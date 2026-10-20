@@ -1,18 +1,22 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Swarm desktop entitlements (ROW 55, NR-09 / research 03e C4-3).
+  Minimised from the six-key upstream baseline to three. Kept keys:
+    - com.apple.security.cs.allow-jit                    V8 needs MAP_JIT under hardened runtime.
+    - com.apple.security.cs.allow-unsigned-executable-memory  V8/WASM/native addons map anonymous
+      executable pages; removing it risks the NR-09 L1 launch gate for no gain over allow-jit.
+    - com.apple.security.cs.disable-library-validation   ad-hoc signing has no Team ID, so nested
+      Mach-O (Electron Framework, helpers, rg) fails library validation without this key (01b M10).
+  Removed keys are documented one-by-one in implementation/s55_electron_hardening.md.
+-->
 <plist version="1.0">
 <dict>
     <key>com.apple.security.cs.allow-jit</key>
     <true/>
     <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
     <true/>
-    <key>com.apple.security.cs.disable-executable-page-protection</key>
-    <true/>
-    <key>com.apple.security.cs.allow-dyld-environment-variables</key>
-    <true/>
     <key>com.apple.security.cs.disable-library-validation</key>
-    <true/>
-    <key>com.apple.security.device.audio-input</key>
     <true/>
 </dict>
 </plist>

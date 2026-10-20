@@ -1,7 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" version="1.1" xmlns:xlink="http://www.w3.org/1999/xlink" width="512" height="512"><svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
-<rect width="512" height="512" fill="#131010"></rect>
-<path d="M320 224V352H192V224H320Z" fill="#5A5858"></path>
-<path fill-rule="evenodd" clip-rule="evenodd" d="M384 416H128V96H384V416ZM320 160H192V352H320V160Z" fill="white"></path>
-</svg><style>@media (prefers-color-scheme: light) { :root { filter: none; } }
-@media (prefers-color-scheme: dark) { :root { filter: none; } }
-</style></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512"><defs><path id="h" d="M-12.12 -89 Q0 -96 12.12 -89 L71.01 -55 Q83.14 -48 83.14 -34 L83.14 34 Q83.14 48 71.01 55 L12.12 89 Q0 96 -12.12 89 L-71.01 55 Q-83.14 48 -83.14 34 L-83.14 -34 Q-83.14 -48 -71.01 -55 Z"/></defs><g transform="scale(0.5)"><rect width="1024" height="1024" rx="224" fill="#0b0b0f"/><g id="mark"><use href="#h" transform="translate(512 512)" fill="#f5a623"/><use href="#h" transform="translate(678.28 512)" fill="#f5a623"/><use href="#h" transform="translate(595.14 368)" fill="#f5a623"/><use href="#h" transform="translate(428.86 368)" fill="#f5a623"/><use href="#h" transform="translate(345.72 512)" fill="#f5a623"/><use href="#h" transform="translate(428.86 656)" fill="#f5a623"/><use href="#h" transform="translate(595.14 656)" fill="#f5a623"/><use href="#h" transform="translate(842 267) scale(0.55)" fill="#3fb0a5"/><use href="#h" transform="translate(182 757) scale(0.55)" fill="#3fb0a5"/></g></g></svg>
