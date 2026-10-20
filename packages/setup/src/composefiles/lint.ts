@@ -47,6 +47,7 @@ export const PASS_THROUGH_HARD: readonly string[] = [
   "NUQ_BACKEND",
   "FDB_CLUSTER_FILE",
 ]
+// COREPACK_ENABLE_NETWORK deliberately NOT listed here — it is our own r75-fix9 offline control (r75fix9_corepack_ruling.md §4.4 bullet 5), not a host pass-through.
 export const PASS_THROUGH_ENV_ONLY_FORBIDDEN: readonly string[] = ["POSTGRES_PASSWORD", "BULL_AUTH_KEY"]
 export const TRUTHY_CHECKED: readonly string[] = ["ALLOW_LOCAL_WEBHOOKS"]
 

@@ -53,6 +53,10 @@ export function renderSquidConf(): RenderFile {
     "# dns_v4_first DROPPED by r75-fix8: obsolete since squid 5.0.4, absent from the v5-v8 reference, ERROR line every boot on 6.13.",
     "# Family order is not load-bearing here: denies evaluate the RESOLVED answer (V3) and the whole NAT64 prefix is denied unconditionally;",
     "# this guest additionally has no live IPv6 route (r75fix6_topology_ruling.md §7 measurement). No successor directive exists.",
+    // pinger_enable is an option-parsed-class directive: its note rides its OWN line (R112b-1 discipline),
+    // and the bare directive below carries no inline comment.
+    "# pinger_enable off per r75-fix9 (R112c-6 spec half): cap_drop ALL kills the ICMP sockets — two ERROR lines plus one FATAL every boot (13c:152) while the shipped conf declares no ICP/HTCP peers or SNMP at all (zero-match grep, r75f9 round); directive available v4-v7, default on (saved copy 80dbd338…). Removes the condition that produces the line; registering the FATAL vocabulary stays row 92's call.",
+    "pinger_enable off",
     "# No caching: every object non-cacheable (the enforceable reading of the 10.4 no-cache directive-class wording).",
     "cache deny all",
     "# Audit twin of PC-PATH-10 lines (ts, method, target-host, verdict, bytes) in a bounded in-container file (r75fix8_squid_sink_ruling.md §3):",

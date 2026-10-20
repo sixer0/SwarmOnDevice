@@ -10,7 +10,7 @@ import { execFileSync, spawnSync } from "node:child_process"
 import { join } from "node:path"
 import { validateLock } from "../src/lockfile.ts"
 import { renderAll, applyRenderedFiles, validateRenderedSecrets } from "../src/composefiles/index.ts"
-import { CAP_ADD_ALLOWLIST, findDirectiveInlineComments, findHealthcheckToolAbsent, findReservedAclNames, findSecretArgvLeak, findSquidOrderingViolations, findWrapChannelViolations, findWrapModeViolations, HEALTHCHECK_TOOL_ABSENT, lintComposeText, lintOk, PASS_THROUGH_HARD, RESERVED_ACL_NAMES, SECRET_ARGV_PATTERNS, SQUID_INLINE_COMMENT_DIRECTIVES } from "../src/composefiles/lint.ts"
+import { CAP_ADD_ALLOWLIST, findDirectiveInlineComments, findHealthcheckToolAbsent, findReservedAclNames, findSecretArgvLeak, findSquidOrderingViolations, findWrapChannelViolations, findWrapModeViolations, HEALTHCHECK_TOOL_ABSENT, lintComposeText, lintOk, PASS_THROUGH_ENV_ONLY_FORBIDDEN, PASS_THROUGH_HARD, RESERVED_ACL_NAMES, SECRET_ARGV_PATTERNS, SQUID_INLINE_COMMENT_DIRECTIVES } from "../src/composefiles/lint.ts"
 import {
   PC_PORTS,
   parseEngineNames,
@@ -1061,6 +1061,67 @@ describe("r75-fix8 squid sink + dns drop — binding gate r75fix8_squid_sink_rul
     expect(SQUID_INLINE_COMMENT_DIRECTIVES).toContain("http_port")
     expect(SQUID_INLINE_COMMENT_DIRECTIVES).toContain("https_port")
     expect(SQUID_INLINE_COMMENT_DIRECTIVES).not.toContain("dns_v4_first")
+  })
+})
+
+describe("r75-fix9 corepack disposition + F-4 api proxy — binding gate r75fix9_corepack_ruling.md §4.4", () => {
+  // The six assertions the ruling names. Two independent renders back assertion 6 on this side;
+  // PROOF 3/12 do the same over CLI artefacts on disk.
+  const r = renderClean()
+  const r2 = renderClean()
+  const fcText = () => fileOf(r, "firecrawl/compose/firecrawl.yml").content
+  const doc = Bun.YAML.parse(fcText())
+  const pw = doc.services["playwright-service"]
+  const api = doc.services.api
+
+  test("assertion 1: playwright-service carries BOTH the command override AND the corepack env key", () => {
+    // Ruling §1.1: the env-only variant of option (a) is PROVABLY INSUFFICIENT (README hydration
+    // sentence, §3.4), so a render that drops the command line while keeping the env key must
+    // fail HERE — both halves are asserted together, single-test, no independent pass.
+    expect(pw.command).toEqual(["node", "dist/api.js"]) // string-pin: a vendor re-pin that changes the start script forces a human through this file again (§4.4)
+    expect(Object.prototype.hasOwnProperty.call(pw.environment, "COREPACK_ENABLE_NETWORK")).toBe(true)
+  })
+
+  test("assertion 2: playwright env COREPACK_ENABLE_NETWORK parses to \"0\" and its raw rendered line carries no ${ interpolation (§11 style)", () => {
+    expect(pw.environment.COREPACK_ENABLE_NETWORK).toBe("0")
+    const raw = fcText().split("\n").find((l) => l.trimStart().startsWith("COREPACK_ENABLE_NETWORK:"))
+    expect(raw).toBeDefined()
+    expect(raw).not.toContain("${")
+  })
+
+  test("assertion 3: api PROXY_SERVER equals the PC_PORTS-derived URL; port pinned back to the register; PROXY_USERNAME/PASSWORD present-and-empty", () => {
+    expect(api.environment.PROXY_SERVER).toBe(`http://egress-proxy:${PC_PORTS.squidContainer}`)
+    // the digits inside the rendered value ARE PC_PORTS.squidContainer, so a future literal that
+    // drifts from the register trips this equality (driver_rules_s3.md:13-14 rule 1)
+    expect(Number(String(api.environment.PROXY_SERVER).split(":").pop())).toBe(PC_PORTS.squidContainer)
+    expect(api.environment.PROXY_USERNAME).toBe("")
+    expect(api.environment.PROXY_PASSWORD).toBe("")
+    // source-side anti-literal pin: every construction site interpolates from PC_PORTS, none bakes the port
+    const src = readFileSync(join(import.meta.dir, "..", "src/composefiles/firecrawl_compose.ts"), "utf8")
+    const sites = src.split("\n").filter((l) => l.includes('PROXY_SERVER: "http://egress-proxy:'))
+    expect(sites.length).toBe(2) // api + playwright
+    for (const s of sites) {
+      expect(s).toContain("${PC_PORTS.squidContainer}")
+      expect(s).not.toMatch(/egress-proxy:3\d{3}/)
+    }
+  })
+
+  test("assertion 4: api networks stay exactly [fc-ctl, fc-data] and gain no ports: key (anti-fc-web invariant)", () => {
+    // Ruling §4.2: the retired §6.4 wording would have moved api to fc-web membership — a
+    // non-internal attachment installs a default route and re-opens the R112b-4-class leak.
+    expect(api.networks).toEqual(["fc-ctl", "fc-data"])
+    expect(api.ports).toBeUndefined()
+  })
+
+  test("assertion 5: COREPACK_ENABLE_NETWORK is NOT in PASS_THROUGH_ENV_ONLY_FORBIDDEN (it is our control, not a host pass-through)", () => {
+    expect(PASS_THROUGH_ENV_ONLY_FORBIDDEN).not.toContain("COREPACK_ENABLE_NETWORK")
+  })
+
+  test("assertion 6: the two changed artefacts are byte-stable across two independent renders", () => {
+    // The published-hash discipline (R112c-1): values live in the fix-round record WITH their
+    // render context, never as literals here — firecrawl.yml is home-dependent by design.
+    expect(fileOf(r2, "firecrawl/compose/firecrawl.yml").content).toBe(fcText())
+    expect(fileOf(r2, "firecrawl/squid/squid.conf").content).toBe(fileOf(r, "firecrawl/squid/squid.conf").content)
   })
 })
 

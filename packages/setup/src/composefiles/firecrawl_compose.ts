@@ -175,6 +175,9 @@ export function renderFirecrawlCompose(
     '      CRAWL_CONCURRENT_REQUESTS: "2"',
     '      MAX_CONCURRENT_JOBS: "2"',
     '      BROWSER_POOL_SIZE: "2"',
+    `      PROXY_SERVER: "http://egress-proxy:${PC_PORTS.squidContainer}"  # r75-fix9 INVOKES the §10.7 F-4 correction (R112c-5: attempt 3 measured api carrying NO proxy env at all, 13c:119-120,232). api reaches the filter over its EXISTING fc-ctl membership; networks MUST stay [fc-ctl, fc-data] — the retired §6.4 comment said 'moves api to fc-web membership', which would install a default route and re-open the R112b-4-class leak on this tier (spec §10.7 F-4 bullet states the amendment). Whether api's HTTP client honours these names is U-12's still-open half; §10.6's attribution rule reads the outcome, attempt 4 measures it.`,
+    '      PROXY_USERNAME: ""  # present-but-empty, same shape as playwright (§6.7)',
+    '      PROXY_PASSWORD: ""',
     ...(ca
       ? [
           "        NODE_EXTRA_CA_CERTS: /etc/ssl/certs/swarm-ca.pem  # §4.10: TLS through the CONNECT tunnel terminates IN this stack",
@@ -296,6 +299,18 @@ export function renderFirecrawlCompose(
     ),
     labelBlock("firecrawl", version, 4, ctx.tamperLabel),
     "    networks: [fc-ctl, fc-iso]",
+    // Marker §4.1 passes these as separate args; the landed helper takes ONE newline-joined text
+    // (shared.ts::commentLines splits on \n), so the verbatim lines are carried that way.
+    commentLines(
+      `command override per r75-fix9 (R112c-9): the image CMD ["pnpm","start"] first-run resolves
+pnpm@11.4.0 via corepack against this container's EMPTY per-boot cache (builder hydrated root's
+cache only — upstream Dockerfile 6aeca442…) and under containment that fetch exits 1 (13c:92-93).
+Upstream's start script IS \`node dist/api.js\` (package.json cd481a4c…); that argv was live-observed
+serving :3000 in attempt 2 (13b:121). dist/ is baked by RUN pnpm run build. Keep in sync with
+spec §6.7; changing it WITHOUT a re-pin note is exactly how a vendor update would drift silently.`,
+      4,
+    ),
+    "    command: [\"node\", \"dist/api.js\"]  # r75-fix9: package manager OUT of the boot path",
     "    environment:",
     `      PORT: "${PC_PORTS.playwrightContainer}"  # PC-PORT-07 container listen (tmp/r78:62-63)`,
     `      PROXY_SERVER: "http://egress-proxy:${PC_PORTS.squidContainer}"  # THE enforced egress route (P-9 design made concrete; PC-PORT-06; register authorizes PROXY_* precisely because the filter IS the configured route, 01c0:194-198)`,
@@ -304,6 +319,7 @@ export function renderFirecrawlCompose(
     '      BLOCK_MEDIA: "true"  # kills img/media/font sub-resource egress — smaller audit surface [H effect name tmp/r78:69]',
     '      MAX_CONCURRENT_PAGES: "2"  # bound to api\'s CRAWL_CONCURRENT_REQUESTS (§6.4)',
     '      ALLOW_LOCAL_WEBHOOKS: "false"  # the upstream flag that WOULD permit local-target crawls (tmp/r78:68) — pinned off; a truthy occurrence is a lint fail (§11)',
+    '      COREPACK_ENABLE_NETWORK: "0"  # r75-fix9 belt: corepack 0.36.0 (node v22.23.3 deps/corepack 6f431b9a…) throws "Network access disabled by the environment" BEFORE any DNS (v0.36.0 httpUtils.ts:10-11, npmRegistryUtils.ts:22-23), killing the forbidden-egress intent line even if some path calls the shim off-boot',
     ...(ca
       ? [
           "      NODE_EXTRA_CA_CERTS: /etc/ssl/certs/swarm-ca.pem  # Node layer only; Chromium store pick-up is the [H] row 112 measures (§4.10)",

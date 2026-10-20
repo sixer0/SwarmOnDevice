@@ -77,6 +77,27 @@ import {
   readContextTable,
 } from "../src/steps/runtime/capture.ts"
 
+/** Seam-pass-7 guard (R112c-2 class): every docker-DAEMON call this driver issues must carry the
+ *  resolved context. Builder-routed calls (composePsArgs / composeUpCmd / composeDownCmd) bake
+ *  "--context DOCKER_CONTEXT" in via stacklib composeBase (stacklib.ts:200-202), and readinessProbe
+ *  threads it internally (seam6), but a hand-written run() whose argv array opens on a bare docker
+ *  verb — exec, ps, inspect or network — would silently aim at the CLI-CURRENT daemon: on this host
+ *  the user's default profile, where none of our containers exist (the exact R112c-2 failure). Scan
+ *  this module's OWN source and refuse to load if any such bare vector reappears. Offline: reads one
+ *  file, touches no docker. */
+function assertNoBareDockerVector(): void {
+  // A bare vector is a run() whose argv opens directly on a docker verb. A correct hand-written argv
+  // opens on "--context"; builder calls open on an identifier (composePsArgs(…), never on a bracket;
+  // host/colima calls open on an absolute path or a variable. None of those match this pattern.
+  const bare = /\brun\(\s*\[\s*"(exec|ps|inspect|network|container|images|image|volume|rmi|rm|logs|commit|create|start|stop|restart|pull|push|build|stats|export|import|update|unpause|attach|diff|events|history|kill|pause|port|save|load|tag|top|wait|info|version)\b"/
+  const hit = readFileSync(import.meta.path, "utf8").match(bare)
+  if (hit) {
+    console.error(`live_smoke: GUARD FAILED — bare docker-invocation vector without --context: ${hit[0]}`)
+    process.exit(3)
+  }
+}
+assertNoBareDockerVector()
+
 const phase = process.env.R93_PHASE ?? ""
 const live = process.env.R93_LIVE === "1"
 const work = process.env.R93_WORK ?? "/tmp"
@@ -484,7 +505,7 @@ async function main(): Promise<void> {
       if (ep) {
         const disc = await discoverInContainerTool(run, ep.name, ["bash"])
         if (disc.tool) {
-          const r = await run(["exec", ep.name, "bash", "-c", `exec 3<>/dev/tcp/${target.host}/${target.port}`])
+          const r = await run(["--context", DOCKER_CONTEXT, "exec", ep.name, "bash", "-c", `exec 3<>/dev/tcp/${target.host}/${target.port}`])
           if (r.exitCode === 0) return { ok: true, vantage: `container:${ep.name}`, detail: "PROBE_TOOL=bash /dev/tcp connect ok" }
           misses.push(`container:${ep.name} exit=${r.exitCode} ${r.stderr.trim().slice(0, 120)}`)
         } else misses.push(`container:${ep.name} no-bash`)
@@ -513,7 +534,7 @@ async function main(): Promise<void> {
     // flag of every network this file declares, whatever the legs did — cheap, honest context.
     const internalFlags: Record<string, string> = {}
     for (const n of parseNetworkNames(readFileSync(plan.composeFile, "utf8"))) {
-      const r = await run(["network", "inspect", `${COMPOSE_PROJECT}_${n}`, "--format", "{{.Internal}}"])
+      const r = await run(["--context", DOCKER_CONTEXT, "network", "inspect", `${COMPOSE_PROJECT}_${n}`, "--format", "{{.Internal}}"])
       internalFlags[n] = r.exitCode === 0 ? r.stdout.trim() : `inspect-failed(exit ${r.exitCode})`
     }
     json("raw_egress_probe", { ...report, corroboration_networks: internalFlags, probeExecs: probeDocker.executedCount() })

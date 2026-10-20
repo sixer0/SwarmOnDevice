@@ -192,7 +192,7 @@ stat -f '%Lp %N' "$WORK/render-a/firecrawl/compose/bin/"* | while read -r m f; d
 [ "$(stat -f '%Lp' "$WORK/render-a/firecrawl/compose/bin/fc-nginx-env.envsh")" = 700 ] || MODES_OK=0
 if [ "$MODES_OK" = 1 ]; then echo "  PASS 7f applied wrap modes: fc-nginx-env.envsh=700 (entrypoint-mounted, R112b-2 sourced channel), all others 600, zero group/world bits"; pass=$((pass+1)); else echo "  FAIL 7f wrap modes wrong"; fail=$((fail+1)); fi
 
-echo "=== PROOF 8: unit suite (88 tests incl. one failing + one passing fixture per lint rule) ==="
+echo "=== PROOF 8: unit suite (99 tests incl. one failing + one passing fixture per lint rule) ==="
 ( cd "$HERE" && bun test test/compose_files.test.ts ) > "$WORK/bun-test.log" 2>&1
 rc=$?
 tail -5 "$WORK/bun-test.log"
@@ -401,6 +401,50 @@ process.exit(bad === 0 ? 0 : 1);
 TS
 bun run "$WORK/r85f6c-demo.ts" | tee "$WORK/r85f6c.out"
 check "r75-fix8 parsed sink proofs (single tmpfs + size/mode; no read_only; 11-member list retains ports; inline-comment clean)" 0 $?
+
+echo "=== PROOF 12: r75-fix9 corepack disposition + F-4 api proxy (r75fix9_corepack_ruling.md §4.4) ==="
+# 12a (grep side over the rendered artefacts on disk): playwright gains the command override and the
+# corepack env key; api gains the PROXY trio with a PC_PORTS-derived port (no source literal anywhere);
+# squid.conf carries pinger_enable off as a bare CODE line (own-line note per R112b-1 discipline).
+CMD_N=$(grep -c '^    command: \["node", "dist/api.js"\]' "$FCY" || true)
+CORE_N=$(grep -c '^      COREPACK_ENABLE_NETWORK: "0"' "$FCY" || true)
+CORE_INTERP=$(grep 'COREPACK_ENABLE_NETWORK' "$FCY" | grep -c '\${' || true)
+PSRV_N=$(grep -c '^      PROXY_SERVER: "http://egress-proxy:' "$FCY" || true)
+SRC_PSRV=$(grep -c 'PROXY_SERVER: "http://egress-proxy:' "$HERE/src/composefiles/firecrawl_compose.ts" || true)
+SRC_DERIVED=$(grep 'PROXY_SERVER: "http://egress-proxy:' "$HERE/src/composefiles/firecrawl_compose.ts" | grep -c 'PC_PORTS.squidContainer' || true)
+SRC_LITERAL=$(grep -c 'egress-proxy:3[0-9][0-9][0-9]' "$HERE/src/composefiles/firecrawl_compose.ts" || true)
+PING_CODE=$(sed 's/#.*//' "$SQ" | grep -cE '^pinger_enable off$' || true)
+if [ "$CMD_N" = 1 ] && [ "$CORE_N" = 1 ] && [ "$CORE_INTERP" = 0 ] && [ "$PSRV_N" = 2 ] \
+   && [ "$SRC_PSRV" = 2 ] && [ "$SRC_DERIVED" = 2 ] && [ "$SRC_LITERAL" = 0 ] && [ "$PING_CODE" = 1 ]; then
+  echo "  PASS 12a playwright command+corepack render once each (zero \${ on the env line); api+playwright PROXY_SERVER both interpolate PC_PORTS.squidContainer (zero baked literals in source); pinger_enable off is a bare code line"; pass=$((pass+1))
+else
+  echo "  FAIL 12a (command=$CMD_N want 1, corepack=$CORE_N want 1, coreInterp=$CORE_INTERP want 0, psrvRender=$PSRV_N want 2, psrvSrc=$SRC_PSRV want 2, srcDerived=$SRC_DERIVED want 2, srcLiteral=$SRC_LITERAL want 0, pinger=$PING_CODE want 1)"; fail=$((fail+1))
+fi
+# 12b (parsed side): the ruling §4.4 structural facts re-checked against the artefact ON DISK —
+# command deep-equal, env value, PC_PORTS equality incl. digit pin, empty credentials, and the
+# anti-fc-web invariant (api networks exactly [fc-ctl, fc-data], no ports key).
+export R85_FCY="$FCY"
+cat > "$WORK/r85f6d-demo.ts" <<'TS'
+// Parsed-structure half of PROOF 12 over the rendered artefact on disk (r75-fix9 §4.4 items 1-4).
+import { readFileSync } from "node:fs";
+const { PC_PORTS } = await import(process.env.R85_SHARED!);
+const fcText = readFileSync(process.env.R85_FCY!, "utf8");
+const doc = Bun.YAML.parse(fcText);
+const pw = doc.services["playwright-service"];
+const api = doc.services.api;
+let bad = 0;
+const say = (ok: boolean, line: string) => { console.log((ok ? "OK   " : "BAD  ") + line); if (!ok) bad++; };
+say(JSON.stringify(pw.command) === JSON.stringify(["node", "dist/api.js"]), "12b playwright command deep-equals [\"node\",\"dist/api.js\"] (string-pin; env-only would still pass this but not the pair-test in units)");
+say(pw.environment.COREPACK_ENABLE_NETWORK === "0", "12b playwright env COREPACK_ENABLE_NETWORK parses to \"0\"");
+say(api.environment.PROXY_SERVER === `http://egress-proxy:${PC_PORTS.squidContainer}`, "12b api PROXY_SERVER equals the PC_PORTS-derived URL");
+say(Number(String(api.environment.PROXY_SERVER).split(":").pop()) === PC_PORTS.squidContainer, "12b PROXY_SERVER port digits pinned back to PC_PORTS.squidContainer");
+say(api.environment.PROXY_USERNAME === "" && api.environment.PROXY_PASSWORD === "", "12b api PROXY_USERNAME/PROXY_PASSWORD present-but-empty");
+say(JSON.stringify(api.networks) === JSON.stringify(["fc-ctl", "fc-data"]) && api.ports === undefined, "12b api networks stay [fc-ctl, fc-data]; no ports key (anti-fc-web invariant)");
+console.log(bad === 0 ? "RESULT OK" : `RESULT FAILED (${bad})`);
+process.exit(bad === 0 ? 0 : 1);
+TS
+bun run "$WORK/r85f6d-demo.ts" | tee "$WORK/r85f6d.out"
+check "r75-fix9 parsed proofs (command pin; corepack flag; PC_PORTS-pinned PROXY_SERVER; empty creds; anti-fc-web invariant)" 0 $?
 
 echo
 echo "row-85 proofs: $pass passed, $fail failed"
