@@ -6,7 +6,10 @@
 # construction, real r94 validator. Nothing here re-implements the matcher.
 set -u
 cd "$(dirname "$0")/../.." || exit 1 # -> packages/opencode
-export PATH="/Users/gsp-budi/Swarm_OnDevice/tools/node_modules/.bin:$PATH"
+# project-local bun lives in <workspace>/tools, three levels above this package dir
+# (<pkg> -> packages -> repo root -> workspace root); derived from cwd (fixed by the
+# cd above) so the proof carries no machine-specific path.
+export PATH="$(cd ../../.. && pwd)/tools/node_modules/.bin:$PATH"
 T=$(mktemp -d)
 trap 'rm -rf "$T"' EXIT
 pass=0; fail=0

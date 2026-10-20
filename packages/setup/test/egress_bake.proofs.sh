@@ -67,13 +67,14 @@ export HOME="$WORK/home-bake"; mkdir -p "$HOME"
 export R92_ROOT="$HERE"
 cat > "$WORK/bake-demo.ts" <<'TS'
 import { rmSync } from "node:fs";
-import { validateLock } from "/Users/gsp-budi/Swarm_OnDevice/swarm/packages/setup/src/lockfile.ts";
-import { SECRET_INVENTORY, pathsFor } from "/Users/gsp-budi/Swarm_OnDevice/swarm/packages/setup/src/composefiles/shared.ts";
-import { renderAll, applyRenderedFiles } from "/Users/gsp-budi/Swarm_OnDevice/swarm/packages/setup/src/composefiles/index.ts";
-import { verifyEgressBake, auditSquidConf } from "/Users/gsp-budi/Swarm_OnDevice/swarm/packages/setup/src/steps/firecrawl/egress_bake.ts";
-
 const root = process.env.R92_ROOT!;
 const home = process.env.HOME!;
+// modules resolved through R92_ROOT (exported by this harness) — no machine path baked in;
+// same env+dynamic-import pattern as runtime/compose/stepkit proofs. stepsRoot() is module-relative.
+const { validateLock } = await import(`${root}/src/lockfile.ts`);
+const { SECRET_INVENTORY, pathsFor } = await import(`${root}/src/composefiles/shared.ts`);
+const { renderAll, applyRenderedFiles } = await import(`${root}/src/composefiles/index.ts`);
+const { verifyEgressBake, auditSquidConf } = await import(`${root}/src/steps/firecrawl/egress_bake.ts`);
 const lock = validateLock(JSON.parse(await Bun.file(`${root}/tools.lock.json`).text()));
 if (!lock.ok) throw new Error(lock.error);
 
@@ -124,7 +125,7 @@ check "4c no @sha256 digest literal in shipped source (expect no-match=1)" 1 $?
 
 echo "=== PROOF 5: directory-scan registration — the bake is NOT a component (shape decision locked) ==="
 cat > "$WORK/scan.ts" <<'TS'
-import { discoverSteps, orderSteps } from "/Users/gsp-budi/Swarm_OnDevice/swarm/packages/setup/src/steps.ts";
+const { discoverSteps, orderSteps } = await import(`${process.env.R92_ROOT!}/src/steps.ts`);
 const scan = discoverSteps();
 const ids = scan.steps.map((s) => s.id);
 const ok = ids.includes("firecrawl") && !ids.includes("egress-proxy") && scan.errors.length === 0;

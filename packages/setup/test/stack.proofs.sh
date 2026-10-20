@@ -66,17 +66,20 @@ check "bun test test/stack_steps.test.ts" 0 $rc
 
 echo "=== PROOF 3: fake docker CLI shim — dry-run performs ZERO exec, prints exact commands ==="
 export HOME="$WORK/home-dry"; mkdir -p "$HOME"
+export R91_ROOT="$HERE"                                # module root for dynamic imports (no machine path baked in)
 export R91_STACKLIB="$HERE/src/stacklib.ts"
 export R91_LOCK="$HERE/tools.lock.json"
 cat > "$WORK/shim-demo.ts" <<'TS'
-import { validateLock } from "/Users/gsp-budi/Swarm_OnDevice/swarm/packages/setup/src/lockfile.ts";
-import { defaultState } from "/Users/gsp-budi/Swarm_OnDevice/swarm/packages/setup/src/state.ts";
-import { createStepKit } from "/Users/gsp-budi/Swarm_OnDevice/swarm/packages/setup/src/stepkit.ts";
-import { STATES } from "/Users/gsp-budi/Swarm_OnDevice/swarm/packages/setup/src/constants.ts";
-import { renderAll, applyRenderedFiles } from "/Users/gsp-budi/Swarm_OnDevice/swarm/packages/setup/src/composefiles/index.ts";
-import { SECRET_INVENTORY } from "/Users/gsp-budi/Swarm_OnDevice/swarm/packages/setup/src/composefiles/shared.ts";
-import { bringUp, makeFakeDockerShim, searxngPlan } from "/Users/gsp-budi/Swarm_OnDevice/swarm/packages/setup/src/stacklib.ts";
 import { mkdirSync, writeFileSync } from "node:fs";
+const root = process.env.R91_ROOT!;
+// modules resolved through R91_ROOT — same env+dynamic-import pattern as runtime/compose/stepkit proofs.
+const { validateLock } = await import(`${root}/src/lockfile.ts`);
+const { defaultState } = await import(`${root}/src/state.ts`);
+const { createStepKit } = await import(`${root}/src/stepkit.ts`);
+const { STATES } = await import(`${root}/src/constants.ts`);
+const { renderAll, applyRenderedFiles } = await import(`${root}/src/composefiles/index.ts`);
+const { SECRET_INVENTORY } = await import(`${root}/src/composefiles/shared.ts`);
+const { bringUp, makeFakeDockerShim, searxngPlan } = await import(`${root}/src/stacklib.ts`);
 
 const home = process.env.HOME!;
 const lock = validateLock(JSON.parse(await Bun.file(process.env.R91_LOCK!).text()));
@@ -127,7 +130,7 @@ check "4b no spawn/network/eval primitive in shipped sources (expect no-match=1)
 
 echo "=== PROOF 5: directory-scan registration (both PC-CMP ids, zero descriptor errors) ==="
 cat > "$WORK/scan.ts" <<'TS'
-import { discoverSteps, orderSteps } from "/Users/gsp-budi/Swarm_OnDevice/swarm/packages/setup/src/steps.ts";
+const { discoverSteps, orderSteps } = await import(`${process.env.R91_ROOT!}/src/steps.ts`);
 const scan = discoverSteps();
 const ids = scan.steps.map((s) => s.id);
 const ok = ids.includes("searxng") && ids.includes("firecrawl") && scan.errors.length === 0;

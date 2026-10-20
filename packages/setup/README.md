@@ -97,7 +97,7 @@ or the machine's tooling). So `tsconfig.json` is **self-contained** (`"types": [
 full catalog.
 
 ```sh
-export PATH="/Users/gsp-budi/Swarm_OnDevice/tools/node_modules/.bin:$PATH"   # local bun only
+export PATH="$(cd .. && pwd)/tools/node_modules/.bin:$PATH"   # local bun only (workspace tools dir, sibling of the repo; run from repo root)
 bun --version                       # 1.3.14
 node_modules/typescript/bin/tsc --noEmit -p packages/setup/tsconfig.json     # typecheck
 bun build --compile --target=bun --outfile /tmp/swarm-setup packages/setup/src/index.ts
