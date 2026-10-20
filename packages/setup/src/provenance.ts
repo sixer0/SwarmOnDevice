@@ -6,13 +6,16 @@
 // PC-PATH-05; dir 0700 / file 0600 by the register's mode classes). JSONL append
 // of a single short line is effectively atomic on APFS and the lock directory
 // (PC-PATH-04) already guarantees one writer at a time, so the atomic.ts
-// tmp+rename dance is not needed for an append-only ledger.
+// tmp+rename dance is not needed for an append-only ledger. Each append is
+// followed by an fsync (FIX4 / F-R109-2), which closes the power-loss window that
+// a bare page-cache append leaves open; see appendProvenance for the policy and
+// its cost note.
 //
 // The record NEVER contains file content, never contains secrets (P-8), and is
 // the artifact rows 108/111/112 re-verify against: url + version + expected/
 // observed digest + size + timestamp + outcome.
 
-import { appendFileSync, existsSync, readFileSync } from "node:fs"
+import { appendFileSync, closeSync, existsSync, fsyncSync, openSync, readFileSync } from "node:fs"
 import { MODES } from "./constants.ts"
 import { ensureParent, setupRoot } from "./paths.ts"
 
@@ -59,10 +62,66 @@ export interface ProvenanceRecord {
   readonly destPath?: string
 }
 
-/** Append one record as a single JSONL line (mode 0600 on create, 0700 parent). */
-export function appendProvenance(record: ProvenanceRecord, absPath: string = provenanceFile()): void {
+export type AppendOutcome = { ok: true; durable: true } | { ok: false; durable: false; detail: string }
+
+/** TEST SEAM ONLY (same discipline as FetchOptions.allowedHosts / SignatureSpec.run):
+ *  replaces the fsync so a unit can script a durability failure. */
+export interface AppendOptions {
+  readonly sync?: () => void
+}
+
+function syncPath(absPath: string): string | null {
+  let fd: number
+  try {
+    fd = openSync(absPath, "r+")
+  } catch (err) {
+    return `open for fsync failed: ${(err as Error).message}`
+  }
+  try {
+    fsyncSync(fd)
+    return null
+  } catch (err) {
+    return `fsync failed: ${(err as Error).message}`
+  } finally {
+    try {
+      closeSync(fd)
+    } catch {
+      // fd already gone; the sync result stands.
+    }
+  }
+}
+
+/**
+ * Append one record as a single JSONL line (mode 0600 on create, 0700 parent),
+ * then fsync the ledger — FIX4 closing finding F-R109-2 (test/03_state_tests.md:118):
+ * without this, kill-9 was safe (page cache survives process death) but power loss
+ * could lose the last append. POLICY: fsync per line. Cost note — one extra
+ * fsync per settled fetchArtifact call; fetch volume is single-digit-to-tens of
+ * lines per install run and an APFS fsync of a small dirty extent is sub-millisecond
+ * to low-millisecond, so per-line durability costs nothing measurable here. If a
+ * future caller ever appends at high frequency, batch THEN (flush-on-transition),
+ * not silently.
+ *
+ * An fsync failure NEVER loses the line: appendFileSync has already written it to
+ * the file (kill-9-safe territory), so the ledger stays parseable; the caller is
+ * told durability was not achieved via the returned outcome instead of a throw —
+ * losing the fetch result over a ledger-sync error would be the wrong trade.
+ */
+export function appendProvenance(record: ProvenanceRecord, absPath: string = provenanceFile(), opts: AppendOptions = {}): AppendOutcome {
   ensureParent(absPath)
   appendFileSync(absPath, `${JSON.stringify(record)}\n`, { encoding: "utf8", mode: MODES.FILE_0600 })
+  const detail = opts.sync ? trySeam(opts.sync) : syncPath(absPath)
+  if (detail !== null) return { ok: false, durable: false, detail }
+  return { ok: true, durable: true }
+}
+
+function trySeam(sync: () => void): string | null {
+  try {
+    sync()
+    return null
+  } catch (err) {
+    return `fsync failed: ${(err as Error).message}`
+  }
 }
 
 /** Read the ledger back (rows 108/111/112 re-verification + tests). Missing file

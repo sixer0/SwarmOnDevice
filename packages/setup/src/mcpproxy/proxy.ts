@@ -38,6 +38,10 @@ export interface TransportRequest {
   /** Request body for POST legs (crawl). Never carries anything secret except the bearer
    *  header, which lives in `headers` and is excluded from every log by construction. */
   readonly body?: string
+  /** Estate allow-list for THIS leg, forwarded by getChecked/postChecked from their policyOpts —
+   *  never sourced from model input. The transport uses it only to skip the resolved-answer DENY
+   *  for configured estate hosts; resolution + pinning still happen (single-resolution preserved). */
+  readonly allowList?: readonly string[]
 }
 
 export interface TransportResponse {
@@ -49,6 +53,11 @@ export interface TransportResponse {
   readonly location?: string
   /** Transport-level failure text (DNS/refused/timeout/too-large), never a secret. */
   readonly error?: string
+  /** Set when the transport refused the target on POLICY grounds AFTER resolving its hostname —
+   *  a DNS answer landed in a denied range (senior review 107 MAJOR-3 fix). getChecked maps this
+   *  to kind:"denied" so the call audits decision:"denied" with the §6.4 reason; NO socket was
+   *  opened for a refused resolution. */
+  readonly deniedReason?: string
 }
 
 export interface Transport {
@@ -289,7 +298,8 @@ async function runSearch(
       query,
       url: res.finalUrl ?? target,
       host: hostOf(res.finalUrl ?? target),
-      status: res.status,
+      // §6.6: a DENIED line carries NO network fields; an ERROR line may honestly carry the status.
+      ...(res.kind === "denied" ? {} : { status: res.status }),
       latency_ms: deps.now().getTime() - started,
       agent,
       session,
@@ -422,7 +432,8 @@ async function runFetch(
       query: null,
       url: res.finalUrl ?? url,
       host: hostOf(res.finalUrl ?? url),
-      status: res.status,
+      // §6.6: a DENIED line carries NO network fields; an ERROR line may honestly carry the status.
+      ...(res.kind === "denied" ? {} : { status: res.status }),
       latency_ms: deps.now().getTime() - started,
       agent,
       session,
@@ -430,7 +441,11 @@ async function runFetch(
     return {
       text:
         res.kind === "denied"
-          ? `BLOCKED_BY_POLICY: ${res.reason} — redirect hop refused.`
+          ? res.reason === "too_many_redirects"
+            ? `BLOCKED_BY_POLICY: too_many_redirects — chain abandoned after ${String(MAX_REDIRECT_HOPS)} hops.`
+            : res.finalUrl === url
+              ? `BLOCKED_BY_POLICY: ${res.reason} — refused at connect time (resolved address); no socket opened.`
+              : `BLOCKED_BY_POLICY: ${res.reason} — redirect hop refused.`
           : `BLOCKED_BY_NETWORK: ${res.reason}`,
       isError: true,
     }
@@ -496,6 +511,10 @@ async function runCrawl(
     {
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify({ url }),
+      // Estate leg: forward the base's own allow-list so the transport's resolved-answer DENY
+      // applies public rules to PUBLIC targets only (the base is an IP literal by derivation;
+      // a future named estate base still resolves ONCE and pins).
+      allowList: allowListForBase(base),
     },
     deps,
   )
@@ -510,7 +529,8 @@ async function runCrawl(
       query: null,
       url,
       host,
-      status: res.status,
+      // §6.6: a DENIED line carries NO network fields; an ERROR line may honestly carry the status.
+      ...(res.kind === "denied" ? {} : { status: res.status }),
       latency_ms: deps.now().getTime() - started,
       agent,
       session,
@@ -605,11 +625,18 @@ async function getChecked(
 ): Promise<CheckedResult> {
   let current = startUrl
   let lastStatus = 0
+  // Forward the leg's estate allow-list to the transport (resolved-answer DENY skip only; the
+  // pin path itself is unchanged). Model-supplied fetch targets never carry one — runFetch calls
+  // getChecked with {} policyOpts.
+  const legReq: TransportRequest = { ...req, ...(policyOpts.allowList ? { allowList: policyOpts.allowList } : {}) }
   for (let hop = 0; hop <= MAX_REDIRECT_HOPS; hop++) {
     const decision = checkUrl(current, policyOpts)
     if (!decision.ok) return { kind: "denied", reason: decision.reason, status: lastStatus, finalUrl: current }
-    const res = await deps.transport.request(current, req)
+    const res = await deps.transport.request(current, legReq)
     lastStatus = res.status
+    // Resolved-answer refusal (MAJOR-3): the transport vetted DNS before dialling and refused —
+    // map to kind:"denied" so the audit line reads decision:"denied", reason:<§6.4>, no socket used.
+    if (res.deniedReason) return { kind: "denied", reason: res.deniedReason, status: res.status, finalUrl: current }
     if (res.error || res.bytes === null)
       return { kind: "network", reason: res.error ?? "no response", status: res.status, finalUrl: current }
     if (res.status >= 300 && res.status < 400) {
@@ -638,6 +665,7 @@ async function postChecked(
   deps: ProxyDeps,
 ): Promise<CheckedResult> {
   const res = await deps.transport.request(url, { ...req, method: "POST", headers: req.headers })
+  if (res.deniedReason) return { kind: "denied", reason: res.deniedReason, status: res.status, finalUrl: url }
   if (res.error || res.bytes === null)
     return { kind: "network", reason: res.error ?? "no response", status: res.status }
   if (res.status >= 400) return { kind: "network", reason: `HTTP ${res.status}`, status: res.status }

@@ -35,31 +35,65 @@
 // (verification-only — the configured->healthy move stays bringUp's, rows 91/93), which is what makes
 // dry-run zero-writes trivially true. It is consent-gated FIRST through the StepKit before any action (P-13).
 
-import { existsSync, readFileSync } from "node:fs"
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs"
 import { OUTCOME, type OutcomeToken } from "../../outcomes.ts"
+import { MODES } from "../../constants.ts"
 import type { LockFile } from "../../lockfile.ts"
 import type { StepKit } from "../../stepkit.ts"
 import { egressProxyPinReady, firecrawlPlan } from "../../stacklib.ts"
 import { pathsFor, PC_PORTS } from "../../composefiles/shared.ts"
+// r94's host-side url policy (L3 enforcer). PURE module (zero imports of its own), so this adds no runtime
+// dependency to the setup binary beyond the deny predicate itself; read-only import — row 92 never edits r94's
+// file. `isDeniedAddress` is the exact predicate r94's checkResolvedAddresses feeds the resolved-IP pin through
+// (§13 / 01f_tool_wiring_spec.md §6.4), which is what makes it the right handle for the cross-enforcer equality check.
+import { isDeniedAddress } from "../../mcpproxy/urlpolicy.ts"
 
-/** §10.4 destinations that MUST be denied (masterplan/01e_compose_spec.md:1027-1030). Canonical CIDR
- *  spellings as the r85 renderer emits them; kept here so the assertion names exactly what it demands
- *  rather than scanning for an arbitrary blob. These are policy REQUIREMENTS, not invented values. */
-export const REQUIRED_DENY_RANGES: readonly { readonly cidr: string; readonly kind: string }[] = [
-  { cidr: "127.0.0.0/8", kind: "loopback" },
-  { cidr: "10.0.0.0/8", kind: "private (RFC1918)" },
-  { cidr: "172.16.0.0/12", kind: "private (RFC1918)" },
-  { cidr: "192.168.0.0/16", kind: "private (RFC1918)" },
-  { cidr: "169.254.0.0/16", kind: "link-local" },
-  { cidr: "100.64.0.0/10", kind: "CGNAT" },
-  { cidr: "::1/128", kind: "IPv6 loopback" },
-  { cidr: "fe80::/10", kind: "IPv6 link-local" },
-  { cidr: "fc00::/7", kind: "IPv6 unique-local" },
+/** §10.4 destinations that MUST be denied — the TWELVE amended classes (01e §10.4 as amended by r75-fix4 per
+ *  review-107 MAJOR-2; verification/11_setup_code_review.md:54-62). Canonical CIDR spellings exactly as the r85
+ *  renderer emits them; each carries a `probe` IP literal in that class so the cross-enforcer hook can ask the
+ *  L3 urlpolicy predicate whether it denies the SAME class squid denies (see crossEnforcerAgreement). The three
+ *  added over the original nine are 0.0.0.0/8 (this-network — the class M2 proved escaping via connect(0.0.0.0)
+ *  → loopback), ::/128 (IPv6 unspecified, its twin) and 64:ff9b::/96 (NAT64 well-known — DNS64 answers embed a
+ *  private IPv4, e.g. 64:ff9b::7f00:1 wraps 127.0.0.1; posture is DENY the whole prefix, never unwrap). These are
+ *  policy REQUIREMENTS transcribed from the spec, not invented values. */
+export const REQUIRED_DENY_RANGES: readonly { readonly cidr: string; readonly kind: string; readonly probe: string }[] = [
+  { cidr: "127.0.0.0/8", kind: "loopback", probe: "127.0.0.1" },
+  { cidr: "10.0.0.0/8", kind: "private (RFC1918)", probe: "10.0.0.1" },
+  { cidr: "172.16.0.0/12", kind: "private (RFC1918)", probe: "172.16.0.1" },
+  { cidr: "192.168.0.0/16", kind: "private (RFC1918)", probe: "192.168.0.1" },
+  { cidr: "169.254.0.0/16", kind: "link-local", probe: "169.254.1.1" },
+  { cidr: "100.64.0.0/10", kind: "CGNAT", probe: "100.64.0.1" },
+  { cidr: "0.0.0.0/8", kind: "this-network", probe: "0.0.0.0" }, // [review-107 M2] new class
+  { cidr: "::1/128", kind: "IPv6 loopback", probe: "::1" },
+  { cidr: "fe80::/10", kind: "IPv6 link-local", probe: "fe80::1" },
+  { cidr: "fc00::/7", kind: "IPv6 unique-local", probe: "fc00::1" },
+  { cidr: "::/128", kind: "IPv6 unspecified", probe: "::" }, // [review-107 M2] new class
+  { cidr: "64:ff9b::/96", kind: "NAT64 well-known", probe: "64:ff9b::1" }, // [review-107 M2] new class
 ]
 
 /** The in-container path squid is told to load (r85 bindMount target). One definition site, reused by the
  *  bind-target and `-f`-argument checks so they cannot drift from each other. */
 const SQUID_CONF_TARGET = "/etc/squid/swarm-egress.conf"
+
+/** ACL names squid PREDEFINES and therefore refuses to have redeclared with a different type — reusing one is a
+ *  boot FATAL (`aclParseAclLine: ACL 'to_localhost' already exists with different type` / `FATAL: Bungled`), the
+ *  R112-1 crash row 92's presence-based audit was blind to (verification/13_live_firecrawl.md §5 V0/M2). The set is
+ *  transcribed from the reservation note the PINNED digest itself ships at /etc/squid/squid.conf:1387 (quoted at
+ *  verification/13_live_firecrawl.md:108): "all, manager, localhost, to_localhost, to_linklocal, and CONNECT".
+ *  to_ipv6_link_local is added as squid's canonical spelling of the link-local builtin. Deliberately EXCLUDED:
+ *  `to_localnet` — the live experiments prove it is NOT predefined (V6 keeps it and parses rc=0; M1 shows its v4/v6
+ *  same-type split is fine, :109), so flagging it would false-fail the renderer that correctly leaves it alone; and
+ *  `SSL_ports`/`Safe_ports`/`localnet`/`Connector` — the estate redeclares SSL_ports same-type, which squid tolerates
+ *  (the crash was at the hostname line, not the port line), so those are out of scope for THIS collision class. */
+export const RESERVED_SQUID_ACL_NAMES: readonly string[] = [
+  "all",
+  "manager",
+  "localhost",
+  "to_localhost",
+  "to_linklocal",
+  "to_ipv6_link_local",
+  "CONNECT",
+]
 
 export type BakeCode =
   | "ARTEFACT_MISSING"
@@ -69,6 +103,8 @@ export type BakeCode =
   | "CMD_CONF_MISMATCH"
   | "PROXY_ROUTE_UNSET"
   | "DENY_RANGE_MISSING"
+  | "URLPOLICY_NOT_DENY"
+  | "CROSS_ENFORCER_DIVERGENCE"
   | "DENY_HOSTNAME_MISSING"
   | "DENY_NOT_ENFORCED"
   | "DEFAULT_DENY_MISSING"
@@ -76,6 +112,10 @@ export type BakeCode =
   | "PORT_FILTER_MISSING"
   | "NOCACHE_MISSING"
   | "SQUID_GRAMMAR_INVALID"
+  | "SQUID_RESERVED_ACL_NAME"
+  | "MODE_SECRETS_DIR"
+  | "MODE_SECRET_FILE"
+  | "MODE_ENTRYPOINT_WRAP"
   | "HARDENING_CAPS"
   | "HARDENING_NO_NEW_PRIVS"
   | "HARDENING_MEMSWAP"
@@ -259,8 +299,130 @@ export function verifyEgressBake(opts: VerifyOptions): EgressBakeVerdict {
   }
 
   findings.push(...auditSquidConf(confText))
+  // (renamed-ACL safe) reserved-name collision: redeclaring a squid-predefined ACL name is a boot FATAL (R112-1).
+  findings.push(...assertNoReservedAclNames(confText))
+  // (cross-enforcer) L3 urlpolicy ⇄ L4 squid must deny the IDENTICAL set, each a superset of the twelve.
+  findings.push(...crossEnforcerAgreement(confText))
+  // (R112-5) file-mode posture is a DISK fact: only asserted when the artefacts were read from a real tools root
+  // (production/row-93 posture). In-memory mismatch tests pass texts directly and skip this by design.
+  if (opts.confText === undefined && opts.composeText === undefined && opts.home !== undefined) {
+    findings.push(...auditFileModes(root, composeText))
+  }
 
   return { ok: findings.length === 0, findings, imageRef: pin.ref, composePath, confPath }
+}
+
+/** Reserved-name collision lint (R112-1). A squid build PREDEFINES certain ACL names; redeclaring one with a
+ *  different type FATALs at parse/boot — `to_localhost` did exactly that in the live run. Because reserved-name use
+ *  is now itself a failure, the bake refuses any conf that declares an ACL whose name is in RESERVED_SQUID_ACL_NAMES,
+ *  independent of the render's chosen custom names (the rename target for `to_localhost` lives with row 85). */
+export function assertNoReservedAclNames(confText: string): BakeFinding[] {
+  const findings: BakeFinding[] = []
+  const seen = new Set<string>()
+  for (const c of confText.split("\n").map((line) => line.split("#")[0] ?? "")) {
+    const m = c.match(/^acl\s+(\S+)\s+\S+/) // `acl <name> <type> ...`
+    const name = m?.[1]
+    if (!name || seen.has(name)) continue
+    if (RESERVED_SQUID_ACL_NAMES.includes(name)) {
+      seen.add(name)
+      findings.push({
+        code: "SQUID_RESERVED_ACL_NAME",
+        item: `acl '${name}' redeclares a squid-predefined name`,
+        hint: `R112-1 (13_live_firecrawl.md:108, V0/V6): predefined set is [${RESERVED_SQUID_ACL_NAMES.join(", ")}]; use a non-reserved name (the live fix renamed the hostname ACL away from to_localhost; http_access deny must follow) or squid FATALs at boot`,
+      })
+    }
+  }
+  return findings
+}
+
+/** File-mode posture (R112-5, security-bearing). Two contracts, both real FS facts asserted only over a rendered
+ *  tools root: (a) D-04 secret hygiene — the firecrawl secrets dir 0700 and every secret file 0600; (b) R112-5's
+ *  silent-auth-bypass class — a host file mounted under a container `/docker-entrypoint.d/` target MUST be
+ *  executable, because the official nginx entrypoint IGNORES non-executable `.sh` there (`Ignoring … not
+ *  executable`), so a 0644 wrap never runs envsubst and the bearer token silently ships empty. Absent secrets/files
+ *  are NOT failed here — secret generation is the owning step's job (D-22); this asserts the SHAPE of what exists. */
+export function auditFileModes(toolsRoot: string, composeText: string): BakeFinding[] {
+  const findings: BakeFinding[] = []
+  const p = pathsFor(toolsRoot)
+
+  if (existsSync(p.firecrawlSecrets)) {
+    const dirMode = statSync(p.firecrawlSecrets).mode & 0o777
+    if (dirMode !== MODES.DIR_0700)
+      findings.push({
+        code: "MODE_SECRETS_DIR",
+        item: `${p.firecrawlSecrets} mode ${dirMode.toString(8)} (want ${MODES.DIR_0700.toString(8)})`,
+        hint: "R112-5 / D-04 (PC-PATH-09): secrets dir must be 0700",
+      })
+    for (const name of readdirSync(p.firecrawlSecrets)) {
+      const f = `${p.firecrawlSecrets}/${name}`
+      if (!statSync(f).isFile()) continue
+      const m = statSync(f).mode & 0o777
+      if (m !== MODES.FILE_0600)
+        findings.push({
+          code: "MODE_SECRET_FILE",
+          item: `${f} mode ${m.toString(8)} (want ${MODES.FILE_0600.toString(8)})`,
+          hint: "R112-5 / D-04: secret files 0600 (group/other bits set leak the value)",
+        })
+    }
+  }
+
+  // Every `/docker-entrypoint.d/` bind in the stack must be executable on the host.
+  const lines = composeText.split("\n")
+  for (let i = 0; i < lines.length; i++) {
+    const src = lines[i]?.match(/^\s+source:\s*(\S+)/)?.[1]
+    if (!src || src.includes(":")) continue // skip tmpfs-style sources carrying a colon
+    // find the paired target within the next couple of lines (r85 bindMount emits source then target)
+    let target = ""
+    for (let j = i + 1; j <= i + 2 && j < lines.length; j++) {
+      const t = lines[j]?.match(/^\s+target:\s*(\S+)/)?.[1]
+      if (t) {
+        target = t
+        break
+      }
+    }
+    if (!target.includes("/docker-entrypoint.d/")) continue
+    if (!existsSync(src)) continue // owner has not placed it yet -> other gates cover absence
+    const mode = statSync(src).mode & 0o777
+    if ((mode & 0o100) === 0)
+      findings.push({
+        code: "MODE_ENTRYPOINT_WRAP",
+        item: `${src} mounted at ${target} is mode ${mode.toString(8)} (not executable)`,
+        hint: "R112-5: the nginx official entrypoint silently IGNORES non-executable docker-entrypoint.d scripts -> the token wrap never runs (silent auth bypass); render 0755 (or invoke via sh)",
+      })
+  }
+
+  return findings
+}
+
+/** Cross-enforcer equality hook (01e §10.4 agreement clause; review-107 MAJOR-2 + cross-enforcer verdict). The
+ *  estate runs TWO SSRF enforcers over different traffic — L4 squid (VM, resolved answers) and L3 urlpolicy (r94,
+ *  host-side proxy fetch). They are complementary, not redundant, so a range present on one side and absent on the
+ *  other is exactly the MAJOR-2 class of bug. This pins BOTH layers to the same twelve classes: for each class it
+ *  checks the squid ACL token AND feeds a class representative through r94's `isDeniedAddress` (the predicate its
+ *  resolve->check->pin transport uses), flagging an L3 gap or a squid/urlpolicy disagreement by name. Equality is
+ *  machine-checked here, not aspirational. */
+export function crossEnforcerAgreement(confText: string): BakeFinding[] {
+  const findings: BakeFinding[] = []
+  const squidDenies = destinationDenyTokens(confText) // renamed-ACL safe: keyed on dst TYPE + http_access deny linkage, not the old name
+  for (const req of REQUIRED_DENY_RANGES) {
+    const squidHas = squidDenies.has(req.cidr)
+    const urlHas = isDeniedAddress(req.probe)
+    if (!urlHas) {
+      findings.push({
+        code: "URLPOLICY_NOT_DENY",
+        item: `${req.cidr} (${req.kind}) not denied by the L3 urlpolicy host-side pin`,
+        hint: "r94 resolved-IP pinning posture (§13 / 01f_tool_wiring_spec.md §6.4): urlpolicy must deny every §10.4 class or the proxy's own host-side fetch leaks it (review-107 M2/M3)",
+      })
+    }
+    if (squidHas !== urlHas) {
+      findings.push({
+        code: "CROSS_ENFORCER_DIVERGENCE",
+        item: `${req.cidr} (${req.kind}): squid(L4)=${squidHas ? "deny" : "allow"} vs urlpolicy(L3)=${urlHas ? "deny" : "allow"} — enforcers must deny identical sets`,
+        hint: "01e §10.4 cross-enforcer agreement clause: any range edit moves renderer + bake-verifier + urlpolicy in ONE change (this hook is where drift surfaces)",
+      })
+    }
+  }
+  return findings
 }
 
 /** Parse-and-assert the squid.conf over the CODE portion only (inline `#` comments stripped so a comment
@@ -269,38 +431,34 @@ export function auditSquidConf(confText: string): BakeFinding[] {
   const findings: BakeFinding[] = []
   const code = confText.split("\n").map((line) => line.split("#")[0] ?? "") // comment-stripped, order preserved
 
-  // Collect every dst token across both to_localnet acl lines (v4 + v6 in the r85 render).
-  const denyTokens = new Set<string>()
-  for (const c of code) {
-    const m = c.match(/^acl\s+to_localnet\s+dst\s+(.+)$/)
-    if (m?.[1]) for (const tok of m[1].trim().split(/\s+/)) denyTokens.add(tok)
-  }
+  // Deny tokens are collected NAME-AGNOSTICALLY from every dst-typed ACL that is actually denied via
+  // http_access deny — so the audit follows row 85's rename away from the reserved `to_localhost`/`to_localnet`
+  // (R112-1) without hardcoding the new name, and an unenforced dst ACL contributes nothing.
+  const denyTokens = destinationDenyTokens(confText)
+  const denied = deniedAclNames(code)
+  const dstDeclNames = aclNamesByType(code, "dst")
+  const dstdomainDeclNames = aclNamesByType(code, "dstdomain")
+  const dstEnforced = dstDeclNames.some((n) => denied.has(n))
+  const dstdomainEnforced = dstdomainDeclNames.some((n) => denied.has(n))
 
   for (const req of REQUIRED_DENY_RANGES) {
     if (!denyTokens.has(req.cidr))
       findings.push({
         code: "DENY_RANGE_MISSING",
-        item: `${req.cidr} (${req.kind}) not in any acl to_localnet dst`,
-        hint: "§10.4 deny-list; a missing private/link-local range leaves an SSRF door open through the egress proxy",
+        item: `${req.cidr} (${req.kind}) not present in a denied dst ACL`,
+        hint: "§10.4 deny-list; a missing private/link-local/NAT64 range leaves an SSRF door open through the egress proxy",
       })
   }
 
-  // Hostname forms (rebinding/`.local`) covered by a dedicated to_localhost ACL.
-  // H-R93-6 (r93 live VM): the pre-fix r85 render mixed `dst localhost domain .local` on one line — INVALID
-  // squid grammar (`domain` is an ACL-type word, never a dst argument) -> `FATAL: Bungled` at boot, which this
-  // audit missed because it asserted token PRESENCE, not grammar. Valid form: `acl to_localhost dstdomain <suffix>`
-  // lines (IP answers stay in to_localnet dst). Coverage = both `localhost` and `.local` present as dstdomain args.
-  const hostnameTokens = new Set<string>()
-  for (const c of code) {
-    const m = c.match(/^acl\s+to_localhost\s+dstdomain\s+(\S+)\s*$/)
-    if (m?.[1]) hostnameTokens.add(m[1])
-  }
+  // Hostname forms (rebinding/`.local`) covered by a DENIED dstdomain ACL — matched by TYPE, not the reserved name
+  // (H-R93-6 + R112-1: the render must not name the ACL `to_localhost`; the coverage class is what matters here).
+  const hostnameTokens = dstdomainDeniedTokens(confText)
   const hostnameCovered = hostnameTokens.has("localhost") && hostnameTokens.has(".local")
   if (!hostnameCovered) {
     findings.push({
       code: "DENY_HOSTNAME_MISSING",
-      item: "acl to_localhost dstdomain does not cover `localhost` and `.local`",
-      hint: "§10.4 hostname form (CONNECT authority + absolute-URI host); dstdomain class per H-R93-6 — IP answers stay covered by to_localnet dst with CONNECT-time answer re-check (V3)",
+      item: "no denied dstdomain ACL covers both `localhost` and `.local`",
+      hint: "§10.4 hostname form (CONNECT authority + absolute-URI host); dstdomain class per H-R93-6/R112-1 — declare it under a NON-reserved name and http_access deny it",
     })
   }
   // Grammar guard for the exact H-R93-6 failure class: no `dst` ACL line may carry the word `domain`
@@ -316,35 +474,32 @@ export function auditSquidConf(confText: string): BakeFinding[] {
   }
 
   // Enforcement wiring — the ACLs are useless unless http_access denies them.
-  function deniesTo(input: string): number {
-    return code.findIndex((c) => new RegExp(`^http_access\\s+deny\\s+${input}\\s*$`).test(c))
-  }
-  const denyLocalnet = deniesTo("to_localnet")
-  const denyLocalhost = deniesTo("to_localhost")
-  const denyAll = code.findIndex((c) => /^http_access\s+deny\s+all\s*$/.test(c))
-
-  if (denyTokens.size > 0 && denyLocalnet === -1)
+  if (dstDeclNames.length > 0 && !dstEnforced)
     findings.push({
       code: "DENY_NOT_ENFORCED",
-      item: "http_access deny to_localnet absent",
-      hint: "an unenforced ACL filters nothing (10.4 deny-then-default-deny ordering)",
+      item: `destination ACL(s) [${dstDeclNames.join(", ")}] declared but no http_access deny references them`,
+      hint: "an unenforced dst ACL filters nothing (10.4 deny-then-default-deny ordering)",
     })
-  if (hostnameTokens.size > 0 && denyLocalhost === -1)
+  if (dstdomainDeclNames.length > 0 && !dstdomainEnforced)
     findings.push({
       code: "DENY_NOT_ENFORCED",
-      item: "http_access deny to_localhost absent",
+      item: `hostname ACL(s) [${dstdomainDeclNames.join(", ")}] declared but no http_access deny references them`,
       hint: "hostname-class SSRF is unprotected without it",
     })
+
+  const denyAll = code.findIndex((c) => /^http_access\s+deny\s+all\s*$/.test(c))
+  const destDenyNames = new Set([...dstDeclNames, ...dstdomainDeclNames])
+  const firstDestDeny = code.findIndex((c) => /^http_access\s+deny\s+(\S+)/.test(c) && destDenyNames.has(c.match(/^http_access\s+deny\s+(\S+)/)?.[1] ?? ""))
   if (denyAll === -1)
     findings.push({
       code: "DEFAULT_DENY_MISSING",
       item: "no trailing http_access deny all",
       hint: "default-deny is the last line; without it anything unmatched is allowed (10.4)",
     })
-  else if ((denyLocalnet !== -1 && denyAll < denyLocalnet) || (denyLocalhost !== -1 && denyAll < denyLocalhost)) {
+  else if (firstDestDeny !== -1 && denyAll < firstDestDeny) {
     findings.push({
       code: "DEFAULT_DENY_MISORDERED",
-      item: "http_access deny all appears BEFORE the specific denies",
+      item: "http_access deny all appears BEFORE the destination-class denies",
       hint: "ordering matters in squid; default-deny first would shadow the allow of localnet and is also a misconfiguration class (10.4)",
     })
   }
@@ -503,6 +658,54 @@ function matchAllValues(lines: readonly string[], re: RegExp): string[] {
   for (const l of lines) {
     const m = l.match(re)
     if (m?.[1]) out.push(m[1])
+  }
+  return out
+}
+
+// --- renamed-ACL-safe ACL helpers (key on ACL TYPE + http_access deny linkage, never the custom name) ------
+
+/** Comment-stripped code lines (a comment naming an IP or name must never satisfy an assertion). */
+function strippedCode(confText: string): string[] {
+  return confText.split("\n").map((line) => line.split("#")[0] ?? "")
+}
+
+/** Names positively referenced by `http_access deny <name>` (negated forms like `deny !SafePorts` are excluded —
+ *  they reference a class as a condition, they are not the enforcement of a destination ACL). */
+function deniedAclNames(code: readonly string[]): Set<string> {
+  const out = new Set<string>()
+  for (const c of code) {
+    const m = c.match(/^http_access\s+deny\s+([A-Za-z_][\w.]*)/)
+    if (m?.[1]) out.add(m[1])
+  }
+  return out
+}
+
+/** Names of every `acl <name> <type> ...` declaration of a given type (`dst`, `dstdomain`, …). */
+function aclNamesByType(code: readonly string[], type: string): string[] {
+  const re = new RegExp(`^acl\\s+(\\S+)\\s+${type}\\s+\\S`)
+  return [...new Set(code.map((c) => c.match(re)?.[1]).filter((n): n is string => !!n))]
+}
+
+/** Union of CIDR tokens from dst-typed ACLs that are actually DENIED — the renamed-ACL-safe deny set. */
+function destinationDenyTokens(confText: string): Set<string> {
+  const code = strippedCode(confText)
+  const denied = deniedAclNames(code)
+  const out = new Set<string>()
+  for (const c of code) {
+    const m = c.match(/^acl\s+(\S+)\s+dst\s+(.+)$/)
+    if (m?.[1] && m[2] && denied.has(m[1])) for (const tok of m[2].trim().split(/\s+/)) out.add(tok)
+  }
+  return out
+}
+
+/** Union of suffix tokens from dstdomain ACLs that are actually DENIED — the renamed hostname class. */
+function dstdomainDeniedTokens(confText: string): Set<string> {
+  const code = strippedCode(confText)
+  const denied = deniedAclNames(code)
+  const out = new Set<string>()
+  for (const c of code) {
+    const m = c.match(/^acl\s+(\S+)\s+dstdomain\s+(.+)$/)
+    if (m?.[1] && m[2] && denied.has(m[1])) for (const tok of m[2].trim().split(/\s+/)) out.add(tok)
   }
   return out
 }

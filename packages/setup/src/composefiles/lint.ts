@@ -363,5 +363,95 @@ export function lintComposeText(text: string, opts: LintOptions): Finding[] {
 }
 
 export function lintOk(findings: readonly Finding[]): boolean {
-  return !findings.some((f) => f.severity === "error")
+  return !findings.some((f) => f.severity === "error");
+}
+
+/** REVIEW-107 MAJOR-1 gate (grep-style, applies to EVERY rendered artefact — compose files AND
+ *  bin wraps): a generated secret must never reach an exec'd command line. `docker top` and
+ *  /proc/<pid>/cmdline expose argv to any principal on the VM host path; the sanctioned channels
+ *  are env assignment/export (the review's own "correct siblings" pattern) and file delivery
+ *  (redis's documented config-file mechanism). Three mechanical shapes catch the leak class: */
+export const SECRET_ARGV_PATTERNS: readonly { readonly id: string; readonly re: RegExp }[] = [
+  { id: "requirepass-argv", re: /--requirepass\s+["']?\$/ }, // password interpolated as a CLI argument
+  { id: "cli-auth-argv", re: /(?:^|\s)-a\s+["']?\$\(/ }, // redis-cli style -a "$(cat ...)"
+  { id: "exec-interpolated-secret", re: /\bexec\b[^\n]*\$\(\s*cat\s+\/run\/secrets/ }, // exec line expanding a secret file
+];
+
+/** Returns one finding per leaked shape; empty means argv-clean across the given text. */
+export function findSecretArgvLeak(text: string): Finding[] {
+  const findings: Finding[] = [];
+  for (const l of toCodeLines(text)) {
+    if (l.isComment) continue; // the gate is about EXECUTED lines; prose may name the shapes (this file does)
+    for (const p of SECRET_ARGV_PATTERNS) {
+      if (p.re.test(l.code)) findings.push({ rule: `secret-argv:${p.id}`, severity: "error", line: l.n, message: `secret material interpolated into an exec'd argument (${p.id})` });
+    }
+  }
+  return findings;
+}
+
+/** REVIEW-107 MAJOR-2 ordering rule, as written into 01e §10.4 by r75-fix4: EVERY destination-class
+ *  deny must precede ANY `http_access allow` line. The member-source `allow localnet` admits only WHO
+ *  may ask, never WHERE it goes — emitted above the destination denies it would shadow them for
+ *  admitted sources, which is exactly the escape M2 proved. Terminal `deny all` ordering stays r92's
+ *  DEFAULT_DENY_MISORDERED job. Name-agnostic since R112-1: destination classes are DISCOVERED from
+ *  the file's own `acl NAME dst|dstdomain` declarations, so renames (to_* -> swarm_*) can't blind it. */
+export function findSquidOrderingViolations(text: string): Finding[] {
+  const lines = toCodeLines(text)
+  const destClasses = new Set<string>()
+  for (const l of lines) {
+    if (l.isComment) continue
+    const m = l.code.match(/^\s*acl\s+(\S+)\s+(?:dst|dstdomain)\s+\S/)
+    if (m?.[1]) destClasses.add(m[1])
+  }
+  const destDenies = lines.filter((l) => !l.isComment && destClasses.has((l.code.trim().match(/^http_access\s+deny\s+(\S+)/) ?? [])[1] ?? ""))
+  const allows = lines.filter((l) => !l.isComment && /^http_access\s+allow\b/.test(l.code.trim()))
+  const findings: Finding[] = [];
+  for (const a of allows) {
+    const below = destDenies.filter((d) => d.n > a.n);
+    if (below.length > 0) {
+      findings.push({ rule: "squid-deny-ordering", severity: "error", line: a.n, message: `http_access allow at line ${a.n} precedes destination-class deny/denies at ${below.map((d) => d.n).join(", ")} — deny-before-allow is mandatory for destination classes (01e §10.4 [review-107 M2]); an admitted source would bypass them` });
+    }
+  }
+  return findings;
+}
+
+/** R112-1 (r112 live VM, squid 6.13 pinned digest): squid PREDEFINES these ACL names — the image
+ *  ships the note at /etc/squid/squid.conf:1387 ("ACLs all, manager, localhost, to_localhost,
+ *  to_linklocal, and CONNECT are predefined"). Redeclaring one with a different type is a boot
+ *  FATAL (`aclParseAclLine: ACL 'X' already exists with different type`) — the exact crash that
+ *  killed egress-proxy via our old `to_localhost`. Experiments V0-V6 isolated it to the NAME.
+ *  Our declarations must therefore live in the swarm_* namespace. Same-type port ACLs
+ *  (SSL_ports/Safe_ports) are NOT listed here: same-type redeclaration parsed clean on the live
+ *  digest (V6 kept SSL_ports at rc=0), so only these six compiled-in names are refused. */
+export const RESERVED_ACL_NAMES: readonly string[] = ["all", "manager", "localhost", "to_localhost", "to_linklocal", "CONNECT"];
+
+export function findReservedAclNames(text: string): Finding[] {
+  const findings: Finding[] = [];
+  for (const l of toCodeLines(text)) {
+    if (l.isComment) continue;
+    const m = l.code.match(/^\s*acl\s+(\S+)\s/);
+    if (m && RESERVED_ACL_NAMES.includes(m[1] as string)) {
+      findings.push({ rule: "reserved-acl-name", severity: "error", line: l.n, message: `acl '${m[1]}' collides with a squid PREDEFINED name (image note /etc/squid/squid.conf:1387) — different-type redeclaration is a boot FATAL (R112-1); declare under the swarm_* namespace instead` });
+    }
+  }
+  return findings;
+}
+
+/** R112-5 (security-bearing): rendered wraps must carry ZERO group/world permission bits, and any
+ *  wrap the container ENTRYPOINT EXECUTES directly (mounted under /docker-entrypoint.d/) must be
+ *  owner-executable — the official nginx entrypoint silently IGNORES non-executable scripts, which
+ *  shipped an empty bearer token (auth bypass posture). Shipped set: 0700 entrypoint-executed,
+ *  0600 sh-invoked. Checked on RenderFile.mode so a regression fails at render time, not first boot. */
+export function findWrapModeViolations(files: readonly { readonly relPath: string; readonly mode: number }[]): Finding[] {
+  const findings: Finding[] = [];
+  for (const f of files) {
+    if (!f.relPath.includes("/compose/bin/")) continue;
+    if ((f.mode & 0o077) !== 0) {
+      findings.push({ rule: "wrap-mode", severity: "error", message: `${f.relPath}: mode 0${f.mode.toString(8)} carries group/world bits — R112-5 mandates 0700/0600 (zero group/world)` });
+    }
+    if (f.relPath.endsWith("fc-nginx-env.sh") && (f.mode & 0o100) === 0) {
+      findings.push({ rule: "wrap-mode", severity: "error", message: `${f.relPath}: not owner-executable — the entrypoint SILENTLY ignores non-executable /docker-entrypoint.d scripts (empty-bearer bypass, R112-5)` });
+    }
+  }
+  return findings;
 }

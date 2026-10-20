@@ -22,3 +22,71 @@ declare module "node:fs" {
 interface URL {
   readonly port: string
 }
+
+// --- FIX2 (review 107 MAJOR-3): resolve→check→pin transport builtins ---------------------------
+// Row-94 fix-round additions, same additive discipline. Mirrors @types/node for exactly the
+// members src/mcpproxy/resolve.ts uses: the dns.lookup answer set, and the http/https request
+// path with the custom-`lookup` connect option (Node >=10.11 API) that makes pinned connects
+// possible without a second resolution. Global Swarm*-prefixed interfaces avoid any collision
+// with existing shims; row 106 retires them against the full catalog.
+
+declare module "node:dns" {
+  export interface DnsAnswer {
+    address: string
+    family: number
+  }
+  export function lookup(
+    hostname: string,
+    options: { all: true; verbatim?: boolean },
+    callback: (err: Error | null, addresses: DnsAnswer[]) => void,
+  ): void
+}
+
+interface SwarmDnsLookupCallback {
+  (err: Error | null, address: string | Array<{ address: string; family: number }>, family?: number): void
+}
+interface SwarmDnsLookupFn {
+  (hostname: string, options: Record<string, unknown>, callback: SwarmDnsLookupCallback): void
+}
+
+interface SwarmHttpRequestOptions {
+  host: string
+  port?: number
+  method?: string
+  path?: string
+  headers?: Record<string, string>
+  timeout?: number
+  /** TLS SNI + certificate-identity target (https leg). Stays the ORIGINAL hostname under pinning. */
+  servername?: string
+  /** Trust anchor override — TEST SEAM ONLY in resolve.ts (self-signed fixtures); undefined keeps
+   *  the system store and setting it NARROWS trust, never disables verification. */
+  ca?: string
+  /** Custom resolver hook: serves the pre-vetted pinned address (TOCTOU closure). */
+  lookup?: SwarmDnsLookupFn
+}
+
+interface SwarmIncomingMessage {
+  readonly statusCode?: number
+  readonly headers: Record<string, string | string[] | undefined>
+  on(event: "data", cb: (chunk: Uint8Array) => void): void
+  on(event: "end", cb: () => void): void
+  on(event: "error", cb: (err: Error) => void): void
+}
+
+interface SwarmClientRequest {
+  on(event: "response", cb: (res: SwarmIncomingMessage) => void): void
+  on(event: "error", cb: (err: Error) => void): void
+  write(chunk: string | Uint8Array): void
+  end(): void
+  destroy(): void
+}
+
+declare module "node:http" {
+  const mod: { request(options: SwarmHttpRequestOptions): SwarmClientRequest }
+  export default mod
+}
+
+declare module "node:https" {
+  const mod: { request(options: SwarmHttpRequestOptions): SwarmClientRequest }
+  export default mod
+}

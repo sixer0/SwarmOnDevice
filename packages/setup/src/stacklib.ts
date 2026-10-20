@@ -160,6 +160,14 @@ function toolsRootFor(home?: string): string {
 
 // --- command builders (pure; every proof of scoping runs over these) ---------------------
 
+// Docker Compose's OWN resource labels (set by compose on every network/container it creates). These
+// are external-tool constants, not register PC-* values — cited to the compose CLI/docs, spelled once
+// here so no call site re-types them. Used only to scope `network ls` per stack inside the shared
+// swarm-tools project (networks carry no io.gsp.swarm.* labels because the rendered compose does not
+// set them on networks).
+const COMPOSE_NETWORK_PROJECT_LABEL = "com.docker.compose.project";
+const COMPOSE_NETWORK_CONFIG_LABEL = "com.docker.compose.project.config_files";
+
 function composeBase(composeFile: string): string[] {
   // PC-PROF-02 explicit context FIRST; PC-PROJ-01 explicit -p; per-stack -f scoping (01e §3).
   return ["--context", DOCKER_CONTEXT, "compose", "-p", COMPOSE_PROJECT, "-f", composeFile]
@@ -179,8 +187,25 @@ export function composePsArgs(composeFile: string): string[] {
   return [...composeBase(composeFile), "ps", "--format", "{{.Name}}={{.State}}={{.Health}}"]
 }
 
+/** List THIS stack's networks with the SUPPORTED plain-docker verb `network ls`, scoped by the
+ *  compose project + config-file labels. Docker Compose v5.6.0 (pinned: tools.lock.json
+ *  components.runtime.docker_compose; 02d §6:40/220) documents NO `compose networks` subcommand —
+ *  its subcommand set is attach/build/commit/config/convert/cp/create/down/events/exec/export/
+ *  images/kill/logs/ls/pause/port/ps/publish/pull/push/restart/rm/run/scale/start/stats/stop/top/
+ *  unpause/up/version/volumes/wait/watch (docs.docker.com/reference/cli/docker/compose/); `ls` lists
+ *  PROJECTS, not networks. The old `compose … networks` argv was rejected live as `unknown docker
+ *  command: "networks"` (R111-1). Networks carry compose's OWN labels (the rendered compose declares
+ *  no io.gsp.swarm.* on them), so per-stack scoping inside the shared swarm-tools project uses
+ *  com.docker.compose.project + .project.config_files = this file (compose stamps both on every
+ *  network it creates). Name kept as `composeNetworksArgs` for API stability with the r93/r111
+ *  drivers that import it; the emitted verb is now plain `docker network ls`. */
 export function composeNetworksArgs(composeFile: string): string[] {
-  return [...composeBase(composeFile), "networks", "--format", "{{.Name}}"]
+  return [
+    "--context", DOCKER_CONTEXT, "network", "ls",
+    "--filter", `label=${COMPOSE_NETWORK_PROJECT_LABEL}=${COMPOSE_PROJECT}`,
+    "--filter", `label=${COMPOSE_NETWORK_CONFIG_LABEL}=${composeFile}`,
+    "--format", "{{.Name}}",
+  ];
 }
 
 /** `docker context inspect <name>` — the pre-bring-up probe that the target context exists.

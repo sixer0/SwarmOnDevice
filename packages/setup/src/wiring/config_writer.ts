@@ -28,7 +28,7 @@
 // This module spawns nothing and opens no socket. It writes only under ~/.config/swarm (entries + texts +
 // their timestamped backups) and ~/.swarm/setup/config-writer.json (the reversal ledger, inside P-16).
 
-import { existsSync, lstatSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs"
+import { existsSync, lstatSync, readFileSync, readdirSync, rmSync, statSync } from "node:fs"
 import { basename, dirname, join } from "node:path"
 import { createHash } from "node:crypto"
 import { MODES, PATHS, STATES, type ComponentId } from "../constants.ts"
@@ -128,6 +128,11 @@ export interface ConfigWriterOptions {
   readonly env?: Readonly<Record<string, string | undefined>>
   /** Where tool_launch audit lines go; default = the unified chain path. */
   readonly chain?: ChainOptions
+  /** TEST SEAM ONLY (F-R109-1 kill-boundary replay): invoked inside the per-target loop right after the
+   *  durable ledger commit ("pre-replace") and again after the atomic replace ("post-replace"). Throwing
+   *  from it emulates a process death at that exact durable boundary so a unit can prove resume+removal
+   *  stay complete. Optional and inert in production — cannot weaken any guarantee. */
+  readonly onTargetBoundary?: (phase: "pre-replace" | "post-replace", label: string) => void
 }
 
 export interface WriteOutcome {
@@ -352,46 +357,56 @@ export function writeConfigEntries(opts: ConfigWriterOptions = {}): WriteResult 
       return { ok: false, reason: `target ${p.path} is a symlink — refusing to write through it (target_symlink)` }
   }
 
-  const changedWrites = plan.filter((p) => {
-    const cur = readCurrent(p.path)
-    return !(cur.present && cur.text === p.desired)
-  })
-
   const wroteSkills = plan.filter((p) => p.label !== CONFIG_FILE_NAME).map((p) => p.label)
   const wrote = { graft: el.graft && !!readEntryFromPlan(plan, "graft"), swarmWeb: el.swarmWeb, skills: wroteSkills }
-
-  if (changedWrites.length === 0) {
-    return { ok: true, changed: false, wrote, skipped, backupPath: null, backups: [], configPath }
-  }
 
   const lpath = ledgerPath(opts.base)
   const prior = readLedger(lpath)
   const files: Record<string, FileRecord> = { ...(prior?.files ?? {}) }
   const backupsThisRun: string[] = []
   let configBackup: string | null = null
+  let changed = false
 
-  for (const p of changedWrites) {
+  // F-R109-1 fix: commit the ledger PER TARGET, durably, immediately BEFORE that target's replace, so
+  // every completed step is independently kill-safe and reversible. A kill between two targets leaves a
+  // ledger that fully accounts for everything already written (no orphan); a re-run finishes the rest.
+  // Ordering per target: durable backup -> durable ledger (fsync'd via atomicWriteText) -> atomic replace.
+  const commitLedger = (): void => {
+    atomicWriteText(
+      lpath,
+      JSON.stringify({ version: LEDGER_VERSION, files, updatedAt: now } satisfies WriterLedger, null, 2) + "\n",
+      MODES.FILE_0600,
+    )
+  }
+
+  for (const p of plan) {
     const cur = readCurrent(p.path)
+    if (cur.present && cur.text === p.desired) continue // already correct; leave any existing record intact
+
+    const prev = files[p.path]
     let backup: string | null = null
     if (cur.present) {
       backup = join(dirname(p.path), `${basename(p.path)}.${sha12(cur.text)}.${compactStamp(now)}.bak`)
-      writeFileSync(backup, cur.text, { encoding: "utf8", mode: MODES.FILE_0600 })
+      atomicWriteText(backup, cur.text, MODES.FILE_0600) // durable BEFORE the ledger references it
       backupsThisRun.push(backup)
       if (p.label === CONFIG_FILE_NAME) configBackup = backup
     }
-    atomicWriteText(p.path, p.desired, MODES.FILE_0600)
-    const prev = files[p.path]
     files[p.path] = {
       targetPath: p.path,
       preexisting: prev ? prev.preexisting : cur.present,
       firstBackupPath: prev?.firstBackupPath ?? backup,
       backups: [...(prev?.backups ?? []), ...(backup ? [backup] : [])],
     }
+    commitLedger() // reversal info is durable before the target changes (closes the K11/K12 gap)
+    opts.onTargetBoundary?.("pre-replace", p.label) // TEST SEAM ONLY: throw here to emulate a kill after the ledger commit but before the replace
+    atomicWriteText(p.path, p.desired, MODES.FILE_0600)
+    opts.onTargetBoundary?.("post-replace", p.label) // TEST SEAM ONLY: throw here to emulate a kill after this target fully lands
+    changed = true
   }
 
-  const ledger: WriterLedger = { version: LEDGER_VERSION, files, updatedAt: now }
-  atomicWriteText(lpath, JSON.stringify(ledger, null, 2) + "\n", MODES.FILE_0600)
-
+  if (!changed) {
+    return { ok: true, changed: false, wrote, skipped, backupPath: null, backups: [], configPath }
+  }
   return { ok: true, changed: true, wrote, skipped, backupPath: configBackup, backups: backupsThisRun, configPath }
 }
 

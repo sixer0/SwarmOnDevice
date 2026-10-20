@@ -3,13 +3,16 @@
 // consent-grant path + F-79-A policy gate hook").
 //
 // The load-bearing invariant enforced HERE, in code: NO network request can happen until a
-// component has been consented to AND that consent is durably recorded. Enforcement is threefold:
+// component has been consented to IN THIS RUN AND that consent is durably recorded. Enforcement
+// is threefold:
 //   1. Structural — index.ts reaches step discovery ONLY after evaluateConsent returns ok:true,
 //      and evaluateConsent records every grant (append + fsync) BEFORE it returns.
-//   2. Verifiable — consentWasGranted() lets future steps (rows 86-90) assert in-process that
-//      their component was granted before they call row 82's fetchArtifact.
+//   2. Verifiable — consentWasGranted() answers grant-in-effect: durable record AND selection by
+//      this run's decision (M4 fix); stepkit's kit.fetch, stacklib bring-up and row 106 dispatch
+//      all gate on this one predicate before row 82's fetchArtifact may be called.
 //   3. Testable — test/consent.test.ts wraps globalThis.fetch with a counter and proves a
-//      refused run performs ZERO network calls (the blueprint's "no download before consent").
+//      refused run performs ZERO network calls (the blueprint's "no download before consent"),
+//      including the M4 matrix: grant-run-A / decline-run-B (zero downloads B) / re-grant-C.
 //
 // Rules implemented verbatim from masterplan/01d_preinstall_consent_dataflow.md (REVISED):
 //   - every component optional and UNTICKED by default (decision 12); only an explicit y/yes grants;
@@ -68,18 +71,31 @@ export type ConsentResult = { ok: true; consented: ComponentId[] } | { ok: false
  *  self-resolve; stack ids expose image refs instead (dockerd pulls them inside the VM, D-16b). */
 const RUNTIME_DOWNLOADS = ["colima", "lima", "docker_cli", "docker_compose", "guest_image", "qemu"] as const
 
-// Grant ledger = the DURABLE RECORD ITSELF. consentWasGranted() answers from the current
-// HOME's consent.log (PC-PATH-03), not from process memory: an in-memory Set leaked grants
-// across test suites sharing one bun process (r95-routed FIX2: stepkit's "false in a fresh
-// process" case failed combined runs), and checking the record is the STRONGER form of the
-// same invariant — "no fetch until consent is RECORDED" is proven by the file, not by an echo
-// of it. Fresh HOME (every sandboxed suite, every clean run) therefore starts ungranted.
-// Rows 86-90 call this before fetchArtifact as the belt-and-braces ordering assert.
+// --- grant-in-effect (FIX ROUND 4, senior review 11 MAJOR-4) ------------------------------------
+// INVARIANT: a download requires a grant IN EFFECT FOR THIS RUN — a durable record (PC-PATH-03)
+// AND selection by this run's consent decision. The append-only log is historical truth and is
+// NEVER rewritten, but it is necessary-not-sufficient: "granted once" must not outlive a later
+// DECLINE. Before this fix the predicate answered from history alone, so once run A granted
+// `node`, run B declining `node` still passed the kit gate and downloaded (M4 — latent until
+// row 106 wires real dispatch, which is exactly when it would have opened).
+// sessionSelection holds EXACTLY the components the LAST evaluateConsent decision in this process
+// granted; every decision replaces the previous one, and any refusal clears it. Both factors are
+// load-bearing against cross-suite leakage (the FIX2 lesson): a stale selection can never grant in
+// a HOME without a record, and a historical record can never grant without this-run selection.
+const sessionSelection = new Set<ComponentId>()
 
-/** True when a durable consent record for the component exists in THIS invocation's
- *  consent.log. Unreadable or malformed file answers false (fail-closed): an unverifiable
- *  grant is treated as no grant, exactly like the resume logic's "cannot verify = not verified". */
+/** True iff THIS RUN may download the component: a durable consent record exists AND this run's
+ *  consent decision selected it. Single enforcement point for stepkit's default consentGate
+ *  (kit.fetch layer 2), stacklib bring-up checks, and row 106's dispatch wiring. */
 export function consentWasGranted(id: ComponentId): boolean {
+  return sessionSelection.has(id) && hasDurableRecord(id)
+}
+
+/** Whether the current HOME's consent.log (PC-PATH-03) carries a record line naming the
+ *  component — historical truth only; NOT a download permission on its own. Unreadable or
+ *  malformed input answers false (fail-closed, same posture as resume logic's "cannot verify =
+ *  not verified"); a torn final line must not hide earlier complete records, so scanning continues. */
+function hasDurableRecord(id: ComponentId): boolean {
   const path = consentLog()
   if (!existsSync(path)) return false
   let text: string
@@ -240,6 +256,9 @@ export function formatLicence(lock: LockFile, id: ComponentId): string {
  * write nothing to disk (row 83 gate: "a refused run leaves nothing on disk").
  */
 export function evaluateConsent(req: ConsentRequest): ConsentResult {
+  // Every consent decision REPLACES the previous one in this process (grant-in-effect, M4):
+  // clear first, so any refusal path below leaves nothing selected for this run.
+  sessionSelection.clear()
   const forbidden = new Set(req.forbidden ?? [])
   const blocked = req.selected.filter((id) => forbidden.has(id))
   if (blocked.length > 0) {
@@ -280,6 +299,8 @@ export function evaluateConsent(req: ConsentRequest): ConsentResult {
       recordConsent({ component: id, mode: "non-interactive", token: req.tokens[id], lock: req.lock })
       granted.push(id)
     }
+    // Grant-in-effect: only components whose token VALIDATED count as selected for this run.
+    for (const id of granted) sessionSelection.add(id)
     return { ok: true, consented: granted }
   }
 
@@ -298,6 +319,8 @@ export function evaluateConsent(req: ConsentRequest): ConsentResult {
     return { ok: false, token: OUTCOME.REFUSED_NO_CONSENT }
   }
   for (const id of granted) recordConsent({ component: id, mode: "interactive", lock: req.lock })
+  // Grant-in-effect: the y/yes answers of THIS decision are this run's selection (M4).
+  for (const id of granted) sessionSelection.add(id)
   return { ok: true, consented: granted }
 }
 

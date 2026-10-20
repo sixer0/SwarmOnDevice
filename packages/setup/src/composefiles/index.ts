@@ -50,7 +50,7 @@ import { renderSearxngSettings } from "./searxng_settings.ts"
 import { renderNginxTemplate, type NginxOptions } from "./nginx_template.ts"
 import { renderBinScripts } from "./bin_scripts.ts"
 import { renderSquidConf } from "./squid_conf.ts"
-import { lintComposeText, lintOk, type Finding } from "./lint.ts"
+import { findReservedAclNames, findSecretArgvLeak, findSquidOrderingViolations, findWrapModeViolations, lintComposeText, lintOk, type Finding } from "./lint.ts"
 
 export interface FullRender {
   readonly ok: boolean
@@ -105,9 +105,20 @@ export function renderAll(lock: LockFile, ctx: RenderContext, nginxOpts: NginxOp
   ]
 
   // F-79-E + full §4.9 gate: refuse to hand back anything that fails its own lint.
+  // REVIEW-107 MAJOR-1 gate extended: the argv-leak scan covers EVERY rendered artefact
+  // (compose + wraps + templates), so a future wrap edit that reintroduces a secret in an
+  // exec'd argument cannot ship.
   const findings = [
     ...lintComposeText(sx.file.content, { lockVersion: lock.version }),
     ...lintComposeText(fc.file.content, { lockVersion: lock.version }),
+    ...files.flatMap((f) => findSecretArgvLeak(f.content).map((x) => ({ ...x, message: `${f.relPath}: ${x.message}` }))),
+    // REVIEW-107 MAJOR-2 (r75-fix4 handoff): the renderer's own squid output must satisfy
+    // deny-before-allow for destination classes before it may ship.
+    ...findSquidOrderingViolations(files.find((f) => f.relPath === "firecrawl/squid/squid.conf")?.content ?? "").map((x) => ({ ...x, message: `firecrawl/squid/squid.conf: ${x.message}` })),
+    // R112-1: no declaration may squat a squid-PREDEFINED ACL name (boot FATAL class, live-proven).
+    ...findReservedAclNames(files.find((f) => f.relPath === "firecrawl/squid/squid.conf")?.content ?? "").map((x) => ({ ...x, message: `firecrawl/squid/squid.conf: ${x.message}` })),
+    // R112-5: wrap modes — zero group/world bits; entrypoint-executed wrap must be owner-executable.
+    ...findWrapModeViolations(files),
   ]
   const ok = lintOk(findings)
   return { ok, files, findings, errors: [], warnings: [...st.warnings], enginePath: nctx.enginePath }

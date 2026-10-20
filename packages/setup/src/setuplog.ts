@@ -131,6 +131,16 @@ const TERM_TOKEN_RE = /\b[a-z][a-z0-9]*@[0-9a-f]{12}\b/gi
 // inline env-style secret assignment inside free text: NAME=... or NAME: ... where NAME ends in a secret suffix.
 const INLINE_SECRET_RE =
   /\b([A-Z][A-Z0-9_]*_(?:SECRET|PASSWORD|PASSWD|TOKEN|API_KEY|AUTH_KEY|ACCESS_KEY|PRIVATE_KEY|CREDENTIAL)|SEARXNG_SECRET|BULL_AUTH_KEY)(\s*[=:]\s*)("[^"]*"|'[^']*'|[^\s,;}\]"']+)/g
+// M5 (senior review 107): the two OPTIONAL auth secrets REDIS_AUTH / VALKEY_AUTH are in the
+// structural EXPLICIT set but were not matched in free text (the catch-all above has _AUTH_KEY,
+// not a bare _AUTH). We deliberately do NOT widen the catch-all with `_AUTH`, because that would
+// also redact legitimate *path* references such as `REDIS_AUTH=/run/secrets/redis_auth`. Instead we
+// match the env/file NAME only when it is followed by a HEX-ONLY VALUE — the §4.6 generation
+// alphabet (`openssl rand -hex`), so the secret is scrubbed while mount paths and artifact digests
+// (sha256:<hex>, which is never preceded by an auth name) survive. This is the "pattern on VALUES,
+// not just keys" half of the fix; it complements registerSecret(), which the future secret-generating
+// owner (rows 86-90) must call so a bare value is caught even without its name nearby.
+const HEX_AUTH_VALUE_RE = /\b(REDIS_AUTH|VALKEY_AUTH)(\s*[=:]\s*)("?)([0-9a-f]{16,})\3/gi
 
 function redactShapes(s: string): string {
   let out = s
@@ -141,6 +151,11 @@ function redactShapes(s: string): string {
     INLINE_SECRET_RE,
     (_m, key: string, sep: string, val: string) =>
       `${key}${sep}${val[0] === '"' || val[0] === "'" ? `${val[0]}${REDACTED}${val[0]}` : REDACTED}`,
+  )
+  // REDIS_AUTH / VALKEY_AUTH hex values (M5). Key-anchored + hex-shaped so path refs survive.
+  out = out.replace(
+    HEX_AUTH_VALUE_RE,
+    (_m, name: string, sep: string, quote: string) => `${name}${sep}${quote}${REDACTED}${quote}`,
   )
   // Term-token BEFORE the credential-scheme rule: otherwise a sentence like "token
   // node@deadbeefcafe" is half-eaten by the scheme matcher (which stops at the '@'),
