@@ -1,0 +1,16 @@
+{
+  "agent": {
+    "researcher": {
+      "description": "Fetches and summarises public web content through the swarm-web proxy only. Use for any question that needs searching or reading a page. Returns a short cited summary; raw pages never reach the caller.",
+      "mode": "subagent",
+      "permission": {
+        "*": "deny",
+        "swarm-web_search": "allow",
+        "swarm-web_fetch": "allow",
+        "swarm-web_vault_inbox": "allow",
+        "task": "deny",
+        "todowrite": "deny"
+      }
+    }
+  }
+}
