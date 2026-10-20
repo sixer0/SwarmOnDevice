@@ -65,7 +65,7 @@ echo "=== PROOF 2: unit suite (twelve-class deny-rule parse-and-assert / cross-e
 rc=$?
 tail -5 "$WORK/bun-test.log"
 check "bun test $MY_TEST" 0 $rc
-grep -qE " 79 pass" "$WORK/bun-test.log" && { echo "  PASS 79 unit tests reported"; pass=$((pass+1)); } || { echo "  FAIL expected 79 passes"; fail=$((fail+1)); }
+grep -qE " 82 pass" "$WORK/bun-test.log" && { echo "  PASS 82 unit tests reported"; pass=$((pass+1)); } || { echo "  FAIL expected 82 passes"; fail=$((fail+1)); }
 
 echo "=== PROOF 3: OFFLINE bake demo — no docker, no spawn, no network; artefacts via the r85 render interface ==="
 echo "    (honesty: this proves ARTEFACT + DIRECTIVE-SHAPE facts. It cannot boot squid, so 'binds PC-PORT-06' is"

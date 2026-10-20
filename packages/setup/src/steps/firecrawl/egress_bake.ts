@@ -124,6 +124,20 @@ export const RESERVED_SQUID_ACL_NAMES: readonly string[] = [
  *  narrow the audit by itself. */
 export const OPTION_PARSED_PORT_DIRECTIVES: readonly string[] = ["http_port", "https_port"]
 
+/** Services whose OWN `PROXY_SERVER` must point at the filter, checked one by one and never by "any line anywhere".
+ *  The render legitimately carries more than one proxy line since r85-fix6d (`0134c4a4ba`): `playwright-service` had
+ *  it from the start (P-9's enforced route, 01e §6.7), and `api` gained it when the §10.7 F-4 correction was INVOKED
+ *  for R112c-5 — attempt 3 measured api carrying no proxy env at all (verification/13c:119-120,232), and the ruling
+ *  that fixed it says the register's own conditional (`01c0_preinstall_register.md:242-243`: do not set `PROXY_*`
+ *  unless the SSRF-filter proxy IS the configured route) is now satisfied "on both tiers"
+ *  (delegation_progress/r75fix9_corepack_ruling.md §4.2, implemented verbatim at firecrawl_compose.ts:178-180 and
+ *  :316-317). Checking the whole file with `.some()` instead of this list is what let an UNROUTED playwright bake
+ *  green once the second line appeared: measured in fix round 5, blanking playwright's route while api's stays
+ *  produces zero findings. COUPLING, stated: a ruling that ever removes one of these routes (or adds a third tier)
+ *  must amend this list in the same change; the test named "every service that declares a proxy route here is on
+ *  REQUIRED_PROXIED_SERVICES" fails loudly if the render and this list drift apart. */
+export const REQUIRED_PROXIED_SERVICES: readonly string[] = ["playwright-service", "api"]
+
 export type BakeCode =
   | "ARTEFACT_MISSING"
   | "PIN_UNUSABLE"
@@ -296,13 +310,24 @@ export function verifyEgressBake(opts: VerifyOptions): EgressBakeVerdict {
     })
   }
 
-  // (1d) Playwright's enforced egress route exists (PROXY_SERVER -> egress-proxy:<squid port>); built from PC_PORTS, never a literal port.
+  // (1d) every SSRF-capable tier must route at the filter UNDER ITS OWN KEY — one refusal per service, never
+  // "some PROXY_SERVER line anywhere". Two reasons, both measured in fix round 5: the render legitimately carries
+  // more than one such line since r85-fix6d (api + playwright-service, REQUIRED_PROXIED_SERVICES above), so a
+  // whole-file `.some()` lets api's line cover for a missing playwright route; and the old pattern `".*"` matched an
+  // EMPTY value too, so only the needle appearing somewhere on the line counted — a trailing comment could satisfy
+  // it. The quoted value is compared exactly here. Port comes from PC_PORTS, never a literal.
   const routeNeedle = `http://egress-proxy:${PC_PORTS.squidContainer}`
-  if (!composeText.split("\n").some((l) => /^\s+PROXY_SERVER:\s*".*"/.test(l) && l.includes(routeNeedle))) {
+  for (const svc of REQUIRED_PROXIED_SERVICES) {
+    const svcBlock = serviceBlock(composeText, svc)
+    const declaredValues = lineMatches(svcBlock, /^\s+PROXY_SERVER:/).map(
+      (l) => l.match(/^\s+PROXY_SERVER:\s*"([^"]*)"/)?.[1] ?? "(unparseable)",
+    )
+    if (declaredValues.includes(routeNeedle)) continue
+    const state = svcBlock.length === 0 ? "service block absent from the render" : declaredValues.length === 0 ? "key absent" : `value(s) [${declaredValues.map((v) => `"${v}"`).join(", ")}]`
     findings.push({
       code: "PROXY_ROUTE_UNSET",
-      item: `no PROXY_SERVER set to "${routeNeedle}"`,
-      hint: "the filter is only real if the SSRF-capable surface is routed through it (P-9; PC-PORT-06 via PC_PORTS.squidContainer, no literal here)",
+      item: `${svc}: no PROXY_SERVER set to "${routeNeedle}" — ${state}`,
+      hint: "the filter is only real if EVERY SSRF-capable surface is routed through it (P-9; PC-PORT-06 via PC_PORTS.squidContainer, no literal here). Another service's route cannot substitute: an unrouted tier keeps a default gateway and reaches hosts directly (the F-3 leak class 01e §10.7 exists to prevent).",
     })
   }
 
@@ -473,7 +498,7 @@ export interface EgressProofLayers {
 export function bakeProofLayers(): EgressProofLayers {
   return {
     offlineProven: [
-      "rendered compose image == tools.lock.json egress_proxy_image pin; conf bound at the path the command loads via -f; PROXY_SERVER routes at egress-proxy:PC-PORT-06 (IMAGE_PIN_MISMATCH / CONF_BIND_MISSING / CMD_CONF_MISMATCH / PROXY_ROUTE_UNSET)",
+      "rendered compose image == tools.lock.json egress_proxy_image pin; conf bound at the path the command loads via -f; EVERY service on REQUIRED_PROXIED_SERVICES carries its own PROXY_SERVER equal to egress-proxy:PC-PORT-06 (IMAGE_PIN_MISMATCH / CONF_BIND_MISSING / CMD_CONF_MISMATCH / PROXY_ROUTE_UNSET)",
       "all twelve §10.4 classes appear in a DENIED dst ACL and the dstdomain pair covers localhost + .local, deny-then-default-deny ordering included (auditSquidConf / crossEnforcerAgreement)",
       "no ACL redeclares a squid-predefined name (assertNoReservedAclNames; R112-1 closed live by r85-fix5)",
       "secret dir/file modes and executable /docker-entrypoint.d wraps over a real tools root (auditFileModes; R112-5)",

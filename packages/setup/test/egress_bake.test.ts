@@ -47,6 +47,7 @@ import {
   LIVE_BOOT_SIGNATURES,
   OPTION_PARSED_PORT_DIRECTIVES,
   REQUIRED_DENY_RANGES,
+  REQUIRED_PROXIED_SERVICES,
 } from "../src/steps/firecrawl/egress_bake.ts"
 
 /** Models r85-fix5's intended R112-1 fix (the live V6 experiment, 13_live_firecrawl.md:110): rename ONLY the
@@ -139,11 +140,15 @@ function readyState(): ReturnType<typeof defaultState> {
   return st
 }
 
-// --- block-scoped editors: change ONLY the rendered egress-proxy service, keep the file otherwise real ---
-function editFcBody(composeText: string, transform: (line: string) => string | null): string {
+// --- block-scoped editors: change ONLY the named rendered service, keep the file otherwise real ---
+/** Transform lines inside ONE indent-2 service block (the same delimiting rule the audit's `serviceBlock` uses), so a
+ *  fixture tampers the tier it names instead of "the first match in the file". Fix round 5 needed this: with api also
+ *  carrying PROXY_SERVER, a whole-file non-global `.replace` silently tampered api while the test claimed to tamper
+ *  Playwright. Pass null from `transform` to drop a line. */
+function editServiceBlock(composeText: string, service: string, transform: (line: string) => string | null): string {
   const lines = composeText.split("\n")
-  const s = lines.findIndex((l) => /^ {2}egress-proxy:\s*$/.test(l))
-  if (s === -1) throw new Error("test: no egress-proxy block found in the rendered compose")
+  const s = lines.findIndex((l) => new RegExp(`^ {2}${service}:\\s*$`).test(l))
+  if (s === -1) throw new Error(`test: no ${service} block found in the rendered compose`)
   let e = lines.length
   for (let i = s + 1; i < lines.length; i++) {
     if (/^ {2}\S/.test(lines[i] ?? "")) {
@@ -156,6 +161,31 @@ function editFcBody(composeText: string, transform: (line: string) => string | n
     .map(transform)
     .filter((l): l is string => l !== null)
   return [...lines.slice(0, s + 1), ...body, ...lines.slice(e)].join("\n")
+}
+
+function editFcBody(composeText: string, transform: (line: string) => string | null): string {
+  return editServiceBlock(composeText, "egress-proxy", transform)
+}
+
+/** PROXY_SERVER lines whose VALUE is exactly the filter route (value parsed out of the quotes, comments ignored). Used
+ *  to state how many tiers a fixture still routes, so "one service tampered" is measured, never assumed. */
+function routedFilterLines(composeText: string): string[] {
+  const needle = `http://egress-proxy:${PC_PORTS.squidContainer}`
+  return composeText
+    .split("\n")
+    .filter((l) => (l.match(/^\s+PROXY_SERVER:\s*"([^"]*)"/)?.[1] ?? "") === needle)
+}
+
+/** Which indent-2 services declare a PROXY_SERVER key at all — the input to the drift pin below. */
+function servicesDeclaringRoute(composeText: string): string[] {
+  const out: string[] = []
+  let svc = ""
+  for (const l of composeText.split("\n")) {
+    const key = l.match(/^ {2}(\S.*):\s*$/)
+    if (key) svc = key[1] ?? ""
+    if (/^\s+PROXY_SERVER:/.test(l) && svc && !out.includes(svc)) out.push(svc)
+  }
+  return out
 }
 
 function treeSnapshot(root: string): string[] {
@@ -401,9 +431,10 @@ describe("(config correctness) rendered compose must match the pin and wire the 
     const home = freshHome("img")
     stageArtefacts(home)
     const ref = String(LOCK.components.firecrawl?.egress_proxy_image)
-    const tampered = readFileSync(fcComposePath(home), "utf8").replace(
-      ref,
-      "docker.io/ubuntu/squid@sha256:" + "0".repeat(64),
+    // Block-scoped from FIX ROUND 5: a whole-file `.replace` works only while the needle is unique in the render, which
+    // is exactly the assumption that broke this round's neighbour (`PROXY_SERVER`). Same discipline everywhere now.
+    const tampered = editServiceBlock(readFileSync(fcComposePath(home), "utf8"), "egress-proxy", (l) =>
+      l.includes(ref) ? l.replace(ref, "docker.io/ubuntu/squid@sha256:" + "0".repeat(64)) : l,
     )
     const v = verifyEgressBake({
       lock: LOCK,
@@ -419,9 +450,8 @@ describe("(config correctness) rendered compose must match the pin and wire the 
     const home = freshHome("bind")
     stageArtefacts(home)
     const confPath = fcSquidPath(home)
-    const tampered = readFileSync(fcComposePath(home), "utf8").replace(
-      `source: ${confPath}`,
-      "source: /elsewhere/squid.conf",
+    const tampered = editServiceBlock(readFileSync(fcComposePath(home), "utf8"), "egress-proxy", (l) =>
+      l.includes(`source: ${confPath}`) ? "        source: /elsewhere/squid.conf" : l,
     )
     const v = verifyEgressBake({ lock: LOCK, home, composeText: tampered, confText: renderSquidConf().content })
     expect(v.findings.some((f) => f.code === "CONF_BIND_MISSING")).toBe(true)
@@ -438,20 +468,81 @@ describe("(config correctness) rendered compose must match the pin and wire the 
     expect(v.findings.some((f) => f.code === "CMD_CONF_MISMATCH")).toBe(true)
   })
 
-  it("Playwright routed away from the filter is refused as PROXY_ROUTE_UNSET", () => {
-    const home = freshHome("route")
+  it("the render carries more than one PROXY_SERVER line, and every proxied service is on the audit's list (drift pin)", () => {
+    // FIX ROUND 5's premise, pinned as a test: r85-fix6d (commit 0134c4a4ba) put api beside playwright-service, so any
+    // fixture or audit rule that assumes ONE route line in this file is now wrong. If row 85 ever legitimately
+    // changes WHICH tiers route, this test is where row 92's REQUIRED_PROXIED_SERVICES must be mirrored — equality
+    // both ways on purpose: a service dropping out of the render is as much a drift as one appearing silently.
+    const home = freshHome("route-multi")
     stageArtefacts(home)
-    const tampered = readFileSync(fcComposePath(home), "utf8").replace(/PROXY_SERVER: "[^"]*"/, 'PROXY_SERVER: ""')
-    const v = verifyEgressBake({ lock: LOCK, home, composeText: tampered, confText: renderSquidConf().content })
-    expect(v.findings.some((f) => f.code === "PROXY_ROUTE_UNSET")).toBe(true)
+    const composeText = readFileSync(fcComposePath(home), "utf8")
+    expect(servicesDeclaringRoute(composeText).length).toBeGreaterThan(1)
+    expect([...servicesDeclaringRoute(composeText)].sort()).toEqual([...REQUIRED_PROXIED_SERVICES].sort())
   })
 
-  it("the enforced route is exactly the egress-proxy on the register squid port (no literal port in this row)", () => {
+  it("Playwright routed away from the filter is refused as PROXY_ROUTE_UNSET (api still routed)", () => {
+    // Scoping matters since the render gained a second route line: the pre-fix fixture used a NON-GLOBAL replace, so it
+    // blanked whichever PROXY_SERVER came first in file order — api's — and left Playwright routed. The audit then had
+    // nothing to refuse and this test went red on a perfectly good render (the red r85-fix6e reported). Blank
+    // Playwright's OWN key and assert the refusal names it: an intact api route must not be able to cover for a tier
+    // that reaches the network directly (01e §10.7 F-3 leak class).
+    const home = freshHome("route")
+    stageArtefacts(home)
+    const composeText = readFileSync(fcComposePath(home), "utf8")
+    const tampered = editServiceBlock(composeText, "playwright-service", (l) =>
+      /^\s+PROXY_SERVER:\s*"[^"]*"/.test(l) ? '      PROXY_SERVER: ""' : l,
+    )
+    expect(routedFilterLines(tampered).length).toBe(routedFilterLines(composeText).length - 1) // exactly one tier de-routed
+    const v = verifyEgressBake({ lock: LOCK, home, composeText: tampered, confText: renderSquidConf().content })
+    expect(v.ok).toBe(false)
+    const hits = v.findings.filter((f) => f.code === "PROXY_ROUTE_UNSET")
+    expect(hits.length).toBe(1) // api stays routed -> one refusal only; per-service scoping holds
+    expect(hits[0]?.item).toContain("playwright-service")
+  })
+
+  it("NEGATIVE CONTROL: api's route removed while Playwright keeps its own is refused too, naming api", () => {
+    // Required by the fix-round dispatch as the proof that the audit catches an unset proxy route per service, not
+    // merely "no route anywhere": removing api's line (the second one in file order, the one the old fixture hit by
+    // accident) must still stop the bake. Playwright's own route is intact here, so a whole-file `.some()` check would
+    // pass silently — this is the fixture that would have stayed blind to the R112c-5 class on the api tier.
+    const home = freshHome("route-neg")
+    stageArtefacts(home)
+    const composeText = readFileSync(fcComposePath(home), "utf8")
+    const tampered = editServiceBlock(composeText, "api", (l) =>
+      /^\s+PROXY_SERVER:\s*"[^"]*"/.test(l) ? '      PROXY_SERVER: ""' : l,
+    )
+    expect(routedFilterLines(tampered).length).toBe(routedFilterLines(composeText).length - 1)
+    const v = verifyEgressBake({ lock: LOCK, home, composeText: tampered, confText: renderSquidConf().content })
+    const hits = v.findings.filter((f) => f.code === "PROXY_ROUTE_UNSET")
+    expect(hits.length).toBe(1)
+    expect(hits[0]?.item).toContain("api")
+    expect(hits[0]?.item).toContain(`"${`http://egress-proxy:${PC_PORTS.squidContainer}`}"`) // the expected value is stated, port from the register
+  })
+
+  it("a PROXY_SERVER left empty cannot pass on its needle appearing later in the file", () => {
+    // The old guard scanned the WHOLE file for a line with a quoted value plus the needle. With two route lines, that
+    // shape is reachable by accident: blank Playwright's value and the needle survives on api's line. Here BOTH tiers
+    // are blanked line-by-line while the needle text is appended as a trailing comment, so nothing routes anywhere and
+    // the refusal must still fire — the comment must carry no weight.
+    const home = freshHome("route-comment")
+    stageArtefacts(home)
+    const needle = `http://egress-proxy:${PC_PORTS.squidContainer}`
+    const composeText = readFileSync(fcComposePath(home), "utf8")
+    const cleared = composeText.replace(/ {6}PROXY_SERVER: "[^"]*"/g, `      PROXY_SERVER: ""  # needle kept as comment only: ${needle}`)
+    expect(routedFilterLines(cleared).length).toBe(0) // no VALUE equals the needle any more
+    const v = verifyEgressBake({ lock: LOCK, home, composeText: cleared, confText: renderSquidConf().content })
+    expect(v.findings.filter((f) => f.code === "PROXY_ROUTE_UNSET").length).toBe(REQUIRED_PROXIED_SERVICES.length)
+  })
+
+  it("the enforced route is exactly the egress-proxy on the register squid port, on every proxied tier (no literal port in this row)", () => {
     // Proves PROXY_SERVER derives from PC_PORTS.squidContainer; the assertion builds the needle from the register mirror.
+    // Positive control for fix round 5's rule: one exact-value line per REQUIRED_PROXIED_SERVICES member, so the audit
+    // and the render agree on the COUNT as well as the target.
     const home = freshHome("route-ok")
     stageArtefacts(home)
     const composeText = readFileSync(fcComposePath(home), "utf8")
     expect(composeText.includes(`http://egress-proxy:${PC_PORTS.squidContainer}`)).toBe(true)
+    expect(routedFilterLines(composeText)).toHaveLength(REQUIRED_PROXIED_SERVICES.length)
   })
 })
 

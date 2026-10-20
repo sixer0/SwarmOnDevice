@@ -86,12 +86,19 @@ export const UninstallCommand = {
   },
 }
 
-async function collectRemovalTargets(args: UninstallArgs, method: Installation.Method): Promise<RemovalTargets> {
+export async function collectRemovalTargets(args: UninstallArgs, method: Installation.Method): Promise<RemovalTargets> {
+  // Row-45 fix round (F-2 of verification/05_uninstall_check.md): 01b section 8 groups
+  // $TMPDIR/swarm with the four XDG dirs under "removed by `swarm uninstall`", and
+  // Global.Path.tmp is exactly that path (core/src/global.ts). It joins the set as
+  // runtime scratch — removed unconditionally like Cache/State, because neither keep flag
+  // describes it: --keep-config guards Config, --keep-data guards Data (interpretation
+  // recorded in implementation/s45_uninstall.md).
   const directories: RemovalTargets["directories"] = [
     { path: Global.Path.data, label: "Data", keep: args.keepData },
     { path: Global.Path.cache, label: "Cache", keep: false },
     { path: Global.Path.config, label: "Config", keep: args.keepConfig },
     { path: Global.Path.state, label: "State", keep: false },
+    { path: Global.Path.tmp, label: "Temp", keep: false },
   ]
 
   const shellConfig = method === "curl" ? await getShellConfigFile() : null
@@ -167,11 +174,8 @@ async function executeUninstall(method: Installation.Method, targets: RemovalTar
   if (method === "curl" && targets.binary) {
     UI.empty()
     prompts.log.message("To finish removing the binary, run:")
-    prompts.log.info(`  rm "${targets.binary}"`)
-
-    const binDir = path.dirname(targets.binary)
-    if (binDir.includes(".swarm")) {
-      prompts.log.info(`  rmdir "${binDir}" 2>/dev/null`)
+    for (const command of await binCleanupCommands(targets.binary)) {
+      prompts.log.info(`  ${command}`)
     }
   }
 
@@ -187,7 +191,36 @@ async function executeUninstall(method: Installation.Method, targets: RemovalTar
   prompts.log.success("Thank you for using Swarm!")
 }
 
-async function getShellConfigFile(): Promise<string | null> {
+// Row-45 fix round (F-1 of verification/05_uninstall_check.md): the installer writes every
+// bundled file into ~/.swarm/bin — the binary always (install:116-142) and ripgrep
+// conditionally (install:148-167, "Copy only when present") — but the old hint named only
+// process.execPath, so the printed `rmdir` failed while ~/.swarm/bin/rg remained. The cleanup
+// set is now derived from the installed state itself: every regular file present in the gated
+// bin dir is named, so installer and uninstaller share ONE source (the directory contents)
+// and a future extra bundled tool needs no change here. Directories are deliberately not
+// named — rm without -r must not be advertised, and rmdir then fails suppressed, leaving an
+// unexpected layout as visible residue instead of a recursive delete. The `.swarm` gate is
+// kept from U04: a `.local/bin` curl install gets the plain `rm` only, exactly as before.
+export async function binCleanupCommands(binary: string): Promise<string[]> {
+  const commands = [`rm "${binary}"`]
+  const binDir = path.dirname(binary)
+  if (!binDir.includes(".swarm")) return commands
+
+  const entries = await fs.readdir(binDir, { withFileTypes: true }).catch(() => [])
+  const siblings = entries
+    .filter((entry) => entry.isFile())
+    .map((entry) => path.join(binDir, entry.name))
+    .filter((file) => file !== binary)
+    .sort()
+  for (const file of siblings) commands.push(`rm "${file}"`)
+
+  commands.push(`rmdir "${binDir}" 2>/dev/null`)
+  const parent = path.dirname(binDir)
+  if (parent.includes(".swarm")) commands.push(`rmdir "${parent}" 2>/dev/null`)
+  return commands
+}
+
+export async function getShellConfigFile(): Promise<string | null> {
   const shell = path.basename(process.env.SHELL || "bash")
   const home = os.homedir()
   const xdgConfig = process.env.XDG_CONFIG_HOME || path.join(home, ".config")
@@ -229,7 +262,7 @@ async function getShellConfigFile(): Promise<string | null> {
   return null
 }
 
-async function cleanShellConfig(file: string) {
+export async function cleanShellConfig(file: string) {
   const content = await Filesystem.readText(file)
   const lines = content.split("\n")
 
