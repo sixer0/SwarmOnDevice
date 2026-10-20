@@ -10,8 +10,8 @@ REPO="$(cd "$HERE/../.." && pwd)"                    # .../swarm
 TOOLS_BIN="$REPO/../tools/node_modules/.bin"         # local bun only (never global)
 export PATH="$TOOLS_BIN:$PATH"
 
-WORK="${TMPDIR:-/tmp}/swarm-setup-r84-proofs"
-rm -rf "$WORK"; mkdir -p "$WORK/bin"
+WORK="$(mktemp -d "${TMPDIR:-/tmp}/swarm-setup-r84-proofs-XXXXXX")"; trap 'rm -rf "$WORK"' EXIT
+mkdir -p "$WORK/bin"
 
 pass=0; fail=0
 check () { # check <label> <expected-exit> <actual-exit>

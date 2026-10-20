@@ -10,8 +10,8 @@ REPO="$(cd "$HERE/../.." && pwd)"                  # .../swarm
 TOOLS_BIN="$REPO/../tools/node_modules/.bin"       # local bun only (never global)
 export PATH="$TOOLS_BIN:$PATH"
 
-WORK="${TMPDIR:-/tmp}/swarm-setup-r83-proofs"
-rm -rf "$WORK"; mkdir -p "$WORK/bin"
+WORK="$(mktemp -d "${TMPDIR:-/tmp}/swarm-setup-r83-proofs-XXXXXX")"; trap 'rm -rf "$WORK"' EXIT
+mkdir -p "$WORK/bin"
 cp "$HERE/tools.lock.json" "$WORK/bin/tools.lock.json"
 BIN="$WORK/bin/swarm-setup"
 

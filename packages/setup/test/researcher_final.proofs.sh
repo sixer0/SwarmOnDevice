@@ -32,8 +32,8 @@ TOOLS_BIN="$REPO/../tools/node_modules/.bin"      # project-local bun ONLY (neve
 export PATH="$TOOLS_BIN:$PATH"
 
 _TMPBASE="${TMPDIR:-/tmp}"; _TMPBASE="${_TMPBASE%/}"
-WORK="$_TMPBASE/swarm-setup-r98-proofs"
-rm -rf "$WORK"; mkdir -p "$WORK"
+WORK="$(mktemp -d "$_TMPBASE/swarm-setup-r98-proofs-XXXXXX")"; trap 'rm -rf "$WORK"' EXIT
+mkdir -p "$WORK"
 
 pass=0; fail=0
 check () { if [ "$2" = "$3" ]; then echo "  PASS $1 (exit $3)"; pass=$((pass+1));

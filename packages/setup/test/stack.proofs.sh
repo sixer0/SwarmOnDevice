@@ -11,8 +11,8 @@ TOOLS_BIN="$REPO/../tools/node_modules/.bin"         # local bun only (never glo
 export PATH="$TOOLS_BIN:$PATH"
 
 _TMPBASE="${TMPDIR:-/tmp}"; _TMPBASE="${_TMPBASE%/}"
-WORK="${_TMPBASE}/swarm-setup-r91-proofs"
-rm -rf "$WORK"; mkdir -p "$WORK/bin"
+WORK="$(mktemp -d "${_TMPBASE}/swarm-setup-r91-proofs-XXXXXX")"; trap 'rm -rf "$WORK"' EXIT
+mkdir -p "$WORK/bin"
 
 pass=0; fail=0
 check () { # check <label> <expected-exit> <actual-exit>

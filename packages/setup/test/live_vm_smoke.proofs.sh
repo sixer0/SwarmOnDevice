@@ -20,8 +20,8 @@ TOOLS_BIN="$REPO/../tools/node_modules/.bin"       # local bun only (never globa
 export PATH="$TOOLS_BIN:$PATH"
 
 _TMPBASE="${TMPDIR:-/tmp}"; _TMPBASE="${_TMPBASE%/}"
-WORK="${_TMPBASE}/swarm-setup-r93-proofs"
-rm -rf "$WORK"; mkdir -p "$WORK/bin" "$WORK/home-dry"
+WORK="$(mktemp -d "${_TMPBASE}/swarm-setup-r93-proofs-XXXXXX")"; trap 'rm -rf "$WORK"' EXIT
+mkdir -p "$WORK/bin" "$WORK/home-dry"
 STATE="$WORK/live.state"; : > "$STATE"            # per-run phase markers (fresh each invocation)
 
 DOCKER=/opt/homebrew/bin/docker
