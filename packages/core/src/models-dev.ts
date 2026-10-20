@@ -20,7 +20,8 @@ const InterleavedField = Schema.Union([
   Schema.String,
 ])
 
-const USER_AGENT = `opencode/${InstallationChannel}/${InstallationVersion}/${Flag.OPENCODE_CLIENT}`
+// Register U01 (residual scan D-15): the operator-enabled catalogue fetch identifies Swarm, not opencode.
+const USER_AGENT = `swarm/${InstallationChannel}/${InstallationVersion}/${Flag.OPENCODE_CLIENT}`
 
 const CostTier = Schema.Struct({
   input: Schema.Finite,
@@ -157,10 +158,14 @@ const layer = Layer.effect(
       ),
     )
 
-    const source = Flag.OPENCODE_MODELS_URL || "https://models.opencode.ai"
+    // WP-EGRESS-CORE (row 56): the upstream default catalogue host is removed — a
+    // fetch target exists only when an operator sets OPENCODE_MODELS_URL explicitly. Without it,
+    // the catalogue resolves from disk cache or the embedded build snapshot and never the network
+    // (decisions.md GATE 2: model list is a frozen per-release snapshot).
+    const source = Flag.OPENCODE_MODELS_URL
     const filepath = path.join(
       Global.Path.cache,
-      source === "https://models.opencode.ai" ? "models.json" : `models-${Hash.fast(source)}.json`,
+      source === undefined ? "models.json" : `models-${Hash.fast(source)}.json`,
     )
     const ttl = Duration.minutes(5)
     const lockKey = `models-dev:${filepath}`
@@ -173,6 +178,8 @@ const layer = Layer.effect(
     })
 
     const fetchApi = Effect.fn("ModelsDev.fetchApi")(function* () {
+      // WP-EGRESS-CORE (row 56): fail closed when no explicit fetch target was configured.
+      if (!source) return yield* Effect.die("ModelsDev: no catalogue fetch target configured; set OPENCODE_MODELS_URL")
       return yield* HttpClientRequest.get(`${source}/api.json`).pipe(
         HttpClientRequest.setHeader("User-Agent", USER_AGENT),
         http.execute,
@@ -219,7 +226,9 @@ const layer = Layer.effect(
       if (fromDisk) return fromDisk
       const snapshot = yield* loadSnapshot
       if (snapshot) return snapshot
-      if (Flag.OPENCODE_DISABLE_MODELS_FETCH) return {}
+      // WP-EGRESS-CORE (row 56): no fetch without an explicit operator-configured target, even
+      // when OPENCODE_DISABLE_MODELS_FETCH is not set — the default host no longer exists.
+      if (Flag.OPENCODE_DISABLE_MODELS_FETCH || !source) return {}
       // Flock is cross-process: concurrent opencode CLIs can race on this cache file.
       const text = yield* Effect.scoped(
         Effect.gen(function* () {
@@ -235,6 +244,9 @@ const layer = Layer.effect(
     const get = (): Effect.Effect<Record<string, Provider>> => cachedGet
 
     const refresh = Effect.fn("ModelsDev.refresh")(function* (force = false) {
+      // WP-EGRESS-CORE (row 56): without an explicit fetch target there is nothing to refresh;
+      // the catalogue stays on disk cache / embedded snapshot only.
+      if (!source) return
       if (!force && (yield* fresh())) return
       yield* Effect.scoped(
         Effect.gen(function* () {
@@ -252,7 +264,9 @@ const layer = Layer.effect(
       )
     })
 
-    if (!Flag.OPENCODE_DISABLE_MODELS_FETCH && !process.argv.includes("--get-yargs-completions")) {
+    // WP-EGRESS-CORE (row 56): the hourly refresh timer is only armed when an operator has set
+    // an explicit fetch target; by default no background catalogue request can ever be made.
+    if (source && !Flag.OPENCODE_DISABLE_MODELS_FETCH && !process.argv.includes("--get-yargs-completions")) {
       // Schedule.spaced runs the effect once, then waits between completions.
       yield* Effect.forkScoped(refresh().pipe(Effect.repeat(Schedule.spaced("60 minutes")), Effect.ignore))
     }
