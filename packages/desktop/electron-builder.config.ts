@@ -11,7 +11,8 @@ const rootDir = path.resolve(packageDir, "../..")
 const signScript = path.join(rootDir, "script", "sign-windows.ps1")
 // The Electron 42 packaging update briefly installed Linux launchers/icons under
 // "opencode-desktop". Keep that hidden desktop entry around so existing GNOME/KDE
-// pins still resolve after the canonical app id changes back to ai.opencode.desktop.
+// pins still resolve after the canonical app id changed to id.co.gsp.swarm.desktop.
+// The file name itself stays (register B09); only its contents were rebranded.
 const legacyDesktopEntry = path.join(packageDir, "resources", "linux", "opencode-desktop.desktop")
 const legacyDesktopEntryFpm = `${legacyDesktopEntry}=/usr/share/applications/opencode-desktop.desktop`
 
@@ -36,26 +37,51 @@ const channel = (() => {
 })()
 
 const APP_IDS = {
-  dev: "ai.opencode.desktop.dev",
-  beta: "ai.opencode.desktop.beta",
-  prod: "ai.opencode.desktop",
+  dev: "id.co.gsp.swarm.desktop.dev",
+  beta: "id.co.gsp.swarm.desktop.beta",
+  prod: "id.co.gsp.swarm.desktop",
 } as const
 
+// C2 credit text (research/03c_licence_notice_plan.md section 4.3) with <HOLDER>
+// filled by the accepted publisher working text "PT GSP" (gate-2 decision 2).
+// Without this field electron-builder derives NSHumanReadableCopyright from the
+// package author, which would ship a brand string IA-5 measures.
+const COPYRIGHT = "Copyright (c) 2025 opencode (MIT). Swarm modifications Copyright (c) 2026 PT GSP."
+
 const getBase = (appId: string): Configuration => ({
-  artifactName: "opencode-desktop-${os}-${arch}.${ext}",
+  artifactName: "swarm-desktop-${os}-${arch}.${ext}",
+  copyright: COPYRIGHT,
+  // Explicit null, not just an absent block: the builder falls back to reading
+  // <projectDir>/.git/config for a publish feed when publish is undefined (M11).
+  publish: null,
   directories: {
     output: "dist",
     buildResources: "resources",
   },
   // Linux launchers are .desktop files, so this is the desktop file name,
-  // not just the app id. For prod, app id "ai.opencode.desktop" becomes
-  // "ai.opencode.desktop.desktop".
+  // not just the app id. For prod, app id "id.co.gsp.swarm.desktop" becomes
+  // "id.co.gsp.swarm.desktop.desktop".
   // https://developer.gnome.org/documentation/guidelines/maintainer/integrating.html
   // https://www.electron.build/docs/linux/
   extraMetadata: {
     desktopName: `${appId}.desktop`,
   },
-  files: ["out/**/*", "resources/**/*", "!resources/opencode-cli*"],
+  // A11 asar trimming (01b 3.6): platform assets the macOS bundle must not ship
+  // inside app.asar, source maps (IS-ND-3), and the staged rg binary, which
+  // reaches the bundle through extraResources instead (AD-15).
+  files: [
+    "out/**/*",
+    "resources/**/*",
+    "!resources/opencode-cli*",
+    "!resources/*.metainfo.xml",
+    "!resources/linux{,/**/*}",
+    "!resources/icons/{android,ios}{,/**/*}",
+    "!resources/icons/Square*",
+    "!resources/icons/StoreLogo.png",
+    "!resources/icons/icon.ico",
+    "!out/**/*.map",
+    "!resources/rg",
+  ],
   extraResources: [
     ...(channel === "dev"
       ? [
@@ -66,12 +92,37 @@ const getBase = (appId: string): Configuration => ({
           },
         ]
       : []),
+    // Notices ride in Contents/Resources beside the app, never inside the asar
+    // (03c N3/N4); the build fails closed when a source file is missing (IA-4).
+    { from: "../../LICENSE", to: "LICENSE" },
+    { from: "../../NOTICE", to: "NOTICE" },
+    { from: "../../THIRD_PARTY_LICENSES.txt", to: "THIRD_PARTY_LICENSES.txt" },
+    // Bundled ripgrep slot (AD-15): staged to resources/rg by the build, lands
+    // at Contents/Resources/rg; row 57's resolver finds it via execPath/../Resources/rg.
+    { from: "resources/rg", to: "rg" },
     {
       from: "native/",
       to: "native/",
       filter: ["index.js", "index.d.ts", "build/Release/mac_window.node", "swift-build/**"],
     },
   ],
+  // Electron fuse lockdown (NR-09 / research 03e C4-1). Names verified against the
+  // installed app-builder-lib@26.15.2 FuseOptionsV1 (configuration.d.ts:475-505);
+  // electron-builder maps them to @electron/fuses FuseV1Options in platformPackager.js
+  // generateFuseConfig (:266-299) and flips them right before signing (:251-255, comment
+  // "the fuses MUST be flipped right before signing"), so the ad-hoc seal below covers
+  // the flipped binary. Sidecar compatibility: it uses utilityProcess.fork (src/main/
+  // server.ts:64), not process.fork/ELECTRON_RUN_AS_NODE, and no source file sets
+  // ELECTRON_RUN_AS_NODE/NODE_OPTIONS/NODE_EXTRA_CA_CERTS (grep clean), so RunAsNode and
+  // NODE_OPTIONS off are compatible at the source level; launch proof is row 118's L1 gate.
+  electronFuses: {
+    runAsNode: false,
+    enableNodeOptionsEnvironmentVariable: false,
+    enableNodeCliInspectArguments: false,
+    enableEmbeddedAsarIntegrityValidation: true,
+    onlyLoadAppFromAsar: true,
+    enableCookieEncryption: true,
+  },
   mac: {
     category: "public.app-category.developer-tools",
     icon: `resources/icons/icon.icns`,
@@ -79,15 +130,26 @@ const getBase = (appId: string): Configuration => ({
     gatekeeperAssess: false,
     entitlements: "resources/entitlements.plist",
     entitlementsInherit: "resources/entitlements.plist",
-    notarize: true,
+    // Q7 / IS-D2: ad-hoc only, no Developer ID, no notarization. Chosen route is the
+    // builder's integrated `identity: "-"` (MacTargetHelper.js:20-50 builds Identity("-")
+    // for qualifier "-"), NOT an afterPack codesign: afterPack fires at emitAfterPack
+    // (platformPackager.js:245) BEFORE the fuse flip (:251), so a hook there would sign a
+    // binary the flip then invalidates. identity "-" signs in doSignAfterPack (:254) AFTER
+    // the flip, which is the only ordering that survives the fuses above. Whether it seals
+    // on this host is confirmed by row 116/118 (V7 deep-strict verify); the IS-D2 afterPack
+    // fallback stays unused unless that verify fails. disable-library-validation is kept in
+    // entitlements.plist precisely because hardened runtime + ad-hoc needs it (builder M10 warning).
+    identity: "-",
+    notarize: false,
     target: ["dmg", "zip"],
   },
   dmg: {
-    sign: true,
+    sign: false,
+    title: "${productName} ${version}",
   },
   protocols: {
-    name: "OpenCode",
-    schemes: ["opencode"],
+    name: "Swarm",
+    schemes: ["swarm"],
   },
   win: {
     icon: `resources/icons/icon.ico`,
@@ -127,31 +189,29 @@ function getConfig() {
       return {
         ...base,
         appId,
-        productName: "OpenCode Dev",
+        productName: "Swarm Dev",
         deb: { fpm: [metainfoFpm(appId)] },
-        rpm: { packageName: "opencode-dev", fpm: [metainfoFpm(appId)] },
+        rpm: { packageName: "swarm-dev", fpm: [metainfoFpm(appId)] },
       }
     }
     case "beta": {
       return {
         ...base,
         appId,
-        productName: "OpenCode Beta",
-        protocols: { name: "OpenCode Beta", schemes: ["opencode"] },
-        publish: { provider: "github", owner: "anomalyco", repo: "opencode-beta", channel: "latest" },
+        productName: "Swarm Beta",
+        protocols: { name: "Swarm Beta", schemes: ["swarm"] },
         deb: { fpm: [metainfoFpm(appId)] },
-        rpm: { packageName: "opencode-beta", fpm: [metainfoFpm(appId)] },
+        rpm: { packageName: "swarm-beta", fpm: [metainfoFpm(appId)] },
       }
     }
     case "prod": {
       return {
         ...base,
         appId,
-        productName: "OpenCode",
-        protocols: { name: "OpenCode", schemes: ["opencode"] },
-        publish: { provider: "github", owner: "anomalyco", repo: "opencode", channel: "latest" },
+        productName: "Swarm",
+        protocols: { name: "Swarm", schemes: ["swarm"] },
         deb: { fpm: [metainfoFpm(appId), legacyDesktopEntryFpm] },
-        rpm: { packageName: "opencode", fpm: [metainfoFpm(appId), legacyDesktopEntryFpm] },
+        rpm: { packageName: "swarm", fpm: [metainfoFpm(appId), legacyDesktopEntryFpm] },
       }
     }
   }

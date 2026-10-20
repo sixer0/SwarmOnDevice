@@ -22,13 +22,17 @@ function tauriDir(id: string) {
 }
 
 // The Tauri app identifier changes between dev/beta/prod builds.
+// Swarm ids (register B06): the resolved directory is Swarm's own userData or a
+// Swarm-id sibling, which never holds Tauri-era .dat files, so this migration can
+// never import OpenCode data (Q4 no-migration, guard G4). It stays in place only
+// to keep rebases cheap.
 const TAURI_APP_IDS: Record<string, string> = {
-  dev: "ai.opencode.desktop.dev",
-  beta: "ai.opencode.desktop.beta",
-  prod: "ai.opencode.desktop",
+  dev: "id.co.gsp.swarm.desktop.dev",
+  beta: "id.co.gsp.swarm.desktop.beta",
+  prod: "id.co.gsp.swarm.desktop",
 }
 function tauriAppId() {
-  return app.isPackaged ? TAURI_APP_IDS[CHANNEL] : "ai.opencode.desktop.dev"
+  return app.isPackaged ? TAURI_APP_IDS[CHANNEL] : "id.co.gsp.swarm.desktop.dev"
 }
 
 // Migrate a single Tauri .dat file into the corresponding electron-store.

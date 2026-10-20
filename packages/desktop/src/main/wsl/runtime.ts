@@ -264,16 +264,22 @@ export async function installWslDistro(name: string, opts?: RunWslOptions) {
   )
 }
 
-export async function installWslOpencode(version: string, distro: string, opts?: RunWslOptions) {
-  return runInteractiveCommand(
-    resolveSystem32Command("wsl.exe"),
-    wslArgs(
-      ["bash", "-lc", `curl -fsSL https://opencode.ai/install | bash -s -- --version ${shellEscape(version)}`],
-      distro,
-    ),
-    withTimeout(opts, DEFAULT_WSL_INSTALL_TIMEOUT_MS),
-    DEFAULT_WSL_INSTALL_TIMEOUT_MS,
-  )
+// R103-M1 (row 103 senior review): upstream ran `curl -fsSL https://opencode.ai/install | bash`
+// inside the distro — the remote-script-pipe-to-shell pattern handoff rule 5 names as the threat
+// vector, stripped the same way as packages/opencode/src/installation/index.ts (see
+// implementation/s56_egress_core.md addendum). Windows/WSL is not a v1 target (Q1, R18), so this
+// path fails closed with a refusal outcome; callers surface it through their existing
+// `code !== 0` handling (servers.ts installOpencode). The refusal text follows the UPGRADE_REFUSAL
+// precedent (plain constant, installation/index.ts:127) because a new nativeT key would reach
+// outside this row's file scope. The "install-opencode" job kind and IPC channel stay untouched
+// per the r52↔r54 ruling.
+export async function installWslOpencode(version: string, _distro: string, _opts?: RunWslOptions) {
+  return {
+    code: 1,
+    signal: null,
+    stdout: "",
+    stderr: `WSL install is not supported in Swarm ${version}; see maintenance guide`,
+  } satisfies WslCommandResult
 }
 
 export async function probeWslDistro(name: string, opts?: RunWslOptions): Promise<WslDistroProbe> {
@@ -307,11 +313,16 @@ export async function probeWslDistro(name: string, opts?: RunWslOptions): Promis
   }
 }
 
+// Guest-side Swarm destination fixed by the row-46 install.sh contract (`install:95`
+// INSTALL_DIR="$HOME/.swarm/bin", `install:112` DEST="$INSTALL_DIR/$APP" with APP=swarm) and
+// mirrored by the J06 detection token in packages/opencode/src/installation/index.ts:268.
+const WSL_SWARM_GUEST_PATH = "$HOME/.swarm/bin/swarm"
+
 export async function resolveWslOpencode(distro: string, opts?: RunWslOptions) {
   return firstLine(
     (
       await runWslSh(
-        'if [ -x "$HOME/.opencode/bin/opencode" ]; then printf "%s\\n" "$HOME/.opencode/bin/opencode"; fi',
+        `if [ -x "${WSL_SWARM_GUEST_PATH}" ]; then printf "%s\\n" "${WSL_SWARM_GUEST_PATH}"; fi`,
         distro,
         opts,
       )
