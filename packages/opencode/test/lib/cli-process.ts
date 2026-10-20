@@ -35,6 +35,9 @@ const cliEntry = path.join(opencodeRoot, "src/index.ts")
 
 export const testModelID = "test/test-model"
 
+// Single source for the harness server password so no test hard-codes a second one.
+export const CLI_TEST_SERVER_PASSWORD = "cli-test-server-password"
+
 // Wrap a Bun subprocess pipe (or any ReadableStream<Uint8Array>) as a Stream.
 // Centralizes the `evaluate` + `onError` boilerplate and tags errors with the
 // stream name so a stderr/stdout failure is greppable in logs.
@@ -74,6 +77,12 @@ function isolatedEnv(home: string, configJson: string): Record<string, string> {
     OPENCODE_DISABLE_AUTOCOMPACT: "1",
     OPENCODE_DISABLE_MODELS_FETCH: "1",
     OPENCODE_AUTH_CONTENT: "{}",
+    // `serve` refuses to start without a password (WP-EGRESS-SRV row 62, research/03e C7-4), and
+    // test/preload.ts:78 deletes this variable from the parent env, so it has to be set here — in
+    // the per-spawn environment — rather than globally. One shared value for every child keeps the
+    // spawned server and the spawned `run --attach` client on the same credential: the client
+    // resolves it through ServerAuth.header()'s Flag fallback (src/server/auth.ts:37).
+    OPENCODE_SERVER_PASSWORD: CLI_TEST_SERVER_PASSWORD,
   }
 }
 
@@ -344,8 +353,10 @@ export function withCliFixture<A, E>(
       yield* forkStderrDrain(proc.stderr, stderrChunks)
 
       // Watch stdout line-by-line for the listening sentinel. Format
-      // (see src/cli/cmd/serve.ts):
-      //   "opencode server listening on http://<host>:<port>"
+      // (see src/cli/cmd/serve.ts, register J01):
+      //   "swarm server listening on http://<host>:<port>"
+      // The pattern matches only the brand-free tail so it keeps working across
+      // the rename; the emitter and the SDK parsers are the byte-paired halves of X-10.
       const readyRe = /listening on (http:\/\/([^\s:]+):(\d+))/
       const readyDeferred = yield* Deferred.make<{ url: string; hostname: string; port: number }>()
       yield* Effect.forkScoped(

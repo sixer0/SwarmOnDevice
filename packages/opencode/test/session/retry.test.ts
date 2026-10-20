@@ -335,7 +335,7 @@ describe("session.retry.retryable", () => {
     expect(retryable).toEqual({ message: "Response decompression failed" })
   })
 
-  test("maps free limits to Go upsell action", () => {
+  test("maps free limits to a credentials-needed action with no upsell copy", () => {
     const error = Schema.decodeUnknownSync(SessionV1.APIError.Schema)(
       new SessionV1.APIError({
         message: "Free usage exceeded",
@@ -354,14 +354,17 @@ describe("session.retry.retryable", () => {
         reason: "free_tier_limit",
         provider: "opencode",
         title: "Free limit reached",
-        message: "Subscribe to OpenCode Go for reliable access to the best open-source models for $10/month.",
-        label: "subscribe",
+        // Row 58 fix-round 3 (scan D-04) replaced the paid-upsell copy with an instruction that names
+        // no product and no price; src/session/retry.ts:106-110 is the emitter.
+        message:
+          "This provider's free tier has no remaining usage. Add your own credentials for a configured provider to continue.",
+        label: "ok",
         link: SessionRetry.GO_UPSELL_URL,
       },
     })
   })
 
-  test("maps Go subscription limits to workspace PAYG upsell", () => {
+  test("maps subscription limits to a reset-in message with no upsell link", () => {
     const error = Schema.decodeUnknownSync(SessionV1.APIError.Schema)(
       new SessionV1.APIError({
         message: "Subscription quota exceeded. You can continue using free models.",
@@ -385,16 +388,19 @@ describe("session.retry.retryable", () => {
     )
 
     expect(SessionRetry.retryable(error, "opencode-go")).toEqual({
+      // Row 58 fix-round 3 dropped the workspace upsell URL from both the composed message and the
+      // action (src/session/retry.ts:131-142): the host is AC4-denied and D-04 counts this as brand
+      // copy. `retryable` no longer emits a `link` key at all, so the exact-match toEqual below pins
+      // its absence rather than merely omitting it.
       message:
-        "5 hour usage limit reached. It will reset in 5 hours 23 minutes. To continue using this model now, enable usage from your available balance - https://opencode.ai/workspace/wrk_01K6XGM22R6FM8JVABE9XDQXGH/go",
+        "5 hour usage limit reached. It will reset in 5 hours 23 minutes. To continue using this model now, enable usage from your available balance",
       action: {
         reason: "account_rate_limit",
         provider: "opencode-go",
-        title: "Go limit reached",
+        title: "Usage limit reached",
         message:
           "5 hour usage limit reached. It will reset in 5 hours 23 minutes. To continue using this model now, enable usage from your available balance",
-        label: "open settings",
-        link: "https://opencode.ai/workspace/wrk_01K6XGM22R6FM8JVABE9XDQXGH/go",
+        label: "ok",
       },
     })
   })

@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test"
-import { mkdir, unlink } from "fs/promises"
+import { mkdir } from "fs/promises"
 import path from "path"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
@@ -17,7 +17,6 @@ import { Plugin } from "../../src/plugin/index"
 import { Provider } from "@/provider/provider"
 
 import { RuntimeFlags } from "@/effect/runtime-flags"
-import { Filesystem } from "@/util/filesystem"
 import { InstanceBootstrap } from "@/project/bootstrap"
 import { InstanceStore } from "@/project/instance-store"
 import { testEffect } from "../lib/effect"
@@ -75,12 +74,6 @@ const providerLayer = (flags: Partial<RuntimeFlags.Info> = {}) =>
   )
 
 const list = Provider.use.list()
-
-const paid = (providers: Record<string, { models: Record<string, { cost: { input: number } }> }>) => {
-  const item = providers[ProviderV2.ID.make("opencode")]
-  expect(item).toBeDefined()
-  return Object.values(item.models).filter((model) => model.cost.input > 0).length
-}
 
 const languageBaseURL = (language: unknown) => (language as { config: { baseURL: string } }).config.baseURL
 
@@ -1303,27 +1296,23 @@ it.instance(
 )
 
 it.instance(
-  "hosted nvidia provider adds billing origin header",
+  "hosted nvidia provider sends no attribution headers",
   Effect.gen(function* () {
     const providers = yield* list
-    expect(providers[ProviderV2.ID.make("nvidia")].options.headers).toEqual({
-      "HTTP-Referer": "https://opencode.ai/",
-      "X-Title": "opencode",
-      "X-BILLING-INVOKE-ORIGIN": "OpenCode",
-    })
+    // Rows 58/59 removed the attribution trio (register H04, decision 8): Swarm identifies itself to
+    // third-party providers or not at all, so an empty header set is the contracted behaviour.
+    expect(providers[ProviderV2.ID.make("nvidia")].options.headers).toEqual({})
   }),
   { config: { provider: { nvidia: { options: { apiKey: "test-api-key" } } } } },
 )
 
 it.instance(
-  "custom nvidia baseURL adds billing origin header",
+  "custom nvidia baseURL sends no attribution headers",
   Effect.gen(function* () {
     const providers = yield* list
-    expect(providers[ProviderV2.ID.make("nvidia")].options.headers).toEqual({
-      "HTTP-Referer": "https://opencode.ai/",
-      "X-Title": "opencode",
-      "X-BILLING-INVOKE-ORIGIN": "OpenCode",
-    })
+    // Rows 58/59 removed the attribution trio (register H04, decision 8): Swarm identifies itself to
+    // third-party providers or not at all, so an empty header set is the contracted behaviour.
+    expect(providers[ProviderV2.ID.make("nvidia")].options.headers).toEqual({})
   }),
   { config: { provider: { nvidia: { options: { apiKey: "test-api-key", baseURL: "http://localhost:8000/v1" } } } } },
 )
@@ -2004,7 +1993,7 @@ const provideMultiInstance = <A, E, R>(eff: Effect.Effect<A, E, R>) =>
 it.effect("plugin config providers persist after instance dispose", () =>
   Effect.gen(function* () {
     const dir = yield* tmpdirScoped()
-    const configDir = path.join(dir, ".opencode")
+    const configDir = path.join(dir, ".swarm")
     const root = path.join(configDir, "plugin")
     yield* Effect.promise(() => mkdir(root, { recursive: true }))
     yield* Effect.promise(() => markPluginDependenciesReady(configDir))
@@ -2061,7 +2050,7 @@ it.instance(
   "plugin config enabled and disabled providers are honored",
   Effect.gen(function* () {
     const instance = yield* TestInstance
-    const configDir = path.join(instance.directory, ".opencode")
+    const configDir = path.join(instance.directory, ".swarm")
     const root = path.join(configDir, "plugin")
     yield* Effect.promise(() => mkdir(root, { recursive: true }))
     yield* Effect.promise(() => markPluginDependenciesReady(configDir))
@@ -2091,55 +2080,25 @@ it.instance(
   }),
 )
 
-it.effect("opencode loader keeps paid models when config apiKey is present", () =>
+// The two upstream cases here asserted that the Zen `opencode` provider exposes its paid models only
+// when a config apiKey or an auth.json entry exists. Swarm never enables that provider: BASELINE_CONFIG
+// lists `disabled_providers: ["opencode","opencode-go"]` (packages/core/src/swarm-defaults.ts:18) and
+// row 41 merges it at the lowest precedence in src/config/config.ts, so the credential-gating path
+// these tests exercised is unreachable by design (FR-DEF-04). Rather than re-enable a provider Swarm
+// ships disabled, the contract that replaced them is asserted directly: the provider is absent from
+// the list even when a key is supplied for it.
+it.effect("shipped baseline keeps the opencode providers out of the list", () =>
   Effect.gen(function* () {
-    const noneDir = yield* tmpdirScoped()
     const keyedDir = yield* tmpdirScoped({
       config: { provider: { opencode: { options: { apiKey: "test-key" } } } },
     })
 
-    const listIn = (directory: string) =>
-      Provider.use
-        .list()
-        .pipe(provideInstanceEffect(directory))
-        .pipe(Effect.provide(instanceStoreLayer), Effect.provide(AppNodeBuilder.build(CrossSpawnSpawner.node)))
+    const providers = yield* Provider.use
+      .list()
+      .pipe(provideInstanceEffect(keyedDir))
+      .pipe(Effect.provide(instanceStoreLayer), Effect.provide(AppNodeBuilder.build(CrossSpawnSpawner.node)))
 
-    const none = paid(yield* listIn(noneDir))
-    const keyedCount = paid(yield* listIn(keyedDir))
-
-    expect(none).toBe(0)
-    expect(keyedCount).toBeGreaterThan(0)
-  }).pipe(provideMultiInstance),
-)
-
-it.effect("opencode loader keeps paid models when auth exists", () =>
-  Effect.gen(function* () {
-    const noneDir = yield* tmpdirScoped()
-    const keyedDir = yield* tmpdirScoped()
-
-    const listIn = (directory: string) =>
-      Provider.use
-        .list()
-        .pipe(provideInstanceEffect(directory))
-        .pipe(Effect.provide(instanceStoreLayer), Effect.provide(AppNodeBuilder.build(CrossSpawnSpawner.node)))
-
-    const none = paid(yield* listIn(noneDir))
-
-    const authPath = path.join(Global.Path.data, "auth.json")
-    const original = yield* Effect.promise(() => Filesystem.readText(authPath).catch(() => undefined))
-
-    yield* Effect.acquireRelease(
-      Effect.promise(() => Filesystem.write(authPath, JSON.stringify({ opencode: { type: "api", key: "test-key" } }))),
-      () =>
-        Effect.promise(async () => {
-          if (original !== undefined) await Filesystem.write(authPath, original)
-          else await unlink(authPath).catch(() => undefined)
-        }),
-    )
-
-    const keyedCount = paid(yield* listIn(keyedDir))
-
-    expect(none).toBe(0)
-    expect(keyedCount).toBeGreaterThan(0)
+    expect(providers[ProviderV2.ID.make("opencode")]).toBeUndefined()
+    expect(providers[ProviderV2.ID.make("opencode-go")]).toBeUndefined()
   }).pipe(provideMultiInstance),
 )

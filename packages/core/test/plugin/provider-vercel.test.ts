@@ -20,7 +20,7 @@ const addPlugin = Effect.fn(function* () {
 })
 
 describe("VercelPlugin", () => {
-  it.effect("applies legacy lower-case referer headers", () =>
+  it.effect("adds no lower-case attribution headers", () =>
     Effect.gen(function* () {
       const catalog = yield* Catalog.Service
       yield* catalog.transform((catalog) => {
@@ -32,8 +32,6 @@ describe("VercelPlugin", () => {
       yield* addPlugin()
       expect((yield* catalog.provider.get(ProviderV2.ID.make("vercel")))?.request.headers).toEqual({
         Existing: "1",
-        "http-referer": "https://opencode.ai/",
-        "x-title": "opencode",
       })
     }),
   )

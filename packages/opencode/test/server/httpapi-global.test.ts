@@ -43,15 +43,19 @@ const apiLayer = HttpRouter.serve(
 const it = testEffect(apiLayer)
 
 describe("global HttpApi", () => {
-  it.live("upgrades to the requested version", () =>
+  // WP-EGRESS-CORE (row 56): Swarm ships no update server (decision 5), so POST /global/upgrade
+  // refuses with 403 before any method detection or download, keeping the declared
+  // GlobalUpgradeResult shape so existing SDK clients still parse the body
+  // (src/server/routes/instance/httpapi/handlers/global.ts:89-98).
+  it.live("refuses upgrade requests with the administrator-managed message", () =>
     Effect.gen(function* () {
       const response = yield* HttpClientRequest.post(GlobalPaths.upgrade).pipe(
         HttpClientRequest.bodyJsonUnsafe({ target: "9.9.9" }),
         HttpClient.execute,
       )
 
-      expect(response.status).toBe(200)
-      expect(yield* response.json).toEqual({ success: true, version: "9.9.9" })
+      expect(response.status).toBe(403)
+      expect(yield* response.json).toEqual({ success: false, error: Installation.UPGRADE_REFUSAL })
     }),
   )
 

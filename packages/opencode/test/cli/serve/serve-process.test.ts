@@ -1,16 +1,22 @@
-// Subprocess integration tests for `opencode serve`. Spawns the real CLI in
+// Subprocess integration tests for `swarm serve`. Spawns the real CLI in
 // headless mode and exercises it over HTTP — this is the only test tier that
 // catches bugs spanning argv → server boot → routing → instance loading.
 //
 // `serve` is long-lived: the harness returns a handle (url/port/kill/exited)
 // and kills the process when the test scope closes. The OS-assigned port is
 // parsed off the "listening on http://..." line.
+//
+// The harness spawns every child with a server password (test/lib/cli-process.ts,
+// required since WP-EGRESS-SRV row 62 made `serve` refuse an unprotected listener),
+// so requests here carry basic-auth credentials built by the same helper the CLI
+// uses when it attaches.
 import { describe, expect } from "bun:test"
 import { Effect } from "effect"
 import { HttpClient } from "effect/unstable/http"
-import { cliIt } from "../../lib/cli-process"
+import { ServerAuth } from "../../../src/server/auth"
+import { cliIt, CLI_TEST_SERVER_PASSWORD } from "../../lib/cli-process"
 
-describe("opencode serve (subprocess)", () => {
+describe("swarm serve (subprocess)", () => {
   // Smoke test: server starts, binds a port, and /global/health responds.
   // If this fails, all other serve tests likely will too — debug here first.
   cliIt.live(
@@ -22,11 +28,19 @@ describe("opencode serve (subprocess)", () => {
         expect(server.url).toMatch(/^http:\/\//)
 
         const client = yield* HttpClient.HttpClient
-        const res = yield* client.get(`${server.url}/global/health`)
+        // Row 62's hardening means a password-protected listener answers unauthenticated
+        // traffic with 401, which is itself proof the auth layer is wired through the real
+        // spawn path rather than only in-process layers.
+        const anonymous = yield* client.get(`${server.url}/global/health`)
+        expect(anonymous.status).toBe(401)
+
+        const res = yield* client.get(`${server.url}/global/health`, {
+          headers: ServerAuth.headers({ password: CLI_TEST_SERVER_PASSWORD }),
+        })
         expect(res.status).toBe(200)
         // GlobalHealth schema is { success: true, ... } | { success: false, error }.
         // We don't lock in further shape here — any 200 with parseable JSON is
-        // enough proof the routing + auth-bypass + instance loading is alive.
+        // enough proof the routing + auth + instance loading is alive.
         const body = yield* res.json
         expect(body).toBeDefined()
       }),

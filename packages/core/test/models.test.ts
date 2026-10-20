@@ -6,6 +6,7 @@ import { LayerNodePlatform } from "@opencode-ai/core/effect/app-node-platform"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { Flag } from "@opencode-ai/core/flag/flag"
 import { Global } from "@opencode-ai/core/global"
+import { Hash } from "@opencode-ai/core/util/hash"
 import { ModelsDev } from "@opencode-ai/core/models-dev"
 import { it } from "./lib/effect"
 import { readFile, rm, writeFile, utimes, mkdir } from "fs/promises"
@@ -18,16 +19,28 @@ import path from "path"
 // bun process.
 const ORIGINAL_MODELS_PATH = Flag.OPENCODE_MODELS_PATH
 const ORIGINAL_DISABLE_FETCH = Flag.OPENCODE_DISABLE_MODELS_FETCH
+const ORIGINAL_MODELS_URL = Flag.OPENCODE_MODELS_URL
+// WP-EGRESS-CORE (row 56) removed the default catalogue host: `source = Flag.OPENCODE_MODELS_URL`
+// and without it `fetchApi` dies and `populate` falls back to {} (src/models-dev.ts:161-182,222-227).
+// The fetch-path cases below therefore need an explicit target; it points at a host that only the
+// file's own mock client ever sees, so no request can leave the process. Same save/restore discipline
+// as the two flags around it — never leak the mutation to later files in this bun process.
 beforeAll(() => {
   Flag.OPENCODE_MODELS_PATH = undefined
   Flag.OPENCODE_DISABLE_MODELS_FETCH = true
+  Flag.OPENCODE_MODELS_URL = TEST_MODELS_URL
 })
 afterAll(() => {
   Flag.OPENCODE_MODELS_PATH = ORIGINAL_MODELS_PATH
   Flag.OPENCODE_DISABLE_MODELS_FETCH = ORIGINAL_DISABLE_FETCH
+  Flag.OPENCODE_MODELS_URL = ORIGINAL_MODELS_URL
 })
 
-const cacheFile = path.join(Global.Path.cache, "models.json")
+// src/models-dev.ts:165-167 keys the cache file on the configured source: `models.json` with no
+// target, `models-<hash of url>.json` with one. Since this suite now sets a target (see beforeAll),
+// the fixture path has to follow the same rule or the service and the test would read two files.
+const TEST_MODELS_URL = "https://models.invalid.test"
+const cacheFile = path.join(Global.Path.cache, `models-${Hash.fast(TEST_MODELS_URL)}.json`)
 
 const fixture: Record<string, ModelsDev.Provider> = {
   acme: {

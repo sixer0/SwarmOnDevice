@@ -260,14 +260,19 @@ describe("tool.read external_directory permission", () => {
 })
 
 describe("tool.read env file permissions", () => {
+  // Row 96's shipped baseline names exactly one readable pattern — `*.env.example`
+  // (packages/core/src/swarm-permission-baseline.ts `read`) — and everything else falls to its
+  // ("*","*") ask rule. So `.envrc` and `environment.ts`, allowed by upstream's read defaults, now
+  // require consent like any other file. The list is a consent matrix, not a brand fixture: every
+  // `true` here is the shipped posture doing its job.
   const cases: [string, boolean][] = [
     [".env", true],
     [".env.local", true],
     [".env.production", true],
     [".env.development.local", true],
     [".env.example", false],
-    [".envrc", false],
-    ["environment.ts", false],
+    [".envrc", true],
+    ["environment.ts", true],
   ]
 
   for (const agentName of ["build", "plan"] as const) {

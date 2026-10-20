@@ -60,7 +60,11 @@ describe("HttpApi CORS", () => {
     }),
   )
 
-  it.live("adds CORS headers to unauthorized responses", () =>
+  // Rows 60/62 removed `https://*.opencode.ai` and the Tauri origins from the CORS allow-list
+  // (packages/server/src/cors.ts), so an upstream-domain origin must no longer be echoed back.
+  // The positive half of this test — CORS headers on a 401 — is kept by using an origin the landed
+  // allow-list still accepts (loopback).
+  it.live("adds CORS headers to unauthorized responses only for allowed origins", () =>
     Effect.gen(function* () {
       const handler = HttpRouter.toWebHandler(
         HttpApiApp.createRoutes().pipe(
@@ -71,14 +75,26 @@ describe("HttpApi CORS", () => {
       const response = yield* Effect.promise(() =>
         handler(
           new Request(new URL("/global/config", "http://localhost"), {
-            headers: { origin: "https://app.opencode.ai" },
+            headers: { origin: "http://localhost:3000" },
           }),
           HttpApiApp.context,
         ),
       )
 
       expect(response.status).toBe(401)
-      expect(response.headers.get("access-control-allow-origin")).toBe("https://app.opencode.ai")
+      expect(response.headers.get("access-control-allow-origin")).toBe("http://localhost:3000")
+
+      const removed = yield* Effect.promise(() =>
+        handler(
+          new Request(new URL("/global/config", "http://localhost"), {
+            headers: { origin: "https://app.opencode.ai" },
+          }),
+          HttpApiApp.context,
+        ),
+      )
+
+      expect(removed.status).toBe(401)
+      expect(removed.headers.get("access-control-allow-origin")).toBeNull()
     }),
   )
 

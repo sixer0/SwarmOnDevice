@@ -293,8 +293,12 @@ describe("HttpApi Server.listen", () => {
       return true
     }) as typeof process.stderr.write
     try {
+      // There is no /status route; at HEAD this returned 200 only because unmatched paths were
+      // proxied to https://app.opencode.ai, and row 60 deleted that fallback
+      // (src/server/shared/ui.ts now returns the JSON 404). The point of the test is the stderr
+      // assertion below, which needs a served request, not a successful one.
       const response = await Server.Default().app.request("/status")
-      expect(response.status).toBe(200)
+      expect(response.status).toBe(404)
     } finally {
       process.stderr.write = original
     }
@@ -323,7 +327,7 @@ describe("HttpApi Server.listen", () => {
           ].join("\n"),
         )
         await Bun.write(
-          path.join(directory, "opencode.json"),
+          path.join(directory, "swarm.json"),
           JSON.stringify({ formatter: false, lsp: false, plugin: [pathToFileURL(plugin).href] }),
         )
         return { initialized, completed }

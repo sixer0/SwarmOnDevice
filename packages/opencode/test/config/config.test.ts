@@ -149,13 +149,13 @@ afterEach(async () => {
 })
 
 const writeManagedSettingsEffect = (settings: object, filename?: string) =>
-  FSUtil.use.writeWithDirs(path.join(managedConfigDir, filename ?? "opencode.json"), JSON.stringify(settings))
+  FSUtil.use.writeWithDirs(path.join(managedConfigDir, filename ?? "swarm.json"), JSON.stringify(settings))
 
-async function writeConfig(dir: string, config: object, name = "opencode.json") {
+async function writeConfig(dir: string, config: object, name = "swarm.json") {
   await Filesystem.write(path.join(dir, name), JSON.stringify(config))
 }
 
-const writeConfigEffect = (dir: string, config: object, name = "opencode.json") =>
+const writeConfigEffect = (dir: string, config: object, name = "swarm.json") =>
   FSUtil.use.writeWithDirs(path.join(dir, name), JSON.stringify(config))
 
 const withInstanceDir = <A, E, R>(dir: string, effect: Effect.Effect<A, E, R>) =>
@@ -204,7 +204,7 @@ const withConfigTree = <A, E, R>(
       [
         input.global ? writeConfigEffect(global, schemaConfig(input.global)) : undefined,
         input.project ? writeConfigEffect(directory, schemaConfig(input.project)) : undefined,
-        input.local ? writeConfigEffect(path.join(directory, ".opencode"), schemaConfig(input.local)) : undefined,
+        input.local ? writeConfigEffect(path.join(directory, ".swarm"), schemaConfig(input.local)) : undefined,
       ].filter((effect): effect is Effect.Effect<void, FSUtil.Error, FSUtil.Service> => effect !== undefined),
       { concurrency: "unbounded" },
     )
@@ -310,13 +310,15 @@ it.instance("falls back to generic username when system user info is unavailable
   }),
 )
 
-it.effect("creates global jsonc config with schema when no global configs exist", () =>
+// Register W06 (row 40) removed every `$schema` write site, including the seed block in
+// loadGlobal: Swarm ships no documentation host, so it no longer creates a stamped global config.
+it.effect("does not create a global config file when none exists", () =>
   withGlobalConfig({}, ({ dir }) =>
     Effect.gen(function* () {
       yield* Config.use.get().pipe(provideInstanceEffect(dir))
 
-      const content = yield* FSUtil.use.readFileString(path.join(dir, "opencode.jsonc"))
-      expect(content).toContain('"$schema": "https://opencode.ai/config.json"')
+      expect(yield* FSUtil.use.existsSafe(path.join(dir, "swarm.jsonc"))).toBe(false)
+      expect(yield* FSUtil.use.existsSafe(path.join(dir, "swarm.json"))).toBe(false)
     }).pipe(Effect.provide(testInstanceStoreLayer), Effect.provide(LayerNode.compile(CrossSpawnSpawner.node))),
   ),
 )
@@ -331,7 +333,7 @@ it.effect("does not create global config when OPENCODE_CONFIG_DIR is set", () =>
         Effect.gen(function* () {
           yield* Config.use.get().pipe(provideInstanceEffect(dir))
 
-          expect(yield* FSUtil.use.existsSafe(path.join(dir, "opencode.jsonc"))).toBe(false)
+          expect(yield* FSUtil.use.existsSafe(path.join(dir, "swarm.jsonc"))).toBe(false)
         }).pipe(Effect.provide(testInstanceStoreLayer), Effect.provide(LayerNode.compile(CrossSpawnSpawner.node))),
       ),
     )
@@ -378,18 +380,18 @@ it.effect("updates global config and omits empty shell key in json", () =>
     Effect.gen(function* () {
       yield* Config.use.updateGlobal({ shell: "" })
 
-      const writtenConfig = yield* FSUtil.use.readJson(path.join(dir, "opencode.json"))
+      const writtenConfig = yield* FSUtil.use.readJson(path.join(dir, "swarm.json"))
       expect(writtenConfig).not.toHaveProperty("shell")
     }),
   ),
 )
 
 it.effect("updates global config and omits empty shell key in jsonc", () =>
-  withGlobalConfig({ config: { shell: "bash", model: "test/model" }, name: "opencode.jsonc" }, ({ dir }) =>
+  withGlobalConfig({ config: { shell: "bash", model: "test/model" }, name: "swarm.jsonc" }, ({ dir }) =>
     Effect.gen(function* () {
       yield* Config.use.updateGlobal({ shell: "" })
 
-      const file = path.join(dir, "opencode.jsonc")
+      const file = path.join(dir, "swarm.jsonc")
       const writtenConfig = yield* FSUtil.use.readFileString(file)
       const parsed = ConfigParse.schema(ConfigV1.Info, ConfigParse.jsonc(writtenConfig, file), file)
       expect(writtenConfig).not.toContain('"shell"')
@@ -425,7 +427,7 @@ it.effect("logs global update diagnostics once without exposing values", () =>
           [
             "configuration compatibility diagnostic",
             expect.objectContaining({
-              source: path.join(dir, "opencode.json"),
+              source: path.join(dir, "swarm.json"),
               kind: "unsupported",
               path: ["providers"],
             }),
@@ -448,7 +450,7 @@ for (const input of globalInputs) {
     withGlobalConfig({}, ({ dir }) =>
       Effect.gen(function* () {
         const fs = yield* FSUtil.Service
-        const file = path.join(dir, `opencode${extension}`)
+        const file = path.join(dir, `swarm${extension}`)
         yield* fs.writeFileString(file, yield* fs.readFileString(path.join(updateFixtures, input)))
         const patch = ConfigParse.schema(ConfigV1.Info, yield* fs.readJson(`${prefix}-patch.json`), input)
         const updated = yield* Config.use.updateGlobal(patch)
@@ -485,7 +487,7 @@ for (const input of projectInputs) {
   )
 }
 
-for (const name of ["opencode.json", "opencode.jsonc"]) {
+for (const name of ["swarm.json", "swarm.jsonc"]) {
   it.live(`rejects updating ${name} with native permissions without writing it`, () =>
     withGlobalConfig(
       { name, config: { permissions: [{ action: "read", resource: "secret-resource", effect: "deny" }] } },
@@ -573,9 +575,12 @@ it.effect("rejects native project permissions even with inherited V1 rules", () 
       if (Exit.isFailure(exit))
         expect(Cause.squash(exit.cause)).toMatchObject({
           data: {
-            path: expect.stringContaining(path.join("project", "opencode.json")),
+            path: expect.stringContaining(path.join("project", "swarm.json")),
             issues: [
-              { path: ["permissions"], message: expect.stringContaining('Use V1 "permission" rules or run opencode2') },
+              // Row 41 fix-round 3 dropped the `run opencode2` tail from the v2-compat message;
+              // src/config/v2-compat.ts:111 now ends at 'Use V1 "permission" rules.' — the trailing
+              // period below is what pins that ending rather than merely matching its prefix.
+              { path: ["permissions"], message: expect.stringContaining('Use V1 "permission" rules.') },
               { path: ["agents", "reviewer", "permissions"], message: expect.stringContaining("not supported") },
             ],
           },
@@ -619,7 +624,7 @@ test("loads project config from Cygwin paths on Windows", async () => {
   })
 })
 
-it.instance("ignores legacy tui keys in opencode config", () =>
+it.instance("ignores legacy tui keys in swarm config", () =>
   Effect.gen(function* () {
     const test = yield* TestInstance
     yield* writeConfigEffect(test.directory, {
@@ -640,7 +645,7 @@ it.instance("loads JSONC config file", () =>
   Effect.gen(function* () {
     const test = yield* TestInstance
     yield* FSUtil.use.writeWithDirs(
-      path.join(test.directory, "opencode.jsonc"),
+      path.join(test.directory, "swarm.jsonc"),
       `{
         // This is a comment
         "$schema": "https://opencode.ai/config.json",
@@ -664,7 +669,7 @@ it.instance("jsonc overrides json in the same directory", () =>
         model: "base",
         username: "base",
       },
-      "opencode.jsonc",
+      "swarm.jsonc",
     )
     yield* writeConfigEffect(test.directory, {
       $schema: "https://opencode.ai/config.json",
@@ -692,25 +697,26 @@ it.instance("handles environment variable substitution", () =>
   ),
 )
 
-it.instance("preserves env variables when adding $schema to config", () =>
+it.instance("preserves env variables when loading a config without $schema", () =>
   withProcessEnv(
     "PRESERVE_VAR",
     "secret_value",
     Effect.gen(function* () {
       const test = yield* TestInstance
-      // Config without $schema - should trigger auto-add
+      // Config without $schema - the writer must leave the file alone apart from real updates
       yield* FSUtil.use.writeWithDirs(
-        path.join(test.directory, "opencode.json"),
+        path.join(test.directory, "swarm.json"),
         JSON.stringify({ username: "{env:PRESERVE_VAR}" }),
       )
       const config = yield* Config.use.get()
       expect(config.username).toBe("secret_value")
 
       // Read the file to verify the env variable was preserved
-      const content = yield* FSUtil.use.readFileString(path.join(test.directory, "opencode.json"))
+      const content = yield* FSUtil.use.readFileString(path.join(test.directory, "swarm.json"))
       expect(content).toContain("{env:PRESERVE_VAR}")
       expect(content).not.toContain("secret_value")
-      expect(content).toContain("$schema")
+      // W06 (row 40): the loader no longer stamps $schema into user config files.
+      expect(content).not.toContain("$schema")
     }),
   ),
 )
@@ -799,7 +805,7 @@ it.instance("validates config schema and throws on invalid values", () =>
 it.instance("throws error for invalid JSON", () =>
   Effect.gen(function* () {
     const test = yield* TestInstance
-    yield* FSUtil.use.writeWithDirs(path.join(test.directory, "opencode.json"), "{ invalid json }")
+    yield* FSUtil.use.writeWithDirs(path.join(test.directory, "swarm.json"), "{ invalid json }")
     const exit = yield* Config.use.get().pipe(Effect.exit)
     expect(Exit.isFailure(exit)).toBe(true)
   }),
@@ -931,11 +937,11 @@ it.instance("accepts the deprecated reference field", () =>
   }),
 )
 
-it.instance("loads config from .opencode directory", () =>
+it.instance("loads config from .swarm directory", () =>
   Effect.gen(function* () {
     const test = yield* TestInstance
     yield* FSUtil.use.writeWithDirs(
-      path.join(test.directory, ".opencode", "agent", "test.md"),
+      path.join(test.directory, ".swarm", "agent", "test.md"),
       `---
 model: test/model
 ---
@@ -957,7 +963,7 @@ it.instance("agent markdown permission config preserves user key order", () =>
   Effect.gen(function* () {
     const test = yield* TestInstance
     yield* FSUtil.use.writeWithDirs(
-      path.join(test.directory, ".opencode", "agent", "ordered.md"),
+      path.join(test.directory, ".swarm", "agent", "ordered.md"),
       `---
 permission:
   bash: allow
@@ -972,11 +978,11 @@ Ordered permissions`,
   }),
 )
 
-it.instance("loads agents from .opencode/agents (plural)", () =>
+it.instance("loads agents from .swarm/agents (plural)", () =>
   Effect.gen(function* () {
     const test = yield* TestInstance
     yield* FSUtil.use.writeWithDirs(
-      path.join(test.directory, ".opencode", "agents", "helper.md"),
+      path.join(test.directory, ".swarm", "agents", "helper.md"),
       `---
 model: test/model
 mode: subagent
@@ -985,7 +991,7 @@ Helper agent prompt`,
     )
 
     yield* FSUtil.use.writeWithDirs(
-      path.join(test.directory, ".opencode", "agents", "nested", "child.md"),
+      path.join(test.directory, ".swarm", "agents", "nested", "child.md"),
       `---
 model: test/model
 mode: subagent
@@ -1011,11 +1017,11 @@ Nested agent prompt`,
   }),
 )
 
-it.instance("loads commands from .opencode/command (singular)", () =>
+it.instance("loads commands from .swarm/command (singular)", () =>
   Effect.gen(function* () {
     const test = yield* TestInstance
     yield* FSUtil.use.writeWithDirs(
-      path.join(test.directory, ".opencode", "command", "hello.md"),
+      path.join(test.directory, ".swarm", "command", "hello.md"),
       `---
 description: Test command
 ---
@@ -1023,7 +1029,7 @@ Hello from singular command`,
     )
 
     yield* FSUtil.use.writeWithDirs(
-      path.join(test.directory, ".opencode", "command", "nested", "child.md"),
+      path.join(test.directory, ".swarm", "command", "nested", "child.md"),
       `---
 description: Nested command
 ---
@@ -1044,11 +1050,11 @@ Nested command template`,
   }),
 )
 
-it.instance("loads commands from .opencode/commands (plural)", () =>
+it.instance("loads commands from .swarm/commands (plural)", () =>
   Effect.gen(function* () {
     const test = yield* TestInstance
     yield* FSUtil.use.writeWithDirs(
-      path.join(test.directory, ".opencode", "commands", "hello.md"),
+      path.join(test.directory, ".swarm", "commands", "hello.md"),
       `---
 description: Test command
 ---
@@ -1056,7 +1062,7 @@ Hello from plural commands`,
     )
 
     yield* FSUtil.use.writeWithDirs(
-      path.join(test.directory, ".opencode", "commands", "nested", "child.md"),
+      path.join(test.directory, ".swarm", "commands", "nested", "child.md"),
       `---
 description: Nested command
 ---
@@ -1228,7 +1234,7 @@ it.instance("does not error when only custom agent is a subagent", () =>
   Effect.gen(function* () {
     const test = yield* TestInstance
     yield* FSUtil.use.writeWithDirs(
-      path.join(test.directory, ".opencode", "agent", "helper.md"),
+      path.join(test.directory, ".swarm", "agent", "helper.md"),
       `---
 model: test/model
 mode: subagent
@@ -1405,7 +1411,7 @@ it.instance(
 it.instance("managed jsonc settings override managed json settings", () =>
   Effect.gen(function* () {
     yield* writeManagedSettingsEffect({ model: "managed/json" })
-    yield* writeManagedSettingsEffect({ model: "managed/jsonc" }, "opencode.jsonc")
+    yield* writeManagedSettingsEffect({ model: "managed/jsonc" }, "swarm.jsonc")
 
     const config = yield* Config.use.get()
     expect(config.model).toBe("managed/jsonc")
@@ -1503,18 +1509,36 @@ it.instance("permission config preserves user key order", () =>
     })
 
     const config = yield* Config.use.get()
+    // Row 96 ships a permission baseline through BASELINE_CONFIG, so the resolved block is no longer
+    // just what the user wrote. Under the merge rule row 96 §3 records for this tree's remeda — a key
+    // present in both keeps its EXISTING position, new keys append in the order they were written — the
+    // shipped keys (packages/core/src/swarm-permission-baseline.ts:42) come first in their normative
+    // order, "*" included because the user also wrote it, and `read` likewise. The user's own keys then
+    // follow in exactly the order above, which is what this case exists to prove: nothing canonicalised.
     expect(Object.keys(config.permission!)).toEqual([
       "*",
+      "read",
+      "glob",
+      "grep",
+      "list",
+      "skill",
+      "webfetch",
+      "websearch",
+      "bash",
+      "graft_*",
+      "swarm-web_*",
       "edit",
       "write",
       "external_directory",
-      "read",
       "todowrite",
       "thoughts_*",
       "reasoning_model_*",
       "tools_*",
       "pr_comments_*",
     ])
+    // Order alone would still pass if the baseline had overwritten the user, so pin precedence too:
+    // the lowest-precedence layer sets "*" to "ask", the user's "deny" must win.
+    expect(config.permission?.["*"]).toBe("deny")
   }),
 )
 
@@ -1570,7 +1594,7 @@ it.instance("project config can override MCP server enabled status", () =>
           },
         },
       },
-      "opencode.jsonc",
+      "swarm.jsonc",
     )
 
     const config = yield* Config.use.get()
@@ -1615,7 +1639,7 @@ it.instance("MCP config deep merges preserving base config properties", () =>
           },
         },
       },
-      "opencode.jsonc",
+      "swarm.jsonc",
     )
 
     const config = yield* Config.use.get()
@@ -1630,7 +1654,7 @@ it.instance("MCP config deep merges preserving base config properties", () =>
   }),
 )
 
-it.instance("local .opencode config can override MCP from project config", () =>
+it.instance("local .swarm config can override MCP from project config", () =>
   Effect.gen(function* () {
     const test = yield* TestInstance
     yield* writeConfigEffect(test.directory, {
@@ -1643,9 +1667,9 @@ it.instance("local .opencode config can override MCP from project config", () =>
         },
       },
     })
-    yield* FSUtil.use.ensureDir(path.join(test.directory, ".opencode"))
+    yield* FSUtil.use.ensureDir(path.join(test.directory, ".swarm"))
     yield* writeConfigEffect(
-      path.join(test.directory, ".opencode"),
+      path.join(test.directory, ".swarm"),
       {
         $schema: "https://opencode.ai/config.json",
         mcp: {
@@ -1656,7 +1680,7 @@ it.instance("local .opencode config can override MCP from project config", () =>
           },
         },
       },
-      "opencode.json",
+      "swarm.json",
     )
 
     const config = yield* Config.use.get()
@@ -1861,7 +1885,7 @@ loginPageWellKnown.it.instance(
 describe("resolvePluginSpec", () => {
   test("keeps package specs unchanged", async () => {
     await using tmp = await tmpdir()
-    const file = path.join(tmp.path, "opencode.json")
+    const file = path.join(tmp.path, "swarm.json")
     expect(await ConfigPlugin.resolvePluginSpec("oh-my-opencode@2.4.3", file)).toBe("oh-my-opencode@2.4.3")
     expect(await ConfigPlugin.resolvePluginSpec("@scope/pkg", file)).toBe("@scope/pkg")
   })
@@ -1877,7 +1901,7 @@ describe("resolvePluginSpec", () => {
       },
     })
 
-    const file = path.join(tmp.path, "opencode.json")
+    const file = path.join(tmp.path, "swarm.json")
     const hit = await ConfigPlugin.resolvePluginSpec(".\\plugin", file)
     expect(ConfigPlugin.pluginSpecifier(hit)).toBe(pathToFileURL(path.join(tmp.path, "plugin", "index.ts")).href)
   })
@@ -1889,7 +1913,7 @@ describe("resolvePluginSpec", () => {
       },
     })
 
-    const file = path.join(tmp.path, "opencode.json")
+    const file = path.join(tmp.path, "swarm.json")
     const hit = await ConfigPlugin.resolvePluginSpec("./plugin.ts", file)
     expect(ConfigPlugin.pluginSpecifier(hit)).toBe(pathToFileURL(path.join(tmp.path, "plugin.ts")).href)
   })
@@ -1908,7 +1932,7 @@ describe("resolvePluginSpec", () => {
       },
     })
 
-    const file = path.join(tmp.path, "opencode.json")
+    const file = path.join(tmp.path, "swarm.json")
     const hit = await ConfigPlugin.resolvePluginSpec("./plugin", file)
     expect(ConfigPlugin.pluginSpecifier(hit)).toBe(pathToFileURL(path.join(tmp.path, "plugin")).href)
   })
@@ -1922,7 +1946,7 @@ describe("resolvePluginSpec", () => {
       },
     })
 
-    const file = path.join(tmp.path, "opencode.json")
+    const file = path.join(tmp.path, "swarm.json")
     const hit = await ConfigPlugin.resolvePluginSpec("./plugin", file)
     expect(ConfigPlugin.pluginSpecifier(hit)).toBe(pathToFileURL(path.join(tmp.path, "plugin", "index.ts")).href)
   })
@@ -1980,7 +2004,7 @@ describe("deduplicatePluginOrigins", () => {
       Effect.gen(function* () {
         const test = yield* TestInstance
         yield* FSUtil.use.writeWithDirs(
-          path.join(test.directory, ".opencode", "plugin", "my-plugin.js"),
+          path.join(test.directory, ".swarm", "plugin", "my-plugin.js"),
           "export default {}",
         )
 
@@ -2008,14 +2032,14 @@ describe("OPENCODE_DISABLE_PROJECT_CONFIG", () => {
     { config: { model: "project/model", username: "project-user" } },
   )
 
-  it.instance("skips project .opencode/ directories when flag is set", () =>
+  it.instance("skips project .swarm/ directories when flag is set", () =>
     withProcessEnv(
       "OPENCODE_DISABLE_PROJECT_CONFIG",
       "true",
       Effect.gen(function* () {
         const test = yield* TestInstance
         yield* FSUtil.use.writeWithDirs(
-          path.join(test.directory, ".opencode", "command", "test-cmd.md"),
+          path.join(test.directory, ".swarm", "command", "test-cmd.md"),
           "# Test Command\nThis is a test command.",
         )
         const directories = yield* Config.use.directories()
@@ -2132,9 +2156,9 @@ test("parseManagedPlist strips MDM metadata keys", async () => {
     ConfigParse.jsonc(
       await ConfigManaged.parseManagedPlist(
         JSON.stringify({
-          PayloadDisplayName: "OpenCode Managed",
-          PayloadIdentifier: "ai.opencode.managed.test",
-          PayloadType: "ai.opencode.managed",
+          PayloadDisplayName: "Swarm Managed",
+          PayloadIdentifier: "id.co.gsp.swarm.managed.test",
+          PayloadType: "id.co.gsp.swarm.managed",
           PayloadUUID: "AAAA-BBBB-CCCC",
           PayloadVersion: 1,
           _manualProfile: true,

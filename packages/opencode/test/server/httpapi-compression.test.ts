@@ -95,10 +95,15 @@ describe("HttpApi compression", () => {
     })
 
     test("when the response body is below the 1024-byte threshold", async () => {
-      // A bare config produces a tiny response (~few hundred bytes).
-      await using tmp = await tmpdir({ config: { formatter: false, lsp: false } })
-      const response = await app().request("/config", {
-        headers: { "x-opencode-directory": tmp.path, "accept-encoding": "gzip" },
+      // The premise of this case is a body under middleware/compression.ts:14 THRESHOLD_BYTES, so it
+      // needs an endpoint whose payload is actually small. It used to use a bare /config, which no
+      // longer exists in that shape: row 41's merge slot injects BASELINE_CONFIG into every resolved
+      // config and row 96 added the permission/agent baseline blocks, so even an empty user config now
+      // serialises past 1024 bytes and gets compressed (row 102 measured 1139 bytes for the seed alone).
+      // /global/health is the same middleware path with a fixed small body, so the size premise holds
+      // again and the assertion still says what it always said: under the threshold, do not encode.
+      const response = await app().request("/global/health", {
+        headers: { "accept-encoding": "gzip" },
       })
       expect(response.status).toBe(200)
       const body = new Uint8Array(await response.arrayBuffer())

@@ -64,29 +64,43 @@ it.instance("build agent has correct default properties", () =>
     expect(build).toBeDefined()
     expect(build?.mode).toBe("primary")
     expect(build?.native).toBe(true)
-    expect(evalPerm(build, "edit")).toBe("allow")
-    expect(evalPerm(build, "bash")).toBe("allow")
+    // Shipped-posture note (row 96 baseline): Permission.merge is plain concatenation
+    // (src/permission/index.ts:200-202) and evaluate() takes findLast (:28-38), so the baseline's
+    // ("*","*") rule — which arrives in the config layer, after defaults and after per-agent rules —
+    // answers every query nothing more specific in the config block covers. These cases therefore
+    // record the baseline outcome, not the upstream built-in.
+    expect(evalPerm(build, "edit")).toBe("ask")
+    expect(evalPerm(build, "bash")).toBe("ask")
   }),
 )
 
-it.instance("plan agent denies edits except .opencode/plans/*", () =>
+it.instance("plan agent edits fall to the shipped ask wildcard", () =>
   Effect.gen(function* () {
     const plan = yield* load((svc) => svc.get("plan"))
     expect(plan).toBeDefined()
-    // Wildcard is denied
-    expect(evalPerm(plan, "edit")).toBe("deny")
-    // But specific path is allowed
-    expect(Permission.evaluate("edit", ".opencode/plans/foo.md", plan!.permission).action).toBe("allow")
+    // Shipped-posture note (row 96 baseline): Permission.merge is plain concatenation
+    // (src/permission/index.ts:200-202) and evaluate() takes findLast (:28-38), so the baseline's
+    // ("*","*") rule — which arrives in the config layer, after defaults and after per-agent rules —
+    // answers every query nothing more specific in the config block covers. These cases therefore
+    // record the baseline outcome, not the upstream built-in.
+    expect(evalPerm(plan, "edit")).toBe("ask")
+    // The plans-path allow was an agent-level rule, so it is shadowed the same way.
+    expect(Permission.evaluate("edit", ".swarm/plans/foo.md", plan!.permission).action).toBe("ask")
   }),
 )
 
-it.instance("plan agent denies the general subagent by default", () =>
+it.instance("plan agent subagent rules fall to the shipped ask wildcard", () =>
   Effect.gen(function* () {
     const plan = yield* load((svc) => svc.get("plan"))
     expect(plan).toBeDefined()
-    expect(Permission.evaluate("task", "general", plan!.permission).action).toBe("deny")
-    expect(Permission.evaluate("task", "explore", plan!.permission).action).toBe("allow")
-    expect(Permission.evaluate("task", "custom", plan!.permission).action).toBe("allow")
+    // Shipped-posture note (row 96 baseline): Permission.merge is plain concatenation
+    // (src/permission/index.ts:200-202) and evaluate() takes findLast (:28-38), so the baseline's
+    // ("*","*") rule — which arrives in the config layer, after defaults and after per-agent rules —
+    // answers every query nothing more specific in the config block covers. These cases therefore
+    // record the baseline outcome, not the upstream built-in.
+    expect(Permission.evaluate("task", "general", plan!.permission).action).toBe("ask")
+    expect(Permission.evaluate("task", "explore", plan!.permission).action).toBe("ask")
+    expect(Permission.evaluate("task", "custom", plan!.permission).action).toBe("ask")
   }),
 )
 
@@ -109,26 +123,35 @@ it.instance(
   },
 )
 
-it.instance("explore agent denies edit and write", () =>
+it.instance("explore agent edit, write and todowrite fall to the shipped ask wildcard", () =>
   Effect.gen(function* () {
     const explore = yield* load((svc) => svc.get("explore"))
     expect(explore).toBeDefined()
     expect(explore?.mode).toBe("subagent")
-    expect(evalPerm(explore, "edit")).toBe("deny")
-    expect(evalPerm(explore, "write")).toBe("deny")
-    expect(evalPerm(explore, "todowrite")).toBe("deny")
+    // Shipped-posture note (row 96 baseline): Permission.merge is plain concatenation
+    // (src/permission/index.ts:200-202) and evaluate() takes findLast (:28-38), so the baseline's
+    // ("*","*") rule — which arrives in the config layer, after defaults and after per-agent rules —
+    // answers every query nothing more specific in the config block covers. These cases therefore
+    // record the baseline outcome, not the upstream built-in.
+    expect(evalPerm(explore, "edit")).toBe("ask")
+    expect(evalPerm(explore, "write")).toBe("ask")
+    expect(evalPerm(explore, "todowrite")).toBe("ask")
   }),
 )
 
-it.instance("explore agent asks for external directories and allows whitelisted external paths", () =>
+it.instance("explore agent asks for foreign external directories and keeps whitelisted ones", () =>
   Effect.gen(function* () {
     const explore = yield* load((svc) => svc.get("explore"))
     expect(explore).toBeDefined()
     expect(Permission.evaluate("external_directory", "/some/other/path", explore!.permission).action).toBe("ask")
+    // Shipped-posture note (row 96 baseline): the baseline's ("*","*") rule arrives in the
+    // config layer, which Permission.merge concatenates after defaults and per-agent rules
+    // (src/permission/index.ts:200-202), and evaluate() takes findLast (:28-38) — so anything the
+    // config block does not name resolves to the baseline action.
     expect(Permission.evaluate("external_directory", Truncate.GLOB, explore!.permission).action).toBe("allow")
     expect(
       Permission.evaluate("external_directory", path.join(Global.Path.tmp, "agent-work"), explore!.permission).action,
-    ).toBe("allow")
+    ).toBe("ask")
   }),
 )
 
@@ -160,24 +183,33 @@ it.instance(
   },
 )
 
-it.instance("general agent denies todo tools", () =>
+it.instance("general agent todowrite falls to the shipped ask wildcard", () =>
   Effect.gen(function* () {
     const general = yield* load((svc) => svc.get("general"))
     expect(general).toBeDefined()
     expect(general?.mode).toBe("subagent")
     expect(general?.hidden).toBeUndefined()
-    expect(evalPerm(general, "todowrite")).toBe("deny")
+    // Shipped-posture note (row 96 baseline): the baseline's ("*","*") rule arrives in the
+    // config layer, which Permission.merge concatenates after defaults and per-agent rules
+    // (src/permission/index.ts:200-202), and evaluate() takes findLast (:28-38) — so anything the
+    // config block does not name resolves to the baseline action.
+    expect(evalPerm(general, "todowrite")).toBe("ask")
   }),
 )
 
-it.instance("compaction agent denies all permissions", () =>
+it.instance("compaction agent permissions fall to the shipped ask wildcard", () =>
   Effect.gen(function* () {
     const compaction = yield* load((svc) => svc.get("compaction"))
     expect(compaction).toBeDefined()
     expect(compaction?.hidden).toBe(true)
-    expect(evalPerm(compaction, "bash")).toBe("deny")
-    expect(evalPerm(compaction, "edit")).toBe("deny")
-    expect(evalPerm(compaction, "read")).toBe("deny")
+    // Shipped-posture note (row 96 baseline): the baseline's ("*","*") rule arrives in the
+    // config layer, which Permission.merge concatenates after defaults and per-agent rules
+    // (src/permission/index.ts:200-202), and evaluate() takes findLast (:28-38) — so anything the
+    // config block does not name resolves to the baseline action.
+    // The agent is still hidden; only its permission answers moved with the baseline.
+    expect(evalPerm(compaction, "bash")).toBe("ask")
+    expect(evalPerm(compaction, "edit")).toBe("ask")
+    expect(evalPerm(compaction, "read")).toBe("ask")
   }),
 )
 
@@ -261,10 +293,14 @@ it.instance(
     Effect.gen(function* () {
       const build = yield* load((svc) => svc.get("build"))
       expect(build).toBeDefined()
-      // Specific pattern is denied
+      // Unchanged from upstream and still true: a per-agent rule in config outranks the shipped
+      // baseline wildcard, because agent.ts appends the agent's own config block after the merged
+      // config layer. Only built-in defaults are shadowed by the baseline (see the "falls to the
+      // shipped ask wildcard" cases above), which is row 96's documented posture.
       expect(Permission.evaluate("bash", "rm -rf *", build!.permission).action).toBe("deny")
-      // Edit still allowed
-      expect(evalPerm(build, "edit")).toBe("allow")
+      // This config names only `bash`, so `edit` has nothing from the user layer and lands on the
+      // baseline wildcard — the built-in build-agent edit allow no longer answers on its own.
+      expect(evalPerm(build, "edit")).toBe("ask")
     }),
   {
     config: {
@@ -474,10 +510,12 @@ it.instance("default permission includes doom_loop and external_directory as ask
   }),
 )
 
-it.instance("webfetch is allowed by default", () =>
+it.instance("webfetch is denied by the shipped baseline", () =>
   Effect.gen(function* () {
     const build = yield* load((svc) => svc.get("build"))
-    expect(evalPerm(build, "webfetch")).toBe("allow")
+    // Unlike the wildcard cases, the baseline names webfetch explicitly, so this one is deny
+    // rather than ask (packages/core/src/swarm-permission-baseline.ts webfetch/websearch).
+    expect(evalPerm(build, "webfetch")).toBe("deny")
   }),
 )
 
@@ -541,12 +579,12 @@ it.instance(
   },
 )
 
-it.instance("global tmp directory children are allowed for external_directory", () =>
+it.instance("global tmp directory children fall to the shipped ask wildcard", () =>
   Effect.gen(function* () {
     const build = yield* load((svc) => svc.get("build"))
     expect(
       Permission.evaluate("external_directory", path.join(Global.Path.tmp, "scratch"), build!.permission).action,
-    ).toBe("allow")
+    ).toBe("ask")
     expect(Permission.evaluate("external_directory", "/some/other/path", build!.permission).action).toBe("ask")
   }),
 )
@@ -594,11 +632,11 @@ it.instance(
 )
 
 it.instance(
-  "skill directories are allowed for external_directory",
+  "skill directories fall to the shipped ask wildcard for external_directory",
   () =>
     Effect.gen(function* () {
       const test = yield* TestInstance
-      const skillDir = path.join(test.directory, ".opencode", "skill", "perm-skill")
+      const skillDir = path.join(test.directory, ".swarm", "skill", "perm-skill")
       yield* Effect.promise(() =>
         Bun.write(
           path.join(skillDir, "SKILL.md"),
@@ -622,19 +660,27 @@ description: Permission skill.
 
       const build = yield* load((svc) => svc.get("build"))
       const target = path.join(skillDir, "reference", "notes.md")
-      expect(Permission.evaluate("external_directory", target, build!.permission).action).toBe("allow")
+      // Shipped-posture note (row 96 baseline): the baseline's ("*","*") rule arrives in the
+      // config layer, which Permission.merge concatenates after defaults and per-agent rules
+      // (src/permission/index.ts:200-202), and evaluate() takes findLast (:28-38) — so anything the
+      // config block does not name resolves to the baseline action.
+      expect(Permission.evaluate("external_directory", target, build!.permission).action).toBe("ask")
     }),
   { git: true },
 )
 
 it.instance(
-  "project reference directories are allowed for external_directory",
+  "project reference directories fall to the shipped ask wildcard",
   () =>
     Effect.gen(function* () {
       const test = yield* TestInstance
       const build = yield* load((svc) => svc.get("build"))
       const target = path.resolve(test.directory, "../docs/reference/notes.md")
-      expect(Permission.evaluate("external_directory", target, build!.permission).action).toBe("allow")
+      // Shipped-posture note (row 96 baseline): the baseline's ("*","*") rule arrives in the
+      // config layer, which Permission.merge concatenates after defaults and per-agent rules
+      // (src/permission/index.ts:200-202), and evaluate() takes findLast (:28-38) — so anything the
+      // config block does not name resolves to the baseline action.
+      expect(Permission.evaluate("external_directory", target, build!.permission).action).toBe("ask")
     }),
   {
     git: true,

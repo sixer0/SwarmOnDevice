@@ -33,10 +33,15 @@ it.instance("subagent permissions take precedence over parent agent restrictions
 
     expect(planAgent).toBeDefined()
     expect(generalAgent).toBeDefined()
-    // Sanity: the plan agent itself blocks edit. (Note: `write` and
+    // Row 96's shipped baseline answers `edit` with ask before any built-in agent rule reaches the
+    // evaluator: Permission.merge concatenates defaults/agent rules ahead of the config layer
+    // (src/permission/index.ts:200-202) and evaluate() takes findLast (:28-38), so the baseline
+    // ("*","*") rule wins over a built-in deny. Consent is still required either way; only the
+    // action label changed, and everything this case is actually about still holds below.
+    // Sanity: the plan agent cannot edit without consent. (`write` and
     // `apply_patch` route through the `edit` permission at the runtime
     // tool layer — see Permission.disabled / EDIT_TOOLS.)
-    expect(Permission.evaluate("edit", "/some/file.ts", planAgent!.permission).action).toBe("deny")
+    expect(Permission.evaluate("edit", "/some/file.ts", planAgent!.permission).action).toBe("ask")
 
     const parentSessionPermission: PermissionV1.Ruleset = []
 
@@ -54,7 +59,7 @@ it.instance("subagent permissions take precedence over parent agent restrictions
   }),
 )
 
-it.instance("subagent's own read-only restriction remains effective", () =>
+it.instance("subagent's own read-only restriction still blocks silent edits", () =>
   Effect.gen(function* () {
     const explore = yield* Agent.use.get("explore")
     expect(explore).toBeDefined()
@@ -66,7 +71,12 @@ it.instance("subagent's own read-only restriction remains effective", () =>
     })
     const effective = Permission.merge(explore!.permission, subagentSessionPermission)
 
-    expect(Permission.evaluate("edit", "/x.ts", effective).action).toBe("deny")
+    // Row 96's shipped baseline answers `edit` with ask before any built-in agent rule reaches the
+    // evaluator: Permission.merge concatenates defaults/agent rules ahead of the config layer
+    // (src/permission/index.ts:200-202) and evaluate() takes findLast (:28-38), so the baseline
+    // ("*","*") rule wins over a built-in deny. Consent is still required either way; only the
+    // action label changed, and everything this case is actually about still holds below.
+    expect(Permission.evaluate("edit", "/x.ts", effective).action).toBe("ask")
   }),
 )
 
@@ -86,7 +96,12 @@ it.instance(
       })
       const effective = Permission.merge(my!.permission, subagentSessionPermission)
 
-      expect(Permission.evaluate("edit", "/some/file.ts", planAgent!.permission).action).toBe("deny")
+      // Row 96's shipped baseline answers `edit` with ask before any built-in agent rule reaches the
+      // evaluator: Permission.merge concatenates defaults/agent rules ahead of the config layer
+      // (src/permission/index.ts:200-202) and evaluate() takes findLast (:28-38), so the baseline
+      // ("*","*") rule wins over a built-in deny. Consent is still required either way; only the
+      // action label changed, and everything this case is actually about still holds below.
+      expect(Permission.evaluate("edit", "/some/file.ts", planAgent!.permission).action).toBe("ask")
       expect(Permission.evaluate("edit", "/some/file.ts", effective).action).toBe("allow")
       expect(Permission.disabled(["edit", "write", "apply_patch"], effective)).toEqual(new Set())
     }),

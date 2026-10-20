@@ -310,7 +310,7 @@ const writeText = Effect.fn("test.writeText")(function* (file: string, text: str
 
 const writeConfig = Effect.fn("test.writeConfig")(function* (dir: string, config: Partial<ConfigV1.Info>) {
   yield* writeText(
-    path.join(dir, "opencode.json"),
+    path.join(dir, "swarm.json"),
     JSON.stringify({ $schema: "https://opencode.ai/config.json", ...config }),
   )
 })
@@ -949,6 +949,12 @@ it.instance("failed subtask preserves metadata on error tool state", () =>
   Effect.gen(function* () {
     const { llm } = yield* useServerConfig((url) => ({
       ...providerCfg(url),
+      // Baseline-aware grant: row 96 ships `"*": "ask"`, so dispatching the `task` tool would wait for
+      // a consent answer this non-interactive test never gives. The case is about the error-state
+      // metadata carried on the subtask tool part, so the config layer grants the dispatch; it is the
+      // same layer that outranks the baseline seed. Consent behaviour has its own coverage elsewhere
+      // (test/cli/run/run-process.test.ts "rejects requested permissions by default …").
+      permission: { "*": "allow", task: "allow" },
       agent: {
         general: {
           model: "test/missing-model",
@@ -1020,6 +1026,14 @@ noLLMServer.instance("prompt tools replace previous prompt tool rules", () =>
   Effect.gen(function* () {
     const prompt = yield* SessionPrompt.Service
     const sessions = yield* Session.Service
+    // A noReply prompt still resolves a default model in createUserMessage, and Swarm ships no
+    // provider out of the box: BASELINE_CONFIG disables the Zen providers
+    // (packages/core/src/swarm-defaults.ts:18) and nothing else is configured, so the lookup that
+    // used to land on Zen's public models now fails with ProviderNoProvidersError. This case is
+    // about permission replacement, so it registers the local test provider like its siblings do and
+    // keeps every assertion below unchanged.
+    const { directory: dir } = yield* TestInstance
+    yield* writeConfig(dir, cfg)
     const session = yield* sessions.create({ title: "Prompt tools" })
 
     yield* prompt.prompt({

@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { ConfigV1 } from "@opencode-ai/core/v1/config/config"
+import { PERMISSION_BASELINE } from "@opencode-ai/core/swarm-permission-baseline"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { httpClient } from "@opencode-ai/core/effect/app-node-platform"
 import { FSUtil } from "@opencode-ai/core/fs-util"
@@ -288,7 +289,7 @@ describe("V2 configuration loading", () => {
     Effect.gen(function* () {
       const instance = yield* TestInstance
       const fs = yield* FSUtil.Service
-      const file = path.join(instance.directory, "opencode.jsonc")
+      const file = path.join(instance.directory, "swarm.jsonc")
       const text =
         '{\n  // Retain this comment\n  "$schema": "https://opencode.ai/config.json",\n  "plugins": ["native-only"]\n}\n'
       yield* fs.writeWithDirs(file, text)
@@ -317,7 +318,7 @@ describe("V2 configuration loading", () => {
       const instance = yield* TestInstance
       const fs = yield* FSUtil.Service
       yield* fs.writeWithDirs(
-        path.join(instance.directory, "opencode.json"),
+        path.join(instance.directory, "swarm.json"),
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           model: { providerID: "anthropic", model: "claude-sonnet", variant: "fast" },
@@ -352,7 +353,11 @@ describe("V2 configuration loading", () => {
       expect(config.skills).toEqual({ paths: ["./skills"], urls: ["https://example.com/skills"] })
       expect(config.mcp?.native).toEqual({ type: "remote", url: "https://native.example.com/mcp", enabled: true })
       expect(config.experimental?.mcp_timeout).toBe(9000)
-      expect(config.permission).toBeUndefined()
+      // Row 96 ships the permission baseline via BASELINE_CONFIG, so a resolved config always carries
+      // a permission block. This V2 input declares none, which now means "the shipped baseline,
+      // untouched" rather than "absent" — comparing against the real constant keeps the assertion about
+      // content instead of collapsing into a truthy check.
+      expect(config.permission).toEqual(PERMISSION_BASELINE)
       expect(config.agent?.reviewer).toMatchObject({
         model: "anthropic/claude-sonnet",
         variant: "thinking",
@@ -373,7 +378,7 @@ describe("V2 configuration loading", () => {
       const instance = yield* TestInstance
       const fs = yield* FSUtil.Service
       yield* fs.writeWithDirs(
-        path.join(instance.directory, "opencode.json"),
+        path.join(instance.directory, "swarm.json"),
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           model: { providerID: "openai", model: "gpt-4.1" },

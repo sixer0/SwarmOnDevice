@@ -27,7 +27,7 @@ describe("ZenmuxPlugin", () => {
     Effect.sync(() => expect(ProviderPlugins.map((item) => item.id)).toContain(PluginV2.ID.make("zenmux"))),
   )
 
-  it.effect("applies the exact legacy Zenmux headers", () =>
+  it.effect("sends no attribution headers for zenmux", () =>
     Effect.gen(function* () {
       const catalog = yield* Catalog.Service
       yield* catalog.transform((catalog) => {
@@ -41,12 +41,14 @@ describe("ZenmuxPlugin", () => {
       })
       yield* addPlugin()
       const result = required(yield* catalog.provider.get(ProviderV2.ID.make("zenmux")))
-      expect(result.request.headers).toEqual({ "HTTP-Referer": "https://opencode.ai/", "X-Title": "opencode" })
-      expect(Object.keys(result.request.headers).sort()).toEqual(["HTTP-Referer", "X-Title"])
+      // Rows 58/59 dropped the attribution pair (register H04, decision 8): Zenmux traffic carries
+      // nothing that names the upstream product, so the header set is empty.
+      expect(result.request.headers).toEqual({})
+      expect(Object.keys(result.request.headers)).toEqual([])
     }),
   )
 
-  it.effect("merges legacy Zenmux headers with existing headers", () =>
+  it.effect("leaves user-configured Zenmux headers untouched", () =>
     Effect.gen(function* () {
       const catalog = yield* Catalog.Service
       yield* catalog.transform((catalog) => {
@@ -63,8 +65,6 @@ describe("ZenmuxPlugin", () => {
 
       expect(required(yield* catalog.provider.get(ProviderV2.ID.make("zenmux"))).request.headers).toEqual({
         Existing: "value",
-        "HTTP-Referer": "https://opencode.ai/",
-        "X-Title": "opencode",
       })
     }),
   )

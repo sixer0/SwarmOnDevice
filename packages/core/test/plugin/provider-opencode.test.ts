@@ -78,7 +78,9 @@ describe("OpencodePlugin", () => {
         {
           id: Integration.MethodID.make("device"),
           type: "oauth",
-          label: "OpenCode Console account",
+          // Row 59 fix-round 2 dropped the brand from the auth-method label;
+          // src/plugin/provider/opencode.ts:43 now emits "Console account".
+          label: "Console account",
         },
         { type: "key", label: "API key (service account)" },
       ])

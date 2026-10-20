@@ -97,7 +97,13 @@ describe("opencode run (non-interactive subprocess)", () => {
         )
         yield* llm.fail("upstream provider exploded mid-stream")
         yield* llm.text("recovered")
-        const result = yield* opencode.run("trigger midstream error", { timeoutMs: 30_000 })
+        // Same baseline-aware grant as the `--format json` continuation case above: this test is about
+        // a mid-stream provider error and the events that follow it, so the shipped `"*": "ask"` floor
+        // must not intercept the tool call. Consent has its own dedicated case in this file.
+        const result = yield* opencode.run("trigger midstream error", {
+          timeoutMs: 30_000,
+          permission: { "*": "allow", bash: "allow" },
+        })
         expect(result.exitCode).toBe(0)
         expect(result.stdout).toBe("partial response\nrecovered\n")
         expect(result.stderr).not.toContain("upstream provider exploded mid-stream")
@@ -226,7 +232,15 @@ describe("opencode run (non-interactive subprocess)", () => {
         )
         yield* llm.fail("provider failed")
         yield* llm.text("recovered")
-        const result = yield* opencode.run("fail after output", { format: "json" })
+        // Baseline-aware grant: row 96 ships `"*": "ask"`, which would stop the mid-stream `bash`
+        // tool call here and the case would never reach the continuation it is about. The grant rides
+        // OPENCODE_CONFIG_CONTENT (see test/lib/cli-process.ts runOpts), i.e. the same config layer that
+        // outranks the baseline seed. Consent itself stays under test in
+        // "rejects requested permissions by default and allows them with the dangerous flag".
+        const result = yield* opencode.run("fail after output", {
+          format: "json",
+          permission: { "*": "allow", bash: "allow" },
+        })
 
         const events = opencode.parseJsonEvents(result.stdout)
         expect(result.exitCode).toBe(0)

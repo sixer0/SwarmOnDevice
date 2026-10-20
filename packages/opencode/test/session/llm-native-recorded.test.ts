@@ -99,6 +99,12 @@ const providerConfig = (input: {
   readonly options: Record<string, unknown>
 }): Partial<ConfigV1.Info> => ({
   enabled_providers: [input.providerID],
+  // The shipped baseline disables the Zen providers (`disabled_providers: ["opencode","opencode-go"]`,
+  // packages/core/src/swarm-defaults.ts:18, merged by row 41), and `isProviderAllowed` in
+  // src/provider/provider.ts:1481-1487 applies the disabled list after the enabled one. This suite
+  // replays recorded cassettes through those providers on purpose, so the instance under test clears
+  // the list; nothing about the shipped default changes.
+  disabled_providers: [],
   provider: {
     [input.providerID]: {
       name: input.name,
@@ -290,7 +296,7 @@ function recordedNativeLLMLayer(scenario: RecordedScenario) {
 const writeConfig = (directory: string, scenario: RecordedScenario, model: ModelsDev.Provider["models"][string]) =>
   Effect.promise(() =>
     Bun.write(
-      path.join(directory, "opencode.json"),
+      path.join(directory, "swarm.json"),
       JSON.stringify({ $schema: "https://opencode.ai/config.json", ...scenario.config(model) }),
     ),
   )
