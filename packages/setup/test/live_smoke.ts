@@ -20,18 +20,44 @@
 //     the phase reports its exact position rather than fabricating a pass.
 //
 // Run ONLY via the harness (which sets R93_LIVE=1 and R93_WORK/R93_PHASE); direct execution refuses.
+//
+// SEAM PASS 5 (2026-10-20): the health gate now gets a real host-side readiness prober
+// (src/readinessProbe.ts) wired into every bringUp call below — r91-fix3's contract makes a
+// no-healthcheck service (searxng today, api/playwright-service/egress-proxy after row 85's
+// healthcheck drop) fail CLOSED with "readiness-probe-missing" without one. The `probes` phase
+// runs the §10.6 item-6 raw-egress kill test in its r75-fix6 repaired form (positive control
+// FIRST, tool order node→curl→nc→wget proven by in-container command -v, IPv4 literal targets,
+// L1/topology naming only, dead target ⇒ VOID-TARGET-DEAD ⇒ UNKNOWN).
 
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs"
 import { randomUUID } from "node:crypto"
 import { join } from "node:path"
 import { validateLock } from "../src/lockfile.ts"
 import { defaultState, readState, writeState } from "../src/state.ts"
-import { STATES, COLIMA_PROFILE, DOCKER_CONTEXT } from "../src/constants.ts"
+import { STATES, COLIMA_PROFILE, DOCKER_CONTEXT, COMPOSE_PROJECT } from "../src/constants.ts"
 import { createStepKit } from "../src/stepkit.ts"
 import { homeDir, toolDir, toolsDir } from "../src/paths.ts"
 import { SECRET_INVENTORY } from "../src/composefiles/shared.ts"
 import { renderAll, applyRenderedFiles } from "../src/composefiles/index.ts"
-import { bringUp, firecrawlPlan, healthProbeUrls, searxngPlan, tearDown, type DockerRunner } from "../src/stacklib.ts"
+import {
+  bringUp,
+  composePsArgs,
+  firecrawlPlan,
+  healthProbeUrls,
+  parseComposePs,
+  searxngPlan,
+  serviceFromContainerName,
+  tearDown,
+  type DockerRunner,
+} from "../src/stacklib.ts"
+import {
+  discoverInContainerTool,
+  makeReadinessProbe,
+  parseNetworkNames,
+  runRawEgressProbe,
+  type ControlOutcome,
+  type RawEgressTarget,
+} from "../src/readinessProbe.ts"
 import { bakeEgressProxy, egressHealthContract } from "../src/steps/firecrawl/egress_bake.ts"
 import { asText, makeRealDockerRunner } from "../src/dockerRunner.real.ts"
 import {
@@ -214,6 +240,14 @@ function probeHostLocal(runner: CommandRunner): HostInfo {
 async function main(): Promise<void> {
   const realDocker = makeRealDockerRunner({ dockerBinary: dockerPath })
   const run: DockerRunner = realDocker.runner
+  // Readiness/exec probes ride a SEPARATE runner instance with a short per-command ceiling: the
+  // health gate polls serially and each probe must return fast (stacklib waitForHealthy header —
+  // probe latency bounding is the prober's contract). Same binary, same context scoping.
+  const probeDocker = makeRealDockerRunner({ dockerBinary: dockerPath, timeoutMs: 25_000 })
+  /** The prober for one stack's bring-up: lanes chosen inside makeReadinessProbe from the
+   *  artefact-derived target descriptor {service, container, urls} the gate hands it. */
+  const readinessFor = (composeFile: string) =>
+    makeReadinessProbe({ docker: probeDocker.runner, composeText: readFileSync(composeFile, "utf8") })
 
   if (phase === "bringup") {
     const cmdRunner = caughtRunner()
@@ -386,7 +420,9 @@ async function main(): Promise<void> {
     const st = committedState()
     const kit = createStepKit({ componentId: "searxng", lock, state: st, dryRun: false, consentGate: () => true })
     const plan = searxngPlan()
-    const out = await bringUp({ kit, plan, run })
+    // searxng ships NO healthcheck (U-1 CLOSED-live): under the 2026-10-20 contract this bring-up
+    // is fail-closed WITHOUT a prober and green only through the host-side HTTP lane below.
+    const out = await bringUp({ kit, plan, run, readiness: readinessFor(plan.composeFile) })
     json("searxng_up", {
       token: out.token,
       attempts: out.attempts,
@@ -402,7 +438,17 @@ async function main(): Promise<void> {
     const st = committedState()
     const kit = createStepKit({ componentId: "firecrawl", lock, state: st, dryRun: false, consentGate: () => true })
     const plan = firecrawlPlan()
-    const out = await bringUp({ kit, plan, run, healthDeadlineMs: 240_000, healthIntervalMs: 3_000 })
+    // The unpublished trio (api, playwright-service, egress-proxy) declares no healthcheck once
+    // row 85's R112b-3 drop lands — each is satisfied here by the exec/TCP lane over the injected
+    // probe runner (in-container tool discovery, artefact-derived ports, fail-closed on either).
+    const out = await bringUp({
+      kit,
+      plan,
+      run,
+      readiness: readinessFor(plan.composeFile),
+      healthDeadlineMs: 240_000,
+      healthIntervalMs: 3_000,
+    })
     json("firecrawl_up", {
       token: out.token,
       attempts: out.attempts,
@@ -411,6 +457,67 @@ async function main(): Promise<void> {
       message: out.message,
     })
     console.log(`R93_OUTCOME firecrawl-up=${out.token}`)
+    return
+  }
+
+  if (phase === "probes") {
+    // §10.6 item 6, repaired form (r75fix6_topology_ruling.md §7): positive control FIRST, IPv4
+    // literal targets, tool order node→curl→nc→wget proven by in-container command -v, verdicts
+    // name ONLY L1/topology (no proxy env is set, so squid is not in this path by construction),
+    // dead target ⇒ VOID-TARGET-DEAD ⇒ UNKNOWN — never PASS.
+    const cmdRunner = caughtRunner()
+    const plan = firecrawlPlan()
+    const ps = await run(composePsArgs(plan.composeFile))
+    const containers = ps.exitCode === 0 ? parseComposePs(ps.stdout) : []
+    const pw = containers.find((c) => c.running && serviceFromContainerName(c.name) === "playwright-service")
+    const ep = containers.find((c) => c.running && serviceFromContainerName(c.name) === "egress-proxy")
+    json("probe_vantages", { playwright: pw?.name ?? null, egressProxy: ep?.name ?? null, composePsExit: ps.exitCode })
+    if (!pw) {
+      console.log("R93_OUTCOME probes=UNKNOWN-NO-CONTAINER")
+      return
+    }
+    // Control ladder, first non-contained vantage that completes the same TCP request:
+    // egress-proxy's fc-web side (if Running) → colima VM shell (Ubuntu guest: bash + coreutils
+    // timeout are OS facts of the colima image, not pinned digests) → macOS host nc.
+    const control = async (target: RawEgressTarget): Promise<ControlOutcome> => {
+      const misses: string[] = []
+      if (ep) {
+        const disc = await discoverInContainerTool(run, ep.name, ["bash"])
+        if (disc.tool) {
+          const r = await run(["exec", ep.name, "bash", "-c", `exec 3<>/dev/tcp/${target.host}/${target.port}`])
+          if (r.exitCode === 0) return { ok: true, vantage: `container:${ep.name}`, detail: "PROBE_TOOL=bash /dev/tcp connect ok" }
+          misses.push(`container:${ep.name} exit=${r.exitCode} ${r.stderr.trim().slice(0, 120)}`)
+        } else misses.push(`container:${ep.name} no-bash`)
+      }
+      const vm = cmdRunner.run([
+        colimaPath,
+        "ssh",
+        "-p",
+        COLIMA_PROFILE,
+        "--",
+        "timeout",
+        "6",
+        "bash",
+        "-c",
+        `exec 3<>/dev/tcp/${target.host}/${target.port}`,
+      ])
+      if (vm.ok) return { ok: true, vantage: "colima-vm-shell", detail: "timeout+bash /dev/tcp connect ok" }
+      misses.push(`colima-vm-shell exit=${vm.exitCode} ${vm.stderr.trim().slice(0, 120)}`)
+      const hostNc = cmdRunner.run(["/usr/bin/nc", "-z", "-G", "4", target.host, String(target.port)])
+      if (hostNc.ok) return { ok: true, vantage: "host-nc", detail: "nc -z connect ok" }
+      misses.push(`host-nc exit=${hostNc.exitCode} ${hostNc.stderr.trim().slice(0, 120)}`)
+      return { ok: false, vantage: "none", detail: misses.join("; ") }
+    }
+    const report = await runRawEgressProbe({ docker: run, container: pw.name, control })
+    // TIMEOUT legs need inspect corroboration (r75-fix6 §7 verdict table): record the Internal
+    // flag of every network this file declares, whatever the legs did — cheap, honest context.
+    const internalFlags: Record<string, string> = {}
+    for (const n of parseNetworkNames(readFileSync(plan.composeFile, "utf8"))) {
+      const r = await run(["network", "inspect", `${COMPOSE_PROJECT}_${n}`, "--format", "{{.Internal}}"])
+      internalFlags[n] = r.exitCode === 0 ? r.stdout.trim() : `inspect-failed(exit ${r.exitCode})`
+    }
+    json("raw_egress_probe", { ...report, corroboration_networks: internalFlags, probeExecs: probeDocker.executedCount() })
+    console.log(`R93_OUTCOME probes=${report.overall}`)
     return
   }
 
