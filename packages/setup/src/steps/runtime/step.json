@@ -1,0 +1,7 @@
+{
+  "id": "runtime",
+  "order": 10,
+  "requires": [],
+  "title": "Container runtime — Colima profile swarm + docker CLI + compose plugin (row 86)",
+  "description": "PC-CMP-01. Preflight (macOS brew-bottle floor fail-closed, Virtualization.framework, Homebrew present), Colima profile 'swarm' lifecycle (create/start/stop/delete) with vm-type vz only (D-12), docker pinned to --context swarm (never 'docker context use' — P-5 current-context untouched), D-13 guest-image capture into state+provenance (lock stays read-only), >=16 GiB memory floor measurement (Firecrawl skip fact for row 92, [H-MEM]). Labels PC-LBL-01..03 via state manifest + compose-rendered objects (row 85)."
+}

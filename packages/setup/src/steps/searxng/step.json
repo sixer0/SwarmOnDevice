@@ -1,0 +1,8 @@
+{
+  "_note": "Row 91 stack bring-up step. DIRECTORY NAME equals descriptor.id (01c §9): the id serves the state key, the ~/.swarm/tools/searxng dir, and the io.gsp.swarm.component label (PC-CMP-06). Lifecycle mechanics live in src/stacklib.ts (shared with the firecrawl step; r84/r85 service pattern) because one library serves both compose stacks under the single project swarm-tools (PC-PROJ-01, 01e §3 ratified R-1).",
+  "id": "searxng",
+  "order": 60,
+  "requires": ["runtime"],
+  "title": "SearXNG stack bring-up (compose project swarm-tools, file-scoped)",
+  "description": "Consent-gated up -d --pull never of the r85-rendered compose/searxng.yml under explicit context swarm and -p swarm-tools, host-side health gate with timeout, label-scoped removal (P-14). Prerequisite: runtime healthy (Colima profile swarm, row 86)."
+}
