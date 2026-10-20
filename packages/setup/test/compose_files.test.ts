@@ -10,7 +10,7 @@ import { execFileSync, spawnSync } from "node:child_process"
 import { join } from "node:path"
 import { validateLock } from "../src/lockfile.ts"
 import { renderAll, applyRenderedFiles, validateRenderedSecrets } from "../src/composefiles/index.ts"
-import { CAP_ADD_ALLOWLIST, findDirectiveInlineComments, findHealthcheckToolAbsent, findReservedAclNames, findSecretArgvLeak, findSquidOrderingViolations, findWrapChannelViolations, findWrapModeViolations, HEALTHCHECK_TOOL_ABSENT, lintComposeText, lintOk, PASS_THROUGH_HARD, RESERVED_ACL_NAMES, SECRET_ARGV_PATTERNS } from "../src/composefiles/lint.ts"
+import { CAP_ADD_ALLOWLIST, findDirectiveInlineComments, findHealthcheckToolAbsent, findReservedAclNames, findSecretArgvLeak, findSquidOrderingViolations, findWrapChannelViolations, findWrapModeViolations, HEALTHCHECK_TOOL_ABSENT, lintComposeText, lintOk, PASS_THROUGH_HARD, RESERVED_ACL_NAMES, SECRET_ARGV_PATTERNS, SQUID_INLINE_COMMENT_DIRECTIVES } from "../src/composefiles/lint.ts"
 import {
   PC_PORTS,
   parseEngineNames,
@@ -200,7 +200,13 @@ describe("renderAll — contract vs the ratified spec", () => {
     ]) {
       expect(q.includes(range)).toBe(true)
     }
-    expect(q).toContain("dns_v4_first on")
+    // r75-fix8 inverts the old `dns_v4_first on` pin: the directive is DROPPED (obsolete since
+    // squid 5.0.4) and the audit log moved off /dev/stdout to a tmpfs-backed file. On CODE lines
+    // (comments stripped, lint.ts's view) neither retired literal may appear and the new sink must.
+    const code = q.split("\n").map((l) => l.split("#")[0] ?? "").join("\n")
+    expect(code).not.toContain("dns_v4_first")
+    expect(code).not.toContain("dev/stdout")
+    expect(code).toContain("access_log stdio:/var/log/squid/access.log")
   })
 
   test("D-22 forms: rabbit ships form B by default; form A renders only when the slot flips", () => {
@@ -1000,6 +1006,61 @@ describe("R112b-4 topology half — r75-fix6 ruling §5: containment by the inte
       .filter(([, s]) => s.ports !== undefined)
       .map(([name]) => name)
     expect(portCarriers).toEqual(["auth-proxy"])
+  })
+})
+
+describe("r75-fix8 squid sink + dns drop — binding gate r75fix8_squid_sink_ruling.md §5.3", () => {
+  // The §5 delta was applied verbatim; these are the five assertions that marker names.
+  const r = renderClean()
+  const q = () => fileOf(r, "firecrawl/squid/squid.conf").content
+  const fcText = () => fileOf(r, "firecrawl/compose/firecrawl.yml").content
+  // lint.ts's comment-stripping view: a CODE line is everything left of the first '#'.
+  const codeOnly = (text: string) => text.split("\n").map((l) => l.split("#")[0] ?? "").join("\n")
+
+  test("assertion 1: exact sink code line present; NEITHER retired literal on any CODE line (comments allowed)", () => {
+    const code = codeOnly(q())
+    expect(code).toContain("access_log stdio:/var/log/squid/access.log")
+    expect(code).not.toContain("dev/stdout") // Change 1's own note NAMES the retired path — code must not carry it
+    expect(code).not.toContain("dns_v4_first")
+    // prose history survives on a comment line (the WHY-stdout-was-dropped note):
+    expect(q()).toContain("stdio:/dev/stdout FATALed as proxy")
+  })
+
+  test("assertion 2: egress-proxy gains exactly ONE tmpfs at /var/log/squid carrying size= and mode=1777", () => {
+    const doc = Bun.YAML.parse(fcText())
+    const eg = doc.services["egress-proxy"]
+    expect(Array.isArray(eg.tmpfs)).toBe(true)
+    expect(eg.tmpfs.length).toBe(1)
+    const entry = eg.tmpfs[0] as string
+    const [target, ...optGroups] = entry.split(":")
+    expect(target).toBe("/var/log/squid")
+    const options = optGroups.join(":").split(",").map((o) => o.trim())
+    expect(options.some((o) => o.startsWith("size="))).toBe(true)
+    expect(options).toContain("mode=1777")
+    expect(options).toEqual(expect.arrayContaining(["noexec", "nosuid"]))
+  })
+
+  test("assertion 3: egress-proxy has NO read_only key (regression guard for §5.2's ban; U-2 owns that flip)", () => {
+    const doc = Bun.YAML.parse(fcText())
+    const eg = doc.services["egress-proxy"]
+    // r75fix8_squid_sink_ruling.md §5.2: egress-proxy is the one hardened service WITHOUT read_only today;
+    // flipping it blind re-opens the pid-file/helper-dir whack-a-mole. That decision belongs to U-2 with live evidence.
+    expect(Object.prototype.hasOwnProperty.call(eg, "read_only")).toBe(false)
+  })
+
+  test("assertion 4: findDirectiveInlineComments stays [] over the new render (R112b-1 class survives the edits)", () => {
+    expect(findDirectiveInlineComments(q())).toEqual([])
+    expect(r.findings.some((f) => f.rule === "squid-inline-comment")).toBe(false)
+  })
+
+  test("assertion 5 (self-side): directive list is 11 members, retains both port directives, drops dns_v4_first", () => {
+    // Authoritative cross-layer pin lives in row 92's test/egress_bake.test.ts "(cross-layer pin)" describe
+    // (verified by reading, not edited here). This guards MY list only: their dynamic strict-longer pin
+    // (SQUID_INLINE_COMMENT_DIRECTIVES.length > OPTION_PARSED_PORT_DIRECTIVES.length) re-values 12>2 -> 11>2.
+    expect(SQUID_INLINE_COMMENT_DIRECTIVES.length).toBe(11)
+    expect(SQUID_INLINE_COMMENT_DIRECTIVES).toContain("http_port")
+    expect(SQUID_INLINE_COMMENT_DIRECTIVES).toContain("https_port")
+    expect(SQUID_INLINE_COMMENT_DIRECTIVES).not.toContain("dns_v4_first")
   })
 })
 

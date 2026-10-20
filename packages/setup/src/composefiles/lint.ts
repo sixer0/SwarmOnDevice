@@ -518,7 +518,8 @@ export function findWrapChannelViolations(files: readonly { readonly relPath: st
  *  rule is absolute: option-parsed directives carry their note on the preceding line, never
  *  inline. ACL/http_access lines are NOT covered here: inline comments on those parsed clean
  *  live (V6 experiment + the shipped v6-dst/dstdomain lines carried them while squid booted
- *  past ACL init). */
+ *  past ACL init). dns_v4_first removed by r75-fix8 along with the directive — obsolete since
+ *  5.0.4, so the renderer can no longer emit it and it is off this list (12 → 11 members). */
 export const SQUID_INLINE_COMMENT_DIRECTIVES: readonly string[] = [
   "http_port",
   "https_port",
@@ -531,7 +532,6 @@ export const SQUID_INLINE_COMMENT_DIRECTIVES: readonly string[] = [
   "access_log",
   "pid_filename",
   "coredump_dir",
-  "dns_v4_first",
 ];
 
 export function findDirectiveInlineComments(text: string): Finding[] {

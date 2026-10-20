@@ -338,6 +338,8 @@ export function renderFirecrawlCompose(
     '    command: ["exec /usr/sbin/squid -N -f /etc/squid/swarm-egress.conf"]  # binary path inside the pinned digest UNVERIFIED (addendum Gaps) — row 92 confirms at first bring-up',
     "    volumes:",
     bindMount(p.firecrawlSquidConf, "/etc/squid/swarm-egress.conf", true, 6),
+    "    tmpfs:",
+    "      - /var/log/squid:noexec,nosuid,size=64m,mode=1777  # r75fix8_squid_sink_ruling.md §3: audit sink for access_log+cache.log; mode=1777 so the post-drop proxy uid (numeric id unknown by design, U-14 class) can create the file; size bounds it into squid's 512m cgroup; tmpfs is emptied at container stop — the idle-window zero-line baseline depends on this",
     `    ${CAP_DROP}`,
     "    cap_add: [SETUID, SETGID]  # H-R93-5 live evidence: squid initgroups+setuid drop to User proxy ('unable to set groups for User proxy' under blanket ALL)",
     `    ${SECURITY_OPT}`,

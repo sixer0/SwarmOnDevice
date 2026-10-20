@@ -5,8 +5,8 @@
 // destination classes (loopback/RFC1918/link-local/CGNAT/IPv6-local plus this-network
 // 0.0.0.0/8, IPv6-unspecified ::/128, NAT64 64:ff9b::/96), ports 80/443 only, STRICT
 // deny-before-allow ordering (enforced by lint.ts findSquidOrderingViolations, run by
-// renderAll), CONNECT-time answer re-check (rebinding-safe, V3), dns_v4_first, no cache,
-// audit-shaped access log on stdout so the json-file logging driver (§4.4) bounds it.
+// renderAll), CONNECT-time answer re-check (rebinding-safe, V3), no cache; audit-shaped
+// access log on a bounded tmpfs-backed file so the mount size bounds it (r75-fix8).
 //
 // ACL NAMES [R112-1, r112 live VM]: squid PREDEFINES `all, manager, localhost, to_localhost,
 // to_linklocal, CONNECT` (image note at /etc/squid/squid.conf:1387); redeclaring a predefined
@@ -50,12 +50,15 @@ export function renderSquidConf(): RenderFile {
     "acl to_localnet dst ::1/128 fe80::/10 fc00::/7 ::/128 64:ff9b::/96   # TWELVE classes [review-107 M2]: additions are 0.0.0.0/8 (this-network; Linux-routed loopback-like), ::/128 (IPv6 unspecified twin), 64:ff9b::/96 (NAT64 well-known prefix — DNS64 answers can embed a private IPv4, e.g. 64:ff9b::7f00:1 wraps 127.0.0.1; posture is DENY the whole prefix, never unwrap). dst takes IP/CIDR only — evaluates the RESOLVED answer (V3 rebinding closure)",
     "acl swarm_hostnames dstdomain localhost      # R112-1: renamed from the PREDEFINED to_localhost (different-type redeclaration = boot FATAL); V6 proved rename-only parses clean",
     "acl swarm_hostnames dstdomain .local         # H-R93-6 split kept: hostname forms are dstdomain-class; same-name same-type lines are additive",
-    "# 10.4 bullet 3: prefer A records so the v4 deny-set sees the answer.",
-    "dns_v4_first on",
+    "# dns_v4_first DROPPED by r75-fix8: obsolete since squid 5.0.4, absent from the v5-v8 reference, ERROR line every boot on 6.13.",
+    "# Family order is not load-bearing here: denies evaluate the RESOLVED answer (V3) and the whole NAT64 prefix is denied unconditionally;",
+    "# this guest additionally has no live IPv6 route (r75fix6_topology_ruling.md §7 measurement). No successor directive exists.",
     "# No caching: every object non-cacheable (the enforceable reading of the 10.4 no-cache directive-class wording).",
     "cache deny all",
-    "# Audit twin of PC-PATH-10 lines (ts, method, target-host, verdict, bytes) on stdout, bounded by the json-file driver (§4.4).",
-    "access_log stdio:/dev/stdout",
+    "# Audit twin of PC-PATH-10 lines (ts, method, target-host, verdict, bytes) in a bounded in-container file (r75fix8_squid_sink_ruling.md §3):",
+    "# stdio writes each line immediately at request completion (squid access_log reference), the tmpfs mount carries it (compose block),",
+    "# and the host-side auditor reads it via `docker exec --user root` — stdio:/dev/stdout FATALed as proxy on the pinned digest (p1 log :19).",
+    "access_log stdio:/var/log/squid/access.log",
     "http_access deny !SafePorts",
     "http_access deny Connector !SSL_ports",
     "# destination-class denies ABOVE every allow (01e §10.4 ordering, enforced by lint); wiring lines bare",

@@ -352,6 +352,56 @@ TS
 bun run "$WORK/r85f6b-demo.ts" | tee "$WORK/r85f6b.out"
 check "R112b-4 parsed topology proofs (block parses; internal flags; playwright containment; single fc-web member + single ports carrier)" 0 $?
 
+echo "=== PROOF 11: r75-fix8 squid sink + dns_v4_first drop (r75fix8_squid_sink_ruling.md §5.3) ==="
+# 11a (grep side over the rendered artefacts on disk): the sink code line is present, the two
+# retired literals are gone from CODE lines (comments may name them as history), and the sized
+# tmpfs mount is rendered into the egress-proxy block. Comment-stripping mirrors lint.ts's view.
+SQCODE=$(sed 's/#.*//' "$SQ")
+SINK_OK=$(printf '%s\n' "$SQCODE" | grep -cE '^access_log stdio:/var/log/squid/access\.log$' || true)
+STDOUT_CODE=$(printf '%s\n' "$SQCODE" | grep -c 'dev/stdout' || true)
+DNS_CODE=$(printf '%s\n' "$SQCODE" | grep -c 'dns_v4_first' || true)
+# prose history survives on a COMMENT line (Change 1's note names the retired stdout path):
+STDOUT_NOTE=$(grep -c 'stdio:/dev/stdout FATALed as proxy' "$SQ" || true)
+TMPFS_LINE=$(grep -c '/var/log/squid:noexec,nosuid,size=64m,mode=1777' "$FCY" || true)
+if [ "$SINK_OK" = 1 ] && [ "$STDOUT_CODE" = 0 ] && [ "$DNS_CODE" = 0 ] && [ "$STDOUT_NOTE" = 1 ] && [ "$TMPFS_LINE" = 1 ]; then
+  echo "  PASS 11a squid.conf renders the tmpfs-backed sink with zero retired literal on any CODE line (stdout note kept as history); firecrawl.yml carries the sized tmpfs mount"; pass=$((pass+1))
+else
+  echo "  FAIL 11a (sink=$SINK_OK want 1, stdoutCode=$STDOUT_CODE want 0, dnsCode=$DNS_CODE want 0, stdoutNote=$STDOUT_NOTE want 1, tmpfs=$TMPFS_LINE want 1)"; fail=$((fail+1))
+fi
+# 11b (parsed side): egress-proxy gains exactly one tmpfs (target + size= + mode=1777), gains NO
+# read_only key (§5.2 ban / U-2 owns the flip), the directive list dropped to 11 while retaining
+# both port directives, and the new render stays inline-comment-clean.
+export R85_SQ="$SQ"
+cat > "$WORK/r85f6c-demo.ts" <<'TS'
+// Parsed-structure half of PROOF 11 over the rendered artefacts on disk (r75-fix8 §5.3 items 2-5).
+import { readFileSync } from "node:fs";
+const L = await import(process.env.R85_LINT!);
+const fcText = readFileSync(process.env.R85_FCY!, "utf8");
+const sq = readFileSync(process.env.R85_SQ!, "utf8");
+const doc = Bun.YAML.parse(fcText);
+const eg = doc.services["egress-proxy"];
+let bad = 0;
+const say = (ok: boolean, line: string) => { console.log((ok ? "OK   " : "BAD  ") + line); if (!ok) bad++; };
+// item 2: exactly one tmpfs entry, target /var/log/squid, options include size= and mode=1777
+say(Array.isArray(eg.tmpfs) && eg.tmpfs.length === 1, "11b egress-proxy tmpfs array has exactly one entry");
+const [target, ...optGroups] = String(eg.tmpfs[0]).split(":");
+const options = optGroups.join(":").split(",").map((o) => o.trim());
+say(target === "/var/log/squid", `11b tmpfs target = ${target} (want /var/log/squid)`);
+say(options.some((o) => o.startsWith("size=")) && options.includes("mode=1777"), "11b tmpfs options include size= and mode=1777");
+// item 3: NO read_only key on egress-proxy (regression guard for §5.2's ban; U-2 owns that flip)
+say(!Object.prototype.hasOwnProperty.call(eg, "read_only"), "11b egress-proxy carries NO read_only key (U-2 + r75fix8_squid_sink_ruling.md §5.2)");
+// item 5 (self-side): directive list re-valued to 11, ports retained, dns_v4_first gone
+say(L.SQUID_INLINE_COMMENT_DIRECTIVES.length === 11, `11b directive list length = ${L.SQUID_INLINE_COMMENT_DIRECTIVES.length} (want 11)`);
+say(L.SQUID_INLINE_COMMENT_DIRECTIVES.includes("http_port") && L.SQUID_INLINE_COMMENT_DIRECTIVES.includes("https_port"), "11b both port directives retained (row 92 subset intact)");
+say(!L.SQUID_INLINE_COMMENT_DIRECTIVES.includes("dns_v4_first"), "11b dns_v4_first dropped from the directive list");
+// item 4: inline-comment gate stays clean over the new render
+say(L.findDirectiveInlineComments(sq).length === 0, "11b findDirectiveInlineComments clean over the new squid.conf");
+console.log(bad === 0 ? "RESULT OK" : `RESULT FAILED (${bad})`);
+process.exit(bad === 0 ? 0 : 1);
+TS
+bun run "$WORK/r85f6c-demo.ts" | tee "$WORK/r85f6c.out"
+check "r75-fix8 parsed sink proofs (single tmpfs + size/mode; no read_only; 11-member list retains ports; inline-comment clean)" 0 $?
+
 echo
 echo "row-85 proofs: $pass passed, $fail failed"
 [ "$fail" = 0 ] || exit 1
