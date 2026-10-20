@@ -1,0 +1,8 @@
+{
+  "_note": "Row 89 descriptor. The DIRECTORY NAME equals this id and is the register PC-CMP-04 value (01c0:53-55): one id serves the state key, the ~/.swarm/tools/rtk dir, and the io.gsp.swarm.component label.",
+  "id": "rtk",
+  "order": 40,
+  "requires": [],
+  "title": "RTK — private rtk-oss (Apache-2.0 edition) command filter (PC-CMP-04 / PC-PIN-02)",
+  "description": "rtk-oss arm64 release asset fetched through the shared verify/fetch library (consent-gated, host-allow-listed, digest-checked), extracted ATOMICALLY into ~/.swarm/tools/rtk/<version>/ only — never a system prefix, never PATH, and never any command from the lock's never_run array (B3/decision 14: Apache-2.0 edition only). No configuration file is written by this step (controller no-init ruling). A pre-existing Homebrew rtk is detected read-only and left byte-identical. Rows 97/98 invoke the private binary by absolute path through rtkBin()."
+}

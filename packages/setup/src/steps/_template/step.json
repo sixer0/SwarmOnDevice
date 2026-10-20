@@ -1,0 +1,8 @@
+{
+  "_note": "AUTHORING TEMPLATE for rows 82-98. Copy this whole directory to src/steps/<component_id>/ where <component_id> is one of runtime|node|graft|rtk|obsidian|searxng|firecrawl (register PC-CMP-01..07). Rename nothing else: the DIRECTORY NAME must equal descriptor.id, and the id serves the state key, the ~/.swarm/tools/<id> dir, and the io.gsp.swarm.component label (01c0:53-55). This _template directory is underscore-prefixed so the directory scan treats it as an example and never registers it as a component.",
+  "id": "runtime",
+  "order": 10,
+  "requires": [],
+  "title": "Example step (container runtime) — replace with your component",
+  "description": "order controls tie-breaks only; real sequencing comes from requires (topological sort). requires lists other component ids this step needs first, e.g. graft uses [\"node\"]."
+}

@@ -1,0 +1,8 @@
+{
+  "_note": "Row 88 descriptor. The DIRECTORY NAME equals this id and is the register PC-CMP-03 value (01c0:53-55): one id serves the state key, the ~/.swarm/tools/graft dir, and the io.gsp.swarm.component label.",
+  "id": "graft",
+  "order": 30,
+  "requires": ["node"],
+  "title": "Graft — private pinned context-graph CLI (PC-CMP-03 / PC-PIN-01)",
+  "description": "Installs the single reviewed pin @nanonets/graft@0.18.0 (D-10 candidate B, proven on this arm64 Mac) through the PRIVATE Node from row 87 using its own npm, against registry.npmjs.org (allow-listed) into ~/.swarm/tools/graft/<version>/ only — prefix isolation, zero global, zero PATH. The graft tarball is fetched+sha512-verified by the shared row-82 library BEFORE npm ever sees it; --ignore-scripts keeps the package postinstall from running, DO_NOT_TRACK=1 carries the telemetry-off posture, and the renamed twin @trailhq/trail-code is never resolved (D-10). Prerequisite node via requires:[node]; row 97 invokes the result by absolute path through graftLaunch()."
+}

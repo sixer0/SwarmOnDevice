@@ -1,0 +1,8 @@
+{
+  "_note": "Row 90 descriptor. The DIRECTORY NAME equals this id and is the register PC-CMP-05 value (01c0:53-55): one id serves the state key, the ~/.swarm/tools/obsidian dir, and the io.gsp.swarm.component label.",
+  "id": "obsidian",
+  "order": 50,
+  "requires": [],
+  "title": "Obsidian — guide-and-detect + user-space staging (PC-CMP-05 / PC-PIN-03)",
+  "description": "L14 guide-and-detect (03f §3): a pre-existing /Applications/Obsidian.app is detected read-only (stat + name-based mdfind) and NEVER touched; when absent and consented (P-12 terms shown by row 83), the pinned official dmg (github.com release, dmg_sha256 dcf818dd…, U-1 Homebrew-cask sum) is fetched through the shared verify/fetch library, mounted READ-ONLY at a private mountpoint under ~/.swarm/tmp, gated by row 82's codesign/spctl/TeamIdentifier check ON THE MOUNTED APP — recording the OBSERVED TeamIdentifier into the install record + provenance ledger (the U-2 closer: first observed value, never assumed) — then ditto-staged atomically into ~/.swarm/tools/obsidian/<version>/Obsidian.app (user space; a full /Applications install stays user-driven). Always unmounts via finally. The Swarm vault is NEVER created here (row 95 owns it); the app is never launched; PT GSP never mirrors or bundles it (L-4)."
+}

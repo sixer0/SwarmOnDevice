@@ -1,0 +1,8 @@
+{
+  "_note": "Row 87 descriptor. The DIRECTORY NAME equals this id and is the register PC-CMP-02 value (01c0:53-55): one id serves the state key, the ~/.swarm/tools/node dir, and the io.gsp.swarm.component label.",
+  "id": "node",
+  "order": 20,
+  "requires": [],
+  "title": "Node.js — private pinned runtime (PC-CMP-02 / PC-PIN-05)",
+  "description": "Official nodejs.org tarball fetched through the shared verify/fetch library (consent-gated, host-allow-listed, digest-checked), extracted ATOMICALLY into ~/.swarm/tools/node/<version>/ only — never a system prefix, never PATH. Prerequisite of graft (row 88) and firecrawl-mcp via P-19; those rows invoke the private binary by absolute path through nodeBin()."
+}
