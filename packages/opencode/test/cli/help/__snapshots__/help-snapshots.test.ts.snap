@@ -170,7 +170,7 @@ Options:
 exports[`Swarm CLI help-text snapshots every documented command emits stable help text: swarm upgrade --help 1`] = `
 "swarm upgrade [target]
 
-upgrade swarm to the latest or a specific version
+refused: Swarm updates are managed by PT GSP
 
 Positionals:
   target  version to upgrade to, for ex '0.1.48' or 'v0.1.48'                               [string]
@@ -330,7 +330,7 @@ Commands:
   swarm debug               debugging and troubleshooting tools
   swarm providers           manage AI providers and credentials                      [aliases: auth]
   swarm agent               manage agents
-  swarm upgrade [target]    upgrade swarm to the latest or a specific version
+  swarm upgrade [target]    refused: Swarm updates are managed by PT GSP
   swarm uninstall           uninstall swarm and remove all related files
   swarm serve               starts a headless swarm server
   swarm web                 start swarm server and open web interface
@@ -642,7 +642,7 @@ Commands:
   swarm debug               debugging and troubleshooting tools
   swarm providers           manage AI providers and credentials                      [aliases: auth]
   swarm agent               manage agents
-  swarm upgrade [target]    upgrade swarm to the latest or a specific version
+  swarm upgrade [target]    refused: Swarm updates are managed by PT GSP
   swarm uninstall           uninstall swarm and remove all related files
   swarm serve               starts a headless swarm server
   swarm web                 start swarm server and open web interface
@@ -704,7 +704,7 @@ Commands:
   swarm debug               debugging and troubleshooting tools
   swarm providers           manage AI providers and credentials                      [aliases: auth]
   swarm agent               manage agents
-  swarm upgrade [target]    upgrade swarm to the latest or a specific version
+  swarm upgrade [target]    refused: Swarm updates are managed by PT GSP
   swarm uninstall           uninstall swarm and remove all related files
   swarm serve               starts a headless swarm server
   swarm web                 start swarm server and open web interface
