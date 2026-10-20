@@ -71,9 +71,6 @@ export const dict: Record<string, string> = {
   "ui.sessionTurn.error.freeUsageExceeded": "Brezplačna uporaba je presežena",
   "ui.sessionTurn.error.addCredits": "Dodajte kredite",
   "dialog.usageExceeded.freeTier.title": "Brezplačna omejitev je dosežena",
-  "dialog.usageExceeded.freeTier.description":
-    "Naročite se na OpenCode Go za zanesljiv dostop do najboljših odprtokodnih modelov za 10 $/mesec.",
-  "dialog.usageExceeded.freeTier.actionLabel": "Naročite se",
   "dialog.usageExceeded.accountRateLimit.title": "Dosežena omejitev",
   "dialog.usageExceeded.accountRateLimit.description":
     "Omejitev uporabe je dosežena. Če želite zdaj še naprej uporabljati ta model, omogočite uporabo iz razpoložljivega stanja",

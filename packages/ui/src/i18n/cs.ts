@@ -70,10 +70,7 @@ export const dict: Record<string, string> = {
   "ui.sessionTurn.error.freeUsageExceeded": "Bezplatné využití překročeno",
   "ui.sessionTurn.error.addCredits": "Přidejte kredity",
   "dialog.usageExceeded.freeTier.title": "Dosažen limit zdarma",
-  "dialog.usageExceeded.freeTier.description":
-    "Předplaťte si OpenCode Go za 10 USD měsíčně a získejte spolehlivý přístup k nejlepším modelům s otevřeným zdrojovým kódem.",
-  "dialog.usageExceeded.freeTier.actionLabel": "Přihlásit se k odběru",
-  "dialog.usageExceeded.accountRateLimit.title": "Dosažen limit služby Go",
+  "dialog.usageExceeded.accountRateLimit.title": "Bylo dosaženo limitu využití",
   "dialog.usageExceeded.accountRateLimit.description":
     "Bylo dosaženo limitu využití. Chcete-li nyní tento model nadále používat, povolte používání ze svého dostupného zůstatku",
   "dialog.usageExceeded.accountRateLimit.actionLabel": "Otevřete nastavení",

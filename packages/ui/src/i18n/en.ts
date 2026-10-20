@@ -74,10 +74,7 @@ export const dict: Record<string, string> = {
   "ui.sessionTurn.error.addCredits": "Add credits",
 
   "dialog.usageExceeded.freeTier.title": "Free limit reached",
-  "dialog.usageExceeded.freeTier.description":
-    "Subscribe to OpenCode Go for reliable access to the best open-source models for $10/month.",
-  "dialog.usageExceeded.freeTier.actionLabel": "Subscribe",
-  "dialog.usageExceeded.accountRateLimit.title": "Go limit reached",
+  "dialog.usageExceeded.accountRateLimit.title": "Usage limit reached",
   "dialog.usageExceeded.accountRateLimit.description":
     "Usage limit reached. To continue using this model now, enable usage from your available balance",
   "dialog.usageExceeded.accountRateLimit.actionLabel": "Open settings",

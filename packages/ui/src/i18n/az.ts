@@ -68,10 +68,7 @@ export const dict: Record<string, string> = {
   "ui.sessionTurn.error.freeUsageExceeded": "Pulsuz istifadə limiti aşıldı",
   "ui.sessionTurn.error.addCredits": "Kredit əlavə et",
   "dialog.usageExceeded.freeTier.title": "Pulsuz limitə çatdınız",
-  "dialog.usageExceeded.freeTier.description":
-    "Ayda $10 olan OpenCode Go abunəliyi ilə ən yaxşı açıq mənbəli modellərə etibarlı giriş əldə edin.",
-  "dialog.usageExceeded.freeTier.actionLabel": "Abunə ol",
-  "dialog.usageExceeded.accountRateLimit.title": "Go limitinə çatdınız",
+  "dialog.usageExceeded.accountRateLimit.title": "İstifadə limitinə çatdınız",
   "dialog.usageExceeded.accountRateLimit.description":
     "İstifadə limitinə çatdınız. Bu modeldən indi istifadə etməyə davam etmək üçün mövcud balansınızdan istifadəni aktivləşdirin",
   "dialog.usageExceeded.accountRateLimit.actionLabel": "Tənzimləmələri aç",

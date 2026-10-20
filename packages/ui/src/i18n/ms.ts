@@ -68,10 +68,7 @@ export const dict: Record<string, string> = {
   "ui.sessionTurn.error.freeUsageExceeded": "Penggunaan percuma telah melebihi had",
   "ui.sessionTurn.error.addCredits": "Tambah kredit",
   "dialog.usageExceeded.freeTier.title": "Had percuma dicapai",
-  "dialog.usageExceeded.freeTier.description":
-    "Langgan OpenCode Go pada harga $10/bulan untuk akses yang lebih stabil kepada model sumber terbuka terbaik.",
-  "dialog.usageExceeded.freeTier.actionLabel": "Langgan",
-  "dialog.usageExceeded.accountRateLimit.title": "Had Go dicapai",
+  "dialog.usageExceeded.accountRateLimit.title": "Had penggunaan telah dicapai",
   "dialog.usageExceeded.accountRateLimit.description":
     "Had penggunaan telah dicapai. Untuk terus menggunakan model ini sekarang, aktifkan penggunaan daripada baki tersedia anda",
   "dialog.usageExceeded.accountRateLimit.actionLabel": "Buka tetapan",

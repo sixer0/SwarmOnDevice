@@ -69,10 +69,7 @@ export const dict: Record<string, string> = {
   "ui.sessionTurn.error.freeUsageExceeded": "Bezmaksas limits pārsniegts",
   "ui.sessionTurn.error.addCredits": "Pievienot kredītus",
   "dialog.usageExceeded.freeTier.title": "Sasniegts bezmaksas limits",
-  "dialog.usageExceeded.freeTier.description":
-    "Abonē OpenCode Go par $10/mēn., lai iegūtu uzticamu piekļuvi labākajiem atvērtā koda modeļiem.",
-  "dialog.usageExceeded.freeTier.actionLabel": "Abonēt",
-  "dialog.usageExceeded.accountRateLimit.title": "Sasniegts Go limits",
+  "dialog.usageExceeded.accountRateLimit.title": "Lietojuma limits sasniegts",
   "dialog.usageExceeded.accountRateLimit.description":
     "Lietojuma limits sasniegts. Lai turpinātu izmantot šo modeli, aktivizē lietošanu no sava atlikuma",
   "dialog.usageExceeded.accountRateLimit.actionLabel": "Atvērt iestatījumus",

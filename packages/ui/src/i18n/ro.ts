@@ -69,10 +69,7 @@ export const dict: Record<string, string> = {
   "ui.sessionTurn.error.freeUsageExceeded": "Ai depășit utilizarea gratuită",
   "ui.sessionTurn.error.addCredits": "Adaugă credit",
   "dialog.usageExceeded.freeTier.title": "Limită gratuită atinsă",
-  "dialog.usageExceeded.freeTier.description":
-    "Abonează-te la OpenCode Go pentru 10$/lună și obține acces fiabil la cele mai bune modele open-source.",
-  "dialog.usageExceeded.freeTier.actionLabel": "Abonează-te",
-  "dialog.usageExceeded.accountRateLimit.title": "Limită Go atinsă",
+  "dialog.usageExceeded.accountRateLimit.title": "Ai atins limita de utilizare",
   "dialog.usageExceeded.accountRateLimit.description":
     "Ai atins limita de utilizare. Pentru a continua să folosești acest model acum, activează utilizarea din soldul disponibil",
   "dialog.usageExceeded.accountRateLimit.actionLabel": "Deschide setările",

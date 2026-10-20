@@ -69,10 +69,7 @@ export const dict: Record<string, string> = {
   "ui.sessionTurn.error.freeUsageExceeded": "ހިލޭ ބޭނުންކުރުން ފަހަނައަޅައި ދިޔައެވެ",
   "ui.sessionTurn.error.addCredits": "ކްރެޑިޓްތައް އިތުރުކުރުން",
   "dialog.usageExceeded.freeTier.title": "ހިލޭ ލިމިޓަށް އާދެވިއްޖެއެވެ",
-  "dialog.usageExceeded.freeTier.description":
-    "އެންމެ ރަނގަޅު އޮޕަން ސޯސް މޮޑެލްތަކަށް އިތުބާރުހުރި ގޮތެއްގައި އެކްސެސް ހޯދުމަށް މަހަކު 10 ޑޮލަރަށް OpenCode Go އަށް ސަބްސްކްރައިބް ކޮށްލައްވާ.",
-  "dialog.usageExceeded.freeTier.actionLabel": "ސަބްސްކްރައިބް ކޮށްލައްވާ",
-  "dialog.usageExceeded.accountRateLimit.title": "ގޯ ލިމިޓް އާދެވުނެވެ",
+  "dialog.usageExceeded.accountRateLimit.title": "ބޭނުންކުރުމުގެ ލިމިޓަށް ވާސިލްވެއްޖެއެވެ",
   "dialog.usageExceeded.accountRateLimit.description":
     "ބޭނުންކުރުމުގެ ލިމިޓަށް ވާސިލްވެއްޖެއެވެ. މިހާރު މި މޮޑެލް ބޭނުން ކުރަމުން ގެންދިއުމަށްޓަކައި، ލިބިފައިވާ ބެލެންސް އިން ބޭނުންކުރުން އެނެބަލް ކުރާށެވެ",
   "dialog.usageExceeded.accountRateLimit.actionLabel": "ސެޓިންގސް ހުޅުވާލާށެވެ",

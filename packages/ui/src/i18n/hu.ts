@@ -70,10 +70,7 @@ export const dict: Record<string, string> = {
   "ui.sessionTurn.error.freeUsageExceeded": "Az ingyenes használat túllépve",
   "ui.sessionTurn.error.addCredits": "Adjon hozzá krediteket",
   "dialog.usageExceeded.freeTier.title": "Elérte a szabad korlátot",
-  "dialog.usageExceeded.freeTier.description":
-    "Iratkozzon fel az OpenCode Go szolgáltatásra havi 10 dollárért, hogy megbízható hozzáférést kapjon a legjobb nyílt forráskódú modellekhez.",
-  "dialog.usageExceeded.freeTier.actionLabel": "Iratkozz fel",
-  "dialog.usageExceeded.accountRateLimit.title": "Elérte a Go korlátját",
+  "dialog.usageExceeded.accountRateLimit.title": "Elérte a használati korlátot",
   "dialog.usageExceeded.accountRateLimit.description":
     "Elérte a használati korlátot. A modell használatának folytatásához engedélyezze a használatot a rendelkezésre álló egyenlegéből",
   "dialog.usageExceeded.accountRateLimit.actionLabel": "Beállítások megnyitása",

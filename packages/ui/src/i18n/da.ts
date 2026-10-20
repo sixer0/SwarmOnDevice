@@ -70,10 +70,7 @@ export const dict = {
   "ui.sessionTurn.error.addCredits": "Tilføj kreditter",
 
   "dialog.usageExceeded.freeTier.title": "Gratis grænse nået",
-  "dialog.usageExceeded.freeTier.description":
-    "Abonnér på OpenCode Go for $10/måned, og få pålidelig adgang til de bedste open source-modeller.",
-  "dialog.usageExceeded.freeTier.actionLabel": "Abonnér",
-  "dialog.usageExceeded.accountRateLimit.title": "Go-grænse nået",
+  "dialog.usageExceeded.accountRateLimit.title": "Forbrugsgrænse nået",
   "dialog.usageExceeded.accountRateLimit.description":
     "Forbrugsgrænse nået. For at fortsætte med at bruge denne model nu, aktivér forbrug fra din tilgængelige saldo",
   "dialog.usageExceeded.accountRateLimit.actionLabel": "Åbn indstillinger",
