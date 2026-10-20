@@ -9,7 +9,7 @@
 // (P-3: no pipe-to-shell; r87 precedent + fetch.proofs.sh 3c keep node:child_process
 // confined to verify.ts).
 //
-// PORT RULE (decisions.md :30 PORT BLOCK): this module publishes no ports and holds
+// PORT RULE (decisions.md entry 'USER DECISION (PORT BLOCK, 05:33 UTC)'): this module publishes no ports and holds
 // ZERO port literals. The VM publishes nothing; stack health URLs are row 93's, fed
 // by the row-85 rendered artefacts. The runtime health gate below uses `docker info`
 // over the context socket — no address, no number.

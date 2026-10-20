@@ -9,10 +9,13 @@
 //
 // The renderer is PURE: no network, no process spawn, no writes. Writing is
 // applyRenderedFiles() below (atomic.ts, row 81) called by the owner steps; a dry run
-// renders to a caller-chosen directory only (PORT RULE note in decisions.md: "dry-run
-// renders to temp only"). Byte-stability is a contract: two renders with equal inputs
-// produce byte-identical files (no timestamps, deterministic key order), which is what
-// lets rows 91/92 diff-lift and row 85's lint stay mechanical.
+// renders to a caller-chosen directory only — implementation observation, not a ruling
+// (no decisions.md entry mentions dry runs; composefiles/index.ts owns the --out
+// default that picks the directory; the decisions.md quotation previously cited here
+// matched no entry and was removed — seam pass 9, 2026-10-20).
+// Byte-stability is a contract: two renders with equal inputs produce byte-identical
+// files (no timestamps, deterministic key order), which is what lets rows 91/92
+// diff-lift and row 85's lint stay mechanical.
 
 import { LABELS } from "../constants.ts"
 import { homeDir } from "../paths.ts"
@@ -273,7 +276,7 @@ export const SECURITY_OPT = 'security_opt: ["no-new-privileges:true"]' // P-9, a
 export const CAP_DROP = "cap_drop: [ALL]" // P-9, all services; cap_add stays banned by the lint
 
 // --- Register class 7 mirror (PC-PORT-01..08) AS AMENDED by the user PORT BLOCK -------------
-// (decisions.md:30, 2026-10-20 05:33 UTC -> register r72-fix2 -> 01e r75-fix2 §4.2). Single
+// (decisions.md entry 'USER DECISION (PORT BLOCK, 05:33 UTC)' -> register r72-fix2 -> 01e r75-fix2 §4.2). Single
 // definition site INSIDE this service: constants.ts is row-81 owned (off-limits to this row)
 // and carries no PORTS block yet; tools.lock.json names ports only in underscore annotations,
 // which its own field_convention bars consumers from reading. Every rendered port value below

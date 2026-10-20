@@ -135,6 +135,36 @@ describe("renderAll — contract vs the ratified spec", () => {
     }
   })
 
+  test("published-port citations name the decision HEADING, never a line offset (seam9 R6 / r85-fix6e)", () => {
+    // These citations SHIP: each ports line is a template literal whose text is written verbatim into
+    // searxng.yml / firecrawl.yml, which is why seam9 refused to fix them in its comment-only pass and
+    // routed them here. Before this round nothing pinned the wording (the sweep's evidence command
+    // `rg -n "as amended by the user PORT BLOCK" test/ src/ | grep -v compose.ts` exits 1), so the
+    // stale offset `(decisions.md:30)` — an unrelated ruling — sat in shipped bytes unnoticed. A line
+    // number rots every time decisions.md grows; the dated entry heading does not, so the heading form
+    // is now under test together with the ban on the numbered form.
+    const r = renderClean()
+    const ANCHOR = "(decisions.md entry 'USER DECISION (PORT BLOCK, 05:33 UTC)')"
+    const sites: readonly { readonly rel: string; readonly id: string; readonly portIndex: number }[] = [
+      { rel: "searxng/compose/searxng.yml", id: "PC-PORT-01", portIndex: 0 },
+      { rel: "firecrawl/compose/firecrawl.yml", id: "PC-PORT-02", portIndex: 1 },
+    ]
+    for (const s of sites) {
+      const published = fileOf(r, s.rel)
+        .content.split("\n")
+        .filter((l) => /^\s+- "127\./.test(l))
+      expect(published.length).toBe(1)
+      const line = published[0]
+      // the anchor must sit on the same line as the constant it amends, not merely somewhere in the file
+      expect(line).toContain(`# ${s.id} as amended by the user PORT BLOCK ${ANCHOR}`)
+      expect(line).not.toMatch(/decisions\.md:\d+/)
+      // the citation text may never disturb the value: it still equals the register-derived pair
+      expect(line).toContain(`"${publishedPortEntries()[s.portIndex]}"`)
+    }
+    // tree-wide: no rendered artefact cites decisions.md by number anywhere
+    for (const f of r.files) expect(f.content).not.toMatch(/decisions\.md:\d+/)
+  })
+
   test("labels: every service carries the three PC-LBL keys; version equals lock.version (F-79-E green)", () => {
     const r = renderClean()
     const text = fileOf(r, "searxng/compose/searxng.yml").content + fileOf(r, "firecrawl/compose/firecrawl.yml").content

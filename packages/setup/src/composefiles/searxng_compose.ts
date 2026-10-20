@@ -59,7 +59,7 @@ export function renderSearxngCompose(
     labelBlock("searxng", version, 4, ctx.tamperLabel),
     "    networks: [se-edge, se-int]",
     "    ports:",
-    `      - "${publishedPortEntries()[0]}"  # PC-PORT-01 as amended by the user PORT BLOCK (decisions.md:30): host 9021 (was 8888, history only), container 8080 unchanged (PC-PORT-03 / 02b:128) — P-6 form`,
+    `      - "${publishedPortEntries()[0]}"  # PC-PORT-01 as amended by the user PORT BLOCK (decisions.md entry 'USER DECISION (PORT BLOCK, 05:33 UTC)'): host 9021 (was 8888, history only), container 8080 unchanged (PC-PORT-03 / 02b:128) — P-6 form`,
     "    env_file:",
     `      - ${p.searxngEnv}  # generated beside this tree; carries SEARXNG_BASE_URL only — no secret values (§4.6)`,
     ...(ca

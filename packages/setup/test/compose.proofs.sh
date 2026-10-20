@@ -446,6 +446,32 @@ TS
 bun run "$WORK/r85f6d-demo.ts" | tee "$WORK/r85f6d.out"
 check "r75-fix9 parsed proofs (command pin; corepack flag; PC_PORTS-pinned PROXY_SERVER; empty creds; anti-fc-web invariant)" 0 $?
 
+echo "=== PROOF 13: shipped port citations name the decision HEADING, not a line offset (seam9 R6 / r85-fix6e) ==="
+# The authority for PC-PORT-01/02 rides INSIDE the rendered ports line, so it ships in bytes that rows
+# 112/117/119/120 hash. A line offset rots whenever decisions.md grows — it had already rotted once
+# (`decisions.md:30` points at the row-56 dead-code ruling while PORT BLOCK is :34) and no test noticed,
+# because the sweep's evidence command exited 1. This proof greps the artefacts ON DISK (the unit suite
+# only renders in memory) plus the source side, so neither half can drift back silently.
+ANCHOR="decisions.md entry 'USER DECISION (PORT BLOCK, 05:33 UTC)'"
+SEY="$WORK/render-a/searxng/compose/searxng.yml"
+A_SEX=$(grep -cF -e "# PC-PORT-01 as amended by the user PORT BLOCK ($ANCHOR)" "$SEY" || true)
+A_FC=$(grep -cF -e "# PC-PORT-02 as amended by the user PORT BLOCK ($ANCHOR)" "$FCY" || true)
+Numb_TREE=$(grep -rlE 'decisions\.md:[0-9]+' "$WORK/render-a" 2>/dev/null | wc -l | tr -d ' ')
+Numb_SRC=$(grep -rlE 'decisions\.md:[0-9]+' "$HERE"/src/composefiles/*.ts 2>/dev/null | wc -l | tr -d ' ')
+if [ "$A_SEX" = 1 ] && [ "$A_FC" = 1 ] && [ "$Numb_TREE" = 0 ] && [ "$Numb_SRC" = 0 ]; then
+  echo "  PASS 13 heading anchor present exactly once on each published-port artefact; zero numbered decisions.md pointers in the render tree and zero in src/composefiles"; pass=$((pass+1))
+else
+  echo "  FAIL 13 (anchorSeaxng=$A_SEX want 1, anchorFirecrawl=$A_FC want 1, numberedInTree=$Numb_TREE want 0, numberedInSrc=$Numb_SRC want 0)"; fail=$((fail+1))
+fi
+# Informational (NOT counted — the docs tree lives outside the repo and may be absent elsewhere):
+# show that the cited heading really does resolve, and is unique, in the decision log itself.
+DOC="$REPO/../docs/2026-10-19_opencode_swarm_rebrand/decisions/decisions.md"
+if [ -f "$DOC" ]; then
+  echo "  INFO heading occurrences in $DOC: $(grep -cF -e 'USER DECISION (PORT BLOCK, 05:33 UTC)' "$DOC") (want 1); stale ':30' still absent: $(grep -cF -e 'decisions.md:30' "$DOC" || true)"
+else
+  echo "  INFO decision log not reachable from this repo copy — heading resolution checked by hand this round"
+fi
+
 echo
 echo "row-85 proofs: $pass passed, $fail failed"
 [ "$fail" = 0 ] || exit 1

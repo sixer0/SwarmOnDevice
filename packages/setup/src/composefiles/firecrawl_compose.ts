@@ -99,7 +99,7 @@ export function renderFirecrawlCompose(
     "    depends_on:  # R112-3 live evidence: nginx resolves proxy_pass hostnames at CONFIG LOAD — starting before api FATALs host-not-found-in-upstream on default.conf proxy_pass line",
     "      api: {condition: service_started}  # minimal posture per r112; upgrade to service_healthy once api's U-1 healthcheck settles (currently omitted per H-R93-3 family)",
     "    ports:",
-    `      - "${publishedPortEntries()[1]}"  # PC-PORT-02 as amended by the user PORT BLOCK (decisions.md:30): host 9022 (was 3002-host; that number survives ONLY as the api CONTAINER listen PC-PORT-04, never published); proxy container side 8080 (PC-PORT-05) keeps it cap-free`,
+    `      - "${publishedPortEntries()[1]}"  # PC-PORT-02 as amended by the user PORT BLOCK (decisions.md entry 'USER DECISION (PORT BLOCK, 05:33 UTC)'): host 9022 (was 3002-host; that number survives ONLY as the api CONTAINER listen PC-PORT-04, never published); proxy container side 8080 (PC-PORT-05) keeps it cap-free`,
     "    volumes:",
     bindMount(p.firecrawlNginxTemplate, "/etc/nginx/templates/default.conf.template", true, 6),
     commentLines(

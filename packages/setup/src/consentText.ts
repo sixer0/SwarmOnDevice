@@ -8,6 +8,13 @@
 // are printed live from tools.lock.json via resolveArtifact (row 82) so this file never drifts a
 // value away from the lock. Where 01d names a value that is still unclosed (guest image D-13/F-5,
 // firecrawl-mcp F-2/D-11, Obsidian team_id U-2), the text says so instead of guessing (C-5).
+//
+// Citations into decisions/decisions.md quote that entry's own heading — 'USER DECISION
+// (PORT BLOCK, 05:33 UTC)' — instead of a line number. The log grows on top of itself, so a bare
+// ":NN" pointer goes stale without warning: the one this file carried for the port ruling drifted
+// off target within a day (row 113's finding §2.5 in verification/09_preinstall_security.md).
+// A heading is unique and greppable (`rg -n -F "USER DECISION (PORT BLOCK" decisions.md`), a line
+// number is neither.
 
 import type { ComponentId } from "./constants.ts"
 
@@ -305,7 +312,7 @@ const SINGLE: Record<Exclude<ComponentId, "runtime">, readonly ConsentBlock[]> =
         "*** Search text leaves this machine. Teks pencarian yang Anda ketik dikirim ke mesin pencari pihak ketiga di luar komputer ini. ***",
         "SearXNG answers by querying other engines. The shipped settings enable exactly FOUR engines — Wikipedia, Wikidata, Brave and DuckDuckGo — so query text reaches those four services (and Wikidata's API); autocomplete is off. Upstream's default-enabled group differs and includes Google CSE, which Swarm does NOT enable because it requires credentials we will not invent (gate D-18).",
         "For a defense user a query can carry project names, hostnames or error strings (P-7); the four engines are curated by row 75 §8 and legal item L17 still governs whether all four survive review.",
-        "1. The port is open to this Mac: any program running as you can issue searches through 127.0.0.1:9021 (PC-PORT-01; the number was 8888 until the user's PORT BLOCK of 2026-10-20 05:33 UTC, decisions.md:30); the Firecrawl API is behind a bearer token, SearXNG has no token mechanism upstream. The caveat itself did not move with the number: at either port the exposure is the same. This is not a defect and cannot be fixed by Swarm without forking the product — but cost, query text and an outbound footprint are available to every local process (gate F-79-D).",
+        "1. The port is open to this Mac: any program running as you can issue searches through 127.0.0.1:9021 (PC-PORT-01; the number was 8888 until the user's PORT BLOCK of 2026-10-20 05:33 UTC, decisions.md entry 'USER DECISION (PORT BLOCK, 05:33 UTC)'); the Firecrawl API is behind a bearer token, SearXNG has no token mechanism upstream. The caveat itself did not move with the number: at either port the exposure is the same. This is not a defect and cannot be fixed by Swarm without forking the product — but cost, query text and an outbound footprint are available to every local process (gate F-79-D).",
         "2. The image-fetch path is switched OFF: image_proxy:false (gate D-07). Left on, SearXNG would fetch result images from engine-supplied URLs with no policy and no audit line — an unaudited second fetch path and an SSRF probe into private ranges through the unauthenticated port above. Nothing is lost: the model consumes text and the sanitiser strips markdown images anyway.",
         "3. Only queries are logged, and locally: every call recorded with URL/query, response size and sha256 in ~/.swarm/logs/web-audit.log (PC-PATH-10) — an audit trail on the same disk as the user's work (retention row 76; UU PDP reading is L18).",
         "Nothing is sent to PT GSP: no Swarm server, no update feed, no analytics endpoint exists in this design (decision 3).",
@@ -315,7 +322,7 @@ const SINGLE: Record<Exclude<ComponentId, "runtime">, readonly ConsentBlock[]> =
         "~/.swarm/tools/searxng/settings.yml (rendered from shipped template PC-PKG-05, bind-mounted read-only)",
         "~/.swarm/tools/searxng/searxng.env (non-secret: base URL only)",
         "~/.swarm/tools/searxng/cache/ (bind-mounted; NAMED VOLUMES are not used — uninstall leaves no docker volume residue, D-17)",
-        "compose file PC-PKG-03 read from the package, never downloaded; inside the VM: labelled containers + project-prefixed networks of stack A + the one published host binding, PC-PORT-01 = 127.0.0.1:9021 (was 8888 before the PORT BLOCK; see 01d §5.4)",
+        "compose file PC-PKG-03 read from the package, never downloaded; inside the VM: labelled containers + project-prefixed networks of stack A + the one published host binding, PC-PORT-01 = 127.0.0.1:9021 (was 8888 before the PORT BLOCK, decisions.md entry 'USER DECISION (PORT BLOCK, 05:33 UTC)'; port history table 01d §5.4)",
         "CONDITIONAL (F-79-C): if row 75's FORCE_OWNERSHIP virtiofs fallback is ever taken, two of these paths become chmod 0777 and the 0600-in-0700 promise above stops being true for them — rows 75/84 own that decision.",
       ],
       uninstallPath: [

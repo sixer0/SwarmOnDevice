@@ -140,7 +140,7 @@ check "7b node:child_process import NOT widened beyond verify.ts (fetch.proofs 3
 grep -rnE 'fetch\(|XMLHttpRequest|node:http|Bun\.serve|new WebSocket' "$HERE/src/steps/runtime" >/dev/null 2>&1
 check "7c zero network primitives (this step performs none; brew channel per decision 13)" 1 $?
 grep -rnE '\b(8888|3002|90[0-9][0-9]|4[0-9]{4}|5[0-9]{4})\b' "$HERE/src/steps/runtime" "$HERE/test/runtime.test.ts" >/dev/null 2>&1
-check "7d ZERO port literals in sources+tests (PORT BLOCK decisions.md :30 — values derive from artefacts/lock, never hardcoded here)" 1 $?
+check "7d ZERO port literals in sources+tests (PORT BLOCK, decisions.md entry 'USER DECISION (PORT BLOCK, 05:33 UTC)' — values derive from artefacts/lock, never hardcoded here)" 1 $?
 grep -rnE 'docker system prune|--accept-license|bash -c|sh -c' "$HERE/src/steps/runtime" >/dev/null 2>&1
 check "7e no prune / no vendor license flag / no shell-spawn (P-3/P-5/P-14)" 1 $?
 NCTXUSE="$(grep -rc '"context", "use"' "$HERE/src/steps/runtime" | awk -F: '{s+=$2} END {print s+0}')"

@@ -2,7 +2,7 @@
 // plugin, the D-13 guest-image capture, and the environment floors. Contract sources:
 // 01c §12(runtime) + §11 ordering; 01e §7.1 sizing (row 75 ratified); 02d §4/§5 pins and
 // prerequisites (row 77); verification/10 items D-12/D-13/P-5 + the row-86 release note
-// (:322); decisions.md brew-floor ruling (:31) + PORT BLOCK (:30).
+// (:322); decisions.md entries 'RESUME QUEUE + row 80 routings' item (b) (brew floor) + 'USER DECISION (PORT BLOCK, 05:33 UTC)'.
 //
 // WHAT THIS STEP DOES NOT DO, deliberately:
 //  - No kit.fetch CALL: the channel is Homebrew (decision 13) — the setup invokes an
@@ -19,7 +19,7 @@
 //  - Never installs/removes Homebrew itself (P-3), never `brew uninstall`s anything
 //    (P-14), never installs QEMU (D-12 closed here: vm-type vz is the ONLY supported
 //    path; the observed scope is RECORDED, pre-existing qemu left untouched).
-//  - Publishes no ports and contains ZERO port literals (PORT BLOCK decisions.md :30:
+//  - Publishes no ports and contains ZERO port literals (PORT BLOCK, decisions.md entry 'USER DECISION (PORT BLOCK, 05:33 UTC)':
 //    the VM publishes nothing; stack health URLs are row 93's, fed by row-85 artefacts;
 //    the runtime health gate is `docker info` over the context socket — port-free).
 //  - Writes tools.lock.json NEVER (0444 shipped read-only; proof greps byte identity).

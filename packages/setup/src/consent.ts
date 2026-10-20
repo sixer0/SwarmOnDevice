@@ -446,8 +446,10 @@ function userName(): string {
 }
 
 /** Recorded consent lines stay pure ASCII so the audit log is tool-parseable everywhere
- *  (row 74 §14 keeps its Indonesian sentences out of recorded fields by design; the SCREEN
- *  shows them). Anything outside ASCII collapses to "-" rather than being truncated mid-byte. */
+ *  (01d §6.5 fixes the record as a field schema that has no disclosure-prose field, so the
+ *  Indonesian sentences live on the SCREEN only; 01d §14 is a character-class count of this
+ *  document, not the source of that rule — r83-fix5 corrected the pointer).
+ *  Anything outside ASCII collapses to "-" rather than being truncated mid-byte. */
 function asciiSafe(s: string): string {
   let out = ""
   for (let i = 0; i < s.length; i++) {

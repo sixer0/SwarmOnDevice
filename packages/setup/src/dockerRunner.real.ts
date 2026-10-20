@@ -27,7 +27,7 @@
 //     a thrown error mid-lifecycle (that would skip its commitFailure/provenance bookkeeping).
 //   - a killed/timed-out child (exitCode null from Bun.spawnSync) maps to a non-zero code too.
 //
-// PORT RULE (decisions.md :32 PORT BLOCK): this module holds ZERO port literals and binds nothing.
+// PORT RULE (decisions.md entry 'USER DECISION (PORT BLOCK, 05:33 UTC)'): this module holds ZERO port literals and binds nothing.
 // The host-side HTTP probes that consume published ports belong to the proof harness and read the
 // ports FROM the rendered artefact (stacklib.healthProbeUrls), exactly as row 91 derives them.
 //
