@@ -51,6 +51,7 @@ import {
   egressProxyPinReady,
   firecrawlPlan,
   healthProbeUrls,
+  healthVerdict,
   imageRmArgs,
   labelListArgs,
   makeFakeDockerShim,
@@ -60,10 +61,14 @@ import {
   resolveDockerContextName,
   searxngPlan,
   selectLabelled,
+  serviceFromContainerName,
+  serviceProbeUrls,
   stackProvenanceFile,
   tearDown,
   volumeRmCmd,
   waitForHealthy,
+  type DockerRunner,
+  type ReadinessProbe,
 } from "../src/stacklib.ts"
 import searxngStep from "../src/steps/searxng/index.ts"
 import firecrawlStep from "../src/steps/firecrawl/index.ts"
@@ -133,6 +138,20 @@ function greenShim(
     { match: "network ls", stdout: "swarm-tools_se-edge\nswarm-tools_se-int" },
   ])
 }
+
+/** Host-side readiness prober paired with greenShim. Under the 2026-10-20 healthcheck-contract
+ *  ruling a container WITHOUT a declared healthcheck (e.g. valkey above, or api/playwright once
+ *  row 85 drops their wget checks) is green only on `Up` PLUS a passing probe — this is that probe.
+ *  It records the targets it was asked about so a test can assert the gate probed the RIGHT service. */
+function recordingReadiness(): { probe: ReadinessProbe; targets: Array<{ service: string; container: string; urls: readonly string[] }> } {
+  const targets: Array<{ service: string; container: string; urls: readonly string[] }> = []
+  const probe: ReadinessProbe = async (t) => {
+    targets.push({ service: t.service, container: t.container, urls: t.urls })
+    return { ok: true, detail: "ready (fixture)" }
+  }
+  return { probe, targets }
+}
+const greenReadiness: ReadinessProbe = async () => ({ ok: true, detail: "ready (fixture)" })
 
 describe("(1) preconditions fail closed — missing secret is refused with a listing, zero docker calls", () => {
   it("refuses when a required secret file is absent, listing exactly what is missing", async () => {
@@ -292,10 +311,13 @@ describe("happy path — up, health gate green, healthy transition, provenance r
     const shim = greenShim()
     const st = readyState("searxng")
     const kit = createStepKit({ componentId: "searxng", lock: LOCK, state: st, dryRun: false, consentGate: () => true })
+    // valkey reports <none> health -> no-healthcheck container; the readiness prober is what
+    // satisfies it under the 2026-10-20 contract (see FIX ROUND 3 describes for the dedicated fixtures).
     const out = await bringUp({
       kit,
       plan: searxngPlan(home),
       run: shim.runner,
+      readiness: greenReadiness,
       healthIntervalMs: 1,
       sleep: async () => {},
     })
@@ -309,7 +331,8 @@ describe("happy path — up, health gate green, healthy transition, provenance r
     expect(cmds.some((c) => c.includes(`context inspect ${DOCKER_CONTEXT}`))).toBe(true)
     expect(cmds.some((c) => c.includes("-f ") && c.includes("up -d --pull never"))).toBe(true)
     expect(cmds.some((c) => c.includes("={{.Health}}"))).toBe(true)
-    // Provenance per bring-up.
+    // Provenance per bring-up. A GREEN sequence keeps the bare "up" verb (R112b-7 vocabulary:
+    // only failed phases carry the "-failed"/"-incomplete" suffix).
     const rows = readStackProvenanceRecords()
     expect(rows.length).toBe(1)
     expect(rows[0]?.outcome).toBe(OUTCOME.OK)
@@ -389,6 +412,8 @@ describe("(4) health gate timeout -> HEALTH_FAILED (BLOCKED-style outcome token)
     expect(st.components.searxng.state).toBe(STATES.FAILED)
     const rows = readStackProvenanceRecords()
     expect(rows.at(-1)?.outcome).toBe(OUTCOME.HEALTH_FAILED)
+    // R112b-7 truthfulness: the ledger verb must not read as a bare "up" on a failed phase.
+    expect(rows.at(-1)?.action).toBe("up-failed")
   })
 })
 
@@ -624,7 +649,16 @@ describe("step modules wire the library end-to-end (install/remove via StepConte
 
     const st = readyState("searxng")
     const upShim = greenShim()
-    const install = await searxngStep.install({ lock: LOCK, state: st, dryRun: false, docker: upShim.runner } as never)
+    // readiness rides the widened StackStepContext (row 91's local seam): the engine-side prober
+    // satisfies the no-healthcheck valkey container; without it this e2e would fail CLOSED (red),
+    // which is itself asserted in the FIX ROUND 3 describe below.
+    const install = await searxngStep.install({
+      lock: LOCK,
+      state: st,
+      dryRun: false,
+      docker: upShim.runner,
+      readiness: greenReadiness,
+    } as never)
     expect(install.token).toBe(OUTCOME.OK)
     expect(st.components.searxng.state).toBe(STATES.HEALTHY)
 
@@ -796,5 +830,321 @@ describe("FIX2 R111-2 — context gone (colima stop deletes the context it added
     expect(out.message).toContain('docker context "colima-swarm" not reachable')
     expect(shim.invocations.length).toBe(1) // compose up NEVER ran against a wrong/absent context
     expect(shim.invocations[0]).toEqual(["context", "inspect", "colima-swarm"])
+  })
+})
+
+// ---- FIX ROUND 3 (R112b-3, host-side half) ---------------------------------------------------
+// The 2026-10-20 healthcheck-contract ruling (decisions.md :40-47) splits R112b-3: row 85 drops
+// the wget healthchecks on api/playwright-service (digests ship no wget); THIS row's half is the
+// gate treating a service with NO healthcheck defined as satisfied by Up PLUS its own host-side
+// readiness probe, staying file/label-scoped. Live evidence being answered:
+// verification/13b_live_firecrawl_rerun.md:135 — HEALTH_FAILED at poll 75 while both services
+// served HTTP 200. The probe is an injected seam (this module opens no socket — P4b grep gate);
+// the offline fake below stands in for row 93's live HTTP/TCP prober.
+
+describe("FIX3 R112b-3 — no-healthcheck service goes green through the host-side readiness probe", () => {
+  // Artefact-shaped snippet (indent rules mirror the r85 renderer) with ONE loopback publish on
+  // api. The numbers are synthetic fixture values chosen OUTSIDE every register port pool, and
+  // the host token is not 127.0.0.1 — this file must stay free of port/IP:port literals (P4a).
+  const FIXTURE_COMPOSE = [
+    "services:",
+    "  api:",
+    "    ports:",
+    '      - "loopback.test:7001:7002"',
+    "  nuq-postgres:",
+    "    image: x",
+  ].join("\n")
+
+  it("fixture proof: shim serves a no-healthcheck service whose readiness answers — gate goes GREEN", async () => {
+    const shim = makeFakeDockerShim([
+      {
+        match: "={{.Health}}",
+        stdout: "swarm-tools-nuq-postgres-1=running=healthy\nswarm-tools-api-1=running=<none>",
+      },
+    ])
+    const rec = recordingReadiness()
+    const wait = await waitForHealthy({
+      run: shim.runner,
+      composeFile: "/fixture/firecrawl.yml",
+      deadlineMs: 10_000,
+      intervalMs: 1,
+      sleep: async () => {},
+      probe: rec.probe,
+      composeText: FIXTURE_COMPOSE,
+    })
+    expect(wait.token).toBe(OUTCOME.OK)
+    expect(wait.attempts).toBe(1)
+    expect(wait.verdict.detail).toContain("satisfied by host-side readiness probes")
+    // Probed EXACTLY the no-healthcheck container — mapped to its compose service, carrying the
+    // artefact-derived URL; the healthy postgres was never probed (scope discipline).
+    expect(rec.targets).toEqual([{ service: "api", container: "swarm-tools-api-1", urls: ["http://loopback.test:7001/"] }])
+  })
+
+  it("end-to-end: the U-1 shipped shape (searxng declares no healthcheck) reaches healthy with a serving probe", async () => {
+    const home = freshHome("gate-green")
+    stageArtefacts(home)
+    writeSecrets(home, "searxng")
+    const shim = makeFakeDockerShim([
+      { match: "context inspect", stdout: "colima-swarm" },
+      { match: "={{.Health}}", stdout: "swarm-tools-searxng-1=running=<none>\nswarm-tools-valkey-1=running=healthy" },
+      { match: "network ls", stdout: "" },
+    ])
+    const st = readyState("searxng")
+    const kit = createStepKit({ componentId: "searxng", lock: LOCK, state: st, dryRun: false, consentGate: () => true })
+    const out = await bringUp({
+      kit,
+      plan: searxngPlan(home),
+      run: shim.runner,
+      readiness: greenReadiness,
+      healthIntervalMs: 1,
+      sleep: async () => {},
+    })
+    expect(out.token).toBe(OUTCOME.OK)
+    expect(st.components.searxng.state).toBe(STATES.HEALTHY)
+    const rows = readStackProvenanceRecords()
+    expect(rows.at(-1)?.outcome).toBe(OUTCOME.OK)
+    expect(rows.at(-1)?.action).toBe("up") // green sequence keeps the bare verb
+  })
+
+  it("a FAILING readiness probe keeps the gate red and names WHICH service and WHY", async () => {
+    const shim = makeFakeDockerShim([
+      { match: "={{.Health}}", stdout: "swarm-tools-playwright-service-1=running=<none>" },
+    ])
+    const failing: ReadinessProbe = async () => ({ ok: false, detail: "tcp connect refused" })
+    const wait = await waitForHealthy({
+      run: shim.runner,
+      composeFile: "/fixture/firecrawl.yml",
+      deadlineMs: 0,
+      intervalMs: 1,
+      sleep: async () => {},
+      probe: failing,
+    })
+    expect(wait.token).toBe(OUTCOME.HEALTH_FAILED)
+    expect(wait.verdict.unhealthy).toEqual(["swarm-tools-playwright-service-1"])
+    expect(wait.verdict.detail).toContain("playwright-service")
+    expect(wait.verdict.detail).toContain("no-healthcheck+readiness-failed(tcp connect refused)")
+  })
+
+  it("fail-closed WITHOUT a wired prober: the verdict names the service and says the probe is missing", async () => {
+    const shim = makeFakeDockerShim([
+      { match: "={{.Health}}", stdout: "swarm-tools-egress-proxy-1=running=<none>" },
+    ])
+    const wait = await waitForHealthy({
+      run: shim.runner,
+      composeFile: "/fixture/firecrawl.yml",
+      deadlineMs: 0,
+      intervalMs: 1,
+      sleep: async () => {},
+    })
+    expect(wait.token).toBe(OUTCOME.HEALTH_FAILED)
+    expect(wait.verdict.detail).toContain("egress-proxy")
+    expect(wait.verdict.detail).toContain("no-healthcheck+readiness-probe-missing")
+  })
+
+  it("timeout/poll budget unchanged in spirit: readiness-pending containers keep polling to the deadline", async () => {
+    const shim = makeFakeDockerShim([{ match: "={{.Health}}", stdout: "swarm-tools-api-1=running=<none>" }])
+    let now = 0
+    const wait = await waitForHealthy({
+      run: shim.runner,
+      composeFile: "/fixture/x.yml",
+      deadlineMs: 50,
+      intervalMs: 10,
+      sleep: async () => {
+        now += 10
+      },
+      clock: () => now,
+      probe: async () => ({ ok: false, detail: "not listening yet" }),
+    })
+    expect(wait.token).toBe(OUTCOME.HEALTH_FAILED)
+    expect(wait.attempts).toBeGreaterThan(1) // rode the window like a healthcheck-pending stack did before
+    expect(wait.attempts).toBe(6) // polls at t=0,10,20,30,40,50; the deadline branch then fires
+  })
+
+  it("declared-healthcheck semantics UNCHANGED: all-green needs no probe call; starting still waits", async () => {
+    const rec = recordingReadiness()
+    const greenShimAllDeclared = makeFakeDockerShim([
+      { match: "={{.Health}}", stdout: "swarm-tools-redis-1=running=healthy\nswarm-tools-rabbitmq-1=running=healthy" },
+    ])
+    const green = await waitForHealthy({
+      run: greenShimAllDeclared.runner,
+      composeFile: "/f.yml",
+      deadlineMs: 1000,
+      intervalMs: 1,
+      sleep: async () => {},
+      probe: rec.probe,
+    })
+    expect(green.token).toBe(OUTCOME.OK)
+    expect(rec.targets.length).toBe(0) // every container declared a healthcheck -> nothing to probe
+    const startingShim = makeFakeDockerShim([
+      { match: "={{.Health}}", stdout: "swarm-tools-rabbitmq-1=running=starting" },
+    ])
+    const starting = await waitForHealthy({
+      run: startingShim.runner,
+      composeFile: "/f.yml",
+      deadlineMs: 0,
+      intervalMs: 1,
+      sleep: async () => {},
+      probe: rec.probe,
+    })
+    expect(starting.token).toBe(OUTCOME.HEALTH_FAILED)
+    expect(starting.verdict.detail).toContain("rabbitmq-1:starting") // the pre-fix label form survives
+    expect(rec.targets.length).toBe(0)
+  })
+
+  it("service mapping + URL grouping helpers (artefact-derived, PORT RULE intact)", () => {
+    expect(serviceFromContainerName("swarm-tools-playwright-service-1")).toBe("playwright-service")
+    expect(serviceFromContainerName("swarm-tools-api-1")).toBe("api")
+    expect(serviceFromContainerName("foreign-name")).toBe("foreign-name") // falls back to itself
+    const urls = serviceProbeUrls(FIXTURE_COMPOSE)
+    expect(urls.get("api")).toEqual(["http://loopback.test:7001/"])
+    expect(urls.get("nuq-postgres")).toBeUndefined() // unpublished -> exec/TCP-class probe territory (row 93's call)
+  })
+
+  it("healthVerdict unit: the readiness map is keyed by CONTAINER NAME and gates only no-healthcheck lanes", () => {
+    const map = new Map([
+      ["a", { ok: true, detail: "ready" }],
+      ["b", { ok: false, detail: "refused" }],
+    ])
+    const v = healthVerdict(
+      [
+        { name: "a", running: true },
+        { name: "b", running: true },
+        { name: "c", running: true, health: "healthy" },
+      ],
+      map,
+    )
+    expect(v.healthy).toBe(false)
+    expect(v.unhealthy).toEqual(["b"]) // "a" green via probe, "c" green via declared check
+    expect(v.detail).toContain("b:no-healthcheck+readiness-failed(refused)")
+  })
+})
+
+// ---- FIX ROUND 3 (R112b-7) -------------------------------------------------------------------
+// Audit-trail truthfulness, reproduced twice (verification/13_live_firecrawl.md R112-7, then
+// verification/13b_live_firecrawl_rerun.md:139): (a) the ledger read `firecrawl up` although the
+// phase ended HEALTH_FAILED — the outcome FIELD was already honest on disk (live row
+// 2026-10-20T10:52:59.099Z carries "outcome":"HEALTH_FAILED"), but the bare action verb invited
+// the misread; bare verbs are now reserved for green sequences. (b) tearDown printed `0 network(s)`
+// while down verifiably removed five — root cause: the count came from the POST-down residue
+// listing (empty by construction after a good down) AND compose networks carry no io.gsp.swarm.*
+// labels at all (FIX ROUND 2 citation), so a label-scoped count could never be non-zero. Counts
+// are now before/after deltas over the compose-labelled network scoping; a failed leg reports
+// "count unavailable", never a fabricated zero.
+
+describe("FIX3 R112b-7 — provenance verb and teardown count tell the truth", () => {
+  /** Stateful fake estate: five compose-project networks exist until `compose down` (or an
+   *  explicit `network rm`) removes them. The io.gsp-label network listing stays EMPTY throughout
+   *  — mirroring the real rendered compose, which is exactly why the old post-state message could
+   *  only ever print zero. */
+  function estateShim(initialNetworks: string[], opts: { failNetworkListing?: boolean } = {}) {
+    let networks = [...initialNetworks]
+    let downDone = false
+    const invocations: string[][] = []
+    const runner: DockerRunner = async (args) => {
+      invocations.push([...args])
+      const j = args.join(" ")
+      if (j.includes("network ls --filter label=com.docker.compose.project")) {
+        if (opts.failNetworkListing) return { exitCode: 1, stdout: "", stderr: "network ls denied (fixture)" }
+        return { exitCode: 0, stdout: downDone ? "" : networks.join("\n"), stderr: "" }
+      }
+      if (j.includes(" compose ") && j.trimEnd().endsWith(" down")) {
+        downDone = true
+        networks = []
+        return { exitCode: 0, stdout: "", stderr: "" }
+      }
+      if (j.includes("network rm ")) {
+        const id = args.at(-1) ?? ""
+        networks = networks.filter((x) => x !== id)
+        return { exitCode: 0, stdout: "", stderr: "" }
+      }
+      return { exitCode: 0, stdout: "", stderr: "" } // io.gsp label listings (container/volume/image): nothing lingering
+    }
+    return { runner, invocations }
+  }
+  const FC_NETWORKS = ["swarm-tools_fc-edge", "swarm-tools_fc-ctl", "swarm-tools_fc-data", "swarm-tools_fc-web", "swarm-tools_fc-iso"]
+
+  it("five networks removed by down are reported as FIVE, not zero (message + ledger)", async () => {
+    const home = freshHome("teardown-count")
+    stageArtefacts(home)
+    writeSecrets(home, "firecrawl")
+    const est = estateShim(FC_NETWORKS)
+    const st = readyState("firecrawl")
+    st.components.firecrawl = { state: STATES.HEALTHY }
+    const kit = createStepKit({ componentId: "firecrawl", lock: LOCK, state: st, dryRun: false, consentGate: () => true })
+    const out = await tearDown({ kit, plan: firecrawlPlan(home), run: est.runner })
+    expect(out.token).toBe(OUTCOME.OK)
+    expect(out.networksRemoved).toBe(5)
+    expect(out.message).toContain("5 network(s) removed")
+    expect(out.message).not.toContain("0 network(s)")
+    const rows = readStackProvenanceRecords()
+    expect(rows.at(-1)?.action).toBe("down") // completed removal keeps the bare verb
+    expect(rows.at(-1)?.networksRemoved).toBe(5)
+  })
+
+  it("a compose-down failure writes a ledger row that ADMITS failure (the old code wrote none at all)", async () => {
+    const home = freshHome("teardown-downfail")
+    stageArtefacts(home)
+    writeSecrets(home, "searxng")
+    const shim = makeFakeDockerShim([
+      { match: " compose ", exitCode: 1, stderr: "error while removing network: network is busy" },
+    ])
+    const st = readyState("searxng")
+    st.components.searxng = { state: STATES.HEALTHY }
+    const kit = createStepKit({ componentId: "searxng", lock: LOCK, state: st, dryRun: false, consentGate: () => true })
+    const out = await tearDown({ kit, plan: searxngPlan(home), run: shim.runner })
+    expect(out.token).toBe(OUTCOME.FAILED)
+    expect(out.networksRemoved).toBeNull()
+    const rows = readStackProvenanceRecords()
+    expect(rows.length).toBe(1)
+    expect(rows[0]?.action).toBe("down-incomplete")
+    expect(rows[0]?.outcome).toBe("FAILED")
+  })
+
+  it("when the network listing fails the message SAYS unavailable instead of printing zero", async () => {
+    const home = freshHome("teardown-unknown")
+    stageArtefacts(home)
+    writeSecrets(home, "firecrawl")
+    const est = estateShim(FC_NETWORKS, { failNetworkListing: true })
+    const st = readyState("firecrawl")
+    st.components.firecrawl = { state: STATES.HEALTHY }
+    const kit = createStepKit({ componentId: "firecrawl", lock: LOCK, state: st, dryRun: false, consentGate: () => true })
+    const out = await tearDown({ kit, plan: firecrawlPlan(home), run: est.runner })
+    expect(out.token).toBe(OUTCOME.OK) // the removal itself still happened; only the COUNT is unknowable
+    expect(out.networksRemoved).toBeNull()
+    expect(out.message).toContain("network count unavailable (listing failed)")
+    expect(out.message).not.toContain("0 network(s)")
+    const rows = readStackProvenanceRecords()
+    expect(rows.at(-1)?.networksRemoved).toBeNull()
+  })
+
+  it("volume-deferral path also carries the truthful removal summary", async () => {
+    const home = freshHome("teardown-deferred")
+    stageArtefacts(home)
+    writeSecrets(home, "firecrawl")
+    let networks = [...FC_NETWORKS]
+    let downDone = false
+    const runner: DockerRunner = async (args) => {
+      const j = args.join(" ")
+      if (j.includes("network ls --filter label=com.docker.compose.project"))
+        return { exitCode: 0, stdout: downDone ? "" : networks.join("\n"), stderr: "" }
+      if (j.includes(" compose ") && j.trimEnd().endsWith(" down")) {
+        downDone = true
+        networks = []
+        return { exitCode: 0, stdout: "", stderr: "" }
+      }
+      if (j.includes("volume ls")) return { exitCode: 0, stdout: "drift-vol", stderr: "" } // labelled drift -> ask
+      return { exitCode: 0, stdout: "", stderr: "" }
+    }
+    const st = readyState("firecrawl")
+    st.components.firecrawl = { state: STATES.HEALTHY }
+    const kit = createStepKit({ componentId: "firecrawl", lock: LOCK, state: st, dryRun: false, consentGate: () => true })
+    const out = await tearDown({ kit, plan: firecrawlPlan(home), run: runner })
+    expect(out.token).toBe(OUTCOME.SKIPPED_WITH_INSTRUCTIONS)
+    expect(out.networksRemoved).toBe(5)
+    expect(out.message).toContain("5 network(s) removed")
+    expect(out.message).toContain("volumes hold possible data") // the P-14 ask survives the rewrite
+    const rows = readStackProvenanceRecords()
+    expect(rows.at(-1)?.action).toBe("down-incomplete") // deferred volumes = not a completed removal
+    expect(rows.at(-1)?.deferredVolumes).toEqual(["drift-vol"])
   })
 })

@@ -28,6 +28,18 @@
 //   (5) a data-only health-gate CONTRACT for row 93 (entrypoint-agnostic running/healthcheck posture —
 //       stock entrypoint.sh + command flags, NOT Pebble per the r77b correction; nothing here assumes a
 //       Pebble socket or wait command).
+//   (6) BOOT-CLASS audit (R112b-5, follows R112b-1) — the layer rows 1-3 of this file did not have. Presence,
+//       ACL-type and even `squid -k parse` all accept the shipping config (`verification/13b_live_firecrawl_rerun.md`
+//       §7 R112b-1/R112b-5), so this audit models what squid's option parser REGISTERS rather than whether the file
+//       parses: an inline `#` on an option-parsed port directive is refused (the exact R112b-1 shape, which left
+//       squid printing `ERROR: No forward-proxy ports configured.` 177 times before FATAL on the pinned 6.13 digest —
+//       $TMPDIR/swarm-setup-r112b-proofs/squid-cache.log), and the rendered config must yield at least one PARSEABLE
+//       non-zero forward-proxy port equal to PC-PORT-06. `bakeProofLayers()` states which claims are offline-proven
+//       and which stay live-only; `LIVE_BOOT_SIGNATURES` hands row 112 the log lines that name each boot failure class.
+//
+// HONESTY (offline green != live green): this verifier NEVER boots squid and cannot prove the proxy binds anything.
+// It proves the SHAPES that the pinned digest's own live A/B experiment showed to be fatal, plus register equality.
+// A green bake means "no offline-detectable boot-class defect", never "the container will serve".
 //
 // BOUNDARIES: zero port literals (PC_PORTS.squidContainer only, imported); zero @sha256 digest literals in
 // src (the cleared reference lives only in the test fixtures, mirroring r91's egress-pin fixtures); no
@@ -95,6 +107,23 @@ export const RESERVED_SQUID_ACL_NAMES: readonly string[] = [
   "CONNECT",
 ]
 
+/** Directives whose ARGUMENTS go through squid's option/port-list parser — the class R112b-1 proved is
+ *  boot-critical in a way its GRAMMAR is not. `http_port` is the boot-proven member: on the pinned digest
+ *  (`squid 6.13`) the rendered line `http_port <PC-PORT-06>   # PC-PORT-06 (unpublished; …)` booted, printed
+ *  `ERROR: No forward-proxy ports configured.` 177 times and FATALed at
+ *  `mimeLoadIcon: cannot parse internal URL: http://<host>:0/…` ($TMPDIR/swarm-setup-r112b-proofs/squid-cache.log:24
+ *  and its tail); deleting ONLY that trailing comment on an otherwise byte-identical conf made the error disappear
+ *  entirely (…/squid-cache-p1.log has zero occurrences) while every OTHER inline comment in the file stayed put —
+ *  which is why this refusal list is the port-directive pair and NOT a blanket "no inline comments anywhere" rule
+ *  (a blanket rule would refuse directives the live run shows to be tolerated, forcing churn in row 85's render).
+ *  `https_port` is included as the SAME parser code path's other member — that equivalence is a labelled
+ *  HYPOTHESIS (source-level inference), not a second boot experiment. Row 85 keeps a WIDER render-side list of the same
+ *  class in `src/composefiles/lint.ts:SQUID_INLINE_COMMENT_DIRECTIVES` (ftp_port, cache*, access_log, dns_v4_first, …);
+ *  this list stays deliberately narrow — it is what a BOOT observation justifies — and the two are pinned against each
+ *  other by a test named cross-layer pin in test/egress_bake.test.ts rather than shared, so a renderer edit can never
+ *  narrow the audit by itself. */
+export const OPTION_PARSED_PORT_DIRECTIVES: readonly string[] = ["http_port", "https_port"]
+
 export type BakeCode =
   | "ARTEFACT_MISSING"
   | "PIN_UNUSABLE"
@@ -113,6 +142,10 @@ export type BakeCode =
   | "NOCACHE_MISSING"
   | "SQUID_GRAMMAR_INVALID"
   | "SQUID_RESERVED_ACL_NAME"
+  | "SQUID_INLINE_COMMENT_ON_DIRECTIVE"
+  | "SQUID_PORT_OPTION_UNPARSED"
+  | "SQUID_FORWARD_PORT_UNREGISTERED"
+  | "SQUID_FORWARD_PORT_MISMATCH"
   | "MODE_SECRETS_DIR"
   | "MODE_SECRET_FILE"
   | "MODE_ENTRYPOINT_WRAP"
@@ -303,6 +336,9 @@ export function verifyEgressBake(opts: VerifyOptions): EgressBakeVerdict {
   findings.push(...assertNoReservedAclNames(confText))
   // (cross-enforcer) L3 urlpolicy ⇄ L4 squid must deny the IDENTICAL set, each a superset of the twelve.
   findings.push(...crossEnforcerAgreement(confText))
+  // (R112b-5 BOOT-CLASS) presence/parse-level layers above are all blind to a config that parses but registers no
+  // forward-proxy port, so this refusal runs too — R112b-1's shape must fail the bake, not reach the VM.
+  findings.push(...auditBootClass(confText))
   // (R112-5) file-mode posture is a DISK fact: only asserted when the artefacts were read from a real tools root
   // (production/row-93 posture). In-memory mismatch tests pass texts directly and skip this by design.
   if (opts.confText === undefined && opts.composeText === undefined && opts.home !== undefined) {
@@ -333,6 +369,207 @@ export function assertNoReservedAclNames(confText: string): BakeFinding[] {
     }
   }
   return findings
+}
+
+/** Boot-class audit (R112b-5). Where the other layers ask "is the policy present and does the text parse?", this one
+ *  asks the next question — "would squid actually REGISTERS a forward-proxy listener from these directive shapes?" —
+ *  because the live re-run proved the gap empirically: the shipping config passed `assertNoReservedAclNames`, the
+ *  type-based §10.4 audit AND `squid -k parse`, then booted, printed `ERROR: No forward-proxy ports configured.`
+ *  177 times and FATALed with an internal URL on port 0 (`$TMPDIR/swarm-setup-r112b-proofs/squid-cache.log:24`, `:204`,
+ *  `grep -c` = 177), while a byte-identical conf with ONLY the `http_port` trailing comment deleted produced zero such
+ *  errors (`…/squid-cache-p1.log`, `grep -c` = 0). Two offline-detectable faces of that class are refused here:
+ *  (1) an inline comment on an option-parsed port directive, and (2) a port directive that yields no parseable
+ *  non-zero forward-proxy port, or one that disagrees with PC-PORT-06 (the port PROXY_SERVER points at). This is a
+ *  SHAPE model calibrated to that single A/B experiment — it is NOT a squid lexer reimplementation and it does not
+ *  boot anything; `bakeProofLayers()` states which part of the claim is offline-proven and which stays live-only. */
+export function auditBootClass(confText: string): BakeFinding[] {
+  const findings: BakeFinding[] = []
+  const lines = confText.split("\n")
+  const forwardPorts: number[] = []
+  let sawPortDirective = false
+  let sawAccelOnly = false
+  let commentedPortLines = 0
+  let perLineUnregistered = 0
+
+  for (let i = 0; i < lines.length; i++) {
+    const raw = lines[i] ?? ""
+    const m = raw.match(/^\s*(https?_port)\b(.*)$/) // full-line comments cannot reach here: `#` is not \s
+    if (!m) continue
+    const rest = m[2] ?? ""
+    const where = `line ${i + 1}: ${raw.trim()}`
+    sawPortDirective = true
+
+    if (rest.includes("#")) {
+      commentedPortLines++
+      findings.push({
+        code: "SQUID_INLINE_COMMENT_ON_DIRECTIVE",
+        item: `${where} — inline comment on an option-parsed directive`,
+        hint: "R112b-1 ($TMPDIR/swarm-setup-r112b-proofs/squid-cache.log:24,:204 vs squid-cache-p1.log): on squid 6.13 this shape boots but registers NO forward-proxy port (`ERROR: No forward-proxy ports configured.` → FATAL mimeLoadIcon port :0), and `squid -k parse` accepts it silently. Move the comment to its own line (row 85 owns the render).",
+      })
+      continue
+    }
+
+    const tokens = tokenizeDirectiveArgs(rest)
+    const port = tokens.length > 0 ? portSpecValue(tokens[0] ?? "") : null
+    if (port === null) {
+      perLineUnregistered++
+      findings.push({
+        code: "SQUID_FORWARD_PORT_UNREGISTERED",
+        item: `${where} — ${tokens.length === 0 ? "no port argument" : `port spec "${tokens[0]}" is not a parseable non-zero port`}`,
+        hint: "boot-class assertion: squid only serves forward proxy traffic when an http_port/https_port line parses to a listener; the live symptom of getting this wrong is `ERROR: No forward-proxy ports configured.` (squid-cache.log:24). A missing or malformed port means no filtered egress path at all.",
+      })
+      continue
+    }
+
+    const opts = tokens.slice(1)
+    const junk = opts.filter((t) => !PORT_OPTION_TOKEN.test(unquote(t)))
+    if (junk.length > 0)
+      findings.push({
+        code: "SQUID_PORT_OPTION_UNPARSED",
+        item: `${where} — non-option token(s) [${junk.join(" ")}] after the port spec`,
+        hint: "generalisation of the R112b-1 class (HYPOTHESIS, not boot-proven beyond the inline-comment case): everything after an http_port port spec must be a squid port option (`flag` or `key=value`), otherwise the rest of the line is parsed as further port specs/options and the intended listener can vanish. Kept separate from UNREGISTERED so a valid port with a suspect option is not double-reported.",
+      })
+    if (opts.some((t) => unquote(t).toLowerCase().split("=")[0] === "accel")) sawAccelOnly = true // accel = web accelerator, not a forward-proxy listener
+    else forwardPorts.push(port)
+  }
+
+  if (forwardPorts.length === 0 && perLineUnregistered === 0) {
+    const reason = !sawPortDirective
+      ? `no ${OPTION_PARSED_PORT_DIRECTIVES.join("/")} directive in the rendered conf`
+      : commentedPortLines > 0
+        ? `${commentedPortLines} port line(s) refused above for an inline comment, so no forward-proxy listener was registered`
+        : sawAccelOnly
+          ? "every declared port is accel-mode (web accelerator), so no forward-proxy listener exists"
+          : "no declared port line yielded a forward-proxy listener"
+    findings.push({
+      code: "SQUID_FORWARD_PORT_UNREGISTERED",
+      item: reason,
+      hint: "the bake's boot-class stand-in for a real boot: without a parseable non-zero http_port the pinned digest exits 1 after `ERROR: No forward-proxy ports configured.` (squid-cache.log:24) and Playwright's PROXY_SERVER route has nothing to talk to. Only a live bind proves the listener really exists — see bakeProofLayers().liveOnly.",
+    })
+  } else if (forwardPorts.length > 0 && !forwardPorts.includes(PC_PORTS.squidContainer)) {
+    findings.push({
+      code: "SQUID_FORWARD_PORT_MISMATCH",
+      item: `rendered forward-proxy port(s) [${forwardPorts.join(", ")}] do not include PC-PORT-06 (${PC_PORTS.squidContainer}) that PROXY_SERVER targets`,
+      hint: "the conf and the enforced route must name the same port; today only the route side derived from PC_PORTS (PROXY_ROUTE_UNSET), so a conf listening elsewhere would have baked green while every browser fetch failed. Register value imported, never re-spelled.",
+    })
+  }
+
+  return findings
+}
+
+/** What each layer of this bake actually establishes — machine-readable honesty about the four-layer blind spot
+ *  R112b-1 exposed (presence grep → ACL/type audit → `squid -k parse` → real boot: the first three were all green
+ *  on a config that could not serve a single request, `verification/13b_live_firecrawl_rerun.md` §7 R112b-1/R112b-5).
+ *  Row 93/112 read this instead of inferring the bake's reach from prose. */
+export interface EgressProofLayers {
+  /** Deterministic artefact facts this bake proves offline. */
+  readonly offlineProven: readonly string[]
+  /** Offline rules whose SOUNDNESS rests on one live observation or on source-level inference — labelled, not hidden. */
+  readonly offlineInferred: readonly string[]
+  /** Claims no offline check can make; only a live boot/pull can close them. */
+  readonly liveOnly: readonly string[]
+}
+
+export function bakeProofLayers(): EgressProofLayers {
+  return {
+    offlineProven: [
+      "rendered compose image == tools.lock.json egress_proxy_image pin; conf bound at the path the command loads via -f; PROXY_SERVER routes at egress-proxy:PC-PORT-06 (IMAGE_PIN_MISMATCH / CONF_BIND_MISSING / CMD_CONF_MISMATCH / PROXY_ROUTE_UNSET)",
+      "all twelve §10.4 classes appear in a DENIED dst ACL and the dstdomain pair covers localhost + .local, deny-then-default-deny ordering included (auditSquidConf / crossEnforcerAgreement)",
+      "no ACL redeclares a squid-predefined name (assertNoReservedAclNames; R112-1 closed live by r85-fix5)",
+      "secret dir/file modes and executable /docker-entrypoint.d wraps over a real tools root (auditFileModes; R112-5)",
+      "no inline comment sits on an option-parsed port directive, and the port directive parses to a non-zero port equal to PC-PORT-06 (auditBootClass; R112b-1/R112b-5)",
+    ],
+    offlineInferred: [
+      "that an inline comment on http_port is what removed the listener — one live A/B pair (squid-cache.log vs squid-cache-p1.log) establishes the correlation, not a parser reimplementation",
+      "that https_port behaves like http_port (same option-parser family; HYPOTHESIS, never booted here)",
+      "that accel-mode ports do not count as forward-proxy listeners — model of the predicate squid's own error line is printed from, not verified against the digest in this row",
+      "that inline comments on OTHER directives are safe — inferred from the p1 run, which booted past config processing with all of them in place",
+    ],
+    liveOnly: [
+      "squid actually binds PC-PORT-06 and answers a CONNECT (needs `docker exec`/a probe inside the VM; rows 93/112)",
+      "whether `access_log stdio:/dev/stdout` is writable by cache_effective_user in the estate container — the verifier's throwaway run FATALed on exactly this (squid-cache-p1.log:19) and the estate never got far enough to show it",
+      "`ERROR: Directive 'dns_v4_first' is obsolete.` noise on the pinned 6.13 digest (squid-cache-p1.log:2) — spec-mandated directive vs pinned release, decision for rows 75/85",
+      "per-target SSRF refusals for the six §10.6 targets and the idle zero-line/control-line audit pair",
+      "the image pull itself, digest resolution and any daemon-side enforcement (`--pull never`) — rows 93/112",
+    ],
+  }
+}
+
+/** A cache.log/stdout line that names a specific boot failure, with who owns it. Row 112 attempt 3 can grep a
+ *  container log through `explainLiveLog` instead of re-deriving these from memory: every entry is a VERBATIM line
+ *  already observed on the pinned digest, so a match is an identification, not a guess. Read-only helper — the bake
+ *  never sees a live log itself (it spawns nothing); row 93/112's driver feeds it one. */
+export interface LiveBootSignature {
+  readonly signature: string
+  readonly meaning: string
+  readonly provenBy: string
+  readonly owner: string
+  /** Whether row 92's offline bake now refuses the shape that causes it. */
+  readonly caughtOfflineBy: string
+}
+
+export const LIVE_BOOT_SIGNATURES: readonly LiveBootSignature[] = [
+  {
+    signature: "ERROR: No forward-proxy ports configured.",
+    meaning: "squid started but registered no forward-proxy listener: the egress filter exists only as a file",
+    provenBy: "$TMPDIR/swarm-setup-r112b-proofs/squid-cache.log:24 (x177, grep -c)",
+    owner: "row 85 (squid_conf render) — R112b-1",
+    caughtOfflineBy: "SQUID_INLINE_COMMENT_ON_DIRECTIVE + SQUID_FORWARD_PORT_UNREGISTERED",
+  },
+  {
+    signature: "FATAL: mimeLoadIcon: cannot parse internal URL",
+    meaning: "downstream of the same cause: squid builds its internal-static URL from port 0 because no port registered",
+    provenBy: "$TMPDIR/swarm-setup-r112b-proofs/squid-cache.log:204",
+    owner: "row 85 — R112b-1 (symptom, not a separate defect)",
+    caughtOfflineBy: "same pair as above",
+  },
+  {
+    signature: "already exists with different type",
+    meaning: "an ACL line redeclares a squid-predefined name under a different type — boot FATAL",
+    provenBy: "verification/13_live_firecrawl.md:108 (image reservation note, transcribed into RESERVED_SQUID_ACL_NAMES)",
+    owner: "row 85 (render naming) — R112-1, CLOSED live by r85-fix5",
+    caughtOfflineBy: "SQUID_RESERVED_ACL_NAME",
+  },
+  {
+    signature: "can't create /docker-entrypoint.env: Read-only file system",
+    meaning: "the auth-proxy token hand-off writes to a read-only rootfs, so nginx starts without the token channel",
+    provenBy: "verification/13b_live_firecrawl_rerun.md:134 (R112b-2)",
+    owner: "row 85 (bin_scripts/nginx_template) — R112b-2",
+    caughtOfflineBy: "NOTHING — mode/exec-bit only (MODE_ENTRYPOINT_WRAP) cannot see the write target",
+  },
+  {
+    signature: 'unknown "swarm_firecrawl_token" variable',
+    meaning: "envsubst left the braced token in the template, so nginx parses it as its own variable and exits 1",
+    provenBy: "verification/13b_live_firecrawl_rerun.md:134 (R112b-2)",
+    owner: "row 85 — R112b-2",
+    caughtOfflineBy: "NOTHING — nginx-side, outside this bake's artefact surface",
+  },
+  {
+    signature: "wget: not found",
+    meaning: "a healthcheck calls a tool the pinned digest does not ship, so the gate can never go green",
+    provenBy: "verification/13b_live_firecrawl_rerun.md:135 (R112b-3)",
+    owner: "rows 85 (healthchecks) + 91 (gate) — R112b-3",
+    caughtOfflineBy: "NOTHING — needs the image's own filesystem; rows 93/112 probe it",
+  },
+  {
+    signature: "Directive 'dns_v4_first' is obsolete.",
+    meaning: "the pinned 6.13 digest rejects the §10.4-mandated directive with an ERROR line every boot (non-fatal)",
+    provenBy: "$TMPDIR/swarm-setup-r112b-proofs/squid-cache-p1.log:2",
+    owner: "rows 75 (spec bullet) + 85 (render) — audit-cleanliness decision, UNKNOWN whether fatal in combination",
+    caughtOfflineBy: "deliberately NOT refused: the directive is spec-mandated, so a bake refusal would pre-empt row 75",
+  },
+  {
+    signature: "Cannot open '/dev/stdout' for writing.",
+    meaning: "access_log stdio:/dev/stdout is not writable by cache_effective_user (proxy) in the container as run",
+    provenBy: "$TMPDIR/swarm-setup-r112b-proofs/squid-cache-p1.log:19",
+    owner: "rows 85 (render) + 112 (live verdict) — whether the estate entrypoint avoids this is UNKNOWN until http_port is fixed",
+    caughtOfflineBy: "NOTHING — writability inside the container is a live fact, not an artefact fact",
+  },
+]
+
+/** Match a live container log against LIVE_BOOT_SIGNATURES; returns every signature whose literal appears. */
+export function explainLiveLog(logText: string): LiveBootSignature[] {
+  return LIVE_BOOT_SIGNATURES.filter((s) => logText.includes(s.signature))
 }
 
 /** File-mode posture (R112-5, security-bearing). Two contracts, both real FS facts asserted only over a rendered
@@ -612,12 +849,12 @@ export async function bakeEgressProxy(opts: EgressBakeOptions): Promise<EgressBa
 
   kit.log(
     "info",
-    `firecrawl egress-proxy ${where}bake green — rendered conf matches the pinned digest, deny-list wired, hardening + no-cache present`,
+    `firecrawl egress-proxy ${where}bake green — rendered conf matches the pinned digest, deny-list wired, hardening + no-cache present, boot-class directive shapes refused-clean`,
     { context: { imageRef: verdict.imageRef, confPath: verdict.confPath } },
   )
   return {
     token: OUTCOME.OK,
-    message: `egress-proxy bake green: rendered squid.conf matches the locked pin (${verdict.imageRef}); SSRF deny-ranges present and wired; real pull/serve verified live by rows 93/112`,
+    message: `egress-proxy bake green: rendered squid.conf matches the locked pin (${verdict.imageRef}); SSRF deny-ranges present and wired; boot-class audit clean (no inline comment on http_port, a non-zero forward-proxy port equal to PC-PORT-06). OFFLINE GREEN IS NOT LIVE GREEN: nothing here proves squid binds that port or serves a CONNECT — pull, bind and per-target refusals stay rows 93/112 (see bakeProofLayers().liveOnly).`,
     verdict,
   }
 }
@@ -661,6 +898,41 @@ function matchAllValues(lines: readonly string[], re: RegExp): string[] {
   }
   return out
 }
+
+// --- boot-class parsers (shape of a directive line, NOT squid's lexer) ---------------------------------------
+
+/** Split the argument remainder of a directive line into squid-shaped tokens: whitespace-separated runs where a
+ *  double-quoted span is part of the SAME token (`name="edge proxy"` is one option to squid; splitting it at the
+ *  space would invent a false SQUID_PORT_OPTION_UNPARSED on a legal config). */
+function tokenizeDirectiveArgs(rest: string): string[] {
+  return rest.match(/(?:[^\s"]|"[^"]*")+/g) ?? []
+}
+
+function unquote(token: string): string {
+  return token.startsWith('"') && token.endsWith('"') ? token.slice(1, -1) : token
+}
+
+/** The port a squid port spec would register, or null when it registers none. Covers `PORT`, `ADDR:PORT` and
+ *  `[V6ADDR]:PORT`. Zero and out-of-range are "no listener" on purpose: R112b-1's FATAL built its internal URL
+ *  from port 0 (`squid-cache.log:204`), which is exactly the value this assertion must refuse. */
+function portSpecValue(spec: string): number | null {
+  const closingBracket = spec.lastIndexOf("]")
+  const portPart =
+    closingBracket >= 0
+      ? spec.slice(closingBracket + 1).replace(/^:/, "")
+      : spec.includes(":")
+        ? spec.slice(spec.lastIndexOf(":") + 1)
+        : spec
+  if (!/^\d+$/.test(portPart)) return null
+  const port = Number(portPart)
+  return port > 0 && port <= 65535 ? port : null
+}
+
+/** A squid port option is a bare flag or a `key=value` / `key,value` pair, where the value may itself be a quoted
+ *  span (`tproxy`, `speed=100kbit/s`, `name="edge proxy"`). Deliberately permissive — only shapes that cannot be
+ *  options at all are refused (e.g. the `(unpublished;` fragment a half-stripped comment leaves behind), so a
+ *  legitimate future option never fails this bake. */
+const PORT_OPTION_TOKEN = /^[A-Za-z_][A-Za-z0-9_]*([=,](?:"[^"]*"|\S)+)?$/
 
 // --- renamed-ACL-safe ACL helpers (key on ACL TYPE + http_access deny linkage, never the custom name) ------
 

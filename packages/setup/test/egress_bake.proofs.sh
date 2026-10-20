@@ -4,6 +4,10 @@
 # Targeted to packages/setup ONLY (row 102 runs the full suite). Binds NO port; makes NO network request;
 # touches NO real docker daemon; SPAWNS NO process — every claim is proven offline over artefacts staged by
 # CONSUMING the row-85 renderer interface. Safe to re-run.
+# WHAT OFFLINE CAN AND CANNOT PROVE (R112b-1's lesson, encoded in bakeProofLayers()): the layers here cover
+# artefact facts + directive SHAPES (the R112b-1 inline-comment class included); "squid binds PC-PORT-06 and answers
+# a CONNECT" is live-only and stays with rows 93/112. PROOF 7 (sibling rows) is opt-in via R92_REGRESS=1 per
+# driver_rules_s3 rule 6.
 set -u
 
 HERE="$(cd "$(dirname "$0")/.." && pwd)"            # .../packages/setup
@@ -56,14 +60,16 @@ bun build --compile --target=bun --outfile "$WORK/bin/egress_bake" "$HERE/$MY_SR
 check "bun build --compile $MY_SRC" 0 $?
 file "$WORK/bin/egress_bake" | grep -q "Mach-O" && { echo "  PASS egress_bake is Mach-O arm64"; pass=$((pass+1)); } || { echo "  FAIL egress_bake not Mach-O"; fail=$((fail+1)); }
 
-echo "=== PROOF 2: unit suite (twelve-class deny-rule parse-and-assert / cross-enforcer equality / pin fail-closed / config correctness / contract / consent+dry-run) ==="
+echo "=== PROOF 2: unit suite (twelve-class deny-rule parse-and-assert / cross-enforcer equality / BOOT-CLASS R112b-1 / pin fail-closed / config correctness / contract / consent+dry-run) ==="
 ( cd "$HERE" && bun test "$MY_TEST" ) > "$WORK/bun-test.log" 2>&1
 rc=$?
 tail -5 "$WORK/bun-test.log"
 check "bun test $MY_TEST" 0 $rc
-grep -qE " 54 pass" "$WORK/bun-test.log" && { echo "  PASS 54 unit tests reported"; pass=$((pass+1)); } || { echo "  FAIL expected 54 passes"; fail=$((fail+1)); }
+grep -qE " 79 pass" "$WORK/bun-test.log" && { echo "  PASS 79 unit tests reported"; pass=$((pass+1)); } || { echo "  FAIL expected 79 passes"; fail=$((fail+1)); }
 
 echo "=== PROOF 3: OFFLINE bake demo — no docker, no spawn, no network; artefacts via the r85 render interface ==="
+echo "    (honesty: this proves ARTEFACT + DIRECTIVE-SHAPE facts. It cannot boot squid, so 'binds PC-PORT-06' is"
+echo "     declared live-only by bakeProofLayers() below and stays row 93/112 territory.)"
 export HOME="$WORK/home-bake"; mkdir -p "$HOME"
 export R92_ROOT="$HERE"
 cat > "$WORK/bake-demo.ts" <<'TS'
@@ -73,9 +79,17 @@ const home = process.env.HOME!;
 // modules resolved through R92_ROOT (exported by this harness) — no machine path baked in;
 // same env+dynamic-import pattern as runtime/compose/stepkit proofs. stepsRoot() is module-relative.
 const { validateLock } = await import(`${root}/src/lockfile.ts`);
-const { SECRET_INVENTORY, pathsFor } = await import(`${root}/src/composefiles/shared.ts`);
+const { SECRET_INVENTORY, pathsFor, PC_PORTS } = await import(`${root}/src/composefiles/shared.ts`);
 const { renderAll, applyRenderedFiles } = await import(`${root}/src/composefiles/index.ts`);
-const { verifyEgressBake, auditSquidConf, crossEnforcerAgreement, assertNoReservedAclNames, auditFileModes, REQUIRED_DENY_RANGES } = await import(`${root}/src/steps/firecrawl/egress_bake.ts`);
+const { verifyEgressBake, auditSquidConf, crossEnforcerAgreement, assertNoReservedAclNames, auditFileModes, auditBootClass, bakeProofLayers, REQUIRED_DENY_RANGES } = await import(`${root}/src/steps/firecrawl/egress_bake.ts`);
+// Fixture builders for the R112b-1 shape and its correction (twins of the ones in test/egress_bake.test.ts; in-memory
+// only — this demo writes nothing into the staged estate). r112b1Shape re-attaches a trailing comment to a BARE
+// http_port line; if the renderer still carries one, its text already IS the shape and passes through unchanged.
+const r112b1Shape = (t: string): string => t.replace(/^(\s*https?_port[^\n#]*?)\s*$/m, (_a, head: string) => `${head}   # PC-PORT-06 (unpublished; fc-ctl only)`);
+const portCommentsFixed = (t: string): string => t.split("\n").flatMap((l: string) => {
+  const m = l.match(/^(\s*(?:https?_port)\b[^#]*)#\s*(.*)$/);
+  return m ? [(m[1] ?? "").trimEnd(), `  # ${m[2] ?? ""}`] : [l];
+}).join("\n");
 const { isDeniedAddress } = await import(`${root}/src/mcpproxy/urlpolicy.ts`);
 const lock = validateLock(JSON.parse(await Bun.file(`${root}/tools.lock.json`).text()));
 if (!lock.ok) throw new Error(lock.error);
@@ -104,9 +118,10 @@ ok("reserved-name lint CLEAN once named away (rename-target)", assertNoReservedA
   chmodSync(wrap, 0o700);
   ok("owner-exec wrap clears MODE_ENTRYPOINT_WRAP", !auditFileModes(tr, cwx).some((f)=>f.code==="MODE_ENTRYPOINT_WRAP"));
   rmSync(wrap, { force: true }); }
-// green bake against the rename target (works whether or not the render already renamed):
-const vg = verifyEgressBake({ lock: lock.lock, home, composeText: composeNow, confText: confNow.replace(/\bto_localhost\b/g,"swarm_hostnames") });
-ok("green bake against the renamed (r85-fix5 target) conf", vg.ok && vg.findings.length === 0);
+// green bake against the TARGET shape (rename + comment off the port directive; works whether or not r85-fix5/fix6 have landed):
+const targetConf = portCommentsFixed(confNow.replace(/\bto_localhost\b/g,"swarm_hostnames"));
+const vg = verifyEgressBake({ lock: lock.lock, home, composeText: composeNow, confText: targetConf });
+ok("green bake against the target-shape conf (r85-fix5 rename + r85-fix6 comment move)", vg.ok && vg.findings.length === 0);
 
 // (b) tag-only pin fails closed BEFORE any artefact is needed
 const p = lock.lock.components.firecrawl as Record<string, unknown>;
@@ -133,10 +148,42 @@ ok("cross-enforcer hook green on the shipped render", crossEnforcerAgreement(con
 const diverged = conf.split("\n").map((l)=> /\bacl\s+to_localnet\s+dst\b/.test(l) ? l.replace(" 0.0.0.0/8","") : l).join("\n");
 ok("squid drops 0.0.0.0/8 but urlpolicy denies it -> CROSS_ENFORCER_DIVERGENCE", crossEnforcerAgreement(diverged).some((f)=>f.code==="CROSS_ENFORCER_DIVERGENCE" && f.item.includes("0.0.0.0/8")));
 
+// (f) BOOT-CLASS audit (R112b-1 -> R112b-5): refuse the shape that PARSES but registers no forward-proxy port, and prove
+//     the three older layers cannot see it. Fixtures are derived from the target-shape artefact, so they bite in both
+//     worlds — renderer fixed or not.
+const b1Bad = r112b1Shape(targetConf);
+const b1Codes = auditBootClass(b1Bad).map((f)=>f.code);
+ok("NEGATIVE CONTROL: R112b-1 shape -> SQUID_INLINE_COMMENT_ON_DIRECTIVE", b1Codes.includes("SQUID_INLINE_COMMENT_ON_DIRECTIVE"));
+ok("NEGATIVE CONTROL: R112b-1 shape -> SQUID_FORWARD_PORT_UNREGISTERED", b1Codes.includes("SQUID_FORWARD_PORT_UNREGISTERED"));
+ok("BLIND SPOT CONFIRMED: auditSquidConf + reserved-lint + cross-enforcer all silent on that text",
+   auditSquidConf(b1Bad).length===0 && assertNoReservedAclNames(b1Bad).length===0 && crossEnforcerAgreement(b1Bad).length===0);
+ok("POSITIVE CONTROL: comment on its own line -> boot-class audit CLEAN", auditBootClass(targetConf).length===0);
+const vb = verifyEgressBake({ lock: lock.lock, home, composeText: composeNow, confText: b1Bad });
+ok("end-to-end: verifyEgressBake REFUSES the R112b-1 config (fail-closed onto F-3)", !vb.ok && vb.findings.map((f)=>f.code).includes("SQUID_INLINE_COMMENT_ON_DIRECTIVE"));
+const wrongPort = targetConf.replace(/^(\s*https?_port)\s*\d+.*$/m, (_m, d: string) => `${d} ${PC_PORTS.squidContainer + 1}`);
+ok("conf port other than PC-PORT-06 -> SQUID_FORWARD_PORT_MISMATCH", auditBootClass(wrongPort).some((f)=>f.code==="SQUID_FORWARD_PORT_MISMATCH"));
+
+// (g) PROOF-LAYER DECLARATION + soft calibration against row 112's live A/B logs (read-only; absent => UNKNOWN, never a pass)
+const layers = bakeProofLayers();
+console.log(`  INFO  bakeProofLayers(): offlineProven=${layers.offlineProven.length} offlineInferred=${layers.offlineInferred.length} liveOnly=${layers.liveOnly.length}`);
+for (const l of layers.liveOnly) console.log(`        LIVE-ONLY (only a real boot/pull proves this): ${l}`);
+ok("declaration keeps a non-empty live-only set (offline green never claims a bound port)", layers.liveOnly.length > 0 && layers.offlineInferred.length > 0);
+{ const base = (process.env.TMPDIR ?? "").replace(/\/$/,""); const dir = base ? `${base}/swarm-setup-r112b-proofs` : "";
+  const badLog = dir ? `${dir}/squid-cache.log` : ""; const p1Log = dir ? `${dir}/squid-cache-p1.log` : "";
+  if (badLog && p1Log && await Bun.file(badLog).exists() && await Bun.file(p1Log).exists()) {
+    const needle = "No forward-proxy ports configured.";
+    const badHits = (await Bun.file(badLog).text()).split("\n").filter((l)=>l.includes(needle)).length;
+    const p1Hits = (await Bun.file(p1Log).text()).split("\n").filter((l)=>l.includes(needle)).length;
+    console.log(`  INFO  live A/B calibration (verifier scratch, read-only): bad-shape log ${badHits}x / corrected-shape log ${p1Hits}x '${needle}'`);
+    ok("offline rule agrees with the live A/B direction (bad>0, corrected==0)", badHits>0 && p1Hits===0);
+  } else {
+    console.log("  UNKNOWN  live A/B logs absent — the offline rule rests on the shipped fixture only (not reported as passed)");
+  } }
+
 process.exit(bad===0 ? 0 : 1);
 TS
 bun run "$WORK/bake-demo.ts"
-check "offline bake demo (green + pin/drift/deny assertions)" 0 $?
+check "offline bake demo (green + pin/drift/deny + R112b-1 boot-class controls + proof layers)" 0 $?
 
 echo "=== PROOF 4: security grep gates ==="
 # 4a: zero port / IP:port literals anywhere in row-92 files (ports come only from PC_PORTS).
@@ -168,18 +215,25 @@ for f in s86_runtime_step.md s88_graft_step.md s89_rtk_step.md s90_obsidian_step
   if [ -f "$HERE/../../../docs/2026-10-19_opencode_swarm_rebrand/implementation/$f" ]; then echo "  landed: $f"; else echo "  NOT landed (in flight): $f"; fi
 done
 
-echo "=== PROOF 7: cross-row regressions (same package, shared typecheck surface) — reported ==="
-run_proof () { # run_proof <file> <summary-grep>
-  local out; out="$(bash "$HERE/test/$1" 2>&1)"
-  echo "$out" | grep -E "$2" | tail -1
-}
-echo "  r81 $(run_proof proofs.sh 'SUMMARY')"
-echo "  r82 $(run_proof fetch.proofs.sh 'row-82 proofs')   <- may show 7/8: 3a trips on ROW 86 runtime/capture.ts regex (routed regex), NOT row 92"
-echo "  r83 $(run_proof consent.proofs.sh 'SUMMARY')"
-echo "  r84 $(run_proof stepkit.proofs.sh 'row-84 proofs')"
-echo "  r85 $(run_proof compose.proofs.sh 'row-85 proofs')"
-echo "  r87 $(run_proof node.proofs.sh 'row-87 proofs' 2>/dev/null || true)"
-echo "  r91 $(run_proof stack.proofs.sh 'SUMMARY')"
+echo "=== PROOF 7: cross-row regressions (same package, shared typecheck surface) — OPT-IN ==="
+# driver_rules_s3 rule 6: run ONLY this row's targeted suite + the workspace typecheck. Sibling proof scripts are
+# other rows' suites, so they are opt-in here (same pattern as r91's R91_REGRESS gate) instead of running by default.
+if [ "${R92_REGRESS:-0}" = "1" ]; then
+  run_proof () { # run_proof <file> <summary-grep>
+    local out; out="$(bash "$HERE/test/$1" 2>&1)"
+    echo "$out" | grep -E "$2" | tail -1
+  }
+  echo "  r81 $(run_proof proofs.sh 'SUMMARY')"
+  echo "  r82 $(run_proof fetch.proofs.sh 'row-82 proofs')   <- may show 7/8: 3a trips on ROW 86 runtime/capture.ts regex (routed regex), NOT row 92"
+  echo "  r83 $(run_proof consent.proofs.sh 'SUMMARY')"
+  echo "  r84 $(run_proof stepkit.proofs.sh 'row-84 proofs')"
+  echo "  r85 $(run_proof compose.proofs.sh 'row-85 proofs')"
+  echo "  r87 $(run_proof node.proofs.sh 'row-87 proofs' 2>/dev/null || true)"
+  echo "  r91 $(run_proof stack.proofs.sh 'SUMMARY')"
+else
+  echo "  SKIPPED (default) — rule 6 targeted-only. Set R92_REGRESS=1 to run r81-r87+r91 serially; sibling deltas"
+  echo "  during concurrent fix rounds are attributed in implementation/s92_egress_bake.md."
+fi
 
 echo "=== SUMMARY: $pass passed, $fail failed ==="
 [ "$fail" = "0" ] && exit 0 || exit 1

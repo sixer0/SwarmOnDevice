@@ -46,7 +46,15 @@ export const step: StepModule = {
       }
     }
 
-    const out = await bringUp({ kit, plan: firecrawlPlan(), run: ctx.docker })
+    // readiness (2026-10-20 healthcheck-contract ruling) rides through from the engine context;
+    // with no prober wired the no-healthcheck services (api/playwright/egress-proxy once row 85
+    // drops their wget checks) stay red by design — fail-closed, named per service in the verdict.
+    const out = await bringUp({
+      kit,
+      plan: firecrawlPlan(),
+      run: ctx.docker,
+      ...(ctx.readiness ? { readiness: ctx.readiness } : {}),
+    })
     return { token: out.token, message: out.message }
   },
 

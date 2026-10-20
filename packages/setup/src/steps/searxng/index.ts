@@ -5,6 +5,8 @@
 //
 // No docker spawn, no port literal, no network primitive lives here: the runner is injected
 // by the engine (StackStepContext.docker, row 93 wiring); without it the step refuses honestly.
+// The host-side readiness prober (StackStepContext.readiness, 2026-10-20 healthcheck-contract
+// ruling) is likewise engine-injected and forwarded verbatim — this step owns no probing itself.
 
 import { createStepKit } from "../../stepkit.ts"
 import { bringUp, runnerGuard, searxngPlan, tearDown, type StackStepContext } from "../../stacklib.ts"
@@ -19,7 +21,7 @@ export const step: StepModule = {
     const guard = runnerGuard(ctx)
     if (guard) return guard
     const kit = createStepKit({ componentId: "searxng", lock: ctx.lock, state: ctx.state, dryRun: ctx.dryRun })
-    const out = await bringUp({ kit, plan: searxngPlan(), run: ctx.docker })
+    const out = await bringUp({ kit, plan: searxngPlan(), run: ctx.docker, ...(ctx.readiness ? { readiness: ctx.readiness } : {}) })
     return { token: out.token, message: out.message }
   },
 

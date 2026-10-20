@@ -28,16 +28,24 @@ import { createStepKit } from "../src/stepkit.ts"
 import { SECRET_INVENTORY, pathsFor, PC_PORTS } from "../src/composefiles/shared.ts"
 import { renderAll, applyRenderedFiles } from "../src/composefiles/index.ts"
 import { renderSquidConf } from "../src/composefiles/squid_conf.ts"
+// r85-fix6's render-side rule for the same R112b-1 class — imported for the DRIFT PIN below, deliberately NOT used by
+// the bake's own audit (see the "(cross-layer pin)" describe for why the two rulebooks stay separate).
+import { findDirectiveInlineComments, SQUID_INLINE_COMMENT_DIRECTIVES } from "../src/composefiles/lint.ts"
 import { discoverSteps } from "../src/steps.ts"
 import { isDeniedAddress } from "../src/mcpproxy/urlpolicy.ts"
 import {
   assertNoReservedAclNames,
+  auditBootClass,
   auditFileModes,
   auditSquidConf,
   bakeEgressProxy,
+  bakeProofLayers,
   crossEnforcerAgreement,
   egressHealthContract,
+  explainLiveLog,
   verifyEgressBake,
+  LIVE_BOOT_SIGNATURES,
+  OPTION_PARSED_PORT_DIRECTIVES,
   REQUIRED_DENY_RANGES,
 } from "../src/steps/firecrawl/egress_bake.ts"
 
@@ -46,6 +54,32 @@ import {
  *  (it keys on ACL TYPE + deny linkage). Used to assert the verifier green against the TARGET artefact while the
  *  render still carries the reserved name — and to prove the lint by re-introducing the reserved name. */
 const v6RenameHostnames = (t: string): string => t.replace(/\bto_localhost\b/g, "swarm_hostnames")
+
+/** Build the EXACT R112b-1 defect shape from whatever the renderer currently emits: hang a trailing comment back on
+ *  the option-parsed `http_port` line (`verification/13b_live_firecrawl_rerun.md` §7 R112b-1: that comment alone made
+ *  squid 6.13 register no forward-proxy port). Works in both worlds — if the line is already bare (r85-fix6 landed)
+ *  the comment is re-attached; if it still carries one, the shipped text already IS the shape and is returned intact. */
+const r112b1Shape = (t: string): string =>
+  t.replace(/^(\s*https?_port[^\n#]*?)\s*$/m, (_all, head: string) => `${head}   # PC-PORT-06 (unpublished; fc-ctl only)`)
+
+/** The corrected shape row 85 owns: identical content, comment moved onto its own line (the fix 13b §7 prescribes:
+ *  "put the comment on its own line"). Idempotent when no port directive carries an inline comment. */
+const movePortCommentsToOwnLine = (t: string): string =>
+  t
+    .split("\n")
+    .flatMap((line) => {
+      const m = line.match(/^(\s*(?:https?_port)\b[^#]*)#\s*(.*)$/)
+      return m ? [(m[1] ?? "").trimEnd(), `  # ${m[2] ?? ""}`] : [line]
+    })
+    .join("\n")
+
+/** Comment-stripped, non-empty code lines — the only part of a squid conf an audit may depend on. Used to compare a
+ *  staged artefact with the raw render because the transitional rename rewrite legitimately touches comment text. */
+const codeLines = (t: string): string[] =>
+  t
+    .split("\n")
+    .map((l) => (l.split("#")[0] ?? "").trimEnd())
+    .filter((l) => l.length > 0)
 
 // Reference digests supplied by the controller brief (r78a ADDENDUM, re-fetch matched). Fixtures only — shipped
 // code never bakes a magic digest literal (it compares the compose against the lock, computed at runtime).
@@ -71,7 +105,14 @@ function freshHome(label: string): string {
   return home
 }
 
-/** Place the two compose stacks + generated configs under the throwaway tools root via the r85 interface. */
+/** Place the two compose stacks + generated configs under the throwaway tools root via the r85 interface, then rewrite
+ *  the STAGED squid.conf to the target shape (R112-1 hostname rename + R112b-1 comment off the port directive).
+ *  WHY THE REWRITE EXISTS: rows 92's green assertions must not depend on WHEN a sibling render fix lands, so the
+ *  disk-reading tests run against the shape a CORRECTED renderer produces — the same transitional staging r92-fix3
+ *  used for the hostname rename. It happens in a throwaway HOME before any bake call, so the zero-write assertions
+ *  still compare like-for-like, and every defect shape is asserted separately ((reserved ACL name) and (boot class)
+ *  below), so nothing about R112-1/R112b-1 is hidden by this. STATUS THIS ROUND: r85-fix5/r85-fix6 both landed while
+ *  this suite was being written, so the rewrite is currently a NO-OP — proven by the "(happy)" equality test below. */
 function stageArtefacts(home: string): void {
   const requiredManifest = { searxng: {} as Record<string, "generated">, firecrawl: {} as Record<string, "generated"> }
   for (const comp of ["searxng", "firecrawl"] as const) {
@@ -81,6 +122,8 @@ function stageArtefacts(home: string): void {
   if (!result.ok)
     throw new Error(`stageArtefacts refused: ${JSON.stringify(result.errors)} ${JSON.stringify(result.findings)}`)
   applyRenderedFiles(result, `${home}/.swarm/tools`)
+  const stagedConf = fcSquidPath(home)
+  writeFileSync(stagedConf, movePortCommentsToOwnLine(v6RenameHostnames(readFileSync(stagedConf, "utf8"))))
 }
 
 function fcComposePath(home: string): string {
@@ -135,15 +178,16 @@ describe("(happy) rendered artefacts bake green against the shipped lock", () =>
   it("verifyEgressBake is clean and reports the locked pin as the image ref", () => {
     const home = freshHome("happy")
     stageArtefacts(home)
-    // GREEN against the TARGET artefact: feed the r85-fix5-renamed conf (to_localhost -> swarm_hostnames, the live
-    // V6 fix) as text so the reserved-name + mode gates reflect the fixed shape deterministically, independent of
-    // whether the render has landed the rename yet. The raw shipped render's reserved name is asserted SEPARATELY
-    // below (assertNoReservedAclNames), so this row neither hides R112-1 nor goes red waiting on a sibling.
+    // GREEN against the TARGET artefact: stageArtefacts has already applied r85-fix5's hostname rename AND r85-fix6's
+    // comment-off-http_port shape, so this asserts the bake passes a corrected estate deterministically — independent
+    // of whether either render fix has landed on the shared tree at run time. Each defect shape is asserted separately
+    // ((reserved ACL name) and (boot class) below), so this neither hides R112-1 nor R112b-1, and it does not go red
+    // waiting on a sibling.
     const v = verifyEgressBake({
       lock: LOCK,
       home,
       composeText: readFileSync(fcComposePath(home), "utf8"),
-      confText: v6RenameHostnames(readFileSync(fcSquidPath(home), "utf8")),
+      confText: readFileSync(fcSquidPath(home), "utf8"),
     })
     expect(v.ok).toBe(true)
     expect(v.findings).toEqual([])
@@ -154,6 +198,18 @@ describe("(happy) rendered artefacts bake green against the shipped lock", () =>
 
   it("the lock arm64 platform digest equals the controller-cleared reference (fixture equality)", () => {
     expect(String(LOCK.components.firecrawl?.egress_proxy_image_arm64_manifest_digest)).toBe(CLEARED_ARM64)
+  })
+
+  it("the transitional rewrite changes NO code line: the raw r85-fix6 render is what the bake just passed", () => {
+    // Regression tripwire, not a convenience. r85-fix5 + r85-fix6 both landed while this round was being written
+    // (squid_conf.ts now carries the PC-PORT-06 note on its own line), so staging must only ever touch comment text.
+    // If this fails, stageArtefacts() is load-bearing again — go check row 85 before trusting the green above, and
+    // the RAW-render assertions below are the reason: they are read straight off the renderer, not from staging.
+    const home = freshHome("happy-raw")
+    stageArtefacts(home)
+    expect(codeLines(readFileSync(fcSquidPath(home), "utf8"))).toEqual(codeLines(renderSquidConf().content))
+    expect(auditBootClass(renderSquidConf().content)).toEqual([]) // raw render, zero transitional help
+    expect(auditBootClass(readFileSync(fcSquidPath(home), "utf8"))).toEqual([])
   })
 })
 
@@ -573,6 +629,215 @@ describe("(reserved ACL name) redeclaring a squid-predefined name is itself a fa
 })
 
 // ================================================================================================
+describe("(boot class) R112b-1: a conf that PARSES but registers no forward-proxy port is refused offline (R112b-5)", () => {
+  // The fixture is built from the renderer's own text, so the negative control is deterministic whether or not
+  // r85-fix6 has moved the comment by the time this suite runs. No port literal anywhere: the drifted-port fixtures
+  // derive from PC_PORTS.squidContainer (PROOF 4a greps this file for literals).
+  const shipped = renderSquidConf().content
+  const bad = r112b1Shape(shipped)
+  const good = movePortCommentsToOwnLine(bad)
+
+  it("the negative-control fixture really carries the R112b-1 shape (inline # on the port directive)", () => {
+    expect(bad.split("\n").some((l) => /^\s*https?_port\b[^#\n]*#/.test(l))).toBe(true)
+  })
+
+  it("NEGATIVE CONTROL: auditBootClass fires on both faces of the class", () => {
+    const codes = auditBootClass(bad).map((f) => f.code)
+    expect(codes).toContain("SQUID_INLINE_COMMENT_ON_DIRECTIVE")
+    expect(codes).toContain("SQUID_FORWARD_PORT_UNREGISTERED") // the boot symptom: no listener to register
+  })
+
+  it("the three OLDER layers are blind to that same text — the reason this layer had to exist (R112b-5)", () => {
+    // Verbatim claim from verification/13b_live_firecrawl_rerun.md §7 R112b-5: presence/parse-level model + reserved-name
+    // lint + type-based audit all ACCEPT the shipping config. If any of them ever starts biting here, this test says so.
+    expect(auditSquidConf(bad)).toEqual([])
+    expect(assertNoReservedAclNames(bad)).toEqual([])
+    expect(crossEnforcerAgreement(bad)).toEqual([])
+  })
+
+  it("POSITIVE CONTROL: the corrected shape (comment on its own line) clears every boot-class code", () => {
+    expect(good.split("\n").some((l) => /^\s*https?_port\b[^#\n]*#/.test(l))).toBe(false)
+    expect(auditBootClass(good)).toEqual([])
+    expect(auditSquidConf(good)).toEqual([]) // and the corrected shape still satisfies the policy audits
+  })
+
+  it("verifyEgressBake refuses the shipping shape end-to-end (fail-closed onto F-3, never a silent pass)", () => {
+    const home = freshHome("bootclass")
+    stageArtefacts(home)
+    const v = verifyEgressBake({
+      lock: LOCK,
+      home,
+      composeText: readFileSync(fcComposePath(home), "utf8"),
+      confText: r112b1Shape(readFileSync(fcSquidPath(home), "utf8")),
+    })
+    expect(v.ok).toBe(false)
+    expect(v.findings.map((f) => f.code)).toContain("SQUID_INLINE_COMMENT_ON_DIRECTIVE")
+    expect(v.findings.map((f) => f.code)).toContain("SQUID_FORWARD_PORT_UNREGISTERED")
+  })
+
+  it("bakeEgressProxy refuses the same shape instead of blessing bring-up (live_smoke's precondition holds)", async () => {
+    const home = freshHome("bootclass-kit")
+    stageArtefacts(home)
+    const kit = createStepKit({
+      componentId: "firecrawl",
+      lock: LOCK,
+      state: readyState(),
+      dryRun: false,
+      consentGate: () => true,
+    })
+    const out = await bakeEgressProxy({
+      kit,
+      home,
+      composeText: readFileSync(fcComposePath(home), "utf8"),
+      confText: r112b1Shape(readFileSync(fcSquidPath(home), "utf8")),
+    })
+    expect(out.token).toBe(OUTCOME.FAILED)
+    expect(out.message).toContain("F-3")
+    expect(out.message).toContain("SQUID_INLINE_COMMENT_ON_DIRECTIVE")
+  })
+
+  it("a conf with NO port directive is refused as unregistered", () => {
+    const stripped = good.split("\n").filter((l) => !/^\s*https?_port\b/.test(l)).join("\n")
+    expect(
+      auditBootClass(stripped).some(
+        (f) => f.code === "SQUID_FORWARD_PORT_UNREGISTERED" && f.item.includes("no http_port/https_port directive"),
+      ),
+    ).toBe(true)
+  })
+
+  it("http_port 0 — the very value the live FATAL used in its internal URL — is refused as unregistered", () => {
+    const zeroed = good.replace(/^(\s*https?_port)\b.*$/m, (_m, d: string) => `${d} 0`)
+    expect(auditBootClass(zeroed).some((f) => f.code === "SQUID_FORWARD_PORT_UNREGISTERED")).toBe(true)
+  })
+
+  it("a forward-proxy port other than PC-PORT-06 is refused as SQUID_FORWARD_PORT_MISMATCH (conf/route drift)", () => {
+    const drifted = good.replace(/^(\s*https?_port)\s*\d+.*$/m, (_m, d: string) => `${d} ${PC_PORTS.squidContainer + 1}`)
+    const f = auditBootClass(drifted)
+    expect(f.some((x) => x.code === "SQUID_FORWARD_PORT_MISMATCH" && x.item.includes(String(PC_PORTS.squidContainer)))).toBe(true)
+    expect(f.some((x) => x.code === "SQUID_FORWARD_PORT_UNREGISTERED")).toBe(false) // a listener exists; it is just the wrong one
+  })
+
+  it("legal port options never false-fire; accel-mode does not count as a forward-proxy listener", () => {
+    const withSuffix = (suffix: string): string =>
+      good.replace(/^(\s*https?_port)\s*\d+.*$/m, (_m, d: string) => `${d} ${PC_PORTS.squidContainer} ${suffix}`)
+    expect(auditBootClass(withSuffix("speed=100kbit/s"))).toEqual([])
+    expect(auditBootClass(withSuffix('name="edge proxy"'))).toEqual([]) // quoted span stays ONE token
+    expect(auditBootClass(withSuffix("accel")).some((f) => f.code === "SQUID_FORWARD_PORT_UNREGISTERED")).toBe(true)
+    expect(auditBootClass(withSuffix("!bogus token")).some((f) => f.code === "SQUID_PORT_OPTION_UNPARSED")).toBe(true)
+  })
+
+  it("https_port is audited on the same rule (same option-parser family; hypothesis encoded, not hidden)", () => {
+    expect(OPTION_PARSED_PORT_DIRECTIVES).toEqual(["http_port", "https_port"])
+    expect(auditBootClass(`https_port ${PC_PORTS.squidContainer}\n`)).toEqual([])
+    expect(auditBootClass(`https_port ${PC_PORTS.squidContainer}  # note\n`).map((f) => f.code)).toEqual([
+      "SQUID_INLINE_COMMENT_ON_DIRECTIVE",
+      "SQUID_FORWARD_PORT_UNREGISTERED",
+    ])
+  })
+
+  it("self-consistency: the check fires on the RAW render exactly when that render carries the shape (r85-fix6 timing-proof)", () => {
+    const rawCarriesInline = shipped.split("\n").some((l) => /^\s*https?_port\b[^#\n]*#/.test(l))
+    expect(auditBootClass(shipped).some((f) => f.code === "SQUID_INLINE_COMMENT_ON_DIRECTIVE")).toBe(rawCarriesInline)
+  })
+})
+
+// ================================================================================================
+describe("(cross-layer pin) row 92's audit and row 85's render rule refuse the class without sharing one rulebook", () => {
+  // r85-fix6 exported lint.ts:SQUID_INLINE_COMMENT_DIRECTIVES + findDirectiveInlineComments and asked this row to
+  // import the predicate instead of re-deriving it (board, 2026-10-20). Kept SEPARATE on purpose: a bake that takes
+  // its refusal list from the renderer it audits can be weakened by an edit to that renderer ALONE. What replaces the
+  // shared constant is a machine-checked relation — row 92's boot-proven subset stays inside row 85's list and both
+  // gates reach the same verdict on the same fixture — so drift fails a test here rather than silently narrowing an
+  // audit. Their wider list (ftp_port, cache*, access_log, dns_v4_first, …) is a render-rule decision; this row only
+  // refuses what the live A/B pair proves about the port directives.
+  const shipped = renderSquidConf().content
+
+  it("row 92's boot-critical set is a SUBSET of row 85's rule, which stays deliberately wider", () => {
+    for (const d of OPTION_PARSED_PORT_DIRECTIVES) expect(SQUID_INLINE_COMMENT_DIRECTIVES).toContain(d)
+    expect(SQUID_INLINE_COMMENT_DIRECTIVES.length).toBeGreaterThan(OPTION_PARSED_PORT_DIRECTIVES.length)
+  })
+
+  it("both gates bite on the R112b-1 fixture (independent implementations, same verdict)", () => {
+    const bad = r112b1Shape(shipped)
+    expect(auditBootClass(bad).some((f) => f.code === "SQUID_INLINE_COMMENT_ON_DIRECTIVE")).toBe(true)
+    expect(findDirectiveInlineComments(bad).some((f) => f.rule === "squid-inline-comment")).toBe(true)
+  })
+
+  it("both gates clear the corrected shape, and row 85's rule already passes the shipped render", () => {
+    const good = movePortCommentsToOwnLine(r112b1Shape(shipped))
+    expect(auditBootClass(good)).toEqual([])
+    expect(findDirectiveInlineComments(good)).toEqual([])
+    expect(findDirectiveInlineComments(shipped)).toEqual([]) // r85-fix6 landed its half: no inline comment left on any listed directive
+  })
+
+  it("the wider rule holds over the staged artefact too (an out-of-band edit surfaces here, not in production)", () => {
+    const home = freshHome("lint-pin")
+    stageArtefacts(home)
+    expect(findDirectiveInlineComments(readFileSync(fcSquidPath(home), "utf8"))).toEqual([])
+  })
+})
+
+// ================================================================================================
+describe("(proof layers) offline-proven vs live-only is declared in code, not left to prose", () => {
+  const layers = bakeProofLayers()
+
+  it("declares the offline-proven set, a labelled inferred set, and a non-empty live-only set", () => {
+    expect(layers.offlineProven.length).toBeGreaterThanOrEqual(4)
+    expect(layers.offlineInferred.length).toBeGreaterThanOrEqual(2)
+    expect(layers.liveOnly.length).toBeGreaterThanOrEqual(3)
+  })
+
+  it("the live-only list names the two things this bake can never prove: the bind and the pull", () => {
+    expect(layers.liveOnly.some((l) => /binds/i.test(l) && l.includes("CONNECT"))).toBe(true)
+    expect(layers.liveOnly.some((l) => /pull/i.test(l))).toBe(true)
+  })
+
+  it("inferred claims are labelled as such, so no reader mistakes the shape model for a parser proof", () => {
+    expect(layers.offlineInferred.every((l) => l.length > 20)).toBe(true)
+    expect(layers.offlineInferred.some((l) => /HYPOTHESIS|inferred|correlation|model/i.test(l))).toBe(true)
+  })
+
+  it("the boot-class rule appears in the offline list and the boot outcome in the live list (no overclaiming)", () => {
+    expect(layers.offlineProven.some((l) => l.includes("auditBootClass"))).toBe(true)
+    expect(layers.liveOnly.some((l) => l.includes("PC-PORT-06"))).toBe(true)
+  })
+})
+
+// ================================================================================================
+describe("(live log signatures) row 112 attempt 3 inherits a verbatim boot-failure table", () => {
+  it("every signature carries its literal line, provenance, owner and the offline rule (if any) that now covers it", () => {
+    expect(LIVE_BOOT_SIGNATURES.length).toBeGreaterThanOrEqual(6)
+    for (const s of LIVE_BOOT_SIGNATURES) {
+      expect(s.signature.length).toBeGreaterThan(8)
+      expect(s.provenBy.length).toBeGreaterThan(4)
+      expect(s.owner.length).toBeGreaterThan(0)
+      expect(s.caughtOfflineBy.length).toBeGreaterThan(0)
+    }
+  })
+
+  it("explainLiveLog identifies the R112b-1 pair from lines copied out of the verifier's own cache.log", () => {
+    const log = [
+      "2026-10-20 10:53:40| ERROR: No forward-proxy ports configured.",
+      "2026-10-20 10:53:40| FATAL: mimeLoadIcon: cannot parse internal URL: http://a0149312d6ec:0/squid-internal-static/icons/silk/image.png",
+    ].join("\n")
+    const hits = explainLiveLog(log).map((s) => s.signature)
+    expect(hits).toContain("ERROR: No forward-proxy ports configured.")
+    expect(hits).toContain("FATAL: mimeLoadIcon: cannot parse internal URL")
+  })
+
+  it("the signature for that error points at the codes THIS bake now emits, and those codes fire on the shape", () => {
+    const s = LIVE_BOOT_SIGNATURES.find((x) => x.signature.startsWith("ERROR: No forward-proxy"))
+    expect(s?.caughtOfflineBy).toContain("SQUID_INLINE_COMMENT_ON_DIRECTIVE")
+    expect(auditBootClass(r112b1Shape(shippedRender())).map((f) => f.code)).toContain("SQUID_INLINE_COMMENT_ON_DIRECTIVE")
+  })
+})
+
+/** Local re-read of the shipped render inside the last describe (module-level const would shadow the fixture above). */
+function shippedRender(): string {
+  return renderSquidConf().content
+}
+
+// ================================================================================================
 describe("(file modes) R112-5 secret hygiene (0700/0600) + executable docker-entrypoint.d wrap", () => {
   const makeRoot = (): string => {
     const tr = mkdtempSync(join(tmpdir(), "swarm-r92-modes-"))
@@ -582,8 +847,8 @@ describe("(file modes) R112-5 secret hygiene (0700/0600) + executable docker-ent
     mkdirSync(`${tr}/firecrawl/compose/bin`, { recursive: true, mode: 0o700 })
     return tr
   }
-  const wrapCompose = (wrap: string): string =>
-    ["services:", "  auth-proxy:", "    volumes:", "      - type: bind", `        source: ${wrap}`, "        target: /docker-entrypoint.d/05-swarm-env.sh", ""].join("\n")
+  const wrapCompose = (wrap: string, target = "/docker-entrypoint.d/05-swarm-env.envsh"): string =>
+    ["services:", "  auth-proxy:", "    volumes:", "      - type: bind", `        source: ${wrap}`, `        target: ${target}`, ""].join("\n")
 
   it("a well-ordered root has NO mode findings", () => {
     const tr = makeRoot()
@@ -604,6 +869,30 @@ describe("(file modes) R112-5 secret hygiene (0700/0600) + executable docker-ent
       expect(auditFileModes(tr, wrapCompose(wrap)).some((f) => f.code === "MODE_ENTRYPOINT_WRAP" && f.item.includes(wrap))).toBe(true)
       chmodSync(wrap, 0o755)
       expect(auditFileModes(tr, wrapCompose(wrap)).some((f) => f.code === "MODE_ENTRYPOINT_WRAP")).toBe(false)
+    } finally {
+      rmSync(tr, { recursive: true, force: true })
+    }
+  })
+
+  it("the rule is extension-agnostic: it bites on r85-fix6's .envsh target and on the historical .sh one", () => {
+    // r85-fix6 renamed the token wrap to fc-nginx-env.envsh (SOURCED, so the exec bit is not functionally required
+    // any more). This row keeps refusing ANY non-executable file under a /docker-entrypoint.d/ target anyway: row 85's
+    // shipped posture is 0700 for entrypoint-mounted wraps (their FIX ROUND 6 proof 7f), so the stricter rule costs
+    // nothing today and still catches the R112-5 silent-skip class if a .sh wrap ever returns. If row 85 ever moves
+    // the .envsh to 0600, this test is where the conversation happens — see the request line in the progress file.
+    const tr = makeRoot()
+    const envsh = `${tr}/firecrawl/compose/bin/fc-nginx-env.envsh`
+    const legacy = `${tr}/firecrawl/compose/bin/05-swarm-env.sh`
+    writeFileSync(envsh, "export SWARM_FIRECRAWL_TOKEN=x\n", { mode: 0o600 })
+    writeFileSync(legacy, "#!/bin/sh\n", { mode: 0o600 })
+    try {
+      const both = wrapCompose(envsh) + wrapCompose(legacy, "/docker-entrypoint.d/05-swarm-env.sh")
+      const hits = auditFileModes(tr, both).filter((f) => f.code === "MODE_ENTRYPOINT_WRAP").map((f) => f.item)
+      expect(hits.some((i) => i.includes(envsh))).toBe(true)
+      expect(hits.some((i) => i.includes(legacy))).toBe(true)
+      chmodSync(envsh, 0o700)
+      chmodSync(legacy, 0o700)
+      expect(auditFileModes(tr, both).some((f) => f.code === "MODE_ENTRYPOINT_WRAP")).toBe(false)
     } finally {
       rmSync(tr, { recursive: true, force: true })
     }

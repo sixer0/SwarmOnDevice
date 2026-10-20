@@ -40,10 +40,20 @@
 // entrypoint is entrypoint.sh, NOT Pebble. The egress-proxy lift is CLEARED (controller re-fetch
 // matched the confirmed index + linux-arm64 digests, equal to tools.lock.json
 // components.firecrawl.egress_proxy_image — asserted by a unit test). Consequence for THIS row:
-// bring-up stays entrypoint-agnostic — compose-level up plus a generic health gate (container
-// running + optional docker healthcheck). No Pebble-specific command, socket or wait logic exists
-// anywhere in this row; whatever command form r85 rendered (currently the direct-squid override)
-// is simply what compose starts.
+// bring-up stays entrypoint-agnostic — compose-level up plus a generic health gate. No
+// Pebble-specific command, socket or wait logic exists anywhere in this row; whatever command form
+// r85 rendered (currently the direct-squid override) is simply what compose starts.
+//
+// HEALTHCHECK CONTRACT (2026-10-20 ruling, decisions.md :40-47, closing R112b-3's host-side half):
+// a service whose container declares NO healthcheck is satisfied by RUNNING **plus** a passing
+// host-side readiness probe (the injected ReadinessProbe seam — this module never opens a socket,
+// so the real HTTP/TCP prober is the row 93/111/112 driver's job). Up alone is NOT green anymore:
+// the old §4.8 "rides on running-status" fallback would wave through exactly the images whose
+// absence-of-tooling made the in-stack check blind. Services WITH a declared healthcheck keep the
+// unchanged semantics (running + healthy). The gate stays file/label-scoped: it only ever probes
+// containers compose ps listed for THIS stack's file. Rationale for probe-over-running: the images
+// that ship without a healthcheck tool (no wget/curl in the pinned digests — R112b-3) are exactly
+// the ones where "running" carries the least evidence, so the host-side check must add some.
 //
 // NO DAEMON IN THIS ROW: process execution lives exclusively in the engine-injected DockerRunner.
 // This module never imports a process-spawn or raw-network builtin and never spawns; proofs and
@@ -84,9 +94,11 @@ export type DockerRunner = (args: readonly string[]) => Promise<DockerResult>
 
 /** Engine-side posture (r81 StepContext is frozen; rows 91+ widen it LOCALLY, never editing the
  *  template). The engine injects the spawn-backed runner; without one the steps refuse honestly
- *  instead of touching anything. */
+ *  instead of touching anything. `readiness` (2026-10-20 healthcheck-contract ruling) is the
+ *  host-side prober for services that declare no container healthcheck — see ReadinessProbe. */
 export interface StackStepContext {
   readonly docker?: DockerRunner
+  readonly readiness?: ReadinessProbe
 }
 
 export function refusingRunner(_args: readonly string[]): Promise<DockerResult> {
@@ -511,6 +523,52 @@ export function parseContainerInspect(output: string): ContainerStatus | null {
   return { name: "", running: parts[0] === "true", ...(health && health !== "<none>" ? { health } : {}) }
 }
 
+// --- host-side readiness probe seam (2026-10-20 healthcheck-contract ruling, R112b-3 half) ------
+
+export interface ReadinessTarget {
+  /** Compose service name derived from the container name (serviceFromContainerName). */
+  readonly service: string
+  /** Exact container name as compose ps reported it — the label/file-scoped identity to probe. */
+  readonly container: string
+  /** Host-side probe URLs for this service parsed FROM the artefact (parsePublishedPorts); empty
+   *  when the service publishes no host port — unpublished services need an exec/TCP-class probe,
+   *  which is why the container name rides along (row 93/111/112 owns that implementation). */
+  readonly urls: readonly string[]
+}
+
+export interface ReadinessResult {
+  readonly ok: boolean
+  readonly detail: string
+}
+
+/** One host-side readiness check for one no-healthcheck container. Injected because this module
+ *  never opens a socket and never spawns (P4b grep gate; module header): the real HTTP-or-TCP
+ *  prober is engine-side, offline units inject a fake. Per the spec's health matrix (§4.8) the
+ *  checks are SearXNG JSON query 200 / Firecrawl readiness endpoint — HTTP where a published
+ *  loopback port exists, TCP-class otherwise (the implementer's choice per target). */
+export type ReadinessProbe = (target: ReadinessTarget) => Promise<ReadinessResult>
+
+/** Compose names managed containers `<project>-<service>-<ordinal>`; recover the service name to
+ *  look up artefact-derived probe URLs. Names outside that shape fall back to themselves (the
+ *  probe still receives the exact container identity). */
+export function serviceFromContainerName(name: string): string {
+  const bare = name.startsWith(`${COMPOSE_PROJECT}-`) ? name.slice(COMPOSE_PROJECT.length + 1) : name
+  const ordinal = bare.match(/^(.*)-\d+$/)
+  return ordinal?.[1] ? ordinal[1] : bare
+}
+
+/** Probe URLs grouped by compose SERVICE (same URL shape healthProbeUrls flattens), so a
+ *  no-healthcheck container maps to its own publishes only. Artefact-derived — PORT RULE holds. */
+export function serviceProbeUrls(composeText: string): Map<string, string[]> {
+  const byService = new Map<string, string[]>()
+  for (const p of parsePublishedPorts(composeText)) {
+    const urls = byService.get(p.service) ?? []
+    urls.push(`http://${p.hostIp}:${p.hostPort}/`)
+    byService.set(p.service, urls)
+  }
+  return byService
+}
+
 export interface HealthVerdict {
   readonly healthy: boolean
   readonly detail: string
@@ -518,24 +576,41 @@ export interface HealthVerdict {
 }
 
 /** Gate form (entrypoint-agnostic on purpose — squid runs via entrypoint.sh per r77b, nothing
- *  Pebble-specific is assumed): every container RUNNING, and every declared healthcheck HEALTHY.
- *  Containers without a healthcheck ride on running-status (01e §4.8 fallback posture). */
-export function healthVerdict(containers: readonly ContainerStatus[]): HealthVerdict {
+ *  Pebble-specific is assumed): every container RUNNING; every DECLARED healthcheck HEALTHY; and
+ *  every container WITHOUT a declared healthcheck additionally holding a passing host-side
+ *  readiness result (2026-10-20 ruling supersedes the old §4.8 rides-on-running fallback — Up
+ *  alone is not green for a service the in-stack check cannot see). A missing readiness entry is
+ *  fail-closed: no probe wired is stated as such, naming the service. `readiness` is keyed by
+ *  container name; pass undefined when every container declares a healthcheck. */
+export function healthVerdict(
+  containers: readonly ContainerStatus[],
+  readiness?: ReadonlyMap<string, ReadinessResult>,
+): HealthVerdict {
   if (containers.length === 0) return { healthy: false, detail: "compose ps returned no containers", unhealthy: [] }
-  const unhealthy = containers.filter((c) => !c.running || (c.health !== undefined && c.health !== "healthy"))
+  const reason = (c: ContainerStatus): string | null => {
+    if (!c.running) return "not-running"
+    if (c.health !== undefined) return c.health === "healthy" ? null : c.health
+    const probe = readiness?.get(c.name)
+    if (probe === undefined) return "no-healthcheck+readiness-probe-missing"
+    return probe.ok ? null : `no-healthcheck+readiness-failed(${probe.detail})`
+  }
+  const unhealthy = containers.filter((c) => reason(c) !== null)
   if (unhealthy.length > 0) {
-    const listed = unhealthy.map((c) => `${c.name}:${c.running ? (c.health ?? "?") : "not-running"}`).join(", ")
+    const listed = unhealthy.map((c) => `${c.name}:${reason(c)}`).join(", ")
     return {
       healthy: false,
       detail: `waiting on ${unhealthy.length}/${containers.length}: ${listed}`,
       unhealthy: unhealthy.map((c) => c.name),
     }
   }
-  return {
-    healthy: true,
-    detail: `all ${containers.length} containers running${containers.some((c) => c.health !== undefined) ? " with declared healthchecks green" : " (no in-stack healthchecks declared)"}`,
-    unhealthy: [],
-  }
+  const probed = containers.filter((c) => c.health === undefined).length
+  const suffix =
+    probed === 0
+      ? containers.some((c) => c.health !== undefined)
+        ? " with declared healthchecks green"
+        : " (no in-stack healthchecks declared)"
+      : ` with ${probed} container(s) without healthchecks satisfied by host-side readiness probes`
+  return { healthy: true, detail: `all ${containers.length} containers running${suffix}`, unhealthy: [] }
 }
 
 export interface HealthWait {
@@ -549,7 +624,11 @@ export interface HealthWait {
 /** Wait loop with deadline. sleep/clock are injected so a timeout is testable in milliseconds;
  *  production defaults are real time. Timeout maps to HEALTH_FAILED (frozen D-23 token set —
  *  BLOCKED_BY_NETWORK stays reserved for network-block, see outcomes.ts); a container that is
- *  NOT RUNNING fails fast instead of waiting out the window. */
+ *  NOT RUNNING fails fast instead of waiting out the window. Each poll additionally runs the
+ *  injected readiness probe once per RUNNING container that declares no healthcheck (2026-10-20
+ *  ruling); with no probe wired those containers stay red — fail-closed, named in the verdict.
+ *  The timeout/poll budget is unchanged in spirit: probes ride inside the same window, their own
+ *  latency bound is the probe implementation's contract (row 93/111/112). */
 export async function waitForHealthy(opts: {
   readonly run: DockerRunner
   readonly composeFile: string
@@ -557,10 +636,14 @@ export async function waitForHealthy(opts: {
   readonly intervalMs?: number
   readonly sleep?: (ms: number) => Promise<void>
   readonly clock?: () => number
+  readonly probe?: ReadinessProbe
+  /** Rendered compose text for artefact-derived probe URLs (PORT RULE); "" probes see no urls. */
+  readonly composeText?: string
 }): Promise<HealthWait> {
   const sleep = opts.sleep ?? ((ms: number) => timerSleep(ms))
   const clock = opts.clock ?? (() => Date.now())
   const intervalMs = opts.intervalMs ?? 2000
+  const urlsByService = serviceProbeUrls(opts.composeText ?? "")
   const start = clock()
   let attempts = 0
   let last: HealthVerdict = { healthy: false, detail: "health gate never polled", unhealthy: [] }
@@ -570,7 +653,16 @@ export async function waitForHealthy(opts: {
     attempts += 1
     const ps = await opts.run(composePsArgs(opts.composeFile))
     containers = ps.exitCode === 0 ? parseComposePs(ps.stdout) : []
-    last = healthVerdict(containers)
+    const readiness = new Map<string, ReadinessResult>()
+    for (const c of containers) {
+      if (!c.running || c.health !== undefined || !opts.probe) continue
+      const service = serviceFromContainerName(c.name)
+      readiness.set(
+        c.name,
+        await opts.probe({ service, container: c.name, urls: urlsByService.get(service) ?? [] }),
+      )
+    }
+    last = healthVerdict(containers, readiness)
     if (last.healthy) return { token: OUTCOME.OK, verdict: last, containers, attempts, elapsedMs: clock() - start }
     const crashed = containers.length > 0 && containers.some((c) => !c.running)
     if (crashed)
@@ -589,7 +681,12 @@ export interface StackProvenanceRecord {
   readonly ts: string
   readonly lockVersion: string
   readonly component: ComponentId
-  readonly action: "up" | "down"
+  /** GREEN-ONLY verbs are bare. R112b-7 truthfulness ruling: a failed phase must not read as a
+   *  plain "up"/"down" — the vocabulary is `up` (ended OK) | `up-failed` (FAILED/HEALTH_FAILED) |
+   *  `down` (ended OK) | `down-incomplete` (compose-down failure or deferred volumes). The exact
+   *  reason stays in `outcome`; a reader scanning for brought-up stacks can no longer count a
+   *  HEALTH_FAILED row as an "up". */
+  readonly action: "up" | "up-failed" | "down" | "down-incomplete"
   readonly project: typeof COMPOSE_PROJECT
   readonly context: string // the ACTUAL probed context name (resolveDockerContextName), not necessarily the register literal
   readonly composeFile: string
@@ -601,6 +698,10 @@ export interface StackProvenanceRecord {
   readonly containers: string[]
   readonly deferredVolumes: string[]
   readonly correlationId?: string
+  /** Teardown only: networks this stack lost, measured as a before/after listing delta
+   *  (R112b-7: the old post-state count printed 0 while down had removed five).
+   *  null = a listing leg failed and the count is honestly unavailable, never a fabricated 0. */
+  readonly networksRemoved?: number | null
 }
 
 export function stackProvenanceFile(): string {
@@ -644,6 +745,9 @@ export interface BringUpOptions {
    *  tuning belongs to row 93's VM runs. */
   readonly healthDeadlineMs?: number
   readonly healthIntervalMs?: number
+  /** Host-side prober for services declaring no container healthcheck (2026-10-20 ruling).
+   *  Absent = those containers can never satisfy the gate (fail-closed, named per service). */
+  readonly readiness?: ReadinessProbe
 }
 
 export interface BringUpResult {
@@ -704,7 +808,7 @@ export async function bringUp(opts: BringUpOptions): Promise<BringUpResult> {
 
   const urls = healthProbeUrls(report.composeText ?? "")
   const upCmd = formatCmd(composeUpCmd(plan.composeFile))
-  const healthLine = `${formatCmd(composePsArgs(plan.composeFile))}  # repeated until every container running + declared healthchecks green`
+  const healthLine = `${formatCmd(composePsArgs(plan.composeFile))}  # repeated until every container running; declared healthchecks green; no-healthcheck services additionally pass their host-side readiness probe`
   // The probe target follows the runtime step's RECORDED context (colima names it colima-<profile>,
   // H-R93-1); compose OPERATIONS below still pin the register name via --context (PC-PROF-02), which
   // row 86 materializes — so both address the same live daemon once row 86 lands.
@@ -793,6 +897,8 @@ export async function bringUp(opts: BringUpOptions): Promise<BringUpResult> {
     intervalMs: opts.healthIntervalMs ?? 2_000,
     ...(opts.sleep ? { sleep: opts.sleep } : {}),
     ...(opts.clock ? { clock: opts.clock } : {}),
+    ...(opts.readiness ? { probe: opts.readiness } : {}),
+    composeText: report.composeText ?? "",
   })
 
   if (wait.token !== OUTCOME.OK) {
@@ -811,9 +917,11 @@ export async function bringUp(opts: BringUpOptions): Promise<BringUpResult> {
       [],
       ctxName,
     )
+    // "did not go green", not "timed out": the same token also covers the crash-fast path, and the
+    // detail already names WHICH service and WHY (R112b-3 gate-message requirement).
     return {
       token: OUTCOME.HEALTH_FAILED,
-      message: `health gate timed out: ${wait.verdict.detail}`,
+      message: `health gate did not go green: ${wait.verdict.detail}`,
       missing: [],
       commands: [upCmd],
       healthUrls: urls,
@@ -892,7 +1000,9 @@ function recordBringUp(
     ts: new Date().toISOString(),
     lockVersion: opts.kit.lock.version,
     component: opts.plan.component,
-    action: "up",
+    // R112b-7: a failed bring-up must not record as a bare "up". OK -> "up"; anything else ->
+    // "up-failed" (the precise reason lives in `outcome` below).
+    action: token === OUTCOME.OK ? "up" : "up-failed",
     project: COMPOSE_PROJECT,
     context: contextName,
     composeFile: opts.plan.composeFile,
@@ -949,17 +1059,31 @@ export interface TearDownResult {
   readonly commands: string[]
   readonly selected: LabelSelection
   readonly deferredVolumes: string[]
+  /** Networks this stack lost, measured as a before/after listing delta (R112b-7); null = a
+   *  listing leg failed so the count is honestly unavailable (never a silent 0). */
+  readonly networksRemoved: number | null
 }
 
 /** remove-path: compose down scoped to THIS stack's file, then label-scoped residue sweep.
  *  Only labelled objects are ever targeted (P-14); volumes are listed and PRINTED, never deleted
- *  without a human answer (ask-before-data-volume); no prune verb exists in any built command. */
+ *  without a human answer (ask-before-data-volume); no prune verb exists in any built command.
+ *
+ *  R112b-7 truthfulness: reported counts are BEFORE/AFTER listing deltas — what actually LEFT the
+ *  estate — not the post-down residue listing. The old message read the residue (empty by
+ *  construction after a successful down) and printed "0 network(s)" while compose down had verifiably
+ *  removed five; worse, compose-created networks carry no io.gsp.swarm.* labels at all (FIX ROUND 2
+ *  citation), so the label-based network count could never be non-zero. Networks are therefore
+ *  enumerated with the compose-labelled `network ls` scoping (composeNetworksArgs), containers and
+ *  images with the io.gsp label pair. Any failing listing leg reports "count unavailable" — never a
+ *  fabricated zero. A compose-down failure now also writes its ledger row (action "down-incomplete"):
+ *  the audit trail must not silently miss failed removals. */
 export async function tearDown(opts: TearDownOptions): Promise<TearDownResult> {
   const { kit, plan } = opts
   const run = opts.run ?? refusingRunner
 
   const listCmds = (): string[] => [
     formatCmd(composeDownCmd(plan.composeFile)),
+    formatCmd(composeNetworksArgs(plan.composeFile)), // network scope for the before/after delta
     ...(["container", "network", "volume", "image"] as const).map((k) => formatCmd(labelListArgs(k, plan.component))),
   ]
 
@@ -977,20 +1101,34 @@ export async function tearDown(opts: TearDownOptions): Promise<TearDownResult> {
       commands,
       selected: { containers: [], networks: [], volumes: [], images: [] },
       deferredVolumes: [],
+      networksRemoved: null, // dry-run measured nothing and says so
     }
   }
+
+  // Estate snapshots around the removal legs; removed = names present BEFORE and gone AFTER.
+  const snapshot = async () => {
+    const [containers, networks, images] = await Promise.all([
+      run(labelListArgs("container", plan.component)),
+      run(composeNetworksArgs(plan.composeFile)),
+      run(labelListArgs("image", plan.component)),
+    ])
+    return { containers, networks, images }
+  }
+  const before = await snapshot()
 
   const down = await run(composeDownCmd(plan.composeFile))
   if (down.exitCode !== 0) {
     kit.log("error", `${plan.component}: compose down failed`, {
       context: { stderr: down.stderr.trim().slice(0, 300) },
     })
+    recordTearDown(opts, OUTCOME.FAILED, [], 1, null)
     return {
       token: OUTCOME.FAILED,
       message: `compose down failed (exit ${down.exitCode}): ${down.stderr.trim().slice(0, 300)}`,
       commands: [formatCmd(composeDownCmd(plan.composeFile))],
       selected: { containers: [], networks: [], volumes: [], images: [] },
       deferredVolumes: [],
+      networksRemoved: null,
     }
   }
 
@@ -1018,6 +1156,22 @@ export async function tearDown(opts: TearDownOptions): Promise<TearDownResult> {
     commands.push(formatCmd(imageRmArgs(id)))
   }
 
+  const after = await snapshot()
+  const removedCount = (pre: DockerResult, post: DockerResult): number | null =>
+    pre.exitCode !== 0 || post.exitCode !== 0
+      ? null
+      : pre.stdout
+          .split("\n")
+          .map((l) => l.trim())
+          .filter((l) => l !== "")
+          .filter((name) => !post.stdout.split("\n").some((p) => p.trim() === name)).length
+  const phrase = (count: number | null, unit: string): string =>
+    count === null ? `${unit} count unavailable (listing failed)` : `${count} ${unit}(s) removed`
+  const containersRemoved = removedCount(before.containers, after.containers)
+  const networksRemoved = removedCount(before.networks, after.networks)
+  const imagesRemoved = removedCount(before.images, after.images)
+  const removalSummary = `${phrase(containersRemoved, "container")}, ${phrase(networksRemoved, "network")}, ${phrase(imagesRemoved, "image ref")}`
+
   // Volumes: ALWAYS deferred to a human answer (P-14 ask-before-data-volume). Firecrawl defines no
   // named volumes by spec (01e §6.5) and searxng bind-mounts instead of naming any (§5.2), so a
   // hit here means drift — even more reason to stop and ask rather than delete.
@@ -1025,14 +1179,15 @@ export async function tearDown(opts: TearDownOptions): Promise<TearDownResult> {
 
   if (selected.volumes.length === 0) {
     kit.transition(STATES.ABSENT, { dockerObjects: [], paths: kit.stateOf().paths ?? [] })
-    recordTearDown(opts, OUTCOME.OK, [], commands.length)
+    recordTearDown(opts, OUTCOME.OK, [], commands.length, networksRemoved)
     kit.log("info", `${plan.component}: stack removed; only labelled objects were targeted`)
     return {
       token: OUTCOME.OK,
-      message: `${plan.title} removed (label-scoped; ${selected.containers.length} container(s), ${selected.networks.length} network(s), ${selected.images.length} image ref(s))`,
+      message: `${plan.title} removed (label-scoped; ${removalSummary})`,
       commands,
       selected,
       deferredVolumes: [],
+      networksRemoved,
     }
   }
 
@@ -1041,13 +1196,14 @@ export async function tearDown(opts: TearDownOptions): Promise<TearDownResult> {
     `${plan.component}: ${selected.volumes.length} labelled volume(s) left in place pending your confirmation (P-14 ask-before-data-volume)`,
     { context: { volumes: selected.volumes } },
   )
-  recordTearDown(opts, OUTCOME.SKIPPED_WITH_INSTRUCTIONS, selected.volumes, commands.length)
+  recordTearDown(opts, OUTCOME.SKIPPED_WITH_INSTRUCTIONS, selected.volumes, commands.length, networksRemoved)
   return {
     token: OUTCOME.SKIPPED_WITH_INSTRUCTIONS,
-    message: `volumes hold possible data — confirm removal explicitly, then run:\n${volumeInstructions.join("\n")}`,
+    message: `${plan.title}: ${removalSummary}; volumes hold possible data — confirm removal explicitly, then run:\n${volumeInstructions.join("\n")}`,
     commands: [...commands, ...volumeInstructions],
     selected,
     deferredVolumes: selected.volumes,
+    networksRemoved,
   }
 }
 
@@ -1056,13 +1212,15 @@ function recordTearDown(
   token: OutcomeToken,
   deferredVolumes: readonly string[],
   attempts: number,
+  networksRemoved: number | null = null,
 ): void {
   if (opts.kit.dryRun) return
   appendStackProvenance({
     ts: new Date().toISOString(),
     lockVersion: opts.kit.lock.version,
     component: opts.plan.component,
-    action: "down",
+    // R112b-7: bare "down" is reserved for a completed removal; anything else says so up front.
+    action: token === OUTCOME.OK ? "down" : "down-incomplete",
     project: COMPOSE_PROJECT,
     context: DOCKER_CONTEXT,
     composeFile: opts.plan.composeFile,
@@ -1073,6 +1231,7 @@ function recordTearDown(
     healthDetail: "teardown",
     containers: [],
     deferredVolumes: [...deferredVolumes],
+    networksRemoved,
   })
 }
 
