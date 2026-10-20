@@ -1644,7 +1644,7 @@ export type GlobalEvent = {
 export type LogLevel = "DEBUG" | "INFO" | "WARN" | "ERROR"
 
 /**
- * Server configuration for opencode serve and web commands
+ * Server configuration for swarm serve and web commands
  */
 export type ServerConfig = {
   port?: number
@@ -1944,7 +1944,7 @@ export type Config = {
   share?: "manual" | "auto" | "disabled"
   autoshare?: boolean
   /**
-   * Check for new versions and show an update notice. Updates are never installed automatically; run /update or `opencode upgrade`. Set to false to disable update checks. true and 'notify' behave the same
+   * Check for new versions and show an update notice. Updates are never installed automatically. Set to false to disable update checks. true and 'notify' behave the same
    */
   autoupdate?: boolean | "notify"
   disabled_providers?: Array<string>
