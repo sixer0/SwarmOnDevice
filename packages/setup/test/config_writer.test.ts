@@ -539,3 +539,148 @@ function exists(p: string): boolean {
     return false
   }
 }
+
+// --- FIX ROUND d: F-R109-1 kill-boundary replay (per-target durable ledger) ----------------------
+
+const SIMULATED_KILL = "SIMULATED_KILL"
+function ledgerFiles(b: string): Record<string, { preexisting: boolean; firstBackupPath: string | null }> {
+  const p = join(b, ".swarm", "setup", "config-writer.json")
+  try {
+    return (JSON.parse(readFileSync(p, "utf8")) as { files: Record<string, never> }).files as Record<
+      string,
+      { preexisting: boolean; firstBackupPath: string | null }
+    >
+  } catch {
+    return {}
+  }
+}
+
+describe("FIX d: F-R109-1 mid-loop kill -> resume -> removal still complete", () => {
+  const ALL = ["graft", "searxng", "rtk", "obsidian"] as const
+
+  it("post-replace fault mid-loop: already-written targets are recorded; resume finishes; removal reverses ALL", () => {
+    const b = base()
+    try {
+      stageProxyBinary(b)
+      const st = stateAll(ALL)
+      // die right after the 4th target (graft skill) fully lands
+      let threw = false
+      try {
+        writeConfigEntries(
+          opts(b, {
+            state: st,
+            onTargetBoundary: (phase, label) => {
+              if (phase === "post-replace" && label === TEXT_TARGETS.graft) throw new Error(SIMULATED_KILL)
+            },
+          }),
+        )
+      } catch (e) {
+        threw = (e as Error).message === SIMULATED_KILL
+      }
+      expect(threw).toBe(true)
+      const lf = ledgerFiles(b)
+      // the four completed targets are already durable in the ledger (no orphan among them)
+      expect(Object.keys(lf).length).toBe(4)
+      expect(exists(join(configDir(b), TEXT_TARGETS.rtk))).toBe(false) // pending target not written
+      // resume: finishes the remaining two targets
+      const resumed = writeConfigEntries(opts(b, { state: st }))
+      expect(resumed.ok && resumed.changed).toBe(true)
+      expect(Object.keys(ledgerFiles(b)).length).toBe(6)
+      // removal reverses everything the crashed run + resume wrote — NOT a permanent no-op
+      const rem = removeConfigEntries(opts(b, { state: st }))
+      expect(rem.ok && rem.files.length).toBe(6)
+      expect(exists(join(configDir(b), TEXT_TARGETS.graft))).toBe(false)
+      expect(exists(join(configDir(b), TEXT_TARGETS.rtk))).toBe(false)
+      expect(exists(configFilePath({ base: b }))).toBe(false)
+    } finally {
+      rmSync(b, { recursive: true, force: true })
+    }
+  })
+
+  it("pre-replace fault on a PRE-EXISTING swarm.json: ledger durable BEFORE the change; removal restores original", () => {
+    const b = base()
+    try {
+      mkdirSync(join(b, ".config", "swarm"), { recursive: true })
+      const original = '{"theme":"swarm"}\n'
+      writeFileSync(configFilePath({ base: b }), original, { encoding: "utf8", mode: 0o600 })
+      const st = stateAll(ALL)
+      let threw = false
+      try {
+        writeConfigEntries(
+          opts(b, {
+            state: st,
+            onTargetBoundary: (phase, label) => {
+              if (phase === "pre-replace" && label === "swarm.json") throw new Error(SIMULATED_KILL)
+            },
+          }),
+        )
+      } catch (e) {
+        threw = (e as Error).message === SIMULATED_KILL
+      }
+      expect(threw).toBe(true)
+      // the replace never happened: swarm.json is still the user's original bytes...
+      expect(readFileSync(configFilePath({ base: b }), "utf8")).toBe(original)
+      // ...yet the ledger ALREADY records it as pre-existing with a durable origin backup
+      const rec = ledgerFiles(b)[configFilePath({ base: b })]
+      expect(rec?.preexisting).toBe(true)
+      expect(rec?.firstBackupPath && exists(rec.firstBackupPath)).toBe(true)
+      // removal therefore restores the original byte-for-byte (no unrecorded modification can survive)
+      const rem = removeConfigEntries(opts(b, { state: st }))
+      expect(rem.ok && rem.action === "restored").toBe(true)
+      expect(readFileSync(configFilePath({ base: b }), "utf8")).toBe(original)
+    } finally {
+      rmSync(b, { recursive: true, force: true })
+    }
+  })
+
+  it("K12 exact shape is unreachable: after the LAST target lands, the ledger is already complete", () => {
+    const b = base()
+    try {
+      stageProxyBinary(b)
+      const st = stateAll(ALL)
+      let threw = false
+      try {
+        writeConfigEntries(
+          opts(b, {
+            state: st,
+            onTargetBoundary: (phase, label) => {
+              if (phase === "post-replace" && label === TEXT_TARGETS.obsidianInbox) throw new Error(SIMULATED_KILL)
+            },
+          }),
+        )
+      } catch (e) {
+        threw = (e as Error).message === SIMULATED_KILL
+      }
+      expect(threw).toBe(true)
+      // all six targets replaced AND all six recorded — the old "all written, no ledger" gap cannot occur
+      expect(Object.keys(ledgerFiles(b)).length).toBe(6)
+      const rem = removeConfigEntries(opts(b, { state: st }))
+      expect(rem.ok && rem.reversed).toBe(true)
+      expect(exists(configFilePath({ base: b }))).toBe(false)
+    } finally {
+      rmSync(b, { recursive: true, force: true })
+    }
+  })
+
+  it("MANIFEST_IDENTICAL still holds across a per-target-committed install", () => {
+    const b = base()
+    try {
+      stageProxyBinary(b)
+      const watched: Record<string, string> = {}
+      const seed = (rel: string, body: string) => {
+        const p = join(b, rel)
+        mkdirSync(dirname(p), { recursive: true })
+        writeFileSync(p, body, { encoding: "utf8" })
+        watched[p] = sha(body)
+      }
+      seed(".claude/settings.json", "{}")
+      seed(".codex/config.toml", "x")
+      seed(".config/opencode/opencode.json", "{}")
+      seed(".zshrc", "p")
+      writeConfigEntries(opts(b, { state: stateAll(ALL) }))
+      for (const [p, digest] of Object.entries(watched)) expect(sha(readFileSync(p, "utf8"))).toBe(digest)
+    } finally {
+      rmSync(b, { recursive: true, force: true })
+    }
+  })
+})

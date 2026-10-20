@@ -9,7 +9,7 @@ import { readFileSync, statSync } from "node:fs"
 import { join } from "node:path"
 import { validateLock } from "../src/lockfile.ts"
 import { renderAll, applyRenderedFiles, validateRenderedSecrets } from "../src/composefiles/index.ts"
-import { CAP_ADD_ALLOWLIST, lintComposeText, lintOk, PASS_THROUGH_HARD } from "../src/composefiles/lint.ts"
+import { CAP_ADD_ALLOWLIST, findReservedAclNames, findSecretArgvLeak, findSquidOrderingViolations, findWrapModeViolations, lintComposeText, lintOk, PASS_THROUGH_HARD, RESERVED_ACL_NAMES, SECRET_ARGV_PATTERNS } from "../src/composefiles/lint.ts"
 import {
   PC_PORTS,
   parseEngineNames,
@@ -517,9 +517,13 @@ describe("H-R93-4/5 hardening correction — least-privilege caps per live evide
     expect(fcText()).toContain("- /etc/nginx/conf.d:noexec,nosuid,size=8m")
   })
 
-  test("playwright tmpfs widened to /root/.cache (corepack mkdir); still NO caps", () => {
-    expect(fcText()).toContain("- /root/.cache:noexec,nosuid,size=256m")
-    expect(fcText()).not.toContain("ms-playwright-hacks:noexec,size=256m") // replaced, not duplicated
+  test("playwright tmpfs: R112-2 SUPERSEDES the FIX2 widening — /root/.cache was the WRONG user's home", () => {
+    const code = fcText()
+      .split("\n")
+      .map((l) => l.split("#")[0] ?? "")
+      .join("\n")
+    expect(code).not.toContain("- /root/.cache:noexec,nosuid,size=256m") // image runs as node (inspect), not root
+    expect(code).toContain("/home/node/.cache") // corrected mount asserted in full by the R112 describe below
   })
 
   test("searxng ships NO curl healthcheck — U-1 closed live (H-R93-3), host-side gate documented", () => {
@@ -558,13 +562,13 @@ describe("H-R93-6 squid ACL grammar — split by type, semantics intact", () => 
       .split("\n")
       .map((l) => l.split("#")[0] ?? "")
       .join("\n") // same discipline as r92's audit
-    expect(code).toContain("acl to_localhost dstdomain localhost")
-    expect(code).toContain("acl to_localhost dstdomain .local")
+    expect(code).toContain("acl swarm_hostnames dstdomain localhost")
+    expect(code).toContain("acl swarm_hostnames dstdomain .local")
     expect(code).not.toMatch(/acl\s+\S+\s+dst\s+.*\bdomain\b/)
     expect(code).not.toContain("dst localhost domain")
   })
 
-  test("all nine deny ranges stay present on the IP-only dst lines and stay wired", () => {
+  test("all TWELVE deny classes stay present on the IP-only dst lines and stay wired", () => {
     const t = q()
     const ranges = [
       "127.0.0.0/8",
@@ -576,12 +580,175 @@ describe("H-R93-6 squid ACL grammar — split by type, semantics intact", () => 
       "100.64.0.0/10",
       "fe80::/10",
       "fc00::/7",
+      "0.0.0.0/8",
+      "::/128",
+      "64:ff9b::/96",
     ]
     for (const cidr of ranges) expect(t).toContain(cidr)
     expect(t).toContain("http_access deny to_localnet")
-    expect(t).toContain("http_access deny to_localhost")
+    expect(t).toContain("http_access deny swarm_hostnames")
     // ordering kept: specific denies before default-deny
-    expect(t.indexOf("http_access deny to_localhost")).toBeLessThan(t.indexOf("http_access deny all"))
+    expect(t.indexOf("http_access deny swarm_hostnames")).toBeLessThan(t.indexOf("http_access deny all"))
+  })
+})
+
+
+describe("REVIEW-107 FIX3 — secrets never reach exec'd argv", () => {
+  const r = () => renderClean();
+  const script = (name: string) => fileOf(r(), `firecrawl/compose/bin/${name}`).content;
+
+  test("redis-start.sh uses the documented config-file mechanism; no --requirepass argv", () => {
+    const t = script("redis-start.sh");
+    expect(t).toContain('umask 077'); // 0600-effective conf on container tmpfs
+    expect(t).toContain("exec redis-server /tmp/swarm-redis.conf"); // argv = conf PATH only
+    expect(t).not.toMatch(/--requirepass\s+["']?\$/);
+    expect(t).toContain('requirepass "%s"'); // directive lives in the FILE format (redis.io management/config)
+  });
+
+  test("redis healthcheck authenticates via REDISCLI_AUTH env assignment, not -a argv", () => {
+    const t = fileOf(r(), "firecrawl/compose/firecrawl.yml").content;
+    expect(t).toContain('REDISCLI_AUTH=\\"$(cat /run/secrets/redis_auth)\\" redis-cli ping');
+    expect(t).not.toMatch(/redis-cli[^\n]*\s-a\s/);
+  });
+
+  test("redis service carries the /tmp tmpfs the runtime conf needs under read_only", () => {
+    expect(fileOf(r(), "firecrawl/compose/firecrawl.yml").content).toContain("- /tmp:noexec,nosuid,size=16m");
+  });
+
+  test("MINOR-6: compose env carries NO REDIS_URL literal; the wrap builds both URLs from the secret", () => {
+    const t = fileOf(r(), "firecrawl/compose/firecrawl.yml").content;
+    const code = t.split("\n").map((l) => l.split("#")[0] ?? "").join("\n"); // prose may quote the old shape; keys may not carry it
+    expect(code).not.toContain("REDIS_URL: redis://");
+    expect(code).not.toContain(":pass@");
+    const env = script("fc-env.sh");
+    expect(env).toContain('export REDIS_URL="redis://:${REDIS_AUTH}@redis:6379"');
+    expect(env).toContain('export REDIS_RATE_LIMIT_URL="redis://:${REDIS_AUTH}@redis:6379"');
+    expect(env).toContain("unset REDIS_AUTH");
+    // api mounts the same generated auth the server enforces (required slot -> always mounted)
+    expect(t.split("/run/secrets/redis_auth").length - 1).toBeGreaterThanOrEqual(2); // api bind + redis bind
+  });
+
+  test("valkey checked: stock entrypoint, no wrap, no secret argv anywhere in stack A", () => {
+    const t = fileOf(r(), "searxng/compose/searxng.yml").content;
+    expect(t).not.toContain("--requirepass");
+    expect(t).not.toContain("/run/secrets");
+    expect(findSecretArgvLeak(t).length).toBe(0);
+  });
+
+  test("ARGV-CLEAN GATE: every rendered artefact passes findSecretArgvLeak", () => {
+    for (const f of r().files) {
+      expect(findSecretArgvLeak(f.content)).toEqual([]);
+    }
+  });
+
+  test("negative control: the pre-fix requirepass-in-argv line IS caught by the gate", () => {
+    const old = 'exec redis-server --bind 0.0.0.0 --requirepass "$(cat /run/secrets/redis_auth)"';
+    const hits = findSecretArgvLeak(old);
+    expect(hits.length).toBeGreaterThanOrEqual(2); // requirepass-argv AND exec-interpolated-secret
+    expect(SECRET_ARGV_PATTERNS.length).toBe(3);
+  });
+});
+
+
+describe("REVIEW-107 M2 renderer half (r75-fix4 handoff) — twelve classes + deny-before-allow", () => {
+  const q = () => fileOf(renderClean(), "firecrawl/squid/squid.conf").content
+
+  test("the three added classes sit EXACTLY per the amended §10.4 block (plain-dst lines only)", () => {
+    const v4 = q().split("\n").find((l) => /^acl to_localnet dst 127\./.test(l)) ?? ""
+    const v6 = q().split("\n").find((l) => /^acl to_localnet dst ::1\/128/.test(l)) ?? ""
+    expect(v4.split("#")[0]).toContain(" 0.0.0.0/8") // this-network appended to the v4 line
+    expect(v6.split("#")[0]).toContain(" ::/128 64:ff9b::/96") // unspecified + NAT64 appended to the v6 line
+    expect(v4).not.toContain("::") // no v6 token drifts onto the v4 line
+    const toks = (line: string) => line.split("#")[0].trim().split(/\s+/).slice(3) // drop "acl to_localnet dst"
+    const tokens = new Set([...toks(v4), ...toks(v6)])
+    expect(tokens.size).toBe(12) // twelve unique literals across the two dst lines
+  })
+
+  test("dstdomain split unchanged by the amendment", () => {
+    expect(q()).toContain("acl swarm_hostnames dstdomain localhost")
+    expect(q()).toContain("acl swarm_hostnames dstdomain .local")
+  })
+
+  test("rendered output satisfies deny-before-allow (ordering lint clean)", () => {
+    expect(findSquidOrderingViolations(q())).toEqual([])
+    const idx = (needle: string) => q().split("\n").findIndex((l) => l.trimStart().startsWith(needle))
+    expect(idx("http_access deny to_localnet")).toBeLessThan(idx("http_access allow localnet"))
+    expect(idx("http_access deny swarm_hostnames")).toBeLessThan(idx("http_access allow localnet"))
+    expect(idx("http_access allow localnet")).toBeLessThan(idx("http_access deny all"))
+  })
+
+  test("REGRESSION FIXTURE: a reordered render (allow hoisted above the destination denies) is refused", () => {
+    const lines = q().split("\n")
+    const allowIdx = lines.findIndex((l) => l.trimStart().startsWith("http_access allow localnet"))
+    const allowLine = lines[allowIdx] as string
+    lines.splice(allowIdx, 1)
+    const firstDeny = lines.findIndex((l) => l.trimStart().startsWith("http_access deny to_localnet"))
+    lines.splice(firstDeny, 0, allowLine) // hoist the source-allow ABOVE all destination denies
+    const reordered = lines.join("\n")
+    expect(reordered).not.toBe(q())
+    const findings = findSquidOrderingViolations(reordered)
+    expect(findings.length).toBeGreaterThan(0)
+    expect(findings.every((f) => f.rule === "squid-deny-ordering")).toBe(true)
+    expect(findings.some((f) => f.severity === "error")).toBe(true)
+  })
+
+  test("renderAll self-lints the ordering rule (a future renderer edit cannot ship an unsorted policy)", () => {
+    const r = renderClean()
+    expect(r.ok).toBe(true)
+    expect(r.findings.some((f) => f.rule === "squid-deny-ordering")).toBe(false)
+  })
+})
+
+describe("R112 live-boot round (row 112) — reserved names, wrap modes, boot ordering", () => {
+  const q = () => fileOf(renderClean(), "firecrawl/squid/squid.conf").content
+
+  test("reserved-ACL-name lint: rendered conf declares NO predefined squid name; a re-declaring fixture refuses", () => {
+    expect(findReservedAclNames(q())).toEqual([])
+    expect(RESERVED_ACL_NAMES).toContain("to_localhost") // transcribed from the image note /etc/squid/squid.conf:1387
+    const squatting = q() + "\nacl to_localhost dstdomain example.invalid\n"
+    const hits = findReservedAclNames(squatting)
+    expect(hits.length).toBe(1)
+    expect(hits[0]?.rule).toBe("reserved-acl-name")
+    // to_localnet deliberately NOT flagged (V6/M1 evidence: not predefined; same-type v4/v6 split fine)
+    expect(findReservedAclNames(q()).some((f) => f.message.includes("to_localnet"))).toBe(false)
+  })
+
+  test("wrap modes (R112-5): entrypoint-executed wrap 0700, sh-invoked wraps 0600, zero group/world bits", () => {
+    const bins = renderClean().files.filter((f) => f.relPath.includes("/compose/bin/"))
+    expect(bins.length).toBeGreaterThanOrEqual(4)
+    for (const f of bins) expect(f.mode & 0o077).toBe(0)
+    const nginxWrap = bins.find((f) => f.relPath.endsWith("fc-nginx-env.sh"))
+    expect(nginxWrap?.mode).toBe(0o700) // owner-executable: the entrypoint IGNORES non-executable scripts (empty-bearer bypass)
+    for (const name of ["fc-env.sh", "redis-start.sh", "nuq-postgres-start.sh"]) {
+      expect(bins.find((f) => f.relPath.endsWith(name))?.mode).toBe(0o600)
+    }
+    expect(findWrapModeViolations(bins)).toEqual([])
+    // negative controls: world-readable and non-executable regressions are both refused
+    expect(findWrapModeViolations([{ relPath: "firecrawl/compose/bin/fc-env.sh", mode: 0o644 }]).length).toBe(1)
+    expect(findWrapModeViolations([{ relPath: "firecrawl/compose/bin/fc-nginx-env.sh", mode: 0o600 }]).length).toBe(1)
+  })
+
+  test("R112-3: auth-proxy starts AFTER api (proxy_pass host resolution happens at nginx config load)", () => {
+    const t = fileOf(renderClean(), "firecrawl/compose/firecrawl.yml").content
+    const authBlock = t.slice(t.indexOf("  auth-proxy:"), t.indexOf("\n  api:"))
+    expect(authBlock).toContain("depends_on:")
+    expect(authBlock).toContain("api: {condition: service_started}")
+  })
+
+  test("R112-4: rabbitmq healthcheck runs as the rabbitmq user (root eacces on the 0400 cookie made it falsely unhealthy)", () => {
+    const t = fileOf(renderClean(), "firecrawl/compose/firecrawl.yml").content
+    expect(t).toContain("runuser -u rabbitmq -- rabbitmq-diagnostics -q check_running")
+    expect(t).not.toContain('["CMD", "rabbitmq-diagnostics"')
+  })
+
+  test("R112-2: playwright cache tmpfs sits at the ACTUAL user's home (/home/node/.cache, uid/gid 1000)", () => {
+    const t = fileOf(renderClean(), "firecrawl/compose/firecrawl.yml").content
+    expect(t).toContain("- /home/node/.cache:noexec,nosuid,uid=1000,gid=1000,size=256m")
+    const code = t
+      .split("\n")
+      .map((l) => l.split("#")[0] ?? "")
+      .join("\n")
+    expect(code).not.toContain("/root/.cache:noexec,nosuid,size=256m") // wrong-path mount replaced, not duplicated
   })
 })
 
@@ -597,7 +764,7 @@ describe("applyRenderedFiles — atomic placement with register modes", () => {
     expect(mode("searxng/searxng.env")).toBe("600")
     expect(mode("firecrawl/nginx/default.conf.template")).toBe("600")
     expect(mode("searxng/compose/searxng.yml")).toBe("644")
-    expect(mode("firecrawl/compose/bin/fc-env.sh")).toBe("644") // §4.7 script mode
+    expect(mode("firecrawl/compose/bin/fc-env.sh")).toBe("600") // R112-5: sh-invoked wrap, zero group/world bits
     expect(mode("firecrawl/squid/squid.conf")).toBe("644")
   })
 

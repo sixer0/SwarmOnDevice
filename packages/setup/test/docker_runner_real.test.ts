@@ -13,6 +13,8 @@ import { describe, it, expect, beforeAll, afterAll } from "bun:test"
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+// Per-run isolation of the source-posture lock (replaces the shared src/tools.lock.json staging).
+import { isolateSourceLock } from "./lockPosture.ts"
 import { OUTCOME } from "../src/outcomes.ts"
 import { STATES, DOCKER_CONTEXT, COMPOSE_PROJECT } from "../src/constants.ts"
 import { defaultState, type StateFile } from "../src/state.ts"
@@ -54,9 +56,7 @@ function scriptedSpawn(rules: Rule[], calls: string[][]): SpawnFn {
 // Source-run lock posture (same harness trick as rows 82/83/84/91): loadLock() falls back to
 // import.meta.dir == src/ under `bun test`, so stage a copy of the shipped lock there for the run
 // and remove it after — never leaves an untracked file behind.
-const SHIPPED_LOCK = join(import.meta.dir, "..", "tools.lock.json")
-const SRC_LOCK = join(import.meta.dir, "..", "src", "tools.lock.json")
-let stagedLock = false
+let releaseLockPosture: (() => void) | undefined
 let LOCK: LockFile
 let realHome = ""
 let sandboxHome = ""
@@ -66,16 +66,13 @@ beforeAll(() => {
   realHome = process.env.HOME ?? ""
   sandboxHome = mkdtempSync(join(tmpdir(), "r93-home-"))
   process.env.HOME = sandboxHome
-  if (!existsSync(SRC_LOCK)) {
-    copyFileSync(SHIPPED_LOCK, SRC_LOCK)
-    stagedLock = true
-  }
+  releaseLockPosture = isolateSourceLock()
   const res = loadLock()
   if (!res.ok) throw new Error(res.error)
   LOCK = res.lock
 })
 afterAll(() => {
-  if (stagedLock) rmSync(SRC_LOCK, { force: true })
+  releaseLockPosture?.()
   if (realHome) process.env.HOME = realHome
   rmSync(sandboxHome, { recursive: true, force: true })
 })

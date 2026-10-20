@@ -167,6 +167,46 @@ rc2=$?
 grep -q "skills/graft/SKILL.md" "$WORK/check2.out" && check "--check names the drifted file" 0 0 || check "--check names the drifted file" 0 1
 sed 's/^/    /' "$WORK/check.out"; sed 's/^/    /' "$WORK/check2.out"
 
+echo "=== PROOF 6: F-R109-1 kill-boundary replay (per-target durable ledger) ==="
+cat > "$WORK/killgap.ts" <<TS
+import { mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from "node:fs"
+import { join } from "node:path"
+import { writeConfigEntries, removeConfigEntries, configFilePath, configDir } from "$HERE/src/wiring/config_writer.ts"
+import { TEXT_TARGETS } from "$HERE/src/skills/researcher_text.ts"
+const KILL = "SIMULATED_KILL"
+const seedState = (B: string) => { mkdirSync(join(B, ".swarm", "setup"), { recursive: true }); const comps: Record<string,{state:string}> = {}; for (const id of ["runtime","node","graft","rtk","obsidian","searxng","firecrawl"]) comps[id]={state:"absent"}; for (const id of ["graft","searxng","rtk","obsidian"]) comps[id]={state:"healthy"}; writeFileSync(join(B,".swarm","setup","state.json"), JSON.stringify({version:1,lockVersion:"t",updatedAt:"2026-10-20T10:40:00.000Z",components:comps})) }
+const stageBin = (B: string) => { mkdirSync(join(B,".swarm","setup","bin"),{recursive:true}); writeFileSync(join(B,".swarm","setup","bin","swarm-web-proxy"), "#!/bin/sh") }
+const O = (B: string, extra: any = {}) => ({ base: B, chain: { path: join(B, ".swarm", "setup", "audit.jsonl") }, launch: () => ({ ok: true as const, nodePath: "/n", cliPath: "/c" }), env: {}, now: () => "2026-10-20T10:40:00.000Z", ...extra })
+const lf = (B: string) => { try { return Object.keys(((JSON.parse(readFileSync(join(B,".swarm","setup","config-writer.json"),"utf8")) as any).files) || {}).length } catch { return -1 } }
+
+// A) post-replace fault mid-loop -> resume finishes -> removal reverses ALL
+let B = process.env.R97_KB + "/a"; rmSync(B,{recursive:true,force:true}); mkdirSync(B,{recursive:true}); stageBin(B); seedState(B)
+try { writeConfigEntries(O(B,{ onTargetBoundary:(ph:string,l:string)=>{ if(ph==="post-replace"&&l===TEXT_TARGETS.graft) throw new Error(KILL) } })) } catch(e){ if((e as Error).message!==KILL) throw e }
+const partialLedger = lf(B); const rtkPending = existsSync(join(configDir(B), TEXT_TARGETS.rtk))
+const resumed = writeConfigEntries(O(B))
+const ledgerAfterResume = lf(B) // read BEFORE removal wipes the ledger
+const remA = removeConfigEntries(O(B))
+const aOk = partialLedger===4 && !rtkPending && resumed.ok && (resumed as any).changed && ledgerAfterResume===6 && remA.ok && (remA as any).files.length===6 && !existsSync(configFilePath({base:B})) && !existsSync(join(configDir(B),TEXT_TARGETS.graft))
+console.log("GAP_POSTRESUME=" + (aOk ? "ok" : "bad") + " partialLedger=" + partialLedger + " rtkPending=" + rtkPending + " ledgerAfterResume=" + ledgerAfterResume)
+
+// B) pre-replace fault on a PRE-EXISTING swarm.json -> ledger durable BEFORE change -> removal restores original
+B = process.env.R97_KB + "/b"; rmSync(B,{recursive:true,force:true}); mkdirSync(join(B,".config","swarm"),{recursive:true}); seedState(B)
+const original = '{"theme":"swarm"}\n'; writeFileSync(configFilePath({base:B}), original)
+try { writeConfigEntries(O(B,{ onTargetBoundary:(ph:string,l:string)=>{ if(ph==="pre-replace"&&l==="swarm.json") throw new Error(KILL) } })) } catch(e){ if((e as Error).message!==KILL) throw e }
+const stillOriginal = readFileSync(configFilePath({base:B}),"utf8")===original
+const rec = ((JSON.parse(readFileSync(join(B,".swarm","setup","config-writer.json"),"utf8")) as any).files)[configFilePath({base:B})]
+const backupDurable = !!(rec && rec.firstBackupPath && existsSync(rec.firstBackupPath)) // read BEFORE removal sweeps backups
+const remB = removeConfigEntries(O(B))
+const bOk = stillOriginal && rec && rec.preexisting===true && backupDurable && remB.ok && (remB as any).action==="restored" && readFileSync(configFilePath({base:B}),"utf8")===original
+console.log("GAP_PRERESTORE=" + (bOk ? "ok" : "bad") + " stillOriginal=" + stillOriginal + " recordedPreexisting=" + (rec?rec.preexisting:"none") + " backupDurable=" + backupDurable + " action=" + (remB.ok?(remB as any).action:"refused"))
+TS
+R97_KB="$WORK/kg" bun run "$WORK/killgap.ts" > "$WORK/kg.out" 2>&1
+rc=$?
+check "kill-gap driver runs clean (exit 0)" 0 $rc
+grep -q "GAP_POSTRESUME=ok" "$WORK/kg.out" && check "mid-loop kill: resume finishes + removal reverses ALL (no permanent no-op)" 0 0 || check "mid-loop kill: resume finishes + removal reverses ALL (no permanent no-op)" 0 1
+grep -q "GAP_PRERESTORE=ok" "$WORK/kg.out" && check "pre-replace kill: ledger durable BEFORE change + removal restores original" 0 0 || check "pre-replace kill: ledger durable BEFORE change + removal restores original" 0 1
+sed 's/^/    /' "$WORK/kg.out"
+
 echo "=== SUMMARY ==="
 echo "SUMMARY: $pass passed, $fail failed"
 rm -rf "$WORK"

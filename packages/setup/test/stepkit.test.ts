@@ -12,18 +12,18 @@
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "bun:test"
 import {
-  copyFileSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
   readdirSync,
-  rmSync,
   statSync,
   writeFileSync,
 } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+// Per-run isolation of the source-posture lock (replaces the shared src/tools.lock.json staging).
+import { isolateSourceLock } from "./lockPosture.ts"
 import { createStepKit, stepOutcomeFromFetch, policyMalformedOutcome, outcomeTokenFor } from "../src/stepkit.ts"
 import { redact, writeSetupLog, registerSecretValue, clearRegisteredSecrets, keyIsSecret } from "../src/setuplog.ts"
 import { defaultState, readState } from "../src/state.ts"
@@ -31,23 +31,18 @@ import { loadLock, type LockFile } from "../src/lockfile.ts"
 import { OUTCOME } from "../src/outcomes.ts"
 import type { ComponentId } from "../src/constants.ts"
 
-// ---- source-run lock posture (same harness trick as rows 82/83) -----------------------
-const SHIPPED_LOCK = join(import.meta.dir, "..", "tools.lock.json")
-const SRC_LOCK = join(import.meta.dir, "..", "src", "tools.lock.json")
-let stagedLock = false
+// ---- source-run lock posture: private program dir per run (see test/lockPosture.ts) ----
+let releaseLockPosture: (() => void) | undefined
 let LOCK: LockFile
 
 beforeAll(() => {
-  if (!existsSync(SRC_LOCK)) {
-    copyFileSync(SHIPPED_LOCK, SRC_LOCK)
-    stagedLock = true
-  }
+  releaseLockPosture = isolateSourceLock()
   const loaded = loadLock()
   if (!loaded.ok) throw new Error(`loadLock failed in test setup: ${loaded.error}`)
   LOCK = loaded.lock
 })
 afterAll(() => {
-  if (stagedLock) rmSync(SRC_LOCK, { force: true })
+  releaseLockPosture?.()
 })
 
 function freshHome(label: string): string {
@@ -248,6 +243,54 @@ describe("(c) redaction proof — bearer + term-token + generated secret never r
     for (const k of ["USE_DB_AUTHENTICATION", "FIRECRAWL_API_URL", "engines", "port", "AUTHOR", "MONITOR"]) {
       expect(keyIsSecret(k)).toBe(false)
     }
+  })
+})
+
+describe("(c-M5) free-text auth VALUE shapes — REDIS_AUTH/VALKEY_AUTH hex scrubbed, paths + digests survive", () => {
+  // openssl rand -hex 32 shape (01e §4.6): 64 lowercase hex chars.
+  const HEX64 = "9f3a7c1e5b2d8046af1c3e7d9b5f204c8e6a1d3b7f9c2e4a6d8b0f1c3e5a7d9b"
+
+  it("REDIS_AUTH=<hex> is redacted; the mount-path form survives (negative control)", () => {
+    // Pre-fix this string survived layer 3 (the catch-all has _AUTH_KEY, not bare _AUTH); post-fix the hex is gone.
+    const leak = redact(`redis started with REDIS_AUTH=${HEX64} on loopback`)
+    expect(leak).not.toContain(HEX64)
+    expect(leak).toContain("[REDACTED]")
+    expect(leak).toContain("on loopback") // non-secret scaffolding kept
+    // Negative control: a PATH reference (not a secret) must NOT be redacted — proves the pattern is value-shaped, not key-blind.
+    const path = redact("mounted REDIS_AUTH=/run/secrets/redis_auth read-only")
+    expect(path).toContain("/run/secrets/redis_auth")
+    expect(path).not.toContain("[REDACTED]")
+  })
+
+  it("VALKEY_AUTH=<hex> is redacted; an artifact digest of the same alphabet survives (negative control)", () => {
+    const leak = redact(`valkey auth VALKEY_AUTH:${HEX64} generated`)
+    expect(leak).not.toContain(HEX64)
+    expect(leak).toContain("[REDACTED]")
+    // Negative control: the SAME 64-hex as an artifact digest is intentionally logged, never a secret.
+    const digest = redact(`verified sha256:${HEX64} against the lock`)
+    expect(digest).toContain(HEX64)
+    expect(digest).not.toContain("[REDACTED]")
+  })
+
+  it("writeSetupLog scrubs a flattened REDIS_AUTH hex in a message while keeping the line valid JSON", () => {
+    const home = freshHome("m5")
+    const path = join(home, ".swarm", "setup", "setup.log")
+    writeSetupLog(
+      {
+        level: "info",
+        source: "swarm-setup.firecrawl.install",
+        component: "firecrawl",
+        message: `redis requirepass set REDIS_AUTH=${HEX64}`,
+        correlationId: "run-m5",
+        ts: "2026-10-20T00:00:00.000Z",
+      },
+      { path },
+    )
+    const written = readFileSync(path, "utf8").trim()
+    expect(written).not.toContain(HEX64)
+    const parsed = JSON.parse(written) as Record<string, unknown>
+    expect(String(parsed.message)).toContain("[REDACTED]")
+    expect(String(parsed.message)).toContain("redis requirepass set")
   })
 })
 

@@ -31,14 +31,15 @@ import {
   readFileSync,
   existsSync,
   readdirSync,
-  copyFileSync,
-  rmSync,
+  statSync,
 } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+// Per-run isolation of the source-posture lock (replaces the shared src/tools.lock.json staging).
+import { isolateSourceLock } from "./lockPosture.ts"
 import { fetchArtifact, resolveArtifact, type FetchOptions } from "../src/fetch.ts"
 import { computeFileDigest, fileMatchesDigest, macSignatureCheck, parseExpectedDigest } from "../src/verify.ts"
-import { readProvenanceRecords } from "../src/provenance.ts"
+import { readProvenanceRecords, appendProvenance, type ProvenanceRecord } from "../src/provenance.ts"
 import { loadLock, validateLock, type LockFile } from "../src/lockfile.ts"
 
 const PAYLOAD = new TextEncoder().encode("swarm-fixture-artifact-bytes-v1\n") // 34 bytes
@@ -67,19 +68,14 @@ function respond(status: number, body?: Uint8Array, location?: string): Response
 // the COMPILED binary (lock beside execPath), hiding this; row 106 finalises the
 // posture. The harness stages a temporary copy for the duration of this suite and
 // removes it after — the tracked package root copy is never touched.
-const SHIPPED_LOCK = join(import.meta.dir, "..", "tools.lock.json")
-const SRC_LOCK = join(import.meta.dir, "..", "src", "tools.lock.json")
-let stagedLock = false
+let releaseLockPosture: (() => void) | undefined
 
 beforeAll(() => {
-  if (!existsSync(SRC_LOCK) && existsSync(SHIPPED_LOCK)) {
-    copyFileSync(SHIPPED_LOCK, SRC_LOCK)
-    stagedLock = true
-  }
+  releaseLockPosture = isolateSourceLock()
 })
 
 afterAll(() => {
-  if (stagedLock) rmSync(SRC_LOCK, { force: true })
+  releaseLockPosture?.()
 })
 
 beforeAll(() => {
@@ -677,5 +673,54 @@ describe("provenance JSONL ledger", () => {
     expect(after).toBe(before)
     expect(existsSync(join(home, ".swarm", "tools"))).toBe(false)
     expect(readProvenanceRecords(opts.provenancePath)).toEqual([])
+  })
+})
+
+describe("provenance fsync durability (FIX4 / F-R109-2)", () => {
+  const rec = (component: string): ProvenanceRecord => ({
+    ts: new Date().toISOString(),
+    lockVersion: "fixture-lock-v1",
+    component,
+    artifact: component,
+    url: "https://example.invalid/x",
+    expected: "0".repeat(64),
+    outcome: "fetched",
+    attempts: 1,
+  })
+
+  it("fsync runs after every append; a simulated fsync failure keeps the ledger parseable and reports durable:false", () => {
+    const home = freshHome()
+    const p = join(home, ".swarm", "setup", "provenance.jsonl")
+    let syncs = 0
+    // two appends with a working seam: line + fsync per call
+    expect(appendProvenance(rec("node"), p, { sync: () => { syncs += 1 } })).toEqual({ ok: true, durable: true })
+    expect(appendProvenance(rec("rtk"), p, { sync: () => { syncs += 1 } })).toEqual({ ok: true, durable: true })
+    expect(syncs).toBe(2)
+    // third append: simulated power-loss-window failure — the line is already on
+    // the file (kill-9-safe), so the ledger must stay fully parseable and the
+    // caller learns durability was NOT achieved (returned, not thrown).
+    const out = appendProvenance(rec("graft"), p, {
+      sync: () => {
+        throw new Error("simulated EIO")
+      },
+    })
+    expect(out.ok).toBe(false)
+    if (out.ok === false) expect(out.detail).toContain("simulated EIO")
+    const records = readProvenanceRecords(p)
+    expect(records.length).toBe(3) // recovery posture: nothing lost, nothing torn
+    expect(records.every((r) => r !== null)).toBe(true)
+    expect(records.map((r) => r?.component)).toEqual(["node", "rtk", "graft"])
+    // a later healthy append still works after the failure (no poisoned state)
+    expect(appendProvenance(rec("obsidian"), p, { sync: () => { syncs += 1 } }).ok).toBe(true)
+    expect(readProvenanceRecords(p).length).toBe(4)
+  })
+
+  it("default path (no seam) fsyncs for real: appended record is readable and file mode is 0600", () => {
+    const home = freshHome()
+    const p = join(home, ".swarm", "setup", "provenance.jsonl")
+    expect(appendProvenance(rec("node"), p)).toEqual({ ok: true, durable: true })
+    expect(readProvenanceRecords(p)[0]?.component).toBe("node")
+    expect(readFileSync(p, "utf8").endsWith("\n")).toBe(true)
+    expect(statSync(p).mode & 0o777).toBe(0o600)
   })
 })

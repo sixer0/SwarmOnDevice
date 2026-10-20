@@ -43,6 +43,7 @@ cat > "$WORK/tsconfig.r92.json" <<JSON
     "$HERE/types/**/*.d.ts",
     "$HERE/src/*.ts",
     "$HERE/src/composefiles/*.ts",
+    "$HERE/src/mcpproxy/urlpolicy.ts",
     "$HERE/src/steps/_template/index.ts",
     "$HERE/src/steps/firecrawl/*.ts"
   ]
@@ -55,18 +56,18 @@ bun build --compile --target=bun --outfile "$WORK/bin/egress_bake" "$HERE/$MY_SR
 check "bun build --compile $MY_SRC" 0 $?
 file "$WORK/bin/egress_bake" | grep -q "Mach-O" && { echo "  PASS egress_bake is Mach-O arm64"; pass=$((pass+1)); } || { echo "  FAIL egress_bake not Mach-O"; fail=$((fail+1)); }
 
-echo "=== PROOF 2: unit suite (deny-rule parse-and-assert / pin fail-closed / config correctness / contract / consent+dry-run) ==="
+echo "=== PROOF 2: unit suite (twelve-class deny-rule parse-and-assert / cross-enforcer equality / pin fail-closed / config correctness / contract / consent+dry-run) ==="
 ( cd "$HERE" && bun test "$MY_TEST" ) > "$WORK/bun-test.log" 2>&1
 rc=$?
 tail -5 "$WORK/bun-test.log"
 check "bun test $MY_TEST" 0 $rc
-grep -qE " 38 pass" "$WORK/bun-test.log" && { echo "  PASS 38 unit tests reported"; pass=$((pass+1)); } || { echo "  FAIL expected 38 passes"; fail=$((fail+1)); }
+grep -qE " 54 pass" "$WORK/bun-test.log" && { echo "  PASS 54 unit tests reported"; pass=$((pass+1)); } || { echo "  FAIL expected 54 passes"; fail=$((fail+1)); }
 
 echo "=== PROOF 3: OFFLINE bake demo — no docker, no spawn, no network; artefacts via the r85 render interface ==="
 export HOME="$WORK/home-bake"; mkdir -p "$HOME"
 export R92_ROOT="$HERE"
 cat > "$WORK/bake-demo.ts" <<'TS'
-import { rmSync } from "node:fs";
+import { chmodSync, rmSync } from "node:fs";
 const root = process.env.R92_ROOT!;
 const home = process.env.HOME!;
 // modules resolved through R92_ROOT (exported by this harness) — no machine path baked in;
@@ -74,7 +75,8 @@ const home = process.env.HOME!;
 const { validateLock } = await import(`${root}/src/lockfile.ts`);
 const { SECRET_INVENTORY, pathsFor } = await import(`${root}/src/composefiles/shared.ts`);
 const { renderAll, applyRenderedFiles } = await import(`${root}/src/composefiles/index.ts`);
-const { verifyEgressBake, auditSquidConf } = await import(`${root}/src/steps/firecrawl/egress_bake.ts`);
+const { verifyEgressBake, auditSquidConf, crossEnforcerAgreement, assertNoReservedAclNames, auditFileModes, REQUIRED_DENY_RANGES } = await import(`${root}/src/steps/firecrawl/egress_bake.ts`);
+const { isDeniedAddress } = await import(`${root}/src/mcpproxy/urlpolicy.ts`);
 const lock = validateLock(JSON.parse(await Bun.file(`${root}/tools.lock.json`).text()));
 if (!lock.ok) throw new Error(lock.error);
 
@@ -86,9 +88,25 @@ applyRenderedFiles(renderAll(lock.lock, { home, secrets: manifest }), `${home}/.
 let bad = 0;
 const ok = (label: string, cond: boolean) => { console.log(`  ${cond?"OK":"NO"}  ${label}`); if(!cond) bad++; };
 
-// (a) the shipped render bakes green
-const v = verifyEgressBake({ lock: lock.lock, home });
-ok("green bake: verifyEgressBake ok=true, zero findings", v.ok && v.findings.length === 0);
+// (a) R112-1 / R112-5 detection proven SYNTHETICALLY (deterministic regardless of whether the r85-fix5 rename/mode
+//     has landed on the shared tree yet), plus a green bake against the rename TARGET form.
+const confNow = await Bun.file(`${home}/.swarm/tools/firecrawl/squid/squid.conf`).text();
+const composeNow = await Bun.file(`${home}/.swarm/tools/firecrawl/compose/firecrawl.yml`).text();
+// reserved-name lint fires whenever a squid-predefined ACL name is declared, and clears when it is renamed away:
+const withReserved = `${confNow}\nacl to_localhost dst 203.0.113.0/24   # synthetic reserved decl (R112-1)\n`;
+ok("reserved-name lint FIRES on a to_localhost decl", assertNoReservedAclNames(withReserved).some((f)=>f.code==="SQUID_RESERVED_ACL_NAME" && f.item.includes("to_localhost")));
+ok("reserved-name lint CLEAN once named away (rename-target)", assertNoReservedAclNames(confNow.replace(/\bto_localhost\b/g,"swarm_hostnames")).length === 0);
+// R112-5 wrap-mode: a non-executable docker-entrypoint.d bind is refused; owner +x clears it.
+{ const tr = `${home}/.swarm/tools`; const wrap = `${tr}/firecrawl/compose/bin/probe-wrap.sh`;
+  await Bun.write(wrap, "#!/bin/sh\n"); chmodSync(wrap, 0o644);
+  const cwx = ["services:","  x:","    volumes:","      - type: bind",`        source: ${wrap}`,"        target: /docker-entrypoint.d/probe.sh"].join("\n");
+  ok("non-exec docker-entrypoint.d wrap -> MODE_ENTRYPOINT_WRAP", auditFileModes(tr, cwx).some((f)=>f.code==="MODE_ENTRYPOINT_WRAP"));
+  chmodSync(wrap, 0o700);
+  ok("owner-exec wrap clears MODE_ENTRYPOINT_WRAP", !auditFileModes(tr, cwx).some((f)=>f.code==="MODE_ENTRYPOINT_WRAP"));
+  rmSync(wrap, { force: true }); }
+// green bake against the rename target (works whether or not the render already renamed):
+const vg = verifyEgressBake({ lock: lock.lock, home, composeText: composeNow, confText: confNow.replace(/\bto_localhost\b/g,"swarm_hostnames") });
+ok("green bake against the renamed (r85-fix5 target) conf", vg.ok && vg.findings.length === 0);
 
 // (b) tag-only pin fails closed BEFORE any artefact is needed
 const p = lock.lock.components.firecrawl as Record<string, unknown>;
@@ -106,6 +124,14 @@ ok("compose image != lock pin -> IMAGE_PIN_MISMATCH", vi.findings.some((f)=>f.co
 const conf = await Bun.file(p2.firecrawlSquidConf).text();
 const stripped = conf.split("\n").map((l)=> /\bacl\s+to_localnet\s+dst\b/.test(l) ? l.replace(" 100.64.0.0/10","") : l).join("\n");
 ok("deny-range removed -> DENY_RANGE_MISSING (CGNAT)", auditSquidConf(stripped).some((f)=>f.code==="DENY_RANGE_MISSING" && f.item.includes("100.64.0.0/10")));
+
+// (e) twelve classes are the required set, and BOTH enforcers cover all twelve identically (review-107 M2)
+ok("REQUIRED_DENY_RANGES is the twelve amended classes", REQUIRED_DENY_RANGES.length === 12);
+ok("urlpolicy denies every class representative", REQUIRED_DENY_RANGES.every((r)=>isDeniedAddress(r.probe)));
+ok("cross-enforcer hook green on the shipped render", crossEnforcerAgreement(conf).length === 0);
+// divergence fixture: strip 0.0.0.0/8 from squid while urlpolicy still denies 0.0.0.0 -> named asymmetry
+const diverged = conf.split("\n").map((l)=> /\bacl\s+to_localnet\s+dst\b/.test(l) ? l.replace(" 0.0.0.0/8","") : l).join("\n");
+ok("squid drops 0.0.0.0/8 but urlpolicy denies it -> CROSS_ENFORCER_DIVERGENCE", crossEnforcerAgreement(diverged).some((f)=>f.code==="CROSS_ENFORCER_DIVERGENCE" && f.item.includes("0.0.0.0/8")));
 
 process.exit(bad===0 ? 0 : 1);
 TS

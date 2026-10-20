@@ -19,18 +19,18 @@
 import { describe, it, expect, beforeAll, afterAll } from "bun:test"
 import {
   chmodSync,
-  copyFileSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
   readdirSync,
-  rmSync,
   statSync,
   writeFileSync,
 } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+// Per-run isolation of the source-posture lock (replaces the shared src/tools.lock.json staging).
+import { isolateSourceLock } from "./lockPosture.ts"
 import step, {
   graftLaunch,
   graftChildEnv,
@@ -49,23 +49,18 @@ import { computeFileDigest, parseExpectedDigest } from "../src/verify.ts"
 import { OUTCOME } from "../src/outcomes.ts"
 import type { FetchResult } from "../src/fetch.ts"
 
-// ---- source-run lock posture (same harness trick as rows 82/83/84/87) -----------------------
-const SHIPPED_LOCK = join(import.meta.dir, "..", "tools.lock.json")
-const SRC_LOCK = join(import.meta.dir, "..", "src", "tools.lock.json")
-let stagedLock = false
+// ---- source-run lock posture: private program dir per run (see test/lockPosture.ts) ----
+let releaseLockPosture: (() => void) | undefined
 let SHIPPED: LockFile
 
 beforeAll(() => {
-  if (!existsSync(SRC_LOCK)) {
-    copyFileSync(SHIPPED_LOCK, SRC_LOCK)
-    stagedLock = true
-  }
+  releaseLockPosture = isolateSourceLock()
   const loaded = loadLock()
   if (!loaded.ok) throw new Error(`loadLock failed in test setup: ${loaded.error}`)
   SHIPPED = loaded.lock
 })
 afterAll(() => {
-  if (stagedLock) rmSync(SRC_LOCK, { force: true })
+  releaseLockPosture?.()
 })
 
 const NODE_VER = "vTest-fake" // synthetic private-node pin the graft step resolves

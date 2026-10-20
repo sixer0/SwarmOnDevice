@@ -11,17 +11,17 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "bun:test"
 import { createHash } from "node:crypto"
 import {
-  copyFileSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
-  rmSync,
   statSync,
   writeFileSync,
 } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+// Per-run isolation of the source-posture lock (replaces the shared src/tools.lock.json staging).
+import { isolateSourceLock } from "./lockPosture.ts"
 import {
   evaluateConsent,
   renderConsentScreen,
@@ -32,14 +32,14 @@ import {
 } from "../src/consent.ts"
 import { readPolicy } from "../src/policy.ts"
 import { loadLock, type LockFile } from "../src/lockfile.ts"
-import { readState } from "../src/state.ts"
+import { readState, defaultState } from "../src/state.ts"
+import { createStepKit } from "../src/stepkit.ts"
 import { COMPONENT_IDS, PATHS, type ComponentId } from "../src/constants.ts"
 import { CONSENT_BLOCKS } from "../src/consentText.ts"
 
-// ---- source-run lock posture (same harness trick as row 82: stage src/tools.lock.json) ------
+// ---- source-run lock posture: private program dir per run (see test/lockPosture.ts) ----
 const SHIPPED_LOCK = join(import.meta.dir, "..", "tools.lock.json")
-const SRC_LOCK = join(import.meta.dir, "..", "src", "tools.lock.json")
-let stagedLock = false
+let releaseLockPosture: (() => void) | undefined
 
 // ---- env hygiene (r95-routed FIX2) -------------------------------------------------------------
 // This suite mutates process.env.HOME per test. A combined single-process `bun test` run must
@@ -49,13 +49,10 @@ let stagedLock = false
 const ORIGINAL_HOME = process.env.HOME
 
 beforeAll(() => {
-  if (!existsSync(SRC_LOCK) && existsSync(SHIPPED_LOCK)) {
-    copyFileSync(SHIPPED_LOCK, SRC_LOCK)
-    stagedLock = true
-  }
+  releaseLockPosture = isolateSourceLock()
 })
 afterAll(() => {
-  if (stagedLock) rmSync(SRC_LOCK, { force: true })
+  releaseLockPosture?.()
   if (ORIGINAL_HOME !== undefined) process.env.HOME = ORIGINAL_HOME
 })
 
@@ -478,5 +475,91 @@ describe("F-79-A policy hook (enforcement half; admin switch DEFERRED — decisi
     mkdirSync(join(home, ".swarm/setup"), { recursive: true, mode: 0o700 })
     writeFileSync(policyPath(), "{not json", { mode: 0o600 })
     expect(readPolicy().ok).toBe(false)
+  })
+})
+
+describe("(M4) grant-in-effect: durable record AND this-run selection both required", () => {
+  // Download-boundary spy: fetchImpl is row 84's OBSERVATION seam (stepkit.ts header: the seam
+  // "can only make the kit MORE restrictive or observe it"). A call means the consent gate PASSED
+  // and row 82's fetchArtifact WOULD have run; the spy itself never touches network or disk.
+  function spyingKit(componentId: ComponentId) {
+    const calls: number[] = []
+    const kit = createStepKit({
+      componentId,
+      lock,
+      state: defaultState(lock.version),
+      dryRun: false,
+      fetchImpl: async () => {
+        calls.push(1)
+        return { ok: false, code: "FETCH_FAILED", message: "M4 spy: attempt observed, no network performed", attempts: 1 } as const
+      },
+    })
+    return { kit, calls }
+  }
+
+  it("grant-A proceeds, decline-B downloads NOTHING despite the durable record, re-grant-C resumes", async () => {
+    const tok = expectedTokenValue("node", computeLockSha256())
+    // RUN A — token grant: gate passes, download boundary reached exactly once.
+    const a = evaluateConsent({ selected: ["node"], nonInteractive: true, tokens: { node: tok }, lock })
+    expect(a.ok).toBe(true)
+    const kitA = spyingKit("node")
+    await kitA.kit.fetch()
+    expect(kitA.calls.length).toBe(1)
+    expect(consentWasGranted("node")).toBe(true)
+    expect(existsSync(consentLogPath())).toBe(true) // history starts here and is NEVER rewritten
+
+    // RUN B — same HOME, user DECLINES node: refusal; predicate false; ZERO new boundary hits.
+    const b = evaluateConsent({ selected: ["node"], nonInteractive: false, tokens: {}, lock, ask: () => "" })
+    expect(b.ok).toBe(false)
+    expect(consentWasGranted("node")).toBe(false) // M4: history alone must NOT pass the gate
+    const kitB = spyingKit("node")
+    const resB = await kitB.kit.fetch()
+    expect(kitB.calls.length).toBe(0) // instrumented counter zero for the declining run
+    expect(resB).toEqual({ ok: false, token: "REFUSED_NO_CONSENT" })
+    expect(existsSync(consentLogPath())).toBe(true) // append-only truth untouched by the refusal
+
+    // RUN C — re-grant: downloads resume.
+    const c = evaluateConsent({ selected: ["node"], nonInteractive: true, tokens: { node: tok }, lock })
+    expect(c.ok).toBe(true)
+    const kitC = spyingKit("node")
+    await kitC.kit.fetch()
+    expect(kitC.calls.length).toBe(1)
+    expect(consentWasGranted("node")).toBe(true)
+  })
+
+  it("selective decline: historically granted rtk stays gated while freshly granted node proceeds", async () => {
+    const full = computeLockSha256()
+    const a = evaluateConsent({
+      selected: ["node", "rtk"],
+      nonInteractive: true,
+      tokens: { node: expectedTokenValue("node", full), rtk: expectedTokenValue("rtk", full) },
+      lock,
+    })
+    expect(a.ok).toBe(true)
+    // Run B: yes-node / no-rtk. rtk holds a historical record but was DECLINED this run.
+    const b = evaluateConsent({ selected: ["node", "rtk"], nonInteractive: false, tokens: {}, lock, ask: (p) => (p.includes("Install node") ? "y" : "") })
+    expect(b.ok).toBe(true)
+    if (b.ok) expect(b.consented).toEqual(["node"])
+    expect(consentWasGranted("node")).toBe(true)
+    expect(consentWasGranted("rtk")).toBe(false) // THE M4 case at component granularity
+    const kitRtk = spyingKit("rtk")
+    await kitRtk.kit.fetch()
+    expect(kitRtk.calls.length).toBe(0)
+  })
+
+  it("a refused run clears the previous grant's selection (last decision wins)", () => {
+    const full = computeLockSha256()
+    const a = evaluateConsent({ selected: ["node"], nonInteractive: true, tokens: { node: expectedTokenValue("node", full) }, lock })
+    expect(a.ok).toBe(true)
+    expect(consentWasGranted("node")).toBe(true)
+    // graft token missing -> the WHOLE run refuses; node's valid token must not survive as selection
+    const b = evaluateConsent({ selected: ["node", "graft"], nonInteractive: true, tokens: { node: expectedTokenValue("node", full) }, lock })
+    expect(b.ok).toBe(false)
+    expect(consentWasGranted("node")).toBe(false)
+  })
+
+  it("direct recordConsent writes history but never grants — only a decision selects", () => {
+    recordConsent({ component: "graft", mode: "interactive", lock })
+    expect(consentWasGranted("graft")).toBe(false)
   })
 })

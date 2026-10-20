@@ -28,7 +28,7 @@ import {
   type TransportRequest,
   type TransportResponse,
 } from "../src/mcpproxy/proxy.ts"
-import { makeFetchTransport, searxngBaseFromEnvOrArtefact } from "../src/mcpproxy/resolve.ts"
+import { makeFetchTransport, searxngBaseFromEnvOrArtefact, defaultConnector } from "../src/mcpproxy/resolve.ts"
 
 const FIXED_MS = Date.parse("2026-10-20T07:00:00.000Z")
 const NONCES = ["aabbccdd", "11223344", "55667788", "99aabbcc"]
@@ -453,5 +453,162 @@ describe("live-loopback wiring (real transport, ephemeral port from server.port 
   it("env-first resolution returns PC-ENV-01 verbatim; artefact fallback finds nothing when HOME is empty", () => {
     expect(searxngBaseFromEnvOrArtefact({ SWARM_SEARXNG_URL: "http://127.0.0.1:9021/" })).toBe("http://127.0.0.1:9021") // trailing slash trimmed
     expect(searxngBaseFromEnvOrArtefact({}, tmpHome())).toBeNull() // no env, no rendered artefact -> honest null
+  })
+})
+
+// --- FIX2 (senior review 107 MAJOR-3): resolved-IP pinning on the host-side fetch -------------
+// The transport resolves ONCE, re-checks EVERY answer (urlpolicy.checkResolvedAddresses), and
+// dials a custom lookup serving only the vetted address — so these units prove: rebinding and
+// NAT64-wrapped answers are refused BEFORE any socket (connector spy never reached), the audit
+// line reads decision:"denied" with the §6.4 reason, and a legitimate name still connects via
+// the pinned path with Host/SNI identity preserved (real node:http against a loopback fixture).
+
+describe("FIX2 resolved-IP pinning: rebinding/NAT64 refused at connect, audit-logged, zero sockets", () => {
+  // Connector spy that records every attempted open AND fails loudly if reached: a refusal path
+  // that dialled would surface both as opens.length > 0 and as a thrown marker.
+  function spyOpen(calls: { secure: boolean; options: unknown }[]) {
+    return (secure: boolean, options: unknown) => {
+      calls.push({ secure, options })
+      throw new Error("connector reached on a path that must refuse before dialling")
+    }
+  }
+
+  it("split-horizon name -> [public, 127.0.0.1]: refused, ONE resolution, zero connector attempts, denied audit line", async () => {
+    const home = tmpHome()
+    const opens: { secure: boolean; options: unknown }[] = []
+    let resolves = 0
+    const transport = makeFetchTransport({
+      resolveAll: async () => {
+        resolves += 1
+        return { ok: true, addresses: ["93.184.216.34", "127.0.0.1"] }
+      },
+      open: spyOpen(opens),
+    })
+    const deps = makeDeps(home, makeFake(), { transport })
+    const res = await callTool(deps, "fetch", { url: "http://rebind.example/page" })
+    expect(textOf(res)).toContain("BLOCKED_BY_POLICY: address_denied")
+    expect(textOf(res)).toContain("no socket opened")
+    expect(opens.length).toBe(0)
+    expect(resolves).toBe(1) // exactly one resolution per hop attempt — no second lookup window
+    const lines = auditLines(home)
+    expect(lines.length).toBe(1)
+    expect(lines[0]).toMatchObject({ tool: "fetch", action: "page", decision: "denied", reason: "address_denied", url: "http://rebind.example/page" })
+    for (const k of ["status", "bytes_in", "bytes_out", "sha256"]) expect(k in (lines[0] as object)).toBe(false)
+  })
+
+  it("NAT64-wrapped answer 64:ff9b::7f00:1 refused like the embedded loopback literal", async () => {
+    const home = tmpHome()
+    const opens: { secure: boolean; options: unknown }[] = []
+    const transport = makeFetchTransport({
+      resolveAll: async () => ({ ok: true, addresses: ["64:ff9b::7f00:1"] }),
+      open: spyOpen(opens),
+    })
+    const deps = makeDeps(home, makeFake(), { transport })
+    const res = await callTool(deps, "fetch", { url: "https://nat64wrap.example/" })
+    expect(textOf(res)).toContain("address_denied")
+    expect(opens.length).toBe(0)
+    expect(auditLines(home)[0]).toMatchObject({ decision: "denied", reason: "address_denied" })
+  })
+
+  it("DNS failure and empty answer sets are honest network errors (decision:error), no socket", async () => {
+    const home = tmpHome()
+    const opens: { secure: boolean; options: unknown }[] = []
+    const failDns = makeDeps(home, makeFake(), { transport: makeFetchTransport({ resolveAll: async () => ({ ok: false, error: "ENOTFOUND gone.example" }), open: spyOpen(opens) }) })
+    const r1 = await callTool(failDns, "fetch", { url: "https://gone.example/" })
+    expect(textOf(r1)).toContain("BLOCKED_BY_NETWORK")
+    expect(textOf(r1)).toContain("ENOTFOUND")
+    const empty = makeDeps(home, makeFake(), { transport: makeFetchTransport({ resolveAll: async () => ({ ok: true, addresses: [] }), open: spyOpen(opens) }) })
+    const r2 = await callTool(empty, "fetch", { url: "https://empty.example/" })
+    expect(textOf(r2)).toContain("no DNS answers")
+    expect(opens.length).toBe(0)
+    expect(auditLines(home).map((l) => l.decision)).toEqual(["error", "error"])
+  })
+
+  it("POSITIVE: fake name pinned to 127.0.0.1 connects for real over node:http; Host preserved; lookup serves ONLY the vetted answer (TOCTOU closure)", async () => {
+    const home = tmpHome()
+    const seenHosts: string[] = []
+    const server = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      fetch(req: RequestLike): ResponseLike | Promise<ResponseLike> {
+        seenHosts.push(String(req.headers.get("host")))
+        return new Response("pinned-content") as unknown as ResponseLike
+      },
+    })
+    try {
+      const port = String(server.port)
+      let resolves = 0
+      let handed: { secure: boolean; options: any } | null = null
+      const transport = makeFetchTransport({
+        resolveAll: async (host: string) => {
+          resolves += 1
+          // "pin-me.example" exists nowhere in real DNS: a successful connect PROVES the pinned
+          // lookup answered it (no second resolution happened); system DNS would ENOTFOUND.
+          return host === "pin-me.example" ? { ok: true, addresses: ["127.0.0.1"] } : { ok: false, error: "fixture NXDOMAIN" }
+        },
+        open: (secure: boolean, options: any) => {
+          handed = { secure, options }
+          return defaultConnector(secure, options) // the REAL production connector dials
+        },
+      })
+      const out = await transport.request(`http://pin-me.example:${port}/doc`, { allowList: ["pin-me.example"] }) // estate channel: configured trust, pin still applied
+      expect(out.status).toBe(200)
+      expect(new TextDecoder().decode(out.bytes as Uint8Array)).toBe("pinned-content")
+      expect(resolves).toBe(1)
+      expect(handed).not.toBeNull()
+      const h = handed as unknown as { secure: boolean; options: any }
+      expect(h.secure).toBe(false)
+      expect(h.options.host).toBe("pin-me.example") // original name kept -> Host header + identity follow it
+      expect(typeof h.options.lookup).toBe("function") // pin installed
+      const served = await new Promise<unknown>((resolve) => h.options.lookup("pin-me.example", { all: true }, (_e: Error | null, a: unknown) => resolve(a)))
+      expect(served).toEqual([{ address: "127.0.0.1", family: 4 }]) // ONLY the vetted answer, never a fresh lookup
+      expect(seenHosts[0]).toBe(`pin-me.example:${port}`) // server-side proof of Host preservation
+    } finally {
+      server.stop(true)
+    }
+  })
+
+  it("POSITIVE end-to-end through the MCP tool on the ESTATE leg: named SearXNG base pinned to loopback, envelopes content, audits allowed", async () => {
+    const home = tmpHome()
+    const server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: () => new Response(JSON.stringify({ results: [{ title: "Estate", url: "https://fixture.example/", content: "named-base search works" }] })) })
+    try {
+      const port = String(server.port)
+      let resolves = 0
+      const transport = makeFetchTransport({
+        resolveAll: async (host: string) => {
+          resolves += 1
+          return host === "searxng.estate.example" ? { ok: true, addresses: ["127.0.0.1"] } : { ok: false, error: "fixture NXDOMAIN" }
+        },
+      })
+      const deps = makeDeps(home, makeFake(), { transport, searxngBase: () => `http://searxng.estate.example:${port}` })
+      const env = textOf(await callTool(deps, "search", { query: "estate named base" }))
+      expect(env).toContain("<<<UNTRUSTED_CONTENT")
+      expect(env).toContain("Estate")
+      expect(resolves).toBe(1) // the NAMED estate base still resolved exactly once and was pinned
+      expect(auditLines(home)[0]).toMatchObject({ tool: "search", decision: "allowed", host: "searxng.estate.example" })
+    } finally {
+      server.stop(true)
+    }
+  })
+
+  it("estate IP-literal bases skip DNS entirely (no resolver call for loopback search leg)", async () => {
+    const home = tmpHome()
+    let resolves = 0
+    const transport = makeFetchTransport({
+      resolveAll: async () => {
+        resolves += 1
+        return { ok: true, addresses: [] }
+      },
+    })
+    const server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: () => new Response(JSON.stringify({ results: [] })) })
+    try {
+      const deps = makeDeps(home, makeFake(), { transport, searxngBase: () => `http://127.0.0.1:${String(server.port)}` })
+      const res = await callTool(deps, "search", { query: "literal check" })
+      expect(auditLines(home)[0]).toMatchObject({ tool: "search", decision: "allowed" })
+      expect(textOf(res)).toContain("<<<UNTRUSTED_CONTENT")
+      expect(resolves).toBe(0) // IP literal -> no DNS step at all; the pinned path is names-only
+    } finally {
+      server.stop(true)
+    }
   })
 })

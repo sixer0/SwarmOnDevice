@@ -17,7 +17,6 @@
 
 import { describe, it, expect, beforeAll, afterAll } from "bun:test"
 import {
-  copyFileSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -28,6 +27,8 @@ import {
 } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+// Per-run isolation of the source-posture lock (replaces the shared src/tools.lock.json staging).
+import { isolateSourceLock } from "./lockPosture.ts"
 import { OUTCOME } from "../src/outcomes.ts"
 import { STATES, DOCKER_CONTEXT, type ComponentId } from "../src/constants.ts"
 import { defaultState, type StateFile } from "../src/state.ts"
@@ -40,13 +41,20 @@ import { SECRET_INVENTORY, pathsFor } from "../src/composefiles/shared.ts"
 import {
   bringUp,
   checkPreconditions,
+  composeDownCmd,
+  composeNetworksArgs,
+  composePsArgs,
   composeUpCmd,
+  containerInspectArgs,
+  containerRmArgs,
   contextInspectArgs,
   egressProxyPinReady,
   firecrawlPlan,
   healthProbeUrls,
+  imageRmArgs,
   labelListArgs,
   makeFakeDockerShim,
+  networkRmArgs,
   parsePublishedPorts,
   readStackProvenanceRecords,
   resolveDockerContextName,
@@ -54,28 +62,24 @@ import {
   selectLabelled,
   stackProvenanceFile,
   tearDown,
+  volumeRmCmd,
   waitForHealthy,
 } from "../src/stacklib.ts"
 import searxngStep from "../src/steps/searxng/index.ts"
 import firecrawlStep from "../src/steps/firecrawl/index.ts"
 
-// ---- source-run lock posture (same harness trick as rows 82/83/84) -----------------------
-const SHIPPED_LOCK = join(import.meta.dir, "..", "tools.lock.json")
-const SRC_LOCK = join(import.meta.dir, "..", "src", "tools.lock.json")
-let stagedLock = false
+// ---- source-run lock posture: private program dir per run (see test/lockPosture.ts) ----
+let releaseLockPosture: (() => void) | undefined
 let LOCK: LockFile
 
 beforeAll(() => {
-  if (!existsSync(SRC_LOCK)) {
-    copyFileSync(SHIPPED_LOCK, SRC_LOCK)
-    stagedLock = true
-  }
+  releaseLockPosture = isolateSourceLock()
   const loaded = loadLock()
   if (!loaded.ok) throw new Error(`loadLock failed in test setup: ${loaded.error}`)
   LOCK = loaded.lock
 })
 afterAll(() => {
-  if (stagedLock) rmSync(SRC_LOCK, { force: true })
+  releaseLockPosture?.()
 })
 
 function freshHome(label: string): string {
@@ -126,7 +130,7 @@ function greenShim(
   return makeFakeDockerShim([
     { match: "context inspect", stdout: "swarm" },
     { match: "={{.Health}}", stdout: psOut }, // compose ps
-    { match: "networks", stdout: "swarm-tools_se-edge\nswarm-tools_se-int" },
+    { match: "network ls", stdout: "swarm-tools_se-edge\nswarm-tools_se-int" },
   ])
 }
 
@@ -333,7 +337,7 @@ describe("(4) health gate timeout -> HEALTH_FAILED (BLOCKED-style outcome token)
     const shim = makeFakeDockerShim([
       { match: "context inspect", stdout: "swarm" },
       { match: "={{.Health}}", stdout: "searxng=running=starting\nvalkey=running=<none>" }, // never green
-      { match: "networks", stdout: "" },
+      { match: "network ls", stdout: "" },
     ])
     const wait = await waitForHealthy({
       run: shim.runner,
@@ -369,7 +373,7 @@ describe("(4) health gate timeout -> HEALTH_FAILED (BLOCKED-style outcome token)
     const shim = makeFakeDockerShim([
       { match: "context inspect", stdout: "swarm" },
       { match: "={{.Health}}", stdout: "searxng=running=starting" },
-      { match: "networks", stdout: "" },
+      { match: "network ls", stdout: "" },
     ])
     const st = readyState("searxng")
     const kit = createStepKit({ componentId: "searxng", lock: LOCK, state: st, dryRun: false, consentGate: () => true })
@@ -660,5 +664,137 @@ describe("step modules wire the library end-to-end (install/remove via StepConte
     const sx = await searxngStep.install({ lock: LOCK, state: readyState("searxng"), dryRun: false } as never)
     expect(sx.token).toBe(OUTCOME.FAILED)
     expect(sx.message).toContain("runner")
+  })
+})
+
+// ---- FIX ROUND 2 (R111-1 / R111-2) -------------------------------------------------------
+// A fake-shim fixture that ERRORS on any docker/compose subcommand outside the pinned CLI's
+// documented surface, so an unsupported verb can never slip through again unnoticed. Citation:
+// docker compose v5.6.0 (tools.lock.json components.runtime.docker_compose; 02d §6) documents NO
+// `compose networks` subcommand (docs.docker.com/reference/cli/docker/compose/); R111-1 captured
+// the live rejection `unknown docker command: "networks"`.
+describe("FIX2 R111-1 — every shipped builder uses a SUPPORTED verb (fixture errors otherwise)", () => {
+  const COMPOSE_VERBS = new Set([
+    "attach", "build", "commit", "config", "convert", "cp", "create", "down", "events", "exec",
+    "export", "images", "kill", "logs", "ls", "pause", "port", "ps", "publish", "pull", "push",
+    "restart", "rm", "run", "scale", "start", "stats", "stop", "top", "unpause", "up", "version",
+    "volumes", "wait", "watch",
+  ]) // docker compose v5.6.0 documented subcommands — deliberately NO "networks"
+  const DOCKER_TOP = new Set(["context", "network", "volume", "image", "container", "inspect", "rm", "rmi", "ps", "pull", "info", "images", "system"])
+  const VALUE_FLAGS = new Set(["-p", "--project-name", "-f", "--file", "--project-directory", "--profile", "--env-file"])
+
+  // Resolve the operative subcommand from an argv, mirroring how the CLI parses global + per-command
+  // flags. Returns null for an unrecognised docker top-level verb; `compose <sub>` for compose mode.
+  function resolveVerb(args: readonly string[]): string | null {
+    let i = 0
+    while (i < args.length && args[i] === "--context") i += 2 // consume the global --context <name>
+    const head = args[i]
+    if (head === undefined) return null
+    if (head === "compose") {
+      i += 1
+      while (i < args.length) {
+        const t = args[i]!
+        if (t.startsWith("-")) { i += VALUE_FLAGS.has(t) ? 2 : 1; continue }
+        return `compose ${t}` // first non-flag token after `compose` is its subcommand
+      }
+      return "compose"
+    }
+    if (!DOCKER_TOP.has(head)) return null // unknown docker top-level verb
+    return `docker ${head}` // sub-subcommands (network ls / context inspect / volume rm …) ride on a valid top verb
+  }
+
+  // Shim that returns exit 1 (`unknown docker command`) for any unresolvable/unsupported verb.
+  function verbValidatingRunner() {
+    const seen: string[] = []
+    return {
+      seen,
+      runner: async (args: readonly string[]) => {
+        seen.push(args.join(" "))
+        const verb = resolveVerb(args)
+        const bad = verb === null || (verb.startsWith("compose ") && !COMPOSE_VERBS.has(verb.slice(8)))
+        if (bad) return { exitCode: 1, stdout: "", stderr: `unknown docker command: "${(verb ?? "").replace(/^\S+ /, "")}"` }
+        return { exitCode: 0, stdout: "", stderr: "" }
+      },
+    }
+  }
+
+  it("accepts EVERY builder the stack lifecycle emits", async () => {
+    const v = verbValidatingRunner()
+    const cmds = [
+      composeUpCmd("/abs/searxng.yml"),
+      composeDownCmd("/abs/searxng.yml"),
+      composePsArgs("/abs/searxng.yml"),
+      composeNetworksArgs("/abs/searxng.yml"),
+      contextInspectArgs("colima-swarm"),
+      labelListArgs("container", "searxng"),
+      labelListArgs("network", "searxng"),
+      labelListArgs("volume", "searxng"),
+      labelListArgs("image", "searxng"),
+      containerInspectArgs("c1"),
+      containerRmArgs("c1"),
+      networkRmArgs("n1"),
+      imageRmArgs("i1"),
+      volumeRmCmd("v1"),
+    ]
+    for (const c of cmds) {
+      const r = await v.runner(c)
+      expect(`${c.join(" ")} -> ${r.stderr}`).toBe(`${c.join(" ")} -> `) // exit 0, empty stderr
+    }
+    expect(v.seen.length).toBe(cmds.length)
+  })
+
+  it("the networks listing is now plain `docker network ls` (no compose verb, no bogus 'networks')", () => {
+    const args = composeNetworksArgs("/abs/searxng.yml")
+    expect(args).toContain("network")
+    expect(args).toContain("ls")
+    expect(args).not.toContain("compose") // fixed: not a compose subcommand at all
+    expect(args.join(" ")).not.toContain(" networks ")
+    expect(args.join(" ")).toContain("com.docker.compose.project.config_files=/abs/searxng.yml") // per-stack scoping inside shared project
+  })
+
+  it("the SAME fixture REJECTS the retired broken form (regression guard)", async () => {
+    const v = verbValidatingRunner()
+    const broken = ["--context", "colima-swarm", "compose", "-p", "swarm-tools", "-f", "/abs/searxng.yml", "networks", "--format", "{{.Name}}"]
+    const r = await v.runner(broken)
+    expect(r.exitCode).toBe(1)
+    expect(r.stderr).toContain('unknown docker command: "networks"')
+  })
+})
+
+describe("FIX2 R111-2 — context gone (colima stop deletes the context it added)", () => {
+  it("resolver falls back to the register constant when only a profile is recorded (context absent)", () => {
+    const st = defaultState(LOCK.version)
+    st.components.runtime = { state: STATES.HEALTHY, dockerObjects: [{ kind: "profile", id: "swarm", createdBySwarm: true, hasData: true }] }
+    expect(resolveDockerContextName(st)).toBe(contextInspectArgs()[2]) // == register DOCKER_CONTEXT, the safe fallback
+  })
+
+  it("bringUp probes the register constant (not a phantom) when the context was never recorded", async () => {
+    const home = freshHome("ctx-absent")
+    stageArtefacts(home)
+    writeSecrets(home, "searxng")
+    const st = defaultState(LOCK.version)
+    st.components.runtime = { state: STATES.HEALTHY, dockerObjects: [{ kind: "profile", id: "swarm", createdBySwarm: true, hasData: true }] }
+    st.components.searxng = { state: STATES.CONFIGURED }
+    const shim = greenShim()
+    const kit = createStepKit({ componentId: "searxng", lock: LOCK, state: st, dryRun: true, consentGate: () => true })
+    const out = await bringUp({ kit, plan: searxngPlan(home), run: shim.runner })
+    expect(out.commands[0]).toBe(`docker context inspect ${contextInspectArgs()[2]}`)
+    expect(shim.zeroExec()).toBe(true)
+  })
+
+  it("fails CLOSED mid-run when a RECORDED context turns out gone (no silent proceed, no wrong-context up)", async () => {
+    const home = freshHome("ctx-gone")
+    stageArtefacts(home)
+    writeSecrets(home, "searxng")
+    const st = defaultState(LOCK.version)
+    st.components.runtime = { state: STATES.HEALTHY, dockerObjects: [{ kind: "docker-context", id: "colima-swarm", createdBySwarm: true }] }
+    st.components.searxng = { state: STATES.CONFIGURED }
+    const shim = makeFakeDockerShim([{ match: "context inspect", exitCode: 1, stderr: "context not found" }])
+    const kit = createStepKit({ componentId: "searxng", lock: LOCK, state: st, dryRun: false, consentGate: () => true })
+    const out = await bringUp({ kit, plan: searxngPlan(home), run: shim.runner })
+    expect(out.token).toBe(OUTCOME.FAILED)
+    expect(out.message).toContain('docker context "colima-swarm" not reachable')
+    expect(shim.invocations.length).toBe(1) // compose up NEVER ran against a wrong/absent context
+    expect(shim.invocations[0]).toEqual(["context", "inspect", "colima-swarm"])
   })
 })

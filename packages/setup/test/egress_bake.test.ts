@@ -15,9 +15,11 @@
 // Run TARGETED (row 102 owns the full suite): cd packages/setup && bun test test/egress_bake.test.ts
 
 import { describe, it, expect, beforeAll, afterAll } from "bun:test"
-import { copyFileSync, existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from "node:fs"
+import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+// Per-run isolation of the source-posture lock (replaces the shared src/tools.lock.json staging).
+import { isolateSourceLock } from "./lockPosture.ts"
 import { OUTCOME } from "../src/outcomes.ts"
 import { STATES } from "../src/constants.ts"
 import { defaultState } from "../src/state.ts"
@@ -27,35 +29,40 @@ import { SECRET_INVENTORY, pathsFor, PC_PORTS } from "../src/composefiles/shared
 import { renderAll, applyRenderedFiles } from "../src/composefiles/index.ts"
 import { renderSquidConf } from "../src/composefiles/squid_conf.ts"
 import { discoverSteps } from "../src/steps.ts"
+import { isDeniedAddress } from "../src/mcpproxy/urlpolicy.ts"
 import {
+  assertNoReservedAclNames,
+  auditFileModes,
   auditSquidConf,
   bakeEgressProxy,
+  crossEnforcerAgreement,
   egressHealthContract,
   verifyEgressBake,
   REQUIRED_DENY_RANGES,
 } from "../src/steps/firecrawl/egress_bake.ts"
+
+/** Models r85-fix5's intended R112-1 fix (the live V6 experiment, 13_live_firecrawl.md:110): rename ONLY the
+ *  hostname ACL off the squid-predefined `to_localhost` to a free name; the dst ACL name is irrelevant to the audit
+ *  (it keys on ACL TYPE + deny linkage). Used to assert the verifier green against the TARGET artefact while the
+ *  render still carries the reserved name — and to prove the lint by re-introducing the reserved name. */
+const v6RenameHostnames = (t: string): string => t.replace(/\bto_localhost\b/g, "swarm_hostnames")
 
 // Reference digests supplied by the controller brief (r78a ADDENDUM, re-fetch matched). Fixtures only — shipped
 // code never bakes a magic digest literal (it compares the compose against the lock, computed at runtime).
 const CLEARED_INDEX = "sha256:6a097f68bae708cedbabd6188d68c7e2e7a38cedd05a176e1cc0ba29e3bbe029"
 const CLEARED_ARM64 = "sha256:eecf35336788c1ab143566bca99ac58f213e9f17906a9a684346d7b323b6696c"
 
-const SHIPPED_LOCK = join(import.meta.dir, "..", "tools.lock.json")
-const SRC_LOCK = join(import.meta.dir, "..", "src", "tools.lock.json")
-let stagedLock = false
+let releaseLockPosture: (() => void) | undefined
 let LOCK: LockFile
 
 beforeAll(() => {
-  if (!existsSync(SRC_LOCK)) {
-    copyFileSync(SHIPPED_LOCK, SRC_LOCK)
-    stagedLock = true
-  }
+  releaseLockPosture = isolateSourceLock()
   const loaded = loadLock()
   if (!loaded.ok) throw new Error(`loadLock failed in test setup: ${loaded.error}`)
   LOCK = loaded.lock
 })
 afterAll(() => {
-  if (stagedLock) rmSync(SRC_LOCK, { force: true })
+  releaseLockPosture?.()
 })
 
 function freshHome(label: string): string {
@@ -128,7 +135,16 @@ describe("(happy) rendered artefacts bake green against the shipped lock", () =>
   it("verifyEgressBake is clean and reports the locked pin as the image ref", () => {
     const home = freshHome("happy")
     stageArtefacts(home)
-    const v = verifyEgressBake({ lock: LOCK, home })
+    // GREEN against the TARGET artefact: feed the r85-fix5-renamed conf (to_localhost -> swarm_hostnames, the live
+    // V6 fix) as text so the reserved-name + mode gates reflect the fixed shape deterministically, independent of
+    // whether the render has landed the rename yet. The raw shipped render's reserved name is asserted SEPARATELY
+    // below (assertNoReservedAclNames), so this row neither hides R112-1 nor goes red waiting on a sibling.
+    const v = verifyEgressBake({
+      lock: LOCK,
+      home,
+      composeText: readFileSync(fcComposePath(home), "utf8"),
+      confText: v6RenameHostnames(readFileSync(fcSquidPath(home), "utf8")),
+    })
     expect(v.ok).toBe(true)
     expect(v.findings).toEqual([])
     expect(v.imageRef).toBe(`docker.io/ubuntu/squid@${CLEARED_INDEX}`)
@@ -147,10 +163,17 @@ describe("(SSRF) deny-rule parse-and-assert over the rendered squid.conf", () =>
     expect(auditSquidConf(renderSquidConf().content)).toEqual([])
   })
 
-  it("every §10.4 required range is present in the shipped render", () => {
+  it("REQUIRED_DENY_RANGES is the TWELVE amended classes, including the three review-107 M2 additions", () => {
+    // review-107 MAJOR-2 named the original nine as incomplete; §10.4 was amended to twelve (r75-fix4).
+    expect(REQUIRED_DENY_RANGES.length).toBe(12)
+    const cidrs = REQUIRED_DENY_RANGES.map((r) => r.cidr)
+    for (const added of ["0.0.0.0/8", "::/128", "64:ff9b::/96"]) expect(cidrs).toContain(added)
+  })
+
+  it("every §10.4 required range (all twelve) is present in the shipped render", () => {
     const tokens = new Set<string>()
     for (const line of renderSquidConf().content.split("\n")) {
-      const m = (line.split("#")[0] ?? "").match(/^acl\s+to_localnet\s+dst\s+(.+)$/)
+      const m = (line.split("#")[0] ?? "").match(/^acl\s+\S+\s+dst\s+(.+)$/)
       if (m?.[1]) for (const t of m[1].trim().split(/\s+/)) tokens.add(t)
     }
     for (const req of REQUIRED_DENY_RANGES) expect(tokens.has(req.cidr)).toBe(true)
@@ -161,7 +184,7 @@ describe("(SSRF) deny-rule parse-and-assert over the rendered squid.conf", () =>
       const broken = renderSquidConf()
         .content.split("\n")
         .map((l) =>
-          /\bacl\s+to_localnet\s+dst\b/.test(l)
+          /\bacl\s+\S+\s+dst\b/.test(l)
             ? l.replace(new RegExp(` ?${req.cidr.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?=\\s|$)`, ""), "")
             : l,
         )
@@ -174,7 +197,7 @@ describe("(SSRF) deny-rule parse-and-assert over the rendered squid.conf", () =>
   it("drops a comment naming a CIDR cannot satisfy the check (parse over the code portion, not grep)", () => {
     const broken = renderSquidConf()
       .content.split("\n")
-      .filter((l) => !/\bacl\s+to_localnet\s+dst\b/.test(l) || !l.includes("169.254.0.0/16")) // remove the v4 line entirely
+      .filter((l) => !/\bacl\s+\S+\s+dst\b/.test(l) || !l.includes("169.254.0.0/16")) // remove the v4 line entirely
       .concat(["# 169.254.0.0/16 mentioned here only as a comment"]) // decoy comment re-introducing the token
       .join("\n")
     const findings = auditSquidConf(broken)
@@ -226,7 +249,7 @@ describe("(SSRF) deny-rule parse-and-assert over the rendered squid.conf", () =>
   it("hostname forms (localhost/.local) uncovered is refused", () => {
     const broken = renderSquidConf()
       .content.split("\n")
-      .filter((l) => !/^acl\s+to_localhost\s+dstdomain\b/.test(l)) // drop the dstdomain pair (H-R93-6 valid form)
+      .filter((l) => !/^acl\s+\S+\s+dstdomain\b/.test(l)) // drop the dstdomain pair (type-based per R112-1 rename; H-R93-6 form)
       .join("\n")
     expect(auditSquidConf(broken).some((f) => f.code === "DENY_HOSTNAME_MISSING")).toBe(true)
   })
@@ -234,12 +257,61 @@ describe("(SSRF) deny-rule parse-and-assert over the rendered squid.conf", () =>
   it("the pre-fix single-line 'dst localhost domain .local' shape is refused as SQUID_GRAMMAR_INVALID (H-R93-6 regression pin)", () => {
     const oldBroken = renderSquidConf()
       .content.split("\n")
-      .filter((l) => !/^acl\s+to_localhost\s+dstdomain\b/.test(l))
+      .filter((l) => !/^acl\s+\S+\s+dstdomain\b/.test(l)) // type-based (R112-1)
       .concat(["acl to_localhost dst localhost domain .local"]) // the exact line that FATALed on the live VM
       .join("\n")
     const findings = auditSquidConf(oldBroken)
     expect(findings.some((f) => f.code === "SQUID_GRAMMAR_INVALID")).toBe(true)
     expect(findings.some((f) => f.code === "DENY_HOSTNAME_MISSING")).toBe(true) // and it satisfies nothing
+  })
+})
+
+// ================================================================================================
+describe("(cross-enforcer equality) L3 urlpolicy ⇄ L4 squid deny identical sets, superset of the twelve", () => {
+  // r94's host-side predicate + the shipped squid ACL over the SAME twelve-class domain. Both must deny every
+  // class, so the hook is green on the shipped artefact and the two enforcers cannot silently drift (review-107 M2).
+  it("urlpolicy denies all twelve class representatives", () => {
+    for (const req of REQUIRED_DENY_RANGES) expect(isDeniedAddress(req.probe)).toBe(true)
+  })
+
+  it("the shipped render passes crossEnforcerAgreement with zero findings (both layers agree on twelve)", () => {
+    expect(crossEnforcerAgreement(renderSquidConf().content)).toEqual([])
+  })
+
+  it("dropping 0.0.0.0/8 from squid while urlpolicy still denies it is a NAMED divergence (MAJOR-2 fixture)", () => {
+    const broken = renderSquidConf()
+      .content.split("\n")
+      .map((l) => (/\bacl\s+\S+\s+dst\b/.test(l) ? l.replace(" 0.0.0.0/8", "") : l))
+      .join("\n")
+    const findings = crossEnforcerAgreement(broken)
+    // squid now permits 0.0.0.0 but urlpolicy denies the 0.0.0.0 probe -> asymmetric -> flagged by class name.
+    expect(
+      findings.some(
+        (f) => f.code === "CROSS_ENFORCER_DIVERGENCE" && f.item.includes("0.0.0.0/8") && f.item.includes("squid(L4)=allow") && f.item.includes("urlpolicy(L3)=deny"),
+      ),
+    ).toBe(true)
+  })
+
+  it("verifyEgressBake fails closed end-to-end on that divergence fixture", () => {
+    const home = freshHome("xfail")
+    stageArtefacts(home)
+    const broken = readFileSync(fcSquidPath(home), "utf8")
+      .split("\n")
+      .map((l) => (/\bacl\s+\S+\s+dst\b/.test(l) ? l.replace(" 0.0.0.0/8", "") : l))
+      .join("\n")
+    const v = verifyEgressBake({ lock: LOCK, home, composeText: readFileSync(fcComposePath(home), "utf8"), confText: broken })
+    expect(v.ok).toBe(false)
+    expect(v.findings.some((f) => f.code === "CROSS_ENFORCER_DIVERGENCE" && f.item.includes("0.0.0.0/8"))).toBe(true)
+    expect(v.findings.some((f) => f.code === "DENY_RANGE_MISSING" && f.item.includes("0.0.0.0/8"))).toBe(true)
+  })
+
+  it("dropping NAT64 64:ff9b::/96 from squid is refused as DENY_RANGE_MISSING (a new-class regression)", () => {
+    const broken = renderSquidConf()
+      .content.split("\n")
+      .map((l) => (/\bacl\s+\S+\s+dst\b/.test(l) ? l.replace(" 64:ff9b::/96", "") : l))
+      .join("\n")
+    expect(auditSquidConf(broken).some((f) => f.code === "DENY_RANGE_MISSING" && f.item.includes("64:ff9b::/96"))).toBe(true)
+    expect(crossEnforcerAgreement(broken).some((f) => f.code === "CROSS_ENFORCER_DIVERGENCE" && f.item.includes("64:ff9b::/96"))).toBe(true)
   })
 })
 
@@ -463,5 +535,92 @@ describe("(shape) the bake is NOT a registered component — the scan stays clos
     expect(scan.errors).toEqual([])
     expect(scan.steps.map((s) => s.id)).not.toContain("egress-proxy")
     expect(scan.steps.some((s) => s.id === "firecrawl")).toBe(true)
+  })
+})
+
+// ================================================================================================
+describe("(reserved ACL name) redeclaring a squid-predefined name is itself a failure (R112-1)", () => {
+  // Built from a synthetically RENAMED render then reverted, so it does NOT depend on whether r85-fix5 has landed.
+  const renamed = v6RenameHostnames(renderSquidConf().content)
+
+  it("the renamed (to_localhost -> swarm_hostnames) conf trips NO reserved-name lint", () => {
+    expect(assertNoReservedAclNames(renamed)).toEqual([])
+  })
+
+  it("declaring the squid-predefined name to_localhost is refused as SQUID_RESERVED_ACL_NAME", () => {
+    const broken = renamed.replace(/\bswarm_hostnames\b/g, "to_localhost") // the exact R112-1 crasher
+    const f = assertNoReservedAclNames(broken)
+    expect(f.some((x) => x.code === "SQUID_RESERVED_ACL_NAME" && x.item.includes("to_localhost"))).toBe(true)
+  })
+
+  it("the cross-enforcer hook is retargeted: it still finds all twelve + hostname coverage on the RENAMED conf", () => {
+    expect(crossEnforcerAgreement(renamed)).toEqual([]) // name-agnostic (keys on dst/dstdomain TYPE + deny linkage)
+  })
+
+  it("verifyEgressBake fails closed when the conf declares a reserved ACL name", () => {
+    const home = freshHome("reserved")
+    stageArtefacts(home)
+    const broken = v6RenameHostnames(renderSquidConf().content).replace(/\bswarm_hostnames\b/g, "to_localhost")
+    const v = verifyEgressBake({
+      lock: LOCK,
+      home,
+      composeText: readFileSync(fcComposePath(home), "utf8"),
+      confText: broken,
+    })
+    expect(v.ok).toBe(false)
+    expect(v.findings.some((f) => f.code === "SQUID_RESERVED_ACL_NAME")).toBe(true)
+  })
+})
+
+// ================================================================================================
+describe("(file modes) R112-5 secret hygiene (0700/0600) + executable docker-entrypoint.d wrap", () => {
+  const makeRoot = (): string => {
+    const tr = mkdtempSync(join(tmpdir(), "swarm-r92-modes-"))
+    const secDir = `${tr}/firecrawl/secrets`
+    mkdirSync(secDir, { recursive: true, mode: 0o700 })
+    writeFileSync(`${secDir}/proxy_token`, "x".repeat(40), { mode: 0o600 })
+    mkdirSync(`${tr}/firecrawl/compose/bin`, { recursive: true, mode: 0o700 })
+    return tr
+  }
+  const wrapCompose = (wrap: string): string =>
+    ["services:", "  auth-proxy:", "    volumes:", "      - type: bind", `        source: ${wrap}`, "        target: /docker-entrypoint.d/05-swarm-env.sh", ""].join("\n")
+
+  it("a well-ordered root has NO mode findings", () => {
+    const tr = makeRoot()
+    const wrap = `${tr}/firecrawl/compose/bin/05-swarm-env.sh`
+    writeFileSync(wrap, "#!/bin/sh\n", { mode: 0o755 })
+    try {
+      expect(auditFileModes(tr, wrapCompose(wrap))).toEqual([])
+    } finally {
+      rmSync(tr, { recursive: true, force: true })
+    }
+  })
+
+  it("a non-executable docker-entrypoint.d wrap is refused (the silent nginx auth-bypass, R112-5)", () => {
+    const tr = makeRoot()
+    const wrap = `${tr}/firecrawl/compose/bin/05-swarm-env.sh`
+    writeFileSync(wrap, "#!/bin/sh\n", { mode: 0o644 }) // nginx ignores non-executable -> token never substituted
+    try {
+      expect(auditFileModes(tr, wrapCompose(wrap)).some((f) => f.code === "MODE_ENTRYPOINT_WRAP" && f.item.includes(wrap))).toBe(true)
+      chmodSync(wrap, 0o755)
+      expect(auditFileModes(tr, wrapCompose(wrap)).some((f) => f.code === "MODE_ENTRYPOINT_WRAP")).toBe(false)
+    } finally {
+      rmSync(tr, { recursive: true, force: true })
+    }
+  })
+
+  it("a secrets dir that is not 0700 / a secret file that is not 0600 is refused (D-04)", () => {
+    const tr = makeRoot()
+    const secDir = `${tr}/firecrawl/secrets`
+    const secFile = `${secDir}/proxy_token`
+    chmodSync(secDir, 0o777)
+    chmodSync(secFile, 0o644)
+    try {
+      const f = auditFileModes(tr, "")
+      expect(f.some((x) => x.code === "MODE_SECRETS_DIR" && x.item.includes(secDir))).toBe(true)
+      expect(f.some((x) => x.code === "MODE_SECRET_FILE" && x.item.includes(secFile))).toBe(true)
+    } finally {
+      rmSync(tr, { recursive: true, force: true })
+    }
   })
 })

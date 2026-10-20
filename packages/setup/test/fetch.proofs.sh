@@ -51,12 +51,14 @@ else
   fi
 fi
 if [ -n "${R82_CA_DIR:-}" ]; then
-  # MATRIX env-run: R82_CA_DIR present => the 23 real-TLS cases EXECUTE (bare runs
-  # self-skip them with a named reason; see fetch.test.ts FIX3 header).
+  # MATRIX env-run: R82_CA_DIR present => the real-TLS cases EXECUTE (bare runs
+  # self-skip them with a named reason; see fetch.test.ts FIX3 header). Count is
+  # read back from the log so the label never goes stale when tests are added.
   ( cd "$PKG" && bun test test/fetch.test.ts ) > "$WORK/bun-test.log" 2>&1
   rc=$?
   cat "$WORK/bun-test.log"
-  check "bun test test/fetch.test.ts (env posture: 29 execute)" 0 $rc
+  n=$(awk '$2=="pass"{p=$1+0} END{print p+0}' "$WORK/bun-test.log")
+  check "bun test test/fetch.test.ts (env posture: $n execute)" 0 $rc
 fi
 
 echo "=== PROOF 3: security grep gates (P-3 / P-17 / no-exec-of-downloaded-content) ==="

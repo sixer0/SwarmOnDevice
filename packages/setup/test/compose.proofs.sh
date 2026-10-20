@@ -108,6 +108,19 @@ else
   echo "  FAIL ports (sex=$NP_SEX fc=$NP_FC total=$NP_ALL nonloop=$NONLOOP 9021=$V_9021 9022=$V_9022 old8888=$V_OLD x9021=$V_X9021 x9022=$V_X9022)"; fail=$((fail+1))
 fi
 
+echo "=== PROOF 5b: TWELVE deny classes rendered + deny-before-allow ordering (review-107 M2 / r75-fix4) ==="
+SQ="$WORK/render-a/firecrawl/squid/squid.conf"
+NC=$(sed 's/#.*//' "$SQ" | grep -E '^acl to_localnet dst ' | tr ' ' '\n' | grep -cE '^(127\.0\.0\.0/8|::1/128|10\.0\.0\.0/8|172\.16\.0\.0/12|192\.168\.0\.0/16|169\.254\.0\.0/16|100\.64\.0\.0/10|fe80::/10|fc00::/7|0\.0\.0\.0/8|::/128|64:ff9b::/96)$')
+NEW3=$(grep -c -e '0\.0\.0\.0/8' -e '::/128' -e '64:ff9b::/96' <(sed 's/#.*//' "$SQ" | grep '^acl to_localnet dst ') || true)
+LAST_DENY=$(grep -nE 'http_access deny (to_localnet|swarm_hostnames)$' "$SQ" | tail -1 | cut -d: -f1)
+FIRST_ALLOW=$(grep -n 'http_access allow' "$SQ" | head -1 | cut -d: -f1)
+DENY_ALL=$(grep -n 'http_access deny all' "$SQ" | tail -1 | cut -d: -f1)
+if [ "$NC" = 12 ] && [ "$FIRST_ALLOW" -gt "$LAST_DENY" ] && [ "$DENY_ALL" -gt "$FIRST_ALLOW" ]; then
+  echo "  PASS 12 unique deny-class literals on the dst lines; every destination deny (last line $LAST_DENY) above the first allow (line $FIRST_ALLOW); deny all last ($DENY_ALL)"; pass=$((pass+1))
+else
+  echo "  FAIL deny-set/ordering (classes=$NC lastDestDeny=$LAST_DENY firstAllow=$FIRST_ALLOW denyAll=$DENY_ALL)"; fail=$((fail+1))
+fi
+
 echo "=== PROOF 6: F-79-E version-label lint rejects a tampered-version fixture ==="
 export R85_ENTRY="$HERE/src/composefiles/index.ts"
 export R85_LOCKMOD="$HERE/src/lockfile.ts"
@@ -163,8 +176,23 @@ grep -nE 'rejectUnauthorized|NODE_TLS_REJECT_UNAUTHORIZED|GIT_SSL_NO_VERIFY|igno
 check "7c insecure-TLS tokens return nothing (P-17)" 1 $?
 grep -nE '\| *(ba|z)?sh|bash -c "\$\(|eval ' "${NEW[@]}" >/dev/null 2>&1
 check "7d pipe-to-shell returns nothing (P-3)" 1 $?
+# 7e REVIEW-107 MAJOR-1 argv-leak gate over the RENDERED TREE (code portions; mirrors lint.ts SECRET_ARGV_PATTERNS):
+# a generated secret must never sit in an exec'd argument (docker top//proc/cmdline exposure).
+LEAK=$(sed 's/#.*//' "$WORK"/render-a/*/*.yml "$WORK"/render-a/*/*.conf "$WORK"/render-a/*/*.template "$WORK"/render-a/*/*.env "$WORK"/render-a/*/compose/bin/* 2>/dev/null \
+  | grep -cE -- '--requirepass[[:space:]]+["'"'"']?\$|[[:space:]]-a[[:space:]]+["'"'"']?\$\(|\bexec[[:space:]][^$]*\$\([[:space:]]*cat[[:space:]]+/run/secrets' || true)
+if [ "$LEAK" = 0 ]; then echo "  PASS 7e zero secret-in-argv shapes across all 10 rendered artefacts (REVIEW-107 M1 gate)"; pass=$((pass+1));
+else echo "  FAIL 7e argv-leak matches=$LEAK"; grep -nE -- '--requirepass[[:space:]]+["'"'"']?\$|[[:space:]]-a[[:space:]]+["'"'"']?\$\(|\bexec[[:space:]][^$]*\$\([[:space:]]*cat[[:space:]]+/run/secrets' "$WORK"/render-a/*/*.yml "$WORK"/render-a/*/compose/bin/* 2>/dev/null | head -5; fail=$((fail+1)); fi
 
-echo "=== PROOF 8: unit suite (57 tests incl. one failing + one passing fixture per lint rule) ==="
+echo "=== PROOF 7f: R112-1 reserved ACL names absent + R112-5 wrap modes land clean ==="
+grep -qE '^acl\s+(all|manager|localhost|to_localhost|to_linklocal|CONNECT)\s' "$SQ" \
+  && { echo "  FAIL 7f rendered squid.conf declares a PREDEFINED ACL name (boot-FATAL class)"; fail=$((fail+1)); } \
+  || { echo "  PASS 7f no reserved-ACL declaration in rendered squid.conf (swarm_hostnames rename live)"; pass=$((pass+1)); }
+MODES_OK=1
+stat -f '%Lp %N' "$WORK/render-a/firecrawl/compose/bin/"* | while read -r m f; do case "$m" in 600|700) ;; *) echo "  bad mode $m $f"; exit 1;; esac; done || MODES_OK=0
+[ "$(stat -f '%Lp' "$WORK/render-a/firecrawl/compose/bin/fc-nginx-env.sh")" = 700 ] || MODES_OK=0
+if [ "$MODES_OK" = 1 ]; then echo "  PASS 7f applied wrap modes: fc-nginx-env.sh=700 (entrypoint-executed), all others 600, zero group/world bits"; pass=$((pass+1)); else echo "  FAIL 7f wrap modes wrong"; fail=$((fail+1)); fi
+
+echo "=== PROOF 8: unit suite (74 tests incl. one failing + one passing fixture per lint rule) ==="
 ( cd "$HERE" && bun test test/compose_files.test.ts ) > "$WORK/bun-test.log" 2>&1
 rc=$?
 tail -5 "$WORK/bun-test.log"

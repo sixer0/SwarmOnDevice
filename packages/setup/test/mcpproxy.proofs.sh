@@ -95,6 +95,47 @@ check "audit module has no slot for the bearer token (structural P-8)" 1 $?
 rg -n '^await ' "$HERE/src/mcpproxy/proxy.ts" "$HERE/src/mcpproxy/sanitise.ts" "$HERE/src/mcpproxy/urlpolicy.ts" "$HERE/src/mcpproxy/audit.ts" "$HERE/src/mcpproxy/register.ts" "$HERE/src/mcpproxy/wiring.ts" "$HERE/src/mcpproxy/resolve.ts" > /dev/null 2>&1
 check "no top-level await outside main.ts (no network at import time, §6.2)" 1 $?
 
+echo "=== PROOF 5: FIX2 transport shape + TLS identity under pinned connect (review 107 MAJOR-3) ==="
+rg -n 'lookup: pinnedLookup' "$HERE/src/mcpproxy/resolve.ts" > /dev/null 2>&1
+check "every named-host request installs the pinned lookup (structural)" 0 $?
+rg -n 'await fetch\(|AbortSignal' "$HERE/src/mcpproxy/resolve.ts" > /dev/null 2>&1
+check "transport no longer uses ambient fetch (single resolution path: dns.lookup + node http/https)" 1 $?
+if command -v openssl >/dev/null 2>&1; then
+  openssl req -x509 -newkey rsa:2048 -keyout "$WORK/key.pem" -out "$WORK/cert.pem" -days 1 -nodes \
+    -subj "/CN=pin.probe.test" -addext "subjectAltName=DNS:pin.probe.test" >/dev/null 2>&1
+  cat > "$WORK/tls_pin_probe.ts" <<'TS'
+// Runtime-generated probe (NOT shipped): proves bun 1.3.14 node:https keeps SNI + certificate
+// identity bound to the ORIGINAL name while a custom lookup pins the TCP destination.
+import https from "node:https"
+import { readFileSync } from "node:fs"
+const certPath = process.argv[2] as string
+const keyPath = process.argv[3] as string
+const ca = readFileSync(certPath, "utf8")
+const srv = Bun.serve({ hostname: "127.0.0.1", port: 0, tls: { key: readFileSync(keyPath, "utf8"), cert: ca }, fetch: () => new Response("tls-pinned") })
+const port = srv.port
+const pin = (ip: string) => (_h: string, o: any, cb: any) => (o && o.all ? cb(null, [{ address: ip, family: 4 }]) : cb(null, ip, 4))
+const get = (servername?: string) =>
+  new Promise<string>((resolve) => {
+    const rq = https.request({ host: "pin.probe.test", port, path: "/", ca, ...(servername ? { servername } : {}), lookup: pin("127.0.0.1") }, (res: any) => {
+      let b = ""
+      res.on("data", (c: any) => (b += c))
+      res.on("end", () => resolve(`status=${res.statusCode} body=${b}`))
+    })
+    rq.on("error", (e: any) => resolve(`error:${e.constructor.name} ${e.message}`))
+    rq.end()
+  })
+console.log(`GOOD ${await get("pin.probe.test")}`)
+console.log(`WRONG ${await get("wrong.example")}`)
+srv.stop(true)
+TS
+  bun run "$WORK/tls_pin_probe.ts" "$WORK/cert.pem" "$WORK/key.pem" > "$WORK/tls.out" 2>&1
+  sed 's/^/    /' "$WORK/tls.out"
+  grep -q "GOOD status=200 body=tls-pinned" "$WORK/tls.out" && check "pinned https connect: correct servername -> 200 (SNI+verify follow the NAME)" 0 0 || check "pinned https connect: correct servername -> 200 (SNI+verify follow the NAME)" 0 1
+  grep -q "WRONG.*ALTNAME" "$WORK/tls.out" && check "same pin, WRONG servername -> certificate rejected (identity not bypassed)" 0 0 || check "same pin, WRONG servername -> certificate rejected (identity not bypassed)" 0 1
+else
+  echo "  SKIP: openssl unavailable — TLS-pin proof not executed (honest skip, not a pass)"
+fi
+
 echo "=== SUMMARY ==="
 echo "SUMMARY: $pass passed, $fail failed"
 rm -rf "$WORK"

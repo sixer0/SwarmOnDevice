@@ -4,7 +4,7 @@
 // Run TARGETED: cd packages/setup && bun test test/mcp_urlpolicy.test.ts
 
 import { describe, it, expect } from "bun:test"
-import { checkUrl, isDeniedAddress } from "../src/mcpproxy/urlpolicy.ts"
+import { checkUrl, isDeniedAddress, isIpLiteral, checkResolvedAddresses, nat64Embedded } from "../src/mcpproxy/urlpolicy.ts"
 
 describe("T-W7-2 rules 1-2: scheme + parseability", () => {
   const schemeVectors = [
@@ -123,5 +123,66 @@ describe("T-W7-2 positive control: public hosts", () => {
   it("userinfo trickery cannot disguise an IP target", () => {
     expect(checkUrl("http://evil@example.com/../@127.0.0.1/")).toEqual({ ok: true, host: "example.com" }) // WHATWG puts example.com as host; the userinfo never reaches a request target
     expect(checkUrl("http://user:pw@127.0.0.1/")).toEqual({ ok: false, reason: "address_denied" })
+  })
+})
+
+// --- FIX2 (senior review 107 MAJOR-3): deny-set completion + NAT64 + resolved-answer gate ------
+
+describe("FIX2 deny-set: 0.0.0.0/8, ::/128, NAT64 64:ff9b::/96", () => {
+  it("0.0.0.0/8 denied across the range, not only the exact address", () => {
+    expect(checkUrl("http://0.0.0.0/")).toEqual({ ok: false, reason: "address_denied" })
+    expect(checkUrl("http://0.5.6.7/")).toEqual({ ok: false, reason: "address_denied" })
+    expect(isDeniedAddress("0.255.255.255")).toBe(true)
+    expect(isDeniedAddress("1.0.0.1")).toBe(false) // just outside the range
+  })
+
+  it("::/128 unspecified and ::1 loopback denied", () => {
+    expect(checkUrl("http://[::]/")).toEqual({ ok: false, reason: "address_denied" })
+    expect(isDeniedAddress("::")).toBe(true)
+    expect(isDeniedAddress("::1")).toBe(true)
+  })
+
+  it("NAT64 well-known prefix refused as literals (whole /96, documented conservative choice)", () => {
+    expect(checkUrl("http://[64:ff9b::7f00:1]/")).toEqual({ ok: false, reason: "address_denied" }) // wraps 127.0.0.1
+    expect(checkUrl("http://[64:ff9b::808:808]/")).toEqual({ ok: false, reason: "address_denied" }) // wraps 8.8.8.8 — prefix rule denies regardless
+    expect(isDeniedAddress("64:ff9b::a0b:c0d")).toBe(true)
+  })
+
+  it("NAT64 embedded-v4 mapping UNDERSTOOD, not just pattern-blocked", () => {
+    expect(nat64Embedded("64:ff9b::7f00:1")).toBe("127.0.0.1")
+    expect(nat64Embedded("64:ff9b::808:808")).toBe("8.8.8.8")
+    expect(nat64Embedded("64:ff9b:1::7f00:1")).toBeNull() // local-use /48 is not the well-known /96
+    expect(nat64Embedded("2001:db8::1")).toBeNull()
+    // Honest boundary: the local-use prefix is NOT in the literal deny set; names resolving to it
+    // are still caught by the transport's resolved-answer gate (mcp_proxy FIX2 suite).
+    expect(isDeniedAddress("64:ff9b:1::7f00:1")).toBe(false)
+  })
+
+  it("isIpLiteral distinguishes names from v4/v6 literals for the transport's pin decision", () => {
+    expect(isIpLiteral("127.0.0.1")).toBe(true)
+    expect(isIpLiteral("::1")).toBe(true)
+    expect(isIpLiteral("64:ff9b::1")).toBe(true)
+    expect(isIpLiteral("example.com")).toBe(false)
+    expect(isIpLiteral("999.1.1.1")).toBe(false) // malformed quad stays name-shaped; parseIPv4 rejects >255
+  })
+})
+
+describe("FIX2 checkResolvedAddresses: every-answer gate feeding the pinned connect", () => {
+  it("all-public answer set passes (null = no policy objection)", () => {
+    expect(checkResolvedAddresses(["93.184.216.34", "2606:2800:220:1:248:1893:25c8:1946"])).toBeNull()
+  })
+  it("split-horizon rebinding set (public + loopback) refuses the WHOLE call", () => {
+    expect(checkResolvedAddresses(["93.184.216.34", "127.0.0.1"])).toBe("address_denied")
+    expect(checkResolvedAddresses(["127.0.0.1", "93.184.216.34"])).toBe("address_denied") // order-independent
+  })
+  it("single private / metadata / NAT64 / CGNAT answer refuses", () => {
+    expect(checkResolvedAddresses(["::1"])).toBe("address_denied")
+    expect(checkResolvedAddresses(["169.254.169.254"])).toBe("address_denied")
+    expect(checkResolvedAddresses(["64:ff9b::7f00:1"])).toBe("address_denied")
+    expect(checkResolvedAddresses(["100.64.0.7"])).toBe("address_denied")
+    expect(checkResolvedAddresses(["fe80::2"])).toBe("address_denied")
+  })
+  it("empty answer set is NOT a policy decision (the caller surfaces the DNS failure honestly)", () => {
+    expect(checkResolvedAddresses([])).toBeNull()
   })
 })

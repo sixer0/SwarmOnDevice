@@ -104,5 +104,26 @@ if [ "$rc" = 1 ]; then echo "  PASS: 0 bind/listen primitives in src/"; pass=$((
 elif [ "$rc" = 0 ]; then echo "  FAIL: a bind/listen primitive was found"; fail=$((fail+1));
 else echo "  FAIL: search errored (rc $rc)"; fail=$((fail+1)); fi
 
+echo "=== PROOF 7: COMPILED binary discovers all SEVEN steps via the embedded registry ==="
+# This is the row-106 blocker H-R106 fix: pre-fix, the compiled install pipeline found ZERO
+# steps (bun --compile does not embed directories). Now discovery reads steps.gen.ts.
+export HOME="$WORK/home-steps"; mkdir -p "$HOME"
+"$BIN" install --dry-run >"$WORK/steps.out" 2>/dev/null
+listed=$(grep -cE '^  - (runtime|node|graft|rtk|obsidian|searxng|firecrawl)$' "$WORK/steps.out")
+if [ "$listed" = "7" ]; then echo "  PASS compiled dry-run lists all 7 steps (found $listed)"; pass=$((pass+1)); else echo "  FAIL compiled dry-run listed $listed/7"; fail=$((fail+1)); fi
+grep -q "RESULT REFUSED_NO_CONSENT" "$WORK/steps.out" && { echo "  PASS consent-first preserved under compiled discovery"; pass=$((pass+1)); } || { echo "  FAIL consent token missing"; fail=$((fail+1)); }
+
+echo "=== PROOF 8: build-time registry parity gate (scan==registry; tamper caught) ==="
+( cd "$HERE" && bun run script/gen-steps.ts --check ) >/dev/null 2>&1
+check "gen-steps --check parity OK (registry == disk scan)" 0 $?
+# Tamper: add a NON-hidden step dir WITHOUT regenerating -> the parity gate must fail closed.
+TAMPER="$HERE/src/steps/zz_parity_probe"
+mkdir -p "$TAMPER"; printf '{"id":"zz_parity_probe","order":99,"requires":[]}\n' > "$TAMPER/step.json"
+( cd "$HERE" && bun run script/gen-steps.ts --check ) >/dev/null 2>&1; rc=$?
+rm -rf "$TAMPER"
+check "adding a step dir without regenerating is CAUGHT (non-zero)" 1 $rc
+( cd "$HERE" && bun run script/gen-steps.ts --check ) >/dev/null 2>&1
+check "parity restored after removing the tamper dir" 0 $?
+
 echo "=== SUMMARY: $pass passed, $fail failed ==="
 [ "$fail" = 0 ]
