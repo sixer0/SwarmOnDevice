@@ -10,6 +10,7 @@
 export const STEPS_GEN_HASH = "03c94c6286d1fb91418854cb5b9977d66f5f851f53933c763467346ab946e277"
 
 import type { StepDescriptor } from "./step-descriptor.ts"
+import type { StepModule } from "./steps/_template/index.ts"
 import step_firecrawl from "./steps/firecrawl/index.ts"
 import step_graft from "./steps/graft/index.ts"
 import step_node from "./steps/node/index.ts"
@@ -30,8 +31,8 @@ export const GENERATED_DESCRIPTORS: readonly StepDescriptor[] = [
 ]
 
 /** The step modules themselves, statically imported so the compiler embeds their code into
- *  the single binary. Ordered to match GENERATED_DESCRIPTORS. Execution wiring (rows 86-90)
- *  consumes these; discovery/ordering uses GENERATED_DESCRIPTORS. */
+ *  the single binary. Ordered to match GENERATED_DESCRIPTORS. Execution wiring consumes
+ *  these; discovery/ordering uses GENERATED_DESCRIPTORS. */
 export const GENERATED_MODULES: readonly unknown[] = [
   step_firecrawl,
   step_graft,
@@ -41,3 +42,17 @@ export const GENERATED_MODULES: readonly unknown[] = [
   step_runtime,
   step_searxng,
 ]
+
+/** Id-keyed view of the SAME statically-imported modules (seam pass 8 / R113-1). The engine
+ *  resolves "which module runs step <id>" through this map in BOTH discovery postures: the
+ *  compiled binary embeds directories nowhere, and the source-mode directory scan returns
+ *  descriptors only — an id map is the one lookup that works identically either way. */
+export const GENERATED_MODULES_BY_ID: Readonly<Record<StepModule["id"], StepModule>> = {
+  "firecrawl": step_firecrawl,
+  "graft": step_graft,
+  "node": step_node,
+  "obsidian": step_obsidian,
+  "rtk": step_rtk,
+  "runtime": step_runtime,
+  "searxng": step_searxng,
+}

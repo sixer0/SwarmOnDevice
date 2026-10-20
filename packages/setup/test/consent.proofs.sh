@@ -80,8 +80,17 @@ expect_absent "C3 no consent.log on mismatch" "$HOME/.swarm/setup/consent.log"
 echo "=== PROOF D: grant path — consent durable BEFORE any fetch is permitted ==="
 export HOME="$WORK/home-grant"; mkdir -p "$HOME"
 "$BIN" install node --non-interactive --terms-token "node=node@${LOCK_SHA12}" >"$WORK/d.out" 2>"$WORK/d.err" </dev/null; rc=$?
-# Steps (rows 86-90) do not exist yet: the run must stop AFTER recording with FAILED, never fetching.
-check "D1 granted run exits 1 (no step modules yet)" 1 $rc
+# seam8-fix1 (controller authority over row 83's file; rationale in 90c_seam_pass_8.md FIX ROUND):
+# the old expectation "granted run exits 1 (no step modules yet)" encoded exactly the placeholder
+# state R113-1 was filed to delete (a run that records consent and installs nothing). A CONSENTED
+# run now dispatches, so exit 1 became a fact about the defect, not about consent. Replaced by a
+# check that is stronger in both worlds and deterministic on networked and offline hosts alike:
+# whatever a granted run prints, its token must name real step execution having been attempted, and
+# REFUSED_NO_CONSENT after a durably-recorded grant means the gate opened without consent — fatal.
+# Consent-first itself is NOT relaxed anywhere in this file: C1/C2/C3 still prove zero writes and
+# zero fetches BEFORE consent, and the two converted checks below still police everything the run
+# touched afterwards.
+if grep -qE '^step [a-z]+: ' "$WORK/d.out"; then echo "  PASS D1 granted run dispatched registered steps (RESULT $(grep -m1 '^RESULT ' "$WORK/d.out" | cut -d' ' -f2))"; pass=$((pass+1)); else echo "  FAIL D1 no 'step <id>:' execution line — run terminated without dispatch (the R113-1 placeholder state)"; fail=$((fail+1)); fi
 if [ -f "$HOME/.swarm/setup/consent.log" ]; then echo "  PASS D1 consent.log written on grant (PC-PATH-03)"; pass=$((pass+1)); else echo "  FAIL D1 consent.log missing"; fail=$((fail+1)); fi
 MODE=$(stat -f '%Lp' "$HOME/.swarm/setup/consent.log" 2>/dev/null || echo "?")
 if [ "$MODE" = "600" ]; then echo "  PASS D1 consent.log mode 0600"; pass=$((pass+1)); else echo "  FAIL D1 mode $MODE != 600"; fail=$((fail+1)); fi
@@ -103,8 +112,53 @@ const ok =
 if (ok) { console.log("  PASS D1 record holds time,user,component,version,hash (+ §6.5 fields, artifact scope)"); process.exit(0); }
 console.log("  FAIL D1 record schema: " + JSON.stringify(l));
 process.exit(1)' "$HOME/.swarm/setup/consent.log" "$LOCK_SHA12" && pass=$((pass+1)) || fail=$((fail+1))
-expect_absent "D1 ZERO fetch evidence: provenance.jsonl absent (row 82 ledger would hold one line per settled call)" "$HOME/.swarm/setup/provenance.jsonl"
-expect_absent "D1 no state.json (no component state advanced without steps)" "$HOME/.swarm/setup/state.json"
+# Converted from "provenance.jsonl absent" (true only while steps could not run) into a POSITIVE
+# audit-ledger integrity check: every settled fetch must have written its line, no line may claim a
+# fetch the state file does not corroborate, and every contacted URL must sit on THIS lock's own
+# host allow-list. The old absence assertion is preserved where it still guards the real invariant:
+# C1/C2/C3 keep demanding zero ledger/state files from any unconsented or refused run.
+{
+  if [ -f "$HOME/.swarm/setup/provenance.jsonl" ]; then
+    node -e '
+      const fs = require("fs");
+      const lines = fs.readFileSync(process.argv[1], "utf8").trim().split("\n").filter((x) => x !== "").map(JSON.parse);
+      const hosts = new Set(JSON.parse(fs.readFileSync(process.argv[2], "utf8")).hosts);
+      const bad = lines.filter((r) => typeof r.url !== "string" || !hosts.has(new URL(r.url).hostname));
+      console.log(lines.length > 0 && bad.length === 0
+        ? "  PASS D1 provenance.jsonl holds >=1 settled line, every url on the lock allow-list (P-18)"
+        : "  FAIL D1 ledger breach: lines=" + lines.length + " off-list=" + JSON.stringify(bad.map((b) => b.url)));
+      process.exit(lines.length > 0 && bad.length === 0 ? 0 : 1)
+    ' "$HOME/.swarm/setup/provenance.jsonl" "$WORK/bin/tools.lock.json" && pass=$((pass+1)) || fail=$((fail+1))
+  else
+    echo "  FAIL D1 consented run settled ZERO fetches — provenance.jsonl missing means nothing was verified"; fail=$((fail+1))
+  fi
+}
+# Converted from "no state.json (no component state advanced without steps)" — an absence that was
+# only true while dispatch was the R113-1 placeholder. The replacement enforces the STATE TRUTH of
+# the consented run in BOTH worlds (networked: the step may complete; offline: it must stop at its
+# network-blocked state) and adds the invariant the old check could never express: a component may
+# only read `healthy` when this very run printed RESULT OK — a fake green is now a hard red.
+{
+  node -e '
+    const fs = require("fs");
+    const home = process.argv[1];
+    const resultLine = fs.readFileSync(process.argv[2], "utf8").split("\n").find((l) => l.startsWith("RESULT ")) || "RESULT <none>";
+    const token = resultLine.split(" ")[1] || "";
+    let st = null;
+    try { st = JSON.parse(fs.readFileSync(home + "/.swarm/setup/state.json", "utf8")); } catch {}
+    const entry = st && st.components && st.components.node;
+    const s = entry ? entry.state : "<absent>";
+    let ok;
+    if (token === "OK") {
+      ok = !!entry && s === "healthy" && entry.installedBySwarm === true && typeof entry.integrity === "string" && Array.isArray(entry.paths) && entry.paths.length > 0;
+    } else {
+      ok = !entry || (s !== "healthy" && s !== "verified" && s !== "installed" && s !== "configured");
+    }
+    console.log(ok ? "  PASS D1 state.json coherence: RESULT " + token + " <-> node=" + s + " (healthy requires an OK run; a fake green is a red)"
+                  : "  FAIL D1 state incoherent: RESULT " + token + " but node=" + JSON.stringify(entry));
+    process.exit(ok ? 0 : 1)
+  ' "$HOME" "$WORK/d.out" && pass=$((pass+1)) || fail=$((fail+1))
+}
 
 echo "=== PROOF E: F-79-A policy hook (enforcement half; switch DEFERRED per decisions.md) ==="
 export HOME="$WORK/home-policy"; mkdir -p "$HOME/.swarm/setup"
