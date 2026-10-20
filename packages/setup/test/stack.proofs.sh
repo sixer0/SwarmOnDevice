@@ -108,13 +108,18 @@ check "dry-run shim: token OK + zeroExec true" 0 $rc
 # Scoping markers, value-agnostic on the context NAME (colima names it colima-<profile>, H-R93-1),
 # PLUS the H-R93-2 fix: the context-inspect line must NOT carry a --context flag, and no line may
 # read the broken "--context context" form.
+# PLUS the R112c-4 fix (fix round 4): the health-poll line must enumerate -a (an exited container is
+# otherwise invisible to the gate — the fail-open) and must scope ps to THIS file's services
+# positionally (searxng + valkey here), because -f alone does not scope ps in the shared project.
 grep -q "up -d --pull never" "$WORK/shim.out" \
   && grep -q -- "-p swarm-tools" "$WORK/shim.out" \
   && grep -qE -- "--context [a-z]" "$WORK/shim.out" \
   && grep -qE "docker context inspect [a-z]" "$WORK/shim.out" \
   && ! grep -q -- "--context context" "$WORK/shim.out" \
-  && { echo "  PASS exact commands carry context + project + file-scoped up; inspect argv correct (no --context)"; pass=$((pass+1)); } \
-  || { echo "  FAIL exact commands missing scoping or bad inspect argv"; fail=$((fail+1)); }
+  && grep -qE -- "ps --format .* -a " "$WORK/shim.out" \
+  && grep -qE -- "ps --format .* -a searxng valkey " "$WORK/shim.out" \
+  && { echo "  PASS exact commands carry context + project + file-scoped up; inspect argv correct (no --context); status query carries -a + its own services"; pass=$((pass+1)); } \
+  || { echo "  FAIL exact commands missing scoping, bad inspect argv, or un-scoped/blind status query"; fail=$((fail+1)); }
 
 echo "=== PROOF 4: PORT RULE — zero port literals in row-91 files (ports are parsed from the artefact) ==="
 # Banned: any published/host port number or IP:port literal. Word-boundary so long hex digests

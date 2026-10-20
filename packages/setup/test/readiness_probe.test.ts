@@ -5,6 +5,13 @@
 // the live artefact ~/.swarm/tools/firecrawl/compose/firecrawl.yml: services at indent 2, env
 // entries at indent 6, publishes at indent 6 quoted) — this suite consumes shapes, never re-renders.
 //
+// Seam pass 6 (fix round for R112c-2/R112c-3) adds two describes below:
+//   R112c-3 -> "shell classes" — per-name `command -v` proven against modeled dash, busybox ash
+//              and bash behaviors (the multi-name form the old code issued returns 127/empty on
+//              the first two; verification/13c_live_firecrawl_attempt3.md probetool-diag.log).
+//   R112c-2 -> "exec-lane context pinning" — every exec-lane argv carries
+//              ["--context", DOCKER_CONTEXT] before the exec verb, sourced from constants.ts.
+//
 // The three dispatch-mandated proofs are each a named describe:
 //   GREEN path with prober        -> "gate lanes" + "waitForHealthy integration"
 //   FAIL-CLOSED path without      -> "waitForHealthy integration" (probe-missing stays red, named)
@@ -20,8 +27,11 @@ import {
   healthVerdict,
   makeFakeDockerShim,
   waitForHealthy,
+  type DockerResult,
+  type DockerRunner,
   type ReadinessTarget,
 } from "../src/stacklib.ts"
+import { DOCKER_CONTEXT } from "../src/constants.ts"
 import {
   discoverInContainerTool,
   makeReadinessProbe,
@@ -31,6 +41,7 @@ import {
   runRawEgressProbe,
   type ControlOutcome,
   type FetchFn,
+  type ProbeTool,
 } from "../src/readinessProbe.ts"
 
 // ---- fixtures (renderer-shaped, indentation-verified — see header) ----------------------------
@@ -125,16 +136,24 @@ describe("artefact parsing — container ports and networks come FROM the compos
 
 // ---- tool discovery (never assume; name what was used) ----------------------------------------
 
-describe("in-container tool discovery — command -v decides, order preserved, absence is data", () => {
+describe("in-container tool discovery — one per-name command -v decides, order preserved, absence is data", () => {
+  // Seam pass 6: discovery issues ONE `command -v <name>` per candidate (R112c-3). Match strings
+  // stay name-exact WITHOUT trailing whitespace: the shim routes on argv.join(" "), so a probe of
+  // "node" ends the joined string at "node" and never carries a "nodejs"-style continuation.
   it("picks node first when the digest ships both node and wget", async () => {
     const shim = makeFakeDockerShim([
-      { match: "command -v", stdout: "/usr/local/bin/node\n/usr/bin/wget\n" },
+      { match: "command -v node", stdout: "/usr/local/bin/node\n" },
+      { match: "command -v wget", stdout: "/usr/bin/wget\n" },
     ])
     const disc = await discoverInContainerTool(shim.runner, "c1", ["node", "curl", "nc", "wget"])
     expect(disc.tool).toBe("node")
+    expect(disc.discovery).toContain("node=/usr/local/bin/node")
   })
   it("falls to the next tool in the mandated order when node is absent (wget last)", async () => {
-    const shim = makeFakeDockerShim([{ match: "command -v", stdout: "/usr/bin/curl\n/usr/bin/wget\n" }])
+    const shim = makeFakeDockerShim([
+      { match: "command -v curl", stdout: "/usr/bin/curl\n" },
+      { match: "command -v wget", stdout: "/usr/bin/wget\n" },
+    ])
     const disc = await discoverInContainerTool(shim.runner, "c1", ["node", "curl", "nc", "wget"])
     expect(disc.tool).toBe("curl")
   })
@@ -143,6 +162,152 @@ describe("in-container tool discovery — command -v decides, order preserved, a
     const disc = await discoverInContainerTool(shim.runner, "c1", ["node", "curl", "nc", "wget"])
     expect(disc.tool).toBe(null)
     expect(shim.invocations[0]?.join(" ")).toContain("sh -c")
+    // per-name walk: every mandated candidate was asked individually, none assumed
+    expect(shim.invocations.filter((a) => a.join(" ").includes("command -v")).length).toBe(4)
+  })
+})
+
+// ---- shell classes (R112c-3): per-name discovery proven against each real shell behavior ------
+
+/** Models the three shells the pinned digests actually ship, with the behaviors the row-112
+ *  attempt-3 verifier measured on them (`probetool-diag.log`, cited in
+ *  verification/13c_live_firecrawl_attempt3.md §7 R112c-3): dash (api, egress-proxy) and busybox
+ *  ash (searxng, auth-proxy) reject the MULTI-name `command -v` form with exit 127 and empty
+ *  stdout; bash answers it partially (prints found paths, exits 1). Single-name `command -v` is
+ *  answered identically by all three — that is the POSIX-portable form the prober now uses. */
+interface ShellClass {
+  readonly name: string
+  /** stdout for `command -v <tool>`; "" = not on PATH. */
+  readonly paths: Record<string, string>
+  /** What `readlink /proc/self/exe` prints (busybox models the no-readlink fallback). */
+  readonly shellExe: string
+  /** Whether the multi-name form yields partial stdout (true only for bash). */
+  readonly multiNameHonored: boolean
+}
+
+const SHELL_CLASSES: ShellClass[] = [
+  { name: "dash", paths: { node: "/usr/local/bin/node", curl: "/usr/bin/curl", bash: "/usr/bin/bash" }, shellExe: "/usr/bin/dash", multiNameHonored: false },
+  { name: "busybox-ash", paths: { nc: "/bin/nc", wget: "/bin/wget" }, shellExe: "/bin/busybox", multiNameHonored: false },
+  { name: "bash", paths: { node: "/usr/local/bin/node", curl: "/usr/bin/curl", bash: "/usr/bin/bash" }, shellExe: "/usr/bin/bash", multiNameHonored: true },
+]
+
+function shellRunner(shell: ShellClass): { runner: DockerRunner; calls: string[][] } {
+  const calls: string[][] = []
+  const runner: DockerRunner = async (args) => {
+    calls.push([...args])
+    const joined = args.join(" ")
+    const respond = (exitCode: number, stdout: string): DockerResult => ({ exitCode, stdout, stderr: "" })
+    if (joined.includes("readlink /proc/self/exe")) return respond(0, `${shell.shellExe}\n`)
+    const cmdv = joined.match(/command -v (.+)$/)
+    if (cmdv) {
+      const name = cmdv[1] ?? ""
+      if (!name.includes(" ")) return respond(shell.paths[name] ? 0 : 1, shell.paths[name] ? `${shell.paths[name]}\n` : "")
+      // Multi-name form: bash prints every found path and exits 1; dash/busybox reject the form
+      // with 127 and NOTHING on stdout — the measured R112c-3 behavior this fixture models.
+      const found = name.split(" ").flatMap((t) => (shell.paths[t] ? [`${shell.paths[t]}\n`] : []))
+      if (shell.multiNameHonored && found.length > 0) return respond(1, found.join(""))
+      return respond(127, "")
+    }
+    return respond(0, "")
+  }
+  return { runner, calls }
+}
+
+describe("shell classes (R112c-3) — a present tool is detected and an absent one is not, on dash, busybox ash and bash", () => {
+  for (const shell of SHELL_CLASSES) {
+    it(`${shell.name}: present tool detected via per-name command -v, evidence names the shell`, async () => {
+      const fx = shellRunner(shell)
+      const first = Object.keys(shell.paths)[0] ?? ""
+      const disc = await discoverInContainerTool(fx.runner, "c1", [first as ProbeTool])
+      expect(disc.tool).toBe(first)
+      expect(disc.discovery).toContain(`${first}=${shell.paths[first]}`)
+      expect(disc.discovery).toContain(`shell=${shell.shellExe}`)
+    })
+    it(`${shell.name}: absent tool stays null — fail-closed, never a guess`, async () => {
+      const fx = shellRunner(shell)
+      const disc = await discoverInContainerTool(fx.runner, "c1", ["telnet" as ProbeTool])
+      expect(disc.tool).toBe(null)
+      expect(disc.discovery).not.toContain("telnet=")
+      expect(disc.discovery).toContain(`shell=${shell.shellExe}`)
+    })
+    it(`${shell.name}: the walk asks ONE name per exec — the R112c-3 multi-name form is gone`, async () => {
+      const fx = shellRunner(shell)
+      await discoverInContainerTool(fx.runner, "c1", ["node", "curl", "nc", "wget"])
+      const probes = fx.calls.filter((a) => a.join(" ").includes("command -v"))
+      // short-circuiting means probes.length tracks the hit position; the invariant under test is
+      // that NO exec ever carries two names, and that an all-miss walk still covers every rung:
+      expect(probes.every((a) => !/command -v \S+ \S+/.test(a.join(" ")))).toBe(true)
+      const missFx = shellRunner({ ...shell, paths: {} })
+      const missDisc = await discoverInContainerTool(missFx.runner, "c1", ["node", "curl", "nc", "wget"])
+      expect(missDisc.tool).toBe(null)
+      expect(missFx.calls.filter((a) => a.join(" ").includes("command -v")).length).toBe(4)
+    })
+  }
+  it("regression pin: under dash/ash the OLD multi-name form would have read tools-present as none", async () => {
+    // Same fixture, old argv shape: 127/empty stdout ⇒ the seam-5 parser found nothing. This test
+    // documents WHY the per-name rewrite is required, by re-running the rejected form verbatim.
+    for (const shell of SHELL_CLASSES.filter((s) => !s.multiNameHonored)) {
+      const fx = shellRunner(shell)
+      const legacy = await fx.runner(["exec", "c1", "sh", "-c", "command -v node curl nc wget bash"])
+      expect(legacy.exitCode).toBe(127)
+      expect(legacy.stdout).toBe("")
+      const fixed = await discoverInContainerTool(fx.runner, "c1", ["node", "curl", "nc", "wget", "bash"])
+      expect(fixed.tool).not.toBe(null)
+    }
+  })
+})
+
+// ---- exec-lane context pinning (R112c-2): every exec rides the resolved register --------------
+
+describe("exec-lane context pinning (R112c-2) — --context precedes every exec argv, from constants.ts", () => {
+  /** True when an argv carries `--context <register>` strictly BEFORE its `exec` verb — the
+   *  position docker requires for the global flag (stacklib composeBase shape, stacklib.ts:185). */
+  const contextPinned = (argv: readonly string[]) =>
+    argv[0] === "--context" && argv[1] === DOCKER_CONTEXT && argv[2] === "exec"
+
+  it("readiness exec lane: discovery AND check argvs are pinned; host lane spawns nothing", async () => {
+    const shim = makeFakeDockerShim([
+      { match: "command -v node", stdout: "/usr/local/bin/node\n" },
+      { match: "node -e", stdout: "READY 200\n" },
+    ])
+    const probe = makeReadinessProbe({ docker: shim.runner, composeText: FC_FIXTURE, fetchImpl: fetchReturning(200) })
+    const execTarget: ReadinessTarget = { service: "api", container: "swarm-tools-api-1", urls: [] }
+    const out = await probe(execTarget)
+    expect(out.ok).toBe(true)
+    expect(shim.invocations.length).toBe(3) // shell identity + node probe + node check, all exec-lane
+    expect(shim.invocations.every(contextPinned)).toBe(true)
+    // positive control that the predicate is not vacuous: unpinned argvs must be rejected by it
+    expect(contextPinned(["exec", "c1", "node", "-e", "x"])).toBe(false)
+    // the host HTTP lane must not spawn anything at all
+    const sxProbe = makeReadinessProbe({ docker: shim.runner, composeText: SX_FIXTURE, fetchImpl: fetchReturning(200) })
+    await sxProbe({ service: "searxng", container: "swarm-tools-searxng-1", urls: ["http://127.0.0.1:9021/"] })
+    expect(shim.invocations.length).toBe(3) // host lane added zero execs
+  })
+
+  it("item-6 raw-egress lane: every exec argv pinned too; control-first legs spawn nothing", async () => {
+    const controlGreen = async (): Promise<ControlOutcome> => ({ ok: true, vantage: "fixture-vm", detail: "ok" })
+    const shim = makeFakeDockerShim([
+      { match: "command -v node", stdout: "/usr/local/bin/node\n" },
+      { match: "--input-type=module", exitCode: 1, stdout: "RAW_EGRESS=BLOCKED ENETUNREACH" },
+    ])
+    const report = await runRawEgressProbe({ docker: shim.runner, container: "pw-1", control: controlGreen })
+    expect(report.overall).toBe("L1-HOLDS")
+    expect(shim.invocations.length).toBeGreaterThan(1)
+    expect(shim.invocations.every(contextPinned)).toBe(true)
+    const dead = await runRawEgressProbe({
+      docker: shim.runner,
+      container: "pw-1",
+      control: async () => ({ ok: false, vantage: "none", detail: "all vantages failed" }),
+    })
+    expect(dead.overall).toBe("VOID")
+    expect(shim.invocations.every(contextPinned)).toBe(true) // still only ever pinned argvs
+  })
+
+  it("override stays injectable but production reads the constant (no second source of truth)", async () => {
+    const shim = makeFakeDockerShim([{ match: "command -v node", stdout: "/usr/local/bin/node\n" }])
+    const probe = makeReadinessProbe({ docker: shim.runner, composeText: FC_FIXTURE, dockerContext: "fixture-context" })
+    await probe(target("api", "swarm-tools-api-1"))
+    expect(shim.invocations[0]?.slice(0, 3)).toEqual(["--context", "fixture-context", "exec"])
   })
 })
 
@@ -199,10 +364,17 @@ describe("makeReadinessProbe — exec/TCP lane for the unpublished trio over the
     expect(out.detail).toContain("PROBE_TOOL=node")
     expect(out.detail).toContain("ECONNREFUSED")
   })
+  // Per-name discovery (R112c-3) means a single "command -v" catch-all rule would answer EVERY
+  // candidate probe with the same path. These fixtures therefore list the ladder explicitly —
+  // ordered misses before the one hit — exactly how the shim routes (first substring match wins).
   it("squid-class digest: bash /dev/tcp TCP connect is the readiness evidence, named PROBE_TOOL=bash", async () => {
     const shim = makeFakeDockerShim([
+      { match: "command -v node", exitCode: 1, stdout: "" },
+      { match: "command -v curl", exitCode: 1, stdout: "" },
+      { match: "command -v nc", exitCode: 1, stdout: "" },
+      { match: "command -v wget", exitCode: 1, stdout: "" },
       { match: "command -v", stdout: "/usr/bin/bash\n" },
-      { match: "bash -c", stdout: "" },
+      { match: "exec swarm-tools-egress-proxy-1 bash -c", stdout: "" },
     ])
     const probe = makeReadinessProbe({ docker: shim.runner, composeText: FC_FIXTURE })
     const out = await probe(target("egress-proxy", "swarm-tools-egress-proxy-1"))
@@ -212,8 +384,11 @@ describe("makeReadinessProbe — exec/TCP lane for the unpublished trio over the
   })
   it("wget lane honors exit 8 (server answered with an error) as serving — response arrival is the signal", async () => {
     const shim = makeFakeDockerShim([
-      { match: "command -v", stdout: "/usr/bin/wget\n" },
-      { match: "wget", exitCode: 8, stdout: "" },
+      { match: "command -v node", exitCode: 1, stdout: "" },
+      { match: "command -v curl", exitCode: 1, stdout: "" },
+      { match: "command -v nc", exitCode: 1, stdout: "" },
+      { match: "command -v wget", stdout: "/usr/bin/wget\n" },
+      { match: "exec swarm-tools-api-1 wget", exitCode: 8, stdout: "" },
     ])
     const probe = makeReadinessProbe({ docker: shim.runner, composeText: FC_FIXTURE })
     const out = await probe(target("api", "swarm-tools-api-1"))
@@ -222,8 +397,9 @@ describe("makeReadinessProbe — exec/TCP lane for the unpublished trio over the
   })
   it("curl digest: printed http code is the serving evidence, named PROBE_TOOL=curl", async () => {
     const shim = makeFakeDockerShim([
-      { match: "command -v", stdout: "/usr/bin/curl\n" },
-      { match: "curl", stdout: "200" },
+      { match: "command -v node", exitCode: 1, stdout: "" },
+      { match: "command -v curl", stdout: "/usr/bin/curl\n" },
+      { match: "exec swarm-tools-api-1 curl", stdout: "200" },
     ])
     const probe = makeReadinessProbe({ docker: shim.runner, composeText: FC_FIXTURE })
     const out = await probe(target("api", "swarm-tools-api-1"))
@@ -232,8 +408,10 @@ describe("makeReadinessProbe — exec/TCP lane for the unpublished trio over the
   })
   it("nc digest: exit 0 TCP connect satisfies the gate, named PROBE_TOOL=nc", async () => {
     const shim = makeFakeDockerShim([
-      { match: "command -v", stdout: "/bin/nc\n" },
-      { match: "nc", stdout: "" },
+      { match: "command -v node", exitCode: 1, stdout: "" },
+      { match: "command -v curl", exitCode: 1, stdout: "" },
+      { match: "command -v nc", stdout: "/bin/nc\n" },
+      { match: "exec swarm-tools-egress-proxy-1 nc", stdout: "" },
     ])
     const probe = makeReadinessProbe({ docker: shim.runner, composeText: FC_FIXTURE })
     const out = await probe(target("egress-proxy", "swarm-tools-egress-proxy-1"))
@@ -333,7 +511,7 @@ describe("waitForHealthy integration — green WITH the prober, fail-closed WITH
 // ---- §10.6 item 6 raw-egress probe (r75-fix6 repaired form) ------------------------------------
 
 describe("item 6 raw-egress probe — control-first, L1-only naming, VOID on dead targets", () => {
-  const nodeFound = { match: "command -v node curl nc wget", stdout: "/usr/local/bin/node\n" }
+  const nodeFound = { match: "command -v node", stdout: "/usr/local/bin/node\n" }
   const controlGreen = async (): Promise<ControlOutcome> => ({ ok: true, vantage: "fixture-vm", detail: "ok" })
   const controlDead = async (): Promise<ControlOutcome> => ({ ok: false, vantage: "none", detail: "all vantages failed" })
 
@@ -370,13 +548,22 @@ describe("item 6 raw-egress probe — control-first, L1-only naming, VOID on dea
     expect(report.legs[0]?.verdict).toBe("TIMEOUT-AMBIGUOUS")
   })
   it("no mandated tool (bash alone does NOT count for item 6) ⇒ VOID-NO-TOOL", async () => {
+    // ubuntu/squid-class image: only bash exists. Rules are ordered and the shim takes the first
+    // substring match, so the four name-exact misses come before the catch-all that answers bash.
     const shim = makeFakeDockerShim([
-      { match: "command -v node curl nc wget", exitCode: 1, stdout: "" },
-      { match: "command -v node curl nc wget bash", stdout: "/bin/bash\n" }, // readiness-only ladder would find bash; item 6 must not
+      { match: "command -v node", exitCode: 1, stdout: "" },
+      { match: "command -v curl", exitCode: 1, stdout: "" },
+      { match: "command -v nc", exitCode: 1, stdout: "" },
+      { match: "command -v wget", exitCode: 1, stdout: "" },
+      { match: "command -v", stdout: "/bin/bash\n" },
     ])
     const report = await runRawEgressProbe({ docker: shim.runner, container: "pw-1", control: controlGreen })
     expect(report.overall).toBe("VOID")
     expect(report.legs[0]?.verdict).toBe("VOID-NO-TOOL")
+    // The ladder itself never asked for bash — exclusion is in ITEM6_TOOL_ORDER, not in filtering:
+    const asked = shim.invocations.filter((a) => a.join(" ").includes("command -v")).map((a) => a.join(" "))
+    expect(asked.some((j) => /command -v bash/.test(j))).toBe(false)
+    expect(asked.length).toBe(12) // all four mandated rungs × three legs, no fifth (bash) probe
   })
   it("the node leg carries no proxy env flag — squid cannot be in this path by construction", async () => {
     const shim = makeFakeDockerShim([nodeFound, { match: "--input-type=module", stdout: "RAW_EGRESS=LEAK" }])
@@ -412,5 +599,13 @@ describe("readinessProbe.ts source posture — no port literals, no host-side ne
     // therefore names the Socket class instead of the net.connect sugar (same semantics).
     const proof6 = /\.(listen|bind)\(|createServer|Bun\.serve|Deno\.listen|startTls|createConnection|net\.connect|http\.Server/
     expect(src.match(proof6)).toBe(null)
+  })
+  it("builds --context in exactly ONE argv site, sourced from constants (R112c-2: no second source of truth)", () => {
+    // execArgs is the module's only exec-argv builder; if a future edit hand-crafts ["exec", …]
+    // or inlines a literal "--context", these counts break and the R112c-2 class returns visibly.
+    expect(src.split('["--context",').length - 1).toBe(1)
+    expect(src).toContain('import { DOCKER_CONTEXT } from "./constants.ts"')
+    expect(src).not.toContain("colima-swarm") // register name lives in constants.ts only
+    expect(src.split('"exec"').length - 1).toBe(1) // only inside execArgs itself
   })
 })

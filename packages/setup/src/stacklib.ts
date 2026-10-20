@@ -22,7 +22,10 @@
 //                                ratified R-1 (01e §3); the CLI flag rides every invocation as
 //                                belt-and-braces so a stray cwd cannot fork a third project.
 //   - `-f <rendered file>`       per-stack scoping (01e §3): up/down of one stack touches only that
-//                                file's objects even inside the shared project.
+//                                file's objects even inside the shared project. `ps` is the exception
+//                                and lists PROJECT containers whatever the -f flags say (R112c-4), so
+//                                the status query adds this file's service names positionally and
+//                                intersects the rows — see composePsArgs / healthVerdict.
 //   - labels                     PC-LBL-01/02 (LABELS) — the ONLY cleanup selector set (P-14):
 //                                remove targets labelled objects exclusively, never by project,
 //                                never a prune (the word never enters a built command; asserted
@@ -50,10 +53,24 @@
 // so the real HTTP/TCP prober is the row 93/111/112 driver's job). Up alone is NOT green anymore:
 // the old §4.8 "rides on running-status" fallback would wave through exactly the images whose
 // absence-of-tooling made the in-stack check blind. Services WITH a declared healthcheck keep the
-// unchanged semantics (running + healthy). The gate stays file/label-scoped: it only ever probes
-// containers compose ps listed for THIS stack's file. Rationale for probe-over-running: the images
+// unchanged semantics (running + healthy). The gate stays file/label-scoped — it only ever probes
+// containers of THIS stack's file, and since R112c-4 that scoping is ENFORCED by the query plus the
+// intersect rather than merely assumed from `-f` (live attempt 3 proved `-f` alone leaks the other
+// file's rows in). Rationale for probe-over-running: the images
 // that ship without a healthcheck tool (no wget/curl in the pinned digests — R112b-3) are exactly
 // the ones where "running" carries the least evidence, so the host-side check must add some.
+//
+// STATUS QUERY (R112c-4 fix round 4): `compose ps` lists RUNNING CONTAINERS ONLY unless `--all` is
+// given (docs.docker.com/reference/cli/docker/compose/ps/: "By default, only running containers are
+// shown. `--all` flag can be used to include stopped containers."), so the pre-fix query was
+// FAILOPEN: a service that had already exited simply was not in the listing, and the gate counted a
+// dead tier out of the denominator instead of naming it (live proof: attempt 3 held
+// playwright-service Exited(1) from 14:51:23 while the verdict read `waiting on 3/8`). The query now
+// carries `-a`, reports the exit code, and is scoped to THIS compose file by passing that file's own
+// service names as positional [SERVICE...] arguments plus an intersect on the parsed rows — `-f` alone
+// does not scope ps (project-wide listing; `--orphans` defaults to true), which is how searxng rows
+// leaked into firecrawl's verdict inside the ratified two-files-one-project layout (01e §3 R-1).
+// A declared service with NO container at all is a distinct named failure (`absent`), never a silence.
 //
 // NO DAEMON IN THIS ROW: process execution lives exclusively in the engine-injected DockerRunner.
 // This module never imports a process-spawn or raw-network builtin and never spawns; proofs and
@@ -195,8 +212,48 @@ export function composeDownCmd(composeFile: string): string[] {
   return [...composeBase(composeFile), "down"]
 }
 
-export function composePsArgs(composeFile: string): string[] {
-  return [...composeBase(composeFile), "ps", "--format", "{{.Name}}={{.State}}={{.Health}}"]
+/** The status-query template. `{{.ExitCode}}` is a documented compose-ps attribute (the `--format
+ *  json` sample on docs.docker.com/reference/cli/docker/compose/ps/ emits `"State":"exited",
+ *  "Health":"","ExitCode":0`, the same Go struct the TEMPLATE form renders), and the
+ *  `{{.Name}}={{.State}}={{.Health}}` prefix is kept EXACTLY as the first three segments because both
+ *  this row's fake fixtures and test/stack.proofs.sh PROOF 3 route their fakes on the substring
+ *  `={{.Health}}`. */
+export const COMPOSE_PS_FORMAT = "{{.Name}}={{.State}}={{.Health}}={{.ExitCode}}"
+
+/** List THIS stack's containers IN EVERY STATE (R112c-4). Two separate scoping/visibility rules:
+ *  - `-a` (see the header block): without it an EXITED container is invisible, which made the gate
+ *    fail OPEN on a dead service.
+ *  - positional `[SERVICE...]` — the usage line is `docker compose ps [OPTIONS] [SERVICE...]` — are
+ *    this file's own declared services (parseComposeServices), because `-f` alone does NOT scope ps
+ *    inside the shared `swarm-tools` project (compose lists project containers and `--orphans`
+ *    defaults to true). The flag order keeps the literal `ps --format` adjacency intact so row 93's
+ *    fixture rules (`test/docker_runner_real.test.ts` keys its scripted answers on `"ps --format"`)
+ *    keep routing; pflag parses options in any position, and the positionals ride last.
+ *  With no service list the builder degrades to the old unscoped shape plus `-a` (still fail-CLOSED,
+ *  just not file-scoped) — one-argument callers such as test/live_smoke.ts:470 stay valid. */
+export function composePsArgs(composeFile: string, services: readonly string[] = []): string[] {
+  return [...composeBase(composeFile), "ps", "--format", COMPOSE_PS_FORMAT, "-a", ...services]
+}
+
+/** Compose service names THIS file declares: the indent-2 keys of its top-level `services:` block —
+ *  the same rendered shape parsePublishedPorts reads. They serve three duties (R112c-4): the per-file
+ *  positional scope of the status query, the intersect that keeps the OTHER file's containers out of
+ *  this verdict, and the expected set the absence lane is measured against. The rendered artefacts
+ *  declare no `profiles:` keys (grep over src/composefiles returns none), so every declared service
+ *  is one `compose up -d` starts — no false absences from profile gating. */
+export function parseComposeServices(composeText: string): string[] {
+  const out: string[] = []
+  let inServices = false
+  for (const line of composeText.split("\n")) {
+    if (/^services:\s*$/.test(line)) {
+      inServices = true
+      continue
+    }
+    if (inServices && /^\S/.test(line)) inServices = false // a new top-level block ends the section
+    const key = inServices ? line.match(/^ {2}([A-Za-z0-9._-]+):\s*$/) : null
+    if (key?.[1]) out.push(key[1])
+  }
+  return [...new Set(out)]
 }
 
 /** List THIS stack's networks with the SUPPORTED plain-docker verb `network ls`, scoped by the
@@ -498,20 +555,38 @@ export function ensureCreatableDirs(creatableDirs: readonly string[]): void {
 export interface ContainerStatus {
   readonly name: string
   readonly running: boolean
-  /** undefined = the image declares no healthcheck (gate falls back to running-status). */
+  /** Raw compose `{{.State}}` (`running|exited|created|paused|restarting|dead|…`) — what the verdict
+   *  names so an exited container reads as EXITED, not as a generic non-running blob (R112c-4). */
+  readonly state?: string
+  /** undefined = the image declares no healthcheck (the gate then needs the host-side readiness probe). */
   readonly health?: string
+  /** compose `{{.ExitCode}}`. Meaningful only when NOT running; undefined when the field was absent
+   *  or unparsable — reported as such, never defaulted to 0 (that would read a crash as a clean stop). */
+  readonly exitCode?: number
 }
 
-/** Parse `compose ps --format {{.Name}}={{.State}}={{.Health}}` output. "<none>"/empty health =
- *  no healthcheck declared. */
+/** Parse `compose ps --format {{.Name}}={{.State}}={{.Health}}={{.ExitCode}}` rows (COMPOSE_PS_FORMAT).
+ *  Segment-split rather than one regex so a row degrades field by field: empty/`<none>` health means
+ *  "no healthcheck declared", and a missing or non-numeric exit code means "unknown", never 0. Rows
+ *  from the older three-segment form still parse (the trailing fields simply stay absent). */
 export function parseComposePs(text: string): ContainerStatus[] {
   const out: ContainerStatus[] = []
   for (const line of text.split("\n")) {
-    const m = line.match(/^([^=]+)=(\w+)=?(.*)$/)
-    if (!m) continue
-    const rawHealth = (m[3] ?? "").trim()
+    const seg = line.split("=")
+    const name = (seg[0] ?? "").trim()
+    const state = (seg[1] ?? "").trim()
+    if (name === "" || state === "") continue
+    const rawHealth = (seg[2] ?? "").trim()
     const health = rawHealth === "" || rawHealth === "<none>" ? undefined : rawHealth
-    out.push({ name: m[1] ?? "", running: (m[2] ?? "") === "running", ...(health ? { health } : {}) })
+    const rawExit = (seg[3] ?? "").trim()
+    const exitCode = /^\d+$/.test(rawExit) ? Number(rawExit) : undefined
+    out.push({
+      name,
+      running: state === "running",
+      state,
+      ...(health ? { health } : {}),
+      ...(exitCode === undefined ? {} : { exitCode }),
+    })
   }
   return out
 }
@@ -581,36 +656,67 @@ export interface HealthVerdict {
  *  readiness result (2026-10-20 ruling supersedes the old §4.8 rides-on-running fallback — Up
  *  alone is not green for a service the in-stack check cannot see). A missing readiness entry is
  *  fail-closed: no probe wired is stated as such, naming the service. `readiness` is keyed by
- *  container name; pass undefined when every container declares a healthcheck. */
+ *  container name; pass undefined when every container declares a healthcheck.
+ *
+ *  R112c-4 adds two things to that same verdict, both aimed at the fail-open this gate showed live:
+ *  - `expectedServices` (this compose file's own declared services) does triple duty: containers of
+ *    any OTHER service are dropped from the verdict (the shared project's ps listing drags them in),
+ *    a declared service with no container at all becomes its own named failure (`<service>:absent(…)`),
+ *    and a not-running container is named by STATE plus exit code (`<name>:exited(code=1)`) instead of
+ *    the old generic `not-running`. Absence and exited therefore read as different words.
+ *  - Without `expectedServices` the absence lane is inert (nothing to measure against) and the green
+ *    sentence says so out loud instead of implying a check that never ran. */
 export function healthVerdict(
   containers: readonly ContainerStatus[],
   readiness?: ReadonlyMap<string, ReadinessResult>,
+  expectedServices?: readonly string[],
 ): HealthVerdict {
-  if (containers.length === 0) return { healthy: false, detail: "compose ps returned no containers", unhealthy: [] }
+  const expected = expectedServices ?? []
+  const inScope = (c: ContainerStatus): boolean => expected.includes(serviceFromContainerName(c.name))
+  const scoped = expected.length === 0 ? [...containers] : containers.filter(inScope)
+  const absent = expected.filter((svc) => !scoped.some((c) => serviceFromContainerName(c.name) === svc))
+  if (scoped.length === 0 && absent.length === 0)
+    return { healthy: false, detail: "compose ps returned no containers", unhealthy: [] }
   const reason = (c: ContainerStatus): string | null => {
-    if (!c.running) return "not-running"
+    if (!c.running) return stoppedReason(c)
     if (c.health !== undefined) return c.health === "healthy" ? null : c.health
     const probe = readiness?.get(c.name)
     if (probe === undefined) return "no-healthcheck+readiness-probe-missing"
     return probe.ok ? null : `no-healthcheck+readiness-failed(${probe.detail})`
   }
-  const unhealthy = containers.filter((c) => reason(c) !== null)
-  if (unhealthy.length > 0) {
-    const listed = unhealthy.map((c) => `${c.name}:${reason(c)}`).join(", ")
+  const red = scoped.flatMap((c) => {
+    const r = reason(c)
+    return r === null ? [] : [`${c.name}:${r}`]
+  })
+  const absentRed = absent.map((svc) => `${svc}:absent(no container for this stack's compose file)`)
+  const failures = [...red, ...absentRed]
+  const total = scoped.length + absent.length
+  if (failures.length > 0)
     return {
       healthy: false,
-      detail: `waiting on ${unhealthy.length}/${containers.length}: ${listed}`,
-      unhealthy: unhealthy.map((c) => c.name),
+      detail: `waiting on ${failures.length}/${total}: ${failures.join(", ")}`,
+      unhealthy: [...scoped.filter((c) => reason(c) !== null).map((c) => c.name), ...absent],
     }
-  }
-  const probed = containers.filter((c) => c.health === undefined).length
+  const probed = scoped.filter((c) => c.health === undefined).length
   const suffix =
     probed === 0
-      ? containers.some((c) => c.health !== undefined)
+      ? scoped.some((c) => c.health !== undefined)
         ? " with declared healthchecks green"
         : " (no in-stack healthchecks declared)"
       : ` with ${probed} container(s) without healthchecks satisfied by host-side readiness probes`
-  return { healthy: true, detail: `all ${containers.length} containers running${suffix}`, unhealthy: [] }
+  const scopeNote =
+    expected.length === 0
+      ? "; no expected-service list supplied, so an absent container could not be detected"
+      : `; every declared service present (${expected.length}/${expected.length})`
+  return { healthy: true, detail: `all ${scoped.length} containers running${suffix}${scopeNote}`, unhealthy: [] }
+}
+
+/** Why a non-running container is red, in words that distinguish the failure modes: the state compose
+ *  reported plus its exit code when the query carried one (`exited(code=1)`), and never a defaulted
+ *  code 0 — an unparsable code is stated as absent info, not as a clean stop. */
+function stoppedReason(c: ContainerStatus): string {
+  const state = c.state && c.state !== "running" ? c.state : "not-running"
+  return c.exitCode === undefined ? state : `${state}(code=${c.exitCode})`
 }
 
 export interface HealthWait {
@@ -628,7 +734,15 @@ export interface HealthWait {
  *  injected readiness probe once per RUNNING container that declares no healthcheck (2026-10-20
  *  ruling); with no probe wired those containers stay red — fail-closed, named in the verdict.
  *  The timeout/poll budget is unchanged in spirit: probes ride inside the same window, their own
- *  latency bound is the probe implementation's contract (row 93/111/112). */
+ *  latency bound is the probe implementation's contract (row 93/111/112).
+ *
+ *  R112c-4 additions: the poll passes THIS file's declared services to the status query (positional
+ *  scope) and intersects the rows against them, so a foreign stack's containers can neither hold this
+ *  verdict red nor satisfy it; `expectedServices` additionally turns a declared service with no
+ *  container into a named red that rides the window (a late create must not fail fast, an absence at
+ *  the deadline still fails closed); and a FAILING status query is now reported as itself instead of
+ *  masquerading as an empty estate — before this round, any rejected argv read as "returned no
+ *  containers" and burned the whole window on a lie about the estate rather than about the command. */
 export async function waitForHealthy(opts: {
   readonly run: DockerRunner
   readonly composeFile: string
@@ -639,11 +753,17 @@ export async function waitForHealthy(opts: {
   readonly probe?: ReadinessProbe
   /** Rendered compose text for artefact-derived probe URLs (PORT RULE); "" probes see no urls. */
   readonly composeText?: string
+  /** This stack's declared services, for the absence lane of healthVerdict. Explicit because a
+   *  caller that passes composeText for URL derivation alone (seam6's prober units) must not inherit
+   *  an expectation its fake listing does not satisfy. bringUp always supplies it. */
+  readonly expectedServices?: readonly string[]
 }): Promise<HealthWait> {
   const sleep = opts.sleep ?? ((ms: number) => timerSleep(ms))
   const clock = opts.clock ?? (() => Date.now())
   const intervalMs = opts.intervalMs ?? 2000
-  const urlsByService = serviceProbeUrls(opts.composeText ?? "")
+  const composeText = opts.composeText ?? ""
+  const urlsByService = serviceProbeUrls(composeText)
+  const services = parseComposeServices(composeText)
   const start = clock()
   let attempts = 0
   let last: HealthVerdict = { healthy: false, detail: "health gate never polled", unhealthy: [] }
@@ -651,8 +771,11 @@ export async function waitForHealthy(opts: {
 
   for (;;) {
     attempts += 1
-    const ps = await opts.run(composePsArgs(opts.composeFile))
-    containers = ps.exitCode === 0 ? parseComposePs(ps.stdout) : []
+    const ps = await opts.run(composePsArgs(opts.composeFile, services))
+    const listed = ps.exitCode === 0 ? parseComposePs(ps.stdout) : []
+    // File scoping, client side too: `-f` does not scope ps inside the shared project, and a compose
+    // build that ignored the positional services must not be able to leak rows into this verdict.
+    containers = services.length === 0 ? listed : listed.filter((c) => services.includes(serviceFromContainerName(c.name)))
     const readiness = new Map<string, ReadinessResult>()
     for (const c of containers) {
       if (!c.running || c.health !== undefined || !opts.probe) continue
@@ -662,7 +785,14 @@ export async function waitForHealthy(opts: {
         await opts.probe({ service, container: c.name, urls: urlsByService.get(service) ?? [] }),
       )
     }
-    last = healthVerdict(containers, readiness)
+    last =
+      ps.exitCode !== 0
+        ? {
+            healthy: false,
+            detail: `status query failed (compose ps exit ${ps.exitCode}): ${ps.stderr.trim().slice(0, 200)}`,
+            unhealthy: [],
+          }
+        : healthVerdict(containers, readiness, opts.expectedServices)
     if (last.healthy) return { token: OUTCOME.OK, verdict: last, containers, attempts, elapsedMs: clock() - start }
     const crashed = containers.length > 0 && containers.some((c) => !c.running)
     if (crashed)
@@ -807,8 +937,11 @@ export async function bringUp(opts: BringUpOptions): Promise<BringUpResult> {
   }
 
   const urls = healthProbeUrls(report.composeText ?? "")
+  // This stack's own declared services, read FROM the artefact (PORT RULE's discipline extended to
+  // service names): they scope the status query per compose file and define what "absent" means.
+  const expectedServices = parseComposeServices(report.composeText ?? "")
   const upCmd = formatCmd(composeUpCmd(plan.composeFile))
-  const healthLine = `${formatCmd(composePsArgs(plan.composeFile))}  # repeated until every container running; declared healthchecks green; no-healthcheck services additionally pass their host-side readiness probe`
+  const healthLine = `${formatCmd(composePsArgs(plan.composeFile, expectedServices))}  # repeated until every container of THIS file is green: -a so EXITED containers are named with their exit code (never counted out of the verdict), services listed positionally because -f alone does not scope ps in the shared project, a declared service with no container reads absent, declared healthchecks must be green, and no-healthcheck services additionally pass their host-side readiness probe`
   // The probe target follows the runtime step's RECORDED context (colima names it colima-<profile>,
   // H-R93-1); compose OPERATIONS below still pin the register name via --context (PC-PROF-02), which
   // row 86 materializes — so both address the same live daemon once row 86 lands.
@@ -899,6 +1032,7 @@ export async function bringUp(opts: BringUpOptions): Promise<BringUpResult> {
     ...(opts.clock ? { clock: opts.clock } : {}),
     ...(opts.readiness ? { probe: opts.readiness } : {}),
     composeText: report.composeText ?? "",
+    expectedServices,
   })
 
   if (wait.token !== OUTCOME.OK) {

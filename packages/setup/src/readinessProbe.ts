@@ -18,11 +18,17 @@
 //      requirement, §10.6 item 1). Connect refused / timeout / 5xx → not ready.
 //   2. Unpublished service (api, playwright-service, egress-proxy — empty urls) → `docker exec`
 //      through the SAME injected DockerRunner row 91 uses (zero new process surface here: this
-//      module spawns nothing itself). The in-container tool is DISCOVERED, never assumed —
-//      `sh -c "command -v node curl nc wget bash"` first, honoring 01e §10.6 item 6's availability
-//      rule (R112b-3 proved wget absent; nothing here ever installs or assumes a tool). The chosen
-//      tool is always named in the result detail as `PROBE_TOOL=<tool>`. No tool found ⇒ fail-closed
-//      `{ok:false}`, never green.
+//      module spawns nothing itself). Every exec-lane argv pins the resolved docker context with a
+//      leading `--context <DOCKER_CONTEXT>` (R112c-2 fix round, seam pass 6) — the same single
+//      source stacklib.composeBase reads (constants.ts PC-PROF-02), never a literal and never the
+//      user's CLI-current context, which on this host is the default profile's daemon where none of
+//      our containers exist. The in-container tool is DISCOVERED, never assumed — ONE
+//      `sh -c "command -v <name>"` PER candidate honoring 01e §10.6 item 6's availability rule
+//      (R112b-3 proved wget absent; R112c-3 proved the dash and busybox-ash shells these digests
+//      actually ship reject the multi-name form with exit 127 and empty stdout, so tools that were
+//      present read as absent; nothing here ever installs or assumes a tool). The chosen tool is
+//      always named in the result detail as `PROBE_TOOL=<tool>`, and the discovery evidence names
+//      the shell that answered. No tool found ⇒ fail-closed `{ok:false}`, never green.
 //
 // PORT RULE (decisions.md PORT BLOCK, restated in stacklib's header): ZERO port literals in this
 // file. Container-side listen ports are parsed FROM the rendered artefact: own-service `PORT: "<n>"`
@@ -50,6 +56,18 @@ import {
   type ReadinessResult,
   type ReadinessTarget,
 } from "./stacklib.ts"
+import { DOCKER_CONTEXT } from "./constants.ts"
+
+// --- exec-lane context pinning (R112c-2 fix round, seam pass 6) --------------------------------
+
+/** The ONLY place this module builds an `exec` argv. `--context` is a docker global flag, so it
+ *  goes BEFORE the verb — the exact shape stacklib's builders use (e.g. composeBase at
+ *  stacklib.ts:185). Live proof this matters (verification/13c_live_firecrawl_attempt3.md R112c-2):
+ *  the identical argv without `--context` returned "No such container" from the user's default
+ *  daemon, with `DOCKER_HOST=` pointed at the swarm socket it returned the tool path. */
+function execArgs(container: string, remoteArgv: readonly string[], context: string): string[] {
+  return ["--context", context, "exec", container, ...remoteArgv]
+}
 
 // --- artefact-derived container ports (PORT RULE: parsed, never literal) -----------------------
 
@@ -129,29 +147,40 @@ export type ProbeTool = (typeof READINESS_TOOL_ORDER)[number]
 export interface ToolDiscovery {
   /** First tool present in the requested order; null when none exists (fail-closed / VOID). */
   readonly tool: ProbeTool | null
-  /** Raw `command -v` stdout, kept verbatim as the existence proof. */
+  /** Evidence string: `shell=<identity>` first, then one `<tool>=<path>` token per hit found while
+   *  walking the ladder (the per-name `command -v` stdout, verbatim). */
   readonly discovery: string
 }
 
-/** One `docker exec <container> sh -c "command -v …"` — the container's OWN shell probing its OWN
- *  PATH; no host shell, no downloaded content executed (P-3 boundary untouched). `command -v`
- *  exits non-zero when ANY name is missing while still printing the found ones, so stdout decides
- *  and exitCode is ignored. */
+/** Per-candidate `command -v`, ONE name per `docker exec <container> sh -c …` — the container's OWN
+ *  shell probing its OWN PATH; no host shell, no downloaded content executed (P-3 boundary
+ *  untouched). The seam-5 single multi-name call (`command -v node curl nc wget bash`) is exactly
+ *  what R112c-3 measured broken: dash (api, egress-proxy) and busybox ash (searxng, auth-proxy)
+ *  reject the multi-name form with exit 127 and EMPTY stdout (probetool-diag.log in
+ *  verification/13c_live_firecrawl_attempt3.md), so present tools read as absent and the gate
+ *  reported `no-probe-tool` for services that ship tools. The old code comment's premise ("exits
+ *  non-zero when ANY name is missing while still printing the found ones") holds of bash only. A
+ *  single-name `command -v` is POSIX-portable across all three shells; the walk short-circuits at
+ *  the first hit, and the shell's real identity rides along in the evidence via a procfs readlink
+ *  with an `echo sh` fallback (busybox lacks readlink; the fallback keeps discovery working and
+ *  just says less about the shell). */
 export async function discoverInContainerTool(
   run: DockerRunner,
   container: string,
   order: readonly ProbeTool[],
+  dockerContext: string = DOCKER_CONTEXT,
 ): Promise<ToolDiscovery> {
-  const res = await run(["exec", container, "sh", "-c", `command -v ${order.join(" ")}`])
-  const found = new Set(
-    res.stdout
-      .split("\n")
-      .map((l) => l.trim())
-      .filter((l) => l !== "")
-      .map((p) => p.slice(p.lastIndexOf("/") + 1)),
-  )
-  for (const tool of order) if (found.has(tool)) return { tool, discovery: res.stdout.trim() }
-  return { tool: null, discovery: res.stdout.trim() }
+  const shellRes = await run(execArgs(container, ["sh", "-c", "readlink /proc/self/exe || echo sh"], dockerContext))
+  const shell = shellRes.stdout.trim() || "sh"
+  const hits: string[] = []
+  for (const tool of order) {
+    const res = await run(execArgs(container, ["sh", "-c", `command -v ${tool}`], dockerContext))
+    const path = res.stdout.trim()
+    if (path === "") continue
+    hits.push(`${tool}=${path}`)
+    return { tool, discovery: [`shell=${shell}`, ...hits].join("; ") }
+  }
+  return { tool: null, discovery: [`shell=${shell}`, ...hits].join("; ") }
 }
 
 // --- readiness probe (gate lane) ----------------------------------------------------------------
@@ -170,6 +199,10 @@ export interface ReadinessProbeOptions {
    *  (stacklib waitForHealthy header). */
   readonly httpTimeoutMs?: number
   readonly execTimeoutSec?: number
+  /** Register name pinned as `--context` on every exec-lane argv (R112c-2). Defaults to
+   *  constants.DOCKER_CONTEXT — the same source stacklib reads; an override exists for seams and
+   *  tests only, never to point the prober at another daemon in production. */
+  readonly dockerContext?: string
 }
 
 /** Build the prober to pass as `BringUpOptions.readiness` / `StackStepContext.readiness`.
@@ -180,11 +213,12 @@ export function makeReadinessProbe(opts: ReadinessProbeOptions): ReadinessProbe 
   const toolCache = new Map<string, ProbeTool>()
   const httpTimeoutMs = opts.httpTimeoutMs ?? 4_000
   const execTimeoutSec = opts.execTimeoutSec ?? 4
+  const dockerContext = opts.dockerContext ?? DOCKER_CONTEXT
   const doFetch: FetchFn = opts.fetchImpl ?? ((url, init) => fetch(url, init))
 
   return async (target: ReadinessTarget): Promise<ReadinessResult> => {
     if (target.urls.length > 0) return probeHttpLane(doFetch, target, httpTimeoutMs)
-    return probeExecLane(opts.docker, toolCache, ports, target, execTimeoutSec)
+    return probeExecLane(opts.docker, toolCache, ports, target, execTimeoutSec, dockerContext)
   }
 }
 
@@ -218,22 +252,24 @@ async function probeExecLane(
   ports: Map<string, number>,
   target: ReadinessTarget,
   timeoutSec: number,
+  dockerContext: string,
 ): Promise<ReadinessResult> {
   let tool = toolCache.get(target.container)
-  if (tool === undefined) tool = (await discoverInContainerTool(run, target.container, READINESS_TOOL_ORDER)).tool ?? undefined
+  if (tool === undefined)
+    tool = (await discoverInContainerTool(run, target.container, READINESS_TOOL_ORDER, dockerContext)).tool ?? undefined
   if (tool === undefined)
     return { ok: false, detail: `no-probe-tool(in-container command -v found none of ${READINESS_TOOL_ORDER.join(" ")})` }
   toolCache.set(target.container, tool)
   const port = ports.get(target.service)
   if (port === undefined)
     return { ok: false, detail: `no-artefact-port-for(${target.service}: artefact carries no PORT env nor http://${target.service}:<port> reference)` }
-  const res = await execReadinessCheck(run, target.container, tool, port, timeoutSec)
+  const res = await execReadinessCheck(run, target.container, tool, port, timeoutSec, dockerContext)
   return readinessFromExec(tool, port, res)
 }
 
 /** One exec-class readiness check per discovered tool. All target the container's OWN loopback —
  *  the check asks "does THIS container serve", not "can the host reach it" (it publishes nothing). */
-function execReadinessCheck(run: DockerRunner, container: string, tool: ProbeTool, port: number, timeoutSec: number): Promise<DockerResult> {
+function execReadinessCheck(run: DockerRunner, container: string, tool: ProbeTool, port: number, timeoutSec: number, dockerContext: string): Promise<DockerResult> {
   const url = `http://127.0.0.1:${port}/`
   if (tool === "node") {
     // Node's global fetch speaks real HTTP against the service's own listen port; any response
@@ -243,15 +279,15 @@ function execReadinessCheck(run: DockerRunner, container: string, tool: ProbeToo
       `fetch(${JSON.stringify(url)},{signal:AbortSignal.timeout(${timeoutSec * 1000})})` +
       `.then(r=>{console.log("READY "+r.status);process.exit(0)})` +
       `.catch(e=>{console.log("NOTREADY "+(((e&&e.cause)||e).code||((e&&e.cause)||e).name||"unknown"));process.exit(1)})`
-    return run(["exec", container, "node", "-e", script])
+    return run(execArgs(container, ["node", "-e", script], dockerContext))
   }
-  if (tool === "curl") return run(["exec", container, "curl", "-s", "-o", "/dev/null", "-w", "%{http_code}", "-m", String(timeoutSec), url])
-  if (tool === "nc") return run(["exec", container, "nc", "-z", "-w", String(timeoutSec), "127.0.0.1", String(port)])
-  if (tool === "wget") return run(["exec", container, "wget", "-q", "-O", "/dev/null", "-T", String(timeoutSec), url])
+  if (tool === "curl") return run(execArgs(container, ["curl", "-s", "-o", "/dev/null", "-w", "%{http_code}", "-m", String(timeoutSec), url], dockerContext))
+  if (tool === "nc") return run(execArgs(container, ["nc", "-z", "-w", String(timeoutSec), "127.0.0.1", String(port)], dockerContext))
+  if (tool === "wget") return run(execArgs(container, ["wget", "-q", "-O", "/dev/null", "-T", String(timeoutSec), url], dockerContext))
   // bash lane: /dev/tcp redirect is a bare TCP connect — the ubuntu/squid digest's realistic shape
   // (live-proven idiom: live_vm_smoke.proofs.sh item-5 uses the same construct). Bounded by the
   // injected runner's own timeoutMs; the driver gives probe execs a short budget.
-  return run(["exec", container, "bash", "-c", `exec 3<>/dev/tcp/127.0.0.1/${port}`])
+  return run(execArgs(container, ["bash", "-c", `exec 3<>/dev/tcp/127.0.0.1/${port}`], dockerContext))
 }
 
 function readinessFromExec(tool: ProbeTool, port: number, res: DockerResult): ReadinessResult {
@@ -329,6 +365,9 @@ export interface RawEgressOptions {
    *  non-contained vantage. Injected so this module stays DockerRunner-pure; the driver supplies
    *  the egress-proxy-container → colima-VM-shell → host ladder. */
   readonly control: (target: RawEgressTarget) => Promise<ControlOutcome>
+  /** Register name pinned as `--context` on the discovery and probe execs (R112c-2); defaults to
+   *  constants.DOCKER_CONTEXT, the same single source as the readiness lane. */
+  readonly dockerContext?: string
 }
 
 /** Bare TCP connect, no proxy env, no resolver — the canonical item-6 shape (01e §10.6 item 6).
@@ -350,6 +389,7 @@ function item6NodeScript(host: string, port: number): string {
 }
 
 export async function runRawEgressProbe(opts: RawEgressOptions): Promise<RawEgressReport> {
+  const dockerContext = opts.dockerContext ?? DOCKER_CONTEXT
   const legs: RawEgressLeg[] = []
   for (const target of RAW_EGRESS_TARGETS) {
     const control = await opts.control(target)
@@ -358,20 +398,20 @@ export async function runRawEgressProbe(opts: RawEgressOptions): Promise<RawEgre
       legs.push({ target, control, probeTool: "none-run", raw: "", verdict: "VOID-TARGET-DEAD", layer: "" })
       continue
     }
-    const disc = await discoverInContainerTool(opts.docker, opts.container, ITEM6_TOOL_ORDER)
+    const disc = await discoverInContainerTool(opts.docker, opts.container, ITEM6_TOOL_ORDER, dockerContext)
     if (disc.tool === null) {
       legs.push({ target, control, probeTool: "none-found", raw: disc.discovery, verdict: "VOID-NO-TOOL", layer: "" })
       continue
     }
-    const res = await item6Exec(opts.docker, opts.container, disc.tool, target)
+    const res = await item6Exec(opts.docker, opts.container, disc.tool, target, dockerContext)
     legs.push(item6Leg(target, control, disc.tool, res))
   }
   return { legs, overall: item6Overall(legs) }
 }
 
-function item6Exec(run: DockerRunner, container: string, tool: ProbeTool, target: RawEgressTarget): Promise<DockerResult> {
-  if (tool === "node") return run(["exec", container, "node", "--input-type=module", "-e", item6NodeScript(target.host, target.port)])
-  if (tool === "nc") return run(["exec", container, "nc", "-z", "-w", "4", target.host, String(target.port)])
+function item6Exec(run: DockerRunner, container: string, tool: ProbeTool, target: RawEgressTarget, dockerContext: string): Promise<DockerResult> {
+  if (tool === "node") return run(execArgs(container, ["node", "--input-type=module", "-e", item6NodeScript(target.host, target.port)], dockerContext))
+  if (tool === "nc") return run(execArgs(container, ["nc", "-z", "-w", "4", target.host, String(target.port)], dockerContext))
   // curl/wget carry no bare-TCP mode: an HTTP-shaped leg against :443/:53 would mislabel routed
   // traffic as refusal, so those legs stay UNKNOWN instead of fabricating a verdict.
   return Promise.resolve({ exitCode: -1, stdout: "", stderr: `tool ${tool} cannot express a bare TCP-connect leg` })
