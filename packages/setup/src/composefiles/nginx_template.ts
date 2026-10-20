@@ -5,7 +5,11 @@
 //
 // The file carries NO secret value: only the ${SWARM_FIRECRAWL_TOKEN} placeholder, which is
 // the single variable the official 20-envsubst-on-templates.sh substitutes (whitelist form),
-// fed by 05-swarm-env.sh reading /run/secrets/proxy_token (bin_scripts.ts).
+// fed by 05-swarm-env.envsh reading /run/secrets/proxy_token (bin_scripts.ts). R112b-2
+// (r112b live VM): that feeder is a SOURCED .envsh — the image runs .sh wraps in a subshell
+// and the old append to /docker-entrypoint.env hit the read-only rootfs, so the variable
+// arrived absent and nginx exited on `unknown "swarm_firecrawl_token" variable`. Absent-token
+// stays fail-closed (that emerg-exit is the mechanism); the channel fix makes the token ARRIVE.
 // U-15: auth_request module presence in the pinned digest is unverified; the pre-decided
 // fallback (inline compare in the serving location, identical accept/reject) renders with
 // {nginxAuthInline: true}. Timing property stated honestly in §6.3: the rewrite-module `if`

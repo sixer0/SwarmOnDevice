@@ -5,11 +5,12 @@
 // port, nothing touches network, writes go to a throwaway dir under TMPDIR.
 
 import { expect, describe, test } from "bun:test"
-import { readFileSync, statSync } from "node:fs"
+import { readFileSync, statSync, mkdirSync, writeFileSync } from "node:fs"
+import { execFileSync, spawnSync } from "node:child_process"
 import { join } from "node:path"
 import { validateLock } from "../src/lockfile.ts"
 import { renderAll, applyRenderedFiles, validateRenderedSecrets } from "../src/composefiles/index.ts"
-import { CAP_ADD_ALLOWLIST, findReservedAclNames, findSecretArgvLeak, findSquidOrderingViolations, findWrapModeViolations, lintComposeText, lintOk, PASS_THROUGH_HARD, RESERVED_ACL_NAMES, SECRET_ARGV_PATTERNS } from "../src/composefiles/lint.ts"
+import { CAP_ADD_ALLOWLIST, findDirectiveInlineComments, findHealthcheckToolAbsent, findReservedAclNames, findSecretArgvLeak, findSquidOrderingViolations, findWrapChannelViolations, findWrapModeViolations, HEALTHCHECK_TOOL_ABSENT, lintComposeText, lintOk, PASS_THROUGH_HARD, RESERVED_ACL_NAMES, SECRET_ARGV_PATTERNS } from "../src/composefiles/lint.ts"
 import {
   PC_PORTS,
   parseEngineNames,
@@ -463,8 +464,8 @@ describe("lint fixtures — one failing + one passing per §4.9 rule (blueprint 
     [
       "lifecycle",
       fc(),
-      '    restart: "no"\n    logging:\n      driver: json-file\n      options: {max-size: "5m", max-file: "2", compress: "true"}\n    healthcheck:  # readiness',
-      '    restart: always\n    logging:\n      driver: json-file\n      options: {max-size: "5m", max-file: "2", compress: "true"}\n    healthcheck:  # readiness',
+      '    restart: "no"\n    logging:\n      driver: json-file\n      options: {max-size: "5m", max-file: "2", compress: "true"}\n    # NO healthcheck — R112b-3',
+      '    restart: always\n    logging:\n      driver: json-file\n      options: {max-size: "5m", max-file: "2", compress: "true"}\n    # NO healthcheck — R112b-3',
     ],
     ["cap-add", fc(), "    shm_size: 1g", "    cap_add: [SYS_ADMIN]\n    shm_size: 1g"],
   ]
@@ -713,12 +714,13 @@ describe("R112 live-boot round (row 112) — reserved names, wrap modes, boot or
     expect(findReservedAclNames(q()).some((f) => f.message.includes("to_localnet"))).toBe(false)
   })
 
-  test("wrap modes (R112-5): entrypoint-executed wrap 0700, sh-invoked wraps 0600, zero group/world bits", () => {
+  test("wrap modes (R112-5 + R112b-2): entrypoint-mounted token wrap 0700 sourced .envsh, sh-invoked wraps 0600, zero group/world bits", () => {
     const bins = renderClean().files.filter((f) => f.relPath.includes("/compose/bin/"))
     expect(bins.length).toBeGreaterThanOrEqual(4)
     for (const f of bins) expect(f.mode & 0o077).toBe(0)
-    const nginxWrap = bins.find((f) => f.relPath.endsWith("fc-nginx-env.sh"))
-    expect(nginxWrap?.mode).toBe(0o700) // owner-executable: the entrypoint IGNORES non-executable scripts (empty-bearer bypass)
+    const nginxWrap = bins.find((f) => f.relPath.startsWith("firecrawl/compose/bin/fc-nginx-env"))
+    expect(nginxWrap?.relPath).toBe("firecrawl/compose/bin/fc-nginx-env.envsh") // R112b-2: sourced channel
+    expect(nginxWrap?.mode).toBe(0o700) // owner-only; zero group/world (R112-5 lineage)
     for (const name of ["fc-env.sh", "redis-start.sh", "nuq-postgres-start.sh"]) {
       expect(bins.find((f) => f.relPath.endsWith(name))?.mode).toBe(0o600)
     }
@@ -749,6 +751,255 @@ describe("R112 live-boot round (row 112) — reserved names, wrap modes, boot or
       .map((l) => l.split("#")[0] ?? "")
       .join("\n")
     expect(code).not.toContain("/root/.cache:noexec,nosuid,size=256m") // wrong-path mount replaced, not duplicated
+  })
+})
+
+describe("R112b fix-round 6 — inline-comment directive class, .envsh token channel, healthcheck tool absence", () => {
+  const r = () => renderClean()
+  const q = () => fileOf(r(), "firecrawl/squid/squid.conf").content
+  const fcText = () => fileOf(r(), "firecrawl/compose/firecrawl.yml").content
+  const sxText = () => fileOf(r(), "searxng/compose/searxng.yml").content
+  const opts = { lockVersion: lock.version }
+
+  // ---- R112b-1: option-parsed directives carry NO inline comment (boot-class parse lint cannot see) ----
+
+  test("GOLDEN: rendered http_port is a bare directive; its note sits on its own line above", () => {
+    const portLine = q().split("\n").find((l) => l.startsWith("http_port"))
+    expect(portLine).toBe(`http_port ${PC_PORTS.squidContainer}`) // value-only line (port stays artefact-derived from PC_PORTS)
+    const noteIdx = q().split("\n").findIndex((l) => l.startsWith("# PC-PORT-06 squid listen"))
+    const portIdx = q().split("\n").findIndex((l) => l.startsWith("http_port"))
+    expect(noteIdx).toBeGreaterThanOrEqual(0)
+    expect(noteIdx).toBeLessThan(portIdx) // own-line comment immediately precedes the directive
+    expect(findDirectiveInlineComments(q())).toEqual([])
+  })
+
+  test("NEGATIVE: the shipped-bad inline-comment form IS refused by the new gate (and ACL lines stay exempt per live evidence)", () => {
+    // reconstruction of the exact r112b shipping form (13b_live_firecrawl_rerun.md:133)
+    const shippedBad = q().replace(
+      `http_port ${PC_PORTS.squidContainer}\n`,
+      `http_port ${PC_PORTS.squidContainer}               # PC-PORT-06 (unpublished; reachable from fc-ctl members only)\n`,
+    )
+    expect(shippedBad).not.toBe(q()) // fixture really mutates
+    const hits = findDirectiveInlineComments(shippedBad)
+    expect(hits.length).toBe(1)
+    expect(hits[0]?.rule).toBe("squid-inline-comment")
+    // scope honesty: acl/http_access lines DO carry inline comments in the shipped conf and squid
+    // parsed them clean live (V6 + boot-past-ACL-init), so the gate must NOT flag them:
+    expect(q()).toContain("acl localnet src 172.16.0.0/12        #")
+    expect(findDirectiveInlineComments(q())).toEqual([])
+  })
+
+  test("renderAll self-lints the directive rule (clean render carries zero squid-inline-comment findings)", () => {
+    const res = r()
+    expect(res.ok).toBe(true)
+    expect(res.findings.some((f) => f.rule === "squid-inline-comment")).toBe(false)
+  })
+
+  // ---- R112b-2: sourced .envsh token channel + fail-closed survival ----
+
+  test("CHANNEL: compose mounts the wrap as /docker-entrypoint.d/05-swarm-env.envsh (sourced, ordered before 20-)", () => {
+    const t = fcText()
+    expect(t).toContain("target: /docker-entrypoint.d/05-swarm-env.envsh")
+    expect(t).not.toContain("/docker-entrypoint.d/05-swarm-env.sh") // subshell form gone, not duplicated
+    expect(t.split("/docker-entrypoint.d/05-swarm-env.envsh").length - 1).toBe(1) // single mount site
+    // filename ordering is the delivery contract: 05- sorts before the image's 20-envsubst script
+    const target = "/docker-entrypoint.d/05-swarm-env.envsh"
+    expect(target.split("/").pop()! < "20-envsubst-on-templates.sh").toBe(true)
+  })
+
+  test("CHANNEL: the rendered wrap exports the token from the secret file, never execs, never writes the RO rootfs", () => {
+    const wrap = fileOf(r(), "firecrawl/compose/bin/fc-nginx-env.envsh").content
+    const code = wrap
+      .split("\n")
+      .map((l) => (l.trimStart().startsWith("#") ? "" : l))
+      .join("\n") // executed lines only — the prose NAMES the dead paths it must not use
+    expect(code).toContain('SWARM_FIRECRAWL_TOKEN="$(cat /run/secrets/proxy_token)"')
+    expect(code).toMatch(/^export SWARM_FIRECRAWL_TOKEN$/m)
+    expect(code).toContain('[ -n "$SWARM_FIRECRAWL_TOKEN" ]') // empty-token refusal (see below)
+    expect(code).not.toMatch(/^\s*exec\s/m) // sourced code that execs kills the entrypoint itself
+    expect(code).not.toContain("/docker-entrypoint.env") // the read-only append that failed live
+    expect(findWrapChannelViolations(r().files)).toEqual([])
+  })
+
+  test("NEGATIVE fixtures: .sh regression, exec line, env-file write, missing export and missing empty-guard are all refused", () => {
+    const good = { relPath: "firecrawl/compose/bin/fc-nginx-env.envsh", content: fileOf(r(), "firecrawl/compose/bin/fc-nginx-env.envsh").content }
+    const asSh = [{ ...good, relPath: "firecrawl/compose/bin/fc-nginx-env.sh" }]
+    expect(findWrapChannelViolations(asSh).some((f) => f.rule === "wrap-channel")).toBe(true)
+    const withExec = [{ ...good, content: `${good.content}\nexec nginx -g "daemon off;"\n` }]
+    expect(findWrapChannelViolations(withExec).some((f) => f.message.includes("exec"))).toBe(true)
+    const roWrite = [{ ...good, content: good.content.replace("export SWARM_FIRECRAWL_TOKEN", 'printf "%s\\n" "$SWARM_FIRECRAWL_TOKEN" >> /docker-entrypoint.env\nexport SWARM_FIRECRAWL_TOKEN') }]
+    expect(findWrapChannelViolations(roWrite).some((f) => f.message.includes("read-only rootfs"))).toBe(true)
+    const noExport = [{ ...good, content: good.content.replace("export SWARM_FIRECRAWL_TOKEN", "") }]
+    expect(findWrapChannelViolations(noExport).some((f) => f.message.includes("export"))).toBe(true)
+    const noGuard = [{ ...good, content: good.content.split("\n").filter((l) => !l.includes('[ -n "$SWARM_FIRECRAWL_TOKEN" ]')).join("\n") }]
+    expect(noGuard[0]!.content).not.toBe(good.content)
+    expect(findWrapChannelViolations(noGuard).some((f) => f.message.includes("empty-token"))).toBe(true)
+  })
+
+  test("TOKEN ARRIVES through the chosen channel: sourced wrap exports, envsubst substitutes into the compare line", () => {
+    // Half 1 (wrap): simulate the image mechanism on the host — `set -eu` + `. wrap` is exactly how
+    // docker-entrypoint.sh consumes a *.envsh (in-process), so an export that survives the dot-source
+    // is the proof the pre-fix .sh subshell could never give. Secret path retargeted to a temp file.
+    const dir = join(process.env.TMPDIR ?? "/tmp", `r85f6-chan-${Date.now()}-${Math.floor(Math.random() * 1e6)}`)
+    mkdirSync(dir, { recursive: true })
+    const tok = "synthetic-token-value-0123456789abcdef"
+    writeFileSync(join(dir, "proxy_token"), tok)
+    const wrapSrc = fileOf(r(), "firecrawl/compose/bin/fc-nginx-env.envsh")
+      .content.replaceAll("/run/secrets/proxy_token", join(dir, "proxy_token"))
+    const wrapPath = join(dir, "05-swarm-env.envsh")
+    writeFileSync(wrapPath, wrapSrc)
+    writeFileSync(
+      join(dir, "runner.sh"),
+      `set -eu\n. '${wrapPath}'\nprintf 'GOT=[%s]' "$SWARM_FIRECRAWL_TOKEN"\n`,
+    )
+    const ok = spawnSync("/bin/sh", [join(dir, "runner.sh")], { encoding: "utf8" })
+    expect(ok.stdout).toContain(`GOT=[${tok}]`) // export persisted through sourcing
+    // Half 1b (fail-closed): empty secret -> the sourced guard exits non-zero BEFORE any export, so
+    // the entrypoint dies and nginx never starts. This is the posture that replaces run 1's silent
+    // empty-bearer bypass; it no longer depends on envsubst's unset-var behaviour (host GNU renders
+    // empty, the container was observed leaving the literal + emerg per 13b:134 — either way this
+    // guard kills the boot first).
+    writeFileSync(join(dir, "proxy_token"), "")
+    const dead = spawnSync("/bin/sh", [join(dir, "runner.sh")], { encoding: "utf8" })
+    expect(dead.status).not.toBe(0)
+    expect(dead.stdout).not.toContain("GOT=")
+    // Half 2 (template): with the var in the environment, the image's whitelist-filtered envsubst puts
+    // the token INTO the compare line and touches nothing else.
+    if (!Bun.which("envsubst")) return // host lacks GNU envsubst -> UNKNOWN here; proofs re-run it where present
+    const tpl = fileOf(r(), "firecrawl/nginx/default.conf.template").content
+    const out = execFileSync("envsubst", ["${SWARM_FIRECRAWL_TOKEN}"], {
+      input: tpl,
+      encoding: "utf8",
+      env: { ...process.env, SWARM_FIRECRAWL_TOKEN: tok },
+    })
+    expect(out).toContain(`Bearer ${tok}`) // token reached the rendered nginx config through the channel
+    expect(out).not.toContain("${SWARM_FIRECRAWL_TOKEN}")
+    expect(out).toContain("$http_authorization") // nginx runtime vars untouched by the whitelist
+    expect(out).not.toContain('"Bearer "') // with a real token there is no empty-bearer accept form
+  })
+
+  // ---- R112b-3: no healthcheck may invoke a binary the pinned digest lacks ----
+
+  test("RENDER: api and playwright ship NO healthcheck; vendor-independent ones stay; no wget/curl test line anywhere", () => {
+    const t = fcText()
+    const svcBlocks = (text: string) => {
+      const out: Record<string, string[]> = {}
+      let name = ""
+      for (const l of text.split("\n")) {
+        const m = l.match(/^  ([a-z][a-z0-9-]*):$|^  ([a-z][a-z0-9-]*):\s+#/)
+        if (m) {
+          name = (m[1] ?? m[2]) as string
+          out[name] = []
+          continue
+        }
+        if (name) out[name]?.push(l)
+      }
+      return out
+    }
+    const blocks = { ...svcBlocks(sxText()), ...svcBlocks(t) }
+    const codeKey = (svc: string, key: string) =>
+      (blocks[svc] ?? []).some((l) => !l.trimStart().startsWith("#") && l.trimStart().startsWith(key))
+    expect(codeKey("api", "healthcheck:")).toBe(false)
+    expect(codeKey("playwright-service", "healthcheck:")).toBe(false)
+    for (const svc of ["redis", "rabbitmq", "nuq-postgres", "valkey", "auth-proxy"]) {
+      expect(codeKey(svc, "healthcheck:")).toBe(true) // kept: tools proven to ship (U-1 table lineage)
+    }
+    // mechanical proof across BOTH files: every wget/curl TEST line belongs ONLY to a service whose
+    // digest ships it (auth-proxy = alpine busybox, kept per 01e §6.2); the table-covered services
+    // carry none — this is the render assertion R112b-3 asked for, scoped to per-digest truth.
+    for (const text of [t, sxText()]) {
+      let svc = ""
+      for (const l of text.split("\n")) {
+        const sm = l.match(/^  ([a-z][a-z0-9-]*):/)
+        if (sm) svc = sm[1] as string
+        if (!/^\s+test:\s*\[/.test(l) || l.trimStart().startsWith("#")) continue
+        const shell = l.replace(/#.*/, "")
+        if (/"wget\b/.test(shell) || /"curl\b/.test(shell)) expect(svc).toBe("auth-proxy")
+      }
+    }
+    expect(findHealthcheckToolAbsent(t)).toEqual([])
+    expect(findHealthcheckToolAbsent(sxText())).toEqual([])
+  })
+
+  test("NEGATIVE fixtures: the shipped-bad wget-on-api and curl-on-searxng forms are refused by lintComposeText", () => {
+    const badApi = fcText().replace(
+      "    # NO healthcheck — R112b-3 (r112b live VM): the pinned api digest ships NO wget",
+      `    healthcheck:\n      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:${PC_PORTS.apiContainer}/v0/health/readiness || exit 1"]\n    # NO healthcheck — R112b-3 (r112b live VM): the pinned api digest ships NO wget`,
+    )
+    expect(badApi).not.toBe(fcText())
+    const hitsApi = lintComposeText(badApi, opts)
+    expect(lintOk(hitsApi)).toBe(false)
+    expect(hitsApi.some((f) => f.rule === "healthcheck-tool-absent")).toBe(true)
+    const badSx = sxText().replace(
+      "    # NO healthcheck — U-1 CLOSED LIVE by row 93 (H-R93-3): the pinned digest ships no curl, so the specced",
+      `    healthcheck:\n      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:${PC_PORTS.searxngPublished.container}/healthz || exit 1"]\n    # NO healthcheck — U-1 CLOSED LIVE by row 93 (H-R93-3): the pinned digest ships no curl, so the specced`,
+    )
+    expect(badSx).not.toBe(sxText())
+    expect(lintComposeText(badSx, opts).some((f) => f.rule === "healthcheck-tool-absent")).toBe(true)
+    // auth-proxy's busybox wget is NOT banned (alpine ships it): the shipped render stays green
+    expect(fcText()).toContain("wget -qO /dev/null")
+    expect(lintOk(lintComposeText(fcText(), opts))).toBe(true)
+    // the table itself carries exactly the live-proven absences (evidence keys, nothing speculative)
+    expect(Object.keys(HEALTHCHECK_TOOL_ABSENT).sort()).toEqual(["api", "playwright-service", "searxng"])
+  })
+})
+
+describe("R112b-4 topology half — r75-fix6 ruling §5: containment by the internal flag, not gateway omission", () => {
+  // Binding contract: delegation_progress/r75fix6_topology_ruling.md §5 (five assertions).
+  // Deliberately NO assertion about an absent gateway: moby assigns 172.30.40.1 regardless of
+  // whether a gateway key is written, so such an assertion is invalid per the ruling (§4 note + §5).
+  const r = renderClean()
+  const fcText = () => fileOf(r, "firecrawl/compose/firecrawl.yml").content
+  // Standalone slice of the rendered networks: block — from the top-level key to the next one.
+  function networksBlock() {
+    const lines = fcText().split("\n")
+    const start = lines.indexOf("networks:")
+    expect(start).toBeGreaterThan(-1)
+    const rest = lines.slice(start + 1)
+    const end = rest.findIndex((l) => /^[a-z]/.test(l)) // next top-level key: services:
+    return rest.slice(0, end === -1 ? rest.length : end).join("\n")
+  }
+
+  test("assertion 1: the rendered networks: block parses as YAML", () => {
+    const nets = Bun.YAML.parse(networksBlock())
+    expect(Object.keys(nets).sort()).toEqual(["fc-ctl", "fc-data", "fc-edge", "fc-iso", "fc-web"])
+    // the pinned subnet survives parsing (gateway NOT asserted — see block comment)
+    expect(nets["fc-iso"].ipam.config[0].subnet).toBe("172.30.40.0/24")
+  })
+
+  test("assertion 2: fc-iso, fc-ctl and fc-data are all internal:true", () => {
+    const nets = Bun.YAML.parse(networksBlock())
+    expect(nets["fc-iso"].internal).toBe(true) // the flip itself — R112b-4 render half
+    expect(nets["fc-ctl"].internal).toBe(true)
+    expect(nets["fc-data"].internal).toBe(true)
+    // textual negative pin: the disproven-premise spelling cannot silently return
+    expect(fcText()).not.toContain("internal: false")
+  })
+
+  test("assertion 3: fc-web and fc-edge stay non-internal (the proxy needs one, auth-proxy needs one)", () => {
+    const nets = Bun.YAML.parse(networksBlock())
+    expect(nets["fc-web"].internal).toBeUndefined()
+    expect(nets["fc-edge"].internal).toBeUndefined()
+  })
+
+  test("assertion 4: playwright-service attaches ONLY internal tiers [fc-ctl, fc-iso]", () => {
+    const doc = Bun.YAML.parse(fcText())
+    const pw = doc.services["playwright-service"].networks
+    expect(pw).toEqual(["fc-ctl", "fc-iso"])
+    // derived containment claim: every attachment is internal -> moby installs no default route
+    for (const n of pw) expect(doc.networks[n].internal).toBe(true)
+  })
+
+  test("assertion 5: only egress-proxy lists fc-web, and only auth-proxy carries ports:", () => {
+    const doc = Bun.YAML.parse(fcText())
+    const onFcWeb = Object.entries(doc.services)
+      .filter(([, s]) => Array.isArray(s.networks) && s.networks.includes("fc-web"))
+      .map(([name]) => name)
+    expect(onFcWeb).toEqual(["egress-proxy"])
+    const portCarriers = Object.entries(doc.services)
+      .filter(([, s]) => s.ports !== undefined)
+      .map(([name]) => name)
+    expect(portCarriers).toEqual(["auth-proxy"])
   })
 })
 

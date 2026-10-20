@@ -37,7 +37,11 @@ export function renderSquidConf(): RenderFile {
     "# by r75-fix4 [review-107 M2]; hostname ACL renamed per R112-1 (swarm_hostnames —",
     "# squid predefines all, manager, localhost, to_localhost, to_linklocal, CONNECT).",
     "# Trust boundary: only fc-ctl members can reach this proxy at all (no other network face).",
-    `http_port ${PC_PORTS.squidContainer}               # PC-PORT-06 (unpublished; reachable from fc-ctl members only)`,
+    // Option-parsed directives below carry their notes on OWN lines (R112b-1 class: an inline
+    // comment silently corrupted the http_port value live and `squid -k parse` accepted both
+    // forms — lint.ts findDirectiveInlineComments now refuses the shape for this whole class).
+    "# PC-PORT-06 squid listen (unpublished; reachable from fc-ctl members only)",
+    `http_port ${PC_PORTS.squidContainer}`,
     "acl localnet src 172.16.0.0/12        # compose bridge pools incl. swarm-tools_* and Colima ranges — superset, per-pool enumeration unnecessary (10.4)",
     "acl SSL_ports port 443",
     "acl SafePorts port 80 443             # allow ports 80/443 only (10.4); custom name — Safe_ports is predefined, we do not touch it",
@@ -46,9 +50,12 @@ export function renderSquidConf(): RenderFile {
     "acl to_localnet dst ::1/128 fe80::/10 fc00::/7 ::/128 64:ff9b::/96   # TWELVE classes [review-107 M2]: additions are 0.0.0.0/8 (this-network; Linux-routed loopback-like), ::/128 (IPv6 unspecified twin), 64:ff9b::/96 (NAT64 well-known prefix — DNS64 answers can embed a private IPv4, e.g. 64:ff9b::7f00:1 wraps 127.0.0.1; posture is DENY the whole prefix, never unwrap). dst takes IP/CIDR only — evaluates the RESOLVED answer (V3 rebinding closure)",
     "acl swarm_hostnames dstdomain localhost      # R112-1: renamed from the PREDEFINED to_localhost (different-type redeclaration = boot FATAL); V6 proved rename-only parses clean",
     "acl swarm_hostnames dstdomain .local         # H-R93-6 split kept: hostname forms are dstdomain-class; same-name same-type lines are additive",
-    "dns_v4_first on                       # 10.4 bullet 3",
-    "cache deny all                        # no caching: every object non-cacheable (the enforceable reading of the 10.4 no-cache directive-class wording)",
-    "access_log stdio:/dev/stdout          # audit twin of PC-PATH-10 lines (ts, method, target-host, verdict, bytes), bounded by the json-file driver (§4.4)",
+    "# 10.4 bullet 3: prefer A records so the v4 deny-set sees the answer.",
+    "dns_v4_first on",
+    "# No caching: every object non-cacheable (the enforceable reading of the 10.4 no-cache directive-class wording).",
+    "cache deny all",
+    "# Audit twin of PC-PATH-10 lines (ts, method, target-host, verdict, bytes) on stdout, bounded by the json-file driver (§4.4).",
+    "access_log stdio:/dev/stdout",
     "http_access deny !SafePorts",
     "http_access deny Connector !SSL_ports",
     "# destination-class denies ABOVE every allow (01e §10.4 ordering, enforced by lint); wiring lines bare",

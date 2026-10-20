@@ -359,6 +359,9 @@ export function lintComposeText(text: string, opts: LintOptions): Finding[] {
     }
   }
 
+  // --- R112b-3: no healthcheck may invoke a tool the pinned digest lacks (table-driven) ---
+  for (const f of healthcheckToolAbsentIn(services)) findings.push(f)
+
   return findings
 }
 
@@ -449,9 +452,153 @@ export function findWrapModeViolations(files: readonly { readonly relPath: strin
     if ((f.mode & 0o077) !== 0) {
       findings.push({ rule: "wrap-mode", severity: "error", message: `${f.relPath}: mode 0${f.mode.toString(8)} carries group/world bits — R112-5 mandates 0700/0600 (zero group/world)` });
     }
+    // R112-5 stays enforced for the LEGACY .sh spelling: if the token wrap ever regresses to a
+    // directly-executed .sh it must at least carry the exec bit (silent-ignore bypass class).
+    // R112b-2's channel gate below refuses the .sh form outright; this line is defence-in-depth.
     if (f.relPath.endsWith("fc-nginx-env.sh") && (f.mode & 0o100) === 0) {
       findings.push({ rule: "wrap-mode", severity: "error", message: `${f.relPath}: not owner-executable — the entrypoint SILENTLY ignores non-executable /docker-entrypoint.d scripts (empty-bearer bypass, R112-5)` });
     }
   }
   return findings;
+}
+
+/** R112b-2 (r112b live VM, 13b_live_firecrawl_rerun.md:134): the token hand-off to
+ *  20-envsubst-on-templates.sh only works through the image's SOURCED `.envsh` mechanism —
+ *  a `.sh` in /docker-entrypoint.d/ runs in a SUBSHELL (its exports die with it) and the
+ *  old append to /docker-entrypoint.env hit `Read-only file system`. The shipped feeder is
+ *  fc-nginx-env.envsh (bin_scripts.ts), mounted at /docker-entrypoint.d/05-swarm-env.envsh.
+ *  These four mechanical checks pin that shape at render time: extension, no exec (this code
+ *  runs INSIDE the entrypoint shell), no rootfs env-file write, and the token channel itself
+ *  (secret-file read + export). Fail-closed semantics are preserved by construction: with the
+ *  token absent the template's braced ${SWARM_FIRECRAWL_TOKEN} survives envsubst and nginx
+ *  exits on `unknown "swarm_firecrawl_token" variable` — never an empty-bearer accept. */
+export function findWrapChannelViolations(files: readonly { readonly relPath: string; readonly content: string }[]): Finding[] {
+  const findings: Finding[] = [];
+  for (const f of files) {
+    if (!f.relPath.includes("/compose/bin/")) continue;
+    if (!f.relPath.split("/").pop()?.startsWith("fc-nginx-env")) continue;
+    const at = f.relPath;
+    // Executed lines only: the wrap's own prose NAMES the historical failure paths (this file and
+    // 01e do too); the gate is about what the sourced shell RUNS, mirroring findSecretArgvLeak.
+    const code = f.content
+      .split("\n")
+      .filter((l) => !l.trimStart().startsWith("#"))
+      .join("\n");
+    if (!f.relPath.endsWith(".envsh")) {
+      findings.push({ rule: "wrap-channel", severity: "error", message: `${at}: entrypoint-mounted token wrap must be a SOURCED .envsh — a .sh runs in a subshell and its exports never reach 20-envsubst-on-templates.sh (R112b-2)` });
+    }
+    if (/^\s*exec\s/m.test(code)) {
+      findings.push({ rule: "wrap-channel", severity: "error", message: `${at}: sourced wrap contains an exec statement — exec inside a sourced .envsh replaces the ENTRYPOINT process (R112b-2 mechanism)` });
+    }
+    if (code.includes("/docker-entrypoint.env")) {
+      findings.push({ rule: "wrap-channel", severity: "error", message: `${at}: writes to /docker-entrypoint.env — that path sits on the read-only rootfs and the append failed live (R112b-2); sourcing IS the hand-off` });
+    }
+    if (!code.includes("/run/secrets/proxy_token")) {
+      findings.push({ rule: "wrap-channel", severity: "error", message: `${at}: token must arrive from the mounted secret file /run/secrets/proxy_token (§4.6/§4.7)` });
+    }
+    if (!/export\s+SWARM_FIRECRAWL_TOKEN/.test(code)) {
+      findings.push({ rule: "wrap-channel", severity: "error", message: `${at}: does not export SWARM_FIRECRAWL_TOKEN — the envsubst whitelist substitutes exactly this variable (01e §6.3)` });
+    }
+    // Empty-token refusal (host-measured: GNU envsubst renders an unset/empty whitelisted var as
+    // NOTHING -> `Bearer "` empty-bearer ACCEPT line). exit 1 inside the SOURCED wrap kills the
+    // entrypoint before envsubst runs; without this guard the fail-closed claim rests on the
+    // image's literal-survival behaviour alone (observed live at 13b:134, but not contract).
+    if (!/\[\s*-n\s+"?\$SWARM_FIRECRAWL_TOKEN"?\s*\][^\n]*exit 1/.test(code.replace(/\n/g, " "))) {
+      findings.push({ rule: "wrap-channel", severity: "error", message: `${at}: no empty-token refusal — an empty secret would render 'Bearer "' (empty-bearer accept, run-1 bypass class); guard with [ -n "$SWARM_FIRECRAWL_TOKEN" ] || ... exit 1 before the export` });
+    }
+  }
+  return findings;
+}
+
+/** R112b-1 (r112b live VM, 13b_live_firecrawl_rerun.md:133): a TRAILING comment on an
+ *  option-parsed squid directive silently changes the OPTION VALUE — the shipped
+ *  `http_port 3128               # PC-PORT-06 …` registered NO forward-proxy port ("ERROR: No
+ *  forward-proxy ports configured." -> FATAL mimeLoadIcon http://<host>:0/…), while `squid -k
+ *  parse` ACCEPTS both forms. Parse-level checks therefore cannot see this class; the render
+ *  rule is absolute: option-parsed directives carry their note on the preceding line, never
+ *  inline. ACL/http_access lines are NOT covered here: inline comments on those parsed clean
+ *  live (V6 experiment + the shipped v6-dst/dstdomain lines carried them while squid booted
+ *  past ACL init). */
+export const SQUID_INLINE_COMMENT_DIRECTIVES: readonly string[] = [
+  "http_port",
+  "https_port",
+  "ftp_port",
+  "visible_hostname",
+  "cache_dir",
+  "cache_mem",
+  "cache",
+  "max_object_size",
+  "access_log",
+  "pid_filename",
+  "coredump_dir",
+  "dns_v4_first",
+];
+
+export function findDirectiveInlineComments(text: string): Finding[] {
+  const findings: Finding[] = [];
+  for (const l of toCodeLines(text)) {
+    if (l.isComment) continue;
+    const m = l.code.match(/^\s*([a-z_][a-z0-9_]*)\b/);
+    if (!m || !SQUID_INLINE_COMMENT_DIRECTIVES.includes(m[1] as string)) continue;
+    if (l.raw.includes("#")) {
+      findings.push({ rule: "squid-inline-comment", severity: "error", line: l.n, message: `option-parsed directive "${m[1]}" carries an inline comment — R112b-1 proved this class silently corrupts the option value (http_port lost its port) and squid -k parse cannot see it; move the note to its own line above` });
+    }
+  }
+  return findings;
+}
+
+/** R112b-3 (r112b live VM, 13b_live_firecrawl_rerun.md:135 + decisions.md 2026-10-20 ruling):
+ *  healthchecks may only invoke tools the PINNED digest actually ships. Live-proven absences:
+ *  wget on the firecrawl api + playwright-service digests (both served HTTP 200 while their
+ *  labels read unhealthy — `wget: not found`, FailingStreak 24/9) and curl on the pinned
+ *  searxng digest (U-1, closed live by row 93 as H-R93-3). auth-proxy's busybox wget is NOT
+ *  listed: alpine base ships it (01e §6.2 rationale; if row 112 ever measures otherwise, add
+ *  the entry and drop that healthcheck per the same U-1 fallback). New proven absences join
+ *  the table; the renderer then refuses the whole render, so a bad tool choice can never ship
+ *  again on the strength of a boot test nobody has to re-run. */
+export const HEALTHCHECK_TOOL_ABSENT: Readonly<Record<string, readonly string[]>> = {
+  api: ["wget"],
+  "playwright-service": ["wget"],
+  searxng: ["curl"],
+};
+
+/** Head binary of a healthcheck test line: CMD form takes argv[0]; CMD-SHELL strips env
+ *  assignments (VAR=… prefixes, quoted bodies flattened) and takes the first command token. */
+function healthcheckHeadBinary(code: string): string | null {
+  const m = code.match(/test:\s*\[(.*)\]/);
+  if (!m) return null;
+  const parts = (m[1] as string).split(",").map((s) => s.trim().replace(/^["']|["']$/g, ""));
+  if (parts.length < 2) return null;
+  const form = parts[0] as string;
+  if (form === "CMD") return (parts[1] as string).split(/\s+/)[0] ?? null;
+  if (form === "CMD-SHELL") {
+    const shell = parts.slice(1).join(",").replace(/\\"[^"]*\\"/g, " X ").replace(/'[^']*'/g, " X ");
+    for (const tok of shell.trim().split(/\s+/)) {
+      if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(tok)) continue; // VAR=value prefix assignment
+      return tok;
+    }
+  }
+  return null;
+}
+
+function healthcheckToolAbsentIn(services: ServiceBlock[]): Finding[] {
+  const findings: Finding[] = [];
+  for (const svc of services) {
+    const banned = HEALTHCHECK_TOOL_ABSENT[svc.name];
+    if (!banned) continue;
+    for (const l of svc.props.get("healthcheck")?.body ?? []) {
+      if (l.isComment) continue;
+      const head = healthcheckHeadBinary(l.code);
+      if (head && banned.includes(head)) {
+        findings.push({ rule: "healthcheck-tool-absent", severity: "error", line: l.n, message: `${svc.name}: healthcheck invokes "${head}", which the pinned digest does NOT ship (live-proven: ${HEALTHCHECK_TOOL_ABSENT[svc.name]?.join(", ")}) — the gate can never go green (R112b-3/U-1); use a shipped tool or omit and let the host-side gate own readiness` });
+      }
+    }
+  }
+  return findings;
+}
+
+/** Text-facing entry point (same shape as every other find* rule): discovers the service blocks
+ *  and applies the table. Wired into lintComposeText so renderAll refuses a bad tool choice. */
+export function findHealthcheckToolAbsent(text: string): Finding[] {
+  return healthcheckToolAbsentIn(walkServices(toCodeLines(text)));
 }

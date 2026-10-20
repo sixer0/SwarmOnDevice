@@ -189,14 +189,168 @@ grep -qE '^acl\s+(all|manager|localhost|to_localhost|to_linklocal|CONNECT)\s' "$
   || { echo "  PASS 7f no reserved-ACL declaration in rendered squid.conf (swarm_hostnames rename live)"; pass=$((pass+1)); }
 MODES_OK=1
 stat -f '%Lp %N' "$WORK/render-a/firecrawl/compose/bin/"* | while read -r m f; do case "$m" in 600|700) ;; *) echo "  bad mode $m $f"; exit 1;; esac; done || MODES_OK=0
-[ "$(stat -f '%Lp' "$WORK/render-a/firecrawl/compose/bin/fc-nginx-env.sh")" = 700 ] || MODES_OK=0
-if [ "$MODES_OK" = 1 ]; then echo "  PASS 7f applied wrap modes: fc-nginx-env.sh=700 (entrypoint-executed), all others 600, zero group/world bits"; pass=$((pass+1)); else echo "  FAIL 7f wrap modes wrong"; fail=$((fail+1)); fi
+[ "$(stat -f '%Lp' "$WORK/render-a/firecrawl/compose/bin/fc-nginx-env.envsh")" = 700 ] || MODES_OK=0
+if [ "$MODES_OK" = 1 ]; then echo "  PASS 7f applied wrap modes: fc-nginx-env.envsh=700 (entrypoint-mounted, R112b-2 sourced channel), all others 600, zero group/world bits"; pass=$((pass+1)); else echo "  FAIL 7f wrap modes wrong"; fail=$((fail+1)); fi
 
-echo "=== PROOF 8: unit suite (74 tests incl. one failing + one passing fixture per lint rule) ==="
+echo "=== PROOF 8: unit suite (88 tests incl. one failing + one passing fixture per lint rule) ==="
 ( cd "$HERE" && bun test test/compose_files.test.ts ) > "$WORK/bun-test.log" 2>&1
 rc=$?
 tail -5 "$WORK/bun-test.log"
 check "bun test test/compose_files.test.ts" 0 $rc
+
+echo "=== PROOF 9: R112b fix-round 6 — inline-comment directive class / .envsh token channel / healthcheck tool absence ==="
+# 9a (independent grep side): the rendered http_port carries NO trailing comment and its value is
+# artefact-derived (equals PC_PORTS.squidContainer in shared.ts — no new port literal introduced here).
+HP_VAL=$(awk '/^http_port/{print $2}' "$SQ")
+HP_HAS_COMMENT=$(awk '/^http_port/{print}' "$SQ" | grep -c '#' || true)
+NOTE_ABOVE=$(awk '/^# PC-PORT-06 squid listen/{n=NR} /^http_port/{print (n && n < NR) ? "yes" : "no"}' "$SQ")
+OPT_IC=$(grep -E '^(http_port|https_port|ftp_port|visible_hostname|cache(_dir|mem)?|max_object_size|access_log|pid_filename|coredump_dir|dns_v4_first)([[:space:]]|$)' <(sed -n '1,200p' "$SQ") | grep -c '#' || true)
+if [ "$HP_HAS_COMMENT" = 0 ] && [ "$NOTE_ABOVE" = "yes" ] && [ "$OPT_IC" = 0 ] \
+   && grep -q "squidContainer: $HP_VAL" "$HERE/src/composefiles/shared.ts"; then
+  echo "  PASS 9a-grep http_port=$HP_VAL renders bare with own-line note; zero inline comments on option-parsed directives; value matches the register mirror"; pass=$((pass+1))
+else
+  echo "  FAIL 9a-grep (val=$HP_VAL comment=$HP_HAS_COMMENT note=$NOTE_ABOVE optInline=$OPT_IC)"; fail=$((fail+1));
+fi
+# 9b/9c + 9a-lint side (mechanical golden/negative proof incl. the shipped-bad reconstructions):
+export R85_ENTRY="$HERE/src/composefiles/index.ts"
+export R85_LINT="$HERE/src/composefiles/lint.ts"
+export R85_SHARED="$HERE/src/composefiles/shared.ts"
+export R85_LOCK="$HERE/tools.lock.json"
+export R85_WORK="$WORK"
+cat > "$WORK/r85f6-demo.ts" <<'TS'
+// FIX ROUND 6 mechanical proofs. Each prints one line; exit 0 only when ALL hold:
+//  9a  rendered squid.conf is inline-comment-clean AND the reconstructed shipped-bad http_port
+//      form (13b_live_firecrawl_rerun.md:133) is refused by findDirectiveInlineComments
+//  9b  compose mounts /docker-entrypoint.d/05-swarm-env.envsh (never .sh); the wrap survives
+//      findWrapChannelViolations; sourcing simulation: exports persist through `. wrap` under
+//      set -eu AND an empty secret kills the boot before export (fail-closed); with a token set,
+//      whitelist envsubst lands it in the compare line (no empty-bearer form, nginx vars intact)
+//  9c  api + playwright-service render NO healthcheck; every wget/curl test line belongs to
+//      auth-proxy only (alpine busybox ships it); findHealthcheckToolAbsent refuses the
+//      reconstructed wget-on-api form
+import { readFileSync, writeFileSync } from "node:fs";
+import { execFileSync, spawnSync } from "node:child_process";
+const { renderAll } = await import(process.env.R85_ENTRY!);
+const L = await import(process.env.R85_LINT!);
+const { PC_PORTS } = await import(process.env.R85_SHARED!);
+const lock = JSON.parse(readFileSync(process.env.R85_LOCK!, "utf8"));
+const WORK = process.env.R85_WORK!;
+const manifest = {
+  home: "/Users/tester",
+  secrets: {
+    searxng: { secret_key: "generated", valkey_auth: "absent" },
+    firecrawl: { proxy_token: "generated", postgres_password: "generated", bull_auth_key: "generated", redis_auth: "generated", rabbitmq_password: "absent" },
+  },
+};
+const r = renderAll(lock, manifest);
+if (!r.ok) { console.error("baseline render failed:", JSON.stringify(r.findings)); process.exit(2); }
+const file = (rel: string) => r.files.find((f: any) => f.relPath === rel);
+const sq = file("firecrawl/squid/squid.conf").content;
+const fc = file("firecrawl/compose/firecrawl.yml").content;
+const sx = file("searxng/compose/searxng.yml").content;
+let bad = 0;
+const say = (ok: boolean, line: string) => { console.log((ok ? "OK   " : "BAD  ") + line); if (!ok) bad++; };
+
+// --- 9a ---
+say(sq.split("\n").find((l) => l.startsWith("http_port")) === `http_port ${PC_PORTS.squidContainer}`, "9a http_port renders as bare directive (value from PC_PORTS)");
+say(L.findDirectiveInlineComments(sq).length === 0, "9a golden: rendered conf carries zero inline comments on option-parsed directives");
+const shippedBad = sq.replace(`http_port ${PC_PORTS.squidContainer}\n`, `http_port ${PC_PORTS.squidContainer}               # PC-PORT-06 (unpublished)\n`);
+say(shippedBad !== sq && L.findDirectiveInlineComments(shippedBad).length === 1, "9a negative: shipped-bad inline-comment form refused by the new lint");
+
+// --- 9b ---
+say(fc.includes("target: /docker-entrypoint.d/05-swarm-env.envsh") && !fc.includes("/docker-entrypoint.d/05-swarm-env.sh"), "9b compose mounts the wrap as SOURCED .envsh (subshell .sh form gone)");
+const wrap = file("firecrawl/compose/bin/fc-nginx-env.envsh");
+say(L.findWrapChannelViolations(r.files).length === 0, "9b golden: shipped wrap satisfies the channel gate (.envsh, no-exec, no RO write, export + empty-guard)");
+const dir = `${WORK}/chan-sim`; writeFileSync(`${dir}.token`, "tok-abc-123");
+const wrapSim = wrap.content.replaceAll("/run/secrets/proxy_token", `${dir}.token`);
+writeFileSync(`${dir}.envsh`, wrapSim);
+writeFileSync(`${dir}-runner.sh`, `set -eu\n. '${dir}.envsh'\nprintf 'GOT=[%s]' "$SWARM_FIRECRAWL_TOKEN"\n`);
+const simOk = spawnSync("/bin/sh", [`${dir}-runner.sh`], { encoding: "utf8" });
+say(simOk.stdout.includes("GOT=[tok-abc-123]"), "9b sourcing proof: export persists through dot-source (the .sh subshell could never do this)");
+writeFileSync(`${dir}.token`, "");
+const simDead = spawnSync("/bin/sh", [`${dir}-runner.sh`], { encoding: "utf8" });
+say(simDead.status !== 0 && !simDead.stdout.includes("GOT="), "9b fail-closed proof: empty secret aborts the sourced wrap BEFORE any export");
+if (Bun.which("envsubst")) {
+  const tpl = file("firecrawl/nginx/default.conf.template").content;
+  const out = execFileSync("envsubst", ["${SWARM_FIRECRAWL_TOKEN}"], { input: tpl, encoding: "utf8", env: { ...process.env, SWARM_FIRECRAWL_TOKEN: "tok-abc-123" } });
+  say(out.includes("Bearer tok-abc-123") && !out.includes("${SWARM_FIRECRAWL_TOKEN}") && out.includes("$http_authorization") && !out.includes('"Bearer "'), "9b envsubst proof: token lands in the compare line; nginx vars untouched; no empty-bearer form");
+} else {
+  console.log("SKIP 9b envsubst proof (host lacks GNU envsubst — UNKNOWN here, container-side proven live)");
+}
+
+// --- 9c ---
+const svcOf = (text: string, want: string) => {
+  let name = ""; let body: string[] = [];
+  for (const l of text.split("\n")) {
+    const m = l.match(/^  ([a-z][a-z0-9-]*):/);
+    if (m) { if (name === want) break; name = m[1]; body = []; continue; }
+    if (name === want) body.push(l);
+  }
+  return body;
+};
+for (const svcName of ["api", "playwright-service"]) {
+  const body = svcOf(fc, svcName);
+  say(!body.some((l) => /^\s+healthcheck:/.test(l) && !l.trimStart().startsWith("#")), `9c ${svcName}: renders NO healthcheck (R112b-3 ruling; host gate owns readiness)`);
+}
+let wgetOutsideProxy = 0; let svc = "";
+for (const text of [fc, sx]) for (const l of text.split("\n")) {
+  const m = l.match(/^  ([a-z][a-z0-9-]*):/); if (m) svc = m[1];
+  if (/^\s+test:\s*\[/.test(l) && !l.trimStart().startsWith("#") && /"(wget|curl)\b/.test(l.replace(/#.*/, "")) && svc !== "auth-proxy") wgetOutsideProxy++;
+}
+say(wgetOutsideProxy === 0, "9c every wget/curl healthcheck test line belongs to auth-proxy only (alpine busybox ships it; digests lacking it use none)");
+for (const svcName of ["redis", "rabbitmq", "nuq-postgres"]) {
+  const body = svcOf(fc, svcName);
+  say(body.some((l) => /^\s+healthcheck:/.test(l)), `9c ${svcName}: vendor-independent healthcheck KEPT per ruling`);
+}
+const badApi = fc.replace("    # NO healthcheck — R112b-3 (r112b live VM): the pinned api digest ships NO wget", `    healthcheck:\n      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:${PC_PORTS.apiContainer}/v0/health/readiness || exit 1"]\n    # NO healthcheck — R112b-3 (r112b live VM): the pinned api digest ships NO wget`);
+say(badApi !== fc && L.findHealthcheckToolAbsent(badApi).length === 1, "9c negative: reconstructed wget-on-api form refused by HEALTHCHECK_TOOL_ABSENT");
+
+console.log(bad === 0 ? "RESULT OK" : `RESULT FAILED (${bad})`);
+process.exit(bad === 0 ? 0 : 1);
+TS
+bun run "$WORK/r85f6-demo.ts" | tee "$WORK/r85f6.out"
+check "R112b mechanical proofs (9a lint-pair, 9b channel+sourcing+envsubst, 9c render+negative)" 0 $?
+
+echo "=== PROOF 10: R112b-4 topology (r75-fix6 ruling §5) — internal browser segment on the RENDERED artefact ==="
+# Same five facts as the unit-suite block, re-checked against the file ON DISK (render-a), so a
+# future edit cannot restore the leak without tripping BOTH suites. NO gateway-absence assertion:
+# moby assigns 172.30.40.1 regardless (ruling §4/§5) — asserting its absence would be invalid.
+FCY="$WORK/render-a/firecrawl/compose/firecrawl.yml"
+NIT=$(sed -n '/^networks:/,/^services:/p' "$FCY" | grep -c '^    internal: true' || true)
+NOFALSE=$(sed -n '/^networks:/,/^services:/p' "$FCY" | grep -c 'internal: false' || true)
+HDR_NEW=$(grep -c '# fc-iso is the internal browser segment' "$FCY" || true)
+HDR_OLD=$(grep -c 'gateway-less' "$FCY" || true)
+if [ "$NIT" = 3 ] && [ "$NOFALSE" = 0 ] && [ "$HDR_NEW" = 1 ] && [ "$HDR_OLD" = 0 ]; then
+  echo "  PASS 10a networks block renders exactly 3 internal:true (fc-ctl/fc-data/fc-iso), zero internal:false; header comment carries the r75-fix6 wording, disproven premise gone"; pass=$((pass+1))
+else
+  echo "  FAIL 10a (internalTrue=$NIT want 3, internalFalse=$NOFALSE want 0, newHeader=$HDR_NEW want 1, oldWording=$HDR_OLD want 0)"; fail=$((fail+1))
+fi
+export R85_FCY="$FCY"
+cat > "$WORK/r85f6b-demo.ts" <<'TS'
+// Parsed-structure half of PROOF 10 over the rendered artefact on disk: five ruling §5 facts.
+import { readFileSync } from "node:fs";
+const text = readFileSync(process.env.R85_FCY!, "utf8");
+const lines = text.split("\n");
+const start = lines.indexOf("networks:");
+const rest = lines.slice(start + 1);
+const end = rest.findIndex((l) => /^[a-z]/.test(l));
+const nets = Bun.YAML.parse(rest.slice(0, end === -1 ? rest.length : end).join("\n"));
+const doc = Bun.YAML.parse(text);
+let bad = 0;
+const say = (ok: boolean, line: string) => { console.log((ok ? "OK   " : "BAD  ") + line); if (!ok) bad++; };
+say(Object.keys(nets).sort().join(",") === "fc-ctl,fc-data,fc-edge,fc-iso,fc-web", "10b networks block parses standalone (5 tiers)");
+say(nets["fc-iso"].internal === true && nets["fc-ctl"].internal === true && nets["fc-data"].internal === true, "10b fc-iso/fc-ctl/fc-data internal=true");
+say(nets["fc-web"].internal === undefined && nets["fc-edge"].internal === undefined, "10b fc-web/fc-edge stay non-internal");
+const pw = doc.services["playwright-service"].networks;
+say(JSON.stringify(pw) === JSON.stringify(["fc-ctl", "fc-iso"]) && pw.every((n: string) => doc.networks[n].internal === true), "10b playwright-service: only internal attachments (no default route)");
+const fcWeb = Object.entries(doc.services).filter(([, s]: [string, any]) => Array.isArray(s.networks) && s.networks.includes("fc-web")).map(([n]) => n);
+const ports = Object.entries(doc.services).filter(([, s]: [string, any]) => s.ports !== undefined).map(([n]) => n);
+say(JSON.stringify(fcWeb) === JSON.stringify(["egress-proxy"]) && JSON.stringify(ports) === JSON.stringify(["auth-proxy"]), "10b fc-web member = egress-proxy only; ports carrier = auth-proxy only");
+console.log(bad === 0 ? "RESULT OK" : `RESULT FAILED (${bad})`);
+process.exit(bad === 0 ? 0 : 1);
+TS
+bun run "$WORK/r85f6b-demo.ts" | tee "$WORK/r85f6b.out"
+check "R112b-4 parsed topology proofs (block parses; internal flags; playwright containment; single fc-web member + single ports carrier)" 0 $?
 
 echo
 echo "row-85 proofs: $pass passed, $fail failed"

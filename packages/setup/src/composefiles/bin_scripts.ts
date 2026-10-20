@@ -3,10 +3,13 @@
 // 0644 made the nginx-mounted wrap NON-EXECUTABLE and the official entrypoint SILENTLY
 // IGNORES non-executable /docker-entrypoint.d scripts ('Ignoring ... not executable') ->
 // SWARM_FIRECRAWL_TOKEN never reached envsubst -> empty-bearer auth BYPASS waiting to
-// happen. Shipped posture: 0700 for the entrypoint-executed nginx wrap (owner-execute,
-// zero group/world bits), 0600 for wraps invoked explicitly via `/bin/sh <path>`
-// (mode-agnostic invocation; readable by owner only). Enforced by lint.ts
-// findWrapModeViolations, run by renderAll — no bin artefact may ever carry group/world bits.
+// happen. Shipped posture: 0700 for the entrypoint-mounted nginx wrap (zero group/world
+// bits; R112b-2 re-shapes THAT wrap into a sourced .envsh whose exports survive into the
+// envsubst script — see its in-file note), 0600 for wraps invoked explicitly via
+// `/bin/sh <path>` (mode-agnostic invocation; readable by owner only). Enforced by lint.ts
+// findWrapModeViolations + findWrapChannelViolations, run by renderAll — no bin artefact
+// may ever carry group/world bits and the entrypoint-mounted wrap must stay a sourced
+// .envsh on the token channel.
 // the paths §6.2/§6.4/§6.5 name. Scripts read secrets from /run/secrets INSIDE the
 // container: no secret value ever appears in these files, in argv, or in logs (§4.6/§4.7).
 //
@@ -88,18 +91,29 @@ export function renderBinScripts(ctx: NormalizedCtx): RenderFile[] {
   })
 
   files.push({
-    relPath: "firecrawl/compose/bin/fc-nginx-env.sh",
+    relPath: "firecrawl/compose/bin/fc-nginx-env.envsh",
     content: [
-      "#!/bin/sh",
-      "# fc-nginx-env.sh — 01e §4.7/§6.2: emits SWARM_FIRECRAWL_TOKEN into docker-entrypoint.env",
-      "# BEFORE the official 20-envsubst-on-templates.sh runs (ordering by filename prefix, U-10).",
-      ': "${DockerEntrypointEnv:=/docker-entrypoint.env}"',
+      "# fc-nginx-env.envsh — 01e §4.7/§6.2 token channel, R112b-2 corrected form. The official",
+      "# nginx entrypoint SOURCES /docker-entrypoint.d/*.envsh in-process (live-proven: the image",
+      "# logs 'Sourcing /docker-entrypoint.d/15-local-resolvers.envsh'), so these exports persist",
+      "# into 20-envsubst-on-templates.sh, which runs later in the same shell (filename order 05 <",
+      "# 20). The pre-fix .sh form was doubly broken on this stack: it ran in a SUBSHELL (exports",
+      "# could not reach the envsubst script at all) AND its append to /docker-entrypoint.env died",
+      "# with 'Read-only file system' (13b_live_firecrawl_rerun.md:134). No env-file write exists in",
+      "# this form at all — sourcing IS the hand-off; if the token cannot be read, the sourced line",
+      "# fails under the entrypoint's `set -eu` and nginx never starts (fail-closed, no empty-bearer",
+      "# bypass). Must NOT exec: this code runs inside the entrypoint shell.",
       'SWARM_FIRECRAWL_TOKEN="$(cat /run/secrets/proxy_token)"',
-      'printf "%s=%s\\n" SWARM_FIRECRAWL_TOKEN "$SWARM_FIRECRAWL_TOKEN" >> "$DockerEntrypointEnv"',
+      '# Empty-token refusal: host-measured GNU envsubst substitutes an unset/empty whitelisted',
+      '# var with NOTHING, which would render `Bearer "` — an empty-bearer ACCEPT line (the run-1',
+      '# bypass class). The container showed literal-survival + emerg instead (13b:134), but the',
+      '# channel must not depend on which behaviour the digest exhibits: exiting non-zero inside a',
+      '# sourced .envsh kills the entrypoint BEFORE envsubst, so nginx never starts untokened.',
+      '[ -n "$SWARM_FIRECRAWL_TOKEN" ] || { echo "fc-nginx-env: empty proxy_token — refusing (fail-closed)" >&2; exit 1; }',
       "export SWARM_FIRECRAWL_TOKEN",
       "",
     ].join("\n"),
-    mode: 0o700, // R112-5: executed DIRECTLY from /docker-entrypoint.d/ — must carry owner +x; zero group/world bits
+    mode: 0o700, // owner-only either way: sourced needs read, and findWrapModeViolations keeps zero group/world bits + the exec bit for every entrypoint-mounted wrap (harmless for a sourced file, keeps one rule)
     stack: "firecrawl",
   })
 

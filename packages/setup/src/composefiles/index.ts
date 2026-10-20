@@ -50,7 +50,7 @@ import { renderSearxngSettings } from "./searxng_settings.ts"
 import { renderNginxTemplate, type NginxOptions } from "./nginx_template.ts"
 import { renderBinScripts } from "./bin_scripts.ts"
 import { renderSquidConf } from "./squid_conf.ts"
-import { findReservedAclNames, findSecretArgvLeak, findSquidOrderingViolations, findWrapModeViolations, lintComposeText, lintOk, type Finding } from "./lint.ts"
+import { findDirectiveInlineComments, findReservedAclNames, findSecretArgvLeak, findSquidOrderingViolations, findWrapChannelViolations, findWrapModeViolations, lintComposeText, lintOk, type Finding } from "./lint.ts"
 
 export interface FullRender {
   readonly ok: boolean
@@ -119,6 +119,13 @@ export function renderAll(lock: LockFile, ctx: RenderContext, nginxOpts: NginxOp
     ...findReservedAclNames(files.find((f) => f.relPath === "firecrawl/squid/squid.conf")?.content ?? "").map((x) => ({ ...x, message: `firecrawl/squid/squid.conf: ${x.message}` })),
     // R112-5: wrap modes — zero group/world bits; entrypoint-executed wrap must be owner-executable.
     ...findWrapModeViolations(files),
+    // R112b-1: option-parsed squid directives carry NO inline comment (the shipped-bad http_port
+    // form registered no forward-proxy port and `squid -k parse` accepted it — boot-class blind
+    // spot, so the render rule is mechanical).
+    ...findDirectiveInlineComments(files.find((f) => f.relPath === "firecrawl/squid/squid.conf")?.content ?? "").map((x) => ({ ...x, message: `firecrawl/squid/squid.conf: ${x.message}` })),
+    // R112b-2: the nginx token feeder stays on the sourced .envsh channel (subshell .sh + RO
+    // env-file writes refuse here, not at first boot).
+    ...findWrapChannelViolations(files),
   ]
   const ok = lintOk(findings)
   return { ok, files, findings, errors: [], warnings: [...st.warnings], enginePath: nctx.enginePath }
