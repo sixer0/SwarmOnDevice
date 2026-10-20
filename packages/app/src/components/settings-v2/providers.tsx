@@ -84,7 +84,13 @@ export const SettingsProvidersV2: Component<{
   const canDisconnect = (item: ProviderItem) =>
     source(item) !== "env" && (protocol() === "v1" || !isConfigCustom(item.id))
 
-  const note = (id: string) => PROVIDER_NOTES.find((item) => item.match(id))?.key
+  const note = (id: string) => {
+    const key = PROVIDER_NOTES.find((item) => item.match(id))?.key
+    // A purged i18n key resolves to undefined at runtime (i18n.translator), so hide the note
+    // instead of rendering a blank line; row 49 hide-affordance pattern, no replacement copy.
+    if (key && !language.t(key)) return undefined
+    return key
+  }
 
   const isConfigCustom = (providerID: string) => {
     const provider = serverSync().data.config.provider?.[providerID]

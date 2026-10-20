@@ -147,13 +147,22 @@ export const DialogSelectModelUnpaidV2: Component<{ model?: ModelState }> = (pro
                       <span class="flex min-w-0 flex-col">
                         <span class="truncate">{provider.name}</span>
                         <Show when={provider.id === "opencode" || provider.id === "opencode-go"}>
-                          <span class="truncate font-[440] text-v2-text-text-muted">
-                            {language.t(
+                          {/* Tagline hidden when its key is absent (opencode-go tagline deleted, s99 §11). */}
+                          <Show
+                            when={language.t(
                               provider.id === "opencode"
                                 ? "dialog.provider.opencode.tagline"
                                 : "dialog.provider.opencodeGo.tagline",
                             )}
-                          </span>
+                          >
+                            <span class="truncate font-[440] text-v2-text-text-muted">
+                              {language.t(
+                                provider.id === "opencode"
+                                  ? "dialog.provider.opencode.tagline"
+                                  : "dialog.provider.opencodeGo.tagline",
+                              )}
+                            </span>
+                          </Show>
                         </Show>
                       </span>
                     </button>

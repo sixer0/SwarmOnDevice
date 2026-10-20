@@ -66,11 +66,14 @@ export function useUsageExceededDialogs() {
       if (goUpsellState[keys.dontShow]) return
 
       if (action.reason === "free_tier_limit") {
+        // freeTier description/actionLabel keys were deleted with the fabricated Swarm Go
+        // upsell (s99 §11): absent translations yield undefined, and DialogUsageExceeded
+        // hides those parts (row 49 pattern). English keeps using server strings.
         dialog.show(() => (
           <DialogUsageExceeded
             title={isEnglish() ? action.title : t("dialog.usageExceeded.freeTier.title")}
-            description={isEnglish() ? action.message : t("dialog.usageExceeded.freeTier.description")}
-            actionLabel={isEnglish() ? action.label : t("dialog.usageExceeded.freeTier.actionLabel")}
+            description={isEnglish() ? action.message : t("dialog.usageExceeded.freeTier.description") || undefined}
+            actionLabel={isEnglish() ? action.label : t("dialog.usageExceeded.freeTier.actionLabel") || undefined}
             link={action.link}
             onClose={(dontShowAgain) => {
               setGoUpsellState(keys.lastSeenAt, Date.now())

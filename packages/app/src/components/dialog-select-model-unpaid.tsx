@@ -118,9 +118,13 @@ export const DialogSelectModelUnpaid: Component<{ model?: ModelState }> = (props
                     </Show>
                     <Show when={i.id === "opencode-go"}>
                       <>
-                        <div class="text-14-regular text-text-weak">
-                          {language.t("dialog.provider.opencodeGo.tagline")}
-                        </div>
+                        {/* Tagline hidden when absent: key deleted with the fabricated Go
+                            subscription copy (s99 §11, row 49 hide pattern). */}
+                        <Show when={language.t("dialog.provider.opencodeGo.tagline")}>
+                          <div class="text-14-regular text-text-weak">
+                            {language.t("dialog.provider.opencodeGo.tagline")}
+                          </div>
+                        </Show>
                         <Tag>{language.t("dialog.provider.tag.recommended")}</Tag>
                       </>
                     </Show>

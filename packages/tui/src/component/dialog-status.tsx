@@ -81,7 +81,7 @@ export function DialogStatus() {
                       <Match when={item.status === "failed" && item}>{(val) => val().error}</Match>
                       <Match when={item.status === "disabled"}>Disabled in configuration</Match>
                       <Match when={(item.status as string) === "needs_auth"}>
-                        Needs authentication (run: opencode mcp auth {key})
+                        Needs authentication (run: swarm mcp auth {key})
                       </Match>
                       <Match when={(item.status as string) === "needs_client_registration" && item}>
                         {(val) => (val() as { error: string }).error}
@@ -164,6 +164,10 @@ export function DialogStatus() {
           </For>
         </box>
       </Show>
+      {/* Credit line C1 (research/03c_licence_notice_plan.md 4.3, surface S4). */}
+      <text fg={theme.textMuted} wrapMode="word">
+        Based on OpenCode (MIT). Not affiliated with the OpenCode team.
+      </text>
     </box>
   )
 }

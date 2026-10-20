@@ -45,7 +45,13 @@ function providerIconsPlugin() {
 }
 
 async function fetchProviderIcons() {
-  const url = process.env.OPENCODE_MODELS_URL || "https://models.opencode.ai"
+  // WP-EGRESS (row 68a, from H-R68-1): the upstream default host is removed — glyphs are
+  // fetched only when an operator sets OPENCODE_MODELS_URL explicitly, mirroring the
+  // fail-closed idiom row 56 applied in packages/core/src/models-dev.ts. Without the env,
+  // the neutralised local files under src/assets/icons/provider stay the build input and
+  // no network request is made at configureServer/buildStart.
+  const url = process.env.OPENCODE_MODELS_URL
+  if (!url) return
   const providers = await fetch(`${url}/api.json`)
     .then((res) => res.json())
     .then((json) => Object.keys(json))

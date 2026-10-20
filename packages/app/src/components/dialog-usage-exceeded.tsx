@@ -3,13 +3,15 @@ import { useLanguage } from "@/context/language"
 import { Button } from "@opencode-ai/ui/button"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { Dialog } from "@opencode-ai/ui/dialog"
-import { JSX } from "solid-js"
+import { JSX, Show } from "solid-js"
 
 export type DialogGoUpsellProps = {
   title: string
   description: JSX.Element
   link?: string
-  actionLabel: string
+  // Optional: an absent translation hides the button instead of rendering it blank
+  // (fabricated Go upsell keys deleted in s99 §11; row 49 hide pattern).
+  actionLabel?: string
   onClose?: (dontShowAgain?: boolean) => void
 }
 
@@ -36,9 +38,13 @@ export function DialogUsageExceeded(props: DialogGoUpsellProps) {
           <Button variant="ghost" size="large" onClick={dismiss}>
             {language.t("dialog.usageExceeded.dontShowAgain")}
           </Button>
-          <Button variant="primary" size="large" onClick={runAction}>
-            {props.actionLabel}
-          </Button>
+          <Show when={props.actionLabel}>
+            {(label) => (
+              <Button variant="primary" size="large" onClick={runAction}>
+                {label()}
+              </Button>
+            )}
+          </Show>
         </div>
       </div>
     </Dialog>

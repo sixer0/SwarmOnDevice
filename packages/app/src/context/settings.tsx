@@ -183,7 +183,8 @@ export function terminalFontFamily(font: string | undefined) {
 const defaultSettings: Settings = {
   general: {
     autoSave: true,
-    releaseNotes: true,
+    // Swarm ships without the hosted changelog feed (WP-EGRESS-SRV row 61), so "What's new" starts off.
+    releaseNotes: false,
     followup: "steer",
     showFileTree: false,
     showNavigation: false,
