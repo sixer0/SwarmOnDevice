@@ -6,7 +6,7 @@
 // offline and drop into any transport (`res.end(...)`, Effect `response.end`,
 // etc.).
 //
-// The visual language mirrors the OpenCode app: the design tokens are a curated
+// The visual language mirrors the Swarm app: the design tokens are a curated
 // subset of the OC-2 semantic tokens in `packages/ui/src/styles/theme.css`, and
 // the wordmark is the same geometry as `packages/ui/src/components/logo.tsx`.
 // Keep this file in sync with those sources when the brand changes.
@@ -25,7 +25,7 @@ export function success(options?: CallbackPageOptions) {
     body: renderCard({
       status: "success",
       headline: "Authorization successful",
-      message: provider ? `OpenCode is now connected to ${escapeHtml(provider)}.` : "OpenCode is now authorized.",
+      message: provider ? `Swarm is now connected to ${escapeHtml(provider)}.` : "Swarm is now authorized.",
       footnote: "You can close this window.",
     }),
     script: options?.autoClose === false ? undefined : AUTO_CLOSE_SCRIPT,
@@ -40,10 +40,10 @@ export function error(detail: string, options?: CallbackPageOptions) {
       status: "error",
       headline: "Authorization failed",
       message: provider
-        ? `OpenCode couldn't finish connecting to ${escapeHtml(provider)}.`
-        : "OpenCode couldn't complete authorization.",
+        ? `Swarm couldn't finish connecting to ${escapeHtml(provider)}.`
+        : "Swarm couldn't complete authorization.",
       detail,
-      footnote: "Close this window and try again from OpenCode.",
+      footnote: "Close this window and try again from Swarm.",
     }),
   })
 }
@@ -100,7 +100,7 @@ function renderDocument(input: { title: string; body: string; script?: string })
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex" />
-    <title>${escapeHtml(input.title)} · OpenCode</title>
+    <title>${escapeHtml(input.title)} · Swarm</title>
     <style>${STYLES}</style>
   </head>
   <body>
@@ -116,8 +116,8 @@ function bootstrapScript(options: BootstrapOptions) {
 var TOKEN_URL=new URL(${scriptString(options.tokenPath)},window.location.origin).href;
 (function(){
   var card=document.getElementById("oc-card"),headline=document.getElementById("oc-headline"),message=document.getElementById("oc-message"),detail=document.getElementById("oc-detail"),footnote=document.getElementById("oc-footnote");
-  function fail(text){card.dataset.status="error";headline.textContent="Authorization failed";message.textContent=PROVIDER?("OpenCode couldn't finish connecting to "+PROVIDER+"."):"OpenCode couldn't complete authorization.";if(text){detail.textContent=text;detail.hidden=false}footnote.textContent="Close this window and try again from OpenCode."}
-  function ok(){card.dataset.status="success";headline.textContent="Authorization successful";message.textContent=PROVIDER?("OpenCode is now connected to "+PROVIDER+"."):"OpenCode is now authorized.";detail.hidden=true;footnote.textContent="You can close this window.";setTimeout(function(){try{window.close()}catch(e){}},2500)}
+  function fail(text){card.dataset.status="error";headline.textContent="Authorization failed";message.textContent=PROVIDER?("Swarm couldn't finish connecting to "+PROVIDER+"."):"Swarm couldn't complete authorization.";if(text){detail.textContent=text;detail.hidden=false}footnote.textContent="Close this window and try again from Swarm."}
+  function ok(){card.dataset.status="success";headline.textContent="Authorization successful";message.textContent=PROVIDER?("Swarm is now connected to "+PROVIDER+"."):"Swarm is now authorized.";detail.hidden=true;footnote.textContent="You can close this window.";setTimeout(function(){try{window.close()}catch(e){}},2500)}
   try{
     var hash=new URLSearchParams((window.location.hash||"").slice(1));
     var search=new URLSearchParams(window.location.search||"");
@@ -249,24 +249,11 @@ const STYLES = `
   @media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
 `
 
-// OpenCode wordmark — same path geometry as packages/ui/src/components/logo.tsx (Logo).
-const WORDMARK = `<svg class="wordmark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 234 42" fill="none" aria-label="OpenCode" role="img">
-        <path d="M18 30H6V18H18V30Z" fill="var(--oc-icon-weak)" />
-        <path d="M18 12H6V30H18V12ZM24 36H0V6H24V36Z" fill="var(--oc-icon-base)" />
-        <path d="M48 30H36V18H48V30Z" fill="var(--oc-icon-weak)" />
-        <path d="M36 30H48V12H36V30ZM54 36H36V42H30V6H54V36Z" fill="var(--oc-icon-base)" />
-        <path d="M84 24V30H66V24H84Z" fill="var(--oc-icon-weak)" />
-        <path d="M84 24H66V30H84V36H60V6H84V24ZM66 18H78V12H66V18Z" fill="var(--oc-icon-base)" />
-        <path d="M108 36H96V18H108V36Z" fill="var(--oc-icon-weak)" />
-        <path d="M108 12H96V36H90V6H108V12ZM114 36H108V12H114V36Z" fill="var(--oc-icon-base)" />
-        <path d="M144 30H126V18H144V30Z" fill="var(--oc-icon-weak)" />
-        <path d="M144 12H126V30H144V36H120V6H144V12Z" fill="var(--oc-icon-strong)" />
-        <path d="M168 30H156V18H168V30Z" fill="var(--oc-icon-weak)" />
-        <path d="M168 12H156V30H168V12ZM174 36H150V6H174V36Z" fill="var(--oc-icon-strong)" />
-        <path d="M198 30H186V18H198V30Z" fill="var(--oc-icon-weak)" />
-        <path d="M198 12H186V30H198V12ZM204 36H180V6H198V0H204V36Z" fill="var(--oc-icon-strong)" />
-        <path d="M234 24V30H216V24H234Z" fill="var(--oc-icon-weak)" />
-        <path d="M216 12V18H228V12H216ZM234 24H216V30H234V36H210V6H234V24Z" fill="var(--oc-icon-strong)" />
+// Swarm wordmark — same path geometry as packages/ui/src/components/logo.tsx (Logo),
+// the SWARM block grid from implementation/01_theme_tokens.md section 3.2, single-tone
+// currentColor per the row-68 method (theme-aware through the inherited text colour).
+const WORDMARK = `<svg class="wordmark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 234 42" fill="none" aria-label="Swarm" role="img">
+        <path data-slot="logo-wordmark" fill="currentColor" d="M16.20 0.00h33.60v8.40h-33.60z M58.20 0.00h8.40v8.40h-8.40z M83.40 0.00h8.40v8.40h-8.40z M108.60 0.00h16.80v8.40h-16.80z M142.20 0.00h33.60v8.40h-33.60z M184.20 0.00h8.40v8.40h-8.40z M209.40 0.00h8.40v8.40h-8.40z M16.20 8.40h8.40v8.40h-8.40z M58.20 8.40h8.40v8.40h-8.40z M83.40 8.40h8.40v8.40h-8.40z M100.20 8.40h8.40v8.40h-8.40z M125.40 8.40h8.40v8.40h-8.40z M142.20 8.40h8.40v8.40h-8.40z M167.40 8.40h8.40v8.40h-8.40z M184.20 8.40h16.80v8.40h-16.80z M209.40 8.40h8.40v8.40h-8.40z M16.20 16.80h33.60v8.40h-33.60z M58.20 16.80h8.40v8.40h-8.40z M75.00 16.80h16.80v8.40h-16.80z M100.20 16.80h33.60v8.40h-33.60z M142.20 16.80h25.20v8.40h-25.20z M184.20 16.80h8.40v8.40h-8.40z M201.00 16.80h16.80v8.40h-16.80z M41.40 25.20h8.40v8.40h-8.40z M58.20 25.20h33.60v8.40h-33.60z M100.20 25.20h8.40v8.40h-8.40z M125.40 25.20h8.40v8.40h-8.40z M142.20 25.20h8.40v8.40h-8.40z M159.00 25.20h16.80v8.40h-16.80z M184.20 25.20h8.40v8.40h-8.40z M209.40 25.20h8.40v8.40h-8.40z M16.20 33.60h33.60v8.40h-33.60z M66.60 33.60h16.80v8.40h-16.80z M100.20 33.60h8.40v8.40h-8.40z M125.40 33.60h8.40v8.40h-8.40z M142.20 33.60h8.40v8.40h-8.40z M167.40 33.60h8.40v8.40h-8.40z M184.20 33.60h8.40v8.40h-8.40z M209.40 33.60h8.40v8.40h-8.40z" />
       </svg>`
 
 const ICON_CHECK = `<svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9" /><path d="m8.5 12.5 2.4 2.4 4.6-5.4" /></svg>`

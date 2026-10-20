@@ -47,7 +47,7 @@ function authHeaders() {
   return {
     "Content-Type": "application/x-www-form-urlencoded",
     Accept: "application/json",
-    "User-Agent": `opencode/${InstallationVersion}`,
+    "User-Agent": `swarm/${InstallationVersion}`,
   }
 }
 
@@ -112,7 +112,7 @@ export async function requestDeviceCode(options: XaiAuthPluginOptions = {}): Pro
     body: new URLSearchParams({
       client_id: CLIENT_ID,
       scope: SCOPE,
-      referrer: "opencode",
+      referrer: "swarm",
     }).toString(),
   })
   if (!response.ok) {
@@ -288,7 +288,7 @@ export async function XaiAuthPlugin(input: PluginInput, options: XaiAuthPluginOp
               }
             }
             headers.set("authorization", `Bearer ${currentAuth.access}`)
-            headers.set("User-Agent", `opencode/${InstallationVersion}`)
+            headers.set("User-Agent", `swarm/${InstallationVersion}`)
 
             return fetch(requestInput, { ...init, headers })
           },

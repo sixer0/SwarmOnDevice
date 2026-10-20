@@ -15,7 +15,7 @@ import { jsonSchema, tool as aiTool, type ModelMessage, type Tool } from "ai"
 import type { Plugin } from "@/plugin"
 import { mergeDeep } from "remeda"
 
-const USER_AGENT = `opencode/${InstallationVersion}`
+const USER_AGENT = `swarm/${InstallationVersion}`
 
 type PrepareInput = {
   readonly user: SessionV1.User
@@ -185,8 +185,8 @@ export const prepare = Effect.fn("LLMRequestPrep.prepare")(function* (input: Pre
     params,
     messageTransformOptions: options,
     headers: {
-      "x-opencode-session-id": input.sessionID,
-      ...(input.parentSessionID ? { "x-opencode-parent-session-id": input.parentSessionID } : {}),
+      "x-swarm-session-id": input.sessionID,
+      ...(input.parentSessionID ? { "x-swarm-parent-session-id": input.parentSessionID } : {}),
       ...(input.model.providerID.startsWith("opencode")
         ? {
             ...(opencodeProjectID ? { "x-opencode-project": opencodeProjectID } : {}),

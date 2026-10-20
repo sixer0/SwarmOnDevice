@@ -4,18 +4,8 @@ import { define } from "../internal"
 export const VercelPlugin = define({
   id: "vercel",
   effect: Effect.fn(function* (ctx) {
-    yield* ctx.catalog.transform(
-      Effect.fn(function* (evt) {
-        for (const item of evt.provider.list()) {
-          if (item.provider.api.type !== "aisdk") continue
-          if (item.provider.api.package !== "@ai-sdk/vercel") continue
-          evt.provider.update(item.provider.id, (provider) => {
-            provider.request.headers["http-referer"] = "https://opencode.ai/"
-            provider.request.headers["x-title"] = "opencode"
-          })
-        }
-      }),
-    )
+    // Upstream attribution headers (http-referer, x-title) dropped per rebrand decision 8 / register H04:
+    // Swarm does not attribute its traffic to the upstream product at third-party gateways.
     yield* ctx.aisdk.sdk(
       Effect.fn(function* (evt) {
         if (evt.package !== "@ai-sdk/vercel") return

@@ -73,7 +73,10 @@ export class NotFoundError extends Schema.TaggedErrorClass<NotFoundError>()("MCP
 type MCPClient = Client
 
 function createClient(directory: string) {
-  const client = new Client({ name: "opencode", version: InstallationVersion }, CLIENT_OPTIONS)
+  // Register U02 (class change, target `swarm`): the MCP client identity sent in initialize params.
+  // Row 58 left this site because U02's Verify cell names v1 row 37, which AD-17 re-points at test
+  // rows 100-102, so no code row claimed it; it is applied here because the file is row 42's area.
+  const client = new Client({ name: "swarm", version: InstallationVersion }, CLIENT_OPTIONS)
   client.setRequestHandler(ListRootsRequestSchema, () =>
     Promise.resolve({ roots: [{ uri: pathToFileURL(directory).href }] }),
   )
@@ -314,7 +317,7 @@ const layer = Layer.effect(
                 return events
                   .publish(TuiEvent.ToastShow, {
                     title: "MCP Authentication Required",
-                    message: `Server "${key}" requires authentication. Run: opencode mcp auth ${key}`,
+                    message: `Server "${key}" requires authentication. Run: swarm mcp auth ${key}`,
                     variant: "warning",
                     duration: 8000,
                   })
@@ -351,7 +354,10 @@ const layer = Layer.effect(
         cwd,
         env: {
           ...process.env,
-          ...(cmd === "opencode" ? { BUN_BE_BUN: "1" } : {}),
+          // Register J03: the MCP self-spawn literal. A local MCP server configured to run Swarm
+          // itself is recognised by the Swarm binary name only (Q3 creates no `opencode` alias),
+          // and BUN_BE_BUN makes that child run as plain Bun rather than as the compiled CLI.
+          ...(cmd === "swarm" ? { BUN_BE_BUN: "1" } : {}),
           ...mcp.environment,
         },
       })

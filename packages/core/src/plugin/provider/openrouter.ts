@@ -10,10 +10,8 @@ export const OpenRouterPlugin = define({
         for (const item of evt.provider.list()) {
           if (item.provider.api.type !== "aisdk") continue
           if (item.provider.api.package !== "@openrouter/ai-sdk-provider") continue
-          evt.provider.update(item.provider.id, (provider) => {
-            provider.request.headers["HTTP-Referer"] = "https://opencode.ai/"
-            provider.request.headers["X-Title"] = "opencode"
-          })
+          // Upstream attribution headers (HTTP-Referer, X-Title) dropped per rebrand decision 8 /
+          // register H04: Swarm does not attribute its traffic to the upstream product at third-party gateways.
           for (const modelID of [ModelV2.ID.make("gpt-5-chat-latest"), ModelV2.ID.make("openai/gpt-5-chat")]) {
             if (!item.models.has(modelID)) continue
             evt.model.update(item.provider.id, modelID, (model) => {
