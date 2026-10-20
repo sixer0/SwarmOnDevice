@@ -4,10 +4,8 @@
   "version": "1.19.3",
   "type": "module",
   "license": "MIT",
-  "homepage": "https://opencode.ai",
   "author": {
-    "name": "OpenCode",
-    "email": "hello@opencode.ai"
+    "name": "PT GSP"
   },
   "scripts": {
     "typecheck": "tsgo -b",

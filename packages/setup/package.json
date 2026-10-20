@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json.schemastore.org/package",
+  "name": "@swarm/setup",
+  "version": "1.19.3-r1",
+  "private": true,
+  "license": "MIT",
+  "description": "swarm-setup: separate, unprivileged, consent-first pre-install program (register PC-PKG-01). Skeleton row 81; steps added by rows 82-98.",
+  "type": "module",
+  "bin": {
+    "swarm-setup": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "build": "bun build --compile --target=bun --outfile dist/swarm-setup src/index.ts",
+    "start": "bun run src/index.ts"
+  },
+  "engines": {
+    "bun": ">=1.3.0"
+  }
+}
