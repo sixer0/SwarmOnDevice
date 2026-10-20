@@ -6,7 +6,7 @@ import { InstallationVersion } from "@opencode-ai/core/installation/version"
 
 export const UpgradeCommand = {
   command: "upgrade [target]",
-  describe: "upgrade swarm to the latest or a specific version",
+  describe: "refused: Swarm updates are managed by PT GSP",
   builder: (yargs: Argv) => {
     return yargs
       .positional("target", {

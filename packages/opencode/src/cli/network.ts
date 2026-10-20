@@ -38,6 +38,19 @@ export function withNetworkOptions<T>(yargs: Argv<T>) {
   return yargs.options(options)
 }
 
+// Password guard shared by `serve` and `web` (research/03e C7-4). Resolved at handler time from
+// process.env, NOT from Flag.OPENCODE_SERVER_PASSWORD: in the Bun-compiled binary the defaults
+// shim evaluates AFTER flag.ts captures its module-load snapshot (row 42 fix round 5 measured the
+// shipped binary mirroring SWARM_SERVER_PASSWORD into the environment while `serve` still refused),
+// whereas the auth layer reads process.env at layer-build time (packages/server/src/auth.ts:31,53),
+// i.e. after the mirror either way. Reading env here makes the guard agree with the auth layer in
+// both the dev entry and the compiled artifact. SWARM_* wins over the OPENCODE_* twin (FR-CLI-04);
+// an empty value counts as unset, matching auth.ts required() which treats "" as unsecured.
+export function serverPasswordSet() {
+  const password = process.env.SWARM_SERVER_PASSWORD ?? process.env.OPENCODE_SERVER_PASSWORD
+  return password !== undefined && password !== ""
+}
+
 export function hasArg(name: string) {
   return networkArgs().some((arg) => arg === name || arg.startsWith(name + "="))
 }

@@ -1,7 +1,6 @@
 import { Effect } from "effect"
 import { effectCmd, fail } from "../effect-cmd"
-import { withNetworkOptions, resolveNetworkOptions } from "../network"
-import { Flag } from "@opencode-ai/core/flag/flag"
+import { withNetworkOptions, resolveNetworkOptions, serverPasswordSet } from "../network"
 
 export const ServeCommand = effectCmd({
   command: "serve",
@@ -12,10 +11,11 @@ export const ServeCommand = effectCmd({
   instance: false,
   handler: Effect.fn("Cli.serve")(function* (args) {
     const { Server } = yield* Effect.promise(() => import("../../server/server"))
-    // Swarm refuses the unauthenticated-by-default server (research/03e C7-4): the local PTY
-    // websocket is a shell door, so an unprotected listener must never come up. The check reads the
-    // same Flag the auth layer resolves, so it cannot pass while the listener has no password.
-    if (!Flag.OPENCODE_SERVER_PASSWORD)
+    // Swarm refuses the unsecured server (research/03e C7-4): the local PTY websocket is a shell
+    // door, so an unprotected listener must never come up. serverPasswordSet() resolves both public
+    // names at handler time, which keeps this guard equal to what the auth layer will actually see
+    // even in the compiled binary where the defaults shim runs after flag.ts (see network.ts).
+    if (!serverPasswordSet())
       return yield* fail(
         "No server password is set; refusing to start an unsecured server. Set SWARM_SERVER_PASSWORD or OPENCODE_SERVER_PASSWORD to a non-empty value and run serve again.",
       )

@@ -1,8 +1,7 @@
 import { Effect } from "effect"
 import { UI } from "../ui"
 import { effectCmd, fail } from "../effect-cmd"
-import { withNetworkOptions, resolveNetworkOptions } from "../network"
-import { Flag } from "@opencode-ai/core/flag/flag"
+import { withNetworkOptions, resolveNetworkOptions, serverPasswordSet } from "../network"
 import { openUrl } from "@opencode-ai/core/open"
 import { networkInterfaces } from "os"
 
@@ -38,8 +37,9 @@ export const WebCommand = effectCmd({
   handler: Effect.fn("Cli.web")(function* (args) {
     const { Server } = yield* Effect.promise(() => import("../../server/server"))
     // Same refusal as `serve` (research/03e C7-4): `web` starts the identical listener and would
-    // otherwise open an unauthenticated shell door plus a browser pointed at it.
-    if (!Flag.OPENCODE_SERVER_PASSWORD)
+    // otherwise open an unauthenticated shell door plus a browser pointed at it. serverPasswordSet()
+    // keeps the guard aligned with the auth layer in the compiled binary (see network.ts).
+    if (!serverPasswordSet())
       return yield* fail(
         "No server password is set; refusing to start an unsecured server. Set SWARM_SERVER_PASSWORD or OPENCODE_SERVER_PASSWORD to a non-empty value and run web again.",
       )
