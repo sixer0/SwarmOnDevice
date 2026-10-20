@@ -69,9 +69,14 @@ fi
 
 # R3: the binary comes from --binary or, by default, the file named swarm next to
 # this script. There is no download path; this installer never contacts a network host.
+# M7 (row 107 review): refuse a symlinked source so cp can never be steered through a link.
 source_path="$binary_path"
 if [ -z "$source_path" ]; then
     source_path="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$APP"
+fi
+if [ -L "$source_path" ]; then
+    echo -e "${RED}Error: Refusing symlinked source ${source_path}; pass the real file.${NC}" >&2
+    exit 1
 fi
 if [ ! -f "$source_path" ]; then
     echo -e "${RED}Error: No Swarm binary found at ${source_path}.${NC}" >&2
@@ -107,11 +112,15 @@ print_message() {
     echo -e "${color}${message}${NC}"
 }
 
-# R5: fixed destination, mode 755; never replace a directory.
+# R5: fixed destination, mode 755; never replace a directory or a symlink.
 mkdir -p "$INSTALL_DIR"
 DEST="$INSTALL_DIR/$APP"
 if [ -d "$DEST" ]; then
     echo -e "${RED}Error: Refusing to replace directory ${DEST}.${NC}" >&2
+    exit 1
+fi
+if [ -L "$DEST" ]; then
+    echo -e "${RED}Error: Refusing to replace symlinked destination ${DEST}.${NC}" >&2
     exit 1
 fi
 
@@ -120,9 +129,12 @@ if [ -f "$DEST" ] && cmp -s "$source_path" "$DEST"; then
     print_message info "${MUTED}Version ${NC}${version_output}${MUTED} already installed at ${NC}${DEST}"
 else
     print_message info "\n${MUTED}Installing ${NC}${APP} ${MUTED}version: ${NC}${version_output} ${MUTED}from: ${NC}${source_path}"
-    # R10: temp name swarm_install_$$, same filesystem as DEST so the move is atomic.
-    tmp="${INSTALL_DIR}/swarm_install_$$"
-    trap 'rm -f "${tmp:-}"' EXIT
+    # R10 + M7 fix: mktemp keeps the swarm_install_$$ stem but adds an unpredictable suffix and
+    # creates the file exclusively (mkstemp/O_EXCL) with mode 600, on the same filesystem as DEST
+    # so the move is atomic. cp needs no special flags: the destination is always this fresh
+    # regular file, never a planted symlink, and the source symlink case is refused above.
+    tmp="$(mktemp "${INSTALL_DIR}/swarm_install_$$_XXXXXX")"
+    trap 'rm -f "$tmp"' EXIT
     cp "$source_path" "$tmp"
     chmod 755 "$tmp"
     mv -f "$tmp" "$DEST"
@@ -132,14 +144,25 @@ fi
 # R5a (AD-15): when an rg binary ships beside the source, copy it into the same bin dir so the
 # resolver's first candidate (dirname(execPath)/rg) finds it with no runtime download. Copy only
 # when present; a plain install without a bundled rg stays clean and falls back to PATH or fail-closed.
+# M7 fix applied here too: refuse symlinked rg source/destination, temp via mktemp.
 rg_source="$(dirname "$source_path")/rg"
+if [ -L "$rg_source" ]; then
+    echo -e "${RED}Error: Refusing symlinked rg source ${rg_source}; ship the real file.${NC}" >&2
+    exit 1
+fi
 if [ -f "$rg_source" ]; then
     rg_dest="$INSTALL_DIR/rg"
+    if [ -L "$rg_dest" ]; then
+        echo -e "${RED}Error: Refusing to replace symlinked ${rg_dest}.${NC}" >&2
+        exit 1
+    fi
     if [ ! -f "$rg_dest" ] || ! cmp -s "$rg_source" "$rg_dest"; then
-        rg_tmp="${INSTALL_DIR}/rg_install_$$"
+        rg_tmp="$(mktemp "${INSTALL_DIR}/rg_install_$$_XXXXXX")"
+        trap 'rm -f "$rg_tmp"' EXIT
         cp "$rg_source" "$rg_tmp"
         chmod 755 "$rg_tmp"
         mv -f "$rg_tmp" "$rg_dest"
+        trap - EXIT
     fi
 fi
 
