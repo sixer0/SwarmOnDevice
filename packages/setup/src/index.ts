@@ -23,9 +23,16 @@ import { discoverSteps, orderSteps } from "./steps.ts"
 import { COMPONENT_IDS, PROGRAM_NAME, type ComponentId } from "./constants.ts"
 import { OUTCOME, EXIT_OK, EXIT_FAIL, exitCodeFor, messageFor, type OutcomeToken } from "./outcomes.ts"
 
-function usageText(): string {
+function usageText(lockVersion?: string): string {
+  const title = `${PROGRAM_NAME} — consent-first pre-install for optional Swarm tools (macOS arm64, unprivileged)`
+  // Row 106: the banner states the ONE version this program can substantiate — the .version
+  // field of the tools.lock.json it just loaded (PC-LBL-03 source). The CLI product version
+  // (OPENCODE_VERSION define, register V09 / 01b:101) belongs to the swarm binary, not here;
+  // printing it without the define plumbing behind it would be a lie, so it is absent by design.
+  const lines = [title]
+  if (lockVersion) lines.push(`tools lock: ${lockVersion}`)
   return [
-    `${PROGRAM_NAME} — consent-first pre-install for optional Swarm tools (macOS arm64, unprivileged)`,
+    ...lines,
     "",
     "Usage:",
     `  ${PROGRAM_NAME}                        show this help + component states + host list`,
@@ -45,9 +52,10 @@ function usageText(): string {
 }
 
 function cmdHelp(): OutcomeToken {
-  console.log(usageText())
-  // Consolidated host list + current states are best-effort reads (no side effects).
+  // Load first so the banner can carry the lock version it actually validated (row 106).
   const lockRes = loadLock()
+  console.log(usageText(lockRes.ok ? lockRes.lock.version : undefined))
+  // Consolidated host list + current states are best-effort reads (no side effects).
   if (lockRes.ok) {
     console.log("")
     printHostList(lockRes.lock.hosts)

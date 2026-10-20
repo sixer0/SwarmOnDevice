@@ -56,8 +56,13 @@
       "PC-HOST-10": "formulae.brew.sh"
     },
     "registry_alias_resolution_D16": {
-      "docker.io": ["registry-1.docker.io", "auth.docker.io"],
-      "ghcr.io": ["ghcr.io"],
+      "docker.io": [
+        "registry-1.docker.io",
+        "auth.docker.io"
+      ],
+      "ghcr.io": [
+        "ghcr.io"
+      ],
       "comparison": "on the resolved registry host, never on the literal image prefix (01c section 5, D-16 at 10:146)"
     },
     "enforcement_split_D16": "row 82's allow-list governs the files the setup downloads; container image pulls are performed by dockerd inside the VM and are governed by the client firewall list plus the --pull never posture (01e:148-149)",
@@ -232,8 +237,12 @@
       "hash_source": "npm registry metadata dist.integrity, served separately from the tarball (02d:63-70)",
       "licence": "MIT",
       "_licence_src": "registry metadata license field MIT (02d:64-65); blank in the pre-fix schema and filled per D-03b (10:133)",
-      "prerequisite": ["node"],
-      "install_flags_required": ["--ignore-scripts"],
+      "prerequisite": [
+        "node"
+      ],
+      "install_flags_required": [
+        "--ignore-scripts"
+      ],
       "_pin_rationale_D10": "0.18.0 is the version whose arm64 behaviour is documented on this machine (02d:66-69, 02c section 1) while the 0.23.x tree-sitter prebuild layout is UNVERIFIED (02d:258 U-5). Advance to 0.23.x only through the 01g reviewed refresh once row 88's smoke test has run (10:140).",
       "_excluded_renamed_twin": {
         "package": "@trailhq/trail-code",
@@ -260,7 +269,10 @@
       "hash_source": "release checksums.txt (2,236 B) - a different file from the same release, satisfying the NR-03 independence rule (02d:89-91)",
       "licence": "Apache-2.0",
       "_licence_src": "02d:92-95 citing 02b section 2 (README states rtk-oss is Apache-2.0 only, consistent with the root LICENSE)",
-      "never_run": ["rtk init", "rtk telemetry enable"],
+      "never_run": [
+        "rtk init",
+        "rtk telemetry enable"
+      ],
       "_preexisting_host_tool": "the Homebrew rtk 0.49.0 on this machine is the other edition and does not satisfy this pin; it is detected and left byte-identical (02d:94-95, row 89 gate)",
       "_src": "02d:82-95",
       "_edition_rule": "Apache-2.0 edition only (B3, decision 14); the BUSL-edition rtk and the BUSL rtk-proxy daemon are out of scope (02d:84-85, 02b:52-53)"
@@ -307,7 +319,9 @@
         "valkey": "BSD-3-Clause"
       },
       "_licence_src": "searxng AGPL-3.0 from GitHub SPDX cited at 01d:547 (02b:109); valkey BSD-3-Clause verified by api.github.com/repos/valkey-io/valkey with output pasted at 01d:966",
-      "prerequisite": ["runtime"],
+      "prerequisite": [
+        "runtime"
+      ],
       "_pc_img": {
         "image": "PC-IMG-01",
         "valkey_image": "PC-IMG-07"
@@ -385,7 +399,10 @@
       },
       "_licence_closers": {},
       "_licence_scope_note": "each value above is the upstream project licence as verified by row 74 in 01d section 8. The full set of licences carried inside each image (base layers, OpenSSL, Alpine packages, Chromium) was not collected by any row and is not claimed here; row 65's THIRD_PARTY_LICENSES.txt reads this same map, so the two cannot drift (D-03, 10:133).",
-      "prerequisite": ["node", "runtime"],
+      "prerequisite": [
+        "node",
+        "runtime"
+      ],
       "_pc_img": {
         "api_image": "PC-IMG-02",
         "playwright_image": "PC-IMG-03",

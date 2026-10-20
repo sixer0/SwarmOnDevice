@@ -11,7 +11,8 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "build": "bun build --compile --target=bun --outfile dist/swarm-setup src/index.ts",
+    "genlock": "bun run script/gen-lock.ts",
+    "build": "bun run genlock && bun build --compile --target=bun --outfile dist/swarm-setup src/index.ts",
     "start": "bun run src/index.ts"
   },
   "engines": {
