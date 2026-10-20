@@ -19,6 +19,14 @@
  *   - It FAILS CLOSED: any missing, empty, or non-regular input exits non-zero
  *     before any subprocess runs, so a half-configured invocation can never emit
  *     a misleading "ok".
+ *   - It NEVER REPORTS A WRITE IT DID NOT VERIFY (row 117b finding R7):
+ *     `ssh-keygen -Y sign` prompts "Overwrite (y/n)?" when `<manifest>.sig`
+ *     already exists; under this wrapper stdin is a pipe, the prompt gets EOF,
+ *     ssh-keygen declines the write and STILL exits 0. So `sign` refuses an
+ *     existing signature unless `--overwrite` is passed, answers the prompt
+ *     through its own stdin when overwriting, and confirms the .sig was actually
+ *     rewritten — over the manifest bytes read around the call — before printing
+ *     success. Invariant: exit 0 implies a freshly written signature.
  *
  * Why ssh-keygen -Y rather than GPG: the host already ships OpenSSH with the `-Y`
  * sign/verify mode (research/03e_security_preread.md:112 records it as [V] on this
@@ -35,6 +43,7 @@
  */
 
 import { spawnSync } from "node:child_process"
+import { createHash } from "node:crypto"
 import { existsSync, readFileSync, statSync } from "node:fs"
 
 // Namespace tag baked into every signature. Kept as one constant so sign and
@@ -68,6 +77,11 @@ function requireRegularFile(label: string, filePath: string, opts: { allowEmpty?
   return filePath
 }
 
+// Flags that carry no value. parseFlags otherwise requires `--key value` for every
+// token, so a boolean must be declared here or it would fail closed as "requires a
+// value". Presence means true; there is no `--overwrite false` form.
+const BOOLEAN_FLAGS = new Set(["overwrite"])
+
 // Parse `--key value` pairs into a map. Unknown flags are kept (harmless) but a
 // flag with no following value fails closed.
 function parseFlags(argv: readonly string[]): Map<string, string> {
@@ -76,6 +90,10 @@ function parseFlags(argv: readonly string[]): Map<string, string> {
     const token = argv[i] as string
     if (!token.startsWith("--")) continue
     const key = token.slice(2)
+    if (BOOLEAN_FLAGS.has(key)) {
+      flags.set(key, "true")
+      continue
+    }
     const value = argv[i + 1]
     if (value === undefined || value.startsWith("--")) {
       fail(`flag --${key} requires a value`)
@@ -108,6 +126,10 @@ function runTool(cmd: string, args: readonly string[], input?: string | Buffer):
 // ---------------------------------------------------------------------------
 // Subcommand: sign
 // ---------------------------------------------------------------------------
+function sha256Hex(data: Buffer): string {
+  return createHash("sha256").update(data).digest("hex")
+}
+
 function cmdSign(flags: Map<string, string>): number {
   const sums = requireRegularFile("manifest", requireFlag(flags, "sums"))
   // The private key is SUPPLIED by the caller and used for this one run only.
@@ -115,15 +137,59 @@ function cmdSign(flags: Map<string, string>): number {
   // generate it. allowEmpty:false means a zero-byte key fails closed.
   const key = requireRegularFile("private key", requireFlag(flags, "key"))
   const namespace = namespaceOf(flags)
-
-  process.stderr.write(`sign-checksums: signing ${sums} as "${namespace}"\n`)
+  const overwrite = flags.get("overwrite") === "true"
   // ssh-keygen -Y sign always writes "<file>.sig" next to the input; there is no
   // output-path flag, so we surface the resulting name ourselves.
-  const status = runTool("ssh-keygen", ["-Y", "sign", "-n", namespace, "-f", key, sums])
+  const sigPath = `${sums}.sig`
+
+  // Row 117b finding R7: with a pre-existing .sig, ssh-keygen asks "Overwrite
+  // (y/n)?", our stdin pipe answers EOF, ssh-keygen declines the write yet exits
+  // 0 — and the old code printed "signature written" anyway. So an explicit
+  // decision is required up front: refuse unless --overwrite says replace it.
+  const sigExisted = existsSync(sigPath)
+  if (sigExisted && !overwrite) {
+    fail(`refusing to overwrite existing signature ${sigPath}; pass --overwrite to replace it`)
+  }
+
+  // Pin the manifest bytes across the signing call: ssh-keygen reads the file
+  // itself, so a concurrent edit would leave us attesting bytes we never checked.
+  const manifestBefore = sha256Hex(readFileSync(sums))
+  const before = sigExisted ? statSync(sigPath) : undefined
+  const startedAt = Date.now()
+
+  process.stderr.write(`sign-checksums: signing ${sums} as "${namespace}"\n`)
+  // With --overwrite we answer the prompt through the same pipe whose EOF caused
+  // the silent decline. Without an existing .sig there is no prompt to answer, so
+  // stdin stays empty rather than risking a passphrase prompt eating our "y".
+  // Buffer, not string: Bun's spawnSync throws `Unknown encoding: buffer` when a
+  // string input meets encoding:"buffer" (the verify path already feeds a Buffer).
+  const status = runTool(
+    "ssh-keygen",
+    ["-Y", "sign", "-n", namespace, "-f", key, sums],
+    sigExisted && overwrite ? Buffer.from("y\n") : undefined,
+  )
   if (status !== 0) {
     fail(`ssh-keygen -Y sign exited ${status}; no trustworthy signature produced`)
   }
-  const sigPath = `${sums}.sig`
+
+  // Exit 0 alone is NOT proof of a write (that was the whole R7 defect), so
+  // confirm bytes actually landed before claiming success. Freshness rides on
+  // mtime/size, not on content hash: ed25519 re-signing of identical bytes is
+  // deterministic (measured in the fix round), so a legitimate --overwrite of an
+  // unchanged manifest may legitimately reproduce the identical signature body.
+  if (!existsSync(sigPath)) fail(`ssh-keygen exited 0 but produced no ${sigPath}; refusing to report success`)
+  const after = statSync(sigPath)
+  if (!after.isFile()) fail(`signature path ${sigPath} is not a regular file after signing`)
+  if (after.size === 0) fail(`signature file ${sigPath} is empty after signing`)
+  if (before && after.mtimeMs === before.mtimeMs && after.size === before.size) {
+    fail(`ssh-keygen exited 0 but left ${sigPath} untouched (declined overwrite); no fresh signature written`)
+  }
+  if (!before && after.mtimeMs < startedAt) {
+    fail(`signature ${sigPath} predates this signing run; refusing to report a pre-existing file as fresh`)
+  }
+  if (sha256Hex(readFileSync(sums)) !== manifestBefore) {
+    fail(`manifest ${sums} changed during signing; the signature may not cover the intended bytes`)
+  }
   process.stderr.write(`sign-checksums: signature written to ${sigPath}\n`)
   return 0
 }
@@ -194,11 +260,13 @@ function cmdCdhash(flags: Map<string, string>): number {
 function usage(): string {
   return [
     "usage:",
-    "  bun script/swarm/sign-checksums.ts sign   --sums <SHA256SUMS> --key <privkey> [--namespace swarm-release]",
+    "  bun script/swarm/sign-checksums.ts sign   --sums <SHA256SUMS> --key <privkey> [--namespace swarm-release] [--overwrite]",
     "  bun script/swarm/sign-checksums.ts verify --sums <SHA256SUMS> --signature <SHA256SUMS.sig> \\",
     "                                              --signers <allowed-signers> --principal <id> [--namespace swarm-release]",
     "  bun script/swarm/sign-checksums.ts cdhash --app <path/to/App.app>",
     "",
+    "sign refuses when <sums>.sig already exists unless --overwrite explicitly authorizes replacing it;",
+    "a success line is printed only after the signature bytes are confirmed freshly written.",
     "keys are always supplied by the caller; this tool never generates or stores them.",
   ].join("\n")
 }
