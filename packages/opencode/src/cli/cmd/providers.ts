@@ -304,7 +304,7 @@ export const ProvidersLoginCommand = effectCmd({
   builder: (yargs: Argv) =>
     yargs
       .positional("url", {
-        describe: "opencode auth provider",
+        describe: "swarm auth provider",
         type: "string",
       })
       .option("provider", {
@@ -449,7 +449,9 @@ export const ProvidersLoginCommand = effectCmd({
       }
 
       yield* Prompt.log.warn(
-        `This only stores a credential for ${provider} - you will need configure it in opencode.json, check the docs for examples.`,
+        // D-06: config-file name follows F07/C9 (`swarm.json`, renamed by row 40); the rest of the
+        // sentence, including its upstream grammar, is left byte-identical to keep the fork diff small.
+        `This only stores a credential for ${provider} - you will need configure it in swarm.json, check the docs for examples.`,
       )
     }
 
@@ -458,22 +460,27 @@ export const ProvidersLoginCommand = effectCmd({
         "Amazon Bedrock authentication priority:\n" +
           "  1. Bearer token (AWS_BEARER_TOKEN_BEDROCK or /connect)\n" +
           "  2. AWS credential chain (profile, access keys, IAM roles, EKS IRSA)\n\n" +
-          "Configure via opencode.json options (profile, region, endpoint) or\n" +
+          // D-06: config-file name follows F07/C9.
+          "Configure via swarm.json options (profile, region, endpoint) or\n" +
           "AWS environment variables (AWS_PROFILE, AWS_REGION, AWS_ACCESS_KEY_ID, AWS_WEB_IDENTITY_TOKEN_FILE).",
       )
     }
 
-    if (provider === "opencode") {
-      yield* Prompt.log.info("Create an api key at https://opencode.ai/auth")
-    }
-
+    // D-06 deleted the api-key hint that stood in this branch because it printed a brand docs host
+    // (ND-3/C13 omits every brand URL slot, W01 removes brand URLs, and that host is on the AC4 deny
+    // list, so showing it to a user was doubly wrong). The provider id itself stays untouched (J09
+    // keep) and is disabled by default through BASELINE_CONFIG.disabled_providers, so the branch had
+    // no remaining statement and was removed with it; the id comparison is deliberately not reused.
     if (provider === "vercel") {
       yield* Prompt.log.info("You can create an api key at https://vercel.link/ai-gateway-token")
     }
 
     if (["cloudflare", "cloudflare-ai-gateway"].includes(provider)) {
       yield* Prompt.log.info(
-        "Cloudflare AI Gateway can be configured with CLOUDFLARE_GATEWAY_ID, CLOUDFLARE_ACCOUNT_ID, and CLOUDFLARE_API_TOKEN environment variables. Read more: https://opencode.ai/docs/providers/#cloudflare-ai-gateway",
+        // D-06 dropped the trailing "Read more:" pointer to a brand docs host (ND-3/C13 + W01, and
+        // that host is AC4-denied). The env-variable guidance is what the user needs, so the first
+        // half of the sentence is kept byte-identical.
+        "Cloudflare AI Gateway can be configured with CLOUDFLARE_GATEWAY_ID, CLOUDFLARE_ACCOUNT_ID, and CLOUDFLARE_API_TOKEN environment variables.",
       )
     }
 

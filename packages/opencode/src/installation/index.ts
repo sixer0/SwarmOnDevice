@@ -39,7 +39,8 @@ export const Info = Schema.Struct({
 export type Info = Schema.Schema.Type<typeof Info>
 
 export function userAgent(client = "cli") {
-  return `opencode/${InstallationChannel}/${InstallationVersion}/${client}`
+  // Register U01 (residual scan D-14): outbound identification is swarm, not opencode.
+  return `swarm/${InstallationChannel}/${InstallationVersion}/${client}`
 }
 
 export const USER_AGENT = userAgent()
@@ -115,7 +116,17 @@ const MAJOR_INSTALL: Partial<Record<Method, { remove: string[]; install: string[
   },
 }
 
-export const MAJOR_INSTRUCTIONS = "https://opencode.ai/v2/docs"
+// upgrade intentionally unsupported; see s56 (upstream docs URL removed)
+export const MAJOR_INSTRUCTIONS = ""
+
+// WP-EGRESS-CORE (row 56): Swarm ships with no update server (decisions.md GATE 2, decision 5).
+// Every upgrade path — `swarm upgrade`, the TUI `/update` apply, and the HTTP route
+// /global/upgrade — funnels through this service, so the refusal lives here as the single
+// choke point. The package-manager machinery below stays in place (disable-not-delete) so
+// upstream rebases remain clean; it is simply never reached.
+export const UPGRADES_DISABLED = true
+export const UPGRADE_REFUSAL =
+  "Swarm updates are managed by your administrator (PT GSP). Upgrade paths are disabled in this build; reinstall through swarm-setup or your package manager."
 
 export class Service extends Context.Service<Service, Interface>()("@opencode/Installation") {}
 
@@ -182,36 +193,16 @@ const layer: Layer.Layer<Service, never, HttpClient.HttpClient | AppProcess.Serv
 
     const upgradeCurl = Effect.fnUntraced(
       function* (target: string) {
-        const response = yield* httpOk.execute(HttpClientRequest.get("https://opencode.ai/install"))
-        const body = yield* response.text
-        const bodyBytes = new TextEncoder().encode(body)
-        const shell = yield* upgradeScriptShell()
-        const result = yield* appProcess.run(
-          ChildProcess.make(shell, [], {
-            stdin: Stream.make(bodyBytes),
-            env: { VERSION: target },
-            extendEnv: true,
-          }),
-        )
-        return {
-          code: result.exitCode,
-          stdout: result.stdout.toString("utf8"),
-          stderr: result.stderr.toString("utf8"),
-        }
+        // upgrade intentionally unsupported; see s56 (remote-script-pipe-to-shell removed)
+        return yield* new UpgradeFailedError({ stderr: upgradeFailure("curl") })
       },
       Effect.mapError(() => new UpgradeFailedError({ stderr: upgradeFailure("curl") })),
     )
 
     const majorUpgrade = Effect.fnUntraced(function* (m: Method) {
       if (m === "curl") {
-        // The V2 installer writes to the same ~/.opencode/bin/opencode path, replacing V1 in place.
-        const response = yield* httpOk
-          .execute(HttpClientRequest.get("https://opencode.ai/v2/install"))
-          .pipe(Effect.mapError(() => new UpgradeFailedError({ stderr: upgradeFailure("curl") })))
-        const body = yield* response.text.pipe(
-          Effect.mapError(() => new UpgradeFailedError({ stderr: upgradeFailure("curl") })),
-        )
-        return yield* run([yield* upgradeScriptShell(), "-c", body])
+        // upgrade intentionally unsupported; see s56 (V2 remote-script-pipe-to-shell removed)
+        return yield* new UpgradeFailedError({ stderr: upgradeFailure("curl") })
       }
 
       if (m === "brew") {
@@ -274,8 +265,15 @@ const layer: Layer.Layer<Service, never, HttpClient.HttpClient | AppProcess.Serv
         }
       }),
       method: Effect.fn("Installation.method")(function* () {
-        if (process.execPath.includes(path.join(".opencode", "bin"))) return "curl" as Method
+        // Register J06/I08: the curl-install marker dir is `.swarm/bin` (row 46 writes there).
+        if (process.execPath.includes(path.join(".swarm", "bin"))) return "curl" as Method
         if (process.execPath.includes(path.join(".local", "bin"))) return "curl" as Method
+        // WP-EGRESS-CORE (row 56, residual scan D-17): with upgrades disabled no caller needs a
+        // package-manager verdict, and probing would spawn brew/scoop/choco with upstream package
+        // names on a live command line — reachable from cli/cmd/tui.ts every 10 minutes and from
+        // cli/cmd/uninstall.ts. Detect from execPath alone; the probes below stay for rebase
+        // parity but are never reached in Swarm builds.
+        if (UPGRADES_DISABLED) return "unknown" as Method
         const exec = process.execPath.toLowerCase()
 
         const checks: Array<{ name: Method; command: () => Effect.Effect<string> }> = [
@@ -310,6 +308,10 @@ const layer: Layer.Layer<Service, never, HttpClient.HttpClient | AppProcess.Serv
       // Reports the installed version when there's no OpenCode 1 update this install method can deliver,
       // so callers offer OpenCode 2 through the major upgrade instead.
       latest: Effect.fn("Installation.latest")(function* (installMethod?: Method) {
+        // WP-EGRESS-CORE (row 56): there is no Swarm release feed, so version discovery never
+        // reaches the network; every caller sees "already current". The npm/choco/brew lookups
+        // below are upstream machinery that would phone home.
+        if (UPGRADES_DISABLED) return InstallationVersion
         const method = installMethod || (yield* result.method())
         // Homebrew Core's opencode formula is OpenCode 2, so `brew upgrade` can't deliver an OpenCode 1 update.
         if (method === "brew" && !(yield* getBrewFormula()).includes("/")) return InstallationVersion
@@ -321,6 +323,10 @@ const layer: Layer.Layer<Service, never, HttpClient.HttpClient | AppProcess.Serv
         }).pipe(Effect.timeout("10 seconds"))
       }, Effect.orDie),
       upgrade: Effect.fn("Installation.upgrade")(function* (m: Method, target: string) {
+        // WP-EGRESS-CORE (row 56): refuse before any package-manager or download work.
+        if (UPGRADES_DISABLED) {
+          return yield* new UpgradeFailedError({ stderr: UPGRADE_REFUSAL })
+        }
         if (semver.valid(target) && semver.major(target) >= 2)
           return yield* new UpgradeFailedError({
             stderr: `OpenCode ${target} is OpenCode 2. Upgrade with \`opencode upgrade --major\` or see ${MAJOR_INSTRUCTIONS}`,
@@ -393,6 +399,10 @@ const layer: Layer.Layer<Service, never, HttpClient.HttpClient | AppProcess.Serv
         yield* text([process.execPath, "--version"])
       }),
       upgradeMajor: Effect.fn("Installation.upgradeMajor")(function* (m: Method) {
+        // WP-EGRESS-CORE (row 56): refuse before any package-manager or download work.
+        if (UPGRADES_DISABLED) {
+          return yield* new UpgradeFailedError({ stderr: UPGRADE_REFUSAL })
+        }
         const outcome = yield* majorUpgrade(m)
         if (outcome.code !== 0) return yield* new UpgradeFailedError({ stderr: upgradeFailure(m, outcome) })
         yield* Effect.logInfo("upgraded major", { method: m, stdout: outcome.stdout, stderr: outcome.stderr })

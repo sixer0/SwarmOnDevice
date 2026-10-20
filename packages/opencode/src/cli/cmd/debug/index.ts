@@ -58,7 +58,10 @@ const InfoCommand = effectCmd({
       : undefined
     const terminal = [termProgram, process.env.TERM].filter((item): item is string => Boolean(item)).join(" / ")
 
-    console.log(`opencode version: ${InstallationVersion}`)
+    // D-07: the label names the executable whose version follows, so it takes the lowercase binary
+    // form (C02/A02) and matches the machine row's prescribed value in 04_residual_scan.md:813. The
+    // line stays labelled rather than a bare token: J10's one-token rule applies to --version only.
+    console.log(`swarm version: ${InstallationVersion}`)
     console.log(`os: ${os.type()} ${os.release()} ${os.arch()}`)
     console.log(`terminal: ${terminal || "unknown"}`)
     console.log("plugins:")

@@ -1,6 +1,7 @@
 import { EOL } from "os"
 import { Effect } from "effect"
 import { ModelsDev } from "@opencode-ai/core/models-dev"
+import { Flag } from "@opencode-ai/core/flag/flag"
 import { effectCmd, fail } from "../effect-cmd"
 import { UI } from "../ui"
 import { ProviderV2 } from "@opencode-ai/core/provider"
@@ -20,12 +21,20 @@ export const ModelsCommand = effectCmd({
         type: "boolean",
       })
       .option("refresh", {
-        describe: "refresh the models cache from models.dev",
+        describe: "refresh the models cache (requires an operator-configured catalogue URL)",
         type: "boolean",
       }),
   handler: Effect.fn("Cli.models")(function* (args) {
     const { Provider } = yield* Effect.promise(() => import("@/provider/provider"))
     if (args.refresh) {
+      // WP-EGRESS-CORE (row 56): catalogue refresh is gated off by default; the fetch target
+      // only exists when an operator sets OPENCODE_MODELS_URL. Refuse visibly instead of
+      // silently no-opping, then keep listing offline data when it runs without --refresh.
+      if (!Flag.OPENCODE_MODELS_URL) {
+        return yield* fail(
+          "Model catalogue refresh is disabled: no catalogue fetch target is configured. An operator may set OPENCODE_MODELS_URL to enable it.",
+        )
+      }
       yield* ModelsDev.Service.use((s) => s.refresh(true))
       UI.println(UI.Style.TEXT_SUCCESS_BOLD + "Models cache refreshed" + UI.Style.TEXT_NORMAL)
     }

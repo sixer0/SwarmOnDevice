@@ -1,6 +1,6 @@
 import { Effect } from "effect"
 import { UI } from "../ui"
-import { effectCmd } from "../effect-cmd"
+import { effectCmd, fail } from "../effect-cmd"
 import { withNetworkOptions, resolveNetworkOptions } from "../network"
 import { Flag } from "@opencode-ai/core/flag/flag"
 import { openUrl } from "@opencode-ai/core/open"
@@ -31,17 +31,24 @@ function getNetworkIPs() {
 export const WebCommand = effectCmd({
   command: "web",
   builder: (yargs) => withNetworkOptions(yargs),
-  describe: "start opencode server and open web interface",
+  describe: "start swarm server and open web interface",
   // Server loads instances per-request via x-opencode-directory header — no
   // ambient project InstanceContext needed at startup.
   instance: false,
   handler: Effect.fn("Cli.web")(function* (args) {
     const { Server } = yield* Effect.promise(() => import("../../server/server"))
-    if (!Flag.OPENCODE_SERVER_PASSWORD) {
-      UI.println(UI.Style.TEXT_WARNING_BOLD + "!  OPENCODE_SERVER_PASSWORD is not set; server is unsecured.")
-    }
+    // Same refusal as `serve` (research/03e C7-4): `web` starts the identical listener and would
+    // otherwise open an unauthenticated shell door plus a browser pointed at it.
+    if (!Flag.OPENCODE_SERVER_PASSWORD)
+      return yield* fail(
+        "No server password is set; refusing to start an unsecured server. Set SWARM_SERVER_PASSWORD or OPENCODE_SERVER_PASSWORD to a non-empty value and run web again.",
+      )
     const opts = yield* resolveNetworkOptions(args)
-    const server = yield* Effect.promise(() => Server.listen(opts))
+    // Same Host allow-list wiring as `serve`: the bound address and the mDNS name are the Host
+    // values this listener answers for; loopback needs no entry because cors.ts accepts it always.
+    const server = yield* Effect.promise(() =>
+      Server.listen({ ...opts, hosts: [opts.hostname, ...(opts.mdns ? [opts.mdnsDomain] : [])] }),
+    )
     UI.empty()
     UI.println(UI.logo("  "))
     UI.empty()

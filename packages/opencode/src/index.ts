@@ -1,8 +1,16 @@
+// Swarm defaults shim. This must stay the FIRST import of the CLI entry: it applies the
+// egress-off ??= defaults, the SWARM_* -> OPENCODE_* alias mirror, guard G3 and the
+// SWARM=1 child marker to process.env before any transitive import evaluates
+// packages/core/src/flag/flag.ts at module load (FR-DEF-01..07, row 36 module contract).
+import "@opencode-ai/core/swarm-defaults"
 import yargs from "yargs"
 import { hideBin } from "yargs/helpers"
 import { RunCommand } from "./cli/cmd/run"
 import { GenerateCommand } from "./cli/cmd/generate"
-import { ConsoleCommand } from "./cli/cmd/account"
+// ConsoleCommand (./cli/cmd/account) and GithubCommand (./cli/cmd/github) are deliberately not
+// imported or registered: FR-CLI-09 keeps `swarm console` and `swarm github` off the command
+// surface. The modules stay on disk untouched (disable-not-delete), and account.ts still exports
+// its helpers, which test/cli/account.test.ts imports directly.
 import { ProvidersCommand } from "./cli/cmd/providers"
 import { AgentCommand } from "./cli/cmd/agent"
 import { UpgradeCommand } from "./cli/cmd/upgrade"
@@ -15,7 +23,6 @@ import { ServeCommand } from "./cli/cmd/serve"
 import { DebugCommand } from "./cli/cmd/debug"
 import { StatsCommand } from "./cli/cmd/stats"
 import { McpCommand } from "./cli/cmd/mcp"
-import { GithubCommand } from "./cli/cmd/github"
 import { ExportCommand } from "./cli/cmd/export"
 import { ImportCommand } from "./cli/cmd/import"
 import { AttachCommand } from "./cli/cmd/attach"
@@ -34,7 +41,9 @@ const args = hideBin(process.argv)
 
 function show(out: string) {
   const text = out.trimStart()
-  if (!text.startsWith("opencode ")) {
+  // Register J02: this test is the parser twin of .scriptName below. It must read "swarm ",
+  // otherwise the logo prints before every help screen.
+  if (!text.startsWith("swarm ")) {
     process.stderr.write(UI.logo() + EOL + EOL)
     process.stderr.write(text + EOL)
     return
@@ -44,7 +53,7 @@ function show(out: string) {
 
 const cli = yargs(args)
   .parserConfiguration({ "populate--": true })
-  .scriptName("opencode")
+  .scriptName("swarm")
   .wrap(100)
   .help("help", "show help")
   .alias("help", "h")
@@ -77,6 +86,10 @@ const cli = yargs(args)
     process.env.OPENCODE_PID = String(process.pid)
   })
   .usage("")
+  // Register C1 / A07 credit line, verbatim from research/03c_licence_notice_plan.md 4.3. It is the
+  // only "OpenCode" string allowed in user-visible output (AC1 exception, Q5) and belongs to --help
+  // only: FR-CLI-02 keeps --version a bare version token so the build smoke test still parses it.
+  .epilogue("Based on OpenCode (MIT). Not affiliated with the OpenCode team.")
   .completion("completion", "generate shell completion script")
   .command(AcpCommand)
   .command(McpCommand)
@@ -85,7 +98,6 @@ const cli = yargs(args)
   .command(RunCommand)
   .command(GenerateCommand)
   .command(DebugCommand)
-  .command(ConsoleCommand)
   .command(ProvidersCommand)
   .command(AgentCommand)
   .command(UpgradeCommand)
@@ -96,7 +108,6 @@ const cli = yargs(args)
   .command(StatsCommand)
   .command(ExportCommand)
   .command(ImportCommand)
-  .command(GithubCommand)
   .command(PrCommand)
   .command(SessionCommand)
   .command(PluginCommand)

@@ -6,7 +6,7 @@ import { InstallationVersion } from "@opencode-ai/core/installation/version"
 
 export const UpgradeCommand = {
   command: "upgrade [target]",
-  describe: "upgrade opencode to the latest or a specific version",
+  describe: "upgrade swarm to the latest or a specific version",
   builder: (yargs: Argv) => {
     return yargs
       .positional("target", {
@@ -20,7 +20,7 @@ export const UpgradeCommand = {
         choices: ["curl", "npm", "pnpm", "bun", "brew", "choco", "scoop"],
       })
       .option("major", {
-        describe: "upgrade to OpenCode 2 and remove OpenCode 1",
+        describe: "upgrade to Swarm 2 and remove Swarm 1",
         type: "boolean",
       })
   },
@@ -29,6 +29,13 @@ export const UpgradeCommand = {
     UI.println(UI.logo("  "))
     UI.empty()
     prompts.intro("Upgrade")
+    // WP-EGRESS-CORE (row 56): refuse before any install-method detection or version lookup,
+    // so `swarm upgrade` makes no request of any kind and exits non-zero.
+    if (Installation.UPGRADES_DISABLED) {
+      prompts.log.error(Installation.UPGRADE_REFUSAL)
+      prompts.outro("Done")
+      process.exit(1)
+    }
     const detectedMethod = await Installation.method()
     const method = (args.method as Installation.Method) ?? detectedMethod
     if (method === "unknown") {

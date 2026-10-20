@@ -124,12 +124,15 @@ export function permissionInfo(request: PermissionRequest): PermissionInfo {
 }
 
 export function permissionAlwaysLines(request: PermissionRequest): string[] {
+  // D-08: the product word here is a prose subject, so it takes the display name (register A01),
+  // matching the already-converted TUI twin at packages/tui/src/routes/session/permission.tsx:144
+  // and :148. Each surface keeps its own upstream punctuation; only the brand word changes.
   if (request.always.length === 1 && request.always[0] === "*") {
-    return [`This will allow ${request.permission} until OpenCode is restarted.`]
+    return [`This will allow ${request.permission} until Swarm is restarted.`]
   }
 
   return [
-    "This will allow the following patterns until OpenCode is restarted.",
+    "This will allow the following patterns until Swarm is restarted.",
     ...request.always.map((item) => `- ${item}`),
   ]
 }

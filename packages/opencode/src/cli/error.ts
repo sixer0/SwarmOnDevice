@@ -47,7 +47,9 @@ export function FormatError(input: unknown): string | undefined {
   // MCPFailed: { name: string }
   if (NamedError.hasName(input, "MCPFailed")) {
     const data = isRecord(input) && isRecord(input.data) ? stringField(input.data, "name") : undefined
-    return `MCP server "${data}" failed. Note, opencode does not support MCP authentication yet.`
+    // D-05: prose subject takes the display name (register A01), matching the app's own
+    // error.chain.mcpFailed copy in packages/app/src/i18n/en.ts.
+    return `MCP server "${data}" failed. Note, Swarm does not support MCP authentication yet.`
   }
 
   // AccountServiceError, AccountTransportError: TaggedErrorClass
@@ -64,8 +66,11 @@ export function FormatError(input: unknown): string | undefined {
     return [
       `Model not found: ${stringField(providerModelNotFound, "providerID")}/${stringField(providerModelNotFound, "modelID")}`,
       ...(suggestions.length ? ["Did you mean: " + suggestions.join(", ")] : []),
-      `Try: \`opencode models\` to list available models`,
-      `Or check your config (opencode.json) provider/model names`,
+      // D-05: command invocations take the lowercase binary name (A02/C02) and the config file name
+      // Swarm actually reads (F07/C9) — row 40 renamed it, so the previous wording pointed users at
+      // a file this product no longer loads.
+      `Try: \`swarm models\` to list available models`,
+      `Or check your config (swarm.json) provider/model names`,
     ].join("\n")
   }
 
@@ -102,7 +107,7 @@ export function FormatError(input: unknown): string | undefined {
     return [
       `Failed to load remote config${remote ? ` from ${remote}` : ""}: the server returned a login page instead of JSON.`,
       `Authentication is missing or has expired (the endpoint is likely behind an SSO or identity-aware proxy).`,
-      ...(url ? [`Run \`opencode auth login ${url}\` to re-authenticate.`] : []),
+      ...(url ? [`Run \`swarm auth login ${url}\` to re-authenticate.`] : []),
     ].join("\n")
   }
 

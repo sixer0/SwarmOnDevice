@@ -6,7 +6,7 @@ import { ServerAuth } from "@/server/auth"
 
 export const AttachCommand = cmd({
   command: "attach <url>",
-  describe: "attach to a running opencode server",
+  describe: "attach to a running swarm server",
   builder: (yargs) =>
     yargs
       .positional("url", {
@@ -35,12 +35,14 @@ export const AttachCommand = cmd({
       .option("password", {
         alias: ["p"],
         type: "string",
-        describe: "basic auth password (defaults to OPENCODE_SERVER_PASSWORD)",
+        // FR-CLI-04: public SWARM_* name only; the OPENCODE_* twin stays honoured at read time.
+        describe: "basic auth password (defaults to SWARM_SERVER_PASSWORD)",
       })
       .option("username", {
         alias: ["u"],
         type: "string",
-        describe: "basic auth username (defaults to OPENCODE_SERVER_USERNAME or 'opencode')",
+        // FR-CLI-04: do not show the literal default user name; it is unchanged on the wire (U05).
+        describe: "basic auth username (defaults to SWARM_SERVER_USERNAME)",
       })
       .option("mini", {
         type: "boolean",

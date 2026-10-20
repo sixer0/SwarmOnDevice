@@ -1,3 +1,7 @@
+// Scope note (WP-EGRESS-SRV row 60): this sanitizer no longer serves a remote UI fallback —
+// the hosted-UI proxy in server/shared/ui.ts was removed, so nothing here forwards
+// headers to upstream hosts anymore. The remaining consumer is the workspace proxy middleware
+// (routes/instance/httpapi/middleware/proxy.ts), which only targets operator-configured remotes.
 const hop = new Set([
   "connection",
   "keep-alive",

@@ -87,6 +87,15 @@ export const globalHandlers = HttpApiBuilder.group(RootHttpApi, "global", (handl
     })
 
     const upgrade = Effect.fn("GlobalHttpApi.upgrade")(function* (ctx: { payload: typeof GlobalUpgradeInput.Type }) {
+      // WP-EGRESS-CORE (row 56): Swarm has no update server (decision 5). Refuse before any
+      // method detection or download work; 403 states "policy, not failure". The response body
+      // keeps the declared GlobalUpgradeResult shape so existing SDK clients parse it unchanged.
+      if (Installation.UPGRADES_DISABLED) {
+        return HttpServerResponse.jsonUnsafe(
+          { success: false as const, error: Installation.UPGRADE_REFUSAL },
+          { status: 403 },
+        )
+      }
       const method = yield* installation.method()
       if (method === "unknown") {
         return HttpServerResponse.jsonUnsafe(

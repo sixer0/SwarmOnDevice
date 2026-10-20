@@ -94,17 +94,20 @@ export function make(input: {
   const initialize = Effect.fn("ACP.initialize")(function* (params: InitializeRequest) {
     const started = performance.now()
     const authMethod: AuthMethod = {
-      description: "Run `opencode auth login` in the terminal",
-      name: "Login with opencode",
+      // FR-CLI-05 / register J03: the ACP self-spawn identity. `command` is what an ACP client
+      // executes, so it must be the binary the user actually installed; the two prose fields are
+      // client-visible and follow C1 (display) and A02 (lowercase in commands).
+      description: "Run `swarm auth login` in the terminal",
+      name: "Login with Swarm",
       id: AuthMethodID,
     }
 
     if (params.clientCapabilities?._meta?.["terminal-auth"] === true) {
       authMethod._meta = {
         "terminal-auth": {
-          command: "opencode",
+          command: "swarm",
           args: ["auth", "login"],
-          label: "OpenCode Login",
+          label: "Swarm Login",
         },
       }
     }
@@ -130,7 +133,7 @@ export function make(input: {
       },
       authMethods: [authMethod],
       agentInfo: {
-        name: "OpenCode",
+        name: "Swarm",
         version: InstallationVersion,
       },
     }
@@ -889,7 +892,7 @@ const promptResponse = Effect.fn("ACP.promptResponse")(function* (
 
 function promptErrorMessage(error: AssistantError) {
   if ("message" in error.data && typeof error.data.message === "string") return error.data.message
-  return "OpenCode prompt failed"
+  return "Swarm prompt failed"
 }
 
 function sendUsageUpdate(
@@ -1188,7 +1191,7 @@ function fromUnknownError(error: unknown, service?: string): Error {
   if (isAuthRequired(error)) {
     return new ACPError.AuthRequiredError({ providerId: findProviderID(error) })
   }
-  return new ACPError.ServiceFailureError({ safeMessage: "OpenCode service failure", service })
+  return new ACPError.ServiceFailureError({ safeMessage: "Swarm service failure", service })
 }
 
 function isACPError(error: unknown): error is Error {
