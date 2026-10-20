@@ -1,0 +1,194 @@
+// Build-time step-registry generator (row 81 FIX2; closes row-106 blocker H-R106).
+//
+// `bun build --compile` does NOT embed directories, so the shipped Mach-O cannot readdir
+// src/steps/ at runtime and discovers ZERO steps. This generator turns the directory-scan
+// contract into a STATIC registry the compiler CAN embed:
+//
+//   bun run script/gen-steps.ts            # regenerate src/steps.gen.ts from src/steps/*/
+//   bun run script/gen-steps.ts --check     # verify the committed registry matches disk
+//
+// Generate mode FAILS CLOSED: any non-hidden step dir whose step.json does not validate, or
+// whose index.ts lacks a default export, aborts the build (REGISTRY_GEN_FAIL) rather than
+// emit a broken registry. It records a content hash of the whole step set (sorted dir names +
+// raw step.json bytes) into the generated file.
+//
+// --check mode recomputes that hash from disk and compares it to the embedded one; a mismatch
+// (a step added/removed/edited WITHOUT regenerating) exits 1 (REGISTRY_STALE). This is the
+// tamper-proof parity gate the controller ruling requires. Deterministic: no clock, no network,
+// no ports, no spawns. Writes exactly ONE file (src/steps.gen.ts) in generate mode.
+
+import { createHash } from "node:crypto"
+import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs"
+import { join } from "node:path"
+import { isHiddenName, validateDescriptor, type StepDescriptor } from "../src/step-descriptor.ts"
+
+const PKG_DIR = join(import.meta.dir, "..") // .../packages/setup
+const STEPS_DIR = join(PKG_DIR, "src", "steps")
+const OUT_FILE = join(PKG_DIR, "src", "steps.gen.ts")
+
+interface DiskStep {
+  dir: string
+  raw: string // exact step.json bytes
+}
+
+/** Read every NON-hidden step directory (the registered-set candidates), sorted by name. */
+function readDiskSteps(): DiskStep[] {
+  if (!existsSync(STEPS_DIR)) return []
+  const out: DiskStep[] = []
+  for (const name of readdirSync(STEPS_DIR).sort()) {
+    const full = join(STEPS_DIR, name)
+    let isDir = false
+    try {
+      isDir = statSync(full).isDirectory()
+    } catch {
+      continue
+    }
+    if (!isDir || isHiddenName(name)) continue
+    const sj = join(full, "step.json")
+    if (!existsSync(sj)) continue // missing step.json surfaces as a validation error below
+    out.push({ dir: name, raw: readFileSync(sj, "utf8") })
+  }
+  return out.sort((a, b) => a.dir.localeCompare(b.dir))
+}
+
+/** Content hash over the WHOLE non-hidden step set (dir names + raw step.json bytes). Any
+ *  add/remove/edit changes it, including a malformed new directory. */
+function stepSetHash(steps: readonly DiskStep[]): string {
+  const canon = JSON.stringify(steps.map((s) => ({ dir: s.dir, raw: s.raw })))
+  return createHash("sha256").update(canon).digest("hex")
+}
+
+/** Canonical descriptor form used for byte-for-byte parity (fixed key order). */
+function canonDescriptors(descriptors: readonly StepDescriptor[]): string {
+  const norm = [...descriptors]
+    .sort((a, b) => a.id.localeCompare(b.id))
+    .map((d) => ({
+      id: d.id,
+      order: d.order,
+      requires: [...d.requires].sort(),
+      title: d.title ?? null,
+      description: d.description ?? null,
+    }))
+  return JSON.stringify(norm)
+}
+
+/** Validate every disk step; return descriptors or the list of fail-closed errors. */
+function validateAll(steps: readonly DiskStep[]): { ok: true; descriptors: StepDescriptor[] } | { ok: false; errors: string[] } {
+  const descriptors: StepDescriptor[] = []
+  const errors: string[] = []
+  for (const s of steps) {
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(s.raw)
+    } catch (err) {
+      errors.push(`${s.dir}: step.json is not valid JSON (${(err as Error).message})`)
+      continue
+    }
+    const v = validateDescriptor(parsed, s.dir)
+    if (!v.ok) {
+      errors.push(v.error)
+      continue
+    }
+    // A registered step MUST expose a default-exported module, or the generated import breaks.
+    const modFile = join(STEPS_DIR, s.dir, "index.ts")
+    if (!existsSync(modFile)) {
+      errors.push(`${s.dir}: missing index.ts (no step module to embed)`)
+      continue
+    }
+    if (!/export default/.test(readFileSync(modFile, "utf8"))) {
+      errors.push(`${s.dir}: index.ts has no 'export default' step module`)
+      continue
+    }
+    descriptors.push(v.descriptor)
+  }
+  return errors.length > 0 ? { ok: false, errors } : { ok: true, descriptors }
+}
+
+function tsStringify(value: unknown): string {
+  return JSON.stringify(value)
+}
+
+function renderRegistry(hash: string, descriptors: readonly StepDescriptor[]): string {
+  const sorted = [...descriptors].sort((a, b) => a.id.localeCompare(b.id))
+  const imports = sorted.map((d) => `import step_${d.id} from "./steps/${d.id}/index.ts"`).join("\n")
+  const descLines = sorted.map((d) => `  ${tsStringify(d)}`).join(",\n")
+  const modLines = sorted.map((d) => `  step_${d.id}`).join(",\n")
+  return `// GENERATED by script/gen-steps.ts — DO NOT EDIT BY HAND.
+// Regenerate: \`bun run script/gen-steps.ts\`. Verify: \`bun run script/gen-steps.ts --check\`.
+//
+// Build-time STATIC step registry so the COMPILED swarm-setup (bun --compile, which does not
+// embed directories) can enumerate AND embed every step (row-106 blocker H-R106). Source/dev/
+// tests keep the directory scan in steps.ts; steps.ts switches posture on isCompiledBinary().
+// The parity gate (--check) fails the build if this file drifts from src/steps/*.
+//
+// Content hash of the step set (sorted dir names + raw step.json bytes):
+export const STEPS_GEN_HASH = ${tsStringify(hash)}
+
+import type { StepDescriptor } from "./step-descriptor.ts"
+${imports}
+
+/** Validated descriptors, one per registered step (equals the source-mode directory scan). */
+export const GENERATED_DESCRIPTORS: readonly StepDescriptor[] = [
+${descLines},
+]
+
+/** The step modules themselves, statically imported so the compiler embeds their code into
+ *  the single binary. Ordered to match GENERATED_DESCRIPTORS. Execution wiring (rows 86-90)
+ *  consumes these; discovery/ordering uses GENERATED_DESCRIPTORS. */
+export const GENERATED_MODULES: readonly unknown[] = [
+${modLines},
+]
+`
+}
+
+async function main(): Promise<void> {
+  const check = process.argv.slice(2).includes("--check")
+  const steps = readDiskSteps()
+  const hash = stepSetHash(steps)
+  const validated = validateAll(steps)
+
+  if (!validated.ok) {
+    console.error("REGISTRY_GEN_FAIL: step set is not clean:")
+    for (const e of validated.errors) console.error(`  - ${e}`)
+    process.exit(1)
+  }
+  const descriptors = validated.descriptors
+
+  if (check) {
+    if (!existsSync(OUT_FILE)) {
+      console.error("REGISTRY_STALE: src/steps.gen.ts does not exist — run gen-steps first")
+      process.exit(1)
+    }
+    let embeddedHash: string
+    let embeddedDescriptors: readonly StepDescriptor[]
+    try {
+      // Importing the generated file also proves its module imports still resolve.
+      const reg = await import(OUT_FILE)
+      embeddedHash = String(reg.STEPS_GEN_HASH)
+      embeddedDescriptors = reg.GENERATED_DESCRIPTORS as readonly StepDescriptor[]
+    } catch (err) {
+      console.error(`REGISTRY_STALE: cannot load committed registry (${(err as Error).message})`)
+      process.exit(1)
+    }
+    const diskCanon = canonDescriptors(descriptors)
+    const embCanon = canonDescriptors(embeddedDescriptors)
+    if (embeddedHash !== hash) {
+      console.error(`REGISTRY_STALE: step-set hash differs\n  disk=${hash}\n  registry=${embeddedHash}`)
+      process.exit(1)
+    }
+    if (diskCanon !== embCanon) {
+      console.error("REGISTRY_STALE: descriptors differ from disk scan")
+      console.error(`  disk=${diskCanon}\n  registry=${embCanon}`)
+      process.exit(1)
+    }
+    console.log(`REGISTRY_PARITY_OK: ${descriptors.length} steps, hash ${hash}`)
+    process.exit(0)
+  }
+
+  const body = renderRegistry(hash, descriptors)
+  writeFileSync(OUT_FILE, body, { encoding: "utf8" })
+  console.log(`REGISTRY_GEN_OK: wrote src/steps.gen.ts (${descriptors.length} steps) hash ${hash}`)
+  console.log(`  steps: ${[...descriptors].sort((a, b) => a.id.localeCompare(b.id)).map((d) => d.id).join(", ")}`)
+}
+
+await main()

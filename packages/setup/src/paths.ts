@@ -89,4 +89,18 @@ export function stepsRoot(): string {
   return join(import.meta.dir, "steps")
 }
 
+/**
+ * True when running as a `bun build --compile` single-file binary (vs `bun run`/`bun test`
+ * on source). Verified empirically on bun 1.3.14 this session:
+ *   - compiled: import.meta.url = "file:///$bunfs/root/<name>" and existsSync(import.meta.dir)=false
+ *   - source:   import.meta.url = "file:///.../src/index.ts"      and existsSync(import.meta.dir)=true
+ *   - Bun.isCompiled is UNDEFINED in BOTH modes on 1.3.14, so it is NOT used.
+ * Both signals agree here; OR them so detection stays correct even if the virtual-FS marker
+ * string changes across bun versions. This gates step discovery: source uses the directory
+ * scan, the compiled binary uses the embedded registry (steps.gen.ts) — see steps.ts.
+ */
+export function isCompiledBinary(): boolean {
+  return import.meta.url.includes("$bunfs") || !existsSync(import.meta.dir)
+}
+
 export const PROGRAM = PROGRAM_NAME
