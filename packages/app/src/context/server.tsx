@@ -2,7 +2,7 @@ import { createSimpleContext } from "@opencode-ai/ui/context"
 import { type Accessor, batch, createMemo } from "solid-js"
 import { createStore, type SetStoreFunction, type Store } from "solid-js/store"
 import { Persist, persisted } from "@/utils/persist"
-import { pathKey } from "@/utils/path-key"
+import { canonicalPathKey } from "@/utils/path-key"
 import { ServerScope } from "@/utils/server-scope"
 
 type StoredProject = { worktree: string; expanded: boolean }
@@ -84,6 +84,10 @@ export function createServerProjects<T extends ServerProjectState>(input: {
   const setStore = input.setStore as unknown as SetStoreFunction<ServerProjectState>
   const current = () => input.store.projects[input.scope()] ?? []
   const currentClosed = () => input.store.recentlyClosed?.[input.scope()] ?? []
+  // Deliberately raw on purpose. Besides close(), the sandbox/worktree normalisation effect in
+  // context/layout.tsx calls this with a sandbox path to drop that exact entry while opening its
+  // root, so widening the match to the canonical key would change which entries get removed — that
+  // is a different semantics decision than tolerating two spellings of one directory in the dedups.
   const remove = (directory: string) => {
     setStore(
       "projects",
@@ -97,29 +101,37 @@ export function createServerProjects<T extends ServerProjectState>(input: {
     remove,
     open(directory: string) {
       const scope = input.scope()
-      const key = pathKey(directory)
+      // Both dedups below answer "is this the same directory?" between a caller-supplied path (which
+      // can be the server's realpath'd spelling) and stored entries (which keep whatever spelling the
+      // picker emitted), so they compare canonical keys. Only raw strings are ever written: the entry
+      // that stays is either an existing worktree or the caller's own `directory`, never a derived
+      // key, so the raw lookups below and the child-store / localStorage names minted from them keep
+      // addressing a real path.
+      const key = canonicalPathKey(directory)
       const closed = currentClosed()
-      if (closed.some((worktree) => pathKey(worktree) === key)) {
+      if (closed.some((worktree) => canonicalPathKey(worktree) === key)) {
         setStore(
           "recentlyClosed",
           scope,
-          closed.filter((worktree) => pathKey(worktree) !== key),
+          closed.filter((worktree) => canonicalPathKey(worktree) !== key),
         )
       }
-      if (current().some((project) => project.worktree === directory)) return
+      if (current().some((project) => canonicalPathKey(project.worktree) === key)) return
       setStore("projects", scope, [{ worktree: directory, expanded: true }, ...current()])
     },
     // User-initiated close: removes the project and records it in recently closed.
     // Internal, non-user removals (e.g. sandbox/worktree normalization) should use remove().
     close(directory: string) {
       remove(directory)
-      const key = pathKey(directory)
-      const closed = [directory, ...currentClosed().filter((worktree) => pathKey(worktree) !== key)].slice(
+      const key = canonicalPathKey(directory)
+      const closed = [directory, ...currentClosed().filter((worktree) => canonicalPathKey(worktree) !== key)].slice(
         0,
         RECENTLY_CLOSED_HISTORY_LIMIT,
       )
       setStore("recentlyClosed", input.scope(), closed)
     },
+    // expand/collapse/move look up by exact stored string: their callers pass worktrees read back out
+    // of this same list (sidebar rows, drag reorder), so they never cross spellings.
     expand(directory: string) {
       const index = current().findIndex((project) => project.worktree === directory)
       if (index !== -1) setStore("projects", input.scope(), index, "expanded", true)
@@ -143,6 +155,25 @@ export function createServerProjects<T extends ServerProjectState>(input: {
       setStore("lastProject", input.scope(), directory)
     },
   }
+}
+
+// Which stored "recently closed" worktrees are still known to the server. Both call sites
+// (context/global.tsx and context/layout.tsx) build the set from sync.data.project — the server's
+// realpath'd spelling of each project directory — and look client-stored worktree strings up in it.
+// That is a spelling-crossing comparison, so both sides go through canonicalPathKey; a raw pathKey
+// here silently drops a project from the Home "recently closed" list purely because macOS served
+// the same directory under /private/var.
+//
+// The returned values are RAW strings taken verbatim from `input.closed`, never keys: callers open
+// them, feed them to enrich()/sync.child() and mint per-workspace storage names from them, all of
+// which must keep addressing the string the app has already been using.
+export function visibleRecentlyClosed(input: {
+  known: readonly { worktree: string }[]
+  closed: readonly string[]
+  limit: number
+}) {
+  const keys = new Set(input.known.map((project) => canonicalPathKey(project.worktree)))
+  return input.closed.filter((worktree) => keys.has(canonicalPathKey(worktree))).slice(0, input.limit)
 }
 
 export function resolveServerList(input: {

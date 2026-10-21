@@ -5,12 +5,11 @@ import { createSimpleContext } from "@opencode-ai/ui/context"
 import { makeEventListener } from "@solid-primitives/event-listener"
 import { useServerSync } from "./server-sync"
 import { useServerSDK } from "./server-sdk"
-import { RECENTLY_CLOSED_DISPLAY_LIMIT, ServerConnection, useServer } from "./server"
+import { RECENTLY_CLOSED_DISPLAY_LIMIT, ServerConnection, useServer, visibleRecentlyClosed } from "./server"
 import { usePlatform } from "./platform"
 import { Project } from "@opencode-ai/sdk/v2"
 import { normalizeProjectInfo } from "./global-sync/utils"
 import { Persist, persisted, removePersisted } from "@/utils/persist"
-import { pathKey } from "@/utils/path-key"
 import { decode64 } from "@/utils/base64"
 import { same } from "@/utils/same"
 import { createScrollPersistence, type SessionScroll } from "./layout-scroll"
@@ -443,8 +442,13 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
     }
 
     function enrich(project: { worktree: string; expanded: boolean }) {
+      // Key derivation, not a comparison: serverSync().child() addresses the per-workspace child
+      // store (and through it the persisted per-workspace storage name) by this exact string.
       const [childStore] = serverSync().child(project.worktree, { bootstrap: false })
       const projectID = childStore.project
+      // Raw string compare, left alone deliberately: it normalises nothing today, it only runs when
+      // the child store carries no project id, and a miss costs the display its server metadata —
+      // the returned object still spreads `...project`, so a usable worktree path survives.
       const metadata = projectID
         ? serverSync().data.project.find((x) => x.id === projectID)
         : serverSync().data.project.find((x) => x.worktree === project.worktree)
@@ -632,16 +636,20 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
       },
       projects: {
         list,
-        recentlyClosed: createMemo(() => {
-          const known = new Set(serverSync().data.project.map((project) => pathKey(project.worktree)))
-          return server.projects
-            .recentlyClosed()
-            .filter((worktree) => known.has(pathKey(worktree)))
-            .slice(0, RECENTLY_CLOSED_DISPLAY_LIMIT)
-            .map((worktree) => enrich({ worktree, expanded: false }))
-        }),
+        recentlyClosed: createMemo(() =>
+          visibleRecentlyClosed({
+            known: serverSync().data.project,
+            closed: server.projects.recentlyClosed(),
+            limit: RECENTLY_CLOSED_DISPLAY_LIMIT,
+          }).map((worktree) => enrich({ worktree, expanded: false })),
+        ),
         open(directory: string) {
           const root = rootFor(directory)
+          // Raw guard, left as-is: if it misses a cross-spelling duplicate, the call below now folds
+          // spellings inside createServerProjects.open(), so no second entry can reach the store and
+          // the only cost of a miss is one redundant loadSessions() fetch. Widening this lookup would
+          // also mean widening roots()/rootFor(), which map server-reported sandbox paths onto
+          // worktree roots and normalise nothing today.
           if (server.projects.list().find((x) => x.worktree === root)) return
           void serverSync().project.loadSessions(root)
           server.projects.open(root)

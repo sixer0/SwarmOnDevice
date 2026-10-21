@@ -1,5 +1,4 @@
 import type { Session } from "@opencode-ai/sdk/v2/client"
-import { preloadMarkdown } from "@opencode-ai/session-ui/markdown-cache"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { useQuery } from "@tanstack/solid-query"
 import { DateTime } from "luxon"
@@ -17,7 +16,7 @@ import { ServerConnection } from "@/context/server"
 import { sessionHasOpenTab, useTabs } from "@/context/tabs"
 import { compareSessionTime, displayName, errorMessage, projectForSession } from "@/pages/layout/helpers"
 import { useSessionTabAvatarState } from "@/pages/layout/project-avatar-state"
-import { pathKey } from "@/utils/path-key"
+import { canonicalPathKey, pathKey } from "@/utils/path-key"
 import { showToast } from "@/utils/toast"
 import { Binary } from "@opencode-ai/core/util/binary"
 import { archiveHomeSession } from "../home-session-archive"
@@ -112,16 +111,19 @@ export function createHomeSessionsController(home: HomeController) {
           try {
             void ctx.sync.session
               .sync(record.session.id)
-              .then(() =>
-                Promise.all(
+              .then(async () => {
+                // Heavy browser-only module (pulls a Vite worker URL); loaded lazily so this
+                // controller stays importable outside the bundle, per the repo dynamic-import rule.
+                const { preloadMarkdown } = await import("@opencode-ai/session-ui/markdown-cache")
+                return Promise.all(
                   (ctx.sync.session.data.message[record.session.id] ?? []).flatMap((message) =>
                     (ctx.sync.session.data.part[message.id] ?? []).flatMap((part) => {
                       if (part.type !== "text" || !part.text) return []
                       return preloadMarkdown(part.text, part.id)
                     }),
                   ),
-                ),
-              )
+                )
+              })
               .catch(() => {})
               .finally(dispose)
           } catch {
@@ -179,14 +181,14 @@ export function createHomeSessionsController(home: HomeController) {
       canCreate: () => !!home.project.newSession(),
       create: home.project.openNewSession,
       open: (session: Session, options?: OpenSessionOptions) => {
-        const directoryKey = pathKey(session.directory)
+        const directoryKey = canonicalPathKey(session.directory)
         const project =
           home.project
             .list()
             .find(
               (item) =>
-                pathKey(item.worktree) === directoryKey ||
-                item.sandboxes?.some((sandbox) => pathKey(sandbox) === directoryKey),
+                canonicalPathKey(item.worktree) === directoryKey ||
+                item.sandboxes?.some((sandbox) => canonicalPathKey(sandbox) === directoryKey),
             ) ?? projectForSession(session, home.project.list(), projectByID())
         const conn = home.server.focused()
         if (!conn) return
@@ -247,24 +249,25 @@ function directories(project: LocalProject) {
   return [project.worktree, ...(project.sandboxes ?? [])]
 }
 
-function buildHomeSessionRecords(input: {
+export function buildHomeSessionRecords(input: {
   sessions: () => Session[]
   projectDirectories: () => string[]
   projects: () => LocalProject[]
   projectByID: () => Map<string, LocalProject>
 }) {
-  const directories = new Set(input.projectDirectories().map(pathKey))
-  const sessions = input.sessions().filter((session) => directories.has(pathKey(session.directory)))
+  const directories = new Set(input.projectDirectories().map(canonicalPathKey))
+  const sessions = input.sessions().filter((session) => directories.has(canonicalPathKey(session.directory)))
   return [...new Map(sessions.map((session) => [session.id, session] as const)).values()]
     .sort(compareSessionTime)
     .flatMap((session) => {
-      const directory = pathKey(session.directory)
+      const directory = canonicalPathKey(session.directory)
       const project =
         input
           .projects()
           .find(
             (item) =>
-              pathKey(item.worktree) === directory || item.sandboxes?.some((sandbox) => pathKey(sandbox) === directory),
+              canonicalPathKey(item.worktree) === directory ||
+              item.sandboxes?.some((sandbox) => canonicalPathKey(sandbox) === directory),
           ) ?? projectForSession(session, input.projects(), input.projectByID())
       if (!project) return []
       return { session, project, projectName: displayName(project) }

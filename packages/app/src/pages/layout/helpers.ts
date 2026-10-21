@@ -1,6 +1,6 @@
 import { getFilename } from "@opencode-ai/core/util/path"
 import { type Session } from "@opencode-ai/sdk/v2/client"
-import { pathKey } from "@/utils/path-key"
+import { canonicalPathKey } from "@/utils/path-key"
 import type { ServerConnection } from "@/context/server"
 import type { HomeProjectSelection } from "@/context/layout"
 
@@ -15,8 +15,13 @@ export function compareSessionTime(a: Session, b: Session) {
   return a.id < b.id ? -1 : a.id > b.id ? 1 : 0
 }
 
+// Client-stored directories and server-reported session directories can name one macOS directory in
+// two spellings (/var/… vs /private/var/…); comparisons fold through canonicalPathKey, while nothing
+// here mints a persisted or cache key.
 const isRootVisibleSession = (session: Session, directory: string) =>
-  pathKey(session.directory) === pathKey(directory) && !session.parentID && !session.time?.archived
+  canonicalPathKey(session.directory) === canonicalPathKey(directory) &&
+  !session.parentID &&
+  !session.time?.archived
 
 export const roots = (store: SessionStore) =>
   (store.session ?? []).filter((session) => isRootVisibleSession(session, store.path.directory))
@@ -101,10 +106,11 @@ export function projectForSession<T extends { id?: string; worktree: string; san
 ) {
   const direct = byID.get(session.projectID)
   if (direct) return direct
-  const directory = pathKey(session.directory)
+  const directory = canonicalPathKey(session.directory)
   return projects.find(
     (project) =>
-      pathKey(project.worktree) === directory || project.sandboxes?.some((sandbox) => pathKey(sandbox) === directory),
+      canonicalPathKey(project.worktree) === directory ||
+      project.sandboxes?.some((sandbox) => canonicalPathKey(sandbox) === directory),
   )
 }
 
@@ -117,12 +123,15 @@ export const errorMessage = (err: unknown, fallback: string) => {
   return fallback
 }
 
+// Matching keys below are function-local and never persisted: the map values (and the returned array)
+// stay raw directory strings exactly as supplied, so folding the comparison keys cannot change any
+// stored spelling — it only lets a server-spelled persisted entry find its live counterpart.
 export const effectiveWorkspaceOrder = (local: string, dirs: string[], persisted?: string[]) => {
-  const root = pathKey(local)
+  const root = canonicalPathKey(local)
   const live = new Map<string, string>()
 
   for (const dir of dirs) {
-    const key = pathKey(dir)
+    const key = canonicalPathKey(dir)
     if (key === root) continue
     if (!live.has(key)) live.set(key, dir)
   }
@@ -131,7 +140,7 @@ export const effectiveWorkspaceOrder = (local: string, dirs: string[], persisted
 
   const result = [local]
   for (const dir of persisted) {
-    const key = pathKey(dir)
+    const key = canonicalPathKey(dir)
     if (key === root) continue
     const match = live.get(key)
     if (!match) continue

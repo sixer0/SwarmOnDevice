@@ -16,7 +16,7 @@ import { ProjectAvatar } from "@opencode-ai/ui/v2/project-avatar-v2"
 import { getProjectAvatarVariant } from "@/context/layout"
 import { useLanguage } from "@/context/language"
 import { displayName, getProjectAvatarSource } from "@/pages/layout/helpers"
-import { pathKey } from "@/utils/path-key"
+import { canonicalPathKey, pathKey } from "@/utils/path-key"
 import { handleDocumentSearchKeydown } from "@/utils/search-keydown"
 import { createMenuDismissController } from "@/utils/menu-dismiss-controller"
 
@@ -56,14 +56,18 @@ export function createPromptProjectController(input: {
   const [store, setStore] = createStore({ open: false, search: "", active: "" })
   let searchRef: HTMLInputElement | undefined
 
+  // The composer's directory is server-reported while available projects are client-stored, so this
+  // lookup crosses spellings and folds. The select() guard below compares two client-stored worktrees
+  // from the same list — it never crosses spellings and deliberately keeps plain pathKey.
   const current = () => {
-    const key = pathKey(input.controls().directory)
+    const key = canonicalPathKey(input.controls().directory)
     return input
       .controls()
       .available.find(
         (project) =>
           (!project.server || project.server.key === input.controls().server) &&
-          (pathKey(project.worktree) === key || project.sandboxes?.some((sandbox) => pathKey(sandbox) === key)),
+          (canonicalPathKey(project.worktree) === key ||
+            project.sandboxes?.some((sandbox) => canonicalPathKey(sandbox) === key)),
       )
   }
   const selected = () => current() ?? input.controls().available[0]

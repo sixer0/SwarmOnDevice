@@ -18,7 +18,7 @@ import { type Session } from "@opencode-ai/sdk/v2/client"
 import { type LocalProject } from "@/context/layout"
 import { useServerSync, useQueryOptions } from "@/context/server-sync"
 import { useLanguage } from "@/context/language"
-import { pathKey } from "@/utils/path-key"
+import { canonicalPathKey, pathKey } from "@/utils/path-key"
 import { NewSessionItem, SessionItem, SessionSkeleton } from "./sidebar-items"
 import { sortedRootSessions } from "./helpers"
 import { useIsFetching } from "@tanstack/solid-query"
@@ -314,7 +314,10 @@ export const SortableWorkspace = (props: {
   const slug = createMemo(() => base64Encode(props.directory))
   const sessions = createMemo(() => sortedRootSessions(workspaceStore, props.sortNow()))
   const local = createMemo(() => props.directory === props.project.worktree)
-  const active = createMemo(() => pathKey(props.ctx.currentDir()) === pathKey(props.directory))
+  // Active-state equality crosses spellings (the route directory can be server-resolved while
+  // props.directory is the client-stored worktree), so it folds. The sessions query keys below stay
+  // raw pathKey: they must keep matching the cache identity minted by the sync layer.
+  const active = createMemo(() => canonicalPathKey(props.ctx.currentDir()) === canonicalPathKey(props.directory))
   const workspaceValue = createMemo(() => {
     const branch = workspaceStore.vcs?.branch
     const name = branch ?? getFilename(props.directory)

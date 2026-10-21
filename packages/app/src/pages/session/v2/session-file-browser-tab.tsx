@@ -12,7 +12,7 @@ import { displayName } from "@/pages/layout/helpers"
 import { useSessionLayout } from "@/pages/session/session-layout"
 import { SessionFileView } from "@/pages/session/file-tabs"
 import { applyFileListKeyDown, SessionFileListV2 } from "@/pages/session/v2/session-file-list-v2"
-import { pathKey } from "@/utils/path-key"
+import { canonicalPathKey } from "@/utils/path-key"
 
 const emptyFiles: string[] = []
 
@@ -65,13 +65,16 @@ export function SessionFileBrowserTab(props: {
     return values[0]
   })
   const loading = createMemo(() => query().length > 0 && search.isPending)
+  // sdk().directory is the server-reported session directory while layout projects are client-stored;
+  // the lookup must fold the two macOS spellings. Nothing here mints a storage or cache key.
   const project = createMemo(() => {
-    const directory = pathKey(sdk().directory)
+    const directory = canonicalPathKey(sdk().directory)
     return layout.projects
       .list()
       .find(
         (item) =>
-          pathKey(item.worktree) === directory || item.sandboxes?.some((sandbox) => pathKey(sandbox) === directory),
+          canonicalPathKey(item.worktree) === directory ||
+          item.sandboxes?.some((sandbox) => canonicalPathKey(sandbox) === directory),
       )
   })
   const title = createMemo(() => displayName(project() ?? { worktree: sdk().directory }))

@@ -1,8 +1,13 @@
 import { createSimpleContext } from "@opencode-ai/ui/context"
 import { createEffect, createMemo, createRoot } from "solid-js"
 import { createStore } from "solid-js/store"
-import { createServerProjects, RECENTLY_CLOSED_DISPLAY_LIMIT, ServerConnection, useServer } from "./server"
-import { pathKey } from "@/utils/path-key"
+import {
+  createServerProjects,
+  RECENTLY_CLOSED_DISPLAY_LIMIT,
+  ServerConnection,
+  useServer,
+  visibleRecentlyClosed,
+} from "./server"
 import { useServerHealth } from "@/utils/server-health"
 import { createServerSdkContext } from "./server-sdk"
 import { createServerSyncContext } from "./server-sync"
@@ -111,8 +116,15 @@ function createServerCtx(
   const sync = createServerSyncContext(sdk)
 
   function enrich(project: { worktree: string; expanded: boolean }) {
+    // Key derivation, not a comparison: sync.child() addresses the per-workspace child store (and
+    // through it the persisted per-workspace storage name) by this exact string, so it stays raw.
     const [childStore] = sync.child(project.worktree, { bootstrap: false })
     const projectID = childStore.project
+    // The worktree fallback below is a raw string compare between a server project and a client
+    // stored path. Left alone deliberately: it normalises nothing today (so folding it is a wider
+    // semantics change than this row's dedup mandate), it only runs when the child store carries no
+    // project id, and a miss costs the display its server metadata — the returned object still
+    // spreads `...project`, so the usable worktree path survives.
     const metadata = projectID
       ? sync.data.project.find((x) => x.id === projectID)
       : sync.data.project.find((x) => x.worktree === project.worktree)
@@ -128,14 +140,13 @@ function createServerCtx(
   }
 
   const projectsList = createMemo(() => projects.list().map(enrich))
-  const recentlyClosedList = createMemo(() => {
-    const known = new Set(sync.data.project.map((project) => pathKey(project.worktree)))
-    return projects
-      .recentlyClosed()
-      .filter((worktree) => known.has(pathKey(worktree)))
-      .slice(0, RECENTLY_CLOSED_DISPLAY_LIMIT)
-      .map((worktree) => enrich({ worktree, expanded: false }))
-  })
+  const recentlyClosedList = createMemo(() =>
+    visibleRecentlyClosed({
+      known: sync.data.project,
+      closed: projects.recentlyClosed(),
+      limit: RECENTLY_CLOSED_DISPLAY_LIMIT,
+    }).map((worktree) => enrich({ worktree, expanded: false })),
+  )
 
   const isLocal =
     (conn?.type === "sidecar" && conn.variant === "base") || (conn?.type === "http" && isLocalHost(conn.http.url))
