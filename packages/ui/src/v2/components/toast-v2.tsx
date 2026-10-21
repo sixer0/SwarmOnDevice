@@ -9,6 +9,17 @@ import "./toast-v2.css"
 
 export interface ToastV2RegionProps extends ToasterProps {}
 
+/**
+ * i18n key for the toast region's accessible name. solid-sonner composes its own label out of
+ * `containerAriaLabel` plus its hotkey label, which put an English-only region name with a keyboard
+ * hint on screen in every locale, so this component names the region itself. The hint goes with the
+ * English word: that shortcut does expand toasts inside the vendor, but no command in this product's
+ * registry binds it and the Shortcuts settings list never shows it, so announcing it was a hint a
+ * user could never find in the UI.
+ * Key pending from the merged i18n row; see docs/2026-10-19_opencode_swarm_rebrand/delegation_progress/coder_execution_r170.md.
+ */
+export const TOAST_V2_REGION_ARIA_KEY = "ui.toast.ariaLabel"
+
 function ToastV2Region(props: ToastV2RegionProps) {
   const i18n = useI18n()
   const [local, rest] = splitProps(props, ["class", "className", "style", "toastOptions", "swipeDirections"])
@@ -47,6 +58,7 @@ function ToastV2Region(props: ToastV2RegionProps) {
   return (
     <Portal>
       <Toaster
+        customAriaLabel={i18n.t(TOAST_V2_REGION_ARIA_KEY)}
         position={isRTL(i18n.locale()) ? "bottom-left" : "bottom-right"}
         offset={isRTL(i18n.locale()) ? { left: 32, bottom: 48 } : { right: 32, bottom: 48 }}
         mobileOffset={16}

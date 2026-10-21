@@ -75,6 +75,30 @@ const pluralCategories = new Map(
   ),
 )
 
+// Narrow presence-only exemption, branch B of the 2026-10-21 i18n propagation decision
+// (`docs/2026-10-19_opencode_swarm_rebrand/decisions/decisions.md`: "A if a credential exists, else B";
+// no credential was supplied). Three keys landed in the `en` and `id` tables only, ahead of the
+// translation lane, so this list excuses PRESENCE of exactly those keys in every locale other than
+// `en` and `id`. It does not change what any other assertion checks: values, placeholders, plural
+// variants and `extra` keys are still enforced for these same keys once a locale carries them.
+// Proper closure is `bun run translate:app -- all`, which translates them and retires this list.
+// Each key exists in exactly one domain's `en.ts`, so relief can only ever fire where the key is real:
+// `command.project.openNumber` and `settings.tab.servers` live in the app table, `ui.toast.ariaLabel`
+// in the ui table (row 170's accessible region name — see packages/ui/src/v2/components/toast-v2.tsx:21).
+// Do NOT add entries here: `parity-exemption-guard.test.ts` fails the suite on a fourth key.
+const UNTRANSLATED_KEY_PRESENCE_EXEMPTION: readonly string[] = [
+  "command.project.openNumber",
+  "settings.tab.servers",
+  "ui.toast.ariaLabel",
+]
+// Locales the exemption never applies to. `en` is every domain's source, and `id` is the second
+// maintained locale: it already carries all three keys, so it stays fully enforced like the rest.
+const NEVER_EXEMPT_LOCALES: readonly string[] = ["en", "id"]
+
+function exemptFromPresence(key: string, locale: string) {
+  return UNTRANSLATED_KEY_PRESENCE_EXEMPTION.includes(key) && !NEVER_EXEMPT_LOCALES.includes(locale)
+}
+
 const domains = [
   {
     name: "app",
@@ -102,7 +126,9 @@ describe("i18n parity", () => {
       const source = await dictionary(domain.source)
       for (const locale of domain.locales) {
         const target = await dictionary(domain.target(locale))
-        const missing = Object.keys(source).filter((key) => !Object.hasOwn(target, key))
+        const missing = Object.keys(source).filter(
+          (key) => !Object.hasOwn(target, key) && !exemptFromPresence(key, locale),
+        )
         const extra = Object.keys(target)
           .filter((key) => !Object.hasOwn(source, key))
           .sort()
