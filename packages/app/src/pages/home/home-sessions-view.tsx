@@ -506,6 +506,15 @@ function HomeSessionProjectName(props: { name: string; search?: boolean }) {
   )
 }
 
+// The pane may only invite what it can actually perform. With a create-session
+// affordance present the invitation stays the imperative "Create a session to get
+// started"; without one (a project-less home, F-137-1) it names the action whose
+// button is on screen — opening a local project — using the existing dictionary
+// entry, so copy and capability cannot drift apart again.
+export function homeSessionsEmptyDescriptionKey(hasCreateAffordance: boolean) {
+  return hasCreateAffordance ? "home.sessions.empty.description" : "home.empty.description"
+}
+
 function HomeSessionsEmpty(props: { onNewSession?: () => void; language: ReturnType<typeof useLanguage> }) {
   return (
     <div class="flex min-h-full flex-col items-center gap-4 px-6 pt-[52px] text-center">
@@ -523,7 +532,7 @@ function HomeSessionsEmpty(props: { onNewSession?: () => void; language: ReturnT
           text-v2-text-text-muted [font-weight:440]
         `}
       >
-        {props.language.t("home.sessions.empty.description")}
+        {props.language.t(homeSessionsEmptyDescriptionKey(props.onNewSession !== undefined))}
       </p>
       <Show when={props.onNewSession}>
         {(onNewSession) => (

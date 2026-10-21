@@ -311,6 +311,19 @@ export function Titlebar(props: { update?: TitlebarUpdate; debugTools?: { visibl
 
               tabs.newDraft({ server: fallback.server, directory: fallback.project.worktree }, "")
             }
+            // Mirrors openNewTab's reachability exactly: that handler creates a draft when it is on a
+            // loaded session, on a draft tab, or can resolve some project's directory; with no project
+            // anywhere it returns without effect, so the control must not look usable (F-137-1).
+            const canOpenNewTab = createMemo(() =>
+              canCreateNewTab({
+                onActiveSession: layout.route().type === "session" && !!session(),
+                onDraftTab: currentTab()?.type === "draft",
+                hasAnyProject:
+                  !!layout.projects.list()[0] ||
+                  global.servers.list().some((conn) => !!global.ensureServerCtx(conn).projects.list()[0]),
+              }),
+            )
+
             const toggleHome = () => tabs.toggleHome({ home: layout.route().type === "home", current: currentTab() })
 
             command.register("titlebar-home", () => [
@@ -413,19 +426,28 @@ export function Titlebar(props: { update?: TitlebarUpdate; debugTools?: { visibl
                 <TooltipV2
                   placement="bottom"
                   value={
-                    <>
-                      {language.t("command.session.new")}
-                      <KeybindV2 keys={newTabTooltipKeybind(command)} variant="neutral" />
-                    </>
+                    canOpenNewTab() ? (
+                      <>
+                        {language.t("command.session.new")}
+                        <KeybindV2 keys={newTabTooltipKeybind(command)} variant="neutral" />
+                      </>
+                    ) : (
+                      // F-137-1: with no directory to bind a draft to, the control says why instead
+                      // of swallowing the click. The same sentence also shows as a native title,
+                      // which browsers still surface on a disabled button.
+                      language.t("home.empty.description")
+                    )
                   }
                 >
                   <IconButtonV2
                     type="button"
                     variant="ghost-muted"
                     size="large"
-                    class="shrink-0"
+                    class="shrink-0 disabled:pointer-events-none"
                     icon={<IconV2 name="plus" />}
-                    onClick={openNewTab}
+                    disabled={!canOpenNewTab()}
+                    title={canOpenNewTab() ? undefined : language.t("home.empty.description")}
+                    onClick={newSessionClickHandler({ canCreate: canOpenNewTab, onOpen: openNewTab })}
                     aria-label={language.t("command.session.new")}
                   />
                 </TooltipV2>
@@ -590,6 +612,32 @@ export function Titlebar(props: { update?: TitlebarUpdate; debugTools?: { visibl
       </Switch>
     </header>
   )
+}
+
+export type NewTabAvailability = {
+  // On a session route whose session record has loaded: the draft inherits its directory.
+  onActiveSession: boolean
+  // The current tab is an unsent draft: the draft inherits its server and directory.
+  onDraftTab: boolean
+  // At least one project exists on the default or any connected server.
+  hasAnyProject: boolean
+}
+
+// A new-session draft must bind to a server directory, and those are the only three
+// routes that supply one. When none applies, opening a session is impossible until a
+// project exists, so the caller must disable the control rather than accept the click
+// silently — the silence was the defect (F-137-1 as judged by row 151, D4 §6.1).
+export function canCreateNewTab(availability: NewTabAvailability) {
+  return availability.onActiveSession || availability.onDraftTab || availability.hasAnyProject
+}
+
+// Handler factory shared by every click path of the control: enabled-state and action
+// read the same availability signal, so the button can never be an enabled no-op again.
+export function newSessionClickHandler(input: { canCreate: () => boolean; onOpen: () => void }) {
+  return () => {
+    if (!input.canCreate()) return
+    input.onOpen()
+  }
 }
 
 type TitlebarUpdatePillState = {
