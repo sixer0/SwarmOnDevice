@@ -59,7 +59,7 @@ import { Titlebar, type TitlebarUpdate } from "@/components/titlebar"
 import { useDirectoryPicker } from "@/components/directory-picker"
 import { ServerConnection, useServer } from "@/context/server"
 import { useLanguage, type Locale } from "@/context/language"
-import { pathKey } from "@/utils/path-key"
+import { canonicalPathKey, pathKey } from "@/utils/path-key"
 import {
   displayName,
   effectiveWorkspaceOrder,
@@ -171,8 +171,11 @@ export default function LegacyLayout(props: ParentProps) {
   }
 
   const editor = createInlineEditorController()
+  // busyWorkspaces is transient component state (useState at :150), never persisted; its keys exist
+  // only to match a setBusy writer (e.g. the server-spelled directory returned by worktree.create)
+  // against isBusy readers (client-stored sidebar directories), so the membership folds spellings.
   const setBusy = (directory: string, value: boolean) => {
-    const key = pathKey(directory)
+    const key = canonicalPathKey(directory)
     if (value) {
       setState("busyWorkspaces", key, true)
       return
@@ -184,7 +187,7 @@ export default function LegacyLayout(props: ParentProps) {
       }),
     )
   }
-  const isBusy = (directory: string) => !!state.busyWorkspaces[pathKey(directory)]
+  const isBusy = (directory: string) => !!state.busyWorkspaces[canonicalPathKey(directory)]
   const navLeave = { current: undefined as number | undefined }
   const sortNow = () => state.sortNow
   let sizet: number | undefined
@@ -457,8 +460,9 @@ export default function LegacyLayout(props: ParentProps) {
         }
 
         const currentSession = params.id
-        if (pathKey(directory) === pathKey(currentDir()) && props.sessionID === currentSession) return
-        if (pathKey(directory) === pathKey(currentDir()) && session?.parentID === currentSession) return
+        if (canonicalPathKey(directory) === canonicalPathKey(currentDir()) && props.sessionID === currentSession) return
+        if (canonicalPathKey(directory) === canonicalPathKey(currentDir()) && session?.parentID === currentSession)
+          return
 
         dismissSessionAlert(sessionKey)
 
@@ -515,14 +519,15 @@ export default function LegacyLayout(props: ParentProps) {
   const currentProject = createMemo(() => {
     const directory = currentDir()
     if (!directory) return
-    const key = pathKey(directory)
+    // The route directory can carry either spelling while projects are client-stored: fold the lookup.
+    const key = canonicalPathKey(directory)
 
     const projects = layout.projects.list()
 
-    const sandbox = projects.find((p) => p.sandboxes?.some((item) => pathKey(item) === key))
+    const sandbox = projects.find((p) => p.sandboxes?.some((item) => canonicalPathKey(item) === key))
     if (sandbox) return sandbox
 
-    const direct = projects.find((p) => pathKey(p.worktree) === key)
+    const direct = projects.find((p) => canonicalPathKey(p.worktree) === key)
     if (direct) return direct
 
     const [child] = serverSync().child(directory, { bootstrap: false })
@@ -554,6 +559,9 @@ export default function LegacyLayout(props: ParentProps) {
     }
   })
 
+  // Deliberately raw pathKey on both read and write: store.workspaceName is persisted (persisted() at
+  // :88), so folding here would orphan names saved under the other spelling. Key minting, not a
+  // client-vs-server comparison.
   const workspaceName = (directory: string, projectId?: string, branch?: string) => {
     const key = pathKey(directory)
     const direct = store.workspaceName[key] ?? store.workspaceName[directory]
@@ -592,7 +600,7 @@ export default function LegacyLayout(props: ParentProps) {
     const activeDir = currentDir()
     return workspaceIds(project).filter((directory) => {
       const expanded = store.workspaceExpanded[directory] ?? directory === project.worktree
-      const active = pathKey(directory) === pathKey(activeDir)
+      const active = canonicalPathKey(directory) === canonicalPathKey(activeDir)
       return expanded || active
     })
   })
@@ -603,9 +611,10 @@ export default function LegacyLayout(props: ParentProps) {
     const projects = layout.projects.list()
     for (const [directory, expanded] of Object.entries(store.workspaceExpanded)) {
       if (!expanded) continue
-      const key = pathKey(directory)
+      const key = canonicalPathKey(directory)
       const project = projects.find(
-        (item) => pathKey(item.worktree) === key || item.sandboxes?.some((sandbox) => pathKey(sandbox) === key),
+        (item) =>
+          canonicalPathKey(item.worktree) === key || item.sandboxes?.some((sandbox) => canonicalPathKey(sandbox) === key),
       )
       if (!project) continue
       if (project.vcs === "git" && layout.sidebar.workspaces(project.worktree)()) continue
@@ -658,7 +667,7 @@ export default function LegacyLayout(props: ParentProps) {
       seen: lru,
       keep: sessionID,
       limit: PREFETCH_MAX_SESSIONS_PER_DIR,
-      preserve: params.id && pathKey(directory) === pathKey(currentDir()) ? [params.id] : undefined,
+      preserve: params.id && canonicalPathKey(directory) === canonicalPathKey(currentDir()) ? [params.id] : undefined,
     })
   }
 
@@ -1022,7 +1031,7 @@ export default function LegacyLayout(props: ParentProps) {
       commands.push({
         id: `project.${number}`,
         category: language.t("command.category.project"),
-        title: `Open Project {number}`,
+        title: language.t("command.project.openNumber", { number }),
         keybind: `mod+${number}`,
         disabled: layout.projects.list().length <= index,
         hidden: true,
@@ -1111,14 +1120,20 @@ export default function LegacyLayout(props: ParentProps) {
   }
 
   function projectRoot(directory: string) {
-    const key = pathKey(directory)
+    // Comparison-only fold: every value this function returns is a raw stored string (project.worktree,
+    // known[0], meta?.worktree), never a derived key, so persisted shapes are untouched.
+    const key = canonicalPathKey(directory)
     const project = layout.projects
       .list()
-      .find((item) => pathKey(item.worktree) === key || item.sandboxes?.some((sandbox) => pathKey(sandbox) === key))
+      .find(
+        (item) =>
+          canonicalPathKey(item.worktree) === key ||
+          item.sandboxes?.some((sandbox) => canonicalPathKey(sandbox) === key),
+      )
     if (project) return project.worktree
 
     const known = Object.entries(store.workspaceOrder).find(
-      ([root, dirs]) => pathKey(root) === key || dirs.some((item) => pathKey(item) === key),
+      ([root, dirs]) => canonicalPathKey(root) === key || dirs.some((item) => canonicalPathKey(item) === key),
     )
     if (known) return known[0]
 
@@ -1170,7 +1185,8 @@ export default function LegacyLayout(props: ParentProps) {
       : [root]
     const canOpen = (value: string | undefined) => {
       if (!value) return false
-      return dirs.some((item) => pathKey(item) === pathKey(value))
+      // target.directory arrives server-reported; dirs are client-stored workspaces.
+      return dirs.some((item) => canonicalPathKey(item) === canonicalPathKey(value))
     }
     const refreshDirs = async (target?: string) => {
       if (!target || target === root || canOpen(target)) return canOpen(target)
@@ -1179,7 +1195,9 @@ export default function LegacyLayout(props: ParentProps) {
       )
         .then((value) => (typeof value === "string" ? value : value.id))
         .then((projectID) => serverSDK().api.project.directories({ projectID, location: { directory: root } }))
-        .then((items) => items.map((item) => item.directory).filter((item) => pathKey(item) !== pathKey(root)))
+        .then((items) =>
+          items.map((item) => item.directory).filter((item) => canonicalPathKey(item) !== canonicalPathKey(root)),
+        )
         .catch(() => [] as string[])
       dirs = effectiveWorkspaceOrder(root, [root, ...listed], store.workspaceOrder[root])
       return canOpen(target)
@@ -1311,9 +1329,10 @@ export default function LegacyLayout(props: ParentProps) {
 
   function closeProject(directory: string) {
     const list = layout.projects.list()
-    const key = pathKey(directory)
-    const index = list.findIndex((x) => pathKey(x.worktree) === key)
-    const active = pathKey(currentProject()?.worktree ?? "") === key
+    // Folded lookup; the raw `directory` is what closes the project below, so storage is untouched.
+    const key = canonicalPathKey(directory)
+    const index = list.findIndex((x) => canonicalPathKey(x.worktree) === key)
+    const active = canonicalPathKey(currentProject()?.worktree ?? "") === key
     if (index === -1) return
 
     if (!active) {
@@ -1380,8 +1399,8 @@ export default function LegacyLayout(props: ParentProps) {
     if (directory === root) return
 
     const current = currentDir()
-    const currentKey = pathKey(current)
-    const deletedKey = pathKey(directory)
+    const currentKey = canonicalPathKey(current)
+    const deletedKey = canonicalPathKey(directory)
     const shouldLeave = leaveDeletedWorkspace || (!!params.dir && currentKey === deletedKey)
     if (!leaveDeletedWorkspace && shouldLeave) {
       navigateWithSidebarReset(`/${base64Encode(root)}/session`)
@@ -1404,7 +1423,7 @@ export default function LegacyLayout(props: ParentProps) {
 
     if (!result) return
 
-    if (pathKey(store.lastProjectSession[root]?.directory ?? "") === pathKey(directory)) {
+    if (canonicalPathKey(store.lastProjectSession[root]?.directory ?? "") === canonicalPathKey(directory)) {
       clearLastProjectSession(root)
     }
 
@@ -1424,12 +1443,12 @@ export default function LegacyLayout(props: ParentProps) {
     if (shouldLeave) return
 
     const nextCurrent = currentDir()
-    const nextKey = pathKey(nextCurrent)
+    const nextKey = canonicalPathKey(nextCurrent)
     const project = layout.projects.list().find((item) => item.worktree === root)
     const dirs = project
       ? effectiveWorkspaceOrder(root, [root, ...(project.sandboxes ?? [])], store.workspaceOrder[root])
       : [root]
-    const valid = dirs.some((item) => pathKey(item) === nextKey)
+    const valid = dirs.some((item) => canonicalPathKey(item) === nextKey)
 
     if (params.dir && projectRoot(nextCurrent) === root && !valid) {
       navigateWithSidebarReset(`/${base64Encode(root)}/session`)
@@ -1535,7 +1554,8 @@ export default function LegacyLayout(props: ParentProps) {
     })
 
     const handleDelete = () => {
-      const leaveDeletedWorkspace = !!params.dir && pathKey(currentDir()) === pathKey(props.directory)
+      const leaveDeletedWorkspace =
+        !!params.dir && canonicalPathKey(currentDir()) === canonicalPathKey(props.directory)
       if (leaveDeletedWorkspace) {
         navigateWithSidebarReset(`/${base64Encode(props.root)}/session`)
       }
@@ -1764,9 +1784,15 @@ export default function LegacyLayout(props: ParentProps) {
     const local = project.worktree
     const dirs = [local, ...(project.sandboxes ?? [])]
     const active = currentProject()
-    const directory = pathKey(active?.worktree ?? "") === pathKey(project.worktree) ? currentDir() : undefined
+    // The first equality compares two client-stored worktrees from the same list (never crosses
+    // spellings, so it stays plain pathKey); the other two compare the route's currentDir(), which can
+    // be server-resolved, against client-stored workspaces, so they fold.
+    const directory =
+      pathKey(active?.worktree ?? "") === pathKey(project.worktree) ? currentDir() : undefined
     const extra =
-      directory && pathKey(directory) !== pathKey(local) && !dirs.some((item) => pathKey(item) === pathKey(directory))
+      directory &&
+      canonicalPathKey(directory) !== canonicalPathKey(local) &&
+      !dirs.some((item) => canonicalPathKey(item) === canonicalPathKey(directory))
         ? directory
         : undefined
     const pending = extra ? WorktreeState.get(serverSDK().scope, extra)?.status === "pending" : false
@@ -1811,7 +1837,7 @@ export default function LegacyLayout(props: ParentProps) {
     setStore(
       "workspaceOrder",
       project.worktree,
-      result.filter((directory) => pathKey(directory) !== pathKey(project.worktree)),
+      result.filter((directory) => canonicalPathKey(directory) !== canonicalPathKey(project.worktree)),
     )
   }
 
@@ -1837,6 +1863,9 @@ export default function LegacyLayout(props: ParentProps) {
     setWorkspaceName(created.directory, created.branch ?? getFilename(created.directory), project.id, created.branch)
 
     const local = project.worktree
+    // key/root below mint persisted store keys (workspaceExpanded at :1845) — they stay raw pathKey so
+    // existing saved shapes survive; only the dedup comparison against stored order entries folds,
+    // letting a server-spelled older entry of the same directory be recognised and replaced.
     const key = pathKey(created.directory)
     const root = pathKey(local)
 
@@ -1849,8 +1878,8 @@ export default function LegacyLayout(props: ParentProps) {
     setStore("workspaceOrder", project.worktree, (prev) => {
       const existing = prev ?? []
       const next = existing.filter((item) => {
-        const id = pathKey(item)
-        return id !== root && id !== key
+        const id = canonicalPathKey(item)
+        return id !== canonicalPathKey(root) && id !== canonicalPathKey(key)
       })
       return [created.directory, ...next]
     })

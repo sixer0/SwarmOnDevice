@@ -73,7 +73,7 @@ export const DialogSettings: Component<{
                   <div class="flex flex-col gap-1.5 w-full">
                     <TabsV2.Trigger value="servers">
                       <Icon name="server" />
-                      {language.t("status.popover.tab.servers")}
+                      {language.t("settings.tab.servers")}
                     </TabsV2.Trigger>
                     <TabsV2.Trigger value="providers">
                       <Icon name="providers" />
