@@ -1843,6 +1843,7 @@ describe("(r267 F-251-1) the mode audit sees the user-editable path into contain
     const secDir = `${toolsRootOf(home)}/firecrawl/secrets`
     mkdirSync(secDir, { recursive: true, mode: 0o700 })
     writeFileSync(`${secDir}/proxy_token`, "x".repeat(40), { mode: 0o644 })
+    chmodSync(`${secDir}/proxy_token`, 0o644) // RQ-273gate-1: create mode is umask-masked (0600 under 077); chmod is not
     expect(codesIn(home)).toContain("MODE_SECRET_FILE")
   })
 

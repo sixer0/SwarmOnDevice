@@ -339,7 +339,12 @@ export function rollbackScopedUnits(entries: readonly CommitEntry[]): string[] {
   const rolledBack: string[] = []
   for (const entry of entries) {
     try {
-      if (entry.prior) atomicWriteText(entry.absPath, entry.prior.bytes, entry.prior.mode)
+      // Row 273b (row 265e F3): restore the prior bytes, but NEVER the group/other write bits. Since row
+      // 273 atomicWriteText lands the exact mode it is given, so restoring a pre-existing 0666/0777 file
+      // "exactly" would have the rollback itself re-publish a widened, tamperable file. The clamp only
+      // ever narrows (0666 -> 0644, 0777 -> 0755); every declared estate mode (0600/0644/0700) passes
+      // through it unchanged.
+      if (entry.prior) atomicWriteText(entry.absPath, entry.prior.bytes, entry.prior.mode & ~0o022)
       else if (existsSync(entry.absPath)) rmSync(entry.absPath)
       rolledBack.push(entry.absPath)
     } catch {

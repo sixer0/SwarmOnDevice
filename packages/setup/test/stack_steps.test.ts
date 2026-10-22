@@ -17,6 +17,7 @@
 
 import { describe, it, expect, beforeAll, afterAll } from "bun:test"
 import {
+  chmodSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -186,6 +187,7 @@ describe("(1) preconditions fail closed — missing secret is refused with a lis
     const p = `${home}/.swarm/tools/searxng/secrets/secret_key`
     rmSync(p, { force: true }) // recreate so the creation mode actually lands (writeFileSync mode is create-only)
     writeFileSync(p, "x".repeat(40) + "\n", { mode: 0o644 })
+    chmodSync(p, 0o644) // RQ-273gate-1: the create mode above is umask-masked (0600 under 077); chmod is not
     expect((statSync(p).mode & 0o077) !== 0).toBe(true) // fixture sanity: group bits really set
     const shim = greenShim()
     const kit = createStepKit({

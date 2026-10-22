@@ -10,9 +10,14 @@
 // (below), always with an argv ARRAY and an absolute-path binary, never a shell.
 
 declare module "node:fs" {
-  /** Mode-set on files THIS step created inside ~/.swarm/tools/node (P-4 permits chmod
-   *  inside the P-16 whitelist; the extracted Node binary must carry its exec bits). */
+  /** Mode-set by PATH. Callers (grep at row 273b): the node and rtk steps' staged binaries inside
+   *  ~/.swarm/tools (P-4 permits chmod inside the P-16 whitelist; an extracted binary must carry its
+   *  exec bits), and the 0700/0600 posture repair of ~/.swarm/setup and lanes.json in
+   *  composefiles/lanes.ts and estate/pins.ts. atomic.ts no longer uses it (row 273b, see fchmodSync). */
   export function chmodSync(path: string, mode: number): void
+  /** Mode-set on an OPEN file descriptor (row 273b, row 265e F1): atomic.ts sets the declared mode on
+   *  the temp inode it just created exclusively, so no swap of the temp name can redirect the change. */
+  export function fchmodSync(fd: number, mode: number): void
 }
 
 // Bun's own sync spawner — mirrors @types/bun for exactly the members row 87 uses.
