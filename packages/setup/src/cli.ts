@@ -19,7 +19,14 @@ import { VERBS, FLAGS, isComponentId, type ComponentId } from "./constants.ts"
 /** Row 199: re-wire config entries for components already recorded healthy. Not a register constant. */
 export const WIRE_VERB = "wire"
 
-export type Verb = "install" | "status" | "remove" | "wire" | "help"
+/** Row 246 (blueprint 11): re-render and recreate ONE stack from the stored lane tuple plus a fresh
+ *  DNS-pin produce. Same non-register status as `wire` — class 12 still holds three verbs
+ *  (`01c0_preinstall_register.md:25`: "changes this register first, never its own copy"), so the
+ *  fifth verb lives in the parse surface only until the register amendment lands. It takes exactly
+ *  one stack name; the refusal for anything else lives in estate/apply.ts, not here. */
+export const APPLY_VERB = "apply"
+
+export type Verb = "install" | "status" | "remove" | "wire" | "apply" | "help"
 
 export interface ParsedCommand {
   verb: Verb
@@ -78,7 +85,7 @@ export function parseArgs(argv: readonly string[]): ParseResult {
     // Positional token: either the verb or a component id.
     if (
       verb === undefined &&
-      (t === VERBS.INSTALL || t === VERBS.STATUS || t === VERBS.REMOVE || t === WIRE_VERB)
+      (t === VERBS.INSTALL || t === VERBS.STATUS || t === VERBS.REMOVE || t === WIRE_VERB || t === APPLY_VERB)
     ) {
       verb = t
       continue

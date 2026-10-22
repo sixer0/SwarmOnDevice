@@ -116,6 +116,10 @@ export type DockerRunner = (args: readonly string[]) => Promise<DockerResult>
 export interface StackStepContext {
   readonly docker?: DockerRunner
   readonly readiness?: ReadinessProbe
+  /** Row 246: pinned HOME for the configure-time lane write and the delivery stage. Absent means
+   *  "use the resolved home", which is what the shipped CLI does; a unit passes a sandbox so no test
+   *  has to mutate process.env.HOME to reach the write (rule E7's incident class). */
+  readonly home?: string
 }
 
 export function refusingRunner(_args: readonly string[]): Promise<DockerResult> {
@@ -332,6 +336,25 @@ export function containerInspectArgs(id: string): string[] {
     "{{.State.Running}} {{if .State.Health}}{{.State.Health.Status}}{{end}}",
     id,
   ]
+}
+
+/** Creation-time facts of one container, as ONE inspect leg (row 246's recreate measurement):
+ *  `.Created` and the compose config-hash label change exactly when compose replaces the
+ *  container, and `.Config.Env` is the environment the daemon fixed AT CREATION — the host-side
+ *  twin of what `/proc/1/environ` shows inside. Deliberately NOT `.State.*`: those change on a
+ *  start/stop of the SAME container, which would make a restart look like a recreate. */
+export const CONTAINER_CREATE_FORMAT =
+  '{{.Created}} {{index .Config.Labels "com.docker.compose.config-hash"}} {{json .Config.Env}}'
+
+export function containerCreateArgs(id: string): string[] {
+  return ["--context", DOCKER_CONTEXT, "inspect", "--format", CONTAINER_CREATE_FORMAT, id]
+}
+
+/** `docker exec <id> <cmd...>` — the read path row 246 uses to observe a value INSIDE the running
+ *  container instead of trusting the host-side record of what it was told (`/proc/1/environ`).
+ *  Read-only by construction: every command this builder can produce in this package is a `cat`. */
+export function containerExecArgs(id: string, cmd: readonly string[]): string[] {
+  return ["--context", DOCKER_CONTEXT, "exec", id, ...cmd]
 }
 
 export function containerRmArgs(id: string): string[] {

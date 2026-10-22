@@ -28,7 +28,9 @@ import { writeConfigEntries, checkSkillFiles, type WriteResult } from "./wiring/
 import { discoverSteps, orderSteps, type StepDescriptor } from "./steps.ts"
 import { GENERATED_MODULES_BY_ID } from "./steps.gen.ts"
 import type { StepContext, StepResult } from "./steps/_template/index.ts"
-import { firecrawlPlan, searxngPlan, type DockerRunner } from "./stacklib.ts"
+import { firecrawlPlan, searxngPlan, type DockerRunner, type ReadinessProbe } from "./stacklib.ts"
+import { applyEstate, type ApplyReport } from "./estate/apply.ts"
+import { homeDir } from "./paths.ts"
 import { makeRealDockerRunner } from "./dockerRunner.real.ts"
 import { makeReadinessProbe } from "./readinessProbe.ts"
 import { COMPONENT_IDS, PROGRAM_NAME, type ComponentId } from "./constants.ts"
@@ -52,6 +54,8 @@ function usageText(lockVersion?: string): string {
     `  ${PROGRAM_NAME} status                 report each component's state (read-only JSON)`,
     `  ${PROGRAM_NAME} remove  [component...] remove only what swarm-setup created (alias: --remove)`,
     `  ${PROGRAM_NAME} wire                   re-wire ~/.config/swarm for components already recorded healthy`,
+    `  ${PROGRAM_NAME} apply <stack>          re-render and recreate ONE stack (searxng | firecrawl) from the`,
+    `                                   stored lane values and a fresh DNS-pin produce; restarts work in flight`,
     "",
     "Flags:",
     "  --non-interactive                MDM mode; names NO default — pass an explicit component list,",
@@ -564,6 +568,112 @@ function cmdWire(cmd: ParsedCommand): OutcomeToken {
   }
 }
 
+/** Row 246 (blueprint 11) — the apply owner: re-render and recreate ONE stack from the stored lane
+ *  tuple plus a fresh DNS-pin produce. Named command, single-stack scope, and the same
+ *  `acquireLock()` posture every other mutating verb uses: the estate is single-writer by rule, so
+ *  a second swarm-setup holding the setup lock makes this verb refuse with REFUSED_CONCURRENCY
+ *  before a path resolves or a container is addressed (06 §5.3 "refuses while another row holds the
+ *  profile"; blueprint 11's `colima-swarm-profile` lock is the wave-level twin of this mechanism).
+ *
+ *  Consent is not asked for and not required: consent covers a download (consent.ts records terms
+ *  per artifact), and this verb downloads nothing — it moves local bytes and restarts local
+ *  containers that an earlier consented install created. It dispatches no step module and commits
+ *  no lifecycle state, for the same reason `wire` dispatches nothing.
+ *
+ *  `--dry-run` IS honoured here (unlike `wire`, which refuses it): apply's dry run validates the
+ *  stored configuration, renders into memory and prints the exact compose argv, and touches
+ *  neither disk nor daemon, so PC-FLAG-03's "touch nothing" promise is literally true. */
+async function cmdApply(cmd: ParsedCommand): Promise<OutcomeToken> {
+  if (cmd.components.length !== 1) {
+    console.error(
+      `${PROGRAM_NAME}: apply takes exactly one stack name — searxng or firecrawl — and applies it to that stack alone`,
+    )
+    console.error(
+      cmd.components.length === 0
+        ? `${PROGRAM_NAME}: required form: ${PROGRAM_NAME} apply <searxng|firecrawl>`
+        : `${PROGRAM_NAME}: named ${cmd.components.join(", ")}; run one apply per stack so the other stack is provably untouched`,
+    )
+    return OUTCOME.FAILED
+  }
+  const lock = acquireLock()
+  if (!lock.ok) {
+    console.error(`${PROGRAM_NAME}: another swarm-setup is running (holder pid ${lock.holderPid})`)
+    return OUTCOME.REFUSED_CONCURRENCY
+  }
+  try {
+    const lockRes = loadLock()
+    if (!lockRes.ok) {
+      console.error(`${PROGRAM_NAME}: ${lockRes.error}`)
+      return OUTCOME.REFUSED_LOCK_MALFORMED
+    }
+    const home = homeDir()
+    const component = cmd.components[0] as string
+    const engine = buildApplyEngine(component, home, cmd.dryRun)
+    const report = await applyEstate({
+      component,
+      lock: lockRes.lock,
+      home,
+      dryRun: cmd.dryRun,
+      ...(engine.docker ? { run: engine.docker } : {}),
+      ...(engine.readiness ? { readiness: engine.readiness } : {}),
+    })
+    printApplyReport(report)
+    return report.ok ? OUTCOME.OK : OUTCOME.FAILED
+  } finally {
+    releaseLock()
+  }
+}
+
+/** Engine injection for apply, built exactly the way buildStepContext builds it for the stack
+ *  steps: a spawn-backed runner only when a docker CLI exists on this host (without one the apply
+ *  refuses honestly at its context probe instead of reporting a fabricated spawn failure), and a
+ *  readiness prober only when THIS stack's rendered artefact can be read, because the prober parses
+ *  its probe URLs from that artefact (PORT RULE). Narrowing-only, like every other seam in this
+ *  package: neither injection can skip a gate or widen a scope. */
+function buildApplyEngine(
+  component: string,
+  home: string,
+  dryRun: boolean,
+): { docker?: DockerRunner; readiness?: ReadinessProbe } {
+  if (component !== "searxng" && component !== "firecrawl") return {}
+  const dockerBinary = resolveDockerBinary()
+  if (!dockerBinary) return {}
+  const plan = component === "searxng" ? searxngPlan(home) : firecrawlPlan(home)
+  let composeText: string | null = null
+  try {
+    composeText = readFileSync(plan.composeFile, "utf8")
+  } catch {
+    composeText = null
+  }
+  const lifecycle = makeRealDockerRunner({ dockerBinary })
+  if (!composeText || dryRun) return { docker: lifecycle.runner as DockerRunner }
+  const probe = makeRealDockerRunner({ dockerBinary, timeoutMs: 25_000 })
+  return { docker: lifecycle.runner as DockerRunner, readiness: makeReadinessProbe({ docker: probe.runner, composeText }) }
+}
+
+/** Message truthfulness over tidiness (the R112b-7 lesson): what was written, what was left alone,
+ *  every docker argv issued, and the value read back INSIDE each running container — the claim
+ *  06 §5.3 makes this command prove, printed rather than inferred. */
+function printApplyReport(report: ApplyReport): void {
+  const head = report.ok ? `apply ${report.stack}: OK` : `apply ${report.stack}: FAILED${report.code ? ` [${report.code}]` : ""}`
+  console.log(head + " — " + report.message.split("\n")[0])
+  for (const line of report.message.split("\n").slice(1)) console.log(`  ${line}`)
+  console.log(`  lanes: ${report.lanesPresent ? JSON.stringify(report.lanes) : "no lanes.json stored (controls unset)"} · pins refresh: ${report.pinsRefresh.action} (${report.pinsRefresh.detail})`)
+  if (report.written.length > 0) console.log(`  wrote ${report.written.join(", ")}`)
+  if (report.unchanged.length > 0) console.log(`  unchanged ${report.unchanged.length} artefact(s) (content-addressed no-write)`)
+  for (const gap of report.observedStateGaps) console.log(`  observed (not gating): ${gap}`)
+  for (const c of report.commands) console.log(`  $ ${c}`)
+  if (report.health) console.log(`  health gate: ${report.health.token} after ${report.health.attempts} poll(s) — ${report.health.detail}`)
+  for (const p of report.proof) {
+    const observed = Object.entries(p.laneValues)
+      .map(([k, v]) => `${k}=${v ?? "<absent>"}`)
+      .join(" ")
+    console.log(
+      `  proof ${p.container} (${p.service}): recreated=${p.recreated} created=${p.created ?? "?"} config-hash=${p.configHash ?? "none"} in-container: ${observed || "no lane keys for this stack"}${p.inContainerError ? ` [environ unreadable: ${p.inContainerError}]` : ""}`,
+    )
+  }
+}
+
 function cmdRemove(cmd: ParsedCommand): OutcomeToken {
   const lock = acquireLock()
   if (!lock.ok) {
@@ -656,8 +766,13 @@ export async function main(argv: readonly string[]): Promise<void> {
       break
     case "wire":
       // Row 199: synchronous by construction — the writer is synchronous and this verb fetches nothing,
-      // dispatches no step and asks no consent (see cmdWire's consent posture note).
+      // dispatches no step module and asks no consent (see cmdWire's consent posture note).
       token = cmdWire(cmd)
+      break
+    case "apply":
+      // Row 246: async because the DNS-pin refresh awaits the host resolver and the health gate polls
+      // the recreated containers; both are inherent to applying a change to a live estate.
+      token = await cmdApply(cmd)
       break
   }
 

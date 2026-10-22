@@ -21,6 +21,7 @@ import {
   type StackStepContext,
 } from "../../stacklib.ts"
 import { deliverEstate } from "../../estate/deliver.ts"
+import { configureLanesAtSetup } from "../../estate/apply.ts"
 import { OUTCOME } from "../../outcomes.ts"
 import type { StepContext, StepModule, StepResult } from "../_template/index.ts"
 
@@ -48,10 +49,21 @@ export const step: StepModule = {
       }
     }
 
+    // Row 246 (06 §2.3's swarm-setup column, routed here by R-245-3): create-if-absent lane storage
+    // BEFORE the delivery stage renders it — fork H requires a stored value, and bring-up never
+    // re-renders (stacklib.ts:497). An existing file, edited by hand or by the desktop route, is
+    // never overwritten from here.
+    const lanes = configureLanesAtSetup({
+      log: (level, message, context) => kit.log(level, message, context ? { context } : undefined),
+      ...(ctx.home ? { home: ctx.home } : {}),
+      dryRun: ctx.dryRun,
+    })
+    if (!lanes.ok) return { token: OUTCOME.FAILED, message: lanes.message }
+
     // Row 263 (D-262-1): the estate render-and-deliver STAGE runs on every install of this stack,
     // after consent and the pin pre-check and before bring-up consumes the artefacts. A refusal
     // here is final for this step — bring-up would only re-report the same precondition gaps.
-    const delivery = deliverEstate({ kit })
+    const delivery = deliverEstate({ kit, ...(ctx.home ? { home: ctx.home } : {}) })
     if (delivery.token !== OUTCOME.OK) return delivery
 
     // readiness (2026-10-20 healthcheck-contract ruling) rides through from the engine context;
@@ -59,7 +71,7 @@ export const step: StepModule = {
     // drops their wget checks) stay red by design — fail-closed, named per service in the verdict.
     const out = await bringUp({
       kit,
-      plan: firecrawlPlan(),
+      plan: firecrawlPlan(ctx.home),
       run: ctx.docker,
       ...(ctx.readiness ? { readiness: ctx.readiness } : {}),
     })
@@ -72,7 +84,7 @@ export const step: StepModule = {
     const kit = createStepKit({ componentId: "firecrawl", lock: ctx.lock, state: ctx.state, dryRun: ctx.dryRun })
     // remove() does NOT re-check the pin: teardown must always be able to clean up a stack even
     // after the lock changed underneath it. It resolves the file through the same pathsFor map.
-    const out = await tearDown({ kit, plan: firecrawlPlan(), run: ctx.docker })
+    const out = await tearDown({ kit, plan: firecrawlPlan(ctx.home), run: ctx.docker })
     return { token: out.token, message: out.message }
   },
 }

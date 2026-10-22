@@ -11,6 +11,7 @@
 import { createStepKit } from "../../stepkit.ts"
 import { bringUp, runnerGuard, searxngPlan, tearDown, type StackStepContext } from "../../stacklib.ts"
 import { deliverEstate } from "../../estate/deliver.ts"
+import { configureLanesAtSetup } from "../../estate/apply.ts"
 import { OUTCOME } from "../../outcomes.ts"
 import type { StepContext, StepModule, StepResult } from "../_template/index.ts"
 
@@ -23,12 +24,27 @@ export const step: StepModule = {
     const guard = runnerGuard(ctx)
     if (guard) return guard
     const kit = createStepKit({ componentId: "searxng", lock: ctx.lock, state: ctx.state, dryRun: ctx.dryRun })
+    // Row 246 (06 §2.3's swarm-setup column, routed here by R-245-3): the lane file is created
+    // create-if-absent BEFORE the delivery stage renders it. Fork H requires a stored value, and
+    // bring-up never re-renders (stacklib.ts:497), so a write landing after the render would be
+    // invisible to the estate it claims to configure. An existing file is never overwritten.
+    const lanes = configureLanesAtSetup({
+      log: (level, message, context) => kit.log(level, message, context ? { context } : undefined),
+      ...(ctx.home ? { home: ctx.home } : {}),
+      dryRun: ctx.dryRun,
+    })
+    if (!lanes.ok) return { token: OUTCOME.FAILED, message: lanes.message }
     // Row 263 (D-262-1): the estate render-and-deliver STAGE runs on every install of this stack,
     // after consent (the engine gates both) and before bring-up consumes the artefacts. A refusal
     // here is final for this step — bring-up would only re-report the same precondition gaps.
-    const delivery = deliverEstate({ kit })
+    const delivery = deliverEstate({ kit, ...(ctx.home ? { home: ctx.home } : {}) })
     if (delivery.token !== OUTCOME.OK) return delivery
-    const out = await bringUp({ kit, plan: searxngPlan(), run: ctx.docker, ...(ctx.readiness ? { readiness: ctx.readiness } : {}) })
+    const out = await bringUp({
+      kit,
+      plan: searxngPlan(ctx.home),
+      run: ctx.docker,
+      ...(ctx.readiness ? { readiness: ctx.readiness } : {}),
+    })
     return { token: out.token, message: out.message }
   },
 
@@ -36,7 +52,7 @@ export const step: StepModule = {
     const guard = runnerGuard(ctx)
     if (guard) return guard
     const kit = createStepKit({ componentId: "searxng", lock: ctx.lock, state: ctx.state, dryRun: ctx.dryRun })
-    const out = await tearDown({ kit, plan: searxngPlan(), run: ctx.docker })
+    const out = await tearDown({ kit, plan: searxngPlan(ctx.home), run: ctx.docker })
     return { token: out.token, message: out.message }
   },
 }
