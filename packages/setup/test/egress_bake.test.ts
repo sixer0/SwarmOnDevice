@@ -1610,6 +1610,112 @@ describe("(r267 F-251-8) network membership of the delivered artefact, one code 
 })
 
 // ================================================================================================
+// Row 270 / F-265-1 + F-265-2 (verification/s6b_13b_lanes_security_delta.md §2). Row 267's guard parsed lines and
+// was therefore blind to two docker-valid spellings — a one-line flow-style service body (C1) and a mapping-form
+// attachment whose membership arrives through a merge key (C3, which passed the WHOLE verifyEgressBake with
+// ok=true) — and the older extra-hosts audit had the twin hole for mapping-form entries. Both audits now parse
+// the artefact with Bun.YAML, the engine the estate-side instruments resolve these bytes with. These are exactly
+// row 265's attacks, landed as permanent fixtures per its remediation ("a regression is a red test rather than a
+// comment"). Every case here also has its E4 pair measured in implementation/s6_r270_yaml_shape_hardening.md:
+// the same instrument run against HEAD d1779b141a bytes, where C1/C3/mapping-extra_hosts were silent.
+// ================================================================================================
+describe("(r270 F-265-1/F-265-2) the engine-read audits see every shape the consumer resolves", () => {
+  const shippedCompose = (): string => {
+    const home = freshHome("r270-nets")
+    stageArtefacts(home)
+    return readFileSync(fcComposePath(home), "utf8")
+  }
+  const codesFor = (text: string): string[] => auditNetworkMembership(text).map((f) => f.code)
+  const ehCodesFor = (text: string): string[] => auditExtraHostPins(text).map((f) => f.code)
+
+  /** Collapse one indent-2 service block into a single flow-style line — the C1 shape. */
+  const collapseService = (compose: string, service: string, flowBody: string): string => {
+    const lines = compose.split("\n")
+    const s = lines.findIndex((l) => l === `  ${service}:`)
+    if (s === -1) throw new Error(`fixture: no ${service} block in the rendered compose`)
+    let e = lines.length
+    for (let i = s + 1; i < lines.length; i++) if (/^ {2}\S/.test(lines[i] ?? "")) { e = i; break }
+    return [...lines.slice(0, s), `  ${service}: ${flowBody}`, ...lines.slice(e)].join("\n")
+  }
+
+  /** C3: the carrier's attachment becomes mapping form whose fc-web arrives via a merge key. */
+  const mergeKeyAttachment = (compose: string): string => {
+    const withMerge = compose.replace("    networks: [fc-ctl, fc-iso]", "    networks:\n      fc-ctl:\n      fc-iso:\n      <<: *r270map")
+    expect(withMerge).not.toBe(compose) // the anchor target below only means something if the carrier changed
+    expect((compose.match(/\nservices:\n/g) ?? []).length).toBe(1)
+    return withMerge.replace("\nservices:\n", "\nx-r270-anchor: &r270map\n  fc-web:\nservices:\n")
+  }
+
+  /** Mapping-form extra_hosts on one service — the F-265-2 spelling (the sequence helper above writes list form). */
+  const injectMappingExtraHosts = (compose: string, service: string, pairs: readonly string[]): string => {
+    const marker = `  ${service}:\n`
+    const i = compose.indexOf(marker)
+    if (i === -1) throw new Error(`fixture: no ${service} block`)
+    return `${compose.slice(0, i + marker.length)}    extra_hosts:\n${pairs.map((p) => `      ${p}`).join("\n")}\n${compose.slice(i + marker.length)}`
+  }
+
+  it("POSITIVE CONTROL r270: the shipped render still passes BOTH engine-read audits with zero findings", () => {
+    const base = shippedCompose()
+    expect(auditNetworkMembership(base)).toEqual([])
+    expect(auditExtraHostPins(base)).toEqual([])
+  })
+
+  it("C1 r270: a one-line flow-style carrier body holding fc-web refuses with all three claims", () => {
+    // Row 265 pre-fix: guard=[(silent)]; docker-visible pw=[fc-ctl,fc-iso,fc-web]. The line reader never saw an
+    // attachment because the whole service body was one line the indent-2 head regex could not open.
+    const c1 = collapseService(shippedCompose(), BROWSER_TIER_SERVICE, "{networks: [fc-ctl, fc-iso, fc-web]}")
+    expect(codesFor(c1)).toEqual(["BROWSER_TIER_MISATTACHED", "NETWORK_NOT_INTERNAL", "PUBLIC_NETWORK_MEMBER_DRIFT"])
+  })
+
+  it("C3 r270: a merge-key mapping attachment hands the carrier fc-web and the bake REFUSES (was ok=true)", () => {
+    // The damning arm of row 265: every other byte of the shipped artefact unchanged, the WHOLE verifyEgressBake
+    // answering ok=true while Bun.YAML resolved fc-web onto the browser carrier. Now all three codes fire.
+    const c3 = mergeKeyAttachment(shippedCompose())
+    expect(codesFor(c3)).toEqual(["BROWSER_TIER_MISATTACHED", "NETWORK_NOT_INTERNAL", "PUBLIC_NETWORK_MEMBER_DRIFT"])
+  })
+
+  it("C3 end-to-end r270: verifyEgressBake over the merge-key artefact answers ok=false naming the survivor-3 code", () => {
+    const home = freshHome("r270-c3-e2e")
+    stageArtefacts(home)
+    const c3 = mergeKeyAttachment(readFileSync(fcComposePath(home), "utf8"))
+    const v = verifyEgressBake({ lock: LOCK, home, composeText: c3, confText: readFileSync(fcSquidPath(home), "utf8") })
+    expect(v.ok).toBe(false)
+    expect(v.findings.map((f) => f.code)).toContain("BROWSER_TIER_MISATTACHED")
+  })
+
+  it("F-265-2 r270: mapping-form extra_hosts fires the same code as block form, and a legal mapping pair stays clean", () => {
+    // Row 265's divergence pair, closed: `crawl.example: host-gateway` in mapping form used to pass BOTH offline
+    // witnesses (bake ok=true, lint ok=true) while the block form fired EXTRA_HOST_AT_HOST. Same verdict now.
+    const base = shippedCompose()
+    const hostile = injectMappingExtraHosts(base, "api", ["crawl.example: host-gateway"])
+    expect(ehCodesFor(hostile)).toContain("EXTRA_HOST_AT_HOST")
+    const legal = injectMappingExtraHosts(base, "api", ["example.com: 104.20.23.154"])
+    expect(ehCodesFor(legal)).toEqual([]) // no false refusal on the shape the compose schema admits
+  })
+
+  it("an artefact the engine cannot read is refused by both audits, never silently skipped (fail-closed leg)", () => {
+    // Bun.YAML throws on an unterminated quote (measured); the audits report COMPOSE_YAML_UNPARSEABLE each.
+    // This is the fail-closed half of the dockerd-vs-Bun parse-equivalence question the delta left UNKNOWN
+    // (§9.2): a text with no offline reading must stop bring-up rather than bless whatever docker might see.
+    const broken = 'services:\n  api:\n    image: "unterminated\n'
+    expect(auditNetworkMembership(broken).map((f) => f.code)).toEqual(["COMPOSE_YAML_UNPARSEABLE"])
+    expect(auditExtraHostPins(broken).map((f) => f.code)).toEqual(["COMPOSE_YAML_UNPARSEABLE"])
+    // Positive control in the same run: the leg binds on failure-to-read, not on any compose it is handed.
+    expect(auditExtraHostPins(shippedCompose())).toEqual([])
+  })
+
+  it("CRLF endings no longer false-refuse a safe artefact (row 265 C5, moved the RIGHT half)", () => {
+    // Pre-fix the line reader turned \r\n into two phantom PUBLIC_NETWORK_MEMBER_DRIFT findings on a SHIPPED-SAFE
+    // file. Fail-closed was the right direction for a gate, but fixing divergence by keeping a false refusal
+    // would have been moving the wrong half (row 265 §2). Engine-read, the same bytes are clean.
+    const crlf = shippedCompose().replace(/\n/g, "\r\n")
+    expect(crlf).not.toBe(shippedCompose())
+    expect(auditNetworkMembership(crlf)).toEqual([])
+    expect(auditExtraHostPins(crlf)).toEqual([])
+  })
+})
+
+// ================================================================================================
 // Row 267 / F-251-1 (verification/s6b_13_lanes_security.md §2.1). `auditFileModes` walked the Firecrawl secrets
 // directory and nothing else, so PC-PATH-18 (lanes.json) and PC-PATH-19 (dns-pins.json) were invisible to the
 // estate's own auditor — measured as `widenedLanesJson=[]` against a control that does fire MODE_SECRET_FILE.

@@ -401,6 +401,43 @@ describe("(r244 survivor-3) the browser tier stays attached to internal networks
     expect(codes).toContain("NETWORK_NOT_INTERNAL")
     expect(codes).toContain("PUBLIC_NETWORK_MEMBER_DRIFT")
   })
+
+  it("RC-244-1 STAYS CLOSED under the YAML spellings row 265 found (r270 F-265-1): flow body and merge key both refuse", () => {
+    // Row 265 measured that the LINE-PARSED guard was blind to two docker-valid spellings — a one-line flow-style
+    // service body (C1) and a mapping-form attachment whose fc-web arrives through a merge key (C3, whole bake
+    // ok=true) — while Bun.YAML resolved the webbed membership either way. The audits are engine-read now; this
+    // lane re-derives the same claim with its own instrument: prove the injection is not a no-op through the
+    // parsed document, then prove the bake refuses it, then keep lint's deliberate silence pinned.
+    const base = SHIPPED_COMPOSE()
+
+    // C1 collapses the ENTIRE carrier block into one flow line (row 265's exact shape): replacing only the head
+    // would leave the old indented body under a flow mapping — invalid YAML on both sides, which proves nothing.
+    const c1lines = base.split("\n")
+    const c1s = c1lines.findIndex((l) => l === "  playwright-service:")
+    if (c1s === -1) throw new Error("fixture: no playwright-service head in the rendered compose")
+    let c1e = c1lines.length
+    for (let i = c1s + 1; i < c1lines.length; i++) if (/^ {2}\S/.test(c1lines[i] ?? "")) { c1e = i; break }
+    const c1 = [...c1lines.slice(0, c1s), "  playwright-service: {networks: [fc-ctl, fc-iso, fc-web]}", ...c1lines.slice(c1e)].join("\n")
+    expect(c1).not.toBe(base)
+    const c1doc = Bun.YAML.parse(c1) as Record<string, any>
+    expect(c1doc.services["playwright-service"].networks).toContain("fc-web") // docker-visible, not a no-op
+    const c1codes = verifyEgressBake({ lock: LOCK, home: "/Users/r244-gap", composeText: c1, confText: SHIPPED_CONF() }).findings.map((f) => f.code)
+    for (const code of ["BROWSER_TIER_MISATTACHED", "NETWORK_NOT_INTERNAL", "PUBLIC_NETWORK_MEMBER_DRIFT"])
+      expect(c1codes).toContain(code)
+
+    const c3base = base.replace("    networks: [fc-ctl, fc-iso]", "    networks:\n      fc-ctl:\n      fc-iso:\n      <<: *r270map")
+    expect(c3base).not.toBe(base)
+    const c3 = c3base.replace("\nservices:\n", "\nx-r270-anchor: &r270map\n  fc-web:\nservices:\n")
+    const c3doc = Bun.YAML.parse(c3) as Record<string, any>
+    expect(Object.keys(c3doc.services["playwright-service"].networks)).toContain("fc-web") // merge RESOLVED by the engine
+    const c3codes = verifyEgressBake({ lock: LOCK, home: "/Users/r244-gap", composeText: c3, confText: SHIPPED_CONF() }).findings.map((f) => f.code)
+    for (const code of ["BROWSER_TIER_MISATTACHED", "NETWORK_NOT_INTERNAL", "PUBLIC_NETWORK_MEMBER_DRIFT"])
+      expect(c3codes).toContain(code)
+
+    // Lint keeps NO network-membership rule on purpose (row 251 §2.3 / row 267 §3.2): the estate consumes the
+    // artefact through the bake. That silence is pinned, not assumed.
+    expect(lintOk(lintComposeText(c3, { lockVersion: LOCK.version }))).toBe(true)
+  })
 })
 
 // ================================================================================================
@@ -506,6 +543,50 @@ describe("(r244 P3 injected answers) render, lint and bake agree without sharing
       expect(findings.map((f) => f.code)).toContain(code)
       expect(findings.every((f) => f.item.includes(service))).toBe(true) // block-scoped: it names the tier
     }
+  })
+
+  it("r270 F-265-2: mapping-form extra_hosts refuses in the bake; lint's own line rule stays blind to it (pinned residual, routed)", () => {
+    // Row 265's twin finding: `crawl.example: host-gateway` written as a MAPPING passed BOTH offline witnesses
+    // while the block form fired EXTRA_HOST_AT_HOST. The bake half is closed here (engine-read entries); the
+    // lint half is a KNOWN RESIDUAL in composefiles/lint.ts's line rule — containment holds because bring-up
+    // consumes the artefact through the bake, and this pin says so in bytes rather than prose. When lint learns
+    // mapping form, INVERT the last expectation; do not delete this test.
+    const marker = "  api:\n"
+    const base = SHIPPED_COMPOSE()
+    const i = base.indexOf(marker)
+    const mapping = `${base.slice(0, i + marker.length)}    extra_hosts:\n      crawl.example: host-gateway\n${base.slice(i + marker.length)}`
+    expect(mapping).not.toBe(base)
+    const parsed = Bun.YAML.parse(mapping) as Record<string, any>
+    expect(parsed.services.api.extra_hosts).toEqual({ "crawl.example": "host-gateway" }) // docker-visible shape, not a no-op
+    expect(auditExtraHostPins(mapping).map((f) => f.code)).toContain("EXTRA_HOST_AT_HOST")
+    const v = verifyEgressBake({ lock: LOCK, home: "/Users/r244-gap", composeText: mapping, confText: SHIPPED_CONF() })
+    expect(v.ok).toBe(false)
+    expect(v.findings.filter((f) => f.code === "EXTRA_HOST_AT_HOST").every((f) => f.item.includes("api"))).toBe(true)
+    expect(lintOk(lintComposeText(mapping, { lockVersion: LOCK.version }))).toBe(true) // the routed residual, pinned
+  })
+
+  it("r270 F-265-5: a pins file carrying an unknown top-level field refuses the render instead of silently unpinning", () => {
+    // Row 265 §5: `{"version":1,"generatedAt":"t","pins":[],"__proto__":{…}}` read ok=true with zero entries —
+    // a carrier-carrying or truncated file produced a silently UNPINNED estate that still reported a present,
+    // screened file (the F-251-7 destination by a second route). parsePinsJson now sweeps the top level closed,
+    // the same discipline the lanes validator applies to submitted names (F-251-3 family).
+    const home = scratchHome("p3-carrier")
+    mkdirSync(join(home, ".swarm", "setup"), { recursive: true })
+    writeFileSync(
+      join(home, ".swarm", "setup", "dns-pins.json"),
+      '{"version":1,"generatedAt":"t","pins":[],"__proto__":{"polluted":true}}',
+      { mode: 0o600 },
+    )
+    const r = renderAll(LOCK, { home, secrets: requiredManifest() })
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.errors.map((e) => e.code)).toContain("DNS_PINS_INVALID")
+    expect(Object.getOwnPropertyNames(Object.prototype)).not.toContain("polluted") // the carrier never landed
+    // Positive control in the same run: the IDENTICAL document without the carrier is the legal no-pins state
+    // (§3.3), so the refusal above is the sweep working, not a reader broken on every file.
+    const clean = scratchHome("p3-carrier-control")
+    mkdirSync(join(clean, ".swarm", "setup"), { recursive: true })
+    writeFileSync(join(clean, ".swarm", "setup", "dns-pins.json"), '{"version":1,"generatedAt":"t","pins":[]}', { mode: 0o600 })
+    expect(renderAll(LOCK, { home: clean, secrets: requiredManifest() }).ok).toBe(true)
   })
 
   it("the narrowed lint still refuses the §4.5 door and still passes the approved entry", () => {

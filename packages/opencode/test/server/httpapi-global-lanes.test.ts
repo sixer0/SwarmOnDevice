@@ -3,8 +3,7 @@
 // Three layers, because three different claims need proving:
 //  - the FILE rules (refusal matrix, mode posture, merge semantics, concurrency) run against
 //    throwaway directories by calling the module the handler calls, with `home` passed EXPLICITLY
-//    everywhere — no test here mutates process.env.HOME (the E7 leak class: bun runs every test
-//    file in one process, and an environment change there escapes);
+//    everywhere — these layers never needed the environment;
 //  - the EFFECTIVE-VALUE leg runs against a scripted DockerRunner, so the argv contract
 //    (`--context colima-swarm` pinned, positive-label filters only per E16, exec-not-spawn per
 //    E17) and every degradation branch are proven without a daemon;
@@ -12,12 +11,18 @@
 //    token-shaped 400s) run over HTTP against the real RootHttpApi tree, exactly as production
 //    assembles it (api.ts RootHttpApi .middleware(Authorization); server.ts provides httpApiAuthLayer).
 //
-// Deliberately NOT done over HTTP: an authenticated VALID PATCH. The in-process app resolves the
-// lane file through the real HOME, and writing the user's actual ~/.swarm/setup/lanes.json from a
-// test is exactly the incident class this wave has produced once already. Valid-write proofs live
-// at module level (explicit sandbox home) plus the live-listener battery in the row's artifact,
-// which runs the server under `env -i HOME=<sandbox>` so even the default resolution is exercised
-// against a throwaway directory.
+// AMENDED by row 270 (finding F-265-4, verification/s6b_13b_lanes_security_delta.md §6). This header used to
+// say "no test here mutates process.env.HOME" and to keep the SURFACE legs safe by sending bodies whose only
+// guard was the auth middleware. Row 265 measured what that costs: the anonymous-WRITE and wrong-password
+// legs carried a VALID tuple through an app resolving the ambient HOME, so one middleware regression was
+// one step away from creating ~/.swarm/setup/lanes.json with a fabricated updatedAt — the second time this
+// session's shape-of-dependency fired (E21). Two changes close it doubly:
+//  1. SANDBOXED BASE — HOME is pinned at module scope below, verified through the resolver itself (E7), and
+//     restored in afterAll so the escape window is this file's own run, not the shared bun process;
+//  2. DOUBLY-REFUSED BODIES — the auth-refusal legs now carry a body the closed set refuses on its own
+//     ({laneCount: 9} answers LANE_VALUE_NOT_A_LANE before any filesystem call), so a middleware failure
+//     writes nothing while the 401 assertion these legs exist for stays byte-identical.
+// Valid-write proofs stay where row 247 put them: module level against explicit sandbox homes.
 //
 // Run targeted: cd packages/opencode && bun test test/server/httpapi-global-lanes.test.ts
 
@@ -27,7 +32,7 @@ import { tmpdir } from "os"
 import { join } from "path"
 import { fileURLToPath } from "url"
 import { NodeHttpServer } from "@effect/platform-node"
-import { describe, expect, test } from "bun:test"
+import { afterAll, describe, expect, test } from "bun:test"
 import { Context, Effect, Layer, Option } from "effect"
 import { HttpClient, HttpClientRequest, HttpRouter } from "effect/unstable/http"
 import { HttpApiBuilder } from "effect/unstable/httpapi"
@@ -140,6 +145,34 @@ async function readAll(proc: { stdout: ReadableStream<Uint8Array> }) {
   }
   return out
 }
+
+// ---------------------------------------------------------------------------
+// E21/F-265-4 sandboxed base (row 270) — pin HOME BEFORE any surface leg can run, verify through the resolver
+// ---------------------------------------------------------------------------
+
+// The in-process app resolves the lane file through paths.ts, which consults process.env.HOME AT CALL TIME.
+// Row 265 measured that a committed leg carrying a valid body was therefore one auth regression away from
+// writing the REAL ~/.swarm/setup/lanes.json (the incident class this session produced twice). Pinning here
+// means even a leg that forgot cannot reach the real home. The pin is verified by READING THE RESOLVER, not
+// by intending it (E7), and a failed verification throws at module load — the whole file goes red rather
+// than running one test against the user's directory. afterAll restores the ambient value so the escape
+// window is this file's own run; bun runs test files sequentially in one process.
+const SURFACE_SANDBOX = tempHome("surface-base")
+const HOME_BEFORE_PIN = process.env.HOME
+process.env.HOME = SURFACE_SANDBOX
+if (lanesFilePath() !== join(SURFACE_SANDBOX, ".swarm", "setup", "lanes.json")) {
+  process.env.HOME = HOME_BEFORE_PIN
+  throw new Error("F-265-4: HOME pin did not take effect through lanesFilePath — refusing to run this suite")
+}
+afterAll(() => {
+  if (HOME_BEFORE_PIN === undefined) delete process.env.HOME
+  else process.env.HOME = HOME_BEFORE_PIN
+})
+
+/** F-265-4's second layer: a body the closed set refuses on its own terms — `laneCount` is not a lane control,
+ *  so pass 1 of the shared validator answers LANE_VALUE_NOT_A_LANE before any filesystem call exists (06 §4.2
+ *  order). The auth-refusal legs used to carry VALID_TUPLE, which WRITES if the middleware ever stops firing. */
+const DOUBLY_REFUSED_WRITE = { laneCount: 9 }
 
 // ---------------------------------------------------------------------------
 // Layer 1 — stored observation (module level, explicit sandbox home)
@@ -864,7 +897,10 @@ describe("GET /global/lanes surface", () => {
 
   guardedIt.live("rejects an anonymous WRITE with 401 — the mutation door inherits the same middleware", () =>
     Effect.gen(function* () {
-      const response = yield* patchRequest(JSON.stringify(VALID_TUPLE)).pipe(HttpClient.execute)
+      // F-265-4: body is DOUBLY_REFUSED_WRITE, not VALID_TUPLE. The 401 assertion is byte-identical (auth fires
+      // first); what changed is what a middleware regression would leave behind — a closed-set refusal with no
+      // filesystem call, instead of a real write to the lane file (row 265 §6 measured that write).
+      const response = yield* patchRequest(JSON.stringify(DOUBLY_REFUSED_WRITE)).pipe(HttpClient.execute)
       expect(response.status).toBe(401)
     }),
   )
@@ -874,7 +910,7 @@ describe("GET /global/lanes surface", () => {
       const read = yield* HttpClientRequest.get(GlobalPaths.lanes)
         .pipe(HttpClientRequest.setHeader("Authorization", basic("not-the-password")), HttpClient.execute)
       expect(read.status).toBe(401)
-      const write = yield* patchRequest(JSON.stringify(VALID_TUPLE), "not-the-password").pipe(HttpClient.execute)
+      const write = yield* patchRequest(JSON.stringify(DOUBLY_REFUSED_WRITE), "not-the-password").pipe(HttpClient.execute)
       expect(write.status).toBe(401)
     }),
   )
@@ -956,6 +992,26 @@ describe("PATCH /global/lanes wire refusals", () => {
       expect(text.includes("CANARY")).toBe(false)
     }),
   )
+
+  // F-265-4's independence proof (row 270): the body the auth-refusal legs now carry must be refused by the
+  // VALIDATOR ITSELF, past the middleware — otherwise "doubly refused" is just "refused once, elsewhere".
+  guardedIt.live("the auth legs' DOUBLY_REFUSED_WRITE body also refuses at 400 when auth passes (second layer proven)", () =>
+    Effect.gen(function* () {
+      const response = yield* patchRequest(JSON.stringify(DOUBLY_REFUSED_WRITE), PASSWORD).pipe(HttpClient.execute)
+      expect(response.status).toBe(400)
+      const body = (yield* response.json) as { error: { code: string; key: string } }
+      expect(body.error.code).toBe("LANE_VALUE_NOT_A_LANE")
+      expect(body.error.key).toBe("laneCount")
+    }),
+  )
+
+  // E21's binding check, visible in the suite rather than only at module load: the route-side resolver points
+  // into the pinned sandbox, so even a leg that completed a write could not reach the real home.
+  test("the surface base resolves inside the pinned sandbox, not the ambient home (F-265-4)", () => {
+    expect(lanesFilePath().startsWith(SURFACE_SANDBOX + "/")).toBe(true)
+    if (HOME_BEFORE_PIN !== undefined && HOME_BEFORE_PIN !== SURFACE_SANDBOX)
+      expect(lanesFilePath()).not.toBe(join(HOME_BEFORE_PIN, ".swarm", "setup", "lanes.json"))
+  })
 
   guardedIt.live("a free-form value answers 400 LANE_VALUE_MALFORMED", () =>
     Effect.gen(function* () {

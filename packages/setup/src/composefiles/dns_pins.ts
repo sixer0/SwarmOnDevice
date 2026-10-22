@@ -133,6 +133,15 @@ function parsePinsJson(text: string, path: string): { ok: true; entries: readonl
   if (typeof record.generatedAt !== "string" || record.generatedAt.length === 0)
     return { ok: false, message: `${path}: generatedAt missing — the reader must not fabricate an age (§1.3)` }
   if (!Array.isArray(record.pins)) return { ok: false, message: `${path}: pins must be an array (shape §1.3)` }
+  // Row 270 / F-265-5: closed top-level set, mirroring the lanes validator's own-key sweep. Without it a
+  // carrier-carrying or truncated file — `{"version":1,"generatedAt":"t","pins":[],"__proto__":{…}}` — read
+  // ok=true with zero entries: a silently UNPINNED estate reporting a present, screened file (the F-251-7
+  // destination reached by a second route). JSON.parse makes `__proto__` an OWN property, so Object.keys
+  // sees every name the document actually carries; anything outside the three schema fields refuses.
+  for (const key of Object.keys(record)) {
+    if (key !== "version" && key !== "generatedAt" && key !== "pins")
+      return { ok: false, message: `${path}: unknown top-level field "${key}" — the pins document is a closed set (shape §1.3); a file carrying names the producer never writes is corruption or a carrier, and neither renders` }
+  }
   return { ok: true, entries: record.pins as readonly PinEntryRaw[] }
 }
 

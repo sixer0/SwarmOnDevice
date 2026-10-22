@@ -69,10 +69,36 @@ export interface SpawnOutput {
  *  never widen contact or fabricate consent). */
 export type SpawnFn = (argv: readonly string[], opts: { readonly timeout: number }) => SpawnOutput
 
+/** Environment names stripped from every docker child this runner spawns (row 270, F-265-3). Same class as
+ *  F-251-9, which row 268 closed on the OBSERVATION door in packages/opencode (`shared/lanes-observation.ts`
+ *  carries the twin list); this is the MUTATING door — `compose up/down/exec` against the estate — where a
+ *  mis-aimed spawn changes state instead of only reading it. The context is already pinned in argv
+ *  (`--context colima-swarm`, structural from stacklib and never rewritten here), so an inherited
+ *  DOCKER_HOST would be a SECOND, ambient way to choose which daemon answers, and DOCKER_CONTEXT /
+ *  DOCKER_CONFIG are the same lever one layer up. Local copy rather than an import: dependency direction —
+ *  packages/setup must not import from packages/opencode. Residual by design on both doors: DOCKER_CERT_PATH,
+ *  DOCKER_TLS_VERIFY, DOCKER_API_VERSION and DOCKER_MACHINE_NAME remain inherited — TLS and version knobs,
+ *  not endpoint selectors — so this list is deliberately NOT "all docker variables". */
+export const DOCKER_ENV_DENY = ["DOCKER_HOST", "DOCKER_CONTEXT", "DOCKER_CONFIG"] as const
+
+/** A copy of `env` with the daemon-selection names removed. Everything else passes through, PATH and HOME
+ *  included, and both are load-bearing: PATH is how docker finds its own helpers, and HOME is where the
+ *  pinned context resolves from (~/.docker — rule E15's split: a process with a SANDBOXED HOME sees no
+ *  daemon at all, so the daemon-facing leg keeps the real HOME while file-facing legs pin their own). */
+export function dockerSpawnEnv(env: Record<string, string | undefined> = process.env): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const [key, value] of Object.entries(env)) {
+    if (value === undefined || (DOCKER_ENV_DENY as readonly string[]).includes(key)) continue
+    out[key] = value
+  }
+  return out
+}
+
 /** The production spawn: Bun.spawnSync, argv array, absolute binary, bounded timeout, both streams
- *  piped. Nothing above this knows about processes. */
+ *  piped. Nothing above this knows about processes. The environment is the explicit stripped copy above,
+ *  so no daemon-selection variable is inherited into the mutating door (F-265-3). */
 export const realSpawn: SpawnFn = (argv, opts) => {
-  const out = Bun.spawnSync(argv, { stdout: "pipe", stderr: "pipe", timeout: opts.timeout })
+  const out = Bun.spawnSync(argv, { stdout: "pipe", stderr: "pipe", timeout: opts.timeout, env: dockerSpawnEnv() })
   return { exitCode: out.exitCode ?? null, stdout: out.stdout, stderr: out.stderr }
 }
 

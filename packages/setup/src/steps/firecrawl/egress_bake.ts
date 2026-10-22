@@ -226,6 +226,12 @@ export type BakeCode =
   | "BROWSER_TIER_MISATTACHED"
   | "NETWORK_NOT_INTERNAL"
   | "PUBLIC_NETWORK_MEMBER_DRIFT"
+  // Row 270 (F-265-1/F-265-2): the membership and extra-hosts audits now parse the artefact with Bun.YAML — the
+  // engine the estate-side instruments resolve with — so a text that engine refuses has no offline reading at
+  // all, and an audit that cannot read its subject must say so rather than stay silent. Fail-closed by design:
+  // docker-valid/Bun-invalid YAML would false-refuse here, and a gate false-refusing is the safe half of an
+  // unresolved parser-equivalence question (verification/s6b_13b_lanes_security_delta.md §9.2).
+  | "COMPOSE_YAML_UNPARSEABLE"
   | "NOCACHE_MISSING"
   | "SQUID_GRAMMAR_INVALID"
   | "SQUID_RESERVED_ACL_NAME"
@@ -978,7 +984,16 @@ export function auditSquidConf(confText: string): BakeFinding[] {
  *     the suite pins the two screens against each other in both directions so a drift is a red test, not a quiet hole. */
 export function auditExtraHostPins(composeText: string): BakeFinding[] {
   const findings: BakeFinding[] = []
-  for (const entry of extraHostEntries(composeText)) {
+  const parsed = parseComposeDocument(composeText)
+  if (!parsed.ok) {
+    findings.push({
+      code: "COMPOSE_YAML_UNPARSEABLE",
+      item: `extra-hosts audit: ${parsed.message}`,
+      hint: "row 270 (F-265-2): this audit reads the artefact through Bun.YAML, the engine the estate-side instruments resolve these bytes with. A text that engine refuses has no offline reading of its entries, and an audit that cannot read its subject refuses rather than staying silent — the fail-closed half of the unresolved dockerd-vs-Bun parse-equivalence question (verification/s6b_13b_lanes_security_delta.md §9.2).",
+    })
+    return findings
+  }
+  for (const entry of extraHostEntries(parsed.doc)) {
     const where = `${entry.service === "" ? "(no service block)" : entry.service}: extra_hosts entry "${entry.raw}"`
     // Split at the FIRST colon: the pair is `name:address`, a name never carries a colon, and an IPv6 address carries
     // several — splitting at the last one would hand the screens a truncated name and a one-character value.
@@ -1058,7 +1073,16 @@ export function auditExtraHostPins(composeText: string): BakeFinding[] {
  *     leave the surviving members' own claims unbacked). */
 export function auditNetworkMembership(composeText: string): BakeFinding[] {
   const findings: BakeFinding[] = []
-  const topo = parseNetworkTopology(composeText)
+  const parsed = parseComposeDocument(composeText)
+  if (!parsed.ok) {
+    findings.push({
+      code: "COMPOSE_YAML_UNPARSEABLE",
+      item: `network-membership audit: ${parsed.message}`,
+      hint: "row 270 (F-265-1): survivor 3's offline witness reads the artefact through Bun.YAML after row 265 measured its line parser blind to a flow-style body and a merge-key attachment. A text that engine refuses has no offline reading of its membership; refusing on a parse failure is the fail-closed half of the unresolved dockerd-vs-Bun equivalence question (verification/s6b_13b_lanes_security_delta.md §9.2).",
+    })
+    return findings
+  }
+  const topo = parseNetworkTopology(parsed.doc)
 
   // (i) the browser carrier stays inside its internal segments
   const beyond = topo.attachments
@@ -1384,65 +1408,90 @@ function samePortSet(a: readonly number[], b: readonly number[]): boolean {
   return xs.length === ys.length && xs.every((v, i) => v === ys[i])
 }
 
-// --- extra_hosts parsers (the P3 audit: both YAML shapes, read per service, comments never trusted) --------------
+// --- compose document parsing shared by the entry-content audits (row 270, F-265-1/F-265-2) ----------------------
+//
+// WHY AN ENGINE AND NOT A LINE READER: the two audits below used to derive their facts with a line-and-indent
+// state machine. Row 265 measured what that costs — a one-line flow-style service body and a mapping-form
+// attachment carrying a merge key are both docker-valid YAML the line reader never sees as an attachment at
+// all, and in the merge-key case the WHOLE `verifyEgressBake` returned ok=true while `Bun.YAML` handed the
+// browser carrier `fc-web` (verification/s6b_13b_lanes_security_delta.md §2); the older extra-hosts audit had
+// the identical blind spot for mapping-form entries (§2's twin, pre-existing). Two guards parsing one document
+// two ways is how the next bypass is born, so both now parse the artefact with `Bun.YAML` — the engine the
+// estate-side instruments resolve these same bytes with — and see every shape that engine can hand onward,
+// merge keys already resolved. A parse THROW is reported as COMPOSE_YAML_UNPARSEABLE rather than swallowed:
+// an audit that could not read its subject refuses instead of staying silent. A file that parses to nothing
+// (empty or comment-only) is NOT a throw — it is a compose with no services and no networks, which the
+// membership claims already refuse loudly through the missing approved members.
+
+/** Parse the delivered artefact once, for whichever entry-content audits run over it.
+ *  WHY THE ACCESSOR IS TYPED BY HAND: packages/setup declares its own minimal BunNamespace
+ *  (types/bun-net.d.ts:142, merged by node-step.d.ts:45) and that declaration has no YAML member — the runtime
+ *  does (bun 1.3.14, rule E5; rows 251/265's instruments resolve these very bytes with it), but the declared
+ *  compiler only sees the declaration, so a bare `Bun.YAML` here would fail `bun run typecheck`. Widening the
+ *  shared d.ts is outside this row's write set (routed as R-270-2); until then this narrow accessor carries
+ *  the dependency honestly, and a runtime WITHOUT Bun.YAML fails closed: every artefact reads as unparseable
+ *  and bring-up stops, which is the direction a containment gate takes an unavailable instrument. */
+const composeYamlParser: { parse(text: string): unknown } | undefined = (Bun as unknown as { YAML?: { parse(text: string): unknown } }).YAML
+
+function parseComposeDocument(composeText: string): { ok: true; doc: Record<string, unknown> } | { ok: false; message: string } {
+  if (!composeYamlParser) return { ok: false, message: "Bun.YAML is unavailable in this runtime — the entry-content audits cannot read the artefact and refuse to guess" }
+  let raw: unknown
+  try {
+    raw = composeYamlParser.parse(composeText)
+  } catch (err) {
+    return { ok: false, message: `Bun.YAML refused the artefact: ${(err as Error).message}` }
+  }
+  if (raw === null || raw === undefined) return { ok: true, doc: {} } // empty/comment-only: loud absence downstream
+  if (typeof raw !== "object" || Array.isArray(raw)) return { ok: true, doc: {} } // scalar/array top level has no services to read either way
+  return { ok: true, doc: raw as Record<string, unknown> }
+}
+
+/** Render any parsed YAML value as the text the pair screens expect. Structured values (a mapping smuggled
+ *  into a sequence item, an object where a scalar belongs) stringify to something no pair shape can match —
+ *  which is the refusal this audit owes them, not a crash and not a skip. */
+function entryValue(value: unknown): string {
+  if (typeof value === "string") return value
+  if (value === null || value === undefined) return ""
+  if (typeof value === "number" || typeof value === "boolean") return String(value)
+  return JSON.stringify(value) ?? String(value)
+}
+
+// --- extra_hosts extraction (the P3 audit: every shape the engine resolves, read per service) ---------------------
 
 interface ExtraHostEntry {
   readonly service: string
-  /** The entry as the artefact carries it, minus quotes and any trailing comment. */
+  /** The entry as the parsed document carries it — quotes and comments are already gone with the engine's reading. */
   readonly raw: string
 }
 
-/** Every `extra_hosts` entry in a compose text, tagged with the indent-2 service it sits under. Both shapes are read —
- *  block form (`extra_hosts:` followed by `- "name:address"` lines, the form row 241 renders) and flow form
- *  (`extra_hosts: ["name:address"]`, the form a hand edit produces and the lint fixture tests) — because the audit's
- *  whole point after the narrowing is that it must not depend on which of them wrote the door open. Trailing comments
- *  are stripped before comparison, so a comment naming a good address satisfies nothing, exactly as in the conf audit. */
-function extraHostEntries(composeText: string): ExtraHostEntry[] {
+/** Every `extra_hosts` entry a service carries, in whatever shape the compose schema admits: the block/flow
+ *  SEQUENCE of "name:address" strings (the form row 241 renders), the MAPPING form `{name: address}` — the
+ *  spelling F-265-2 measured invisible to both offline witnesses while block form fired `EXTRA_HOST_AT_HOST` —
+ *  and the single-scalar form. Merge keys need no special case here because the engine resolves them before
+ *  this function sees the object: what is visible in the parsed document is what a consumer received. */
+function extraHostEntries(doc: Record<string, unknown>): ExtraHostEntry[] {
   const out: ExtraHostEntry[] = []
-  const lines = composeText.split("\n")
-  let service = ""
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i] ?? ""
-    const svc = line.match(/^ {2}(\S.*?):\s*(?:#.*)?$/)
-    if (svc) {
-      service = svc[1] ?? ""
+  const services = doc.services
+  if (typeof services !== "object" || services === null || Array.isArray(services)) return out
+  for (const [service, body] of Object.entries(services as Record<string, unknown>)) {
+    if (typeof body !== "object" || body === null || Array.isArray(body)) continue
+    const entries = (body as Record<string, unknown>).extra_hosts
+    if (entries === undefined || entries === null) continue
+    if (Array.isArray(entries)) {
+      for (const item of entries) out.push({ service, raw: entryValue(item) })
       continue
     }
-    const key = line.match(/^(\s*)extra_hosts:\s*(.*)$/)
-    if (!key) continue
-    const indent = (key[1] ?? "").length
-    const rest = (key[2] ?? "").split("#")[0]?.trim() ?? ""
-    if (rest.startsWith("[") && rest.endsWith("]")) {
-      for (const item of rest.slice(1, -1).split(",")) {
-        const value = stripEntryQuotes(item)
-        if (value !== "") out.push({ service, raw: value })
-      }
+    if (typeof entries === "object") {
+      for (const [hostname, value] of Object.entries(entries as Record<string, unknown>))
+        out.push({ service, raw: `${hostname}:${entryValue(value)}` })
       continue
     }
-    if (rest !== "") {
-      out.push({ service, raw: stripEntryQuotes(rest) })
-      continue
-    }
-    for (let j = i + 1; j < lines.length; j++) {
-      const body = lines[j] ?? ""
-      if (body.trim() === "" || body.trim().startsWith("#")) continue
-      if ((body.match(/^(\s*)/)?.[1] ?? "").length <= indent) break
-      const item = body.match(/^\s*-\s*(.*)$/)
-      if (!item) break
-      out.push({ service, raw: stripEntryQuotes((item[1] ?? "").split("#")[0] ?? "") })
-    }
+    out.push({ service, raw: entryValue(entries) })
   }
   return out
 }
 
-function stripEntryQuotes(token: string): string {
-  const t = token.trim()
-  if (t.length > 1 && ((t.startsWith('"') && t.endsWith('"')) || (t.startsWith("'") && t.endsWith("'"))))
-    return t.slice(1, -1)
-  return t
-}
-
-// --- network-membership parsers (row 267 / F-251-8: who is attached to what, in either YAML shape) ----------------
+// --- network-membership extraction (row 267 / F-251-8, engine-read since row 270 / F-265-1) -----------------------
 
 interface NetworkAttachment {
   readonly service: string
@@ -1457,75 +1506,57 @@ interface NetworkTopology {
   readonly attachments: readonly NetworkAttachment[]
 }
 
-/** Read the segmentation out of a compose text: which networks are declared and with which `internal` flag, and
- *  which service attaches which of them. Both YAML shapes are read for attachments — the flow form the render emits
- *  (`networks: [fc-ctl, fc-iso]`) and the block forms a hand edit writes (`- fc-web`, or the mapping form
- *  `fc-web: {aliases: […]}`) — for the same reason `extraHostEntries` reads both: after the narrowing, the audit
- *  must not depend on which spelling opened the door. Comments are stripped before anything is compared, so a
- *  comment naming a good network satisfies nothing. */
-function parseNetworkTopology(composeText: string): NetworkTopology {
+/** Read the segmentation out of the PARSED compose document: which networks are declared and with which
+   `internal` flag, and which service attaches which of them. Every shape the engine resolves is visible here —
+   the flow and block sequences, the mapping form with per-network options, a one-line flow-style service body,
+   and a mapping-form attachment whose membership arrives through a merge key. Those last two are exactly what
+   row 265 measured the previous line reader missing (F-265-1, introduced-by-batch: the merge-key spelling
+   passed the WHOLE verifyEgressBake with ok=true while Bun.YAML handed the carrier fc-web), and comments need
+   no handling because the engine discards them before this function runs. */
+function parseNetworkTopology(doc: Record<string, unknown>): NetworkTopology {
   const defined = new Map<string, boolean>()
   const attachments: NetworkAttachment[] = []
-  const lines = composeText.split("\n")
-  let section = ""
-  let entry = ""
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i] ?? ""
-    const top = line.match(/^([A-Za-z_][\w-]*):/) // indent-0 key switches section (services:, networks:, name:, …)
-    if (top) {
-      section = top[1] ?? ""
-      entry = ""
-      continue
-    }
-    if (section !== "services" && section !== "networks") continue
-
-    const head = line.match(/^ {2}([^:\s][^:]*):\s*(?:#.*)?$/) // the indent-2 member of the current section
-    if (head) {
-      entry = head[1] ?? ""
-      if (section === "networks" && !defined.has(entry)) defined.set(entry, false)
-      continue
-    }
-    if (entry === "") continue
-
-    if (section === "networks") {
-      const internal = line.match(/^ {4}internal:\s*(\S+)/)
-      if (internal?.[1]) defined.set(entry, /^(?:true|yes)$/i.test(internal[1]))
-      continue
-    }
-
-    const nets = line.match(/^ {4}networks:\s*(.*)$/)
-    if (!nets) continue
-    const rest = (nets[1] ?? "").split("#")[0]?.trim() ?? ""
-    if (rest.startsWith("[") && rest.endsWith("]")) {
-      for (const item of rest.slice(1, -1).split(",")) {
-        const name = stripEntryQuotes(item)
-        if (name !== "") attachments.push({ service: entry, network: name })
-      }
-      continue
-    }
-    if (rest !== "") {
-      attachments.push({ service: entry, network: stripEntryQuotes(rest) })
-      continue
-    }
-    // Block form: consume ONLY indent-6 entries; deeper lines belong to one entry's own options (aliases, ipv4_address).
-    for (let j = i + 1; j < lines.length; j++) {
-      const body = lines[j] ?? ""
-      if (body.trim() === "" || body.trim().startsWith("#")) continue
-      const indent = (body.match(/^(\s*)/)?.[1] ?? "").length
-      if (indent <= 4) break
-      if (indent !== 6) continue
-      const item = body.match(/^ {6}-\s*(\S.*?)\s*$/)
-      if (item) {
-        attachments.push({ service: entry, network: stripEntryQuotes(item[1] ?? "") })
+  const networks = doc.networks
+  if (typeof networks === "object" && networks !== null && !Array.isArray(networks)) {
+    for (const [name, body] of Object.entries(networks as Record<string, unknown>))
+      defined.set(
+        name,
+        typeof body === "object" && body !== null && !Array.isArray(body) && internalFlagHolds((body as Record<string, unknown>).internal),
+      )
+  }
+  const services = doc.services
+  if (typeof services === "object" && services !== null && !Array.isArray(services)) {
+    for (const [service, body] of Object.entries(services as Record<string, unknown>)) {
+      if (typeof body !== "object" || body === null || Array.isArray(body)) continue
+      const nets = (body as Record<string, unknown>).networks
+      if (nets === undefined || nets === null) continue
+      if (Array.isArray(nets)) {
+        for (const item of nets) attachments.push({ service, network: attachmentName(item) })
         continue
       }
-      const key = body.match(/^ {6}([^:\s][^:]*):(?:\s*\{[^}]*\})?\s*(?:#.*)?$/)
-      if (key) attachments.push({ service: entry, network: stripEntryQuotes(key[1] ?? "") })
+      if (typeof nets === "object") {
+        // Mapping form: the KEYS are the memberships — merged or literal, the engine already resolved which is which.
+        for (const name of Object.keys(nets as Record<string, unknown>)) attachments.push({ service, network: name })
+        continue
+      }
+      attachments.push({ service, network: attachmentName(nets) })
     }
   }
-
   return { defined, attachments }
+}
+
+/** A sequence item that is not a plain name (a mapping smuggled into `[fc-ctl, {fc-web: null}]`) keeps its JSON
+ *  spelling as the attachment name: no top-level block declares such a network, so claim (ii) refuses it. */
+function attachmentName(value: unknown): string {
+  return typeof value === "string" ? value : entryValue(value)
+}
+
+/** The internal flag as both this file's line reader and docker's own YAML 1.1 heritage read it: boolean true,
+ *  or the strings true/yes in any case. Anything else — including `false`, absence and structured values — is
+ *  non-internal; fail-closed is the direction a containment gate takes its mistakes. */
+function internalFlagHolds(value: unknown): boolean {
+  if (value === true) return true
+  return typeof value === "string" && /^(?:true|yes)$/i.test(value)
 }
 
 /** Positive NAME shape: lowercase RFC1123 labels with at least one dot. The dot is containment, not style — docker's
