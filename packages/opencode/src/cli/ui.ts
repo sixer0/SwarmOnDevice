@@ -3,17 +3,19 @@ import { Schema } from "effect"
 import { logo as glyphs } from "./logo"
 
 // Swarm ASCII wordmark, copied verbatim from implementation/01_theme_tokens.md section 3.2
-// (row 38's design). It is a new drawing, not a recolour or trace of the OpenCode mark: five
+// (row 38's design, widened to 26 columns by row 241c so W and M each own a centre column). It is
+// a new drawing, not a recolour or trace of the OpenCode mark: five
 // capital letters in a solid slab style versus upstream's four lowercase outlined rows, so it
 // differs in letter count, case, stroke weight and construction (FR-CLI-08, 03c 7.1). The
 // split half form used by the TUI renderer lives in packages/tui/src/logo.ts (row 49); joining
-// those halves with one space reproduces these rows exactly.
+// those halves with one space reproduces these rows exactly. packages/ui/test/wordmark-glyph.test.ts
+// decodes these rows back onto the cell grid and pins them against the SVG, so the two cannot drift.
 const wordmark = [
-  `████ █  █  ██  ████ █  █`,
-  `█    █  █ █  █ █  █ ██ █`,
-  `████ █ ██ ████ ███  █ ██`,
-  `   █ ████ █  █ █ ██ █  █`,
-  `████  ██  █  █ █  █ █  █`,
+  `████ █   █  ██  ████ █   █`,
+  `█    █   █ █  █ █  █ ██ ██`,
+  `████ █ █ █ ████ ███  █ █ █`,
+  `   █ ██ ██ █  █ █ ██ █   █`,
+  `████ ██ ██ █  █ █  █ █   █`,
 ]
 
 export class CancelledError extends Schema.TaggedErrorClass<CancelledError>()("UICancelledError", {}) {}

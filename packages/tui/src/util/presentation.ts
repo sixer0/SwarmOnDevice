@@ -1,6 +1,9 @@
+// Second copy of the SWARM split wordmark for this renderer; same 26-column grid as
+// packages/tui/src/logo.ts and packages/ui/src/components/logo.tsx, pinned by
+// packages/ui/test/wordmark-glyph.test.ts.
 const logo = {
-  left: ["████ █  █  ██ ", "█    █  █ █  █", "████ █ ██ ████", "   █ ████ █  █", "████  ██  █  █"],
-  right: ["████ █  █", "█  █ ██ █", "███  █ ██", "█ ██ █  █", "█  █ █  █"],
+  left: ["████ █   █  ██ ", "█    █   █ █  █", "████ █ █ █ ████", "   █ ██ ██ █  █", "████ ██ ██ █  █"],
+  right: ["████ █   █", "█  █ ██ ██", "███  █ █ █", "█ ██ █   █", "█  █ █   █"],
 }
 
 const reset = "\x1b[0m"

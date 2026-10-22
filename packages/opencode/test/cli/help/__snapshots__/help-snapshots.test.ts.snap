@@ -314,11 +314,11 @@ Options:
 `;
 
 exports[`Swarm CLI help-text snapshots every documented command emits stable help text: swarm github --help 1`] = `
-"████ █  █  ██  ████ █  █
-█    █  █ █  █ █  █ ██ █
-████ █ ██ ████ ███  █ ██
-   █ ████ █  █ █ ██ █  █
-████  ██  █  █ █  █ █  █
+"████ █   █  ██  ████ █   █
+█    █   █ █  █ █  █ ██ ██
+████ █ █ █ ████ ███  █ █ █
+   █ ██ ██ █  █ █ ██ █   █
+████ ██ ██ █  █ █  █ █   █
 
 Commands:
   swarm completion          generate shell completion script
@@ -626,11 +626,11 @@ Options:
 `;
 
 exports[`Swarm CLI help-text snapshots every documented command emits stable help text: swarm github install --help 1`] = `
-"████ █  █  ██  ████ █  █
-█    █  █ █  █ █  █ ██ █
-████ █ ██ ████ ███  █ ██
-   █ ████ █  █ █ ██ █  █
-████  ██  █  █ █  █ █  █
+"████ █   █  ██  ████ █   █
+█    █   █ █  █ █  █ ██ ██
+████ █ █ █ ████ ███  █ █ █
+   █ ██ ██ █  █ █ ██ █   █
+████ ██ ██ █  █ █  █ █   █
 
 Commands:
   swarm completion          generate shell completion script
@@ -688,11 +688,11 @@ Based on OpenCode (MIT). Not affiliated with the OpenCode team.
 `;
 
 exports[`Swarm CLI help-text snapshots every documented command emits stable help text: swarm github run --help 1`] = `
-"████ █  █  ██  ████ █  █
-█    █  █ █  █ █  █ ██ █
-████ █ ██ ████ ███  █ ██
-   █ ████ █  █ █ ██ █  █
-████  ██  █  █ █  █ █  █
+"████ █   █  ██  ████ █   █
+█    █   █ █  █ █  █ ██ ██
+████ █ █ █ ████ ███  █ █ █
+   █ ██ ██ █  █ █ ██ █   █
+████ ██ ██ █  █ █  █ █   █
 
 Commands:
   swarm completion          generate shell completion script

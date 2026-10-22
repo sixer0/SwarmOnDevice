@@ -33,7 +33,7 @@ const logoSource = readFileSync(fileURLToPath(logoPath), "utf8")
 const upstreamWordmark = readFileSync(fileURLToPath(upstreamWordmarkPath), "utf8")
 
 // Geometry prefixes measured by row 160 (§8): the Swarm wordmark opens `M16.20 0.00h33.60`
-// (logo.tsx:144) and the upstream one opens `M55.3846 36.4286H18.4615` (wordmark-v2.tsx:19).
+// (logo.tsx:152) and the upstream one opens `M55.3846 36.4286H18.4615` (wordmark-v2.tsx:19).
 // Comparing drawings by their ink rather than by an identifier is the point: identifiers were
 // exactly what every earlier text instrument read.
 const SWARM_WORDMARK_PATH_PREFIX = "M16.20 0.00h33.60"
@@ -70,10 +70,13 @@ describe("composer call site points at the Swarm wordmark seam", () => {
   })
 
   test("the class string keeps the geometry and theme tokens and adds the watermark token", () => {
-    // Ruling §4 row 2. `h-auto w-full` and `text-v2-background-bg-inverse` are kept verbatim: the
-    // two canvases differ in aspect by ~0.2% (234/42 against 720/129), and both marks paint
-    // fill="currentColor" (logo.tsx:143, wordmark-v2.tsx:20), so the existing theme token is what
-    // keeps the replacement theme-aware. `opacity-12` is the treatment moved to the call site.
+    // Ruling §4 row 2. `h-auto w-full` and `text-v2-background-bg-inverse` are kept verbatim, and
+    // both marks paint fill="currentColor" (logo.tsx:151, wordmark-v2.tsx:20), so the existing theme
+    // token is what keeps the replacement theme-aware. `opacity-12` is the treatment moved to the
+    // call site. Row 241c widened this canvas to 250.8 units, so the two aspects now differ by
+    // about 7% (250.8/42 against 720/129) rather than the ~0.2% row 168 measured; under `w-full
+    // h-auto` that makes the composer mark render 120.6 px tall instead of 129.2 px at a 720 px
+    // container. The class string itself is unchanged, which is what this test pins.
     const element = /<Logo\s+class="([^"]*)"\s*\/>/.exec(viewSource)
     expect(element).not.toBeNull()
     expect(element![1].trim().split(/\s+/)).toEqual([
@@ -114,7 +117,7 @@ describe("the watermark treatment is carried by the class, not by the component"
   })
 
   test("both seams apply the caller's class through the same single-key classList pattern", () => {
-    // Prop-surface parity (ruling §3.4): Logo takes `props: { class?: string }` (logo.tsx:133) and
+    // Prop-surface parity (ruling §3.4): Logo takes `props: { class?: string }` (logo.tsx:141) and
     // WordmarkV2 takes Pick<ComponentProps<"svg">, "class"> (wordmark-v2.tsx:3); the call site
     // passes one class string, and both components forward it identically.
     const pattern = 'classList={{ [props.class ?? ""]: !!props.class }}'
@@ -128,7 +131,7 @@ describe("the chosen component draws the Swarm lettering, not the upstream lette
   test("Logo carries the Swarm grid path and the upstream geometry appears nowhere in it", () => {
     expect(logoSource).toContain(SWARM_WORDMARK_PATH_PREFIX)
     expect(logoSource).not.toContain(UPSTREAM_WORDMARK_PATH_PREFIX)
-    expect(logoSource).toContain('viewBox="0 0 234 42"')
+    expect(logoSource).toContain('viewBox="0 0 250.8 42"')
     // One wordmark path element, against the upstream component's eight letterforms.
     const logoBody = logoSource.slice(logoSource.indexOf("export const Logo"))
     expect(logoBody).not.toBe(logoSource)
