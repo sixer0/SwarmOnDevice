@@ -91,33 +91,47 @@ describe("product path — a healthy-graft wire produces swarm.json:mcp.graft + 
 
 describe("call-site presence in src/index.ts — the source-level remove-the-call control (DC-W1)", () => {
   const src = readFileSync(join(import.meta.dir, "..", "src", "index.ts"), "utf8")
+  // Bound the slice at cmdInstall's own terminator — printWiringOutcome's doc comment, the next
+  // declaration after it — reusing the idiom d1_merged_lane.test.ts:248 pins and the rationale row 199
+  // wrote at wire_verb.test.ts:188-190. The previous bound was "function cmdRemove", which swept in
+  // cmdWire: index.ts carries the IDENTICAL writer call inside cmdWire, so deleting install's own call
+  // left this control green (senior review F-01, verification/s6_05_codereview.md §1.7). The
+  // bound-integrity case below fails loudly if the marker ever stops resolving, so the slice can never
+  // silently widen back over cmdWire. Same literal as d1_merged_lane.test.ts:248 by design — if one
+  // copy is edited away from the other, the lane that kept the true bound goes red first.
+  const installStart = src.indexOf("async function cmdInstall")
+  const installEnd = src.indexOf("/** Surface the writer's own result")
+  const CMD_INSTALL_BODY = src.slice(installStart, installEnd)
 
   it("index.ts imports writeConfigEntries from the wiring module (the product, not an operator, owns the call)", () => {
     expect(src).toContain('import { writeConfigEntries')
     expect(src).toContain('from "./wiring/config_writer.ts"')
   })
 
-  it("cmdInstall calls writeConfigEntries with the LIVE state object, not a re-read", () => {
-    const installStart = src.indexOf("async function cmdInstall")
-    const removeStart = src.indexOf("function cmdRemove")
+  it("the cmdInstall slice is really bounded: it starts at cmdInstall and ends before cmdWire declares", () => {
     expect(installStart).toBeGreaterThan(-1)
-    expect(removeStart).toBeGreaterThan(installStart)
-    const body = src.slice(installStart, removeStart)
+    expect(installEnd).toBeGreaterThan(installStart)
+    expect(CMD_INSTALL_BODY).not.toContain("function cmdWire")
+  })
+
+  it("cmdInstall calls writeConfigEntries with the LIVE state object, not a re-read", () => {
     // The call passes st.state (the object the steps mutated) and the loaded lock — §1.1 property 3.
-    expect(body).toContain("writeConfigEntries({ state: st.state, lock: lockRes.lock })")
+    // Deleting it from cmdInstall must turn THIS case red; that is the remove-the-call control.
+    expect(CMD_INSTALL_BODY).toContain("writeConfigEntries({ state: st.state, lock: lockRes.lock })")
   })
 
   it("the wiring call sits AFTER the --dry-run early-return, so a dry run never wires (no token scraping path)", () => {
-    const dryRunReturn = src.indexOf("return OUTCOME.REFUSED_NO_CONSENT")
-    const wireCall = src.indexOf("writeConfigEntries({ state: st.state")
-    expect(dryRunReturn).toBeGreaterThan(-1)
-    expect(wireCall).toBeGreaterThan(dryRunReturn)
+    // Ordering within the bounded body, same idiom as d1_merged_lane.test.ts:258-260. The old
+    // whole-file indexOf found cmdWire's call when install's was deleted, so this could not see the
+    // removal either; inside CMD_INSTALL_BODY a deleted call makes indexOf -1 and this comparison fails.
+    expect(CMD_INSTALL_BODY.indexOf("return OUTCOME.REFUSED_NO_CONSENT")).toBeLessThan(
+      CMD_INSTALL_BODY.indexOf("writeConfigEntries"),
+    )
   })
 
   it("a writer refusal folds FAILED in so the install exits non-zero (AC-T4 wiring side)", () => {
-    const installStart = src.indexOf("async function cmdInstall")
-    const removeStart = src.indexOf("function cmdRemove")
-    const body = src.slice(installStart, removeStart)
-    expect(body).toContain("if (!wire.ok) return moreSevere(report.token, OUTCOME.FAILED)")
+    // Bounded too: cmdWire's fold reads `return OUTCOME.FAILED` (no moreSevere), so the old unbounded
+    // slice only stayed honest here by accident of wording — it now speaks about cmdInstall alone.
+    expect(CMD_INSTALL_BODY).toContain("if (!wire.ok) return moreSevere(report.token, OUTCOME.FAILED)")
   })
 })

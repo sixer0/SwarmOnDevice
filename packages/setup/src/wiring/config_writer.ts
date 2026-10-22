@@ -61,15 +61,24 @@ export function configDir(base?: string): string {
 }
 
 /**
- * Resolve the config directory exactly as the Swarm product does, so an installer never writes where
+ * Resolve the config directory the way the Swarm product resolves it, so an installer never writes where
  * the product will not read (the CONFIG PATH divergence in research/s6_04_route_impact.md). The server
- * builds its config path from xdg-basedir (`packages/core/src/global.ts:13`), which honours
- * `$XDG_CONFIG_HOME` when it is set to an ABSOLUTE path and otherwise falls back to `$HOME/.config`.
- * The writer previously always used `$HOME/.config/swarm`, so whenever `XDG_CONFIG_HOME` was set the two
- * disagreed and a wired entry would land where the running product never looks. Replicating xdg-basedir's
- * own rule locally keeps the unprivileged setup binary free of a new dependency. An explicit `base`
- * (throwaway-HOME tests) still means `<base>/.config/swarm`: that argument simulates HOME, not XDG, and
- * its callers own the whole tree.
+ * builds its config path from xdg-basedir (`packages/core/src/global.ts:3,13`). This function is a
+ * dependency-free local replica of that rule — a replica, NOT an exact match. It diverges from
+ * xdg-basedir@5.1.0 in two ways, each compared against the package's own `index.js` (senior review F-03,
+ * verification/s6_05_codereview.md §6.1; whether to close them is an open user decision):
+ *   1. Upstream accepts ANY truthy `XDG_CONFIG_HOME`, relative paths included (`index.js:10`,
+ *      `env.XDG_CONFIG_HOME || …`); this replica additionally demands a leading `/` (the
+ *      `startsWith("/")` test below), so a relative value is honoured by the product but ignored here.
+ *   2. On fallback, upstream uses `os.homedir()` unconditionally (`index.js:4`); this replica falls back
+ *      through `homeDir()` (src/paths.ts:12-15), which prefers a non-empty `process.env.HOME`. With
+ *      `HOME` set away from the account home — every throwaway-HOME test does this — the two resolve to
+ *      different directories.
+ * They agree when `XDG_CONFIG_HOME` is set absolute, or unset/empty AND `HOME` equals `os.homedir()`.
+ * Before this replica existed the writer always used `$HOME/.config/swarm`, so any set
+ * `XDG_CONFIG_HOME` put a wired entry where the running product never looks; the replica closes that
+ * common case. An explicit `base` (throwaway-HOME tests) still means `<base>/.config/swarm`: that
+ * argument simulates HOME, not XDG, and its callers own the whole tree.
  */
 function xdgConfigHome(): string {
   const x = process.env.XDG_CONFIG_HOME
