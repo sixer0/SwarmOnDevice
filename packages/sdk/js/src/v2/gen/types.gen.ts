@@ -192,6 +192,76 @@ export type GlobalSetup = {
   registration: GlobalSetupRegistration
 }
 
+export type GlobalLanesFile = {
+  tildePath: string
+  present: boolean
+  error?: string
+  dirModeRepaired?: boolean
+}
+
+export type GlobalLaneRange = {
+  min: number
+  max: number
+  setupValue: number
+  stack: "firecrawl" | "searxng"
+  service: "api" | "playwright-service" | "searxng"
+  basis: string
+}
+
+export type GlobalLanesObservedValue = {
+  status: "observed"
+  value: number
+}
+
+export type GlobalLanesObservedAbsent = {
+  status: "absent"
+}
+
+export type GlobalLanesObservedUnobserved = {
+  status: "unobserved"
+  reason: string
+}
+
+export type GlobalLanesObservedEntry =
+  | GlobalLanesObservedValue
+  | GlobalLanesObservedAbsent
+  | GlobalLanesObservedUnobserved
+
+export type GlobalLanes = {
+  observedAt: string
+  file: GlobalLanesFile
+  range: {
+    [key: string]: GlobalLaneRange
+  }
+  stored?: {
+    [key: string]: number
+  }
+  updatedAt?: string
+  restartRequired: "container-recreate"
+  observed: {
+    [key: string]: GlobalLanesObservedEntry
+  }
+}
+
+export type GlobalLanesPatchInput = {
+  NUQ_WORKER_COUNT?: number
+  MAX_CONCURRENT_PAGES?: number
+  GRANIAN_BLOCKING_THREADS?: number
+}
+
+export type GlobalLanesState = {
+  observedAt: string
+  file: GlobalLanesFile
+  range: {
+    [key: string]: GlobalLaneRange
+  }
+  stored?: {
+    [key: string]: number
+  }
+  updatedAt?: string
+  restartRequired: "container-recreate"
+}
+
 export type SnapshotFileDiff = {
   file?: string
   patch?: string
@@ -7338,6 +7408,56 @@ export type GlobalSetupResponses = {
 }
 
 export type GlobalSetupResponse = GlobalSetupResponses[keyof GlobalSetupResponses]
+
+export type GlobalLanesGetData = {
+  body?: never
+  path?: never
+  query?: never
+  url: "/global/lanes"
+}
+
+export type GlobalLanesGetErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type GlobalLanesGetError = GlobalLanesGetErrors[keyof GlobalLanesGetErrors]
+
+export type GlobalLanesGetResponses = {
+  /**
+   * Lane-control state: stored tuple, published bounds, and in-container observations
+   */
+  200: GlobalLanes
+}
+
+export type GlobalLanesGetResponse = GlobalLanesGetResponses[keyof GlobalLanesGetResponses]
+
+export type GlobalLanesUpdateData = {
+  body?: GlobalLanesPatchInput
+  path?: never
+  query?: never
+  url: "/global/lanes"
+}
+
+export type GlobalLanesUpdateErrors = {
+  /**
+   * BadRequest | InvalidRequestError
+   */
+  400: EffectHttpApiErrorBadRequest | InvalidRequestError
+}
+
+export type GlobalLanesUpdateError = GlobalLanesUpdateErrors[keyof GlobalLanesUpdateErrors]
+
+export type GlobalLanesUpdateResponses = {
+  /**
+   * The full stored state after commit
+   */
+  200: GlobalLanesState
+}
+
+export type GlobalLanesUpdateResponse = GlobalLanesUpdateResponses[keyof GlobalLanesUpdateResponses]
 
 export type GlobalEventData = {
   body?: never

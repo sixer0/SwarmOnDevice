@@ -118,6 +118,64 @@ const scenarios: Scenario[] = [
         check(typeof skill.relPath === "string" && typeof skill.present === "boolean", "skill entries are relPath plus presence")
       }
     }),
+  // Row 247 — lane controls. The GET is read-only against the real home (an absent lanes file is
+  // the legal default) and its observation leg fails fast to named reasons when no daemon is up;
+  // the checks below are posture invariants that hold either way.
+  http.protected
+    .get("/global/lanes", "global.lanes.get")
+    .global()
+    .json(200, (body) => {
+      object(body)
+      assertNoSetupLeaks(body)
+      check(typeof body.observedAt === "string" && !Number.isNaN(Date.parse(body.observedAt)), "observedAt should be a read timestamp")
+      object(body.file)
+      // §5.2 tilde rule: only the tilde form of PC-PATH-18 may ever appear, never the expansion.
+      check(body.file.tildePath === "~/.swarm/setup/lanes.json", "lane file should be published in tilde form only")
+      check(!JSON.stringify(body).includes("/Users/"), "no absolute home path should appear on the lanes payload")
+      boolean(body.file.present)
+      object(body.range)
+      check(Object.keys(body.range).length === 3, "range should carry all three lane controls")
+      for (const entry of Object.values(body.range)) {
+        object(entry)
+        check(
+          Number.isInteger(entry.min) && Number.isInteger(entry.max) && (entry.min as number) <= (entry.max as number),
+          "ranges are integer bounds",
+        )
+      }
+      // An unreadable stored tuple omits `stored`; a readable one is an integer map (§4.3 no-collapse).
+      if (body.stored !== undefined) {
+        object(body.stored)
+        for (const value of Object.values(body.stored)) check(Number.isInteger(value), "stored lane values are integers")
+      } else {
+        check(typeof body.file.error === "string", "stored may only be omitted when file.error explains why")
+      }
+      check(body.restartRequired === "container-recreate", "every lane control is recreate-class (06 §3.1)")
+      object(body.observed)
+      for (const entry of Object.values(body.observed)) {
+        object(entry)
+        check(typeof entry.status === "string" && ["observed", "absent", "unobserved"].includes(entry.status), "observations speak the closed three-status vocabulary")
+        if (entry.status === "observed") check(Number.isInteger(entry.value), "observed values are integers")
+        if (entry.status === "unobserved") check(typeof entry.reason === "string", "every unobserved entry names its reason")
+      }
+    }),
+  // The PATCH scenario submits an out-of-range value ON PURPOSE: refusal happens before any
+  // filesystem call exists (06 §4.2), so this route's exerciser leg provably cannot write, even
+  // though the exercise harness isolates XDG dirs but not the HOME the lane resolver reads.
+  // Registering under http.protected also puts both verbs through --mode auth anonymous probing.
+  http.protected
+    .patch("/global/lanes", "global.lanes.update")
+    .global()
+    .probe({ path: "/global/lanes", body: { NUQ_WORKER_COUNT: 99 } })
+    .at(() => ({ path: "/global/lanes", body: { NUQ_WORKER_COUNT: 99 } }))
+    .json(400, (body) => {
+      object(body)
+      object(body.error)
+      check(body.error.code === "LANE_VALUE_OUT_OF_RANGE", "out-of-range patch should refuse with the spec token")
+      check(body.error.key === "NUQ_WORKER_COUNT", "the refusal should name the offending key")
+      check(body.error.value === 99, "the refusal should carry the offending value")
+      object(body.error.range)
+      check(body.error.range.min === 4 && body.error.range.max === 5, "the refusal should carry the shipped [4,5] bound (fork H)")
+    }),
   http.protected
     .get("/global/event", "global.event")
     .global()

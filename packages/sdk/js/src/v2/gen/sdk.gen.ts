@@ -86,6 +86,11 @@ import type {
   GlobalEventResponses,
   GlobalHealthErrors,
   GlobalHealthResponses,
+  GlobalLanesGetErrors,
+  GlobalLanesGetResponses,
+  GlobalLanesPatchInput,
+  GlobalLanesUpdateErrors,
+  GlobalLanesUpdateResponses,
   GlobalSetupErrors,
   GlobalSetupResponses,
   GlobalUpgradeErrors,
@@ -1279,6 +1284,44 @@ export class Experimental extends HeyApiClient {
   }
 }
 
+export class Lanes extends HeyApiClient {
+  /**
+   * Get lane controls
+   *
+   * The stored lane tuple (~/.swarm/setup/lanes.json, tilde form only), each control's validation bounds straight off the shipped range table, and what the running carrier containers actually carry in their PID 1 environment. Every control is recreate-class: applying a stored change needs the stack's apply command, so restartRequired says so rather than implying live effect. An unreadable stored file yields file.error with `stored` omitted — never an empty map dressed up as unconfigured.
+   */
+  public get<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError>) {
+    return (options?.client ?? this.client).get<GlobalLanesGetResponses, GlobalLanesGetErrors, ThrowOnError>({
+      url: "/global/lanes",
+      ...options,
+    })
+  }
+
+  /**
+   * Update lane controls
+   *
+   * Merge the submitted subset of the three lane controls over the stored tuple, validate the whole candidate through the shipped validator, and commit atomically at mode 0600. Any defect — out-of-range (both sides of the bounds), a key outside the closed three-name set, a non-integer value, or a body that is not the closed struct — refuses with its LANE_VALUE_* token and writes nothing, including the well-formed siblings of the same payload. The response is the full stored state read back after commit.
+   */
+  public update<ThrowOnError extends boolean = false>(
+    parameters?: {
+      globalLanesPatchInput?: GlobalLanesPatchInput
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ key: "globalLanesPatchInput", map: "body" }] }])
+    return (options?.client ?? this.client).patch<GlobalLanesUpdateResponses, GlobalLanesUpdateErrors, ThrowOnError>({
+      url: "/global/lanes",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+}
+
 export class Config extends HeyApiClient {
   /**
    * Get global configuration
@@ -1388,6 +1431,11 @@ export class Global extends HeyApiClient {
         ...params.headers,
       },
     })
+  }
+
+  private _lanes?: Lanes
+  get lanes(): Lanes {
+    return (this._lanes ??= new Lanes({ client: this.client }))
   }
 
   private _config?: Config

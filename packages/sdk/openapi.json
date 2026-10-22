@@ -358,6 +358,94 @@
         ]
       }
     },
+    "/global/lanes": {
+      "get": {
+        "tags": ["global"],
+        "operationId": "global.lanes.get",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Lane-control state: stored tuple, published bounds, and in-container observations",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GlobalLanes"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestError"
+                }
+              }
+            }
+          }
+        },
+        "description": "The stored lane tuple (~/.swarm/setup/lanes.json, tilde form only), each control's validation bounds straight off the shipped range table, and what the running carrier containers actually carry in their PID 1 environment. Every control is recreate-class: applying a stored change needs the stack's apply command, so restartRequired says so rather than implying live effect. An unreadable stored file yields file.error with `stored` omitted — never an empty map dressed up as unconfigured.",
+        "summary": "Get lane controls",
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.global.lanes.get({\n  ...\n})"
+          }
+        ]
+      },
+      "patch": {
+        "tags": ["global"],
+        "operationId": "global.lanes.update",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The full stored state after commit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GlobalLanesState"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "BadRequest | InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/effect_HttpApiError_BadRequest"
+                    },
+                    {
+                      "$ref": "#/components/schemas/InvalidRequestError"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "description": "Merge the submitted subset of the three lane controls over the stored tuple, validate the whole candidate through the shipped validator, and commit atomically at mode 0600. Any defect — out-of-range (both sides of the bounds), a key outside the closed three-name set, a non-integer value, or a body that is not the closed struct — refuses with its LANE_VALUE_* token and writes nothing, including the well-formed siblings of the same payload. The response is the full stored state read back after commit.",
+        "summary": "Update lane controls",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GlobalLanesPatchInput"
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.global.lanes.update({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/global/event": {
       "get": {
         "tags": ["global"],
@@ -15847,6 +15935,189 @@
           }
         },
         "required": ["observedAt", "stateFile", "components", "registration"],
+        "additionalProperties": false
+      },
+      "GlobalLanesFile": {
+        "type": "object",
+        "properties": {
+          "tildePath": {
+            "type": "string"
+          },
+          "present": {
+            "type": "boolean"
+          },
+          "error": {
+            "type": "string"
+          },
+          "dirModeRepaired": {
+            "type": "boolean"
+          }
+        },
+        "required": ["tildePath", "present"],
+        "additionalProperties": false
+      },
+      "GlobalLaneRange": {
+        "type": "object",
+        "properties": {
+          "min": {
+            "type": "integer"
+          },
+          "max": {
+            "type": "integer"
+          },
+          "setupValue": {
+            "type": "integer"
+          },
+          "stack": {
+            "type": "string",
+            "enum": ["firecrawl", "searxng"]
+          },
+          "service": {
+            "type": "string",
+            "enum": ["api", "playwright-service", "searxng"]
+          },
+          "basis": {
+            "type": "string"
+          }
+        },
+        "required": ["min", "max", "setupValue", "stack", "service", "basis"],
+        "additionalProperties": false
+      },
+      "GlobalLanesObservedValue": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["observed"]
+          },
+          "value": {
+            "type": "integer"
+          }
+        },
+        "required": ["status", "value"],
+        "additionalProperties": false
+      },
+      "GlobalLanesObservedAbsent": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["absent"]
+          }
+        },
+        "required": ["status"],
+        "additionalProperties": false
+      },
+      "GlobalLanesObservedUnobserved": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["unobserved"]
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": ["status", "reason"],
+        "additionalProperties": false
+      },
+      "GlobalLanesObservedEntry": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/GlobalLanesObservedValue"
+          },
+          {
+            "$ref": "#/components/schemas/GlobalLanesObservedAbsent"
+          },
+          {
+            "$ref": "#/components/schemas/GlobalLanesObservedUnobserved"
+          }
+        ]
+      },
+      "GlobalLanes": {
+        "type": "object",
+        "properties": {
+          "observedAt": {
+            "type": "string"
+          },
+          "file": {
+            "$ref": "#/components/schemas/GlobalLanesFile"
+          },
+          "range": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/GlobalLaneRange"
+            }
+          },
+          "stored": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer"
+            }
+          },
+          "updatedAt": {
+            "type": "string"
+          },
+          "restartRequired": {
+            "type": "string",
+            "enum": ["container-recreate"]
+          },
+          "observed": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/GlobalLanesObservedEntry"
+            }
+          }
+        },
+        "required": ["observedAt", "file", "range", "restartRequired", "observed"],
+        "additionalProperties": false
+      },
+      "GlobalLanesPatchInput": {
+        "type": "object",
+        "properties": {
+          "NUQ_WORKER_COUNT": {
+            "type": "integer"
+          },
+          "MAX_CONCURRENT_PAGES": {
+            "type": "integer"
+          },
+          "GRANIAN_BLOCKING_THREADS": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": false
+      },
+      "GlobalLanesState": {
+        "type": "object",
+        "properties": {
+          "observedAt": {
+            "type": "string"
+          },
+          "file": {
+            "$ref": "#/components/schemas/GlobalLanesFile"
+          },
+          "range": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/GlobalLaneRange"
+            }
+          },
+          "stored": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer"
+            }
+          },
+          "updatedAt": {
+            "type": "string"
+          },
+          "restartRequired": {
+            "type": "string",
+            "enum": ["container-recreate"]
+          }
+        },
+        "required": ["observedAt", "file", "range", "restartRequired"],
         "additionalProperties": false
       },
       "SnapshotFileDiff": {

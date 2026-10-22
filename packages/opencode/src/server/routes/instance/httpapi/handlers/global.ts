@@ -6,10 +6,11 @@ import { Global } from "@opencode-ai/core/global"
 import { Installation } from "@/installation"
 import { disposeAllInstancesAndEmitGlobalDisposed } from "@/server/global-lifecycle"
 import { setupObservation } from "@/server/shared/setup-observation"
+import { applyLanesPatch, lanesStateObservation, observeEffective } from "@/server/shared/lanes-observation"
 import { InstallationVersion } from "@opencode-ai/core/installation/version"
 import { Effect, Queue } from "effect"
 import * as Stream from "effect/Stream"
-import { HttpServerResponse } from "effect/unstable/http"
+import { HttpServerRequest, HttpServerResponse } from "effect/unstable/http"
 import { HttpApiBuilder } from "effect/unstable/httpapi"
 import * as Sse from "effect/unstable/encoding/Sse"
 import { RootHttpApi } from "../api"
@@ -80,6 +81,42 @@ export const globalHandlers = HttpApiBuilder.group(RootHttpApi, "global", (handl
       return setupObservation(Global.Path.config)
     })
 
+    // Row 247 — lane controls (06_s6b_lanes_spec.md §5.2). The read answers stored-plus-observed:
+    // the file leg resolves through the setup writer's own resolver (imported, not mirrored) and
+    // publishes only the tilde path; the observation leg reads /proc/1/environ inside already-running
+    // label-scoped carriers — it execs, never spawns, and degrades to named reasons when the daemon
+    // or a carrier is absent, because an absence must never be rendered as a value or as false.
+    const lanesGet = Effect.fn("GlobalHttpApi.lanesGet")(function* () {
+      const state = lanesStateObservation()
+      const observed = yield* observeEffective()
+      return { ...state, observed }
+    })
+
+    // Raw handling is what lets malformed JSON answer with the spec's own LANE_VALUE_MALFORMED
+    // token instead of a framework decode rejection (session.create at handlers/session.ts:159-176
+    // is the in-repo precedent for handleRaw + declared payload). Validation completes before any
+    // write call exists (06 §4.2), so every refusal here provably touches no bytes and no mode.
+    const lanesUpdate = Effect.fn("GlobalHttpApi.lanesUpdate")(function* (ctx: {
+      request: HttpServerRequest.HttpServerRequest
+    }) {
+      const body = yield* Effect.orDie(ctx.request.text)
+      const parsed = yield* Effect.try({
+        try: () => JSON.parse(body) as unknown,
+        catch: (err) => `request body is not valid JSON: ${err instanceof Error ? err.message : String(err)}`,
+      }).pipe(
+        Effect.map((value) => ({ ok: true as const, value })),
+        Effect.catch((reason) => Effect.succeed({ ok: false as const, reason })),
+      )
+      if (!parsed.ok)
+        return HttpServerResponse.jsonUnsafe(
+          { error: { code: "LANE_VALUE_MALFORMED", reason: parsed.reason } },
+          { status: 400 },
+        )
+      const result = applyLanesPatch(parsed.value)
+      if (!result.ok) return HttpServerResponse.jsonUnsafe({ error: result.error }, { status: 400 })
+      return HttpServerResponse.jsonUnsafe(result.state)
+    })
+
     const event = Effect.fn("GlobalHttpApi.event")(function* () {
       return yield* eventResponse()
     })
@@ -140,6 +177,8 @@ export const globalHandlers = HttpApiBuilder.group(RootHttpApi, "global", (handl
     return handlers
       .handle("health", health)
       .handle("setup", setup)
+      .handle("lanesGet", lanesGet)
+      .handleRaw("lanesUpdate", lanesUpdate)
       .handleRaw("event", event)
       .handle("configGet", configGet)
       .handle("configUpdate", configUpdate)
