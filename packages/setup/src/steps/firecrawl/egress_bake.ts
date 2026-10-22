@@ -1317,3 +1317,151 @@ function canonicalPublicUnicastV4(value: string): boolean {
   if (Number(parts[0] ?? "0") >= 224) return false
   return !isDeniedAddress(value)
 }
+
+// --- readiness-probe sink accounting (row 243 / R112d-3): the idle-window assertion as a DELTA with a liveness witness --
+//
+// WHY THIS EXISTS. The readiness gate polls the estate, and its exec-lane check against egress-proxy is a bare TCP
+// connect to squid's OWN port that opens and closes without ever sending request headers. squid logs each such connect
+// as `NONE_NONE/000 … error:transaction-end-before-headers` — attempt 4 counted eleven of them at the gate's own ~3.2 s
+// poll spacing, ending the second the gate went green (verification/13d_live_firecrawl_attempt4.md §8 R112d-3). Those
+// lines pollute an "idle window" assertion over squid's access log (§10.6 item 7: "zero outbound connections
+// attributable to the estate"): a naive "no new lines appeared" check reads the gate's own traffic as the estate going
+// busy, while a naive "ignore the 000 lines and see if anything is left" check cannot tell a genuinely idle estate from
+// a sink that stopped writing at all — the byte-identical observation §10.6's audit-sink rule forbids
+// (`masterplan/01e_compose_spec.md` :1720-1722: "Zero lines from a blind sink and zero lines from a truly idle estate
+// are byte-identical observations; only the control tells them apart"). The reconciliation is that the probe lines are
+// BOTH things at once: they must not count as egress, yet their very presence is positive proof the sink is writing. So
+// the idle verdict is a DELTA over two full reads, classified three ways, and it may say IDLE only when something
+// proves the sink is live — either the gate's own probe-noise lines (still polling) or a deliberate control line
+// (polling finished). This is trap T-5 of `masterplan/05_s6b_firecrawl_repair_contract.md` §5 made executable.
+//
+// PURE over RECORDED log lines: it boots nothing, spawns nothing, opens no socket. Rows 254/255 supply the live reads;
+// row 263 wires it into the bring-up assertion. Proving the delta rule on fixtures here is the row's whole test; the
+// live proof belongs to row 255 (`verification/s6b_09_containment_after_repair.md`), never to this file.
+
+/** The squid status code meaning "no HTTP response was ever sent" — the readiness self-connect's signature. A real
+ *  request always completes with a non-000 status (even the positive control's `TCP_MISS_ABORTED/503`), so 000 is what
+ *  separates the gate's own traffic from the estate's. */
+const SQUID_NO_RESPONSE_STATUS = "000"
+
+/** The vendor token squid writes when a connection closed before any request headers arrived — the readiness exec-lane
+ *  connect's tell (R112d-3). Named once so the classifier and its tests cite one spelling. */
+export const READINESS_PROBE_NOISE_TOKEN = "error:transaction-end-before-headers"
+
+/** The `<TAG>/<status>` field of a squid native access-log line. Leftmost match wins, which is the status field by
+ *  construction: in the native format the client IP (digits/dots, no letters) precedes it and the hierarchy token
+ *  (`HIER_DIRECT/<ip>`) follows it, so the first `[A-Z_]+/\d{3}` on any well-formed line is the reply code. */
+const SQUID_STATUS_FIELD = /\b([A-Z][A-Z_]*)\/(\d{3})\b/
+
+export type SquidSinkKind = "PROBE_NOISE" | "REAL_EGRESS" | "CONTROL" | "UNRECOGNIZED"
+
+/** Classify one squid access-log line into the four kinds the idle decision reasons over. Order matters and is the
+ *  substance of this row: the control marker wins over physical shape (the control IS a real request, but it is the one
+ *  the reader deliberately issued, so it registers as the liveness witness rather than as traffic that breaks idleness);
+ *  probe noise wins over real egress (a 000-status self-connect is neither outbound nor a transaction). A non-blank
+ *  line that is none of these is UNRECOGNIZED, and `auditIdleWindow` treats it fail-closed — an unattributable line
+ *  must never be silently read as "nothing happened". */
+export function classifySquidSinkLine(line: string, controlMarker?: string): SquidSinkKind {
+  if (line.trim() === "") return "UNRECOGNIZED"
+  if (controlMarker !== undefined && controlMarker !== "" && line.includes(controlMarker)) return "CONTROL"
+  if (isReadinessProbeNoise(line)) return "PROBE_NOISE"
+  if (hasRealRequest(line)) return "REAL_EGRESS"
+  return "UNRECOGNIZED"
+}
+
+function isReadinessProbeNoise(line: string): boolean {
+  const m = line.match(SQUID_STATUS_FIELD)
+  if (m?.[2] !== SQUID_NO_RESPONSE_STATUS) return false
+  // Tie the noise to the documented readiness signature (tag NONE_NONE or the transaction-end tell), NOT to every 000:
+  // a genuine aborted download can also carry 000, and mislabelling it as gate noise would hide real egress.
+  return m[1] === "NONE_NONE" || line.includes(READINESS_PROBE_NOISE_TOKEN)
+}
+
+function hasRealRequest(line: string): boolean {
+  const m = line.match(SQUID_STATUS_FIELD)
+  if (m !== null && m[2] !== SQUID_NO_RESPONSE_STATUS) return true
+  return /\b(?:GET|POST|HEAD|PUT|DELETE|CONNECT|OPTIONS|TRACE|PATCH)\b/.test(line)
+}
+
+export interface IdleWindowInput {
+  /** Full access-log contents read at the START of the idle window. */
+  readonly before: readonly string[]
+  /** Full access-log contents read at the END of the idle window. */
+  readonly after: readonly string[]
+  /** Substring identifying the deliberate positive-control request (e.g. `r112d-ctrl.example.com`). Optional: while
+   *  the gate is still polling, its probe-noise lines are themselves the liveness witness and no control is required. */
+  readonly controlMarker?: string
+  /** Optional third read taken immediately AFTER issuing the control request. When supplied, the control line is sought
+   *  in `(controlProbe − after)` rather than inside the window, matching attempt 4's A5 recipe where the control landed
+   *  just after the idle window closed (`verification/13d_live_firecrawl_attempt4.md` §4 A5). */
+  readonly controlProbe?: readonly string[]
+}
+
+export type IdleWindowOutcome =
+  /** Sink proven live (witness present) AND zero real egress in the window — genuinely nothing went out. */
+  | "IDLE"
+  /** At least one real-egress or unrecognised line appeared in the window — the estate sent something out. */
+  | "BUSY"
+  /** Zero real egress AND no liveness witness: an empty delta that cannot be told from a sink that stopped writing.
+   *  This is the distinct outcome R112d-3 exists to protect — never reported as IDLE. */
+  | "BLIND_SINK"
+
+export interface IdleWindowVerdict {
+  readonly outcome: IdleWindowOutcome
+  readonly added: number
+  readonly probeNoise: number
+  readonly realEgress: number
+  readonly control: number
+  readonly unrecognized: number
+  readonly witness: "PROBE_NOISE" | "CONTROL" | "NONE"
+  /** The lines that forced BUSY (real egress + unrecognised), quoted so a refusal names its cause. */
+  readonly blockingLines: readonly string[]
+}
+
+/** Decide an idle window from two full reads of squid's access log, accounting for the readiness gate's own probe
+ *  traffic. The verdict is a DELTA (lines added between the reads), never an absolute count, per R112d-3; it is allowed
+ *  to conclude IDLE only when a witness (probe noise still landing, or a control line landing) proves the sink writes. */
+export function auditIdleWindow(input: IdleWindowInput): IdleWindowVerdict {
+  const added = sinkDelta(input.before, input.after)
+  let probeNoise = 0
+  let realEgress = 0
+  let control = 0
+  let unrecognized = 0
+  const blockingLines: string[] = []
+  for (const line of added) {
+    const kind = classifySquidSinkLine(line, input.controlMarker)
+    if (kind === "PROBE_NOISE") probeNoise++
+    else if (kind === "REAL_EGRESS") {
+      realEgress++
+      blockingLines.push(line)
+    } else if (kind === "CONTROL") control++
+    else {
+      unrecognized++
+      blockingLines.push(line)
+    }
+  }
+  const controlLanded = control > 0 || controlProbeLanded(input)
+  const witness: IdleWindowVerdict["witness"] = controlLanded ? "CONTROL" : probeNoise > 0 ? "PROBE_NOISE" : "NONE"
+  const outcome: IdleWindowOutcome = blockingLines.length > 0 ? "BUSY" : witness === "NONE" ? "BLIND_SINK" : "IDLE"
+  return { outcome, added: added.length, probeNoise, realEgress, control, unrecognized, witness, blockingLines }
+}
+
+function controlProbeLanded(input: IdleWindowInput): boolean {
+  const marker = input.controlMarker
+  if (input.controlProbe === undefined || marker === undefined || marker === "") return false
+  return sinkDelta(input.after, input.controlProbe).some((l) => l.includes(marker))
+}
+
+/** Lines present in `after` more often than in `before`, occurrence-wise, preserving order. A MULTISET difference, not a
+ *  set one: the gate writes many near-identical probe lines and a set would collapse repeats the delta must still see. */
+function sinkDelta(before: readonly string[], after: readonly string[]): string[] {
+  const remaining = new Map<string, number>()
+  for (const l of before) remaining.set(l, (remaining.get(l) ?? 0) + 1)
+  const added: string[] = []
+  for (const l of after) {
+    const c = remaining.get(l) ?? 0
+    if (c > 0) remaining.set(l, c - 1)
+    else added.push(l)
+  }
+  return added
+}

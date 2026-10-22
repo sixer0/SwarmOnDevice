@@ -54,7 +54,13 @@ import {
   OPTION_PARSED_PORT_DIRECTIVES,
   REQUIRED_DENY_RANGES,
   REQUIRED_PROXIED_SERVICES,
+  // Row 243's probe-noise accounting: pure functions over RECORDED squid log lines. No live sink is touched here;
+  // rows 254/255 supply the live reads, this suite proves the delta rule on fixtures.
+  auditIdleWindow,
+  classifySquidSinkLine,
+  READINESS_PROBE_NOISE_TOKEN,
 } from "../src/steps/firecrawl/egress_bake.ts"
+import type { IdleWindowVerdict } from "../src/steps/firecrawl/egress_bake.ts"
 
 /** Models r85-fix5's intended R112-1 fix (the live V6 experiment, 13_live_firecrawl.md:110): rename ONLY the
  *  hostname ACL off the squid-predefined `to_localhost` to a free name; the dst ACL name is irrelevant to the audit
@@ -1311,5 +1317,145 @@ describe("(extra_hosts audit row 242) a pin may carry a public answer, never the
     const third = injectExtraHosts(composeText, "redis", ["crawl.example:192.168.5.3"])
     const v = verifyEgressBake({ lock: LOCK, home, composeText: third, confText: readFileSync(fcSquidPath(home), "utf8") })
     expect(v.findings.some((f) => f.code === "EXTRA_HOST_DENIED_VALUE" && f.item.includes("redis"))).toBe(true)
+  })
+})
+
+// --- row 243 / R112d-3: the readiness-probe lines that pollute the egress audit sink ------------------------------
+//
+// Every fixture below is a RECORDED squid native access-log line, shaped from the live evidence in
+// verification/13d_live_firecrawl_attempt4.md (§4 A5 idle leg, §5.2/§5.4 sink lines, §8 R112d-3's eleven
+// `NONE_NONE/000 … error:transaction-end-before-headers` lines). Nothing here boots squid or reads a live sink — the
+// delta rule is proved on fixtures, and the live proof is row 255's cell. The three things the row must prove are each
+// a named group: (1) IDLE is still concluded while the gate polls, NOT by ignoring the sink; (2) a sink that wrote NO
+// lines is a distinct BLIND_SINK outcome; (3) the delta comparison is load-bearing (see the mutation battery in
+// implementation/s6b_r112d3_probe_noise.md — these tests are what those mutants break).
+describe("(probe-noise accounting row 243) the idle window survives the readiness gate's own polling", () => {
+  // Faithful recorded shapes. Timestamps differ per line (squid stamps every connect), so repeated probes are distinct
+  // strings; the multiset-delta test below pins the identical-repeat case separately.
+  const realGet = "1761119702.123    0 172.22.0.3 TCP_MISS/200 1013 GET http://example.com/ - HIER_DIRECT/172.66.147.243 text/html"
+  const deniedConnect = "1761119704.789    0 172.22.0.3 TCP_DENIED/403 3375 CONNECT 127.0.0.1:80 - HIER_NONE/- text/html"
+  const tunnel = "1761119703.456    0 172.22.0.2 TCP_TUNNEL/200 7073 CONNECT example.com:443 - HIER_DIRECT/104.20.23.154 -"
+  const controlLine = "1761119705.000    0 172.22.0.3 TCP_MISS_ABORTED/503 0 GET http://r112d-ctrl.example.com/ - HIER_NONE/- text/html"
+  const CONTROL_MARKER = "r112d-ctrl.example.com"
+  const probeNoise = (ms: number): string =>
+    `176111970${ms}.${ms}    0 172.22.0.1 NONE_NONE/000 0 - ${READINESS_PROBE_NOISE_TOKEN} - HIER_NONE/- -`
+  const elevenProbes = Array.from({ length: 11 }, (_, i) => probeNoise(i))
+  const garbage = "this is not a squid access-log line at all"
+
+  // ---- classification itself, the primitive the window decision is built from ----
+  it("classifies the gate's self-connect as PROBE_NOISE and a completed request as REAL_EGRESS", () => {
+    expect(classifySquidSinkLine(probeNoise(0))).toBe("PROBE_NOISE")
+    expect(classifySquidSinkLine(realGet)).toBe("REAL_EGRESS")
+    expect(classifySquidSinkLine(deniedConnect)).toBe("REAL_EGRESS")
+    expect(classifySquidSinkLine(tunnel)).toBe("REAL_EGRESS")
+  })
+
+  it("the control marker wins over physical shape: a deliberate request is the witness, not traffic", () => {
+    // Physically the control IS a real request (TCP_MISS_ABORTED/503); without the marker it reads as egress, with it
+    // it reads as CONTROL. That precedence is what lets a control prove liveness without breaking idleness.
+    expect(classifySquidSinkLine(controlLine)).toBe("REAL_EGRESS")
+    expect(classifySquidSinkLine(controlLine, CONTROL_MARKER)).toBe("CONTROL")
+  })
+
+  it("an unattributable non-blank line is UNRECOGNIZED, never silently idle", () => {
+    expect(classifySquidSinkLine(garbage)).toBe("UNRECOGNIZED")
+    expect(classifySquidSinkLine("   ")).toBe("UNRECOGNIZED")
+  })
+
+  // ---- PROOF 1: IDLE while the gate actively polls, and NOT by ignoring the sink ----
+  it("PROOF 1 — concludes IDLE with eleven probe lines landing, counting them rather than discarding them", () => {
+    const v = auditIdleWindow({ before: [realGet], after: [realGet, ...elevenProbes] })
+    expect(v.outcome).toBe("IDLE")
+    // The fix is NOT "ignore the sink": the eleven probe lines were seen and counted as noise (that count is the very
+    // witness that proves the sink is writing), while none of them counted as egress.
+    expect(v.probeNoise).toBe(11)
+    expect(v.realEgress).toBe(0)
+    expect(v.witness).toBe("PROBE_NOISE")
+    expect(v.blockingLines).toEqual([])
+  })
+
+  // ---- PROOF 2: a sink that wrote nothing is a DISTINCT outcome, never folded into idle ----
+  it("PROOF 2 — an entirely empty sink reports BLIND_SINK, its own named result", () => {
+    const v = auditIdleWindow({ before: [], after: [] })
+    expect(v.outcome).toBe("BLIND_SINK")
+    expect(v.witness).toBe("NONE")
+    expect(v.added).toBe(0)
+  })
+
+  it("PROOF 2b — a stale sink (no new lines, gate stopped) is BLIND_SINK, not the idle a naive filter would fake", () => {
+    // A "drop the 000 lines, if nothing remains call it idle" implementation would report IDLE here — indistinguishable
+    // from a dead sink. The witness requirement is what refuses it.
+    const v = auditIdleWindow({ before: [realGet], after: [realGet] })
+    expect(v.outcome).toBe("BLIND_SINK")
+    expect(v.witness).toBe("NONE")
+  })
+
+  it("E4 DISCRIMINATION — idle-with-poll and blind-sink are distinguishable outcomes, not byte-identical", () => {
+    const idleWithPoll = auditIdleWindow({ before: [realGet], after: [realGet, ...elevenProbes] }).outcome
+    const blind = auditIdleWindow({ before: [realGet], after: [realGet] }).outcome
+    expect(idleWithPoll).toBe("IDLE")
+    expect(blind).toBe("BLIND_SINK")
+    expect(idleWithPoll).not.toBe(blind)
+  })
+
+  // ---- the second witness path: a control line once the gate has stopped polling ----
+  it("IDLE via a control line landing after the window, when no probe noise remains", () => {
+    const v = auditIdleWindow({
+      before: [realGet],
+      after: [realGet],
+      controlMarker: CONTROL_MARKER,
+      controlProbe: [realGet, controlLine],
+    })
+    expect(v.outcome).toBe("IDLE")
+    expect(v.witness).toBe("CONTROL")
+    expect(v.realEgress).toBe(0)
+  })
+
+  it("a control line inside the window is the witness, not traffic that flips IDLE to BUSY", () => {
+    const v = auditIdleWindow({ before: [], after: [controlLine], controlMarker: CONTROL_MARKER })
+    expect(v.outcome).toBe("IDLE")
+    expect(v.control).toBe(1)
+    expect(v.realEgress).toBe(0)
+  })
+
+  // ---- the assertion still bites: real egress is never masked by probe noise or by the control ----
+  it("reports BUSY when a real request appears in the window, naming the line", () => {
+    const v = auditIdleWindow({ before: [], after: [realGet] })
+    expect(v.outcome).toBe("BUSY")
+    expect(v.realEgress).toBe(1)
+    expect(v.blockingLines).toContain(realGet)
+  })
+
+  it("probe noise does NOT mask real egress: a tunnel beside the probes still reads BUSY", () => {
+    const v = auditIdleWindow({ before: [], after: [probeNoise(0), tunnel] })
+    expect(v.outcome).toBe("BUSY")
+    expect(v.probeNoise).toBe(1)
+    expect(v.realEgress).toBe(1)
+    expect(v.blockingLines).toContain(tunnel)
+  })
+
+  it("an unrecognised line fails closed to BUSY, never to IDLE", () => {
+    const v = auditIdleWindow({ before: [], after: [garbage] })
+    expect(v.outcome).toBe("BUSY")
+    expect(v.unrecognized).toBe(1)
+    expect(v.blockingLines).toContain(garbage)
+  })
+
+  // ---- the delta rule is load-bearing (mutant M1 deletes exactly this) ----
+  it("DELTA not absolute: a real line already present at the window start does not make the window busy", () => {
+    // The scrape that triggered the 120 s window logged realGet BEFORE the window opened. Inside the window only probe
+    // noise lands. Counting `after` wholesale (the delete-the-delta mutant) would see realGet and report BUSY; the
+    // delta sees only the added probes and correctly reports IDLE.
+    const v = auditIdleWindow({ before: [realGet, deniedConnect], after: [realGet, deniedConnect, ...elevenProbes.slice(0, 3)] })
+    expect(v.outcome).toBe("IDLE")
+    expect(v.realEgress).toBe(0)
+    expect(v.added).toBe(3)
+  })
+
+  it("multiset delta keeps identical repeats a set difference would collapse", () => {
+    const same = probeNoise(7)
+    const v = auditIdleWindow({ before: [], after: [same, same, same] })
+    expect(v.probeNoise).toBe(3)
+    expect(v.added).toBe(3)
   })
 })
