@@ -873,6 +873,9 @@ export const dict = {
   "setup.status.used": "Terpakai",
   "setup.status.notClaimed": "Tidak diklaim",
 
+  "setup.lanes.apply_warning":
+    "Menerapkan perubahan akan membuat ulang stack dan mengganggu pekerjaan yang sedang berjalan; perubahan belum aktif hingga saat itu.",
+
   "session.share.popover.title": "Publikasikan di web",
   "session.share.popover.description.shared": "Sesi ini publik di web. Siapa pun dengan tautan dapat mengaksesnya.",
   "session.share.popover.description.unshared":

@@ -15,18 +15,21 @@ import {
 // costs no i18n key — the exact zero-cost captioning row 203 used for the seven-component records block
 // (home-status-card.tsx:79).
 //
-// i18n HARD STOP (dispatch item 6): the six-key cap approved at gate 195 is exhausted (five spent on the ladder,
-// one on the dangling-key repair — decisions.md gate-195 item (i) + the 2026-10-22 exemption extension). This
-// component therefore mints ZERO keys and stretches none. Everything it paints is either (a) a monospace
-// technical token — env name, number, `[min,max]` range bracket, the literal field names `stored`/`observed`/
-// `range`/`setupValue`/`restartRequired` exactly as they appear on the wire (the same R7 field-name-token class the
-// sibling card already prints for `observedAt`/`receivedAt` at home-status-card.tsx:67,70), the closed observation
-// vocabulary `observed`/`absent`/`unobserved:<reason>`, the restart class `container-recreate`, and refusal tokens
-// like `LANE_VALUE_OUT_OF_RANGE` — or (b) the ONE pre-existing key `common.loading`, used at its literal meaning
-// for the in-flight line (row 203 reused it identically; it is translated in all 61 locales and adds nothing to the
-// exemption list). Every prose label this control WOULD want (a human heading, "stored"/"applied" column captions,
-// an "Apply" verb, the apply-consequence sentence) is named-but-not-minted in implementation/s6b_d5_card.md §i18n
-// and routed to row 249.
+// i18n posture (row 248 dispatch item 6, amended by row 249 under the 2026-10-22 USER DECISIONS item 1): the
+// gate-195 cap of six was exhausted at dispatch; the user then moved it six → seven and spent the single freed key
+// on exactly ONE thing — the apply-consequence sentence `setup.lanes.apply_warning`, rendered persistently below.
+// Until that decision, the consequence rode only on the persistent `container-recreate` token; the token stays as
+// the technical restart-class value (R7), but the meaning no longer depends on reading it. Everything else this
+// component paints remains either (a) a monospace technical token — env name, number, `[min,max]` range bracket,
+// the literal field names `stored`/`observed`/`range`/`setupValue`/`restartRequired` exactly as they appear on the
+// wire (the same R7 field-name-token class the sibling card already prints for `observedAt`/`receivedAt` at
+// home-status-card.tsx:67,70), the closed observation vocabulary `observed`/`absent`/`unobserved:<reason>`, the
+// restart class `container-recreate`, and refusal tokens like `LANE_VALUE_OUT_OF_RANGE` — or (b) the pre-existing
+// key `common.loading`, used at its literal meaning for the in-flight line (row 203 reused it identically; it is
+// translated in all 61 locales and adds nothing to the exemption list). The other six prose labels this control
+// WOULD want (a human heading, "stored"/"applied" column captions, an "Apply" verb, per-control accessible names,
+// the documented-not-effective disclosure, a refresh label) were DECLINED at prototype stage and stay unminted —
+// see implementation/s6b_d5_card.md §8 and decisions/decisions.md 2026-10-22 item 1.
 //
 // POLLING COST (row 247 §10 item 7): each GET can exec up to five docker children when a daemon is present, so this
 // block does NOT poll at health cadence. It reads once on mount and re-reads only after a user-initiated write.
@@ -81,6 +84,14 @@ export function LaneControls(props: { client: Accessor<LaneStatusClient | undefi
     >
       {/* Caption = the file this surface reads, monospace data (R7), zero keys. */}
       <div class="font-mono text-[10px] text-v2-text-text-faint">{model().filePath ?? "~/.swarm/setup/lanes.json"}</div>
+
+      {/* The apply consequence, stated in prose (the one key row 249 minted under the cap six→seven, decisions.md
+          2026-10-22 item 1). Persistent, not write-triggered: a dial over a recreate knob must say so before the
+          first Enter, not only after. The `container-recreate` token below keeps its technical meaning; it no
+          longer carries this sentence alone. */}
+      <div class="text-12-regular text-v2-text-text-faint" data-lane-apply-warning>
+        {language.t("setup.lanes.apply_warning")}
+      </div>
 
       <Show when={state.loading && !state.read}>
         <div class="text-12-regular text-v2-text-text-faint">{language.t("common.loading")}</div>

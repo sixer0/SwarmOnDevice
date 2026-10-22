@@ -90,9 +90,12 @@ const pluralCategories = new Map(
 //     the Home status card's four level names plus its level-4 non-claim (`setup.status.installed`,
 //     `.registered`, `.visible`, `.used`, `.notClaimed`) and the freed sixth slot
 //     `mcp.status.needs_client_registration`, which also repairs the dangling key referenced at
-//     packages/app/src/components/dialog-select-mcp.tsx:13.
+//     packages/app/src/components/dialog-select-mcp.tsx:13;
+//   - one more by blueprint-11 row 249 (session 6, USER DECISIONS 2026-10-22 item 1: the i18n cap moved
+//     six → seven by explicit user decision, spent entirely on the apply-consequence sentence
+//     `setup.lanes.apply_warning` shown by the lane controls on the Home card).
 // Widening this list is a decision, not drift: `parity-exemption-guard.test.ts` fails the suite on any
-// tenth entry, on any non-literal/wildcard, and if `en` or `id` ever stops carrying an exempt key.
+// eleventh entry, on any non-literal/wildcard, and if `en` or `id` ever stops carrying an exempt key.
 const UNTRANSLATED_KEY_PRESENCE_EXEMPTION: readonly string[] = [
   "command.project.openNumber",
   "settings.tab.servers",
@@ -103,6 +106,7 @@ const UNTRANSLATED_KEY_PRESENCE_EXEMPTION: readonly string[] = [
   "setup.status.used",
   "setup.status.notClaimed",
   "mcp.status.needs_client_registration",
+  "setup.lanes.apply_warning",
 ]
 // Locales the exemption never applies to. `en` is every domain's source, and `id` is the second
 // maintained locale: it already carries every exempt key, so it stays fully enforced like the rest.

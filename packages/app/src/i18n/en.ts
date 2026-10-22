@@ -772,6 +772,9 @@ export const dict = {
   "setup.status.used": "Used",
   "setup.status.notClaimed": "Not claimed",
 
+  "setup.lanes.apply_warning":
+    "Applying recreates the stack and interrupts running work; the change is not live until then.",
+
   "session.share.popover.title": "Publish on web",
   "session.share.popover.description.shared":
     "This session is public on the web. It is accessible to anyone with the link.",
