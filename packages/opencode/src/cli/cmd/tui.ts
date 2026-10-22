@@ -6,7 +6,7 @@ import { fileURLToPath } from "url"
 import { UI } from "@/cli/ui"
 import { errorMessage } from "@opencode-ai/tui/util/error"
 import { withTimeout } from "@/util/timeout"
-import { withNetworkOptions, resolveNetworkOptionsNoConfig, hasArg } from "@/cli/network"
+import { withNetworkOptions, resolveNetworkOptionsNoConfig, hasArg, serverPasswordSet } from "@/cli/network"
 import { Filesystem } from "@/util/filesystem"
 import type { GlobalEvent } from "@opencode-ai/sdk/v2"
 import type { EventSource } from "@opencode-ai/tui/context/sdk"
@@ -225,6 +225,25 @@ export const TuiThreadCommand = cmd({
       return
     }
 
+    // F-207-1 follow-up (row 207d): the worker guard (tui/worker.ts:67) refuses an unsecured
+    // listener by answering nothing — it cannot reject (util/rpc.ts has no error channel; a
+    // rejected worker message aborts bun test, measured exit 133) and cannot end its parent.
+    // Without this pre-flight, `swarm --port N` with no password hung forever awaiting
+    // client.call("server") below (measured: alive past 30 s, zero listeners bound). Same
+    // predicate as the guard and as cmd/serve.ts:18, cmd/web.ts:42, cmd/acp.ts:32; same
+    // refusal wording and exit 1 as their fail(). The worker guard stays: this is UX, the
+    // guard is the boundary. Computed here, before chdir and worker boot, so a refused
+    // invocation never spawns a worker or moves the process directory.
+    const network = resolveNetworkOptionsNoConfig(args)
+    const external = hasArg("--port") || hasArg("--hostname") || network.mdns === true
+    if (external && !serverPasswordSet()) {
+      UI.error(
+        "No server password is set; refusing to start an unsecured server. Set SWARM_SERVER_PASSWORD or OPENCODE_SERVER_PASSWORD to a non-empty value and run tui again.",
+      )
+      process.exitCode = 1
+      return
+    }
+
     const unguard = win32InstallCtrlCGuard()
     try {
       const { TuiConfig } = await import("@/config/tui")
@@ -268,9 +287,6 @@ export const TuiThreadCommand = cmd({
 
       const prompt = await input(args.prompt)
       const config = await TuiConfig.get()
-
-      const network = resolveNetworkOptionsNoConfig(args)
-      const external = hasArg("--port") || hasArg("--hostname") || network.mdns === true
 
       const headers = external ? ServerAuth.headers() : undefined
 
