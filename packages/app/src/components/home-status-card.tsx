@@ -4,6 +4,7 @@ import { useLanguage } from "@/context/language"
 import { useServer } from "@/context/server"
 import { createSetupStatus } from "@/context/setup-status"
 import { buildStatusCardModel, type Cell, type Level3Input, type LadderRow } from "./home-status-card.model"
+import { LaneControls } from "./lane-controls"
 
 // Home status card (row 203). Renders four INDEPENDENT levels per surface, each labelled with its own source and
 // freshness, and never collapses them into a verdict (masterplan/04_s6_status_spec.md §6 R1/R2/R3). All honesty
@@ -30,16 +31,19 @@ export function HomeStatusCard(props: { mcp?: Level3Input }) {
   // available wherever GlobalProvider + ServerProvider are — i.e. both Home surfaces.
   const global = useGlobal()
   const server = useServer()
+  // Resolved once and shared by the setup-status seam and the lane-controls block: the same client server-sdk uses
+  // (server-sdk.tsx:398), available wherever GlobalProvider + ServerProvider are — i.e. both Home surfaces.
+  const getClient = () => {
+    const conn = server.current
+    if (!conn) return undefined
+    return global.ensureServerCtx(conn).sdk.client
+  }
   // i18n keys are not compile-checked anywhere in this app — `Flatten` collapses the dictionary to a string index
   // (context/language.tsx:29-30,192-195), so `t` accepts any string with or without a cast here (measured in
   // verification/s6_05_codereview.md §7). The former widening cast hid nothing and is deleted as F-14 cleanup;
   // closing the repo-wide hole is F-13, routed to the user. `language.t` threads through unmodified below.
 
-  const status = createSetupStatus(() => {
-    const conn = server.current
-    if (!conn) return undefined
-    return global.ensureServerCtx(conn).sdk.client
-  })
+  const status = createSetupStatus(getClient)
   const model = createMemo(() => buildStatusCardModel({ read: status.read, loading: status.loading, mcp: props.mcp }))
 
   return (
@@ -87,6 +91,10 @@ export function HomeStatusCard(props: { mcp?: Level3Input }) {
           </For>
         </div>
       </Show>
+
+      {/* Lane controls + monitoring read-out (row 248): its own clearly-labelled block, captioned by the tilde
+          source path, mounted alongside the ladder and never merged into it. */}
+      <LaneControls client={getClient} />
     </section>
   )
 }
