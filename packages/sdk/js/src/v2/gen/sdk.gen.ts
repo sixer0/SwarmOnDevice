@@ -86,6 +86,8 @@ import type {
   GlobalEventResponses,
   GlobalHealthErrors,
   GlobalHealthResponses,
+  GlobalSetupErrors,
+  GlobalSetupResponses,
   GlobalUpgradeErrors,
   GlobalUpgradeResponses,
   InstanceDisposeErrors,
@@ -1324,6 +1326,18 @@ export class Global extends HeyApiClient {
   public health<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError>) {
     return (options?.client ?? this.client).get<GlobalHealthResponses, GlobalHealthErrors, ThrowOnError>({
       url: "/global/health",
+      ...options,
+    })
+  }
+
+  /**
+   * Get setup observations
+   *
+   * Read-only observations behind the Home status card's installed and registered levels: the setup component record, and the presence of the config entry and skill texts the setup writes into the server's own global config directory. Values are observations read during this request; nothing here starts or connects anything.
+   */
+  public setup<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError>) {
+    return (options?.client ?? this.client).get<GlobalSetupResponses, GlobalSetupErrors, ThrowOnError>({
+      url: "/global/setup",
       ...options,
     })
   }

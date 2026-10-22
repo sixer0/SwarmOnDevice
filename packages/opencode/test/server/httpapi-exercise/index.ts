@@ -57,6 +57,25 @@ function locationData(validate: (value: any) => void) {
   }
 }
 
+// Row 201 payload minimisation. The setup record this route reads also carries absolute install paths, docker
+// object ids, hash-named backup paths and a lock version (packages/setup/src/state.ts:28-44). Any one of those
+// on the wire discloses the home directory — therefore the username — plus a map of what could be destroyed,
+// to every process that can reach the port (research/s6_04_route_impact.md §2). The scan is recursive so a
+// leak nested inside a component or a skill entry fails too, and it reports key trails only, never values.
+const FORBIDDEN_SETUP_KEYS = ["paths", "dockerObjects", "backups", "lockVersion", "version", "integrity"]
+
+function assertNoSetupLeaks(value: unknown, trail = "$") {
+  if (Array.isArray(value)) {
+    for (const item of value) assertNoSetupLeaks(item, trail)
+    return
+  }
+  if (!value || typeof value !== "object") return
+  for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+    check(!FORBIDDEN_SETUP_KEYS.includes(key), `${trail}.${key} must not be published by /global/setup`)
+    assertNoSetupLeaks(child, `${trail}.${key}`)
+  }
+}
+
 const scenarios: Scenario[] = [
   http.protected
     .get("/global/health", "global.health")
@@ -64,6 +83,40 @@ const scenarios: Scenario[] = [
     .json(200, (body) => {
       object(body)
       check(body.healthy === true, "server should report healthy")
+    }),
+  http.protected
+    .get("/global/setup", "global.setup")
+    .global()
+    .json(200, (body) => {
+      object(body)
+      assertNoSetupLeaks(body)
+      check(typeof body.observedAt === "string" && !Number.isNaN(Date.parse(body.observedAt)), "observedAt should be a read timestamp")
+      object(body.stateFile)
+      check(typeof body.stateFile.path === "string", "stateFile.path should name the file that was opened")
+      boolean(body.stateFile.present)
+      const components = body.components
+      object(components)
+      // All seven register ids are published even when the record names none of them, so the card can render
+      // one row per component (PC-CMP-01..07, packages/setup/src/constants.ts:9-17).
+      check(
+        ["runtime", "node", "graft", "rtk", "obsidian", "searxng", "firecrawl"].every((id) => isRecord(components[id])),
+        "components should carry one entry per register component id",
+      )
+      object(body.registration)
+      check(body.registration.reader === "xdg-config", "registration should name its path resolver")
+      check(typeof body.registration.configDirPath === "string", "registration should publish the directory it asked about")
+      object(body.registration.configFile)
+      boolean(body.registration.configFile.present)
+      object(body.registration.configFile.entries)
+      boolean(body.registration.configFile.entries.graft)
+      boolean(body.registration.configFile.entries.swarmWeb)
+      const skills = body.registration.skills
+      array(skills)
+      check(skills.length === 5, "registration should report all five skill texts")
+      for (const skill of skills) {
+        object(skill)
+        check(typeof skill.relPath === "string" && typeof skill.present === "boolean", "skill entries are relPath plus presence")
+      }
     }),
   http.protected
     .get("/global/event", "global.event")

@@ -56,7 +56,25 @@ function underHome(tildePath: string, base: string): string {
 }
 
 export function configDir(base?: string): string {
-  return base !== undefined ? join(base, ".config", "swarm") : join(homeDir(), ".config", "swarm")
+  if (base !== undefined) return join(base, ".config", "swarm")
+  return join(xdgConfigHome(), "swarm")
+}
+
+/**
+ * Resolve the config directory exactly as the Swarm product does, so an installer never writes where
+ * the product will not read (the CONFIG PATH divergence in research/s6_04_route_impact.md). The server
+ * builds its config path from xdg-basedir (`packages/core/src/global.ts:13`), which honours
+ * `$XDG_CONFIG_HOME` when it is set to an ABSOLUTE path and otherwise falls back to `$HOME/.config`.
+ * The writer previously always used `$HOME/.config/swarm`, so whenever `XDG_CONFIG_HOME` was set the two
+ * disagreed and a wired entry would land where the running product never looks. Replicating xdg-basedir's
+ * own rule locally keeps the unprivileged setup binary free of a new dependency. An explicit `base`
+ * (throwaway-HOME tests) still means `<base>/.config/swarm`: that argument simulates HOME, not XDG, and
+ * its callers own the whole tree.
+ */
+function xdgConfigHome(): string {
+  const x = process.env.XDG_CONFIG_HOME
+  if (x && x.length > 0 && x.startsWith("/")) return x
+  return join(homeDir(), ".config")
 }
 
 export function configFilePath(opts: { base?: string; path?: string } = {}): string {
@@ -313,7 +331,7 @@ interface PlannedWrite {
 function buildPlan(
   state: StateFile,
   opts: ConfigWriterOptions,
-): { plan: PlannedWrite[]; el: Eligibility; skipped: SkippedBag; configPath: string } {
+): { plan: PlannedWrite[]; el: Eligibility; skipped: SkippedBag; configPath: string; conflict: string | null } {
   const configPath = configFilePath({
     ...(opts.base !== undefined ? { base: opts.base } : {}),
     ...(opts.path !== undefined ? { path: opts.path } : {}),
@@ -321,11 +339,19 @@ function buildPlan(
   const el = eligibility(state, opts)
   const { entries, skipped } = desiredEntries(state, opts, el)
   const plan: PlannedWrite[] = []
+  // D13: carry the merge conflict out of the planner instead of discarding it. `mergeIntoExisting`
+  // returns `{ json: "", conflict: "<sentence>" }` when the existing swarm.json is not valid JSON or
+  // not a top-level object; the old code destructured only `{ json }` and pushed the empty string as
+  // the desired bytes, which the write loop then committed (truncating the user's file). The empty
+  // `json` is still planned so the symlink guard runs against the real target first, but the caller
+  // refuses on `conflict` BEFORE any write, so the original bytes survive at their own path.
+  let conflict: string | null = null
 
   if (Object.keys(entries).length > 0) {
     const current = readCurrent(configPath)
-    const { json } = mergeIntoExisting(current.text, entries)
-    plan.push({ path: configPath, desired: json, label: CONFIG_FILE_NAME })
+    const merged = mergeIntoExisting(current.text, entries)
+    conflict = merged.conflict
+    plan.push({ path: configPath, desired: merged.json, label: CONFIG_FILE_NAME })
   }
 
   const texts = renderSkillTexts(opts.lock)
@@ -336,7 +362,7 @@ function buildPlan(
       ;(skipped.skills ??= {})[t.rel] = `${t.gate} component is not healthy (P-15)`
     }
   }
-  return { plan, el, skipped, configPath }
+  return { plan, el, skipped, configPath, conflict }
 }
 
 /**
@@ -349,13 +375,20 @@ export function writeConfigEntries(opts: ConfigWriterOptions = {}): WriteResult 
   const stateRes = resolveStateFile(opts)
   if (!stateRes.ok) return { ok: false, reason: `cannot read component state: ${stateRes.error}` }
 
-  const { plan, el, skipped, configPath } = buildPlan(stateRes.state, opts)
+  const { plan, el, skipped, configPath, conflict } = buildPlan(stateRes.state, opts)
 
   // Symlink refusal BEFORE any read/write, across every planned target (never follow one).
   for (const p of plan) {
     if (isSymlink(p.path))
       return { ok: false, reason: `target ${p.path} is a symlink — refusing to write through it (target_symlink)` }
   }
+
+  // D13 fail-closed — the guarantee this function's own doc comment advertises ("...and on an
+  // unparseable existing swarm.json") that was never implemented. Refuse on the conflict AFTER the
+  // symlink guard (so a symlinked corrupt target still reports "symlink" first) and BEFORE the write
+  // loop (so the user's bytes survive byte-for-byte at their original path: no truncation, no backup,
+  // no ledger, never a half-wired machine). Closes drift D13 / AC-T1..AC-T3.
+  if (conflict !== null) return { ok: false, reason: conflict }
 
   const wroteSkills = plan.filter((p) => p.label !== CONFIG_FILE_NAME).map((p) => p.label)
   const wrote = { graft: el.graft && !!readEntryFromPlan(plan, "graft"), swarmWeb: el.swarmWeb, skills: wroteSkills }

@@ -7,9 +7,10 @@ import { join } from "path"
 // Why this file exists: the exemption is a deliberate, bounded weakening of a completeness invariant
 // (branch B of the 2026-10-21 decision in
 // `docs/2026-10-19_opencode_swarm_rebrand/decisions/decisions.md`). Its safety depends entirely on
-// staying three entries wide. This guard is the mechanism that keeps the exception from becoming the
-// norm: any fourth entry, any wildcard, or any relaxation of the `missing: []` assertion fails the
-// suite here instead of quietly passing the gate it is supposed to police.
+// staying bounded — nine entries as of blueprint-10 row 204 (session 6), up from the original three.
+// This guard is the mechanism that keeps the exception from becoming the norm: any entry beyond the
+// approved set, any wildcard, or any relaxation of the `missing: []` assertion fails the suite here
+// instead of quietly passing the gate it is supposed to police.
 //
 // It reads the gate's source text on purpose. Importing `parity.test.ts` would re-register its tests
 // inside this file, and the guard must bite even if someone edits the list into something the gate
@@ -17,7 +18,17 @@ import { join } from "path"
 
 const gateSource = readFileSync(join(import.meta.dir, "parity.test.ts"), "utf8")
 
-const APPROVED_EXEMPT_KEYS = ["command.project.openNumber", "settings.tab.servers", "ui.toast.ariaLabel"]
+const APPROVED_EXEMPT_KEYS = [
+  "command.project.openNumber",
+  "settings.tab.servers",
+  "ui.toast.ariaLabel",
+  "setup.status.installed",
+  "setup.status.registered",
+  "setup.status.visible",
+  "setup.status.used",
+  "setup.status.notClaimed",
+  "mcp.status.needs_client_registration",
+]
 
 function arrayLiteral(name: string) {
   const declaration = new RegExp(`const ${name}: readonly string\\[\\] = \\[([^\\]]*)\\]`)
@@ -34,10 +45,10 @@ function arrayLiteral(name: string) {
 describe("i18n parity exemption guard", () => {
   const exemptKeys = arrayLiteral("UNTRANSLATED_KEY_PRESENCE_EXEMPTION")
 
-  test("the exemption holds exactly the three approved keys and nothing else", () => {
+  test("the exemption holds exactly the nine approved keys and nothing else", () => {
     expect([...exemptKeys].sort()).toEqual([...APPROVED_EXEMPT_KEYS].sort())
-    expect(exemptKeys.length).toBe(3)
-    expect(new Set(exemptKeys).size).toBe(3)
+    expect(exemptKeys.length).toBe(9)
+    expect(new Set(exemptKeys).size).toBe(9)
   })
 
   test("every exemption entry is a literal dotted key, never a wildcard or pattern", () => {

@@ -321,6 +321,43 @@
         ]
       }
     },
+    "/global/setup": {
+      "get": {
+        "tags": ["global"],
+        "operationId": "global.setup",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Machine-global setup observations",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GlobalSetup"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestError"
+                }
+              }
+            }
+          }
+        },
+        "description": "Read-only observations behind the Home status card's installed and registered levels: the setup component record, and the presence of the config entry and skill texts the setup writes into the server's own global config directory. Values are observations read during this request; nothing here starts or connects anything.",
+        "summary": "Get setup observations",
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.global.setup({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/global/event": {
       "get": {
         "tags": ["global"],
@@ -15692,6 +15729,124 @@
           }
         },
         "required": ["name", "data"],
+        "additionalProperties": false
+      },
+      "GlobalSetupStateFile": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "present": {
+            "type": "boolean"
+          },
+          "updatedAtAbsent": {
+            "type": "boolean"
+          },
+          "error": {
+            "type": "string"
+          }
+        },
+        "required": ["path", "present"],
+        "additionalProperties": false
+      },
+      "GlobalSetupComponent": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string"
+          },
+          "installedBySwarm": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "GlobalSetupConfigFile": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "present": {
+            "type": "boolean"
+          },
+          "parseError": {
+            "type": "string"
+          },
+          "entries": {
+            "type": "object",
+            "properties": {
+              "graft": {
+                "type": "boolean"
+              },
+              "swarmWeb": {
+                "type": "boolean"
+              }
+            },
+            "required": ["graft", "swarmWeb"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["path", "present", "entries"],
+        "additionalProperties": false
+      },
+      "GlobalSetupSkill": {
+        "type": "object",
+        "properties": {
+          "relPath": {
+            "type": "string"
+          },
+          "present": {
+            "type": "boolean"
+          }
+        },
+        "required": ["relPath", "present"],
+        "additionalProperties": false
+      },
+      "GlobalSetupRegistration": {
+        "type": "object",
+        "properties": {
+          "reader": {
+            "type": "string",
+            "enum": ["xdg-config"]
+          },
+          "configDirPath": {
+            "type": "string"
+          },
+          "configFile": {
+            "$ref": "#/components/schemas/GlobalSetupConfigFile"
+          },
+          "skills": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GlobalSetupSkill"
+            }
+          }
+        },
+        "required": ["reader", "configDirPath", "configFile", "skills"],
+        "additionalProperties": false
+      },
+      "GlobalSetup": {
+        "type": "object",
+        "properties": {
+          "observedAt": {
+            "type": "string"
+          },
+          "stateFile": {
+            "$ref": "#/components/schemas/GlobalSetupStateFile"
+          },
+          "components": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/GlobalSetupComponent"
+            }
+          },
+          "registration": {
+            "$ref": "#/components/schemas/GlobalSetupRegistration"
+          }
+        },
+        "required": ["observedAt", "stateFile", "components", "registration"],
         "additionalProperties": false
       },
       "SnapshotFileDiff": {

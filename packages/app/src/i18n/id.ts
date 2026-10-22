@@ -422,6 +422,7 @@ export const dict = {
   "mcp.status.connected": "terhubung",
   "mcp.status.failed": "gagal",
   "mcp.status.needs_auth": "perlu autentikasi",
+  "mcp.status.needs_client_registration": "perlu registrasi klien",
   "mcp.status.disabled": "nonaktif",
   "mcp.auth.clickToAuthenticate": "Klik untuk mengautentikasi",
 
@@ -865,6 +866,12 @@ export const dict = {
   "status.popover.tab.lsp": "LSP",
   "status.popover.tab.plugins": "Plugin",
   "status.popover.action.manageServers": "Kelola server",
+
+  "setup.status.installed": "Terpasang",
+  "setup.status.registered": "Terdaftar",
+  "setup.status.visible": "Terlihat",
+  "setup.status.used": "Terpakai",
+  "setup.status.notClaimed": "Tidak diklaim",
 
   "session.share.popover.title": "Publikasikan di web",
   "session.share.popover.description.shared": "Sesi ini publik di web. Siapa pun dengan tautan dapat mengaksesnya.",

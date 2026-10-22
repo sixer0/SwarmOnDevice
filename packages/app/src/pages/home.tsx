@@ -7,6 +7,7 @@ import { createHomeScrollController } from "./home/home-scroll-controller"
 import { createHomeSessionSearchController } from "./home/home-session-search-controller"
 import { createHomeSessionsController } from "./home/home-sessions-controller"
 import { HomeSessions } from "./home/home-sessions"
+import { HomeStatusCard } from "@/components/home-status-card"
 
 export function NewHome() {
   const home = createHomeController()
@@ -37,6 +38,11 @@ export function NewHome() {
         >
           <HomeProjects projects={projects} scroll={scroll} />
           <HomeSessions sessions={sessions} search={search} scroll={scroll} />
+          {/* Fourth grid child: spans both columns on large screens, stacks below on small. Visible in both
+              transports without touching sidebar scroll geometry (spec §8). */}
+          <div class="min-w-0 lg:col-span-2">
+            <HomeStatusCard />
+          </div>
           <HomeUtilityNav
             class="flex lg:hidden"
             onOpenSettings={projects.utility.settings}

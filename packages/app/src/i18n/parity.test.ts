@@ -77,22 +77,35 @@ const pluralCategories = new Map(
 
 // Narrow presence-only exemption, branch B of the 2026-10-21 i18n propagation decision
 // (`docs/2026-10-19_opencode_swarm_rebrand/decisions/decisions.md`: "A if a credential exists, else B";
-// no credential was supplied). Three keys landed in the `en` and `id` tables only, ahead of the
-// translation lane, so this list excuses PRESENCE of exactly those keys in every locale other than
-// `en` and `id`. It does not change what any other assertion checks: values, placeholders, plural
-// variants and `extra` keys are still enforced for these same keys once a locale carries them.
-// Proper closure is `bun run translate:app -- all`, which translates them and retires this list.
-// Each key exists in exactly one domain's `en.ts`, so relief can only ever fire where the key is real:
-// `command.project.openNumber` and `settings.tab.servers` live in the app table, `ui.toast.ariaLabel`
-// in the ui table (row 170's accessible region name — see packages/ui/src/v2/components/toast-v2.tsx:21).
-// Do NOT add entries here: `parity-exemption-guard.test.ts` fails the suite on a fourth key.
+// no credential was supplied). Keys landed in the `en` and `id` tables only, ahead of the translation
+// lane, so this list excuses PRESENCE of exactly those keys in every locale other than `en` and `id`.
+// It does not change what any other assertion checks: values, placeholders, plural variants and `extra`
+// keys are still enforced for these same keys once a locale carries them. Proper closure is
+// `bun run translate:app -- all`, which translates them and retires this list.
+// Two deliberate batches live here, each real in `en`+`id` and absent in the other 60 locales:
+//   - the original three (branch B): `command.project.openNumber` and `settings.tab.servers` (app
+//     table) plus `ui.toast.ariaLabel` (ui table — row 170's accessible region name, see
+//     packages/ui/src/v2/components/toast-v2.tsx:21);
+//   - six more landed by blueprint-10 row 204 (session 6, CONTROLLER GATE ruling (i) in decisions.md):
+//     the Home status card's four level names plus its level-4 non-claim (`setup.status.installed`,
+//     `.registered`, `.visible`, `.used`, `.notClaimed`) and the freed sixth slot
+//     `mcp.status.needs_client_registration`, which also repairs the dangling key referenced at
+//     packages/app/src/components/dialog-select-mcp.tsx:13.
+// Widening this list is a decision, not drift: `parity-exemption-guard.test.ts` fails the suite on any
+// tenth entry, on any non-literal/wildcard, and if `en` or `id` ever stops carrying an exempt key.
 const UNTRANSLATED_KEY_PRESENCE_EXEMPTION: readonly string[] = [
   "command.project.openNumber",
   "settings.tab.servers",
   "ui.toast.ariaLabel",
+  "setup.status.installed",
+  "setup.status.registered",
+  "setup.status.visible",
+  "setup.status.used",
+  "setup.status.notClaimed",
+  "mcp.status.needs_client_registration",
 ]
 // Locales the exemption never applies to. `en` is every domain's source, and `id` is the second
-// maintained locale: it already carries all three keys, so it stays fully enforced like the rest.
+// maintained locale: it already carries every exempt key, so it stays fully enforced like the rest.
 const NEVER_EXEMPT_LOCALES: readonly string[] = ["en", "id"]
 
 function exemptFromPresence(key: string, locale: string) {

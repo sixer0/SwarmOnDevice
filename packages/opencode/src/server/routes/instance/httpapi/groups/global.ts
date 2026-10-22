@@ -65,8 +65,52 @@ const GlobalUpgradeResult = Schema.Union([
   }),
 ])
 
+// Levels 1-2 of the Home status card (masterplan/04_s6_status_spec.md §4). The route publishes OBSERVATIONS
+// only — the card computes level values from them — and the field set below is the whole contract on purpose.
+// The setup record also carries absolute install paths, docker object ids, backup paths and digests
+// (packages/setup/src/state.ts:28-37); those disclose the home directory and therefore the username to any
+// process that can reach the port, so they are not representable in this API at all rather than merely
+// omitted by a handler that could otherwise leak them (research/s6_04_route_impact.md §2).
+const GlobalSetupStateFile = Schema.Struct({
+  path: Schema.String,
+  present: Schema.Boolean,
+  updatedAtAbsent: Schema.optional(Schema.Boolean),
+  error: Schema.optional(Schema.String),
+}).annotate({ identifier: "GlobalSetupStateFile" })
+
+const GlobalSetupComponent = Schema.Struct({
+  state: Schema.optional(Schema.String),
+  installedBySwarm: Schema.optional(Schema.Boolean),
+}).annotate({ identifier: "GlobalSetupComponent" })
+
+const GlobalSetupConfigFile = Schema.Struct({
+  path: Schema.String,
+  present: Schema.Boolean,
+  parseError: Schema.optional(Schema.String),
+  entries: Schema.Struct({ graft: Schema.Boolean, swarmWeb: Schema.Boolean }),
+}).annotate({ identifier: "GlobalSetupConfigFile" })
+
+const GlobalSetupRegistration = Schema.Struct({
+  reader: Schema.Literal("xdg-config"),
+  configDirPath: Schema.String,
+  configFile: GlobalSetupConfigFile,
+  skills: Schema.Array(
+    Schema.Struct({ relPath: Schema.String, present: Schema.Boolean }).annotate({ identifier: "GlobalSetupSkill" }),
+  ),
+}).annotate({ identifier: "GlobalSetupRegistration" })
+
+const GlobalSetup = Schema.Struct({
+  observedAt: Schema.String,
+  stateFile: GlobalSetupStateFile,
+  // Keys are the seven register component ids (PC-CMP-01..07). A string key set keeps the server free of the
+  // @swarm/setup import; the handler always emits exactly those seven (server/shared/setup-observation.ts).
+  components: Schema.Record(Schema.String, GlobalSetupComponent),
+  registration: GlobalSetupRegistration,
+}).annotate({ identifier: "GlobalSetup" })
+
 export const GlobalPaths = {
   health: "/global/health",
+  setup: "/global/setup",
   event: "/global/event",
   config: "/global/config",
   dispose: "/global/dispose",
@@ -83,6 +127,20 @@ export const GlobalApi = HttpApi.make("global").add(
           identifier: "global.health",
           summary: "Get health",
           description: "Get health information about the Swarm server.",
+        }),
+      ),
+      // Machine-global by construction: no query, no payload, and this group carries no instance or
+      // workspace middleware (auth arrives from RootHttpApi at api.ts:57-59). Copying the three-middleware
+      // shape of groups/mcp.ts:146-148 would make it directory-scoped and stop being a machine fact
+      // (research/s6_04_route_impact.md §3).
+      HttpApiEndpoint.get("setup", GlobalPaths.setup, {
+        success: described(GlobalSetup, "Machine-global setup observations"),
+      }).annotateMerge(
+        OpenApi.annotations({
+          identifier: "global.setup",
+          summary: "Get setup observations",
+          description:
+            "Read-only observations behind the Home status card's installed and registered levels: the setup component record, and the presence of the config entry and skill texts the setup writes into the server's own global config directory. Values are observations read during this request; nothing here starts or connects anything.",
         }),
       ),
       HttpApiEndpoint.get("event", GlobalPaths.event, {

@@ -2,8 +2,10 @@ import { Config } from "@/config/config"
 import { GlobalBus, type GlobalEvent as GlobalBusEvent } from "@/bus/global"
 import { EffectBridge } from "@/effect/bridge"
 import { EventV2 } from "@opencode-ai/core/event"
+import { Global } from "@opencode-ai/core/global"
 import { Installation } from "@/installation"
 import { disposeAllInstancesAndEmitGlobalDisposed } from "@/server/global-lifecycle"
+import { setupObservation } from "@/server/shared/setup-observation"
 import { InstallationVersion } from "@opencode-ai/core/installation/version"
 import { Effect, Queue } from "effect"
 import * as Stream from "effect/Stream"
@@ -67,6 +69,17 @@ export const globalHandlers = HttpApiBuilder.group(RootHttpApi, "global", (handl
       return { healthy: true as const, version: InstallationVersion }
     })
 
+    // Levels 1-2 of the Home status card. Two file reads with privileges the server already holds, and
+    // nothing else: no directory or workspace parameter, no instance context, no spawn, and no internal
+    // request to `/mcp` — a status read that started MCP children would be an action wearing a read's
+    // clothes (masterplan/04_s6_status_spec.md §4 rule 3, research/s6_04_route_impact.md §3). The path
+    // argument is Global.Path.config, the same constant the product's own global config load reads
+    // (packages/opencode/src/config/config.ts:253), so the registration half describes the file the
+    // product actually uses rather than one the writer merely happened to write.
+    const setup = Effect.fn("GlobalHttpApi.setup")(function* () {
+      return setupObservation(Global.Path.config)
+    })
+
     const event = Effect.fn("GlobalHttpApi.event")(function* () {
       return yield* eventResponse()
     })
@@ -126,6 +139,7 @@ export const globalHandlers = HttpApiBuilder.group(RootHttpApi, "global", (handl
 
     return handlers
       .handle("health", health)
+      .handle("setup", setup)
       .handleRaw("event", event)
       .handle("configGet", configGet)
       .handle("configUpdate", configUpdate)

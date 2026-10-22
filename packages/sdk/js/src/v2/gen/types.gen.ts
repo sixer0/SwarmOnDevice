@@ -149,6 +149,49 @@ export type MoveSessionError = {
   }
 }
 
+export type GlobalSetupStateFile = {
+  path: string
+  present: boolean
+  updatedAtAbsent?: boolean
+  error?: string
+}
+
+export type GlobalSetupComponent = {
+  state?: string
+  installedBySwarm?: boolean
+}
+
+export type GlobalSetupConfigFile = {
+  path: string
+  present: boolean
+  parseError?: string
+  entries: {
+    graft: boolean
+    swarmWeb: boolean
+  }
+}
+
+export type GlobalSetupSkill = {
+  relPath: string
+  present: boolean
+}
+
+export type GlobalSetupRegistration = {
+  reader: "xdg-config"
+  configDirPath: string
+  configFile: GlobalSetupConfigFile
+  skills: Array<GlobalSetupSkill>
+}
+
+export type GlobalSetup = {
+  observedAt: string
+  stateFile: GlobalSetupStateFile
+  components: {
+    [key: string]: GlobalSetupComponent
+  }
+  registration: GlobalSetupRegistration
+}
+
 export type SnapshotFileDiff = {
   file?: string
   patch?: string
@@ -7270,6 +7313,31 @@ export type GlobalHealthResponses = {
 }
 
 export type GlobalHealthResponse = GlobalHealthResponses[keyof GlobalHealthResponses]
+
+export type GlobalSetupData = {
+  body?: never
+  path?: never
+  query?: never
+  url: "/global/setup"
+}
+
+export type GlobalSetupErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type GlobalSetupError = GlobalSetupErrors[keyof GlobalSetupErrors]
+
+export type GlobalSetupResponses = {
+  /**
+   * Machine-global setup observations
+   */
+  200: GlobalSetup
+}
+
+export type GlobalSetupResponse = GlobalSetupResponses[keyof GlobalSetupResponses]
 
 export type GlobalEventData = {
   body?: never

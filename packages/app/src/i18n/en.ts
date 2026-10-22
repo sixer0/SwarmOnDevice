@@ -324,6 +324,7 @@ export const dict = {
   "mcp.status.connected": "connected",
   "mcp.status.failed": "failed",
   "mcp.status.needs_auth": "needs auth",
+  "mcp.status.needs_client_registration": "needs client registration",
   "mcp.status.disabled": "disabled",
   "mcp.auth.clickToAuthenticate": "Click to authenticate",
 
@@ -764,6 +765,12 @@ export const dict = {
   "status.popover.tab.lsp": "LSP",
   "status.popover.tab.plugins": "Plugins",
   "status.popover.action.manageServers": "Manage servers",
+
+  "setup.status.installed": "Installed",
+  "setup.status.registered": "Registered",
+  "setup.status.visible": "Visible",
+  "setup.status.used": "Used",
+  "setup.status.notClaimed": "Not claimed",
 
   "session.share.popover.title": "Publish on web",
   "session.share.popover.description.shared":

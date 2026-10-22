@@ -1,9 +1,9 @@
 import { Effect } from "effect"
-import { effectCmd } from "../effect-cmd"
+import { effectCmd, fail } from "../effect-cmd"
 import { AgentSideConnection, ndJsonStream } from "@agentclientprotocol/sdk"
 import { ServerAuth } from "@/server/auth"
 import { createOpencodeClient } from "@opencode-ai/sdk/v2"
-import { withNetworkOptions, resolveNetworkOptions } from "../network"
+import { withNetworkOptions, resolveNetworkOptions, serverPasswordSet } from "../network"
 import { ACPProfile } from "@/acp/profile"
 
 export const AcpCommand = effectCmd({
@@ -21,6 +21,18 @@ export const AcpCommand = effectCmd({
     const { ACP } = yield* Effect.promise(() => import("@/acp/agent"))
     ACPProfile.mark("cli.acp.handler")
     process.env.OPENCODE_CLIENT = "acp"
+    // `acp` starts the same Server.listen listener as `serve`/`web`, so it opens the same local PTY
+    // websocket shell door (research/03e C7-4). Without this guard an `acp` process brought up with no
+    // password bound loopback and answered GET /global/setup and /global/health anonymously with 200
+    // (row 201 measured it; row 194 §1 residual / row 207 claim C-207-c). serverPasswordSet() treats an
+    // empty value as unset, so this also refuses the c4 fail-open class on the acp path. The ACP agent
+    // talks to its own listener through ServerAuth.headers() below, which carries the credential once a
+    // password is set, so requiring one here does not break the internal client — only anonymous
+    // third-party reads of the port.
+    if (!serverPasswordSet())
+      return yield* fail(
+        "No server password is set; refusing to start an unsecured server. Set SWARM_SERVER_PASSWORD or OPENCODE_SERVER_PASSWORD to a non-empty value and run acp again.",
+      )
     const opts = yield* resolveNetworkOptions(args)
     const server = yield* Effect.promise(() => ACPProfile.measure("cli.acp.server.listen", () => Server.listen(opts)))
 

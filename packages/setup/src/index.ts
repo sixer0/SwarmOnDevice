@@ -24,6 +24,7 @@ import { readState } from "./state.ts"
 import { acquireLock, releaseLock } from "./lockdir.ts"
 import { printHostList, evaluateConsent, renderConsentScreen } from "./consent.ts"
 import { enforcePolicy } from "./wiring/policy_enforce.ts"
+import { writeConfigEntries, checkSkillFiles, type WriteResult } from "./wiring/config_writer.ts"
 import { discoverSteps, orderSteps, type StepDescriptor } from "./steps.ts"
 import { GENERATED_MODULES_BY_ID } from "./steps.gen.ts"
 import type { StepContext, StepResult } from "./steps/_template/index.ts"
@@ -50,9 +51,13 @@ function usageText(lockVersion?: string): string {
     `  ${PROGRAM_NAME} install [component...] consent-first install (all seven optional, unticked)`,
     `  ${PROGRAM_NAME} status                 report each component's state (read-only JSON)`,
     `  ${PROGRAM_NAME} remove  [component...] remove only what swarm-setup created (alias: --remove)`,
+    `  ${PROGRAM_NAME} wire                   re-wire ~/.config/swarm for components already recorded healthy`,
     "",
     "Flags:",
-    "  --non-interactive                MDM mode; needs --terms-token for every selected component",
+    "  --non-interactive                MDM mode; names NO default — pass an explicit component list,",
+    "                                   plus --terms-token for every component named (row 198: an",
+    "                                   unnamed list refuses with REFUSED_NO_SELECTION instead of",
+    "                                   silently selecting all seven)",
     "  --terms-token <component>=<value>  per-tool acknowledgement unlocking --non-interactive",
     "                                   (value = <component_id>@<lock_sha256_12>, shown on the consent screen)",
     "  --dry-run                        touch nothing; install shows exactly what consent would be asked for, remove lists what would be deleted",
@@ -97,8 +102,30 @@ function cmdStatus(): OutcomeToken {
   return OUTCOME.OK
 }
 
-function resolveSelected(named: readonly ComponentId[]): ComponentId[] {
-  return named.length > 0 ? [...named] : [...COMPONENT_IDS]
+/** Row 198 (fix contract §3): the non-interactive path may never silently select everything. An
+ *  unnamed list is legitimate ONLY where a human is present to tick boxes — register PC-CMD-01 freezes
+ *  "no args presents all seven optional/unticked" for the interactive path, and the ticking IS the
+ *  consent. With --non-interactive nobody is ticking: the old all-seven default forced operators to
+ *  harvest seven tokens out of a --dry-run screen, which constraint N6 forbids becoming product
+ *  behaviour. Returning null means "refuse"; the caller prints the candidates and returns
+ *  REFUSED_NO_SELECTION. Named here so both verbs share one rule (drift D10 found the second copy). */
+function resolveSelected(named: readonly ComponentId[], nonInteractive: boolean): ComponentId[] | null {
+  if (named.length > 0) return [...named]
+  if (nonInteractive) return null
+  return [...COMPONENT_IDS]
+}
+
+/** Row 198: one refusal text for both verbs. Names every candidate id so an operator learns what to
+ *  pass without reading source, and states the required form generically rather than picking
+ *  components for them. The full register set is printed (not the policy-filtered remainder) because
+ *  this is the answer to "what can this verb install?" and because a filtered list could be empty;
+ *  a named-but-forbidden component still gets its own F-79-A warning from `selectable`. */
+function printNoSelectionRefusal(verb: string): void {
+  console.error(`${PROGRAM_NAME}: ${verb} --non-interactive named no component; refusing instead of selecting all seven`)
+  console.error(`${PROGRAM_NAME}: candidates: ${COMPONENT_IDS.join(", ")}`)
+  console.error(
+    `${PROGRAM_NAME}: required form: ${PROGRAM_NAME} ${verb} <component> [<component>...] --non-interactive --terms-token <component>=<value> (one per named component)`,
+  )
 }
 
 /** F-79-A enforcement (hook only; admin switch DEFERRED): forbidden components never reach the
@@ -299,7 +326,14 @@ async function cmdInstall(cmd: ParsedCommand): Promise<OutcomeToken> {
     // terms LINKED not auto-accepted, admin token for this lock. --dry-run shows EXACTLY what
     // would be asked, then refuses without consent (row-81 PROOF 3 exit contract preserved:
     // a dry run never consents, never records, never downloads).
-    const offered = selectable(resolveSelected(cmd.components), forbidden)
+    const selected = resolveSelected(cmd.components, cmd.nonInteractive)
+    if (selected === null) {
+      // Row 198: refuses BEFORE the consent gate, so no token is demanded, no consent is recorded and
+      // nothing downstream (fetch, steps, the row-197 writer call) can be reached.
+      printNoSelectionRefusal("install")
+      return OUTCOME.REFUSED_NO_SELECTION
+    }
+    const offered = selectable(selected, forbidden)
     if (cmd.dryRun) {
       renderConsentScreen(lockRes.lock, offered, { dryRun: true })
       const scan = discoverSteps()
@@ -359,7 +393,172 @@ async function cmdInstall(cmd: ParsedCommand): Promise<OutcomeToken> {
     for (const e of report.executions) {
       console.log(`step ${e.id}: ${e.token}${e.message ? ` — ${e.message.split("\n")[0]}` : ""}`)
     }
+
+    // D1 wiring (row 197): the product now wires its own tools after the pipeline, with no caller
+    // reaching into the module and no --dry-run token scraping. The health gate lives INSIDE the writer
+    // (config_writer.ts eligibility()), so this call is unconditional-after-the-pipeline and an unhealthy
+    // component produces a recorded skip rather than a write (§1.1 property 1). Pass the LIVE state the
+    // steps just mutated (st.state) instead of re-reading disk at the moment it most recently changed
+    // (§1.1 property 3). Skip reasons are printed verbatim; a writer refusal (D13 unparseable config,
+    // symlinked target, unreadable state) folds FAILED in so the run exits non-zero (§1.1 property 2, AC-T4).
+    const wire = writeConfigEntries({ state: st.state, lock: lockRes.lock })
+    printWiringOutcome(wire)
+    if (!wire.ok) return moreSevere(report.token, OUTCOME.FAILED)
     return report.token
+  } finally {
+    releaseLock()
+  }
+}
+
+/** Surface the writer's own result honestly: every skip reason verbatim, what changed, or the refusal.
+ *  Never summarise a skip away into a bare OK (directive N9 refuse-silently class; §1.1 property 2). */
+function printWiringOutcome(wire: WriteResult): void {
+  if (!wire.ok) {
+    console.error(`${PROGRAM_NAME}: wiring refused: ${wire.reason}`)
+    return
+  }
+  if (wire.skipped.graft) console.log(`wire graft: skipped — ${wire.skipped.graft}`)
+  if (wire.skipped.swarmWeb) console.log(`wire swarm-web: skipped — ${wire.skipped.swarmWeb}`)
+  for (const [rel, reason] of Object.entries(wire.skipped.skills ?? {})) console.log(`wire ${rel}: skipped — ${reason}`)
+  if (!wire.changed) {
+    console.log("wire: no change (already current)")
+    return
+  }
+  const written = [
+    wire.wrote.graft && "swarm.json:mcp.graft",
+    wire.wrote.swarmWeb && "swarm.json:mcp.swarm-web",
+    ...wire.wrote.skills,
+  ].filter((s): s is string => Boolean(s))
+  console.log(`wire: wrote ${written.join(", ")}`)
+  for (const b of wire.backups) console.log(`wire: backup ${b}`)
+}
+
+/** Which component actually has to become healthy for a writer gate to open. The writer keys eligibility
+ *  on its own gate names (`Eligibility` in config_writer.ts), and `swarmWeb` is backed by the searxng
+ *  component plus its staged proxy binary — so the repair command must name searxng, not "swarm-web". */
+const WIRE_GATE_TO_COMPONENT: Readonly<Record<string, ComponentId>> = {
+  graft: "graft",
+  swarmWeb: "searxng",
+  rtk: "rtk",
+  obsidian: "obsidian",
+}
+
+/** Recover the gate a writer skip reason names. Only the writer's own sentence shape is matched; an
+ *  unrecognised reason (e.g. the graft launch guard refusing) yields undefined and the caller falls back
+ *  to the gate the skip was recorded under, so no reason string ever goes unexplained. */
+function wireGateOfReason(reason: string): string | undefined {
+  const unhealthy = /^(\w+) component is not healthy \(P-15\)$/.exec(reason)
+  if (unhealthy?.[1]) return unhealthy[1]
+  if (reason.startsWith("proxy binary not staged")) return "swarmWeb"
+  return undefined
+}
+
+/** Fix contract §4.4: an unhealthy target prints the writer's reason (already done, verbatim, by
+ *  printWiringOutcome) PLUS the command that would make it eligible. Deduplicated per component so two
+ *  texts gated on the same component produce one instruction, not two. */
+function printWireRepairs(wire: WriteResult): void {
+  if (!wire.ok) return
+  const gates: string[] = []
+  if (wire.skipped.graft) gates.push(wireGateOfReason(wire.skipped.graft) ?? "graft")
+  if (wire.skipped.swarmWeb) gates.push(wireGateOfReason(wire.skipped.swarmWeb) ?? "swarmWeb")
+  for (const reason of Object.values(wire.skipped.skills ?? {})) {
+    const gate = wireGateOfReason(reason)
+    if (gate) gates.push(gate)
+  }
+  const instructed = new Set<string>()
+  for (const gate of gates) {
+    const component = WIRE_GATE_TO_COMPONENT[gate]
+    if (!component || instructed.has(component)) continue
+    instructed.add(component)
+    console.log(`wire: repair with ${PROGRAM_NAME} install ${component}`)
+  }
+}
+
+/** Row 199 (fix contract §4, masterplan/03_s6_fix_contract.md) — the `wire` verb, kept off the critical
+ *  path for the one machine state this project is actually in: tools installed while the wiring never
+ *  ran (§4.1 reason 1, measured at research/s6_01_seam_anchor.md:421-427; and §4.1 reason 2 — there is
+ *  no non-destructive product path out of that state, because `remove` prints targets and returns
+ *  SKIPPED_WITH_INSTRUCTIONS without deleting anything).
+ *
+ *  IT RESOLVES NO COMPONENT LIST, AND THAT IS THE DESIGN. Scope comes entirely from the writer's health
+ *  gate (`eligibility()` in config_writer.ts, which keys on a component's recorded state being healthy),
+ *  so "wire with no arguments" means "rewire exactly what is already recorded healthy" — never "all
+ *  seven". Drift D10 (research/s6_01_seam_anchor.md:460) was born from an empty-list-means-everything
+ *  default living in two places; row 198 closed both into `resolveSelected` and warned that a third verb
+ *  resolving its own list would reopen it (implementation/s6_r198_selection.md §6). This verb cannot
+ *  reopen it: there is no expression here that turns an absent argument into a component list, so there
+ *  is no default to inherit and nothing for the shared rule to be bypassed around. test/wire_verb.test.ts
+ *  pins that absence mechanically (source tripwire) and behaviourally (all-absent wires nothing).
+ *
+ *  Thin call, not a second engine (§4.2): eligibility, backup naming, the ledger and the byte compare all
+ *  stay inside config_writer.ts, reached through the same entry point row 197 shipped and printed by the
+ *  same printer, so no writer logic is duplicated here.
+ *
+ *  Consent posture: `wire` re-runs wiring ONLY. It never calls evaluateConsent, never renders a consent
+ *  screen, never dispatches a step module and never commits state — so it cannot fabricate consent or
+ *  reach an install step. `--terms-token` is inert here for the same reason it is inert in `remove`: a
+ *  token acknowledges terms for a download, and this verb downloads nothing. `--dry-run` is REFUSED rather
+ *  than ignored: PC-FLAG-03 promises "touch nothing", and wiring writes, so accepting the flag would let
+ *  the CLI promise something it does not do (directive N9's refuse-silently class). */
+function cmdWire(cmd: ParsedCommand): OutcomeToken {
+  if (cmd.components.length > 0) {
+    console.error(
+      `${PROGRAM_NAME}: wire takes no component list — it rewires exactly the components already recorded healthy, and scope is decided by the writer's health gate, not by arguments`,
+    )
+    console.error(
+      `${PROGRAM_NAME}: named ${cmd.components.join(", ")}; to make one eligible, install it first: ${PROGRAM_NAME} install <component>`,
+    )
+    return OUTCOME.FAILED
+  }
+  if (cmd.dryRun) {
+    console.error(`${PROGRAM_NAME}: wire --dry-run is not offered: wiring writes ~/.config/swarm, so "touch nothing" cannot be honoured here`)
+    console.error(`${PROGRAM_NAME}: use "${PROGRAM_NAME} status" to inspect the recorded states, or install a component to make it eligible`)
+    return OUTCOME.FAILED
+  }
+
+  const lock = acquireLock()
+  if (!lock.ok) {
+    console.error(`${PROGRAM_NAME}: another swarm-setup is running (holder pid ${lock.holderPid})`)
+    return OUTCOME.REFUSED_CONCURRENCY
+  }
+  try {
+    const lockRes = loadLock()
+    if (!lockRes.ok) {
+      console.error(`${PROGRAM_NAME}: ${lockRes.error}`)
+      return OUTCOME.REFUSED_LOCK_MALFORMED
+    }
+    const st = readState(lockRes.lock.version)
+    if (!st.ok) {
+      console.error(`${PROGRAM_NAME}: ${st.error}`)
+      return OUTCOME.FAILED
+    }
+
+    // The same entry point row 197 shipped for install, called the same way: live state in, writer's own
+    // health gate deciding scope. No second eligibility check is added here (contract §1.1 property 1 —
+    // two owners of one rule is how the half-state got out of sync in the first place).
+    const wire = writeConfigEntries({ state: st.state, lock: lockRes.lock })
+    printWiringOutcome(wire)
+    if (!wire.ok) return OUTCOME.FAILED // §4.4 last row: the flat reason is already printed verbatim; exit 1
+
+    printWireRepairs(wire)
+
+    // Post-write byte check over the rendered texts, reported with its real count so exit 0 on a machine
+    // where nothing is eligible cannot be read as a clean bill (contract §5.3 / drift D5). Diagnostic only:
+    // a drift immediately after the writer itself wrote those bytes is a contradiction, so it fails loudly.
+    const check = checkSkillFiles({ state: st.state, lock: lockRes.lock })
+    if (check.checked.length === 0)
+      console.log("wire: drift check compared 0 file(s) — no text gate is healthy, so this says nothing about the texts")
+    else if (check.ok)
+      console.log(`wire: drift check compared ${check.checked.length} file(s), all byte-equal to a fresh render: ${check.checked.join(", ")}`)
+    else for (const d of check.drifts) console.error(`${PROGRAM_NAME}: wire drift ${d}`)
+    if (!check.ok) return OUTCOME.FAILED
+
+    // AC-V3 / §4.4: any skipped target means the run is NOT an OK — the operator chain keys on
+    // SKIPPED_WITH_INSTRUCTIONS (exit 0) while the reasons and repair commands above carry the detail.
+    const anySkip =
+      !!wire.skipped.graft || !!wire.skipped.swarmWeb || Object.keys(wire.skipped.skills ?? {}).length > 0
+    if (anySkip) return OUTCOME.SKIPPED_WITH_INSTRUCTIONS
+    return OUTCOME.OK
   } finally {
     releaseLock()
   }
@@ -384,8 +583,18 @@ function cmdRemove(cmd: ParsedCommand): OutcomeToken {
     }
 
     // Collect ONLY objects the setup created (P-14: label + state manifest must agree).
+    // Row 198 (fix contract §3.1/§3.4, drift D10): this is the SECOND copy of the all-seven default,
+    // inline here rather than in resolveSelected. It shares install's rule — an unnamed scope is only
+    // safe while a human is presenting. remove deletes nothing today (it ends in
+    // SKIPPED_WITH_INSTRUCTIONS), so an unnamed INTERACTIVE run keeps the all-seven scope it prints;
+    // the refusal exists for the day deletion lands, when a destructive verb defaulting to everything
+    // would be a worse hazard than the install default this session is fixing.
+    const scope = resolveSelected(cmd.components, cmd.nonInteractive)
+    if (scope === null) {
+      printNoSelectionRefusal("remove")
+      return OUTCOME.REFUSED_NO_SELECTION
+    }
     const targets: string[] = []
-    const scope = cmd.components.length > 0 ? cmd.components : COMPONENT_IDS
     for (const id of scope) {
       const c = st.state.components[id]
       if (!c.installedBySwarm) continue
@@ -444,6 +653,11 @@ export async function main(argv: readonly string[]): Promise<void> {
       break
     case "remove":
       token = cmdRemove(cmd)
+      break
+    case "wire":
+      // Row 199: synchronous by construction — the writer is synchronous and this verb fetches nothing,
+      // dispatches no step and asks no consent (see cmdWire's consent posture note).
+      token = cmdWire(cmd)
       break
   }
 

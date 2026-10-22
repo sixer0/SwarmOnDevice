@@ -48,10 +48,21 @@ echo "  (independent lock_sha256_12 = $LOCK_SHA12)"
 
 echo "=== PROOF C: scripted refusals leave NOTHING on disk, zero network ==="
 export HOME="$WORK/home-refuse"; mkdir -p "$HOME"
-# C1: non-interactive without any token -> REFUSED_NON_INTERACTIVE, exit 1
+# C1: non-interactive with NO component named -> REFUSED_NO_SELECTION, exit 1.
+# Row 198 (fix contract §3.5 AC-S1) narrowed this invocation. It used to fall through to the token gate
+# as REFUSED_NON_INTERACTIVE, because an unnamed list silently meant "all seven" and the operator then
+# had to produce seven tokens for components nobody chose. The refusal now fires at the selection site,
+# before consent is ever asked for. The missing/mismatched-token gate is still proved below (C3), for a
+# run that DID name a component, so no coverage is lost by this retarget.
 "$BIN" install --non-interactive >"$WORK/c1.out" 2>"$WORK/c1.err" </dev/null; rc=$?
-check "C1 install --non-interactive (no tokens) exit 1" 1 $rc
-expect_grep "C1 RESULT token" "RESULT REFUSED_NON_INTERACTIVE" "$WORK/c1.out"
+check "C1 install --non-interactive (no names) exit 1" 1 $rc
+expect_grep "C1 RESULT token" "RESULT REFUSED_NO_SELECTION" "$WORK/c1.out"
+# AC-S1: the refusal must NAME the ids it declined to select, so an operator can fix the command
+# without reading source. They print on stderr, beside the required command form.
+for cid in runtime node graft rtk obsidian searxng firecrawl; do
+  expect_grep "C1 refusal names candidate '$cid'" "$cid" "$WORK/c1.err"
+done
+expect_grep "C1 refusal states the required form" "required form:" "$WORK/c1.err"
 # Nothing FILE is written by a refused run (row-81 lock-dir scaffolding may exist empty;
 # the lock dir itself must be released). consent.log / state.json / provenance are the load-bearing absences.
 NFILES=$(find "$HOME/.swarm" -type f 2>/dev/null | wc -l | tr -d ' ')

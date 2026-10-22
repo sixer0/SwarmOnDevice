@@ -28,6 +28,10 @@ export const OUTCOME = {
   REFUSED_CONCURRENCY: "REFUSED_CONCURRENCY", // P-15 lock
   REFUSED_NON_INTERACTIVE: "REFUSED_NON_INTERACTIVE", // P-13 missing terms token
   REFUSED_NO_CONSENT: "REFUSED_NO_CONSENT", // consent gate FIRST (P-13 / decision 12)
+  // Row 198 (fix contract §3.3): NOTHING was selected, so no consent was ever asked for. Deliberately
+  // distinct from the two above — collapsing them would hide which gate fired. Refusal class => exit 1
+  // through exitCodeFor's default arm, with no edit to the exit mapping.
+  REFUSED_NO_SELECTION: "REFUSED_NO_SELECTION",
   REFUSED_LOCK_MALFORMED: "REFUSED_LOCK_MALFORMED", // fail-closed lock loader (P-1)
 } as const
 
@@ -70,6 +74,10 @@ export function messageFor(token: OutcomeToken): string {
       return "refused: --non-interactive requires an explicit --terms-token for every selected component"
     case OUTCOME.REFUSED_NO_CONSENT:
       return "refused: no component was consented to; nothing will be downloaded or installed"
+    case OUTCOME.REFUSED_NO_SELECTION:
+      // Row 198: the candidate ids are printed by the refusing site (they are policy-filtered there);
+      // this line names the gate and the fix so a transcript alone is never ambiguous.
+      return "refused: --non-interactive named no component; nothing was selected, consented, downloaded or written (name one or more of the candidate ids listed above)"
     case OUTCOME.REFUSED_LOCK_MALFORMED:
       return "refused: tools.lock.json failed validation (fail-closed)"
   }

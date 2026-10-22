@@ -3,10 +3,23 @@
 // PC-FLAG-01 --non-interactive / PC-FLAG-02 --terms-token <component>=<value> /
 // PC-FLAG-03 --dry-run). The verbs were frozen by row 72 after gate R-3 ratified
 // row 73's proposal (01c §3, 01c0 §12). There is deliberately NO update/upgrade verb.
+//
+// Row 199 (session 6) adds a FOURTH verb, `wire`, kept off the critical path by
+// masterplan/03_s6_fix_contract.md §4.1. It is recognised HERE and deliberately NOT added to the
+// VERBS constant in constants.ts: that object is the verbatim copy of register class 12 (its own
+// header says "Register constants used VERBATIM … No value here is redefined"), `wire` has no
+// PC-CMD-* id, and masterplan/01c0_preinstall_register.md §21.1 states class 12 "still holds three
+// verbs". Adding one there without amending the register first would break that register's rule at
+// :25 ("changes this register first, never its own copy"). The amendment is a docs-row debt already
+// routed to the controller at 03_s6_fix_contract.md §7.1; until it lands, the fourth verb lives in
+// the parse surface only.
 
 import { VERBS, FLAGS, isComponentId, type ComponentId } from "./constants.ts"
 
-export type Verb = "install" | "status" | "remove" | "help"
+/** Row 199: re-wire config entries for components already recorded healthy. Not a register constant. */
+export const WIRE_VERB = "wire"
+
+export type Verb = "install" | "status" | "remove" | "wire" | "help"
 
 export interface ParsedCommand {
   verb: Verb
@@ -63,7 +76,10 @@ export function parseArgs(argv: readonly string[]): ParseResult {
     }
 
     // Positional token: either the verb or a component id.
-    if (verb === undefined && (t === VERBS.INSTALL || t === VERBS.STATUS || t === VERBS.REMOVE)) {
+    if (
+      verb === undefined &&
+      (t === VERBS.INSTALL || t === VERBS.STATUS || t === VERBS.REMOVE || t === WIRE_VERB)
+    ) {
       verb = t
       continue
     }
@@ -81,9 +97,9 @@ export function parseArgs(argv: readonly string[]): ParseResult {
     // No bare verb: `swarm-setup` with nothing, or an explicit --help, is the usage screen.
     if (argv.length === 0 || help) verb = "help"
     else if (Object.keys(tokens).length > 0 || nonInteractive || dryRun) {
-      return { ok: false, error: "missing command verb (install | status | remove)" }
+      return { ok: false, error: "missing command verb (install | status | remove | wire)" }
     } else {
-      return { ok: false, error: `unknown command${help ? "" : ""}: expected install | status | remove` }
+      return { ok: false, error: `unknown command${help ? "" : ""}: expected install | status | remove | wire` }
     }
   }
 
