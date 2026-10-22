@@ -71,12 +71,22 @@ import {
   type EstateDeliveryRecord,
   type EstateSecretRow,
 } from "./ledger.ts"
+import { produceDnsPinsFromAnswers } from "./pins.ts"
+import type { ResolveOutcome } from "../mcpproxy/resolve.ts"
 
 export interface DeliverEstateOptions {
   readonly kit: StepKit
   /** Pinned HOME (rule E7): resolved ONCE here; every path below derives from this value, so a
    *  sandboxed run cannot leak into the real home mid-flight. */
   readonly home?: string
+  /** Row 266 (producer spec §1.1, U-240b-1): the bounded crawl-target allow-list plus whatever the
+   *  host resolver answered for each name. BOTH arrive from the caller because neither is this stage's
+   *  to invent — which names are pinned is an operator/gate decision, and node has no synchronous DNS
+   *  lookup for a stage whose two callers are synchronous. Empty/absent means "no allow-list decided
+   *  yet": the produce refuses, writes nothing, and the render stays byte-identical to today's estate
+   *  (the absent file is the legal no-pins state, §3.3). A non-empty list with no answers refuses with
+   *  PINS_ANSWERS_UNAVAILABLE rather than silently skipping — the gap stays visible. */
+  readonly dnsPins?: { readonly hostnames: readonly string[]; readonly answers?: Readonly<Record<string, ResolveOutcome>> }
   /** TEST SEAM ONLY (same narrowing discipline as consentGate/fetchImpl/makeFakeDockerShim):
    *  called with each artefact path immediately AFTER its atomic commit, so a unit can script a
    *  mid-pass throw (simulating EACCES/ENOSPC between writes) or corrupt the committed bytes (to
@@ -403,6 +413,26 @@ export function deliverEstate(opts: DeliverEstateOptions): StepResult {
     appendRefused("DELIVER_SKIPPED_COMPONENT", fields, startedAt)
     return { token: OUTCOME.SKIPPED, message: `estate delivery skipped [DELIVER_SKIPPED_COMPONENT] ${component}: component state is "skipped"; nothing rendered, nothing written` }
   }
+
+  // --- Row 266: the initial DNS-pin produce (PC-PATH-19), BEFORE the render reads the file ------
+  // Producer spec §2.2 assigns this moment: "the initial produce rides the same bring-up sequence that
+  // already drives renderAll … a host-side resolve→check→write step that lands dns-pins.json
+  // immediately before the render reads it". Row 263 made THIS stage that render driver, so the
+  // produce belongs here and nowhere else — renderAll reads the file at composefiles/index.ts's
+  // readDnsPins call, and bring-up never re-renders (stacklib.ts:497), so a later produce would be
+  // invisible to the estate. An empty allow-list is NOT a delivery failure: the absent file is the one
+  // legal no-pins state (§3.3 closing paragraph) and which hostnames belong on the list is an open
+  // human decision (U-240b-1), so refusing every install over it would strand clean machines on a
+  // question this stage does not get to ask. Every OTHER refusal is final and moves zero bytes.
+  const pins = produceDnsPinsFromAnswers({
+    home,
+    hostnames: opts.dnsPins?.hostnames ?? [],
+    answers: opts.dnsPins?.answers ?? {},
+    dryRun: kit.dryRun,
+    log: (level, message, context) => kit.log(level, message, context ? { context } : undefined),
+  })
+  if (!pins.ok && pins.code !== "PINS_ALLOW_LIST_EMPTY")
+    return { token: OUTCOME.FAILED, message: `estate delivery refused [${pins.code}] ${pins.reason}` }
 
   // --- Phase 1: plan ---------------------------------------------------------------------------
   const rendered = renderAll(kit.lock, { home, secrets: declareRequiredSlots() })
