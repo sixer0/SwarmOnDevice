@@ -5,6 +5,7 @@ import { upgrade } from "@/cli/upgrade"
 import { Config } from "@/config/config"
 import { GlobalBus } from "@/bus/global"
 import { ServerAuth } from "@/server/auth"
+import { serverPasswordSet } from "@/cli/network"
 import { writeHeapSnapshot } from "node:v8"
 import { Heap } from "@/cli/heap"
 import { AppRuntime } from "@/effect/app-runtime"
@@ -52,6 +53,23 @@ export const rpc = {
     return result
   },
   async server(input: { port: number; hostname: string; mdns?: boolean; cors?: string[] }) {
+    // F-207-1 (row 207b): this was the only Server.listen call site without the refusal its
+    // siblings carry (cmd/serve.ts:18, cmd/web.ts:42, cmd/acp.ts:32); row 207 measured it
+    // answering GET /global/setup anonymously with 200 when no password was set, or with
+    // OPENCODE_SERVER_PASSWORD="" (arms A/D). serverPasswordSet() decides from process.env at
+    // call time — empty counts as unset, SWARM_* wins precedence (cli/network.ts:49-52). The
+    // default TUI never reaches this method: tui.ts:273 only calls rpc.server() in external
+    // mode (--port/--hostname/--mdns), and serves over rpc.fetch otherwise, binding no socket.
+    // The refusal answers nothing rather than rejecting: util/rpc.ts has no error channel, so
+    // a rejected worker message reaches the parent as an unhandled worker exception (fatal
+    // under bun test, measured exit 133). Arms A/D therefore leave the parent's rpc "server"
+    // call pending after this stderr line, and the unsecured listener simply never binds.
+    if (!serverPasswordSet()) {
+      console.error(
+        "No server password is set; refusing to start an unsecured server. Set SWARM_SERVER_PASSWORD or OPENCODE_SERVER_PASSWORD to a non-empty value.",
+      )
+      await new Promise<never>(() => {})
+    }
     if (server) await server.stop(true)
     server = await Server.listen(input)
     return { url: server.url.toString() }
