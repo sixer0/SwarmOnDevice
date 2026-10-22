@@ -6,13 +6,12 @@
 //
 // Row 199 (session 6) adds a FOURTH verb, `wire`, kept off the critical path by
 // masterplan/03_s6_fix_contract.md §4.1. It is recognised HERE and deliberately NOT added to the
-// VERBS constant in constants.ts: that object is the verbatim copy of register class 12 (its own
-// header says "Register constants used VERBATIM … No value here is redefined"), `wire` has no
-// PC-CMD-* id, and masterplan/01c0_preinstall_register.md §21.1 states class 12 "still holds three
-// verbs". Adding one there without amending the register first would break that register's rule at
-// :25 ("changes this register first, never its own copy"). The amendment is a docs-row debt already
-// routed to the controller at 03_s6_fix_contract.md §7.1; until it lands, the fourth verb lives in
-// the parse surface only.
+// VERBS constant in constants.ts: that object is the verbatim copy of the FROZEN §12 table (its own
+// header says "Register constants used VERBATIM … No value here is redefined"), and the frozen rows
+// stay untouched even after amendment (§21.1 idiom: "frozen row left in place"). The register
+// amendment landed as §21.4 R-3 (2026-10-22, row 246b): wire is PC-CMD-04, apply is PC-CMD-05, both
+// as dated rulings outside the frozen table — which is why the two verbs live in the parse surface,
+// beside WIRE_VERB/APPLY_VERB below, and not in VERBS.
 
 import { VERBS, FLAGS, isComponentId, type ComponentId } from "./constants.ts"
 
@@ -20,10 +19,11 @@ import { VERBS, FLAGS, isComponentId, type ComponentId } from "./constants.ts"
 export const WIRE_VERB = "wire"
 
 /** Row 246 (blueprint 11): re-render and recreate ONE stack from the stored lane tuple plus a fresh
- *  DNS-pin produce. Same non-register status as `wire` — class 12 still holds three verbs
- *  (`01c0_preinstall_register.md:25`: "changes this register first, never its own copy"), so the
- *  fifth verb lives in the parse surface only until the register amendment lands. It takes exactly
- *  one stack name; the refusal for anything else lives in estate/apply.ts, not here. */
+ *  DNS-pin produce. Registered as PC-CMD-05 by the dated ruling at
+ *  `01c0_preinstall_register.md` §21.4 (R-3, 2026-10-22); like `wire` it stays in the parse surface
+ *  because constants.ts mirrors the frozen §12 table verbatim and the frozen rows were left in
+ *  place. It takes exactly one stack name; the refusal for anything else lives in estate/apply.ts,
+ *  not here. */
 export const APPLY_VERB = "apply"
 
 export type Verb = "install" | "status" | "remove" | "wire" | "apply" | "help"
@@ -104,9 +104,9 @@ export function parseArgs(argv: readonly string[]): ParseResult {
     // No bare verb: `swarm-setup` with nothing, or an explicit --help, is the usage screen.
     if (argv.length === 0 || help) verb = "help"
     else if (Object.keys(tokens).length > 0 || nonInteractive || dryRun) {
-      return { ok: false, error: "missing command verb (install | status | remove | wire)" }
+      return { ok: false, error: "missing command verb (install | status | remove | wire | apply)" }
     } else {
-      return { ok: false, error: `unknown command${help ? "" : ""}: expected install | status | remove | wire` }
+      return { ok: false, error: `unknown command${help ? "" : ""}: expected install | status | remove | wire | apply` }
     }
   }
 

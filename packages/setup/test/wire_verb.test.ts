@@ -200,18 +200,31 @@ describe("Verb surface — `wire` is a recognised verb with its own usage line",
     expect(r.out).toContain("graft component is not healthy")
   })
 
-  it("usage text lists the fourth verb alongside the three frozen ones", async () => {
+  it("usage text lists all five verbs — the three frozen ones plus wire and apply", async () => {
     const r = await runCli(["--help"])
     expect(r.out).toContain("re-wire")
     expect(r.out).toContain("install [component...]")
     expect(r.out).toContain("remove  [component...]")
+    // Row 246b: the help screen must not under-name the verb set either (register §21.4 R-3).
+    expect(r.out).toContain("apply <stack>")
   })
 
-  it("the missing-verb error now enumerates wire too, so help never contradicts the parser", async () => {
+  it("the missing-verb error enumerates the COMPLETE register set, so help never contradicts the parser", async () => {
     // A bare unknown word hits `unknown argument` first; the verb-enumerating message is reachable via a
     // flag-only invocation (parseArgs:80-88), which is the surface that would have gone stale.
+    // Row 246b: this pins the full set per register §21.4 R-3 — PC-CMD-01..03 frozen plus PC-CMD-04
+    // (wire) and PC-CMD-05 (apply). A verb added to the parser without joining this message, or dropped
+    // from it, goes red here; mutation-proven in implementation/s6_r246b_verb_register.md §3.
     const r = await runCli(["--dry-run"])
-    expect(r.err).toContain("missing command verb (install | status | remove | wire)")
+    expect(r.err).toContain("missing command verb (install | status | remove | wire | apply)")
+    expect(r.code).toBe(1)
+  })
+
+  it("the unknown-command error names the same complete set (both enumerating strings move together)", async () => {
+    // A component id with no verb reaches the OTHER enumerating message (cli.ts:109). Row 246b widened
+    // both strings in one batch, so both are pinned — one test per string, not one string tested twice.
+    const r = await runCli(["graft"])
+    expect(r.err).toContain("expected install | status | remove | wire | apply")
     expect(r.code).toBe(1)
   })
 
