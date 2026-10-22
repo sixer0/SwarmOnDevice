@@ -69,8 +69,39 @@ describe("AC-192-1 — the negative case (mandatory)", () => {
     expect(graft.registered.kind).toBe("no") // level 2: the file the setup writes is gone
     // They disagree, and each names its OWN source — neither is derived from the other (R2).
     expect(graft.installed.sourceToken).toContain(".swarm/setup/state.json")
-    expect(graft.registered.sourceToken).toContain(".config/swarm/swarm.json")
+    // F-04: level 2 names the directory the payload REPORTED, not a hardcoded literal.
+    expect(graft.registered.sourceToken).toBe(noSwarmJson.registration.configDirPath)
     expect(graft.installed.sourceToken).not.toBe(graft.registered.sourceToken)
+  })
+})
+
+describe("F-04 — the level-2 source names the directory the server reported, never a hardcoded literal", () => {
+  test("an ok read paints the payload's configDirPath verbatim, even when relocated away from ~/.config", () => {
+    const relocated = payload()
+    relocated.registration.configDirPath = "/tmp/r206b-xdg/swarm"
+    const model = buildStatusCardModel({ read: okRead(relocated), loading: false })
+    for (const row of model.ladder) expect(row.registered.sourceToken).toBe("/tmp/r206b-xdg/swarm")
+  })
+
+  test("a failed read yields source `unknown`, never the old literal and never any path (anti-collapse)", () => {
+    // The failed arm of SetupRead carries no component data (context/setup-status.ts:48-51), so there is no
+    // path for it to display; the card must say unknown rather than fall back to a hardcoded location.
+    for (const cause of ["server_unreachable", "not_provided_by_this_server", "http_error"] as const) {
+      const model = buildStatusCardModel({ read: failedRead(cause), loading: false })
+      for (const row of model.ladder) {
+        expect(row.registered.kind).toBe("unknown")
+        expect(row.registered.causeToken).toBe(cause)
+        expect(row.registered.sourceToken).toBe("unknown")
+        expect(row.registered.sourceToken).not.toContain("/")
+      }
+    }
+  })
+
+  test("an empty published path degrades to `unknown`, not to a blank source", () => {
+    const blank = payload()
+    blank.registration.configDirPath = ""
+    const model = buildStatusCardModel({ read: okRead(blank), loading: false })
+    for (const row of model.ladder) expect(row.registered.sourceToken).toBe("unknown")
   })
 })
 

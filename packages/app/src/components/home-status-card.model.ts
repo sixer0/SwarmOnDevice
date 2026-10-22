@@ -159,7 +159,13 @@ function installedCell(read: SetupRead | undefined, surface: SetupSurfaceId): Ce
 
 function registeredCell(read: SetupRead | undefined, surface: SetupSurfaceId): Cell {
   if (!read) return pendingOrUnknown(surface)
-  return levelToCell(resolveRegistered(read, surface), "~/.config/swarm/swarm.json", "present")
+  // F-04: level 2 names the directory the SERVER reported (spec §2's publication requirement), never a re-typed
+  // literal. A failed read carries no payload at all (context/setup-status.ts:48-51), so it has no path to
+  // display and keeps the technical token `unknown`; an ok read always carries a string configDirPath because
+  // the seam refuses any 200 body without one (setup-status.ts:236-239). The `|| "unknown"` covers a published
+  // empty string, which would otherwise paint a blank source.
+  const source = read.kind === "ok" ? read.observed.registration.configDirPath : "unknown"
+  return levelToCell(resolveRegistered(read, surface), source || "unknown", "present")
 }
 
 function visibleCell(surface: SetupSurfaceId, mcp: Level3Input | undefined): Cell {

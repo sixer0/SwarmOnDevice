@@ -30,10 +30,10 @@ export function HomeStatusCard(props: { mcp?: Level3Input }) {
   // available wherever GlobalProvider + ServerProvider are — i.e. both Home surfaces.
   const global = useGlobal()
   const server = useServer()
-  // Translated value words whose keys row 204 lands in en.ts/id.ts. Until then `t` returns the raw key (the E14
-  // behaviour); the cast is the mechanical seam between "row 203 references these keys" and "row 204 defines them",
-  // so this file never edits the locale tables (inventory s6_03_i18n_inventory.md §5 assigns en.ts/id.ts to 204).
-  const tKey = language.t as (key: string, params?: Record<string, string | number | boolean>) => string
+  // i18n keys are not compile-checked anywhere in this app — `Flatten` collapses the dictionary to a string index
+  // (context/language.tsx:29-30,192-195), so `t` accepts any string with or without a cast here (measured in
+  // verification/s6_05_codereview.md §7). The former widening cast hid nothing and is deleted as F-14 cleanup;
+  // closing the repo-wide hole is F-13, routed to the user. `language.t` threads through unmodified below.
 
   const status = createSetupStatus(() => {
     const conn = server.current
@@ -56,7 +56,7 @@ export function HomeStatusCard(props: { mcp?: Level3Input }) {
       </Show>
 
       <div class="flex min-w-0 flex-col gap-2">
-        <For each={model().ladder}>{(row) => <LadderSurface row={row} tKey={tKey} />}</For>
+        <For each={model().ladder}>{(row) => <LadderSurface row={row} tKey={language.t} />}</For>
       </div>
 
       {/* Freshness, stated once for levels 1-2. observedAt (server read time) and receivedAt (client arrival) are
@@ -81,7 +81,7 @@ export function HomeStatusCard(props: { mcp?: Level3Input }) {
             {(rec) => (
               <div class="flex items-center justify-between gap-2 text-12-regular">
                 <span class="font-mono text-v2-text-text-muted">{rec.component}</span>
-                <CellView cell={rec.cell} tKey={tKey} />
+                <CellView cell={rec.cell} tKey={language.t} />
               </div>
             )}
           </For>
@@ -91,7 +91,9 @@ export function HomeStatusCard(props: { mcp?: Level3Input }) {
   )
 }
 
-function LadderSurface(props: { row: LadderRow; tKey: (key: string) => string }) {
+// `tKey` carries the real `language.t` type (`keyof Dictionary`), not a widened `string` key — the widening cast
+// this file used to apply hid nothing (Flatten makes the key space a string index anyway; F-13/F-14).
+function LadderSurface(props: { row: LadderRow; tKey: ReturnType<typeof useLanguage>["t"] }) {
   const levels = () => [
     { labelKey: "setup.status.installed", cell: props.row.installed },
     { labelKey: "setup.status.registered", cell: props.row.registered },
@@ -113,7 +115,7 @@ function LadderSurface(props: { row: LadderRow; tKey: (key: string) => string })
   )
 }
 
-function CellView(props: { cell: Cell; tKey: (key: string) => string }) {
+function CellView(props: { cell: Cell; tKey: ReturnType<typeof useLanguage>["t"] }) {
   const value = () => {
     const cell = props.cell
     if (cell.labelKey) return props.tKey(cell.labelKey)
