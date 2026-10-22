@@ -16,6 +16,11 @@
 //   renderAll(lock, ctx)      — pure: compose files + settings.yml + nginx template +
 //                               bin wraps + squid.conf + searxng.env; refuses on required-
 //                               secret absence (§4.9) and on any lint finding incl. F-79-E.
+//                               Reads (and re-screens) dns-pins.json under ctx.home for the
+//                               P3 extra_hosts entries — absent file renders zero entries
+//                               (row 241); see dns_pins.ts. Reads and validates lanes.json the
+//                               same way for the three lane controls, refusing the render on an
+//                               invalid file rather than defaulting (row 245); see lanes.ts.
 //   applyRenderedFiles(res)   — atomic writes (row-81 atomic.ts) with §4.6/D-04 modes;
 //                               returns the paths to record via kit.transition patch.
 //   lintComposeText(text, o)  — the §4.9 rule set incl. F-79-E + gate additions.
@@ -50,6 +55,8 @@ import { renderSearxngSettings } from "./searxng_settings.ts"
 import { renderNginxTemplate, type NginxOptions } from "./nginx_template.ts"
 import { renderBinScripts } from "./bin_scripts.ts"
 import { renderSquidConf } from "./squid_conf.ts"
+import { readDnsPins } from "./dns_pins.ts"
+import { readLanes } from "./lanes.ts"
 import { findDirectiveInlineComments, findReservedAclNames, findSecretArgvLeak, findSquidOrderingViolations, findWrapChannelViolations, findWrapModeViolations, lintComposeText, lintOk, type Finding } from "./lint.ts"
 
 export interface FullRender {
@@ -87,9 +94,24 @@ export function renderAll(lock: LockFile, ctx: RenderContext, nginxOpts: NginxOp
   })
   if (preErrors.length > 0) return refuse(preErrors)
 
-  const sx = renderSearxngCompose(lock, nctx)
+  // Row 241 (gate 239 / P3): read + re-screen dns-pins.json under the context home. Absent file is
+  // the only legal no-pins state and yields zero entries — the render then stays byte-identical to
+  // the pre-P3 estate. A malformed or poisoned file REFUSES the whole render (producer spec §3.3:
+  // never omit an entry silently; §5 row 245: the re-check closes the direct-edit residual).
+  const pins = readDnsPins(nctx.home)
+  if (!pins.ok) return refuse([{ code: "DNS_PINS_INVALID", message: `dns-pins.json refused the render: ${pins.message}` }])
+
+  // Row 245 (blueprint 11 / masterplan/06_s6b_lanes_spec.md §5.1): read + validate lanes.json under
+  // the context home. Absent file = no configured control = byte-identical to row 241's final
+  // render (AC-237-1). A hand-edited or otherwise invalid file REFUSES the render with the same three
+  // tokens the route answers 400 with (§4.1's second boundary decision): defaulting instead would run
+  // an estate that contradicts the file the user just edited, which is coercion by another route.
+  const lanes = readLanes(nctx.home)
+  if (!lanes.ok) return refuse([{ code: lanes.token, message: `lanes.json refused the render: ${lanes.message}` }])
+
+  const sx = renderSearxngCompose(lock, nctx, lanes.lanes)
   if (!sx.ok) return refuse(sx.errors)
-  const fc = renderFirecrawlCompose(lock, nctx)
+  const fc = renderFirecrawlCompose(lock, nctx, pins.entries, lanes.lanes)
   if (!fc.ok) return refuse(fc.errors)
   const st = renderSearxngSettings(nctx)
   if (!st.ok) return refuse(st.errors)

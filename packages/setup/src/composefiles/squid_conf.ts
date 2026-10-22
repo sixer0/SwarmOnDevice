@@ -7,6 +7,10 @@
 // deny-before-allow ordering (enforced by lint.ts findSquidOrderingViolations, run by
 // renderAll), CONNECT-time answer re-check (rebinding-safe, V3), no cache; audit-shaped
 // access log on a bounded tmpfs-backed file so the mount size bounds it (r75-fix8).
+// Amended by r11 (row 241, gate 239 option 2): the CONNECT method may now tunnel to BOTH
+// 80 and 443 via the dedicated swarm_tunnel_ports ACL — a port-class widening only; the
+// twelve-class destination screen, the deny-before-allow ordering and the internal-only
+// browser attachment are the three properties §10.4 requires to survive it, unchanged here.
 //
 // ACL NAMES [R112-1, r112 live VM]: squid PREDEFINES `all, manager, localhost, to_localhost,
 // to_linklocal, CONNECT` (image note at /etc/squid/squid.conf:1387); redeclaring a predefined
@@ -44,6 +48,15 @@ export function renderSquidConf(): RenderFile {
     `http_port ${PC_PORTS.squidContainer}`,
     "acl localnet src 172.16.0.0/12        # compose bridge pools incl. swarm-tools_* and Colima ranges — superset, per-pool enumeration unnecessary (10.4)",
     "acl SSL_ports port 443",
+    // Tunnel-port class — gate 239 fork F-239-B ("Perlu": plain-HTTP scraping is a required capability),
+    // shape word at 01e §10.4's r11 amendment. This ACL exists ONLY to re-point the single deny Connector
+    // line below; SSL_ports stays declared and unchanged so any other reader of it is unaffected
+    // (research/s6_12_tunnel_options_costed.md §4 "Invariant that must survive"), SafePorts and its deny
+    // stay as-is because that pair governs non-tunnel methods and was never the refusal, and NO new
+    // http_access allow line appears: the widening removes one denial for one method class, it grants no
+    // route. Public-only stays enforced by the destination denies below, evaluated against squid's own
+    // CONNECT-time answer (V3) — the port test and the destination test are independent mechanisms (§1 item 1).
+    "acl swarm_tunnel_ports port 80 443",
     "acl SafePorts port 80 443             # allow ports 80/443 only (10.4); custom name — Safe_ports is predefined, we do not touch it",
     "acl Connector method CONNECT",
     "acl to_localnet dst 127.0.0.0/8 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 169.254.0.0/16 100.64.0.0/10 0.0.0.0/8",
@@ -64,7 +77,9 @@ export function renderSquidConf(): RenderFile {
     "# and the host-side auditor reads it via `docker exec --user root` — stdio:/dev/stdout FATALed as proxy on the pinned digest (p1 log :19).",
     "access_log stdio:/var/log/squid/access.log",
     "http_access deny !SafePorts",
-    "http_access deny Connector !SSL_ports",
+    // Re-pointed (not reordered, not duplicated) at the tunnel-port class per gate 239 option 2 —
+    // this single argument substitution IS the whole widening; see the swarm_tunnel_ports note above.
+    "http_access deny Connector !swarm_tunnel_ports",
     "# destination-class denies ABOVE every allow (01e §10.4 ordering, enforced by lint); wiring lines bare",
     "# by design — r92's audit fixtures match them exactly (`^\s*http_access deny <name>\s*$`).",
     "http_access deny to_localnet",

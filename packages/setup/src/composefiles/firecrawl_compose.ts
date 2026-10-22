@@ -34,10 +34,14 @@ import {
 } from "./shared.ts"
 import { COMPOSE_PROJECT } from "../constants.ts"
 import type { LockFile } from "../lockfile.ts"
+import type { ExtraHost } from "./dns_pins.ts"
+import type { LaneValues } from "./lanes.ts"
 
 export function renderFirecrawlCompose(
   lock: LockFile,
   ctx: NormalizedCtx,
+  pins: readonly ExtraHost[],
+  lanes: LaneValues,
 ): { ok: true; file: RenderFile } | { ok: false; errors: RenderError[] } {
   const api = lockImage(lock, "firecrawl", "api_image")
   if (!api.ok) return { ok: false, errors: [api.error] }
@@ -59,6 +63,32 @@ export function renderFirecrawlCompose(
   const ca = ctx.caBundlePath !== undefined
   const redisAuth = resolveSecretState({ secrets: ctx.secrets }, "firecrawl", "redis_auth") === "generated" // U-4 default ON — required slot, contextErrors already refuses if absent
   const rabbitCred = resolveSecretState({ secrets: ctx.secrets }, "firecrawl", "rabbitmq_password") === "generated" // U-5 default OFF -> form B
+  // P3 injected answers (gate 239: the chosen shape is P3 with forks C+D settling divergence and
+  // freeze; 01e §4.5 amended + §10.2): the pins arrive ALREADY
+  // screened by dns_pins.readDnsPins — one dotted FQDN to one canonical public unicast IPv4, every
+  // recorded answer re-run through the shipped urlpolicy predicates at read time. Empty means the
+  // pins file is ABSENT (the only legal no-pins state, producer spec §3.3) and the render stays
+  // byte-identical to the pre-P3 estate: no key, no comment, no empty list. IPv6 is withheld by
+  // design (§1.2: the guest has no live IPv6 route); a non-survivor or malformed file refuses the
+  // whole render upstream — nothing here may omit an entry silently.
+  const extraHostsBlock = (indent: number): string[] =>
+    pins.length === 0
+      ? []
+      : [
+          `${" ".repeat(indent)}extra_hosts:  # P3 injected public answers (01e §4.5/§10.2, gate 239); render-screened literals, never the host, never a denied class`,
+          ...pins.map((pin) => `${" ".repeat(indent + 2)}- "${pin.hostname}:${pin.address}"`),
+        ]
+
+  // Lane controls (row 245; masterplan/06_s6b_lanes_spec.md §5.1). Every value arrives ALREADY
+  // VALIDATED: lanes.readLanes ran the closed key set, the integer rule and the published ranges at
+  // index.ts and refused the whole render otherwise, so nothing here may re-default, clamp or infer.
+  // Each control renders its OWN literal from its OWN key — never one derived number driving two keys,
+  // which is the collapse §4.3 forbids — and an unset control renders exactly what row 241 left in
+  // the bytes (AC-237-1). The four inert keys below keep their values and their "not read by the
+  // pinned build" comments untouched: this row changes live VALUES only, never the claims around them
+  // (01e §12's row-245 contract line).
+  const workers = lanes.NUQ_WORKER_COUNT // C-1 api queue workers: image default 5, published range [4,5]
+  const pages = lanes.MAX_CONCURRENT_PAGES // C-2 playwright pages: vendor 10, our literal 2, published range [4,4]
 
   const y = [
     "# compose/firecrawl.yml — PC-PKG-04 (rendered by the swarm-setup compose-files renderer, row 85)",
@@ -140,6 +170,9 @@ export function renderFirecrawlCompose(
     ),
     labelBlock("firecrawl", version, 4, ctx.tamperLabel),
     "    networks: [fc-ctl, fc-data]  # NOT fc-edge (only the proxy publishes), NOT fc-web (egress goes through the filter), NOT fc-iso",
+    // §10.2: a contained tier learns a public name from rendered data in its own /etc/hosts, never
+    // from a network path — api is one of the two services the producer spec names (row 241 hand-off).
+    ...extraHostsBlock(4),
     '    entrypoint: ["/bin/sh", "/usr/local/bin/fc-env.sh"]  # §4.7 wrap exports the env-only credentials AND builds REDIS_URL from the generated auth (REVIEW-107 MINOR-6) before exec',
     '    command: ["node", "dist/src/harness.js", "--start-docker"]',
     "    volumes:",
@@ -171,10 +204,30 @@ export function renderFirecrawlCompose(
     "      POSTGRES_DB: postgres",
     "      ENV: local",
     '      HARNESS_STARTUP_TIMEOUT_MS: "60000"',
-    '      NUM_WORKERS_PER_QUEUE: "2"  # scaled down from upstream 8 for the §7.2 memory budget',
-    '      CRAWL_CONCURRENT_REQUESTS: "2"',
-    '      MAX_CONCURRENT_JOBS: "2"',
-    '      BROWSER_POOL_SIZE: "2"',
+    // r11 (row 240) deleted the "scaled down from upstream 8 for the §7.2 memory budget" claim that used to
+    // trail NUM_WORKERS_PER_QUEUE here: row 236 read the pinned api digest's own files and these four names
+    // occur in NO file under /app (config schema api:/app/dist/src/config.js:69,:689; research/s6b_06_upstream_defaults.md
+    // §3.1-§3.2), so the "2" is read by nothing and there was never an upstream 8 behind them to scale from.
+    // The §6.4 wording rule binds every retained-but-inert key with the "not read by the pinned build"
+    // sentence (masterplan/06_s6b_lanes_spec.md §3.5) so nobody re-derives capacity from these values.
+    '      NUM_WORKERS_PER_QUEUE: "2"  # not read by the pinned build 2.11.554-production; retained for',
+    "      # forward-compatibility pending the vendor keys returning",
+    '      CRAWL_CONCURRENT_REQUESTS: "2"  # not read by the pinned build 2.11.554-production; retained for',
+    "      # forward-compatibility pending the vendor keys returning",
+    '      MAX_CONCURRENT_JOBS: "2"  # not read by the pinned build 2.11.554-production; retained for',
+    "      # forward-compatibility pending the vendor keys returning",
+    '      BROWSER_POOL_SIZE: "2"  # not read by the pinned build 2.11.554-production; retained for',
+    "      # forward-compatibility pending the vendor keys returning",
+    // C-1, the first LIVE lane (row 245). Rendered only when lanes.json names it: with the file absent
+    // this whole spread is empty and the api env is byte-identical to row 241's final bytes. The
+    // comment carries the fork-H arithmetic so a reader of the compose file alone cannot re-derive
+    // "raise it to 4" from the floor — 4 is what the validator REFUSES BELOW, 5 is what ships and is
+    // already today's effective value (research/s6b_07_capacity_envelope.md §4.1, §6).
+    ...(workers === undefined
+      ? []
+      : [
+          `      NUQ_WORKER_COUNT: "${workers}"  # LIVE key: api:/app/dist/src/config.js:341, consumed at harness.js:109/:110/:660 (row 236 §3.3), where the image default is 5. Value from ~/.swarm/setup/lanes.json (PC-PATH-18), validated [4,5] per row 238 §4.1 + gate 239 fork H; the floor 4 is a refusal boundary, not a write — writing 4 would cost a worker against a per-team job ceiling of 5 (concurrency-limit.js:39). Env-class: changing it recreates this container (§3.1 restart class)`,
+        ]),
     `      PROXY_SERVER: "http://egress-proxy:${PC_PORTS.squidContainer}"  # r75-fix9 INVOKES the §10.7 F-4 correction (R112c-5: attempt 3 measured api carrying NO proxy env at all, 13c:119-120,232). api reaches the filter over its EXISTING fc-ctl membership; networks MUST stay [fc-ctl, fc-data] — the retired §6.4 comment said 'moves api to fc-web membership', which would install a default route and re-open the R112b-4-class leak on this tier (spec §10.7 F-4 bullet states the amendment). Whether api's HTTP client honours these names is U-12's still-open half; §10.6's attribution rule reads the outcome, attempt 4 measures it.`,
     '      PROXY_USERNAME: ""  # present-but-empty, same shape as playwright (§6.7)',
     '      PROXY_PASSWORD: ""',
@@ -299,6 +352,9 @@ export function renderFirecrawlCompose(
     ),
     labelBlock("firecrawl", version, 4, ctx.tamperLabel),
     "    networks: [fc-ctl, fc-iso]",
+    // The other of the two contained services the row-241 hand-off names (producer spec §5): the
+    // vendor pre-check inside this image consumes exactly these hosts-file answers (§3.0 layer table).
+    ...extraHostsBlock(4),
     // Marker §4.1 passes these as separate args; the landed helper takes ONE newline-joined text
     // (shared.ts::commentLines splits on \n), so the verbatim lines are carried that way.
     commentLines(
@@ -317,7 +373,31 @@ spec §6.7; changing it WITHOUT a re-pin note is exactly how a vendor update wou
     '      PROXY_USERNAME: ""  # present-but-empty pins behaviour; the proxy trusts the fc-ctl network identity instead (§10.4)',
     '      PROXY_PASSWORD: ""',
     '      BLOCK_MEDIA: "true"  # kills img/media/font sub-resource egress — smaller audit surface [H effect name tmp/r78:69]',
-    '      MAX_CONCURRENT_PAGES: "2"  # bound to api\'s CRAWL_CONCURRENT_REQUESTS (§6.4)',
+    // r11 (row 240) disposed of the phantom binding this line used to claim ("bound to api's
+    // CRAWL_CONCURRENT_REQUESTS (§6.4)"): the far end is a key the pinned build never reads
+    // (§6.4's r11 correction above; masterplan/06_s6b_lanes_spec.md §3.4 item 1 found the
+    // half-virtual coupling). The replacement carries only facts read from bytes, per §6.7.
+    // C-2, the crawl lane the user's floor actually raises (row 245). Unset keeps row 241's bytes
+    // verbatim, including the "this 2 is a deliberate cut" sentence, which is true only of 2; the
+    // configured arm keeps every fact §6.7 required (live key, playwright's own default 10, the
+    // Semaphore that enforces it) and replaces ONLY the number-bound clause, which would otherwise
+    // state "2" above a different value. Neither arm re-introduces the deleted "upstream 8"
+    // generalisation or the phantom CRAWL_CONCURRENT_REQUESTS binding (01e §12's row-245 line).
+    ...(pages === undefined
+      ? [
+          '      MAX_CONCURRENT_PAGES: "2"  # LIVE key owned by the playwright image: its own default is 10',
+          "      # (pw:/usr/src/app/api.ts:26-29 with the ?? '10' literal, twin dist/api.js:29, enforced as",
+          "      # new Semaphore(MAX_CONCURRENT_PAGES) at :160), so this 2 is a deliberate cut, not an",
+          "      # upstream match; the api-side lane controls validate independently of it (§6.7 r11 note).",
+        ]
+      : [
+          `      MAX_CONCURRENT_PAGES: "${pages}"  # LIVE key owned by the playwright image: its own default is 10`,
+          "      # (pw:/usr/src/app/api.ts:26-29 with the ?? '10' literal, twin dist/api.js:29, enforced as",
+          "      # new Semaphore(MAX_CONCURRENT_PAGES) at :160). Value from ~/.swarm/setup/lanes.json",
+          "      # (PC-PATH-18), validated [4,4] per row 238 §4.2 — the one crawl number this estate cut",
+          "      # itself (10 -> 2) and the one the user's floor genuinely raises; env-class, so changing it",
+          "      # recreates this container. The api-side lane controls validate independently of it (§6.7).",
+        ]),
     '      ALLOW_LOCAL_WEBHOOKS: "false"  # the upstream flag that WOULD permit local-target crawls (tmp/r78:68) — pinned off; a truthy occurrence is a lint fail (§11)',
     '      COREPACK_ENABLE_NETWORK: "0"  # r75-fix9 belt: corepack 0.36.0 (node v22.23.3 deps/corepack 6f431b9a…) throws "Network access disabled by the environment" BEFORE any DNS (v0.36.0 httpUtils.ts:10-11, npmRegistryUtils.ts:22-23), killing the forbidden-egress intent line even if some path calls the shim off-boot',
     ...(ca

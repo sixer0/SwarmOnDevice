@@ -33,9 +33,14 @@ import { renderSquidConf } from "../src/composefiles/squid_conf.ts"
 import { findDirectiveInlineComments, SQUID_INLINE_COMMENT_DIRECTIVES } from "../src/composefiles/lint.ts"
 import { discoverSteps } from "../src/steps.ts"
 import { isDeniedAddress } from "../src/mcpproxy/urlpolicy.ts"
+// Row 242's drift pin: the RENDER-side pair screen, imported only so the two rulebooks can be pinned against each
+// other. The audit itself never calls this (see header item (7) of egress_bake.ts) — an audit that asks the renderer
+// whether the renderer was right inherits every hole the renderer later grows.
+import { extraHostPairProblem } from "../src/composefiles/dns_pins.ts"
 import {
   assertNoReservedAclNames,
   auditBootClass,
+  auditExtraHostPins,
   auditFileModes,
   auditSquidConf,
   bakeEgressProxy,
@@ -44,6 +49,7 @@ import {
   egressHealthContract,
   explainLiveLog,
   verifyEgressBake,
+  APPROVED_TUNNEL_PORTS,
   LIVE_BOOT_SIGNATURES,
   OPTION_PARSED_PORT_DIRECTIVES,
   REQUIRED_DENY_RANGES,
@@ -1002,5 +1008,308 @@ describe("(file modes) R112-5 secret hygiene (0700/0600) + executable docker-ent
     } finally {
       rmSync(tr, { recursive: true, force: true })
     }
+  })
+})
+
+// ================================================================================================
+// ROW 242 (gate 239 lockstep). Two halves, both required by 01e §10.4's "lockstep duty, named for row 242" and by
+// 05 §5 trap T-6: the port guard had to learn the render's new ACL form WITHOUT losing the ability to refuse a
+// substituted, deleted, shrunk, widened or reverted class, and the narrowed extra_hosts lint (row 241, fork A) left
+// this audit as the last offline stop between "the key is allowed" and "a pin routes the contained tier at the host".
+// ================================================================================================
+
+/** One `extra_hosts` pair on a service block, in the shape the artefact carries it. Used by every pair-level case
+ *  below so the audit is driven through real text rather than an internal function. */
+function pairCompose(hostname: string, value: string): string {
+  return ["services:", "  probe-service:", "    image: example@sha256:" + "0".repeat(64), "    extra_hosts:", `      - "${hostname}:${value}"`, ""].join("\n")
+}
+
+/** Insert an extra_hosts block into ONE rendered service (the same insertion point row 241 renders at, after the
+ *  service's `networks:` line), so an injection test tampers the tier it names and nothing else. */
+function injectExtraHosts(composeText: string, service: string, entries: readonly string[]): string {
+  return editServiceBlock(composeText, service, (l) =>
+    /^ {4}networks:/.test(l)
+      ? [l, "    extra_hosts:", ...entries.map((e) => `      - "${e}"`)].join("\n")
+      : l,
+  )
+}
+
+describe("(lockstep row 242) the CONNECT tunnel guard follows the render's ACL name and keeps its bite", () => {
+  // The six tests row 241 deliberately left red are the ACCEPT side of this guard. Everything in this describe is the
+  // other side, which is the reason the guard exists: §10.4 names the value of this audit as catching "a substituted
+  // ACL name", not agreeing with whatever the renderer emitted last week.
+  const shipped = renderSquidConf().content
+  const portFilter = (conf: string): string[] =>
+    auditSquidConf(conf)
+      .filter((f) => f.code === "PORT_FILTER_MISSING")
+      .map((f) => f.item)
+
+  it("POSITIVE CONTROL: row 241's render clears the guard, and the shape that clears it is the approved one", () => {
+    expect(portFilter(shipped)).toEqual([])
+    // Asserted independently of the audit's own parse (plain text), so the audit cannot satisfy itself.
+    expect(shipped).toContain("acl swarm_tunnel_ports port 80 443")
+    expect(shipped).toContain("http_access deny Connector !swarm_tunnel_ports")
+    expect(shipped).toContain("acl SSL_ports port 443") // §10.4's invariant that must survive the widening
+    expect(shipped.split("\n").filter((l) => /^\s*http_access\s+allow\b/.test(l.split("#")[0] ?? ""))).toHaveLength(1)
+    expect(APPROVED_TUNNEL_PORTS).toEqual([80, 443])
+  })
+
+  it("E4 DISCRIMINATION: the pre-lockstep bytes are REFUSED, so the instrument tells the two worlds apart", () => {
+    const preGate = shipped
+      .split("\n")
+      .filter((l) => !/^\s*acl\s+swarm_tunnel_ports\s+port\b/.test(l))
+      .map((l) => l.replace("http_access deny Connector !swarm_tunnel_ports", "http_access deny Connector !SSL_ports"))
+      .join("\n")
+    // The OLD matcher accepted these bytes; the NEW matcher accepts only the approved class, so a silent revert of the
+    // render cannot pass the bake either. Had the fix been "accept both forms", this assertion would be vacuous.
+    expect(portFilter(preGate)).toHaveLength(1)
+    expect(portFilter(preGate)[0]).toContain('"SSL_ports"')
+    expect(portFilter(preGate)[0]).toContain("not the approved")
+  })
+
+  const mutations: readonly { readonly name: string; readonly conf: string; readonly names?: string }[] = [
+    { name: "the CONNECT deny line is DELETED", conf: shipped.split("\n").filter((l) => !/^\s*http_access\s+deny\s+Connector\s+!/.test(l)).join("\n"), names: "no `http_access deny" },
+    {
+      name: "the tunnel ACL declaration is DELETED, leaving a dangling reference",
+      conf: shipped.split("\n").filter((l) => !/^\s*acl\s+swarm_tunnel_ports\s+port\b/.test(l)).join("\n"),
+      names: "swarm_tunnel_ports",
+    },
+    {
+      name: "the deny argument is SUBSTITUTED to an ACL nothing declares",
+      conf: shipped.replace("http_access deny Connector !swarm_tunnel_ports", "http_access deny Connector !swarm_wrong_ports"),
+      names: "swarm_wrong_ports",
+    },
+    { name: "the tunnel class is SHRUNK to 443 (the pre-gate coverage)", conf: shipped.replace("acl swarm_tunnel_ports port 80 443", "acl swarm_tunnel_ports port 443"), names: "[443]" },
+    { name: "the tunnel class is WIDENED to 8080", conf: shipped.replace("acl swarm_tunnel_ports port 80 443", "acl swarm_tunnel_ports port 80 443 8080"), names: "8080" },
+    { name: "the tunnel class is widened by a second additive same-name line", conf: `${shipped}\nacl swarm_tunnel_ports port 8080\n`, names: "8080" },
+    { name: "the tunnel class carries a range token instead of plain ports", conf: shipped.replace("acl swarm_tunnel_ports port 80 443", "acl swarm_tunnel_ports port 80 443 1024-65535"), names: "not a plain-integer port-class ACL" },
+    { name: "the tunnel ACL's TYPE is corrupted from port to dst", conf: shipped.replace("acl swarm_tunnel_ports port 80 443", "acl swarm_tunnel_ports dst 80 443"), names: "not a plain-integer port-class ACL" },
+    { name: "the method ACL stops declaring CONNECT, so the line is no longer a tunnel rule", conf: shipped.replace("acl Connector method CONNECT", "acl Connector method GET"), names: "no `http_access deny" },
+    {
+      name: "the tunnel class is negated by a DECOY deny line whose method term is not the CONNECT ACL",
+      conf: shipped
+        .replace("acl Connector method CONNECT", "acl Connector method CONNECT\nacl NotATunnel method GET")
+        .replace("http_access deny Connector !swarm_tunnel_ports", "http_access deny NotATunnel !swarm_tunnel_ports"),
+      names: "no `http_access deny",
+    },
+    { name: "the CONNECT deny line is hidden behind a comment", conf: shipped.replace("http_access deny Connector !swarm_tunnel_ports", "# http_access deny Connector !swarm_tunnel_ports"), names: "no `http_access deny" },
+    { name: "the tunnel ACL line is hidden behind a comment", conf: shipped.replace("acl swarm_tunnel_ports port 80 443", "# acl swarm_tunnel_ports port 80 443"), names: "swarm_tunnel_ports" },
+    { name: "the non-tunnel guard is dropped (no `deny !SafePorts`)", conf: shipped.split("\n").filter((l) => !/^\s*http_access\s+deny\s+!SafePorts\s*$/.test(l)).join("\n"), names: "!SafePorts" },
+    { name: "SafePorts loses both approved ports", conf: shipped.replace("acl SafePorts port 80 443", "acl SafePorts port 8080"), names: "SafePorts carries [8080]" },
+    { name: "SafePorts is WIDENED beyond the approved non-tunnel pair", conf: shipped.replace("acl SafePorts port 80 443", "acl SafePorts port 80 443 8080"), names: "SafePorts carries [80, 443, 8080]" },
+    {
+      // The regression this row nearly shipped with: once row 241 moved the deny reference off SSL_ports, a substring
+      // matcher stopped mentioning the class at all, so deleting it would have baked green. It is now resolved through
+      // the same port parser as the tunnel class, which keeps §10.4's "stays declared and unchanged" enforceable.
+      name: "the SSL_ports declaration is DELETED while its old referencer is gone (the §10.4 surviving invariant)",
+      conf: shipped.split("\n").filter((l) => !/^\s*acl\s+SSL_ports\s+port\b/.test(l)).join("\n"),
+      names: "SSL_ports",
+    },
+  ]
+  for (const m of mutations) {
+    it(`MUTATION: ${m.name} is refused as PORT_FILTER_MISSING`, () => {
+      const items = portFilter(m.conf)
+      expect(items).toHaveLength(1) // exactly one finding for one guard — not a cascade that could mask it
+      if (m.names) expect(items[0]).toContain(m.names) // and it NAMES the leg that failed
+    })
+  }
+
+  it("it is the CLASS that is audited, not the literal: renaming ACL and reference together stays green", () => {
+    const renamed = shipped.replace(/swarm_tunnel_ports/g, "swarm_egress_ports")
+    expect(renamed).not.toContain("swarm_tunnel_ports")
+    expect(portFilter(renamed)).toEqual([])
+    // …while renaming ONLY the reference (the substitution the audit exists to catch) still refuses.
+    expect(portFilter(shipped.replace("deny Connector !swarm_tunnel_ports", "deny Connector !swarm_egress_ports")).length).toBe(1)
+  })
+
+  it("set semantics, not string equality: reordered, duplicated and same-name-split classes stay green", () => {
+    expect(portFilter(shipped.replace("acl swarm_tunnel_ports port 80 443", "acl swarm_tunnel_ports port 443 80"))).toEqual([])
+    expect(portFilter(shipped.replace("acl swarm_tunnel_ports port 80 443", "acl swarm_tunnel_ports port 80 443 443"))).toEqual([])
+    expect(
+      portFilter(shipped.replace("acl swarm_tunnel_ports port 80 443", "acl swarm_tunnel_ports port 80\nacl swarm_tunnel_ports port 443")),
+    ).toEqual([])
+  })
+
+  it("the twelve deny tokens the audit already verifies are still exactly twelve, both directions", () => {
+    // §12's contract line for this row: REQUIRED_DENY_RANGES keeps its twelve entries and urlpolicy does not move —
+    // this is a port-class change, and isDeniedAddress compares bytes, never ports. Set equality BOTH ways, so a
+    // dropped class and an added class each fail here rather than being averaged into a count.
+    expect(REQUIRED_DENY_RANGES.length).toBe(12)
+    const tokens = new Set<string>()
+    for (const line of shipped.split("\n")) {
+      const m = (line.split("#")[0] ?? "").match(/^acl\s+\S+\s+dst\s+(.+)$/)
+      if (m?.[1]) for (const t of m[1].trim().split(/\s+/)) tokens.add(t)
+    }
+    expect([...tokens].sort()).toEqual([...REQUIRED_DENY_RANGES.map((r) => r.cidr)].sort())
+    expect(auditSquidConf(shipped)).toEqual([])
+    expect(crossEnforcerAgreement(shipped)).toEqual([]) // the identity hook at egress_bake.ts:666-688 still holds
+  })
+
+  it("verifyEgressBake is green on the staged artefacts and red on the reverted render end-to-end", () => {
+    const home = freshHome("lockstep")
+    stageArtefacts(home)
+    const composeText = readFileSync(fcComposePath(home), "utf8")
+    const confText = readFileSync(fcSquidPath(home), "utf8")
+    expect(verifyEgressBake({ lock: LOCK, home, composeText, confText }).ok).toBe(true)
+    const reverted = confText
+      .split("\n")
+      .filter((l) => !/^\s*acl\s+swarm_tunnel_ports\s+port\b/.test(l))
+      .map((l) => l.replace("deny Connector !swarm_tunnel_ports", "deny Connector !SSL_ports"))
+      .join("\n")
+    const v = verifyEgressBake({ lock: LOCK, home, composeText, confText: reverted })
+    expect(v.ok).toBe(false)
+    expect(v.findings.filter((f) => f.code === "PORT_FILTER_MISSING")).toHaveLength(1)
+  })
+})
+
+// ================================================================================================
+describe("(extra_hosts audit row 242) a pin may carry a public answer, never the host and never a denied class", () => {
+  const codesFor = (hostname: string, value: string): string[] => auditExtraHostPins(pairCompose(hostname, value)).map((f) => f.code)
+
+  it("POSITIVE CONTROL: no key at all, a commented key, and public pairs each yield ZERO findings", () => {
+    expect(auditExtraHostPins(["services:", "  api:", "    networks: [fc-ctl]", ""].join("\n"))).toEqual([])
+    expect(auditExtraHostPins(["services:", "  api:", '    extra_hosts:  # P3 injected public answers; none rendered', ""].join("\n"))).toEqual([])
+    expect(auditExtraHostPins(pairCompose("example.com", "104.20.23.154"))).toEqual([])
+    expect(auditExtraHostPins(pairCompose("zeta.example.org", "8.8.8.8"))).toEqual([])
+    // a flow-form public entry parses and passes too
+    expect(auditExtraHostPins(["services:", "  api:", '    extra_hosts: ["example.com:93.184.216.34"]', ""].join("\n"))).toEqual([])
+    // and a trailing comment naming a hostile pair satisfies nothing and trips nothing
+    expect(auditExtraHostPins(["services:", "  api:", "    extra_hosts:", '      - "example.com:104.20.23.154"  # crawl.example:127.0.0.1', ""].join("\n"))).toEqual([])
+  })
+
+  const hostile: readonly { readonly name: string; readonly hostname: string; readonly value: string; readonly code: string }[] = [
+    { name: "the §4.5 door in its own spelling", hostname: "host.docker.internal", value: "host-gateway", code: "EXTRA_HOST_AT_HOST" },
+    { name: "host-gateway under a public-looking name", hostname: "crawl.example", value: "host-gateway", code: "EXTRA_HOST_AT_HOST" },
+    { name: "denied NAME with a PUBLIC value (the name screen survives)", hostname: "host.docker.internal", value: "93.184.216.34", code: "EXTRA_HOST_AT_HOST" },
+    { name: "cloud metadata name", hostname: "metadata.google.internal", value: "1.1.1.1", code: "EXTRA_HOST_AT_HOST" },
+    { name: ".local suffix name", hostname: "a.local", value: "1.1.1.1", code: "EXTRA_HOST_AT_HOST" },
+    { name: "a denied host NAME in the value slot", hostname: "crawl.example", value: "localhost", code: "EXTRA_HOST_AT_HOST" },
+    { name: "loopback v4 value", hostname: "crawl.example", value: "127.0.0.1", code: "EXTRA_HOST_DENIED_VALUE" },
+    { name: "the RC-234-2 nip.io fixture address", hostname: "crawl.example", value: "192.168.5.3", code: "EXTRA_HOST_DENIED_VALUE" },
+    { name: "RFC1918 10/8 value", hostname: "crawl.example", value: "10.1.2.3", code: "EXTRA_HOST_DENIED_VALUE" },
+    { name: "link-local / cloud-metadata address", hostname: "crawl.example", value: "169.254.169.254", code: "EXTRA_HOST_DENIED_VALUE" },
+    { name: "CGNAT value", hostname: "crawl.example", value: "100.64.0.1", code: "EXTRA_HOST_DENIED_VALUE" },
+    { name: "this-network value", hostname: "crawl.example", value: "0.0.0.1", code: "EXTRA_HOST_DENIED_VALUE" },
+    { name: "IPv6 loopback value", hostname: "crawl.example", value: "::1", code: "EXTRA_HOST_DENIED_VALUE" },
+    { name: "IPv6 unspecified value", hostname: "crawl.example", value: "::", code: "EXTRA_HOST_DENIED_VALUE" },
+    { name: "IPv6 link-local value", hostname: "crawl.example", value: "fe80::1", code: "EXTRA_HOST_DENIED_VALUE" },
+    { name: "NAT64-wrapped loopback value", hostname: "crawl.example", value: "64:ff9b::7f00:1", code: "EXTRA_HOST_DENIED_VALUE" },
+    { name: "IPv4-mapped IPv6 loopback value", hostname: "crawl.example", value: "::ffff:127.0.0.1", code: "EXTRA_HOST_DENIED_VALUE" },
+    { name: "multicast value (outside the twelve CIDRs, caught by the unicast leg)", hostname: "crawl.example", value: "239.1.2.3", code: "EXTRA_HOST_SHAPE_INVALID" },
+    { name: "reserved value 240/4", hostname: "crawl.example", value: "240.0.0.1", code: "EXTRA_HOST_SHAPE_INVALID" },
+    { name: "public IPv6 value, withheld by design (producer spec §1.2)", hostname: "crawl.example", value: "2606:4700:dead:beef::1", code: "EXTRA_HOST_SHAPE_INVALID" },
+    { name: "leading-zero (octal-parseable) form", hostname: "crawl.example", value: "010.1.2.3", code: "EXTRA_HOST_SHAPE_INVALID" },
+    { name: "hex-component form", hostname: "crawl.example", value: "0x6e.0.0.1", code: "EXTRA_HOST_SHAPE_INVALID" },
+    { name: "undotted service short-name (docker DNS shadowing)", hostname: "redis", value: "104.20.23.154", code: "EXTRA_HOST_SHAPE_INVALID" },
+    { name: "uppercase name", hostname: "CRAWL.EXAMPLE", value: "104.20.23.154", code: "EXTRA_HOST_SHAPE_INVALID" },
+    { name: "IP literal in the name slot", hostname: "1.2.3.4", value: "104.20.23.154", code: "EXTRA_HOST_SHAPE_INVALID" },
+    { name: "trailing-root-dot name", hostname: "example.com.", value: "104.20.23.154", code: "EXTRA_HOST_SHAPE_INVALID" },
+  ]
+  for (const h of hostile) {
+    it(`HOSTILE: ${h.name} — ${h.hostname}:${h.value} is refused as ${h.code}`, () => {
+      expect(codesFor(h.hostname, h.value)).toContain(h.code)
+    })
+  }
+
+  it("every hostile pair is refused, never merely described: no case above yields an empty finding list", () => {
+    for (const h of hostile) expect(auditExtraHostPins(pairCompose(h.hostname, h.value)).length).toBeGreaterThan(0)
+  })
+
+  it("flow-form hostility is caught the same way as block form", () => {
+    const flow = ["services:", "  api:", '    extra_hosts: ["crawl.example:host-gateway"]', ""].join("\n")
+    expect(auditExtraHostPins(flow).map((f) => f.code)).toContain("EXTRA_HOST_AT_HOST")
+  })
+
+  it("malformed pairs are refused rather than skipped", () => {
+    expect(codesFor("crawl.example", "")).toContain("EXTRA_HOST_SHAPE_INVALID") // "name:" -> empty address
+    expect(auditExtraHostPins(["services:", "  api:", "    extra_hosts:", "      - crawl.example", ""].join("\n")).length).toBe(1)
+  })
+
+  it("DRIFT PIN: the audit's screens and the renderer's screens agree pair-for-pair in both directions", () => {
+    // Two independent implementations over one shared predicate (urlpolicy) — §10.4 forbids a second address list, the
+    // cross-layer doctrine forbids the audit inheriting the renderer's rulebook. Exact agreement is what makes the
+    // pairing safe: a screen that drifts either way is a red test here, not a quiet hole or a false refusal.
+    const pairs: readonly (readonly [string, string])[] = [
+      ["example.com", "104.20.23.154"],
+      ["zeta.example.org", "8.8.8.8"],
+      ["sub.domain.example.co.uk", "172.66.147.243"],
+      ["host.docker.internal", "host-gateway"],
+      ["host.docker.internal", "93.184.216.34"],
+      ["crawl.example", "host-gateway"],
+      ["crawl.example", "127.0.0.1"],
+      ["crawl.example", "192.168.5.3"],
+      ["crawl.example", "169.254.169.254"],
+      ["crawl.example", "::1"],
+      ["crawl.example", "64:ff9b::7f00:1"],
+      ["crawl.example", "239.1.2.3"],
+      ["crawl.example", "2606:4700:dead:beef::1"],
+      ["crawl.example", "010.1.2.3"],
+      ["crawl.example", "0x6e.0.0.1"],
+      ["crawl.example", "not-an-address"],
+      ["redis", "104.20.23.154"],
+      ["CRAWL.EXAMPLE", "104.20.23.154"],
+      ["1.2.3.4", "104.20.23.154"],
+      ["example.com.", "104.20.23.154"],
+      ["metadata.google.internal", "1.1.1.1"],
+      ["a.local", "1.1.1.1"],
+    ]
+    const divergences: string[] = []
+    for (const [hostname, value] of pairs) {
+      const renderRefuses = extraHostPairProblem(hostname, value) !== null
+      const auditRefuses = auditExtraHostPins(pairCompose(hostname, value)).length > 0
+      if (auditRefuses !== renderRefuses) divergences.push(`${hostname}:${value} render_refuses=${renderRefuses} audit_refuses=${auditRefuses}`)
+    }
+    // Empty means two independent screens reach the same verdict on every pair, in both directions: the audit is not
+    // merely a copy of the render rule (it would report nothing if the render rule were weakened), and it does not
+    // refuse a pair the renderer legitimately emits.
+    expect(divergences).toEqual([])
+  })
+
+  it("cross-enforcer identity after the move: the value leg and urlpolicy answer identically on both sides", () => {
+    for (const rep of REQUIRED_DENY_RANGES) {
+      expect(isDeniedAddress(rep.probe)).toBe(true)
+      expect(codesFor("pin.example", rep.probe)).toContain("EXTRA_HOST_DENIED_VALUE")
+    }
+    for (const pub of ["104.20.23.154", "172.66.147.243", "93.184.216.34", "8.8.8.8"]) {
+      expect(isDeniedAddress(pub)).toBe(false)
+      expect(auditExtraHostPins(pairCompose("pin.example", pub))).toEqual([])
+    }
+  })
+
+  it("end-to-end: a poisoned pin in the staged compose refuses the whole bake and the refusal names the service", () => {
+    const home = freshHome("p3-hostile")
+    stageArtefacts(home)
+    const composeText = readFileSync(fcComposePath(home), "utf8")
+    const confText = readFileSync(fcSquidPath(home), "utf8")
+    expect(verifyEgressBake({ lock: LOCK, home, composeText, confText }).ok).toBe(true) // control: the shipped estate
+    const tampered = injectExtraHosts(composeText, "api", ["host.docker.internal:host-gateway"])
+    const v = verifyEgressBake({ lock: LOCK, home, composeText: tampered, confText })
+    expect(v.ok).toBe(false)
+    const hits = v.findings.filter((f) => f.code.startsWith("EXTRA_HOST"))
+    expect(hits.length).toBeGreaterThanOrEqual(2) // the name leg AND the host-gateway value leg
+    expect(hits.every((f) => f.item.includes("api"))).toBe(true) // block-scoped: it names the tier it refuses
+    expect(hits.every((f) => f.code === "EXTRA_HOST_AT_HOST")).toBe(true)
+  })
+
+  it("NEGATIVE CONTROL for the same rule: a legal public pin on api leaves the bake green (no false fire)", () => {
+    const home = freshHome("p3-clean")
+    stageArtefacts(home)
+    const composeText = readFileSync(fcComposePath(home), "utf8")
+    const tampered = injectExtraHosts(composeText, "api", ["example.com:104.20.23.154", "zeta.example.org:8.8.8.8"])
+    const v = verifyEgressBake({ lock: LOCK, home, composeText: tampered, confText: readFileSync(fcSquidPath(home), "utf8") })
+    expect(v.findings.filter((f) => f.code.startsWith("EXTRA_HOST"))).toEqual([])
+    expect(v.ok).toBe(true)
+  })
+
+  it("the audit covers EVERY service that carries the key, not only the two the renderer writes to", () => {
+    // Row 241 chose a value-based lint and emits on api + playwright-service by construction; the approval narrowed
+    // the rule to ENTRY CONTENTS, so this audit screens whichever tier carries the key rather than inventing a
+    // service allow-list the gate did not authorise. A hostile entry on a third tier must still refuse.
+    const home = freshHome("p3-third-tier")
+    stageArtefacts(home)
+    const composeText = readFileSync(fcComposePath(home), "utf8")
+    const third = injectExtraHosts(composeText, "redis", ["crawl.example:192.168.5.3"])
+    const v = verifyEgressBake({ lock: LOCK, home, composeText: third, confText: readFileSync(fcSquidPath(home), "utf8") })
+    expect(v.findings.some((f) => f.code === "EXTRA_HOST_DENIED_VALUE" && f.item.includes("redis"))).toBe(true)
   })
 })

@@ -24,7 +24,8 @@
 //       CGNAT/IPv6-local range in a `to_localnet dst` ACL AND those ACLs are WIRED into http_access deny
 //       before a trailing default-deny (parse-and-assert over the code portion, not a naive grep).
 //   (4) the non-negotiable hardening keys gate §8 cond.2 makes a standing duty of row 92's lift
-//       (cap_drop ALL, no-new-privileges, memswap_limit == mem_limit) plus ports-only-80/443 and no-cache.
+//       (cap_drop ALL, no-new-privileges, memswap_limit == mem_limit) plus ports-only-80/443, the CONNECT
+//       tunnel-port class equal to the approved {80,443} (gate 239 option 2 — see APPROVED_TUNNEL_PORTS), and no-cache.
 //   (5) a data-only health-gate CONTRACT for row 93 (entrypoint-agnostic running/healthcheck posture —
 //       stock entrypoint.sh + command flags, NOT Pebble per the r77b correction; nothing here assumes a
 //       Pebble socket or wait command).
@@ -36,6 +37,19 @@
 //       $TMPDIR/swarm-setup-r112b-proofs/squid-cache.log), and the rendered config must yield at least one PARSEABLE
 //       non-zero forward-proxy port equal to PC-PORT-06. `bakeProofLayers()` states which claims are offline-proven
 //       and which stay live-only; `LIVE_BOOT_SIGNATURES` hands row 112 the log lines that name each boot failure class.
+//
+//   (7) THE INJECTED-ANSWER AUDIT (gate 239 fork A / 01e §4.5 as narrowed by row 241, audited by row 242). The lint no
+//       longer bans the `extra_hosts` key BY NAME — it screens entries — so an out-of-band or hand-edited compose can
+//       now carry a key the render never emits. `auditExtraHostPins` therefore re-screens EVERY entry in the artefact
+//       this bake already refuses to bless: a pair that points the contained tier at the host (EXTRA_HOST_AT_HOST: a
+//       denied name class, or the `host-gateway` sentinel docker substitutes with the host address), a value inside
+//       one of the twelve denied classes (EXTRA_HOST_DENIED_VALUE), or a pair that is not one lowercase dotted FQDN
+//       mapped to one canonical public unicast IPv4 literal (EXTRA_HOST_SHAPE_INVALID, the leg that also refuses IPv6,
+//       withheld by producer-spec §1.2). It deliberately does NOT call `composefiles/dns_pins.ts`'s screen: an audit
+//       that asks the renderer whether the renderer was right inherits every hole the renderer later grows (the same
+//       reason the boot-class rule keeps its own narrow list — see the "(cross-layer pin)" describe in the suite). The
+//       twelve classes themselves are NOT re-listed here; they are read from r94's shipped urlpolicy predicates, which
+//       §10.4's cross-enforcer clause requires both layers to share.
 //
 // HONESTY (offline green != live green): this verifier NEVER boots squid and cannot prove the proxy binds anything.
 // It proves the SHAPES that the pinned digest's own live A/B experiment showed to be fatal, plus register equality.
@@ -58,7 +72,11 @@ import { pathsFor, PC_PORTS } from "../../composefiles/shared.ts"
 // dependency to the setup binary beyond the deny predicate itself; read-only import — row 92 never edits r94's
 // file. `isDeniedAddress` is the exact predicate r94's checkResolvedAddresses feeds the resolved-IP pin through
 // (§13 / 01f_tool_wiring_spec.md §6.4), which is what makes it the right handle for the cross-enforcer equality check.
-import { isDeniedAddress } from "../../mcpproxy/urlpolicy.ts"
+// Row 242 adds the two neighbours of that same predicate — `checkResolvedAddresses` (the name+address screen the P3
+// extra_hosts audit asks about each leg) and `isIpLiteral` (the "a name that IS an answer" leg) — because §10.4's
+// cross-enforcer clause forbids a second address list: the twelve classes are asked of THIS module everywhere, never
+// re-spelled in the audit. Nothing here edits it; its own suite is the contract.
+import { checkResolvedAddresses, isDeniedAddress, isIpLiteral } from "../../mcpproxy/urlpolicy.ts"
 
 /** §10.4 destinations that MUST be denied — the TWELVE amended classes (01e §10.4 as amended by r75-fix4 per
  *  review-107 MAJOR-2; verification/11_setup_code_review.md:54-62). Canonical CIDR spellings exactly as the r85
@@ -82,6 +100,22 @@ export const REQUIRED_DENY_RANGES: readonly { readonly cidr: string; readonly ki
   { cidr: "::/128", kind: "IPv6 unspecified", probe: "::" }, // [review-107 M2] new class
   { cidr: "64:ff9b::/96", kind: "NAT64 well-known", probe: "64:ff9b::1" }, // [review-107 M2] new class
 ]
+
+/** The port class a CONNECT tunnel may open — the ONLY ports gate 239 option 2 admitted, transcribed from
+ *  01e §10.4's r11 amendment (`acl swarm_tunnel_ports port 80 443`) and its surviving-invariant bullet. These are
+ *  policy literals in the same class as REQUIRED_DENY_RANGES (spec-transcribed requirements, not register values —
+ *  PC_PORTS carries the estate's own listen ports and is imported for those). The audit compares the SET a rendered
+ *  conf negates against this list exactly: narrower than this re-adds the refusal that made plain-HTTP scraping
+ *  impossible (R112d-1), wider than this exceeds what the user approved (forks B/F of `decisions/decisions.md:299-305`). */
+export const APPROVED_TUNNEL_PORTS: readonly number[] = [80, 443]
+
+/** The two port classes gate 239 option 2 explicitly did NOT touch, kept as their own constants so nobody "shares"
+ *  them with the tunnel class by coincidence: `acl SafePorts port 80 443` (+ `http_access deny !SafePorts`) governs
+ *  the non-tunnel methods, and `acl SSL_ports port 443` stays declared "so any other reader of `SSL_ports` is
+ *  unaffected" (01e §10.4's r11 bullet, quoting research/s6_12_tunnel_options_costed.md §4's invariant). Both are
+ *  policy literals like REQUIRED_DENY_RANGES, not register values: PC_PORTS carries the estate's own listen ports. */
+export const NON_TUNNEL_PORTS: readonly number[] = [80, 443]
+export const TLS_ONLY_PORTS: readonly number[] = [443]
 
 /** The in-container path squid is told to load (r85 bindMount target). One definition site, reused by the
  *  bind-target and `-f`-argument checks so they cannot drift from each other. */
@@ -153,6 +187,9 @@ export type BakeCode =
   | "DEFAULT_DENY_MISSING"
   | "DEFAULT_DENY_MISORDERED"
   | "PORT_FILTER_MISSING"
+  | "EXTRA_HOST_AT_HOST"
+  | "EXTRA_HOST_DENIED_VALUE"
+  | "EXTRA_HOST_SHAPE_INVALID"
   | "NOCACHE_MISSING"
   | "SQUID_GRAMMAR_INVALID"
   | "SQUID_RESERVED_ACL_NAME"
@@ -356,6 +393,10 @@ export function verifyEgressBake(opts: VerifyOptions): EgressBakeVerdict {
     })
   }
 
+  // (P3 injected answers, gate 239 fork A / row 242) the narrowed lint screens entries at RENDER time and no longer
+  // bans the key by name, so the artefact is where a hostile or out-of-band `extra_hosts` becomes visible. This audit
+  // reads the composed text, not dns_pins' screen — see header item (7) for why the two rulebooks stay separate.
+  findings.push(...auditExtraHostPins(composeText))
   findings.push(...auditSquidConf(confText))
   // (renamed-ACL safe) reserved-name collision: redeclaring a squid-predefined ACL name is a boot FATAL (R112-1).
   findings.push(...assertNoReservedAclNames(confText))
@@ -500,6 +541,8 @@ export function bakeProofLayers(): EgressProofLayers {
     offlineProven: [
       "rendered compose image == tools.lock.json egress_proxy_image pin; conf bound at the path the command loads via -f; EVERY service on REQUIRED_PROXIED_SERVICES carries its own PROXY_SERVER equal to egress-proxy:PC-PORT-06 (IMAGE_PIN_MISMATCH / CONF_BIND_MISSING / CMD_CONF_MISMATCH / PROXY_ROUTE_UNSET)",
       "all twelve §10.4 classes appear in a DENIED dst ACL and the dstdomain pair covers localhost + .local, deny-then-default-deny ordering included (auditSquidConf / crossEnforcerAgreement)",
+      "the CONNECT-method deny negates a port class equal to the approved tunnel set {80, 443}, and the two classes gate 239 did not touch are still declared exactly as §10.4 words them — SafePorts {80, 443} with `deny !SafePorts`, SSL_ports {443} (auditSquidConf port guard; gate 239 option 2 rendered by row 241, audit moved in lockstep by row 242)",
+      "every extra_hosts entry present in the artefact aims at a public name and a canonical public unicast IPv4 answer — no host-pointing leg, no twelve-class value (auditExtraHostPins; §4.5 as narrowed by gate 239 fork A)",
       "no ACL redeclares a squid-predefined name (assertNoReservedAclNames; R112-1 closed live by r85-fix5)",
       "secret dir/file modes and executable /docker-entrypoint.d wraps over a real tools root (auditFileModes; R112-5)",
       "no inline comment sits on an option-parsed port directive, and the port directive parses to a non-zero port equal to PC-PORT-06 (auditBootClass; R112b-1/R112b-5)",
@@ -515,6 +558,7 @@ export function bakeProofLayers(): EgressProofLayers {
       "whether `access_log stdio:/dev/stdout` is writable by cache_effective_user in the estate container — the verifier's throwaway run FATALed on exactly this (squid-cache-p1.log:19) and the estate never got far enough to show it",
       "`ERROR: Directive 'dns_v4_first' is obsolete.` noise on the pinned 6.13 digest (squid-cache-p1.log:2) — spec-mandated directive vs pinned release, decision for rows 75/85",
       "per-target SSRF refusals for the six §10.6 targets and the idle zero-line/control-line audit pair",
+      "TUNNEL-FORM containment after gate 239's widening: that a private target reached as `CONNECT 127.0.0.1:80` still leaves a TCP_DENIED line naming it (§10.6 items 3 and 8 in CONNECT form, incl. the `127.0.0.1.nip.io` / `192.168.5.3.nip.io` fixtures of RC-234-2). The offline audit proves the port CLASS and the twelve dst ACLs; it cannot see squid evaluating its own CONNECT-time answer, and it stays blind to the two dstdomain classes losing their bite inside a tunnel — Loss 2, whose only instrument is row 255's battery ('Why the audit passing is not proof', research/s6_12_tunnel_options_costed.md §4).",
       "the image pull itself, digest resolution and any daemon-side enforcement (`--pull never`) — rows 93/112",
     ],
   }
@@ -766,18 +810,56 @@ export function auditSquidConf(confText: string): BakeFinding[] {
     })
   }
 
-  // Ports-only-80/443 + CONNECT restricted to SSL_ports (10.4).
-  const safePorts = code.find((c) => /^acl\s+SafePorts\s+port\b/.test(c)) ?? ""
-  const sslPorts = code.find((c) => /^acl\s+SSL_ports\s+port\b/.test(c)) ?? ""
+  // Ports-only-80/443 + CONNECT restricted to the APPROVED tunnel-port class (10.4 bullet 1, as amended by gate 239
+  // option 2: `acl swarm_tunnel_ports port 80 443` declared beside an UNTOUCHED `acl SSL_ports port 443`, with the one
+  // `http_access deny Connector` line re-pointed at it). Row 242's lockstep duty is to move this guard with that render
+  // without relaxing it, so it keys on STRUCTURE exactly like the destination audit above keys on TYPE: the line must be
+  // `http_access deny <ACL declaring method CONNECT> !<port-class ACL>` and the negated class's port SET must equal
+  // APPROVED_TUNNEL_PORTS. Name-agnostic only in the direction row 241 moved — a substituted ACL name still has to
+  // resolve to a real port declaration — and strict everywhere else: the finding names which leg failed. Accepting the
+  // pre-gate `!SSL_ports` form as well was considered and REJECTED: an audit that admits both cannot tell whether the
+  // approved class was ever rendered, which is the "agrees with whatever the renderer emitted last week" failure the
+  // lockstep clause exists to prevent (01e §10.4 "The lockstep duty, named for row 242"; 05 §5 trap T-6).
+  const portClasses = portAclClasses(code)
+  const tunnelTerm = connectorTunnelTerm(code)
+  const tunnelPorts: number[] | null = tunnelTerm === undefined ? null : portClasses.get(tunnelTerm) ?? null
+  // The two named classes gate 239 left untouched are resolved through the SAME port parser rather than matched as
+  // substrings: `acl SafePorts port 80 443` and `acl SSL_ports port 443` stay exactly as §10.4 words them, and a
+  // deleted or widened declaration refuses here even though nothing else in the file mentions them any more. The old
+  // guard got that coverage for free — its literal `deny Connector !SSL_ports` mentioned SSL_ports — so when row 241
+  // moved the reference to the tunnel class, a substring matcher would have LOSED it silently.
+  const safePortsClass: number[] | null = portClasses.get("SafePorts") ?? null
+  const sslPortsClass: number[] | null = portClasses.get("SSL_ports") ?? null
   const denyUnsafe = code.some((c) => /^http_access\s+deny\s+!SafePorts\s*$/.test(c))
-  const denyConnectorNonSsl = code.some((c) => /^http_access\s+deny\s+Connector\s+!SSL_ports\s*$/.test(c))
-  const has80 = /(^|\s)80(\s|$)/.test(safePorts)
-  const has443 = /(^|\s)443(\s|$)/.test(safePorts) || /(^|\s)443(\s|$)/.test(sslPorts)
-  if (!(has80 && has443 && denyUnsafe && denyConnectorNonSsl)) {
+  // The tunnel leg stays separate from the boolean conjunction so the refusal can say WHY it fired; a guard whose
+  // message is a generic "incomplete" cannot be told apart from a guard that was never reached.
+  const tunnelProblem =
+    tunnelTerm === undefined
+      ? "no `http_access deny <CONNECT-method-ACL> !<port-ACL>` line at all"
+      : tunnelPorts === null
+        ? `the CONNECT deny negates "${tunnelTerm}", which is not a plain-integer port-class ACL declaration`
+        : !samePortSet(tunnelPorts, APPROVED_TUNNEL_PORTS)
+          ? `the CONNECT deny class "${tunnelTerm}" carries [${tunnelPorts.join(", ")}], not the approved {${APPROVED_TUNNEL_PORTS.join(", ")}}`
+          : null
+  const unsafePortLegs = [
+    safePortsClass === null
+      ? "no plain-integer `acl SafePorts port …` declaration"
+      : !samePortSet(safePortsClass, NON_TUNNEL_PORTS)
+        ? `SafePorts carries [${safePortsClass.join(", ")}], not {${NON_TUNNEL_PORTS.join(", ")}}`
+        : null,
+    sslPortsClass === null
+      ? "no plain-integer `acl SSL_ports port …` declaration (§10.4: SSL_ports stays declared and unchanged)"
+      : !samePortSet(sslPortsClass, TLS_ONLY_PORTS)
+        ? `SSL_ports carries [${sslPortsClass.join(", ")}], not {${TLS_ONLY_PORTS.join(", ")}}`
+        : null,
+    denyUnsafe ? null : "no `http_access deny !SafePorts`",
+    tunnelProblem,
+  ].filter((leg): leg is string => leg !== null)
+  if (unsafePortLegs.length > 0) {
     findings.push({
       code: "PORT_FILTER_MISSING",
-      item: "ports-80/443-only guard incomplete",
-      hint: "10.4 bullet 1: allow 80/443 only, deny !SafePorts, deny Connector !SSL_ports",
+      item: `ports-80/443-only guard incomplete: ${unsafePortLegs.join("; ")}`,
+      hint: "10.4 bullet 1 as amended by gate 239 option 2: `acl SafePorts port 80 443` + `deny !SafePorts` and `acl SSL_ports port 443` stay exactly as they were, and the CONNECT-method deny must negate a port ACL whose set is exactly the approved tunnel class (rendered today as `acl swarm_tunnel_ports port 80 443`, row 241). Renaming or dropping that ACL is refused here, not silently accepted.",
     })
   }
 
@@ -790,6 +872,90 @@ export function auditSquidConf(confText: string): BakeFinding[] {
       hint: "10.4: no caching; every object non-cacheable",
     })
 
+  return findings
+}
+
+/** Audit of the P3 injected answers over the RENDERED compose artefact (gate 239 fork A narrowed 01e §4.5 to "no entry
+ *  may point at the host"; audited by this row under §10.4's lockstep duty). WHY THE BAKE CARRIES THIS AT ALL: row 241
+ *  replaced a blanket ban on the KEY NAME with a screen over ENTRIES, so a compose text can now legitimately carry
+ *  `extra_hosts:` — and, because bring-up consumes the artefact and never re-renders, can also carry entries the
+ *  render never produced (an out-of-band edit, a restored file, a harness slip). With the name-ban gone the screens that
+ *  remain are the lint at render time and this audit at bake time; this one is the last offline stop before the stack is
+ *  brought up, and it is deliberately NOT a call into `composefiles/dns_pins.ts` (header item (7)).
+ *
+ *  THREE CODES, ONE PER HARM CLASS, each proven by mutation in test/egress_bake.test.ts:
+ *   - EXTRA_HOST_AT_HOST — the pair aims the contained tier at the host: the name is in a denied name class
+ *     (host.docker.internal / localhost / *.local / *.internal / *.localhost / metadata.google.internal, via the shipped
+ *     urlpolicy predicate) or the value is `host-gateway`, the sentinel docker substitutes with the host's gateway
+ *     address, or a denied host NAME. This is the exact door §4.5 prohibits, so it is refused whatever the value says.
+ *   - EXTRA_HOST_DENIED_VALUE — the value is an address inside one of the twelve §10.4 classes (loopback, RFC1918,
+ *     link-local incl. cloud metadata, CGNAT, this-network, the four IPv6 locals, NAT64) — asked of r94's shipped
+ *     `isDeniedAddress`, NOT re-listed here, which is what keeps the two enforcers one list instead of two.
+ *   - EXTRA_HOST_SHAPE_INVALID — the pair is not "one lowercase dotted FQDN mapped to one canonical public unicast
+ *     IPv4 literal": malformed entry, undotted name (docker's embedded DNS answers service short-names, so a pin named
+ *     `redis` is a stack-internal redirect), uppercase, an IP literal used as a name, an IPv6 value (withheld by design,
+ *     producer spec §1.2), a multicast/reserved answer ≥224 (which the twelve CIDRs do not cover), or a non-canonical
+ *     numeric form (leading-zero/octal/hex). Only this third leg restates a positive shape the renderer also checks;
+ *     the suite pins the two screens against each other in both directions so a drift is a red test, not a quiet hole. */
+export function auditExtraHostPins(composeText: string): BakeFinding[] {
+  const findings: BakeFinding[] = []
+  for (const entry of extraHostEntries(composeText)) {
+    const where = `${entry.service === "" ? "(no service block)" : entry.service}: extra_hosts entry "${entry.raw}"`
+    // Split at the FIRST colon: the pair is `name:address`, a name never carries a colon, and an IPv6 address carries
+    // several — splitting at the last one would hand the screens a truncated name and a one-character value.
+    const sep = entry.raw.indexOf(":")
+    if (sep <= 0 || sep === entry.raw.length - 1) {
+      findings.push({
+        code: "EXTRA_HOST_SHAPE_INVALID",
+        item: `${where} is not a single "hostname:address" pair`,
+        hint: "01e §4.5 statement 1 as amended: one dotted FQDN to one address literal — a pair this file cannot parse is not the shape the gate approved",
+      })
+      continue
+    }
+    const hostname = entry.raw.slice(0, sep)
+    const value = entry.raw.slice(sep + 1)
+    const nameVerdict = checkResolvedAddresses([hostname])
+    if (nameVerdict === "host_denied_name")
+      findings.push({
+        code: "EXTRA_HOST_AT_HOST",
+        item: `${where} names a denied host class ("${hostname}") — the contained tier would learn to dial the host`,
+        hint: "§4.5 as narrowed by gate 239 fork A still prohibits exactly this: 'no entry may point at the host'. The NAME screen survives the narrowing (urlpolicy DENIED_EXACT/DENIED_SUFFIXES, reused not re-listed).",
+      })
+    else if (!dottedFqdnShape(hostname) || isIpLiteral(hostname))
+      findings.push({
+        code: "EXTRA_HOST_SHAPE_INVALID",
+        item: `${where} has a name that is not a lowercase dotted FQDN ("${hostname}")`,
+        hint: "an undotted short-name shadows docker's own service DNS (producer §5/row 241 containment note), an IP literal in the name slot maps answers to answers, and a name the render could not have emitted is tampering either way",
+      })
+
+    if (value.trim().toLowerCase() === "host-gateway")
+      findings.push({
+        code: "EXTRA_HOST_AT_HOST",
+        item: `${where} uses the "host-gateway" sentinel — docker substitutes the HOST address for it`,
+        hint: "the §4.5 door in its own spelling: this is how a pin routes fc-ctl/fc-iso traffic at the host without naming it (01e §4.5 prohibited-keys text, preserved by gate 239's narrowing)",
+      })
+    else {
+      const valueVerdict = checkResolvedAddresses([value])
+      if (valueVerdict === "host_denied_name")
+        findings.push({
+          code: "EXTRA_HOST_AT_HOST",
+          item: `${where} carries the denied host name "${value}" as its answer`,
+          hint: "an /etc/hosts line whose address slot is a name is not an answer, and this one names the host class",
+        })
+      else if (valueVerdict === "address_denied")
+        findings.push({
+          code: "EXTRA_HOST_DENIED_VALUE",
+          item: `${where} pins a §10.4 denied-class address ("${value}")`,
+          hint: "the twelve classes are asked of r94's shipped urlpolicy predicate (isDeniedAddress behind checkResolvedAddresses) — a private/loopback/link-local/CGNAT/NAT64 answer injected here gives the contained tier a route the filter exists to refuse, and it is the class the narrowing must never have admitted",
+        })
+      else if (!canonicalPublicUnicastV4(value))
+        findings.push({
+          code: "EXTRA_HOST_SHAPE_INVALID",
+          item: `${where} has a value that is not a canonical public unicast IPv4 literal ("${value}")`,
+          hint: "§4.5 statement 1 + producer spec §1.2/§3.3: IPv6 is withheld (the guest has no live v6 route), multicast/reserved ≥224 is non-unicast and slips past the twelve CIDRs, and non-canonical numeric forms (leading zero, octal, hex) are drift or tampering, never an answer the producer wrote",
+        })
+    }
+  }
   return findings
 }
 
@@ -1005,4 +1171,149 @@ function dstdomainDeniedTokens(confText: string): Set<string> {
     if (m?.[1] && m[2] && denied.has(m[1])) for (const tok of m[2].trim().split(/\s+/)) out.add(tok)
   }
   return out
+}
+
+// --- port-class parsers (row 242's lockstep move: find the CONNECT guard by STRUCTURE, then judge its SET) ------
+
+/** Every `acl <name> port <tokens...>` declaration resolved to its port numbers, keyed by the ACL name the render
+ *  chose. Same-name lines UNION, which is what squid does with same-type redeclarations (the shipped dstdomain pair
+ *  relies on the same behaviour). A class carrying any token that is not a plain in-range integer — a range
+ *  (`1024-65535`), a service name (`HTTP`), a half-stripped comment fragment — maps to null so the caller REFUSES
+ *  rather than guesses at what such a class admits. */
+function portAclClasses(code: readonly string[]): Map<string, number[] | null> {
+  const out = new Map<string, number[] | null>()
+  for (const c of code) {
+    const m = c.match(/^acl\s+(\S+)\s+port\s+(.+)$/)
+    if (!m?.[1] || !m[2]) continue
+    const once = out.get(m[1])
+    const merged = once === null ? null : [...(once ?? [])]
+    let unparseable = false
+    for (const tok of m[2].trim().split(/\s+/)) {
+      const v = /^\d+$/.test(tok) ? Number(tok) : Number.NaN
+      if (!Number.isInteger(v) || v < 1 || v > 65535) {
+        unparseable = true
+        break
+      }
+      merged?.push(v)
+    }
+    // Once a class is poisoned by ANY line it stays poisoned: an unparseable token must not be dropped in favour of
+    // the numbers that did parse, or `port 80 443 1024-65535` would read as the approved {80,443} plus a wildcard.
+    if (merged === null || unparseable) out.set(m[1], null)
+    else out.set(m[1], merged)
+  }
+  return out
+}
+
+/** The negated term of the CONNECT-method deny line, or undefined when the conf carries no such line. Resolved by
+ *  structure: an `http_access deny <a> !<b>` line where <a> is declared as an `acl <a> method ...` listing CONNECT.
+ *  This is how the audit follows row 241's substitution WITHOUT learning the replacement name in advance, and it stays
+ *  a refusal in the two shapes that matter: no such line at all (tunnels unrestricted by omission), and a line whose
+ *  negated name resolves to no port declaration (a substituted or deleted ACL — the exact corruption class §10.4's
+ *  lockstep duty names). A bare `http_access deny Connector` is deliberately NOT matched either: denying every tunnel
+ *  is not the approved policy, and gate 239 answered fork B that plain-HTTP scraping is a required capability. */
+function connectorTunnelTerm(code: readonly string[]): string | undefined {
+  const connectAcls = new Set(
+    code.flatMap((c) => {
+      const m = c.match(/^acl\s+(\S+)\s+method\s+(.+)$/)
+      return m?.[1] && (m[2] ?? "").trim().split(/\s+/).includes("CONNECT") ? [m[1]] : []
+    }),
+  )
+  if (connectAcls.size === 0) return undefined
+  for (const c of code) {
+    const m = c.match(/^http_access\s+deny\s+(\S+)\s+!(\S+)\s*$/)
+    if (m?.[1] && m[2] && connectAcls.has(m[1])) return m[2]
+  }
+  return undefined
+}
+
+/** Port-set equality with duplicates collapsed and order ignored — the approved class is a SET, so a reordered or
+ *  duplicated line is the same policy while a widened or narrowed one is a different one. */
+function samePortSet(a: readonly number[], b: readonly number[]): boolean {
+  const xs = [...new Set(a)].sort((p, q) => p - q)
+  const ys = [...new Set(b)].sort((p, q) => p - q)
+  return xs.length === ys.length && xs.every((v, i) => v === ys[i])
+}
+
+// --- extra_hosts parsers (the P3 audit: both YAML shapes, read per service, comments never trusted) --------------
+
+interface ExtraHostEntry {
+  readonly service: string
+  /** The entry as the artefact carries it, minus quotes and any trailing comment. */
+  readonly raw: string
+}
+
+/** Every `extra_hosts` entry in a compose text, tagged with the indent-2 service it sits under. Both shapes are read —
+ *  block form (`extra_hosts:` followed by `- "name:address"` lines, the form row 241 renders) and flow form
+ *  (`extra_hosts: ["name:address"]`, the form a hand edit produces and the lint fixture tests) — because the audit's
+ *  whole point after the narrowing is that it must not depend on which of them wrote the door open. Trailing comments
+ *  are stripped before comparison, so a comment naming a good address satisfies nothing, exactly as in the conf audit. */
+function extraHostEntries(composeText: string): ExtraHostEntry[] {
+  const out: ExtraHostEntry[] = []
+  const lines = composeText.split("\n")
+  let service = ""
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i] ?? ""
+    const svc = line.match(/^ {2}(\S.*?):\s*(?:#.*)?$/)
+    if (svc) {
+      service = svc[1] ?? ""
+      continue
+    }
+    const key = line.match(/^(\s*)extra_hosts:\s*(.*)$/)
+    if (!key) continue
+    const indent = (key[1] ?? "").length
+    const rest = (key[2] ?? "").split("#")[0]?.trim() ?? ""
+    if (rest.startsWith("[") && rest.endsWith("]")) {
+      for (const item of rest.slice(1, -1).split(",")) {
+        const value = stripEntryQuotes(item)
+        if (value !== "") out.push({ service, raw: value })
+      }
+      continue
+    }
+    if (rest !== "") {
+      out.push({ service, raw: stripEntryQuotes(rest) })
+      continue
+    }
+    for (let j = i + 1; j < lines.length; j++) {
+      const body = lines[j] ?? ""
+      if (body.trim() === "" || body.trim().startsWith("#")) continue
+      if ((body.match(/^(\s*)/)?.[1] ?? "").length <= indent) break
+      const item = body.match(/^\s*-\s*(.*)$/)
+      if (!item) break
+      out.push({ service, raw: stripEntryQuotes((item[1] ?? "").split("#")[0] ?? "") })
+    }
+  }
+  return out
+}
+
+function stripEntryQuotes(token: string): string {
+  const t = token.trim()
+  if (t.length > 1 && ((t.startsWith('"') && t.endsWith('"')) || (t.startsWith("'") && t.endsWith("'"))))
+    return t.slice(1, -1)
+  return t
+}
+
+/** Positive NAME shape: lowercase RFC1123 labels with at least one dot. The dot is containment, not style — docker's
+ *  embedded DNS answers service short-names on the all-internal tiers, so an undotted pin redirects a tier inside the
+ *  stack (producer spec §5 / row 241's judgement note). Label lengths are capped per RFC 1035 as their own visible
+ *  check (≤63 each, ≤253 total) instead of being buried in the pattern. Deliberately NOT imported from
+ *  composefiles/dns_pins.ts — see header item (7). */
+function dottedFqdnShape(host: string): boolean {
+  if (host.length === 0 || host.length > 253) return false
+  const labels = host.split(".")
+  if (labels.length < 2) return false
+  return labels.every((label) => label.length <= 63 && /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(label))
+}
+
+/** Positive VALUE shape: a canonical dotted-quad in the unicast range. This is NOT a second deny list — the twelve
+ *  CIDRs are asked of r94's shipped `isDeniedAddress`, the same predicate the cross-enforcer hook uses. What is
+ *  restated here are the two things those CIDRs do not cover and producer §3.3 demands anyway: multicast/reserved
+ *  answers whose first octet is ≥224 (239.1.2.3 answers FALSE from `isDeniedAddress` yet the vendor classifier blocks
+ *  the whole target on it — research/s6_11_playwright_precheck.md §7.3) and non-canonical numeric encodings (leading
+ *  zero, octal, hex) that urlpolicy parses for hostile URL hosts but no answer-producer ever writes into a render. */
+function canonicalPublicUnicastV4(value: string): boolean {
+  const parts = value.split(".")
+  if (parts.length !== 4) return false
+  if (!parts.every((p) => /^(?:0|[1-9][0-9]?|1[0-9]{2}|2[0-4][0-9]|25[0-5])$/.test(p))) return false
+  if (Number(parts[0] ?? "0") >= 224) return false
+  return !isDeniedAddress(value)
 }

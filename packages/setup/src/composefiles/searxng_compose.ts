@@ -21,10 +21,12 @@ import {
 } from "./shared.ts"
 import { COMPOSE_PROJECT } from "../constants.ts"
 import type { LockFile } from "../lockfile.ts"
+import type { LaneValues } from "./lanes.ts"
 
 export function renderSearxngCompose(
   lock: LockFile,
   ctx: NormalizedCtx,
+  lanes: LaneValues,
 ): { ok: true; file: RenderFile } | { ok: false; errors: RenderError[] } {
   const image = lockImage(lock, "searxng", "image")
   if (!image.ok) return { ok: false, errors: [image.error] }
@@ -33,7 +35,28 @@ export function renderSearxngCompose(
 
   const p = pathsFor(ctx.toolsRoot)
   const ca = ctx.caBundlePath !== undefined // F-79-B presence flag drives the conditional block
+  const threads = lanes.GRANIAN_BLOCKING_THREADS // C-3; undefined means unset -> renders as today (§5.1 rule 4)
   const version = lock.version
+
+  // AC-237-13 / 06 §5.1 item 5 — the trap this block exists to close. Until row 245 the ONLY
+  // `environment:` key in this service sat inside the CA-bundle spread below, so a lane value
+  // appended there would be set on machines that have a corporate CA configured and silently ABSENT
+  // on every other machine. The header is therefore emitted when EITHER input needs it, the CA entry
+  // stays inside its own conditional (it is a §4.10 fact about this host, not a lane), and with
+  // neither input present nothing is emitted at all — which is what keeps the default render
+  // byte-identical to row 241's final bytes.
+  const environmentBlock = (): string[] =>
+    !ca && threads === undefined
+      ? []
+      : [
+          "    environment:",
+          ...(ca ? ["      SSL_CERT_FILE: /etc/ssl/certs/swarm-ca.pem  # §4.10 CA-bundle conditional (bundle present on host)"] : []),
+          ...(threads === undefined
+            ? []
+            : [
+                `      GRANIAN_BLOCKING_THREADS: "${threads}"  # LIVE key: the image bakes 4 and granian honours it through auto_envvar_prefix='GRANIAN' (granian/cli.py:606, row 236 §4.2). Value from ~/.swarm/setup/lanes.json (PC-PATH-18), validated [4,4] (row 238 §4.3); writing it takes ownership of what the baked ENV used to decide (06 §5.1), and changing it recreates the container (env-class, §3.1)`,
+              ]),
+        ]
 
   const y = [
     "# compose/searxng.yml — PC-PKG-03 (rendered by the swarm-setup compose-files renderer, row 85)",
@@ -62,12 +85,7 @@ export function renderSearxngCompose(
     `      - "${publishedPortEntries()[0]}"  # PC-PORT-01 as amended by the user PORT BLOCK (decisions.md entry 'USER DECISION (PORT BLOCK, 05:33 UTC)'): host 9021 (was 8888, history only), container 8080 unchanged (PC-PORT-03 / 02b:128) — P-6 form`,
     "    env_file:",
     `      - ${p.searxngEnv}  # generated beside this tree; carries SEARXNG_BASE_URL only — no secret values (§4.6)`,
-    ...(ca
-      ? [
-          "    environment:",
-          "      SSL_CERT_FILE: /etc/ssl/certs/swarm-ca.pem  # §4.10 CA-bundle conditional (bundle present on host)",
-        ]
-      : []),
+    ...environmentBlock(),
     "    volumes:",
     bindMount(p.searxngSettings, "/etc/searxng/settings.yml", true, 6),
     bindMount(p.searxngCache, "/var/cache/searxng", false, 6),

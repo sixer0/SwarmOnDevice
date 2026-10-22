@@ -19,6 +19,8 @@ import {
   type RenderContext,
 } from "../src/composefiles/shared.ts"
 import { renderNginxTemplate } from "../src/composefiles/nginx_template.ts"
+import { extraHostPairProblem, publicUnicastV4, readDnsPins } from "../src/composefiles/dns_pins.ts"
+import { checkResolvedAddresses, isDeniedAddress } from "../src/mcpproxy/urlpolicy.ts"
 
 const lockPath = join(import.meta.dir, "..", "tools.lock.json")
 const parsedLock = JSON.parse(readFileSync(lockPath, "utf8"))
@@ -448,7 +450,18 @@ describe("lint fixtures — one failing + one passing per §4.9 rule (blueprint 
       "    volumes:\n      - type: bind\n        source: /var/run/docker.sock\n        target: /var/run/docker.sock",
     ],
     ["banned-key", sx(), "    tmpfs:", "    pid: host\n    tmpfs:"],
-    ["banned-key", sx(), "# §5.1 segmentation", "# extra_hosts: anything"],
+    // RE-SPECIFIED by row 241 (RC-234-1, honoured in the same batch as the lint narrowing per
+    // gate 239 fork A + masterplan/07_s6b_p3_producer_spec.md §5). The old fixture asserted the
+    // BLANKET name ban ("even a comment naming extra_hosts is refused"); the user-approved rule
+    // (01e §4.5 amended) is a VALUE rule — no entry may point at the host or a denied class.
+    // These mutations inject real entries into the api service; each must trip rule "extra-hosts".
+    // The passing side (public entry green, comment mention green) lives in the row-241 describe.
+    ["extra-hosts", fc(), "    networks: [fc-ctl, fc-data]", "    networks: [fc-ctl, fc-data]\n    extra_hosts:\n      - \"host.docker.internal:host-gateway\""],
+    ["extra-hosts", fc(), "    networks: [fc-ctl, fc-data]", "    networks: [fc-ctl, fc-data]\n    extra_hosts:\n      - \"crawl.example:127.0.0.1\""],
+    ["extra-hosts", fc(), "    networks: [fc-ctl, fc-data]", "    networks: [fc-ctl, fc-data]\n    extra_hosts:\n      - \"crawl.example:192.168.5.3\""],
+    ["extra-hosts", fc(), "    networks: [fc-ctl, fc-data]", "    networks: [fc-ctl, fc-data]\n    extra_hosts:\n      - \"host.docker.internal:93.184.216.34\""],
+    ["extra-hosts", fc(), "    networks: [fc-ctl, fc-data]", "    networks: [fc-ctl, fc-data]\n    extra_hosts:\n      - \"crawl.example:239.1.2.3\""],
+    ["extra-hosts", fc(), "    networks: [fc-ctl, fc-data]", "    networks: [fc-ctl, fc-data]\n    extra_hosts: [\"crawl.example:host-gateway\"]"],
     [
       "named-volume",
       sx(),
@@ -1174,5 +1187,233 @@ describe("applyRenderedFiles — atomic placement with register modes", () => {
   test("an unclean render cannot be applied", () => {
     const dirty = renderAll(lock, { home: "/Users/tester" }) // missing required secrets
     expect(() => applyRenderedFiles(dirty, "/tmp/r85-never")).toThrow()
+  })
+})
+
+describe("gate 239 row 241 — P3 extra_hosts render, narrowed lint, squid tunnel widening", () => {
+  // Shapes are cited per section of masterplan/01e_compose_spec.md (as amended by row 240) and
+  // masterplan/07_s6b_p3_producer_spec.md §1.3/§3. Scratch homes live under $TMPDIR/kilo only.
+  const fcText = () => fileOf(renderClean(), "firecrawl/compose/firecrawl.yml").content
+  const q = () => fileOf(renderClean(), "firecrawl/squid/squid.conf").content
+  const opts = { lockVersion: lock.version }
+
+  function sandboxHome(name: string, pinsJson?: string): string {
+    const dir = join(process.env.TMPDIR ?? "/tmp", "kilo", `r241-${name}-${process.pid}-${Math.floor(Math.random() * 1e6)}`)
+    mkdirSync(join(dir, ".swarm", "setup"), { recursive: true })
+    if (pinsJson !== undefined) writeFileSync(join(dir, ".swarm", "setup", "dns-pins.json"), pinsJson)
+    return dir
+  }
+  const pinReader = (home: string) => renderAll(lock, { ...baseCtx, home })
+  const pinDoc = (pins: unknown[], extra?: Record<string, unknown>) =>
+    JSON.stringify({ version: 1, generatedAt: "2026-10-22T02:15:00Z", pins, ...extra })
+  const goodPin = {
+    hostname: "example.com",
+    address: "104.20.23.154",
+    answersSeen: ["104.20.23.154", "172.66.147.243"], // the producer-spec §1.3 sample pair, both public
+    checkedAt: "2026-10-22T02:15:00Z",
+  }
+
+  // --- work item 6: the absent file is the only legal no-pins state (producer spec §3.3 closing) ---
+  test("byte-identical default: no pins file renders NO extra_hosts key anywhere", () => {
+    expect(fcText()).not.toContain("extra_hosts")
+    expect(fileOf(renderClean(), "searxng/compose/searxng.yml").content).not.toContain("extra_hosts")
+    const absent = sandboxHome("absent")
+    expect(readDnsPins(absent)).toEqual({ ok: true, entries: [], present: false })
+    const r = pinReader(absent)
+    expect(r.ok).toBe(true)
+    const textA = fileOf(r, "firecrawl/compose/firecrawl.yml").content
+    expect(textA).not.toContain("extra_hosts")
+    // same-home determinism (the cross-codebase byte-diff vs HEAD bytes lives in the row-241
+    // implementation record: pkgA(HEAD) vs pkgB(after) renders with no pins file)
+    expect(fileOf(pinReader(absent), "firecrawl/compose/firecrawl.yml").content).toBe(textA)
+  })
+
+  // --- work item 1: the render shape (§4.5 amended statement 1; §10.2; producer spec §5 row 241) ---
+  test("valid pins render on api AND playwright-service only, as quoted literals, lint-green", () => {
+    const home = sandboxHome(
+      "valid",
+      pinDoc([
+        { ...goodPin },
+        { hostname: "zeta.example.org", address: "8.8.8.8", answersSeen: ["8.8.8.8"], checkedAt: "2026-10-22T02:15:00Z" },
+      ]),
+    )
+    const r = pinReader(home)
+    if (!r.ok) throw new Error(`pins render refused: ${JSON.stringify(r.errors)}`)
+    const text = fileOf(r, "firecrawl/compose/firecrawl.yml").content
+    const doc = Bun.YAML.parse(text)
+    // sorted by hostname for byte-stability regardless of file order (§1.3 entry list)
+    expect(doc.services.api.extra_hosts).toEqual(["example.com:104.20.23.154", "zeta.example.org:8.8.8.8"])
+    expect(doc.services["playwright-service"].extra_hosts).toEqual(["example.com:104.20.23.154", "zeta.example.org:8.8.8.8"])
+    for (const svc of ["auth-proxy", "redis", "rabbitmq", "nuq-postgres", "egress-proxy"])
+      expect(doc.services[svc].extra_hosts).toBeUndefined()
+    // literal discipline: every entry line is a quoted hostname:dotted-quad pair, zero interpolation (§11).
+    // Anchored shape (exactly one colon, canonical quad) so the published-port lines can never join this count.
+    const entryLines = text.split("\n").filter((l) => /^ {6}- "[a-z0-9][a-z0-9.-]*:(?:[0-9]{1,3}\.){3}[0-9]{1,3}"$/.test(l))
+    expect(entryLines.length).toBe(4)
+    for (const l of entryLines) expect(l).toMatch(/^ {6}- "[a-z0-9.-]+:(?:[0-9]{1,3}\.){3}[0-9]{1,3}"$/)
+    expect(text).not.toContain("${")
+    expect(r.findings.length).toBe(0)
+    // byte-stability across two renders with the same inputs (shared.ts contract)
+    const r2 = pinReader(home)
+    expect(r2.ok && fileOf(r2, "firecrawl/compose/firecrawl.yml").content).toBe(text)
+    // IPv6 withheld by design: no entry carries a colon-delimited v6 value (§1.2)
+    for (const e of doc.services.api.extra_hosts) expect(String(e).split(":")[1]).not.toMatch(/^[0-9a-f]*:/)
+  })
+
+  // --- work item 2: render-time screening refuses, never omits silently (§3.3 posture) ---
+  test("refusal matrix: malformed, poisoned, non-survivor and duplicate pins refuse the WHOLE render", () => {
+    const twelve: Array<[string, string]> = [
+      ["127.0.0.0/8", "127.0.0.1"],
+      ["10.0.0.0/8", "10.1.2.3"],
+      ["172.16.0.0/12", "172.20.0.9"],
+      ["192.168.0.0/16", "192.168.5.3"],
+      ["169.254.0.0/16", "169.254.169.254"],
+      ["100.64.0.0/10", "100.64.0.1"],
+      ["0.0.0.0/8", "0.0.0.1"],
+      ["::1/128", "::1"],
+      ["fe80::/10", "fe80::1"],
+      ["fc00::/7", "fd00::1"],
+      ["::/128", "::"],
+      ["64:ff9b::/96", "64:ff9b::7f00:1"],
+    ]
+    const cases: Array<[string, string]> = [
+      ["malformed JSON", "{ this is not json"],
+      ["version 2", JSON.stringify({ version: 2, generatedAt: "x", pins: [] })],
+      ["generatedAt missing", JSON.stringify({ version: 1, pins: [goodPin] })],
+      ["pins not an array", JSON.stringify({ version: 1, generatedAt: "x", pins: {} })],
+      ["empty pins array is legal", pinDoc([])], // the ONE exception — asserted below, not refused
+      ["name host.docker.internal", pinDoc([{ ...goodPin, hostname: "host.docker.internal" }])],
+      ["name .internal suffix", pinDoc([{ ...goodPin, hostname: "svc.internal" }])],
+      ["name undotted short-name", pinDoc([{ ...goodPin, hostname: "redis" }])],
+      ["name is an IP literal", pinDoc([{ ...goodPin, hostname: "93.184.216.34" }])],
+      ["address not a screened survivor", pinDoc([{ ...goodPin, answersSeen: ["8.8.8.8"] }])],
+      ["answersSeen secretly private", pinDoc([{ ...goodPin, answersSeen: ["104.20.23.154", "192.168.1.1"] }])],
+      ["duplicate hostname", pinDoc([goodPin, { ...goodPin, address: "8.8.8.8", answersSeen: ["8.8.8.8"] }])],
+      ["answersSeen empty", pinDoc([{ ...goodPin, answersSeen: [] }])],
+      ["checkedAt missing", pinDoc([{ ...goodPin, checkedAt: undefined }])],
+      ["multicast value", pinDoc([{ ...goodPin, address: "239.1.2.3", answersSeen: ["239.1.2.3"] }])],
+      ["reserved-value", pinDoc([{ ...goodPin, address: "240.0.0.1", answersSeen: ["240.0.0.1"] }])],
+      ["octal-form value", pinDoc([{ ...goodPin, address: "010.1.2.3", answersSeen: ["010.1.2.3"] }])],
+      ["host-gateway value", pinDoc([{ ...goodPin, address: "host-gateway", answersSeen: ["host-gateway"] }])],
+      ...twelve.map(([cls, addr]): [string, string] => [
+        `twelve-class ${cls}`,
+        pinDoc([{ ...goodPin, address: addr, answersSeen: [addr] }]),
+      ]),
+    ]
+    let legalEmpty = 0
+    for (const [label, doc] of cases) {
+      const home = sandboxHome(`refuse-${label.replace(/[^a-z0-9]+/gi, "-")}`, doc)
+      const r = pinReader(home)
+      if (label === "empty pins array is legal") {
+        expect(r.ok, label).toBe(true)
+        expect(fileOf(r, "firecrawl/compose/firecrawl.yml").content).not.toContain("extra_hosts")
+        legalEmpty += 1
+        continue
+      }
+      expect(r.ok, label).toBe(false)
+      expect(r.errors.every((e) => e.code === "DNS_PINS_INVALID"), label).toBe(true)
+      expect(r.files.length, `${label}: refusal writes nothing`).toBe(0)
+    }
+    expect(legalEmpty).toBe(1)
+  })
+
+  // --- work item 2 core: the shipped predicates are REUSED, not re-implemented (§3.1) ---
+  test("screening reuse: value screen agrees with urlpolicy class-by-class; unicast leg proven additive", () => {
+    const reps = ["127.0.0.1", "10.1.2.3", "172.20.0.9", "192.168.5.3", "169.254.169.254", "100.64.0.1", "0.0.0.1", "::1", "fe80::1", "fd00::1", "::", "64:ff9b::7f00:1"]
+    for (const rep of reps) {
+      expect(isDeniedAddress(rep), `urlpolicy denies ${rep}`).toBe(true) // the shipped predicate owns the twelve classes
+      expect(publicUnicastV4(rep), `screen refuses ${rep}`).toBe(false)
+    }
+    for (const pub of ["104.20.23.154", "172.66.147.243", "93.184.216.34", "8.8.8.8"]) {
+      expect(isDeniedAddress(pub)).toBe(false)
+      expect(publicUnicastV4(pub)).toBe(true)
+    }
+    // The unicast leg is provably ADDITIVE, not a second deny list: multicast/reserved slip past the
+    // twelve CIDRs (isDeniedAddress false) yet the vendor classifier blocks them — §3.3 row 4.
+    expect(isDeniedAddress("239.1.2.3")).toBe(false)
+    expect(publicUnicastV4("239.1.2.3")).toBe(false)
+    expect(isDeniedAddress("240.0.0.1")).toBe(false)
+    expect(publicUnicastV4("240.0.0.1")).toBe(false)
+    // name screen coexists (§4.5 statement 2): denied NAMES trip the pair problem even with a public value
+    expect(checkResolvedAddresses(["host.docker.internal"])).toBe("host_denied_name")
+    expect(extraHostPairProblem("host.docker.internal", "93.184.216.34")).toContain("denied name class")
+    expect(extraHostPairProblem("example.com", "104.20.23.154")).toBe(null)
+  })
+
+  // --- work item 4: the narrowing went BOTH ways (blanket name ban gone, host refusal intact) ---
+  test("narrowed lint: comment mention and public entry are green; host-pointing entries are red", () => {
+    // The OLD fixture's mutation — a comment merely NAMING the key — must now lint clean:
+    const commentOnly = fcText().replace("# §6.1 five-tier segmentation", "# extra_hosts: prose may name the key again")
+    expect(commentOnly).not.toBe(fcText())
+    expect(lintOk(lintComposeText(commentOnly, opts))).toBe(true)
+    // A public-address entry renders green (the §4.5 permission):
+    const publicEntry = fcText().replace(
+      "    networks: [fc-ctl, fc-data]",
+      '    networks: [fc-ctl, fc-data]\n    extra_hosts:\n      - "example.com:104.20.23.154"',
+    )
+    expect(lintOk(lintComposeText(publicEntry, opts))).toBe(true)
+    // MUTATION PROOF for the re-specified fixtures: the host-pointing forms trip rule extra-hosts
+    // (this is the instrument discriminating; the cases[] table above drives the same through lintComposeText).
+    for (const bad of [
+      '"host.docker.internal:host-gateway"',
+      '"crawl.example:127.0.0.1"',
+      '"crawl.example:0.0.0.1"',
+      '"crawl.example:100.64.0.1"',
+      '"crawl.example:239.1.2.3"',
+      '"crawl.example:::1"',
+    ]) {
+      const mutated = fcText().replace(
+        "    networks: [fc-ctl, fc-data]",
+        `    networks: [fc-ctl, fc-data]\n    extra_hosts:\n      - ${bad}`,
+      )
+      const findings = lintComposeText(mutated, opts)
+      expect(findings.some((f) => f.rule === "extra-hosts"), bad).toBe(true)
+      expect(lintOk(findings), bad).toBe(false)
+    }
+    // §11 zero-tolerance stays untouched by the narrowing (PASS_THROUGH_HARD still bans by name anywhere):
+    expect(lintComposeText(fcText().replace("# §6.1 five-tier", "# OPENAI_API_KEY here"), opts).some((f) => f.rule === "pass-through")).toBe(true)
+  })
+
+  // --- work item 3: the squid widening is ONE argument substitution plus one declaration, nothing else ---
+  test("tunnel widening: swarm_tunnel_ports declared beside an untouched SSL_ports; deny Connector re-pointed only", () => {
+    const t = q()
+    const code = t.split("\n").map((l) => l.split("#")[0] ?? "").join("\n")
+    expect(code).toContain("acl swarm_tunnel_ports port 80 443")
+    expect(code).toContain("acl SSL_ports port 443") // invariant that must survive (§10.4 r11 bullet)
+    expect(code).toContain("acl SafePorts port 80 443")
+    expect(code).toContain("http_access deny !SafePorts")
+    expect(code).toContain("http_access deny Connector !swarm_tunnel_ports")
+    expect(code).not.toContain("http_access deny Connector !SSL_ports") // re-pointed, not duplicated
+    // NO new allow line was introduced: exactly one http_access allow exists, as before (10.4 ordering)
+    expect(code.split("\n").filter((l) => /^\s*http_access\s+allow\b/.test(l)).length).toBe(1)
+    // ordering + grammar invariants survive
+    expect(findSquidOrderingViolations(t)).toEqual([])
+    expect(findReservedAclNames(t)).toEqual([])
+    expect(findDirectiveInlineComments(t)).toEqual([])
+    // the twelve destination classes stay twelve, plain-dst only (the widening touched ports, not dst)
+    const toks = (line: string) => line.split("#")[0].trim().split(/\s+/).slice(3)
+    const v4 = t.split("\n").find((l) => /^acl to_localnet dst 127\./.test(l)) ?? ""
+    const v6 = t.split("\n").find((l) => /^acl to_localnet dst ::1\/128/.test(l)) ?? ""
+    expect(new Set([...toks(v4), ...toks(v6)]).size).toBe(12)
+    // declaration order preserved: tunnel ACL sits among the acl block, every destination deny still
+    // precedes the single allow, and deny-all stays last (positions relative, not absolute)
+    const idx = (needle: string) => t.split("\n").findIndex((l) => l.trimStart().startsWith(needle))
+    expect(idx("acl swarm_tunnel_ports")).toBeLessThan(idx("http_access deny to_localnet"))
+    expect(idx("http_access deny Connector")).toBeLessThan(idx("http_access deny to_localnet"))
+    expect(idx("http_access deny to_localnet")).toBeLessThan(idx("http_access allow localnet"))
+    expect(idx("http_access allow localnet")).toBeLessThan(idx("http_access deny all"))
+  })
+
+  // --- work item 5: the two stale comments, both homes, verified disposed ---
+  test("stale comments: 'upstream 8' claim deleted (four keys carry the §6.4 sentence); phantom binding gone", () => {
+    const t = fcText()
+    expect(t).not.toContain("scaled down from upstream 8")
+    expect(t.split("not read by the pinned build 2.11.554-production").length - 1).toBe(4)
+    expect(t).not.toContain("bound to api's CRAWL_CONCURRENT_REQUESTS")
+    const mcp = t.split("\n").find((l) => l.trimStart().startsWith("MAX_CONCURRENT_PAGES:")) ?? ""
+    expect(mcp).toContain('"2"') // value unchanged — row 245 owns changing it
+    expect(mcp).toContain("LIVE key owned by the playwright image")
+    expect(t).toContain("deliberate cut") // the §6.7 replacement facts ride the continuation lines
+    expect(t).toContain("pw:/usr/src/app/api.ts:26-29")
   })
 })

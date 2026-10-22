@@ -12,6 +12,7 @@
 
 import { COMPOSE_PROJECT, LABELS } from "../constants.ts"
 import { publishedPortEntries } from "./shared.ts"
+import { extraHostPairProblem } from "./dns_pins.ts"
 
 export type Severity = "error" | "warn"
 
@@ -66,7 +67,17 @@ export const CAP_ADD_ALLOWLIST: Readonly<Record<string, readonly string[]>> = {
 }
 
 const BANNED_CODE_SUBSTRINGS: readonly string[] = ["privileged", "network_mode", "docker.sock"]
-const BANNED_ANYWHERE: readonly string[] = ["extra_hosts"] // the §4.5 host-gateway door may not even be named
+/** NARROWED by row 241 under gate 239 fork A (user-authorised change to a security gate —
+ *  decisions/decisions.md gate-239 entry: "the blanket `extra_hosts` ban in our own lint narrows
+ *  to 'no entry may point at the host', which is what §4.5 actually prohibits"). The old entry
+ *  here was a substring ban on the NAME across every raw line including comments; the rule that
+ *  replaces it is the extra_hosts screen inside lintComposeText below — a name-screen +
+ *  value-screen over actual
+ *  entries, reusing the shipped urlpolicy predicates (dns_pins.ts), so host.docker.internal and
+ *  host-gateway stay refused and every twelve-class address stays refused, while one public
+ *  unicast IPv4 literal per dotted FQDN is permitted (§4.5 amended statements 1-3). The loop
+ *  over this list stays for any future zero-tolerance name; after the narrowing it carries none. */
+const BANNED_ANYWHERE: readonly string[] = []
 
 export interface LintOptions {
   /** tools.lock.json .version — F-79-E asserts every label equals this exact string. */
@@ -357,6 +368,37 @@ export function lintComposeText(text: string, opts: LintOptions): Finding[] {
       if (value.includes("~"))
         push("tilde-path", `${svc.name}: env_file path carries a literal ~ — absolute at write time (A-75-1)`, l.n)
       else if (!value.startsWith("/")) push("tilde-path", `${svc.name}: env_file path must be absolute`, l.n)
+    }
+
+    // --- extra_hosts, narrowed rule (row 241 / gate 239 fork A / 01e §4.5 amended) ---
+    // Replaces the old blanket name ban: entries are SCREENED, not named-banned. Both halves of
+    // §4.5 statement 2 coexist here — the name side refuses host.docker.internal/.local/.internal
+    // & friends, the value side refuses every twelve-class address, host-gateway, IPv6, multicast
+    // and non-canonical forms — via the SAME predicate the pins reader uses (dns_pins.ts), which
+    // is itself the shipped urlpolicy reuse (§3.1's no-second-deny-list invariant).
+    const extraHosts = svc.props.get("extra_hosts")
+    if (extraHosts) {
+      const entries: string[] = []
+      const inlineRaw = (extraHosts.line.code.match(/^ {4}extra_hosts:\s*(.*)$/) ?? [])[1]?.trim() ?? ""
+      if (inlineRaw.startsWith("[") && inlineRaw.endsWith("]")) {
+        for (const item of inlineRaw.slice(1, -1).split(",")) {
+          const v = stripQuotesAndComment(item.trim())
+          if (v.length > 0) entries.push(v)
+        }
+      }
+      for (const l of extraHosts.body) {
+        const m = !l.isComment ? l.code.match(/^\s{4,}-\s+(.*)$/) : null
+        if (!m) continue
+        entries.push(stripQuotesAndComment(m[1] as string))
+      }
+      for (const entry of entries) {
+        const sep = entry.indexOf(":")
+        const problem =
+          sep <= 0 || sep === entry.length - 1
+            ? `entry "${entry}" is not a single "hostname:address" pair (§4.5 amended: one hostname to one public unicast IPv4 literal)`
+            : extraHostPairProblem(entry.slice(0, sep), entry.slice(sep + 1))
+        if (problem !== null) push("extra-hosts", `${svc.name}: extra_hosts refused — ${problem}`)
+      }
     }
   }
 

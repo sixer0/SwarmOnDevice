@@ -7,7 +7,12 @@
 // comes from constants.ts (PC-PROJ-01, PC-LBL-01..03, PC-PORT-01/02). Nothing is
 // re-hardcoded here that the lock or register already owns.
 //
-// The renderer is PURE: no network, no process spawn, no writes. Writing is
+// The renderer is PURE: no network, no process spawn, no writes. The two inputs it reads are
+// declared data files under ctx.home — dns-pins.json (row 241 / producer spec §5) for the P3
+// extra_hosts entries and lanes.json (row 245 / masterplan/06_s6b_lanes_spec.md §5.1) for the three
+// lane controls. Both are spec-required reads, both are re-validated at render time because a user
+// who edits them directly bypasses their writers, and an absent file is the legal default that keeps
+// today's bytes; everything else still arrives through RenderContext. Writing is
 // applyRenderedFiles() below (atomic.ts, row 81) called by the owner steps; a dry run
 // renders to a caller-chosen directory only — implementation observation, not a ruling
 // (no decisions.md entry mentions dry runs; composefiles/index.ts owns the --out
@@ -75,6 +80,14 @@ export interface RenderError {
     | "SECRET_UNDECLARED" // manifest names something outside the §4.6 inventory
     | "LOCK_FIELD_MISSING" // a pin this render needs is absent/null in the lock
     | "ENGINE_SETTINGS_INVALID" // enginePath=image-settings but no usable text
+    | "DNS_PINS_INVALID" // dns-pins.json malformed or an entry fails the render-time screen (row 241, producer spec §3.3)
+    // The three lane tokens (row 245, masterplan/06_s6b_lanes_spec.md §4.1). They are RenderError
+    // CODES rather than one wrapper code so the CLI's `refuse [TOKEN]` line carries the same
+    // vocabulary the route answers 400 with and the units assert on — one bad value produces one
+    // word wherever it is caught, which is the whole point of sharing tokens across layers.
+    | "LANE_VALUE_OUT_OF_RANGE" // integer outside that control's published [min,max], below the floor included
+    | "LANE_VALUE_NOT_A_LANE" // key outside the closed three-name set (inert or invented knob names)
+    | "LANE_VALUE_MALFORMED" // not a JSON integer, or a file/shape that cannot be read as the schema
     | "CONTEXT_INVALID"
   readonly message: string
 }
