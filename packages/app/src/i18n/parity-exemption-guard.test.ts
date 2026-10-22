@@ -53,7 +53,10 @@ describe("i18n parity exemption guard", () => {
 
   test("every exemption entry is a literal dotted key, never a wildcard or pattern", () => {
     for (const key of exemptKeys) {
-      expect(key).toMatch(/^[A-Za-z][A-Za-z0-9]*(\.[A-Za-z][A-Za-z0-9]*)+$/)
+      // Underscores are allowed inside segments because the gate-approved key
+      // `mcp.status.needs_client_registration` (decisions.md gate-195 item (i)) spells its union member that way;
+      // segments must still start with a letter, so wildcards, brackets, spaces and slashes stay rejected.
+      expect(key).toMatch(/^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+$/)
     }
   })
 
@@ -67,7 +70,7 @@ describe("i18n parity exemption guard", () => {
     expect(gateSource.split("exemptFromPresence").length - 1).toBe(2)
     // Both completeness assertions must still demand a literally empty `missing` array. If either one
     // became a threshold (`missing.slice`, `missing.length`), the exemption would start absorbing real
-    // drift instead of only the three named keys.
+    // drift instead of only the named keys.
     expect(gateSource.split("missing: []").length - 1).toBe(2)
     expect(gateSource).not.toMatch(/missing\.(slice|length|filter|some|every)/)
   })
@@ -77,7 +80,20 @@ describe("i18n parity exemption guard", () => {
     // from `Object.keys(source)`. That would leave the call site announcing the raw key string —
     // precisely the regression row 170 measured (`packages/ui/src/v2/components/toast-v2.tsx:21`).
     const sources = [
-      { domain: "app", file: "./en.ts", keys: ["command.project.openNumber", "settings.tab.servers"] },
+      {
+        domain: "app",
+        file: "./en.ts",
+        keys: [
+          "command.project.openNumber",
+          "settings.tab.servers",
+          "setup.status.installed",
+          "setup.status.registered",
+          "setup.status.visible",
+          "setup.status.used",
+          "setup.status.notClaimed",
+          "mcp.status.needs_client_registration",
+        ],
+      },
       { domain: "ui", file: "../../../ui/src/i18n/en.ts", keys: ["ui.toast.ariaLabel"] },
     ]
     for (const source of sources) {
