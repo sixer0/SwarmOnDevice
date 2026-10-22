@@ -31,7 +31,9 @@
 // far smaller boundary. This module therefore runs at most two `docker ps` listings (positive-label
 // filters only — the daemon on this estate rejects `label!=`, rule E16) plus one `docker exec` per
 // carrier, all pinned to --context colima-swarm (the DOCKER_CONTEXT constant; never the user's
-// current context, never `default`). It starts nothing. If a spawn ever looks necessary here, the
+// current context, never `default`). It starts nothing. The child ENVIRONMENT is pinned too:
+// DOCKER_HOST, DOCKER_CONTEXT and DOCKER_CONFIG are stripped from every spawn (finding F-251-9), so
+// argv is the only thing that chooses a daemon. If a spawn ever looks necessary here, the
 // answer is to route the question to row 251's boundary review, not to add it.
 //
 // DEGRADE HONESTLY (§5.2's split claim + the anti-collapse invariant): stored configuration and
@@ -222,7 +224,15 @@ export function applyLanesPatch(patch: unknown, home: string = homeDir()): Lanes
   if (!isPlainObject(patch))
     return patchError("LANE_VALUE_MALFORMED", { reason: "request body must be a JSON object of lane control names to integers (06 §5.2 closed struct)" })
 
-  const candidate: Record<string, unknown> = { ...current.lanes }
+  // F-251-3: the merge target carries NO prototype deliberately. On a normal object, assigning the
+  // submitted name `__proto__` invokes Object.prototype's setter, which RE-PARENTS the candidate
+  // instead of adding a key — so pass 1's own-key sweep (lanes.ts:210) finds nothing to refuse and
+  // an undocumented carrier answers 200 while setting nothing but a fabricated `updatedAt`, the one
+  // thing whose absence means "never set from the app" (§2.4). Refusing nothing while writing an age
+  // is the worst of both halves of refuse-not-coerce (06 §4). A null-prototype object makes every
+  // submitted name an own data property, so `__proto__`, `constructor` and `prototype` meet exactly
+  // the same LANE_VALUE_NOT_A_LANE as every other unknown name — a class fix, not a name list.
+  const candidate: Record<string, unknown> = Object.assign(Object.create(null) as Record<string, unknown>, current.lanes)
   for (const [key, value] of Object.entries(patch)) candidate[key] = value
 
   const doc = { version: 1, updatedAt: new Date().toISOString(), lanes: candidate }
@@ -279,9 +289,38 @@ export type DockerRunner = (argv: readonly string[], timeoutMs: number) => Promi
 
 const PROBE_TIMEOUT_MS = 2000
 
+/** Environment names stripped from every docker child this surface spawns (finding F-251-9). The
+ *  context is already pinned in argv (`--context colima-swarm`), so an ambient `DOCKER_HOST` would
+ *  be a SECOND, inherited way to choose which daemon answers, and `DOCKER_CONTEXT` / `DOCKER_CONFIG`
+ *  are the same lever one layer up — which context is current, and where contexts resolve from.
+ *  Row 251 measured that a failing pinned context is not rescued by `DOCKER_HOST` (its I-H/I-I);
+ *  whether it wins on a working daemon stays UNKNOWN until a profile runs (rule E10 forbids starting
+ *  one here), and clearing the three names removes the question instead of inheriting it. */
+export const DOCKER_ENV_DENY = ["DOCKER_HOST", "DOCKER_CONTEXT", "DOCKER_CONFIG"] as const
+
+/**
+ * A copy of `env` with the daemon-selection names removed. Everything else passes through, PATH and
+ * HOME included, and both are load-bearing: PATH is how the `docker` executable is found, and HOME is
+ * where the pinned context resolves from (~/.docker — rule E15's split: a process with a SANDBOXED
+ * HOME sees no daemon at all, so the daemon leg must keep the server's real HOME). Consequence worth
+ * naming: an operator who legitimately relocated their whole docker config via DOCKER_CONFIG will
+ * find the pinned context unresolvable, and the leg degrades honestly to a named reason rather than
+ * silently probing wherever the environment pointed.
+ */
+export function dockerSpawnEnv(env: Record<string, string | undefined> = process.env): Record<string, string> {
+  const denied: readonly string[] = DOCKER_ENV_DENY
+  const out: Record<string, string> = {}
+  for (const [key, value] of Object.entries(env)) {
+    if (value === undefined || denied.includes(key)) continue
+    out[key] = value
+  }
+  return out
+}
+
 /** Production runner. Bun's `timeout` option kills the child, so a hung daemon degrades to
  *  `timeout` instead of hanging the request (the dead-`default`-VM class of failure, E10's reason).
- *  stderr is DROPPED, never forwarded: daemon messages embed $HOME-bearing paths. */
+ *  stderr is DROPPED, never forwarded: daemon messages embed $HOME-bearing paths. The environment is
+ *  the explicit copy above, so no daemon-selection variable is inherited (F-251-9). */
 export const liveDockerRunner: DockerRunner = async (argv, timeoutMs) => {
   try {
     const proc = Bun.spawn(["docker", ...argv], {
@@ -289,6 +328,7 @@ export const liveDockerRunner: DockerRunner = async (argv, timeoutMs) => {
       stdout: "pipe",
       stderr: "ignore",
       timeout: timeoutMs,
+      env: dockerSpawnEnv(),
     })
     const stdout = await new Response(proc.stdout).text()
     const code = await proc.exited

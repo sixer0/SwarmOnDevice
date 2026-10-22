@@ -16077,13 +16077,19 @@
         "type": "object",
         "properties": {
           "NUQ_WORKER_COUNT": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": 4,
+            "maximum": 5
           },
           "MAX_CONCURRENT_PAGES": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": 4,
+            "maximum": 4
           },
           "GRANIAN_BLOCKING_THREADS": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": 4,
+            "maximum": 4
           }
         },
         "additionalProperties": false

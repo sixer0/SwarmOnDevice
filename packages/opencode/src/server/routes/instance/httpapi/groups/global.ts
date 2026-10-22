@@ -2,6 +2,7 @@ import { ConfigV1 } from "@opencode-ai/core/v1/config/config"
 import { EventV2 } from "@opencode-ai/core/event"
 import { EventManifest } from "@/event-manifest"
 import { InstanceDisposed } from "@/server/event"
+import { laneRangeMap } from "@/server/shared/lanes-observation"
 import "@opencode-ai/core/account"
 import "@/server/event"
 import { Schema } from "effect"
@@ -175,14 +176,28 @@ const GlobalLanes = Schema.Struct({
   observed: Schema.Record(Schema.String, GlobalLanesObservedEntry),
 }).annotate({ identifier: "GlobalLanes" })
 
-/** DOCUMENTATION ONLY — `lanesUpdate` is handled raw (it must answer malformed JSON bodies with
- *  the spec's own token, which a framework decode rejection could not phrase), and the enforced
- *  closed set lives in the shared validator the handler imports. This schema states the shape the
- *  SDK sees: three optional integers, no free-form field (§4.3 "never accept a free-form value"). */
+/** DOCUMENTATION ONLY as a gate, DOCUMENTATION AS A CONTRACT as a description — `lanesUpdate` is
+ *  handled raw (it must answer malformed JSON bodies with the spec's own token, which a framework
+ *  decode rejection could not phrase), and the enforced closed set lives in the shared validator the
+ *  handler imports. Nothing here decodes a request: an out-of-range submission still meets the
+ *  handler's LANE_VALUE_OUT_OF_RANGE, not a schema error, and that ordering is deliberate.
+ *
+ *  The bounds ARE stated, though (finding F-251-4 / row 252 Q5.1): a published contract that calls
+ *  `NUQ_WORKER_COUNT: 999` legal while the server refuses it is a weaker contract than the behaviour,
+ *  and a client typed against the generated SDK could only discover the difference at runtime. They
+ *  are read off the imported range table rather than restated, so [4,5]/[4,4]/[4,4] keep exactly one
+ *  home (row 252 Q6.6 lists that single-home property as the drift class this session keeps closing). */
+const lanePatchBounds = laneRangeMap()
+
+function lanePatchField(key: string) {
+  const bound = lanePatchBounds[key]
+  return Schema.optional(Schema.Int.check(Schema.isBetween({ minimum: bound.min, maximum: bound.max })))
+}
+
 export const GlobalLanesPatchInput = Schema.Struct({
-  NUQ_WORKER_COUNT: Schema.optional(Schema.Int),
-  MAX_CONCURRENT_PAGES: Schema.optional(Schema.Int),
-  GRANIAN_BLOCKING_THREADS: Schema.optional(Schema.Int),
+  NUQ_WORKER_COUNT: lanePatchField("NUQ_WORKER_COUNT"),
+  MAX_CONCURRENT_PAGES: lanePatchField("MAX_CONCURRENT_PAGES"),
+  GRANIAN_BLOCKING_THREADS: lanePatchField("GRANIAN_BLOCKING_THREADS"),
 }).annotate({ identifier: "GlobalLanesPatchInput" })
 
 export const GlobalPaths = {

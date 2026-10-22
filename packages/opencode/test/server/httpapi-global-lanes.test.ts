@@ -25,6 +25,7 @@ import { createHash } from "crypto"
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "fs"
 import { tmpdir } from "os"
 import { join } from "path"
+import { fileURLToPath } from "url"
 import { NodeHttpServer } from "@effect/platform-node"
 import { describe, expect, test } from "bun:test"
 import { Context, Effect, Layer, Option } from "effect"
@@ -45,6 +46,7 @@ import { schemaErrorLayer } from "../../src/server/routes/instance/httpapi/middl
 import {
   LANES_TILDE_PATH,
   applyLanesPatch,
+  dockerSpawnEnv,
   lanesFilePath,
   lanesStateObservation,
   observeEffective,
@@ -342,6 +344,74 @@ describe("PATCH /global/lanes refusals", () => {
 })
 
 // ---------------------------------------------------------------------------
+// Layer 1b2 — the prototype-chain carriers row 251 caught slipping past the closed set (F-251-3)
+// ---------------------------------------------------------------------------
+
+// Row 251 measured these bodies answering 200 while every own-property name answered 400. The
+// mechanism was the merge itself: `candidate["__proto__"] = value` invokes Object.prototype's
+// setter and RE-PARENTS the candidate instead of adding a key, so pass 1's own-key sweep
+// (lanes.ts:210) found nothing to refuse. Nothing hostile reached the file — but the commit moved
+// `updatedAt` from absent to present, fabricating the very age whose absence means "never set from
+// the app" (lanes.ts:134-136). Refusing nothing while writing an age is the worst of both halves of
+// refuse-not-coerce (06 §4), which is why this class now answers like every other unknown name.
+describe("PATCH /global/lanes prototype-chain carriers (F-251-3)", () => {
+  // Raw JSON text, never object literals: `{ __proto__: x }` in a literal sets the prototype rather
+  // than creating the own property JSON.parse creates, so a literal would test a different thing.
+  const carriers = [
+    { name: "__proto__ carrying an in-range value", key: "__proto__", raw: '{"__proto__":{"MAX_CONCURRENT_PAGES":4}}' },
+    { name: "__proto__ carrying an out-of-range value", key: "__proto__", raw: '{"__proto__":{"NUQ_WORKER_COUNT":999}}' },
+    { name: "__proto__ carrying an unrelated payload", key: "__proto__", raw: '{"__proto__":{"totally_unrelated":"x"}}' },
+    { name: "__proto__ carrying a nested envelope", key: "__proto__", raw: '{"__proto__":{"lanes":{"MAX_CONCURRENT_PAGES":4}}}' },
+    { name: "constructor", key: "constructor", raw: '{"constructor":{"MAX_CONCURRENT_PAGES":4}}' },
+    { name: "prototype", key: "prototype", raw: '{"prototype":{"MAX_CONCURRENT_PAGES":4}}' },
+  ]
+
+  for (const carrier of carriers) {
+    test(`refuses the "${carrier.name}" carrier exactly like an ordinary unknown name`, () => {
+      // Seed WITHOUT updatedAt — that absence is the thing the old 200 fabricated.
+      const home = homeWith({ doc: { version: 1, lanes: VALID_TUPLE } })
+      try {
+        const before = snapshot(home)
+        const result = applyLanesPatch(JSON.parse(carrier.raw), home)
+        expect(result.ok).toBe(false)
+        if (result.ok) throw new Error("unreachable")
+        expect(result.error.code).toBe("LANE_VALUE_NOT_A_LANE")
+        expect(result.error.key).toBe(carrier.key)
+        // One vocabulary, not a second one: the reason must be the shared validator's own sentence for
+        // that name, the same one an ordinary unknown key produces (computed key on purpose — it is
+        // the own-property form JSON.parse yields).
+        const canonical = validateLanesDocument({ version: 1, lanes: { [carrier.key]: 4 } })
+        expect(canonical.ok).toBe(false)
+        if (canonical.ok) throw new Error("unreachable")
+        expect(result.error.reason).toBe(canonical.message)
+        // A refusal has no state at all, so it cannot carry a fabricated updatedAt either.
+        expect("state" in result).toBe(false)
+        // Nothing written: bytes, both modes and the listing are bit-identical, and the stored
+        // document still has no updatedAt.
+        expect(snapshot(home)).toEqual(before)
+        expect(readDoc(home).updatedAt).toBeUndefined()
+        expect(readDoc(home).lanes).toEqual(VALID_TUPLE)
+        expect(JSON.stringify(result.error).includes(home)).toBe(false)
+      } finally {
+        rmSync(home, { recursive: true, force: true })
+      }
+    })
+  }
+
+  test("a refused carrier leaves the merge machinery intact: the next legal PATCH still merges", () => {
+    const home = homeWith({ doc: { version: 1, lanes: { NUQ_WORKER_COUNT: 5 } } })
+    try {
+      expect(applyLanesPatch(JSON.parse('{"__proto__":{"MAX_CONCURRENT_PAGES":4}}'), home).ok).toBe(false)
+      const after = applyLanesPatch({ MAX_CONCURRENT_PAGES: 4 }, home)
+      expect(after.ok).toBe(true)
+      expect(readDoc(home).lanes).toEqual({ NUQ_WORKER_COUNT: 5, MAX_CONCURRENT_PAGES: 4 })
+    } finally {
+      rmSync(home, { recursive: true, force: true })
+    }
+  })
+})
+
+// ---------------------------------------------------------------------------
 // Layer 1c — PATCH success: merge, posture, and the no-second-table pin
 // ---------------------------------------------------------------------------
 
@@ -622,6 +692,123 @@ describe("effective observation (scripted daemon, no spawn)", () => {
 })
 
 // ---------------------------------------------------------------------------
+// Layer 2b — the ENVIRONMENT of a real docker child (finding F-251-9)
+// ---------------------------------------------------------------------------
+
+/** Records its own argv and which environment names it can see, then answers like the estate's CLI
+ *  would: listings for `ps`, a PID 1 environ dump for `exec`. It is a stand-in for the executable,
+ *  never for a daemon — nothing here contacts or starts one (rule E10). */
+function stubDockerScript() {
+  return [
+    "#!/bin/sh",
+    'printf "ARGV=%s\\n" "$*" >> "$R268_STUB_LOG"',
+    'printf "SAW_HOST=%s SAW_CONTEXT=%s SAW_CONFIG=%s SAW_PATH=%s SAW_HOME=%s\\n" "${DOCKER_HOST+yes}" "${DOCKER_CONTEXT+yes}" "${DOCKER_CONFIG+yes}" "${PATH+yes}" "${HOME+yes}" >> "$R268_STUB_LOG"',
+    'case " $* " in',
+    '  *" ps "*)',
+    '    case "$*" in *component=firecrawl*) printf "swarm-tools-api-1\\nswarm-tools-playwright-service-1\\n" ;; *) printf "swarm-tools-searxng-1\\n" ;; esac',
+    "    ;;",
+    '  *" exec "*) printf "PATH=/usr/bin\\nNUQ_WORKER_COUNT=5\\nMAX_CONCURRENT_PAGES=4\\nGRANIAN_BLOCKING_THREADS=4\\n" ;;',
+    "  *) printf '' ;;",
+    "esac",
+    "exit 0",
+    "",
+  ].join("\n")
+}
+
+describe("docker spawn environment (F-251-9)", () => {
+  test("dockerSpawnEnv drops the three daemon-selection names and keeps PATH, HOME and the rest", () => {
+    const out = dockerSpawnEnv({
+      PATH: "/usr/bin:/bin",
+      HOME: "/home/tester",
+      LANG: "en_US.UTF-8",
+      DOCKER_HOST: "tcp://1.2.3.4:2375",
+      DOCKER_CONTEXT: "default",
+      DOCKER_CONFIG: "/elsewhere",
+      NOT_SET: undefined,
+    })
+    expect(Object.keys(out).sort()).toEqual(["HOME", "LANG", "PATH"])
+    // Both survivors are load-bearing: PATH is how `docker` is found, HOME is where the pinned
+    // context resolves from — a sandboxed HOME sees no daemon at all (rule E15).
+    expect(out.PATH).toBe("/usr/bin:/bin")
+    expect(out.HOME).toBe("/home/tester")
+  })
+
+  // The claim is about a REAL Bun.spawn, so it runs one: a child bun process whose starting
+  // environment carries hostile DOCKER_* names calls liveDockerRunner through observeEffective, and
+  // the stub reports what its own environment actually held.
+  //
+  // Injection point matters and was got once: assigning process.env.X inside a `bun -e` script does
+  // NOT reach a process that script later spawns on this host (Bun hands children the block captured
+  // at start), so an in-child injection reads clean against PRE-fix bytes too — the VOID pairing
+  // rule E4 exists to catch. Everything the arms must differ on is therefore set at spawn time.
+  test("a spawned docker sees no daemon-selection variable, and the observation leg still completes over the cleared environment", async () => {
+    const root = mkdtempSync(join(kiloRoot(), "r268-dockerenv-"))
+    chmodSync(root, 0o700)
+    const bin = join(root, "bin")
+    mkdirSync(bin)
+    const log = join(root, "stub.log")
+    writeFileSync(log, "", "utf8")
+    const stub = join(bin, "docker")
+    writeFileSync(stub, stubDockerScript(), "utf8")
+    chmodSync(stub, 0o755)
+    const moduleUrl = new URL("../../src/server/shared/lanes-observation.ts", import.meta.url).href
+    const packageDir = fileURLToPath(new URL("../../", import.meta.url))
+    const child =
+      `const mod = await import(${JSON.stringify(moduleUrl)});\n` +
+      `const { Effect } = await import(Bun.resolveSync("effect", ${JSON.stringify(packageDir)}));\n` +
+      `const observed = await Effect.runPromise(mod.observeEffective(mod.liveDockerRunner));\n` +
+      `process.stdout.write("PARENT_HAS=" + [process.env.DOCKER_HOST, process.env.DOCKER_CONTEXT, process.env.DOCKER_CONFIG].join("|") + "\\n");\n` +
+      `process.stdout.write("OBSERVED=" + JSON.stringify(observed) + "\\n");\n`
+    try {
+      const proc = Bun.spawn([process.execPath, "-e", child], {
+        stdout: "pipe",
+        stderr: "pipe",
+        cwd: packageDir,
+        env: {
+          ...process.env,
+          PATH: `${bin}:${process.env.PATH ?? ""}`,
+          R268_STUB_LOG: log,
+          DOCKER_HOST: "tcp://r268-canary-host:2375",
+          DOCKER_CONTEXT: "default",
+          DOCKER_CONFIG: "/tmp/r268-canary-config",
+        },
+      })
+      const stdout = await new Response(proc.stdout).text()
+      const stderr = await new Response(proc.stderr).text()
+      const code = await proc.exited
+      expect(code, `child failed, stderr: ${stderr}`).toBe(0)
+
+      // Anti-vacuity: the environment really did carry the three names one level up, so the stub's
+      // silence below is the filter working rather than an arm that never loaded anything.
+      expect(stdout.split("\n")[0]).toBe("PARENT_HAS=tcp://r268-canary-host:2375|default|/tmp/r268-canary-config")
+
+      const lines = readFileSync(log, "utf8").trimEnd().split("\n")
+      const argvs = lines.filter((line) => line.startsWith("ARGV="))
+      const saws = lines.filter((line) => line.startsWith("SAW_"))
+      expect(argvs.length).toBeGreaterThan(0)
+      // Fork G's cost bound still holds through the real runner: two listings plus one exec per carrier.
+      expect(argvs.length).toBeLessThanOrEqual(5)
+      for (const line of saws) expect(line).toBe("SAW_HOST= SAW_CONTEXT= SAW_CONFIG= SAW_PATH=yes SAW_HOME=yes")
+      for (const line of argvs) {
+        expect(line.startsWith("ARGV=--context colima-swarm ")).toBe(true)
+        expect(line).not.toContain("default")
+      }
+
+      // The cleared case still WORKS: with nothing but PATH and HOME inherited, the whole leg ran and
+      // parsed the stub's environ output into three observed values.
+      const observedLine = stdout.split("\n").find((line) => line.startsWith("OBSERVED=")) ?? ""
+      const observed = JSON.parse(observedLine.slice("OBSERVED=".length)) as Record<string, { status: string; value?: number }>
+      for (const control of LANE_CONTROLS) {
+        expect(observed[control.key].status).toBe("observed")
+        expect(observed[control.key].value).toBeGreaterThan(0)
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  }, 30000)
+})
+
+// ---------------------------------------------------------------------------
 // Layer 3 — the HTTP surface: auth posture inherited, tokens on the wire, tilde only
 // ---------------------------------------------------------------------------
 
@@ -790,6 +977,29 @@ describe("PATCH /global/lanes wire refusals", () => {
         const text = yield* response.text
         const parsed = JSON.parse(text) as { error?: { code?: string } }
         expect(parsed.error?.code).toBe("LANE_VALUE_MALFORMED")
+      }
+    }),
+  )
+
+  // F-251-3 over the wire. Row 251's instrument I-E measured these exact bodies answering 200 on a
+  // live listener; the closed-set refusal is what the surface owes every name it does not accept,
+  // and a 200 here would also mean a response carrying an `updatedAt` the payload never set.
+  guardedIt.live("a __proto__ carrier answers 400 with the closed-set token, never a 200 with a fabricated updatedAt", () =>
+    Effect.gen(function* () {
+      for (const bodyText of [
+        '{"__proto__":{"MAX_CONCURRENT_PAGES":4}}',
+        '{"__proto__":{"totally_unrelated":"x"}}',
+        '{"constructor":{"MAX_CONCURRENT_PAGES":4}}',
+      ]) {
+        const response = yield* patchRequest(bodyText, PASSWORD).pipe(HttpClient.execute)
+        expect(response.status).toBe(400)
+        const text = yield* response.text
+        const parsed = JSON.parse(text) as { error?: { code?: string; key?: string } }
+        expect(parsed.error?.code).toBe("LANE_VALUE_NOT_A_LANE")
+        expect(parsed.error?.key).toBeString()
+        // The refusal body is `{code, key, reason}`: no state, therefore no age to fabricate.
+        expect(text.includes("updatedAt")).toBe(false)
+        expect(text.includes(process.env.HOME ?? "/nonexistent-home")).toBe(false)
       }
     }),
   )
