@@ -308,11 +308,15 @@ function runCli(argv: readonly string[]): void {
   process.exit(exitCodeFor(OUTCOME.FAILED))
 }
 
-// Run-as-main guard, calibrated against the probed Bun argv shapes (r81 precedent: args start
-// at index 2 in BOTH postures): direct source run has argv[1]=.../composefiles/index.ts; the
-// compiled binary has argv[1]=/$bunfs/root/<name>. Test/demo imports have a different argv[1]
-// and therefore get the library without the CLI executing.
-const entry = process.argv[1] ?? ""
-if (entry.startsWith("/$bunfs/") || entry.endsWith("composefiles/index.ts")) {
+// Run-as-main guard — D-262-4 (ratified decisions/decisions.md:436-438), replacing the old
+// argv-shape predicate `entry.startsWith("/$bunfs/") || entry.endsWith("composefiles/index.ts")`.
+// That predicate tested an ARGV SHAPE, not module main-ness: inside the compiled swarm-setup
+// binary argv[1] IS /$bunfs/root/swarm-setup, so the moment row 263 bundled this module into the
+// installed program (estate/deliver.ts imports renderAll), the guard would have fired mid-install,
+// runCli would see the verb "install", fall through to "unknown verb", print RESULT FAILED and
+// process.exit(1). import.meta.main is the idiom this package already uses for exactly this
+// purpose (src/index.ts:678 and its comment at :672-677); test/estate_delivery.test.ts pins the
+// regression under compiled-shaped argv.
+if (import.meta.main) {
   runCli(process.argv.slice(2))
 }

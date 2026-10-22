@@ -20,6 +20,8 @@ import {
   tearDown,
   type StackStepContext,
 } from "../../stacklib.ts"
+import { deliverEstate } from "../../estate/deliver.ts"
+import { OUTCOME } from "../../outcomes.ts"
 import type { StepContext, StepModule, StepResult } from "../_template/index.ts"
 
 type Ctx = StepContext & StackStepContext
@@ -45,6 +47,12 @@ export const step: StepModule = {
         message: `egress-proxy pin unusable (${pin.found}); refusing bring-up until the controller-cleared squid digest is in tools.lock.json`,
       }
     }
+
+    // Row 263 (D-262-1): the estate render-and-deliver STAGE runs on every install of this stack,
+    // after consent and the pin pre-check and before bring-up consumes the artefacts. A refusal
+    // here is final for this step — bring-up would only re-report the same precondition gaps.
+    const delivery = deliverEstate({ kit })
+    if (delivery.token !== OUTCOME.OK) return delivery
 
     // readiness (2026-10-20 healthcheck-contract ruling) rides through from the engine context;
     // with no prober wired the no-healthcheck services (api/playwright/egress-proxy once row 85

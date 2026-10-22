@@ -10,6 +10,8 @@
 
 import { createStepKit } from "../../stepkit.ts"
 import { bringUp, runnerGuard, searxngPlan, tearDown, type StackStepContext } from "../../stacklib.ts"
+import { deliverEstate } from "../../estate/deliver.ts"
+import { OUTCOME } from "../../outcomes.ts"
 import type { StepContext, StepModule, StepResult } from "../_template/index.ts"
 
 type Ctx = StepContext & StackStepContext
@@ -21,6 +23,11 @@ export const step: StepModule = {
     const guard = runnerGuard(ctx)
     if (guard) return guard
     const kit = createStepKit({ componentId: "searxng", lock: ctx.lock, state: ctx.state, dryRun: ctx.dryRun })
+    // Row 263 (D-262-1): the estate render-and-deliver STAGE runs on every install of this stack,
+    // after consent (the engine gates both) and before bring-up consumes the artefacts. A refusal
+    // here is final for this step — bring-up would only re-report the same precondition gaps.
+    const delivery = deliverEstate({ kit })
+    if (delivery.token !== OUTCOME.OK) return delivery
     const out = await bringUp({ kit, plan: searxngPlan(), run: ctx.docker, ...(ctx.readiness ? { readiness: ctx.readiness } : {}) })
     return { token: out.token, message: out.message }
   },

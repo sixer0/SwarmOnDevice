@@ -38,7 +38,9 @@ import { STATES, COLIMA_PROFILE, DOCKER_CONTEXT, COMPOSE_PROJECT } from "../src/
 import { createStepKit } from "../src/stepkit.ts"
 import { homeDir, toolDir, toolsDir } from "../src/paths.ts"
 import { SECRET_INVENTORY } from "../src/composefiles/shared.ts"
-import { renderAll, applyRenderedFiles } from "../src/composefiles/index.ts"
+import { renderAll } from "../src/composefiles/index.ts"
+import { fenceApplyRendered } from "../src/estate/deliver.ts"
+import type { EstateSecretRow } from "../src/estate/ledger.ts"
 import {
   bringUp,
   composePsArgs,
@@ -403,12 +405,31 @@ async function main(): Promise<void> {
       console.log("R93_OUTCOME bringup=BLOCKED_AT render")
       return
     }
-    applyRenderedFiles(rendered, toolsDir())
+    // Row 263 fence (R-262/E, decisions/decisions.md:445-450): this pair used to deposit unrecorded
+    // artefacts into the real home — the condition that made the delivery gap invisible for five
+    // sessions (verification/s6_r240d_compose_delivery.md:348-350). Fencing means RECORDED, not
+    // disabled: identical bytes land at identical paths (rows 254/255 still need them where colima's
+    // virtiofs mounts the real home), but every deposit now moves through fenceApplyRendered, which
+    // appends intent-before-bytes rows whose program.compiled is read from isCompiledBinary() — false
+    // under this recipe (repo source + local bun + R93_LIVE=1), so a compiled:true row can only ever
+    // come from the product (spec §5.3 discriminator D-B).
+    const secretRows: EstateSecretRow[] = []
     for (const comp of ["searxng", "firecrawl"] as const) {
       if (comp === "firecrawl" && !pre.firecrawlOffered) continue
-      for (const spec of SECRET_INVENTORY[comp])
-        if (spec.required) genSecret(join(home, ".swarm", "tools", comp, "secrets", spec.name))
+      for (const spec of SECRET_INVENTORY[comp]) {
+        if (!spec.required) continue
+        const p = join(home, ".swarm", "tools", comp, "secrets", spec.name)
+        let kept = false
+        try {
+          kept = existsSync(p) && readFileSync(p, "utf8").trim().length >= 32
+        } catch {
+          kept = false
+        }
+        genSecret(p)
+        secretRows.push({ component: comp, slot: spec.name, action: kept ? "present" : "created", mode: statSync(p).mode & 0o777 })
+      }
     }
+    fenceApplyRendered({ lock, home, rendered, root: toolsDir(), entryTokens: ["(harness)", "test/live_smoke.ts", `R93_PHASE=${phase}`], secretRows })
     const sxText = readFileSync(searxngPlan(home).composeFile, "utf8")
     const fcText = readFileSync(firecrawlPlan(home).composeFile, "utf8")
     const sxUrls = healthProbeUrls(sxText)
