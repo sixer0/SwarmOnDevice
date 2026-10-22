@@ -27,6 +27,10 @@
 //   argv discipline-> PC-PROF-02 pinned on every leg, no prune/down/rm verb anywhere (P-14)
 //   configure-time -> 06 §2.3 + fork H: install creates lanes.json with the stored tuple, preserves
 //                     an edited file byte-for-byte, and touches nothing under --dry-run
+//   one home (r269)  -> this verb's commit loop is the shared primitive in src/estate/scoped_commit.ts:
+//                     no re-inlined rule here, stepkit's `healthy` edge unwidened, and the four commit
+//                     faults (unreadable target, mode-only drift, throw between writes, post-commit
+//                     drift) refused with their shipped APPLY_* codes on THIS path
 //
 // Collected by the package's declared command (`bun test` from packages/setup) — rule E14.
 
@@ -708,3 +712,156 @@ function listStack(root: string, component: string): string[] {
   walk(dir)
   return out.sort()
 }
+
+// --- 8. r269: this verb's commit loop is the shared primitive --------------------------------------
+
+/** The commit rules row 252 §Q1 found written twice. Each has exactly one declaration now, in
+ *  src/estate/scoped_commit.ts; if this file ever re-inlines one, the first test below reddens.
+ *  (The same guard list exists in estate_delivery.test.ts for its own caller — a knowingly duplicated
+ *  three lines, because a shared test helper would mean a new file outside row 269's area. Routed to
+ *  the same owner as Q6.2's `withHome` triplication.) */
+const SHARED_RULE_DECLARATIONS = [
+  "function sha256(",
+  "function fileMode(",
+  "function declareRequiredSlots(",
+  "function isUnchanged(",
+  "function commitScoped(",
+  "function sameBytesOnDisk(",
+  "function rollback(",
+  "atomicWriteText(",
+] as const
+
+const readEstateSrc = (name: string): string => readFileSync(join(import.meta.dir, "..", "src", "estate", name), "utf8")
+const occurrences = (haystack: string, needle: string): number => haystack.split(needle).length - 1
+const moduleSpecifiers = (src: string): string[] => [...src.matchAll(/from "([^"]+)"/g)].map((m) => m[1] as string)
+
+describe("r269 the scoped commit loop has one home (row 252 Q1, R-246-2)", () => {
+  it("this verb declares no commit rule of its own any more", () => {
+    const applySrc = readEstateSrc("apply.ts")
+    const offenders = SHARED_RULE_DECLARATIONS.filter((declaration) => applySrc.includes(declaration))
+    expect(offenders).toEqual([])
+    expect(applySrc).toContain('from "./scoped_commit.ts"')
+  })
+
+  it("the primitive declares each shared rule once, and deliver imports the same module", () => {
+    const primitive = readEstateSrc("scoped_commit.ts")
+    const rules = [
+      "export function sha256(",
+      "export function fileMode(",
+      "export function declareRequiredSlots(",
+      "export function artefactMatchesDisk(",
+      "export function planScopedCommit(",
+      "function isUnchanged(",
+      "function writeUnit(",
+      "function verifyUnits(",
+      "export function rollbackScopedUnits(",
+    ]
+    const miscounted = rules.map((rule) => `${rule} declared ${occurrences(primitive, rule)}x`).filter((line) => !line.endsWith("declared 1x"))
+    expect(miscounted).toEqual([])
+    expect(readEstateSrc("deliver.ts")).toContain('from "./scoped_commit.ts"')
+  })
+
+  it("apply still commits no lifecycle state — the primitive never saw a kit", () => {
+    const applySrc = readEstateSrc("apply.ts")
+    const primitive = readEstateSrc("scoped_commit.ts")
+    // The ruling's whole point: sharing the commit loop must not smuggle the state walk or the ledger
+    // into apply, and must not give the primitive a lifecycle vocabulary of its own. Module specifiers
+    // are the honest instrument here — a token search would trip on the comments that argue this.
+    expect(moduleSpecifiers(primitive).sort()).toEqual(["../atomic.ts", "../composefiles/shared.ts", "node:crypto", "node:fs"])
+    expect(moduleSpecifiers(applySrc).filter((m) => /stepkit|outcomes|estate\/ledger/.test(m))).toEqual([])
+  })
+})
+
+describe("r269 apply refuses what the shared primitive refuses (codes unchanged)", () => {
+  it("an existing target that cannot be read refuses with APPLY_WRITE_FAILED and binds nothing (E12)", async () => {
+    await withHome(async (home) => {
+      createLanesFileAtSetup(home)
+      deliveredHome(home, ["searxng"])
+      const squatted = join(toolsRootOf(home), "searxng", "settings.yml")
+      rmSync(squatted)
+      mkdirSync(squatted, { recursive: true }) // a DIRECTORY on the artefact's name: EISDIR on read
+      const before = census(toolsRootOf(home))
+      const daemon = makeDaemon({ services: liveSearxng() })
+      const r = await applyEstate(applyOpts(home, daemon, { component: "searxng" }))
+      expect(r.ok).toBe(false)
+      expect(r.code).toBe("APPLY_WRITE_FAILED")
+      // Parity anchor: this phrase is produced by exactly one function in the package, and
+      // estate_delivery.test.ts asserts the identical phrase from DELIVER_TARGET_UNWRITABLE.
+      expect(r.message).toContain("existing target unreadable (")
+      expect(r.message).toContain("rolled back 0 path(s)")
+      expect(census(toolsRootOf(home))).toEqual(before)
+      expect(daemon.calls.length).toBe(0) // the refusal happened before the first docker leg
+    })
+  })
+
+  it("a mode-only drift under an unwritable directory refuses, freezing every byte and mtime", async () => {
+    await withHome(async (home) => {
+      createLanesFileAtSetup(home)
+      deliveredHome(home, ["searxng"])
+      const composeDir = join(toolsRootOf(home), "searxng", "compose")
+      const yml = join(composeDir, "searxng.yml")
+      chmodSync(yml, 0o600) // drift: the render wants 0644, so R-262-1 says this MUST be rewritten
+      chmodSync(composeDir, 0o500) // ...and its directory now refuses the atomic rename
+      const before = census(toolsRootOf(home))
+      try {
+        const daemon = makeDaemon({ services: liveSearxng() })
+        const r = await applyEstate(applyOpts(home, daemon, { component: "searxng" }))
+        expect(r.code).toBe("APPLY_WRITE_FAILED")
+        expect(r.message).toContain("rolled back 0 path(s)") // the restore refused too — counted honestly
+        expect(census(toolsRootOf(home))).toEqual(before)
+        expect(daemon.calls.length).toBe(0)
+      } finally {
+        chmodSync(composeDir, 0o700)
+        chmodSync(yml, 0o644)
+      }
+    })
+  })
+
+  it("a throw between writes restores the planted prior through the shared rollback", async () => {
+    await withHome(async (home) => {
+      createLanesFileAtSetup(home)
+      deliveredHome(home, ["searxng"])
+      const yml = join(toolsRootOf(home), "searxng", "compose", "searxng.yml")
+      writeFileSync(yml, "OLD PLANTED BYTES\n", { mode: 0o644 })
+      const daemon = makeDaemon({ services: liveSearxng() })
+      const r = await applyEstate(
+        applyOpts(home, daemon, {
+          component: "searxng",
+          disturbWrite: (absPath: string) => {
+            if (absPath === yml) throw new Error("simulated ENOSPC between writes")
+          },
+        }),
+      )
+      expect(r.ok).toBe(false)
+      expect(r.code).toBe("APPLY_WRITE_FAILED")
+      expect(r.message).toContain("simulated ENOSPC between writes")
+      expect(r.message).toContain("rolled back 1 path(s)")
+      expect(readFileSync(yml, "utf8")).toBe("OLD PLANTED BYTES\n")
+      expect(daemon.calls.length).toBe(0)
+    })
+  })
+
+  it("bytes that drift after the commit are caught by the shared read-back verify", async () => {
+    await withHome(async (home) => {
+      createLanesFileAtSetup(home)
+      deliveredHome(home, ["searxng"])
+      const yml = join(toolsRootOf(home), "searxng", "compose", "searxng.yml")
+      writeFileSync(yml, "OLD PLANTED BYTES\n", { mode: 0o644 })
+      const daemon = makeDaemon({ services: liveSearxng() })
+      const r = await applyEstate(
+        applyOpts(home, daemon, {
+          component: "searxng",
+          disturbWrite: (absPath: string) => {
+            if (absPath === yml) writeFileSync(absPath, `${readFileSync(absPath, "utf8")}CORRUPTED`, { mode: 0o644 })
+          },
+        }),
+      )
+      expect(r.ok).toBe(false)
+      expect(r.code).toBe("APPLY_VERIFY_MISMATCH")
+      expect(r.message).toContain("sha256 differs from plan")
+      expect(r.message).toContain("rolled back 1 path(s)")
+      expect(readFileSync(yml, "utf8")).toBe("OLD PLANTED BYTES\n") // the shared rollback undid the drift
+      expect(daemon.calls.length).toBe(0)
+    })
+  })
+})

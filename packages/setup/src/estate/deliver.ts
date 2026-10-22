@@ -27,6 +27,9 @@
 //    preflight, intent ledger row) -> commit (capture prior bytes, atomic writes) -> verify
 //    (read-back sha256+mode) with rollback from captured priors on any failure. Convergent across
 //    crashes: rename-per-file (atomic.ts:19-33) plus compare-on-restart means the next run finishes.
+//    Row 269 moved those three commit RULES to estate/scoped_commit.ts so applyEstate calls the same
+//    code (verification/s6b_14_addendum_codereview.md Q1); the walk, the ledger and the residue
+//    report named above stay in this file and are what makes this stage more than the primitive.
 //  - §1.5 skipped stays skipped: state "skipped" -> OUTCOME.SKIPPED, nothing transitioned/written
 //    (the chain admits skipped->downloaded, so a chain-walk MUST NOT start for a skipped component).
 //  - §1.5 the state walk: absent -> downloaded -> verified -> installed -> configured through one
@@ -53,14 +56,13 @@
 
 import { existsSync, lstatSync, readFileSync, readdirSync, rmSync, statSync } from "node:fs"
 import { dirname, join } from "node:path"
-import { createHash, randomBytes } from "node:crypto"
+import { randomBytes } from "node:crypto"
 import { MODES, STATES, type StateValue } from "../constants.ts"
 import { OUTCOME } from "../outcomes.ts"
 import type { StepResult } from "../steps/_template/index.ts"
 import type { StepKit } from "../stepkit.ts"
 import type { LockFile } from "../lockfile.ts"
 import { ensureDir, homeDir } from "../paths.ts"
-import { atomicWriteText } from "../atomic.ts"
 import { applyRenderedFiles, renderAll, validateRenderedSecrets, type FullRender } from "../composefiles/index.ts"
 import { SECRET_INVENTORY, type RenderFile } from "../composefiles/shared.ts"
 import {
@@ -72,6 +74,19 @@ import {
   type EstateSecretRow,
 } from "./ledger.ts"
 import { produceDnsPinsFromAnswers } from "./pins.ts"
+// Row 269: the scoped commit loop and the three byte-identical helpers moved to one home that
+// estate/apply.ts consumes too (verification/s6b_14_addendum_codereview.md Q1, R-246-2). The state
+// walk, the ledger rows and the residue report below stay HERE — the primitive is state-free by ruling.
+import {
+  commitScopedUnits,
+  declareRequiredSlots,
+  fileMode,
+  planScopedCommit,
+  rollbackScopedUnits,
+  sha256,
+  utf8Bytes,
+  type ScopedCommitUnit,
+} from "./scoped_commit.ts"
 import type { ResolveOutcome } from "../mcpproxy/resolve.ts"
 
 export interface DeliverEstateOptions {
@@ -102,12 +117,6 @@ const STACK_ORDER: Record<StackComponent, number> = { searxng: 3, firecrawl: 7 }
 /** The §4.1 forward-chain positions this stage walks; a component at/after `configured` needs no hops. */
 const CHAIN: readonly StateValue[] = [STATES.ABSENT, STATES.DOWNLOADED, STATES.VERIFIED, STATES.INSTALLED, STATES.CONFIGURED]
 
-interface ArtefactPlan {
-  readonly file: RenderFile
-  readonly row: EstateArtefactRow
-  readonly prior?: { bytes: string; mode: number }
-}
-
 interface SecretPlan {
   readonly component: StackComponent
   readonly slot: string
@@ -116,15 +125,6 @@ interface SecretPlan {
   /** Set only when this run generates the value; registered with the redactor immediately, never logged. */
   readonly value?: string
   readonly mode: number
-}
-
-function sha256(text: string): string {
-  return createHash("sha256").update(text).digest("hex")
-}
-
-/** UTF-8 byte count through the declared Buffer shim only (from(string,"utf8") -> hex length). */
-function utf8Bytes(text: string): number {
-  return Buffer.from(text, "utf8").toString("hex").length / 2
 }
 
 function toHex(bytes: Uint8Array): string {
@@ -150,10 +150,6 @@ function toBase64Url(bytes: Uint8Array): string {
     if (has2) out += B64URL_ALPHABET.charAt(n & 63)
   }
   return out
-}
-
-function fileMode(path: string): number {
-  return statSync(path).mode & 0o777
 }
 
 /** Same collapse stacklib.ts:180-182 does for the consumer's whitelist test — kept local because
@@ -312,38 +308,6 @@ function planSecrets(kit: StepKit, component: StackComponent, toolsRoot: string)
   return { plans, invalid, reasons }
 }
 
-function planArtefacts(scoped: readonly RenderFile[], toolsRoot: string): { plans: ArtefactPlan[]; blocked: string[] } {
-  const plans: ArtefactPlan[] = []
-  const blocked: string[] = []
-  for (const file of scoped) {
-    const absPath = join(toolsRoot, file.relPath)
-    const rowBase = {
-      relPath: file.relPath,
-      absPath,
-      mode: file.mode,
-      sha256: sha256(file.content),
-      bytes: utf8Bytes(file.content),
-    }
-    if (!existsSync(absPath)) {
-      plans.push({ file, row: { ...rowBase, action: "written" } })
-      continue
-    }
-    let prior: { bytes: string; mode: number }
-    try {
-      prior = { bytes: readFileSync(absPath, "utf8"), mode: fileMode(absPath) }
-    } catch (err) {
-      // An existing target that cannot be read (occupied by a directory, EISDIR/EACCES) is a
-      // detectable-in-advance failure: name it and refuse BEFORE any byte moves (§4.1), rather
-      // than throwing mid-plan.
-      blocked.push(`${absPath}: existing target unreadable (${(err as Error).message})`)
-      continue
-    }
-    const unchanged = prior.bytes === file.content && prior.mode === file.mode
-    plans.push({ file, row: { ...rowBase, action: unchanged ? "unchanged" : "written" }, prior })
-  }
-  return { plans, blocked }
-}
-
 /** Snapshot `.tmp-*` siblings per affected parent dir BEFORE committing, so teardown can remove
  *  only the ones that appeared during THIS pass (mine by construction — atomic.ts names them with
  *  a UUID this process generated). Never a sweep (rule E13). */
@@ -366,21 +330,6 @@ function removeOwnStrayTmp(snap: Map<string, Set<string>>): void {
       }
     }
   }
-}
-
-/** Restore captured priors / undo creations made in this pass. Returns the paths actually undone. */
-function rollback(entries: ReadonlyArray<{ absPath: string; prior?: { bytes: string; mode: number } }>): string[] {
-  const rolledBack: string[] = []
-  for (const p of entries) {
-    try {
-      if (p.prior) atomicWriteText(p.absPath, p.prior.bytes, p.prior.mode)
-      else if (existsSync(p.absPath)) rmSync(p.absPath)
-      rolledBack.push(p.absPath)
-    } catch {
-      // A failed restore stays OUT of rolledBack — the short list plus the ledger code names the incident.
-    }
-  }
-  return rolledBack
 }
 
 /** Walk the forward chain up to `to` through the one kit. Positions at/after `configured` need no
@@ -470,12 +419,36 @@ export function deliverEstate(opts: DeliverEstateOptions): StepResult {
   if (placeholderProblems.length > 0)
     return refuse("DELIVER_SECRET_INVALID", placeholderProblems.join("; "), fields, startedAt, { render: renderBlock })
 
-  const artefactPlan = planArtefacts(scoped, toolsRoot)
-  if (artefactPlan.blocked.length > 0)
-    return refuse("DELIVER_TARGET_UNWRITABLE", artefactPlan.blocked.join("; "), fields, startedAt, { render: renderBlock, secrets: secretRowsFrom(posture.plans) })
-  const artefacts = artefactPlan.plans
+  // Row 269: the plan/commit/verify/rollback RULES live in ./scoped_commit.ts, shared with apply.
+  // What stays here is everything this stage owns and that primitive must never know about: the
+  // secret posture, the state walk, the ledger rows, the residue report and this stage's own refusal
+  // codes. Units are ordered artefacts-then-secrets so the write order is the one row 263 shipped.
+  const units: readonly ScopedCommitUnit[] = [
+    ...scoped.map((f) => ({
+      relPath: f.relPath,
+      absPath: join(toolsRoot, f.relPath),
+      mode: f.mode,
+      content: f.content,
+      kind: "artefact" as const,
+      afterWrite: opts.disturbWrite, // TEST SEAM ONLY — can only fail the pass earlier/louder
+    })),
+    ...posture.plans.map((p) => ({
+      relPath: `${p.component}/secrets/${p.slot}`,
+      absPath: p.absPath,
+      mode: p.mode,
+      content: p.action === "created" ? `${p.value}\n` : "",
+      kind: p.action === "created" ? ("secret-created" as const) : ("secret-present" as const),
+      // The secrets dir is this stage's only extra directory duty (§2.3); a present secret is never
+      // written at all (R-262-2), which its kind encodes and the primitive enforces.
+      prepare: p.action === "created" ? () => ensureDir(dirname(p.absPath), MODES.DIR_0700) : undefined,
+    })),
+  ]
+  const plan = planScopedCommit(units)
+  if (plan.blocked.length > 0)
+    return refuse("DELIVER_TARGET_UNWRITABLE", plan.blocked.join("; "), fields, startedAt, { render: renderBlock, secrets: secretRowsFrom(posture.plans) })
+  const artefacts = plan.planned.filter((p) => p.kind === "artefact")
   const createdSecrets = posture.plans.filter((p) => p.action === "created")
-  const targets = [...artefacts.map((a) => a.row.absPath), ...createdSecrets.map((p) => p.absPath)]
+  const targets = [...artefacts.map((a) => a.absPath), ...createdSecrets.map((p) => p.absPath)]
   const blocked =
     existsSync(toolsRoot) && !lstatSync(toolsRoot).isDirectory()
       ? `${toolsRoot}: tools root exists and is not a directory`
@@ -489,7 +462,7 @@ export function deliverEstate(opts: DeliverEstateOptions): StepResult {
   if (!preWalk.ok)
     return { token: OUTCOME.FAILED, message: `estate delivery refused: the state engine declined the pre-commit walk — ${preWalk.error}` }
 
-  const plannedRows = artefacts.map((a) => a.row)
+  const plannedRows: EstateArtefactRow[] = artefacts.map((a) => ({ relPath: a.relPath, absPath: a.absPath, mode: a.mode, sha256: a.sha256, bytes: a.bytes, action: a.action }))
   const residue = listResidue(toolsRoot, rendered.files)
   const intent: EstateDeliveryRecord = {
     ts: new Date().toISOString(),
@@ -509,49 +482,25 @@ export function deliverEstate(opts: DeliverEstateOptions): StepResult {
       residue,
     })
 
-  // --- Phase 2: commit -------------------------------------------------------------------------
+  // --- Phase 2 + 3: commit and read-back verify, both through the shared primitive ----------------
   const tmpSnap = snapshotTmpDirs(targets)
-  const wroteArtefacts = artefacts.filter((a) => a.row.action === "written")
-  const rollbackEntries = () => [
-    ...wroteArtefacts.map((a) => ({ absPath: a.row.absPath, prior: a.prior })),
-    ...createdSecrets.map((p) => ({ absPath: p.absPath })),
-  ]
-  try {
-    for (const a of wroteArtefacts) {
-      atomicWriteText(a.row.absPath, a.file.content, a.row.mode)
-      opts.disturbWrite?.(a.row.absPath) // TEST SEAM ONLY — can only fail the pass earlier/louder
-    }
-    for (const s of createdSecrets) {
-      ensureDir(dirname(s.absPath), MODES.DIR_0700) // the secrets dir is this stage's only extra dir duty (§2.3)
-      atomicWriteText(s.absPath, `${s.value}\n`, s.mode)
-    }
-  } catch (err) {
-    const rolledBack = rollback(rollbackEntries())
+  const commit = commitScopedUnits(units, { schedule: "plan-ahead", plan })
+  if (!commit.ok) {
+    const rolledBack = rollbackScopedUnits(commit.entries)
     removeOwnStrayTmp(tmpSnap)
-    appendBestEffort(outcomeRecord("rolled-back", "DELIVER_WRITE_FAILED", rolledBack))
-    return { token: OUTCOME.FAILED, message: `estate delivery refused [DELIVER_WRITE_FAILED] ${(err as Error).message}; rolled back ${rolledBack.length} path(s)` }
-  }
-
-  // --- Phase 3: verify every in-scope target against the plan ------------------------------------
-  const mismatches: string[] = []
-  for (const a of artefacts) {
-    if (!existsSync(a.row.absPath)) mismatches.push(`${a.row.absPath}: missing after commit`)
-    else if (fileMode(a.row.absPath) !== a.row.mode) mismatches.push(`${a.row.absPath}: mode ${fileMode(a.row.absPath).toString(8)} != ${a.row.mode.toString(8)}`)
-    else if (sha256(readFileSync(a.row.absPath, "utf8")) !== a.row.sha256) mismatches.push(`${a.row.absPath}: sha256 differs from plan`)
-  }
-  for (const s of posture.plans) {
-    if (!existsSync(s.absPath)) mismatches.push(`${s.absPath}: missing after commit`)
-    else if ((fileMode(s.absPath) & 0o077) !== 0) mismatches.push(`${s.absPath}: group/other bits set`)
-    else if (s.value !== undefined && readFileSync(s.absPath, "utf8").trim() !== s.value) mismatches.push(`${s.absPath}: content differs from the generated value`)
-  }
-  if (mismatches.length > 0) {
-    const rolledBack = rollback(rollbackEntries())
-    removeOwnStrayTmp(tmpSnap)
-    appendBestEffort(outcomeRecord("rolled-back", "DELIVER_VERIFY_MISMATCH", rolledBack))
-    return {
-      token: OUTCOME.FAILED,
-      message: `estate delivery refused [DELIVER_VERIFY_MISMATCH] ${mismatches[0]}${mismatches.length > 1 ? ` (+${mismatches.length - 1} more)` : ""}; rolled back ${rolledBack.length} path(s)`,
-    }
+    // Fault -> §4.1 code. `target-unreadable` cannot arise under this schedule (the plan above already
+    // refused it before any byte moved); it is named rather than defaulted so no future change can
+    // silently re-label it a write failure.
+    const code: DeliverCode =
+      commit.fault === "verify-mismatch" ? "DELIVER_VERIFY_MISMATCH" : commit.fault === "target-unreadable" ? "DELIVER_TARGET_UNWRITABLE" : "DELIVER_WRITE_FAILED"
+    const detail =
+      commit.fault === "write-threw"
+        ? commit.detail // row 263's voice for a throw: the raw reason, no path prefix
+        : commit.fault === "verify-mismatch"
+          ? `${commit.reasons[0]}${commit.reasons.length > 1 ? ` (+${commit.reasons.length - 1} more)` : ""}`
+          : commit.reason
+    appendBestEffort(outcomeRecord("rolled-back", code, rolledBack))
+    return { token: OUTCOME.FAILED, message: `estate delivery refused [${code}] ${detail}; rolled back ${rolledBack.length} path(s)` }
   }
 
   const toInstalled = walkTo(kit, STATES.INSTALLED)
@@ -561,6 +510,7 @@ export function deliverEstate(opts: DeliverEstateOptions): StepResult {
   if (!pathsPatch.ok)
     return { token: OUTCOME.FAILED, message: `estate delivery: bytes committed but the state engine declined configured — ${pathsPatch.error}` }
 
+  const wroteArtefacts = artefacts.filter((a) => a.action === "written")
   const wroteAny = wroteArtefacts.length > 0 || createdSecrets.length > 0
   appendBestEffort(outcomeRecord(wroteAny ? "delivered" : "unchanged"))
   const w = wroteArtefacts.length
@@ -577,7 +527,7 @@ export function deliverEstate(opts: DeliverEstateOptions): StepResult {
       action,
       ...(code ? { code } : {}),
       render: renderBlock,
-      artefacts: plannedRows.map((r) => (restored.has(r.absPath) && artefacts.find((a) => a.row.absPath === r.absPath)?.prior ? { ...r, action: "restored" as const } : r)),
+      artefacts: plannedRows.map((r) => (restored.has(r.absPath) && artefacts.find((a) => a.absPath === r.absPath)?.prior ? { ...r, action: "restored" as const } : r)),
       secrets: secretRowsFrom(posture.plans),
       residue,
       elapsedMs: Date.now() - startedAt,
@@ -588,17 +538,6 @@ export function deliverEstate(opts: DeliverEstateOptions): StepResult {
 
 function secretRowsFrom(plans: readonly SecretPlan[]): EstateSecretRow[] {
   return plans.map(({ component, slot, action, mode }) => ({ component, slot, action, mode }))
-}
-
-/** D-262-2: declare EVERY required slot of BOTH stacks — contextErrors demands them for the render
- *  to exist at all (shared.ts:153-177) — while writes stay scoped by stack tag. Values are never
- *  passed: the renderer never sees a secret (committed composefiles/index.ts:24-26; the standalone
- *  CLI declares the same posture with zero secret files on disk, :272-277). */
-function declareRequiredSlots(): Record<"searxng" | "firecrawl", Record<string, "generated">> {
-  const secrets: Record<"searxng" | "firecrawl", Record<string, "generated">> = { searxng: {}, firecrawl: {} }
-  for (const comp of ["searxng", "firecrawl"] as const)
-    for (const spec of SECRET_INVENTORY[comp]) if (spec.required) secrets[comp][spec.name] = "generated"
-  return secrets
 }
 
 /** ------------------------------------------------------------------------------------------

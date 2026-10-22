@@ -36,16 +36,17 @@
 //     file's own service names positionally (the R112c-4 scoping rule), and every listing is
 //     label-scoped (PC-LBL-01/02). No prune verb exists here, as elsewhere in this package.
 
-import { createHash } from "node:crypto"
-import { existsSync, readFileSync, rmSync, statSync } from "node:fs"
 import { join } from "node:path"
-import { atomicWriteText } from "../atomic.ts"
 import { homeDir } from "../paths.ts"
 import { renderAll } from "../composefiles/index.ts"
-import { SECRET_INVENTORY, type RenderFile } from "../composefiles/shared.ts"
 import { LANE_CONTROLS, createLanesFileAtSetup, lanesPath, readLanes, type LaneKey, type LaneValues } from "../composefiles/lanes.ts"
 import { readDnsPins } from "../composefiles/dns_pins.ts"
 import { produceDnsPins } from "./pins.ts"
+// Row 269: this verb's scoped commit loop and the three byte-identical helpers it carried are now the
+// shared primitive estate/deliver.ts calls too (verification/s6b_14_addendum_codereview.md Q1, R-246-2).
+// The primitive is STATE-FREE by ruling — apply still commits no lifecycle state and writes no ledger
+// row, and `healthy -> configured` was NOT widened to make that sharing possible.
+import { artefactMatchesDisk, commitScopedUnits, declareRequiredSlots, rollbackScopedUnits, type ScopedCommitUnit } from "./scoped_commit.ts"
 import type { Resolver } from "../mcpproxy/resolve.ts"
 import type { LockFile } from "../lockfile.ts"
 import { readState } from "../state.ts"
@@ -121,6 +122,13 @@ export interface ApplyOptions {
   readonly clock?: () => number
   readonly healthDeadlineMs?: number
   readonly healthIntervalMs?: number
+  /** TEST SEAM ONLY, added by row 269 under the same narrowing discipline as `deliverEstate`'s option
+   *  of the same name (deliver.ts DeliverEstateOptions.disturbWrite): called with each artefact path
+   *  immediately AFTER its atomic commit, so a unit can script a mid-pass throw (simulating
+   *  EACCES/ENOSPC between writes) or corrupt the committed bytes and drive the read-back verify on
+   *  THIS verb. It can only make the run fail EARLIER or LOUDER — never bypass a gate, widen a scope,
+   *  or hide a mismatch. Shipped code passes nothing: src/index.ts:612-619 builds ApplyOptions without it. */
+  readonly disturbWrite?: (absPath: string) => void
 }
 
 /** One container's identity before and across the recreate — the recreate evidence itself, in the
@@ -176,26 +184,8 @@ export interface ApplyReport {
   readonly elapsedMs: number
 }
 
-function sha256(text: string): string {
-  return createHash("sha256").update(text).digest("hex")
-}
-
-function fileMode(path: string): number {
-  return statSync(path).mode & 0o777
-}
-
 function log(level: "info" | "warn" | "error", message: string, context?: Record<string, unknown>): void {
   writeSetupLog({ level, source: LOG_SOURCE, message, ...(context ? { context } : {}) })
-}
-
-/** D-262-2's declaration posture, mirrored at this caller because deliver.ts keeps its own copy
- *  private: EVERY required slot of BOTH stacks must be declared for renderAll to produce the full
- *  set at all, while writes stay scoped by the `stack` tag each RenderFile carries. */
-function declareRequiredSlots(): Record<"searxng" | "firecrawl", Record<string, "generated">> {
-  const secrets: Record<"searxng" | "firecrawl", Record<string, "generated">> = { searxng: {}, firecrawl: {} }
-  for (const comp of ["searxng", "firecrawl"] as const)
-    for (const spec of SECRET_INVENTORY[comp]) if (spec.required) secrets[comp][spec.name] = "generated"
-  return secrets
 }
 
 function stackOf(component: ApplyComponent, home: string): StackPlan {
@@ -375,8 +365,20 @@ export async function applyEstate(opts: ApplyOptions): Promise<ApplyReport> {
       { ...carried, render: renderInfo, observedStateGaps: preGate.observed },
     )
 
+  // One unit list, built once, feeds both legs below: the dry-run plan and the real commit. Its shape
+  // is the shared primitive's, which is the point — deliver builds the same units over the same
+  // RenderFiles and gets the same content-addressed / atomic / verified behaviour from one home.
+  const units: readonly ScopedCommitUnit[] = scoped.map((f) => ({
+    relPath: f.relPath,
+    absPath: join(toolsRoot, f.relPath),
+    mode: f.mode,
+    content: f.content,
+    kind: "artefact" as const,
+    afterWrite: opts.disturbWrite, // TEST SEAM ONLY — can only fail the run earlier/louder
+  }))
+
   if (opts.dryRun) {
-    const planned = scoped.filter((f) => !sameBytesOnDisk(f, join(toolsRoot, f.relPath))).map((f) => f.relPath)
+    const planned = units.filter((u) => !artefactMatchesDisk(u)).map((u) => u.relPath)
     const argv = composeUpCmd(composeFile)
     commands.push(formatCmd(argv))
     log("info", `apply ${component} dry-run: would write ${planned.length} artefact(s) and recreate with the printed argv`, { planned })
@@ -385,18 +387,21 @@ export async function applyEstate(opts: ApplyOptions): Promise<ApplyReport> {
       message: `dry-run apply ${component}: validated lanes, screened pins, rendered ${scoped.length} artefact(s) of this stack, printed the exact compose command; wrote nothing, ran nothing`,
       ...carried,
       render: renderInfo,
-      unchanged: scoped.filter((f) => sameBytesOnDisk(f, join(toolsRoot, f.relPath))).map((f) => f.relPath),
+      unchanged: units.filter((u) => artefactMatchesDisk(u)).map((u) => u.relPath),
       commands,
     })
   }
 
   // --- Phase 5: commit this stack's artefacts (content-addressed, rollback on failure) ---------
-  const commit = commitScoped(scoped, toolsRoot)
+  // schedule "sequential" is this verb's shipped posture: it decides, captures and writes one file at
+  // a time, so an unreadable target stops the pass where it stands and only the writes actually made
+  // are undone. deliver passes "plan-ahead" instead. Both schedules run the same rules.
+  const commit = commitScopedUnits(units, { schedule: "sequential" })
   if (!commit.ok) {
-    const rolled = rollback(commit.entries)
+    const rolled = rollbackScopedUnits(commit.entries)
     return refuse(
-      commit.code,
-      `${commit.reason}; rolled back ${rolled} path(s) — prior bytes restored`,
+      commit.fault === "verify-mismatch" ? "APPLY_VERIFY_MISMATCH" : "APPLY_WRITE_FAILED",
+      `${commit.reason}; rolled back ${rolled.length} path(s) — prior bytes restored`,
       { ...carried, render: renderInfo },
     )
   }
@@ -404,10 +409,10 @@ export async function applyEstate(opts: ApplyOptions): Promise<ApplyReport> {
   // --- Phase 6: integrity again, over the bytes that are now on disk ---------------------------
   const postGate = integrityGate(plan, opts.lock, home)
   if (postGate.refused.length > 0) {
-    const rolled = rollback(commit.entries)
+    const rolled = rollbackScopedUnits(commit.entries)
     return refuse(
       "APPLY_ARTEFACT_INCOMPLETE",
-      `re-rendered estate is not applyable: ${postGate.refused.join("; ")} — rolled back ${rolled} path(s), no container was contacted`,
+      `re-rendered estate is not applyable: ${postGate.refused.join("; ")} — rolled back ${rolled.length} path(s), no container was contacted`,
       { ...carried, render: renderInfo, observedStateGaps: postGate.observed },
     )
   }
@@ -525,92 +530,13 @@ function describeGap(gap: PreconditionGap): string {
 }
 
 /** ---------------------------------------------------------------------------------------------
- * Scoped commit — the same three properties row 263's stage ships, applied to one stack's files:
- * content-addressed no-write (identical bytes AND mode are left alone, so mtime freezes), atomic
- * per-file rename, and read-back verification. Rollback restores planted prior bytes and removes
- * what this pass created; a foreign `.tmp-*` sibling is never touched (E13).
+ * Scoped commit — row 269 moved these rules into estate/scoped_commit.ts, where deliverEstate reads
+ * the same code (verification/s6b_14_addendum_codereview.md Q1, closing R-246-2): content-addressed
+ * no-write, capture-prior, atomic per-file rename, read-back verification and rollback-from-priors
+ * each have exactly one home now. This verb keeps only what is genuinely its own — the "sequential"
+ * schedule (decide, capture and write one file at a time) and its APPLY_* vocabulary — and it still
+ * commits no lifecycle state. A foreign `.tmp-*` sibling is still never touched (E13).
  * --------------------------------------------------------------------------------------------- */
-interface CommitEntry {
-  readonly absPath: string
-  readonly prior?: { bytes: string; mode: number }
-}
-
-type CommitResult =
-  | { ok: true; written: string[]; unchanged: string[]; entries: CommitEntry[] }
-  | { ok: false; code: ApplyCode; reason: string; entries: CommitEntry[]; written: string[]; unchanged: string[] }
-
-function sameBytesOnDisk(file: RenderFile, absPath: string): boolean {
-  if (!existsSync(absPath)) return false
-  try {
-    return fileMode(absPath) === file.mode && sha256(readFileSync(absPath, "utf8")) === sha256(file.content)
-  } catch {
-    return false
-  }
-}
-
-function commitScoped(scoped: readonly RenderFile[], toolsRoot: string): CommitResult {
-  const entries: CommitEntry[] = []
-  const written: string[] = []
-  const unchanged: string[] = []
-  const mismatches: string[] = []
-  for (const file of scoped) {
-    const absPath = join(toolsRoot, file.relPath)
-    if (sameBytesOnDisk(file, absPath)) {
-      unchanged.push(file.relPath)
-      continue
-    }
-    let prior: { bytes: string; mode: number } | undefined
-    if (existsSync(absPath)) {
-      try {
-        prior = { bytes: readFileSync(absPath, "utf8"), mode: fileMode(absPath) }
-      } catch (err) {
-        return {
-          ok: false,
-          code: "APPLY_WRITE_FAILED",
-          reason: `${absPath}: existing target unreadable (${(err as Error).message})`,
-          entries,
-          written,
-          unchanged,
-        }
-      }
-    }
-    entries.push({ absPath, ...(prior ? { prior } : {}) })
-    try {
-      atomicWriteText(absPath, file.content, file.mode)
-    } catch (err) {
-      return { ok: false, code: "APPLY_WRITE_FAILED", reason: `${absPath}: ${(err as Error).message}`, entries, written, unchanged }
-    }
-    written.push(file.relPath)
-  }
-  for (const file of scoped) {
-    const absPath = join(toolsRoot, file.relPath)
-    if (!existsSync(absPath)) mismatches.push(`${absPath}: missing after commit`)
-    else if (fileMode(absPath) !== file.mode) mismatches.push(`${absPath}: mode ${fileMode(absPath).toString(8)} != ${file.mode.toString(8)}`)
-    else if (sha256(readFileSync(absPath, "utf8")) !== sha256(file.content)) mismatches.push(`${absPath}: sha256 differs from plan`)
-  }
-  if (mismatches.length > 0)
-    return { ok: false, code: "APPLY_VERIFY_MISMATCH", reason: mismatches.join("; "), entries, written, unchanged }
-  return { ok: true, written, unchanged, entries }
-}
-
-function rollback(entries: readonly CommitEntry[]): number {
-  let restored = 0
-  for (const e of entries) {
-    try {
-      if (e.prior) {
-        atomicWriteText(e.absPath, e.prior.bytes, e.prior.mode)
-        restored += 1
-      } else if (existsSync(e.absPath)) {
-        // Only paths THIS pass created are removed — never a foreign sibling (E13).
-        rmSync(e.absPath)
-        restored += 1
-      }
-    } catch {
-      /* best-effort: the caller reports the refusal either way and names the rollback count */
-    }
-  }
-  return restored
-}
 
 /** ---------------------------------------------------------------------------------------------
  * Observation legs — creation facts plus, optionally, the value read inside the container.

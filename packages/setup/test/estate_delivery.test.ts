@@ -18,6 +18,9 @@
 //   residue             -> R-262-3 report-not-prune
 //   run-as-main         -> D-262-4 (the trap: bundled renderer + argv-shape predicate = exit 1 mid-install)
 //   fence               -> R-262/E + spec §5.3 discriminators D-A/D-B/D-C under the harness recipe
+//   one home (r269)   -> the commit rules exist once, in src/estate/scoped_commit.ts: neither caller
+//                        re-inlines one, and stepkit's `healthy` edge was NOT widened to allow it
+//                        (verification/s6b_14_addendum_codereview.md Q1)
 //
 // Collected by the package's declared command (`bun test` from packages/setup) — rule E14.
 
@@ -370,6 +373,10 @@ describe("r263 failure posture (§4.1 taxonomy, §4.2 rollback)", () => {
       const res = deliverEstate({ kit: kitFor("searxng", defaultState(LOCK.version)), home })
       expect(res.token).toBe(OUTCOME.FAILED)
       expect(res.message).toContain("[DELIVER_TARGET_UNWRITABLE]")
+      // Row 269 parity anchor: this phrase is produced by exactly ONE function in the package
+      // (scoped_commit.ts planScopedCommit). estate_apply.test.ts asserts the identical phrase from
+      // apply's own refusal, which is what makes the two strings one rule and not two habits.
+      expect(res.message).toContain("existing target unreadable (")
       expect(existsSync(join(toolsRootOf(home), "searxng", "compose", "searxng.yml"))).toBe(false)
     })
   })
@@ -482,5 +489,60 @@ describe("r263 harness fence (R-262/E; spec §5.3 D-A/D-B/D-C)", () => {
         "DELIVER_WRITE_FAILED",
       ].sort(),
     )
+  })
+})
+
+// --- r269: one implementation, two callers --------------------------------------------------------
+
+/** The rules row 252 §Q1 measured as written twice (three of them byte-identical). Each now has
+ *  exactly one declaration, in src/estate/scoped_commit.ts. A caller that re-inlines any of them —
+ *  including by writing its own atomic rename — trips this list and reddens this suite. */
+const SHARED_RULE_DECLARATIONS = [
+  "function sha256(",
+  "function fileMode(",
+  "function declareRequiredSlots(",
+  "function isUnchanged(",
+  "function planArtefacts(",
+  "function commitScoped(",
+  "function sameBytesOnDisk(",
+  "function rollback(",
+  "atomicWriteText(",
+] as const
+
+const readEstateSrc = (name: string): string => readFileSync(join(import.meta.dir, "..", "src", "estate", name), "utf8")
+const occurrences = (haystack: string, needle: string): number => haystack.split(needle).length - 1
+
+describe("r269 the scoped commit loop has one home (row 252 Q1, R-246-2)", () => {
+  it("neither estate caller declares a commit rule of its own any more", () => {
+    const offenders: string[] = []
+    for (const [file, src] of [["deliver.ts", readEstateSrc("deliver.ts")], ["apply.ts", readEstateSrc("apply.ts")]] as const)
+      for (const declaration of SHARED_RULE_DECLARATIONS) if (src.includes(declaration)) offenders.push(`${file}: ${declaration}`)
+    expect(offenders).toEqual([])
+  })
+
+  it("both callers import the primitive, which declares each rule exactly once", () => {
+    const primitive = readEstateSrc("scoped_commit.ts")
+    expect(readEstateSrc("deliver.ts")).toContain('from "./scoped_commit.ts"')
+    expect(readEstateSrc("apply.ts")).toContain('from "./scoped_commit.ts"')
+    const rules = [
+      "export function sha256(",
+      "export function fileMode(",
+      "export function declareRequiredSlots(",
+      "export function artefactMatchesDisk(",
+      "export function planScopedCommit(",
+      "function isUnchanged(",
+      "function writeUnit(",
+      "function verifyUnits(",
+      "export function rollbackScopedUnits(",
+    ]
+    const miscounted = rules.map((rule) => `${rule} declared ${occurrences(primitive, rule)}x`).filter((line) => !line.endsWith("declared 1x"))
+    expect(miscounted).toEqual([])
+  })
+
+  it("the state table was NOT widened to buy the sharing (the ruling's other half)", () => {
+    const stepkit = readFileSync(join(import.meta.dir, "..", "src", "stepkit.ts"), "utf8")
+    // Widening healthy->configured would have let apply call deliverEstate wholesale; row 252 Q1
+    // refused that on truthfulness grounds (D-262-3). Pin the edge list itself, not just its length.
+    expect(stepkit.match(/healthy: \[[^\]]*\]/)?.[0]).toBe('healthy: ["failed"]')
   })
 })
