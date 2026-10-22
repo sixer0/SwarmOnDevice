@@ -81,10 +81,14 @@ const requiredManifest = (): RenderContext["secrets"] => {
   return manifest
 }
 
-/** Render the estate against a home, optionally carrying a dns-pins.json (the P3 producer's output shape §1.3). */
+/** Render the estate against a home, optionally carrying a dns-pins.json (the P3 producer's output shape §1.3).
+ *  The seed carries PC-PATH-19's register mode 0600, because that is what the real writer does
+ *  (`estate/pins.ts` commits through `atomicWriteJson(path, doc, MODES.FILE_0600)`); a bare `writeFileSync` left it
+ *  at 0644, which row 267's widened mode audit then correctly refused on the staged-artefact leg of this lane. The
+ *  fixture was the drift, not the audit — recorded here so nobody "fixes" it back. */
 function renderEstate(home: string, pinsJson?: string) {
   mkdirSync(join(home, ".swarm", "setup"), { recursive: true })
-  if (pinsJson !== undefined) writeFileSync(join(home, ".swarm", "setup", "dns-pins.json"), pinsJson)
+  if (pinsJson !== undefined) writeFileSync(join(home, ".swarm", "setup", "dns-pins.json"), pinsJson, { mode: 0o600 })
   const r = renderAll(LOCK, { home, secrets: requiredManifest() })
   if (!r.ok) throw new Error(`render refused unexpectedly: ${JSON.stringify(r.errors)} ${JSON.stringify(r.findings)}`)
   return r
@@ -382,16 +386,20 @@ describe("(r244 survivor-3) the browser tier stays attached to internal networks
         expect(["fc-web", "fc-edge"]).not.toContain(n)
   })
 
-  it("COVERAGE GAP (recorded, RC-244-1): neither the lint nor the bake refuses an added non-internal attachment", () => {
-    // The third survivor is pinned by render construction plus this lane's artefact assertion, and measured live
-    // by §10.6 item 6 (`probes=L1-HOLDS`, row 255). Offline there is NO second witness: hand-editing fc-web onto
-    // the browser tier passes both instruments. Stated as a passing assertion so the gap is visible in the suite
-    // rather than discovered by an attacker; routed to rows 251/252 as RC-244-1.
+  it("RC-244-1 CLOSED by row 267: the bake refuses an added non-internal attachment (lint still does not)", () => {
+    // The exact injection row 244 recorded as unauditable offline (RC-244-1), reproduced byte-for-byte so the
+    // closure is measured against the same bytes rather than asserted beside a new fixture. Lint's silence is
+    // DELIBERATE and stays pinned here: network membership is not a lint rule, and moving it there would put the
+    // check on the render path while the estate consumes the artefact (row 251 §2.3's argument for the bake).
+    // One injection violates all three claims at once, so all three codes answer; the per-code isolating mutations
+    // (each firing exactly one of them) live in test/egress_bake.test.ts under "r267 F-251-8".
     const webbed = SHIPPED_COMPOSE().replace("    networks: [fc-ctl, fc-iso]", "    networks: [fc-ctl, fc-iso, fc-web]")
     expect(webbed).not.toBe(SHIPPED_COMPOSE())
     expect(lintOk(lintComposeText(webbed, { lockVersion: LOCK.version }))).toBe(true)
-    const v = verifyEgressBake({ lock: LOCK, home: "/Users/r244-gap", composeText: webbed, confText: SHIPPED_CONF() })
-    expect(v.findings.map((f) => f.code)).not.toContain("NETWORK_NOT_INTERNAL")
+    const codes = verifyEgressBake({ lock: LOCK, home: "/Users/r244-gap", composeText: webbed, confText: SHIPPED_CONF() }).findings.map((f) => f.code)
+    expect(codes).toContain("BROWSER_TIER_MISATTACHED")
+    expect(codes).toContain("NETWORK_NOT_INTERNAL")
+    expect(codes).toContain("PUBLIC_NETWORK_MEMBER_DRIFT")
   })
 })
 

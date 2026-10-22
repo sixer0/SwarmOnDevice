@@ -271,17 +271,36 @@ export interface LanesWriteReport {
    *  make the control unusable over a cosmetic drift on a machine the user owns. */
   readonly dirModeRepaired: boolean
   readonly dirModeAfter: number
+  /** Mode of the file AS FOUND, or -1 when this call created it (the convention pins.ts:249-250 uses
+   *  for an absent parent). Reported so a caller can tell "already private" from "was loose". */
+  readonly fileModeBefore: number
+  /** True when a PRE-EXISTING file carried any group/other bit and this call tightened it to 0600
+   *  (F-251-1). Mirrors `dirModeRepaired` two fields above: the same function already repaired a
+   *  drifted directory while reporting a drifted file, which is the asymmetry row 251 §2.1 named. */
+  readonly fileModeRepaired: boolean
   readonly fileMode: number
 }
 
-/** Create `~/.swarm/setup/lanes.json` with the fork-H tuple when absent; leave an existing file
- *  untouched either way.
+/** Create `~/.swarm/setup/lanes.json` with the fork-H tuple when absent; never overwrite one that exists,
+ *  but DO tighten its mode if it drifted (F-251-1).
  *
  *  WHY THE DIRECTORY MODE IS VERIFIED AND NOT ASSUMED: ensureDir applies its mode only when it
  *  CREATES (paths.ts:42-46 — "if it already exists we do not chmod it"), so a setup dir found at
  *  0755 after some other program's umask would otherwise receive a private-looking 0600 file inside
  *  a world-traversable directory, silently. The write therefore stats the directory first, repairs a
- *  wrong mode, and reports what it found (AC-237-6). */
+ *  wrong mode, and reports what it found (AC-237-6).
+ *
+ *  WHY THE FILE MODE GETS THE SAME TREATMENT (row 251 F-251-1, accepted by the controller as row 267):
+ *  the register says PC-PATH-18 carries 0600 always, and 06 §2.2 argued it from the rename replacing
+ *  the inode — a premise that holds after every WRITE and fails after none, which is exactly the
+ *  create-if-absent path. Before this change the function repaired a drifted directory two lines
+ *  above while leaving a hand-widened 0644 file wide and merely reporting it (measured: I-A2
+ *  `modeAfterInstall=644` against I-A4 `dirRepaired=true`). Tightening closes the asymmetry with the
+ *  same instrument that already owned the repair. What is NOT touched is the payload: a user edit
+ *  survives byte-for-byte (06 §2.3's create-if-absent rule), because the mode is the register's
+ *  posture and the bytes are the user's choice. The repair is one-directional — it strips group and
+ *  other bits and grants nothing; a file found NARROWER than 0600 (say 0400) leaks nothing and is
+ *  left alone, unlike the directory, whose 0500 form would block the owner's own commit path. */
 export function createLanesFileAtSetup(home: string): LanesWriteReport {
   const path = lanesPath(home)
   const dir = join(home, ".swarm", "setup")
@@ -290,14 +309,19 @@ export function createLanesFileAtSetup(home: string): LanesWriteReport {
   const dirModeRepaired = dirModeBefore !== MODES.DIR_0700
   if (dirModeRepaired) chmodSync(dir, MODES.DIR_0700)
   const existed = existsSync(path)
-  if (!existed)
-    atomicWriteJson(path, { version: 1, lanes: SETUP_LANE_VALUES }, MODES.FILE_0600)
+  const fileModeBefore = existed ? statSync(path).mode & 0o777 : -1
+  if (!existed) atomicWriteJson(path, { version: 1, lanes: SETUP_LANE_VALUES }, MODES.FILE_0600)
+  // `& 0o077` is the whole question: any group or other bit is the drift, and 0600 is the answer.
+  const fileModeRepaired = existed && (fileModeBefore & 0o077) !== 0
+  if (fileModeRepaired) chmodSync(path, MODES.FILE_0600)
   return {
     path,
     created: !existed,
     dirModeBefore,
     dirModeRepaired,
     dirModeAfter: statSync(dir).mode & 0o777,
+    fileModeBefore,
+    fileModeRepaired,
     fileMode: statSync(path).mode & 0o777,
   }
 }

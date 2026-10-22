@@ -59,6 +59,17 @@ export function renderSquidConf(): RenderFile {
     "acl swarm_tunnel_ports port 80 443",
     "acl SafePorts port 80 443             # allow ports 80/443 only (10.4); custom name — Safe_ports is predefined, we do not touch it",
     "acl Connector method CONNECT",
+    // THE DENY CIDRs BELOW AND ABOVE ARE A COPY OF A POLICY THE BAKE ALSO CARRIES — read this before editing either.
+    // The twelve classes have one host-side predicate (`mcpproxy/urlpolicy.ts:isDeniedAddress`) and one registry of
+    // class representatives (`steps/firecrawl/egress_bake.ts:REQUIRED_DENY_RANGES`); the two ACL lines here are the
+    // L4 rendering of the same set and are deliberately NOT derived from either — a renderer that emitted whatever
+    // the audit listed would make the audit's own comparison tautological, which is the independence row 242 argued
+    // for in the other direction (implementation/s6_r242_audit_lockstep.md §4). The copy is LINKED instead: the
+    // renderer-suite pin `test/compose_files.test.ts` ("r267 Q6.3") compares the tokens on these two lines against
+    // REQUIRED_DENY_RANGES as SETS IN BOTH DIRECTIONS, so moving one list without the other is a red test rather
+    // than a silently divergent L4 rule (row 252 Q6.3 named this line as the fourth home; row 251 §2.9 CAUTION 2
+    // owns the widening ruling). Widening therefore needs, in ONE batch: urlpolicy, REQUIRED_DENY_RANGES, these two
+    // lines, row 244's removal loop, and the cross-enforcer hook.
     "acl to_localnet dst 127.0.0.0/8 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 169.254.0.0/16 100.64.0.0/10 0.0.0.0/8",
     "acl to_localnet dst ::1/128 fe80::/10 fc00::/7 ::/128 64:ff9b::/96   # TWELVE classes [review-107 M2]: additions are 0.0.0.0/8 (this-network; Linux-routed loopback-like), ::/128 (IPv6 unspecified twin), 64:ff9b::/96 (NAT64 well-known prefix — DNS64 answers can embed a private IPv4, e.g. 64:ff9b::7f00:1 wraps 127.0.0.1; posture is DENY the whole prefix, never unwrap). dst takes IP/CIDR only — evaluates the RESOLVED answer (V3 rebinding closure)",
     "acl swarm_hostnames dstdomain localhost      # R112-1: renamed from the PREDEFINED to_localhost (different-type redeclaration = boot FATAL); V6 proved rename-only parses clean",

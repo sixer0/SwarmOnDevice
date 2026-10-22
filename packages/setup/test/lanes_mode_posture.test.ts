@@ -15,6 +15,9 @@
 //   B3  a lanes.json found WIDER than 0600 — does a successful commit tighten it, and does
 //       create-if-absent leave it alone? (measured: no existing lane fixture sets any mode but 0600;
 //       grep for 0o644|0o666|0o604 across the three lane files returns zero matches)
+//       AMENDED by row 267: the route write still tightens, and create-if-absent NOW DOES TOO
+//       (F-251-1, verification/s6b_13_lanes_security.md §2.1 — the file got the same treatment the directory
+//       already had). The bytes stay the user's; only the grants come off.
 //   B4  a directory drifted to something other than 0755 — 0777, 0750, 0711, 0500 — does the repair
 //       CONVERGE to 0700 and grant nothing to group/other on the way?
 //   B5  the repair's SCOPE — does it stop at the setup dir, leaving ~/.swarm and sibling entries
@@ -125,21 +128,42 @@ describe("r250 B3 — a lanes.json found wider than 0600, across the two writers
     expect(JSON.parse(readFileSync(lanesPath(home), "utf8")).lanes.NUQ_WORKER_COUNT).toBe(4)
   })
 
-  test("create-if-absent leaves BOTH the bytes and the wide mode of a pre-existing file alone", () => {
-    // The asymmetry is deliberate and is pinned rather than smoothed over: swarm-setup is not that
-    // day's writer, so it neither edits the user's file nor chmods it. Widening a hand-loosened
-    // file back to 0600 is the app write's job (the test above), not the installer's.
+  test("create-if-absent keeps a pre-existing file's BYTES and tightens its wide MODE (F-251-1)", () => {
+    // Row 250 pinned the opposite posture ("swarm-setup is not that day's writer") as a judgement inside the spec's
+    // silence; row 251 §2.1 measured it as an ASYMMETRY — the same function repaired a drifted directory two lines
+    // earlier (lanes.ts:289-291) while only reporting a drifted file — and the controller accepted the finding as
+    // F-251-1, dispatched to row 267. The register posture is 0600 always (06 §2.2), and the bytes remain the user's:
+    // this pins both halves of that distinction at once.
     const home = homeWithFileMode(0o644)
     const before = posture(home)
     const report = createLanesFileAtSetup(home)
-    expect(report.created).toBe(false)
-    expect(report.fileMode).toBe(0o644) // reported as found, not as the register wants it
-    expect(posture(home).fileSha).toBe(before.fileSha)
-    expect(posture(home).fileMode).toBe(0o644)
+    expect(report.created).toBe(false) // never re-created, never overwritten
+    expect(report.fileModeBefore).toBe(0o644) // reported as found …
+    expect(report.fileModeRepaired).toBe(true) // … and as moved
+    expect(report.fileMode).toBe(0o600) // reported as the register wants it, after the repair
+    expect(posture(home).fileSha).toBe(before.fileSha) // the payload survives byte-for-byte
+    expect(posture(home).fileMode).toBe(0o600)
     expect(posture(home).dirMode).toBe(0o700)
+    expect(posture(home).listing).toBe(before.listing) // no temp sibling, no new entry
   })
 
-  test("a wider file whose directory is ALSO adrift gets the directory repaired and the file untouched", () => {
+  test("a tighter-than-register file (0400) is left alone: the repair strips grants, it never adds one", () => {
+    // Why the predicate is `mode & 0o077` and not `mode !== 0600`: a 0400 lane file leaks nothing to anyone, and
+    // widening it would make "repair" the operation that GRANTS permission. The directory converges from both sides
+    // because a 0500 setup dir blocks the owner's own commit path; a read-only file does not block anything, since
+    // the route replaces it by rename(2), which needs directory permission, not file permission.
+    const home = homeWithFileMode(0o400)
+    const before = posture(home)
+    const report = createLanesFileAtSetup(home)
+    expect(report.fileModeBefore).toBe(0o400)
+    expect(report.fileModeRepaired).toBe(false)
+    expect(report.fileMode).toBe(0o400)
+    expect(posture(home)).toEqual(before)
+  })
+
+  test("a wider file whose directory is ALSO adrift gets BOTH repairs, each reported on its own", () => {
+    // The two repairs stay independent duties (row 250's phrase) — what changed under F-251-1 is that the file half
+    // is now performed as well as reported, so the pair converges instead of converging halfway.
     const home = homeWithFileMode(0o644)
     chmodSync(setupDir(home), 0o755)
     const report = createLanesFileAtSetup(home)
@@ -147,7 +171,8 @@ describe("r250 B3 — a lanes.json found wider than 0600, across the two writers
     expect(report.dirModeRepaired).toBe(true)
     expect(report.dirModeAfter).toBe(0o700)
     expect(report.created).toBe(false)
-    expect(modeOf(lanesPath(home))).toBe(0o644) // the two repairs are independent duties
+    expect(report.fileModeRepaired).toBe(true)
+    expect(modeOf(lanesPath(home))).toBe(0o600)
   })
 })
 

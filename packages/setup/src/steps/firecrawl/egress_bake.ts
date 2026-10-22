@@ -68,6 +68,14 @@ import type { LockFile } from "../../lockfile.ts"
 import type { StepKit } from "../../stepkit.ts"
 import { egressProxyPinReady, firecrawlPlan } from "../../stacklib.ts"
 import { pathsFor, PC_PORTS } from "../../composefiles/shared.ts"
+// Row 267 (F-251-1): the mode audit covers the two user-editable setup files the estate consumes, and it asks
+// THEM where they live rather than re-spelling either path. PC-PATH-18's resolver has one home (lanes.ts:54)
+// and PC-PATH-19's another (dns_pins.ts:43) — the single-resolver rule both files state as their reason — so
+// an audit that hardcoded `~/.swarm/setup/lanes.json` would be a fourth home of a path and could drift from
+// the very writer it exists to double-check. Path resolution is not a policy screen: reusing it breaks none of
+// the independence stated in header item (7), which is about RULEBOOKS, not about filenames.
+import { lanesPath } from "../../composefiles/lanes.ts"
+import { dnsPinsPath } from "../../composefiles/dns_pins.ts"
 // r94's host-side url policy (L3 enforcer). PURE module (zero imports of its own), so this adds no runtime
 // dependency to the setup binary beyond the deny predicate itself; read-only import — row 92 never edits r94's
 // file. `isDeniedAddress` is the exact predicate r94's checkResolvedAddresses feeds the resolved-IP pin through
@@ -172,6 +180,28 @@ export const OPTION_PARSED_PORT_DIRECTIVES: readonly string[] = ["http_port", "h
  *  REQUIRED_PROXIED_SERVICES" fails loudly if the render and this list drift apart. */
 export const REQUIRED_PROXIED_SERVICES: readonly string[] = ["playwright-service", "api"]
 
+/** The service whose attachment gate 239 counted as survivor 3 of 3 — the browser carrier. Named once so the
+ *  audit below and its tests cite one spelling rather than each carrying their own literal. */
+export const BROWSER_TIER_SERVICE = "playwright-service"
+
+/** The networks the browser carrier may attach to. Transcribed from the render's own instruction
+ *  (`firecrawl_compose.ts:350`: "NEVER fc-web, NEVER fc-edge/fc-data (§6.7)") and asserted over parsed YAML by
+ *  row 244's lane (`egress_tunnel_units.test.ts`, "(r244 survivor-3)"); this constant moves that claim down to the
+ *  delivered bytes. Deliberately a SUBSET test, not an equality: dropping one of the two would be a functional
+ *  regression for the vendor pre-check to notice, not a containment leak for this audit to refuse. */
+export const BROWSER_TIER_NETWORKS: readonly string[] = ["fc-ctl", "fc-iso"]
+
+/** Every network of this stack that is NOT `internal: true`, with the EXACT set of services allowed on it —
+ *  transcribed from the five-tier segmentation the renderer itself states (`firecrawl_compose.ts:99-115`):
+ *  fc-edge carries the one published face (auth-proxy), fc-web carries the one internet-capable member
+ *  (egress-proxy). Two consequences fall out, both intended: a service not named here may attach nothing but
+ *  internal networks, and a non-internal network absent from this map has no approved member at all, so ANY
+ *  service attaching it refuses. New public segments therefore fail closed instead of needing list upkeep. */
+export const APPROVED_PUBLIC_NETWORK_MEMBERS: Readonly<Record<string, readonly string[]>> = {
+  "fc-edge": ["auth-proxy"],
+  "fc-web": ["egress-proxy"],
+}
+
 export type BakeCode =
   | "ARTEFACT_MISSING"
   | "PIN_UNUSABLE"
@@ -190,6 +220,12 @@ export type BakeCode =
   | "EXTRA_HOST_AT_HOST"
   | "EXTRA_HOST_DENIED_VALUE"
   | "EXTRA_HOST_SHAPE_INVALID"
+  // Row 267 F-251-8: the internal-only browser attachment (gate 239 survivor 3) had no offline instrument at all —
+  // four mutations of it left `lintOk=true` with zero bake findings (verification/s6b_13_lanes_security.md §2.3).
+  // These three codes move the claims row 244 made about parsed YAML down to the bytes on disk.
+  | "BROWSER_TIER_MISATTACHED"
+  | "NETWORK_NOT_INTERNAL"
+  | "PUBLIC_NETWORK_MEMBER_DRIFT"
   | "NOCACHE_MISSING"
   | "SQUID_GRAMMAR_INVALID"
   | "SQUID_RESERVED_ACL_NAME"
@@ -200,6 +236,10 @@ export type BakeCode =
   | "MODE_SECRETS_DIR"
   | "MODE_SECRET_FILE"
   | "MODE_ENTRYPOINT_WRAP"
+  // Row 267 F-251-1: PC-PATH-18/19 were invisible to this audit (measured empty against a control that fires
+  // MODE_SECRET_FILE), so a widened user-editable file reached container configuration with no offline witness.
+  | "MODE_LANES_FILE"
+  | "MODE_DNS_PINS_FILE"
   | "HARDENING_CAPS"
   | "HARDENING_NO_NEW_PRIVS"
   | "HARDENING_MEMSWAP"
@@ -397,6 +437,10 @@ export function verifyEgressBake(opts: VerifyOptions): EgressBakeVerdict {
   // bans the key by name, so the artefact is where a hostile or out-of-band `extra_hosts` becomes visible. This audit
   // reads the composed text, not dns_pins' screen — see header item (7) for why the two rulebooks stay separate.
   findings.push(...auditExtraHostPins(composeText))
+  // (F-251-8, row 267) the internal-only browser attachment, moved from row 244's parsed-YAML assertions down to the
+  // delivered bytes. It sits here rather than in lint.ts for the reason row 251 §2.3 gives: bring-up consumes the
+  // artefact and never re-renders, so the bake is the only offline instrument that sees what the estate will run.
+  findings.push(...auditNetworkMembership(composeText))
   findings.push(...auditSquidConf(confText))
   // (renamed-ACL safe) reserved-name collision: redeclaring a squid-predefined ACL name is a boot FATAL (R112-1).
   findings.push(...assertNoReservedAclNames(confText))
@@ -406,9 +450,10 @@ export function verifyEgressBake(opts: VerifyOptions): EgressBakeVerdict {
   // forward-proxy port, so this refusal runs too — R112b-1's shape must fail the bake, not reach the VM.
   findings.push(...auditBootClass(confText))
   // (R112-5) file-mode posture is a DISK fact: only asserted when the artefacts were read from a real tools root
-  // (production/row-93 posture). In-memory mismatch tests pass texts directly and skip this by design.
+  // (production/row-93 posture). In-memory mismatch tests pass texts directly and skip this by design. Row 267
+  // hands the same home to the PC-PATH-18/19 leg, because those two files live beside the estate, not under it.
   if (opts.confText === undefined && opts.composeText === undefined && opts.home !== undefined) {
-    findings.push(...auditFileModes(root, composeText))
+    findings.push(...auditFileModes(root, composeText, opts.home))
   }
 
   return { ok: findings.length === 0, findings, imageRef: pin.ref, composePath, confPath }
@@ -543,8 +588,9 @@ export function bakeProofLayers(): EgressProofLayers {
       "all twelve §10.4 classes appear in a DENIED dst ACL and the dstdomain pair covers localhost + .local, deny-then-default-deny ordering included (auditSquidConf / crossEnforcerAgreement)",
       "the CONNECT-method deny negates a port class equal to the approved tunnel set {80, 443}, and the two classes gate 239 did not touch are still declared exactly as §10.4 words them — SafePorts {80, 443} with `deny !SafePorts`, SSL_ports {443} (auditSquidConf port guard; gate 239 option 2 rendered by row 241, audit moved in lockstep by row 242)",
       "every extra_hosts entry present in the artefact aims at a public name and a canonical public unicast IPv4 answer — no host-pointing leg, no twelve-class value (auditExtraHostPins; §4.5 as narrowed by gate 239 fork A)",
+      "the segmentation of the firecrawl artefact matches the approved topology: the browser carrier holds only fc-ctl/fc-iso, every other tier sits on an internal network, and fc-edge/fc-web carry exactly their one approved member each (auditNetworkMembership; gate 239 survivor 3, added by row 267 under F-251-8 — the firecrawl compose only, since this bake never reads searxng.yml)",
       "no ACL redeclares a squid-predefined name (assertNoReservedAclNames; R112-1 closed live by r85-fix5)",
-      "secret dir/file modes and executable /docker-entrypoint.d wraps over a real tools root (auditFileModes; R112-5)",
+      "secret dir/file modes, executable /docker-entrypoint.d wraps, and the 0600 posture of PC-PATH-18 lanes.json / PC-PATH-19 dns-pins.json over a real tools root and home (auditFileModes; R112-5, with the two user-editable paths added by row 267 under F-251-1)",
       "no inline comment sits on an option-parsed port directive, and the port directive parses to a non-zero port equal to PC-PORT-06 (auditBootClass; R112b-1/R112b-5)",
     ],
     offlineInferred: [
@@ -641,13 +687,25 @@ export function explainLiveLog(logText: string): LiveBootSignature[] {
   return LIVE_BOOT_SIGNATURES.filter((s) => logText.includes(s.signature))
 }
 
-/** File-mode posture (R112-5, security-bearing). Two contracts, both real FS facts asserted only over a rendered
+/** File-mode posture (R112-5, security-bearing). Three contracts, all real FS facts asserted only over a rendered
  *  tools root: (a) D-04 secret hygiene — the firecrawl secrets dir 0700 and every secret file 0600; (b) R112-5's
  *  silent-auth-bypass class — a host file mounted under a container `/docker-entrypoint.d/` target MUST be
  *  executable, because the official nginx entrypoint IGNORES non-executable `.sh` there (`Ignoring … not
  *  executable`), so a 0644 wrap never runs envsubst and the bearer token silently ships empty. Absent secrets/files
- *  are NOT failed here — secret generation is the owning step's job (D-22); this asserts the SHAPE of what exists. */
-export function auditFileModes(toolsRoot: string, composeText: string): BakeFinding[] {
+ *  are NOT failed here — secret generation is the owning step's job (D-22); this asserts the SHAPE of what exists.
+ *
+ *  (c) Row 267 (F-251-1): the two user-editable files that BECOME container configuration — PC-PATH-18 lanes.json
+ *  and PC-PATH-19 dns-pins.json. Neither was visible to this audit before (measured: a widened lanes.json produced
+ *  zero findings from the same instrument that flags a 0644 secret file), so the estate's own auditor agreed with
+ *  whatever the filesystem permitted. Their paths come from the writers' own resolvers, imported above.
+ *
+ *  WHY THE PREDICATE IS `mode & 0o077` AND NOT `mode !== 0600` here while the secret leg above uses strict
+ *  equality: this audit runs on the bring-up path AFTER `createLanesFileAtSetup` has had its turn, and that writer
+ *  tightens only what carries a group or other bit (lanes.ts, F-251-1 note). Refusing a NARROWER file (0400 leaks
+ *  nothing) would therefore refuse a state no shipped writer will repair — a deadlock with no owner. Secret files
+ *  have no such hand-edited posture to respect: their owning step writes them 0600 or does not write them at all,
+ *  so strict equality is both safe and correct there. */
+export function auditFileModes(toolsRoot: string, composeText: string, setupHome?: string): BakeFinding[] {
   const findings: BakeFinding[] = []
   const p = pathsFor(toolsRoot)
 
@@ -669,6 +727,27 @@ export function auditFileModes(toolsRoot: string, composeText: string): BakeFind
           item: `${f} mode ${m.toString(8)} (want ${MODES.FILE_0600.toString(8)})`,
           hint: "R112-5 / D-04: secret files 0600 (group/other bits set leak the value)",
         })
+    }
+  }
+
+  // (c) Row 267 F-251-1 — the user-editable path into container configuration. Asserted only when a home was
+  // handed in, exactly as the secret leg is asserted only over a real tools root: an in-memory mismatch test has
+  // no disk to speak about. Absent files stay absent-and-silent (both are optional by design: no lanes file means
+  // the byte-identical default render, no pins file means no extra_hosts), and an existing one must be private.
+  if (setupHome !== undefined) {
+    const legs: readonly { readonly path: string; readonly code: BakeCode; readonly register: string }[] = [
+      { path: lanesPath(setupHome), code: "MODE_LANES_FILE", register: "PC-PATH-18" },
+      { path: dnsPinsPath(setupHome), code: "MODE_DNS_PINS_FILE", register: "PC-PATH-19" },
+    ]
+    for (const leg of legs) {
+      if (!existsSync(leg.path)) continue
+      const m = statSync(leg.path).mode & 0o777
+      if ((m & 0o077) === 0) continue
+      findings.push({
+        code: leg.code,
+        item: `${leg.path} mode ${m.toString(8)} (want ${MODES.FILE_0600.toString(8)}): group or other bits are set on ${leg.register}`,
+        hint: `${leg.register} is read straight into container configuration (lane values reach a service environment; pins reach extra_hosts) and its register posture is 0600 inside the 0700 setup dir. The configure-time writer tightens this file (lanes.ts createLanesFileAtSetup); this finding is the second witness for the case it cannot cover — a widening that lands after the last install, or on a path whose writer never ran.`,
+      })
     }
   }
 
@@ -956,6 +1035,77 @@ export function auditExtraHostPins(composeText: string): BakeFinding[] {
         })
     }
   }
+  return findings
+}
+
+/** Network-membership audit (row 267, F-251-8 / gate 239 survivor 3). WHY THE BAKE OWNS THIS AND NOT THE LINT:
+ *  lint runs over bytes the renderer just produced, so it can only ever re-state what the renderer intended; the
+ *  estate consumes the ARTEFACT, and rows 246/263 write those artefacts to disk without any re-render at bring-up
+ *  (stacklib.ts:497 "never re-renders"). That gap is exactly why `auditFileModes` and `auditExtraHostPins` exist
+ *  (row 251 §2.3's argument, quoted at implementation/s6_r242_audit_lockstep.md §4), and network membership has
+ *  the same shape: before this rule the property had one live witness (row 255's item-6 raw-egress kill test) and
+ *  no offline one — four mutations of it left `lintOk=true` with zero bake findings while the same instruments bit
+ *  on four extra-hosts poisons, which is a coverage statement, not a complaint.
+ *
+ *  THREE CLAIMS, one per code, each proven by an isolating mutation in test/egress_bake.test.ts:
+ *   - BROWSER_TIER_MISATTACHED — the browser carrier attaches anything outside {fc-ctl, fc-iso}. fc-web is the
+ *     internet-capable segment, so this is the direct "the browser reaches the world" case RC-244-1 named.
+ *   - NETWORK_NOT_INTERNAL — any other service attaches a network that is not declared `internal: true`, including
+ *     a network no top-level block declares (docker would create that one non-internal on first use, which is the
+ *     quieter half of the same hole).
+ *   - PUBLIC_NETWORK_MEMBER_DRIFT — a non-internal network's member set differs from the approved set in either
+ *     direction: an added member gains a public face, a removed one silently changes who can route (and would
+ *     leave the surviving members' own claims unbacked). */
+export function auditNetworkMembership(composeText: string): BakeFinding[] {
+  const findings: BakeFinding[] = []
+  const topo = parseNetworkTopology(composeText)
+
+  // (i) the browser carrier stays inside its internal segments
+  const beyond = topo.attachments
+    .filter((a) => a.service === BROWSER_TIER_SERVICE && !BROWSER_TIER_NETWORKS.includes(a.network))
+    .map((a) => a.network)
+  if (beyond.length > 0)
+    findings.push({
+      code: "BROWSER_TIER_MISATTACHED",
+      item: `${BROWSER_TIER_SERVICE} attaches [${[...new Set(beyond)].join(", ")}] — the browser tier may hold only ${BROWSER_TIER_NETWORKS.join(", ")}`,
+      hint: "gate 239 survivor 3 of 3 (01e §6.7/§10.2): the playwright carrier is contained by attaching to internal segments only. fc-web is the internet-capable tier and fc-edge is the published face; membership of either hands the browser a route around egress-proxy, which is the whole F-3 leak class this stack exists to close. Live witness stays row 255's item-6 kill test — offline green is not live green.",
+    })
+
+  // (ii) every other attachment must sit on an internal network
+  for (const a of topo.attachments) {
+    if (APPROVED_PUBLIC_NETWORK_MEMBERS[a.network]?.includes(a.service)) continue
+    const internal = topo.defined.get(a.network)
+    if (internal === true) continue
+    const reason =
+      internal === undefined
+        ? `"${a.network}" is not declared in the top-level networks: block — docker would create it on demand, non-internal`
+        : `"${a.network}" is declared without internal: true`
+    findings.push({
+      code: "NETWORK_NOT_INTERNAL",
+      item: `${a.service} attaches ${reason}`,
+      hint: "only the two services named in APPROVED_PUBLIC_NETWORK_MEMBERS may hold a non-internal face (auth-proxy on fc-edge as the published entry, egress-proxy on fc-web as the sole internet-capable member). Every other tier is contained by the internal flag — U-7 measured that all-internal attachments mean no default route, so containment here is a property of the network, not of a gateway the render could forget to omit.",
+    })
+  }
+
+  // (iii) each public network's member set is exactly the approved one
+  for (const [network, approved] of Object.entries(APPROVED_PUBLIC_NETWORK_MEMBERS)) {
+    const members = [...new Set(topo.attachments.filter((a) => a.network === network).map((a) => a.service))]
+    const missing = approved.filter((s) => !members.includes(s))
+    const extra = members.filter((s) => !(approved as readonly string[]).includes(s))
+    if (missing.length === 0 && extra.length === 0) continue
+    const how =
+      extra.length > 0 && missing.length > 0
+        ? `carries [${extra.join(", ")}] and lacks [${missing.join(", ")}]`
+        : extra.length > 0
+          ? `carries an unapproved member [${extra.join(", ")}]`
+          : `is missing its approved member [${missing.join(", ")}]`
+    findings.push({
+      code: "PUBLIC_NETWORK_MEMBER_DRIFT",
+      item: `${network} ${how}; the approved set is {${approved.join(", ")}}`,
+      hint: "the trust boundary of this stack is stated as two singleton memberships (01e §6.1/§10.4): fc-edge answers the ONLY publish and fc-web has EXACTLY ONE internet-capable member. An added member widens a public face; a removed one means the remaining tiers' containment claims were never backed by the render you are looking at.",
+    })
+  }
+
   return findings
 }
 
@@ -1290,6 +1440,92 @@ function stripEntryQuotes(token: string): string {
   if (t.length > 1 && ((t.startsWith('"') && t.endsWith('"')) || (t.startsWith("'") && t.endsWith("'"))))
     return t.slice(1, -1)
   return t
+}
+
+// --- network-membership parsers (row 267 / F-251-8: who is attached to what, in either YAML shape) ----------------
+
+interface NetworkAttachment {
+  readonly service: string
+  readonly network: string
+}
+
+interface NetworkTopology {
+  /** Top-level `networks:` declarations, name → whether the block carries `internal: true`. A network any service
+   *  attaches that is ABSENT from this map is treated as non-internal, because that is what docker does with an
+   *  undeclared network: it creates one, bridge-typed and routable. */
+  readonly defined: Map<string, boolean>
+  readonly attachments: readonly NetworkAttachment[]
+}
+
+/** Read the segmentation out of a compose text: which networks are declared and with which `internal` flag, and
+ *  which service attaches which of them. Both YAML shapes are read for attachments — the flow form the render emits
+ *  (`networks: [fc-ctl, fc-iso]`) and the block forms a hand edit writes (`- fc-web`, or the mapping form
+ *  `fc-web: {aliases: […]}`) — for the same reason `extraHostEntries` reads both: after the narrowing, the audit
+ *  must not depend on which spelling opened the door. Comments are stripped before anything is compared, so a
+ *  comment naming a good network satisfies nothing. */
+function parseNetworkTopology(composeText: string): NetworkTopology {
+  const defined = new Map<string, boolean>()
+  const attachments: NetworkAttachment[] = []
+  const lines = composeText.split("\n")
+  let section = ""
+  let entry = ""
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i] ?? ""
+    const top = line.match(/^([A-Za-z_][\w-]*):/) // indent-0 key switches section (services:, networks:, name:, …)
+    if (top) {
+      section = top[1] ?? ""
+      entry = ""
+      continue
+    }
+    if (section !== "services" && section !== "networks") continue
+
+    const head = line.match(/^ {2}([^:\s][^:]*):\s*(?:#.*)?$/) // the indent-2 member of the current section
+    if (head) {
+      entry = head[1] ?? ""
+      if (section === "networks" && !defined.has(entry)) defined.set(entry, false)
+      continue
+    }
+    if (entry === "") continue
+
+    if (section === "networks") {
+      const internal = line.match(/^ {4}internal:\s*(\S+)/)
+      if (internal?.[1]) defined.set(entry, /^(?:true|yes)$/i.test(internal[1]))
+      continue
+    }
+
+    const nets = line.match(/^ {4}networks:\s*(.*)$/)
+    if (!nets) continue
+    const rest = (nets[1] ?? "").split("#")[0]?.trim() ?? ""
+    if (rest.startsWith("[") && rest.endsWith("]")) {
+      for (const item of rest.slice(1, -1).split(",")) {
+        const name = stripEntryQuotes(item)
+        if (name !== "") attachments.push({ service: entry, network: name })
+      }
+      continue
+    }
+    if (rest !== "") {
+      attachments.push({ service: entry, network: stripEntryQuotes(rest) })
+      continue
+    }
+    // Block form: consume ONLY indent-6 entries; deeper lines belong to one entry's own options (aliases, ipv4_address).
+    for (let j = i + 1; j < lines.length; j++) {
+      const body = lines[j] ?? ""
+      if (body.trim() === "" || body.trim().startsWith("#")) continue
+      const indent = (body.match(/^(\s*)/)?.[1] ?? "").length
+      if (indent <= 4) break
+      if (indent !== 6) continue
+      const item = body.match(/^ {6}-\s*(\S.*?)\s*$/)
+      if (item) {
+        attachments.push({ service: entry, network: stripEntryQuotes(item[1] ?? "") })
+        continue
+      }
+      const key = body.match(/^ {6}([^:\s][^:]*):(?:\s*\{[^}]*\})?\s*(?:#.*)?$/)
+      if (key) attachments.push({ service: entry, network: stripEntryQuotes(key[1] ?? "") })
+    }
+  }
+
+  return { defined, attachments }
 }
 
 /** Positive NAME shape: lowercase RFC1123 labels with at least one dot. The dot is containment, not style — docker's

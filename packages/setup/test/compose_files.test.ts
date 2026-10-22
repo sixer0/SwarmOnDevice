@@ -21,6 +21,12 @@ import {
 import { renderNginxTemplate } from "../src/composefiles/nginx_template.ts"
 import { extraHostPairProblem, publicUnicastV4, readDnsPins } from "../src/composefiles/dns_pins.ts"
 import { checkResolvedAddresses, isDeniedAddress } from "../src/mcpproxy/urlpolicy.ts"
+// Row 267 Q6.3: the bake's registry of the twelve classes, imported HERE (the renderer's own suite) so a row that
+// edits squid_conf.ts sees red where it edited. The bake suite already compared these two lists
+// (test/egress_bake.test.ts "still exactly twelve, both directions"); the gap was that nothing in the RENDERER's
+// suite did, so a one-sided edit passed its own package gate and surfaced later. Verification/s6b_14_addendum_codereview.md
+// Q6.3 named squid_conf.ts:62 as the fourth unlinked home of the v4 CIDR set.
+import { REQUIRED_DENY_RANGES } from "../src/steps/firecrawl/egress_bake.ts"
 
 const lockPath = join(import.meta.dir, "..", "tools.lock.json")
 const parsedLock = JSON.parse(readFileSync(lockPath, "utf8"))
@@ -1415,5 +1421,71 @@ describe("gate 239 row 241 — P3 extra_hosts render, narrowed lint, squid tunne
     expect(mcp).toContain("LIVE key owned by the playwright image")
     expect(t).toContain("deliberate cut") // the §6.7 replacement facts ride the continuation lines
     expect(t).toContain("pw:/usr/src/app/api.ts:26-29")
+  })
+})
+
+// ================================================================================================
+// Row 267 / Q6.3 (`verification/s6b_14_addendum_codereview.md`) — the rendered deny CIDRs are LINKED to the
+// bake's registry, and the link lives in the RENDERER's own suite.
+//
+// CHOSEN MECHANISM: assert equality in a test, do NOT derive the render from `REQUIRED_DENY_RANGES`. Deriving
+// would make the bake's comparison tautological — `auditSquidConf` and `crossEnforcerAgreement` ask whether the L4
+// render denies each class the registry names, and a renderer that emitted whatever the audit listed can never
+// answer that question. It is the independence argument row 242 wrote for the opposite direction
+// (`implementation/s6_r242_audit_lockstep.md` §4: "an audit that asks the renderer whether the renderer was right
+// inherits every hole the renderer later grows"), which row 252 endorsed as the right pattern for duplication that
+// is safe. Deriving would also drag a `steps/**` module into a `composefiles/` renderer, inverting the direction
+// the bake already imports, and would put rendered bytes at the mercy of registry ordering.
+//
+// WHY HERE AND NOT ONLY IN THE BAKE SUITE: the bake suite already compared the two lists both ways
+// ("the twelve deny tokens … still exactly twelve, both directions"), yet a row editing `squid_conf.ts` runs THIS
+// suite as its own gate and saw nothing — which is precisely how the fourth home stayed unlinked.
+// ================================================================================================
+describe("r267 Q6.3 — squid_conf's deny CIDRs and REQUIRED_DENY_RANGES are one set, checked both ways", () => {
+  /** Every CIDR token on the rendered dst ACL lines, comment-stripped: the v6 line's own note names `0.0.0.0/8`,
+   *  so a comparison that read raw lines could be satisfied by prose. */
+  const dstTokens = (conf: string): Set<string> => {
+    const out = new Set<string>()
+    for (const line of conf.split("\n")) {
+      const m = (line.split("#")[0] ?? "").match(/^acl\s+\S+\s+dst\s+(.+)$/)
+      if (m?.[1]) for (const t of m[1].trim().split(/\s+/)) out.add(t)
+    }
+    return out
+  }
+  const registryCidrs = (): string[] => REQUIRED_DENY_RANGES.map((r) => r.cidr)
+  const diff = (rendered: ReadonlySet<string>, registry: readonly string[]) => ({
+    missingFromRender: registry.filter((c) => !rendered.has(c)),
+    extraInRender: [...rendered].filter((c) => !registry.includes(c)).sort(),
+  })
+  /** Edit ONLY the v4 destination line, by its own shape, so no comment or sibling line can be hit by accident. */
+  const editV4Line = (conf: string, edit: (line: string) => string): string =>
+    conf.replace(/^acl to_localnet dst 127\.[^\n]*$/m, (m) => edit(m))
+
+  test("the shipped render's dst tokens equal REQUIRED_DENY_RANGES exactly, in both directions", () => {
+    const rendered = dstTokens(fileOf(renderClean(), "firecrawl/squid/squid.conf").content)
+    expect(diff(rendered, registryCidrs())).toEqual({ missingFromRender: [], extraInRender: [] })
+    expect(rendered.size).toBe(registryCidrs().length) // twelve measured against twelve, not against a literal 12
+  })
+
+  test("the pin bites on a one-CIDR edit to the render: dropping CGNAT is named as missing", () => {
+    const narrowed = dstTokens(editV4Line(fileOf(renderClean(), "firecrawl/squid/squid.conf").content, (l) => l.replace(" 100.64.0.0/10", "")))
+    expect(narrowed.size).toBe(11) // the edit moved bytes rather than no-op'ing
+    expect(diff(narrowed, registryCidrs()).missingFromRender).toEqual(["100.64.0.0/10"])
+  })
+
+  test("the pin bites the other way: one CIDR ADDED to the render is named as extra", () => {
+    const widened = dstTokens(editV4Line(fileOf(renderClean(), "firecrawl/squid/squid.conf").content, (l) => `${l} 198.18.0.0/15`))
+    expect(widened.size).toBe(13)
+    expect(diff(widened, registryCidrs()).extraInRender).toEqual(["198.18.0.0/15"])
+  })
+
+  test("and it bites on a registry-side move: a widening the render did not follow is red, not silent", () => {
+    // Helper-level deliberately — a test cannot edit the imported constant. The source-level version of this claim
+    // (egress_bake.ts mutated to gain a class, this suite re-run against it) is quoted in
+    // implementation/s6_r267_setup_security_fixes.md §3. What is pinned here is that the comparison is TWO-SIDED,
+    // so the direction Q6.3 actually names — the host predicate widens under F-251-5 and squid_conf.ts:62 does not
+    // follow — cannot pass quietly in either suite.
+    const rendered = dstTokens(fileOf(renderClean(), "firecrawl/squid/squid.conf").content)
+    expect(diff(rendered, [...registryCidrs(), "198.18.0.0/15"]).missingFromRender).toEqual(["198.18.0.0/15"])
   })
 })

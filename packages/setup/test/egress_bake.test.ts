@@ -42,6 +42,9 @@ import {
   auditBootClass,
   auditExtraHostPins,
   auditFileModes,
+  // Row 267 F-251-8: the offline witness gate 239 survivor 3 never had (RC-244-1 / verification/s6b_13 §2.3).
+  auditNetworkMembership,
+  BROWSER_TIER_SERVICE,
   auditSquidConf,
   bakeEgressProxy,
   bakeProofLayers,
@@ -1457,5 +1460,244 @@ describe("(probe-noise accounting row 243) the idle window survives the readines
     const v = auditIdleWindow({ before: [], after: [same, same, same] })
     expect(v.probeNoise).toBe(3)
     expect(v.added).toBe(3)
+  })
+})
+
+// ================================================================================================
+// Row 267 / F-251-8 (verification/s6b_13_lanes_security.md §2.3, closing RC-244-1). Gate 239's third survivor —
+// the browser carrier reaching nothing beyond the internal tiers — had no offline instrument: four mutations of it
+// left `lintOk=true` with zero bake findings, while the same two scanners demonstrably bit on four extra-hosts
+// poisons. The rule lives in the BAKE, not the lint, because the bake owns artefact-level facts about the bytes the
+// estate consumes (that is why auditFileModes and auditExtraHostPins exist); lint only ever sees what the renderer
+// intended. Row 244's composite injection is kept as a permanent fixture in egress_tunnel_units.test.ts; every
+// case below is ISOLATING instead, firing exactly ONE of the three codes, so no code rides a neighbour's finding.
+// ================================================================================================
+describe("(r267 F-251-8) network membership of the delivered artefact, one code per claim", () => {
+  /** The shipped firecrawl compose, produced by the real renderer into a throwaway home. */
+  const shippedCompose = (): string => {
+    const home = freshHome("nets")
+    stageArtefacts(home)
+    return readFileSync(fcComposePath(home), "utf8")
+  }
+
+  /** Add one network to one service's flow list, touching nothing else in the file. */
+  const attach = (compose: string, service: string, extra: string): string =>
+    editServiceBlock(compose, service, (l) => {
+      if (!/^ {4}networks:\s*\[/.test(l)) return l
+      const i = l.indexOf("]")
+      return `${l.slice(0, i)}, ${extra}${l.slice(i)}`
+    })
+
+  /** Remove one network from one service's flow list, keeping any trailing comment. */
+  const detach = (compose: string, service: string, name: string): string =>
+    editServiceBlock(compose, service, (l) => {
+      const m = l.match(/^ {4}networks:\s*\[([^\]]*)\]/)
+      if (!m?.[1]) return l
+      const kept = m[1].split(",").map((x) => x.trim()).filter((x) => x !== "" && x !== name)
+      return `    networks: [${kept.join(", ")}]${l.slice((m[0] ?? "").length)}`
+    })
+
+  /** Declare a network in the top-level block, with whatever body the case needs. */
+  const declareNetwork = (compose: string, name: string, body: readonly string[]): string => {
+    const lines = compose.split("\n")
+    const i = lines.findIndex((l) => l === "networks:")
+    if (i === -1) throw new Error("fixture: the render carries no top-level networks: block")
+    return [...lines.slice(0, i + 1), `  ${name}:`, ...body, ...lines.slice(i + 1)].join("\n")
+  }
+
+  const codesFor = (text: string): string[] => auditNetworkMembership(text).map((f) => f.code)
+
+  it("POSITIVE CONTROL: the shipped render passes all three claims with zero findings", () => {
+    expect(auditNetworkMembership(shippedCompose())).toEqual([])
+  })
+
+  it("BROWSER_TIER_MISATTACHED fires ALONE when the carrier gains an internal network outside its pair", () => {
+    // fc-data is internal, so claim (ii) has nothing to complain about and claim (iii) does not see it either:
+    // this isolates the browser-membership rule itself.
+    const base = shippedCompose()
+    const moved = attach(base, BROWSER_TIER_SERVICE, "fc-data")
+    expect(moved).not.toBe(base)
+    expect(codesFor(moved)).toEqual(["BROWSER_TIER_MISATTACHED"])
+    expect(auditNetworkMembership(moved)[0]?.item).toContain("fc-data")
+  })
+
+  it("NETWORK_NOT_INTERNAL fires ALONE on an UNDECLARED network — the shape docker would create routable", () => {
+    const base = shippedCompose()
+    const sneaky = attach(base, "redis", "fc-sneak")
+    expect(sneaky).not.toBe(base)
+    expect(codesFor(sneaky)).toEqual(["NETWORK_NOT_INTERNAL"])
+    expect(auditNetworkMembership(sneaky)[0]?.item).toContain("not declared")
+  })
+
+  it("NETWORK_NOT_INTERNAL also fires ALONE on a declared segment whose internal flag is missing", () => {
+    const base = shippedCompose()
+    const opened = declareNetwork(attach(base, "redis", "fc-open"), "fc-open", ["    driver: bridge"])
+    expect(codesFor(opened)).toEqual(["NETWORK_NOT_INTERNAL"])
+    expect(auditNetworkMembership(opened)[0]?.item).toContain("without internal: true")
+  })
+
+  it("PUBLIC_NETWORK_MEMBER_DRIFT fires ALONE when the sole internet-capable member walks off fc-web", () => {
+    // Removing egress-proxy from fc-web leaves it on fc-ctl only — internally contained, so claim (ii) stays quiet,
+    // and the browser tier is untouched, so claim (i) stays quiet. What breaks is the boundary statement itself:
+    // fc-web would have no member, meaning the render no longer matches the topology §6.1 claims.
+    const base = shippedCompose()
+    const orphan = detach(base, "egress-proxy", "fc-web")
+    expect(orphan).not.toBe(base)
+    expect(codesFor(orphan)).toEqual(["PUBLIC_NETWORK_MEMBER_DRIFT"])
+    expect(auditNetworkMembership(orphan)[0]?.item).toContain("missing its approved member")
+  })
+
+  it("an unapproved member on a public segment is named by BOTH rules that it violates", () => {
+    // Documented overlap, not a cascade bug: auth-proxy on fc-web both holds a face the approval did not give it
+    // (claim ii) and changes fc-web's singleton membership (claim iii).
+    const base = shippedCompose()
+    const codes = codesFor(attach(base, "auth-proxy", "fc-web"))
+    expect(codes).toContain("NETWORK_NOT_INTERNAL")
+    expect(codes).toContain("PUBLIC_NETWORK_MEMBER_DRIFT")
+    expect(codes).not.toContain("BROWSER_TIER_MISATTACHED")
+  })
+
+  it("flipping or deleting fc-iso's internal flag is refused for the tier standing on it", () => {
+    // Row 251's third and fourth mutations, reproduced on the real artefact: `internal: false`, and the flag deleted
+    // outright. Both leave lint green (it has no network rule) and both now fail the bake.
+    const base = shippedCompose()
+    const flipped = base.replace("    internal: true  # r75-fix6", "    internal: false  # r75-fix6")
+    expect(flipped).not.toBe(base)
+    expect(codesFor(flipped)).toEqual(["NETWORK_NOT_INTERNAL"])
+    const deleted = base.replace("    internal: true  # r75-fix6", "    driver: bridge  # flag deleted")
+    expect(codesFor(deleted)).toEqual(["NETWORK_NOT_INTERNAL"])
+  })
+
+  it("every YAML shape is read: flow list, block sequence and block mapping all refuse the same injection", () => {
+    const base = shippedCompose()
+    const flow = attach(base, BROWSER_TIER_SERVICE, "fc-web")
+    const sequence = editServiceBlock(base, BROWSER_TIER_SERVICE, (l) =>
+      /^ {4}networks:/.test(l) ? "    networks:\n      - fc-ctl\n      - fc-iso\n      - fc-web" : l)
+    const mapping = editServiceBlock(base, BROWSER_TIER_SERVICE, (l) =>
+      /^ {4}networks:/.test(l) ? "    networks:\n      fc-ctl: {}\n      fc-iso: {}\n      fc-web:\n        aliases: [browser]" : l)
+    for (const [shape, text] of [["flow", flow], ["sequence", sequence], ["mapping", mapping]] as const) {
+      expect(text, shape).not.toBe(base)
+      expect(codesFor(text), shape).toContain("BROWSER_TIER_MISATTACHED")
+    }
+  })
+
+  it("a comment naming the public segments satisfies nothing and trips nothing", () => {
+    const base = shippedCompose()
+    const commented = editServiceBlock(base, BROWSER_TIER_SERVICE, (l) =>
+      /^ {4}networks:/.test(l) ? `${l}  # fc-web and fc-edge are NOT attached here` : l)
+    expect(commented).not.toBe(base)
+    expect(codesFor(commented)).toEqual([])
+  })
+
+  it("claim (i) has a subject: the carrier the policy names actually exists in the render it audits", () => {
+    // The membership map cannot go vacuous quietly — a renamed member leaves its network with ZERO members and
+    // PUBLIC_NETWORK_MEMBER_DRIFT fires on the missing side. Claim (i) is the exception: it filters attachments BY
+    // SERVICE NAME, so a renamed carrier would match nothing and the rule would pass while protecting nobody. This
+    // is the pin that stops that.
+    const base = shippedCompose()
+    expect(base).toMatch(new RegExp(`^ {2}${BROWSER_TIER_SERVICE}:\\s*$`, "m"))
+    expect(attach(base, BROWSER_TIER_SERVICE, "fc-data")).not.toBe(base)
+  })
+
+  it("end-to-end: verifyEgressBake refuses a webbed browser tier, so bring-up cannot boot it", () => {
+    const home = freshHome("nets-e2e")
+    stageArtefacts(home)
+    const webbed = attach(readFileSync(fcComposePath(home), "utf8"), BROWSER_TIER_SERVICE, "fc-web")
+    const v = verifyEgressBake({ lock: LOCK, home, composeText: webbed, confText: readFileSync(fcSquidPath(home), "utf8") })
+    expect(v.ok).toBe(false)
+    expect(v.findings.map((f) => f.code)).toContain("BROWSER_TIER_MISATTACHED")
+  })
+})
+
+// ================================================================================================
+// Row 267 / F-251-1 (verification/s6b_13_lanes_security.md §2.1). `auditFileModes` walked the Firecrawl secrets
+// directory and nothing else, so PC-PATH-18 (lanes.json) and PC-PATH-19 (dns-pins.json) were invisible to the
+// estate's own auditor — measured as `widenedLanesJson=[]` against a control that does fire MODE_SECRET_FILE.
+// Both paths are covered now, and the pair below reproduces that control in the SAME run, so the green cases
+// above are coverage rather than health.
+// ================================================================================================
+describe("(r267 F-251-1) the mode audit sees the user-editable path into container configuration", () => {
+  const seededHome = (): string => {
+    const home = freshHome("modes-r267")
+    stageArtefacts(home)
+    return home
+  }
+  const toolsRootOf = (home: string): string => `${home}/.swarm/tools`
+
+  /** Seed one setup file at a CHOSEN mode — the state no shipped writer produces and every shipped fixture assumed. */
+  const seed = (home: string, name: string, mode: number): string => {
+    const dir = join(home, ".swarm", "setup")
+    mkdirSync(dir, { recursive: true })
+    const p = join(dir, name)
+    writeFileSync(p, '{"version":1}\n')
+    chmodSync(p, mode)
+    return p
+  }
+  const codesIn = (home: string): string[] => auditFileModes(toolsRootOf(home), "", home).map((f) => f.code)
+
+  it("POSITIVE CONTROL in the same run: a 0644 secret file still fires MODE_SECRET_FILE", () => {
+    // Without this arm, every zero below could be read as an instrument that never says anything (rule E4).
+    const home = seededHome()
+    const secDir = `${toolsRootOf(home)}/firecrawl/secrets`
+    mkdirSync(secDir, { recursive: true, mode: 0o700 })
+    writeFileSync(`${secDir}/proxy_token`, "x".repeat(40), { mode: 0o644 })
+    expect(codesIn(home)).toContain("MODE_SECRET_FILE")
+  })
+
+  it("a lanes.json widened to 0644 is refused; the sanctioned 0600 is not; an absent file is not", () => {
+    const wide = seededHome()
+    const path = seed(wide, "lanes.json", 0o644)
+    expect(statSync(path).mode & 0o777).toBe(0o644) // the drift is really on disk
+    expect(codesIn(wide)).toContain("MODE_LANES_FILE")
+
+    const exact = seededHome()
+    seed(exact, "lanes.json", 0o600)
+    expect(codesIn(exact)).toEqual([])
+
+    const absent = seededHome()
+    expect(codesIn(absent)).toEqual([])
+  })
+
+  it("dns-pins.json gets the identical treatment under its own code", () => {
+    const wide = seededHome()
+    seed(wide, "dns-pins.json", 0o644)
+    expect(codesIn(wide)).toContain("MODE_DNS_PINS_FILE")
+    const exact = seededHome()
+    seed(exact, "dns-pins.json", 0o600)
+    expect(codesIn(exact)).toEqual([])
+  })
+
+  it("both files wide yields both codes, and the world-readable 0666 inside a widened dir is caught too", () => {
+    const home = seededHome()
+    seed(home, "lanes.json", 0o644)
+    seed(home, "dns-pins.json", 0o666)
+    expect(codesIn(home).sort()).toEqual(["MODE_DNS_PINS_FILE", "MODE_LANES_FILE"])
+  })
+
+  it("a file NARROWER than the register (0400) is left alone — the audit must not refuse what no writer will repair", () => {
+    // Coherence with createLanesFileAtSetup, which tightens only grants (mode & 0o077). Were this leg strict equality,
+    // a 0400 file would be refused by the bake and never repaired by the writer: a deadlock with no owner.
+    const home = seededHome()
+    seed(home, "lanes.json", 0o400)
+    expect(codesIn(home)).toEqual([])
+  })
+
+  it("the leg is a DISK fact: with artefacts handed in memory and no home, nothing is asserted about modes", () => {
+    // Same gate the secret leg has — an in-memory fixture has no filesystem to speak about.
+    const home = seededHome()
+    seed(home, "lanes.json", 0o644)
+    expect(auditFileModes(toolsRootOf(home), "").map((f) => f.code)).toEqual([])
+  })
+
+  it("end-to-end: the bake refuses a widened lane file, and clears once it is tightened", () => {
+    const home = seededHome()
+    seed(home, "lanes.json", 0o644)
+    const wide = verifyEgressBake({ lock: LOCK, home })
+    expect(wide.ok).toBe(false)
+    expect(wide.findings.map((f) => f.code)).toContain("MODE_LANES_FILE")
+
+    chmodSync(join(home, ".swarm", "setup", "lanes.json"), 0o600)
+    const tight = verifyEgressBake({ lock: LOCK, home })
+    expect(tight.findings.map((f) => `${f.code}: ${f.item}`)).toEqual([])
   })
 })
