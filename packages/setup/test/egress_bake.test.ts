@@ -1716,6 +1716,102 @@ describe("(r270 F-265-1/F-265-2) the engine-read audits see every shape the cons
 })
 
 // ================================================================================================
+// Row 271 / F-265b-1 + F-265b-4 (verification/s6b_13c_r270_security_recheck.md §2.3, §7). Bun.YAML DROPS tags and
+// keeps the value; compose-go HONOURS `!reset`, so `networks: !reset [fc-ctl, fc-iso]` (N5d) and `internal: !reset
+// true` on fc-iso / fc-ctl (N5e / N5f) passed the WHOLE bake ok=true in disk posture while compose resolved the browser
+// onto the non-internal default network or stripped the internal flag. A multi-document stream (N7 append, N7b
+// prepend) parsed to an array that row 270 read as `{}`: the extra_hosts audit went silent while compose MERGED the
+// documents onto fc-web. Each case below is row 265b's exact text transform over this home's own render (anchors
+// must match exactly once, its ANCHOR_MISS lesson), run through verifyEgressBake in disk posture — the artefact is
+// written to the sandbox tools root and read back, so the modes leg runs too. E4 pair against HEAD 3804b18070 bytes:
+// implementation/s6_r271_yaml_tag_refusal.md §5.
+// ================================================================================================
+describe("(r271 F-265b-1/F-265b-4) a YAML tag or a non-mapping top refuses the whole bake", () => {
+  const once = (text: string, from: string, to: string): string => {
+    const n = text.split(from).length - 1
+    if (n !== 1) throw new Error(`fixture ANCHOR_MISS: ${JSON.stringify(from)} matched ${n} times`)
+    return text.replace(from, to)
+  }
+  const N5D = (t: string): string => once(t, "    networks: [fc-ctl, fc-iso]\n", "    networks: !reset [fc-ctl, fc-iso]\n")
+  const N5E = (t: string): string =>
+    once(t, "    internal: true  # r75-fix6: all-internal attachments mean no default route; do NOT assert an absent gateway\n", "    internal: !reset true\n")
+  const N5F = (t: string): string => once(t, "  fc-ctl:\n    driver: bridge\n    internal: true\n", "  fc-ctl:\n    driver: bridge\n    internal: !reset true\n")
+  const N7_DOC = `services:\n  ${BROWSER_TIER_SERVICE}:\n    networks: [fc-ctl, fc-iso, fc-web]\n`
+  const N7 = (t: string): string => `${t.endsWith("\n") ? t : `${t}\n`}---\n${N7_DOC}`
+  const N7B = (t: string): string => `${N7_DOC}---\n${t}`
+
+  /** Disk posture: render into a fresh sandbox home, apply the transform to THAT home's artefact on disk, bake it. */
+  const bakeOnDisk = (label: string, mutate: (t: string) => string): { ok: boolean; codes: string[] } => {
+    const home = freshHome(`r271-${label}`)
+    stageArtefacts(home)
+    const path = fcComposePath(home)
+    const before = readFileSync(path, "utf8")
+    const after = mutate(before)
+    expect(after).not.toBe(before) // the transform must have changed the artefact or the arm proves nothing
+    writeFileSync(path, after)
+    const v = verifyEgressBake({ lock: LOCK, home })
+    return { ok: v.ok, codes: v.findings.map((f) => f.code) }
+  }
+  const expectRefused = (r: { ok: boolean; codes: string[] }): void => {
+    expect(r.ok).toBe(false)
+    expect(r.codes).toContain("COMPOSE_YAML_UNPARSEABLE")
+  }
+
+  it("POSITIVE CONTROL r271: the shipped render carries no '!' at all and bakes ok=true in disk posture", () => {
+    const home = freshHome("r271-control")
+    stageArtefacts(home)
+    expect(readFileSync(fcComposePath(home), "utf8")).not.toContain("!") // the renderer emits no tag, so refusing every tag costs nothing
+    const v = verifyEgressBake({ lock: LOCK, home })
+    expect(v.findings).toEqual([])
+    expect(v.ok).toBe(true)
+  })
+
+  it("N5d r271: `networks: !reset [fc-ctl, fc-iso]` on the browser refuses the whole bake (was ok=true)", () => {
+    expectRefused(bakeOnDisk("n5d", N5D))
+  })
+
+  it("N5e r271: `internal: !reset true` on fc-iso refuses the whole bake (was ok=true)", () => {
+    expectRefused(bakeOnDisk("n5e", N5E))
+  })
+
+  it("N5f r271: `internal: !reset true` on fc-ctl refuses the whole bake (was ok=true)", () => {
+    expectRefused(bakeOnDisk("n5f", N5F))
+  })
+
+  it("N7 r271: a second document appended (compose merges fc-web onto the browser) refuses the whole bake", () => {
+    expectRefused(bakeOnDisk("n7", N7))
+  })
+
+  it("N7b r271: a second document prepended refuses the whole bake", () => {
+    expectRefused(bakeOnDisk("n7b", N7B))
+  })
+
+  it("r271: every tag is refused by both audits, whatever its name, and a top-level sequence or scalar is never read as {}", () => {
+    const home = freshHome("r271-shapes")
+    stageArtefacts(home)
+    const base = readFileSync(fcComposePath(home), "utf8")
+    const both = (t: string): string[][] => [auditNetworkMembership(t).map((f) => f.code), auditExtraHostPins(t).map((f) => f.code)]
+    const REFUSED = [["COMPOSE_YAML_UNPARSEABLE"], ["COMPOSE_YAML_UNPARSEABLE"]]
+    expect(both(once(base, "    networks: [fc-ctl, fc-iso]\n", "    networks: !override [fc-ctl, fc-iso]\n"))).toEqual(REFUSED)
+    expect(both(once(base, "    networks: [fc-ctl, fc-iso]\n", "    networks: !!seq [fc-ctl, fc-iso]\n"))).toEqual(REFUSED)
+    expect(both(once(base, "    networks: [fc-ctl, fc-iso]\n", "    networks: [fc-ctl, fc-iso]\n    network_mode: !reset host\n"))).toEqual(REFUSED) // N5g
+    expect(both("- services: {}\n")).toEqual(REFUSED) // top-level sequence
+    expect(both("just a scalar\n")).toEqual(REFUSED)
+    expect(both("services: {}\n---\n")).toEqual(REFUSED) // a trailing empty document is still a second document
+  })
+
+  it("NO FALSE REFUSAL r271: a '!' inside quoted scalars, a plain scalar, a block scalar or a comment bakes ok=true", () => {
+    const withBangs = (t: string): string => {
+      const labelled = once(t, "\nname: swarm-tools\n", '\nname: swarm-tools\nx-r271-dq: "hi! !reset [x]"\nx-r271-sq: \'!override yes\'\nx-r271-plain: echo hi!\nx-r271-block: |\n  line with !reset inside\n')
+      return once(labelled, "    networks: [fc-ctl, fc-iso]\n", "    networks: [fc-ctl, fc-iso]  # a comment may say !reset [fc-web] and mean nothing\n")
+    }
+    const r = bakeOnDisk("nofalse", withBangs)
+    expect(r.codes).toEqual([])
+    expect(r.ok).toBe(true)
+  })
+})
+
+// ================================================================================================
 // Row 267 / F-251-1 (verification/s6b_13_lanes_security.md §2.1). `auditFileModes` walked the Firecrawl secrets
 // directory and nothing else, so PC-PATH-18 (lanes.json) and PC-PATH-19 (dns-pins.json) were invisible to the
 // estate's own auditor — measured as `widenedLanesJson=[]` against a control that does fire MODE_SECRET_FILE.

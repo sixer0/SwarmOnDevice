@@ -1441,9 +1441,45 @@ function parseComposeDocument(composeText: string): { ok: true; doc: Record<stri
   } catch (err) {
     return { ok: false, message: `Bun.YAML refused the artefact: ${(err as Error).message}` }
   }
+  // Row 271 (F-265b-4, verification/s6b_13c_r270_security_recheck.md §7): Bun.YAML hands a multi-document stream
+  // back as an ARRAY of documents (measured: "a: 1\n---\nb: 2" -> [{"a":1},{"b":2}]), indistinguishable from a
+  // top-level sequence, and row 270 read both as `{}`. compose-go MERGES the documents (N7/N7b: browser on fc-web),
+  // and `{}` left the extra_hosts audit silent. Neither shape is a compose file this estate renders, so both — and
+  // a scalar top — are refused by name here instead of being read as an empty document.
+  if (Array.isArray(raw))
+    return { ok: false, message: "the artefact is a multi-document stream or a top-level sequence — compose merges documents this audit would not see, so it refuses rather than read the stream as empty" }
+  if (raw !== null && raw !== undefined && typeof raw !== "object")
+    return { ok: false, message: `the artefact's top level is a ${typeof raw} scalar, not a mapping — there is no compose document to audit` }
+  const tag = composeTagProblem(composeText, raw)
+  if (tag !== undefined) return { ok: false, message: tag }
   if (raw === null || raw === undefined) return { ok: true, doc: {} } // empty/comment-only: loud absence downstream
-  if (typeof raw !== "object" || Array.isArray(raw)) return { ok: true, doc: {} } // scalar/array top level has no services to read either way
   return { ok: true, doc: raw as Record<string, unknown> }
+}
+
+/** Row 271 (F-265b-1): Bun.YAML DISCARDS a node's tag and keeps its value, while compose-go HONOURS its own
+ *  `!reset` / `!override` tags — `networks: !reset [fc-ctl, fc-iso]` reads here as a clean internal list and in
+ *  compose as "no networks" (browser on the non-internal default), `internal: !reset true` reads here as true and
+ *  in compose as "flag removed". The renderer emits no `!` at all, so any tag is refused, whatever its name.
+ *  HOW A TAG IS TOLD FROM A `!` IN TEXT, using the engine's own tokenisation rather than a second hand-written
+ *  lexer (row 270 §0: two readers of one document is how the next bypass is born): every `!` is replaced by a
+ *  letter and the text is parsed again. A `!` inside a quoted, plain or block scalar is DATA, so the re-parse equals
+ *  the original with the same substitution applied to its strings; a `!` inside a comment vanishes from both. A
+ *  `!` that is a TAG was dropped by the first parse but becomes visible text (or a parse failure) in the second,
+ *  so the two disagree and the artefact is refused. Collisions created by the substitution (`a!` beside `aZ`) can
+ *  only make the two disagree, which is a false refusal — the safe direction. */
+function composeTagProblem(composeText: string, parsed: unknown): string | undefined {
+  if (!composeText.includes("!")) return undefined
+  const SUBSTITUTE = "Z"
+  let probe: unknown
+  try {
+    probe = composeYamlParser!.parse(composeText.replaceAll("!", SUBSTITUTE))
+  } catch {
+    probe = undefined
+  }
+  const expected = JSON.stringify(parsed ?? null).replaceAll("!", SUBSTITUTE)
+  if (JSON.stringify(probe ?? null) === expected) return undefined
+  const line = composeText.slice(0, composeText.indexOf("!")).split("\n").length
+  return `the artefact carries a YAML tag (the first "!" in the text is at line ${line}) — Bun.YAML discards tags while compose honours !reset/!override, so the two would read different documents; the renderer emits no tags, and this audit refuses rather than guess which reading docker builds`
 }
 
 /** Render any parsed YAML value as the text the pair screens expect. Structured values (a mapping smuggled
