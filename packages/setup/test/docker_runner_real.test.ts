@@ -37,6 +37,9 @@ import {
   type SpawnFn,
   type SpawnOutput,
 } from "../src/dockerRunner.real.ts"
+import { chmodSync } from "node:fs" // r272 env-strip block
+import { spawnSync as nodeSpawnSync } from "node:child_process" // r272
+import { DOCKER_ENV_DENY, dockerSpawnEnv } from "../src/dockerRunner.real.ts" // r272
 
 type Rule = { match: string; exitCode?: number; stdout?: string; stderr?: string }
 
@@ -290,5 +293,84 @@ describe("CONTRACT PARITY — real runner drives stacklib.bringUp identically to
     expect(real.neverPrune()).toBe(true)
     expect(real.spawnedArgv.every((a) => a[0] === DOCKER_BINARY_DEFAULT)).toBe(true)
     expect(real.invocations.some((a) => a.includes("prune"))).toBe(false)
+  })
+})
+
+// Row 272 (F-264b-8 / R-270-3): row 270 made `realSpawn` hand docker an explicitly stripped environment
+// (`env: dockerSpawnEnv()`), but no committed test exercised it — reverting it reddened nothing. This block
+// drives the PRODUCTION spawn (not the scripted seam) against a stub binary that prints its own environment.
+// The canaries are put into the OS environment of a child bun hosting `realSpawn`, because Bun's spawn
+// without `env` ignores in-process `process.env` writes (row 272 §1 M1), so a mutation that drops the
+// `env:` option must be able to show the canaries arriving — the `control` spawn proves the instrument can.
+// E21: the stub only prints; HOME is a fresh sandbox; nothing here writes under the real home.
+describe("r272 realSpawn strips daemon-selection env (F-264b-8)", () => {
+  it("r272: dockerSpawnEnv drops exactly the deny-list and passes everything else through", () => {
+    const env = { DOCKER_HOST: "h", DOCKER_CONTEXT: "c", DOCKER_CONFIG: "/c", DOCKER_API_VERSION: "1.24", HOME: "/h", PATH: "/p", X: undefined }
+    expect(dockerSpawnEnv(env)).toEqual({ DOCKER_API_VERSION: "1.24", HOME: "/h", PATH: "/p" })
+  })
+
+  it("r272: a realSpawn child loses DOCKER_HOST/DOCKER_CONTEXT/DOCKER_CONFIG, keeps HOME and PATH", () => {
+    const box = mkdtempSync(join(tmpdir(), "swarm-r272-realspawn-"))
+    try {
+      const home = join(box, "home")
+      mkdirSync(home)
+      const stub = join(box, "envdump")
+      writeFileSync(
+        stub,
+        [
+          "#!/bin/sh",
+          ...[...DOCKER_ENV_DENY, "HOME"].map((n) => `echo "${n}=\${${n}-<unset>}"`),
+          'echo "PATH_SET=${PATH:+yes}"',
+          'echo "ARGV=$*"',
+          "",
+        ].join("\n"),
+      )
+      chmodSync(stub, 0o755)
+      const driver = join(box, "driver.ts")
+      writeFileSync(
+        driver,
+        `import { realSpawn } from ${JSON.stringify(join(import.meta.dir, "../src/dockerRunner.real.ts"))}
+const stub = process.env.R272_STUB as string
+const parse = (s: string) => Object.fromEntries(s.trim().split("\\n").filter((l) => l.includes("=")).map((l) => [l.slice(0, l.indexOf("=")), l.slice(l.indexOf("=") + 1)]))
+const dec = (v: string | Uint8Array) => (typeof v === "string" ? v : new TextDecoder().decode(v))
+const child = realSpawn([stub, "--context", "colima-swarm", "compose", "-p", "swarm-tools", "up", "-d"], { timeout: 20000 })
+const control = Bun.spawnSync([stub], { stdout: "pipe" })
+console.log(JSON.stringify({
+  self: { DOCKER_HOST: process.env.DOCKER_HOST, DOCKER_CONTEXT: process.env.DOCKER_CONTEXT, DOCKER_CONFIG: process.env.DOCKER_CONFIG },
+  control: parse(dec(control.stdout)),
+  child: { exit: child.exitCode, ...parse(dec(child.stdout)) },
+}))
+`,
+      )
+      const canary = {
+        DOCKER_HOST: "tcp://r272-canary-host.invalid:2375",
+        DOCKER_CONTEXT: "r272-canary-context",
+        DOCKER_CONFIG: join(box, "r272-canary-config"),
+      }
+      // node:child_process, not Bun.spawnSync: injection_harness.test.ts spies Bun.spawn/spawnSync at module load and
+      // its disarmed pass-through drops the options object (env included); under any `-t` filter its afterAll
+      // never runs, so the spy outlives the file (row 272 §5). This parent spawn must not depend on that.
+      const out = nodeSpawnSync(process.execPath, ["run", driver], {
+        cwd: box,
+        encoding: "utf8",
+        env: { HOME: home, PATH: process.env.PATH ?? "/usr/bin:/bin", no_proxy: "*", R272_STUB: stub, ...canary },
+      })
+      const stderr = out.stderr
+      expect({ exit: out.status, stderr }).toEqual({ exit: 0, stderr: "" })
+      const got = JSON.parse(out.stdout.trim()) as {
+        self: Record<string, string>
+        control: Record<string, string>
+        child: Record<string, string | number>
+      }
+      expect(got.self).toEqual(canary) // anti-vacuity, one level up
+      for (const n of DOCKER_ENV_DENY) expect(got.control[n]).toBe(canary[n]) // the instrument can see them
+      expect(got.child.exit).toBe(0)
+      expect(got.child.ARGV).toBe("--context colima-swarm compose -p swarm-tools up -d") // argv never rewritten
+      for (const n of DOCKER_ENV_DENY) expect({ [n]: got.child[n] }).toEqual({ [n]: "<unset>" })
+      expect(got.child.HOME).toBe(home)
+      expect(got.child.PATH_SET).toBe("yes")
+    } finally {
+      rmSync(box, { recursive: true, force: true })
+    }
   })
 })

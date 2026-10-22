@@ -28,6 +28,9 @@ import {
 } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { chmodSync, rmSync } from "node:fs" // r272 env-strip block
+import { spawnSync as nodeSpawnSync } from "node:child_process" // r272
+import { DOCKER_ENV_DENY } from "../src/dockerRunner.real.ts" // r272: the one setup-side deny-list
 // Per-run isolation of the source-posture lock (replaces the shared src/tools.lock.json staging).
 import { isolateSourceLock } from "./lockPosture.ts"
 import { createHash } from "node:crypto"
@@ -801,5 +804,100 @@ describe("capture + isolation helpers", () => {
       "label!=io.gsp.swarm.managed=true",
     )
     expect(dockerContextLsArgv("/opt/homebrew/bin/docker").join(" ")).toContain("{{.Name}} {{.Current}}")
+  })
+})
+
+// Row 272 (F-264b-1): the runtime step's spawn door (`spawnRunner`) runs colima AND docker — `docker info`,
+// the foreign-container `ps`, `docker context ls` and the state-writing `docker context use` — so it must not
+// inherit the daemon-selection names. Measured on this host (row 272 §1): with an inherited hostile
+// DOCKER_CONFIG the health check addressed the hostile config's socket, and DOCKER_CONTEXT re-marks the
+// "current" column the isolation evidence and the restore target read.
+//
+// WHY A CHILD BUN: Bun's spawn without `env` passes the process's ORIGINAL environ, not later writes to
+// `process.env` (measured, row 272 §1 M1 — the row 268 VOID lesson). Setting canaries in-process would leave
+// the door's children canary-free on HEAD bytes too, i.e. a vacuous green. So the canaries are put into the
+// OS environment of a child bun that hosts the runner, and that child proves it holds them (`self`) and that
+// a control spawn of its own DOES pass them on (`control`) before the door's children are judged.
+// E21: the stub only prints; HOME is a fresh sandbox; nothing here can write under the real home.
+describe("r272 runtime door strips daemon-selection env (F-264b-1)", () => {
+  it("r272: every spawnRunner child loses DOCKER_HOST/DOCKER_CONTEXT/DOCKER_CONFIG, keeps HOME and PATH", () => {
+    const box = mkdtempSync(join(tmpdir(), "swarm-r272-runtime-"))
+    try {
+      const home = join(box, "home")
+      mkdirSync(home)
+      const stub = join(box, "envdump")
+      writeFileSync(
+        stub,
+        [
+          "#!/bin/sh",
+          ...[...DOCKER_ENV_DENY, "HOME"].map((n) => `echo "${n}=\${${n}-<unset>}"`),
+          'echo "PATH_SET=${PATH:+yes}"',
+          "",
+        ].join("\n"),
+      )
+      chmodSync(stub, 0o755)
+      const driver = join(box, "driver.ts")
+      writeFileSync(
+        driver,
+        `import { spawnRunner, colimaStartArgv, dockerInfoArgv, dockerContextUseArgv } from ${JSON.stringify(join(import.meta.dir, "../src/steps/runtime/commands.ts"))}
+const stub = process.env.R272_STUB as string
+const parse = (s: string) => Object.fromEntries(s.trim().split("\\n").filter((l) => l.includes("=")).map((l) => [l.slice(0, l.indexOf("=")), l.slice(l.indexOf("=") + 1)]))
+const r = spawnRunner(20000)
+// production argv shapes with the stub standing in for the binary (argv[0]): the door does not branch on argv
+const docker = r.run([stub, ...dockerInfoArgv("/x/docker", "colima-swarm").slice(1)])
+const use = r.run([stub, ...dockerContextUseArgv("/x/docker", "default").slice(1)])
+const colima = r.run([stub, ...colimaStartArgv("/x/colima", 2, 2, false).slice(1)])
+const control = Bun.spawnSync([stub], { stdout: "pipe" })
+console.log(JSON.stringify({
+  self: { DOCKER_HOST: process.env.DOCKER_HOST, DOCKER_CONTEXT: process.env.DOCKER_CONTEXT, DOCKER_CONFIG: process.env.DOCKER_CONFIG },
+  control: parse(new TextDecoder().decode(control.stdout)),
+  children: [docker, use, colima].map((c) => ({ ok: c.ok, ...parse(c.stdout) })),
+  executed: r.executedCount,
+}))
+`,
+      )
+      const canary = {
+        DOCKER_HOST: "tcp://r272-canary-host.invalid:2375",
+        DOCKER_CONTEXT: "r272-canary-context",
+        DOCKER_CONFIG: join(box, "r272-canary-config"),
+      }
+      // node:child_process, not Bun.spawnSync: injection_harness.test.ts spies Bun.spawn/spawnSync at module load and
+      // its disarmed pass-through drops the options object (env included); under any `-t` filter its afterAll
+      // never runs, so the spy outlives the file (row 272 §5). This parent spawn must not depend on that.
+      const out = nodeSpawnSync(process.execPath, ["run", driver], {
+        cwd: box,
+        encoding: "utf8",
+        env: { HOME: home, PATH: process.env.PATH ?? "/usr/bin:/bin", no_proxy: "*", R272_STUB: stub, ...canary },
+      })
+      const stderr = out.stderr
+      expect({ exit: out.status, stderr }).toEqual({ exit: 0, stderr: "" })
+      const got = JSON.parse(out.stdout.trim()) as {
+        self: Record<string, string>
+        control: Record<string, string>
+        children: Record<string, string | boolean>[]
+        executed: number
+      }
+      // anti-vacuity: the host process holds the canaries, and a plain spawn from it passes them on
+      expect(got.self).toEqual(canary)
+      for (const n of DOCKER_ENV_DENY) expect(got.control[n]).toBe(canary[n])
+      // the door: three children (docker-, context-use- and colima-shaped), all stripped, HOME/PATH intact
+      expect(got.executed).toBe(3)
+      expect(got.children.length).toBe(3)
+      for (const child of got.children) {
+        expect(child.ok).toBe(true)
+        for (const n of DOCKER_ENV_DENY) expect({ [n]: child[n] }).toEqual({ [n]: "<unset>" })
+        expect(child.HOME).toBe(home)
+        expect(child.PATH_SET).toBe("yes")
+      }
+    } finally {
+      rmSync(box, { recursive: true, force: true })
+    }
+  })
+
+  it("r272: the runtime door consumes the setup-side deny-list rather than a copy of its own", () => {
+    expect([...DOCKER_ENV_DENY]).toEqual(["DOCKER_HOST", "DOCKER_CONTEXT", "DOCKER_CONFIG"])
+    const src = readFileSync(join(import.meta.dir, "../src/steps/runtime/commands.ts"), "utf8")
+    expect({ importsDockerSpawnEnv: /import \{[^}]*\bdockerSpawnEnv\b[^}]*\} from "\.\.\/\.\.\/dockerRunner\.real\.ts"/.test(src) }).toEqual({ importsDockerSpawnEnv: true })
+    expect({ ownDenyLiterals: src.match(/["']DOCKER_(HOST|CONTEXT|CONFIG)["']/g) ?? [] }).toEqual({ ownDenyLiterals: [] })
   })
 })

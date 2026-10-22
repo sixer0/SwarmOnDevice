@@ -78,7 +78,10 @@ export type SpawnFn = (argv: readonly string[], opts: { readonly timeout: number
  *  DOCKER_CONFIG are the same lever one layer up. Local copy rather than an import: dependency direction —
  *  packages/setup must not import from packages/opencode. Residual by design on both doors: DOCKER_CERT_PATH,
  *  DOCKER_TLS_VERIFY, DOCKER_API_VERSION and DOCKER_MACHINE_NAME remain inherited — TLS and version knobs,
- *  not endpoint selectors — so this list is deliberately NOT "all docker variables". */
+ *  not endpoint selectors — so this list is deliberately NOT "all docker variables".
+ *  ONE HOME on the setup side (row 272): the runtime step's door (`steps/runtime/commands.ts::spawnRunner`,
+ *  colima + docker info/ps/context ls/context use) consumes `dockerSpawnEnv` from here, so both setup doors
+ *  strip the same names and their children resolve the same docker config dir. Do not copy this list. */
 export const DOCKER_ENV_DENY = ["DOCKER_HOST", "DOCKER_CONTEXT", "DOCKER_CONFIG"] as const
 
 /** A copy of `env` with the daemon-selection names removed. Everything else passes through, PATH and HOME

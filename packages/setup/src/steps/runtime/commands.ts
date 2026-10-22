@@ -28,6 +28,7 @@
 // before/after `docker context ls` comparison (capture.ts::buildContextEvidence).
 
 import { COLIMA_PROFILE, DOCKER_CONTEXT } from "../../constants.ts"
+import { dockerSpawnEnv } from "../../dockerRunner.real.ts"
 
 export interface ExecResult {
   readonly ok: boolean // exit 0 AND the spawn itself started
@@ -85,7 +86,16 @@ export function printOnlyRunner(): CommandRunner {
 /** The real runner: Bun.spawnSync, argv array, absolute path, bounded timeout.
  *  A missing binary surfaces as exitCode 127 (ok:false), never an exception.
  *  Output normalization via TextDecoder per r87's measured note: piped streams come back
- *  as Buffer/Uint8Array regardless of any encoding option (bun 1.3.14). */
+ *  as Buffer/Uint8Array regardless of any encoding option (bun 1.3.14).
+ *
+ *  ENVIRONMENT (row 272, F-264b-1): every child gets `dockerSpawnEnv()` — the ONE setup-side
+ *  deny-list (dockerRunner.real.ts) — not the inherited environment. This door runs colima AND
+ *  docker (`info`, the foreign-container `ps`, `context ls`, the state-writing `context use`), and
+ *  the strip is deliberately UNIFORM across all of them: colima creates the `colima-swarm` context
+ *  from its own environment, so colima and every docker call here must resolve the same config
+ *  dir ($HOME/.docker), which is also what realSpawn's children resolve. Measured with an inherited
+ *  DOCKER_CONFIG before this change: the health check followed the foreign config's socket, and
+ *  DOCKER_CONTEXT re-marked the "current" column the isolation evidence and restore read. */
 export function spawnRunner(timeoutMs: number = SPAWN_TIMEOUT_MS): CommandRunner {
   const printed: string[] = []
   let executed = 0
@@ -96,7 +106,7 @@ export function spawnRunner(timeoutMs: number = SPAWN_TIMEOUT_MS): CommandRunner
       // Bun.spawnSync THROWS on a missing binary (measured, r93 H-R93-7) — the documented
       // contract here is exitCode 127, so the throw is caught and mapped, never propagated.
       try {
-        const out = Bun.spawnSync(argv, { stdout: "pipe", stderr: "pipe", timeout: timeoutMs })
+        const out = Bun.spawnSync(argv, { stdout: "pipe", stderr: "pipe", timeout: timeoutMs, env: dockerSpawnEnv() })
         executed += 1
         const code = out.exitCode ?? 127
         return { ok: code === 0, exitCode: code, stdout: asText(out.stdout), stderr: asText(out.stderr) }
