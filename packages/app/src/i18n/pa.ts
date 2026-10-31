@@ -706,6 +706,7 @@ export const dict = {
   "error.chain.configInvalidWithMessage": "{{path}} تے کنفیگ فائل غلط اے: {{message}}",
   "notification.permission.title": "اجازت دی لوڑ اے",
   "session.permission.alwaysNamed": "ہمیشہ اجازت دیو: {{scope}}",
+  "session.permission.alwaysRepeats": "ہمیشہ اجازت دیو: ڈوم لوپ",
   "notification.permission.description": "{{sessionTitle}} {{projectName}} وچ اجازت دی لوڑ اے",
   "notification.question.title": "سوال",
   "notification.question.description": "{{sessionTitle}} {{projectName}} وچ اک سوال اے",

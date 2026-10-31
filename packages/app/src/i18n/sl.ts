@@ -692,6 +692,7 @@ export const dict = {
   "error.chain.configInvalidWithMessage": "Konfiguracijska datoteka na {{path}} je neveljavna: {{message}}",
   "notification.permission.title": "Potrebno je dovoljenje",
   "session.permission.alwaysNamed": "Dovoli vedno: {{scope}}",
+  "session.permission.alwaysRepeats": "Dovoli vedno: Doom Loop",
   "notification.permission.description": "{{sessionTitle}} v {{projectName}} potrebuje dovoljenje",
   "notification.question.title": "vprašanje",
   "notification.question.description": "{{sessionTitle}} v {{projectName}} ima vprašanje",

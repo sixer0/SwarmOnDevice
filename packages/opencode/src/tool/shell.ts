@@ -679,6 +679,13 @@ export const ShellTool = Tool.define(
                 used -= item.size
                 dropped = true
               }
+              // How much arrives at once depends on how busy the machine is, so one huge chunk has to count the same as many.
+              if (used > keep) {
+                const text = list[0]!.text.slice(-keep)
+                used = Buffer.byteLength(text, "utf-8")
+                list[0] = { text, size: used }
+                dropped = true
+              }
 
               last = preview(last + chunk)
 

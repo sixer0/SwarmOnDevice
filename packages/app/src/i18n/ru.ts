@@ -740,6 +740,7 @@ export const dict = {
 
   "notification.permission.title": "Требуется разрешение",
   "session.permission.alwaysNamed": "Разрешить всегда: {{scope}}",
+  "session.permission.alwaysRepeats": "Разрешить всегда: Doom Loop",
   "notification.permission.description": "Для {{sessionTitle}} в {{projectName}} требуется разрешение",
   "notification.question.title": "Вопрос",
   "notification.question.description": "У {{sessionTitle}} в {{projectName}} есть вопрос",

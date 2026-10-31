@@ -144,6 +144,7 @@ export const dict: Record<string, string> = {
   "ui.tool.list": "Zoznam",
   "ui.tool.glob": "Glob",
   "ui.tool.grep": "Grep",
+  "ui.tool.git": "Git",
   "ui.tool.task": "Úloha",
   "ui.tool.webfetch": "Webfetch",
   "ui.tool.websearch": "Webové vyhľadávanie",

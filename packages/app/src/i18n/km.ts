@@ -689,6 +689,7 @@ export const dict = {
   "error.chain.configInvalidWithMessage": "ឯកសារកំណត់រចនាសម្ព័ន្ធនៅ {{path}} មិនត្រឹមត្រូវទេ៖ {{message}}",
   "notification.permission.title": "ទាមទារការអនុញ្ញាត",
   "session.permission.alwaysNamed": "អនុញ្ញាតជានិច្ច: {{scope}}",
+  "session.permission.alwaysRepeats": "អនុញ្ញាតជានិច្ច: Doom Loop",
   "notification.permission.description": "{{sessionTitle}} ក្នុង {{projectName}} ត្រូវការការអនុញ្ញាត",
   "notification.question.title": "សំណួរ",
   "notification.question.description": "{{sessionTitle}} នៅក្នុង {{projectName}} មានសំណួរមួយ។",

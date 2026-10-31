@@ -730,6 +730,7 @@ export const dict = {
 
   "notification.permission.title": "需要權限",
   "session.permission.alwaysNamed": "永遠允許: {{scope}}",
+  "session.permission.alwaysRepeats": "永遠允許: Doom Loop",
   "notification.permission.description": "{{sessionTitle}}（{{projectName}}）需要權限",
   "notification.question.title": "問題",
   "notification.question.description": "{{sessionTitle}}（{{projectName}}）有一個問題",

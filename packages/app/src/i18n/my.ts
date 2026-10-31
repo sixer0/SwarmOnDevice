@@ -698,6 +698,7 @@ export const dict = {
   "error.chain.configInvalidWithMessage": "{{path}} ရှိ Config ဖိုင်သည် မမှန်ကန်ပါ- {{message}}",
   "notification.permission.title": "ခွင့်ပြုချက် လိုအပ်သည်။",
   "session.permission.alwaysNamed": "အမြဲခွင့်ပြုပါ။: {{scope}}",
+  "session.permission.alwaysRepeats": "အမြဲခွင့်ပြုပါ။: Doom Loop",
   "notification.permission.description": "{{sessionTitle}} တွင် {{projectName}} ခွင့်ပြုချက် လိုအပ်သည်။",
   "notification.question.title": "မေးခွန်း",
   "notification.question.description": "{{sessionTitle}} {{projectName}} တွင် မေးခွန်းတစ်ခုရှိသည်။",

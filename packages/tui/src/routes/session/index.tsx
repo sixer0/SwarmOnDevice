@@ -1696,6 +1696,9 @@ function ToolPart(props: { last: boolean; part: ToolPart; message: AssistantMess
         <Match when={display() === "read"}>
           <Read {...toolprops} />
         </Match>
+        <Match when={display() === "git"}>
+          <Git {...toolprops} />
+        </Match>
         <Match when={display() === "grep"}>
           <Grep {...toolprops} />
         </Match>
@@ -2093,6 +2096,15 @@ function Glob(props: ToolProps) {
       <Show when={numberValue(props.metadata.count)}>
         ({numberValue(props.metadata.count)} {numberValue(props.metadata.count) === 1 ? "match" : "matches"})
       </Show>
+    </InlineTool>
+  )
+}
+
+function Git(props: ToolProps) {
+  const paths = createMemo(() => (Array.isArray(props.input.paths) ? props.input.paths.filter((item) => typeof item === "string") : []))
+  return (
+    <InlineTool icon="→" pending="Reading git…" complete={stringValue(props.input.subcommand)} part={props.part}>
+      Git {[stringValue(props.input.subcommand), stringValue(props.input.revision), ...paths()].filter(Boolean).join(" ")}
     </InlineTool>
   )
 }
@@ -2577,6 +2589,7 @@ const toolDisplays = new Set([
   "bash",
   "glob",
   "read",
+  "git",
   "grep",
   "webfetch",
   "websearch",

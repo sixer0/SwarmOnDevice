@@ -691,6 +691,7 @@ export const dict = {
   "error.chain.configInvalidWithMessage": "Konfigurācijas fails {{path}} nav derīgs: {{message}}",
   "notification.permission.title": "Nepieciešama atļauja",
   "session.permission.alwaysNamed": "Atļaut vienmēr: {{scope}}",
+  "session.permission.alwaysRepeats": "Atļaut vienmēr: Doom Loop",
   "notification.permission.description": "{{sessionTitle}} projektā {{projectName}} nepieciešama atļauja",
   "notification.question.title": "Jautājums",
   "notification.question.description": "{{sessionTitle}} projektā {{projectName}} ir jautājums",

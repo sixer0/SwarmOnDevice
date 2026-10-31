@@ -1,19 +1,22 @@
-// Reading a repository with no shell in the way. Fixed subcommands, argv only, literal pathspecs, and nothing the repository
-// can configure gets to run: what can be switched off from outside is switched off, and a repository configured with
-// something that cannot be is refused, with the reason, so the agent can use the shell and a person gets asked.
+// Reading a repository with no shell in the way. Fixed subcommands, argv only, literal pathspecs. Git only runs in a repository
+// git-guard.ts has read and found plain, so nothing it configures can name a program. The settings below are a second layer.
+// Anything else is refused with the reason, so the agent can use the shell and a person gets asked.
 import { execFile } from "node:child_process"
-import fs from "node:fs"
 import { devNull } from "node:os"
 import path from "node:path"
 import { Effect, Schema } from "effect"
 import { InstanceState } from "@/effect/instance-state"
 import { containsPath, type InstanceContext } from "../project/instance-context"
 import DESCRIPTION from "./git.txt"
+import { GitGuard } from "./git-guard"
 import { Reach } from "./reach"
 import { Secrets } from "./secrets"
 import * as Tool from "./tool"
 
-const MAX_OUTPUT = 4 * 1024 * 1024
+// What comes back from git, and what goes on from here. Enough to read, and small enough that nothing after it can stall.
+const MAX_FROM_GIT = 1024 * 1024
+// Below the general cut for tool results, so the note a reader gets is this one and not a file to go and read.
+const MAX_OUTPUT = 48 * 1024
 const TIMEOUT_MS = 15_000
 const DEFAULT_LOG = 20
 const MAX_LOG = 200
@@ -54,6 +57,8 @@ export const HARDENED_CONFIG = [
   "core.askPass=",
   "core.quotePath=true",
   "diff.external=",
+  // A diff brings the index up to date when it can, optional locks or not, and this tool writes nothing.
+  "diff.autoRefreshIndex=false",
   `diff.orderFile=${devNull}`,
   "diff.ignoreSubmodules=all",
   "diff.submodule=short",
@@ -62,6 +67,10 @@ export const HARDENED_CONFIG = [
   "credential.helper=",
   "gpg.program=",
   "gpg.ssh.program=",
+  "gpg.openpgp.program=",
+  "gpg.x509.program=",
+  "gpg.ssh.defaultKeyCommand=",
+  "gpg.ssh.revocationFile=",
   "log.showSignature=false",
   "log.mailmap=false",
   "mailmap.file=",
@@ -111,72 +120,15 @@ function run(binary: string, args: string[], cwd: string, env: NodeJS.ProcessEnv
     execFile(
       binary,
       args,
-      { cwd, env, encoding: "utf8", maxBuffer: MAX_OUTPUT, timeout: TIMEOUT_MS, killSignal: "SIGKILL", signal },
+      { cwd, env, encoding: "utf8", maxBuffer: MAX_FROM_GIT, timeout: TIMEOUT_MS, killSignal: "SIGKILL", signal },
       (error, stdout, stderr) => {
-        if (error?.code === "ERR_CHILD_PROCESS_STDIO_MAXBUFFER")
-          return resolve({ code: 0, stdout: `${stdout}\n[output cut at ${MAX_OUTPUT} bytes. Narrow it with limit, revision or paths.]\n`, stderr })
+        if (error?.code === "ERR_CHILD_PROCESS_STDIO_MAXBUFFER") return resolve({ code: 0, stdout, stderr })
         if (error?.killed) return resolve({ code: 1, stdout, stderr: `stopped after ${TIMEOUT_MS / 1000} seconds` })
         const code = typeof error?.code === "number" ? error.code : error ? 1 : 0
         resolve({ code, stdout, stderr: error && !stderr ? error.message : stderr })
       },
     ),
   )
-}
-
-// Allowed in a repository's config because git only runs what the flags above have already turned off, or never runs it for
-// these subcommands. These cannot be turned off from outside, or only by accident of the version, so they are refused.
-const UNSAFE_CONFIG: [RegExp, string][] = [
-  [/^filter\..*\.(clean|smudge|process)$/, "a content filter, which git runs on files it reads"],
-  [/^hook\./, "a hook defined in config, which core.hooksPath does not cover"],
-  [/^remote\..*\.(promisor|partialclonefilter)$/, "a partial clone, which can fetch from the network while reading"],
-  [/^core\.worktree$/, "core.worktree, which moves the working tree somewhere else"],
-]
-const KNOWN_EXTENSIONS = new Set(["objectformat", "worktreeconfig", "noop", "refstorage", "compatobjectformat"])
-
-// A pointer file in a checkout can be a FIFO, and reading one here would hang the server rather than a child that can be killed.
-function pointer(file: string) {
-  const info = fs.lstatSync(file, { throwIfNoEntry: false })
-  return info?.isFile() && info.size < 4096 ? fs.readFileSync(file, "utf8") : undefined
-}
-
-/**
- * The repository's git directory, or why this tool will not read it. Everything it reads has to be in the project, or be
- * the record of a linked worktree that names this project back, which a hostile checkout cannot forge from inside itself.
- */
-function locate(instance: InstanceContext) {
-  const dotGit = path.join(instance.worktree, ".git")
-  const info = fs.lstatSync(dotGit, { throwIfNoEntry: false })
-  if (!info) return { refused: "there is no .git at the top of this project" }
-  const target = info.isFile() ? pointer(dotGit)?.match(/^gitdir: (.+?)\s*$/m)?.[1] : dotGit
-  if (!target) return { refused: ".git is not a repository" }
-  const gitDir = Reach.real(path.resolve(instance.worktree, target))
-  if (!gitDir) return { refused: ".git leads nowhere" }
-  const inside = Reach.inside(gitDir, instance)
-  const backPointer = pointer(path.join(gitDir, "gitdir"))?.trim()
-  const linked = path.basename(path.dirname(gitDir)) === "worktrees" && backPointer !== undefined && Reach.real(backPointer) === Reach.real(dotGit)
-  if (!inside && !linked) return { refused: ".git points outside this project" }
-  const commonFile = path.join(gitDir, "commondir")
-  if (fs.existsSync(commonFile) && pointer(commonFile) === undefined) return { refused: "its commondir is not a plain file" }
-  const common = fs.existsSync(commonFile) ? Reach.real(path.resolve(gitDir, pointer(commonFile)!.trim())) : gitDir
-  if (!common || !(Reach.inside(common, instance) || (linked && common === path.dirname(path.dirname(gitDir)))))
-    return { refused: "its commondir points outside this project" }
-  const leaves = [...["config", "objects", "refs", "packed-refs"].map((name) => path.join(common, name)), path.join(gitDir, "HEAD"), path.join(gitDir, "index")]
-  if (leaves.some((file) => fs.lstatSync(file, { throwIfNoEntry: false })?.isSymbolicLink()))
-    return { refused: "part of .git is a symbolic link, which can lead outside this project" }
-  if (fs.existsSync(path.join(common, "objects/info/alternates")))
-    return { refused: "it borrows objects from another repository through objects/info/alternates" }
-  return { gitDir }
-}
-
-/** Why this repository's config cannot be read safely, if it cannot. */
-function unsafeKey(names: string[]) {
-  for (const name of names) {
-    const hit = UNSAFE_CONFIG.find(([pattern]) => pattern.test(name))
-    if (hit) return `${name} is ${hit[1]}`
-    if (name.startsWith("extensions.") && !KNOWN_EXTENSIONS.has(name.slice("extensions.".length)))
-      return `${name} is a repository extension this tool does not know`
-  }
-  return undefined
 }
 
 // `HEAD`, `main`, `v1.0`, `feature/x`, `abc123`, `HEAD~2`, `HEAD^`, `HEAD@{1}`. No `:`, which names a blob, and no `^{`, `-`
@@ -188,6 +140,29 @@ function endpoints(revision: string, allowRange: boolean) {
   if (range && !allowRange) return undefined
   const ends = range ? [range[1]!, range[2]!] : [revision]
   return ends.every((end) => REVISION.test(end) && !end.includes("..")) ? ends : undefined
+}
+
+const SHARED_DIFF = ["--no-ext-diff", "--no-textconv", "--ignore-submodules=all", "--submodule=short", "--no-color", "--stat"]
+const LOG_FORMAT = "--format=%h %s"
+const COMMIT_FORMAT = "--format=medium"
+const COMMIT = ["--no-show-signature", "--no-mailmap", "--no-notes"]
+// Every flag this tool can pass, by subcommand. Parameters already name what can be asked for, so nothing a model sends should
+// reach here. This is what holds if that ever stops being true: `git log --output=` writes a file.
+const FLAGS: Record<Params["subcommand"], { plain: ReadonlySet<string>; valued: ReadonlySet<string> }> = {
+  status: { plain: new Set(["--short", "--branch", "--untracked-files=normal", "--ignore-submodules=all"]), valued: new Set() },
+  diff: { plain: new Set([...SHARED_DIFF, "--cached"]), valued: new Set() },
+  log: { plain: new Set([...SHARED_DIFF, ...COMMIT, LOG_FORMAT, COMMIT_FORMAT, "-p"]), valued: new Set(["-n"]) },
+  show: { plain: new Set([...SHARED_DIFF, ...COMMIT, COMMIT_FORMAT]), valued: new Set() },
+  blame: { plain: new Set(["--no-textconv"]), valued: new Set(["-L"]) },
+  branch: { plain: new Set(["--list", "--no-color", "--no-column", "-v", "--all"]), valued: new Set() },
+}
+
+/** The first argument that is a flag this subcommand has no entry for, up to the `--` that ends flags. */
+export function unlistedFlag(subcommand: Params["subcommand"], args: readonly string[]) {
+  const allowed = FLAGS[subcommand]
+  const end = args.indexOf("--")
+  const flags = end < 0 ? args : args.slice(0, end)
+  return flags.find((arg, index) => arg.startsWith("-") && !allowed.plain.has(arg) && !allowed.valued.has(arg) && !allowed.valued.has(flags[index - 1] ?? ""))
 }
 
 function argv(params: Params, revision: string[], files: string[]) {
@@ -205,18 +180,16 @@ function argv(params: Params, revision: string[], files: string[]) {
         ...NO_DRIVERS,
         ...NO_SUBMODULES,
         "--no-color",
-        "--no-show-signature",
-        "--no-mailmap",
-        "--no-notes",
+        ...COMMIT,
         "-n",
         String(limit),
-        ...(params.patch ? ["-p"] : params.stat ? ["--stat"] : ["--oneline"]),
+        ...(params.patch ? [COMMIT_FORMAT, "-p"] : params.stat ? [COMMIT_FORMAT, "--stat"] : [LOG_FORMAT]),
         ...revision,
         ...end,
       ]
     case "show":
       if (params.fileAtRevision) return ["show", "--no-textconv", "--no-color", `${revision[0] ?? "HEAD"}:${files[0]}`]
-      return ["show", ...NO_DRIVERS, ...NO_SUBMODULES, "--no-color", "--no-show-signature", "--no-mailmap", "--no-notes", ...stat, ...revision, ...end]
+      return ["show", ...NO_DRIVERS, ...NO_SUBMODULES, "--no-color", COMMIT_FORMAT, ...COMMIT, ...stat, ...revision, ...end]
     case "blame": {
       const lines =
         params.startLine !== undefined || params.endLine !== undefined
@@ -263,10 +236,19 @@ export const GitTool = Tool.define(
       execute: (params: Params, ctx: Tool.Context) =>
         Effect.gen(function* () {
           const instance = yield* InstanceState.context
-          const refuse = (why: string) =>
-            Effect.fail(new Error(`git tool refused: ${why}. Nothing was run. Use the shell if a person should decide.`))
+          // What this repository is, which only the shell can work with. A bad argument is another matter: fix the call.
+          const refuseRepository = (why: string) =>
+            Effect.fail(new Error(`git tool refused: ${why}. Nothing was run. Use the shell for this repository: it asks a person.`))
+          const refuse = (why: string) => Effect.fail(new Error(`git tool refused: ${why}.`))
 
-          // Reading runs nothing, by everything below. Windows has not been tried, so it keeps asking there.
+          if (instance.project.vcs !== "git") return yield* refuseRepository("this project is not a git repository")
+          const guarded = GitGuard.inspect(instance.worktree)
+          if (guarded.refused !== undefined) return yield* refuseRepository(guarded.refused)
+          const env = hardenedEnv(instance)
+          const binary = Bun.which("git", { PATH: env.PATH })
+          if (!binary) return yield* refuseRepository("no git program outside this project")
+
+          // Reading runs nothing, by everything above. Windows has not been tried, so it keeps asking there.
           yield* ctx.ask({
             permission: "git",
             patterns: [params.subcommand],
@@ -275,19 +257,12 @@ export const GitTool = Tool.define(
             harmless: ctx.trust && process.platform !== "win32" ? true : undefined,
           })
 
-          if (instance.project.vcs !== "git") return yield* refuse("this project is not a git repository")
-          const binary = Bun.which("git", { PATH: hardenedEnv(instance).PATH })
-          if (!binary) return yield* refuse("no git program outside this project")
-          const located = locate(instance)
-          if (located.refused !== undefined) return yield* refuse(located.refused)
-
-          const env = hardenedEnv(instance)
           const git = (args: string[]) =>
             Effect.promise(() =>
               run(
                 binary,
                 [
-                  `--git-dir=${located.gitDir}`,
+                  `--git-dir=${guarded.gitDir}`,
                   `--work-tree=${instance.worktree}`,
                   "--no-pager",
                   "--no-optional-locks",
@@ -299,11 +274,6 @@ export const GitTool = Tool.define(
                 ctx.abort,
               ),
             )
-
-          const config = yield* git(["config", "--list", "--name-only", "--includes", "-z"])
-          if (config.code !== 0) return yield* refuse("its config could not be read")
-          const unsafe = unsafeKey(config.stdout.split("\0").filter(Boolean))
-          if (unsafe) return yield* refuse(`this repository's config sets ${unsafe}`)
 
           const files = (params.paths ?? []).map((given) => {
             const full = path.resolve(instance.directory, given)
@@ -333,14 +303,22 @@ export const GitTool = Tool.define(
           }
           const revision = params.revision === undefined || params.subcommand === "status" || params.subcommand === "branch" ? [] : [params.revision]
 
-          const result = yield* git(argv(params, revision, relative))
-          const text = withholdSecretDiffs(result.stdout).replace(CONTROL, "")
+          const args = argv(params, revision, relative)
+          const unlisted = unlistedFlag(params.subcommand, args.slice(1))
+          if (unlisted) return yield* refuse(`${unlisted} is not a flag this tool passes to git ${params.subcommand}`)
+          const result = yield* git(args)
+          // Scrubbed before the cut, since half a secret at the cut would no longer be recognised afterwards.
+          const full = Secrets.scrub(withholdSecretDiffs(result.stdout).replace(CONTROL, ""), instance.worktree)
+          const cut = full.length > MAX_OUTPUT || result.stdout.length >= MAX_FROM_GIT
+          const text = cut
+            ? `${full.slice(0, MAX_OUTPUT)}\n[output cut at ${MAX_OUTPUT / 1024} KB. There is more. Narrow it with limit, revision or paths.]\n`
+            : full
           if (result.code !== 0) {
             return yield* Effect.fail(new Error(Secrets.scrub(`git ${params.subcommand} failed: ${result.stderr.replace(CONTROL, "").trim()}`, instance.worktree)))
           }
           return {
             title: `git ${params.subcommand}`,
-            metadata: { subcommand: params.subcommand },
+            metadata: { subcommand: params.subcommand, truncated: cut },
             output: text || "(no output)",
           }
         }).pipe(Effect.orDie),

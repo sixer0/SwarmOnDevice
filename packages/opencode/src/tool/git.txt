@@ -5,4 +5,5 @@ Use this instead of running `git status`, `git diff`, `git log`, `git show`, `gi
 - Pass revision as one commit, tag or branch name. diff and log also take a range such as main..HEAD.
 - Pass paths to limit the result. They are taken literally, and have to be inside the project.
 - A file that holds secrets is left out of a diff, with a note saying so.
-- If it refuses a repository, it says why. That repository's config can run programs, and the shell is the way to go on, because a person is asked there.
+- Long output is cut, with a note saying so. Narrow it with limit, revision or paths.
+- It only runs in a plain repository. If its config, submodules or layout are anything more, it refuses and says why, and the shell is the way to go on, because a person is asked there. If it refuses a revision or a path, fix the call.

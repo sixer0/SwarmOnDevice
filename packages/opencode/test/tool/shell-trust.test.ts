@@ -208,6 +208,10 @@ describe("shell commands inside an agent session", () => {
     const offered: [string, string][] = [
       ["git status --short", "git status *"],
       ["git log --oneline -5", "git log *"],
+      ["git log -n 3 --stat", "git log *"],
+      ["git diff --cached --stat", "git diff *"],
+      ["git commit -m wip", "git commit *"],
+      ["git add -A", "git add *"],
       ["ls src", "ls *"],
       ["bun test", "bun test *"],
       ["make test", "make test *"],
@@ -243,6 +247,17 @@ describe("shell commands inside an agent session", () => {
       "/bin/ls",
       "'ls' src",
       "ls  src",
+      // A rule reads as what the subcommand is for, so what else it can do gets no rule.
+      "git log --output=wrote.txt -1",
+      "git show --output=wrote.txt",
+      "git diff --output=wrote.txt",
+      "git log --format=%GG",
+      "git diff --ext-diff",
+      "git commit --no-verify -m x",
+      "git commit -n -m x",
+      "git commit --amend --no-edit",
+      "git add --force x.txt",
+      "git branch -D x",
       // A subcommand that cannot be named.
       "git -c core.pager=evil status",
       "git -C . status",

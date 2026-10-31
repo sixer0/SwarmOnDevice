@@ -150,7 +150,7 @@ function NeedRow(props: { board: AgentBoardController; need: AgentBoardNeed }) {
               {/* "Allow always" is a standing decision, so it is offered once the row has someone's attention. */}
               <Show when={!item.request.movedOnAt && !spendLimitDetail(item.request) && item.request.always.length > 0}>
                 <KeyButton
-                  label={alwaysLabel(item.request.always, language.t)}
+                  label={alwaysLabel(item.request, language.t)}
                   keys={["⇧", "A"]}
                   variant="ghost-muted"
                   class="md:!hidden md:group-hover/agent:!inline-flex md:group-focus/agent:!inline-flex md:group-focus-within/agent:!inline-flex"

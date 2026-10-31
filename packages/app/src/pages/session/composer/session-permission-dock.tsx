@@ -123,7 +123,7 @@ function RegularPermission(props: {
                 onClick={() => props.onDecide("always")}
                 disabled={props.responding}
               >
-                {alwaysLabel(props.request.always, language.t)}
+                {alwaysLabel(props.request, language.t)}
               </Button>
             </Show>
             <Button variant="primary" size="normal" onClick={() => props.onDecide("once")} disabled={props.responding}>

@@ -693,6 +693,7 @@ export const dict = {
   "error.chain.configInvalidWithMessage": "Конфигурациската датотека на {{path}} е неважечка: {{message}}",
   "notification.permission.title": "Потребна е дозвола",
   "session.permission.alwaysNamed": "Дозволете секогаш: {{scope}}",
+  "session.permission.alwaysRepeats": "Дозволете секогаш: Doom Loop",
   "notification.permission.description": "На {{sessionTitle}} во {{projectName}} му треба дозвола",
   "notification.question.title": "Прашање",
   "notification.question.description": "{{sessionTitle}} во {{projectName}} има прашање",

@@ -655,6 +655,7 @@ export const dict = {
 
   "notification.permission.title": "Permission required",
   "session.permission.alwaysNamed": "Allow always: {{scope}}",
+  "session.permission.alwaysRepeats": "Allow always: repeated calls",
   "notification.permission.description": "{{sessionTitle}} in {{projectName}} needs permission",
   "notification.question.title": "Question",
   "notification.question.description": "{{sessionTitle}} in {{projectName}} has a question",

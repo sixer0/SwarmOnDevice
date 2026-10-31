@@ -136,6 +136,7 @@ export const dict = {
   "ui.tool.list": "ລາຍການ",
   "ui.tool.glob": "Glob",
   "ui.tool.grep": "Grep",
+  "ui.tool.git": "Git",
   "ui.tool.task": "ວຽກງານ",
   "ui.tool.webfetch": "Webfetch",
   "ui.tool.websearch": "ຄົ້ນຫາເວັບ",

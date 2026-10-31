@@ -140,6 +140,9 @@ export function PermissionPrompt(props: { request: PermissionRequest; directory?
           title="Always allow"
           body={
             <Switch>
+              <Match when={props.request.permission === "doom_loop"}>
+                <TextBody title={"This stops asking about repeated calls to " + (props.request.always[0] ?? "this tool") + " until Swarm is restarted. It allows no call that would otherwise ask."} />
+              </Match>
               <Match when={props.request.always.length === 1 && props.request.always[0] === "*"}>
                 <TextBody title={"This will allow " + props.request.permission + " until Swarm is restarted."} />
               </Match>

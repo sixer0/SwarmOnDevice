@@ -131,6 +131,7 @@ function toolLine(part: Extract<Part, { type: "tool" }>) {
     asText(input?.command) ??
     asText(input?.filePath) ??
     asText(input?.pattern) ??
+    asText(input?.subcommand) ??
     asText(input?.description) ??
     asText(part.state.status === "running" || part.state.status === "completed" ? part.state.title : undefined)
   const mark = part.state.status === "error" ? "✕ " : part.state.status === "running" ? "… " : ""

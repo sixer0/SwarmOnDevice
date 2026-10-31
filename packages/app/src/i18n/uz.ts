@@ -694,6 +694,7 @@ export const dict = {
   "error.chain.configInvalidWithMessage": "{{path}} da konfiguratsiya fayli notoʻgʻri: {{message}}",
   "notification.permission.title": "Ruxsat talab qilinadi",
   "session.permission.alwaysNamed": "Har doim ruxsat bering: {{scope}}",
+  "session.permission.alwaysRepeats": "Har doim ruxsat bering: Doom Loop",
   "notification.permission.description": "{{sessionTitle}} uchun {{projectName}} uchun ruxsat kerak",
   "notification.question.title": "Savol",
   "notification.question.description": "{{projectName}} da {{sessionTitle}} savol bor",

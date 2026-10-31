@@ -691,6 +691,7 @@ export const dict = {
   "error.chain.configInvalidWithMessage": "Fișierul de configurare de la {{path}} este invalid: {{message}}",
   "notification.permission.title": "Permisiune necesară",
   "session.permission.alwaysNamed": "Permite mereu: {{scope}}",
+  "session.permission.alwaysRepeats": "Permite mereu: Doom Loop",
   "notification.permission.description": "{{sessionTitle}} din {{projectName}} are nevoie de permisiune",
   "notification.question.title": "Întrebare",
   "notification.question.description": "{{sessionTitle}} din {{projectName}} are o întrebare",

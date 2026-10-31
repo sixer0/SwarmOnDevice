@@ -146,6 +146,7 @@ export const dict = {
   "ui.tool.list": "一覧表示",
   "ui.tool.glob": "Glob",
   "ui.tool.grep": "Grep",
+  "ui.tool.git": "Git",
   "ui.tool.webfetch": "Webfetch",
   "ui.tool.websearch": "Web検索",
   "ui.tool.websearch.provider": "{{provider}} Web検索",

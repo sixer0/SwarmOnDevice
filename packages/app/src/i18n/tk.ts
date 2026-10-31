@@ -691,6 +691,7 @@ export const dict = {
   "error.chain.configInvalidWithMessage": "{{path}} faýly sazlamak nädogry: {{message}}",
   "notification.permission.title": "Rugsat gerek",
   "session.permission.alwaysNamed": "Elmydama rugsat beriň: {{scope}}",
+  "session.permission.alwaysRepeats": "Elmydama rugsat beriň: Doom aýlawy",
   "notification.permission.description": "{{projectName}} taslamasyndaky {{sessionTitle}} rugsat talap edýär",
   "notification.question.title": "Sorag",
   "notification.question.description": "{{projectName}} taslamasyndaky {{sessionTitle}} sessiýasynyň soragy bar",

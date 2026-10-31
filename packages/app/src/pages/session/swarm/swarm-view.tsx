@@ -171,7 +171,7 @@ function LaneDetail(props: { swarm: SwarmController; lane: SwarmLane }) {
                   disabled={busy()}
                   onClick={() => props.swarm.allow(props.lane, request, "always")}
                 >
-                  {alwaysLabel(request.always, language.t)}
+                  {alwaysLabel(request, language.t)}
                 </ButtonV2>
               </Show>
               <ButtonV2

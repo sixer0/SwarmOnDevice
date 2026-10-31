@@ -642,6 +642,7 @@ export const dict = {
 
   "notification.permission.title": "Tillatelse påkrevd",
   "session.permission.alwaysNamed": "Tillat alltid: {{scope}}",
+  "session.permission.alwaysRepeats": "Tillat alltid: Doom Loop",
   "notification.permission.description": "{{sessionTitle}} i {{projectName}} trenger tillatelse",
   "notification.question.title": "Spørsmål",
   "notification.question.description": "{{sessionTitle}} i {{projectName}} har et spørsmål",

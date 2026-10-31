@@ -140,6 +140,7 @@ export const dict: Record<string, string> = {
   "ui.tool.list": "Llista",
   "ui.tool.glob": "Glob",
   "ui.tool.grep": "Grep",
+  "ui.tool.git": "Git",
   "ui.tool.task": "Tasca",
   "ui.tool.webfetch": "Webfetch",
   "ui.tool.websearch": "Cerca web",

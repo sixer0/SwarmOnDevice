@@ -743,6 +743,7 @@ export const dict = {
 
   "notification.permission.title": "Permiso requerido",
   "session.permission.alwaysNamed": "Permitir siempre: {{scope}}",
+  "session.permission.alwaysRepeats": "Permitir siempre: Bucle infinito",
   "notification.permission.description": "{{sessionTitle}} en {{projectName}} necesita permiso",
   "notification.question.title": "Pregunta",
   "notification.question.description": "{{sessionTitle}} en {{projectName}} tiene una pregunta",

@@ -702,6 +702,7 @@ export const dict = {
   "error.chain.configInvalidWithMessage": "{{path}} ގައި ކޮންފިގް ފައިލް ސައްހަ ނޫން: {{message}}",
   "notification.permission.title": "ހުއްދަ ބޭނުންވެއެވެ",
   "session.permission.alwaysNamed": "އަބަދުވެސް ހުއްދަ ދޭށެވެ: {{scope}}",
+  "session.permission.alwaysRepeats": "އަބަދުވެސް ހުއްދަ ދޭށެވެ: ޑޫމް ލޫޕް އެވެ",
   "notification.permission.description": "{{sessionTitle}} އިން {{projectName}} އަށް ހުއްދަ ބޭނުންވެއެވެ",
   "notification.question.title": "ސުވާލު",
   "notification.question.description": "{{sessionTitle}} އިން {{projectName}} ގައި ސުވާލެއް އެބައޮތެވެ",

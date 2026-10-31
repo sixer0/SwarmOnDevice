@@ -707,6 +707,7 @@ export const dict = {
   "error.chain.configInvalidWithMessage": "Tệp cấu hình tại {{path}} không hợp lệ: {{message}}",
   "notification.permission.title": "Cần có sự cho phép",
   "session.permission.alwaysNamed": "Cho phép luôn: {{scope}}",
+  "session.permission.alwaysRepeats": "Cho phép luôn: Vòng lặp vô hạn",
   "notification.permission.description": "{{sessionTitle}} trong {{projectName}} cần có sự cho phép",
   "notification.question.title": "Câu hỏi",
   "notification.question.description": "{{sessionTitle}} trong {{projectName}} có câu hỏi",

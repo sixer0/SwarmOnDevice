@@ -689,6 +689,7 @@ export const dict = {
   "error.chain.configInvalidWithMessage": "Konfiguračný súbor na {{path}} je neplatný: {{message}}",
   "notification.permission.title": "Vyžaduje sa povolenie",
   "session.permission.alwaysNamed": "Vždy povoliť: {{scope}}",
+  "session.permission.alwaysRepeats": "Vždy povoliť: Doom Loop",
   "notification.permission.description": "{{sessionTitle}} v {{projectName}} vyžaduje povolenie",
   "notification.question.title": "Otázka",
   "notification.question.description": "{{sessionTitle}} v {{projectName}} má otázku",

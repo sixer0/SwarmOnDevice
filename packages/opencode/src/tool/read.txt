@@ -1,4 +1,6 @@
-Read a file or directory from the local filesystem. If the path does not exist, an error is returned.
+Read a file or list a directory from the local filesystem. If the path does not exist, an error is returned.
+
+This is how to list a directory: pass its path, instead of running `ls` in the shell, which stops and waits for a person.
 
 Usage:
 - The filePath parameter should be an absolute path.

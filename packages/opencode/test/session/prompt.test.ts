@@ -33,7 +33,7 @@ import { LateAnswer } from "@/session/late-answer"
 import { RunLease } from "@/session/run-lease"
 import { SessionResume } from "@/session/resume"
 import { Global } from "@opencode-ai/core/global"
-import { mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs"
+import { mkdirSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs"
 import { SessionMessageTable } from "@opencode-ai/core/session/sql"
 import { LLM } from "../../src/session/llm"
 import { MessageV2 } from "../../src/session/message-v2"
@@ -2826,6 +2826,53 @@ it.instance("skipped requests go away with a deleted or archived session, and li
         delete process.env.SWARM_UNATTENDED_AFTER_MS
       }),
   ),
+)
+
+it.instance("a walked-away `ls` is released, and what the model reads next names the tool that needs nobody", () =>
+  Effect.acquireUseRelease(
+    Effect.sync(() => {
+      process.env.SWARM_UNATTENDED_AFTER_MS = "1"
+    }),
+    () =>
+      Effect.gen(function* () {
+        const { llm } = yield* useServerConfig(providerCfg)
+        const prompt = yield* SessionPrompt.Service
+        const sessions = yield* Session.Service
+        const chat = yield* sessions.create({ title: "Pinned" })
+        yield* prompt.prompt({ sessionID: chat.id, agent: "build", noReply: true, parts: [{ type: "text", text: "go" }] })
+        yield* llm.tool("bash", { command: "ls", description: "list" })
+        yield* llm.text("done")
+
+        yield* prompt.loop({ sessionID: chat.id })
+
+        const sent = JSON.stringify((yield* llm.hits).at(-1)?.body.messages)
+        expect(sent).toContain("did not run")
+        expect(sent).toContain("read for a file or a directory's listing (instead of cat or ls)")
+      }),
+    () =>
+      Effect.sync(() => {
+        delete process.env.SWARM_UNATTENDED_AFTER_MS
+      }),
+  ),
+)
+
+it.instance("a command template's shell runs in the session's project, not where the server started", () =>
+  Effect.gen(function* () {
+    const { llm, dir } = yield* useServerConfig((url) => ({
+      ...providerCfg(url),
+      command: { here: { template: "We are in !`pwd` now" } },
+    }))
+    const prompt = yield* SessionPrompt.Service
+    const sessions = yield* Session.Service
+    const chat = yield* sessions.create({ title: "Pinned" })
+    yield* llm.text("done")
+
+    yield* prompt.command({ sessionID: chat.id, command: "here", arguments: "" })
+
+    const sent = JSON.stringify((yield* llm.hits).at(-1)?.body.messages)
+    expect(sent).toContain(`We are in ${realpathSync(dir)}`)
+    expect(realpathSync(dir)).not.toBe(realpathSync(process.cwd()))
+  }),
 )
 
 it.instance("a server's reasoning_content lands in one thinking block per step, apart from the answer", () =>

@@ -775,5 +775,7 @@ export class TestLLMServer extends Context.Service<TestLLMServer, TestLLMServer.
         misses: Effect.sync(() => [...misses]),
       })
     }),
-  ).pipe(Layer.provide(HttpRouter.layer), Layer.provide(NodeHttpServer.layer(() => Http.createServer(), { port: 0 })))
+    // On every address, the system can hand out a port something else already holds on 127.0.0.1 alone, and that listener then
+    // answers what the test sends: seen as a sandbox proxy's 407. Asking on 127.0.0.1 cannot collide.
+  ).pipe(Layer.provide(HttpRouter.layer), Layer.provide(NodeHttpServer.layer(() => Http.createServer(), { host: "127.0.0.1", port: 0 })))
 }

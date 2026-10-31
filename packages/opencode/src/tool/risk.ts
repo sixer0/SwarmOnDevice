@@ -158,6 +158,20 @@ const NO_ALWAYS = new Set([
 ])
 const GIT_NO_ALWAYS = new Set(["config", "submodule", "hook", "difftool", "mergetool", "bisect", "rebase", "filter-branch", "update-ref", "replace", "rm", "clean", "grep", "daemon", "archive", "worktree"])
 
+// A rule for `git log *` is read as a rule for looking at history, so it must not cover what else git log can do: `--output=`
+// writes a file, and `git commit --no-verify` skips the checks someone meant to keep. Each subcommand here takes only the flags
+// listed, or no rule is offered and an earlier rule does not answer it.
+const GIT_RULE_FLAGS: Record<string, ReadonlySet<string>> = {
+  status: new Set(["-s", "--short", "-b", "--branch", "--porcelain", "--porcelain=v1", "--porcelain=v2", "--no-color", "--ignored"]),
+  log: new Set(["--oneline", "--graph", "--stat", "--shortstat", "--name-only", "--name-status", "-p", "--patch", "--all", "--decorate", "--no-decorate", "--no-color", "--reverse", "--merges", "--no-merges", "-n"]),
+  show: new Set(["--stat", "--shortstat", "--name-only", "--name-status", "--oneline", "-p", "--patch", "-s", "--no-patch", "--no-color"]),
+  diff: new Set(["--stat", "--shortstat", "--numstat", "--name-only", "--name-status", "--cached", "--staged", "--no-color"]),
+  blame: new Set(["-w", "-s", "-L"]),
+  branch: new Set(["-a", "--all", "-r", "--remotes", "-v", "-vv", "--list", "--show-current", "--no-color"]),
+  add: new Set(["-A", "--all", "-u", "--update"]),
+  commit: new Set(["-m", "-a", "--all", "--allow-empty"]),
+}
+
 /** The words of a command that can only be one program with those words, or undefined. */
 export function plainWords(command: string) {
   return PLAIN_COMMAND.test(command) ? command.split(" ") : undefined
@@ -168,7 +182,13 @@ export function scope(command: string) {
   const words = plainWords(command)
   if (!words) return undefined
   if (NO_ALWAYS.has(words[0]!)) return undefined
-  if (words[0] === "git" && GIT_NO_ALWAYS.has(words[1] ?? "")) return undefined
+  if (words[0] === "git") {
+    const sub = words[1] ?? ""
+    // `git -c core.pager=x log` or `git -C elsewhere log` is not the subcommand a rule would name.
+    if (sub.startsWith("-") || GIT_NO_ALWAYS.has(sub)) return undefined
+    const flags = GIT_RULE_FLAGS[sub]
+    if (flags && words.slice(2).some((word) => word.startsWith("-") && !flags.has(word) && !/^-\d+$/.test(word))) return undefined
+  }
   return BashArity.scope(words)
 }
 

@@ -126,6 +126,7 @@ export const dict = {
   "ui.tool.list": "Liste",
   "ui.tool.glob": "Glob",
   "ui.tool.grep": "Grep",
+  "ui.tool.git": "Git",
   "ui.tool.webfetch": "Webhentning",
   "ui.tool.websearch": "Websøgning",
   "ui.tool.websearch.provider": "{{provider}} Websøgning",

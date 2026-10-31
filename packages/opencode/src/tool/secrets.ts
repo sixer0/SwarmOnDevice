@@ -18,7 +18,9 @@ const SETTINGS_FILE = /^(application(-[\w-]+)?\.properties|appsettings(\.[\w-]+)
 const ENV_EXAMPLE = /\.(example|sample|template|dist|defaults)$/
 const WHOLE_FILE = /(^|\/)(id_rsa|id_ed25519|id_ecdsa|id_dsa|\.netrc|\.pgpass|\.git-credentials|credentials|service-account.*\.json|(secrets?|credentials?)\.(ya?ml|json|toml|ini)|\.pypirc|\.dockercfg|\.docker\/config\.json|\.kube\/config|kubeconfig|\.htpasswd|token\.txt|\.secrets)$|\.(pem|key|p12|pfx|keystore|jks|tfstate)(\.backup)?$|(^|\/)\.envs\/|(^|\/)\.?secrets?\/[^/]+\.(txt|env|json|ya?ml|toml|ini|conf|cfg|properties)$/i
 
-// Values that are recognisable wherever they turn up, including in a log line nobody expected them in.
+// Values that are recognisable wherever they turn up, including in a log line nobody expected them in. These run over every
+// tool result, on one line as long as anyone likes, so no pattern may look arbitrarily far ahead from a place it can start
+// many times: that is quadratic, and 256 KB took a minute. So each scan ahead from a repeatable start has a ceiling.
 const SHAPES: [RegExp, string][] = [
   [/-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?(-----END [A-Z ]*PRIVATE KEY-----|$)/g, "[hidden:private-key]"],
   [/\bsk-[A-Za-z0-9_-]{20,}/g, "[hidden:api-key]"],
@@ -28,12 +30,13 @@ const SHAPES: [RegExp, string][] = [
   [/\bxox[abprs]-[A-Za-z0-9-]{10,}/g, "[hidden:slack-token]"],
   [/\b(AKIA|ASIA)[0-9A-Z]{16}\b/g, "[hidden:aws-key]"],
   [/\bAIza[0-9A-Za-z_-]{30,}/g, "[hidden:api-key]"],
-  [/\b([a-z][a-z0-9+.-]*:\/\/[^/\s:@]+:)[^/\s@]+(@)/gi, "$1[hidden:password]$2"],
-  [/\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/g, "[hidden:token]"],
+  [/\b([a-z][a-z0-9+.-]{0,31}:\/\/[^/\s:@]+:)[^/\s@]+(@)/gi, "$1[hidden:password]$2"],
+  [/\beyJ[A-Za-z0-9_-]{10,1024}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/g, "[hidden:token]"],
   [/\b(bearer\s+)[A-Za-z0-9._~+/-]{12,}/gi, "$1[hidden:token]"],
-  // `password=hunter2`, in any file. Only a value that looks made up: `password = req.body.password` is code.
+  // `password=hunter2`, in any file. Only a value that looks made up: `password = req.body.password` is code. Whatever comes
+  // before the word stays as it was, so nothing needs to match it.
   [
-    /\b([\w.-]*(?:password|passwd)\s*[=:]\s*["']?)(?![A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)+)(?=[^\s"'`,;()]*\d)[^\s"'`,;()\[\]]{6,}/gi,
+    /((?:password|passwd)\s*[=:]\s*["']?)(?![A-Za-z_$][\w$]{0,256}(?:\.[A-Za-z_$][\w$]{0,256})+)(?=[^\s"'`,;()]{0,256}\d)[^\s"'`,;()\[\]]{6,}/gi,
     "$1[hidden:password]",
   ],
 ]

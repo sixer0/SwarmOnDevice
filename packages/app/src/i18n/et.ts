@@ -687,6 +687,7 @@ export const dict = {
   "error.chain.configInvalidWithMessage": "Konfiguratsioonifail aadressil {{path}} on kehtetu: {{message}}",
   "notification.permission.title": "Nõutav luba",
   "session.permission.alwaysNamed": "Luba alati: {{scope}}",
+  "session.permission.alwaysRepeats": "Luba alati: Doom Loop",
   "notification.permission.description": "{{sessionTitle}} asukohas {{projectName}} vajab luba",
   "notification.question.title": "küsimus",
   "notification.question.description": "{{sessionTitle}} kasutajal {{projectName}} on küsimus",

@@ -683,6 +683,7 @@ export const dict = {
   "error.chain.configInvalidWithMessage": "ملف التكوين في {{path}} غير صالح: {{message}}",
   "notification.permission.title": "مطلوب إذن",
   "session.permission.alwaysNamed": "السماح دائمًا: {{scope}}",
+  "session.permission.alwaysRepeats": "السماح دائمًا: حلقة مفرغة",
   "notification.permission.description": "{{sessionTitle}} في {{projectName}} يحتاج إلى إذن",
   "notification.question.title": "سؤال",
   "notification.question.description": "{{sessionTitle}} في {{projectName}} لديه سؤال",

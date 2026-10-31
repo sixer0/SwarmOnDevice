@@ -6,7 +6,7 @@ ${workdirSection}
 
 Use `${tmp}` for temporary work outside the workspace. This directory has already been created, already exists, and is pre-approved for external directory access.
 
-IMPORTANT: This tool is for terminal operations like npm, docker, and git commands that change something. DO NOT use it for file operations (reading, writing, editing, searching, finding files) or for reading git state (status, diff, log, show, blame, branches) - use the specialized tools for this instead. Every call here stops and waits for a person unless their rules say otherwise, and those tools do not.
+IMPORTANT: This tool is for terminal operations like npm, docker, and git commands that change something. DO NOT use it for file operations (reading, writing, editing, searching, finding files) or for reading git state (status, diff, log, show, blame, branches) - use the specialized tools for this instead. Every call here stops and waits for a person unless their rules say otherwise, and those tools do not. So never start with `ls`: to list a directory call read with its path, to find files call glob, to search call grep, and to read a file call read.
 
 Send one plain command at a time where you can, with no pipes, redirects or `&&`, and do not trim output with `tail` or `head`: long output is already cut for you, the exit code stays honest, and only a plain command can be allowed for the rest of a session.
 

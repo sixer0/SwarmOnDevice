@@ -126,6 +126,7 @@ export const dict: Record<Keys, string> = {
   "ui.tool.list": "Liste",
   "ui.tool.glob": "Glob",
   "ui.tool.grep": "Grep",
+  "ui.tool.git": "Git",
   "ui.tool.webfetch": "Webhenting",
   "ui.tool.websearch": "Nettsøk",
   "ui.tool.websearch.provider": "{{provider}} Nettsøk",

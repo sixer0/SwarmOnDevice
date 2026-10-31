@@ -137,6 +137,7 @@ export const dict = {
   "ui.tool.list": "បញ្ជី",
   "ui.tool.glob": "Glob",
   "ui.tool.grep": "Grep",
+  "ui.tool.git": "Git",
   "ui.tool.task": "កិច្ចការ",
   "ui.tool.webfetch": "Webfetch",
   "ui.tool.websearch": "ការស្វែងរកតាមអ៊ីនធឺណិត",

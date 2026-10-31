@@ -696,6 +696,7 @@ export const dict = {
   "error.chain.configInvalidWithMessage": "A {{path}} konfigurációs fájlja érvénytelen: {{message}}",
   "notification.permission.title": "Engedély szükséges",
   "session.permission.alwaysNamed": "Mindig engedje meg: {{scope}}",
+  "session.permission.alwaysRepeats": "Mindig engedje meg: Doom Loop",
   "notification.permission.description": "A {{sessionTitle}} {{projectName}}-ben engedélyre van szüksége",
   "notification.question.title": "Kérdés",
   "notification.question.description": "A {{sessionTitle}} {{projectName}}-ben van egy kérdése",

@@ -144,6 +144,7 @@ export const dict: Record<string, string> = {
   "ui.tool.list": "Sąrašas",
   "ui.tool.glob": "Glob",
   "ui.tool.grep": "Grep",
+  "ui.tool.git": "Git",
   "ui.tool.task": "Užduotis",
   "ui.tool.webfetch": "Webfetch",
   "ui.tool.websearch": "Interneto paieška",

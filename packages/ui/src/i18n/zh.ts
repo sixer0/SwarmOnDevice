@@ -150,6 +150,7 @@ export const dict = {
   "ui.tool.list": "列出文件",
   "ui.tool.glob": "Glob",
   "ui.tool.grep": "Grep",
+  "ui.tool.git": "Git",
   "ui.tool.webfetch": "Webfetch",
   "ui.tool.websearch": "网页搜索",
   "ui.tool.websearch.provider": "{{provider}} 网页搜索",

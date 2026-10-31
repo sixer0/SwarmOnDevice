@@ -697,6 +697,7 @@ export const dict = {
   "error.chain.configInvalidWithMessage": "Το αρχείο διαμόρφωσης στο {{path}} δεν είναι έγκυρο: {{message}}",
   "notification.permission.title": "Απαιτείται άδεια",
   "session.permission.alwaysNamed": "Να επιτρέπεται πάντα: {{scope}}",
+  "session.permission.alwaysRepeats": "Να επιτρέπεται πάντα: Doom Loop",
   "notification.permission.description": "{{sessionTitle}} στο {{projectName}} χρειάζεται άδεια",
   "notification.question.title": "Ερώτηση",
   "notification.question.description": "{{sessionTitle}} στο {{projectName}} έχει μια ερώτηση",

@@ -476,6 +476,12 @@ export function getToolInfo(
         title: i18n.t("ui.tool.grep"),
         subtitle: input.pattern,
       }
+    case "git":
+      return {
+        icon: "branch",
+        title: i18n.t("ui.tool.git"),
+        subtitle: gitDetail(input),
+      }
     case "webfetch":
       return {
         icon: "window-cursor",
@@ -589,7 +595,13 @@ function taskSession(
     .sort((a, b) => (b.time.created ?? 0) - (a.time.created ?? 0))[0]?.id
 }
 
-const CONTEXT_GROUP_TOOLS = new Set(["read", "glob", "grep", "list"])
+/** What was read from the repository, as someone would say it: `log main..HEAD`, `blame src/a.ts`. */
+function gitDetail(input: Record<string, unknown>) {
+  const paths = Array.isArray(input.paths) ? input.paths.filter((item): item is string => typeof item === "string") : []
+  return [input.subcommand, input.revision, ...paths].filter((item) => typeof item === "string" && item).join(" ") || undefined
+}
+
+const CONTEXT_GROUP_TOOLS = new Set(["read", "glob", "grep", "list", "git"])
 const HIDDEN_TOOLS = new Set(["todowrite"])
 
 function list<T>(value: T[] | undefined | null, fallback: T[]) {
@@ -883,7 +895,7 @@ function contextToolTrigger(part: ToolPart, i18n: ReturnType<typeof useI18n>) {
 }
 
 function contextToolSummary(parts: ToolPart[]) {
-  const read = parts.filter((part) => part.tool === "read").length
+  const read = parts.filter((part) => part.tool === "read" || part.tool === "git").length
   const search = parts.filter((part) => part.tool === "glob" || part.tool === "grep").length
   const list = parts.filter((part) => part.tool === "list").length
   return { read, search, list }
@@ -1942,6 +1954,35 @@ ToolRegistry.register({
             aria-label={i18n.t("ui.scrollView.ariaLabel")}
           >
             <Markdown text={props.output!} />
+          </div>
+        </Show>
+      </BasicTool>
+    )
+  },
+})
+
+ToolRegistry.register({
+  name: "git",
+  render(props) {
+    const i18n = useI18n()
+    return (
+      <BasicTool
+        {...props}
+        icon="branch"
+        trigger={{
+          title: i18n.t("ui.tool.git"),
+          subtitle: gitDetail(props.input) ?? "",
+        }}
+      >
+        <Show when={props.output}>
+          <div
+            data-component="tool-output"
+            data-scrollable
+            tabIndex={0}
+            role="region"
+            aria-label={i18n.t("ui.scrollView.ariaLabel")}
+          >
+            <Markdown text={"```\n" + props.output! + "\n```"} />
           </div>
         </Show>
       </BasicTool>

@@ -745,6 +745,7 @@ export const dict = {
 
   "notification.permission.title": "İzin gerekli",
   "session.permission.alwaysNamed": "Her zaman izin ver: {{scope}}",
+  "session.permission.alwaysRepeats": "Her zaman izin ver: Sonsuz Döngü",
   "notification.permission.description": "{{projectName}} içindeki {{sessionTitle}} izin gerektiriyor",
   "notification.question.title": "Soru",
   "notification.question.description": "{{projectName}} içindeki {{sessionTitle}} bir soru soruyor",

@@ -136,6 +136,7 @@ export const dict: Record<string, string> = {
   "ui.tool.list": "فهرست کنید",
   "ui.tool.glob": "گلوب",
   "ui.tool.grep": "گرپ",
+  "ui.tool.git": "Git",
   "ui.tool.task": "وظیفه",
   "ui.tool.webfetch": "واکشی وب",
   "ui.tool.websearch": "جستجوی وب",

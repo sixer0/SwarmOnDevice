@@ -687,6 +687,7 @@ export const dict = {
   "error.chain.configInvalidWithMessage": "ໄຟລ໌ Config ຢູ່ {{path}} ບໍ່ຖືກຕ້ອງ: {{message}}",
   "notification.permission.title": "ຕ້ອງມີການອະນຸຍາດ",
   "session.permission.alwaysNamed": "ອະນຸຍາດສະເໝີ: {{scope}}",
+  "session.permission.alwaysRepeats": "ອະນຸຍາດສະເໝີ: Doom Loop",
   "notification.permission.description": "{{sessionTitle}} ໃນ {{projectName}} ຕ້ອງການການອະນຸຍາດ",
   "notification.question.title": "ຄໍາຖາມ",
   "notification.question.description": "{{sessionTitle}} ໃນ {{projectName}} ມີຄໍາຖາມ",

@@ -690,6 +690,7 @@ export const dict = {
   "error.chain.configInvalidWithMessage": "فایل پیکربندی در {{path}} نامعتبر است: {{message}}",
   "notification.permission.title": "مجوز لازم است",
   "session.permission.alwaysNamed": "همیشه اجازه بده: {{scope}}",
+  "session.permission.alwaysRepeats": "همیشه اجازه بده: حلقه عذاب",
   "notification.permission.description": "{{sessionTitle}} در {{projectName}} به مجوز نیاز دارد",
   "notification.question.title": "سوال",
   "notification.question.description": "{{sessionTitle}} در {{projectName}} یک سوال دارد",

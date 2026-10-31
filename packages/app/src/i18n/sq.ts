@@ -694,6 +694,7 @@ export const dict = {
   "error.chain.configInvalidWithMessage": "Skedari i konfigurimit në {{path}} është i pavlefshëm: {{message}}",
   "notification.permission.title": "Kërkohet leje",
   "session.permission.alwaysNamed": "Lejo gjithmonë: {{scope}}",
+  "session.permission.alwaysRepeats": "Lejo gjithmonë: Doom Loop",
   "notification.permission.description": "{{sessionTitle}} në {{projectName}} ka nevojë për leje",
   "notification.question.title": "Pyetje",
   "notification.question.description": "{{sessionTitle}} në {{projectName}} ka një pyetje",

@@ -760,6 +760,7 @@ export const dict = {
 
   "notification.permission.title": "Izin diperlukan",
   "session.permission.alwaysNamed": "Izinkan selalu: {{scope}}",
+  "session.permission.alwaysRepeats": "Izinkan selalu: Doom Loop",
   "notification.permission.description": "{{sessionTitle}} di {{projectName}} memerlukan izin",
   "notification.question.title": "Pertanyaan",
   "notification.question.description": "{{sessionTitle}} di {{projectName}} memiliki pertanyaan",

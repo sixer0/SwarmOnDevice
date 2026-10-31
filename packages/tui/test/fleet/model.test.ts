@@ -213,6 +213,13 @@ describe("reading stored messages", () => {
     expect(history.lines).toEqual(["> Fix the build", "bash bun test", "✕ edit src/a.ts", "Done with that."])
     expect(history.hasReply).toBe(true)
   })
+  test("a git read says what it read once, with no second git", () => {
+    const history = summarizeHistory(
+      [message("assistant", [{ type: "tool", tool: "git", state: { status: "completed", input: { subcommand: "log", limit: 1 }, title: "git log" } }])],
+      NOW,
+    )
+    expect(history.lines).toEqual(["git log"])
+  })
   test("stopping an agent is not a failure", () => {
     const aborted = message("assistant", [], { error: { name: "MessageAbortedError", data: { message: "x" } } })
     const broke = message("assistant", [], { error: { name: "APIError", data: { message: "bad key" } } })

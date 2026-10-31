@@ -702,6 +702,7 @@ export const dict = {
   "error.chain.configInvalidWithMessage": "Konfigurationsfilen på {{path}} är ogiltig: {{message}}",
   "notification.permission.title": "Behörighet krävs",
   "session.permission.alwaysNamed": "Tillåt alltid: {{scope}}",
+  "session.permission.alwaysRepeats": "Tillåt alltid: Doom Loop",
   "notification.permission.description": "{{sessionTitle}} i {{projectName}} behöver behörighet",
   "notification.question.title": "Fråga",
   "notification.question.description": "{{sessionTitle}} i {{projectName}} har en fråga",
