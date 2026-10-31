@@ -225,6 +225,8 @@ export const dict = {
   "dialog.model.manage.provider.toggle": "Uključi/isključi sve {{provider}} modele",
 
   "dialog.model.unpaid.freeModels.title": "Besplatni modeli koje obezbjeđuje Swarm",
+  "dialog.model.local.title": "Na ovom uređaju",
+  "dialog.model.local.empty": "Pokrenite Ollama ili LM Studio i vaši modeli će se pojaviti ovdje.",
   "dialog.model.unpaid.addMore.title": "Dodaj još modela od popularnih provajdera",
   "dialog.model.unpaid.viewMoreProviders": "Pogledaj još više od 70 provajdera",
 
@@ -305,6 +307,7 @@ export const dict = {
 
   "model.tag.free": "Besplatno",
   "model.tag.latest": "Najnovije",
+  "model.tag.chatOnly": "Samo chat",
   "model.provider.anthropic": "Anthropic",
   "model.provider.openai": "OpenAI",
   "model.provider.google": "Google",
@@ -324,6 +327,13 @@ export const dict = {
   "model.tooltip.reasoning.allowed": "Podržava rasuđivanje",
   "model.tooltip.reasoning.none": "Bez rasuđivanja",
   "model.tooltip.context": "Limit konteksta {{limit}}",
+  "model.tooltip.cost.label": "Cijena",
+  "model.tooltip.local.value": "Besplatno, na ovom uređaju",
+  "model.tooltip.price.label": "Za 1M tokena",
+  "model.tooltip.price.value": "{{input}} ulaz, {{output}} izlaz",
+  "model.tooltip.sessionCost.label": "Ova sesija bi koštala",
+  "model.tooltip.tools.label": "Alati",
+  "model.tooltip.tools.none": "Nema, samo chat",
 
   "common.search.placeholder": "Pretraži",
   "common.goBack": "Nazad",

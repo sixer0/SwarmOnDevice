@@ -218,6 +218,7 @@ export function usePromptInputV2Controller(props: PromptInputV2ControllerProps):
     return permission.isAutoAccepting(id, sdk().directory)
   })
   const submission = createPromptSubmit({
+    onModelRequired: () => dialog.show(() => <DialogSelectModelUnpaidV2 model={props.controls.model.selection} />),
     prompt,
     info,
     imageAttachments: attachments,

@@ -224,6 +224,8 @@ export const dict = {
   "dialog.model.manage.provider.toggle": "Переключить все модели {{provider}}",
 
   "dialog.model.unpaid.freeModels.title": "Бесплатные модели от Swarm",
+  "dialog.model.local.title": "На этом устройстве",
+  "dialog.model.local.empty": "Запустите Ollama или LM Studio, и ваши модели появятся здесь.",
   "dialog.model.unpaid.addMore.title": "Добавьте больше моделей от популярных провайдеров",
   "dialog.model.unpaid.viewMoreProviders": "Посмотреть ещё более 70 провайдеров",
 
@@ -303,6 +305,7 @@ export const dict = {
   "provider.disconnect.toast.disconnected.description": "Модели {{provider}} больше недоступны.",
   "model.tag.free": "Бесплатно",
   "model.tag.latest": "Последняя",
+  "model.tag.chatOnly": "Только чат",
   "model.provider.anthropic": "Anthropic",
   "model.provider.openai": "OpenAI",
   "model.provider.google": "Google",
@@ -322,6 +325,13 @@ export const dict = {
   "model.tooltip.reasoning.allowed": "Поддерживает рассуждения",
   "model.tooltip.reasoning.none": "Без рассуждений",
   "model.tooltip.context": "Лимит контекста {{limit}}",
+  "model.tooltip.cost.label": "Стоимость",
+  "model.tooltip.local.value": "Бесплатно, на этом устройстве",
+  "model.tooltip.price.label": "За 1 млн токенов",
+  "model.tooltip.price.value": "{{input}} ввод, {{output}} вывод",
+  "model.tooltip.sessionCost.label": "Этот сеанс стоил бы",
+  "model.tooltip.tools.label": "Инструменты",
+  "model.tooltip.tools.none": "Нет, только чат",
 
   "common.search.placeholder": "Поиск",
   "common.goBack": "Назад",

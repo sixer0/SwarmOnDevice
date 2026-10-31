@@ -5,11 +5,12 @@ import { List, type ListRef } from "@opencode-ai/ui/list"
 import { ProviderIcon } from "@opencode-ai/ui/provider-icon"
 import { Tag } from "@opencode-ai/ui/tag"
 import { Tooltip } from "@opencode-ai/ui/tooltip"
-import { type Component, Show } from "solid-js"
+import { type Component, onCleanup, onMount, Show } from "solid-js"
 import { useLocal } from "@/context/local"
 import { popularProviders, useProviders } from "@/hooks/use-providers"
 import { ModelTooltip } from "./model-tooltip"
 import { useLanguage } from "@/context/language"
+import { useServerSync } from "@/context/server-sync"
 import { decode64 } from "@/utils/base64"
 
 type ModelState = ReturnType<typeof useLocal>["model"]
@@ -21,6 +22,14 @@ export const DialogSelectModelUnpaid: Component<{ model?: ModelState }> = (props
   const directory = () => decode64(local.slug())
   const providers = useProviders(directory)
   const language = useLanguage()
+  const serverSync = useServerSync()
+
+  // While this is open, starting a local engine is all it takes: its models appear here by themselves.
+  onMount(() => {
+    void serverSync().refreshProviders()
+    const poll = setInterval(() => void serverSync().refreshProviders(), 3000)
+    onCleanup(() => clearInterval(poll))
+  })
 
   const openProviders = (provider?: string) => {
     void import("./dialog-connect-provider").then((x) => {
@@ -45,7 +54,10 @@ export const DialogSelectModelUnpaid: Component<{ model?: ModelState }> = (props
       class="overflow-y-auto [&_[data-slot=dialog-body]]:overflow-visible [&_[data-slot=dialog-body]]:flex-none"
     >
       <div class="flex flex-col gap-3 px-2.5" onKeyDown={handleKeyDown}>
-        <div class="text-14-medium text-text-base px-2.5">{language.t("dialog.model.unpaid.freeModels.title")}</div>
+        <div class="text-14-medium text-text-base px-2.5">{language.t("dialog.model.local.title")}</div>
+        <Show when={model.list().length === 0}>
+          <div class="text-14-regular text-text-weak px-2.5">{language.t("dialog.model.local.empty")}</div>
+        </Show>
         <List
           class="px-3 [&_[data-slot=list-scroll]]:overflow-visible"
           ref={(ref) => (listRef = ref)}
@@ -78,10 +90,10 @@ export const DialogSelectModelUnpaid: Component<{ model?: ModelState }> = (props
           {(i) => (
             <div class="w-full flex items-center gap-x-2.5">
               <span>{i.name}</span>
-              <Tag>{language.t("model.tag.free")}</Tag>
-              <Show when={i.latest}>
-                <Tag>{language.t("model.tag.latest")}</Tag>
+              <Show when={i.capabilities.toolcall === false}>
+                <Tag>{language.t("model.tag.chatOnly")}</Tag>
               </Show>
+              <Tag>{language.t("model.tag.free")}</Tag>
             </div>
           )}
         </List>

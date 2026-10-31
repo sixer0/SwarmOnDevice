@@ -6,6 +6,7 @@ import { showToast } from "@/utils/toast"
 import { popularProviders, useProviders } from "@/hooks/use-providers"
 import { createMemo, type Component, For, Show } from "solid-js"
 import { useLanguage } from "@/context/language"
+import { isOnDeviceProvider } from "./model-price"
 import { useServerProtocol, useServerSDK } from "@/context/server-sdk"
 import { useServerSync } from "@/context/server-sync"
 import { DialogConnectProvider, useProviderConnectController } from "./dialog-connect-provider"
@@ -75,6 +76,7 @@ const SettingsProvidersContent: Component<{ onBack?: () => void }> = (props) => 
 
   const type = (item: ProviderItem) => {
     const current = source(item)
+    if (isOnDeviceProvider(item)) return language.t("dialog.model.local.title")
     if (current === "env") return language.t("settings.providers.tag.environment")
     if (current === "api") return language.t("provider.connect.method.apiKey")
     if (current === "config") {
@@ -86,7 +88,7 @@ const SettingsProvidersContent: Component<{ onBack?: () => void }> = (props) => 
   }
 
   const canDisconnect = (item: ProviderItem) =>
-    source(item) !== "env" && (protocol() === "v1" || !isConfigCustom(item.id))
+    source(item) !== "env" && !isOnDeviceProvider(item) && (protocol() === "v1" || !isConfigCustom(item.id))
 
   const note = (id: string) => PROVIDER_NOTES.find((item) => item.match(id))?.key
 
@@ -178,9 +180,11 @@ const SettingsProvidersContent: Component<{ onBack?: () => void }> = (props) => 
                     <Show
                       when={canDisconnect(item)}
                       fallback={
-                        <span class="text-14-regular text-text-base opacity-0 group-hover:opacity-100 transition-opacity duration-200 pr-3 cursor-default">
-                          {language.t("settings.providers.connected.environmentDescription")}
-                        </span>
+                        <Show when={!isOnDeviceProvider(item)}>
+                          <span class="text-14-regular text-text-base opacity-0 group-hover:opacity-100 transition-opacity duration-200 pr-3 cursor-default">
+                            {language.t("settings.providers.connected.environmentDescription")}
+                          </span>
+                        </Show>
                       }
                     >
                       <Button size="large" variant="ghost" onClick={() => void disconnect(item.id, item.name)}>

@@ -1,4 +1,4 @@
-import { createMemo, createSignal } from "solid-js"
+import { createMemo, createSignal, onMount } from "solid-js"
 import { useLocal } from "../context/local"
 import { map, pipe, flatMap, entries, filter, sortBy, take } from "remeda"
 import { DialogSelect } from "../ui/dialog-select"
@@ -8,12 +8,25 @@ import { DialogVariant } from "./dialog-variant"
 import * as fuzzysort from "fuzzysort"
 import { useConnected } from "./use-connected"
 import { useSync } from "../context/sync"
+import { useSDK } from "../context/sdk"
+import { useProject } from "../context/project"
 
 export function DialogModel(props: { providerID?: string }) {
   const local = useLocal()
   const sync = useSync()
   const dialog = useDialog()
+  const sdk = useSDK()
+  const project = useProject()
   const [query, setQuery] = createSignal("")
+
+  // Picks up a local engine started, or a model pulled, since this pane booted.
+  onMount(() => {
+    void sdk.client.config.providers({ workspace: project.workspace.current() }).then((result) => {
+      if (!result.data) return
+      sync.set("provider", result.data.providers)
+      sync.set("provider_default", result.data.default)
+    })
+  })
 
   const connected = useConnected()
   const providers = createDialogProviderOptions()
@@ -41,7 +54,7 @@ export function DialogModel(props: { providerID?: string }) {
             description: provider.name,
             category,
             disabled: provider.id === "opencode" && model.id.includes("-nano"),
-            footer: model.cost?.input === 0 && provider.id === "opencode" ? "Free" : undefined,
+            footer: modelFooter(provider, model),
             onSelect: () => {
               onSelect(provider.id, model.id)
             },
@@ -61,6 +74,7 @@ export function DialogModel(props: { providerID?: string }) {
     const providerOptions = pipe(
       sync.data.provider,
       sortBy(
+        (provider) => provider.options?.onDevice !== true,
         (provider) => provider.id !== "opencode",
         (provider) => provider.name,
       ),
@@ -79,7 +93,7 @@ export function DialogModel(props: { providerID?: string }) {
               : undefined,
             category: connected() ? provider.name : undefined,
             disabled: provider.id === "opencode" && model.includes("-nano"),
-            footer: info.cost?.input === 0 && provider.id === "opencode" ? "Free" : undefined,
+            footer: modelFooter(provider, info),
             onSelect() {
               onSelect(provider.id, model)
             },
@@ -100,7 +114,9 @@ export function DialogModel(props: { providerID?: string }) {
               return false
             return true
           }),
-          (options) => sortModelOptions(options, props.providerID !== undefined),
+          // Local models arrive ranked for this machine; everything else sorts by price tag and release date.
+          (options) =>
+            provider.options?.onDevice === true ? options : sortModelOptions(options, props.providerID !== undefined),
         ),
       ),
     )
@@ -182,6 +198,21 @@ export function DialogModel(props: { providerID?: string }) {
     />
   )
 }
+
+// What the choice costs, at a glance. Zero or missing prices from a cloud provider stay blank: they usually
+// mean a subscription or an unknown price, not free.
+export function modelFooter(
+  provider: { id: string; options?: Record<string, unknown> },
+  model: { cost?: { input: number; output: number }; capabilities?: { toolcall?: boolean } },
+) {
+  if (model.capabilities?.toolcall === false) return "Chat only"
+  if (provider.options?.onDevice === true) return "Free"
+  if (provider.id === "opencode" && model.cost?.input === 0) return "Free"
+  if (!model.cost || model.cost.input + model.cost.output === 0) return undefined
+  return `$${price(model.cost.input)}/$${price(model.cost.output)}`
+}
+
+const price = (value: number) => (value >= 1 ? Number(value.toFixed(2)) : Number(value.toPrecision(2)))
 
 export function sortModelOptions<T extends { footer?: string; releaseDate: string | number; title: string }>(
   options: T[],

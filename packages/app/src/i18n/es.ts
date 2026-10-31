@@ -225,6 +225,8 @@ export const dict = {
   "dialog.model.manage.provider.toggle": "Mostrar u ocultar todos los modelos de {{provider}}",
 
   "dialog.model.unpaid.freeModels.title": "Modelos gratuitos proporcionados por Swarm",
+  "dialog.model.local.title": "En este dispositivo",
+  "dialog.model.local.empty": "Inicia Ollama o LM Studio y tus modelos aparecerán aquí.",
   "dialog.model.unpaid.addMore.title": "Añadir más modelos de proveedores populares",
   "dialog.model.unpaid.viewMoreProviders": "Ver más de 70 proveedores",
 
@@ -305,6 +307,7 @@ export const dict = {
 
   "model.tag.free": "Gratis",
   "model.tag.latest": "Más reciente",
+  "model.tag.chatOnly": "Solo chat",
   "model.provider.anthropic": "Anthropic",
   "model.provider.openai": "OpenAI",
   "model.provider.google": "Google",
@@ -324,6 +327,13 @@ export const dict = {
   "model.tooltip.reasoning.allowed": "Permite razonamiento",
   "model.tooltip.reasoning.none": "Sin razonamiento",
   "model.tooltip.context": "Límite de contexto {{limit}}",
+  "model.tooltip.cost.label": "Coste",
+  "model.tooltip.local.value": "Gratis, en este dispositivo",
+  "model.tooltip.price.label": "Por 1 M de tokens",
+  "model.tooltip.price.value": "{{input}} entrada, {{output}} salida",
+  "model.tooltip.sessionCost.label": "Esta sesión costaría",
+  "model.tooltip.tools.label": "Herramientas",
+  "model.tooltip.tools.none": "Ninguna, solo chat",
 
   "common.search.placeholder": "Buscar",
   "common.goBack": "Volver",

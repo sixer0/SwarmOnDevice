@@ -124,6 +124,8 @@ export const dict = {
   "dialog.model.manage.provider.toggle": "Skift alle {{provider}}-modeller",
 
   "dialog.model.unpaid.freeModels.title": "Gratis modeller leveret af Swarm",
+  "dialog.model.local.title": "På denne enhed",
+  "dialog.model.local.empty": "Start Ollama eller LM Studio, så vises dine modeller her.",
   "dialog.model.unpaid.addMore.title": "Tilføj flere modeller fra populære udbydere",
   "dialog.model.unpaid.viewMoreProviders": "Se mere end 70 yderligere udbydere",
 
@@ -202,6 +204,7 @@ export const dict = {
   "provider.disconnect.toast.disconnected.description": "Modeller fra {{provider}} er ikke længere tilgængelige.",
   "model.tag.free": "Gratis",
   "model.tag.latest": "Nyeste",
+  "model.tag.chatOnly": "Kun chat",
 
   "model.provider.anthropic": "Anthropic",
   "model.provider.openai": "OpenAI",
@@ -222,6 +225,13 @@ export const dict = {
   "model.tooltip.reasoning.allowed": "Tillader ræsonnering",
   "model.tooltip.reasoning.none": "Ingen ræsonnering",
   "model.tooltip.context": "Kontekstgrænse {{limit}}",
+  "model.tooltip.cost.label": "Pris",
+  "model.tooltip.local.value": "Gratis, på denne enhed",
+  "model.tooltip.price.label": "Pr. 1M tokens",
+  "model.tooltip.price.value": "{{input}} ind, {{output}} ud",
+  "model.tooltip.sessionCost.label": "Denne session ville koste",
+  "model.tooltip.tools.label": "Værktøjer",
+  "model.tooltip.tools.none": "Ingen, kun chat",
   "common.search.placeholder": "Søg",
   "common.goBack": "Gå tilbage",
   "common.goForward": "Naviger fremad",

@@ -227,6 +227,8 @@ export const dict = {
   "dialog.model.manage.provider.toggle": "切換所有 {{provider}} 模型",
 
   "dialog.model.unpaid.freeModels.title": "Swarm 提供的免費模型",
+  "dialog.model.local.title": "在此裝置上",
+  "dialog.model.local.empty": "啟動 Ollama 或 LM Studio，你的模型就會顯示在這裡。",
   "dialog.model.unpaid.addMore.title": "從熱門提供者新增更多模型",
   "dialog.model.unpaid.viewMoreProviders": "查看另外 70 多個提供者",
 
@@ -303,6 +305,7 @@ export const dict = {
   "provider.disconnect.toast.disconnected.description": "{{provider}} 模型已不再可用。",
   "model.tag.free": "免費",
   "model.tag.latest": "最新",
+  "model.tag.chatOnly": "僅聊天",
 
   "model.provider.anthropic": "Anthropic",
   "model.provider.openai": "OpenAI",
@@ -323,6 +326,13 @@ export const dict = {
   "model.tooltip.reasoning.allowed": "支援推理",
   "model.tooltip.reasoning.none": "不支援推理",
   "model.tooltip.context": "上下文上限 {{limit}}",
+  "model.tooltip.cost.label": "費用",
+  "model.tooltip.local.value": "免費，在此裝置上",
+  "model.tooltip.price.label": "每 100 萬 token",
+  "model.tooltip.price.value": "輸入 {{input}}，輸出 {{output}}",
+  "model.tooltip.sessionCost.label": "此工作階段的費用將為",
+  "model.tooltip.tools.label": "工具",
+  "model.tooltip.tools.none": "無，只能聊天",
   "common.search.placeholder": "搜尋",
   "common.goBack": "返回",
   "common.goForward": "前進",

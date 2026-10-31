@@ -1,5 +1,22 @@
 import { describe, expect, test } from "bun:test"
-import { sortModelOptions } from "../../../../src/component/dialog-model"
+import { modelFooter, sortModelOptions } from "../../../../src/component/dialog-model"
+
+describe("modelFooter", () => {
+  const cloud = { id: "anthropic" }
+  const local = { id: "ollama", options: { onDevice: true } }
+
+  test("shows input and output prices per million tokens", () => {
+    expect(modelFooter(cloud, { cost: { input: 3, output: 15 } })).toBe("$3/$15")
+    expect(modelFooter(cloud, { cost: { input: 0.075, output: 0.3 } })).toBe("$0.075/$0.3")
+  })
+  test("calls only local models free, not a zero price from a cloud provider", () => {
+    expect(modelFooter(local, { cost: { input: 0, output: 0 } })).toBe("Free")
+    expect(modelFooter(cloud, { cost: { input: 0, output: 0 } })).toBeUndefined()
+  })
+  test("warns about a model that cannot use tools", () => {
+    expect(modelFooter(local, { capabilities: { toolcall: false } })).toBe("Chat only")
+  })
+})
 
 describe("sortModelOptions", () => {
   test("orders provider-scoped model choices by newest release first", () => {

@@ -3,6 +3,7 @@ import { base64Encode } from "@opencode-ai/core/util/encode"
 import { useParams } from "@solidjs/router"
 import { batch, createEffect, createMemo, startTransition } from "solid-js"
 import { createStore } from "solid-js/store"
+import { compareProviders } from "@/components/model-price"
 import { useModels } from "@/context/models"
 import { useSettings } from "@/context/settings"
 import { useProviders } from "@/hooks/use-providers"
@@ -163,7 +164,8 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
 
     const defaultModel = () => {
       const defaults = providers.default()
-      for (const provider of providers.connected()) {
+      // Running a local engine does not take over from a cloud model someone connected on purpose.
+      for (const provider of providers.connected().toSorted((a, b) => -compareProviders(a, b))) {
         const configured = defaults[provider.id]
         if (configured) {
           const model = { providerID: provider.id, modelID: configured }

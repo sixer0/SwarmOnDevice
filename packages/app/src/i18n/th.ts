@@ -223,6 +223,8 @@ export const dict = {
   "dialog.model.manage.provider.toggle": "สลับโมเดลทั้งหมดของ {{provider}}",
 
   "dialog.model.unpaid.freeModels.title": "โมเดลฟรีที่จัดหาให้โดย Swarm",
+  "dialog.model.local.title": "บนอุปกรณ์นี้",
+  "dialog.model.local.empty": "เริ่ม Ollama หรือ LM Studio แล้วโมเดลของคุณจะแสดงที่นี่",
   "dialog.model.unpaid.addMore.title": "เพิ่มโมเดลเพิ่มเติมจากผู้ให้บริการยอดนิยม",
   "dialog.model.unpaid.viewMoreProviders": "ดูผู้ให้บริการเพิ่มเติมกว่า 70 ราย",
 
@@ -302,6 +304,7 @@ export const dict = {
 
   "model.tag.free": "ฟรี",
   "model.tag.latest": "ล่าสุด",
+  "model.tag.chatOnly": "แชตเท่านั้น",
   "model.provider.anthropic": "Anthropic",
   "model.provider.openai": "OpenAI",
   "model.provider.google": "Google",
@@ -321,6 +324,13 @@ export const dict = {
   "model.tooltip.reasoning.allowed": "อนุญาตการใช้เหตุผล",
   "model.tooltip.reasoning.none": "ไม่มีการใช้เหตุผล",
   "model.tooltip.context": "ขีดจำกัดบริบท {{limit}}",
+  "model.tooltip.cost.label": "ค่าใช้จ่าย",
+  "model.tooltip.local.value": "ฟรี บนอุปกรณ์นี้",
+  "model.tooltip.price.label": "ต่อ 1 ล้านโทเค็น",
+  "model.tooltip.price.value": "เข้า {{input}}, ออก {{output}}",
+  "model.tooltip.sessionCost.label": "เซสชันนี้จะมีค่าใช้จ่าย",
+  "model.tooltip.tools.label": "เครื่องมือ",
+  "model.tooltip.tools.none": "ไม่มี แชตเท่านั้น",
 
   "common.search.placeholder": "ค้นหา",
   "common.goBack": "ย้อนกลับ",

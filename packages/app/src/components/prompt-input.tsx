@@ -1201,6 +1201,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
   const { abort, handleSubmit } =
     props.submission ??
     createPromptSubmit({
+      onModelRequired: () => dialog.show(() => <DialogSelectModelUnpaid model={props.controls.model.selection} />),
       prompt,
       info,
       imageAttachments,

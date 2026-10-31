@@ -249,6 +249,8 @@ export const dict = {
   "dialog.model.manage.description": "自定义模型选择器中显示的模型。",
   "dialog.model.manage.provider.toggle": "切换所有 {{provider}} 模型",
   "dialog.model.unpaid.freeModels.title": "Swarm 提供的免费模型",
+  "dialog.model.local.title": "在此设备上",
+  "dialog.model.local.empty": "启动 Ollama 或 LM Studio，你的模型就会显示在这里。",
   "dialog.model.unpaid.addMore.title": "从热门提供商添加更多模型",
   "dialog.model.unpaid.viewMoreProviders": "查看另外 70 多个提供商",
 
@@ -326,6 +328,7 @@ export const dict = {
 
   "model.tag.free": "免费",
   "model.tag.latest": "最新",
+  "model.tag.chatOnly": "仅聊天",
   "model.provider.anthropic": "Anthropic",
   "model.provider.openai": "OpenAI",
   "model.provider.google": "Google",
@@ -345,6 +348,13 @@ export const dict = {
   "model.tooltip.reasoning.allowed": "支持推理",
   "model.tooltip.reasoning.none": "不支持推理",
   "model.tooltip.context": "上下文上限 {{limit}}",
+  "model.tooltip.cost.label": "费用",
+  "model.tooltip.local.value": "免费，在此设备上",
+  "model.tooltip.price.label": "每 100 万 token",
+  "model.tooltip.price.value": "输入 {{input}}，输出 {{output}}",
+  "model.tooltip.sessionCost.label": "此会话的费用将为",
+  "model.tooltip.tools.label": "工具",
+  "model.tooltip.tools.none": "无，只能聊天",
 
   "common.search.placeholder": "搜索",
   "common.goBack": "返回",

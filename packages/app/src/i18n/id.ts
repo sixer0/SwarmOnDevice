@@ -226,6 +226,8 @@ export const dict = {
   "dialog.model.manage.provider.toggle": "Alihkan semua model {{provider}}",
 
   "dialog.model.unpaid.freeModels.title": "Model gratis disediakan oleh Swarm",
+  "dialog.model.local.title": "Di perangkat ini",
+  "dialog.model.local.empty": "Jalankan Ollama atau LM Studio dan model Anda akan muncul di sini.",
   "dialog.model.unpaid.addMore.title": "Tambahkan lebih banyak model dari penyedia populer",
   "dialog.model.unpaid.viewMoreProviders": "Lihat 70+ penyedia lainnya",
 
@@ -305,6 +307,7 @@ export const dict = {
 
   "model.tag.free": "Gratis",
   "model.tag.latest": "Terbaru",
+  "model.tag.chatOnly": "Hanya obrolan",
   "model.provider.anthropic": "Anthropic",
   "model.provider.openai": "OpenAI",
   "model.provider.google": "Google",
@@ -324,6 +327,13 @@ export const dict = {
   "model.tooltip.reasoning.allowed": "Mengizinkan penalaran",
   "model.tooltip.reasoning.none": "Tanpa penalaran",
   "model.tooltip.context": "Batas konteks {{limit}}",
+  "model.tooltip.cost.label": "Biaya",
+  "model.tooltip.local.value": "Gratis, di perangkat ini",
+  "model.tooltip.price.label": "Per 1 juta token",
+  "model.tooltip.price.value": "{{input}} masuk, {{output}} keluar",
+  "model.tooltip.sessionCost.label": "Sesi ini akan berbiaya",
+  "model.tooltip.tools.label": "Alat",
+  "model.tooltip.tools.none": "Tidak ada, hanya obrolan",
 
   "common.search.placeholder": "Cari",
   "common.goBack": "Navigasi mundur",

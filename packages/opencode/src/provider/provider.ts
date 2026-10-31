@@ -28,6 +28,7 @@ import { optional } from "@opencode-ai/core/schema"
 import { ProviderTransform } from "./transform"
 import { ProviderV2 } from "@opencode-ai/core/provider"
 import { ModelV2 } from "@opencode-ai/core/model"
+import { LocalEngines } from "./local-engines"
 import { ModelStatus } from "./model-status"
 import { RuntimeFlags } from "@/effect/runtime-flags"
 import { ProviderError } from "./error"
@@ -1170,8 +1171,57 @@ export function toPublicInfo(provider: Info): Info {
   )
 }
 
-export function defaultModelIDs<T extends { models: Record<string, { id: string }> }>(providers: Record<string, T>) {
-  return mapValues(providers, (item) => sort(Object.values(item.models))[0].id)
+export function defaultModelIDs<T extends { options?: Record<string, unknown>; models: Record<string, { id: string }> }>(
+  providers: Record<string, T>,
+) {
+  return mapValues(providers, (item) => bestModel(item).id)
+}
+
+// Local models arrive ranked for this machine (LocalEngines.rank); names say nothing useful about them.
+function bestModel<M extends { id: string }>(provider: { options?: Record<string, unknown>; models: Record<string, M> }) {
+  const models = Object.values(provider.models)
+  return provider.options?.onDevice === true ? models[0] : sort(models)[0]
+}
+
+function fromLocalEngine(engine: LocalEngines.LocalEngine): Info {
+  const id = ProviderV2.ID.make(engine.id)
+  return {
+    id,
+    name: engine.name,
+    // Not a new source value: outside SDK and plugin users keep the set they already handle.
+    source: "custom",
+    env: [],
+    options: { baseURL: engine.baseURL, apiKey: "local", onDevice: true },
+    models: Object.fromEntries(
+      engine.models.map((item) => {
+        const context = item.context ?? 32_768
+        const model: Model = {
+          id: ModelV2.ID.make(item.id),
+          providerID: id,
+          name: item.id,
+          family: item.family,
+          api: { id: item.id, url: engine.baseURL, npm: "@ai-sdk/openai-compatible" },
+          status: "active",
+          headers: {},
+          options: {},
+          cost: { input: 0, output: 0, cache: { read: 0, write: 0 } },
+          limit: { context, output: Math.min(Math.floor(context / 4), 16_384) },
+          capabilities: {
+            temperature: true,
+            reasoning: item.reasoning,
+            attachment: item.vision,
+            toolcall: item.tools,
+            input: { text: true, audio: false, image: item.vision, video: false, pdf: false },
+            output: { text: true, audio: false, image: false, video: false, pdf: false },
+            interleaved: false,
+          },
+          release_date: "",
+          variants: {},
+        }
+        return [item.id, { ...model, variants: ProviderTransform.variants(model) }]
+      }),
+    ),
+  }
 }
 
 export class ModelNotFoundError extends Schema.TaggedErrorClass<ModelNotFoundError>()("ProviderModelNotFoundError", {
@@ -1248,6 +1298,8 @@ interface State {
   sdk: Map<string, BundledSDK>
   modelLoaders: Record<string, CustomModelLoader>
   varsLoaders: Record<string, CustomVarsLoader>
+  localIDs: Set<string>
+  localAllowed: (engine: LocalEngines.LocalEngine) => boolean
 }
 
 export class Service extends Context.Service<Service, Interface>()("@opencode/Provider") {}
@@ -1787,11 +1839,40 @@ const layer = Layer.effect(
           sdk,
           modelLoaders,
           varsLoaders,
+          localIDs: new Set<string>(),
+          localAllowed: (engine: LocalEngines.LocalEngine) => {
+            if (!isProviderAllowed(ProviderV2.ID.make(engine.id))) return false
+            // Whoever set this engine up by hand, under any name, keeps their own setup.
+            return !configProviders.some(
+              ([id, provider]) => id === engine.id || sameOrigin(provider.options?.baseURL, engine.baseURL),
+            )
+          },
         }
       }),
     )
 
-    const list = Effect.fn("Provider.list")(() => InstanceState.use(state, (s) => s.providers))
+    // Local engines come and go while Swarm runs (someone starts Ollama, pulls a model), so they are
+    // reconciled on read instead of being fixed when a directory's state is built. Appended after every
+    // other provider, so having a local engine never changes the model of someone who connected a cloud one.
+    const syncLocal = Effect.fn("Provider.syncLocal")(function* (s: State) {
+      const engines = (yield* Effect.promise(() => LocalEngines.current())).filter(
+        (engine) => s.localAllowed(engine) && (s.localIDs.has(engine.id) || !s.providers[ProviderV2.ID.make(engine.id)]),
+      )
+      const seen = new Set(engines.map((engine) => engine.id as string))
+      for (const id of s.localIDs) {
+        if (!seen.has(id)) delete s.providers[ProviderV2.ID.make(id)]
+      }
+      for (const engine of engines) {
+        s.providers[ProviderV2.ID.make(engine.id)] = fromLocalEngine(engine)
+      }
+      s.localIDs = seen
+      return s
+    })
+
+    const list = Effect.fn("Provider.list")(function* () {
+      const s = yield* InstanceState.get(state)
+      return (yield* syncLocal(s)).providers
+    })
 
     async function resolveSDK(model: Model, s: State, envs: Record<string, string | undefined>) {
       try {
@@ -1898,12 +1979,16 @@ const layer = Layer.effect(
       }
     }
 
-    const getProvider = Effect.fn("Provider.getProvider")((providerID: ProviderV2.ID) =>
-      InstanceState.use(state, (s) => s.providers[providerID]),
-    )
+    const getProvider = Effect.fn("Provider.getProvider")(function* (providerID: ProviderV2.ID) {
+      const s = yield* InstanceState.get(state)
+      return s.providers[providerID] ?? (yield* syncLocal(s)).providers[providerID]
+    })
 
     const getModel = Effect.fn("Provider.getModel")(function* (providerID: ProviderV2.ID, modelID: ModelV2.ID) {
-      const s = yield* InstanceState.get(state)
+      const known = yield* InstanceState.get(state)
+      // Only a miss asks the engines again: an agent run looks its model up on every step, and port 8080
+      // may belong to the user's own server, which should not see a probe every few seconds.
+      const s = known.providers[providerID]?.models[modelID] ? known : yield* syncLocal(known)
       const provider = s.providers[providerID]
       if (!provider) {
         const catalogProvider = s.catalog[providerID]
@@ -2042,7 +2127,7 @@ const layer = Layer.effect(
       const cfg = yield* config.get()
       if (cfg.model) return parseModel(cfg.model)
 
-      const s = yield* InstanceState.get(state)
+      const s = yield* syncLocal(yield* InstanceState.get(state))
       const recent = yield* fs.readJson(path.join(Global.Path.state, "model.json")).pipe(
         Effect.map((x): { providerID: ProviderV2.ID; modelID: ModelV2.ID }[] => {
           if (!isRecord(x) || !Array.isArray(x.recent)) return []
@@ -2065,7 +2150,7 @@ const layer = Layer.effect(
       const configured = Object.keys(cfg.provider ?? {})
       const provider = Object.values(s.providers).find((p) => configured.length === 0 || configured.includes(p.id))
       if (!provider) return yield* new NoProvidersError()
-      const [model] = sort(Object.values(provider.models))
+      const model = bestModel(provider)
       if (!model) return yield* new NoModelsError({ providerID: provider.id })
       return {
         providerID: provider.id,
@@ -2077,7 +2162,7 @@ const layer = Layer.effect(
   }),
 )
 
-const priority = ["gpt-5", "claude-sonnet-4", "big-pickle", "gemini-3-pro"]
+const priority = ["gpt-5", "claude-sonnet", "big-pickle", "gemini-3-pro"]
 const smallModelFamilyPriority = ["gemini-flash", "gpt-nano", "claude-haiku"]
 export function sort<T extends { id: string }>(models: T[]) {
   return sortBy(
@@ -2086,6 +2171,15 @@ export function sort<T extends { id: string }>(models: T[]) {
     [(model) => (model.id.includes("latest") ? 0 : 1), "asc"],
     [(model) => model.id, "desc"],
   )
+}
+
+function sameOrigin(a: unknown, b: string) {
+  if (typeof a !== "string") return false
+  const left = URL.parse(a)
+  const right = URL.parse(b)
+  if (!left || !right) return false
+  const host = (url: URL) => (url.hostname === "localhost" || url.hostname === "[::1]" ? "127.0.0.1" : url.hostname)
+  return host(left) === host(right) && left.port === right.port
 }
 
 export function parseModel(model: string) {

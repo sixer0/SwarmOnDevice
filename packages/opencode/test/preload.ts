@@ -54,6 +54,11 @@ const cacheDir = path.join(dir, "cache", "opencode")
 await fs.mkdir(cacheDir, { recursive: true })
 await fs.writeFile(path.join(cacheDir, "version"), "14")
 
+// Local model engines running on the developer's machine must not appear in tests. A remote host is never probed.
+process.env["OLLAMA_HOST"] = "local-engines-off.invalid"
+process.env["SWARM_LMSTUDIO_HOST"] = "local-engines-off.invalid"
+process.env["SWARM_LLAMACPP_HOST"] = "local-engines-off.invalid"
+
 // Clear provider and server auth env vars to ensure clean test state
 delete process.env["ANTHROPIC_API_KEY"]
 delete process.env["OPENAI_API_KEY"]

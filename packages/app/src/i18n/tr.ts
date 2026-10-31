@@ -229,6 +229,8 @@ export const dict = {
   "dialog.model.manage.provider.toggle": "Tüm {{provider}} modellerini aç/kapat",
 
   "dialog.model.unpaid.freeModels.title": "Swarm tarafından sunulan ücretsiz modeller",
+  "dialog.model.local.title": "Bu cihazda",
+  "dialog.model.local.empty": "Ollama veya LM Studio'yu başlatın, modelleriniz burada görünsün.",
   "dialog.model.unpaid.addMore.title": "Popüler sağlayıcılardan daha fazla model ekleyin",
   "dialog.model.unpaid.viewMoreProviders": "70'ten fazla sağlayıcı daha görüntüle",
 
@@ -309,6 +311,7 @@ export const dict = {
 
   "model.tag.free": "Ücretsiz",
   "model.tag.latest": "En yeni",
+  "model.tag.chatOnly": "Yalnızca sohbet",
   "model.provider.anthropic": "Anthropic",
   "model.provider.openai": "OpenAI",
   "model.provider.google": "Google",
@@ -328,6 +331,13 @@ export const dict = {
   "model.tooltip.reasoning.allowed": "Akıl yürütmeyi destekler",
   "model.tooltip.reasoning.none": "Akıl yürütme yok",
   "model.tooltip.context": "Bağlam sınırı {{limit}}",
+  "model.tooltip.cost.label": "Maliyet",
+  "model.tooltip.local.value": "Ücretsiz, bu cihazda",
+  "model.tooltip.price.label": "1M token başına",
+  "model.tooltip.price.value": "{{input}} giriş, {{output}} çıkış",
+  "model.tooltip.sessionCost.label": "Bu oturumun maliyeti",
+  "model.tooltip.tools.label": "Araçlar",
+  "model.tooltip.tools.none": "Yok, yalnızca sohbet",
 
   "common.search.placeholder": "Ara",
   "common.goBack": "Geri git",

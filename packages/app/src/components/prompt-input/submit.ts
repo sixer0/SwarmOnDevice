@@ -228,6 +228,7 @@ type PromptSubmitInput = {
   onQueue?: (draft: FollowupDraft) => void
   onAbort?: () => void
   onSubmit?: () => void
+  onModelRequired?: () => void
   model?: ModelSelection
 }
 
@@ -339,6 +340,10 @@ export function createPromptSubmit(input: PromptSubmitInput) {
     const currentModel = modelSelection.current()
     const currentAgent = local.agent.current()
     const variant = modelSelection.variant.current()
+    if (!currentModel && input.onModelRequired) {
+      input.onModelRequired()
+      return
+    }
     if (!currentModel || !currentAgent) {
       showToast({
         title: language.t("prompt.toast.modelAgentRequired.title"),

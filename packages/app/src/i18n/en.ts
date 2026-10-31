@@ -128,6 +128,8 @@ export const dict = {
   "dialog.model.manage.provider.toggle": "Toggle all {{provider}} models",
 
   "dialog.model.unpaid.freeModels.title": "Free models provided by Swarm",
+  "dialog.model.local.title": "On this device",
+  "dialog.model.local.empty": "Start Ollama or LM Studio and your models appear here.",
   "dialog.model.unpaid.addMore.title": "Add more models from popular providers",
   "dialog.model.unpaid.viewMoreProviders": "See 70+ more providers",
 
@@ -207,6 +209,7 @@ export const dict = {
 
   "model.tag.free": "Free",
   "model.tag.latest": "Latest",
+  "model.tag.chatOnly": "Chat only",
   "model.provider.anthropic": "Anthropic",
   "model.provider.openai": "OpenAI",
   "model.provider.google": "Google",
@@ -226,6 +229,13 @@ export const dict = {
   "model.tooltip.reasoning.allowed": "Allows reasoning",
   "model.tooltip.reasoning.none": "No reasoning",
   "model.tooltip.context": "Context limit {{limit}}",
+  "model.tooltip.cost.label": "Cost",
+  "model.tooltip.local.value": "Free, on this device",
+  "model.tooltip.price.label": "Per 1M tokens",
+  "model.tooltip.price.value": "{{input}} in, {{output}} out",
+  "model.tooltip.sessionCost.label": "This session would cost",
+  "model.tooltip.tools.label": "Tools",
+  "model.tooltip.tools.none": "None, can only chat",
 
   "common.search.placeholder": "Search",
   "common.goBack": "Navigate back",

@@ -15,6 +15,7 @@ import { Config } from "@/config/config"
 import { Env } from "../../src/env"
 import { Plugin } from "../../src/plugin/index"
 import { Provider } from "@/provider/provider"
+import { LocalEngines } from "@/provider/local-engines"
 
 import { RuntimeFlags } from "@/effect/runtime-flags"
 import { InstanceBootstrap } from "@/project/bootstrap"
@@ -101,6 +102,90 @@ const alphaProviderConfig = {
     },
   },
 }
+
+// A real HTTP server answering Ollama's documented endpoints, so the whole path from probe to Provider.list runs.
+const localEngine = Effect.acquireRelease(
+  Effect.sync(() => {
+    const server = Bun.serve({
+      port: 0,
+      hostname: "127.0.0.1",
+      async fetch(request) {
+        const pathname = new URL(request.url).pathname
+        if (pathname === "/api/tags")
+          return Response.json({
+            models: [
+              { name: "chat-only:4b", size: 3e9, details: { family: "x" } },
+              { name: "best:14b", size: 9e9, details: { family: "x" } },
+            ],
+          })
+        const body = (await request.json()) as { model: string }
+        return Response.json({
+          capabilities: body.model === "best:14b" ? ["completion", "tools"] : ["completion"],
+          model_info: { "x.context_length": 40960 },
+        })
+      },
+    })
+    process.env["OLLAMA_HOST"] = `127.0.0.1:${server.port}`
+    LocalEngines.reset()
+    return server
+  }),
+  (server) =>
+    Effect.sync(() => {
+      server.stop(true)
+      process.env["OLLAMA_HOST"] = "local-engines-off.invalid"
+      LocalEngines.reset()
+    }),
+)
+
+it.instance("a running local engine connects by itself and starts on its best model", () =>
+  Effect.gen(function* () {
+    const server = yield* localEngine
+    const providers = yield* list
+    const ollama = providers[ProviderV2.ID.make("ollama")]
+    expect(ollama.options.onDevice).toBe(true)
+    expect(ollama.options.baseURL).toBe(`http://127.0.0.1:${server.port}/v1`)
+    expect(Object.keys(ollama.models)).toEqual(["best:14b", "chat-only:4b"])
+    expect(ollama.models["chat-only:4b"].capabilities.toolcall).toBe(false)
+    expect(ollama.models["best:14b"].cost.input).toBe(0)
+    expect(Provider.defaultModelIDs(providers)[ProviderV2.ID.make("ollama")]).toBe("best:14b")
+    const fallback = yield* Provider.use.defaultModel()
+    expect(fallback).toEqual({ providerID: ProviderV2.ID.make("ollama"), modelID: ModelV2.ID.make("best:14b") })
+    const model = yield* Provider.use.getModel(ProviderV2.ID.make("ollama"), ModelV2.ID.make("best:14b"))
+    expect(model.api.url).toBe(`http://127.0.0.1:${server.port}/v1`)
+  }),
+)
+
+it.instance("a local engine does not take over from a cloud provider", () =>
+  Effect.gen(function* () {
+    yield* localEngine
+    yield* setProcessEnv("ANTHROPIC_API_KEY", "test-api-key")
+    const providers = yield* list
+    expect(providers[ProviderV2.ID.make("ollama")]).toBeDefined()
+    const fallback = yield* Provider.use.defaultModel()
+    expect(fallback.providerID).toBe(ProviderV2.ID.anthropic)
+  }),
+)
+
+it.instance(
+  "a local engine the user disabled stays off",
+  () =>
+    Effect.gen(function* () {
+      yield* localEngine
+      const providers = yield* list
+      expect(providers[ProviderV2.ID.make("ollama")]).toBeUndefined()
+    }),
+  { config: { disabled_providers: ["ollama"] } },
+)
+
+it.instance("local models disappear when the engine stops", () =>
+  Effect.gen(function* () {
+    const server = yield* localEngine
+    expect((yield* list)[ProviderV2.ID.make("ollama")]).toBeDefined()
+    yield* Effect.promise(() => server.stop(true))
+    LocalEngines.reset()
+    expect((yield* list)[ProviderV2.ID.make("ollama")]).toBeUndefined()
+  }),
+)
 
 it.instance("provider loaded from env variable", () =>
   Effect.gen(function* () {

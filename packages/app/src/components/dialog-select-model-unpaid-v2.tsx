@@ -10,7 +10,9 @@ import { useLocal } from "@/context/local"
 import { useProviders } from "@/hooks/use-providers"
 import { decode64 } from "@/utils/base64"
 import { useLanguage } from "@/context/language"
+import { useServerSync } from "@/context/server-sync"
 import { ModelTooltip } from "./model-tooltip"
+import { isOnDevice } from "./model-price"
 
 type ModelState = ReturnType<typeof useLocal>["model"]
 const featuredProviders = ["opencode", "opencode-go", "openai", "anthropic", "google", "github-copilot"]
@@ -32,6 +34,9 @@ export const DialogSelectModelUnpaidV2: Component<{ model?: ModelState }> = (pro
   const isFree = (item: ReturnType<ModelState["list"]>[number]) =>
     item.provider.id === "opencode" && (!item.cost || item.cost.input === 0)
   const freeModels = createMemo(() => model.list().filter(isFree))
+  const localModels = createMemo(() => model.list().filter(isOnDevice))
+  const rows = createMemo(() => [...localModels(), ...freeModels()])
+  const serverSync = useServerSync()
 
   const openProviders = (provider?: string) => {
     void import("./dialog-connect-provider").then((x) => {
@@ -50,6 +55,10 @@ export const DialogSelectModelUnpaidV2: Component<{ model?: ModelState }> = (pro
   // document level while the dialog is mounted instead of on the list container.
   let listEl: HTMLDivElement | undefined
   onMount(() => {
+    // While this is open, starting a local engine is all it takes: its models appear here by themselves.
+    void serverSync().refreshProviders()
+    const poll = setInterval(() => void serverSync().refreshProviders(), 3000)
+    onCleanup(() => clearInterval(poll))
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return
       if (!listEl) return
@@ -79,10 +88,20 @@ export const DialogSelectModelUnpaidV2: Component<{ model?: ModelState }> = (pro
           <div data-section="free-models" class="flex w-full flex-col items-start pb-3">
             <div class="flex h-8 w-full flex-none select-none flex-row items-center px-3 pb-2">
               <div class="flex h-5 items-center text-[13px] font-[440] leading-5 tracking-[-0.04px] text-v2-text-text-muted [font-family:var(--v2-font-family-sans)] [font-variant-numeric:tabular-nums] [font-variation-settings:'slnt'_0]">
-                {language.t("dialog.model.unpaid.freeModels.title")}
+                {freeModels().length > 0 && localModels().length === 0
+                  ? language.t("dialog.model.unpaid.freeModels.title")
+                  : language.t("dialog.model.local.title")}
               </div>
             </div>
-            <For each={freeModels()}>
+            <Show when={rows().length === 0}>
+              <div
+                data-local-hint
+                class="px-3 text-[13px] font-[440] leading-5 tracking-[-0.04px] text-v2-text-text-base [font-family:var(--v2-font-family-sans)]"
+              >
+                {language.t("dialog.model.local.empty")}
+              </div>
+            </Show>
+            <For each={rows()}>
               {(item) => (
                 <TooltipV2
                   class="w-full"
@@ -105,10 +124,10 @@ export const DialogSelectModelUnpaidV2: Component<{ model?: ModelState }> = (pro
                     onClick={() => selectModel(item)}
                   >
                     <span class="min-w-0 truncate">{displayModelName(item.name)}</span>
-                    <Tag class="shrink-0">{language.t("model.tag.free")}</Tag>
-                    <Show when={item.latest}>
-                      <Tag class="shrink-0">{language.t("model.tag.latest")}</Tag>
+                    <Show when={item.capabilities.toolcall === false}>
+                      <Tag class="shrink-0">{language.t("model.tag.chatOnly")}</Tag>
                     </Show>
+                    <Tag class="shrink-0">{language.t("model.tag.free")}</Tag>
                     <Show when={currentKey() === modelKey(item)}>
                       <Icon name="check" class="ml-auto size-4 shrink-0 text-v2-icon-icon-base" />
                     </Show>

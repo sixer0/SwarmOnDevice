@@ -145,7 +145,8 @@ export const prepare = Effect.fn("LLMRequestPrep.prepare")(function* (input: Pre
     },
   )
 
-  const tools = resolveTools(input)
+  // A model that cannot use tools rejects any request that lists them, so it gets a plain chat instead of an error.
+  const tools = input.model.capabilities.toolcall ? resolveTools(input) : {}
   // Codex parity: OpenAI Responses-family providers hardcode `strict: false`
   // on every function tool so MCP-sourced and dynamic schemas that don't
   // satisfy OpenAI's structured-outputs constraints still register.

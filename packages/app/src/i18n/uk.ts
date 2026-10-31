@@ -225,6 +225,8 @@ export const dict = {
   "dialog.model.manage.provider.toggle": "Перемкнути всі моделі {{provider}}",
 
   "dialog.model.unpaid.freeModels.title": "Безкоштовні моделі від Swarm",
+  "dialog.model.local.title": "На цьому пристрої",
+  "dialog.model.local.empty": "Запустіть Ollama або LM Studio, і ваші моделі з'являться тут.",
   "dialog.model.unpaid.addMore.title": "Додати більше моделей від популярних провайдерів",
   "dialog.model.unpaid.viewMoreProviders": "Переглянути ще понад 70 провайдерів",
 
@@ -305,6 +307,7 @@ export const dict = {
 
   "model.tag.free": "Безкоштовно",
   "model.tag.latest": "Остання",
+  "model.tag.chatOnly": "Лише чат",
   "model.provider.anthropic": "Anthropic",
   "model.provider.openai": "OpenAI",
   "model.provider.google": "Google",
@@ -324,6 +327,13 @@ export const dict = {
   "model.tooltip.reasoning.allowed": "Підтримує мислення",
   "model.tooltip.reasoning.none": "Без мислення",
   "model.tooltip.context": "Ліміт контексту {{limit}}",
+  "model.tooltip.cost.label": "Вартість",
+  "model.tooltip.local.value": "Безкоштовно, на цьому пристрої",
+  "model.tooltip.price.label": "За 1 млн токенів",
+  "model.tooltip.price.value": "{{input}} ввід, {{output}} вивід",
+  "model.tooltip.sessionCost.label": "Цей сеанс коштував би",
+  "model.tooltip.tools.label": "Інструменти",
+  "model.tooltip.tools.none": "Немає, лише чат",
 
   "common.search.placeholder": "Пошук",
   "common.goBack": "Назад",

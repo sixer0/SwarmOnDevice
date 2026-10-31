@@ -22,6 +22,10 @@ import { handleDocumentSearchKeydown } from "@/utils/search-keydown"
 import { createMenuDismissController } from "@/utils/menu-dismiss-controller"
 import { createEventListener } from "@solid-primitives/event-listener"
 import { matchesModelSearch } from "./dialog-select-model-search"
+import { useServerSync } from "@/context/server-sync"
+import { useSync } from "@/context/sync"
+import { useParams } from "@solidjs/router"
+import { compareModels, compareProviders, isOnDevice, priceLabel, sumTokens } from "./model-price"
 
 const isFree = (provider: string, cost: { input: number } | undefined) =>
   provider === "opencode" && (!cost || cost.input === 0)
@@ -32,7 +36,21 @@ type ModelItem = ReturnType<ModelState["list"]>[number]
 const modelKey = (model: ModelItem) => `${model.provider.id}:${model.id}`
 const manageKey = "action:manage"
 
+// The tokens the open session has really used, so a model's tooltip can say what they would cost there.
+function createSessionTokens() {
+  const sync = useSync()
+  const params = useParams()
+  return createMemo(() => {
+    if (!params.id) return
+    return sumTokens(
+      (sync().data.message[params.id] ?? []).flatMap((message) => (message.role === "assistant" ? [message.tokens] : [])),
+    )
+  })
+}
+
 const sortModelGroups = (a: { category: string; items: ModelItem[] }, b: { category: string; items: ModelItem[] }) => {
+  const local = compareProviders(a.items[0].provider, b.items[0].provider)
+  if (local !== 0) return local
   const aIndex = popularProviders.indexOf(a.category)
   const bIndex = popularProviders.indexOf(b.category)
   const aPopular = aIndex >= 0
@@ -53,6 +71,7 @@ const ModelList: Component<{
 }> = (props) => {
   const model = props.model ?? useLocal().model
   const language = useLanguage()
+  const sessionTokens = createSessionTokens()
 
   const models = createMemo(() =>
     model
@@ -70,9 +89,11 @@ const ModelList: Component<{
       items={models}
       current={model.current()}
       filterKeys={["provider.name", "name", "id"]}
-      sortBy={(a, b) => a.name.localeCompare(b.name)}
+      sortBy={compareModels}
       groupBy={(x) => x.provider.name}
       sortGroupsBy={(a, b) => {
+        const local = compareProviders(a.items[0].provider, b.items[0].provider)
+        if (local !== 0) return local
         const aProvider = a.items[0].provider.id
         const bProvider = b.items[0].provider.id
         if (popularProviders.includes(aProvider) && !popularProviders.includes(bProvider)) return -1
@@ -85,7 +106,14 @@ const ModelList: Component<{
           placement="right-start"
           gutter={12}
           openDelay={0}
-          value={<ModelTooltip model={item} latest={item.latest} free={isFree(item.provider.id, item.cost)} />}
+          value={
+            <ModelTooltip
+              model={item}
+              latest={item.latest}
+              free={isFree(item.provider.id, item.cost)}
+              sessionTokens={sessionTokens()}
+            />
+          }
         >
           {node}
         </Tooltip>
@@ -100,12 +128,12 @@ const ModelList: Component<{
       {(i) => (
         <div class="w-full flex items-center gap-x-2 text-13-regular">
           <span class="truncate">{i.name}</span>
-          <Show when={isFree(i.provider.id, i.cost)}>
-            <Tag>{language.t("model.tag.free")}</Tag>
+          <Show when={i.capabilities.toolcall === false}>
+            <Tag>{language.t("model.tag.chatOnly")}</Tag>
           </Show>
-          <Show when={i.latest}>
-            <Tag>{language.t("model.tag.latest")}</Tag>
-          </Show>
+          <span class="ml-auto shrink-0 text-12-regular text-text-weak tabular-nums">
+            {isFree(i.provider.id, i.cost) || isOnDevice(i) ? language.t("model.tag.free") : priceLabel(i)}
+          </span>
         </div>
       )}
     </List>
@@ -241,6 +269,7 @@ export function ModelSelectorPopoverV2(props: {
       models={controller.models}
       groups={controller.groups}
       current={controller.current}
+      sessionTokens={controller.sessionTokens}
       select={controller.select}
       onManage={() => {
         void import("./dialog-manage-models").then((module) => {
@@ -271,7 +300,7 @@ function createModelSelectorController(input: {
       const filtered = query
         ? allModels().filter((item) => matchesModelSearch(query, [item.name, item.id, item.provider.name]))
         : allModels()
-      return [...filtered].sort((a, b) => a.name.localeCompare(b.name))
+      return [...filtered].sort(compareModels)
     },
     groups: (models: ModelItem[]) => {
       const byProvider = new Map<string, ModelItem[]>()
@@ -284,6 +313,7 @@ function createModelSelectorController(input: {
       const value = model.current()
       return value ? modelKey(value) : undefined
     },
+    sessionTokens: createSessionTokens(),
     select: (item: ModelItem) => {
       model.set({ modelID: item.id, providerID: item.provider.id }, { recent: true })
       input.onSelect()
@@ -296,11 +326,13 @@ function ModelSelectorPopoverV2View(props: {
   models: (search: string) => ModelItem[]
   groups: (models: ModelItem[]) => { category: string; items: ModelItem[] }[]
   current: () => string | undefined
+  sessionTokens: () => ReturnType<typeof sumTokens>
   select: (item: ModelItem) => void
   onManage: () => void
   onClose: () => void
 }) {
   const language = useLanguage()
+  const serverSync = useServerSync()
   const [store, setStore] = createStore({ open: false, search: "", active: "" })
   let searchRef: HTMLInputElement | undefined
   let contentRef: HTMLDivElement | undefined
@@ -321,6 +353,8 @@ function ModelSelectorPopoverV2View(props: {
     if (open) {
       dismiss.allowTriggerRestore()
       setStore({ open: true, active: initialActive() })
+      // Picks up a model pulled or an engine started since the list was last read.
+      void serverSync().refreshProviders()
       setTimeout(() =>
         requestAnimationFrame(() => {
           searchRef?.focus()
@@ -378,7 +412,7 @@ function ModelSelectorPopoverV2View(props: {
       <MenuV2.Portal>
         <MenuV2.Content
           ref={(element: HTMLDivElement) => (contentRef = element)}
-          class="w-[284px] overflow-hidden rounded-md border-0 bg-v2-background-bg-layer-01 !p-0 shadow-[var(--v2-elevation-floating)] focus:outline-none"
+          class="w-[320px] overflow-hidden rounded-md border-0 bg-v2-background-bg-layer-01 !p-0 shadow-[var(--v2-elevation-floating)] focus:outline-none"
           onPointerDownOutside={dismiss.preventTriggerRestore}
           onFocusOutside={dismiss.preventTriggerRestore}
           onCloseAutoFocus={dismiss.onCloseAutoFocus}
@@ -452,6 +486,9 @@ function ModelSelectorPopoverV2View(props: {
                     <MenuV2.Group>
                       <MenuV2.GroupLabel class="sticky top-0 z-10 gap-2 bg-v2-background-bg-layer-01 px-3">
                         <span class="min-w-0 truncate">{group.items[0].provider.name}</span>
+                        <Show when={isOnDevice(group.items[0])}>
+                          <span class="ml-auto shrink-0 font-[440]">{language.t("dialog.model.local.title")}</span>
+                        </Show>
                       </MenuV2.GroupLabel>
                       <MenuV2.RadioGroup value={props.current()}>
                         <For each={group.items}>
@@ -466,6 +503,7 @@ function ModelSelectorPopoverV2View(props: {
                                   model={item}
                                   latest={item.latest}
                                   free={isFree(item.provider.id, item.cost)}
+                                  sessionTokens={props.sessionTokens()}
                                   v2
                                 />
                               }
@@ -483,12 +521,17 @@ function ModelSelectorPopoverV2View(props: {
                                 onSelect={() => selectModel(item)}
                               >
                                 <span class="min-w-0 truncate leading-5">{item.name}</span>
-                                <Show when={isFree(item.provider.id, item.cost)}>
-                                  <TagV2 class="shrink-0">{language.t("model.tag.free")}</TagV2>
+                                <Show when={item.capabilities.toolcall === false}>
+                                  <TagV2 class="shrink-0">{language.t("model.tag.chatOnly")}</TagV2>
                                 </Show>
-                                <Show when={item.latest}>
-                                  <TagV2 class="shrink-0">{language.t("model.tag.latest")}</TagV2>
-                                </Show>
+                                <span
+                                  data-model-price
+                                  class="ml-auto shrink-0 pl-2 text-[12px] leading-5 text-v2-text-text-muted [font-variant-numeric:tabular-nums]"
+                                >
+                                  {isFree(item.provider.id, item.cost) || isOnDevice(item)
+                                    ? language.t("model.tag.free")
+                                    : priceLabel(item)}
+                                </span>
                               </MenuV2.RadioItem>
                             </TooltipV2>
                           )}

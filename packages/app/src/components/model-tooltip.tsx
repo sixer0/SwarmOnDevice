@@ -1,5 +1,6 @@
 import { Show, type Component, type JSX } from "solid-js"
 import { useLanguage } from "@/context/language"
+import { formatPrice, hasPrice, isOnDevice, repriceSession } from "./model-price"
 
 type InputKey = "text" | "image" | "audio" | "video" | "pdf"
 type InputMap = Record<InputKey, boolean>
@@ -9,9 +10,12 @@ type ModelInfo = {
   name: string
   provider: {
     name: string
+    options?: Record<string, unknown>
   }
+  cost?: { input: number; output: number; cache?: { read: number; write: number } }
   capabilities?: {
     reasoning: boolean
+    toolcall?: boolean
     input: InputMap
   }
   modalities?: {
@@ -32,9 +36,15 @@ function ModelTooltipRow(props: { name: JSX.Element; value: JSX.Element }) {
   )
 }
 
-export const ModelTooltip: Component<{ model: ModelInfo; latest?: boolean; free?: boolean; v2?: boolean }> = (
-  props,
-) => {
+type SessionTokens = Parameters<typeof repriceSession>[0]
+
+export const ModelTooltip: Component<{
+  model: ModelInfo
+  latest?: boolean
+  free?: boolean
+  v2?: boolean
+  sessionTokens?: SessionTokens
+}> = (props) => {
   const language = useLanguage()
   const sourceName = (model: ModelInfo) => {
     const value = `${model.id} ${model.name}`.toLowerCase()
@@ -92,10 +102,26 @@ export const ModelTooltip: Component<{ model: ModelInfo; latest?: boolean; free?
   }
   const context = () => language.t("model.tooltip.context", { limit: props.model.limit.context.toLocaleString() })
   const contextLimit = () => props.model.limit.context.toLocaleString(language.intl())
+  const price = () => {
+    if (isOnDevice(props.model)) return language.t("model.tooltip.local.value")
+    if (!hasPrice(props.model)) return
+    return language.t("model.tooltip.price.value", {
+      input: formatPrice(props.model.cost!.input),
+      output: formatPrice(props.model.cost!.output),
+    })
+  }
+  const priceName = () =>
+    isOnDevice(props.model) ? language.t("model.tooltip.cost.label") : language.t("model.tooltip.price.label")
+  const sessionCost = () => {
+    if (!props.sessionTokens || !hasPrice(props.model)) return
+    const value = repriceSession(props.sessionTokens, props.model.cost!)
+    return `$${value < 0.01 ? "0.01" : value.toFixed(2)}`
+  }
+  const noTools = () => props.model.capabilities?.toolcall === false
 
   if (props.v2) {
     return (
-      <div class="flex w-[180px] flex-col gap-2">
+      <div class="flex w-[240px] flex-col gap-2">
         <ModelTooltipRow name={language.t("model.tooltip.model")} value={name()} />
         <ModelTooltipRow name={language.t("model.tooltip.provider")} value={props.model.provider.name} />
         <Show when={inputs()}>
@@ -103,6 +129,13 @@ export const ModelTooltip: Component<{ model: ModelInfo; latest?: boolean; free?
         </Show>
         <ModelTooltipRow name={language.t("model.tooltip.reasoning")} value={reasoning()} />
         <ModelTooltipRow name={language.t("model.tooltip.context.label")} value={contextLimit()} />
+        <Show when={noTools()}>
+          <ModelTooltipRow name={language.t("model.tooltip.tools.label")} value={language.t("model.tooltip.tools.none")} />
+        </Show>
+        <Show when={price()}>{(value) => <ModelTooltipRow name={priceName()} value={value()} />}</Show>
+        <Show when={sessionCost()}>
+          {(value) => <ModelTooltipRow name={language.t("model.tooltip.sessionCost.label")} value={value()} />}
+        </Show>
       </div>
     )
   }
@@ -119,6 +152,23 @@ export const ModelTooltip: Component<{ model: ModelInfo; latest?: boolean; free?
       </Show>
       <div class="text-12-regular text-text-invert-base">{reasoning()}</div>
       <div class="text-12-regular text-text-invert-base">{context()}</div>
+      <Show when={noTools()}>
+        <div class="text-12-regular text-text-invert-base">{language.t("model.tooltip.tools.none")}</div>
+      </Show>
+      <Show when={price()}>
+        {(value) => (
+          <div class="text-12-regular text-text-invert-base">
+            {priceName()}: {value()}
+          </div>
+        )}
+      </Show>
+      <Show when={sessionCost()}>
+        {(value) => (
+          <div class="text-12-regular text-text-invert-base">
+            {language.t("model.tooltip.sessionCost.label")}: {value()}
+          </div>
+        )}
+      </Show>
     </div>
   )
 }
