@@ -779,6 +779,7 @@ export const dict = {
   "session.review.evidence.partial": "{{check}} је прошао, али је покренут само део скупа",
   "session.review.evidence.failed": "{{check}} је пао, exit {{exit}}",
   "session.review.evidence.hidden": "Резултат {{check}} непознат: излазни код је дошао од друге команде",
+  "session.review.evidence.seen": "{{check}} је прошао према свом излазу; излазни код је био скривен",
   "session.review.evidence.running": "{{check}} се извршава",
   "session.review.evidence.stale": "{{check}} је прошао, затим су измењене још датотеке: {{count}}",
   "session.review.evidence.none": "Није покренуто: {{checks}}",

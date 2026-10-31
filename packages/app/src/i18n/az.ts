@@ -793,6 +793,7 @@ export const dict = {
   "session.review.evidence.partial": "{{check}} keçdi, lakin yalnız dəstin bir hissəsi işlədi",
   "session.review.evidence.failed": "{{check}} uğursuz oldu, çıxış {{exit}}",
   "session.review.evidence.hidden": "{{check}} nəticəsi məlum deyil: çıxış kodu başqa əmrdən gəlib",
+  "session.review.evidence.seen": "{{check}} çıxışına görə keçdi; çıxış kodu gizli idi",
   "session.review.evidence.running": "{{check}} işləyir",
   "session.review.evidence.stale": "{{check}} keçdi, sonra daha çox fayl dəyişdi: {{count}}",
   "session.review.evidence.none": "İşləməyib: {{checks}}",

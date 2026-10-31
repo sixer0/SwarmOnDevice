@@ -773,6 +773,7 @@ export const dict = {
   "session.review.evidence.partial": "{{check}} ຜ່ານ, ແຕ່ແລ່ນພຽງບາງສ່ວນຂອງຊຸດ",
   "session.review.evidence.failed": "{{check}} ລົ້ມເຫຼວ, exit {{exit}}",
   "session.review.evidence.hidden": "ບໍ່ຮູ້ຜົນຂອງ {{check}}: exit code ມາຈາກຄຳສັ່ງອື່ນ",
+  "session.review.evidence.seen": "{{check}} ຜ່ານຕາມຜົນລັບຂອງມັນ; ລະຫັດອອກຖືກເຊື່ອງໄວ້",
   "session.review.evidence.running": "{{check}} ກຳລັງແລ່ນ",
   "session.review.evidence.stale": "{{check}} ຜ່ານ, ຈາກນັ້ນມີໄຟລ໌ປ່ຽນເພີ່ມ: {{count}}",
   "session.review.evidence.none": "ບໍ່ໄດ້ແລ່ນ: {{checks}}",

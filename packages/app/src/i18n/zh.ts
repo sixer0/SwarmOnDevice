@@ -821,6 +821,7 @@ export const dict = {
   "session.review.evidence.partial": "{{check}} 已通过，但只运行了部分用例",
   "session.review.evidence.failed": "{{check}} 失败，退出码 {{exit}}",
   "session.review.evidence.hidden": "{{check}} 结果未知：退出码来自另一条命令",
+  "session.review.evidence.seen": "根据输出，{{check}} 已通过；退出码被隐藏",
   "session.review.evidence.running": "{{check}} 正在运行",
   "session.review.evidence.stale": "{{check}} 已通过，之后又有文件被修改：{{count}}",
   "session.review.evidence.none": "未运行：{{checks}}",

@@ -790,6 +790,7 @@ export const dict = {
   "session.review.evidence.partial": "{{check}} ފާސްވި، އެކަމަކު ސޫޓުގެ ބައެއް ކުރީ ރަންވީ",
   "session.review.evidence.failed": "{{check}} ފެއިލްވި، އެގްޒިޓް {{exit}}",
   "session.review.evidence.hidden": "{{check}} ގެ ނަތީޖާ ނޭނގެ: އެގްޒިޓް ކޯޑު އައީ އެހެން ކޮމާންޑަކުން",
+  "session.review.evidence.seen": "{{check}} ގެ އައުޓްޕުޓަށް ބަލާއިރު ފާސްވެއްޖެ؛ އެގްޒިޓް ކޯޑު ފޮރުވިފައި ހުރި",
   "session.review.evidence.running": "{{check}} ރަންވަނީ",
   "session.review.evidence.stale": "{{check}} ފާސްވި، ދެން އިތުރު ފައިލްތައް ބަދަލުވި: {{count}}",
   "session.review.evidence.none": "ރަން ނުވި: {{checks}}",

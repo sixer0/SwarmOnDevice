@@ -792,6 +792,7 @@ export const dict = {
   "session.review.evidence.partial": "{{check}} geslaagd, maar slechts een deel van de suite liep",
   "session.review.evidence.failed": "{{check}} mislukt, exit {{exit}}",
   "session.review.evidence.hidden": "Uitkomst van {{check}} onbekend: de exitcode kwam van een ander commando",
+  "session.review.evidence.seen": "{{check}} geslaagd volgens de uitvoer; de afsluitcode was verborgen",
   "session.review.evidence.running": "{{check}} draait",
   "session.review.evidence.stale": "{{check}} geslaagd, daarna zijn meer bestanden gewijzigd: {{count}}",
   "session.review.evidence.none": "Niet uitgevoerd: {{checks}}",

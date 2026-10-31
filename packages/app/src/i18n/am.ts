@@ -764,6 +764,7 @@ export const dict = {
   "session.review.evidence.partial": "{{check}} አልፏል፣ ነገር ግን የስብስቡ ከፊል ብቻ ተሠርቷል",
   "session.review.evidence.failed": "{{check}} ወድቋል፣ መውጫ {{exit}}",
   "session.review.evidence.hidden": "የ{{check}} ውጤት አይታወቅም፦ የመውጫ ኮዱ ከሌላ ትዕዛዝ የመጣ ነው",
+  "session.review.evidence.seen": "{{check}} በውጤቱ መሠረት አልፏል፤ የመውጫ ኮዱ ተደብቋል",
   "session.review.evidence.running": "{{check}} በመሮጥ ላይ ነው",
   "session.review.evidence.stale": "{{check}} አልፏል፣ ከዚያ በኋላ ተጨማሪ ፋይሎች ተቀይረዋል፦ {{count}}",
   "session.review.evidence.none": "አልተሠራም፦ {{checks}}",

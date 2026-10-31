@@ -778,6 +778,7 @@ export const dict = {
   "session.review.evidence.partial": "{{check}} გავიდა, მაგრამ ნაკრების მხოლოდ ნაწილი გაეშვა",
   "session.review.evidence.failed": "{{check}} ჩავარდა, გასვლის კოდი {{exit}}",
   "session.review.evidence.hidden": "{{check}}-ის შედეგი უცნობია: გასვლის კოდი სხვა ბრძანებიდან მოვიდა",
+  "session.review.evidence.seen": "{{check}} გავიდა მისი გამოსავლის მიხედვით; გასვლის კოდი დამალული იყო",
   "session.review.evidence.running": "{{check}} გაშვებულია",
   "session.review.evidence.stale": "{{check}} გავიდა, შემდეგ კიდევ შეიცვალა ფაილები: {{count}}",
   "session.review.evidence.none": "არ გაშვებულა: {{checks}}",

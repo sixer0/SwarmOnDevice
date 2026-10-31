@@ -774,6 +774,7 @@ export const dict = {
   "session.review.evidence.partial": "{{check}} läbis, kuid käivitati vaid osa komplektist",
   "session.review.evidence.failed": "{{check}} ebaõnnestus, väljumine {{exit}}",
   "session.review.evidence.hidden": "{{check}} tulemus teadmata: väljumiskood tuli teisest käsust",
+  "session.review.evidence.seen": "{{check}} läbis oma väljundi järgi; väljumiskood oli peidetud",
   "session.review.evidence.running": "{{check}} töötab",
   "session.review.evidence.stale": "{{check}} läbis, seejärel muudeti veel faile: {{count}}",
   "session.review.evidence.none": "Ei käivitatud: {{checks}}",

@@ -786,6 +786,7 @@ export const dict = {
   "session.review.evidence.partial": "Το {{check}} πέρασε, αλλά έτρεξε μόνο μέρος της σουίτας",
   "session.review.evidence.failed": "Το {{check}} απέτυχε, έξοδος {{exit}}",
   "session.review.evidence.hidden": "Άγνωστο αποτέλεσμα για {{check}}: ο κωδικός εξόδου προήλθε από άλλη εντολή",
+  "session.review.evidence.seen": "Το {{check}} πέρασε σύμφωνα με την έξοδό του· ο κωδικός εξόδου ήταν κρυφός",
   "session.review.evidence.running": "Το {{check}} εκτελείται",
   "session.review.evidence.stale": "Το {{check}} πέρασε, μετά άλλαξαν κι άλλα αρχεία: {{count}}",
   "session.review.evidence.none": "Δεν έτρεξε: {{checks}}",

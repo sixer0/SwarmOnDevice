@@ -826,6 +826,7 @@ export const dict = {
   "session.review.evidence.partial": "{{check}}: пройдено, но запущена только часть набора",
   "session.review.evidence.failed": "{{check}}: ошибка, код выхода {{exit}}",
   "session.review.evidence.hidden": "{{check}}: результат неизвестен, код выхода получен от другой команды",
+  "session.review.evidence.seen": "{{check}}: успешно судя по выводу; код выхода был скрыт",
   "session.review.evidence.running": "{{check}}: выполняется",
   "session.review.evidence.stale": "{{check}}: пройдено, затем изменены другие файлы: {{count}}",
   "session.review.evidence.none": "Не запускались: {{checks}}",

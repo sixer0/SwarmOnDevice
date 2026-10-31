@@ -26,6 +26,7 @@ const checks: CheckWords = {
   stale: (command, count) => `${command}: stale ${count}`,
   failed: (command, exit) => `${command}: failed ${exit}`,
   hidden: (command) => `${command}: hidden`,
+  seen: (command) => `${command}: seen`,
   partial: (command) => `${command}: partial`,
   none: (kinds) => `not run: ${kinds.join()}`,
 }

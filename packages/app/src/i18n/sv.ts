@@ -789,6 +789,7 @@ export const dict = {
   "session.review.evidence.partial": "{{check}} godkändes, men bara en del av sviten kördes",
   "session.review.evidence.failed": "{{check}} misslyckades, exit {{exit}}",
   "session.review.evidence.hidden": "Resultat för {{check}} okänt: exitkoden kom från ett annat kommando",
+  "session.review.evidence.seen": "{{check}} godkändes enligt sin utdata; slutkoden var dold",
   "session.review.evidence.running": "{{check}} körs",
   "session.review.evidence.stale": "{{check}} godkändes, sedan ändrades fler filer: {{count}}",
   "session.review.evidence.none": "Kördes inte: {{checks}}",

@@ -708,6 +708,7 @@ export const dict = {
   "session.review.evidence.partial": "{{check}} bestod, men kun en del af suiten kørte",
   "session.review.evidence.failed": "{{check}} fejlede, exit {{exit}}",
   "session.review.evidence.hidden": "Resultat for {{check}} ukendt: exitkoden kom fra en anden kommando",
+  "session.review.evidence.seen": "{{check}} bestod ifølge sit output; afslutningskoden var skjult",
   "session.review.evidence.running": "{{check}} kører",
   "session.review.evidence.stale": "{{check}} bestod, derefter ændredes flere filer: {{count}}",
   "session.review.evidence.none": "Kørte ikke: {{checks}}",

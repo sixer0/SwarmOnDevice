@@ -746,6 +746,7 @@ export const dict = {
   "session.review.evidence.partial": "{{check}} passed, but only part of the suite ran",
   "session.review.evidence.failed": "{{check}} failed, exit {{exit}}",
   "session.review.evidence.hidden": "{{check}} result unknown: the exit code came from another command",
+  "session.review.evidence.seen": "{{check}} passed according to its output; the exit code was hidden",
   "session.review.evidence.running": "{{check}} is running",
   "session.review.evidence.stale": "{{check}} passed, then more files changed: {{count}}",
   "session.review.evidence.none": "Did not run: {{checks}}",

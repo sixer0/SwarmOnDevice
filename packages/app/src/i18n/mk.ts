@@ -781,6 +781,7 @@ export const dict = {
   "session.review.evidence.partial": "{{check}} помина, но се изврши само дел од комплетот",
   "session.review.evidence.failed": "{{check}} не успеа, излезен код {{exit}}",
   "session.review.evidence.hidden": "Непознат исход за {{check}}: излезниот код дојде од друга команда",
+  "session.review.evidence.seen": "{{check}} помина според излезот; излезниот код беше скриен",
   "session.review.evidence.running": "{{check}} се извршува",
   "session.review.evidence.stale": "{{check}} помина, па се сменија уште датотеки: {{count}}",
   "session.review.evidence.none": "Не е извршено: {{checks}}",

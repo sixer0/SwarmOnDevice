@@ -853,6 +853,7 @@ export const dict = {
   "session.review.evidence.partial": "{{check}} lulus, tetapi hanya sebagian suite yang berjalan",
   "session.review.evidence.failed": "{{check}} gagal, exit {{exit}}",
   "session.review.evidence.hidden": "Hasil {{check}} tidak diketahui: exit code berasal dari perintah lain",
+  "session.review.evidence.seen": "{{check}} lulus menurut keluarannya; exit code tersembunyi",
   "session.review.evidence.running": "{{check}} sedang berjalan",
   "session.review.evidence.stale": "{{check}} lulus, lalu lebih banyak file berubah: {{count}}",
   "session.review.evidence.none": "Tidak dijalankan: {{checks}}",

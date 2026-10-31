@@ -783,6 +783,7 @@ export const dict = {
   "session.review.evidence.partial": "{{check}} o‘tdi, lekin to‘plamning faqat bir qismi ishladi",
   "session.review.evidence.failed": "{{check}} xato berdi, exit {{exit}}",
   "session.review.evidence.hidden": "{{check}} natijasi noma’lum: chiqish kodi boshqa buyruqdan keldi",
+  "session.review.evidence.seen": "{{check}} chiqishiga koʻra oʻtdi; chiqish kodi yashirin edi",
   "session.review.evidence.running": "{{check}} ishlamoqda",
   "session.review.evidence.stale": "{{check}} o‘tdi, keyin yana fayllar o‘zgardi: {{count}}",
   "session.review.evidence.none": "Ishlamadi: {{checks}}",

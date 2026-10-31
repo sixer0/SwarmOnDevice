@@ -786,6 +786,7 @@ export const dict = {
   "session.review.evidence.partial": "{{check}} အောင်မြင်သော်လည်း suite ၏ တစ်စိတ်တစ်ပိုင်းသာ run ခဲ့သည်",
   "session.review.evidence.failed": "{{check}} မအောင်မြင်ပါ၊ exit {{exit}}",
   "session.review.evidence.hidden": "{{check}} ရလဒ် မသိရ: exit code သည် အခြား command မှ လာသည်",
+  "session.review.evidence.seen": "{{check}} သည် ၎င်း၏ထွက်ရှိမှုအရ အောင်မြင်သည်; ထွက်ကုဒ်ကို ဖုံးကွယ်ထားသည်",
   "session.review.evidence.running": "{{check}} run နေသည်",
   "session.review.evidence.stale": "{{check}} အောင်မြင်ပြီးနောက် ဖိုင်ပိုပြောင်းသွားသည်: {{count}}",
   "session.review.evidence.none": "မ run ခဲ့ပါ: {{checks}}",

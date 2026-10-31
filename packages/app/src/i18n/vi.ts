@@ -794,6 +794,7 @@ export const dict = {
   "session.review.evidence.partial": "{{check}} đã qua, nhưng chỉ chạy một phần bộ test",
   "session.review.evidence.failed": "{{check}} thất bại, exit {{exit}}",
   "session.review.evidence.hidden": "Chưa rõ kết quả {{check}}: mã thoát đến từ lệnh khác",
+  "session.review.evidence.seen": "{{check}} đạt theo đầu ra của nó; mã thoát đã bị ẩn",
   "session.review.evidence.running": "{{check}} đang chạy",
   "session.review.evidence.stale": "{{check}} đã qua, sau đó có thêm tệp thay đổi: {{count}}",
   "session.review.evidence.none": "Chưa chạy: {{checks}}",

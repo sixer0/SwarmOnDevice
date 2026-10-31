@@ -780,6 +780,7 @@ export const dict: Record<string, string> = {
   "session.review.evidence.partial": "{{check}} पास भयो, तर सुइटको केही भाग मात्र चल्यो",
   "session.review.evidence.failed": "{{check}} असफल, exit {{exit}}",
   "session.review.evidence.hidden": "{{check}} को नतिजा अज्ञात: exit code अर्को कमान्डबाट आयो",
+  "session.review.evidence.seen": "आउटपुट अनुसार {{check}} पास भयो; एक्जिट कोड लुकेको थियो",
   "session.review.evidence.running": "{{check}} चलिरहेको छ",
   "session.review.evidence.stale": "{{check}} पास भयो, त्यसपछि थप फाइल बदलिए: {{count}}",
   "session.review.evidence.none": "चलेन: {{checks}}",

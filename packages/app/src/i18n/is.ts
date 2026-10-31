@@ -781,6 +781,7 @@ export const dict = {
   "session.review.evidence.partial": "{{check}} stóðst, en aðeins hluti prófasafnsins var keyrður",
   "session.review.evidence.failed": "{{check}} mistókst, skilakóði {{exit}}",
   "session.review.evidence.hidden": "Niðurstaða {{check}} óþekkt: skilakóðinn kom frá annarri skipun",
+  "session.review.evidence.seen": "{{check}} stóðst samkvæmt úttaki sínu; útgangskóðinn var falinn",
   "session.review.evidence.running": "{{check}} er í gangi",
   "session.review.evidence.stale": "{{check}} stóðst, svo breyttust fleiri skrár: {{count}}",
   "session.review.evidence.none": "Var ekki keyrt: {{checks}}",

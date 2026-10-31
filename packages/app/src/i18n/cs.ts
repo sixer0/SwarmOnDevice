@@ -778,6 +778,7 @@ export const dict = {
   "session.review.evidence.partial": "{{check}} prošel, ale běžela jen část sady",
   "session.review.evidence.failed": "{{check}} selhal, návratový kód {{exit}}",
   "session.review.evidence.hidden": "Výsledek {{check}} neznámý: návratový kód pochází z jiného příkazu",
+  "session.review.evidence.seen": "{{check}} prošel podle svého výstupu; návratový kód byl skrytý",
   "session.review.evidence.running": "{{check}} běží",
   "session.review.evidence.stale": "{{check}} prošel, poté se změnily další soubory: {{count}}",
   "session.review.evidence.none": "Neběželo: {{checks}}",

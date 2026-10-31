@@ -833,6 +833,7 @@ export const dict = {
   "session.review.evidence.partial": "{{check}} geçti, ancak takımın yalnızca bir kısmı çalıştı",
   "session.review.evidence.failed": "{{check}} başarısız, exit {{exit}}",
   "session.review.evidence.hidden": "{{check}} sonucu bilinmiyor: çıkış kodu başka bir komuttan geldi",
+  "session.review.evidence.seen": "{{check}} çıktısına göre geçti; çıkış kodu gizliydi",
   "session.review.evidence.running": "{{check}} çalışıyor",
   "session.review.evidence.stale": "{{check}} geçti, sonra başka dosyalar değişti: {{count}}",
   "session.review.evidence.none": "Çalışmadı: {{checks}}",

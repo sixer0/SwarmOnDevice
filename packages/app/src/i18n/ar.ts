@@ -765,6 +765,7 @@ export const dict = {
   "session.review.evidence.partial": "نجح {{check}}، لكن جزءًا فقط من المجموعة شُغِّل",
   "session.review.evidence.failed": "فشل {{check}}، رمز الخروج {{exit}}",
   "session.review.evidence.hidden": "نتيجة {{check}} غير معروفة: رمز الخروج جاء من أمر آخر",
+  "session.review.evidence.seen": "نجح {{check}} وفق مخرجاته؛ كان رمز الخروج مخفيًا",
   "session.review.evidence.running": "{{check}} قيد التشغيل",
   "session.review.evidence.stale": "نجح {{check}}، ثم تغيرت ملفات أخرى: {{count}}",
   "session.review.evidence.none": "لم يُشغَّل: {{checks}}",

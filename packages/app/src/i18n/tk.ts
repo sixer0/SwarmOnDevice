@@ -778,6 +778,7 @@ export const dict = {
   "session.review.evidence.partial": "{{check}} geçdi, ýöne toplumyň diňe bir bölegi işledi",
   "session.review.evidence.failed": "{{check}} şowsuz boldy, exit {{exit}}",
   "session.review.evidence.hidden": "{{check}} netijesi näbelli: çykyş kody başga bir buýrukdan geldi",
+  "session.review.evidence.seen": "{{check}} çykarylyşyna görä geçdi; çykyş kody gizlenipdi",
   "session.review.evidence.running": "{{check}} işleýär",
   "session.review.evidence.stale": "{{check}} geçdi, soň ýene faýllar üýtgedi: {{count}}",
   "session.review.evidence.none": "Işlemedi: {{checks}}",

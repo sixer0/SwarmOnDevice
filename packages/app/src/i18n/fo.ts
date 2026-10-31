@@ -778,6 +778,7 @@ export const dict = {
   "session.review.evidence.partial": "{{check}} slapp ígjøgnum, men bert ein partur av røðini varð koyrdur",
   "session.review.evidence.failed": "{{check}} miseydnaðist, útgangur {{exit}}",
   "session.review.evidence.hidden": "Úrslit hjá {{check}} ókent: útgangskotan kom frá einum øðrum boði",
+  "session.review.evidence.seen": "{{check}} stóðst sambært úttakinum; útgangskotan var fjald",
   "session.review.evidence.running": "{{check}} koyrir",
   "session.review.evidence.stale": "{{check}} slapp ígjøgnum, síðani broyttust fleiri fílur: {{count}}",
   "session.review.evidence.none": "Varð ikki koyrt: {{checks}}",

@@ -342,6 +342,64 @@ export function classifyCommand(command: string): ClassifiedCommand | undefined 
   if (kinds.size === 0) return
   return { kinds: [...kinds], hidden, partial }
 }
+const STRIP_COLOR = /\u001b\[[0-9;]*m/g
+// Passes output through whole, or keeps its end. A filter like grep could have removed the line that said what failed.
+const KEEPS_THE_END = /^\s*(?:tail|tee|cat)\b/
+const IGNORES_FAILURE = /^\s*(?:true|:)\s*$/
+
+/**
+ * What a test run's own summary says, for a run whose exit code is hidden by what it was piped into. Only a runner's
+ * summary line counts, never a word somewhere in the output, and only when nothing else in the command could print or
+ * remove it. Anything less stays unknown.
+ */
+export function visibleTestResult(command: string, output: string): "passed" | "failed" | undefined {
+  const pieces = command.split(/(\|\||&&|\|&|\||;|\n)/)
+  const segments = pieces.filter((_, index) => index % 2 === 0)
+  const operators = pieces.filter((_, index) => index % 2 === 1)
+  const checks = segments.flatMap((segment, index) =>
+    !NOT_A_RUN.test(segment) && CHECK_RULES.some(([, rule]) => rule.test(segment)) ? [index] : [],
+  )
+  if (checks.length !== 1) return
+  const at = checks[0]
+  if (operators.slice(0, at).some((operator) => operator !== "&&")) return
+  const clean = operators.slice(at).every((operator, index) => {
+    const next = segments[at + index + 1] ?? ""
+    if (operator === "|" || operator === "|&") return KEEPS_THE_END.test(next)
+    return operator === "||" && IGNORES_FAILURE.test(next)
+  })
+  if (!clean) return
+  return summaryOf(output.replace(STRIP_COLOR, ""))
+}
+
+function summaryOf(output: string): "passed" | "failed" | undefined {
+  const lines = output.split("\n").map((line) => line.trim())
+  const count = (pattern: RegExp) => {
+    const found = lines.findLast((line) => pattern.test(line))
+    return found === undefined ? undefined : Number(pattern.exec(found)![1])
+  }
+  // bun: "3 pass" and "0 fail" on lines of their own. mocha: "3 passing", and "1 failing" only when one did.
+  const bunPass = count(/^(\d+) pass$/)
+  const bunFail = count(/^(\d+) fail$/)
+  if (bunFail) return "failed"
+  if (bunPass && bunFail === 0) return "passed"
+  if (count(/^(\d+) failing$/)) return "failed"
+  if (count(/^(\d+) passing\b/)) return "passed"
+  // jest and vitest: "Tests: 1 failed, 2 passed, 3 total", "Tests  3 passed (3)".
+  const tally = lines.findLast((line) => /^Tests:?\s+.*\b\d+ (?:passed|failed)\b/.test(line))
+  // pytest: "=== 1 failed, 2 passed in 0.12s ===", with or without the rules.
+  const pytest = lines.findLast((line) => /^=*\s*(?:\d+ \w+(?:, )?)+ in [\d.]+s\b/.test(line))
+  for (const line of [tally, pytest]) {
+    if (!line) continue
+    if (/\b[1-9]\d* (?:failed|errors?)\b/.test(line)) return "failed"
+    if (/\b[1-9]\d* passed\b/.test(line)) return "passed"
+  }
+  // cargo: "test result: ok. 3 passed; 0 failed; ...". go: "ok  pkg  0.1s", or "FAIL" lines.
+  const cargo = lines.findLast((line) => /^test result: (?:ok|FAILED)\./.test(line))
+  if (cargo) return cargo.startsWith("test result: ok") ? "passed" : "failed"
+  if (lines.some((line) => /^(?:FAIL|--- FAIL)\b/.test(line))) return "failed"
+  if (lines.some((line) => /^ok\s+\S+\s+(?:\(cached\)|[\d.]+s)/.test(line))) return "passed"
+  return undefined
+}
 
 // ---- What the run did, per file and per check --------------------------------------------------------------------------
 
@@ -351,6 +409,8 @@ export type CheckRun = {
   status: CheckStatus
   partial: boolean
   exit?: number
+  /** The exit code was hidden, so `status` comes from the runner's own summary in the output. */
+  seen?: boolean
   at: number
   step: MapStep
   sessionID: string
@@ -416,22 +476,27 @@ export function buildActivity(input: {
           return
         }
         if (step.kind === "command" && !step.notRun) {
-          const classified = classifyCommand(String(step.input?.command ?? step.label))
+          const command = String(step.input?.command ?? step.label)
+          const classified = classifyCommand(command)
           const exit = step.metadata?.exit
+          // A hidden exit code says nothing, but a test runner's own summary may still be right there in the output.
+          const seen =
+            !step.running && !step.problem && classified?.hidden && classified.kinds.join() === "test"
+              ? visibleTestResult(command, step.output?.() ?? "")
+              : undefined
           classified?.kinds.forEach((kind) => {
             const status: CheckStatus = step.running
               ? "running"
               : step.problem
                 ? "failed"
-                : classified.hidden || typeof exit !== "number"
-                  ? "hidden"
-                  : "passed"
+                : (seen ?? (classified.hidden || typeof exit !== "number" ? "hidden" : "passed"))
             checks.push({
               kind,
-              command: String(step.input?.command ?? step.label),
+              command,
               status,
               partial: classified.partial,
-              exit: typeof exit === "number" ? exit : undefined,
+              seen: !!seen,
+              exit: typeof exit === "number" && !seen ? exit : undefined,
               at: step.end ?? step.start,
               step,
               sessionID: session.id,

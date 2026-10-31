@@ -682,6 +682,7 @@ export const dict = {
   "session.review.evidence.partial": "{{check}} meni läpi, mutta vain osa sarjasta ajettiin",
   "session.review.evidence.failed": "{{check}} epäonnistui, poistumiskoodi {{exit}}",
   "session.review.evidence.hidden": "{{check}}-tulos tuntematon: poistumiskoodi tuli toisesta komennosta",
+  "session.review.evidence.seen": "{{check}} meni läpi tulosteensa mukaan; poistumiskoodi oli piilossa",
   "session.review.evidence.running": "{{check}} on käynnissä",
   "session.review.evidence.stale": "{{check}} meni läpi, sitten muuttui lisää tiedostoja: {{count}}",
   "session.review.evidence.none": "Ei ajettu: {{checks}}",

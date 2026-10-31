@@ -784,6 +784,7 @@ export const dict = {
   "session.review.evidence.partial": "{{check}} ha passat, però només s'ha executat part de la suite",
   "session.review.evidence.failed": "{{check}} ha fallat, sortida {{exit}}",
   "session.review.evidence.hidden": "Resultat de {{check}} desconegut: el codi de sortida venia d'una altra ordre",
+  "session.review.evidence.seen": "{{check}} ha passat segons la seva sortida; el codi de sortida estava ocult",
   "session.review.evidence.running": "{{check}} s'està executant",
   "session.review.evidence.stale": "{{check}} ha passat, després han canviat més fitxers: {{count}}",
   "session.review.evidence.none": "No s'ha executat: {{checks}}",

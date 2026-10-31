@@ -773,6 +773,7 @@ export const dict = {
   "session.review.evidence.partial": "{{check}}: zaliczone, ale uruchomiono tylko część zestawu",
   "session.review.evidence.failed": "{{check}}: błąd, kod wyjścia {{exit}}",
   "session.review.evidence.hidden": "{{check}}: wynik nieznany, kod wyjścia pochodził z innego polecenia",
+  "session.review.evidence.seen": "{{check}} przeszło według swojego wyjścia; kod wyjścia był ukryty",
   "session.review.evidence.running": "{{check}} trwa",
   "session.review.evidence.stale": "{{check}}: zaliczone, potem zmieniono kolejne pliki: {{count}}",
   "session.review.evidence.none": "Nie uruchomiono: {{checks}}",

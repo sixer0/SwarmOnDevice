@@ -779,6 +779,7 @@ export const dict = {
   "session.review.evidence.partial": "{{check}} izturēja, bet palaista tikai daļa komplekta",
   "session.review.evidence.failed": "{{check}} neizdevās, izejas kods {{exit}}",
   "session.review.evidence.hidden": "{{check}} rezultāts nav zināms: izejas kods nāca no citas komandas",
+  "session.review.evidence.seen": "{{check}} izturēts pēc izvades; izejas kods bija paslēpts",
   "session.review.evidence.running": "{{check}} darbojas",
   "session.review.evidence.stale": "{{check}} izturēja, tad mainījās vēl faili: {{count}}",
   "session.review.evidence.none": "Nav palaists: {{checks}}",

@@ -778,6 +778,7 @@ export const dict = {
   "session.review.evidence.partial": "{{check}} je uspel, a je stekel le del nabora",
   "session.review.evidence.failed": "{{check}} je spodletel, exit {{exit}}",
   "session.review.evidence.hidden": "Rezultat {{check}} neznan: izhodna koda je prišla iz drugega ukaza",
+  "session.review.evidence.seen": "{{check}} je uspel glede na izhod; izhodna koda je bila skrita",
   "session.review.evidence.running": "{{check}} teče",
   "session.review.evidence.stale": "{{check}} je uspel, nato so se spremenile še datoteke: {{count}}",
   "session.review.evidence.none": "Ni steklo: {{checks}}",

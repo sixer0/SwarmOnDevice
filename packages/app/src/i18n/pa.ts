@@ -793,6 +793,7 @@ export const dict = {
   "session.review.evidence.partial": "{{check}} ਪਾਸ ਹੋਇਆ, ਪਰ ਸੂਟ ਦਾ ਸਿਰਫ਼ ਹਿੱਸਾ ਚੱਲਿਆ",
   "session.review.evidence.failed": "{{check}} ਫੇਲ੍ਹ ਹੋਇਆ, exit {{exit}}",
   "session.review.evidence.hidden": "{{check}} ਦਾ ਨਤੀਜਾ ਅਣਜਾਣ: ਐਗਜ਼ਿਟ ਕੋਡ ਕਿਸੇ ਹੋਰ ਕਮਾਂਡ ਤੋਂ ਆਇਆ",
+  "session.review.evidence.seen": "ਆਉਟਪੁੱਟ ਮੁਤਾਬਕ {{check}} ਪਾਸ ਹੋਇਆ; ਐਗਜ਼ਿਟ ਕੋਡ ਲੁਕਿਆ ਸੀ",
   "session.review.evidence.running": "{{check}} ਚੱਲ ਰਿਹਾ ਹੈ",
   "session.review.evidence.stale": "{{check}} ਪਾਸ ਹੋਇਆ, ਫਿਰ ਹੋਰ ਫ਼ਾਈਲਾਂ ਬਦਲੀਆਂ: {{count}}",
   "session.review.evidence.none": "ਨਹੀਂ ਚੱਲਿਆ: {{checks}}",

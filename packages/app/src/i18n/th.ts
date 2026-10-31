@@ -820,6 +820,7 @@ export const dict = {
   "session.review.evidence.partial": "{{check}} ผ่าน แต่รันเพียงบางส่วนของชุดทดสอบ",
   "session.review.evidence.failed": "{{check}} ล้มเหลว exit {{exit}}",
   "session.review.evidence.hidden": "ไม่ทราบผล {{check}}: รหัสออกมาจากคำสั่งอื่น",
+  "session.review.evidence.seen": "{{check}} ผ่านตามผลลัพธ์ที่แสดง แต่รหัสออกถูกซ่อนไว้",
   "session.review.evidence.running": "{{check}} กำลังรัน",
   "session.review.evidence.stale": "{{check}} ผ่าน แต่หลังจากนั้นมีไฟล์เปลี่ยนอีก: {{count}}",
   "session.review.evidence.none": "ไม่ได้รัน: {{checks}}",

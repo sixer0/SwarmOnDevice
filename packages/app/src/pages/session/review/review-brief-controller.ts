@@ -505,6 +505,7 @@ export function createReviewBrief(input: {
         stale: (command, count) => language.t("session.review.land.check.stale", { command, count }),
         failed: (command, exit) => language.t("session.review.land.check.failed", { command, exit }),
         hidden: (command) => language.t("session.review.land.check.hidden", { command }),
+        seen: (command) => language.t("session.review.evidence.seen", { check: command }),
         partial: (command) => language.t("session.review.land.check.partial", { command }),
         none: (kinds) =>
           language.t("session.review.land.check.none", { checks: kinds.map((kind) => kindName(kind)).join(", ") }),

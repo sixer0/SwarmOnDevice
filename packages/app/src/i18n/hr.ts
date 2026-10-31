@@ -785,6 +785,7 @@ export const dict = {
   "session.review.evidence.partial": "{{check}} je prošao, ali je pokrenut samo dio skupa",
   "session.review.evidence.failed": "{{check}} nije uspio, izlaz {{exit}}",
   "session.review.evidence.hidden": "Ishod za {{check}} nepoznat: izlazni kod došao je iz druge naredbe",
+  "session.review.evidence.seen": "{{check}} je prošao prema svom izlazu; izlazni kod bio je skriven",
   "session.review.evidence.running": "{{check}} se izvodi",
   "session.review.evidence.stale": "{{check}} je prošao, a zatim su se promijenile još datoteke: {{count}}",
   "session.review.evidence.none": "Nije pokrenuto: {{checks}}",

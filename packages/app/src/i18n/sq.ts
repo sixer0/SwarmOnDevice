@@ -781,6 +781,7 @@ export const dict = {
   "session.review.evidence.partial": "{{check}} kaloi, por u ekzekutua vetëm një pjesë e grupit",
   "session.review.evidence.failed": "{{check}} dështoi, exit {{exit}}",
   "session.review.evidence.hidden": "Rezultati i {{check}} i panjohur: kodi i daljes erdhi nga një komandë tjetër",
+  "session.review.evidence.seen": "{{check}} kaloi sipas daljes së tij; kodi i daljes ishte i fshehur",
   "session.review.evidence.running": "{{check}} po ekzekutohet",
   "session.review.evidence.stale": "{{check}} kaloi, pastaj u ndryshuan më shumë skedarë: {{count}}",
   "session.review.evidence.none": "Nuk u ekzekutua: {{checks}}",

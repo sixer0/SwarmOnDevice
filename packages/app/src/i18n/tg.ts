@@ -781,6 +781,7 @@ export const dict = {
   "session.review.evidence.partial": "{{check}} гузашт, аммо танҳо қисми маҷмӯа иҷро шуд",
   "session.review.evidence.failed": "{{check}} хато дод, exit {{exit}}",
   "session.review.evidence.hidden": "Натиҷаи {{check}} маълум нест: рамзи баромад аз фармони дигар омад",
+  "session.review.evidence.seen": "{{check}} аз рӯи хуруҷаш гузашт; рамзи хуруҷ пинҳон буд",
   "session.review.evidence.running": "{{check}} иҷро шуда истодааст",
   "session.review.evidence.stale": "{{check}} гузашт, баъд файлҳои дигар тағйир ёфтанд: {{count}}",
   "session.review.evidence.none": "Иҷро нашуд: {{checks}}",

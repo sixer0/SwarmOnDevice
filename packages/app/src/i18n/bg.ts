@@ -784,6 +784,7 @@ export const dict = {
   "session.review.evidence.partial": "{{check}} мина, но е пусната само част от набора",
   "session.review.evidence.failed": "{{check}} се провали, изход {{exit}}",
   "session.review.evidence.hidden": "Резултатът от {{check}} е неизвестен: изходният код е от друга команда",
+  "session.review.evidence.seen": "{{check}} мина според изхода си; кодът на изход беше скрит",
   "session.review.evidence.running": "{{check}} се изпълнява",
   "session.review.evidence.stale": "{{check}} мина, после са променени още файлове: {{count}}",
   "session.review.evidence.none": "Не е пуснато: {{checks}}",

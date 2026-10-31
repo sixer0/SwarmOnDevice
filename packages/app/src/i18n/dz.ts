@@ -791,6 +791,7 @@ export const dict: Record<string, string> = {
   "session.review.evidence.partial": "{{check}} འགྲུབ་སོང་ འདི་ཡང་ཚོགས་སྡེའི་ཆ་ཤས་གཅིག་རང་གཡོག་བཀོལ་ཡི།",
   "session.review.evidence.failed": "{{check}} འཐུས་ཤོར་སོང་། ཐོན་ {{exit}}",
   "session.review.evidence.hidden": "{{check}} གི་གྲུབ་འབྲས་མ་ཤེས། ཐོན་ཨང་འདི་བརྡ་བཀོད་གཞན་ལས་འབྱོར་ཡི།",
+  "session.review.evidence.seen": "{{check}} ཐོན་འབྲས་ལྟར་ཐར་ཡི། ཐོན་ཨང་སྦ་སྟེ་ཡོད།",
   "session.review.evidence.running": "{{check}} གཡོག་བཀོལ་དོ།",
   "session.review.evidence.stale": "{{check}} འགྲུབ་སོང་། དེ་ལས་ཡིག་སྣོད་ཁ་སྣོན་འགྱུར་སོང་: {{count}}",
   "session.review.evidence.none": "གཡོག་མ་བཀོལ་: {{checks}}",

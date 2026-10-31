@@ -783,6 +783,7 @@ export const dict = {
   "session.review.evidence.partial": "{{check}} a réussi, mais seule une partie de la suite a tourné",
   "session.review.evidence.failed": "{{check}} a échoué, sortie {{exit}}",
   "session.review.evidence.hidden": "Résultat de {{check}} inconnu : le code de sortie venait d'une autre commande",
+  "session.review.evidence.seen": "{{check}} réussi d'après sa sortie ; le code de sortie était masqué",
   "session.review.evidence.running": "{{check}} est en cours",
   "session.review.evidence.stale": "{{check}} a réussi, puis d'autres fichiers ont changé : {{count}}",
   "session.review.evidence.none": "Non exécuté : {{checks}}",

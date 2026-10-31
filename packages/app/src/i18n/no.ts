@@ -700,6 +700,7 @@ export const dict = {
   "session.review.evidence.partial": "{{check}} besto, men bare deler av testsettet ble kjørt",
   "session.review.evidence.failed": "{{check}} feilet, exit {{exit}}",
   "session.review.evidence.hidden": "{{check}} har ukjent resultat: exit-koden kom fra en annen kommando",
+  "session.review.evidence.seen": "{{check}} besto ifølge utdataene; avslutningskoden var skjult",
   "session.review.evidence.running": "{{check}} kjører",
   "session.review.evidence.stale": "{{check}} besto, deretter ble flere filer endret: {{count}}",
   "session.review.evidence.none": "Ikke kjørt: {{checks}}",

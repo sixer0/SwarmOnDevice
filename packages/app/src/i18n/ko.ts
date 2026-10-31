@@ -539,6 +539,7 @@ export const dict = {
   "session.review.evidence.partial": "{{check}} 통과, 하지만 스위트 일부만 실행됨",
   "session.review.evidence.failed": "{{check}} 실패, 종료 코드 {{exit}}",
   "session.review.evidence.hidden": "{{check}} 결과 알 수 없음: 종료 코드가 다른 명령에서 나왔습니다",
+  "session.review.evidence.seen": "출력에 따르면 {{check}} 통과했습니다. 종료 코드는 가려졌습니다",
   "session.review.evidence.running": "{{check}} 실행 중",
   "session.review.evidence.stale": "{{check}} 통과 후 파일이 더 변경됨: {{count}}",
   "session.review.evidence.none": "실행되지 않음: {{checks}}",

@@ -774,6 +774,7 @@ export const dict: Record<string, string> = {
   "session.review.evidence.partial": "{{check}} සමත් විය, නමුත් ධාවනය වූයේ කට්ටලයේ කොටසක් පමණි",
   "session.review.evidence.failed": "{{check}} අසාර්ථක විය, exit {{exit}}",
   "session.review.evidence.hidden": "{{check}} ප්‍රතිඵලය නොදනී: exit කේතය ආවේ වෙනත් විධානයකින්",
+  "session.review.evidence.seen": "ප්‍රතිදානයට අනුව {{check}} සමත් විය; පිටවීමේ කේතය සැඟවී තිබුණි",
   "session.review.evidence.running": "{{check}} ධාවනය වෙමින්",
   "session.review.evidence.stale": "{{check}} සමත් විය, පසුව තවත් ගොනු වෙනස් විය: {{count}}",
   "session.review.evidence.none": "ධාවනය නොවීය: {{checks}}",

@@ -10,6 +10,7 @@ import {
   buildBrief,
   changeHash,
   classifyCommand,
+  visibleTestResult,
   findClaims,
   flaggedLines,
   nextOpenFile,
@@ -389,6 +390,70 @@ describe("buildActivity and buildBrief", () => {
     })
     expect(fine.headline).toEqual({ key: "clear" })
     expect(fine.tone).toBe("ok")
+  })
+
+  describe("a test run whose exit code is hidden", () => {
+    const after = (command: string, output: string) => {
+      const part = tool("c1", "bash", { command }, 20, { exit: 0 }) as unknown as { state: { output: string } }
+      part.state.output = output
+      const parts = {
+        a1: [
+          tool("e1", "edit", { filePath: "/repo/src/a.ts" }, 10, {
+            filediff: { file: "/repo/src/a.ts", additions: 1, deletions: 1 },
+          }),
+          part as unknown as Part,
+        ],
+      }
+      return buildBrief({
+        diffs: [code, spec],
+        activity: run(parts, messages),
+        marks: {},
+        running: false,
+        complete: true,
+      })
+    }
+
+    test("reads as passed when the runner's summary says so, and says where that came from", () => {
+      const brief = after("bun test 2>&1 | tail -20", "(pass) rounds\n\n 3 pass\n 0 fail\nRan 3 tests")
+      expect(brief.headline.key).toBe("clear")
+      const row = brief.evidence.find((item) => item.type === "check")
+      expect(row?.type === "check" && [row.status, row.run.seen]).toEqual(["passed", true])
+    })
+
+    test("reads as failed when the runner's summary says so", () => {
+      const brief = after("bun test | tail -3", " 2 pass\n 1 fail\nRan 3 tests")
+      expect(brief.headline).toEqual({ key: "failed", command: "bun test | tail -3" })
+      const row = brief.evidence.find((item) => item.type === "check")
+      expect(row?.type === "check" && row.run.exit).toBeUndefined()
+    })
+
+    test("stays unknown without a summary, or when something could have removed or printed it", () => {
+      expect(after("bun test | tail -3", "nothing useful").headline.key).toBe("hidden")
+      expect(after("bun test | grep pass", " 3 pass\n 0 fail").headline.key).toBe("hidden")
+      expect(after("bun test | head -5", " 3 pass\n 0 fail").headline.key).toBe("hidden")
+      expect(after('bun test | tail -3; echo " 3 pass"', " 3 pass\n 0 fail").headline.key).toBe("hidden")
+    })
+  })
+
+  test.each([
+    ["3 pass\n0 fail", "passed"],
+    ["\u001b[32m3 pass\u001b[0m\n\u001b[31m1 fail\u001b[0m", "failed"],
+    ["0 pass\n0 fail", undefined],
+    ["3 pass", undefined],
+    ["(pass) handles 2 failed logins\n3 pass\n0 fail", "passed"],
+    ["handles 2 failed logins", undefined],
+    ["Tests:       1 failed, 2 passed, 3 total", "failed"],
+    [" Tests  3 passed (3)", "passed"],
+    ["=== 3 passed in 0.12s ===", "passed"],
+    ["1 failed, 2 passed in 0.12s", "failed"],
+    ["test result: ok. 3 passed; 0 failed; 0 ignored", "passed"],
+    ["test result: FAILED. 2 passed; 1 failed", "failed"],
+    ["ok  \texample.com/x\t0.12s", "passed"],
+    ["--- FAIL: TestX (0.00s)\nFAIL", "failed"],
+    ["  3 passing (10ms)\n  1 failing", "failed"],
+    ["  3 passing (10ms)", "passed"],
+  ])("reads the summary %j as %s", (output, expected) => {
+    expect(visibleTestResult("bun test | tail -5", output)).toBe(expected as "passed" | "failed" | undefined)
   })
 
   test("a piped test run is hidden, never a pass, and a claim with no run is called out", () => {

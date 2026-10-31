@@ -785,6 +785,7 @@ export const dict = {
   "session.review.evidence.partial": "{{check}} sikeres, de a készletnek csak egy része futott",
   "session.review.evidence.failed": "{{check}} megbukott, kilépési kód: {{exit}}",
   "session.review.evidence.hidden": "{{check}} eredménye ismeretlen: a kilépési kód másik parancstól jött",
+  "session.review.evidence.seen": "A(z) {{check}} a kimenete szerint sikeres; a kilépési kód rejtve maradt",
   "session.review.evidence.running": "{{check}} fut",
   "session.review.evidence.stale": "{{check}} sikeres volt, de aztán további fájlok módosultak: {{count}}",
   "session.review.evidence.none": "Nem futott: {{checks}}",

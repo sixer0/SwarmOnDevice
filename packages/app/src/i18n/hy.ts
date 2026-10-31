@@ -783,6 +783,7 @@ export const dict = {
   "session.review.evidence.partial": "{{check}}-ը անցել է, բայց աշխատել է հավաքածուի միայն մի մասը",
   "session.review.evidence.failed": "{{check}}-ը ձախողվել է, ելք {{exit}}",
   "session.review.evidence.hidden": "{{check}}-ի արդյունքն անհայտ է. ելքի կոդը եկել է այլ հրամանից",
+  "session.review.evidence.seen": "{{check}}-ը անցավ՝ ըստ իր ելքի. ելքի կոդը թաքնված էր",
   "session.review.evidence.running": "{{check}}-ը աշխատում է",
   "session.review.evidence.stale": "{{check}}-ը անցել է, հետո փոխվել են ավելի շատ ֆայլեր՝ {{count}}",
   "session.review.evidence.none": "Չի աշխատել՝ {{checks}}",

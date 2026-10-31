@@ -775,6 +775,7 @@ export const dict = {
   "session.review.evidence.partial": "{{check}} ជាប់ ប៉ុន្តែបានដំណើរការតែផ្នែកខ្លះនៃសំណុំ",
   "session.review.evidence.failed": "{{check}} បរាជ័យ exit {{exit}}",
   "session.review.evidence.hidden": "មិនដឹងលទ្ធផល {{check}}៖ exit code មកពីពាក្យបញ្ជាផ្សេង",
+  "session.review.evidence.seen": "{{check}} ជាប់ តាមលទ្ធផលរបស់វា ប៉ុន្តែកូដចេញត្រូវបានលាក់",
   "session.review.evidence.running": "{{check}} កំពុងដំណើរការ",
   "session.review.evidence.stale": "{{check}} ជាប់ រួចមានឯកសារផ្លាស់ប្តូរបន្ថែម៖ {{count}}",
   "session.review.evidence.none": "មិនបានដំណើរការ៖ {{checks}}",

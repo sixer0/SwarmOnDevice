@@ -784,6 +784,7 @@ export const dict = {
   "session.review.evidence.partial": "{{check}} praėjo, bet paleista tik dalis rinkinio",
   "session.review.evidence.failed": "{{check}} nepavyko, išėjimo kodas {{exit}}",
   "session.review.evidence.hidden": "{{check}} rezultatas nežinomas: išėjimo kodas atėjo iš kitos komandos",
+  "session.review.evidence.seen": "{{check}} pavyko pagal išvestį; išėjimo kodas buvo paslėptas",
   "session.review.evidence.running": "{{check}} vykdoma",
   "session.review.evidence.stale": "{{check}} praėjo, bet paskui pasikeitė daugiau failų: {{count}}",
   "session.review.evidence.none": "Nepaleista: {{checks}}",

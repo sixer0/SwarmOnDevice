@@ -795,6 +795,7 @@ export const dict = {
   "session.review.evidence.partial": "{{check}} पास हुआ, पर सूट का सिर्फ़ एक हिस्सा चला",
   "session.review.evidence.failed": "{{check}} विफल, एग्ज़िट {{exit}}",
   "session.review.evidence.hidden": "{{check}} का नतीजा अज्ञात: एग्ज़िट कोड किसी और कमांड से आया",
+  "session.review.evidence.seen": "आउटपुट के अनुसार {{check}} पास हुआ; एग्ज़िट कोड छिपा था",
   "session.review.evidence.running": "{{check}} चल रहा है",
   "session.review.evidence.stale": "{{check}} पास हुआ, फिर और फ़ाइलें बदलीं: {{count}}",
   "session.review.evidence.none": "नहीं चला: {{checks}}",

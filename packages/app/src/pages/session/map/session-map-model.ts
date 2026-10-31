@@ -24,6 +24,8 @@ export type MapStep = {
   // Why this step counts as a problem. A shell command that exits non-zero completes normally as far as the tool is
   // concerned, so the exit code has to be read from its metadata.
   problem?: string
+  // What the tool printed, read only when asked: streaming output must not rebuild the model.
+  output?: () => string
   // The line of output that says what went wrong, so a failure can be read without opening it.
   detail?: string
   running: boolean
@@ -237,6 +239,7 @@ export function buildSessionMap(input: SessionMapInput): SessionMapModel {
             start: time.start,
             end: time.end,
             files: changesOf(part),
+            output: () => quiet(() => (part.state.status === "completed" ? text(part.state.output) : "")),
             haystack: () => quiet(() => toolHaystack(part)),
           },
         ]

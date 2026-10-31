@@ -780,6 +780,7 @@ export const dict = {
   "session.review.evidence.partial": "{{check}} a trecut, dar a rulat doar o parte din suită",
   "session.review.evidence.failed": "{{check}} a eșuat, exit {{exit}}",
   "session.review.evidence.hidden": "Rezultat {{check}} necunoscut: codul de ieșire a venit de la altă comandă",
+  "session.review.evidence.seen": "{{check}} a trecut conform ieșirii sale; codul de ieșire era ascuns",
   "session.review.evidence.running": "{{check}} rulează",
   "session.review.evidence.stale": "{{check}} a trecut, apoi s-au modificat alte fișiere: {{count}}",
   "session.review.evidence.none": "Nu au rulat: {{checks}}",

@@ -43,6 +43,7 @@ export type CheckWords = {
   stale: (command: string, count: number) => string
   failed: (command: string, exit: string) => string
   hidden: (command: string) => string
+  seen: (command: string) => string
   partial: (command: string) => string
   none: (kinds: readonly CheckKind[]) => string
 }
@@ -58,7 +59,8 @@ export function checkLines(evidence: readonly EvidenceRow[], included: ReadonlyS
     if (row.status === "running") return []
     const after = row.editedAfter.filter((file) => included.has(file)).length
     if (after > 0) return [words.stale(command, after)]
-    return [row.run.partial ? words.partial(command) : words.passed(command)]
+    if (row.run.partial) return [words.partial(command)]
+    return [row.run.seen ? words.seen(command) : words.passed(command)]
   })
 }
 

@@ -343,6 +343,7 @@ function EvidenceItem(props: { brief: ReviewBriefController; row: EvidenceRow })
       if (status === "stale")
         return language.t("session.review.evidence.stale", { check, count: row.editedAfter.length })
       if (status === "passed" && row.run.partial) return language.t("session.review.evidence.partial", { check })
+      if (status === "passed" && row.run.seen) return language.t("session.review.evidence.seen", { check })
       if (status === "failed" && row.run.exit === undefined) return language.t("session.review.headline.failed", { command: row.run.command })
       return language.t(`session.review.evidence.${status}`, { check, exit: row.run.exit ?? "" })
     }

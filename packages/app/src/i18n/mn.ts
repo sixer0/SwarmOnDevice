@@ -784,6 +784,7 @@ export const dict = {
   "session.review.evidence.partial": "{{check}} давсан боловч багцын зөвхөн нэг хэсэг ажилласан",
   "session.review.evidence.failed": "{{check}} бүтэлгүйтсэн, гарах код {{exit}}",
   "session.review.evidence.hidden": "{{check}}-ийн үр дүн тодорхойгүй: гарах код өөр командаас ирсэн",
+  "session.review.evidence.seen": "{{check}} гаралтынхаа дагуу амжилттай; гарах код нуугдсан байв",
   "session.review.evidence.running": "{{check}} ажиллаж байна",
   "session.review.evidence.stale": "{{check}} давсан, дараа нь өөр файлууд өөрчлөгдсөн: {{count}}",
   "session.review.evidence.none": "Ажиллаагүй: {{checks}}",

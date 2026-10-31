@@ -770,6 +770,7 @@ export const dict = {
   "session.review.evidence.partial": "{{check}}は成功しましたが、スイートの一部しか実行されていません",
   "session.review.evidence.failed": "{{check}}が失敗しました (終了コード {{exit}})",
   "session.review.evidence.hidden": "{{check}}の結果は不明: 終了コードが別のコマンドのものです",
+  "session.review.evidence.seen": "出力によると {{check}} は成功しました。終了コードは隠れていました",
   "session.review.evidence.running": "{{check}}を実行中",
   "session.review.evidence.stale": "{{check}}は成功しましたが、その後さらにファイルが変更されました: {{count}}",
   "session.review.evidence.none": "未実行: {{checks}}",
