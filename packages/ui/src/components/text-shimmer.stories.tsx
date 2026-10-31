@@ -10,20 +10,18 @@ Use for pending states inside buttons or list rows.
 
 ### API
 - Required: \`text\` string.
-- Optional: \`as\`, \`active\`, \`offset\`, \`class\`.
+- Optional: \`as\`, \`active\`, \`class\`.
 
 ### Variants and states
 - Active/inactive state via \`active\`.
 
 ### Behavior
-- Uses a moving gradient sweep clipped to text.
-- \`offset\` lets multiple shimmers run out-of-phase.
+- The text breathes while active, on the compositor, with no per-frame paint.
 
 ### Accessibility
-- Uses \`aria-label\` with the full text.
 
 ### Theming/tokens
-- Uses \`data-component="text-shimmer"\` and CSS custom properties for timing.
+- Uses \`data-component="text-shimmer"\` and the \`--motion-breathe\` token for timing.
 
 `
 
@@ -31,7 +29,6 @@ const defaults = {
   text: "Loading...",
   active: true,
   class: "text-14-medium text-text-strong",
-  offset: 0,
 } as const
 
 const story = create({ title: "UI/TextShimmer", mod, args: defaults })
@@ -46,7 +43,6 @@ export default {
     text: { control: "text" },
     class: { control: "text" },
     active: { control: "boolean" },
-    offset: { control: { type: "range", min: 0, max: 80, step: 1 } },
   },
   parameters: {
     docs: {

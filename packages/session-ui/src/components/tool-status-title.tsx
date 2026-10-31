@@ -99,12 +99,12 @@ export function ToolStatusTitle(props: {
           <span data-slot="tool-status-swap" ref={widthRef} style={{ width: width() }}>
             <Show when={animating() || active()}>
               <span data-slot="tool-status-active" ref={activeRef}>
-                <TextShimmer text={activeTail()} active={active()} offset={0} />
+                <TextShimmer text={activeTail()} active={active()} />
               </span>
             </Show>
             <Show when={animating() || !active()}>
               <span data-slot="tool-status-done" ref={doneRef}>
-                <TextShimmer text={doneTail()} active={false} offset={0} />
+                <TextShimmer text={doneTail()} active={false} />
               </span>
             </Show>
           </span>
@@ -112,17 +112,17 @@ export function ToolStatusTitle(props: {
       >
         <span data-slot="tool-status-suffix">
           <span data-slot="tool-status-prefix">
-            <TextShimmer text={split().prefix} active={active()} offset={0} />
+            <TextShimmer text={split().prefix} active={active()} />
           </span>
           <span data-slot="tool-status-tail" ref={widthRef} style={{ width: width() }}>
             <Show when={animating() || active()}>
               <span data-slot="tool-status-active" ref={activeRef}>
-                <TextShimmer text={activeTail()} active={active()} offset={prefixLen()} />
+                <TextShimmer text={activeTail()} active={active()} />
               </span>
             </Show>
             <Show when={animating() || !active()}>
               <span data-slot="tool-status-done" ref={doneRef}>
-                <TextShimmer text={doneTail()} active={false} offset={prefixLen()} />
+                <TextShimmer text={doneTail()} active={false} />
               </span>
             </Show>
           </span>

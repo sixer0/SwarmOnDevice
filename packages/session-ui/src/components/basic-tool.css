@@ -59,7 +59,7 @@
     flex: 0 1 auto;
     min-width: 0;
     max-width: 100%;
-    font-size: 14px;
+    font-size: var(--session-row-size);
   }
 
   [data-slot="basic-tool-tool-info-structured"] {
@@ -84,19 +84,20 @@
   [data-slot="basic-tool-tool-title"] {
     flex-shrink: 0;
     font-family: var(--font-family-sans);
-    font-size: 14px;
+    font-size: var(--session-row-size);
     font-style: normal;
     font-weight: var(--font-weight-medium);
     line-height: var(--line-height-large);
     letter-spacing: var(--letter-spacing-normal);
-    color: var(--v2-text-text-base);
+    color: var(--session-voice-work);
+    transition: color var(--motion-arrive) ease;
 
     &.capitalize {
       text-transform: capitalize;
     }
 
     &.agent-title {
-      color: var(--v2-text-text-base);
+      color: var(--session-voice-work);
       font-weight: var(--font-weight-medium);
     }
   }
@@ -107,14 +108,15 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-family: var(--font-family-sans);
+    font-family: var(--font-family-mono);
+    font-feature-settings: var(--font-family-mono--font-feature-settings);
     font-variant-numeric: tabular-nums;
-    font-size: 14px;
+    font-size: var(--session-row-code-size);
     font-style: normal;
     font-weight: var(--font-weight-regular);
     line-height: var(--line-height-large);
     letter-spacing: var(--letter-spacing-normal);
-    color: var(--v2-text-text-muted);
+    color: var(--v2-text-text-base);
 
     &.clickable {
       cursor: pointer;
@@ -153,14 +155,24 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-family: var(--font-family-sans);
+    font-family: var(--font-family-mono);
+    font-feature-settings: var(--font-family-mono--font-feature-settings);
     font-variant-numeric: tabular-nums;
-    font-size: 14px;
+    font-size: var(--session-row-code-size);
     font-style: normal;
     font-weight: var(--font-weight-regular);
     line-height: var(--line-height-large);
     letter-spacing: var(--letter-spacing-normal);
-    color: var(--v2-text-text-muted);
+    color: var(--session-voice-work);
+  }
+
+  [data-slot="basic-tool-tool-problem"] {
+    flex-shrink: 0;
+    font-family: var(--font-family-mono);
+    font-feature-settings: var(--font-family-mono--font-feature-settings);
+    font-size: var(--session-row-code-size);
+    line-height: var(--line-height-large);
+    color: var(--session-mark-failed);
   }
 
   [data-slot="basic-tool-tool-action"] {
@@ -168,6 +180,12 @@
     align-items: center;
     flex-shrink: 0;
   }
+}
+
+[data-slot="collapsible-trigger"]:hover [data-slot="basic-tool-tool-title"],
+[data-slot="collapsible-trigger"]:hover [data-slot="message-part-title-text"],
+[data-slot="collapsible-trigger"]:hover [data-slot="context-tool-group-label"] {
+  color: var(--v2-text-text-base);
 }
 
 [data-component="task-tool-card"] {

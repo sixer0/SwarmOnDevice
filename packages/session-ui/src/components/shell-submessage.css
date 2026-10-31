@@ -6,6 +6,10 @@
   vertical-align: baseline;
 }
 
+[data-component="shell-submessage"][data-animate] {
+  animation: motion-arrive var(--motion-arrive) var(--motion-ease) backwards;
+}
+
 [data-component="shell-submessage"] [data-slot="shell-submessage-width"] {
   min-width: 0;
   max-width: 100%;

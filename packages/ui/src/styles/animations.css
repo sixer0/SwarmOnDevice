@@ -139,3 +139,17 @@
     animation-delay: 3s;
   }
 }
+
+/* Compositor-only, so a working agent costs no layout or paint per frame. */
+@keyframes motion-arrive {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+}
+
+@keyframes motion-breathe {
+  50% {
+    opacity: 0.45;
+  }
+}

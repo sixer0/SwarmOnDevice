@@ -204,4 +204,63 @@ describe("current session timeline rows", () => {
 
     expect(result.rows.map((row) => row._tag)).toEqual(["UserMessage", "AssistantPart"])
   })
+
+  describe("voices and the working indicator", () => {
+    const user = { id: "u1", role: "user", time: { created: 1 } } as any
+    const text = (id: string, messageID = "a1") => ({ id, type: "text", text: "said", messageID }) as any
+    const tool = (id: string, status = "completed", messageID = "a1") =>
+      ({ id, type: "tool", tool: "bash", state: { status }, messageID }) as any
+    const assistant = (id: string, completed?: number) => ({ id, role: "assistant", time: { created: 2, completed } }) as any
+    const build = (parts: any[], messages: any[], status: "busy" | "idle", showReasoning = false) =>
+      Timeline.constructMessageRows(
+        user,
+        (id: string) => parts.filter((part) => part.messageID === id),
+        messages,
+        0,
+        showReasoning,
+        status,
+        true,
+        true,
+      )
+    const voices = (rows: any[]) =>
+      rows
+        .filter((row) => row._tag === "AssistantPart")
+        .map((row) => [row.group.key, row.voice, row.railStart, row.railEnd])
+
+    test("text is the answer only when nothing follows it, and earlier text joins the trail", () => {
+      const rows = build([text("t1"), tool("c1"), tool("c2"), text("t2")], [assistant("a1", 3)], "idle")
+      expect(voices(rows)).toEqual([
+        ["t1", "work", true, false],
+        ["c1", "work", false, false],
+        ["c2", "work", false, true],
+        ["t2", "answer", false, true],
+      ])
+    })
+
+    test("a turn that ends on a tool is all work", () => {
+      const rows = build([tool("c1")], [assistant("a1", 3)], "idle")
+      expect(voices(rows)).toEqual([["c1", "work", true, true]])
+    })
+
+    test("text turns into work when a tool arrives after it", () => {
+      expect(voices(build([text("t1")], [assistant("a1")], "busy"))[0]?.[1]).toBe("answer")
+      expect(voices(build([text("t1"), tool("c1", "running")], [assistant("a1")], "busy"))[0]?.[1]).toBe("work")
+    })
+
+    const hasThinking = (rows: any[]) => rows.some((row) => row._tag === "Thinking")
+
+    test("only one thing says the agent is working", () => {
+      expect(hasThinking(build([], [assistant("a1")], "busy"))).toBe(true)
+      expect(hasThinking(build([tool("c1", "running")], [assistant("a1")], "busy"))).toBe(false)
+      expect(hasThinking(build([text("t1")], [assistant("a1")], "busy"))).toBe(false)
+      expect(hasThinking(build([tool("c1")], [assistant("a1", 3)], "busy"))).toBe(true)
+      expect(hasThinking(build([tool("c1")], [assistant("a1", 3)], "idle"))).toBe(false)
+    })
+
+    test("the thinking row continues the rail instead of starting a new one", () => {
+      const rows = build([tool("c1")], [assistant("a1", 3)], "busy")
+      expect(voices(rows)).toEqual([["c1", "work", true, false]])
+      expect(rows.find((row) => row._tag === "Thinking")).toMatchObject({ railStart: false })
+    })
+  })
 })

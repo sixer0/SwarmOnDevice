@@ -12,6 +12,9 @@ const context = (key: string, partIDs: string[], userMessageID = "user-1") =>
       refs: partIDs.map((partID) => ({ messageID: "assistant-1", partID })),
     } satisfies PartGroup,
     previousAssistantPart: false,
+    voice: "work",
+    railStart: true,
+    railEnd: true,
   })
 
 const user = (userMessageID = "user-1") => new TimelineRow.UserMessage({ userMessageID, anchor: true })

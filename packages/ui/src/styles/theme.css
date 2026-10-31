@@ -20,6 +20,38 @@
   --letter-spacing-tightest: -0.3199999928474426;
   --paragraph-spacing-base: 0;
 
+  /* Session reading system: what the agent says reads as prose, what it did reads as a quiet trail. */
+  --session-measure: 72ch;
+  --session-text-gap: 18px;
+  --session-text-gap-first: 8px;
+  --session-heading-1: 20px;
+  --session-heading-2: 16px;
+  --session-heading-3: 14px;
+  --session-heading-4: 13px;
+  --session-heading-weight: 600;
+  --session-row: 28px;
+  --session-row-size: 13px;
+  --session-row-code-size: 12.5px;
+  --session-rail-x: 8px;
+  --session-rail-dot: 5px;
+  --session-rail: var(--v2-border-border-base);
+  --session-mark: var(--v2-text-text-faint);
+  --session-mark-live: var(--v2-text-text-base);
+  --session-mark-failed: var(--v2-state-fg-danger);
+  --session-voice-work: var(--v2-text-text-muted);
+
+  /* Motion. Everything session-level reads these, so reduced motion is decided in one place below. */
+  --motion-ease: cubic-bezier(0.2, 0, 0, 1);
+  --motion-arrive: 180ms;
+  --motion-settle: 240ms;
+  --motion-wait: 400ms;
+  --motion-breathe: 1.8s;
+  --motion-breathe-state: running;
+  --tool-motion-ease: var(--motion-ease);
+  --tool-motion-spring-ms: 240ms;
+  --tool-motion-fade-ms: 160ms;
+  --tool-motion-blur: 0px;
+
   --spacing: 0.25rem;
 
   --breakpoint-sm: 40rem;
@@ -627,5 +659,16 @@
     --avatar-text-cyan: #369eff;
     --avatar-text-lime: #c4f042;
     --text-stronger: rgba(255, 255, 255, 0.936);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-arrive: 0ms;
+    --motion-settle: 0ms;
+    --motion-wait: 0ms;
+    --motion-breathe-state: paused;
+    --tool-motion-spring-ms: 0ms;
+    --tool-motion-fade-ms: 0ms;
   }
 }

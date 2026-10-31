@@ -542,6 +542,7 @@ export function Markdown(
   return (
     <div
       data-component="markdown"
+      data-streaming={local.streaming ? "" : undefined}
       dir="auto"
       classList={{
         ...local.classList,

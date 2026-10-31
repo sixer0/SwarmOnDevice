@@ -9,8 +9,20 @@
   overflow: visible;
 
   &.tool-collapsible {
-    --tool-content-gap: 4px;
+    --tool-content-gap: 2px;
     gap: var(--tool-content-gap);
+
+    > [data-slot="collapsible-trigger"] {
+      height: var(--session-row);
+    }
+
+    > [data-slot="collapsible-content"][data-expanded] {
+      padding-bottom: 8px;
+    }
+
+    &[data-toggled] > [data-slot="collapsible-content"][data-expanded] {
+      animation: motion-arrive var(--motion-arrive) var(--motion-ease) backwards;
+    }
   }
 
   [data-slot="collapsible-trigger"] {

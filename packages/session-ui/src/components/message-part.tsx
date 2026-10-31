@@ -5,7 +5,6 @@ import {
   createSignal,
   For,
   Match,
-  onMount,
   Show,
   Switch,
   onCleanup,
@@ -60,9 +59,9 @@ import { Spinner } from "@opencode-ai/ui/spinner"
 import { TextShimmer } from "@opencode-ai/ui/text-shimmer"
 import { AnimatedCountList } from "./tool-count-summary"
 import { ToolStatusTitle } from "./tool-status-title"
+import { failedExit } from "./part-mark"
 import { patchFiles } from "./apply-patch-file"
 import { partDefaultOpen } from "./part-default-open"
-import { animate } from "motion"
 import { attached, inline, kind, typeLabel } from "./message-file"
 import { readPartText } from "./message-part-text"
 import { SessionProgressIndicatorV2 } from "../v2/components/session-progress-indicator-v2"
@@ -92,32 +91,11 @@ async function writeClipboard(text: string): Promise<boolean> {
 }
 
 function ShellSubmessage(props: { text: string; animate?: boolean }) {
-  let widthRef: HTMLSpanElement | undefined
-  let valueRef: HTMLSpanElement | undefined
-
-  onMount(() => {
-    if (!props.animate) return
-    requestAnimationFrame(() => {
-      if (widthRef) {
-        animate(widthRef, { width: "auto" }, { type: "spring", visualDuration: 0.25, bounce: 0 })
-      }
-      if (valueRef) {
-        animate(valueRef, { opacity: 1, filter: "blur(0px)" }, { duration: 0.32, ease: [0.16, 1, 0.3, 1] })
-      }
-    })
-  })
-
   return (
-    <span data-component="shell-submessage" dir="ltr">
-      <span ref={widthRef} data-slot="shell-submessage-width" style={{ width: props.animate ? "0px" : undefined }}>
+    <span data-component="shell-submessage" data-animate={props.animate ? "" : undefined} dir="ltr">
+      <span data-slot="shell-submessage-width">
         <span data-slot="basic-tool-tool-subtitle">
-          <span
-            ref={valueRef}
-            data-slot="shell-submessage-value"
-            style={props.animate ? { opacity: 0, filter: "blur(2px)" } : undefined}
-          >
-            {props.text}
-          </span>
+          <span data-slot="shell-submessage-value">{props.text}</span>
         </span>
       </span>
     </span>
@@ -250,7 +228,8 @@ export type PartComponent = Component<MessagePartProps>
 export const PART_MAPPING: Record<string, PartComponent | undefined> = {}
 
 const TEXT_RENDER_PACE_MS = 24
-const TEXT_RENDER_IMMEDIATE = 512
+// A provider that delivers text in large batches should still read as text arriving, not as paragraphs appearing.
+const TEXT_RENDER_IMMEDIATE = 64
 const TEXT_RENDER_SNAP = /[\s.,!?;:)\]]/
 
 function step(size: number) {
@@ -726,6 +705,7 @@ export function renderable(part: PartType, showReasoningSummaries = true) {
 }
 
 export { partDefaultOpen } from "./part-default-open"
+export { toolMark } from "./part-mark"
 
 export function AssistantParts(props: {
   messages: AssistantMessage[]
@@ -1079,7 +1059,7 @@ export function ContextToolGroup(props: {
         <div data-component="context-tool-group-trigger">
           <span
             data-slot="context-tool-group-title"
-            class="min-w-0 flex items-center gap-2 text-14-medium text-text-strong"
+            class="min-w-0 flex items-center gap-2"
           >
             <span data-slot="context-tool-group-label" class="shrink-0">
               <ToolStatusTitle
@@ -1091,7 +1071,7 @@ export function ContextToolGroup(props: {
             </span>
             <span
               data-slot="context-tool-group-summary"
-              class="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap font-normal text-text-base"
+              class="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap"
             >
               <AnimatedCountList
                 items={[
@@ -2142,6 +2122,9 @@ ToolRegistry.register({
               </span>
               <Show when={!open() && props.input.command}>
                 <ShellSubmessage text={props.input.command} animate={sawPending} />
+              </Show>
+              <Show when={!pending() && failedExit(props.metadata)}>
+                {(code) => <span data-slot="basic-tool-tool-problem">exit {code()}</span>}
               </Show>
             </div>
           </div>

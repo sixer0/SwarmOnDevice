@@ -443,12 +443,12 @@
     gap: 8px;
     min-width: 0;
     font-family: var(--font-family-sans);
-    font-size: 14px;
+    font-size: var(--session-row-size);
     font-style: normal;
     font-weight: var(--font-weight-medium);
     line-height: var(--line-height-large);
     letter-spacing: var(--letter-spacing-normal);
-    color: var(--v2-text-text-muted);
+    color: var(--session-voice-work);
   }
 
   [data-slot="message-part-title-spinner"] {
@@ -470,7 +470,8 @@
   [data-slot="message-part-title-text"] {
     flex-shrink: 0;
     text-transform: capitalize;
-    color: var(--v2-text-text-base);
+    color: var(--session-voice-work);
+    transition: color var(--motion-arrive) ease;
   }
 
   [data-slot="message-part-title-filename"] {
@@ -479,7 +480,11 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    font-family: var(--font-family-mono);
+    font-feature-settings: var(--font-family-mono--font-feature-settings);
+    font-size: var(--session-row-code-size);
     font-weight: var(--font-weight-regular);
+    color: var(--v2-text-text-base);
     direction: ltr;
     unicode-bidi: isolate;
   }
@@ -494,7 +499,10 @@
   }
 
   [data-slot="message-part-directory"] {
-    color: var(--v2-text-text-muted);
+    font-family: var(--font-family-mono);
+    font-feature-settings: var(--font-family-mono--font-feature-settings);
+    font-size: var(--session-row-code-size);
+    color: var(--session-voice-work);
     text-overflow: ellipsis;
     overflow: hidden;
     white-space: nowrap;
@@ -631,6 +639,7 @@
 }
 
 [data-component="context-tool-group-trigger"] {
+  --tool-status-done-color: currentColor;
   width: 100%;
   min-height: 24px;
   display: flex;
@@ -642,6 +651,19 @@
   [data-slot="context-tool-group-title"] {
     flex-shrink: 1;
     min-width: 0;
+    font-size: var(--session-row-size);
+    line-height: var(--line-height-large);
+  }
+
+  [data-slot="context-tool-group-label"] {
+    font-weight: var(--font-weight-medium);
+    color: var(--session-voice-work);
+    transition: color var(--motion-arrive) ease;
+  }
+
+  [data-slot="context-tool-group-summary"] {
+    font-weight: var(--font-weight-regular);
+    color: var(--v2-text-text-base);
   }
 
   [data-slot="collapsible-arrow"] {
@@ -654,10 +676,10 @@
   padding-top: 0;
   padding-right: 0;
   padding-bottom: 0;
-  padding-left: 12px;
+  padding-left: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
 
   [data-slot="context-tool-group-item"] {
     min-width: 0;

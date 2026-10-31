@@ -25,8 +25,11 @@ export type TimelineRowMap = {
     userMessageID: string
     group: PartGroup
     previousAssistantPart: boolean
+    voice: "work" | "answer"
+    railStart: boolean
+    railEnd: boolean
   }
-  Thinking: { userMessageID: string; reasoningHeading?: string }
+  Thinking: { userMessageID: string; reasoningHeading?: string; railStart: boolean }
   Retry: { userMessageID: string }
   DiffSummary: { userMessageID: string; diffs: SummaryDiff[] }
   Error: { userMessageID: string; text: string }
@@ -143,6 +146,27 @@ export namespace Timeline {
             ),
           ]
         : groupParts(assistantPartRefs).map((group) => ({ type: "part" as const, group }))
+    // One indicator at a time: a part still arriving or a running tool already says the agent is working.
+    const lastRef = assistantPartRefs.at(-1)
+    const lastItem = assistantItems.at(-1)
+    const partLive =
+      lastItem?.type === "part" &&
+      (lastItem.group.type === "context" ||
+        (lastRef?.part.type === "tool" && ["pending", "running"].includes(lastRef.part.state.status)) ||
+        ((lastRef?.part.type === "text" || lastRef?.part.type === "reasoning") &&
+          assistantMessages[lastRef.messageIndex]?.time.completed === undefined))
+    const thinking =
+      isActive && status === "busy" && !error && !partLive && (showReasoning ? assistantPartRefs.length === 0 : true)
+
+    // Text is the answer only while nothing follows it; everything before that is work on the way.
+    const typeOf = new Map(assistantPartRefs.map((ref) => [ref.part.id, ref.part.type] as const))
+    const isWork = (index: number) => {
+      const item = assistantItems[index]
+      if (item?.type !== "part") return false
+      if (assistantItems[index + 1]?.type === "part") return true
+      return item.group.type === "context" || typeOf.get(item.group.ref.partID) !== "text"
+    }
+
     if (previousUserMessage) rows.push(new TimelineRow.TurnGap({ userMessageID: userMessage.id }))
 
     if (comments.length > 0 && !inlineComments)
@@ -169,7 +193,7 @@ export namespace Timeline {
     }
 
     let assistantGroupIndex = 0
-    assistantItems.forEach((item) => {
+    assistantItems.forEach((item, itemIndex) => {
       if (item.type === "interrupted") {
         rows.push(
           new TimelineRow.TurnDivider({
@@ -185,12 +209,15 @@ export namespace Timeline {
           userMessageID: userMessage.id,
           group: item.group,
           previousAssistantPart: assistantGroupIndex > 0,
+          voice: isWork(itemIndex) ? "work" : "answer",
+          railStart: !isWork(itemIndex - 1),
+          railEnd: !isWork(itemIndex + 1) && !(thinking && itemIndex === assistantItems.length - 1),
         }),
       )
       assistantGroupIndex += 1
     })
 
-    if (isActive && status === "busy" && !error && (showReasoning ? assistantPartRefs.length === 0 : true)) {
+    if (thinking) {
       const heading = assistantMessages
         .flatMap((message) => getMessageParts(message.id))
         .map((part) => (part.type === "reasoning" && part.text ? reasoningHeading(part.text) : undefined))
@@ -200,6 +227,7 @@ export namespace Timeline {
         new TimelineRow.Thinking({
           userMessageID: userMessage.id,
           reasoningHeading: heading,
+          railStart: !isWork(assistantItems.length - 1),
         }),
       )
     }

@@ -1,5 +1,5 @@
 import { Collapsible as Kobalte, CollapsibleRootProps } from "@kobalte/core/collapsible"
-import { ComponentProps, ParentProps, splitProps } from "solid-js"
+import { ComponentProps, createSignal, ParentProps, splitProps } from "solid-js"
 import { Icon } from "./icon"
 
 export interface CollapsibleProps extends ParentProps<CollapsibleRootProps> {
@@ -9,11 +9,18 @@ export interface CollapsibleProps extends ParentProps<CollapsibleRootProps> {
 }
 
 function CollapsibleRoot(props: CollapsibleProps) {
-  const [local, others] = splitProps(props, ["class", "classList", "variant"])
+  const [local, others] = splitProps(props, ["class", "classList", "variant", "onOpenChange"])
+  // Timeline rows remount as they scroll back into view; only an opening someone just asked for should animate.
+  const [toggled, setToggled] = createSignal(false)
   return (
     <Kobalte
       data-component="collapsible"
       data-variant={local.variant || "normal"}
+      data-toggled={toggled() ? "" : undefined}
+      onOpenChange={(open) => {
+        setToggled(true)
+        local.onOpenChange?.(open)
+      }}
       classList={{
         ...local.classList,
         [local.class ?? ""]: !!local.class,

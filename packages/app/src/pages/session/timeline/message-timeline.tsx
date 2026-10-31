@@ -25,6 +25,7 @@ import {
   MessageDivider,
   Part as MessagePart,
   partDefaultOpen,
+  toolMark,
   type UserActions,
 } from "@opencode-ai/session-ui/message-part"
 import { DiffChanges } from "@opencode-ai/ui/diff-changes"
@@ -1007,6 +1008,13 @@ export function MessageTimeline(props: {
   }
 
   const workingTurn = (userMessageID: string) => sessionStatus().type !== "idle" && activeMessageID() === userMessageID
+  // Rows that appear while the agent works settle in; rows already there at load, or scrolled back to, do not.
+  const seenRows = new Set<string>()
+  let rowsSettled = false
+  onMount(() => {
+    const timer = setTimeout(() => (rowsSettled = true), 600)
+    onCleanup(() => clearTimeout(timer))
+  })
 
   const turnDurationMs = (userMessageID: string) => {
     const message = messageByID().get(userMessageID)
@@ -1110,26 +1118,47 @@ export function MessageTimeline(props: {
     )
   }
 
-  function TimelineRowFrame(input: { row: Accessor<FramedTimelineRow>; children: JSX.Element }) {
+  function TimelineRowFrame(input: {
+    row: Accessor<FramedTimelineRow>
+    part?: Accessor<string | undefined>
+    mark?: Accessor<string | undefined>
+    children: JSX.Element
+  }) {
     const anchor = () => {
       const row = input.row()
       return row._tag === "CommentStrip" || (row._tag === "UserMessage" && row.anchor)
     }
-    const previousAssistantPart = () => {
+    const assistant = () => {
       const row = input.row()
-      return row._tag === "AssistantPart" && row.previousAssistantPart
+      return row._tag === "AssistantPart" ? row : undefined
     }
+    const thinking = () => {
+      const row = input.row()
+      return row._tag === "Thinking" ? row : undefined
+    }
+    const firstRow = input.row()
+    const rowKey = TimelineRow.key(firstRow)
+    const arrive =
+      firstRow._tag === "AssistantPart" && rowsSettled && workingTurn(firstRow.userMessageID) && !seenRows.has(rowKey)
+    seenRows.add(rowKey)
 
     return (
       <div
         id={anchor() ? props.anchor(input.row().userMessageID) : undefined}
         data-message-id={input.row().userMessageID}
         data-timeline-row={input.row()._tag}
+        data-voice={assistant()?.voice ?? (thinking() ? "work" : undefined)}
+        data-part={input.part?.()}
+        data-mark={input.mark?.()}
+        data-first={assistant() && !assistant()!.previousAssistantPart ? "" : undefined}
+        data-rail-start={(assistant()?.railStart ?? thinking()?.railStart) ? "" : undefined}
+        data-rail-end={assistant()?.railEnd || thinking() ? "" : undefined}
+        data-arrive={arrive ? "" : undefined}
+        data-working={assistant() && workingTurn(assistant()!.userMessageID) ? "" : undefined}
         classList={{
           "min-w-0 w-full max-w-full": true,
           "md:max-w-200 2xl:max-w-[1000px]": props.centered,
           "md:mx-auto": props.centered,
-          "pt-3": previousAssistantPart(),
         }}
       >
         <div data-component="session-turn" class="min-w-0 w-full relative" style={{ height: "auto" }}>
@@ -1235,8 +1264,29 @@ export function MessageTimeline(props: {
       }
       case "AssistantPart": {
         const assistantPartRow = row as Accessor<TimelineRowByTag<"AssistantPart">>
+        const parts = createMemo(() => {
+          const group = assistantPartRow().group
+          if (group.type === "part") return [getMsgPart(group.ref.messageID, group.ref.partID)]
+          return group.refs.map((ref) => getMsgPart(ref.messageID, ref.partID))
+        })
+        const partKind = () => {
+          const part = parts()[0]
+          if (assistantPartRow().group.type === "context" || part?.type === "tool")
+            return part?.type === "tool" && part.tool === "task" ? "task" : "tool"
+          return part?.type === "text" || part?.type === "reasoning" ? "text" : undefined
+        }
+        const mark = () => {
+          const marks = parts().map(toolMark)
+          const group = assistantPartRow()
+          if (marks.includes("failed")) return "failed"
+          if (marks.includes("running")) return "running"
+          if (group.group.type === "context" && workingTurn(group.userMessageID)) {
+            if (lastAssistantGroupKey().get(group.userMessageID) === group.group.key) return "running"
+          }
+          return marks.includes("done") ? "done" : undefined
+        }
         return (
-          <TimelineRowFrame row={assistantPartRow}>
+          <TimelineRowFrame row={assistantPartRow} part={partKind} mark={mark}>
             <div data-slot="session-turn-message-container" class="w-full px-4 md:px-5">
               <div
                 data-slot="session-turn-assistant-content"
@@ -1251,7 +1301,7 @@ export function MessageTimeline(props: {
       case "Thinking": {
         const thinkingRow = row as Accessor<TimelineRowByTag<"Thinking">>
         return (
-          <TimelineRowFrame row={thinkingRow}>
+          <TimelineRowFrame row={thinkingRow} part={() => "tool"} mark={() => "running"}>
             <div data-slot="session-turn-message-container" class="w-full px-4 md:px-5">
               <TimelineThinkingRow
                 reasoningHeading={thinkingRow().reasoningHeading}
