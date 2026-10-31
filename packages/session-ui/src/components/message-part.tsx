@@ -824,7 +824,9 @@ export function AssistantParts(props: {
 }
 
 function isContextGroupTool(part: PartType): part is ToolPart {
-  return part.type === "tool" && CONTEXT_GROUP_TOOLS.has(part.tool)
+  if (part.type !== "tool" || !CONTEXT_GROUP_TOOLS.has(part.tool)) return false
+  // A refused read read nothing, and its reason must not sit folded away under "Explored".
+  return !(part.state.status === "completed" && part.state.metadata?.refused)
 }
 
 function contextToolDetail(part: ToolPart): string | undefined {
@@ -1971,7 +1973,8 @@ ToolRegistry.register({
         icon="branch"
         trigger={{
           title: i18n.t("ui.tool.git"),
-          subtitle: gitDetail(props.input) ?? "",
+          // A refused read shows why: the person is about to be asked for what it would have done.
+          subtitle: props.metadata.refused ?? gitDetail(props.input) ?? "",
         }}
       >
         <Show when={props.output}>

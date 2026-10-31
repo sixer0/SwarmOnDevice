@@ -2105,6 +2105,7 @@ function Git(props: ToolProps) {
   return (
     <InlineTool icon="→" pending="Reading git…" complete={stringValue(props.input.subcommand)} part={props.part}>
       Git {[stringValue(props.input.subcommand), stringValue(props.input.revision), ...paths()].filter(Boolean).join(" ")}
+      {stringValue(props.metadata.refused) ? ` ${stringValue(props.metadata.refused)}` : ""}
     </InlineTool>
   )
 }

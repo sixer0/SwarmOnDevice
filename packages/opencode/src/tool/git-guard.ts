@@ -132,7 +132,7 @@ export function inspect(worktree: string): { gitDir: string; refused?: undefined
   const info = fs.lstatSync(gitDir, { throwIfNoEntry: false })
   if (!info) return { refused: "there is no .git at the top of this project" }
   if (info.isSymbolicLink()) return { refused: ".git is a symbolic link" }
-  if (!info.isDirectory()) return { refused: ".git is a file that points elsewhere, as in a linked worktree or a submodule checkout" }
+  if (!info.isDirectory()) return { refused: ".git is a file that points elsewhere, as in a linked worktree or a submodule" }
   if (present(path.join(gitDir, "commondir"))) return { refused: "its commondir says the repository is somewhere else" }
   const leaves = ["config", "objects", "refs", "packed-refs", "HEAD", "index"].map((name) => path.join(gitDir, name))
   if (leaves.some((file) => fs.lstatSync(file, { throwIfNoEntry: false })?.isSymbolicLink()))

@@ -109,7 +109,9 @@ const allRefused = (dir: string, why: RegExp, marker = "marker") =>
       // A normal result: if this were a failed call, the invoke would die and the test with it.
       const result = yield* invoke(dir, params)
       const message = result.output
-      expect(result.metadata.refused).toBeDefined()
+      // The line a person sees on the row: the reason itself, on one line.
+      expect(result.metadata.refused).toMatch(why)
+      expect(result.metadata.refused?.split("\n")).toHaveLength(1)
       expect(message).toContain("git tool refused")
       expect(message).toContain("Use the shell (bash)")
       expect(message).toMatch(why)

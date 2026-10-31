@@ -286,7 +286,8 @@ export const GitTool = Tool.define(
           // another matter: fix the call.
           const refuseRepository = (why: string) => ({
             title: `git ${params.subcommand} refused`,
-            metadata: { subcommand: params.subcommand, truncated: false, refused: why as string | undefined },
+            // The line a person sees on the row. The model may never repeat the output, as measured: 0 of 4 ordinary jobs did.
+            metadata: { subcommand: params.subcommand, truncated: false, refused: `refused: ${why}. The shell can do it, and asks.` as string | undefined },
             output: `git tool refused: ${why}. Nothing was run. Use the shell (bash) for this repository: it asks a person.`,
           })
           const refuse = (why: string) => Effect.fail(new Error(`git tool refused: ${why}.`))
