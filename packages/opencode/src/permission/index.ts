@@ -114,7 +114,10 @@ const layer = Layer.effect(
 
       const id = request.id ?? PermissionV1.ID.ascending()
       // A repeating call stops the run on purpose until a person looks. Carrying on would defeat that guard.
-      const wait = request.permission === "doom_loop" ? undefined : Unattended.wait(away.has(request.sessionID))
+      // The same goes for a spend limit: nobody being there is exactly when it must hold.
+      const wait = ["doom_loop", "spend_limit"].includes(request.permission)
+        ? undefined
+        : Unattended.wait(away.has(request.sessionID))
       const asked: PermissionV1.Request = {
         id,
         sessionID: request.sessionID,

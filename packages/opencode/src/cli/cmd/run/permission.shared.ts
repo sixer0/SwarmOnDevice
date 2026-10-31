@@ -108,6 +108,14 @@ export function permissionInfo(request: PermissionRequest): PermissionInfo {
     }
   }
 
+  if (request.permission === "spend_limit") {
+    return {
+      icon: "$",
+      title: "Spend limit reached",
+      lines: [`This run has spent ${request.patterns[0] ?? ""}. It stays paused until you decide.`],
+    }
+  }
+
   if (request.permission === "doom_loop") {
     return {
       icon: "⟳",

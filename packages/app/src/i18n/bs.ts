@@ -573,6 +573,18 @@ export const dict = {
 
   "dialog.usageExceeded.dontShowAgain": "Nemoj više prikazivati",
 
+  "context.spend.title": "Gdje je otišao novac",
+
+  "context.spend.writing": "Pisanje",
+
+  "context.spend.fresh": "Čitanje novog konteksta",
+
+  "context.spend.reread": "Ponovno čitanje keširanog konteksta",
+
+  "context.spend.subagents": "Podagenti",
+
+  "context.spend.saved": "Keširanje je uštedjelo oko {{amount}}",
+
   "context.breakdown.title": "Razlaganje konteksta",
   "context.breakdown.note":
     'Približna raspodjela ulaznih tokena. "Ostalo" uključuje definicije alata i dodatno opterećenje.',
@@ -1473,6 +1485,10 @@ export const dict = {
   "memory.remembered": "Zapamćeno",
   "memory.seeAll": "Prikaži sve",
   "memory.undo": "Poništi",
+  "session.spend.title": "Dostignut je limit potrošnje",
+  "session.spend.summary": "Ovo pokretanje je potrošilo {{spent}}. Ostaje pauzirano dok ne odlučite.",
+  "session.spend.continue": "Nastavi do {{amount}}",
+  "session.spend.stop": "Zaustavi ovdje",
   "session.movesOn.hint": "Nema odgovora do {{time}}? Agent nastavlja bez ovoga.",
   "session.movedOn.title": "Nastavio je bez vas",
   "session.movedOn.allow": "Dozvoli i nastavi",

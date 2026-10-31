@@ -133,6 +133,10 @@ export const Info = Schema.Struct({
   enterprise: Schema.optional(
     Schema.Struct({ url: Schema.optional(Schema.String).annotate({ description: "Enterprise URL" }) }),
   ),
+  spend_limit: Schema.optional(Schema.Finite).annotate({
+    description:
+      "US dollars one run may spend, subagents included, before it pauses and asks whether to continue (default: 10). A run starts at your message. 0 turns the limit off.",
+  }),
   tool_output: Schema.optional(
     Schema.Struct({
       max_lines: Schema.optional(PositiveInt).annotate({
@@ -152,7 +156,12 @@ export const Info = Schema.Struct({
         description: "Enable automatic compaction when context is full (default: true)",
       }),
       prune: Schema.optional(Schema.Boolean).annotate({
-        description: "Enable pruning of old tool outputs (default: false)",
+        description:
+          "Clear old tool outputs from a session returning after its prompt cache expired (default: true)",
+      }),
+      max_context: Schema.optional(NonNegativeInt).annotate({
+        description:
+          "Compact once context reaches this many tokens, even if the model's window is larger. By default paid models compact near 200000 tokens or their first higher-priced tier. 0 uses the whole window.",
       }),
       tail_turns: Schema.optional(NonNegativeInt).annotate({
         description:

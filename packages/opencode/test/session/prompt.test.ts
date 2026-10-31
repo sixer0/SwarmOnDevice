@@ -26,6 +26,7 @@ import { Image } from "../../src/image/image"
 import { Question } from "../../src/question"
 import { Todo } from "../../src/session/todo"
 import { Session } from "@/session/session"
+import { SessionSpend } from "@/session/spend"
 import { SessionMessageTable } from "@opencode-ai/core/session/sql"
 import { LLM } from "../../src/session/llm"
 import { MessageV2 } from "../../src/session/message-v2"
@@ -2496,4 +2497,226 @@ noLLMServer.instance(
       }
     }),
   30_000,
+)
+
+// Spend limit, cold-cache pruning and system prompt stability
+
+const spent = Effect.fn("test.spent")(function* (sessionID: SessionID, cost: number, finish = "tool-calls") {
+  const sessions = yield* Session.Service
+  const seeded = yield* seed(sessionID, { finish })
+  yield* sessions.updateMessage({ ...seeded.assistant, cost, time: { created: Date.now(), completed: Date.now() } })
+  yield* sessions.updatePart({
+    id: PartID.ascending(),
+    messageID: seeded.assistant.id,
+    sessionID,
+    type: "step-finish",
+    reason: finish,
+    cost,
+    tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+  })
+  return seeded
+})
+
+const waitForAsk = Effect.fn("test.waitForAsk")(function* (permission: string) {
+  const service = yield* Permission.Service
+  return yield* pollWithTimeout(
+    service.list().pipe(Effect.map((list) => list.find((item) => item.permission === permission))),
+    "timed out waiting for the spend limit to ask",
+  )
+})
+
+const allowAll = [{ permission: "*", pattern: "*", action: "allow" as const }]
+
+it.instance("a run at its spend limit waits, and stopping it sends nothing more to the model", () =>
+  Effect.gen(function* () {
+    const { llm } = yield* useServerConfig((url) => ({ ...providerCfg(url), spend_limit: 1 }))
+    const prompt = yield* SessionPrompt.Service
+    const service = yield* Permission.Service
+    const sessions = yield* Session.Service
+    const chat = yield* sessions.create({ title: "Pinned", permission: allowAll })
+    yield* spent(chat.id, 2.5)
+
+    const fiber = yield* prompt.loop({ sessionID: chat.id }).pipe(Effect.forkChild)
+    const asked = yield* waitForAsk("spend_limit")
+    expect(asked.sessionID).toBe(chat.id)
+    expect(asked.patterns).toEqual(["$2.50 of $1.00"])
+    expect(asked.metadata.next).toBe(3.5)
+    // Unattended moving-on must never apply: nobody being there is when the limit matters.
+    expect(asked.movesOnAt).toBeUndefined()
+
+    yield* service.reply({ requestID: asked.id, reply: "reject" })
+    const result = yield* Fiber.join(fiber)
+    expect(yield* llm.calls).toBe(0)
+    expect(result.parts.some((part) => part.type === "text" && part.text.includes("$1.00 spend limit"))).toBe(true)
+
+    // Running again does not ask again or spend: the run ended cleanly.
+    const again = yield* prompt.loop({ sessionID: chat.id })
+    expect(again.info.id).toBe(result.info.id)
+    expect(yield* service.list()).toEqual([])
+  }),
+)
+
+it.instance("continuing past the limit raises it by the same amount and the run goes on", () =>
+  Effect.gen(function* () {
+    const { llm } = yield* useServerConfig((url) => ({ ...providerCfg(url), spend_limit: 1 }))
+    const prompt = yield* SessionPrompt.Service
+    const service = yield* Permission.Service
+    const sessions = yield* Session.Service
+    const chat = yield* sessions.create({ title: "Pinned", permission: allowAll })
+    yield* spent(chat.id, 1.5)
+    yield* llm.text("all done")
+
+    const fiber = yield* prompt.loop({ sessionID: chat.id }).pipe(Effect.forkChild)
+    const asked = yield* waitForAsk("spend_limit")
+    yield* service.reply({ requestID: asked.id, reply: "once" })
+    const result = yield* Fiber.join(fiber)
+    expect(result.parts.some((part) => part.type === "text" && part.text === "all done")).toBe(true)
+    expect(yield* service.list()).toEqual([])
+  }),
+)
+
+it.instance("a new message starts a new run, so an earlier expensive one does not count", () =>
+  Effect.gen(function* () {
+    const { llm } = yield* useServerConfig((url) => ({ ...providerCfg(url), spend_limit: 1 }))
+    const prompt = yield* SessionPrompt.Service
+    const sessions = yield* Session.Service
+    const chat = yield* sessions.create({ title: "Pinned", permission: allowAll })
+    yield* spent(chat.id, 40, "stop")
+    yield* user(chat.id, "one more thing")
+    yield* llm.text("sure")
+
+    const result = yield* prompt.loop({ sessionID: chat.id })
+    expect(result.parts.some((part) => part.type === "text" && part.text === "sure")).toBe(true)
+  }),
+)
+
+it.instance("subagents count toward the run, and they all share one question on the root session", () =>
+  Effect.gen(function* () {
+    yield* useServerConfig((url) => ({ ...providerCfg(url), spend_limit: 1 }))
+    const service = yield* Permission.Service
+    const sessions = yield* Session.Service
+    const root = yield* sessions.create({ title: "Root", permission: allowAll })
+    yield* spent(root.id, 0.25)
+    const first = yield* sessions.create({ parentID: root.id, title: "first" })
+    const second = yield* sessions.create({ parentID: root.id, title: "second" })
+    yield* spent(first.id, 0.5)
+    yield* spent(second.id, 0.5)
+
+    const input = { sessions, permission: service, limit: 1 }
+    const a = yield* SessionSpend.check({ ...input, session: first }).pipe(Effect.forkChild)
+    const b = yield* SessionSpend.check({ ...input, session: second }).pipe(Effect.forkChild)
+    const asked = yield* waitForAsk("spend_limit")
+    expect(asked.sessionID).toBe(root.id)
+    expect(asked.metadata.subagents).toBe(2)
+    expect(asked.metadata.subagentCost).toBe(1)
+    expect(asked.patterns).toEqual(["$1.25 of $1.00"])
+    expect((yield* service.list()).length).toBe(1)
+
+    yield* service.reply({ requestID: asked.id, reply: "reject" })
+    expect(yield* Fiber.join(a)).toBe(1)
+    expect(yield* Fiber.join(b)).toBe(1)
+  }),
+)
+
+it.instance("a limit of 0 never asks", () =>
+  Effect.gen(function* () {
+    const { llm } = yield* useServerConfig((url) => ({ ...providerCfg(url), spend_limit: 0 }))
+    const prompt = yield* SessionPrompt.Service
+    const sessions = yield* Session.Service
+    const chat = yield* sessions.create({ title: "Pinned", permission: allowAll })
+    yield* spent(chat.id, 500)
+    yield* llm.text("done")
+    const result = yield* prompt.loop({ sessionID: chat.id })
+    expect(result.parts.some((part) => part.type === "text" && part.text === "done")).toBe(true)
+  }),
+)
+
+unix(
+  "an instructions file edited mid-run reaches the model at the next message, keeping the cached prefix intact",
+  () =>
+    Effect.gen(function* () {
+      const { dir, llm } = yield* useServerConfig((url) => ({ ...providerCfg(url), shell: "bash" }))
+      yield* writeText(path.join(dir, "AGENTS.md"), "# Rules\nFIRST RULE\n")
+      const prompt = yield* SessionPrompt.Service
+      const sessions = yield* Session.Service
+      const chat = yield* sessions.create({ title: "Pinned", permission: allowAll })
+      yield* user(chat.id, "edit the rules")
+      yield* llm.tool("bash", { command: "printf 'SECOND RULE\\n' >> AGENTS.md", description: "Add a rule" })
+      yield* llm.text("edited")
+      yield* prompt.loop({ sessionID: chat.id })
+
+      const system = (body: unknown) =>
+        JSON.stringify((body as { messages: { role: string }[] }).messages.filter((item) => item.role === "system"))
+      const steps = (yield* llm.inputs).filter((body) => "tools" in body)
+      expect(steps.length).toBe(2)
+      expect(system(steps[0])).toContain("FIRST RULE")
+      expect(system(steps[1])).toBe(system(steps[0]))
+
+      yield* user(chat.id, "thanks")
+      yield* llm.text("welcome")
+      yield* prompt.loop({ sessionID: chat.id })
+      const last = (yield* llm.inputs).filter((body) => "tools" in body).at(-1)
+      expect(system(last)).toContain("SECOND RULE")
+    }),
+)
+
+const bulkyHistory = Effect.fn("test.bulkyHistory")(function* (sessionID: SessionID, ago: number) {
+  const sessions = yield* Session.Service
+  const first = yield* seed(sessionID, { finish: "stop" })
+  const when = Date.now() - ago
+  yield* sessions.updateMessage({ ...first.assistant, time: { created: when, completed: when } })
+  const part = yield* sessions.updatePart({
+    id: PartID.ascending(),
+    messageID: first.assistant.id,
+    sessionID,
+    type: "tool",
+    tool: "bash",
+    callID: "old",
+    state: {
+      status: "completed",
+      input: {},
+      output: "x".repeat(400_000),
+      title: "",
+      metadata: {},
+      time: { start: when, end: when },
+    },
+  })
+  const next = yield* seed(sessionID, { finish: "stop" })
+  yield* sessions.updateMessage({ ...next.assistant, time: { created: when, completed: when } })
+  return part.id
+})
+
+const oldOutputCleared = Effect.fn("test.oldOutputCleared")(function* (sessionID: SessionID, partID: PartID) {
+  const sessions = yield* Session.Service
+  const part = (yield* sessions.messages({ sessionID })).flatMap((m) => m.parts).find((item) => item.id === partID)
+  return part?.type === "tool" && part.state.status === "completed" && part.state.time.compacted !== undefined
+})
+
+it.instance("old tool output is cleared when a session returns to an expired cache", () =>
+  Effect.gen(function* () {
+    const { llm } = yield* useServerConfig(providerCfg)
+    const prompt = yield* SessionPrompt.Service
+    const sessions = yield* Session.Service
+    const chat = yield* sessions.create({ title: "Pinned", permission: allowAll })
+    const partID = yield* bulkyHistory(chat.id, 60 * 60 * 1000)
+    yield* user(chat.id, "back again")
+    yield* llm.text("hello again")
+    yield* prompt.loop({ sessionID: chat.id })
+    expect(yield* oldOutputCleared(chat.id, partID)).toBe(true)
+    expect(JSON.stringify((yield* llm.inputs).at(-1))).not.toContain("xxxxxxxxxxxxxxxx")
+  }),
+)
+
+it.instance("old tool output stays while the cache is still warm, since clearing it would cost more", () =>
+  Effect.gen(function* () {
+    const { llm } = yield* useServerConfig(providerCfg)
+    const prompt = yield* SessionPrompt.Service
+    const sessions = yield* Session.Service
+    const chat = yield* sessions.create({ title: "Pinned", permission: allowAll })
+    const partID = yield* bulkyHistory(chat.id, 30 * 1000)
+    yield* user(chat.id, "one more")
+    yield* llm.text("sure")
+    yield* prompt.loop({ sessionID: chat.id })
+    expect(yield* oldOutputCleared(chat.id, partID)).toBe(false)
+  }),
 )

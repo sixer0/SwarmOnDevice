@@ -538,6 +538,18 @@ export const dict = {
   "dialog.project.edit.worktree.startup.placeholder": "مثال: bun install",
   "dialog.usageExceeded.dontShowAgain": "عدم الإظهار مرة أخرى",
 
+  "context.spend.title": "أين ذهبت الأموال",
+
+  "context.spend.writing": "الكتابة",
+
+  "context.spend.fresh": "قراءة سياق جديد",
+
+  "context.spend.reread": "إعادة قراءة السياق المخزن مؤقتًا",
+
+  "context.spend.subagents": "الوكلاء الفرعيون",
+
+  "context.spend.saved": "وفّر التخزين المؤقت نحو {{amount}}",
+
   "context.breakdown.title": "تفصيل السياق",
   "context.breakdown.note": 'تفصيل تقريبي لرموز الإدخال المميزة. يشمل "أخرى" تعريفات الأدوات والأعباء الإضافية.',
   "context.breakdown.system": "النظام",
@@ -1386,6 +1398,10 @@ export const dict = {
   "memory.remembered": "تم التذكر",
   "memory.seeAll": "عرض الكل",
   "memory.undo": "تراجع",
+  "session.spend.title": "تم بلوغ حد الإنفاق",
+  "session.spend.summary": "أنفق هذا التشغيل {{spent}}. سيبقى متوقفًا مؤقتًا حتى تقرر.",
+  "session.spend.continue": "المتابعة حتى {{amount}}",
+  "session.spend.stop": "توقف هنا",
   "session.movesOn.hint": "لا إجابة بحلول {{time}}؟ سيتابع الوكيل من دون هذا.",
   "session.movedOn.title": "تابع من دونك",
   "session.movedOn.allow": "السماح والمتابعة",

@@ -23056,6 +23056,9 @@
             },
             "additionalProperties": false
           },
+          "spend_limit": {
+            "type": "number"
+          },
           "tool_output": {
             "type": "object",
             "properties": {
@@ -23078,6 +23081,10 @@
               },
               "prune": {
                 "type": "boolean"
+              },
+              "max_context": {
+                "type": "integer",
+                "minimum": 0
               },
               "tail_turns": {
                 "type": "integer",

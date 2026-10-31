@@ -567,6 +567,18 @@ export const dict = {
   "dialog.project.edit.worktree.startup.placeholder": "例如 bun install",
   "dialog.usageExceeded.dontShowAgain": "不再顯示",
 
+  "context.spend.title": "費用去向",
+
+  "context.spend.writing": "寫入",
+
+  "context.spend.fresh": "讀取新內容脈絡",
+
+  "context.spend.reread": "重新讀取已快取的內容脈絡",
+
+  "context.spend.subagents": "子代理程式",
+
+  "context.spend.saved": "快取節省了約 {{amount}}",
+
   "context.breakdown.title": "上下文細分",
   "context.breakdown.note": "輸入 token 的概略細分。「其他」包含工具定義和額外負擔。",
   "context.breakdown.system": "系統",
@@ -1440,6 +1452,10 @@ export const dict = {
   "memory.remembered": "已記住",
   "memory.seeAll": "查看全部",
   "memory.undo": "復原",
+  "session.spend.title": "已達到支出上限",
+  "session.spend.summary": "此次執行已花費 {{spent}}。在你決定之前會保持暫停。",
+  "session.spend.continue": "繼續至 {{amount}}",
+  "session.spend.stop": "到此停止",
   "session.movesOn.hint": "到 {{time}} 仍無回答？代理將略過此項繼續。",
   "session.movedOn.title": "已在你不在時繼續",
   "session.movedOn.allow": "允許並繼續",

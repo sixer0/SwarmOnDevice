@@ -1,4 +1,4 @@
-import { createMemo, createEffect, on, onCleanup, For, Show } from "solid-js"
+import { createMemo, createEffect, createResource, on, onCleanup, For, Show } from "solid-js"
 import type { JSX } from "solid-js"
 import { useSync } from "@/context/sync"
 import { checksum } from "@opencode-ai/core/util/encode"
@@ -21,6 +21,7 @@ import { useSessionLayout } from "@/pages/session/session-layout"
 import { getSessionContext } from "./session-context-metrics"
 import { estimateSessionContextBreakdown, type SessionContextBreakdownKey } from "./session-context-breakdown"
 import { createSessionContextFormatter } from "./session-context-format"
+import { sessionSpend, type SessionSpendKey } from "./session-spend"
 
 const BREAKDOWN_COLOR: Record<SessionContextBreakdownKey, string> = {
   system: "var(--syntax-info)",
@@ -28,6 +29,13 @@ const BREAKDOWN_COLOR: Record<SessionContextBreakdownKey, string> = {
   assistant: "var(--syntax-property)",
   tool: "var(--syntax-warning)",
   other: "var(--syntax-comment)",
+}
+
+const SPEND_COLOR: Record<SessionSpendKey, string> = {
+  writing: "var(--syntax-property)",
+  fresh: "var(--syntax-warning)",
+  reread: "var(--syntax-info)",
+  subagents: "var(--syntax-success)",
 }
 
 function Stat(props: { label: string; value: JSX.Element }) {
@@ -141,9 +149,33 @@ export function SessionContextTab() {
   const ctx = createMemo(() => getSessionContext(messages(), [...providers.all().values()]))
   const formatter = createMemo(() => createSessionContextFormatter(language.intl()))
 
+  // Subagents are sessions of their own, so a total that leaves them out understates what the task cost.
+  const [subagentCost] = createResource(
+    () => (params.id ? ([params.id, messages().length, info()?.cost ?? 0] as const) : undefined),
+    async ([id]) => {
+      const queue = [id]
+      let total = 0
+      for (const parent of queue) {
+        const children = (await sdk().client.session.children({ sessionID: parent })).data ?? []
+        total += children.reduce((sum, child) => sum + (child.cost ?? 0), 0)
+        queue.push(...children.map((child) => child.id))
+      }
+      return total
+    },
+  )
+  const knownSubagentCost = () => (subagentCost.error ? 0 : (subagentCost.latest ?? 0))
+
   const cost = createMemo(() => {
-    return usd().format(info()?.cost ?? 0)
+    return usd().format((info()?.cost ?? 0) + knownSubagentCost())
   })
+
+  const spend = createMemo(() =>
+    sessionSpend({
+      messages: messages(),
+      providers: [...providers.all().values()],
+      subagentCost: knownSubagentCost(),
+    }),
+  )
 
   const counts = createMemo(() => {
     const all = messages()
@@ -308,6 +340,40 @@ export function SessionContextTab() {
       onScroll={handleScroll}
     >
       <div class="px-6 pt-4 pb-10 flex flex-col gap-10">
+        <Show when={spend()}>
+          {(value) => (
+            <div class="flex flex-col gap-2" data-session-spend>
+              <div class="text-12-regular text-text-weak">{language.t("context.spend.title")}</div>
+              <div class="h-2 w-full rounded-full bg-surface-base overflow-hidden flex">
+                <For each={value().segments}>
+                  {(segment) => (
+                    <div
+                      class="h-full"
+                      style={{ width: `${segment.percent}%`, "background-color": SPEND_COLOR[segment.key] }}
+                    />
+                  )}
+                </For>
+              </div>
+              <div class="flex flex-wrap gap-x-3 gap-y-1">
+                <For each={value().segments}>
+                  {(segment) => (
+                    <div class="flex items-center gap-1 text-11-regular text-text-weak">
+                      <div class="size-2 rounded-sm" style={{ "background-color": SPEND_COLOR[segment.key] }} />
+                      <div>{language.t(`context.spend.${segment.key}`)}</div>
+                      <div class="text-text-weaker">{usd().format(segment.cost)}</div>
+                    </div>
+                  )}
+                </For>
+              </div>
+              <Show when={value().saved >= 0.01}>
+                <div class="text-11-regular text-text-weak">
+                  {language.t("context.spend.saved", { amount: usd().format(value().saved) })}
+                </div>
+              </Show>
+            </div>
+          )}
+        </Show>
+
         <div class="grid grid-cols-1 @[32rem]:grid-cols-2 gap-4">
           <For each={stats}>
             {(stat) => <Stat label={language.t(stat.label as Parameters<typeof language.t>[0])} value={stat.value()} />}

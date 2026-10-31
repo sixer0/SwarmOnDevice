@@ -13,6 +13,7 @@ import { Provider } from "@/provider/provider"
 import { type Tool as AITool, tool, jsonSchema } from "ai"
 import type { JSONSchema7 } from "@ai-sdk/provider"
 import { SessionCompaction } from "./compaction"
+import { SessionSpend } from "./spend"
 import { SystemPrompt } from "./system"
 import { Instruction } from "./instruction"
 import { Memory } from "@/memory/memory"
@@ -1108,6 +1109,10 @@ const layer = Layer.effect(
         const ctx = yield* InstanceState.context
         let structured: unknown
         let step = 0
+        let coldChecked = false
+        let compactedForPriceAt: number | undefined
+        let priceTargetOff = false
+        let frozenSystem: { key: string; parts: string[] } | undefined
         const session = yield* sessions.get(sessionID).pipe(Effect.orDie)
 
         while (true) {
@@ -1155,6 +1160,52 @@ const layer = Layer.effect(
             break
           }
 
+          if (!coldChecked) {
+            coldChecked = true
+            if (
+              lastFinished?.time.completed &&
+              Date.now() - lastFinished.time.completed >= SessionCompaction.cacheColdAfter()
+            ) {
+              yield* compaction.prune({ sessionID }).pipe(Effect.ignore)
+              continue
+            }
+          }
+
+          const stoppedAt = yield* SessionSpend.check({
+            session,
+            sessions,
+            permission,
+            limit: (yield* config.get()).spend_limit,
+          })
+          if (stoppedAt !== undefined) {
+            const now = Date.now()
+            const stopped = yield* sessions.updateMessage({
+              id: MessageID.ascending(),
+              sessionID,
+              parentID: lastUser.id,
+              role: "assistant",
+              mode: lastUser.agent,
+              agent: lastUser.agent,
+              variant: lastUser.model.variant,
+              path: { cwd: ctx.directory, root: ctx.worktree },
+              cost: 0,
+              tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+              modelID: lastUser.model.modelID,
+              providerID: lastUser.model.providerID,
+              finish: "stop",
+              time: { created: now, completed: now },
+            } satisfies SessionV1.Assistant)
+            yield* sessions.updatePart({
+              id: PartID.ascending(),
+              messageID: stopped.id,
+              sessionID,
+              type: "text",
+              text: SessionSpend.stopMessage(stoppedAt),
+              time: { start: now, end: now },
+            })
+            break
+          }
+
           step++
           if (step === 1)
             yield* title({
@@ -1184,13 +1235,17 @@ const layer = Layer.effect(
             continue
           }
 
-          if (
-            lastFinished &&
-            lastFinished.summary !== true &&
-            (yield* compaction.isOverflow({ tokens: lastFinished.tokens, model }))
-          ) {
-            yield* compaction.create({ sessionID, agent: lastUser.agent, model: lastUser.model, auto: true })
-            continue
+          if (lastFinished && lastFinished.summary !== true) {
+            const full = yield* compaction.isOverflow({ tokens: lastFinished.tokens, model })
+            const costly = !priceTargetOff && (yield* compaction.isOverPriceTarget({ tokens: lastFinished.tokens, model }))
+            // Still over right after compacting means instructions alone are this large. Compacting again would only
+            // add cost on every step, so leave it to the model's real limit for the rest of the run.
+            if (costly && compactedForPriceAt !== undefined && step - compactedForPriceAt <= 3) priceTargetOff = true
+            if (full || (costly && !priceTargetOff)) {
+              if (!full) compactedForPriceAt = step
+              yield* compaction.create({ sessionID, agent: lastUser.agent, model: lastUser.model, auto: true })
+              continue
+            }
           }
 
           const agent = yield* agents.get(lastUser.agent)
@@ -1281,21 +1336,31 @@ const layer = Layer.effect(
 
             yield* plugin.trigger("experimental.chat.messages.transform", {}, { messages: msgs })
 
-            const [skills, env, instructions, remembered, mcpInstructions, modelMsgs] = yield* Effect.all([
-              sys.skills(agent),
-              sys.environment(model),
-              instruction.system().pipe(Effect.orDie),
-              memory.prompt(model),
-              sys.mcp(agent, session.permission),
-              MessageV2.toModelMessagesEffect(msgs, model),
-            ])
-            const system = [
-              ...env,
-              ...instructions,
-              ...(remembered ? [remembered] : []),
-              ...(mcpInstructions ? [mcpInstructions] : []),
-              ...(skills ? [skills] : []),
-            ]
+            const modelMsgs = yield* MessageV2.toModelMessagesEffect(msgs, model)
+            // The system prompt comes before the whole conversation in a prompt cache, so one changed byte makes every
+            // token re-bill at the write rate and discards signed thinking. It stays as it was for the rest of this
+            // turn: a note remembered or an AGENTS.md edited mid-run takes effect at the person's next message.
+            const systemKey = `${lastUser.id}:${agent.name}:${model.providerID}/${model.id}`
+            if (frozenSystem?.key !== systemKey) {
+              const [skills, env, instructions, remembered, mcpInstructions] = yield* Effect.all([
+                sys.skills(agent),
+                sys.environment(model),
+                instruction.system().pipe(Effect.orDie),
+                memory.prompt(model),
+                sys.mcp(agent, session.permission),
+              ])
+              frozenSystem = {
+                key: systemKey,
+                parts: [
+                  ...env,
+                  ...instructions,
+                  ...(remembered ? [remembered] : []),
+                  ...(mcpInstructions ? [mcpInstructions] : []),
+                  ...(skills ? [skills] : []),
+                ],
+              }
+            }
+            const system = [...frozenSystem.parts]
             const format = lastUser.format ?? { type: "text" as const }
             if (format.type === "json_schema") system.push(STRUCTURED_OUTPUT_SYSTEM_PROMPT)
             const result = yield* handle.process({
@@ -1364,7 +1429,6 @@ const layer = Layer.effect(
           continue
         }
 
-        yield* compaction.prune({ sessionID }).pipe(Effect.ignore, Effect.forkIn(scope))
         return yield* lastAssistant(sessionID)
       },
     )

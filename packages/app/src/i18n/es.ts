@@ -575,6 +575,18 @@ export const dict = {
 
   "dialog.usageExceeded.dontShowAgain": "No volver a mostrar",
 
+  "context.spend.title": "Adónde fue el dinero",
+
+  "context.spend.writing": "Escritura",
+
+  "context.spend.fresh": "Lectura de contexto nuevo",
+
+  "context.spend.reread": "Relectura de contexto en caché",
+
+  "context.spend.subagents": "Subagentes",
+
+  "context.spend.saved": "La caché ahorró unos {{amount}}",
+
   "context.breakdown.title": "Desglose del contexto",
   "context.breakdown.note":
     'Desglose aproximado de tokens de entrada. "Otro" incluye definiciones de herramientas y sobrecarga.',
@@ -1481,6 +1493,10 @@ export const dict = {
   "memory.remembered": "Recordado",
   "memory.seeAll": "Ver todo",
   "memory.undo": "Deshacer",
+  "session.spend.title": "Límite de gasto alcanzado",
+  "session.spend.summary": "Esta ejecución ha gastado {{spent}}. Sigue en pausa hasta que decidas.",
+  "session.spend.continue": "Continuar hasta {{amount}}",
+  "session.spend.stop": "Detener aquí",
   "session.movesOn.hint": "¿Sin respuesta a las {{time}}? El agente continúa sin esto.",
   "session.movedOn.title": "Siguió sin ti",
   "session.movedOn.allow": "Permitir y continuar",

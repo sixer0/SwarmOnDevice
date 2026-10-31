@@ -551,6 +551,18 @@ export const dict = {
   "dialog.releaseNotes.media.alt": "Xem trước bản phát hành",
   "dialog.usageExceeded.dontShowAgain": "Không hiển thị lại",
 
+  "context.spend.title": "Tiền đã đi đâu",
+
+  "context.spend.writing": "Viết",
+
+  "context.spend.fresh": "Đọc ngữ cảnh mới",
+
+  "context.spend.reread": "Đọc lại ngữ cảnh đã lưu đệm",
+
+  "context.spend.subagents": "Tác tử con",
+
+  "context.spend.saved": "Bộ nhớ đệm đã tiết kiệm khoảng {{amount}}",
+
   "context.breakdown.title": "Phân tích ngữ cảnh",
   "context.breakdown.note":
     'Phân tích gần đúng của token đầu vào. "Khác" bao gồm các định nghĩa công cụ và chi phí chung.',
@@ -1385,6 +1397,10 @@ export const dict = {
   "memory.remembered": "Đã ghi nhớ",
   "memory.seeAll": "Xem tất cả",
   "memory.undo": "Hoàn tác",
+  "session.spend.title": "Đã đạt giới hạn chi tiêu",
+  "session.spend.summary": "Lần chạy này đã chi {{spent}}. Nó sẽ tạm dừng cho đến khi bạn quyết định.",
+  "session.spend.continue": "Tiếp tục đến {{amount}}",
+  "session.spend.stop": "Dừng tại đây",
   "session.movesOn.hint": "Không có câu trả lời trước {{time}}? Tác tử sẽ tiếp tục mà không có điều này.",
   "session.movedOn.title": "Đã tiếp tục mà không có bạn",
   "session.movedOn.allow": "Cho phép và tiếp tục",

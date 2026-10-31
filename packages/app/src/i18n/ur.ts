@@ -554,6 +554,18 @@ export const dict = {
   "dialog.releaseNotes.media.alt": "ریلیز کا پیش منظر",
   "dialog.usageExceeded.dontShowAgain": "دوبارہ نہ دکھائیں",
 
+  "context.spend.title": "پیسہ کہاں گیا",
+
+  "context.spend.writing": "لکھنا",
+
+  "context.spend.fresh": "نیا سیاق پڑھنا",
+
+  "context.spend.reread": "کیش شدہ سیاق دوبارہ پڑھنا",
+
+  "context.spend.subagents": "ذیلی ایجنٹس",
+
+  "context.spend.saved": "کیشنگ نے تقریباً {{amount}} بچائے",
+
   "context.breakdown.title": "سیاق و سباق کی تفصیل",
   "context.breakdown.note": 'ان پٹ ٹوکنز کی تخمینی تقسیم۔ "دیگر" میں ٹول کی تعریفیں اور اضافی بوجھ شامل ہیں۔',
   "context.breakdown.system": "سسٹم",
@@ -1379,6 +1391,10 @@ export const dict = {
   "memory.remembered": "یاد رکھ لیا",
   "memory.seeAll": "سب دیکھیں",
   "memory.undo": "واپس کریں",
+  "session.spend.title": "خرچ کی حد پوری ہو گئی",
+  "session.spend.summary": "اس رن نے {{spent}} خرچ کیے ہیں۔ آپ کے فیصلے تک یہ رکا رہے گا۔",
+  "session.spend.continue": "{{amount}} تک جاری رکھیں",
+  "session.spend.stop": "یہیں روکیں",
   "session.movesOn.hint": "{{time}} تک کوئی جواب نہیں؟ ایجنٹ اس کے بغیر جاری رکھے گا۔",
   "session.movedOn.title": "آپ کے بغیر جاری رکھا",
   "session.movedOn.allow": "اجازت دیں اور جاری رکھیں",

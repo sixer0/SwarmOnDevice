@@ -552,6 +552,18 @@ export const dict = {
   "dialog.releaseNotes.media.alt": "रिलीज़ पूर्वावलोकन",
   "dialog.usageExceeded.dontShowAgain": "फिर से न दिखाएँ",
 
+  "context.spend.title": "पैसा कहाँ गया",
+
+  "context.spend.writing": "लिखना",
+
+  "context.spend.fresh": "नया कॉन्टेक्स्ट पढ़ना",
+
+  "context.spend.reread": "कैश किया गया कॉन्टेक्स्ट दोबारा पढ़ना",
+
+  "context.spend.subagents": "सबएजेंट",
+
+  "context.spend.saved": "कैशिंग से लगभग {{amount}} की बचत हुई",
+
   "context.breakdown.title": "कॉन्टेक्स्ट ब्रेकडाउन",
   "context.breakdown.note": 'इनपुट टोकन का अनुमानित विभाजन। "अन्य" में टूल की परिभाषाएँ और अतिरिक्त खर्च शामिल हैं।',
   "context.breakdown.system": "सिस्टम",
@@ -1380,6 +1392,10 @@ export const dict = {
   "memory.remembered": "याद रखा गया",
   "memory.seeAll": "सभी देखें",
   "memory.undo": "पूर्ववत करें",
+  "session.spend.title": "खर्च सीमा पूरी हो गई",
+  "session.spend.summary": "इस रन ने {{spent}} खर्च किए हैं। आपके निर्णय तक यह रुका रहेगा।",
+  "session.spend.continue": "{{amount}} तक जारी रखें",
+  "session.spend.stop": "यहीं रोकें",
   "session.movesOn.hint": "{{time}} तक कोई जवाब नहीं? एजेंट इसके बिना आगे बढ़ेगा।",
   "session.movedOn.title": "आपके बिना आगे बढ़ गया",
   "session.movedOn.allow": "अनुमति दें और जारी रखें",

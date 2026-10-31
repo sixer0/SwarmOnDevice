@@ -454,6 +454,18 @@ export const dict = {
   "dialog.releaseNotes.media.alt": "Anteprima delle novità",
   "dialog.usageExceeded.dontShowAgain": "Non mostrare più",
 
+  "context.spend.title": "Dove sono finiti i soldi",
+
+  "context.spend.writing": "Scrittura",
+
+  "context.spend.fresh": "Lettura di nuovo contesto",
+
+  "context.spend.reread": "Rilettura del contesto in cache",
+
+  "context.spend.subagents": "Subagenti",
+
+  "context.spend.saved": "La cache ha fatto risparmiare circa {{amount}}",
+
   "context.breakdown.title": "Ripartizione del contesto",
   "context.breakdown.note":
     'Ripartizione approssimativa dei token di input. "Altro" include le definizioni degli strumenti e i dati aggiuntivi.',
@@ -1391,6 +1403,10 @@ export const dict = {
   "memory.remembered": "Ricordato",
   "memory.seeAll": "Mostra tutto",
   "memory.undo": "Annulla",
+  "session.spend.title": "Limite di spesa raggiunto",
+  "session.spend.summary": "Questa esecuzione ha speso {{spent}}. Resta in pausa finché non decidi.",
+  "session.spend.continue": "Continua fino a {{amount}}",
+  "session.spend.stop": "Fermati qui",
   "session.movesOn.hint": "Nessuna risposta entro le {{time}}? L'agente prosegue senza questo.",
   "session.movedOn.title": "Ha proseguito senza di te",
   "session.movedOn.allow": "Consenti e continua",

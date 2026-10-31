@@ -547,6 +547,18 @@ export const dict = {
   "dialog.releaseNotes.media.alt": "Releasevoorbeeld",
   "dialog.usageExceeded.dontShowAgain": "Niet meer weergeven",
 
+  "context.spend.title": "Waar het geld naartoe ging",
+
+  "context.spend.writing": "Schrijven",
+
+  "context.spend.fresh": "Nieuwe context lezen",
+
+  "context.spend.reread": "Gecachete context opnieuw lezen",
+
+  "context.spend.subagents": "Subagents",
+
+  "context.spend.saved": "Caching bespaarde ongeveer {{amount}}",
+
   "context.breakdown.title": "Contextanalyse",
   "context.breakdown.note":
     'Geschatte uitsplitsing van invoertokens. "Overig" omvat gereedschapsdefinities en overhead.',
@@ -1387,6 +1399,10 @@ export const dict = {
   "memory.remembered": "Onthouden",
   "memory.seeAll": "Alles bekijken",
   "memory.undo": "Ongedaan maken",
+  "session.spend.title": "Bestedingslimiet bereikt",
+  "session.spend.summary": "Deze run heeft {{spent}} uitgegeven. Hij blijft gepauzeerd totdat je beslist.",
+  "session.spend.continue": "Doorgaan tot {{amount}}",
+  "session.spend.stop": "Hier stoppen",
   "session.movesOn.hint": "Geen antwoord om {{time}}? De agent gaat hier zonder verder.",
   "session.movedOn.title": "Zonder jou doorgegaan",
   "session.movedOn.allow": "Toestaan en doorgaan",

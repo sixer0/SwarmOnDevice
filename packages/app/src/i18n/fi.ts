@@ -437,6 +437,18 @@ export const dict = {
   "dialog.releaseNotes.media.alt": "Julkaisun esikatselu",
   "dialog.usageExceeded.dontShowAgain": "Älä näytä uudelleen",
 
+  "context.spend.title": "Mihin rahat menivät",
+
+  "context.spend.writing": "Kirjoittaminen",
+
+  "context.spend.fresh": "Uuden kontekstin lukeminen",
+
+  "context.spend.reread": "Välimuistissa olevan kontekstin lukeminen uudelleen",
+
+  "context.spend.subagents": "Aliagentit",
+
+  "context.spend.saved": "Välimuisti säästi noin {{amount}}",
+
   "context.breakdown.title": "Kontekstin erittely",
   "context.breakdown.note":
     'Syötetokenien arvioitu jakautuminen. "Muut" sisältää työkalumäärittelyt ja muun oheissisällön.',
@@ -1384,6 +1396,10 @@ export const dict = {
   "memory.remembered": "Muistettu",
   "memory.seeAll": "Näytä kaikki",
   "memory.undo": "Kumoa",
+  "session.spend.title": "Kulutusraja saavutettu",
+  "session.spend.summary": "Tämä ajo on kuluttanut {{spent}}. Se pysyy keskeytettynä, kunnes päätät.",
+  "session.spend.continue": "Jatka summaan {{amount}} asti",
+  "session.spend.stop": "Pysäytä tähän",
   "session.movesOn.hint": "Ei vastausta klo {{time}} mennessä? Agentti jatkaa ilman tätä.",
   "session.movedOn.title": "Jatkoi ilman sinua",
   "session.movedOn.allow": "Salli ja jatka",

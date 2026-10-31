@@ -572,6 +572,18 @@ export const dict = {
   "dialog.project.edit.worktree.startup.placeholder": "например, bun install",
   "dialog.usageExceeded.dontShowAgain": "Больше не показывать",
 
+  "context.spend.title": "Куда ушли деньги",
+
+  "context.spend.writing": "Написание",
+
+  "context.spend.fresh": "Чтение нового контекста",
+
+  "context.spend.reread": "Повторное чтение кэшированного контекста",
+
+  "context.spend.subagents": "Субагенты",
+
+  "context.spend.saved": "Кэширование сэкономило около {{amount}}",
+
   "context.breakdown.title": "Разбивка контекста",
   "context.breakdown.note":
     'Приблизительная разбивка входных токенов. "Другое" включает определения инструментов и накладные расходы.',
@@ -1478,6 +1490,10 @@ export const dict = {
   "memory.remembered": "Запомнено",
   "memory.seeAll": "Показать все",
   "memory.undo": "Отменить",
+  "session.spend.title": "Достигнут лимит расходов",
+  "session.spend.summary": "Этот запуск потратил {{spent}}. Он остаётся на паузе, пока вы не решите.",
+  "session.spend.continue": "Продолжить до {{amount}}",
+  "session.spend.stop": "Остановить здесь",
   "session.movesOn.hint": "Нет ответа к {{time}}? Агент продолжит без этого.",
   "session.movedOn.title": "Продолжил без вас",
   "session.movedOn.allow": "Разрешить и продолжить",

@@ -569,6 +569,18 @@ export const dict = {
 
   "dialog.usageExceeded.dontShowAgain": "ไม่ต้องแสดงอีก",
 
+  "context.spend.title": "เงินถูกใช้ไปกับอะไร",
+
+  "context.spend.writing": "การเขียน",
+
+  "context.spend.fresh": "การอ่านบริบทใหม่",
+
+  "context.spend.reread": "การอ่านบริบทในแคชซ้ำ",
+
+  "context.spend.subagents": "เอเจนต์ย่อย",
+
+  "context.spend.saved": "แคชช่วยประหยัดได้ประมาณ {{amount}}",
+
   "context.breakdown.title": "การแบ่งบริบท",
   "context.breakdown.note": 'การแบ่งโดยประมาณของโทเค็นนำเข้า "อื่น ๆ" รวมถึงคำนิยามเครื่องมือและโอเวอร์เฮด',
   "context.breakdown.system": "ระบบ",
@@ -1454,6 +1466,10 @@ export const dict = {
   "memory.remembered": "จดจำแล้ว",
   "memory.seeAll": "ดูทั้งหมด",
   "memory.undo": "เลิกทำ",
+  "session.spend.title": "ถึงขีดจำกัดการใช้จ่ายแล้ว",
+  "session.spend.summary": "การรันนี้ใช้ไป {{spent}} แล้ว และจะหยุดชั่วคราวจนกว่าคุณจะตัดสินใจ",
+  "session.spend.continue": "ทำต่อถึง {{amount}}",
+  "session.spend.stop": "หยุดที่นี่",
   "session.movesOn.hint": "ไม่มีคำตอบภายใน {{time}} หรือ เอเจนต์จะทำต่อโดยไม่มีสิ่งนี้",
   "session.movedOn.title": "ทำต่อโดยไม่มีคุณ",
   "session.movedOn.allow": "อนุญาตและทำต่อ",

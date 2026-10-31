@@ -549,6 +549,18 @@ export const dict = {
   "dialog.releaseNotes.media.alt": "Buraxılış önbaxışı",
   "dialog.usageExceeded.dontShowAgain": "Bir daha göstərmə",
 
+  "context.spend.title": "Pul hara getdi",
+
+  "context.spend.writing": "Yazma",
+
+  "context.spend.fresh": "Yeni kontekstin oxunması",
+
+  "context.spend.reread": "Keşlənmiş kontekstin təkrar oxunması",
+
+  "context.spend.subagents": "Alt agentlər",
+
+  "context.spend.saved": "Keş təxminən {{amount}} qənaət etdi",
+
   "context.breakdown.title": "Kontekst bölgüsü",
   "context.breakdown.note": 'Giriş tokenlərinin təxmini bölgüsü. "Digər" alət təriflərini və əlavə yükü əhatə edir.',
   "context.breakdown.system": "Sistem",
@@ -1382,6 +1394,10 @@ export const dict = {
   "memory.remembered": "Yadda saxlanıldı",
   "memory.seeAll": "Hamısına bax",
   "memory.undo": "Geri al",
+  "session.spend.title": "Xərc limitinə çatıldı",
+  "session.spend.summary": "Bu icra {{spent}} xərcləyib. Siz qərar verənə qədər fasilədə qalacaq.",
+  "session.spend.continue": "{{amount}} həddinə qədər davam et",
+  "session.spend.stop": "Burada dayandır",
   "session.movesOn.hint": "{{time}} qədər cavab yoxdur? Agent bunsuz davam edir.",
   "session.movedOn.title": "Sizsiz davam etdi",
   "session.movedOn.allow": "İcazə ver və davam et",

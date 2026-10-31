@@ -357,6 +357,20 @@ export function PermissionPrompt(props: { request: PermissionRequest; directory?
               }
             }
 
+            if (permission === "spend_limit") {
+              return {
+                icon: "$",
+                title: "Spend limit reached",
+                body: (
+                  <box paddingLeft={1}>
+                    <text fg={theme.textMuted}>
+                      {`This run has spent ${props.request.patterns[0] ?? ""}. It stays paused until you decide.`}
+                    </text>
+                  </box>
+                ),
+              }
+            }
+
             if (permission === "doom_loop") {
               return {
                 icon: "⟳",
@@ -402,7 +416,11 @@ export function PermissionPrompt(props: { request: PermissionRequest; directory?
               title="Permission required"
               header={header()}
               body={current.body}
-              options={{ once: "Allow once", always: "Allow always", reject: "Reject" }}
+              options={
+                props.request.permission === "spend_limit"
+                  ? { once: `Continue to $${Number(props.request.metadata?.next ?? 0).toFixed(2)}`, reject: "Stop here" }
+                  : { once: "Allow once", always: "Allow always", reject: "Reject" }
+              }
               escapeKey="reject"
               fullscreen
               onSelect={(option) => {

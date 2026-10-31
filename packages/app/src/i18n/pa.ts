@@ -552,6 +552,18 @@ export const dict = {
   "dialog.releaseNotes.media.alt": "ریلیز پیش نظارہ",
   "dialog.usageExceeded.dontShowAgain": "دوبارہ نہ وکھاؤ",
 
+  "context.spend.title": "ਪੈਸਾ ਕਿੱਥੇ ਗਿਆ",
+
+  "context.spend.writing": "ਲਿਖਣਾ",
+
+  "context.spend.fresh": "ਨਵਾਂ ਸੰਦਰਭ ਪੜ੍ਹਨਾ",
+
+  "context.spend.reread": "ਕੈਸ਼ ਕੀਤਾ ਸੰਦਰਭ ਦੁਬਾਰਾ ਪੜ੍ਹਨਾ",
+
+  "context.spend.subagents": "ਸਬਏਜੰਟ",
+
+  "context.spend.saved": "ਕੈਸ਼ਿੰਗ ਨੇ ਲਗਭਗ {{amount}} ਬਚਾਏ",
+
   "context.breakdown.title": "کانٹیکسٹ دی ونڈ",
   "context.breakdown.note": 'ان پٹ ٹوکناں دی لگ بھگ ونڈ۔ "ہور" وچ ٹول دیاں تعریفاں تے وادھو خرچ شامل نیں۔',
   "context.breakdown.system": "نظام",
@@ -1377,6 +1389,10 @@ export const dict = {
   "memory.remembered": "یاد رکھیا گیا",
   "memory.seeAll": "سارے ویکھو",
   "memory.undo": "واپس",
+  "session.spend.title": "ਖਰਚ ਸੀਮਾ ਪੂਰੀ ਹੋ ਗਈ",
+  "session.spend.summary": "ਇਸ ਰਨ ਨੇ {{spent}} ਖਰਚ ਕੀਤੇ ਹਨ। ਤੁਹਾਡੇ ਫ਼ੈਸਲੇ ਤੱਕ ਇਹ ਰੁਕਿਆ ਰਹੇਗਾ।",
+  "session.spend.continue": "{{amount}} ਤੱਕ ਜਾਰੀ ਰੱਖੋ",
+  "session.spend.stop": "ਇੱਥੇ ਰੋਕੋ",
   "session.movesOn.hint": "{{time}} ਤੱਕ ਕੋਈ ਜਵਾਬ ਨਹੀਂ? ਏਜੰਟ ਇਸ ਤੋਂ ਬਿਨਾਂ ਜਾਰੀ ਰੱਖੇਗਾ।",
   "session.movedOn.title": "ਤੁਹਾਡੇ ਤੋਂ ਬਿਨਾਂ ਜਾਰੀ ਰੱਖਿਆ",
   "session.movedOn.allow": "ਇਜਾਜ਼ਤ ਦਿਓ ਅਤੇ ਜਾਰੀ ਰੱਖੋ",

@@ -1,3 +1,4 @@
+import { isOverPriceTarget, priceTarget } from "../../src/session/overflow"
 import { afterEach, describe, expect, mock, test } from "bun:test"
 import { ConfigV1 } from "@opencode-ai/core/v1/config/config"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
@@ -621,6 +622,35 @@ describe("session.compaction.create", () => {
       }),
     ),
   )
+})
+
+describe("session.compaction price target", () => {
+  const priced = { input: 4, output: 20, cache: { read: 0.2, write: 5 } }
+  const big = { context: 1_000_000, output: 32_000 }
+  const usage = (input: number) => ({ input, output: 0, reasoning: 0, cache: { read: 0, write: 0 } })
+
+  test("a paid model stops growing near 200k even with a far larger window", () => {
+    const model = createModel({ ...big, cost: priced })
+    expect(priceTarget({ cfg: {}, model })).toBe(180_000)
+    expect(isOverPriceTarget({ cfg: {}, model, tokens: usage(179_999) })).toBe(false)
+    expect(isOverPriceTarget({ cfg: {}, model, tokens: usage(180_000) })).toBe(true)
+  })
+
+  test("a free or on-device model uses its whole window", () => {
+    expect(priceTarget({ cfg: {}, model: createModel(big) })).toBeUndefined()
+  })
+
+  test("stops short of the first higher-priced tier", () => {
+    const tiers = [{ input: 8, output: 40, cache: priced.cache, tier: { type: "context" as const, size: 100_000 } }]
+    expect(priceTarget({ cfg: {}, model: createModel({ ...big, cost: { ...priced, tiers } }) })).toBe(80_000)
+  })
+
+  test("max_context overrides the default, and 0 turns it off", () => {
+    const model = createModel({ ...big, cost: priced })
+    expect(priceTarget({ cfg: { compaction: { max_context: 500_000 } }, model })).toBe(480_000)
+    expect(priceTarget({ cfg: { compaction: { max_context: 0 } }, model })).toBeUndefined()
+    expect(isOverPriceTarget({ cfg: { compaction: { auto: false } }, model, tokens: usage(900_000) })).toBe(false)
+  })
 })
 
 describe("session.compaction.prune", () => {

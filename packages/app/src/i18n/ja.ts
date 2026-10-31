@@ -542,6 +542,18 @@ export const dict = {
   "dialog.project.edit.worktree.startup.placeholder": "例: bun install",
   "dialog.usageExceeded.dontShowAgain": "今後表示しない",
 
+  "context.spend.title": "費用の内訳",
+
+  "context.spend.writing": "書き込み",
+
+  "context.spend.fresh": "新しいコンテキストの読み込み",
+
+  "context.spend.reread": "キャッシュ済みコンテキストの再読み込み",
+
+  "context.spend.subagents": "サブエージェント",
+
+  "context.spend.saved": "キャッシュで約 {{amount}} 節約しました",
+
   "context.breakdown.title": "コンテキストの内訳",
   "context.breakdown.note": '入力トークンのおおよその内訳です。"その他"にはツールの定義やオーバーヘッドが含まれます。',
   "context.breakdown.system": "システム",
@@ -1386,6 +1398,10 @@ export const dict = {
   "memory.remembered": "記憶しました",
   "memory.seeAll": "すべて表示",
   "memory.undo": "元に戻す",
+  "session.spend.title": "利用額の上限に達しました",
+  "session.spend.summary": "この実行は {{spent}} を使いました。判断されるまで一時停止します。",
+  "session.spend.continue": "{{amount}} まで続行",
+  "session.spend.stop": "ここで停止",
   "session.movesOn.hint": "{{time}} までに回答がなければ、エージェントはこれなしで続行します。",
   "session.movedOn.title": "あなたの回答なしで続行しました",
   "session.movedOn.allow": "許可して続行",

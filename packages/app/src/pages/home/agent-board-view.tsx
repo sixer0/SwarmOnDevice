@@ -1,5 +1,6 @@
 import { SessionTabAvatarView } from "@/pages/layout/session-tab-avatar"
 import { useLanguage } from "@/context/language"
+import { formatUsd, spendLimitDetail } from "@/components/session/session-spend"
 import { displayName, errorMessage } from "@/pages/layout/helpers"
 import { sessionTitle } from "@/utils/session-title"
 import { getRelativeTime } from "@/utils/time"
@@ -109,7 +110,7 @@ function NeedRow(props: { board: AgentBoardController; need: AgentBoardNeed }) {
           if (item.kind === "permission")
             return {
               a: () => props.board.allow(item, "once"),
-              A: () => props.board.allow(item, "always"),
+              ...(spendLimitDetail(item.request) ? {} : { A: () => props.board.allow(item, "always") }),
               d: () => props.board.allow(item, "reject"),
               Enter: open,
             }
@@ -146,7 +147,7 @@ function NeedRow(props: { board: AgentBoardController; need: AgentBoardNeed }) {
             <div class="flex min-w-0 items-center gap-1.5">
               <RowTitle board={props.board} root={props.need.root} />
               {/* "Allow always" is a standing decision, so it is offered once the row has someone's attention. */}
-              <Show when={!item.request.movedOnAt}>
+              <Show when={!item.request.movedOnAt && !spendLimitDetail(item.request)}>
                 <KeyButton
                   label={language.t("ui.permission.allowAlways")}
                   keys={["⇧", "A"]}
@@ -157,14 +158,22 @@ function NeedRow(props: { board: AgentBoardController; need: AgentBoardNeed }) {
                 />
               </Show>
               <KeyButton
-                label={language.t(item.request.movedOnAt ? "session.movedOn.leave" : "ui.permission.deny")}
+                label={
+                  spendLimitDetail(item.request)
+                    ? language.t("session.spend.stop")
+                    : language.t(item.request.movedOnAt ? "session.movedOn.leave" : "ui.permission.deny")
+                }
                 keys={["D"]}
                 variant="outline"
                 disabled={busy()}
                 onClick={() => props.board.allow(item, "reject")}
               />
               <KeyButton
-                label={language.t(item.request.movedOnAt ? "session.movedOn.allow" : "ui.permission.allowOnce")}
+                label={(() => {
+                  const spend = spendLimitDetail(item.request)
+                  if (spend) return language.t("session.spend.continue", { amount: formatUsd(spend.next, language.intl()) })
+                  return language.t(item.request.movedOnAt ? "session.movedOn.allow" : "ui.permission.allowOnce")
+                })()}
                 keys={["A"]}
                 variant="contrast"
                 disabled={busy()}
@@ -179,7 +188,11 @@ function NeedRow(props: { board: AgentBoardController; need: AgentBoardNeed }) {
                 bg-v2-background-bg-layer-02 font-mono text-[12px] leading-[18px] text-v2-text-text-base select-text
               `}
             >
-              {permissionDetail(item.request)}
+              {(() => {
+                const spend = spendLimitDetail(item.request)
+                if (spend) return language.t("session.spend.summary", { spent: formatUsd(spend.spent, language.intl()) })
+                return permissionDetail(item.request)
+              })()}
             </pre>
           </>
         )}

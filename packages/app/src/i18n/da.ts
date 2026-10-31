@@ -454,6 +454,18 @@ export const dict = {
   "dialog.project.edit.worktree.startup.placeholder": "f.eks. bun install",
   "dialog.usageExceeded.dontShowAgain": "Vis ikke igen",
 
+  "context.spend.title": "Hvor pengene blev af",
+
+  "context.spend.writing": "Skrivning",
+
+  "context.spend.fresh": "Læsning af ny kontekst",
+
+  "context.spend.reread": "Genlæsning af cachelagret kontekst",
+
+  "context.spend.subagents": "Underagenter",
+
+  "context.spend.saved": "Caching sparede omkring {{amount}}",
+
   "context.breakdown.title": "Kontekstfordeling",
   "context.breakdown.note":
     'Omtrentlig fordeling af input-tokens. "Andre" inkluderer værktøjsdefinitioner og overhead.',
@@ -1464,6 +1476,10 @@ export const dict = {
   "memory.remembered": "Husket",
   "memory.seeAll": "Se alle",
   "memory.undo": "Fortryd",
+  "session.spend.title": "Forbrugsgrænsen er nået",
+  "session.spend.summary": "Denne kørsel har brugt {{spent}}. Den forbliver sat på pause, indtil du beslutter dig.",
+  "session.spend.continue": "Fortsæt til {{amount}}",
+  "session.spend.stop": "Stop her",
   "session.movesOn.hint": "Intet svar inden {{time}}? Agenten fortsætter uden dette.",
   "session.movedOn.title": "Fortsatte uden dig",
   "session.movedOn.allow": "Tillad og fortsæt",

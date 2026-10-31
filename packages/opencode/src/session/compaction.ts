@@ -14,7 +14,7 @@ import { NotFoundError } from "@/storage/storage"
 
 import { Effect, Layer, Context } from "effect"
 import { InstanceState } from "@/effect/instance-state"
-import { isOverflow as overflow, usable } from "./overflow"
+import { isOverPriceTarget, isOverflow as overflow, usable } from "./overflow"
 import { serviceUse } from "@opencode-ai/core/effect/service-use"
 import { RuntimeFlags } from "@/effect/runtime-flags"
 import { EventV2Bridge } from "@/event-v2-bridge"
@@ -29,6 +29,16 @@ export const PRUNE_MINIMUM = 20_000
 export const PRUNE_PROTECT = 40_000
 const TOOL_OUTPUT_MAX_CHARS = 2_000
 const PRUNE_PROTECTED_TOOLS = ["skill"]
+// Prompt caches expire after minutes of silence (5 on Anthropic, up to 10 on OpenAI by default). Clearing old tool output
+// while a cache is warm forces a re-write of everything after it, which costs more than it saves. Once the cache is gone
+// the next request pays to write the whole conversation anyway, so that is the moment shrinking it only saves money.
+const CACHE_COLD_AFTER_MS = 10 * 60 * 1000
+
+export function cacheColdAfter() {
+  const raw = Number(process.env.SWARM_CACHE_COLD_AFTER_MS)
+  return process.env.SWARM_CACHE_COLD_AFTER_MS && Number.isFinite(raw) ? raw : CACHE_COLD_AFTER_MS
+}
+
 const MIN_PRESERVE_RECENT_TOKENS = 2_000
 const MAX_PRESERVE_RECENT_TOKENS = 15_000
 type Turn = {
@@ -167,6 +177,10 @@ export interface Interface {
     tokens: SessionV1.Assistant["tokens"]
     model: Provider.Model
   }) => Effect.Effect<boolean>
+  readonly isOverPriceTarget: (input: {
+    tokens: SessionV1.Assistant["tokens"]
+    model: Provider.Model
+  }) => Effect.Effect<boolean>
   readonly prune: (input: { sessionID: SessionID }) => Effect.Effect<void>
   readonly process: (input: {
     parentID: MessageID
@@ -205,6 +219,18 @@ const layer = Layer.effect(
       model: Provider.Model
     }) {
       return overflow({
+        cfg: yield* config.get(),
+        tokens: input.tokens,
+        model: input.model,
+        outputTokenMax: flags.outputTokenMax,
+      })
+    })
+
+    const overPriceTarget = Effect.fn("SessionCompaction.isOverPriceTarget")(function* (input: {
+      tokens: SessionV1.Assistant["tokens"]
+      model: Provider.Model
+    }) {
+      return isOverPriceTarget({
         cfg: yield* config.get(),
         tokens: input.tokens,
         model: input.model,
@@ -272,7 +298,7 @@ const layer = Layer.effect(
     // calls, then erases output of older tool calls to free context space
     const prune = Effect.fn("SessionCompaction.prune")(function* (input: { sessionID: SessionID }) {
       const cfg = yield* config.get()
-      if (!cfg.compaction?.prune) return
+      if (cfg.compaction?.prune === false) return
       yield* Effect.logInfo("pruning")
 
       const msgs = yield* session
@@ -583,6 +609,7 @@ const layer = Layer.effect(
 
     return Service.of({
       isOverflow,
+      isOverPriceTarget: overPriceTarget,
       prune,
       process: processCompaction,
       create,

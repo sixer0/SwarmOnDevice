@@ -586,6 +586,18 @@ export const dict = {
 
   "dialog.usageExceeded.dontShowAgain": "Більше не показувати",
 
+  "context.spend.title": "Куди пішли гроші",
+
+  "context.spend.writing": "Написання",
+
+  "context.spend.fresh": "Читання нового контексту",
+
+  "context.spend.reread": "Повторне читання кешованого контексту",
+
+  "context.spend.subagents": "Субагенти",
+
+  "context.spend.saved": "Кешування заощадило близько {{amount}}",
+
   "context.breakdown.title": "Розподіл контексту",
   "context.breakdown.note":
     'Приблизний розподіл вхідних токенів. "Інше" включає визначення інструментів і накладні витрати.',
@@ -1482,6 +1494,10 @@ export const dict = {
   "memory.remembered": "Запам'ятано",
   "memory.seeAll": "Показати всі",
   "memory.undo": "Скасувати",
+  "session.spend.title": "Досягнуто ліміту витрат",
+  "session.spend.summary": "Цей запуск витратив {{spent}}. Він залишається на паузі, доки ви не вирішите.",
+  "session.spend.continue": "Продовжити до {{amount}}",
+  "session.spend.stop": "Зупинити тут",
   "session.movesOn.hint": "Немає відповіді до {{time}}? Агент продовжить без цього.",
   "session.movedOn.title": "Продовжив без вас",
   "session.movedOn.allow": "Дозволити й продовжити",

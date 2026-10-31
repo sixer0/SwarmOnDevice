@@ -345,6 +345,18 @@ export const dict = {
   "dialog.project.edit.worktree.startup.placeholder": "예: bun install",
   "dialog.usageExceeded.dontShowAgain": "다시 표시하지 않기",
 
+  "context.spend.title": "비용 내역",
+
+  "context.spend.writing": "작성",
+
+  "context.spend.fresh": "새 컨텍스트 읽기",
+
+  "context.spend.reread": "캐시된 컨텍스트 다시 읽기",
+
+  "context.spend.subagents": "하위 에이전트",
+
+  "context.spend.saved": "캐싱으로 약 {{amount}}를 절약했습니다",
+
   "context.breakdown.title": "컨텍스트 분석",
   "context.breakdown.note": '입력 토큰의 대략적인 분석입니다. "기타"에는 도구 정의 및 오버헤드가 포함됩니다.',
   "context.breakdown.system": "시스템",
@@ -1384,6 +1396,10 @@ export const dict = {
   "memory.remembered": "기억함",
   "memory.seeAll": "모두 보기",
   "memory.undo": "실행 취소",
+  "session.spend.title": "지출 한도에 도달했습니다",
+  "session.spend.summary": "이 실행에서 {{spent}}를 사용했습니다. 결정할 때까지 일시 중지됩니다.",
+  "session.spend.continue": "{{amount}}까지 계속",
+  "session.spend.stop": "여기서 중지",
   "session.movesOn.hint": "{{time}}까지 답이 없으면 에이전트가 이것 없이 계속합니다.",
   "session.movedOn.title": "사용자 없이 계속했습니다",
   "session.movedOn.allow": "허용하고 계속",

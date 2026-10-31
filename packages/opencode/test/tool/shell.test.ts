@@ -1138,7 +1138,7 @@ describe("tool.shell truncation", () => {
       Effect.gen(function* () {
         const lineCount = Truncate.MAX_LINES + 500
         const result = yield* run({
-          command: fill("lines", lineCount),
+          command: `${fill("lines", lineCount)} | cat`,
         })
         mustTruncate(result)
         expect(result.output).toMatch(/\.\.\.output truncated\.\.\./)
@@ -1175,13 +1175,42 @@ describe("tool.shell truncation", () => {
     ),
   )
 
+  it.live("long runs of similar lines are hidden from the model and kept in a file", () =>
+    runIn(
+      projectRoot,
+      Effect.gen(function* () {
+        const result = yield* run({ command: fill("lines", 500) })
+        const metadata = result.metadata as { truncated?: boolean; outputPath?: string; output?: string }
+        expect(metadata.truncated).toBe(false)
+        expect(result.output).toContain("... 495 similar lines ...")
+        expect(result.output).toContain("495 similar lines hidden. Full output saved to:")
+        expect(result.output.length).toBeLessThan(400)
+        expect(metadata.output?.trim().split(/\r?\n/).length).toBe(500)
+        const saved = yield* (yield* FSUtil.Service).readFileString(metadata.outputPath!)
+        expect(saved.trim().split(/\r?\n/).length).toBe(500)
+      }),
+    ),
+  )
+
+  it.live("a cut output keeps its start as well as its end", () =>
+    runIn(
+      projectRoot,
+      Effect.gen(function* () {
+        const result = yield* run({ command: `${fill("lines", Truncate.MAX_LINES + 500)} | cat` })
+        mustTruncate(result)
+        expect(result.output.startsWith("1\n2\n")).toBe(true)
+        expect(result.output.trimEnd().endsWith(String(Truncate.MAX_LINES + 500))).toBe(true)
+      }),
+    ),
+  )
+
   it.live("full output is saved to file when truncated", () =>
     runIn(
       projectRoot,
       Effect.gen(function* () {
         const lineCount = Truncate.MAX_LINES + 100
         const result = yield* run({
-          command: fill("lines", lineCount),
+          command: `${fill("lines", lineCount)} | cat`,
         })
         mustTruncate(result)
 

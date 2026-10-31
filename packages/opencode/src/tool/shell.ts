@@ -16,6 +16,7 @@ import { Shell } from "@opencode-ai/core/shell"
 import { ShellID } from "./shell/id"
 
 import * as Truncate from "./truncate"
+import { condense } from "./condense"
 import { Plugin } from "@/plugin"
 import { ChildProcess } from "effect/unstable/process"
 import { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner"
@@ -25,6 +26,9 @@ import { BashArity } from "@/permission/arity"
 export { Parameters } from "./shell/prompt"
 
 const MAX_METADATA_LENGTH = 30_000
+// Shown from the start of an output that gets cut. Setup failures print there, and the rest of the budget goes to the end.
+const HEAD_BYTES = 4 * 1024
+const SHELL_MAX_BYTES = 24 * 1024
 const CWD = new Set(["cd", "chdir", "popd", "pushd", "push-location", "set-location"])
 const FILES = new Set([
   ...CWD,
@@ -215,6 +219,12 @@ function pathArgs(list: Part[], ps: boolean, cmd = false) {
     out.push(item.text)
   }
   return out
+}
+
+// Unless `tool_output` says otherwise. Commands are the largest thing that enters a run, and whatever enters is paid for
+// again on every later step. The full output is always saved, and the agent can search it for what it needs.
+function shellLimits(limits: { maxLines: number; maxBytes: number }) {
+  return { ...limits, maxBytes: limits.maxBytes === Truncate.MAX_BYTES ? SHELL_MAX_BYTES : limits.maxBytes }
 }
 
 function preview(text: string) {
@@ -435,8 +445,10 @@ export const ShellTool = Tool.define(
       },
       ctx: Tool.Context,
     ) {
-      const limits = yield* trunc.limits()
+      const limits = shellLimits(yield* trunc.limits())
       const keep = limits.maxBytes * 2
+      let head = ""
+      let dropped = false
       let full = ""
       let last = ""
       const list: Chunk[] = []
@@ -486,13 +498,14 @@ export const ShellTool = Tool.define(
           yield* Effect.forkScoped(
             Stream.runForEach(Stream.decodeText(handle.all), (chunk) => {
               const size = Buffer.byteLength(chunk, "utf-8")
+              if (head.length < HEAD_BYTES) head += chunk
               list.push({ text: chunk, size })
               used += size
               while (used > keep && list.length > 1) {
                 const item = list.shift()
                 if (!item) break
                 used -= item.size
-                cut = true
+                dropped = true
               }
 
               last = preview(last + chunk)
@@ -506,7 +519,6 @@ export const ShellTool = Tool.define(
                     Effect.andThen((next) =>
                       Effect.sync(() => {
                         file = next
-                        cut = true
                         sink = createWriteStream(next, { flags: "a" })
                         full = ""
                       }),
@@ -566,18 +578,21 @@ export const ShellTool = Tool.define(
       }
       if (aborted) meta.push("User aborted the command")
       const raw = list.map((item) => item.text).join("")
-      const end = tail(raw, limits.maxLines, limits.maxBytes)
-      if (end.cut) cut = true
-      if (!file && end.cut) {
-        file = yield* trunc.write(raw)
-      }
+      const condensed = condense({ text: raw, command: input.command })
+      const whole = tail(condensed.text, limits.maxLines, limits.maxBytes)
+      // Saving a large output to a file along the way is not a cut: what matters is whether the agent sees all of it.
+      cut = dropped || whole.cut
+      // What was hidden stays one read away, so nothing the agent might need is gone.
+      if (!file && (cut || condensed.hidden > 0)) file = yield* trunc.write(raw)
 
-      let output = end.text
-      if (!output) output = "(no output)"
-
-      if (cut && file) {
-        output = `...output truncated...\n\nFull output saved to: ${file}\n\n` + output
+      let output = whole.text || "(no output)"
+      if (cut) {
+        const shown = condense({ text: head, command: input.command }).text.slice(0, HEAD_BYTES)
+        const opening = shown.slice(0, Math.max(shown.lastIndexOf("\n"), 0))
+        const end = tail(condensed.text, limits.maxLines, limits.maxBytes - HEAD_BYTES).text
+        output = `${opening ? opening + "\n\n" : ""}...output truncated...\n\nFull output saved to: ${file}\n\n${end}`
       }
+      if (!cut && condensed.hidden > 0) output += `\n\n(${condensed.hidden} similar lines hidden. Full output saved to: ${file})`
 
       if (meta.length > 0) {
         output += "\n\n<shell_metadata>\n" + meta.join("\n") + "\n</shell_metadata>"
@@ -588,7 +603,7 @@ export const ShellTool = Tool.define(
           output: last || preview(output),
           exit: code,
           truncated: cut,
-          ...(cut && file ? { outputPath: file } : {}),
+          ...(file && (cut || condensed.hidden > 0) ? { outputPath: file } : {}),
         },
         output,
       }
@@ -599,7 +614,7 @@ export const ShellTool = Tool.define(
         const cfg = yield* config.get()
         const shell = Shell.acceptable(cfg.shell)
         const name = Shell.name(shell)
-        const limits = yield* trunc.limits()
+        const limits = shellLimits(yield* trunc.limits())
         const prompt = ShellPrompt.render(name, process.platform, limits, defaultTimeoutMs)
         yield* Effect.logInfo("shell tool using shell", { shell })
 

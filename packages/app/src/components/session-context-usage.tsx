@@ -41,6 +41,8 @@ function openSessionContext(args: {
   if (args.layout.fileTree.opened() && args.layout.fileTree.tab() !== "all") args.layout.fileTree.setTab("all")
   void args.tabs.open("context")
   args.tabs.setActive("context")
+  // A panel opening right now mounts its tabs on the first one, Review, and reports that as a selection a moment later.
+  setTimeout(() => args.tabs.setActive("context"), 200)
 }
 
 export function SessionContextUsage(props: SessionContextUsageProps) {

@@ -2218,6 +2218,7 @@ export type Config = {
   enterprise?: {
     url?: string
   }
+  spend_limit?: number
   tool_output?: {
     max_lines?: number
     max_bytes?: number
@@ -2225,6 +2226,7 @@ export type Config = {
   compaction?: {
     auto?: boolean
     prune?: boolean
+    max_context?: number
     tail_turns?: number
     preserve_recent_tokens?: number
     reserved?: number

@@ -587,6 +587,18 @@ export const dict = {
 
   "dialog.usageExceeded.dontShowAgain": "不再显示",
 
+  "context.spend.title": "费用去向",
+
+  "context.spend.writing": "写入",
+
+  "context.spend.fresh": "读取新上下文",
+
+  "context.spend.reread": "重新读取已缓存的上下文",
+
+  "context.spend.subagents": "子智能体",
+
+  "context.spend.saved": "缓存节省了约 {{amount}}",
+
   "context.breakdown.title": "上下文细分",
   "context.breakdown.note": "输入 token 的大致细分。“其他”包含工具定义和开销。",
   "context.breakdown.system": "系统",
@@ -1445,6 +1457,10 @@ export const dict = {
   "memory.remembered": "已记住",
   "memory.seeAll": "查看全部",
   "memory.undo": "撤销",
+  "session.spend.title": "已达到支出上限",
+  "session.spend.summary": "本次运行已花费 {{spent}}。在你决定之前会保持暂停。",
+  "session.spend.continue": "继续至 {{amount}}",
+  "session.spend.stop": "到此停止",
   "session.movesOn.hint": "到 {{time}} 仍无回答？智能体将跳过此项继续。",
   "session.movedOn.title": "已在你不在时继续",
   "session.movedOn.allow": "允许并继续",

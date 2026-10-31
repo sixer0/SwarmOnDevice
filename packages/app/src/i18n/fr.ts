@@ -548,6 +548,18 @@ export const dict = {
   "dialog.project.edit.worktree.startup.placeholder": "p. ex. bun install",
   "dialog.usageExceeded.dontShowAgain": "Ne plus afficher",
 
+  "context.spend.title": "Où est passé l'argent",
+
+  "context.spend.writing": "Écriture",
+
+  "context.spend.fresh": "Lecture de nouveau contexte",
+
+  "context.spend.reread": "Relecture du contexte en cache",
+
+  "context.spend.subagents": "Sous-agents",
+
+  "context.spend.saved": "Le cache a économisé environ {{amount}}",
+
   "context.breakdown.title": "Répartition du contexte",
   "context.breakdown.note":
     "Répartition approximative des jetons d'entrée. \"Autre\" inclut les définitions d'outils et les données annexes.",
@@ -1413,6 +1425,10 @@ export const dict = {
   "memory.remembered": "Retenu",
   "memory.seeAll": "Tout voir",
   "memory.undo": "Annuler",
+  "session.spend.title": "Limite de dépenses atteinte",
+  "session.spend.summary": "Cette exécution a dépensé {{spent}}. Elle reste en pause jusqu'à votre décision.",
+  "session.spend.continue": "Continuer jusqu'à {{amount}}",
+  "session.spend.stop": "Arrêter ici",
   "session.movesOn.hint": "Pas de réponse à {{time}} ? L'agent continue sans cela.",
   "session.movedOn.title": "A continué sans vous",
   "session.movedOn.allow": "Autoriser et continuer",

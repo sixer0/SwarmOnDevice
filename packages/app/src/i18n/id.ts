@@ -586,6 +586,18 @@ export const dict = {
 
   "dialog.usageExceeded.dontShowAgain": "Jangan tampilkan lagi",
 
+  "context.spend.title": "Ke mana uangnya",
+
+  "context.spend.writing": "Menulis",
+
+  "context.spend.fresh": "Membaca konteks baru",
+
+  "context.spend.reread": "Membaca ulang konteks dari cache",
+
+  "context.spend.subagents": "Subagen",
+
+  "context.spend.saved": "Cache menghemat sekitar {{amount}}",
+
   "context.breakdown.title": "Rincian Konteks",
   "context.breakdown.note": 'Perkiraan rincian token masukan. "Lainnya" mencakup definisi alat dan beban tambahan.',
   "context.breakdown.system": "Sistem",
@@ -1478,6 +1490,10 @@ export const dict = {
   "memory.remembered": "Diingat",
   "memory.seeAll": "Lihat semua",
   "memory.undo": "Urungkan",
+  "session.spend.title": "Batas biaya tercapai",
+  "session.spend.summary": "Run ini telah menghabiskan {{spent}}. Run tetap dijeda sampai Anda memutuskan.",
+  "session.spend.continue": "Lanjutkan hingga {{amount}}",
+  "session.spend.stop": "Berhenti di sini",
   "session.movesOn.hint": "Belum dijawab sampai {{time}}? Agen lanjut tanpa ini.",
   "session.movedOn.title": "Lanjut tanpa Anda",
   "session.movedOn.allow": "Izinkan dan lanjutkan",

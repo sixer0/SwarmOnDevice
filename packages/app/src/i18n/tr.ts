@@ -577,6 +577,18 @@ export const dict = {
 
   "dialog.usageExceeded.dontShowAgain": "Bir daha gösterme",
 
+  "context.spend.title": "Para nereye gitti",
+
+  "context.spend.writing": "Yazma",
+
+  "context.spend.fresh": "Yeni bağlamı okuma",
+
+  "context.spend.reread": "Önbellekteki bağlamı yeniden okuma",
+
+  "context.spend.subagents": "Alt ajanlar",
+
+  "context.spend.saved": "Önbellek yaklaşık {{amount}} tasarruf sağladı",
+
   "context.breakdown.title": "Bağlam Dökümü",
   "context.breakdown.note": 'Girdi tokenlerinin yaklaşık dökümü. "Diğer" araç tanımları ve ek yükleri içerir.',
   "context.breakdown.system": "Sistem",
@@ -1476,6 +1488,10 @@ export const dict = {
   "memory.remembered": "Hatırlandı",
   "memory.seeAll": "Tümünü gör",
   "memory.undo": "Geri al",
+  "session.spend.title": "Harcama sınırına ulaşıldı",
+  "session.spend.summary": "Bu çalıştırma {{spent}} harcadı. Siz karar verene kadar duraklatılmış kalır.",
+  "session.spend.continue": "{{amount}} tutarına kadar devam et",
+  "session.spend.stop": "Burada durdur",
   "session.movesOn.hint": "{{time}} saatine kadar yanıt yok mu? Ajan bu olmadan devam eder.",
   "session.movedOn.title": "Sensiz devam etti",
   "session.movedOn.allow": "İzin ver ve devam et",

@@ -4,6 +4,7 @@ import { Button } from "@opencode-ai/ui/button"
 import { DockPrompt } from "@opencode-ai/session-ui/dock-prompt"
 import { Icon } from "@opencode-ai/ui/icon"
 import { useLanguage } from "@/context/language"
+import { formatUsd, spendLimitDetail } from "@/components/session/session-spend"
 
 export const clockTime = (at: number) =>
   new Date(at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
@@ -14,6 +15,8 @@ export function SessionPermissionDock(props: {
   onDecide: (response: "once" | "always" | "reject") => void
 }) {
   const language = useLanguage()
+  const spend = () => spendLimitDetail(props.request)
+  const money = (value: number) => formatUsd(value, language.intl())
 
   const toolDescription = () => {
     const key = `settings.permissions.tool.${props.request.permission}.description`
@@ -21,6 +24,71 @@ export function SessionPermissionDock(props: {
     if (value === key) return ""
     return value
   }
+
+  return (
+    <Show
+      when={spend()}
+      fallback={<RegularPermission {...props} toolDescription={toolDescription()} />}
+    >
+      {(detail) => (
+        <DockPrompt
+          kind="permission"
+          header={
+            <div data-slot="permission-row" data-variant="header">
+              <span data-slot="permission-icon">
+                <Icon name="warning" size="normal" />
+              </span>
+              <div data-slot="permission-header-title">{language.t("session.spend.title")}</div>
+            </div>
+          }
+          footer={
+            <>
+              <div />
+              <div data-slot="permission-footer-actions">
+                <Button
+                  variant="ghost"
+                  size="normal"
+                  onClick={() => props.onDecide("reject")}
+                  disabled={props.responding}
+                >
+                  {language.t("session.spend.stop")}
+                </Button>
+                <Button
+                  variant="primary"
+                  size="normal"
+                  onClick={() => props.onDecide("once")}
+                  disabled={props.responding}
+                >
+                  {language.t("session.spend.continue", { amount: money(detail().next) })}
+                </Button>
+              </div>
+            </>
+          }
+        >
+          <div data-slot="permission-row">
+            <span data-slot="permission-spacer" aria-hidden="true" />
+            <div data-slot="permission-hint">
+              {language.t("session.spend.summary", { spent: money(detail().spent) })}
+              <Show when={detail().subagents > 0}>
+                {" "}
+                {language.t("context.spend.subagents")}: {detail().subagents} ({money(detail().subagentCost)})
+              </Show>
+            </div>
+          </div>
+        </DockPrompt>
+      )}
+    </Show>
+  )
+}
+
+function RegularPermission(props: {
+  request: PermissionRequest
+  responding: boolean
+  onDecide: (response: "once" | "always" | "reject") => void
+  toolDescription: string
+}) {
+  const language = useLanguage()
+  const toolDescription = () => props.toolDescription
 
   return (
     <DockPrompt

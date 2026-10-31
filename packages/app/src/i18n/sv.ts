@@ -546,6 +546,18 @@ export const dict = {
   "dialog.releaseNotes.media.alt": "Förhandsvisning av version",
   "dialog.usageExceeded.dontShowAgain": "Visa inte igen",
 
+  "context.spend.title": "Vart pengarna tog vägen",
+
+  "context.spend.writing": "Skrivande",
+
+  "context.spend.fresh": "Läsning av ny kontext",
+
+  "context.spend.reread": "Omläsning av cachelagrad kontext",
+
+  "context.spend.subagents": "Underagenter",
+
+  "context.spend.saved": "Cachning sparade ungefär {{amount}}",
+
   "context.breakdown.title": "Kontextfördelning",
   "context.breakdown.note":
     'Ungefärlig uppdelning av inmatningstokens. "Övrigt" inkluderar verktygsdefinitioner och overhead.',
@@ -1376,6 +1388,10 @@ export const dict = {
   "memory.remembered": "Ihågkommet",
   "memory.seeAll": "Visa alla",
   "memory.undo": "Ångra",
+  "session.spend.title": "Utgiftsgränsen är nådd",
+  "session.spend.summary": "Den här körningen har spenderat {{spent}}. Den förblir pausad tills du bestämmer dig.",
+  "session.spend.continue": "Fortsätt till {{amount}}",
+  "session.spend.stop": "Stoppa här",
   "session.movesOn.hint": "Inget svar senast {{time}}? Agenten fortsätter utan detta.",
   "session.movedOn.title": "Fortsatte utan dig",
   "session.movedOn.allow": "Tillåt och fortsätt",

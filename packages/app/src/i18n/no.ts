@@ -478,6 +478,18 @@ export const dict = {
 
   "dialog.usageExceeded.dontShowAgain": "Ikke vis igjen",
 
+  "context.spend.title": "Hvor pengene ble av",
+
+  "context.spend.writing": "Skriving",
+
+  "context.spend.fresh": "Lesing av ny kontekst",
+
+  "context.spend.reread": "Ny lesing av bufret kontekst",
+
+  "context.spend.subagents": "Underagenter",
+
+  "context.spend.saved": "Hurtigbufring sparte omtrent {{amount}}",
+
   "context.breakdown.title": "Kontekstfordeling",
   "context.breakdown.note":
     'Omtrentlig fordeling av inndatatokener. "Annet" inkluderer verktøydefinisjoner og overhead.',
@@ -1483,6 +1495,10 @@ export const dict = {
   "memory.remembered": "Husket",
   "memory.seeAll": "Se alle",
   "memory.undo": "Angre",
+  "session.spend.title": "Forbruksgrensen er nådd",
+  "session.spend.summary": "Denne kjøringen har brukt {{spent}}. Den står på pause til du bestemmer deg.",
+  "session.spend.continue": "Fortsett til {{amount}}",
+  "session.spend.stop": "Stopp her",
   "session.movesOn.hint": "Ikke noe svar innen {{time}}? Agenten fortsetter uten dette.",
   "session.movedOn.title": "Fortsatte uten deg",
   "session.movedOn.allow": "Tillat og fortsett",
