@@ -97,6 +97,7 @@ export function DialogHomeCommandPaletteV2(props: {
     load: (search, signal) => serverCtx.sdk.api.session.list({ parentID: null, search, limit: 50 }, { signal }),
     untitled: () => language.t("command.session.new"),
     category: () => language.t("command.category.session"),
+    language,
   })
 
   const highlight = (item: CommandPaletteEntry | undefined) => {

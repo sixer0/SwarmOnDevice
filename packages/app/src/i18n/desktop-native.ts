@@ -202,7 +202,7 @@ export function detectDesktopNativeLocale(languages: readonly string[]): Desktop
     if (["no", "nb", "nn"].includes(source.language)) return "no"
     const match = DESKTOP_NATIVE_LOCALES.find((candidate) => {
       const target = locale(DESKTOP_NATIVE_LOCALE_TAGS[candidate])
-      return target?.language === source.language && target.script === source.script
+      return target?.language === source.language && scriptFamily(target.script) === scriptFamily(source.script)
     })
     if (match) return match
   }
@@ -212,6 +212,10 @@ export function detectDesktopNativeLocale(languages: readonly string[]): Desktop
 export function desktopNativePluralCategories(locale: DesktopNativeLocale) {
   return new Intl.PluralRules(DESKTOP_NATIVE_LOCALE_TAGS[locale]).resolvedOptions().pluralCategories
 }
+
+// Nastaliq (Aran) is a style of Arabic script, not another alphabet. ICU versions disagree on which one pa-PK maximizes
+// to: Bun's says Aran and Node's says Arab, so comparing them literally would drop a Punjabi reader to English on some.
+const scriptFamily = (script: string | undefined) => (script === "Aran" ? "Arab" : script)
 
 function locale(value: string) {
   try {

@@ -43,6 +43,8 @@ describe("command palette sessions", () => {
             server,
             opened: () => [opened],
             stored: () => [{ ...stored, icon: { url: "stored-project-avatar" } }],
+            // A server too old to have content search: the palette falls back to searching titles.
+            search: async () => undefined,
             load: async (text) => {
               searches.push(text)
               return {
@@ -51,6 +53,7 @@ describe("command palette sessions", () => {
             },
             untitled: () => "Untitled",
             category: () => "Sessions",
+            language: { t: (key) => String(key), intl: () => "en" },
           })
           const first = search("palette")
           const second = search("palette session")

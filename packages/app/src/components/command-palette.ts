@@ -159,6 +159,7 @@ export function createCommandPaletteModel(props: { filesOnly?: () => boolean; on
     load: (search, signal) => serverSDK.api.session.list({ parentID: null, search, limit: 50 }, { signal }),
     untitled: () => language.t("command.session.new"),
     category: () => language.t("command.category.session"),
+    language,
   })
   /** The line selected in the file on screen, as a query. Opening the palette then answers who wrote it. */
   const selectedLine = () => {
@@ -244,15 +245,15 @@ export function createServerSessionEntries(props: {
   load: (search: string, signal: AbortSignal) => Promise<{ data: SessionInfo[] }>
   untitled: () => string
   category: () => string
+  language: Pick<ReturnType<typeof useLanguage>, "t" | "intl">
 }) {
-  const language = useLanguage()
   const [status, setStatus] = createSignal<SessionSearchStatus>({})
   let abort: AbortController | undefined
 
   onCleanup(() => abort?.abort())
 
   const fromSearch = (response: GlobalSearchResponse, entry: (session: Session) => CommandPaletteEntry) => {
-    const heading = searchHeading(response, props.category(), language.intl())
+    const heading = searchHeading(response, props.category(), props.language.intl())
     return response.results.map((result) => {
       const base = entry(result.session)
       return {
@@ -263,7 +264,7 @@ export function createServerSessionEntries(props: {
         anchor: result.anchor,
         hit:
           result.snippet.length > 0 || result.verdict
-            ? { label: hitLabel(result, language.t), snippet: result.snippet }
+            ? { label: hitLabel(result, props.language.t), snippet: result.snippet }
             : undefined,
       }
     })
