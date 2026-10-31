@@ -12,7 +12,7 @@ import { FSUtil } from "@opencode-ai/core/fs-util"
 import { CrossSpawnSpawner } from "@opencode-ai/core/cross-spawn-spawner"
 import { Agent } from "../../src/agent/agent"
 import { SessionID, MessageID } from "../../src/session/schema"
-import { GitTool, hardenedEnv, unlistedFlag, withholdSecretDiffs } from "../../src/tool/git"
+import { GitTool, HARDENED_CONFIG, hardenedEnv, unlistedFlag, withholdSecretDiffs } from "../../src/tool/git"
 import { GitGuard } from "../../src/tool/git-guard"
 import { provideInstance, testInstanceStoreLayer, tmpdirScoped } from "../fixture/fixture"
 import { testEffect } from "../lib/effect"
@@ -159,8 +159,8 @@ describe("git tool on a hostile repository", () => {
         fs.chmodSync(path.join(hooks, "post-index-change"), 0o755)
         plain(dir, "config", "core.hooksPath", hooks)
       },
+      // On the list, because Husky sets it. The -c overrides it, and the Husky test below holds what that rests on.
       proof: ["update-index", "--refresh"],
-      why: /core\.hookspath/,
     },
     { name: "diff.external", plant: (dir, script) => void plain(dir, "config", "diff.external", script), proof: ["diff"], why: /diff\.external/ },
     {
@@ -219,6 +219,58 @@ describe("git tool on a hostile repository", () => {
       }),
     )
   }
+
+  describe("core.hooksPath, which is on the list because Husky sets it", () => {
+    const HOOKS = ["applypatch-msg", "pre-applypatch", "post-applypatch", "pre-commit", "pre-merge-commit", "prepare-commit-msg", "commit-msg", "post-commit", "pre-rebase", "post-checkout", "post-merge", "pre-push", "pre-receive", "update", "proc-receive", "post-receive", "post-update", "reference-transaction", "push-to-checkout", "pre-auto-gc", "post-rewrite", "sendemail-validate", "fsmonitor-watchman", "p4-changelist", "p4-prepare-changelist", "p4-post-changelist", "p4-pre-submit", "post-index-change"]
+    const husky = (dir: string, script: string) => {
+      seed(dir)
+      for (const hooks of [path.join(dir, ".husky/_"), path.join(dir, ".git/hooks")]) {
+        fs.mkdirSync(hooks, { recursive: true })
+        for (const hook of HOOKS) fs.copyFileSync(script, path.join(hooks, hook))
+      }
+      plain(dir, "config", "core.hooksPath", ".husky/_")
+    }
+
+    test("the -c that makes this safe is still there", () => {
+      expect(HARDENED_CONFIG).toContain("core.hooksPath=/dev/null")
+    })
+
+    it.live("a Husky repository is read, with a stale stat, and no hook fires and the index does not change", () =>
+      Effect.gen(function* () {
+        const dir = yield* tmpdirScoped()
+        husky(dir, evil(dir))
+        // Control: what git does when it writes the index here is run the hook.
+        fs.utimesSync(path.join(dir, "README.md"), new Date(), new Date(Date.now() + 5000))
+        plain(dir, "update-index", "--refresh")
+        expect(fired(dir)).toBe(true)
+        fs.utimesSync(path.join(dir, "README.md"), new Date(), new Date(Date.now() + 9000))
+        const index = fs.readFileSync(path.join(dir, ".git/index"))
+        expect(GitGuard.inspect(dir).gitDir).toBeDefined()
+        yield* noneFire(dir)
+        expect(fs.readFileSync(path.join(dir, ".git/index")).equals(index)).toBe(true)
+        const seen = spawnSync("git", [`--git-dir=${path.join(dir, ".git")}`, `--work-tree=${dir}`, ...HARDENED_CONFIG.flatMap((setting) => ["-c", setting]), "rev-parse", "--git-path", "hooks"], { cwd: dir, encoding: "utf8", env: hardenedEnv({ directory: dir, worktree: dir } as never) })
+        expect(seen.stdout.trim()).toBe("/dev/null")
+      }),
+    )
+
+    for (const value of ["~nosuchuser/x", ":(optional)/x", "%(prefix)/x", "$(touch ${MARK})", "`touch ${MARK}`"]) {
+      it.live(`a value of ${value} is only ever overridden`, () =>
+        Effect.gen(function* () {
+          const dir = yield* tmpdirScoped()
+          husky(dir, evil(dir))
+          plain(dir, "config", "core.hooksPath", value.replace("${MARK}", `${dir}-marker`))
+          expect(GitGuard.inspect(dir).gitDir).toBeDefined()
+          yield* noneFire(dir)
+        }),
+      )
+    }
+
+    test("any spelling of it passes, and the rest of core still does not", () => {
+      for (const text of ["[core]\n\thooksPath = .husky/_\n", "[core]\n\thookspath = .husky/_\n", "[CORE]\n\tHOOKSPATH = .husky/_\n"]) expect(GitGuard.configProblem(text)).toBeUndefined()
+      for (const key of ["fsmonitor", "autocrlf", "worktree", "sshCommand"]) expect(GitGuard.configProblem(`[core]\n\t${key} = x\n`)).toBeDefined()
+      expect(GitGuard.configProblem('[core "x"]\n\thooksPath = y\n')).toBeDefined()
+    })
+  })
 
   const pagers = ["core.pager", "pager.status", "pager.log", "pager.diff", "pager.show", "pager.branch", "pager.blame"]
   for (const key of pagers) {

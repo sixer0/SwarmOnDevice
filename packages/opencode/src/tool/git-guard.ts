@@ -8,7 +8,8 @@ import path from "node:path"
 const MAX_CONFIG = 256 * 1024
 const MAX_INDEX = 64 * 1024 * 1024
 
-// Keys git only consults to lay out a repository, or only for fetch, push, pull and commit, which this tool never runs.
+// Keys git only consults to lay out a repository, or only for fetch, push, pull and commit, which this tool never runs, and
+// the hooks path, which is switched off on the command line.
 // None names a program. `remote.*.url` can hold `ext::sh -c ...`, but that only runs on a transport, and with no fetch here,
 // no promisor (not on this list) and GIT_NO_LAZY_FETCH there is no transport. What git init and git clone write is all here.
 const PLAIN_KEYS = new Set([
@@ -19,6 +20,9 @@ const PLAIN_KEYS = new Set([
   "core.ignorecase",
   "core.precomposeunicode",
   "core.symlinks",
+  // Lower case, because the check lower-cases first. Husky sets it. The -c in HARDENED_CONFIG overrides it, so the path is never
+  // used, and these reads have no cause to fire a hook anyway. Nothing about this one extends to any other core key.
+  "core.hookspath",
   "user.name",
   "user.email",
   "user.signingkey",
