@@ -1336,4 +1336,10 @@ export const dict = {
   "memory.remembered": "Diingati",
   "memory.seeAll": "Lihat semua",
   "memory.undo": "Buat asal",
+  "session.movesOn.hint": "Tiada jawapan menjelang {{time}}? Ejen meneruskan tanpa ini.",
+  "session.movedOn.title": "Diteruskan tanpa anda",
+  "session.movedOn.allow": "Benarkan dan teruskan",
+  "session.movedOn.leave": "Biarkan",
+  "session.movedOn.answer": "Jawab",
+  "home.agents.movedOn": "Diteruskan tanpa ini · {{time}}",
 }

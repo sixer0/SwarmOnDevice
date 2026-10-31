@@ -1349,4 +1349,10 @@ export const dict = {
   "memory.remembered": "記憶しました",
   "memory.seeAll": "すべて表示",
   "memory.undo": "元に戻す",
+  "session.movesOn.hint": "{{time}} までに回答がなければ、エージェントはこれなしで続行します。",
+  "session.movedOn.title": "あなたの回答なしで続行しました",
+  "session.movedOn.allow": "許可して続行",
+  "session.movedOn.leave": "そのままにする",
+  "session.movedOn.answer": "回答",
+  "home.agents.movedOn": "これなしで続行しました · {{time}}",
 }

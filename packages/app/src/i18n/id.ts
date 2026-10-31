@@ -1441,4 +1441,10 @@ export const dict = {
   "memory.remembered": "Diingat",
   "memory.seeAll": "Lihat semua",
   "memory.undo": "Urungkan",
+  "session.movesOn.hint": "Belum dijawab sampai {{time}}? Agen lanjut tanpa ini.",
+  "session.movedOn.title": "Lanjut tanpa Anda",
+  "session.movedOn.allow": "Izinkan dan lanjutkan",
+  "session.movedOn.leave": "Biarkan",
+  "session.movedOn.answer": "Jawab",
+  "home.agents.movedOn": "Lanjut tanpa ini · {{time}}",
 }

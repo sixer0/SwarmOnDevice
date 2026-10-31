@@ -1427,4 +1427,10 @@ export const dict = {
   "memory.remembered": "Husket",
   "memory.seeAll": "Se alle",
   "memory.undo": "Fortryd",
+  "session.movesOn.hint": "Intet svar inden {{time}}? Agenten fortsætter uden dette.",
+  "session.movedOn.title": "Fortsatte uden dig",
+  "session.movedOn.allow": "Tillad og fortsæt",
+  "session.movedOn.leave": "Lad være",
+  "session.movedOn.answer": "Svar",
+  "home.agents.movedOn": "Fortsatte uden dette · {{time}}",
 }

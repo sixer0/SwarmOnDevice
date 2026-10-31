@@ -1337,4 +1337,10 @@ export const dict = {
   "memory.remembered": "Zapamätané",
   "memory.seeAll": "Zobraziť všetko",
   "memory.undo": "Vrátiť späť",
+  "session.movesOn.hint": "Žiadna odpoveď do {{time}}? Agent bude pokračovať bez toho.",
+  "session.movedOn.title": "Pokračoval bez vás",
+  "session.movedOn.allow": "Povoliť a pokračovať",
+  "session.movedOn.leave": "Nechať tak",
+  "session.movedOn.answer": "Odpovedať",
+  "home.agents.movedOn": "Pokračoval bez toho · {{time}}",
 }

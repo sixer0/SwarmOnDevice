@@ -1335,4 +1335,10 @@ export const dict = {
   "memory.remembered": "დამახსოვრებულია",
   "memory.seeAll": "ყველას ნახვა",
   "memory.undo": "დაბრუნება",
+  "session.movesOn.hint": "{{time}}-მდე პასუხი არ არის? აგენტი ამის გარეშე გააგრძელებს.",
+  "session.movedOn.title": "გააგრძელა თქვენ გარეშე",
+  "session.movedOn.allow": "დაშვება და გაგრძელება",
+  "session.movedOn.leave": "დატოვება",
+  "session.movedOn.answer": "პასუხი",
+  "home.agents.movedOn": "გააგრძელა ამის გარეშე · {{time}}",
 }

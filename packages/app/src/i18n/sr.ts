@@ -1340,4 +1340,10 @@ export const dict = {
   "memory.remembered": "Запамћено",
   "memory.seeAll": "Прикажи све",
   "memory.undo": "Поништи",
+  "session.movesOn.hint": "Нема одговора до {{time}}? Агент наставља без овога.",
+  "session.movedOn.title": "Наставио је без вас",
+  "session.movedOn.allow": "Дозволи и настави",
+  "session.movedOn.leave": "Остави",
+  "session.movedOn.answer": "Одговори",
+  "home.agents.movedOn": "Наставио је без овога · {{time}}",
 }

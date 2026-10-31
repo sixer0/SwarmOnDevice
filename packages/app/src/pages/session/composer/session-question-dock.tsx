@@ -13,6 +13,7 @@ import { makeEventListener } from "@solid-primitives/event-listener"
 import { createResizeObserver } from "@solid-primitives/resize-observer"
 import { useServerSDK } from "@/context/server-sdk"
 import { ScopedKey } from "@/utils/server-scope"
+import { clockTime } from "./session-permission-dock"
 
 const cache = new Map<string, { tab: number; answers: QuestionAnswer[]; custom: string[]; customOn: boolean[] }>()
 
@@ -532,6 +533,11 @@ export const SessionQuestionDock: Component<{ request: QuestionRequest; onSubmit
         <Show when={!store.minimized}>
           <Show when={multi()} fallback={<div data-slot="question-hint">{language.t("ui.question.singleHint")}</div>}>
             <div data-slot="question-hint">{language.t("ui.question.multiHint")}</div>
+          </Show>
+          <Show when={props.request.movesOnAt}>
+            {(at) => (
+              <div data-slot="question-hint">{language.t("session.movesOn.hint", { time: clockTime(at()) })}</div>
+            )}
           </Show>
         </Show>
         <div

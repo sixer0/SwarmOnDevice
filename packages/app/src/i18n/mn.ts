@@ -1347,4 +1347,10 @@ export const dict = {
   "memory.remembered": "Санасан",
   "memory.seeAll": "Бүгдийг харах",
   "memory.undo": "Буцаах",
+  "session.movesOn.hint": "{{time}} гэхэд хариу алга уу? Агент үүнгүйгээр үргэлжилнэ.",
+  "session.movedOn.title": "Таныгүйгээр үргэлжилсэн",
+  "session.movedOn.allow": "Зөвшөөрч үргэлжлүүлэх",
+  "session.movedOn.leave": "Орхих",
+  "session.movedOn.answer": "Хариулах",
+  "home.agents.movedOn": "Үүнгүйгээр үргэлжилсэн · {{time}}",
 }

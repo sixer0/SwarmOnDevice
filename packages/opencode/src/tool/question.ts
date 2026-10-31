@@ -25,7 +25,16 @@ export const QuestionTool = Tool.define<typeof Parameters, Metadata, Question.Se
             sessionID: ctx.sessionID,
             questions: params.questions,
             tool: ctx.callID ? { messageID: ctx.messageID, callID: ctx.callID } : undefined,
-          })
+            movesOn: true,
+          }).pipe(Effect.catchTag("QuestionAwayError", () => Effect.succeed(undefined)))
+
+          if (!answers)
+            return {
+              title: `Asked ${params.questions.length} question${params.questions.length > 1 ? "s" : ""}`,
+              output:
+                "Nobody answered in time. The user has probably stepped away and can still answer later. Do not ask again. Choose what you would recommend, preferring what is easy to reverse, and carry on. In your final message, say what you assumed.",
+              metadata: { answers: [] },
+            }
 
           const formatted = params.questions
             .map((q, i) => `"${q.question}"="${answers[i]?.length ? answers[i].join(", ") : "Unanswered"}"`)

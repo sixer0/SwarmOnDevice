@@ -1344,4 +1344,10 @@ export const dict = {
   "memory.remembered": "Հիշվեց",
   "memory.seeAll": "Տեսնել բոլորը",
   "memory.undo": "Հետարկել",
+  "session.movesOn.hint": "{{time}}-ին պատասխան չկա՞։ Գործակալը կշարունակի առանց սրա։",
+  "session.movedOn.title": "Շարունակեց առանց ձեզ",
+  "session.movedOn.allow": "Թույլատրել և շարունակել",
+  "session.movedOn.leave": "Թողնել",
+  "session.movedOn.answer": "Պատասխանել",
+  "home.agents.movedOn": "Շարունակեց առանց սրա · {{time}}",
 }

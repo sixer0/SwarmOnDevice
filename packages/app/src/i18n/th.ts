@@ -1417,4 +1417,10 @@ export const dict = {
   "memory.remembered": "จดจำแล้ว",
   "memory.seeAll": "ดูทั้งหมด",
   "memory.undo": "เลิกทำ",
+  "session.movesOn.hint": "ไม่มีคำตอบภายใน {{time}} หรือ เอเจนต์จะทำต่อโดยไม่มีสิ่งนี้",
+  "session.movedOn.title": "ทำต่อโดยไม่มีคุณ",
+  "session.movedOn.allow": "อนุญาตและทำต่อ",
+  "session.movedOn.leave": "ปล่อยไว้",
+  "session.movedOn.answer": "ตอบ",
+  "home.agents.movedOn": "ทำต่อโดยไม่มีสิ่งนี้ · {{time}}",
 }

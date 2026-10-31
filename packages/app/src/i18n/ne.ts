@@ -1336,4 +1336,10 @@ export const dict: Record<string, string> = {
   "memory.remembered": "सम्झिएको",
   "memory.seeAll": "सबै हेर्नुहोस्",
   "memory.undo": "पूर्ववत",
+  "session.movesOn.hint": "{{time}} सम्म जवाफ छैन? एजेन्ट यो बिना अगाडि बढ्छ।",
+  "session.movedOn.title": "तपाईं बिना अगाडि बढ्यो",
+  "session.movedOn.allow": "अनुमति दिनुहोस् र जारी राख्नुहोस्",
+  "session.movedOn.leave": "छोड्नुहोस्",
+  "session.movedOn.answer": "जवाफ दिनुहोस्",
+  "home.agents.movedOn": "यो बिना अगाडि बढ्यो · {{time}}",
 }

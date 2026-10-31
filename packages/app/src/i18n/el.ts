@@ -1352,4 +1352,10 @@ export const dict = {
   "memory.remembered": "Αποθηκεύτηκε",
   "memory.seeAll": "Εμφάνιση όλων",
   "memory.undo": "Αναίρεση",
+  "session.movesOn.hint": "Καμία απάντηση έως {{time}}; Ο πράκτορας συνεχίζει χωρίς αυτό.",
+  "session.movedOn.title": "Συνέχισε χωρίς εσάς",
+  "session.movedOn.allow": "Επιτρέψτε και συνεχίστε",
+  "session.movedOn.leave": "Αφήστε το",
+  "session.movedOn.answer": "Απάντηση",
+  "home.agents.movedOn": "Συνέχισε χωρίς αυτό · {{time}}",
 }

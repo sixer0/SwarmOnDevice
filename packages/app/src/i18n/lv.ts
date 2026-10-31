@@ -1339,4 +1339,10 @@ export const dict = {
   "memory.remembered": "Atcerēts",
   "memory.seeAll": "Skatīt visu",
   "memory.undo": "Atsaukt",
+  "session.movesOn.hint": "Nav atbildes līdz {{time}}? Aģents turpina bez šī.",
+  "session.movedOn.title": "Turpināja bez jums",
+  "session.movedOn.allow": "Atļaut un turpināt",
+  "session.movedOn.leave": "Atstāt",
+  "session.movedOn.answer": "Atbildēt",
+  "home.agents.movedOn": "Turpināja bez šī · {{time}}",
 }

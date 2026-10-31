@@ -1349,4 +1349,10 @@ export const dict = {
   "memory.remembered": "Megjegyezve",
   "memory.seeAll": "Összes megtekintése",
   "memory.undo": "Visszavonás",
+  "session.movesOn.hint": "Nincs válasz {{time}}-ig? Az ügynök enélkül folytatja.",
+  "session.movedOn.title": "Nélküled folytatta",
+  "session.movedOn.allow": "Engedélyezés és folytatás",
+  "session.movedOn.leave": "Hagyd",
+  "session.movedOn.answer": "Válasz",
+  "home.agents.movedOn": "Enélkül folytatta · {{time}}",
 }

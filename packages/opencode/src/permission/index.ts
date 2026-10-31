@@ -6,12 +6,18 @@ import { Deferred, Effect, Layer, Context } from "effect"
 import os from "os"
 import { PermissionV1 } from "@opencode-ai/core/v1/permission"
 import { EventV2Bridge } from "@/event-v2-bridge"
+import { Unattended } from "./unattended"
 
 export const Event = PermissionV1.Event
 
 export interface Interface {
   readonly ask: (input: PermissionV1.AskInput) => Effect.Effect<void, PermissionV1.Error>
-  readonly reply: (input: PermissionV1.ReplyInput) => Effect.Effect<void, PermissionV1.NotFoundError>
+  /** Returns the request when the agent had already carried on without it: the caller decides how to pick that back up. */
+  readonly reply: (
+    input: PermissionV1.ReplyInput,
+  ) => Effect.Effect<PermissionV1.Request | undefined, PermissionV1.NotFoundError>
+  /** Lets one later call through without asking, for what the user allowed after the agent had carried on. */
+  readonly grant: (input: Pick<PermissionV1.Request, "sessionID" | "permission" | "patterns">) => Effect.Effect<void>
   readonly list: () => Effect.Effect<ReadonlyArray<PermissionV1.Request>>
 }
 
@@ -23,7 +29,19 @@ interface PendingEntry {
 interface State {
   pending: Map<PermissionV1.ID, PendingEntry>
   approved: PermissionV1.Rule[]
+  grants: Pick<PermissionV1.Request, "sessionID" | "permission" | "patterns">[]
+  /** Sessions whose last request went unanswered: nobody is there, so the next one is not worth a long wait. */
+  away: Set<PermissionV1.Request["sessionID"]>
 }
+
+const sameRequest = (
+  a: Pick<PermissionV1.Request, "sessionID" | "permission" | "patterns">,
+  b: Pick<PermissionV1.Request, "sessionID" | "permission" | "patterns">,
+) =>
+  a.sessionID === b.sessionID &&
+  a.permission === b.permission &&
+  a.patterns.length === b.patterns.length &&
+  a.patterns.every((pattern, index) => pattern === b.patterns[index])
 
 export function evaluate(permission: string, pattern: string, ...rulesets: PermissionV1.Ruleset[]): PermissionV1.Rule {
   return (
@@ -49,7 +67,9 @@ const layer = Layer.effect(
         const state = {
           pending: new Map<PermissionV1.ID, PendingEntry>(),
           approved: [],
-        }
+          grants: [],
+          away: new Set(),
+        } satisfies State as State
 
         yield* Effect.addFinalizer(() =>
           Effect.gen(function* () {
@@ -65,7 +85,7 @@ const layer = Layer.effect(
     )
 
     const ask = Effect.fn("Permission.ask")(function* (input: PermissionV1.AskInput) {
-      const { approved, pending } = yield* InstanceState.get(state)
+      const { approved, away, grants, pending } = yield* InstanceState.get(state)
       const { ruleset, ...request } = input
       let needsAsk = false
 
@@ -83,8 +103,19 @@ const layer = Layer.effect(
 
       if (!needsAsk) return
 
+      const granted = grants.findIndex((grant) => sameRequest(grant, request))
+      if (granted >= 0) {
+        grants.splice(granted, 1)
+        return
+      }
+      // Already waiting for the user's decision on exactly this. Asking again would only add a wait and a second row.
+      if ([...pending.values()].some((item) => item.info.movedOnAt && sameRequest(item.info, request)))
+        return yield* new PermissionV1.AwayError()
+
       const id = request.id ?? PermissionV1.ID.ascending()
-      const info: PermissionV1.Request = {
+      // A repeating call stops the run on purpose until a person looks. Carrying on would defeat that guard.
+      const wait = request.permission === "doom_loop" ? undefined : Unattended.wait(away.has(request.sessionID))
+      const asked: PermissionV1.Request = {
         id,
         sessionID: request.sessionID,
         permission: request.permission,
@@ -93,30 +124,55 @@ const layer = Layer.effect(
         always: request.always,
         tool: request.tool,
       }
+      const info: PermissionV1.Request = wait ? { ...asked, movesOnAt: Date.now() + wait } : asked
       yield* Effect.logInfo("asking", { id, permission: info.permission, patterns: info.patterns })
 
       const deferred = yield* Deferred.make<void, PermissionV1.RejectedError | PermissionV1.CorrectedError>()
       pending.set(id, { info, deferred })
       yield* events.publish(Event.Asked, info)
+      const moveOn = Effect.gen(function* () {
+        // The request stays listed and answerable. The agent is released, not the decision.
+        const moved: PermissionV1.Request = { ...asked, movedOnAt: Date.now() }
+        pending.set(id, { info: moved, deferred })
+        away.add(request.sessionID)
+        yield* Effect.logInfo("moved on", { id, permission: info.permission })
+        yield* events.publish(Event.Asked, moved)
+        return yield* new PermissionV1.AwayError()
+      })
       return yield* Effect.ensuring(
-        Deferred.await(deferred),
+        wait
+          ? Effect.raceFirst(Deferred.await(deferred), Effect.sleep(wait).pipe(Effect.andThen(moveOn)))
+          : Deferred.await(deferred),
         Effect.sync(() => {
-          pending.delete(id)
+          if (!pending.get(id)?.info.movedOnAt) pending.delete(id)
         }),
       )
     })
 
     const reply = Effect.fn("Permission.reply")(function* (input: PermissionV1.ReplyInput) {
-      const { approved, pending } = yield* InstanceState.get(state)
+      const { approved, away, pending } = yield* InstanceState.get(state)
       const existing = pending.get(input.requestID)
       if (!existing) return yield* new PermissionV1.NotFoundError({ requestID: input.requestID })
 
       pending.delete(input.requestID)
+      away.delete(existing.info.sessionID)
       yield* events.publish(Event.Replied, {
         sessionID: existing.info.sessionID,
         requestID: existing.info.id,
         reply: input.reply,
       })
+
+      if (existing.info.movedOnAt) {
+        if (input.reply === "always")
+          approved.push(
+            ...existing.info.always.map((pattern) => ({
+              permission: existing.info.permission,
+              pattern,
+              action: "allow" as const,
+            })),
+          )
+        return existing.info
+      }
 
       if (input.reply === "reject") {
         yield* Deferred.fail(
@@ -127,7 +183,7 @@ const layer = Layer.effect(
         )
 
         for (const [id, item] of pending.entries()) {
-          if (item.info.sessionID !== existing.info.sessionID) continue
+          if (item.info.sessionID !== existing.info.sessionID || item.info.movedOnAt) continue
           pending.delete(id)
           yield* events.publish(Event.Replied, {
             sessionID: item.info.sessionID,
@@ -151,7 +207,7 @@ const layer = Layer.effect(
       }
 
       for (const [id, item] of pending.entries()) {
-        if (item.info.sessionID !== existing.info.sessionID) continue
+        if (item.info.sessionID !== existing.info.sessionID || item.info.movedOnAt) continue
         const ok = item.info.patterns.every(
           (pattern) => evaluate(item.info.permission, pattern, approved).action === "allow",
         )
@@ -171,7 +227,14 @@ const layer = Layer.effect(
       return Array.from(pending.values(), (item) => item.info)
     })
 
-    return Service.of({ ask, reply, list })
+    const grant = Effect.fn("Permission.grant")(function* (
+      input: Pick<PermissionV1.Request, "sessionID" | "permission" | "patterns">,
+    ) {
+      const { grants } = yield* InstanceState.get(state)
+      grants.push({ sessionID: input.sessionID, permission: input.permission, patterns: input.patterns })
+    })
+
+    return Service.of({ ask, reply, grant, list })
   }),
 )
 

@@ -1341,4 +1341,10 @@ export const dict = {
   "memory.remembered": "U kujtua",
   "memory.seeAll": "Shiko të gjitha",
   "memory.undo": "Zhbëj",
+  "session.movesOn.hint": "Asnjë përgjigje deri në {{time}}? Agjenti vazhdon pa këtë.",
+  "session.movedOn.title": "Vazhdoi pa ju",
+  "session.movedOn.allow": "Lejo dhe vazhdo",
+  "session.movedOn.leave": "Lëre",
+  "session.movedOn.answer": "Përgjigju",
+  "home.agents.movedOn": "Vazhdoi pa këtë · {{time}}",
 }

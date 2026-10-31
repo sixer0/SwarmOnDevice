@@ -1363,4 +1363,10 @@ export const dict = {
   "memory.remembered": "Gemerkt",
   "memory.seeAll": "Alle anzeigen",
   "memory.undo": "Rückgängig",
+  "session.movesOn.hint": "Keine Antwort bis {{time}}? Der Agent macht ohne dies weiter.",
+  "session.movedOn.title": "Ohne dich weitergemacht",
+  "session.movedOn.allow": "Erlauben und fortfahren",
+  "session.movedOn.leave": "So lassen",
+  "session.movedOn.answer": "Antworten",
+  "home.agents.movedOn": "Ohne dies weitergemacht · {{time}}",
 } satisfies Partial<Record<Keys, string>>

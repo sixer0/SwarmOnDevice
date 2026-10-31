@@ -1439,4 +1439,10 @@ export const dict = {
   "memory.remembered": "Hatırlandı",
   "memory.seeAll": "Tümünü gör",
   "memory.undo": "Geri al",
+  "session.movesOn.hint": "{{time}} saatine kadar yanıt yok mu? Ajan bu olmadan devam eder.",
+  "session.movedOn.title": "Sensiz devam etti",
+  "session.movedOn.allow": "İzin ver ve devam et",
+  "session.movedOn.leave": "Böyle kalsın",
+  "session.movedOn.answer": "Yanıtla",
+  "home.agents.movedOn": "Bu olmadan devam etti · {{time}}",
 } satisfies Partial<Record<Keys, string>>

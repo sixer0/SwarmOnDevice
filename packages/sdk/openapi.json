@@ -16452,6 +16452,12 @@
             },
             "required": ["messageID", "callID"],
             "additionalProperties": false
+          },
+          "movesOnAt": {
+            "type": "number"
+          },
+          "movedOnAt": {
+            "type": "number"
           }
         },
         "required": ["id", "sessionID", "permission", "patterns", "metadata", "always"],
@@ -16534,6 +16540,12 @@
           },
           "tool": {
             "$ref": "#/components/schemas/QuestionTool"
+          },
+          "movesOnAt": {
+            "type": "number"
+          },
+          "movedOnAt": {
+            "type": "number"
           }
         },
         "required": ["id", "sessionID", "questions"],
@@ -20740,6 +20752,12 @@
                         },
                         "required": ["messageID", "callID"],
                         "additionalProperties": false
+                      },
+                      "movesOnAt": {
+                        "type": "number"
+                      },
+                      "movedOnAt": {
+                        "type": "number"
                       }
                     },
                     "required": ["id", "sessionID", "permission", "patterns", "metadata", "always"],
@@ -21145,6 +21163,12 @@
                       },
                       "tool": {
                         "$ref": "#/components/schemas/QuestionTool"
+                      },
+                      "movesOnAt": {
+                        "type": "number"
+                      },
+                      "movedOnAt": {
+                        "type": "number"
                       }
                     },
                     "required": ["id", "sessionID", "questions"],
@@ -33800,6 +33824,12 @@
                 },
                 "required": ["messageID", "callID"],
                 "additionalProperties": false
+              },
+              "movesOnAt": {
+                "type": "number"
+              },
+              "movedOnAt": {
+                "type": "number"
               }
             },
             "required": ["id", "sessionID", "permission", "patterns", "metadata", "always"],
@@ -34418,6 +34448,12 @@
               },
               "tool": {
                 "$ref": "#/components/schemas/QuestionTool"
+              },
+              "movesOnAt": {
+                "type": "number"
+              },
+              "movedOnAt": {
+                "type": "number"
               }
             },
             "required": ["id", "sessionID", "questions"],
@@ -37287,6 +37323,12 @@
                 },
                 "required": ["messageID", "callID"],
                 "additionalProperties": false
+              },
+              "movesOnAt": {
+                "type": "number"
+              },
+              "movedOnAt": {
+                "type": "number"
               }
             },
             "required": ["id", "sessionID", "permission", "patterns", "metadata", "always"],
@@ -37554,6 +37596,12 @@
               },
               "tool": {
                 "$ref": "#/components/schemas/QuestionTool"
+              },
+              "movesOnAt": {
+                "type": "number"
+              },
+              "movedOnAt": {
+                "type": "number"
               }
             },
             "required": ["id", "sessionID", "questions"],

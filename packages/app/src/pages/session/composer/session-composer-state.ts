@@ -8,7 +8,12 @@ import { useLanguage } from "@/context/language"
 import { usePermission } from "@/context/permission"
 import { useSDK } from "@/context/sdk"
 import { useSync } from "@/context/sync"
-import { sessionPermissionRequest, sessionQuestionRequest } from "./session-request-tree"
+import {
+  sessionMovedOnRequests,
+  sessionPermissionRequest,
+  sessionQuestionRequest,
+  type MovedOnRequest,
+} from "./session-request-tree"
 
 export const todoState = (input: {
   count: number
@@ -33,13 +38,33 @@ export function createSessionComposerController(options?: { closeMs?: number | (
   const language = useLanguage()
   const permission = usePermission()
 
+  const [answering, setAnswering] = createStore({ id: undefined as string | undefined })
+
+  // The server-wide store, not this directory's session list: that list has no subagents until they are opened.
+  const movedOn = createMemo(() => {
+    const data = serverSync().session.data
+    return sessionMovedOnRequests(
+      () => Object.values(data.info).filter((item) => !!item),
+      data.permission,
+      data.question,
+      params.id,
+    )
+  })
+
+  // A request the agent carried on without no longer blocks anything, so it leaves the prompt position. Its own full
+  // question dock comes back only when the user chooses to answer it.
   const questionRequest = createMemo((): QuestionRequest | undefined => {
-    return sessionQuestionRequest(sync().data.session, sync().data.question, params.id)
+    return sessionQuestionRequest(
+      sync().data.session,
+      sync().data.question,
+      params.id,
+      (item) => !item.movedOnAt || item.id === answering.id,
+    )
   })
 
   const permissionRequest = createMemo((): PermissionRequest | undefined => {
     return sessionPermissionRequest(sync().data.session, sync().data.permission, params.id, (item) => {
-      return !permission.autoResponds(item, sdk().directory)
+      return !item.movedOnAt && !permission.autoResponds(item, sdk().directory)
     })
   })
 
@@ -75,22 +100,38 @@ export function createSessionComposerController(options?: { closeMs?: number | (
     return store.responding === perm.id
   })
 
-  const decide = (response: "once" | "always" | "reject") => {
-    const perm = permissionRequest()
-    if (!perm) return
-    if (store.responding === perm.id) return
-
-    setStore("responding", perm.id)
-    sdk()
-      .api.permission.reply({ sessionID: perm.sessionID, requestID: perm.id, reply: response })
+  const respond = (id: string, send: () => Promise<unknown>) => {
+    if (store.responding === id) return
+    setStore("responding", id)
+    send()
       .catch((err: unknown) => {
         const description = err instanceof Error ? err.message : String(err)
         showToast({ title: language.t("common.requestFailed"), description })
       })
       .finally(() => {
-        setStore("responding", (id) => (id === perm.id ? undefined : id))
+        setStore("responding", (current) => (current === id ? undefined : current))
       })
   }
+
+  const decide = (response: "once" | "always" | "reject") => {
+    const perm = permissionRequest()
+    if (!perm) return
+    respond(perm.id, () =>
+      sdk().api.permission.reply({ sessionID: perm.sessionID, requestID: perm.id, reply: response }),
+    )
+  }
+
+  const allowMovedOn = (request: PermissionRequest) =>
+    respond(request.id, () =>
+      sdk().api.permission.reply({ sessionID: request.sessionID, requestID: request.id, reply: "once" }),
+    )
+
+  const leaveMovedOn = (item: MovedOnRequest) =>
+    respond(item.request.id, () =>
+      item.kind === "permission"
+        ? sdk().api.permission.reply({ sessionID: item.request.sessionID, requestID: item.request.id, reply: "reject" })
+        : sdk().api.question.reject({ sessionID: item.request.sessionID, requestID: item.request.id }),
+    )
 
   let timer: number | undefined
   let raf: number | undefined
@@ -191,6 +232,11 @@ export function createSessionComposerController(options?: { closeMs?: number | (
     permissionRequest,
     permissionResponding,
     decide,
+    movedOn,
+    responding: (id: string) => store.responding === id,
+    allowMovedOn,
+    leaveMovedOn,
+    answerMovedOn: (id: string) => setAnswering("id", id),
     todos,
     dock: () =>
       store.sessionID === params.id

@@ -228,6 +228,8 @@ export type PermissionRequest = {
     messageID: string
     callID: string
   }
+  movesOnAt?: number
+  movedOnAt?: number
 }
 
 export type QuestionOption = {
@@ -271,6 +273,8 @@ export type QuestionRequest = {
    */
   questions: Array<QuestionInfo>
   tool?: QuestionTool
+  movesOnAt?: number
+  movedOnAt?: number
 }
 
 export type GlobalAgentsInstance = {
@@ -1564,6 +1568,8 @@ export type GlobalEvent = {
             messageID: string
             callID: string
           }
+          movesOnAt?: number
+          movedOnAt?: number
         }
       }
     | {
@@ -1691,6 +1697,8 @@ export type GlobalEvent = {
            */
           questions: Array<QuestionInfo>
           tool?: QuestionTool
+          movesOnAt?: number
+          movedOnAt?: number
         }
       }
     | {
@@ -5932,6 +5940,8 @@ export type PermissionAsked = {
       messageID: string
       callID: string
     }
+    movesOnAt?: number
+    movedOnAt?: number
   }
 }
 
@@ -6161,6 +6171,8 @@ export type QuestionAsked = {
      */
     questions: Array<QuestionInfo>
     tool?: QuestionTool
+    movesOnAt?: number
+    movedOnAt?: number
   }
 }
 
@@ -7094,6 +7106,8 @@ export type EventPermissionAsked = {
       messageID: string
       callID: string
     }
+    movesOnAt?: number
+    movedOnAt?: number
   }
 }
 
@@ -7178,6 +7192,8 @@ export type EventQuestionAsked = {
      */
     questions: Array<QuestionInfo>
     tool?: QuestionTool
+    movesOnAt?: number
+    movedOnAt?: number
   }
 }
 

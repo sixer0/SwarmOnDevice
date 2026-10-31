@@ -1331,4 +1331,10 @@ export const dict: Record<string, string> = {
   "memory.remembered": "මතක තබාගත්තා",
   "memory.seeAll": "සියල්ල බලන්න",
   "memory.undo": "අහෝසි කරන්න",
+  "session.movesOn.hint": "{{time}} වන විට පිළිතුරක් නැද්ද? නියෝජිතයා මෙය නොමැතිව ඉදිරියට යයි.",
+  "session.movedOn.title": "ඔබ නොමැතිව ඉදිරියට ගියේය",
+  "session.movedOn.allow": "අවසර දී ඉදිරියට",
+  "session.movedOn.leave": "එලෙසම තබන්න",
+  "session.movedOn.answer": "පිළිතුරු දෙන්න",
+  "home.agents.movedOn": "මෙය නොමැතිව ඉදිරියට ගියේය · {{time}}",
 }

@@ -457,3 +457,61 @@ lifecycle.live("pending question rejects on instance reload", () =>
     if (Exit.isFailure(exit)) expect(Cause.squash(exit.cause)).toBeInstanceOf(Question.RejectedError)
   }),
 )
+
+const awayQuestion: Question.Info = {
+  question: "Which database?",
+  header: "Database",
+  options: [{ label: "Postgres", description: "" }],
+}
+
+it.instance("a question that opted in moves on, stays open, and a late reply hands it back", () =>
+  Effect.acquireUseRelease(
+    Effect.sync(() => {
+      process.env.SWARM_UNATTENDED_AFTER_MS = "40"
+    }),
+    () =>
+      Effect.gen(function* () {
+        const question = yield* Question.Service
+        const sessionID = SessionID.make("ses_away")
+        const exit = yield* question
+          .ask({ sessionID, questions: [awayQuestion], movesOn: true })
+          .pipe(Effect.exit)
+        expect(Exit.isFailure(exit) && Cause.squash(exit.cause) instanceof Question.AwayError).toBe(true)
+
+        const [moved] = yield* question.list()
+        expect(moved?.movedOnAt).toBeNumber()
+        const late = yield* question.reply({ requestID: moved!.id, answers: [["Postgres"]] })
+        expect(late?.id).toBe(moved?.id)
+        expect(yield* question.list()).toHaveLength(0)
+      }),
+    () =>
+      Effect.sync(() => {
+        delete process.env.SWARM_UNATTENDED_AFTER_MS
+      }),
+  ),
+)
+
+it.instance("a question that did not opt in waits for a person", () =>
+  Effect.acquireUseRelease(
+    Effect.sync(() => {
+      process.env.SWARM_UNATTENDED_AFTER_MS = "20"
+    }),
+    () =>
+      Effect.gen(function* () {
+        const question = yield* Question.Service
+        const fiber = yield* question
+          .ask({ sessionID: SessionID.make("ses_stays"), questions: [awayQuestion] })
+          .pipe(Effect.forkScoped)
+        yield* Effect.sleep("60 millis")
+        const [waiting] = yield* question.list()
+        expect(waiting?.movesOnAt).toBeUndefined()
+        expect(waiting?.movedOnAt).toBeUndefined()
+        yield* question.reject(waiting!.id)
+        yield* Fiber.await(fiber)
+      }),
+    () =>
+      Effect.sync(() => {
+        delete process.env.SWARM_UNATTENDED_AFTER_MS
+      }),
+  ),
+)

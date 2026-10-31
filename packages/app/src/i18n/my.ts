@@ -1355,4 +1355,10 @@ export const dict = {
   "memory.remembered": "မှတ်ထားပြီး",
   "memory.seeAll": "အားလုံးကြည့်ပါ",
   "memory.undo": "နောက်ပြန်",
+  "session.movesOn.hint": "{{time}} အထိ အဖြေမရှိလျှင် အေးဂျင့်သည် ဤအရာမပါဘဲ ဆက်လုပ်ပါမည်။",
+  "session.movedOn.title": "သင်မပါဘဲ ဆက်လုပ်ခဲ့သည်",
+  "session.movedOn.allow": "ခွင့်ပြုပြီး ဆက်လုပ်ရန်",
+  "session.movedOn.leave": "ထားလိုက်ပါ",
+  "session.movedOn.answer": "ဖြေရန်",
+  "home.agents.movedOn": "ဤအရာမပါဘဲ ဆက်လုပ်ခဲ့သည် · {{time}}",
 }

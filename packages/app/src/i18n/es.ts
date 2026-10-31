@@ -1444,4 +1444,10 @@ export const dict = {
   "memory.remembered": "Recordado",
   "memory.seeAll": "Ver todo",
   "memory.undo": "Deshacer",
+  "session.movesOn.hint": "¿Sin respuesta a las {{time}}? El agente continúa sin esto.",
+  "session.movedOn.title": "Siguió sin ti",
+  "session.movedOn.allow": "Permitir y continuar",
+  "session.movedOn.leave": "Dejarlo",
+  "session.movedOn.answer": "Responder",
+  "home.agents.movedOn": "Siguió sin esto · {{time}}",
 }

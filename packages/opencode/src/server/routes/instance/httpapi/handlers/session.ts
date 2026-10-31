@@ -1,5 +1,6 @@
 import { PermissionV1 } from "@opencode-ai/core/v1/permission"
 import { Agent } from "@/agent/agent"
+import { LateAnswer } from "@/session/late-answer"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
 import { EventV2Bridge } from "@/event-v2-bridge"
 import { Command } from "@/command"
@@ -60,6 +61,7 @@ export const sessionHandlers = HttpApiBuilder.group(InstanceHttpApi, "session", 
     const summary = yield* SessionSummary.Service
     const events = yield* EventV2Bridge.Service
     const scope = yield* Scope.Scope
+    const late = yield* LateAnswer.make
 
     const list = Effect.fn("SessionHttpApi.list")(function* (ctx: { query: typeof ListQuery.Type }) {
       const directory = ctx.query.directory ? yield* InstanceState.directory : undefined
@@ -364,7 +366,7 @@ export const sessionHandlers = HttpApiBuilder.group(InstanceHttpApi, "session", 
       payload: typeof PermissionResponsePayload.Type
     }) {
       yield* requireSession(ctx.params.sessionID)
-      yield* permissionSvc.reply({ requestID: ctx.params.permissionID, reply: ctx.payload.response }).pipe(
+      const moved = yield* permissionSvc.reply({ requestID: ctx.params.permissionID, reply: ctx.payload.response }).pipe(
         Effect.catchTag("Permission.NotFoundError", (error) =>
           Effect.fail(
             new PermissionNotFoundError({
@@ -374,6 +376,7 @@ export const sessionHandlers = HttpApiBuilder.group(InstanceHttpApi, "session", 
           ),
         ),
       )
+      if (moved && ctx.payload.response !== "reject") yield* late.permission(moved).pipe(Effect.forkIn(scope))
       return true
     })
 

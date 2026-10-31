@@ -1327,4 +1327,10 @@ export const dict = {
   "memory.remembered": "ຈື່ແລ້ວ",
   "memory.seeAll": "ເບິ່ງທັງໝົດ",
   "memory.undo": "ຍົກເລີກ",
+  "session.movesOn.hint": "ບໍ່ມີຄຳຕອບພາຍໃນ {{time}}? ຕົວແທນຈະດຳເນີນຕໍ່ໂດຍບໍ່ມີສິ່ງນີ້.",
+  "session.movedOn.title": "ດຳເນີນຕໍ່ໂດຍບໍ່ມີທ່ານ",
+  "session.movedOn.allow": "ອະນຸຍາດ ແລະ ດຳເນີນຕໍ່",
+  "session.movedOn.leave": "ປະໄວ້",
+  "session.movedOn.answer": "ຕອບ",
+  "home.agents.movedOn": "ດຳເນີນຕໍ່ໂດຍບໍ່ມີສິ່ງນີ້ · {{time}}",
 }

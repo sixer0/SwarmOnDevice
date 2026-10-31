@@ -5,6 +5,9 @@ import { DockPrompt } from "@opencode-ai/session-ui/dock-prompt"
 import { Icon } from "@opencode-ai/ui/icon"
 import { useLanguage } from "@/context/language"
 
+export const clockTime = (at: number) =>
+  new Date(at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+
 export function SessionPermissionDock(props: {
   request: PermissionRequest
   responding: boolean
@@ -32,7 +35,11 @@ export function SessionPermissionDock(props: {
       }
       footer={
         <>
-          <div />
+          <div class="min-w-0 text-12-regular text-text-weak">
+            <Show when={props.request.movesOnAt}>
+              {(at) => language.t("session.movesOn.hint", { time: clockTime(at()) })}
+            </Show>
+          </div>
           <div data-slot="permission-footer-actions">
             <Button variant="ghost" size="normal" onClick={() => props.onDecide("reject")} disabled={props.responding}>
               {language.t("ui.permission.deny")}

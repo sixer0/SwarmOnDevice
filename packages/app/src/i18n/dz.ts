@@ -1359,4 +1359,10 @@ export const dict: Record<string, string> = {
   "memory.remembered": "དྲན་པ།",
   "memory.seeAll": "ཆ་མཉམ་ལྟ།",
   "memory.undo": "ཕྱིར་ལོག",
+  "session.movesOn.hint": "{{time}} ཚུན་ལན་མེད་པ་ཅིན་ ངོ་ཚབ་འདི་མེད་པར་འཕྲོ་མཐུད་འབད་འོང་།",
+  "session.movedOn.title": "ཁྱོད་མེད་པར་འཕྲོ་མཐུད་འབད་ཡི།",
+  "session.movedOn.allow": "གནང་བ་བྱིན་ཏེ་འཕྲོ་མཐུད།",
+  "session.movedOn.leave": "བཞག",
+  "session.movedOn.answer": "ལན་འདེབས།",
+  "home.agents.movedOn": "འདི་མེད་པར་འཕྲོ་མཐུད་འབད་ཡི། · {{time}}",
 }

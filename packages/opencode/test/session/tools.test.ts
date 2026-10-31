@@ -50,7 +50,8 @@ const fakePlugin = Plugin.Service.of({
 
 const fakePermission = Permission.Service.of({
   ask: () => Effect.void,
-  reply: () => Effect.void,
+  reply: () => Effect.succeed(undefined),
+  grant: () => Effect.void,
   list: () => Effect.succeed([]),
 } satisfies Permission.Interface)
 

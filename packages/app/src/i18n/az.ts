@@ -1345,4 +1345,10 @@ export const dict = {
   "memory.remembered": "Yadda saxlanıldı",
   "memory.seeAll": "Hamısına bax",
   "memory.undo": "Geri al",
+  "session.movesOn.hint": "{{time}} qədər cavab yoxdur? Agent bunsuz davam edir.",
+  "session.movedOn.title": "Sizsiz davam etdi",
+  "session.movedOn.allow": "İcazə ver və davam et",
+  "session.movedOn.leave": "Belə qalsın",
+  "session.movedOn.answer": "Cavabla",
+  "home.agents.movedOn": "Bunsuz davam etdi · {{time}}",
 }

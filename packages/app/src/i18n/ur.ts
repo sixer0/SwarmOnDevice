@@ -1342,4 +1342,10 @@ export const dict = {
   "memory.remembered": "یاد رکھ لیا",
   "memory.seeAll": "سب دیکھیں",
   "memory.undo": "واپس کریں",
+  "session.movesOn.hint": "{{time}} تک کوئی جواب نہیں؟ ایجنٹ اس کے بغیر جاری رکھے گا۔",
+  "session.movedOn.title": "آپ کے بغیر جاری رکھا",
+  "session.movedOn.allow": "اجازت دیں اور جاری رکھیں",
+  "session.movedOn.leave": "رہنے دیں",
+  "session.movedOn.answer": "جواب دیں",
+  "home.agents.movedOn": "اس کے بغیر جاری رکھا · {{time}}",
 }

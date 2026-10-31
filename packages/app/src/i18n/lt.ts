@@ -1351,4 +1351,10 @@ export const dict = {
   "memory.remembered": "Įsiminta",
   "memory.seeAll": "Rodyti viską",
   "memory.undo": "Atšaukti",
+  "session.movesOn.hint": "Nėra atsakymo iki {{time}}? Agentas tęs be šito.",
+  "session.movedOn.title": "Tęsė be jūsų",
+  "session.movedOn.allow": "Leisti ir tęsti",
+  "session.movedOn.leave": "Palikti",
+  "session.movedOn.answer": "Atsakyti",
+  "home.agents.movedOn": "Tęsė be šito · {{time}}",
 }

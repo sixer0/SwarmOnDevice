@@ -1337,4 +1337,10 @@ export const dict = {
   "memory.remembered": "Ýatda saklandy",
   "memory.seeAll": "Hemmesini görmek",
   "memory.undo": "Yzyna al",
+  "session.movesOn.hint": "{{time}} çenli jogap ýokmy? Agent munsuz dowam edýär.",
+  "session.movedOn.title": "Sizsiz dowam etdi",
+  "session.movedOn.allow": "Rugsat ber we dowam et",
+  "session.movedOn.leave": "Goý",
+  "session.movedOn.answer": "Jogap ber",
+  "home.agents.movedOn": "Munsuz dowam etdi · {{time}}",
 }

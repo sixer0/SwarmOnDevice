@@ -1343,4 +1343,10 @@ export const dict = {
   "memory.remembered": "Ба ёд гирифта шуд",
   "memory.seeAll": "Ҳамаро дидан",
   "memory.undo": "Бекор кардан",
+  "session.movesOn.hint": "То {{time}} ҷавоб нест? Агент бе ин идома медиҳад.",
+  "session.movedOn.title": "Бе шумо идома дод",
+  "session.movedOn.allow": "Иҷозат додан ва идома",
+  "session.movedOn.leave": "Гузоштан",
+  "session.movedOn.answer": "Ҷавоб додан",
+  "home.agents.movedOn": "Бе ин идома дод · {{time}}",
 }

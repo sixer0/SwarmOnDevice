@@ -37,6 +37,12 @@ export const Request = Schema.Struct({
   sessionID: SessionID,
   questions: Schema.Array(Info).annotate({ description: "Questions to ask" }),
   tool: Schema.optional(Tool),
+  movesOnAt: Schema.optional(Schema.Finite).annotate({
+    description: "When the agent stops waiting and carries on without an answer, if nobody has answered",
+  }),
+  movedOnAt: Schema.optional(Schema.Finite).annotate({
+    description: "When the agent carried on without an answer. It can still be answered, which continues the session",
+  }),
 }).annotate({ identifier: "QuestionRequest" })
 export const Answer = Schema.Array(Schema.String).annotate({ identifier: "QuestionAnswer" })
 export const Reply = Schema.Struct({

@@ -1308,4 +1308,10 @@ export const dict = {
   "memory.remembered": "ታስታውሷል",
   "memory.seeAll": "ሁሉንም እይ",
   "memory.undo": "ቀልብስ",
+  "session.movesOn.hint": "እስከ {{time}} መልስ የለም? ወኪሉ ያለዚህ ይቀጥላል።",
+  "session.movedOn.title": "ያለ እርስዎ ቀጥሏል",
+  "session.movedOn.allow": "ፍቀድ እና ቀጥል",
+  "session.movedOn.leave": "ተወው",
+  "session.movedOn.answer": "መልስ",
+  "home.agents.movedOn": "ያለዚህ ቀጥሏል · {{time}}",
 }

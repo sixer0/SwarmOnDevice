@@ -1172,3 +1172,130 @@ it.instance(
     }),
   { git: true },
 )
+
+const shortWait = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+  Effect.acquireUseRelease(
+    Effect.sync(() => {
+      process.env.SWARM_UNATTENDED_AFTER_MS = "40"
+    }),
+    () => effect,
+    () =>
+      Effect.sync(() => {
+        delete process.env.SWARM_UNATTENDED_AFTER_MS
+      }),
+  )
+
+const askBash = (sessionID: SessionID, command: string, permission = "bash") =>
+  Permission.Service.use((svc) =>
+    svc.ask({
+      sessionID,
+      permission,
+      patterns: [command],
+      metadata: { command },
+      always: [],
+      ruleset: [],
+    }),
+  )
+
+it.instance(
+  "unanswered request: the agent moves on, the request stays open and tells both times",
+  () =>
+    shortWait(
+      Effect.gen(function* () {
+        const permission = yield* Permission.Service
+        const sessionID = SessionID.make("session_away_move")
+        const fiber = yield* askBash(sessionID, "rm -rf dist").pipe(Effect.forkScoped)
+        const [waiting] = yield* waitForPending(1)
+        expect(waiting?.movesOnAt).toBeGreaterThan(Date.now() - 1000)
+        expect(waiting?.movedOnAt).toBeUndefined()
+
+        const exit = yield* Fiber.await(fiber)
+        expect(Exit.isFailure(exit) && Cause.squash(exit.cause) instanceof PermissionV1.AwayError).toBe(true)
+
+        const [moved] = yield* permission.list()
+        expect(moved?.id).toBe(waiting?.id)
+        expect(moved?.movedOnAt).toBeNumber()
+        expect(moved?.movesOnAt).toBeUndefined()
+      }),
+    ),
+)
+
+it.instance("asking again for what is already skipped does not wait or add a row", () =>
+  shortWait(
+    Effect.gen(function* () {
+      const permission = yield* Permission.Service
+      const sessionID = SessionID.make("session_away_repeat")
+      yield* askBash(sessionID, "rm -rf dist").pipe(Effect.exit)
+      const started = Date.now()
+      const again = yield* askBash(sessionID, "rm -rf dist").pipe(Effect.exit)
+      expect(Exit.isFailure(again)).toBe(true)
+      expect(Date.now() - started).toBeLessThan(30)
+      expect(yield* permission.list()).toHaveLength(1)
+    }),
+  ),
+)
+
+it.instance("allowing it late hands back the request, and a grant lets exactly one matching call through", () =>
+  shortWait(
+    Effect.gen(function* () {
+      const permission = yield* Permission.Service
+      const sessionID = SessionID.make("session_away_late")
+      yield* askBash(sessionID, "rm -rf dist").pipe(Effect.exit)
+      const [moved] = yield* permission.list()
+      const late = yield* permission.reply({ requestID: moved!.id, reply: "once" })
+      expect(late?.id).toBe(moved?.id)
+      expect(yield* permission.list()).toHaveLength(0)
+
+      yield* permission.grant(late!)
+      yield* askBash(sessionID, "rm -rf dist")
+      // Used up, and it never covered anything else.
+      expect(Exit.isFailure(yield* askBash(sessionID, "rm -rf dist").pipe(Effect.exit))).toBe(true)
+      yield* rejectAll()
+    }),
+  ),
+)
+
+it.instance("a normal reply returns nothing, and denying one request leaves skipped ones listed", () =>
+  shortWait(
+    Effect.gen(function* () {
+      const permission = yield* Permission.Service
+      const sessionID = SessionID.make("session_away_cascade")
+      yield* askBash(sessionID, "rm -rf dist").pipe(Effect.exit)
+      process.env.SWARM_UNATTENDED_AFTER_MS = "60000"
+      const fiber = yield* askBash(sessionID, "rm -rf build").pipe(Effect.forkScoped)
+      yield* waitForPending(2)
+      const live = (yield* permission.list()).find((item) => !item.movedOnAt)
+      expect(yield* permission.reply({ requestID: live!.id, reply: "reject" })).toBeUndefined()
+      yield* Fiber.await(fiber)
+      const left = yield* permission.list()
+      expect(left).toHaveLength(1)
+      expect(left[0]?.movedOnAt).toBeNumber()
+    }),
+  ),
+)
+
+it.instance("the repeated-call guard keeps waiting for a person", () =>
+  shortWait(
+    Effect.gen(function* () {
+      const fiber = yield* askBash(SessionID.make("session_away_doom"), "bash", "doom_loop").pipe(Effect.forkScoped)
+      const [waiting] = yield* waitForPending(1)
+      expect(waiting?.movesOnAt).toBeUndefined()
+      yield* Effect.sleep("80 millis")
+      expect(fiber.pollUnsafe()).toBeUndefined()
+      yield* rejectAll()
+      yield* Fiber.await(fiber)
+    }),
+  ),
+)
+
+it.instance("zero turns moving on off", () =>
+  Effect.gen(function* () {
+    process.env.SWARM_UNATTENDED_AFTER_MS = "0"
+    const fiber = yield* askBash(SessionID.make("session_away_off"), "ls").pipe(Effect.forkScoped)
+    const [waiting] = yield* waitForPending(1)
+    delete process.env.SWARM_UNATTENDED_AFTER_MS
+    expect(waiting?.movesOnAt).toBeUndefined()
+    yield* rejectAll()
+    yield* Fiber.await(fiber)
+  }),
+)

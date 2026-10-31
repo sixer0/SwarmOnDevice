@@ -1,6 +1,7 @@
 import { PermissionV1 } from "@opencode-ai/core/v1/permission"
 import { Permission } from "@/permission"
-import { Effect } from "effect"
+import { LateAnswer } from "@/session/late-answer"
+import { Effect, Scope } from "effect"
 import { HttpApiBuilder } from "effect/unstable/httpapi"
 import { InstanceHttpApi } from "../api"
 import { PermissionNotFoundError } from "../errors"
@@ -8,6 +9,8 @@ import { PermissionNotFoundError } from "../errors"
 export const permissionHandlers = HttpApiBuilder.group(InstanceHttpApi, "permission", (handlers) =>
   Effect.gen(function* () {
     const svc = yield* Permission.Service
+    const late = yield* LateAnswer.make
+    const scope = yield* Scope.Scope
 
     const list = Effect.fn("PermissionHttpApi.list")(function* () {
       return yield* svc.list()
@@ -17,7 +20,7 @@ export const permissionHandlers = HttpApiBuilder.group(InstanceHttpApi, "permiss
       params: { requestID: PermissionV1.ID }
       payload: PermissionV1.ReplyBody
     }) {
-      yield* svc
+      const moved = yield* svc
         .reply({
           requestID: ctx.params.requestID,
           reply: ctx.payload.reply,
@@ -33,6 +36,7 @@ export const permissionHandlers = HttpApiBuilder.group(InstanceHttpApi, "permiss
             ),
           ),
         )
+      if (moved && ctx.payload.reply !== "reject") yield* late.permission(moved).pipe(Effect.forkIn(scope))
       return true
     })
 

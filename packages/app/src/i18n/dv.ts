@@ -1356,4 +1356,10 @@ export const dict = {
   "memory.remembered": "ހަނދާންކުރެވުނު",
   "memory.seeAll": "ހުރިހާ އެއްޗެއް ބަލާ",
   "memory.undo": "އަނބުރާ",
+  "session.movesOn.hint": "{{time}} އަށް ޖަވާބެއް ނުލިބިއްޖެނަމަ އޭޖެންޓް މިއާ ނުލައި ކުރިއަށްދާނެ.",
+  "session.movedOn.title": "ތިޔަބޭފުޅާއާ ނުލައި ކުރިއަށްދިޔައީ",
+  "session.movedOn.allow": "ހުއްދަދީ ކުރިއަށްދާ",
+  "session.movedOn.leave": "ދޫކޮށްލާ",
+  "session.movedOn.answer": "ޖަވާބުދޭ",
+  "home.agents.movedOn": "މިއާ ނުލައި ކުރިއަށްދިޔައީ · {{time}}",
 }

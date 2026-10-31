@@ -32,6 +32,12 @@ export const Request = Schema.Struct({
   metadata: Schema.Record(Schema.String, Schema.Unknown),
   always: Schema.Array(Schema.String),
   tool: Schema.optional(Schema.Struct({ messageID: Schema.String, callID: Schema.String })),
+  movesOnAt: Schema.optional(Schema.Finite).annotate({
+    description: "When the agent stops waiting and carries on without this, if nobody has answered",
+  }),
+  movedOnAt: Schema.optional(Schema.Finite).annotate({
+    description: "When the agent carried on without this. It can still be answered, which continues the session",
+  }),
 }).annotate({ identifier: "PermissionRequest" })
 export type Request = typeof Request.Type
 

@@ -1347,4 +1347,10 @@ export const dict = {
   "memory.remembered": "Muistettu",
   "memory.seeAll": "Näytä kaikki",
   "memory.undo": "Kumoa",
+  "session.movesOn.hint": "Ei vastausta klo {{time}} mennessä? Agentti jatkaa ilman tätä.",
+  "session.movedOn.title": "Jatkoi ilman sinua",
+  "session.movedOn.allow": "Salli ja jatka",
+  "session.movedOn.leave": "Jätä näin",
+  "session.movedOn.answer": "Vastaa",
+  "home.agents.movedOn": "Jatkoi ilman tätä · {{time}}",
 }

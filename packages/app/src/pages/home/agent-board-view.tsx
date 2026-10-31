@@ -136,6 +136,7 @@ function NeedRow(props: { board: AgentBoardController; need: AgentBoardNeed }) {
         fallback={
           <>
             <RowTitle board={props.board} root={props.need.root} />
+            <MovedOnLine at={props.need.request.movedOnAt} />
             <QuestionBody board={props.board} need={props.need as QuestionNeed} busy={busy()} />
           </>
         }
@@ -145,29 +146,32 @@ function NeedRow(props: { board: AgentBoardController; need: AgentBoardNeed }) {
             <div class="flex min-w-0 items-center gap-1.5">
               <RowTitle board={props.board} root={props.need.root} />
               {/* "Allow always" is a standing decision, so it is offered once the row has someone's attention. */}
+              <Show when={!item.request.movedOnAt}>
+                <KeyButton
+                  label={language.t("ui.permission.allowAlways")}
+                  keys={["⇧", "A"]}
+                  variant="ghost-muted"
+                  class="md:!hidden md:group-hover/agent:!inline-flex md:group-focus/agent:!inline-flex md:group-focus-within/agent:!inline-flex"
+                  disabled={busy()}
+                  onClick={() => props.board.allow(item, "always")}
+                />
+              </Show>
               <KeyButton
-                label={language.t("ui.permission.allowAlways")}
-                keys={["⇧", "A"]}
-                variant="ghost-muted"
-                class="md:!hidden md:group-hover/agent:!inline-flex md:group-focus/agent:!inline-flex md:group-focus-within/agent:!inline-flex"
-                disabled={busy()}
-                onClick={() => props.board.allow(item, "always")}
-              />
-              <KeyButton
-                label={language.t("ui.permission.deny")}
+                label={language.t(item.request.movedOnAt ? "session.movedOn.leave" : "ui.permission.deny")}
                 keys={["D"]}
                 variant="outline"
                 disabled={busy()}
                 onClick={() => props.board.allow(item, "reject")}
               />
               <KeyButton
-                label={language.t("ui.permission.allowOnce")}
+                label={language.t(item.request.movedOnAt ? "session.movedOn.allow" : "ui.permission.allowOnce")}
                 keys={["A"]}
                 variant="contrast"
                 disabled={busy()}
                 onClick={() => props.board.allow(item, "once")}
               />
             </div>
+            <MovedOnLine at={item.request.movedOnAt} />
             <pre
               data-agent-detail
               class={`
@@ -181,6 +185,20 @@ function NeedRow(props: { board: AgentBoardController; need: AgentBoardNeed }) {
         )}
       </Show>
     </div>
+  )
+}
+
+/** Says why this row is here although the agent is not stuck on it any more. */
+function MovedOnLine(props: { at?: number }) {
+  const language = useLanguage()
+  return (
+    <Show when={props.at}>
+      {(at) => (
+        <div data-agent-moved-on class="pb-1 pl-6 text-v2-text-text-muted [font-weight:440]">
+          {language.t("home.agents.movedOn", { time: getRelativeTime(new Date(at()).toISOString(), language.t) })}
+        </div>
+      )}
+    </Show>
   )
 }
 

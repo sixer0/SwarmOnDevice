@@ -1330,4 +1330,10 @@ export const dict = {
   "memory.remembered": "Meelde jäetud",
   "memory.seeAll": "Vaata kõiki",
   "memory.undo": "Võta tagasi",
+  "session.movesOn.hint": "Vastust pole kella {{time}}-ks? Agent jätkab ilma selleta.",
+  "session.movedOn.title": "Jätkas ilma sinuta",
+  "session.movedOn.allow": "Luba ja jätka",
+  "session.movedOn.leave": "Jäta nii",
+  "session.movedOn.answer": "Vasta",
+  "home.agents.movedOn": "Jätkas ilma selleta · {{time}}",
 }

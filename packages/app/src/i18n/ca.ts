@@ -1351,4 +1351,10 @@ export const dict = {
   "memory.remembered": "Recordat",
   "memory.seeAll": "Mostra-ho tot",
   "memory.undo": "Desfés",
+  "session.movesOn.hint": "Sense resposta a les {{time}}? L'agent continua sense això.",
+  "session.movedOn.title": "Ha continuat sense tu",
+  "session.movedOn.allow": "Permet i continua",
+  "session.movedOn.leave": "Deixa-ho",
+  "session.movedOn.answer": "Respon",
+  "home.agents.movedOn": "Ha continuat sense això · {{time}}",
 }

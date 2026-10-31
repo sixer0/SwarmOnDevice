@@ -1329,4 +1329,10 @@ export const dict: Record<string, string> = {
   "memory.remembered": "মনে রাখা হয়েছে",
   "memory.seeAll": "সব দেখুন",
   "memory.undo": "পূর্বাবস্থায় ফেরান",
+  "session.movesOn.hint": "{{time}}-এর মধ্যে উত্তর নেই? এজেন্ট এটি ছাড়াই চালিয়ে যাবে।",
+  "session.movedOn.title": "আপনাকে ছাড়াই চালিয়ে গেছে",
+  "session.movedOn.allow": "অনুমতি দিন ও চালিয়ে যান",
+  "session.movedOn.leave": "থাক",
+  "session.movedOn.answer": "উত্তর দিন",
+  "home.agents.movedOn": "এটি ছাড়াই চালিয়ে গেছে · {{time}}",
 }

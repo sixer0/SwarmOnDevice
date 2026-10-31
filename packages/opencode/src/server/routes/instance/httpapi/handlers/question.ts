@@ -1,6 +1,7 @@
 import { Question } from "@/question"
 import { QuestionID } from "@/question/schema"
-import { Effect } from "effect"
+import { LateAnswer } from "@/session/late-answer"
+import { Effect, Scope } from "effect"
 import { HttpApiBuilder } from "effect/unstable/httpapi"
 import { InstanceHttpApi } from "../api"
 import { QuestionNotFoundError } from "../errors"
@@ -8,6 +9,8 @@ import { QuestionNotFoundError } from "../errors"
 export const questionHandlers = HttpApiBuilder.group(InstanceHttpApi, "question", (handlers) =>
   Effect.gen(function* () {
     const svc = yield* Question.Service
+    const late = yield* LateAnswer.make
+    const scope = yield* Scope.Scope
 
     const list = Effect.fn("QuestionHttpApi.list")(function* () {
       return yield* svc.list()
@@ -17,7 +20,7 @@ export const questionHandlers = HttpApiBuilder.group(InstanceHttpApi, "question"
       params: { requestID: QuestionID }
       payload: Question.Reply
     }) {
-      yield* svc
+      const moved = yield* svc
         .reply({
           requestID: ctx.params.requestID,
           answers: ctx.payload.answers,
@@ -32,6 +35,7 @@ export const questionHandlers = HttpApiBuilder.group(InstanceHttpApi, "question"
             ),
           ),
         )
+      if (moved) yield* late.question(moved, ctx.payload.answers).pipe(Effect.forkIn(scope))
       return true
     })
 

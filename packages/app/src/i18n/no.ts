@@ -1446,4 +1446,10 @@ export const dict = {
   "memory.remembered": "Husket",
   "memory.seeAll": "Se alle",
   "memory.undo": "Angre",
+  "session.movesOn.hint": "Ikke noe svar innen {{time}}? Agenten fortsetter uten dette.",
+  "session.movedOn.title": "Fortsatte uten deg",
+  "session.movedOn.allow": "Tillat og fortsett",
+  "session.movedOn.leave": "La være",
+  "session.movedOn.answer": "Svar",
+  "home.agents.movedOn": "Fortsatte uten dette · {{time}}",
 } satisfies Partial<Record<Keys, string>>

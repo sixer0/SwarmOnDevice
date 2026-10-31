@@ -1330,4 +1330,10 @@ export const dict = {
   "memory.remembered": "បានចងចាំ",
   "memory.seeAll": "មើលទាំងអស់",
   "memory.undo": "មិនធ្វើវិញ",
+  "session.movesOn.hint": "គ្មានចម្លើយត្រឹម {{time}}? អេជិនបន្តដោយគ្មានវា។",
+  "session.movedOn.title": "បានបន្តដោយគ្មានអ្នក",
+  "session.movedOn.allow": "អនុញ្ញាត និងបន្ត",
+  "session.movedOn.leave": "ទុកចោល",
+  "session.movedOn.answer": "ឆ្លើយ",
+  "home.agents.movedOn": "បានបន្តដោយគ្មានវា · {{time}}",
 }

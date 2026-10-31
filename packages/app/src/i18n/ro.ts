@@ -1341,4 +1341,10 @@ export const dict = {
   "memory.remembered": "Reținut",
   "memory.seeAll": "Vezi tot",
   "memory.undo": "Anulează",
+  "session.movesOn.hint": "Niciun răspuns până la {{time}}? Agentul continuă fără asta.",
+  "session.movedOn.title": "A continuat fără tine",
+  "session.movedOn.allow": "Permite și continuă",
+  "session.movedOn.leave": "Lasă așa",
+  "session.movedOn.answer": "Răspunde",
+  "home.agents.movedOn": "A continuat fără asta · {{time}}",
 }

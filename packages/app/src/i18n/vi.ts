@@ -1348,4 +1348,10 @@ export const dict = {
   "memory.remembered": "Đã ghi nhớ",
   "memory.seeAll": "Xem tất cả",
   "memory.undo": "Hoàn tác",
+  "session.movesOn.hint": "Không có câu trả lời trước {{time}}? Tác tử sẽ tiếp tục mà không có điều này.",
+  "session.movedOn.title": "Đã tiếp tục mà không có bạn",
+  "session.movedOn.allow": "Cho phép và tiếp tục",
+  "session.movedOn.leave": "Để nguyên",
+  "session.movedOn.answer": "Trả lời",
+  "home.agents.movedOn": "Đã tiếp tục mà không có điều này · {{time}}",
 }

@@ -96,6 +96,8 @@ export class Subscription {
         if (event.properties.status.type === "idle") this.idle(event.properties.sessionID)
         return
       case "permission.asked":
+        // The same request again, now that the agent has carried on without it. The editor already showed it.
+        if (event.properties.movedOnAt) return
         this.permission.handle(event)
         return
       case "message.part.updated":

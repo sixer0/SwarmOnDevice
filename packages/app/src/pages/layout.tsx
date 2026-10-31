@@ -425,6 +425,8 @@ export default function LegacyLayout(props: ParentProps) {
         const icon = e.details.type === "permission.asked" ? ("checklist" as const) : ("bubble-5" as const)
         const directory = e.name
         const props = e.details.properties
+        // The same request again, now that the agent has carried on without it. The user was already alerted once.
+        if (props.movedOnAt) return
         if (e.details.type === "permission.asked" && permission.autoResponds(e.details.properties, directory)) return
 
         const [store] = serverSync().child(directory, { bootstrap: false })

@@ -1336,4 +1336,10 @@ export const dict = {
   "memory.remembered": "Munað",
   "memory.seeAll": "Sjá allt",
   "memory.undo": "Afturkalla",
+  "session.movesOn.hint": "Ekkert svar fyrir {{time}}? Fulltrúinn heldur áfram án þessa.",
+  "session.movedOn.title": "Hélt áfram án þín",
+  "session.movedOn.allow": "Leyfa og halda áfram",
+  "session.movedOn.leave": "Láta vera",
+  "session.movedOn.answer": "Svara",
+  "home.agents.movedOn": "Hélt áfram án þessa · {{time}}",
 }

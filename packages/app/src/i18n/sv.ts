@@ -1339,4 +1339,10 @@ export const dict = {
   "memory.remembered": "Ihågkommet",
   "memory.seeAll": "Visa alla",
   "memory.undo": "Ångra",
+  "session.movesOn.hint": "Inget svar senast {{time}}? Agenten fortsätter utan detta.",
+  "session.movedOn.title": "Fortsatte utan dig",
+  "session.movedOn.allow": "Tillåt och fortsätt",
+  "session.movedOn.leave": "Låt vara",
+  "session.movedOn.answer": "Svara",
+  "home.agents.movedOn": "Fortsatte utan detta · {{time}}",
 }

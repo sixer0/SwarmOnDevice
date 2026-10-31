@@ -1349,4 +1349,10 @@ export const dict = {
   "memory.remembered": "تم التذكر",
   "memory.seeAll": "عرض الكل",
   "memory.undo": "تراجع",
+  "session.movesOn.hint": "لا إجابة بحلول {{time}}؟ سيتابع الوكيل من دون هذا.",
+  "session.movedOn.title": "تابع من دونك",
+  "session.movedOn.allow": "السماح والمتابعة",
+  "session.movedOn.leave": "اتركه",
+  "session.movedOn.answer": "إجابة",
+  "home.agents.movedOn": "تابع من دون هذا · {{time}}",
 }

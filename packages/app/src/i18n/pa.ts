@@ -1340,4 +1340,10 @@ export const dict = {
   "memory.remembered": "یاد رکھیا گیا",
   "memory.seeAll": "سارے ویکھو",
   "memory.undo": "واپس",
+  "session.movesOn.hint": "{{time}} ਤੱਕ ਕੋਈ ਜਵਾਬ ਨਹੀਂ? ਏਜੰਟ ਇਸ ਤੋਂ ਬਿਨਾਂ ਜਾਰੀ ਰੱਖੇਗਾ।",
+  "session.movedOn.title": "ਤੁਹਾਡੇ ਤੋਂ ਬਿਨਾਂ ਜਾਰੀ ਰੱਖਿਆ",
+  "session.movedOn.allow": "ਇਜਾਜ਼ਤ ਦਿਓ ਅਤੇ ਜਾਰੀ ਰੱਖੋ",
+  "session.movedOn.leave": "ਰਹਿਣ ਦਿਓ",
+  "session.movedOn.answer": "ਜਵਾਬ ਦਿਓ",
+  "home.agents.movedOn": "ਇਸ ਤੋਂ ਬਿਨਾਂ ਜਾਰੀ ਰੱਖਿਆ · {{time}}",
 }

@@ -1333,4 +1333,10 @@ export const dict = {
   "memory.remembered": "Munað",
   "memory.seeAll": "Vís alt",
   "memory.undo": "Angra",
+  "session.movesOn.hint": "Einki svar áðrenn {{time}}? Agenturin heldur fram uttan hetta.",
+  "session.movedOn.title": "Helt fram uttan teg",
+  "session.movedOn.allow": "Loyv og halt fram",
+  "session.movedOn.leave": "Lat vera",
+  "session.movedOn.answer": "Svara",
+  "home.agents.movedOn": "Helt fram uttan hetta · {{time}}",
 }

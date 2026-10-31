@@ -1343,4 +1343,10 @@ export const dict = {
   "memory.remembered": "Remembered",
   "memory.seeAll": "See all",
   "memory.undo": "Undo",
+  "session.movesOn.hint": "No answer by {{time}}? The agent carries on without this.",
+  "session.movedOn.title": "Went on without you",
+  "session.movedOn.allow": "Allow and continue",
+  "session.movedOn.leave": "Leave it",
+  "session.movedOn.answer": "Answer",
+  "home.agents.movedOn": "Went on without this · {{time}}",
 }

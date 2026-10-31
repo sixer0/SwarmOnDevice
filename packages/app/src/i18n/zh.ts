@@ -1408,4 +1408,10 @@ export const dict = {
   "memory.remembered": "已记住",
   "memory.seeAll": "查看全部",
   "memory.undo": "撤销",
+  "session.movesOn.hint": "到 {{time}} 仍无回答？智能体将跳过此项继续。",
+  "session.movedOn.title": "已在你不在时继续",
+  "session.movedOn.allow": "允许并继续",
+  "session.movedOn.leave": "不处理",
+  "session.movedOn.answer": "回答",
+  "home.agents.movedOn": "已跳过此项继续 · {{time}}",
 } satisfies Partial<Record<Keys, string>>

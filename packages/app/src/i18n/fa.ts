@@ -1334,4 +1334,10 @@ export const dict = {
   "memory.remembered": "به خاطر سپرده شد",
   "memory.seeAll": "مشاهده همه",
   "memory.undo": "بازگردانی",
+  "session.movesOn.hint": "تا {{time}} پاسخی نیست؟ عامل بدون این ادامه می‌دهد.",
+  "session.movedOn.title": "بدون شما ادامه داد",
+  "session.movedOn.allow": "اجازه و ادامه",
+  "session.movedOn.leave": "رهایش کن",
+  "session.movedOn.answer": "پاسخ",
+  "home.agents.movedOn": "بدون این ادامه داد · {{time}}",
 }

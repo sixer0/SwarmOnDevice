@@ -1445,4 +1445,10 @@ export const dict = {
   "memory.remembered": "Запам'ятано",
   "memory.seeAll": "Показати всі",
   "memory.undo": "Скасувати",
+  "session.movesOn.hint": "Немає відповіді до {{time}}? Агент продовжить без цього.",
+  "session.movedOn.title": "Продовжив без вас",
+  "session.movedOn.allow": "Дозволити й продовжити",
+  "session.movedOn.leave": "Залишити",
+  "session.movedOn.answer": "Відповісти",
+  "home.agents.movedOn": "Продовжив без цього · {{time}}",
 }

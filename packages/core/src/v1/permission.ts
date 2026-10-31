@@ -18,6 +18,12 @@ export class CorrectedError extends Schema.TaggedErrorClass<CorrectedError>()("P
   }
 }
 
+export class AwayError extends Schema.TaggedErrorClass<AwayError>()("PermissionAwayError", {}) {
+  override get message() {
+    return "Nobody answered this permission request in time, so this call did not run. The user has probably stepped away and can still allow it later. Do not try to get the same effect another way. Carry on with everything that does not depend on it, and list what you skipped in your final message."
+  }
+}
+
 export class DeniedError extends Schema.TaggedErrorClass<DeniedError>()("PermissionDeniedError", {
   ruleset: Schema.Any,
 }) {
@@ -30,4 +36,4 @@ export class NotFoundError extends Schema.TaggedErrorClass<NotFoundError>()("Per
   requestID: ID,
 }) {}
 
-export type Error = DeniedError | RejectedError | CorrectedError
+export type Error = DeniedError | RejectedError | CorrectedError | AwayError

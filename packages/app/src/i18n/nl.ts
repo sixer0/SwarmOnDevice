@@ -1350,4 +1350,10 @@ export const dict = {
   "memory.remembered": "Onthouden",
   "memory.seeAll": "Alles bekijken",
   "memory.undo": "Ongedaan maken",
+  "session.movesOn.hint": "Geen antwoord om {{time}}? De agent gaat hier zonder verder.",
+  "session.movedOn.title": "Zonder jou doorgegaan",
+  "session.movedOn.allow": "Toestaan en doorgaan",
+  "session.movedOn.leave": "Laten zo",
+  "session.movedOn.answer": "Antwoorden",
+  "home.agents.movedOn": "Hier zonder doorgegaan · {{time}}",
 }
