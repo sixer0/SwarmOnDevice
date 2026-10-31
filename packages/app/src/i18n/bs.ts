@@ -737,6 +737,17 @@ export const dict = {
   "home.sessions.group.today": "Danas",
   "home.sessions.group.yesterday": "Jučer",
   "home.sessions.group.older": "Starije",
+  "home.agents.label": "Agenti",
+  "home.agents.needsYou": "Čekaju vas",
+  "home.agents.running": "U toku",
+  "home.agents.failed": "Neuspjelo",
+  "home.agents.finished": "Spremno za pregled",
+  "home.agents.quiet": "Trenutno vas nijedan agent ne čeka",
+  "home.agents.checking": "Provjera agenata",
+  "home.agents.unreachable": "Provjera agenata nije uspjela",
+  "home.agents.retry": "Pokušaj ponovo",
+  "home.agents.badge": "Čekaju vas: {{count}}",
+  "home.agents.jump": "Idi na agente koji vas čekaju",
   "home.providerTip":
     "Poveži se s više od 75 provajdera da koristiš druge modele, uključujući Claude, GPT, Gemini i druge",
 

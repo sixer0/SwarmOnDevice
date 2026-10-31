@@ -3,7 +3,12 @@ import { GlobalBus, type GlobalEvent as GlobalBusEvent } from "@/bus/global"
 import { EffectBridge } from "@/effect/bridge"
 import { EventV2 } from "@opencode-ai/core/event"
 import { Global } from "@opencode-ai/core/global"
+import { InstanceRef } from "@/effect/instance-ref"
 import { Installation } from "@/installation"
+import { Permission } from "@/permission"
+import { InstanceStore } from "@/project/instance-store"
+import { Question } from "@/question"
+import { SessionStatus } from "@/session/status"
 import { disposeAllInstancesAndEmitGlobalDisposed } from "@/server/global-lifecycle"
 import { setupObservation } from "@/server/shared/setup-observation"
 import { applyLanesPatch, lanesStateObservation, observeEffective } from "@/server/shared/lanes-observation"
@@ -65,9 +70,32 @@ export const globalHandlers = HttpApiBuilder.group(RootHttpApi, "global", (handl
     const config = yield* Config.Service
     const installation = yield* Installation.Service
     const bridge = yield* EffectBridge.make()
+    const instances = yield* InstanceStore.Service
+    const permission = yield* Permission.Service
+    const question = yield* Question.Service
+    const status = yield* SessionStatus.Service
 
     const health = Effect.fn("GlobalHttpApi.health")(function* () {
       return { healthy: true as const, version: InstallationVersion }
+    })
+
+    const agents = Effect.fn("GlobalHttpApi.agents")(function* () {
+      const loaded = yield* instances.loaded()
+      return {
+        instances: yield* Effect.forEach(
+          loaded,
+          (ctx) =>
+            Effect.gen(function* () {
+              return {
+                directory: ctx.directory,
+                status: Object.fromEntries(yield* status.list()),
+                permission: yield* permission.list(),
+                question: yield* question.list(),
+              }
+            }).pipe(Effect.provideService(InstanceRef, ctx)),
+          { concurrency: "unbounded" },
+        ),
+      }
     })
 
     // Levels 1-2 of the Home status card. Two file reads with privileges the server already holds, and
@@ -177,6 +205,7 @@ export const globalHandlers = HttpApiBuilder.group(RootHttpApi, "global", (handl
     return handlers
       .handle("health", health)
       .handle("setup", setup)
+      .handle("agents", agents)
       .handle("lanesGet", lanesGet)
       .handleRaw("lanesUpdate", lanesUpdate)
       .handleRaw("event", event)

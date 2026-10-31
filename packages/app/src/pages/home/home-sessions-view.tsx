@@ -1,5 +1,5 @@
 import type { Session } from "@opencode-ai/sdk/v2/client"
-import { type Accessor, createMemo, For, Show, Suspense } from "solid-js"
+import { type Accessor, createMemo, For, type JSX, Show, Suspense } from "solid-js"
 import { Spinner } from "@opencode-ai/ui/spinner"
 import { ScrollView } from "@opencode-ai/ui/scroll-view"
 import { ButtonV2 } from "@opencode-ai/ui/v2/button-v2"
@@ -38,6 +38,7 @@ function isBackgroundOpen(event: MouseEvent) {
 
 export type HomeSessionsViewProps = {
   language: ReturnType<typeof useLanguage>
+  board?: JSX.Element
   groups: Accessor<HomeSessionGroup[]>
   showProjectName: Accessor<boolean>
   server: Accessor<ServerConnection.Key>
@@ -105,6 +106,7 @@ export function HomeSessionsView(props: HomeSessionsViewProps) {
         />
       </div>
       <div class="-mr-3 min-h-[calc(100cqh-72px)] lg:min-h-[calc(100cqh-96px)]">
+        {props.board}
         <Suspense
           fallback={
             <div class="pt-3">

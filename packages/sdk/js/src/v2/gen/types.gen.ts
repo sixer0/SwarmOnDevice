@@ -192,6 +192,99 @@ export type GlobalSetup = {
   registration: GlobalSetupRegistration
 }
 
+export type SessionStatus =
+  | {
+      type: "idle"
+    }
+  | {
+      type: "retry"
+      attempt: number
+      message: string
+      action?: {
+        reason: string
+        provider: string
+        title: string
+        message: string
+        label: string
+        link?: string
+      }
+      next: number
+    }
+  | {
+      type: "busy"
+    }
+
+export type PermissionRequest = {
+  id: string
+  sessionID: string
+  permission: string
+  patterns: Array<string>
+  metadata: {
+    [key: string]: unknown
+  }
+  always: Array<string>
+  tool?: {
+    messageID: string
+    callID: string
+  }
+}
+
+export type QuestionOption = {
+  /**
+   * Display text (1-5 words, concise)
+   */
+  label: string
+  /**
+   * Explanation of choice
+   */
+  description: string
+}
+
+export type QuestionInfo = {
+  /**
+   * Complete question
+   */
+  question: string
+  /**
+   * Very short label (max 30 chars)
+   */
+  header: string
+  /**
+   * Available choices
+   */
+  options: Array<QuestionOption>
+  multiple?: boolean
+  custom?: boolean
+}
+
+export type QuestionTool = {
+  messageID: string
+  callID: string
+}
+
+export type QuestionRequest = {
+  id: string
+  sessionID: string
+  /**
+   * Questions to ask
+   */
+  questions: Array<QuestionInfo>
+  tool?: QuestionTool
+}
+
+export type GlobalAgentsInstance = {
+  directory: string
+  status: {
+    [key: string]: SessionStatus
+  }
+  permission: Array<PermissionRequest>
+  question: Array<QuestionRequest>
+}
+
+export type GlobalAgents = {
+  instances: Array<GlobalAgentsInstance>
+}
+
 export type GlobalLanesFile = {
   tildePath: string
   present: boolean
@@ -781,61 +874,6 @@ export type Todo = {
    * Priority level of the task: high, medium, low
    */
   priority: string
-}
-
-export type SessionStatus =
-  | {
-      type: "idle"
-    }
-  | {
-      type: "retry"
-      attempt: number
-      message: string
-      action?: {
-        reason: string
-        provider: string
-        title: string
-        message: string
-        label: string
-        link?: string
-      }
-      next: number
-    }
-  | {
-      type: "busy"
-    }
-
-export type QuestionOption = {
-  /**
-   * Display text (1-5 words, concise)
-   */
-  label: string
-  /**
-   * Explanation of choice
-   */
-  description: string
-}
-
-export type QuestionInfo = {
-  /**
-   * Complete question
-   */
-  question: string
-  /**
-   * Very short label (max 30 chars)
-   */
-  header: string
-  /**
-   * Available choices
-   */
-  options: Array<QuestionOption>
-  multiple?: boolean
-  custom?: boolean
-}
-
-export type QuestionTool = {
-  messageID: string
-  callID: string
 }
 
 export type QuestionAnswer = Array<string>
@@ -2582,35 +2620,10 @@ export type PtyForbiddenError = {
   message: string
 }
 
-export type QuestionRequest = {
-  id: string
-  sessionID: string
-  /**
-   * Questions to ask
-   */
-  questions: Array<QuestionInfo>
-  tool?: QuestionTool
-}
-
 export type QuestionNotFoundError = {
   _tag: "QuestionNotFoundError"
   requestID: string
   message: string
-}
-
-export type PermissionRequest = {
-  id: string
-  sessionID: string
-  permission: string
-  patterns: Array<string>
-  metadata: {
-    [key: string]: unknown
-  }
-  always: Array<string>
-  tool?: {
-    messageID: string
-    callID: string
-  }
 }
 
 export type PermissionNotFoundError = {
@@ -7408,6 +7421,31 @@ export type GlobalSetupResponses = {
 }
 
 export type GlobalSetupResponse = GlobalSetupResponses[keyof GlobalSetupResponses]
+
+export type GlobalAgentsData = {
+  body?: never
+  path?: never
+  query?: never
+  url: "/global/agents"
+}
+
+export type GlobalAgentsErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type GlobalAgentsError = GlobalAgentsErrors[keyof GlobalAgentsErrors]
+
+export type GlobalAgentsResponses = {
+  /**
+   * What every booted instance's agents are doing right now
+   */
+  200: GlobalAgents
+}
+
+export type GlobalAgentsResponse = GlobalAgentsResponses[keyof GlobalAgentsResponses]
 
 export type GlobalLanesGetData = {
   body?: never

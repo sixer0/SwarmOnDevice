@@ -5,7 +5,15 @@ import { HttpBody, HttpClient, HttpClientRequest, HttpRouter } from "effect/unst
 import { HttpApiBuilder } from "effect/unstable/httpapi"
 import { Auth } from "../../src/auth"
 import { Config } from "../../src/config/config"
+import { InstanceRef } from "../../src/effect/instance-ref"
 import { Installation } from "../../src/installation"
+import { Permission } from "../../src/permission"
+import type { InstanceContext } from "../../src/project/instance-context"
+import type { PermissionV1 } from "@opencode-ai/core/v1/permission"
+import { InstanceStore } from "../../src/project/instance-store"
+import { Question } from "../../src/question"
+import { SessionStatus } from "../../src/session/status"
+import { SessionID } from "../../src/session/schema"
 import { MoveSession } from "@opencode-ai/core/control-plane/move-session"
 import { ServerAuth } from "../../src/server/auth"
 import { RootHttpApi } from "../../src/server/routes/instance/httpapi/api"
@@ -16,6 +24,20 @@ import { globalHandlers } from "../../src/server/routes/instance/httpapi/handler
 import { authorizationLayer } from "../../src/server/routes/instance/httpapi/middleware/authorization"
 import { schemaErrorLayer } from "../../src/server/routes/instance/httpapi/middleware/schema-error"
 import { testEffect } from "../lib/effect"
+
+const booted = {
+  directory: "/work/booted",
+  worktree: "/work/booted",
+  project: {},
+} as unknown as InstanceContext
+const pendingPermission = {
+  id: "per_1",
+  sessionID: "ses_busy",
+  permission: "bash",
+  patterns: ["ls"],
+  metadata: { command: "ls" },
+  always: ["ls *"],
+} as unknown as PermissionV1.Request
 
 const apiLayer = HttpRouter.serve(
   HttpApiBuilder.layer(RootHttpApi).pipe(
@@ -30,6 +52,22 @@ const apiLayer = HttpRouter.serve(
   Layer.provideMerge(NodeHttpServer.layerTest),
   Layer.provide(Layer.mock(Auth.Service)({})),
   Layer.provide(Layer.mock(Config.Service)({})),
+  Layer.provide(
+    Layer.mock(InstanceStore.Service)({
+      loaded: () => Effect.succeed([booted]),
+    }),
+  ),
+  Layer.provide(
+    Layer.mock(Permission.Service)({
+      list: () => InstanceRef.pipe(Effect.map((ctx) => (ctx?.directory === booted.directory ? [pendingPermission] : []))),
+    }),
+  ),
+  Layer.provide(Layer.mock(Question.Service)({ list: () => Effect.succeed([]) })),
+  Layer.provide(
+    Layer.mock(SessionStatus.Service)({
+      list: () => Effect.succeed(new Map([[SessionID.make("ses_busy"), { type: "busy" as const }]])),
+    }),
+  ),
   Layer.provide(Layer.mock(MoveSession.Service)({})),
   Layer.provide(
     Layer.mock(Installation.Service)({
@@ -43,6 +81,24 @@ const apiLayer = HttpRouter.serve(
 const it = testEffect(apiLayer)
 
 describe("global HttpApi", () => {
+  it.live("reports agent activity per booted instance, reading under that instance's context", () =>
+    Effect.gen(function* () {
+      const response = yield* HttpClientRequest.get(GlobalPaths.agents).pipe(HttpClient.execute)
+
+      expect(response.status).toBe(200)
+      expect((yield* response.json) as unknown).toEqual({
+        instances: [
+          {
+            directory: booted.directory,
+            status: { ses_busy: { type: "busy" } },
+            permission: [pendingPermission],
+            question: [],
+          },
+        ],
+      })
+    }),
+  )
+
   // WP-EGRESS-CORE (row 56): Swarm ships no update server (decision 5), so POST /global/upgrade
   // refuses with 403 before any method detection or download, keeping the declared
   // GlobalUpgradeResult shape so existing SDK clients still parse the body

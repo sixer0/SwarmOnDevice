@@ -50,6 +50,44 @@ describe("InstanceStore", () => {
     }),
   )
 
+  it.live("loaded lists booted instances and never boots one", () =>
+    Effect.gen(function* () {
+      const dir = yield* tmpdirScoped({ git: true })
+      const store = yield* InstanceStore.Service
+      let boots = 0
+      yield* setBootstrap(
+        Effect.sync(() => {
+          boots++
+        }),
+      )
+
+      expect((yield* store.loaded()).some((ctx) => ctx.directory === dir)).toBe(false)
+      expect(boots).toBe(0)
+
+      yield* store.load({ directory: dir })
+      expect((yield* store.loaded()).filter((ctx) => ctx.directory === dir).length).toBe(1)
+      expect(boots).toBe(1)
+    }),
+  )
+
+  it.live("loaded skips an instance still booting", () =>
+    Effect.gen(function* () {
+      const dir = yield* tmpdirScoped({ git: true })
+      const store = yield* InstanceStore.Service
+      const gate = yield* Deferred.make<void>()
+      const started = yield* Deferred.make<void>()
+      yield* setBootstrap(Deferred.succeed(started, undefined).pipe(Effect.andThen(Deferred.await(gate))))
+
+      const fiber = yield* store.load({ directory: dir }).pipe(Effect.forkScoped)
+      yield* Deferred.await(started)
+      expect((yield* store.loaded()).some((ctx) => ctx.directory === dir)).toBe(false)
+
+      yield* Deferred.succeed(gate, undefined)
+      yield* Fiber.join(fiber)
+      expect((yield* store.loaded()).some((ctx) => ctx.directory === dir)).toBe(true)
+    }),
+  )
+
   it.live("runs bootstrap with InstanceRef provided", () =>
     Effect.gen(function* () {
       const dir = yield* tmpdirScoped({ git: true })

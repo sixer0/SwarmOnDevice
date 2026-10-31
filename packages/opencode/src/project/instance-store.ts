@@ -6,7 +6,7 @@ import { WorkspaceContext } from "@/control-plane/workspace-context"
 import { InstanceRef } from "@/effect/instance-ref"
 import { disposeInstance as runDisposers } from "@/effect/instance-registry"
 import { FSUtil } from "@opencode-ai/core/fs-util"
-import { Context, Deferred, Duration, Effect, Exit, Layer, Scope } from "effect"
+import { Context, Deferred, Duration, Effect, Exit, Layer, Option, Scope } from "effect"
 import { type InstanceContext } from "./instance-context"
 import { InstanceBootstrap } from "./bootstrap-service"
 import * as Project from "./project"
@@ -19,6 +19,9 @@ export interface LoadInput {
 
 export interface Interface {
   readonly load: (input: LoadInput) => Effect.Effect<InstanceContext>
+  /** The instances that have finished booting. Reads the cache only: it never boots a directory, so a
+   *  machine-wide observation can use it without spawning the MCP children a first load would start. */
+  readonly loaded: () => Effect.Effect<ReadonlyArray<InstanceContext>>
   readonly reload: (input: LoadInput) => Effect.Effect<InstanceContext>
   readonly dispose: (ctx: InstanceContext) => Effect.Effect<void>
   readonly disposeDirectory: (directory: string) => Effect.Effect<void>
@@ -123,6 +126,12 @@ const layer: Layer.Layer<Service, never, Project.Service | InstanceBootstrap.Ser
       ).pipe(Effect.withSpan("InstanceStore.load"))
     }
 
+    const loaded = Effect.fn("InstanceStore.loaded")(function* () {
+      const contexts = yield* Effect.forEach([...cache.values()], (entry) => Deferred.poll(entry.deferred))
+      const ready = contexts.flatMap((poll) => (Option.isSome(poll) ? [poll.value] : []))
+      return yield* Effect.forEach(ready, (ctx) => ctx)
+    })
+
     const reload = (input: LoadInput): Effect.Effect<InstanceContext> => {
       const directory = FSUtil.resolve(input.directory)
       return Effect.uninterruptibleMask((restore) =>
@@ -193,6 +202,7 @@ const layer: Layer.Layer<Service, never, Project.Service | InstanceBootstrap.Ser
 
     return Service.of({
       load,
+      loaded,
       reload,
       dispose,
       disposeDirectory,

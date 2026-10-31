@@ -1,15 +1,18 @@
 import type { HomeScrollController } from "./home-scroll-controller"
 import type { HomeSessionSearchController } from "./home-session-search-controller"
 import type { HomeSessionsController } from "./home-sessions-controller"
+import type { JSX } from "solid-js"
 import { HomeSessionsView } from "./home-sessions-view"
 
 export function HomeSessions(props: {
   sessions: HomeSessionsController
   search: HomeSessionSearchController
   scroll: HomeScrollController
+  board?: JSX.Element
 }) {
   return (
     <HomeSessionsView
+      board={props.board}
       language={props.sessions.copy.language}
       groups={props.sessions.data.groups}
       showProjectName={props.sessions.session.showProjectName}

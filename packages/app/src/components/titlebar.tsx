@@ -39,6 +39,7 @@ import type { PromptSession } from "@/context/prompt"
 import "./titlebar.css"
 import { newTabTooltipKeybind } from "./command-tooltip-keybind"
 import { normalizeSessionInfo } from "@/utils/session"
+import { createAgentAttention, requestAgentBoardFocus } from "@/pages/home/agent-board-controller"
 
 const legacyTitlebarHeight = 40
 const v2TitlebarHeight = 36
@@ -326,6 +327,8 @@ export function Titlebar(props: { update?: TitlebarUpdate; debugTools?: { visibl
 
             const toggleHome = () => tabs.toggleHome({ home: layout.route().type === "home", current: currentTab() })
 
+            const agentsWaiting = createAgentAttention(() => server.current)
+
             command.register("titlebar-home", () => [
               {
                 id: "home.toggle",
@@ -334,6 +337,16 @@ export function Titlebar(props: { update?: TitlebarUpdate; debugTools?: { visibl
                 keybind: "mod+b",
                 hidden: true,
                 onSelect: toggleHome,
+              },
+              {
+                id: "home.agents.jump",
+                title: language.t("home.agents.jump"),
+                category: language.t("command.category.view"),
+                keybind: "mod+shift+u",
+                onSelect: () => {
+                  if (layout.route().type !== "home") toggleHome()
+                  requestAgentBoardFocus()
+                },
               },
             ])
 
@@ -393,7 +406,7 @@ export function Titlebar(props: { update?: TitlebarUpdate; debugTools?: { visibl
                       <KeybindV2 keys={command.keybindParts("home.toggle")} variant="neutral" />
                     </>
                   }
-                  class="shrink-0"
+                  class="relative shrink-0"
                 >
                   <IconButtonV2
                     type="button"
@@ -403,9 +416,26 @@ export function Titlebar(props: { update?: TitlebarUpdate; debugTools?: { visibl
                     icon={<IconV2 name="grid-plus" />}
                     state={layout.route().type === "home" ? "pressed" : undefined}
                     onClick={toggleHome}
-                    aria-label={language.t("home.title")}
+                    aria-label={
+                      agentsWaiting() > 0
+                        ? `${language.t("home.title")}, ${language.t("home.agents.badge", { count: agentsWaiting() })}`
+                        : language.t("home.title")
+                    }
                     aria-pressed={layout.route().type === "home"}
                   />
+                  <Show when={agentsWaiting() > 0}>
+                    <span
+                      data-component="titlebar-agents-waiting"
+                      aria-hidden="true"
+                      class={`
+                        pointer-events-none absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center
+                        rounded-full bg-v2-state-bg-danger px-1 text-[10px] font-semibold leading-none
+                        text-v2-state-fg-danger tabular-nums
+                      `}
+                    >
+                      {agentsWaiting()}
+                    </span>
+                  </Show>
                 </TooltipV2>
 
                 <TitlebarTabStrip

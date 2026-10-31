@@ -759,6 +759,17 @@ export const dict = {
   "home.sessions.group.today": "Сьогодні",
   "home.sessions.group.yesterday": "Учора",
   "home.sessions.group.older": "Раніше",
+  "home.agents.label": "Агенти",
+  "home.agents.needsYou": "Чекають на вас",
+  "home.agents.running": "Виконуються",
+  "home.agents.failed": "З помилкою",
+  "home.agents.finished": "Готово до перевірки",
+  "home.agents.quiet": "Зараз жоден агент на вас не чекає",
+  "home.agents.checking": "Перевірка агентів",
+  "home.agents.unreachable": "Не вдалося перевірити агентів",
+  "home.agents.retry": "Повторити",
+  "home.agents.badge": "Чекають на вас: {{count}}",
+  "home.agents.jump": "Перейти до агентів, які чекають на вас",
   "home.providerTip":
     "Підключіться до понад 75 провайдерів, щоб використовувати інші моделі, зокрема Claude, GPT, Gemini та інші",
 

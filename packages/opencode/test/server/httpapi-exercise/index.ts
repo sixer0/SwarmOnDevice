@@ -85,6 +85,13 @@ const scenarios: Scenario[] = [
       check(body.healthy === true, "server should report healthy")
     }),
   http.protected
+    .get("/global/agents", "global.agents")
+    .global()
+    .json(200, (body) => {
+      object(body)
+      check(Array.isArray(body.instances), "instances should list the booted instances")
+    }),
+  http.protected
     .get("/global/setup", "global.setup")
     .global()
     .json(200, (body) => {

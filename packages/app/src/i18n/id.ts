@@ -757,6 +757,17 @@ export const dict = {
   "home.sessions.group.today": "Hari ini",
   "home.sessions.group.yesterday": "Kemarin",
   "home.sessions.group.older": "Lebih lama",
+  "home.agents.label": "Agen",
+  "home.agents.needsYou": "Menunggu Anda",
+  "home.agents.running": "Berjalan",
+  "home.agents.failed": "Gagal",
+  "home.agents.finished": "Siap ditinjau",
+  "home.agents.quiet": "Tidak ada agen yang menunggu Anda saat ini",
+  "home.agents.checking": "Memeriksa agen Anda",
+  "home.agents.unreachable": "Tidak dapat memeriksa agen Anda",
+  "home.agents.retry": "Coba lagi",
+  "home.agents.badge": "Menunggu Anda: {{count}}",
+  "home.agents.jump": "Buka agen yang menunggu Anda",
   "home.providerTip":
     "Hubungkan ke 75+ penyedia untuk menggunakan model lain, termasuk Claude, GPT, Gemini, dan lainnya",
 

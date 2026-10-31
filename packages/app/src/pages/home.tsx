@@ -1,4 +1,6 @@
 import { ScrollView } from "@opencode-ai/ui/scroll-view"
+import { createAgentBoardController } from "./home/agent-board-controller"
+import { AgentBoardView } from "./home/agent-board-view"
 import { createHomeController } from "./home/home-controller"
 import { createHomeProjectsController } from "./home/home-projects-controller"
 import { HomeUtilityNav } from "./home/home-projects-view"
@@ -15,6 +17,7 @@ export function NewHome() {
   const sessions = createHomeSessionsController(home)
   const search = createHomeSessionSearchController(home, sessions)
   const scroll = createHomeScrollController(sessions.data.groups)
+  const board = createAgentBoardController(home, sessions)
   return (
     <div
       class={`
@@ -37,7 +40,12 @@ export function NewHome() {
           `}
         >
           <HomeProjects projects={projects} scroll={scroll} />
-          <HomeSessions sessions={sessions} search={search} scroll={scroll} />
+          <HomeSessions
+            sessions={sessions}
+            search={search}
+            scroll={scroll}
+            board={<AgentBoardView board={board} hasSessions={sessions.data.records().length > 0} />}
+          />
           {/* Fourth grid child: spans both columns on large screens, stacks below on small. Visible in both
               transports without touching sidebar scroll geometry (spec §8). */}
           <div class="min-w-0 lg:col-span-2">

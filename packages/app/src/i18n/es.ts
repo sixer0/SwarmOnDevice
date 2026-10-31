@@ -740,6 +740,17 @@ export const dict = {
   "home.sessions.group.today": "Hoy",
   "home.sessions.group.yesterday": "Ayer",
   "home.sessions.group.older": "Anteriores",
+  "home.agents.label": "Agentes",
+  "home.agents.needsYou": "Te necesitan",
+  "home.agents.running": "En ejecución",
+  "home.agents.failed": "Con errores",
+  "home.agents.finished": "Listas para revisar",
+  "home.agents.quiet": "Ahora mismo ningún agente te necesita",
+  "home.agents.checking": "Comprobando tus agentes",
+  "home.agents.unreachable": "No se pudieron comprobar tus agentes",
+  "home.agents.retry": "Reintentar",
+  "home.agents.badge": "Te necesitan: {{count}}",
+  "home.agents.jump": "Ir a los agentes que te necesitan",
   "home.providerTip":
     "Conéctate a más de 75 proveedores para usar otros modelos, como Claude, GPT, Gemini y muchos más",
 

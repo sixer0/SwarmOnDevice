@@ -737,6 +737,17 @@ export const dict = {
   "home.sessions.group.today": "Сегодня",
   "home.sessions.group.yesterday": "Вчера",
   "home.sessions.group.older": "Ранее",
+  "home.agents.label": "Агенты",
+  "home.agents.needsYou": "Ждут вас",
+  "home.agents.running": "Выполняются",
+  "home.agents.failed": "С ошибкой",
+  "home.agents.finished": "Готово к проверке",
+  "home.agents.quiet": "Сейчас ни один агент вас не ждёт",
+  "home.agents.checking": "Проверка агентов",
+  "home.agents.unreachable": "Не удалось проверить агентов",
+  "home.agents.retry": "Повторить",
+  "home.agents.badge": "Ждут вас: {{count}}",
+  "home.agents.jump": "Перейти к агентам, которые ждут вас",
   "home.providerTip":
     "Подключитесь к более чем 75 провайдерам, чтобы использовать другие модели, включая Claude, GPT, Gemini и другие",
 

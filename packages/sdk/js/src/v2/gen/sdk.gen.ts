@@ -76,6 +76,8 @@ import type {
   FindTextResponses,
   FormatterStatusErrors,
   FormatterStatusResponses,
+  GlobalAgentsErrors,
+  GlobalAgentsResponses,
   GlobalConfigGetErrors,
   GlobalConfigGetResponses,
   GlobalConfigUpdateErrors,
@@ -1381,6 +1383,18 @@ export class Global extends HeyApiClient {
   public setup<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError>) {
     return (options?.client ?? this.client).get<GlobalSetupResponses, GlobalSetupErrors, ThrowOnError>({
       url: "/global/setup",
+      ...options,
+    })
+  }
+
+  /**
+   * Get agent activity
+   *
+   * Session statuses, pending permission requests and pending questions from every instance that has already booted. It never boots an instance, so a project with nothing running stays cold and starts nothing.
+   */
+  public agents<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError>) {
+    return (options?.client ?? this.client).get<GlobalAgentsResponses, GlobalAgentsErrors, ThrowOnError>({
+      url: "/global/agents",
       ...options,
     })
   }

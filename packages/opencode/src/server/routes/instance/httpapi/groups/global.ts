@@ -1,6 +1,9 @@
 import { ConfigV1 } from "@opencode-ai/core/v1/config/config"
 import { EventV2 } from "@opencode-ai/core/event"
 import { EventManifest } from "@/event-manifest"
+import { PermissionV1 } from "@opencode-ai/core/v1/permission"
+import { Question } from "@/question"
+import { SessionStatus } from "@/session/status"
 import { InstanceDisposed } from "@/server/event"
 import { laneRangeMap } from "@/server/shared/lanes-observation"
 import "@opencode-ai/core/account"
@@ -48,6 +51,20 @@ const GlobalEventSchema = Schema.Struct({
     ...SyncEventSchemas,
   ]),
 }).annotate({ identifier: "GlobalEvent" })
+
+// Home's agent board. One entry per instance that has ALREADY booted, because only a booted instance can hold a
+// running session or a pending request. Reading per directory instead would boot every project and start its MCP
+// children just to find out that nothing is happening there (components/home-status-card.tsx level 3 posture).
+const GlobalAgentsInstance = Schema.Struct({
+  directory: Schema.String,
+  status: Schema.Record(Schema.String, SessionStatus.Info),
+  permission: Schema.Array(PermissionV1.Request),
+  question: Schema.Array(Question.Request),
+}).annotate({ identifier: "GlobalAgentsInstance" })
+
+const GlobalAgents = Schema.Struct({
+  instances: Schema.Array(GlobalAgentsInstance),
+}).annotate({ identifier: "GlobalAgents" })
 
 export const GlobalUpgradeInput = Schema.Struct({
   target: Schema.String.check(
@@ -203,6 +220,7 @@ export const GlobalLanesPatchInput = Schema.Struct({
 export const GlobalPaths = {
   health: "/global/health",
   setup: "/global/setup",
+  agents: "/global/agents",
   lanes: "/global/lanes",
   event: "/global/event",
   config: "/global/config",
@@ -234,6 +252,16 @@ export const GlobalApi = HttpApi.make("global").add(
           summary: "Get setup observations",
           description:
             "Read-only observations behind the Home status card's installed and registered levels: the setup component record, and the presence of the config entry and skill texts the setup writes into the server's own global config directory. Values are observations read during this request; nothing here starts or connects anything.",
+        }),
+      ),
+      HttpApiEndpoint.get("agents", GlobalPaths.agents, {
+        success: described(GlobalAgents, "What every booted instance's agents are doing right now"),
+      }).annotateMerge(
+        OpenApi.annotations({
+          identifier: "global.agents",
+          summary: "Get agent activity",
+          description:
+            "Session statuses, pending permission requests and pending questions from every instance that has already booted. It never boots an instance, so a project with nothing running stays cold and starts nothing.",
         }),
       ),
       // Row 247 — lane controls. Same machine-global posture as `setup` above (no query, no group

@@ -20,6 +20,10 @@ import { HttpApiBuilder } from "effect/unstable/httpapi"
 import { Auth } from "../../src/auth"
 import { Config } from "../../src/config/config"
 import { Installation } from "../../src/installation"
+import { Permission } from "../../src/permission"
+import { InstanceStore } from "../../src/project/instance-store"
+import { Question } from "../../src/question"
+import { SessionStatus } from "../../src/session/status"
 import { MoveSession } from "@opencode-ai/core/control-plane/move-session"
 import { ServerAuth } from "../../src/server/auth"
 import { RootHttpApi } from "../../src/server/routes/instance/httpapi/api"
@@ -312,6 +316,10 @@ function apiLayer(password: Option.Option<string>) {
     Layer.provideMerge(NodeHttpServer.layerTest),
     Layer.provide(Layer.mock(Auth.Service)({})),
     Layer.provide(Layer.mock(Config.Service)({})),
+    Layer.provide(Layer.mock(InstanceStore.Service)({})),
+    Layer.provide(Layer.mock(Permission.Service)({})),
+    Layer.provide(Layer.mock(Question.Service)({})),
+    Layer.provide(Layer.mock(SessionStatus.Service)({})),
     Layer.provide(Layer.mock(MoveSession.Service)({})),
     Layer.provide(
       Layer.mock(Installation.Service)({

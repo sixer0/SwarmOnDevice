@@ -617,6 +617,17 @@ export const dict = {
   "home.sessions.group.today": "I dag",
   "home.sessions.group.yesterday": "I går",
   "home.sessions.group.older": "Ældre",
+  "home.agents.label": "Agenter",
+  "home.agents.needsYou": "Venter på dig",
+  "home.agents.running": "Kører",
+  "home.agents.failed": "Mislykket",
+  "home.agents.finished": "Klar til gennemgang",
+  "home.agents.quiet": "Ingen agenter har brug for dig lige nu",
+  "home.agents.checking": "Tjekker dine agenter",
+  "home.agents.unreachable": "Kunne ikke tjekke dine agenter",
+  "home.agents.retry": "Prøv igen",
+  "home.agents.badge": "Venter på dig: {{count}}",
+  "home.agents.jump": "Gå til agenter, der har brug for dig",
   "home.providerTip":
     "Opret forbindelse til mere end 75 udbydere for at bruge andre modeller, herunder Claude, GPT, Gemini og flere",
 
