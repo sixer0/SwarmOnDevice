@@ -161,6 +161,8 @@ export function agentSnapshotWrites(
     session_status: Record<string, SessionStatus | undefined>
   },
   snapshot: Pick<GlobalAgents, "instances">,
+  // What the store held when the request left. Anything that changed since is newer than the snapshot, and events win.
+  before: AgentSnapshotBaseline = agentSnapshotBaseline(store),
 ) {
   const directories = new Set(snapshot.instances.map((instance) => canonicalPathKey(instance.directory)))
   const permission = Map.groupBy(
@@ -179,19 +181,49 @@ export function agentSnapshotWrites(
       const directory = store.info[id]?.directory
       return !listed.has(id) && !!directory && directories.has(canonicalPathKey(directory))
     })
-  const sorted = <T extends { id: string }>(requests: T[]) => requests.toSorted((a, b) => byString(a.id, b.id))
+  const settled = <T extends { id: string }>(
+    current: Record<string, T[] | undefined>,
+    listed: Map<string, T[]>,
+    gone: string[],
+  ) =>
+    [...gone.map((id) => [id, [] as T[]] as const), ...listed].map(([id, requests]) => {
+      const held = current[id] ?? []
+      const answered = (request: T) => before.requests.has(request.id) && !held.some((item) => item.id === request.id)
+      const arrived = held.filter(
+        (item) => !before.requests.has(item.id) && !requests.some((request) => request.id === item.id),
+      )
+      return [
+        id,
+        [...requests.filter((request) => !answered(request)), ...arrived].toSorted((a, b) => byString(a.id, b.id)),
+      ] as const
+    })
+  const moved = (id: string) => statusKey(store.session_status[id]) !== before.status.get(id)
 
   return {
-    permission: [
-      ...stale(store.permission, permission).map((id) => [id, [] as PermissionRequest[]] as const),
-      ...[...permission].map(([id, requests]) => [id, sorted(requests)] as const),
-    ],
-    question: [
-      ...stale(store.question, question).map((id) => [id, [] as QuestionRequest[]] as const),
-      ...[...question].map(([id, requests]) => [id, sorted(requests)] as const),
-    ],
-    status: [...status],
-    clearStatus: stale(store.session_status, status),
+    permission: settled(store.permission, permission, stale(store.permission, permission)),
+    question: settled(store.question, question, stale(store.question, question)),
+    status: [...status].filter(([id]) => !moved(id)),
+    clearStatus: stale(store.session_status, status).filter((id) => !moved(id)),
+  }
+}
+
+const statusKey = (status: SessionStatus | undefined) => (status ? JSON.stringify(status) : undefined)
+
+export type AgentSnapshotBaseline = { requests: Set<string>; status: Map<string, string | undefined> }
+
+/** Taken when a snapshot request leaves, so its answer can tell what happened while it was on the way. */
+export function agentSnapshotBaseline(store: {
+  permission: Record<string, PermissionRequest[] | undefined>
+  question: Record<string, QuestionRequest[] | undefined>
+  session_status: Record<string, SessionStatus | undefined>
+}): AgentSnapshotBaseline {
+  return {
+    requests: new Set(
+      [...Object.values(store.permission), ...Object.values(store.question)].flatMap((list) =>
+        (list ?? []).map((request) => request.id),
+      ),
+    ),
+    status: new Map(Object.entries(store.session_status).map(([id, status]) => [id, statusKey(status)])),
   }
 }
 

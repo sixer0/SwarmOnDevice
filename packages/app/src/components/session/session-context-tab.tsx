@@ -149,9 +149,13 @@ export function SessionContextTab() {
   const ctx = createMemo(() => getSessionContext(messages(), [...providers.all().values()]))
   const formatter = createMemo(() => createSessionContextFormatter(language.intl()))
 
-  // Subagents are sessions of their own, so a total that leaves them out understates what the task cost.
+  // Subagents are sessions of their own, so a total that leaves them out understates what the task cost. Walking the tree
+  // takes a request per subagent, so it runs on opening and when a run ends, not on every step of one.
   const [subagentCost] = createResource(
-    () => (params.id ? ([params.id, messages().length, info()?.cost ?? 0] as const) : undefined),
+    () =>
+      params.id
+        ? ([params.id, (sync().data.session_status[params.id]?.type ?? "idle") === "idle"] as const)
+        : undefined,
     async ([id]) => {
       const queue = [id]
       let total = 0

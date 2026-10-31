@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import type { Part, PermissionRequest, QuestionRequest, Session, SessionStatus } from "@opencode-ai/sdk/v2/client"
 import {
   agentSnapshotSessions,
+  agentSnapshotBaseline,
   agentSnapshotWrites,
   buildAgentBoard,
   inlineQuestion,
@@ -224,6 +225,55 @@ describe("agentSnapshotWrites", () => {
     const writes = agentSnapshotWrites(store, snapshot)
     expect(writes.permission.some(([id]) => id === "remote")).toBe(false)
     expect(writes.clearStatus).not.toContain("remote")
+  })
+
+  describe("an answer older than what happened while it was on the way", () => {
+    const listed = (id: string, sessionID = "kept") => ({
+      instances: [
+        {
+          directory: "/work/a",
+          status: {},
+          permission: [permission(id, sessionID)],
+          question: [],
+        },
+      ],
+    })
+    const base = {
+      info: { kept: session("kept") } as AgentBoardInput["info"],
+      question: {},
+    }
+
+    test("does not bring back a request answered in the meantime", () => {
+      const before = { ...base, permission: { kept: [permission("per_1", "kept")] }, session_status: {} }
+      const baseline = agentSnapshotBaseline(before)
+      const now = { ...base, permission: { kept: [] }, session_status: {} }
+      const writes = agentSnapshotWrites(now, listed("per_1"), baseline)
+      expect(writes.permission).toEqual([["kept", []]])
+    })
+
+    test("keeps a request that arrived in the meantime and still shows a new one", () => {
+      const baseline = agentSnapshotBaseline({ ...base, permission: {}, session_status: {} })
+      const now = { ...base, permission: { kept: [permission("per_2", "kept")] }, session_status: {} }
+      const writes = agentSnapshotWrites(now, listed("per_1"), baseline)
+      expect(writes.permission[0]![1].map((item) => item.id)).toEqual(["per_1", "per_2"])
+    })
+
+    test("does not clear or overwrite a status that changed in the meantime", () => {
+      const quiet = { ...base, permission: {}, question: {} }
+      const baseline = agentSnapshotBaseline({ ...quiet, session_status: {} })
+      const now = { ...quiet, session_status: { kept: { type: "busy" } } as Record<string, SessionStatus> }
+      const empty = { instances: [{ directory: "/work/a", status: {}, permission: [], question: [] }] }
+      expect(agentSnapshotWrites(now, empty, baseline).clearStatus).toEqual([])
+      const idle = { instances: [{ ...empty.instances[0]!, status: { kept: { type: "idle" as const } } }] }
+      expect(agentSnapshotWrites(now, idle, baseline).status).toEqual([])
+    })
+
+    test("still clears a status nothing has touched", () => {
+      const quiet = { ...base, permission: {}, question: {} }
+      const held = { ...quiet, session_status: { kept: { type: "busy" } } as Record<string, SessionStatus> }
+      const empty = { instances: [{ directory: "/work/a", status: {}, permission: [], question: [] }] }
+      expect(agentSnapshotWrites(held, empty, agentSnapshotBaseline(held)).clearStatus).toEqual(["kept"])
+    })
   })
 
   test("names every session the snapshot refers to, once", () => {

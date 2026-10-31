@@ -12,6 +12,7 @@ import { canonicalPathKey } from "@/utils/path-key"
 import { showToast } from "@/utils/toast"
 import {
   agentSnapshotSessions,
+  agentSnapshotBaseline,
   agentSnapshotWrites,
   buildAgentBoard,
   type AgentBoard,
@@ -44,11 +45,12 @@ export function createAgentSnapshot(ctx: Accessor<ServerContext | undefined>) {
     queryFn: async (): Promise<GlobalAgents | null> => {
       const current = ctx()
       if (!current || (await current.sdk.protocol) !== "v1") return null
+      const before = agentSnapshotBaseline(current.sync.session.data)
       const result = await current.sdk.client.global.agents({ throwOnError: false })
       if (result.response?.status === 404) return null
       if (!result.data) throw new Error(`Agent activity request failed: ${result.response?.status ?? "no response"}`)
       const session = current.sync.session
-      const writes = agentSnapshotWrites(session.data, result.data)
+      const writes = agentSnapshotWrites(session.data, result.data, before)
       batch(() => {
         writes.permission.forEach(([id, list]) => session.set("permission", id, reconcile(list, { key: "id" })))
         writes.question.forEach(([id, list]) => session.set("question", id, reconcile(list, { key: "id" })))
