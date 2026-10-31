@@ -51,6 +51,7 @@ import { ModelsProvider } from "@/context/models"
 import { useNotification } from "@/context/notification"
 import { PromptProvider, usePrompt } from "@/context/prompt"
 import { usePlatform } from "@/context/platform"
+import { usePermission } from "@/context/permission"
 import { SDKProvider, useSDK } from "@/context/sdk"
 import { useServerSDK } from "@/context/server-sdk"
 import { ServerConnection, serverName, useServer } from "@/context/server"
@@ -97,6 +98,8 @@ import { useSessionHashScroll } from "@/pages/session/use-session-hash-scroll"
 import { createSessionMap, type MapTarget } from "@/pages/session/map/session-map-controller"
 import { stepReference, type MapChapter, type MapStep } from "@/pages/session/map/session-map-model"
 import { SessionMapPanel } from "@/pages/session/map/session-map-view"
+import { createSwarm } from "@/pages/session/swarm/swarm-controller"
+import { SwarmPanel } from "@/pages/session/swarm/swarm-view"
 import { Identifier } from "@/utils/id"
 import { diffs as list } from "@/utils/diffs"
 import { Persist, persisted } from "@/utils/persist"
@@ -364,6 +367,7 @@ export default function Page() {
   const language = useLanguage()
   const sdk = useSDK()
   const serverSDK = useServerSDK()
+  const permission = usePermission()
   const settings = useSettings()
   const platform = usePlatform()
   const prompt = usePrompt()
@@ -1157,6 +1161,29 @@ export default function Page() {
     },
     visibleTurn,
   })
+  const swarm = createSwarm({
+    sessionID: () => params.id,
+    sdk,
+    sync,
+    serverSync,
+    autoResponds: (request, directory) => permission.autoResponds(request, directory),
+    openLane: (sessionID, step) => {
+      if (sessionID === params.id) {
+        if (step) sessionMap.openStep(step)
+        return
+      }
+      const href = params.serverKey
+        ? sessionHref(requireServerKey(params.serverKey), sessionID)
+        : legacySessionHref(sdk().directory, sessionID)
+      navigate(step ? `${href}#message-${step.turnID}` : href)
+    },
+    draftToComposer: (text) => {
+      if (swarm.rootID() !== params.id) return false
+      appendToComposer(text)
+      return true
+    },
+    onClose: () => focusInput(),
+  })
   const toggleSessionMap = () => {
     if (!sessionMap.opened()) return sessionMap.toggle()
     closeSessionMap()
@@ -1170,10 +1197,11 @@ export default function Page() {
       if (!found) showToast({ title: language.t("session.map.noProblems") })
     })
   // Steering from the map: the reference lands in the composer after whatever is already drafted, and nothing is sent.
-  const askAboutStep = (step: MapStep) => {
+  const askAboutStep = (step: MapStep) =>
+    appendToComposer(language.t("session.map.ask.prefix", { step: stepReference(step) }))
+  const appendToComposer = (lead: string) => {
     const parts = prompt.current()
     const last = parts.at(-1)
-    const lead = language.t("session.map.ask.prefix", { step: stepReference(step) })
     const body = last?.type === "text" ? last.content + (last.content.trim() ? "\n\n" : "") + lead : lead
     const start =
       last?.type === "text"
@@ -1197,6 +1225,7 @@ export default function Page() {
     setActiveMessage,
     focusInput,
     toggleSessionMap,
+    toggleSwarm: () => swarm.toggle(),
     goToProblem,
     review: reviewTab,
     fileBrowser: () => newSessionDesign() && isDesktop() && !!params.id,
@@ -2117,15 +2146,23 @@ export default function Page() {
 
   const sessionPanelWithMap = () => (
     <div class="relative flex min-h-0 flex-1">
-      <div class="flex h-full min-w-0 flex-1 flex-col">{sessionPanelContent()}</div>
-      <Show when={params.id && sessionMap.opened() && !mobileChanges()}>
-        <SessionMapPanel
-          map={sessionMap}
-          directory={sdk().directory}
-          onAsk={askAboutStep}
-          onRewind={rewindToChapter}
-          onClose={closeSessionMap}
-        />
+      {/* Covered while the swarm view is up: the composer must not take focus or keys from under it. */}
+      <div class="flex h-full min-w-0 flex-1 flex-col" inert={swarm.opened()}>
+        {sessionPanelContent()}
+      </div>
+      <div class="contents" inert={swarm.opened()}>
+        <Show when={params.id && sessionMap.opened() && !mobileChanges()}>
+          <SessionMapPanel
+            map={sessionMap}
+            directory={sdk().directory}
+            onAsk={askAboutStep}
+            onRewind={rewindToChapter}
+            onClose={closeSessionMap}
+          />
+        </Show>
+      </div>
+      <Show when={params.id && swarm.opened()}>
+        <SwarmPanel swarm={swarm} />
       </Show>
     </div>
   )
@@ -2330,6 +2367,12 @@ export default function Page() {
           opened: sessionMap.opened(),
           newProblems: sessionMap.opened() ? 0 : (sessionMap.fresh()?.problems ?? 0),
           toggle: toggleSessionMap,
+        }}
+        swarm={{
+          visible: !!params.id && swarm.pulse().agents > 1,
+          opened: swarm.opened(),
+          pulse: swarm.pulse(),
+          toggle: () => swarm.toggle(),
         }}
       />
       <div
