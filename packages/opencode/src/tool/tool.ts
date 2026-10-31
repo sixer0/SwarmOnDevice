@@ -8,6 +8,7 @@ import type { SessionID, MessageID } from "../session/schema"
 import * as Truncate from "./truncate"
 import { InstanceRef } from "@/effect/instance-ref"
 import { Secrets } from "./secrets"
+import { ShellOrphans } from "./shell/orphans"
 import { Agent } from "@/agent/agent"
 
 interface Metadata {
@@ -134,6 +135,11 @@ function wrap<Parameters extends Schema.Decoder<unknown>, Result extends Metadat
                 }),
             ),
           )
+          // Before anything else this run does, not only before the next command: a file edit races the old command too.
+          const orphans = yield* Effect.tryPromise({ try: () => ShellOrphans.end(ctx.sessionID), catch: String }).pipe(
+            Effect.catch((error) => Effect.logWarning("could not end interrupted commands", { error }).pipe(Effect.as(0))),
+          )
+          if (orphans > 0) yield* Effect.logInfo("ended interrupted commands", { count: orphans, sessionID: ctx.sessionID })
           const raw = yield* execute(decoded as Schema.Schema.Type<Parameters>, ctx)
           const instance = yield* InstanceRef
           const result = instance ? Secrets.scrubResult(raw, instance.worktree) : raw

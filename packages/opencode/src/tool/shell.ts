@@ -14,6 +14,7 @@ import { Config } from "@/config/config"
 import { RuntimeFlags } from "@/effect/runtime-flags"
 import { Shell } from "@opencode-ai/core/shell"
 import { ShellID } from "./shell/id"
+import { ShellOrphans } from "./shell/orphans"
 
 import * as Truncate from "./truncate"
 import { condense } from "./condense"
@@ -670,6 +671,16 @@ export const ShellTool = Tool.define(
         Effect.gen(function* () {
           yield* Effect.addFinalizer(closeSink)
           const handle = yield* spawner.spawn(cmd(input.shell, input.command, input.cwd, input.env))
+          // Windows commands are not in a group of their own here, so there is nothing to end later.
+          if (process.platform !== "win32") {
+            const pid = Number(handle.pid)
+            yield* Effect.try({ try: () => ShellOrphans.record(ctx.sessionID, pid), catch: String }).pipe(
+              Effect.catch((error) => Effect.logWarning("could not record running command", { error })),
+            )
+            yield* Effect.addFinalizer(() =>
+              Effect.try({ try: () => ShellOrphans.clear(ctx.sessionID, pid), catch: String }).pipe(Effect.ignore),
+            )
+          }
 
           yield* Effect.forkScoped(
             Stream.runForEach(Stream.decodeText(handle.all), (chunk) => {

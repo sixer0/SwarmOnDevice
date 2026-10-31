@@ -3,7 +3,9 @@ import { describe, expect } from "bun:test"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { Cause, Effect, Exit, Layer } from "effect"
 import { existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs"
+import fs from "node:fs"
 import path from "path"
+import { Global } from "@opencode-ai/core/global"
 import { Config } from "@/config/config"
 import { ShellTool } from "../../src/tool/shell"
 import { provideInstance, testInstanceStoreLayer, tmpdirScoped } from "../fixture/fixture"
@@ -384,6 +386,16 @@ describe("shell commands inside an agent session", () => {
       }).pipe(Effect.map((asked) => expect(asked).toBeUndefined())),
     )
   })
+
+  it.live("a finished command leaves no record behind to be ended later", () =>
+    Effect.gen(function* () {
+      const result = yield* run("echo done")
+      expect(result.output).toContain("done")
+      expect(result.metadata.exit).toBe(0)
+      const left = fs.readdirSync(path.join(Global.Path.state, "shell-running", "ses_trust"))
+      expect(left).toEqual([])
+    }),
+  )
 
   describe("what a command prints from a secret file", () => {
     const secrets = (dir: string) => {

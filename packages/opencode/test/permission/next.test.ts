@@ -1357,3 +1357,33 @@ it.instance("a harmless call does not skip a session's own catch-all", () =>
     expect(Exit.isFailure(yield* Fiber.join(asking))).toBe(true)
   }),
 )
+
+it.instance("a session keeps only so many skipped requests, dropping the oldest", () =>
+  Effect.acquireUseRelease(
+    Effect.sync(() => {
+      process.env.SWARM_UNATTENDED_AFTER_MS = "1"
+    }),
+    () =>
+      Effect.gen(function* () {
+        const permission = yield* Permission.Service
+        const night = SessionID.make("session_night")
+        const other = SessionID.make("session_other")
+        const skip = (sessionID: SessionID, pattern: string) =>
+          permission
+            .ask({ sessionID, permission: "edit", patterns: [pattern], metadata: {}, always: [], ruleset: [] })
+            .pipe(Effect.exit)
+        yield* skip(other, "other.ts")
+        for (let index = 0; index < Permission.MAX_SKIPPED + 3; index++) yield* skip(night, `file${index}.ts`)
+        const listed = yield* permission.list()
+        const kept = listed.filter((item) => item.sessionID === night)
+        expect(kept).toHaveLength(Permission.MAX_SKIPPED)
+        expect(kept[0]?.patterns).toEqual(["file3.ts"])
+        // Another session's are not this one's to drop.
+        expect(listed.filter((item) => item.sessionID === other)).toHaveLength(1)
+      }),
+    () =>
+      Effect.sync(() => {
+        delete process.env.SWARM_UNATTENDED_AFTER_MS
+      }),
+  ),
+)

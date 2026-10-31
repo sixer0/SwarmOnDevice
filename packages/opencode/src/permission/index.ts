@@ -10,6 +10,8 @@ import { Unattended } from "./unattended"
 
 export const Event = PermissionV1.Event
 
+export const MAX_SKIPPED = 20
+
 export interface Interface {
   readonly ask: (input: PermissionV1.AskInput) => Effect.Effect<void, PermissionV1.Error>
   /** Returns the request when the agent had already carried on without it: the caller decides how to pick that back up. */
@@ -153,6 +155,18 @@ const layer = Layer.effect(
         away.add(request.sessionID)
         yield* Effect.logInfo("moved on", { id, permission: info.permission })
         yield* events.publish(Event.Asked, moved)
+        // An unattended night can skip far more of these than anyone will read. The oldest are the least likely to matter.
+        const skipped = [...pending.values()].filter(
+          (item) => item.info.movedOnAt && item.info.sessionID === request.sessionID,
+        )
+        for (const item of skipped.slice(0, Math.max(0, skipped.length - MAX_SKIPPED))) {
+          pending.delete(item.info.id)
+          yield* events.publish(Event.Replied, {
+            sessionID: item.info.sessionID,
+            requestID: item.info.id,
+            reply: "reject",
+          })
+        }
         return yield* new PermissionV1.AwayError()
       })
       return yield* Effect.ensuring(
