@@ -2,6 +2,8 @@
 // every byte that passed through: a `read` result is someone else's file, and indexing it would make every common word
 // match every session that ever opened that file.
 
+import { Secrets } from "@/tool/secrets"
+
 const TOOL_OUTPUT_HEAD = 2_000
 const TOOL_OUTPUT_TAIL = 2_000
 const EDIT_LIMIT = 64_000
@@ -24,6 +26,12 @@ const string = (value: unknown) => (typeof value === "string" ? value : "")
 
 /** Null means there is nothing to index yet, or ever: a running tool, an empty step marker, an injected reminder. */
 export function extract(data: Data, role: string | undefined): Doc | null {
+  const doc = extractRaw(data, role)
+  // A secret someone typed, or wrote into a command, would otherwise sit in a second copy and come back in every search.
+  return doc && { ...doc, text: Secrets.scrubText(doc.text), label: Secrets.scrubText(doc.label) }
+}
+
+function extractRaw(data: Data, role: string | undefined): Doc | null {
   if (data.type === "text") {
     if (data.synthetic || data.ignored) return null
     const text = string(data.text).slice(0, TEXT_LIMIT)

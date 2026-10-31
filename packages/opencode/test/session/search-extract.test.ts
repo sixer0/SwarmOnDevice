@@ -19,6 +19,18 @@ describe("SessionSearchExtract.extract", () => {
     expect(SessionSearchExtract.extract({ type: "step-start" }, "assistant")).toBeNull()
   })
 
+  test("a secret written into a prompt or a command does not reach the index", () => {
+    const prompt = SessionSearchExtract.extract({ type: "text", text: "use the token TYPEDsecretVALUEeee555 please" }, "user")
+    expect(prompt?.text).not.toContain("TYPEDsecretVALUEeee555")
+    expect(prompt?.text).toContain("please")
+    const shell = SessionSearchExtract.extract(tool("bash", { command: "API_KEY=INPUTsecretVALUEddd444 echo hi" }), "assistant")
+    expect(shell?.text).not.toContain("INPUTsecretVALUEddd444")
+    expect(shell?.label).not.toContain("INPUTsecretVALUEddd444")
+    expect(shell?.text).toContain("echo hi")
+    const edit = SessionSearchExtract.extract(tool("write", { filePath: "cfg.txt", content: "password = hunter2hunter2\n" }), "assistant")
+    expect(edit?.text).not.toContain("hunter2hunter2")
+  })
+
   test("a tool still running has nothing to index yet", () => {
     expect(SessionSearchExtract.extract(tool("bash", { command: "x" }, { status: "running" }), "assistant")).toBeNull()
   })

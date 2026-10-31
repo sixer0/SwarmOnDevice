@@ -40,7 +40,7 @@ describe("Risk.classify", () => {
     expect(Risk.classify(["psql", "-c", "SELECT 1"])).toEqual({ kind: "unknown" })
   })
 
-  test.each(["ls src", "cat README.md", "git status --short", "git log --oneline -5", "git diff", "grep -r total src", "git fetch"])(
+  test.each(["ls src", "cat README.md", "git status --short", "git log --oneline -5", "git diff", "grep -r total src"])(
     "%s only reads",
     (command) => expect(kind(command)).toBe("harmless"),
   )
@@ -58,6 +58,7 @@ describe("Risk.classify", () => {
     "rg --pre evil x",
     "git diff --output=/tmp/x",
     "git -c core.pager=evil log",
+    "git fetch",
     "git rebase main",
     "git merge main",
     "git pull",
@@ -89,10 +90,48 @@ describe("Risk.classify", () => {
       expect(Risk.sensitive(file)).toBe(true)
     for (const file of ["src/orders.ts", "package.json", "docs/.github.md"]) expect(Risk.sensitive(file)).toBe(false)
   })
+
+  test("a disk that ignores case, or skips characters, opens the same file under another name", () => {
+    for (const file of [
+      ".GIT/config",
+      ".Git/hooks/pre-commit",
+      "SWARM.JSON",
+      "packages/x/Swarm.JSONC",
+      ".GitHub/workflows/y.yml",
+      ".HUSKY/pre-commit",
+      ".SWARM/command/y.md",
+      ".OPENCODE/x",
+      ".GITATTRIBUTES",
+      ".g\u200cit/config",
+      ".git./config",
+      ".git /config",
+      "git~1/config",
+      ".git::$INDEX_ALLOCATION/config",
+    ])
+      expect(Risk.sensitive(file)).toBe(true)
+  })
+
+  test("long flags can be cut short and short flags can share a dash", () => {
+    for (const command of ["sort --out=x y", "sort -uo x y", "sort --compress=sh y", "tree -ao x", "file -bC x", "grep -R x .", "rg --follow x", "du -L ."])
+      expect(kind(command)).toBe("unknown")
+  })
+
+  test("a flag that names a file is checked like an argument that does", () => {
+    expect(Risk.classify(["grep", "--file=/etc/hosts", "x"])).toEqual({ kind: "harmless", paths: ["x", "/etc/hosts"] })
+    expect(Risk.classify(["grep", "-f/etc/hosts", "x"])).toEqual({ kind: "harmless", paths: ["x", "/etc/hosts"] })
+  })
 })
 
 describe("harmless calls under the shipped baseline", () => {
   const rules = Permission.fromConfig(PERMISSION_BASELINE as never)
+  test("a person's own catch-all is not the baseline's", () => {
+    const { USER_CATCH_ALL } = Permission
+    expect(Permission.isShippedCatchAll(Permission.evaluate("edit", "src/a.ts", rules))).toBe(true)
+    const own = Permission.fromConfig({ "*": "ask", [USER_CATCH_ALL]: true } as never)
+    expect(Permission.isShippedCatchAll(Permission.evaluate("edit", "src/a.ts", own))).toBe(false)
+    expect(Permission.isShippedCatchAll({ permission: "*", pattern: "*", action: "ask" })).toBe(false)
+  })
+
   test("the baseline's catch-all is what a harmless call skips, and a named rule is not", () => {
     expect(Permission.evaluate("edit", "src/a.ts", rules).permission).toBe("*")
     expect(Permission.evaluate("bash", "curl x", rules).permission).toBe("bash")
@@ -115,7 +154,7 @@ describe("Secrets", () => {
   })
 
   test("knows which files hold secrets", () => {
-    for (const file of [".env", ".env.local", "a/.env.production", "prod.env", ".npmrc", "id_rsa", "cert.pem", "x.key", "credentials.json"])
+    for (const file of [".env", ".env.local", "a/.env.production", "prod.env", ".npmrc", "id_rsa", "cert.pem", "x.key", "credentials.json", ".ENV", ".NPMRC", ".ENVRC", "A/.Env.Local", ".NETRC", "CREDENTIALS", "config/secrets.yaml", "config/credentials.yml"])
       expect(Secrets.secretFile(file)).toBe(true)
     for (const file of [".env.example", ".env.sample", "env.ts", "environment.ts", "README.md"]) expect(Secrets.secretFile(file)).toBe(false)
   })
@@ -142,6 +181,19 @@ describe("Secrets", () => {
       delete process.env.TRUST_TEST_TOKEN
       delete process.env.TRUST_TEST_AUTH_SOCK
     }
+  })
+
+  test("text with no project to look in still loses what is plainly a secret", () => {
+    for (const [text, leak] of [
+      ["API_KEY=INPUTsecretVALUEddd444 echo hi", "INPUTsecretVALUEddd444"],
+      ["use the token TYPEDsecretVALUEeee555 please", "TYPEDsecretVALUEeee555"],
+      ["db pass is hunter2hunter2 on db.internal", "hunter2hunter2"],
+      ["password=abc", "abc"],
+      ["sk_live_a1b2c3d4e5f6g7h8", "sk_live"],
+    ] as const)
+      expect(Secrets.scrubText(text)).not.toContain(leak)
+    for (const text of ["the token parser lives in src/lexer.ts", "password reset emails go out", "key = item.id", "commit 9240f3eb7e5d1a2b3c4d5e6f7a8b9c0d1e2f3a4b"])
+      expect(Secrets.scrubText(text)).toBe(text)
   })
 
   test("refuses to write a placeholder over a real value", () => {

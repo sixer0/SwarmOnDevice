@@ -348,6 +348,38 @@ describe("SessionSearch", () => {
         }),
       ))
 
+    test("a line of a secret file comes back with its value hidden", () =>
+      run(({ db, search, catchUp }) =>
+        Effect.gen(function* () {
+          yield* Effect.promise(() => Bun.write(path.join(projectDir, ".env"), "PORT=3000\nAPI_KEY=abcSECRETvalue123456\n"))
+          yield* addSession(db, "Worked here")
+          yield* catchUp
+          const response = yield* search.search({ q: ".env:2", directory: projectDir })
+          expect(response.file?.text).toBe("API_KEY=[hidden:API_KEY]")
+        }),
+      ))
+
+    test("a link out of the project is not followed to read a line", () =>
+      run(({ search, catchUp }) =>
+        Effect.gen(function* () {
+          const link = path.join(projectDir, "hosts-link.txt")
+          yield* Effect.promise(() => fs.symlink("/etc/hosts", link).catch(() => undefined))
+          yield* catchUp
+          const response = yield* search.search({ q: "hosts-link.txt:1", directory: projectDir })
+          expect(response.file?.text).toBeUndefined()
+        }),
+      ))
+
+    test("a directory no session worked in is not a place to read from", () =>
+      run(({ db, search, catchUp }) =>
+        Effect.gen(function* () {
+          yield* addSession(db, "Worked here")
+          yield* catchUp
+          const response = yield* search.search({ q: "./hosts:1", directory: "/etc" })
+          expect(response.file?.text).toBeUndefined()
+        }),
+      ))
+
     test("something that only looks like a file is searched as words", () =>
       run(({ db, search, catchUp }) =>
         Effect.gen(function* () {

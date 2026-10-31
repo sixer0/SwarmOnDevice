@@ -10,7 +10,15 @@ export type Verdict =
   /** Reads only. `paths` must stay inside the project. */
   | { kind: "harmless"; paths: string[] }
   /** Changes files that the step's snapshot can restore, if `paths` turn out to be covered by it. */
-  | { kind: "undoable"; paths: string[]; removes?: boolean; hooks?: boolean }
+  | {
+      kind: "undoable"
+      paths: string[]
+      removes?: boolean
+      /** Repository hooks this fires: true for any of them. They run code, so it is only a plain file change without. */
+      hooks?: boolean | readonly string[]
+      /** Touches untracked files and leaves ignored ones alone, so only those have to be in the snapshot. */
+      untrackedOnly?: boolean
+    }
   | { kind: "risky"; risk: Risk }
   | { kind: "unknown" }
 
@@ -24,18 +32,28 @@ const READERS = new Set([
   "sleep",
 ])
 // Each of these turns a reader into something that writes, or runs another program.
+// Short flags can share a dash and long ones can be abbreviated, so `sort -uo x` and `sort --out=x` have to count too.
+// Following a symlink, or taking the list of files from a file, reads what the arguments here do not show.
 const NEVER: Record<string, RegExp> = {
-  find: /^-(delete|exec|execdir|ok|okdir|fprint|fprint0|fprintf|fls)$/,
-  sort: /^(-o|--output|--compress-program)/,
-  rg: /^--(pre|hostname-bin)/,
-  tree: /^-o/,
-  file: /^(-C|--compile)$/,
+  find: /^-(delete|exec|execdir|ok|okdir|fprint|fprint0|fprintf|fls|files0-from|L|H|follow)$/,
+  sort: /^(-[a-zA-Z]*o|--o|--comp|--files0)/,
+  rg: /^(--(pre|hostname-bin|follow)|-[a-zA-Z]*L)/,
+  grep: /^(-[a-zA-Z]*R|--dereference-recursive)/,
+  tree: /^(-[a-zA-Z]*[ol]|--fromfile)/,
+  file: /^(-[a-zA-Z]*[Cf]|--compile|--files-from)/,
+  wc: /^--files0/,
+  du: /^(--files0|-[a-zA-Z]*[LD]|--dereference)/,
+  jq: /^(-[a-zA-Z]*f|--from-file)/,
 }
 const GIT_READERS = new Set([
   "status", "diff", "log", "show", "blame", "rev-parse", "ls-files", "ls-tree", "describe", "shortlog", "rev-list",
-  "merge-base", "show-ref", "fetch",
+  "merge-base", "show-ref",
 ])
-const GIT_NEVER = /^(--output|--ext-diff|--upload-pack|--exec|--open-files-in-pager|-O|--textconv|--filters)/
+const GIT_NEVER =
+  /^(--output|--ext-diff|--upload-pack|--exec|--open-files-in-pager|-O|--textconv|--filters|--no-index|--contents|--file\b|--blob|--edit-description)/
+
+const INDEX_HOOK = ["post-index-change"]
+const CHECKOUT_HOOKS = ["post-checkout", "post-index-change"]
 
 const REMOTE: [string, RegExp][] = [
   ["npm", /^publish$/], ["pnpm", /^publish$/], ["yarn", /^publish$/], ["bun", /^publish$/], ["cargo", /^publish$/],
@@ -62,39 +80,66 @@ function git(args: string[]): Verdict {
     return risky(force ? "irreversible" : "remote")
   }
   if (["filter-branch", "filter-repo", "update-ref", "replace"].includes(sub)) return risky("irreversible")
+  // Reaches another machine, runs its credential helper or ssh command, and writes refs. A named place can carry data.
+  if (sub === "fetch")
+    return rest.some((a) => !flag(a) && /[:/@]|^\./.test(a)) ? risky("remote") : UNKNOWN
   if (sub === "reflog" && ["expire", "delete"].includes(rest[0] ?? "")) return risky("irreversible")
   if (sub === "gc" && rest.some((a) => a.startsWith("--prune"))) return risky("irreversible")
   if (sub === "stash") {
     if (["drop", "clear"].includes(rest[0] ?? "")) return risky("irreversible")
+    if (rest.some((a) => GIT_NEVER.test(a))) return UNKNOWN
     if (["list", "show"].includes(rest[0] ?? "")) return { kind: "harmless", paths: [] }
-    if (rest.length === 0 || rest[0] === "push") return { kind: "undoable", paths: [] }
+    if (rest.length === 0 || rest[0] === "push") return { kind: "undoable", paths: [], hooks: CHECKOUT_HOOKS }
     return UNKNOWN
   }
   if (sub === "branch") {
     if (rest.some((a) => /^(-D|-M|--delete|--force|-f|-d|-m|--move)$/.test(a)))
       return rest.some((a) => /^(-D|-M|--force|-f)$/.test(a)) ? risky("irreversible") : UNKNOWN
+    if (rest.some((a) => GIT_NEVER.test(a))) return UNKNOWN
     return { kind: "harmless", paths: [] }
   }
   if (sub === "reset") {
-    if (!rest.includes("--hard")) return { kind: "undoable", paths: [] }
     // The tree comes back through the snapshot, but commits the branch no longer points at do not.
-    const target = rest.filter((a) => !flag(a))
-    return target.length === 0 || (target.length === 1 && target[0] === "HEAD")
-      ? { kind: "undoable", paths: [] }
-      : risky("irreversible")
+    const separator = rest.indexOf("--")
+    const target = (separator < 0 ? rest : rest.slice(0, separator)).filter((a) => !flag(a))
+    if (target.length === 0 || (target.length === 1 && target[0] === "HEAD")) return { kind: "undoable", paths: [], hooks: INDEX_HOOK }
+    if (rest.some((a) => /^--(hard|soft|keep|merge|mixed)$/.test(a)) || target.some((a) => /[~^@]|^[0-9a-f]{7,40}$/.test(a)))
+      return risky("irreversible")
+    // `git reset main` moves the branch and `git reset src/a.ts` only unstages. Without a separator a name can be either.
+    return separator < 0 && !target.every((a) => /[/.]/.test(a)) ? UNKNOWN : { kind: "undoable", paths: [], hooks: INDEX_HOOK }
   }
   if (sub === "clean") {
     if (rest.some((a) => /^-[a-z]*[xX]/.test(a))) return risky("irreversible")
-    return rest.some((a) => /^-[a-z]*f/.test(a) || a === "--force") ? { kind: "undoable", paths: [] } : { kind: "harmless", paths: [] }
+    return rest.some((a) => /^-[a-z]*f/.test(a) || a === "--force")
+      ? { kind: "undoable", paths: ["."], removes: true, untrackedOnly: true }
+      : { kind: "harmless", paths: [] }
   }
   if (rest.some((a) => GIT_NEVER.test(a))) return UNKNOWN
   if (GIT_READERS.has(sub)) return { kind: "harmless", paths: [] }
   if (sub === "remote") return rest.length === 0 || rest[0] === "-v" || rest[0] === "get-url" ? { kind: "harmless", paths: [] } : UNKNOWN
   if (sub === "tag") return rest.length === 0 || rest[0] === "-l" || rest[0] === "--list" ? { kind: "harmless", paths: [] } : UNKNOWN
-  if (sub === "config") return rest[0] === "--get" || rest[0] === "--list" || rest[0] === "-l" ? { kind: "harmless", paths: [] } : UNKNOWN
-  if (sub === "commit") return { kind: "undoable", paths: [], hooks: true }
-  if (["add", "restore", "checkout", "switch", "rm", "mv"].includes(sub)) return { kind: "undoable", paths: [] }
+  if (sub === "config") {
+    if (rest.some((a) => /^-[a-zA-Z]*f/.test(a))) return UNKNOWN
+    return rest[0] === "--get" || rest[0] === "--list" || rest[0] === "-l" ? { kind: "harmless", paths: [] } : UNKNOWN
+  }
+  if (sub === "commit") {
+    // Rewriting the last commit is not in the snapshot, and these take the message from a file the arguments only name.
+    if (rest.some((a) => /^(--amend|-[a-zA-Z]*F|--file|-t|--template|-[cC]|--reuse-message|--reedit-message)/.test(a))) return UNKNOWN
+    return { kind: "undoable", paths: [], hooks: true }
+  }
+  if (sub === "checkout" || sub === "switch") {
+    if (rest.some((a) => /^(-[a-zA-Z]*[BC]|--force-create)/.test(a))) return risky("irreversible")
+    return { kind: "undoable", paths: [], hooks: CHECKOUT_HOOKS }
+  }
+  if (["add", "restore", "rm", "mv"].includes(sub)) return { kind: "undoable", paths: [], hooks: INDEX_HOOK }
   return UNKNOWN
+}
+
+// `grep --file=/etc/hosts` and `grep -f/etc/hosts` read a file just as `grep -f /etc/hosts` does.
+function flagPath(arg: string) {
+  if (!flag(arg) || !arg.includes("/")) return []
+  const equals = arg.indexOf("=")
+  return [equals >= 0 ? arg.slice(equals + 1) : arg.slice(2)]
 }
 
 /** `tokens` are the command name and arguments with quotes removed. */
@@ -123,7 +168,7 @@ export function classify(tokens: string[]): Verdict {
     if (NEVER[name] && args.some((a) => NEVER[name].test(a))) return UNKNOWN
     if (name === "uniq" && args.filter((a) => !flag(a)).length > 1) return UNKNOWN
     if (name === "echo" || name === "printf" || name === "printenv" || name === "sleep") return { kind: "harmless", paths: [] }
-    return { kind: "harmless", paths: args.filter((a) => !flag(a)) }
+    return { kind: "harmless", paths: [...args.filter((a) => !flag(a)), ...args.flatMap(flagPath)] }
   }
   if (name === "mkdir" || name === "touch") {
     const paths = args.filter((a) => !flag(a))
@@ -140,9 +185,24 @@ export function classify(tokens: string[]): Verdict {
 }
 
 // Editing these changes what later runs, or what the agent is allowed to do. Undo restoring them afterwards is too late.
-const SENSITIVE = /(^|\/)(\.git|\.husky|\.swarm|\.opencode)(\/|$)|(^|\/)(swarm|opencode)\.jsonc?$|^\.github\/workflows\/|(^|\/)\.gitattributes$/
+const SENSITIVE =
+  /(^|\/)(\.git|git~\d+|\.husky|\.githooks|\.swarm|\.opencode)(\/|$)|(^|\/)(swarm|opencode)\.jsonc?$|^\.github\/workflows\/|(^|\/)\.git(attributes|modules)$/
 
-export const sensitive = (relative: string) => SENSITIVE.test(relative.replaceAll("\\", "/"))
+// macOS and Windows disks ignore case, so `.GIT/config` is `.git/config`. HFS+ also skips some invisible characters and
+// NTFS skips trailing dots and spaces and takes a stream suffix. Matching what the disk would open costs one prompt at most.
+const IGNORED_CHARACTERS = /[\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufeff]/g
+
+export const canonical = (relative: string) =>
+  relative
+    .replaceAll("\\", "/")
+    .normalize("NFC")
+    .replace(IGNORED_CHARACTERS, "")
+    .toLowerCase()
+    .split("/")
+    .map((part) => (part === "." || part === ".." ? part : part.replace(/:.*$/, "").replace(/[. ]+$/, "")))
+    .join("/")
+
+export const sensitive = (relative: string) => SENSITIVE.test(canonical(relative))
 
 // Rebuilt by a command, so losing them costs a rebuild. Ignored files with any other name may be the only copy.
 const REBUILT = new Set(["node_modules", "dist", "build", "out", "target", ".next", ".nuxt", ".turbo", ".cache", ".parcel-cache", "coverage", "__pycache__", ".pytest_cache"])

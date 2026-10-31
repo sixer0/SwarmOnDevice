@@ -4,6 +4,7 @@ import { InstanceState } from "@/effect/instance-state"
 import type * as Tool from "./tool"
 import { containsPath } from "../project/instance-context"
 import { FSUtil } from "@opencode-ai/core/fs-util"
+import { Reach } from "./reach"
 
 type Kind = "file" | "directory"
 
@@ -23,10 +24,13 @@ export const assertExternalDirectoryEffect = Effect.fn("Tool.assertExternalDirec
 
   const ins = yield* InstanceState.context
   const full = process.platform === "win32" ? FSUtil.normalizePath(target) : target
-  if (containsPath(full, ins)) return false
+  const named = containsPath(full, ins)
+  if (named && Reach.inside(full, ins)) return false
 
+  // A symlink in the project that leads out of it: what the person is being asked about is where it leads.
+  const landed = named ? (Reach.real(full) ?? full) : full
   const kind = options?.kind ?? "file"
-  const dir = kind === "directory" ? full : path.dirname(full)
+  const dir = kind === "directory" ? landed : path.dirname(landed)
   const glob =
     process.platform === "win32"
       ? FSUtil.normalizePathPattern(path.join(dir, "*"))
@@ -37,7 +41,7 @@ export const assertExternalDirectoryEffect = Effect.fn("Tool.assertExternalDirec
     patterns: [glob],
     always: [glob],
     metadata: {
-      filepath: full,
+      filepath: landed,
       parentDir: dir,
     },
   })

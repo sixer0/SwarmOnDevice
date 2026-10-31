@@ -15,6 +15,7 @@ import { lock, trimDiff } from "./edit"
 import { FileSeen } from "./file-seen"
 import { Secrets } from "./secrets"
 import { assertExternalDirectoryEffect } from "./external-directory"
+import { Reach } from "./reach"
 import * as Bom from "@/util/bom"
 
 const MAX_PROJECT_DIAGNOSTICS_FILES = 5
@@ -55,15 +56,17 @@ export const WriteTool = Tool.define(
           const diff = trimDiff(createTwoFilesPatch(filepath, filepath, contentOld, contentNew))
           const label = path.relative(instance.worktree, filepath)
           Secrets.assertNoPlaceholder(contentNew, contentOld, label)
+          const trust = yield* Reach.editTrust(ctx, instance, [filepath])
           yield* ctx.ask({
             permission: "edit",
             patterns: [label],
-            always: ["*"],
+            always: trust.risk ? [] : ["*"],
             metadata: {
               filepath,
               diff,
+              ...(trust.risk ? { risk: trust.risk } : {}),
             },
-            harmless: Tool.undoableEdit(ctx, label),
+            harmless: trust.harmless,
           })
 
           // Two agents may be here at once, and an answer to the prompt above may have taken a while.

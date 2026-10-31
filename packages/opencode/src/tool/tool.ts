@@ -6,9 +6,7 @@ import type { MessageV2 } from "../session/message-v2"
 import type { Permission } from "../permission"
 import type { SessionID, MessageID } from "../session/schema"
 import * as Truncate from "./truncate"
-import path from "path"
 import { InstanceRef } from "@/effect/instance-ref"
-import { Risk } from "./risk"
 import { Secrets } from "./secrets"
 import { Agent } from "@/agent/agent"
 
@@ -52,17 +50,6 @@ export type Context<M extends Metadata = Metadata> = {
     /** Each step snapshots this project, so Undo can restore what changes in it. */
     canUndo: boolean
   }
-}
-
-/** A change to this project file that Undo can take back, and that does not change what runs or what is allowed later. */
-export function undoableEdit(ctx: Pick<Context, "trust">, relative: string) {
-  return (
-    Boolean(ctx.trust?.canUndo) &&
-    !relative.startsWith("..") &&
-    !path.isAbsolute(relative) &&
-    !Risk.sensitive(relative) &&
-    !Secrets.secretFile(relative)
-  )
 }
 
 export interface ExecuteResult<M extends Metadata = Metadata> {

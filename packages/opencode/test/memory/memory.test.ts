@@ -128,7 +128,7 @@ describe("learning from commands", () => {
         yield* run(memory, "s", "bun test", 0, "12 pass")
         const items = (yield* memory.get()).items
         expect(items.map((item) => item.text)).toEqual([
-          '`npm test` does not work here (npm error Missing script: "test"). `bun test` does.',
+          "`npm test` does not work here. `bun test` does.",
         ])
         expect(items[0]?.source).toBe("learned")
       }),

@@ -14,7 +14,7 @@ const RANDOM_LOOKING = /^(?=.*[0-9])(?=.*[A-Za-z])[A-Za-z0-9+/_=.-]{20,}$/
 
 const ENV_FILE = /^\.env(\.|$)|\.env$/
 const ENV_EXAMPLE = /\.(example|sample|template|dist|defaults)$/
-const WHOLE_FILE = /(^|\/)(id_rsa|id_ed25519|id_ecdsa|id_dsa|\.netrc|\.pgpass|\.git-credentials|credentials|credentials\.json|service-account.*\.json)$|\.(pem|key|p12|pfx|keystore|jks)$/i
+const WHOLE_FILE = /(^|\/)(id_rsa|id_ed25519|id_ecdsa|id_dsa|\.netrc|\.pgpass|\.git-credentials|credentials|service-account.*\.json|(secrets?|credentials?)\.(ya?ml|json|toml|ini))$|\.(pem|key|p12|pfx|keystore|jks)$/i
 
 // Values that are recognisable wherever they turn up, including in a log line nobody expected them in.
 const SHAPES: [RegExp, string][] = [
@@ -27,6 +27,8 @@ const SHAPES: [RegExp, string][] = [
   [/\b(AKIA|ASIA)[0-9A-Z]{16}\b/g, "[hidden:aws-key]"],
   [/\bAIza[0-9A-Za-z_-]{30,}/g, "[hidden:api-key]"],
   [/\b([a-z][a-z0-9+.-]*:\/\/[^/\s:@]+:)[^/\s@]+(@)/gi, "$1[hidden:password]$2"],
+  [/\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/g, "[hidden:token]"],
+  [/\b(bearer\s+)[A-Za-z0-9._~+/-]{12,}/gi, "$1[hidden:token]"],
 ]
 
 // SESSION_TTL=3600 or AUTH_URL=https://... under a secret-sounding name. The agent needs these to do its job.
@@ -40,8 +42,10 @@ export function secretPair(name: string, value: string) {
 }
 
 const fileKind = (file: string) => {
-  const base = path.basename(file)
-  if (WHOLE_FILE.test(file)) return "whole" as const
+  // Case-insensitive disks: `.ENV` opens `.env`.
+  const name = file.replaceAll("\\", "/").normalize("NFC").toLowerCase()
+  const base = path.basename(name)
+  if (WHOLE_FILE.test(name)) return "whole" as const
   if (ENV_EXAMPLE.test(base)) return undefined
   if (ENV_FILE.test(base) || base === ".npmrc" || base === ".envrc") return "env" as const
   return undefined
@@ -73,6 +77,21 @@ function pairs(text: string) {
   return out
 }
 
+// Credential files that are not `NAME=value`: `.netrc`, `.pgpass`, YAML. Only values that are known can be hidden.
+function fileValues(file: string, text: string) {
+  const base = path.basename(file).toLowerCase()
+  const out = pairs(text)
+  for (const line of text.split("\n")) {
+    const yaml = line.match(/^\s*(?:-\s*)?["']?([A-Za-z_][\w.-]*)["']?\s*:\s*(\S.*)$/)
+    const value = yaml ? unquoted(yaml[2]) : ""
+    if (yaml && secretPair(yaml[1], value)) out.push([yaml[1], urlPassword(value) ?? value])
+    for (const match of line.matchAll(/\b(password|passwd|account)\s+(\S+)/gi)) out.push([match[1], match[2]])
+    const fields = line.split(":")
+    if (base === ".pgpass" && fields.length === 5) out.push(["pgpass", fields[4].trim()])
+  }
+  return out
+}
+
 /** One line of a .env-style file, with a secret value replaced. */
 export function maskLine(line: string) {
   const match = line.match(PAIR)
@@ -86,54 +105,88 @@ export function maskLine(line: string) {
 // Short values would replace ordinary words everywhere. A short password is still hidden in its own file by maskLine.
 const MIN_KNOWN = 6
 const FRESH_MS = 3000
+// A secret file deep in a repository is found by walking it, so that walk is rationed. Near the root is checked every time.
+const NEAR = 2
+const DEEP = 8
+const DEEP_FRESH_MS = 30_000
+const MAX_ENTRIES = 20_000
+const MAX_SECRET_FILE = 1024 * 1024
 const SKIP = new Set(["node_modules", ".git", "dist", "build", "out", "target", "vendor", ".next", ".turbo"])
 
-type Known = { at: number; values: [string, string][] }
+type Known = { at: number; version: number; values: [string, string][] }
 const cache = new Map<string, Known>()
 const learned = new Map<string, string>()
+let learnedVersion = 0
+const deepFiles = new Map<string, { at: number; files: string[] }>()
 
-function envFiles(root: string, depth: number, out: string[]) {
+function walkSecretFiles(root: string, depth: number, out: string[], budget: { left: number }) {
   let entries: fs.Dirent[]
   try {
     entries = fs.readdirSync(root, { withFileTypes: true })
   } catch {
     return out
   }
+  budget.left -= entries.length
   for (const entry of entries) {
     if (entry.isDirectory()) {
-      if (depth > 0 && !SKIP.has(entry.name) && !entry.name.startsWith(".")) envFiles(path.join(root, entry.name), depth - 1, out)
+      if (depth > 0 && budget.left > 0 && !SKIP.has(entry.name) && !entry.name.startsWith("."))
+        walkSecretFiles(path.join(root, entry.name), depth - 1, out, budget)
       continue
     }
-    if (entry.isFile() && fileKind(entry.name) === "env") out.push(path.join(root, entry.name))
+    if (entry.isFile() && fileKind(entry.name) !== undefined) out.push(path.join(root, entry.name))
   }
   return out
 }
 
+function secretFiles(root: string) {
+  const near = walkSecretFiles(root, NEAR, [], { left: MAX_ENTRIES })
+  // A project at the disk's root has no depth worth walking.
+  if (root === path.parse(root).root) return near
+  const hit = deepFiles.get(root)
+  if (hit && Date.now() - hit.at < DEEP_FRESH_MS) return [...new Set([...near, ...hit.files])]
+  const files = walkSecretFiles(root, DEEP, [], { left: MAX_ENTRIES })
+  deepFiles.set(root, { at: Date.now(), files })
+  return [...new Set([...near, ...files])]
+}
+
+function readSecretFile(file: string) {
+  try {
+    return fs.statSync(file).size > MAX_SECRET_FILE ? undefined : fs.readFileSync(file, "utf8")
+  } catch {
+    return undefined
+  }
+}
+
 function known(root: string): [string, string][] {
   const hit = cache.get(root)
-  if (hit && Date.now() - hit.at < FRESH_MS && hit.values.length >= learned.size) return hit.values
+  if (hit && Date.now() - hit.at < FRESH_MS && hit.version === learnedVersion) return hit.values
   const found = new Map<string, string>(learned)
   for (const [name, value] of Object.entries(process.env)) {
     // A path is not a secret just because its variable is called SSH_AUTH_SOCK.
     if (value && value.length >= 8 && !value.startsWith("/") && secretPair(name, value))
       found.set(urlPassword(value) ?? value, name)
   }
-  for (const file of envFiles(root, 2, [])) {
-    try {
-      for (const [name, value] of pairs(fs.readFileSync(file, "utf8"))) if (value.length >= MIN_KNOWN) found.set(value, name)
-    } catch {
-      continue
-    }
+  for (const file of secretFiles(root)) {
+    const text = readSecretFile(file)
+    if (text === undefined) continue
+    for (const [name, value] of fileValues(file, text)) if (value.length >= MIN_KNOWN) found.set(value, name)
   }
   // Longest first, so a value inside a longer one does not leave the rest of it showing.
   const values = [...found.entries()].sort((a, b) => b[0].length - a[0].length)
-  cache.set(root, { at: Date.now(), values })
+  cache.set(root, { at: Date.now(), version: learnedVersion, values })
   return values
 }
 
 /** Remembers the values of a secret file outside the usual places, so they are hidden everywhere from now on. */
-export function learn(text: string) {
-  for (const [name, value] of pairs(text)) if (value.length >= MIN_KNOWN) learned.set(value, name)
+export function learn(text: string, file = ".env") {
+  for (const [name, value] of fileValues(file, text)) if (value.length >= MIN_KNOWN) learned.set(value, name)
+  learnedVersion++
+}
+
+/** A command named this file, which may be anywhere, so what it prints can be recognised. */
+export function learnFile(file: string) {
+  const text = readSecretFile(file)
+  if (text !== undefined) learn(text, file)
 }
 
 export function scrub(text: string, root: string) {
@@ -141,6 +194,35 @@ export function scrub(text: string, root: string) {
   for (const [value, name] of known(root)) if (out.includes(value)) out = out.replaceAll(value, `[hidden:${name}]`)
   for (const [shape, mask] of SHAPES) out = out.replace(shape, mask)
   return out
+}
+
+// `API_KEY=abc`, with a value written out rather than read from anywhere. `key = item.id` in code is not one.
+const ASSIGNED = /(^|[\s;&|("'`])((?:export\s+)?)([A-Za-z_][A-Za-z0-9_.-]*)(\s*=\s*)("[^"\n]*"|'[^'\n]*'|[^\s"'`;&|)]+)/g
+const PLAIN_SECRET_NAME = /^(password|passwd|pwd|secret|token)$/i
+// `the token abc123`. A word on its own is left alone: "the token parser" and "password reset" are ordinary sentences.
+const SPOKEN =
+  /\b((?:pass(?:word|wd|phrase)?|pwd|secret|token|api[ _-]?key|access[ _-]?key|private[ _-]?key|credential)s?)\b((?:\s+(?:value|is|was|=|:))*\s*[:=]?\s*)(["']?)([^\s"'`,;]{4,})/gi
+const LONG_TOKEN = /[A-Za-z0-9+_-]{32,}/g
+const mixedCase = (text: string) => /[a-z]/.test(text) && /[A-Z]/.test(text)
+const tokenLike = (text: string) => /\d/.test(text) || (text.length >= 8 && mixedCase(text))
+
+/**
+ * For text with no project to look values up in: a prompt, a typed command, a note. Works on what a value looks like and
+ * what it is called, so it catches a secret that is written out, not a plain word somebody uses as a password.
+ */
+export function scrubText(text: string) {
+  const known = [...learned.entries()].reduce((out, [value, name]) => out.replaceAll(value, `[hidden:${name}]`), text)
+  return SHAPES.reduce((out, [shape, mask]) => out.replace(shape, mask), known)
+    .replace(ASSIGNED, (whole, start: string, exported: string, name: string, equals: string, value: string) => {
+      const inner = unquoted(value)
+      if (!secretPair(name, inner) || PLACEHOLDER.test(inner)) return whole
+      const written = value !== inner || name === name.toUpperCase() || tokenLike(inner) || PLAIN_SECRET_NAME.test(name)
+      return written ? `${start}${exported}${name}${equals}[hidden:${name}]` : whole
+    })
+    .replace(SPOKEN, (whole, name: string, between: string, _quote: string, value: string) =>
+      tokenLike(value) && !PLACEHOLDER.test(value) ? `${name}${between}[hidden:${name}]` : whole,
+    )
+    .replace(LONG_TOKEN, (token) => (mixedCase(token) && /\d/.test(token) ? "[hidden:token]" : token))
 }
 
 function scrubValue<T>(value: T, root: string, depth: number): T {

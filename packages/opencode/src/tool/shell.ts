@@ -1,7 +1,6 @@
 import { Effect, Stream } from "effect"
 import os from "os"
 import { createWriteStream } from "node:fs"
-import { readdir, stat } from "node:fs/promises"
 import * as Tool from "./tool"
 import path from "path"
 import { containsPath, type InstanceContext } from "../project/instance-context"
@@ -23,9 +22,9 @@ import { ChildProcess } from "effect/unstable/process"
 import { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner"
 import { ShellPrompt, type Parameters } from "./shell/prompt"
 import { BashArity } from "@/permission/arity"
-import { execFile } from "node:child_process"
-import { promisify } from "node:util"
 import { Risk } from "./risk"
+import { Reach } from "./reach"
+import { Secrets } from "./secrets"
 
 export { Parameters } from "./shell/prompt"
 
@@ -84,6 +83,10 @@ type Scan = {
   always: Set<string>
   harmless: Set<string>
   risk?: Risk.Risk
+  /** Secret files the command names, so what it prints from them can be recognised. */
+  secretFiles: Set<string>
+  /** Set when it reshapes one of them, because a secret cut into pieces or re-encoded can no longer be recognised. */
+  withheld?: string
 }
 
 type Chunk = {
@@ -276,54 +279,93 @@ const parse = Effect.fn("ShellTool.parse")(function* (command: string, ps: boole
   return tree
 })
 
-const git = promisify(execFile)
-// Matches the size above which a step's snapshot leaves an untracked file out.
-const SNAPSHOT_FILE_LIMIT = 2 * 1024 * 1024
+// What a command is allowed to be made of before anything in it is taken at face value. Everything else, such as a group,
+// a subshell, a loop, an expansion or a heredoc, means the arguments the parser sees are not what the shell will use.
+const UNDERSTOOD = new Set([
+  "program",
+  "comment",
+  "command",
+  "command_name",
+  "word",
+  "number",
+  "string",
+  "string_content",
+  "raw_string",
+  "concatenation",
+  "list",
+  "pipeline",
+  "redirected_statement",
+  "file_redirect",
+  "file_descriptor",
+])
 
-/** Whether the step's snapshot would leave anything under these paths behind, so Undo could not bring it back. */
-async function outsideSnapshot(worktree: string, paths: string[]) {
-  const list = async (...args: string[]) =>
-    (await git("git", ["-C", worktree, "ls-files", "-z", "--others", "--exclude-standard", ...args, "--", ...paths], { maxBuffer: 64 * 1024 * 1024 })).stdout
-      .split("\0")
-      .filter(Boolean)
-  try {
-    if ((await list("--ignored", "--directory")).some((file) => !Risk.rebuilt(file))) return true
-    const sizes = await Promise.all(
-      (await list()).map((file) => stat(path.join(worktree, file)).then((info) => info.size, () => 0)),
-    )
-    return sizes.some((size) => size > SNAPSHOT_FILE_LIMIT)
-  } catch {
-    return true
-  }
+function understood(node: Node): boolean {
+  if (!UNDERSTOOD.has(node.type) || node.isError || node.isMissing) return false
+  return node.namedChildren.every((child) => child !== null && understood(child))
 }
 
-/** A commit runs the repository's hooks, which is running code, so it only counts as a plain file change without any. */
-async function hasGitHooks(worktree: string) {
-  try {
-    const run = (...args: string[]) => git("git", ["-C", worktree, ...args]).then((out) => out.stdout.trim())
-    const custom = await run("config", "--get", "core.hooksPath").catch(() => "")
-    if (custom) return true
-    const dir = await run("rev-parse", "--path-format=absolute", "--git-path", "hooks")
-    return (await readdir(dir).catch(() => [] as string[])).some((file) => !file.endsWith(".sample"))
-  } catch {
-    return true
-  }
+// The shell rewrites these before the command sees them: globs, braces, escapes, `~user`, and quotes inside a word.
+const REWRITTEN = /[*?[\]{}\\"'`$]|^~[^/]/
+
+function literal(part: { type: string; text: string }) {
+  if (part.type === "string" || part.type === "raw_string") return !/[$`]/.test(part.text) || part.type === "raw_string"
+  if (part.type === "number") return true
+  return part.type === "word" && !REWRITTEN.test(part.text)
 }
 
-function redirectTargets(node: Node) {
-  const parent = node.parent
-  if (parent?.type !== "redirected_statement") return { targets: [] as string[], dynamic: false }
-  const targets: string[] = []
-  let moving = false
-  for (const redirect of parent.descendantsOfType("file_redirect")) {
-    if (!redirect || !/>/.test(redirect.text)) continue
-    const target = unquote(redirect.childForFieldName("destination")?.text ?? redirect.lastChild?.text ?? "")
-    if (/^(\d+|-|\/dev\/null)$/.test(target)) continue
-    if (dynamic(target, false) || !target) moving = true
-    else targets.push(target)
+/** Every redirect in the command, wherever it sits, and whether each is one this file can vouch for. */
+function redirectsIn(root: Node) {
+  const writes: string[] = []
+  const reads: string[] = []
+  const loose: string[] = []
+  let unproven = false
+  for (const redirect of root.descendantsOfType("file_redirect")) {
+    if (!redirect) continue
+    const destinations = redirect.childrenForFieldName("destination").filter((node) => node !== null)
+    const destination = destinations[0]
+    // `echo x > a b` passes `b` to echo, and the grammar files it under the redirect.
+    if (destinations.length !== 1 || !destination) {
+      unproven = true
+      continue
+    }
+    const operator = redirect.text.slice(0, destination.startIndex - redirect.startIndex).trim()
+    const owner = redirect.parent
+    const plain =
+      owner?.type === "command" ||
+      (owner?.type === "redirected_statement" && owner.childForFieldName("body")?.type === "command")
+    if (!plain) loose.push((owner ?? redirect).text.trim())
+    // `2>&1` and `>&-` move a stream and name no file.
+    if (/[<>]&$/.test(operator) && /^(\d+|-)$/.test(destination.text)) continue
+    if (!literal({ type: destination.type, text: destination.text })) {
+      unproven = true
+      continue
+    }
+    const target = unquote(destination.text)
+    if (target === "/dev/null") continue
+    if (operator.includes(">")) writes.push(target)
+    else reads.push(target)
   }
-  return { targets, dynamic: moving }
+  return { writes, reads, loose, unproven }
 }
+
+// These change the shape of what they read, so no search for the value would find it in their output.
+const RESHAPES = new Set([
+  "cut", "jq", "yq", "sed", "awk", "gawk", "tr", "rev", "base64", "base32", "xxd", "od", "hexdump", "strings", "fold",
+  "openssl", "iconv", "gzip", "zip", "tar",
+])
+const INLINE_CODE = new Set(["python", "python3", "node", "bun", "deno", "ruby", "perl", "php", "sh", "bash", "zsh"])
+
+function reshapes(tokens: string[]) {
+  const name = tokens[0]
+  if (!name) return false
+  const args = tokens.slice(1)
+  if (RESHAPES.has(name)) return true
+  if (name === "grep" || name === "rg") return args.some((arg) => /^(-[a-zA-Z]*o|--only-matching)/.test(arg))
+  if (name === "head" || name === "tail") return args.some((arg) => /^(-c|--bytes)/.test(arg))
+  return INLINE_CODE.has(name) && args.some((arg) => /^-[a-zA-Z]*[ce]/.test(arg))
+}
+
+const WORD_BREAK = /[\s'"|;&<>()=,:]+/
 
 const ask = Effect.fn("ShellTool.ask")(function* (ctx: Tool.Context, scan: Scan, input: { command: string }) {
   if (scan.dirs.size > 0) {
@@ -465,51 +507,60 @@ export const ShellTool = Tool.define(
         patterns: new Set<string>(),
         always: new Set<string>(),
         harmless: new Set<string>(),
+        secretFiles: new Set<string>(),
       }
       const shellKind = ShellID.toKind(Shell.name(shell))
       // A changed directory, variable or function means no argument here can be taken at face value.
       const posix = Boolean(trust) && !ps && shellKind !== "cmd"
+      const redirects = ps ? { writes: [], reads: [], loose: [], unproven: false } : redirectsIn(root)
+      const proven = !ps && understood(root)
       const uncertain =
-        !posix ||
-        commands(root).some((node) => CWD.has(node.firstChild?.text ?? "")) ||
-        root.descendantsOfType("variable_assignment").length > 0 ||
-        root.descendantsOfType("function_definition").length > 0
+        !posix || !proven || redirects.unproven || commands(root).some((node) => CWD.has(node.firstChild?.text ?? ""))
+      const absolute = (file: string) => path.resolve(cwd, home(file))
 
-      const judge = Effect.fn("ShellTool.judge")(function* (node: Node, tokens: string[]) {
+      const judge = Effect.fn("ShellTool.judge")(function* (command: Part[], tokens: string[]) {
         const verdict = Risk.classify(tokens.map(unquote))
         if (verdict.kind === "risky" || verdict.kind === "unknown" || uncertain) {
           return verdict.kind === "risky" ? verdict : ({ kind: "unknown" } as const)
         }
-        const redirect = redirectTargets(node)
-        if (redirect.dynamic) return { kind: "unknown" } as const
+        const prints = tokens[0] === "echo" || tokens[0] === "printf" || tokens[0] === "sleep"
+        if (!prints && !command.slice(1).every((part) => part.text.startsWith("-") || literal(part)))
+          return { kind: "unknown" } as const
         const removes = verdict.kind === "undoable" && verdict.removes
-        const changed = [...(verdict.kind === "undoable" ? verdict.paths : []), ...redirect.targets]
-        const absolute = (file: string) => path.resolve(cwd, home(file))
+        const changed = [...(verdict.kind === "undoable" ? verdict.paths : []), ...redirects.writes].map(absolute)
         const lost = { kind: "risky", risk: "irreversible" } as const
-        for (const file of [...verdict.paths, ...redirect.targets].map(absolute)) {
-          if (containsPath(file, instance)) {
-            if (changed.map(absolute).includes(file) && Risk.sensitive(path.relative(instance.worktree, file)))
-              return removes ? lost : ({ kind: "unknown" } as const)
-            continue
-          }
-          return removes ? lost : ({ kind: "unknown" } as const)
+        for (const file of [...verdict.paths, ...redirects.reads, ...redirects.writes].map(absolute)) {
+          // Reached through a symlink, the name says nothing about where this lands, and the snapshot does not go there.
+          if (!containsPath(file, instance) || !Reach.inside(file, instance)) return removes ? lost : ({ kind: "unknown" } as const)
+          if (changed.includes(file) && Reach.sensitive(file, instance)) return removes ? lost : ({ kind: "unknown" } as const)
         }
+        const repository = tokens[0] === "git"
+        if (repository && (yield* Effect.promise(() => Reach.hasGitPrograms(cwd)))) return { kind: "unknown" } as const
         if (verdict.kind === "harmless" && changed.length === 0) return { kind: "harmless" } as const
         if (!trust?.canUndo) return { kind: "unknown" } as const
-        if (verdict.kind === "undoable" && verdict.hooks && (yield* Effect.promise(() => hasGitHooks(instance.worktree))))
-          return { kind: "unknown" } as const
-        if (
-          changed.length > 0 &&
-          (yield* Effect.promise(() => outsideSnapshot(instance.worktree, changed.map(absolute))))
-        )
+        if (verdict.kind === "undoable" && verdict.hooks) {
+          const names = verdict.hooks === true ? undefined : verdict.hooks
+          if (yield* Effect.promise(() => Reach.hasGitHooks(cwd, names))) return { kind: "unknown" } as const
+        }
+        const untrackedOnly = verdict.kind === "undoable" && verdict.untrackedOnly
+        if (changed.length > 0 && (yield* Effect.promise(() => Reach.outsideSnapshot(instance.worktree, changed, { untrackedOnly }))))
           return lost
+        if (changed.some(Secrets.secretFile)) return { kind: "unknown" } as const
         return { kind: "harmless" } as const
       })
 
+      const named = new Set(redirects.reads.filter(Secrets.secretFile).map(absolute))
+      let reshaped = false
       for (const node of commands(root)) {
         const command = parts(node)
         const tokens = command.map((item) => item.text)
         const cmd = ps || shellKind === "cmd" ? tokens[0]?.toLowerCase() : tokens[0]
+        if (!ps) {
+          const plain = tokens.map(unquote)
+          reshaped = reshaped || reshapes(plain)
+          for (const word of plain.slice(1).flatMap((token) => token.split(WORD_BREAK)))
+            if (word && Secrets.secretFile(word)) named.add(absolute(word))
+        }
 
         if (cmd && (FILES.has(cmd) || (shellKind === "cmd" && CMD_FILES.has(cmd)))) {
           for (const arg of pathArgs(command, ps, shellKind === "cmd")) {
@@ -522,7 +573,7 @@ export const ShellTool = Tool.define(
         }
 
         if (tokens.length && (!cmd || !CWD.has(cmd))) {
-          const verdict = posix ? yield* judge(node, tokens) : undefined
+          const verdict = posix ? yield* judge(command, tokens) : undefined
           if (verdict?.kind === "harmless") {
             scan.harmless.add(source(node))
             continue
@@ -532,6 +583,16 @@ export const ShellTool = Tool.define(
           scan.always.add(BashArity.prefix(tokens).join(" ") + " *")
         }
       }
+
+      // A redirect on a whole group belongs to no one command, and "allow echo" does not stretch to where this one writes.
+      if (scan.patterns.size > 0 || scan.harmless.size === 0) redirects.loose.forEach((text) => scan.patterns.add(text))
+      // Nothing was recognised as a command, such as `[[ -f x ]]` or `x=1`, so nothing has been judged.
+      if (posix && !proven && scan.patterns.size === 0 && scan.harmless.size === 0) {
+        const whole = root.text.trim()
+        if (whole) scan.patterns.add(whole)
+      }
+      scan.secretFiles = named
+      if (reshaped && named.size > 0) scan.withheld = path.relative(instance.worktree, [...named][0]!)
 
       return scan
     })
@@ -555,6 +616,7 @@ export const ShellTool = Tool.define(
         cwd: string
         env: NodeJS.ProcessEnv
         timeout: number
+        withheld?: string
       },
       ctx: Tool.Context,
     ) {
@@ -597,6 +659,7 @@ export const ShellTool = Tool.define(
         ).pipe(Effect.catch(() => Effect.void))
       })
 
+      const root = (yield* InstanceState.context).worktree
       yield* ctx.metadata({
         metadata: {
           output: "",
@@ -610,6 +673,7 @@ export const ShellTool = Tool.define(
 
           yield* Effect.forkScoped(
             Stream.runForEach(Stream.decodeText(handle.all), (chunk) => {
+              if (input.withheld) return Effect.void
               const size = Buffer.byteLength(chunk, "utf-8")
               if (head.length < HEAD_BYTES) head += chunk
               list.push({ text: chunk, size })
@@ -639,7 +703,7 @@ export const ShellTool = Tool.define(
                     Effect.andThen(
                       ctx.metadata({
                         metadata: {
-                          output: last,
+                          output: Secrets.scrub(last, root),
                         },
                       }),
                     ),
@@ -647,9 +711,10 @@ export const ShellTool = Tool.define(
                 }
               }
 
+              // Shown and stored while the command runs, before the final result gets its own pass.
               return ctx.metadata({
                 metadata: {
-                  output: last,
+                  output: Secrets.scrub(last, root),
                 },
               })
             }),
@@ -705,6 +770,8 @@ export const ShellTool = Tool.define(
         const end = tail(condensed.text, limits.maxLines, limits.maxBytes - HEAD_BYTES).text
         output = `${opening ? opening + "\n\n" : ""}...output truncated...\n\nFull output saved to: ${file}\n\n${end}`
       }
+      if (input.withheld)
+        output = `[hidden: output withheld. This command reshapes ${input.withheld}, a file that holds secrets, so the values in its output could not be recognised and hidden. Programs you run can still read the file. Do not try to get the same values another way.]`
       if (!cut && condensed.hidden > 0) output += `\n\n(${condensed.hidden} similar lines hidden. Full output saved to: ${file})`
 
       if (meta.length > 0) {
@@ -745,7 +812,7 @@ export const ShellTool = Tool.define(
               }
               const timeout = params.timeout ?? defaultTimeoutMs
               const ps = Shell.ps(shell)
-              yield* Effect.scoped(
+              const scanned = yield* Effect.scoped(
                 Effect.gen(function* () {
                   const tree = yield* Effect.acquireRelease(parse(params.command, ps), (tree) =>
                     Effect.sync(() => tree.delete()),
@@ -753,8 +820,10 @@ export const ShellTool = Tool.define(
                   const scan = yield* collect(tree.rootNode, cwd, ps, shell, instanceCtx, ctx.trust)
                   if (!containsPath(cwd, instanceCtx)) scan.dirs.add(cwd)
                   yield* ask(ctx, scan, params)
+                  return scan
                 }),
               )
+              scanned.secretFiles.forEach(Secrets.learnFile)
 
               return yield* run(
                 {
@@ -763,6 +832,7 @@ export const ShellTool = Tool.define(
                   cwd,
                   env: yield* shellEnv(ctx, cwd),
                   timeout,
+                  withheld: scanned.withheld,
                 },
                 ctx,
               )

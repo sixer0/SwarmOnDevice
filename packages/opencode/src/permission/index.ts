@@ -43,6 +43,15 @@ const sameRequest = (
   a.patterns.length === b.patterns.length &&
   a.patterns.every((pattern, index) => pattern === b.patterns[index])
 
+// Which rules are the shipped catch-all. Kept beside the rules rather than on them: the rule shape is public API, and an
+// object that was never marked, such as a session's own rule, counts as the person's.
+const shippedCatchAll = new WeakSet<PermissionV1.Rule>()
+
+/** Set by config on a permission block when a source other than the shipped baseline wrote its `"*"`. */
+export const USER_CATCH_ALL = Symbol.for("swarm.permission.userCatchAll")
+
+export const isShippedCatchAll = (rule: PermissionV1.Rule) => shippedCatchAll.has(rule)
+
 export function evaluate(permission: string, pattern: string, ...rulesets: PermissionV1.Ruleset[]): PermissionV1.Rule {
   return (
     rulesets
@@ -91,7 +100,8 @@ const layer = Layer.effect(
 
       for (const pattern of request.patterns) {
         const rule = evaluate(request.permission, pattern, ruleset, approved)
-        yield* Effect.logInfo("evaluated", { permission: request.permission, pattern, action: rule })
+        // Not the pattern: for a shell call it is the command, and that can hold a secret typed into its arguments.
+        yield* Effect.logInfo("evaluated", { permission: request.permission, action: rule.action })
         if (rule.action === "deny") {
           return yield* new PermissionV1.DeniedError({
             ruleset: ruleset.filter((rule) => Wildcard.match(request.permission, rule.permission)),
@@ -99,7 +109,8 @@ const layer = Layer.effect(
         }
         if (rule.action === "allow") continue
         // The shipped baseline asks about anything it does not name. That is for what could hurt, and this cannot.
-        if (harmless && rule.permission === "*") continue
+        // A person who wrote "*": "ask" themselves meant every call, and that is not this rule.
+        if (harmless && isShippedCatchAll(rule)) continue
         needsAsk = true
       }
 
@@ -130,7 +141,7 @@ const layer = Layer.effect(
         tool: request.tool,
       }
       const info: PermissionV1.Request = wait ? { ...asked, movesOnAt: Date.now() + wait } : asked
-      yield* Effect.logInfo("asking", { id, permission: info.permission, patterns: info.patterns })
+      yield* Effect.logInfo("asking", { id, permission: info.permission })
 
       const deferred = yield* Deferred.make<void, PermissionV1.RejectedError | PermissionV1.CorrectedError>()
       pending.set(id, { info, deferred })
@@ -255,7 +266,9 @@ export function fromConfig(permission: ConfigPermissionV1.Info) {
   const ruleset: PermissionV1.Rule[] = []
   for (const [key, value] of Object.entries(permission)) {
     if (typeof value === "string") {
-      ruleset.push({ permission: key, action: value, pattern: "*" })
+      const rule = { permission: key, action: value, pattern: "*" }
+      if (key === "*" && value === "ask" && !(USER_CATCH_ALL in permission)) shippedCatchAll.add(rule)
+      ruleset.push(rule)
       continue
     }
     ruleset.push(

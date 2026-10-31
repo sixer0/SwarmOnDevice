@@ -10,6 +10,7 @@ import { assertExternalDirectoryEffect } from "./external-directory"
 import { Instruction } from "../session/instruction"
 import { isPdfAttachment, sniffAttachmentMime } from "@/util/media"
 import { Secrets } from "./secrets"
+import { Reach } from "./reach"
 import { FileSeen } from "./file-seen"
 
 const DEFAULT_READ_LIMIT = 2000
@@ -331,7 +332,9 @@ export const ReadTool = Tool.define<
         return yield* Effect.fail(new Error(`Cannot read binary file: ${filepath}`))
       }
 
-      if (Secrets.wholeSecretFile(filepath)) {
+      // A link called notes.txt that points at .env is still .env.
+      const landed = Reach.real(filepath) ?? filepath
+      if (Secrets.wholeSecretFile(filepath) || Secrets.wholeSecretFile(landed)) {
         const hidden = `This file holds credentials, so its contents are kept from you. Programs you run can still use it.`
         return {
           title,
@@ -340,7 +343,7 @@ export const ReadTool = Tool.define<
         }
       }
 
-      const secret = Secrets.secretFile(filepath)
+      const secret = Secrets.secretFile(filepath) || Secrets.secretFile(landed)
       if (Number(stat.size) <= 1024 * 1024) {
         const whole = yield* fs.readFileString(filepath).pipe(Effect.catch(() => Effect.succeed(undefined)))
         if (whole !== undefined) {

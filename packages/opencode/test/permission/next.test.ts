@@ -1299,3 +1299,61 @@ it.instance("zero turns moving on off", () =>
     yield* Fiber.await(fiber)
   }),
 )
+
+// The shipped baseline's "*": "ask" is for what could hurt. A person who wrote it themselves meant everything.
+it.instance("a harmless call skips the shipped catch-all", () =>
+  Effect.gen(function* () {
+    const permission = yield* Permission.Service
+    yield* permission.ask({
+      sessionID: SessionID.make("session_catchall"),
+      permission: "edit",
+      patterns: ["src/a.ts"],
+      metadata: {},
+      always: [],
+      ruleset: Permission.fromConfig({ "*": "ask" }),
+      harmless: true,
+    })
+    expect(yield* permission.list()).toHaveLength(0)
+  }),
+)
+
+it.instance("a harmless call does not skip a catch-all the person wrote", () =>
+  Effect.gen(function* () {
+    const permission = yield* Permission.Service
+    const own = Permission.fromConfig({ "*": "ask", [Permission.USER_CATCH_ALL]: true } as never)
+    const asking = yield* permission
+      .ask({
+        sessionID: SessionID.make("session_catchall"),
+        permission: "edit",
+        patterns: ["src/a.ts"],
+        metadata: {},
+        always: [],
+        ruleset: own,
+        harmless: true,
+      })
+      .pipe(Effect.exit, Effect.forkChild)
+    yield* waitForPending(1)
+    yield* rejectAll()
+    expect(Exit.isFailure(yield* Fiber.join(asking))).toBe(true)
+  }),
+)
+
+it.instance("a harmless call does not skip a session's own catch-all", () =>
+  Effect.gen(function* () {
+    const permission = yield* Permission.Service
+    const asking = yield* permission
+      .ask({
+        sessionID: SessionID.make("session_catchall"),
+        permission: "edit",
+        patterns: ["src/a.ts"],
+        metadata: {},
+        always: [],
+        ruleset: [{ permission: "*", pattern: "*", action: "ask" }],
+        harmless: true,
+      })
+      .pipe(Effect.exit, Effect.forkChild)
+    yield* waitForPending(1)
+    yield* rejectAll()
+    expect(Exit.isFailure(yield* Fiber.join(asking))).toBe(true)
+  }),
+)

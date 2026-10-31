@@ -7,6 +7,8 @@ import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { ProjectTable } from "@opencode-ai/core/project/sql"
 import { MessageTable, PartTable, SessionTable } from "@opencode-ai/core/session/sql"
 import { GlobalInfo, fromRow } from "@/session/session"
+import { Reach } from "@/tool/reach"
+import { Secrets } from "@/tool/secrets"
 import { editWroteLine, extract, type Kind } from "./extract"
 import { matchAll, matchAny, matchTerm, parse, tokens, type Parsed, type Range, type Term } from "./query"
 
@@ -17,7 +19,8 @@ import { matchAll, matchAny, matchTerm, parse, tokens, type Parsed, type Range, 
 // database's write lock against a running agent.
 
 /** Bump when what is indexed changes: the sidecar is dropped and rebuilt. */
-const SCHEMA_VERSION = 1
+// 2: documents are scrubbed of secrets before indexing, so what an older version stored has to go.
+const SCHEMA_VERSION = 2
 const BATCH = 200
 const BACKFILL_PAUSE = Duration.millis(10)
 const LIVE_PAUSE = Duration.seconds(2)
@@ -563,7 +566,11 @@ export const layer = Layer.effect(
 
     /** "Why did this line change": which session wrote this line of this file, and what had it been asked to do. */
     const searchFile = Effect.fnUntraced(function* (file: NonNullable<Parsed["file"]>, directory: string | undefined, limit: number) {
-      const text = file.line && directory ? yield* readLine(directory, file.path, file.line) : undefined
+      // Only a place sessions have worked in: this is a lookup in a project, not a way to read any file on the disk.
+      const worked =
+        directory &&
+        (yield* db.select({ id: SessionTable.id }).from(SessionTable).where(eq(SessionTable.directory, directory as never)).limit(1).all()).length > 0
+      const text = file.line && directory && worked ? yield* readLine(directory, file.path, file.line) : undefined
       if (!index) return { results: [] as ResultShape[], text }
       const pathTokens = tokens(file.path)
       if (pathTokens.length === 0) return { results: [] as ResultShape[], text }
@@ -709,11 +716,19 @@ function openIndex() {
 const readLine = Effect.fnUntraced(function* (directory: string, file: string, line: number) {
   const full = path.resolve(directory, file)
   if (full !== directory && !full.startsWith(directory + path.sep)) return undefined
+  // Following a link can leave the project however the name reads, and a credentials file is not for showing.
+  const root = Reach.real(directory)
+  const landed = Reach.real(full)
+  if (!root || !landed || (landed !== root && !landed.startsWith(root + path.sep))) return undefined
+  if (Secrets.wholeSecretFile(full) || Secrets.wholeSecretFile(landed)) return undefined
   const content = yield* Effect.tryPromise(async () => {
     const stat = await fs.stat(full)
     return stat.size > FILE_READ_LIMIT ? undefined : await fs.readFile(full, "utf8")
   }).pipe(Effect.option, Effect.map(Option.getOrUndefined))
-  return content?.split("\n")[line - 1]?.trim()
+  const text = content?.split("\n")[line - 1]
+  if (text === undefined) return undefined
+  const masked = Secrets.secretFile(full) || Secrets.secretFile(landed) ? Secrets.maskLine(text) : text
+  return Secrets.scrub(masked, root).trim()
 })
 
 export const node = LayerNode.make({ service: Service, layer, deps: [Database.node] })

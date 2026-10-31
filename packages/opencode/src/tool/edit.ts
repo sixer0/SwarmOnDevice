@@ -18,6 +18,7 @@ import { Format } from "../format"
 import { InstanceState } from "@/effect/instance-state"
 import { Snapshot } from "@/snapshot"
 import { assertExternalDirectoryEffect } from "./external-directory"
+import { Reach } from "./reach"
 import { FSUtil } from "@opencode-ai/core/fs-util"
 import * as Bom from "@/util/bom"
 
@@ -103,15 +104,17 @@ export const EditTool = Tool.define(
                 contentNew = next.text
                 diff = trimDiff(createTwoFilesPatch(filePath, filePath, contentOld, contentNew))
                 Secrets.assertNoPlaceholder(contentNew, contentOld, label)
+                const trust = yield* Reach.editTrust(ctx, instance, [filePath])
                 yield* ctx.ask({
                   permission: "edit",
                   patterns: [label],
-                  always: ["*"],
+                  always: trust.risk ? [] : ["*"],
                   metadata: {
                     filepath: filePath,
                     diff,
+                    ...(trust.risk ? { risk: trust.risk } : {}),
                   },
-                  harmless: Tool.undoableEdit(ctx, label),
+                  harmless: trust.harmless,
                 })
                 yield* afs.writeWithDirs(filePath, Bom.join(contentNew, desiredBom))
                 if (yield* format.file(filePath)) {
@@ -157,15 +160,17 @@ export const EditTool = Tool.define(
                   normalizeLineEndings(contentNew),
                 ),
               )
+              const trust = yield* Reach.editTrust(ctx, instance, [filePath])
               yield* ctx.ask({
                 permission: "edit",
                 patterns: [label],
-                always: ["*"],
+                always: trust.risk ? [] : ["*"],
                 metadata: {
                   filepath: filePath,
                   diff,
+                  ...(trust.risk ? { risk: trust.risk } : {}),
                 },
-                harmless: Tool.undoableEdit(ctx, label),
+                harmless: trust.harmless,
               })
 
               yield* afs.writeWithDirs(filePath, Bom.join(contentNew, desiredBom))

@@ -28,7 +28,7 @@ export const MAX_TEXT = 400
 const disabled = () => !!process.env.SWARM_DISABLE_MEMORY
 
 type Stored = { version: 1; enabled: boolean; items: Item[] }
-type Failure = { command: string; where: string; reason: string }
+type Failure = { command: string; where: string }
 
 export interface Interface {
   readonly get: () => Effect.Effect<Info>
@@ -213,12 +213,10 @@ export const layer = Layer.effect(
         const intent = MemoryLearn.intentOf(parsed.command)
         if (!intent) return
         const key = MemoryLearn.commandKey(parsed)
-        const reason = MemoryLearn.invocationFailure(input.exit, input.output)
-        if (reason) {
-          if (MemoryLearn.looksSecret(reason)) return
+        if (MemoryLearn.invocationFailure(input.exit, input.output)) {
           if (failures.size > 64) failures.clear()
           const session = failures.get(input.sessionID) ?? new Map<string, Failure>()
-          failures.set(input.sessionID, session.set(intent, { ...parsed, reason: tidy(reason) }))
+          failures.set(input.sessionID, session.set(intent, parsed))
           yield* dropStale((item) => item.worked === key)
           return
         }
@@ -252,11 +250,6 @@ function makeRoom(items: readonly Item[]) {
   if (items.length < MAX_ITEMS) return [...items]
   const oldest = items.find((item) => item.source === "learned")
   return oldest ? items.filter((item) => item !== oldest) : undefined
-}
-
-function tidy(reason: string) {
-  const home = Global.Path.home
-  return reason.replaceAll(home, "~").replace(/\s+/g, " ").trim()
 }
 
 const decodeStore = Schema.decodeUnknownOption(
