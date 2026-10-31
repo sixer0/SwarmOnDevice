@@ -104,6 +104,26 @@ describe("collecting one server's agents", () => {
     expect(row.pending?.label).toBe("$ rm -rf build")
   })
 
+  test("a request the agent moved on from does not make a working agent read as waiting", () => {
+    const moved = { ...permission("p", "s"), movedOnAt: NOW - 1000 }
+    const [row] = collect({
+      instances: [instance({ status: { s: { type: "busy" } }, permission: [moved] })],
+      sessions: new Map([["s", session("s")]]),
+    })
+    expect(row.state).toBe("running")
+    expect(row.pending).toBeUndefined()
+  })
+
+  test("once the agent has stopped, a request it moved on from is a decision left waiting", () => {
+    const moved = { ...permission("p", "s"), movedOnAt: NOW - 1000 }
+    const [row] = collect({
+      instances: [instance({ permission: [moved] })],
+      sessions: new Map([["s", session("s")]]),
+    })
+    expect(row.state).toBe("waiting")
+    expect(row.pending?.label).toBe("$ rm -rf build")
+  })
+
   test("a request arriving before its session is loaded still shows, in the request's directory", () => {
     const [row] = collect({ instances: [instance({ directory: "/work/z", permission: [permission("p", "s")] })] })
     expect(row.directory).toBe("/work/z")

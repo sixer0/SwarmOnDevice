@@ -1,3 +1,4 @@
+import { needsPerson } from "@opencode-ai/core/permission/needs-person"
 import { base64Encode } from "@opencode-ai/core/util/encode"
 
 export function acceptKey(sessionID: string, directory?: string) {
@@ -40,9 +41,10 @@ function sessionLineage(session: { id: string; parentID?: string }[], sessionID:
 export function autoRespondsPermission(
   autoAccept: Record<string, boolean>,
   session: { id: string; parentID?: string }[],
-  permission: { sessionID: string },
+  permission: { sessionID: string; permission?: string },
   directory?: string,
 ) {
+  if (permission.permission && needsPerson(permission.permission)) return false
   const value = sessionAutoAccept(autoAccept, session, permission, directory)
   if (value !== undefined) return value
   return directory ? isDirectoryAutoAccepting(autoAccept, directory) : false
@@ -51,9 +53,10 @@ export function autoRespondsPermission(
 export function sessionAutoAccept(
   autoAccept: Record<string, boolean>,
   session: { id: string; parentID?: string }[],
-  permission: { sessionID: string },
+  permission: { sessionID: string; permission?: string },
   directory?: string,
 ) {
+  if (permission.permission && needsPerson(permission.permission)) return false
   return sessionLineage(session, permission.sessionID)
     .map((id) => accepted(autoAccept, id, directory))
     .find((item): item is boolean => item !== undefined)

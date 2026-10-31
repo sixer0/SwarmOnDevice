@@ -335,6 +335,18 @@ describe("buildSwarm", () => {
     expect(model.totals.failed).toBe(1)
   })
 
+  test("a lane the agent moved on from reports what it is doing, then the decision left over", () => {
+    const moved = { id: "r", sessionID: "a", permission: "bash", patterns: [], metadata: {}, always: [], movedOnAt: 5 }
+    const request = moved as unknown as PermissionRequest
+    const working = buildSwarm(
+      input(tree(), messages, parts(), { permission: { a: [request] }, status: { a: { type: "busy" } } }),
+    )
+    expect(working.lanes[1]!.status).toBe("running")
+    expect(working.lanes[1]!.permission?.id).toBe("r")
+    const stopped = buildSwarm(input(tree(), messages, parts(), { permission: { a: [request] } }))
+    expect(stopped.lanes[1]!.status).toBe("needs")
+  })
+
   test("a blocked lane says so, unless the app answers that request itself", () => {
     const request = {
       id: "r",
@@ -380,6 +392,20 @@ describe("buildSwarm", () => {
 })
 
 describe("swarmPulse", () => {
+  test("a request the agent moved on from, or that the app answers itself, is not stuck", () => {
+    const pulse = (request: object, autoResponds?: () => boolean) =>
+      swarmPulse({
+        rootID: "root",
+        info: { root: session("root") },
+        permission: { root: [{ id: "r", ...request } as unknown as PermissionRequest] },
+        question: {},
+        autoResponds,
+      }).needs
+    expect(pulse({})).toBe(1)
+    expect(pulse({ movedOnAt: 1 })).toBe(0)
+    expect(pulse({}, () => true)).toBe(0)
+  })
+
   test("reads only session state", () => {
     const pulse = swarmPulse({
       rootID: "root",

@@ -1,3 +1,4 @@
+import { needsPerson } from "@opencode-ai/core/permission/needs-person"
 import type { PermissionV1 } from "@opencode-ai/core/v1/permission"
 import { FSUtil } from "@opencode-ai/core/fs-util"
 // CLI entry point for `swarm run` and `swarm --mini`.
@@ -797,7 +798,7 @@ export const RunCommand = effectCmd({
               if (!sessions.has(permission.sessionID)) continue
 
               // --auto approves what an agent wants to do. These two are not that: they stop a run nobody is watching.
-              if (auto && !["spend_limit", "doom_loop"].includes(permission.permission)) {
+              if (auto && !needsPerson(permission.permission)) {
                 await client.permission.reply({
                   requestID: permission.id,
                   reply: "once",

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import type { PermissionRequest, Session } from "@opencode-ai/sdk/v2/client"
 import { base64Encode } from "@opencode-ai/core/util/encode"
-import { autoRespondsPermission, isDirectoryAutoAccepting, sessionAutoAccept } from "./permission-auto-respond"
+import { acceptKey, autoRespondsPermission, directoryAcceptKey, isDirectoryAutoAccepting, sessionAutoAccept } from "./permission-auto-respond"
 
 const session = (input: { id: string; parentID?: string }) =>
   ({
@@ -15,6 +15,24 @@ const permission = (sessionID: string) =>
   }) as Pick<PermissionRequest, "sessionID">
 
 describe("autoRespondsPermission", () => {
+  test.each(["spend_limit", "doom_loop"])("never answers %s, whatever is switched on", (name) => {
+    const directory = "/tmp/project"
+    const sessions = [session({ id: "root" })]
+    const request = { sessionID: "root", permission: name }
+    for (const autoAccept of [
+      { root: true },
+      { [acceptKey("root", directory)]: true },
+      { [directoryAcceptKey(directory)]: true },
+    ]) {
+      expect(autoRespondsPermission(autoAccept, sessions, request, directory)).toBe(false)
+      expect(sessionAutoAccept(autoAccept, sessions, request, directory)).not.toBe(true)
+    }
+  })
+
+  test("still answers an ordinary request", () => {
+    expect(autoRespondsPermission({ root: true }, [session({ id: "root" })], { sessionID: "root", permission: "edit" })).toBe(true)
+  })
+
   test("uses a parent session's directory-scoped auto-accept", () => {
     const directory = "/tmp/project"
     const sessions = [session({ id: "root" }), session({ id: "child", parentID: "root" })]

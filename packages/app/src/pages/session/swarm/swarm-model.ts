@@ -157,9 +157,13 @@ function laneStatus(input: {
   messages: readonly Message[] | undefined
   waitingOn: number
 }): Pick<SwarmLane, "status" | "detail"> {
-  if (input.permission || input.question) return { status: "needs" }
+  const request = input.permission ?? input.question
+  if ((input.permission && !input.permission.movedOnAt) || (input.question && !input.question.movedOnAt))
+    return { status: "needs" }
   if (input.status?.type === "retry") return { status: "retry", detail: input.status.message }
   if (input.status?.type === "busy") return { status: input.waitingOn > 0 ? "waiting" : "running" }
+  // The agent moved on from this and has since stopped, so what is left is a decision for the person.
+  if (request) return { status: "needs" }
   if (!input.messages) return { status: "unread" }
   const last = input.messages.findLast((message): message is AssistantMessage => message.role === "assistant")
   const failure = last?.error
@@ -176,8 +180,10 @@ function buildLane(input: SwarmInput, id: string, depth: number): SwarmLane {
   const messages = input.messages(id)
   const directory = session.directory
   const model = buildSessionMap({ messages: messages ?? [], parts: input.parts })
-  const permission = (input.permission[id] ?? []).find((request) => !input.autoResponds?.(request, directory))
-  const question = input.question[id]?.[0]
+  const permissions = (input.permission[id] ?? []).filter((request) => !input.autoResponds?.(request, directory))
+  // A request that is really holding the agent comes before any it moved on from.
+  const permission = permissions.find((request) => !request.movedOnAt) ?? permissions[0]
+  const question = input.question[id]?.find((request) => !request.movedOnAt) ?? input.question[id]?.[0]
   const assistants = (messages ?? []).filter((message): message is AssistantMessage => message.role === "assistant")
 
   const waitingOn = model.steps.filter(
@@ -423,13 +429,13 @@ export function buildSwarm(input: SwarmInput): SwarmModel {
 
 // ---- Whether this session has subagents, and whether one is stuck. No messages are read, so it stays on for every session.
 
-export function swarmPulse(input: Pick<SwarmInput, "rootID" | "info" | "permission" | "question">) {
+export function swarmPulse(input: Pick<SwarmInput, "rootID" | "info" | "permission" | "question" | "autoResponds">) {
   const tree = sessionTree(input.rootID, input.info).filter(({ id }) => !!input.info[id])
-  return {
-    agents: tree.length,
-    needs: tree.filter(({ id }) => (input.permission[id]?.length ?? 0) > 0 || (input.question[id]?.length ?? 0) > 0)
-      .length,
-  }
+  const stuck = (id: string) =>
+    (input.permission[id] ?? []).some(
+      (request) => !request.movedOnAt && !input.autoResponds?.(request, input.info[id]!.directory),
+    ) || (input.question[id] ?? []).some((request) => !request.movedOnAt)
+  return { agents: tree.length, needs: tree.filter(({ id }) => stuck(id)).length }
 }
 
 /** The order a keyboard walks the lanes, and where it starts: whoever is stuck first, otherwise where the reader is. */

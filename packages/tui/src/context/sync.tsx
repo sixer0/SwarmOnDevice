@@ -1,3 +1,4 @@
+import { needsPerson } from "@opencode-ai/core/permission/needs-person"
 import type {
   Message,
   Agent,
@@ -264,7 +265,7 @@ export const {
         case "permission.asked": {
           const request = event.properties
           // Auto mode approves what an agent wants to do. A spend limit and a repeating call stop a run for a person.
-          if (permission.mode === "auto" && !["spend_limit", "doom_loop"].includes(request.permission)) {
+          if (permission.mode === "auto" && !needsPerson(request.permission)) {
             void sdk.client.permission.reply({
               requestID: request.id,
               reply: "once",

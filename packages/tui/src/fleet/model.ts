@@ -177,16 +177,20 @@ export function collectAgents(input: {
   now: number
 }): FleetAgent[] {
   const pendingBySession = new Map<string, { pending: FleetPending; directory: string }>()
+  // Requests the agent moved on from. While it works they say nothing about it. Once it stops they are decisions left over.
+  const skippedBySession = new Map<string, { pending: FleetPending; directory: string }>()
   const busy = new Map<string, { directory: string; retry?: string }>()
   input.instances.forEach((instance) => {
-    instance.permission.forEach((request) => {
-      if (!pendingBySession.has(request.sessionID))
-        pendingBySession.set(request.sessionID, { pending: describePermission(request), directory: instance.directory })
-    })
-    instance.question.forEach((request) => {
-      if (!pendingBySession.has(request.sessionID))
-        pendingBySession.set(request.sessionID, { pending: describeQuestion(request), directory: instance.directory })
-    })
+    const hold = (sessionID: string, movedOn: boolean, pending: () => FleetPending) => {
+      const held = movedOn ? skippedBySession : pendingBySession
+      if (!held.has(sessionID)) held.set(sessionID, { pending: pending(), directory: instance.directory })
+    }
+    instance.permission.forEach((request) =>
+      hold(request.sessionID, !!request.movedOnAt, () => describePermission(request)),
+    )
+    instance.question.forEach((request) =>
+      hold(request.sessionID, !!request.movedOnAt, () => describeQuestion(request)),
+    )
     Object.entries(instance.status).forEach(([sessionID, status]) => {
       if (status.type === "idle") return
       busy.set(sessionID, {
@@ -196,11 +200,16 @@ export function collectAgents(input: {
     })
   })
 
-  const ids = new Set([...pendingBySession.keys(), ...busy.keys(), ...input.sessions.keys()])
+  const ids = new Set([
+    ...pendingBySession.keys(),
+    ...skippedBySession.keys(),
+    ...busy.keys(),
+    ...input.sessions.keys(),
+  ])
   const agents = [...ids].flatMap((sessionID): FleetAgent[] => {
     const session = input.sessions.get(sessionID)
-    const pending = pendingBySession.get(sessionID)
     const running = busy.get(sessionID)
+    const pending = pendingBySession.get(sessionID) ?? (running ? undefined : skippedBySession.get(sessionID))
     const history = input.history.get(sessionID)
     const directory = pending?.directory ?? running?.directory ?? session?.directory
     if (!directory) return []

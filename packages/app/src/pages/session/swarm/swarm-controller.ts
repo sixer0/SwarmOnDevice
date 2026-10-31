@@ -117,6 +117,7 @@ export function createSwarm(input: {
       info: current.info,
       permission: current.permission,
       question: current.question,
+      autoResponds: input.autoResponds,
     })
   })
 

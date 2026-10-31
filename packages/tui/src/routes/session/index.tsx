@@ -230,11 +230,12 @@ export function Session() {
   )
   const permissions = createMemo(() => {
     if (session()?.parentID) return []
-    return children().flatMap((x) => sync.data.permission[x.id] ?? [])
+    // A request the agent has moved on from blocks nothing: it stays answerable from /fleet, and the composer stays free.
+    return children().flatMap((x) => (sync.data.permission[x.id] ?? []).filter((item) => !item.movedOnAt))
   })
   const questions = createMemo(() => {
     if (session()?.parentID) return []
-    return children().flatMap((x) => sync.data.question[x.id] ?? [])
+    return children().flatMap((x) => (sync.data.question[x.id] ?? []).filter((item) => !item.movedOnAt))
   })
   const visible = createMemo(() => !session()?.parentID && permissions().length === 0 && questions().length === 0)
   const disabled = createMemo(() => permissions().length > 0 || questions().length > 0)
