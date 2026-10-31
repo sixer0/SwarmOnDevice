@@ -92,6 +92,8 @@ export const dict: Record<string, string> = {
   "ui.messagePart.option.typeOwnAnswer": "Írja be saját válaszát",
   "ui.messagePart.review.title": "Tekintse át a válaszait",
   "ui.messagePart.questions.dismissed": "Kérdések elutasítva",
+  "ui.messagePart.notRun.away": "Enélkül folytatta",
+  "ui.messagePart.notRun.declined": "Nem futott",
   "ui.messagePart.compaction": "Munkamenet tömörített",
   "ui.messagePart.context.read.one": "{{count}} olvasni",
   "ui.messagePart.context.read.other": "{{count}} olvas",

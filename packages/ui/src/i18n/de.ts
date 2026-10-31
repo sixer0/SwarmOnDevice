@@ -96,6 +96,10 @@ export const dict = {
   "ui.sessionTurn.status.consideringNextSteps": "Nächste Schritte werden erwogen",
 
   "ui.messagePart.questions.dismissed": "Fragen verworfen",
+
+  "ui.messagePart.notRun.away": "Ohne dies weitergemacht",
+
+  "ui.messagePart.notRun.declined": "Nicht gelaufen",
   "ui.messagePart.compaction": "Sitzung komprimiert",
   "ui.messagePart.context.read.one": "{{count}} Lesevorgang",
   "ui.messagePart.context.read.other": "{{count}} Lesevorgänge",

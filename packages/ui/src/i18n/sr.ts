@@ -92,6 +92,8 @@ export const dict = {
   "ui.messagePart.option.typeOwnAnswer": "Унесите свој одговор",
   "ui.messagePart.review.title": "Прегледајте своје одговоре",
   "ui.messagePart.questions.dismissed": "Питања су одбачена",
+  "ui.messagePart.notRun.away": "Наставио је без овога",
+  "ui.messagePart.notRun.declined": "Није покренуто",
   "ui.messagePart.compaction": "сесија је компактна",
   "ui.messagePart.context.read.one": "{{count}} читање",
   "ui.messagePart.context.read.few": "{{count}} читања",

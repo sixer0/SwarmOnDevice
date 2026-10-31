@@ -59,7 +59,7 @@ import { Spinner } from "@opencode-ai/ui/spinner"
 import { TextShimmer } from "@opencode-ai/ui/text-shimmer"
 import { AnimatedCountList } from "./tool-count-summary"
 import { ToolStatusTitle } from "./tool-status-title"
-import { failedExit } from "./part-mark"
+import { failedExit, notRun } from "./part-mark"
 import { patchFiles } from "./apply-patch-file"
 import { partDefaultOpen } from "./part-default-open"
 import { attached, inline, kind, typeLabel } from "./message-file"
@@ -705,7 +705,7 @@ export function renderable(part: PartType, showReasoningSummaries = true) {
 }
 
 export { partDefaultOpen } from "./part-default-open"
-export { toolMark } from "./part-mark"
+export { notRun, toolMark } from "./part-mark"
 
 export function AssistantParts(props: {
   messages: AssistantMessage[]
@@ -1439,6 +1439,46 @@ export function Part(props: MessagePartProps) {
   )
 }
 
+/** A call the permission gate stopped. Quiet, because nothing went wrong: the row says what it was and why it did not run. */
+function NotRunRow(props: { tool: string; input: Record<string, unknown>; reason: "away" | "declined" }) {
+  const i18n = useI18n()
+  const name = () => {
+    const key = (
+      {
+        bash: "ui.tool.shell",
+        shell: "ui.tool.shell",
+        task: "ui.tool.task",
+        webfetch: "ui.tool.webfetch",
+        edit: "ui.messagePart.title.edit",
+        write: "ui.messagePart.title.write",
+      } as const
+    )[props.tool as "bash"]
+    return key ? i18n.t(key) : props.tool
+  }
+  const what = () => {
+    const input = props.input
+    const path = typeof input.filePath === "string" ? getFilename(input.filePath) : undefined
+    return String(input.command ?? path ?? input.description ?? input.url ?? input.pattern ?? "")
+  }
+  return (
+    <div data-component="tool-trigger" data-not-run={props.reason}>
+      <div data-slot="basic-tool-tool-trigger-content">
+        <div data-slot="basic-tool-tool-info">
+          <div data-slot="basic-tool-tool-info-structured">
+            <div data-slot="basic-tool-tool-info-main">
+              <span data-slot="basic-tool-tool-title">{name()}</span>
+              <span data-slot="basic-tool-tool-subtitle">{what()}</span>
+              <span data-slot="basic-tool-tool-arg">
+                {i18n.t(props.reason === "away" ? "ui.messagePart.notRun.away" : "ui.messagePart.notRun.declined")}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export interface ToolProps {
   input: Record<string, any>
   metadata: Record<string, any>
@@ -1560,6 +1600,8 @@ PART_MAPPING["tool"] = function ToolPartDisplay(props) {
           <Match when={part().state.status === "error" && (part().state as any).error}>
             {(error) => {
               const cleaned = error().replace("Error: ", "")
+              const skipped = notRun(partMetadata())
+              if (skipped) return <NotRunRow tool={part().tool} input={part().state.input} reason={skipped} />
               if (part().tool === "question" && cleaned.includes("dismissed this question")) {
                 return (
                   <div style="width: 100%; display: flex; justify-content: flex-end;">
@@ -2593,6 +2635,7 @@ ToolRegistry.register({
       const count = questions().length
       if (count === 0) return ""
       if (completed()) return i18n.t("ui.question.subtitle.answered", { count })
+      if (props.status === "completed") return i18n.t("ui.messagePart.notRun.away")
       return `${count} ${i18n.t(count > 1 ? "ui.common.question.other" : "ui.common.question.one")}`
     })
 

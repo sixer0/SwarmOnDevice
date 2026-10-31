@@ -91,6 +91,8 @@ export const dict: Record<string, string> = {
   "ui.messagePart.option.typeOwnAnswer": "Ieraksti savu atbildi",
   "ui.messagePart.review.title": "Pārskati savas atbildes",
   "ui.messagePart.questions.dismissed": "Jautājumi noraidīti",
+  "ui.messagePart.notRun.away": "Turpināja bez šī",
+  "ui.messagePart.notRun.declined": "Nav palaists",
   "ui.messagePart.compaction": "Sesija saspiesta",
   "ui.messagePart.context.read.one": "{{count}} lasījums",
   "ui.messagePart.context.read.other": "{{count}} lasījumi",

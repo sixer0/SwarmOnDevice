@@ -90,6 +90,8 @@ export const dict: Record<string, string> = {
   "ui.messagePart.option.typeOwnAnswer": "Sláðu inn þitt eigið svar",
   "ui.messagePart.review.title": "Farðu yfir svörin þín",
   "ui.messagePart.questions.dismissed": "Spurningum vísað frá",
+  "ui.messagePart.notRun.away": "Hélt áfram án þessa",
+  "ui.messagePart.notRun.declined": "Var ekki keyrt",
   "ui.messagePart.compaction": "Setan þjöppuð",
   "ui.messagePart.context.read.one": "{{count}} lesið",
   "ui.messagePart.context.read.other": "{{count}} les",

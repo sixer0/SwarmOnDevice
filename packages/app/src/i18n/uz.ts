@@ -736,7 +736,6 @@ export const dict = {
   "session.error.notFound.description": "Ushbu yorliq endi ushbu serverda mavjud bo'lmagan seansga ishora qiladi.",
   "session.error.notFound.closeTab": "Tab ni yoping",
   "session.error.serverConnection": "Bu serverga ulanib boʻlmadi",
-  "session.review.filesChanged": "Fayllar o'zgartirildi {{count}}",
   "session.review.change.one": "O'zgartirish",
   "session.review.change.other": "O'zgarishlar",
   "session.review.loadingChanges": "Oʻzgarishlar yuklanmoqda...",

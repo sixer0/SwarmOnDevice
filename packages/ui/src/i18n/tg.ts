@@ -90,6 +90,8 @@ export const dict = {
   "ui.messagePart.option.typeOwnAnswer": "Ҷавоби худро нависед",
   "ui.messagePart.review.title": "Ҷавобҳои худро аз назар гузаронед",
   "ui.messagePart.questions.dismissed": "Саволҳо рад карда шуданд",
+  "ui.messagePart.notRun.away": "Бе ин идома дод",
+  "ui.messagePart.notRun.declined": "Иҷро нашуд",
   "ui.messagePart.compaction": "Сессия фишурда шуд",
   "ui.messagePart.context.read.one": "{{count}} хонданд",
   "ui.messagePart.context.read.other": "{{count}} мехонад",

@@ -740,7 +740,6 @@ export const dict = {
   "session.error.notFound.description": "ဤတဘ်သည် ဤဆာဗာတွင်မရှိတော့သော စက်ရှင်တစ်ခုကို ညွှန်ပြသည်။",
   "session.error.notFound.closeTab": "တဘ်ကို ပိတ်ပါ။",
   "session.error.serverConnection": "ဤဆာဗာသို့ ချိတ်ဆက်၍မရပါ။",
-  "session.review.filesChanged": "ဖိုင်များကို {{count}} ပြောင်းထားသည်။",
   "session.review.change.one": "ပြောင်းလဲခြင်း။",
   "session.review.change.other": "ပြောင်းလဲမှုများ",
   "session.review.loadingChanges": "အပြောင်းအလဲများကို ဖွင့်နေသည်...",

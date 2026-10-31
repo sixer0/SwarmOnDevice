@@ -748,7 +748,6 @@ export const dict = {
   "session.error.notFound.description": "ایہ ٹیب اک سیشن ول اشارہ کردا اے جہڑا ہن اس سرور تے موجود نئیں اے۔",
   "session.error.notFound.closeTab": "ٹیب بند کرو",
   "session.error.serverConnection": "اس سرور نال جڑ نئیں سکدے",
-  "session.review.filesChanged": "بدلیاں فائلاں {{count}}",
   "session.review.change.one": "تبدیلی",
   "session.review.change.other": "تبدیلیاں",
   "session.review.loadingChanges": "تبدیلیاں لوڈ ہو رہیاں نیں...",

@@ -90,6 +90,8 @@ export const dict: Record<string, string> = {
   "ui.messagePart.option.typeOwnAnswer": "Skriv ditt eget svar",
   "ui.messagePart.review.title": "Granska dina svar",
   "ui.messagePart.questions.dismissed": "Frågorna har avfärdats",
+  "ui.messagePart.notRun.away": "Fortsatte utan detta",
+  "ui.messagePart.notRun.declined": "Kördes inte",
   "ui.messagePart.compaction": "Sessionen har komprimerats",
   "ui.messagePart.context.read.one": "{{count}} läsning",
   "ui.messagePart.context.read.other": "{{count}} läsningar",

@@ -732,7 +732,6 @@ export const dict = {
   "session.error.notFound.description": "Esta aba aponta para uma sessão que não existe mais neste servidor.",
   "session.error.notFound.closeTab": "Fechar aba",
   "session.error.serverConnection": "Não é possível conectar a este servidor",
-  "session.review.filesChanged": "{{count}} arquivos alterados",
   "session.review.change.one": "Alteração",
   "session.review.change.other": "Alterações",
   "session.review.loadingChanges": "Carregando alterações...",

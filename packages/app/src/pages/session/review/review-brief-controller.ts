@@ -28,6 +28,7 @@ import {
   type ReviewVerdict,
 } from "./review-brief-model"
 import { composeMessage, includedByDefault, teamUpdate } from "./review-landing-model"
+import { createLandedWork } from "./landed-work"
 
 const HISTORY_LIMIT = 2000
 const HYDRATE_CONCURRENCY = 3
@@ -39,7 +40,6 @@ const HISTORY_RETRY_SECONDS = 3
 const DETACHED = "detached HEAD"
 
 export type UndoneFile = { file: string; patch: string }
-export type Landed = { update: string; headline: string }
 
 export function createReviewBrief(input: {
   sessionID: Accessor<string | undefined>
@@ -65,6 +65,7 @@ export function createReviewBrief(input: {
     Persist.global("review-marks"),
     createStore({ marks: {} as Record<string, Record<string, ReviewMark | undefined> | undefined> }),
   )
+  const landedWork = createLandedWork()
   const [view, setView] = createStore({
     read: {} as Record<string, boolean | undefined>,
     readFailed: {} as Record<string, boolean | undefined>,
@@ -85,7 +86,6 @@ export function createReviewBrief(input: {
     writing: false,
     committing: false,
     landError: undefined as string | undefined,
-    landed: undefined as Landed | undefined,
     copied: false,
   })
   const [focusLine, setFocusLine] = createSignal<{
@@ -433,6 +433,8 @@ export function createReviewBrief(input: {
     current.evidence.forEach((row) => {
       if (row.type === "claim" && row.against === "failed" && row.run) {
         lines.push(language.t("session.review.reply.claim", { quote: row.claim.quote, command: row.run.command }))
+      } else if (row.type === "claim" && row.against === "none") {
+        lines.push(language.t("session.review.evidence.claim.none", { quote: row.claim.quote }))
       } else if (row.type === "check" && row.status === "failed" && !claimed.has(row.run.command)) {
         lines.push(language.t("session.review.reply.failed", { command: row.run.command }))
       } else if (row.type === "check" && row.status === "stale") {
@@ -563,10 +565,9 @@ export function createReviewBrief(input: {
       })
       batch(() => {
         done.files.forEach((file) => setMark(file, undefined))
-        setView({
-          landed: { headline, update: teamUpdate({ headline, message: text }) },
-          copied: false,
-        })
+        const id = rootID()
+        if (id) landedWork.record(id, { headline, update: teamUpdate({ headline, message: text }), at: Date.now() })
+        setView("copied", false)
         closeLanding()
       })
       input.refresh()
@@ -579,7 +580,7 @@ export function createReviewBrief(input: {
   }
 
   const copyUpdate = async () => {
-    const update = view.landed?.update
+    const update = landedWork.get(rootID())?.update
     if (!update) return
     try {
       await navigator.clipboard.writeText(update)
@@ -595,7 +596,7 @@ export function createReviewBrief(input: {
       rootID,
       () => {
         closeLanding()
-        setView({ landed: undefined, copied: false, landError: undefined })
+        setView({ copied: false, landError: undefined })
       },
       { defer: true },
     ),
@@ -641,8 +642,14 @@ export function createReviewBrief(input: {
     committing: () => view.committing,
     landError: () => view.landError,
     land,
-    landed: () => view.landed,
-    dismissLanded: () => setView("landed", undefined),
+    landed: () => {
+      const work = landedWork.get(rootID())
+      return work?.dismissed ? undefined : work
+    },
+    dismissLanded: () => {
+      const id = rootID()
+      if (id) landedWork.dismiss(id)
+    },
     copied: () => view.copied,
     copyUpdate,
     openStep: input.openStep,

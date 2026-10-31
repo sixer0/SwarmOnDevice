@@ -90,6 +90,8 @@ export const dict: Record<string, string> = {
   "ui.messagePart.option.typeOwnAnswer": "የራስህን መልስ ተይብ",
   "ui.messagePart.review.title": "መልሶችዎን ይገምግሙ",
   "ui.messagePart.questions.dismissed": "ጥያቄዎች ውድቅ የተደረጉ",
+  "ui.messagePart.notRun.away": "ያለዚህ ቀጥሏል",
+  "ui.messagePart.notRun.declined": "አልተሠራም",
   "ui.messagePart.compaction": "የክፍለ ጊዜው የታመቀ",
   "ui.messagePart.context.read.one": "{{count}} ማንበብ",
   "ui.messagePart.context.read.other": "{{count}} ያነባል",

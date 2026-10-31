@@ -774,7 +774,6 @@ export const dict = {
   "session.error.notFound.description": "此分頁指向的工作階段已不存在於此伺服器。",
   "session.error.notFound.closeTab": "關閉分頁",
   "session.error.serverConnection": "無法連線至此伺服器",
-  "session.review.filesChanged": "{{count}} 個檔案變更",
   "session.review.change.one": "變更",
   "session.review.change.other": "變更",
   "session.review.loadingChanges": "正在載入變更...",

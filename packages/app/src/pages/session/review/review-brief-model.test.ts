@@ -282,6 +282,62 @@ describe("buildActivity and buildBrief", () => {
   const other = diffOf("src/b.ts", ["a"], ["b"])
   const spec = diffOf("src/a.test.ts", [], ['it("x", () => { expect(1).toBe(1) })'])
 
+  test("a check nobody allowed did not fail: it did not run, and saying it passed is called out", () => {
+    const skipped = (id: string, start: number) =>
+      ({
+        id,
+        type: "tool",
+        tool: "bash",
+        state: {
+          status: "error",
+          input: { command: "bun test" },
+          error: "Nobody answered this permission request in time, so this call did not run.",
+          metadata: { notRun: "away" },
+          time: { start, end: start + 1 },
+        },
+      }) as unknown as Part
+    const activity = run(
+      {
+        u1: [textPart("t", "Fix the total")],
+        a1: [
+          tool("e1", "edit", { filePath: "/repo/src/a.ts" }, 10, {
+            filediff: { file: "src/a.ts", additions: 1, deletions: 1 },
+          }),
+          skipped("b1", 20),
+          textPart("c", "Fixed. All tests pass."),
+        ],
+      },
+      messages,
+    )
+    expect(activity.checks).toEqual([])
+    const brief = buildBrief({ diffs: [code], activity, marks: {}, running: false, complete: true })
+    expect(brief.headline).toEqual({ key: "claim", kind: "test" })
+    expect(brief.evidence[0]).toMatchObject({ type: "claim", against: "none" })
+    expect(brief.evidence.some((row) => row.type === "check" && row.status === "failed")).toBe(false)
+  })
+
+  test("once only files that are not this run's are left, nothing asks for a review or a commit", () => {
+    const activity = run(
+      {
+        u1: [textPart("t", "Fix the total")],
+        a1: [
+          tool("e1", "edit", { filePath: "/repo/src/a.ts" }, 10, {
+            filediff: { file: "src/a.ts", additions: 1, deletions: 1 },
+          }),
+          tool("r1", "bash", { command: "bun test" }, 20, { exit: 0 }),
+        ],
+      },
+      messages,
+    )
+    const brief = buildBrief({ diffs: [other], activity, marks: {}, running: false, complete: true })
+    expect(brief.headline).toEqual({ key: "elsewhere", count: 1 })
+    expect(brief.tone).toBe("neutral")
+    expect(brief.evidence.some((row) => row.type === "elsewhere")).toBe(false)
+    expect(buildBrief({ diffs: [code, other], activity, marks: {}, running: false, complete: true }).headline.key).not.toBe(
+      "elsewhere",
+    )
+  })
+
   test("a pass before the last edit goes stale and names the file", () => {
     const activity = run(
       {

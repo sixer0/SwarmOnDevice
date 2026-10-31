@@ -92,6 +92,8 @@ export const dict: Record<string, string> = {
   "ui.messagePart.option.typeOwnAnswer": "ཁྱོད་རའི་ལན་ཡིག་དཔར་རྐྱབས།",
   "ui.messagePart.review.title": "ཁྱོད་རའི་ལན་ཚུ་བསྐྱར་ཞིབ་འབད།",
   "ui.messagePart.questions.dismissed": "དྲི་བ་ཚུ་ ཕྱིར་འབུད་འབད་ཡོདཔ།",
+  "ui.messagePart.notRun.away": "འདི་མེད་པར་འཕྲོ་མཐུད་འབད་ཡི།",
+  "ui.messagePart.notRun.declined": "གཡོག་མ་བཀོལ་",
   "ui.messagePart.compaction": "ལཱ་ཡུན་བསྡམ་བཞག་ཡོདཔ།",
   "ui.messagePart.context.read.one": "{{count}}བཀླགས།",
   "ui.messagePart.context.read.other": "{{count}} ལྷག་ཡོད།",

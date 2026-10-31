@@ -733,7 +733,6 @@ export const dict = {
   "session.error.notFound.description": "Šī cilne norāda uz sesiju, kas vairs neeksistē šajā serverī.",
   "session.error.notFound.closeTab": "Aizvērt cilni",
   "session.error.serverConnection": "Nevar izveidot savienojumu ar šo serveri",
-  "session.review.filesChanged": "Mainīti faili: {{count}}",
   "session.review.change.one": "Izmaiņa",
   "session.review.change.other": "Izmaiņas",
   "session.review.loadingChanges": "Notiek izmaiņu ielāde...",

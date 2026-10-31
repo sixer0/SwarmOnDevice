@@ -738,7 +738,6 @@ export const dict = {
   "session.error.notFound.description": "Aquesta pestanya apunta a una sessió que ja no existeix en aquest servidor.",
   "session.error.notFound.closeTab": "Tanca la pestanya",
   "session.error.serverConnection": "No es pot connectar a aquest servidor",
-  "session.review.filesChanged": "Fitxers canviats {{count}}",
   "session.review.change.one": "Canviar",
   "session.review.change.other": "Canvis",
   "session.review.loadingChanges": "S'estan carregant els canvis...",

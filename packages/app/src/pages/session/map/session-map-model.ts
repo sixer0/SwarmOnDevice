@@ -1,4 +1,5 @@
 import type { AssistantMessage, Message, Part, ToolPart, UserMessage } from "@opencode-ai/sdk/v2"
+import { notRun } from "@opencode-ai/session-ui/part-mark"
 
 // A long session is hundreds of tool calls in a virtualized transcript: the browser's find cannot see it and a failed
 // command looks like a passing one. This module reduces the raw messages and parts to what a person reads instead.
@@ -18,6 +19,8 @@ export type MapStep = {
   input?: Record<string, unknown>
   metadata?: Record<string, unknown>
   label: string
+  // It stopped at the permission gate and never ran, so it says nothing about the work.
+  notRun?: boolean
   // Why this step counts as a problem. A shell command that exits non-zero completes normally as far as the tool is
   // concerned, so the exit code has to be read from its metadata.
   problem?: string
@@ -121,7 +124,11 @@ const changesOf = (part: ToolPart): MapFileChange[] => {
   return []
 }
 
+const notRunOf = (part: ToolPart) => (part.state.status === "error" ? notRun(part.state.metadata) : undefined)
+
 const problemOf = (part: ToolPart) => {
+  // Stopped at the permission gate: it never ran, so there is nothing to investigate. What is waiting shows elsewhere.
+  if (notRunOf(part)) return
   if (part.state.status === "error") return firstLine(text(part.state.error)) || part.tool
   if (part.state.status !== "completed") return
   const exit = record(part.state.metadata).exit
@@ -221,6 +228,7 @@ export function buildSessionMap(input: SessionMapInput): SessionMapModel {
             metadata: "metadata" in part.state ? record(part.state.metadata) : undefined,
             label: labelOf(part, kind),
             problem: problemOf(part),
+            notRun: !!notRunOf(part),
             detail:
               part.state.status === "completed" && problemOf(part)
                 ? quiet(() => failureLine(text(part.state.status === "completed" ? part.state.output : "")))

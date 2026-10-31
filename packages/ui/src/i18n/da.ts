@@ -89,6 +89,10 @@ export const dict = {
   "ui.sessionTurn.status.consideringNextSteps": "Overvejer næste skridt",
 
   "ui.messagePart.questions.dismissed": "Spørgsmål afvist",
+
+  "ui.messagePart.notRun.away": "Fortsatte uden dette",
+
+  "ui.messagePart.notRun.declined": "Kørte ikke",
   "ui.messagePart.compaction": "Session komprimeret",
   "ui.messagePart.context.read.one": "{{count}} læsning",
   "ui.messagePart.context.read.other": "{{count}} læsninger",

@@ -90,6 +90,8 @@ export const dict: Record<string, string> = {
   "ui.messagePart.option.typeOwnAnswer": "Nhập câu trả lời của riêng bạn",
   "ui.messagePart.review.title": "Xem lại các câu trả lời của bạn",
   "ui.messagePart.questions.dismissed": "Đã bỏ qua câu hỏi",
+  "ui.messagePart.notRun.away": "Đã tiếp tục mà không có điều này",
+  "ui.messagePart.notRun.declined": "Chưa chạy",
   "ui.messagePart.compaction": "Đã nén phiên",
   "ui.messagePart.context.read.one": "{{count}} đọc",
   "ui.messagePart.context.read.other": "{{count}} lượt đọc",

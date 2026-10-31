@@ -731,7 +731,6 @@ export const dict = {
   "session.error.notFound.description": "Tab ini merujuk kepada sesi yang tidak lagi wujud pada pelayan ini.",
   "session.error.notFound.closeTab": "Tutup Tab",
   "session.error.serverConnection": "Tidak dapat berhubung dengan pelayan ini",
-  "session.review.filesChanged": "{{count}} Fail Diubah",
   "session.review.change.one": "Perubahan",
   "session.review.change.other": "Perubahan",
   "session.review.loadingChanges": "Memuat perubahan...",

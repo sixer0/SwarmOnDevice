@@ -748,7 +748,6 @@ export const dict = {
   "session.error.notFound.description": "Tab này trỏ đến một phiên không còn tồn tại trên máy chủ này.",
   "session.error.notFound.closeTab": "Đóng tab",
   "session.error.serverConnection": "Không thể kết nối với máy chủ này",
-  "session.review.filesChanged": "Số tệp đã thay đổi: {{count}}",
   "session.review.change.one": "Thay đổi",
   "session.review.change.other": "Thay đổi",
   "session.review.loadingChanges": "Đang tải các thay đổi...",

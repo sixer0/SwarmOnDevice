@@ -740,7 +740,6 @@ export const dict = {
   "session.error.notFound.description": "Ova kartica ukazuje na sesiju koja više ne postoji na ovom poslužitelju.",
   "session.error.notFound.closeTab": "Zatvori Tab",
   "session.error.serverConnection": "Ne mogu se spojiti na ovaj poslužitelj",
-  "session.review.filesChanged": "Datoteke promijenjene {{count}}",
   "session.review.change.one": "Promijeniti",
   "session.review.change.other": "Promjene",
   "session.review.loadingChanges": "Učitavanje promjena...",

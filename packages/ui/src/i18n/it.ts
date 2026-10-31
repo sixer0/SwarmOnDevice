@@ -92,6 +92,8 @@ export const dict: Record<string, string> = {
   "ui.messagePart.option.typeOwnAnswer": "Digita la tua risposta",
   "ui.messagePart.review.title": "Rivedi le tue risposte",
   "ui.messagePart.questions.dismissed": "Domande ignorate",
+  "ui.messagePart.notRun.away": "Ha proseguito senza questo",
+  "ui.messagePart.notRun.declined": "Non eseguito",
   "ui.messagePart.compaction": "Sessione compattata",
   "ui.messagePart.context.read.one": "{{count}} lettura",
   "ui.messagePart.context.read.many": "{{count}} di letture",

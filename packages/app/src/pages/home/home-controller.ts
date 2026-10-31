@@ -90,6 +90,7 @@ export function createHomeController() {
         const directory = directories[0]
         if (!directory) return
         const ctx = global.ensureServerCtx(conn)
+        const first = ctx.projects.list().length === 0
         directories.forEach((item) => {
           if (ctx.projects.list().some((project) => project.worktree === item)) return
           const location = { directory: item }
@@ -106,6 +107,8 @@ export function createHomeController() {
         })
         ctx.projects.touch(directory)
         setSelection({ server: ServerConnection.key(conn), directory })
+        // Somebody opening their first project is here to give it a task, and that is the only thing it can offer yet.
+        if (first) openProjectNewSession(conn, directory)
       },
       openNewSession: () => {
         const conn = focusedServer()

@@ -92,6 +92,8 @@ export const dict: Record<string, string> = {
   "ui.messagePart.option.typeOwnAnswer": "O'zingizning javobingizni yozing",
   "ui.messagePart.review.title": "Javoblaringizni ko'rib chiqing",
   "ui.messagePart.questions.dismissed": "Savollar bekor qilindi",
+  "ui.messagePart.notRun.away": "Bunsiz davom etdi",
+  "ui.messagePart.notRun.declined": "Ishlamadi",
   "ui.messagePart.compaction": "Seans siqildi",
   "ui.messagePart.context.read.one": "{{count}} o'qildi",
   "ui.messagePart.context.read.other": "{{count}} o'qiydi",

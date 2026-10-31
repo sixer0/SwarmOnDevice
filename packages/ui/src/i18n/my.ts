@@ -91,6 +91,8 @@ export const dict = {
   "ui.messagePart.option.typeOwnAnswer": "သင့်ကိုယ်ပိုင်အဖြေကို ရိုက်ထည့်ပါ။",
   "ui.messagePart.review.title": "သင့်အဖြေများကို ပြန်လည်သုံးသပ်ပါ။",
   "ui.messagePart.questions.dismissed": "မေးခွန်းများကို ထုတ်ထားသည်။",
+  "ui.messagePart.notRun.away": "ဤအရာမပါဘဲ ဆက်လုပ်ခဲ့သည်",
+  "ui.messagePart.notRun.declined": "မ run ခဲ့ပါ",
   "ui.messagePart.compaction": "ဆက်ရှင်ကို ကျုံ့လိုက်ပါပြီ။",
   "ui.messagePart.context.read.one": "{{count}} ဖတ်သည်။",
   "ui.messagePart.context.read.other": "{{count}} ဖတ်သည်။",

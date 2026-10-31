@@ -92,6 +92,8 @@ export const dict: Record<string, string> = {
   "ui.messagePart.option.typeOwnAnswer": "आफ्नो जवाफ टाइप गर्नुहोस्",
   "ui.messagePart.review.title": "आफ्नो जवाफ समीक्षा गर्नुहोस्",
   "ui.messagePart.questions.dismissed": "प्रश्नहरू खारेज गरियो",
+  "ui.messagePart.notRun.away": "यो बिना अगाडि बढ्यो",
+  "ui.messagePart.notRun.declined": "चलेन",
   "ui.messagePart.compaction": "सत्र संकुचित",
   "ui.messagePart.context.read.one": "{{count}} पढियो",
   "ui.messagePart.context.read.other": "{{count}} पढियो",

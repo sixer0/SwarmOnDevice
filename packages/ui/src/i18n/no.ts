@@ -70,6 +70,10 @@ export const dict: Record<Keys, string> = {
   "ui.sessionTurn.status.consideringNextSteps": "Vurderer neste trinn",
 
   "ui.messagePart.questions.dismissed": "Spørsmål avvist",
+
+  "ui.messagePart.notRun.away": "Fortsatte uten dette",
+
+  "ui.messagePart.notRun.declined": "Ikke kjørt",
   "ui.messagePart.compaction": "Sesjon komprimert",
   "ui.messagePart.context.read.one": "{{count}} lest",
   "ui.messagePart.context.read.other": "{{count}} lest",

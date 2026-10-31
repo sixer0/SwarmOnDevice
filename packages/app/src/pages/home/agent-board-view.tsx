@@ -207,11 +207,12 @@ function NeedRow(props: { board: AgentBoardController; need: AgentBoardNeed }) {
 /** Says why this row is here although the agent is not stuck on it any more. */
 function MovedOnLine(props: { at?: number }) {
   const language = useLanguage()
+  const now = createMinuteClock()
   return (
     <Show when={props.at}>
       {(at) => (
         <div data-agent-moved-on class="pb-1 pl-6 text-v2-text-text-muted [font-weight:440]">
-          {language.t("home.agents.movedOn", { time: getRelativeTime(new Date(at()).toISOString(), language.t) })}
+          {(now(), language.t("home.agents.movedOn", { time: getRelativeTime(new Date(at()).toISOString(), language.t) }))}
         </div>
       )}
     </Show>

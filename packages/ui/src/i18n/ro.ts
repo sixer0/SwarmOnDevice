@@ -91,6 +91,8 @@ export const dict: Record<string, string> = {
   "ui.messagePart.option.typeOwnAnswer": "Scrie propriul răspuns",
   "ui.messagePart.review.title": "Revizuiește răspunsurile",
   "ui.messagePart.questions.dismissed": "Întrebări respinse",
+  "ui.messagePart.notRun.away": "A continuat fără asta",
+  "ui.messagePart.notRun.declined": "Nu au rulat",
   "ui.messagePart.compaction": "Sesiune compactată",
   "ui.messagePart.context.read.one": "{{count}} citire",
   "ui.messagePart.context.read.other": "{{count}} citiri",

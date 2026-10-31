@@ -789,7 +789,6 @@ export const dict = {
   "session.error.notFound.description": "Bu sekme, artık bu sunucuda bulunmayan bir oturuma yönlendiriyor.",
   "session.error.notFound.closeTab": "Sekmeyi kapat",
   "session.error.serverConnection": "Bu sunucuya bağlanılamıyor",
-  "session.review.filesChanged": "{{count}} dosya değişti",
   "session.review.change.one": "Değişiklik",
   "session.review.change.other": "Değişiklik",
   "session.review.loadingChanges": "Değişiklikler yükleniyor...",

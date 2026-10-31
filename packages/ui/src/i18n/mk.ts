@@ -90,6 +90,8 @@ export const dict = {
   "ui.messagePart.option.typeOwnAnswer": "Напишете го вашиот сопствен одговор",
   "ui.messagePart.review.title": "Прегледајте ги вашите одговори",
   "ui.messagePart.questions.dismissed": "Прашањата се отфрлени",
+  "ui.messagePart.notRun.away": "Продолжи без ова",
+  "ui.messagePart.notRun.declined": "Не е извршено",
   "ui.messagePart.compaction": "Сесијата е набиена",
   "ui.messagePart.context.read.one": "{{count}} прочитајте",
   "ui.messagePart.context.read.other": "{{count}} чита",

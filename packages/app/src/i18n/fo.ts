@@ -733,7 +733,6 @@ export const dict = {
   "session.error.notFound.description": "Hesin flipin vísir á eina setu, sum ikki longur er til á hesum ambætaranum.",
   "session.error.notFound.closeTab": "Lat flipan aftur",
   "session.error.serverConnection": "Kann ikki seta samband við hendan ambætaran",
-  "session.review.filesChanged": "Fílur broyttar {{count}}",
   "session.review.change.one": "Broyting",
   "session.review.change.other": "Broytingar",
   "session.review.loadingChanges": "Heinta broytingar...",

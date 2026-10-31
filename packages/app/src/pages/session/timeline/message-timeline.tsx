@@ -144,7 +144,7 @@ function TimelineThinkingRow(props: { reasoningHeading?: string; showReasoningSu
   )
 }
 
-function TimelineDiffSummaryRow(props: { diffs: SummaryDiff[] }) {
+function TimelineDiffSummaryRow(props: { diffs: SummaryDiff[]; onReview?: () => void }) {
   const language = useLanguage()
   const maxFiles = 10
   const [state, setState] = createStore({
@@ -171,6 +171,13 @@ function TimelineDiffSummaryRow(props: { diffs: SummaryDiff[] }) {
           <span data-slot="session-turn-diffs-toggle" onClick={() => setState("showAll", !showAll())}>
             {showAll() ? language.t("ui.sessionTurn.diffs.showLess") : language.t("ui.sessionTurn.diffs.showAll")}
           </span>
+        </Show>
+        <Show when={props.onReview}>
+          {(review) => (
+            <ButtonV2 size="small" variant="outline" class="ms-auto" data-session-review onClick={review()}>
+              {language.t("session.tab.review")}
+            </ButtonV2>
+          )}
         </Show>
       </div>
       <div data-component="session-turn-diffs-content">
@@ -259,6 +266,8 @@ export function MessageTimeline(props: {
   onVisibleTurn?: (id: string | undefined) => void
   setScrollToEnd?: (fn: () => void) => void
   setHistoryAnchor?: (handlers: { capture: () => void; restore: (done: boolean) => void }) => void
+  /** What a finished run's file list offers next. Undefined where the review panel is open or there is none. */
+  onReview?: () => (() => void) | undefined
 }) {
   let touchGesture: number | undefined
 
@@ -1326,7 +1335,15 @@ export function MessageTimeline(props: {
         return (
           <TimelineRowFrame row={diffSummaryRow}>
             <div data-slot="session-turn-message-container" class="w-full px-4 md:px-5">
-              <TimelineDiffSummaryRow diffs={diffSummaryRow().diffs} />
+              <TimelineDiffSummaryRow
+                diffs={diffSummaryRow().diffs}
+                onReview={
+                  timelineRows().findLast((item) => item._tag === "DiffSummary")?.userMessageID ===
+                  diffSummaryRow().userMessageID
+                    ? props.onReview?.()
+                    : undefined
+                }
+              />
             </div>
           </TimelineRowFrame>
         )

@@ -728,7 +728,6 @@ export const dict = {
   "session.error.notFound.description": "ແຖບນີ້ຊີ້ໄປຫາເຊດຊັນທີ່ບໍ່ມີຢູ່ໃນເຊີບເວີນີ້ແລ້ວ.",
   "session.error.notFound.closeTab": "ປິດແຖບ",
   "session.error.serverConnection": "ບໍ່ສາມາດເຊື່ອມຕໍ່ກັບເຊີບເວີນີ້ໄດ້",
-  "session.review.filesChanged": "ໄຟລ໌ປ່ຽນ {{count}}",
   "session.review.change.one": "ປ່ຽນແປງ",
   "session.review.change.other": "ການປ່ຽນແປງ",
   "session.review.loadingChanges": "ກຳລັງໂຫຼດການປ່ຽນແປງ...",

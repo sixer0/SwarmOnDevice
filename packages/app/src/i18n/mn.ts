@@ -738,7 +738,6 @@ export const dict = {
   "session.error.notFound.description": "Энэ таб нь энэ сервер дээр байхгүй сессийг заадаг.",
   "session.error.notFound.closeTab": "Табыг хаах",
   "session.error.serverConnection": "Энэ серверт холбогдох боломжгүй байна",
-  "session.review.filesChanged": "Файлууд өөрчлөгдсөн {{count}}",
   "session.review.change.one": "Өөрчлөх",
   "session.review.change.other": "Өөрчлөлтүүд",
   "session.review.loadingChanges": "Өөрчлөлтүүдийг ачаалж байна...",

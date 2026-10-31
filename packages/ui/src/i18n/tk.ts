@@ -90,6 +90,8 @@ export const dict: Record<string, string> = {
   "ui.messagePart.option.typeOwnAnswer": "Öz jogabyňyzy ýazyň",
   "ui.messagePart.review.title": "Jogaplaryňyzy gözden geçiriň",
   "ui.messagePart.questions.dismissed": "Soraglar ýatyryldy",
+  "ui.messagePart.notRun.away": "Munsuz dowam etdi",
+  "ui.messagePart.notRun.declined": "Işlemedi",
   "ui.messagePart.compaction": "Sessiýa gysyldy",
   "ui.messagePart.context.read.one": "{{count}} oka",
   "ui.messagePart.context.read.other": "{{count}} okaýar",

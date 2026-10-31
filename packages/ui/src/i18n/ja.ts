@@ -90,6 +90,10 @@ export const dict = {
   "ui.sessionTurn.status.consideringNextSteps": "次のステップを検討中",
 
   "ui.messagePart.questions.dismissed": "質問をスキップしました",
+
+  "ui.messagePart.notRun.away": "これなしで続行しました",
+
+  "ui.messagePart.notRun.declined": "未実行",
   "ui.messagePart.compaction": "セッションが圧縮されました",
   "ui.messagePart.context.read.one": "{{count}} 件の読み取り",
   "ui.messagePart.context.read.other": "{{count}} 件の読み取り",

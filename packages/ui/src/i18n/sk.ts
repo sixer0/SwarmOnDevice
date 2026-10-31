@@ -92,6 +92,8 @@ export const dict: Record<string, string> = {
   "ui.messagePart.option.typeOwnAnswer": "Napíšte vlastnú odpoveď",
   "ui.messagePart.review.title": "Skontrolujte svoje odpovede",
   "ui.messagePart.questions.dismissed": "Otázky zamietnuté",
+  "ui.messagePart.notRun.away": "Pokračoval bez toho",
+  "ui.messagePart.notRun.declined": "Nebežalo",
   "ui.messagePart.compaction": "Relácia bola zhutnená",
   "ui.messagePart.context.read.one": "{{count}} prečítanie",
   "ui.messagePart.context.read.other": "{{count}} prečítaní",

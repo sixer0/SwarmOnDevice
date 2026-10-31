@@ -92,6 +92,8 @@ export const dict: Record<string, string> = {
   "ui.messagePart.option.typeOwnAnswer": "Upišite svoj odgovor",
   "ui.messagePart.review.title": "Pregledajte svoje odgovore",
   "ui.messagePart.questions.dismissed": "Pitanja odbačena",
+  "ui.messagePart.notRun.away": "Nastavio je bez ovoga",
+  "ui.messagePart.notRun.declined": "Nije pokrenuto",
   "ui.messagePart.compaction": "Sesija je zbijena",
   "ui.messagePart.context.read.one": "{{count}} čitati",
   "ui.messagePart.context.read.other": "{{count}} glasi",

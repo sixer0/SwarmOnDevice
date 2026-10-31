@@ -744,7 +744,6 @@ export const dict = {
   "session.error.notFound.description": "މި ޓެބުން އިޝާރާތް ކުރަނީ މި ސަރވަރގައި މިހާރު ނެތް ސެޝަނަކަށެވެ.",
   "session.error.notFound.closeTab": "Tab ބަންދުކުރުން",
   "session.error.serverConnection": "މި ސަރވަރ އާއި ގުޅެވޭކަށް ނެތެވެ",
-  "session.review.filesChanged": "ފައިލްތައް ބަދަލުވެއްޖެ {{count}}",
   "session.review.change.one": "ބަދަލު",
   "session.review.change.other": "ބަދަލުތައް",
   "session.review.loadingChanges": "ބަދަލުތައް ލޯޑް ކުރަނީ...",

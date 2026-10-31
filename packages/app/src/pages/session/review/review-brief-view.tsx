@@ -63,6 +63,8 @@ function useHeadline(brief: ReviewBriefController) {
         return language.t("session.review.headline.flags", { count: headline.count })
       case "clear":
         return language.t("session.review.headline.clear")
+      case "elsewhere":
+        return language.t("session.review.evidence.elsewhere", { count: headline.count })
       case "history":
         return language.t("session.review.headline.history")
     }
@@ -79,6 +81,8 @@ export function ReviewBriefStrip(props: { brief: ReviewBriefController }) {
   const [prefs, setPrefs] = persisted(Persist.global("review-brief"), createStore({ evidence: false }))
   const open = () => prefs.evidence && brief().evidence.length > 0
   const allDecided = () => brief().progress.total > 0 && brief().progress.ok === brief().progress.total
+  // Only files that are not this run's are left: nothing to count, and committing them is not this panel's business.
+  const settled = () => brief().headline.key === "elsewhere"
 
   return (
     <section
@@ -111,16 +115,18 @@ export function ReviewBriefStrip(props: { brief: ReviewBriefController }) {
           </Show>
         </button>
         <div class="flex shrink-0 items-center gap-2">
-          <span class="text-12-regular text-v2-text-text-muted">
-            {language.t("session.review.progress", { done: brief().progress.ok, total: brief().progress.total })}
-          </span>
+          <Show when={!settled()}>
+            <span class="text-12-regular text-v2-text-text-muted">
+              {language.t("session.review.progress", { done: brief().progress.ok, total: brief().progress.total })}
+            </span>
+          </Show>
           <Show when={brief().sendable}>
             <ButtonV2 size="small" variant="contrast" onClick={props.brief.sendBack}>
               {language.t("session.review.action.sendBack")}
               <Show when={brief().progress.work > 0}>{` (${brief().progress.work})`}</Show>
             </ButtonV2>
           </Show>
-          <Show when={props.brief.canLand() && !props.brief.landing()}>
+          <Show when={props.brief.canLand() && !props.brief.landing() && !settled()}>
             <ButtonV2
               size="small"
               data-review-land
@@ -337,6 +343,7 @@ function EvidenceItem(props: { brief: ReviewBriefController; row: EvidenceRow })
       if (status === "stale")
         return language.t("session.review.evidence.stale", { check, count: row.editedAfter.length })
       if (status === "passed" && row.run.partial) return language.t("session.review.evidence.partial", { check })
+      if (status === "failed" && row.run.exit === undefined) return language.t("session.review.headline.failed", { command: row.run.command })
       return language.t(`session.review.evidence.${status}`, { check, exit: row.run.exit ?? "" })
     }
     if (row.type === "none") {

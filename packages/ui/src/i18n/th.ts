@@ -91,6 +91,10 @@ export const dict = {
   "ui.sessionTurn.status.consideringNextSteps": "กำลังพิจารณาขั้นตอนถัดไป",
 
   "ui.messagePart.questions.dismissed": "ละทิ้งคำถามแล้ว",
+
+  "ui.messagePart.notRun.away": "ทำต่อโดยไม่มีสิ่งนี้",
+
+  "ui.messagePart.notRun.declined": "ไม่ได้รัน",
   "ui.messagePart.compaction": "บีบอัดเซสชันแล้ว",
   "ui.messagePart.context.read.one": "อ่าน {{count}} รายการ",
   "ui.messagePart.context.read.other": "อ่าน {{count}} รายการ",

@@ -636,7 +636,6 @@ export const dict = {
   "session.error.notFound.description": "Tämä välilehti osoittaa istuntoon, jota ei enää ole tällä palvelimella.",
   "session.error.notFound.closeTab": "Sulje välilehti",
   "session.error.serverConnection": "Ei voi muodostaa yhteyttä tähän palvelimeen",
-  "session.review.filesChanged": "Muutettuja tiedostoja: {{count}}",
   "session.review.change.one": "Muutos",
   "session.review.change.other": "Muutokset",
   "session.review.loadingChanges": "Ladataan muutoksia...",

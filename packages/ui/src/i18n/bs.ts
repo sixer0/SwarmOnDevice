@@ -96,6 +96,10 @@ export const dict = {
   "ui.sessionTurn.status.consideringNextSteps": "Razmatranje sljedećih koraka",
 
   "ui.messagePart.questions.dismissed": "Pitanja odbačena",
+
+  "ui.messagePart.notRun.away": "Nastavio je bez ovoga",
+
+  "ui.messagePart.notRun.declined": "Nije pokrenuto",
   "ui.messagePart.compaction": "Sesija sažeta",
   "ui.messagePart.context.read.one": "{{count}} čitanje",
   "ui.messagePart.context.read.few": "{{count}} čitanja",

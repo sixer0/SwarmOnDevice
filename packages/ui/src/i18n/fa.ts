@@ -90,6 +90,8 @@ export const dict: Record<string, string> = {
   "ui.messagePart.option.typeOwnAnswer": "پاسخ خود را تایپ کنید",
   "ui.messagePart.review.title": "پاسخ های خود را مرور کنید",
   "ui.messagePart.questions.dismissed": "سوالات رد شد",
+  "ui.messagePart.notRun.away": "بدون این ادامه داد",
+  "ui.messagePart.notRun.declined": "اجرا نشد",
   "ui.messagePart.compaction": "جلسه فشرده شده است",
   "ui.messagePart.context.read.one": "{{count}} خوانده شود",
   "ui.messagePart.context.read.other": "{{count}} می خواند",

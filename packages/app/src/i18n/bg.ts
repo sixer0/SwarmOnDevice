@@ -738,7 +738,6 @@ export const dict = {
   "session.error.notFound.description": "Този раздел сочи към сесия, която вече не съществува на този сървър.",
   "session.error.notFound.closeTab": "Затваряне на раздела",
   "session.error.serverConnection": "Не може да се свърже с този сървър",
-  "session.review.filesChanged": "Променени файлове {{count}}",
   "session.review.change.one": "промяна",
   "session.review.change.other": "Промени",
   "session.review.loadingChanges": "Промените се зареждат...",

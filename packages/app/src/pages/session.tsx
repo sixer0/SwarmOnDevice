@@ -2166,7 +2166,7 @@ export default function Page() {
           onClick={() => setStore("mobileTab", "changes")}
         >
           {hasReview()
-            ? language.t("session.review.filesChanged", { count: reviewCount() })
+            ? `${language.t("session.tab.review")} ${reviewCount()}`
             : language.t("session.review.change.other")}
         </Tabs.Trigger>
       </Tabs.List>
@@ -2224,6 +2224,9 @@ export default function Page() {
               {(_id) => (
                 <MessageTimeline
                   actions={actions}
+                  onReview={() =>
+                    isDesktop() && canReview() && !view().reviewPanel.opened() ? openReviewPanel : undefined
+                  }
                   scroll={ui.scroll}
                   onResumeScroll={resumeScroll}
                   setScrollRef={setScrollRef}

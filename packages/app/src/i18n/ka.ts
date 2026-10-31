@@ -733,7 +733,6 @@ export const dict = {
   "session.error.notFound.description": "ეს ჩანართი მიუთითებს სესიაზე, რომელიც აღარ არსებობს ამ სერვერზე.",
   "session.error.notFound.closeTab": "ჩანართის დახურვა",
   "session.error.serverConnection": "ამ სერვერთან დაკავშირება შეუძლებელია",
-  "session.review.filesChanged": "ფაილები შეიცვალა {{count}}",
   "session.review.change.one": "შეცვლა",
   "session.review.change.other": "ცვლილებები",
   "session.review.loadingChanges": "ცვლილებების ჩატვირთვა...",

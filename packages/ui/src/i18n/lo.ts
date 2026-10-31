@@ -90,6 +90,8 @@ export const dict = {
   "ui.messagePart.option.typeOwnAnswer": "ພິມຄໍາຕອບຂອງທ່ານເອງ",
   "ui.messagePart.review.title": "ທົບທວນຄືນຄໍາຕອບຂອງເຈົ້າ",
   "ui.messagePart.questions.dismissed": "ປິດຄຳຖາມ",
+  "ui.messagePart.notRun.away": "ດຳເນີນຕໍ່ໂດຍບໍ່ມີສິ່ງນີ້",
+  "ui.messagePart.notRun.declined": "ບໍ່ໄດ້ແລ່ນ",
   "ui.messagePart.compaction": "ເຊດຊັນຖືກບີບອັດລົງ",
   "ui.messagePart.context.read.one": "{{count}} ອ່ານ",
   "ui.messagePart.context.read.other": "{{count}} ອ່ານ",

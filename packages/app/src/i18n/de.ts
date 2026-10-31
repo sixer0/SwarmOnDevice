@@ -625,7 +625,6 @@ export const dict = {
     "Dieser Tab verweist auf eine Sitzung, die auf diesem Server nicht mehr existiert.",
   "session.error.notFound.closeTab": "Tab schließen",
   "session.error.serverConnection": "Verbindung zu diesem Server nicht möglich",
-  "session.review.filesChanged": "Geänderte Dateien: {{count}}",
   "session.review.change.one": "Änderung",
   "session.review.change.other": "Änderungen",
   "session.review.loadingChanges": "Änderungen werden geladen…",

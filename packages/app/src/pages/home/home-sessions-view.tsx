@@ -39,6 +39,10 @@ function isBackgroundOpen(event: MouseEvent) {
 export type HomeSessionsViewProps = {
   language: ReturnType<typeof useLanguage>
   board?: JSX.Element
+  /** Sessions in the rows above stay out of the list, so the list being empty does not mean there is nothing here. */
+  waiting?: Accessor<boolean>
+  landed?: (session: Session) => string | undefined
+  onOpenProject?: () => void
   groups: Accessor<HomeSessionGroup[]>
   showProjectName: Accessor<boolean>
   server: Accessor<ServerConnection.Key>
@@ -80,9 +84,12 @@ export function HomeSessionsView(props: HomeSessionsViewProps) {
       aria-label={props.language.t("sidebar.project.recentSessions")}
     >
       <div class="sticky top-0 z-30 shrink-0 bg-v2-background-bg-base pb-3 pt-6 lg:pt-12" onWheel={props.onWheel}>
-        <HomeSessionSearch {...props} />
+        {/* There is nothing to search until there is a project. */}
+        <Show when={props.canCreateSession()}>
+          <HomeSessionSearch {...props} />
+        </Show>
         <Suspense>
-          <Show when={props.groups().length > 0 && props.canCreateSession()}>
+          <Show when={(props.groups().length > 0 || props.waiting?.()) && props.canCreateSession()}>
             <div class="pointer-events-none absolute right-0 top-[84px] z-20 flex lg:top-[108px]">
               <ButtonV2
                 data-action="home-new-session"
@@ -117,10 +124,13 @@ export function HomeSessionsView(props: HomeSessionsViewProps) {
           <Show
             when={props.groups().length > 0}
             fallback={
-              <HomeSessionsEmpty
-                onNewSession={props.canCreateSession() ? props.onCreateSession : undefined}
-                language={props.language}
-              />
+              <Show when={!props.waiting?.()}>
+                <HomeSessionsEmpty
+                  onNewSession={props.canCreateSession() ? props.onCreateSession : undefined}
+                  onOpenProject={props.onOpenProject}
+                  language={props.language}
+                />
+              </Show>
             }
           >
             <div ref={props.onSetContent} class="flex flex-col pt-3 pr-3 pb-16">
@@ -454,6 +464,13 @@ function HomeSessionRow(props: HomeSessionsViewProps & { record: HomeSessionReco
         <Show when={showProjectName()}>
           <HomeSessionProjectName name={props.record.projectName} />
         </Show>
+        <Show when={props.landed?.(props.record.session)}>
+          {(line) => (
+            <span data-home-landed class="min-w-0 shrink truncate text-v2-text-text-muted [font-weight:440]" title={line()}>
+              {line()}
+            </span>
+          )}
+        </Show>
       </button>
       <Show when={SHOW_HOME_SESSION_ARCHIVE}>
         <div
@@ -517,7 +534,11 @@ export function homeSessionsEmptyDescriptionKey(hasCreateAffordance: boolean) {
   return hasCreateAffordance ? "home.sessions.empty.description" : "home.empty.description"
 }
 
-function HomeSessionsEmpty(props: { onNewSession?: () => void; language: ReturnType<typeof useLanguage> }) {
+function HomeSessionsEmpty(props: {
+  onNewSession?: () => void
+  onOpenProject?: () => void
+  language: ReturnType<typeof useLanguage>
+}) {
   return (
     <div class="flex min-h-full flex-col items-center gap-4 px-6 pt-[52px] text-center">
       <div
@@ -540,6 +561,13 @@ function HomeSessionsEmpty(props: { onNewSession?: () => void; language: ReturnT
         {(onNewSession) => (
           <ButtonV2 data-action="home-new-session" variant="neutral" size="normal" icon="edit" onClick={onNewSession()}>
             {props.language.t("command.session.new")}
+          </ButtonV2>
+        )}
+      </Show>
+      <Show when={!props.onNewSession && props.onOpenProject}>
+        {(onOpenProject) => (
+          <ButtonV2 data-action="home-open-project" variant="neutral" size="normal" onClick={onOpenProject()}>
+            {props.language.t("command.project.open")}
           </ButtonV2>
         )}
       </Show>

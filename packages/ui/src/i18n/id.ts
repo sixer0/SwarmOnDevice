@@ -97,6 +97,8 @@ export const dict: Record<string, string> = {
   "ui.messagePart.option.typeOwnAnswer": "Ketik jawaban Anda sendiri",
   "ui.messagePart.review.title": "Tinjau jawaban Anda",
   "ui.messagePart.questions.dismissed": "Pertanyaan ditutup",
+  "ui.messagePart.notRun.away": "Lanjut tanpa ini",
+  "ui.messagePart.notRun.declined": "Tidak dijalankan",
   "ui.messagePart.compaction": "Sesi diringkas",
   "ui.messagePart.context.read.one": "{{count}} pembacaan",
   "ui.messagePart.context.read.other": "{{count}} pembacaan",

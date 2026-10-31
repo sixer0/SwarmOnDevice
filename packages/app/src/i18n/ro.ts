@@ -733,7 +733,6 @@ export const dict = {
   "session.error.notFound.description": "Acest tab indică spre o sesiune care nu mai există pe acest server.",
   "session.error.notFound.closeTab": "Închide tab-ul",
   "session.error.serverConnection": "Nu se poate conecta la acest server",
-  "session.review.filesChanged": "{{count}} fișiere modificate",
   "session.review.change.one": "Modificare",
   "session.review.change.other": "Modificări",
   "session.review.loadingChanges": "Se încarcă modificările...",

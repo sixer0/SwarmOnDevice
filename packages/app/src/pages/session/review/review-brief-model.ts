@@ -423,7 +423,7 @@ export function buildActivity(input: {
           narration = step.label
           return
         }
-        if (step.kind === "command") {
+        if (step.kind === "command" && !step.notRun) {
           const classified = classifyCommand(String(step.input?.command ?? step.label))
           const exit = step.metadata?.exit
           classified?.kinds.forEach((kind) => {
@@ -579,6 +579,7 @@ export type BriefHeadline =
   | { key: "flags"; count: number }
   | { key: "clear" }
   | { key: "history" }
+  | { key: "elsewhere"; count: number }
 
 export type BriefTone = "critical" | "warning" | "ok" | "neutral"
 
@@ -718,6 +719,8 @@ export function buildBrief(input: BriefInput): Brief {
   const flagged = files.filter((file) => file.group === "look").length
   const contradicted = claims.length > 0 ? (claims[0] as Extract<EvidenceRow, { type: "claim" }>) : undefined
 
+  const onlyElsewhere = files.length > 0 && files.every((file) => file.group === "elsewhere")
+
   let headline: BriefHeadline
   let tone: BriefTone
   if (input.running) {
@@ -729,6 +732,10 @@ export function buildBrief(input: BriefInput): Brief {
   } else if (failed) {
     headline = { key: "failed", command: failed.run.command }
     tone = "critical"
+  } else if (onlyElsewhere) {
+    // Nothing here is this run's: it landed, was undone or never existed. These files are not waiting for a review of it.
+    headline = { key: "elsewhere", count: files.length }
+    tone = "neutral"
   } else if (stale.length > 0) {
     headline = { key: "stale", count: new Set(stale).size }
     tone = "warning"
@@ -763,7 +770,7 @@ export function buildBrief(input: BriefInput): Brief {
     byFile: new Map(files.map((file) => [file.file, file])),
     groups,
     order: groups.flatMap((group) => group.files),
-    evidence,
+    evidence: onlyElsewhere ? evidence.filter((row) => row.type !== "elsewhere") : evidence,
     headline,
     tone,
     progress,

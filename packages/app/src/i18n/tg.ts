@@ -735,7 +735,6 @@ export const dict = {
   "session.error.notFound.description": "Ин ҷадвал ба сессияе ишора мекунад, ки дигар дар ин сервер вуҷуд надорад.",
   "session.error.notFound.closeTab": "Варақаро пӯшед",
   "session.error.serverConnection": "Ба ин сервер пайваст шудан мумкин нест",
-  "session.review.filesChanged": "Файлҳо тағир дода шуданд {{count}}",
   "session.review.change.one": "Тағйир",
   "session.review.change.other": "Тағйирот",
   "session.review.loadingChanges": "Тағйирот бор карда мешавад...",

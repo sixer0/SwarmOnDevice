@@ -90,6 +90,8 @@ export const dict: Record<string, string> = {
   "ui.messagePart.option.typeOwnAnswer": "Shkruani përgjigjen tuaj",
   "ui.messagePart.review.title": "Rishikoni përgjigjet tuaja",
   "ui.messagePart.questions.dismissed": "Pyetjet u hodhën poshtë",
+  "ui.messagePart.notRun.away": "Vazhdoi pa këtë",
+  "ui.messagePart.notRun.declined": "Nuk u ekzekutua",
   "ui.messagePart.compaction": "Sesioni i ngjeshur",
   "ui.messagePart.context.read.one": "{{count}} lexuar",
   "ui.messagePart.context.read.other": "{{count}} lexon",

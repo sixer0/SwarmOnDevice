@@ -90,6 +90,8 @@ export const dict = {
   "ui.messagePart.option.typeOwnAnswer": "Өөрийнхөө хариултыг бичнэ үү",
   "ui.messagePart.review.title": "Хариултуудаа нягталж үзээрэй",
   "ui.messagePart.questions.dismissed": "Асуултуудыг хаасан",
+  "ui.messagePart.notRun.away": "Үүнгүйгээр үргэлжилсэн",
+  "ui.messagePart.notRun.declined": "Ажиллаагүй",
   "ui.messagePart.compaction": "Сеанс нягтаршсан",
   "ui.messagePart.context.read.one": "{{count}} уншсан",
   "ui.messagePart.context.read.other": "{{count}} уншдаг",

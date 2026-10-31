@@ -719,7 +719,6 @@ export const dict = {
   "session.error.notFound.description": "ይህ ትር የሚያመለክተው በዚህ አገልጋይ ላይ ወደሌለው ክፍለ ጊዜ ነው።",
   "session.error.notFound.closeTab": "ትርን ዝጋ",
   "session.error.serverConnection": "ከዚህ አገልጋይ ጋር መገናኘት አልተቻለም",
-  "session.review.filesChanged": "የተቀየሩ ፋይሎች {{count}}",
   "session.review.change.one": "ለውጥ",
   "session.review.change.other": "ለውጦች",
   "session.review.loadingChanges": "ለውጦችን በመጫን ላይ...",

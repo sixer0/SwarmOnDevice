@@ -733,7 +733,6 @@ export const dict = {
   "session.error.notFound.description": "Tato karta ukazuje na relaci, která již na tomto serveru neexistuje.",
   "session.error.notFound.closeTab": "Zavřít kartu",
   "session.error.serverConnection": "K tomuto serveru se nelze připojit",
-  "session.review.filesChanged": "Soubory změněny {{count}}",
   "session.review.change.one": "Změna",
   "session.review.change.other": "Změny",
   "session.review.loadingChanges": "Načítání změn...",

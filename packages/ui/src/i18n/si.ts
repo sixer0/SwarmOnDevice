@@ -90,6 +90,8 @@ export const dict: Record<string, string> = {
   "ui.messagePart.option.typeOwnAnswer": "ඔබේම පිළිතුර ටයිප් කරන්න",
   "ui.messagePart.review.title": "ඔබේ පිළිතුරු සමාලෝචනය කරන්න",
   "ui.messagePart.questions.dismissed": "ප්‍රශ්න ඉවත දමන ලදී",
+  "ui.messagePart.notRun.away": "මෙය නොමැතිව ඉදිරියට ගියේය",
+  "ui.messagePart.notRun.declined": "ධාවනය නොවීය",
   "ui.messagePart.compaction": "සැසිය සංයුක්ත කර ඇත",
   "ui.messagePart.context.read.one": "{{count}} කියවා ඇත",
   "ui.messagePart.context.read.other": "{{count}} කියවයි",

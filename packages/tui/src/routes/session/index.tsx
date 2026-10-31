@@ -1811,6 +1811,7 @@ function InlineTool(props: {
 
   const denied = createMemo(
     () =>
+      (props.part.state.status === "error" && !!props.part.state.metadata?.notRun) ||
       error()?.includes("QuestionRejectedError") ||
       error()?.includes("rejected permission") ||
       error()?.includes("specified a rule") ||

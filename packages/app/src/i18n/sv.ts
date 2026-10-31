@@ -743,7 +743,6 @@ export const dict = {
   "session.error.notFound.description": "Den här fliken pekar på en session som inte längre finns på den här servern.",
   "session.error.notFound.closeTab": "Stäng flik",
   "session.error.serverConnection": "Det går inte att ansluta till den här servern",
-  "session.review.filesChanged": "Ändrade filer: {{count}}",
   "session.review.change.one": "Ändring",
   "session.review.change.other": "Ändringar",
   "session.review.loadingChanges": "Läser in ändringar...",

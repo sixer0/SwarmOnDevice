@@ -735,7 +735,6 @@ export const dict = {
   "session.error.notFound.description": "Оваа картичка укажува на сесија што повеќе не постои на овој сервер.",
   "session.error.notFound.closeTab": "Затвори ја картичката",
   "session.error.serverConnection": "Не може да се поврзе со овој сервер",
-  "session.review.filesChanged": "Променети датотеки {{count}}",
   "session.review.change.one": "Промена",
   "session.review.change.other": "Промени",
   "session.review.loadingChanges": "Се вчитуваат промените...",

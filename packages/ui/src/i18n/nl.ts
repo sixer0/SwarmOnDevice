@@ -90,6 +90,8 @@ export const dict: Record<string, string> = {
   "ui.messagePart.option.typeOwnAnswer": "Typ je eigen antwoord",
   "ui.messagePart.review.title": "Controleer je antwoorden",
   "ui.messagePart.questions.dismissed": "Vragen genegeerd",
+  "ui.messagePart.notRun.away": "Hier zonder doorgegaan",
+  "ui.messagePart.notRun.declined": "Niet uitgevoerd",
   "ui.messagePart.compaction": "Sessie gecomprimeerd",
   "ui.messagePart.context.read.one": "{{count}} bestand gelezen",
   "ui.messagePart.context.read.other": "{{count}} bestanden gelezen",

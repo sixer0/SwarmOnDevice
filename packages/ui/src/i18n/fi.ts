@@ -89,6 +89,8 @@ export const dict: Record<string, string> = {
   "ui.messagePart.option.typeOwnAnswer": "Kirjoita oma vastauksesi",
   "ui.messagePart.review.title": "Tarkista vastauksesi",
   "ui.messagePart.questions.dismissed": "Kysymykset hylätty",
+  "ui.messagePart.notRun.away": "Jatkoi ilman tätä",
+  "ui.messagePart.notRun.declined": "Ei ajettu",
   "ui.messagePart.compaction": "Istunto tiivistetty",
   "ui.messagePart.context.read.one": "{{count}} lukukerta",
   "ui.messagePart.context.read.other": "{{count}} lukukertaa",

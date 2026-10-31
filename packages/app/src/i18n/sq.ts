@@ -735,7 +735,6 @@ export const dict = {
   "session.error.notFound.description": "Kjo skedë tregon për një sesion që nuk ekziston më në këtë server.",
   "session.error.notFound.closeTab": "Mbyll skedën",
   "session.error.serverConnection": "Nuk mund të lidhet me këtë server",
-  "session.review.filesChanged": "Skedarët u ndryshuan {{count}}",
   "session.review.change.one": "Ndryshimi",
   "session.review.change.other": "Ndryshimet",
   "session.review.loadingChanges": "Ndryshimet po ngarkohen...",

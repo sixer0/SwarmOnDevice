@@ -90,6 +90,8 @@ export const dict: Record<string, string> = {
   "ui.messagePart.option.typeOwnAnswer": "Sisestage oma vastus",
   "ui.messagePart.review.title": "Vaadake oma vastused üle",
   "ui.messagePart.questions.dismissed": "Küsimused lükati tagasi",
+  "ui.messagePart.notRun.away": "Jätkas ilma selleta",
+  "ui.messagePart.notRun.declined": "Ei käivitatud",
   "ui.messagePart.compaction": "Seanss tihendatud",
   "ui.messagePart.context.read.one": "{{count}} loe",
   "ui.messagePart.context.read.other": "{{count}} loeb",

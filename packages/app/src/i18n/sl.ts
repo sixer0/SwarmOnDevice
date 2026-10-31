@@ -733,7 +733,6 @@ export const dict = {
   "session.error.notFound.description": "Ta zavihek kaže na sejo, ki ne obstaja več na tem strežniku.",
   "session.error.notFound.closeTab": "Zapri zavihek",
   "session.error.serverConnection": "Ni mogoče vzpostaviti povezave s tem strežnikom",
-  "session.review.filesChanged": "Spremenjene datoteke {{count}}",
   "session.review.change.one": "spremeniti",
   "session.review.change.other": "Spremembe",
   "session.review.loadingChanges": "Nalaganje sprememb ...",

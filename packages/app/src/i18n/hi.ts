@@ -749,7 +749,6 @@ export const dict = {
   "session.error.notFound.description": "यह टैब एक सेशन की ओर इशारा करता है जो अब इस सर्वर पर मौजूद नहीं है।",
   "session.error.notFound.closeTab": "टैब बंद करें",
   "session.error.serverConnection": "इस सर्वर से कनेक्ट नहीं किया जा सकता",
-  "session.review.filesChanged": "बदली गई फ़ाइलें: {{count}}",
   "session.review.change.one": "परिवर्तन",
   "session.review.change.other": "परिवर्तन",
   "session.review.loadingChanges": "परिवर्तन लोड हो रहे हैं...",

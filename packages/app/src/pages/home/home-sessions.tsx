@@ -1,7 +1,8 @@
 import type { HomeScrollController } from "./home-scroll-controller"
 import type { HomeSessionSearchController } from "./home-session-search-controller"
-import type { HomeSessionsController } from "./home-sessions-controller"
-import type { JSX } from "solid-js"
+import type { HomeSessionGroup, HomeSessionsController } from "./home-sessions-controller"
+import type { Session } from "@opencode-ai/sdk/v2/client"
+import type { Accessor, JSX } from "solid-js"
 import { HomeSessionsView } from "./home-sessions-view"
 
 export function HomeSessions(props: {
@@ -9,12 +10,19 @@ export function HomeSessions(props: {
   search: HomeSessionSearchController
   scroll: HomeScrollController
   board?: JSX.Element
+  groups?: Accessor<HomeSessionGroup[]>
+  waiting?: Accessor<boolean>
+  landed?: (session: Session) => string | undefined
+  onOpenProject?: () => void
 }) {
   return (
     <HomeSessionsView
       board={props.board}
+      waiting={props.waiting}
+      landed={props.landed}
+      onOpenProject={props.onOpenProject}
       language={props.sessions.copy.language}
-      groups={props.sessions.data.groups}
+      groups={props.groups ?? props.sessions.data.groups}
       showProjectName={props.sessions.session.showProjectName}
       server={props.sessions.session.server}
       canCreateSession={props.sessions.session.canCreate}

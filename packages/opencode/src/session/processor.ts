@@ -251,7 +251,9 @@ const layer = Layer.effect(
             input: match.part.state.input,
             error: errorMessage(error),
             // Keep metadata streamed while running so failures retain progress detail (e.g. execute's child calls).
-            metadata: match.part.state.metadata,
+            // A call stopped at the permission gate never ran. Everything that reports on a run has to be able to say so,
+            // and the error text is written for the model.
+            metadata: { ...match.part.state.metadata, ...notRunMetadata(error) },
             time: { start: match.part.state.time.start, end: Date.now() },
           },
         })
@@ -828,3 +830,14 @@ export const node = LayerNode.make({
 })
 
 export * as SessionProcessor from "./processor"
+
+function notRunMetadata(error: unknown) {
+  if (error instanceof PermissionV1.AwayError) return { notRun: "away" as const }
+  if (
+    error instanceof PermissionV1.RejectedError ||
+    error instanceof PermissionV1.CorrectedError ||
+    error instanceof PermissionV1.DeniedError
+  )
+    return { notRun: "declined" as const }
+  return undefined
+}

@@ -94,6 +94,10 @@ export const dict = {
   "ui.sessionTurn.status.consideringNextSteps": "正在考虑下一步",
 
   "ui.messagePart.questions.dismissed": "问题已忽略",
+
+  "ui.messagePart.notRun.away": "已跳过此项继续",
+
+  "ui.messagePart.notRun.declined": "未运行",
   "ui.messagePart.compaction": "会话已压缩",
   "ui.messagePart.context.read.one": "{{count}} 次读取",
   "ui.messagePart.context.read.other": "{{count}} 次读取",

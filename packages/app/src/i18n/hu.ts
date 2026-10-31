@@ -738,7 +738,6 @@ export const dict = {
   "session.error.notFound.description": "Ez a lap olyan munkamenetre mutat, amely már nem létezik ezen a kiszolgálón.",
   "session.error.notFound.closeTab": "Zárja be a Tab-t",
   "session.error.serverConnection": "Nem lehet csatlakozni ehhez a szerverhez",
-  "session.review.filesChanged": "A fájlok megváltoztak {{count}}",
   "session.review.change.one": "Változás",
   "session.review.change.other": "Változások",
   "session.review.loadingChanges": "Módosítások betöltése...",

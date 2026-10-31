@@ -67,6 +67,10 @@ export const dict = {
   "ui.sessionTurn.status.consideringNextSteps": "다음 단계 고려 중",
 
   "ui.messagePart.questions.dismissed": "질문 무시됨",
+
+  "ui.messagePart.notRun.away": "이것 없이 계속했습니다",
+
+  "ui.messagePart.notRun.declined": "실행되지 않음",
   "ui.messagePart.compaction": "세션 압축됨",
   "ui.messagePart.context.read.one": "{{count}}개 읽음",
   "ui.messagePart.context.read.other": "{{count}}개 읽음",

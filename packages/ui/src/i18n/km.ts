@@ -91,6 +91,8 @@ export const dict = {
   "ui.messagePart.option.typeOwnAnswer": "វាយបញ្ចូលចម្លើយរបស់អ្នក។",
   "ui.messagePart.review.title": "ពិនិត្យមើលចម្លើយរបស់អ្នក។",
   "ui.messagePart.questions.dismissed": "សំណួរត្រូវបានច្រានចោល",
+  "ui.messagePart.notRun.away": "បានបន្តដោយគ្មានវា",
+  "ui.messagePart.notRun.declined": "មិនបានដំណើរការ",
   "ui.messagePart.compaction": "សម័យត្រូវបានបង្រួម",
   "ui.messagePart.context.read.one": "{{count}} អាន",
   "ui.messagePart.context.read.other": "{{count}} អាន",

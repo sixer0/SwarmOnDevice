@@ -98,6 +98,35 @@ describe("buildSessionMap", () => {
     expect(aborted.problems).toEqual([])
   })
 
+  test("a call stopped at the permission gate never ran, so it is no problem and keeps its command", () => {
+    const map = buildSessionMap({
+      messages: [user("m1", 1), assistant("m2", "m1", 2)],
+      parts: (id) =>
+        id === "m2"
+          ? [
+              tool("p3", "m2", "bash", {
+                status: "error",
+                input: { command: "bun test" },
+                error: "Nobody answered this permission request in time, so this call did not run.",
+                metadata: { notRun: "away" },
+                time: { start: 3, end: 4 },
+              }),
+              tool("p5", "m2", "bash", {
+                status: "error",
+                input: { command: "rm -rf dist" },
+                error: "The user rejected permission to use this specific tool call.",
+                metadata: { notRun: "declined" },
+                time: { start: 5, end: 6 },
+              }),
+            ]
+          : [],
+    })
+    expect(map.counts.problems).toBe(0)
+    const steps = map.chapters[0].steps
+    expect(steps.map((step) => step.label)).toEqual(["bun test", "rm -rf dist"])
+    expect(steps.every((step) => step.notRun)).toBe(true)
+  })
+
   test("adds up each file across steps", () => {
     const file = model().files[0]!
     expect(file).toMatchObject({ path: "/repo/a.ts", added: 4, removed: 2 })

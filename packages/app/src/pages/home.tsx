@@ -1,3 +1,5 @@
+import { createMemo } from "solid-js"
+import { createLandedWork } from "@/pages/session/review/landed-work"
 import { ScrollView } from "@opencode-ai/ui/scroll-view"
 import { createAgentBoardController } from "./home/agent-board-controller"
 import { AgentBoardView } from "./home/agent-board-view"
@@ -18,6 +20,15 @@ export function NewHome() {
   const search = createHomeSessionSearchController(home, sessions)
   const scroll = createHomeScrollController(sessions.data.groups)
   const board = createAgentBoardController(home, sessions)
+  const landedWork = createLandedWork()
+  // One session, one row: what needs an answer is above, so it does not appear again below.
+  const groups = createMemo(() => {
+    const waiting = new Set(board.board.needs.map((need) => need.root.id))
+    return sessions.data
+      .groups()
+      .map((group) => ({ ...group, sessions: group.sessions.filter((record) => !waiting.has(record.session.id)) }))
+      .filter((group) => group.sessions.length > 0)
+  })
   return (
     <div
       class={`
@@ -45,6 +56,17 @@ export function NewHome() {
             search={search}
             scroll={scroll}
             board={<AgentBoardView board={board} />}
+            groups={groups}
+            waiting={() => board.board.needs.length > 0}
+            landed={(session) => {
+              const work = landedWork.get(session.id)
+              // Anything said or done in the session since means this line is no longer the last word on it.
+              return work && work.at >= session.time.updated ? work.headline : undefined
+            }}
+            onOpenProject={() => {
+              const conn = home.server.focused()
+              if (conn) projects.project.choose(conn)
+            }}
           />
           {/* Fourth grid child: spans both columns on large screens, stacks below on small. Visible in both
               transports without touching sidebar scroll geometry (spec §8). */}

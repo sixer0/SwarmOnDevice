@@ -367,6 +367,8 @@ function createV1Api(input: CompatibleInput): CompatibleApi {
         const result = await legacy(value.location).find.files({
           query: value.query,
           dirs: value.type === undefined ? undefined : value.type === "directory" ? "true" : "false",
+          // `dirs` only says whether folders may appear among the files; a folder picker must not offer files.
+          type: value.type,
           limit: value.limit,
         })
         return located(

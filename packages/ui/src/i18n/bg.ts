@@ -90,6 +90,8 @@ export const dict = {
   "ui.messagePart.option.typeOwnAnswer": "Въведете своя собствен отговор",
   "ui.messagePart.review.title": "Прегледайте отговорите си",
   "ui.messagePart.questions.dismissed": "Въпросите са отхвърлени",
+  "ui.messagePart.notRun.away": "Продължи без това",
+  "ui.messagePart.notRun.declined": "Не е пуснато",
   "ui.messagePart.compaction": "Сесията е компактна",
   "ui.messagePart.context.read.one": "{{count}} прочетено",
   "ui.messagePart.context.read.other": "{{count}} чете",

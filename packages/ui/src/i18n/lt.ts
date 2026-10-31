@@ -92,6 +92,8 @@ export const dict: Record<string, string> = {
   "ui.messagePart.option.typeOwnAnswer": "Įveskite savo atsakymą",
   "ui.messagePart.review.title": "Peržiūrėkite savo atsakymus",
   "ui.messagePart.questions.dismissed": "Klausimai atmesti",
+  "ui.messagePart.notRun.away": "Tęsė be šito",
+  "ui.messagePart.notRun.declined": "Nepaleista",
   "ui.messagePart.compaction": "Seansas suglaudintas",
   "ui.messagePart.context.read.one": "Skaityti {{count}}",
   "ui.messagePart.context.read.other": "{{count}} skaito",

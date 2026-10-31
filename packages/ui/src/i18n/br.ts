@@ -92,6 +92,10 @@ export const dict = {
   "ui.sessionTurn.status.consideringNextSteps": "Considerando próximos passos",
 
   "ui.messagePart.questions.dismissed": "Perguntas descartadas",
+
+  "ui.messagePart.notRun.away": "Continuou sem isso",
+
+  "ui.messagePart.notRun.declined": "Não executado",
   "ui.messagePart.compaction": "Sessão compactada",
   "ui.messagePart.context.read.one": "{{count}} leitura",
   "ui.messagePart.context.read.many": "{{count}} de leituras",

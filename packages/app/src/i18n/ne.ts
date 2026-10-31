@@ -733,7 +733,6 @@ export const dict: Record<string, string> = {
   "session.error.notFound.description": "यो ट्याबले यो सर्भरमा अब अवस्थित नभएको सत्रलाई संकेत गर्छ।",
   "session.error.notFound.closeTab": "ट्याब बन्द गर्नुहोस्",
   "session.error.serverConnection": "यो सर्भरमा जडान गर्न सकिँदैन",
-  "session.review.filesChanged": "फाइलहरू परिवर्तन गरियो {{count}}",
   "session.review.change.one": "परिवर्तन गर्नुहोस्",
   "session.review.change.other": "परिवर्तनहरू",
   "session.review.loadingChanges": "परिवर्तनहरू लोड गर्दै...",

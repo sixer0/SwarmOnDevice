@@ -737,7 +737,6 @@ export const dict = {
   "session.error.notFound.description": "Այս ներդիրը ցույց է տալիս նիստ, որն այլևս գոյություն չունի այս սերվերում։",
   "session.error.notFound.closeTab": "Փակել ներդիրը",
   "session.error.serverConnection": "Հնարավոր չէ միանալ այս սերվերին",
-  "session.review.filesChanged": "Ֆայլերը փոխվել են {{count}}",
   "session.review.change.one": "Փոխել",
   "session.review.change.other": "Փոփոխություններ",
   "session.review.loadingChanges": "Բեռնվում են փոփոխություններ...",

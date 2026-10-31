@@ -732,7 +732,6 @@ export const dict = {
   "session.error.notFound.description": "این تب به جلسه ای اشاره می کند که دیگر در این سرور وجود ندارد.",
   "session.error.notFound.closeTab": "Tab را ببندید",
   "session.error.serverConnection": "نمی توان به این سرور متصل شد",
-  "session.review.filesChanged": "فایل ها تغییر کردند {{count}}",
   "session.review.change.one": "تغییر دهید",
   "session.review.change.other": "تغییرات",
   "session.review.loadingChanges": "در حال بارگیری تغییرات...",

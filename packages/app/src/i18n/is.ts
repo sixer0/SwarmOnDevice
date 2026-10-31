@@ -735,7 +735,6 @@ export const dict = {
   "session.error.notFound.description": "Þessi flipi bendir á lotu sem er ekki lengur til á þessum netþjóni.",
   "session.error.notFound.closeTab": "Lokaðu Tab",
   "session.error.serverConnection": "Get ekki tengst þessum þjóni",
-  "session.review.filesChanged": "Skráum breytt {{count}}",
   "session.review.change.one": "Breyta",
   "session.review.change.other": "Breytingar",
   "session.review.loadingChanges": "Hleður breytingum...",

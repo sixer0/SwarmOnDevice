@@ -665,7 +665,6 @@ export const dict = {
   "session.error.notFound.description": "Denne fane henviser til en session, der ikke længere findes på denne server.",
   "session.error.notFound.closeTab": "Luk fane",
   "session.error.serverConnection": "Kan ikke oprette forbindelse til denne server",
-  "session.review.filesChanged": "{{count}} ændrede filer",
   "session.review.change.one": "Ændring",
   "session.review.change.other": "Ændringer",
   "session.review.loadingChanges": "Indlæser ændringer...",

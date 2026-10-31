@@ -90,6 +90,8 @@ export const dict: Record<string, string> = {
   "ui.messagePart.option.typeOwnAnswer": "Πληκτρολογήστε τη δική σας απάντηση",
   "ui.messagePart.review.title": "Ελέγξτε τις απαντήσεις σας",
   "ui.messagePart.questions.dismissed": "Οι ερωτήσεις απορρίφθηκαν",
+  "ui.messagePart.notRun.away": "Συνέχισε χωρίς αυτό",
+  "ui.messagePart.notRun.declined": "Δεν έτρεξε",
   "ui.messagePart.compaction": "Σύνοψη συνεδρίας",
   "ui.messagePart.context.read.one": "{{count}} ανάγνωση",
   "ui.messagePart.context.read.other": "{{count}} διαβάζει",

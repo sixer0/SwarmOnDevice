@@ -90,6 +90,8 @@ export const dict: Record<string, string> = {
   "ui.messagePart.option.typeOwnAnswer": "Մուտքագրեք ձեր սեփական պատասխանը",
   "ui.messagePart.review.title": "Դիտեք ձեր պատասխանները",
   "ui.messagePart.questions.dismissed": "Հարցերը մերժված են",
+  "ui.messagePart.notRun.away": "Շարունակեց առանց սրա",
+  "ui.messagePart.notRun.declined": "Չի աշխատել",
   "ui.messagePart.compaction": "Նիստը կոմպակտացված",
   "ui.messagePart.context.read.one": "{{count}} կարդալ",
   "ui.messagePart.context.read.other": "{{count}} կարդում",

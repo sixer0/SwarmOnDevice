@@ -738,7 +738,6 @@ export const dict = {
   "session.error.notFound.description": "Šis skirtukas nurodo seansą, kurio šiame serveryje nebėra.",
   "session.error.notFound.closeTab": "Uždarykite Tab",
   "session.error.serverConnection": "Nepavyksta prisijungti prie šio serverio",
-  "session.review.filesChanged": "Failai pakeisti {{count}}",
   "session.review.change.one": "Keisti",
   "session.review.change.other": "Pakeitimai",
   "session.review.loadingChanges": "Įkeliami pakeitimai...",
