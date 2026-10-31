@@ -246,7 +246,6 @@ export const TuiThreadCommand = cmd({
 
     const unguard = win32InstallCtrlCGuard()
     try {
-      const { TuiConfig } = await import("@/config/tui")
       if (args.fork && !args.continue && !args.session) {
         UI.error("--fork requires --continue or --session")
         process.exitCode = 1
@@ -286,6 +285,8 @@ export const TuiThreadCommand = cmd({
       }
 
       const prompt = await input(args.prompt)
+      // Everything from here on loads after the worker is already booting, so the two start side by side.
+      const { TuiConfig } = await import("@/config/tui")
       const config = await TuiConfig.get()
 
       const headers = external ? ServerAuth.headers() : undefined

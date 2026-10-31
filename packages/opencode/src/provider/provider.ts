@@ -1382,6 +1382,25 @@ export function fromModelsDevProvider(provider: ModelsDev.Provider): Info {
   }
 }
 
+function lazyValues<T, U>(record: Record<string, T>, convert: (value: T) => U) {
+  const result: Record<string, U> = {}
+  const settle = (key: string, value: U) =>
+    Object.defineProperty(result, key, { value, writable: true, enumerable: true, configurable: true })
+  for (const [key, value] of Object.entries(record)) {
+    Object.defineProperty(result, key, {
+      enumerable: true,
+      configurable: true,
+      get: () => {
+        const converted = convert(value)
+        settle(key, converted)
+        return converted
+      },
+      set: (next: U) => settle(key, next),
+    })
+  }
+  return result
+}
+
 function modeOptions(model: Model, body: Record<string, unknown> | undefined) {
   if (!body) return model.options
   const options = Object.fromEntries(
@@ -1438,8 +1457,11 @@ const layer = Layer.effect(
         const bridge = yield* EffectBridge.make()
         const cfg = yield* config.get()
         const modelsDev = yield* modelsDevSvc.get()
-        const catalog = mapValues(modelsDev, fromModelsDevProvider)
-        const database = mapValues(catalog, toPublicInfo)
+        // The catalog lists thousands of models and almost none are used: converting all of them cost about
+        // 300 ms of a blocked server and 70 MB per open directory. Only what something reads gets converted.
+        const catalog = lazyValues(modelsDev, fromModelsDevProvider)
+        const database = lazyValues(modelsDev, (item) => toPublicInfo(fromModelsDevProvider(item)))
+        const envNames = new Map(Object.entries(modelsDev).map(([id, item]) => [id, item.env ?? []]))
 
         const providers: Record<ProviderV2.ID, Info> = {} as Record<ProviderV2.ID, Info>
         const languages = new Map<string, LanguageModelV3>()
@@ -1616,18 +1638,19 @@ const layer = Layer.effect(
             parsed.models[modelID] = parsedModel
           }
           database[providerID] = parsed
+          envNames.set(providerID, parsed.env)
         }
 
         // load env
         const envs = yield* env.all()
-        for (const [id, provider] of Object.entries(database)) {
+        for (const [id, names] of envNames) {
           const providerID = ProviderV2.ID.make(id)
           if (disabled.has(providerID)) continue
-          const apiKey = provider.env.map((item) => envs[item]).find(Boolean)
+          const apiKey = names.map((item) => envs[item]).find(Boolean)
           if (!apiKey) continue
           mergeProvider(providerID, {
             source: "env",
-            key: provider.env.length === 1 ? apiKey : undefined,
+            key: names.length === 1 ? apiKey : undefined,
           })
         }
 
@@ -1887,7 +1910,7 @@ const layer = Layer.effect(
         const suggestions = catalogProvider
           ? modelSuggestions(catalogProvider, modelID, runtimeFlags.enableExperimentalModels)
           : fuzzysort
-              .go(providerID, Object.keys({ ...s.catalog, ...s.providers }), { limit: 3, threshold: -10000 })
+              .go(providerID, [...new Set([...Object.keys(s.catalog), ...Object.keys(s.providers)])], { limit: 3, threshold: -10000 })
               .map((m) => m.target)
         return yield* new ModelNotFoundError({ providerID, modelID, suggestions })
       }

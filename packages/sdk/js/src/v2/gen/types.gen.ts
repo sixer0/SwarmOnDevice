@@ -9550,6 +9550,7 @@ export type ProviderListData = {
   query?: {
     directory?: string
     workspace?: string
+    models?: "connected"
   }
   url: "/provider"
 }

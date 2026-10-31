@@ -5150,6 +5150,15 @@
               "type": "string"
             },
             "required": false
+          },
+          {
+            "name": "models",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["connected"]
+            },
+            "required": false
           }
         ],
         "responses": {

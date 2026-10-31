@@ -4,7 +4,7 @@ import { ModelsDev } from "@opencode-ai/core/models-dev"
 import { Provider } from "@/provider/provider"
 import { Auth } from "@/auth"
 
-import { mapValues } from "remeda"
+import { mapValues, pickBy } from "remeda"
 import { Effect, Schema } from "effect"
 import { HttpServerRequest, HttpServerResponse } from "effect/unstable/http"
 import { HttpApiBuilder } from "effect/unstable/httpapi"
@@ -39,7 +39,7 @@ export const providerHandlers = HttpApiBuilder.group(InstanceHttpApi, "provider"
     const svc = yield* ProviderAuth.Service
     const authStore = yield* Auth.Service
 
-    const list = Effect.fn("ProviderHttpApi.list")(function* () {
+    const list = Effect.fn("ProviderHttpApi.list")(function* (ctx: { query: { models?: "connected" } }) {
       const config = yield* cfg.get()
       const all = yield* ModelsDev.Service.use((s) => s.get())
       const disabled = new Set(config.disabled_providers ?? [])
@@ -51,12 +51,16 @@ export const providerHandlers = HttpApiBuilder.group(InstanceHttpApi, "provider"
       const connected = yield* provider.list()
       const credentials = yield* authStore.all().pipe(Effect.orDie)
       const providers = Object.assign(
-        mapValues(filtered, (item) => Provider.fromModelsDevProvider(item)),
+        mapValues(filtered, (item) =>
+          ctx.query.models === "connected" && !credentials[item.id]
+            ? Provider.fromModelsDevProvider({ ...item, models: {} })
+            : Provider.fromModelsDevProvider(item),
+        ),
         connected,
       )
       return {
         all: Object.values(providers).map(Provider.toPublicInfo),
-        default: Provider.defaultModelIDs(providers),
+        default: Provider.defaultModelIDs(pickBy(providers, (item) => Object.keys(item.models).length > 0)),
         connected: Object.keys(providers).filter((id) => id in connected || credentials[id]),
       }
     })

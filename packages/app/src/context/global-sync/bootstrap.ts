@@ -230,7 +230,7 @@ export const loadProvidersQuery = (
     queryFn: () =>
       retry(async () => {
         if ((await protocol) === "v1" && legacy) {
-          const result = await legacy.provider.list()
+          const result = await legacy.provider.list({ models: "connected" })
           return normalizeProviderList(result.data!)
         }
         const location = directory ? { location: { directory } } : undefined

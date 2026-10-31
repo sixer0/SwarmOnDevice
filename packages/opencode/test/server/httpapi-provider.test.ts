@@ -379,6 +379,43 @@ describe("provider HttpApi", () => {
   )
 
   it.instance(
+    "sends only connected providers' models when asked, and the whole catalog otherwise",
+    Effect.gen(function* () {
+      const directory = (yield* TestInstance).directory
+      yield* setEnvScoped(
+        "OPENCODE_AUTH_CONTENT",
+        JSON.stringify({
+          google: { type: "oauth", refresh: "dummy", access: "dummy", expires: 9999999999999 },
+        }),
+      )
+      const headers = { "x-opencode-directory": directory }
+      const fullResponse = yield* request("/provider", { headers })
+      const slimResponse = yield* request("/provider?models=connected", { headers })
+      expect(fullResponse.status).toBe(200)
+      expect(slimResponse.status).toBe(200)
+
+      type Body = {
+        all: { id: string; name: string; models: Record<string, unknown> }[]
+        default: Record<string, string>
+        connected: string[]
+      }
+      const full = (yield* fullResponse.json) as Body
+      const slim = (yield* slimResponse.json) as Body
+      const models = (body: Body, id: string) => Object.keys(body.all.find((item) => item.id === id)?.models ?? {})
+
+      expect(slim.connected).toContain("google")
+      expect(slim.connected).not.toContain("anthropic")
+      expect(models(slim, "google")).toEqual(models(full, "google"))
+      expect(models(full, "anthropic").length).toBeGreaterThan(0)
+      expect(models(slim, "anthropic")).toEqual([])
+      expect(slim.all.map((item) => [item.id, item.name])).toEqual(full.all.map((item) => [item.id, item.name]))
+      expect(slim.default.google).toBe(full.default.google)
+      expect(slim.default.anthropic).toBeUndefined()
+    }),
+    { ...projectOptions },
+  )
+
+  it.instance(
     "keeps provider.models hook input mutations out of provider state",
     Effect.gen(function* () {
       const directory = (yield* TestInstance).directory
