@@ -44,7 +44,7 @@ export function NewHome() {
             sessions={sessions}
             search={search}
             scroll={scroll}
-            board={<AgentBoardView board={board} hasSessions={sessions.data.records().length > 0} />}
+            board={<AgentBoardView board={board} />}
           />
           {/* Fourth grid child: spans both columns on large screens, stacks below on small. Visible in both
               transports without touching sidebar scroll geometry (spec §8). */}

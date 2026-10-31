@@ -6,7 +6,6 @@ import {
   mapRows,
   nextProblem,
   relativePath,
-  runStrip,
   sinceYouLooked,
   stepReference,
 } from "./session-map-model"
@@ -186,26 +185,6 @@ describe("mapRows", () => {
     const rows = mapRows({ model: big, filter: "all", query: "needle", open: open([]) })
     expect(rows.filter((row) => row.type === "step")).toHaveLength(200)
     expect(rows.at(-1)).toMatchObject({ type: "truncated", total: 250 })
-  })
-})
-
-describe("runStrip", () => {
-  test("one cell per step while they fit", () => {
-    const cells = runStrip(model().steps, 72)
-    expect(cells).toHaveLength(model().steps.length)
-    expect(cells[2]!.problem).toBe(true)
-    expect(cells[3]!.edit).toBe(true)
-  })
-
-  test("steps share a cell past the width, and the worst shows", () => {
-    const steps = Array.from({ length: 100 }, (_, index) => ({ ...model().steps[0]!, id: `s${index}`, start: index }))
-    steps[17]!.problem = "exit 1"
-    const cells = runStrip(steps, 10, 95)
-    expect(cells).toHaveLength(10)
-    expect(cells[1]!.problem).toBe(true)
-    expect(cells[0]!.problem).toBe(false)
-    expect(cells[9]!.fresh).toBe(true)
-    expect(cells[8]!.fresh).toBe(false)
   })
 })
 

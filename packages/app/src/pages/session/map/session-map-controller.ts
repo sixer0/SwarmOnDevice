@@ -77,7 +77,15 @@ export function createSessionMap(input: {
     on(input.sessionID, (id, previous) => {
       if (previous) markSeen(previous)
       setExpanded(reconcile({}))
-      setView({ filter: "all", draft: "", query: "", selected: undefined, problem: undefined, hydrateError: false })
+      // Opening one agent of a run from the agents list keeps the list; the page leaves it once there are no agents.
+      setView({
+        filter: untrack(() => view.filter) === "agents" ? "agents" : "all",
+        draft: "",
+        query: "",
+        selected: undefined,
+        problem: undefined,
+        hydrateError: false,
+      })
       setSince(id ? untrack(() => store.seen[id]) : undefined)
     }),
   )
@@ -153,7 +161,7 @@ export function createSessionMap(input: {
     openStep,
     hydrate,
     opened: () => store.open,
-    toggle: () => setStore("open", (value) => !value),
+    open: () => setStore("open", true),
     close: () => setStore("open", false),
     dismissFresh: () => setSince(undefined),
     setFilter: (filter: MapFilter) => setView({ filter, selected: undefined }),

@@ -160,8 +160,6 @@ describe("buildAxis", () => {
     expect(axis.x(0)).toBe(0)
     expect(axis.x(90_000)).toBeCloseTo(1)
     expect(axis.x(30_000)).toBeLessThan(axis.x(60_000))
-    expect(axis.wallMs).toBe(90_000)
-    expect(axis.breaks).toEqual([])
   })
 
   test("a three day gap between turns becomes a sliver, not most of the chart", () => {
@@ -170,14 +168,11 @@ describe("buildAxis", () => {
       [0, 60_000],
       [3 * day, 3 * day + 60_000],
     ])
-    expect(axis.breaks).toHaveLength(1)
-    expect(axis.breaks[0]!.ms).toBe(3 * day - 60_000)
     const firstEnd = axis.x(60_000)
     const secondStart = axis.x(3 * day)
     expect(secondStart - firstEnd).toBeCloseTo(0.03)
     expect(firstEnd).toBeCloseTo(0.485)
     expect(axis.x(day)).toBe(secondStart)
-    expect(axis.wallMs).toBe(120_000)
   })
 
   test("is safe with nothing and with one instant", () => {
@@ -187,17 +182,11 @@ describe("buildAxis", () => {
     expect(Number.isFinite(axis.x(600))).toBe(true)
   })
 
-  test("ticks stay few", () => {
-    const axis = buildAxis([[0, 3_600_000]])
-    expect(axis.ticks.length).toBeGreaterThan(2)
-    expect(axis.ticks.length).toBeLessThanOrEqual(8)
-    expect(axis.seconds).toBe(false)
-  })
 })
 
 describe("coalesceSegments", () => {
   const seg = (id: string, start: number, kind: SwarmSegment["kind"]) =>
-    ({ id, kind, start, end: start + 1, running: false, label: id, paths: [id], count: 1 }) as unknown as SwarmSegment
+    ({ id, kind, start, end: start + 1, running: false, label: id, count: 1 }) as unknown as SwarmSegment
 
   test("a failure hidden among close steps still colours the cell", () => {
     const cells = coalesceSegments(
@@ -208,7 +197,6 @@ describe("coalesceSegments", () => {
     expect(cells[0]!.kind).toBe("problem")
     expect(cells[0]!.label).toBe("b")
     expect(cells[0]!.count).toBe(3)
-    expect(cells[0]!.paths).toEqual(["a", "b", "c"])
   })
 
   test("distant steps stay apart, and a thousand steps collapse to a bounded number", () => {
@@ -389,33 +377,6 @@ describe("buildSwarm", () => {
     expect(model.lanes[0]!.segments[0]!.kind).toBe("agent")
   })
 
-  test("a neighbour's earlier life does not stretch the chart", () => {
-    const other = session("other", { title: "Old neighbour" })
-    const all = {
-      ...messages,
-      other: [user("u9", "other", 1), assistant("m9", "other", "u9", 2, { time: { created: 2 } })],
-    }
-    const model = buildSwarm(
-      input([...tree(), other], all, parts(), { alongside: ["other"], status: { other: { type: "busy" } } }),
-    )
-    expect(model.axis.start).toBeGreaterThanOrEqual(1000)
-    expect(model.lanes.at(-1)!.start).toBe(2)
-    expect(model.axis.x(2)).toBe(model.axis.x(model.axis.start))
-  })
-
-  test("sessions running alongside count for overlap but not for the run's cost", () => {
-    const other = session("other", { title: "Another run", cost: 9 })
-    const all = { ...messages, other: [user("u9", "other", 2000), assistant("m9", "other", "u9", 2050)] }
-    const next = parts()
-    next.m2 = []
-    next.m9 = [tool("w", "write", { filePath: "src/r.ts", content: "z" }, 4000, 4100)]
-    const model = buildSwarm(input([...tree(), other], all, next, { alongside: ["other"] }))
-    expect(model.lanes.at(-1)!.group).toBe("alongside")
-    expect(model.totals.cost).toBeCloseTo(0.6)
-    expect(model.totals.agents).toBe(3)
-    expect(model.overlaps[0]!.writes.map((write) => write.laneID)).toEqual(["a", "other"])
-    expect(model.overlaps[0]!.blind).toBe(true)
-  })
 })
 
 describe("swarmPulse", () => {
@@ -427,14 +388,10 @@ describe("swarmPulse", () => {
         a: session("a", { parentID: "root", cost: 2 }),
         b: session("b", { parentID: "root", cost: 0.5 }),
       },
-      status: { root: { type: "busy" }, b: { type: "busy" } },
       permission: { a: [{ id: "r" } as unknown as PermissionRequest] },
       question: {},
     })
     expect(pulse.agents).toBe(3)
     expect(pulse.needs).toBe(1)
-    expect(pulse.active).toBe(2)
-    expect(pulse.cost).toBeCloseTo(3.5)
-    expect(pulse.dots.map((dot) => dot.state)).toEqual(["active", "needs", "active"])
   })
 })

@@ -1,17 +1,13 @@
 import { describe, expect, test } from "bun:test"
 import type { Prompt } from "@/context/prompt"
 import {
-  appendToPrompt,
   buildItems,
   definitionPattern,
-  detectChecks,
   editDistance,
   extractRefs,
   extractTerms,
   lineWindow,
-  mentionsChecks,
   pickIdentifier,
-  rankWordFiles,
   replaceInPrompt,
   resolveRef,
   similarSessions,
@@ -21,11 +17,9 @@ import {
 const facts = (over: Partial<PreflightFacts> = {}): PreflightFacts => ({
   refs: [],
   identifiers: [],
-  files: [],
   dirty: [],
   busy: [],
   similar: [],
-  checks: [],
   ...over,
 })
 const text = (content: string): Prompt => [{ type: "text", content, start: 0, end: content.length }]
@@ -115,42 +109,7 @@ describe("extractTerms", () => {
       [],
     )
     expect(terms.identifiers).toEqual(["round_half_up", "calculateTotal"])
-    expect(terms.words).toContain("invoice")
-    expect(terms.words).toContain("rounding")
-    expect(terms.words).not.toContain("please")
     expect(terms.identifiers).not.toContain("TypeError")
-  })
-
-  test("keeps non-English words for the filename search", () => {
-    expect(extractTerms("perbaiki pembulatan faktur", []).words).toEqual(["perbaiki", "pembulatan", "faktur"])
-  })
-
-  test("does not search for words that are part of a reference", () => {
-    const refs = extractRefs("open src/invoice.ts", "/r")
-    expect(extractTerms("open src/invoice.ts", refs).words).toEqual(["open"])
-  })
-})
-
-describe("rankWordFiles", () => {
-  test("needs a word in the filename and prefers more of them", () => {
-    const ranked = rankWordFiles(
-      {
-        invoice: ["src/invoice/rounding.ts", "src/invoice/other.ts", "src/invoice.ts"],
-        rounding: ["src/invoice/rounding.ts", "src/round.ts", "docs/contest.md"],
-      },
-      new Set(),
-    )
-    expect(ranked[0]?.path).toBe("src/invoice/rounding.ts")
-    expect(ranked.map((item) => item.path)).not.toContain("src/invoice/other.ts")
-    expect(ranked.map((item) => item.path)).not.toContain("docs/contest.md")
-  })
-
-  test("drops generated files and what is already claimed, and puts tests after source", () => {
-    const ranked = rankWordFiles(
-      { invoice: ["dist/invoice.js", "test/invoice.test.ts", "src/invoice.ts", "lib/invoice.py"] },
-      new Set(["lib/invoice.py"]),
-    )
-    expect(ranked.map((item) => item.path)).toEqual(["src/invoice.ts", "test/invoice.test.ts"])
   })
 })
 
@@ -188,34 +147,6 @@ describe("similarSessions", () => {
   })
 })
 
-describe("detectChecks", () => {
-  test("package scripts use the project's package manager", () => {
-    const json = JSON.stringify({ scripts: { test: "vitest", typecheck: "tsc", build: "vite build" } })
-    expect(detectChecks({ rootFiles: ["package.json", "bun.lock"], packageJson: json })).toEqual([
-      "bun run typecheck",
-      "bun run test",
-    ])
-    expect(detectChecks({ rootFiles: ["package.json"], packageJson: json })[0]).toBe("npm run typecheck")
-  })
-  test("ignores npm's placeholder test script and broken json", () => {
-    const placeholder = JSON.stringify({ scripts: { test: 'echo "Error: no test specified" && exit 1' } })
-    expect(detectChecks({ rootFiles: [], packageJson: placeholder })).toEqual([])
-    expect(detectChecks({ rootFiles: [], packageJson: "{ nope" })).toEqual([])
-  })
-  test("other ecosystems", () => {
-    expect(detectChecks({ rootFiles: ["Cargo.toml"] })).toEqual(["cargo test"])
-    expect(detectChecks({ rootFiles: ["go.mod"] })).toEqual(["go test ./..."])
-    expect(detectChecks({ rootFiles: ["pyproject.toml"] })).toEqual(["pytest"])
-    expect(detectChecks({ rootFiles: ["Makefile"], makefile: "build:\n\tx\ntest: build\n\ty\n" })).toEqual(["make test"])
-    expect(detectChecks({ rootFiles: ["Makefile"], makefile: "build:\n" })).toEqual([])
-  })
-  test("no suggestion once the draft already asks for it", () => {
-    expect(mentionsChecks("then run the tests please", ["npm run test"])).toBe(true)
-    expect(mentionsChecks("finish with `cargo test`", ["cargo test"])).toBe(true)
-    expect(mentionsChecks("fix the login bug", ["npm run test"])).toBe(false)
-  })
-})
-
 describe("prompt edits keep offsets correct", () => {
   test("replace", () => {
     const parts: Prompt = [
@@ -236,13 +167,6 @@ describe("prompt edits keep offsets correct", () => {
     expect(replaceInPrompt(text("x"), "x", "$&$&")[0]).toMatchObject({ content: "$&$&", end: 4 })
   })
 
-  test("append goes after a blank line and trims trailing space", () => {
-    expect(appendToPrompt(text("fix it \n"), "run tests")[0]).toMatchObject({
-      content: "fix it\n\nrun tests",
-      end: 17,
-    })
-  })
-
   test("line window stays in the file", () => {
     expect(lineWindow(4)).toEqual({ start: 1, end: 19 })
     expect(lineWindow(100)).toEqual({ start: 85, end: 115 })
@@ -250,23 +174,23 @@ describe("prompt edits keep offsets correct", () => {
 })
 
 describe("buildItems", () => {
-  const base = { text: "", attached: [], dismissed: {}, isolated: false }
+  const base = { attached: [], dismissed: {}, isolated: false }
 
   test("one row per file, most specific evidence wins", () => {
     const items = buildItems({
       ...base,
       facts: facts({
         refs: [{ kind: "found", ref: ref("/ci/src/a.ts", 4), path: "src/a.ts" }],
-        identifiers: [{ kind: "defined", identifier: "total", path: "src/a.ts", line: 9 }],
-        files: [
-          { path: "src/a.ts", words: ["a"] },
-          { path: "src/b.ts", words: ["b"] },
+        identifiers: [
+          { kind: "defined", identifier: "total", path: "src/a.ts", line: 9 },
+          { kind: "defined", identifier: "tax", path: "src/b.ts", line: 2 },
+          { kind: "used", identifier: "other", path: "src/c.ts", line: 3 },
         ],
       }),
     })
     expect(items.map((item) => [item.kind, "path" in item ? item.path : ""])).toEqual([
       ["trace", "src/a.ts"],
-      ["word", "src/b.ts"],
+      ["definition", "src/b.ts"],
     ])
   })
 
@@ -274,10 +198,12 @@ describe("buildItems", () => {
     const items = buildItems({
       ...base,
       attached: ["src/a.ts"],
-      dismissed: { "word:src/b.ts": true },
+      dismissed: { "mention:src/b.ts": true },
       facts: facts({
-        refs: [{ kind: "found", ref: ref("src/a.ts"), path: "src/a.ts" }],
-        files: [{ path: "src/b.ts", words: ["b"] }],
+        refs: [
+          { kind: "found", ref: ref("src/a.ts"), path: "src/a.ts" },
+          { kind: "found", ref: ref("src/b.ts"), path: "src/b.ts" },
+        ],
       }),
     })
     expect(items).toEqual([])
@@ -309,13 +235,22 @@ describe("buildItems", () => {
     }
     const items = buildItems(input)
     expect(items.find((item) => item.kind === "busy")).toMatchObject({ overlap: ["src/a.ts"] })
-    expect(items.find((item) => item.kind === "dirty")).toMatchObject({ count: 2, overlap: ["src/a.ts"] })
+    expect(items.find((item) => item.kind === "dirty")).toMatchObject({ overlap: ["src/a.ts"] })
     expect(buildItems({ ...input, isolated: true }).map((item) => item.kind)).toEqual(["mention"])
   })
 
-  test("checks row hides once the draft asks for them", () => {
-    const row = { ...base, facts: facts({ checks: ["npm run test"] }) }
-    expect(buildItems({ ...row, text: "fix it" }).map((item) => item.kind)).toEqual(["checks"])
-    expect(buildItems({ ...row, text: "fix it, then run the tests" })).toEqual([])
+  test("uncommitted files elsewhere say nothing, and what could go wrong comes first", () => {
+    const items = buildItems({
+      ...base,
+      facts: facts({
+        refs: [
+          { kind: "found", ref: ref("src/a.ts"), path: "src/a.ts" },
+          { kind: "near", ref: ref("src/gone.ts"), path: "src/gones.ts" },
+        ],
+        dirty: ["README.md"],
+        busy: [{ id: "s1", title: "Other", files: [] }],
+      }),
+    })
+    expect(items.map((item) => item.kind)).toEqual(["typo", "busy", "mention"])
   })
 })

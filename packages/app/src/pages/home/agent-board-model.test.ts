@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import type { Part, PermissionRequest, QuestionRequest, Session, SessionStatus } from "@opencode-ai/sdk/v2/client"
 import {
-  agentActivity,
   agentSnapshotSessions,
   agentSnapshotWrites,
   buildAgentBoard,
@@ -114,8 +113,8 @@ describe("buildAgentBoard", () => {
     expect(board.running).toEqual([{ key: "root", root: expect.objectContaining({ id: "root" }), status: retry }])
   })
 
-  test("splits unread results into failed and finished, newest finished first, skipping active sessions", () => {
-    const recent = ["failed", "older", "newer", "busy", "read"].map((id) => session(id))
+  test("lists unread failures, skipping active sessions", () => {
+    const recent = ["failed", "older", "busy", "read"].map((id) => session(id))
     const board = buildAgentBoard(
       input({
         info: Object.fromEntries(recent.map((item) => [item.id, item])),
@@ -128,14 +127,12 @@ describe("buildAgentBoard", () => {
               { type: "error" as const, time: 2, error: { name: "x" } },
             ],
             older: [{ type: "turn-complete" as const, time: 3 }],
-            newer: [{ type: "turn-complete" as const, time: 4 }],
             busy: [{ type: "turn-complete" as const, time: 5 }],
           })[id] ?? [],
       }),
     )
     expect(board.failed.map((item) => item.key)).toEqual(["failed"])
     expect(board.failed[0]?.error).toEqual({ name: "x" })
-    expect(board.finished.map((item) => item.key)).toEqual(["newer", "older"])
   })
 
   test("a session the user stopped themselves is not reported as failed", () => {
@@ -148,7 +145,6 @@ describe("buildAgentBoard", () => {
       }),
     )
     expect(board.failed).toEqual([])
-    expect(board.finished).toEqual([])
   })
 
   test("project scope filters every section", () => {
@@ -167,7 +163,6 @@ describe("buildAgentBoard", () => {
     )
     expect(board.needs).toEqual([])
     expect(board.running.map((item) => item.key)).toEqual(["here"])
-    expect(board.finished).toEqual([])
   })
 })
 
@@ -185,14 +180,6 @@ describe("row details", () => {
     expect(inlineQuestion(question("q", "s", { questions: [{ ...base, options: [] }] }))).toBeUndefined()
   })
 
-  test("activity follows the newest meaningful part", () => {
-    const tool = (name: string) => ({ type: "tool", tool: name }) as Part
-    expect(agentActivity(undefined)).toBeUndefined()
-    expect(agentActivity([{ type: "step-start" } as Part])).toBeUndefined()
-    expect(agentActivity([{ type: "text" } as Part, tool("bash")])).toBe("ui.sessionTurn.status.runningCommands")
-    expect(agentActivity([tool("bash"), { type: "reasoning" } as Part])).toBe("ui.sessionTurn.status.thinking")
-    expect(agentActivity([tool("custom_mcp_tool")])).toBe("ui.sessionTurn.status.thinking")
-  })
 })
 
 describe("agentSnapshotWrites", () => {

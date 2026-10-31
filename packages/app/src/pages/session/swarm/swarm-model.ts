@@ -11,8 +11,8 @@ import type {
 import { buildSessionMap, relativePath, type MapStep, type SessionMapModel } from "../map/session-map-model"
 
 // A run with subagents is a tree of sessions working at the same time, but every surface shows one session. This module
-// reduces that tree to what a person needs to oversee it: one lane per agent on a shared clock, what each one costs, who
-// spawned whom, and where two agents touched the same file. Pure, so it can be rebuilt once a second while agents run.
+// reduces that tree to what a person needs to oversee it: one row per agent on a shared clock, what each one costs, and
+// where two agents touched the same file. Pure, so it can be rebuilt once a second while agents run.
 
 export type SwarmLaneStatus = "needs" | "running" | "waiting" | "retry" | "failed" | "stopped" | "done" | "unread"
 
@@ -25,19 +25,15 @@ export type SwarmSegment = {
   end: number
   running: boolean
   label: string
-  paths: string[]
   count: number
   step: MapStep
 }
-
-export type SwarmGroup = "run" | "alongside"
 
 export type SwarmLane = {
   id: string
   session: Session
   parentID?: string
   depth: number
-  group: SwarmGroup
   title: string
   agent?: string
   status: SwarmLaneStatus
@@ -48,10 +44,8 @@ export type SwarmLane = {
   current?: MapStep
   start: number
   end: number
-  spawnAt?: number
   workMs: number
   cost: number
-  tokens: number
   model: SessionMapModel
   segments: SwarmSegment[]
   told?: string
@@ -72,9 +66,6 @@ export type SwarmTotals = {
   failed: number
   problems: number
   cost: number
-  tokens: number
-  wallMs: number
-  workMs: number
 }
 
 export type SwarmModel = {
@@ -86,7 +77,6 @@ export type SwarmModel = {
 
 export type SwarmInput = {
   rootID: string
-  alongside?: readonly string[]
   info: Record<string, Session | undefined>
   status: Record<string, SessionStatus | undefined>
   permission: Record<string, readonly PermissionRequest[] | undefined>
@@ -181,7 +171,7 @@ function laneStatus(input: {
   return { status: "done" }
 }
 
-function buildLane(input: SwarmInput, id: string, depth: number, group: SwarmGroup, parent?: SwarmLane): SwarmLane {
+function buildLane(input: SwarmInput, id: string, depth: number): SwarmLane {
   const session = input.info[id]!
   const messages = input.messages(id)
   const directory = session.directory
@@ -209,7 +199,6 @@ function buildLane(input: SwarmInput, id: string, depth: number, group: SwarmGro
       end: step.running ? input.now : end(step.end ?? step.start),
       running: step.running,
       label: step.label,
-      paths: step.files.map((file) => relativePath(file.path, directory)),
       count: 1,
       step,
     }),
@@ -226,19 +215,12 @@ function buildLane(input: SwarmInput, id: string, depth: number, group: SwarmGro
   const active = mergeIntervals(replies)
   const workMs = Math.max(0, span(active) - span(mergeIntervals(waits)))
 
-  const fromParent = parent?.model.steps.find((step) => childSessionOf(step) === id)
   const latestUser = (messages ?? []).findLast((message): message is UserMessage => message.role === "user")
   const firstChapter = model.chapters[0]
   const lastChapter = model.chapters.at(-1)
 
   // The server rolls cost up per session; before its first update the messages are the better number.
   const fromMessages = assistants.reduce((total, message) => total + (message.cost ?? 0), 0)
-  const tokens = session.tokens
-  const tokensFromSession = tokens ? tokens.input + tokens.output + tokens.reasoning : 0
-  const tokensFromMessages = assistants.reduce(
-    (total, message) => total + (message.tokens?.input ?? 0) + (message.tokens?.output ?? 0),
-    0,
-  )
 
   const current =
     model.steps.findLast((step) => step.running && step.kind !== "agent") ?? model.steps.findLast((s) => s.running)
@@ -258,7 +240,6 @@ function buildLane(input: SwarmInput, id: string, depth: number, group: SwarmGro
     session,
     parentID: session.parentID,
     depth,
-    group,
     title: laneTitle(session),
     agent: session.agent ?? latestUser?.agent,
     ...laneStatus({ session, status: input.status[id], permission, question, messages, waitingOn }),
@@ -266,10 +247,8 @@ function buildLane(input: SwarmInput, id: string, depth: number, group: SwarmGro
     current,
     start: Math.min(...starts),
     end: Math.max(...ends),
-    spawnAt: fromParent?.start ?? (parent ? session.time.created : undefined),
     workMs,
     cost: Math.max(session.cost ?? 0, fromMessages),
-    tokens: Math.max(tokensFromSession, tokensFromMessages),
     model,
     segments,
     told: firstChapter?.prompt || undefined,
@@ -282,32 +261,20 @@ function buildLane(input: SwarmInput, id: string, depth: number, group: SwarmGro
 
 // ---- Time axis ----------------------------------------------------------------------------------------------------
 
-export type SwarmAxisTick = { x: number; at: number }
-export type SwarmAxisBreak = { x: number; ms: number }
-
 export type SwarmAxis = {
   start: number
   end: number
   x: (at: number) => number
-  ticks: SwarmAxisTick[]
-  breaks: SwarmAxisBreak[]
-  wallMs: number
-  // Seconds matter on the labels only when the whole run fits in a few minutes.
-  seconds: boolean
 }
 
 // A session can have turns days apart. Nothing happened in those gaps, so they are drawn as a fixed sliver.
 const GAP_MS = 2 * 60_000
 const GAP_SHARE = 0.03
-const TICK_STEPS = [5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600, 7200, 14_400, 28_800, 86_400].map(
-  (s) => s * 1000,
-)
-const TICK_TARGET = 6
 
 export function buildAxis(intervals: readonly Interval[]): SwarmAxis {
   const sections = mergeIntervals(intervals, GAP_MS)
   if (sections.length === 0) {
-    return { start: 0, end: 0, x: () => 0, ticks: [], breaks: [], wallMs: 0, seconds: true }
+    return { start: 0, end: 0, x: () => 0 }
   }
   const wallMs = span(sections)
   const gaps = sections.length - 1
@@ -338,27 +305,7 @@ export function buildAxis(intervals: readonly Interval[]): SwarmAxis {
     return last.left + last.width
   }
 
-  const step = TICK_STEPS.find((value) => wallMs / value <= TICK_TARGET) ?? TICK_STEPS.at(-1)!
-  const ticks = placed.flatMap((section) => {
-    const list: SwarmAxisTick[] = []
-    const first = Math.ceil(section.start / step) * step
-    for (let at = first; at <= section.end; at += step) list.push({ at, x: x(at) })
-    return list
-  })
-  const breaks = placed.slice(1).map((section, index) => ({
-    x: section.left - GAP_SHARE,
-    ms: section.start - placed[index]!.end,
-  }))
-
-  return {
-    start: sections[0]![0],
-    end: sections.at(-1)![1],
-    x,
-    ticks,
-    breaks,
-    wallMs,
-    seconds: step < 60_000,
-  }
+  return { start: sections[0]![0], end: sections.at(-1)![1], x }
 }
 
 // Priority for a cell that stands for several steps: a failure must never be hidden by the passing steps around it.
@@ -386,7 +333,6 @@ export function coalesceSegments(segments: readonly SwarmSegment[], x: (at: numb
         last.end = Math.max(last.end, segment.end)
         last.count += 1
         last.running = last.running || segment.running
-        last.paths = [...new Set([...last.paths, ...segment.paths])]
         if (KIND_RANK[segment.kind] > KIND_RANK[last.kind]) {
           last.kind = segment.kind
           last.label = segment.label
@@ -451,85 +397,38 @@ export function findOverlaps(lanes: readonly SwarmLane[]): SwarmOverlap[] {
 // ---- The whole picture --------------------------------------------------------------------------------------------
 
 export function buildSwarm(input: SwarmInput): SwarmModel {
-  const lanes: SwarmLane[] = []
-  const add = (rootID: string, group: SwarmGroup) => {
-    const built = new Map<string, SwarmLane>()
-    sessionTree(rootID, input.info).forEach(({ id, depth }) => {
-      if (!input.info[id]) return
-      const parentID = input.info[id]!.parentID
-      const lane = buildLane(input, id, depth, group, parentID ? built.get(parentID) : undefined)
-      built.set(id, lane)
-      lanes.push(lane)
-    })
-  }
-  add(input.rootID, "run")
-  input.alongside?.forEach((id) => add(id, "alongside"))
-
-  const run = lanes.filter((lane) => lane.group === "run")
-  // The chart is about this run. Another session's earlier life is cut at the run's first moment, or an old neighbour
-  // would squeeze the run into a corner.
-  const runStart = Math.min(...run.map((lane) => lane.start))
+  const lanes = sessionTree(input.rootID, input.info).flatMap(({ id, depth }) =>
+    input.info[id] ? [buildLane(input, id, depth)] : [],
+  )
   const axis = buildAxis(
-    lanes.flatMap((lane): Interval[] => {
-      const intervals: Interval[] = [
-        [lane.start, lane.end],
-        ...lane.segments.map((segment): Interval => [segment.start, segment.end]),
-      ]
-      if (lane.group === "run") return intervals
-      return intervals
-        .filter(([, end]) => end >= runStart)
-        .map(([start, end]): Interval => [Math.max(start, runStart), end])
-    }),
+    lanes.flatMap((lane): Interval[] => [
+      [lane.start, lane.end],
+      ...lane.segments.map((segment): Interval => [segment.start, segment.end]),
+    ]),
   )
-  const runAxis = mergeIntervals(
-    run.map((lane): Interval => [lane.start, lane.end]),
-    GAP_MS,
-  )
-
   return {
     lanes,
     axis,
     overlaps: findOverlaps(lanes),
     totals: {
-      agents: run.length,
-      needs: run.filter((lane) => lane.status === "needs").length,
-      active: run.filter((lane) => ["running", "retry", "waiting"].includes(lane.status)).length,
-      failed: run.filter((lane) => lane.status === "failed").length,
-      problems: run.reduce((total, lane) => total + lane.model.counts.problems, 0),
-      cost: run.reduce((total, lane) => total + lane.cost, 0),
-      tokens: run.reduce((total, lane) => total + lane.tokens, 0),
-      wallMs: span(runAxis),
-      workMs: run.reduce((total, lane) => total + lane.workMs, 0),
+      agents: lanes.length,
+      needs: lanes.filter((lane) => lane.status === "needs").length,
+      active: lanes.filter((lane) => ["running", "retry", "waiting"].includes(lane.status)).length,
+      failed: lanes.filter((lane) => lane.status === "failed").length,
+      problems: lanes.reduce((total, lane) => total + lane.model.counts.problems, 0),
+      cost: lanes.reduce((total, lane) => total + lane.cost, 0),
     },
   }
 }
 
-// ---- Header pulse: no messages are read for this, so it is cheap enough to keep on for every session ------------------
+// ---- Whether this session has subagents, and whether one is stuck. No messages are read, so it stays on for every session.
 
-export type SwarmPulseDot = { id: string; state: "needs" | "active" | "settled" }
-
-export type SwarmPulse = {
-  agents: number
-  needs: number
-  active: number
-  cost: number
-  dots: SwarmPulseDot[]
-}
-
-export function swarmPulse(
-  input: Pick<SwarmInput, "rootID" | "info" | "status" | "permission" | "question">,
-): SwarmPulse {
+export function swarmPulse(input: Pick<SwarmInput, "rootID" | "info" | "permission" | "question">) {
   const tree = sessionTree(input.rootID, input.info).filter(({ id }) => !!input.info[id])
-  const dots = tree.map(({ id }): SwarmPulseDot => {
-    if ((input.permission[id]?.length ?? 0) > 0 || (input.question[id]?.length ?? 0) > 0) return { id, state: "needs" }
-    return { id, state: (input.status[id]?.type ?? "idle") !== "idle" ? "active" : "settled" }
-  })
   return {
     agents: tree.length,
-    needs: dots.filter((dot) => dot.state === "needs").length,
-    active: dots.filter((dot) => dot.state === "active").length,
-    cost: tree.reduce((total, { id }) => total + (input.info[id]?.cost ?? 0), 0),
-    dots,
+    needs: tree.filter(({ id }) => (input.permission[id]?.length ?? 0) > 0 || (input.question[id]?.length ?? 0) > 0)
+      .length,
   }
 }
 

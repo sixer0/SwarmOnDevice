@@ -1,5 +1,5 @@
 import { makeEventListener } from "@solid-primitives/event-listener"
-import { createMemo, createResource, createSignal, For, Show, type JSX } from "solid-js"
+import { createMemo, createResource, createSignal, Show, type JSX } from "solid-js"
 import type { SnapshotFileDiff, VcsFileDiff } from "@opencode-ai/sdk/v2"
 import type { FileDiffInfo } from "@opencode-ai/client/promise"
 import {
@@ -61,7 +61,6 @@ export type ReviewPanelV2Props = {
   focusedComment?: SessionReviewFocus | null
   onFocusedCommentChange?: (focus: SessionReviewFocus | null) => void
   brief?: ReviewBriefController
-  onBriefRef?: (el: HTMLDivElement | undefined) => void
 }
 
 export function ReviewPanelV2(props: ReviewPanelV2Props) {
@@ -222,7 +221,6 @@ export function ReviewPanelV2(props: ReviewPanelV2Props) {
     <div
       ref={(el) => {
         root = el
-        props.onBriefRef?.(el)
         makeEventListener(el, "keydown", handleKey)
       }}
       tabIndex={-1}
@@ -292,43 +290,35 @@ function ReviewPanelV2Sidebar(props: {
           </div>
         }
       >
-        <Show when={props.brief && !props.searching() && props.diffs().length > 0}>
-          <div
-            class="flex items-center gap-0.5 px-2 pb-1.5"
-            role="group"
-            aria-label={language.t("session.review.sidebar.view")}
-          >
-            <For each={["queue", "tree"] as const}>
-              {(item) => (
-                <button
-                  type="button"
-                  aria-pressed={props.state.sidebarView() === item}
-                  class="h-6 rounded-md px-2 text-12-regular text-v2-text-text-muted hover:text-v2-text-text-base focus-visible:outline-2 focus-visible:outline-v2-border-border-strong aria-pressed:bg-v2-overlay-simple-overlay-hover aria-pressed:text-v2-text-text-base"
-                  onClick={() => props.state.setSidebarView(item)}
-                >
-                  {language.t(`session.review.sidebar.${item}`)}
-                </button>
-              )}
-            </For>
-          </div>
-        </Show>
         <Show
           when={props.searching()}
           fallback={
-            <Show
-              when={queueShown() && props.brief}
-              fallback={
-                <FileTreeV2
-                  allowed={props.filteredFiles()}
-                  kinds={props.kinds()}
-                  draggable={false}
-                  active={props.activeDiff()}
-                  onFileClick={(node) => props.onSelectFile(node.path)}
-                />
-              }
-            >
-              {(brief) => <ReviewQueue brief={brief()} active={props.activeDiff()} onSelect={props.onSelectFile} />}
-            </Show>
+            <>
+              <Show
+                when={queueShown() && props.brief}
+                fallback={
+                  <FileTreeV2
+                    allowed={props.filteredFiles()}
+                    kinds={props.kinds()}
+                    draggable={false}
+                    active={props.activeDiff()}
+                    onFileClick={(node) => props.onSelectFile(node.path)}
+                  />
+                }
+              >
+                {(brief) => <ReviewQueue brief={brief()} active={props.activeDiff()} onSelect={props.onSelectFile} />}
+              </Show>
+              <Show when={props.brief && props.diffs().length > 0}>
+                <button
+                  type="button"
+                  data-review-order
+                  class="mx-2 mb-2 rounded text-12-regular text-v2-text-text-faint underline-offset-2 hover:text-v2-text-text-base hover:underline focus-visible:outline-2 focus-visible:outline-v2-border-border-strong"
+                  onClick={() => props.state.setSidebarView(queueShown() ? "tree" : "queue")}
+                >
+                  {language.t(queueShown() ? "session.review.sidebar.tree" : "session.review.sidebar.queue")}
+                </button>
+              </Show>
+            </>
           }
         >
           <Show

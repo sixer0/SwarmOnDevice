@@ -27,8 +27,6 @@ export type SessionCommandContext = {
   setActiveMessage: (message: UserMessage | undefined) => void
   focusInput: () => void
   toggleSessionMap: () => void
-  toggleSwarm: () => void
-  focusReview: () => void
   goToProblem: (direction: 1 | -1) => void
   review?: () => boolean
   fileBrowser?: () => boolean
@@ -453,13 +451,6 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
       },
     }),
     viewCommand({
-      id: "review.focus",
-      title: language.t("command.review.focus"),
-      keybind: "mod+shift+y",
-      disabled: !params.id,
-      onSelect: actions.focusReview,
-    }),
-    viewCommand({
       id: "review.toggle",
       title: language.t("command.review.toggle"),
       keybind: "mod+shift+r",
@@ -520,17 +511,10 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
     }),
     sessionCommand({
       id: "session.map.toggle",
-      title: language.t("command.session.map.toggle"),
+      title: language.t("session.activity.title"),
       keybind: "mod+shift+k",
       disabled: !params.id,
       onSelect: actions.toggleSessionMap,
-    }),
-    sessionCommand({
-      id: "session.swarm.toggle",
-      title: language.t("command.session.swarm.toggle"),
-      keybind: "mod+shift+j",
-      disabled: !params.id,
-      onSelect: actions.toggleSwarm,
     }),
     sessionCommand({
       id: "session.map.problem.next",

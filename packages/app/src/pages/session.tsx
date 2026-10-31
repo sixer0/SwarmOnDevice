@@ -105,7 +105,6 @@ import { stepReference, type MapChapter, type MapStep } from "@/pages/session/ma
 import { SessionMapPanel } from "@/pages/session/map/session-map-view"
 import { createReviewBrief } from "@/pages/session/review/review-brief-controller"
 import { createSwarm } from "@/pages/session/swarm/swarm-controller"
-import { SwarmPanel } from "@/pages/session/swarm/swarm-view"
 import { Identifier } from "@/utils/id"
 import { diffs as list } from "@/utils/diffs"
 import { Persist, persisted } from "@/utils/persist"
@@ -1189,12 +1188,17 @@ export default function Page() {
     serverSync,
     autoResponds: (request, directory) => permission.autoResponds(request, directory),
     openLane: (sessionID, step) => openRunStep(sessionID, step),
+    // A subagent's own composer is disabled. The way to ask is from the main agent's session, so go there first.
     draftToComposer: (text) => {
-      if (swarm.rootID() !== params.id) return false
-      appendToComposer(text)
-      return true
+      const root = swarm.rootID()
+      if (root === params.id) appendToComposer(text)
+      else if (root) openRunStep(root)
     },
-    onClose: () => focusInput(),
+    watching: () => sessionMap.opened() && sessionMap.view.filter === "agents",
+  })
+  // Leaving a run for a session with no agents leaves nothing to show on that tab.
+  createEffect(() => {
+    if (sessionMap.view.filter === "agents" && swarm.pulse().agents <= 1) sessionMap.setFilter("all")
   })
   const reviewBrief = createReviewBrief({
     sessionID: () => params.id,
@@ -1213,14 +1217,11 @@ export default function Page() {
       focusInput()
     },
   })
-  let reviewBriefRoot: HTMLDivElement | undefined
-  const focusReviewBrief = () => {
-    if (!view().reviewPanel.opened()) view().reviewPanel.open()
-    requestAnimationFrame(() => reviewBriefRoot?.focus({ preventScroll: true }))
-  }
+  // A stuck subagent is the first thing worth seeing when the panel opens.
   const toggleSessionMap = () => {
-    if (!sessionMap.opened()) return sessionMap.toggle()
-    closeSessionMap()
+    if (sessionMap.opened()) return closeSessionMap()
+    if (swarm.pulse().agents > 1 && swarm.pulse().needs > 0) sessionMap.setFilter("agents")
+    sessionMap.open()
   }
   const closeSessionMap = () => {
     sessionMap.close()
@@ -1259,8 +1260,6 @@ export default function Page() {
     setActiveMessage,
     focusInput,
     toggleSessionMap,
-    toggleSwarm: () => swarm.toggle(),
-    focusReview: focusReviewBrief,
     goToProblem,
     review: reviewTab,
     fileBrowser: () => newSessionDesign() && isDesktop() && !!params.id,
@@ -1464,9 +1463,6 @@ export default function Page() {
     },
     get brief() {
       return params.id ? reviewBrief : undefined
-    },
-    onBriefRef: (el: HTMLDivElement | undefined) => {
-      reviewBriefRoot = el
     },
   })
 
@@ -2187,23 +2183,16 @@ export default function Page() {
 
   const sessionPanelWithMap = () => (
     <div class="relative flex min-h-0 flex-1">
-      {/* Covered while the swarm view is up: the composer must not take focus or keys from under it. */}
-      <div class="flex h-full min-w-0 flex-1 flex-col" inert={swarm.opened()}>
-        {sessionPanelContent()}
-      </div>
-      <div class="contents" inert={swarm.opened()}>
-        <Show when={params.id && sessionMap.opened() && !mobileChanges()}>
-          <SessionMapPanel
-            map={sessionMap}
-            directory={sdk().directory}
-            onAsk={askAboutStep}
-            onRewind={rewindToChapter}
-            onClose={closeSessionMap}
-          />
-        </Show>
-      </div>
-      <Show when={params.id && swarm.opened()}>
-        <SwarmPanel swarm={swarm} />
+      <div class="flex h-full min-w-0 flex-1 flex-col">{sessionPanelContent()}</div>
+      <Show when={params.id && sessionMap.opened() && !mobileChanges()}>
+        <SessionMapPanel
+          map={sessionMap}
+          swarm={swarm}
+          directory={sdk().directory}
+          onAsk={askAboutStep}
+          onRewind={rewindToChapter}
+          onClose={closeSessionMap}
+        />
       </Show>
     </div>
   )
@@ -2416,14 +2405,14 @@ export default function Page() {
         map={{
           visible: !!params.id,
           opened: sessionMap.opened(),
-          newProblems: sessionMap.opened() ? 0 : (sessionMap.fresh()?.problems ?? 0),
+          attention: sessionMap.opened()
+            ? undefined
+            : swarm.pulse().agents > 1 && swarm.pulse().needs > 0
+              ? "warning"
+              : (sessionMap.fresh()?.problems ?? 0) > 0
+                ? "danger"
+                : undefined,
           toggle: toggleSessionMap,
-        }}
-        swarm={{
-          visible: !!params.id && swarm.pulse().agents > 1,
-          opened: swarm.opened(),
-          pulse: swarm.pulse(),
-          toggle: () => swarm.toggle(),
         }}
       />
       <div

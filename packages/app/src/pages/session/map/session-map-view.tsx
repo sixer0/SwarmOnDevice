@@ -6,11 +6,12 @@ import { Icon as IconV2 } from "@opencode-ai/ui/v2/icon"
 import { IconButtonV2 } from "@opencode-ai/ui/v2/icon-button-v2"
 import { ButtonV2 } from "@opencode-ai/ui/v2/button-v2"
 import { createEffect, createMemo, For, Match, on, onMount, Show, Switch, type JSX } from "solid-js"
+import type { SwarmController } from "../swarm/swarm-controller"
+import { SwarmAgents } from "../swarm/swarm-view"
 import type { SessionMapController } from "./session-map-controller"
 import {
   formatDuration,
   relativePath,
-  runStrip,
   type MapChapter,
   type MapFile,
   type MapFilter,
@@ -18,7 +19,6 @@ import {
   type MapStep,
 } from "./session-map-model"
 
-const STRIP_CELLS = 72
 // A step this short is not worth a duration; a slow one is often the thing being looked for.
 const SLOW_STEP_MS = 5000
 
@@ -29,20 +29,6 @@ const ROW = `
   focus-visible:[box-shadow:inset_0_0_0_1px_var(--v2-border-border-strong)]
   leading-[18px] [content-visibility:auto] [contain-intrinsic-size:auto_32px]
 `
-
-function Meter(props: { icon: Parameters<typeof Icon>[0]["name"]; value: number; danger?: boolean }) {
-  return (
-    <Show when={props.value > 0}>
-      <span
-        class="inline-flex items-center gap-0.5 tabular-nums"
-        classList={{ "text-v2-state-fg-danger": props.danger }}
-      >
-        <Icon name={props.icon} size="small" class="!size-3.5" />
-        {props.value}
-      </span>
-    </Show>
-  )
-}
 
 function StepRow(props: {
   rowID: string
@@ -186,16 +172,17 @@ function ChapterRow(props: {
           <span class="line-clamp-2 text-v2-text-text-base [font-weight:530]" title={prompt()}>
             {prompt()}
           </span>
-          <Show when={props.chapter.outcome && !props.open}>
-            <span class="line-clamp-2 text-v2-text-text-muted [font-weight:440]">{props.chapter.outcome!.text}</span>
+          <Show when={props.chapter.problems > 0 || duration()}>
+            <span class="flex items-center gap-x-2.5 text-v2-text-text-faint [font-weight:440]">
+              <Show when={props.chapter.problems > 0}>
+                <span class="inline-flex items-center gap-0.5 tabular-nums text-v2-state-fg-danger">
+                  <Icon name="warning" size="small" class="!size-3.5" />
+                  {props.chapter.problems}
+                </span>
+              </Show>
+              <Show when={duration()}>{(value) => <span class="ml-auto tabular-nums">{value()}</span>}</Show>
+            </span>
           </Show>
-          <span class="flex flex-wrap items-center gap-x-2.5 text-v2-text-text-faint [font-weight:440]">
-            <Meter icon="warning" value={props.chapter.problems} danger />
-            <Meter icon="console" value={props.chapter.commands} />
-            <Meter icon="code-lines" value={props.chapter.files} />
-            <Meter icon="task" value={props.chapter.visibleSteps} />
-            <Show when={duration()}>{(value) => <span class="ml-auto tabular-nums">{value()}</span>}</Show>
-          </span>
         </span>
       </button>
       <div class="absolute right-1 top-1 hidden rounded-[6px] bg-v2-background-bg-base group-hover/chapter:block">
@@ -247,6 +234,7 @@ function FileRow(props: {
 
 export function SessionMapPanel(props: {
   map: SessionMapController
+  swarm: SwarmController
   directory: string
   onAsk: (step: MapStep) => void
   onRewind: (chapter: MapChapter) => void
@@ -257,21 +245,29 @@ export function SessionMapPanel(props: {
   let searchInput: HTMLInputElement | undefined
 
   const counts = () => props.map.model().counts
-  const filters = createMemo<{ id: MapFilter; label: string; count?: number; danger?: boolean }[]>(() => [
+  const filters = createMemo<
+    { id: MapFilter; label: string; count?: number; tone?: "danger" | "warning" }[]
+  >(() => [
     { id: "all", label: language.t("session.map.filter.all") },
     {
       id: "problems",
       label: language.t("session.map.filter.problems"),
       count: counts().problems,
-      danger: counts().problems > 0,
+      tone: "danger",
     },
     { id: "edits", label: language.t("session.map.filter.edits"), count: props.map.model().files.length },
-    { id: "commands", label: language.t("session.map.filter.commands"), count: counts().commands },
-    ...(counts().agents > 0
-      ? [{ id: "agents" as const, label: language.t("session.map.filter.agents"), count: counts().agents }]
+    ...(props.swarm.pulse().agents > 1
+      ? [
+          {
+            id: "agents" as const,
+            label: language.t("session.map.filter.agents"),
+            count: props.swarm.pulse().agents,
+            tone: props.swarm.pulse().needs > 0 ? ("warning" as const) : undefined,
+          },
+        ]
       : []),
   ])
-  const strip = createMemo(() => runStrip(props.map.model().steps, STRIP_CELLS, props.map.since()))
+  const showingAgents = () => props.map.view.filter === "agents"
   const rowByID = createMemo(() => new Map(props.map.rows().map((row) => [row.id, row] as const)))
   const rowIDs = createMemo(() => props.map.rows().map((row) => row.id))
   const firstFocusable = () => rowIDs()[0]
@@ -508,13 +504,13 @@ export function SessionMapPanel(props: {
     <aside
       id="session-map-panel"
       data-component="session-map"
-      aria-label={language.t("session.map.title")}
+      aria-label={language.t("session.activity.title")}
       class="absolute inset-y-0 right-0 z-[70] flex h-full w-[min(372px,100%)] shrink-0 flex-col gap-2 border-l border-v2-border-border-base bg-v2-background-bg-base pt-2 shadow-[var(--v2-elevation-raised)] @[900px]:static @[900px]:w-[372px] @[900px]:shadow-none"
       onKeyDown={onPanelKey}
     >
       <div class="flex h-8 shrink-0 items-center gap-2 pl-3 pr-1.5">
         <span class="min-w-0 flex-1 truncate text-v2-text-text-base [font-weight:530]">
-          {language.t("session.map.title")}
+          {language.t("session.activity.title")}
         </span>
         <IconButtonV2
           type="button"
@@ -526,34 +522,7 @@ export function SessionMapPanel(props: {
         />
       </div>
 
-      <Show when={strip().length > 0}>
-        <div
-          data-map-strip
-          aria-hidden="true"
-          class="mx-3 flex h-5 shrink-0 items-stretch gap-px overflow-hidden rounded-[3px]"
-        >
-          <For each={strip()}>
-            {(cell) => (
-              <button
-                type="button"
-                tabindex={-1}
-                title={(cell.steps.find((step) => step.problem) ?? cell.steps[0])?.label}
-                class="min-w-0 flex-1 cursor-default border-0 p-0 transition-opacity duration-[120ms] hover:opacity-60"
-                classList={{
-                  "bg-v2-state-fg-danger": cell.problem,
-                  "bg-v2-text-text-muted": !cell.problem && cell.edit,
-                  "bg-v2-border-border-strong": !cell.problem && !cell.edit,
-                  "animate-pulse": cell.running,
-                }}
-                style={{ "margin-top": cell.problem ? "0" : cell.edit ? "4px" : "10px" }}
-                onClick={() => props.map.openStep(cell.steps.find((step) => step.problem) ?? cell.steps[0]!)}
-              />
-            )}
-          </For>
-        </div>
-      </Show>
-
-      <div class="flex shrink-0 flex-wrap gap-1 px-2" role="group" aria-label={language.t("session.map.title")}>
+      <div class="flex shrink-0 flex-wrap gap-1 px-2" role="group" aria-label={language.t("session.activity.title")}>
         <For each={filters()}>
           {(filter) => (
             <button
@@ -564,10 +533,13 @@ export function SessionMapPanel(props: {
               onClick={() => props.map.setFilter(filter.id)}
             >
               {filter.label}
-              <Show when={filter.count !== undefined}>
+              <Show when={filter.count}>
                 <span
                   class="tabular-nums text-v2-text-text-faint"
-                  classList={{ "!text-v2-state-fg-danger": filter.danger }}
+                  classList={{
+                    "!text-v2-state-fg-danger": filter.tone === "danger",
+                    "!text-v2-state-fg-warning": filter.tone === "warning",
+                  }}
                 >
                   {filter.count}
                 </span>
@@ -577,98 +549,97 @@ export function SessionMapPanel(props: {
         </For>
       </div>
 
-      <div class="mx-2 flex h-7 shrink-0 items-center gap-1.5 rounded-[6px] bg-v2-overlay-simple-overlay-hover px-2">
-        <IconV2 name="magnifying-glass" class="shrink-0 text-v2-text-text-faint" />
-        <input
-          ref={(el) => {
-            searchInput = el
-          }}
-          data-map-search
-          type="text"
-          value={props.map.view.draft}
-          placeholder={language.t("session.map.search.placeholder")}
-          aria-label={language.t("session.map.search.placeholder")}
-          class="min-w-0 flex-1 border-0 bg-transparent text-v2-text-text-base outline-none [font-weight:440] placeholder:text-v2-text-text-faint"
-          onInput={(event) => props.map.search(event.currentTarget.value)}
-          onKeyDown={onSearchKey}
-        />
-      </div>
+      <Show when={!showingAgents()} fallback={<SwarmAgents swarm={props.swarm} />}>
+        <div class="mx-2 flex h-7 shrink-0 items-center gap-1.5 rounded-[6px] bg-v2-overlay-simple-overlay-hover px-2">
+          <IconV2 name="magnifying-glass" class="shrink-0 text-v2-text-text-faint" />
+          <input
+            ref={(el) => {
+              searchInput = el
+            }}
+            data-map-search
+            type="text"
+            value={props.map.view.draft}
+            placeholder={language.t("session.map.search.placeholder")}
+            aria-label={language.t("session.map.search.placeholder")}
+            class="min-w-0 flex-1 border-0 bg-transparent text-v2-text-text-base outline-none [font-weight:440] placeholder:text-v2-text-text-faint"
+            onInput={(event) => props.map.search(event.currentTarget.value)}
+            onKeyDown={onSearchKey}
+          />
+        </div>
 
-      <Show when={props.map.fresh()}>
-        {(fresh) => (
-          <div
-            data-map-fresh
-            class="mx-2 flex shrink-0 items-center gap-1 rounded-[6px] bg-v2-state-bg-info pl-2 pr-0.5 text-v2-state-fg-info"
-          >
-            <button
-              type="button"
-              class="flex min-h-7 min-w-0 flex-1 cursor-default flex-wrap items-center gap-x-2 border-0 bg-transparent text-left text-current outline-none [font-weight:530] focus-visible:underline"
-              onClick={() => props.map.openStep(fresh().first)}
+        <Show when={props.map.fresh()}>
+          {(fresh) => (
+            <div
+              data-map-fresh
+              class="mx-2 flex shrink-0 items-center gap-1 rounded-[6px] bg-v2-state-bg-info pl-2 pr-0.5 text-v2-state-fg-info"
             >
-              <span>{language.t("session.map.since", { steps: fresh().steps.length })}</span>
-              <Show when={fresh().problems > 0}>
-                <span class="text-v2-state-fg-danger">
-                  {language.t("session.map.since.problems", { problems: fresh().problems })}
-                </span>
-              </Show>
-            </button>
-            <IconButtonV2
-              type="button"
-              variant="ghost-muted"
-              size="small"
-              aria-label={language.t("common.dismiss")}
-              onClick={() => props.map.dismissFresh()}
-              icon={<IconV2 name="close" />}
-            />
-          </div>
-        )}
-      </Show>
-
-      <Show when={props.map.view.hydrating}>
-        <div
-          data-map-history="loading"
-          class="mx-3 flex shrink-0 items-center gap-2 text-v2-text-text-faint [font-weight:440]"
-        >
-          <Spinner class="size-3.5" />
-          {language.t("session.map.history.loading")}
-        </div>
-      </Show>
-      <Show when={props.map.view.hydrateError}>
-        <div
-          data-map-history="error"
-          class="mx-3 flex shrink-0 items-center gap-2 text-v2-text-text-muted [font-weight:440]"
-        >
-          <span class="min-w-0 flex-1">{language.t("session.map.history.error")}</span>
-          <ButtonV2 variant="ghost" onClick={() => void props.map.hydrate()}>
-            {language.t("home.agents.retry")}
-          </ButtonV2>
-        </div>
-      </Show>
-
-      <div
-        ref={(el) => {
-          list = el
-        }}
-        data-map-list
-        data-scrollable
-        class="min-h-0 flex-1 overflow-y-auto px-1.5 pb-1"
-        onKeyDown={onListKey}
-        onFocusIn={(event) => {
-          const id = (event.target as HTMLElement).closest<HTMLElement>("[data-map-row]")?.dataset.mapRow
-          if (id) props.map.select(id)
-        }}
-      >
-        <Show
-          when={rowIDs().length > 0}
-          fallback={<div class="px-2 py-3 text-v2-text-text-faint [font-weight:440]">{emptyText()}</div>}
-        >
-          <For each={rowIDs()}>{(id) => renderRow(id)}</For>
+              <button
+                type="button"
+                class="flex min-h-7 min-w-0 flex-1 cursor-default flex-wrap items-center gap-x-2 border-0 bg-transparent text-left text-current outline-none [font-weight:530] focus-visible:underline"
+                onClick={() => props.map.openStep(fresh().first)}
+              >
+                <span>{language.t("session.map.since", { steps: fresh().steps.length })}</span>
+                <Show when={fresh().problems > 0}>
+                  <span class="text-v2-state-fg-danger">
+                    {language.t("session.map.since.problems", { problems: fresh().problems })}
+                  </span>
+                </Show>
+              </button>
+              <IconButtonV2
+                type="button"
+                variant="ghost-muted"
+                size="small"
+                aria-label={language.t("common.dismiss")}
+                onClick={() => props.map.dismissFresh()}
+                icon={<IconV2 name="close" />}
+              />
+            </div>
+          )}
         </Show>
-      </div>
 
-      <div class="shrink-0 truncate border-t border-v2-border-border-base px-3 py-1.5 text-v2-text-text-faint [font-weight:440] max-md:hidden">
-        {language.t("session.map.hint")}
-      </div>
+        <Show when={props.map.view.hydrating}>
+          <div
+            data-map-history="loading"
+            class="mx-3 flex shrink-0 items-center gap-2 text-v2-text-text-faint [font-weight:440]"
+          >
+            <Spinner class="size-3.5" />
+            {language.t("session.map.history.loading")}
+          </div>
+        </Show>
+        <Show when={props.map.view.hydrateError}>
+          <div
+            data-map-history="error"
+            class="mx-3 flex shrink-0 items-center gap-2 text-v2-text-text-muted [font-weight:440]"
+          >
+            <span class="min-w-0 flex-1">{language.t("session.map.history.error")}</span>
+            <ButtonV2 variant="ghost" onClick={() => void props.map.hydrate()}>
+              {language.t("home.agents.retry")}
+            </ButtonV2>
+          </div>
+        </Show>
+
+        <div
+          ref={(el) => {
+            list = el
+          }}
+          data-map-list
+          data-scrollable
+          class="min-h-0 flex-1 overflow-y-auto px-1.5 pb-1"
+          onKeyDown={onListKey}
+          onFocusIn={(event) => {
+            const id = (event.target as HTMLElement).closest<HTMLElement>("[data-map-row]")?.dataset.mapRow
+            if (id) props.map.select(id)
+          }}
+        >
+          <Show
+            when={rowIDs().length > 0}
+            fallback={<div class="px-2 py-3 text-v2-text-text-faint [font-weight:440]">{emptyText()}</div>}
+          >
+            <For each={rowIDs()}>{(id) => renderRow(id)}</For>
+          </Show>
+        </div>
+
+      </Show>
     </aside>
   )
 }

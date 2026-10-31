@@ -10,7 +10,6 @@ import { Tooltip, TooltipKeybind } from "@opencode-ai/ui/tooltip"
 import { getFilename } from "@opencode-ai/core/util/path"
 import { createEffect, createMemo, createSignal, For, onMount, Show } from "solid-js"
 import { createStore } from "solid-js/store"
-import type { SwarmPulse } from "@/pages/session/swarm/swarm-model"
 import { createMediaQuery } from "@solid-primitives/media"
 import { Portal } from "solid-js/web"
 import { useCommand } from "@/context/command"
@@ -138,11 +137,14 @@ const showRequestError = (language: ReturnType<typeof useLanguage>, err: unknown
   })
 }
 
-export type SessionHeaderMap = { visible: boolean; opened: boolean; newProblems: number; toggle: () => void }
+export type SessionHeaderMap = {
+  visible: boolean
+  opened: boolean
+  attention?: "warning" | "danger"
+  toggle: () => void
+}
 
-export type SessionHeaderSwarm = { visible: boolean; opened: boolean; pulse: SwarmPulse; toggle: () => void }
-
-export function SessionHeader(props: { map?: SessionHeaderMap; swarm?: SessionHeaderSwarm }) {
+export function SessionHeader(props: { map?: SessionHeaderMap }) {
   const layout = useLayout()
   const command = useCommand()
   const server = useServer()
@@ -450,29 +452,21 @@ export function SessionHeader(props: { map?: SessionHeaderMap; swarm?: SessionHe
                         <StatusPopover />
                       </Tooltip>
                     </Show>
-                    <Show when={props.swarm?.visible}>
-                      <TooltipKeybind
-                        title={language.t("command.session.swarm.toggle")}
-                        keybind={command.keybind("session.swarm.toggle")}
-                      >
-                        <SwarmPulseButton swarm={props.swarm!} />
-                      </TooltipKeybind>
-                    </Show>
                     <Show when={props.map?.visible}>
                       <TooltipKeybind
-                        title={language.t("command.session.map.toggle")}
+                        title={language.t("session.activity.title")}
                         keybind={command.keybind("session.map.toggle")}
                       >
                         <Button
                           variant="ghost"
                           class="titlebar-icon relative w-8 h-6 p-0 box-border shrink-0"
                           onClick={() => props.map?.toggle()}
-                          aria-label={language.t("command.session.map.toggle")}
+                          aria-label={language.t("session.activity.title")}
                           aria-expanded={props.map?.opened}
                           aria-controls="session-map-panel"
                         >
                           <Icon size="small" name="bullet-list" />
-                          <SessionMapBadge count={props.map?.newProblems ?? 0} />
+                          <SessionMapDot attention={props.map?.attention} />
                         </Button>
                       </TooltipKeybind>
                     </Show>
@@ -542,8 +536,6 @@ export function SessionHeader(props: { map?: SessionHeaderMap; swarm?: SessionHe
                 state={v2ActionsState()}
                 map={props.map}
                 mapKeybind={command.keybindParts("session.map.toggle")}
-                swarm={props.swarm}
-                swarmKeybind={command.keybindParts("session.swarm.toggle")}
               />
             </Show>
           </Portal>
@@ -563,56 +555,18 @@ type SessionHeaderV2ActionsState = {
   onReviewToggle: () => void
 }
 
-const SWARM_DOTS = 12
-
-/** One dot per agent in this run, so a stuck or finished swarm reads at a glance from the header. */
-function SwarmPulseButton(props: { swarm: SessionHeaderSwarm }) {
-  const language = useLanguage()
-  const usd = createMemo(() => new Intl.NumberFormat(language.intl(), { style: "currency", currency: "USD" }))
+function SessionMapDot(props: { attention?: "warning" | "danger" }) {
   return (
-    <button
-      type="button"
-      data-component="session-swarm-pulse"
-      data-swarm-needs={props.swarm.pulse.needs}
-      aria-label={language.t("command.session.swarm.toggle")}
-      aria-expanded={props.swarm.opened}
-      aria-controls="session-swarm-panel"
-      class="flex h-7 shrink-0 cursor-default items-center gap-1.5 rounded-[6px] border-0 bg-transparent px-1.5 text-v2-text-text-muted outline-none transition-colors duration-[120ms] [font-weight:440] hover:bg-v2-overlay-simple-overlay-hover focus-visible:[box-shadow:inset_0_0_0_1px_var(--v2-border-border-strong)] aria-expanded:bg-v2-overlay-simple-overlay-hover"
-      onClick={() => props.swarm.toggle()}
-    >
-      <span class="flex items-center gap-[3px]" aria-hidden="true">
-        <For each={props.swarm.pulse.dots.slice(0, SWARM_DOTS)}>
-          {(dot) => (
-            <span
-              class="size-1.5 rounded-full"
-              classList={{
-                "bg-v2-state-fg-warning": dot.state === "needs",
-                "bg-v2-state-fg-info animate-pulse motion-reduce:animate-none": dot.state === "active",
-                "bg-v2-border-border-strong": dot.state === "settled",
-              }}
-            />
-          )}
-        </For>
-      </span>
-      <Show when={props.swarm.pulse.agents > SWARM_DOTS}>
-        <span class="tabular-nums text-v2-text-text-faint">{props.swarm.pulse.agents}</span>
-      </Show>
-      <Show when={props.swarm.pulse.cost > 0}>
-        <span class="tabular-nums max-md:hidden">{usd().format(props.swarm.pulse.cost)}</span>
-      </Show>
-    </button>
-  )
-}
-
-function SessionMapBadge(props: { count: number }) {
-  return (
-    <Show when={props.count > 0}>
+    <Show when={props.attention}>
       <span
-        data-component="session-map-badge"
-        class="absolute -right-0.5 -top-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-v2-state-fg-danger px-0.5 text-[10px] leading-none text-v2-background-bg-base tabular-nums"
-      >
-        {props.count}
-      </span>
+        data-component="session-map-dot"
+        data-attention={props.attention}
+        class="absolute right-1 top-1 size-1.5 rounded-full"
+        classList={{
+          "bg-v2-state-fg-warning": props.attention === "warning",
+          "bg-v2-state-fg-danger": props.attention === "danger",
+        }}
+      />
     </Show>
   )
 }
@@ -621,8 +575,6 @@ function SessionHeaderV2Actions(props: {
   state: SessionHeaderV2ActionsState
   map?: SessionHeaderMap
   mapKeybind: string[]
-  swarm?: SessionHeaderSwarm
-  swarmKeybind: string[]
 }) {
   const language = useLanguage()
 
@@ -633,29 +585,13 @@ function SessionHeaderV2Actions(props: {
           <StatusPopoverV2 />
         </Tooltip>
       </Show>
-      <Show when={props.swarm?.visible}>
-        <TooltipV2
-          class="shrink-0"
-          placement="bottom"
-          value={
-            <>
-              {language.t("command.session.swarm.toggle")}
-              <Show when={props.swarmKeybind.length > 0}>
-                <KeybindV2 keys={props.swarmKeybind} variant="neutral" />
-              </Show>
-            </>
-          }
-        >
-          <SwarmPulseButton swarm={props.swarm!} />
-        </TooltipV2>
-      </Show>
       <Show when={props.map?.visible}>
         <TooltipV2
           class="shrink-0"
           placement="bottom"
           value={
             <>
-              {language.t("command.session.map.toggle")}
+              {language.t("session.activity.title")}
               <Show when={props.mapKeybind.length > 0}>
                 <KeybindV2 keys={props.mapKeybind} variant="neutral" />
               </Show>
@@ -670,12 +606,12 @@ function SessionHeaderV2Actions(props: {
               class="!w-9 shrink-0"
               state={props.map?.opened ? "pressed" : undefined}
               onClick={() => props.map?.toggle()}
-              aria-label={language.t("command.session.map.toggle")}
+              aria-label={language.t("session.activity.title")}
               aria-expanded={props.map?.opened}
               aria-controls="session-map-panel"
               icon={<Icon name="bullet-list" size="small" />}
             />
-            <SessionMapBadge count={props.map?.newProblems ?? 0} />
+            <SessionMapDot attention={props.map?.attention} />
           </div>
         </TooltipV2>
       </Show>

@@ -303,7 +303,8 @@ export function buildSessionMap(input: SessionMapInput): SessionMapModel {
   }
 }
 
-export type MapFilter = "all" | "problems" | "edits" | "commands" | "agents"
+// "agents" is a view of the panel, not a filter over steps: it shows the run's agents instead of the list.
+export type MapFilter = "all" | "problems" | "edits" | "agents"
 
 export type MapRow =
   | { type: "chapter"; id: string; chapter: MapChapter; open: boolean }
@@ -355,8 +356,6 @@ const foldExplored = (steps: readonly MapStep[]) => {
 const matchesFilter = (step: MapStep, filter: MapFilter) => {
   if (step.kind === "text") return false
   if (filter === "problems") return !!step.problem
-  if (filter === "commands") return step.kind === "command"
-  if (filter === "agents") return step.kind === "agent"
   return true
 }
 
@@ -411,32 +410,6 @@ function searchRows(model: SessionMapModel, filter: MapFilter, query: string): M
   })
   if (total > RESULT_LIMIT) rows.push({ type: "truncated", id: "truncated", total })
   return rows
-}
-
-export type RunStripCell = {
-  start: number
-  steps: MapStep[]
-  problem: boolean
-  edit: boolean
-  running: boolean
-  fresh: boolean
-}
-
-// One cell per step until the strip runs out of width, then steps share a cell and the worst of them shows.
-export function runStrip(steps: readonly MapStep[], cells: number, since?: number): RunStripCell[] {
-  if (steps.length === 0 || cells <= 0) return []
-  const width = Math.max(1, Math.ceil(steps.length / cells))
-  return Array.from({ length: Math.ceil(steps.length / width) }, (_, index) => {
-    const group = steps.slice(index * width, (index + 1) * width)
-    return {
-      start: index * width,
-      steps: group,
-      problem: group.some((step) => step.problem),
-      edit: group.some((step) => step.kind === "edit"),
-      running: group.some((step) => step.running),
-      fresh: since !== undefined && group.some((step) => step.start > since),
-    }
-  })
 }
 
 export type SinceYouLooked = { steps: MapStep[]; problems: number; first: MapStep }

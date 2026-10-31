@@ -336,16 +336,11 @@ export function Titlebar(props: { update?: TitlebarUpdate; debugTools?: { visibl
                 category: language.t("command.category.view"),
                 keybind: "mod+b",
                 hidden: true,
-                onSelect: toggleHome,
-              },
-              {
-                id: "home.agents.jump",
-                title: language.t("home.agents.jump"),
-                category: language.t("command.category.view"),
-                keybind: "mod+shift+u",
+                // From the keyboard, arriving at Home with agents waiting puts the keyboard on the first of them.
                 onSelect: () => {
-                  if (layout.route().type !== "home") toggleHome()
-                  requestAgentBoardFocus()
+                  const arriving = layout.route().type !== "home"
+                  toggleHome()
+                  if (arriving && agentsWaiting() > 0) requestAgentBoardFocus()
                 },
               },
             ])

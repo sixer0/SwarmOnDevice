@@ -75,8 +75,9 @@ export function ReviewBriefStrip(props: { brief: ReviewBriefController }) {
   const language = useLanguage()
   const headline = useHeadline(props.brief)
   const brief = () => props.brief.brief()
-  const [prefs, setPrefs] = persisted(Persist.global("review-brief"), createStore({ collapsed: false }))
-  const open = () => !prefs.collapsed && brief().evidence.length > 0
+  // The headline already says what matters; the evidence behind it is one click away.
+  const [prefs, setPrefs] = persisted(Persist.global("review-brief"), createStore({ evidence: false }))
+  const open = () => prefs.evidence && brief().evidence.length > 0
   const allDecided = () => brief().progress.total > 0 && brief().progress.ok === brief().progress.total
 
   return (
@@ -92,7 +93,7 @@ export function ReviewBriefStrip(props: { brief: ReviewBriefController }) {
           class={`flex min-w-0 flex-1 basis-60 items-center gap-2 rounded-md text-start ${FOCUS_RING}`}
           aria-expanded={open()}
           disabled={brief().evidence.length === 0}
-          onClick={() => setPrefs("collapsed", (value) => !value)}
+          onClick={() => setPrefs("evidence", (value) => !value)}
         >
           <Show
             when={props.brief.running()}
@@ -110,19 +111,7 @@ export function ReviewBriefStrip(props: { brief: ReviewBriefController }) {
           </Show>
         </button>
         <div class="flex shrink-0 items-center gap-2">
-          <span class="flex items-center gap-2 text-12-regular text-v2-text-text-muted">
-            <span
-              class="relative block h-1 w-16 overflow-hidden rounded-full bg-v2-border-border-base"
-              role="progressbar"
-              aria-valuenow={brief().progress.ok}
-              aria-valuemax={brief().progress.total}
-              aria-label={language.t("session.review.progress.label")}
-            >
-              <span
-                class="absolute inset-y-0 start-0 bg-v2-state-fg-success"
-                style={{ width: `${(brief().progress.ok / Math.max(brief().progress.total, 1)) * 100}%` }}
-              />
-            </span>
+          <span class="text-12-regular text-v2-text-text-muted">
             {language.t("session.review.progress", { done: brief().progress.ok, total: brief().progress.total })}
           </span>
           <Switch>
@@ -305,6 +294,8 @@ export function ReviewQueue(props: {
   const language = useLanguage()
   const words = useFlagWords(props.brief)
   const brief = () => props.brief.brief()
+  // Formatting, lockfiles, generated files and docs are the part nobody has to read to decide. They wait until asked.
+  const [skimOpen, setSkimOpen] = createSignal(false)
   return (
     <div class="flex flex-col gap-2 pb-2" data-component="review-queue">
       <For each={brief().groups}>
@@ -315,14 +306,31 @@ export function ReviewQueue(props: {
               return mark === "none" || mark === "changed"
             }),
           )
+          const folded = () => group.id === "skim" && !skimOpen() && !group.files.includes(props.active ?? "")
           return (
             <section aria-label={language.t(`session.review.group.${group.id}`)}>
               <div class="flex h-6 items-center gap-1.5 px-2">
-                <span class="min-w-0 truncate text-12-medium text-v2-text-text-muted">
-                  {language.t(`session.review.group.${group.id}`)}
-                </span>
+                <Show
+                  when={group.id === "skim"}
+                  fallback={
+                    <span class="min-w-0 truncate text-12-medium text-v2-text-text-muted">
+                      {language.t(`session.review.group.${group.id}`)}
+                    </span>
+                  }
+                >
+                  <button
+                    type="button"
+                    data-review-skim
+                    aria-expanded={!folded()}
+                    class={`flex min-w-0 items-center gap-0.5 rounded text-12-medium text-v2-text-text-muted hover:text-v2-text-text-base ${FOCUS_RING}`}
+                    onClick={() => setSkimOpen(folded())}
+                  >
+                    <span class="min-w-0 truncate">{language.t(`session.review.group.${group.id}`)}</span>
+                    <Icon name="chevron-down" class={folded() ? "-rotate-90" : undefined} />
+                  </button>
+                </Show>
                 <span class="text-11-regular text-v2-text-text-faint">{group.files.length}</span>
-                <Show when={groupOffersAll(group.id) && open().length > 1}>
+                <Show when={!folded() && groupOffersAll(group.id) && open().length > 1}>
                   <button
                     type="button"
                     class={`ms-auto rounded text-11-regular text-v2-text-text-muted underline-offset-2 hover:text-v2-text-text-base hover:underline ${FOCUS_RING}`}
@@ -332,7 +340,7 @@ export function ReviewQueue(props: {
                   </button>
                 </Show>
               </div>
-              <For each={group.files}>
+              <For each={folded() ? [] : group.files}>
                 {(file) => {
                   const item = () => brief().byFile.get(file)
                   return (
@@ -378,7 +386,6 @@ export function ReviewQueue(props: {
           )
         }}
       </For>
-      <p class="px-2 pt-1 text-11-regular text-v2-text-text-faint">{language.t("session.review.keys")}</p>
       <Show when={props.brief.undone().length > 0}>
         <section aria-label={language.t("session.review.group.undone")}>
           <div class="flex h-6 items-center px-2 text-12-medium text-v2-text-text-muted">
@@ -413,55 +420,94 @@ const groupOffersAll = (id: BriefGroupID) => id === "skim" || id === "elsewhere"
 
 // ---- One file: why it changed, what to look at, what to do ------------------------------------------------------------
 
+/** One line: the first thing to look at in this file. Why it changed, every other flag and Undo are one click away. */
 export function ReviewFileBanner(props: { brief: ReviewBriefController; file: string }) {
   const language = useLanguage()
   const item = createMemo(() => props.brief.brief().byFile.get(props.file))
   const firstTouch = () => item()?.touches.at(0)
   const lastTouch = () => item()?.touches.at(-1)
+  const canUndo = () => {
+    const row = item()
+    return !!row && (props.brief.canUndo(row) || confirming())
+  }
+  const confirming = () => props.brief.pendingUndo() === props.file
+  const [expanded, setExpanded] = createSignal(false)
+  const open = () => expanded() || confirming()
+  const shownFlags = () => (open() ? (item()?.flags ?? []) : (item()?.flags.slice(0, 1) ?? []))
 
   return (
     <Show when={item()}>
       {(row) => (
         <div
           data-component="review-file-banner"
-          class="flex shrink-0 flex-col gap-1 border-b border-v2-border-border-base px-3 py-1.5"
+          class="flex shrink-0 flex-col gap-0.5 border-b border-v2-border-border-base px-3 py-1"
         >
-          <div class="min-w-0 text-12-regular text-v2-text-text-muted">
-            <Show
-              when={firstTouch()}
-              fallback={<span class="text-v2-text-text-faint">{language.t("session.review.why.unknown")}</span>}
-            >
-              {(touch) => (
-                <span class="flex min-w-0 items-center gap-1.5" title={touch().prompt}>
-                  <span class="min-w-0 truncate">
+          <Show when={open() || row().flags.length === 0}>
+            <div class="flex min-h-6 min-w-0 items-center gap-1.5 text-12-regular text-v2-text-text-muted">
+              <Show
+                when={firstTouch()}
+                fallback={
+                  <span class="min-w-0 flex-1 truncate text-v2-text-text-faint">
+                    {language.t("session.review.why.unknown")}
+                  </span>
+                }
+              >
+                {(touch) => (
+                  <span class="min-w-0 flex-1 truncate" title={touch().prompt}>
                     <Show when={touch().prompt}>
                       {(prompt) => language.t("session.review.why.prompt", { prompt: oneLine(prompt()) })}
                     </Show>
                   </span>
-                  <Show when={row().touches.length > 1}>
-                    <span class="shrink-0 text-v2-text-text-faint">
-                      {language.t("session.review.why.edits", { count: row().touches.length })}
-                    </span>
-                  </Show>
-                  <Show when={lastTouch()?.step}>
-                    {(step) => (
-                      <button
-                        type="button"
-                        class={`shrink-0 rounded underline-offset-2 hover:text-v2-text-text-base hover:underline ${FOCUS_RING}`}
-                        onClick={() => props.brief.openStep(lastTouch()!.sessionID, step())}
-                      >
-                        {language.t("session.review.action.show")}
-                      </button>
-                    )}
-                  </Show>
+                )}
+              </Show>
+              <Show when={open() && row().touches.length > 1}>
+                <span class="shrink-0 text-v2-text-text-faint">
+                  {language.t("session.review.why.edits", { count: row().touches.length })}
                 </span>
-              )}
-            </Show>
-          </div>
+              </Show>
+              <Show when={lastTouch()?.step}>
+                {(step) => (
+                  <button
+                    type="button"
+                    class={`shrink-0 rounded underline-offset-2 hover:text-v2-text-text-base hover:underline ${FOCUS_RING}`}
+                    onClick={() => props.brief.openStep(lastTouch()!.sessionID, step())}
+                  >
+                    {language.t("session.review.action.show")}
+                  </button>
+                )}
+              </Show>
+              <Show when={canUndo() && (open() || row().flags.length === 0)}>
+                <ButtonV2
+                  size="small"
+                  data-review-undo
+                  variant={confirming() ? "danger" : "ghost-muted"}
+                  disabled={props.brief.undoing()}
+                  onClick={() => void props.brief.undo(row().file)}
+                >
+                  {confirming()
+                    ? language.t("session.review.action.undoConfirm")
+                    : language.t("session.review.action.undo")}
+                </ButtonV2>
+              </Show>
+            </div>
+          </Show>
           <Show when={row().flags.length > 0}>
-            <ul class="flex max-h-30 min-w-0 flex-col overflow-y-auto">
-              <For each={row().flags}>{(flag) => <FlagRow brief={props.brief} file={props.file} flag={flag} />}</For>
-            </ul>
+            <div class="flex min-w-0 items-start gap-1">
+              <ul class="flex max-h-30 min-w-0 flex-1 flex-col overflow-y-auto">
+                <For each={shownFlags()}>{(flag) => <FlagRow brief={props.brief} file={props.file} flag={flag} />}</For>
+              </ul>
+              <button
+                type="button"
+                data-review-banner-more
+                aria-expanded={open()}
+                aria-label={language.t(open() ? "prompt.preflight.collapse" : "prompt.preflight.expand")}
+                class={`flex h-6 shrink-0 items-center gap-0.5 rounded text-12-regular tabular-nums text-v2-text-text-faint hover:text-v2-text-text-base ${FOCUS_RING}`}
+                onClick={() => setExpanded((value) => !value)}
+              >
+                <Show when={!open() && row().flags.length > 1}>+{row().flags.length - 1}</Show>
+                <Icon name="chevron-down" class={open() ? "rotate-180" : undefined} />
+              </button>
+            </div>
           </Show>
         </div>
       )}
@@ -472,11 +518,6 @@ export function ReviewFileBanner(props: { brief: ReviewBriefController; file: st
 export function ReviewFileActions(props: { brief: ReviewBriefController; file?: string }) {
   const language = useLanguage()
   const item = createMemo(() => (props.file ? props.brief.brief().byFile.get(props.file) : undefined))
-  const canUndo = () => {
-    const row = item()
-    return !!row && props.brief.canUndo(row)
-  }
-  const confirming = () => props.brief.pendingUndo() === props.file
   return (
     <Show when={item()}>
       {(row) => (
@@ -500,18 +541,6 @@ export function ReviewFileActions(props: { brief: ReviewBriefController; file?: 
           >
             {language.t("session.review.action.needsWork")}
           </ButtonV2>
-          <Show when={canUndo() || confirming()}>
-            <ButtonV2
-              size="small"
-              variant={confirming() ? "danger" : "ghost-muted"}
-              disabled={props.brief.undoing()}
-              onClick={() => void props.brief.undo(row().file)}
-            >
-              {confirming()
-                ? language.t("session.review.action.undoConfirm")
-                : language.t("session.review.action.undo")}
-            </ButtonV2>
-          </Show>
         </div>
       )}
     </Show>

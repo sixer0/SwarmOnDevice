@@ -38,7 +38,6 @@ export type PreflightRef = {
 
 export type PreflightTerms = {
   identifiers: string[]
-  words: string[]
 }
 
 export type ResolvedRef =
@@ -51,8 +50,6 @@ export type IdentifierMatch =
   | { kind: "defined"; identifier: string; path: string; line: number }
   | { kind: "used"; identifier: string; path: string; line: number }
   | { kind: "missing"; identifier: string }
-
-export type WordFile = { path: string; words: string[] }
 
 export type PreflightSessionInfo = {
   id: string
@@ -157,65 +154,17 @@ export function extractTerms(text: string, refs: PreflightRef[]): PreflightTerms
   const identifiers = unique([...quoted, ...shaped, ...called])
     .filter((value) => !BUILTIN_ERROR.test(value))
     .slice(0, 3)
-  const taken = new Set(identifiers.map((value) => value.toLowerCase()))
-  const words = unique(
-    Array.from(clean.toLowerCase().matchAll(/\p{L}[\p{L}\p{N}-]{3,}/gu), (match) => match[0]).filter(
-      (word) => !STOPWORDS.has(word) && !taken.has(word),
-    ),
-  ).slice(0, 5)
-  return { identifiers, words }
+  return { identifiers }
 }
 
 function unique<T>(values: T[]) {
   return [...new Set(values)]
 }
 
-function nameTokens(name: string) {
-  return name
-    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
-    .toLowerCase()
-    .split(/[^\p{L}\p{N}]+/u)
-    .filter(Boolean)
-}
-
 function wordHits(word: string, token: string) {
   if (word === token) return true
   // Light stemming: "rounding" should find round.ts and "invoices" invoice.ts, without "test" finding "contest".
   return token.length >= 4 && word.length >= 4 && (word.startsWith(token) || token.startsWith(word))
-}
-
-export function rankWordFiles(results: Record<string, string[]>, skip: Set<string>): WordFile[] {
-  const scores = new Map<string, { named: Set<string>; folder: Set<string> }>()
-  Object.entries(results).forEach(([word, paths]) =>
-    paths
-      .filter((path) => !GENERATED_PATH.test(path) && !skip.has(path))
-      .forEach((path) => {
-        const segments = path.split("/")
-        const score = scores.get(path) ?? { named: new Set<string>(), folder: new Set<string>() }
-        if (nameTokens(segments.at(-1)!.replace(/\.[^.]+$/, "")).some((token) => wordHits(word, token))) {
-          score.named.add(word)
-        }
-        if (segments.slice(0, -1).flatMap(nameTokens).some((token) => wordHits(word, token))) score.folder.add(word)
-        scores.set(path, score)
-      }),
-  )
-  return [...scores.entries()]
-    .filter(([, score]) => score.named.size > 0)
-    .map(([path, score]) => ({
-      path,
-      words: [...score.named],
-      score: score.named.size * 2 + [...score.folder].filter((word) => !score.named.has(word)).length,
-    }))
-    .sort(
-      (a, b) =>
-        b.score - a.score || Number(isTestPath(a.path)) - Number(isTestPath(b.path)) || a.path.length - b.path.length,
-    )
-    .slice(0, 3)
-    .map((item) => ({ path: item.path, words: item.words }))
-}
-
-function isTestPath(path: string) {
-  return /(^|[./_-])(test|tests|spec|specs|__tests__)([./_-]|$)/.test(path)
 }
 
 export function definitionPattern(identifier: string) {
@@ -261,44 +210,6 @@ function meaningfulWords(text: string) {
   )
 }
 
-export function detectChecks(input: { rootFiles: string[]; packageJson?: string; makefile?: string }) {
-  const has = (name: string) => input.rootFiles.includes(name)
-  const scripts = packageScripts(input.packageJson)
-  const runner = has("bun.lock") || has("bun.lockb") ? "bun" : has("pnpm-lock.yaml") ? "pnpm" : has("yarn.lock") ? "yarn" : "npm"
-  const fromPackage = ["typecheck", "test", "lint"]
-    .filter((name) => scripts[name] && !/no test specified/i.test(scripts[name]!))
-    .map((name) => `${runner} run ${name}`)
-  return [
-    ...fromPackage,
-    ...(has("Cargo.toml") ? ["cargo test"] : []),
-    ...(has("go.mod") ? ["go test ./..."] : []),
-    ...(has("pyproject.toml") || has("pytest.ini") || has("tox.ini") ? ["pytest"] : []),
-    ...(has("build.gradle") || has("build.gradle.kts") ? ["./gradlew test"] : []),
-    ...(has("pom.xml") ? ["mvn test"] : []),
-    ...(fromPackage.length === 0 && input.makefile && /^test\s*:/m.test(input.makefile) ? ["make test"] : []),
-  ].slice(0, 3)
-}
-
-function packageScripts(json: string | undefined): Record<string, string | undefined> {
-  if (!json) return {}
-  try {
-    const parsed = JSON.parse(json) as { scripts?: Record<string, string> }
-    return parsed.scripts ?? {}
-  } catch {
-    // A half-edited package.json must not take the composer with it; there is simply nothing to suggest.
-    return {}
-  }
-}
-
-export function mentionsChecks(text: string, commands: string[]) {
-  if (commands.some((command) => text.includes(command))) return true
-  return /\b(run|running|execute|verify|verified|make sure)\b[^.\n]*\b(tests?|typecheck|type-check|lint|build)\b/i.test(text)
-}
-
-export function checksInstruction(commands: string[]) {
-  return commands.map((command) => `\`${command}\``).join(", ")
-}
-
 // The composer stores character offsets on every part, so edits rebuild them rather than patching one part.
 function reindex(parts: Prompt): Prompt {
   let offset = 0
@@ -321,18 +232,6 @@ export function replaceInPrompt(parts: Prompt, from: string, to: string): Prompt
   )
 }
 
-export function appendToPrompt(parts: Prompt, text: string): Prompt {
-  const last = parts.findLastIndex((part) => part.type === "text")
-  if (last === -1) return reindex([...parts, { type: "text", content: text, start: 0, end: 0 }])
-  return reindex(
-    parts.map((part, index) =>
-      index === last && part.type === "text"
-        ? { ...part, content: `${part.content.replace(/\s+$/, "")}\n\n${text}` }
-        : part,
-    ),
-  )
-}
-
 export function lineWindow(line: number) {
   return { start: Math.max(1, line - 15), end: line + 15 }
 }
@@ -340,39 +239,29 @@ export function lineWindow(line: number) {
 export type PreflightFacts = {
   refs: ResolvedRef[]
   identifiers: IdentifierMatch[]
-  files: WordFile[]
   dirty: string[]
   busy: { id: string; title: string; files: string[] }[]
   similar: PreflightSessionInfo[]
-  checks: string[]
 }
 
 export type PreflightItem =
   | { key: string; kind: "trace"; path: string; line: number }
   | { key: string; kind: "mention"; path: string; line?: number }
   | { key: string; kind: "definition"; path: string; line: number; identifier: string }
-  | { key: string; kind: "use"; path: string; line: number; identifier: string }
-  | { key: string; kind: "word"; path: string; words: string[] }
   | { key: string; kind: "typo"; raw: string; written: string; path: string; line?: number }
   | { key: string; kind: "missing-path"; path: string }
   | { key: string; kind: "missing-identifier"; identifier: string }
   | { key: string; kind: "busy"; id: string; title: string; overlap: string[] }
-  | { key: string; kind: "dirty"; count: number; overlap: string[] }
+  | { key: string; kind: "dirty"; overlap: string[] }
   | { key: string; kind: "similar"; id: string; title: string; updated: number }
-  | { key: string; kind: "checks"; commands: string[] }
 
 export const isAttachItem = (
   item: PreflightItem,
-): item is Extract<PreflightItem, { kind: "trace" | "mention" | "definition" | "use" | "word" }> =>
-  item.kind === "trace" ||
-  item.kind === "mention" ||
-  item.kind === "definition" ||
-  item.kind === "use" ||
-  item.kind === "word"
+): item is Extract<PreflightItem, { kind: "trace" | "mention" | "definition" }> =>
+  item.kind === "trace" || item.kind === "mention" || item.kind === "definition"
 
 export function buildItems(input: {
   facts: PreflightFacts
-  text: string
   attached: string[]
   dismissed: Record<string, boolean | undefined>
   isolated: boolean
@@ -385,7 +274,7 @@ export function buildItems(input: {
     return true
   }
 
-  // Most specific evidence first. Once a trace claims a file, a filename guess must not list it a second time.
+  // Most specific evidence first. Once a trace claims a file, a definition must not list it a second time.
   const refs = input.facts.refs.flatMap((resolved): PreflightItem[] => {
     if (resolved.kind === "found") {
       if (!take(resolved.path)) return []
@@ -415,20 +304,18 @@ export function buildItems(input: {
     if (match.kind === "missing") {
       return [{ key: `missing-id:${match.identifier}`, kind: "missing-identifier", identifier: match.identifier }]
     }
-    if (!take(match.path)) return []
+    // A use could be anywhere and says little. The name exists, which is all the draft needed to know.
+    if (match.kind === "used" || !take(match.path)) return []
     return [
       {
         key: `id:${match.identifier}`,
-        kind: match.kind === "defined" ? "definition" : "use",
+        kind: "definition",
         path: match.path,
         line: match.line,
         identifier: match.identifier,
       },
     ]
   })
-  const files = input.facts.files.flatMap((file): PreflightItem[] =>
-    take(file.path) ? [{ key: `word:${file.path}`, kind: "word", path: file.path, words: file.words }] : [],
-  )
 
   const named = new Set([
     ...attached,
@@ -447,10 +334,9 @@ export function buildItems(input: {
         }),
       )
   const dirtyOverlap = input.facts.dirty.filter((file) => named.has(file))
+  // Uncommitted work is normal. It is only worth a line when the draft is about those same files.
   const dirty: PreflightItem[] =
-    !input.isolated && input.facts.dirty.length > 0
-      ? [{ key: "dirty", kind: "dirty", count: input.facts.dirty.length, overlap: dirtyOverlap }]
-      : []
+    !input.isolated && dirtyOverlap.length > 0 ? [{ key: "dirty", kind: "dirty", overlap: dirtyOverlap }] : []
   const similar = input.facts.similar.map(
     (session): PreflightItem => ({
       key: `similar:${session.id}`,
@@ -460,12 +346,10 @@ export function buildItems(input: {
       updated: session.updated,
     }),
   )
-  const checks: PreflightItem[] =
-    input.facts.checks.length > 0 && !mentionsChecks(input.text, input.facts.checks)
-      ? [{ key: "checks", kind: "checks", commands: input.facts.checks }]
-      : []
-
-  return [...refs, ...identifiers, ...files, ...busy, ...dirty, ...similar, ...checks].filter(
-    (item) => !input.dismissed[item.key],
+  // Only the first row shows until asked, so what could go wrong comes before what could merely help.
+  const [wrong, helpful] = [...refs, ...identifiers].reduce<[PreflightItem[], PreflightItem[]]>(
+    ([bad, good], item) => (isAttachItem(item) ? [bad, [...good, item]] : [[...bad, item], good]),
+    [[], []],
   )
+  return [...wrong, ...busy, ...dirty, ...helpful, ...similar].filter((item) => !input.dismissed[item.key])
 }

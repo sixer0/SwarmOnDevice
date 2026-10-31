@@ -1,14 +1,11 @@
 import type {
   GlobalAgents,
-  Part,
   PermissionRequest,
   QuestionRequest,
   Session,
   SessionStatus,
 } from "@opencode-ai/sdk/v2/client"
 import { canonicalPathKey } from "@/utils/path-key"
-
-export const AGENT_BOARD_FINISHED_LIMIT = 6
 
 type BoardNotification = { type: "turn-complete" | "error"; time: number; error?: unknown }
 
@@ -30,13 +27,11 @@ export type AgentBoardNeed =
 
 export type AgentBoardRunning = { key: string; root: Session; status: SessionStatus }
 export type AgentBoardFailed = { key: string; root: Session; error: unknown; time: number }
-export type AgentBoardFinished = { key: string; root: Session; time: number }
 
 export type AgentBoard = {
   needs: AgentBoardNeed[]
   running: AgentBoardRunning[]
   failed: AgentBoardFailed[]
-  finished: AgentBoardFinished[]
   /** Session ids the board cannot place yet; the controller resolves them and the board recomputes. */
   missing: string[]
 }
@@ -116,8 +111,7 @@ export function buildAgentBoard(input: AgentBoardInput): AgentBoard {
   const settled = input.recent.flatMap((session) => {
     if (session.parentID || active.has(session.id) || !input.inScope(session.directory)) return []
     const unseen = input.unseen(session.id).filter((notification) => !isUserAbort(notification))
-    const latest = unseen.at(-1)
-    return latest ? [{ session, unseen, latest }] : []
+    return unseen.length > 0 ? [{ session, unseen }] : []
   })
 
   return {
@@ -128,10 +122,6 @@ export function buildAgentBoard(input: AgentBoardInput): AgentBoard {
       if (!error) return []
       return [{ key: item.session.id, root: item.session, error: error.error, time: error.time }]
     }),
-    finished: settled
-      .filter((item) => item.unseen.every((notification) => notification.type !== "error"))
-      .map((item) => ({ key: item.session.id, root: item.session, time: item.latest.time }))
-      .sort((a, b) => b.time - a.time),
     missing: [...missing],
   }
 }
@@ -148,36 +138,6 @@ export function inlineQuestion(request: QuestionRequest) {
   const question = request.questions.length === 1 ? request.questions[0] : undefined
   if (!question || question.multiple || question.options.length === 0) return
   return question
-}
-
-export type AgentActivityKey =
-  | "ui.sessionTurn.status.runningCommands"
-  | "ui.sessionTurn.status.makingEdits"
-  | "ui.sessionTurn.status.searchingWeb"
-  | "ui.sessionTurn.status.delegating"
-  | "ui.sessionTurn.status.gatheringContext"
-  | "ui.sessionTurn.status.thinking"
-
-const TOOL_ACTIVITY: Record<string, AgentActivityKey> = {
-  bash: "ui.sessionTurn.status.runningCommands",
-  edit: "ui.sessionTurn.status.makingEdits",
-  write: "ui.sessionTurn.status.makingEdits",
-  apply_patch: "ui.sessionTurn.status.makingEdits",
-  webfetch: "ui.sessionTurn.status.searchingWeb",
-  websearch: "ui.sessionTurn.status.searchingWeb",
-  task: "ui.sessionTurn.status.delegating",
-  read: "ui.sessionTurn.status.gatheringContext",
-  grep: "ui.sessionTurn.status.gatheringContext",
-  glob: "ui.sessionTurn.status.gatheringContext",
-  list: "ui.sessionTurn.status.gatheringContext",
-}
-
-/** The agent's current step, read off the newest part of its latest message. */
-export function agentActivity(parts: readonly Part[] | undefined): AgentActivityKey | undefined {
-  const part = parts?.findLast((item) => item.type === "tool" || item.type === "reasoning" || item.type === "text")
-  if (!part) return
-  if (part.type !== "tool") return "ui.sessionTurn.status.thinking"
-  return TOOL_ACTIVITY[part.tool] ?? "ui.sessionTurn.status.thinking"
 }
 
 /**

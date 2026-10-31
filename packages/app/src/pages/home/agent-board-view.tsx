@@ -26,14 +26,13 @@ type RowKeys = Partial<Record<string, () => void>>
 
 const rowKeys = new WeakMap<Element, () => RowKeys>()
 
-function Section(props: { name: string; title: string; count: number; action?: JSX.Element; children: JSX.Element }) {
+function Section(props: { name: string; title: string; count: number; children: JSX.Element }) {
   return (
     <Show when={props.count > 0}>
       <div data-agent-section={props.name} class="flex flex-col gap-1">
         <div class="flex h-7 items-center gap-2 pl-3 pr-1">
           <span class={SECTION_LABEL}>{props.title}</span>
           <span class="text-v2-text-text-faint tabular-nums [font-weight:440]">{props.count}</span>
-          {props.action}
         </div>
         <div class="flex flex-col gap-1" role="list">
           {props.children}
@@ -43,7 +42,7 @@ function Section(props: { name: string; title: string; count: number; action?: J
   )
 }
 
-function RowTitle(props: { board: AgentBoardController; root: Session; loading?: boolean; trailing?: JSX.Element }) {
+function RowTitle(props: { board: AgentBoardController; root: Session; loading?: boolean }) {
   const project = () => props.board.project(props.root.directory)
   const name = () => displayName(project() ?? { worktree: props.root.directory })
   return (
@@ -66,25 +65,32 @@ function RowTitle(props: { board: AgentBoardController; root: Session; loading?:
       <Show when={props.board.showProjectName()}>
         <span class="shrink-0 truncate text-v2-text-text-muted [font-weight:440]">{name()}</span>
       </Show>
-      {props.trailing}
     </button>
   )
 }
 
+// The letter shows only on the row that has the keyboard, which is the only place it works.
 function KeyButton(props: {
   label: string
   keys: string[]
   variant: "ghost-muted" | "outline" | "contrast" | "neutral"
   disabled: boolean
+  class?: string
   onClick: () => void
 }) {
   return (
-    <ButtonV2 type="button" variant={props.variant} disabled={props.disabled} onClick={props.onClick}>
+    <ButtonV2
+      type="button"
+      variant={props.variant}
+      disabled={props.disabled}
+      class={props.class}
+      onClick={props.onClick}
+    >
       {props.label}
       <KeybindV2
         keys={props.keys}
         variant="ghost"
-        class="ml-1.5 [&_[data-slot=keybind-v2-label]]:text-current [&_[data-slot=keybind-v2-label]]:opacity-70"
+        class="ml-1.5 !hidden group-focus/agent:!inline-flex [&_[data-slot=keybind-v2-label]]:text-current [&_[data-slot=keybind-v2-label]]:opacity-70"
       />
     </ButtonV2>
   )
@@ -124,40 +130,35 @@ function NeedRow(props: { board: AgentBoardController; need: AgentBoardNeed }) {
       role="listitem"
       class={`${ROW} border border-v2-border-border-base px-3 pb-2.5`}
     >
-      <RowTitle board={props.board} root={props.need.root} />
       <Show
         when={props.need.kind === "permission" && props.need}
         keyed
-        fallback={<QuestionBody board={props.board} need={props.need as QuestionNeed} busy={busy()} />}
+        fallback={
+          <>
+            <RowTitle board={props.board} root={props.need.root} />
+            <QuestionBody board={props.board} need={props.need as QuestionNeed} busy={busy()} />
+          </>
+        }
       >
         {(item) => (
           <>
-            <pre
-              data-agent-detail
-              class={`
-                ml-6 max-h-24 overflow-auto whitespace-pre-wrap break-all rounded-[6px] px-2.5 py-1.5
-                bg-v2-background-bg-layer-02 font-mono text-[12px] leading-[18px] text-v2-text-text-base select-text
-              `}
-            >
-              {permissionDetail(item.request)}
-            </pre>
-            <div class="mt-2 flex flex-wrap items-center justify-end gap-1.5 pl-6">
-              <span class="mr-auto min-w-0 truncate text-v2-text-text-muted [font-weight:440]">
-                {permissionDescription(language, item.request.permission)}
-              </span>
-              <KeyButton
-                label={language.t("ui.permission.deny")}
-                keys={["D"]}
-                variant="ghost-muted"
-                disabled={busy()}
-                onClick={() => props.board.allow(item, "reject")}
-              />
+            <div class="flex min-w-0 items-center gap-1.5">
+              <RowTitle board={props.board} root={props.need.root} />
+              {/* "Allow always" is a standing decision, so it is offered once the row has someone's attention. */}
               <KeyButton
                 label={language.t("ui.permission.allowAlways")}
                 keys={["⇧", "A"]}
-                variant="outline"
+                variant="ghost-muted"
+                class="md:!hidden md:group-hover/agent:!inline-flex md:group-focus/agent:!inline-flex md:group-focus-within/agent:!inline-flex"
                 disabled={busy()}
                 onClick={() => props.board.allow(item, "always")}
+              />
+              <KeyButton
+                label={language.t("ui.permission.deny")}
+                keys={["D"]}
+                variant="outline"
+                disabled={busy()}
+                onClick={() => props.board.allow(item, "reject")}
               />
               <KeyButton
                 label={language.t("ui.permission.allowOnce")}
@@ -167,6 +168,15 @@ function NeedRow(props: { board: AgentBoardController; need: AgentBoardNeed }) {
                 onClick={() => props.board.allow(item, "once")}
               />
             </div>
+            <pre
+              data-agent-detail
+              class={`
+                ml-6 max-h-24 overflow-auto whitespace-pre-wrap break-all rounded-[6px] px-2.5 py-1.5
+                bg-v2-background-bg-layer-02 font-mono text-[12px] leading-[18px] text-v2-text-text-base select-text
+              `}
+            >
+              {permissionDetail(item.request)}
+            </pre>
           </>
         )}
       </Show>
@@ -217,29 +227,20 @@ function QuestionBody(props: { board: AgentBoardController; need: QuestionNeed; 
   )
 }
 
-function permissionDescription(language: ReturnType<typeof useLanguage>, permission: string) {
-  const key = `settings.permissions.tool.${permission}.description`
-  const value = language.t(key as Parameters<typeof language.t>[0])
-  return value === key ? language.t("notification.permission.title") : value
-}
-
-function statusLine(
-  language: ReturnType<typeof useLanguage>,
-  status: SessionStatus,
-  activity: ReturnType<AgentBoardController["activity"]>,
-) {
-  if (status.type === "retry")
-    return language.t("ui.sessionTurn.retry.attemptLine", { line: status.message, attempt: status.attempt })
-  return language.t(activity ?? "ui.sessionTurn.status.thinking")
-}
-
-function RunningRow(props: { board: AgentBoardController; root: Session; status: SessionStatus; now: number }) {
+/** A running agent is already in the session list below. One that keeps failing and retrying is not fine. */
+function RetryingRow(props: {
+  board: AgentBoardController
+  root: Session
+  status: Extract<SessionStatus, { type: "retry" }>
+  now: number
+}) {
   const language = useLanguage()
   const elapsed = () => {
     props.now
     return getRelativeTime(new Date(props.board.since(props.root)).toISOString(), language.t)
   }
-  const retrying = () => props.status.type === "retry"
+  const line = () =>
+    language.t("ui.sessionTurn.retry.attemptLine", { line: props.status.message, attempt: props.status.attempt })
   return (
     <div
       ref={(element) =>
@@ -256,12 +257,8 @@ function RunningRow(props: { board: AgentBoardController; root: Session; status:
     >
       <div class="flex min-w-0 items-center gap-2">
         <RowTitle board={props.board} root={props.root} loading />
-        <span
-          class="min-w-0 max-w-[40%] shrink truncate [font-weight:440]"
-          classList={{ "text-v2-state-fg-warning": retrying(), "text-v2-text-text-muted": !retrying() }}
-          title={retrying() ? statusLine(language, props.status, undefined) : undefined}
-        >
-          {statusLine(language, props.status, props.board.activity(props.root.id))}
+        <span class="min-w-0 max-w-[40%] shrink truncate text-v2-state-fg-warning [font-weight:440]" title={line()}>
+          {line()}
         </span>
         <span class="shrink-0 text-v2-text-text-faint tabular-nums [font-weight:440]">{elapsed()}</span>
         <KeyButton
@@ -276,14 +273,7 @@ function RunningRow(props: { board: AgentBoardController; root: Session; status:
   )
 }
 
-function SettledRow(props: {
-  board: AgentBoardController
-  root: Session
-  kind: "failed" | "finished"
-  detail?: string
-  time: number
-  now: number
-}) {
+function FailedRow(props: { board: AgentBoardController; root: Session; detail: string; time: number; now: number }) {
   const language = useLanguage()
   const when = () => {
     props.now
@@ -298,7 +288,7 @@ function SettledRow(props: {
         }))
       }
       data-agent-row
-      data-agent-kind={props.kind}
+      data-agent-kind="failed"
       tabIndex={0}
       role="listitem"
       class={`${ROW} px-3`}
@@ -310,34 +300,32 @@ function SettledRow(props: {
           type="button"
           variant="ghost-muted"
           size="small"
-          class="shrink-0"
+          class="shrink-0 md:opacity-0 md:group-hover/agent:opacity-100 md:group-focus/agent:opacity-100 md:focus-visible:opacity-100"
           icon={<IconV2 name="close" />}
           aria-label={language.t("common.dismiss")}
           title={language.t("common.dismiss")}
           onClick={() => props.board.dismiss(props.root.id)}
         />
       </div>
-      <Show when={props.detail}>
-        <div class="truncate pb-2 pl-6 text-v2-state-fg-danger [font-weight:440]" title={props.detail}>
-          {props.detail}
-        </div>
-      </Show>
+      <div class="truncate pb-2 pl-6 text-v2-state-fg-danger [font-weight:440]" title={props.detail}>
+        {props.detail}
+      </div>
     </div>
   )
 }
 
-export function AgentBoardView(props: { board: AgentBoardController; hasSessions: boolean }) {
+export function AgentBoardView(props: { board: AgentBoardController }) {
   const language = useLanguage()
   const now = createMinuteClock()
   let root: HTMLElement | undefined
   let handledFocusRequest = 0
 
   const rows = () => [...(root?.querySelectorAll<HTMLElement>("[data-agent-row]") ?? [])]
-  const total = () =>
-    props.board.board.needs.length +
-    props.board.board.running.length +
-    props.board.board.failed.length +
-    props.board.board.finished.length
+  const retrying = () =>
+    props.board.board.running.flatMap((item) =>
+      item.status.type === "retry" ? [{ root: item.root, status: item.status }] : [],
+    )
+  const total = () => props.board.board.needs.length + retrying().length + props.board.board.failed.length
 
   // Answering a request removes its row. The next one takes over the keyboard, so a run of approvals is just "a a a".
   let refocusIndex: number | undefined
@@ -361,8 +349,6 @@ export function AgentBoardView(props: { board: AgentBoardController; hasSessions
     handledFocusRequest = request
     queueMicrotask(() => rows()[0]?.focus())
   })
-
-  createEffect(() => props.board.syncActivity(props.board.board.running))
 
   const onKeyDown = (event: KeyboardEvent) => {
     if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return
@@ -392,7 +378,7 @@ export function AgentBoardView(props: { board: AgentBoardController; hasSessions
       ref={root}
       data-component="home-agent-board"
       aria-label={language.t("home.agents.label")}
-      class="flex flex-col gap-3 pb-5 pt-3 pr-3"
+      class="flex flex-col gap-3 pr-3 pt-3 empty:hidden"
       onKeyDown={onKeyDown}
     >
       <Section name="needs" title={language.t("home.agents.needsYou")} count={props.board.board.needs.length}>
@@ -402,10 +388,9 @@ export function AgentBoardView(props: { board: AgentBoardController; hasSessions
       <Section name="failed" title={language.t("home.agents.failed")} count={props.board.board.failed.length}>
         <For each={props.board.board.failed}>
           {(item) => (
-            <SettledRow
+            <FailedRow
               board={props.board}
               root={item.root}
-              kind="failed"
               detail={errorMessage(item.error, language.t("notification.session.error.fallbackDescription"))}
               time={item.time}
               now={now()}
@@ -414,30 +399,9 @@ export function AgentBoardView(props: { board: AgentBoardController; hasSessions
         </For>
       </Section>
 
-      <Section name="running" title={language.t("home.agents.running")} count={props.board.board.running.length}>
-        <For each={props.board.board.running}>
-          {(item) => <RunningRow board={props.board} root={item.root} status={item.status} now={now()} />}
-        </For>
-      </Section>
-
-      <Section
-        name="finished"
-        title={language.t("home.agents.finished")}
-        count={props.board.board.finished.length}
-        action={
-          <ButtonV2
-            type="button"
-            variant="ghost-muted"
-            size="small"
-            class="ml-auto"
-            onClick={props.board.clearFinished}
-          >
-            {language.t("common.clear")}
-          </ButtonV2>
-        }
-      >
-        <For each={props.board.finishedVisible()}>
-          {(item) => <SettledRow board={props.board} root={item.root} kind="finished" time={item.time} now={now()} />}
+      <Section name="running" title={language.t("home.agents.running")} count={retrying().length}>
+        <For each={retrying()}>
+          {(item) => <RetryingRow board={props.board} root={item.root} status={item.status} now={now()} />}
         </For>
       </Section>
 
@@ -453,12 +417,6 @@ export function AgentBoardView(props: { board: AgentBoardController; hasSessions
           >
             {language.t("home.agents.retry")}
           </ButtonV2>
-        </div>
-      </Show>
-
-      <Show when={total() === 0 && !props.board.status.failed() && props.hasSessions}>
-        <div data-agent-state="quiet" class="pl-3 text-v2-text-text-faint [font-weight:440]">
-          {props.board.status.checking() ? language.t("home.agents.checking") : language.t("home.agents.quiet")}
         </div>
       </Show>
     </section>

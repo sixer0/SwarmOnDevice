@@ -11,8 +11,6 @@ import { errorMessage } from "@/pages/layout/helpers"
 import { canonicalPathKey } from "@/utils/path-key"
 import { showToast } from "@/utils/toast"
 import {
-  AGENT_BOARD_FINISHED_LIMIT,
-  agentActivity,
   agentSnapshotSessions,
   agentSnapshotWrites,
   buildAgentBoard,
@@ -23,8 +21,6 @@ import type { HomeController } from "./home-controller"
 import type { HomeSessionsController } from "./home-sessions-controller"
 
 const AGENT_SNAPSHOT_INTERVAL_MS = 30_000
-// Running rows read the agent's current step from its messages; past this many the cost is not worth the label.
-const AGENT_ACTIVITY_SYNC_LIMIT = 8
 
 type ServerContext = ReturnType<ReturnType<typeof useGlobal>["ensureServerCtx"]>
 
@@ -79,7 +75,7 @@ function createBoardState(input: {
   const board = createMemo((): AgentBoard => {
     const ctx = input.context()
     const conn = input.server()
-    if (!ctx || !conn) return { needs: [], running: [], failed: [], finished: [], missing: [] }
+    if (!ctx || !conn) return { needs: [], running: [], failed: [], missing: [] }
     const key = ServerConnection.key(conn)
     const session = ctx.sync.session.data
     return buildAgentBoard({
@@ -141,7 +137,7 @@ export function createAgentBoardController(home: HomeController, sessions: HomeS
   })
 
   // Rows keep their identity across updates: rebuilding them would drop keyboard focus on every status event.
-  const [board, setBoard] = createStore<AgentBoard>({ needs: [], running: [], failed: [], finished: [], missing: [] })
+  const [board, setBoard] = createStore<AgentBoard>({ needs: [], running: [], failed: [], missing: [] })
   createEffect(() => setBoard(reconcile(live(), { key: "key" })))
 
   const [pending, setPending] = createStore<Record<string, boolean>>({})
@@ -199,18 +195,11 @@ export function createAgentBoardController(home: HomeController, sessions: HomeS
 
   return {
     board,
-    finishedVisible: () => board.finished.slice(0, AGENT_BOARD_FINISHED_LIMIT),
     pending: (key: string) => !!pending[key],
     status: {
-      checking: () => snapshot.isLoading,
       failed: () => snapshot.isError,
       retrying: () => snapshot.isFetching,
       retry: () => void snapshot.refetch(),
-    },
-    activity: (sessionID: string) => {
-      const data = context()?.sync.session.data
-      const message = data?.message[sessionID]?.at(-1)
-      return agentActivity(message ? data?.part[message.id] : undefined)
     },
     since: (root: Session) =>
       context()?.sync.session.data.message[root.id]?.findLast((message) => message.role === "user")?.time.created ??
@@ -229,12 +218,6 @@ export function createAgentBoardController(home: HomeController, sessions: HomeS
     server: () => home.selection.value().server,
     showProjectName: sessions.session.showProjectName,
     open: (root: Session) => sessions.session.open(root),
-    syncActivity: (running: readonly { key: string }[]) => {
-      const ctx = context()
-      running.slice(0, AGENT_ACTIVITY_SYNC_LIMIT).forEach((item) => {
-        void ctx?.sync.session.sync(item.key).catch(() => undefined)
-      })
-    },
     allow: (need: Extract<AgentBoardNeed, { kind: "permission" }>, reply: "once" | "always" | "reject") =>
       act(
         need.key,
@@ -254,7 +237,6 @@ export function createAgentBoardController(home: HomeController, sessions: HomeS
         return ctx.sdk.api.session.interrupt({ sessionID: root.id })
       }),
     dismiss: markViewed,
-    clearFinished: () => batch(() => board.finished.forEach((item) => markViewed(item.key))),
   }
 }
 

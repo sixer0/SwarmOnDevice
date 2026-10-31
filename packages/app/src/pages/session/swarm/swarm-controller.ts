@@ -30,25 +30,24 @@ export function createSwarm(input: {
   serverSync: ReturnType<typeof useServerSync>
   autoResponds: (request: PermissionRequest, directory: string) => boolean
   openLane: (sessionID: string, step?: MapStep) => void
-  draftToComposer: (text: string) => boolean
-  onClose: () => void
+  draftToComposer: (text: string) => void
+  // History is read and the model built only while someone is looking at the agents.
+  watching: Accessor<boolean>
 }) {
   const language = useLanguage()
   const session = () => input.serverSync().session
   const data = () => session().data
 
-  const [opened, setOpened] = createSignal(false)
   const [view, setView] = createStore({
     selected: undefined as string | undefined,
-    path: undefined as string | undefined,
-    step: undefined as string | undefined,
+    // The row the reader folded. Without it the selection is always open.
+    folded: false,
     discoverFailed: false,
     loading: {} as Record<string, boolean | undefined>,
     failed: {} as Record<string, boolean | undefined>,
     pending: {} as Record<string, boolean | undefined>,
     draft: {} as Record<string, string | undefined>,
     sent: undefined as string | undefined,
-    alongside: [] as string[],
   })
 
   const rootID = createMemo(() => {
@@ -75,11 +74,12 @@ export function createSwarm(input: {
         .catch(() => undefined)
   })
 
-  const treeIDs = (id: string) => sessionTree(id, data().info).map((item) => item.id)
   const laneIDs = createMemo(() => {
     const id = rootID()
     if (!id) return []
-    return [id, ...view.alongside].flatMap(treeIDs).filter((item) => !!data().info[item])
+    return sessionTree(id, data().info)
+      .map((item) => item.id)
+      .filter((item) => !!data().info[item])
   })
 
   // ---- Discovery: who is in this run. Sessions started later arrive through session.created. ----------------------
@@ -99,7 +99,7 @@ export function createSwarm(input: {
     })
   }
 
-  // The header pulse needs only the direct children, once per root. Opening the view walks the whole tree.
+  // Knowing there are agents at all takes only the direct children, once per root. Looking at them walks the whole tree.
   createEffect(
     on(rootID, (id) => {
       if (!id || discovered.has(id)) return
@@ -110,36 +110,14 @@ export function createSwarm(input: {
 
   const pulse = createMemo(() => {
     const id = rootID()
-    if (!id) return { agents: 0, needs: 0, active: 0, cost: 0, dots: [] }
+    if (!id) return { agents: 0, needs: 0 }
     const current = data()
     return swarmPulse({
       rootID: id,
       info: current.info,
-      status: current.session_status,
       permission: current.permission,
       question: current.question,
     })
-  })
-
-  // ---- Others working in the same project right now. Once seen they stay, so a lane does not vanish as it finishes. --
-
-  createEffect(() => {
-    if (!opened()) return
-    const id = rootID()
-    const current = data()
-    const busy = (input.sync().data.session as Session[])
-      .filter((item) => !item.parentID && !item.time.archived && item.id !== id)
-      .filter(
-        (item) =>
-          (current.session_status[item.id]?.type ?? "idle") !== "idle" ||
-          (current.permission[item.id]?.length ?? 0) > 0 ||
-          (current.question[item.id]?.length ?? 0) > 0,
-      )
-      .map((item) => item.id)
-    const fresh = busy.filter((item) => !untrack(() => view.alongside).includes(item))
-    if (fresh.length === 0) return
-    setView("alongside", (list) => [...list, ...fresh])
-    void discoverAll(fresh, true)
   })
 
   // ---- History: every lane reads its messages through the shared session cache, pinned while the view is open. ------
@@ -177,7 +155,7 @@ export function createSwarm(input: {
   }
 
   createEffect(() => {
-    if (!opened()) return
+    if (!input.watching()) return
     laneIDs().forEach((id) => {
       if (pinned.has(id)) return
       pinned.add(id)
@@ -199,7 +177,7 @@ export function createSwarm(input: {
       rootID,
       () => {
         release()
-        setView({ alongside: [], selected: undefined, path: undefined, step: undefined, sent: undefined })
+        setView({ selected: undefined, folded: false, sent: undefined })
         setView("failed", reconcile({}))
         setView("loading", reconcile({}))
       },
@@ -212,7 +190,7 @@ export function createSwarm(input: {
   const [now, setNow] = createSignal(Date.now())
   const active = createMemo(() => laneIDs().some((id) => (data().session_status[id]?.type ?? "idle") !== "idle"))
   createEffect(() => {
-    if (!opened() || !active()) return
+    if (!input.watching() || !active()) return
     const timer = setInterval(() => {
       if (document.visibilityState !== "hidden") setNow(Date.now())
     }, TICK_MS)
@@ -243,7 +221,7 @@ export function createSwarm(input: {
   )
 
   const model = createMemo<SwarmModel | undefined>(() => {
-    if (!opened()) return
+    if (!input.watching()) return
     const id = rootID()
     if (!id) return
     version()
@@ -253,7 +231,6 @@ export function createSwarm(input: {
       if (!current.info[id]) return
       return buildSwarm({
         rootID: id,
-        alongside: view.alongside,
         info: current.info,
         status: current.session_status,
         permission: current.permission,
@@ -350,13 +327,22 @@ export function createSwarm(input: {
 
   const stop = (lane: SwarmLane) => act(lane.id, () => input.sdk().api.session.interrupt({ sessionID: lane.id }))
 
-  const close = () => {
-    setOpened(false)
-    setView({ path: undefined, step: undefined })
-    release()
-    setView("loading", reconcile({}))
-    input.onClose()
-  }
+  // Looking away lets go of the history; looking again walks the tree for anything started since.
+  createEffect(
+    on(
+      input.watching,
+      (watching) => {
+        if (!watching) {
+          release()
+          setView("loading", reconcile({}))
+          return
+        }
+        const id = rootID()
+        if (id) void discoverAll([id], true)
+      },
+      { defer: true },
+    ),
+  )
 
   /** Puts the shared-file problem in front of whoever can still act on it: the last writer, else the main agent. */
   const check = (overlap: SwarmOverlap, write: SwarmWrite) => {
@@ -368,14 +354,12 @@ export function createSwarm(input: {
     const text = language.t("session.swarm.overlap.draft", { path: overlap.path, other: otherTitle })
     if (lane && canTell(lane)) {
       batch(() => {
-        setView("selected", lane.id)
+        setView({ selected: lane.id, folded: false, sent: undefined })
         setView("draft", lane.id, text)
-        setView("sent", undefined)
       })
-      return "tell" as const
+      return
     }
-    if (input.draftToComposer(text)) close()
-    return "composer" as const
+    input.draftToComposer(text)
   }
 
   return {
@@ -384,48 +368,22 @@ export function createSwarm(input: {
     pulse,
     rootID,
     selectedLane,
-    laneIDs,
-    opened,
     canTell,
     allow,
     answer,
     tell,
     stop,
     check,
-    close,
-    currentSessionID: input.sessionID,
-    toggle: () => {
-      if (opened()) return close()
-      batch(() => {
-        setOpened(true)
-        setView({ selected: undefined, sent: undefined, step: undefined })
-      })
-      const id = rootID()
-      if (id) void discoverAll([id], true)
-    },
-    open: (lane: SwarmLane, step?: MapStep) => {
-      input.openLane(lane.id, step)
-      close()
-    },
-    select: (id: string) => {
-      batch(() => {
-        setView("selected", id)
-        setView("step", undefined)
-        setView("sent", undefined)
-      })
-    },
-    pickStep: (lane: SwarmLane, stepID: string) => {
-      batch(() => {
-        setView("selected", lane.id)
-        setView("step", stepID)
-        setView("sent", undefined)
-      })
+    open: (lane: SwarmLane, step?: MapStep) => input.openLane(lane.id, step),
+    /** The selected row is the open one, so picking it again folds it. */
+    toggle: (id: string) => {
+      const same = selectedLane()?.id === id
+      setView({ selected: id, folded: same && !view.folded, sent: undefined })
     },
     setDraft: (id: string, value: string) => setView("draft", id, value),
-    highlight: (path: string | undefined) => setView("path", path),
     retry: () => {
       const id = rootID()
-      if (id) void discoverAll([id, ...view.alongside], true)
+      if (id) void discoverAll([id], true)
       laneIDs()
         .filter((item) => view.failed[item])
         .forEach((item) => queue.push(item))
