@@ -1391,6 +1391,8 @@ export const dict = {
   "session.spend.continue": "То {{amount}} идома додан",
   "session.spend.stop": "Дар ин ҷо қатъ кардан",
   "session.movesOn.hint": "То {{time}} ҷавоб нест? Агент бе ин идома медиҳад.",
+  "session.permission.cannotUndo": "Бекоркунӣ инро баргардонда наметавонад.",
+  "session.permission.leavesMachine": "Ин аз компютери шумо мебарояд. Бекоркунӣ онро баргардонда наметавонад.",
   "session.movedOn.title": "Бе шумо идома дод",
   "session.movedOn.allow": "Иҷозат додан ва идома",
   "session.movedOn.leave": "Гузоштан",

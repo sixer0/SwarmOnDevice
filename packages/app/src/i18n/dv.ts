@@ -1404,6 +1404,8 @@ export const dict = {
   "session.spend.continue": "{{amount}} އަށް ކުރިއަށް ގެންދާ",
   "session.spend.stop": "މިތާ ހުއްޓާ",
   "session.movesOn.hint": "{{time}} އަށް ޖަވާބެއް ނުލިބިއްޖެނަމަ އޭޖެންޓް މިއާ ނުލައި ކުރިއަށްދާނެ.",
+  "session.permission.cannotUndo": "އަންޑޫއަށް މިއެއް އަނބުރާ ނުގެނެވޭނެ.",
+  "session.permission.leavesMachine": "މިއީ ތިބާގެ މެޝިނުން ބޭރަށް ދާ އެއްޗެއް. އަންޑޫއަކުން އަނބުރާ ނުގެނެވޭނެ.",
   "session.movedOn.title": "ތިޔަބޭފުޅާއާ ނުލައި ކުރިއަށްދިޔައީ",
   "session.movedOn.allow": "ހުއްދަދީ ކުރިއަށްދާ",
   "session.movedOn.leave": "ދޫކޮށްލާ",

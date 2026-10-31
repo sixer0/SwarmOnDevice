@@ -1381,6 +1381,8 @@ export const dict = {
   "session.spend.continue": "Halt fram til {{amount}}",
   "session.spend.stop": "Steðga her",
   "session.movesOn.hint": "Einki svar áðrenn {{time}}? Agenturin heldur fram uttan hetta.",
+  "session.permission.cannotUndo": "Angra kann ikki fáa hetta aftur.",
+  "session.permission.leavesMachine": "Hetta fer av teldu tíni. Angra kann ikki taka tað aftur.",
   "session.movedOn.title": "Helt fram uttan teg",
   "session.movedOn.allow": "Loyv og halt fram",
   "session.movedOn.leave": "Lat vera",

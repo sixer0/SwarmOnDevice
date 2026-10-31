@@ -1384,6 +1384,8 @@ export const dict = {
   "session.spend.continue": "Halda áfram upp í {{amount}}",
   "session.spend.stop": "Stöðva hér",
   "session.movesOn.hint": "Ekkert svar fyrir {{time}}? Fulltrúinn heldur áfram án þessa.",
+  "session.permission.cannotUndo": "Afturkalla getur ekki endurheimt þetta.",
+  "session.permission.leavesMachine": "Þetta fer af tölvunni þinni. Afturkalla getur ekki tekið það til baka.",
   "session.movedOn.title": "Hélt áfram án þín",
   "session.movedOn.allow": "Leyfa og halda áfram",
   "session.movedOn.leave": "Láta vera",

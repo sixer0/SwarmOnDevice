@@ -1403,6 +1403,8 @@ export const dict = {
   "session.spend.continue": "{{amount}} အထိ ဆက်လုပ်ရန်",
   "session.spend.stop": "ဤနေရာတွင် ရပ်ရန်",
   "session.movesOn.hint": "{{time}} အထိ အဖြေမရှိလျှင် အေးဂျင့်သည် ဤအရာမပါဘဲ ဆက်လုပ်ပါမည်။",
+  "session.permission.cannotUndo": "ပြန်ဖျက်ခြင်းက ဒါကို ပြန်ယူမပေးနိုင်ပါ။",
+  "session.permission.leavesMachine": "ဒါက သင့်စက်မှ ထွက်သွားပါမည်။ ပြန်ဖျက်ခြင်းက ပြန်ယူမပေးနိုင်ပါ။",
   "session.movedOn.title": "သင်မပါဘဲ ဆက်လုပ်ခဲ့သည်",
   "session.movedOn.allow": "ခွင့်ပြုပြီး ဆက်လုပ်ရန်",
   "session.movedOn.leave": "ထားလိုက်ပါ",

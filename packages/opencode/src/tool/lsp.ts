@@ -57,6 +57,7 @@ export const LspTool = Tool.define(
             permission: "lsp",
             patterns: ["*"],
             always: ["*"],
+            harmless: ctx.trust ? true : undefined,
             metadata: meta,
           })
 

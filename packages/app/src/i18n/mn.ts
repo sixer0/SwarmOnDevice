@@ -1395,6 +1395,8 @@ export const dict = {
   "session.spend.continue": "{{amount}} хүртэл үргэлжлүүлэх",
   "session.spend.stop": "Энд зогсоох",
   "session.movesOn.hint": "{{time}} гэхэд хариу алга уу? Агент үүнгүйгээр үргэлжилнэ.",
+  "session.permission.cannotUndo": "Буцаах үйлдэл үүнийг сэргээж чадахгүй.",
+  "session.permission.leavesMachine": "Энэ таны компьютерээс гарна. Буцаах үйлдэл буцааж чадахгүй.",
   "session.movedOn.title": "Таныгүйгээр үргэлжилсэн",
   "session.movedOn.allow": "Зөвшөөрч үргэлжлүүлэх",
   "session.movedOn.leave": "Орхих",

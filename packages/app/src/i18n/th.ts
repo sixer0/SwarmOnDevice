@@ -1471,6 +1471,8 @@ export const dict = {
   "session.spend.continue": "ทำต่อถึง {{amount}}",
   "session.spend.stop": "หยุดที่นี่",
   "session.movesOn.hint": "ไม่มีคำตอบภายใน {{time}} หรือ เอเจนต์จะทำต่อโดยไม่มีสิ่งนี้",
+  "session.permission.cannotUndo": "การเลิกทำกู้คืนสิ่งนี้ไม่ได้",
+  "session.permission.leavesMachine": "สิ่งนี้จะออกจากเครื่องของคุณ การเลิกทำเรียกคืนไม่ได้",
   "session.movedOn.title": "ทำต่อโดยไม่มีคุณ",
   "session.movedOn.allow": "อนุญาตและทำต่อ",
   "session.movedOn.leave": "ปล่อยไว้",

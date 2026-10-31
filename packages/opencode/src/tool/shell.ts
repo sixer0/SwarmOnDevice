@@ -1,6 +1,7 @@
 import { Effect, Stream } from "effect"
 import os from "os"
 import { createWriteStream } from "node:fs"
+import { readdir, stat } from "node:fs/promises"
 import * as Tool from "./tool"
 import path from "path"
 import { containsPath, type InstanceContext } from "../project/instance-context"
@@ -22,6 +23,9 @@ import { ChildProcess } from "effect/unstable/process"
 import { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner"
 import { ShellPrompt, type Parameters } from "./shell/prompt"
 import { BashArity } from "@/permission/arity"
+import { execFile } from "node:child_process"
+import { promisify } from "node:util"
+import { Risk } from "./risk"
 
 export { Parameters } from "./shell/prompt"
 
@@ -78,6 +82,8 @@ type Scan = {
   dirs: Set<string>
   patterns: Set<string>
   always: Set<string>
+  harmless: Set<string>
+  risk?: Risk.Risk
 }
 
 type Chunk = {
@@ -270,6 +276,55 @@ const parse = Effect.fn("ShellTool.parse")(function* (command: string, ps: boole
   return tree
 })
 
+const git = promisify(execFile)
+// Matches the size above which a step's snapshot leaves an untracked file out.
+const SNAPSHOT_FILE_LIMIT = 2 * 1024 * 1024
+
+/** Whether the step's snapshot would leave anything under these paths behind, so Undo could not bring it back. */
+async function outsideSnapshot(worktree: string, paths: string[]) {
+  const list = async (...args: string[]) =>
+    (await git("git", ["-C", worktree, "ls-files", "-z", "--others", "--exclude-standard", ...args, "--", ...paths], { maxBuffer: 64 * 1024 * 1024 })).stdout
+      .split("\0")
+      .filter(Boolean)
+  try {
+    if ((await list("--ignored", "--directory")).some((file) => !Risk.rebuilt(file))) return true
+    const sizes = await Promise.all(
+      (await list()).map((file) => stat(path.join(worktree, file)).then((info) => info.size, () => 0)),
+    )
+    return sizes.some((size) => size > SNAPSHOT_FILE_LIMIT)
+  } catch {
+    return true
+  }
+}
+
+/** A commit runs the repository's hooks, which is running code, so it only counts as a plain file change without any. */
+async function hasGitHooks(worktree: string) {
+  try {
+    const run = (...args: string[]) => git("git", ["-C", worktree, ...args]).then((out) => out.stdout.trim())
+    const custom = await run("config", "--get", "core.hooksPath").catch(() => "")
+    if (custom) return true
+    const dir = await run("rev-parse", "--path-format=absolute", "--git-path", "hooks")
+    return (await readdir(dir).catch(() => [] as string[])).some((file) => !file.endsWith(".sample"))
+  } catch {
+    return true
+  }
+}
+
+function redirectTargets(node: Node) {
+  const parent = node.parent
+  if (parent?.type !== "redirected_statement") return { targets: [] as string[], dynamic: false }
+  const targets: string[] = []
+  let moving = false
+  for (const redirect of parent.descendantsOfType("file_redirect")) {
+    if (!redirect || !/>/.test(redirect.text)) continue
+    const target = unquote(redirect.childForFieldName("destination")?.text ?? redirect.lastChild?.text ?? "")
+    if (/^(\d+|-|\/dev\/null)$/.test(target)) continue
+    if (dynamic(target, false) || !target) moving = true
+    else targets.push(target)
+  }
+  return { targets, dynamic: moving }
+}
+
 const ask = Effect.fn("ShellTool.ask")(function* (ctx: Tool.Context, scan: Scan, input: { command: string }) {
   if (scan.dirs.size > 0) {
     const directories = Array.from(scan.dirs)
@@ -280,22 +335,34 @@ const ask = Effect.fn("ShellTool.ask")(function* (ctx: Tool.Context, scan: Scan,
     yield* ctx.ask({
       permission: "external_directory",
       patterns: globs,
-      always: globs,
+      always: scan.risk ? [] : globs,
       metadata: {
         command: input.command,
         directories,
         patterns: globs,
+        ...(scan.risk ? { risk: scan.risk } : {}),
       },
     })
   }
+
+  if (scan.harmless.size > 0)
+    yield* ctx.ask({
+      permission: ShellID.ToolID,
+      patterns: Array.from(scan.harmless),
+      always: [],
+      metadata: { command: input.command },
+      harmless: true,
+    })
 
   if (scan.patterns.size === 0) return
   yield* ctx.ask({
     permission: ShellID.ToolID,
     patterns: Array.from(scan.patterns),
-    always: Array.from(scan.always),
+    // "Allow always" on something Undo cannot take back would approve the next, different, one.
+    always: scan.risk ? [] : Array.from(scan.always),
     metadata: {
       command: input.command,
+      ...(scan.risk ? { risk: scan.risk } : {}),
     },
   })
 })
@@ -391,13 +458,53 @@ export const ShellTool = Tool.define(
       ps: boolean,
       shell: string,
       instance: InstanceContext,
+      trust: Tool.Context["trust"],
     ) {
       const scan: Scan = {
         dirs: new Set<string>(),
         patterns: new Set<string>(),
         always: new Set<string>(),
+        harmless: new Set<string>(),
       }
       const shellKind = ShellID.toKind(Shell.name(shell))
+      // A changed directory, variable or function means no argument here can be taken at face value.
+      const posix = Boolean(trust) && !ps && shellKind !== "cmd"
+      const uncertain =
+        !posix ||
+        commands(root).some((node) => CWD.has(node.firstChild?.text ?? "")) ||
+        root.descendantsOfType("variable_assignment").length > 0 ||
+        root.descendantsOfType("function_definition").length > 0
+
+      const judge = Effect.fn("ShellTool.judge")(function* (node: Node, tokens: string[]) {
+        const verdict = Risk.classify(tokens.map(unquote))
+        if (verdict.kind === "risky" || verdict.kind === "unknown" || uncertain) {
+          return verdict.kind === "risky" ? verdict : ({ kind: "unknown" } as const)
+        }
+        const redirect = redirectTargets(node)
+        if (redirect.dynamic) return { kind: "unknown" } as const
+        const removes = verdict.kind === "undoable" && verdict.removes
+        const changed = [...(verdict.kind === "undoable" ? verdict.paths : []), ...redirect.targets]
+        const absolute = (file: string) => path.resolve(cwd, home(file))
+        const lost = { kind: "risky", risk: "irreversible" } as const
+        for (const file of [...verdict.paths, ...redirect.targets].map(absolute)) {
+          if (containsPath(file, instance)) {
+            if (changed.map(absolute).includes(file) && Risk.sensitive(path.relative(instance.worktree, file)))
+              return removes ? lost : ({ kind: "unknown" } as const)
+            continue
+          }
+          return removes ? lost : ({ kind: "unknown" } as const)
+        }
+        if (verdict.kind === "harmless" && changed.length === 0) return { kind: "harmless" } as const
+        if (!trust?.canUndo) return { kind: "unknown" } as const
+        if (verdict.kind === "undoable" && verdict.hooks && (yield* Effect.promise(() => hasGitHooks(instance.worktree))))
+          return { kind: "unknown" } as const
+        if (
+          changed.length > 0 &&
+          (yield* Effect.promise(() => outsideSnapshot(instance.worktree, changed.map(absolute))))
+        )
+          return lost
+        return { kind: "harmless" } as const
+      })
 
       for (const node of commands(root)) {
         const command = parts(node)
@@ -415,6 +522,12 @@ export const ShellTool = Tool.define(
         }
 
         if (tokens.length && (!cmd || !CWD.has(cmd))) {
+          const verdict = posix ? yield* judge(node, tokens) : undefined
+          if (verdict?.kind === "harmless") {
+            scan.harmless.add(source(node))
+            continue
+          }
+          if (verdict?.kind === "risky") scan.risk = scan.risk === "irreversible" ? scan.risk : verdict.risk
           scan.patterns.add(source(node))
           scan.always.add(BashArity.prefix(tokens).join(" ") + " *")
         }
@@ -637,7 +750,7 @@ export const ShellTool = Tool.define(
                   const tree = yield* Effect.acquireRelease(parse(params.command, ps), (tree) =>
                     Effect.sync(() => tree.delete()),
                   )
-                  const scan = yield* collect(tree.rootNode, cwd, ps, shell, instanceCtx)
+                  const scan = yield* collect(tree.rootNode, cwd, ps, shell, instanceCtx, ctx.trust)
                   if (!containsPath(cwd, instanceCtx)) scan.dirs.add(cwd)
                   yield* ask(ctx, scan, params)
                 }),

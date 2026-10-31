@@ -1385,6 +1385,8 @@ export const dict = {
   "session.spend.continue": "{{amount}} çenli dowam et",
   "session.spend.stop": "Şu ýerde sakla",
   "session.movesOn.hint": "{{time}} çenli jogap ýokmy? Agent munsuz dowam edýär.",
+  "session.permission.cannotUndo": "Yza almak muny dikeldip bilmeýär.",
+  "session.permission.leavesMachine": "Bu kompýuteriňizden çykýar. Yza almak ony gaýtaryp bilmeýär.",
   "session.movedOn.title": "Sizsiz dowam etdi",
   "session.movedOn.allow": "Rugsat ber we dowam et",
   "session.movedOn.leave": "Goý",

@@ -1397,6 +1397,8 @@ export const dict = {
   "session.spend.continue": "Продължи до {{amount}}",
   "session.spend.stop": "Спри тук",
   "session.movesOn.hint": "Няма отговор до {{time}}? Агентът продължава без това.",
+  "session.permission.cannotUndo": "Отмяната не може да върне това.",
+  "session.permission.leavesMachine": "Това напуска компютъра ви. Отмяната не може да го върне.",
   "session.movedOn.title": "Продължи без вас",
   "session.movedOn.allow": "Разреши и продължи",
   "session.movedOn.leave": "Остави",

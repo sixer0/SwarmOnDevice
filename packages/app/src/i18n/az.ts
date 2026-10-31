@@ -1399,6 +1399,8 @@ export const dict = {
   "session.spend.continue": "{{amount}} həddinə qədər davam et",
   "session.spend.stop": "Burada dayandır",
   "session.movesOn.hint": "{{time}} qədər cavab yoxdur? Agent bunsuz davam edir.",
+  "session.permission.cannotUndo": "Geri al bunu qaytara bilməz.",
+  "session.permission.leavesMachine": "Bu kompüterinizi tərk edir. Geri al bunu ləğv edə bilməz.",
   "session.movedOn.title": "Sizsiz davam etdi",
   "session.movedOn.allow": "İcazə ver və davam et",
   "session.movedOn.leave": "Belə qalsın",

@@ -25,6 +25,7 @@ export const TodoWriteTool = Tool.define<typeof Parameters, Metadata, Todo.Servi
             permission: "todowrite",
             patterns: ["*"],
             always: ["*"],
+            harmless: ctx.trust ? true : undefined,
             metadata: {},
           })
 

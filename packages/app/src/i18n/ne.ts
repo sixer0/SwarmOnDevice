@@ -1384,6 +1384,8 @@ export const dict: Record<string, string> = {
   "session.spend.continue": "{{amount}} सम्म जारी राख्नुहोस्",
   "session.spend.stop": "यहीँ रोक्नुहोस्",
   "session.movesOn.hint": "{{time}} सम्म जवाफ छैन? एजेन्ट यो बिना अगाडि बढ्छ।",
+  "session.permission.cannotUndo": "पूर्ववतले यसलाई फिर्ता ल्याउन सक्दैन।",
+  "session.permission.leavesMachine": "यो तपाईंको मेसिनबाट बाहिर जान्छ। पूर्ववतले यसलाई फिर्ता लिन सक्दैन।",
   "session.movedOn.title": "तपाईं बिना अगाडि बढ्यो",
   "session.movedOn.allow": "अनुमति दिनुहोस् र जारी राख्नुहोस्",
   "session.movedOn.leave": "छोड्नुहोस्",

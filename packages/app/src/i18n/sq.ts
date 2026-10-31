@@ -1389,6 +1389,8 @@ export const dict = {
   "session.spend.continue": "Vazhdo deri në {{amount}}",
   "session.spend.stop": "Ndalo këtu",
   "session.movesOn.hint": "Asnjë përgjigje deri në {{time}}? Agjenti vazhdon pa këtë.",
+  "session.permission.cannotUndo": "Zhbëj nuk mund ta kthejë këtë.",
+  "session.permission.leavesMachine": "Kjo largohet nga kompjuteri juaj. Zhbëj nuk mund ta kthejë.",
   "session.movedOn.title": "Vazhdoi pa ju",
   "session.movedOn.allow": "Lejo dhe vazhdo",
   "session.movedOn.leave": "Lëre",

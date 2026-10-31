@@ -1500,6 +1500,8 @@ export const dict = {
   "session.spend.continue": "Fortsett til {{amount}}",
   "session.spend.stop": "Stopp her",
   "session.movesOn.hint": "Ikke noe svar innen {{time}}? Agenten fortsetter uten dette.",
+  "session.permission.cannotUndo": "Angre kan ikke hente dette tilbake.",
+  "session.permission.leavesMachine": "Dette forlater maskinen din. Angre kan ikke ta det tilbake.",
   "session.movedOn.title": "Fortsatte uten deg",
   "session.movedOn.allow": "Tillat og fortsett",
   "session.movedOn.leave": "La være",

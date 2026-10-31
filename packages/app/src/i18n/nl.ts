@@ -1404,6 +1404,8 @@ export const dict = {
   "session.spend.continue": "Doorgaan tot {{amount}}",
   "session.spend.stop": "Hier stoppen",
   "session.movesOn.hint": "Geen antwoord om {{time}}? De agent gaat hier zonder verder.",
+  "session.permission.cannotUndo": "Ongedaan maken kan dit niet terughalen.",
+  "session.permission.leavesMachine": "Dit verlaat je computer. Ongedaan maken kan het niet terugdraaien.",
   "session.movedOn.title": "Zonder jou doorgegaan",
   "session.movedOn.allow": "Toestaan en doorgaan",
   "session.movedOn.leave": "Laten zo",

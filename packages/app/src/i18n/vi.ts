@@ -1402,6 +1402,8 @@ export const dict = {
   "session.spend.continue": "Tiếp tục đến {{amount}}",
   "session.spend.stop": "Dừng tại đây",
   "session.movesOn.hint": "Không có câu trả lời trước {{time}}? Tác tử sẽ tiếp tục mà không có điều này.",
+  "session.permission.cannotUndo": "Hoàn tác không thể khôi phục việc này.",
+  "session.permission.leavesMachine": "Việc này rời khỏi máy của bạn. Hoàn tác không thể lấy lại.",
   "session.movedOn.title": "Đã tiếp tục mà không có bạn",
   "session.movedOn.allow": "Cho phép và tiếp tục",
   "session.movedOn.leave": "Để nguyên",

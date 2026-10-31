@@ -1397,6 +1397,8 @@ export const dict = {
   "session.spend.continue": "Folytatás {{amount}} összegig",
   "session.spend.stop": "Leállítás itt",
   "session.movesOn.hint": "Nincs válasz {{time}}-ig? Az ügynök enélkül folytatja.",
+  "session.permission.cannotUndo": "A visszavonás ezt nem tudja helyreállítani.",
+  "session.permission.leavesMachine": "Ez elhagyja a gépedet. A visszavonás nem tudja visszahozni.",
   "session.movedOn.title": "Nélküled folytatta",
   "session.movedOn.allow": "Engedélyezés és folytatás",
   "session.movedOn.leave": "Hagyd",

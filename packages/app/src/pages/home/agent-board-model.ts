@@ -133,6 +133,13 @@ export function permissionDetail(request: PermissionRequest) {
   return request.patterns.join("\n")
 }
 
+/** Why this request is the rare one worth reading: Undo cannot take it back. */
+export function permissionRisk(request: PermissionRequest) {
+  if (request.metadata?.risk === "remote") return "session.permission.leavesMachine" as const
+  if (request.metadata?.risk === "irreversible") return "session.permission.cannotUndo" as const
+  return undefined
+}
+
 /** Only a single single-select question can be answered in one keypress; anything richer opens the session. */
 export function inlineQuestion(request: QuestionRequest) {
   const question = request.questions.length === 1 ? request.questions[0] : undefined

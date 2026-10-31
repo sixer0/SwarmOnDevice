@@ -1401,6 +1401,8 @@ export const dict = {
   "session.spend.continue": "{{amount}}까지 계속",
   "session.spend.stop": "여기서 중지",
   "session.movesOn.hint": "{{time}}까지 답이 없으면 에이전트가 이것 없이 계속합니다.",
+  "session.permission.cannotUndo": "실행 취소로 되돌릴 수 없습니다.",
+  "session.permission.leavesMachine": "이 작업은 이 컴퓨터 밖으로 나갑니다. 실행 취소로 되돌릴 수 없습니다.",
   "session.movedOn.title": "사용자 없이 계속했습니다",
   "session.movedOn.allow": "허용하고 계속",
   "session.movedOn.leave": "그대로 두기",

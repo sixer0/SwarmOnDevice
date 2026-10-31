@@ -1399,6 +1399,8 @@ export const dict = {
   "session.spend.continue": "Tęsti iki {{amount}}",
   "session.spend.stop": "Sustabdyti čia",
   "session.movesOn.hint": "Nėra atsakymo iki {{time}}? Agentas tęs be šito.",
+  "session.permission.cannotUndo": "Anuliavimas to nesugrąžins.",
+  "session.permission.leavesMachine": "Tai palieka jūsų kompiuterį. Anuliavimas to nesugrąžins.",
   "session.movedOn.title": "Tęsė be jūsų",
   "session.movedOn.allow": "Leisti ir tęsti",
   "session.movedOn.leave": "Palikti",

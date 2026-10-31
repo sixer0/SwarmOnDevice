@@ -1375,6 +1375,8 @@ export const dict = {
   "session.spend.continue": "ສືບຕໍ່ຮອດ {{amount}}",
   "session.spend.stop": "ຢຸດຢູ່ນີ້",
   "session.movesOn.hint": "ບໍ່ມີຄຳຕອບພາຍໃນ {{time}}? ຕົວແທນຈະດຳເນີນຕໍ່ໂດຍບໍ່ມີສິ່ງນີ້.",
+  "session.permission.cannotUndo": "ການຍົກເລີກບໍ່ສາມາດນຳສິ່ງນີ້ກັບຄືນໄດ້.",
+  "session.permission.leavesMachine": "ສິ່ງນີ້ຈະອອກຈາກເຄື່ອງຂອງທ່ານ. ການຍົກເລີກບໍ່ສາມາດເອົາກັບຄືນໄດ້.",
   "session.movedOn.title": "ດຳເນີນຕໍ່ໂດຍບໍ່ມີທ່ານ",
   "session.movedOn.allow": "ອະນຸຍາດ ແລະ ດຳເນີນຕໍ່",
   "session.movedOn.leave": "ປະໄວ້",

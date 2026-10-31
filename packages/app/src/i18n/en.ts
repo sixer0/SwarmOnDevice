@@ -1391,6 +1391,8 @@ export const dict = {
   "session.spend.continue": "Continue to {{amount}}",
   "session.spend.stop": "Stop here",
   "session.movesOn.hint": "No answer by {{time}}? The agent carries on without this.",
+  "session.permission.cannotUndo": "Undo can't bring this back.",
+  "session.permission.leavesMachine": "This leaves your machine. Undo can't take it back.",
   "session.movedOn.title": "Went on without you",
   "session.movedOn.allow": "Allow and continue",
   "session.movedOn.leave": "Leave it",

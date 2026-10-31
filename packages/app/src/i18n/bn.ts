@@ -1377,6 +1377,8 @@ export const dict: Record<string, string> = {
   "session.spend.continue": "{{amount}} পর্যন্ত চালিয়ে যান",
   "session.spend.stop": "এখানে থামুন",
   "session.movesOn.hint": "{{time}}-এর মধ্যে উত্তর নেই? এজেন্ট এটি ছাড়াই চালিয়ে যাবে।",
+  "session.permission.cannotUndo": "পূর্বাবস্থায় ফেরানো এটি ফিরিয়ে আনতে পারবে না।",
+  "session.permission.leavesMachine": "এটি আপনার কম্পিউটার ছেড়ে যাবে। পূর্বাবস্থায় ফেরানো এটি ফেরাতে পারবে না।",
   "session.movedOn.title": "আপনাকে ছাড়াই চালিয়ে গেছে",
   "session.movedOn.allow": "অনুমতি দিন ও চালিয়ে যান",
   "session.movedOn.leave": "থাক",

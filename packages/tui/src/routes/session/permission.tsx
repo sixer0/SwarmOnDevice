@@ -275,7 +275,14 @@ export function PermissionPrompt(props: { request: PermissionRequest; directory?
                 title: "Shell command",
                 body: (
                   <Show when={command}>
-                    <box paddingLeft={1}>
+                    <box paddingLeft={1} flexDirection="column">
+                      <Show when={props.request.metadata?.risk}>
+                        <text fg={theme.warning}>
+                          {props.request.metadata?.risk === "remote"
+                            ? "This leaves your machine. Undo can't take it back."
+                            : "Undo can't bring this back."}
+                        </text>
+                      </Show>
                       <text fg={theme.text}>{"$ " + command}</text>
                     </box>
                   </Show>
@@ -419,7 +426,9 @@ export function PermissionPrompt(props: { request: PermissionRequest; directory?
               options={
                 props.request.permission === "spend_limit"
                   ? { once: `Continue to $${Number(props.request.metadata?.next ?? 0).toFixed(2)}`, reject: "Stop here" }
-                  : { once: "Allow once", always: "Allow always", reject: "Reject" }
+                  : props.request.always.length === 0
+                    ? { once: "Allow once", reject: "Reject" }
+                    : { once: "Allow once", always: "Allow always", reject: "Reject" }
               }
               escapeKey="reject"
               fullscreen

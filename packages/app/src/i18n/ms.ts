@@ -1384,6 +1384,8 @@ export const dict = {
   "session.spend.continue": "Teruskan hingga {{amount}}",
   "session.spend.stop": "Berhenti di sini",
   "session.movesOn.hint": "Tiada jawapan menjelang {{time}}? Ejen meneruskan tanpa ini.",
+  "session.permission.cannotUndo": "Buat asal tidak dapat mengembalikan ini.",
+  "session.permission.leavesMachine": "Ini keluar dari mesin anda. Buat asal tidak dapat menariknya balik.",
   "session.movedOn.title": "Diteruskan tanpa anda",
   "session.movedOn.allow": "Benarkan dan teruskan",
   "session.movedOn.leave": "Biarkan",

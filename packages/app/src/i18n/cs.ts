@@ -1389,6 +1389,8 @@ export const dict = {
   "session.spend.continue": "Pokračovat do {{amount}}",
   "session.spend.stop": "Zastavit zde",
   "session.movesOn.hint": "Žádná odpověď do {{time}}? Agent bude pokračovat bez toho.",
+  "session.permission.cannotUndo": "Zpět toto nedokáže vrátit.",
+  "session.permission.leavesMachine": "Tohle opustí váš počítač. Zpět to nedokáže vrátit.",
   "session.movedOn.title": "Pokračoval bez vás",
   "session.movedOn.allow": "Povolit a pokračovat",
   "session.movedOn.leave": "Nechat být",

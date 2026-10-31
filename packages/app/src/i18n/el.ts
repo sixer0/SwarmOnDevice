@@ -1400,6 +1400,8 @@ export const dict = {
   "session.spend.continue": "Συνέχεια έως {{amount}}",
   "session.spend.stop": "Διακοπή εδώ",
   "session.movesOn.hint": "Καμία απάντηση έως {{time}}; Ο πράκτορας συνεχίζει χωρίς αυτό.",
+  "session.permission.cannotUndo": "Η αναίρεση δεν μπορεί να το επαναφέρει.",
+  "session.permission.leavesMachine": "Αυτό φεύγει από τον υπολογιστή σας. Η αναίρεση δεν μπορεί να το πάρει πίσω.",
   "session.movedOn.title": "Συνέχισε χωρίς εσάς",
   "session.movedOn.allow": "Επιτρέψτε και συνεχίστε",
   "session.movedOn.leave": "Αφήστε το",

@@ -1393,6 +1393,8 @@ export const dict = {
   "session.spend.continue": "Fortsätt till {{amount}}",
   "session.spend.stop": "Stoppa här",
   "session.movesOn.hint": "Inget svar senast {{time}}? Agenten fortsätter utan detta.",
+  "session.permission.cannotUndo": "Ångra kan inte få tillbaka det här.",
+  "session.permission.leavesMachine": "Det här lämnar din dator. Ångra kan inte ta tillbaka det.",
   "session.movedOn.title": "Fortsatte utan dig",
   "session.movedOn.allow": "Tillåt och fortsätt",
   "session.movedOn.leave": "Låt vara",

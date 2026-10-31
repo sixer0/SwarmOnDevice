@@ -6,6 +6,8 @@
 import * as path from "path"
 import { Effect, Schema, Semaphore } from "effect"
 import * as Tool from "./tool"
+import { FileSeen } from "./file-seen"
+import { Secrets } from "./secrets"
 import { LSP } from "@/lsp/lsp"
 import { createTwoFilesPatch, diffLines } from "diff"
 import DESCRIPTION from "./edit.txt"
@@ -34,7 +36,7 @@ function convertToLineEnding(text: string, ending: "\n" | "\r\n"): string {
 
 const locks = new Map<string, Semaphore.Semaphore>()
 
-function lock(filePath: string) {
+export function lock(filePath: string) {
   const resolvedFilePath = FSUtil.resolve(filePath)
   const hit = locks.get(resolvedFilePath)
   if (hit) return hit
@@ -81,6 +83,7 @@ export const EditTool = Tool.define(
             ? params.filePath
             : path.join(instance.directory, params.filePath)
           yield* assertExternalDirectoryEffect(ctx, filePath)
+          const label = path.relative(instance.worktree, filePath)
 
           let diff = ""
           let contentOld = ""
@@ -99,19 +102,22 @@ export const EditTool = Tool.define(
                 contentOld = ""
                 contentNew = next.text
                 diff = trimDiff(createTwoFilesPatch(filePath, filePath, contentOld, contentNew))
+                Secrets.assertNoPlaceholder(contentNew, contentOld, label)
                 yield* ctx.ask({
                   permission: "edit",
-                  patterns: [path.relative(instance.worktree, filePath)],
+                  patterns: [label],
                   always: ["*"],
                   metadata: {
                     filepath: filePath,
                     diff,
                   },
+                  harmless: Tool.undoableEdit(ctx, label),
                 })
                 yield* afs.writeWithDirs(filePath, Bom.join(contentNew, desiredBom))
                 if (yield* format.file(filePath)) {
                   contentNew = yield* Bom.syncFile(afs, filePath, desiredBom)
                 }
+                FileSeen.wrote(ctx.sessionID, filePath, contentNew)
                 yield* events.publish(FileSystem.Event.Edited, { file: filePath })
                 yield* events.publish(Watcher.Event.Updated, {
                   file: filePath,
@@ -130,9 +136,18 @@ export const EditTool = Tool.define(
               const old = convertToLineEnding(normalizeLineEndings(params.oldString), ending)
               const replacement = convertToLineEnding(normalizeLineEndings(params.newString), ending)
 
-              const next = Bom.split(replace(contentOld, old, replacement, params.replaceAll))
+              const replaced = (() => {
+                try {
+                  return replace(contentOld, old, replacement, params.replaceAll)
+                } catch (error) {
+                  const note = FileSeen.changedNote(ctx.sessionID, filePath, contentOld)
+                  throw note && error instanceof Error ? new Error(error.message + note) : error
+                }
+              })()
+              const next = Bom.split(replaced)
               const desiredBom = source.bom || next.bom
               contentNew = next.text
+              Secrets.assertNoPlaceholder(contentNew, contentOld, label)
 
               diff = trimDiff(
                 createTwoFilesPatch(
@@ -144,18 +159,20 @@ export const EditTool = Tool.define(
               )
               yield* ctx.ask({
                 permission: "edit",
-                patterns: [path.relative(instance.worktree, filePath)],
+                patterns: [label],
                 always: ["*"],
                 metadata: {
                   filepath: filePath,
                   diff,
                 },
+                harmless: Tool.undoableEdit(ctx, label),
               })
 
               yield* afs.writeWithDirs(filePath, Bom.join(contentNew, desiredBom))
               if (yield* format.file(filePath)) {
                 contentNew = yield* Bom.syncFile(afs, filePath, desiredBom)
               }
+              FileSeen.wrote(ctx.sessionID, filePath, contentNew)
               yield* events.publish(FileSystem.Event.Edited, { file: filePath })
               yield* events.publish(Watcher.Event.Updated, {
                 file: filePath,

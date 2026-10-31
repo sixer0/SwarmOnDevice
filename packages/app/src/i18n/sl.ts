@@ -1390,6 +1390,8 @@ export const dict = {
   "session.spend.continue": "Nadaljuj do {{amount}}",
   "session.spend.stop": "Ustavi tukaj",
   "session.movesOn.hint": "Ni odgovora do {{time}}? Agent nadaljuje brez tega.",
+  "session.permission.cannotUndo": "Razveljavitev tega ne more vrniti.",
+  "session.permission.leavesMachine": "To zapusti vaš računalnik. Razveljavitev tega ne more vrniti.",
   "session.movedOn.title": "Nadaljeval je brez vas",
   "session.movedOn.allow": "Dovoli in nadaljuj",
   "session.movedOn.leave": "Pusti",

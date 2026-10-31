@@ -1382,6 +1382,8 @@ export const dict = {
   "session.spend.continue": "ادامه تا {{amount}}",
   "session.spend.stop": "همین‌جا متوقف شود",
   "session.movesOn.hint": "تا {{time}} پاسخی نیست؟ عامل بدون این ادامه می‌دهد.",
+  "session.permission.cannotUndo": "واگرد نمی‌تواند این را برگرداند.",
+  "session.permission.leavesMachine": "این از دستگاه شما خارج می‌شود. واگرد نمی‌تواند آن را برگرداند.",
   "session.movedOn.title": "بدون شما ادامه داد",
   "session.movedOn.allow": "اجازه و ادامه",
   "session.movedOn.leave": "رهایش کن",

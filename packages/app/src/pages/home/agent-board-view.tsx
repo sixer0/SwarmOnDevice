@@ -11,7 +11,7 @@ import { IconButtonV2 } from "@opencode-ai/ui/v2/icon-button-v2"
 import { KeybindV2 } from "@opencode-ai/ui/v2/keybind-v2"
 import { createEffect, createMemo, For, type JSX, on, Show } from "solid-js"
 import { agentBoardFocusRequest, createMinuteClock, type AgentBoardController } from "./agent-board-controller"
-import { inlineQuestion, permissionDetail, type AgentBoardNeed } from "./agent-board-model"
+import { inlineQuestion, permissionDetail, permissionRisk, type AgentBoardNeed } from "./agent-board-model"
 
 const SECTION_LABEL = "text-v2-text-text-muted [font-weight:440]"
 const ROW = `
@@ -147,7 +147,7 @@ function NeedRow(props: { board: AgentBoardController; need: AgentBoardNeed }) {
             <div class="flex min-w-0 items-center gap-1.5">
               <RowTitle board={props.board} root={props.need.root} />
               {/* "Allow always" is a standing decision, so it is offered once the row has someone's attention. */}
-              <Show when={!item.request.movedOnAt && !spendLimitDetail(item.request)}>
+              <Show when={!item.request.movedOnAt && !spendLimitDetail(item.request) && item.request.always.length > 0}>
                 <KeyButton
                   label={language.t("ui.permission.allowAlways")}
                   keys={["⇧", "A"]}
@@ -181,6 +181,9 @@ function NeedRow(props: { board: AgentBoardController; need: AgentBoardNeed }) {
               />
             </div>
             <MovedOnLine at={item.request.movedOnAt} />
+            <Show when={permissionRisk(item.request)} keyed>
+              {(risk) => <div class="pb-1 pl-6 text-v2-state-fg-warning [font-weight:440]">{language.t(risk)}</div>}
+            </Show>
             <pre
               data-agent-detail
               class={`

@@ -1498,6 +1498,8 @@ export const dict = {
   "session.spend.continue": "Continuar hasta {{amount}}",
   "session.spend.stop": "Detener aquí",
   "session.movesOn.hint": "¿Sin respuesta a las {{time}}? El agente continúa sin esto.",
+  "session.permission.cannotUndo": "Deshacer no puede recuperar esto.",
+  "session.permission.leavesMachine": "Esto sale de tu equipo. Deshacer no puede revertirlo.",
   "session.movedOn.title": "Siguió sin ti",
   "session.movedOn.allow": "Permitir y continuar",
   "session.movedOn.leave": "Dejarlo",

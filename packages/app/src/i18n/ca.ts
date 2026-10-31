@@ -1399,6 +1399,8 @@ export const dict = {
   "session.spend.continue": "Continua fins a {{amount}}",
   "session.spend.stop": "Atura aquí",
   "session.movesOn.hint": "Sense resposta a les {{time}}? L'agent continua sense això.",
+  "session.permission.cannotUndo": "Desfer no pot recuperar això.",
+  "session.permission.leavesMachine": "Això surt del teu ordinador. Desfer no ho pot revertir.",
   "session.movedOn.title": "Ha continuat sense tu",
   "session.movedOn.allow": "Permet i continua",
   "session.movedOn.leave": "Deixa-ho",

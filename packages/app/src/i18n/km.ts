@@ -1378,6 +1378,8 @@ export const dict = {
   "session.spend.continue": "បន្តរហូតដល់ {{amount}}",
   "session.spend.stop": "ឈប់ត្រឹមនេះ",
   "session.movesOn.hint": "គ្មានចម្លើយត្រឹម {{time}}? អេជិនបន្តដោយគ្មានវា។",
+  "session.permission.cannotUndo": "ការមិនធ្វើវិញមិនអាចនាំវាត្រឡប់មកវិញបានទេ។",
+  "session.permission.leavesMachine": "វានឹងចេញពីម៉ាស៊ីនរបស់អ្នក។ ការមិនធ្វើវិញមិនអាចដកវាវិញបានទេ។",
   "session.movedOn.title": "បានបន្តដោយគ្មានអ្នក",
   "session.movedOn.allow": "អនុញ្ញាត និងបន្ត",
   "session.movedOn.leave": "ទុកចោល",

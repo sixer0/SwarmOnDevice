@@ -1389,6 +1389,8 @@ export const dict = {
   "session.spend.continue": "Continuă până la {{amount}}",
   "session.spend.stop": "Oprește aici",
   "session.movesOn.hint": "Niciun răspuns până la {{time}}? Agentul continuă fără asta.",
+  "session.permission.cannotUndo": "Anularea nu poate recupera asta.",
+  "session.permission.leavesMachine": "Asta părăsește computerul tău. Anularea nu o poate retrage.",
   "session.movedOn.title": "A continuat fără tine",
   "session.movedOn.allow": "Permite și continuă",
   "session.movedOn.leave": "Lasă așa",

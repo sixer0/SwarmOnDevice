@@ -1403,6 +1403,8 @@ export const dict = {
   "session.spend.continue": "المتابعة حتى {{amount}}",
   "session.spend.stop": "توقف هنا",
   "session.movesOn.hint": "لا إجابة بحلول {{time}}؟ سيتابع الوكيل من دون هذا.",
+  "session.permission.cannotUndo": "لا يمكن للتراجع استعادة هذا.",
+  "session.permission.leavesMachine": "سيغادر هذا جهازك. لا يمكن للتراجع إلغاؤه.",
   "session.movedOn.title": "تابع من دونك",
   "session.movedOn.allow": "السماح والمتابعة",
   "session.movedOn.leave": "اتركه",

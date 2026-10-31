@@ -1313,6 +1313,7 @@ const layer = Layer.effect(
               bypassAgentCheck,
               messages: msgs,
               promptOps,
+              canUndo: (yield* InstanceState.context).project.vcs === "git" && (yield* config.get()).snapshot !== false,
             }).pipe(
               Effect.provideService(Plugin.Service, plugin),
               Effect.provideService(Permission.Service, permission),

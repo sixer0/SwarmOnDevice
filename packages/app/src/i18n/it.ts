@@ -1408,6 +1408,8 @@ export const dict = {
   "session.spend.continue": "Continua fino a {{amount}}",
   "session.spend.stop": "Fermati qui",
   "session.movesOn.hint": "Nessuna risposta entro le {{time}}? L'agente prosegue senza questo.",
+  "session.permission.cannotUndo": "Annulla non può recuperare questo.",
+  "session.permission.leavesMachine": "Questo lascia il tuo computer. Annulla non può riportarlo indietro.",
   "session.movedOn.title": "Ha proseguito senza di te",
   "session.movedOn.allow": "Consenti e continua",
   "session.movedOn.leave": "Lascia stare",

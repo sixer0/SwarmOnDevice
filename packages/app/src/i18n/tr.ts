@@ -1493,6 +1493,8 @@ export const dict = {
   "session.spend.continue": "{{amount}} tutarına kadar devam et",
   "session.spend.stop": "Burada durdur",
   "session.movesOn.hint": "{{time}} saatine kadar yanıt yok mu? Ajan bu olmadan devam eder.",
+  "session.permission.cannotUndo": "Geri al bunu geri getiremez.",
+  "session.permission.leavesMachine": "Bu makinenizden çıkar. Geri al bunu geri alamaz.",
   "session.movedOn.title": "Sensiz devam etti",
   "session.movedOn.allow": "İzin ver ve devam et",
   "session.movedOn.leave": "Böyle kalsın",

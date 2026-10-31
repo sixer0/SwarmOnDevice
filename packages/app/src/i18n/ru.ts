@@ -1495,6 +1495,8 @@ export const dict = {
   "session.spend.continue": "Продолжить до {{amount}}",
   "session.spend.stop": "Остановить здесь",
   "session.movesOn.hint": "Нет ответа к {{time}}? Агент продолжит без этого.",
+  "session.permission.cannotUndo": "Отмена не сможет это вернуть.",
+  "session.permission.leavesMachine": "Это покинет ваш компьютер. Отмена не сможет это вернуть.",
   "session.movedOn.title": "Продолжил без вас",
   "session.movedOn.allow": "Разрешить и продолжить",
   "session.movedOn.leave": "Оставить",

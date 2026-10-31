@@ -142,6 +142,8 @@ export const TaskTool = Tool.define(
           permission: id,
           patterns: [params.subagent_type],
           always: ["*"],
+          // Starting one changes nothing by itself. Each call it makes is checked on its own.
+          harmless: ctx.trust ? true : undefined,
           metadata: {
             description: params.description,
             subagent_type: params.subagent_type,

@@ -1401,6 +1401,8 @@ export const dict = {
   "session.spend.continue": "Jatka summaan {{amount}} asti",
   "session.spend.stop": "Pysäytä tähän",
   "session.movesOn.hint": "Ei vastausta klo {{time}} mennessä? Agentti jatkaa ilman tätä.",
+  "session.permission.cannotUndo": "Kumoa ei voi palauttaa tätä.",
+  "session.permission.leavesMachine": "Tämä lähtee koneeltasi. Kumoa ei voi perua sitä.",
   "session.movedOn.title": "Jatkoi ilman sinua",
   "session.movedOn.allow": "Salli ja jatka",
   "session.movedOn.leave": "Jätä näin",

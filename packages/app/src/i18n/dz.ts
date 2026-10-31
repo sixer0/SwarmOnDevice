@@ -1407,6 +1407,8 @@ export const dict: Record<string, string> = {
   "session.spend.continue": "{{amount}} ཚུན་མུ་མཐུད་",
   "session.spend.stop": "ནཱ་ལུ་བཀག",
   "session.movesOn.hint": "{{time}} ཚུན་ལན་མེད་པ་ཅིན་ ངོ་ཚབ་འདི་མེད་པར་འཕྲོ་མཐུད་འབད་འོང་།",
+  "session.permission.cannotUndo": "ལོག་འབད་ནི་གིས་འདི་སླར་ལོག་འབག་མི་ཚུགས།",
+  "session.permission.leavesMachine": "འདི་ཁྱོད་ཀྱི་གློག་རིག་ལས་ཕྱིར་འགྱོཝ་ཨིན། ལོག་འབད་ནི་གིས་སླར་ལོག་འབག་མི་ཚུགས།",
   "session.movedOn.title": "ཁྱོད་མེད་པར་འཕྲོ་མཐུད་འབད་ཡི།",
   "session.movedOn.allow": "གནང་བ་བྱིན་ཏེ་འཕྲོ་མཐུད།",
   "session.movedOn.leave": "བཞག",

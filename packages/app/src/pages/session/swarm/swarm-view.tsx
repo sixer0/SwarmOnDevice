@@ -1,5 +1,5 @@
 import { useLanguage } from "@/context/language"
-import { inlineQuestion, permissionDetail } from "@/pages/home/agent-board-model"
+import { inlineQuestion, permissionDetail, permissionRisk } from "@/pages/home/agent-board-model"
 import { Icon } from "@opencode-ai/ui/icon"
 import { Spinner } from "@opencode-ai/ui/spinner"
 import { ButtonV2 } from "@opencode-ai/ui/v2/button-v2"
@@ -156,18 +156,23 @@ function LaneDetail(props: { swarm: SwarmController; lane: SwarmLane }) {
       <Show when={props.lane.permission} keyed>
         {(request) => (
           <div data-swarm-need="permission" class="rounded-[6px] border border-v2-state-border-warning p-2">
+            <Show when={permissionRisk(request)} keyed>
+              {(risk) => <div class="pb-1 text-v2-state-fg-warning [font-weight:440]">{language.t(risk)}</div>}
+            </Show>
             <pre class="max-h-24 overflow-auto whitespace-pre-wrap break-all font-mono text-[12px] leading-[18px] text-v2-text-text-base select-text">
               {permissionDetail(request)}
             </pre>
             <div class="mt-2 flex flex-wrap justify-end gap-1.5">
-              <ButtonV2
-                type="button"
-                variant="ghost-muted"
-                disabled={busy()}
-                onClick={() => props.swarm.allow(props.lane, request, "always")}
-              >
-                {language.t("ui.permission.allowAlways")}
-              </ButtonV2>
+              <Show when={request.always.length > 0}>
+                <ButtonV2
+                  type="button"
+                  variant="ghost-muted"
+                  disabled={busy()}
+                  onClick={() => props.swarm.allow(props.lane, request, "always")}
+                >
+                  {language.t("ui.permission.allowAlways")}
+                </ButtonV2>
+              </Show>
               <ButtonV2
                 type="button"
                 variant="outline"

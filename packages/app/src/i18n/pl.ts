@@ -1417,6 +1417,8 @@ export const dict = {
   "session.spend.continue": "Kontynuuj do {{amount}}",
   "session.spend.stop": "Zatrzymaj tutaj",
   "session.movesOn.hint": "Brak odpowiedzi do {{time}}? Agent kontynuuje bez tego.",
+  "session.permission.cannotUndo": "Cofnij nie przywróci tego.",
+  "session.permission.leavesMachine": "To opuści twój komputer. Cofnij tego nie odwróci.",
   "session.movedOn.title": "Kontynuował bez Ciebie",
   "session.movedOn.allow": "Zezwól i kontynuuj",
   "session.movedOn.leave": "Zostaw",

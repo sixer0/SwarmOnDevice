@@ -11,7 +11,9 @@ import { Watcher } from "@opencode-ai/core/filesystem/watcher"
 import { Format } from "../format"
 import { FSUtil } from "@opencode-ai/core/fs-util"
 import { InstanceState } from "@/effect/instance-state"
-import { trimDiff } from "./edit"
+import { lock, trimDiff } from "./edit"
+import { FileSeen } from "./file-seen"
+import { Secrets } from "./secrets"
 import { assertExternalDirectoryEffect } from "./external-directory"
 import * as Bom from "@/util/bom"
 
@@ -51,20 +53,31 @@ export const WriteTool = Tool.define(
           const contentNew = next.text
 
           const diff = trimDiff(createTwoFilesPatch(filepath, filepath, contentOld, contentNew))
+          const label = path.relative(instance.worktree, filepath)
+          Secrets.assertNoPlaceholder(contentNew, contentOld, label)
           yield* ctx.ask({
             permission: "edit",
-            patterns: [path.relative(instance.worktree, filepath)],
+            patterns: [label],
             always: ["*"],
             metadata: {
               filepath,
               diff,
             },
+            harmless: Tool.undoableEdit(ctx, label),
           })
 
-          yield* fs.writeWithDirs(filepath, Bom.join(contentNew, desiredBom))
-          if (yield* format.file(filepath)) {
-            yield* Bom.syncFile(fs, filepath, desiredBom)
-          }
+          // Two agents may be here at once, and an answer to the prompt above may have taken a while.
+          const merged = yield* lock(filepath).withPermits(1)(
+            Effect.gen(function* () {
+              const current = (yield* fs.existsSafe(filepath)) ? (yield* Bom.readFile(fs, filepath)).text : undefined
+              const decision = FileSeen.decide({ session: ctx.sessionID, file: filepath, label, current, next: contentNew })
+              if ("refused" in decision) throw new Error(Secrets.scrub(decision.refused, instance.worktree))
+              yield* fs.writeWithDirs(filepath, Bom.join(decision.text, desiredBom))
+              const final = (yield* format.file(filepath)) ? yield* Bom.syncFile(fs, filepath, desiredBom) : decision.text
+              FileSeen.wrote(ctx.sessionID, filepath, final)
+              return decision.merged
+            }),
+          )
           yield* events.publish(FileSystem.Event.Edited, { file: filepath })
           yield* events.publish(Watcher.Event.Updated, {
             file: filepath,
@@ -72,6 +85,7 @@ export const WriteTool = Tool.define(
           })
 
           let output = "Wrote file successfully."
+          if (merged) output += ` ${FileSeen.MERGED_NOTE}`
           yield* lsp.touchFile(filepath, "document")
           const diagnostics = yield* lsp.diagnostics()
           const normalizedFilepath = FSUtil.normalizePath(filepath)

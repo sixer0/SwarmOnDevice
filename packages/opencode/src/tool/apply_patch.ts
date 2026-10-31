@@ -7,7 +7,9 @@ import { InstanceState } from "@/effect/instance-state"
 import { Patch } from "../patch"
 import { createTwoFilesPatch, diffLines } from "diff"
 import { assertExternalDirectoryEffect } from "./external-directory"
-import { trimDiff } from "./edit"
+import { lock, trimDiff } from "./edit"
+import { FileSeen } from "./file-seen"
+import { Secrets } from "./secrets"
 import { LSP } from "@/lsp/lsp"
 import { FSUtil } from "@opencode-ai/core/fs-util"
 import DESCRIPTION from "./apply_patch.txt"
@@ -201,6 +203,15 @@ export const ApplyPatchTool = Tool.define(
         ...(change.movePath ? { movePath: change.movePath } : {}),
       }))
 
+      for (const change of fileChanges) {
+        if (change.type === "delete") continue
+        Secrets.assertNoPlaceholder(
+          change.newContent,
+          change.oldContent,
+          path.relative(instance.worktree, change.filePath),
+        )
+      }
+
       // Check permissions if needed
       const relativePaths = fileChanges.map((c) => path.relative(instance.worktree, c.filePath).replaceAll("\\", "/"))
       yield* ctx.ask({
@@ -212,6 +223,7 @@ export const ApplyPatchTool = Tool.define(
           diff: totalDiff,
           files,
         },
+        harmless: relativePaths.every((file) => Tool.undoableEdit(ctx, file)),
       })
 
       // Apply the changes
@@ -227,10 +239,28 @@ export const ApplyPatchTool = Tool.define(
             updates.push({ file: change.filePath, event: "add" })
             break
 
-          case "update":
-            yield* afs.writeWithDirs(change.filePath, Bom.join(change.newContent, change.bom))
+          case "update": {
+            // The patch was worked out before the prompt. Whatever landed in the file since then has to survive this.
+            const written = yield* lock(change.filePath).withPermits(1)(
+              Effect.gen(function* () {
+                const current = (yield* Bom.readFile(afs, change.filePath)).text
+                const text =
+                  current === change.oldContent ? change.newContent : FileSeen.merge(change.oldContent, change.newContent, current)
+                if (text === undefined) return false
+                yield* afs.writeWithDirs(change.filePath, Bom.join(text, change.bom))
+                FileSeen.wrote(ctx.sessionID, change.filePath, text)
+                return true
+              }),
+            )
+            if (!written)
+              return yield* Effect.fail(
+                new Error(
+                  `apply_patch: ${path.relative(instance.worktree, change.filePath)} changed while this patch waited, and the changes overlap. It was not written. Read it again and redo the patch.`,
+                ),
+              )
             updates.push({ file: change.filePath, event: "change" })
             break
+          }
 
           case "move":
             if (change.movePath) {

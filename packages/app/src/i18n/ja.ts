@@ -1403,6 +1403,8 @@ export const dict = {
   "session.spend.continue": "{{amount}} まで続行",
   "session.spend.stop": "ここで停止",
   "session.movesOn.hint": "{{time}} までに回答がなければ、エージェントはこれなしで続行します。",
+  "session.permission.cannotUndo": "元に戻す操作では復元できません。",
+  "session.permission.leavesMachine": "これはこのマシンの外に出ます。元に戻す操作では取り消せません。",
   "session.movedOn.title": "あなたの回答なしで続行しました",
   "session.movedOn.allow": "許可して続行",
   "session.movedOn.leave": "そのままにする",

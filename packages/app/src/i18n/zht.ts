@@ -1457,6 +1457,8 @@ export const dict = {
   "session.spend.continue": "繼續至 {{amount}}",
   "session.spend.stop": "到此停止",
   "session.movesOn.hint": "到 {{time}} 仍無回答？代理將略過此項繼續。",
+  "session.permission.cannotUndo": "復原無法還原此操作。",
+  "session.permission.leavesMachine": "這會離開你的電腦。復原無法收回。",
   "session.movedOn.title": "已在你不在時繼續",
   "session.movedOn.allow": "允許並繼續",
   "session.movedOn.leave": "不處理",

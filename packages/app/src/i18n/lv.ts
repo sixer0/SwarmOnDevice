@@ -1387,6 +1387,8 @@ export const dict = {
   "session.spend.continue": "Turpināt līdz {{amount}}",
   "session.spend.stop": "Apturēt šeit",
   "session.movesOn.hint": "Nav atbildes līdz {{time}}? Aģents turpina bez šī.",
+  "session.permission.cannotUndo": "Atsaukšana to nevar atjaunot.",
+  "session.permission.leavesMachine": "Tas pamet jūsu datoru. Atsaukšana to nevar atgriezt.",
   "session.movedOn.title": "Turpināja bez jums",
   "session.movedOn.allow": "Atļaut un turpināt",
   "session.movedOn.leave": "Atstāt",

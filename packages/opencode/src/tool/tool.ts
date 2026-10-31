@@ -6,6 +6,10 @@ import type { MessageV2 } from "../session/message-v2"
 import type { Permission } from "../permission"
 import type { SessionID, MessageID } from "../session/schema"
 import * as Truncate from "./truncate"
+import path from "path"
+import { InstanceRef } from "@/effect/instance-ref"
+import { Risk } from "./risk"
+import { Secrets } from "./secrets"
 import { Agent } from "@/agent/agent"
 
 interface Metadata {
@@ -42,7 +46,23 @@ export type Context<M extends Metadata = Metadata> = {
   extra?: { [key: string]: unknown }
   messages: SessionV1.WithParts[]
   metadata(input: { title?: string; metadata?: M }): Effect.Effect<void>
-  ask(input: Omit<PermissionV1.Request, "id" | "sessionID" | "tool">): Effect.Effect<void>
+  ask(input: Omit<PermissionV1.Request, "id" | "sessionID" | "tool"> & { harmless?: boolean }): Effect.Effect<void>
+  /** Set for a real agent run. Without it a tool asks about everything, as a call from outside a session should. */
+  trust?: {
+    /** Each step snapshots this project, so Undo can restore what changes in it. */
+    canUndo: boolean
+  }
+}
+
+/** A change to this project file that Undo can take back, and that does not change what runs or what is allowed later. */
+export function undoableEdit(ctx: Pick<Context, "trust">, relative: string) {
+  return (
+    Boolean(ctx.trust?.canUndo) &&
+    !relative.startsWith("..") &&
+    !path.isAbsolute(relative) &&
+    !Risk.sensitive(relative) &&
+    !Secrets.secretFile(relative)
+  )
 }
 
 export interface ExecuteResult<M extends Metadata = Metadata> {
@@ -127,7 +147,9 @@ function wrap<Parameters extends Schema.Decoder<unknown>, Result extends Metadat
                 }),
             ),
           )
-          const result = yield* execute(decoded as Schema.Schema.Type<Parameters>, ctx)
+          const raw = yield* execute(decoded as Schema.Schema.Type<Parameters>, ctx)
+          const instance = yield* InstanceRef
+          const result = instance ? Secrets.scrubResult(raw, instance.worktree) : raw
           if (result.metadata.truncated !== undefined) {
             return result
           }

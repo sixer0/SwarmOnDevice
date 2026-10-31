@@ -1398,6 +1398,8 @@ export const dict = {
   "session.spend.continue": "{{amount}} gacha davom etish",
   "session.spend.stop": "Shu yerda to‘xtatish",
   "session.movesOn.hint": "{{time}} gacha javob yo‘qmi? Agent bunsiz davom etadi.",
+  "session.permission.cannotUndo": "Bekor qilish buni qaytara olmaydi.",
+  "session.permission.leavesMachine": "Bu kompyuteringizdan chiqadi. Bekor qilish uni qaytara olmaydi.",
   "session.movedOn.title": "Sizsiz davom etdi",
   "session.movedOn.allow": "Ruxsat berish va davom etish",
   "session.movedOn.leave": "Qoldirish",

@@ -1378,6 +1378,8 @@ export const dict = {
   "session.spend.continue": "Jätka kuni {{amount}}",
   "session.spend.stop": "Peata siin",
   "session.movesOn.hint": "Vastust pole kella {{time}}-ks? Agent jätkab ilma selleta.",
+  "session.permission.cannotUndo": "Tagasivõtmine ei too seda tagasi.",
+  "session.permission.leavesMachine": "See lahkub sinu arvutist. Tagasivõtmine ei saa seda tagasi tuua.",
   "session.movedOn.title": "Jätkas ilma sinuta",
   "session.movedOn.allow": "Luba ja jätka",
   "session.movedOn.leave": "Jäta nii",

@@ -9,6 +9,8 @@ import { InstanceState } from "@/effect/instance-state"
 import { assertExternalDirectoryEffect } from "./external-directory"
 import { Instruction } from "../session/instruction"
 import { isPdfAttachment, sniffAttachmentMime } from "@/util/media"
+import { Secrets } from "./secrets"
+import { FileSeen } from "./file-seen"
 
 const DEFAULT_READ_LIMIT = 2000
 const MAX_LINE_LENGTH = 2000
@@ -257,6 +259,7 @@ export const ReadTool = Tool.define<
         patterns: [path.relative(instance.worktree, filepath)],
         always: ["*"],
         metadata: {},
+        harmless: ctx.trust ? true : undefined,
       })
 
       if (!stat) return yield* miss(filepath)
@@ -328,7 +331,26 @@ export const ReadTool = Tool.define<
         return yield* Effect.fail(new Error(`Cannot read binary file: ${filepath}`))
       }
 
+      if (Secrets.wholeSecretFile(filepath)) {
+        const hidden = `This file holds credentials, so its contents are kept from you. Programs you run can still use it.`
+        return {
+          title,
+          output: [`<path>${filepath}</path>`, `<type>file</type>`, `<content>\n[hidden:${path.basename(filepath)}]`, `</content>`, hidden].join("\n"),
+          metadata: { preview: hidden, truncated: false, loaded: [] as string[] },
+        }
+      }
+
+      const secret = Secrets.secretFile(filepath)
+      if (Number(stat.size) <= 1024 * 1024) {
+        const whole = yield* fs.readFileString(filepath).pipe(Effect.catch(() => Effect.succeed(undefined)))
+        if (whole !== undefined) {
+          FileSeen.record(ctx.sessionID, filepath, whole)
+          if (secret) Secrets.learn(whole)
+        }
+      }
+
       const file = yield* lines(filepath, { limit: params.limit ?? DEFAULT_READ_LIMIT, offset: params.offset || 1 })
+      if (secret) file.raw = file.raw.map(Secrets.maskLine)
       if (file.count < file.offset && !(file.count === 0 && file.offset === 1)) {
         return yield* Effect.fail(
           new Error(`Offset ${file.offset} is out of range for this file (${file.count} lines)`),
@@ -349,6 +371,8 @@ export const ReadTool = Tool.define<
         output += `\n\n(End of file - total ${file.count} lines)`
       }
       output += "\n</content>"
+      if (secret)
+        output += `\n\nSecret values show as [hidden:NAME]. Programs you run still get the real ones, so running with this file loaded works. Do not try to reveal them.`
 
       yield* warm(filepath)
 

@@ -1356,6 +1356,8 @@ export const dict = {
   "session.spend.continue": "እስከ {{amount}} ቀጥል",
   "session.spend.stop": "እዚህ አቁም",
   "session.movesOn.hint": "እስከ {{time}} መልስ የለም? ወኪሉ ያለዚህ ይቀጥላል።",
+  "session.permission.cannotUndo": "መቀልበስ ይህን መመለስ አይችልም።",
+  "session.permission.leavesMachine": "ይህ ከኮምፒውተርዎ ይወጣል። መቀልበስ ሊመልሰው አይችልም።",
   "session.movedOn.title": "ያለ እርስዎ ቀጥሏል",
   "session.movedOn.allow": "ፍቀድ እና ቀጥል",
   "session.movedOn.leave": "ተወው",

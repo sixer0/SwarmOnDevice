@@ -1397,6 +1397,8 @@ export const dict = {
   "session.spend.continue": "{{amount}} तक जारी रखें",
   "session.spend.stop": "यहीं रोकें",
   "session.movesOn.hint": "{{time}} तक कोई जवाब नहीं? एजेंट इसके बिना आगे बढ़ेगा।",
+  "session.permission.cannotUndo": "पूर्ववत इसे वापस नहीं ला सकता।",
+  "session.permission.leavesMachine": "यह आपकी मशीन से बाहर जाएगा। पूर्ववत इसे वापस नहीं ला सकता।",
   "session.movedOn.title": "आपके बिना आगे बढ़ गया",
   "session.movedOn.allow": "अनुमति दें और जारी रखें",
   "session.movedOn.leave": "रहने दें",

@@ -1383,6 +1383,8 @@ export const dict = {
   "session.spend.continue": "გაგრძელება {{amount}}-მდე",
   "session.spend.stop": "აქ შეჩერება",
   "session.movesOn.hint": "{{time}}-მდე პასუხი არ არის? აგენტი ამის გარეშე გააგრძელებს.",
+  "session.permission.cannotUndo": "გაუქმება ამას ვერ დააბრუნებს.",
+  "session.permission.leavesMachine": "ეს ტოვებს თქვენს კომპიუტერს. გაუქმება მას ვერ დააბრუნებს.",
   "session.movedOn.title": "გააგრძელა თქვენ გარეშე",
   "session.movedOn.allow": "დაშვება და გაგრძელება",
   "session.movedOn.leave": "დატოვება",

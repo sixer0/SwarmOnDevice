@@ -1481,6 +1481,8 @@ export const dict = {
   "session.spend.continue": "Fortsæt til {{amount}}",
   "session.spend.stop": "Stop her",
   "session.movesOn.hint": "Intet svar inden {{time}}? Agenten fortsætter uden dette.",
+  "session.permission.cannotUndo": "Fortryd kan ikke hente dette tilbage.",
+  "session.permission.leavesMachine": "Dette forlader din maskine. Fortryd kan ikke tage det tilbage.",
   "session.movedOn.title": "Fortsatte uden dig",
   "session.movedOn.allow": "Tillad og fortsæt",
   "session.movedOn.leave": "Lad være",

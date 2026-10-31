@@ -1392,6 +1392,8 @@ export const dict = {
   "session.spend.continue": "Շարունակել մինչև {{amount}}",
   "session.spend.stop": "Կանգնեցնել այստեղ",
   "session.movesOn.hint": "{{time}}-ին պատասխան չկա՞։ Գործակալը կշարունակի առանց սրա։",
+  "session.permission.cannotUndo": "Հետարկումը չի կարող սա վերադարձնել։",
+  "session.permission.leavesMachine": "Սա դուրս է գալիս ձեր համակարգչից։ Հետարկումը չի կարող այն հետ բերել։",
   "session.movedOn.title": "Շարունակեց առանց ձեզ",
   "session.movedOn.allow": "Թույլատրել և շարունակել",
   "session.movedOn.leave": "Թողնել",

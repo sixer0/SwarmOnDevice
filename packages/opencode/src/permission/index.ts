@@ -86,7 +86,7 @@ const layer = Layer.effect(
 
     const ask = Effect.fn("Permission.ask")(function* (input: PermissionV1.AskInput) {
       const { approved, away, grants, pending } = yield* InstanceState.get(state)
-      const { ruleset, ...request } = input
+      const { ruleset, harmless, ...request } = input
       let needsAsk = false
 
       for (const pattern of request.patterns) {
@@ -98,6 +98,8 @@ const layer = Layer.effect(
           })
         }
         if (rule.action === "allow") continue
+        // The shipped baseline asks about anything it does not name. That is for what could hurt, and this cannot.
+        if (harmless && rule.permission === "*") continue
         needsAsk = true
       }
 
