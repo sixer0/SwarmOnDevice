@@ -175,6 +175,7 @@ const TIPS: Tip[] = [
   (shortcuts) => `Use ${commandText("/themes", shortcuts.themeList())} to switch between ${themeCount} built-in themes`,
   (shortcuts) => `Use ${commandText("/new", shortcuts.sessionNew())} to start a fresh conversation session`,
   (shortcuts) => `Use ${commandText("/sessions", shortcuts.sessionList())} to list, pin, and continue sessions`,
+  () => "Run {highlight}/fleet{/highlight} to see every Swarm agent on this machine and answer the ones waiting on you",
   (shortcuts) => press(shortcuts.sessionPinToggle(), "in the session list to pin one at the top"),
   (shortcuts) =>
     shortcuts.sessionQuickSwitch1() && shortcuts.sessionQuickSwitch9()

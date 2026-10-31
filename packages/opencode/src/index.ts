@@ -26,6 +26,7 @@ import { McpCommand } from "./cli/cmd/mcp"
 import { ExportCommand } from "./cli/cmd/export"
 import { ImportCommand } from "./cli/cmd/import"
 import { AttachCommand } from "./cli/cmd/attach"
+import { FleetCommand } from "./cli/cmd/fleet"
 import { TuiThreadCommand } from "./cli/cmd/tui"
 import { AcpCommand } from "./cli/cmd/acp"
 import { EOL } from "os"
@@ -95,6 +96,7 @@ const cli = yargs(args)
   .command(McpCommand)
   .command(TuiThreadCommand)
   .command(AttachCommand)
+  .command(FleetCommand)
   .command(RunCommand)
   .command(GenerateCommand)
   .command(DebugCommand)

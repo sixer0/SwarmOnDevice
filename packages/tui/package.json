@@ -25,6 +25,8 @@
     "./context/editor": "./src/context/editor.ts",
     "./context/clipboard": "./src/context/clipboard.tsx",
     "./attention": "./src/attention.ts",
+    "./fleet/model": "./src/fleet/model.ts",
+    "./fleet/registry": "./src/fleet/registry.ts",
     "./editor": "./src/editor.ts",
     "./editor-zed": "./src/editor-zed.ts",
     "./runtime": "./src/runtime.tsx",

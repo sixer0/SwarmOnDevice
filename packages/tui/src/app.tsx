@@ -80,6 +80,7 @@ import {
 import type { EventSource } from "./context/sdk"
 import { DialogVariant } from "./component/dialog-variant"
 import { createTuiAttention } from "./attention"
+import { fleetHost } from "./fleet/host"
 import * as TuiAudio from "./audio"
 import { win32DisableProcessedInput, win32FlushInputBuffer } from "./terminal-win32"
 import { destroyRenderer } from "./util/renderer"
@@ -371,6 +372,7 @@ function App(props: { onSnapshot?: () => Promise<string[]>; pluginHost: TuiPlugi
   const attention = createTuiAttention({ renderer, config: tuiConfig, kv })
   const clipboard = useClipboard()
   const update = useUpdateNotification()
+  fleetHost.setServer(sdk.url)
 
   const api = createTuiApi(
     createTuiApiAdapters({
@@ -439,26 +441,29 @@ function App(props: { onSnapshot?: () => Promise<string[]>; pluginHost: TuiPlugi
   // Update terminal window title based on current route and session
   createEffect(() => {
     if (!terminalTitleEnabled() || Flag.OPENCODE_DISABLE_TERMINAL_TITLE) return
+    // What tmux, screen and SSH clients show for this window: a blocked agent anywhere must be readable from there.
+    const waiting = fleetHost.waiting()
+    const prefix = waiting > 0 ? `(${waiting}) ` : ""
 
     if (route.data.type === "home") {
-      renderer.setTerminalTitle("Swarm")
+      renderer.setTerminalTitle(`${prefix}Swarm`)
       return
     }
 
     if (route.data.type === "session") {
       const session = sync.session.get(route.data.sessionID)
       if (!session || isDefaultTitle(session.title)) {
-        renderer.setTerminalTitle("Swarm")
+        renderer.setTerminalTitle(`${prefix}Swarm`)
         return
       }
 
       const title = session.title.length > 40 ? session.title.slice(0, 37) + "…" : session.title
-      renderer.setTerminalTitle(`Swarm | ${title}`)
+      renderer.setTerminalTitle(`${prefix}Swarm | ${title}`)
       return
     }
 
     if (route.data.type === "plugin") {
-      renderer.setTerminalTitle(`Swarm | ${route.data.id}`)
+      renderer.setTerminalTitle(`${prefix}Swarm | ${route.data.id}`)
     }
   })
 

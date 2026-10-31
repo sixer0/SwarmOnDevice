@@ -326,6 +326,7 @@ Commands:
   swarm mcp                 manage MCP (Model Context Protocol) servers
   swarm [project]           start swarm tui                                                [default]
   swarm attach <url>        attach to a running swarm server
+  swarm fleet               show every Swarm agent running on this machine
   swarm run [message..]     run swarm with a message
   swarm debug               debugging and troubleshooting tools
   swarm providers           manage AI providers and credentials                      [aliases: auth]
@@ -638,6 +639,7 @@ Commands:
   swarm mcp                 manage MCP (Model Context Protocol) servers
   swarm [project]           start swarm tui                                                [default]
   swarm attach <url>        attach to a running swarm server
+  swarm fleet               show every Swarm agent running on this machine
   swarm run [message..]     run swarm with a message
   swarm debug               debugging and troubleshooting tools
   swarm providers           manage AI providers and credentials                      [aliases: auth]
@@ -700,6 +702,7 @@ Commands:
   swarm mcp                 manage MCP (Model Context Protocol) servers
   swarm [project]           start swarm tui                                                [default]
   swarm attach <url>        attach to a running swarm server
+  swarm fleet               show every Swarm agent running on this machine
   swarm run [message..]     run swarm with a message
   swarm debug               debugging and troubleshooting tools
   swarm providers           manage AI providers and credentials                      [aliases: auth]
