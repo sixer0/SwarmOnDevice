@@ -221,7 +221,10 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
           }
         }
 
-        const provider = sync.data.provider[0]
+        // A provider written into config is what this person means to use, wherever it falls in the list.
+        const provider =
+          sync.data.provider.find((item) => item.source === "config" && item.options?.onDevice !== true) ??
+          sync.data.provider[0]
         if (!provider) return undefined
         const defaultModel = sync.data.provider_default[provider.id]
         const firstModel = Object.values(provider.models)[0]

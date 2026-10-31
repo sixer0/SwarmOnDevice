@@ -77,7 +77,9 @@ export function SessionContextUsage(props: SessionContextUsageProps) {
 
   const context = createMemo(() => getSessionContext(messages(), [...providers.all().values()]))
   const cost = createMemo(() => {
-    return usd().format(info()?.cost ?? 0)
+    const value = info()?.cost ?? 0
+    // A model with no price costs nothing to anyone here, and "$0.00" would read like a meter that is not running.
+    return value > 0 ? usd().format(value) : undefined
   })
   const contextVisible = createMemo(() => view().reviewPanel.opened() && tabState.activeTab() === "context")
   const hasOtherTabs = createMemo(() =>
@@ -129,8 +131,10 @@ export function SessionContextUsage(props: SessionContextUsageProps) {
 
   const tooltipValue = () => (
     <div class="flex w-[120px] flex-col gap-2">
-      <ContextTooltipRow name={language.t("context.usage.cost")} value={cost()} />
-      <ContextTooltipRow name={language.t("context.usage.usage")} value={`${context()?.usage ?? 0}%`} />
+      <Show when={cost()}>{(value) => <ContextTooltipRow name={language.t("context.usage.cost")} value={value()} />}</Show>
+      <Show when={context()?.usage !== null && context()?.usage !== undefined}>
+        <ContextTooltipRow name={language.t("context.usage.usage")} value={`${context()?.usage}%`} />
+      </Show>
       <ContextTooltipRow
         name={language.t("context.usage.tokens")}
         value={context()?.total.toLocaleString(language.intl()) ?? "0"}

@@ -38,9 +38,20 @@ const LOCAL_HOST = [
   /^192\.168\.\d+\.\d+$/,
   /^172\.(1[6-9]|2\d|3[01])\.\d+\.\d+$/,
   /^\[f[cd][0-9a-f]{2}:[0-9a-f:]*\]$/i,
+  /^\[fe[89ab][0-9a-f]:[0-9a-f:]*\]$/i,
+  // Shared address space (RFC 6598): how Tailscale and other mesh VPNs address their own machines.
+  /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.\d+\.\d+$/,
+  /^169\.254\.\d+\.\d+$/,
+  /\.ts\.net$/,
+  /\.(internal|intranet|lan|home\.arpa|corp)$/,
+  // A bare name such as gpu-box can only be resolved inside a private network.
+  /^[a-z0-9-]+$/i,
 ]
 
-/** Whether an endpoint is on this machine or its private network. An unreadable address counts as off-device. */
+/**
+ * Whether an endpoint is on this machine or a network the person runs, such as an office LAN or a tailnet: an internal
+ * model is not a third-party cloud. An unreadable address counts as off-device.
+ */
 export function isOnDeviceURL(url: string | undefined) {
   if (!url) return false
   // URL.parse rather than a try/catch: template URLs such as https://${region}.example.com do not parse.

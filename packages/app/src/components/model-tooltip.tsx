@@ -128,7 +128,9 @@ export const ModelTooltip: Component<{
           {(value) => <ModelTooltipRow name={language.t("model.tooltip.inputs")} value={value()} />}
         </Show>
         <ModelTooltipRow name={language.t("model.tooltip.reasoning")} value={reasoning()} />
-        <ModelTooltipRow name={language.t("model.tooltip.context.label")} value={contextLimit()} />
+        <Show when={props.model.limit.context > 0}>
+          <ModelTooltipRow name={language.t("model.tooltip.context.label")} value={contextLimit()} />
+        </Show>
         <Show when={noTools()}>
           <ModelTooltipRow name={language.t("model.tooltip.tools.label")} value={language.t("model.tooltip.tools.none")} />
         </Show>
@@ -151,7 +153,9 @@ export const ModelTooltip: Component<{
         )}
       </Show>
       <div class="text-12-regular text-text-invert-base">{reasoning()}</div>
-      <div class="text-12-regular text-text-invert-base">{context()}</div>
+      <Show when={props.model.limit.context > 0}>
+        <div class="text-12-regular text-text-invert-base">{context()}</div>
+      </Show>
       <Show when={noTools()}>
         <div class="text-12-regular text-text-invert-base">{language.t("model.tooltip.tools.none")}</div>
       </Show>

@@ -618,7 +618,7 @@ function isAfter(info: Info, other?: Info) {
 
 export function fromError(
   e: unknown,
-  ctx: { providerID: ProviderV2.ID; aborted?: boolean },
+  ctx: { providerID: ProviderV2.ID; providerName?: string; aborted?: boolean },
 ): NonNullable<Assistant["error"]> {
   switch (true) {
     case e instanceof DOMException && e.name === "AbortError":
@@ -635,6 +635,15 @@ export function fromError(
         {
           providerID: ctx.providerID,
           message: e.message,
+        },
+        { cause: e },
+      ).toObject()
+    case !ctx.aborted && ProviderError.isUnreachable(e):
+      return new APIError(
+        {
+          message: ProviderError.unreachableMessage(ctx.providerName ?? ctx.providerID),
+          isRetryable: true,
+          metadata: { code: "provider_unreachable", detail: errorMessage(e) },
         },
         { cause: e },
       ).toObject()

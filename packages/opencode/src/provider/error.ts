@@ -20,6 +20,29 @@ export class ResponseStreamError extends Error {
   }
 }
 
+export class UnreachableError extends Error {
+  public override readonly name = "ProviderUnreachableError"
+  constructor(host: string) {
+    super(`Could not open a connection to ${host}`)
+  }
+}
+
+const UNREACHABLE =
+  /cannot connect to api|unable to connect|connection refused|connectionrefused|failed to open socket|failedtoopensocket|econnrefused|enotfound|getaddrinfo|eai_again|ehostunreach|enetunreach|hostunreachable|networkunreachable|etimedout|connecttimeout|\bdns\b/i
+
+/** Nothing answered at all, as opposed to a server that answered with an error or stalled partway through one. */
+export function isUnreachable(error: unknown) {
+  if (error instanceof UnreachableError) return true
+  if (!(error instanceof Error)) return false
+  if (APICallError.isInstance(error)) return error.statusCode === undefined && UNREACHABLE.test(error.message)
+  const code = (error as { code?: unknown }).code
+  return UNREACHABLE.test(`${error.name} ${typeof code === "string" ? code : ""} ${error.message}`)
+}
+
+/** Said in the transcript, once while Swarm keeps trying and once if it gives up, so it has to read right for both. */
+export const unreachableMessage = (provider: string) =>
+  `${provider} cannot be reached. Check your VPN or network connection.`
+
 function isOpenAiErrorRetryable(e: APICallError) {
   const status = e.statusCode
   if (!status) return e.isRetryable

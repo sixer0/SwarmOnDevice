@@ -3,7 +3,7 @@
 
 type Tokens = { input: number; output: number; reasoning?: number; cache?: { read: number; write: number } }
 type Cost = { input: number; output: number; cache?: { read: number; write: number } }
-type OnDevice = { options?: Record<string, unknown> }
+type OnDevice = { source?: string; options?: Record<string, unknown> }
 type Model = { name: string; cost?: Cost; provider: OnDevice }
 
 export const isOnDeviceProvider = (provider: OnDevice) => provider.options?.onDevice === true
@@ -30,8 +30,15 @@ export function compareModels(a: Model, b: Model) {
   return a.name.localeCompare(b.name)
 }
 
-export const compareProviders = (a: OnDevice, b: OnDevice) =>
-  Number(isOnDeviceProvider(b)) - Number(isOnDeviceProvider(a))
+// A provider written into config is what this person means to use. Anything Swarm found by itself comes after it.
+const isConfigured = (provider: OnDevice) => provider.source === "config" && !isOnDeviceProvider(provider)
+const pickerRank = (provider: OnDevice) => (isConfigured(provider) ? 0 : isOnDeviceProvider(provider) ? 1 : 2)
+const defaultRank = (provider: OnDevice) => (isConfigured(provider) ? 0 : isOnDeviceProvider(provider) ? 2 : 1)
+
+/** Order of the picker's groups. */
+export const compareProviders = (a: OnDevice, b: OnDevice) => pickerRank(a) - pickerRank(b)
+/** Which connected provider a session starts on when nothing has been chosen yet. */
+export const compareProviderDefaults = (a: OnDevice, b: OnDevice) => defaultRank(a) - defaultRank(b)
 
 export function sumTokens(tokens: Tokens[]) {
   if (tokens.length === 0) return

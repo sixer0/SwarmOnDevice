@@ -126,7 +126,12 @@ export const prepare = Effect.fn("LLMRequestPrep.prepare")(function* (input: Pre
         : undefined,
       topP: input.agent.topP ?? ProviderTransform.topP(input.model),
       topK: ProviderTransform.topK(input.model),
-      maxOutputTokens: ProviderTransform.maxOutputTokens(input.model, input.flags.outputTokenMax),
+      // No limit declared on a self-hosted server: asking for a fixed amount can itself exceed its window (vLLM counts
+      // the request as prompt plus max_tokens), so a model with 32k refused even a short first message. It knows best.
+      maxOutputTokens:
+        input.model.limit.output === 0 && input.model.api.npm === "@ai-sdk/openai-compatible"
+          ? undefined
+          : ProviderTransform.maxOutputTokens(input.model, input.flags.outputTokenMax),
       options,
     },
   )

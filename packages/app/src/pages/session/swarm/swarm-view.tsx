@@ -425,9 +425,11 @@ export function SwarmAgents(props: { swarm: SwarmController }) {
                   </span>
                 )}
               </Show>
-              <span data-swarm-stat="cost" class="ml-auto tabular-nums">
-                {usd(totals()?.cost ?? 0)}
-              </span>
+              <Show when={(totals()?.cost ?? 0) > 0}>
+                <span data-swarm-stat="cost" class="ml-auto tabular-nums">
+                  {usd(totals()?.cost ?? 0)}
+                </span>
+              </Show>
             </div>
 
             <Index each={model().overlaps}>
@@ -462,7 +464,9 @@ export function SwarmAgents(props: { swarm: SwarmController }) {
                               <span class="min-w-0 flex-1 truncate text-v2-text-text-base [font-weight:530]">
                                 {lane().title}
                               </span>
-                              <span class={`shrink-0 tabular-nums ${FAINT}`}>{usd(lane().cost)}</span>
+                              <Show when={lane().cost > 0}>
+                                <span class={`shrink-0 tabular-nums ${FAINT}`}>{usd(lane().cost)}</span>
+                              </Show>
                             </span>
                             <span class="flex min-w-0 items-baseline gap-1.5">
                               <span

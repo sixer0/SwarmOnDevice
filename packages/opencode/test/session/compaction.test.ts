@@ -636,6 +636,13 @@ describe("session.compaction price target", () => {
     expect(isOverPriceTarget({ cfg: {}, model, tokens: usage(180_000) })).toBe(true)
   })
 
+  test("a model whose window nobody declared stops growing at a size that is safe to assume", () => {
+    const model = createModel({ context: 0, output: 0 })
+    expect(priceTarget({ cfg: {}, model })).toBe(108_000)
+    expect(isOverPriceTarget({ cfg: {}, model, tokens: usage(108_000) })).toBe(true)
+    expect(priceTarget({ cfg: { compaction: { max_context: 0 } }, model })).toBeUndefined()
+  })
+
   test("a free or on-device model uses its whole window", () => {
     expect(priceTarget({ cfg: {}, model: createModel(big) })).toBeUndefined()
   })
@@ -1203,11 +1210,49 @@ describe("session.compaction.process", () => {
   )
 
   it.instance(
-    "falls back to overflow guidance when no replayable turn exists",
+    "a long run that overflowed just continues, with no talk of attachments it never had",
     Effect.gen(function* () {
       const ssn = yield* SessionNs.Service
       const session = yield* ssn.create({})
       yield* createUserMessage(session.id, "earlier")
+      const msg = yield* createUserMessage(session.id, "current")
+      const msgs = yield* ssn.messages({ sessionID: session.id })
+
+      const result = yield* SessionCompaction.use.process({
+        parentID: msg.id,
+        messages: msgs,
+        sessionID: session.id,
+        auto: true,
+        overflow: true,
+      })
+
+      const last = (yield* ssn.messages({ sessionID: session.id })).at(-1)
+
+      expect(result).toBe("continue")
+      expect(last?.info.role).toBe("user")
+      expect(last?.parts[0]?.type).toBe("text")
+      if (last?.parts[0]?.type === "text") {
+        expect(last.parts[0].text).not.toContain("attachments")
+        expect(last.parts[0].text).toContain("Continue if you have next steps")
+      }
+    }),
+  )
+
+  it.instance(
+    "falls back to overflow guidance when an attachment may be why it overflowed",
+    Effect.gen(function* () {
+      const ssn = yield* SessionNs.Service
+      const session = yield* ssn.create({})
+      const earlier = yield* createUserMessage(session.id, "earlier")
+      yield* ssn.updatePart({
+        id: PartID.ascending(),
+        messageID: earlier.id,
+        sessionID: session.id,
+        type: "file",
+        mime: "image/png",
+        filename: "shot.png",
+        url: "data:image/png;base64,AAAA",
+      })
       const msg = yield* createUserMessage(session.id, "current")
       const msgs = yield* ssn.messages({ sessionID: session.id })
 

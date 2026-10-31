@@ -74,6 +74,8 @@ export function DialogModel(props: { providerID?: string }) {
     const providerOptions = pipe(
       sync.data.provider,
       sortBy(
+        // A provider written into config is what this person means to use; what Swarm found by itself comes after it.
+        (provider) => provider.source !== "config" || provider.options?.onDevice === true,
         (provider) => provider.options?.onDevice !== true,
         (provider) => provider.id !== "opencode",
         (provider) => provider.name,

@@ -36,6 +36,13 @@ describe("isOnDeviceURL", () => {
     "http://10.0.0.5/v1",
     "http://172.20.0.2/v1",
     "http://gpu-box.local:8000/v1",
+    "http://100.64.0.1:8000/v1",
+    "http://100.101.102.103/v1",
+    "http://100.127.255.254/v1",
+    "http://[fd7a:115c:a1e0::1]:8000/v1",
+    "https://inference.my-tailnet.ts.net/v1",
+    "http://models.internal/v1",
+    "http://gpu-box:8000/v1",
   ])("%s is on device", (url) => {
     expect(MemoryLearn.isOnDeviceURL(url)).toBe(true)
   })
@@ -45,6 +52,10 @@ describe("isOnDeviceURL", () => {
     "https://localhost.evil.example.com/v1",
     "http://127.0.0.1.nip.io/v1",
     "http://172.32.0.1/v1",
+    "http://100.63.255.255/v1",
+    "http://100.128.0.1/v1",
+    "https://ts.net.example.com/v1",
+    "https://example.ts.net.evil.com/v1",
     "http://10.0.0.1.example.com/v1",
     "https://${RESOURCE}.openai.azure.com",
     "",

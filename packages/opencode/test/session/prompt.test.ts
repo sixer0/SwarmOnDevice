@@ -2526,10 +2526,59 @@ const waitForAsk = Effect.fn("test.waitForAsk")(function* (permission: string) {
 })
 
 const allowAll = [{ permission: "*", pattern: "*", action: "allow" as const }]
+const paidCost = { input: 5, output: 25 }
+
+// The same provider with a price on its model, since only a request that costs money can be held.
+function paidCfg(url: string) {
+  const base = providerCfg(url)
+  return {
+    ...base,
+    provider: {
+      test: {
+        ...base.provider.test,
+        models: { "test-model": { ...base.provider.test.models["test-model"], cost: paidCost } },
+      },
+    },
+  }
+}
+
+it.instance("a model with no price never pauses, however much paid models spent in the same run", () =>
+  Effect.gen(function* () {
+    const { llm } = yield* useServerConfig((url) => ({ ...providerCfg(url), spend_limit: 1 }))
+    const prompt = yield* SessionPrompt.Service
+    const service = yield* Permission.Service
+    const sessions = yield* Session.Service
+    const chat = yield* sessions.create({ title: "Pinned", permission: allowAll })
+    yield* spent(chat.id, 500)
+    yield* llm.text("done")
+    const result = yield* prompt.loop({ sessionID: chat.id })
+    expect(result.parts.some((part) => part.type === "text" && part.text === "done")).toBe(true)
+    expect(yield* service.list()).toEqual([])
+  }),
+)
+
+it.instance("the limit counts what was spent after the run began, not what the session held when it started", () =>
+  Effect.gen(function* () {
+    yield* useServerConfig((url) => ({ ...paidCfg(url), spend_limit: 1 }))
+    const service = yield* Permission.Service
+    const sessions = yield* Session.Service
+    const atStart = yield* sessions.create({ title: "Pinned", permission: allowAll })
+    expect(atStart.cost ?? 0).toBe(0)
+    yield* spent(atStart.id, 1.5)
+    const model = { cost: { ...paidCost, cache: { read: 0, write: 0 } } }
+    const fiber = yield* SessionSpend.check({ sessions, permission: service, limit: 1, model, session: atStart }).pipe(
+      Effect.forkChild,
+    )
+    const asked = yield* waitForAsk("spend_limit")
+    expect(asked.patterns).toEqual(["$1.50 of $1.00"])
+    yield* service.reply({ requestID: asked.id, reply: "reject" })
+    expect(yield* Fiber.join(fiber)).toBe(1)
+  }),
+)
 
 it.instance("a run at its spend limit waits, and stopping it sends nothing more to the model", () =>
   Effect.gen(function* () {
-    const { llm } = yield* useServerConfig((url) => ({ ...providerCfg(url), spend_limit: 1 }))
+    const { llm } = yield* useServerConfig((url) => ({ ...paidCfg(url), spend_limit: 1 }))
     const prompt = yield* SessionPrompt.Service
     const service = yield* Permission.Service
     const sessions = yield* Session.Service
@@ -2558,7 +2607,7 @@ it.instance("a run at its spend limit waits, and stopping it sends nothing more 
 
 it.instance("continuing past the limit raises it by the same amount and the run goes on", () =>
   Effect.gen(function* () {
-    const { llm } = yield* useServerConfig((url) => ({ ...providerCfg(url), spend_limit: 1 }))
+    const { llm } = yield* useServerConfig((url) => ({ ...paidCfg(url), spend_limit: 1 }))
     const prompt = yield* SessionPrompt.Service
     const service = yield* Permission.Service
     const sessions = yield* Session.Service
@@ -2577,7 +2626,7 @@ it.instance("continuing past the limit raises it by the same amount and the run 
 
 it.instance("a new message starts a new run, so an earlier expensive one does not count", () =>
   Effect.gen(function* () {
-    const { llm } = yield* useServerConfig((url) => ({ ...providerCfg(url), spend_limit: 1 }))
+    const { llm } = yield* useServerConfig((url) => ({ ...paidCfg(url), spend_limit: 1 }))
     const prompt = yield* SessionPrompt.Service
     const sessions = yield* Session.Service
     const chat = yield* sessions.create({ title: "Pinned", permission: allowAll })
@@ -2592,7 +2641,7 @@ it.instance("a new message starts a new run, so an earlier expensive one does no
 
 it.instance("subagents count toward the run, and they all share one question on the root session", () =>
   Effect.gen(function* () {
-    yield* useServerConfig((url) => ({ ...providerCfg(url), spend_limit: 1 }))
+    yield* useServerConfig((url) => ({ ...paidCfg(url), spend_limit: 1 }))
     const service = yield* Permission.Service
     const sessions = yield* Session.Service
     const root = yield* sessions.create({ title: "Root", permission: allowAll })
@@ -2602,7 +2651,7 @@ it.instance("subagents count toward the run, and they all share one question on 
     yield* spent(first.id, 0.5)
     yield* spent(second.id, 0.5)
 
-    const input = { sessions, permission: service, limit: 1 }
+    const input = { sessions, permission: service, limit: 1, model: { cost: { input: 1, output: 1, cache: { read: 0, write: 0 } } } }
     const a = yield* SessionSpend.check({ ...input, session: first }).pipe(Effect.forkChild)
     const b = yield* SessionSpend.check({ ...input, session: second }).pipe(Effect.forkChild)
     const asked = yield* waitForAsk("spend_limit")

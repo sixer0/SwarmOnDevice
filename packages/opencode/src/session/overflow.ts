@@ -9,6 +9,9 @@ const COMPACTION_BUFFER = 20_000
 // Every step re-sends the whole conversation, so its price grows with the context. Past this size, summarizing pays for
 // itself within a few steps on any paid model, even though a 1M window would still have room.
 const PAID_CONTEXT_TARGET = 200_000
+// No window declared and none learned yet. Some servers cut an oversized prompt without saying so, which silently loses
+// the start of the conversation. A summary here costs little; `compaction.max_context` moves it.
+const UNKNOWN_WINDOW_TARGET = 128_000
 
 export function usable(input: { cfg: ConfigV1.Info; model: Provider.Model; outputTokenMax?: number }) {
   const context = input.model.limit.context
@@ -22,15 +25,22 @@ export function usable(input: { cfg: ConfigV1.Info; model: Provider.Model; outpu
     : Math.max(0, context - ProviderTransform.maxOutputTokens(input.model, input.outputTokenMax))
 }
 
-/** Where a paid model's context should stop growing, or undefined when only the window itself limits it. */
+/** Where a model's context should stop growing short of its window, or undefined when only the window limits it. */
 export function priceTarget(input: { cfg: ConfigV1.Info; model: Provider.Model; outputTokenMax?: number }) {
   const configured = input.cfg.compaction?.max_context
   if (configured === 0) return undefined
   const cost = input.model.cost
-  if (configured === undefined && !cost?.input) return undefined
+  const unknownWindow = input.model.limit.context === 0
+  if (configured === undefined && !cost?.input && !unknownWindow) return undefined
   // Crossing a priced tier raises the rate of every token in the request, so stop short of the first one.
   const tiers = (cost?.tiers ?? []).filter((item) => item.tier.type === "context").map((item) => item.tier.size)
-  const limit = configured ?? Math.min(PAID_CONTEXT_TARGET, ...tiers, ...(cost?.experimentalOver200K ? [200_000] : []))
+  const limit =
+    configured ??
+    Math.min(
+      unknownWindow ? UNKNOWN_WINDOW_TARGET : PAID_CONTEXT_TARGET,
+      ...tiers,
+      ...(cost?.experimentalOver200K ? [200_000] : []),
+    )
   const reserved =
     input.cfg.compaction?.reserved ??
     Math.min(COMPACTION_BUFFER, ProviderTransform.maxOutputTokens(input.model, input.outputTokenMax))
@@ -52,7 +62,7 @@ export function isOverflow(input: {
   return count(input.tokens) >= usable(input)
 }
 
-/** The context still fits but has grown past what is worth paying to re-send on every step. */
+/** The context still fits but has grown past what is worth re-sending on every step, or past what is safe to assume. */
 export function isOverPriceTarget(input: {
   cfg: ConfigV1.Info
   tokens: SessionV1.Assistant["tokens"]

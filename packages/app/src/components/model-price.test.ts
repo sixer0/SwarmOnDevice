@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { compareModels, compareProviders, formatPrice, priceLabel, repriceSession, sumTokens } from "./model-price"
+import { compareModels, compareProviderDefaults, compareProviders, formatPrice, priceLabel, repriceSession, sumTokens } from "./model-price"
 
 const model = (name: string, input?: number, output = 0, onDevice = false) => ({
   name,
@@ -36,6 +36,14 @@ describe("compareModels", () => {
     const sorted = [model("z-best", 0, 0, true), model("a-worse", 0, 0, true)].toSorted(compareModels)
     expect(sorted.map((item) => item.name)).toEqual(["z-best", "a-worse"])
   })
+})
+
+test("a provider written into config comes first in the picker and is the default", () => {
+  const configured = { source: "config" }
+  const engine = { source: "custom", options: { onDevice: true } }
+  const cloud = { source: "env" }
+  expect([cloud, engine, configured].toSorted(compareProviders)).toEqual([configured, engine, cloud])
+  expect([engine, cloud, configured].toSorted(compareProviderDefaults)).toEqual([configured, cloud, engine])
 })
 
 test("compareProviders puts on-device first", () => {

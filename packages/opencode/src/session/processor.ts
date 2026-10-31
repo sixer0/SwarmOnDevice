@@ -15,6 +15,7 @@ import { Session } from "./session"
 import { LLM } from "./llm"
 import { MessageV2 } from "./message-v2"
 import { isOverflow } from "./overflow"
+import { ModelWindow } from "@/provider/model-window"
 import { PartID } from "./schema"
 import type { SessionID } from "./schema"
 import { SessionRetry } from "./retry"
@@ -157,9 +158,11 @@ const layer = Layer.effect(
       const noteAttemptPart = (part: { id: PartID; messageID: SessionV1.Assistant["id"]; sessionID: SessionID }) =>
         ctx.attemptParts.push({ sessionID: part.sessionID, messageID: part.messageID, partID: part.id })
 
+      const providerName = (yield* config.get()).provider?.[input.model.providerID]?.name ?? input.model.providerID
       const parse = (e: unknown) =>
         MessageV2.fromError(e, {
           providerID: input.model.providerID,
+          providerName,
           aborted,
         })
 
@@ -672,6 +675,15 @@ const layer = Layer.effect(
         })
         const error = parse(e)
         if (SessionV1.ContextOverflowError.isInstance(error)) {
+          // The refused prompt is the current one, so what the server last accepted comes from the steps before it.
+          let accepted = 0
+          if (ModelWindow.undeclared(input.model)) {
+            const previous = yield* session
+              .findMessage(ctx.sessionID, (message) => message.info.role === "assistant" && message.info.tokens.input > 0)
+              .pipe(Effect.orDie)
+            if (previous._tag === "Some" && previous.value.info.role === "assistant") accepted = previous.value.info.tokens.input
+          }
+          ModelWindow.learnFromRefusal(input.model, `${error.data.message} ${error.data.responseBody ?? ""}`, accepted)
           if ((yield* config.get()).compaction?.auto === false && !ctx.assistantMessage.summary) {
             ctx.assistantMessage.error = error
             ctx.assistantMessage.finish = "error"
@@ -679,8 +691,9 @@ const layer = Layer.effect(
             yield* status.set(ctx.sessionID, { type: "idle" })
             return
           }
+          // Handled: the run compacts and carries on, so nobody should be told something went wrong. If compacting
+          // cannot save it, that is reported then.
           ctx.needsCompaction = true
-          yield* events.publish(Session.Event.Error, { sessionID: ctx.sessionID, error })
           return
         }
         ctx.assistantMessage.error = error
@@ -690,6 +703,8 @@ const layer = Layer.effect(
         })
         yield* status.set(ctx.sessionID, { type: "idle" })
       })
+
+      let retrying = false
 
       const process = Effect.fn("SessionProcessor.process")(function* (streamInput: LLM.StreamInput) {
         yield* Effect.logInfo("process", {
@@ -705,11 +720,21 @@ const layer = Layer.effect(
             ctx.attemptParts = []
             ctx.currentText = undefined
             ctx.reasoningMap = {}
-            yield* status.set(ctx.sessionID, { type: "busy" })
+            // While retrying, the reason stays on screen until the provider really answers. Connecting to one that is
+            // down can take seconds, and the message would otherwise blink off and on with every attempt.
+            if (!retrying) yield* status.set(ctx.sessionID, { type: "busy" })
             const stream = llm.stream(streamInput)
 
             yield* stream.pipe(
-              Stream.tap((event) => handleEvent(event)),
+              Stream.tap((event) =>
+                Effect.gen(function* () {
+                  if (retrying) {
+                    retrying = false
+                    yield* status.set(ctx.sessionID, { type: "busy" })
+                  }
+                  yield* handleEvent(event)
+                }),
+              ),
               Stream.takeUntil(() => ctx.needsCompaction),
               Stream.runDrain,
             )
@@ -747,6 +772,7 @@ const layer = Layer.effect(
                 provider: input.model.providerID,
                 parse,
                 set: (info) => {
+                  retrying = true
                   return status.set(ctx.sessionID, {
                     type: "retry",
                     attempt: info.attempt,

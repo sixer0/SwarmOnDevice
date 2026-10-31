@@ -1554,6 +1554,16 @@ describe("session.message-v2.toModelMessage", () => {
 })
 
 describe("session.message-v2.fromError", () => {
+  test("a provider nobody can connect to is named in plain words, and the run keeps trying", () => {
+    const result = MessageV2.fromError(Object.assign(new Error("connect failed"), { code: "ECONNREFUSED" }), {
+      providerID,
+      providerName: "internal-llm",
+    }) as { name: string; data: { message: string; isRetryable: boolean } }
+    expect(result.name).toBe("APIError")
+    expect(result.data.isRetryable).toBe(true)
+    expect(result.data.message).toBe("internal-llm cannot be reached. Check your VPN or network connection.")
+  })
+
   test("serializes context_length_exceeded as ContextOverflowError", () => {
     const input = {
       type: "error",

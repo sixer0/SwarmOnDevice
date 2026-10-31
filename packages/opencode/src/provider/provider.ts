@@ -1,3 +1,4 @@
+import { connect, type Socket } from "net"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import os from "os"
 import { ConfigV1 } from "@opencode-ai/core/v1/config/config"
@@ -29,6 +30,7 @@ import { ProviderTransform } from "./transform"
 import { ProviderV2 } from "@opencode-ai/core/provider"
 import { ModelV2 } from "@opencode-ai/core/model"
 import { LocalEngines } from "./local-engines"
+import { ModelWindow } from "./model-window"
 import { ModelStatus } from "./model-status"
 import { RuntimeFlags } from "@/effect/runtime-flags"
 import { ProviderError } from "./error"
@@ -92,6 +94,37 @@ function timeoutController(ms: number) {
   }
 }
 
+// A server that accepted the request may take minutes to start answering, but one nobody can connect to says nothing
+// at all: packets to a tailnet or VPN address that is down are dropped, so the request would hang for over a minute
+// before the first error. If no headers have come after a few seconds, check whether a connection opens at all.
+const REACHABLE_CHECK_AFTER_MS = 5_000
+const REACHABLE_CHECK_TIMEOUT_MS = 5_000
+
+function watchReachable(input: any, abort: (error: ProviderError.UnreachableError) => void) {
+  // A proxy is what gets connected to, not the address in the URL.
+  if (process.env.HTTP_PROXY || process.env.HTTPS_PROXY || process.env.http_proxy || process.env.https_proxy) return
+  const url = URL.parse(input instanceof Request ? input.url : String(input))
+  if (!url) return
+  const port = Number(url.port) || (url.protocol === "https:" ? 443 : 80)
+  let socket: Socket | undefined
+  const timer = setTimeout(() => {
+    socket = connect({ host: url.hostname.replace(/^\[|\]$/g, ""), port, timeout: REACHABLE_CHECK_TIMEOUT_MS })
+    const fail = () => {
+      socket?.destroy()
+      abort(new ProviderError.UnreachableError(url.host))
+    }
+    socket.once("connect", () => socket?.destroy())
+    socket.once("timeout", fail)
+    socket.once("error", fail)
+  }, REACHABLE_CHECK_AFTER_MS)
+  return () => {
+    clearTimeout(timer)
+    socket?.removeAllListeners()
+    socket?.on("error", () => {})
+    socket?.destroy()
+  }
+}
+
 // Applies the `headerTimeout`, `chunkTimeout` (SSE idle) and `timeout` provider options at the
 // fetch layer, on top of `options.fetch` when a custom fetch is configured.
 function timeoutFetch(options: Record<string, any>) {
@@ -111,6 +144,9 @@ function timeoutFetch(options: Record<string, any>) {
     if (opts.signal) signals.push(opts.signal)
     if (chunkAbortCtl) signals.push(chunkAbortCtl.signal)
     if (headerTimeoutCtl) signals.push(headerTimeoutCtl.signal)
+    const reachable = new AbortController()
+    signals.push(reachable.signal)
+    const stopWatching = watchReachable(input, (error) => reachable.abort(error))
     if (timeout !== undefined && timeout !== null && timeout !== false) signals.push(AbortSignal.timeout(timeout))
 
     const combined = signals.length === 0 ? null : signals.length === 1 ? signals[0] : AbortSignal.any(signals)
@@ -120,7 +156,10 @@ function timeoutFetch(options: Record<string, any>) {
       ...opts,
       // @ts-ignore see here: https://github.com/oven-sh/bun/issues/16682
       timeout: false,
-    }).finally(() => headerTimeoutCtl?.clear())
+    }).finally(() => {
+      headerTimeoutCtl?.clear()
+      stopWatching?.()
+    })
 
     if (!chunkAbortCtl) return res
     return wrapSSE(res, chunkTimeout, chunkAbortCtl)
@@ -236,8 +275,12 @@ function custom(dep: CustomDep): Record<string, CustomLoader> {
         }
       }
 
+      // Public free models are there so someone with nothing set up can start. Whoever configured a provider has what
+      // they mean to use, and a hosted model must not be its default or crowd it in the picker.
+      const hasOwnProvider = Object.keys((yield* dep.config()).provider ?? {}).some((id) => id !== "opencode")
+
       return {
-        autoload: Object.keys(input.models).length > 0,
+        autoload: Object.keys(input.models).length > 0 && (ok || !hasOwnProvider),
         options: ok ? {} : { apiKey: "public" },
       }
     }),
@@ -1871,6 +1914,11 @@ const layer = Layer.effect(
 
     const list = Effect.fn("Provider.list")(function* () {
       const s = yield* InstanceState.get(state)
+      for (const provider of Object.values(s.providers)) {
+        if (provider.source !== "config") continue
+        ModelWindow.discover(provider)
+        Object.values(provider.models).forEach(ModelWindow.apply)
+      }
       return (yield* syncLocal(s)).providers
     })
 
@@ -2008,7 +2056,8 @@ const layer = Layer.effect(
           : modelSuggestions(s.catalog[providerID], modelID, runtimeFlags.enableExperimentalModels)
         return yield* new ModelNotFoundError({ providerID, modelID, suggestions })
       }
-      return info
+      if (provider.source === "config") ModelWindow.discover(provider)
+      return ModelWindow.apply(info)
     })
 
     const getLanguage = Effect.fn("Provider.getLanguage")(function* (model: Model) {

@@ -238,9 +238,9 @@ export function SessionContextTab() {
     { label: "context.stats.messages", value: () => counts().all.toLocaleString(language.intl()) },
     { label: "context.stats.provider", value: providerLabel },
     { label: "context.stats.model", value: modelLabel },
-    { label: "context.stats.limit", value: () => formatter().number(ctx()?.limit) },
+    { label: "context.stats.limit", value: () => formatter().number(ctx()?.limit), when: () => !!ctx()?.limit },
     { label: "context.stats.totalTokens", value: () => formatter().number(ctx()?.total) },
-    { label: "context.stats.usage", value: () => formatter().percent(ctx()?.usage) },
+    { label: "context.stats.usage", value: () => formatter().percent(ctx()?.usage), when: () => !!ctx()?.limit },
     { label: "context.stats.inputTokens", value: () => formatter().number(ctx()?.input) },
     { label: "context.stats.outputTokens", value: () => formatter().number(ctx()?.message.tokens.output) },
     { label: "context.stats.reasoningTokens", value: () => formatter().number(ctx()?.message.tokens.reasoning) },
@@ -251,10 +251,10 @@ export function SessionContextTab() {
     },
     { label: "context.stats.userMessages", value: () => counts().user.toLocaleString(language.intl()) },
     { label: "context.stats.assistantMessages", value: () => counts().assistant.toLocaleString(language.intl()) },
-    { label: "context.stats.totalCost", value: cost },
+    { label: "context.stats.totalCost", value: cost, when: () => (info()?.cost ?? 0) + knownSubagentCost() > 0 },
     { label: "context.stats.sessionCreated", value: () => formatter().time(info()?.time.created) },
     { label: "context.stats.lastActivity", value: () => formatter().time(ctx()?.message.time.created) },
-  ] satisfies { label: string; value: () => JSX.Element }[]
+  ] satisfies { label: string; value: () => JSX.Element; when?: () => boolean }[]
 
   const exportSession = async () => {
     const sessionID = params.id
@@ -376,7 +376,11 @@ export function SessionContextTab() {
 
         <div class="grid grid-cols-1 @[32rem]:grid-cols-2 gap-4">
           <For each={stats}>
-            {(stat) => <Stat label={language.t(stat.label as Parameters<typeof language.t>[0])} value={stat.value()} />}
+            {(stat) => (
+              <Show when={"when" in stat ? stat.when?.() : true}>
+                <Stat label={language.t(stat.label as Parameters<typeof language.t>[0])} value={stat.value()} />
+              </Show>
+            )}
           </For>
         </div>
 

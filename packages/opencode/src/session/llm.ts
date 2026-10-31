@@ -6,7 +6,7 @@ import { SessionV1 } from "@opencode-ai/core/v1/session"
 import { serviceUse } from "@opencode-ai/core/effect/service-use"
 import { Context, Effect, Layer } from "effect"
 import * as Stream from "effect/Stream"
-import { streamText, wrapLanguageModel, type ModelMessage, type Tool } from "ai"
+import { extractReasoningMiddleware, streamText, wrapLanguageModel, type ModelMessage, type Tool } from "ai"
 import type { LLMEvent } from "@opencode-ai/llm"
 import { LLMClient } from "@opencode-ai/llm/route"
 import type { LLMClientService } from "@opencode-ai/llm/route"
@@ -325,6 +325,11 @@ const live: Layer.Layer<
           model: wrapLanguageModel({
             model: language,
             middleware: [
+              // A self-hosted server without a reasoning parser passes a model's thinking through as plain text. It belongs
+              // in the collapsed thinking block, not in the answer, a title or a summary.
+              ...(item.source === "config" && input.model.api.npm === "@ai-sdk/openai-compatible"
+                ? [extractReasoningMiddleware({ tagName: "think" })]
+                : []),
               {
                 specificationVersion: "v3" as const,
                 async transformParams(args) {

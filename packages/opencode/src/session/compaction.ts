@@ -39,6 +39,17 @@ export function cacheColdAfter() {
   return process.env.SWARM_CACHE_COLD_AFTER_MS && Number.isFinite(raw) ? raw : CACHE_COLD_AFTER_MS
 }
 
+// A summary request has to fit the same window as everything else. Reached only when a server's real window turned out
+// far smaller than the conversation; the latest part is what the run needs to continue.
+function fitWindow(conversation: string, model: Provider.Model, cfg: ConfigV1.Info) {
+  const room = usable({ cfg, model })
+  if (room <= 0) return conversation
+  const max = room * 3 // chars: tokens run about four to the char in English, fewer in code and other scripts
+  return conversation.length <= max
+    ? conversation
+    : `[Earlier parts of this conversation were too long to include.]\n\n${conversation.slice(-max)}`
+}
+
 const MIN_PRESERVE_RECENT_TOKENS = 2_000
 const MAX_PRESERVE_RECENT_TOKENS = 15_000
 type Turn = {
@@ -403,7 +414,7 @@ const layer = Layer.effect(
       )
       const msgs = structuredClone(selected.head)
       yield* plugin.trigger("experimental.chat.messages.transform", {}, { messages: msgs })
-      const conversation = msgs.map(serialize).filter(Boolean).join("\n\n")
+      const conversation = fitWindow(msgs.map(serialize).filter(Boolean).join("\n\n"), model, cfg)
       const nextPrompt =
         compacting.prompt ??
         [
@@ -481,6 +492,7 @@ const layer = Layer.effect(
         }).toObject()
         processor.message.finish = "error"
         yield* session.updateMessage(processor.message)
+        yield* events.publish(Session.Event.Error, { sessionID: input.sessionID, error: processor.message.error })
         return "stop"
       }
 
@@ -551,7 +563,7 @@ const layer = Layer.effect(
               model: userMessage.model,
             })
             const text =
-              (input.overflow
+              (input.overflow && input.messages.some((m) => m.parts.some((p) => p.type === "file" && MessageV2.isMedia(p.mime)))
                 ? "The previous request exceeded the provider's size limit due to large media attachments. The conversation was compacted and media files were removed from context. If the user was asking about attached images or files, explain that the attachments were too large to process and suggest they try again with smaller or fewer files.\n\n"
                 : "") +
               "Continue if you have next steps, or stop and ask for clarification if you are unsure how to proceed."

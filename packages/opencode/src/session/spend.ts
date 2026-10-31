@@ -1,6 +1,7 @@
 import { Deferred, Effect } from "effect"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
 import type { Permission } from "@/permission"
+import type { Provider } from "@/provider/provider"
 import type { Session } from "./session"
 import type { MessageID, SessionID } from "./schema"
 
@@ -18,10 +19,14 @@ export const usd = (value: number) => `$${value.toFixed(2)}`
 export const stopMessage = (limit: number) =>
   `Stopped here: this run reached its ${usd(limit)} spend limit. Nothing further was sent to the model. Send a message to continue.`
 
+/** Whether a request to this model costs money. A model with no price, such as a self-hosted one, never does. */
+export const isPaid = (model: Pick<Provider.Model, "cost">) => !!model.cost && model.cost.input + model.cost.output > 0
+
 type Tree = { root: Session.Info; descendants: Session.Info[] }
 
 const tree = Effect.fnUntraced(function* (sessions: Session.Interface, session: Session.Info) {
-  let root = session
+  // Always re-read: the caller holds the session as it was when the run began, whose cost is still what it was then.
+  let root = yield* sessions.get(session.id).pipe(Effect.orDie)
   while (root.parentID) root = yield* sessions.get(root.parentID).pipe(Effect.orDie)
   const descendants: Session.Info[] = []
   const queue = [root.id]
@@ -80,13 +85,17 @@ const measure = Effect.fnUntraced(function* (sessions: Session.Interface, input:
 /**
  * Called before every model request of every session. Returns the limit that stopped the run, or undefined to go on.
  * Parallel subagents that reach the limit together share one question, asked on the session the person is looking at.
+ * Only a request that would cost money can be held: an unpriced model carries on even if paid ones in the same run
+ * have used up the limit, and since it adds nothing to the total, only money actually spent ever counts.
  */
 export const check = Effect.fn("SessionSpend.check")(function* (input: {
   session: Session.Info
   sessions: Session.Interface
   permission: Permission.Interface
+  model: Pick<Provider.Model, "cost">
   limit: number | undefined
 }) {
+  if (!isPaid(input.model)) return undefined
   const configured = input.limit ?? DEFAULT_LIMIT
   if (configured <= 0) return undefined
   while (true) {

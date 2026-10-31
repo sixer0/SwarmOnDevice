@@ -920,6 +920,62 @@ describe("session.llm.stream", () => {
   )
 
   it.instance(
+    "leaves the answer's length to the server when a self-hosted model declares no limit",
+    () =>
+      Effect.gen(function* () {
+        const request = waitRequest(
+          "/chat/completions",
+          new Response(createChatStream("Hello"), {
+            status: 200,
+            headers: { "Content-Type": "text/event-stream" },
+          }),
+        )
+        const providerID = ProviderV2.ID.make("internal")
+        const resolved = yield* Provider.use.getModel(providerID, ModelV2.ID.make("thinker"))
+        const sessionID = SessionID.make("session-test-1")
+        const agent = {
+          name: "test",
+          mode: "primary",
+          options: {},
+          permission: [{ permission: "*", pattern: "*", action: "allow" }],
+        } satisfies Agent.Info
+        yield* drain({
+          user: {
+            id: MessageID.make("msg_user-1"),
+            sessionID,
+            role: "user",
+            time: { created: Date.now() },
+            agent: agent.name,
+            model: { providerID, modelID: resolved.id },
+          } satisfies SessionV1.User,
+          sessionID,
+          model: resolved,
+          agent,
+          system: ["You are a helpful assistant."],
+          messages: [{ role: "user", content: "Hello" }],
+          tools: {},
+        })
+        const capture = yield* Effect.promise(() => request)
+        expect(capture.body.max_tokens).toBeUndefined()
+        expect(capture.body.max_completion_tokens).toBeUndefined()
+      }),
+    {
+      config: () => ({
+        enabled_providers: ["internal"],
+        provider: {
+          internal: {
+            name: "internal",
+            npm: "@ai-sdk/openai-compatible",
+            options: { baseURL: `${state.server!.url.origin}/v1` },
+            // A window is declared so this test sees only the chat request, not the question about the window.
+            models: { thinker: { name: "thinker", limit: { context: 100_000, output: 0 } } },
+          },
+        },
+      }),
+    },
+  )
+
+  it.instance(
     "surfaces network_error finish reasons as retryable stream failures",
     () =>
       Effect.gen(function* () {

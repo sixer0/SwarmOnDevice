@@ -1171,10 +1171,12 @@ const layer = Layer.effect(
             }
           }
 
+          const model = yield* getModel(lastUser.model.providerID, lastUser.model.modelID, sessionID)
           const stoppedAt = yield* SessionSpend.check({
             session,
             sessions,
             permission,
+            model,
             limit: (yield* config.get()).spend_limit,
           })
           if (stoppedAt !== undefined) {
@@ -1215,7 +1217,6 @@ const layer = Layer.effect(
               history: msgs,
             }).pipe(Effect.ignore, Effect.forkIn(scope))
 
-          const model = yield* getModel(lastUser.model.providerID, lastUser.model.modelID, sessionID)
           const task = tasks.pop()
 
           if (task?.type === "subtask") {
