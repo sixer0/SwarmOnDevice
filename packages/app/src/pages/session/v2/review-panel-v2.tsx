@@ -1,4 +1,5 @@
-import { createMemo, createResource, createSignal, Show, type JSX } from "solid-js"
+import { makeEventListener } from "@solid-primitives/event-listener"
+import { createMemo, createResource, createSignal, For, Show, type JSX } from "solid-js"
 import type { SnapshotFileDiff, VcsFileDiff } from "@opencode-ai/sdk/v2"
 import type { FileDiffInfo } from "@opencode-ai/client/promise"
 import {
@@ -30,6 +31,13 @@ import {
 } from "@/pages/session/v2/review-diff-kinds"
 import type { ReviewPanelV2State } from "@/pages/session/v2/review-panel-v2-state"
 import { applyFileListKeyDown, SessionFileListV2 } from "@/pages/session/v2/session-file-list-v2"
+import type { ReviewBriefController } from "@/pages/session/review/review-brief-controller"
+import {
+  ReviewBriefStrip,
+  ReviewFileActions,
+  ReviewFileBanner,
+  ReviewQueue,
+} from "@/pages/session/review/review-brief-view"
 
 type ReviewDiff = FileDiffInfo | SnapshotFileDiff | VcsFileDiff
 
@@ -52,10 +60,13 @@ export type ReviewPanelV2Props = {
   comments?: SessionReviewComment[]
   focusedComment?: SessionReviewFocus | null
   onFocusedCommentChange?: (focus: SessionReviewFocus | null) => void
+  brief?: ReviewBriefController
+  onBriefRef?: (el: HTMLDivElement | undefined) => void
 }
 
 export function ReviewPanelV2(props: ReviewPanelV2Props) {
   const sdk = useSDK()
+  let root: HTMLDivElement | undefined
 
   const diffs = createMemo(() => props.diffs().filter(filterRenderableDiff))
   const filteredFiles = createMemo(() =>
@@ -68,6 +79,14 @@ export function ReviewPanelV2(props: ReviewPanelV2Props) {
   const kinds = createMemo(() => reviewDiffKinds(diffs()))
   // Changes-only trees omit "M" — every row is already a change; A/D stay visible.
   const treeKinds = createMemo(() => new Map([...kinds()].filter(([, kind]) => kind !== "mix")))
+  // Next and previous follow the queue, so the arrows walk the files in the order they are worth reading.
+  const orderedFiles = createMemo(() => {
+    const brief = props.brief
+    const files = filteredFiles()
+    if (!brief || props.state.sidebarView() !== "queue" || searching()) return files
+    const shown = new Set(files)
+    return brief.brief().order.filter((file) => shown.has(file))
+  })
   const activeDiff = createMemo(() => {
     // A focused comment takes over the preview until the preview applies it and
     // clears the focus; the owner then persists the file as the active selection.
@@ -75,7 +94,7 @@ export function ReviewPanelV2(props: ReviewPanelV2Props) {
     if (focus && diffs().some((diff) => diff.file === focus.file)) return focus.file
     const active = props.activeFile
     if (searching()) return active
-    const files = filteredFiles()
+    const files = orderedFiles()
     if (active && files.includes(active)) return active
     return files[0]
   })
@@ -109,7 +128,30 @@ export function ReviewPanelV2(props: ReviewPanelV2Props) {
         return undefined
       })
 
-  return (
+  const select = (file: string) => {
+    props.onSelectFile(file)
+    // WebKit does not focus a clicked button, and the review keys only listen while focus is inside the panel.
+    if (root && !root.contains(document.activeElement)) root.focus({ preventScroll: true })
+  }
+
+  const handleKey = (event: KeyboardEvent) => {
+    const brief = props.brief
+    if (!brief || event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return
+    const target = event.target
+    if (target instanceof HTMLElement && (target.isContentEditable || target.closest("input, textarea, select"))) return
+    const file = activeDiff()
+    if (!file) return
+    const key = event.key.toLowerCase()
+    if (key === "v") brief.decide(file, "ok")
+    else if (key === "x") brief.decide(file, "work")
+    else if (key !== "n" || !brief.nextFlag()) return
+    event.preventDefault()
+    // Otherwise the page reads the letter as the start of a message and moves focus to the composer.
+    event.stopPropagation()
+    root?.focus({ preventScroll: true })
+  }
+
+  const panel = () => (
     <SessionReviewV2
       title={props.title}
       stats={<DiffChanges changes={diffs()} />}
@@ -122,7 +164,8 @@ export function ReviewPanelV2(props: ReviewPanelV2Props) {
           title={props.title}
           state={props.state}
           diffsReady={props.diffsReady}
-          onSelectFile={props.onSelectFile}
+          onSelectFile={select}
+          brief={props.brief}
           diffs={diffs}
           filteredFiles={filteredFiles}
           searching={searching}
@@ -131,13 +174,16 @@ export function ReviewPanelV2(props: ReviewPanelV2Props) {
         />
       }
       activeFile={activeDiff()}
-      files={filteredFiles()}
-      onSelectFile={props.onSelectFile}
+      files={orderedFiles()}
+      onSelectFile={select}
       diffStyle={props.diffStyle}
       onDiffStyleChange={props.onDiffStyleChange}
       expandMode={props.state.expandMode()}
       onExpandModeChange={props.state.setExpandMode}
       hasDiffs={diffs().length > 0}
+      toolbarActions={
+        <Show when={props.brief}>{(brief) => <ReviewFileActions brief={brief()} file={activeDiff()} />}</Show>
+      }
       preview={
         // Key on the file path, not the diff object identity, so refreshed diff data
         // updates the mounted preview instead of remounting the whole viewer.
@@ -158,6 +204,11 @@ export function ReviewPanelV2(props: ReviewPanelV2Props) {
                   comments={props.comments}
                   focusedComment={props.focusedComment}
                   onFocusedCommentChange={props.onFocusedCommentChange}
+                  banner={<Show when={props.brief}>{(brief) => <ReviewFileBanner brief={brief()} file={file} />}</Show>}
+                  focusLine={(() => {
+                    const focus = props.brief?.focusLine()
+                    return focus?.file === file ? focus : undefined
+                  })()}
                 />
               )}
             </Show>
@@ -166,6 +217,24 @@ export function ReviewPanelV2(props: ReviewPanelV2Props) {
       }
     />
   )
+
+  return (
+    <div
+      ref={(el) => {
+        root = el
+        props.onBriefRef?.(el)
+        makeEventListener(el, "keydown", handleKey)
+      }}
+      tabIndex={-1}
+      data-component="review-brief-root"
+      class="flex h-full min-h-0 flex-col outline-none"
+    >
+      <Show when={props.brief && diffs().length > 0}>
+        <ReviewBriefStrip brief={props.brief!} />
+      </Show>
+      <div class="min-h-0 flex-1">{panel()}</div>
+    </div>
+  )
 }
 
 function ReviewPanelV2Sidebar(props: {
@@ -173,6 +242,7 @@ function ReviewPanelV2Sidebar(props: {
   state: ReviewPanelV2State
   diffsReady: () => boolean
   onSelectFile: (path: string) => void
+  brief?: ReviewBriefController
   diffs: () => RenderDiff[]
   filteredFiles: () => string[]
   searching: () => boolean
@@ -180,6 +250,7 @@ function ReviewPanelV2Sidebar(props: {
   activeDiff: () => string | undefined
 }) {
   const language = useLanguage()
+  const queueShown = () => !!props.brief && props.state.sidebarView() === "queue"
   const [explicitHighlight, setExplicitHighlight] = createSignal<string | undefined>()
   const highlightedPath = createMemo(() => {
     if (!props.searching()) return undefined
@@ -221,16 +292,43 @@ function ReviewPanelV2Sidebar(props: {
           </div>
         }
       >
+        <Show when={props.brief && !props.searching() && props.diffs().length > 0}>
+          <div
+            class="flex items-center gap-0.5 px-2 pb-1.5"
+            role="group"
+            aria-label={language.t("session.review.sidebar.view")}
+          >
+            <For each={["queue", "tree"] as const}>
+              {(item) => (
+                <button
+                  type="button"
+                  aria-pressed={props.state.sidebarView() === item}
+                  class="h-6 rounded-md px-2 text-12-regular text-v2-text-text-muted hover:text-v2-text-text-base focus-visible:outline-2 focus-visible:outline-v2-border-border-strong aria-pressed:bg-v2-overlay-simple-overlay-hover aria-pressed:text-v2-text-text-base"
+                  onClick={() => props.state.setSidebarView(item)}
+                >
+                  {language.t(`session.review.sidebar.${item}`)}
+                </button>
+              )}
+            </For>
+          </div>
+        </Show>
         <Show
           when={props.searching()}
           fallback={
-            <FileTreeV2
-              allowed={props.filteredFiles()}
-              kinds={props.kinds()}
-              draggable={false}
-              active={props.activeDiff()}
-              onFileClick={(node) => props.onSelectFile(node.path)}
-            />
+            <Show
+              when={queueShown() && props.brief}
+              fallback={
+                <FileTreeV2
+                  allowed={props.filteredFiles()}
+                  kinds={props.kinds()}
+                  draggable={false}
+                  active={props.activeDiff()}
+                  onFileClick={(node) => props.onSelectFile(node.path)}
+                />
+              }
+            >
+              {(brief) => <ReviewQueue brief={brief()} active={props.activeDiff()} onSelect={props.onSelectFile} />}
+            </Show>
           }
         >
           <Show

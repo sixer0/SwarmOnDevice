@@ -8,7 +8,7 @@ import { mediaKindFromPath } from "../../pierre/media"
 import { cloneSelectedLineRange, previewSelectedLines } from "../../pierre/selection-bridge"
 import type { FileContent, SnapshotFileDiff, VcsFileDiff } from "@opencode-ai/sdk/v2"
 import type { FileDiffInfo } from "@opencode-ai/client/promise"
-import { createEffect, createMemo, onCleanup, Show, untrack } from "solid-js"
+import { createEffect, createMemo, onCleanup, Show, untrack, type JSX } from "solid-js"
 import { createStore } from "solid-js/store"
 import { Dynamic } from "solid-js/web"
 import { normalize, text, type ViewDiff } from "../../components/session-diff"
@@ -43,6 +43,10 @@ export type SessionReviewFilePreviewV2Props = {
   comments?: SessionReviewComment[]
   focusedComment?: SessionReviewFocus | null
   onFocusedCommentChange?: (focus: SessionReviewFocus | null) => void
+  /** Sits between the file header and the diff, and scrolls with neither. */
+  banner?: JSX.Element
+  /** Selects this line and brings it into view. A new `token` repeats the jump to the same line. */
+  focusLine?: { line: number; side: "additions" | "deletions"; token: number }
 }
 
 function statusLabel(status: ViewDiff["status"]) {
@@ -211,6 +215,33 @@ export function SessionReviewFilePreviewV2(props: SessionReviewFilePreviewV2Prop
     })
   })
 
+  createEffect(() => {
+    const focus = props.focusLine
+    if (!focus) return
+    untrack(() => {
+      setStore("selection", { start: focus.line, end: focus.line, side: focus.side })
+      focusToken++
+      const token = focusToken
+      // The diff renders in a shadow root and asynchronously, so its rows have to be waited for.
+      const scrollTo = (attempt: number) => {
+        if (token !== focusToken) return
+        const root = scrollRef?.querySelector("diffs-container")?.shadowRoot
+        const rows = root?.querySelectorAll(`[data-line="${focus.line}"], [data-alt-line="${focus.line}"]`)
+        const row =
+          rows && Array.from(rows).find((item) => item instanceof HTMLElement && item.hasAttribute("data-line-type"))
+        if (row instanceof HTMLElement) {
+          const side = focus.side === "deletions" ? "change-deletion" : "change-addition"
+          const exact = Array.from(rows!).find((item) => item instanceof HTMLElement && item.dataset.lineType === side)
+          ;(exact instanceof HTMLElement ? exact : row).scrollIntoView({ block: "center" })
+          return
+        }
+        if (attempt >= 120) return
+        requestAnimationFrame(() => scrollTo(attempt + 1))
+      }
+      requestAnimationFrame(() => scrollTo(0))
+    })
+  })
+
   const expandUnchanged = () => props.expandMode === "expand"
 
   const diffViewer = () => (
@@ -268,6 +299,7 @@ export function SessionReviewFilePreviewV2(props: SessionReviewFilePreviewV2Prop
           <DiffChanges changes={view()} />
         </div>
       </div>
+      {props.banner}
       <div
         ref={(el) => {
           scrollRef = el

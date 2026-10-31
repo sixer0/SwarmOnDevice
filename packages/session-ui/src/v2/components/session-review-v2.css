@@ -210,6 +210,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 8px;
   padding: 10px 12px;
   padding-inline-start: 8px;
@@ -225,6 +226,8 @@
 
 [data-component="session-review-v2"] .session-review-v2-toolbar-group--start {
   min-width: 0;
+  flex-wrap: wrap;
+  row-gap: 4px;
 }
 
 [data-component="session-review-v2"] [data-slot="session-review-v2-toolbar-collapsed-meta"] {

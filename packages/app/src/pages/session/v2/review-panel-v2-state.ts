@@ -15,6 +15,7 @@ export function createReviewPanelV2State() {
       sidebarOpened: true,
       sidebarWidth: SESSION_REVIEW_V2_SIDEBAR_WIDTH_DEFAULT,
       expandMode: "collapse" as SessionReviewExpandMode,
+      sidebarView: "queue" as "queue" | "tree",
     }),
   )
   // The filter is transient by design: a persisted filter would silently hide
@@ -29,6 +30,8 @@ export function createReviewPanelV2State() {
     setFilter,
     expandMode: () => store.expandMode,
     setExpandMode: (mode: SessionReviewExpandMode) => setStore("expandMode", mode),
+    sidebarView: () => store.sidebarView ?? "queue",
+    setSidebarView: (view: "queue" | "tree") => setStore("sidebarView", view),
     resizeSidebar: (width: number) =>
       setStore(
         "sidebarWidth",

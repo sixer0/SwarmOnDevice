@@ -36,6 +36,8 @@ export type SessionReviewV2Props = {
   onExpandModeChange: (mode: SessionReviewExpandMode) => void
   preview?: JSX.Element
   hasDiffs: boolean
+  /** Actions on the current file, beside the previous and next buttons. */
+  toolbarActions?: JSX.Element
 }
 
 export type SessionReviewV2SidebarProps = {
@@ -260,6 +262,7 @@ export function SessionReviewV2(props: SessionReviewV2Props) {
           />
         </TooltipV2>
       </div>
+      {props.toolbarActions}
     </>
   )
 

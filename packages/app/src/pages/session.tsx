@@ -89,7 +89,12 @@ import { SessionReviewEmptyNoGitV2 } from "@opencode-ai/session-ui/v2/session-re
 import { SessionReviewV2SidebarToggle } from "@opencode-ai/session-ui/v2/session-review-v2"
 import { ReviewPanelV2 } from "@/pages/session/v2/review-panel-v2"
 import { createReviewPanelV2State } from "@/pages/session/v2/review-panel-v2-state"
-import { reviewDiffDirectory, reviewDiffNeedsLoad, reviewRootDirectory } from "@/pages/session/v2/review-diff-kinds"
+import {
+  filterRenderableDiff,
+  reviewDiffDirectory,
+  reviewDiffNeedsLoad,
+  reviewRootDirectory,
+} from "@/pages/session/v2/review-diff-kinds"
 import { TerminalPanel } from "@/pages/session/terminal-panel"
 import { TerminalPanelV2 } from "@/pages/session/terminal-panel-v2"
 import { useComposerCommands } from "@/pages/session/use-composer-commands"
@@ -98,6 +103,7 @@ import { useSessionHashScroll } from "@/pages/session/use-session-hash-scroll"
 import { createSessionMap, type MapTarget } from "@/pages/session/map/session-map-controller"
 import { stepReference, type MapChapter, type MapStep } from "@/pages/session/map/session-map-model"
 import { SessionMapPanel } from "@/pages/session/map/session-map-view"
+import { createReviewBrief } from "@/pages/session/review/review-brief-controller"
 import { createSwarm } from "@/pages/session/swarm/swarm-controller"
 import { SwarmPanel } from "@/pages/session/swarm/swarm-view"
 import { Identifier } from "@/utils/id"
@@ -719,6 +725,11 @@ export default function Page() {
     if (selected && diffs.some((diff) => diff.file === selected)) return selected
     return diffs[0]?.file
   }
+  // No choice yet: the panel opens on the first file of its queue, which is rarely the first alphabetically.
+  const chosenReviewFile = () => {
+    const selected = reviewFile()
+    return selected && reviewDiffs().some((diff) => diff.file === selected) ? selected : undefined
+  }
   const reviewCount = () => reviewDiffs().length
   const hasReview = () => reviewCount() > 0
   const reviewReady = () => {
@@ -1161,22 +1172,23 @@ export default function Page() {
     },
     visibleTurn,
   })
+  const openRunStep = (sessionID: string, step?: MapStep) => {
+    if (sessionID === params.id) {
+      if (step) sessionMap.openStep(step)
+      return
+    }
+    const href = params.serverKey
+      ? sessionHref(requireServerKey(params.serverKey), sessionID)
+      : legacySessionHref(sdk().directory, sessionID)
+    navigate(step ? `${href}#message-${step.turnID}` : href)
+  }
   const swarm = createSwarm({
     sessionID: () => params.id,
     sdk,
     sync,
     serverSync,
     autoResponds: (request, directory) => permission.autoResponds(request, directory),
-    openLane: (sessionID, step) => {
-      if (sessionID === params.id) {
-        if (step) sessionMap.openStep(step)
-        return
-      }
-      const href = params.serverKey
-        ? sessionHref(requireServerKey(params.serverKey), sessionID)
-        : legacySessionHref(sdk().directory, sessionID)
-      navigate(step ? `${href}#message-${step.turnID}` : href)
-    },
+    openLane: (sessionID, step) => openRunStep(sessionID, step),
     draftToComposer: (text) => {
       if (swarm.rootID() !== params.id) return false
       appendToComposer(text)
@@ -1184,6 +1196,28 @@ export default function Page() {
     },
     onClose: () => focusInput(),
   })
+  const reviewBrief = createReviewBrief({
+    sessionID: () => params.id,
+    enabled: () => !!params.id && newSessionDesign() && wantsReview() && hasReview(),
+    undoable: () => reviewMode() === "git",
+    diffs: () => reviewDiffs().filter(filterRenderableDiff),
+    activeFile: () => chosenReviewFile(),
+    selectFile: (file) => focusReviewDiff(file),
+    sdk,
+    sync,
+    serverSync,
+    refresh: () => refreshVcs(),
+    openStep: openRunStep,
+    draftToComposer: (text) => {
+      appendToComposer(text)
+      focusInput()
+    },
+  })
+  let reviewBriefRoot: HTMLDivElement | undefined
+  const focusReviewBrief = () => {
+    if (!view().reviewPanel.opened()) view().reviewPanel.open()
+    requestAnimationFrame(() => reviewBriefRoot?.focus({ preventScroll: true }))
+  }
   const toggleSessionMap = () => {
     if (!sessionMap.opened()) return sessionMap.toggle()
     closeSessionMap()
@@ -1226,6 +1260,7 @@ export default function Page() {
     focusInput,
     toggleSessionMap,
     toggleSwarm: () => swarm.toggle(),
+    focusReview: focusReviewBrief,
     goToProblem,
     review: reviewTab,
     fileBrowser: () => newSessionDesign() && isDesktop() && !!params.id,
@@ -1397,7 +1432,7 @@ export default function Page() {
     },
     loadDiff: loadReviewDiff,
     get activeFile() {
-      return activeReviewFile()
+      return chosenReviewFile()
     },
     onSelectFile: focusReviewDiff,
     get diffStyle() {
@@ -1426,6 +1461,12 @@ export default function Page() {
         if (current && reviewDiffs().some((diff) => diff.file === current.file)) focusReviewDiff(current.file)
       }
       comments.setFocus(focus)
+    },
+    get brief() {
+      return params.id ? reviewBrief : undefined
+    },
+    onBriefRef: (el: HTMLDivElement | undefined) => {
+      reviewBriefRoot = el
     },
   })
 

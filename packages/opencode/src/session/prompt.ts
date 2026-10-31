@@ -524,6 +524,7 @@ const layer = Layer.effect(
           const args = Shell.args(sh, input.command, cwd)
           let output = ""
           let aborted = false
+          let exitCode: number | undefined
 
           const finish = Effect.uninterruptible(
             Effect.gen(function* () {
@@ -541,7 +542,8 @@ const layer = Layer.effect(
                   time: { ...part.state.time, end: completed },
                   input: part.state.input,
                   title: "",
-                  metadata: { output },
+                  // The agent's shell tool records its exit code too. Without it a failing command reads as a pass.
+                  metadata: exitCode === undefined ? { output } : { output, exit: exitCode },
                   output,
                 }
                 yield* sessions.updatePart(part)
@@ -573,7 +575,7 @@ const layer = Layer.effect(
                   }
                 }),
               )
-              yield* handle.exitCode
+              exitCode = yield* handle.exitCode
             }).pipe(Effect.scoped, Effect.orDie),
           ).pipe(Effect.exit)
 

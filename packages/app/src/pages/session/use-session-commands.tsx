@@ -28,6 +28,7 @@ export type SessionCommandContext = {
   focusInput: () => void
   toggleSessionMap: () => void
   toggleSwarm: () => void
+  focusReview: () => void
   goToProblem: (direction: 1 | -1) => void
   review?: () => boolean
   fileBrowser?: () => boolean
@@ -450,6 +451,13 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
         terminal.requestFocus(terminal.active())
         view().terminal.open()
       },
+    }),
+    viewCommand({
+      id: "review.focus",
+      title: language.t("command.review.focus"),
+      keybind: "mod+shift+y",
+      disabled: !params.id,
+      onSelect: actions.focusReview,
     }),
     viewCommand({
       id: "review.toggle",

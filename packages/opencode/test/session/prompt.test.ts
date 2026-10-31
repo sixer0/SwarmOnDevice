@@ -1600,6 +1600,21 @@ unixNoLLMServer(
 )
 
 unixNoLLMServer(
+  "shell records the exit code so a failing command does not read as a pass",
+  () =>
+    Effect.gen(function* () {
+      const { prompt, chat } = yield* boot()
+      const failed = completedTool(
+        (yield* prompt.shell({ sessionID: chat.id, agent: "build", command: "printf nope && exit 3" })).parts,
+      )
+      const passed = completedTool((yield* prompt.shell({ sessionID: chat.id, agent: "build", command: "true" })).parts)
+      expect(failed?.state.metadata.exit).toBe(3)
+      expect(passed?.state.metadata.exit).toBe(0)
+    }),
+  { config: cfg },
+)
+
+unixNoLLMServer(
   "shell completes a fast command on the preferred shell",
   () =>
     Effect.gen(function* () {
