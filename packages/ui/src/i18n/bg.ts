@@ -191,4 +191,5 @@ export const dict = {
   "ui.question.multiHint": "Изберете всички приложими отговори",
   "ui.question.singleHint": "Изберете един отговор",
   "ui.question.custom.placeholder": "Въведете вашия отговор...",
+  "ui.tool.remember": "Запомнено",
 }

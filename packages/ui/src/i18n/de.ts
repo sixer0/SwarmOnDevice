@@ -215,4 +215,5 @@ export const dict = {
   "ui.promptInput.send": "Senden",
   "ui.promptInput.stop": "Stoppen",
   "ui.tabs.close": "Tab schließen",
+  "ui.tool.remember": "Gemerkt",
 } satisfies Partial<Record<Keys, string>>

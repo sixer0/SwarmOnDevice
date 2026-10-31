@@ -192,4 +192,5 @@ export const dict: Record<string, string> = {
   "ui.question.multiHint": "އެކަމާ ގުޅޭ ހުރިހާ ޖަވާބެއް ހޮވާށެވެ",
   "ui.question.singleHint": "އެއް ޖަވާބެއް ހޮވާށެވެ",
   "ui.question.custom.placeholder": "ޖަވާބު ޓައިޕް ކުރާށެވެ...",
+  "ui.tool.remember": "ހަނދާންކުރެވުނު",
 }

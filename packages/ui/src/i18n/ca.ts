@@ -195,4 +195,5 @@ export const dict: Record<string, string> = {
   "ui.question.multiHint": "Seleccioneu totes les respostes aplicables",
   "ui.question.singleHint": "Seleccioneu una resposta",
   "ui.question.custom.placeholder": "Escriu la teva resposta...",
+  "ui.tool.remember": "Recordat",
 }

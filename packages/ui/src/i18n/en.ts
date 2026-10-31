@@ -156,6 +156,7 @@ export const dict: Record<string, string> = {
   "ui.tool.websearch.provider": "{{provider}} Web Search",
   "ui.tool.shell": "Shell",
   "ui.tool.patch": "Patch",
+  "ui.tool.remember": "Remembered",
   "ui.tool.todos": "To-dos",
   "ui.tool.todos.read": "Read to-dos",
   "ui.tool.questions": "Questions",

@@ -215,4 +215,5 @@ export const dict: Record<Keys, string> = {
   "ui.sessionTurn.diffs.showAll": "Vis alle",
   "ui.sessionTurn.diffs.showLess": "Vis færre",
   "ui.sessionTurn.diffs.more": "+{{count}} filer til",
+  "ui.tool.remember": "Husket",
 }

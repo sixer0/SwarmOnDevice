@@ -14,6 +14,7 @@ import {
   PromptProjectSelector,
   type PromptProjectController,
 } from "@/components/prompt-project-selector"
+import { ProjectMemoryLine } from "@/components/project-memory"
 import { StatusPopoverV2 } from "@/components/status-popover"
 import { useLanguage } from "@/context/language"
 import { useSDK } from "@/context/sdk"
@@ -75,6 +76,7 @@ export function NewSessionView(props: {
                       onDone={props.input.restoreFocus}
                     />
                   </Show>
+                  <ProjectMemoryLine />
                 </div>
               </Show>
             </div>

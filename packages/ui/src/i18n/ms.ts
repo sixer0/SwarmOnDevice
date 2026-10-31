@@ -191,4 +191,5 @@ export const dict: Record<string, string> = {
   "ui.question.multiHint": "Pilih semua jawapan yang berkaitan",
   "ui.question.singleHint": "Pilih satu jawapan",
   "ui.question.custom.placeholder": "Taip jawapan anda...",
+  "ui.tool.remember": "Diingati",
 }

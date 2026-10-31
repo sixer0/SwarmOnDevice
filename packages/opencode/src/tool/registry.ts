@@ -12,6 +12,8 @@ import { ReadTool } from "./read"
 import { TaskTool } from "./task"
 import { Database } from "@opencode-ai/core/database/database"
 import { TodoWriteTool } from "./todo"
+import { RememberTool } from "./remember"
+import { Memory } from "@/memory/memory"
 import { WebFetchTool } from "./webfetch"
 import { WriteTool } from "./write"
 import { InvalidTool } from "./invalid"
@@ -103,6 +105,8 @@ const layer = Layer.effect(
     const read = yield* ReadTool
     const question = yield* QuestionTool
     const todo = yield* TodoWriteTool
+    const remember = yield* RememberTool
+    const memory = yield* Memory.Service
     const lsptool = yield* LspTool
     const plan = yield* PlanExitTool
     const webfetch = yield* WebFetchTool
@@ -219,6 +223,7 @@ const layer = Layer.effect(
           todo: Tool.init(todo),
           search: Tool.init(websearch),
           skill: Tool.init(skilltool),
+          remember: Tool.init(remember),
           patch: Tool.init(patchtool),
           question: Tool.init(question),
           lsp: Tool.init(lsptool),
@@ -240,6 +245,7 @@ const layer = Layer.effect(
             tool.task,
             tool.fetch,
             tool.todo,
+            tool.remember,
             tool.search,
             tool.skill,
             tool.patch,
@@ -289,7 +295,10 @@ const layer = Layer.effect(
     })
 
     const tools: Interface["tools"] = Effect.fn("ToolRegistry.tools")(function* (input) {
+      const remembering = !process.env.SWARM_DISABLE_MEMORY && (yield* memory.get()).enabled
       const filtered = (yield* all()).filter((tool) => {
+        // Primary agents only: a subagent is where raw pages and files get read, and notes outlive the session.
+        if (tool.id === RememberTool.id) return remembering && input.agent.mode !== "subagent"
         if (tool.id === WebSearchTool.id) {
           return webSearchEnabled(input.providerID, { exa: flags.enableExa, parallel: flags.enableParallel })
         }
@@ -432,6 +441,7 @@ export const node = LayerNode.make({
     Plugin.node,
     Question.node,
     Todo.node,
+    Memory.node,
     Agent.node,
     Skill.node,
     Session.node,

@@ -217,4 +217,5 @@ export const dict = {
   "ui.toolErrorCard.copyError": "Hatayı kopyala",
   "ui.message.duration.seconds": "{{count}} sn",
   "ui.message.duration.minutesSeconds": "{{minutes}} dk {{seconds}} sn",
+  "ui.tool.remember": "Hatırlandı",
 } satisfies Partial<Record<Keys, string>>

@@ -199,4 +199,5 @@ export const dict: Record<string, string> = {
   "ui.question.multiHint": "Vyberte všechny platné odpovědi",
   "ui.question.singleHint": "Vyberte jednu odpověď",
   "ui.question.custom.placeholder": "Napište svou odpověď...",
+  "ui.tool.remember": "Zapamatováno",
 }

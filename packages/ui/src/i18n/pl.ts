@@ -219,4 +219,5 @@ export const dict = {
   "ui.toolErrorCard.copyError": "Kopiuj błąd",
   "ui.message.duration.seconds": "{{count}} s",
   "ui.message.duration.minutesSeconds": "{{minutes}} min {{seconds}} s",
+  "ui.tool.remember": "Zapamiętano",
 }

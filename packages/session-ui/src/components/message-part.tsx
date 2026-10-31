@@ -553,6 +553,12 @@ export function getToolInfo(
         icon: "checklist",
         title: i18n.t("ui.tool.todos"),
       }
+    case "remember":
+      return {
+        icon: "brain",
+        title: i18n.t("ui.tool.remember"),
+        subtitle: input.text ?? input.forget,
+      }
     case "question":
       return {
         icon: "bubble-5",
@@ -1809,6 +1815,25 @@ ToolRegistry.register({
           )}
         </For>
       </>
+    )
+  },
+})
+
+ToolRegistry.register({
+  name: "remember",
+  render(props) {
+    const i18n = useI18n()
+    return (
+      <BasicTool
+        {...props}
+        icon="brain"
+        hideDetails
+        trigger={{
+          title: i18n.t("ui.tool.remember"),
+          // A refused note shows why, not the words that were not kept.
+          subtitle: props.metadata.refused ? props.output : (props.input.text ?? props.output),
+        }}
+      />
     )
   },
 })

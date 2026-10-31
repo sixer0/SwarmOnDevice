@@ -67,6 +67,7 @@ export type Event =
   | EventQuestionV2Asked
   | EventQuestionV2Replied
   | EventQuestionV2Rejected
+  | EventMemoryUpdated
   | EventTodoUpdated
   | EventLspUpdated
   | EventPermissionAsked
@@ -861,6 +862,22 @@ export type Pty = {
   exitCode?: number
 }
 
+export type MemorySource = "user" | "agent" | "learned"
+
+export type MemoryItem = {
+  id: string
+  text: string
+  source: MemorySource
+  /**
+   * Never sent to a model that runs off this device
+   */
+  deviceOnly: boolean
+  time: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  sessionID?: string
+  failed?: string
+  worked?: string
+}
+
 export type Todo = {
   /**
    * Brief description of the task
@@ -1507,6 +1524,13 @@ export type GlobalEvent = {
         properties: {
           sessionID: string
           requestID: string
+        }
+      }
+    | {
+        id: string
+        type: "memory.updated"
+        properties: {
+          added?: MemoryItem
         }
       }
     | {
@@ -2592,6 +2616,18 @@ export type McpServerNotFoundError = {
   message: string
 }
 
+export type MemoryInfo = {
+  enabled: boolean
+  items: Array<MemoryItem>
+}
+
+export type MemoryRefusal = "empty" | "long" | "secret" | "full"
+
+export type MemoryResult = {
+  item?: MemoryItem
+  refused?: MemoryRefusal
+}
+
 export type Project = {
   id: string
   worktree: string
@@ -2943,6 +2979,20 @@ export type OutputFormat1 =
       retryCount?: number
     }
 
+export type MemoryItem1 = {
+  id: string
+  text: string
+  source: MemorySource
+  /**
+   * Never sent to a model that runs off this device
+   */
+  deviceOnly: boolean
+  time: number | "NaN" | "Infinity" | "-Infinity"
+  sessionID?: string
+  failed?: string
+  worked?: string
+}
+
 export type SessionStatus2 = {
   id: string
   metadata?: {
@@ -3061,6 +3111,7 @@ export type V2Event =
   | QuestionV2Asked
   | QuestionV2Replied
   | QuestionV2Rejected
+  | MemoryUpdated
   | TodoUpdated
   | LspUpdated
   | PermissionAsked
@@ -5804,6 +5855,23 @@ export type QuestionV2Rejected = {
   }
 }
 
+export type MemoryUpdated = {
+  id: string
+  metadata?: {
+    [key: string]: unknown
+  }
+  type: "memory.updated"
+  durable?: {
+    aggregateID: string
+    seq: number
+    version: number
+  }
+  location?: LocationRef
+  data: {
+    added?: MemoryItem1
+  }
+}
+
 export type TodoUpdated = {
   id: string
   metadata?: {
@@ -6982,6 +7050,14 @@ export type EventQuestionV2Rejected = {
   properties: {
     sessionID: string
     requestID: string
+  }
+}
+
+export type EventMemoryUpdated = {
+  id: string
+  type: "memory.updated"
+  properties: {
+    added?: MemoryItem1
   }
 }
 
@@ -8947,6 +9023,157 @@ export type McpDisconnectResponses = {
 }
 
 export type McpDisconnectResponse = McpDisconnectResponses[keyof McpDisconnectResponses]
+
+export type MemoryGetData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/memory"
+}
+
+export type MemoryGetErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type MemoryGetError = MemoryGetErrors[keyof MemoryGetErrors]
+
+export type MemoryGetResponses = {
+  /**
+   * What this project's sessions start out knowing
+   */
+  200: MemoryInfo
+}
+
+export type MemoryGetResponse = MemoryGetResponses[keyof MemoryGetResponses]
+
+export type MemorySettingsData = {
+  body?: {
+    enabled: boolean
+  }
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/memory"
+}
+
+export type MemorySettingsErrors = {
+  /**
+   * BadRequest | InvalidRequestError
+   */
+  400: EffectHttpApiErrorBadRequest | InvalidRequestError
+}
+
+export type MemorySettingsError = MemorySettingsErrors[keyof MemorySettingsErrors]
+
+export type MemorySettingsResponses = {
+  /**
+   * The updated memory
+   */
+  200: MemoryInfo
+}
+
+export type MemorySettingsResponse = MemorySettingsResponses[keyof MemorySettingsResponses]
+
+export type MemoryAddData = {
+  body?: {
+    text: string
+  }
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/memory"
+}
+
+export type MemoryAddErrors = {
+  /**
+   * BadRequest | InvalidRequestError
+   */
+  400: EffectHttpApiErrorBadRequest | InvalidRequestError
+}
+
+export type MemoryAddError = MemoryAddErrors[keyof MemoryAddErrors]
+
+export type MemoryAddResponses = {
+  /**
+   * The stored note, or why it was refused
+   */
+  200: MemoryResult
+}
+
+export type MemoryAddResponse = MemoryAddResponses[keyof MemoryAddResponses]
+
+export type MemoryRemoveData = {
+  body?: never
+  path: {
+    id: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/memory/{id}"
+}
+
+export type MemoryRemoveErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type MemoryRemoveError = MemoryRemoveErrors[keyof MemoryRemoveErrors]
+
+export type MemoryRemoveResponses = {
+  /**
+   * Whether a note was removed
+   */
+  200: boolean
+}
+
+export type MemoryRemoveResponse = MemoryRemoveResponses[keyof MemoryRemoveResponses]
+
+export type MemoryUpdateData = {
+  body?: {
+    text?: string
+    deviceOnly?: boolean
+  }
+  path: {
+    id: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/memory/{id}"
+}
+
+export type MemoryUpdateErrors = {
+  /**
+   * BadRequest | InvalidRequestError
+   */
+  400: EffectHttpApiErrorBadRequest | InvalidRequestError
+}
+
+export type MemoryUpdateError = MemoryUpdateErrors[keyof MemoryUpdateErrors]
+
+export type MemoryUpdateResponses = {
+  /**
+   * The updated note, or why the change was refused
+   */
+  200: MemoryResult
+}
+
+export type MemoryUpdateResponse = MemoryUpdateResponses[keyof MemoryUpdateResponses]
 
 export type ProjectListData = {
   body?: never

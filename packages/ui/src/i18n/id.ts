@@ -215,4 +215,5 @@ export const dict: Record<string, string> = {
   "ui.question.custom.placeholder": "Ketik jawaban Anda...",
 
   "ui.toast.ariaLabel": "Notifikasi",
+  "ui.tool.remember": "Diingat",
 }

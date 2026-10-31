@@ -191,4 +191,5 @@ export const dict: Record<string, string> = {
   "ui.question.multiHint": "Επιλογή όλων των απαντήσεων που ισχύουν",
   "ui.question.singleHint": "Επιλέξτε μία απάντηση",
   "ui.question.custom.placeholder": "Πληκτρολογήστε την απάντησή σας...",
+  "ui.tool.remember": "Αποθηκεύτηκε",
 }

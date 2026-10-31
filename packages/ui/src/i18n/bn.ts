@@ -193,4 +193,5 @@ export const dict: Record<string, string> = {
   "ui.question.multiHint": "প্রযোজ্য সমস্ত উত্তর নির্বাচন করুন",
   "ui.question.singleHint": "একটি উত্তর নির্বাচন করুন",
   "ui.question.custom.placeholder": "আপনার উত্তর টাইপ করুন...",
+  "ui.tool.remember": "মনে রাখা হয়েছে",
 }

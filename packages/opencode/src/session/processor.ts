@@ -1,6 +1,8 @@
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { PermissionV1 } from "@opencode-ai/core/v1/permission"
 import { Image } from "@/image/image"
+import { Memory } from "@/memory/memory"
+import { ToolID as ShellToolID } from "@/tool/shell/id"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
 import { Cause, Deferred, Effect, Exit, Layer, Context, Scope, Schema } from "effect"
 import * as Stream from "effect/Stream"
@@ -128,6 +130,7 @@ const layer = Layer.effect(
     const scope = yield* Scope.Scope
     const status = yield* SessionStatus.Service
     const image = yield* Image.Service
+    const memory = yield* Memory.Service
     const events = yield* EventV2Bridge.Service
     const database = yield* Database.Service
 
@@ -221,6 +224,18 @@ const layer = Layer.effect(
           },
         })
         yield* settleToolCall(toolCallID)
+        if (match.part.tool === ShellToolID)
+          yield* memory
+            .observeCommand({
+              sessionID: match.part.sessionID,
+              command: String(match.part.state.input.command ?? ""),
+              workdir:
+                typeof match.part.state.input.workdir === "string" ? match.part.state.input.workdir : undefined,
+              exit: typeof output.metadata.exit === "number" ? output.metadata.exit : null,
+              output: output.output,
+              model: ctx.model,
+            })
+            .pipe(Effect.catchCause((cause) => Effect.logWarning("memory: could not observe command", { cause })))
       })
 
       const failToolCall = Effect.fn("SessionProcessor.failToolCall")(function* (toolCallID: string, error: unknown) {
@@ -779,6 +794,7 @@ export const node = LayerNode.make({
     Plugin.node,
     SessionSummary.node,
     SessionStatus.node,
+    Memory.node,
     Image.node,
     EventV2Bridge.node,
     Database.node,

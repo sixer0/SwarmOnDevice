@@ -219,4 +219,5 @@ export const dict = {
   "ui.toolErrorCard.copyError": "Kopiraj grešku",
   "ui.message.duration.seconds": "{{count}}s",
   "ui.message.duration.minutesSeconds": "{{minutes}}m {{seconds}}s",
+  "ui.tool.remember": "Zapamćeno",
 } satisfies Partial<Record<Keys, string>>

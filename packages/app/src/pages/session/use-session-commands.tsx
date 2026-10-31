@@ -1,4 +1,5 @@
 import { useNavigate } from "@solidjs/router"
+import { DialogProjectMemory, createProjectMemoryNotices } from "@/components/project-memory"
 import { useCommand, type CommandOption } from "@/context/command"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { previewSelectedLines } from "@opencode-ai/session-ui/pierre/selection-bridge"
@@ -41,6 +42,7 @@ const withCategory = (category: string) => {
 
 export const useSessionCommands = (actions: SessionCommandContext) => {
   const command = useCommand()
+  createProjectMemoryNotices()
   const dialog = useDialog()
   const file = useFile()
   const language = useLanguage()
@@ -365,6 +367,13 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
       slash: "redo",
       disabled: !params.id || !info()?.revert?.messageID,
       onSelect: redo,
+    }),
+    sessionCommand({
+      id: "memory.open",
+      title: language.t("memory.title"),
+      description: language.t("command.memory.description"),
+      slash: "memory",
+      onSelect: () => dialog.show(() => <DialogProjectMemory />),
     }),
     sessionCommand({
       id: "session.compact",

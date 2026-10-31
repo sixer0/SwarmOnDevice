@@ -192,4 +192,5 @@ export const dict = {
   "ui.question.multiHint": "သက်ဆိုင်သည့် အဖြေအားလုံးကို ရွေးပါ။",
   "ui.question.singleHint": "အဖြေတစ်ခု ရွေးပါ။",
   "ui.question.custom.placeholder": "သင့်အဖြေကို ရိုက်ထည့်ပါ...",
+  "ui.tool.remember": "မှတ်ထားပြီး",
 }

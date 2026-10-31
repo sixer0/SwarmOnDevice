@@ -227,4 +227,5 @@ export const dict = {
   "ui.toolErrorCard.copyError": "نسخ الخطأ",
   "ui.message.duration.seconds": "{{count}}ث",
   "ui.message.duration.minutesSeconds": "{{minutes}}د {{seconds}}ث",
+  "ui.tool.remember": "تم التذكر",
 }

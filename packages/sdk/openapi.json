@@ -3762,6 +3762,358 @@
         ]
       }
     },
+    "/memory": {
+      "get": {
+        "tags": ["memory"],
+        "operationId": "memory.get",
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          },
+          {
+            "name": "workspace",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "What this project's sessions start out knowing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryInfo"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestError"
+                }
+              }
+            }
+          }
+        },
+        "description": "List the notes every new session on this project starts with.",
+        "summary": "Get project memory",
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.memory.get({\n  ...\n})"
+          }
+        ]
+      },
+      "post": {
+        "tags": ["memory"],
+        "operationId": "memory.add",
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          },
+          {
+            "name": "workspace",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The stored note, or why it was refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "BadRequest | InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/effect_HttpApiError_BadRequest"
+                    },
+                    {
+                      "$ref": "#/components/schemas/InvalidRequestError"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "description": "Add a note written by the user. Text that looks like a credential is refused.",
+        "summary": "Add a note",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "text": {
+                    "type": "string"
+                  }
+                },
+                "required": ["text"],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.memory.add({\n  ...\n})"
+          }
+        ]
+      },
+      "patch": {
+        "tags": ["memory"],
+        "operationId": "memory.settings",
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          },
+          {
+            "name": "workspace",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The updated memory",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryInfo"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "BadRequest | InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/effect_HttpApiError_BadRequest"
+                    },
+                    {
+                      "$ref": "#/components/schemas/InvalidRequestError"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "description": "When off, sessions receive no notes and nothing new is learned. Notes are kept.",
+        "summary": "Turn project memory on or off",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "enabled": {
+                    "type": "boolean"
+                  }
+                },
+                "required": ["enabled"],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.memory.settings({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/memory/{id}": {
+      "patch": {
+        "tags": ["memory"],
+        "operationId": "memory.update",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "name": "directory",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          },
+          {
+            "name": "workspace",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The updated note, or why the change was refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "BadRequest | InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/effect_HttpApiError_BadRequest"
+                    },
+                    {
+                      "$ref": "#/components/schemas/InvalidRequestError"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "description": "Rewrite a note, or set whether it may leave this device.",
+        "summary": "Change a note",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "text": {
+                    "type": "string"
+                  },
+                  "deviceOnly": {
+                    "type": "boolean"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.memory.update({\n  ...\n})"
+          }
+        ]
+      },
+      "delete": {
+        "tags": ["memory"],
+        "operationId": "memory.remove",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "name": "directory",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          },
+          {
+            "name": "workspace",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Whether a note was removed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "boolean",
+                  "description": "Whether a note was removed"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestError"
+                }
+              }
+            }
+          }
+        },
+        "description": "Remove a note from the project memory.",
+        "summary": "Remove a note",
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.memory.remove({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/project": {
       "get": {
         "tags": ["project"],
@@ -15618,6 +15970,9 @@
             "$ref": "#/components/schemas/EventQuestionV2Rejected"
           },
           {
+            "$ref": "#/components/schemas/EventMemoryUpdated"
+          },
+          {
             "$ref": "#/components/schemas/EventTodoUpdated"
           },
           {
@@ -17965,6 +18320,62 @@
         "required": ["id", "title", "command", "args", "cwd", "status", "pid"],
         "additionalProperties": false
       },
+      "MemorySource": {
+        "type": "string",
+        "enum": ["user", "agent", "learned"]
+      },
+      "MemoryItem": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "source": {
+            "$ref": "#/components/schemas/MemorySource"
+          },
+          "deviceOnly": {
+            "type": "boolean",
+            "description": "Never sent to a model that runs off this device"
+          },
+          "time": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "enum": ["NaN"]
+              },
+              {
+                "type": "string",
+                "enum": ["Infinity"]
+              },
+              {
+                "type": "string",
+                "enum": ["-Infinity"]
+              },
+              {
+                "type": "string",
+                "enum": ["Infinity", "-Infinity", "NaN"]
+              }
+            ]
+          },
+          "sessionID": {
+            "type": "string"
+          },
+          "failed": {
+            "type": "string"
+          },
+          "worked": {
+            "type": "string"
+          }
+        },
+        "required": ["id", "text", "source", "deviceOnly", "time"],
+        "additionalProperties": false
+      },
       "Todo": {
         "type": "object",
         "properties": {
@@ -20196,6 +20607,30 @@
                       }
                     },
                     "required": ["sessionID", "requestID"],
+                    "additionalProperties": false
+                  }
+                },
+                "required": ["id", "type", "properties"],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^evt_"
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": ["memory.updated"]
+                  },
+                  "properties": {
+                    "type": "object",
+                    "properties": {
+                      "added": {
+                        "$ref": "#/components/schemas/MemoryItem"
+                      }
+                    },
                     "additionalProperties": false
                   }
                 },
@@ -23366,6 +23801,38 @@
         "required": ["_tag", "name", "message"],
         "additionalProperties": false
       },
+      "MemoryInfo": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MemoryItem"
+            }
+          }
+        },
+        "required": ["enabled", "items"],
+        "additionalProperties": false
+      },
+      "MemoryRefusal": {
+        "type": "string",
+        "enum": ["empty", "long", "secret", "full"]
+      },
+      "MemoryResult": {
+        "type": "object",
+        "properties": {
+          "item": {
+            "$ref": "#/components/schemas/MemoryItem"
+          },
+          "refused": {
+            "$ref": "#/components/schemas/MemoryRefusal"
+          }
+        },
+        "additionalProperties": false
+      },
       "Project": {
         "type": "object",
         "properties": {
@@ -24421,6 +24888,54 @@
           }
         ]
       },
+      "MemoryItem1": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "source": {
+            "$ref": "#/components/schemas/MemorySource"
+          },
+          "deviceOnly": {
+            "type": "boolean",
+            "description": "Never sent to a model that runs off this device"
+          },
+          "time": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "enum": ["NaN"]
+              },
+              {
+                "type": "string",
+                "enum": ["Infinity"]
+              },
+              {
+                "type": "string",
+                "enum": ["-Infinity"]
+              }
+            ]
+          },
+          "sessionID": {
+            "type": "string"
+          },
+          "failed": {
+            "type": "string"
+          },
+          "worked": {
+            "type": "string"
+          }
+        },
+        "required": ["id", "text", "source", "deviceOnly", "time"],
+        "additionalProperties": false
+      },
       "session.status": {
         "type": "object",
         "properties": {
@@ -24769,6 +25284,9 @@
           },
           {
             "$ref": "#/components/schemas/QuestionV2Rejected"
+          },
+          {
+            "$ref": "#/components/schemas/MemoryUpdated"
           },
           {
             "$ref": "#/components/schemas/TodoUpdated"
@@ -33067,6 +33585,52 @@
         "required": ["id", "type", "data"],
         "additionalProperties": false
       },
+      "MemoryUpdated": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^evt_"
+          },
+          "metadata": {
+            "type": "object"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["memory.updated"]
+          },
+          "durable": {
+            "type": "object",
+            "properties": {
+              "aggregateID": {
+                "type": "string"
+              },
+              "seq": {
+                "type": "integer"
+              },
+              "version": {
+                "type": "integer"
+              }
+            },
+            "required": ["aggregateID", "seq", "version"],
+            "additionalProperties": false
+          },
+          "location": {
+            "$ref": "#/components/schemas/LocationRef"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "added": {
+                "$ref": "#/components/schemas/MemoryItem1"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "required": ["id", "type", "data"],
+        "additionalProperties": false
+      },
       "TodoUpdated": {
         "type": "object",
         "properties": {
@@ -36596,6 +37160,30 @@
         "required": ["id", "type", "properties"],
         "additionalProperties": false
       },
+      "EventMemoryUpdated": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^evt_"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["memory.updated"]
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "added": {
+                "$ref": "#/components/schemas/MemoryItem1"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "required": ["id", "type", "properties"],
+        "additionalProperties": false
+      },
       "EventTodoUpdated": {
         "type": "object",
         "properties": {
@@ -37410,6 +37998,10 @@
     {
       "name": "mcp",
       "description": "Experimental HttpApi MCP routes."
+    },
+    {
+      "name": "memory",
+      "description": "Project memory routes."
     },
     {
       "name": "project",

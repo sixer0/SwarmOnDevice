@@ -414,6 +414,27 @@ const scenarios: Scenario[] = [
       body: { reply: "once" },
     }))
     .json(404, object, "status"),
+  http.protected.get("/memory", "memory.get").json(200, object),
+  http.protected
+    .post("/memory", "memory.add")
+    .at((ctx) => ({ path: "/memory", headers: ctx.headers(), body: { text: "the password: hunter22" } }))
+    .json(200, object),
+  http.protected
+    .patch("/memory", "memory.settings")
+    .at((ctx) => ({ path: "/memory", headers: ctx.headers(), body: { enabled: true } }))
+    .json(200, object),
+  http.protected
+    .patch("/memory/{id}", "memory.update")
+    .at((ctx) => ({
+      path: route("/memory/{id}", { id: "missing" }),
+      headers: ctx.headers(),
+      body: { deviceOnly: true },
+    }))
+    .json(200, object),
+  http.protected
+    .delete("/memory/{id}", "memory.remove")
+    .at((ctx) => ({ path: route("/memory/{id}", { id: "missing" }), headers: ctx.headers() }))
+    .json(200, boolean),
   http.protected.get("/question", "question.list").json(200, array),
   http.protected
     .post("/question/{requestID}/reply", "question.reply.invalid")
