@@ -236,17 +236,21 @@ export const GitTool = Tool.define(
       execute: (params: Params, ctx: Tool.Context) =>
         Effect.gen(function* () {
           const instance = yield* InstanceState.context
-          // What this repository is, which only the shell can work with. A bad argument is another matter: fix the call.
-          const refuseRepository = (why: string) =>
-            Effect.fail(new Error(`git tool refused: ${why}. Nothing was run. Use the shell for this repository: it asks a person.`))
+          // What this repository is, which only the shell can work with, is an answer and not a failed call. A bad argument is
+          // another matter: fix the call.
+          const refuseRepository = (why: string) => ({
+            title: `git ${params.subcommand} refused`,
+            metadata: { subcommand: params.subcommand, truncated: false, refused: why as string | undefined },
+            output: `git tool refused: ${why}. Nothing was run. Use the shell (bash) for this repository: it asks a person.`,
+          })
           const refuse = (why: string) => Effect.fail(new Error(`git tool refused: ${why}.`))
 
-          if (instance.project.vcs !== "git") return yield* refuseRepository("this project is not a git repository")
+          if (instance.project.vcs !== "git") return refuseRepository("this project is not a git repository")
           const guarded = GitGuard.inspect(instance.worktree)
-          if (guarded.refused !== undefined) return yield* refuseRepository(guarded.refused)
+          if (guarded.refused !== undefined) return refuseRepository(guarded.refused)
           const env = hardenedEnv(instance)
           const binary = Bun.which("git", { PATH: env.PATH })
-          if (!binary) return yield* refuseRepository("no git program outside this project")
+          if (!binary) return refuseRepository("no git program outside this project")
 
           // Reading runs nothing, by everything above. Windows has not been tried, so it keeps asking there.
           yield* ctx.ask({
@@ -318,7 +322,7 @@ export const GitTool = Tool.define(
           }
           return {
             title: `git ${params.subcommand}`,
-            metadata: { subcommand: params.subcommand, truncated: cut },
+            metadata: { subcommand: params.subcommand, truncated: cut, refused: undefined },
             output: text || "(no output)",
           }
         }).pipe(Effect.orDie),

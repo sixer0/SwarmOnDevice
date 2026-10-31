@@ -80,10 +80,14 @@ const invoke = (dir: string, params: object, onAsk: (req: { permission: string; 
     } as never)
   }).pipe(provideInstance(dir))
 
-const failure = <R>(effect: Effect.Effect<unknown, unknown, R>) =>
+// What stopped this call: a failed call, or a repository the tool answered it will not run in.
+const failure = <R>(effect: Effect.Effect<{ output: string; metadata: { refused?: string } }, unknown, R>) =>
   effect.pipe(
     Effect.exit,
-    Effect.map((exit) => (Exit.isFailure(exit) ? String(Cause.squash(exit.cause)) : "no failure")),
+    Effect.map((exit) => {
+      if (Exit.isFailure(exit)) return String(Cause.squash(exit.cause))
+      return exit.value.metadata.refused === undefined ? "no failure" : exit.value.output
+    }),
   )
 
 /** Every call runs and stays clean, or is refused by name when `refused` is given. Returns nothing: it asserts. */
@@ -102,8 +106,12 @@ const allRefused = (dir: string, why: RegExp, marker = "marker") =>
   Effect.gen(function* () {
     clear(dir, marker)
     for (const params of calls) {
-      const message = yield* failure(invoke(dir, params))
+      // A normal result: if this were a failed call, the invoke would die and the test with it.
+      const result = yield* invoke(dir, params)
+      const message = result.output
+      expect(result.metadata.refused).toBeDefined()
       expect(message).toContain("git tool refused")
+      expect(message).toContain("Use the shell (bash)")
       expect(message).toMatch(why)
       expect(message.trim().split("\n")).toHaveLength(1)
       expect([JSON.stringify(params), fired(dir, marker)]).toEqual([JSON.stringify(params), false])
@@ -512,7 +520,7 @@ describe("git tool on a hostile repository", () => {
         seed(other)
         fs.rmSync(path.join(dir, ".git"), { recursive: true })
         fs.writeFileSync(path.join(dir, ".git"), `gitdir: ${path.join(other, ".git")}\n`)
-        expect(yield* failure(invoke(dir, { subcommand: "log" }))).toContain("outside this project")
+        expect(yield* failure(invoke(dir, { subcommand: "log" }))).toContain(".git is a file")
       }),
     )
 
@@ -552,35 +560,125 @@ describe("git tool on a hostile repository", () => {
         fs.writeFileSync(path.join(record, "commondir"), "../..\n")
         fs.rmSync(path.join(dir, ".git"), { recursive: true })
         fs.writeFileSync(path.join(dir, ".git"), `gitdir: ${record}\n`)
-        expect(GitGuard.inspect(dir).refused).toContain("outside this project")
+        expect(GitGuard.inspect(dir).refused).toContain(".git is a file")
         fs.rmSync(path.join(dir, ".git"))
         fs.symlinkSync(path.join(other, ".git"), path.join(dir, ".git"))
         expect(GitGuard.inspect(dir).refused).toContain("symbolic link")
       }),
     )
 
-    it.live("a linked worktree of a repository whose config is not plain", () =>
+    it.live("a real linked worktree is refused, and its main checkout is still read", () =>
       Effect.gen(function* () {
         const dir = yield* tmpdirScoped()
         seed(dir)
         const linked = `${dir}-linked`
         plain(dir, "worktree", "add", "-q", "-b", "other", linked)
-        plain(dir, "config", "core.fsmonitor", evil(dir))
-        expect(yield* failure(invoke(linked, { subcommand: "status" }))).toContain("core.fsmonitor")
-        expect(fired(dir)).toBe(false)
+        yield* allRefused(linked, /\.git is a file/)
+        expect((yield* invoke(dir, { subcommand: "log" })).output).toContain("second")
+        expect((yield* invoke(dir, { subcommand: "branch" })).output).toContain("other")
         fs.rmSync(linked, { recursive: true, force: true })
       }),
     )
 
-    it.live("a real linked worktree is still read", () =>
+    it.live("a checkout with a separate git dir, and a submodule's own checkout", () =>
+      Effect.gen(function* () {
+        const dir = yield* tmpdirScoped()
+        plain(dir, "init", "-q", "-b", "main", `--separate-git-dir=${dir}-separate`)
+        expect(fs.statSync(path.join(dir, ".git")).isFile()).toBe(true)
+        yield* failure(invoke(dir, { subcommand: "status" })).pipe(Effect.map((message) => expect(message).toContain(".git is a file")))
+        const main = yield* tmpdirScoped()
+        seed(main)
+        const source = yield* tmpdirScoped()
+        seed(source)
+        plain(main, "-c", "protocol.file.allow=always", "submodule", "add", "-q", source, "mod")
+        expect(fs.statSync(path.join(main, "mod/.git")).isFile()).toBe(true)
+        expect(GitGuard.inspect(path.join(main, "mod")).refused).toContain(".git is a file")
+      }),
+    )
+
+    // What the guard used to trim and git does not. Each proves it is live first: plain git runs the planted filter, which
+    // lives in a config beside the harmless one that a trim would have read.
+    const indirections: [string, string, string, string?][] = [
+      ["a trailing space", "../.. \n", "../.. "],
+      ["a leading space", " ../..\n", "."],
+      ["a trailing tab", "../..\t\n", "../..\t"],
+      ["a form feed", "../..\f\n", "../..\f"],
+      ["a leading newline", "\n../..\n", "."],
+      ["a relative gitdir", "../.. \n", "../.. ", ".git\n"],
+    ]
+    for (const [name, commondir, where, back] of indirections) {
+      it.live(`a commondir with ${name}, which git and a trim read differently`, () =>
+        Effect.gen(function* () {
+          const source = yield* tmpdirScoped()
+          seed(source)
+          fs.writeFileSync(path.join(source, ".gitattributes"), "* filter=evil\n")
+          plain(source, "add", ".gitattributes")
+          plain(source, "commit", "-qm", "attributes")
+          const dir = yield* tmpdirScoped()
+          for (const file of ["src", "README.md", ".gitattributes"]) fs.cpSync(path.join(source, file), path.join(dir, file), { recursive: true })
+          const record = path.join(dir, ".w/worktrees/x")
+          fs.mkdirSync(record, { recursive: true })
+          fs.mkdirSync(path.join(dir, ".w/objects"))
+          fs.mkdirSync(path.join(dir, ".w/refs"))
+          fs.writeFileSync(path.join(dir, ".w/config"), "[core]\n\trepositoryformatversion = 0\n")
+          fs.writeFileSync(path.join(dir, ".git"), "gitdir: .w/worktrees/x\n")
+          fs.writeFileSync(path.join(record, "gitdir"), back ?? `${path.join(dir, ".git")}\n`)
+          fs.writeFileSync(path.join(record, "commondir"), commondir)
+          fs.writeFileSync(path.join(record, "HEAD"), "ref: refs/heads/main\n")
+          fs.copyFileSync(path.join(source, ".git/index"), path.join(record, "index"))
+          // A leading character makes a directory of its own on the way, whose parent is the record.
+          if (where === ".") fs.mkdirSync(path.join(record, commondir.split("/")[0]!))
+          const hostile = path.join(record, where)
+          fs.cpSync(path.join(source, ".git"), hostile, { recursive: true, force: where !== "." })
+          fs.appendFileSync(path.join(hostile, "config"), `[filter "evil"]\n\tclean = ${evil(dir)}\n\tsmudge = ${evil(dir)}\n`)
+          plain(dir, "status", "--short")
+          expect(fired(dir)).toBe(true)
+          yield* allRefused(dir, /\.git is a file/)
+        }),
+      )
+    }
+
+    test("a commondir in an ordinary .git is refused for being there, whatever it says", () => {
+      const dir = fs.mkdtempSync(path.join(process.env.TMPDIR ?? "/tmp", "git-guard-"))
+      seed(dir)
+      expect(GitGuard.inspect(dir).gitDir).toBe(path.join(dir, ".git"))
+      const file = path.join(dir, ".git/commondir")
+      for (const text of [".\n", " ../..\n", "../.. \n", "../..\t\n", "../..\f\n", "\n../..\n", ""]) {
+        fs.writeFileSync(file, text)
+        expect(GitGuard.inspect(dir).refused).toContain("commondir")
+      }
+      fs.rmSync(file)
+      fs.symlinkSync("nowhere", file)
+      expect(GitGuard.inspect(dir).refused).toContain("commondir")
+      fs.rmSync(file)
+      fs.mkdirSync(file)
+      expect(GitGuard.inspect(dir).refused).toContain("commondir")
+      fs.rmSync(dir, { recursive: true, force: true })
+    })
+
+    it.live("--git-dir and the tool's environment leave git nothing else to follow", () =>
       Effect.gen(function* () {
         const dir = yield* tmpdirScoped()
         seed(dir)
-        const linked = `${dir}-linked`
-        plain(dir, "worktree", "add", "-q", "-b", "other", linked)
-        const result = yield* invoke(linked, { subcommand: "log" })
-        expect(result.output).toContain("second")
-        fs.rmSync(linked, { recursive: true, force: true })
+        const elsewhere = yield* tmpdirScoped()
+        seed(elsewhere)
+        fs.writeFileSync(path.join(dir, ".gitattributes"), "* filter=evil\n")
+        plain(elsewhere, "config", "filter.evil.clean", evil(dir))
+        const hostile = path.join(elsewhere, ".git")
+        const saved = { dir: process.env.GIT_DIR, common: process.env.GIT_COMMON_DIR }
+        process.env.GIT_DIR = hostile
+        process.env.GIT_COMMON_DIR = hostile
+        const env = hardenedEnv({ directory: dir, worktree: dir } as never)
+        const seen = spawnSync("git", [`--git-dir=${path.join(dir, ".git")}`, `--work-tree=${dir}`, "rev-parse", "--git-dir", "--git-common-dir"], { cwd: dir, encoding: "utf8", env })
+        const result = yield* invoke(dir, { subcommand: "status" }).pipe(Effect.exit)
+        process.env.GIT_DIR = saved.dir
+        process.env.GIT_COMMON_DIR = saved.common
+        if (saved.dir === undefined) delete process.env.GIT_DIR
+        if (saved.common === undefined) delete process.env.GIT_COMMON_DIR
+        expect(Object.keys(env).filter((key) => key === "GIT_DIR" || key === "GIT_COMMON_DIR")).toEqual([])
+        expect(seen.stdout.trim().split("\n")).toEqual([path.join(dir, ".git"), path.join(dir, ".git")])
+        expect(Exit.isSuccess(result)).toBe(true)
+        expect(fired(dir)).toBe(false)
       }),
     )
   })

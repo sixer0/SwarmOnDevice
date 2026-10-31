@@ -4,7 +4,6 @@
 // prompt, because the shell can still do it and a person gets asked. Being wrong costs a program run with nobody asked.
 import fs from "node:fs"
 import path from "node:path"
-import { Reach } from "./reach"
 
 const MAX_CONFIG = 256 * 1024
 const MAX_INDEX = 64 * 1024 * 1024
@@ -116,51 +115,30 @@ function regular(file: string, max: number) {
   const info = fs.lstatSync(file, { throwIfNoEntry: false })
   return info?.isFile() && info.size <= max ? fs.readFileSync(file) : undefined
 }
-const text = (file: string, max = 4096) => regular(file, max)?.toString("latin1")
 const present = (file: string) => fs.lstatSync(file, { throwIfNoEntry: false }) !== undefined
 
 /**
- * Where this checkout's git directory is, or why the tool will not run git here. `.git` is either an ordinary directory or
- * a linked worktree: the record that names this checkout back, in a repository's `worktrees/`, with that repository's
- * config held to the same list. Anything else, such as a submodule's or a separate git dir, is not looked into further.
+ * The git directory to pass to git, or the plain reason it must not be run in this checkout. Only `.git` as an ordinary
+ * directory holding its own config qualifies. A `.git` file or a `commondir` is an indirection, and git reads those by its own
+ * rules: trimming one differently once let this vet a harmless config while git obeyed a hostile one beside it. So neither
+ * is followed or parsed, whatever it says, and that is every linked worktree and submodule checkout.
  */
-function locate(worktree: string) {
-  const dotGit = path.join(worktree, ".git")
-  const info = fs.lstatSync(dotGit, { throwIfNoEntry: false })
+export function inspect(worktree: string): { gitDir: string; refused?: undefined } | { refused: string; gitDir?: undefined } {
+  const gitDir = path.join(worktree, ".git")
+  const info = fs.lstatSync(gitDir, { throwIfNoEntry: false })
   if (!info) return { refused: "there is no .git at the top of this project" }
   if (info.isSymbolicLink()) return { refused: ".git is a symbolic link" }
-  if (info.isDirectory()) {
-    if (present(path.join(dotGit, "commondir"))) return { refused: "its commondir says the repository is somewhere else" }
-    return { gitDir: dotGit, common: dotGit }
-  }
-  const target = text(dotGit)?.match(/^gitdir: ([^\n]+)\n?$/)?.[1]
-  if (!target) return { refused: ".git is not a repository" }
-  const gitDir = Reach.real(path.resolve(worktree, target))
-  if (!gitDir) return { refused: ".git leads nowhere" }
-  const back = text(path.join(gitDir, "gitdir"))?.trim()
-  const linked = path.basename(path.dirname(gitDir)) === "worktrees" && back !== undefined && Reach.real(back) === Reach.real(dotGit)
-  if (!linked) return { refused: ".git points outside this project, and is no linked worktree of it" }
-  const common = path.dirname(path.dirname(gitDir))
-  const named = text(path.join(gitDir, "commondir"))?.trim()
-  if (named === undefined || Reach.real(path.resolve(gitDir, named)) !== common) return { refused: "its commondir does not match this worktree" }
-  return { gitDir, common }
-}
-
-/** The git directory to pass to git, or the plain reason it must not be run in this checkout. */
-export function inspect(worktree: string): { gitDir: string; refused?: undefined } | { refused: string; gitDir?: undefined } {
-  const located = locate(worktree)
-  if (located.refused !== undefined) return { refused: located.refused }
-  const { gitDir, common } = located as { gitDir: string; common: string }
-  const leaves = [...["config", "objects", "refs", "packed-refs"].map((name) => path.join(common, name)), path.join(gitDir, "HEAD"), path.join(gitDir, "index")]
+  if (!info.isDirectory()) return { refused: ".git is a file that points elsewhere, as in a linked worktree or a submodule checkout" }
+  if (present(path.join(gitDir, "commondir"))) return { refused: "its commondir says the repository is somewhere else" }
+  const leaves = ["config", "objects", "refs", "packed-refs", "HEAD", "index"].map((name) => path.join(gitDir, name))
   if (leaves.some((file) => fs.lstatSync(file, { throwIfNoEntry: false })?.isSymbolicLink()))
     return { refused: "part of .git is a symbolic link, which can lead outside this project" }
-  if (present(path.join(common, "objects/info/alternates")))
+  if (present(path.join(gitDir, "objects/info/alternates")))
     return { refused: "it borrows objects from another repository through objects/info/alternates" }
-  if (present(path.join(common, "config.worktree")) || present(path.join(gitDir, "config.worktree")))
-    return { refused: "it has a worktree config" }
-  if (present(path.join(worktree, ".gitmodules")) || present(path.join(common, "modules")))
+  if (present(path.join(gitDir, "config.worktree"))) return { refused: "it has a worktree config" }
+  if (present(path.join(worktree, ".gitmodules")) || present(path.join(gitDir, "modules")))
     return { refused: "it has submodules, whose own config no setting from here can reach" }
-  const config = regular(path.join(common, "config"), MAX_CONFIG)?.toString("latin1")
+  const config = regular(path.join(gitDir, "config"), MAX_CONFIG)?.toString("latin1")
   if (config === undefined) return { refused: "its config is not a plain file this tool can read" }
   const problem = configProblem(config)
   if (problem) return { refused: problem }
