@@ -54,6 +54,9 @@ test("a paid provider declared first in config does not become the default over 
   expect([paid, own].toSorted(compareProviderDefaults)).toEqual([own, paid])
   // Paid but written into config is still chosen over anything Swarm found by itself.
   expect([cloud, paid].toSorted(compareProviderDefaults)).toEqual([paid, cloud])
+  // One free model does not make a paid provider the default ahead of one with no prices at all.
+  const mixed = { source: "config", models: { big: { cost: { input: 5, output: 25 } }, free: {} } }
+  expect([paid, mixed, own].toSorted(compareProviderDefaults)).toEqual([own, mixed, paid])
 })
 
 test("compareProviders puts on-device first", () => {

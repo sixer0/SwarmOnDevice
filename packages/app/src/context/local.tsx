@@ -3,7 +3,7 @@ import { base64Encode } from "@opencode-ai/core/util/encode"
 import { useParams } from "@solidjs/router"
 import { batch, createEffect, createMemo, startTransition } from "solid-js"
 import { createStore } from "solid-js/store"
-import { compareProviderDefaults } from "@/components/model-price"
+import { compareProviderDefaults, hasPrice, isOnDeviceProvider } from "@/components/model-price"
 import { useModels } from "@/context/models"
 import { useSettings } from "@/context/settings"
 import { useProviders } from "@/hooks/use-providers"
@@ -166,13 +166,17 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
       const defaults = providers.default()
       // Running a local engine does not take over from a model someone set up on purpose.
       for (const provider of providers.connected().toSorted(compareProviderDefaults)) {
+        // The priced models of a provider that also has a free one stay a choice, like any other paid model.
+        const models = Object.values(provider.models)
+        const free = models.filter((model) => !hasPrice(model))
+        const offered = provider.source === "config" && !isOnDeviceProvider(provider) && free.length > 0 ? free : models
         const configured = defaults[provider.id]
-        if (configured) {
+        if (configured && offered.some((model) => model.id === configured)) {
           const model = { providerID: provider.id, modelID: configured }
           if (validModel(model)) return model
         }
 
-        const first = Object.values(provider.models)[0]
+        const first = offered[0]
         if (!first) continue
         const model = { providerID: provider.id, modelID: first.id }
         if (validModel(model)) return model

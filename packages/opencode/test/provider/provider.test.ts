@@ -453,6 +453,55 @@ it.instance(
   },
 )
 
+it.instance(
+  "defaultModel does not let one free model carry a paid provider's priced models in",
+  () =>
+    Effect.gen(function* () {
+      const model = yield* Provider.use.defaultModel()
+      expect(String(model.providerID)).toBe("own-server")
+      expect(String(model.modelID)).toBe("thinker")
+    }),
+  {
+    config: {
+      provider: {
+        paidcloud: {
+          name: "Paid cloud",
+          npm: "@ai-sdk/openai-compatible",
+          options: { apiKey: "key", baseURL: "http://127.0.0.1:1/v1" },
+          models: { "zeta-big": { name: "Big", cost: { input: 5, output: 25 } }, "alpha-free": { name: "Free" } },
+        },
+        "own-server": {
+          name: "Own server",
+          npm: "@ai-sdk/openai-compatible",
+          options: { apiKey: "key", baseURL: "http://127.0.0.1:2/v1" },
+          models: { thinker: {} },
+        },
+      },
+    },
+  },
+)
+
+it.instance(
+  "defaultModel takes the free model when only a provider with both kinds is configured",
+  () =>
+    Effect.gen(function* () {
+      const model = yield* Provider.use.defaultModel()
+      expect(String(model.modelID)).toBe("alpha-free")
+    }),
+  {
+    config: {
+      provider: {
+        paidcloud: {
+          name: "Paid cloud",
+          npm: "@ai-sdk/openai-compatible",
+          options: { apiKey: "key", baseURL: "http://127.0.0.1:1/v1" },
+          models: { "zeta-big": { name: "Big", cost: { input: 5, output: 25 } }, "alpha-free": { name: "Free" } },
+        },
+      },
+    },
+  },
+)
+
 it.instance("defaultModel returns first available model when no config set", () =>
   Effect.gen(function* () {
     yield* setProcessEnv("ANTHROPIC_API_KEY", "test-api-key")

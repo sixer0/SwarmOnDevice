@@ -35,8 +35,11 @@ const isConfigured = (provider: OnDevice) => provider.source === "config" && !is
 const pickerRank = (provider: OnDevice) => (isConfigured(provider) ? 0 : isOnDeviceProvider(provider) ? 1 : 2)
 // Among those, one that bills per request stays a choice someone makes, whatever order the config lists them in.
 const defaultRank = (provider: OnDevice) => {
-  if (!isConfigured(provider)) return isOnDeviceProvider(provider) ? 3 : 2
-  return Object.values(provider.models ?? {}).some((model) => !hasPrice(model)) ? 0 : 1
+  if (!isConfigured(provider)) return isOnDeviceProvider(provider) ? 4 : 3
+  const models = Object.values(provider.models ?? {})
+  // A provider's one free model does not bring its priced ones along, or put it ahead of a provider with no prices.
+  if (models.length > 0 && models.every((model) => !hasPrice(model))) return 0
+  return models.some((model) => !hasPrice(model)) ? 1 : 2
 }
 
 /** Order of the picker's groups. */

@@ -163,6 +163,51 @@ describe("discover", () => {
     expect(ModelWindow.apply(item.models.thinker).limit.context).toBe(65536)
   })
 
+  test("sends a stored key the provider's options do not carry, and learns the limits a keyless request is refused", async () => {
+    const seen: (string | null)[] = []
+    const instance = Bun.serve({
+      port: 0,
+      hostname: "127.0.0.1",
+      fetch(request) {
+        seen.push(request.headers.get("authorization"))
+        if (request.headers.get("authorization") !== "Bearer stored") return new Response("no", { status: 401 })
+        return Response.json({ data: [{ id: "thinker", max_input_tokens: 786432, max_output_tokens: 120000 }] })
+      },
+    })
+    const baseURL = `http://127.0.0.1:${instance.port}/v1`
+    const item = { ...provider(baseURL), key: "stored", options: { baseURL } }
+    ModelWindow.discover(item)
+    await Bun.sleep(100)
+    instance.stop(true)
+    expect(seen).toEqual(["Bearer stored"])
+    expect(ModelWindow.apply(item.models.thinker).limit).toMatchObject({ context: 786432, output: 120000 })
+  })
+
+  test("a header the config set for authorization is the only one sent", async () => {
+    const { instance, seen, baseURL } = server({ data: [] })
+    const item = provider(baseURL)
+    ModelWindow.discover({ ...item, options: { ...item.options, headers: { Authorization: "Token own" } } })
+    await Bun.sleep(100)
+    instance.stop(true)
+    expect(seen).toEqual(["/v1/models Token own"])
+  })
+
+  test("a redirect to another address never receives the key", async () => {
+    const elsewhere = server({ data: [{ id: "thinker", max_model_len: 2048 }] })
+    const instance = Bun.serve({
+      port: 0,
+      hostname: "127.0.0.1",
+      fetch: () => Response.redirect(`${elsewhere.baseURL}/models`, 302),
+    })
+    const item = provider(`http://127.0.0.1:${instance.port}/v1`)
+    ModelWindow.discover(item)
+    await Bun.sleep(100)
+    instance.stop(true)
+    elsewhere.instance.stop(true)
+    expect(elsewhere.seen).toEqual([])
+    expect(ModelWindow.apply(item.models.thinker).limit.context).toBe(0)
+  })
+
   test("a server that is down costs nothing and leaves the model as it was", async () => {
     const { instance, baseURL } = server({})
     instance.stop(true)

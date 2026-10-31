@@ -26,6 +26,8 @@ type LimitedModel = {
 }
 type Provider = {
   id: string
+  /** The stored key (auth.json or the provider's env), which `options.apiKey` does not carry until a request is built. */
+  key?: string
   options?: Record<string, unknown>
   models: Record<string, LimitedModel & { api: { npm: string; url?: string } }>
 }
@@ -137,11 +139,15 @@ export function learnFromRefusal(model: LimitedModel, message: string, accepted?
 }
 
 async function probe(provider: Provider, baseURL: string, models: LimitedModel[]) {
-  const apiKey = provider.options?.apiKey
-  const headers = isRecord(provider.options?.headers) ? (provider.options.headers as Record<string, string>) : {}
+  const apiKey = provider.options?.apiKey ?? provider.key
+  const headers = new Headers(isRecord(provider.options?.headers) ? (provider.options.headers as HeadersInit) : {})
+  if (typeof apiKey === "string" && apiKey && !headers.has("authorization"))
+    headers.set("authorization", `Bearer ${apiKey}`)
+  // The credentials are for this provider's own address, so a redirect elsewhere is treated as no answer.
   const response = await fetch(`${baseURL.replace(/\/+$/, "")}/models`, {
     signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
-    headers: { ...(typeof apiKey === "string" && apiKey ? { authorization: `Bearer ${apiKey}` } : {}), ...headers },
+    headers,
+    redirect: [...headers].length > 0 ? "manual" : "follow",
   }).catch(() => undefined)
   if (!response?.ok) return
   // It answered, so its answer stands for as long as Swarm runs. Only an unreachable server is asked again.
