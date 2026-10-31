@@ -1,11 +1,26 @@
 export function prefix(tokens: string[]) {
+  return tokens.slice(0, known(tokens) ?? 1)
+}
+
+/**
+ * The rule an "Allow always" gives for one plain command: its program plus subcommand and nothing wider. A program this
+ * table does not know gets its first argument too, so `make test` does not become all of make. A flag in the middle, as in
+ * `git -c x=y status`, means the subcommand cannot be named, so there is no rule.
+ */
+export function scope(tokens: string[]) {
+  const size = known(tokens) ?? 2
+  const head = tokens.slice(0, size)
+  if (head.length === 0 || head.some((token) => token.startsWith("-"))) return undefined
+  // `git` alone is not all of git, and `make` alone is not every target.
+  return head.length < size ? head.join(" ") : `${head.join(" ")} *`
+}
+
+function known(tokens: string[]) {
   for (let len = tokens.length; len > 0; len--) {
-    const prefix = tokens.slice(0, len).join(" ")
-    const arity = ARITY[prefix]
-    if (arity !== undefined) return tokens.slice(0, arity)
+    const arity = Object.hasOwn(ARITY, tokens.slice(0, len).join(" ")) ? ARITY[tokens.slice(0, len).join(" ")] : undefined
+    if (arity !== undefined) return arity
   }
-  if (tokens.length === 0) return []
-  return tokens.slice(0, 1)
+  return undefined
 }
 
 /* Generated with following prompt:

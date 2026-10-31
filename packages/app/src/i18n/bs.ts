@@ -739,6 +739,7 @@ export const dict = {
   "error.chain.configInvalidWithMessage": "Konfiguracijska datoteka na {{path}} nije ispravna: {{message}}",
 
   "notification.permission.title": "Potrebna dozvola",
+  "session.permission.alwaysNamed": "Uvijek dozvoli: {{scope}}",
   "notification.permission.description": "{{sessionTitle}} u {{projectName}} traži dozvolu",
   "notification.question.title": "Pitanje",
   "notification.question.description": "{{sessionTitle}} u {{projectName}} ima pitanje",

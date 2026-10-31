@@ -1,9 +1,9 @@
 import { Risk } from "@/tool/risk"
 
 // "Run again" sends a command straight to the shell with no permission prompt, so it is only offered for a command that is
-// one plain program, optionally after a `cd`, and that program has to be known: either the shell tool's own classifier says
-// it only reads, or it is a recognised check. `unknown` from that classifier means "keep asking", so it never counts here.
-// Anything else is not offered: this reads no shell grammar, and a person can always send it as a message.
+// one plain program, optionally after a `cd`, and that program has to be a recognised check. Anything the classifier labels
+// as changing something or leaving the machine is not offered, and nor is anything else: this reads no shell grammar, and a
+// person can always send it as a message.
 
 const MAX_LENGTH = 200
 // Run whatever they are given, so what they run is not what this would be judging.
@@ -23,10 +23,13 @@ const SUBCOMMANDS: Record<string, Set<string>> = {
 }
 const PACKAGE_MANAGERS = new Set(["bun", "npm", "pnpm", "yarn"])
 // Flags that load or run something else, so the program's name no longer says what happens.
-const LOADS_CODE = /^--?(exec|toolexec|preload|require|config|globalsetup|setupfiles)\b/i
+const LOADS_CODE = /^--?(exec|toolexec|vettool|preload|require|config|project|plugin|rootdir|globalsetup|setupfiles)\b/i
+// The short forms of the same, except for cargo, whose -p only picks a package of the workspace.
+const LOADS_CODE_SHORT = /^-[rpc]$/
 
 export function rerunnable(command: string) {
-  if (command.length > MAX_LENGTH || command.includes("\n")) return false
+  // A control character is a separator to one shell and part of a word to another.
+  if (command.length > MAX_LENGTH || /[^\x20-\x7e]/.test(command)) return false
   const segments = command.split("&&").map(words)
   if (segments.some((segment) => !segment)) return false
   const programs = (segments as string[][]).filter((segment) => !(segment[0] === "cd" && segment.length === 2))
@@ -35,16 +38,12 @@ export function rerunnable(command: string) {
   if (start === -1 || !programs[0].slice(0, start).every((word) => SETTINGS.test(word))) return false
   const tokens = programs[0].slice(start)
   if (WRAPPERS.has(tokens[0])) return false
-  const verdict = Risk.classify(tokens)
-  if (verdict.kind === "harmless") return verdict.paths.every(insideProject)
-  return verdict.kind === "unknown" && isCheck(tokens)
+  return Risk.classify(tokens).kind === "unknown" && isCheck(tokens)
 }
-
-const insideProject = (file: string) => !/^(\/|~)/.test(file) && !file.split(/[\\/]/).includes("..")
 
 function isCheck([program, first, second, ...rest]: string[]): boolean {
   const args = [first, second, ...rest].filter((word) => word !== undefined)
-  if (args.some((word) => LOADS_CODE.test(word))) return false
+  if (args.some((word) => LOADS_CODE.test(word) || (program !== "cargo" && LOADS_CODE_SHORT.test(word)))) return false
   if (CHECKERS.has(program)) return true
   if (SUBCOMMANDS[program]?.has(first)) return true
   if ((program === "npx" || program === "bunx") && CHECKERS.has(first)) return true

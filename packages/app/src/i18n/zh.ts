@@ -736,6 +736,7 @@ export const dict = {
   "error.chain.configInvalidWithMessage": "配置文件 {{path}} 无效：{{message}}",
 
   "notification.permission.title": "需要权限",
+  "session.permission.alwaysNamed": "始终允许: {{scope}}",
   "notification.permission.description": "{{sessionTitle}}（{{projectName}}）需要权限",
   "notification.question.title": "问题",
   "notification.question.description": "{{sessionTitle}}（{{projectName}}）有一个问题",

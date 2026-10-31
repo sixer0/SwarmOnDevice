@@ -690,6 +690,7 @@ export const dict = {
   "error.chain.configInvalid": "Konfigurační soubor na {{path}} je neplatný",
   "error.chain.configInvalidWithMessage": "Konfigurační soubor na {{path}} je neplatný: {{message}}",
   "notification.permission.title": "Vyžaduje se povolení",
+  "session.permission.alwaysNamed": "Vždy povolit: {{scope}}",
   "notification.permission.description": "{{sessionTitle}} v {{projectName}} potřebuje povolení",
   "notification.question.title": "Otázka",
   "notification.question.description": "{{sessionTitle}} v {{projectName}} má otázku",

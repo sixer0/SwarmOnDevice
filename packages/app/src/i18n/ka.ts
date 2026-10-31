@@ -690,6 +690,7 @@ export const dict = {
   "error.chain.configInvalid": "კონფიგურაციის ფაილი {{path}}-ზე არასწორია",
   "error.chain.configInvalidWithMessage": "კონფიგურაციის ფაილი {{path}}-ზე არასწორია: {{message}}",
   "notification.permission.title": "ნებართვა საჭიროა",
+  "session.permission.alwaysNamed": "ყოველთვის ნებადართული: {{scope}}",
   "notification.permission.description": "{{sessionTitle}} {{projectName}}-ში საჭიროებს ნებართვას",
   "notification.question.title": "კითხვა",
   "notification.question.description": "{{sessionTitle}} {{projectName}}-ში აქვს შეკითხვა",

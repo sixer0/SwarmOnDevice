@@ -744,6 +744,7 @@ export const dict = {
   "error.chain.configInvalidWithMessage": "{{path}} adresindeki yapılandırma dosyası geçersiz: {{message}}",
 
   "notification.permission.title": "İzin gerekli",
+  "session.permission.alwaysNamed": "Her zaman izin ver: {{scope}}",
   "notification.permission.description": "{{projectName}} içindeki {{sessionTitle}} izin gerektiriyor",
   "notification.question.title": "Soru",
   "notification.question.description": "{{projectName}} içindeki {{sessionTitle}} bir soru soruyor",

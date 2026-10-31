@@ -346,6 +346,9 @@ const STRIP_COLOR = /\u001b\[[0-9;]*m/g
 // Passes output through whole, or keeps its end. A filter like grep could have removed the line that said what failed.
 const KEEPS_THE_END = /^\s*(?:tail|tee|cat)\b/
 const IGNORES_FAILURE = /^\s*(?:true|:)\s*$/
+// Runners that end on one summary of the whole run, called directly rather than through a script that could run others.
+const ONE_RESULT = /^\s*(?:(?:bunx|npx|pnpx|pnpm exec|yarn)\s+)?(?:bun test|jest|vitest(?:\s+run)?|pytest|python3?\s+-m\s+pytest|mocha)\b/
+const SEVERAL_RESULTS = /--filter\b|--recursive\b|--workspaces?\b|\s-r\b|\bturbo\b/
 
 /**
  * What a test run's own summary says, for a run whose exit code is hidden by what it was piped into. Only a runner's
@@ -361,14 +364,19 @@ export function visibleTestResult(command: string, output: string): "passed" | "
   )
   if (checks.length !== 1) return
   const at = checks[0]
+  // Anything before it could have printed a summary of its own, except moving to where it runs.
   if (operators.slice(0, at).some((operator) => operator !== "&&")) return
+  if (segments.slice(0, at).some((segment) => !/^\s*cd\s+[^\s;&|<>]+\s*$/.test(segment))) return
   const clean = operators.slice(at).every((operator, index) => {
     const next = segments[at + index + 1] ?? ""
     if (operator === "|" || operator === "|&") return KEEPS_THE_END.test(next)
     return operator === "||" && IGNORES_FAILURE.test(next)
   })
   if (!clean) return
-  return summaryOf(output.replace(STRIP_COLOR, ""))
+  const result = summaryOf(output.replace(STRIP_COLOR, ""))
+  // A failure seen is a failure. A pass is only believed from one runner called directly: `go test ./...`, `cargo test` and
+  // a script end on the last of several results, so a tail can have hidden an earlier failure.
+  return result === "failed" || (ONE_RESULT.test(segments[at]) && !SEVERAL_RESULTS.test(segments[at])) ? result : undefined
 }
 
 function summaryOf(output: string): "passed" | "failed" | undefined {
@@ -393,11 +401,8 @@ function summaryOf(output: string): "passed" | "failed" | undefined {
     if (/\b[1-9]\d* (?:failed|errors?)\b/.test(line)) return "failed"
     if (/\b[1-9]\d* passed\b/.test(line)) return "passed"
   }
-  // cargo: "test result: ok. 3 passed; 0 failed; ...". go: "ok  pkg  0.1s", or "FAIL" lines.
-  const cargo = lines.findLast((line) => /^test result: (?:ok|FAILED)\./.test(line))
-  if (cargo) return cargo.startsWith("test result: ok") ? "passed" : "failed"
-  if (lines.some((line) => /^(?:FAIL|--- FAIL)\b/.test(line))) return "failed"
-  if (lines.some((line) => /^ok\s+\S+\s+(?:\(cached\)|[\d.]+s)/.test(line))) return "passed"
+  // cargo: "test result: FAILED. ...". go: "FAIL" lines. Their passes are not read: see visibleTestResult.
+  if (lines.some((line) => /^(?:test result: FAILED\.|FAIL\b|--- FAIL\b)/.test(line))) return "failed"
   return undefined
 }
 

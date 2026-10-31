@@ -139,7 +139,8 @@ export function parseDraft(text: string): Draft | undefined {
   if (!parsed || typeof parsed !== "object") return undefined
   const { name, description, instructions } = parsed as Record<string, unknown>
   if (typeof instructions !== "string" || !instructions.trim()) return undefined
-  const steps = disarm(instructions.trim()).replace(/`([^`\n]+)`/g, (_, command: string) => `\`${untrimmed(command)}\``)
+  // Last, on the final text: rewriting a command can leave a `!` right before a backtick, which is a live marker again.
+  const steps = disarm(instructions.trim().replace(/`([^`\n]+)`/g, (_, command: string) => `\`${untrimmed(command)}\``))
   const template = steps.includes(ARGUMENTS) ? steps : `${steps}\n\nDetails for this run, if any: ${ARGUMENTS}`
   if (template.length > MAX_TEMPLATE || MemoryLearn.looksSecret(template)) return undefined
   return {
@@ -157,7 +158,8 @@ export function parseDraft(text: string): Draft | undefined {
  */
 export function disarm(template: string): string {
   const quoted = template.replace(ConfigMarkdown.FILE_REGEX, (match) => (match === "@" ? match : `\`${match}\``))
-  const next = quoted.replace(/!+`/g, "`")
+  // `!$ARGUMENTS` would turn what the person types next into a marker.
+  const next = quoted.replace(/!+`/g, "`").replace(/!+(?=\$)/g, "")
   return armed(next) ? disarm(next) : next
 }
 

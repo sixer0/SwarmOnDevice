@@ -581,6 +581,7 @@ export const dict = {
   "error.chain.configInvalid": "Konfigurationsdatei unter {{path}} ist ungültig",
   "error.chain.configInvalidWithMessage": "Konfigurationsdatei unter {{path}} ist ungültig: {{message}}",
   "notification.permission.title": "Berechtigung erforderlich",
+  "session.permission.alwaysNamed": "Immer erlauben: {{scope}}",
   "notification.permission.description": "{{sessionTitle}} in {{projectName}} benötigt Berechtigung",
   "notification.question.title": "Frage",
   "notification.question.description": "{{sessionTitle}} in {{projectName}} hat eine Frage",

@@ -695,6 +695,7 @@ export const dict = {
   "error.chain.configInvalid": "{{path}} дээрх тохиргооны файл буруу байна",
   "error.chain.configInvalidWithMessage": "{{path}} дээрх тохиргооны файл буруу байна: {{message}}",
   "notification.permission.title": "Зөвшөөрөл шаардлагатай",
+  "session.permission.alwaysNamed": "Үргэлж зөвшөөрөх: {{scope}}",
   "notification.permission.description": "{{projectName}} дахь {{sessionTitle}} зөвшөөрөл шаардлагатай",
   "notification.question.title": "Асуулт",
   "notification.question.description": "{{projectName}} дэх {{sessionTitle}} асуулт байна",

@@ -1,4 +1,4 @@
-import { Effect, Stream } from "effect"
+import { Effect, Fiber, Stream } from "effect"
 import os from "os"
 import { createWriteStream } from "node:fs"
 import * as Tool from "./tool"
@@ -22,7 +22,6 @@ import { Plugin } from "@/plugin"
 import { ChildProcess } from "effect/unstable/process"
 import { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner"
 import { ShellPrompt, type Parameters } from "./shell/prompt"
-import { BashArity } from "@/permission/arity"
 import { Risk } from "./risk"
 import { Reach } from "./reach"
 import { Secrets } from "./secrets"
@@ -81,8 +80,6 @@ type Part = {
 type Scan = {
   dirs: Set<string>
   patterns: Set<string>
-  always: Set<string>
-  harmless: Set<string>
   risk?: Risk.Risk
   /** Secret files the command names, so what it prints from them can be recognised. */
   secretFiles: Set<string>
@@ -281,8 +278,8 @@ const parse = Effect.fn("ShellTool.parse")(function* (command: string, ps: boole
   return tree
 })
 
-// What a command is allowed to be made of before anything in it is taken at face value. Everything else, such as a group,
-// a subshell, a loop, an expansion or a heredoc, means the arguments the parser sees are not what the shell will use.
+// What a command is made of for its label to be taken at face value. Everything else, such as a group, a subshell, a loop,
+// an expansion or a heredoc, means the arguments the parser sees may not be what the shell will use, so it gets no label.
 const UNDERSTOOD = new Set([
   "program",
   "comment",
@@ -306,8 +303,7 @@ function understood(node: Node): boolean {
   return node.namedChildren.every((child) => child !== null && understood(child))
 }
 
-// Nothing in these can be rewritten by any POSIX shell or by zsh before the command sees it, written as what may be there
-// rather than what may not, because each shell has its own list: zsh turns `=sh` into a path and runs `*(e:cmd:)`.
+// Nothing in these can be rewritten by any POSIX shell or by zsh before the command sees it.
 const PLAIN_WORD = /^[\w./@%+:,-][\w./@%+:,=-]*$/
 
 function literal(part: { type: string; text: string }) {
@@ -371,7 +367,14 @@ function reshapes(tokens: string[]) {
 
 const WORD_BREAK = /[\s'"|;&<>()=,:]+/
 
-const ask = Effect.fn("ShellTool.ask")(function* (ctx: Tool.Context, scan: Scan, input: { command: string }) {
+// Every call asks, unless a rule a person wrote says otherwise. How the text parses never lowers that: the parse only names
+// the patterns, labels the prompt and withholds "Allow always", which is offered for one plain command and answers only that.
+const ask = Effect.fn("ShellTool.ask")(function* (
+  ctx: Tool.Context,
+  scan: Scan,
+  input: { command: string },
+  always: string | undefined,
+) {
   if (scan.dirs.size > 0) {
     const directories = Array.from(scan.dirs)
     const globs = directories.map((dir) => {
@@ -391,26 +394,17 @@ const ask = Effect.fn("ShellTool.ask")(function* (ctx: Tool.Context, scan: Scan,
     })
   }
 
-  if (scan.harmless.size > 0)
-    yield* ctx.ask({
-      permission: ShellID.ToolID,
-      patterns: Array.from(scan.harmless),
-      // Skipped under the shipped rules. A person's own `"*": "ask"` still asks, and should be able to stop asking.
-      always: Array.from(scan.always),
-      metadata: { command: input.command },
-      harmless: true,
-    })
-
-  if (scan.patterns.size === 0) return
+  const rule = scan.risk || scan.dirs.size > 0 ? undefined : always
   yield* ctx.ask({
     permission: ShellID.ToolID,
-    patterns: Array.from(scan.patterns),
-    // "Allow always" on something Undo cannot take back would approve the next, different, one.
-    always: scan.risk ? [] : Array.from(scan.always),
+    // A bare `cd x` or a text the parser found no command in still asks, as itself.
+    patterns: scan.patterns.size > 0 ? Array.from(scan.patterns) : [input.command],
+    always: rule ? [rule] : [],
     metadata: {
       command: input.command,
       ...(scan.risk ? { risk: scan.risk } : {}),
     },
+    noAlways: rule === undefined,
   })
 })
 
@@ -510,27 +504,23 @@ export const ShellTool = Tool.define(
       const scan: Scan = {
         dirs: new Set<string>(),
         patterns: new Set<string>(),
-        always: new Set<string>(),
-        harmless: new Set<string>(),
         secretFiles: new Set<string>(),
       }
       const shellKind = ShellID.toKind(Shell.name(shell))
-      // A changed directory, variable or function means no argument here can be taken at face value. Windows is not
-      // judged: nothing has been run there to back this up, and its shells look in the current directory for a program.
-      // Nor is a shell whose grammar is not the one parsed here.
+      // A changed directory, variable or function means no argument here can be taken at face value. Windows gets no
+      // labels: nothing has been run there to back them up. Nor does a shell whose grammar is not the one parsed here.
       const posix = Boolean(trust) && !ps && shellKind !== "cmd" && process.platform !== "win32" && Shell.posix(shell)
       const redirects = ps ? { writes: [], reads: [], loose: [], unproven: false } : redirectsIn(root)
       const proven = !ps && understood(root)
       const uncertain =
         !posix || !proven || redirects.unproven || commands(root).some((node) => CWD.has(node.firstChild?.text ?? ""))
       const absolute = (file: string) => path.resolve(cwd, home(file))
-      const plain = posix && !uncertain && Reach.plainEnvironment(process.env, instance)
 
-      const judge = Effect.fn("ShellTool.judge")(function* (command: Part[], tokens: string[]) {
+      const judge = Effect.fn("ShellTool.judge")(function* (tokens: string[]) {
         const unknown = { kind: "unknown" } as const
         const verdict = Risk.classify(tokens.map(unquote))
         if (verdict.kind === "risky") return verdict
-        if (verdict.kind === "unknown" || uncertain) return unknown
+        if (uncertain) return unknown
         const listed = verdict.kind === "undoable" ? verdict.paths : []
         const removes = verdict.kind === "undoable" && verdict.removes
         // Anything that writes asks, and these only decide whether that prompt has to say Undo cannot help.
@@ -545,16 +535,7 @@ export const ShellTool = Tool.define(
           const landed = Reach.landsOn(changed, instance)
           if (yield* Effect.promise(() => Reach.outsideSnapshot(instance.worktree, landed, { untrackedOnly }))) return lost
         }
-        if (verdict.kind === "undoable" || changed.length > 0 || redirects.reads.length > 0) return unknown
-
-        // A reader. Everything it was given has to be plain, its name has to be what it looks like, and all of it has to
-        // stay inside the project, on what a secret could be read through as well as what names one.
-        if (!plain || !command.slice(1).every(literal)) return unknown
-        const inProject = (file: string) => containsPath(absolute(file), instance) && Reach.inside(absolute(file), instance)
-        if (!verdict.paths.every(inProject)) return unknown
-        if (!verdict.contents.every((file) => Reach.readable(absolute(file)))) return unknown
-        if (!verdict.walks.every((file) => Reach.walkable(absolute(file)))) return unknown
-        return { kind: "harmless" } as const
+        return unknown
       })
 
       const named = new Set(redirects.reads.filter(Secrets.secretFile).map(absolute))
@@ -581,30 +562,19 @@ export const ShellTool = Tool.define(
         }
 
         if (tokens.length && (!cmd || !CWD.has(cmd))) {
-          const verdict = posix ? yield* judge(command, tokens) : undefined
-          scan.always.add(BashArity.prefix(tokens).join(" ") + " *")
-          if (verdict?.kind === "harmless") {
-            scan.harmless.add(source(node))
-            continue
-          }
+          const verdict = posix ? yield* judge(tokens) : undefined
           if (verdict?.kind === "risky") scan.risk = scan.risk === "irreversible" ? scan.risk : verdict.risk
           scan.patterns.add(source(node))
         }
       }
 
-      // A redirect on a whole group belongs to no one command, and "allow echo" does not stretch to where this one writes.
-      if (scan.patterns.size > 0 || scan.harmless.size === 0) redirects.loose.forEach((text) => scan.patterns.add(text))
+      // A redirect on a whole group belongs to no one command.
+      redirects.loose.forEach((text) => scan.patterns.add(text))
       // Something here is not a plain command, such as `[[ -f x ]]`, `x=1` or `export PATH=evil`. The parser's list of
       // commands leaves it out, so the whole text is what a person answers for, and a rule for `ls *` does not cover it.
       if (posix && !proven) {
         const whole = root.text.trim()
         if (whole) scan.patterns.add(whole)
-      }
-      // A sequence is harmless only if every part is. One part may have changed what the others mean, so a person who
-      // allows the sequence is allowing all of it, and no part gets through on the strength of the rest.
-      if (scan.patterns.size > 0) {
-        scan.harmless.forEach((text) => scan.patterns.add(text))
-        scan.harmless.clear()
       }
       scan.secretFiles = named
       if (reshaped && named.size > 0) scan.withheld = path.relative(instance.worktree, [...named][0]!)
@@ -696,7 +666,7 @@ export const ShellTool = Tool.define(
             )
           }
 
-          yield* Effect.forkScoped(
+          const reading = yield* Effect.forkScoped(
             Stream.runForEach(Stream.decodeText(handle.all), (chunk) => {
               if (input.withheld) return Effect.void
               const size = Buffer.byteLength(chunk, "utf-8")
@@ -759,6 +729,10 @@ export const ShellTool = Tool.define(
             abort.pipe(Effect.map(() => ({ kind: "abort" as const, code: null }))),
             timeout.pipe(Effect.map(() => ({ kind: "timeout" as const, code: null }))),
           ])
+
+          // The exit can land before the last of its output does, and a silence would read as nothing printed. Bounded,
+          // because something it left running in the background can hold the pipe open for as long as it likes.
+          if (exit.kind === "exit") yield* Fiber.await(reading).pipe(Effect.timeoutOption("1 second"))
 
           if (exit.kind === "abort") {
             aborted = true
@@ -844,7 +818,8 @@ export const ShellTool = Tool.define(
                   )
                   const scan = yield* collect(tree.rootNode, cwd, ps, shell, instanceCtx, ctx.trust)
                   if (!containsPath(cwd, instanceCtx)) scan.dirs.add(cwd)
-                  yield* ask(ctx, scan, params)
+                  const posix = !ps && process.platform !== "win32" && Shell.posix(shell)
+                  yield* ask(ctx, scan, params, posix ? Reach.alwaysFor(params.command, cwd, instanceCtx) : undefined)
                   return scan
                 }),
               )

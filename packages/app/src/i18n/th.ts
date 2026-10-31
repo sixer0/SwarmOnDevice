@@ -732,6 +732,7 @@ export const dict = {
   "error.chain.configInvalidWithMessage": "ไฟล์กำหนดค่าที่ {{path}} ไม่ถูกต้อง: {{message}}",
 
   "notification.permission.title": "ต้องการสิทธิ์",
+  "session.permission.alwaysNamed": "อนุญาตเสมอ: {{scope}}",
   "notification.permission.description": "{{sessionTitle}} ใน {{projectName}} ต้องการสิทธิ์",
   "notification.question.title": "คำถาม",
   "notification.question.description": "{{sessionTitle}} ใน {{projectName}} มีคำถาม",

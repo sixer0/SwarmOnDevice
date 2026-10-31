@@ -57,6 +57,22 @@ export const ApplyPatchTool = Tool.define(
 
       const instance = yield* InstanceState.context
 
+      // Each section is worked out from what is on disk now, so a second section for the same file would replace the first.
+      const named = (name: string) => FSUtil.resolve(path.resolve(instance.directory, name))
+      const sections = hunks.map((hunk) => [
+        ...new Set([hunk.path, ...(hunk.type === "update" && hunk.move_path ? [hunk.move_path] : [])].map(named)),
+      ])
+      const repeated = sections
+        .flat()
+        .find((name, index, all) => all.indexOf(name) !== index)
+      if (repeated) {
+        return yield* Effect.fail(
+          new Error(
+            `apply_patch verification failed: ${path.relative(instance.worktree, repeated)} is named by more than one section. Nothing was written. Put all changes to one file in one section, as several @@ chunks.`,
+          ),
+        )
+      }
+
       // Validate file paths and check permissions
       const fileChanges: Array<{
         filePath: string

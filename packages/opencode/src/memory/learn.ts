@@ -17,6 +17,12 @@ const SECRET_PATTERNS = [
   /\bbearer\s+[A-Za-z0-9._~+/-]{12,}/i,
   /[a-z][a-z0-9+.-]*:\/\/[^\s/:@]+:[^\s/@]+@/i,
   /\b[A-Za-z0-9_-]*(?:password|passwd|pwd|secret|token|api[_-]?key|access[_-]?key|private[_-]?key|credential)[A-Za-z0-9_-]*\s*[:=]\s*\S/i,
+  // Short names people use in a note: `pw: x`, `ssh pass: x`.
+  /\b(?:pw|pass|passcode|passphrase|login)\s*[:=]\s*\S/i,
+  // A value after the word with no sign between them. Only what looks made up: "password reset flow" is a sentence.
+  /\b(?:password|passwd|passphrase|pwd|pass)\s+(?:is\s+|of\s+)?(?:\S*\d\S*|\S+-\S+|\S{16,})/i,
+  // `user admin hunter2hunter2`, `login admin / Tr0ub4dor3x`.
+  /\b(?:user|username|login)\s+\S+\s*(?:\/\s*|:\s*|\s)\S*\d\S*/i,
 ]
 
 /** A note or command that may hold a credential is never stored, not even partly masked. */

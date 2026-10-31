@@ -688,6 +688,7 @@ export const dict: Record<string, string> = {
   "error.chain.configInvalid": "{{path}}-এ কনফিগ ফাইলটি অবৈধ",
   "error.chain.configInvalidWithMessage": "{{path}}-এ কনফিগ ফাইলটি অবৈধ: {{message}}",
   "notification.permission.title": "অনুমতি প্রয়োজন",
+  "session.permission.alwaysNamed": "সর্বদা অনুমতি দিন: {{scope}}",
   "notification.permission.description": "{{projectName}}-এ {{sessionTitle}} অনুমতি প্রয়োজন",
   "notification.question.title": "প্রশ্ন",
   "notification.question.description": "{{projectName}}-এ {{sessionTitle}} একটি প্রশ্ন আছে",

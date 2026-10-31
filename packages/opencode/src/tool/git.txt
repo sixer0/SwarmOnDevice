@@ -1,0 +1,8 @@
+Read this repository's state: status, diff, log, show, blame, and the list of branches. It changes nothing, reaches no network and runs nothing the repository configures, so it does not interrupt anyone with a prompt.
+
+Use this instead of running `git status`, `git diff`, `git log`, `git show`, `git blame` or `git branch` in the shell. Shell commands stop and wait for a person.
+
+- Pass revision as one commit, tag or branch name. diff and log also take a range such as main..HEAD.
+- Pass paths to limit the result. They are taken literally, and have to be inside the project.
+- A file that holds secrets is left out of a diff, with a note saying so.
+- If it refuses a repository, it says why. That repository's config can run programs, and the shell is the way to go on, because a person is asked there.

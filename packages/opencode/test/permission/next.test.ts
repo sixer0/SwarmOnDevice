@@ -1300,6 +1300,47 @@ it.instance("zero turns moving on off", () =>
   }),
 )
 
+// "Allow always" was given for one plain command. A redirect or a chain may start the same way and do something else.
+it.instance("an earlier always does not answer a request marked noAlways", () =>
+  Effect.gen(function* () {
+    const permission = yield* Permission.Service
+    const sessionID = SessionID.make("session_noalways")
+    const ruleset = Permission.fromConfig({ "*": "ask" })
+    const first = yield* permission.ask({ sessionID, permission: "bash", patterns: ["echo hi"], metadata: {}, always: ["echo *"], ruleset }).pipe(Effect.forkScoped)
+    const waiting = yield* permission.list().pipe(Effect.repeat({ until: (list) => list.length === 1 }))
+    yield* permission.reply({ requestID: waiting[0]!.id, reply: "always" })
+    yield* Fiber.join(first)
+
+    // The rule answers the same plain command, as it should.
+    yield* permission.ask({ sessionID, permission: "bash", patterns: ["echo bye"], metadata: {}, always: ["echo *"], ruleset })
+    expect(yield* permission.list()).toHaveLength(0)
+
+    const redirected = yield* permission.ask({ sessionID, permission: "bash", patterns: ["echo x > swarm.json"], metadata: {}, always: [], ruleset, noAlways: true }).pipe(Effect.forkScoped)
+    const asked = yield* permission.list().pipe(Effect.repeat({ until: (list) => list.length === 1 }))
+    expect(asked[0]!.patterns).toEqual(["echo x > swarm.json"])
+    yield* permission.reply({ requestID: asked[0]!.id, reply: "reject" })
+    yield* Fiber.await(redirected)
+  }),
+)
+
+it.instance("an always given now does not release a waiting request marked noAlways", () =>
+  Effect.gen(function* () {
+    const permission = yield* Permission.Service
+    const sessionID = SessionID.make("session_noalways_pending")
+    const ruleset = Permission.fromConfig({ "*": "ask" })
+    const plain = yield* permission.ask({ sessionID, permission: "bash", patterns: ["echo hi"], metadata: {}, always: ["echo *"], ruleset }).pipe(Effect.forkScoped)
+    const chained = yield* permission.ask({ sessionID, permission: "bash", patterns: ["echo x > a"], metadata: {}, always: [], ruleset, noAlways: true }).pipe(Effect.forkScoped)
+    const waiting = yield* permission.list().pipe(Effect.repeat({ until: (list) => list.length === 2 }))
+    const first = waiting.find((item) => item.patterns[0] === "echo hi")!
+    yield* permission.reply({ requestID: first.id, reply: "always" })
+    yield* Fiber.join(plain)
+    const left = yield* permission.list()
+    expect(left.map((item) => item.patterns[0])).toEqual(["echo x > a"])
+    yield* permission.reply({ requestID: left[0]!.id, reply: "reject" })
+    yield* Fiber.await(chained)
+  }),
+)
+
 // The shipped baseline's "*": "ask" is for what could hurt. A person who wrote it themselves meant everything.
 it.instance("a harmless call skips the shipped catch-all", () =>
   Effect.gen(function* () {

@@ -26,6 +26,7 @@ export interface Interface {
 
 interface PendingEntry {
   info: PermissionV1.Request
+  noAlways?: boolean
   deferred: Deferred.Deferred<void, PermissionV1.RejectedError | PermissionV1.CorrectedError>
 }
 
@@ -98,11 +99,11 @@ const layer = Layer.effect(
 
     const ask = Effect.fn("Permission.ask")(function* (input: PermissionV1.AskInput) {
       const { approved, away, grants, pending } = yield* InstanceState.get(state)
-      const { ruleset, harmless, ...request } = input
+      const { ruleset, harmless, noAlways, ...request } = input
       let needsAsk = false
 
       for (const pattern of request.patterns) {
-        const rule = evaluate(request.permission, pattern, ruleset, approved)
+        const rule = evaluate(request.permission, pattern, ruleset, noAlways ? [] : approved)
         // Not the pattern: for a shell call it is the command, and that can hold a secret typed into its arguments.
         yield* Effect.logInfo("evaluated", { permission: request.permission, action: rule.action })
         if (rule.action === "deny") {
@@ -147,12 +148,12 @@ const layer = Layer.effect(
       yield* Effect.logInfo("asking", { id, permission: info.permission })
 
       const deferred = yield* Deferred.make<void, PermissionV1.RejectedError | PermissionV1.CorrectedError>()
-      pending.set(id, { info, deferred })
+      pending.set(id, { info, deferred, noAlways })
       yield* events.publish(Event.Asked, info)
       const moveOn = Effect.gen(function* () {
         // The request stays listed and answerable. The agent is released, not the decision.
         const moved: PermissionV1.Request = { ...asked, movedOnAt: Date.now() }
-        pending.set(id, { info: moved, deferred })
+        pending.set(id, { info: moved, deferred, noAlways })
         away.add(request.sessionID)
         yield* Effect.logInfo("moved on", { id, permission: info.permission })
         yield* events.publish(Event.Asked, moved)
@@ -238,7 +239,7 @@ const layer = Layer.effect(
       }
 
       for (const [id, item] of pending.entries()) {
-        if (item.info.sessionID !== existing.info.sessionID || item.info.movedOnAt) continue
+        if (item.info.sessionID !== existing.info.sessionID || item.info.movedOnAt || item.noAlways) continue
         const ok = item.info.patterns.every(
           (pattern) => evaluate(item.info.permission, pattern, approved).action === "allow",
         )

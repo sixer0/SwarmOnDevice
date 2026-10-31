@@ -4,6 +4,7 @@ import { InstanceState } from "@/effect/instance-state"
 import { FSUtil } from "@opencode-ai/core/fs-util"
 import { Ripgrep } from "@opencode-ai/core/ripgrep"
 import { assertExternalDirectoryEffect } from "./external-directory"
+import { Reach } from "./reach"
 import DESCRIPTION from "./glob.txt"
 import * as Tool from "./tool"
 
@@ -45,6 +46,13 @@ export const GlobTool = Tool.define(
             bypass: false,
             kind: "directory",
           })
+          if (!Reach.readable(search))
+            yield* ctx.ask({
+              permission: "read",
+              patterns: [path.relative(ins.worktree, search)],
+              always: [],
+              metadata: { filepath: search, pattern: params.pattern },
+            })
 
           const limit = 100
           const files = yield* ripgrep.glob({ cwd: search, pattern: params.pattern, limit })

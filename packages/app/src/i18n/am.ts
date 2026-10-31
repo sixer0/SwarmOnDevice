@@ -677,6 +677,7 @@ export const dict = {
   "error.chain.configInvalid": "ማዋቀር ፋይል በ{{path}} ልክ ያልሆነ ነው",
   "error.chain.configInvalidWithMessage": "የማዋቀር ፋይል በ{{path}} ልክ ያልሆነ ነው፡ {{message}}",
   "notification.permission.title": "ፈቃድ ያስፈልጋል",
+  "session.permission.alwaysNamed": "ሁልጊዜ ፍቀድ: {{scope}}",
   "notification.permission.description": "{{sessionTitle}} በ{{projectName}} ውስጥ ፈቃድ ያስፈልገዋል",
   "notification.question.title": "ጥያቄ",
   "notification.question.description": "{{sessionTitle}} በ{{projectName}} ውስጥ ጥያቄ አለው",

@@ -703,6 +703,7 @@ export const dict = {
   "error.chain.configInvalid": "Configuratiebestand op {{path}} is ongeldig",
   "error.chain.configInvalidWithMessage": "Configuratiebestand op {{path}} is ongeldig: {{message}}",
   "notification.permission.title": "Toestemming vereist",
+  "session.permission.alwaysNamed": "Altijd toestaan: {{scope}}",
   "notification.permission.description": "{{sessionTitle}} in {{projectName}} heeft toestemming nodig",
   "notification.question.title": "Vraag",
   "notification.question.description": "{{sessionTitle}} in {{projectName}} heeft een vraag",

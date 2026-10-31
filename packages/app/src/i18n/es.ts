@@ -742,6 +742,7 @@ export const dict = {
   "error.chain.configInvalidWithMessage": "El archivo de configuración en {{path}} es inválido: {{message}}",
 
   "notification.permission.title": "Permiso requerido",
+  "session.permission.alwaysNamed": "Permitir siempre: {{scope}}",
   "notification.permission.description": "{{sessionTitle}} en {{projectName}} necesita permiso",
   "notification.question.title": "Pregunta",
   "notification.question.description": "{{sessionTitle}} en {{projectName}} tiene una pregunta",

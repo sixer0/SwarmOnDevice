@@ -692,6 +692,7 @@ export const dict = {
   "error.chain.configInvalid": "Файли танзимот дар {{path}} нодуруст аст",
   "error.chain.configInvalidWithMessage": "Файли танзимот дар {{path}} нодуруст аст: {{message}}",
   "notification.permission.title": "Иҷозат талаб карда мешавад",
+  "session.permission.alwaysNamed": "Ҳамеша иҷозат диҳед: {{scope}}",
   "notification.permission.description": "{{sessionTitle}} дар {{projectName}} ичозат лозим аст",
   "notification.question.title": "Савол",
   "notification.question.description": "{{sessionTitle}} дар {{projectName}} савол дорад",

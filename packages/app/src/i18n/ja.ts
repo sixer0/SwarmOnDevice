@@ -687,6 +687,7 @@ export const dict = {
   "error.chain.configInvalid": "{{path}} の設定ファイルが無効です",
   "error.chain.configInvalidWithMessage": "{{path}} の設定ファイルが無効です: {{message}}",
   "notification.permission.title": "権限が必要です",
+  "session.permission.alwaysNamed": "常に許可: {{scope}}",
   "notification.permission.description": "{{projectName}} の {{sessionTitle}} が権限を必要としています",
   "notification.question.title": "質問",
   "notification.question.description": "{{projectName}} の {{sessionTitle}} から質問があります",

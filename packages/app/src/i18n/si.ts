@@ -687,6 +687,7 @@ export const dict: Record<string, string> = {
   "error.chain.configInvalid": "{{path}} හි වින්‍යාස ගොනුව වලංගු නොවේ",
   "error.chain.configInvalidWithMessage": "{{path}} හි වින්‍යාස ගොනුව වලංගු නොවේ: {{message}}",
   "notification.permission.title": "අවසරය අවශ්‍යයි",
+  "session.permission.alwaysNamed": "සෑම විටම ඉඩ දෙන්න: {{scope}}",
   "notification.permission.description": "{{projectName}} හි {{sessionTitle}} හට අවසර අවශ්‍යයි",
   "notification.question.title": "ප්රශ්නය",
   "notification.question.description": "{{projectName}} හි {{sessionTitle}} හට ප්‍රශ්නයක් ඇත",

@@ -54,7 +54,7 @@ export function checkLines(evidence: readonly EvidenceRow[], included: ReadonlyS
     if (row.type === "none") return [words.none(row.kinds)]
     if (row.type !== "check") return []
     const command = row.run.command
-    if (row.status === "failed") return [words.failed(command, String(row.run.exit ?? "?"))]
+    if (row.status === "failed") return [words.failed(command, String(row.run.exit ?? "unknown"))]
     if (row.status === "hidden") return [words.hidden(command)]
     if (row.status === "running") return []
     const after = row.editedAfter.filter((file) => included.has(file)).length

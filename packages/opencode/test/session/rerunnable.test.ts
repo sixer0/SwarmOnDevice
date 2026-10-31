@@ -14,7 +14,6 @@ describe("rerunnable", () => {
     "python -m pytest tests",
     "make test",
     "pnpm lint",
-    "ls src",
   ])("offers %s", (command) => {
     expect(SessionRerunnable.rerunnable(command)).toBe(true)
   })

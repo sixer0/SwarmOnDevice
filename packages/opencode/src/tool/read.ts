@@ -255,12 +255,14 @@ export const ReadTool = Tool.define<
         kind: stat?.type === "Directory" ? "directory" : "file",
       })
 
+      // Reading runs nothing, so ordinary files do not ask. Secret files do, by either name, and what a yes shows is masked.
+      const readable = Reach.readable(filepath)
       yield* ctx.ask({
         permission: "read",
         patterns: [path.relative(instance.worktree, filepath)],
-        always: ["*"],
+        always: readable ? ["*"] : [],
         metadata: {},
-        harmless: ctx.trust ? true : undefined,
+        harmless: ctx.trust && readable ? true : undefined,
       })
 
       if (!stat) return yield* miss(filepath)

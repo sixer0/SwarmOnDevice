@@ -739,6 +739,7 @@ export const dict = {
   "error.chain.configInvalidWithMessage": "Недопустимый конфигурационный файл по адресу {{path}}: {{message}}",
 
   "notification.permission.title": "Требуется разрешение",
+  "session.permission.alwaysNamed": "Разрешить всегда: {{scope}}",
   "notification.permission.description": "Для {{sessionTitle}} в {{projectName}} требуется разрешение",
   "notification.question.title": "Вопрос",
   "notification.question.description": "У {{sessionTitle}} в {{projectName}} есть вопрос",

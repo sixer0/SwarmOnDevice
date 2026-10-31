@@ -40,41 +40,17 @@ describe("Risk.classify", () => {
     expect(Risk.classify(["psql", "-c", "SELECT 1"])).toEqual({ kind: "unknown" })
   })
 
-  test.each([
-    "ls src",
-    "ls -la",
-    "cat README.md",
-    "head -n 5 a",
-    "tail -5 a",
-    "wc -l a",
-    "grep -rn total src",
-    "grep -e x a",
-    "find src -name x -type f",
-    "sort -rn a",
-    "uniq -c a",
-    "pwd",
-    "true",
-    "echo hi",
-    "test -f a",
-  ])("%s only reads", (command) => expect(kind(command)).toBe("harmless"))
-
-  test("what is printed and what is walked are told apart from what is only named", () => {
-    expect(Risk.classify(["cat", "-n", "a", "b"])).toEqual({ kind: "harmless", paths: ["a", "b"], contents: ["a", "b"], walks: [] })
-    expect(Risk.classify(["ls", "a"])).toEqual({ kind: "harmless", paths: ["a"], contents: [], walks: [] })
-    expect(Risk.classify(["ls"])).toEqual({ kind: "harmless", paths: ["."], contents: [], walks: [] })
-    expect(Risk.classify(["grep", "x", "a"])).toEqual({ kind: "harmless", paths: ["a"], contents: ["a"], walks: [] })
-    expect(Risk.classify(["grep", "-e", "x", "a"])).toEqual({ kind: "harmless", paths: ["a"], contents: ["a"], walks: [] })
-    expect(Risk.classify(["grep", "-r", "x", "src"])).toEqual({ kind: "harmless", paths: ["src"], contents: [], walks: ["src"] })
-    expect(Risk.classify(["grep", "-r", "x"])).toEqual({ kind: "harmless", paths: ["."], contents: [], walks: ["."] })
-    expect(Risk.classify(["head", "-n", "5", "a"])).toEqual({ kind: "harmless", paths: ["a"], contents: ["a"], walks: [] })
-  })
+  test.each(["ls src", "cat README.md", "grep -rn total src", "find src -name x", "echo hi", "pwd", "git status", "constructor", "__proto__ x"])(
+    "%s gets no label: it says nothing about being safe, and a prompt still asks",
+    (command) => expect(kind(command)).toBe("unknown"),
+  )
 
   test.each(["git add -A", "git commit -m x", "git reset --hard", "git reset --hard HEAD", "git checkout -- .", "git clean -fd", "git mv a b", "git restore --source=b a", "rm -rf dist", "mv a b", "cp a b", "mkdir -p src/lib", "touch x"])(
-    "%s changes files, so it never reads as harmless",
+    "%s changes files",
     (command) => expect(kind(command)).toBe("undoable"),
   )
 
-  // No git command is harmless: config, hooks, worktree config, HOME and the environment each make it run a program.
+  // Nothing says these are safe: config, hooks, worktree config, HOME and the environment each make git run a program.
   test.each([
     "git status",
     "git status --short",
@@ -248,8 +224,29 @@ describe("Risk.classify", () => {
       ".cargo/config.toml",
     ])
       expect([file, Risk.sensitive(file)]).toEqual([file, true])
-    for (const file of ["src/orders.ts", "docs/.github.md", "README.md", "src/config.ts", "package.ts", "src/makefile.ts", ".gitignore"])
+    for (const file of ["src/orders.ts", "docs/.github.md", "README.md", "src/config.ts", "package.ts", "src/makefile.ts"])
       expect([file, Risk.sensitive(file)]).toEqual([file, false])
+  })
+
+  test("an edit with nobody asked is for what plainly is a project's own source and content", () => {
+    for (const file of ["src/orders.ts", "src/config.ts", "src/hooks/useFoo.tsx", "lib/a.py", "main.go", "README.md", "docs/guide.md", "notes.txt", "src/i18n/en.json", "test/fixtures/a.yaml", "styles/app.css", "packages/x/src/index.ts"])
+      expect([file, Risk.ordinaryEdit(file)]).toEqual([file, true])
+    for (const file of [
+      // What the gates found, one name at a time.
+      "tui.json", "tui.jsonc", ".swarm/tui.json", "CONTEXT.md", ".agents/skills/x/SKILL.md", ".gitignore",
+      "composer.json", "composer.lock", "mix.exs", ".formatter.exs", "Containerfile", "Earthfile", "Vagrantfile", "Tiltfile", "Procfile",
+      "gradlew", "mvnw", "gradle.properties", "gradle/wrapper/gradle-wrapper.properties", "Directory.Build.props", "x.csproj", "Package.swift",
+      "Podfile", "build.sbt", "x.pth", ".rspec", ".rubocop.yml", "tsconfig.json", "packages/x/tsconfig.base.json", ".devcontainer.json", ".pdbrc",
+      ".ipython/profile_default/startup/a.py", "jest.config.json", "vitest.workspace.ts", ".pnp.cjs", "rust-toolchain.toml", "WORKSPACE",
+      "BUILD.bazel", ".bazelrc", "requirements.txt", "requirements-dev.txt", "uv.lock", "Gemfile.lock", "gems.rb", ".terraformrc",
+      // Every place that loads something.
+      ".swarm/plugin/x.ts", ".swarm/tool/x.ts", ".swarm/agent/x.md", ".swarm/command/x.md", ".swarm/skill/x/SKILL.md", ".opencode/plugin/x.ts", ".claude/skills/x/SKILL.md",
+      // Source a tool runs by its name or its place.
+      "vite.config.ts", "conftest.py", "setup.py", "build.rs", "node_modules/x/index.js", "vendor/x/a.php", "venv/lib/a.py",
+      // Data formats anywhere else double as configuration.
+      "config.json", "settings.yaml", "x.toml", "scripts/run.sh", "Makefile", "bin/tool",
+    ])
+      expect([file, Risk.ordinaryEdit(file)]).toEqual([file, false])
   })
 
   test("a disk that ignores case, or skips characters, opens the same file under another name", () => {
@@ -289,6 +286,14 @@ describe("harmless calls under the shipped baseline", () => {
     expect(Permission.isShippedCatchAll({ permission: "*", pattern: "*", action: "ask" })).toBe(false)
   })
 
+  test("every native agent, subagents included, sees the git tool and reads with it unprompted", () => {
+    const explore = Permission.merge(Permission.fromConfig({ "*": "deny", grep: "allow", read: "allow" }), rules)
+    expect(Permission.disabled(["git"], explore).size).toBe(0)
+    expect(Permission.isShippedCatchAll(Permission.evaluate("git", "status", explore))).toBe(true)
+    // A person who wants it off can have that.
+    expect(Permission.disabled(["git"], Permission.merge(rules, Permission.fromConfig({ git: "deny" }))).has("git")).toBe(true)
+  })
+
   test("the baseline's catch-all is what a harmless call skips, and a named rule is not", () => {
     expect(Permission.evaluate("edit", "src/a.ts", rules).permission).toBe("*")
     expect(Permission.evaluate("bash", "curl x", rules).permission).toBe("bash")
@@ -297,6 +302,20 @@ describe("harmless calls under the shipped baseline", () => {
 })
 
 describe("Secrets", () => {
+  test("well-known credential files are secret by name", () => {
+    for (const file of [".pypirc", ".dockercfg", ".docker/config.json", ".kube/config", "kubeconfig", "terraform.tfvars", "x.tfstate", ".htpasswd", "token.txt", "wp-config.php", "application.properties", "application-prod.properties", "appsettings.json", "appsettings.Production.json", "secrets/prod.txt", ".secrets", "config/prod.env.bak"])
+      expect([file, Secrets.secretFile(file)]).toEqual([file, true])
+    for (const file of ["src/secrets/manager.ts", "src/token.ts", "appsettings.ts", "docs/application.md", ".env.example", "src/vite.env.d.ts", "src/app.env.ts"])
+      expect([file, Secrets.secretFile(file)]).toEqual([file, false])
+  })
+
+  test("a password written out is hidden in any file, and code that handles one is left alone", () => {
+    expect(Secrets.scrub("password=hunter2hunter2xy\n", "/nonexistent")).toBe("password=[hidden:password]\n")
+    expect(Secrets.scrub('db_password: "Tr0ub4dor3x"', "/nonexistent")).toContain("[hidden:password]")
+    for (const code of ["password = req.body.password", "password: string", "const password = await ask()", "pwd=$(pwd)"])
+      expect(Secrets.scrub(code, "/nonexistent")).toBe(code)
+  })
+
   test("masks secret values by name and by shape, and leaves plain settings readable", () => {
     expect(Secrets.maskLine("API_KEY=abc")).toBe("API_KEY=[hidden:API_KEY]")
     expect(Secrets.maskLine('export DB_PASSWORD="hunter2"')).toBe("export DB_PASSWORD=[hidden:DB_PASSWORD]")

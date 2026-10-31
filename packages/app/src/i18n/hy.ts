@@ -694,6 +694,7 @@ export const dict = {
   "error.chain.configInvalid": "Կարգավորման ֆայլը {{path}}-ում անվավեր է",
   "error.chain.configInvalidWithMessage": "Կարգավորման ֆայլը {{path}}-ում անվավեր է՝ {{message}}",
   "notification.permission.title": "Պահանջվում է թույլտվություն",
+  "session.permission.alwaysNamed": "Թույլատրել միշտ: {{scope}}",
   "notification.permission.description": "{{sessionTitle}}-ը {{projectName}}-ում թույլտվություն է պահանջում",
   "notification.question.title": "Հարց",
   "notification.question.description": "{{sessionTitle}} {{projectName}}-ում հարց կա",

@@ -78,6 +78,23 @@ describe("fallbackDraft", () => {
 })
 
 describe("parseDraft", () => {
+  // Removing ` | tail` leaves a `!` right before the closing backtick, so the check has to run on the final text.
+  test.each([
+    "Run `foo! | tail` touch SAVE_A `bar` $ARGUMENTS",
+    "`x! 2>&1 | head -5` touch SAVE_A2 `y` $ARGUMENTS",
+    "`a! | tail`\ntouch SAVE_K\n`b` $ARGUMENTS",
+    "Run !!`touch X` and ! `touch Y` $ARGUMENTS",
+    "`@/etc/hosts | tail` $ARGUMENTS",
+  ])("what a rewrite leaves behind is not a live marker: %s", (instructions) => {
+    const draft = Model.parseDraft(reply(instructions))!
+    expect(ConfigMarkdown.shell(draft.template)).toEqual([])
+    expect(ConfigMarkdown.files(draft.template).filter((match) => match[1])).toEqual([])
+  })
+
+  test("what a person types next cannot join a marker", () => {
+    expect(Model.parseDraft(reply("Bump !$ARGUMENTS"))?.template).toBe("Bump $ARGUMENTS")
+  })
+
   const reply = (instructions: string) =>
     JSON.stringify({ name: "Bump Deps!", description: "Line one\nline two", instructions })
 

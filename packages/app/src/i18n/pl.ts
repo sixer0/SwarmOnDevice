@@ -689,6 +689,7 @@ export const dict = {
   "error.chain.configInvalid": "Plik konfiguracyjny w {{path}} jest nieprawidłowy",
   "error.chain.configInvalidWithMessage": "Plik konfiguracyjny w {{path}} jest nieprawidłowy: {{message}}",
   "notification.permission.title": "Wymagane uprawnienie",
+  "session.permission.alwaysNamed": "Zezwalaj zawsze: {{scope}}",
   "notification.permission.description": "{{sessionTitle}} w {{projectName}} potrzebuje uprawnienia",
   "notification.question.title": "Pytanie",
   "notification.question.description": "{{sessionTitle}} w {{projectName}} ma pytanie",

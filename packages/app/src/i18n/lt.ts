@@ -695,6 +695,7 @@ export const dict = {
   "error.chain.configInvalid": "Konfigūracijos failas {{path}} yra neteisingas",
   "error.chain.configInvalidWithMessage": "Konfigūracijos failas, esantis {{path}}, yra neteisingas: {{message}}",
   "notification.permission.title": "Reikalingas leidimas",
+  "session.permission.alwaysNamed": "Leiskite visada: {{scope}}",
   "notification.permission.description": "{{sessionTitle}} {{projectName}} reikia leidimo",
   "notification.question.title": "Klausimas",
   "notification.question.description": "{{sessionTitle}} {{projectName}} turi klausimą",

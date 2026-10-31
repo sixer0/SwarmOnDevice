@@ -594,6 +594,7 @@ export const dict = {
   "error.chain.configInvalid": "Polun {{path}} määritystiedosto on virheellinen",
   "error.chain.configInvalidWithMessage": "Polun {{path}} määritystiedosto on virheellinen: {{message}}",
   "notification.permission.title": "Lupa vaaditaan",
+  "session.permission.alwaysNamed": "Salli aina: {{scope}}",
   "notification.permission.description": "Istunto {{sessionTitle}} projektissa {{projectName}} tarvitsee luvan",
   "notification.question.title": "Kysymys",
   "notification.question.description": "Istunto {{sessionTitle}} projektissa {{projectName}} esittää kysymyksen",

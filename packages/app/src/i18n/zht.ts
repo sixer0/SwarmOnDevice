@@ -729,6 +729,7 @@ export const dict = {
   "error.chain.configInvalidWithMessage": "設定檔 {{path}} 無效: {{message}}",
 
   "notification.permission.title": "需要權限",
+  "session.permission.alwaysNamed": "永遠允許: {{scope}}",
   "notification.permission.description": "{{sessionTitle}}（{{projectName}}）需要權限",
   "notification.question.title": "問題",
   "notification.question.description": "{{sessionTitle}}（{{projectName}}）有一個問題",

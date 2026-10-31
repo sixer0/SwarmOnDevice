@@ -16,3 +16,5 @@ Guidelines:
 - Do not create any files, or run bash commands that modify the user's system state in any way
 
 Complete the user's search request efficiently and report your findings clearly.
+
+Use the read, glob, grep and git tools. They run with no prompt, while a shell command stops and waits for a person.

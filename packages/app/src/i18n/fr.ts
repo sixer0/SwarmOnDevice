@@ -698,6 +698,7 @@ export const dict = {
   "error.chain.configInvalid": "Le fichier de configuration à {{path}} est invalide",
   "error.chain.configInvalidWithMessage": "Le fichier de configuration à {{path}} est invalide : {{message}}",
   "notification.permission.title": "Permission requise",
+  "session.permission.alwaysNamed": "Toujours autoriser: {{scope}}",
   "notification.permission.description": "{{sessionTitle}} dans {{projectName}} a besoin d'une permission",
   "notification.question.title": "Question",
   "notification.question.description": "{{sessionTitle}} dans {{projectName}} a une question",

@@ -12,9 +12,11 @@ const PUBLIC_NAME = /PUBLIC|PUBLISHABLE/i
 const CREDENTIAL_URL = /^[a-z][a-z0-9+.-]*:\/\/[^/\s:@]+:[^/\s@]+@/i
 const RANDOM_LOOKING = /^(?=.*[0-9])(?=.*[A-Za-z])[A-Za-z0-9+/_=.-]{20,}$/
 
-const ENV_FILE = /^\.env([-_.]|$)|\.env$/
+const ENV_FILE = /^\.env([-_.]|$)|\.env$|\.env\.(bak|old|orig|backup|save|local|prod|production|dev|development|staging|test)$/
+// Settings files where credentials sit beside everything an agent needs, so a yes shows them line by line, masked.
+const SETTINGS_FILE = /^(application(-[\w-]+)?\.properties|appsettings(\.[\w-]+)?\.json|wp-config\.php|[\w.-]*\.tfvars)$/
 const ENV_EXAMPLE = /\.(example|sample|template|dist|defaults)$/
-const WHOLE_FILE = /(^|\/)(id_rsa|id_ed25519|id_ecdsa|id_dsa|\.netrc|\.pgpass|\.git-credentials|credentials|service-account.*\.json|(secrets?|credentials?)\.(ya?ml|json|toml|ini))$|\.(pem|key|p12|pfx|keystore|jks)$|(^|\/)\.envs\//i
+const WHOLE_FILE = /(^|\/)(id_rsa|id_ed25519|id_ecdsa|id_dsa|\.netrc|\.pgpass|\.git-credentials|credentials|service-account.*\.json|(secrets?|credentials?)\.(ya?ml|json|toml|ini)|\.pypirc|\.dockercfg|\.docker\/config\.json|\.kube\/config|kubeconfig|\.htpasswd|token\.txt|\.secrets)$|\.(pem|key|p12|pfx|keystore|jks|tfstate)(\.backup)?$|(^|\/)\.envs\/|(^|\/)\.?secrets?\/[^/]+\.(txt|env|json|ya?ml|toml|ini|conf|cfg|properties)$/i
 
 // Values that are recognisable wherever they turn up, including in a log line nobody expected them in.
 const SHAPES: [RegExp, string][] = [
@@ -29,6 +31,11 @@ const SHAPES: [RegExp, string][] = [
   [/\b([a-z][a-z0-9+.-]*:\/\/[^/\s:@]+:)[^/\s@]+(@)/gi, "$1[hidden:password]$2"],
   [/\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/g, "[hidden:token]"],
   [/\b(bearer\s+)[A-Za-z0-9._~+/-]{12,}/gi, "$1[hidden:token]"],
+  // `password=hunter2`, in any file. Only a value that looks made up: `password = req.body.password` is code.
+  [
+    /\b([\w.-]*(?:password|passwd)\s*[=:]\s*["']?)(?![A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)+)(?=[^\s"'`,;()]*\d)[^\s"'`,;()\[\]]{6,}/gi,
+    "$1[hidden:password]",
+  ],
 ]
 
 // SESSION_TTL=3600 or AUTH_URL=https://... under a secret-sounding name. The agent needs these to do its job.
@@ -47,7 +54,7 @@ const fileKind = (file: string) => {
   const base = path.basename(name)
   if (WHOLE_FILE.test(name)) return "whole" as const
   if (ENV_EXAMPLE.test(base)) return undefined
-  if (ENV_FILE.test(base) || base === ".npmrc" || base === ".envrc") return "env" as const
+  if (ENV_FILE.test(base) || SETTINGS_FILE.test(base) || base === ".npmrc" || base === ".envrc") return "env" as const
   return undefined
 }
 

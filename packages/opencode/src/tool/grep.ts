@@ -4,6 +4,7 @@ import { InstanceState } from "@/effect/instance-state"
 import { FSUtil } from "@opencode-ai/core/fs-util"
 import { Ripgrep } from "@opencode-ai/core/ripgrep"
 import { assertExternalDirectoryEffect } from "./external-directory"
+import { Reach } from "./reach"
 import DESCRIPTION from "./grep.txt"
 import * as Tool from "./tool"
 
@@ -57,6 +58,17 @@ export const GrepTool = Tool.define(
             kind: requestedInfo?.type === "Directory" ? "directory" : "file",
           })
 
+          // Naming a secret file or a place that holds them is a question for a person. A pattern is a question too: a count
+          // or a hit is one bit of a value, and enough of them are all of it, so a walk leaves those files out of its answer.
+          const named = Reach.readable(requested)
+          if (!named)
+            yield* ctx.ask({
+              permission: "read",
+              patterns: [path.relative(ins.worktree, requested)],
+              always: [],
+              metadata: { filepath: requested, pattern: params.pattern },
+            })
+
           const search = FSUtil.resolve(requested)
           const info = yield* fs.stat(search).pipe(Effect.catch(() => Effect.succeed(undefined)))
           const cwd = info?.type === "Directory" ? search : path.dirname(search)
@@ -68,14 +80,17 @@ export const GrepTool = Tool.define(
           })
           if (result.length === 0) return empty
 
-          const rows = result.map((item) => ({
-            path: path.resolve(
-              requestedInfo?.type === "Directory" ? requested : path.dirname(requested),
-              item.entry.path,
-            ),
-            line: item.line,
-            text: item.text,
-          }))
+          const rows = result
+            .map((item) => ({
+              path: path.resolve(
+                requestedInfo?.type === "Directory" ? requested : path.dirname(requested),
+                item.entry.path,
+              ),
+              line: item.line,
+              text: item.text,
+            }))
+            .filter((row) => !named || Reach.readable(row.path))
+          if (rows.length === 0) return empty
 
           const limit = 100
           const truncated = rows.length === limit

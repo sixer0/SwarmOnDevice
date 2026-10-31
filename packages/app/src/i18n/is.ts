@@ -693,6 +693,7 @@ export const dict = {
   "error.chain.configInvalid": "Stillingarskrá á {{path}} er ógild",
   "error.chain.configInvalidWithMessage": "Stillingarskrá á {{path}} er ógild: {{message}}",
   "notification.permission.title": "Leyfi krafist",
+  "session.permission.alwaysNamed": "Leyfðu alltaf: {{scope}}",
   "notification.permission.description": "{{sessionTitle}} í {{projectName}} þarf leyfi",
   "notification.question.title": "Spurning",
   "notification.question.description": "{{sessionTitle}} í {{projectName}} hefur spurningu",

@@ -701,6 +701,7 @@ export const dict = {
   "error.chain.configInvalid": "Konfigurationsfilen på {{path}} är ogiltig",
   "error.chain.configInvalidWithMessage": "Konfigurationsfilen på {{path}} är ogiltig: {{message}}",
   "notification.permission.title": "Behörighet krävs",
+  "session.permission.alwaysNamed": "Tillåt alltid: {{scope}}",
   "notification.permission.description": "{{sessionTitle}} i {{projectName}} behöver behörighet",
   "notification.question.title": "Fråga",
   "notification.question.description": "{{sessionTitle}} i {{projectName}} har en fråga",

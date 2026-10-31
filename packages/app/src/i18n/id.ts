@@ -759,6 +759,7 @@ export const dict = {
   "error.chain.configInvalidWithMessage": "Berkas konfigurasi di {{path}} tidak valid: {{message}}",
 
   "notification.permission.title": "Izin diperlukan",
+  "session.permission.alwaysNamed": "Izinkan selalu: {{scope}}",
   "notification.permission.description": "{{sessionTitle}} di {{projectName}} memerlukan izin",
   "notification.question.title": "Pertanyaan",
   "notification.question.description": "{{sessionTitle}} di {{projectName}} memiliki pertanyaan",

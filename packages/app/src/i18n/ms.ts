@@ -688,6 +688,7 @@ export const dict = {
   "error.chain.configInvalid": "Fail konfigurasi di {{path}} tidak sah",
   "error.chain.configInvalidWithMessage": "Fail konfigurasi di {{path}} tidak sah: {{message}}",
   "notification.permission.title": "Kebenaran diperlukan",
+  "session.permission.alwaysNamed": "Benarkan sentiasa: {{scope}}",
   "notification.permission.description": "{{sessionTitle}} dalam {{projectName}} memerlukan kebenaran",
   "notification.question.title": "Soalan",
   "notification.question.description": "{{sessionTitle}} dalam {{projectName}} mempunyai soalan",

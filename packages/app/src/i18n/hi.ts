@@ -707,6 +707,7 @@ export const dict = {
   "error.chain.configInvalid": "{{path}} पर कॉन्फ़िगरेशन फ़ाइल अमान्य है",
   "error.chain.configInvalidWithMessage": "{{path}} पर कॉन्फ़िगरेशन फ़ाइल अमान्य है: {{message}}",
   "notification.permission.title": "अनुमति आवश्यक है",
+  "session.permission.alwaysNamed": "हमेशा अनुमति दें: {{scope}}",
   "notification.permission.description": "{{projectName}} में {{sessionTitle}} को अनुमति की आवश्यकता है",
   "notification.question.title": "प्रश्न",
   "notification.question.description": "{{projectName}} में {{sessionTitle}} का एक प्रश्न है",

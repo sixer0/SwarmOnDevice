@@ -950,7 +950,7 @@ describe("tool.shell permissions", () => {
     }),
   )
 
-  each("does not ask for bash permission when command is cd only", () =>
+  each("asks for bash permission even when command is cd only, as text can look like a cd and be more", () =>
     Effect.gen(function* () {
       const tmp = yield* tmpdirScoped()
       yield* runIn(
@@ -964,7 +964,7 @@ describe("tool.shell permissions", () => {
             capture(requests),
           )
           const bashReq = requests.find((r) => r.permission === "bash")
-          expect(bashReq).toBeUndefined()
+          expect(bashReq?.patterns).toEqual(["cd ."])
         }),
       )
     }),

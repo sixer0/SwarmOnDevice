@@ -690,6 +690,7 @@ export const dict = {
   "error.chain.configInvalid": "Uppsetingarfílan á {{path}} er ógyldug",
   "error.chain.configInvalidWithMessage": "Uppsetingarfílan á {{path}} er ógyldug: {{message}}",
   "notification.permission.title": "Loyvi krevst",
+  "session.permission.alwaysNamed": "Loyva altíð: {{scope}}",
   "notification.permission.description": "{{sessionTitle}} í {{projectName}} hevur brúk fyri loyvi",
   "notification.question.title": "Spurningur",
   "notification.question.description": "{{sessionTitle}} í {{projectName}} hevur ein spurning",

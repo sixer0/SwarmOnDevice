@@ -16,6 +16,9 @@ import { SessionID, MessageID } from "../../src/session/schema"
 import { ApplyPatchTool } from "../../src/tool/apply_patch"
 import { EditTool } from "../../src/tool/edit"
 import { ReadTool } from "../../src/tool/read"
+import { GrepTool } from "../../src/tool/grep"
+import { GlobTool } from "../../src/tool/glob"
+import { Ripgrep } from "@opencode-ai/core/ripgrep"
 import { WriteTool } from "../../src/tool/write"
 import { Instruction } from "../../src/session/instruction"
 import { provideInstance, testInstanceStoreLayer, tmpdirScoped } from "../fixture/fixture"
@@ -25,7 +28,7 @@ import { CrossSpawnSpawner } from "@opencode-ai/core/cross-spawn-spawner"
 const it = testEffect(
   Layer.mergeAll(
     LayerNode.compile(
-      LayerNode.group([CrossSpawnSpawner.node, LSP.node, FSUtil.node, Format.node, EventV2Bridge.node, Truncate.node, Agent.node, Instruction.node]),
+      LayerNode.group([CrossSpawnSpawner.node, LSP.node, FSUtil.node, Format.node, EventV2Bridge.node, Truncate.node, Agent.node, Instruction.node, Ripgrep.node]),
     ),
     testInstanceStoreLayer,
   ),
@@ -72,9 +75,9 @@ const context = (asked: Asked[], onAsk: (dir: string) => void, dir: string) => (
 
 // Every prompt is recorded and let through, so a test can see both what was asked and what happened after it.
 const runTool = (
-  tool: "write" | "edit" | "patch" | "read",
+  tool: "write" | "edit" | "patch" | "read" | "grep" | "glob",
   params: (dir: string) => object,
-  options?: { prepare?: (dir: string) => void; onAsk?: (dir: string) => void },
+  options?: { prepare?: (dir: string) => void; onAsk?: (dir: string) => void; check?: (dir: string) => void },
 ) =>
   Effect.gen(function* () {
     const dir = yield* tmpdirScoped()
@@ -86,13 +89,17 @@ const runTool = (
       if (tool === "write") return yield* (yield* (yield* WriteTool).init()).execute(params(dir) as never, ctx as never)
       if (tool === "edit") return yield* (yield* (yield* EditTool).init()).execute(params(dir) as never, ctx as never)
       if (tool === "read") return yield* (yield* (yield* ReadTool).init()).execute(params(dir) as never, ctx as never)
+      if (tool === "grep") return yield* (yield* (yield* GrepTool).init()).execute(params(dir) as never, ctx as never)
+      if (tool === "glob") return yield* (yield* (yield* GlobTool).init()).execute(params(dir) as never, ctx as never)
       return yield* (yield* (yield* ApplyPatchTool).init()).execute(params(dir) as never, ctx as never)
     }).pipe(provideInstance(dir), Effect.exit)
     const edits = asked.filter((item) => item.permission === "edit" || item.permission === "external_directory")
+    options?.check?.(dir)
     return {
       dir,
       asked: edits,
-      prompted: edits.filter((item) => !item.harmless),
+      // The baseline allows these two by name, and what they read is judged in the prompts they raise as "read".
+      prompted: asked.filter((item) => !item.harmless && item.permission !== "grep" && item.permission !== "glob"),
       output: Exit.isSuccess(exit) ? exit.value.output : undefined,
       error: Exit.isFailure(exit) ? String(Cause.squash(exit.cause)) : undefined,
     }
@@ -149,6 +156,130 @@ describe("files a person has to be asked about", () => {
         expect(run.asked.length).toBeGreaterThan(0)
       }),
     ),
+  )
+})
+
+describe("edits with nobody asked are for ordinary source", () => {
+  for (const relative of ["tui.json", "composer.json", "CONTEXT.md", ".gitignore", ".agents/skills/x/SKILL.md", "scripts/x.sh", "tsconfig.json", "data.json", "src/tui.json"]) {
+    it.live(`write asks: ${relative}`, () =>
+      runTool("write", write(relative)).pipe(Effect.map((run) => expect(run.prompted.map((item) => item.permission)).toEqual(["edit"]))),
+    )
+  }
+  for (const relative of ["src/new.ts", "README.md", "src/i18n/en.json"]) {
+    it.live(`write does not: ${relative}`, () =>
+      runTool("write", write(relative)).pipe(Effect.map((run) => expect(run.prompted).toEqual([]))),
+    )
+  }
+  it.live("through a link to a config file counts as the config file", () =>
+    runTool("write", write("src/notes.ts"), {
+      prepare: (dir) => {
+        fs.writeFileSync(path.join(dir, "tui.json"), "{}\n")
+        fs.symlinkSync(path.join(dir, "tui.json"), path.join(dir, "src/notes.ts"))
+      },
+    }).pipe(Effect.map((run) => expect(run.prompted.map((item) => item.permission)).toEqual(["edit"]))),
+  )
+  it.live("a project that is itself a global config directory is not ordinary", () =>
+    Effect.acquireUseRelease(
+      Effect.sync(() => process.env.SWARM_CONFIG_DIR),
+      () =>
+        runTool("write", write("src/plugin/x.ts"), {
+          prepare: (dir) => {
+            process.env.SWARM_CONFIG_DIR = dir
+          },
+        }).pipe(Effect.map((run) => expect(run.prompted.map((item) => item.permission)).toEqual(["edit"]))),
+      (previous) =>
+        Effect.sync(() => {
+          if (previous === undefined) delete process.env.SWARM_CONFIG_DIR
+          else process.env.SWARM_CONFIG_DIR = previous
+        }),
+    ),
+  )
+  it.live("a hostile fsmonitor does not run when an edit asks whether Undo can help", () =>
+    runTool("write", write("src/new2.ts"), {
+      prepare: (dir) => {
+        fs.writeFileSync(`${dir}-fsm`, `#!/bin/sh\necho ran > "${dir}-fired"\n`, { mode: 0o755 })
+        spawnSync("git", ["config", "core.fsmonitor", `${dir}-fsm`], { cwd: dir })
+        fs.mkdirSync(path.join(dir, ".git/hooks"), { recursive: true })
+        fs.copyFileSync(`${dir}-fsm`, path.join(dir, ".git/hooks/post-index-change"))
+      },
+      check: (dir) => expect(fs.existsSync(`${dir}-fired`)).toBe(false),
+    }),
+  )
+})
+
+describe("read, grep and glob", () => {
+  const reading = (tool: "read" | "grep" | "glob", params: (dir: string) => object, prepare?: (dir: string) => void) =>
+    runTool(tool, params, { prepare })
+  const secrets = (dir: string) => {
+    fs.writeFileSync(path.join(dir, ".env"), "API_KEY=abcSECRETvalue123456\n")
+    fs.mkdirSync(path.join(dir, ".envs"))
+    fs.writeFileSync(path.join(dir, ".envs/prod"), "API_KEY=abcSECRETvalue123456\n")
+    fs.symlinkSync(path.join(dir, ".env"), path.join(dir, "notes"))
+    fs.mkdirSync(path.join(dir, ".kube"))
+    fs.writeFileSync(path.join(dir, ".kube/config"), "password: abcSECRETvalue123456\n")
+  }
+  it.live("reading an ordinary file asks nothing of anyone", () =>
+    reading("read", (dir) => ({ filePath: path.join(dir, "src/a.ts") })).pipe(Effect.map((run) => expect(run.prompted).toEqual([]))),
+  )
+  it.live("listing a directory asks nothing", () =>
+    reading("read", (dir) => ({ filePath: path.join(dir, "src") })).pipe(Effect.map((run) => expect(run.prompted).toEqual([]))),
+  )
+  for (const relative of [".env", "notes", ".envs/prod", ".git/config", ".kube/config", "innocent/config"]) {
+    it.live(`read asks: ${relative}`, () =>
+      reading("read", (dir) => ({ filePath: path.join(dir, relative) }), secrets).pipe(
+        Effect.map((run) => {
+          expect(run.prompted[0]?.permission).toBe("read")
+          expect(run.prompted[0]?.always).toEqual([])
+        }),
+      ),
+    )
+  }
+  it.live("what a yes shows is still masked", () =>
+    reading("read", (dir) => ({ filePath: path.join(dir, ".env") }), secrets).pipe(
+      Effect.map((run) => expect(run.output).not.toContain("abcSECRETvalue123456")),
+    ),
+  )
+  it.live("grep over the project leaves a secret file out of its answer, so a count is no oracle", () =>
+    reading("grep", () => ({ pattern: "^API_KEY=abcS" }), (dir) => {
+      secrets(dir)
+      fs.writeFileSync(path.join(dir, "src/ok.ts"), "API_KEY=abcSok\n")
+    }).pipe(
+      Effect.map((run) => {
+        expect(run.prompted).toEqual([])
+        expect(run.output).toContain("ok.ts")
+        expect(run.output).not.toContain(".env")
+        expect(run.output).not.toContain("abcSECRET")
+      }),
+    ),
+  )
+  it.live("an include pattern naming one does not bring it back", () =>
+    reading("grep", () => ({ pattern: "API_KEY", include: ".env" }), secrets).pipe(
+      Effect.map((run) => expect(run.output).toBe("No files found")),
+    ),
+  )
+  for (const relative of [".env", "notes", ".envs", ".git"]) {
+    it.live(`grep asks: ${relative}`, () =>
+      reading("grep", (dir) => ({ pattern: "x", path: path.join(dir, relative) }), secrets).pipe(
+        Effect.map((run) => expect(run.prompted.map((item) => item.permission)).toEqual(["read"])),
+      ),
+    )
+  }
+  for (const relative of [".envs", ".git", ".kube"]) {
+    it.live(`glob asks: ${relative}`, () =>
+      reading("glob", (dir) => ({ pattern: "*", path: path.join(dir, relative) }), secrets).pipe(
+        Effect.map((run) => expect(run.prompted.map((item) => item.permission)).toContain("read")),
+      ),
+    )
+  }
+  it.live("grep and glob outside the project ask", () =>
+    Effect.gen(function* () {
+      const grep = yield* reading("grep", (dir) => ({ pattern: "x", path: `${dir}-outside` }))
+      expect(grep.prompted.map((item) => item.permission)).toContain("external_directory")
+      const glob = yield* reading("glob", (dir) => ({ pattern: "*", path: `${dir}-outside` }))
+      expect(glob.prompted.map((item) => item.permission)).toContain("external_directory")
+      const link = yield* reading("grep", (dir) => ({ pattern: "x", path: path.join(dir, "linkdir") }))
+      expect(link.prompted.map((item) => item.permission)).toContain("external_directory")
+    }),
   )
 })
 
@@ -242,6 +373,23 @@ describe("apply_patch naming one file twice", () => {
       Effect.timeoutOrElse({ duration: "20 seconds", orElse: () => Effect.die(new Error("deadlocked on its own lock")) }),
     )
 
+  it.live("two sections for one file are refused, with nothing written", () =>
+    runTool("patch", (dir) => ({
+      patchText: `*** Begin Patch\n*** Update File: ${path.join(dir, "m.txt")}\n@@\n-x\n+y\n*** Update File: ${path.join(dir, "m.txt")}\n@@\n-z\n+w\n*** End Patch`,
+    }), { prepare: (dir) => fs.writeFileSync(path.join(dir, "m.txt"), "x\nz\n") }).pipe(
+      Effect.map((run) => {
+        expect(run.error).toContain("more than one section")
+        expect(fs.readFileSync(path.join(run.dir, "m.txt"), "utf8")).toBe("x\nz\n")
+      }),
+    ),
+  )
+  it.live("delete then update of one file is refused too", () =>
+    runTool("patch", (dir) => ({
+      patchText: `*** Begin Patch\n*** Delete File: ${path.join(dir, "m.txt")}\n*** Update File: ${path.join(dir, "m.txt")}\n@@\n-x\n+y\n*** End Patch`,
+    }), { prepare: (dir) => fs.writeFileSync(path.join(dir, "m.txt"), "x\n") }).pipe(
+      Effect.map((run) => expect(run.error).toContain("more than one section")),
+    ),
+  )
   it.live("a move that only changes case does not wait on itself, and the file survives", () =>
     finish(runTool("patch", (dir) => patch(dir, "M.txt"), { prepare: file })).pipe(
       Effect.map((run) => {

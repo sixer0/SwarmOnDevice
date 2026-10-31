@@ -446,9 +446,7 @@ describe("buildActivity and buildBrief", () => {
     [" Tests  3 passed (3)", "passed"],
     ["=== 3 passed in 0.12s ===", "passed"],
     ["1 failed, 2 passed in 0.12s", "failed"],
-    ["test result: ok. 3 passed; 0 failed; 0 ignored", "passed"],
     ["test result: FAILED. 2 passed; 1 failed", "failed"],
-    ["ok  \texample.com/x\t0.12s", "passed"],
     ["--- FAIL: TestX (0.00s)\nFAIL", "failed"],
     ["  3 passing (10ms)\n  1 failing", "failed"],
     ["  3 passing (10ms)", "passed"],
@@ -663,5 +661,33 @@ describe("reversePatch", () => {
     ).toBeUndefined()
     expect(reversePatch("diff --git a/x b/x\nBinary files a/x and b/x differ\n")).toBeUndefined()
     expect(reversePatch("diff --git a/x b/x\nindex 1..2\n")).toBeUndefined()
+  })
+})
+
+describe("what a piped run's own summary can be trusted for", () => {
+  test.each([
+    // A tail keeps only the last of several results, so an earlier failure may be gone.
+    ["go test ./... | tail -1", "ok  	pkg/b	0.1s\n"],
+    ["cargo test --no-fail-fast 2>&1 | tail -3", "test result: ok. 3 passed; 0 failed; 0 ignored\n"],
+    ["bun run test | tail -5", "3 pass\n0 fail\n"],
+    ["npm test | tail -5", "3 passing\n"],
+    ["pnpm -r test | tail -5", "3 pass\n0 fail\n"],
+    ["vitest --workspace | tail -5", "Tests  3 passed (3)\n"],
+    // Something before it could have printed that.
+    ["printf '3 pass\\n0 fail\\n' && bun test | tail -1", "3 pass\n0 fail\n"],
+    ["echo hi && bun test | tail -2", "3 pass\n0 fail\n"],
+  ])("%s says unknown, not passed", (command, output) => {
+    expect(visibleTestResult(command, output)).toBeUndefined()
+  })
+  test.each([
+    ["bun test | tail -5", "3 pass\n0 fail\n", "passed"],
+    ["bun test 2>&1 | tail -20", "3 pass\n0 fail\n", "passed"],
+    ["cd pkg && bun test | tail -5", "3 pass\n0 fail\n", "passed"],
+    ["pytest | tail -1", "=== 3 passed in 0.12s ===\n", "passed"],
+    ["npm test | tail -5", "1 failing\n", "failed"],
+    ["go test ./... | tail -5", "FAIL\tpkg/a\t0.1s\n", "failed"],
+    ["cargo test | tail -3", "test result: FAILED. 1 passed; 2 failed; 0 ignored\n", "failed"],
+  ])("%s is read", (command, output, expected) => {
+    expect(visibleTestResult(command, output)).toBe(expected as "passed" | "failed")
   })
 })

@@ -3,6 +3,21 @@ import { MemoryLearn } from "../../src/memory/learn"
 
 describe("looksSecret", () => {
   test.each([
+    "pw: hunter2hunter2",
+    "db login admin / Tr0ub4dor3x",
+    "ssh pass: correcthorsebatterystaple",
+    "connect with password correct-horse-battery",
+    "prod db is db.internal user admin hunter2hunter2",
+  ])("a note filed the way people write them is refused: %s", (text) => {
+    expect(MemoryLearn.looksSecret(text)).toBe(true)
+  })
+
+  test.each(["password reset flow lives in auth.ts", "the login page uses the session cookie", "user admin can see the panel", "use pass by value here"])(
+    "an ordinary sentence is kept: %s",
+    (text) => expect(MemoryLearn.looksSecret(text)).toBe(false),
+  )
+
+  test.each([
     "the key is sk-ant-api03-abcdefghijklmnop",
     "ghp_abcdefghijklmnopqrstuvwxyz1234",
     "AKIAIOSFODNN7EXAMPLE",

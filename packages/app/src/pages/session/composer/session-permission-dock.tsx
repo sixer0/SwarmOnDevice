@@ -1,4 +1,5 @@
 import { For, Show } from "solid-js"
+import { alwaysLabel } from "./permission-always"
 import type { PermissionRequest } from "@opencode-ai/sdk/v2"
 import { Button } from "@opencode-ai/ui/button"
 import { DockPrompt } from "@opencode-ai/session-ui/dock-prompt"
@@ -122,7 +123,7 @@ function RegularPermission(props: {
                 onClick={() => props.onDecide("always")}
                 disabled={props.responding}
               >
-                {language.t("ui.permission.allowAlways")}
+                {alwaysLabel(props.request.always, language.t)}
               </Button>
             </Show>
             <Button variant="primary" size="normal" onClick={() => props.onDecide("once")} disabled={props.responding}>

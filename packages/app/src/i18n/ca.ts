@@ -695,6 +695,7 @@ export const dict = {
   "error.chain.configInvalid": "El fitxer de configuració a {{path}} no és vàlid",
   "error.chain.configInvalidWithMessage": "El fitxer de configuració a {{path}} no és vàlid: {{message}}",
   "notification.permission.title": "Cal permís",
+  "session.permission.alwaysNamed": "Permetre sempre: {{scope}}",
   "notification.permission.description": "{{sessionTitle}} a {{projectName}} necessita permís",
   "notification.question.title": "Pregunta",
   "notification.question.description": "{{sessionTitle}} a {{projectName}} té una pregunta",

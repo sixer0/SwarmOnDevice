@@ -619,6 +619,7 @@ export const dict = {
   "error.chain.configInvalidWithMessage": "Konfigurationsfil på {{path}} er ugyldig: {{message}}",
 
   "notification.permission.title": "Tilladelse påkrævet",
+  "session.permission.alwaysNamed": "Tillad altid: {{scope}}",
   "notification.permission.description": "{{sessionTitle}} i {{projectName}} kræver tilladelse",
   "notification.question.title": "Spørgsmål",
   "notification.question.description": "{{sessionTitle}} i {{projectName}} har et spørgsmål",

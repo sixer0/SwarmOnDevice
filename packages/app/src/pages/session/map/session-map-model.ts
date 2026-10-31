@@ -80,7 +80,7 @@ const firstLine = (value: string) => value.trim().split("\n")[0]?.trim() ?? ""
 const kindOf = (tool: string): MapStepKind => {
   if (tool === "bash" || tool === "shell") return "command"
   if (tool === "edit" || tool === "write" || tool === "patch" || tool === "apply_patch") return "edit"
-  if (tool === "read" || tool === "grep" || tool === "glob" || tool === "list") return "explore"
+  if (tool === "read" || tool === "grep" || tool === "glob" || tool === "list" || tool === "git") return "explore"
   if (tool === "task") return "agent"
   if (tool === "question") return "question"
   if (tool === "webfetch" || tool === "websearch") return "web"

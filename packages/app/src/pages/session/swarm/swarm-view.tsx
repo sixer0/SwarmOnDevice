@@ -1,4 +1,5 @@
 import { useLanguage } from "@/context/language"
+import { alwaysLabel } from "@/pages/session/composer/permission-always"
 import { inlineQuestion, permissionDetail, permissionRisk } from "@/pages/home/agent-board-model"
 import { Icon } from "@opencode-ai/ui/icon"
 import { Spinner } from "@opencode-ai/ui/spinner"
@@ -170,7 +171,7 @@ function LaneDetail(props: { swarm: SwarmController; lane: SwarmLane }) {
                   disabled={busy()}
                   onClick={() => props.swarm.allow(props.lane, request, "always")}
                 >
-                  {language.t("ui.permission.allowAlways")}
+                  {alwaysLabel(request.always, language.t)}
                 </ButtonV2>
               </Show>
               <ButtonV2

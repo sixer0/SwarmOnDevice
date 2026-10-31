@@ -704,6 +704,7 @@ export const dict = {
   "error.chain.configInvalid": "{{path}} ünvanındakı konfiqurasiya faylı etibarsızdır",
   "error.chain.configInvalidWithMessage": "{{path}} ünvanındakı konfiqurasiya faylı etibarsızdır: {{message}}",
   "notification.permission.title": "İcazə tələb olunur",
+  "session.permission.alwaysNamed": "Həmişə icazə ver: {{scope}}",
   "notification.permission.description": "{{projectName}} layihəsində {{sessionTitle}} icazə tələb edir",
   "notification.question.title": "Sual",
   "notification.question.description": "{{projectName}} layihəsində {{sessionTitle}} sualı var",

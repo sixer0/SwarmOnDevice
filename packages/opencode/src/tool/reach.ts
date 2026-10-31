@@ -3,14 +3,18 @@
 import fs from "node:fs"
 import { stat } from "node:fs/promises"
 import path from "node:path"
+import { devNull } from "node:os"
 import { execFile } from "node:child_process"
 import { promisify } from "node:util"
 import { Effect } from "effect"
+import { Global } from "@opencode-ai/core/global"
 import { containsPath, type InstanceContext } from "../project/instance-context"
 import { Risk } from "./risk"
 import { Secrets } from "./secrets"
 
 const git = promisify(execFile)
+// Asking whether Undo can help must not itself run what the repository says to.
+const QUIET = ["--no-optional-locks", "-c", "core.fsmonitor=false", "-c", `core.hooksPath=${devNull}`]
 // Matches the size above which a step's snapshot leaves an untracked file out.
 const SNAPSHOT_FILE_LIMIT = 2 * 1024 * 1024
 const MAX_LINKS = 40
@@ -71,14 +75,14 @@ export function secret(file: string) {
 /** Whether the step's snapshot would leave anything under these paths behind, so Undo could not bring it back. */
 export async function outsideSnapshot(worktree: string, paths: string[], options?: { untrackedOnly?: boolean }) {
   const list = async (...args: string[]) =>
-    (await git("git", ["-C", worktree, "ls-files", "-z", "--others", "--exclude-standard", ...args, "--", ...paths], { maxBuffer: 64 * 1024 * 1024 })).stdout
+    (await git("git", [...QUIET, "-C", worktree, "ls-files", "-z", "--others", "--exclude-standard", ...args, "--", ...paths], { maxBuffer: 64 * 1024 * 1024 })).stdout
       .split("\0")
       .filter(Boolean)
   try {
     if (!options?.untrackedOnly) {
       if ((await list("--ignored", "--directory")).some((file) => !Risk.rebuilt(file))) return true
       // ls-files only lists what exists. A new file in an ignored place is just as far out of Undo's reach.
-      const ignored = await git("git", ["-C", worktree, "check-ignore", "--", ...paths]).then(
+      const ignored = await git("git", [...QUIET, "-C", worktree, "check-ignore", "--", ...paths]).then(
         (out) => out.stdout.split("\n").filter(Boolean),
         (error: { code?: number }) => {
           if (error.code === 1) return [] as string[]
@@ -99,67 +103,32 @@ export async function outsideSnapshot(worktree: string, paths: string[], options
   }
 }
 
-const MAX_WALKED = 20_000
 // Directories whose contents can hold a credential under any name. `.git/config` carries remote URLs with their tokens.
-const HOLDS_SECRETS = /(^|\/)(\.git|\.envs|\.ssh|\.aws|\.gnupg)(\/|$)/i
+const HOLDS_SECRETS = /(^|\/)(\.git|\.envs|\.ssh|\.aws|\.gnupg|\.kube|\.docker)(\/|$)/i
 
-/** Whether what is in this file may reach the model through a command with nobody asked. */
+/** Whether what is in this file may reach the model through a read tool with nobody asked. */
 export function readable(file: string) {
   const target = real(file)
   return target !== undefined && !secret(file) && !HOLDS_SECRETS.test(file) && !HOLDS_SECRETS.test(target)
 }
 
-/**
- * Whether a recursive read here could only print ordinary files. A pattern is a question, so a count or a match is one
- * bit of a secret and enough of them are all of it. No scrubber sees that, so a walk that reaches a secret file asks. A
- * link can lead anywhere, and past the budget nothing is known, and neither is proven.
- */
-export function walkable(directory: string) {
-  const target = real(directory)
-  if (target === undefined) return false
-  const pending = [target]
-  let seen = 0
-  while (pending.length > 0) {
-    const current = pending.pop()!
-    if (HOLDS_SECRETS.test(path.basename(current)) || Secrets.secretFile(current)) return false
-    const info = fs.lstatSync(current, { throwIfNoEntry: false })
-    if (!info) return false
-    if (info.isSymbolicLink()) return false
-    if (!info.isDirectory()) continue
-    const entries = attemptList(current)
-    if (!entries) return false
-    seen += entries.length
-    if (seen > MAX_WALKED) return false
-    pending.push(...entries.map((entry) => path.join(current, entry)))
-  }
-  return true
-}
-
-function attemptList(directory: string) {
-  try {
-    return fs.readdirSync(directory)
-  } catch {
-    return undefined
-  }
-}
-
-// Each of these makes a bare `ls` something other than the `ls` it looks like, before any of its arguments are read.
-const REPLACES_A_PROGRAM = /^(LD_PRELOAD|LD_LIBRARY_PATH|LD_AUDIT|DYLD_.+|BASH_FUNC_.+|GREP_OPTIONS)$/
-const SOURCED_BY_THE_SHELL = ["BASH_ENV", "ENV", "ZDOTDIR"]
+/** The same judgement for a name in a repository, which may not be on disk any more. */
+export const readableName = (name: string) => !Secrets.secretFile(name) && !HOLDS_SECRETS.test(name)
 
 /**
- * Whether the environment leaves a bare command name meaning the system's program, in a project that may be hostile. A
- * relative or empty entry in PATH, or one inside the project, lets the repository supply its own `ls`.
+ * The rule an "Allow always" may leave behind for this command, or undefined when there is none to offer and none that
+ * could answer it: only one plain command, naming nothing outside the project and no secret, whatever comes after it.
  */
-export function plainEnvironment(env: NodeJS.ProcessEnv, instance: InstanceContext) {
-  if (Object.keys(env).some((key) => REPLACES_A_PROGRAM.test(key))) return false
-  const roots = realRoots(instance)
-  const outside = (entry: string) => {
-    const target = path.isAbsolute(entry) ? real(entry) : undefined
-    return target !== undefined && !containsPath(target, roots)
-  }
-  if (!(env.PATH ?? "").split(path.delimiter).every(outside)) return false
-  return SOURCED_BY_THE_SHELL.every((key) => env[key] === undefined || outside(env[key]!))
+export function alwaysFor(command: string, cwd: string, instance: InstanceContext) {
+  const words = Risk.plainWords(command)
+  if (!words || !inside(cwd, instance)) return undefined
+  const named = words.slice(1).flatMap((word) => word.replace(/^-[A-Za-z]/, "").split(/[=,:@]/)).filter(Boolean)
+  const stays = named.every((word) => {
+    if (word.startsWith("-")) return true
+    const file = path.resolve(cwd, word)
+    return !word.startsWith("/") && !word.includes("..") && inside(file, instance) && readable(file)
+  })
+  return stays ? Risk.scope(command) : undefined
 }
 
 /** The names a change reaches, as this worktree spells them: through a link it lands somewhere else in the project. */
@@ -177,6 +146,17 @@ export function landsOn(files: string[], instance: InstanceContext) {
   ]
 }
 
+/** Ordinary by both of its names, and not somewhere a global config loads from, even when that is the open project. */
+function ordinary(file: string, instance: InstanceContext) {
+  const target = real(file)
+  const loaded = [Global.Path.config, process.env.OPENCODE_CONFIG_DIR, process.env.SWARM_CONFIG_DIR].filter((dir) => dir !== undefined)
+  if (target === undefined || loaded.some((dir) => !path.relative(real(dir) ?? dir, target).startsWith(".."))) return false
+  return (
+    Risk.ordinaryEdit(path.relative(instance.worktree, file)) &&
+    Risk.ordinaryEdit(path.relative(realRoots(instance).worktree, target))
+  )
+}
+
 /** What to tell the permission layer about an edit to these files. */
 export const editTrust = Effect.fn("Reach.editTrust")(function* (
   ctx: { trust?: { canUndo: boolean } },
@@ -188,7 +168,7 @@ export const editTrust = Effect.fn("Reach.editTrust")(function* (
   if (files.some((file) => sensitive(file, instance) || secret(file))) return { harmless: false }
   if (yield* Effect.promise(() => outsideSnapshot(instance.worktree, landsOn(files, instance))))
     return { harmless: false, risk: "irreversible" as const }
-  return { harmless: true }
+  return { harmless: files.every((file) => ordinary(file, instance)) }
 })
 
 export * as Reach from "./reach"

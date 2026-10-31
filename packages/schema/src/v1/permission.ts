@@ -60,6 +60,9 @@ export const AskInput = Schema.Struct({
   ruleset: Ruleset,
   // The call cannot do lasting harm, so a catch-all "ask" does not apply to it. A rule naming this permission still does.
   harmless: Schema.optional(Schema.Boolean),
+  // An earlier "Allow always" does not answer this one: it is more than the single command that always was given for.
+  // Rules a person wrote in config still do.
+  noAlways: Schema.optional(Schema.Boolean),
 }).annotate({
   identifier: "PermissionAskInput",
 })

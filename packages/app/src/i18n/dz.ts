@@ -702,6 +702,7 @@ export const dict: Record<string, string> = {
   "error.chain.configInvalid": "{{path}}ལུ་ཡོད་པའི་རིམ་སྒྲིག་ཡིག་སྣོད་འདི་ནུས་མེད་ཨིན།",
   "error.chain.configInvalidWithMessage": "{{path}} ལུ་ཡོད་པའི་རིམ་སྒྲིག་ཡིག་སྣོད་འདི་ནུས་མེད་ཨིན་: {{message}}",
   "notification.permission.title": "གནང་བ་དགོཔ།",
+  "session.permission.alwaysNamed": "ཨ་རྟག་ར་གནང་བཅུག།: {{scope}}",
   "notification.permission.description": "{{sessionTitle}}ནང་ {{projectName}}ལུ་གནང་བ་དགོཔ་ཨིན།",
   "notification.question.title": "དྲི་བ",
   "notification.question.description": "{{sessionTitle}} ནང་{{projectName}}ནང་དྲི་བ་ཅིག་ཡོད།",

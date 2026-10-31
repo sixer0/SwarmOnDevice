@@ -1,16 +1,16 @@
-// What a shell command can do, as far as this file can prove from its words. Only `harmless` skips a prompt. Everything
-// else asks, and `risky` says why Undo will not help. So a wrong or missing answer here costs one prompt, never a repo:
-// `unknown` means nobody has shown it is safe, and it must never be read as safe.
+// What a shell command is about to do, as far as its words say. This labels a prompt and nothing more: it is why a prompt
+// can say Undo will not help, and why it may leave out "Allow always". A label can only add caution, so nothing here can
+// ever skip a prompt or lower a permission, and a wrong or missing answer costs a less informative prompt, never a repo.
 //
-// The list of what runs unprompted is deliberately short and made of named flags, not of refused ones. Each round of
-// refusing flags turned up another spelling, so a flag, an argument shape or a command not named below is `unknown`.
+// It used to go further and let proven reads run unprompted. Three passes found a new disagreement between this parser's
+// words and the shell's each time, so safe reads moved to tools with no shell in them: read, glob, grep and git.
+
+import { BashArity } from "@/permission/arity"
 
 export type Risk = "irreversible" | "remote"
 
 export type Verdict =
-  /** Reads only. `paths` must stay inside the project. What `contents` holds gets printed, `walks` is read recursively. */
-  | { kind: "harmless"; paths: string[]; contents: string[]; walks: string[] }
-  /** Changes files. It always asks: this describes what it touches, so the prompt can say when Undo cannot help. */
+  /** Changes files: this describes what it touches, so the prompt can say when Undo cannot help. */
   | {
       kind: "undoable"
       paths: string[]
@@ -23,133 +23,6 @@ export type Verdict =
 
 const UNKNOWN: Verdict = { kind: "unknown" }
 const risky = (risk: Risk): Verdict => ({ kind: "risky", risk })
-
-type Reader = {
-  /** Short flags that take nothing and only change how the result is printed. */
-  bools: string
-  /** Short flags that take a value, and what that value may be. */
-  values?: Record<string, RegExp>
-  /** Most file arguments it may take. A second one can mean something it writes to, as with `uniq`. */
-  operands?: number
-  /** Prints what is in its files, as opposed to their names. */
-  contents?: boolean
-}
-
-const COUNT = /^\+?\d+$/
-const DIGITS = "0123456789"
-const ANYTHING = /^/
-
-// Why each is here: none can run a program with these flags, none opens a socket, and each reads only what it is named.
-const READERS: Record<string, Reader> = {
-  // Names and metadata of what it is named. No -L or -H: it does not follow a link unless it is told to.
-  ls: { bools: "1aAdFhlpRrSt" },
-  // Bytes of the files named, nothing else.
-  cat: { bools: "nbs", contents: true },
-  // Lines only. No -c, which cuts a value into pieces no scrubber recognises, and no -f, which never returns.
-  head: { bools: DIGITS, values: { n: COUNT }, contents: true },
-  tail: { bools: DIGITS, values: { n: COUNT }, contents: true },
-  // Counts of the files named. No --files0-from, which takes the list from a file.
-  wc: { bools: "lwcm", contents: true },
-  // Reorders lines. No -o, which writes, and no long options: GNU's --compress-program runs a program.
-  sort: { bools: "rnufbd", values: { k: /^[\w.,]+$/, t: /^.$/ }, contents: true },
-  // One input at most: its second file argument is one it writes.
-  uniq: { bools: "cdui", operands: 1, contents: true },
-}
-
-// Whole lines of the files named, or under the directories named with -r. No -o, which reassembles a secret a character
-// at a time, no -f, which takes patterns from a file, and no -R, -S or -O, which follow links out of the project.
-const GREP: Reader = { bools: "nilcvwHhFEqsxrI", values: { e: ANYTHING, A: COUNT, B: COUNT, C: COUNT } }
-
-// Names only, by a named set of tests. Everything that writes or runs (-delete, -exec, -fprint) is simply not named, and
-// neither is -L, -H or -follow. No `-newer`: it would need its value checked as a path too.
-const FIND_VALUE: Record<string, RegExp> = {
-  "-name": ANYTHING,
-  "-iname": ANYTHING,
-  "-path": ANYTHING,
-  "-ipath": ANYTHING,
-  "-type": /^[fdl]$/,
-  "-maxdepth": /^\d+$/,
-  "-mindepth": /^\d+$/,
-}
-const FIND_BARE = new Set(["-print", "-empty", "-not", "-a", "-o", "-and", "-or"])
-
-const harmless = (paths: string[], contents: string[] = [], walks: string[] = []): Verdict => ({
-  kind: "harmless",
-  paths,
-  contents,
-  walks,
-})
-
-/** Splits arguments by what the reader declares. Undefined when any of them is something it does not declare. */
-function operands(reader: Reader, args: string[]) {
-  const found: string[] = []
-  const flags = new Set<string>()
-  const values: string[] = []
-  for (let index = 0; index < args.length; index++) {
-    const arg = args[index]!
-    if (!arg.startsWith("-")) {
-      found.push(arg)
-      continue
-    }
-    // `-` is stdin, `--` changes how what follows is read, and no long option is named at all.
-    if (arg === "-" || arg.startsWith("--")) return undefined
-    for (let at = 1; at < arg.length; at++) {
-      const letter = arg[at]!
-      const pattern = reader.values?.[letter]
-      if (pattern) {
-        const value = arg.slice(at + 1) || args[++index]
-        if (value === undefined || !pattern.test(value)) return undefined
-        if (letter === "e") values.push(value)
-        break
-      }
-      if (!reader.bools.includes(letter)) return undefined
-      flags.add(letter)
-    }
-  }
-  return { found, flags, patterned: values.length > 0 }
-}
-
-function reader(name: string, args: string[]): Verdict {
-  if (name === "pwd") return args.every((arg) => arg === "-L" || arg === "-P") ? harmless([]) : UNKNOWN
-  if (name === "true") return args.length === 0 ? harmless([]) : UNKNOWN
-  // Prints its own words. The caller checks that they are literal, so no expansion reads anything for it.
-  if (name === "echo") return harmless([])
-  if (name === "test") return args.length === 2 && /^-[efds]$/.test(args[0]!) ? harmless([args[1]!]) : UNKNOWN
-  if (name === "find") return find(args)
-  if (name === "grep") return grep(args)
-  // Own keys only: `constructor` and `toString` are on every object, and neither is a reader.
-  if (!Object.hasOwn(READERS, name)) return UNKNOWN
-  const spec = READERS[name]!
-  const parsed = operands(spec, args)
-  if (!parsed || (spec.operands !== undefined && parsed.found.length > spec.operands)) return UNKNOWN
-  // Nothing named means stdin, except for `ls`, which lists where it is.
-  if (name === "ls" && parsed.found.length === 0) return harmless(["."])
-  return harmless(parsed.found, spec.contents ? parsed.found : [])
-}
-
-function grep(args: string[]): Verdict {
-  const parsed = operands(GREP, args)
-  if (!parsed) return UNKNOWN
-  const files = parsed.patterned ? parsed.found : parsed.found.slice(1)
-  if (!parsed.patterned && parsed.found.length === 0) return UNKNOWN
-  if (!parsed.flags.has("r")) return harmless(files, files)
-  const walked = files.length > 0 ? files : ["."]
-  return harmless(walked, [], walked)
-}
-
-function find(args: string[]): Verdict {
-  const start = args.findIndex((arg) => arg.startsWith("-") || arg === "!")
-  const roots = start < 0 ? args : args.slice(0, start)
-  const tests = start < 0 ? [] : args.slice(start)
-  for (let index = 0; index < tests.length; index++) {
-    const test = tests[index]!
-    if (test === "!" || FIND_BARE.has(test)) continue
-    const pattern = FIND_VALUE[test]
-    const value = tests[++index]
-    if (!pattern || value === undefined || !pattern.test(value)) return UNKNOWN
-  }
-  return harmless(roots.length > 0 ? roots : ["."])
-}
 
 const REMOTE: [string, RegExp][] = [
   ["npm", /^publish$/], ["pnpm", /^publish$/], ["yarn", /^publish$/], ["bun", /^publish$/], ["cargo", /^publish$/],
@@ -185,7 +58,7 @@ function gitCommand(args: string[]) {
   return args.slice(index)
 }
 
-// Never `harmless`. Even `git status` runs what a hostile repository or environment says to: `core.fsmonitor`, a
+// Nothing here says a git command is safe. Even `git status` runs what a hostile repository or environment says to: `core.fsmonitor`, a
 // worktree config, `post-index-change`, `HOME` with its `.gitconfig`, `GIT_CONFIG_*`. No check of today's config proves
 // the next one, so a person answers instead. This only tells them when Undo would not bring back what it does.
 function git(args: string[]): Verdict {
@@ -238,8 +111,7 @@ function git(args: string[]): Verdict {
 export function classify(tokens: string[]): Verdict {
   const [spelled, ...args] = tokens
   if (!spelled) return UNKNOWN
-  // How the danger is spelled does not change it. Being named by path does change what would run, so only the
-  // bare names below can ever be harmless.
+  // How the danger is spelled does not change it.
   const name = spelled.split("/").at(-1)!
   if (name === "git") {
     const verdict = git(args)
@@ -269,7 +141,35 @@ export function classify(tokens: string[]): Verdict {
     // A copy only risks what it lands on. A move or a remove also takes away what it names.
     return { kind: "undoable", paths: name === "cp" ? paths.slice(-1) : paths, removes: name !== "cp" }
   }
-  return reader(name, args)
+  return UNKNOWN
+}
+
+// Decided on the bytes, with no parser: only characters no shell gives a meaning, single spaces between words, and no word
+// starting with `=`, which zsh would expand. So whatever a parser thinks, this runs one program with these words. Anything
+// else, including any control character, a pipe, a redirect, a variable or a quote, is not plain.
+const PLAIN_COMMAND = /^[A-Za-z0-9_][A-Za-z0-9_.+-]*(?: [\w./@%+:,-][\w./@%+:,=-]*)*$/
+
+// A rule for these would be a rule for anything: they run or fetch whatever their arguments say, or write where one points.
+const NO_ALWAYS = new Set([
+  "sh", "bash", "zsh", "dash", "ksh", "fish", "csh", "tcsh", "eval", "exec", "source", "command", "builtin", "env", "xargs", "sudo", "doas", "nohup", "nice", "time", "watch",
+  "node", "nodejs", "python", "python2", "python3", "ruby", "perl", "php", "lua", "deno", "npx", "bunx", "pnpx", "uvx", "pipx",
+  "curl", "wget", "nc", "ncat", "ssh", "scp", "sftp", "ftp", "rsync", "telnet",
+  "rm", "rmdir", "mv", "cp", "ln", "dd", "chmod", "chown", "tee", "sed", "awk", "gawk", "find", "sort", "export", "alias", "unset", "set", "trap",
+])
+const GIT_NO_ALWAYS = new Set(["config", "submodule", "hook", "difftool", "mergetool", "bisect", "rebase", "filter-branch", "update-ref", "replace", "rm", "clean", "grep", "daemon", "archive", "worktree"])
+
+/** The words of a command that can only be one program with those words, or undefined. */
+export function plainWords(command: string) {
+  return PLAIN_COMMAND.test(command) ? command.split(" ") : undefined
+}
+
+/** What an "Allow always" may cover for this command, or undefined when it should not be offered at all. */
+export function scope(command: string) {
+  const words = plainWords(command)
+  if (!words) return undefined
+  if (NO_ALWAYS.has(words[0]!)) return undefined
+  if (words[0] === "git" && GIT_NO_ALWAYS.has(words[1] ?? "")) return undefined
+  return BashArity.scope(words)
 }
 
 // Editing these changes what later runs, or what the agent is allowed to do. Undo restoring them afterwards is too late,
@@ -279,7 +179,7 @@ const SENSITIVE_DIRECTORIES = new Set([
   // Git and its hooks.
   ".git", ".husky", ".githooks",
   // What the agent reads as rules, tools and plugins.
-  ".swarm", ".opencode", ".claude", ".cursor",
+  ".swarm", ".opencode", ".claude", ".cursor", ".agents",
   // CI.
   ".github", ".gitlab", ".circleci", ".buildkite",
   // Editor tasks and settings, dev containers.
@@ -289,9 +189,9 @@ const SENSITIVE_DIRECTORIES = new Set([
 ])
 const SENSITIVE_FILES = new Set([
   // Git.
-  ".gitconfig", ".gitattributes", ".gitmodules",
+  ".gitconfig", ".gitattributes", ".gitmodules", ".gitignore",
   // Rules for the agent.
-  "swarm.json", "swarm.jsonc", "opencode.json", "opencode.jsonc", "agents.md", "claude.md", "gemini.md", ".cursorrules", ".windsurfrules", ".mcp.json",
+  "swarm.json", "swarm.jsonc", "opencode.json", "opencode.jsonc", "tui.json", "tui.jsonc", "agents.md", "claude.md", "context.md", "gemini.md", ".cursorrules", ".windsurfrules", ".mcp.json",
   // Shells, and what they source.
   ".bashrc", ".bash_profile", ".bash_login", ".bash_logout", ".bash_aliases", ".profile", ".zshrc", ".zshenv", ".zprofile", ".zlogin", ".zlogout", ".kshrc", ".cshrc", ".tcshrc", ".inputrc", ".envrc",
   // Tool settings that can run something or redirect where it fetches from.
@@ -333,6 +233,31 @@ export function sensitive(relative: string) {
     SENSITIVE_FILES.has(name) ||
     SENSITIVE_NAME.test(name)
   )
+}
+
+// What an edit may touch with nobody asked. This is a list of what is ordinary, because the list above can only name what
+// someone thought of, and each gate found another: `tui.json`, `composer.json`, `Vagrantfile`, `.pnp.cjs`. A file not here
+// asks, once, and that is the whole cost of being wrong. It is written as what the code and docs of a project look like:
+const ORDINARY_SOURCE =
+  /\.(ts|tsx|mts|cts|js|jsx|mjs|cjs|vue|svelte|astro|py|pyi|rb|go|rs|java|kt|scala|swift|c|h|cc|cpp|cxx|hpp|hh|m|mm|cs|fs|php|lua|ex|exs|erl|hs|ml|clj|cljs|dart|zig|r|jl|sql|graphql|gql|proto|css|scss|sass|less|html|htm|md|mdx|txt|rst|adoc)$/
+// Data formats double as configuration, so they are ordinary only inside what is plainly a project's own content.
+const ORDINARY_DATA = /\.(json|jsonc|yaml|yml|toml|csv|tsv|xml|svg)$/
+const CONTENT_DIRECTORIES = new Set(["src", "lib", "app", "test", "tests", "spec", "specs", "__tests__", "fixtures", "testdata", "docs", "locales", "locale", "i18n", "public", "assets", "static", "data"])
+// Code other code loads by its path rather than by being called.
+const LOADED_BY_PATH = new Set(["node_modules", "bower_components", "vendor", "venv", "site-packages", "dist-packages"])
+// Source files whose name makes a tool run them: `vite.config.ts`, `conftest.py`, `Package.swift`, `mix.exs`, `build.rs`.
+const CODE_THAT_CONFIGURES =
+  /\.(config|conf|setup|rc|workspace)\.[^.]+$|^(conftest|noxfile|fabfile|tasks|sitecustomize|manage|setup|build|gulpfile|gruntfile|dangerfile|webpack|rollup|metro|karma|protractor|package|mix|podfile|appfile|fastfile|gems|gemfile|tsconfig|jsconfig)\.|^(requirements|constraints)[.-]/
+
+/** Whether an edit here is the agent doing the job, as opposed to changing what later runs or what is allowed. */
+export function ordinaryEdit(relative: string) {
+  if (sensitive(relative)) return false
+  const parts = canonical(relative).split("/")
+  const name = parts.at(-1)!
+  const folders = parts.slice(0, -1)
+  if (parts.some((part) => part === ".." || (part.startsWith(".") && part !== "."))) return false
+  if (folders.some((part) => LOADED_BY_PATH.has(part)) || CODE_THAT_CONFIGURES.test(name)) return false
+  return ORDINARY_SOURCE.test(name) || (ORDINARY_DATA.test(name) && folders.some((part) => CONTENT_DIRECTORIES.has(part)))
 }
 
 // Rebuilt by a command, so losing them costs a rebuild. Ignored files with any other name may be the only copy.

@@ -691,6 +691,7 @@ export const dict: Record<string, string> = {
   "error.chain.configInvalid": "{{path}} मा कन्फिग फाइल अमान्य छ",
   "error.chain.configInvalidWithMessage": "{{path}} मा कन्फिग फाइल अमान्य छ: {{message}}",
   "notification.permission.title": "अनुमति आवश्यक छ",
+  "session.permission.alwaysNamed": "सधैं अनुमति दिनुहोस्: {{scope}}",
   "notification.permission.description": "{{sessionTitle}} मा {{projectName}} लाई अनुमति चाहिन्छ",
   "notification.question.title": "प्रश्न",
   "notification.question.description": "{{sessionTitle}} {{projectName}} मा एउटा प्रश्न छ",
