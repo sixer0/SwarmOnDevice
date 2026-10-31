@@ -59,7 +59,7 @@ export function createEventSource() {
   }
 }
 
-export type FetchHandler = (url: URL) => Response | Promise<Response> | undefined
+export type FetchHandler = (url: URL) => Response | Promise<Response | undefined> | undefined
 
 export function createFetch(override?: FetchHandler, events?: ReturnType<typeof createEventSource>) {
   const session = [] as URL[]
@@ -78,6 +78,8 @@ export function createFetch(override?: FetchHandler, events?: ReturnType<typeof 
         "/experimental/workspace/status",
         "/formatter",
         "/lsp",
+        "/permission",
+        "/question",
       ].includes(url.pathname)
     )
       return json([])

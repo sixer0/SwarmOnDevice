@@ -7,6 +7,15 @@ import { describe, expect } from "bun:test"
 import { Effect } from "effect"
 import { reply } from "../../lib/llm-server"
 import { cliIt } from "../../lib/cli-process"
+import { testProviderConfig } from "../../lib/test-provider"
+
+// One step of this reports enough usage to cost $1 at $5 per million tokens, or nothing on an unpriced model.
+const expensive = { input: 200_000, output: 10 }
+const spendConfig = (url: string, cost: { input: number; output: number }) => {
+  const config = testProviderConfig(url)
+  config.provider.test.models["test-model"].cost = cost
+  return JSON.stringify({ ...config, spend_limit: 0.5 })
+}
 
 describe("opencode run (non-interactive subprocess)", () => {
   // Happy path: prompt completes, output reaches stdout, process exits 0.
@@ -58,6 +67,47 @@ describe("opencode run (non-interactive subprocess)", () => {
         const plain = yield* opencode.run("think again")
         opencode.expectExit(plain, 0)
         expect(plain.stdout).toBe("visible\n")
+      }),
+    60_000,
+  )
+
+  cliIt.concurrent(
+    "--auto holds a paid model's spend limit: one clear stop, nonzero exit, nothing further sent",
+    ({ llm, opencode }) =>
+      Effect.gen(function* () {
+        yield* llm.push(reply().tool("bash", { command: "printf one", description: "first step" }).usage(expensive))
+        yield* llm.text("this request must never be sent")
+
+        const result = yield* opencode.run("work", {
+          extraArgs: ["--auto"],
+          env: { OPENCODE_CONFIG_CONTENT: spendConfig(llm.url, { input: 5, output: 25 }) },
+        })
+
+        expect(result.exitCode).toBe(1)
+        expect(`${result.stdout}${result.stderr}`).toContain("spend_limit")
+        expect(`${result.stdout}${result.stderr}`).toContain("Stopped here")
+        expect(yield* llm.pending).toBe(1)
+      }),
+    60_000,
+  )
+
+  cliIt.concurrent(
+    "--auto on an unpriced model never sees the limit, however much it uses",
+    ({ llm, opencode }) =>
+      Effect.gen(function* () {
+        yield* llm.push(reply().tool("bash", { command: "printf one", description: "first step" }).usage(expensive))
+        yield* llm.push(reply().tool("bash", { command: "printf two", description: "second step" }).usage(expensive))
+        yield* llm.text("finished", { usage: expensive })
+
+        const result = yield* opencode.run("work", {
+          extraArgs: ["--auto"],
+          env: { OPENCODE_CONFIG_CONTENT: spendConfig(llm.url, { input: 0, output: 0 }) },
+        })
+
+        opencode.expectExit(result, 0)
+        expect(result.stdout).toContain("finished")
+        expect(`${result.stdout}${result.stderr}`).not.toContain("spend_limit")
+        expect(yield* llm.pending).toBe(0)
       }),
     60_000,
   )

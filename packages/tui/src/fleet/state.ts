@@ -63,6 +63,7 @@ export function createFleetState(input: FleetStateInput) {
   let lastPublished = ""
   let lastPublishedAt = 0
   let loaded = false
+  let open = false
 
   function schedule(delay: number) {
     if (timer || disposed) return
@@ -93,7 +94,22 @@ export function createFleetState(input: FleetStateInput) {
       const now = Date.now()
       const agents = await input.client.global.agents({ throwOnError: true })
       const instances = agents.data.instances
-      const directories = [...new Set([...instances.map((item) => item.directory), input.state.path.directory])].filter(Boolean)
+      const waiting = instances.flatMap((instance) => [
+        ...instance.permission.map((item) => ({ id: item.sessionID, directory: instance.directory })),
+        ...instance.question.map((item) => ({ id: item.sessionID, directory: instance.directory })),
+      ])
+      // Running or blocked sessions the list did not return: subagents, and anything older than the window.
+      const active = [
+        ...instances.flatMap((instance) =>
+          Object.keys(instance.status).map((id) => ({ id, directory: instance.directory })),
+        ),
+        ...waiting,
+      ]
+      // With the board closed all that shows is who is waiting. One request says that, however many agents are working.
+      const showing = open
+      const directories = showing
+        ? [...new Set([...instances.map((item) => item.directory), input.state.path.directory])].filter(Boolean)
+        : []
       const listed = await Promise.all(
         directories.map((directory) =>
           input.client.session
@@ -102,15 +118,9 @@ export function createFleetState(input: FleetStateInput) {
             .catch(() => [] as Session[]),
         ),
       )
-      const current = new Map(listed.flat().map((session) => [session.id, session]))
-      // Running or blocked sessions the list did not return: subagents, and anything older than the window.
-      const active = instances.flatMap((instance) => [
-        ...Object.keys(instance.status).map((id) => ({ id, directory: instance.directory })),
-        ...instance.permission.map((item) => ({ id: item.sessionID, directory: instance.directory })),
-        ...instance.question.map((item) => ({ id: item.sessionID, directory: instance.directory })),
-      ])
+      const current = showing ? new Map(listed.flat().map((session) => [session.id, session])) : new Map(sessions)
       await Promise.all(
-        active.map(async (item) => {
+        (showing ? active : waiting).map(async (item) => {
           if (current.has(item.id)) return
           const known = sessions.get(item.id)
           if (known) {
@@ -126,12 +136,14 @@ export function createFleetState(input: FleetStateInput) {
       sessions.clear()
       current.forEach((session, id) => sessions.set(id, session))
 
-      await Promise.all(
-        [...current.values()]
-          .filter((session) => !session.parentID || active.some((item) => item.id === session.id))
-          .map((session) => loadHistory(session)),
-      )
-      ;[...history.keys()].filter((id) => !current.has(id)).forEach((id) => history.delete(id))
+      if (showing) {
+        await Promise.all(
+          [...current.values()]
+            .filter((session) => !session.parentID || active.some((item) => item.id === session.id))
+            .map((session) => loadHistory(session)),
+        )
+        ;[...history.keys()].filter((id) => !current.has(id)).forEach((id) => history.delete(id))
+      }
 
       active.forEach((item) => ran.add(item.id))
       const next = collectAgents({ instances, sessions, history, errors, firstSeen, now: Date.now() })
@@ -190,17 +202,22 @@ export function createFleetState(input: FleetStateInput) {
     if (goto) input.onGoto(goto)
   }
 
+  // What a session is doing only matters on the board. While it is closed, note what went stale for when it opens.
   const markSession = (sessionID: string | undefined, delay: number) => {
     if (sessionID) staleHistory.add(sessionID)
+    if (open) schedule(delay)
+  }
+  const markRequest = (sessionID: string, delay: number) => {
+    staleHistory.add(sessionID)
     schedule(delay)
   }
 
   unsubscribe.push(
-    input.event.on("permission.asked", (event) => markSession(event.properties.sessionID, 50)),
-    input.event.on("question.asked", (event) => markSession(event.properties.sessionID, 50)),
-    input.event.on("permission.replied", (event) => markSession(event.properties.sessionID, 100)),
-    input.event.on("question.replied", (event) => markSession(event.properties.sessionID, 100)),
-    input.event.on("question.rejected", (event) => markSession(event.properties.sessionID, 100)),
+    input.event.on("permission.asked", (event) => markRequest(event.properties.sessionID, 50)),
+    input.event.on("question.asked", (event) => markRequest(event.properties.sessionID, 50)),
+    input.event.on("permission.replied", (event) => markRequest(event.properties.sessionID, 100)),
+    input.event.on("question.replied", (event) => markRequest(event.properties.sessionID, 100)),
+    input.event.on("question.rejected", (event) => markRequest(event.properties.sessionID, 100)),
     input.event.on("session.status", (event) => {
       if (event.properties.status.type === "busy") {
         ran.add(event.properties.sessionID)
@@ -217,8 +234,8 @@ export function createFleetState(input: FleetStateInput) {
       }
       markSession(sessionID, 150)
     }),
-    input.event.on("session.updated", () => schedule(500)),
-    input.event.on("session.deleted", () => schedule(100)),
+    input.event.on("session.updated", () => markSession(undefined, 500)),
+    input.event.on("session.deleted", () => markSession(undefined, 100)),
     // Tool calls move the "what is it doing" line. Text deltas arrive on another event, on purpose not watched here.
     input.event.on("message.part.updated", (event) => markSession(event.properties.part.sessionID, 800)),
   )
@@ -248,6 +265,11 @@ export function createFleetState(input: FleetStateInput) {
       schedule(0)
     },
     refresh: () => schedule(0),
+    /** The board on screen wants the full picture. Without it only who is waiting is kept up to date. */
+    setOpen(value: boolean) {
+      open = value
+      if (value) schedule(0)
+    },
     dispose() {
       disposed = true
       timers.forEach(clearInterval)

@@ -48,6 +48,8 @@ function FleetBoard(props: { api: TuiPluginApi; fleet: FleetStore }) {
 
   const clock = setInterval(() => setNow(Date.now()), 5000)
   onCleanup(() => clearInterval(clock))
+  props.fleet.setOpen(true)
+  onCleanup(() => props.fleet.setOpen(false))
 
   // Until the person picks a row, stay on the top one: whoever has waited longest, even if it just arrived.
   // After that, when the selected agent leaves (it was just answered), the same position is the next one.

@@ -796,12 +796,15 @@ export const RunCommand = effectCmd({
               const permission = event.properties
               if (!sessions.has(permission.sessionID)) continue
 
-              if (auto) {
+              // --auto approves what an agent wants to do. These two are not that: they stop a run nobody is watching.
+              if (auto && !["spend_limit", "doom_loop"].includes(permission.permission)) {
                 await client.permission.reply({
                   requestID: permission.id,
                   reply: "once",
                 })
               } else {
+                // A script has to be able to tell that the work stopped at the limit rather than finished.
+                if (permission.permission === "spend_limit") process.exitCode = 1
                 UI.println(
                   UI.Style.TEXT_WARNING_BOLD + "!",
                   UI.Style.TEXT_NORMAL +

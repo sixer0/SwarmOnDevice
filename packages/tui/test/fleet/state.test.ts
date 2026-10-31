@@ -24,7 +24,8 @@ const reply = {
 }
 
 /** A real client boundary: only what the server would answer, nothing about how the state uses it. */
-function harness(server: { instances: unknown[]; list: unknown[]; fail?: boolean }) {
+function harness(server: { instances: unknown[]; list: unknown[]; fail?: boolean }, options = { open: true }) {
+  const calls = { agents: 0, list: 0, get: 0, messages: 0 }
   const handlers = new Map<string, (event: unknown) => void>()
   let blocked = 0
   const gotos: string[] = []
@@ -40,22 +41,33 @@ function harness(server: { instances: unknown[]; list: unknown[]; fail?: boolean
     client: {
       global: {
         agents: async () => {
+          calls.agents++
           if (server.fail) throw new Error("connection refused")
           return { data: { instances: server.instances } }
         },
       },
       session: {
-        list: async () => ({ data: server.list }),
-        get: async (query: { sessionID: string }) => ({ data: session(query.sessionID) }),
-        messages: async () => ({ data: [reply] }),
+        list: async () => {
+          calls.list++
+          return { data: server.list }
+        },
+        get: async (query: { sessionID: string }) => {
+          calls.get++
+          return { data: session(query.sessionID) }
+        },
+        messages: async () => {
+          calls.messages++
+          return { data: [reply] }
+        },
       },
     } as unknown as TuiPluginApi["client"],
     onNewlyBlocked: () => (blocked += 1),
     onGoto: (id: string) => gotos.push(id),
   } satisfies FleetStateInput
   const fleet = createFleetState(input)
+  if (options.open) fleet.setOpen(true)
   stops.push(() => fleet.dispose())
-  return { fleet, blocked: () => blocked, gotos, emit: (type: string, event: unknown) => handlers.get(type)?.(event) }
+  return { calls, fleet, blocked: () => blocked, gotos, emit: (type: string, event: unknown) => handlers.get(type)?.(event) }
 }
 
 const settle = (check: () => boolean) =>
@@ -121,4 +133,43 @@ test("another Swarm can ask this one to show a session", async () => {
   const { gotos } = harness({ instances: [], list: [] })
   requestGoto(dir, process.pid, "ses_9")
   await settle(() => gotos.includes("ses_9"))
+})
+
+test("with the board closed, working agents cost no requests and a new question is still noticed", async () => {
+  const instance = {
+    directory: "/w",
+    status: { a: { type: "busy" }, b: { type: "busy" } },
+    permission: [] as unknown[],
+    question: [],
+  }
+  const { calls, emit, fleet, blocked } = harness({ instances: [instance], list: [session("a"), session("b")] }, { open: false })
+  await settle(() => calls.agents >= 1)
+  await Bun.sleep(5)
+  const part = (sessionID: string) => ({ properties: { part: { sessionID } } })
+  for (const id of ["a", "b", "a", "b"]) emit("message.part.updated", part(id))
+  emit("session.status", { properties: { sessionID: "a", status: { type: "busy" } } })
+  await Bun.sleep(900)
+  expect(calls).toEqual({ agents: 1, list: 0, get: 0, messages: 0 })
+
+  instance.permission.push(permission("p1", "a"))
+  emit("permission.asked", { properties: { sessionID: "a" } })
+  await settle(() => fleet.rows().some((row) => row.state === "waiting"))
+  expect(blocked()).toBe(1)
+  expect(calls).toEqual({ agents: 2, list: 0, get: 1, messages: 0 })
+})
+
+test("opening the board loads the full picture, and closing it stops the polling again", async () => {
+  const instance = { directory: "/w", status: { a: { type: "busy" } }, permission: [], question: [] }
+  const { calls, emit, fleet } = harness({ instances: [instance], list: [session("a")] }, { open: false })
+  await settle(() => calls.agents >= 1)
+  fleet.setOpen(true)
+  await settle(() => calls.messages >= 1 && calls.list >= 1)
+  await settle(() => fleet.rows().length === 1)
+
+  fleet.setOpen(false)
+  await Bun.sleep(20)
+  const before = { ...calls }
+  emit("message.part.updated", { properties: { part: { sessionID: "a" } } })
+  await Bun.sleep(900)
+  expect(calls).toEqual(before)
 })

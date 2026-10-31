@@ -173,12 +173,80 @@ export const {
         .then((x) => (x.data ?? []).toSorted((a, b) => a.id.localeCompare(b.id)))
     }
 
+    function holdPermission(request: PermissionRequest) {
+      const requests = store.permission[request.sessionID]
+      if (!requests) {
+        setStore("permission", request.sessionID, [request])
+        return
+      }
+      const match = search(requests, request.id, (r) => r.id)
+      if (match.found) {
+        setStore("permission", request.sessionID, match.index, reconcile(request))
+        return
+      }
+      setStore(
+        "permission",
+        request.sessionID,
+        produce((draft) => {
+          draft.splice(match.index, 0, request)
+        }),
+      )
+    }
+
+    function holdQuestion(request: QuestionRequest) {
+      const requests = store.question[request.sessionID]
+      if (!requests) {
+        setStore("question", request.sessionID, [request])
+        return
+      }
+      const match = search(requests, request.id, (r) => r.id)
+      if (match.found) {
+        setStore("question", request.sessionID, match.index, reconcile(request))
+        return
+      }
+      setStore(
+        "question",
+        request.sessionID,
+        produce((draft) => {
+          draft.splice(match.index, 0, request)
+        }),
+      )
+    }
+
+    let readingPending = 0
+    const settledWhileReading = new Set<string>()
+
+    // Events only say what happens from now on. Someone attaching to a run that already stopped at its spend limit
+    // would otherwise see a spinner forever: that question has no timeout, and nothing will ever announce it again.
+    // This only shows what is waiting. Auto mode does not answer it: that switch is about what the agent asks next.
+    async function loadPending(directory?: string) {
+      const workspace = project.workspace.current()
+      readingPending++
+      const [permissions, questions] = await Promise.all([
+        sdk.client.permission.list({ directory, workspace }).then((x) => x.data ?? []),
+        sdk.client.question.list({ directory, workspace }).then((x) => x.data ?? []),
+      ])
+        .catch((error) => {
+          console.error("tui could not read pending requests", { error: String(error) })
+          return [[], []] as [PermissionRequest[], QuestionRequest[]]
+        })
+        .finally(() => {
+          readingPending--
+        })
+      batch(() => {
+        permissions.filter((item) => !settledWhileReading.has(item.id)).forEach(holdPermission)
+        questions.filter((item) => !settledWhileReading.has(item.id)).forEach(holdQuestion)
+      })
+      if (readingPending === 0) settledWhileReading.clear()
+    }
+
     event.subscribe((event, { directory, workspace }) => {
       switch (event.type) {
         case "server.instance.disposed":
           void bootstrap()
           break
         case "permission.replied": {
+          if (readingPending > 0) settledWhileReading.add(event.properties.requestID)
           const requests = store.permission[event.properties.sessionID]
           if (!requests) break
           const match = search(requests, event.properties.requestID, (r) => r.id)
@@ -195,7 +263,8 @@ export const {
 
         case "permission.asked": {
           const request = event.properties
-          if (permission.mode === "auto") {
+          // Auto mode approves what an agent wants to do. A spend limit and a repeating call stop a run for a person.
+          if (permission.mode === "auto" && !["spend_limit", "doom_loop"].includes(request.permission)) {
             void sdk.client.permission.reply({
               requestID: request.id,
               reply: "once",
@@ -204,28 +273,13 @@ export const {
             })
             break
           }
-          const requests = store.permission[request.sessionID]
-          if (!requests) {
-            setStore("permission", request.sessionID, [request])
-            break
-          }
-          const match = search(requests, request.id, (r) => r.id)
-          if (match.found) {
-            setStore("permission", request.sessionID, match.index, reconcile(request))
-            break
-          }
-          setStore(
-            "permission",
-            request.sessionID,
-            produce((draft) => {
-              draft.splice(match.index, 0, request)
-            }),
-          )
+          holdPermission(request)
           break
         }
 
         case "question.replied":
         case "question.rejected": {
+          if (readingPending > 0) settledWhileReading.add(event.properties.requestID)
           const requests = store.question[event.properties.sessionID]
           if (!requests) break
           const match = search(requests, event.properties.requestID, (r) => r.id)
@@ -241,24 +295,7 @@ export const {
         }
 
         case "question.asked": {
-          const request = event.properties
-          const requests = store.question[request.sessionID]
-          if (!requests) {
-            setStore("question", request.sessionID, [request])
-            break
-          }
-          const match = search(requests, request.id, (r) => r.id)
-          if (match.found) {
-            setStore("question", request.sessionID, match.index, reconcile(request))
-            break
-          }
-          setStore(
-            "question",
-            request.sessionID,
-            produce((draft) => {
-              draft.splice(match.index, 0, request)
-            }),
-          )
+          holdQuestion(event.properties)
           break
         }
 
@@ -536,6 +573,7 @@ export const {
             sdk.client.session.status({ workspace }).then((x) => {
               setStore("session_status", reconcile(x.data ?? {}))
             }),
+            loadPending(),
             sdk.client.provider.auth({ workspace }).then((x) => setStore("provider_auth", reconcile(x.data ?? {}))),
             sdk.client.vcs.get({ workspace }).then((x) => setStore("vcs", reconcile(x.data))),
             project.workspace.sync(),
@@ -664,6 +702,8 @@ export const {
               }),
             )
             fullSyncedSessions.add(sessionID)
+            // A session opened from /fleet can belong to another project, whose requests the bootstrap read did not see.
+            await loadPending(session.data?.directory)
           })().finally(() => {
             syncingSessions.delete(sessionID)
             hydratingSessions.delete(sessionID)
