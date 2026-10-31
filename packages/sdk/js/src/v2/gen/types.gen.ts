@@ -68,6 +68,7 @@ export type Event =
   | EventQuestionV2Replied
   | EventQuestionV2Rejected
   | EventMemoryUpdated
+  | EventCommandUpdated
   | EventTodoUpdated
   | EventLspUpdated
   | EventPermissionAsked
@@ -1539,6 +1540,13 @@ export type GlobalEvent = {
       }
     | {
         id: string
+        type: "command.updated"
+        properties: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        id: string
         type: "todo.updated"
         properties: {
           sessionID: string
@@ -2636,6 +2644,44 @@ export type MemoryResult = {
   refused?: MemoryRefusal
 }
 
+export type SavedCommandItem = {
+  name: string
+  description?: string
+  template: string
+  /**
+   * project: lives in this project's .swarm folder. global: available in every project
+   */
+  scope: "project" | "global"
+}
+
+export type SavedCommandRefusal = "name" | "taken" | "empty" | "long" | "secret"
+
+export type SavedCommandResult = {
+  item?: SavedCommandItem
+  refused?: SavedCommandRefusal
+}
+
+export type SavedCommandDraft = {
+  name: string
+  description: string
+  template: string
+  /**
+   * model: written by the session's model. prompts: put together from the run without a model
+   */
+  source: "model" | "prompts"
+}
+
+export type NotFoundError = {
+  name: "NotFoundError"
+  data: {
+    message: string
+  }
+}
+
+export type SavedCommandRepeat = {
+  times: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+}
+
 export type Project = {
   id: string
   worktree: string
@@ -2727,13 +2773,6 @@ export type ProviderAuthError1 = {
     field?: string
     message?: string
     kind?: string
-  }
-}
-
-export type NotFoundError = {
-  name: "NotFoundError"
-  data: {
-    message: string
   }
 }
 
@@ -3120,6 +3159,7 @@ export type V2Event =
   | QuestionV2Replied
   | QuestionV2Rejected
   | MemoryUpdated
+  | CommandUpdated
   | TodoUpdated
   | LspUpdated
   | PermissionAsked
@@ -5880,6 +5920,23 @@ export type MemoryUpdated = {
   }
 }
 
+export type CommandUpdated = {
+  id: string
+  metadata?: {
+    [key: string]: unknown
+  }
+  type: "command.updated"
+  durable?: {
+    aggregateID: string
+    seq: number
+    version: number
+  }
+  location?: LocationRef
+  data: {
+    [key: string]: unknown
+  }
+}
+
 export type TodoUpdated = {
   id: string
   metadata?: {
@@ -7070,6 +7127,14 @@ export type EventMemoryUpdated = {
   type: "memory.updated"
   properties: {
     added?: MemoryItem1
+  }
+}
+
+export type EventCommandUpdated = {
+  id: string
+  type: "command.updated"
+  properties: {
+    [key: string]: unknown
   }
 }
 
@@ -9190,6 +9255,192 @@ export type MemoryUpdateResponses = {
 }
 
 export type MemoryUpdateResponse = MemoryUpdateResponses[keyof MemoryUpdateResponses]
+
+export type SavedCommandListData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/saved-command"
+}
+
+export type SavedCommandListErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type SavedCommandListError = SavedCommandListErrors[keyof SavedCommandListErrors]
+
+export type SavedCommandListResponses = {
+  /**
+   * Commands saved as files, for this project and all
+   */
+  200: Array<SavedCommandItem>
+}
+
+export type SavedCommandListResponse = SavedCommandListResponses[keyof SavedCommandListResponses]
+
+export type SavedCommandSaveData = {
+  body?: {
+    name: string
+    description?: string
+    template: string
+    global?: boolean
+    replaces?: string
+    sessionID?: string
+  }
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/saved-command"
+}
+
+export type SavedCommandSaveErrors = {
+  /**
+   * BadRequest | InvalidRequestError
+   */
+  400: EffectHttpApiErrorBadRequest | InvalidRequestError
+}
+
+export type SavedCommandSaveError = SavedCommandSaveErrors[keyof SavedCommandSaveErrors]
+
+export type SavedCommandSaveResponses = {
+  /**
+   * The saved command, or why it was refused
+   */
+  200: SavedCommandResult
+}
+
+export type SavedCommandSaveResponse = SavedCommandSaveResponses[keyof SavedCommandSaveResponses]
+
+export type SavedCommandDraftData = {
+  body?: {
+    sessionID: string
+  }
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/saved-command/draft"
+}
+
+export type SavedCommandDraftErrors = {
+  /**
+   * BadRequest | InvalidRequestError
+   */
+  400: EffectHttpApiErrorBadRequest | InvalidRequestError
+  /**
+   * NotFoundError
+   */
+  404: NotFoundError
+}
+
+export type SavedCommandDraftError = SavedCommandDraftErrors[keyof SavedCommandDraftErrors]
+
+export type SavedCommandDraftResponses = {
+  /**
+   * A command worked out from the run, for the user to review
+   */
+  200: SavedCommandDraft
+}
+
+export type SavedCommandDraftResponse = SavedCommandDraftResponses[keyof SavedCommandDraftResponses]
+
+export type SavedCommandRepeatData = {
+  body?: never
+  path?: never
+  query: {
+    directory?: string
+    workspace?: string
+    sessionID: string
+  }
+  url: "/saved-command/repeat"
+}
+
+export type SavedCommandRepeatErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type SavedCommandRepeatError = SavedCommandRepeatErrors[keyof SavedCommandRepeatErrors]
+
+export type SavedCommandRepeatResponses = {
+  /**
+   * How often this session's job has been asked for here
+   */
+  200: SavedCommandRepeat
+}
+
+export type SavedCommandRepeatResponse = SavedCommandRepeatResponses[keyof SavedCommandRepeatResponses]
+
+export type SavedCommandDeclineData = {
+  body?: {
+    sessionID: string
+  }
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/saved-command/decline"
+}
+
+export type SavedCommandDeclineErrors = {
+  /**
+   * BadRequest | InvalidRequestError
+   */
+  400: EffectHttpApiErrorBadRequest | InvalidRequestError
+}
+
+export type SavedCommandDeclineError = SavedCommandDeclineErrors[keyof SavedCommandDeclineErrors]
+
+export type SavedCommandDeclineResponses = {
+  /**
+   * Recorded
+   */
+  200: boolean
+}
+
+export type SavedCommandDeclineResponse = SavedCommandDeclineResponses[keyof SavedCommandDeclineResponses]
+
+export type SavedCommandRemoveData = {
+  body?: never
+  path: {
+    name: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/saved-command/{name}"
+}
+
+export type SavedCommandRemoveErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type SavedCommandRemoveError = SavedCommandRemoveErrors[keyof SavedCommandRemoveErrors]
+
+export type SavedCommandRemoveResponses = {
+  /**
+   * Whether a command was removed
+   */
+  200: boolean
+}
+
+export type SavedCommandRemoveResponse = SavedCommandRemoveResponses[keyof SavedCommandRemoveResponses]
 
 export type ProjectListData = {
   body?: never

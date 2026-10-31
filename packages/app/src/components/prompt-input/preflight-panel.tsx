@@ -233,6 +233,15 @@ function RowText(props: { item: PreflightItem }) {
           <Warn>{language.t("prompt.preflight.dirty.overlap", { file: item().overlap[0]! })}</Warn>
         )}
       </Match>
+      <Match when={props.item.kind === "saved" && props.item}>
+        {(item) => (
+          <span class="flex flex-wrap items-baseline gap-x-2">
+            <span>{language.t("prompt.preflight.saved")}</span>
+            <Code>/{item().name}</Code>
+            <Show when={item().description}>{(about) => reason(about())}</Show>
+          </span>
+        )}
+      </Match>
       <Match when={props.item.kind === "similar" && props.item}>
         {(item) => (
           <span>
@@ -296,6 +305,9 @@ function RowActions(props: {
         <Show when={props.preflight.worktreeAvailable()}>
           {action(language.t("prompt.preflight.isolate"), props.preflight.isolate, "isolate")}
         </Show>
+      </Match>
+      <Match when={props.item.kind === "saved" && props.item}>
+        {(item) => action(language.t("prompt.preflight.saved.use"), () => props.preflight.useCommand(item().name), "use")}
       </Match>
       <Match when={props.item.kind === "similar" && props.item}>
         {(item) =>

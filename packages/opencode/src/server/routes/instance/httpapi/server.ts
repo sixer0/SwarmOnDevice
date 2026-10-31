@@ -29,6 +29,7 @@ import { ProviderAuth } from "@/provider/auth"
 import { Provider } from "@/provider/provider"
 import { Question } from "@/question"
 import { Memory } from "@/memory/memory"
+import { SavedCommands } from "@/command/saved"
 import { SessionCompaction } from "@/session/compaction"
 import { Instruction } from "@/session/instruction"
 import { LLM } from "@/session/llm"
@@ -98,6 +99,7 @@ import { providerHandlers } from "./handlers/provider"
 import { ptyConnectHandlers, ptyHandlers } from "./handlers/pty"
 import { questionHandlers } from "./handlers/question"
 import { memoryHandlers } from "./handlers/memory"
+import { savedCommandHandlers } from "./handlers/saved-command"
 import { sessionHandlers } from "./handlers/session"
 import { syncHandlers } from "./handlers/sync"
 import { tuiHandlers } from "./handlers/tui"
@@ -161,6 +163,7 @@ const instanceApiRoutes = HttpApiBuilder.layer(InstanceHttpApi).pipe(
     instanceHandlers,
     mcpHandlers,
     memoryHandlers,
+    savedCommandHandlers,
     projectHandlers,
     projectCopyHandlers,
     ptyHandlers,
@@ -233,6 +236,7 @@ const app = LayerNode.group([
   Discovery.node,
   Question.node,
   Memory.node,
+  SavedCommands.node,
   Permission.node,
   PermissionSaved.node,
   Todo.node,

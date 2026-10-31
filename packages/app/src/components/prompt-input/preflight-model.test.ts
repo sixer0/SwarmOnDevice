@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import type { Prompt } from "@/context/prompt"
 import {
+  asCommand,
   buildItems,
   definitionPattern,
   editDistance,
@@ -9,7 +10,9 @@ import {
   lineWindow,
   pickIdentifier,
   replaceInPrompt,
+  promptText,
   resolveRef,
+  savedCommandFor,
   similarSessions,
   type PreflightFacts,
 } from "./preflight-model"
@@ -252,5 +255,37 @@ describe("buildItems", () => {
       }),
     })
     expect(items.map((item) => item.kind)).toEqual(["typo", "busy", "mention"])
+  })
+})
+
+describe("saved commands", () => {
+  const commands = [
+    { name: "triage", description: "Triage the failing login tests" },
+    { name: "bump-deps", description: "Bump the dependencies, run the tests and fix what breaks" },
+  ]
+
+  test("finds the command a draft is asking for, and nothing for other drafts", () => {
+    expect(savedCommandFor("bump the dependencies and fix what breaks in packages/web", commands)?.name).toBe("bump-deps")
+    expect(savedCommandFor("add dark mode to settings", commands)).toBeUndefined()
+  })
+
+  test("falls back to the name when a hand-written command has no description", () => {
+    expect(savedCommandFor("bump deps for the web package", [{ name: "bump-deps" }])?.name).toBe("bump-deps")
+  })
+
+  test("the draft becomes the command's details and attachments stay", () => {
+    const file = { type: "file", path: "a.ts", content: "@a.ts", start: 5, end: 10 } as const
+    const result = asCommand([{ type: "text", content: "  bump it ", start: 0, end: 5 }, file], "bump-deps")
+    expect(promptText(result)).toBe("/bump-deps bump it ")
+    expect(result[1]).toMatchObject({ type: "file", start: 19 })
+  })
+
+  test("the saved row leads, unless something is actually wrong", () => {
+    const facts = { refs: [], identifiers: [], dirty: [], busy: [], similar: [], saved: commands[1] }
+    const base = { attached: [], dismissed: {}, isolated: false }
+    expect(buildItems({ ...base, facts })[0]?.kind).toBe("saved")
+    expect(buildItems({ ...base, dismissed: { "saved:bump-deps": true }, facts })).toHaveLength(0)
+    const wrong = buildItems({ ...base, facts: { ...facts, identifiers: [{ kind: "missing", identifier: "fooBar" }] } })
+    expect(wrong.map((item) => item.kind)).toEqual(["missing-identifier", "saved"])
   })
 })

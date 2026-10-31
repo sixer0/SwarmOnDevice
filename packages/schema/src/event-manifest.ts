@@ -16,6 +16,7 @@ import { PermissionV1 } from "./permission-v1"
 import { Plugin } from "./plugin"
 import { Project } from "./project"
 import { ProjectMemory } from "./project-memory"
+import { SavedCommand } from "./saved-command"
 import { ProjectDirectories } from "./project-directories"
 import { Pty } from "./pty"
 import { Question } from "./question"
@@ -54,6 +55,7 @@ const featureDefinitions = Event.inventory(
   ...Pty.Event.Definitions,
   ...Question.Event.Definitions,
   ...ProjectMemory.Event.Definitions,
+  ...SavedCommand.Event.Definitions,
 )
 
 export const ServerDefinitions = Event.inventory(

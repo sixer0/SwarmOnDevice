@@ -435,6 +435,35 @@ const scenarios: Scenario[] = [
     .delete("/memory/{id}", "memory.remove")
     .at((ctx) => ({ path: route("/memory/{id}", { id: "missing" }), headers: ctx.headers() }))
     .json(200, boolean),
+  http.protected.get("/saved-command", "savedCommand.list").json(200, array),
+  http.protected
+    .post("/saved-command", "savedCommand.save")
+    .at((ctx) => ({ path: "/saved-command", headers: ctx.headers(), body: { name: "../evil", template: "x" } }))
+    .json(200, object),
+  http.protected
+    .post("/saved-command/draft", "savedCommand.draft")
+    .at((ctx) => ({
+      path: "/saved-command/draft",
+      headers: ctx.headers(),
+      body: { sessionID: "ses_httpapi_missing" },
+    }))
+    .json(404, object, "status"),
+  http.protected
+    .get("/saved-command/repeat", "savedCommand.repeat")
+    .at((ctx) => ({ path: "/saved-command/repeat?sessionID=ses_httpapi_missing", headers: ctx.headers() }))
+    .json(200, object),
+  http.protected
+    .post("/saved-command/decline", "savedCommand.decline")
+    .at((ctx) => ({
+      path: "/saved-command/decline",
+      headers: ctx.headers(),
+      body: { sessionID: "ses_httpapi_missing" },
+    }))
+    .json(200, boolean),
+  http.protected
+    .delete("/saved-command/{name}", "savedCommand.remove")
+    .at((ctx) => ({ path: route("/saved-command/{name}", { name: "missing" }), headers: ctx.headers() }))
+    .json(200, boolean),
   http.protected.get("/question", "question.list").json(200, array),
   http.protected
     .post("/question/{requestID}/reply", "question.reply.invalid")

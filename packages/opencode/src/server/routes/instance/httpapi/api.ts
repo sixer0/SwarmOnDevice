@@ -22,6 +22,7 @@ import { ProviderApi } from "./groups/provider"
 import { PtyApi, PtyConnectApi } from "./groups/pty"
 import { QuestionApi } from "./groups/question"
 import { MemoryApi } from "./groups/memory"
+import { SavedCommandApi } from "./groups/saved-command"
 import { SessionApi } from "./groups/session"
 import { SyncApi } from "./groups/sync"
 import { TuiApi } from "./groups/tui"
@@ -66,6 +67,7 @@ export const InstanceHttpApi = HttpApi.make("opencode-instance")
   .addHttpApi(InstanceApi)
   .addHttpApi(McpApi)
   .addHttpApi(MemoryApi)
+  .addHttpApi(SavedCommandApi)
   .addHttpApi(ProjectApi)
   .addHttpApi(ProjectCopyApi)
   .addHttpApi(PtyApi)

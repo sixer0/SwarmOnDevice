@@ -1687,6 +1687,15 @@ export function MessageTimeline(props: {
                                   {language.t("session.share.action.share")}...
                                 </MenuV2.Item>
                               </Show>
+                              <MenuV2.Item
+                                onSelect={() =>
+                                  void import("@/components/saved-command").then((module) =>
+                                    dialog.show(() => <module.DialogSavedCommands sessionID={id} />),
+                                  )
+                                }
+                              >
+                                {language.t("savedCommand.title")}
+                              </MenuV2.Item>
                               <MenuV2.Item onSelect={() => exportSession(id)}>
                                 {language.t("common.export")}...
                               </MenuV2.Item>

@@ -1,5 +1,5 @@
 import { base64Encode } from "@opencode-ai/core/util/encode"
-import { batch, createEffect, createMemo, on, onCleanup, untrack, type Accessor } from "solid-js"
+import { batch, createEffect, createMemo, createResource, on, onCleanup, untrack, type Accessor } from "solid-js"
 import { createStore, reconcile } from "solid-js/store"
 import { selectionFromLines } from "@/context/file"
 import { usePrompt, type Prompt } from "@/context/prompt"
@@ -8,6 +8,7 @@ import { useServerSDK } from "@/context/server-sdk"
 import { useSync } from "@/context/sync"
 import { promptLength } from "./history"
 import {
+  asCommand,
   buildItems,
   definitionPattern,
   escapeRegex,
@@ -20,6 +21,7 @@ import {
   promptText,
   replaceInPrompt,
   resolveRef,
+  savedCommandFor,
   similarSessions,
   type IdentifierMatch,
   type PreflightFacts,
@@ -96,6 +98,18 @@ export function createPreflight(input: {
       input.sessionID(),
     )
   })
+  // Best effort like the other project facts: without the list there is simply no row.
+  const [savedCommands, savedControl] = createResource(
+    () => (input.active() && input.fresh() ? sdk() : undefined),
+    (current) =>
+      current.client.savedCommand.list().then(
+        (response) => response.data ?? [],
+        () => [],
+      ),
+  )
+  createEffect(() => onCleanup(sdk().event.on("command.updated", () => void savedControl.refetch())))
+  // Costs nothing to compare, so it follows the draft as typed rather than the last search.
+  const saved = createMemo(() => (input.fresh() ? savedCommandFor(text(), savedCommands.latest ?? []) : undefined))
   const isolated = () => {
     const selected = input.worktree?.selected()
     return !!selected && selected !== "main" && selected !== directory()
@@ -112,6 +126,7 @@ export function createPreflight(input: {
             dirty: input.fresh() ? store.dirty : [],
             busy: input.fresh() ? store.busy : [],
             similar: similar(),
+            saved: saved(),
           },
         })
       : []
@@ -294,6 +309,7 @@ export function createPreflight(input: {
     attach,
     dismiss: (key: string) => setStore("dismissed", key, true),
     isolate: () => input.worktree?.isolate(),
+    useCommand: (name: string) => setPrompt(asCommand(prompt.current(), name)),
     fixTypo: (item: Extract<PreflightItem, { kind: "typo" }>) => {
       // The next search would clear this row, but not before focus has moved on from a button about to vanish.
       setStore("dismissed", item.key, true)

@@ -1,3 +1,4 @@
+import { useParams } from "@solidjs/router"
 import { Show, type JSX } from "solid-js"
 import { useLanguage } from "@/context/language"
 import { useSettings } from "@/context/settings"
@@ -5,6 +6,7 @@ import { SessionPermissionDock } from "@/pages/session/composer/session-permissi
 import { SessionQuestionDock } from "@/pages/session/composer/session-question-dock"
 import { SessionFollowupDock } from "@/pages/session/composer/session-followup-dock"
 import { SessionMovedOnDock } from "@/pages/session/composer/session-moved-on-dock"
+import { SessionRepeatDock } from "@/pages/session/composer/session-repeat-dock"
 import { SessionRevertDock } from "@/pages/session/composer/session-revert-dock"
 import { SessionTodoDock } from "@/pages/session/composer/session-todo-dock"
 import type { SessionComposerRegionController } from "./session-composer-region-controller"
@@ -13,6 +15,7 @@ export function SessionComposerRegion(props: {
   controller: SessionComposerRegionController
   promptInput: JSX.Element
 }) {
+  const params = useParams()
   const language = useLanguage()
   const controller = props.controller
   const settings = useSettings()
@@ -140,6 +143,9 @@ export function SessionComposerRegion(props: {
                   onAnswer={controller.state.answerMovedOn}
                   onLeave={controller.state.leaveMovedOn}
                 />
+              </Show>
+              <Show when={!controller.child() && !controller.state.blocked() && !controller.followup()?.items.length && params.id}>
+                {(sessionID) => <SessionRepeatDock sessionID={sessionID()} />}
               </Show>
               <Show when={controller.followup()?.items.length}>
                 <SessionFollowupDock

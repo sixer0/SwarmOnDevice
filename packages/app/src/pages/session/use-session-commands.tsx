@@ -331,6 +331,12 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
     })
   }
 
+  const saveCommand = () => {
+    void import("@/components/saved-command").then((module) =>
+      dialog.show(() => <module.DialogSavedCommands sessionID={visibleUserMessages().length > 0 ? params.id : undefined} />),
+    )
+  }
+
   const fork = () => {
     void openDialog(
       () => import("@/components/dialog-fork"),
@@ -374,6 +380,13 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
       description: language.t("command.memory.description"),
       slash: "memory",
       onSelect: () => dialog.show(() => <DialogProjectMemory />),
+    }),
+    sessionCommand({
+      id: "command.save",
+      title: language.t("savedCommand.title"),
+      description: language.t("command.savedCommand.description"),
+      slash: "save",
+      onSelect: saveCommand,
     }),
     sessionCommand({
       id: "session.compact",

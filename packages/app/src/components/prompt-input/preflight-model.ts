@@ -1,3 +1,4 @@
+import { jobMatchesLabel } from "@opencode-ai/core/util/same-job"
 import type { Prompt } from "@/context/prompt"
 
 // Pure half of the composer preflight: what a draft refers to, what that resolves to in the real project, and which
@@ -236,12 +237,28 @@ export function lineWindow(line: number) {
   return { start: Math.max(1, line - 15), end: line + 15 }
 }
 
+/** The first saved command whose description the draft mostly repeats. */
+export function savedCommandFor(text: string, commands: { name: string; description?: string }[]) {
+  return commands.find((command) => jobMatchesLabel(text, command.description || command.name.replaceAll("-", " ")))
+}
+
+/** Makes the draft the command's details: the command says how, and what was typed says what this time. */
+export function asCommand(parts: Prompt, name: string): Prompt {
+  const prefix = `/${name} `
+  const first = parts.findIndex((part) => part.type === "text")
+  if (first === -1) return reindex([{ type: "text", content: prefix, start: 0, end: 0 }, ...parts])
+  return reindex(
+    parts.map((part, index) => (index === first && part.type === "text" ? { ...part, content: prefix + part.content.trimStart() } : part)),
+  )
+}
+
 export type PreflightFacts = {
   refs: ResolvedRef[]
   identifiers: IdentifierMatch[]
   dirty: string[]
   busy: { id: string; title: string; files: string[] }[]
   similar: PreflightSessionInfo[]
+  saved?: { name: string; description?: string }
 }
 
 export type PreflightItem =
@@ -254,6 +271,7 @@ export type PreflightItem =
   | { key: string; kind: "busy"; id: string; title: string; overlap: string[] }
   | { key: string; kind: "dirty"; overlap: string[] }
   | { key: string; kind: "similar"; id: string; title: string; updated: number }
+  | { key: string; kind: "saved"; name: string; description?: string }
 
 export const isAttachItem = (
   item: PreflightItem,
@@ -351,5 +369,9 @@ export function buildItems(input: {
     ([bad, good], item) => (isAttachItem(item) ? [bad, [...good, item]] : [[...bad, item], good]),
     [[], []],
   )
-  return [...wrong, ...busy, ...dirty, ...helpful, ...similar].filter((item) => !input.dismissed[item.key])
+  const saved: PreflightItem[] = input.facts.saved
+    ? [{ key: `saved:${input.facts.saved.name}`, kind: "saved", ...input.facts.saved }]
+    : []
+  // A command that already does the whole job makes the other hints beside the point, so it leads unless something is wrong.
+  return [...wrong, ...busy, ...dirty, ...saved, ...helpful, ...similar].filter((item) => !input.dismissed[item.key])
 }

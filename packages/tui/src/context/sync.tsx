@@ -430,6 +430,12 @@ export const {
           break
         }
 
+        case "command.updated": {
+          const workspace = project.workspace.current()
+          void sdk.client.command.list({ workspace }).then((x) => setStore("command", reconcile(x.data ?? [])))
+          break
+        }
+
         case "lsp.updated": {
           const workspace = project.workspace.current()
           void sdk.client.lsp.status({ workspace }).then((x) => setStore("lsp", x.data ?? []))

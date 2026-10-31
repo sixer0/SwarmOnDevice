@@ -58,6 +58,7 @@ import { filetype } from "../../util/filetype"
 import parsers from "../../parsers-config"
 import { errorMessage } from "../../util/error"
 import { Toast, useToast } from "../../ui/toast"
+import { useSaveCommand } from "../../component/dialog-save-command"
 import { useKV } from "../../context/kv.tsx"
 import stripAnsi from "strip-ansi"
 import { usePromptRef } from "../../context/prompt"
@@ -278,6 +279,7 @@ export function Session() {
 
   const scrollAcceleration = createMemo(() => getScrollAcceleration(tuiConfig))
   const toast = useToast()
+  const saveCommand = useSaveCommand()
   const sdk = useSDK()
   const editor = useEditorContext()
 
@@ -514,6 +516,17 @@ export function Session() {
             sessionID={route.sessionID}
           />
         ))
+      },
+    },
+    {
+      title: "Save as command",
+      value: "session.save",
+      category: "Session",
+      slash: {
+        name: "save",
+      },
+      run: () => {
+        saveCommand(route.sessionID)
       },
     },
     {

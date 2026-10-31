@@ -194,6 +194,18 @@ import type {
   QuestionReplyErrors,
   QuestionReplyResponses,
   QuestionV2Reply,
+  SavedCommandDeclineErrors,
+  SavedCommandDeclineResponses,
+  SavedCommandDraftErrors,
+  SavedCommandDraftResponses,
+  SavedCommandListErrors,
+  SavedCommandListResponses,
+  SavedCommandRemoveErrors,
+  SavedCommandRemoveResponses,
+  SavedCommandRepeatErrors,
+  SavedCommandRepeatResponses,
+  SavedCommandSaveErrors,
+  SavedCommandSaveResponses,
   SessionAbortErrors,
   SessionAbortResponses,
   SessionChildrenErrors,
@@ -2789,6 +2801,227 @@ export class Memory extends HeyApiClient {
         ...params.headers,
       },
     })
+  }
+}
+
+export class SavedCommand extends HeyApiClient {
+  /**
+   * List saved commands
+   *
+   * List the commands kept as files in this project's folder and in the user's config.
+   */
+  public list<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<SavedCommandListResponses, SavedCommandListErrors, ThrowOnError>({
+      url: "/saved-command",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Save a command
+   *
+   * Save a command. An existing name is refused unless `replaces` names it.
+   */
+  public save<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+      name?: string
+      description?: string
+      template?: string
+      global?: boolean
+      replaces?: string
+      sessionID?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "name" },
+            { in: "body", key: "description" },
+            { in: "body", key: "template" },
+            { in: "body", key: "global" },
+            { in: "body", key: "replaces" },
+            { in: "body", key: "sessionID" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<SavedCommandSaveResponses, SavedCommandSaveErrors, ThrowOnError>({
+      url: "/saved-command",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Draft a command from a session
+   *
+   * Write up a finished session as a reusable command, using the session's own model. Saves nothing.
+   */
+  public draft<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+      sessionID?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "sessionID" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<SavedCommandDraftResponses, SavedCommandDraftErrors, ThrowOnError>({
+      url: "/saved-command/draft",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Check whether a session's job keeps coming back
+   *
+   * Compares the session's first prompt with recent ones in this project. Uses no model.
+   */
+  public repeat<ThrowOnError extends boolean = false>(
+    parameters: {
+      directory?: string
+      workspace?: string
+      sessionID: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "query", key: "sessionID" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<SavedCommandRepeatResponses, SavedCommandRepeatErrors, ThrowOnError>({
+      url: "/saved-command/repeat",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Stop offering a job
+   *
+   * Do not offer to save this session's kind of job again.
+   */
+  public decline<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+      sessionID?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "sessionID" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<SavedCommandDeclineResponses, SavedCommandDeclineErrors, ThrowOnError>(
+      {
+        url: "/saved-command/decline",
+        ...options,
+        ...params,
+        headers: {
+          "Content-Type": "application/json",
+          ...options?.headers,
+          ...params.headers,
+        },
+      },
+    )
+  }
+
+  /**
+   * Remove a saved command
+   *
+   * Delete a saved command's file.
+   */
+  public remove<ThrowOnError extends boolean = false>(
+    parameters: {
+      name: string
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "name" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).delete<SavedCommandRemoveResponses, SavedCommandRemoveErrors, ThrowOnError>(
+      {
+        url: "/saved-command/{name}",
+        ...options,
+        ...params,
+      },
+    )
   }
 }
 
@@ -7437,6 +7670,11 @@ export class OpencodeClient extends HeyApiClient {
   private _memory?: Memory
   get memory(): Memory {
     return (this._memory ??= new Memory({ client: this.client }))
+  }
+
+  private _savedCommand?: SavedCommand
+  get savedCommand(): SavedCommand {
+    return (this._savedCommand ??= new SavedCommand({ client: this.client }))
   }
 
   private _project?: Project
