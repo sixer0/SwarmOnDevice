@@ -203,25 +203,71 @@ function argv(params: Params, revision: string[], files: string[]) {
 }
 
 // A patch section starts at a line git writes at column 0, and every line of content has a prefix, so nothing in a file or
-// a commit message can start or hide one. Withholding works on a whole section, by every name it gives the file.
+// a commit message can start or hide one. Withholding works on a whole section, by every name it gives the file. Lines end at
+// \n and nothing else: a lone \r inside a secret file must not start a section that gets to be judged on its own.
+// A section is only kept when every line of its header is known and every name in it is safe.
 export function withholdSecretDiffs(output: string) {
-  const sections = output.split(/^(?=diff --git )/m)
+  const sections = output.split(/(?<![^\n])(?=diff --)/)
   const withheld = new Set<string>()
+  const unread = { count: 0 }
   const kept = sections.filter((section) => {
-    if (!section.startsWith("diff --git ")) return true
-    const header = section.slice(0, Math.max(section.search(/^(?:@@|Binary files|GIT binary patch)/m), 0) || section.length)
-    const named = [
-      ...header.split("\n")[0]!.slice("diff --git ".length).split(/ (?=b\/)/),
-      ...[...header.matchAll(/^(?:---|\+\+\+|rename from|rename to|copy from|copy to) (.+)$/gm)].map((match) => match[1]!),
-    ]
-      .map((name) => name.replace(/^"|"$/g, "").replace(/^[ab]\//, ""))
-      .filter((name) => name !== devNull)
+    if (!section.startsWith("diff --")) return true
+    const named = sectionNames(section)
+    if (!named) {
+      unread.count++
+      return false
+    }
     const secret = named.find((name) => !Reach.readableName(name))
-    if (secret) withheld.add(secret)
+    if (secret) withheld.add(/[\x00-\x1f\x7f]/.test(secret) ? JSON.stringify(secret) : secret)
     return !secret
   })
-  if (withheld.size === 0) return output
-  return `${kept.join("")}\n[withheld: the diff of ${[...withheld].join(", ")}, which holds secrets]\n`
+  if (withheld.size === 0 && unread.count === 0) return output
+  return [
+    kept.join(""),
+    ...(withheld.size > 0 ? [`\n[withheld: the diff of ${[...withheld].join(", ")}, which holds secrets]\n`] : []),
+    ...(unread.count > 0 ? [`\n[withheld: ${unread.count} diff section(s) this tool could not read for certain]\n`] : []),
+  ].join("")
+}
+
+const HEADER_PLAIN = /^(?:index|mode|old mode|new mode|new file mode|deleted file mode|similarity index|dissimilarity index) /
+const HEADER_PATH = /^(---|\+\+\+) (.+)$/
+const HEADER_NAME = /^(?:rename from|rename to|copy from|copy to|\* Unmerged path) (.+)$/
+const QUOTED = /^"(?:[^"\\]|\\.)*"$/
+const C_ESCAPE: Record<string, string> = { a: "\x07", b: "\b", t: "\t", n: "\n", v: "\v", f: "\f", r: "\r" }
+
+/** Every name a section's header gives its file, or undefined if any part of that header is not a form git is known to write. */
+function sectionNames(section: string) {
+  const lines = section.split("\n")
+  const end = lines.findIndex((line) => line === "" || /^(?:@@|Binary files |GIT binary patch)/.test(line))
+  const header = lines.slice(1, end < 0 ? undefined : end)
+  const first = lines[0]!.match(/^diff --(git|cc|combined) (.+)$/)
+  if (!first) return undefined
+  const named = [
+    // Either side can hold a space, so this can cut one name in several. Each piece gets judged, and that only adds to what is held back.
+    ...(first[1] === "git" ? first[2]!.split(/ (?=b\/|"b\/)/).map(prefixed) : [unquote(first[2]!)]),
+    ...header.map((line) => {
+      if (HEADER_PLAIN.test(line)) return null
+      const named = line.match(HEADER_NAME)
+      if (named) return unquote(named[1]!)
+      const path = line.match(HEADER_PATH)
+      // Git puts a tab after a name that has a space in it.
+      if (path) return path[2] === devNull ? null : prefixed(path[2]!.replace(/\t$/, ""))
+      return undefined
+    }),
+  ].filter((name) => name !== null)
+  return named.every((name) => name) ? (named as string[]) : undefined
+}
+
+function prefixed(raw: string) {
+  return unquote(raw)?.match(/^[ab]\/(.+)$/s)?.[1]
+}
+
+// Names with anything odd in them, which includes any byte past ASCII here (core.quotePath), come from git C-quoted.
+function unquote(raw: string) {
+  if (!raw.includes('"')) return raw
+  if (!QUOTED.test(raw)) return undefined
+  const bytes = raw.slice(1, -1).replace(/\\([0-7]{3}|.)/gs, (_, code: string) => (code.length === 3 ? String.fromCharCode(parseInt(code, 8)) : (C_ESCAPE[code] ?? code)))
+  return Buffer.from(bytes, "latin1").toString("utf8")
 }
 
 // A commit message or a file can hold anything. Whoever reads the output should see the text, not what a terminal does with it.
@@ -312,7 +358,9 @@ export const GitTool = Tool.define(
           if (unlisted) return yield* refuse(`${unlisted} is not a flag this tool passes to git ${params.subcommand}`)
           const result = yield* git(args)
           // Scrubbed before the cut, since half a secret at the cut would no longer be recognised afterwards.
-          const full = Secrets.scrub(withholdSecretDiffs(result.stdout).replace(CONTROL, ""), instance.worktree)
+          // A file at a revision is that file's own text, already judged by its name above. A line in it is not a section of anything.
+          const shown = params.fileAtRevision ? result.stdout : withholdSecretDiffs(result.stdout)
+          const full = Secrets.scrub(shown.replace(CONTROL, ""), instance.worktree)
           const cut = full.length > MAX_OUTPUT || result.stdout.length >= MAX_FROM_GIT
           const text = cut
             ? `${full.slice(0, MAX_OUTPUT)}\n[output cut at ${MAX_OUTPUT / 1024} KB. There is more. Narrow it with limit, revision or paths.]\n`

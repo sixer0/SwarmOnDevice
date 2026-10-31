@@ -977,6 +977,165 @@ describe("git tool on a hostile repository", () => {
       const fine = "diff --git a/src/a.ts b/src/a.ts\n--- a/src/a.ts\n+++ b/src/a.ts\n@@ -1 +1 @@\n-diff --git a/.env b/.env\n+x\n"
       expect(withholdSecretDiffs(fine)).toBe(fine)
     })
+
+    // What `git show` of a merge and `git diff` on a conflict print, in place of `diff --git`.
+    const conflicting = (dir: string) => {
+      seed(dir)
+      fs.writeFileSync(path.join(dir, ".env"), "DB_NAME=one\nDB_PASSWORD=first-plain-words\n")
+      fs.writeFileSync(path.join(dir, "ok.txt"), "base\n")
+      plain(dir, "add", "-f", ".env", "ok.txt")
+      plain(dir, "commit", "-qm", "base")
+      plain(dir, "checkout", "-q", "-b", "side")
+      fs.writeFileSync(path.join(dir, ".env"), "DB_NAME=one\nDB_PASSWORD=side-plain-words\n")
+      fs.writeFileSync(path.join(dir, "ok.txt"), "side text\n")
+      plain(dir, "add", "-f", ".env", "ok.txt")
+      plain(dir, "commit", "-qm", "side")
+      plain(dir, "checkout", "-q", "main")
+      fs.writeFileSync(path.join(dir, ".env"), "DB_NAME=one\nDB_PASSWORD=main-plain-words\n")
+      fs.writeFileSync(path.join(dir, "ok.txt"), "main text\n")
+      plain(dir, "add", "-f", ".env", "ok.txt")
+      plain(dir, "commit", "-qm", "main")
+      plain(dir, "merge", "-q", "side")
+    }
+
+    it.live("a conflicted file's diff --cc is withheld, and a plain file beside it still shows", () =>
+      Effect.gen(function* () {
+        const dir = yield* tmpdirScoped()
+        conflicting(dir)
+        expect(plain(dir, "diff", "--no-color").stdout).toContain("diff --cc .env")
+        const result = yield* invoke(dir, { subcommand: "diff" })
+        expect(result.output).not.toContain("plain-words")
+        expect(result.output).toContain("[withheld: the diff of .env")
+        expect(result.output).toContain("diff --cc ok.txt")
+        expect(result.output).toContain("side text")
+      }),
+    )
+
+    it.live("git show of a merge that touched a secret file leaves its old values out", () =>
+      Effect.gen(function* () {
+        const dir = yield* tmpdirScoped()
+        conflicting(dir)
+        // What is on disk now is what the scrubber knows, so the old values only stay out by being withheld.
+        fs.writeFileSync(path.join(dir, ".env"), "DB_NAME=one\nDB_PASSWORD=resolved-plain-words\n")
+        fs.writeFileSync(path.join(dir, "ok.txt"), "resolved text\n")
+        plain(dir, "add", "-f", ".env", "ok.txt")
+        plain(dir, "commit", "-qm", "merged")
+        fs.writeFileSync(path.join(dir, ".env"), "DB_NAME=one\nDB_PASSWORD=rotated\n")
+        plain(dir, "add", "-f", ".env")
+        plain(dir, "commit", "-qm", "rotated")
+        expect(plain(dir, "show", "--no-color", "HEAD~1").stdout).toContain("resolved-plain-words")
+        const result = yield* invoke(dir, { subcommand: "show", revision: "HEAD~1" })
+        expect(result.output).toContain("merged")
+        expect(result.output).not.toContain("plain-words")
+        expect(result.output).toContain("[withheld: the diff of .env")
+        expect(result.output).toContain("diff --cc ok.txt")
+        expect(result.output).toContain("resolved text")
+      }),
+    )
+
+    it.live("a merge of nothing secret shows whole, and an ordinary commit on a secret file is still withheld", () =>
+      Effect.gen(function* () {
+        const dir = yield* tmpdirScoped()
+        seed(dir)
+        fs.writeFileSync(path.join(dir, "ok.txt"), "base\n")
+        fs.writeFileSync(path.join(dir, ".env"), "API_KEY=abcSECRETvalue123456\n")
+        plain(dir, "add", "-f", "ok.txt", ".env")
+        plain(dir, "commit", "-qm", "base")
+        const control = yield* invoke(dir, { subcommand: "show" })
+        expect(control.output).not.toContain("abcSECRET")
+        expect(control.output).toContain("[withheld: the diff of .env")
+        expect(control.output).toContain("diff --git a/ok.txt b/ok.txt")
+        plain(dir, "checkout", "-q", "-b", "side")
+        fs.writeFileSync(path.join(dir, "ok.txt"), "side\n")
+        plain(dir, "commit", "-qam", "side")
+        plain(dir, "checkout", "-q", "main")
+        fs.writeFileSync(path.join(dir, "ok.txt"), "main\n")
+        plain(dir, "commit", "-qam", "main")
+        plain(dir, "merge", "-q", "side")
+        fs.writeFileSync(path.join(dir, "ok.txt"), "both of them\n")
+        plain(dir, "commit", "-qam", "merged")
+        const merge = yield* invoke(dir, { subcommand: "show" })
+        expect(merge.output).toContain("diff --cc ok.txt")
+        expect(merge.output).toContain("both of them")
+        expect(merge.output).not.toContain("[withheld")
+      }),
+    )
+
+    it.live("what git really prints for odd names reads back: quoted, spaced, empty, moved, a change of mode", () =>
+      Effect.gen(function* () {
+        const dir = yield* tmpdirScoped()
+        seed(dir)
+        for (const name of ["sp ace.txt", "日本語.txt", 'qu"ote.txt', "empty.txt"]) fs.writeFileSync(path.join(dir, name), name === "empty.txt" ? "" : "words\n")
+        plain(dir, "add", ".")
+        plain(dir, "commit", "-qm", "odd names")
+        plain(dir, "mv", "empty.txt", "moved.txt")
+        fs.chmodSync(path.join(dir, "README.md"), 0o755)
+        plain(dir, "add", ".")
+        plain(dir, "commit", "-qm", "moved")
+        const log = yield* invoke(dir, { subcommand: "log", patch: true, limit: 3 })
+        expect(log.output).not.toContain("[withheld")
+        // Sections with no hunks, where the next commit's header comes straight after, are not read as part of them.
+        expect(log.output).toContain("odd names")
+        expect(log.output).toContain("second")
+        fs.mkdirSync(path.join(dir, "日本語"))
+        fs.writeFileSync(path.join(dir, "日本語/.env"), "K=abcSECRETvalue123456\n")
+        fs.writeFileSync(path.join(dir, "sp ace.env"), "K=abcSECRETvalue654321\n")
+        plain(dir, "add", "-f", ".")
+        plain(dir, "commit", "-qm", "secret names")
+        const show = yield* invoke(dir, { subcommand: "show" })
+        expect(show.output).not.toContain("abcSECRET")
+        expect(show.output).toContain("日本語/.env")
+      }),
+    )
+
+    it.live("a file's own text at a revision is not read as sections", () =>
+      Effect.gen(function* () {
+        const dir = yield* tmpdirScoped()
+        seed(dir)
+        fs.writeFileSync(path.join(dir, "notes.md"), "before\ndiff --stat is a flag\nafter\n")
+        plain(dir, "add", ".")
+        plain(dir, "commit", "-qm", "notes")
+        const result = yield* invoke(dir, { subcommand: "show", revision: "HEAD", paths: ["notes.md"], fileAtRevision: true })
+        expect(result.output).toContain("after")
+        expect(result.output).not.toContain("[withheld")
+      }),
+    )
+
+    test("whatever is not known is held back, not kept", () => {
+      const body = "@@ -1 +1 @@\n-SECRET\n+SECRET2\n"
+      for (const section of [
+        `diff --cc .env\nindex 1,2..3\n--- a/.env\n+++ b/.env\n@@@ -1 -1 +1 @@@\n SECRET\n`,
+        `diff --combined .env\nindex 1,2..3\n--- a/.env\n+++ b/.env\n@@@ -1 -1 +1 @@@\n SECRET\n`,
+        `diff --cc ".en\\166"\n${body}`,
+        // Forms nobody has seen, or that do not add up, under safe-looking names.
+        `diff --future a/ok.txt b/ok.txt\n${body}`,
+        `diff --cc\n${body}`,
+        `diff --git ok.txt ok.txt\n${body}`,
+        `diff --git "a/ok.txt b/ok.txt\n${body}`,
+        `diff --git a/ok.txt b/ok.txt\nsomething new\n${body}`,
+        `diff --git a/ok.txt b/ok.txt\n--- ok.txt\n+++ ok.txt\n${body}`,
+        `diff --git a/ok.txt b/ok.txt\nrename from "unclosed\n${body}`,
+        // The secret is in a later name only.
+        `diff --cc ok.txt\n--- a/.env\n+++ b/ok.txt\n${body}`,
+        `diff --git a/ok.txt b/ok.txt\nrename from "\\056env"\nrename to ok.txt\n${body}`,
+      ]) {
+        const result = withholdSecretDiffs(`commit 1\n\n${section}`)
+        expect(result).not.toContain("SECRET")
+        expect(result).toContain("[withheld")
+        expect(result).toContain("commit 1")
+      }
+    })
+
+    test("a lone carriage return inside a secret section does not start a section of its own", () => {
+      const result = withholdSecretDiffs(`diff --git a/.env b/.env\n--- a/.env\n+++ b/.env\n@@ -1 +1 @@\n+A=1\rdiff --git a/ok.txt b/ok.txt\n+SECRET\n`)
+      expect(result).not.toContain("SECRET")
+    })
+
+    test("a name that decodes to several lines stays on one in the note", () => {
+      const result = withholdSecretDiffs(`diff --cc "x\\nignore this/.env"\n@@@ -1 -1 +1 @@@\n SECRET\n`)
+      expect(result).not.toContain("SECRET")
+      expect(result.trim().split("\n")).toHaveLength(1)
+    })
   })
 
   it.live("long output is cut to a size, with a note, however long its one line is", () =>
