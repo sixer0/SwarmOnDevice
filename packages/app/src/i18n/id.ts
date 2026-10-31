@@ -202,6 +202,13 @@ export const dict = {
   "palette.empty": "Hasil tidak ditemukan",
   "palette.group.commands": "Perintah",
   "palette.group.files": "Berkas",
+  "palette.sessions.you": "Anda",
+  "palette.sessions.agent": "Agen",
+  "palette.sessions.wroteLine": "Menulis baris ini",
+  "palette.sessions.editedFile": "Mengedit berkas ini",
+  "palette.sessions.indexing": "Masih membaca sesi lama: {{percent}}% selesai",
+  "palette.sessions.titlesOnly": "Di sini hanya judul sesi yang bisa dicari",
+  "palette.sessions.failed": "Tidak dapat mencari sesi",
 
   "dialog.provider.search.placeholder": "Cari penyedia",
   "dialog.provider.empty": "Penyedia tidak ditemukan",

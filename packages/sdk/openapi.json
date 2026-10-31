@@ -395,6 +395,68 @@
         ]
       }
     },
+    "/global/search": {
+      "get": {
+        "tags": ["global"],
+        "operationId": "global.search",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "name": "directory",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sessions that answer the question, best first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionSearchResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestError"
+                }
+              }
+            }
+          }
+        },
+        "description": "Searches prompts, answers, reasoning, edits and commands across every project on this machine, with no model involved. Understands plain questions, dates such as `last month`, and a file with an optional line (`src/auth.ts:42`), which answers which session wrote that line. A running agent is not affected: the index lives in its own file.",
+        "summary": "Search everything sessions said and did",
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.global.search({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/global/lanes": {
       "get": {
         "tags": ["global"],
@@ -17037,6 +17099,341 @@
         "required": ["instances"],
         "additionalProperties": false
       },
+      "SnapshotFileDiff": {
+        "type": "object",
+        "properties": {
+          "file": {
+            "type": "string"
+          },
+          "patch": {
+            "type": "string"
+          },
+          "additions": {
+            "type": "number"
+          },
+          "deletions": {
+            "type": "number"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["added", "deleted", "modified"]
+          }
+        },
+        "required": ["additions", "deletions"],
+        "additionalProperties": false
+      },
+      "PermissionAction": {
+        "type": "string",
+        "enum": ["allow", "deny", "ask"]
+      },
+      "PermissionRule": {
+        "type": "object",
+        "properties": {
+          "permission": {
+            "type": "string"
+          },
+          "pattern": {
+            "type": "string"
+          },
+          "action": {
+            "$ref": "#/components/schemas/PermissionAction"
+          }
+        },
+        "required": ["permission", "pattern", "action"],
+        "additionalProperties": false
+      },
+      "PermissionRuleset": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/PermissionRule"
+        }
+      },
+      "ProjectSummary": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "worktree": {
+            "type": "string"
+          }
+        },
+        "required": ["id", "worktree"],
+        "additionalProperties": false
+      },
+      "GlobalSession": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^ses"
+          },
+          "slug": {
+            "type": "string"
+          },
+          "projectID": {
+            "type": "string"
+          },
+          "workspaceID": {
+            "type": "string",
+            "pattern": "^wrk"
+          },
+          "directory": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "parentID": {
+            "type": "string",
+            "pattern": "^ses"
+          },
+          "summary": {
+            "type": "object",
+            "properties": {
+              "additions": {
+                "type": "number"
+              },
+              "deletions": {
+                "type": "number"
+              },
+              "files": {
+                "type": "number"
+              },
+              "diffs": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SnapshotFileDiff"
+                }
+              }
+            },
+            "required": ["additions", "deletions", "files"],
+            "additionalProperties": false
+          },
+          "cost": {
+            "type": "number"
+          },
+          "tokens": {
+            "type": "object",
+            "properties": {
+              "input": {
+                "type": "number"
+              },
+              "output": {
+                "type": "number"
+              },
+              "reasoning": {
+                "type": "number"
+              },
+              "cache": {
+                "type": "object",
+                "properties": {
+                  "read": {
+                    "type": "number"
+                  },
+                  "write": {
+                    "type": "number"
+                  }
+                },
+                "required": ["read", "write"],
+                "additionalProperties": false
+              }
+            },
+            "required": ["input", "output", "reasoning", "cache"],
+            "additionalProperties": false
+          },
+          "share": {
+            "type": "object",
+            "properties": {
+              "url": {
+                "type": "string"
+              }
+            },
+            "required": ["url"],
+            "additionalProperties": false
+          },
+          "title": {
+            "type": "string"
+          },
+          "agent": {
+            "type": "string"
+          },
+          "model": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "providerID": {
+                "type": "string"
+              },
+              "variant": {
+                "type": "string"
+              }
+            },
+            "required": ["id", "providerID"],
+            "additionalProperties": false
+          },
+          "version": {
+            "type": "string"
+          },
+          "metadata": {
+            "type": "object"
+          },
+          "time": {
+            "type": "object",
+            "properties": {
+              "created": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "updated": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "compacting": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "archived": {
+                "type": "number"
+              }
+            },
+            "required": ["created", "updated"],
+            "additionalProperties": false
+          },
+          "permission": {
+            "$ref": "#/components/schemas/PermissionRuleset"
+          },
+          "revert": {
+            "type": "object",
+            "properties": {
+              "messageID": {
+                "type": "string",
+                "pattern": "^msg"
+              },
+              "partID": {
+                "type": "string",
+                "pattern": "^prt"
+              },
+              "snapshot": {
+                "type": "string"
+              },
+              "diff": {
+                "type": "string"
+              }
+            },
+            "required": ["messageID"],
+            "additionalProperties": false
+          },
+          "project": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProjectSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": ["id", "slug", "projectID", "directory", "title", "version", "time", "project"],
+        "additionalProperties": false
+      },
+      "SessionSearchResult": {
+        "type": "object",
+        "properties": {
+          "session": {
+            "$ref": "#/components/schemas/GlobalSession"
+          },
+          "openID": {
+            "type": "string"
+          },
+          "anchor": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": ["prompt", "said", "thought", "edit", "tool"]
+          },
+          "label": {
+            "type": "string"
+          },
+          "verdict": {
+            "type": "string",
+            "enum": ["wrote", "edited"]
+          },
+          "snippet": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "text": {
+                  "type": "string"
+                },
+                "hit": {
+                  "type": "boolean"
+                }
+              },
+              "required": ["text", "hit"],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": ["session", "openID", "snippet"],
+        "additionalProperties": false
+      },
+      "SessionSearchResponse": {
+        "type": "object",
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SessionSearchResult"
+            }
+          },
+          "range": {
+            "type": "object",
+            "properties": {
+              "from": {
+                "type": "number"
+              },
+              "to": {
+                "type": "number"
+              }
+            },
+            "required": ["from", "to"],
+            "additionalProperties": false
+          },
+          "file": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string"
+              },
+              "line": {
+                "type": "number"
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": ["path"],
+            "additionalProperties": false
+          },
+          "progress": {
+            "type": "number"
+          },
+          "available": {
+            "type": "boolean"
+          }
+        },
+        "required": ["results", "progress", "available"],
+        "additionalProperties": false
+      },
       "GlobalLanesFile": {
         "type": "object",
         "properties": {
@@ -17225,55 +17622,6 @@
         },
         "required": ["observedAt", "file", "range", "restartRequired"],
         "additionalProperties": false
-      },
-      "SnapshotFileDiff": {
-        "type": "object",
-        "properties": {
-          "file": {
-            "type": "string"
-          },
-          "patch": {
-            "type": "string"
-          },
-          "additions": {
-            "type": "number"
-          },
-          "deletions": {
-            "type": "number"
-          },
-          "status": {
-            "type": "string",
-            "enum": ["added", "deleted", "modified"]
-          }
-        },
-        "required": ["additions", "deletions"],
-        "additionalProperties": false
-      },
-      "PermissionAction": {
-        "type": "string",
-        "enum": ["allow", "deny", "ask"]
-      },
-      "PermissionRule": {
-        "type": "object",
-        "properties": {
-          "permission": {
-            "type": "string"
-          },
-          "pattern": {
-            "type": "string"
-          },
-          "action": {
-            "$ref": "#/components/schemas/PermissionAction"
-          }
-        },
-        "required": ["permission", "pattern", "action"],
-        "additionalProperties": false
-      },
-      "PermissionRuleset": {
-        "type": "array",
-        "items": {
-          "$ref": "#/components/schemas/PermissionRule"
-        }
       },
       "Session": {
         "type": "object",
@@ -23584,201 +23932,6 @@
           }
         },
         "required": ["directory"],
-        "additionalProperties": false
-      },
-      "ProjectSummary": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
-          "worktree": {
-            "type": "string"
-          }
-        },
-        "required": ["id", "worktree"],
-        "additionalProperties": false
-      },
-      "GlobalSession": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "pattern": "^ses"
-          },
-          "slug": {
-            "type": "string"
-          },
-          "projectID": {
-            "type": "string"
-          },
-          "workspaceID": {
-            "type": "string",
-            "pattern": "^wrk"
-          },
-          "directory": {
-            "type": "string"
-          },
-          "path": {
-            "type": "string"
-          },
-          "parentID": {
-            "type": "string",
-            "pattern": "^ses"
-          },
-          "summary": {
-            "type": "object",
-            "properties": {
-              "additions": {
-                "type": "number"
-              },
-              "deletions": {
-                "type": "number"
-              },
-              "files": {
-                "type": "number"
-              },
-              "diffs": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/SnapshotFileDiff"
-                }
-              }
-            },
-            "required": ["additions", "deletions", "files"],
-            "additionalProperties": false
-          },
-          "cost": {
-            "type": "number"
-          },
-          "tokens": {
-            "type": "object",
-            "properties": {
-              "input": {
-                "type": "number"
-              },
-              "output": {
-                "type": "number"
-              },
-              "reasoning": {
-                "type": "number"
-              },
-              "cache": {
-                "type": "object",
-                "properties": {
-                  "read": {
-                    "type": "number"
-                  },
-                  "write": {
-                    "type": "number"
-                  }
-                },
-                "required": ["read", "write"],
-                "additionalProperties": false
-              }
-            },
-            "required": ["input", "output", "reasoning", "cache"],
-            "additionalProperties": false
-          },
-          "share": {
-            "type": "object",
-            "properties": {
-              "url": {
-                "type": "string"
-              }
-            },
-            "required": ["url"],
-            "additionalProperties": false
-          },
-          "title": {
-            "type": "string"
-          },
-          "agent": {
-            "type": "string"
-          },
-          "model": {
-            "type": "object",
-            "properties": {
-              "id": {
-                "type": "string"
-              },
-              "providerID": {
-                "type": "string"
-              },
-              "variant": {
-                "type": "string"
-              }
-            },
-            "required": ["id", "providerID"],
-            "additionalProperties": false
-          },
-          "version": {
-            "type": "string"
-          },
-          "metadata": {
-            "type": "object"
-          },
-          "time": {
-            "type": "object",
-            "properties": {
-              "created": {
-                "type": "integer",
-                "minimum": 0
-              },
-              "updated": {
-                "type": "integer",
-                "minimum": 0
-              },
-              "compacting": {
-                "type": "integer",
-                "minimum": 0
-              },
-              "archived": {
-                "type": "number"
-              }
-            },
-            "required": ["created", "updated"],
-            "additionalProperties": false
-          },
-          "permission": {
-            "$ref": "#/components/schemas/PermissionRuleset"
-          },
-          "revert": {
-            "type": "object",
-            "properties": {
-              "messageID": {
-                "type": "string",
-                "pattern": "^msg"
-              },
-              "partID": {
-                "type": "string",
-                "pattern": "^prt"
-              },
-              "snapshot": {
-                "type": "string"
-              },
-              "diff": {
-                "type": "string"
-              }
-            },
-            "required": ["messageID"],
-            "additionalProperties": false
-          },
-          "project": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/ProjectSummary"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "required": ["id", "slug", "projectID", "directory", "title", "version", "time", "project"],
         "additionalProperties": false
       },
       "McpResource": {

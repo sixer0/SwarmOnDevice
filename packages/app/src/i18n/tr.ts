@@ -205,6 +205,13 @@ export const dict = {
   "palette.empty": "Sonuç bulunamadı",
   "palette.group.commands": "Komutlar",
   "palette.group.files": "Dosyalar",
+  "palette.sessions.you": "Siz",
+  "palette.sessions.agent": "Ajan",
+  "palette.sessions.wroteLine": "Bu satırı yazdı",
+  "palette.sessions.editedFile": "Bu dosyayı düzenledi",
+  "palette.sessions.indexing": "Eski oturumlar hâlâ okunuyor: %{{percent}} tamamlandı",
+  "palette.sessions.titlesOnly": "Burada yalnızca oturum başlıkları aranabilir",
+  "palette.sessions.failed": "Oturumlarda arama yapılamadı",
 
   "dialog.provider.search.placeholder": "Sağlayıcı ara",
   "dialog.provider.empty": "Sağlayıcı bulunamadı",

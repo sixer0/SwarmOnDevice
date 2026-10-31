@@ -226,6 +226,13 @@ export const dict = {
   "palette.empty": "未找到结果",
   "palette.group.commands": "命令",
   "palette.group.files": "文件",
+  "palette.sessions.you": "你",
+  "palette.sessions.agent": "智能体",
+  "palette.sessions.wroteLine": "写了这一行",
+  "palette.sessions.editedFile": "编辑了此文件",
+  "palette.sessions.indexing": "仍在读取较早的会话:已完成 {{percent}}%",
+  "palette.sessions.titlesOnly": "此处只能搜索会话标题",
+  "palette.sessions.failed": "无法搜索会话",
 
   "dialog.provider.search.placeholder": "搜索提供商",
   "dialog.provider.empty": "未找到提供商",

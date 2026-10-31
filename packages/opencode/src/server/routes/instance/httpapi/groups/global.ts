@@ -1,3 +1,4 @@
+import { SessionSearch } from "@/session/search"
 import { ConfigV1 } from "@opencode-ai/core/v1/config/config"
 import { EventV2 } from "@opencode-ai/core/event"
 import { EventManifest } from "@/event-manifest"
@@ -221,6 +222,7 @@ export const GlobalPaths = {
   health: "/global/health",
   setup: "/global/setup",
   agents: "/global/agents",
+  search: "/global/search",
   lanes: "/global/lanes",
   event: "/global/event",
   config: "/global/config",
@@ -262,6 +264,21 @@ export const GlobalApi = HttpApi.make("global").add(
           summary: "Get agent activity",
           description:
             "Session statuses, pending permission requests and pending questions from every instance that has already booted. It never boots an instance, so a project with nothing running stays cold and starts nothing.",
+        }),
+      ),
+      HttpApiEndpoint.get("search", GlobalPaths.search, {
+        query: {
+          q: Schema.String,
+          directory: Schema.optional(Schema.String),
+          limit: Schema.optional(Schema.NumberFromString),
+        },
+        success: described(SessionSearch.Response, "Sessions that answer the question, best first"),
+      }).annotateMerge(
+        OpenApi.annotations({
+          identifier: "global.search",
+          summary: "Search everything sessions said and did",
+          description:
+            "Searches prompts, answers, reasoning, edits and commands across every project on this machine, with no model involved. Understands plain questions, dates such as `last month`, and a file with an optional line (`src/auth.ts:42`), which answers which session wrote that line. A running agent is not affected: the index lives in its own file.",
         }),
       ),
       // Row 247 — lane controls. Same machine-global posture as `setup` above (no query, no group

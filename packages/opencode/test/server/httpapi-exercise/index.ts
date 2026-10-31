@@ -92,6 +92,14 @@ const scenarios: Scenario[] = [
       check(Array.isArray(body.instances), "instances should list the booted instances")
     }),
   http.protected
+    .get("/global/search", "global.search")
+    .global()
+    .at(() => ({ path: "/global/search?q=login" }))
+    .json(200, (body) => {
+      object(body)
+      check(Array.isArray(body.results), "results should list matching sessions")
+    }),
+  http.protected
     .get("/global/setup", "global.setup")
     .global()
     .json(200, (body) => {

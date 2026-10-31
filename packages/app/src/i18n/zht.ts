@@ -203,6 +203,13 @@ export const dict = {
   "palette.empty": "找不到結果",
   "palette.group.commands": "命令",
   "palette.group.files": "檔案",
+  "palette.sessions.you": "你",
+  "palette.sessions.agent": "代理",
+  "palette.sessions.wroteLine": "寫了這一行",
+  "palette.sessions.editedFile": "編輯了此檔案",
+  "palette.sessions.indexing": "仍在讀取較早的工作階段:已完成 {{percent}}%",
+  "palette.sessions.titlesOnly": "此處只能搜尋工作階段標題",
+  "palette.sessions.failed": "無法搜尋工作階段",
 
   "dialog.provider.search.placeholder": "搜尋提供者",
   "dialog.provider.empty": "找不到提供者",

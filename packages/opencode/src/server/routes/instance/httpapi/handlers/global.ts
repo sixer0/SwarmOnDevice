@@ -1,3 +1,4 @@
+import { SessionSearch } from "@/session/search"
 import { Config } from "@/config/config"
 import { GlobalBus, type GlobalEvent as GlobalBusEvent } from "@/bus/global"
 import { EffectBridge } from "@/effect/bridge"
@@ -74,6 +75,7 @@ export const globalHandlers = HttpApiBuilder.group(RootHttpApi, "global", (handl
     const permission = yield* Permission.Service
     const question = yield* Question.Service
     const status = yield* SessionStatus.Service
+    const sessionSearch = yield* SessionSearch.Service
 
     const health = Effect.fn("GlobalHttpApi.health")(function* () {
       return { healthy: true as const, version: InstallationVersion }
@@ -206,6 +208,7 @@ export const globalHandlers = HttpApiBuilder.group(RootHttpApi, "global", (handl
       .handle("health", health)
       .handle("setup", setup)
       .handle("agents", agents)
+      .handle("search", (ctx) => sessionSearch.search(ctx.query))
       .handle("lanesGet", lanesGet)
       .handleRaw("lanesUpdate", lanesUpdate)
       .handleRaw("event", event)

@@ -199,6 +199,13 @@ export const dict = {
   "palette.empty": "Ingen resultater funnet",
   "palette.group.commands": "Kommandoer",
   "palette.group.files": "Filer",
+  "palette.sessions.you": "Du",
+  "palette.sessions.agent": "Agent",
+  "palette.sessions.wroteLine": "Skrev denne linjen",
+  "palette.sessions.editedFile": "Redigerte denne filen",
+  "palette.sessions.indexing": "Leser fortsatt eldre økter: {{percent}} % ferdig",
+  "palette.sessions.titlesOnly": "Her kan du bare søke i økttitler",
+  "palette.sessions.failed": "Kunne ikke søke i økter",
 
   "dialog.provider.search.placeholder": "Søk etter leverandører",
   "dialog.provider.empty": "Ingen leverandører funnet",

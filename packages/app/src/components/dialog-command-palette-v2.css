@@ -86,7 +86,10 @@
 
 .command-palette-v2-group-title {
   margin: 6px 0;
+  overflow: hidden;
   padding: 0 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--v2-text-text-muted);
   font-size: 13px;
   font-weight: 440;
@@ -111,6 +114,12 @@
   text-align: left;
   cursor: default;
   scroll-margin: 6px 0;
+}
+
+.command-palette-v2-row[data-hit] {
+  height: auto;
+  min-height: 52px;
+  padding-block: 6px;
 }
 
 .command-palette-v2-row[data-active] {
@@ -169,6 +178,42 @@
 
 .command-palette-v2-meta {
   flex-shrink: 0;
+}
+
+.command-palette-v2-hit {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.command-palette-v2-snippet {
+  overflow: hidden;
+  color: var(--v2-text-text-muted);
+  font-size: 12px;
+  font-weight: 440;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.command-palette-v2-snippet-label {
+  margin-inline-end: 6px;
+  color: var(--v2-text-text-base);
+}
+
+.command-palette-v2-snippet mark {
+  background: transparent;
+  color: var(--v2-text-text-base);
+  font-weight: 600;
+}
+
+.command-palette-v2-note {
+  padding: 0 12px 4px;
+  color: var(--v2-text-text-muted);
+  font-size: 12px;
+  line-height: 16px;
 }
 
 .command-palette-v2-file-path {

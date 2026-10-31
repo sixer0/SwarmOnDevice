@@ -1,14 +1,15 @@
 import { getFilename } from "@opencode-ai/core/util/path"
-import type { Project } from "@opencode-ai/sdk/v2/client"
+import type { GlobalSearchResponse, Project, Session } from "@opencode-ai/sdk/v2/client"
 import type { SessionInfo } from "@opencode-ai/client/promise"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
-import { createMemo, onCleanup } from "solid-js"
+import { createMemo, createSignal, onCleanup } from "solid-js"
 import { commandPaletteOptions, useCommand, type CommandOption } from "@/context/command"
-import { useFile } from "@/context/file"
+import { useFile, type SelectedLineRange } from "@/context/file"
 import { useGlobal } from "@/context/global"
 import { useLanguage } from "@/context/language"
 import { useLayout, type LocalProject } from "@/context/layout"
 import { ServerConnection } from "@/context/server"
+import { useSDK } from "@/context/sdk"
 import { useServerSDK } from "@/context/server-sdk"
 import { useTabs } from "@/context/tabs"
 import { displayName, projectForSession } from "@/pages/layout/helpers"
@@ -31,7 +32,13 @@ export type CommandPaletteEntry = {
   project?: LocalProject
   archived?: number
   updated?: number
+  /** The turn to scroll to when this session opens. */
+  anchor?: string
+  /** Where the session matched: who said it, or which file, then the words. Absent when only the title matched. */
+  hit?: { label?: string; snippet: ReadonlyArray<{ text: string; hit: boolean }> }
 }
+
+export type SessionSearchStatus = { indexing?: number; titlesOnly?: boolean; failed?: boolean }
 
 const ENTRY_LIMIT = 5
 const COMMON_COMMAND_IDS = [
@@ -87,7 +94,8 @@ export function createCommandPaletteModel(props: { filesOnly?: () => boolean; on
   const serverSDK = useServerSDK()()
   const serverCtx = global.ensureServerCtx(serverSDK.server)
   const appTabs = useTabs()
-  const { tabs: sessionTabs } = useSessionLayout()
+  const { tabs: sessionTabs, view } = useSessionLayout()
+  const sdk = useSDK()
   const openFile = createCommandPaletteFileOpener(props.onOpenFile)
   const state = { cleanup: undefined as (() => void) | void, committed: false }
   const filesOnly = () => props.filesOnly?.() ?? false
@@ -146,10 +154,20 @@ export function createCommandPaletteModel(props: { filesOnly?: () => boolean; on
     server: ServerConnection.key(serverSDK.server),
     opened: serverCtx.projects.list,
     stored: () => serverCtx.sync.data.project,
+    search: (q, signal) =>
+      serverSDK.client.global.search({ q, directory: sdk().directory }, { signal, throwOnError: true }).then((r) => r.data),
     load: (search, signal) => serverSDK.api.session.list({ parentID: null, search, limit: 50 }, { signal }),
     untitled: () => language.t("command.session.new"),
     category: () => language.t("command.category.session"),
   })
+  /** The line selected in the file on screen, as a query. Opening the palette then answers who wrote it. */
+  const selectedLine = () => {
+    if (!view().reviewPanel.opened()) return
+    const tab = tabState.activeFileTab()
+    const path = tab ? file.pathFromTab(tab) : undefined
+    const range = path ? (file.selectedLines(path) as SelectedLineRange | undefined) : undefined
+    return path && range ? `${path}:${Math.min(range.start, range.end)}` : undefined
+  }
 
   const highlight = (item: CommandPaletteEntry | undefined) => {
     state.cleanup?.()
@@ -178,7 +196,7 @@ export function createCommandPaletteModel(props: { filesOnly?: () => boolean; on
         server: item.server,
         sessionId: item.sessionID,
       })
-      appTabs.select(tab)
+      appTabs.select(tab, item.anchor)
       return
     }
     if (!item.path) return
@@ -198,6 +216,7 @@ export function createCommandPaletteModel(props: { filesOnly?: () => boolean; on
     recentFileEntries,
     rootFileEntries,
     sessions,
+    selectedLine,
     highlight,
     select,
     close: () => dialog.close(),
@@ -220,18 +239,41 @@ export function createServerSessionEntries(props: {
   server: ServerConnection.Key
   opened: () => LocalProject[]
   stored: () => Project[]
+  search: (text: string, signal: AbortSignal) => Promise<GlobalSearchResponse | undefined>
+  /** Title search, for a server too old to have content search. */
   load: (search: string, signal: AbortSignal) => Promise<{ data: SessionInfo[] }>
   untitled: () => string
   category: () => string
 }) {
+  const language = useLanguage()
+  const [status, setStatus] = createSignal<SessionSearchStatus>({})
   let abort: AbortController | undefined
 
   onCleanup(() => abort?.abort())
 
-  return async (text: string): Promise<CommandPaletteEntry[]> => {
+  const fromSearch = (response: GlobalSearchResponse, entry: (session: Session) => CommandPaletteEntry) => {
+    const heading = searchHeading(response, props.category(), language.intl())
+    return response.results.map((result) => {
+      const base = entry(result.session)
+      return {
+        ...base,
+        category: heading,
+        sessionID: result.openID,
+        archived: result.session.time.archived,
+        anchor: result.anchor,
+        hit:
+          result.snippet.length > 0 || result.verdict
+            ? { label: hitLabel(result, language.t), snippet: result.snippet }
+            : undefined,
+      }
+    })
+  }
+
+  const entries = async (text: string): Promise<CommandPaletteEntry[]> => {
     const search = text.trim()
     if (!search) {
       abort?.abort()
+      setStatus({})
       return []
     }
     abort?.abort()
@@ -253,29 +295,65 @@ export function createServerSessionEntries(props: {
     const openedByID = new Map(opened.flatMap((project) => (project.id ? [[project.id, project] as const] : [])))
     const stored = props.stored().map((project) => ({ ...project, expanded: false }))
     const storedByID = new Map(stored.map((project) => [project.id, project] as const))
+    const entry = (session: Session): CommandPaletteEntry => {
+      const project = projectForSession(session, opened, openedByID) ?? projectForSession(session, stored, storedByID)
+      return {
+        id: `session:${props.server}:${session.id}`,
+        type: "session",
+        title: session.title || props.untitled(),
+        description: project ? displayName(project) : getFilename(session.directory),
+        category: props.category(),
+        directory: session.directory,
+        sessionID: session.id,
+        server: props.server,
+        project,
+        updated: session.time.updated,
+      }
+    }
+    const response = await props.search(search, current.signal).catch(() => undefined)
+    if (current.signal.aborted) return []
+    if (response) {
+      setStatus({
+        indexing: response.progress < 1 && response.available ? response.progress : undefined,
+        titlesOnly: !response.available,
+      })
+      return fromSearch(response, entry)
+    }
     return props
       .load(search, current.signal)
-      .then((result) =>
-        result.data
+      .then((result) => {
+        setStatus({ titlesOnly: true })
+        return result.data
           .map(normalizeSessionInfo)
           .filter((session) => !session.time.archived)
-          .map((session) => {
-            const project =
-              projectForSession(session, opened, openedByID) ?? projectForSession(session, stored, storedByID)
-            return {
-              id: `session:${props.server}:${session.id}`,
-              type: "session" as const,
-              title: session.title || props.untitled(),
-              description: project ? displayName(project) : getFilename(session.directory),
-              category: props.category(),
-              directory: session.directory,
-              sessionID: session.id,
-              server: props.server,
-              project,
-              updated: session.time.updated,
-            }
-          }),
-      )
-      .catch(() => [] as CommandPaletteEntry[])
+          .map(entry)
+      })
+      .catch(() => {
+        if (!current.signal.aborted) setStatus({ failed: true })
+        return [] as CommandPaletteEntry[]
+      })
   }
+
+  return Object.assign(entries, { status })
+}
+
+function hitLabel(result: GlobalSearchResponse["results"][number], t: ReturnType<typeof useLanguage>["t"]) {
+  if (result.verdict === "wrote") return t("palette.sessions.wroteLine")
+  if (result.verdict === "edited") return t("palette.sessions.editedFile")
+  if (result.kind === "prompt") return t("palette.sessions.you")
+  if (result.kind === "said" || result.kind === "thought") return t("palette.sessions.agent")
+  if (result.kind === "edit") return result.label ? getFilename(result.label) : undefined
+  return result.label
+}
+
+/** What was searched, when it was more than words: which line of which file, or which dates a phrase meant. */
+function searchHeading(response: GlobalSearchResponse, category: string, locale: string) {
+  if (response.file) {
+    const place = response.file.line ? `${response.file.path}:${response.file.line}` : response.file.path
+    return response.file.text ? `${place}  ${response.file.text}` : place
+  }
+  if (!response.range) return category
+  const dates = new Intl.DateTimeFormat(locale, { month: "short", day: "numeric" })
+  // `to` is exclusive, and a whole day like "yesterday" reads better as one date than as a range.
+  return `${category} · ${dates.formatRange(response.range.from, response.range.to - 1)}`
 }

@@ -9,6 +9,7 @@
 //
 // Run targeted: cd packages/opencode && bun test test/server/httpapi-global-setup.test.ts
 
+import { SessionSearch } from "@/session/search"
 import { mkdtempSync, mkdirSync, chmodSync, readFileSync, rmSync, writeFileSync } from "fs"
 import { tmpdir } from "os"
 import { join } from "path"
@@ -318,6 +319,7 @@ function apiLayer(password: Option.Option<string>) {
     Layer.provide(Layer.mock(Config.Service)({})),
     Layer.provide(Layer.mock(InstanceStore.Service)({})),
     Layer.provide(Layer.mock(Permission.Service)({})),
+    Layer.provide(Layer.mock(SessionSearch.Service)({})),
     Layer.provide(Layer.mock(Question.Service)({})),
     Layer.provide(Layer.mock(SessionStatus.Service)({})),
     Layer.provide(Layer.mock(MoveSession.Service)({})),

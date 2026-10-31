@@ -291,6 +291,112 @@ export type GlobalAgents = {
   instances: Array<GlobalAgentsInstance>
 }
 
+export type SnapshotFileDiff = {
+  file?: string
+  patch?: string
+  additions: number
+  deletions: number
+  status?: "added" | "deleted" | "modified"
+}
+
+export type PermissionAction = "allow" | "deny" | "ask"
+
+export type PermissionRule = {
+  permission: string
+  pattern: string
+  action: PermissionAction
+}
+
+export type PermissionRuleset = Array<PermissionRule>
+
+export type ProjectSummary = {
+  id: string
+  name?: string
+  worktree: string
+}
+
+export type GlobalSession = {
+  id: string
+  slug: string
+  projectID: string
+  workspaceID?: string
+  directory: string
+  path?: string
+  parentID?: string
+  summary?: {
+    additions: number
+    deletions: number
+    files: number
+    diffs?: Array<SnapshotFileDiff>
+  }
+  cost?: number
+  tokens?: {
+    input: number
+    output: number
+    reasoning: number
+    cache: {
+      read: number
+      write: number
+    }
+  }
+  share?: {
+    url: string
+  }
+  title: string
+  agent?: string
+  model?: {
+    id: string
+    providerID: string
+    variant?: string
+  }
+  version: string
+  metadata?: {
+    [key: string]: unknown
+  }
+  time: {
+    created: number
+    updated: number
+    compacting?: number
+    archived?: number
+  }
+  permission?: PermissionRuleset
+  revert?: {
+    messageID: string
+    partID?: string
+    snapshot?: string
+    diff?: string
+  }
+  project: ProjectSummary | null
+}
+
+export type SessionSearchResult = {
+  session: GlobalSession
+  openID: string
+  anchor?: string
+  kind?: "prompt" | "said" | "thought" | "edit" | "tool"
+  label?: string
+  verdict?: "wrote" | "edited"
+  snippet: Array<{
+    text: string
+    hit: boolean
+  }>
+}
+
+export type SessionSearchResponse = {
+  results: Array<SessionSearchResult>
+  range?: {
+    from: number
+    to: number
+  }
+  file?: {
+    path: string
+    line?: number
+    text?: string
+  }
+  progress: number
+  available: boolean
+}
+
 export type GlobalLanesFile = {
   tildePath: string
   present: boolean
@@ -360,24 +466,6 @@ export type GlobalLanesState = {
   updatedAt?: string
   restartRequired: "container-recreate"
 }
-
-export type SnapshotFileDiff = {
-  file?: string
-  patch?: string
-  additions: number
-  deletions: number
-  status?: "added" | "deleted" | "modified"
-}
-
-export type PermissionAction = "allow" | "deny" | "ask"
-
-export type PermissionRule = {
-  permission: string
-  pattern: string
-  action: PermissionAction
-}
-
-export type PermissionRuleset = Array<PermissionRule>
 
 export type Session = {
   id: string
@@ -2397,66 +2485,6 @@ export type WorktreeRemoveInput = {
 
 export type WorktreeResetInput = {
   directory: string
-}
-
-export type ProjectSummary = {
-  id: string
-  name?: string
-  worktree: string
-}
-
-export type GlobalSession = {
-  id: string
-  slug: string
-  projectID: string
-  workspaceID?: string
-  directory: string
-  path?: string
-  parentID?: string
-  summary?: {
-    additions: number
-    deletions: number
-    files: number
-    diffs?: Array<SnapshotFileDiff>
-  }
-  cost?: number
-  tokens?: {
-    input: number
-    output: number
-    reasoning: number
-    cache: {
-      read: number
-      write: number
-    }
-  }
-  share?: {
-    url: string
-  }
-  title: string
-  agent?: string
-  model?: {
-    id: string
-    providerID: string
-    variant?: string
-  }
-  version: string
-  metadata?: {
-    [key: string]: unknown
-  }
-  time: {
-    created: number
-    updated: number
-    compacting?: number
-    archived?: number
-  }
-  permission?: PermissionRuleset
-  revert?: {
-    messageID: string
-    partID?: string
-    snapshot?: string
-    diff?: string
-  }
-  project: ProjectSummary | null
 }
 
 export type McpResource = {
@@ -7605,6 +7633,35 @@ export type GlobalAgentsResponses = {
 }
 
 export type GlobalAgentsResponse = GlobalAgentsResponses[keyof GlobalAgentsResponses]
+
+export type GlobalSearchData = {
+  body?: never
+  path?: never
+  query: {
+    q: string
+    directory?: string
+    limit?: string
+  }
+  url: "/global/search"
+}
+
+export type GlobalSearchErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type GlobalSearchError = GlobalSearchErrors[keyof GlobalSearchErrors]
+
+export type GlobalSearchResponses = {
+  /**
+   * Sessions that answer the question, best first
+   */
+  200: SessionSearchResponse
+}
+
+export type GlobalSearchResponse = GlobalSearchResponses[keyof GlobalSearchResponses]
 
 export type GlobalLanesGetData = {
   body?: never

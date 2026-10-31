@@ -100,6 +100,13 @@ export const dict = {
   "palette.empty": "Ingen resultater fundet",
   "palette.group.commands": "Kommandoer",
   "palette.group.files": "Filer",
+  "palette.sessions.you": "Dig",
+  "palette.sessions.agent": "Agent",
+  "palette.sessions.wroteLine": "Skrev denne linje",
+  "palette.sessions.editedFile": "Redigerede denne fil",
+  "palette.sessions.indexing": "Læser stadig ældre sessioner: {{percent}} % færdig",
+  "palette.sessions.titlesOnly": "Her kan der kun søges i sessionstitler",
+  "palette.sessions.failed": "Kunne ikke søge i sessioner",
 
   "dialog.provider.search.placeholder": "Søg udbydere",
   "dialog.provider.empty": "Ingen udbydere fundet",

@@ -146,10 +146,11 @@ export const { use: useTabs, provider: TabsProvider } = createSimpleContext({
       if (next.length !== closed.length) setClosed(() => next)
     })
 
-    const navigateTab = (tab: Tab) => {
+    /** `messageID` opens a session scrolled to that turn, however far back it is. */
+    const navigateTab = (tab: Tab, messageID?: string) => {
       const href = tabHref(tab)
       setRecentKey(tabKey(tab))
-      navigate(href)
+      navigate(messageID ? `${href}#message-${messageID}` : href)
     }
 
     const removeTab = (index: number) => {

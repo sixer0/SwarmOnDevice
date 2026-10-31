@@ -201,6 +201,13 @@ export const dict = {
   "palette.empty": "Результатів не знайдено",
   "palette.group.commands": "Команди",
   "palette.group.files": "Файли",
+  "palette.sessions.you": "Ви",
+  "palette.sessions.agent": "Агент",
+  "palette.sessions.wroteLine": "Написав цей рядок",
+  "palette.sessions.editedFile": "Змінив цей файл",
+  "palette.sessions.indexing": "Старіші сеанси ще читаються: готово {{percent}}%",
+  "palette.sessions.titlesOnly": "Тут можна шукати лише за назвами сеансів",
+  "palette.sessions.failed": "Не вдалося виконати пошук у сеансах",
 
   "dialog.provider.search.placeholder": "Пошук провайдерів",
   "dialog.provider.empty": "Провайдерів не знайдено",

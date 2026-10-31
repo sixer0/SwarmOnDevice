@@ -1,3 +1,4 @@
+import { SessionSearch } from "@/session/search"
 import { NodeHttpServer } from "@effect/platform-node"
 import { describe, expect } from "bun:test"
 import { Context, Effect, Layer, Option } from "effect"
@@ -62,6 +63,7 @@ const apiLayer = HttpRouter.serve(
       list: () => InstanceRef.pipe(Effect.map((ctx) => (ctx?.directory === booted.directory ? [pendingPermission] : []))),
     }),
   ),
+  Layer.provide(Layer.mock(SessionSearch.Service)({})),
   Layer.provide(Layer.mock(Question.Service)({ list: () => Effect.succeed([]) })),
   Layer.provide(
     Layer.mock(SessionStatus.Service)({

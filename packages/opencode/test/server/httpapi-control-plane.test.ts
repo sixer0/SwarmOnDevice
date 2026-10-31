@@ -1,3 +1,4 @@
+import { SessionSearch } from "@/session/search"
 import { NodeHttpServer } from "@effect/platform-node"
 import { describe, expect } from "bun:test"
 import { Context, Effect, Layer, Option, Ref } from "effect"
@@ -44,6 +45,7 @@ const apiLayer = HttpRouter.serve(
   Layer.provide(Layer.mock(Config.Service)({})),
   Layer.provide(Layer.mock(InstanceStore.Service)({})),
   Layer.provide(Layer.mock(Permission.Service)({})),
+  Layer.provide(Layer.mock(SessionSearch.Service)({})),
   Layer.provide(Layer.mock(Question.Service)({})),
   Layer.provide(Layer.mock(SessionStatus.Service)({})),
   Layer.provide(Layer.mock(Installation.Service)({})),

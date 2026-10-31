@@ -40,6 +40,21 @@ export function layerFromPath(filename: string) {
   return layer.pipe(Layer.provide(sqliteLayer({ filename })))
 }
 
+/**
+ * A second, rebuildable database beside the main one, with no migrations. For derived data whose failure must not stop
+ * Swarm from starting. Fails rather than blocks when another process is writing to it: `busy_timeout` 0 keeps a
+ * background writer from ever freezing the server's event loop, because SQLite calls are synchronous.
+ */
+export function sidecar(filename: string) {
+  return Effect.gen(function* () {
+    const context = yield* Layer.build(sqliteLayer({ filename }))
+    const db = yield* makeDatabase.pipe(Effect.provide(context))
+    yield* db.run("PRAGMA synchronous = NORMAL")
+    yield* db.run("PRAGMA busy_timeout = 0")
+    return db
+  })
+}
+
 export function path() {
   if (Flag.OPENCODE_DB) {
     if (Flag.OPENCODE_DB === ":memory:" || isAbsolute(Flag.OPENCODE_DB)) return Flag.OPENCODE_DB

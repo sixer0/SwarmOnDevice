@@ -201,6 +201,13 @@ export const dict = {
   "palette.empty": "Nema rezultata",
   "palette.group.commands": "Komande",
   "palette.group.files": "Datoteke",
+  "palette.sessions.you": "Vi",
+  "palette.sessions.agent": "Agent",
+  "palette.sessions.wroteLine": "Napisao je ovaj red",
+  "palette.sessions.editedFile": "Uredio je ovu datoteku",
+  "palette.sessions.indexing": "Još se čitaju starije sesije: {{percent}}% gotovo",
+  "palette.sessions.titlesOnly": "Ovdje se mogu pretraživati samo naslovi sesija",
+  "palette.sessions.failed": "Pretraživanje sesija nije uspjelo",
 
   "dialog.provider.search.placeholder": "Pretraži provajdere",
   "dialog.provider.empty": "Nema pronađenih provajdera",

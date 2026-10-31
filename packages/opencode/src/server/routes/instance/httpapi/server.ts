@@ -37,6 +37,7 @@ import { SessionProcessor } from "@/session/processor"
 import { SessionPrompt } from "@/session/prompt"
 import { SessionResume } from "@/session/resume"
 import { SessionRevert } from "@/session/revert"
+import { SessionSearch } from "@/session/search"
 import { SessionRunState } from "@/session/run-state"
 import { Session } from "@/session/session"
 import { SessionStatus } from "@/session/status"
@@ -237,6 +238,7 @@ const app = LayerNode.group([
   Question.node,
   Memory.node,
   SavedCommands.node,
+  SessionSearch.node,
   Permission.node,
   PermissionSaved.node,
   Todo.node,
@@ -289,6 +291,7 @@ export function createRoutes(
     docRoute,
     uiRoute,
     SessionResume.layer,
+    SessionSearch.indexing,
   ).pipe(
     Layer.provide([
       errorLayer,

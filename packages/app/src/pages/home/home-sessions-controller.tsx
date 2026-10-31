@@ -156,7 +156,7 @@ export function createHomeSessionsController(home: HomeController) {
               ctx.projects.touch(directory)
               void startTransition(() => {
                 const tab = tabs.addSessionTab({ server, sessionId: sessionID })
-                tabs.select(tab)
+                tabs.select(tab, entry.anchor)
               })
             }}
           />

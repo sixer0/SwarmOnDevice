@@ -199,6 +199,13 @@ export const dict = {
   "palette.empty": "ไม่พบผลลัพธ์",
   "palette.group.commands": "คำสั่ง",
   "palette.group.files": "ไฟล์",
+  "palette.sessions.you": "คุณ",
+  "palette.sessions.agent": "เอเจนต์",
+  "palette.sessions.wroteLine": "เขียนบรรทัดนี้",
+  "palette.sessions.editedFile": "แก้ไขไฟล์นี้",
+  "palette.sessions.indexing": "ยังอ่านเซสชันเก่าอยู่: เสร็จแล้ว {{percent}}%",
+  "palette.sessions.titlesOnly": "ที่นี่ค้นหาได้เฉพาะชื่อเซสชัน",
+  "palette.sessions.failed": "ค้นหาเซสชันไม่สำเร็จ",
 
   "dialog.provider.search.placeholder": "ค้นหาผู้ให้บริการ",
   "dialog.provider.empty": "ไม่พบผู้ให้บริการ",

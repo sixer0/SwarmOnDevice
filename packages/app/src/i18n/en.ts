@@ -104,6 +104,13 @@ export const dict = {
   "palette.empty": "No results found",
   "palette.group.commands": "Commands",
   "palette.group.files": "Files",
+  "palette.sessions.you": "You",
+  "palette.sessions.agent": "Agent",
+  "palette.sessions.wroteLine": "Wrote this line",
+  "palette.sessions.editedFile": "Edited this file",
+  "palette.sessions.indexing": "Still reading older sessions: {{percent}}% done",
+  "palette.sessions.titlesOnly": "Only session titles can be searched here",
+  "palette.sessions.failed": "Couldn't search sessions",
 
   "dialog.provider.search.placeholder": "Search providers",
   "dialog.provider.empty": "No providers found",

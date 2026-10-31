@@ -21,6 +21,7 @@ import {
   createServerSessionEntries,
   uniqueCommandPaletteEntries,
   type CommandPaletteEntry,
+  type SessionSearchStatus,
 } from "./command-palette"
 import "./dialog-command-palette-v2.css"
 
@@ -39,20 +40,33 @@ export function DialogCommandPaletteV2(props: { onOpenFile?: (path: string) => v
   const palette = createCommandPaletteModel(props)
   const loadItems = async (text: string) => {
     const q = text.trim()
-    if (!q) return [...palette.preferredCommandEntries(), ...palette.recentFileEntries()]
+    if (!q) {
+      const line = palette.selectedLine()
+      return [
+        ...(line ? await palette.sessions(line) : []),
+        ...palette.preferredCommandEntries(),
+        ...palette.recentFileEntries(),
+      ]
+    }
 
-    const [files, nextSessions] = await Promise.all([palette.file.searchFiles(q), Promise.resolve(palette.sessions(q))])
+    // A file with a line number names the same file, for anyone who came to open it.
+    const [files, nextSessions] = await Promise.all([
+      palette.file.searchFiles(q.replace(/(?::|#L)\d+$/, "")),
+      Promise.resolve(palette.sessions(q)),
+    ])
     const category = palette.language.t("palette.group.files")
-    return [
-      ...palette.commandEntries().filter((entry) => matchesEntry(entry, q)),
-      ...nextSessions,
-      ...files.map((path) => createCommandPaletteFileEntry(path, category)),
-    ]
+    const fileEntries = files.map((path) => createCommandPaletteFileEntry(path, category))
+    const commands = palette.commandEntries().filter((entry) => matchesEntry(entry, q))
+    // Typing a bare path is usually about opening that file, so the file comes first there.
+    return /\.[a-z0-9]{1,8}$/i.test(q) && !/\s/.test(q)
+      ? [...commands, ...fileEntries, ...nextSessions]
+      : [...commands, ...nextSessions, ...fileEntries]
   }
 
   return (
     <CommandPaletteView
       placeholder={palette.language.t("palette.search.placeholder")}
+      status={palette.sessions.status}
       loadItems={loadItems}
       highlight={palette.highlight}
       select={palette.select}
@@ -79,6 +93,7 @@ export function DialogHomeCommandPaletteV2(props: {
     server: ServerConnection.key(props.server),
     opened: serverCtx.projects.list,
     stored: () => serverCtx.sync.data.project,
+    search: (q, signal) => serverCtx.sdk.client.global.search({ q }, { signal, throwOnError: true }).then((r) => r.data),
     load: (search, signal) => serverCtx.sdk.api.session.list({ parentID: null, search, limit: 50 }, { signal }),
     untitled: () => language.t("command.session.new"),
     category: () => language.t("command.category.session"),
@@ -115,6 +130,7 @@ export function DialogHomeCommandPaletteV2(props: {
   return (
     <CommandPaletteView
       placeholder={language.t("palette.search.placeholder.home")}
+      status={sessions.status}
       loadItems={loadItems}
       highlight={highlight}
       select={select}
@@ -125,6 +141,7 @@ export function DialogHomeCommandPaletteV2(props: {
 
 function CommandPaletteView(props: {
   placeholder: string
+  status: () => SessionSearchStatus
   loadItems: (text: string) => CommandPaletteEntry[] | Promise<CommandPaletteEntry[]>
   highlight: (item: CommandPaletteEntry | undefined) => void
   select: (item: CommandPaletteEntry | undefined) => void
@@ -152,6 +169,14 @@ function CommandPaletteView(props: {
 
   createEffect(() => {
     props.highlight(activeEntry())
+  })
+
+  const statusText = createMemo(() => {
+    const status = props.status()
+    if (status.failed) return language.t("palette.sessions.failed")
+    if (status.titlesOnly) return language.t("palette.sessions.titlesOnly")
+    if (status.indexing === undefined) return undefined
+    return language.t("palette.sessions.indexing", { percent: Math.round(status.indexing * 100) })
   })
 
   let resultsRef: HTMLDivElement | undefined
@@ -239,6 +264,9 @@ function CommandPaletteView(props: {
                 )}
               </For>
             </Show>
+            <Show when={query().trim() && statusText()}>
+              {(text) => <div class="command-palette-v2-note">{text()}</div>}
+            </Show>
           </div>
         </ScrollView>
       </DialogBody>
@@ -266,6 +294,7 @@ function PaletteRow(props: {
       role="option"
       aria-selected={props.active}
       data-active={props.active ? "" : undefined}
+      data-hit={props.item.hit ? "" : undefined}
       onMouseMove={(event) => {
         // Ignore hover from a static cursor when keyboard scrolling moves rows underneath it.
         if (event.movementX === 0 && event.movementY === 0) return
@@ -319,16 +348,38 @@ function PaletteRow(props: {
                 )}
               </Show>
             </div>
-            <div class="command-palette-v2-row-text">
-              <span class="command-palette-v2-title" classList={{ "opacity-70": !!props.item.archived }}>
-                {props.item.title}
-              </span>
-              <Show when={props.item.description}>
-                <span class="command-palette-v2-description" classList={{ "opacity-70": !!props.item.archived }}>
-                  {props.item.description}
-                </span>
-              </Show>
-            </div>
+            <Show
+              when={props.item.hit}
+              fallback={
+                <div class="command-palette-v2-row-text">
+                  <span class="command-palette-v2-title" classList={{ "opacity-70": !!props.item.archived }}>
+                    {props.item.title}
+                  </span>
+                  <Show when={props.item.description}>
+                    <span class="command-palette-v2-description" classList={{ "opacity-70": !!props.item.archived }}>
+                      {props.item.description}
+                    </span>
+                  </Show>
+                </div>
+              }
+            >
+              {(hit) => (
+                <div class="command-palette-v2-hit" classList={{ "opacity-70": !!props.item.archived }}>
+                  <div class="command-palette-v2-row-text">
+                    <span class="command-palette-v2-title">{props.item.title}</span>
+                    <span class="command-palette-v2-description">{props.item.description}</span>
+                  </div>
+                  <div class="command-palette-v2-snippet">
+                    <Show when={hit().label}>
+                      <span class="command-palette-v2-snippet-label">{hit().label}</span>
+                    </Show>
+                    <For each={hit().snippet}>
+                      {(segment) => (segment.hit ? <mark>{segment.text}</mark> : <span>{segment.text}</span>)}
+                    </For>
+                  </div>
+                </div>
+              )}
+            </Show>
           </div>
           <Show when={props.item.updated}>
             <span class="command-palette-v2-meta">

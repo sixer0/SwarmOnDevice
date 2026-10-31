@@ -93,6 +93,8 @@ import type {
   GlobalLanesPatchInput,
   GlobalLanesUpdateErrors,
   GlobalLanesUpdateResponses,
+  GlobalSearchErrors,
+  GlobalSearchResponses,
   GlobalSetupErrors,
   GlobalSetupResponses,
   GlobalUpgradeErrors,
@@ -1418,6 +1420,38 @@ export class Global extends HeyApiClient {
     return (options?.client ?? this.client).get<GlobalAgentsResponses, GlobalAgentsErrors, ThrowOnError>({
       url: "/global/agents",
       ...options,
+    })
+  }
+
+  /**
+   * Search everything sessions said and did
+   *
+   * Searches prompts, answers, reasoning, edits and commands across every project on this machine, with no model involved. Understands plain questions, dates such as `last month`, and a file with an optional line (`src/auth.ts:42`), which answers which session wrote that line. A running agent is not affected: the index lives in its own file.
+   */
+  public search<ThrowOnError extends boolean = false>(
+    parameters: {
+      q: string
+      directory?: string
+      limit?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "q" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "limit" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<GlobalSearchResponses, GlobalSearchErrors, ThrowOnError>({
+      url: "/global/search",
+      ...options,
+      ...params,
     })
   }
 
