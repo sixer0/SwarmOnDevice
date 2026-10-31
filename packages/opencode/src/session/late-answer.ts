@@ -34,7 +34,8 @@ export const make = Effect.gen(function* () {
     yield* prompt.prompt({
       sessionID,
       agent: last?.info.role === "user" ? last.info.agent : undefined,
-      parts: [{ type: "text", text }],
+      // Keeps the spend limit's run open: this message must not read as someone starting a new one.
+      parts: [{ type: "text", text, metadata: { lateAnswer: true } }],
     })
   })
 

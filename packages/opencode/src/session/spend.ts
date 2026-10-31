@@ -38,10 +38,11 @@ const tree = Effect.fnUntraced(function* (sessions: Session.Interface, session: 
   return { root, descendants } satisfies Tree
 })
 
+// An answer to something the agent skipped belongs to the run it came from: it is not someone agreeing to a new one.
 const isPersonMessage = (message: SessionV1.WithParts) =>
   message.info.role === "user" &&
   !message.parts.some((part) => part.type === "compaction") &&
-  message.parts.some((part) => part.type === "text" && !part.synthetic && !part.ignored)
+  message.parts.some((part) => part.type === "text" && !part.synthetic && !part.ignored && !part.metadata?.lateAnswer)
 
 /** What this run has cost so far, read from the database so a resumed run keeps counting from where it was. */
 const measure = Effect.fnUntraced(function* (sessions: Session.Interface, input: Tree) {

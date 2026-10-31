@@ -17,6 +17,8 @@ import { Config } from "@/config/config"
 import { LSP } from "@/lsp/lsp"
 import { MCP } from "../../src/mcp"
 import { Permission } from "../../src/permission"
+import { PermissionV1 } from "@opencode-ai/core/v1/permission"
+import { QuestionID } from "../../src/question/schema"
 import { Plugin } from "../../src/plugin"
 import { Provider as ProviderSvc } from "@/provider/provider"
 import { Env } from "../../src/env"
@@ -27,6 +29,11 @@ import { Question } from "../../src/question"
 import { Todo } from "../../src/session/todo"
 import { Session } from "@/session/session"
 import { SessionSpend } from "@/session/spend"
+import { LateAnswer } from "@/session/late-answer"
+import { RunLease } from "@/session/run-lease"
+import { SessionResume } from "@/session/resume"
+import { Global } from "@opencode-ai/core/global"
+import { mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs"
 import { SessionMessageTable } from "@opencode-ai/core/session/sql"
 import { LLM } from "../../src/session/llm"
 import { MessageV2 } from "../../src/session/message-v2"
@@ -2664,6 +2671,398 @@ it.instance("subagents count toward the run, and they all share one question on 
     yield* service.reply({ requestID: asked.id, reply: "reject" })
     expect(yield* Fiber.join(a)).toBe(1)
     expect(yield* Fiber.join(b)).toBe(1)
+  }),
+)
+
+it.instance("a subagent resumed from an earlier run counts only what it spent in this one", () =>
+  Effect.gen(function* () {
+    yield* useServerConfig((url) => ({ ...paidCfg(url), spend_limit: 1 }))
+    const service = yield* Permission.Service
+    const sessions = yield* Session.Service
+    const root = yield* sessions.create({ title: "Root", permission: allowAll })
+    const helper = yield* sessions.create({ parentID: root.id, title: "helper" })
+    yield* spent(helper.id, 40, "stop")
+    yield* Effect.promise(() => Bun.sleep(5))
+    yield* user(root.id, "carry on")
+    yield* Effect.promise(() => Bun.sleep(5))
+    yield* spent(helper.id, 0.5)
+
+    const model = { cost: { ...paidCost, cache: { read: 0, write: 0 } } }
+    const input = { sessions, permission: service, limit: 1, model }
+    expect(yield* SessionSpend.check({ ...input, session: root })).toBeUndefined()
+    expect(yield* service.list()).toEqual([])
+
+    yield* spent(helper.id, 0.75)
+    const fiber = yield* SessionSpend.check({ ...input, session: root }).pipe(Effect.forkChild)
+    const asked = yield* waitForAsk("spend_limit")
+    expect(asked.patterns).toEqual(["$1.25 of $1.00"])
+    yield* service.reply({ requestID: asked.id, reply: "reject" })
+    expect(yield* Fiber.join(fiber)).toBe(1)
+  }),
+)
+
+it.instance("a late answer stays inside the run, so it cannot lift a spend limit that has been reached", () =>
+  Effect.gen(function* () {
+    const { llm } = yield* useServerConfig((url) => ({ ...paidCfg(url), spend_limit: 1 }))
+    const service = yield* Permission.Service
+    const sessions = yield* Session.Service
+    const chat = yield* sessions.create({ title: "Pinned", permission: allowAll })
+    yield* spent(chat.id, 2.5)
+    yield* llm.text("should wait for the person")
+
+    const late = yield* LateAnswer.make
+    const request = {
+      id: PermissionV1.ID.ascending(),
+      sessionID: chat.id,
+      permission: "bash",
+      patterns: ["git push"],
+      metadata: { command: "git push" },
+      always: [],
+    }
+    const fiber = yield* late.permission(request).pipe(Effect.forkChild)
+    const asked = yield* waitForAsk("spend_limit")
+    expect(asked.patterns).toEqual(["$2.50 of $1.00"])
+    expect(yield* llm.calls).toBe(0)
+    yield* service.reply({ requestID: asked.id, reply: "reject" })
+    yield* Fiber.join(fiber)
+    expect(yield* llm.calls).toBe(0)
+  }),
+)
+
+it.instance("a late answer to a subagent reaches the root session as the person's message, and the grant holds", () =>
+  Effect.gen(function* () {
+    const { llm } = yield* useServerConfig(providerCfg)
+    const service = yield* Permission.Service
+    const sessions = yield* Session.Service
+    const root = yield* sessions.create({ title: "Root", permission: allowAll })
+    const child = yield* sessions.create({ parentID: root.id, title: "helper" })
+    yield* seed(root.id, { finish: "stop" })
+    yield* llm.text("allowed, carrying on")
+    yield* llm.text("answered, carrying on")
+
+    const late = yield* LateAnswer.make
+    yield* late.permission({
+      id: PermissionV1.ID.ascending(),
+      sessionID: child.id,
+      permission: "bash",
+      patterns: ["git push"],
+      metadata: { command: "git push" },
+      always: [],
+    })
+    const texts = (yield* sessions.messages({ sessionID: root.id })).flatMap((message) =>
+      message.info.role !== "user"
+        ? []
+        : message.parts.flatMap((part) => (part.type === "text" ? [part.text] : [])),
+    )
+    expect(texts.at(-1)).toContain("`git push`")
+    // The one-shot grant is on the root, and lets exactly this call through once with no second prompt.
+    yield* service.ask({
+      sessionID: root.id,
+      permission: "bash",
+      patterns: ["git push"],
+      metadata: {},
+      always: [],
+      ruleset: [],
+    })
+    expect(yield* service.list()).toEqual([])
+
+    yield* late.question(
+      {
+        id: QuestionID.ascending(),
+        sessionID: child.id,
+        questions: [{ question: "Which database?", header: "DB", options: [{ label: "SQLite", description: "" }] }],
+      },
+      [["SQLite"]],
+    )
+    const last = (yield* sessions.messages({ sessionID: root.id })).findLast((message) => message.info.role === "user")
+    expect(last?.parts.some((part) => part.type === "text" && part.text.includes('"Which database?": SQLite'))).toBe(true)
+    expect(yield* llm.calls).toBe(2)
+  }),
+)
+
+// Crash resume. It starts provider runs with nobody present, so what bounds it has to be pinned here.
+
+const leaseDir = () => path.join(Global.Path.state, "runs")
+const deadPid = () => Number(Bun.spawnSync(["sh", "-c", "echo $$"]).stdout.toString().trim())
+
+const interrupted = Effect.fn("test.interrupted")(function* (
+  sessionID: SessionID,
+  lease: { resumes?: number; stopped?: boolean; parentID?: string } = {},
+) {
+  const { directory } = yield* TestInstance
+  RunLease.enable()
+  mkdirSync(leaseDir(), { recursive: true })
+  writeFileSync(
+    path.join(leaseDir(), `${sessionID}.json`),
+    JSON.stringify({ version: 1, directory, pid: deadPid(), resumes: 0, sessionID, ...lease }),
+  )
+  return directory
+})
+
+const leases = () =>
+  Effect.sync(() => {
+    try {
+      return readdirSync(leaseDir())
+    } catch {
+      return [] as string[]
+    }
+  })
+
+const clearLeases = Effect.sync(() => rmSync(leaseDir(), { recursive: true, force: true }))
+
+const openTool = Effect.fn("test.openTool")(function* (
+  sessionID: SessionID,
+  tool: string,
+  metadata: Record<string, unknown> = {},
+) {
+  const sessions = yield* Session.Service
+  const seeded = yield* seed(sessionID)
+  const part = yield* sessions.updatePart({
+    id: PartID.ascending(),
+    messageID: seeded.assistant.id,
+    sessionID,
+    type: "tool",
+    callID: `call_${tool}`,
+    tool,
+    state: {
+      status: "running",
+      input: { command: "git push origin main" },
+      metadata,
+      time: { start: Date.now() },
+    },
+  } satisfies SessionV1.ToolPart)
+  return { ...seeded, part }
+})
+
+const toolAfter = Effect.fn("test.toolAfter")(function* (sessionID: SessionID, partID: PartID) {
+  const sessions = yield* Session.Service
+  const part = (yield* sessions.messages({ sessionID }))
+    .flatMap((message) => message.parts)
+    .find((item) => item.id === partID)
+  return part?.type === "tool" ? part : undefined
+})
+
+it.instance("resume: an interrupted run continues once, says the call may have run, and does not repeat it", () =>
+  Effect.gen(function* () {
+    yield* clearLeases
+    const { llm } = yield* useServerConfig(providerCfg)
+    const sessions = yield* Session.Service
+    const chat = yield* sessions.create({ title: "Pinned", permission: allowAll })
+    const seeded = yield* openTool(chat.id, "bash")
+    const directory = yield* interrupted(chat.id)
+    yield* llm.text("picked up where it left off")
+
+    const claimed = RunLease.claimInterrupted({ only: directory })
+    expect(claimed.map((item) => item.action)).toEqual(["continue"])
+    expect(claimed[0].lease.resumes).toBe(1)
+    // A second server starting at the same moment finds nothing left to take.
+    expect(RunLease.claimInterrupted({ only: directory })).toEqual([])
+    yield* SessionResume.resumeDirectory(claimed)
+
+    const part = yield* toolAfter(chat.id, seeded.part.id)
+    expect(part?.state.status).toBe("error")
+    expect(part?.state.status === "error" && part.state.error).toBe(SessionResume.INTERRUPTED_TOOL)
+    expect(part?.state.status === "error" && part.state.metadata?.interrupted).toBe(true)
+    expect(yield* llm.calls).toBe(1)
+    expect(yield* leases()).toEqual([])
+    expect(JSON.stringify((yield* llm.hits)[0].body.messages)).toContain(SessionResume.INTERRUPTED_TOOL)
+  }),
+)
+
+it.instance("resume: a call stopped at a permission prompt reads as not run, and the model is told so", () =>
+  Effect.gen(function* () {
+    yield* clearLeases
+    const { llm } = yield* useServerConfig(providerCfg)
+    const sessions = yield* Session.Service
+    const chat = yield* sessions.create({ title: "Pinned", permission: allowAll })
+    const seeded = yield* openTool(chat.id, "bash", { waitingOnPermission: true })
+    const directory = yield* interrupted(chat.id)
+    yield* llm.text("I will ask again")
+
+    yield* SessionResume.resumeDirectory(RunLease.claimInterrupted({ only: directory }))
+
+    const part = yield* toolAfter(chat.id, seeded.part.id)
+    expect(part?.state.status === "error" && part.state.error).toBe(SessionResume.NOT_RUN_TOOL)
+    expect(part?.state.status === "error" && part.state.metadata).toEqual({ notRun: "away" })
+    expect(JSON.stringify((yield* llm.hits)[0].body.messages)).toContain(SessionResume.NOT_RUN_TOOL)
+  }),
+)
+
+it.instance("resume: an unanswered question reads as not run too", () =>
+  Effect.gen(function* () {
+    yield* clearLeases
+    const { llm } = yield* useServerConfig(providerCfg)
+    const sessions = yield* Session.Service
+    const chat = yield* sessions.create({ title: "Pinned", permission: allowAll })
+    const seeded = yield* openTool(chat.id, "question")
+    const directory = yield* interrupted(chat.id)
+    yield* llm.text("I will ask again")
+
+    yield* SessionResume.resumeDirectory(RunLease.claimInterrupted({ only: directory }))
+
+    const part = yield* toolAfter(chat.id, seeded.part.id)
+    expect(part?.state.status === "error" && part.state.metadata?.notRun).toBe("away")
+  }),
+)
+
+it.instance("a tool waiting on permission is marked durably, and the mark goes once it is answered", () =>
+  Effect.gen(function* () {
+    const { llm } = yield* useServerConfig(providerCfg)
+    const prompt = yield* SessionPrompt.Service
+    const service = yield* Permission.Service
+    const sessions = yield* Session.Service
+    const chat = yield* sessions.create({
+      title: "Pinned",
+      permission: [{ permission: "bash", pattern: "*", action: "ask" as const }],
+    })
+    yield* prompt.prompt({ sessionID: chat.id, agent: "build", noReply: true, parts: [{ type: "text", text: "go" }] })
+    yield* llm.tool("bash", { command: "printf one", description: "step" })
+    yield* llm.text("done")
+
+    const fiber = yield* prompt.loop({ sessionID: chat.id }).pipe(Effect.forkChild)
+    const asked = yield* waitForAsk("bash")
+    const tool = () =>
+      sessions
+        .messages({ sessionID: chat.id })
+        .pipe(Effect.map((messages) => toolPart(messages.flatMap((message) => message.parts))))
+    const waiting = yield* tool()
+    expect(waiting?.state.status === "running" && waiting.state.metadata?.waitingOnPermission).toBe(true)
+
+    yield* service.reply({ requestID: asked.id, reply: "once" })
+    yield* Fiber.join(fiber)
+    const finished = yield* tool()
+    expect(finished?.state.status).toBe("completed")
+    expect(finished?.state.status === "completed" && finished.state.metadata?.waitingOnPermission).toBeUndefined()
+  }),
+)
+
+it.instance("resume: past the cap nothing is sent, and the run says it was not safe to continue", () =>
+  Effect.gen(function* () {
+    yield* clearLeases
+    const { llm } = yield* useServerConfig(providerCfg)
+    const sessions = yield* Session.Service
+    const chat = yield* sessions.create({ title: "Pinned", permission: allowAll })
+    const seeded = yield* openTool(chat.id, "bash")
+    const directory = yield* interrupted(chat.id, { resumes: RunLease.MAX_RESUMES })
+
+    const claimed = RunLease.claimInterrupted({ only: directory })
+    expect(claimed.map((item) => item.action)).toEqual(["exhausted"])
+    yield* SessionResume.resumeDirectory(claimed)
+
+    expect(yield* llm.calls).toBe(0)
+    expect(yield* leases()).toEqual([])
+    const info = (yield* sessions.messages({ sessionID: chat.id })).find((message) => message.info.id === seeded.assistant.id)?.info
+    expect(info?.role === "assistant" && info.error?.data).toMatchObject({
+      message: expect.stringContaining("not safe to continue"),
+    })
+  }),
+)
+
+it.instance("resume: a run the person stopped stays stopped", () =>
+  Effect.gen(function* () {
+    yield* clearLeases
+    const { llm } = yield* useServerConfig(providerCfg)
+    const sessions = yield* Session.Service
+    const chat = yield* sessions.create({ title: "Pinned", permission: allowAll })
+    const seeded = yield* openTool(chat.id, "bash")
+    const directory = yield* interrupted(chat.id, { stopped: true })
+
+    const claimed = RunLease.claimInterrupted({ only: directory })
+    expect(claimed.map((item) => item.action)).toEqual(["stopped"])
+    yield* SessionResume.resumeDirectory(claimed)
+
+    expect(yield* llm.calls).toBe(0)
+    expect(yield* leases()).toEqual([])
+    const info = (yield* sessions.messages({ sessionID: chat.id })).find((message) => message.info.id === seeded.assistant.id)?.info
+    expect(info?.role === "assistant" && info.error?.name).toBe("MessageAbortedError")
+  }),
+)
+
+it.instance("resume: a run over its spend limit asks before sending anything, and Stop ends it", () =>
+  Effect.gen(function* () {
+    yield* clearLeases
+    const { llm } = yield* useServerConfig((url) => ({ ...paidCfg(url), spend_limit: 1 }))
+    const service = yield* Permission.Service
+    const sessions = yield* Session.Service
+    const chat = yield* sessions.create({ title: "Pinned", permission: allowAll })
+    yield* spent(chat.id, 2.5)
+    const directory = yield* interrupted(chat.id)
+
+    const fiber = yield* SessionResume.resumeDirectory(RunLease.claimInterrupted({ only: directory })).pipe(
+      Effect.forkChild,
+    )
+    const asked = yield* waitForAsk("spend_limit")
+    expect(asked.patterns).toEqual(["$2.50 of $1.00"])
+    expect(yield* llm.calls).toBe(0)
+    yield* service.reply({ requestID: asked.id, reply: "reject" })
+    yield* Fiber.join(fiber)
+    expect(yield* llm.calls).toBe(0)
+    expect(yield* leases()).toEqual([])
+  }),
+)
+
+it.instance("resume: a parent waiting on a subagent gets the subagent's answer, from one shared run of it", () =>
+  Effect.gen(function* () {
+    yield* clearLeases
+    const { llm } = yield* useServerConfig(providerCfg)
+    const sessions = yield* Session.Service
+    const root = yield* sessions.create({ title: "Root", permission: allowAll })
+    const child = yield* sessions.create({ parentID: root.id, title: "helper", permission: allowAll })
+    yield* user(child.id, "look into it")
+    const seeded = yield* openTool(root.id, "task", { sessionId: child.id })
+    const directory = yield* interrupted(child.id, { parentID: root.id })
+    yield* interrupted(root.id)
+    yield* llm.textMatch(
+      (hit) => !JSON.stringify(hit.body.messages).includes("the helper found it"),
+      "the helper found it",
+    )
+    yield* llm.text("root finished")
+
+    const claimed = RunLease.claimInterrupted({ only: directory })
+    expect(claimed.length).toBe(2)
+    yield* SessionResume.resumeDirectory(claimed)
+
+    const part = yield* toolAfter(root.id, seeded.part.id)
+    expect(part?.state.status).toBe("completed")
+    expect(part?.state.status === "completed" && part.state.output).toContain("the helper found it")
+    expect(yield* llm.calls).toBe(2)
+    expect(yield* leases()).toEqual([])
+  }),
+)
+
+it.instance("resume: a lease for a session that no longer exists is dropped", () =>
+  Effect.gen(function* () {
+    yield* clearLeases
+    const { llm } = yield* useServerConfig(providerCfg)
+    const directory = yield* interrupted(SessionID.make("ses_gone"))
+
+    yield* SessionResume.resumeDirectory(RunLease.claimInterrupted({ only: directory }))
+
+    expect(yield* llm.calls).toBe(0)
+    expect(yield* leases()).toEqual([])
+  }),
+)
+
+it.instance("still over the price target right after compacting: it does not compact again on every step", () =>
+  Effect.gen(function* () {
+    const { llm } = yield* useServerConfig((url) => ({ ...paidCfg(url), compaction: { max_context: 20_000 } }))
+    const prompt = yield* SessionPrompt.Service
+    const sessions = yield* Session.Service
+    const chat = yield* sessions.create({ title: "Pinned", permission: allowAll })
+    yield* prompt.prompt({ sessionID: chat.id, agent: "build", noReply: true, parts: [{ type: "text", text: "go" }] })
+    const large = { input: 50_000, output: 10 }
+    const step = (command: string) => reply().tool("bash", { command, description: "step" }).usage(large)
+    yield* llm.push(step("printf one"))
+    yield* llm.text("the summary", { usage: { input: 1_000, output: 10 } })
+    yield* llm.push(step("printf two"))
+    yield* llm.push(step("printf three"))
+    yield* llm.text("done", { usage: large })
+
+    yield* prompt.loop({ sessionID: chat.id })
+
+    const parts = (yield* sessions.messages({ sessionID: chat.id })).flatMap((message) => message.parts)
+    expect(parts.filter((part) => part.type === "compaction").length).toBe(1)
+    expect(yield* llm.pending).toBe(0)
   }),
 )
 

@@ -84,15 +84,36 @@ export const resolve = Effect.fn("SessionTools.resolve")(function* (input: {
           },
         }
       }),
-    ask: (req) =>
-      permission
-        .ask({
-          ...req,
-          sessionID: input.session.id,
-          tool: { messageID: input.processor.message.id, callID: options.toolCallId },
-          ruleset: Permission.merge(input.agent.permission, input.session.permission ?? []),
+    ask: (req) => {
+      // Requests live in memory, so a crash loses them. This is what tells a restart that the call never ran.
+      const waiting = (value: boolean) =>
+        input.processor.updateToolCall(options.toolCallId, (match) => {
+          if (match.state.status !== "running" && match.state.status !== "pending") return match
+          const { waitingOnPermission: _, ...metadata } = ("metadata" in match.state && match.state.metadata) || {}
+          return {
+            ...match,
+            state: {
+              title: "title" in match.state ? match.state.title : undefined,
+              metadata: value ? { ...metadata, waitingOnPermission: true } : metadata,
+              status: "running" as const,
+              input: args,
+              time: match.state.status === "running" ? match.state.time : { start: Date.now() },
+            },
+          }
         })
-        .pipe(Effect.orDie),
+      return waiting(true).pipe(
+        Effect.andThen(
+          permission.ask({
+            ...req,
+            sessionID: input.session.id,
+            tool: { messageID: input.processor.message.id, callID: options.toolCallId },
+            ruleset: Permission.merge(input.agent.permission, input.session.permission ?? []),
+          }),
+        ),
+        Effect.ensuring(waiting(false).pipe(Effect.ignore)),
+        Effect.orDie,
+      )
+    },
   })
 
   for (const item of yield* registry.tools({

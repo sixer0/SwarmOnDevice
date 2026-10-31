@@ -15,6 +15,10 @@ import { Session } from "./session"
 export const INTERRUPTED_TOOL =
   "[Swarm restarted while this tool was running. It may have partly run, or may still be running in the background. Check the current state before repeating it.]"
 
+/** The same moment for a call stopped at a prompt: it is known not to have run, and the person was never asked. */
+export const NOT_RUN_TOOL =
+  "[Swarm restarted while this call was waiting for a person, so it did not run and nobody answered. If it is still needed, make the call again.]"
+
 type Run = Effect.Effect<SessionV1.WithParts | undefined>
 
 const resumeAll = Effect.fn("SessionResume.resumeAll")(function* (found: RunLease.Interrupted[]) {
@@ -35,7 +39,7 @@ const resumeAll = Effect.fn("SessionResume.resumeAll")(function* (found: RunLeas
   )
 })
 
-const resumeDirectory = Effect.fn("SessionResume.resumeDirectory")(function* (items: RunLease.Interrupted[]) {
+export const resumeDirectory = Effect.fn("SessionResume.resumeDirectory")(function* (items: RunLease.Interrupted[]) {
   const sessions = yield* Session.Service
   const prompt = yield* SessionPrompt.Service
   const runs = new Map<string, Run>()
@@ -48,11 +52,26 @@ const resumeDirectory = Effect.fn("SessionResume.resumeDirectory")(function* (it
         Effect.catchCause(() => Effect.succeed(undefined)),
       )
 
-  const interrupt = Effect.fnUntraced(function* (part: SessionV1.ToolPart, text = INTERRUPTED_TOOL) {
+  const interrupt = Effect.fnUntraced(function* (part: SessionV1.ToolPart, stated?: string) {
     const state = part.state
     if (state.status !== "pending" && state.status !== "running") return
     const end = Date.now()
-    const metadata = "metadata" in state && isRecord(state.metadata) ? state.metadata : {}
+    const { waitingOnPermission, ...metadata } = "metadata" in state && isRecord(state.metadata) ? state.metadata : {}
+    const start = "time" in state ? state.time.start : end
+    if (!stated && (part.tool === "question" || waitingOnPermission === true)) {
+      yield* sessions.updatePart({
+        ...part,
+        state: {
+          status: "error",
+          input: state.input,
+          error: NOT_RUN_TOOL,
+          metadata: { ...metadata, notRun: "away" },
+          time: { start, end },
+        },
+      })
+      return
+    }
+    const text = stated ?? INTERRUPTED_TOOL
     yield* sessions.updatePart({
       ...part,
       state: {
@@ -65,7 +84,7 @@ const resumeDirectory = Effect.fn("SessionResume.resumeDirectory")(function* (it
           interrupted: true,
           ...(typeof metadata.output === "string" ? { output: `${metadata.output}\n\n${text}` } : {}),
         },
-        time: { start: "time" in state ? state.time.start : end, end },
+        time: { start, end },
       },
     })
   })
@@ -150,7 +169,10 @@ const resumeDirectory = Effect.fn("SessionResume.resumeDirectory")(function* (it
         Effect.as(true),
         Effect.catchCause(() => Effect.succeed(false)),
       )
-      if (!exists) return undefined
+      if (!exists) {
+        RunLease.end(sessionID)
+        return undefined
+      }
       yield* Effect.logInfo("resuming interrupted run", {
         "session.id": sessionID,
         action: item.action,
