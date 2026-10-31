@@ -321,6 +321,8 @@ const layer = Layer.effect(
         // explicitly so the migration can treat the baseline value as absent (FR-DEF-04:
         // the baseline must not override an explicit user setting; r100 fix round).
         let userSetShare = false
+        // Same reason for the permission catch-all: the baseline always sets it, so only the sources can say whose it is.
+        let userSetCatchAll = false
         const authEnv: Record<string, string> = {}
         const consoleManagedProviders = new Set<string>()
         let activeOrgName: string | undefined
@@ -355,6 +357,7 @@ const layer = Layer.effect(
 
         const merge = (source: string, next: Info, kind?: ConfigPlugin.Scope) => {
           if ("share" in next) userSetShare = true
+          if (next.permission && "*" in next.permission) userSetCatchAll = true
           result = mergeConfigConcatArrays(result, next)
           return mergePluginOrigins(source, next.plugin, kind)
         }
@@ -531,7 +534,9 @@ const layer = Layer.effect(
 
         if (Flag.OPENCODE_PERMISSION) {
           try {
-            result.permission = mergeDeep(result.permission ?? {}, JSON.parse(Flag.OPENCODE_PERMISSION))
+            const fromEnv = JSON.parse(Flag.OPENCODE_PERMISSION)
+            if ("*" in fromEnv) userSetCatchAll = true
+            result.permission = mergeDeep(result.permission ?? {}, fromEnv)
           } catch (err) {
             yield* Effect.logWarning("OPENCODE_PERMISSION contains invalid JSON, skipping", { err })
           }
@@ -573,6 +578,15 @@ const layer = Layer.effect(
         if (Flag.OPENCODE_DISABLE_PRUNE) {
           result.compaction = { ...result.compaction, prune: false }
         }
+
+        // Read by Permission.fromConfig. On the block itself and not enumerable, so it never reaches a config file or the API.
+        const owned = [
+          ...(userSetCatchAll && result.permission ? [result.permission] : []),
+          ...Object.values(result.agent ?? {}).flatMap((agent) =>
+            agent?.permission && "*" in agent.permission ? [agent.permission] : [],
+          ),
+        ]
+        for (const block of owned) Object.defineProperty(block, Symbol.for("swarm.permission.userCatchAll"), { value: true })
 
         return {
           config: result,

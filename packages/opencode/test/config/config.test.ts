@@ -6,6 +6,7 @@ import { Cause, Effect, Exit, Layer, Logger, Option } from "effect"
 import { NamedError } from "@opencode-ai/core/util/error"
 import { FetchHttpClient, HttpClient, HttpClientResponse } from "effect/unstable/http"
 import { Config } from "@/config/config"
+import { Permission } from "@/permission"
 import { ConfigManaged } from "@/config/managed"
 import { ConfigParse } from "../../src/config/parse"
 import { ConfigV2Compat } from "../../src/config/v2-compat"
@@ -2256,3 +2257,27 @@ test("parseManagedPlist handles empty config", async () => {
   )
   expect(config.$schema).toBe("https://opencode.ai/config.json")
 })
+
+it.effect("a catch-all written by the user is not mistaken for the shipped baseline", () =>
+  withConfigTree(
+    { project: { permission: { "*": "ask" } } },
+    Effect.gen(function* () {
+      const permission = (yield* Config.use.get()).permission ?? {}
+      const rule = Permission.fromConfig(permission).find((item) => item.permission === "*")
+      expect(rule?.action).toBe("ask")
+      expect(Permission.isShippedCatchAll(rule!)).toBe(false)
+      expect(JSON.stringify(permission)).not.toContain("userCatchAll")
+    }),
+  ),
+)
+
+it.effect("the baseline's catch-all still counts as shipped when no source writes one", () =>
+  withConfigTree(
+    { project: { permission: { read: "allow" } } },
+    Effect.gen(function* () {
+      const rule = Permission.fromConfig((yield* Config.use.get()).permission ?? {}).find((item) => item.permission === "*")
+      expect(rule?.action).toBe("ask")
+      expect(Permission.isShippedCatchAll(rule!)).toBe(true)
+    }),
+  ),
+)
