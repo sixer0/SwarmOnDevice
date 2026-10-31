@@ -26,6 +26,8 @@ export type SessionCommandContext = {
   navigateMessageByOffset: (offset: number) => void
   setActiveMessage: (message: UserMessage | undefined) => void
   focusInput: () => void
+  toggleSessionMap: () => void
+  goToProblem: (direction: 1 | -1) => void
   review?: () => boolean
   fileBrowser?: () => boolean
 }
@@ -506,6 +508,27 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
       keybind: "mod+alt+]",
       disabled: !params.id,
       onSelect: () => navigateMessageByOffset(1),
+    }),
+    sessionCommand({
+      id: "session.map.toggle",
+      title: language.t("command.session.map.toggle"),
+      keybind: "mod+shift+k",
+      disabled: !params.id,
+      onSelect: actions.toggleSessionMap,
+    }),
+    sessionCommand({
+      id: "session.map.problem.next",
+      title: language.t("command.session.map.problem.next"),
+      keybind: "f8",
+      disabled: !params.id,
+      onSelect: () => actions.goToProblem(1),
+    }),
+    sessionCommand({
+      id: "session.map.problem.previous",
+      title: language.t("command.session.map.problem.previous"),
+      keybind: "shift+f8",
+      disabled: !params.id,
+      onSelect: () => actions.goToProblem(-1),
     }),
   ]
 

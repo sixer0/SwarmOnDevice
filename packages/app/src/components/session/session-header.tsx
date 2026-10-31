@@ -137,7 +137,9 @@ const showRequestError = (language: ReturnType<typeof useLanguage>, err: unknown
   })
 }
 
-export function SessionHeader() {
+export type SessionHeaderMap = { visible: boolean; opened: boolean; newProblems: number; toggle: () => void }
+
+export function SessionHeader(props: { map?: SessionHeaderMap }) {
   const layout = useLayout()
   const command = useCommand()
   const server = useServer()
@@ -445,6 +447,24 @@ export function SessionHeader() {
                         <StatusPopover />
                       </Tooltip>
                     </Show>
+                    <Show when={props.map?.visible}>
+                      <TooltipKeybind
+                        title={language.t("command.session.map.toggle")}
+                        keybind={command.keybind("session.map.toggle")}
+                      >
+                        <Button
+                          variant="ghost"
+                          class="titlebar-icon relative w-8 h-6 p-0 box-border shrink-0"
+                          onClick={() => props.map?.toggle()}
+                          aria-label={language.t("command.session.map.toggle")}
+                          aria-expanded={props.map?.opened}
+                          aria-controls="session-map-panel"
+                        >
+                          <Icon size="small" name="bullet-list" />
+                          <SessionMapBadge count={props.map?.newProblems ?? 0} />
+                        </Button>
+                      </TooltipKeybind>
+                    </Show>
                     <TooltipKeybind
                       title={language.t("command.terminal.toggle")}
                       keybind={command.keybind("terminal.toggle")}
@@ -507,7 +527,11 @@ export function SessionHeader() {
                 </div>
               }
             >
-              <SessionHeaderV2Actions state={v2ActionsState()} />
+              <SessionHeaderV2Actions
+                state={v2ActionsState()}
+                map={props.map}
+                mapKeybind={command.keybindParts("session.map.toggle")}
+              />
             </Show>
           </Portal>
         )}
@@ -526,7 +550,24 @@ type SessionHeaderV2ActionsState = {
   onReviewToggle: () => void
 }
 
-function SessionHeaderV2Actions(props: { state: SessionHeaderV2ActionsState }) {
+function SessionMapBadge(props: { count: number }) {
+  return (
+    <Show when={props.count > 0}>
+      <span
+        data-component="session-map-badge"
+        class="absolute -right-0.5 -top-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-v2-state-fg-danger px-0.5 text-[10px] leading-none text-v2-background-bg-base tabular-nums"
+      >
+        {props.count}
+      </span>
+    </Show>
+  )
+}
+
+function SessionHeaderV2Actions(props: {
+  state: SessionHeaderV2ActionsState
+  map?: SessionHeaderMap
+  mapKeybind: string[]
+}) {
   const language = useLanguage()
 
   return (
@@ -535,6 +576,36 @@ function SessionHeaderV2Actions(props: { state: SessionHeaderV2ActionsState }) {
         <Tooltip placement="bottom" value={props.state.statusLabel}>
           <StatusPopoverV2 />
         </Tooltip>
+      </Show>
+      <Show when={props.map?.visible}>
+        <TooltipV2
+          class="shrink-0"
+          placement="bottom"
+          value={
+            <>
+              {language.t("command.session.map.toggle")}
+              <Show when={props.mapKeybind.length > 0}>
+                <KeybindV2 keys={props.mapKeybind} variant="neutral" />
+              </Show>
+            </>
+          }
+        >
+          <div class="relative">
+            <IconButtonV2
+              type="button"
+              variant="ghost-muted"
+              size="large"
+              class="!w-9 shrink-0"
+              state={props.map?.opened ? "pressed" : undefined}
+              onClick={() => props.map?.toggle()}
+              aria-label={language.t("command.session.map.toggle")}
+              aria-expanded={props.map?.opened}
+              aria-controls="session-map-panel"
+              icon={<Icon name="bullet-list" size="small" />}
+            />
+            <SessionMapBadge count={props.map?.newProblems ?? 0} />
+          </div>
+        </TooltipV2>
       </Show>
       <Show when={props.state.reviewVisible}>
         <TooltipV2

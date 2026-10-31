@@ -77,6 +77,7 @@ import { observeElementOffsetReconnectAware } from "./observe-element-offset"
 import { createTimelineProjection } from "./projection"
 import { MessageComment, SummaryDiff, TimelineRow, TimelineRowMap } from "./rows"
 import { filterVirtualIndexes } from "./virtual-items"
+import type { MapTarget } from "@/pages/session/map/session-map-controller"
 
 const emptyMessages: MessageType[] = []
 const emptyParts: PartType[] = []
@@ -253,6 +254,8 @@ export function MessageTimeline(props: {
   userMessages: UserMessage[]
   anchor: (id: string) => string
   setRevealMessage?: (fn: (id: string) => void) => void
+  setRevealTarget?: (fn: (target: MapTarget) => void) => void
+  onVisibleTurn?: (id: string | undefined) => void
   setScrollToEnd?: (fn: () => void) => void
   setHistoryAnchor?: (handlers: { capture: () => void; restore: (done: boolean) => void }) => void
 }) {
@@ -498,12 +501,77 @@ export function MessageTimeline(props: {
     () => new Map(virtualizer.getVirtualItems().map((item) => [item.key, item] as const)),
   )
   const virtualRowKeys = createMemo(() => virtualizer.getVirtualItems().map((item) => item.key as string))
+  // A jump from the session map lands on one row of a virtualized list: open what the reader came to see, scroll until
+  // the row exists, then mark it so the eye can find it.
+  let revealFrame: number | undefined
+  const revealTarget = (target: MapTarget) => {
+    const rows = timelineRows()
+    const partRow = target.partID
+      ? rows.findIndex(
+          (row) =>
+            row._tag === "AssistantPart" &&
+            (row.group.type === "part"
+              ? row.group.ref.partID === target.partID
+              : row.group.refs.some((ref) => ref.partID === target.partID)),
+        )
+      : -1
+    const errorRow = target.error
+      ? rows.findIndex((row) => row._tag === "Error" && row.userMessageID === target.turnID)
+      : -1
+    const promptRow = rows.findIndex((row) => row._tag === "UserMessage" && row.userMessageID === target.turnID)
+    const index = partRow >= 0 ? partRow : errorRow >= 0 ? errorRow : promptRow
+    if (index < 0) return
+    const row = rows[index]
+    if (row?._tag === "AssistantPart") {
+      if (row.group.type === "context") setToolOpen(`context:${row.group.key}`, true)
+      else if (getMsgPart(row.group.ref.messageID, row.group.ref.partID)?.type === "tool")
+        setToolOpen(row.group.ref.partID, true)
+    }
+    virtualizer.scrollToIndex(index, { align: "center" })
+    if (!row) return
+    const key = TimelineRow.key(row)
+    if (revealFrame !== undefined) cancelAnimationFrame(revealFrame)
+    let frames = 0
+    const mark = () => {
+      revealFrame = undefined
+      const element = listRoot()?.querySelector<HTMLElement>(`[data-timeline-key="${CSS.escape(key)}"] > [data-index]`)
+      if (!element) {
+        frames += 1
+        if (frames < 120) revealFrame = requestAnimationFrame(mark)
+        return
+      }
+      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return
+      listRoot()
+        ?.querySelectorAll("[data-map-revealed]")
+        .forEach((node) => node.removeAttribute("data-map-revealed"))
+      element.dataset.mapRevealed = ""
+      element.animate(
+        [
+          { backgroundColor: "var(--v2-state-bg-info)", offset: 0 },
+          { backgroundColor: "var(--v2-state-bg-info)", offset: 0.4 },
+          { backgroundColor: "transparent", offset: 1 },
+        ],
+        { duration: 1400, easing: "ease-out" },
+      )
+    }
+    revealFrame = requestAnimationFrame(mark)
+  }
+  onCleanup(() => {
+    if (revealFrame !== undefined) cancelAnimationFrame(revealFrame)
+  })
+  createEffect(() => {
+    virtualRowKeys()
+    const range = virtualizer.range
+    if (!range) return
+    props.onVisibleTurn?.(timelineRows()[Math.floor((range.startIndex + range.endIndex) / 2)]?.userMessageID)
+  })
   createEffect(() => {
     props.setRevealMessage?.((id) => {
       const index = messageRowIndex().get(id)
       if (index === undefined) return
       virtualizer.scrollToIndex(index, { align: "center" })
     })
+    props.setRevealTarget?.(revealTarget)
     props.setScrollToEnd?.(() => virtualizer.scrollToEnd())
     props.setHistoryAnchor?.({ capture: capturePrependAnchor, restore: restorePrependAnchor })
   })
@@ -548,6 +616,7 @@ export function MessageTimeline(props: {
     if (resizePinFrame !== undefined) cancelAnimationFrame(resizePinFrame)
     if (overscanFrame !== undefined) cancelAnimationFrame(overscanFrame)
     props.setRevealMessage?.(() => {})
+    props.setRevealTarget?.(() => {})
     props.setScrollToEnd?.(() => {})
     props.setHistoryAnchor?.({ capture: () => {}, restore: () => {} })
   })

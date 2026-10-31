@@ -94,6 +94,9 @@ import { TerminalPanelV2 } from "@/pages/session/terminal-panel-v2"
 import { useComposerCommands } from "@/pages/session/use-composer-commands"
 import { useSessionCommands } from "@/pages/session/use-session-commands"
 import { useSessionHashScroll } from "@/pages/session/use-session-hash-scroll"
+import { createSessionMap, type MapTarget } from "@/pages/session/map/session-map-controller"
+import { stepReference, type MapChapter, type MapStep } from "@/pages/session/map/session-map-model"
+import { SessionMapPanel } from "@/pages/session/map/session-map-view"
 import { Identifier } from "@/utils/id"
 import { diffs as list } from "@/utils/diffs"
 import { Persist, persisted } from "@/utils/persist"
@@ -1136,11 +1139,65 @@ export default function Page() {
     inputRef?.focus()
   }
 
+  let revealTarget = (_target: MapTarget) => {}
+  const [visibleTurn, setVisibleTurn] = createSignal<string>()
+  const sessionMap = createSessionMap({
+    sessionID: () => params.id,
+    messages: timeline.messages,
+    parts: (messageID) => sync().data.part[messageID] ?? [],
+    revertMessageID,
+    historyMore,
+    historyLoading,
+    loadOlder: () => loadOlder(),
+    reveal: (target) => {
+      autoScroll.pause()
+      revealTarget(target)
+      // On a phone the panel covers the transcript it just moved.
+      if (!isDesktop()) sessionMap.close()
+    },
+    visibleTurn,
+  })
+  const toggleSessionMap = () => {
+    if (!sessionMap.opened()) return sessionMap.toggle()
+    closeSessionMap()
+  }
+  const closeSessionMap = () => {
+    sessionMap.close()
+    focusInput()
+  }
+  const goToProblem = (direction: 1 | -1) =>
+    void sessionMap.problem(direction).then((found) => {
+      if (!found) showToast({ title: language.t("session.map.noProblems") })
+    })
+  // Steering from the map: the reference lands in the composer after whatever is already drafted, and nothing is sent.
+  const askAboutStep = (step: MapStep) => {
+    const parts = prompt.current()
+    const last = parts.at(-1)
+    const lead = language.t("session.map.ask.prefix", { step: stepReference(step) })
+    const body = last?.type === "text" ? last.content + (last.content.trim() ? "\n\n" : "") + lead : lead
+    const start =
+      last?.type === "text"
+        ? last.start
+        : parts.reduce((end, part) => ("end" in part && part.end ? Math.max(end, part.end) : end), 0)
+    const next = [
+      ...(last?.type === "text" ? parts.slice(0, -1) : parts),
+      { type: "text" as const, content: body, start, end: start + body.length },
+    ]
+    prompt.set(next, start + body.length)
+    focusInput()
+  }
+  const rewindToChapter = (chapter: MapChapter) => {
+    if (!params.id) return
+    void revert({ sessionID: params.id, messageID: chapter.id })
+  }
+
   useComposerCommands()
   useSessionCommands({
     navigateMessageByOffset,
     setActiveMessage,
     focusInput,
+    toggleSessionMap,
+    goToProblem,
     review: reviewTab,
     fileBrowser: () => newSessionDesign() && isDesktop() && !!params.id,
   })
@@ -2058,6 +2115,21 @@ export default function Page() {
     return <SessionErrorFallback error={error} sessionID={params.id} />
   }
 
+  const sessionPanelWithMap = () => (
+    <div class="relative flex min-h-0 flex-1">
+      <div class="flex h-full min-w-0 flex-1 flex-col">{sessionPanelContent()}</div>
+      <Show when={params.id && sessionMap.opened() && !mobileChanges()}>
+        <SessionMapPanel
+          map={sessionMap}
+          directory={sdk().directory}
+          onAsk={askAboutStep}
+          onRewind={rewindToChapter}
+          onClose={closeSessionMap}
+        />
+      </Show>
+    </div>
+  )
+
   const sessionPanelContent = () => (
     <>
       {sessionSync() ?? ""}
@@ -2115,6 +2187,10 @@ export default function Page() {
                   setRevealMessage={(fn) => {
                     revealMessage = fn
                   }}
+                  setRevealTarget={(fn) => {
+                    revealTarget = fn
+                  }}
+                  onVisibleTurn={setVisibleTurn}
                   setScrollToEnd={(fn) => {
                     scrollToEnd = fn
                   }}
@@ -2248,7 +2324,14 @@ export default function Page() {
 
   return (
     <SessionRouteFrame>
-      <SessionHeader />
+      <SessionHeader
+        map={{
+          visible: !!params.id,
+          opened: sessionMap.opened(),
+          newProblems: sessionMap.opened() ? 0 : (sessionMap.fresh()?.problems ?? 0),
+          toggle: toggleSessionMap,
+        }}
+      />
       <div
         ref={panelRow}
         class="flex-1 min-h-0 flex flex-col md:flex-row"
@@ -2272,13 +2355,13 @@ export default function Page() {
             <Show when={sessionPanelKey()} keyed>
               {(_) => (
                 <SessionPanelFrame newLayout raised={!!params.id}>
-                  <ErrorBoundary fallback={sessionErrorFallback}>{sessionPanelContent()}</ErrorBoundary>
+                  <ErrorBoundary fallback={sessionErrorFallback}>{sessionPanelWithMap()}</ErrorBoundary>
                 </SessionPanelFrame>
               )}
             </Show>
           ) : (
             <SessionPanelFrame newLayout={false} raised={!!params.id}>
-              {sessionPanelContent()}
+              {sessionPanelWithMap()}
             </SessionPanelFrame>
           )}
 
