@@ -5,6 +5,7 @@ import { Format } from "@/format"
 import { Global } from "@opencode-ai/core/global"
 import { LSP } from "@/lsp/lsp"
 import { CommitDraft } from "@/project/commit-draft"
+import { SessionRerunnable } from "@/session/rerunnable"
 import { Vcs } from "@/project/vcs"
 import { Skill } from "@/skill"
 import { Effect } from "effect"
@@ -112,6 +113,9 @@ export const instanceHandlers = HttpApiBuilder.group(InstanceHttpApi, "instance"
         ),
       )
       .handle("vcsCommitDraft", (ctx) => commitDraft.write(ctx.payload))
+      .handle("shellRerunnable", (ctx) =>
+        Effect.succeed({ rerunnable: ctx.payload.commands.filter(SessionRerunnable.rerunnable) }),
+      )
       .handle("command", getCommand)
       .handle("agent", getAgent)
       .handle("skill", getSkill)

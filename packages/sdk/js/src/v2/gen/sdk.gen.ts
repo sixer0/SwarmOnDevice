@@ -256,6 +256,8 @@ import type {
   SessionUnshareResponses,
   SessionUpdateErrors,
   SessionUpdateResponses,
+  ShellRerunnableErrors,
+  ShellRerunnableResponses,
   SubtaskPartInput,
   SyncHistoryListErrors,
   SyncHistoryListResponses,
@@ -2367,6 +2369,45 @@ export class Vcs extends HeyApiClient {
   private _diff?: Diff
   get diff2(): Diff {
     return (this._diff ??= new Diff({ client: this.client }))
+  }
+}
+
+export class Shell extends HeyApiClient {
+  /**
+   * Check commands for a re-run
+   *
+   * Say which of these commands are one plain program that the shell tool's own classifier does not consider risky. Runs nothing.
+   */
+  public rerunnable<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+      commands?: Array<string>
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "commands" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<ShellRerunnableResponses, ShellRerunnableErrors, ThrowOnError>({
+      url: "/shell/rerunnable",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
   }
 }
 
@@ -7761,6 +7802,11 @@ export class OpencodeClient extends HeyApiClient {
   private _vcs?: Vcs
   get vcs(): Vcs {
     return (this._vcs ??= new Vcs({ client: this.client }))
+  }
+
+  private _shell?: Shell
+  get shell(): Shell {
+    return (this._shell ??= new Shell({ client: this.client }))
   }
 
   private _command?: Command

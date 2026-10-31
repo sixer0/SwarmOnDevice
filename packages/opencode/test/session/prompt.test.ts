@@ -2780,6 +2780,79 @@ it.instance("a late answer to a subagent reaches the root session as the person'
   }),
 )
 
+it.instance("skipped requests go away with a deleted or archived session, and live ones stay", () =>
+  Effect.acquireUseRelease(
+    Effect.sync(() => {
+      process.env.SWARM_UNATTENDED_AFTER_MS = "1"
+    }),
+    () =>
+      Effect.gen(function* () {
+        yield* useServerConfig(providerCfg)
+        const service = yield* Permission.Service
+        const questions = yield* Question.Service
+        const sessions = yield* Session.Service
+        const late = yield* LateAnswer.make
+        const kept = yield* sessions.create({ title: "kept" })
+        const archived = yield* sessions.create({ title: "archived" })
+        const helper = yield* sessions.create({ parentID: archived.id, title: "helper of archived" })
+        const deleted = yield* sessions.create({ title: "deleted" })
+        const skip = (sessionID: SessionID) =>
+          service
+            .ask({ sessionID, permission: "bash", patterns: ["git push"], metadata: {}, always: [], ruleset: [] })
+            .pipe(Effect.exit)
+        const skipQuestion = (sessionID: SessionID) =>
+          questions
+            .ask({
+              sessionID,
+              movesOn: true,
+              questions: [{ question: "Which?", header: "Which", options: [{ label: "A", description: "" }] }],
+            })
+            .pipe(Effect.exit)
+        for (const id of [kept.id, archived.id, helper.id, deleted.id]) {
+          yield* skip(id)
+          yield* skipQuestion(id)
+        }
+        expect((yield* service.list()).length).toBe(4)
+
+        yield* sessions.setArchived({ sessionID: archived.id, time: Date.now() })
+        yield* sessions.remove(deleted.id)
+        yield* late.forgetAbandoned()
+
+        expect((yield* service.list()).map((item) => item.sessionID)).toEqual([kept.id])
+        expect((yield* questions.list()).map((item) => item.sessionID)).toEqual([kept.id])
+      }),
+    () =>
+      Effect.sync(() => {
+        delete process.env.SWARM_UNATTENDED_AFTER_MS
+      }),
+  ),
+)
+
+it.instance("a server's reasoning_content lands in one thinking block per step, apart from the answer", () =>
+  Effect.gen(function* () {
+    const { llm } = yield* useServerConfig(providerCfg)
+    const prompt = yield* SessionPrompt.Service
+    const sessions = yield* Session.Service
+    const chat = yield* sessions.create({ title: "Pinned", permission: allowAll })
+    yield* prompt.prompt({ sessionID: chat.id, agent: "build", noReply: true, parts: [{ type: "text", text: "why?" }] })
+    yield* llm.push(reply().reason("Let me work this out.").text("Checking.").tool("bash", { command: "printf one", description: "step" }))
+    yield* llm.reason("Now I know.", { text: "Totals round twice." })
+
+    yield* prompt.loop({ sessionID: chat.id })
+
+    const steps = (yield* sessions.messages({ sessionID: chat.id })).filter((message) => message.info.role === "assistant")
+    const read = (type: "reasoning" | "text") =>
+      steps.flatMap((message) => message.parts.flatMap((part) => (part.type === type ? [part.text] : [])))
+    expect(read("reasoning")).toEqual(["Let me work this out.", "Now I know."])
+    expect(read("text")).toEqual(["Checking.", "Totals round twice."])
+    // Going back to the server it stays in its own field, and never reads as something the assistant said.
+    const sent = (yield* llm.hits).at(-1)?.body.messages as Array<Record<string, unknown>>
+    const assistant = sent.find((message) => message.role === "assistant")
+    expect(assistant?.content).toBe("Checking.")
+    expect(assistant?.reasoning_content).toBe("Let me work this out.")
+  }),
+)
+
 // Crash resume. It starts provider runs with nobody present, so what bounds it has to be pinned here.
 
 const leaseDir = () => path.join(Global.Path.state, "runs")

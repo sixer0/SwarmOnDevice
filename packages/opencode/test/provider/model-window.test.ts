@@ -34,6 +34,47 @@ describe("fromModels", () => {
   })
 })
 
+describe("an internal server's real answer", () => {
+  // Measured from the server this is built for, with its sibling models. It states both limits and no other field.
+  const body = {
+    object: "list",
+    data: [
+      { id: "worker", max_input_tokens: 131072, max_output_tokens: 16384 },
+      { id: "worker-fast", max_input_tokens: 65536, max_output_tokens: 8192 },
+      { id: "thinker", max_input_tokens: 786432, max_output_tokens: 120000 },
+      { id: "auto-efficient", max_input_tokens: 262144, max_output_tokens: 32768 },
+    ],
+  }
+
+  test("reads the model asked about, not a sibling", () => {
+    expect(ModelWindow.fromModels(body, "thinker")).toBe(786432)
+    expect(ModelWindow.outputFromModels(body, "thinker")).toBe(120000)
+    expect(ModelWindow.fromModels(body, "worker-fast")).toBe(65536)
+    expect(ModelWindow.outputFromModels(body, "missing")).toBeUndefined()
+    expect(ModelWindow.outputFromModels({ data: [{ id: "thinker", max_model_len: 32768 }] }, "thinker")).toBeUndefined()
+  })
+
+  test("discovery gives the configured model both limits, under the name the server knows it by", async () => {
+    const server = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: () => Response.json(body) })
+    try {
+      const thinker = {
+        ...model(undefined, "own-name"),
+        api: { npm: "@ai-sdk/openai-compatible", id: "thinker" },
+      }
+      ModelWindow.discover({
+        id: "internal",
+        options: { baseURL: `http://127.0.0.1:${server.port}/v1` },
+        models: { "own-name": thinker },
+      })
+      const end = Date.now() + 2000
+      while (Date.now() < end && !ModelWindow.apply(thinker).limit.context) await Bun.sleep(5)
+      expect(thinker.limit).toEqual({ context: 786432, output: 120000 })
+    } finally {
+      server.stop(true)
+    }
+  })
+})
+
 describe("fromError", () => {
   test.each([
     ["This model's maximum context length is 32768 tokens. However, you requested 40000 tokens", 32768],

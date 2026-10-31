@@ -491,6 +491,32 @@ it.instance("a question that opted in moves on, stays open, and a late reply han
   ),
 )
 
+it.instance("a session keeps only so many skipped questions, dropping the oldest", () =>
+  Effect.acquireUseRelease(
+    Effect.sync(() => {
+      process.env.SWARM_UNATTENDED_AFTER_MS = "1"
+    }),
+    () =>
+      Effect.gen(function* () {
+        const question = yield* Question.Service
+        const sessionID = SessionID.make("ses_night")
+        const other = SessionID.make("ses_other")
+        yield* question.ask({ sessionID: other, questions: [awayQuestion], movesOn: true }).pipe(Effect.exit)
+        for (let index = 0; index < Question.MAX_SKIPPED + 3; index++) {
+          yield* question.ask({ sessionID, questions: [awayQuestion], movesOn: true }).pipe(Effect.exit)
+        }
+        const listed = yield* question.list()
+        expect(listed.filter((item) => item.sessionID === sessionID)).toHaveLength(Question.MAX_SKIPPED)
+        // Another session's are not this one's to drop.
+        expect(listed.filter((item) => item.sessionID === other)).toHaveLength(1)
+      }),
+    () =>
+      Effect.sync(() => {
+        delete process.env.SWARM_UNATTENDED_AFTER_MS
+      }),
+  ),
+)
+
 it.instance("a question that did not opt in waits for a person", () =>
   Effect.acquireUseRelease(
     Effect.sync(() => {

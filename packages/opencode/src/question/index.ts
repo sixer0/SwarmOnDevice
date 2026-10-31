@@ -51,6 +51,9 @@ interface State {
 
 // Service
 
+/** How many moved-on questions one session keeps listed. */
+export const MAX_SKIPPED = 20
+
 export interface Interface {
   readonly ask: (input: {
     sessionID: SessionID
@@ -123,6 +126,14 @@ const layer = Layer.effect(
         away.add(input.sessionID)
         yield* Effect.logInfo("moved on", { id })
         yield* events.publish(Event.Asked, moved)
+        // An unattended night can skip far more of these than anyone will read. The oldest are the least likely to matter.
+        const skipped = [...pending.values()].filter(
+          (item) => item.info.movedOnAt && item.info.sessionID === input.sessionID,
+        )
+        for (const item of skipped.slice(0, Math.max(0, skipped.length - MAX_SKIPPED))) {
+          pending.delete(item.info.id)
+          yield* events.publish(Event.Rejected, { sessionID: item.info.sessionID, requestID: item.info.id })
+        }
         return yield* new AwayError()
       })
       return yield* Effect.ensuring(

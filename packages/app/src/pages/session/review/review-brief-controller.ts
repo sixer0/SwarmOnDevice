@@ -19,7 +19,6 @@ import {
   flaggedLines,
   nextOpenFile,
   reversePatch,
-  safeToRerun,
   type Brief,
   type BriefFile,
   type CheckKind,
@@ -77,6 +76,7 @@ export function createReviewBrief(input: {
     pendingUndo: undefined as string | undefined,
     undoing: false,
     rerunning: undefined as string | undefined,
+    rerunnable: {} as Record<string, boolean | undefined>,
     landing: false,
     landingFiles: false,
     // A person's tick wins over the default, and a person's words win over the draft, whatever arrives later.
@@ -385,7 +385,27 @@ export function createReviewBrief(input: {
 
   // ---- Re-running a check ---------------------------------------------------------------------------------------------
 
-  const canRerun = (command: string) => safeToRerun(command) && !rootBusy() && !!rootID() && !view.rerunning
+  // The server decides, with the same classifier the shell tool uses. Until it has said yes, or if it cannot say, no.
+  const askedRerunnable = new Set<string>()
+  createEffect(() => {
+    const commands = [
+      ...new Set(brief().evidence.flatMap((row) => (row.type === "check" ? [row.run.command] : []))),
+    ].filter((command) => !askedRerunnable.has(command))
+    if (commands.length === 0) return
+    commands.forEach((command) => askedRerunnable.add(command))
+    void input
+      .sdk()
+      .client.shell.rerunnable({ commands: commands.slice(0, 100) }, { throwOnError: true })
+      .then((result) => {
+        batch(() => commands.forEach((command) => setView("rerunnable", command, result.data.rerunnable.includes(command))))
+      })
+      .catch((error) => {
+        commands.forEach((command) => askedRerunnable.delete(command))
+        console.debug("[review-brief] could not check commands for a re-run", { error })
+      })
+  })
+
+  const canRerun = (command: string) => !!view.rerunnable[command] && !rootBusy() && !!rootID() && !view.rerunning
 
   const rerun = async (command: string) => {
     const id = rootID()

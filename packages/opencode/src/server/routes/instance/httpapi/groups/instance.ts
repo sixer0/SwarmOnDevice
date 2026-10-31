@@ -62,6 +62,7 @@ export const InstancePaths = {
   vcsApply: "/vcs/apply",
   vcsCommit: "/vcs/commit",
   vcsCommitDraft: "/vcs/commit-draft",
+  shellRerunnable: "/shell/rerunnable",
   command: "/command",
   agent: "/agent",
   skill: "/skill",
@@ -160,6 +161,21 @@ export const InstanceApi = HttpApi.make("instance")
             summary: "Commit files",
             description:
               "Commit exactly these paths from the working tree with this message. Other staged changes stay out. Never pushes.",
+          }),
+        ),
+        HttpApiEndpoint.post("shellRerunnable", InstancePaths.shellRerunnable, {
+          query: WorkspaceRoutingQuery,
+          payload: Schema.Struct({ commands: Schema.Array(Schema.String).check(Schema.isMaxLength(100)) }),
+          success: described(
+            Schema.Struct({ rerunnable: Schema.Array(Schema.String) }).annotate({ identifier: "ShellRerunnable" }),
+            "The commands from the list that may be offered for a re-run on one click",
+          ),
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "shell.rerunnable",
+            summary: "Check commands for a re-run",
+            description:
+              "Say which of these commands are one plain program that the shell tool's own classifier does not consider risky. Runs nothing.",
           }),
         ),
         HttpApiEndpoint.post("vcsCommitDraft", InstancePaths.vcsCommitDraft, {

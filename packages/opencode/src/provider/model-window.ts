@@ -15,9 +15,15 @@ const RETRY_AFTER_MS = 60_000
 // Below this a number is not a context window: a stray field, or a limit nobody could run an agent in.
 const SMALLEST_WINDOW = 1024
 const LIMIT_FIELDS = ["max_model_len", "max_context_length", "context_length", "context_window", "max_input_tokens"]
+const OUTPUT_FIELDS = ["max_output_tokens", "max_completion_tokens"]
 
-type Known = Record<string, { context: number; at: number }>
-type LimitedModel = { id: string; providerID: string; limit: { context: number; output: number; input?: number } }
+type Known = Record<string, { context: number; output?: number; at: number }>
+type LimitedModel = {
+  id: string
+  providerID: string
+  limit: { context: number; output: number; input?: number }
+  api?: { id?: string; npm?: string; url?: string }
+}
 type Provider = {
   id: string
   options?: Record<string, unknown>
@@ -54,6 +60,14 @@ export function fromModels(body: unknown, modelID: string) {
   return undefined
 }
 
+/** Reads how much a model may answer with, when the server says. Most servers count that inside the window and do not. */
+export function outputFromModels(body: unknown, modelID: string) {
+  const rows = isRecord(body) && Array.isArray(body.data) ? body.data : []
+  const row = rows.find((item) => isRecord(item) && item.id === modelID)
+  if (!isRecord(row)) return undefined
+  return OUTPUT_FIELDS.map((field) => usable(row[field])).find((value) => value !== undefined)
+}
+
 /** Reads the window out of a refusal, when the server states it. */
 export function fromError(message: string) {
   const match =
@@ -88,11 +102,11 @@ async function save() {
   }
 }
 
-function remember(providerID: string, modelID: string, context: number) {
+function remember(providerID: string, modelID: string, context: number, output?: number) {
   const store = load()
   const id = key(providerID, modelID)
-  if (store[id]?.context === context) return
-  store[id] = { context, at: Date.now() }
+  if (store[id]?.context === context && store[id]?.output === output) return
+  store[id] = { context, ...(output ? { output } : {}), at: Date.now() }
   void save()
 }
 
@@ -102,11 +116,14 @@ export const undeclared = (model: LimitedModel) => model.limit.context === 0 || 
 /** Gives a model with undeclared limits what has been learned about it. Declared limits are never touched. */
 export function apply<M extends LimitedModel>(model: M) {
   if (!undeclared(model)) return model
-  const context = load()[key(model.providerID, model.id)]?.context
-  if (!context || model.limit.context === context) return model
+  const found = load()[key(model.providerID, model.id)]
+  const context = found?.context
+  if (!context) return model
+  // What the server stated, or else the same split as a local engine's models: leaves room to answer.
+  const output = found.output ?? Math.min(Math.floor(context / 4), 16_384)
+  if (model.limit.context === context && model.limit.output === output) return model
   learned.add(model)
-  // Same split as a local engine's models: leaves room to answer, and tells the server what to expect.
-  model.limit = { ...model.limit, context, output: Math.min(Math.floor(context / 4), 16_384) }
+  model.limit = { ...model.limit, context, output }
   return model
 }
 
@@ -131,8 +148,10 @@ async function probe(provider: Provider, baseURL: string, models: LimitedModel[]
   attempts.set(provider.id, Number.POSITIVE_INFINITY)
   const body: unknown = await response.json().catch(() => undefined)
   for (const model of models) {
-    const context = fromModels(body, model.id)
-    if (context) remember(provider.id, model.id, context)
+    // The name in config can differ from the name the server knows it by.
+    const id = model.api?.id ?? model.id
+    const context = fromModels(body, id)
+    if (context) remember(provider.id, model.id, context, outputFromModels(body, id))
   }
 }
 

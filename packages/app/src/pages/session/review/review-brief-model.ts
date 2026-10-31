@@ -343,14 +343,6 @@ export function classifyCommand(command: string): ClassifiedCommand | undefined 
   return { kinds: [...kinds], hidden, partial }
 }
 
-/** A check is offered for a re-run on one click only when it plainly cannot change anything by itself. */
-export function safeToRerun(command: string) {
-  if (command.includes("\n") || command.length > 200) return false
-  return !/\brm\b|>|\bsudo\b|\bgit\s+(?:push|commit|reset|checkout|clean|stash)\b|\bcurl\b|\bwget\b|\bdeploy\b|\bpublish\b|\bdocker\b|\bkubectl\b|\bexit\b/.test(
-    command,
-  )
-}
-
 // ---- What the run did, per file and per check --------------------------------------------------------------------------
 
 export type CheckRun = {

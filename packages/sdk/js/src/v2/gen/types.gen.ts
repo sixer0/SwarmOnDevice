@@ -2592,6 +2592,10 @@ export type VcsCommitError = {
   }
 }
 
+export type ShellRerunnable = {
+  rerunnable: Array<string>
+}
+
 export type VcsCommitDraft = {
   subject?: string
   summary?: string
@@ -8795,6 +8799,36 @@ export type VcsCommitResponses = {
 }
 
 export type VcsCommitResponse = VcsCommitResponses[keyof VcsCommitResponses]
+
+export type ShellRerunnableData = {
+  body?: {
+    commands: Array<string>
+  }
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/shell/rerunnable"
+}
+
+export type ShellRerunnableErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type ShellRerunnableError = ShellRerunnableErrors[keyof ShellRerunnableErrors]
+
+export type ShellRerunnableResponses = {
+  /**
+   * The commands from the list that may be offered for a re-run on one click
+   */
+  200: ShellRerunnable
+}
+
+export type ShellRerunnableResponse = ShellRerunnableResponses[keyof ShellRerunnableResponses]
 
 export type VcsCommitDraftData = {
   body?: {

@@ -15,7 +15,6 @@ import {
   nextOpenFile,
   parsePatch,
   reversePatch,
-  safeToRerun,
   type DiffInput,
   type RunActivity,
 } from "./review-brief-model"
@@ -211,19 +210,6 @@ describe("classifyCommand", () => {
     expect(classifyCommand("pytest -k rounding")?.partial).toBe(true)
     expect(classifyCommand("bun test")?.partial).toBe(false)
   })
-})
-
-test("safeToRerun refuses anything that could change something by itself", () => {
-  expect(safeToRerun("bun test")).toBe(true)
-  expect(safeToRerun("cd pkg && tsc --noEmit")).toBe(true)
-  for (const command of [
-    "rm -rf x && bun test",
-    "bun test > out.txt",
-    "git stash && bun test",
-    "bun test\nnpm publish",
-  ]) {
-    expect(safeToRerun(command)).toBe(false)
-  }
 })
 
 describe("findClaims", () => {

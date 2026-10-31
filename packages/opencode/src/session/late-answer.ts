@@ -16,6 +16,7 @@ export const make = Effect.gen(function* () {
   const sessions = yield* Session.Service
   const prompt = yield* SessionPrompt.Service
   const permission = yield* Permission.Service
+  const question = yield* Question.Service
   const events = yield* EventV2Bridge.Service
 
   const rootOf = (sessionID: SessionID): Effect.Effect<SessionID> =>
@@ -50,7 +51,26 @@ export const make = Effect.gen(function* () {
       }),
     )
 
+  // Nobody will open a deleted or archived session to answer these, so they should stop being listed.
+  const abandoned = Effect.fnUntraced(function* (sessionID: SessionID) {
+    const open = (id: SessionID) =>
+      sessions.get(id).pipe(
+        Effect.map((session) => !session.time.archived),
+        Effect.catchCause(() => Effect.succeed(false)),
+      )
+    return !(yield* open(sessionID)) || !(yield* open(yield* rootOf(sessionID)))
+  })
+
   return {
+    forgetAbandoned: Effect.fn("LateAnswer.forgetAbandoned")(function* () {
+      for (const item of (yield* permission.list()).filter((item) => item.movedOnAt)) {
+        if (yield* abandoned(item.sessionID))
+          yield* permission.reply({ requestID: item.id, reply: "reject" }).pipe(Effect.ignore)
+      }
+      for (const item of (yield* question.list()).filter((item) => item.movedOnAt)) {
+        if (yield* abandoned(item.sessionID)) yield* question.reject(item.id).pipe(Effect.ignore)
+      }
+    }),
     permission: Effect.fn("LateAnswer.permission")(function* (request: PermissionV1.Request) {
       const root = yield* rootOf(request.sessionID)
       yield* permission.grant({ sessionID: root, permission: request.permission, patterns: request.patterns })

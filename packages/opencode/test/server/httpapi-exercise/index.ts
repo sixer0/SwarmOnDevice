@@ -279,6 +279,15 @@ const scenarios: Scenario[] = [
       body: { sessionID: "ses_missing", files: ["a"] },
     }))
     .json(200, (body: any) => object(body), "status"),
+  http.protected
+    .post("/shell/rerunnable", "shell.rerunnable")
+    .inProject({ git: false })
+    .at((ctx) => ({
+      path: "/shell/rerunnable",
+      headers: ctx.headers(),
+      body: { commands: ["bun test", "dropdb prod"] },
+    }))
+    .json(200, (body: any) => object(body), "status"),
   http.protected.get("/command", "command.list").json(200, array, "status"),
   http.protected.get("/agent", "app.agents").json(200, array, "status"),
   http.protected.get("/skill", "app.skills").json(200, array, "status"),

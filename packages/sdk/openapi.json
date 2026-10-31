@@ -2967,6 +2967,80 @@
         ]
       }
     },
+    "/shell/rerunnable": {
+      "post": {
+        "tags": ["instance"],
+        "operationId": "shell.rerunnable",
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          },
+          {
+            "name": "workspace",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The commands from the list that may be offered for a re-run on one click",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShellRerunnable"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestError"
+                }
+              }
+            }
+          }
+        },
+        "description": "Say which of these commands are one plain program that the shell tool's own classifier does not consider risky. Runs nothing.",
+        "summary": "Check commands for a re-run",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "commands": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "maxItems": 100
+                  }
+                },
+                "required": ["commands"],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.shell.rerunnable({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/vcs/commit-draft": {
       "post": {
         "tags": ["instance"],
@@ -24413,6 +24487,19 @@
           }
         },
         "required": ["name", "data"],
+        "additionalProperties": false
+      },
+      "ShellRerunnable": {
+        "type": "object",
+        "properties": {
+          "rerunnable": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": ["rerunnable"],
         "additionalProperties": false
       },
       "VcsCommitDraft": {
