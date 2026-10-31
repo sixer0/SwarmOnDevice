@@ -10,6 +10,7 @@ import { writeHeapSnapshot } from "node:v8"
 import { Heap } from "@/cli/heap"
 import { AppRuntime } from "@/effect/app-runtime"
 import { Effect } from "effect"
+import { RunLease } from "@/session/run-lease"
 import { disposeAllInstancesAndEmitGlobalDisposed } from "@/server/global-lifecycle"
 
 Heap.start()
@@ -94,5 +95,8 @@ export const rpc = {
     process.off("uncaughtException", onUncaughtException)
   },
 }
+
+// This process belongs to one project and one terminal, so it only picks up that project's interrupted runs.
+RunLease.host({ only: process.cwd() })
 
 Rpc.listen(rpc)

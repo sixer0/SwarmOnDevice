@@ -33,6 +33,7 @@ import { Instruction } from "@/session/instruction"
 import { LLM } from "@/session/llm"
 import { SessionProcessor } from "@/session/processor"
 import { SessionPrompt } from "@/session/prompt"
+import { SessionResume } from "@/session/resume"
 import { SessionRevert } from "@/session/revert"
 import { SessionRunState } from "@/session/run-state"
 import { Session } from "@/session/session"
@@ -279,6 +280,7 @@ export function createRoutes(
     serverRoutes,
     docRoute,
     uiRoute,
+    SessionResume.layer,
   ).pipe(
     Layer.provide([
       errorLayer,

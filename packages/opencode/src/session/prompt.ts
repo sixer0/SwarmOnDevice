@@ -46,6 +46,7 @@ import { Cause, Effect, Exit, Latch, Layer, Option, Scope, Context, Schema, Type
 import { InstanceState } from "@/effect/instance-state"
 import { TaskTool, type TaskPromptOps } from "@/tool/task"
 import { SessionRunState } from "./run-state"
+import { RunLease } from "./run-lease"
 import { RuntimeFlags } from "@/effect/runtime-flags"
 import { EventV2Bridge } from "@/event-v2-bridge"
 import { Database } from "@opencode-ai/core/database/database"
@@ -99,10 +100,22 @@ function isOrphanedInterruptedTool(part: SessionV1.ToolPart) {
   return part.state.status === "error" && part.state.metadata?.interrupted === true
 }
 
+/** Tells the model, in the result it is about to read, that it has been getting this same answer. Sent only, not saved. */
+function noteRepeatedCalls(messages: SessionV1.WithParts[]) {
+  const repeated = SessionProcessor.identicalCalls(messages)
+  if (repeated.count < SessionProcessor.DOOM_LOOP_NOTICE || !repeated.part) return
+  const note = `\n\n<system-reminder>You have now made this exact call ${repeated.count} times in a row and got this exact result each time. Repeating it will not change anything. Do something different, or stop and report what is blocking you.</system-reminder>`
+  const state = repeated.part.state
+  if (state.status === "completed") state.output += note
+  if (state.status === "error") state.error += note
+}
+
 export interface Interface {
   readonly cancel: (sessionID: SessionID) => Effect.Effect<void>
   readonly prompt: (input: PromptInput) => Effect.Effect<SessionV1.WithParts, Image.Error>
   readonly loop: (input: LoopInput) => Effect.Effect<SessionV1.WithParts>
+  /** Continues a run a dead process left behind. `prepare` runs first, inside the run, so stopping the session stops it too. */
+  readonly resume: (sessionID: SessionID, prepare: Effect.Effect<void>) => Effect.Effect<SessionV1.WithParts>
   readonly shell: (input: ShellInput) => Effect.Effect<SessionV1.WithParts, Session.BusyError>
   readonly command: (input: CommandInput) => Effect.Effect<SessionV1.WithParts, Image.Error>
   readonly resolvePromptParts: (template: string) => Effect.Effect<PromptInput["parts"]>
@@ -1080,6 +1093,14 @@ const layer = Layer.effect(
       throw new Error("Impossible")
     })
 
+    const leased = <A>(sessionID: SessionID, work: Effect.Effect<A>) =>
+      Effect.gen(function* () {
+        const ctx = yield* InstanceState.context
+        const session = yield* sessions.get(sessionID).pipe(Effect.orDie)
+        RunLease.begin({ sessionID, directory: ctx.directory, parentID: session.parentID })
+        return yield* work
+      }).pipe(Effect.ensuring(Effect.sync(() => RunLease.end(sessionID))))
+
     const runLoop: (sessionID: SessionID) => Effect.Effect<SessionV1.WithParts> = Effect.fn("SessionPrompt.run")(
       function* (sessionID: SessionID) {
         const ctx = yield* InstanceState.context
@@ -1088,6 +1109,7 @@ const layer = Layer.effect(
         const session = yield* sessions.get(sessionID).pipe(Effect.orDie)
 
         while (true) {
+          RunLease.touch(sessionID)
           yield* status.set(sessionID, { type: "busy" })
           yield* Effect.logInfo("loop", { "session.id": sessionID, step })
 
@@ -1184,6 +1206,7 @@ const layer = Layer.effect(
             Effect.provideService(FSUtil.Service, fsys),
             Effect.provideService(Session.Service, sessions),
           )
+          noteRepeatedCalls(msgs)
 
           const msg: SessionV1.Assistant = {
             id: MessageID.ascending(),
@@ -1345,7 +1368,20 @@ const layer = Layer.effect(
     const loop: (input: LoopInput) => Effect.Effect<SessionV1.WithParts> = Effect.fn("SessionPrompt.loop")(function* (
       input: LoopInput,
     ) {
-      return yield* state.ensureRunning(input.sessionID, lastAssistant(input.sessionID), runLoop(input.sessionID))
+      return yield* state.ensureRunning(
+        input.sessionID,
+        lastAssistant(input.sessionID),
+        leased(input.sessionID, runLoop(input.sessionID)),
+      )
+    })
+
+    const resume: Interface["resume"] = Effect.fn("SessionPrompt.resume")(function* (sessionID, prepare) {
+      return yield* state.ensureRunning(
+        sessionID,
+        lastAssistant(sessionID),
+        // A parent can spend a long time in prepare waiting on its subagents, and that is still the run working.
+        leased(sessionID, status.set(sessionID, { type: "busy" }).pipe(Effect.andThen(prepare), Effect.andThen(runLoop(sessionID)))),
+      )
     })
 
     const shell: (input: ShellInput) => Effect.Effect<SessionV1.WithParts, Session.BusyError> = Effect.fn(
@@ -1486,6 +1522,7 @@ const layer = Layer.effect(
       cancel,
       prompt,
       loop,
+      resume,
       shell,
       command,
       resolvePromptParts,

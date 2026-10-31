@@ -61,7 +61,7 @@ export const Parameters = Schema.Struct({
   }),
 })
 
-function renderOutput(input: {
+export function renderTaskOutput(input: {
   sessionID: SessionID
   state: "running" | "completed" | "error"
   summary?: string
@@ -76,6 +76,27 @@ function renderOutput(input: {
     `</${tag}>`,
     "</task>",
   ].join("\n")
+}
+
+/** What a subagent's last message amounts to as a task result. Also read when a restart lost the waiting task call. */
+export function taskOutcome(sessionID: SessionID, result: SessionV1.WithParts) {
+  if (result.info.role !== "assistant") return { type: "unfinished" as const }
+  if (result.info.error) {
+    const message =
+      "message" in result.info.error.data && typeof result.info.error.data.message === "string"
+        ? result.info.error.data.message
+        : result.info.error.name
+    return { type: "failed" as const, message: `Subagent failed (task_id: ${sessionID}): ${message}` }
+  }
+  const failed = result.parts.findLast((item) => item.type === "tool" && item.state.status === "error")
+  if (failed?.type === "tool" && failed.state.status === "error") {
+    return { type: "failed" as const, message: `Subagent failed (task_id: ${sessionID}): ${failed.state.error}` }
+  }
+  return {
+    type: "completed" as const,
+    text: result.parts.findLast((item) => item.type === "text")?.text ?? "",
+    finished: !!result.info.finish && !["tool-calls", "unknown"].includes(result.info.finish),
+  }
 }
 
 export const TaskTool = Tool.define(
@@ -210,18 +231,9 @@ export const TaskTool = Tool.define(
           agent: next.name,
           parts,
         })
-        if (result.info.role === "assistant" && result.info.error) {
-          const message =
-            "message" in result.info.error.data && typeof result.info.error.data.message === "string"
-              ? result.info.error.data.message
-              : result.info.error.name
-          return yield* Effect.fail(new Error(`Subagent failed (task_id: ${nextSession.id}): ${message}`))
-        }
-        const failed = result.parts.findLast((item) => item.type === "tool" && item.state.status === "error")
-        if (failed?.type === "tool" && failed.state.status === "error") {
-          return yield* Effect.fail(new Error(`Subagent failed (task_id: ${nextSession.id}): ${failed.state.error}`))
-        }
-        return result.parts.findLast((item) => item.type === "text")?.text ?? ""
+        const outcome = taskOutcome(nextSession.id, result)
+        if (outcome.type === "failed") return yield* Effect.fail(new Error(outcome.message))
+        return outcome.type === "completed" ? outcome.text : ""
       })
 
       const inject = Effect.fn("TaskTool.injectBackgroundResult")(function* (
@@ -238,7 +250,7 @@ export const TaskTool = Tool.define(
               {
                 type: "text",
                 synthetic: true,
-                text: renderOutput({
+                text: renderTaskOutput({
                   sessionID: nextSession.id,
                   state,
                   summary:
@@ -272,7 +284,7 @@ export const TaskTool = Tool.define(
             background: true,
             jobId: nextSession.id,
           },
-          output: renderOutput({
+          output: renderTaskOutput({
             sessionID: nextSession.id,
             state: "running",
             summary: "Background task updated",
@@ -304,7 +316,7 @@ export const TaskTool = Tool.define(
             background: true,
             jobId: info.id,
           },
-          output: renderOutput({
+          output: renderTaskOutput({
             sessionID: nextSession.id,
             state: "running",
             summary: "Background task started",
@@ -341,7 +353,7 @@ export const TaskTool = Tool.define(
             return {
               title: params.description,
               metadata,
-              output: renderOutput({ sessionID: nextSession.id, state: "completed", text: result?.output ?? "" }),
+              output: renderTaskOutput({ sessionID: nextSession.id, state: "completed", text: result?.output ?? "" }),
             }
           }),
         (_, exit) =>

@@ -14,6 +14,8 @@ export type RetryReason = "free_tier_limit" | "account_rate_limit" | (string & {
 
 export type Retryable = {
   message: string
+  /** This failure was billed, unlike a refused request, so it does not get the long patience of an outage. */
+  paid?: boolean
   action?: {
     reason: RetryReason
     provider: string
@@ -30,6 +32,10 @@ export const RETRY_JITTER_FACTOR = 0.25
 export const RETRY_MAX_DELAY_NO_HEADERS = 30_000 // 30 seconds
 export const RETRY_MAX_DELAY = 2_147_483_647 // max 32-bit signed integer for setTimeout
 export const RETRY_MAX_RETRIES = 5
+export const RETRY_MAX_DELAY_BACKOFF = 60_000 // 1 minute: a provider coming back is noticed soon after it does
+export const RETRY_OUTAGE_BUDGET = 30 * 60 * 1000 // 30 minutes: outlasts a typical provider incident, and failed calls cost nothing
+
+export const STREAM_CUT_MESSAGE = "The provider closed the connection before finishing its answer"
 
 const RETRYABLE_MESSAGE_PATTERNS = [
   /429|500|502|503|504|524/i,
@@ -71,7 +77,7 @@ export function delay(attempt: number, error?: SessionV1.APIError, random = Math
         }
       }
 
-      return cap(exponential(attempt, random))
+      return Math.min(exponential(attempt, random), RETRY_MAX_DELAY_BACKOFF)
     }
   }
 
@@ -146,6 +152,7 @@ export function retryable(error: Err, provider: string) {
 
   const message = isRecord(error.data) ? error.data.message : undefined
   if (typeof message !== "string") return undefined
+  if (message === STREAM_CUT_MESSAGE) return { message, paid: true }
   const lower = message.toLowerCase()
   if (lower.includes("too_many_requests")) return { message: "Too Many Requests" }
   if (lower.includes("exhausted") || lower.includes("unavailable")) return { message: "Provider is overloaded" }
@@ -180,6 +187,7 @@ function parseJSON(value: unknown) {
 }
 
 export function policy(opts: {
+  budget?: number
   provider: string
   parse: (error: unknown) => Err
   set: (input: { attempt: number; message: string; action?: Retryable["action"]; next: number }) => Effect.Effect<void>
@@ -189,7 +197,11 @@ export function policy(opts: {
       const error = opts.parse(meta.input)
       const retry = retryable(error, opts.provider)
       if (!retry) return Cause.done(meta.attempt)
-      if (meta.attempt > RETRY_MAX_RETRIES) return Cause.done(meta.attempt)
+      // A few attempts for a limit that needs the user (it has an action), the whole budget for a transient failure:
+      // five quick tries gave up on any incident longer than about a minute and threw away the run.
+      if (meta.attempt > RETRY_MAX_RETRIES && (retry.action || ("paid" in retry && retry.paid) || meta.elapsed >= (opts.budget ?? RETRY_OUTAGE_BUDGET))) {
+        return Cause.done(meta.attempt)
+      }
       return Effect.gen(function* () {
         const wait = delay(meta.attempt, SessionV1.APIError.isInstance(error) ? error : undefined)
         const now = yield* Clock.currentTimeMillis

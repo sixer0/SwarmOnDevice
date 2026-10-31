@@ -11,6 +11,9 @@ declare module "virtual:opencode-server" {
     export const listen: typeof import("../../../opencode/dist/types/src/node").Server.listen
     export type Listener = import("../../../opencode/dist/types/src/node").Server.Listener
   }
+  export namespace RunLease {
+    export const host: typeof import("../../../opencode/dist/types/src/node").RunLease.host
+  }
   export namespace Config {
     export const get: typeof import("../../../opencode/dist/types/src/node").Config.get
     export type Info = import("../../../opencode/dist/types/src/node").Config.Info

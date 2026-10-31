@@ -1,5 +1,6 @@
 import { Effect } from "effect"
 import { effectCmd, fail } from "../effect-cmd"
+import { RunLease } from "@/session/run-lease"
 import { withNetworkOptions, resolveNetworkOptions, serverPasswordSet } from "../network"
 
 export const ServeCommand = effectCmd({
@@ -23,6 +24,7 @@ export const ServeCommand = effectCmd({
     // Server.listen forwards its options to the CORS config, so the bound address and the mDNS
     // name are the Host values this listener will answer for (loopback needs no entry: cors.ts
     // accepts it unconditionally).
+    RunLease.host()
     const server = yield* Effect.promise(() =>
       Server.listen({ ...opts, hosts: [opts.hostname, ...(opts.mdns ? [opts.mdnsDomain] : [])] }),
     )

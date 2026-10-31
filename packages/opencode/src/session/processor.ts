@@ -26,7 +26,41 @@ import { EventV2Bridge } from "@/event-v2-bridge"
 import { Database } from "@opencode-ai/core/database/database"
 import { Usage, type LLMEvent } from "@opencode-ai/llm"
 
-const DOOM_LOOP_THRESHOLD = 3
+// Identical calls with identical results before the model gets told so, and before a person gets asked. The model
+// gets the first chance because a person may be asleep; the question is what stops the spending if it does not listen.
+export const DOOM_LOOP_NOTICE = 3
+export const DOOM_LOOP_THRESHOLD = 5
+const DOOM_LOOP_WINDOW = DOOM_LOOP_THRESHOLD * 2 + 2
+
+/**
+ * How many tool calls in a row, newest first, match the newest one exactly: same tool, same input, same result. Runs
+ * across messages because each step of a run is its own message. Stops at the person's last prompt, because a new
+ * instruction is new information, and on any different result, because polling that changes is not a loop.
+ */
+export function identicalCalls(messages: SessionV1.WithParts[], skipCallID?: string) {
+  const newestFirst = messages.toReversed().flatMap((message) => {
+    if (message.info.role === "user" && message.parts.some((part) => part.type === "text" && !part.synthetic)) return [null]
+    return message.parts.filter((part): part is SessionV1.ToolPart => part.type === "tool" && part.callID !== skipCallID).toReversed()
+  })
+  const end = newestFirst.indexOf(null)
+  const calls = (end === -1 ? newestFirst : newestFirst.slice(0, end)).filter((part) => part !== null)
+  const finished = calls.filter((part) => part.state.status === "completed" || part.state.status === "error")
+  const newest = finished[0]
+  if (!newest) return { count: 0 }
+  const key = callKey(newest)
+  const mismatch = finished.findIndex((part) => callKey(part) !== key)
+  return { count: mismatch === -1 ? finished.length : mismatch, tool: newest.tool, input: newest.state.input, part: newest }
+}
+
+function callKey(part: SessionV1.ToolPart) {
+  const state = part.state
+  return JSON.stringify([
+    part.tool,
+    state.input,
+    state.status === "completed" ? state.output : state.status === "error" ? state.error : "",
+  ])
+}
+
 export type Result = "compact" | "stop" | "continue"
 
 export interface Handle {
@@ -72,6 +106,8 @@ interface ProcessorContext extends Input {
   needsCompaction: boolean
   currentText: SessionV1.TextPart | undefined
   reasoningMap: Record<string, SessionV1.ReasoningPart>
+  /** Saved by the attempt in progress. A retry removes them, or the user and the model see them once per attempt. */
+  attemptParts: { sessionID: SessionID; messageID: SessionV1.Assistant["id"]; partID: PartID }[]
 }
 
 type StreamEvent = LLMEvent
@@ -111,8 +147,12 @@ const layer = Layer.effect(
         needsCompaction: false,
         currentText: undefined,
         reasoningMap: {},
+        attemptParts: [],
       }
       let aborted = false
+
+      const noteAttemptPart = (part: { id: PartID; messageID: SessionV1.Assistant["id"]; sessionID: SessionID }) =>
+        ctx.attemptParts.push({ sessionID: part.sessionID, messageID: part.messageID, partID: part.id })
 
       const parse = (e: unknown) =>
         MessageV2.fromError(e, {
@@ -288,7 +328,7 @@ const layer = Layer.effect(
               time: { start: Date.now() },
               metadata: value.providerMetadata,
             }
-            yield* session.updatePart(ctx.reasoningMap[value.id])
+            noteAttemptPart(yield* session.updatePart(ctx.reasoningMap[value.id]))
             return
 
           case "reasoning-delta":
@@ -350,20 +390,14 @@ const layer = Layer.effect(
                 : value.providerMetadata,
             }))
 
-            const parts = yield* MessageV2.parts(ctx.assistantMessage.id).pipe(
-              Effect.provideService(Database.Service, database),
-            )
-            const recentParts = parts.slice(-DOOM_LOOP_THRESHOLD)
-
+            const recent = yield* session
+              .messages({ sessionID: ctx.sessionID, limit: DOOM_LOOP_WINDOW })
+              .pipe(Effect.orDie)
+            const repeated = identicalCalls(recent, value.id)
             if (
-              recentParts.length !== DOOM_LOOP_THRESHOLD ||
-              !recentParts.every(
-                (part) =>
-                  part.type === "tool" &&
-                  part.tool === value.name &&
-                  part.state.status !== "pending" &&
-                  JSON.stringify(part.state.input) === JSON.stringify(input),
-              )
+              repeated.count < DOOM_LOOP_THRESHOLD ||
+              repeated.tool !== value.name ||
+              JSON.stringify(repeated.input) !== JSON.stringify(input)
             ) {
               return
             }
@@ -423,13 +457,15 @@ const layer = Layer.effect(
 
           case "step-start":
             if (!ctx.snapshot) ctx.snapshot = yield* snapshot.track()
-            yield* session.updatePart({
-              id: PartID.ascending(),
-              messageID: ctx.assistantMessage.id,
-              sessionID: ctx.sessionID,
-              snapshot: ctx.snapshot,
-              type: "step-start",
-            })
+            noteAttemptPart(
+              yield* session.updatePart({
+                id: PartID.ascending(),
+                messageID: ctx.assistantMessage.id,
+                sessionID: ctx.sessionID,
+                snapshot: ctx.snapshot,
+                type: "step-start",
+              }),
+            )
             return
 
           case "step-finish": {
@@ -457,16 +493,18 @@ const layer = Layer.effect(
             ctx.assistantMessage.finish = value.reason
             ctx.assistantMessage.cost += usage.cost
             ctx.assistantMessage.tokens = usage.tokens
-            yield* session.updatePart({
-              id: PartID.ascending(),
-              reason: value.reason,
-              snapshot: completedSnapshot,
-              messageID: ctx.assistantMessage.id,
-              sessionID: ctx.assistantMessage.sessionID,
-              type: "step-finish",
-              tokens: usage.tokens,
-              cost: usage.cost,
-            })
+            noteAttemptPart(
+              yield* session.updatePart({
+                id: PartID.ascending(),
+                reason: value.reason,
+                snapshot: completedSnapshot,
+                messageID: ctx.assistantMessage.id,
+                sessionID: ctx.assistantMessage.sessionID,
+                type: "step-finish",
+                tokens: usage.tokens,
+                cost: usage.cost,
+              }),
+            )
             yield* session.updateMessage(ctx.assistantMessage)
             if (ctx.snapshot) {
               const patch = yield* snapshot.patch(ctx.snapshot)
@@ -507,7 +545,7 @@ const layer = Layer.effect(
               time: { start: Date.now() },
               metadata: value.providerMetadata,
             }
-            yield* session.updatePart(ctx.currentText)
+            noteAttemptPart(yield* session.updatePart(ctx.currentText))
             return
 
           case "text-delta":
@@ -648,6 +686,8 @@ const layer = Layer.effect(
 
         return yield* Effect.gen(function* () {
           yield* Effect.gen(function* () {
+            yield* Effect.forEach(ctx.attemptParts, session.removePart, { discard: true })
+            ctx.attemptParts = []
             ctx.currentText = undefined
             ctx.reasoningMap = {}
             yield* status.set(ctx.sessionID, { type: "busy" })
@@ -658,6 +698,22 @@ const layer = Layer.effect(
               Stream.takeUntil(() => ctx.needsCompaction),
               Stream.runDrain,
             )
+
+            // A connection that closes cleanly mid-answer raises no error: the step just ends with no finish reason and
+            // no tool call. The loop reads that as "keep going" and asks again at once, with no backoff and with no
+            // limit, and every one of those requests is paid for. It is a failed attempt, so treat it as one.
+            const finish = ctx.assistantMessage.finish
+            if (
+              !ctx.needsCompaction &&
+              (!finish || finish === "unknown") &&
+              Object.keys(ctx.toolcalls).length === 0 &&
+              !(yield* MessageV2.parts(ctx.assistantMessage.id).pipe(
+                Effect.provideService(Database.Service, database),
+              )).some((part) => part.type === "tool")
+            ) {
+              ctx.assistantMessage.finish = undefined
+              return yield* Effect.fail(new Error(SessionRetry.STREAM_CUT_MESSAGE))
+            }
           }).pipe(
             Effect.onInterrupt(() =>
               Effect.gen(function* () {

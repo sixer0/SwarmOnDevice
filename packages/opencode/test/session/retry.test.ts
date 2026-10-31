@@ -124,12 +124,12 @@ describe("session.retry.delay", () => {
     }),
   )
 
-  it.instance("policy stops after five retries", () =>
+  const attemptsOf = (error: SessionV1.APIError, calls: number, budget?: number) =>
     Effect.gen(function* () {
       const attempts: number[] = []
-      const error = apiError({ "retry-after-ms": "0" })
       const step = yield* Schedule.toStepWithMetadata(
         SessionRetry.policy({
+          budget,
           provider: "test",
           parse: Schema.decodeUnknownSync(SessionV1.APIError.Schema),
           set: (info) =>
@@ -138,14 +138,39 @@ describe("session.retry.delay", () => {
             }),
         }),
       )
+      yield* Effect.forEach(Array.from({ length: calls }), () => Effect.ignore(step(error)))
+      return attempts
+    })
 
-      yield* Effect.forEach(Array.from({ length: SessionRetry.RETRY_MAX_RETRIES + 1 }), () =>
-        Effect.ignore(step(error)),
-      )
-
-      expect(attempts).toStrictEqual([1, 2, 3, 4, 5])
+  it.instance("policy outlasts an outage: a transient failure keeps retrying past five attempts", () =>
+    Effect.gen(function* () {
+      expect(yield* attemptsOf(apiError({ "retry-after-ms": "0" }), 12)).toStrictEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])
     }),
   )
+
+  it.instance("policy gives up once the outage budget is spent", () =>
+    Effect.gen(function* () {
+      expect(yield* attemptsOf(apiError({ "retry-after-ms": "0" }), 12, 0)).toStrictEqual([1, 2, 3, 4, 5])
+    }),
+  )
+
+  it.instance("policy stops after five retries on a limit only the user can lift", () =>
+    Effect.gen(function* () {
+      const error = Schema.decodeUnknownSync(SessionV1.APIError.Schema)(
+        new SessionV1.APIError({
+          message: "boom",
+          isRetryable: true,
+          responseHeaders: { "retry-after-ms": "0" },
+          responseBody: "FreeUsageLimitError",
+        }).toObject(),
+      )
+      expect(yield* attemptsOf(error, SessionRetry.RETRY_MAX_RETRIES + 3)).toStrictEqual([1, 2, 3, 4, 5])
+    }),
+  )
+
+  test("backoff without a retry-after never waits longer than a minute", () => {
+    expect(SessionRetry.delay(30, apiError({}))).toBe(SessionRetry.RETRY_MAX_DELAY_BACKOFF)
+  })
 })
 
 describe("session.retry.retryable", () => {
