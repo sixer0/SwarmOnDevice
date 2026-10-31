@@ -332,4 +332,113 @@ describe("Vcs diff", () => {
       }),
     { git: true },
   )
+  describe("commit", () => {
+    const output = Effect.fn("VcsTest.output")(function* (cwd: string, args: string[]) {
+      return (yield* Git.Service.use((git) => git.run(args, { cwd }))).text()
+    })
+
+    it.instance(
+      "commits exactly the named paths, new, changed and deleted, and leaves everything else alone",
+      () =>
+        Effect.gen(function* () {
+          const test = yield* TestInstance
+          const dir = test.directory
+          yield* write(path.join(dir, "keep.txt"), "one\n")
+          yield* write(path.join(dir, "gone.txt"), "one\n")
+          yield* write(path.join(dir, "other.txt"), "one\n")
+          yield* write(path.join(dir, "staged.txt"), "one\n")
+          yield* git(dir, ["add", "."])
+          yield* git(dir, ["commit", "--no-gpg-sign", "-m", "base"])
+
+          yield* write(path.join(dir, "keep.txt"), "two\n")
+          yield* remove(path.join(dir, "gone.txt"))
+          yield* write(path.join(dir, "a new *.txt"), "new\n")
+          yield* write(path.join(dir, "a new b.txt"), "not this one\n")
+          yield* write(path.join(dir, "other.txt"), "someone else's\n")
+          yield* write(path.join(dir, "staged.txt"), "staged by someone\n")
+          yield* git(dir, ["add", "staged.txt"])
+
+          const vcs = yield* init()
+          const result = yield* vcs.commit({
+            files: ["keep.txt", "gone.txt", "a new *.txt"],
+            message: "  Land it\n\n#1 stays a line\n",
+          })
+
+          expect([...result.files].sort()).toEqual(["a new *.txt", "gone.txt", "keep.txt"])
+          expect(result.hash).toHaveLength(40)
+          expect(result.hash.startsWith(result.short)).toBe(true)
+          expect(result.branch).toBe(yield* vcs.branch())
+          expect((yield* output(dir, ["log", "-1", "--format=%B"])).trim()).toBe("Land it\n\n#1 stays a line")
+          const status = yield* output(dir, ["status", "--porcelain=v1", "--untracked-files=all"])
+          expect(status.split("\n").filter(Boolean).sort()).toEqual([
+            " M other.txt",
+            '?? "a new b.txt"',
+            "M  staged.txt",
+          ])
+        }),
+      { git: true },
+    )
+
+    it.instance(
+      "a refusing hook leaves the index as it was and reports what the hook said",
+      () =>
+        Effect.gen(function* () {
+          const test = yield* TestInstance
+          const dir = test.directory
+          yield* write(path.join(dir, "base.txt"), "one\n")
+          yield* git(dir, ["add", "."])
+          yield* git(dir, ["commit", "--no-gpg-sign", "-m", "base"])
+          const hook = path.join(dir, ".git", "hooks", "pre-commit")
+          yield* write(hook, "#!/bin/sh\necho 'lint says no' >&2\nexit 1\n")
+          yield* Effect.promise(() => fs.chmod(hook, 0o755))
+          yield* write(path.join(dir, "base.txt"), "two\n")
+          yield* write(path.join(dir, "new.txt"), "new\n")
+          const before = yield* output(dir, ["status", "--porcelain=v1", "--untracked-files=all"])
+          const head = yield* output(dir, ["rev-parse", "HEAD"])
+
+          const vcs = yield* init()
+          const error = yield* vcs.commit({ files: ["base.txt", "new.txt"], message: "Nope" }).pipe(Effect.flip)
+
+          expect(error.reason).toBe("refused")
+          expect(error.message).toContain("lint says no")
+          expect(yield* output(dir, ["status", "--porcelain=v1", "--untracked-files=all"])).toBe(before)
+          expect(yield* output(dir, ["rev-parse", "HEAD"])).toBe(head)
+        }),
+      { git: true },
+    )
+
+    it.instance(
+      "paths are from the top of the repository when working in a subdirectory, and a first commit works",
+      () =>
+        Effect.gen(function* () {
+          const test = yield* TestInstance
+          const dir = test.directory
+          yield* write(path.join(dir, "sub", "a.txt"), "a\n")
+          yield* git(dir, ["update-ref", "-d", "HEAD"])
+          const vcs = yield* init()
+          const result = yield* vcs.commit({ files: ["sub/a.txt"], message: "First" })
+          expect(result.files).toEqual(["sub/a.txt"])
+        }),
+      { git: true },
+    )
+
+    it.instance(
+      "refuses an empty message, no files, and a path with nothing to commit",
+      () =>
+        Effect.gen(function* () {
+          const vcs = yield* init()
+          expect((yield* vcs.commit({ files: ["a"], message: "  " }).pipe(Effect.flip)).reason).toBe("invalid")
+          expect((yield* vcs.commit({ files: [], message: "m" }).pipe(Effect.flip)).reason).toBe("invalid")
+          expect((yield* vcs.commit({ files: ["missing.txt"], message: "m" }).pipe(Effect.flip)).reason).toBe("refused")
+        }),
+      { git: true },
+    )
+
+    it.instance("refuses outside git", () =>
+      Effect.gen(function* () {
+        const vcs = yield* init()
+        expect((yield* vcs.commit({ files: ["a"], message: "m" }).pipe(Effect.flip)).reason).toBe("non-git")
+      }),
+    )
+  })
 })

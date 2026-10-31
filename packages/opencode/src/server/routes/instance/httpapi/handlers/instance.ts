@@ -4,12 +4,13 @@ import * as InstanceState from "@/effect/instance-state"
 import { Format } from "@/format"
 import { Global } from "@opencode-ai/core/global"
 import { LSP } from "@/lsp/lsp"
+import { CommitDraft } from "@/project/commit-draft"
 import { Vcs } from "@/project/vcs"
 import { Skill } from "@/skill"
 import { Effect } from "effect"
 import { HttpApiBuilder } from "effect/unstable/httpapi"
 import { InstanceHttpApi } from "../api"
-import { ApiVcsApplyError } from "../groups/instance"
+import { ApiVcsApplyError, ApiVcsCommitError } from "../groups/instance"
 import { markInstanceForDisposal } from "../lifecycle"
 
 export const instanceHandlers = HttpApiBuilder.group(InstanceHttpApi, "instance", (handlers) =>
@@ -20,6 +21,7 @@ export const instanceHandlers = HttpApiBuilder.group(InstanceHttpApi, "instance"
     const lsp = yield* LSP.Service
     const skill = yield* Skill.Service
     const vcs = yield* Vcs.Service
+    const commitDraft = yield* CommitDraft.Service
 
     const dispose = Effect.fn("InstanceHttpApi.dispose")(function* () {
       yield* markInstanceForDisposal(yield* InstanceState.context)
@@ -101,6 +103,15 @@ export const instanceHandlers = HttpApiBuilder.group(InstanceHttpApi, "instance"
       .handle("vcsDiff", getVcsDiff)
       .handle("vcsDiffRaw", getVcsDiffRaw)
       .handle("vcsApply", applyVcs)
+      .handle("vcsCommit", (ctx) =>
+        vcs.commit(ctx.payload).pipe(
+          Effect.mapError(
+            (error) =>
+              new ApiVcsCommitError({ name: "VcsCommitError", data: { message: error.message, reason: error.reason } }),
+          ),
+        ),
+      )
+      .handle("vcsCommitDraft", (ctx) => commitDraft.write(ctx.payload))
       .handle("command", getCommand)
       .handle("agent", getAgent)
       .handle("skill", getSkill)

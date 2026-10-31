@@ -1,5 +1,5 @@
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
-import { Effect, Layer, Context, Schema, Scope } from "effect"
+import { Duration, Effect, Layer, Context, Option, Schema, Scope, Stream } from "effect"
 import { formatPatch, structuredPatch } from "diff"
 import { InstanceState } from "@/effect/instance-state"
 import { Watcher } from "@opencode-ai/core/filesystem/watcher"
@@ -273,6 +273,26 @@ export const ApplyResult = Schema.Struct({
 })
 export type ApplyResult = Schema.Schema.Type<typeof ApplyResult>
 
+export const CommitInput = Schema.Struct({
+  files: Schema.Array(Schema.String),
+  message: Schema.String,
+})
+export type CommitInput = Schema.Schema.Type<typeof CommitInput>
+
+export const CommitResult = Schema.Struct({
+  hash: Schema.String,
+  short: Schema.String,
+  branch: Schema.optional(Schema.String),
+  // Read back from the commit itself, so what is reported is what landed and not what was asked for.
+  files: Schema.Array(Schema.String),
+}).annotate({ identifier: "VcsCommitResult" })
+export type CommitResult = Schema.Schema.Type<typeof CommitResult>
+
+export class CommitError extends Schema.TaggedErrorClass<CommitError>()("VcsCommitError", {
+  message: Schema.String,
+  reason: Schema.Literals(["non-git", "invalid", "refused"]),
+}) {}
+
 export class PatchApplyError extends Schema.TaggedErrorClass<PatchApplyError>()("VcsPatchApplyError", {
   message: Schema.String,
   reason: Schema.Literals(["non-git", "not-clean"]),
@@ -286,6 +306,7 @@ export interface Interface {
   readonly diff: (mode: Mode, options?: DiffOptions) => Effect.Effect<FileDiff[]>
   readonly diffRaw: () => Effect.Effect<string>
   readonly apply: (input: ApplyInput) => Effect.Effect<ApplyResult, PatchApplyError>
+  readonly commit: (input: CommitInput) => Effect.Effect<CommitResult, CommitError>
 }
 
 interface State {
@@ -414,9 +435,77 @@ const layer: Layer.Layer<Service, never, Git.Service | EventV2Bridge.Service> = 
         }
         return { applied: true }
       }),
+      // Commits these paths and nothing else: whatever else is staged stays staged and out of the commit. It never talks
+      // to a remote. Hooks run, because a hook that refuses is the team's rule and the person should hear about it.
+      commit: Effect.fn("Vcs.commit")(function* (input: CommitInput) {
+        const ctx = yield* InstanceState.context
+        if (ctx.project.vcs !== "git") {
+          return yield* new CommitError({ message: "This project is not a git repository", reason: "non-git" })
+        }
+        const message = input.message.trim()
+        const files = [...new Set(input.files)]
+        if (!message || files.length === 0) {
+          return yield* new CommitError({ message: "A commit needs a message and at least one file", reason: "invalid" })
+        }
+        // Diff paths are relative to the top of the repository, and a file named `*.ts` is that file and not a pattern.
+        const cwd = ctx.worktree
+        const literal = ["--literal-pathspecs"]
+        const listed = yield* git.run(
+          [...literal, "status", "--porcelain=v1", "--untracked-files=all", "--no-renames", "-z", "--", ...files],
+          { cwd },
+        )
+        const fresh = listed
+          .text()
+          .split("\0")
+          .filter((item) => item.startsWith("?? "))
+          .map((item) => item.slice(3))
+        const refused = (result: Git.Result) =>
+          new CommitError({ message: gitOutput(result), reason: "refused" })
+        if (fresh.length > 0) {
+          // `commit -- path` refuses a path git has never heard of. Intent only, so a refusal can leave the index as it was.
+          const added = yield* git.run([...literal, "add", "--intent-to-add", "--", ...fresh], { cwd })
+          if (added.exitCode !== 0) return yield* refused(added)
+        }
+        const committed = yield* git
+          .run([...literal, "commit", "--only", "-F", "-", "--", ...files], {
+            cwd,
+            env: { GIT_EDITOR: "true", GIT_TERMINAL_PROMPT: "0" },
+            stdin: Stream.make(new TextEncoder().encode(message + "\n")),
+          })
+          .pipe(Effect.timeoutOption(COMMIT_TIMEOUT))
+        if (Option.isNone(committed) || committed.value.exitCode !== 0) {
+          if (fresh.length > 0) {
+            const unstage = (yield* git.hasHead(cwd)) ? ["reset", "-q", "--"] : ["rm", "--cached", "-q", "--"]
+            yield* git.run([...literal, ...unstage, ...fresh], { cwd })
+          }
+          if (Option.isNone(committed)) {
+            return yield* new CommitError({ message: "git commit did not finish within 5 minutes", reason: "refused" })
+          }
+          return yield* refused(committed.value)
+        }
+        const head = yield* git.run(["rev-parse", "HEAD"], { cwd })
+        const short = yield* git.run(["rev-parse", "--short", "HEAD"], { cwd })
+        const shown = yield* git.run(["show", "--no-renames", "--name-only", "--format=", "-z", "HEAD"], { cwd })
+        return {
+          hash: head.text().trim(),
+          short: short.text().trim(),
+          branch: yield* git.branch(cwd),
+          files: shown.text().split("\0").filter(Boolean),
+        }
+      }),
     })
   }),
 )
+
+const COMMIT_TIMEOUT = Duration.minutes(5)
+
+// A hook may report on either stream. The end of the output is where the reason is.
+const gitOutput = (result: Git.Result) =>
+  [result.stderr.toString("utf8"), result.text()]
+    .map((text) => text.trim())
+    .filter(Boolean)
+    .join("\n")
+    .slice(-2000) || `git exited with ${result.exitCode}`
 
 export const node = LayerNode.make({ service: Service, layer: layer, deps: [Git.node, EventV2Bridge.node] })
 

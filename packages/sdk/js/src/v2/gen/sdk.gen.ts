@@ -420,6 +420,10 @@ import type {
   V2SkillListResponses,
   VcsApplyErrors,
   VcsApplyResponses,
+  VcsCommitDraftErrors,
+  VcsCommitDraftResponses,
+  VcsCommitErrors,
+  VcsCommitResponses,
   VcsDiffErrors,
   VcsDiffRawErrors,
   VcsDiffRawResponses,
@@ -2272,6 +2276,84 @@ export class Vcs extends HeyApiClient {
     )
     return (options?.client ?? this.client).post<VcsApplyResponses, VcsApplyErrors, ThrowOnError>({
       url: "/vcs/apply",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Commit files
+   *
+   * Commit exactly these paths from the working tree with this message. Other staged changes stay out. Never pushes.
+   */
+  public commit<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+      files?: Array<string>
+      message?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "files" },
+            { in: "body", key: "message" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<VcsCommitResponses, VcsCommitErrors, ThrowOnError>({
+      url: "/vcs/commit",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Draft a commit summary
+   *
+   * Write a subject and summary for these files with the session's own model. Answers empty rather than send anything to a model that is off this machine or network.
+   */
+  public commitDraft<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+      sessionID?: string
+      files?: Array<string>
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "sessionID" },
+            { in: "body", key: "files" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<VcsCommitDraftResponses, VcsCommitDraftErrors, ThrowOnError>({
+      url: "/vcs/commit-draft",
       ...options,
       ...params,
       headers: {

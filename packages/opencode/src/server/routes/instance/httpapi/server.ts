@@ -30,6 +30,7 @@ import { Provider } from "@/provider/provider"
 import { Question } from "@/question"
 import { Memory } from "@/memory/memory"
 import { SavedCommands } from "@/command/saved"
+import { CommitDraft } from "@/project/commit-draft"
 import { SessionCompaction } from "@/session/compaction"
 import { Instruction } from "@/session/instruction"
 import { LLM } from "@/session/llm"
@@ -238,6 +239,7 @@ const app = LayerNode.group([
   Question.node,
   Memory.node,
   SavedCommands.node,
+  CommitDraft.node,
   SessionSearch.node,
   Permission.node,
   PermissionSaved.node,

@@ -2,6 +2,7 @@ import { Agent } from "@/agent/agent"
 import { Command } from "@/command"
 import { Format } from "@/format"
 import { LSP } from "@/lsp/lsp"
+import { CommitDraft } from "@/project/commit-draft"
 import { Vcs } from "@/project/vcs"
 import { Skill } from "@/skill"
 import { Schema } from "effect"
@@ -40,6 +41,17 @@ export class ApiVcsApplyError extends Schema.ErrorClass<ApiVcsApplyError>("VcsAp
   { httpApiStatus: 400 },
 ) {}
 
+export class ApiVcsCommitError extends Schema.ErrorClass<ApiVcsCommitError>("VcsCommitError")(
+  {
+    name: Schema.Literal("VcsCommitError"),
+    data: Schema.Struct({
+      message: Schema.String,
+      reason: Schema.Literals(["non-git", "invalid", "refused"]),
+    }),
+  },
+  { httpApiStatus: 400 },
+) {}
+
 export const InstancePaths = {
   dispose: "/instance/dispose",
   path: "/path",
@@ -48,6 +60,8 @@ export const InstancePaths = {
   vcsDiff: "/vcs/diff",
   vcsDiffRaw: "/vcs/diff/raw",
   vcsApply: "/vcs/apply",
+  vcsCommit: "/vcs/commit",
+  vcsCommitDraft: "/vcs/commit-draft",
   command: "/command",
   agent: "/agent",
   skill: "/skill",
@@ -133,6 +147,31 @@ export const InstanceApi = HttpApi.make("instance")
             identifier: "vcs.apply",
             summary: "Apply VCS patch",
             description: "Apply a raw patch to the current working tree.",
+          }),
+        ),
+        HttpApiEndpoint.post("vcsCommit", InstancePaths.vcsCommit, {
+          query: WorkspaceRoutingQuery,
+          payload: Vcs.CommitInput,
+          success: described(Vcs.CommitResult, "The commit that was made"),
+          error: ApiVcsCommitError,
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "vcs.commit",
+            summary: "Commit files",
+            description:
+              "Commit exactly these paths from the working tree with this message. Other staged changes stay out. Never pushes.",
+          }),
+        ),
+        HttpApiEndpoint.post("vcsCommitDraft", InstancePaths.vcsCommitDraft, {
+          query: WorkspaceRoutingQuery,
+          payload: CommitDraft.Input,
+          success: described(CommitDraft.Result, "A subject and summary, empty when none could be written on this machine"),
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "vcs.commitDraft",
+            summary: "Draft a commit summary",
+            description:
+              "Write a subject and summary for these files with the session's own model. Answers empty rather than send anything to a model that is off this machine or network.",
           }),
         ),
         HttpApiEndpoint.get("command", InstancePaths.command, {

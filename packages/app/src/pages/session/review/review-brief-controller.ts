@@ -27,6 +27,7 @@ import {
   type ReviewMark,
   type ReviewVerdict,
 } from "./review-brief-model"
+import { composeMessage, includedByDefault, teamUpdate } from "./review-landing-model"
 
 const HISTORY_LIMIT = 2000
 const HYDRATE_CONCURRENCY = 3
@@ -34,8 +35,11 @@ const MAX_MARKED_FILES = 2000
 const CONFIRM_MS = 4000
 const MAX_HISTORY_RETRIES = 3
 const HISTORY_RETRY_SECONDS = 3
+// Git's own name for it, kept as written in every language.
+const DETACHED = "detached HEAD"
 
 export type UndoneFile = { file: string; patch: string }
+export type Landed = { update: string; headline: string }
 
 export function createReviewBrief(input: {
   sessionID: Accessor<string | undefined>
@@ -72,6 +76,17 @@ export function createReviewBrief(input: {
     pendingUndo: undefined as string | undefined,
     undoing: false,
     rerunning: undefined as string | undefined,
+    landing: false,
+    landingFiles: false,
+    // A person's tick wins over the default, and a person's words win over the draft, whatever arrives later.
+    picked: {} as Record<string, boolean | undefined>,
+    edited: undefined as string | undefined,
+    written: undefined as { subject?: string; summary?: string } | undefined,
+    writing: false,
+    committing: false,
+    landError: undefined as string | undefined,
+    landed: undefined as Landed | undefined,
+    copied: false,
   })
   const [focusLine, setFocusLine] = createSignal<{
     file: string
@@ -445,13 +460,146 @@ export function createReviewBrief(input: {
     if (text) input.draftToComposer(text)
   }
 
-  const askToCommit = () => {
-    const files = brief()
-      .files.filter((file) => file.mark === "ok")
-      .map((file) => `- ${file.file}`)
-    if (files.length === 0) return
-    input.draftToComposer([language.t("session.review.reply.commit"), ...files].join("\n"))
+  // ---- Landing: the reviewed files become a commit, and the team gets told. Nothing here runs without a click. -----------
+
+  const canLand = () => input.undoable() && !running() && brief().files.length > 0
+  const included = createMemo(() => {
+    const picked = view.picked
+    return new Set(brief().files.filter((file) => picked[file.file] ?? includedByDefault(file)).map((file) => file.file))
+  })
+  const lastModel = () =>
+    (data().message[rootID() ?? ""] ?? []).findLast(
+      (message: Message): message is Extract<Message, { role: "user" }> => message.role === "user",
+    )?.model.modelID
+  const draft = createMemo(() => {
+    if (!view.landing) return ""
+    return composeMessage({
+      brief: brief(),
+      included: included(),
+      title: untitled(data().info[rootID() ?? ""]?.title),
+      written: view.written,
+      checks: {
+        passed: (command) => language.t("session.review.land.check.passed", { command }),
+        stale: (command, count) => language.t("session.review.land.check.stale", { command, count }),
+        failed: (command, exit) => language.t("session.review.land.check.failed", { command, exit }),
+        hidden: (command) => language.t("session.review.land.check.hidden", { command }),
+        partial: (command) => language.t("session.review.land.check.partial", { command }),
+        none: (kinds) =>
+          language.t("session.review.land.check.none", { checks: kinds.map((kind) => kindName(kind)).join(", ") }),
+      },
+      words: {
+        asked: language.t("session.review.land.asked"),
+        checks: language.t("session.review.land.checks"),
+        mixed: language.t("session.review.land.check.mixed"),
+        leftOut: (files) => language.t("session.review.land.leftOut", { files }),
+        provenance: (reviewed, total) =>
+          language.t("session.review.land.provenance", { model: lastModel() ?? "", reviewed, total }),
+      },
+    })
+  })
+  const message = () => view.edited ?? draft()
+
+  let draftToken = 0
+  const openLanding = () => {
+    if (!canLand() || view.landing) return false
+    const id = rootID()
+    setView({
+      landing: true,
+      landError: undefined,
+      edited: undefined,
+      written: undefined,
+      picked: {},
+      writing: !!id,
+      // Nothing is going in by default, so the list is the next thing the person needs.
+      landingFiles: brief().files.every((file) => !includedByDefault(file)),
+    })
+    if (!id) return true
+    const token = ++draftToken
+    // The record of the run is already a usable message, so the summary arrives if and when it can. It only replaces the
+    // draft while the person has not typed, because `message` prefers what they wrote.
+    void input
+      .sdk()
+      .client.vcs.commitDraft({ sessionID: id, files: [...included()] }, { throwOnError: true })
+      .then((result) => {
+        if (token === draftToken) setView("written", result.data)
+      })
+      .catch((error) => console.debug("[review-brief] commit draft failed", { error }))
+      .finally(() => {
+        if (token === draftToken) setView("writing", false)
+      })
+    return true
   }
+  const closeLanding = () => {
+    draftToken += 1
+    setView({ landing: false, writing: false, landingFiles: false })
+  }
+
+  const land = async () => {
+    const files = [...included()]
+    const text = message().trim()
+    if (!canLand() || view.committing || files.length === 0 || !text) return
+    setView({ committing: true, landError: undefined })
+    try {
+      // What was read is what goes in. The panel keeps up as files change, so this only catches the last moment.
+      const fresh = await input
+        .sdk()
+        .api.vcs.diff({ location: { directory: directory() }, mode: "working" })
+        .then((value) => value.data)
+      const moved = files.filter((file) => {
+        const entry = fresh.find((item) => item.file === file)
+        return !entry || changeHash(entry) !== brief().byFile.get(file)?.hash
+      })
+      if (moved.length > 0) {
+        input.refresh()
+        setView("landError", language.t("session.review.land.moved", { files: moved.join(", ") }))
+        return
+      }
+      const result = await input.sdk().client.vcs.commit({ files, message: text }, { throwOnError: true })
+      const done = result.data
+      if (!done) throw new Error(language.t("common.requestFailed"))
+      const headline = language.t("session.review.land.done", {
+        hash: done.short,
+        branch: done.branch ?? DETACHED,
+      })
+      batch(() => {
+        done.files.forEach((file) => setMark(file, undefined))
+        setView({
+          landed: { headline, update: teamUpdate({ headline, message: text }) },
+          copied: false,
+        })
+        closeLanding()
+      })
+      input.refresh()
+    } catch (error) {
+      console.debug("[review-brief] commit failed", { error })
+      setView("landError", commitError(error, language.t("common.requestFailed")))
+    } finally {
+      setView("committing", false)
+    }
+  }
+
+  const copyUpdate = async () => {
+    const update = view.landed?.update
+    if (!update) return
+    try {
+      await navigator.clipboard.writeText(update)
+      setView("copied", true)
+    } catch (error) {
+      console.debug("[review-brief] copy failed", { error })
+      showToast({ variant: "error", title: language.t("session.review.land.copyFailed") })
+    }
+  }
+
+  createEffect(
+    on(
+      rootID,
+      () => {
+        closeLanding()
+        setView({ landed: undefined, copied: false, landError: undefined })
+      },
+      { defer: true },
+    ),
+  )
 
   return {
     brief,
@@ -478,13 +626,41 @@ export function createReviewBrief(input: {
     canRerun,
     rerunning: () => view.rerunning,
     sendBack,
-    askToCommit,
+    canLand,
+    branch: () => input.sync().data.vcs?.branch ?? DETACHED,
+    landing: () => view.landing,
+    openLanding,
+    closeLanding,
+    message,
+    setMessage: (text: string) => setView("edited", text),
+    included,
+    pick: (file: string, on: boolean) => setView("picked", file, on),
+    landingFiles: () => view.landingFiles,
+    toggleLandingFiles: () => setView("landingFiles", (value) => !value),
+    writing: () => view.writing && view.edited === undefined,
+    committing: () => view.committing,
+    landError: () => view.landError,
+    land,
+    landed: () => view.landed,
+    dismissLanded: () => setView("landed", undefined),
+    copied: () => view.copied,
+    copyUpdate,
     openStep: input.openStep,
     kindName,
     flagLabel,
     expanded: () => view.expanded,
     setExpanded: (value: boolean) => setView("expanded", value),
   }
+}
+
+// A session keeps its placeholder title until one is written, which says nothing about the work.
+const untitled = (title: string | undefined) => (title && !/\d{4}-\d{2}-\d{2}T\d{2}:/.test(title) ? title : undefined)
+
+// Git's own words are the useful part of a refused commit: what the hook said, what is wrong with the identity.
+function commitError(error: unknown, fallback: string) {
+  const data = error && typeof error === "object" && "data" in error ? (error as { data?: { message?: unknown } }).data : undefined
+  if (typeof data?.message === "string" && data.message) return data.message
+  return errorMessage(error, fallback)
 }
 
 export type ReviewBriefController = ReturnType<typeof createReviewBrief>

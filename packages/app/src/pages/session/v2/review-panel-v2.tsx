@@ -36,6 +36,7 @@ import {
   ReviewBriefStrip,
   ReviewFileActions,
   ReviewFileBanner,
+  ReviewLanded,
   ReviewQueue,
 } from "@/pages/session/review/review-brief-view"
 
@@ -143,6 +144,13 @@ export function ReviewPanelV2(props: ReviewPanelV2Props) {
     const key = event.key.toLowerCase()
     if (key === "v") brief.decide(file, "ok")
     else if (key === "x") brief.decide(file, "work")
+    else if (key === "c") {
+      // Opens the message, which takes the focus. Committing is a further, deliberate step.
+      if (!brief.openLanding()) return
+      event.preventDefault()
+      event.stopPropagation()
+      return
+    }
     else if (key !== "n" || !brief.nextFlag()) return
     event.preventDefault()
     // Otherwise the page reads the letter as the start of a message and moves focus to the composer.
@@ -227,6 +235,7 @@ export function ReviewPanelV2(props: ReviewPanelV2Props) {
       data-component="review-brief-root"
       class="flex h-full min-h-0 flex-col outline-none"
     >
+      <Show when={props.brief}>{(brief) => <ReviewLanded brief={brief()} />}</Show>
       <Show when={props.brief && diffs().length > 0}>
         <ReviewBriefStrip brief={props.brief!} />
       </Show>

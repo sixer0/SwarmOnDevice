@@ -114,19 +114,22 @@ export function ReviewBriefStrip(props: { brief: ReviewBriefController }) {
           <span class="text-12-regular text-v2-text-text-muted">
             {language.t("session.review.progress", { done: brief().progress.ok, total: brief().progress.total })}
           </span>
-          <Switch>
-            <Match when={brief().sendable}>
-              <ButtonV2 size="small" variant="contrast" onClick={props.brief.sendBack}>
-                {language.t("session.review.action.sendBack")}
-                <Show when={brief().progress.work > 0}>{` (${brief().progress.work})`}</Show>
-              </ButtonV2>
-            </Match>
-            <Match when={allDecided()}>
-              <ButtonV2 size="small" variant="contrast" onClick={props.brief.askToCommit}>
-                {language.t("session.review.action.commit")}
-              </ButtonV2>
-            </Match>
-          </Switch>
+          <Show when={brief().sendable}>
+            <ButtonV2 size="small" variant="contrast" onClick={props.brief.sendBack}>
+              {language.t("session.review.action.sendBack")}
+              <Show when={brief().progress.work > 0}>{` (${brief().progress.work})`}</Show>
+            </ButtonV2>
+          </Show>
+          <Show when={props.brief.canLand() && !props.brief.landing()}>
+            <ButtonV2
+              size="small"
+              data-review-land
+              variant={allDecided() && !brief().sendable ? "contrast" : "outline"}
+              onClick={() => props.brief.openLanding()}
+            >
+              {language.t("session.review.action.land")}
+            </ButtonV2>
+          </Show>
         </div>
       </div>
       <Show when={props.brief.historyFailed()}>
@@ -153,7 +156,161 @@ export function ReviewBriefStrip(props: { brief: ReviewBriefController }) {
           <For each={brief().evidence}>{(row) => <EvidenceItem brief={props.brief} row={row} />}</For>
         </ul>
       </Show>
+      <Show when={props.brief.landing() && props.brief.canLand()}>
+        <ReviewLanding brief={props.brief} />
+      </Show>
     </section>
+  )
+}
+
+// ---- Landing: one message, the files it covers, and the click that commits ----------------------------------------------
+
+function ReviewLanding(props: { brief: ReviewBriefController }) {
+  const language = useLanguage()
+  const brief = () => props.brief.brief()
+  const words = useFlagWords(props.brief)
+  const count = () => props.brief.included().size
+  const stayingOut = (file: BriefFile) => {
+    if (file.mark === "work") return language.t("session.review.action.needsWork")
+    if (file.group === "elsewhere") return language.t("session.review.group.elsewhere")
+    return words(file)
+  }
+  return (
+    <form
+      data-component="review-landing"
+      class="flex flex-col gap-2 border-t border-v2-border-border-base px-3 py-2"
+      onSubmit={(event) => {
+        event.preventDefault()
+        void props.brief.land()
+      }}
+    >
+      <textarea
+        ref={(el) => queueMicrotask(() => el.focus({ preventScroll: true }))}
+        data-review-land-message
+        aria-label={language.t("session.review.land.message")}
+        rows={10}
+        spellcheck={false}
+        class="max-h-72 min-h-24 w-full resize-y rounded-md [field-sizing:content] border border-v2-border-border-base bg-v2-background-bg-base px-2 py-1.5 font-mono text-12-regular text-v2-text-text-base outline-none focus:border-v2-border-border-strong"
+        value={props.brief.message()}
+        onInput={(event) => props.brief.setMessage(event.currentTarget.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") {
+            event.preventDefault()
+            event.stopPropagation()
+            props.brief.closeLanding()
+          }
+          if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+            event.preventDefault()
+            void props.brief.land()
+          }
+        }}
+      />
+      <Show when={props.brief.landError()}>
+        {(error) => (
+          <pre
+            role="alert"
+            data-review-land-error
+            class="max-h-32 overflow-y-auto whitespace-pre-wrap rounded-md bg-v2-overlay-simple-overlay-hover px-2 py-1.5 font-mono text-11-regular text-v2-state-fg-danger"
+          >
+            {error()}
+          </pre>
+        )}
+      </Show>
+      <Show when={props.brief.landingFiles()}>
+        <ul class="flex max-h-40 flex-col overflow-y-auto" data-review-land-files>
+          <For each={brief().files}>
+            {(file) => (
+              <li>
+                <label class="flex min-h-6 min-w-0 cursor-pointer items-center gap-2 text-12-regular text-v2-text-text-base">
+                  <input
+                    type="checkbox"
+                    data-review-land-file={file.file}
+                    checked={props.brief.included().has(file.file)}
+                    onChange={(event) => props.brief.pick(file.file, event.currentTarget.checked)}
+                  />
+                  <span class="min-w-0 truncate" title={file.file}>
+                    {file.file}
+                  </span>
+                  <Show when={!props.brief.included().has(file.file) && stayingOut(file)}>
+                    {(reason) => <span class="shrink-0 text-11-regular text-v2-text-text-muted">{reason()}</span>}
+                  </Show>
+                </label>
+              </li>
+            )}
+          </For>
+        </ul>
+      </Show>
+      <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <button
+          type="button"
+          data-review-land-toggle
+          aria-expanded={props.brief.landingFiles()}
+          class={`flex items-center gap-0.5 rounded text-12-regular text-v2-text-text-muted hover:text-v2-text-text-base ${FOCUS_RING}`}
+          onClick={props.brief.toggleLandingFiles}
+        >
+          {language.t("session.review.land.files", {
+            included: count(),
+            total: brief().files.length,
+            branch: props.brief.branch(),
+          })}
+          <Icon name="chevron-down" class={props.brief.landingFiles() ? "rotate-180" : undefined} />
+        </button>
+        <Show when={props.brief.writing()}>
+          <span class="flex items-center gap-1 text-12-regular text-v2-text-text-faint" data-review-land-writing>
+            <Spinner class="size-3" />
+            {language.t("session.review.land.writing")}
+          </span>
+        </Show>
+        <div class="ms-auto flex items-center gap-2">
+          <ButtonV2 size="small" type="button" variant="ghost-muted" onClick={props.brief.closeLanding}>
+            {language.t("common.cancel")}
+          </ButtonV2>
+          <ButtonV2
+            size="small"
+            type="submit"
+            variant="contrast"
+            data-review-land-commit
+            disabled={count() === 0 || !props.brief.message().trim() || props.brief.committing()}
+          >
+            {language.t("session.review.action.land")}
+          </ButtonV2>
+        </div>
+      </div>
+    </form>
+  )
+}
+
+/** Stays after the last file has left the panel: this is the moment to tell someone. */
+export function ReviewLanded(props: { brief: ReviewBriefController }) {
+  const language = useLanguage()
+  return (
+    <Show when={props.brief.landed()}>
+      {(landed) => (
+        <div
+          data-component="review-landed"
+          role="status"
+          class="flex min-h-10 shrink-0 flex-wrap items-center gap-x-2 gap-y-1 border-b border-v2-border-border-base px-3 py-1.5"
+        >
+          <span class="shrink-0 text-v2-state-fg-success">
+            <Icon name="check" />
+          </span>
+          <span class="min-w-0 flex-1 basis-60 text-13-medium text-v2-text-text-base" data-review-landed>
+            {landed().headline}
+          </span>
+          <ButtonV2 size="small" variant="outline" data-review-landed-copy onClick={() => void props.brief.copyUpdate()}>
+            {props.brief.copied() ? language.t("session.review.land.copied") : language.t("session.review.land.copy")}
+          </ButtonV2>
+          <button
+            type="button"
+            aria-label={language.t("common.close")}
+            class={`flex size-6 shrink-0 items-center justify-center rounded text-v2-text-text-muted hover:text-v2-text-text-base ${FOCUS_RING}`}
+            onClick={props.brief.dismissLanded}
+          >
+            <Icon name="xmark-small" />
+          </button>
+        </div>
+      )}
+    </Show>
   )
 }
 

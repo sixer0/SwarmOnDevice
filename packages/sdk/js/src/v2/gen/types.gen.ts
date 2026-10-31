@@ -2577,6 +2577,26 @@ export type VcsApplyError = {
   }
 }
 
+export type VcsCommitResult = {
+  hash: string
+  short: string
+  branch?: string
+  files: Array<string>
+}
+
+export type VcsCommitError = {
+  name: "VcsCommitError"
+  data: {
+    message: string
+    reason: "non-git" | "invalid" | "refused"
+  }
+}
+
+export type VcsCommitDraft = {
+  subject?: string
+  summary?: string
+}
+
 export type Command = {
   name: string
   description?: string
@@ -8744,6 +8764,68 @@ export type VcsApplyResponses = {
 }
 
 export type VcsApplyResponse = VcsApplyResponses[keyof VcsApplyResponses]
+
+export type VcsCommitData = {
+  body?: {
+    files: Array<string>
+    message: string
+  }
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/vcs/commit"
+}
+
+export type VcsCommitErrors = {
+  /**
+   * VcsCommitError | InvalidRequestError
+   */
+  400: VcsCommitError | InvalidRequestError
+}
+
+export type VcsCommitError2 = VcsCommitErrors[keyof VcsCommitErrors]
+
+export type VcsCommitResponses = {
+  /**
+   * The commit that was made
+   */
+  200: VcsCommitResult
+}
+
+export type VcsCommitResponse = VcsCommitResponses[keyof VcsCommitResponses]
+
+export type VcsCommitDraftData = {
+  body?: {
+    sessionID: string
+    files: Array<string>
+  }
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/vcs/commit-draft"
+}
+
+export type VcsCommitDraftErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type VcsCommitDraftError = VcsCommitDraftErrors[keyof VcsCommitDraftErrors]
+
+export type VcsCommitDraftResponses = {
+  /**
+   * A subject and summary, empty when none could be written on this machine
+   */
+  200: VcsCommitDraft
+}
+
+export type VcsCommitDraftResponse = VcsCommitDraftResponses[keyof VcsCommitDraftResponses]
 
 export type CommandListData = {
   body?: never
