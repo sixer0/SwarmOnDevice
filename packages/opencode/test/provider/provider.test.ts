@@ -425,6 +425,34 @@ test("parseModel handles model IDs with slashes", () => {
   expect(String(result.modelID)).toBe("anthropic/claude-3-opus")
 })
 
+it.instance(
+  "defaultModel prefers a configured model with no price, even when a paid provider is declared first",
+  () =>
+    Effect.gen(function* () {
+      const model = yield* Provider.use.defaultModel()
+      expect(String(model.providerID)).toBe("own-server")
+      expect(String(model.modelID)).toBe("thinker")
+    }),
+  {
+    config: {
+      provider: {
+        paidcloud: {
+          name: "Paid cloud",
+          npm: "@ai-sdk/openai-compatible",
+          options: { apiKey: "key", baseURL: "http://127.0.0.1:1/v1" },
+          models: { big: { name: "Big", cost: { input: 5, output: 25 } } },
+        },
+        "own-server": {
+          name: "Own server",
+          npm: "@ai-sdk/openai-compatible",
+          options: { apiKey: "key", baseURL: "http://127.0.0.1:2/v1" },
+          models: { thinker: {} },
+        },
+      },
+    },
+  },
+)
+
 it.instance("defaultModel returns first available model when no config set", () =>
   Effect.gen(function* () {
     yield* setProcessEnv("ANTHROPIC_API_KEY", "test-api-key")

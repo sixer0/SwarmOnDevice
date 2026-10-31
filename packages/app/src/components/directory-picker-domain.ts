@@ -321,6 +321,40 @@ export function displayPickerPath(path: string, input: string, home: string) {
   return pickerTilde(value, home) || value
 }
 
+/**
+ * The folder a typed path names, if it exists. Enter on a path means that path: the highlighted row may still be from
+ * before the results caught up with what was typed, and that row would open as the project. Undefined for anything
+ * that is not a plain path, or does not exist.
+ */
+export async function typedDirectory(
+  args: { sdk: ServerSDK; base: () => string | undefined; home: () => string },
+  filter: string,
+) {
+  const raw = normalizePickerDrive(cleanPickerInput(filter))
+  if (!raw.startsWith("~") && !pickerRoot(raw) && !raw.includes("/")) return
+  if (raw.split("/").some((part) => part === "..")) return
+  const home = args.home()
+  const expanded = pickerRoot(raw)
+    ? raw
+    : raw === "~"
+      ? home
+      : raw.startsWith("~/")
+        ? joinPickerPath(home, raw.slice(2))
+        : joinPickerPath(args.base() ?? "", raw)
+  const target = trimPickerPath(expanded)
+  if (!target) return
+  const parent = pickerParent(target)
+  if (parent === target) return target
+  const nodes = await args.sdk.api.file
+    .list({ location: { directory: parent } })
+    .then((result) => result.data)
+    .catch(() => [])
+  const found = nodes.some(
+    (node) => node.type === "directory" && getFilename(trimPickerPath(normalizePickerDrive(node.path))) === getFilename(target),
+  )
+  return found ? target : undefined
+}
+
 export function createDirectorySearch(args: { sdk: ServerSDK; base: () => string | undefined; home: () => string }) {
   const cache = new Map<string, Promise<Array<{ name: string; absolute: string }>>>()
   let current = 0

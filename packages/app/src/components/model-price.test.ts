@@ -46,6 +46,16 @@ test("a provider written into config comes first in the picker and is the defaul
   expect([engine, cloud, configured].toSorted(compareProviderDefaults)).toEqual([configured, cloud, engine])
 })
 
+test("a paid provider declared first in config does not become the default over one with no price", () => {
+  const price = { input: 5, output: 25 }
+  const paid = { source: "config", models: { big: { cost: price } } }
+  const own = { source: "config", models: { thinker: {} } }
+  const cloud = { source: "env", models: { other: { cost: price } } }
+  expect([paid, own].toSorted(compareProviderDefaults)).toEqual([own, paid])
+  // Paid but written into config is still chosen over anything Swarm found by itself.
+  expect([cloud, paid].toSorted(compareProviderDefaults)).toEqual([paid, cloud])
+})
+
 test("compareProviders puts on-device first", () => {
   const cloud = { options: {} }
   const local = { options: { onDevice: true } }

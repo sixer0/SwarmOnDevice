@@ -68,9 +68,9 @@ export function NewHome() {
               if (conn) projects.project.choose(conn)
             }}
           />
-          {/* Fourth grid child: spans both columns on large screens, stacks below on small. Visible in both
-              transports without touching sidebar scroll geometry (spec §8). */}
-          <div class="min-w-0 lg:col-span-2">
+          {/* Fourth grid child: under the sessions on large screens, since the projects column is sticky and spanning it
+              would draw over this card. Stacks below on small. Visible in both transports (spec §8). */}
+          <div class="min-w-0 lg:col-start-2">
             <HomeStatusCard />
           </div>
           <HomeUtilityNav

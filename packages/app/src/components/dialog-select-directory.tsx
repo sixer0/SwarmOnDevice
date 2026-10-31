@@ -8,7 +8,7 @@ import { createMemo, createResource, createSignal } from "solid-js"
 import { useLanguage } from "@/context/language"
 import { ServerConnection } from "@/context/server"
 import { useGlobal } from "@/context/global"
-import { cleanPickerInput, createDirectorySearch, displayPickerPath } from "./directory-picker-domain"
+import { cleanPickerInput, createDirectorySearch, displayPickerPath, typedDirectory } from "./directory-picker-domain"
 import type { Path } from "@opencode-ai/sdk/v2/client"
 
 interface DialogSelectDirectoryProps {
@@ -128,6 +128,13 @@ export function DialogSelectDirectory(props: DialogSelectDirectoryProps) {
     dialog.close()
   }
 
+  // Waits for what was typed, since the highlighted row can still be a result from before it.
+  async function openTyped() {
+    const typed = filter()
+    const target = (await typedDirectory({ sdk, home, base: start }, typed)) ?? (await directories(typed))[0]
+    if (target) resolve(target)
+  }
+
   return (
     <Dialog title={props.title ?? language.t("command.project.open")}>
       <List
@@ -149,6 +156,12 @@ export function DialogSelectDirectory(props: DialogSelectDirectoryProps) {
         ref={(r) => (list = r)}
         onFilter={(value) => setFilter(cleanPickerInput(value))}
         onKeyEvent={(e, item) => {
+          if (e.key === "Enter" && !e.isComposing && /[~/\\]/.test(filter())) {
+            e.preventDefault()
+            e.stopPropagation()
+            void openTyped()
+            return
+          }
           if (e.key !== "Tab") return
           if (e.shiftKey) return
           if (!item) return

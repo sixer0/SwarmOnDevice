@@ -15,6 +15,7 @@ import {
   treePathWithin,
   currentPickerSuggestions,
   createDirectorySearch,
+  typedDirectory,
   createPriorityTaskQueue,
   displayPickerPath,
   pickerParent,
@@ -307,4 +308,32 @@ test("returns absolute directories and relative files", () => {
   expect(selectedTreePath("/home/luke/repo", "src/index.ts", "file")).toBe("src/index.ts")
   expect(selectedTreePath("/home/luke/repo/src", "index.ts", "file", "/home/luke/repo")).toBe("src/index.ts")
   expect(selectedTreePath("/home/luke/repo", "src/", "file")).toBeUndefined()
+})
+
+test("a typed path that exists is what Enter opens, wherever the highlight is", async () => {
+  const asked: string[] = []
+  const sdk = {
+    api: {
+      file: {
+        list: (input: { location: { directory: string } }) => {
+          asked.push(input.location.directory)
+          return Promise.resolve({
+            data: input.location.directory === "/work" ? [{ path: "scene-a", type: "directory" }, { path: "note.txt", type: "file" }] : [],
+          })
+        },
+      },
+    },
+  } as unknown as Parameters<typeof typedDirectory>[0]["sdk"]
+  const args = { sdk, home: () => "/work", base: () => "/work" }
+
+  expect(await typedDirectory(args, "/work/scene-a")).toBe("/work/scene-a")
+  expect(await typedDirectory(args, "/work/scene-a/")).toBe("/work/scene-a")
+  expect(await typedDirectory(args, "~/scene-a")).toBe("/work/scene-a")
+  expect(await typedDirectory(args, "/work/missing")).toBeUndefined()
+  expect(await typedDirectory(args, "/work/note.txt")).toBeUndefined()
+  expect(await typedDirectory(args, "/work/../work/scene-a")).toBeUndefined()
+  // A bare word is a search, not a path, and asks the server nothing.
+  asked.length = 0
+  expect(await typedDirectory(args, "scene-a")).toBeUndefined()
+  expect(asked).toEqual([])
 })

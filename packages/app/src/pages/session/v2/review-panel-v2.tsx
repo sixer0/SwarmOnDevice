@@ -151,7 +151,8 @@ export function ReviewPanelV2(props: ReviewPanelV2Props) {
       event.stopPropagation()
       return
     }
-    else if (key !== "n" || !brief.nextFlag()) return
+    else if (key === "n") brief.nextFlag()
+    else return
     event.preventDefault()
     // Otherwise the page reads the letter as the start of a message and moves focus to the composer.
     event.stopPropagation()

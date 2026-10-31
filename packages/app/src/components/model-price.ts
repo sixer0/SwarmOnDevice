@@ -3,7 +3,7 @@
 
 type Tokens = { input: number; output: number; reasoning?: number; cache?: { read: number; write: number } }
 type Cost = { input: number; output: number; cache?: { read: number; write: number } }
-type OnDevice = { source?: string; options?: Record<string, unknown> }
+type OnDevice = { source?: string; options?: Record<string, unknown>; models?: Record<string, { cost?: Cost }> }
 type Model = { name: string; cost?: Cost; provider: OnDevice }
 
 export const isOnDeviceProvider = (provider: OnDevice) => provider.options?.onDevice === true
@@ -33,7 +33,11 @@ export function compareModels(a: Model, b: Model) {
 // A provider written into config is what this person means to use. Anything Swarm found by itself comes after it.
 const isConfigured = (provider: OnDevice) => provider.source === "config" && !isOnDeviceProvider(provider)
 const pickerRank = (provider: OnDevice) => (isConfigured(provider) ? 0 : isOnDeviceProvider(provider) ? 1 : 2)
-const defaultRank = (provider: OnDevice) => (isConfigured(provider) ? 0 : isOnDeviceProvider(provider) ? 2 : 1)
+// Among those, one that bills per request stays a choice someone makes, whatever order the config lists them in.
+const defaultRank = (provider: OnDevice) => {
+  if (!isConfigured(provider)) return isOnDeviceProvider(provider) ? 3 : 2
+  return Object.values(provider.models ?? {}).some((model) => !hasPrice(model)) ? 0 : 1
+}
 
 /** Order of the picker's groups. */
 export const compareProviders = (a: OnDevice, b: OnDevice) => pickerRank(a) - pickerRank(b)

@@ -2197,7 +2197,10 @@ const layer = Layer.effect(
       }
 
       const configured = Object.keys(cfg.provider ?? {})
-      const provider = Object.values(s.providers).find((p) => configured.length === 0 || configured.includes(p.id))
+      const candidates = Object.values(s.providers).filter((p) => configured.length === 0 || configured.includes(p.id))
+      // A provider that bills per request stays a choice someone makes, whatever order the config lists them in.
+      const unpriced = (p: Info) => Object.values(p.models).some((model) => model.cost.input + model.cost.output === 0)
+      const provider = (configured.length > 0 ? candidates.find(unpriced) : undefined) ?? candidates[0]
       if (!provider) return yield* new NoProvidersError()
       const model = bestModel(provider)
       if (!model) return yield* new NoModelsError({ providerID: provider.id })
