@@ -2347,7 +2347,17 @@ export default function Page() {
                         setFollowup("paused", id, true)
                       },
                     })
-                    return <PromptInputV2Composer controller={controller} borderUnderlay />
+                    return (
+                      <PromptInputV2Composer
+                        controller={controller}
+                        borderUnderlay
+                        preflight={{
+                          placement: "above",
+                          fresh: () => visibleUserMessages().length === 0,
+                          sessionID: () => params.id,
+                        }}
+                      />
+                    )
                   }}
                 </Show>
               }

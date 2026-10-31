@@ -13,6 +13,8 @@ import type { PromptInputProps } from "@/components/prompt-input/contracts"
 import { normalizePromptHistoryEntry, promptLength, type PromptHistoryComment } from "@/components/prompt-input/history"
 import { createPersistedPromptInputHistory } from "@/components/prompt-input/history-store"
 import { promptDesignPlaceholder, promptPlaceholder } from "@/components/prompt-input/placeholder"
+import { PromptPreflight } from "@/components/prompt-input/preflight-panel"
+import type { PreflightWorktree } from "@/components/prompt-input/preflight-controller"
 import { createPromptSubmit } from "@/components/prompt-input/submit"
 import { selectionFromLines, type SelectedLineRange, useFile } from "@/context/file"
 import { useComments } from "@/context/comments"
@@ -37,6 +39,14 @@ export type PromptInputV2ComposerProps = {
   class?: string
   controller: PromptInputV2ComposerController
   borderUnderlay?: boolean
+  preflight?: {
+    /** The new-session page has room below its composer; the session dock only has room above. */
+    placement: "above" | "below"
+    /** True while the draft would start a run, rather than steer one already underway. */
+    fresh: () => boolean
+    sessionID: () => string | undefined
+    worktree?: PreflightWorktree
+  }
 }
 
 export type PromptInputV2ControllerProps = Omit<PromptInputProps, "class" | "submission">
@@ -48,9 +58,20 @@ export function PromptInputV2Composer(props: PromptInputV2ComposerProps) {
   const dialog = useDialog()
   const command = useCommand()
   const language = useLanguage()
+  const preflight = () =>
+    props.preflight && (
+      <PromptPreflight
+        active={() => props.controller.state.mode === "normal"}
+        fresh={props.preflight.fresh}
+        sessionID={props.preflight.sessionID}
+        worktree={props.preflight.worktree}
+        restoreFocus={props.controller.restoreFocus}
+      />
+    )
 
   return (
-    <div class="flex flex-col gap-3">
+    <div class="flex flex-col gap-2">
+      <Show when={props.preflight?.placement === "above"}>{preflight()}</Show>
       <PromptInputV2
         controller={props.controller}
         borderUnderlay={props.borderUnderlay}
@@ -74,6 +95,7 @@ export function PromptInputV2Composer(props: PromptInputV2ComposerProps) {
           />
         }
       />
+      <Show when={props.preflight?.placement === "below"}>{preflight()}</Show>
     </div>
   )
 }

@@ -351,9 +351,13 @@ function parsePromptInputV2Editor(editor: HTMLDivElement) {
     Array.from(node.childNodes).forEach(visit)
   }
 
+  const isBlock = (node: Node | undefined) => node instanceof HTMLElement && ["DIV", "P"].includes(node.tagName)
   Array.from(editor.childNodes).forEach((node, index, nodes) => {
+    // A multi-line paste leaves the first line as a bare text node with the rest in blocks, so the line break before
+    // the first block has to come from here or the two lines reach the agent joined together.
+    if (isBlock(node) && index > 0 && !isBlock(nodes[index - 1])) buffer += "\n"
     visit(node)
-    if (node instanceof HTMLElement && ["DIV", "P"].includes(node.tagName) && index < nodes.length - 1) buffer += "\n"
+    if (isBlock(node) && index < nodes.length - 1) buffer += "\n"
   })
   flush()
   if (

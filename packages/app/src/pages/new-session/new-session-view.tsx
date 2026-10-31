@@ -41,7 +41,19 @@ export function NewSessionView(props: {
           <div class={NEW_SESSION_CONTENT_WIDTH}>
             <Logo class="h-auto w-full opacity-12 text-v2-background-bg-inverse" />
             <div class="mt-8 flex flex-col gap-8">
-              <PromptInputV2Composer controller={props.input} />
+              <PromptInputV2Composer
+                controller={props.input}
+                preflight={{
+                  placement: "below",
+                  fresh: () => true,
+                  sessionID: () => undefined,
+                  worktree: {
+                    selected: props.workspace.selection.value,
+                    available: props.workspace.bar.visible,
+                    isolate: () => props.workspace.selection.set("create"),
+                  },
+                }}
+              />
               <Show when={props.project.empty()}>
                 <PromptProjectAddButton controller={props.project} />
               </Show>
