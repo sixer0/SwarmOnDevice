@@ -1,6 +1,7 @@
 import path from "node:path"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
 import { jobWords } from "@opencode-ai/core/util/same-job"
+import { ConfigMarkdown } from "@/config/markdown"
 import { MemoryLearn } from "@/memory/learn"
 
 // Pure half of saved commands: what a run comes down to, and how that becomes something the next agent can follow.
@@ -14,6 +15,13 @@ const NAME = /^[a-z0-9][a-z0-9-]{0,39}$/
 const LOOKING_ONLY = /^(ls|cat|pwd|cd|echo|grep|rg|find|head|tail|sed -n|wc|which|file|tree|git (status|diff|log|show))\b/
 const EDIT_TOOLS = new Set(["edit", "write", "patch", "multiedit"])
 const ARGUMENTS = "$ARGUMENTS"
+
+// `bun test 2>&1 | tail -20` reports tail's exit code, so whoever reads the next run cannot tell whether the check passed.
+// Only a final tail or head, which trims and adds nothing: anything else in a pipe may be the point of the command.
+const TRIMMED = /^([^|]+?)(?:\s+2>&1)?\s*\|\s*(?:tail|head)(?:\s+(?:-n\s*)?-?\d+)?\s*$/
+
+/** A command as it should be repeated, with the exit code left showing. */
+export const untrimmed = (command: string) => command.match(TRIMMED)?.[1]?.trim() ?? command
 
 export type Digest = {
   prompts: string[]
@@ -54,7 +62,7 @@ export function digest(messages: readonly SessionV1.WithParts[], directory: stri
       const state = part.state
       if (state.status !== "completed" && state.status !== "error") continue
       if (part.tool === "bash") {
-        const command = typeof state.input.command === "string" ? state.input.command.trim() : ""
+        const command = untrimmed(typeof state.input.command === "string" ? state.input.command.trim() : "")
         if (!command || command.length > MAX_LINE || MemoryLearn.looksSecret(command)) continue
         const exit = state.status === "completed" ? state.metadata?.exit : 1
         if (exit === 0 || exit === undefined) {
@@ -131,7 +139,7 @@ export function parseDraft(text: string): Draft | undefined {
   if (!parsed || typeof parsed !== "object") return undefined
   const { name, description, instructions } = parsed as Record<string, unknown>
   if (typeof instructions !== "string" || !instructions.trim()) return undefined
-  const steps = disarm(instructions.trim())
+  const steps = disarm(instructions.trim()).replace(/`([^`\n]+)`/g, (_, command: string) => `\`${untrimmed(command)}\``)
   const template = steps.includes(ARGUMENTS) ? steps : `${steps}\n\nDetails for this run, if any: ${ARGUMENTS}`
   if (template.length > MAX_TEMPLATE || MemoryLearn.looksSecret(template)) return undefined
   return {
@@ -142,12 +150,19 @@ export function parseDraft(text: string): Draft | undefined {
 }
 
 /**
- * A template can run shell when used: !`command` executes before the agent sees anything, without asking. The person
- * can write that themselves. A draft must not contain it, because a model's words may trace back to what it read.
+ * A template can run shell when used: !`command` executes before the agent sees anything, without asking, and @path puts
+ * a file in the prompt. The person can write those themselves. A draft must not contain them, because a model's words may
+ * trace back to what it read. Judged on the final form with the same patterns a command is run with, so `!!` cannot turn
+ * into a live marker once the first one is gone.
  */
-export function disarm(template: string) {
-  return template.replace(/!`/g, "`")
+export function disarm(template: string): string {
+  const quoted = template.replace(ConfigMarkdown.FILE_REGEX, (match) => (match === "@" ? match : `\`${match}\``))
+  const next = quoted.replace(/!+`/g, "`")
+  return armed(next) ? disarm(next) : next
 }
+
+const armed = (template: string) =>
+  ConfigMarkdown.shell(template).length > 0 || ConfigMarkdown.files(template).some((match) => match[1])
 
 export function cleanName(value: string) {
   return value

@@ -282,7 +282,8 @@ export const ApplyPatchTool = Tool.define(
               return
             }
             yield* afs.writeWithDirs(target, Bom.join(text, change.bom))
-            if (change.type === "move") {
+            // Onto itself, or onto its own name in another case, the file just written is the one this would remove.
+            if (change.type === "move" && FSUtil.resolve(target) !== FSUtil.resolve(change.filePath)) {
               yield* afs.remove(change.filePath)
               updates.push({ file: change.filePath, event: "unlink" })
               updates.push({ file: target, event: "add" })
@@ -304,7 +305,8 @@ export const ApplyPatchTool = Tool.define(
         }
       })
       // In one order everywhere, so that two patches over the same files cannot each hold what the other waits for.
-      yield* [...new Set(touched.map((file) => path.resolve(file)))]
+      // Keyed the way `lock` keys them: a file and a link to it, or a rename that only changes case, are one lock.
+      yield* [...new Set(touched.map((file) => FSUtil.resolve(file)))]
         .sort()
         .reduce<Effect.Effect<void, Error>>((inner, file) => lock(file).withPermits(1)(inner), apply)
 

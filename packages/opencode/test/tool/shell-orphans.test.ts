@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { spawn, spawnSync } from "node:child_process"
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import os from "node:os"
+import path from "node:path"
 import { ShellOrphans } from "../../src/tool/shell/orphans"
 
 const groups: number[] = []
@@ -103,5 +106,61 @@ describe("ShellOrphans", () => {
     ShellOrphans.record(session(), pid, await deadServer())
     expect(await ShellOrphans.end(session())).toBe(0)
     expect(alive(pid)).toBe(true)
+  })
+
+  describe("when ps cannot answer", () => {
+    // What BusyBox's does with `-p`: fails, and says so. `kill` is the shell's own, so only `ps` is affected.
+    const withoutPs = async <T>(run: () => Promise<T>) => {
+      const dir = mkdtempSync(path.join(os.tmpdir(), "no-ps-"))
+      writeFileSync(path.join(dir, "ps"), "#!/bin/sh\necho 'ps: unrecognized option: p' >&2\nexit 1\n", { mode: 0o755 })
+      const before = process.env.PATH
+      process.env.PATH = dir
+      try {
+        return await run()
+      } finally {
+        process.env.PATH = before
+        rmSync(dir, { recursive: true, force: true })
+      }
+    }
+
+    test("a command under a live server is never killed", async () => {
+      const id = session()
+      const pid = command("sleep 30")
+      await waitFor(() => started(pid) !== "")
+      ShellOrphans.record(id, pid, { pid: process.pid, started: started(process.pid) })
+      expect(await withoutPs(() => ShellOrphans.end(id))).toBe(0)
+      expect(alive(pid)).toBe(true)
+      // The record is kept, for a later call that can tell.
+      ShellOrphans.clear(id, pid)
+    })
+
+    test("nor when it could not answer at the start either", async () => {
+      const id = session()
+      const pid = command("sleep 30")
+      await withoutPs(async () => ShellOrphans.record(id, pid, { pid: process.pid }))
+      expect(await ShellOrphans.end(id)).toBe(0)
+      expect(await withoutPs(() => ShellOrphans.end(id))).toBe(0)
+      expect(alive(pid)).toBe(true)
+    })
+
+    test("with the server gone, a leader it cannot identify is left alone", async () => {
+      const id = session()
+      const pid = command("sleep 30")
+      await waitFor(() => started(pid) !== "")
+      ShellOrphans.record(id, pid, await deadServer())
+      expect(await withoutPs(() => ShellOrphans.end(id))).toBe(0)
+      expect(alive(pid)).toBe(true)
+      // Once it can tell again, the same record still ends it.
+      expect(await ShellOrphans.end(id)).toBe(1)
+    })
+
+    test("a server that is really gone is known without asking ps", async () => {
+      const id = session()
+      const pid = command("sleep 30")
+      await waitFor(() => started(pid) !== "")
+      const server = await deadServer()
+      ShellOrphans.record(id, pid, { pid: server.pid })
+      expect(await ShellOrphans.end(id)).toBe(1)
+    })
   })
 })

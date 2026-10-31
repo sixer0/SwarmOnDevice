@@ -112,6 +112,21 @@ describe("files a person has to be asked about", () => {
     ".NPMRC",
     ".ENVRC",
     "innocent/config",
+    ".gitconfig",
+    "AGENTS.md",
+    "package.json",
+    "Makefile",
+    "sub/Makefile",
+    ".bashrc",
+    ".zshenv",
+    ".vscode/tasks.json",
+    ".gitlab-ci.yml",
+    ".circleci/config.yml",
+    "Dockerfile",
+    "vite.config.ts",
+    ".swarm/plugin/x.ts",
+    ".\u017fwarm/command/y.md",
+    "\u017fwarm.json",
   ]) {
     it.live(`write asks: ${relative}`, () =>
       runTool("write", write(relative)).pipe(Effect.map((run) => expect(run.prompted.length).toBeGreaterThan(0))),
@@ -201,6 +216,45 @@ describe("a gitignored file Undo cannot restore", () => {
   )
   it.live("a rebuilt directory costs a rebuild, so it does not ask", () =>
     runTool("write", write("dist/out.js")).pipe(Effect.map((run) => expect(run.prompted).toEqual([]))),
+  )
+})
+
+describe("an edit through a link", () => {
+  it.live("to an ignored file asks and says Undo cannot help", () =>
+    runTool("write", write("notes"), {
+      prepare: (dir) => fs.symlinkSync("data/local.db", path.join(dir, "notes")),
+    }).pipe(
+      Effect.map((run) => {
+        expect(run.prompted[0]?.metadata.risk).toBe("irreversible")
+        expect(run.prompted[0]?.always).toEqual([])
+      }),
+    ),
+  )
+})
+
+describe("apply_patch naming one file twice", () => {
+  const patch = (dir: string, move: string) => ({
+    patchText: `*** Begin Patch\n*** Update File: ${path.join(dir, "m.txt")}\n*** Move to: ${path.join(dir, move)}\n@@\n-x\n+y\n*** End Patch`,
+  })
+  const file = (dir: string) => fs.writeFileSync(path.join(dir, "m.txt"), "x\n")
+  const finish = <A, E, R>(run: Effect.Effect<A, E, R>) =>
+    run.pipe(
+      Effect.timeoutOrElse({ duration: "20 seconds", orElse: () => Effect.die(new Error("deadlocked on its own lock")) }),
+    )
+
+  it.live("a move that only changes case does not wait on itself, and the file survives", () =>
+    finish(runTool("patch", (dir) => patch(dir, "M.txt"), { prepare: file })).pipe(
+      Effect.map((run) => {
+        expect(run.error).toBeUndefined()
+        expect(fs.readFileSync(path.join(run.dir, "m.txt"), "utf8")).toBe("y\n")
+      }),
+    ),
+  )
+
+  it.live("a move onto itself keeps the file", () =>
+    finish(runTool("patch", (dir) => patch(dir, "m.txt"), { prepare: file })).pipe(
+      Effect.map((run) => expect(fs.readFileSync(path.join(run.dir, "m.txt"), "utf8")).toBe("y\n")),
+    ),
   )
 })
 

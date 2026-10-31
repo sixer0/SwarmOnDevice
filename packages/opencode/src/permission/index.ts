@@ -1,3 +1,4 @@
+import { needsPerson } from "@opencode-ai/core/permission/needs-person"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { ConfigPermissionV1 } from "@opencode-ai/core/v1/config/permission"
 import { InstanceState } from "@/effect/instance-state"
@@ -130,7 +131,7 @@ const layer = Layer.effect(
       const id = request.id ?? PermissionV1.ID.ascending()
       // A repeating call stops the run on purpose until a person looks. Carrying on would defeat that guard.
       // The same goes for a spend limit: nobody being there is exactly when it must hold.
-      const wait = ["doom_loop", "spend_limit"].includes(request.permission)
+      const wait = needsPerson(request.permission)
         ? undefined
         : Unattended.wait(away.has(request.sessionID))
       const asked: PermissionV1.Request = {

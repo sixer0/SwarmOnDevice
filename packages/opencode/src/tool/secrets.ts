@@ -12,9 +12,9 @@ const PUBLIC_NAME = /PUBLIC|PUBLISHABLE/i
 const CREDENTIAL_URL = /^[a-z][a-z0-9+.-]*:\/\/[^/\s:@]+:[^/\s@]+@/i
 const RANDOM_LOOKING = /^(?=.*[0-9])(?=.*[A-Za-z])[A-Za-z0-9+/_=.-]{20,}$/
 
-const ENV_FILE = /^\.env(\.|$)|\.env$/
+const ENV_FILE = /^\.env([-_.]|$)|\.env$/
 const ENV_EXAMPLE = /\.(example|sample|template|dist|defaults)$/
-const WHOLE_FILE = /(^|\/)(id_rsa|id_ed25519|id_ecdsa|id_dsa|\.netrc|\.pgpass|\.git-credentials|credentials|service-account.*\.json|(secrets?|credentials?)\.(ya?ml|json|toml|ini))$|\.(pem|key|p12|pfx|keystore|jks)$/i
+const WHOLE_FILE = /(^|\/)(id_rsa|id_ed25519|id_ecdsa|id_dsa|\.netrc|\.pgpass|\.git-credentials|credentials|service-account.*\.json|(secrets?|credentials?)\.(ya?ml|json|toml|ini))$|\.(pem|key|p12|pfx|keystore|jks)$|(^|\/)\.envs\//i
 
 // Values that are recognisable wherever they turn up, including in a log line nobody expected them in.
 const SHAPES: [RegExp, string][] = [

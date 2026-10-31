@@ -131,22 +131,262 @@ const run = (command: string, prepare?: (dir: string) => void) =>
 describe("shell commands inside an agent session", () => {
   const runs = [
     "ls src",
-    "git status",
-    "cat .env",
-    "rm -rf src",
-    "rm -rf dist",
-    "mkdir -p src/lib && touch src/lib/x.ts",
-    "echo hi > src/out.txt",
-    "echo hi 2>/dev/null",
-    "git add -A && git commit -qm x --allow-empty",
-    "git reset --hard",
+    "ls -la",
+    "ls -R src",
+    "cat src/a.ts",
+    "head -n 5 src/a.ts",
+    "head -5 src/a.ts",
+    "tail -n +2 src/a.ts",
+    "wc -l src/a.ts",
+    "grep -n a src/a.ts",
+    "grep -rn a src",
+    "find src -name 'a*' -type f",
     "ls | grep a",
+    "cat src/a.ts | sort | uniq -c",
+    "echo hi 2>/dev/null",
+    "ls src 2>&1",
+    "pwd",
+    "true",
+    "test -f src/a.ts",
+    "ls src && cat src/a.ts",
   ]
   for (const command of runs) {
     it.live(`runs without a prompt: ${command}`, () =>
       outcome(command).pipe(Effect.map((asked) => expect(asked).toBeUndefined())),
     )
   }
+
+  // Each of these used to run unprompted on the strength of Undo, or of a check of today's git config.
+  const asksNow = [
+    "git status",
+    "git status --short",
+    "git diff",
+    "git log --oneline -5",
+    "git show HEAD",
+    "git branch",
+    "git --version",
+    "git add -A && git commit -qm x --allow-empty",
+    "git reset --hard",
+    "rm -rf src",
+    "rm -rf dist",
+    "mv src/a.ts src/b.ts",
+    "cp src/a.ts src/b.ts",
+    "mkdir -p src/lib && touch src/lib/x.ts",
+    "echo hi > src/out.txt",
+    "ls | sort > src/list.txt",
+    "cat < src/a.ts",
+  ]
+  for (const command of asksNow) {
+    it.live(`asks: ${command}`, () => outcome(command).pipe(Effect.map((asked) => expect(asked).toBeDefined())))
+  }
+
+  describe("anything that alters the shell makes the whole command not harmless", () => {
+    const altering = [
+      "printf -v HOME . ; git status",
+      "printf -v PATH evil ; ls",
+      "printf hi",
+      "read x; ls",
+      "export PATH=evil; ls",
+      "declare -x PATH=evil; ls",
+      "typeset PATH=evil; ls",
+      "local x=1; ls",
+      "readonly x=1; ls",
+      "unset PATH; ls",
+      "eval ls",
+      "source x.sh; ls",
+      ". ./x.sh; ls",
+      "alias ls=rm; ls",
+      "unalias ls; ls",
+      "function ls { rm x; }; ls",
+      "hash -p ./evil ls; ls",
+      "set -a; ls",
+      "shopt -s expand_aliases; ls",
+      "trap 'rm x' EXIT; ls",
+      "builtin cd src; ls",
+      "command ls",
+      "exec ls",
+      "x=1; ls",
+      "PATH=evil ls",
+      "cd src && ls",
+      "pushd src; ls",
+      "constructor",
+      "toString",
+      "__proto__",
+    ]
+    for (const command of altering) {
+      it.live(`asks: ${command}`, () =>
+        outcome(command).pipe(
+          Effect.map((asked) => {
+            expect(asked).toBeDefined()
+            // Allowing it means allowing all of it, and no part slips past on its own.
+            if (command.endsWith("; ls")) expect(asked?.patterns.join(" ")).toContain("ls")
+          }),
+        ),
+      )
+    }
+
+    it.live("a rule for the command that follows does not cover what came before it", () =>
+      outcome("export PATH=evil; ls src").pipe(
+        Effect.map((asked) => expect(asked?.patterns).toContain("export PATH=evil; ls src")),
+      ),
+    )
+
+    it.live("a sequence lists every part, so allowing it is allowing all of it", () =>
+      outcome("ls src ; bun test").pipe(
+        Effect.map((asked) => {
+          expect(asked?.patterns).toContain("ls src")
+          expect(asked?.patterns).toContain("bun test")
+        }),
+      ),
+    )
+  })
+
+  describe("only named flags and literal words", () => {
+    const refused = [
+      // Named elsewhere as ways out.
+      "ls -L src",
+      "ls -LR .",
+      "ls --color=always src",
+      "find -Ls .",
+      "find . -L",
+      "find . -delete",
+      "find . -exec rm {} ;",
+      "find . -newer /etc/hosts",
+      "find . -fprint x",
+      "grep -S x .",
+      "grep -rS x src",
+      "grep -R x src",
+      "grep -O x src",
+      "grep -f list x src",
+      "grep -o a src/a.ts",
+      "grep -ro . src",
+      "grep --include=x y src",
+      "sort -o out src/a.ts",
+      "sort --co=xx src/a.ts",
+      "sort -T /tmp src/a.ts",
+      "uniq src/a.ts src/b.ts",
+      "head -c 5 src/a.ts",
+      "tail -c +5 src/a.ts",
+      "tail -f src/a.ts",
+      "wc --files0-from=x",
+      "cat -",
+      "cat -- src/a.ts",
+      "cat /dev/stdin",
+      "test -n x",
+      "test -f /etc/hosts",
+      "true x",
+      // Off the list altogether.
+      "printenv",
+      "printenv SERVICE_TOKEN",
+      "printenv SERVICE_TOKEN | cut -c2-",
+      "env",
+      "jq -n 'env|@base64'",
+      "cut -c1 src/a.ts",
+      "rg a src",
+      "diff src/a.ts src/b.ts",
+      "stat src/a.ts",
+      "du src",
+      "file src/a.ts",
+      "which ls",
+      "sleep 1",
+      "tree src",
+      "./ls",
+      "/bin/ls",
+      // What the shell would rewrite, in bash or in zsh.
+      "cat =sh",
+      "ls =sh",
+      "echo =sh",
+      "ls src/*",
+      "ls *(e:'touch x':)",
+      "echo $HOME",
+      'echo "$HOME"',
+      "echo \\$HOME",
+      "cat ~/.ssh/config",
+      "cat 'src/a.ts'$x",
+      "ls ~",
+      // Numbers are words too, and a file can be called one.
+      "cat 5 | rm x",
+    ]
+    for (const command of refused) {
+      it.live(`asks: ${command}`, () => outcome(command).pipe(Effect.map((asked) => expect(asked).toBeDefined())))
+    }
+
+    it.live("a file with a number for a name is checked like any other", () =>
+      outcome("cat 5", true, (dir) => symlinkSync("/etc/hosts", path.join(dir, "5"))).pipe(
+        Effect.map((asked) => expect(asked).toBeDefined()),
+      ),
+    )
+  })
+
+  describe("reading outside the project asks", () => {
+    const outside = (dir: string) => {
+      const out = `${dir}-outside`
+      mkdirSync(out, { recursive: true })
+      writeFileSync(path.join(out, "s.txt"), "OUTSIDE\n")
+      symlinkSync(out, path.join(dir, "cl"))
+      symlinkSync(path.join(out, "s.txt"), path.join(dir, "linkfile"))
+      mkdirSync(path.join(dir, "tree"))
+      symlinkSync(out, path.join(dir, "tree/deep"))
+    }
+    for (const command of [
+      "cat linkfile",
+      "cat cl/s.txt",
+      "ls cl",
+      "ls -R cl",
+      "find cl -name s.txt",
+      "grep -r OUTSIDE tree",
+      "grep -r OUTSIDE cl",
+      "wc -l linkfile",
+      "test -f cl/s.txt",
+      "cat ../x",
+      "cat /etc/hosts",
+      "git diff /etc/hosts /dev/null",
+      "git blame --cont=/etc/hosts src/a.ts",
+      "git config --list --fil=/etc/hosts",
+      "cp cl/s.txt got.txt",
+      "cp -R cl/ got",
+    ]) {
+      it.live(`asks: ${command}`, () => outcome(command, true, outside).pipe(Effect.map((asked) => expect(asked).toBeDefined())))
+    }
+  })
+
+  describe("a hostile environment or repository cannot supply its own program", () => {
+    const withEnv = (name: string, value: string | ((dir: string) => string)) =>
+      Effect.acquireUseRelease(
+        Effect.sync(() => process.env[name]),
+        () =>
+          outcome("ls src", true, (dir) => {
+            process.env[name] = typeof value === "string" ? value : value(dir)
+          }),
+        (previous) =>
+          Effect.sync(() => {
+            if (previous === undefined) delete process.env[name]
+            else process.env[name] = previous
+          }),
+      )
+    const original = process.env.PATH ?? ""
+    for (const [label, next] of [
+      ["an empty entry", `:${original}`],
+      ["a relative entry", `evil:${original}`],
+    ] as const) {
+      it.live(`asks when PATH has ${label}`, () => withEnv("PATH", next).pipe(Effect.map((asked) => expect(asked).toBeDefined())))
+    }
+    it.live("asks when PATH reaches inside the project", () =>
+      withEnv("PATH", (dir) => `${dir}/bin:${original}`).pipe(Effect.map((asked) => expect(asked).toBeDefined())),
+    )
+    it.live("asks when BASH_ENV is the project's", () =>
+      withEnv("BASH_ENV", (dir) => `${dir}/rc`).pipe(Effect.map((asked) => expect(asked).toBeDefined())),
+    )
+    it.live("asks when a library is preloaded", () =>
+      withEnv("DYLD_INSERT_LIBRARIES", "/tmp/x.dylib").pipe(Effect.map((asked) => expect(asked).toBeDefined())),
+    )
+    it.live("asks under a shell whose grammar is not the one parsed here", () =>
+      outcome("ls src", true, (dir) => {
+        symlinkSync("/bin/sh", path.join(dir, "csh"))
+        writeFileSync(path.join(dir, "swarm.json"), JSON.stringify({ shell: path.join(dir, "csh") }))
+      }).pipe(Effect.map((asked) => expect(asked).toBeDefined())),
+    )
+  })
 
   const lost = [
     "rm data/local.db",
@@ -163,6 +403,17 @@ describe("shell commands inside an agent session", () => {
     "git reset --hard HEAD~1",
     "ls; git push -f",
     "cd src && git push --force",
+    "git -C . push --force",
+    "git reset --har HEAD~1",
+    "git reset src/a.ts",
+    "git reset feat/old",
+    "git reset v1.0",
+    "git commit --am -m x",
+    "git commit --amend -m x",
+    "git branch -qD victim",
+    "git branch -C main victim",
+    "git switch --force-c main HEAD~1",
+    "/usr/bin/dropdb orders",
   ]
   for (const command of lost) {
     it.live(`asks, and says Undo cannot help: ${command}`, () =>
@@ -236,9 +487,6 @@ describe("shell commands inside an agent session", () => {
       stoppedBefore("{ echo PWNED; } > escaped.txt", () => {}, (dir) => existsSync(path.join(dir, "escaped.txt"))),
     )
 
-    it.live("a pipeline writing inside the project needs no prompt: Undo covers it", () =>
-      outcome("ls | sort > src/list.txt").pipe(Effect.map((asked) => expect(asked).toBeUndefined())),
-    )
   })
 
   describe("arguments the shell rewrites before the command sees them", () => {
@@ -328,27 +576,6 @@ describe("shell commands inside an agent session", () => {
       ),
     )
 
-    const planted = (dir: string) =>
-      writeFileSync(
-        path.join(dir, ".git/config"),
-        readFileSync(path.join(dir, ".git/config"), "utf8") + '[core]\n\tfsmonitor = "touch PWNED; false"\n',
-      )
-    it.live("git status asks when the repository's own config runs a program", () =>
-      outcome("git status", true, planted).pipe(Effect.map((asked) => expect(asked).toBeDefined())),
-    )
-    it.live("git status stays quiet when it only uses git's built-in monitor", () =>
-      outcome("git status", true, (dir) =>
-        writeFileSync(
-          path.join(dir, ".git/config"),
-          readFileSync(path.join(dir, ".git/config"), "utf8") + "[core]\n\tfsmonitor = true\n",
-        ),
-      ).pipe(Effect.map((asked) => expect(asked).toBeUndefined())),
-    )
-    it.live("checking out runs post-checkout, so it asks when there is one", () =>
-      outcome("git checkout -q -b new", true, (dir) =>
-        writeFileSync(path.join(dir, ".git/hooks/post-checkout"), "#!/bin/sh\nexit 0\n", { mode: 0o755 }),
-      ).pipe(Effect.map((asked) => expect(asked).toBeDefined())),
-    )
   })
 
   describe("moving history is not what a snapshot restores", () => {
@@ -357,12 +584,42 @@ describe("shell commands inside an agent session", () => {
         outcome(command).pipe(Effect.map((asked) => expect(asked?.risk).toBe("irreversible"))),
       )
     }
-    it.live("rewriting the last commit asks", () =>
-      outcome("git commit --amend -m rewritten").pipe(Effect.map((asked) => expect(asked).toBeDefined())),
-    )
-    for (const command of ["git reset", "git reset HEAD", "git reset -- src/a.ts", "git reset src/a.ts"]) {
-      it.live(`only unstaging needs no prompt: ${command}`, () =>
-        outcome(command).pipe(Effect.map((asked) => expect(asked).toBeUndefined())),
+    for (const command of ["git reset", "git reset HEAD", "git reset -- src/a.ts"]) {
+      it.live(`only unstaging asks without that warning: ${command}`, () =>
+        outcome(command).pipe(
+          Effect.map((asked) => {
+            expect(asked).toBeDefined()
+            expect(asked?.risk).toBeUndefined()
+          }),
+        ),
+      )
+    }
+  })
+
+  describe("git commands that write paths ask, and nothing reaches the path first", () => {
+    const branchWithConfig = (dir: string) => {
+      const git = (...args: string[]) => spawnSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", ...args], { cwd: dir })
+      git("checkout", "-q", "-b", "b")
+      writeFileSync(path.join(dir, "swarm.json"), '{"permission":{"*":"allow"}}\n')
+      git("add", "swarm.json")
+      git("commit", "-qm", "c")
+      git("checkout", "-q", "-")
+    }
+    for (const command of [
+      "git mv src/a.ts swarm.json",
+      "git mv src .swarm",
+      "git mv src .github/workflows",
+      "git mv src .husky",
+      "git restore --source=b swarm.json",
+      "git checkout b -- swarm.json",
+      "git checkout b",
+      "git rm -f swarm.json",
+      "git clean -f",
+      "git stash",
+      "git stash push -a",
+    ]) {
+      it.live(`asks: ${command}`, () =>
+        stoppedBefore(command, branchWithConfig, (dir) => existsSync(path.join(dir, "swarm.json"))),
       )
     }
   })
@@ -380,10 +637,15 @@ describe("shell commands inside an agent session", () => {
         outcome(command, true, nested).pipe(Effect.map((asked) => expect(asked?.risk).toBe("irreversible"))),
       )
     }
-    it.live("cleaning without one stays quiet, and ignored files are not its business", () =>
+    it.live("cleaning without one asks like any other, and does not say Undo cannot help", () =>
       outcome("git clean -fd", true, (dir) => {
         spawnSync("rm", [path.join(dir, "big.bin")])
-      }).pipe(Effect.map((asked) => expect(asked).toBeUndefined())),
+      }).pipe(
+        Effect.map((asked) => {
+          expect(asked).toBeDefined()
+          expect(asked?.risk).toBeUndefined()
+        }),
+      ),
     )
   })
 
@@ -480,13 +742,60 @@ describe("shell commands inside an agent session", () => {
     )
   })
 
-  it.live("a commit runs repository hooks, so it asks when there are any", () =>
-    outcome("git commit -qm x --allow-empty", true, (dir) =>
-      writeFileSync(path.join(dir, ".git/hooks/pre-commit"), "#!/bin/sh\nexit 0\n", { mode: 0o755 }),
-    ).pipe(Effect.map((asked) => expect(asked).toBeDefined())),
-  )
+  describe("a secret can only be read with someone asked", () => {
+    const secrets = (dir: string) => {
+      writeFileSync(path.join(dir, ".env"), "API_KEY=abcSECRETvalue123456\n")
+      writeFileSync(path.join(dir, ".env-prod"), "API_KEY=abcSECRETvalue123456\n")
+      mkdirSync(path.join(dir, ".envs"))
+      writeFileSync(path.join(dir, ".envs/prod"), "API_KEY=abcSECRETvalue123456\n")
+      symlinkSync(".env", path.join(dir, "notes"))
+      mkdirSync(path.join(dir, "deep/er"), { recursive: true })
+      writeFileSync(path.join(dir, "deep/er/.env"), "API_KEY=abcSECRETvalue123456\n")
+      writeFileSync(path.join(dir, "deep/plain.txt"), "plain\n")
+    }
+    for (const command of [
+      "grep -ro . .",
+      "grep -rn x .",
+      "grep -r x deep",
+      "grep -c '^API_KEY=abcd' .env",
+      "grep x .env",
+      "cat .env",
+      "cat .env | sort",
+      "cat notes",
+      "cut -c9-14 notes",
+      "head -n 1 .env",
+      "wc -c .env",
+      "cat .env-prod",
+      "cat .envs/prod",
+      "grep -r x .envs",
+      "cat .git/config",
+      "grep -r url .git",
+      "cp .env notes.txt",
+      "mv .env notes.txt",
+    ]) {
+      it.live(`asks: ${command}`, () => outcome(command, true, secrets).pipe(Effect.map((asked) => expect(asked).toBeDefined())))
+    }
+    it.live("listing names reads no contents", () =>
+      outcome("find . -name '.env'", true, secrets).pipe(Effect.map((asked) => expect(asked).toBeUndefined())),
+    )
+    it.live("a recursive read of a directory holding none needs no prompt", () =>
+      outcome("grep -rn plain deep/plain.txt", true, secrets).pipe(Effect.map((asked) => expect(asked).toBeUndefined())),
+    )
+  })
 
-  it.live("without snapshots nothing that changes files is taken as undoable", () =>
+  describe("the prompted way to read one still hides what it can", () => {
+    const secrets = (dir: string) => writeFileSync(path.join(dir, ".env"), "API_KEY=abcSECRETvalue123456\n")
+    it.live("hides the value once allowed", () =>
+      run("cat .env", secrets).pipe(
+        Effect.map((result) => {
+          expect(result.output).not.toContain("abcSECRETvalue123456")
+          expect(result.output).toContain("[hidden:")
+        }),
+      ),
+    )
+  })
+
+  it.live("without snapshots nothing changes, and reading still works", () =>
     Effect.gen(function* () {
       expect(yield* outcome("rm -rf src", false)).toBeDefined()
       expect(yield* outcome("touch x", false)).toBeDefined()

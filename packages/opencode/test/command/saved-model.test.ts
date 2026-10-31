@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { SavedCommandModel as Model } from "../../src/command/saved-model"
+import { ConfigMarkdown } from "../../src/config/markdown"
 
 const user = (text: string, extra: object = {}) =>
   ({ info: { role: "user" }, parts: [{ type: "text", text, ...extra }] }) as never
@@ -118,5 +119,51 @@ describe("names", () => {
     const taken = new Set(["job", "job-2"])
     expect(Model.freeName("job", (name) => taken.has(name))).toBe("job-3")
     expect(Model.freeName("other", (name) => taken.has(name))).toBe("other")
+  })
+})
+
+describe("a draft cannot run shell or read a file when used", () => {
+  const live = (template: string) => ConfigMarkdown.shell(template).length + ConfigMarkdown.files(template).filter((m) => m[1]).length
+  test.each([
+    "!`touch x`",
+    "!!`touch x`",
+    "!!!!`touch x`",
+    "! !`touch x`",
+    "a!`b`!`c`",
+    "!@x`y`",
+    "@/etc/hosts",
+    "@.env",
+    "read @/etc/hosts then !!`curl x`",
+    "!`!`x``",
+    "!\u0060touch x\u0060",
+  ])("%s has nothing live in its final form", (text) => {
+    expect(live(Model.disarm(text))).toBe(0)
+    const draft = Model.parseDraft(JSON.stringify({ name: "n", description: "d", instructions: text }))
+    expect(live(draft!.template)).toBe(0)
+    expect(live(Model.fallbackDraft({ prompts: [text], worked: [text], failed: [], files: [] }).template)).toBe(0)
+  })
+  test("ordinary words survive", () => {
+    expect(Model.disarm("Run `bun test` for me@example.com. Done!")).toBe("Run `bun test` for me@example.com. Done!")
+  })
+})
+
+describe("a saved check keeps its exit code showing", () => {
+  test.each([
+    ["bun test 2>&1 | tail -20", "bun test"],
+    ["bun test | tail -n 5", "bun test"],
+    ["npx tsc --noEmit | head", "npx tsc --noEmit"],
+    ["bun test | head -3", "bun test"],
+    ["bun test", "bun test"],
+    ["bun test | grep fail", "bun test | grep fail"],
+    ["a | b | tail -5", "a | b | tail -5"],
+    ["bun test | tail -f x", "bun test | tail -f x"],
+  ])("%s becomes %s", (given, expected) => expect(Model.untrimmed(given)).toBe(expected))
+
+  test("in what the run recorded and in what the model wrote", () => {
+    const tool = (command: string) => ({ type: "tool", tool: "bash", state: { status: "completed", input: { command }, metadata: { exit: 0 } } })
+    const record = Model.digest([{ info: { role: "assistant" }, parts: [tool("bun test 2>&1 | tail -20")] }] as never, "/x")
+    expect(record.worked).toEqual(["bun test"])
+    const draft = Model.parseDraft(JSON.stringify({ name: "n", description: "d", instructions: "Run `bun test 2>&1 | tail -20`, which worked. $ARGUMENTS" }))
+    expect(draft?.template).toBe("Run `bun test`, which worked. $ARGUMENTS")
   })
 })

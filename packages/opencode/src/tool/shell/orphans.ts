@@ -6,7 +6,7 @@ import fs from "node:fs"
 import path from "node:path"
 import { Global } from "@opencode-ai/core/global"
 
-type Started = { pid: number; started: string }
+type Started = { pid: number; started?: string }
 type Running = Started & { server: Started }
 
 const FORCE_AFTER_MS = 3000
@@ -14,10 +14,16 @@ const POLL_MS = 50
 
 const folder = (session: string) => path.join(Global.Path.state, "shell-running", path.basename(session))
 
-/** When the process began. With a pid this identifies one process, since the number alone can be handed out again. */
+/**
+ * When the process began. With a pid this identifies one process, since the number alone can be handed out again.
+ * `undefined` means `ps` could not say, which is not the same as `""`, no such process. It can be blocked or missing, and
+ * BusyBox's has no `-p`.
+ */
 function startedAt(pid: number) {
-  const out = spawnSync("ps", ["-o", "lstart=", "-p", String(pid)], { encoding: "utf8" })
-  return out.status === 0 ? out.stdout.trim() : ""
+  const out = spawnSync("ps", ["-o", "lstart=", "-p", String(pid)], { encoding: "utf8", env: process.env })
+  if (out.error) return undefined
+  if (out.status === 0) return out.stdout.trim() || undefined
+  return out.status === 1 && !out.stderr.trim() ? "" : undefined
 }
 
 let self: Started | undefined
@@ -31,6 +37,34 @@ function groupAlive(pid: number) {
     // EPERM still means it exists.
     return (error as NodeJS.ErrnoException).code === "EPERM"
   }
+}
+
+/** No signal is sent. Only "no such process" counts as gone: anything else, including no permission, is still there. */
+function processAlive(pid: number) {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code !== "ESRCH"
+  }
+}
+
+/** Gone for certain, up for certain, or undefined when nothing here can tell. Only a certain answer may kill. */
+function serverIsGone({ pid, started }: Started) {
+  if (!processAlive(pid)) return true
+  const now = startedAt(pid)
+  if (now === undefined || !started) return undefined
+  return now !== started
+}
+
+/** Whether ending this group would end the recorded command. Undefined when nothing here can tell. */
+function stillThatCommand(running: Running) {
+  // A group whose leader has exited keeps its number for as long as a member lives, so that is still this command.
+  if (!processAlive(running.pid)) return true
+  const leader = startedAt(running.pid)
+  if (leader === undefined || !running.started) return undefined
+  // A live leader with another start time is a new process given the same number.
+  return leader === "" || leader === running.started
 }
 
 function signalGroup(pid: number, signal: NodeJS.Signals) {
@@ -71,13 +105,13 @@ export async function end(session: string) {
       fs.rmSync(file, { force: true })
       continue
     }
-    // Its server is still up, whether this one or another process: that command is in use.
-    if (running.server.started && startedAt(running.server.pid) === running.server.started) continue
+    // Its server is still up, whether this one or another process: that command is in use. When `ps` cannot answer, the
+    // record stays for a later call to decide, because a wrong guess here kills a running migration.
+    if (serverIsGone(running.server) !== true) continue
     if (groupAlive(running.pid)) {
-      // A live leader with another start time is a new process given the same number. A group whose leader has exited
-      // keeps its number for as long as a member lives, so a group without a leader is still this command's.
-      const leader = startedAt(running.pid)
-      if (!leader || leader === running.started) {
+      const same = stillThatCommand(running)
+      if (same === undefined) continue
+      if (same) {
         signalGroup(running.pid, "SIGTERM")
         const deadline = Date.now() + FORCE_AFTER_MS
         while (groupAlive(running.pid) && Date.now() < deadline) await Bun.sleep(POLL_MS)

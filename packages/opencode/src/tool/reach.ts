@@ -1,7 +1,7 @@
 // Where a path really lands, and whether Undo can bring it back. A name inside the project proves nothing on its own: a
 // symlink can carry it anywhere, and the step's snapshot leaves ignored files, large files and nested repositories out.
 import fs from "node:fs"
-import { readdir, stat } from "node:fs/promises"
+import { stat } from "node:fs/promises"
 import path from "node:path"
 import { execFile } from "node:child_process"
 import { promisify } from "node:util"
@@ -99,40 +99,82 @@ export async function outsideSnapshot(worktree: string, paths: string[], options
   }
 }
 
-/** A command that fires these hooks is running repository code, so it only counts as a plain file change without any. */
-export async function hasGitHooks(directory: string, names?: readonly string[]) {
+const MAX_WALKED = 20_000
+// Directories whose contents can hold a credential under any name. `.git/config` carries remote URLs with their tokens.
+const HOLDS_SECRETS = /(^|\/)(\.git|\.envs|\.ssh|\.aws|\.gnupg)(\/|$)/i
+
+/** Whether what is in this file may reach the model through a command with nobody asked. */
+export function readable(file: string) {
+  const target = real(file)
+  return target !== undefined && !secret(file) && !HOLDS_SECRETS.test(file) && !HOLDS_SECRETS.test(target)
+}
+
+/**
+ * Whether a recursive read here could only print ordinary files. A pattern is a question, so a count or a match is one
+ * bit of a secret and enough of them are all of it. No scrubber sees that, so a walk that reaches a secret file asks. A
+ * link can lead anywhere, and past the budget nothing is known, and neither is proven.
+ */
+export function walkable(directory: string) {
+  const target = real(directory)
+  if (target === undefined) return false
+  const pending = [target]
+  let seen = 0
+  while (pending.length > 0) {
+    const current = pending.pop()!
+    if (HOLDS_SECRETS.test(path.basename(current)) || Secrets.secretFile(current)) return false
+    const info = fs.lstatSync(current, { throwIfNoEntry: false })
+    if (!info) return false
+    if (info.isSymbolicLink()) return false
+    if (!info.isDirectory()) continue
+    const entries = attemptList(current)
+    if (!entries) return false
+    seen += entries.length
+    if (seen > MAX_WALKED) return false
+    pending.push(...entries.map((entry) => path.join(current, entry)))
+  }
+  return true
+}
+
+function attemptList(directory: string) {
   try {
-    const run = (...args: string[]) => git("git", ["-C", directory, ...args]).then((out) => out.stdout.trim())
-    const custom = await run("config", "--get", "core.hooksPath").catch(() => "")
-    const dir = custom
-      ? path.resolve(directory, custom)
-      : await run("rev-parse", "--path-format=absolute", "--git-path", "hooks")
-    const hooks = (await readdir(dir).catch(() => [] as string[])).filter((file) => !file.endsWith(".sample"))
-    return names ? hooks.some((file) => names.includes(file)) : hooks.length > 0
+    return fs.readdirSync(directory)
   } catch {
-    return true
+    return undefined
   }
 }
 
-const PROGRAM_SETTING =
-  /^(core\.(sshcommand|pager|askpass|gitproxy|editor)|diff\.external|diff\..+\.(command|textconv)|filter\..+\.(clean|smudge|process)|merge\..+\.driver|gpg(\..+)?\.program|credential(\..+)?\.helper|sequence\.editor|pager\..+|interactive\.difffilter|uploadpack\.packobjectshook|include\.path|includeif\..+\.path)$/i
+// Each of these makes a bare `ls` something other than the `ls` it looks like, before any of its arguments are read.
+const REPLACES_A_PROGRAM = /^(LD_PRELOAD|LD_LIBRARY_PATH|LD_AUDIT|DYLD_.+|BASH_FUNC_.+|GREP_OPTIONS)$/
+const SOURCED_BY_THE_SHELL = ["BASH_ENV", "ENV", "ZDOTDIR"]
 
 /**
- * Whether this repository's own config makes even `git status` run a program. It is the repository's file, which may
- * have arrived in a tarball, unlike the user's global config, so it is not taken as the user's choice.
+ * Whether the environment leaves a bare command name meaning the system's program, in a project that may be hostile. A
+ * relative or empty entry in PATH, or one inside the project, lets the repository supply its own `ls`.
  */
-export async function hasGitPrograms(directory: string) {
-  const local = await git("git", ["-C", directory, "config", "--local", "--get-regexp", "."]).then(
-    (out) => out.stdout,
-    // Exit 1 is no match. Outside a repository, git has nothing to run either.
-    () => "",
-  )
-  return local.split("\n").some((line) => {
-    const space = line.indexOf(" ")
-    const key = space < 0 ? line : line.slice(0, space)
-    if (key.toLowerCase() === "core.fsmonitor") return !/^(true|false|0|1)$/i.test(line.slice(space + 1).trim())
-    return PROGRAM_SETTING.test(key)
-  })
+export function plainEnvironment(env: NodeJS.ProcessEnv, instance: InstanceContext) {
+  if (Object.keys(env).some((key) => REPLACES_A_PROGRAM.test(key))) return false
+  const roots = realRoots(instance)
+  const outside = (entry: string) => {
+    const target = path.isAbsolute(entry) ? real(entry) : undefined
+    return target !== undefined && !containsPath(target, roots)
+  }
+  if (!(env.PATH ?? "").split(path.delimiter).every(outside)) return false
+  return SOURCED_BY_THE_SHELL.every((key) => env[key] === undefined || outside(env[key]!))
+}
+
+/** The names a change reaches, as this worktree spells them: through a link it lands somewhere else in the project. */
+export function landsOn(files: string[], instance: InstanceContext) {
+  const root = realRoots(instance).worktree
+  return [
+    ...new Set(
+      files.flatMap((file) => {
+        const target = real(file)
+        return target && containsPath(target, realRoots(instance))
+          ? [file, path.join(instance.worktree, path.relative(root, target))]
+          : [file]
+      }),
+    ),
+  ]
 }
 
 /** What to tell the permission layer about an edit to these files. */
@@ -144,7 +186,7 @@ export const editTrust = Effect.fn("Reach.editTrust")(function* (
   if (!ctx.trust?.canUndo) return { harmless: false }
   if (files.some((file) => !inside(file, instance))) return { harmless: false, risk: "irreversible" as const }
   if (files.some((file) => sensitive(file, instance) || secret(file))) return { harmless: false }
-  if (yield* Effect.promise(() => outsideSnapshot(instance.worktree, files)))
+  if (yield* Effect.promise(() => outsideSnapshot(instance.worktree, landsOn(files, instance))))
     return { harmless: false, risk: "irreversible" as const }
   return { harmless: true }
 })

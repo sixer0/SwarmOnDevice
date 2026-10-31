@@ -119,6 +119,7 @@ function parts(node: Node) {
       child.type !== "command_name" &&
       child.type !== "command_name_expr" &&
       child.type !== "word" &&
+      child.type !== "number" &&
       child.type !== "string" &&
       child.type !== "raw_string" &&
       child.type !== "concatenation"
@@ -305,13 +306,15 @@ function understood(node: Node): boolean {
   return node.namedChildren.every((child) => child !== null && understood(child))
 }
 
-// The shell rewrites these before the command sees them: globs, braces, escapes, `~user`, and quotes inside a word.
-const REWRITTEN = /[*?[\]{}\\"'`$]|^~[^/]/
+// Nothing in these can be rewritten by any POSIX shell or by zsh before the command sees it, written as what may be there
+// rather than what may not, because each shell has its own list: zsh turns `=sh` into a path and runs `*(e:cmd:)`.
+const PLAIN_WORD = /^[\w./@%+:,-][\w./@%+:,=-]*$/
 
 function literal(part: { type: string; text: string }) {
-  if (part.type === "string" || part.type === "raw_string") return !/[$`]/.test(part.text) || part.type === "raw_string"
+  if (part.type === "raw_string") return true
+  if (part.type === "string") return !/[$`\\!]/.test(part.text)
   if (part.type === "number") return true
-  return part.type === "word" && !REWRITTEN.test(part.text)
+  return part.type === "word" && PLAIN_WORD.test(part.text)
 }
 
 /** Every redirect in the command, wherever it sits, and whether each is one this file can vouch for. */
@@ -392,7 +395,8 @@ const ask = Effect.fn("ShellTool.ask")(function* (ctx: Tool.Context, scan: Scan,
     yield* ctx.ask({
       permission: ShellID.ToolID,
       patterns: Array.from(scan.harmless),
-      always: [],
+      // Skipped under the shipped rules. A person's own `"*": "ask"` still asks, and should be able to stop asking.
+      always: Array.from(scan.always),
       metadata: { command: input.command },
       harmless: true,
     })
@@ -511,42 +515,45 @@ export const ShellTool = Tool.define(
         secretFiles: new Set<string>(),
       }
       const shellKind = ShellID.toKind(Shell.name(shell))
-      // A changed directory, variable or function means no argument here can be taken at face value.
-      const posix = Boolean(trust) && !ps && shellKind !== "cmd"
+      // A changed directory, variable or function means no argument here can be taken at face value. Windows is not
+      // judged: nothing has been run there to back this up, and its shells look in the current directory for a program.
+      // Nor is a shell whose grammar is not the one parsed here.
+      const posix = Boolean(trust) && !ps && shellKind !== "cmd" && process.platform !== "win32" && Shell.posix(shell)
       const redirects = ps ? { writes: [], reads: [], loose: [], unproven: false } : redirectsIn(root)
       const proven = !ps && understood(root)
       const uncertain =
         !posix || !proven || redirects.unproven || commands(root).some((node) => CWD.has(node.firstChild?.text ?? ""))
       const absolute = (file: string) => path.resolve(cwd, home(file))
+      const plain = posix && !uncertain && Reach.plainEnvironment(process.env, instance)
 
       const judge = Effect.fn("ShellTool.judge")(function* (command: Part[], tokens: string[]) {
+        const unknown = { kind: "unknown" } as const
         const verdict = Risk.classify(tokens.map(unquote))
-        if (verdict.kind === "risky" || verdict.kind === "unknown" || uncertain) {
-          return verdict.kind === "risky" ? verdict : ({ kind: "unknown" } as const)
-        }
-        const prints = tokens[0] === "echo" || tokens[0] === "printf" || tokens[0] === "sleep"
-        if (!prints && !command.slice(1).every((part) => part.text.startsWith("-") || literal(part)))
-          return { kind: "unknown" } as const
+        if (verdict.kind === "risky") return verdict
+        if (verdict.kind === "unknown" || uncertain) return unknown
+        const listed = verdict.kind === "undoable" ? verdict.paths : []
         const removes = verdict.kind === "undoable" && verdict.removes
-        const changed = [...(verdict.kind === "undoable" ? verdict.paths : []), ...redirects.writes].map(absolute)
+        // Anything that writes asks, and these only decide whether that prompt has to say Undo cannot help.
+        const changed = [...listed, ...redirects.writes].map(absolute)
         const lost = { kind: "risky", risk: "irreversible" } as const
-        for (const file of [...verdict.paths, ...redirects.reads, ...redirects.writes].map(absolute)) {
-          // Reached through a symlink, the name says nothing about where this lands, and the snapshot does not go there.
-          if (!containsPath(file, instance) || !Reach.inside(file, instance)) return removes ? lost : ({ kind: "unknown" } as const)
-          if (changed.includes(file) && Reach.sensitive(file, instance)) return removes ? lost : ({ kind: "unknown" } as const)
+        for (const file of changed) {
+          if (!containsPath(file, instance) || !Reach.inside(file, instance) || Reach.sensitive(file, instance))
+            return removes ? lost : unknown
         }
-        const repository = tokens[0] === "git"
-        if (repository && (yield* Effect.promise(() => Reach.hasGitPrograms(cwd)))) return { kind: "unknown" } as const
-        if (verdict.kind === "harmless" && changed.length === 0) return { kind: "harmless" } as const
-        if (!trust?.canUndo) return { kind: "unknown" } as const
-        if (verdict.kind === "undoable" && verdict.hooks) {
-          const names = verdict.hooks === true ? undefined : verdict.hooks
-          if (yield* Effect.promise(() => Reach.hasGitHooks(cwd, names))) return { kind: "unknown" } as const
+        if (changed.length > 0 && trust?.canUndo) {
+          const untrackedOnly = verdict.kind === "undoable" && verdict.untrackedOnly
+          const landed = Reach.landsOn(changed, instance)
+          if (yield* Effect.promise(() => Reach.outsideSnapshot(instance.worktree, landed, { untrackedOnly }))) return lost
         }
-        const untrackedOnly = verdict.kind === "undoable" && verdict.untrackedOnly
-        if (changed.length > 0 && (yield* Effect.promise(() => Reach.outsideSnapshot(instance.worktree, changed, { untrackedOnly }))))
-          return lost
-        if (changed.some(Secrets.secretFile)) return { kind: "unknown" } as const
+        if (verdict.kind === "undoable" || changed.length > 0 || redirects.reads.length > 0) return unknown
+
+        // A reader. Everything it was given has to be plain, its name has to be what it looks like, and all of it has to
+        // stay inside the project, on what a secret could be read through as well as what names one.
+        if (!plain || !command.slice(1).every(literal)) return unknown
+        const inProject = (file: string) => containsPath(absolute(file), instance) && Reach.inside(absolute(file), instance)
+        if (!verdict.paths.every(inProject)) return unknown
+        if (!verdict.contents.every((file) => Reach.readable(absolute(file)))) return unknown
+        if (!verdict.walks.every((file) => Reach.walkable(absolute(file)))) return unknown
         return { kind: "harmless" } as const
       })
 
@@ -575,22 +582,29 @@ export const ShellTool = Tool.define(
 
         if (tokens.length && (!cmd || !CWD.has(cmd))) {
           const verdict = posix ? yield* judge(command, tokens) : undefined
+          scan.always.add(BashArity.prefix(tokens).join(" ") + " *")
           if (verdict?.kind === "harmless") {
             scan.harmless.add(source(node))
             continue
           }
           if (verdict?.kind === "risky") scan.risk = scan.risk === "irreversible" ? scan.risk : verdict.risk
           scan.patterns.add(source(node))
-          scan.always.add(BashArity.prefix(tokens).join(" ") + " *")
         }
       }
 
       // A redirect on a whole group belongs to no one command, and "allow echo" does not stretch to where this one writes.
       if (scan.patterns.size > 0 || scan.harmless.size === 0) redirects.loose.forEach((text) => scan.patterns.add(text))
-      // Nothing was recognised as a command, such as `[[ -f x ]]` or `x=1`, so nothing has been judged.
-      if (posix && !proven && scan.patterns.size === 0 && scan.harmless.size === 0) {
+      // Something here is not a plain command, such as `[[ -f x ]]`, `x=1` or `export PATH=evil`. The parser's list of
+      // commands leaves it out, so the whole text is what a person answers for, and a rule for `ls *` does not cover it.
+      if (posix && !proven) {
         const whole = root.text.trim()
         if (whole) scan.patterns.add(whole)
+      }
+      // A sequence is harmless only if every part is. One part may have changed what the others mean, so a person who
+      // allows the sequence is allowing all of it, and no part gets through on the strength of the rest.
+      if (scan.patterns.size > 0) {
+        scan.harmless.forEach((text) => scan.patterns.add(text))
+        scan.harmless.clear()
       }
       scan.secretFiles = named
       if (reshaped && named.size > 0) scan.withheld = path.relative(instance.worktree, [...named][0]!)
