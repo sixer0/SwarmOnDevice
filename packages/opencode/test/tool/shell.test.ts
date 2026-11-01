@@ -3,9 +3,13 @@ import { describe, expect } from "bun:test"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { Cause, Effect, Exit, Layer } from "effect"
 import type * as Scope from "effect/Scope"
+import { mkdir, symlink } from "fs/promises"
 import os from "os"
 import path from "path"
+import { pathToFileURL } from "url"
 import { Config } from "@/config/config"
+import { InstanceState } from "@/effect/instance-state"
+import { AutonomyTable } from "@/permission/autonomy-table"
 import { Shell } from "@opencode-ai/core/shell"
 import { ShellTool } from "../../src/tool/shell"
 import { Filesystem } from "@/util/filesystem"
@@ -1000,6 +1004,214 @@ describe("tool.shell permissions", () => {
           const bashReq = requests.find((r) => r.permission === "bash")
           expect(bashReq).toBeDefined()
           expect(bashReq!.always[0]).toBe("ls *")
+        }),
+      )
+    }),
+  )
+})
+
+const CREDENTIALS = [
+  "OPENCODE_SERVER_PASSWORD",
+  "SWARM_SERVER_PASSWORD",
+  "OPENCODE_SERVER_USERNAME",
+  "SWARM_SERVER_USERNAME",
+]
+
+const withEnv = <A, E, R>(values: Record<string, string>, self: Effect.Effect<A, E, R>) =>
+  Effect.acquireUseRelease(
+    Effect.sync(() => {
+      const prev = Object.keys(values).map((name) => [name, process.env[name]] as const)
+      Object.assign(process.env, values)
+      return prev
+    }),
+    () => self,
+    (prev) =>
+      Effect.sync(() =>
+        prev.forEach(([name, value]) => {
+          if (value === undefined) delete process.env[name]
+          else process.env[name] = value
+        }),
+      ),
+  )
+
+const printEnv = () => {
+  const text = `${bin} -e ${evalarg("console.log(JSON.stringify(process.env))")}`
+  if (PS.has(sh())) return `& ${text}`
+  return text
+}
+
+describe("tool.shell server credentials", () => {
+  each("does not hand the server's credentials to a command", () =>
+    withEnv(
+      {
+        ...Object.fromEntries(CREDENTIALS.map((name) => [name, `from-server-${name}`])),
+        SHELL_TEST_KEPT: "still-here",
+      },
+      Effect.gen(function* () {
+        const tmp = yield* tmpdirScoped()
+        yield* runIn(
+          tmp,
+          Effect.gen(function* () {
+            const result = yield* run({ command: printEnv() })
+            expect(result.metadata.exit).toBe(0)
+            const env = JSON.parse(result.output)
+            CREDENTIALS.forEach((name) => expect(env).not.toHaveProperty(name))
+            expect(result.output).not.toContain("from-server-")
+            expect(env.SHELL_TEST_KEPT).toBe("still-here")
+          }),
+        )
+      }),
+    ),
+  )
+
+  // Windows finds a variable under any spelling of its name, so a differently cased copy would reach the command there.
+  it.live("drops a differently cased copy too", () =>
+    withEnv(
+      { opencode_server_password: "from-server-lowercase" },
+      Effect.gen(function* () {
+        const tmp = yield* tmpdirScoped()
+        yield* runIn(
+          tmp,
+          Effect.gen(function* () {
+            const result = yield* run({ command: printEnv() })
+            expect(result.output).not.toContain("from-server-")
+          }),
+        )
+      }),
+    ),
+  )
+
+  it.live("drops them after the shell.env plugin hook, and keeps what else it adds", () =>
+    Effect.gen(function* () {
+      const tmp = yield* tmpdirScoped({ git: true, config: { formatter: false, lsp: false } })
+      const plugin = path.join(tmp, "plugin.ts")
+      yield* Effect.promise(() =>
+        Bun.write(
+          plugin,
+          [
+            "export default async () => ({",
+            '  "shell.env": (input, output) => {',
+            ...CREDENTIALS.map((name) => `    output.env.${name} = "from-plugin-${name}"`),
+            '    output.env.SHELL_TEST_PLUGIN = "plugin-kept"',
+            "  },",
+            "})",
+            "",
+          ].join("\n"),
+        ),
+      )
+      yield* Effect.promise(() =>
+        Bun.write(
+          path.join(tmp, "swarm.json"),
+          JSON.stringify({ plugin: [pathToFileURL(plugin).href], formatter: false, lsp: false }),
+        ),
+      )
+      yield* runIn(
+        tmp,
+        Effect.gen(function* () {
+          const result = yield* run({ command: printEnv() })
+          expect(result.metadata.exit).toBe(0)
+          const env = JSON.parse(result.output)
+          CREDENTIALS.forEach((name) => expect(env).not.toHaveProperty(name))
+          expect(result.output).not.toContain("from-plugin-")
+          expect(env.SHELL_TEST_PLUGIN).toBe("plugin-kept")
+        }),
+      )
+    }),
+  )
+})
+
+describe("tool.shell prompt workdir", () => {
+  each("both prompts name the folder a relative workdir resolves to", () =>
+    Effect.gen(function* () {
+      const outer = yield* tmpdirScoped()
+      yield* Effect.promise(() => Bun.write(path.join(outer, "outside.txt"), "x"))
+      const tmp = yield* tmpdirScoped()
+      const sub = path.join(tmp, "sub")
+      yield* Effect.promise(() => mkdir(sub))
+      yield* runIn(
+        tmp,
+        Effect.gen(function* () {
+          const requests: Array<Omit<PermissionV1.Request, "id" | "sessionID" | "tool">> = []
+          yield* run({ command: `cat ${path.join(outer, "outside.txt")}`, workdir: "sub" }, capture(requests))
+          expect(requests.map((request) => request.permission)).toEqual(["external_directory", "bash"])
+          requests.forEach((request) => expect(request.metadata.workdir).toBe(Filesystem.normalizePath(sub)))
+        }),
+      )
+    }),
+  )
+
+  each("names the project folder when no workdir is given", () =>
+    Effect.gen(function* () {
+      const tmp = yield* tmpdirScoped()
+      yield* runIn(
+        tmp,
+        Effect.gen(function* () {
+          const requests: Array<Omit<PermissionV1.Request, "id" | "sessionID" | "tool">> = []
+          yield* run({ command: "echo hi" }, capture(requests))
+          expect(requests.map((request) => request.metadata.workdir)).toEqual([tmp])
+        }),
+      )
+    }),
+  )
+
+  each("names a workdir outside the project on both prompts", () =>
+    Effect.gen(function* () {
+      const outer = yield* tmpdirScoped()
+      const tmp = yield* tmpdirScoped()
+      yield* runIn(
+        tmp,
+        Effect.gen(function* () {
+          const requests: Array<Omit<PermissionV1.Request, "id" | "sessionID" | "tool">> = []
+          yield* run({ command: "echo hi", workdir: outer }, capture(requests))
+          expect(requests.map((request) => request.permission)).toEqual(["external_directory", "bash"])
+          requests.forEach((request) => expect(request.metadata.workdir).toBe(outer))
+        }),
+      )
+    }),
+  )
+
+  // `link` exists only in `sub`, and leaves the project. Judged from the project folder, the same words name a harmless
+  // missing path inside it, which is the mistake this field is there to prevent.
+  ;(process.platform === "win32" ? it.live.skip : it.live)("lets the table judge a relative path where it runs", () =>
+    Effect.gen(function* () {
+      const outer = yield* tmpdirScoped()
+      yield* Effect.promise(() => Bun.write(path.join(outer, "keep.txt"), "x"))
+      const tmp = yield* tmpdirScoped({ git: true })
+      const sub = path.join(tmp, "sub")
+      yield* Effect.promise(() => mkdir(sub))
+      yield* Effect.promise(() => symlink(outer, path.join(sub, "link")))
+      yield* runIn(
+        tmp,
+        Effect.gen(function* () {
+          const instance = yield* InstanceState.context
+          const err = new Error("stop after permission")
+          const requests: Array<Omit<PermissionV1.Request, "id" | "sessionID" | "tool">> = []
+          const next = {
+            ...ctx,
+            ask: (req: Omit<PermissionV1.Request, "id" | "sessionID" | "tool">) =>
+              Effect.sync(() => {
+                requests.push(req)
+                if (req.permission === "bash") throw err
+              }),
+          }
+          expect(yield* fail({ command: "rm link/keep.txt", workdir: "sub" }, next)).toMatchObject({
+            message: err.message,
+          })
+          const request = requests.find((item) => item.permission === "bash")!
+          const judge = (cwd: string) =>
+            AutonomyTable.classify({
+              permission: request.permission,
+              patterns: request.patterns,
+              metadata: request.metadata,
+              instance,
+              cwd,
+              canUndo: true,
+              folder: "clean",
+            })
+          expect(request.metadata.workdir).toBe(sub)
+          expect(judge(request.metadata.workdir as string).class).toBe("D")
+          expect(judge(instance.directory).class).toBe("P")
+          expect(yield* Effect.promise(() => Bun.file(path.join(outer, "keep.txt")).exists())).toBe(true)
         }),
       )
     }),

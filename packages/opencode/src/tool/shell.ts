@@ -368,12 +368,20 @@ function reshapes(tokens: string[]) {
 
 const WORD_BREAK = /[\s'"|;&<>()=,:]+/
 
+// With these a command could call the server's API as its owner, past every prompt.
+const SERVER_CREDENTIALS = new Set([
+  "OPENCODE_SERVER_PASSWORD",
+  "SWARM_SERVER_PASSWORD",
+  "OPENCODE_SERVER_USERNAME",
+  "SWARM_SERVER_USERNAME",
+])
+
 // Every call asks, unless a rule a person wrote says otherwise. How the text parses never lowers that: the parse only names
 // the patterns, labels the prompt and withholds "Allow always", which is offered for one plain command and answers only that.
 const ask = Effect.fn("ShellTool.ask")(function* (
   ctx: Tool.Context,
   scan: Scan,
-  input: { command: string },
+  input: { command: string; cwd: string },
   always: string | undefined,
 ) {
   if (scan.dirs.size > 0) {
@@ -388,6 +396,7 @@ const ask = Effect.fn("ShellTool.ask")(function* (
       always: scan.risk || directories.some((dir) => withholdsAlways(dir, "directory")) ? [] : globs,
       metadata: {
         command: input.command,
+        workdir: input.cwd,
         directories,
         patterns: globs,
         ...(scan.risk ? { risk: scan.risk } : {}),
@@ -403,6 +412,8 @@ const ask = Effect.fn("ShellTool.ask")(function* (
     always: rule ? [rule] : [],
     metadata: {
       command: input.command,
+      // The folder the command runs in, since its relative paths mean nothing without it.
+      workdir: input.cwd,
       ...(scan.risk ? { risk: scan.risk } : {}),
     },
     noAlways: rule === undefined,
@@ -589,10 +600,10 @@ export const ShellTool = Tool.define(
         { cwd, sessionID: ctx.sessionID, callID: ctx.callID },
         { env: {} },
       )
-      return {
-        ...process.env,
-        ...extra.env,
-      }
+      // After the hook, so a plugin cannot put them back. Upper-cased because Windows finds a variable under any spelling.
+      return Object.fromEntries(
+        Object.entries({ ...process.env, ...extra.env }).filter(([name]) => !SERVER_CREDENTIALS.has(name.toUpperCase())),
+      )
     })
 
     const run = Effect.fn("ShellTool.run")(function* (
@@ -827,7 +838,12 @@ export const ShellTool = Tool.define(
                   const scan = yield* collect(tree.rootNode, cwd, ps, shell, instanceCtx, ctx.trust)
                   if (!containsPath(cwd, instanceCtx)) scan.dirs.add(cwd)
                   const posix = !ps && process.platform !== "win32" && Shell.posix(shell)
-                  yield* ask(ctx, scan, params, posix ? Reach.alwaysFor(params.command, cwd, instanceCtx) : undefined)
+                  yield* ask(
+                    ctx,
+                    scan,
+                    { command: params.command, cwd },
+                    posix ? Reach.alwaysFor(params.command, cwd, instanceCtx) : undefined,
+                  )
                   return scan
                 }),
               )
