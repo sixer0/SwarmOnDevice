@@ -24589,6 +24589,9 @@
             "items": {
               "type": "string"
             }
+          },
+          "note": {
+            "type": "string"
           }
         },
         "required": ["hash", "short", "files"],
