@@ -50,6 +50,8 @@ export type Context<M extends Metadata = Metadata> = {
   trust?: {
     /** Each step snapshots this project, so Undo can restore what changes in it. */
     canUndo: boolean
+    /** The bundled library's root, when it is on for this agent. A tool that finds this empty treats the folder like any other. */
+    library?: string
   }
 }
 

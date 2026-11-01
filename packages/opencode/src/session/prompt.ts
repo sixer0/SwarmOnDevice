@@ -1315,6 +1315,7 @@ const layer = Layer.effect(
               messages: msgs,
               promptOps,
               canUndo: (yield* InstanceState.context).project.vcs === "git" && (yield* config.get()).snapshot !== false,
+              library: yield* SessionTools.library({ agent, config }),
             }).pipe(
               Effect.provideService(Plugin.Service, plugin),
               Effect.provideService(Permission.Service, permission),

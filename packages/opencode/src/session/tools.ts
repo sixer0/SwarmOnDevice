@@ -1,4 +1,6 @@
 import { Agent } from "@/agent/agent"
+import type { Config } from "@/config/config"
+import { LibraryRoot } from "@/skill/library-root"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
 import { Provider } from "@/provider/provider"
 import { ProviderTransform } from "@/provider/transform"
@@ -40,6 +42,24 @@ const SUPPORTED_MCP_RESOURCE_ATTACHMENT_MIMES = new Set([
   "image/webp",
 ])
 
+const LIBRARY_SKILL = "knowledge-library"
+
+/**
+ * The library root this agent's tools may treat as the library, if any. The key is global on purpose: `getGlobal`, never
+ * `get`, or a project could turn the library on. A config that cannot be read is left to fail, because it must not read as on.
+ */
+export const library = Effect.fn("SessionTools.library")(function* (input: {
+  agent: Agent.Info
+  config: Pick<Config.Interface, "getGlobal">
+}) {
+  const root = LibraryRoot.current()
+  if (root.kind !== "available") return undefined
+  const on = (yield* input.config.getGlobal()).knowledge_library !== false
+  return on && Permission.evaluate("skill", LIBRARY_SKILL, input.agent.permission).action !== "deny"
+    ? root.root
+    : undefined
+})
+
 export const resolve = Effect.fn("SessionTools.resolve")(function* (input: {
   agent: Agent.Info
   model: Provider.Model
@@ -50,6 +70,8 @@ export const resolve = Effect.fn("SessionTools.resolve")(function* (input: {
   promptOps: TaskPromptOps
   /** Whether each step snapshots this project, so Undo can restore what changes in it. */
   canUndo?: boolean
+  /** The library root for this agent, from `library`. Without it the folder is like any other. */
+  library?: string
 }) {
   const tools: Record<string, AITool> = {}
   const run = yield* EffectBridge.make()
@@ -59,7 +81,7 @@ export const resolve = Effect.fn("SessionTools.resolve")(function* (input: {
   const mcp = yield* MCP.Service
   const truncate = yield* Truncate.Service
   const flags = yield* RuntimeFlags.Service
-  const trust = { canUndo: input.canUndo ?? false }
+  const trust = { canUndo: input.canUndo ?? false, library: input.library }
 
   const context = (args: Record<string, unknown>, options: ToolExecutionOptions): Tool.Context => ({
     sessionID: input.session.id,
