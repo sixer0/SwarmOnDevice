@@ -343,6 +343,8 @@ Commands:
   swarm session             manage sessions
   swarm plugin <module>     install plugin and update config                         [aliases: plug]
   swarm db                  database tools
+  swarm trust [dir]         let a folder load its own plugins, tools, MCP servers and permission
+                            rules
 
 Positionals:
   project  path to start swarm in                                                           [string]
@@ -656,6 +658,8 @@ Commands:
   swarm session             manage sessions
   swarm plugin <module>     install plugin and update config                         [aliases: plug]
   swarm db                  database tools
+  swarm trust [dir]         let a folder load its own plugins, tools, MCP servers and permission
+                            rules
 
 Positionals:
   project  path to start swarm in                                                           [string]
@@ -719,6 +723,8 @@ Commands:
   swarm session             manage sessions
   swarm plugin <module>     install plugin and update config                         [aliases: plug]
   swarm db                  database tools
+  swarm trust [dir]         let a folder load its own plugins, tools, MCP servers and permission
+                            rules
 
 Positionals:
   project  path to start swarm in                                                           [string]
