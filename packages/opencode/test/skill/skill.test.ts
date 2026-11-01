@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, mock, test } from "bun:test"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
-import { Effect, Exit, Layer, Logger } from "effect"
+import { Cause, Effect, Exit, Layer, Logger } from "effect"
 import { Ripgrep } from "@opencode-ai/core/ripgrep"
 import { ProjectTrust } from "@opencode-ai/core/project/trust"
 import { ConfigMarkdown } from "../../src/config/markdown"
@@ -1002,5 +1002,144 @@ describe("knowledge-library registration", () => {
     const entry = JSON.parse(line.slice("ENTRY".length))
     expect(entry.location).toBe("<built-in>")
     expect(entry.content).toContain(`Root: ${path.join(nodeFs.realpathSync.native(resources), "knowledge-library")}.`)
+  })
+})
+
+describe("knowledge-library when it cannot answer", () => {
+  afterEach(() => {
+    posedRoot = undefined
+    ProjectTrust.assumeTrustedForTests(true)
+  })
+
+  // Written out here, on purpose: these strings are the contract, so a test must not read them from the code.
+  const NO_APP_TEXT =
+    "Knowledge Library is not available in this session. It is available only in sessions run by the Swarm desktop app. Tell the user and continue without it. Do not look for a copy on disk."
+  const FAILED_TEXT =
+    "Knowledge Library could not be opened in this app because its copy is missing or failed a check. Tell the user and continue without it. Do not look for a copy on disk."
+  const NOT_FOUND_TEXT = `Skill "${NAME}" not found. Available skills: customize-swarm`
+  const UNUSABLE_ROOT = "/synthetic/!`Resources`/knowledge-library"
+
+  const itCall = testEffect(
+    Layer.mergeAll(
+      LayerNode.compile(
+        LayerNode.group([ToolRegistry.node, Skill.node, Config.node, CrossSpawnSpawner.node, Ripgrep.node]),
+      ),
+      testInstanceStoreLayer,
+    ),
+  )
+
+  const callTool = (name: string) =>
+    Effect.gen(function* () {
+      const registry = yield* ToolRegistry.Service
+      const tool = (yield* registry.tools({
+        providerID: "opencode" as never,
+        modelID: "gpt-5" as never,
+        agent: buildAgent(),
+      })).find((item) => item.id === SkillTool.id)
+      if (!tool) throw new Error("Skill tool not found")
+      return yield* tool
+        .execute(
+          { name },
+          {
+            sessionID: SessionID.make("ses_test"),
+            messageID: MessageID.make("msg_test"),
+            callID: "",
+            agent: "build",
+            abort: AbortSignal.any([]),
+            messages: [],
+            metadata: () => Effect.void,
+            ask: () => Effect.void,
+          },
+        )
+        .pipe(Effect.exit)
+    })
+
+  const failureText = (exit: Exit.Exit<unknown, unknown>) => {
+    if (Exit.isSuccess(exit)) throw new Error("expected the call to fail")
+    const error = Cause.squash(exit.cause)
+    return error instanceof Error ? error.message : String(error)
+  }
+
+  const cases: [string, LibraryRoot.Status, string | undefined, string][] = [
+    ["outside the app", NO_APP, undefined, NO_APP_TEXT],
+    ["outside the app, key off", NO_APP, `{"knowledge_library": false}`, NO_APP_TEXT],
+    ["a missing copy", { kind: "failed", code: "missing" }, undefined, FAILED_TEXT],
+    ["a symlinked copy", { kind: "failed", code: "symlink" }, undefined, FAILED_TEXT],
+    ["another edition", { kind: "failed", code: "edition" }, undefined, FAILED_TEXT],
+    ["a failed copy, key off", { kind: "failed", code: "missing" }, `{"knowledge_library": false}`, FAILED_TEXT],
+    ["a sound copy, key off", AVAILABLE, `{"knowledge_library": false}`, NOT_FOUND_TEXT],
+    ["a root the entry refuses", { kind: "available", root: UNUSABLE_ROOT }, undefined, FAILED_TEXT],
+    [
+      "a root the entry refuses, key off",
+      { kind: "available", root: UNUSABLE_ROOT },
+      `{"knowledge_library": false}`,
+      NOT_FOUND_TEXT,
+    ],
+  ]
+
+  for (const [name, status, global, expected] of cases) {
+    itCall.live(`the skill tool, ${name}: exact text`, () => {
+      posedRoot = status
+      const logs: string[] = []
+      return captureLogs(
+        logs,
+        provideTmpdirInstance((dir) =>
+          withGlobalConfig(
+            global,
+            Effect.gen(function* () {
+              yield* writeDiskSkill(dir, ".swarm/skills", NAME, "# Imitation")
+              expect(failureText(yield* callTool(NAME))).toBe(expected)
+              const reasons = logs.filter((line) => line.includes("knowledge library unavailable"))
+              if (status.kind !== "failed") expect(reasons).toEqual([])
+              if (status.kind === "failed") {
+                expect(reasons.length).toBe(1)
+                expect(reasons[0]).toContain(`"code":"${status.code}"`)
+              }
+            }),
+          ),
+        ),
+      )
+    })
+  }
+
+  itCall.live("the skill tool, a sound copy, key on: the entry and no message", () => {
+    posedRoot = AVAILABLE
+    return provideTmpdirInstance(() =>
+      Effect.gen(function* () {
+        const exit = yield* callTool(NAME)
+        if (Exit.isFailure(exit)) throw new Error("expected the entry")
+        expect(exit.value.output).toBe(ENTRY)
+      }),
+    )
+  })
+
+  for (const status of [NO_APP, { kind: "failed", code: "missing" } as const]) {
+    itCall.live(`another name keeps the plain not found, ${status.kind}`, () => {
+      posedRoot = status
+      return provideTmpdirInstance(() =>
+        Effect.gen(function* () {
+          expect(failureText(yield* callTool("no-such-skill"))).toBe(
+            'Skill "no-such-skill" not found. Available skills: customize-swarm',
+          )
+        }),
+      )
+    })
+  }
+
+  itCall.live("a message reaches no one who did not call the name", () => {
+    posedRoot = { kind: "failed", code: "edition" }
+    const logs: string[] = []
+    return captureLogs(
+      logs,
+      provideTmpdirInstance(() =>
+        Effect.gen(function* () {
+          const skill = yield* Skill.Service
+          const listed = Skill.fmt(yield* skill.available(), { verbose: true })
+          expect(listed).not.toContain("Knowledge Library")
+          expect(listed).not.toContain(NAME)
+          expect(logs.filter((line) => line.includes("knowledge library unavailable"))).toEqual([])
+        }),
+      ),
+    )
   })
 })

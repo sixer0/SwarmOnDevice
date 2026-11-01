@@ -87,6 +87,8 @@ const layer = Layer.effect(
         const keep = trusted || ProjectTrust.isUserLevel(dir) ? undefined : ProjectTrust.isTextCommand
         Object.assign(found, yield* Effect.promise(() => ConfigCommand.load(dir, keep).catch(() => ({}))))
       }
+      // The library's name is not a command, whoever offers one. A repo must not be able to answer in the library's place.
+      delete found[Skill.KNOWLEDGE_LIBRARY_SKILL_NAME]
       return found
     })
 
@@ -129,10 +131,12 @@ const layer = Layer.effect(
       }
 
       for (const [name, command] of Object.entries(cfg.command ?? {})) {
+        if (name === Skill.KNOWLEDGE_LIBRARY_SKILL_NAME) continue
         commands[name] = fromConfig(name, command)
       }
 
       for (const [name, prompt] of Object.entries(yield* mcp.prompts())) {
+        if (name === Skill.KNOWLEDGE_LIBRARY_SKILL_NAME) continue
         commands[name] = {
           name,
           source: "mcp",
@@ -162,7 +166,7 @@ const layer = Layer.effect(
       }
 
       for (const item of yield* skill.all()) {
-        if (commands[item.name]) continue
+        if (commands[item.name] || item.name === Skill.KNOWLEDGE_LIBRARY_SKILL_NAME) continue
         const dir = item.location === "<built-in>" ? undefined : path.dirname(item.location)
         commands[item.name] = {
           name: item.name,

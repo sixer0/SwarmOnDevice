@@ -1,5 +1,6 @@
 import { Agent } from "@/agent/agent"
 import type { Config } from "@/config/config"
+import { KNOWLEDGE_LIBRARY_SKILL_NAME } from "@/skill"
 import { LibraryRoot } from "@/skill/library-root"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
 import { Provider } from "@/provider/provider"
@@ -42,8 +43,6 @@ const SUPPORTED_MCP_RESOURCE_ATTACHMENT_MIMES = new Set([
   "image/webp",
 ])
 
-const LIBRARY_SKILL = "knowledge-library"
-
 /**
  * The library root this agent's tools may treat as the library, if any. The key is global on purpose: `getGlobal`, never
  * `get`, or a project could turn the library on. A config that cannot be read is left to fail, because it must not read as on.
@@ -55,7 +54,7 @@ export const library = Effect.fn("SessionTools.library")(function* (input: {
   const root = LibraryRoot.current()
   if (root.kind !== "available") return undefined
   const on = (yield* input.config.getGlobal()).knowledge_library !== false
-  return on && Permission.evaluate("skill", LIBRARY_SKILL, input.agent.permission).action !== "deny"
+  return on && Permission.evaluate("skill", KNOWLEDGE_LIBRARY_SKILL_NAME, input.agent.permission).action !== "deny"
     ? root.root
     : undefined
 })

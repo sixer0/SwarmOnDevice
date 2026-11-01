@@ -5,8 +5,8 @@ import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { SessionProjector } from "@opencode-ai/core/session/projector"
 import { eq } from "drizzle-orm"
 import { EventV2Bridge } from "@/event-v2-bridge"
-import { expect } from "bun:test"
-import { Cause, Deferred, Duration, Effect, Exit, Fiber, Layer } from "effect"
+import { expect, mock } from "bun:test"
+import { Cause, Deferred, Duration, Effect, Exit, Fiber, Layer, Logger } from "effect"
 import path from "path"
 import { fileURLToPath } from "url"
 import { NamedError } from "@opencode-ai/core/util/error"
@@ -33,6 +33,7 @@ import { LateAnswer } from "@/session/late-answer"
 import { RunLease } from "@/session/run-lease"
 import { SessionResume } from "@/session/resume"
 import { Global } from "@opencode-ai/core/global"
+import { ProjectTrust } from "@opencode-ai/core/project/trust"
 import { mkdirSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs"
 import { SessionMessageTable } from "@opencode-ai/core/session/sql"
 import { LLM } from "../../src/session/llm"
@@ -50,6 +51,7 @@ import { SessionStatus } from "../../src/session/status"
 import { SessionV2 } from "@opencode-ai/core/session"
 import { SessionExecution } from "@opencode-ai/core/session/execution"
 import { Skill } from "../../src/skill"
+import { LibraryRoot } from "../../src/skill/library-root"
 import { SystemPrompt } from "../../src/session/system"
 import { Shell } from "@opencode-ai/core/shell"
 import { Snapshot } from "../../src/snapshot"
@@ -117,7 +119,10 @@ function errorTool(parts: SessionV1.Part[]) {
   return part?.state.status === "error" ? (part as ErrorToolPart) : undefined
 }
 
-function makeMcp(instructions: MCP.ServerInstructions[] = []) {
+function makeMcp(
+  instructions: MCP.ServerInstructions[] = [],
+  prompts: Effect.Success<ReturnType<MCP.Interface["prompts"]>> = {},
+) {
   return Layer.succeed(
     MCP.Service,
     MCP.Service.of({
@@ -125,7 +130,7 @@ function makeMcp(instructions: MCP.ServerInstructions[] = []) {
       clients: () => Effect.succeed({}),
       instructions: () => Effect.succeed(instructions),
       tools: () => Effect.succeed({}),
-      prompts: () => Effect.succeed({}),
+      prompts: () => Effect.succeed(prompts),
       resources: () => Effect.succeed({}),
       resourceTemplates: () => Effect.succeed({}),
       add: () => Effect.succeed({ status: { status: "disabled" as const } }),
@@ -216,11 +221,15 @@ const promptRoot = LayerNode.group([
   RuntimeFlags.node,
 ])
 
-function makePrompt(input?: { mcpInstructions?: MCP.ServerInstructions[]; processor?: "blocking" }) {
+function makePrompt(input?: {
+  mcpInstructions?: MCP.ServerInstructions[]
+  mcpPrompts?: Effect.Success<ReturnType<MCP.Interface["prompts"]>>
+  processor?: "blocking"
+}) {
   const replacements = [
     [SessionSummary.node, summary],
     [LSP.node, lsp],
-    [MCP.node, makeMcp(input?.mcpInstructions)],
+    [MCP.node, makeMcp(input?.mcpInstructions, input?.mcpPrompts)],
     [RuntimeFlags.node, runtimeFlags],
   ] as const
   if (input?.processor === "blocking") {
@@ -3288,3 +3297,259 @@ it.instance("old tool output stays while the cache is still warm, since clearing
     expect(yield* oldOutputCleared(chat.id, partID)).toBe(false)
   }),
 )
+
+// Outside the app the resolver answers no-app. Only `current` changes, and with nothing posed it gives this process's real
+// answer, so another file sharing the process still sees the real module.
+const actualRoot = { ...LibraryRoot }
+let posedRoot: LibraryRoot.Status | undefined
+const currentRoot = () => posedRoot ?? actualRoot.current()
+mock.module("../../src/skill/library-root", () => ({
+  ...actualRoot,
+  current: currentRoot,
+  LibraryRoot: { ...actualRoot, current: currentRoot },
+}))
+
+const LIBRARY = "knowledge-library"
+// Written out here, on purpose: these strings are the contract, so a test must not read them from the code.
+const NO_APP_TEXT =
+  "Knowledge Library is not available in this session. It is available only in sessions run by the Swarm desktop app. Tell the user and continue without it. Do not look for a copy on disk."
+const FAILED_TEXT =
+  "Knowledge Library could not be opened in this app because its copy is missing or failed a check. Tell the user and continue without it. Do not look for a copy on disk."
+const ROOT_AVAILABLE: LibraryRoot.Status = { kind: "available", root: "/synthetic/Resources/knowledge-library" }
+const ROOT_NO_APP: LibraryRoot.Status = { kind: "no-app" }
+const ROOT_REFUSED: LibraryRoot.Status = { kind: "available", root: "/synthetic/!`Resources`/knowledge-library" }
+const KEY_OFF = `{"knowledge_library": false}`
+
+const posing = <A, E, R>(status: LibraryRoot.Status, trusted: boolean, self: Effect.Effect<A, E, R>) =>
+  Effect.acquireUseRelease(
+    Effect.sync(() => {
+      posedRoot = status
+      ProjectTrust.assumeTrustedForTests(trusted)
+    }),
+    () => self,
+    () =>
+      Effect.sync(() => {
+        posedRoot = undefined
+        ProjectTrust.assumeTrustedForTests(true)
+      }),
+  )
+
+// The key is global, so it is the global file that has to say it.
+const withGlobalFile = <A, E, R>(content: string | undefined, self: Effect.Effect<A, E, R>) =>
+  Effect.gen(function* () {
+    const config = yield* Config.Service
+    const { directory } = yield* TestInstance
+    const dir = path.join(directory, ".global-config")
+    mkdirSync(dir, { recursive: true })
+    if (content !== undefined) writeFileSync(path.join(dir, "swarm.json"), content)
+    return yield* Effect.acquireUseRelease(
+      Effect.gen(function* () {
+        const previous = Global.Path.config
+        ;(Global.Path as { config: string }).config = dir
+        yield* config.invalidate()
+        return previous
+      }),
+      () => self,
+      (previous) =>
+        Effect.gen(function* () {
+          ;(Global.Path as { config: string }).config = previous
+          yield* config.invalidate()
+        }),
+    )
+  })
+
+const slashFailure = Effect.gen(function* () {
+  const prompt = yield* SessionPrompt.Service
+  const sessions = yield* Session.Service
+  const chat = yield* sessions.create({ title: "Pinned" })
+  const exit = yield* prompt.command({ sessionID: chat.id, command: LIBRARY, arguments: "" }).pipe(Effect.exit)
+  if (Exit.isSuccess(exit)) throw new Error("expected the command to fail")
+  const error = Cause.squash(exit.cause)
+  if (!NamedError.Unknown.isInstance(error)) throw error
+  return error.data.message
+})
+
+const genericNotFound = Effect.gen(function* () {
+  const commands = yield* Command.Service
+  const names = (yield* commands.list()).map((item) => item.name).join(", ")
+  return `Command not found: "${LIBRARY}". Available commands: ${names}`
+})
+
+const slashCases: [string, LibraryRoot.Status, string | undefined, string | undefined][] = [
+  ["outside the app", ROOT_NO_APP, undefined, NO_APP_TEXT],
+  ["outside the app, key off", ROOT_NO_APP, KEY_OFF, NO_APP_TEXT],
+  ["a missing copy", { kind: "failed", code: "missing" }, undefined, FAILED_TEXT],
+  ["a symlinked copy", { kind: "failed", code: "symlink" }, undefined, FAILED_TEXT],
+  ["another edition", { kind: "failed", code: "edition" }, undefined, FAILED_TEXT],
+  ["a failed copy, key off", { kind: "failed", code: "edition" }, KEY_OFF, FAILED_TEXT],
+  ["a sound copy, key on", ROOT_AVAILABLE, undefined, undefined],
+  ["a sound copy, key off", ROOT_AVAILABLE, KEY_OFF, undefined],
+  ["a root the entry refuses", ROOT_REFUSED, undefined, FAILED_TEXT],
+  ["a root the entry refuses, key off", ROOT_REFUSED, KEY_OFF, undefined],
+]
+
+for (const [name, status, global, expected] of slashCases) {
+  noLLMServer.instance(`/knowledge-library, ${name}: exact text`, () => {
+    const logs: string[] = []
+    return posing(
+      status,
+      true,
+      withGlobalFile(
+        global,
+        Effect.gen(function* () {
+          expect(yield* slashFailure).toBe(expected ?? (yield* genericNotFound))
+          const reasons = logs.filter((line) => line.includes("knowledge library unavailable"))
+          if (status.kind !== "failed") expect(reasons).toEqual([])
+          if (status.kind === "failed") {
+            expect(reasons.length).toBe(1)
+            expect(reasons[0]).toContain(`"code":"${status.code}"`)
+          }
+        }),
+      ),
+    ).pipe(
+      Effect.provide(
+        Logger.layer([
+          Logger.make<unknown, void>((options) => {
+            logs.push(JSON.stringify(options.message))
+          }),
+        ]),
+      ),
+    )
+  })
+}
+
+noLLMServer.instance("another missing command keeps the plain answer outside the app", () =>
+  posing(
+    ROOT_NO_APP,
+    true,
+    Effect.gen(function* () {
+      const prompt = yield* SessionPrompt.Service
+      const sessions = yield* Session.Service
+      const chat = yield* sessions.create({ title: "Pinned" })
+      const exit = yield* prompt.command({ sessionID: chat.id, command: "no-such", arguments: "" }).pipe(Effect.exit)
+      if (Exit.isSuccess(exit)) throw new Error("expected the command to fail")
+      const error = Cause.squash(exit.cause)
+      if (!NamedError.Unknown.isInstance(error)) throw error
+      expect(error.data.message.startsWith('Command not found: "no-such". Available commands: ')).toBe(true)
+    }),
+  ),
+)
+
+// What each imitation source does to the table of commands. The neighbour has the same origin as the imitation, so a
+// source that was not read at all cannot pass as one whose imitation was ignored.
+const imitations: [string, string, (dir: string) => void][] = [
+  [
+    "V7 a text command file",
+    "file-neighbour",
+    (dir) => {
+      mkdirSync(path.join(dir, ".swarm", "commands"), { recursive: true })
+      writeFileSync(path.join(dir, ".swarm", "commands", `${LIBRARY}.md`), "Imitation text")
+      writeFileSync(path.join(dir, ".swarm", "commands", "file-neighbour.md"), "Neighbour text")
+    },
+  ],
+  [
+    "V8 a command in swarm.json",
+    "config-neighbour",
+    (dir) => {
+      writeFileSync(
+        path.join(dir, "swarm.json"),
+        JSON.stringify({
+          command: { [LIBRARY]: { template: "Imitation text" }, "config-neighbour": { template: "Neighbour text" } },
+        }),
+      )
+    },
+  ],
+  [
+    "V9 a command file with a shell block",
+    "file-neighbour",
+    (dir) => {
+      mkdirSync(path.join(dir, ".swarm", "commands"), { recursive: true })
+      writeFileSync(path.join(dir, ".swarm", "commands", `${LIBRARY}.md`), "Imitation !`touch imitation-ran`")
+      writeFileSync(path.join(dir, ".swarm", "commands", "file-neighbour.md"), "Neighbour text")
+    },
+  ],
+]
+
+for (const [name, neighbour, write] of imitations) {
+  for (const trusted of [true, false]) {
+    for (const status of [ROOT_AVAILABLE, ROOT_NO_APP]) {
+      noLLMServer.instance(`${name}, ${trusted ? "trusted" : "untrusted"}, ${status.kind}: ignored`, () =>
+        posing(
+          status,
+          trusted,
+          Effect.gen(function* () {
+            const { directory } = yield* TestInstance
+            write(directory)
+            const commands = yield* Command.Service
+            expect(yield* commands.get(LIBRARY)).toBeUndefined()
+            const names = (yield* commands.list()).map((item) => item.name)
+            expect(names).not.toContain(LIBRARY)
+            expect(names).toContain(neighbour)
+            expect(yield* slashFailure).toBe(status.kind === "no-app" ? NO_APP_TEXT : yield* genericNotFound)
+            expect(readdirSync(directory)).not.toContain("imitation-ran")
+          }),
+        ),
+      )
+    }
+  }
+}
+
+noLLMServer.instance("a command file saved after the instance started is ignored too", () =>
+  posing(
+    ROOT_NO_APP,
+    true,
+    Effect.gen(function* () {
+      const { directory } = yield* TestInstance
+      const commands = yield* Command.Service
+      yield* commands.list()
+      mkdirSync(path.join(directory, ".swarm", "commands"), { recursive: true })
+      writeFileSync(path.join(directory, ".swarm", "commands", `${LIBRARY}.md`), "Imitation text")
+      writeFileSync(path.join(directory, ".swarm", "commands", "file-neighbour.md"), "Neighbour text")
+      expect(yield* commands.get("file-neighbour")).toBeDefined()
+      expect(yield* commands.get(LIBRARY)).toBeUndefined()
+      expect(yield* slashFailure).toBe(NO_APP_TEXT)
+    }),
+  ),
+)
+
+noLLMServer.instance("the entry itself is a skill and never a command", () =>
+  posing(
+    ROOT_AVAILABLE,
+    true,
+    Effect.gen(function* () {
+      const skill = yield* Skill.Service
+      const commands = yield* Command.Service
+      expect((yield* skill.get(LIBRARY))?.location).toBe("<built-in>")
+      expect(yield* commands.get(LIBRARY)).toBeUndefined()
+      expect((yield* commands.list()).map((item) => item.name)).toContain("customize-swarm")
+    }),
+  ),
+)
+
+const withLibraryPrompt = testEffect(
+  makePrompt({
+    mcpPrompts: {
+      [LIBRARY]: { name: LIBRARY, description: "Imitation", client: "imitation" },
+      "prompt-neighbour": { name: "prompt-neighbour", description: "Neighbour", client: "imitation" },
+    },
+  }),
+)
+
+for (const trusted of [true, false]) {
+  for (const status of [ROOT_AVAILABLE, ROOT_NO_APP]) {
+    withLibraryPrompt.instance(
+      `V19 an MCP prompt of that name, ${trusted ? "trusted" : "untrusted"}, ${status.kind}: ignored`,
+      () =>
+        posing(
+          status,
+          trusted,
+          Effect.gen(function* () {
+            const commands = yield* Command.Service
+            expect(yield* commands.get(LIBRARY)).toBeUndefined()
+            expect((yield* commands.get("prompt-neighbour"))?.source).toBe("mcp")
+            expect(yield* slashFailure).toBe(status.kind === "no-app" ? NO_APP_TEXT : yield* genericNotFound)
+          }),
+        ),
+    )
+  }
+}

@@ -27,6 +27,7 @@ import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process"
 import { CrossSpawnSpawner } from "@opencode-ai/core/cross-spawn-spawner"
 import * as Stream from "effect/Stream"
 import { Command } from "../command"
+import { Skill } from "../skill"
 import { pathToFileURL, fileURLToPath } from "url"
 import { Config } from "@/config/config"
 import { ConfigMarkdown } from "@/config/markdown"
@@ -136,6 +137,7 @@ const layer = Layer.effect(
     const compaction = yield* SessionCompaction.Service
     const plugin = yield* Plugin.Service
     const commands = yield* Command.Service
+    const skill = yield* Skill.Service
     const config = yield* Config.Service
     const permission = yield* Permission.Service
     const fsys = yield* FSUtil.Service
@@ -1472,7 +1474,10 @@ const layer = Layer.effect(
       if (!cmd) {
         const available = (yield* commands.list()).map((c) => c.name)
         const hint = available.length ? ` Available commands: ${available.join(", ")}` : ""
-        const error = new NamedError.Unknown({ message: `Command not found: "${input.command}".${hint}` })
+        const reason = yield* skill
+          .require(input.command)
+          .pipe(Effect.match({ onSuccess: () => undefined, onFailure: (missing) => missing.reason }))
+        const error = new NamedError.Unknown({ message: reason ?? `Command not found: "${input.command}".${hint}` })
         yield* events.publish(Session.Event.Error, { sessionID: input.sessionID, error: error.toObject() })
         throw error
       }
@@ -1718,6 +1723,7 @@ export const node = LayerNode.make({
     SessionCompaction.node,
     Plugin.node,
     Command.node,
+    Skill.node,
     Config.node,
     Permission.node,
     FSUtil.node,
