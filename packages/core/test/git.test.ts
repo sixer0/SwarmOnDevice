@@ -108,6 +108,23 @@ describe("Git worktrees", () => {
       expect((yield* git.worktree.list(repo)).some((entry) => entry.directory.endsWith("-git-worktree"))).toBe(false)
     }),
   )
+
+  it.live("keeps the project where .git was found when core.worktree names somewhere else", () =>
+    Effect.gen(function* () {
+      const root = yield* Effect.acquireRelease(
+        Effect.promise(() => tmpdir()),
+        (dir) => Effect.promise(() => dir[Symbol.asyncDispose]()),
+      )
+      yield* Effect.promise(() => initRepo(root.path))
+      const directory = AbsolutePath.make(yield* Effect.promise(() => fs.realpath(root.path)))
+      const other = path.join(directory, "elsewhere")
+      yield* Effect.promise(() => fs.mkdir(other))
+      const git = yield* Git.Service
+      expect((yield* git.repo.discover(directory))?.worktree).toBe(directory)
+      yield* Effect.promise(() => $`git config core.worktree ${other}`.cwd(directory).quiet())
+      expect((yield* git.repo.discover(directory))?.worktree).toBe(directory)
+    }),
+  )
 })
 
 describe("Git trees", () => {

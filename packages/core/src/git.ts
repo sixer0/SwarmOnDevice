@@ -195,8 +195,11 @@ const layer = Layer.effect(
       const commonDir = yield* git(["rev-parse", "--git-common-dir"])
       if (gitDir.exitCode !== 0 || commonDir.exitCode !== 0) return undefined
 
+      const reported = topLevel.exitCode === 0 ? resolvePath(cwd, topLevel.text) : cwd
+      const found = yield* fs.resolve(cwd)
       return new Repository({
-        worktree: AbsolutePath.make(topLevel.exitCode === 0 ? resolvePath(cwd, topLevel.text) : cwd),
+        // A checkout's own core.worktree may name any folder, and the project's boundary is drawn from this. It stays where .git is.
+        worktree: AbsolutePath.make((yield* fs.resolve(reported)) === found ? reported : found),
         gitDirectory: AbsolutePath.make(resolvePath(cwd, gitDir.text)),
         commonDirectory: AbsolutePath.make(resolvePath(cwd, commonDir.text)),
       })

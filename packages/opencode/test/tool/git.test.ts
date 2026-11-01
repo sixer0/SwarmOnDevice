@@ -11,6 +11,7 @@ import { Truncate } from "@/tool/truncate"
 import { FSUtil } from "@opencode-ai/core/fs-util"
 import { CrossSpawnSpawner } from "@opencode-ai/core/cross-spawn-spawner"
 import { Agent } from "../../src/agent/agent"
+import { InstanceRef } from "../../src/effect/instance-ref"
 import { SessionID, MessageID } from "../../src/session/schema"
 import { GitTool, HARDENED_CONFIG, hardenedEnv, unlistedFlag, withholdSecretDiffs } from "../../src/tool/git"
 import { GitGuard } from "../../src/tool/git-guard"
@@ -631,6 +632,42 @@ describe("git tool on a hostile repository", () => {
         expect((yield* invoke(dir, { subcommand: "log" })).output).toContain("second")
         expect((yield* invoke(dir, { subcommand: "branch" })).output).toContain("other")
         fs.rmSync(linked, { recursive: true, force: true })
+      }),
+    )
+
+    it.live("core.worktree cannot point the tool, or the project, at another repository", () =>
+      Effect.gen(function* () {
+        const dir = yield* tmpdirScoped()
+        const victim = `${dir}-victim`
+        fs.mkdirSync(victim)
+        seed(victim)
+        plain(victim, "commit", "-qam", "VICTIM-SUBJECT")
+        seed(dir)
+        fs.appendFileSync(path.join(dir, ".git/config"), `[core]\n\tworktree = ../../${path.basename(victim)}\n`)
+        expect(plain(dir, "rev-parse", "--show-toplevel").stdout.trim()).toBe(fs.realpathSync(victim))
+        yield* Effect.gen(function* () {
+          const instance = yield* InstanceRef
+          expect(instance?.worktree).toBe(fs.realpathSync(dir))
+        }).pipe(provideInstance(dir))
+        const result = yield* invoke(dir, { subcommand: "log", patch: true })
+        expect(result.metadata.refused).toContain("core.worktree")
+        expect(result.output).not.toContain("VICTIM-SUBJECT")
+        fs.rmSync(victim, { recursive: true, force: true })
+      }),
+    )
+
+    it.live("a copy of a known project reads its own history, not the first checkout's", () =>
+      Effect.gen(function* () {
+        const dir = yield* tmpdirScoped()
+        seed(dir)
+        plain(dir, "commit", "-qam", "ORIGINAL-SUBJECT")
+        expect((yield* invoke(dir, { subcommand: "log" })).output).toContain("ORIGINAL-SUBJECT")
+        const copy = `${dir}-copy`
+        fs.cpSync(dir, copy, { recursive: true })
+        plain(copy, "commit", "-q", "--allow-empty", "-m", "COPY-SUBJECT")
+        expect((yield* invoke(copy, { subcommand: "log" })).output).toContain("COPY-SUBJECT")
+        expect((yield* invoke(dir, { subcommand: "log" })).output).not.toContain("COPY-SUBJECT")
+        fs.rmSync(copy, { recursive: true, force: true })
       }),
     )
 
