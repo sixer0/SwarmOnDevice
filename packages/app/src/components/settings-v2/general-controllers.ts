@@ -1,8 +1,8 @@
-import { createMemo, createResource, createSignal, onMount, type Accessor } from "solid-js"
+import { createEffect, createMemo, createResource, createSignal, on, onMount, type Accessor } from "solid-js"
+import { createStore } from "solid-js/store"
 import type { ColorScheme } from "@opencode-ai/ui/theme/context"
 import { useTheme } from "@opencode-ai/ui/theme/context"
 import { useLanguage } from "@/context/language"
-import { usePermission } from "@/context/permission"
 import { usePlatform } from "@/context/platform"
 import { ServerConnection, useServer } from "@/context/server"
 import { useServerSDK } from "@/context/server-sdk"
@@ -26,31 +26,138 @@ import { createSoundPreviewController, type ShellOption } from "./general-contro
 export { createShellOptions, createSoundPreviewController } from "./general-controller-behavior"
 export type { ShellOption, ShellSelectOption } from "./general-controller-behavior"
 
-export function createPermissionScopeController(sessionID: Accessor<string | undefined>) {
-  const permission = usePermission()
-  const serverSync = useServerSync()
-  const directory = createMemo(() => {
-    const id = sessionID()
-    if (!id) return undefined
-    return serverSync().session.lineage.peek(id)?.session.directory
+export type AutonomousScope = { sessionID?: string; directory: string }
+
+export function autonomousToast(
+  t: (
+    key:
+      | "toast.permissions.autonomous.on.title"
+      | "toast.permissions.autonomous.off.title"
+      | "settings.general.row.autonomous.description",
+  ) => string,
+  on: boolean,
+) {
+  if (!on) return { title: t("toast.permissions.autonomous.off.title") }
+  return {
+    title: t("toast.permissions.autonomous.on.title"),
+    description: t("settings.general.row.autonomous.description"),
+  }
+}
+
+// The server alone holds the mode. This keeps only its last answer, for as long as the view is open.
+export function createAutonomousToggle(input: {
+  scope: Accessor<AutonomousScope | undefined>
+  read: (scope: AutonomousScope) => Promise<boolean>
+  write: (scope: AutonomousScope, on: boolean) => Promise<boolean>
+  changed: (on: boolean) => void
+  failed: () => void
+}) {
+  const [state, setState] = createStore({ on: false, known: false, unreadable: false, pending: false })
+  // An answer to an earlier scope or an older request is not an answer to this one.
+  let run = 0
+
+  const refresh = async () => {
+    const scope = input.scope()
+    if (!scope || state.pending) return
+    const current = ++run
+    await input.read(scope).then(
+      (on) => {
+        if (current === run) setState({ on, known: true, unreadable: false })
+      },
+      () => {
+        if (current === run) setState({ known: false, unreadable: true })
+      },
+    )
+  }
+
+  const change = async (next: (scope: AutonomousScope) => Promise<boolean>) => {
+    const scope = input.scope()
+    if (!scope || state.pending) return
+    const current = ++run
+    setState("pending", true)
+    await next(scope).then(
+      (on) => {
+        input.changed(on)
+        if (current === run) setState({ on, known: true, unreadable: false, pending: false })
+      },
+      async () => {
+        input.failed()
+        if (current !== run) return
+        setState("pending", false)
+        // Stopping holds on the server even when saving it failed, so the old value may be wrong now.
+        await refresh()
+      },
+    )
+  }
+
+  const load = () => {
+    run++
+    setState({ on: false, known: false, unreadable: false, pending: false })
+    return refresh()
+  }
+
+  const where = createMemo(() => {
+    const scope = input.scope()
+    return scope && `${scope.sessionID ?? ""}\0${scope.directory}`
   })
+  createEffect(on(where, () => void load()))
 
   return {
-    accepting: createMemo(() => {
-      const id = sessionID()
-      const dir = directory()
-      if (!id || !dir) return false
-      return permission.isAutoAccepting(id, dir)
-    }),
-    enabled: createMemo(() => !!directory()),
-    set: (checked: boolean) => {
-      const id = sessionID()
-      const dir = directory()
-      if (!id || !dir) return
-      if (checked) return permission.enableAutoAccept(id, dir)
-      permission.disableAutoAccept(id, dir)
+    accepting: () => state.on,
+    available: () => !!input.scope(),
+    enabled: () => !!input.scope() && state.known && !state.pending,
+    description: () => {
+      if (!input.scope()) return "settings.general.row.autonomous.disabledReason" as const
+      if (state.unreadable) return "common.requestFailed" as const
+      return "settings.general.row.autonomous.description" as const
     },
+    load,
+    refresh,
+    set: (checked: boolean) => change((scope) => input.write(scope, checked)),
+    // Decides from what the server says now: Settings or the add menu may have changed it since this view last read.
+    toggle: () => change((scope) => input.read(scope).then((on) => input.write(scope, !on))),
   }
+}
+
+export function createAutonomousModeController(input: {
+  sessionID: Accessor<string | undefined>
+  directory: Accessor<string | undefined>
+}) {
+  const language = useLanguage()
+  const serverSdk = useServerSDK()
+  const serverSync = useServerSync()
+  const client = (directory: string) => serverSdk().createClient({ directory, throwOnError: true }).autonomy
+  // The server sends no event when the mode changes: this is how the composer learns of it.
+  const announce = () => window.dispatchEvent(new Event("swarm:autonomy-changed"))
+
+  return createAutonomousToggle({
+    scope: () => {
+      const sessionID = input.sessionID()
+      const directory =
+        (sessionID ? serverSync().session.lineage.peek(sessionID)?.session.directory : undefined) ?? input.directory()
+      return directory ? { sessionID, directory } : undefined
+    },
+    read: (scope) =>
+      scope.sessionID
+        ? client(scope.directory)
+            .session({ sessionID: scope.sessionID })
+            .then((result) => result.data!.on)
+        : client(scope.directory)
+            .mode()
+            .then((result) => result.data!.on),
+    write: (scope, on) =>
+      client(scope.directory)
+        .modeUpdate({ on, sessionID: scope.sessionID })
+        .then((result) => result.data!.on),
+    changed: (on) => {
+      announce()
+      showToast(autonomousToast(language.t, on))
+    },
+    failed: () => {
+      announce()
+      showToast({ title: language.t("common.requestFailed") })
+    },
+  })
 }
 
 export function createShellSettingsController() {
@@ -231,7 +338,7 @@ export function createSoundSettingsController() {
   }
 }
 
-export type PermissionScopeController = ReturnType<typeof createPermissionScopeController>
+export type AutonomousModeController = ReturnType<typeof createAutonomousModeController>
 export type ShellSettingsController = ReturnType<typeof createShellSettingsController>
 export type KnowledgeLibraryController = ReturnType<typeof createKnowledgeLibraryController>
 export type AppearanceSettingsController = ReturnType<typeof createAppearanceSettingsController>

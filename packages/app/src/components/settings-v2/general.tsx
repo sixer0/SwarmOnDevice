@@ -1,5 +1,6 @@
 import { Component, Show, createMemo, createResource } from "solid-js"
 import { createMediaQuery } from "@solid-primitives/media"
+import { useParams } from "@solidjs/router"
 import { ButtonV2 } from "@opencode-ai/ui/v2/button-v2"
 import { SelectV2 } from "@opencode-ai/ui/v2/select-v2"
 import { Switch } from "@opencode-ai/ui/v2/switch-v2"
@@ -9,19 +10,20 @@ import { useLanguage } from "@/context/language"
 import { usePlatform } from "@/context/platform"
 import { useUpdaterAction } from "../updater-action"
 import { useSettings } from "@/context/settings"
+import { decode64 } from "@/utils/base64"
 import { SettingsListV2 } from "./parts/list"
 import { SettingsRowV2 } from "./parts/row"
 import { LayoutRetirementNotice, LayoutTransitionToggle } from "./interface-transition"
 import {
   createAppearanceSettingsController,
+  createAutonomousModeController,
   createKnowledgeLibraryController,
-  createPermissionScopeController,
   createShellOptions,
   createShellSettingsController,
   createSoundSettingsController,
   soundOptions,
   type AppearanceSettingsController,
-  type PermissionScopeController,
+  type AutonomousModeController,
   type ShellSettingsController,
   type SoundSettingsController,
 } from "./general-controllers"
@@ -69,14 +71,14 @@ const soundSettings = {
   },
 } as const
 
-const PermissionScopeSetting: Component<{ controller: PermissionScopeController }> = (props) => {
+const AutonomousModeSetting: Component<{ controller: AutonomousModeController }> = (props) => {
   const language = useLanguage()
   return (
     <SettingsRowV2
-      title={language.t("command.permissions.autoaccept.enable")}
-      description={language.t("toast.permissions.autoaccept.on.description")}
+      title={language.t("settings.general.row.autonomous.title")}
+      description={language.t(props.controller.description())}
     >
-      <div data-action="settings-auto-accept-permissions">
+      <div data-action="settings-autonomous-mode">
         <Switch
           checked={props.controller.accepting()}
           disabled={!props.controller.enabled()}
@@ -273,7 +275,11 @@ export const SettingsGeneralV2: Component<{
   const settings = useSettings()
   const mobile = createMediaQuery("(max-width: 767px)")
   const updater = useUpdaterAction()
-  const permissionScope = createPermissionScopeController(() => props.sessionID)
+  const params = useParams<{ dir?: string; id?: string }>()
+  const autonomousMode = createAutonomousModeController({
+    sessionID: () => props.sessionID ?? params.id,
+    directory: () => decode64(params.dir),
+  })
   const shell = createShellSettingsController()
   const appearance = createAppearanceSettingsController()
   const sounds = createSoundSettingsController()
@@ -323,7 +329,7 @@ export const SettingsGeneralV2: Component<{
       <SettingsListV2>
         <LanguageSetting />
 
-        <PermissionScopeSetting controller={permissionScope} />
+        <AutonomousModeSetting controller={autonomousMode} />
 
         <ShellSetting controller={shell} />
 

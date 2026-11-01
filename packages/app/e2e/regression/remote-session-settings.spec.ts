@@ -1,6 +1,5 @@
 import { base64Encode } from "@opencode-ai/core/util/encode"
 import { expect, test, type Page, type Route } from "@playwright/test"
-import { installSseTransport } from "../utils/sse-transport"
 import { currentSession } from "../utils/mock-server"
 
 const serverA = "http://127.0.0.1:4096"
@@ -12,8 +11,8 @@ const childSessionA = { ...session("ses_server_a_child", directoryA, "Server A c
 const sessionB = session("ses_server_b", directoryB, "Server B session")
 
 test("session settings use the remote server context", async ({ page }) => {
-  const permissionRequests: string[] = []
-  await mockServers(page, permissionRequests)
+  const autonomyWrites: AutonomyWrite[] = []
+  await mockServers(page, autonomyWrites)
   await configureServers(page)
 
   await page.goto(`/server/${base64Encode(serverB)}/session/${sessionB.id}`)
@@ -21,36 +20,25 @@ test("session settings use the remote server context", async ({ page }) => {
   await page.keyboard.press("Control+,")
 
   const dialog = page.locator(".settings-v2-dialog")
-  const autoAccept = dialog.locator('[data-action="settings-auto-accept-permissions"]')
-  const input = autoAccept.getByRole("switch")
-  await expect(autoAccept).toBeVisible()
+  const autonomous = dialog.locator('[data-action="settings-autonomous-mode"]')
+  const input = autonomous.getByRole("switch")
+  await expect(autonomous).toBeVisible()
   await expect(input).toBeEnabled()
-  permissionRequests.length = 0
-  await autoAccept.locator('[data-slot="switch-control"]').click()
+  await expect(input).not.toBeChecked()
+  await autonomous.locator('[data-slot="switch-control"]').click()
   await expect(input).toBeChecked()
-  await expect
-    .poll(() =>
-      permissionRequests.some((request) => {
-        const url = new URL(request)
-        return url.origin === serverB && url.searchParams.get("directory") === directoryB
-      }),
-    )
-    .toBe(true)
-  expect(permissionRequests.every((request) => new URL(request).origin === serverB)).toBe(true)
+  expect(autonomyWrites).toEqual([
+    { origin: serverB, directory: directoryB, body: { on: true, sessionID: sessionB.id } },
+  ])
 
   await dialog.getByRole("tab", { name: "Models" }).click()
   await expect(dialog.getByRole("switch", { name: "Server B Model" })).toBeEnabled()
   await expect(dialog.getByRole("switch", { name: "Server A Model" })).toHaveCount(0)
 })
 
-test("auto-accept responds for an unfocused server session", async ({ page }) => {
-  const permissionRequests: string[] = []
-  const permissionResponses: PermissionResponse[] = []
-  const transport = await installSseTransport<{ directory: string; payload: Record<string, unknown> }>(page, {
-    server: serverA,
-    retry: 20,
-  })
-  await mockServers(page, permissionRequests, permissionResponses)
+test("autonomous mode belongs to the server and to the session it was turned on for", async ({ page }) => {
+  const autonomyWrites: AutonomyWrite[] = []
+  await mockServers(page, autonomyWrites)
   await configureServers(page, [
     { type: "session", server: serverA, sessionId: sessionA.id },
     { type: "session", server: serverB, sessionId: sessionB.id },
@@ -60,93 +48,27 @@ test("auto-accept responds for an unfocused server session", async ({ page }) =>
   await page.goto(`/server/${base64Encode(serverA)}/session/${sessionA.id}`)
   await expect(page.getByText(sessionA.title).first()).toBeVisible()
   await page.keyboard.press("Control+,")
-  const autoAccept = page.locator(".settings-v2-dialog").locator('[data-action="settings-auto-accept-permissions"]')
-  await autoAccept.locator('[data-slot="switch-control"]').click()
-  await expect(autoAccept.getByRole("switch")).toBeChecked()
-  await expect
-    .poll(() =>
-      permissionRequests.some((request) => {
-        const url = new URL(request)
-        return url.origin === serverA && url.searchParams.get("directory") === directoryA
-      }),
-    )
-    .toBe(true)
+  const autonomous = page.locator(".settings-v2-dialog").locator('[data-action="settings-autonomous-mode"]')
+  await expect(autonomous.getByRole("switch")).toBeEnabled()
+  await autonomous.locator('[data-slot="switch-control"]').click()
+  await expect(autonomous.getByRole("switch")).toBeChecked()
+  expect(autonomyWrites).toEqual([
+    { origin: serverA, directory: directoryA, body: { on: true, sessionID: sessionA.id } },
+  ])
   await page.keyboard.press("Escape")
 
   await page.locator(`[data-titlebar-tab-slot]:has(a[href="${hrefB}"])`).click()
   await expect(page).toHaveURL(new RegExp(`${hrefB.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`))
   await expect(page.getByText(sessionB.title).first()).toBeVisible()
-  await transport.waitForConnection()
-
-  await transport.send({
-    directory: directoryA,
-    payload: {
-      id: "event-permission-background-a",
-      type: "permission.asked",
-      properties: {
-        id: "permission-background-a",
-        sessionID: sessionA.id,
-        permission: "bash",
-        patterns: ["git status"],
-        metadata: {},
-        always: [],
-      },
-    },
-  })
-
-  await expect
-    .poll(() => permissionResponses)
-    .toEqual([
-      {
-        origin: serverA,
-        directory: directoryA,
-        sessionID: sessionA.id,
-        permissionID: "permission-background-a",
-        body: { response: "once" },
-      },
-    ])
-
-  await transport.send({
-    directory: directoryA,
-    payload: {
-      id: "event-permission-background-a-child",
-      type: "permission.asked",
-      properties: {
-        id: "permission-background-a-child",
-        sessionID: childSessionA.id,
-        permission: "bash",
-        patterns: ["git diff"],
-        metadata: {},
-        always: [],
-      },
-    },
-  })
-
-  await expect
-    .poll(() => permissionResponses)
-    .toEqual([
-      {
-        origin: serverA,
-        directory: directoryA,
-        sessionID: sessionA.id,
-        permissionID: "permission-background-a",
-        body: { response: "once" },
-      },
-      {
-        origin: serverA,
-        directory: directoryA,
-        sessionID: childSessionA.id,
-        permissionID: "permission-background-a-child",
-        body: { response: "once" },
-      },
-    ])
+  await page.keyboard.press("Control+,")
+  await expect(autonomous.getByRole("switch")).toBeEnabled()
+  await expect(autonomous.getByRole("switch")).not.toBeChecked()
+  expect(autonomyWrites).toHaveLength(1)
 })
 
-type PermissionResponse = {
+type AutonomyWrite = {
   origin: string
   directory?: string
-  sessionID: string
-  permissionID: string
   body: unknown
 }
 
@@ -161,7 +83,9 @@ async function configureServers(page: Page, tabs: { type: "session"; server: str
   )
 }
 
-async function mockServers(page: Page, permissionRequests: string[], permissionResponses: PermissionResponse[] = []) {
+async function mockServers(page: Page, autonomyWrites: AutonomyWrite[]) {
+  // Only the server holds the mode, per server and session: what the app shows has to come from here.
+  const autonomous = new Set<string>()
   await page.route("**/*", async (route) => {
     const url = new URL(route.request().url())
     if (url.origin !== serverA && url.origin !== serverB) return route.fallback()
@@ -169,18 +93,26 @@ async function mockServers(page: Page, permissionRequests: string[], permissionR
     const directory = remote ? directoryB : directoryA
     const sessions = remote ? [sessionB] : [sessionA, childSessionA]
     const requestDirectory = url.searchParams.get("directory")
-    const response = url.pathname.match(/^\/session\/([^/]+)\/permissions\/([^/]+)$/)
-    if (route.request().method() === "POST" && response) {
-      permissionResponses.push({
-        origin: url.origin,
-        directory: requestDirectory ?? undefined,
-        sessionID: response[1]!,
-        permissionID: response[2]!,
-        body: route.request().postDataJSON(),
-      })
-      return json(route, true)
-    }
     if (requestDirectory && requestDirectory !== directory) return json(route, { name: "InvalidDirectory" }, 500)
+    if (url.pathname === "/autonomy/mode" && route.request().method() === "PUT") {
+      const body = route.request().postDataJSON() as { on: boolean; sessionID: string }
+      autonomyWrites.push({ origin: url.origin, directory: requestDirectory ?? undefined, body })
+      if (body.on) autonomous.add(`${url.origin}/${body.sessionID}`)
+      if (!body.on) autonomous.delete(`${url.origin}/${body.sessionID}`)
+      return json(route, { on: body.on, externalChange: [] })
+    }
+    const autonomySession = url.pathname.match(/^\/session\/([^/]+)\/autonomy$/)
+    if (autonomySession)
+      return json(route, {
+        rootID: autonomySession[1],
+        on: autonomous.has(`${url.origin}/${autonomySession[1]}`),
+        externalChange: [],
+        open: 0,
+        lines: [],
+        intact: true,
+        problems: [],
+        notFromHere: 0,
+      })
     if (url.pathname === "/global/event" || url.pathname === "/event" || url.pathname === "/api/event")
       return sse(route)
     if (url.pathname === "/global/health") return json(route, { healthy: true })
@@ -216,11 +148,11 @@ async function mockServers(page: Page, permissionRequests: string[], permissionR
     if (/^\/session\/[^/]+$/.test(url.pathname)) return json(route, { name: "NotFoundError" }, 404)
     if (/^\/session\/[^/]+\/message$/.test(url.pathname)) return json(route, [])
     if (/^\/session\/[^/]+\/(children|todo|diff)$/.test(url.pathname)) return json(route, [])
-    if (url.pathname === "/permission") {
-      permissionRequests.push(url.toString())
-      return json(route, [])
-    }
-    if (["/skill", "/command", "/lsp", "/formatter", "/question", "/vcs/diff", "/pty/shells"].includes(url.pathname))
+    if (
+      ["/permission", "/skill", "/command", "/lsp", "/formatter", "/question", "/vcs/diff", "/pty/shells"].includes(
+        url.pathname,
+      )
+    )
       return json(route, [])
     if (["/global/config", "/config", "/provider/auth", "/mcp"].includes(url.pathname)) return json(route, {})
     if (url.pathname === "/provider") return json(route, provider(remote ? "server-b" : "server-a"))

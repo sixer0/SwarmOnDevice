@@ -1,12 +1,13 @@
 import { useNavigate } from "@solidjs/router"
+import { createEffect, on } from "solid-js"
 import { DialogProjectMemory, createProjectMemoryNotices } from "@/components/project-memory"
+import { createAutonomousModeController } from "@/components/settings-v2/general-controllers"
 import { useCommand, type CommandOption } from "@/context/command"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { previewSelectedLines } from "@opencode-ai/session-ui/pierre/selection-bridge"
 import { useFile, selectionFromLines, type FileSelection, type SelectedLineRange } from "@/context/file"
 import { useLanguage } from "@/context/language"
 import { useLayout } from "@/context/layout"
-import { usePermission } from "@/context/permission"
 import { usePrompt } from "@/context/prompt"
 import { useSDK } from "@/context/sdk"
 import { useSettings } from "@/context/settings"
@@ -46,7 +47,6 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
   const dialog = useDialog()
   const file = useFile()
   const language = useLanguage()
-  const permission = usePermission()
   const prompt = usePrompt()
   const sdk = useSDK()
   const settings = useSettings()
@@ -146,11 +146,18 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
   const mcpCommand = withCategory(language.t("command.category.mcp"))
   const permissionsCommand = withCategory(language.t("command.category.permissions"))
 
-  const isAutoAcceptActive = () => {
-    const sessionID = params.id
-    if (sessionID) return permission.isAutoAccepting(sessionID, sdk().directory)
-    return permission.isAutoAcceptingDirectory(sdk().directory)
-  }
+  const autonomousMode = createAutonomousModeController({
+    sessionID: () => params.id,
+    directory: () => sdk().directory,
+  })
+  // Settings and the add menu change the mode too. Opening any dialog, the palette included, reads it again.
+  createEffect(
+    on(
+      () => dialog.active,
+      () => void autonomousMode.refresh(),
+      { defer: true },
+    ),
+  )
 
   const exportSession = async () => {
     const sessionID = params.id
@@ -228,24 +235,6 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
       () => import("@/components/dialog-select-mcp"),
       (x) => dialog.show(() => <x.DialogSelectMcp />),
     )
-  }
-
-  const toggleAutoAccept = () => {
-    const sessionID = params.id
-    if (sessionID) permission.toggleAutoAccept(sessionID, sdk().directory)
-    else permission.toggleAutoAcceptDirectory(sdk().directory)
-
-    const active = sessionID
-      ? permission.isAutoAccepting(sessionID, sdk().directory)
-      : permission.isAutoAcceptingDirectory(sdk().directory)
-    showToast({
-      title: active
-        ? language.t("toast.permissions.autoaccept.on.title")
-        : language.t("toast.permissions.autoaccept.off.title"),
-      description: active
-        ? language.t("toast.permissions.autoaccept.on.description")
-        : language.t("toast.permissions.autoaccept.off.description"),
-    })
   }
 
   const undo = async () => {
@@ -567,13 +556,13 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
 
   const permissionsCmds = () => [
     permissionsCommand({
-      id: "permissions.autoaccept",
-      title: isAutoAcceptActive()
-        ? language.t("command.permissions.autoaccept.disable")
-        : language.t("command.permissions.autoaccept.enable"),
+      id: "permissions.autonomous",
+      title: autonomousMode.accepting()
+        ? language.t("command.permissions.autonomous.disable")
+        : language.t("command.permissions.autonomous.enable"),
       keybind: "mod+shift+a",
       disabled: false,
-      onSelect: toggleAutoAccept,
+      onSelect: () => void autonomousMode.toggle(),
     }),
   ]
 

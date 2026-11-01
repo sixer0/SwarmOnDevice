@@ -1,8 +1,16 @@
 import { describe, expect, test, vi } from "bun:test"
-import { createRoot } from "solid-js"
+import { createRoot, createSignal } from "solid-js"
 import { ServerConnection } from "@/context/server"
+import { dict as en } from "@/i18n/en"
+import { dict as id } from "@/i18n/id"
 import { createShellOptions, createSoundPreviewController } from "./general-controller-behavior"
-import { createKnowledgeLibraryToggle, knowledgeLibraryCommit } from "./general-controllers"
+import {
+  autonomousToast,
+  createAutonomousToggle,
+  createKnowledgeLibraryToggle,
+  knowledgeLibraryCommit,
+  type AutonomousScope,
+} from "./general-controllers"
 
 describe("settings v2 controllers", () => {
   test("normalizes shell names and preserves an unavailable configured shell", () => {
@@ -51,6 +59,294 @@ describe("settings v2 controllers", () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  describe("autonomous mode", () => {
+    const directory = "/work/proj"
+
+    // The same answer the server gives: a session's own value, or else its folder's.
+    const server = (input: { sessions?: Record<string, boolean>; folders?: string[]; failWrites?: boolean } = {}) => {
+      const sessions = new Map(Object.entries(input.sessions ?? {}))
+      const folders = new Set(input.folders ?? [])
+      const calls = { reads: [] as AutonomousScope[], writes: [] as [AutonomousScope, boolean][] }
+      const current = (scope: AutonomousScope) =>
+        (scope.sessionID ? sessions.get(scope.sessionID) : undefined) ?? folders.has(scope.directory)
+      return {
+        sessions,
+        folders,
+        calls,
+        read: async (scope: AutonomousScope) => {
+          calls.reads.push(scope)
+          return current(scope)
+        },
+        write: async (scope: AutonomousScope, on: boolean) => {
+          calls.writes.push([scope, on])
+          if (input.failWrites) throw new Error("AutonomyWriteError")
+          if (scope.sessionID) sessions.set(scope.sessionID, on)
+          if (!scope.sessionID && on) folders.add(scope.directory)
+          if (!scope.sessionID && !on) folders.delete(scope.directory)
+          return current(scope)
+        },
+      }
+    }
+
+    const toggle = (
+      scope: () => AutonomousScope | undefined,
+      backend: Pick<ReturnType<typeof server>, "read" | "write">,
+    ) => {
+      const seen = { changed: [] as boolean[], failed: 0 }
+      const controller = createRoot(() =>
+        createAutonomousToggle({
+          scope,
+          read: backend.read,
+          write: backend.write,
+          changed: (on) => seen.changed.push(on),
+          failed: () => seen.failed++,
+        }),
+      )
+      void controller.load()
+      return { seen, controller }
+    }
+
+    const settled = async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    }
+
+    test("in a session reads and changes that session on the server", async () => {
+      const backend = server({ sessions: { ses_a: true } })
+      const { seen, controller } = toggle(() => ({ sessionID: "ses_a", directory }), backend)
+      expect(controller.enabled()).toBe(false)
+      await settled()
+
+      expect(backend.calls.reads).toEqual([{ sessionID: "ses_a", directory }])
+      expect(controller.accepting()).toBe(true)
+      expect(controller.enabled()).toBe(true)
+
+      await controller.set(false)
+
+      expect(backend.calls.writes).toEqual([[{ sessionID: "ses_a", directory }, false]])
+      expect(backend.sessions.get("ses_a")).toBe(false)
+      expect(controller.accepting()).toBe(false)
+      expect(seen.changed).toEqual([false])
+    })
+
+    test("without a session falls back to the folder, and a new session there inherits it", async () => {
+      const backend = server()
+      const folder = toggle(() => ({ directory }), backend)
+      await settled()
+      expect(folder.controller.accepting()).toBe(false)
+
+      await folder.controller.set(true)
+
+      expect(backend.calls.writes).toEqual([[{ directory }, true]])
+      expect(backend.folders.has(directory)).toBe(true)
+      expect(folder.controller.accepting()).toBe(true)
+
+      const started = toggle(() => ({ sessionID: "ses_new", directory }), backend)
+      await settled()
+      expect(started.controller.accepting()).toBe(true)
+      expect(backend.sessions.has("ses_new")).toBe(false)
+    })
+
+    test("on Home stays off, says why, and never reaches the server", async () => {
+      const backend = server({ folders: [directory] })
+      const { seen, controller } = toggle(() => undefined, backend)
+      await settled()
+
+      expect(controller.available()).toBe(false)
+      expect(controller.enabled()).toBe(false)
+      expect(controller.accepting()).toBe(false)
+      expect(controller.description()).toBe("settings.general.row.autonomous.disabledReason")
+
+      await controller.set(true)
+      await controller.toggle()
+
+      expect(backend.calls.reads).toEqual([])
+      expect(backend.calls.writes).toEqual([])
+      expect(seen).toEqual({ changed: [], failed: 0 })
+    })
+
+    test("shows what the server answered, not what was asked for", async () => {
+      const backend = server()
+      const { controller } = toggle(() => ({ sessionID: "ses_a", directory }), {
+        read: backend.read,
+        write: async () => false,
+      })
+      await settled()
+
+      await controller.set(true)
+
+      expect(controller.accepting()).toBe(false)
+    })
+
+    test("keeps the value and reports once when the server refuses the change", async () => {
+      const backend = server({ sessions: { ses_a: true }, failWrites: true })
+      const { seen, controller } = toggle(() => ({ sessionID: "ses_a", directory }), backend)
+      await settled()
+
+      await controller.set(false)
+
+      expect(controller.accepting()).toBe(true)
+      expect(controller.enabled()).toBe(true)
+      expect(seen).toEqual({ changed: [], failed: 1 })
+    })
+
+    test("reads again after a refused change, because stopping holds even when saving failed", async () => {
+      const backend = server({ sessions: { ses_a: true } })
+      const { seen, controller } = toggle(() => ({ sessionID: "ses_a", directory }), {
+        read: backend.read,
+        write: async (scope, on) => {
+          await backend.write(scope, on)
+          throw new Error("AutonomyWriteError")
+        },
+      })
+      await settled()
+      expect(controller.accepting()).toBe(true)
+
+      await controller.set(false)
+
+      expect(controller.accepting()).toBe(false)
+      expect(controller.enabled()).toBe(true)
+      expect(seen).toEqual({ changed: [], failed: 1 })
+    })
+
+    test("does not claim a state it could not read", async () => {
+      const backend = server()
+      const { seen, controller } = toggle(() => ({ sessionID: "ses_a", directory }), {
+        read: () => Promise.reject(new Error("offline")),
+        write: backend.write,
+      })
+      await settled()
+
+      expect(controller.accepting()).toBe(false)
+      expect(controller.enabled()).toBe(false)
+      expect(controller.description()).toBe("common.requestFailed")
+      expect(seen.failed).toBe(0)
+    })
+
+    test("the shortcut flips what the server holds now, not an older view", async () => {
+      const backend = server({ sessions: { ses_a: false } })
+      const { controller } = toggle(() => ({ sessionID: "ses_a", directory }), backend)
+      await settled()
+      expect(controller.accepting()).toBe(false)
+
+      // The add menu turned it on in the meantime.
+      backend.sessions.set("ses_a", true)
+      await controller.toggle()
+
+      expect(backend.calls.writes).toEqual([[{ sessionID: "ses_a", directory }, false]])
+      expect(controller.accepting()).toBe(false)
+    })
+
+    test("refresh picks up a change made elsewhere", async () => {
+      const backend = server({ sessions: { ses_a: false } })
+      const { controller } = toggle(() => ({ sessionID: "ses_a", directory }), backend)
+      await settled()
+
+      backend.sessions.set("ses_a", true)
+      await controller.refresh()
+
+      expect(controller.accepting()).toBe(true)
+    })
+
+    test("ignores a second change while the first is pending", async () => {
+      let settle = (_: boolean) => {}
+      const sent: boolean[] = []
+      const backend = server()
+      const { controller } = toggle(() => ({ sessionID: "ses_a", directory }), {
+        read: backend.read,
+        write: (_, on) => {
+          sent.push(on)
+          return new Promise<boolean>((resolve) => (settle = resolve))
+        },
+      })
+      await settled()
+
+      const first = controller.set(true)
+      expect(controller.enabled()).toBe(false)
+      await controller.set(false)
+      await controller.toggle()
+      settle(true)
+      await first
+
+      expect(sent).toEqual([true])
+      expect(controller.accepting()).toBe(true)
+      expect(controller.enabled()).toBe(true)
+    })
+
+    test("drops an answer that belongs to the previous session", async () => {
+      const answers = new Map<string, (on: boolean) => void>()
+      const [scope, setScope] = createSignal<AutonomousScope>({ sessionID: "ses_a", directory })
+      const { controller } = toggle(scope, {
+        read: (where) => new Promise<boolean>((resolve) => answers.set(where.sessionID ?? "", resolve)),
+        write: async (_, on) => on,
+      })
+      await settled()
+
+      setScope({ sessionID: "ses_b", directory })
+      void controller.load()
+      await settled()
+      answers.get("ses_a")?.(true)
+      await settled()
+      expect(controller.accepting()).toBe(false)
+      expect(controller.enabled()).toBe(false)
+
+      answers.get("ses_b")?.(false)
+      await settled()
+      expect(controller.accepting()).toBe(false)
+      expect(controller.enabled()).toBe(true)
+    })
+
+    test("forgets the previous session's value as soon as the session changes", async () => {
+      const backend = server({ sessions: { ses_a: true } })
+      const [scope, setScope] = createSignal<AutonomousScope>({ sessionID: "ses_a", directory })
+      const { controller } = toggle(scope, {
+        read: (where) => (where.sessionID === "ses_a" ? backend.read(where) : new Promise<boolean>(() => {})),
+        write: backend.write,
+      })
+      await settled()
+      expect(controller.accepting()).toBe(true)
+
+      setScope({ sessionID: "ses_b", directory })
+      void controller.load()
+      await settled()
+
+      expect(controller.accepting()).toBe(false)
+      expect(controller.enabled()).toBe(false)
+    })
+
+    test("toast turning on carries the whole label, turning off only the title", () => {
+      const t = (key: keyof typeof en) => en[key]
+      expect(autonomousToast(t, true)).toEqual({
+        title: en["toast.permissions.autonomous.on.title"],
+        description: en["settings.general.row.autonomous.description"],
+      })
+      expect(autonomousToast(t, false)).toEqual({ title: en["toast.permissions.autonomous.off.title"] })
+    })
+
+    test("the label states the S-7 sentence in both languages", () => {
+      expect(en["settings.general.row.autonomous.description"]).toContain(
+        "Tests and builds run with your account. Swarm can't limit what the code inside them does.",
+      )
+      expect(id["settings.general.row.autonomous.description"]).toContain(
+        "Test dan build berjalan dengan akun Anda. Swarm tidak dapat membatasi apa yang dilakukan kode di dalamnya.",
+      )
+    })
+
+    test("the settings row is one row with the agreed action, on the server's state alone", async () => {
+      const general = await Bun.file(new URL("./general.tsx", import.meta.url)).text()
+      const legacy = await Bun.file(new URL("../settings-general.tsx", import.meta.url)).text()
+      const palette = await Bun.file(new URL("../../pages/session/use-session-commands.tsx", import.meta.url)).text()
+
+      expect(general.match(/data-action="settings-autonomous-mode"/g)?.length).toBe(1)
+      expect(legacy.match(/data-action="settings-autonomous-mode"/g)?.length).toBe(1)
+      expect(palette).toContain('keybind: "mod+shift+a"')
+      ;[general, legacy, palette].forEach((source) => {
+        expect(source).not.toContain("usePermission")
+        expect(source).not.toContain("autoaccept")
+        expect(source).toContain("createAutonomousModeController")
+      })
+    })
   })
 
   describe("knowledge library row", () => {
