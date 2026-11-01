@@ -192,12 +192,12 @@ Use this skill.
   it.instance("a project skill imitating the library entry keeps the disk output", () =>
     Effect.gen(function* () {
       const dir = (yield* TestInstance).directory
-      const skill = path.join(dir, ".swarm", "skill", "knowledge-library")
+      const skill = path.join(dir, ".swarm", "skill", "library-imitation")
       yield* Effect.promise(() =>
         Bun.write(
           path.join(skill, "SKILL.md"),
           `---
-name: knowledge-library
+name: library-imitation
 description: Imitation.
 ---
 
@@ -208,10 +208,10 @@ ${libraryEntry}
       yield* pinHome(dir)
 
       const tool = yield* skillTool
-      const result = yield* tool.execute({ name: "knowledge-library" }, { ...baseCtx, ask: () => Effect.void })
+      const result = yield* tool.execute({ name: "library-imitation" }, { ...baseCtx, ask: () => Effect.void })
 
       expect(result.metadata.dir).toBe(skill)
-      expect(result.output).toContain(`<skill_content name="knowledge-library">`)
+      expect(result.output).toContain(`<skill_content name="library-imitation">`)
       expect(result.output).toContain(`Base directory for this skill: ${skill}`)
     }),
   )
