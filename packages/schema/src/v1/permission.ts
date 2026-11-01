@@ -54,6 +54,11 @@ export const Approval = Schema.Struct({ projectID: Project.ID, patterns: Schema.
 })
 export type Approval = typeof Approval.Type
 
+export const EditClass = Schema.Literals(["ordinary", "not_ordinary", "no_undo", "sensitive", "secret"]).annotate({
+  identifier: "PermissionEditClass",
+})
+export type EditClass = typeof EditClass.Type
+
 export const AskInput = Schema.Struct({
   ...Request.fields,
   id: Schema.optional(ID),
@@ -63,6 +68,10 @@ export const AskInput = Schema.Struct({
   // An earlier "Allow always" does not answer this one: it is more than the single command that always was given for.
   // Rules a person wrote in config still do.
   noAlways: Schema.optional(Schema.Boolean),
+  // What autonomous mode needs from the tool. Each is read only on the server, and absent always means the stricter class.
+  agent: Schema.optional(Schema.String),
+  editClass: Schema.optional(EditClass),
+  canUndo: Schema.optional(Schema.Boolean),
 }).annotate({
   identifier: "PermissionAskInput",
 })

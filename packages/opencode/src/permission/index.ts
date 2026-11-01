@@ -3,10 +3,15 @@ import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { ConfigPermissionV1 } from "@opencode-ai/core/v1/config/permission"
 import { InstanceState } from "@/effect/instance-state"
 import { Wildcard } from "@opencode-ai/core/util/wildcard"
-import { Deferred, Effect, Layer, Context } from "effect"
+import { Deferred, Effect, Layer, Context, Option } from "effect"
 import os from "os"
+import path from "path"
 import { PermissionV1 } from "@opencode-ai/core/v1/permission"
 import { EventV2Bridge } from "@/event-v2-bridge"
+import { Session } from "@/session/session"
+import type { SessionID } from "@/session/schema"
+import { Autonomy } from "./autonomy"
+import { AutonomyTable } from "./autonomy-table"
 import { Unattended } from "./unattended"
 
 export const Event = PermissionV1.Event
@@ -70,10 +75,37 @@ export function evaluate(permission: string, pattern: string, ...rulesets: Permi
 
 export class Service extends Context.Service<Service, Interface>()("@opencode/Permission") {}
 
+/** One model's answer on one class P request. It settles that call only, and nothing it says can change a class. */
+export interface Decided {
+  readonly decision: "allow" | "reject" | "defer"
+  readonly decidedBy: Extract<Autonomy.AuditEntry, { type: "decision" }>["decidedBy"]
+  readonly reason?: string
+  readonly memo?: boolean
+  readonly latencyMs?: number
+  readonly costUsd?: number
+}
+
+/** Settles class P. Until a real one is in place, every such request is held. */
+export class Decider extends Context.Service<
+  Decider,
+  { readonly decide: (input: PermissionV1.AskInput, root: SessionID) => Effect.Effect<Decided> }
+>()("@opencode/PermissionDecider") {}
+
+const UNDECIDED: Decided = { decision: "defer", decidedBy: "system:decider_unavailable" }
+
+const held = (category: AutonomyTable.HeldCategory): AutonomyTable.Verdict => ({
+  class: "D",
+  decidedBy: "gate",
+  category,
+})
+
 const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const events = yield* EventV2Bridge.Service
+    const sessions = yield* Session.Service
+    const autonomy = yield* Autonomy.Service
+    const decider = yield* Decider
     const state = yield* InstanceState.make<State>(
       Effect.fn("Permission.state")(function* (ctx) {
         void ctx
@@ -97,10 +129,132 @@ const layer = Layer.effect(
       }),
     )
 
+    const rootOf = (sessionID: SessionID): Effect.Effect<{ id: SessionID; directory?: string }> =>
+      sessions.get(sessionID).pipe(
+        Effect.flatMap((session) => (session.parentID ? rootOf(session.parentID) : Effect.succeed(session))),
+        Effect.catchCause(() => Effect.succeed({ id: sessionID })),
+      )
+
+    /** What autonomous mode does with this request. Undefined when its root is not in the mode, and nothing changes then. */
+    const gate = Effect.fn("Permission.gate")(function* (
+      input: PermissionV1.AskInput,
+      requestID: PermissionV1.ID,
+      userCatchAll: boolean,
+    ) {
+      const instance = yield* InstanceState.context
+      const root = yield* rootOf(input.sessionID)
+      const directory = root.directory ?? instance.directory
+      yield* autonomy.markMode({ root: root.id, directory })
+      const check = yield* autonomy.check({ root: root.id, directory })
+      if (!check.on) return undefined
+
+      // Undefined when it could not be read, and a lineage nobody can place is held to the plan agent's limits.
+      const last = yield* sessions
+        .findMessage(root.id, (message) => message.info.role === "user")
+        .pipe(
+          Effect.map(Option.getOrUndefined),
+          Effect.map((message) => ({ agent: message?.info.role === "user" ? message.info.agent : undefined })),
+          Effect.catchCause(() => Effect.succeed(undefined)),
+        )
+      const folder = yield* autonomy
+        .folderState(instance.directory)
+        .pipe(Effect.catchCause(() => Effect.succeed(undefined)))
+      const workdir = input.metadata.workdir
+      const cwd = typeof workdir === "string" && path.isAbsolute(workdir) ? workdir : undefined
+      const canUndo = input.canUndo ?? false
+      const table = yield* Effect.try({
+        // `harmless` stays out: such a call only gets here when a rule naming its permission asked about it.
+        try: () =>
+          AutonomyTable.classify({
+            permission: input.permission,
+            patterns: input.patterns,
+            metadata: input.metadata,
+            instance,
+            cwd: cwd ?? instance.directory,
+            canUndo,
+            folder,
+            editClass: input.editClass,
+            plan: input.agent === "plan" || last === undefined || last.agent === "plan",
+            rule: userCatchAll ? "user_catch_all" : undefined,
+          }),
+        catch: String,
+      }).pipe(
+        Effect.catch((error) =>
+          Effect.logError("could not classify a permission request", { permission: input.permission, error }).pipe(
+            Effect.as(held("not_routine")),
+          ),
+        ),
+      )
+      // Relative paths in a command mean nothing until its real folder is known, so no decider sees it without one.
+      const placed = table.class === "P" && input.permission === "bash" && !cwd ? held("not_routine") : table
+      const verdict = Autonomy.afterCheck(placed.class, check) === placed.class ? placed : held("not_routine")
+      const decided =
+        verdict.class === "P"
+          ? yield* decider.decide(input, root.id).pipe(Effect.catchCause(() => Effect.succeed(UNDECIDED)))
+          : undefined
+      const category =
+        verdict.class === "P" && decided?.decision !== "allow" && decided?.decision !== "reject"
+          ? ("decider_unavailable" as const)
+          : verdict.category
+      const decision =
+        verdict.class === "P"
+          ? decided?.decision === "allow" || decided?.decision === "reject"
+            ? decided.decision
+            : ("defer" as const)
+          : verdict.class === "A"
+            ? ("allow" as const)
+            : verdict.class === "B"
+              ? ("ask" as const)
+              : verdict.class === "X"
+                ? ("reject" as const)
+                : ("defer" as const)
+
+      // An ordinary edit never asks in any mode, and shows up as an edit. Everything else leaves a line.
+      if (verdict.class === "A" && input.editClass === "ordinary") return { class: verdict.class, decision, category }
+      const written = yield* autonomy
+        .record(root.id, {
+          type: "decision",
+          sessionID: input.sessionID,
+          requestID,
+          messageID: input.tool?.messageID,
+          callID: input.tool?.callID,
+          agent: input.agent ?? "unknown",
+          rootAgent: last?.agent,
+          directory,
+          permission: input.permission,
+          patterns: input.patterns,
+          class: verdict.class,
+          category,
+          risk: typeof input.metadata.risk === "string" ? input.metadata.risk : null,
+          canUndo,
+          decidedBy: decided?.decidedBy ?? (verdict.decidedBy === "person" ? "person" : "gate"),
+          decision,
+          reason: decided?.reason,
+          memo: decided?.memo,
+          latencyMs: decided?.latencyMs,
+          costUsd: decided?.costUsd,
+        })
+        .pipe(
+          Effect.as(true),
+          Effect.catch((error) =>
+            Effect.logError("could not record a permission decision", {
+              requestID,
+              decision,
+              error: error.message,
+            }).pipe(Effect.as(false)),
+          ),
+        )
+      // Nothing runs without a person unless the decision to let it is on record. Refusing or holding needs no such line.
+      if (!written && decision === "allow")
+        return { class: "D" as const, decision: "defer" as const, category: "not_routine" as const }
+      return { class: verdict.class, decision, category }
+    })
+
     const ask = Effect.fn("Permission.ask")(function* (input: PermissionV1.AskInput) {
       const { approved, away, grants, pending } = yield* InstanceState.get(state)
       const { ruleset, harmless, noAlways, ...request } = input
       let needsAsk = false
+      let userCatchAll = false
 
       for (const pattern of request.patterns) {
         const rule = evaluate(request.permission, pattern, ruleset, noAlways ? [] : approved)
@@ -115,6 +269,7 @@ const layer = Layer.effect(
         // The shipped baseline asks about anything it does not name. That is for what could hurt, and this cannot.
         // A person who wrote "*": "ask" themselves meant every call, and that is not this rule.
         if (harmless && isShippedCatchAll(rule)) continue
+        if (rule.permission === "*" && rule.pattern === "*" && !isShippedCatchAll(rule)) userCatchAll = true
         needsAsk = true
       }
 
@@ -130,11 +285,15 @@ const layer = Layer.effect(
         return yield* new PermissionV1.AwayError()
 
       const id = request.id ?? PermissionV1.ID.ascending()
+      const gated = yield* gate(input, id, userCatchAll)
+      if (gated?.decision === "allow") return
+      // Refused by what it is, so no person is asked. Not a rejection: that error ends the run, and this one reports back.
+      if (gated?.class === "X") return yield* new PermissionV1.DeniedError({ ruleset: [] })
+      if (gated?.decision === "reject") return yield* new PermissionV1.RejectedError()
+
       // A repeating call stops the run on purpose until a person looks. Carrying on would defeat that guard.
       // The same goes for a spend limit: nobody being there is exactly when it must hold.
-      const wait = needsPerson(request.permission)
-        ? undefined
-        : Unattended.wait(away.has(request.sessionID))
+      const wait = needsPerson(request.permission) ? undefined : Unattended.wait(away.has(request.sessionID))
       const asked: PermissionV1.Request = {
         id,
         sessionID: request.sessionID,
@@ -148,6 +307,15 @@ const layer = Layer.effect(
       yield* Effect.logInfo("asking", { id, permission: info.permission })
 
       const deferred = yield* Deferred.make<void, PermissionV1.RejectedError | PermissionV1.CorrectedError>()
+      // Held for the person with the agent already released, whatever the unattended wait is set to. An "always" on one
+      // of these would open more than the single call anyone looked at, so it has nothing to apply to.
+      if (gated?.decision === "defer") {
+        const moved: PermissionV1.Request = { ...asked, always: [], movedOnAt: Date.now() }
+        pending.set(id, { info: moved, deferred, noAlways })
+        yield* Effect.logInfo("held", { id, permission: moved.permission, category: gated.category })
+        yield* events.publish(Event.Asked, moved)
+        return yield* new PermissionV1.AwayError()
+      }
       pending.set(id, { info, deferred, noAlways })
       yield* events.publish(Event.Asked, info)
       const moveOn = Effect.gen(function* () {
@@ -315,6 +483,16 @@ export function visibleTools<T>(tools: Record<string, T>, ruleset: PermissionV1.
   return Object.fromEntries(Object.entries(tools).filter(([name]) => !hidden.has(name)))
 }
 
-export const node = LayerNode.make({ service: Service, layer: layer, deps: [EventV2Bridge.node] })
+export const deciderNode = LayerNode.make({
+  service: Decider,
+  layer: Layer.succeed(Decider, Decider.of({ decide: () => Effect.succeed(UNDECIDED) })),
+  deps: [],
+})
+
+export const node = LayerNode.make({
+  service: Service,
+  layer: layer,
+  deps: [EventV2Bridge.node, Session.node, Autonomy.node, deciderNode],
+})
 
 export * as Permission from "."
