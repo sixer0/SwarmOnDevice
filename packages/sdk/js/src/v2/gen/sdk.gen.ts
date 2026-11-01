@@ -161,6 +161,10 @@ import type {
   ProjectInitGitResponses,
   ProjectListErrors,
   ProjectListResponses,
+  ProjectTrustDecideErrors,
+  ProjectTrustDecideResponses,
+  ProjectTrustErrors,
+  ProjectTrustResponses,
   ProjectUpdateErrors,
   ProjectUpdateResponses,
   PromptInput,
@@ -3240,6 +3244,73 @@ export class Project extends HeyApiClient {
       url: "/project/current",
       ...options,
       ...params,
+    })
+  }
+
+  /**
+   * Get folder trust
+   *
+   * What this folder wants to run or change, and whether a person has decided. A folder with nothing to decide is `clean`.
+   */
+  public trust<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<ProjectTrustResponses, ProjectTrustErrors, ThrowOnError>({
+      url: "/project/trust",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Decide folder trust
+   *
+   * Record a person's answer. `trust` is kept in the user's own state and reloads the folder, so what it asks for loads now; `later` lasts until the server restarts.
+   */
+  public trustDecide<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+      decision?: "trust" | "later"
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "decision" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<ProjectTrustDecideResponses, ProjectTrustDecideErrors, ThrowOnError>({
+      url: "/project/trust",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
     })
   }
 

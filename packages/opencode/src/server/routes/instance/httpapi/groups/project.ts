@@ -1,5 +1,6 @@
 import { Project } from "@/project/project"
 import { ProjectV2 } from "@opencode-ai/core/project"
+import { ProjectTrust } from "@opencode-ai/core/project/trust"
 import { Schema } from "effect"
 import { HttpApi, HttpApiEndpoint, HttpApiError, HttpApiGroup, OpenApi } from "effect/unstable/httpapi"
 import { ProjectNotFoundError } from "../errors"
@@ -14,6 +15,8 @@ const UpdatePayload = Schema.Struct({
   icon: Schema.optional(Project.Info.fields.icon),
   commands: Schema.optional(Project.Info.fields.commands),
 })
+
+const TrustPayload = Schema.Struct({ decision: ProjectTrust.Decision })
 
 export const ProjectApi = HttpApi.make("project")
   .add(
@@ -37,6 +40,30 @@ export const ProjectApi = HttpApi.make("project")
             identifier: "project.current",
             summary: "Get current project",
             description: "Retrieve the currently active project that Swarm is working with.",
+          }),
+        ),
+        HttpApiEndpoint.get("trust", `${root}/trust`, {
+          query: WorkspaceRoutingQuery,
+          success: described(ProjectTrust.Status, "Whether this folder's own code and settings may load"),
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "project.trust",
+            summary: "Get folder trust",
+            description:
+              "What this folder wants to run or change, and whether a person has decided. A folder with nothing to decide is `clean`.",
+          }),
+        ),
+        HttpApiEndpoint.post("trustDecide", `${root}/trust`, {
+          query: WorkspaceRoutingQuery,
+          payload: TrustPayload,
+          success: described(ProjectTrust.Status, "The folder's trust after the decision"),
+          error: [HttpApiError.BadRequest],
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "project.trustDecide",
+            summary: "Decide folder trust",
+            description:
+              "Record a person's answer. `trust` is kept in the user's own state and reloads the folder, so what it asks for loads now; `later` lasts until the server restarts.",
           }),
         ),
         HttpApiEndpoint.post("initGit", `${root}/git/init`, {

@@ -1,3 +1,4 @@
+import { ProjectTrust } from "@opencode-ai/core/project/trust"
 import { needsPerson } from "@opencode-ai/core/permission/needs-person"
 import type { PermissionV1 } from "@opencode-ai/core/v1/permission"
 import { FSUtil } from "@opencode-ai/core/fs-util"
@@ -349,6 +350,12 @@ export const RunCommand = effectCmd({
           process.exit(1)
         }
       })()
+      // No person here to ask, so the folder stays as it is. Attached, the remote server decides and this folder may not exist.
+      if (!args.attach && directory && ["ask", "later"].includes(ProjectTrust.status(directory).state)) {
+        process.stderr.write(
+          `swarm: this folder's own plugins, tools, MCP servers and permission rules are not loaded because it is not trusted. To allow them, run: swarm trust ${directory}\n`,
+        )
+      }
       const attachHeaders = args.attach
         ? ServerAuth.headers({ password: args.password, username: args.username })
         : undefined

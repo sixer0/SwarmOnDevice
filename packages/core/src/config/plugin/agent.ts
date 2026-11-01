@@ -7,6 +7,7 @@ import { AgentV2 } from "../../agent"
 import { Config } from "../../config"
 import { ConfigAgent } from "../agent"
 import { ConfigMarkdown } from "../markdown"
+import { ProjectTrust } from "../../project/trust"
 import { FSUtil } from "../../fs-util"
 import { ModelV2 } from "../../model"
 import { ConfigAgentV1 } from "../../v1/config/agent"
@@ -57,7 +58,7 @@ export const Plugin = define({
             const files = yield* discover(fs, entry.path)
             return yield* Effect.forEach(files, (file) =>
               fs.readFileStringSafe(file.filepath).pipe(
-                Effect.map((content) => content && decode(file, content)),
+                Effect.map((content) => content && decode(file, content, entry.held)),
                 Effect.catch(() => Effect.succeed(undefined)),
               ),
             ).pipe(
@@ -150,9 +151,10 @@ function discover(fs: FSUtil.Interface, directory: string) {
   )
 }
 
-function decode(file: { directory: string; filepath: string; primary: boolean }, content: string) {
+function decode(file: { directory: string; filepath: string; primary: boolean }, content: string, held?: boolean) {
   const markdown = ConfigMarkdown.parseOption(content)
   if (!markdown) return
+  if (held && !ProjectTrust.isTextAgent(markdown.data)) return
   const name = path
     .relative(file.directory, file.filepath)
     .replaceAll("\\", "/")

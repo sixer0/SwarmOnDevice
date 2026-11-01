@@ -8,7 +8,7 @@ import { configEntryNameFromPath } from "./entry-name"
 import * as ConfigMarkdown from "./markdown"
 import { ConfigParse } from "./parse"
 
-export async function load(dir: string) {
+export async function load(dir: string, keep?: (input: Record<string, unknown>) => boolean) {
   const result: Record<string, ConfigAgentV1.Info> = {}
   for (const item of await Glob.scan("{agent,agents}/**/*.md", {
     cwd: dir,
@@ -26,12 +26,13 @@ export async function load(dir: string) {
       ...md.data,
       prompt: md.content.trim(),
     }
+    if (keep && !keep(config)) continue
     result[config.name] = ConfigParse.schema(ConfigAgentV1.Info, config, item)
   }
   return result
 }
 
-export async function loadMode(dir: string) {
+export async function loadMode(dir: string, keep?: (input: Record<string, unknown>) => boolean) {
   const result: Record<string, ConfigAgentV1.Info> = {}
   for (const item of await Glob.scan("{mode,modes}/*.md", {
     cwd: dir,
@@ -47,6 +48,7 @@ export async function loadMode(dir: string) {
       ...md.data,
       prompt: md.content.trim(),
     }
+    if (keep && !keep(config)) continue
     const parsed = Schema.decodeUnknownExit(ConfigAgentV1.Info)(config, { errors: "all", propertyOrder: "original" })
     if (Exit.isSuccess(parsed)) {
       result[config.name] = {

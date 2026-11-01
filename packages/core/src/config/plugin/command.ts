@@ -9,6 +9,7 @@ import { FSUtil } from "../../fs-util"
 import { ModelV2 } from "../../model"
 import { ConfigCommand } from "../command"
 import { ConfigMarkdown } from "../markdown"
+import { ProjectTrust } from "../../project/trust"
 
 const decodeCommand = Schema.decodeUnknownOption(ConfigCommand.Info)
 
@@ -21,7 +22,7 @@ export const Plugin = define({
       Effect.fn(function* (draft) {
         const documents = yield* Effect.forEach(yield* config.entries(), (entry) => {
           if (entry.type === "document") return Effect.succeed([{ commands: entry.info.commands }])
-          return loadDirectory(fs, entry.path).pipe(
+          return loadDirectory(fs, entry.path, entry.held).pipe(
             Effect.map((commands) => [
               { commands: Object.fromEntries(commands.map((command) => [command.name, command.info])) },
             ]),
@@ -49,14 +50,14 @@ export const Plugin = define({
   }),
 })
 
-function loadDirectory(fs: FSUtil.Interface, directory: string) {
+function loadDirectory(fs: FSUtil.Interface, directory: string, held?: boolean) {
   return Effect.gen(function* () {
     const files = yield* fs
       .glob("{command,commands}/**/*.md", { cwd: directory, absolute: true, dot: true, symlink: true })
       .pipe(Effect.catch(() => Effect.succeed([] as string[])))
     return yield* Effect.forEach(files.toSorted(), (filepath) =>
       fs.readFileStringSafe(filepath).pipe(
-        Effect.map((content) => (content === undefined ? undefined : decode(directory, filepath, content))),
+        Effect.map((content) => (content === undefined ? undefined : decode(directory, filepath, content, held))),
         Effect.catch(() => Effect.succeed(undefined)),
       ),
     ).pipe(
@@ -67,9 +68,10 @@ function loadDirectory(fs: FSUtil.Interface, directory: string) {
   })
 }
 
-function decode(directory: string, filepath: string, content: string) {
+function decode(directory: string, filepath: string, content: string, held?: boolean) {
   const markdown = ConfigMarkdown.parseOption(content)
   if (!markdown) return
+  if (held && !ProjectTrust.isTextCommand({ ...markdown.data, template: markdown.content })) return
   const info = Option.getOrUndefined(decodeCommand({ ...markdown.data, template: markdown.content.trim() }))
   if (!info) return
   return {

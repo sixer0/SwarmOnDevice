@@ -350,6 +350,20 @@ const scenarios: Scenario[] = [
       body: { name: "Missing Project" },
     }))
     .json(404, object, "status"),
+  http.protected.get("/project/trust", "project.trust").json(
+    200,
+    (body) => {
+      object(body)
+      check(typeof body.state === "string", "trust should report a state")
+      check(Array.isArray(body.items), "trust should list what the folder wants")
+    },
+    "status",
+  ),
+  http.protected
+    .post("/project/trust", "project.trustDecide")
+    .mutating()
+    .at((ctx) => ({ path: "/project/trust", headers: ctx.headers(), body: { decision: "later" } }))
+    .json(200, object, "status"),
   http.protected
     .post("/project/git/init", "project.initGit")
     .mutating()

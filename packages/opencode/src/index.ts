@@ -41,6 +41,7 @@ const commands = {
   session: async () => (await import("./cli/cmd/session")).SessionCommand,
   plugin: async () => (await import("./cli/cmd/plug")).PluginCommand,
   db: async () => (await import("./cli/cmd/db")).DbCommand,
+  trust: async () => (await import("./cli/cmd/trust")).TrustCommand,
 }
 const commandAliases: Record<string, keyof typeof commands | undefined> = { auth: "providers", plug: "plugin" }
 

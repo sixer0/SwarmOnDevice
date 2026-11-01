@@ -1,4 +1,5 @@
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
+import { ProjectTrust } from "@opencode-ai/core/project/trust"
 import path from "path"
 import { InstanceState } from "@/effect/instance-state"
 import { EffectBridge } from "@/effect/bridge"
@@ -80,9 +81,11 @@ const layer = Layer.effect(
     const files = Effect.fnUntraced(function* (ctx: InstanceContext) {
       const found: Record<string, Awaited<ReturnType<typeof ConfigCommand.load>>[string]> = {}
       // The project's folder may have been created after this instance worked out its config directories.
-      const dirs = new Set([...(yield* config.directories()), ...projectDirs(ctx)])
+      const dirs = new Set([...(yield* config.textDirectories()), ...projectDirs(ctx)])
+      const trusted = ProjectTrust.isTrusted(ctx.directory)
       for (const dir of dirs) {
-        Object.assign(found, yield* Effect.promise(() => ConfigCommand.load(dir).catch(() => ({}))))
+        const keep = trusted || ProjectTrust.isUserLevel(dir) ? undefined : ProjectTrust.isTextCommand
+        Object.assign(found, yield* Effect.promise(() => ConfigCommand.load(dir, keep).catch(() => ({}))))
       }
       return found
     })

@@ -10,7 +10,7 @@ import * as ConfigMarkdown from "./markdown"
 
 const decodeInfo = Schema.decodeUnknownExit(ConfigCommandV1.Info)
 
-export async function load(dir: string) {
+export async function load(dir: string, keep?: (input: Record<string, unknown>) => boolean) {
   const result: Record<string, ConfigCommandV1.Info> = {}
   for (const item of await Glob.scan("{command,commands}/**/*.md", {
     cwd: dir,
@@ -28,6 +28,7 @@ export async function load(dir: string) {
       ...md.data,
       template: md.content.trim(),
     }
+    if (keep && !keep(config)) continue
     const parsed = decodeInfo(config, { errors: "all", propertyOrder: "original" })
     if (Exit.isSuccess(parsed)) {
       result[config.name] = parsed.value

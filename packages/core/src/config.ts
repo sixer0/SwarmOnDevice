@@ -9,6 +9,7 @@ import { FSUtil } from "./fs-util"
 import { Global } from "./global"
 import { Location } from "./location"
 import { Policy } from "./policy"
+import { ProjectTrust } from "./project/trust"
 import { AbsolutePath } from "./schema"
 import { ConfigAgent } from "./config/agent"
 import { ConfigAttachments } from "./config/attachments"
@@ -115,6 +116,8 @@ export class Document extends Schema.Class<Document>("Config.Document")({
 export class Directory extends Schema.Class<Directory>("Config.Directory")({
   type: Schema.Literal("directory"),
   path: AbsolutePath,
+  /** A folder of a project nobody has trusted: read text from it, and never load code. */
+  held: Schema.optional(Schema.Boolean),
 }) {}
 
 export type Entry = Document | Directory
@@ -144,13 +147,17 @@ const layer = Layer.effect(
     const decodeInfo = Schema.decodeUnknownOption(Info, decodeOptions)
     const decodeV1Info = Schema.decodeUnknownOption(ConfigV1.Info, decodeOptions)
 
+    const trusted = ProjectTrust.isTrusted(location.directory)
+    const isHeld = (file: string) => !trusted && !ProjectTrust.isUserLevel(file)
+
     const loadFile = Effect.fnUntraced(function* (filepath: string) {
       const text = yield* fs.readFileStringSafe(filepath)
       if (!text) return
 
       const errors: ParseError[] = []
-      const input: unknown = parse(text, errors, { allowTrailingComma: true })
+      const parsed: unknown = parse(text, errors, { allowTrailingComma: true })
       if (errors.length) return
+      const input = isHeld(filepath) ? ProjectTrust.keep(parsed, filepath).kept : parsed
 
       const info = Option.getOrUndefined(
         ConfigMigrateV1.isV1(input)
@@ -166,7 +173,7 @@ const layer = Layer.effect(
         ...(yield* Effect.forEach(names, (file) => loadFile(path.join(directory, file))).pipe(
           Effect.map((configs) => configs.filter((config): config is Document => config !== undefined)),
         )),
-        new Directory({ type: "directory", path: directory }),
+        new Directory({ type: "directory", path: directory, ...(isHeld(directory) ? { held: true } : {}) }),
       ]
     })
 

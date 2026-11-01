@@ -2747,6 +2747,17 @@ export type Project = {
   sandboxes: Array<string>
 }
 
+export type ProjectTrustItem = {
+  label: string
+  source: string
+}
+
+export type ProjectTrustStatus = {
+  state: "clean" | "ask" | "later" | "trusted"
+  directory: string
+  items: Array<ProjectTrustItem>
+}
+
 export type ProjectNotFoundError = {
   _tag: "ProjectNotFoundError"
   projectID: string
@@ -9672,6 +9683,64 @@ export type ProjectCurrentResponses = {
 }
 
 export type ProjectCurrentResponse = ProjectCurrentResponses[keyof ProjectCurrentResponses]
+
+export type ProjectTrustData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/project/trust"
+}
+
+export type ProjectTrustErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type ProjectTrustError = ProjectTrustErrors[keyof ProjectTrustErrors]
+
+export type ProjectTrustResponses = {
+  /**
+   * Whether this folder's own code and settings may load
+   */
+  200: ProjectTrustStatus
+}
+
+export type ProjectTrustResponse = ProjectTrustResponses[keyof ProjectTrustResponses]
+
+export type ProjectTrustDecideData = {
+  body?: {
+    decision: "trust" | "later"
+  }
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/project/trust"
+}
+
+export type ProjectTrustDecideErrors = {
+  /**
+   * BadRequest | InvalidRequestError
+   */
+  400: EffectHttpApiErrorBadRequest | InvalidRequestError
+}
+
+export type ProjectTrustDecideError = ProjectTrustDecideErrors[keyof ProjectTrustDecideErrors]
+
+export type ProjectTrustDecideResponses = {
+  /**
+   * The folder's trust after the decision
+   */
+  200: ProjectTrustStatus
+}
+
+export type ProjectTrustDecideResponse = ProjectTrustDecideResponses[keyof ProjectTrustDecideResponses]
 
 export type ProjectInitGitData = {
   body?: never

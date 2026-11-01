@@ -95,3 +95,7 @@ process.env["OPENCODE_DB"] = ":memory:"
 const { initProjectors } = await import("../src/server/projectors")
 
 initProjectors()
+
+// Most suites are about what a project's config does, so their temp folders count as trusted. test/project/trust.test.ts turns this off.
+const { ProjectTrust } = await import("@opencode-ai/core/project/trust")
+ProjectTrust.assumeTrustedForTests(true)

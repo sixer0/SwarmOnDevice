@@ -21,6 +21,7 @@ import { Filesystem } from "@/util/filesystem"
 import { ConfigVariable } from "@/config/variable"
 import { FormatError, FormatUnknownError } from "@/cli/error"
 import { TuiConfig } from "@opencode-ai/tui/config"
+import { ProjectTrust } from "@opencode-ai/core/project/trust"
 
 export const Info = TuiConfig.Info
 export type Info = TuiConfig.Info
@@ -39,6 +40,8 @@ export type HostMetadata = {
 export interface Interface {
   readonly get: () => Effect.Effect<Resolved>
   readonly pluginOrigins: () => Effect.Effect<ConfigPlugin.Origin[]>
+  /** Read again from disk: trust may have changed since startup. */
+  readonly freshPluginOrigins: () => Effect.Effect<ConfigPlugin.Origin[]>
   readonly waitForDependencies: () => Effect.Effect<void>
 }
 
@@ -81,6 +84,9 @@ function dropUnknownKeybinds(input: Record<string, unknown>) {
 const loadState = Effect.fn("TuiConfig.loadState")(function* (ctx: { directory: string }) {
   const afs = yield* FSUtil.Service
   let appliedOrder = 0
+  const trusted = ProjectTrust.isTrusted(ctx.directory)
+  const isHeld = (file: string) =>
+    !trusted && !ProjectTrust.isUserLevel(file) && file !== Flag.OPENCODE_TUI_CONFIG
 
   const resolvePlugins = (config: Info, configFilepath: string): Effect.Effect<Info> =>
     Effect.gen(function* () {
@@ -96,14 +102,20 @@ const loadState = Effect.fn("TuiConfig.loadState")(function* (ctx: { directory: 
 
   const load = (text: string, configFilepath: string): Effect.Effect<Info> =>
     Effect.gen(function* () {
-      const expanded = yield* Effect.promise(() =>
-        ConfigVariable.substitute({ text, type: "path", path: configFilepath, missing: "empty" }),
-      )
+      const held = isHeld(configFilepath)
+      // An untrusted project's file is read as written: no {env:} or {file:}, and no plugin takes effect.
+      const expanded = held
+        ? text
+        : yield* Effect.promise(() =>
+            ConfigVariable.substitute({ text, type: "path", path: configFilepath, missing: "empty" }),
+          )
       const data = ConfigParse.jsonc(expanded, configFilepath)
       if (!isRecord(data)) return {} as Info
       // Flatten a nested "tui" key so users who wrote `{ "tui": { ... } }` inside tui.json
       // (mirroring the legacy merged-config shape) still get their settings applied.
-      const normalized = dropUnknownKeybinds(normalize(data))
+      const flat = normalize(data)
+      if (held) delete flat.plugin
+      const normalized = dropUnknownKeybinds(flat)
       const parsed = ConfigParse.schema(Info, normalized, configFilepath)
       const validated = parsed.attention?.sounds
         ? {
@@ -226,16 +238,24 @@ const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const directory = yield* CurrentWorkingDirectory
+    const afs = yield* FSUtil.Service
     const data = yield* loadState({ directory })
 
     const get = Effect.fn("TuiConfig.get")(() => Effect.succeed(data.config))
     const pluginOrigins = Effect.fn("TuiConfig.pluginOrigins")(() => Effect.succeed(data.pluginOrigins))
+    const freshPluginOrigins = Effect.fn("TuiConfig.freshPluginOrigins")(() =>
+      loadState({ directory }).pipe(
+        Effect.map((state) => state.pluginOrigins),
+        Effect.provideService(FSUtil.Service, afs),
+        Effect.catch(() => Effect.succeed(data.pluginOrigins)),
+      ),
+    )
 
     // Intentional no-op kept on the interface: plugin/tui/runtime.ts passes it to
     // resolveExternalPlugins. The background @opencode-ai/plugin installs per tui
     // config dir (the second N1 site, register P10) are removed; nothing to join.
     const waitForDependencies = Effect.fn("TuiConfig.waitForDependencies")(() => Effect.void)
-    return Service.of({ get, pluginOrigins, waitForDependencies })
+    return Service.of({ get, pluginOrigins, freshPluginOrigins, waitForDependencies })
   }).pipe(Effect.withSpan("TuiConfig.layer")),
 )
 
@@ -253,4 +273,8 @@ export async function get() {
 
 export async function pluginOrigins() {
   return runPromise((svc) => svc.pluginOrigins())
+}
+
+export async function freshPluginOrigins() {
+  return runPromise((svc) => svc.freshPluginOrigins())
 }

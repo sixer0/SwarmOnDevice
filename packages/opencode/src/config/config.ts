@@ -22,6 +22,7 @@ import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/unstable/
 import { EffectFlock } from "@opencode-ai/core/util/effect-flock"
 import { containsPath, type InstanceContext } from "../project/instance-context"
 import { BASELINE_CONFIG } from "@opencode-ai/core/swarm-defaults"
+import { ProjectTrust } from "@opencode-ai/core/project/trust"
 import { ConfigV1 } from "@opencode-ai/core/v1/config/config"
 import { RemoteAuthError } from "@opencode-ai/core/v1/config/error"
 import { ConfigPermissionV1 } from "@opencode-ai/core/v1/config/permission"
@@ -117,6 +118,7 @@ type Info = ConfigV1.Info & {
 type State = {
   config: Info
   directories: string[]
+  textDirectories: string[]
   consoleState: ConsoleState
 }
 
@@ -127,7 +129,10 @@ export interface Interface {
   readonly update: (config: Info) => Effect.Effect<void>
   readonly updateGlobal: (config: Info) => Effect.Effect<{ info: Info; changed: boolean }>
   readonly invalidate: () => Effect.Effect<void>
+  /** Folders that can add code. A project's own are left out while the project is not trusted. */
   readonly directories: () => Effect.Effect<string[]>
+  /** Every config folder, for what reads only text from them. A reader must hold back what is not text. */
+  readonly textDirectories: () => Effect.Effect<string[]>
   readonly waitForDependencies: () => Effect.Effect<void>
 }
 
@@ -247,6 +252,13 @@ const layer = Layer.effect(
       return yield* loadConfig(text, { path: filepath }, env)
     })
 
+    // What an untrusted project may set. No {env:} or {file:} substitution: the text has not earned reading either.
+    const loadKept = Effect.fnUntraced(function* (filepath: string) {
+      const text = yield* readConfigFile(filepath)
+      if (!text) return {} as Info
+      return yield* decodeConfig(ProjectTrust.keep(ConfigParse.jsonc(text, filepath), filepath).kept, filepath)
+    })
+
     const loadGlobal = Effect.fnUntraced(function* (env?: Record<string, string>) {
       let result: Info = {}
       result = mergeConfig(result, yield* loadFile(path.join(Global.Path.config, "config.json"), env))
@@ -307,6 +319,8 @@ const layer = Layer.effect(
     const loadInstanceState = Effect.fn("Config.loadInstanceState")(
       function* (ctx: InstanceContext) {
         const auth = yield* authSvc.all().pipe(Effect.orDie)
+        const trusted = ProjectTrust.isTrusted(ctx.directory)
+        const isHeld = (location: string) => !trusted && !ProjectTrust.isUserLevel(location)
 
         // Swarm baseline (FR-DEF-04): the lowest-precedence layer, merged before every
         // other source so user, project and managed config files override it. Values:
@@ -413,7 +427,7 @@ const layer = Layer.effect(
 
         if (!Flag.OPENCODE_DISABLE_PROJECT_CONFIG) {
           for (const file of yield* ConfigPaths.files("swarm", ctx.directory, ctx.worktree).pipe(Effect.orDie)) {
-            yield* merge(file, yield* loadFile(file, authEnv), "local")
+            yield* merge(file, isHeld(file) ? yield* loadKept(file) : yield* loadFile(file, authEnv), "local")
           }
         }
 
@@ -432,7 +446,7 @@ const layer = Layer.effect(
             for (const file of ["swarm.json", "swarm.jsonc"]) {
               const source = path.join(dir, file)
               yield* Effect.logDebug(`loading config from ${source}`)
-              yield* merge(source, yield* loadFile(source, authEnv))
+              yield* merge(source, isHeld(source) ? yield* loadKept(source) : yield* loadFile(source, authEnv))
               result.agent ??= {}
               result.mode ??= {}
               result.plugin ??= []
@@ -446,9 +460,13 @@ const layer = Layer.effect(
           // dir. No package install may spawn at runtime; plugin packages arrive only via
           // the explicit `swarm plugin` command.
 
-          result.command = mergeDeep(result.command ?? {}, yield* Effect.promise(() => ConfigCommand.load(dir)))
-          result.agent = mergeDeep(result.agent ?? {}, yield* Effect.promise(() => ConfigAgent.load(dir)))
-          result.agent = mergeDeep(result.agent ?? {}, yield* Effect.promise(() => ConfigAgent.loadMode(dir)))
+          const held = isHeld(dir)
+          const textCommand = held ? ProjectTrust.isTextCommand : undefined
+          const textAgent = held ? ProjectTrust.isTextAgent : undefined
+          result.command = mergeDeep(result.command ?? {}, yield* Effect.promise(() => ConfigCommand.load(dir, textCommand)))
+          result.agent = mergeDeep(result.agent ?? {}, yield* Effect.promise(() => ConfigAgent.load(dir, textAgent)))
+          result.agent = mergeDeep(result.agent ?? {}, yield* Effect.promise(() => ConfigAgent.loadMode(dir, textAgent)))
+          if (held) continue
           // Auto-discovered plugins under `.swarm/plugin(s)` are already local files, so ConfigPlugin.load
           // returns normalized Specs and we only need to attach origin metadata here.
           const list = yield* Effect.promise(() => ConfigPlugin.load(dir))
@@ -589,7 +607,8 @@ const layer = Layer.effect(
 
         return {
           config: result,
-          directories,
+          directories: directories.filter((dir) => !isHeld(dir)),
+          textDirectories: directories,
           consoleState: {
             consoleManagedProviders: Array.from(consoleManagedProviders),
             activeOrgName,
@@ -612,6 +631,10 @@ const layer = Layer.effect(
 
     const directories = Effect.fn("Config.directories")(function* () {
       return yield* InstanceState.use(state, (s) => s.directories)
+    })
+
+    const textDirectories = Effect.fn("Config.textDirectories")(function* () {
+      return yield* InstanceState.use(state, (s) => s.textDirectories)
     })
 
     const getConsoleState = Effect.fn("Config.getConsoleState")(function* () {
@@ -677,6 +700,7 @@ const layer = Layer.effect(
       updateGlobal,
       invalidate,
       directories,
+      textDirectories,
       waitForDependencies,
     })
   }),

@@ -1,11 +1,13 @@
 import * as InstanceState from "@/effect/instance-state"
 import { Project } from "@/project/project"
 import { ProjectV2 } from "@opencode-ai/core/project"
+import { ProjectTrust } from "@opencode-ai/core/project/trust"
+import { InstanceStore } from "@/project/instance-store"
 import { Effect } from "effect"
 import { HttpApiBuilder } from "effect/unstable/httpapi"
 import { InstanceHttpApi } from "../api"
 import { ProjectNotFoundError } from "../errors"
-import { markInstanceForReload } from "../lifecycle"
+import { markInstanceForDisposal, markInstanceForReload } from "../lifecycle"
 
 export const projectHandlers = HttpApiBuilder.group(InstanceHttpApi, "project", (handlers) =>
   Effect.gen(function* () {
@@ -18,6 +20,33 @@ export const projectHandlers = HttpApiBuilder.group(InstanceHttpApi, "project", 
 
     const current = Effect.fn("ProjectHttpApi.current")(function* () {
       return (yield* InstanceState.context).project
+    })
+
+    const trust = Effect.fn("ProjectHttpApi.trust")(function* () {
+      return ProjectTrust.status((yield* InstanceState.context).directory)
+    })
+
+    const trustDecide = Effect.fn("ProjectHttpApi.trustDecide")(function* (input: {
+      payload: { decision: ProjectTrust.Decision }
+    }) {
+      const ctx = yield* InstanceState.context
+      if (input.payload.decision === "later") {
+        ProjectTrust.notNow(ctx.directory)
+        return ProjectTrust.status(ctx.directory)
+      }
+      const root = yield* Effect.sync(() => ProjectTrust.trust(ctx.directory)).pipe(
+        Effect.tapDefect((error) =>
+          Effect.logError("failed to save folder trust", { directory: ctx.directory, error: String(error) }),
+        ),
+      )
+      // Everything open under this checkout loaded without its project config, so all of it starts again.
+      const store = yield* InstanceStore.Service
+      const others = (yield* store.loaded()).filter(
+        (item) => item.directory !== ctx.directory && ProjectTrust.rootOf(item.directory) === root,
+      )
+      yield* Effect.forEach(others, (item) => store.dispose(item), { discard: true })
+      yield* markInstanceForDisposal(ctx)
+      return ProjectTrust.status(ctx.directory)
     })
 
     const initGit = Effect.fn("ProjectHttpApi.initGit")(function* () {
@@ -56,6 +85,8 @@ export const projectHandlers = HttpApiBuilder.group(InstanceHttpApi, "project", 
     return handlers
       .handle("list", list)
       .handle("current", current)
+      .handle("trust", trust)
+      .handle("trustDecide", trustDecide)
       .handle("initGit", initGit)
       .handle("update", update)
       .handle("directories", directories)

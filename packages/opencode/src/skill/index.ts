@@ -1,3 +1,4 @@
+import { ProjectTrust } from "@opencode-ai/core/project/trust"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import path from "path"
 import { Effect, Layer, Context, Schema } from "effect"
@@ -102,7 +103,12 @@ export interface Interface {
   readonly available: (agent?: Agent.Info) => Effect.Effect<Info[]>
 }
 
-const add = Effect.fnUntraced(function* (state: State, match: string, events: EventV2Bridge.Service["Service"]) {
+const add = Effect.fnUntraced(function* (
+  state: State,
+  match: string,
+  events: EventV2Bridge.Service["Service"],
+  trusted: boolean,
+) {
   const md = yield* Effect.tryPromise({
     try: () => ConfigMarkdown.parse(match),
     catch: (err) => err,
@@ -121,6 +127,7 @@ const add = Effect.fnUntraced(function* (state: State, match: string, events: Ev
   if (!md) return
 
   if (!isSkillFrontmatter(md.data)) return
+  if (!trusted && !ProjectTrust.isUserLevel(match) && !ProjectTrust.isTextSkill(md.content)) return
 
   if (state.skills[md.data.name]) {
     yield* Effect.logWarning("duplicate skill name", {
@@ -202,7 +209,7 @@ const discoverSkills = Effect.fnUntraced(function* (
     }
   }
 
-  const configDirs = yield* config.directories()
+  const configDirs = yield* config.textDirectories()
   for (const dir of configDirs) {
     yield* scan(state, dir, SWARM_SKILL_PATTERN)
   }
@@ -236,8 +243,9 @@ const loadSkills = Effect.fnUntraced(function* (
   state: State,
   discovered: DiscoveryState,
   events: EventV2Bridge.Service["Service"],
+  trusted: boolean,
 ) {
-  yield* Effect.forEach(discovered.matches, (match) => add(state, match, events), {
+  yield* Effect.forEach(discovered.matches, (match) => add(state, match, events, trusted), {
     concurrency: "unbounded",
     discard: true,
   })
@@ -271,7 +279,7 @@ const layer = Layer.effect(
       }),
     )
     const state = yield* InstanceState.make(
-      Effect.fn("Skill.state")(function* () {
+      Effect.fn("Skill.state")(function* (ctx) {
         const s: State = { skills: {}, dirs: new Set() }
         // Register the built-in skill BEFORE disk discovery so a user-disk
         // skill with the same name can override it.
@@ -281,7 +289,7 @@ const layer = Layer.effect(
           location: "<built-in>",
           content: CUSTOMIZE_SWARM_SKILL_BODY,
         }
-        yield* loadSkills(s, yield* InstanceState.get(discovered), events)
+        yield* loadSkills(s, yield* InstanceState.get(discovered), events, ProjectTrust.isTrusted(ctx.directory))
         return s
       }),
     )
