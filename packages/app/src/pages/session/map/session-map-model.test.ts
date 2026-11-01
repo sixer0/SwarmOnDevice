@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test"
-import type { Message, Part } from "@opencode-ai/sdk/v2"
+import type { AutonomyAuditLine, Message, Part } from "@opencode-ai/sdk/v2"
+import path from "path"
 import {
   buildSessionMap,
+  decisionGroups,
   failureLine,
   mapRows,
   nextProblem,
@@ -252,4 +254,226 @@ test("stepReference and relativePath", () => {
   expect(stepReference(step)).toBe("bash `bun test` (exit 1)")
   expect(relativePath("/repo/a.ts", "/repo/")).toBe("a.ts")
   expect(relativePath("/other/a.ts", "/repo")).toBe("/other/a.ts")
+})
+
+describe("decisionGroups", () => {
+  let seq = 0
+  const decision = (requestID: string, fields: Partial<Extract<AutonomyAuditLine, { type: "decision" }>> = {}) =>
+    ({
+      v: 1,
+      seq: ++seq,
+      prev: "",
+      at: seq,
+      type: "decision",
+      rootID: "root",
+      sessionID: "root",
+      requestID,
+      messageID: "msg_5",
+      agent: "build",
+      directory: "/repo",
+      permission: "bash",
+      patterns: ["ls"],
+      patternsTruncated: false,
+      class: "P",
+      risk: "",
+      canUndo: true,
+      decidedBy: "agent:test/test-model",
+      decision: "allow",
+      memo: false,
+      follows: [],
+      ...fields,
+    }) as AutonomyAuditLine
+  const outcome = (requestID: string, value: string, by?: string) =>
+    ({ v: 1, seq: ++seq, prev: "", at: seq, type: "outcome", requestID, outcome: value, by }) as AutonomyAuditLine
+  const marker = (name: string) =>
+    ({
+      v: 1,
+      seq: ++seq,
+      prev: "",
+      at: seq,
+      type: "marker",
+      rootID: "root",
+      marker: name,
+      decidedBy: "gate",
+    }) as AutonomyAuditLine
+  const ids = (list: readonly { id: string }[]) => list.map((item) => item.id)
+
+  test("a held call waits, and leaves waiting once answered", () => {
+    const groups = decisionGroups(
+      [
+        decision("held-d", { class: "D", decision: "defer", decidedBy: "gate", category: "outward" }),
+        decision("held-p", {
+          decision: "defer",
+          decidedBy: "system:decider_unavailable",
+          category: "decider_unavailable",
+        }),
+        decision("yes", { class: "D", decision: "defer", decidedBy: "gate" }),
+        outcome("yes", "approved_later", "person"),
+        decision("no", { class: "D", decision: "defer", decidedBy: "gate" }),
+        outcome("no", "rejected_later", "person"),
+      ],
+      "root",
+    )
+    expect(ids(groups.waiting)).toEqual(["held-d", "held-p"])
+    expect(ids(groups.decided)).toEqual(["no", "yes"])
+    expect(groups.limited).toEqual([])
+    expect(groups.decided.map((entry) => entry.by)).toEqual(["person", "person"])
+  })
+
+  test("the waiting list is what the route counts as open", () => {
+    const groups = decisionGroups(
+      [
+        decision("full", { class: "D", decision: "defer", category: "queue_full" }),
+        decision("question", { class: "A", decision: "defer", permission: "question", canUndo: false }),
+        decision("gone", { class: "D", decision: "defer" }),
+        outcome("gone", "abandoned", "system:session_closed"),
+        decision("open", { class: "D", decision: "defer" }),
+      ],
+      "root",
+    )
+    expect(ids(groups.waiting)).toEqual(["open"])
+  })
+
+  test("what the mode or the decider refused is limited, and an agent's yes is decided", () => {
+    const groups = decisionGroups(
+      [
+        decision("x", { class: "X", decision: "reject", decidedBy: "gate", category: "app_state" }),
+        decision("refused", { decision: "reject" }),
+        decision("full", { class: "D", decision: "defer", category: "queue_full" }),
+        decision("loop", { class: "B", decision: "ask", decidedBy: "gate" }),
+        decision("gone", { class: "D", decision: "defer" }),
+        outcome("gone", "abandoned"),
+        decision("agent"),
+        decision("question", { class: "A", decision: "defer", permission: "question", reason: "asumsi agen" }),
+      ],
+      "root",
+    )
+    expect(ids(groups.limited)).toEqual(["gone", "loop", "full", "refused", "x"])
+    expect(ids(groups.decided)).toEqual(["question", "agent"])
+    expect(groups.decided[1]?.by).toBe("test/test-model")
+  })
+
+  test("Undo is offered only for what ran, with a message and a snapshot, and within reach of one", () => {
+    const groups = decisionGroups(
+      [
+        decision("button"),
+        decision("approved", { class: "D", decision: "defer" }),
+        outcome("approved", "approved_later", "person"),
+        decision("no-message", { messageID: undefined }),
+        decision("no-snapshot", { canUndo: false }),
+        decision("pushed", { class: "D", decision: "defer", category: "outward" }),
+        outcome("pushed", "approved_later", "person"),
+        decision("elsewhere", { category: "outside_folder" }),
+        decision("refused", { decision: "reject" }),
+        decision("rejected", { class: "D", decision: "defer" }),
+        outcome("rejected", "rejected_later", "person"),
+      ],
+      "root",
+    )
+    const undo = Object.fromEntries(
+      [...groups.waiting, ...groups.decided, ...groups.limited].map((entry) => [entry.id, entry.undo]),
+    )
+    expect(undo).toEqual({
+      button: "button",
+      approved: "button",
+      "no-message": "none",
+      "no-snapshot": "none",
+      pushed: "none",
+      elsewhere: "none",
+      refused: undefined,
+      rejected: undefined,
+    })
+  })
+
+  test("a subagent's line says Undo cannot help, however undoable it looks", () => {
+    const groups = decisionGroups([decision("child-edit", { sessionID: "child", messageID: "msg_7" })], "root")
+    expect(groups.decided[0]).toMatchObject({ sessionID: "child", messageID: "msg_7", undo: "none" })
+  })
+
+  test("what a revert took away reads as undone and offers no second Undo", () => {
+    const groups = decisionGroups(
+      [
+        decision("before", { messageID: "msg_3" }),
+        decision("from", { messageID: "msg_5" }),
+        decision("after", { messageID: "msg_7" }),
+        decision("child", { sessionID: "child", messageID: "msg_9" }),
+      ],
+      "root",
+      (sessionID) => (sessionID === "root" ? "msg_5" : undefined),
+    )
+    const seen = Object.fromEntries(groups.decided.map((entry) => [entry.id, [entry.outcome, entry.undo]]))
+    expect(seen).toEqual({
+      before: [undefined, "button"],
+      from: ["undone", undefined],
+      after: ["undone", undefined],
+      child: [undefined, "none"],
+    })
+  })
+
+  test("a line of another root stays out, and an outcome without a decision makes nothing up", () => {
+    const groups = decisionGroups([decision("other", { rootID: "elsewhere" }), outcome("nobody", "ran")], "root")
+    expect([...groups.waiting, ...groups.decided, ...groups.limited]).toEqual([])
+  })
+
+  test("an interrupted decider leaves an outcome with no decision line, and it is passed over", () => {
+    const lines = [
+      decision("kept"),
+      {
+        v: 1,
+        seq: 2,
+        prev: "abc",
+        at: 2,
+        type: "outcome",
+        requestID: "per_interrupted",
+        outcome: "not_run",
+        by: "system:decider_interrupted",
+      },
+    ] as AutonomyAuditLine[]
+    const groups = decisionGroups(lines, "root")
+    expect(ids(groups.decided)).toEqual(["kept"])
+    expect(groups.decided[0]?.outcome).toBeUndefined()
+    expect([...groups.waiting, ...groups.limited, ...groups.notes]).toEqual([])
+  })
+
+  test("mode, decider and queue markers become notes, latest first", () => {
+    const groups = decisionGroups(
+      [
+        marker("mode_on"),
+        marker("decider_open"),
+        marker("decider_closed"),
+        marker("b1"),
+        marker("b0"),
+        marker("mode_off"),
+      ],
+      "root",
+    )
+    expect(groups.notes.map((note) => note.note)).toEqual(["mode_off", "queue_full", "decider_unavailable", "mode_on"])
+  })
+
+  test("Markdown and links in a reason or a pattern come through untouched", () => {
+    const reason = "[click](https://evil.example) **now** <img src=x onerror=alert(1)>\n# heading"
+    const pattern = "curl https://evil.example/[a](b) `tick`"
+    const groups = decisionGroups([decision("md", { reason, patterns: [pattern] })], "root")
+    expect(groups.decided[0]?.reason).toBe(reason)
+    expect(groups.decided[0]?.patterns).toEqual([pattern])
+  })
+
+  test("the decisions view takes no rows from the step list", () => {
+    const model = buildSessionMap({ messages, parts: () => [] })
+    expect(mapRows({ model, filter: "decisions", query: "", open: () => true })).toEqual([])
+    expect(mapRows({ model, filter: "decisions", query: "anything", open: () => true })).toEqual([])
+  })
+
+  test("the rows that show a decision have nothing that could parse its text", async () => {
+    const source = await Bun.file(path.join(import.meta.dir, "session-map-view.tsx")).text()
+    const start = source.indexOf("export function DecisionRow")
+    const end = source.indexOf("function DialogUndoDecision")
+    expect(start).toBeGreaterThan(0)
+    expect(end).toBeGreaterThan(start)
+    const row = source.slice(start, end)
+    expect(row).toContain("{pattern}")
+    expect(row).toContain("{reason()}")
+    expect(row).not.toMatch(/innerHTML|Markdown|<a\b|href|marked|createLink|data-markdown/)
+    expect(source).not.toMatch(/innerHTML|<Markdown/)
+  })
 })

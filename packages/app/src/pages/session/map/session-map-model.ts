@@ -1,4 +1,4 @@
-import type { AssistantMessage, Message, Part, ToolPart, UserMessage } from "@opencode-ai/sdk/v2"
+import type { AssistantMessage, AutonomyAuditLine, Message, Part, ToolPart, UserMessage } from "@opencode-ai/sdk/v2"
 import { notRun } from "@opencode-ai/session-ui/part-mark"
 
 // A long session is hundreds of tool calls in a virtualized transcript: the browser's find cannot see it and a failed
@@ -314,8 +314,8 @@ export function buildSessionMap(input: SessionMapInput): SessionMapModel {
   }
 }
 
-// "agents" is a view of the panel, not a filter over steps: it shows the run's agents instead of the list.
-export type MapFilter = "all" | "problems" | "edits" | "agents"
+// "agents" and "decisions" are views of the panel, not filters over steps: each shows its own list instead.
+export type MapFilter = "all" | "problems" | "edits" | "agents" | "decisions"
 
 export type MapRow =
   | { type: "chapter"; id: string; chapter: MapChapter; open: boolean }
@@ -377,6 +377,7 @@ export function mapRows(input: {
   query: string
   open: (id: string, chapter: MapChapter | undefined) => boolean
 }): MapRow[] {
+  if (input.filter === "decisions") return []
   const query = input.query.trim().toLowerCase()
   if (query) return searchRows(input.model, input.filter, query)
   if (input.filter === "edits") {
@@ -448,6 +449,130 @@ export function nextProblem(
   if (turn < 0) return direction > 0 ? list[0] : list.at(-1)
   if (direction > 0) return list.find((step) => (order.get(step.turnID) ?? 0) >= turn) ?? list[0]
   return list.findLast((step) => (order.get(step.turnID) ?? 0) <= turn) ?? list.at(-1)
+}
+
+type DecisionLine = Extract<AutonomyAuditLine, { type: "decision" }>
+
+export type DecisionEntry = {
+  id: string
+  sessionID: string
+  messageID?: string
+  directory: string
+  at: number
+  permission: string
+  // Written by whatever the agent read, so an attacker can reach them. Shown as they are, never as Markdown or links.
+  patterns: readonly string[]
+  patternsTruncated: boolean
+  reason?: string
+  category?: DecisionLine["category"]
+  // "person", or the model that answered. The gate and the system are nobody a reader needs named here.
+  by?: string
+  outcome?: Extract<AutonomyAuditLine, { type: "outcome" }>["outcome"]
+  // Only for what actually ran. "button" is a promise that Undo brings it back; "none" says it cannot.
+  undo?: "button" | "none"
+}
+
+export type DecisionNote = {
+  id: string
+  at: number
+  note: "mode_on" | "mode_off" | "decider_unavailable" | "queue_full"
+}
+
+export type DecisionGroups = {
+  waiting: DecisionEntry[]
+  decided: DecisionEntry[]
+  limited: DecisionEntry[]
+  notes: DecisionNote[]
+}
+
+const CLOSED_OUTCOMES: readonly string[] = ["approved_later", "rejected_later", "abandoned"]
+
+// A snapshot brings files back. It cannot recall what left the machine, or reach what lives outside the worktree.
+const BEYOND_UNDO: readonly (DecisionLine["category"] | undefined)[] = [
+  "outside_folder",
+  "outward",
+  "not_reversible",
+  "no_undo",
+  "external_tool",
+]
+
+const NOTE_OF: Partial<Record<Extract<AutonomyAuditLine, { type: "marker" }>["marker"], DecisionNote["note"]>> = {
+  mode_on: "mode_on",
+  mode_off: "mode_off",
+  decider_open: "decider_unavailable",
+  decider_limit: "decider_unavailable",
+  b0: "queue_full",
+}
+
+// The same reading as `openIn` on the server, so the groups' waiting list and the route's `open` count cannot differ.
+const isWaiting = (line: DecisionLine, outcome: DecisionEntry["outcome"]) =>
+  line.decision === "defer" &&
+  (line.class === "D" || line.class === "P") &&
+  line.category !== "queue_full" &&
+  !(outcome && CLOSED_OUTCOMES.includes(outcome))
+
+// Class X reaches this as a rejection by the gate, like a decider's. Class B stops for a person and is never held.
+const isLimited = (line: DecisionLine, outcome: DecisionEntry["outcome"]) =>
+  line.class === "B" ||
+  outcome === "abandoned" ||
+  line.category === "queue_full" ||
+  (line.decision === "reject" && line.decidedBy !== "person")
+
+const byOf = (line: DecisionLine, later?: string) => {
+  if (later === "person" || line.decidedBy === "person") return "person"
+  return line.decidedBy.startsWith("agent:") ? line.decidedBy.slice("agent:".length) : undefined
+}
+
+// A revert only marks where the session went back to, so what it took away is everything from that message on.
+export function decisionGroups(
+  lines: readonly AutonomyAuditLine[],
+  rootID: string,
+  revertedAt: (sessionID: string) => string | undefined = () => undefined,
+): DecisionGroups {
+  const outcomes = new Map(lines.flatMap((line) => (line.type === "outcome" ? [[line.requestID, line] as const] : [])))
+  const groups: DecisionGroups = { waiting: [], decided: [], limited: [], notes: [] }
+  lines.forEach((line) => {
+    if (line.type === "marker") {
+      const note = NOTE_OF[line.marker]
+      if (note) groups.notes.push({ id: `${line.seq}:${line.at}`, at: line.at, note })
+      return
+    }
+    if (line.type !== "decision" || line.rootID !== rootID) return
+    const later = outcomes.get(line.requestID)
+    const ran = line.decision === "allow" || later?.outcome === "approved_later"
+    const reverted = revertedAt(line.sessionID)
+    const taken = !!(ran && line.messageID && reverted && line.messageID >= reverted)
+    const outcome = taken ? "undone" : later?.outcome
+    const entry: DecisionEntry = {
+      id: line.requestID,
+      sessionID: line.sessionID,
+      messageID: line.messageID,
+      directory: line.directory,
+      at: line.at,
+      permission: line.permission,
+      patterns: line.patterns,
+      patternsTruncated: line.patternsTruncated,
+      reason: line.reason,
+      category: line.category,
+      by: byOf(line, later?.by),
+      outcome,
+      undo:
+        !ran || outcome === "undone"
+          ? undefined
+          : // A subagent's Undo can overwrite the root's later step on the same file with no warning (autonomy-revert.test.ts).
+            line.sessionID === rootID && line.messageID && line.canUndo && !BEYOND_UNDO.includes(line.category)
+            ? "button"
+            : "none",
+    }
+    if (isWaiting(line, later?.outcome)) groups.waiting.push(entry)
+    else if (isLimited(line, later?.outcome)) groups.limited.push(entry)
+    else groups.decided.push(entry)
+  })
+  // What waits longest comes first. Everything else reads as a log, latest on top.
+  groups.decided.reverse()
+  groups.limited.reverse()
+  groups.notes.reverse()
+  return groups
 }
 
 // What goes into the composer when someone asks about a step: enough for the agent to know which one is meant.
