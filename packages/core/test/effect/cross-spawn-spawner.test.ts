@@ -211,6 +211,44 @@ describe("cross-spawn spawner", () => {
     )
   })
 
+  describe("a reader that arrives after the process has gone", () => {
+    const code = (handle: ChildProcessSpawner.ChildProcessHandle) =>
+      handle.exitCode.pipe(Effect.timeout("5 seconds"), Effect.map(Number))
+
+    fx.effect("still gets everything it printed", () =>
+      Effect.gen(function* () {
+        const handle = yield* js('console.log("out"); console.error("err")')
+        yield* Effect.promise(() => new Promise((resolve) => setTimeout(resolve, 500)))
+        const output = yield* decodeByteStream(handle.all)
+        expect(output.split("\n").map((line) => line.trim()).sort()).toEqual(["err", "out"])
+        expect(yield* code(handle)).toBe(0)
+      }),
+    )
+
+    fx.effect("still gets it when the exit code was read first", () =>
+      Effect.gen(function* () {
+        const handle = yield* js('console.log("out")')
+        expect(yield* code(handle)).toBe(0)
+        expect(yield* decodeByteStream(handle.stdout)).toBe("out")
+      }),
+    )
+
+    fx.effect("an exit code does not wait for output nobody reads", () =>
+      Effect.gen(function* () {
+        const handle = yield* js('console.log("out"); console.error("err")')
+        expect(yield* code(handle)).toBe(0)
+      }),
+    )
+
+    fx.effect("reading only one pipe does not hold up the exit code", () =>
+      Effect.gen(function* () {
+        const handle = yield* js('console.log("out"); console.error("err")')
+        expect(yield* decodeByteStream(handle.stdout)).toBe("out")
+        expect(yield* code(handle)).toBe(0)
+      }),
+    )
+  })
+
   describe("stdin", () => {
     fx.effect(
       "allows providing standard input to a command",

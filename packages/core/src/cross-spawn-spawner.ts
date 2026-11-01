@@ -22,10 +22,36 @@ import {
   ProcessId,
 } from "effect/unstable/process/ChildProcessSpawner"
 import * as NodeChildProcess from "node:child_process"
-import { PassThrough } from "node:stream"
+import { PassThrough, type Readable } from "node:stream"
 import launch from "cross-spawn"
 import { makeGlobalNode } from "./effect/app-node"
 import { filesystem, path } from "./effect/app-node-platform"
+
+// Once a process has exited, a pipe with no listener is drained into nothing. A reader only attaches when its stream first
+// runs, and a quick command can be gone by then, which reads as a command that printed nothing. So each pipe is held from the
+// moment it exists until someone takes it, or until the process's scope ends with nobody having wanted it.
+const held = new WeakMap<NodeChildProcess.ChildProcess, Set<Readable>>()
+const keep = () => {}
+
+const holdOutput = (proc: NodeChildProcess.ChildProcess) => {
+  const pipes = new Set([proc.stdout, proc.stderr].filter((pipe): pipe is Readable => !!pipe))
+  for (const pipe of pipes) pipe.on("readable", keep)
+  held.set(proc, pipes)
+  return pipes
+}
+
+const takeOutput = (proc: NodeChildProcess.ChildProcess, pipe: Readable) => {
+  held.get(proc)?.delete(pipe)
+  return pipe
+}
+
+const dropOutput = (proc: NodeChildProcess.ChildProcess) => {
+  for (const pipe of held.get(proc) ?? []) {
+    pipe.off("readable", keep)
+    pipe.resume()
+  }
+  held.delete(proc)
+}
 
 const toError = (err: unknown): Error => (err instanceof globalThis.Error ? err : new globalThis.Error(String(err)))
 
@@ -247,13 +273,13 @@ export const make = Effect.gen(function* () {
   ) => {
     let stdout = proc.stdout
       ? NodeStream.fromReadable({
-          evaluate: () => proc.stdout!,
+          evaluate: () => takeOutput(proc, proc.stdout!),
           onError: (cause) => toPlatformError("fromReadable(stdout)", toError(cause), command),
         })
       : Stream.empty
     let stderr = proc.stderr
       ? NodeStream.fromReadable({
-          evaluate: () => proc.stderr!,
+          evaluate: () => takeOutput(proc, proc.stderr!),
           onError: (cause) => toPlatformError("fromReadable(stderr)", toError(cause), command),
         })
       : Stream.empty
@@ -268,19 +294,23 @@ export const make = Effect.gen(function* () {
     Effect.callback<readonly [NodeChildProcess.ChildProcess, ExitSignal], PlatformError.PlatformError>((resume) => {
       const signal = Deferred.makeUnsafe<readonly [code: number | null, signal: NodeJS.Signals | null]>()
       const proc = launch(command.command, command.args, opts)
+      const unread = holdOutput(proc)
       let end = false
+      const finish = (args: readonly [code: number | null, signal: NodeJS.Signals | null]) => {
+        if (end) return
+        end = true
+        Deferred.doneUnsafe(signal, Exit.succeed(args))
+      }
       let exit: readonly [code: number | null, signal: NodeJS.Signals | null] | undefined
       proc.on("error", (err) => {
         resume(Effect.fail(toPlatformError("spawn", err, command)))
       })
       proc.on("exit", (...args) => {
         exit = args
+        // A held pipe cannot close until it is read, and nothing says it ever will be. The exit is known either way.
+        if (unread.size > 0) finish(args)
       })
-      proc.on("close", (...args) => {
-        if (end) return
-        end = true
-        Deferred.doneUnsafe(signal, Exit.succeed(exit ?? args))
-      })
+      proc.on("close", (...args) => finish(exit ?? args))
       proc.on("spawn", () => {
         resume(Effect.succeed([proc, signal]))
       })
@@ -380,6 +410,7 @@ export const make = Effect.gen(function* () {
               windowsHide: process.platform === "win32",
             }),
             Effect.fnUntraced(function* ([proc, signal]) {
+              dropOutput(proc)
               const done = yield* Deferred.isDone(signal)
               const kill = timeout(proc, command, command.options)
               if (done) {
