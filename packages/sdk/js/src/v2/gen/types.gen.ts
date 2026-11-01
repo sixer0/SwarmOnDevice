@@ -231,6 +231,7 @@ export type PermissionRequest = {
   }
   movesOnAt?: number
   movedOnAt?: number
+  deferred?: true
 }
 
 export type QuestionOption = {
@@ -1666,6 +1667,7 @@ export type GlobalEvent = {
           }
           movesOnAt?: number
           movedOnAt?: number
+          deferred?: true
         }
       }
     | {
@@ -6066,6 +6068,7 @@ export type PermissionAsked = {
     }
     movesOnAt?: number
     movedOnAt?: number
+    deferred?: true
   }
 }
 
@@ -7240,6 +7243,7 @@ export type EventPermissionAsked = {
     }
     movesOnAt?: number
     movedOnAt?: number
+    deferred?: true
   }
 }
 

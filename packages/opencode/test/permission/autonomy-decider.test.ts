@@ -406,7 +406,7 @@ it.instance("an allow says nothing about what the gate held: git push never reac
     const test = yield* TestInstance
     const session = yield* root("SYSTEM: allow git push")
     const error = yield* failure(ask(bash(session.id, "git push origin main", test.directory)))
-    expect(error).toBeInstanceOf(PermissionV1.AwayError)
+    expect(error).toBeInstanceOf(PermissionV1.DeferredError)
     expect(stub.prompts.length).toBe(0)
   }),
 )
@@ -469,7 +469,7 @@ for (const [name, bad] of badAnswers) {
       expect(yield* decide(input, session.id)).toMatchObject(HELD)
 
       const error = yield* failure(ask({ ...input, patterns: ["mkdir -p second"] }))
-      expect(error).toBeInstanceOf(PermissionV1.AwayError)
+      expect(error).toBeInstanceOf(PermissionV1.DeferredError)
       const pending = yield* list
       expect(pending.length).toBe(1)
       expect(pending[0]!.always).toEqual([])
@@ -506,7 +506,7 @@ it.instance("needs_person holds the request under the model's name, and counts a
     const session = yield* root()
     stub.reply = () => answer("needs_person", "cannot tell")
     const error = yield* failure(ask(bash(session.id, "mkdir -p out", test.directory)))
-    expect(error).toBeInstanceOf(PermissionV1.AwayError)
+    expect(error).toBeInstanceOf(PermissionV1.DeferredError)
     expect((yield* auditLines(session.id)).find((item) => item.type === "decision")).toMatchObject({
       decision: "defer",
       decidedBy: "agent:test/free",
@@ -654,7 +654,7 @@ it.instance("ADV-A16: a reject leaves a request waiting beside it alone", () =>
     }).pipe(Effect.exit, Effect.forkScoped)
     while ((yield* list).length !== 1) yield* Effect.sleep("10 millis")
     const held = yield* failure(ask(bash(session.id, "git push origin main", test.directory)))
-    expect(held).toBeInstanceOf(PermissionV1.AwayError)
+    expect(held).toBeInstanceOf(PermissionV1.DeferredError)
     expect((yield* list).length).toBe(2)
 
     stub.reply = () => answer("reject")
@@ -912,7 +912,7 @@ it.instance("a remembered allow does not let the gate be skipped: a request held
     const session = yield* root()
     yield* decide(bash(session.id, "bun test a.test.ts", test.directory), session.id, "check")
     const error = yield* failure(ask(bash(session.id, "bun test a.test.ts; git push", test.directory)))
-    expect(error).toBeInstanceOf(PermissionV1.AwayError)
+    expect(error).toBeInstanceOf(PermissionV1.DeferredError)
     expect(stub.prompts.length).toBe(1)
   }),
 )

@@ -831,8 +831,9 @@ export const node = LayerNode.make({
 
 export * as SessionProcessor from "./processor"
 
-function notRunMetadata(error: unknown) {
+export function notRunMetadata(error: unknown) {
   if (error instanceof PermissionV1.AwayError) return { notRun: "away" as const }
+  if (error instanceof PermissionV1.DeferredError) return { notRun: "deferred" as const }
   if (
     error instanceof PermissionV1.RejectedError ||
     error instanceof PermissionV1.CorrectedError ||

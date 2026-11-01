@@ -37,6 +37,12 @@ function convertToLineEnding(text: string, ending: "\n" | "\r\n"): string {
 
 const locks = new Map<string, Semaphore.Semaphore>()
 
+/** The folder prompt for an edit and the edit after it are one decision. `patterns` has to be what the edit asks about. */
+export const followedByEdit = (ctx: Tool.Context, patterns: readonly string[]): Tool.Context => ({
+  ...ctx,
+  ask: (request) => ctx.ask({ ...request, follows: [{ permission: "edit", patterns }] }),
+})
+
 export function lock(filePath: string) {
   const resolvedFilePath = FSUtil.resolve(filePath)
   const hit = locks.get(resolvedFilePath)
@@ -83,8 +89,8 @@ export const EditTool = Tool.define(
           const filePath = path.isAbsolute(params.filePath)
             ? params.filePath
             : path.join(instance.directory, params.filePath)
-          yield* assertExternalDirectoryEffect(ctx, filePath)
           const label = path.relative(instance.worktree, filePath)
+          yield* assertExternalDirectoryEffect(followedByEdit(ctx, [label]), filePath)
 
           let diff = ""
           let contentOld = ""

@@ -37,6 +37,8 @@ export const permissionHandlers = HttpApiBuilder.group(InstanceHttpApi, "permiss
           ),
         )
       if (moved && ctx.payload.reply !== "reject") yield* late.permission(moved).pipe(Effect.forkIn(scope))
+      if (moved && ctx.payload.reply === "reject")
+        yield* late.rejected(moved, ctx.payload.message).pipe(Effect.forkIn(scope))
       return true
     })
 

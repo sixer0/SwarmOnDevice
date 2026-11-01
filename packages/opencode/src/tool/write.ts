@@ -11,7 +11,7 @@ import { Watcher } from "@opencode-ai/core/filesystem/watcher"
 import { Format } from "../format"
 import { FSUtil } from "@opencode-ai/core/fs-util"
 import { InstanceState } from "@/effect/instance-state"
-import { lock, trimDiff } from "./edit"
+import { followedByEdit, lock, trimDiff } from "./edit"
 import { FileSeen } from "./file-seen"
 import { Secrets } from "./secrets"
 import { assertExternalDirectoryEffect } from "./external-directory"
@@ -44,7 +44,8 @@ export const WriteTool = Tool.define(
           const filepath = path.isAbsolute(params.filePath)
             ? params.filePath
             : path.join(instance.directory, params.filePath)
-          yield* assertExternalDirectoryEffect(ctx, filepath)
+          const label = path.relative(instance.worktree, filepath)
+          yield* assertExternalDirectoryEffect(followedByEdit(ctx, [label]), filepath)
 
           const exists = yield* fs.existsSafe(filepath)
           const source = exists ? yield* Bom.readFile(fs, filepath) : { bom: false, text: "" }
@@ -54,7 +55,6 @@ export const WriteTool = Tool.define(
           const contentNew = next.text
 
           const diff = trimDiff(createTwoFilesPatch(filepath, filepath, contentOld, contentNew))
-          const label = path.relative(instance.worktree, filepath)
           Secrets.assertNoPlaceholder(contentNew, contentOld, label)
           const trust = yield* Reach.editTrust(ctx, instance, [filepath])
           yield* ctx.ask({

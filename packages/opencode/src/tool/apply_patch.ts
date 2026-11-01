@@ -90,9 +90,32 @@ export const ApplyPatchTool = Tool.define(
 
       let totalDiff = ""
 
+      // All the folders first, each once, and one answer for all of them and the edit. Prompt by prompt, a retry would use
+      // up the first folder's answer on its way to the next one and never get to the end of a patch.
+      const targets = hunks.flatMap((hunk) => [
+        path.resolve(instance.directory, hunk.path),
+        ...(hunk.type === "update" && hunk.move_path ? [path.resolve(instance.directory, hunk.move_path)] : []),
+      ])
+      const outside: Parameters<Tool.Context["ask"]>[0][] = []
+      const scout: Tool.Context = { ...ctx, ask: (request) => Effect.sync(() => void outside.push(request)) }
+      for (const target of targets) yield* assertExternalDirectoryEffect(scout, target)
+      const folders = outside.filter(
+        (request, index) => outside.findIndex((other) => other.patterns[0] === request.patterns[0]) === index,
+      )
+      const edited = targets.map((file) => path.relative(instance.worktree, file).replaceAll("\\", "/"))
+      for (const request of folders) {
+        const others = folders.filter((other) => other !== request)
+        yield* ctx.ask({
+          ...request,
+          follows: [
+            ...others.map((other) => ({ permission: other.permission, patterns: other.patterns })),
+            { permission: "edit", patterns: edited },
+          ],
+        })
+      }
+
       for (const hunk of hunks) {
         const filePath = path.resolve(instance.directory, hunk.path)
-        yield* assertExternalDirectoryEffect(ctx, filePath)
 
         switch (hunk.type) {
           case "add": {
@@ -163,7 +186,6 @@ export const ApplyPatchTool = Tool.define(
             }
 
             const movePath = hunk.move_path ? path.resolve(instance.directory, hunk.move_path) : undefined
-            yield* assertExternalDirectoryEffect(ctx, movePath)
             const replaces =
               movePath && (yield* afs.existsSafe(movePath)) ? (yield* Bom.readFile(afs, movePath)).text : undefined
 

@@ -384,6 +384,8 @@ const ask = Effect.fn("ShellTool.ask")(function* (
   input: { command: string; cwd: string },
   always: string | undefined,
 ) {
+  // A bare `cd x` or a text the parser found no command in still asks, as itself.
+  const patterns = scan.patterns.size > 0 ? Array.from(scan.patterns) : [input.command]
   if (scan.dirs.size > 0) {
     const directories = Array.from(scan.dirs)
     const globs = directories.map((dir) => {
@@ -401,14 +403,15 @@ const ask = Effect.fn("ShellTool.ask")(function* (
         patterns: globs,
         ...(scan.risk ? { risk: scan.risk } : {}),
       },
+      // One command, so one decision: this prompt already shows it.
+      follows: [{ permission: ShellID.ToolID, patterns }],
     })
   }
 
   const rule = scan.risk || scan.dirs.size > 0 ? undefined : always
   yield* ctx.ask({
     permission: ShellID.ToolID,
-    // A bare `cd x` or a text the parser found no command in still asks, as itself.
-    patterns: scan.patterns.size > 0 ? Array.from(scan.patterns) : [input.command],
+    patterns,
     always: rule ? [rule] : [],
     metadata: {
       command: input.command,

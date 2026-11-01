@@ -17329,6 +17329,10 @@
           },
           "movedOnAt": {
             "type": "number"
+          },
+          "deferred": {
+            "type": "boolean",
+            "enum": [true]
           }
         },
         "required": ["id", "sessionID", "permission", "patterns", "metadata", "always"],
@@ -21934,6 +21938,10 @@
                       },
                       "movedOnAt": {
                         "type": "number"
+                      },
+                      "deferred": {
+                        "type": "boolean",
+                        "enum": [true]
                       }
                     },
                     "required": ["id", "sessionID", "permission", "patterns", "metadata", "always"],
@@ -35061,6 +35069,10 @@
               },
               "movedOnAt": {
                 "type": "number"
+              },
+              "deferred": {
+                "type": "boolean",
+                "enum": [true]
               }
             },
             "required": ["id", "sessionID", "permission", "patterns", "metadata", "always"],
@@ -38579,6 +38591,10 @@
               },
               "movedOnAt": {
                 "type": "number"
+              },
+              "deferred": {
+                "type": "boolean",
+                "enum": [true]
               }
             },
             "required": ["id", "sessionID", "permission", "patterns", "metadata", "always"],

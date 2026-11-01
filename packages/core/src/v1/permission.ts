@@ -2,7 +2,7 @@ export * as PermissionV1 from "./permission"
 
 import { Schema } from "effect"
 export * from "@opencode-ai/schema/permission-v1"
-import { ID } from "@opencode-ai/schema/permission-v1"
+import { DeferredError, ID } from "@opencode-ai/schema/permission-v1"
 
 export class RejectedError extends Schema.TaggedErrorClass<RejectedError>()("PermissionRejectedError", {}) {
   override get message() {
@@ -36,4 +36,4 @@ export class NotFoundError extends Schema.TaggedErrorClass<NotFoundError>()("Per
   requestID: ID,
 }) {}
 
-export type Error = DeniedError | RejectedError | CorrectedError | AwayError
+export type Error = DeniedError | RejectedError | CorrectedError | AwayError | DeferredError

@@ -385,7 +385,7 @@ it.instance(
         filePath: path.join(test.directory, "package.json"),
         content: "{}\n",
       })
-      expect(held).toBeInstanceOf(PermissionV1.AwayError)
+      expect(held).toBeInstanceOf(PermissionV1.DeferredError)
       expect(yield* audit(root.id)).toEqual([["D", "sensitive_file"]])
     }),
   shipped,

@@ -3,7 +3,7 @@ import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { ConfigPermissionV1 } from "@opencode-ai/core/v1/config/permission"
 import { InstanceState } from "@/effect/instance-state"
 import { Wildcard } from "@opencode-ai/core/util/wildcard"
-import { Deferred, Effect, Layer, Context, Option } from "effect"
+import { Deferred, Effect, Layer, Context, Option, Schema } from "effect"
 import os from "os"
 import path from "path"
 import { PermissionV1 } from "@opencode-ai/core/v1/permission"
@@ -19,27 +19,38 @@ export const Event = PermissionV1.Event
 
 export const MAX_SKIPPED = 20
 
+/** The request an answer settled, with what that one answer also covers. Not public: `follows` never leaves the server. */
+export type Answered = PermissionV1.Request & { follows?: PermissionV1.Follows }
+
+export interface Grant extends Pick<PermissionV1.Request, "sessionID" | "permission" | "patterns"> {
+  /** Came along with another request's answer, so nobody looked at this one by itself. A refusal still holds for it. */
+  followed?: boolean
+}
+
 export interface Interface {
   readonly ask: (input: PermissionV1.AskInput) => Effect.Effect<void, PermissionV1.Error>
   /** Returns the request when the agent had already carried on without it: the caller decides how to pick that back up. */
   readonly reply: (
     input: PermissionV1.ReplyInput,
-  ) => Effect.Effect<PermissionV1.Request | undefined, PermissionV1.NotFoundError>
+  ) => Effect.Effect<Answered | undefined, PermissionV1.NotFoundError>
   /** Lets one later call through without asking, for what the user allowed after the agent had carried on. */
-  readonly grant: (input: Pick<PermissionV1.Request, "sessionID" | "permission" | "patterns">) => Effect.Effect<void>
+  readonly grant: (input: Grant) => Effect.Effect<void>
   readonly list: () => Effect.Effect<ReadonlyArray<PermissionV1.Request>>
 }
 
 interface PendingEntry {
   info: PermissionV1.Request
   noAlways?: boolean
+  follows?: PermissionV1.Follows
+  /** Set when autonomous mode held this, which is also what the agent gets told while it stays held. */
+  category?: PermissionV1.DeferredCategory
   deferred: Deferred.Deferred<void, PermissionV1.RejectedError | PermissionV1.CorrectedError>
 }
 
 interface State {
   pending: Map<PermissionV1.ID, PendingEntry>
   approved: PermissionV1.Rule[]
-  grants: Pick<PermissionV1.Request, "sessionID" | "permission" | "patterns">[]
+  grants: Grant[]
   /** Sessions whose last request went unanswered: nobody is there, so the next one is not worth a long wait. */
   away: Set<PermissionV1.Request["sessionID"]>
 }
@@ -96,6 +107,13 @@ class DeciderRefusedError extends PermissionV1.DeniedError {
   }
 }
 
+/** Class X. Nobody wrote a rule and nobody can answer this, so the text says neither. */
+class RefusedByModeError extends PermissionV1.DeniedError {
+  override get message() {
+    return "This call did not run. Autonomous mode never allows this kind of call, whoever is asked. Do not try to get the same effect another way. Carry on with everything that does not depend on it, and list what was refused in your final message."
+  }
+}
+
 /** Settles class P. A seam, so a test can count what reaches it. */
 export class Decider extends Context.Service<
   Decider,
@@ -111,6 +129,8 @@ const held = (category: AutonomyTable.HeldCategory): AutonomyTable.Verdict => ({
   decidedBy: "gate",
   category,
 })
+
+const isHeldCategory = Schema.is(PermissionV1.DeferredCategory)
 
 const layer = Layer.effect(
   Service,
@@ -153,6 +173,8 @@ const layer = Layer.effect(
       input: PermissionV1.AskInput,
       requestID: PermissionV1.ID,
       userCatchAll: boolean,
+      // A person's answer to another request already covers this, so only a refusal is left to find.
+      followed = false,
     ) {
       const instance = yield* InstanceState.context
       const root = yield* rootOf(input.sessionID)
@@ -189,6 +211,7 @@ const layer = Layer.effect(
             editClass: input.editClass,
             plan: input.agent === "plan" || last === undefined || last.agent === "plan",
             rule: userCatchAll ? "user_catch_all" : undefined,
+            follows: input.follows,
           }),
         catch: String,
       }).pipe(
@@ -198,6 +221,7 @@ const layer = Layer.effect(
           ),
         ),
       )
+      if (followed && table.class !== "X") return undefined
       // Relative paths in a command mean nothing until its real folder is known, so no decider sees it without one.
       const placed = table.class === "P" && input.permission === "bash" && !cwd ? held("not_routine") : table
       const verdict = Autonomy.afterCheck(placed.class, check) === placed.class ? placed : held("not_routine")
@@ -265,9 +289,15 @@ const layer = Layer.effect(
       return { class: verdict.class, decision, category }
     })
 
+    const inMode = Effect.fnUntraced(function* (sessionID: SessionID) {
+      const instance = yield* InstanceState.context
+      const root = yield* rootOf(sessionID)
+      return (yield* autonomy.check({ root: root.id, directory: root.directory ?? instance.directory })).on
+    })
+
     const ask = Effect.fn("Permission.ask")(function* (input: PermissionV1.AskInput) {
       const { approved, away, grants, pending } = yield* InstanceState.get(state)
-      const { ruleset, harmless, noAlways, ...request } = input
+      const { ruleset, harmless, noAlways, follows, ...request } = input
       let needsAsk = false
       let userCatchAll = false
 
@@ -291,19 +321,26 @@ const layer = Layer.effect(
       if (!needsAsk) return
 
       const granted = grants.findIndex((grant) => sameRequest(grant, request))
+      const id = request.id ?? PermissionV1.ID.ascending()
       if (granted >= 0) {
-        grants.splice(granted, 1)
+        const [grant] = grants.splice(granted, 1)
+        if (!grant?.followed) return
+        // The person answered the prompt before this one, so what this one turned out to be was never in front of them.
+        const gated = yield* gate(input, id, userCatchAll, true)
+        if (gated?.class === "X") return yield* new RefusedByModeError({ ruleset: [] })
         return
       }
       // Already waiting for the user's decision on exactly this. Asking again would only add a wait and a second row.
-      if ([...pending.values()].some((item) => item.info.movedOnAt && sameRequest(item.info, request)))
-        return yield* new PermissionV1.AwayError()
+      const waiting = [...pending.values()].find((item) => item.info.movedOnAt && sameRequest(item.info, request))
+      if (waiting && !waiting.category) return yield* new PermissionV1.AwayError()
+      // With the mode off the entry stays answerable, and this is a new request that gets an ordinary prompt.
+      if (waiting?.category && (yield* inMode(request.sessionID)))
+        return yield* new PermissionV1.DeferredError({ category: waiting.category })
 
-      const id = request.id ?? PermissionV1.ID.ascending()
       const gated = yield* gate(input, id, userCatchAll)
       if (gated?.decision === "allow") return
       // Refused by what it is, so no person is asked. Not a rejection: that error ends the run, and this one reports back.
-      if (gated?.class === "X") return yield* new PermissionV1.DeniedError({ ruleset: [] })
+      if (gated?.class === "X") return yield* new RefusedByModeError({ ruleset: [] })
       if (gated?.decision === "reject") return yield* new DeciderRefusedError({ ruleset: [] })
 
       // A repeating call stops the run on purpose until a person looks. Carrying on would defeat that guard.
@@ -325,18 +362,19 @@ const layer = Layer.effect(
       // Held for the person with the agent already released, whatever the unattended wait is set to. An "always" on one
       // of these would open more than the single call anyone looked at, so it has nothing to apply to.
       if (gated?.decision === "defer") {
-        const moved: PermissionV1.Request = { ...asked, always: [], movedOnAt: Date.now() }
-        pending.set(id, { info: moved, deferred, noAlways })
-        yield* Effect.logInfo("held", { id, permission: moved.permission, category: gated.category })
+        const category = isHeldCategory(gated.category) ? gated.category : "not_routine"
+        const moved: PermissionV1.Request = { ...asked, always: [], movedOnAt: Date.now(), deferred: true }
+        pending.set(id, { info: moved, deferred, noAlways, follows, category })
+        yield* Effect.logInfo("held", { id, permission: moved.permission, category })
         yield* events.publish(Event.Asked, moved)
-        return yield* new PermissionV1.AwayError()
+        return yield* new PermissionV1.DeferredError({ category })
       }
-      pending.set(id, { info, deferred, noAlways })
+      pending.set(id, { info, deferred, noAlways, follows })
       yield* events.publish(Event.Asked, info)
       const moveOn = Effect.gen(function* () {
         // The request stays listed and answerable. The agent is released, not the decision.
         const moved: PermissionV1.Request = { ...asked, movedOnAt: Date.now() }
-        pending.set(id, { info: moved, deferred, noAlways })
+        pending.set(id, { info: moved, deferred, noAlways, follows })
         away.add(request.sessionID)
         yield* Effect.logInfo("moved on", { id, permission: info.permission })
         yield* events.publish(Event.Asked, moved)
@@ -386,7 +424,7 @@ const layer = Layer.effect(
               action: "allow" as const,
             })),
           )
-        return existing.info
+        return existing.follows ? { ...existing.info, follows: existing.follows } : existing.info
       }
 
       if (input.reply === "reject") {
@@ -442,11 +480,14 @@ const layer = Layer.effect(
       return Array.from(pending.values(), (item) => item.info)
     })
 
-    const grant = Effect.fn("Permission.grant")(function* (
-      input: Pick<PermissionV1.Request, "sessionID" | "permission" | "patterns">,
-    ) {
+    const grant = Effect.fn("Permission.grant")(function* (input: Grant) {
       const { grants } = yield* InstanceState.get(state)
-      grants.push({ sessionID: input.sessionID, permission: input.permission, patterns: input.patterns })
+      grants.push({
+        sessionID: input.sessionID,
+        permission: input.permission,
+        patterns: input.patterns,
+        followed: input.followed,
+      })
     })
 
     return Service.of({ ask, reply, grant, list })

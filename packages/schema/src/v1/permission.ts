@@ -38,6 +38,9 @@ export const Request = Schema.Struct({
   movedOnAt: Schema.optional(Schema.Finite).annotate({
     description: "When the agent carried on without this. It can still be answered, which continues the session",
   }),
+  deferred: Schema.optional(Schema.Literal(true)).annotate({
+    description: "Autonomous mode held this for the user's decision: the agent never waited for it",
+  }),
 }).annotate({ identifier: "PermissionRequest" })
 export type Request = typeof Request.Type
 
@@ -59,6 +62,39 @@ export const EditClass = Schema.Literals(["ordinary", "not_ordinary", "no_undo",
 })
 export type EditClass = typeof EditClass.Type
 
+/** Why autonomous mode did not run a call. Closed, so nothing a repository wrote can reach the agent through it. */
+export const DeferredCategory = Schema.Literals([
+  "outside_folder",
+  "outward",
+  "not_reversible",
+  "sensitive_file",
+  "secret_file",
+  "external_tool",
+  "no_undo",
+  "not_routine",
+  "queue_full",
+  "decider_unavailable",
+  "folder_not_trusted",
+  "plan_mode",
+  "app_state",
+  "asks_every_time",
+]).annotate({ identifier: "PermissionDeferredCategory" })
+export type DeferredCategory = typeof DeferredCategory.Type
+
+export class DeferredError extends Schema.TaggedErrorClass<DeferredError>()("PermissionDeferredError", {
+  category: DeferredCategory,
+}) {
+  override get message() {
+    return `This call did not run. In autonomous mode it is held for the user's decision: \`${this.category}\`. Do not try to get the same effect another way. Carry on with everything that does not depend on it, and list what is waiting in your final message. To look at something in the project use read, glob, grep or git, which ask nobody. Checks such as tests and builds run as plain commands, for example \`bun test path\` with \`workdir\`; no other operators.`
+  }
+}
+
+/** A prompt the same call would raise next. One decision answers it too, so a person is not asked twice about one call. */
+export const Follows = Schema.Array(
+  Schema.Struct({ permission: Schema.String, patterns: Schema.Array(Schema.String) }),
+).annotate({ identifier: "PermissionFollows" })
+export type Follows = typeof Follows.Type
+
 export const AskInput = Schema.Struct({
   ...Request.fields,
   id: Schema.optional(ID),
@@ -72,6 +108,7 @@ export const AskInput = Schema.Struct({
   agent: Schema.optional(Schema.String),
   editClass: Schema.optional(EditClass),
   canUndo: Schema.optional(Schema.Boolean),
+  follows: Schema.optional(Follows),
 }).annotate({
   identifier: "PermissionAskInput",
 })

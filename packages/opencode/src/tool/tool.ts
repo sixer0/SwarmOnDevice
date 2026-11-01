@@ -56,6 +56,7 @@ export type Context<M extends Metadata = Metadata> = {
       harmless?: boolean
       noAlways?: boolean
       editClass?: PermissionV1.EditClass
+      follows?: PermissionV1.Follows
       /** Under the plan agent's limits in autonomous mode: no rule or earlier answer settles this before the gate. */
       planLimited?: boolean
     },
