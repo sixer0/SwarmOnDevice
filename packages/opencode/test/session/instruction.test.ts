@@ -206,6 +206,26 @@ describe("Instruction.resolve", () => {
     ),
   )
 
+  it.live("does not take a folder that only shares the session directory's name for part of it", () =>
+    Effect.gen(function* () {
+      const base = yield* tmpWithFiles({
+        "Swarm/keep.txt": "",
+        "Swarm.app/AGENTS.md": "# Neighbour Instructions",
+        "Swarm.app/Contents/note.md": "text",
+      })
+
+      yield* Effect.gen(function* () {
+        const svc = yield* Instruction.Service
+        const results = yield* svc.resolve(
+          [],
+          path.join(base, "Swarm.app", "Contents", "note.md"),
+          MessageID.make("msg_message-boundary-1"),
+        )
+        expect(results).toEqual([])
+      }).pipe(provideInstance(path.join(base, "Swarm")), provideInstruction({ home: base, config: base }))
+    }),
+  )
+
   test.todo("fetches remote instructions from config URLs via HttpClient", () => {})
 })
 
