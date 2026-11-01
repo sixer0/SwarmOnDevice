@@ -1435,4 +1435,5 @@ export const dict = {
   "session.movedOn.leave": "그대로 두기",
   "session.movedOn.answer": "답변",
   "home.agents.movedOn": "이것 없이 계속했습니다 · {{time}}",
+  "home.setup.attention": "설정의 일부에 확인이 필요합니다.",
 }

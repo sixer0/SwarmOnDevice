@@ -1437,4 +1437,5 @@ export const dict = {
   "session.movedOn.leave": "ထားလိုက်ပါ",
   "session.movedOn.answer": "ဖြေရန်",
   "home.agents.movedOn": "ဤအရာမပါဘဲ ဆက်လုပ်ခဲ့သည် · {{time}}",
+  "home.setup.attention": "သင့်တပ်ဆင်မှု၏ အစိတ်အပိုင်းတစ်ခုကို အာရုံစိုက်ရန် လိုအပ်သည်။",
 }

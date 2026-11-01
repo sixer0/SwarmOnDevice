@@ -1417,4 +1417,5 @@ export const dict = {
   "session.movedOn.leave": "დატოვება",
   "session.movedOn.answer": "პასუხი",
   "home.agents.movedOn": "გააგრძელა ამის გარეშე · {{time}}",
+  "home.setup.attention": "თქვენი დაყენების ნაწილს ყურადღება სჭირდება.",
 }

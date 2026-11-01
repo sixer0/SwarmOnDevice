@@ -1532,4 +1532,5 @@ export const dict = {
   "session.movedOn.leave": "Dejarlo",
   "session.movedOn.answer": "Responder",
   "home.agents.movedOn": "Siguió sin esto · {{time}}",
+  "home.setup.attention": "Parte de tu configuración necesita atención.",
 }

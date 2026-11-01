@@ -1441,4 +1441,5 @@ export const dict: Record<string, string> = {
   "session.movedOn.leave": "བཞག",
   "session.movedOn.answer": "ལན་འདེབས།",
   "home.agents.movedOn": "འདི་མེད་པར་འཕྲོ་མཐུད་འབད་ཡི། · {{time}}",
+  "home.setup.attention": "ཁྱོད་ཀྱི་གཞི་སྒྲིག་གི་ཆ་ཤས་ཅིག་ལུ་དོ་སྣང་དགོ།",
 }

@@ -1416,4 +1416,5 @@ export const dict = {
   "session.movedOn.leave": "رهایش کن",
   "session.movedOn.answer": "پاسخ",
   "home.agents.movedOn": "بدون این ادامه داد · {{time}}",
+  "home.setup.attention": "بخشی از راه‌اندازی شما نیاز به توجه دارد.",
 }

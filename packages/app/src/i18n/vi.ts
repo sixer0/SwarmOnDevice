@@ -1436,4 +1436,5 @@ export const dict = {
   "session.movedOn.leave": "Để nguyên",
   "session.movedOn.answer": "Trả lời",
   "home.agents.movedOn": "Đã tiếp tục mà không có điều này · {{time}}",
+  "home.setup.attention": "Một phần thiết lập của bạn cần được chú ý.",
 }

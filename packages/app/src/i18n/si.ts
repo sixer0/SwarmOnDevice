@@ -1413,4 +1413,5 @@ export const dict: Record<string, string> = {
   "session.movedOn.leave": "එලෙසම තබන්න",
   "session.movedOn.answer": "පිළිතුරු දෙන්න",
   "home.agents.movedOn": "මෙය නොමැතිව ඉදිරියට ගියේය · {{time}}",
+  "home.setup.attention": "ඔබගේ පිහිටුවීමේ කොටසකට අවධානය අවශ්‍යයි.",
 }

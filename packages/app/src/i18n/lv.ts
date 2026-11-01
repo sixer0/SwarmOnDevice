@@ -1421,4 +1421,5 @@ export const dict = {
   "session.movedOn.leave": "Atstāt",
   "session.movedOn.answer": "Atbildēt",
   "home.agents.movedOn": "Turpināja bez šī · {{time}}",
+  "home.setup.attention": "Daļai jūsu iestatījumu jāpievērš uzmanība.",
 }

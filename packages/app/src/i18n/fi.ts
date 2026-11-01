@@ -1435,4 +1435,5 @@ export const dict = {
   "session.movedOn.leave": "Jätä näin",
   "session.movedOn.answer": "Vastaa",
   "home.agents.movedOn": "Jatkoi ilman tätä · {{time}}",
+  "home.setup.attention": "Osa asetuksistasi vaatii huomiota.",
 }

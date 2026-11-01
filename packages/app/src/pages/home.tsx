@@ -11,7 +11,8 @@ import { createHomeScrollController } from "./home/home-scroll-controller"
 import { createHomeSessionSearchController } from "./home/home-session-search-controller"
 import { createHomeSessionsController } from "./home/home-sessions-controller"
 import { HomeSessions } from "./home/home-sessions"
-import { HomeStatusCard } from "@/components/home-status-card"
+import { HomeSetupNotice } from "@/components/home-status-card"
+import { useSettingsDialog } from "@/components/settings-dialog"
 
 export function NewHome() {
   const home = createHomeController()
@@ -21,6 +22,7 @@ export function NewHome() {
   const scroll = createHomeScrollController(sessions.data.groups)
   const board = createAgentBoardController(home, sessions)
   const landedWork = createLandedWork()
+  const openSetup = useSettingsDialog("servers")
   // One session, one row: what needs an answer is above, so it does not appear again below.
   const groups = createMemo(() => {
     const waiting = new Set(board.board.needs.map((need) => need.root.id))
@@ -55,7 +57,12 @@ export function NewHome() {
             sessions={sessions}
             search={search}
             scroll={scroll}
-            board={<AgentBoardView board={board} />}
+            board={
+              <>
+                <HomeSetupNotice onOpen={openSetup} />
+                <AgentBoardView board={board} />
+              </>
+            }
             groups={groups}
             waiting={() => board.board.needs.length > 0}
             landed={(session) => {
@@ -68,11 +75,6 @@ export function NewHome() {
               if (conn) projects.project.choose(conn)
             }}
           />
-          {/* Fourth grid child: under the sessions on large screens, since the projects column is sticky and spanning it
-              would draw over this card. Stacks below on small. Visible in both transports (spec §8). */}
-          <div class="min-w-0 lg:col-start-2">
-            <HomeStatusCard />
-          </div>
           <HomeUtilityNav
             class="flex lg:hidden"
             onOpenSettings={projects.utility.settings}

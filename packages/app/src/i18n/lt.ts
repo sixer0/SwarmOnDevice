@@ -1433,4 +1433,5 @@ export const dict = {
   "session.movedOn.leave": "Palikti",
   "session.movedOn.answer": "Atsakyti",
   "home.agents.movedOn": "Tęsė be šito · {{time}}",
+  "home.setup.attention": "Dalį jūsų sąrankos reikia peržiūrėti.",
 }

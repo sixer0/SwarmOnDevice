@@ -3,41 +3,61 @@ import { useGlobal } from "@/context/global"
 import { useLanguage } from "@/context/language"
 import { useServer } from "@/context/server"
 import { createSetupStatus } from "@/context/setup-status"
-import { buildStatusCardModel, type Cell, type Level3Input, type LadderRow } from "./home-status-card.model"
+import { ButtonV2 } from "@opencode-ai/ui/v2/button-v2"
+import { buildStatusCardModel, setupNeedsAttention, type Cell, type Level3Input, type LadderRow } from "./home-status-card.model"
 import { LaneControls } from "./lane-controls"
 
-// Home status card (row 203). Renders four INDEPENDENT levels per surface, each labelled with its own source and
+// Setup status card (row 203). Renders four INDEPENDENT levels per surface, each labelled with its own source and
 // freshness, and never collapses them into a verdict (masterplan/04_s6_status_spec.md §6 R1/R2/R3). All honesty
 // decisions live in home-status-card.model.ts; this file only lays those decisions out, so a reviewer diffing
 // layout cannot accidentally move a truthfulness rule.
 //
-// HOME-SPLIT DECISION (spec §8, dispatch item 2): mounted on BOTH NewHome (pages/home.tsx) and LegacyHome
-// (pages/home/legacy-home.tsx), so neither layout is blind to it. newLayoutDesigns defaults true
-// (context/settings.tsx:61), so NewHome is the common case; legacy is the exception but still gets the card.
+// PLACEMENT (user decision 2026-11-01, replacing spec §8's mount on Home): the card is technical detail for someone
+// who went looking, so it lives on the Servers page of Settings (settings-v2/servers.tsx). Home only gets
+// HomeSetupNotice below, and only when something actually broke. The older layout passed its sunset
+// (context/settings.tsx:63, resolveNewLayoutDesigns), so no one can reach LegacyHome or its Settings dialog any more.
 //
 // LEVEL 3 POSTURE (spec §6 R4, AC-192-8): the card does NOT fetch `/mcp` to fill itself, because the first read
 // for a directory spawns every configured child (opencode/src/mcp/index.ts:598 -> :508-531). It renders level 3
 // as `unknown / not_observed` unless the caller already holds a directory-scoped observation and passes it via
 // the `mcp` prop. Populating level 3 is therefore an explicit, disclosed action owned by the caller, not a side
-// effect of opening Home. The non-forcing "has this instance booted?" primitive R4 option (a) needs is not
+// effect of opening the page. The non-forcing "has this instance booted?" primitive R4 option (a) needs is not
 // exposed today (mcp/index.ts:167-190), so option (b) is the only fully-honest default.
 
-export function HomeStatusCard(props: { mcp?: Level3Input }) {
-  const language = useLanguage()
-  // The client is reached through Global/Server, not ServerSDK: ServerSDKProvider is mounted only on the
-  // server-scoped session routes (app.tsx:123/170/217), NOT on either Home layout (NewHome sits under
-  // SharedProviders at app.tsx:570-576, which has no SDK provider; LegacyHome's shell reaches data via Global too).
-  // ensureServerCtx(conn).sdk.client is the same client server-sdk itself uses (server-sdk.tsx:398) and is
-  // available wherever GlobalProvider + ServerProvider are — i.e. both Home surfaces.
+// The client is reached through Global/Server, not ServerSDK: ServerSDKProvider is mounted only on the
+// server-scoped session routes (app.tsx:123/170/217), NOT on either Home layout (NewHome sits under
+// SharedProviders at app.tsx:570-576, which has no SDK provider; LegacyHome's shell reaches data via Global too).
+// ensureServerCtx(conn).sdk.client is the same client server-sdk itself uses (server-sdk.tsx:398) and is
+// available wherever GlobalProvider + ServerProvider are, so both Home layouts and the Settings dialog.
+function useSetupClient() {
   const global = useGlobal()
   const server = useServer()
-  // Resolved once and shared by the setup-status seam and the lane-controls block: the same client server-sdk uses
-  // (server-sdk.tsx:398), available wherever GlobalProvider + ServerProvider are — i.e. both Home surfaces.
-  const getClient = () => {
+  return () => {
     const conn = server.current
     if (!conn) return undefined
     return global.ensureServerCtx(conn).sdk.client
   }
+}
+
+/** One line on Home when setup needs a look, and nothing at all otherwise. Same shape as the board's unreachable line. */
+export function HomeSetupNotice(props: { onOpen: () => void }) {
+  const language = useLanguage()
+  const status = createSetupStatus(useSetupClient())
+  return (
+    <Show when={setupNeedsAttention(status.read)}>
+      <div data-setup-attention class="flex items-center gap-2 pl-3 pr-3 pt-3 text-v2-text-text-muted [font-weight:440]">
+        <span class="min-w-0 truncate">{language.t("home.setup.attention")}</span>
+        <ButtonV2 type="button" variant="ghost-muted" size="small" onClick={props.onOpen}>
+          {language.t("sidebar.settings")}
+        </ButtonV2>
+      </div>
+    </Show>
+  )
+}
+
+export function HomeStatusCard(props: { mcp?: Level3Input }) {
+  const language = useLanguage()
+  const getClient = useSetupClient()
   // i18n keys are not compile-checked anywhere in this app — `Flatten` collapses the dictionary to a string index
   // (context/language.tsx:29-30,192-195), so `t` accepts any string with or without a cast here (measured in
   // verification/s6_05_codereview.md §7). The former widening cast hid nothing and is deleted as F-14 cleanup;
@@ -130,7 +150,7 @@ function CellView(props: { cell: Cell; tKey: ReturnType<typeof useLanguage>["t"]
     return cell.token ?? ""
   }
   return (
-    <span class="flex items-baseline gap-1.5 text-right" data-kind={props.cell.kind}>
+    <span class="flex min-w-0 flex-wrap items-baseline justify-end gap-x-1.5 text-right [overflow-wrap:anywhere]" data-kind={props.cell.kind}>
       <span class="text-12-regular text-v2-text-text-base">{value()}</span>
       {/* Causes, details and sources are R7 monospace technical tokens, never translated or dressed up. */}
       <Show when={props.cell.causeToken}>

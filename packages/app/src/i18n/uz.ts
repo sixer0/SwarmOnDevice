@@ -1432,4 +1432,5 @@ export const dict = {
   "session.movedOn.leave": "Qoldirish",
   "session.movedOn.answer": "Javob berish",
   "home.agents.movedOn": "Bunsiz davom etdi · {{time}}",
+  "home.setup.attention": "Sozlamangizning bir qismi e'tibor talab qiladi.",
 }

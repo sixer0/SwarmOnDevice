@@ -1438,4 +1438,5 @@ export const dict = {
   "session.movedOn.leave": "ދޫކޮށްލާ",
   "session.movedOn.answer": "ޖަވާބުދޭ",
   "home.agents.movedOn": "މިއާ ނުލައި ކުރިއަށްދިޔައީ · {{time}}",
+  "home.setup.attention": "ތިޔަބޭފުޅާގެ ސެޓަޕްގެ ބައެއްގެ މައްޗަށް ސަމާލުކަން ބޭނުންވެއެވެ.",
 }

@@ -1448,4 +1448,5 @@ export const dict = {
   "session.movedOn.leave": "Deixar assim",
   "session.movedOn.answer": "Responder",
   "home.agents.movedOn": "Continuou sem isso · {{time}}",
+  "home.setup.attention": "Ul lodenn eus ho staliadur he deus ezhomm evezh.",
 }

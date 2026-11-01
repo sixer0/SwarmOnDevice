@@ -1438,4 +1438,5 @@ export const dict = {
   "session.movedOn.leave": "Laten zo",
   "session.movedOn.answer": "Antwoorden",
   "home.agents.movedOn": "Hier zonder doorgegaan · {{time}}",
+  "home.setup.attention": "Een deel van je installatie vraagt om aandacht.",
 }

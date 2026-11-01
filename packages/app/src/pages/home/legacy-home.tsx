@@ -1,6 +1,5 @@
 import { DialogSelectServer } from "@/components/dialog-select-server"
 import { useDirectoryPicker } from "@/components/directory-picker"
-import { HomeStatusCard } from "@/components/home-status-card"
 import { useGlobal } from "@/context/global"
 import { useLanguage } from "@/context/language"
 import { type ServerConnection, useServer } from "@/context/server"
@@ -138,11 +137,6 @@ export function LegacyHome() {
           </div>
         </Match>
       </Switch>
-      {/* Same card as NewHome (spec §8 home-split decision: both layouts, no blind spot). Constrained to the
-          legacy column width so it does not stretch past the centered content. */}
-      <div class="mx-auto mt-10 w-full max-w-[560px]">
-        <HomeStatusCard />
-      </div>
     </div>
   )
 }

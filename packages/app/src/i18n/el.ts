@@ -1434,4 +1434,5 @@ export const dict = {
   "session.movedOn.leave": "Αφήστε το",
   "session.movedOn.answer": "Απάντηση",
   "home.agents.movedOn": "Συνέχισε χωρίς αυτό · {{time}}",
+  "home.setup.attention": "Μέρος της ρύθμισής σας χρειάζεται προσοχή.",
 }

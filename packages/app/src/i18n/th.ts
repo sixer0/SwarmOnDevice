@@ -1505,4 +1505,5 @@ export const dict = {
   "session.movedOn.leave": "ปล่อยไว้",
   "session.movedOn.answer": "ตอบ",
   "home.agents.movedOn": "ทำต่อโดยไม่มีสิ่งนี้ · {{time}}",
+  "home.setup.attention": "การตั้งค่าบางส่วนของคุณต้องได้รับการตรวจสอบ",
 }

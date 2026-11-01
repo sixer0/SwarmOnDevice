@@ -238,6 +238,18 @@ function pendingOrUnknown(surface: SetupSurfaceId): Cell {
   return { kind: "unknown", causeToken: "not_observed", labelKey: "common.unknown", sourceToken: "~/.swarm/setup/state.json" }
 }
 
+/** Whether Home should point at the card. The one place a read becomes a yes or no, and it says no more than "go and
+ *  look": the card stays four independent levels. Only positive evidence that something broke counts. A machine where
+ *  setup never ran (`no_state_record`), a server that could not be asked and a skipped tool are all normal, so a first
+ *  launch shows nothing. */
+export function setupNeedsAttention(read: SetupRead | undefined) {
+  if (read?.kind !== "ok") return false
+  if (read.observed.stateFile.error || read.observed.registration.configFile.parseError) return true
+  return Object.values(read.observed.components ?? {}).some(
+    (component) => component?.state === "failed" || component?.state === "BLOCKED_BY_NETWORK",
+  )
+}
+
 /** Flatten every literal (non-translated) token the card will paint, for the mechanical no-aggregate and
  *  vocabulary checks. Translated labels are represented by their keys, so a raw English verdict word can never
  *  appear here by accident. */

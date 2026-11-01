@@ -1428,4 +1428,5 @@ export const dict = {
   "session.movedOn.leave": "ਰਹਿਣ ਦਿਓ",
   "session.movedOn.answer": "ਜਵਾਬ ਦਿਓ",
   "home.agents.movedOn": "ਇਸ ਤੋਂ ਬਿਨਾਂ ਜਾਰੀ ਰੱਖਿਆ · {{time}}",
+  "home.setup.attention": "ਤੁਹਾਡੇ ਸੈੱਟਅੱਪ ਦੇ ਇੱਕ ਹਿੱਸੇ ਵੱਲ ਧਿਆਨ ਦੇਣ ਦੀ ਲੋੜ ਹੈ।",
 }

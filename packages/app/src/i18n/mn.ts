@@ -1429,4 +1429,5 @@ export const dict = {
   "session.movedOn.leave": "Орхих",
   "session.movedOn.answer": "Хариулах",
   "home.agents.movedOn": "Үүнгүйгээр үргэлжилсэн · {{time}}",
+  "home.setup.attention": "Таны тохиргооны нэг хэсэгт анхаарал шаардлагатай.",
 }

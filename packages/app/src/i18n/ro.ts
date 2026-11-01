@@ -1423,4 +1423,5 @@ export const dict = {
   "session.movedOn.leave": "Lasă așa",
   "session.movedOn.answer": "Răspunde",
   "home.agents.movedOn": "A continuat fără asta · {{time}}",
+  "home.setup.attention": "O parte din configurarea ta necesită atenție.",
 }

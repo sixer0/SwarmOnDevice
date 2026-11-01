@@ -1419,4 +1419,5 @@ export const dict = {
   "session.movedOn.leave": "Nechať tak",
   "session.movedOn.answer": "Odpovedať",
   "home.agents.movedOn": "Pokračoval bez toho · {{time}}",
+  "home.setup.attention": "Časť vášho nastavenia vyžaduje pozornosť.",
 }

@@ -1,6 +1,12 @@
 import { describe, expect, test } from "bun:test"
 import type { GlobalSetup } from "@opencode-ai/sdk/v2/client"
-import { buildStatusCardModel, collectLiteralTokens, type Level3Input, type LadderRow } from "./home-status-card.model"
+import {
+  buildStatusCardModel,
+  collectLiteralTokens,
+  setupNeedsAttention,
+  type Level3Input,
+  type LadderRow,
+} from "./home-status-card.model"
 import type { SetupRead } from "../context/setup-status"
 
 // Mechanical proof for row 203. These run in the plain `src` unit lane (`bun test --conditions=solid`) because
@@ -51,6 +57,42 @@ function surface(model: ReturnType<typeof buildStatusCardModel>, id: LadderRow["
   if (!row) throw new Error(`no ladder row for ${id}`)
   return row
 }
+
+describe("whether Home points at the card", () => {
+  test("a first launch with no setup record says nothing", () => {
+    const fresh = payload({
+      stateFile: { path: "/home/u/.swarm/setup/state.json", present: false, updatedAtAbsent: true },
+      components: {},
+    })
+    expect(setupNeedsAttention(okRead(fresh))).toBe(false)
+  })
+
+  test("a healthy, absent or skipped component says nothing", () => {
+    const quiet = payload({ components: { graft: { state: "healthy" }, rtk: { state: "absent" }, node: { state: "skipped" } } })
+    expect(setupNeedsAttention(okRead(quiet))).toBe(false)
+  })
+
+  test("no answer is not a setup problem", () => {
+    expect(setupNeedsAttention(undefined)).toBe(false)
+    expect(setupNeedsAttention(failedRead("server_unreachable"))).toBe(false)
+    expect(setupNeedsAttention(failedRead("not_provided_by_this_server"))).toBe(false)
+  })
+
+  test("a failed or network-blocked component asks for attention", () => {
+    expect(setupNeedsAttention(okRead(payload({ components: { graft: { state: "failed" } } })))).toBe(true)
+    expect(setupNeedsAttention(okRead(payload({ components: { searxng: { state: "BLOCKED_BY_NETWORK" } } })))).toBe(true)
+  })
+
+  test("a state file or config that cannot be read asks for attention", () => {
+    const broken = payload({
+      stateFile: { path: "/home/u/.swarm/setup/state.json", present: true, updatedAtAbsent: false, error: "cannot read state file" },
+    })
+    expect(setupNeedsAttention(okRead(broken))).toBe(true)
+    const config = payload()
+    config.registration.configFile.parseError = "invalid JSON"
+    expect(setupNeedsAttention(okRead(config))).toBe(true)
+  })
+})
 
 describe("AC-192-1 — the negative case (mandatory)", () => {
   // Delete ONLY ~/.config/swarm/swarm.json on a machine where level 1 is true: the state record still says graft

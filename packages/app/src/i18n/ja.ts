@@ -1437,4 +1437,5 @@ export const dict = {
   "session.movedOn.leave": "そのままにする",
   "session.movedOn.answer": "回答",
   "home.agents.movedOn": "これなしで続行しました · {{time}}",
+  "home.setup.attention": "セットアップの一部に確認が必要です。",
 }

@@ -6,6 +6,7 @@ import { useDialog } from "@opencode-ai/ui/context/dialog"
 import fuzzysort from "fuzzysort"
 import { type Component, For, Show, createMemo } from "solid-js"
 import { createStore } from "solid-js/store"
+import { HomeStatusCard } from "@/components/home-status-card"
 import { ServerRowMenu } from "@/components/server/server-row-menu"
 import { ServerHealthIndicator } from "@/components/server/server-row"
 import { useLanguage } from "@/context/language"
@@ -133,6 +134,9 @@ export const SettingsServersV2: Component = () => {
             </For>
           </SettingsListV2>
         </Show>
+        <div class="mt-8 select-text">
+          <HomeStatusCard />
+        </div>
       </div>
     </>
   )

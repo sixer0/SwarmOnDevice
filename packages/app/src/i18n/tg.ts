@@ -1425,4 +1425,5 @@ export const dict = {
   "session.movedOn.leave": "Гузоштан",
   "session.movedOn.answer": "Ҷавоб додан",
   "home.agents.movedOn": "Бе ин идома дод · {{time}}",
+  "home.setup.attention": "Як қисми танзимоти шумо диққатро талаб мекунад.",
 }

@@ -1412,4 +1412,5 @@ export const dict = {
   "session.movedOn.leave": "ទុកចោល",
   "session.movedOn.answer": "ឆ្លើយ",
   "home.agents.movedOn": "បានបន្តដោយគ្មានវា · {{time}}",
+  "home.setup.attention": "ផ្នែកមួយនៃការរៀបចំរបស់អ្នកត្រូវការការយកចិត្តទុកដាក់។",
 }

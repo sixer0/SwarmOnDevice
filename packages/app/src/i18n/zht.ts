@@ -1491,4 +1491,5 @@ export const dict = {
   "session.movedOn.leave": "不處理",
   "session.movedOn.answer": "回答",
   "home.agents.movedOn": "已略過此項繼續 · {{time}}",
+  "home.setup.attention": "你的部分設定需要處理。",
 } satisfies Partial<Record<Keys, string>>

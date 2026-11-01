@@ -1431,4 +1431,5 @@ export const dict = {
   "session.movedOn.leave": "Hagyd",
   "session.movedOn.answer": "Válasz",
   "home.agents.movedOn": "Enélkül folytatta · {{time}}",
+  "home.setup.attention": "A beállítás egy része figyelmet igényel.",
 }

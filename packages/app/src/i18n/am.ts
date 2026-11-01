@@ -1390,4 +1390,5 @@ export const dict = {
   "session.movedOn.leave": "ተወው",
   "session.movedOn.answer": "መልስ",
   "home.agents.movedOn": "ያለዚህ ቀጥሏል · {{time}}",
+  "home.setup.attention": "የማዋቀርዎ ክፍል ትኩረት ይፈልጋል።",
 }
