@@ -1,5 +1,12 @@
-import { expect, test } from "bun:test"
+import { afterAll, beforeAll, expect, test } from "bun:test"
+import { appendFileSync, realpathSync } from "node:fs"
+import fs from "node:fs/promises"
+import { createRequire } from "node:module"
+import os from "node:os"
+import path from "node:path"
 import type { Configuration } from "electron-builder"
+import { libraryHooks } from "./electron-builder.config"
+import { LIBRARY_FOLDER, STAGE } from "./scripts/stage-library"
 
 const legacyDesktopEntry = "resources/linux/opencode-desktop.desktop"
 
@@ -193,4 +200,256 @@ test("minimises macOS entitlements to the ad-hoc hardened minimum", async () => 
       "com.apple.security.cs.disable-library-validation",
     ].sort(),
   )
+})
+
+// KL-26: the staged edition reaches the bundle through extraResources, guarded by both hooks. No test here
+// runs the real `stage` mode, so none of them reads the edition; content is synthetic.
+const stageScript = path.join(import.meta.dir, "scripts", "stage-library.ts")
+const savedPath = process.env.PATH
+const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "swarm-builder-config-"))
+const realBin = path.join(tempRoot, "real-bin")
+const spyBin = path.join(tempRoot, "spy-bin")
+const spyLog = path.join(tempRoot, "spy.log")
+
+beforeAll(async () => {
+  // Under `bun test` the running binary need not be on PATH, and the hooks look up `bun` by name like the builder does.
+  await fs.mkdir(realBin)
+  await fs.symlink(process.execPath, path.join(realBin, "bun"))
+  await fs.mkdir(spyBin)
+  await fs.writeFile(path.join(spyBin, "bun"), `#!/bin/sh\necho "$@" >> "${spyLog}"\n`, { mode: 0o755 })
+  process.env.PATH = `${realBin}:${savedPath}`
+})
+
+afterAll(async () => {
+  process.env.PATH = savedPath
+  await fs.rm(tempRoot, { recursive: true, force: true })
+})
+
+const lstatOrNull = (target: string) => fs.lstat(target).catch(() => null)
+const readLog = (target: string) =>
+  fs
+    .readFile(target, "utf8")
+    .then((text) => text.trim().split("\n"))
+    .catch(() => [] as string[])
+
+async function importConfig(query: string, channel = "prod") {
+  const previous = process.env.OPENCODE_CHANNEL
+  process.env.OPENCODE_CHANNEL = channel
+  const module = await import(`./electron-builder.config.ts?${query}`)
+  if (previous === undefined) delete process.env.OPENCODE_CHANNEL
+  else process.env.OPENCODE_CHANNEL = previous
+  return module.default as Configuration
+}
+
+for (const channel of channels) {
+  test(`packages the staged library for ${channel.channel} (KL-26)`, async () => {
+    const config = await importConfig(`library=${channel.channel}`, channel.channel)
+    const entry = { from: ".library-stage", to: LIBRARY_FOLDER }
+
+    expect(config.extraResources).toContainEqual(entry)
+    expect(path.join(import.meta.dir, entry.from)).toBe(STAGE)
+    expect(entry.to).toBe("knowledge-library")
+    expect(config.beforePack).toBeFunction()
+    expect(config.afterPack).toBeFunction()
+    // Never inside the asar: no positive pattern of `files` reaches the staging folder.
+    const included = (config.files as string[]).filter((pattern) => !pattern.startsWith("!"))
+    expect(included.length).toBeGreaterThan(0)
+    for (const pattern of included) {
+      expect(new Bun.Glob(pattern).match(".library-stage")).toBe(false)
+      expect(new Bun.Glob(pattern).match(".library-stage/knowledge/a.md")).toBe(false)
+    }
+  })
+}
+
+test("importing the config starts nothing and touches no disk", async () => {
+  const before = await lstatOrNull(STAGE)
+  process.env.PATH = `${spyBin}:${savedPath}`
+  await importConfig("no-effect")
+  process.env.PATH = `${realBin}:${savedPath}`
+
+  expect(await readLog(spyLog)).toEqual([])
+  expect((await lstatOrNull(STAGE))?.ino).toBe(before?.ino)
+  // The script holds Bun-only APIs and the builder loads this config on node, so only a subprocess may reach it.
+  const source = await Bun.file(path.join(import.meta.dir, "electron-builder.config.ts")).text()
+  expect(source).not.toMatch(/(from|import\()\s*["'][^"']*stage-library/)
+})
+
+test("the configured beforePack runs the staging script in stage mode", async () => {
+  const config = await importConfig("before-pack")
+  process.env.PATH = `${spyBin}:${savedPath}`
+  // The spy stands in for bun, so the real script never runs here.
+  await (config.beforePack as () => Promise<void>)()
+  process.env.PATH = `${realBin}:${savedPath}`
+
+  expect(await readLog(spyLog)).toEqual([`${stageScript} stage`])
+  await fs.rm(spyLog)
+})
+
+test("a hook without bun fails instead of skipping the gate", async () => {
+  const project = await fs.mkdtemp(path.join(tempRoot, "no-bun-"))
+  const hooks = libraryHooks(stageScript, path.join(project, ".library-stage"))
+  process.env.PATH = path.join(project, "absent")
+  const failure = await hooks.beforePack().catch((error: Error) => error.message)
+  process.env.PATH = `${realBin}:${savedPath}`
+
+  expect(failure).toMatch(/^stage-library: cannot run bun/)
+  expect(failure).not.toContain(project)
+})
+
+test("afterPack on the real script reports only the token and still removes the staging", async () => {
+  const project = await fs.mkdtemp(path.join(tempRoot, "after-pack-"))
+  const stage = path.join(project, ".library-stage")
+  await fs.mkdir(stage)
+  const hooks = libraryHooks(stageScript, stage)
+
+  const failure = await hooks
+    .afterPack({ appOutDir: project, packager: { getResourcesDir: (dir: string) => path.join(dir, "Resources") } })
+    .catch((error: Error) => error.message)
+
+  expect(failure).toBe("LIB_STAGE_TREE: copy folder")
+  expect(await lstatOrNull(stage)).toBeNull()
+})
+
+// T9 at hook level: the builder's own doPack, event emitter, matchers and copy run; the steps that need an
+// Electron distribution are replaced, and fuses and signing only record that they were reached.
+const builderRequire = createRequire(
+  realpathSync(path.join(import.meta.dir, "node_modules/electron-builder/package.json")),
+)
+// The index first: platformPackager.js and the index import each other, and only this order resolves.
+const { Platform, Arch, PlatformPackager } = builderRequire("app-builder-lib")
+const { AsyncEventEmitter } = builderRequire("app-builder-lib/out/util/asyncEventEmitter")
+
+async function runDoPack(stageBody: string, verifyBody: string) {
+  const project = await fs.mkdtemp(path.join(tempRoot, "do-pack-"))
+  const stage = path.join(project, ".library-stage")
+  const log = path.join(project, "steps.log")
+  const script = path.join(project, "stub.ts")
+  await fs.writeFile(
+    script,
+    `import fs from "node:fs"
+import path from "node:path"
+const [mode, resources] = process.argv.slice(2)
+const stage = ${JSON.stringify(stage)}
+const real = ${JSON.stringify(stageScript)}
+fs.appendFileSync(${JSON.stringify(log)}, mode + "\\n")
+if (mode === "stage") {
+  ${stageBody}
+}
+if (mode === "verify") {
+  ${verifyBody}
+}
+`,
+  )
+  const hooks = libraryHooks(script, stage)
+  const emitter = new AsyncEventEmitter()
+  emitter.on("beforePack", hooks.beforePack, "user")
+  emitter.on("afterPack", hooks.afterPack, "user")
+  const config = await importConfig("do-pack")
+  const entry = (config.extraResources as { from: string }[]).filter((item) => item.from === ".library-stage")
+  const step = (name: string) => async () => appendFileSync(log, `${name}\n`)
+
+  class Harness extends PlatformPackager {
+    constructor(info: unknown, platform: unknown) {
+      super(info, platform)
+    }
+    // A method, not a field like the others: the base constructor calls it.
+    prepareAppInfo(appInfo: unknown) {
+      return appInfo
+    }
+    computeAsarOptions = async () => null
+    copyAppFiles = () => {}
+    sanityCheckPackage = async () => {}
+    doAddElectronFuses = step("fuses")
+    doSignAfterPack = step("sign")
+  }
+  const packager = new Harness(
+    {
+      config: { extraResources: entry, mac: {} },
+      options: {},
+      projectDir: project,
+      appInfo: { productFilename: "Swarm" },
+      cancellationToken: { cancelled: false },
+      framework: {
+        name: "electron",
+        version: "0",
+        distMacOsAppName: "Electron.app",
+        prepareApplicationStageDirectory: async () => {},
+      },
+      installAppDependencies: async () => {},
+      emitBeforePack: (context: unknown) => emitter.emit("beforePack", context),
+      emitAfterExtract: (context: unknown) => emitter.emit("afterExtract", context),
+      emitAfterPack: (context: unknown) => emitter.emit("afterPack", context),
+    },
+    Platform.MAC,
+  )
+  const appOutDir = path.join(project, "mac-arm64")
+  const failure = await packager
+    .doPack({
+      outDir: path.join(project, "dist"),
+      appOutDir,
+      platformName: "darwin",
+      arch: Arch.arm64,
+      platformSpecificBuildOptions: {},
+      targets: [],
+    })
+    .then(() => undefined)
+    .catch((error: Error) => error.message)
+
+  return {
+    failure,
+    stage,
+    steps: await readLog(log),
+    library: path.join(appOutDir, "Swarm.app", "Contents", "Resources", LIBRARY_FOLDER),
+  }
+}
+
+const writeStage = `fs.mkdirSync(path.join(stage, "knowledge"), { recursive: true })
+  fs.writeFileSync(path.join(stage, "knowledge", "a.md"), "synthetic")
+  fs.chmodSync(path.join(stage, "knowledge", "a.md"), 0o644)`
+const realVerify = `const result = Bun.spawnSync([process.execPath, real, "verify", resources], { stderr: "inherit" })
+  process.exit(result.exitCode)`
+
+test("a passing gate carries the staging into Resources before fuses and signing, then removes it", async () => {
+  const result = await runDoPack(
+    writeStage,
+    `if (!fs.existsSync(path.join(resources, "knowledge-library/knowledge/a.md"))) process.exit(9)`,
+  )
+
+  expect(result.failure).toBeUndefined()
+  expect(result.steps).toEqual(["stage", "verify", "fuses", "sign"])
+  expect(await Bun.file(path.join(result.library, "knowledge", "a.md")).text()).toBe("synthetic")
+  // INT-5 and the nlink check run on this copy: the builder must neither widen the mode nor hard-link it.
+  const copied = await fs.lstat(path.join(result.library, "knowledge", "a.md"))
+  expect(copied.mode & 0o777).toBe(0o644)
+  expect(copied.nlink).toBe(1)
+  expect(await lstatOrNull(result.stage)).toBeNull()
+})
+
+test("a failing beforePack stops the pack before the copy, the fuses and the signature", async () => {
+  const result = await runDoPack(
+    `console.error("LIB_SOURCE_MISSING: edition folder")
+  process.exit(1)`,
+    realVerify,
+  )
+
+  expect(result.failure).toBe("LIB_SOURCE_MISSING: edition folder")
+  expect(result.steps).toEqual(["stage"])
+  expect(await lstatOrNull(result.library)).toBeNull()
+})
+
+test("a staging folder the builder skipped fails afterPack, so no signed app forms", async () => {
+  // The builder only warns about a missing extraResources source (fileMatcher.js copyFiles), so this gate is the guard.
+  const result = await runDoPack("", realVerify)
+
+  expect(result.failure).toBe("LIB_STAGE_TREE: copy folder")
+  expect(result.steps).toEqual(["stage", "verify"])
+})
+
+test("a copy the real verifier rejects fails afterPack, removes the staging, and no signed app forms", async () => {
+  const result = await runDoPack(writeStage, realVerify)
+
+  expect(result.failure).toMatch(/^LIB_[A-Z_]+: /)
+  expect(result.failure).not.toContain(tempRoot)
+  expect(result.steps).toEqual(["stage", "verify"])
+  expect(await lstatOrNull(result.stage)).toBeNull()
 })

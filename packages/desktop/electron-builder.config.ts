@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process"
+import { rm } from "node:fs/promises"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { promisify } from "node:util"
@@ -28,6 +29,31 @@ async function signWindows(configuration: { path: string }) {
     ["-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", signScript, configuration.path],
     { cwd: rootDir },
   )
+}
+
+// KL-26: the builder loads this config on node and the script needs Bun APIs, so the hooks call it as a
+// subprocess and importing this config runs nothing. A hook rejection stops the pack:
+// doPack awaits both events with no catch (platformPackager.js:155, :245), and afterPack comes before the
+// fuse flip and the signature (:252, :255). The verify step reads only. The staging holds a copy of the
+// edition, so it goes on pass and on failure (C8). A build that dies between the hooks leaves it, ignored by
+// git, and the next `stage` replaces it. The script's own message carries the token and relative paths only;
+// execFile's message would add the absolute command line.
+export function libraryHooks(script: string, stage: string) {
+  const run = async (...args: string[]) => {
+    const result = await execFileAsync("bun", [script, ...args], { cwd: packageDir }).catch(
+      (error: { stderr?: string; code?: unknown }) => {
+        throw new Error(error.stderr?.trim() || `stage-library: cannot run bun (${error.code})`)
+      },
+    )
+    process.stdout.write(result.stdout)
+  }
+  return {
+    beforePack: () => run("stage"),
+    afterPack: (context: { appOutDir: string; packager: { getResourcesDir(appOutDir: string): string } }) =>
+      run("verify", context.packager.getResourcesDir(context.appOutDir)).finally(() =>
+        rm(stage, { recursive: true, force: true }),
+      ),
+  }
 }
 
 const channel = (() => {
@@ -94,19 +120,23 @@ const getBase = (appId: string): Configuration => ({
       : []),
     // Notices ride in Contents/Resources beside the app, never inside the asar
     // (03c N3/N4). electron-builder only warns and skips a missing source
-    // (fileMatcher.js copyFiles), so this list does not enforce IA-4 by itself.
+    // (fileMatcher.js copyFiles), so this list does not enforce IA-4 by itself;
+    // only the knowledge library below has a build gate, its two hooks.
     { from: "../../LICENSE", to: "LICENSE" },
     { from: "../../NOTICE", to: "NOTICE" },
     { from: "../../THIRD_PARTY_LICENSES.txt", to: "THIRD_PARTY_LICENSES.txt" },
     // Bundled ripgrep slot (AD-15): staged to resources/rg by the build, lands at
     // Contents/Resources/rg; the sidecar's resolver finds it via process.resourcesPath.
     { from: "resources/rg", to: "rg" },
+    // Copied after beforePack writes the staging and before afterPack verifies it, so the seal covers it.
+    { from: ".library-stage", to: "knowledge-library" },
     {
       from: "native/",
       to: "native/",
       filter: ["index.js", "index.d.ts", "build/Release/mac_window.node", "swift-build/**"],
     },
   ],
+  ...libraryHooks(path.join(packageDir, "scripts", "stage-library.ts"), path.join(packageDir, ".library-stage")),
   // Electron fuse lockdown (NR-09 / research 03e C4-1). Names verified against the
   // installed app-builder-lib@26.15.2 FuseOptionsV1 (configuration.d.ts:475-505);
   // electron-builder maps them to @electron/fuses FuseV1Options in platformPackager.js
