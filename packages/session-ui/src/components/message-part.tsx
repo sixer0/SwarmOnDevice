@@ -1454,7 +1454,7 @@ export function Part(props: MessagePartProps) {
 }
 
 /** A call the permission gate stopped. Quiet, because nothing went wrong: the row says what it was and why it did not run. */
-function NotRunRow(props: { tool: string; input: Record<string, unknown>; reason: "away" | "declined" }) {
+function NotRunRow(props: { tool: string; input: Record<string, unknown>; reason: "away" | "declined" | "deferred" }) {
   const i18n = useI18n()
   const name = () => {
     const key = (

@@ -15,7 +15,9 @@ import { createPersistedPromptInputHistory } from "@/components/prompt-input/his
 import { promptDesignPlaceholder, promptPlaceholder } from "@/components/prompt-input/placeholder"
 import { PromptPreflight } from "@/components/prompt-input/preflight-panel"
 import type { PreflightWorktree } from "@/components/prompt-input/preflight-controller"
+import { createPromptAutonomy } from "@/components/prompt-input/autonomy"
 import { createPromptSubmit } from "@/components/prompt-input/submit"
+import { autonomousToast } from "@/components/settings-v2/general-controllers"
 import { selectionFromLines, type SelectedLineRange, useFile } from "@/context/file"
 import { useComments } from "@/context/comments"
 import { useCommand } from "@/context/command"
@@ -28,7 +30,11 @@ import { useSDK } from "@/context/sdk"
 import { useSync } from "@/context/sync"
 import { createSessionTabs } from "@/pages/session/helpers"
 import { showToast } from "@/utils/toast"
-import { PromptInputV2, type PromptInputV2Suggestion } from "@opencode-ai/session-ui/v2/prompt-input"
+import {
+  PromptInputV2,
+  type PromptInputV2Autonomy,
+  type PromptInputV2Suggestion,
+} from "@opencode-ai/session-ui/v2/prompt-input"
 import {
   createPromptInputV2Controller,
   createPromptInputV2State,
@@ -49,9 +55,13 @@ export type PromptInputV2ComposerProps = {
   }
 }
 
-export type PromptInputV2ControllerProps = Omit<PromptInputProps, "class" | "submission">
+export type PromptInputV2ControllerProps = Omit<PromptInputProps, "class" | "submission"> & {
+  /** Opens Activity on the autonomous decisions. A draft has neither, so its marker only reads. */
+  openDecisions?: () => void
+}
 export type PromptInputV2ComposerController = PromptInputV2Interaction & {
   readonly model: PromptInputProps["controls"]["model"]
+  readonly autonomy: PromptInputV2Autonomy
 }
 
 export function PromptInputV2Composer(props: PromptInputV2ComposerProps) {
@@ -76,6 +86,7 @@ export function PromptInputV2Composer(props: PromptInputV2ComposerProps) {
         controller={props.controller}
         borderUnderlay={props.borderUnderlay}
         class={props.class}
+        autonomy={props.controller.autonomy}
         variantControlVisible={!props.controller.model.loading}
         attachKeybind={command.keybindParts("file.attach")}
         attachShortcut={command.keybind("file.attach")}
@@ -216,6 +227,12 @@ export function usePromptInputV2Controller(props: PromptInputV2ControllerProps):
     const id = props.controls.session.id
     if (!id) return permission.isAutoAcceptingDirectory(sdk().directory)
     return permission.isAutoAccepting(id, sdk().directory)
+  })
+  const autonomy = createPromptAutonomy({
+    sdk,
+    sessionID: () => props.controls.session.id,
+    onChanged: (on) => showToast(autonomousToast(language.t, on)),
+    onFailed: () => showToast({ variant: "error", title: language.t("common.requestFailed") }),
   })
   const submission = createPromptSubmit({
     onModelRequired: () => dialog.show(() => <DialogSelectModelUnpaidV2 model={props.controls.model.selection} />),
@@ -432,6 +449,26 @@ export function usePromptInputV2Controller(props: PromptInputV2ControllerProps):
     },
   })
   Object.defineProperty(controller, "model", { get: () => props.controls.model })
+  Object.defineProperty(controller, "autonomy", {
+    value: {
+      get label() {
+        return language.t("settings.general.row.autonomous.title")
+      },
+      get on() {
+        return autonomy.on() === true
+      },
+      get disabled() {
+        return autonomy.on() === undefined
+      },
+      get marker() {
+        return autonomy.on() ? language.t("session.autonomy.marker", { count: autonomy.waiting() }) : undefined
+      },
+      get onMarker() {
+        return props.controls.session.id ? props.openDecisions : undefined
+      },
+      onToggle: () => void autonomy.toggle(),
+    } satisfies PromptInputV2Autonomy,
+  })
 
   command.register("prompt-input", () => [
     {

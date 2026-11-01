@@ -34,12 +34,24 @@ export type {
 
 export type PromptInputV2Mode = "normal" | "shell"
 
+/** Autonomous mode as the host knows it. The words are the host's: they come from keys this package cannot read. */
+export type PromptInputV2Autonomy = {
+  readonly label: string
+  readonly on: boolean
+  readonly disabled: boolean
+  /** Only while the mode is on. */
+  readonly marker?: string
+  readonly onToggle: () => void
+  readonly onMarker?: () => void
+}
+
 export type PromptInputV2Props = {
   controller: PromptInputV2Interaction
   disabled?: boolean
   readOnly?: boolean
   borderUnderlay?: boolean
   class?: string
+  autonomy?: PromptInputV2Autonomy
   modelControl?: JSX.Element
   variantControlVisible?: boolean
   attachKeybind?: string[]
@@ -211,6 +223,7 @@ export function PromptInputV2(props: PromptInputV2Props) {
               commandsLabel={i18n.t("ui.promptInput.commands")}
               contextLabel={i18n.t("ui.promptInput.context")}
               shellLabel={i18n.t("ui.promptInput.shell")}
+              autonomy={props.autonomy}
               onAttach={props.controller.attach}
               onCommands={props.controller.openCommands}
               onContext={props.controller.openContext}
@@ -254,6 +267,20 @@ export function PromptInputV2(props: PromptInputV2Props) {
               )}
             </Show>
           </div>
+          {/* Outside the row above, which shell mode hides: this mode must stay visible whatever is being typed. */}
+          <Show when={props.autonomy?.marker}>
+            {(marker) => (
+              <button
+                type="button"
+                data-action="prompt-autonomy-marker"
+                class="me-2 shrink-0 whitespace-nowrap text-[12px] leading-4 text-v2-text-text-muted enabled:hover:text-v2-text-text-base"
+                disabled={!props.autonomy?.onMarker}
+                onClick={() => props.autonomy?.onMarker?.()}
+              >
+                {marker()}
+              </button>
+            )}
+          </Show>
           <PromptInputV2SubmitButton
             mode={state.mode}
             stopping={view.submit.stopping()}
@@ -480,6 +507,7 @@ export function PromptInputV2AddMenu(props: {
   commandsLabel: string
   contextLabel: string
   shellLabel: string
+  autonomy?: PromptInputV2Autonomy
   onAttach: () => void
   onCommands: () => void
   onContext: () => void
@@ -521,6 +549,22 @@ export function PromptInputV2AddMenu(props: {
             <MenuV2.Item onSelect={props.onShell} shortcut="!">
               {props.shellLabel}
             </MenuV2.Item>
+            <Show when={props.autonomy}>
+              {(autonomy) => (
+                <>
+                  <MenuV2.Separator />
+                  <MenuV2.CheckboxItem
+                    data-action="prompt-autonomy-toggle"
+                    checked={autonomy().on}
+                    disabled={autonomy().disabled}
+                    closeOnSelect
+                    onChange={() => autonomy().onToggle()}
+                  >
+                    {autonomy().label}
+                  </MenuV2.CheckboxItem>
+                </>
+              )}
+            </Show>
           </MenuV2.Content>
         </MenuV2.Portal>
       </MenuV2>

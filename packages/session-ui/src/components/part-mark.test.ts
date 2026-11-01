@@ -32,6 +32,7 @@ describe("a call the permission gate stopped", () => {
   test("is not a failure", () => {
     expect(toolMark(stopped({ notRun: "away" }))).toBe("done")
     expect(toolMark(stopped({ notRun: "declined" }))).toBe("done")
+    expect(toolMark(stopped({ notRun: "deferred" }))).toBe("done")
   })
 
   test("any other error still is", () => {
@@ -41,6 +42,7 @@ describe("a call the permission gate stopped", () => {
 
   test("notRun only names the reasons it knows", () => {
     expect(notRun({ notRun: "away" })).toBe("away")
+    expect(notRun({ notRun: "deferred" })).toBe("deferred")
     expect(notRun({ exit: 1 })).toBeUndefined()
     expect(notRun(undefined)).toBeUndefined()
   })

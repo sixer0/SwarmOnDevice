@@ -9,7 +9,7 @@ export function failedExit(metadata: unknown) {
 /** Why a call stopped at the permission gate never ran. It did not fail, so nothing should report it as a failure. */
 export function notRun(metadata: unknown) {
   const reason = (metadata as { notRun?: unknown } | undefined)?.notRun
-  return reason === "away" || reason === "declined" ? reason : undefined
+  return reason === "away" || reason === "declined" || reason === "deferred" ? reason : undefined
 }
 
 export function toolMark(part: Part | undefined): "running" | "failed" | "done" | undefined {
