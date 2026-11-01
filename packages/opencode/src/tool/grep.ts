@@ -5,6 +5,7 @@ import { FSUtil } from "@opencode-ai/core/fs-util"
 import { Ripgrep } from "@opencode-ai/core/ripgrep"
 import { assertExternalDirectoryEffect } from "./external-directory"
 import { Reach } from "./reach"
+import { fromLibrary, LIBRARY_SOURCE } from "./read"
 import DESCRIPTION from "./grep.txt"
 import * as Tool from "./tool"
 
@@ -100,7 +101,11 @@ export const GrepTool = Tool.define(
 
           const total = rows.length
           const hasMore = truncated || result.length === limit
-          const output = [`Found ${total} matches${hasMore ? " (more matches available)" : ""}`]
+          const output = [
+            // First, because a long result is cut from the end. One line for the whole result, even a mixed one.
+            ...(final.some((row) => fromLibrary(row.path)) ? [LIBRARY_SOURCE] : []),
+            `Found ${total} matches${hasMore ? " (more matches available)" : ""}`,
+          ]
 
           let current = ""
           for (const match of final) {
