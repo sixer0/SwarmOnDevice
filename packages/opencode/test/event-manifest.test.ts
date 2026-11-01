@@ -9,7 +9,7 @@ describe("public event manifest", () => {
     expect(EventManifest.Definitions).toBe(SchemaEventManifest.Definitions)
     expect(EventManifest.Latest).toBe(SchemaEventManifest.Latest)
     expect(EventManifest.Durable).toBe(SchemaEventManifest.Durable)
-    expect(EventManifest.Latest.size).toBe(90)
+    expect(EventManifest.Latest.size).toBe(91)
     expect(EventManifest.Latest.has("memory.updated")).toBe(true)
     expect(EventManifest.Latest.has("command.updated")).toBe(true)
     expect(EventManifest.Latest.get("session.next.step.ended")).toBe(SessionEvent.Step.Ended)

@@ -21,6 +21,7 @@ import { WorkspaceTable } from "@opencode-ai/core/control-plane/workspace.sql"
 import { getAdapter, registeredAdapters } from "./adapters"
 import { type Target, type WorkspaceInfo, WorkspaceInfo as WorkspaceInfoSchema } from "./types"
 import { WorkspaceV2 } from "@opencode-ai/core/workspace"
+import { Autonomy } from "@/permission/autonomy"
 import { Session } from "@/session/session"
 import { SessionPrompt } from "@/session/prompt"
 import { SessionTable } from "@opencode-ai/core/session/sql"
@@ -794,7 +795,11 @@ const layer = Layer.effect(
       yield* Effect.forEach(
         sessions.filter((sessionInfo) => !sessionInfo.parentID || !sessionIDs.has(sessionInfo.parentID)),
         (sessionInfo) =>
-          session.remove(sessionInfo.id).pipe(Effect.catchIf(NotFoundError.isInstance, () => Effect.void)),
+          session.remove(sessionInfo.id).pipe(
+            // A subagent's calls are on its root's record, and a parent outside this workspace is still there.
+            Effect.andThen(() => (sessionInfo.parentID ? Effect.void : Autonomy.removeAudit(sessionInfo.id))),
+            Effect.catchIf(NotFoundError.isInstance, () => Effect.void),
+          ),
         { discard: true },
       )
 

@@ -20,6 +20,7 @@ import { LSP } from "@/lsp/lsp"
 import { MCP } from "@/mcp"
 import { McpAuth } from "@/mcp/auth"
 import { Permission } from "@/permission"
+import { Autonomy } from "@/permission/autonomy"
 import { Plugin } from "@/plugin"
 import { PluginPtyEnvironment } from "@/plugin/pty-environment"
 import { InstanceStore } from "@/project/instance-store"
@@ -85,6 +86,7 @@ import {
 } from "./middleware/authorization"
 import { EventApi } from "./groups/event"
 import { PtyConnectApi } from "./groups/pty"
+import { autonomyHandlers } from "./handlers/autonomy"
 import { eventHandlers } from "./handlers/event"
 import { configHandlers } from "./handlers/config"
 import { controlHandlers } from "./handlers/control"
@@ -159,6 +161,7 @@ const ptyConnectApiRoutes = HttpApiBuilder.layer(PtyConnectApi).pipe(
 )
 const instanceApiRoutes = HttpApiBuilder.layer(InstanceHttpApi).pipe(
   Layer.provide([
+    autonomyHandlers,
     configHandlers,
     experimentalHandlers,
     fileHandlers,
@@ -242,6 +245,7 @@ const app = LayerNode.group([
   CommitDraft.node,
   SessionSearch.node,
   Permission.node,
+  Autonomy.node,
   PermissionSaved.node,
   Todo.node,
   Session.node,

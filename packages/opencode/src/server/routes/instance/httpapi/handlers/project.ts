@@ -1,4 +1,5 @@
 import * as InstanceState from "@/effect/instance-state"
+import { Autonomy } from "@/permission/autonomy"
 import { Project } from "@/project/project"
 import { ProjectV2 } from "@opencode-ai/core/project"
 import { ProjectTrust } from "@opencode-ai/core/project/trust"
@@ -13,6 +14,7 @@ export const projectHandlers = HttpApiBuilder.group(InstanceHttpApi, "project", 
   Effect.gen(function* () {
     const svc = yield* Project.Service
     const project = yield* ProjectV2.Service
+    const autonomy = yield* Autonomy.Service
 
     const list = Effect.fn("ProjectHttpApi.list")(function* () {
       return yield* svc.list()
@@ -34,7 +36,7 @@ export const projectHandlers = HttpApiBuilder.group(InstanceHttpApi, "project", 
         ProjectTrust.notNow(ctx.directory)
         return ProjectTrust.status(ctx.directory)
       }
-      const root = yield* Effect.sync(() => ProjectTrust.trust(ctx.directory)).pipe(
+      const root = yield* autonomy.grantTrust(ctx.directory).pipe(
         Effect.tapDefect((error) =>
           Effect.logError("failed to save folder trust", { directory: ctx.directory, error: String(error) }),
         ),

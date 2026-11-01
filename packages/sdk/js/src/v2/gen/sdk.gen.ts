@@ -15,6 +15,14 @@ import type {
   AuthRemoveResponses,
   AuthSetErrors,
   AuthSetResponses,
+  AutonomyConfirmErrors,
+  AutonomyConfirmResponses,
+  AutonomyModeErrors,
+  AutonomyModeResponses,
+  AutonomyModeUpdateErrors,
+  AutonomyModeUpdateResponses,
+  AutonomySessionErrors,
+  AutonomySessionResponses,
   CommandListErrors,
   CommandListResponses,
   Config as Config3,
@@ -1550,6 +1558,139 @@ export class Event extends HeyApiClient {
     )
     return (options?.client ?? this.client).sse.get<EventSubscribeResponses, unknown, ThrowOnError>({
       url: "/event",
+      ...options,
+      ...params,
+    })
+  }
+}
+
+export class Autonomy extends HeyApiClient {
+  /**
+   * Get folder autonomous mode
+   *
+   * Whether new sessions in this folder start in autonomous mode.
+   */
+  public mode<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<AutonomyModeResponses, AutonomyModeErrors, ThrowOnError>({
+      url: "/autonomy/mode",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Set autonomous mode
+   *
+   * Turn autonomous mode on or off for a session's root, or for this folder when no session is given. The folder's instance keeps running.
+   */
+  public modeUpdate<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+      on?: boolean
+      sessionID?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "on" },
+            { in: "body", key: "sessionID" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).put<AutonomyModeUpdateResponses, AutonomyModeUpdateErrors, ThrowOnError>({
+      url: "/autonomy/mode",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Confirm a change to the state files
+   *
+   * A person says a change to the mode or trust file was theirs: what the files say now takes effect, and approvals resume.
+   */
+  public confirm<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<AutonomyConfirmResponses, AutonomyConfirmErrors, ThrowOnError>({
+      url: "/autonomy/confirm",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Get a session's autonomous decisions
+   *
+   * The mode and audit record of the session's root. Patterns and reasons can come from an attacker: show them as plain text.
+   */
+  public session<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<AutonomySessionResponses, AutonomySessionErrors, ThrowOnError>({
+      url: "/session/{sessionID}/autonomy",
       ...options,
       ...params,
     })
@@ -7833,6 +7974,11 @@ export class OpencodeClient extends HeyApiClient {
   private _event?: Event
   get event(): Event {
     return (this._event ??= new Event({ client: this.client }))
+  }
+
+  private _autonomy?: Autonomy
+  get autonomy(): Autonomy {
+    return (this._autonomy ??= new Autonomy({ client: this.client }))
   }
 
   private _config?: Config2

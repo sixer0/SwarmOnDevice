@@ -842,6 +842,293 @@
         ]
       }
     },
+    "/autonomy/mode": {
+      "get": {
+        "tags": ["autonomy"],
+        "operationId": "autonomy.mode",
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          },
+          {
+            "name": "workspace",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Autonomous mode for this folder",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutonomyMode"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestError"
+                }
+              }
+            }
+          }
+        },
+        "description": "Whether new sessions in this folder start in autonomous mode.",
+        "summary": "Get folder autonomous mode",
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.autonomy.mode({\n  ...\n})"
+          }
+        ]
+      },
+      "put": {
+        "tags": ["autonomy"],
+        "operationId": "autonomy.modeUpdate",
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          },
+          {
+            "name": "workspace",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Autonomous mode after the change",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutonomyMode"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "BadRequest | InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/effect_HttpApiError_BadRequest"
+                    },
+                    {
+                      "$ref": "#/components/schemas/InvalidRequestError"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "AutonomyWriteError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutonomyWriteError"
+                }
+              }
+            }
+          }
+        },
+        "description": "Turn autonomous mode on or off for a session's root, or for this folder when no session is given. The folder's instance keeps running.",
+        "summary": "Set autonomous mode",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "on": {
+                    "type": "boolean"
+                  },
+                  "sessionID": {
+                    "type": "string",
+                    "pattern": "^ses"
+                  }
+                },
+                "required": ["on"],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.autonomy.modeUpdate({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/autonomy/confirm": {
+      "post": {
+        "tags": ["autonomy"],
+        "operationId": "autonomy.confirm",
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          },
+          {
+            "name": "workspace",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Autonomous mode for this folder after the confirmation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutonomyMode"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestError"
+                }
+              }
+            }
+          }
+        },
+        "description": "A person says a change to the mode or trust file was theirs: what the files say now takes effect, and approvals resume.",
+        "summary": "Confirm a change to the state files",
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.autonomy.confirm({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/session/{sessionID}/autonomy": {
+      "get": {
+        "tags": ["autonomy"],
+        "operationId": "autonomy.session",
+        "parameters": [
+          {
+            "name": "sessionID",
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "pattern": "^ses"
+            },
+            "required": true
+          },
+          {
+            "name": "directory",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          },
+          {
+            "name": "workspace",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Autonomous mode and decisions of the session's root",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutonomySession"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "BadRequest | InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/effect_HttpApiError_BadRequest"
+                    },
+                    {
+                      "$ref": "#/components/schemas/InvalidRequestError"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        },
+        "description": "The mode and audit record of the session's root. Patterns and reasons can come from an attacker: show them as plain text.",
+        "summary": "Get a session's autonomous decisions",
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.autonomy.session({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/config": {
       "get": {
         "tags": ["config"],
@@ -16856,6 +17143,9 @@
             "$ref": "#/components/schemas/EventPermissionReplied"
           },
           {
+            "$ref": "#/components/schemas/EventAutonomyBlocked"
+          },
+          {
             "$ref": "#/components/schemas/Event.tui.prompt.append"
           },
           {
@@ -21994,6 +22284,38 @@
                   },
                   "type": {
                     "type": "string",
+                    "enum": ["autonomy.blocked"]
+                  },
+                  "properties": {
+                    "type": "object",
+                    "properties": {
+                      "sessionID": {
+                        "type": "string"
+                      },
+                      "level": {
+                        "type": "string",
+                        "enum": ["b0", "b1"]
+                      },
+                      "count": {
+                        "type": "integer"
+                      }
+                    },
+                    "required": ["sessionID", "level", "count"],
+                    "additionalProperties": false
+                  }
+                },
+                "required": ["id", "type", "properties"],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^evt_"
+                  },
+                  "type": {
+                    "type": "string",
                     "enum": ["tui.prompt.append"]
                   },
                   "properties": {
@@ -23861,6 +24183,357 @@
         },
         "additionalProperties": false
       },
+      "AutonomyMode": {
+        "type": "object",
+        "properties": {
+          "on": {
+            "type": "boolean"
+          },
+          "externalChange": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": ["mode.json", "trust.json"]
+            }
+          }
+        },
+        "required": ["on", "externalChange"],
+        "additionalProperties": false
+      },
+      "NotFoundError": {
+        "type": "object",
+        "required": ["name", "data"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "enum": ["NotFoundError"]
+          },
+          "data": {
+            "type": "object",
+            "required": ["message"],
+            "properties": {
+              "message": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "AutonomyWriteError": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "enum": ["AutonomyWriteError"]
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": ["message"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["name", "data"],
+        "additionalProperties": false
+      },
+      "AutonomyAuditLine": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "v": {
+                "type": "number",
+                "enum": [1]
+              },
+              "seq": {
+                "type": "integer"
+              },
+              "prev": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              "at": {
+                "type": "number"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["decision"]
+              },
+              "rootID": {
+                "type": "string"
+              },
+              "sessionID": {
+                "type": "string"
+              },
+              "requestID": {
+                "type": "string"
+              },
+              "messageID": {
+                "type": "string"
+              },
+              "callID": {
+                "type": "string"
+              },
+              "agent": {
+                "type": "string"
+              },
+              "rootAgent": {
+                "type": "string"
+              },
+              "directory": {
+                "type": "string"
+              },
+              "permission": {
+                "type": "string"
+              },
+              "patterns": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "patternsTruncated": {
+                "type": "boolean"
+              },
+              "class": {
+                "type": "string",
+                "enum": ["A", "P", "D", "B", "X"]
+              },
+              "category": {
+                "type": "string",
+                "enum": [
+                  "check",
+                  "file-op",
+                  "git-local",
+                  "edit-not-ordinary",
+                  "outside_folder",
+                  "outward",
+                  "not_reversible",
+                  "sensitive_file",
+                  "secret_file",
+                  "external_tool",
+                  "no_undo",
+                  "not_routine",
+                  "queue_full",
+                  "decider_unavailable",
+                  "folder_not_trusted",
+                  "plan_mode",
+                  "app_state",
+                  "asks_every_time"
+                ]
+              },
+              "risk": {
+                "type": "string"
+              },
+              "canUndo": {
+                "type": "boolean"
+              },
+              "decidedBy": {
+                "type": "string",
+                "pattern": "^(gate|person|agent:[^/]+\\/.+|system:.+)$"
+              },
+              "decision": {
+                "type": "string",
+                "enum": ["allow", "reject", "defer", "ask"]
+              },
+              "reason": {
+                "type": "string"
+              },
+              "memo": {
+                "type": "boolean"
+              },
+              "latencyMs": {
+                "type": "number"
+              },
+              "costUsd": {
+                "type": "number"
+              },
+              "follows": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "permission": {
+                      "type": "string"
+                    },
+                    "patterns": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": ["permission", "patterns"],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "v",
+              "seq",
+              "prev",
+              "at",
+              "type",
+              "rootID",
+              "sessionID",
+              "requestID",
+              "agent",
+              "directory",
+              "permission",
+              "patterns",
+              "patternsTruncated",
+              "class",
+              "risk",
+              "canUndo",
+              "decidedBy",
+              "decision",
+              "memo",
+              "follows"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "v": {
+                "type": "number",
+                "enum": [1]
+              },
+              "seq": {
+                "type": "integer"
+              },
+              "prev": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              "at": {
+                "type": "number"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["outcome"]
+              },
+              "requestID": {
+                "type": "string"
+              },
+              "outcome": {
+                "type": "string",
+                "enum": ["ran", "failed", "not_run", "approved_later", "rejected_later", "abandoned", "undone"]
+              },
+              "exit": {
+                "type": "number"
+              },
+              "by": {
+                "type": "string",
+                "pattern": "^(gate|person|agent:[^/]+\\/.+|system:.+)$"
+              }
+            },
+            "required": ["v", "seq", "prev", "at", "type", "requestID", "outcome"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "v": {
+                "type": "number",
+                "enum": [1]
+              },
+              "seq": {
+                "type": "integer"
+              },
+              "prev": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              "at": {
+                "type": "number"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["marker"]
+              },
+              "rootID": {
+                "type": "string"
+              },
+              "directory": {
+                "type": "string"
+              },
+              "marker": {
+                "type": "string",
+                "enum": [
+                  "external_change",
+                  "mode_on",
+                  "mode_off",
+                  "decider_open",
+                  "decider_closed",
+                  "decider_limit",
+                  "b0",
+                  "b1"
+                ]
+              },
+              "files": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": ["mode.json", "trust.json"]
+                }
+              },
+              "decidedBy": {
+                "type": "string",
+                "pattern": "^(gate|person|agent:[^/]+\\/.+|system:.+)$"
+              }
+            },
+            "required": ["v", "seq", "prev", "at", "type", "rootID", "marker", "decidedBy"],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "AutonomySession": {
+        "type": "object",
+        "properties": {
+          "rootID": {
+            "type": "string",
+            "pattern": "^ses"
+          },
+          "on": {
+            "type": "boolean"
+          },
+          "externalChange": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": ["mode.json", "trust.json"]
+            }
+          },
+          "open": {
+            "type": "integer"
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AutonomyAuditLine"
+            }
+          },
+          "intact": {
+            "type": "boolean"
+          },
+          "problems": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "notFromHere": {
+            "type": "integer"
+          }
+        },
+        "required": ["rootID", "on", "externalChange", "open", "lines", "intact", "problems", "notFromHere"],
+        "additionalProperties": false
+      },
       "Model": {
         "type": "object",
         "properties": {
@@ -24988,25 +25661,6 @@
         },
         "required": ["name", "description", "template", "source"],
         "additionalProperties": false
-      },
-      "NotFoundError": {
-        "type": "object",
-        "required": ["name", "data"],
-        "properties": {
-          "name": {
-            "type": "string",
-            "enum": ["NotFoundError"]
-          },
-          "data": {
-            "type": "object",
-            "required": ["message"],
-            "properties": {
-              "message": {
-                "type": "string"
-              }
-            }
-          }
-        }
       },
       "SavedCommandRepeat": {
         "type": "object",
@@ -26521,6 +27175,9 @@
           },
           {
             "$ref": "#/components/schemas/PermissionReplied"
+          },
+          {
+            "$ref": "#/components/schemas/AutonomyBlocked"
           },
           {
             "$ref": "#/components/schemas/TuiPromptAppend"
@@ -35138,6 +35795,60 @@
         "required": ["id", "type", "data"],
         "additionalProperties": false
       },
+      "AutonomyBlocked": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^evt_"
+          },
+          "metadata": {
+            "type": "object"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["autonomy.blocked"]
+          },
+          "durable": {
+            "type": "object",
+            "properties": {
+              "aggregateID": {
+                "type": "string"
+              },
+              "seq": {
+                "type": "integer"
+              },
+              "version": {
+                "type": "integer"
+              }
+            },
+            "required": ["aggregateID", "seq", "version"],
+            "additionalProperties": false
+          },
+          "location": {
+            "$ref": "#/components/schemas/LocationRef"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "sessionID": {
+                "type": "string"
+              },
+              "level": {
+                "type": "string",
+                "enum": ["b0", "b1"]
+              },
+              "count": {
+                "type": "integer"
+              }
+            },
+            "required": ["sessionID", "level", "count"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["id", "type", "data"],
+        "additionalProperties": false
+      },
       "TuiPromptAppend": {
         "type": "object",
         "properties": {
@@ -38638,6 +39349,38 @@
         "required": ["id", "type", "properties"],
         "additionalProperties": false
       },
+      "EventAutonomyBlocked": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^evt_"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["autonomy.blocked"]
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "sessionID": {
+                "type": "string"
+              },
+              "level": {
+                "type": "string",
+                "enum": ["b0", "b1"]
+              },
+              "count": {
+                "type": "integer"
+              }
+            },
+            "required": ["sessionID", "level", "count"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["id", "type", "properties"],
+        "additionalProperties": false
+      },
       "EventMcpToolsChanged": {
         "type": "object",
         "properties": {
@@ -39292,6 +40035,10 @@
     {
       "name": "event",
       "description": "Instance event stream route."
+    },
+    {
+      "name": "autonomy",
+      "description": "Experimental HttpApi autonomous mode routes."
     },
     {
       "name": "config",

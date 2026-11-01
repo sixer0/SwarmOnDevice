@@ -73,6 +73,7 @@ export type Event =
   | EventLspUpdated
   | EventPermissionAsked
   | EventPermissionReplied
+  | EventAutonomyBlocked
   | EventTuiPromptAppend2
   | EventTuiCommandExecute2
   | EventTuiToastShow2
@@ -1681,6 +1682,15 @@ export type GlobalEvent = {
       }
     | {
         id: string
+        type: "autonomy.blocked"
+        properties: {
+          sessionID: string
+          level: "b0" | "b1"
+          count: number
+        }
+      }
+    | {
+        id: string
         type: "tui.prompt.append"
         properties: {
           text: string
@@ -2333,6 +2343,119 @@ export type Config = {
   }
 }
 
+export type AutonomyMode = {
+  on: boolean
+  externalChange: Array<"mode.json" | "trust.json">
+}
+
+export type NotFoundError = {
+  name: "NotFoundError"
+  data: {
+    message: string
+  }
+}
+
+export type AutonomyWriteError = {
+  name: "AutonomyWriteError"
+  data: {
+    message: string
+  }
+}
+
+export type AutonomyAuditLine =
+  | {
+      v: 1
+      seq: number
+      prev: string
+      at: number
+      type: "decision"
+      rootID: string
+      sessionID: string
+      requestID: string
+      messageID?: string
+      callID?: string
+      agent: string
+      rootAgent?: string
+      directory: string
+      permission: string
+      patterns: Array<string>
+      patternsTruncated: boolean
+      class: "A" | "P" | "D" | "B" | "X"
+      category?:
+        | "check"
+        | "file-op"
+        | "git-local"
+        | "edit-not-ordinary"
+        | "outside_folder"
+        | "outward"
+        | "not_reversible"
+        | "sensitive_file"
+        | "secret_file"
+        | "external_tool"
+        | "no_undo"
+        | "not_routine"
+        | "queue_full"
+        | "decider_unavailable"
+        | "folder_not_trusted"
+        | "plan_mode"
+        | "app_state"
+        | "asks_every_time"
+      risk: string
+      canUndo: boolean
+      decidedBy: string
+      decision: "allow" | "reject" | "defer" | "ask"
+      reason?: string
+      memo: boolean
+      latencyMs?: number
+      costUsd?: number
+      follows: Array<{
+        permission: string
+        patterns: Array<string>
+      }>
+    }
+  | {
+      v: 1
+      seq: number
+      prev: string
+      at: number
+      type: "outcome"
+      requestID: string
+      outcome: "ran" | "failed" | "not_run" | "approved_later" | "rejected_later" | "abandoned" | "undone"
+      exit?: number
+      by?: string
+    }
+  | {
+      v: 1
+      seq: number
+      prev: string
+      at: number
+      type: "marker"
+      rootID: string
+      directory?: string
+      marker:
+        | "external_change"
+        | "mode_on"
+        | "mode_off"
+        | "decider_open"
+        | "decider_closed"
+        | "decider_limit"
+        | "b0"
+        | "b1"
+      files?: Array<"mode.json" | "trust.json">
+      decidedBy: string
+    }
+
+export type AutonomySession = {
+  rootID: string
+  on: boolean
+  externalChange: Array<"mode.json" | "trust.json">
+  open: number
+  lines: Array<AutonomyAuditLine>
+  intact: boolean
+  problems: Array<string>
+  notFromHere: number
+}
+
 export type Model = {
   id: string
   providerID: string
@@ -2727,13 +2850,6 @@ export type SavedCommandDraft = {
    * model: written by the session's model. prompts: put together from the run without a model
    */
   source: "model" | "prompts"
-}
-
-export type NotFoundError = {
-  name: "NotFoundError"
-  data: {
-    message: string
-  }
 }
 
 export type SavedCommandRepeat = {
@@ -3233,6 +3349,7 @@ export type V2Event =
   | LspUpdated
   | PermissionAsked
   | PermissionReplied
+  | AutonomyBlocked
   | TuiPromptAppend
   | TuiCommandExecute
   | TuiToastShow
@@ -6091,6 +6208,25 @@ export type PermissionReplied = {
   }
 }
 
+export type AutonomyBlocked = {
+  id: string
+  metadata?: {
+    [key: string]: unknown
+  }
+  type: "autonomy.blocked"
+  durable?: {
+    aggregateID: string
+    seq: number
+    version: number
+  }
+  location?: LocationRef
+  data: {
+    sessionID: string
+    level: "b0" | "b1"
+    count: number
+  }
+}
+
 export type TuiPromptAppend = {
   id: string
   metadata?: {
@@ -7257,6 +7393,16 @@ export type EventPermissionReplied = {
   }
 }
 
+export type EventAutonomyBlocked = {
+  id: string
+  type: "autonomy.blocked"
+  properties: {
+    sessionID: string
+    level: "b0" | "b1"
+    count: number
+  }
+}
+
 export type EventMcpToolsChanged = {
   id: string
   type: "mcp.tools.changed"
@@ -7907,6 +8053,135 @@ export type EventSubscribeResponses = {
 }
 
 export type EventSubscribeResponse = EventSubscribeResponses[keyof EventSubscribeResponses]
+
+export type AutonomyModeData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/autonomy/mode"
+}
+
+export type AutonomyModeErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type AutonomyModeError = AutonomyModeErrors[keyof AutonomyModeErrors]
+
+export type AutonomyModeResponses = {
+  /**
+   * Autonomous mode for this folder
+   */
+  200: AutonomyMode
+}
+
+export type AutonomyModeResponse = AutonomyModeResponses[keyof AutonomyModeResponses]
+
+export type AutonomyModeUpdateData = {
+  body?: {
+    on: boolean
+    sessionID?: string
+  }
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/autonomy/mode"
+}
+
+export type AutonomyModeUpdateErrors = {
+  /**
+   * BadRequest | InvalidRequestError
+   */
+  400: EffectHttpApiErrorBadRequest | InvalidRequestError
+  /**
+   * NotFoundError
+   */
+  404: NotFoundError
+  /**
+   * AutonomyWriteError
+   */
+  500: AutonomyWriteError
+}
+
+export type AutonomyModeUpdateError = AutonomyModeUpdateErrors[keyof AutonomyModeUpdateErrors]
+
+export type AutonomyModeUpdateResponses = {
+  /**
+   * Autonomous mode after the change
+   */
+  200: AutonomyMode
+}
+
+export type AutonomyModeUpdateResponse = AutonomyModeUpdateResponses[keyof AutonomyModeUpdateResponses]
+
+export type AutonomyConfirmData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/autonomy/confirm"
+}
+
+export type AutonomyConfirmErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type AutonomyConfirmError = AutonomyConfirmErrors[keyof AutonomyConfirmErrors]
+
+export type AutonomyConfirmResponses = {
+  /**
+   * Autonomous mode for this folder after the confirmation
+   */
+  200: AutonomyMode
+}
+
+export type AutonomyConfirmResponse = AutonomyConfirmResponses[keyof AutonomyConfirmResponses]
+
+export type AutonomySessionData = {
+  body?: never
+  path: {
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/session/{sessionID}/autonomy"
+}
+
+export type AutonomySessionErrors = {
+  /**
+   * BadRequest | InvalidRequestError
+   */
+  400: EffectHttpApiErrorBadRequest | InvalidRequestError
+  /**
+   * NotFoundError
+   */
+  404: NotFoundError
+}
+
+export type AutonomySessionError = AutonomySessionErrors[keyof AutonomySessionErrors]
+
+export type AutonomySessionResponses = {
+  /**
+   * Autonomous mode and decisions of the session's root
+   */
+  200: AutonomySession
+}
+
+export type AutonomySessionResponse = AutonomySessionResponses[keyof AutonomySessionResponses]
 
 export type ConfigGetData = {
   body?: never

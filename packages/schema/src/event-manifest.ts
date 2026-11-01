@@ -1,5 +1,6 @@
 export * as EventManifest from "./event-manifest"
 
+import { AutonomyEvent } from "./autonomy-event"
 import { Catalog } from "./catalog"
 import { Durable } from "./durable-event-manifest"
 import { Event } from "./event"
@@ -72,6 +73,7 @@ export const Definitions = Event.inventory(
   ...SessionTodo.Event.Definitions,
   ...LspEvent.Definitions,
   ...PermissionV1.Event.Definitions,
+  ...AutonomyEvent.Definitions,
   ...TuiEvent.Definitions,
   ...McpEvent.Definitions,
   ...LegacyEvent.Definitions,
