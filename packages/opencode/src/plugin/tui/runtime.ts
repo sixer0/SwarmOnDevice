@@ -1121,10 +1121,22 @@ async function load(input: {
   }
 }
 
+/** The folder was untrusted when this process read its tui config, so what it names has not loaded yet. */
+export async function reloadProjectPlugins() {
+  const state = runtime
+  if (!state) return
+  for (const origin of await TuiConfig.freshPluginOrigins()) {
+    state.pending.set(ConfigPlugin.pluginSpecifier(origin.spec), origin)
+    await addPluginBySpec(state, ConfigPlugin.pluginSpecifier(origin.spec))
+  }
+  state.view.update({ status: listPluginStatus(state) })
+}
+
 export function createLegacyTuiPluginHost(): TuiPluginHost {
   return {
     start: init,
     dispose,
+    reloadProjectPlugins,
   }
 }
 

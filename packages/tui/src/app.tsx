@@ -34,6 +34,7 @@ import { EditorContextProvider } from "./context/editor"
 import { useEvent } from "./context/event"
 import { SDKProvider, useSDK } from "./context/sdk"
 import { StartupLoading } from "./component/startup-loading"
+import { DialogTrust } from "./component/dialog-trust"
 import { SyncProvider, useSync } from "./context/sync"
 import { DataProvider } from "./context/data"
 import { LocationProvider } from "./context/location"
@@ -539,6 +540,34 @@ function App(props: { onSnapshot?: () => Promise<string[]>; pluginHost: TuiPlugi
       },
     ),
   )
+
+  // Once per launch. The server holds the folder's own code back either way, so a failed check just means no question.
+  let trustChecked = false
+  createEffect(() => {
+    if (trustChecked || sync.status !== "complete") return
+    trustChecked = true
+    void sdk.client.project.trust().then((response) => {
+      const status = response.data
+      if (status?.state !== "ask") return
+      dialog.replace(() => (
+        <DialogTrust
+          directory={status.directory}
+          items={status.items}
+          onDecide={(decision) => {
+            void sdk.client.project
+              .trustDecide({ decision }, { throwOnError: true })
+              .then(() => (decision === "trust" ? props.pluginHost.reloadProjectPlugins?.() : undefined))
+              .catch((error: unknown) =>
+                toast.show({
+                  variant: "error",
+                  message: error instanceof Error ? error.message : "Could not save the answer",
+                }),
+              )
+          }}
+        />
+      ))
+    })
+  })
 
   const connected = useConnected()
   const currentWorktreeWorkspace = createMemo(() => {

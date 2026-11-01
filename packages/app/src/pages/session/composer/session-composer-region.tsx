@@ -9,6 +9,7 @@ import { SessionMovedOnDock } from "@/pages/session/composer/session-moved-on-do
 import { SessionRepeatDock } from "@/pages/session/composer/session-repeat-dock"
 import { SessionRevertDock } from "@/pages/session/composer/session-revert-dock"
 import { SessionTodoDock } from "@/pages/session/composer/session-todo-dock"
+import { SessionTrustDock } from "@/pages/session/composer/session-trust-dock"
 import type { SessionComposerRegionController } from "./session-composer-region-controller"
 
 export function SessionComposerRegion(props: {
@@ -40,6 +41,8 @@ export function SessionComposerRegion(props: {
           "md:max-w-200 md:mx-auto 2xl:max-w-[1000px]": controller.centered(),
         }}
       >
+        <SessionTrustDock />
+
         <Show when={controller.state.questionRequest()} keyed>
           {(request) => (
             <div>

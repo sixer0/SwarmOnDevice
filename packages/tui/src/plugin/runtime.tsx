@@ -66,6 +66,8 @@ export type TuiPluginHost = {
     dispose?: () => void
   }): Promise<void>
   dispose(): Promise<void>
+  /** Loads what a folder's config names, once the person has said the folder may run it. */
+  reloadProjectPlugins?(): Promise<void>
 }
 
 const Context = createContext<PluginRuntime>()

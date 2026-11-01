@@ -18,6 +18,7 @@ import { ProjectMemoryLine } from "@/components/project-memory"
 import { StatusPopoverV2 } from "@/components/status-popover"
 import { useLanguage } from "@/context/language"
 import { useSDK } from "@/context/sdk"
+import { SessionTrustDock } from "@/pages/session/composer/session-trust-dock"
 import { useServerSync } from "@/context/server-sync"
 import { useProviders } from "@/hooks/use-providers"
 import { NEW_SESSION_CONTENT_WIDTH } from "@/pages/session/new-session-layout"
@@ -42,6 +43,7 @@ export function NewSessionView(props: {
           <div class={NEW_SESSION_CONTENT_WIDTH}>
             <Logo class="h-auto w-full opacity-12 text-v2-background-bg-inverse" />
             <div class="mt-8 flex flex-col gap-8">
+              <SessionTrustDock />
               <PromptInputV2Composer
                 controller={props.input}
                 preflight={{

@@ -12,6 +12,9 @@ export type DialogConfirmProps = {
   onConfirm?: () => void
   onCancel?: () => void
   label?: string
+  confirmLabel?: string
+  /** Which button Enter presses at first. Defaults to the confirming one. */
+  start?: "confirm" | "cancel"
 }
 
 export type DialogConfirmResult = boolean | undefined
@@ -20,7 +23,7 @@ export function DialogConfirm(props: DialogConfirmProps) {
   const dialog = useDialog()
   const { theme } = useTheme()
   const [store, setStore] = createStore({
-    active: "confirm" as "confirm" | "cancel",
+    active: (props.start ?? "confirm") as "confirm" | "cancel",
   })
 
   useBindings(() => ({
@@ -80,7 +83,11 @@ export function DialogConfirm(props: DialogConfirmProps) {
               }}
             >
               <text fg={key === store.active ? theme.selectedListItemText : theme.textMuted}>
-                {Locale.titlecase(key === "cancel" ? (props.label ?? key) : key)}
+                {key === "confirm" && props.confirmLabel
+                  ? props.confirmLabel
+                  : key === "cancel" && props.start
+                    ? (props.label ?? key)
+                    : Locale.titlecase(key === "cancel" ? (props.label ?? key) : key)}
               </text>
             </box>
           )}
