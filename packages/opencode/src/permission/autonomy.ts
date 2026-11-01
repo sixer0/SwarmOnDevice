@@ -1,11 +1,27 @@
-import { mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs"
+import {
+  closeSync,
+  constants,
+  fchmodSync,
+  fstatSync,
+  lstatSync,
+  mkdirSync,
+  openSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+  writeSync,
+} from "node:fs"
 import { createHash } from "node:crypto"
 import path from "node:path"
-import { Clock, Context, Effect, Layer, Schema } from "effect"
+import { Clock, Context, Effect, Layer, Option, Schema } from "effect"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { Global } from "@opencode-ai/core/global"
 import { ProjectTrust } from "@opencode-ai/core/project/trust"
 import type { SessionID } from "@/session/schema"
+import { Secrets } from "@/tool/secrets"
 
 // Whether a session runs without a person at the prompt, kept on the server so it holds with every window closed.
 //
@@ -13,9 +29,21 @@ import type { SessionID } from "@/session/schema"
 // both answers come from memory while the process lives: what a file says later never takes effect by itself. The hash
 // comparison below only notices. It is a detector, not a prevention: it stops approvals, it cannot stop the write, and
 // nothing here covers a file edited while no process was running.
+//
+// The audit file is an operational record, not forensic evidence, for the same reason. Its hash chain notices a change
+// made while this process lives, and code running as the user can rewrite the whole file while none does.
 
 const MODE_FILE = "mode.json"
 const TRUST_FILE = "trust.json"
+const MAX_DIRECTORY = 1000
+const MAX_SHORT_DIRECTORY = 200
+const MAX_NAME = 100
+const MAX_PATTERN = 300
+const MAX_REASON = 200
+const AUDIT_LINE_BYTES = 4096
+const AUDIT_RETENTION_DAYS = 30
+const DAY_MS = 24 * 60 * 60 * 1000
+const SKIPPED_QUESTION_REASON = "asumsi agen"
 
 export type StateFile = typeof MODE_FILE | typeof TRUST_FILE
 
@@ -43,6 +71,135 @@ export class WriteError extends Schema.TaggedErrorClass<WriteError>()("AutonomyW
   message: Schema.String,
 }) {}
 
+const Follow = Schema.Struct({ permission: Schema.String, patterns: Schema.Array(Schema.String) })
+const Chained = {
+  v: Schema.Literal(1),
+  seq: Schema.Int,
+  // The first line of a file has nothing before it.
+  prev: Schema.NullOr(Schema.String.check(Schema.isPattern(/^[0-9a-f]{64}$/))),
+  at: Schema.Finite,
+}
+const DecidedBy = Schema.String.check(Schema.isPattern(/^(gate|person|agent:[^/]+\/.+|system:.+)$/))
+const Decision = Schema.Struct({
+  ...Chained,
+  type: Schema.Literal("decision"),
+  rootID: Schema.String,
+  sessionID: Schema.String,
+  requestID: Schema.String,
+  messageID: Schema.optional(Schema.String),
+  callID: Schema.optional(Schema.String),
+  agent: Schema.String,
+  rootAgent: Schema.optional(Schema.String),
+  directory: Schema.String,
+  permission: Schema.String,
+  patterns: Schema.Array(Schema.String),
+  patternsTruncated: Schema.Boolean,
+  class: Schema.Literals(["A", "P", "D", "B", "X"]),
+  category: Schema.optional(
+    Schema.Literals([
+      "check",
+      "file-op",
+      "git-local",
+      "edit-not-ordinary",
+      "outside_folder",
+      "outward",
+      "not_reversible",
+      "sensitive_file",
+      "secret_file",
+      "external_tool",
+      "no_undo",
+      "not_routine",
+      "queue_full",
+      "decider_unavailable",
+      "folder_not_trusted",
+      "plan_mode",
+      "app_state",
+      "asks_every_time",
+    ]),
+  ),
+  risk: Schema.NullOr(Schema.String),
+  canUndo: Schema.Boolean,
+  decidedBy: DecidedBy,
+  decision: Schema.Literals(["allow", "reject", "defer", "ask"]),
+  reason: Schema.optional(Schema.String),
+  memo: Schema.Boolean,
+  latencyMs: Schema.optional(Schema.Finite),
+  costUsd: Schema.optional(Schema.Finite),
+  follows: Schema.Array(Follow),
+})
+const Outcome = Schema.Struct({
+  ...Chained,
+  type: Schema.Literal("outcome"),
+  requestID: Schema.String,
+  outcome: Schema.Literals(["ran", "failed", "not_run", "approved_later", "rejected_later", "abandoned", "undone"]),
+  exit: Schema.optional(Schema.Finite),
+  by: Schema.optional(DecidedBy),
+})
+const Marker = Schema.Struct({
+  ...Chained,
+  type: Schema.Literal("marker"),
+  rootID: Schema.String,
+  directory: Schema.optional(Schema.String),
+  marker: Schema.Literals([
+    "external_change",
+    "mode_on",
+    "mode_off",
+    "decider_open",
+    "decider_closed",
+    "decider_limit",
+    "b0",
+    "b1",
+  ]),
+  files: Schema.optional(Schema.Array(Schema.Literals([MODE_FILE, TRUST_FILE]))),
+  decidedBy: DecidedBy,
+})
+/** One line of `autonomy/<rootID>.jsonl`. */
+export const AuditLine = Schema.Union([Decision, Outcome, Marker])
+export type AuditLine = typeof AuditLine.Type
+
+type DecidedByName = "gate" | "person" | `agent:${string}/${string}` | `system:${string}`
+type Unchained<Line> = Omit<Line, "v" | "seq" | "prev" | "at">
+
+/**
+ * What a caller may hand in, field by field. The line is built from these names only, so a diff, a tool's output or the
+ * goal cannot reach the file by being passed along in an object.
+ */
+export type AuditEntry =
+  | (Omit<
+      Unchained<typeof Decision.Type>,
+      "rootID" | "patternsTruncated" | "risk" | "memo" | "follows" | "decidedBy"
+    > & {
+      readonly decidedBy: DecidedByName
+      readonly risk?: string | null
+      readonly memo?: boolean
+      readonly follows?: typeof Decision.Type.follows
+    })
+  | (Omit<Unchained<typeof Outcome.Type>, "by"> & { readonly by?: DecidedByName })
+  | (Omit<Unchained<typeof Marker.Type>, "rootID" | "decidedBy"> & { readonly decidedBy: DecidedByName })
+
+export interface SkippedQuestion {
+  readonly root: SessionID
+  readonly sessionID: SessionID
+  readonly directory: string
+  readonly agent: string
+  readonly messageID: string
+  readonly callID?: string
+  /** The questions' own text. There is deliberately no place for an answer: nobody gave one. */
+  readonly questions: readonly string[]
+}
+
+export interface AuditRead {
+  readonly lines: readonly AuditLine[]
+  /** False when the chain does not hold. A file rewritten whole while no process ran still reads true. */
+  readonly intact: boolean
+  readonly problems: readonly string[]
+  /**
+   * Lines after the last one this service wrote. Another process appending looks exactly like a forged line chained on
+   * the head, so this is a count to show and not a verdict. It is 0 while this service is the only writer.
+   */
+  readonly notFromHere: number
+}
+
 export interface Interface {
   readonly isOn: (input: Where) => Effect.Effect<boolean>
   readonly setMode: (input: ModeChange) => Effect.Effect<void, WriteError>
@@ -55,6 +212,13 @@ export interface Interface {
   readonly confirm: () => Effect.Effect<void>
   /** Trust given inside this process. Going through here keeps it from reading as a change from outside. */
   readonly grantTrust: (directory: string) => Effect.Effect<string>
+  /** One line in the root's audit file. A failure is the caller's to weigh: nothing is retried or dropped silently here. */
+  readonly record: (root: SessionID, entry: AuditEntry) => Effect.Effect<void, WriteError>
+  /** The `question` tool does not pass the gate, so it says here that a run went on by its own assumption. */
+  readonly recordSkippedQuestion: (input: SkippedQuestion) => Effect.Effect<void, WriteError>
+  /** Notes the root's mode when it differs from what its file last said. A root that was never on writes nothing. */
+  readonly markMode: (input: Where) => Effect.Effect<void>
+  readonly readAudit: (root: SessionID) => Effect.Effect<AuditRead>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@opencode/Autonomy") {}
@@ -148,14 +312,163 @@ function writeMode(mode: Mode) {
   return hashOf(text)
 }
 
-/** One line in the root's audit file. An ID is not a path, whatever it spells. */
-function appendAudit(root: string, at: number, line: Record<string, unknown>) {
-  mkdirSync(folder(), { recursive: true, mode: 0o700 })
-  writeFileSync(
-    path.join(folder(), `${path.basename(root)}.jsonl`),
-    `${JSON.stringify({ v: 1, at, rootID: root, ...line })}\n`,
-    { flag: "a", mode: 0o600 },
+const decodeLine = Schema.decodeUnknownOption(Schema.fromJsonString(AuditLine))
+const auditFile = (id: string) => path.join(folder(), `${id}.jsonl`)
+
+/** A pattern can be a command, and a command can hold a secret typed into its arguments. */
+const hide = (text: string, directory: string, limit = Number.POSITIVE_INFINITY) =>
+  ProjectTrust.printable(Secrets.scrub(Secrets.scrubText(text), directory), limit)
+
+function auditFields(root: string, entry: AuditEntry) {
+  if (entry.type === "outcome")
+    return {
+      type: entry.type,
+      requestID: ProjectTrust.printable(entry.requestID, MAX_NAME),
+      outcome: entry.outcome,
+      exit: entry.exit,
+      by: entry.by && ProjectTrust.printable(entry.by, MAX_NAME),
+    }
+  if (entry.type === "marker")
+    return {
+      type: entry.type,
+      rootID: ProjectTrust.printable(root, MAX_NAME),
+      directory: entry.directory && ProjectTrust.printable(entry.directory, MAX_DIRECTORY),
+      marker: entry.marker,
+      files: entry.files,
+      decidedBy: ProjectTrust.printable(entry.decidedBy, MAX_NAME),
+    }
+  const patterns = entry.patterns.map((item) => hide(item, entry.directory))
+  return {
+    type: entry.type,
+    rootID: ProjectTrust.printable(root, MAX_NAME),
+    sessionID: ProjectTrust.printable(entry.sessionID, MAX_NAME),
+    requestID: ProjectTrust.printable(entry.requestID, MAX_NAME),
+    messageID: entry.messageID && ProjectTrust.printable(entry.messageID, MAX_NAME),
+    callID: entry.callID && ProjectTrust.printable(entry.callID, MAX_NAME),
+    agent: ProjectTrust.printable(entry.agent, MAX_NAME),
+    rootAgent: entry.rootAgent && ProjectTrust.printable(entry.rootAgent, MAX_NAME),
+    directory: ProjectTrust.printable(entry.directory, MAX_DIRECTORY),
+    permission: ProjectTrust.printable(entry.permission, MAX_NAME),
+    patterns: patterns.map((item) => ProjectTrust.printable(item, MAX_PATTERN)),
+    patternsTruncated: patterns.some((item) => item.length > MAX_PATTERN),
+    class: entry.class,
+    category: entry.category,
+    risk: entry.risk === undefined || entry.risk === null ? null : ProjectTrust.printable(entry.risk, MAX_NAME),
+    canUndo: entry.canUndo,
+    decidedBy: ProjectTrust.printable(entry.decidedBy, MAX_NAME),
+    decision: entry.decision,
+    reason: entry.reason === undefined ? undefined : hide(entry.reason, entry.directory, MAX_REASON),
+    memo: entry.memo ?? false,
+    latencyMs: entry.latencyMs,
+    costUsd: entry.costUsd,
+    follows: (entry.follows ?? []).map((item) => ({
+      permission: ProjectTrust.printable(item.permission, MAX_NAME),
+      patterns: item.patterns.map((pattern) => hide(pattern, entry.directory, MAX_PATTERN)),
+    })),
+  }
+}
+
+type Fields = ReturnType<typeof auditFields>
+
+/** What goes first when a line is too long: the rest of the list, then the model's words, and the first pattern last. */
+function smaller(fields: Fields): Fields[] {
+  const short =
+    "directory" in fields && fields.directory
+      ? { ...fields, directory: ProjectTrust.printable(fields.directory, MAX_SHORT_DIRECTORY) }
+      : fields
+  if (short.type !== "decision") return [short]
+  const base = { ...short, follows: [], patternsTruncated: true }
+  return [
+    ...base.patterns.slice(1).map((_, index) => ({
+      ...base,
+      patterns: base.patterns.slice(0, base.patterns.length - 1 - index),
+    })),
+    { ...base, patterns: base.patterns.slice(0, 1), reason: undefined },
+    { ...base, patterns: [], reason: undefined },
+  ]
+}
+
+// Under the limit one write to a file opened for append reaches it whole, even with other processes writing too.
+function encodeLine(chain: { v: 1; seq: number; prev: string | null; at: number }, fields: Fields) {
+  const fits = (text: string) => Buffer.byteLength(text) < AUDIT_LINE_BYTES
+  const whole = JSON.stringify({ ...chain, ...fields })
+  if (fits(whole)) return whole
+  const fitted = smaller(fields)
+    .map((item) => JSON.stringify({ ...chain, ...item }))
+    .find(fits)
+  if (fitted === undefined) throw new Error("audit line is over the limit")
+  return fitted
+}
+
+/** A pipe put in the file's place would block a read, and with it every prompt. A link would write somewhere else. */
+function readAuditText(file: string) {
+  const found = lstatSync(file, { throwIfNoEntry: false })
+  if (!found) return ""
+  if (!found.isFile()) throw new Error("audit path is not a regular file")
+  return readFileSync(file, "utf8")
+}
+
+/** Where a service that has not written to this file yet picks the chain up. */
+function tailOf(file: string) {
+  const text = readAuditText(file)
+  const lines = text.split("\n").filter(Boolean)
+  const last = lines.at(-1)
+  if (last === undefined) return { seq: 0, hash: null, torn: false }
+  return {
+    seq: Option.getOrUndefined(decodeLine(last))?.seq ?? lines.length,
+    hash: hashOf(last),
+    torn: !text.endsWith("\n"),
+  }
+}
+
+function writeAudit(file: string, text: string) {
+  const bytes = Buffer.from(text)
+  // O_NONBLOCK makes a pipe without a reader an error instead of a wait. The mode only applies when the file is created.
+  const fd = openSync(
+    file,
+    constants.O_WRONLY | constants.O_APPEND | constants.O_CREAT | constants.O_NOFOLLOW | constants.O_NONBLOCK,
+    0o600,
   )
+  try {
+    if (!fstatSync(fd).isFile()) throw new Error("audit path is not a regular file")
+    fchmodSync(fd, 0o600)
+    return writeSync(fd, bytes) === bytes.length
+  } finally {
+    closeSync(fd)
+  }
+}
+
+function verifyAudit(text: string, head: string | null | undefined): AuditRead {
+  const raw = text.split("\n").filter(Boolean)
+  const decoded = raw.map((line) => decodeLine(line))
+  const hashes = raw.map((line) => hashOf(line))
+  const firstAt = new Map(hashes.toReversed().map((hash, index) => [hash, raw.length - 1 - index]))
+  const problems = raw.flatMap((_, index) => {
+    const line = decoded[index]
+    if (Option.isNone(line)) return [`line ${index + 1} is not a valid entry`]
+    if (firstAt.get(hashes[index]) !== index) return [`line ${index + 1} repeats an earlier line`]
+    // Writers that start together can all find the file empty, so a file may have several first lines. Only the seq says so.
+    if (line.value.prev === null) return line.value.seq === 1 ? [] : [`line ${index + 1} claims to be the first`]
+    return (firstAt.get(line.value.prev) ?? index) < index ? [] : [`line ${index + 1} follows a line that is not there`]
+  })
+  const headAt = typeof head === "string" ? hashes.indexOf(head) : undefined
+  return {
+    lines: decoded.flatMap((line) => (Option.isSome(line) ? [line.value] : [])),
+    intact: problems.length === 0 && headAt !== -1,
+    problems: headAt === -1 ? [...problems, "the last line written here is gone or changed"] : problems,
+    notFromHere: headAt === undefined || headAt === -1 ? 0 : raw.length - 1 - headAt,
+  }
+}
+
+function sweepAudit(now: number) {
+  readdirSync(folder())
+    .filter((name) => name.endsWith(".jsonl"))
+    .map((name) => path.join(folder(), name))
+    .filter((file) => {
+      const found = lstatSync(file)
+      return found.isFile() && now - found.mtimeMs > AUDIT_RETENTION_DAYS * DAY_MS
+    })
+    .forEach((file) => rmSync(file, { force: true }))
 }
 
 export const layer = Layer.effect(
@@ -169,6 +482,17 @@ export const layer = Layer.effect(
     const seen: Record<StateFile, string> = { [MODE_FILE]: firstMode.hash, [TRUST_FILE]: firstTrust.hash }
     const changed = new Set<StateFile>()
     const marked = new Set<string>()
+    // The chain's head for each root this service wrote to. A change to the file cannot reach it.
+    const heads = new Map<string, { seq: number; hash: string | null; torn: boolean }>()
+    const modeMarked = new Map<string, boolean>()
+
+    const started = yield* Clock.currentTimeMillis
+    yield* Effect.try({ try: () => sweepAudit(started), catch: String }).pipe(
+      // A folder that is not there yet has nothing old in it.
+      Effect.catch((error) =>
+        error.includes("ENOENT") ? Effect.void : Effect.logError("could not sweep old audit files", { error }),
+      ),
+    )
 
     const isOnNow = (input: Where) => mode.sessions.get(input.root) ?? mode.directories.has(input.directory)
 
@@ -176,6 +500,82 @@ export const layer = Layer.effect(
       if (readState(MODE_FILE).hash !== seen[MODE_FILE]) changed.add(MODE_FILE)
       if (readState(TRUST_FILE).hash !== seen[TRUST_FILE]) changed.add(TRUST_FILE)
     }
+
+    // In one synchronous stretch, so two callers in this process can never take the same place in the chain.
+    const appendAudit = (root: string, at: number, entry: AuditEntry) => {
+      // An ID is not a path, whatever it spells.
+      const id = path.basename(root)
+      const file = auditFile(id)
+      mkdirSync(folder(), { recursive: true, mode: 0o700 })
+      const head = heads.get(id) ?? tailOf(file)
+      const seq = head.seq + 1
+      const text = encodeLine({ v: 1, seq, prev: head.hash, at }, auditFields(root, entry))
+      if (!writeAudit(file, `${head.torn ? "\n" : ""}${text}\n`)) {
+        // Part of a line is in the file now: read the tail again, so the next one starts on a line of its own.
+        heads.delete(id)
+        throw new Error("audit line was only partly written")
+      }
+      heads.set(id, { seq, hash: hashOf(text), torn: false })
+    }
+
+    const record = Effect.fn("Autonomy.record")(function* (root: SessionID, entry: AuditEntry) {
+      const at = yield* Clock.currentTimeMillis
+      yield* Effect.try({ try: () => appendAudit(root, at, entry), catch: String }).pipe(
+        Effect.tapError((error) => Effect.logError("could not write to the audit file", { root, error })),
+        Effect.mapError(() => new WriteError({ message: "Could not write to the audit file" })),
+      )
+    })
+
+    const markMode = Effect.fn("Autonomy.markMode")(function* (input: Where) {
+      const on = isOnNow(input)
+      const last = modeMarked.get(input.root) ?? false
+      if (on === last) return
+      yield* record(input.root, {
+        type: "marker",
+        directory: input.directory,
+        marker: on ? "mode_on" : "mode_off",
+        decidedBy: "system:mode_change",
+      }).pipe(
+        Effect.tap(() => Effect.sync(() => modeMarked.set(input.root, on))),
+        // Logged by record, and the next request tries again.
+        Effect.ignore,
+      )
+    })
+
+    const recordSkippedQuestion = Effect.fn("Autonomy.recordSkippedQuestion")(function* (input: SkippedQuestion) {
+      yield* record(input.root, {
+        type: "decision",
+        sessionID: input.sessionID,
+        // A question has no permission request, and the call is what its entry in the session is known by.
+        requestID: input.callID ?? input.messageID,
+        messageID: input.messageID,
+        callID: input.callID,
+        agent: input.agent,
+        directory: input.directory,
+        permission: "question",
+        patterns: input.questions,
+        class: "A",
+        canUndo: false,
+        decidedBy: "gate",
+        // Not answered, and still open for later.
+        decision: "defer",
+        reason: SKIPPED_QUESTION_REASON,
+      })
+    })
+
+    const readAudit = Effect.fn("Autonomy.readAudit")(function* (root: SessionID) {
+      const id = path.basename(root)
+      const read = yield* Effect.try({
+        try: () => verifyAudit(readAuditText(auditFile(id)), heads.get(id)?.hash),
+        catch: String,
+      }).pipe(
+        Effect.catch((error) =>
+          Effect.succeed({ lines: [], intact: false, problems: [`not readable: ${error}`], notFromHere: 0 }),
+        ),
+      )
+      if (!read.intact) yield* Effect.logError("the audit chain does not hold", { root, problems: read.problems })
+      return read
+    })
 
     const setMode = Effect.fn("Autonomy.setMode")(function* (input: ModeChange) {
       yield* Effect.try({
@@ -266,6 +666,10 @@ export const layer = Layer.effect(
       folderState,
       confirm,
       grantTrust,
+      record,
+      recordSkippedQuestion,
+      markMode,
+      readAudit,
     })
   }),
 )
