@@ -1,4 +1,5 @@
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
+import { ProjectTrust } from "@opencode-ai/core/project/trust"
 import { Duration, Effect, Layer, Context, Option, Schema, Scope, Stream } from "effect"
 import { formatPatch, structuredPatch } from "diff"
 import { InstanceState } from "@/effect/instance-state"
@@ -285,6 +286,8 @@ export const CommitResult = Schema.Struct({
   branch: Schema.optional(Schema.String),
   // Read back from the commit itself, so what is reported is what landed and not what was asked for.
   files: Schema.Array(Schema.String),
+  // Set when this commit was not made the way the repository's own setup would have made it.
+  note: Schema.optional(Schema.String),
 }).annotate({ identifier: "VcsCommitResult" })
 export type CommitResult = Schema.Schema.Type<typeof CommitResult>
 
@@ -436,7 +439,8 @@ const layer: Layer.Layer<Service, never, Git.Service | EventV2Bridge.Service> = 
         return { applied: true }
       }),
       // Commits these paths and nothing else: whatever else is staged stays staged and out of the commit. It never talks
-      // to a remote. Hooks run, because a hook that refuses is the team's rule and the person should hear about it.
+      // to a remote. In a trusted folder hooks run, because a hook that refuses is the team's rule and the person should hear
+      // about it. Until then the repository's programs stay off, and the result says so.
       commit: Effect.fn("Vcs.commit")(function* (input: CommitInput) {
         const ctx = yield* InstanceState.context
         if (ctx.project.vcs !== "git") {
@@ -452,7 +456,7 @@ const layer: Layer.Layer<Service, never, Git.Service | EventV2Bridge.Service> = 
         const literal = ["--literal-pathspecs"]
         const listed = yield* git.run(
           [...literal, "status", "--porcelain=v1", "--untracked-files=all", "--no-renames", "-z", "--", ...files],
-          { cwd },
+          { cwd, personAsked: true },
         )
         const fresh = listed
           .text()
@@ -463,7 +467,7 @@ const layer: Layer.Layer<Service, never, Git.Service | EventV2Bridge.Service> = 
           new CommitError({ message: gitOutput(result), reason: "refused" })
         if (fresh.length > 0) {
           // `commit -- path` refuses a path git has never heard of. Intent only, so a refusal can leave the index as it was.
-          const added = yield* git.run([...literal, "add", "--intent-to-add", "--", ...fresh], { cwd })
+          const added = yield* git.run([...literal, "add", "--intent-to-add", "--", ...fresh], { cwd, personAsked: true })
           if (added.exitCode !== 0) return yield* refused(added)
         }
         const committed = yield* git
@@ -471,12 +475,13 @@ const layer: Layer.Layer<Service, never, Git.Service | EventV2Bridge.Service> = 
             cwd,
             env: { GIT_EDITOR: "true", GIT_TERMINAL_PROMPT: "0" },
             stdin: Stream.make(new TextEncoder().encode(message + "\n")),
+            personAsked: true,
           })
           .pipe(Effect.timeoutOption(COMMIT_TIMEOUT))
         if (Option.isNone(committed) || committed.value.exitCode !== 0) {
           if (fresh.length > 0) {
             const unstage = (yield* git.hasHead(cwd)) ? ["reset", "-q", "--"] : ["rm", "--cached", "-q", "--"]
-            yield* git.run([...literal, ...unstage, ...fresh], { cwd })
+            yield* git.run([...literal, ...unstage, ...fresh], { cwd, personAsked: true })
           }
           if (Option.isNone(committed)) {
             return yield* new CommitError({ message: "git commit did not finish within 5 minutes", reason: "refused" })
@@ -485,12 +490,16 @@ const layer: Layer.Layer<Service, never, Git.Service | EventV2Bridge.Service> = 
         }
         const head = yield* git.run(["rev-parse", "HEAD"], { cwd })
         const short = yield* git.run(["rev-parse", "--short", "HEAD"], { cwd })
-        const shown = yield* git.run(["show", "--no-renames", "--name-only", "--format=", "-z", "HEAD"], { cwd })
+        const shown = yield* git.run(["show", "--no-renames", "--name-only", "--format=", "-z", "HEAD"], {
+          cwd,
+          personAsked: true,
+        })
         return {
           hash: head.text().trim(),
           short: short.text().trim(),
           branch: yield* git.branch(cwd),
           files: shown.text().split("\0").filter(Boolean),
+          ...(ProjectTrust.isTrusted(cwd) ? {} : { note: PROGRAMS_OFF_NOTE }),
         }
       }),
     })
@@ -498,6 +507,9 @@ const layer: Layer.Layer<Service, never, Git.Service | EventV2Bridge.Service> = 
 )
 
 const COMMIT_TIMEOUT = Duration.minutes(5)
+
+const PROGRAMS_OFF_NOTE =
+  "This folder is not trusted, so its git hooks, filters and signing did not run. To allow them, run: swarm trust"
 
 // A hook may report on either stream. The end of the output is where the reason is.
 const gitOutput = (result: Git.Result) =>

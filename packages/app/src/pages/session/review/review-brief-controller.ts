@@ -26,7 +26,7 @@ import {
   type ReviewMark,
   type ReviewVerdict,
 } from "./review-brief-model"
-import { composeMessage, includedByDefault, teamUpdate } from "./review-landing-model"
+import { composeMessage, includedByDefault, landedHeadline, teamUpdate } from "./review-landing-model"
 import { createLandedWork } from "./landed-work"
 
 const HISTORY_LIMIT = 2000
@@ -580,10 +580,10 @@ export function createReviewBrief(input: {
       const result = await input.sdk().client.vcs.commit({ files, message: text }, { throwOnError: true })
       const done = result.data
       if (!done) throw new Error(language.t("common.requestFailed"))
-      const headline = language.t("session.review.land.done", {
-        hash: done.short,
-        branch: done.branch ?? DETACHED,
-      })
+      const headline = landedHeadline(
+        language.t("session.review.land.done", { hash: done.short, branch: done.branch ?? DETACHED }),
+        done.note,
+      )
       batch(() => {
         done.files.forEach((file) => setMark(file, undefined))
         const id = rootID()

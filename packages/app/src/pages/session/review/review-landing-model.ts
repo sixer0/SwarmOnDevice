@@ -114,6 +114,11 @@ function trustworthy(written: { subject?: string; summary?: string } | undefined
   return findClaims(`${written.subject}\n${written.summary ?? ""}`).length > 0 ? undefined : written
 }
 
+/** What happened, then anything the server says differed from a normal commit, so neither the person nor the team assumes it ran. */
+export function landedHeadline(done: string, note?: string) {
+  return note ? `${done}. ${note}` : done
+}
+
 /** What to paste to a colleague: where it is, and the message exactly as committed, edits included. */
 export function teamUpdate(input: { headline: string; message: string }) {
   return `${input.headline}\n\n${input.message.trim()}`

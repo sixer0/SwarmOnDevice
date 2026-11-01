@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import type { BriefFile, EvidenceRow } from "./review-brief-model"
-import { checkLines, composeMessage, includedByDefault, promptsBehind, teamUpdate, type CheckWords } from "./review-landing-model"
+import { checkLines, composeMessage, includedByDefault, landedHeadline, promptsBehind, teamUpdate, type CheckWords } from "./review-landing-model"
 
 const file = (name: string, over: Partial<BriefFile> = {}): BriefFile => ({
   file: name,
@@ -151,5 +151,12 @@ describe("composeMessage", () => {
 test("teamUpdate is the headline over the message as committed", () => {
   expect(teamUpdate({ headline: "Committed abc on main, not pushed", message: "  Edited\n" })).toBe(
     "Committed abc on main, not pushed\n\nEdited",
+  )
+})
+
+test("landedHeadline carries what the server says differed, and adds nothing when it says nothing", () => {
+  expect(landedHeadline("Committed abc on main, not pushed")).toBe("Committed abc on main, not pushed")
+  expect(landedHeadline("Committed abc on main, not pushed", "Its git hooks did not run.")).toBe(
+    "Committed abc on main, not pushed. Its git hooks did not run.",
   )
 })

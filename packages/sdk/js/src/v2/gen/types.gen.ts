@@ -2582,6 +2582,7 @@ export type VcsCommitResult = {
   short: string
   branch?: string
   files: Array<string>
+  note?: string
 }
 
 export type VcsCommitError = {

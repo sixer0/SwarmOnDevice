@@ -3,6 +3,7 @@ import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { AppProcess } from "@opencode-ai/core/process"
 import { Effect, Layer, Context, Stream } from "effect"
 import { ChildProcess } from "effect/unstable/process"
+import { devNull } from "os"
 
 const cfg = [
   "--no-optional-locks",
@@ -75,6 +76,11 @@ export interface Options {
   readonly env?: Record<string, string>
   readonly maxOutputBytes?: number
   readonly stdin?: ChildProcess.CommandInput
+  /**
+   * A person asked for this exact action. In a folder nobody has trusted it still happens, with the repository's own programs
+   * switched off, where a background read would simply be skipped.
+   */
+  readonly personAsked?: boolean
 }
 
 export interface Interface {
@@ -105,6 +111,50 @@ const kind = (code: string): Kind => {
 
 const programCommands = new Set(["status", "diff", "show", "add", "stash"])
 
+// What a commit or an apply can start from a repository's own config: its hooks, a filter, a signing program, and an automatic
+// gc that fires its own hook. The filters come from configFilters. An editor needs no setting: these actions never open one.
+const PROGRAMS_OFF = [
+  ["core.hooksPath", devNull],
+  ["commit.gpgSign", "false"],
+  ["gc.auto", "0"],
+  ["maintenance.auto", "false"],
+] as const
+const FILTER_KEY = /^filter\.(.+)\.[^.]+$/s
+
+/** The filters this repository's own config defines, as git itself reads them, includes and all. The user's global ones stay on. */
+const configFilters = (listed: string) => {
+  const parts = listed.split("\0").filter(Boolean)
+  const names = parts.flatMap((scope, index) => {
+    if (index % 2 !== 0 || !["local", "worktree"].includes(scope)) return []
+    return FILTER_KEY.exec(parts[index + 1] ?? "")?.[1] ?? []
+  })
+  return [...new Set(names)]
+}
+
+// Through the environment and not -c, because a key and its value stay apart there: a filter may be called `a=b`.
+const programsOffEnv = (filters: readonly string[]) => {
+  const settings = [
+    ...PROGRAMS_OFF,
+    ...filters.flatMap((name) => [
+      [`filter.${name}.clean`, ""],
+      [`filter.${name}.smudge`, ""],
+      [`filter.${name}.process`, ""],
+      [`filter.${name}.required`, "false"],
+    ]),
+  ]
+  return {
+    GIT_CONFIG_COUNT: String(settings.length),
+    GIT_NO_LAZY_FETCH: "1",
+    GIT_TERMINAL_PROMPT: "0",
+    ...Object.fromEntries(
+      settings.flatMap(([key, value], index) => [
+        [`GIT_CONFIG_KEY_${index}`, key],
+        [`GIT_CONFIG_VALUE_${index}`, value],
+      ]),
+    ),
+  }
+}
+
 export class Service extends Context.Service<Service, Interface>()("@opencode/Git") {}
 
 const layer = Layer.effect(
@@ -119,12 +169,27 @@ const layer = Layer.effect(
         // These hash or render files, and a repository's own config can name the program that does it. Nobody has said
         // that may run in this folder yet, so the reader sees no changes, the same as a clean tree.
         const command = args.find((item) => !item.startsWith("-"))
-        if (command && programCommands.has(command) && ProjectTrust.heldGitSetting(opts.cwd))
+        if (!opts.personAsked && command && programCommands.has(command) && ProjectTrust.heldGitSetting(opts.cwd))
           return { exitCode: 0, text: () => "", stdout: Buffer.alloc(0), stderr: Buffer.alloc(0), truncated: false } satisfies Result
+        const held = opts.personAsked && !ProjectTrust.isTrusted(opts.cwd)
+        const listed = held
+          ? yield* appProcess.run(
+              ChildProcess.make("git", ["config", "-z", "--show-scope", "--name-only", "--get-regexp", "^filter\\."], {
+                cwd: opts.cwd,
+                extendEnv: true,
+                stdin: "ignore",
+                stdout: "pipe",
+                stderr: "pipe",
+              }),
+            )
+          : undefined
+        // 1 means no filters. Anything else means the list cannot be relied on, so the action does not go ahead without it.
+        if (listed && listed.exitCode !== 0 && listed.exitCode !== 1)
+          return { ...fail(listed.stderr.toString("utf8")), exitCode: listed.exitCode } satisfies Result
         const result = yield* appProcess.run(
           ChildProcess.make("git", [...cfg, ...args], {
             cwd: opts.cwd,
-            env: opts.env,
+            env: listed ? { ...programsOffEnv(configFilters(listed.stdout.toString("utf8"))), ...opts.env } : opts.env,
             extendEnv: true,
             stdin: opts.stdin ?? "ignore",
             stdout: "pipe",
@@ -332,7 +397,7 @@ const layer = Layer.effect(
     })
 
     const applyPatch = Effect.fn("Git.applyPatch")(function* (cwd: string, patch: string) {
-      return yield* run(["apply", "-"], { cwd, stdin: stdin(patch) })
+      return yield* run(["apply", "-"], { cwd, stdin: stdin(patch), personAsked: true })
     })
 
     return Service.of({
