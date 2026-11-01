@@ -42,6 +42,7 @@ import { Format } from "../format"
 import { InstanceState } from "@/effect/instance-state"
 import { EffectBridge } from "@/effect/bridge"
 import { Question } from "../question"
+import { Autonomy } from "@/permission/autonomy"
 import { Todo } from "../session/todo"
 import { LSP } from "@/lsp/lsp"
 import { Instruction } from "../session/instruction"
@@ -444,6 +445,7 @@ export const node = LayerNode.make({
     Config.node,
     Plugin.node,
     Question.node,
+    Autonomy.node,
     Todo.node,
     Memory.node,
     Agent.node,

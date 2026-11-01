@@ -61,6 +61,8 @@ export interface Interface {
     tool?: Tool
     /** The caller can carry on without an answer, so it does not have to wait for one forever. */
     movesOn?: boolean
+    /** Nobody is at the prompt by choice, so move on at once. Wins over `SWARM_UNATTENDED_AFTER_MS=0`. */
+    noWait?: boolean
   }) => Effect.Effect<ReadonlyArray<Answer>, RejectedError | AwayError>
   /** Returns the request when the agent had already carried on without an answer. */
   readonly reply: (input: {
@@ -102,6 +104,7 @@ const layer = Layer.effect(
       questions: ReadonlyArray<Info>
       tool?: Tool
       movesOn?: boolean
+      noWait?: boolean
     }) {
       const { away, pending } = yield* InstanceState.get(state)
       const id = QuestionID.ascending()
@@ -114,8 +117,8 @@ const layer = Layer.effect(
         questions: input.questions,
         tool: input.tool,
       }
-      const wait = input.movesOn ? Unattended.wait(away.has(input.sessionID)) : undefined
-      const info: Request = wait ? { ...asked, movesOnAt: Date.now() + wait } : asked
+      const wait = input.noWait ? 0 : input.movesOn ? Unattended.wait(away.has(input.sessionID)) : undefined
+      const info: Request = wait === undefined ? asked : { ...asked, movesOnAt: Date.now() + wait }
       pending.set(id, { info, deferred })
       yield* events.publish(Event.Asked, info)
 
@@ -137,9 +140,9 @@ const layer = Layer.effect(
         return yield* new AwayError()
       })
       return yield* Effect.ensuring(
-        wait
-          ? Effect.raceFirst(Deferred.await(deferred), Effect.sleep(wait).pipe(Effect.andThen(moveOn)))
-          : Deferred.await(deferred),
+        wait === undefined
+          ? Deferred.await(deferred)
+          : Effect.raceFirst(Deferred.await(deferred), Effect.sleep(wait).pipe(Effect.andThen(moveOn))),
         Effect.sync(() => {
           if (!pending.get(id)?.info.movedOnAt) pending.delete(id)
         }),
