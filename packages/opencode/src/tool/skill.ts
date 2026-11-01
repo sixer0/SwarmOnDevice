@@ -31,6 +31,26 @@ export const SkillTool = Tool.define(
             metadata: {},
           })
 
+          // A built-in skill has no folder. Its location is not a path, so dirname gives "." and the
+          // file sample would come from the process cwd, unprompted.
+          if (info.location === "<built-in>") {
+            const content = info.content.trim()
+            return {
+              title: `Loaded skill: ${info.name}`,
+              // The library entry carries its own data frame. Inside skill_content it would read as a skill to follow.
+              output: content.startsWith("<library_data")
+                ? content
+                : [
+                    `<skill_content name="${info.name}">`,
+                    `# Skill: ${info.name}`,
+                    "",
+                    content,
+                    "</skill_content>",
+                  ].join("\n"),
+              metadata: { name: info.name, dir: undefined as string | undefined },
+            }
+          }
+
           const dir = path.dirname(info.location)
           const base = dir
           const files = yield* ripgrep.find({
