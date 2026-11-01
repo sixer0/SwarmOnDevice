@@ -16,10 +16,19 @@ import {
 } from "node:fs"
 import { createHash } from "node:crypto"
 import path from "node:path"
-import { Clock, Context, Effect, Layer, Option, Schema } from "effect"
+import { Cause, Clock, Context, Effect, Layer, Option, Schema, Scope } from "effect"
+import { eq } from "drizzle-orm"
+import { Database } from "@opencode-ai/core/database/database"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
+import { EventV2 } from "@opencode-ai/core/event"
 import { Global } from "@opencode-ai/core/global"
 import { ProjectTrust } from "@opencode-ai/core/project/trust"
+import { AbsolutePath } from "@opencode-ai/core/schema"
+import { SessionTable } from "@opencode-ai/core/session/sql"
+import { PermissionV1 } from "@opencode-ai/core/v1/permission"
+import { QuestionV1 } from "@opencode-ai/schema/question-v1"
+import { SessionStatusEvent } from "@opencode-ai/schema/session-status-event"
+import { GlobalBus, type GlobalEvent } from "@/bus/global"
 import type { SessionID } from "@/session/schema"
 import { Secrets } from "@/tool/secrets"
 
@@ -44,6 +53,23 @@ const AUDIT_LINE_BYTES = 4096
 const AUDIT_RETENTION_DAYS = 30
 const DAY_MS = 24 * 60 * 60 * 1000
 const SKIPPED_QUESTION_REASON = "asumsi agen"
+
+/** How long everything has to stay quiet before it counts as finished: a run can pass through idle between two steps. */
+export const BLOCKED_DEBOUNCE_MS = 5000
+
+/**
+ * The person is needed, because of a full queue (b0) or because nothing in this process can go on without them (b1).
+ * Sent by the code below on what the code knows, never because of what a model or a file says, so it carries a count
+ * and nothing that was written by anyone. A spend limit or a repeating call needs none of this: its prompt is the notice.
+ */
+export const Blocked = EventV2.define({
+  type: "autonomy.blocked",
+  schema: {
+    sessionID: Schema.String,
+    level: Schema.Literals(["b0", "b1"]),
+    count: Schema.Int,
+  },
+})
 
 export type StateFile = typeof MODE_FILE | typeof TRUST_FILE
 
@@ -516,9 +542,25 @@ export const removeAudit = Effect.fn("Autonomy.removeAudit")(function* (root: Se
   )
 })
 
+const isStatus = Schema.is(SessionStatusEvent.Status.data)
+const isIdle = Schema.is(SessionStatusEvent.Idle.data)
+const isPrompt = Schema.is(
+  Schema.Struct({ id: Schema.String, sessionID: Schema.String, movedOnAt: Schema.optional(Schema.Number) }),
+)
+const isAnswer = Schema.is(Schema.Struct({ requestID: Schema.String }))
+const PROMPT_ASKED: readonly string[] = [PermissionV1.Event.Asked.type, QuestionV1.Event.Asked.type]
+const PROMPT_ANSWERED: readonly string[] = [
+  PermissionV1.Event.Replied.type,
+  QuestionV1.Event.Replied.type,
+  QuestionV1.Event.Rejected.type,
+]
+
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
+    // Absent only where the layer is built alone to read and write its files, and there is nobody to tell then.
+    const events = Option.getOrUndefined(yield* Effect.serviceOption(EventV2.Service))
+    const database = Option.getOrUndefined(yield* Effect.serviceOption(Database.Service))
     // Shared by every open folder, and outliving any of them: the files are global, and a reload must not lose this.
     const firstMode = yield* Effect.sync(() => readState(MODE_FILE))
     const firstTrust = yield* Effect.sync(() => readState(TRUST_FILE))
@@ -530,6 +572,14 @@ export const layer = Layer.effect(
     // The chain's head for each root this service wrote to. A change to the file cannot reach it.
     const heads = new Map<string, { seq: number; hash: string | null; torn: boolean }>()
     const modeMarked = new Map<string, boolean>()
+    // What can still go on, across every open folder: SessionStatus and the prompts each keep theirs per folder.
+    const running = new Map<string, string | undefined>()
+    const prompts = new Map<string, { sessionID: string; directory: string | undefined }>()
+    // Sessions that went idle since the last look. A root nothing happened to since a restart stays quiet until it runs.
+    const idled = new Set<string>()
+    // Per root, the held calls a b1 already named. Saying the same again adds nothing anyone can act on.
+    const told = new Map<string, ReadonlySet<string>>()
+    let lastIdle = 0
 
     const started = yield* Clock.currentTimeMillis
     yield* Effect.try({ try: () => sweepAudit(started), catch: String }).pipe(
@@ -563,11 +613,30 @@ export const layer = Layer.effect(
       heads.set(id, { seq, hash: hashOf(text), torn: false })
     }
 
+    const tell = Effect.fnUntraced(function* (root: string, directory: string, level: "b0" | "b1") {
+      if (!events) return
+      const id = path.basename(root)
+      const open = openIn(readAuditText(auditFile(id)), id)
+      // Only b1. A full queue says work is still going on, and whoever let that pass still has to hear when it stops.
+      if (level === "b1") told.set(id, new Set(open.map((line) => line.requestID)))
+      yield* events.publish(
+        Blocked,
+        { sessionID: root, level, count: open.length },
+        // Clients take events by folder, and this one may be sent from a timer that belongs to none.
+        { location: { directory: AbsolutePath.make(directory) } },
+      )
+    })
+
     const record = Effect.fn("Autonomy.record")(function* (root: SessionID, entry: AuditEntry) {
       const at = yield* Clock.currentTimeMillis
       yield* Effect.try({ try: () => appendAudit(root, at, entry), catch: String }).pipe(
         Effect.tapError((error) => Effect.logError("could not write to the audit file", { root, error })),
         Effect.mapError(() => new WriteError({ message: "Could not write to the audit file" })),
+      )
+      if (entry.type !== "marker" || entry.marker !== "b0" || !entry.directory) return
+      yield* tell(root, entry.directory, "b0").pipe(
+        // The line is written, and the queue being full is not undone by a notice that failed.
+        Effect.catchCause((cause) => Effect.logError("could not send a notice", { root, cause })),
       )
     })
 
@@ -640,6 +709,121 @@ export const layer = Layer.effect(
       )
       return found.flat()
     })
+
+    const rootOf = (id: string): Effect.Effect<{ root: SessionID; directory: string } | undefined> =>
+      database
+        ? database.db
+            .select({ parent: SessionTable.parent_id, directory: SessionTable.directory })
+            .from(SessionTable)
+            .where(eq(SessionTable.id, id as SessionID))
+            .get()
+            .pipe(
+              Effect.orDie,
+              Effect.flatMap((row) => {
+                if (!row) return Effect.succeed(undefined)
+                if (row.parent) return rootOf(row.parent)
+                return Effect.succeed({ root: id as SessionID, directory: row.directory })
+              }),
+            )
+        : Effect.succeed(undefined)
+
+    /**
+     * GATE 6. An agent is told to carry on with whatever else it can and end its turn when there is nothing left, so a
+     * root in the mode with nothing moving anywhere and a decision open means the person is the only way forward. Any
+     * root in the mode still moving keeps every other one waiting: asking is the last resort, and what it finds may
+     * clear the way. A failure to look says nothing, and the queue stays where it is in Activity.
+     */
+    const lookAtBlocked = Effect.gen(function* () {
+      const moving = yield* Effect.forEach(
+        [...running.keys(), ...[...prompts.values()].map((item) => item.sessionID)],
+        rootOf,
+      )
+      if (moving.some((item) => item && isOnNow({ root: item.root, directory: item.directory }))) return
+      const finished = new Map(
+        (yield* Effect.forEach([...idled], rootOf)).flatMap((item) => (item ? [[item.root, item] as const] : [])),
+      )
+      idled.clear()
+      yield* Effect.forEach(
+        [...finished.values()].filter((item) => isOnNow({ root: item.root, directory: item.directory })),
+        Effect.fnUntraced(function* (item) {
+          const id = path.basename(item.root)
+          const known = told.get(id)
+          const open = openIn(readAuditText(auditFile(id)), id)
+          if (open.every((line) => known?.has(line.requestID))) return
+          yield* record(item.root, {
+            type: "marker",
+            directory: item.directory,
+            marker: "b1",
+            decidedBy: "system:blocked",
+          }).pipe(Effect.ignore)
+          yield* tell(item.root, item.directory, "b1")
+        }),
+        { discard: true },
+      )
+    })
+
+    if (events && database) {
+      const scope = yield* Scope.Scope
+      const look = Effect.suspend(() => {
+        const mine = ++lastIdle
+        return Effect.sleep(BLOCKED_DEBOUNCE_MS).pipe(
+          Effect.andThen(Effect.suspend(() => (mine === lastIdle ? lookAtBlocked : Effect.void))),
+          Effect.catchCauseIf(
+            (cause) => !Cause.hasInterrupts(cause),
+            (cause) => Effect.logError("could not work out whether a person is needed", { cause }),
+          ),
+          Effect.forkIn(scope),
+          Effect.asVoid,
+        )
+      })
+
+      const unsubscribe = yield* events.listen((event) =>
+        Effect.suspend(() => {
+          const data = event.data
+          const directory = event.location?.directory
+          if (event.type === SessionStatusEvent.Status.type && isStatus(data)) {
+            if (data.status.type !== "idle") {
+              running.set(data.sessionID, directory)
+              return Effect.void
+            }
+            running.delete(data.sessionID)
+            // A prompt lives inside a run. A cancelled one takes its prompt with it, and nothing is published about that.
+            prompts.forEach((item, id) => {
+              if (item.sessionID === data.sessionID) prompts.delete(id)
+            })
+            return Effect.void
+          }
+          if (event.type === SessionStatusEvent.Idle.type && isIdle(data)) {
+            idled.add(data.sessionID)
+            return look
+          }
+          if (PROMPT_ASKED.includes(event.type) && isPrompt(data)) {
+            // A held call and a prompt that moved on are both published with this set, and neither is waiting for anyone.
+            if (data.movedOnAt === undefined) prompts.set(data.id, { sessionID: data.sessionID, directory })
+            else prompts.delete(data.id)
+            return Effect.void
+          }
+          if (PROMPT_ANSWERED.includes(event.type) && isAnswer(data)) prompts.delete(data.requestID)
+          return Effect.void
+        }),
+      )
+      yield* Effect.addFinalizer(() => unsubscribe)
+
+      // A folder being closed publishes nothing for the runs it ends. Left alone, one of them would hold back every
+      // notice in this process for as long as it lives.
+      const onClosed = (event: GlobalEvent) => {
+        if (event.payload?.type !== "server.instance.disposed") return
+        running.forEach((directory, id) => {
+          if (directory === event.directory) running.delete(id)
+        })
+        prompts.forEach((item, id) => {
+          if (item.directory === event.directory) prompts.delete(id)
+        })
+        Effect.runFork(look)
+      }
+      GlobalBus.on("event", onClosed)
+      yield* Effect.addFinalizer(() => Effect.sync(() => GlobalBus.off("event", onClosed)))
+    }
 
     const setMode = Effect.fn("Autonomy.setMode")(function* (input: ModeChange) {
       yield* Effect.try({
@@ -739,6 +923,6 @@ export const layer = Layer.effect(
   }),
 )
 
-export const node = LayerNode.make({ service: Service, layer, deps: [] })
+export const node = LayerNode.make({ service: Service, layer, deps: [EventV2.node, Database.node] })
 
 export * as Autonomy from "./autonomy"
