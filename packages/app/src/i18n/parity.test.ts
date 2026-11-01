@@ -95,9 +95,12 @@ const pluralCategories = new Map(
 //     six → seven by explicit user decision, spent entirely on the apply-consequence sentence
 //     `setup.lanes.apply_warning` shown by the lane controls on the Home card);
 //   - two more for the Knowledge Library row in Settings (`settings.general.row.knowledgeLibrary.title`
-//     and `.description`, decision C2 in `docs/2026-11-01_knowledge_library_default/decisions/decisions.md`).
+//     and `.description`, decision C2 in `docs/2026-11-01_knowledge_library_default/decisions/decisions.md`);
+//   - twenty-four more for autonomous mode (`settings.general.row.autonomous.*`, `command.permissions.autonomous.*`,
+//     `toast.permissions.autonomous.*`, `session.autonomy.marker`, `session.map.filter.decisions`,
+//     `session.map.decisions.*` and `notification.autonomy.blocked`, decision C18 in the same file, widening C2).
 // Widening this list is a decision, not drift: `parity-exemption-guard.test.ts` fails the suite on any
-// thirteenth entry, on any non-literal/wildcard, and if `en` or `id` ever stops carrying an exempt key.
+// thirty-seventh entry, on any non-literal/wildcard, and if `en` or `id` ever stops carrying an exempt key.
 const UNTRANSLATED_KEY_PRESENCE_EXEMPTION: readonly string[] = [
   "command.project.openNumber",
   "settings.tab.servers",
@@ -111,6 +114,30 @@ const UNTRANSLATED_KEY_PRESENCE_EXEMPTION: readonly string[] = [
   "setup.lanes.apply_warning",
   "settings.general.row.knowledgeLibrary.title",
   "settings.general.row.knowledgeLibrary.description",
+  "settings.general.row.autonomous.title",
+  "settings.general.row.autonomous.description",
+  "settings.general.row.autonomous.disabledReason",
+  "command.permissions.autonomous.enable",
+  "command.permissions.autonomous.disable",
+  "toast.permissions.autonomous.on.title",
+  "toast.permissions.autonomous.off.title",
+  "session.autonomy.marker",
+  "session.map.filter.decisions",
+  "session.map.decisions.group.waiting",
+  "session.map.decisions.group.decided",
+  "session.map.decisions.group.limited",
+  "session.map.decisions.category.not_routine",
+  "session.map.decisions.category.queue_full",
+  "session.map.decisions.category.decider_unavailable",
+  "session.map.decisions.category.folder_not_trusted",
+  "session.map.decisions.category.plan_mode",
+  "session.map.decisions.category.app_state",
+  "session.map.decisions.category.asks_every_time",
+  "session.map.decisions.outcome.ran",
+  "session.map.decisions.outcome.notRun",
+  "session.map.decisions.undo.confirm",
+  "session.map.decisions.marker.externalChange",
+  "notification.autonomy.blocked",
 ]
 // Locales the exemption never applies to. `en` is every domain's source, and `id` is the second
 // maintained locale: it already carries every exempt key, so it stays fully enforced like the rest.

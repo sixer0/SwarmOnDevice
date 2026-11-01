@@ -7,8 +7,8 @@ import { join } from "path"
 // Why this file exists: the exemption is a deliberate, bounded weakening of a completeness invariant
 // (branch B of the 2026-10-21 decision in
 // `docs/2026-10-19_opencode_swarm_rebrand/decisions/decisions.md`). Its safety depends entirely on
-// staying bounded — twelve entries as of decision C2 of the 2026-11-01 Knowledge Library task, up from
-// ten at blueprint-11 row 249 (session 6), nine at row 204 and the original three.
+// staying bounded — thirty-six entries as of decision C18 of the 2026-11-01 Knowledge Library task, up from
+// twelve at its decision C2, ten at blueprint-11 row 249 (session 6), nine at row 204 and the original three.
 // This guard is the mechanism that keeps the exception from becoming the norm: any entry beyond the
 // approved set, any wildcard, or any relaxation of the `missing: []` assertion fails the suite here
 // instead of quietly passing the gate it is supposed to police.
@@ -32,6 +32,30 @@ const APPROVED_EXEMPT_KEYS = [
   "setup.lanes.apply_warning",
   "settings.general.row.knowledgeLibrary.title",
   "settings.general.row.knowledgeLibrary.description",
+  "settings.general.row.autonomous.title",
+  "settings.general.row.autonomous.description",
+  "settings.general.row.autonomous.disabledReason",
+  "command.permissions.autonomous.enable",
+  "command.permissions.autonomous.disable",
+  "toast.permissions.autonomous.on.title",
+  "toast.permissions.autonomous.off.title",
+  "session.autonomy.marker",
+  "session.map.filter.decisions",
+  "session.map.decisions.group.waiting",
+  "session.map.decisions.group.decided",
+  "session.map.decisions.group.limited",
+  "session.map.decisions.category.not_routine",
+  "session.map.decisions.category.queue_full",
+  "session.map.decisions.category.decider_unavailable",
+  "session.map.decisions.category.folder_not_trusted",
+  "session.map.decisions.category.plan_mode",
+  "session.map.decisions.category.app_state",
+  "session.map.decisions.category.asks_every_time",
+  "session.map.decisions.outcome.ran",
+  "session.map.decisions.outcome.notRun",
+  "session.map.decisions.undo.confirm",
+  "session.map.decisions.marker.externalChange",
+  "notification.autonomy.blocked",
 ]
 
 function arrayLiteral(name: string) {
@@ -49,10 +73,10 @@ function arrayLiteral(name: string) {
 describe("i18n parity exemption guard", () => {
   const exemptKeys = arrayLiteral("UNTRANSLATED_KEY_PRESENCE_EXEMPTION")
 
-  test("the exemption holds exactly the twelve approved keys and nothing else", () => {
+  test("the exemption holds exactly the thirty-six approved keys and nothing else", () => {
     expect([...exemptKeys].sort()).toEqual([...APPROVED_EXEMPT_KEYS].sort())
-    expect(exemptKeys.length).toBe(12)
-    expect(new Set(exemptKeys).size).toBe(12)
+    expect(exemptKeys.length).toBe(36)
+    expect(new Set(exemptKeys).size).toBe(36)
   })
 
   test("every exemption entry is a literal dotted key, never a wildcard or pattern", () => {
@@ -99,6 +123,30 @@ describe("i18n parity exemption guard", () => {
           "setup.lanes.apply_warning",
           "settings.general.row.knowledgeLibrary.title",
           "settings.general.row.knowledgeLibrary.description",
+          "settings.general.row.autonomous.title",
+          "settings.general.row.autonomous.description",
+          "settings.general.row.autonomous.disabledReason",
+          "command.permissions.autonomous.enable",
+          "command.permissions.autonomous.disable",
+          "toast.permissions.autonomous.on.title",
+          "toast.permissions.autonomous.off.title",
+          "session.autonomy.marker",
+          "session.map.filter.decisions",
+          "session.map.decisions.group.waiting",
+          "session.map.decisions.group.decided",
+          "session.map.decisions.group.limited",
+          "session.map.decisions.category.not_routine",
+          "session.map.decisions.category.queue_full",
+          "session.map.decisions.category.decider_unavailable",
+          "session.map.decisions.category.folder_not_trusted",
+          "session.map.decisions.category.plan_mode",
+          "session.map.decisions.category.app_state",
+          "session.map.decisions.category.asks_every_time",
+          "session.map.decisions.outcome.ran",
+          "session.map.decisions.outcome.notRun",
+          "session.map.decisions.undo.confirm",
+          "session.map.decisions.marker.externalChange",
+          "notification.autonomy.blocked",
         ],
       },
       { domain: "ui", file: "../../../ui/src/i18n/en.ts", keys: ["ui.toast.ariaLabel"] },
