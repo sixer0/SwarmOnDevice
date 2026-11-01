@@ -7,7 +7,8 @@ import { join } from "path"
 // Why this file exists: the exemption is a deliberate, bounded weakening of a completeness invariant
 // (branch B of the 2026-10-21 decision in
 // `docs/2026-10-19_opencode_swarm_rebrand/decisions/decisions.md`). Its safety depends entirely on
-// staying bounded — ten entries as of blueprint-11 row 249 (session 6), up from nine at row 204 and the original three.
+// staying bounded — twelve entries as of decision C2 of the 2026-11-01 Knowledge Library task, up from
+// ten at blueprint-11 row 249 (session 6), nine at row 204 and the original three.
 // This guard is the mechanism that keeps the exception from becoming the norm: any entry beyond the
 // approved set, any wildcard, or any relaxation of the `missing: []` assertion fails the suite here
 // instead of quietly passing the gate it is supposed to police.
@@ -29,6 +30,8 @@ const APPROVED_EXEMPT_KEYS = [
   "setup.status.notClaimed",
   "mcp.status.needs_client_registration",
   "setup.lanes.apply_warning",
+  "settings.general.row.knowledgeLibrary.title",
+  "settings.general.row.knowledgeLibrary.description",
 ]
 
 function arrayLiteral(name: string) {
@@ -46,10 +49,10 @@ function arrayLiteral(name: string) {
 describe("i18n parity exemption guard", () => {
   const exemptKeys = arrayLiteral("UNTRANSLATED_KEY_PRESENCE_EXEMPTION")
 
-  test("the exemption holds exactly the ten approved keys and nothing else", () => {
+  test("the exemption holds exactly the twelve approved keys and nothing else", () => {
     expect([...exemptKeys].sort()).toEqual([...APPROVED_EXEMPT_KEYS].sort())
-    expect(exemptKeys.length).toBe(10)
-    expect(new Set(exemptKeys).size).toBe(10)
+    expect(exemptKeys.length).toBe(12)
+    expect(new Set(exemptKeys).size).toBe(12)
   })
 
   test("every exemption entry is a literal dotted key, never a wildcard or pattern", () => {
@@ -94,6 +97,8 @@ describe("i18n parity exemption guard", () => {
           "setup.status.notClaimed",
           "mcp.status.needs_client_registration",
           "setup.lanes.apply_warning",
+          "settings.general.row.knowledgeLibrary.title",
+          "settings.general.row.knowledgeLibrary.description",
         ],
       },
       { domain: "ui", file: "../../../ui/src/i18n/en.ts", keys: ["ui.toast.ariaLabel"] },

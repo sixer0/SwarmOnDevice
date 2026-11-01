@@ -1265,6 +1265,9 @@ export const dict = {
 
   "settings.general.row.releaseNotes.title": "Catatan rilis",
   "settings.general.row.releaseNotes.description": "Tampilkan pop-up Apa yang Baru setelah pembaruan",
+  "settings.general.row.knowledgeLibrary.title": "Knowledge Library",
+  "settings.general.row.knowledgeLibrary.description":
+    "Edisi umum, commit sumber {{commit}}. Hanya berubah saat aplikasi dibangun ulang dan tidak diperiksa terhadap sumber. Isi yang dibaca agen dikirim ke model yang sedang dipakai dan ikut riwayat sesi bila model diganti; retensi penyedia tidak diperiksa. Mematikan tidak menghapus riwayat yang sudah ada.",
 
   "settings.updates.row.startup.title": "Periksa pembaruan saat dimulai",
   "settings.updates.row.startup.description": "Secara otomatis memeriksa pembaruan saat Swarm diluncurkan",

@@ -82,7 +82,7 @@ const pluralCategories = new Map(
 // It does not change what any other assertion checks: values, placeholders, plural variants and `extra`
 // keys are still enforced for these same keys once a locale carries them. Proper closure is
 // `bun run translate:app -- all`, which translates them and retires this list.
-// Two deliberate batches live here, each real in `en`+`id` and absent in the other 60 locales:
+// Deliberate batches live here, each real in `en`+`id` and absent in the other 60 locales:
 //   - the original three (branch B): `command.project.openNumber` and `settings.tab.servers` (app
 //     table) plus `ui.toast.ariaLabel` (ui table — row 170's accessible region name, see
 //     packages/ui/src/v2/components/toast-v2.tsx:21);
@@ -93,9 +93,11 @@ const pluralCategories = new Map(
 //     packages/app/src/components/dialog-select-mcp.tsx:13;
 //   - one more by blueprint-11 row 249 (session 6, USER DECISIONS 2026-10-22 item 1: the i18n cap moved
 //     six → seven by explicit user decision, spent entirely on the apply-consequence sentence
-//     `setup.lanes.apply_warning` shown by the lane controls on the Home card).
+//     `setup.lanes.apply_warning` shown by the lane controls on the Home card);
+//   - two more for the Knowledge Library row in Settings (`settings.general.row.knowledgeLibrary.title`
+//     and `.description`, decision C2 in `docs/2026-11-01_knowledge_library_default/decisions/decisions.md`).
 // Widening this list is a decision, not drift: `parity-exemption-guard.test.ts` fails the suite on any
-// eleventh entry, on any non-literal/wildcard, and if `en` or `id` ever stops carrying an exempt key.
+// thirteenth entry, on any non-literal/wildcard, and if `en` or `id` ever stops carrying an exempt key.
 const UNTRANSLATED_KEY_PRESENCE_EXEMPTION: readonly string[] = [
   "command.project.openNumber",
   "settings.tab.servers",
@@ -107,6 +109,8 @@ const UNTRANSLATED_KEY_PRESENCE_EXEMPTION: readonly string[] = [
   "setup.status.notClaimed",
   "mcp.status.needs_client_registration",
   "setup.lanes.apply_warning",
+  "settings.general.row.knowledgeLibrary.title",
+  "settings.general.row.knowledgeLibrary.description",
 ]
 // Locales the exemption never applies to. `en` is every domain's source, and `id` is the second
 // maintained locale: it already carries every exempt key, so it stays fully enforced like the rest.

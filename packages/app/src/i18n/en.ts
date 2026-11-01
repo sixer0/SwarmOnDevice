@@ -1159,6 +1159,9 @@ export const dict = {
 
   "settings.general.row.releaseNotes.title": "Release notes",
   "settings.general.row.releaseNotes.description": "Show What's New popups after updates",
+  "settings.general.row.knowledgeLibrary.title": "Knowledge Library",
+  "settings.general.row.knowledgeLibrary.description":
+    "General edition, source commit {{commit}}. Changes only when the app is rebuilt and is not checked against its source. What agents read is sent to the model in use, and goes along with the session history if you switch models; provider retention is not checked. Turning this off does not erase existing history.",
 
   "settings.updates.row.startup.title": "Check for updates on startup",
   "settings.updates.row.startup.description": "Automatically check for updates when Swarm launches",
