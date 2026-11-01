@@ -1,15 +1,17 @@
 import { describe, expect, test } from "bun:test"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
+import nodeFs from "node:fs"
 import path from "path"
 import { Effect, FileSystem, Layer } from "effect"
 import { CrossSpawnSpawner } from "@opencode-ai/core/cross-spawn-spawner"
 
 import { Instruction } from "../../src/session/instruction"
+import { LibraryRoot } from "../../src/skill/library-root"
 import type { MessageV2 } from "../../src/session/message-v2"
 import { MessageID, PartID, SessionID } from "../../src/session/schema"
 import { Global } from "@opencode-ai/core/global"
 import { RuntimeFlags } from "../../src/effect/runtime-flags"
-import { provideInstance, provideTmpdirInstance, tmpdirScoped } from "../fixture/fixture"
+import { provideInstance, provideTmpdirInstance, tmpdir, tmpdirScoped } from "../fixture/fixture"
 import { testEffect } from "../lib/effect"
 import { TestConfig } from "../fixture/config"
 import { ProviderV2 } from "@opencode-ai/core/provider"
@@ -281,4 +283,157 @@ describe("Instruction.systemPaths global config", () => {
       }).pipe(provideInstance(projectTmp), provideInstruction({ home: globalTmp, config: globalTmp }))
     }),
   )
+})
+
+const LIBRARY_SUITE = "Instruction with a library root"
+const library = LibraryRoot.current()
+
+// Runs only in the process the test below starts, where the real resolver has found the synthetic bundle.
+describe.skipIf(library.kind !== "available")(LIBRARY_SUITE, () => {
+  const root = library.kind === "available" ? library.root : ""
+  const resources = path.dirname(root)
+  const app = path.dirname(path.dirname(resources))
+  const base = path.dirname(app)
+  const note = path.join(root, "topic", "note.md")
+
+  const session = <A, E, R>(directory: string, self: Effect.Effect<A, E, R>, global = base) =>
+    self.pipe(provideInstance(directory), provideInstruction({ home: base, config: global }))
+
+  for (const [name, directory] of [
+    ["the folder holding the app", base],
+    ["the app", app],
+    ["the folder holding the copy", resources],
+  ] as const) {
+    it.live(`attaches nothing from the copy when the session directory is ${name}`, () =>
+      session(
+        directory,
+        Effect.gen(function* () {
+          const svc = yield* Instruction.Service
+          expect(yield* svc.resolve([], note, MessageID.make("msg_message-library-1"))).toEqual([])
+        }),
+      ),
+    )
+  }
+
+  it.live("still attaches instructions outside the copy", () =>
+    session(
+      base,
+      Effect.gen(function* () {
+        const svc = yield* Instruction.Service
+        const results = yield* svc.resolve(
+          [],
+          path.join(base, "elsewhere", "note.md"),
+          MessageID.make("msg_message-library-2"),
+        )
+        expect(results.map((item) => item.filepath)).toEqual([path.join(base, "elsewhere", "AGENTS.md")])
+      }),
+    ),
+  )
+
+  it.live("attaches nothing from the copy when a link in the project leads to it", () =>
+    session(
+      path.join(base, "project"),
+      Effect.gen(function* () {
+        const svc = yield* Instruction.Service
+        const results = yield* svc.resolve(
+          [],
+          path.join(base, "project", "shelf", "topic", "note.md"),
+          MessageID.make("msg_message-library-3"),
+        )
+        expect(results).toEqual([])
+      }),
+    ),
+  )
+
+  for (const [name, directory] of [
+    ["inside the copy", path.join(root, "topic")],
+    ["a link to the copy", path.join(base, "project", "shelf")],
+  ] as const) {
+    it.live(`leaves the copy out of the system prompt when the session directory is ${name}`, () =>
+      session(
+        directory,
+        Effect.gen(function* () {
+          const svc = yield* Instruction.Service
+          const paths = yield* svc.systemPaths()
+          expect(Array.from(paths).filter((item) => nodeFs.realpathSync(item).startsWith(root + path.sep))).toEqual([])
+          expect((yield* svc.system()).filter((item) => item.includes("LIBRARY TEXT"))).toEqual([])
+        }),
+      ),
+    )
+  }
+
+  it.live("leaves the copy out when the global config folder is inside it", () =>
+    session(
+      base,
+      Effect.gen(function* () {
+        const svc = yield* Instruction.Service
+        expect((yield* svc.systemPaths()).has(path.join(root, "AGENTS.md"))).toBe(false)
+      }),
+      root,
+    ),
+  )
+
+  it.live("leaves the copy out when the config names a file in it", () =>
+    Effect.gen(function* () {
+      const svc = yield* Instruction.Service
+      const paths = yield* svc.systemPaths()
+      expect(paths.has(path.join(root, "AGENTS.md"))).toBe(false)
+      expect(paths.has(path.join(base, "elsewhere", "AGENTS.md"))).toBe(true)
+    }).pipe(
+      provideInstance(base),
+      Effect.provide(
+        AppNodeBuilder.build(Instruction.node, [
+          [
+            Config.node,
+            TestConfig.layer({
+              get: () =>
+                Effect.succeed({
+                  instructions: [path.join(root, "AGENTS.md"), path.join(base, "elsewhere", "AGENTS.md")],
+                }),
+            }),
+          ],
+          [Global.node, Global.layerWith({ home: base, config: base })],
+          [RuntimeFlags.node, RuntimeFlags.layer({})],
+        ]),
+      ),
+    ),
+  )
+})
+
+describe("Instruction library guard", () => {
+  // A process of its own, because the root is decided once as the module loads and nothing can set it afterwards.
+  test.skipIf(library.kind === "available")("holds in a process the bundled library is really found in", async () => {
+    await using tmp = await tmpdir()
+    const resources = path.join(tmp.path, "Swarm.app", "Contents", "Resources")
+    const copy = path.join(resources, "knowledge-library")
+    await Promise.all(
+      Object.entries({
+        [path.join(copy, "library.json")]: JSON.stringify({ edition: { id: "edisi-umum" } }),
+        [path.join(copy, "AGENTS.md")]: "LIBRARY TEXT",
+        [path.join(copy, "CLAUDE.md")]: "LIBRARY TEXT",
+        [path.join(copy, "topic", "AGENTS.md")]: "LIBRARY TEXT",
+        [path.join(copy, "topic", "note.md")]: "text",
+        [path.join(tmp.path, "elsewhere", "AGENTS.md")]: "# Elsewhere",
+        [path.join(tmp.path, "elsewhere", "note.md")]: "text",
+        [path.join(tmp.path, "project", "keep.txt")]: "",
+      }).map(([file, content]) => Bun.write(file, content)),
+    )
+    nodeFs.symlinkSync(copy, path.join(tmp.path, "project", "shelf"))
+    const preload = path.join(tmp.path, "pose.ts")
+    await Bun.write(
+      preload,
+      `Object.defineProperty(process, "type", { value: "utility", configurable: true, writable: true })
+       Object.defineProperty(process, "resourcesPath", { value: ${JSON.stringify(resources)}, configurable: true, writable: true })`,
+    )
+
+    const child = Bun.spawnSync(
+      [process.execPath, "test", "--preload", preload, "test/session/instruction.test.ts", "-t", LIBRARY_SUITE],
+      { cwd: path.join(import.meta.dir, "../.."), env: process.env, stdout: "pipe", stderr: "pipe" },
+    )
+    const output = child.stdout.toString() + child.stderr.toString()
+    // The count is what proves the suite ran here: if the root were not found it would skip and exit 0.
+    expect(output).toMatch(/\b9 pass\b/)
+    expect(output).toMatch(/\b0 fail\b/)
+    expect(child.exitCode).toBe(0)
+  }, 60_000)
 })

@@ -11,6 +11,8 @@ import { Flag } from "@opencode-ai/core/flag/flag"
 import { FSUtil } from "@opencode-ai/core/fs-util"
 import { withTransientReadRetry } from "@/util/effect-http-client"
 import { Global } from "@opencode-ai/core/global"
+import { LibraryRoot } from "@/skill/library-root"
+import { Reach } from "@/tool/reach"
 import type { MessageV2 } from "./message-v2"
 import type { MessageID } from "./schema"
 
@@ -29,6 +31,14 @@ function extract(messages: SessionV1.WithParts[]) {
     }
   }
   return paths
+}
+
+// The bundled library's own AGENTS.md and CLAUDE.md are reference text, never instructions to this session. Both names
+// are checked, because a link in a project can carry the library in under any path.
+function inLibrary(file: string) {
+  const library = LibraryRoot.current()
+  if (library.kind !== "available") return false
+  return FSUtil.contains(library.root, file) || FSUtil.contains(library.root, Reach.real(file) ?? file)
 }
 
 export interface Interface {
@@ -113,7 +123,7 @@ const layer: Layer.Layer<
       const paths = new Set<string>()
 
       for (const file of globalFiles) {
-        if (yield* fs.existsSafe(file)) {
+        if (!inLibrary(file) && (yield* fs.existsSafe(file))) {
           paths.add(path.resolve(file))
           break
         }
@@ -122,9 +132,9 @@ const layer: Layer.Layer<
       // The first project-level match wins so we don't stack AGENTS.md/CLAUDE.md from every ancestor.
       if (!Flag.OPENCODE_DISABLE_PROJECT_CONFIG) {
         for (const file of instructionFiles) {
-          const matches = yield* fs
+          const matches = (yield* fs
             .findUp(file, ctx.directory, ctx.worktree)
-            .pipe(Effect.catch(() => Effect.succeed([])))
+            .pipe(Effect.catch(() => Effect.succeed([])))).filter((item) => !inLibrary(item))
           if (matches.length > 0) {
             matches.forEach((item) => paths.add(path.resolve(item)))
             break
@@ -145,7 +155,7 @@ const layer: Layer.Layer<
                 })
               : relative(instruction)
           ).pipe(Effect.catch(() => Effect.succeed([] as string[])))
-          matches.forEach((item) => paths.add(path.resolve(item)))
+          matches.filter((item) => !inLibrary(item)).forEach((item) => paths.add(path.resolve(item)))
         }
       }
 
@@ -193,7 +203,7 @@ const layer: Layer.Layer<
       // Walk upward from the file being read and attach nearby instruction files once per message.
       while (FSUtil.contains(root, current) && current !== root) {
         const found = yield* find(current)
-        if (!found || found === target || sys.has(found) || already.has(found)) {
+        if (!found || found === target || sys.has(found) || already.has(found) || inLibrary(found)) {
           current = path.dirname(current)
           continue
         }
