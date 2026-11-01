@@ -67,6 +67,7 @@ export const WriteTool = Tool.define(
               ...(trust.risk ? { risk: trust.risk } : {}),
             },
             harmless: trust.harmless,
+            editClass: trust.editClass,
           })
 
           // Two agents may be here at once, and an answer to the prompt above may have taken a while.

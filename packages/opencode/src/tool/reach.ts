@@ -163,12 +163,15 @@ export const editTrust = Effect.fn("Reach.editTrust")(function* (
   instance: InstanceContext,
   files: string[],
 ) {
-  if (!ctx.trust?.canUndo) return { harmless: false }
-  if (files.some((file) => !inside(file, instance))) return { harmless: false, risk: "irreversible" as const }
-  if (files.some((file) => sensitive(file, instance) || secret(file))) return { harmless: false }
+  if (!ctx.trust?.canUndo) return { harmless: false, editClass: "no_undo" as const }
+  if (files.some((file) => !inside(file, instance)))
+    return { harmless: false, risk: "irreversible" as const, editClass: "no_undo" as const }
+  if (files.some((file) => secret(file))) return { harmless: false, editClass: "secret" as const }
+  if (files.some((file) => sensitive(file, instance))) return { harmless: false, editClass: "sensitive" as const }
   if (yield* Effect.promise(() => outsideSnapshot(instance.worktree, landsOn(files, instance))))
-    return { harmless: false, risk: "irreversible" as const }
-  return { harmless: files.every((file) => ordinary(file, instance)) }
+    return { harmless: false, risk: "irreversible" as const, editClass: "no_undo" as const }
+  const harmless = files.every((file) => ordinary(file, instance))
+  return { harmless, editClass: harmless ? ("ordinary" as const) : ("not_ordinary" as const) }
 })
 
 export * as Reach from "./reach"

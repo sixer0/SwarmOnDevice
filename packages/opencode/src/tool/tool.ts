@@ -1,5 +1,7 @@
 import { PermissionV1 } from "@opencode-ai/core/v1/permission"
-import { Effect, Schema } from "effect"
+import path from "node:path"
+import { Global } from "@opencode-ai/core/global"
+import { Effect, Option, Schema } from "effect"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
 import type { JSONSchema7 } from "@ai-sdk/provider"
 import type { MessageV2 } from "../session/message-v2"
@@ -7,6 +9,10 @@ import type { Permission } from "../permission"
 import type { SessionID, MessageID } from "../session/schema"
 import * as Truncate from "./truncate"
 import { InstanceRef } from "@/effect/instance-ref"
+import { InstanceState } from "@/effect/instance-state"
+import { Autonomy } from "@/permission/autonomy"
+import { Session } from "@/session/session"
+import { Reach } from "./reach"
 import { Secrets } from "./secrets"
 import { ShellOrphans } from "./shell/orphans"
 import { Agent } from "@/agent/agent"
@@ -45,7 +51,15 @@ export type Context<M extends Metadata = Metadata> = {
   extra?: { [key: string]: unknown }
   messages: SessionV1.WithParts[]
   metadata(input: { title?: string; metadata?: M }): Effect.Effect<void>
-  ask(input: Omit<PermissionV1.Request, "id" | "sessionID" | "tool"> & { harmless?: boolean; noAlways?: boolean }): Effect.Effect<void>
+  ask(
+    input: Omit<PermissionV1.Request, "id" | "sessionID" | "tool"> & {
+      harmless?: boolean
+      noAlways?: boolean
+      editClass?: PermissionV1.EditClass
+      /** Under the plan agent's limits in autonomous mode: no rule or earlier answer settles this before the gate. */
+      planLimited?: boolean
+    },
+  ): Effect.Effect<void>
   /** Set for a real agent run. Without it a tool asks about everything, as a call from outside a session should. */
   trust?: {
     /** Each step snapshots this project, so Undo can restore what changes in it. */
@@ -111,6 +125,7 @@ function wrap<Parameters extends Schema.Decoder<unknown>, Result extends Metadat
   init: Init<Parameters, Result>,
   truncate: Truncate.Interface,
   agents: Agent.Interface,
+  planLimited?: (ctx: Context) => Effect.Effect<boolean>,
 ) {
   return () =>
     Effect.gen(function* () {
@@ -142,7 +157,27 @@ function wrap<Parameters extends Schema.Decoder<unknown>, Result extends Metadat
             Effect.catch((error) => Effect.logWarning("could not end interrupted commands", { error }).pipe(Effect.as(0))),
           )
           if (orphans > 0) yield* Effect.logInfo("ended interrupted commands", { count: orphans, sessionID: ctx.sessionID })
-          const raw = yield* execute(decoded as Schema.Schema.Type<Parameters>, ctx)
+          const raw = yield* execute(
+            decoded as Schema.Schema.Type<Parameters>,
+            planLimited
+              ? {
+                  ...ctx,
+                  // An edit nobody would be asked about never reaches the gate, so this has to be settled here.
+                  ask: (request) =>
+                    request.permission !== "edit" && request.permission !== "external_directory"
+                      ? ctx.ask(request)
+                      : planLimited(ctx).pipe(
+                          Effect.flatMap((limited) => {
+                            if (!limited) return ctx.ask(request)
+                            if (request.permission === "edit")
+                              return ctx.ask({ ...request, harmless: false, noAlways: true, planLimited: true })
+                            // The edit that follows is asked about on its own, and its plan is class A.
+                            return dataPlan(request.metadata.filepath) ? Effect.void : ctx.ask(request)
+                          }),
+                        ),
+                }
+              : ctx,
+          )
           const instance = yield* InstanceRef
           const result = instance ? Secrets.scrubResult(raw, instance.worktree) : raw
           if (result.metadata.truncated !== undefined) {
@@ -165,6 +200,38 @@ function wrap<Parameters extends Schema.Decoder<unknown>, Result extends Metadat
     })
 }
 
+/**
+ * Whether autonomous mode holds this session to the plan agent's limits. The same reading as the gate's, which has the
+ * final say on what an edit is. With the mode off this reads no message and changes nothing.
+ */
+const planLimits = (sessions: Session.Interface, autonomy: Autonomy.Interface) =>
+  Effect.fnUntraced(function* (ctx: Context) {
+    const rootOf = (sessionID: SessionID): Effect.Effect<{ id: SessionID; directory?: string }> =>
+      sessions.get(sessionID).pipe(
+        Effect.flatMap((session) => (session.parentID ? rootOf(session.parentID) : Effect.succeed(session))),
+        Effect.catchCause(() => Effect.succeed({ id: sessionID })),
+      )
+    const root = yield* rootOf(ctx.sessionID)
+    const directory = root.directory ?? (yield* InstanceState.directory)
+    if (!(yield* autonomy.isOn({ root: root.id, directory }))) return false
+    if (ctx.agent === "plan") return true
+    return yield* sessions
+      .findMessage(root.id, (message) => message.info.role === "user")
+      .pipe(
+        Effect.map(Option.getOrUndefined),
+        Effect.map((message) => message?.info.role === "user" && message.info.agent === "plan"),
+        // A lineage nobody can place is held to the limits, as the gate holds it.
+        Effect.catchCause(() => Effect.succeed(true)),
+      )
+  })
+
+/** A plan in the app's own data folder, once links are followed. That folder is outside every project, so it asks first. */
+const dataPlan = (file: unknown) => {
+  const target = typeof file === "string" ? Reach.real(file) : undefined
+  const folder = path.join(Global.Path.data, "plans")
+  return target !== undefined && target.endsWith(".md") && path.dirname(target) === (Reach.real(folder) ?? folder)
+}
+
 export function define<
   Parameters extends Schema.Decoder<unknown>,
   Result extends Metadata,
@@ -179,7 +246,12 @@ export function define<
       const resolved = yield* init
       const truncate = yield* Truncate.Service
       const agents = yield* Agent.Service
-      return { id, init: wrap(id, resolved, truncate, agents) }
+      // Optional so that a tool built on its own, as its unit tests do, needs neither. The registry provides both.
+      const sessions = yield* Effect.serviceOption(Session.Service)
+      const autonomy = yield* Effect.serviceOption(Autonomy.Service)
+      const limits =
+        Option.isSome(sessions) && Option.isSome(autonomy) ? planLimits(sessions.value, autonomy.value) : undefined
+      return { id, init: wrap(id, resolved, truncate, agents, limits) }
     }),
     { id },
   )

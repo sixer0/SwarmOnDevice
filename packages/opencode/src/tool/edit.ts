@@ -115,6 +115,7 @@ export const EditTool = Tool.define(
                     ...(trust.risk ? { risk: trust.risk } : {}),
                   },
                   harmless: trust.harmless,
+                  editClass: trust.editClass,
                 })
                 yield* afs.writeWithDirs(filePath, Bom.join(contentNew, desiredBom))
                 if (yield* format.file(filePath)) {
@@ -171,6 +172,7 @@ export const EditTool = Tool.define(
                   ...(trust.risk ? { risk: trust.risk } : {}),
                 },
                 harmless: trust.harmless,
+                editClass: trust.editClass,
               })
 
               yield* afs.writeWithDirs(filePath, Bom.join(contentNew, desiredBom))

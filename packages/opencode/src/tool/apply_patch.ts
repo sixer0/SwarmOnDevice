@@ -251,6 +251,7 @@ export const ApplyPatchTool = Tool.define(
           ...(trust.risk ? { risk: trust.risk } : {}),
         },
         harmless: trust.harmless,
+        editClass: trust.editClass,
       })
 
       // Apply the changes

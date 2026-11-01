@@ -2,7 +2,9 @@ import { Agent } from "@/agent/agent"
 import type { Config } from "@/config/config"
 import { KNOWLEDGE_LIBRARY_SKILL_NAME } from "@/skill"
 import { LibraryRoot } from "@/skill/library-root"
+import { PermissionV1 } from "@opencode-ai/core/v1/permission"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
+import { Wildcard } from "@opencode-ai/core/util/wildcard"
 import { Provider } from "@/provider/provider"
 import { ProviderTransform } from "@/provider/transform"
 import { MCP } from "@/mcp"
@@ -59,6 +61,17 @@ export const library = Effect.fn("SessionTools.library")(function* (input: {
     : undefined
 })
 
+/**
+ * For this one request only, and nothing is written. An allow rule settles a request before the gate, and under the plan
+ * agent's limits an edit is the gate's to judge, whoever wrote the rule. A deny keeps its place and still refuses first.
+ */
+const allowsToAsks = (ruleset: PermissionV1.Ruleset) =>
+  ruleset.map((rule) =>
+    rule.action === "allow" && Wildcard.match("edit", rule.permission)
+      ? { permission: "edit", pattern: rule.pattern, action: "ask" as const }
+      : rule,
+  )
+
 export const resolve = Effect.fn("SessionTools.resolve")(function* (input: {
   agent: Agent.Info
   model: Provider.Model
@@ -105,7 +118,8 @@ export const resolve = Effect.fn("SessionTools.resolve")(function* (input: {
           },
         }
       }),
-    ask: (req) => {
+    ask: ({ planLimited, ...request }) => {
+      const ruleset = Permission.merge(input.agent.permission, input.session.permission ?? [])
       // Requests live in memory, so a crash loses them. This is what tells a restart that the call never ran.
       const waiting = (value: boolean) =>
         input.processor.updateToolCall(options.toolCallId, (match) => {
@@ -125,10 +139,12 @@ export const resolve = Effect.fn("SessionTools.resolve")(function* (input: {
       return waiting(true).pipe(
         Effect.andThen(
           permission.ask({
-            ...req,
+            ...request,
             sessionID: input.session.id,
             tool: { messageID: input.processor.message.id, callID: options.toolCallId },
-            ruleset: Permission.merge(input.agent.permission, input.session.permission ?? []),
+            agent: input.agent.name,
+            canUndo: trust.canUndo,
+            ruleset: planLimited ? allowsToAsks(ruleset) : ruleset,
           }),
         ),
         Effect.ensuring(waiting(false).pipe(Effect.ignore)),
