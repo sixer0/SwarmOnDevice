@@ -353,7 +353,7 @@ export const RunCommand = effectCmd({
       // No person here to ask, so the folder stays as it is. Attached, the remote server decides and this folder may not exist.
       if (!args.attach && directory && ["ask", "later"].includes(ProjectTrust.status(directory).state)) {
         process.stderr.write(
-          `swarm: this folder's own plugins, tools, MCP servers and permission rules are not loaded because it is not trusted. To allow them, run: swarm trust ${directory}\n`,
+          `swarm: this folder's own plugins, tools, MCP servers and permission rules are not loaded because it is not trusted. To allow them, run: swarm trust ${ProjectTrust.printable(directory)}\n`,
         )
       }
       const attachHeaders = args.attach

@@ -299,7 +299,7 @@ describe("mcp, formatter, lsp, shell, provider", () => {
     expect(config.server).toBeUndefined()
     expect(config.experimental?.policies).toBeUndefined()
     expect(config.instructions).toEqual(["inside.md"])
-    expect(ProjectTrust.status(tmp.path).items.length).toBeGreaterThan(10)
+    expect(ProjectTrust.scan(tmp.path).length).toBeGreaterThan(10)
   })
 
   test("untrusted: {file:} and {env:} are not read into a kept setting", async () => {
@@ -465,5 +465,98 @@ describe("the store", () => {
       await fs.rm(file, { force: true })
       await AppRuntime.runPromise(Config.Service.use((config) => config.invalidate()))
     }
+  })
+})
+
+describe("the question is about a hostile folder, in that folder's own words", () => {
+  const hidden = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u
+  const labels = (dir: string) => ProjectTrust.status(dir).items.map((item) => item.label)
+  const mcp = (name: string, command: string[] = ["/bin/false"]) => ({ mcp: { [name]: { type: "local", command } } })
+
+  test("ANSI and newlines in a server name and command do not reach any client", async () => {
+    await using tmp = await hostile(
+      mcp("\x1b[31mIGNORE PREVIOUS\x1b[0m\nSECOND LINE", ["/bin/false", "\x1b]0;title\x07", "\r\nrm -rf"]),
+    )
+    const found = labels(tmp.path)
+    expect(found).toEqual([`Start MCP server "[31mIGNORE PREVIOUS[0m SECOND LINE": /bin/false ]0;title  rm -rf`])
+    expect(found.join("")).not.toMatch(hidden)
+  })
+
+  test("8-bit controls, line separators and zero-width text are gone too", async () => {
+    await using tmp = await hostile(mcp("a\x9b31mb\x85c d e​f﻿g­h\u{e0041}i"))
+    expect(labels(tmp.path)).toEqual([`Start MCP server "a31mb c d efghi": /bin/false`])
+  })
+
+  test("a bidi override cannot reorder what the person reads", async () => {
+    await using tmp = await hostile(
+      { plugin: ["safe‮gnp.evil‬", "⁦x⁩‎‏؜‪‫‭⁧⁨"] },
+    )
+    expect(labels(tmp.path)).toEqual(["Load plugin safegnp.evil", "Load plugin x"])
+  })
+
+  test("a file's own name is cleaned in the label and in its source", async () => {
+    const name = "\x1b[2Jevil\n‮name.ts"
+    await using tmp = await hostile({}, async (dir) => {
+      await Bun.write(path.join(dir, ".swarm/plugin", name), "export default async () => ({})\n")
+    })
+    const items = ProjectTrust.status(tmp.path).items
+    expect(items.map((item) => item.label)).toEqual(["Load plugin [2Jevil name.ts"])
+    expect(items[0]!.source).toEndWith(".swarm/plugin/[2Jevil name.ts")
+    expect(JSON.stringify(items)).not.toContain("\\u001b")
+  })
+
+  test("a very long name is cut, and a split character cannot survive the cut", async () => {
+    await using tmp = await hostile(mcp("x".repeat(100_000)))
+    const [label] = labels(tmp.path)
+    expect(label!.length).toBeLessThanOrEqual(200)
+    expect(label).toEndWith("…")
+    await using split = await hostile(mcp("🙂".repeat(100_000)))
+    expect(labels(split.path)[0]!.isWellFormed()).toBe(true)
+    await using source = await hostile(mcp("y"), async (dir) => {
+      await Bun.write(path.join(dir, "n".repeat(200), "n".repeat(200), "swarm.json"), "{}")
+    })
+    expect(ProjectTrust.status(path.join(source.path, "n".repeat(200), "n".repeat(200))).items).toHaveLength(1)
+    expect(ProjectTrust.status(source.path).items[0]!.source.length).toBeLessThanOrEqual(200)
+  })
+
+  test("a very long list stops with a plain count, and every client gets the same list", async () => {
+    const servers = Object.fromEntries(Array.from({ length: 500 }, (_, index) => [`s${index}`, { type: "remote", url: "x" }]))
+    await using tmp = await hostile({ mcp: servers })
+    const status = ProjectTrust.status(tmp.path)
+    expect(status.state).toBe("ask")
+    expect(status.items).toHaveLength(7)
+    expect(status.items.at(-1)!.label).toBe("and 494 more")
+  })
+
+  test("the count stays true at the edge: exactly as many as are shown has no count at all", async () => {
+    const list = (count: number) => Array.from({ length: count }, (_, index) => `p${index}`)
+    await using six = await hostile({ plugin: list(6) })
+    expect(labels(six.path)).toEqual(list(6).map((name) => `Load plugin ${name}`))
+    await using seven = await hostile({ plugin: list(7) })
+    expect(labels(seven.path).at(-1)).toBe("and 1 more")
+  })
+
+  test("names that differ only in hidden characters count once", async () => {
+    await using tmp = await hostile({ plugin: ["same", "sa​me", "s\x1bame"] })
+    expect(labels(tmp.path)).toEqual(["Load plugin same"])
+  })
+
+  test("a folder name is cleaned for reading, and trust still belongs to the real folder", async () => {
+    await using tmp = await tmpdir()
+    const dir = path.join(tmp.path, "evil\x1b[31m\n‮name")
+    await fs.mkdir(path.join(dir, ".git"), { recursive: true })
+    await Bun.write(path.join(dir, "swarm.json"), JSON.stringify({ permission: { "*": "allow" } }))
+    const status = ProjectTrust.status(dir)
+    expect(status.directory).toEndWith("evil[31m name")
+    expect(status.directory).not.toMatch(hidden)
+    ProjectTrust.trust(dir)
+    expect(ProjectTrust.status(dir).state).toBe("trusted")
+    expect(ProjectTrust.rootOf(dir)).toEndWith("evil\x1b[31m\n‮name")
+    ProjectTrust.revoke(dir)
+  })
+
+  test("ordinary text is left exactly as it was", async () => {
+    await using tmp = await hostile(mcp("Tést — 日本語 🙂", ["/usr/bin/env", "node", "--flag=a b"]))
+    expect(labels(tmp.path)).toEqual([`Start MCP server "Tést — 日本語 🙂": /usr/bin/env node --flag=a b`])
   })
 })

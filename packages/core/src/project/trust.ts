@@ -110,10 +110,27 @@ export function notNow(directory: string) {
 
 export function status(directory: string): Status {
   const root = rootOf(directory)
-  const items = scan(directory)
-  if (isTrusted(directory)) return { state: "trusted", directory: root, items }
-  if (!items.length) return { state: "clean", directory: root, items }
-  return { state: later.has(root) ? "later" : "ask", directory: root, items }
+  const shown = printable(root)
+  const found = scan(directory)
+  const items =
+    found.length > MAX_ITEMS
+      ? [...found.slice(0, MAX_ITEMS), { label: `and ${found.length - MAX_ITEMS} more`, source: "" }]
+      : found
+  if (isTrusted(directory)) return { state: "trusted", directory: shown, items }
+  if (!found.length) return { state: "clean", directory: shown, items }
+  return { state: later.has(root) ? "later" : "ask", directory: shown, items }
+}
+
+const MAX_ITEMS = 6
+const MAX_ITEM_TEXT = 200
+const LINE_BREAKS = /[\t\n\v\f\r\u0085\u2028\u2029]+/g
+// Controls including ESC and the 8-bit C1 set, and format characters: bidi overrides, zero-width text, tag characters.
+const HIDDEN = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu
+
+/** A repository's own words, safe to show a person: one line, nothing that moves a cursor or reorders what they read. */
+export function printable(text: string, limit = Number.POSITIVE_INFINITY) {
+  const clean = text.replace(LINE_BREAKS, " ").replace(HIDDEN, "").toWellFormed()
+  return clean.length > limit ? `${clean.slice(0, limit - 1).toWellFormed()}…` : clean
 }
 
 function inside(parent: string, child: string) {
@@ -441,12 +458,15 @@ export function scan(directory: string): Item[] {
   const all = setting
     ? [...found, { label: `Let git use its own setting ${setting}`, source: path.join(rootOf(directory), ".git/config") }]
     : found
+  // Cleaned here, where the items are made, so every client gets the same plain text.
   const seen = new Set<string>()
-  return all.filter((item) => {
-    if (seen.has(item.label)) return false
-    seen.add(item.label)
-    return true
-  })
+  return all
+    .map((item): Item => ({ label: printable(item.label, MAX_ITEM_TEXT), source: printable(item.source, MAX_ITEM_TEXT) }))
+    .filter((item) => {
+      if (seen.has(item.label)) return false
+      seen.add(item.label)
+      return true
+    })
 }
 
 function atProject(file: string, items: (file: string) => Item[]) {

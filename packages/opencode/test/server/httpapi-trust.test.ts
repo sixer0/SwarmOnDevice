@@ -50,6 +50,27 @@ afterEach(async () => {
 afterAll(() => ProjectTrust.assumeTrustedForTests(true))
 
 describe("folder trust routes", () => {
+  test("what the route sends is clean, whatever the folder's config says", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      init: async (dir) => {
+        const servers = Object.fromEntries(
+          Array.from({ length: 50 }, (_, index) => [`s${index}\x1b[31m\n\u202e${"x".repeat(1000)}`, { type: "remote", url: "x" }]),
+        )
+        await Bun.write(path.join(dir, "swarm.json"), JSON.stringify({ mcp: servers }))
+      },
+    })
+    const response = await Server.Default().app.request("/project/trust", { headers: headers(tmp.path) })
+    const status = await response.json()
+    expect(status.state).toBe("ask")
+    expect(status.items).toHaveLength(7)
+    expect(status.items.at(-1).label).toBe("and 44 more")
+    for (const item of status.items) {
+      expect(item.label).not.toMatch(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u)
+      expect(item.label.length).toBeLessThanOrEqual(200)
+    }
+  })
+
   test("a clean folder reports nothing to decide", async () => {
     await using tmp = await tmpdir({ git: true })
     const response = await Server.Default().app.request("/project/trust", { headers: headers(tmp.path) })

@@ -14,7 +14,7 @@ export const TrustCommand = cmd({
   handler: async (args) => {
     const directory = path.resolve(process.cwd(), args.dir ?? ".")
     if (args.remove) {
-      process.stdout.write(`Not trusted: ${ProjectTrust.revoke(directory)}\n`)
+      process.stdout.write(`Not trusted: ${ProjectTrust.printable(ProjectTrust.revoke(directory))}\n`)
       return
     }
     // A grant is a person's decision, so there is deliberately no flag that answers for them. A model's bash and a script have
@@ -24,11 +24,11 @@ export const TrustCommand = cmd({
       process.exitCode = 1
       return
     }
-    const items = ProjectTrust.scan(directory)
+    const status = ProjectTrust.status(directory)
     const lines = [
-      `Trust ${ProjectTrust.rootOf(directory)}?`,
-      ...(items.length
-        ? ["It wants to:", ...items.map((item) => `  ${item.label}`)]
+      `Trust ${status.directory}?`,
+      ...(status.items.length
+        ? ["It wants to:", ...status.items.map((item) => `  ${item.label}`)]
         : ["It has nothing to load right now."]),
       "Anything it adds later loads without asking.",
     ]
@@ -38,7 +38,7 @@ export const TrustCommand = cmd({
       process.exitCode = 1
       return
     }
-    process.stdout.write(`Trusted: ${ProjectTrust.trust(directory)}\n`)
+    process.stdout.write(`Trusted: ${ProjectTrust.printable(ProjectTrust.trust(directory))}\n`)
   },
 })
 

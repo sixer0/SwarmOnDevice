@@ -133,6 +133,20 @@ describe("swarm trust needs a person", () => {
     }
   })
 
+  test("what it prints from the folder is clean, and a long list is counted", async () => {
+    const { folder, env, store } = await bench()
+    const servers = Object.fromEntries(
+      Array.from({ length: 30 }, (_, index) => [`\x1b[41ms${index}\nSECOND`, { type: "remote", url: "x" }]),
+    )
+    await Bun.write(path.join(folder, "swarm.json"), JSON.stringify({ mcp: servers }))
+    const result = await atTerminal([folder], env, "no")
+    expect(result.answered).toBe(true)
+    expect(result.text).not.toContain("\x1b[41m")
+    expect(result.text).not.toContain("\nSECOND")
+    expect(result.text).toContain("and 24 more")
+    expect(await Bun.file(store).exists()).toBe(false)
+  })
+
   test("--remove asks nothing, because it only takes trust away", async () => {
     const { folder, env, store } = await bench()
     await atTerminal([folder], env, "yes")

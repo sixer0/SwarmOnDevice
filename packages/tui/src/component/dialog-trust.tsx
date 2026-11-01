@@ -1,19 +1,15 @@
 import { DialogConfirm } from "../ui/dialog-confirm"
 
-const SHOWN = 6
-
-/** Asks once when a folder has its own code or rules to load. Enter on its own means "Not now". */
+/**
+ * Asks once when a folder has its own code or rules to load. Enter on its own means "Not now". The server cleans and caps the
+ * items, including the "and N more" row, so they are shown as they come.
+ */
 export function DialogTrust(props: {
   directory: string
   items: readonly { label: string }[]
   onDecide: (decision: "trust" | "later") => void
 }) {
-  const more = props.items.length - SHOWN
-  const message = [
-    props.directory,
-    ...props.items.slice(0, SHOWN).map((item) => `- ${item.label}`),
-    ...(more > 0 ? [`- and ${more} more`] : []),
-  ].join("\n")
+  const message = [props.directory, ...props.items.map((item) => `- ${item.label}`)].join("\n")
   return (
     <DialogConfirm
       title="This folder wants to run its own code or change what Swarm may do"

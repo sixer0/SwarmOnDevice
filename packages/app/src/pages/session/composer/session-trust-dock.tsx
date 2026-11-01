@@ -6,11 +6,10 @@ import { useLanguage } from "@/context/language"
 import { useSDK } from "@/context/sdk"
 import { showToast } from "@/utils/toast"
 
-const SHOWN = 6
-
 /**
  * Asks once when a folder has its own code or rules to load. The server holds them back whether or not this renders, so
- * nothing here is a safeguard: a failed check shows nothing and the folder stays as it is, without those items.
+ * nothing here is a safeguard: a failed check shows nothing and the folder stays as it is, without those items. The server
+ * cleans and caps the items, including the "and N more" row, so they are shown as they come, as text.
  */
 export function SessionTrustDock() {
   const language = useLanguage()
@@ -82,18 +81,13 @@ export function SessionTrustDock() {
           <div data-slot="permission-row">
             <span data-slot="permission-spacer" aria-hidden="true" />
             <div data-slot="permission-patterns">
-              <For each={items().slice(0, SHOWN)}>
+              <For each={items()}>
                 {(item) => (
-                  <code class="text-12-regular text-text-base break-all" title={item.source}>
+                  <code class="text-12-regular text-text-base break-all" title={item.source || undefined}>
                     {item.label}
                   </code>
                 )}
               </For>
-              <Show when={items().length > SHOWN}>
-                <span class="text-12-regular text-text-weak">
-                  {language.t("common.moreCountSuffix", { count: items().length - SHOWN })}
-                </span>
-              </Show>
             </div>
           </div>
         </DockPrompt>
