@@ -11,6 +11,7 @@ import { EventV2Bridge } from "@/event-v2-bridge"
 import { Session } from "@/session/session"
 import type { SessionID } from "@/session/schema"
 import { Autonomy } from "./autonomy"
+import { AutonomyDecider } from "./autonomy-decider"
 import { AutonomyTable } from "./autonomy-table"
 import { Unattended } from "./unattended"
 
@@ -85,10 +86,22 @@ export interface Decided {
   readonly costUsd?: number
 }
 
-/** Settles class P. Until a real one is in place, every such request is held. */
+/**
+ * The decider's no. A denial to everything that reads one, so the agent goes on, in words that are true: nobody wrote a
+ * rule. The reason is fixed on purpose. The model's own stays in the audit, since repository text can steer it.
+ */
+class DeciderRefusedError extends PermissionV1.DeniedError {
+  override get message() {
+    return "This call did not run. Autonomous mode refused it: an automatic check judged that it does not serve what the user asked for. Do not try to get the same effect another way. Carry on with everything that does not depend on it, and list what was refused in your final message."
+  }
+}
+
+/** Settles class P. A seam, so a test can count what reaches it. */
 export class Decider extends Context.Service<
   Decider,
-  { readonly decide: (input: PermissionV1.AskInput, root: SessionID) => Effect.Effect<Decided> }
+  {
+    readonly decide: (input: PermissionV1.AskInput, root: SessionID, category?: string) => Effect.Effect<Decided>
+  }
 >()("@opencode/PermissionDecider") {}
 
 const UNDECIDED: Decided = { decision: "defer", decidedBy: "system:decider_unavailable" }
@@ -190,7 +203,9 @@ const layer = Layer.effect(
       const verdict = Autonomy.afterCheck(placed.class, check) === placed.class ? placed : held("not_routine")
       const decided =
         verdict.class === "P"
-          ? yield* decider.decide(input, root.id).pipe(Effect.catchCause(() => Effect.succeed(UNDECIDED)))
+          ? yield* decider
+              .decide(input, root.id, verdict.category)
+              .pipe(Effect.catchCause(() => Effect.succeed(UNDECIDED)))
           : undefined
       const category =
         verdict.class === "P" && decided?.decision !== "allow" && decided?.decision !== "reject"
@@ -289,7 +304,7 @@ const layer = Layer.effect(
       if (gated?.decision === "allow") return
       // Refused by what it is, so no person is asked. Not a rejection: that error ends the run, and this one reports back.
       if (gated?.class === "X") return yield* new PermissionV1.DeniedError({ ruleset: [] })
-      if (gated?.decision === "reject") return yield* new PermissionV1.RejectedError()
+      if (gated?.decision === "reject") return yield* new DeciderRefusedError({ ruleset: [] })
 
       // A repeating call stops the run on purpose until a person looks. Carrying on would defeat that guard.
       // The same goes for a spend limit: nobody being there is exactly when it must hold.
@@ -485,8 +500,11 @@ export function visibleTools<T>(tools: Record<string, T>, ruleset: PermissionV1.
 
 export const deciderNode = LayerNode.make({
   service: Decider,
-  layer: Layer.succeed(Decider, Decider.of({ decide: () => Effect.succeed(UNDECIDED) })),
-  deps: [],
+  layer: Layer.effect(
+    Decider,
+    Effect.map(AutonomyDecider.Service, (decider) => Decider.of({ decide: decider.decide })),
+  ),
+  deps: [AutonomyDecider.node],
 })
 
 export const node = LayerNode.make({

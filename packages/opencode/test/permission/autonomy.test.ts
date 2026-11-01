@@ -235,7 +235,7 @@ it.instance("a grandchild's routine command goes to the decider, and its answer 
 
     stub.answer = "reject"
     expect(yield* failure(ask(bash(grandchild.id, "mkdir -p other", test.directory)))).toBeInstanceOf(
-      PermissionV1.RejectedError,
+      PermissionV1.DeniedError,
     )
     expect(yield* list).toEqual([])
 
@@ -541,7 +541,7 @@ it.instance("a decision that cannot be recorded gives no approval, and refusing 
 
     stub.answer = "reject"
     expect(yield* failure(ask(bash(root.id, "mkdir -p other", test.directory)))).toBeInstanceOf(
-      PermissionV1.RejectedError,
+      PermissionV1.DeniedError,
     )
     expect(yield* failure(ask(bash(root.id, "git push origin main", test.directory)))).toBeInstanceOf(
       PermissionV1.AwayError,

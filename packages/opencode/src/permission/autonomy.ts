@@ -316,7 +316,8 @@ const decodeLine = Schema.decodeUnknownOption(Schema.fromJsonString(AuditLine))
 const auditFile = (id: string) => path.join(folder(), `${id}.jsonl`)
 
 /** A pattern can be a command, and a command can hold a secret typed into its arguments. */
-const hide = (text: string, directory: string, limit = Number.POSITIVE_INFINITY) =>
+/** A prompt's or a command's text with what looks like a secret masked, on one printable line. */
+export const hide = (text: string, directory: string, limit = Number.POSITIVE_INFINITY) =>
   ProjectTrust.printable(Secrets.scrub(Secrets.scrubText(text), directory), limit)
 
 function auditFields(root: string, entry: AuditEntry) {
