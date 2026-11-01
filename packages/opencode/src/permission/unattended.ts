@@ -3,8 +3,8 @@
 // call does not run, it carries on with whatever else it can, and the request stays open for the user. Going without
 // is the safe direction, since nothing runs that a person did not allow.
 
-const FIRST_WAIT = 10 * 60 * 1000
-// Once one request went unanswered nobody is there. Waiting the full time again would turn a night into a few prompts.
+const FIRST_WAIT = 2 * 60 * 1000
+// Once one request went unanswered nobody is there. Waiting the full time again would only slow an empty night down.
 const NEXT_WAIT = 60 * 1000
 
 /** How long to wait for a person, or undefined to wait for good. SWARM_UNATTENDED_AFTER_MS=0 turns moving on off. */

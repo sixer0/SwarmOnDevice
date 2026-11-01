@@ -5,8 +5,8 @@ afterEach(() => {
   delete process.env.SWARM_UNATTENDED_AFTER_MS
 })
 
-test("waits ten minutes for the first request, and a minute once nobody answered one", () => {
-  expect(Unattended.wait(false)).toBe(600_000)
+test("waits two minutes for the first request, and a minute once nobody answered one", () => {
+  expect(Unattended.wait(false)).toBe(120_000)
   expect(Unattended.wait(true)).toBe(60_000)
 })
 
