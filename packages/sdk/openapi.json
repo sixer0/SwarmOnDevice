@@ -23501,6 +23501,9 @@
           "snapshot": {
             "type": "boolean"
           },
+          "knowledge_library": {
+            "type": "boolean"
+          },
           "plugin": {
             "type": "array",
             "items": {

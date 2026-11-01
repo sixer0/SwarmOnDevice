@@ -438,6 +438,66 @@ it.effect("logs global update diagnostics once without exposing values", () =>
   ),
 )
 
+// The Settings switch writes this key and must never loosen a rule the user wrote by hand.
+for (const name of ["swarm.json", "swarm.jsonc"]) {
+  for (const permission of ["deny", { skill: "deny" }]) {
+    it.live(`knowledge_library write keeps permission ${JSON.stringify(permission)} in ${name}`, () =>
+      withGlobalConfig({ config: { permission }, name }, ({ dir }) =>
+        Effect.gen(function* () {
+          const fs = yield* FSUtil.Service
+          const file = path.join(dir, name)
+          const updated = yield* Config.use.updateGlobal({ knowledge_library: false })
+          const written = ConfigParse.jsonc(yield* fs.readFileString(file), file) as Record<string, unknown>
+
+          expect(updated.changed).toBe(true)
+          expect(updated.info.knowledge_library).toBe(false)
+          expect(written.knowledge_library).toBe(false)
+          expect(written.permission).toEqual(permission)
+          expect((yield* Config.use.getGlobal()).knowledge_library).toBe(false)
+        }),
+      ),
+    )
+  }
+}
+
+it.live("knowledge_library is unset by default and survives a round trip in jsonc with comments intact", () =>
+  withGlobalConfig({}, ({ dir }) =>
+    Effect.gen(function* () {
+      const fs = yield* FSUtil.Service
+      const file = path.join(dir, "swarm.jsonc")
+      yield* fs.writeFileString(file, '{\n  // keep this note\n  "permission": "deny"\n}\n')
+      yield* Config.use.invalidate()
+      expect((yield* Config.use.getGlobal()).knowledge_library).toBeUndefined()
+
+      yield* Config.use.updateGlobal({ knowledge_library: false })
+      yield* Config.use.updateGlobal({ knowledge_library: true })
+
+      const written = yield* fs.readFileString(file)
+      expect(written).toContain("// keep this note")
+      expect(ConfigParse.jsonc(written, file)).toEqual({ permission: "deny", knowledge_library: true })
+      expect((yield* Config.use.getGlobal()).knowledge_library).toBe(true)
+    }),
+  ),
+)
+
+it.live("knowledge_library is written to the first existing global config file", () =>
+  withGlobalConfig({}, ({ dir }) =>
+    Effect.gen(function* () {
+      const fs = yield* FSUtil.Service
+      const files = ["swarm.jsonc", "swarm.json", "config.json"]
+      yield* Effect.forEach(files, (name) => fs.writeFileString(path.join(dir, name), "{}"))
+
+      yield* Config.use.updateGlobal({ knowledge_library: false })
+
+      expect(yield* Effect.forEach(files, (name) => fs.readFileString(path.join(dir, name)))).toEqual([
+        expect.stringContaining('"knowledge_library": false'),
+        "{}",
+        "{}",
+      ])
+    }),
+  ),
+)
+
 const updateFixtures = path.join(import.meta.dir, "fixtures/v2-compat")
 const globalInputs = [...new Bun.Glob("update-global/*-input.{json,jsonc}").scanSync({ cwd: updateFixtures })].sort()
 const projectInputs = [...new Bun.Glob("update-project/*-input.json").scanSync({ cwd: updateFixtures })].sort()

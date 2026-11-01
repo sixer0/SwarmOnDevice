@@ -2211,6 +2211,7 @@ export type Config = {
     ignore?: Array<string>
   }
   snapshot?: boolean
+  knowledge_library?: boolean
   plugin?: Array<
     | string
     | [

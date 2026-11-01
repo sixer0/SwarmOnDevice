@@ -53,6 +53,10 @@ export const Info = Schema.Struct({
     description:
       "Enable or disable snapshot tracking. When false, filesystem snapshots are not recorded and undoing or reverting will not undo/redo file changes. Defaults to true.",
   }),
+  knowledge_library: Schema.optional(Schema.Boolean).annotate({
+    description:
+      "Enable or disable the bundled knowledge library. Only read from the global config; a project config cannot turn it on. Defaults to true.",
+  }),
   plugin: Schema.optional(Schema.mutable(Schema.Array(ConfigPluginV1.Spec))),
   share: Schema.optional(Schema.Literals(["manual", "auto", "disabled"])).annotate({
     description:
