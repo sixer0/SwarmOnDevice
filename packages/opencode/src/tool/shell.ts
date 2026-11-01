@@ -24,6 +24,7 @@ import { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner
 import { ShellPrompt, type Parameters } from "./shell/prompt"
 import { Risk } from "./risk"
 import { Reach } from "./reach"
+import { withholdsAlways } from "./external-directory"
 import { Secrets } from "./secrets"
 
 export { Parameters } from "./shell/prompt"
@@ -384,7 +385,7 @@ const ask = Effect.fn("ShellTool.ask")(function* (
     yield* ctx.ask({
       permission: "external_directory",
       patterns: globs,
-      always: scan.risk ? [] : globs,
+      always: scan.risk || directories.some((dir) => withholdsAlways(dir, "directory")) ? [] : globs,
       metadata: {
         command: input.command,
         directories,

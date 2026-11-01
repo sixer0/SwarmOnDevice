@@ -253,6 +253,7 @@ export const ReadTool = Tool.define<
       yield* assertExternalDirectoryEffect(ctx, filepath, {
         bypass: Boolean(ctx.extra?.["bypassCwdCheck"]),
         kind: stat?.type === "Directory" ? "directory" : "file",
+        readOnly: true,
       })
 
       // Reading runs nothing, so ordinary files do not ask. Secret files do, by either name, and what a yes shows is masked.

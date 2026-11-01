@@ -45,6 +45,7 @@ export const GlobTool = Tool.define(
           yield* assertExternalDirectoryEffect(ctx, search, {
             bypass: false,
             kind: "directory",
+            readOnly: true,
           })
           if (!Reach.readable(search))
             yield* ctx.ask({

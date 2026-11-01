@@ -56,6 +56,7 @@ export const GrepTool = Tool.define(
           yield* assertExternalDirectoryEffect(ctx, requested, {
             bypass: false,
             kind: requestedInfo?.type === "Directory" ? "directory" : "file",
+            readOnly: true,
           })
 
           // Naming a secret file or a place that holds them is a question for a person. A pattern is a question too: a count
