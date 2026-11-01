@@ -99,6 +99,7 @@ export const dict: Record<string, string> = {
   "ui.messagePart.questions.dismissed": "Pertanyaan ditutup",
   "ui.messagePart.notRun.away": "Lanjut tanpa ini",
   "ui.messagePart.notRun.declined": "Tidak dijalankan",
+  "ui.messagePart.notRun.deferred": "Ditunda, menunggu putusan Anda",
   "ui.messagePart.compaction": "Sesi diringkas",
   "ui.messagePart.context.read.one": "{{count}} pembacaan",
   "ui.messagePart.context.read.other": "{{count}} pembacaan",

@@ -1483,7 +1483,7 @@ function NotRunRow(props: { tool: string; input: Record<string, unknown>; reason
               <span data-slot="basic-tool-tool-title">{name()}</span>
               <span data-slot="basic-tool-tool-subtitle">{what()}</span>
               <span data-slot="basic-tool-tool-arg">
-                {i18n.t(props.reason === "away" ? "ui.messagePart.notRun.away" : "ui.messagePart.notRun.declined")}
+                {i18n.t(`ui.messagePart.notRun.${props.reason}`)}
               </span>
             </div>
           </div>

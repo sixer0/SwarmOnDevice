@@ -100,6 +100,7 @@ export const dict: Record<string, string> = {
   "ui.messagePart.questions.dismissed": "Questions dismissed",
   "ui.messagePart.notRun.away": "Went on without this",
   "ui.messagePart.notRun.declined": "Did not run",
+  "ui.messagePart.notRun.deferred": "Held for your decision",
   "ui.messagePart.compaction": "Session compacted",
   "ui.messagePart.context.read.one": "{{count}} read",
   "ui.messagePart.context.read.other": "{{count}} reads",

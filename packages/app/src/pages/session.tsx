@@ -2379,6 +2379,10 @@ export default function Page() {
                         if (!id) return
                         setFollowup("paused", id, true)
                       },
+                      openDecisions: () => {
+                        sessionMap.setFilter("decisions")
+                        sessionMap.open()
+                      },
                     })
                     return (
                       <PromptInputV2Composer

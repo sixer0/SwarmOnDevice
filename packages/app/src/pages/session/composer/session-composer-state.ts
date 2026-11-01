@@ -30,6 +30,40 @@ export const todoDockAtBoundary = (state: ReturnType<typeof todoState>) => state
 
 const idle = { type: "idle" as const }
 
+/**
+ * Whether a request is holding the agent right now, so it takes the prompt position and alerts once. A request the agent
+ * carried on without does not, and neither does one autonomous mode put aside for a decision later.
+ */
+export const asksNow = (request: { movedOnAt?: number; deferred?: true }) => !request.movedOnAt && !request.deferred
+
+/** What the "went on without you" dock lists. Decisions put aside have one place, the Activity filter. */
+export function composerMovedOn(...input: Parameters<typeof sessionMovedOnRequests>) {
+  return sessionMovedOnRequests(...input).filter((item) => item.kind !== "permission" || !item.request.deferred)
+}
+
+/**
+ * The alert for `autonomy.blocked`. Nothing from the repository reaches it: the event carries only a session id, a level
+ * and a count. It shows on the open session too, because held decisions have no dock there to say the work stopped.
+ */
+export function autonomyBlockedToast(input: {
+  count: number
+  sessionTitle: string
+  current: boolean
+  t: ReturnType<typeof useLanguage>["t"]
+  open: () => void
+}) {
+  return {
+    persistent: !input.current,
+    icon: "checklist" as const,
+    title: input.t("notification.permission.title"),
+    description: input.t("notification.autonomy.blocked", { sessionTitle: input.sessionTitle, count: input.count }),
+    actions: [
+      ...(input.current ? [] : [{ label: input.t("notification.action.goToSession"), onClick: input.open }]),
+      { label: input.t("common.dismiss"), onClick: "dismiss" as const },
+    ],
+  }
+}
+
 export function createSessionComposerController(options?: { closeMs?: number | (() => number) }) {
   const params = useParams()
   const sdk = useSDK()
@@ -43,7 +77,7 @@ export function createSessionComposerController(options?: { closeMs?: number | (
   // The server-wide store, not this directory's session list: that list has no subagents until they are opened.
   const movedOn = createMemo(() => {
     const data = serverSync().session.data
-    return sessionMovedOnRequests(
+    return composerMovedOn(
       () => Object.values(data.info).filter((item) => !!item),
       data.permission,
       data.question,
@@ -64,7 +98,7 @@ export function createSessionComposerController(options?: { closeMs?: number | (
 
   const permissionRequest = createMemo((): PermissionRequest | undefined => {
     return sessionPermissionRequest(sync().data.session, sync().data.permission, params.id, (item) => {
-      return !item.movedOnAt && !permission.autoResponds(item, sdk().directory)
+      return asksNow(item) && !permission.autoResponds(item, sdk().directory)
     })
   })
 

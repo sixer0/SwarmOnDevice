@@ -7,8 +7,8 @@ import { join } from "path"
 // Why this file exists: the exemption is a deliberate, bounded weakening of a completeness invariant
 // (branch B of the 2026-10-21 decision in
 // `docs/2026-10-19_opencode_swarm_rebrand/decisions/decisions.md`). Its safety depends entirely on
-// staying bounded — thirty-six entries as of decision C18 of the 2026-11-01 Knowledge Library task, up from
-// twelve at its decision C2, ten at blueprint-11 row 249 (session 6), nine at row 204 and the original three.
+// staying bounded — thirty-seven entries as of row 77 of the 2026-11-01 Knowledge Library task, up from thirty-six
+// at its decision C18, twelve at its decision C2, ten at blueprint-11 row 249 (session 6), nine at row 204 and the original three.
 // This guard is the mechanism that keeps the exception from becoming the norm: any entry beyond the
 // approved set, any wildcard, or any relaxation of the `missing: []` assertion fails the suite here
 // instead of quietly passing the gate it is supposed to police.
@@ -56,6 +56,7 @@ const APPROVED_EXEMPT_KEYS = [
   "session.map.decisions.undo.confirm",
   "session.map.decisions.marker.externalChange",
   "notification.autonomy.blocked",
+  "ui.messagePart.notRun.deferred",
 ]
 
 function arrayLiteral(name: string) {
@@ -73,10 +74,10 @@ function arrayLiteral(name: string) {
 describe("i18n parity exemption guard", () => {
   const exemptKeys = arrayLiteral("UNTRANSLATED_KEY_PRESENCE_EXEMPTION")
 
-  test("the exemption holds exactly the thirty-six approved keys and nothing else", () => {
+  test("the exemption holds exactly the thirty-seven approved keys and nothing else", () => {
     expect([...exemptKeys].sort()).toEqual([...APPROVED_EXEMPT_KEYS].sort())
-    expect(exemptKeys.length).toBe(36)
-    expect(new Set(exemptKeys).size).toBe(36)
+    expect(exemptKeys.length).toBe(37)
+    expect(new Set(exemptKeys).size).toBe(37)
   })
 
   test("every exemption entry is a literal dotted key, never a wildcard or pattern", () => {
@@ -149,7 +150,11 @@ describe("i18n parity exemption guard", () => {
           "notification.autonomy.blocked",
         ],
       },
-      { domain: "ui", file: "../../../ui/src/i18n/en.ts", keys: ["ui.toast.ariaLabel"] },
+      {
+        domain: "ui",
+        file: "../../../ui/src/i18n/en.ts",
+        keys: ["ui.toast.ariaLabel", "ui.messagePart.notRun.deferred"],
+      },
     ]
     for (const source of sources) {
       await testEnCarriesKeys(source)
