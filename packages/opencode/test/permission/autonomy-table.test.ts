@@ -314,6 +314,124 @@ describe("the allow list on its own", () => {
   })
 })
 
+describe("where a command runs", () => {
+  const COMMANDS = ["bun test", "bun run build", "make test", "npm test", 'git commit -m "x"', "git add -A", "touch x"]
+  const verdicts = (cwd: string, inside: InstanceContext) =>
+    COMMANDS.map((command) => AutonomyTable.classify(bash(command, { cwd, instance: inside })))
+  const allHeld = (cwd: string, inside: InstanceContext, category: AutonomyTable.HeldCategory) =>
+    expect(verdicts(cwd, inside)).toEqual(COMMANDS.map(() => HELD(category)))
+
+  test("a link out of the project, however many links it takes, is outside the folder", async () => {
+    await using repo = await tmpdir({ git: true })
+    await using away = await tmpdir()
+    await plainRepository(repo.path)
+    const inside = instanceOf(repo.path)
+    fs.mkdirSync(path.join(away.path, "sub"))
+    fs.mkdirSync(path.join(repo.path, "deep"))
+    fs.symlinkSync(away.path, path.join(repo.path, "one"))
+    fs.symlinkSync("one", path.join(repo.path, "two"))
+    fs.symlinkSync("../two", path.join(repo.path, "deep/three"))
+    fs.symlinkSync(path.dirname(repo.path), path.join(repo.path, "parent"))
+    fs.symlinkSync(path.join(away.path, "not-there"), path.join(repo.path, "dangling"))
+    fs.symlinkSync("loop-b", path.join(repo.path, "loop-a"))
+    fs.symlinkSync("loop-a", path.join(repo.path, "loop-b"))
+    for (const name of ["one", "two", "deep/three", "one/sub", "deep/three/sub", "parent", "dangling", "dangling/sub", "loop-a", "loop-a/sub"])
+      allHeld(path.join(repo.path, name), inside, "outside_folder")
+    allHeld(away.path, inside, "outside_folder")
+    allHeld(path.join(repo.path, "..", path.basename(away.path)), inside, "outside_folder")
+  })
+
+  test("a project that is itself behind a link is judged by where both really are", async () => {
+    await using repo = await tmpdir({ git: true })
+    await using holder = await tmpdir()
+    await using away = await tmpdir()
+    await plainRepository(repo.path)
+    fs.mkdirSync(path.join(repo.path, "src"))
+    fs.symlinkSync(away.path, path.join(repo.path, "out"))
+    const alias = path.join(holder.path, "alias")
+    fs.symlinkSync(repo.path, alias)
+    const expected = [AGENT("check"), AGENT("check"), AGENT("check"), AGENT("check"), AGENT("git-local"), AGENT("git-local"), AGENT("file-op")]
+    const spellings = [instanceOf(alias), instanceOf(repo.path)]
+    for (const inside of spellings)
+      for (const cwd of [alias, path.join(alias, "src"), repo.path, path.join(repo.path, "src")]) expect(verdicts(cwd, inside)).toEqual(expected)
+    for (const inside of spellings) {
+      allHeld(path.join(alias, "out"), inside, "outside_folder")
+      allHeld(path.join(repo.path, "out"), inside, "outside_folder")
+    }
+  })
+
+  test("a folder that cannot be vouched for is held", async () => {
+    await using repo = await tmpdir({ git: true })
+    await plainRepository(repo.path)
+    const inside = instanceOf(repo.path)
+    fs.writeFileSync(path.join(repo.path, "file"), "x\n")
+    allHeld(path.join(repo.path, "not-there"), inside, "not_routine")
+    allHeld(path.join(repo.path, "not/there/at/all"), inside, "not_routine")
+    allHeld(path.join(repo.path, "file"), inside, "not_routine")
+    allHeld("src", inside, "outside_folder")
+    allHeld("", inside, "outside_folder")
+  })
+
+  test("a folder `cd` may not enter may not be entered by naming it as the workdir", async () => {
+    await using repo = await tmpdir({ git: true })
+    await plainRepository(repo.path)
+    const inside = instanceOf(repo.path)
+    for (const name of [".git/hooks", ".github/workflows", ".swarm"]) {
+      fs.mkdirSync(path.join(repo.path, name), { recursive: true })
+      allHeld(path.join(repo.path, name), inside, "not_routine")
+    }
+    fs.mkdirSync(path.join(repo.path, ".env"))
+    allHeld(path.join(repo.path, ".env"), inside, "not_routine")
+  })
+
+  test("the guard on the project says nothing about a repository nested inside it", async () => {
+    await using repo = await tmpdir({ git: true })
+    await plainRepository(repo.path)
+    const inside = instanceOf(repo.path)
+    const nested = path.join(repo.path, "vendor/x")
+    fs.mkdirSync(path.join(nested, "deep"), { recursive: true })
+    await $`git init -q`.cwd(nested).quiet()
+    fs.mkdirSync(path.join(repo.path, "linked"))
+    fs.writeFileSync(path.join(repo.path, "linked/.git"), "gitdir: /tmp/elsewhere\n")
+    fs.mkdirSync(path.join(repo.path, "plain/deep"), { recursive: true })
+    for (const cwd of [nested, path.join(nested, "deep"), path.join(repo.path, "linked")])
+      for (const command of ["git add -A", 'git commit -m "x"', "git switch -c x", "git add a.ts"])
+        expect([cwd, command, AutonomyTable.routine(command, cwd, inside)]).toEqual([cwd, command, undefined])
+    expect(AutonomyTable.routine("cd vendor/x && git add -A", repo.path, inside)).toBeUndefined()
+    expect(AutonomyTable.routine("cd vendor/x/deep && git add -A", repo.path, inside)).toBeUndefined()
+    expect(AutonomyTable.routine("bun test", nested, inside)).toBe("check")
+    expect(AutonomyTable.routine("git add -A", path.join(repo.path, "plain/deep"), inside)).toBe("git-local")
+    expect(AutonomyTable.routine("cd plain/deep && git add -A", repo.path, inside)).toBe("git-local")
+  })
+
+  test("`routine` on its own refuses a folder it could not enter", async () => {
+    await using repo = await tmpdir({ git: true })
+    await using away = await tmpdir()
+    await plainRepository(repo.path)
+    const link = path.join(repo.path, "out")
+    fs.symlinkSync(away.path, link)
+    for (const command of COMMANDS) expect(AutonomyTable.routine(command, link, instanceOf(repo.path))).toBeUndefined()
+  })
+
+  test("nothing but a command reads the folder, so no other request changes with it", async () => {
+    await using away = await tmpdir()
+    const link = path.join(dir, "cwd-out")
+    fs.symlinkSync(away.path, link)
+    const samples: Input[] = [
+      edit("src/a.ts", { editClass: "not_ordinary" }),
+      edit("src/a.ts", { editClass: "ordinary", harmless: true }),
+      edit(path.join(Global.Path.state, "trust.json")),
+      request("read", { patterns: [".env"] }),
+      request("read", { harmless: true }),
+      request("task"),
+      request("question"),
+      request("external_directory", { patterns: ["/tmp/*"], metadata: { filepath: "/tmp/a" } }),
+      request("graft_find_code"),
+    ]
+    for (const sample of samples) expect(AutonomyTable.classify({ ...sample, cwd: link })).toEqual(AutonomyTable.classify(sample))
+  })
+})
+
 describe("a frozen install", () => {
   const FORMS: [command: string, lockfile: string][] = [
     ["bun install --frozen-lockfile", "bun.lock"],

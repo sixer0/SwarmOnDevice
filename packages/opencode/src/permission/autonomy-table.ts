@@ -153,7 +153,37 @@ function matchesCheck(words: readonly string[], cwd: string, instance: InstanceC
   })
 }
 
-const gitAllowed = (instance: InstanceContext) => GitGuard.inspect(instance.worktree).refused === undefined
+const outsideProject = (cwd: string, instance: InstanceContext) => !path.isAbsolute(cwd) || !Reach.inside(cwd, instance)
+
+/**
+ * The folder decides which Makefile `make` reads, which scripts `npm` runs and which repository `git` lands in and takes
+ * hooks from, even for a command that names no path. So a `workdir` has to meet what `cd` has to meet, by where it really
+ * is: the shell only compares its spelling with the project's.
+ */
+function canRunIn(cwd: string, instance: InstanceContext) {
+  if (outsideProject(cwd, instance) || Reach.sensitive(cwd, instance) || Reach.secret(cwd)) return false
+  // Nothing can run in a folder that is not there. Holding it also leaves no time for a link to appear under that name.
+  try {
+    return fs.statSync(cwd, { throwIfNoEntry: false })?.isDirectory() === true
+  } catch {
+    return false
+  }
+}
+
+/** The guard vets the project's own `.git`. A `.git` on the way up from here belongs to a repository it never looked at. */
+function gitAllowed(cwd: string, instance: InstanceContext) {
+  if (GitGuard.inspect(instance.worktree).refused !== undefined) return false
+  const top = Reach.real(instance.worktree)
+  let folder = Reach.real(cwd)
+  if (top === undefined || folder === undefined) return false
+  while (folder !== top) {
+    if (fs.lstatSync(path.join(folder, ".git"), { throwIfNoEntry: false })) return false
+    const parent: string = path.dirname(folder)
+    if (parent === folder) return false
+    folder = parent
+  }
+  return true
+}
 
 /**
  * Whether each lockfile present here is byte for byte what HEAD holds. Comparing two hashes runs nothing the repository
@@ -210,14 +240,14 @@ export function lockfileUnchanged(names: readonly string[], cwd: string, instanc
 }
 
 function single(piece: string, cwd: string, instance: InstanceContext): RoutineCategory | undefined {
-  if (COMMIT.test(piece) || (BRANCH.test(piece) && !piece.includes(".."))) return gitAllowed(instance) ? "git-local" : undefined
+  if (COMMIT.test(piece) || (BRANCH.test(piece) && !piece.includes(".."))) return gitAllowed(cwd, instance) ? "git-local" : undefined
   const words = Risk.plainWords(piece)
   if (!words) return undefined
   if (FILE_OPS.has(words[0]!)) return fileOp(words, cwd, instance) ? "file-op" : undefined
   if (words[0] === "git" && words[1] === "add") {
     const rest = words.slice(2)
     const named = rest.length === 1 && rest[0] === "-A" ? true : rest.length > 0 && rest.every((word) => safePath(word, cwd, instance))
-    return named && gitAllowed(instance) ? "git-local" : undefined
+    return named && gitAllowed(cwd, instance) ? "git-local" : undefined
   }
   const lockfiles = INSTALLS.get(piece)
   if (lockfiles) return lockfileUnchanged(lockfiles, cwd, instance) ? "check" : undefined
@@ -229,6 +259,7 @@ function single(piece: string, cwd: string, instance: InstanceContext): RoutineC
  * Splitting on the literal " && " is enough: every piece must then pass `Risk.plainWords`, so no other operator survives.
  */
 export function routine(command: string, cwd: string, instance: InstanceContext): RoutineCategory | undefined {
+  if (!canRunIn(cwd, instance)) return undefined
   let here = cwd
   const kinds: RoutineCategory[] = []
   for (const [index, piece] of command.replace(OUTPUT_TAIL, "").split(" && ").entries()) {
@@ -325,6 +356,7 @@ function classifyBash(input: Input, checkClass: CheckClass): Verdict {
   const command = input.metadata.command
   if (typeof command !== "string" || !command) return held("not_routine")
   if (command.split(WORD_BREAK).some((word) => word && Secrets.secretFile(word))) return held("secret_file")
+  if (outsideProject(input.cwd, input.instance)) return held("outside_folder")
   const kind = routine(command, input.cwd, input.instance)
   if (!kind) return held("not_routine")
   // A folder nobody has approved holds something nobody has looked at, so running its code is not routine yet.
