@@ -1,8 +1,11 @@
 import { afterEach, beforeEach, expect } from "bun:test"
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs"
 import os from "node:os"
 import path from "node:path"
+import { NodeHttpServer, NodeServices } from "@effect/platform-node"
 import { Cause, Effect, Exit, Fiber, Layer } from "effect"
+import { HttpClient, HttpClientRequest, HttpRouter, HttpServer } from "effect/unstable/http"
+import { layerWebSocketConstructorGlobal } from "effect/unstable/socket/Socket"
 import { CrossSpawnSpawner } from "@opencode-ai/core/cross-spawn-spawner"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
@@ -19,6 +22,7 @@ import { Format } from "../../src/format"
 import { LSP } from "../../src/lsp/lsp"
 import { Plugin } from "../../src/plugin"
 import { Question } from "../../src/question"
+import { HttpApiApp } from "../../src/server/routes/instance/httpapi/server"
 import { LateAnswer } from "../../src/session/late-answer"
 import { SessionProcessor } from "../../src/session/processor"
 import { SessionPrompt } from "../../src/session/prompt"
@@ -33,7 +37,7 @@ import { InstanceBootstrap } from "../../src/project/bootstrap"
 import { InstanceStore } from "../../src/project/instance-store"
 import { MessageID, SessionID } from "../../src/session/schema"
 import { Session } from "../../src/session/session"
-import { TestInstance } from "../fixture/fixture"
+import { provideInstanceEffect, TestInstance, tmpdirScoped } from "../fixture/fixture"
 import { testEffect } from "../lib/effect"
 
 const folder = path.join(Global.Path.state, "autonomy")
@@ -908,15 +912,28 @@ flows.instance("AU-23: allow grants the root, exactly this pattern, nowhere that
     const test = yield* TestInstance
     const push = bash(child.id, "git push origin main", test.directory)
     expect(yield* failure(ask(push))).toBeInstanceOf(PermissionV1.DeferredError)
+    const requestID = (yield* list)[0]!.id
     const before = readdirSync(folder).map((name) => readFileSync(path.join(folder, name), "utf8"))
 
-    yield* approve((yield* list)[0]!.id)
+    yield* approve(requestID)
     expect(sent).toHaveLength(1)
     expect(sent[0]).toMatchObject({ sessionID: root.id, lateAnswer: true })
     expect(sent[0]!.text).toContain("git push origin main")
 
-    // Written nowhere: a file on disk must not be able to allow anything.
-    expect(readdirSync(folder).map((name) => readFileSync(path.join(folder, name), "utf8"))).toEqual(before)
+    // Only that it was answered is written, and no grant: a file on disk must not be able to allow anything.
+    const after = readdirSync(folder).map((name) => readFileSync(path.join(folder, name), "utf8"))
+    expect(after.filter((text) => !before.includes(text))).toHaveLength(1)
+    expect(auditLines(root.id).at(-1)).toMatchObject({ type: "outcome", requestID, outcome: "approved_later" })
+    expect(Object.keys(auditLines(root.id).at(-1)!).sort()).toEqual([
+      "at",
+      "by",
+      "outcome",
+      "prev",
+      "requestID",
+      "seq",
+      "type",
+      "v",
+    ])
 
     // Not the same call any more, so it is judged again.
     expect(yield* failure(ask(bash(root.id, "git push origin other", test.directory)))).toBeInstanceOf(
@@ -984,5 +1001,631 @@ flows.instance("AU-23: with the mode off an entry can still be answered, and the
     yield* approve(held.id)
     expect(sent).toHaveLength(1)
     expect(yield* list).toEqual([])
+  }),
+)
+
+const auditText = (root: SessionID) => readFileSync(path.join(folder, `${root}.jsonl`), "utf8")
+const auditLines = (root: SessionID) =>
+  auditText(root)
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => JSON.parse(line) as Record<string, unknown>)
+
+it.instance("ADV-A21: of 25 different critical calls 20 wait, 5 are told it is full, nothing is lost, one B0", () =>
+  Effect.gen(function* () {
+    const { root, child } = yield* lineage
+    const test = yield* TestInstance
+    const pushes = Array.from({ length: 25 }, (_, index) => `git push origin branch-${index}`)
+    // The limit is per root, so a child's calls count against the same queue.
+    const errors = yield* Effect.forEach(pushes, (command, index) =>
+      failure(ask(bash(index % 2 ? child.id : root.id, command, test.directory))),
+    )
+    const categories = errors.map((error) => (error as PermissionV1.DeferredError).category)
+    expect(categories.slice(0, 20).every((category) => category !== "queue_full")).toBe(true)
+    expect(categories.slice(20)).toEqual(Array(5).fill("queue_full"))
+    expect(errors.every((error) => error instanceof PermissionV1.DeferredError)).toBe(true)
+
+    const held = yield* list
+    expect(held.length).toBe(Permission.QUEUE_LIMIT)
+    // The oldest stay. Nothing was pushed out to make room.
+    expect(held.map((item) => item.patterns[0])).toEqual(pushes.slice(0, 20))
+
+    const lines = yield* audit(root.id)
+    expect(lines.map((line) => line.patterns[0])).toEqual(pushes)
+    expect(lines.slice(20).every((line) => line.category === "queue_full" && line.decision === "defer")).toBe(true)
+    expect(auditLines(root.id).filter((line) => line.marker === "b0")).toHaveLength(1)
+  }),
+)
+
+it.instance("AU-24: taken at the same moment, the 21st place still does not exist", () =>
+  Effect.gen(function* () {
+    const { root } = yield* lineage
+    const test = yield* TestInstance
+    const errors = yield* Effect.forEach(
+      Array.from({ length: 25 }, (_, index) => `git push origin branch-${index}`),
+      (command) => failure(ask(bash(root.id, command, test.directory))),
+      { concurrency: "unbounded" },
+    )
+    expect(yield* list).toHaveLength(20)
+    expect(errors.filter((error) => (error as PermissionV1.DeferredError).category === "queue_full")).toHaveLength(5)
+  }),
+)
+
+it.instance("AU-24: a full queue is reported again only after it had room", () =>
+  Effect.gen(function* () {
+    const { root } = yield* lineage
+    const test = yield* TestInstance
+    yield* Effect.forEach(
+      Array.from({ length: 22 }, (_, index) => `git push origin branch-${index}`),
+      (command) => failure(ask(bash(root.id, command, test.directory))),
+    )
+    expect(auditLines(root.id).filter((line) => line.marker === "b0")).toHaveLength(1)
+    yield* reply({ requestID: (yield* list)[0]!.id, reply: "reject" })
+
+    // The place that opened is taken, and the same decision is not asked for twice.
+    const taken = yield* failure(ask(bash(root.id, "git push origin again", test.directory)))
+    expect((taken as PermissionV1.DeferredError).category).not.toBe("queue_full")
+    const repeat = yield* failure(ask(bash(root.id, "git push origin again", test.directory)))
+    expect((repeat as PermissionV1.DeferredError).category).not.toBe("queue_full")
+    expect(yield* list).toHaveLength(20)
+    expect(auditLines(root.id).filter((line) => line.marker === "b0")).toHaveLength(1)
+
+    const full = yield* failure(ask(bash(root.id, "git push origin more", test.directory)))
+    expect((full as PermissionV1.DeferredError).category).toBe("queue_full")
+    expect(auditLines(root.id).filter((line) => line.marker === "b0")).toHaveLength(2)
+  }),
+)
+
+it.instance("AU-24: work that is not critical goes on with the queue full", () =>
+  Effect.gen(function* () {
+    const { root } = yield* lineage
+    const test = yield* TestInstance
+    yield* Effect.forEach(
+      Array.from({ length: 21 }, (_, index) => `git push origin branch-${index}`),
+      (command) => failure(ask(bash(root.id, command, test.directory))),
+    )
+    yield* ask({
+      sessionID: root.id,
+      permission: "task",
+      patterns: ["general"],
+      metadata: {},
+      always: ["*"],
+      ruleset: [],
+    })
+    expect(yield* list).toHaveLength(20)
+  }),
+)
+
+it.instance("AU-24: a person's spend limit is not a queue, and waits even with the queue full", () =>
+  Effect.gen(function* () {
+    const { root } = yield* lineage
+    const test = yield* TestInstance
+    yield* Effect.forEach(
+      Array.from({ length: 21 }, (_, index) => `git push origin branch-${index}`),
+      (command) => failure(ask(bash(root.id, command, test.directory))),
+    )
+    const fiber = yield* ask({
+      sessionID: root.id,
+      permission: "spend_limit",
+      patterns: ["*"],
+      metadata: {},
+      always: [],
+      ruleset: [],
+    }).pipe(Effect.exit, Effect.forkScoped)
+    const items = yield* waitForPending(21)
+    const waiting = items.find((item) => item.permission === "spend_limit")!
+    expect(waiting.movedOnAt).toBeUndefined()
+    yield* reply({ requestID: waiting.id, reply: "once" })
+    expect(Exit.isSuccess(yield* Fiber.join(fiber))).toBe(true)
+  }),
+)
+
+it.instance("T-4: skipping past MAX_SKIPPED never drops what the mode held", () =>
+  Effect.gen(function* () {
+    const autonomy = yield* Autonomy.Service
+    const { root } = yield* lineage
+    const test = yield* TestInstance
+    expect(yield* failure(ask(bash(root.id, "git push origin main", test.directory)))).toBeInstanceOf(
+      PermissionV1.DeferredError,
+    )
+    yield* autonomy.setMode({ scope: "session", root: root.id, on: false })
+    process.env.SWARM_UNATTENDED_AFTER_MS = "1"
+
+    yield* Effect.forEach(
+      Array.from({ length: Permission.MAX_SKIPPED + 3 }, (_, index) => `git pull origin branch-${index}`),
+      (command) => failure(ask(bash(root.id, command))),
+    )
+    const items = yield* list
+    expect(items.filter((item) => item.deferred).map((item) => item.patterns[0])).toEqual(["git push origin main"])
+    // An ordinary skip is still trimmed outside the mode.
+    expect(items.filter((item) => !item.deferred).length).toBe(Permission.MAX_SKIPPED)
+  }),
+)
+
+it.instance("T-4: an ordinary skip is not trimmed once the root is in the mode", () =>
+  Effect.gen(function* () {
+    const sessions = yield* Session.Service
+    const autonomy = yield* Autonomy.Service
+    const root = yield* sessions.create({})
+    process.env.SWARM_UNATTENDED_AFTER_MS = "1"
+    yield* Effect.forEach(
+      Array.from({ length: Permission.MAX_SKIPPED }, (_, index) => `git pull origin branch-${index}`),
+      (command) => failure(ask(bash(root.id, command))),
+    )
+    process.env.SWARM_UNATTENDED_AFTER_MS = "100"
+    const fiber = yield* ask(bash(root.id, "git pull origin last")).pipe(Effect.exit, Effect.forkScoped)
+    yield* waitForPending(Permission.MAX_SKIPPED + 1)
+    yield* autonomy.setMode({ scope: "session", root: root.id, on: true })
+    yield* Fiber.join(fiber)
+    expect(yield* list).toHaveLength(Permission.MAX_SKIPPED + 1)
+  }),
+)
+
+flows.instance("ADV-A22: closed with the queue open and opened again, it is there, reply works, the agent wakes", () =>
+  Effect.gen(function* () {
+    const store = yield* InstanceStore.Service
+    const { root, child } = yield* lineage
+    const test = yield* TestInstance
+    const answers = yield* late
+    expect(yield* failure(ask(bash(child.id, "git push origin main", test.directory)))).toBeInstanceOf(
+      PermissionV1.DeferredError,
+    )
+    const before = (yield* list)[0]!
+
+    yield* store.reload({ directory: test.directory })
+    expect(sent).toEqual([])
+    const after = yield* list
+    expect(after).toHaveLength(1)
+    expect(after[0]).toMatchObject({
+      id: before.id,
+      sessionID: child.id,
+      permission: "bash",
+      patterns: ["git push origin main"],
+      always: [],
+      deferred: true,
+      movedOnAt: expect.any(Number),
+    })
+
+    // Waiting for the same answer, so the same call is not a second entry.
+    expect(yield* failure(ask(bash(child.id, "git push origin main", test.directory)))).toBeInstanceOf(
+      PermissionV1.DeferredError,
+    )
+    expect(yield* list).toHaveLength(1)
+
+    const moved = yield* reply({ requestID: before.id, reply: "once" })
+    yield* answers.permission(moved!)
+    expect(sent).toHaveLength(1)
+    expect(sent[0]).toMatchObject({ sessionID: root.id, lateAnswer: true })
+    expect(sent[0]!.text).toContain("git push origin main")
+    yield* ask(bash(root.id, "git push origin main", test.directory))
+
+    // Answered, so it does not come back from the file.
+    yield* store.reload({ directory: test.directory })
+    expect(yield* list).toEqual([])
+    expect(auditLines(root.id).find((line) => line.type === "outcome")).toMatchObject({
+      requestID: before.id,
+      outcome: "approved_later",
+      by: "person",
+    })
+  }),
+)
+
+it.instance("AU-25: a refused entry stays refused after a restart, and a full queue took nothing in", () =>
+  Effect.gen(function* () {
+    const store = yield* InstanceStore.Service
+    const { root } = yield* lineage
+    const test = yield* TestInstance
+    yield* Effect.forEach(
+      Array.from({ length: 21 }, (_, index) => `git push origin branch-${index}`),
+      (command) => failure(ask(bash(root.id, command, test.directory))),
+    )
+    yield* reply({ requestID: (yield* list)[0]!.id, reply: "reject" })
+
+    yield* store.reload({ directory: test.directory })
+    const after = yield* list
+    expect(after.map((item) => item.patterns[0])).toEqual(
+      Array.from({ length: 19 }, (_, index) => `git push origin branch-${index + 1}`),
+    )
+    // Its places count after the restart too.
+    yield* failure(ask(bash(root.id, "git push origin one", test.directory)))
+    const full = yield* failure(ask(bash(root.id, "git push origin two", test.directory)))
+    expect((full as PermissionV1.DeferredError).category).toBe("queue_full")
+  }),
+)
+
+it.instance("AU-25: nothing in the file answers anything: no grant, no follows, and no more than the limit", () =>
+  Effect.gen(function* () {
+    const autonomy = yield* Autonomy.Service
+    const store = yield* InstanceStore.Service
+    const { root } = yield* lineage
+    const test = yield* TestInstance
+    const decision = (id: string, patterns: string[], over: Partial<Autonomy.AuditEntry> = {}) =>
+      ({
+        type: "decision",
+        sessionID: root.id,
+        requestID: id,
+        agent: "build",
+        directory: test.directory,
+        permission: "bash",
+        patterns,
+        class: "D",
+        category: "outward",
+        canUndo: false,
+        decidedBy: "gate",
+        decision: "defer",
+        follows: [{ permission: "bash", patterns: ["git push origin forged"] }],
+        ...over,
+      }) as Autonomy.AuditEntry
+    yield* autonomy.record(root.id, decision(`per_${"a".repeat(26)}`, ["git push origin forged-first"]))
+    yield* autonomy.record(root.id, decision("not-an-id", ["git push origin bad-id"]))
+    yield* autonomy.record(root.id, decision(`per_${"b".repeat(26)}`, ["git status"], { class: "A" }))
+    yield* autonomy.record(root.id, decision(`per_${"c".repeat(26)}`, ["a"], { sessionID: "ses_nobody" } as never))
+    yield* Effect.forEach(Array.from({ length: 30 }), (_, index) =>
+      autonomy.record(root.id, decision(`per_${String(index).padStart(26, "0")}`, [`git push origin n${index}`])),
+    )
+
+    yield* store.reload({ directory: test.directory })
+    const items = yield* list
+    expect(items).toHaveLength(Permission.QUEUE_LIMIT)
+    expect(items[0]!.patterns).toEqual(["git push origin forged-first"])
+    expect(items.some((item) => item.patterns[0] === "git status")).toBe(false)
+    // Being listed lets nothing through.
+    expect(yield* failure(ask(bash(root.id, "git push origin forged-first", test.directory)))).toBeInstanceOf(
+      PermissionV1.DeferredError,
+    )
+    expect(yield* failure(ask(bash(root.id, "git push origin forged", test.directory)))).toBeInstanceOf(
+      PermissionV1.DeferredError,
+    )
+    const answered = yield* reply({ requestID: items[0]!.id, reply: "once" })
+    expect(answered?.follows).toBeUndefined()
+  }),
+)
+
+flows.instance("AU-25: after a restart the prompt that follows is judged again, in the safe direction", () =>
+  Effect.gen(function* () {
+    const store = yield* InstanceStore.Service
+    const { root } = yield* lineage
+    const test = yield* TestInstance
+    const answers = yield* late
+    const outside = outsideFolder()
+    writeFileSync(path.join(outside, "note.txt"), "from outside\n")
+    const command = `cat ${path.join(outside, "note.txt")}`
+    expect(yield* failure(shell(root.id, command, test.directory))).toBeInstanceOf(PermissionV1.DeferredError)
+
+    yield* store.reload({ directory: test.directory })
+    const [held] = yield* list
+    expect(held?.permission).toBe("external_directory")
+    yield* answers.permission((yield* reply({ requestID: held!.id, reply: "once" }))!)
+
+    // The answer covers its own prompt only now, so a call with two prompts takes three: the folder's grant goes on the
+    // try that the shell's prompt stops. Slower by two clicks. Nothing ran without somebody saying so.
+    expect(yield* failure(shell(root.id, command, test.directory))).toBeInstanceOf(PermissionV1.DeferredError)
+    const [second] = yield* list
+    expect(second?.permission).toBe("bash")
+    yield* answers.permission((yield* reply({ requestID: second!.id, reply: "once" }))!)
+    expect(yield* failure(shell(root.id, command, test.directory))).toBeInstanceOf(PermissionV1.DeferredError)
+    const [third] = yield* list
+    expect(third?.permission).toBe("external_directory")
+    yield* answers.permission((yield* reply({ requestID: third!.id, reply: "once" }))!)
+    yield* shell(root.id, command, test.directory)
+    expect(yield* list).toEqual([])
+  }),
+)
+
+it.instance("C26: an entry whose line could not be written is answerable now and gone after a restart", () =>
+  Effect.gen(function* () {
+    const store = yield* InstanceStore.Service
+    const { root } = yield* lineage
+    const test = yield* TestInstance
+    mkdirSync(folder, { recursive: true })
+    rmSync(path.join(folder, `${root.id}.jsonl`), { force: true })
+    mkdirSync(path.join(folder, `${root.id}.jsonl`))
+    expect(yield* failure(ask(bash(root.id, "git push origin main", test.directory)))).toBeInstanceOf(
+      PermissionV1.DeferredError,
+    )
+    expect(yield* list).toHaveLength(1)
+    yield* store.reload({ directory: test.directory })
+    expect(yield* list).toEqual([])
+    // Still nothing ran, and the call is held again the next time the agent makes it.
+    rmSync(path.join(folder, `${root.id}.jsonl`), { recursive: true })
+    expect(yield* failure(ask(bash(root.id, "git push origin main", test.directory)))).toBeInstanceOf(
+      PermissionV1.DeferredError,
+    )
+    expect(yield* list).toHaveLength(1)
+  }),
+)
+
+it.instance("C26: with no line written a full queue still takes nothing, and decider approval does not run", () =>
+  Effect.gen(function* () {
+    const { root } = yield* lineage
+    const test = yield* TestInstance
+    yield* Effect.forEach(
+      Array.from({ length: 20 }, (_, index) => `git push origin branch-${index}`),
+      (command) => failure(ask(bash(root.id, command, test.directory))),
+    )
+    rmSync(path.join(folder, `${root.id}.jsonl`), { force: true })
+    mkdirSync(path.join(folder, `${root.id}.jsonl`))
+    const refused = yield* failure(ask(bash(root.id, "git push origin more", test.directory)))
+    expect((refused as PermissionV1.DeferredError).category).toBe("queue_full")
+    // The decider says yes to this one, and with no line that yes is held. There is no place to hold it either.
+    const approved = yield* failure(ask(bash(root.id, "mkdir -p out", test.directory)))
+    expect(stub.calls).toEqual(["bash"])
+    expect((approved as PermissionV1.DeferredError).category).toBe("queue_full")
+    expect(yield* list).toHaveLength(20)
+  }),
+)
+
+it.instance("AU-25: a file whose session is not known brings back nothing, and the session says where a line belongs", () =>
+  Effect.gen(function* () {
+    const autonomy = yield* Autonomy.Service
+    const store = yield* InstanceStore.Service
+    const sessions = yield* Session.Service
+    const test = yield* TestInstance
+    const here = yield* sessions.create({})
+    const line = (root: SessionID, directory: string) =>
+      ({
+        type: "decision",
+        sessionID: root,
+        requestID: `per_${"e".repeat(26)}`,
+        agent: "build",
+        directory,
+        permission: "bash",
+        patterns: ["git push origin main"],
+        class: "D",
+        category: "outward",
+        canUndo: false,
+        decidedBy: "gate",
+        decision: "defer",
+      }) as Autonomy.AuditEntry
+    // A root this store never heard of, in a file of its own: the session is what says where it belongs.
+    yield* autonomy.record("ses_gone" as SessionID, line("ses_gone" as SessionID, test.directory))
+    yield* autonomy.record(here.id, line(here.id, "/somewhere/else"))
+    yield* store.reload({ directory: test.directory })
+    const items = yield* list
+    expect(items.map((item) => item.sessionID)).toEqual([here.id])
+  }),
+)
+
+it.instance("AU-25: a line is only brought back from its own root's file, and by the folder that root is in", () =>
+  Effect.gen(function* () {
+    const autonomy = yield* Autonomy.Service
+    const store = yield* InstanceStore.Service
+    const sessions = yield* Session.Service
+    const test = yield* TestInstance
+    const line = (sessionID: SessionID, id: string) =>
+      ({
+        type: "decision",
+        sessionID,
+        requestID: `per_${id.repeat(26)}`,
+        agent: "build",
+        directory: test.directory,
+        permission: "bash",
+        patterns: ["git push origin main"],
+        class: "D",
+        category: "outward",
+        canUndo: false,
+        decidedBy: "gate",
+        decision: "defer",
+      }) as Autonomy.AuditEntry
+    const here = yield* sessions.create({})
+    const other = yield* sessions.create({})
+    const away = yield* tmpdirScoped({ git: true })
+    const there = yield* sessions.create({}).pipe(provideInstanceEffect(away))
+    // A session that is not under the root whose file names it.
+    yield* autonomy.record(other.id, line(here.id, "m"))
+    yield* autonomy.record(there.id, line(there.id, "n"))
+    // Moved whole into another root's file, so the line says one root and the file another.
+    yield* autonomy.record(here.id, line(here.id, "p"))
+    const copied = readFileSync(path.join(folder, `${here.id}.jsonl`))
+    rmSync(path.join(folder, `${here.id}.jsonl`))
+    writeFileSync(path.join(folder, `ses_third.jsonl`), copied)
+
+    yield* store.reload({ directory: test.directory })
+    expect(yield* list).toEqual([])
+    const elsewhere = yield* list.pipe(provideInstanceEffect(away))
+    expect(elsewhere.map((item) => item.sessionID)).toEqual([there.id])
+  }),
+)
+
+flows.instance("AU-26: archived, the entry is refused as abandoned and never runs, and it stays that way", () =>
+  Effect.gen(function* () {
+    const sessions = yield* Session.Service
+    const store = yield* InstanceStore.Service
+    const { root, child } = yield* lineage
+    const test = yield* TestInstance
+    const answers = yield* late
+    expect(yield* failure(ask(bash(child.id, "git push origin main", test.directory)))).toBeInstanceOf(
+      PermissionV1.DeferredError,
+    )
+    const [held] = yield* list
+    yield* sessions.setArchived({ sessionID: root.id, time: Date.now() })
+    yield* answers.forgetAbandoned()
+    expect(yield* list).toEqual([])
+    expect(sent).toEqual([])
+    expect(auditLines(root.id).filter((line) => line.type === "outcome")).toEqual([
+      expect.objectContaining({ requestID: held!.id, outcome: "abandoned", by: "system:session_closed" }),
+    ])
+    yield* store.reload({ directory: test.directory })
+    expect(yield* list).toEqual([])
+  }),
+)
+
+it.instance("AU-26: archived while nothing was running, it is abandoned at the next start", () =>
+  Effect.gen(function* () {
+    const sessions = yield* Session.Service
+    const store = yield* InstanceStore.Service
+    const { root } = yield* lineage
+    const test = yield* TestInstance
+    yield* failure(ask(bash(root.id, "git push origin main", test.directory)))
+    const [held] = yield* list
+    yield* sessions.setArchived({ sessionID: root.id, time: Date.now() })
+    yield* store.reload({ directory: test.directory })
+    expect(yield* list).toEqual([])
+    expect(auditLines(root.id).find((line) => line.type === "outcome")).toMatchObject({
+      requestID: held!.id,
+      outcome: "abandoned",
+    })
+  }),
+)
+
+flows.instance("AU-26: a deleted child's entry is abandoned on its root's record, not in a new file", () =>
+  Effect.gen(function* () {
+    const sessions = yield* Session.Service
+    const { root, child, grandchild } = yield* lineage
+    const test = yield* TestInstance
+    const answers = yield* late
+    yield* failure(ask(bash(grandchild.id, "git push origin main", test.directory)))
+    const [held] = yield* list
+    yield* sessions.remove(child.id)
+    yield* answers.forgetAbandoned()
+    expect(yield* list).toEqual([])
+    expect(existsSync(path.join(folder, `${grandchild.id}.jsonl`))).toBe(false)
+    expect(auditLines(root.id).find((line) => line.type === "outcome")).toMatchObject({
+      requestID: held!.id,
+      outcome: "abandoned",
+    })
+  }),
+)
+
+it.instance("an old file with a decision still open outlives the retention, and one without does not", () =>
+  Effect.gen(function* () {
+    const autonomy = yield* Autonomy.Service
+    const { root } = yield* lineage
+    const test = yield* TestInstance
+    yield* failure(ask(bash(root.id, "git push origin main", test.directory)))
+    const old = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000)
+    const open = path.join(folder, `${root.id}.jsonl`)
+    const settled = path.join(folder, "ses_settled.jsonl")
+    yield* autonomy.record("ses_settled" as SessionID, { type: "marker", marker: "mode_on", decidedBy: "gate" })
+    utimesSync(open, old, old)
+    utimesSync(settled, old, old)
+    yield* Effect.scoped(Layer.build(Layer.fresh(Autonomy.layer)))
+    expect(existsSync(open)).toBe(true)
+    expect(existsSync(settled)).toBe(false)
+  }),
+)
+
+// Through the real routes and handlers, so that deleting and archiving are what do this and not a call a test made up.
+const served = testEffect(
+  Layer.mergeAll(
+    AppNodeBuilder.build(LayerNode.group([InstanceStore.node, Session.node, Autonomy.node]), [
+      [InstanceStore.bootstrapNode, noopBootstrap],
+    ]),
+    (
+      HttpRouter.serve(HttpApiApp.routes, { disableListenLog: true, disableLogger: true }) as Layer.Layer<
+        never,
+        unknown,
+        HttpServer.HttpServer
+      >
+    ).pipe(
+      Layer.provide(layerWebSocketConstructorGlobal),
+      Layer.provideMerge(NodeHttpServer.layerTest),
+      Layer.provideMerge(NodeServices.layer),
+    ),
+  ),
+)
+
+const held = (sessionID: SessionID, directory: string, id: string) =>
+  ({
+    type: "decision",
+    sessionID,
+    requestID: `per_${id.repeat(26)}`,
+    agent: "build",
+    directory,
+    permission: "bash",
+    patterns: ["git push origin main"],
+    class: "D",
+    category: "outward",
+    canUndo: false,
+    decidedBy: "gate",
+    decision: "defer",
+  }) as Autonomy.AuditEntry
+
+const route = (url: string, directory: string, init: RequestInit = {}) =>
+  HttpClientRequest.fromWeb(
+    new Request(new URL(url, "http://localhost"), {
+      ...init,
+      headers: { "x-opencode-directory": directory, "content-type": "application/json" },
+    }),
+  ).pipe(
+    HttpClientRequest.setUrl(url),
+    HttpClient.execute,
+    Effect.flatMap((response) => response.json.pipe(Effect.map((body) => ({ status: response.status, body })))),
+  )
+
+served.instance("AU-26 through the routes: archive refuses as abandoned and keeps the record", () =>
+  Effect.gen(function* () {
+    const sessions = yield* Session.Service
+    const autonomy = yield* Autonomy.Service
+    const test = yield* TestInstance
+    const root = yield* sessions.create({})
+    yield* autonomy.record(root.id, held(root.id, test.directory, "a"))
+
+    expect((yield* route("/permission", test.directory)).body).toMatchObject([{ sessionID: root.id, deferred: true }])
+    const archived = yield* route(`/session/${root.id}`, test.directory, {
+      method: "PATCH",
+      body: JSON.stringify({ time: { archived: Date.now() } }),
+    })
+    expect(archived.status).toBe(200)
+    expect((yield* route("/permission", test.directory)).body).toEqual([])
+    expect(auditLines(root.id).at(-1)).toMatchObject({
+      type: "outcome",
+      requestID: `per_${"a".repeat(26)}`,
+      outcome: "abandoned",
+    })
+  }),
+)
+
+served.instance("AU-26 through the routes: deleting a root takes its file, deleting a child keeps the root's", () =>
+  Effect.gen(function* () {
+    const sessions = yield* Session.Service
+    const autonomy = yield* Autonomy.Service
+    const test = yield* TestInstance
+    const root = yield* sessions.create({})
+    const child = yield* sessions.create({ parentID: root.id })
+    yield* autonomy.record(root.id, held(child.id, test.directory, "b"))
+    expect((yield* route("/permission", test.directory)).body).toMatchObject([{ sessionID: child.id }])
+
+    expect((yield* route(`/session/${child.id}`, test.directory, { method: "DELETE" })).status).toBe(200)
+    expect((yield* route("/permission", test.directory)).body).toEqual([])
+    expect(auditLines(root.id).at(-1)).toMatchObject({ type: "outcome", outcome: "abandoned" })
+    expect(existsSync(path.join(folder, `${child.id}.jsonl`))).toBe(false)
+
+    expect((yield* route(`/session/${root.id}`, test.directory, { method: "DELETE" })).status).toBe(200)
+    expect(existsSync(path.join(folder, `${root.id}.jsonl`))).toBe(false)
+  }),
+)
+
+// Fresh gate and audit services over the same files and sessions: what a new process inherits, and all of it.
+it.instance("ADV-A22: a new process finds the queue, and carries the audit chain on from the file", () =>
+  Effect.gen(function* () {
+    const sessions = yield* Session.Service
+    const bridge = yield* EventV2Bridge.Service
+    const { root } = yield* lineage
+    const test = yield* TestInstance
+    yield* failure(ask(bash(root.id, "git push origin main", test.directory)))
+    const [before] = yield* list
+
+    yield* Effect.gen(function* () {
+      const autonomy = yield* Autonomy.Service
+      const [after] = yield* list
+      expect(after?.id).toBe(before!.id)
+      expect(after?.deferred).toBe(true)
+      expect(yield* reply({ requestID: after!.id, reply: "once" })).toMatchObject({ id: before!.id })
+      expect(yield* list).toEqual([])
+      const read = yield* autonomy.readAudit(root.id)
+      expect(read.intact).toBe(true)
+      expect(read.lines.at(-1)).toMatchObject({ type: "outcome", outcome: "approved_later" })
+    }).pipe(
+      Effect.provide(
+        Layer.fresh(
+          AppNodeBuilder.build(LayerNode.group([Permission.node, Autonomy.node]), [
+            [Session.node, Layer.succeed(Session.Service, sessions)],
+            [EventV2Bridge.node, Layer.succeed(EventV2Bridge.Service, bridge)],
+            [Permission.deciderNode, decider],
+          ]),
+        ),
+      ),
+    )
   }),
 )

@@ -19,6 +19,9 @@ export const Event = PermissionV1.Event
 
 export const MAX_SKIPPED = 20
 
+/** Held calls one root may have open. The next one is told so and stays out, because nothing here is ever dropped. */
+export const QUEUE_LIMIT = 20
+
 /** The request an answer settled, with what that one answer also covers. Not public: `follows` never leaves the server. */
 export type Answered = PermissionV1.Request & { follows?: PermissionV1.Follows }
 
@@ -31,7 +34,8 @@ export interface Interface {
   readonly ask: (input: PermissionV1.AskInput) => Effect.Effect<void, PermissionV1.Error>
   /** Returns the request when the agent had already carried on without it: the caller decides how to pick that back up. */
   readonly reply: (
-    input: PermissionV1.ReplyInput,
+    // `abandoned`: nobody will answer this any more, because its session is gone or archived. Not on the public input.
+    input: PermissionV1.ReplyInput & { abandoned?: boolean },
   ) => Effect.Effect<Answered | undefined, PermissionV1.NotFoundError>
   /** Lets one later call through without asking, for what the user allowed after the agent had carried on. */
   readonly grant: (input: Grant) => Effect.Effect<void>
@@ -44,6 +48,8 @@ interface PendingEntry {
   follows?: PermissionV1.Follows
   /** Set when autonomous mode held this, which is also what the agent gets told while it stays held. */
   category?: PermissionV1.DeferredCategory
+  /** Whose queue this counts against, set only on what autonomous mode held. A child's deleted session cannot lose it. */
+  root?: SessionID
   deferred: Deferred.Deferred<void, PermissionV1.RejectedError | PermissionV1.CorrectedError>
 }
 
@@ -53,6 +59,8 @@ interface State {
   grants: Grant[]
   /** Sessions whose last request went unanswered: nobody is there, so the next one is not worth a long wait. */
   away: Set<PermissionV1.Request["sessionID"]>
+  /** Roots already reported as full. One report for each time it fills up, however many calls find it so. */
+  full: Set<SessionID>
 }
 
 const sameRequest = (
@@ -131,6 +139,7 @@ const held = (category: AutonomyTable.HeldCategory): AutonomyTable.Verdict => ({
 })
 
 const isHeldCategory = Schema.is(PermissionV1.DeferredCategory)
+const decodeRequest = Schema.decodeUnknownOption(PermissionV1.Request)
 
 const layer = Layer.effect(
   Service,
@@ -141,13 +150,14 @@ const layer = Layer.effect(
     const decider = yield* Decider
     const state = yield* InstanceState.make<State>(
       Effect.fn("Permission.state")(function* (ctx) {
-        void ctx
         const state = {
           pending: new Map<PermissionV1.ID, PendingEntry>(),
           approved: [],
           grants: [],
           away: new Set(),
+          full: new Set(),
         } satisfies State as State
+        yield* restore(ctx.directory, state.pending)
 
         yield* Effect.addFinalizer(() =>
           Effect.gen(function* () {
@@ -162,17 +172,90 @@ const layer = Layer.effect(
       }),
     )
 
-    const rootOf = (sessionID: SessionID): Effect.Effect<{ id: SessionID; directory?: string }> =>
+    const rootOf = (
+      sessionID: SessionID,
+    ): Effect.Effect<{ id: SessionID; directory?: string; time?: { archived?: number } }> =>
       sessions.get(sessionID).pipe(
         Effect.flatMap((session) => (session.parentID ? rootOf(session.parentID) : Effect.succeed(session))),
         Effect.catchCause(() => Effect.succeed({ id: sessionID })),
       )
+
+    const close = (
+      entry: PendingEntry,
+      outcome: "approved_later" | "rejected_later" | "abandoned",
+      by: "person" | "system:session_closed",
+    ) =>
+      Effect.gen(function* () {
+        if (!entry.root) return
+        yield* autonomy
+          .record(entry.root, { type: "outcome", requestID: entry.info.id, outcome, by })
+          // Logged by record. Without this line the entry is asked about again after a restart, and nothing runs by it.
+          .pipe(Effect.ignore)
+        const { full } = yield* InstanceState.get(state)
+        full.delete(entry.root)
+      })
+
+    /**
+     * Brings back what was held before the last restart, as questions only: the file can make one appear, never answer
+     * one. So `follows` stays out even though the line has a place for it, and the agent asks again for the rest.
+     */
+    const restore = Effect.fnUntraced(function* (directory: string, pending: State["pending"]) {
+      const counted = new Map<string, number>()
+      for (const line of yield* autonomy.openDecisions()) {
+        const sessionID = line.sessionID as SessionID
+        const session = yield* sessions.get(sessionID).pipe(Effect.catchCause(() => Effect.succeed(undefined)))
+        const root = yield* rootOf(sessionID)
+        if (!session || root.id !== line.rootID) {
+          yield* Effect.logWarning("left out a held call whose session is not there", { requestID: line.requestID })
+          continue
+        }
+        if (root.directory !== directory) continue
+        if (session.time.archived || root.time?.archived) {
+          yield* autonomy
+            .record(root.id, {
+              type: "outcome",
+              requestID: line.requestID,
+              outcome: "abandoned",
+              by: "system:session_closed",
+            })
+            .pipe(Effect.ignore)
+          continue
+        }
+        const taken = counted.get(root.id) ?? 0
+        const info = decodeRequest({
+          id: line.requestID,
+          sessionID: line.sessionID,
+          permission: line.permission,
+          patterns: line.patterns,
+          metadata: {},
+          always: [],
+          tool: line.messageID && line.callID ? { messageID: line.messageID, callID: line.callID } : undefined,
+          movedOnAt: line.at,
+          deferred: true,
+        })
+        // More than the gate ever lets in means lines nobody here wrote. The oldest are the ones it did.
+        if (taken >= QUEUE_LIMIT || info._tag === "None") {
+          yield* Effect.logWarning("left out a held call", { requestID: line.requestID, root: root.id })
+          continue
+        }
+        counted.set(root.id, taken + 1)
+        pending.set(info.value.id, {
+          info: info.value,
+          category: isHeldCategory(line.category) ? line.category : "not_routine",
+          root: root.id,
+          // Nothing is waiting on this: the run it stopped is over.
+          deferred: yield* Deferred.make<void, PermissionV1.RejectedError | PermissionV1.CorrectedError>(),
+        })
+      }
+    })
 
     /** What autonomous mode does with this request. Undefined when its root is not in the mode, and nothing changes then. */
     const gate = Effect.fn("Permission.gate")(function* (
       input: PermissionV1.AskInput,
       requestID: PermissionV1.ID,
       userCatchAll: boolean,
+      // Takes a place in the root's queue, in one step with counting it. False when there is none left.
+      hold: (root: SessionID, category: PermissionV1.DeferredCategory) => Effect.Effect<boolean>,
       // A person's answer to another request already covers this, so only a refusal is left to find.
       followed = false,
     ) {
@@ -231,7 +314,7 @@ const layer = Layer.effect(
               .decide(input, root.id, verdict.category)
               .pipe(Effect.catchCause(() => Effect.succeed(UNDECIDED)))
           : undefined
-      const category =
+      const judged =
         verdict.class === "P" && decided?.decision !== "allow" && decided?.decision !== "reject"
           ? ("decider_unavailable" as const)
           : verdict.category
@@ -247,6 +330,19 @@ const layer = Layer.effect(
               : verdict.class === "X"
                 ? ("reject" as const)
                 : ("defer" as const)
+
+      const reportFull = Effect.gen(function* () {
+        const { full } = yield* InstanceState.get(state)
+        if (full.has(root.id)) return
+        full.add(root.id)
+        yield* autonomy
+          .record(root.id, { type: "marker", directory, marker: "b0", decidedBy: "system:queue_full" })
+          // Logged by record, and the next call that finds it full tries again.
+          .pipe(Effect.catch(() => Effect.sync(() => full.delete(root.id))))
+      })
+      const queued =
+        decision !== "defer" || (yield* hold(root.id, isHeldCategory(judged) ? judged : "not_routine"))
+      const category = queued ? judged : ("queue_full" as const)
 
       // An ordinary edit never asks in any mode, and shows up as an edit. Everything else leaves a line.
       if (verdict.class === "A" && input.editClass === "ordinary") return { class: verdict.class, decision, category }
@@ -283,9 +379,14 @@ const layer = Layer.effect(
             }).pipe(Effect.as(false)),
           ),
         )
+      if (!queued) yield* reportFull
       // Nothing runs without a person unless the decision to let it is on record. Refusing or holding needs no such line.
-      if (!written && decision === "allow")
-        return { class: "D" as const, decision: "defer" as const, category: "not_routine" as const }
+      if (!written && decision === "allow") {
+        if (yield* hold(root.id, "not_routine"))
+          return { class: "D" as const, decision: "defer" as const, category: "not_routine" as const }
+        yield* reportFull
+        return { class: "D" as const, decision: "defer" as const, category: "queue_full" as const }
+      }
       return { class: verdict.class, decision, category }
     })
 
@@ -322,11 +423,30 @@ const layer = Layer.effect(
 
       const granted = grants.findIndex((grant) => sameRequest(grant, request))
       const id = request.id ?? PermissionV1.ID.ascending()
+      const asked: PermissionV1.Request = {
+        id,
+        sessionID: request.sessionID,
+        permission: request.permission,
+        patterns: request.patterns,
+        metadata: request.metadata,
+        always: request.always,
+        tool: request.tool,
+      }
+      const deferred = yield* Deferred.make<void, PermissionV1.RejectedError | PermissionV1.CorrectedError>()
+      // Held for the person with the agent already released, whatever the unattended wait is set to. An "always" on one
+      // of these would open more than the single call anyone looked at, so it has nothing to apply to.
+      const hold = (root: SessionID, category: PermissionV1.DeferredCategory) =>
+        Effect.sync(() => {
+          if ([...pending.values()].filter((item) => item.root === root).length >= QUEUE_LIMIT) return false
+          const moved: PermissionV1.Request = { ...asked, always: [], movedOnAt: Date.now(), deferred: true }
+          pending.set(id, { info: moved, deferred, noAlways, follows, category, root })
+          return true
+        })
       if (granted >= 0) {
         const [grant] = grants.splice(granted, 1)
         if (!grant?.followed) return
         // The person answered the prompt before this one, so what this one turned out to be was never in front of them.
-        const gated = yield* gate(input, id, userCatchAll, true)
+        const gated = yield* gate(input, id, userCatchAll, hold, true)
         if (gated?.class === "X") return yield* new RefusedByModeError({ ruleset: [] })
         return
       }
@@ -337,7 +457,7 @@ const layer = Layer.effect(
       if (waiting?.category && (yield* inMode(request.sessionID)))
         return yield* new PermissionV1.DeferredError({ category: waiting.category })
 
-      const gated = yield* gate(input, id, userCatchAll)
+      const gated = yield* gate(input, id, userCatchAll, hold)
       if (gated?.decision === "allow") return
       // Refused by what it is, so no person is asked. Not a rejection: that error ends the run, and this one reports back.
       if (gated?.class === "X") return yield* new RefusedByModeError({ ruleset: [] })
@@ -346,27 +466,14 @@ const layer = Layer.effect(
       // A repeating call stops the run on purpose until a person looks. Carrying on would defeat that guard.
       // The same goes for a spend limit: nobody being there is exactly when it must hold.
       const wait = needsPerson(request.permission) ? undefined : Unattended.wait(away.has(request.sessionID))
-      const asked: PermissionV1.Request = {
-        id,
-        sessionID: request.sessionID,
-        permission: request.permission,
-        patterns: request.patterns,
-        metadata: request.metadata,
-        always: request.always,
-        tool: request.tool,
-      }
       const info: PermissionV1.Request = wait ? { ...asked, movesOnAt: Date.now() + wait } : asked
       yield* Effect.logInfo("asking", { id, permission: info.permission })
 
-      const deferred = yield* Deferred.make<void, PermissionV1.RejectedError | PermissionV1.CorrectedError>()
-      // Held for the person with the agent already released, whatever the unattended wait is set to. An "always" on one
-      // of these would open more than the single call anyone looked at, so it has nothing to apply to.
       if (gated?.decision === "defer") {
         const category = isHeldCategory(gated.category) ? gated.category : "not_routine"
-        const moved: PermissionV1.Request = { ...asked, always: [], movedOnAt: Date.now(), deferred: true }
-        pending.set(id, { info: moved, deferred, noAlways, follows, category })
-        yield* Effect.logInfo("held", { id, permission: moved.permission, category })
-        yield* events.publish(Event.Asked, moved)
+        const entry = pending.get(id)
+        yield* Effect.logInfo("held", { id, permission: asked.permission, category })
+        if (entry) yield* events.publish(Event.Asked, entry.info)
         return yield* new PermissionV1.DeferredError({ category })
       }
       pending.set(id, { info, deferred, noAlways, follows })
@@ -379,9 +486,12 @@ const layer = Layer.effect(
         yield* Effect.logInfo("moved on", { id, permission: info.permission })
         yield* events.publish(Event.Asked, moved)
         // An unattended night can skip far more of these than anyone will read. The oldest are the least likely to matter.
-        const skipped = [...pending.values()].filter(
-          (item) => item.info.movedOnAt && item.info.sessionID === request.sessionID,
-        )
+        // Not in autonomous mode, where a decision is only ever settled by a person, and never what that mode held.
+        const skipped = (yield* inMode(request.sessionID))
+          ? []
+          : [...pending.values()].filter(
+              (item) => item.info.movedOnAt && !item.root && item.info.sessionID === request.sessionID,
+            )
         for (const item of skipped.slice(0, Math.max(0, skipped.length - MAX_SKIPPED))) {
           pending.delete(item.info.id)
           yield* events.publish(Event.Replied, {
@@ -402,13 +512,15 @@ const layer = Layer.effect(
       )
     })
 
-    const reply = Effect.fn("Permission.reply")(function* (input: PermissionV1.ReplyInput) {
+    const reply = Effect.fn("Permission.reply")(function* (input: PermissionV1.ReplyInput & { abandoned?: boolean }) {
       const { approved, away, pending } = yield* InstanceState.get(state)
       const existing = pending.get(input.requestID)
       if (!existing) return yield* new PermissionV1.NotFoundError({ requestID: input.requestID })
 
       pending.delete(input.requestID)
       away.delete(existing.info.sessionID)
+      if (input.abandoned) yield* close(existing, "abandoned", "system:session_closed")
+      else yield* close(existing, input.reply === "reject" ? "rejected_later" : "approved_later", "person")
       yield* events.publish(Event.Replied, {
         sessionID: existing.info.sessionID,
         requestID: existing.info.id,

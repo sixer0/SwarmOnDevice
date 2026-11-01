@@ -200,6 +200,9 @@ export interface AuditRead {
   readonly notFromHere: number
 }
 
+/** A held call nobody has answered, as its line in the audit file says it. */
+export type OpenDecision = typeof Decision.Type
+
 export interface Interface {
   readonly isOn: (input: Where) => Effect.Effect<boolean>
   readonly setMode: (input: ModeChange) => Effect.Effect<void, WriteError>
@@ -219,6 +222,8 @@ export interface Interface {
   /** Notes the root's mode when it differs from what its file last said. A root that was never on writes nothing. */
   readonly markMode: (input: Where) => Effect.Effect<void>
   readonly readAudit: (root: SessionID) => Effect.Effect<AuditRead>
+  /** Every root's held calls still open, oldest first per root. What is in the file only ever becomes a question. */
+  readonly openDecisions: () => Effect.Effect<readonly OpenDecision[]>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@opencode/Autonomy") {}
@@ -461,16 +466,55 @@ function verifyAudit(text: string, head: string | null | undefined): AuditRead {
   }
 }
 
-function sweepAudit(now: number) {
+function openIn(text: string, id: string) {
+  const lines = text
+    .split("\n")
+    .filter(Boolean)
+    .flatMap((line) => {
+      const decoded = decodeLine(line)
+      return Option.isSome(decoded) ? [decoded.value] : []
+    })
+  const answered = new Set(
+    lines.flatMap((line) =>
+      line.type === "outcome" && ["approved_later", "rejected_later", "abandoned"].includes(line.outcome)
+        ? [line.requestID]
+        : [],
+    ),
+  )
+  return lines.filter(
+    (line): line is OpenDecision =>
+      line.type === "decision" &&
+      line.rootID === id &&
+      line.decision === "defer" &&
+      // Class A with "defer" is a skipped question, which nobody is asked to answer. A full queue took nothing in.
+      (line.class === "D" || line.class === "P") &&
+      line.category !== "queue_full" &&
+      !answered.has(line.requestID),
+  )
+}
+
+const auditIDs = () =>
   readdirSync(folder())
     .filter((name) => name.endsWith(".jsonl"))
-    .map((name) => path.join(folder(), name))
-    .filter((file) => {
-      const found = lstatSync(file)
-      return found.isFile() && now - found.mtimeMs > AUDIT_RETENTION_DAYS * DAY_MS
+    .map((name) => name.slice(0, -".jsonl".length))
+
+function sweepAudit(now: number) {
+  auditIDs()
+    .filter((id) => {
+      const found = lstatSync(auditFile(id))
+      if (!found.isFile() || now - found.mtimeMs <= AUDIT_RETENTION_DAYS * DAY_MS) return false
+      // A decision waits as long as it takes, and this file is the only thing that remembers it across a restart.
+      return openIn(readAuditText(auditFile(id)), id).length === 0
     })
-    .forEach((file) => rmSync(file, { force: true }))
+    .forEach((id) => rmSync(auditFile(id), { force: true }))
 }
+
+/** The root's file, for when the person deleted the session and asked for its data to go with it. Needs no live state. */
+export const removeAudit = Effect.fn("Autonomy.removeAudit")(function* (root: SessionID) {
+  yield* Effect.try({ try: () => rmSync(auditFile(path.basename(root)), { force: true }), catch: String }).pipe(
+    Effect.catch((error) => Effect.logError("could not remove an audit file", { root, error })),
+  )
+})
 
 export const layer = Layer.effect(
   Service,
@@ -578,6 +622,25 @@ export const layer = Layer.effect(
       return read
     })
 
+    const openDecisions = Effect.fn("Autonomy.openDecisions")(function* () {
+      const ids = yield* Effect.try({ try: auditIDs, catch: String }).pipe(
+        // A folder that is not there yet has nothing open in it.
+        Effect.catch((error) =>
+          error.includes("ENOENT")
+            ? Effect.succeed([])
+            : Effect.logError("could not list the audit files", { error }).pipe(Effect.as([])),
+        ),
+      )
+      const found = yield* Effect.forEach(ids, (id) =>
+        Effect.try({ try: () => openIn(readAuditText(auditFile(id)), id), catch: String }).pipe(
+          Effect.catch((error) =>
+            Effect.logError("could not read an audit file", { root: id, error }).pipe(Effect.as([])),
+          ),
+        ),
+      )
+      return found.flat()
+    })
+
     const setMode = Effect.fn("Autonomy.setMode")(function* (input: ModeChange) {
       yield* Effect.try({
         try: () => {
@@ -671,6 +734,7 @@ export const layer = Layer.effect(
       recordSkippedQuestion,
       markMode,
       readAudit,
+      openDecisions,
     })
   }),
 )

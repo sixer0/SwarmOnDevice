@@ -1,5 +1,6 @@
 import { PermissionV1 } from "@opencode-ai/core/v1/permission"
 import { Agent } from "@/agent/agent"
+import { Autonomy } from "@/permission/autonomy"
 import { LateAnswer } from "@/session/late-answer"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
 import { EventV2Bridge } from "@/event-v2-bridge"
@@ -178,8 +179,11 @@ export const sessionHandlers = HttpApiBuilder.group(InstanceHttpApi, "session", 
     })
 
     const remove = Effect.fn("SessionHttpApi.remove")(function* (ctx: { params: { sessionID: SessionID } }) {
+      const removed = yield* requireSession(ctx.params.sessionID)
       yield* SessionError.mapStorageNotFound(session.remove(ctx.params.sessionID))
       yield* late.forgetAbandoned()
+      // A subagent's calls are on its root's record, and that session is still there.
+      if (!removed.parentID) yield* Autonomy.removeAudit(ctx.params.sessionID)
       return true
     })
 

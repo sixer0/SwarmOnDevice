@@ -65,7 +65,7 @@ export const make = Effect.gen(function* () {
     forgetAbandoned: Effect.fn("LateAnswer.forgetAbandoned")(function* () {
       for (const item of (yield* permission.list()).filter((item) => item.movedOnAt)) {
         if (yield* abandoned(item.sessionID))
-          yield* permission.reply({ requestID: item.id, reply: "reject" }).pipe(Effect.ignore)
+          yield* permission.reply({ requestID: item.id, reply: "reject", abandoned: true }).pipe(Effect.ignore)
       }
       for (const item of (yield* question.list()).filter((item) => item.movedOnAt)) {
         if (yield* abandoned(item.sessionID)) yield* question.reject(item.id).pipe(Effect.ignore)
