@@ -1,9 +1,17 @@
 import { sentryVitePlugin } from "@sentry/vite-plugin"
 import { defineConfig } from "electron-vite"
 import appPlugin from "@opencode-ai/app/vite"
+import { readFileSync } from "node:fs"
 import * as fs from "node:fs/promises"
 
 const OPENCODE_SERVER_DIST = "../opencode/dist/node"
+
+// Read as text: electron-vite runs this config under Node, and stage-library.ts only loads under Bun.
+const knowledgeLibraryCommit = (() => {
+  const match = readFileSync("./scripts/stage-library.ts", "utf8").match(/^\s*sourceCommit: "([0-9a-f]{40})",$/m)
+  if (!match) throw new Error("stage-library.ts: pinned sourceCommit not found")
+  return match[1]
+})()
 
 const channel = (() => {
   const raw = process.env.OPENCODE_CHANNEL
@@ -91,6 +99,9 @@ const require = __cjs_mod__.createRequire(import.meta.url);
     },
   },
   renderer: {
+    define: {
+      "import.meta.env.KNOWLEDGE_LIBRARY_COMMIT": JSON.stringify(knowledgeLibraryCommit),
+    },
     plugins: [appPlugin, sentry],
     publicDir: "../../../app/public",
     root: "src/renderer",

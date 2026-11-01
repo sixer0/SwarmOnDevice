@@ -32,6 +32,9 @@ type PlatformBase = {
   /** App version */
   version?: string
 
+  /** Source commit of the knowledge library edition bundled with the app (desktop only) */
+  knowledgeLibraryCommit?: string
+
   /** Open a web or mail URL in the default system application */
   openExternal(url: string): void
 

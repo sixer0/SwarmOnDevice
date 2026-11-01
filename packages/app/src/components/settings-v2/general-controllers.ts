@@ -1,7 +1,10 @@
-import { createMemo, createResource, onMount, type Accessor } from "solid-js"
+import { createMemo, createResource, createSignal, onMount, type Accessor } from "solid-js"
 import type { ColorScheme } from "@opencode-ai/ui/theme/context"
 import { useTheme } from "@opencode-ai/ui/theme/context"
+import { useLanguage } from "@/context/language"
 import { usePermission } from "@/context/permission"
+import { usePlatform } from "@/context/platform"
+import { ServerConnection, useServer } from "@/context/server"
 import { useServerSDK } from "@/context/server-sdk"
 import { useServerSync } from "@/context/server-sync"
 import {
@@ -17,6 +20,7 @@ import {
   useSettings,
 } from "@/context/settings"
 import { playSoundById, SOUND_OPTIONS } from "@/utils/sound"
+import { showToast } from "@/utils/toast"
 import { createSoundPreviewController, type ShellOption } from "./general-controller-behavior"
 
 export { createShellOptions, createSoundPreviewController } from "./general-controller-behavior"
@@ -69,6 +73,66 @@ export function createShellSettingsController() {
       if (value === current()) return
       void serverSync().updateConfig({ shell: value })
     },
+  }
+}
+
+export function knowledgeLibraryCommit(input: {
+  desktop: boolean
+  server: ServerConnection.Any | undefined
+  commit: string | undefined
+}) {
+  if (!input.desktop || !input.server || !ServerConnection.builtin(input.server)) return undefined
+  return input.commit?.slice(0, 10) || undefined
+}
+
+export function createKnowledgeLibraryToggle(input: {
+  value: Accessor<boolean | undefined>
+  write: (value: boolean | undefined) => void
+  update: (value: boolean) => Promise<unknown>
+  failed: () => void
+}) {
+  const [pending, setPending] = createSignal(false)
+
+  return {
+    // Unset means on: only an explicit false turns the library off.
+    enabled: () => input.value() !== false,
+    pending,
+    set: async (checked: boolean) => {
+      if (pending()) return
+      const before = input.value()
+      setPending(true)
+      input.write(checked)
+      await input
+        .update(checked)
+        .catch(() => {
+          input.write(before)
+          input.failed()
+        })
+        .finally(() => setPending(false))
+    },
+  }
+}
+
+export function createKnowledgeLibraryController() {
+  const language = useLanguage()
+  const platform = usePlatform()
+  const server = useServer()
+  const serverSync = useServerSync()
+
+  return {
+    commit: createMemo(() =>
+      knowledgeLibraryCommit({
+        desktop: platform.platform === "desktop",
+        server: server.current,
+        commit: platform.knowledgeLibraryCommit,
+      }),
+    ),
+    ...createKnowledgeLibraryToggle({
+      value: () => serverSync().data.config.knowledge_library,
+      write: (value) => serverSync().set("config", "knowledge_library", value),
+      update: (value) => serverSync().updateConfig({ knowledge_library: value }),
+      failed: () => showToast({ title: language.t("common.requestFailed") }),
+    }),
   }
 }
 
@@ -169,5 +233,6 @@ export function createSoundSettingsController() {
 
 export type PermissionScopeController = ReturnType<typeof createPermissionScopeController>
 export type ShellSettingsController = ReturnType<typeof createShellSettingsController>
+export type KnowledgeLibraryController = ReturnType<typeof createKnowledgeLibraryController>
 export type AppearanceSettingsController = ReturnType<typeof createAppearanceSettingsController>
 export type SoundSettingsController = ReturnType<typeof createSoundSettingsController>

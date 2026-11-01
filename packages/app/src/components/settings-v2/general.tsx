@@ -14,6 +14,7 @@ import { SettingsRowV2 } from "./parts/row"
 import { LayoutRetirementNotice, LayoutTransitionToggle } from "./interface-transition"
 import {
   createAppearanceSettingsController,
+  createKnowledgeLibraryController,
   createPermissionScopeController,
   createShellOptions,
   createShellSettingsController,
@@ -276,6 +277,7 @@ export const SettingsGeneralV2: Component<{
   const shell = createShellSettingsController()
   const appearance = createAppearanceSettingsController()
   const sounds = createSoundSettingsController()
+  const knowledgeLibrary = createKnowledgeLibraryController()
   const desktop = createMemo(() => platform.platform === "desktop")
 
   const [pinchZoom, { mutate: setPinchZoom }] = createResource(
@@ -430,6 +432,23 @@ export const SettingsGeneralV2: Component<{
             />
           </div>
         </SettingsRowV2>
+
+        <Show when={knowledgeLibrary.commit()}>
+          {(commit) => (
+            <SettingsRowV2
+              title={language.t("settings.general.row.knowledgeLibrary.title")}
+              description={language.t("settings.general.row.knowledgeLibrary.description", { commit: commit() })}
+            >
+              <div data-action="settings-knowledge-library">
+                <Switch
+                  checked={knowledgeLibrary.enabled()}
+                  disabled={knowledgeLibrary.pending()}
+                  onChange={(checked) => void knowledgeLibrary.set(checked)}
+                />
+              </div>
+            </SettingsRowV2>
+          )}
+        </Show>
       </SettingsListV2>
     </div>
   )

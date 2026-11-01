@@ -169,6 +169,7 @@ const createPlatform = (windowState: DesktopWindowState): Platform => {
     platform: "desktop",
     os,
     version: pkg.version,
+    knowledgeLibraryCommit: import.meta.env.KNOWLEDGE_LIBRARY_COMMIT,
     windowID: windowState.id,
 
     async openDirectoryPickerDialog(opts) {
