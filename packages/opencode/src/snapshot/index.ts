@@ -236,7 +236,10 @@ const layer: Layer.Layer<Service, never, FSUtil.Service | AppProcess.Service | C
           yield* sync()
           const [diff, other] = yield* Effect.all(
             [
-              git([...quote, ...args(["diff-files", "--name-only", "-z", "--", "."])], {
+              // Without this git starts a child inside every submodule, and that child obeys the submodule's own config:
+              // core.fsmonitor, a clean filter, a post-index-change hook. A gitlink left off this list is also left off the
+              // add below, which would start the same child.
+              git([...quote, ...args(["diff-files", "--ignore-submodules=all", "--name-only", "-z", "--", "."])], {
                 cwd: state.directory,
               }),
               git([...quote, ...args(["ls-files", "--full-name", "--others", "--exclude-standard", "-z", "--", "."])], {

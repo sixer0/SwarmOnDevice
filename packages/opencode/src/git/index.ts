@@ -1,3 +1,4 @@
+import { ProjectTrust } from "@opencode-ai/core/project/trust"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { AppProcess } from "@opencode-ai/core/process"
 import { Effect, Layer, Context, Stream } from "effect"
@@ -9,6 +10,10 @@ const cfg = [
   "core.autocrlf=false",
   "-c",
   "core.fsmonitor=false",
+  // git passes -c settings down to a child it starts inside a submodule. "dirty" means it starts none, so the submodule's own
+  // clean filter or hook never runs, and a submodule whose commit moved still shows.
+  "-c",
+  "diff.ignoreSubmodules=dirty",
   "-c",
   "core.longpaths=true",
   "-c",
@@ -98,6 +103,8 @@ const kind = (code: string): Kind => {
   return "modified"
 }
 
+const programCommands = new Set(["status", "diff", "show", "add", "stash"])
+
 export class Service extends Context.Service<Service, Interface>()("@opencode/Git") {}
 
 const layer = Layer.effect(
@@ -109,6 +116,11 @@ const layer = Layer.effect(
 
     const run = Effect.fn("Git.run")(
       function* (args: string[], opts: Options) {
+        // These hash or render files, and a repository's own config can name the program that does it. Nobody has said
+        // that may run in this folder yet, so the reader sees no changes, the same as a clean tree.
+        const command = args.find((item) => !item.startsWith("-"))
+        if (command && programCommands.has(command) && ProjectTrust.heldGitSetting(opts.cwd))
+          return { exitCode: 0, text: () => "", stdout: Buffer.alloc(0), stderr: Buffer.alloc(0), truncated: false } satisfies Result
         const result = yield* appProcess.run(
           ChildProcess.make("git", [...cfg, ...args], {
             cwd: opts.cwd,

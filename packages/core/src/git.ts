@@ -441,7 +441,8 @@ const layer = Layer.effect(
         )
       const [tracked, untracked] = yield* Effect.all(
         [
-          list(["diff-files", "--name-only", "-z", "--", input.scope]),
+          // Without this git starts a child inside each submodule, and the child obeys that submodule's own config.
+          list(["diff-files", "--ignore-submodules=all", "--name-only", "-z", "--", input.scope]),
           list(["ls-files", "--others", "--exclude-standard", "-z", "--", input.scope]),
         ],
         { concurrency: 2 },
