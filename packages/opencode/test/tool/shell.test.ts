@@ -1034,11 +1034,14 @@ const withEnv = <A, E, R>(values: Record<string, string>, self: Effect.Effect<A,
       ),
   )
 
-const printEnv = () => {
-  const text = `${bin} -e ${evalarg("console.log(JSON.stringify(process.env))")}`
-  if (PS.has(sh())) return `& ${text}`
-  return text
-}
+// Read from a file the command writes, because the tool's own output is filtered for secrets and would not show what it saw.
+const seenEnv = Effect.fn("ShellToolTest.seenEnv")(function* (dir: string) {
+  const file = path.join(dir, "seen-env.json")
+  const text = `${bin} -e ${evalarg("Bun.write(Bun.argv[1],JSON.stringify(process.env))")} ${quote(file.replaceAll("\\", "/"))}`
+  const result = yield* run({ command: PS.has(sh()) ? `& ${text}` : text })
+  expect(result.metadata.exit).toBe(0)
+  return yield* Effect.promise(() => Bun.file(file).json() as Promise<Record<string, string>>)
+})
 
 describe("tool.shell server credentials", () => {
   each("does not hand the server's credentials to a command", () =>
@@ -1052,11 +1055,9 @@ describe("tool.shell server credentials", () => {
         yield* runIn(
           tmp,
           Effect.gen(function* () {
-            const result = yield* run({ command: printEnv() })
-            expect(result.metadata.exit).toBe(0)
-            const env = JSON.parse(result.output)
+            const env = yield* seenEnv(tmp)
             CREDENTIALS.forEach((name) => expect(env).not.toHaveProperty(name))
-            expect(result.output).not.toContain("from-server-")
+            expect(JSON.stringify(env)).not.toContain("from-server-")
             expect(env.SHELL_TEST_KEPT).toBe("still-here")
           }),
         )
@@ -1073,8 +1074,9 @@ describe("tool.shell server credentials", () => {
         yield* runIn(
           tmp,
           Effect.gen(function* () {
-            const result = yield* run({ command: printEnv() })
-            expect(result.output).not.toContain("from-server-")
+            const env = yield* seenEnv(tmp)
+            expect(JSON.stringify(env)).not.toContain("from-server-")
+            expect(env.PATH).toBeDefined()
           }),
         )
       }),
@@ -1108,11 +1110,9 @@ describe("tool.shell server credentials", () => {
       yield* runIn(
         tmp,
         Effect.gen(function* () {
-          const result = yield* run({ command: printEnv() })
-          expect(result.metadata.exit).toBe(0)
-          const env = JSON.parse(result.output)
+          const env = yield* seenEnv(tmp)
           CREDENTIALS.forEach((name) => expect(env).not.toHaveProperty(name))
-          expect(result.output).not.toContain("from-plugin-")
+          expect(JSON.stringify(env)).not.toContain("from-plugin-")
           expect(env.SHELL_TEST_PLUGIN).toBe("plugin-kept")
         }),
       )
