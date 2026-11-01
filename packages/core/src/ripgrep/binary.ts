@@ -24,13 +24,19 @@ export namespace RipgrepBinary {
             // Resolution order fixed by masterplan/01a1_register_addendum.md AD-15 (I15):
             // the copies bundled with the artifact come first because the build recorded
             // their version and sha256, then the machine-managed slots (system PATH, then
-            // the user-managed bin directory). Candidates 1 and 2 cover the CLI archive,
-            // the installed CLI and the desktop bundle; in a source tree neither exists
-            // and resolution falls through exactly as upstream.
+            // the user-managed bin directory). The execPath candidates cover the CLI archive
+            // and the installed CLI. They miss the desktop sidecar: a utilityProcess runs from
+            // the Helper app, whose execPath/../Resources is not the app's Contents/Resources.
+            // Electron's resourcesPath does point there; Bun leaves it undefined, so the CLI
+            // and a source tree skip that candidate and fall through exactly as upstream.
             const execDir = path.dirname(process.execPath)
+            const resourcesPath: unknown = Reflect.get(process, "resourcesPath")
             const candidates = [
               path.join(execDir, name),
               path.join(execDir, "..", "Resources", name),
+              ...(typeof resourcesPath === "string" && path.isAbsolute(resourcesPath)
+                ? [path.join(resourcesPath, name)]
+                : []),
               yield* Effect.sync(() => which(name)),
               path.join(Global.Path.bin, name),
             ]

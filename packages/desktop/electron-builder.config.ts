@@ -93,12 +93,13 @@ const getBase = (appId: string): Configuration => ({
         ]
       : []),
     // Notices ride in Contents/Resources beside the app, never inside the asar
-    // (03c N3/N4); the build fails closed when a source file is missing (IA-4).
+    // (03c N3/N4). electron-builder only warns and skips a missing source
+    // (fileMatcher.js copyFiles), so this list does not enforce IA-4 by itself.
     { from: "../../LICENSE", to: "LICENSE" },
     { from: "../../NOTICE", to: "NOTICE" },
     { from: "../../THIRD_PARTY_LICENSES.txt", to: "THIRD_PARTY_LICENSES.txt" },
-    // Bundled ripgrep slot (AD-15): staged to resources/rg by the build, lands
-    // at Contents/Resources/rg; row 57's resolver finds it via execPath/../Resources/rg.
+    // Bundled ripgrep slot (AD-15): staged to resources/rg by the build, lands at
+    // Contents/Resources/rg; the sidecar's resolver finds it via process.resourcesPath.
     { from: "resources/rg", to: "rg" },
     {
       from: "native/",
