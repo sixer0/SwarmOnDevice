@@ -84,8 +84,6 @@ export type SwarmInput = {
   messages: (sessionID: string) => readonly Message[] | undefined
   parts: (messageID: string) => readonly Part[]
   now: number
-  // Requests the app answers by itself are nobody's to answer here.
-  autoResponds?: (request: PermissionRequest, directory: string) => boolean
 }
 
 const SUBAGENT_SUFFIX = / \(@[^)]+ subagent\)$/
@@ -178,9 +176,9 @@ function laneStatus(input: {
 function buildLane(input: SwarmInput, id: string, depth: number): SwarmLane {
   const session = input.info[id]!
   const messages = input.messages(id)
-  const directory = session.directory
   const model = buildSessionMap({ messages: messages ?? [], parts: input.parts })
-  const permissions = (input.permission[id] ?? []).filter((request) => !input.autoResponds?.(request, directory))
+  // A decision autonomous mode put aside does not hold the agent, and its one place is the Activity filter.
+  const permissions = (input.permission[id] ?? []).filter((request) => !request.deferred)
   // A request that is really holding the agent comes before any it moved on from.
   const permission = permissions.find((request) => !request.movedOnAt) ?? permissions[0]
   const question = input.question[id]?.find((request) => !request.movedOnAt) ?? input.question[id]?.[0]
@@ -429,12 +427,11 @@ export function buildSwarm(input: SwarmInput): SwarmModel {
 
 // ---- Whether this session has subagents, and whether one is stuck. No messages are read, so it stays on for every session.
 
-export function swarmPulse(input: Pick<SwarmInput, "rootID" | "info" | "permission" | "question" | "autoResponds">) {
+export function swarmPulse(input: Pick<SwarmInput, "rootID" | "info" | "permission" | "question">) {
   const tree = sessionTree(input.rootID, input.info).filter(({ id }) => !!input.info[id])
   const stuck = (id: string) =>
-    (input.permission[id] ?? []).some(
-      (request) => !request.movedOnAt && !input.autoResponds?.(request, input.info[id]!.directory),
-    ) || (input.question[id] ?? []).some((request) => !request.movedOnAt)
+    (input.permission[id] ?? []).some((request) => !request.movedOnAt && !request.deferred) ||
+    (input.question[id] ?? []).some((request) => !request.movedOnAt)
   return { agents: tree.length, needs: tree.filter(({ id }) => stuck(id)).length }
 }
 

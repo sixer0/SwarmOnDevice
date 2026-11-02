@@ -28,7 +28,6 @@ export function createSwarm(input: {
   sdk: ReturnType<typeof useSDK>
   sync: ReturnType<typeof useSync>
   serverSync: ReturnType<typeof useServerSync>
-  autoResponds: (request: PermissionRequest, directory: string) => boolean
   openLane: (sessionID: string, step?: MapStep) => void
   draftToComposer: (text: string) => void
   // History is read and the model built only while someone is looking at the agents.
@@ -117,7 +116,6 @@ export function createSwarm(input: {
       info: current.info,
       permission: current.permission,
       question: current.question,
-      autoResponds: input.autoResponds,
     })
   })
 
@@ -239,7 +237,6 @@ export function createSwarm(input: {
         messages: (sessionID) => current.message[sessionID],
         parts: (messageID) => current.part[messageID] ?? [],
         now: Math.max(at, Date.now()),
-        autoResponds: input.autoResponds,
       })
     })
   })

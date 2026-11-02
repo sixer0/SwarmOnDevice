@@ -347,7 +347,7 @@ describe("buildSwarm", () => {
     expect(stopped.lanes[1]!.status).toBe("needs")
   })
 
-  test("a blocked lane says so, unless the app answers that request itself", () => {
+  test("a blocked lane says so, unless autonomous mode put that request aside", () => {
     const request = {
       id: "r",
       sessionID: "a",
@@ -360,10 +360,9 @@ describe("buildSwarm", () => {
     expect(shown.lanes[1]!.status).toBe("needs")
     expect(shown.totals.needs).toBe(1)
     expect(defaultLane(shown.lanes, "root")).toBe("a")
-    const auto = buildSwarm(
-      input(tree(), messages, parts(), { permission: { a: [request] }, autoResponds: () => true }),
-    )
-    expect(auto.lanes[1]!.status).toBe("done")
+    const held = buildSwarm(input(tree(), messages, parts(), { permission: { a: [{ ...request, deferred: true }] } }))
+    expect(held.lanes[1]!.status).toBe("done")
+    expect(held.totals.needs).toBe(0)
   })
 
   test("an unread lane is not called finished", () => {
@@ -392,18 +391,17 @@ describe("buildSwarm", () => {
 })
 
 describe("swarmPulse", () => {
-  test("a request the agent moved on from, or that the app answers itself, is not stuck", () => {
-    const pulse = (request: object, autoResponds?: () => boolean) =>
+  test("a request the agent moved on from, or that autonomous mode put aside, is not stuck", () => {
+    const pulse = (request: object) =>
       swarmPulse({
         rootID: "root",
         info: { root: session("root") },
         permission: { root: [{ id: "r", ...request } as unknown as PermissionRequest] },
         question: {},
-        autoResponds,
       }).needs
     expect(pulse({})).toBe(1)
     expect(pulse({ movedOnAt: 1 })).toBe(0)
-    expect(pulse({}, () => true)).toBe(0)
+    expect(pulse({ deferred: true })).toBe(0)
   })
 
   test("reads only session state", () => {

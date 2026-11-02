@@ -19,6 +19,7 @@ import {
   terminalInput,
   useSettings,
 } from "@/context/settings"
+import { AUTONOMY_CHANGED } from "@/components/prompt-input/autonomy"
 import { playSoundById, SOUND_OPTIONS } from "@/utils/sound"
 import { showToast } from "@/utils/toast"
 import { createSoundPreviewController, type ShellOption } from "./general-controller-behavior"
@@ -128,7 +129,7 @@ export function createAutonomousModeController(input: {
   const serverSync = useServerSync()
   const client = (directory: string) => serverSdk().createClient({ directory, throwOnError: true }).autonomy
   // The server sends no event when the mode changes: this is how the composer learns of it.
-  const announce = () => window.dispatchEvent(new Event("swarm:autonomy-changed"))
+  const announce = () => window.dispatchEvent(new Event(AUTONOMY_CHANGED))
 
   return createAutonomousToggle({
     scope: () => {

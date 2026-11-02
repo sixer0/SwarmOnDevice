@@ -17,7 +17,6 @@ export type AgentBoardInput = {
   /** Sessions the notification store is consulted for: Home's recent session list. */
   recent: Session[]
   unseen: (sessionID: string) => readonly BoardNotification[]
-  autoResponds: (request: PermissionRequest, directory: string) => boolean
   inScope: (directory: string) => boolean
 }
 
@@ -77,8 +76,10 @@ export function buildAgentBoard(input: AgentBoardInput): AgentBoard {
   const needs = [
     ...Object.entries(input.permission).flatMap(([sessionID, requests]) =>
       (requests ?? []).flatMap((request): AgentBoardNeed[] => {
+        // A decision autonomous mode put aside waits for nobody: its one place is the Activity filter.
+        if (request.deferred) return []
         const found = locate(sessionID)
-        if (!found || input.autoResponds(request, found.session.directory)) return []
+        if (!found) return []
         return [{ kind: "permission", key: request.id, request, session: found.session, root: found.root }]
       }),
     ),

@@ -184,7 +184,7 @@ describe("a decision autonomous mode put aside (AU-36)", () => {
 
   test("the composer reads both through these rules, and the marker opens the decisions filter", () => {
     const composer = readFileSync(join(import.meta.dir, "session-composer-state.ts"), "utf8")
-    expect(composer).toContain("return asksNow(item) && !permission.autoResponds(item, sdk().directory)")
+    expect(composer).toContain("sync().data.permission, params.id, asksNow)")
     expect(composer).toContain("return composerMovedOn(")
     const page = readFileSync(join(import.meta.dir, "../../session.tsx"), "utf8")
     expect(page).toMatch(/openDecisions: \(\) => \{\s+sessionMap\.setFilter\("decisions"\)\s+sessionMap\.open\(\)/)

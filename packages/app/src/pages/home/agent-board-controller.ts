@@ -5,7 +5,6 @@ import { createStore, produce, reconcile } from "solid-js/store"
 import { useGlobal } from "@/context/global"
 import { useLanguage } from "@/context/language"
 import { useNotification } from "@/context/notification"
-import { usePermission } from "@/context/permission"
 import { ServerConnection } from "@/context/server"
 import { errorMessage } from "@/pages/layout/helpers"
 import { canonicalPathKey } from "@/utils/path-key"
@@ -73,7 +72,6 @@ function createBoardState(input: {
   inScope: (directory: string) => boolean
 }) {
   const notification = useNotification()
-  const permission = usePermission()
   const board = createMemo((): AgentBoard => {
     const ctx = input.context()
     const conn = input.server()
@@ -87,7 +85,6 @@ function createBoardState(input: {
       status: session.session_status,
       recent: input.recent(),
       unseen: (id) => notification.ensureServerState(key).session.unseen(id),
-      autoResponds: (request, directory) => permission.ensureServerState(key).autoResponds(request, directory),
       inScope: input.inScope,
     })
   })

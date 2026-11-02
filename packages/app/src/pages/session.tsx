@@ -51,7 +51,6 @@ import { ModelsProvider } from "@/context/models"
 import { useNotification } from "@/context/notification"
 import { PromptProvider, usePrompt } from "@/context/prompt"
 import { usePlatform } from "@/context/platform"
-import { usePermission } from "@/context/permission"
 import { SDKProvider, useSDK } from "@/context/sdk"
 import { useServerSDK } from "@/context/server-sdk"
 import { ServerConnection, serverName, useServer } from "@/context/server"
@@ -372,7 +371,6 @@ export default function Page() {
   const language = useLanguage()
   const sdk = useSDK()
   const serverSDK = useServerSDK()
-  const permission = usePermission()
   const settings = useSettings()
   const platform = usePlatform()
   const prompt = usePrompt()
@@ -1186,7 +1184,6 @@ export default function Page() {
     sdk,
     sync,
     serverSync,
-    autoResponds: (request, directory) => permission.autoResponds(request, directory),
     openLane: (sessionID, step) => openRunStep(sessionID, step),
     // A subagent's own composer is disabled. The way to ask is from the main agent's session, so go there first.
     draftToComposer: (text) => {

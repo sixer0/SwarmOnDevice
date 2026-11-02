@@ -5,7 +5,6 @@ import { useParams } from "@solidjs/router"
 import { showToast } from "@/utils/toast"
 import { useServerSync } from "@/context/server-sync"
 import { useLanguage } from "@/context/language"
-import { usePermission } from "@/context/permission"
 import { useSDK } from "@/context/sdk"
 import { useSync } from "@/context/sync"
 import {
@@ -70,7 +69,6 @@ export function createSessionComposerController(options?: { closeMs?: number | (
   const sync = useSync()
   const serverSync = useServerSync()
   const language = useLanguage()
-  const permission = usePermission()
 
   const [answering, setAnswering] = createStore({ id: undefined as string | undefined })
 
@@ -97,9 +95,7 @@ export function createSessionComposerController(options?: { closeMs?: number | (
   })
 
   const permissionRequest = createMemo((): PermissionRequest | undefined => {
-    return sessionPermissionRequest(sync().data.session, sync().data.permission, params.id, (item) => {
-      return asksNow(item) && !permission.autoResponds(item, sdk().directory)
-    })
+    return sessionPermissionRequest(sync().data.session, sync().data.permission, params.id, asksNow)
   })
 
   const blocked = createMemo(() => {

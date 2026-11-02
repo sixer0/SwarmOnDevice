@@ -29,7 +29,6 @@ const input = (extra: Partial<AgentBoardInput>): AgentBoardInput => ({
   status: {},
   recent: [],
   unseen: () => [],
-  autoResponds: () => false,
   inScope: () => true,
   ...extra,
 })
@@ -68,15 +67,27 @@ describe("buildAgentBoard", () => {
     expect(board.missing.toSorted()).toEqual(["other", "root"])
   })
 
-  test("a request the session auto-accepts is not shown", () => {
+  test("a decision autonomous mode put aside does not make a running session need you", () => {
     const board = buildAgentBoard(
       input({
         info: { s1: session("s1") },
-        permission: { s1: [permission("per_1", "s1")] },
-        autoResponds: () => true,
+        permission: { s1: [{ ...permission("per_1", "s1"), deferred: true }] },
+        status: { s1: { type: "busy" } },
       }),
     )
     expect(board.needs).toEqual([])
+    expect(board.missing).toEqual([])
+    expect(board.running.map((item) => item.root.id)).toEqual(["s1"])
+  })
+
+  test("a request the agent went on without still needs you", () => {
+    const board = buildAgentBoard(
+      input({
+        info: { s1: session("s1") },
+        permission: { s1: [{ ...permission("per_1", "s1"), movedOnAt: 1 }] },
+      }),
+    )
+    expect(board.needs.map((item) => item.key)).toEqual(["per_1"])
   })
 
   test("a session blocked on the user is not also listed as running", () => {
