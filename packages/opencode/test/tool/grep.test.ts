@@ -21,6 +21,8 @@ import { Config } from "@/config/config"
 import { RuntimeFlags } from "@/effect/runtime-flags"
 import { Git } from "@/git"
 import { Filesystem } from "@/util/filesystem"
+import { AutonomyTable } from "@/permission/autonomy-table"
+import { InstanceState } from "@/effect/instance-state"
 
 const toolLayer = (flags: Partial<RuntimeFlags.Info> = {}) =>
   LayerNode.compile(
@@ -218,6 +220,38 @@ describe("tool.grep", () => {
       expect(result.output).toContain(path.join(alias, "test.txt"))
       expect(result.output).not.toContain(path.join(real, "test.txt"))
       expect(requests.find((req) => req.permission === "external_directory")).toBeUndefined()
+    }),
+  )
+  // U11 rule 1, row 103: a look out of the folder is class A, but ripgrep always opens hidden files, so a search out of the
+  // folder must say so and the autonomy table must hold it.
+  it.instance("a search out of the folder marks that it opens hidden files, and the autonomy table holds it", () =>
+    Effect.gen(function* () {
+      yield* TestInstance
+      const tmp = yield* Effect.acquireRelease(
+        Effect.promise(() => fs.mkdtemp(path.join(os.tmpdir(), "opencode-grep-hidden-"))),
+        (dir) => Effect.promise(() => fs.rm(dir, { recursive: true, force: true })),
+      )
+      yield* Effect.promise(() => Bun.write(path.join(tmp, ".zshrc"), "export TOKEN=needle"))
+      const requests: Array<Omit<PermissionV1.Request, "id" | "sessionID" | "tool">> = []
+      const next: Tool.Context = { ...ctx, ask: (req) => Effect.sync(() => void requests.push(req)) }
+
+      const info = yield* GrepTool
+      const grep = yield* info.init()
+      yield* grep.execute({ pattern: "needle", path: tmp }, next)
+
+      const prompt = requests.find((req) => req.permission === "external_directory")
+      expect(prompt?.metadata).toMatchObject({ readOnly: true, hidden: true })
+      const instance = yield* InstanceState.context
+      const verdict = AutonomyTable.classify({
+        permission: prompt!.permission,
+        patterns: prompt!.patterns,
+        metadata: prompt!.metadata,
+        instance,
+        cwd: instance.directory,
+        canUndo: true,
+        folder: "trusted",
+      })
+      expect(verdict).toEqual({ class: "D", decidedBy: "gate", category: "outside_folder" })
     }),
   )
 })

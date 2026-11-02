@@ -58,6 +58,8 @@ export const GrepTool = Tool.define(
             bypass: false,
             kind: requestedInfo?.type === "Directory" ? "directory" : "file",
             readOnly: true,
+            // ripgrep always runs with `--hidden`, so a search out of the folder opens dotfiles a listing would not name.
+            searchesHidden: true,
           })
 
           // Naming a secret file or a place that holds them is a question for a person. A pattern is a question too: a count

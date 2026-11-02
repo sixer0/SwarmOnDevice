@@ -14,6 +14,8 @@ type Options = {
   kind?: Kind
   /** The caller only reads, and shows what it read as text. Nothing that writes or runs may set this. */
   readOnly?: boolean
+  /** The caller also opens hidden files under the target (ripgrep runs with `--hidden`). Read by the autonomy table. */
+  searchesHidden?: boolean
 }
 
 export const assertExternalDirectoryEffect = Effect.fn("Tool.assertExternalDirectory")(function* (
@@ -50,6 +52,7 @@ export const assertExternalDirectoryEffect = Effect.fn("Tool.assertExternalDirec
       parentDir: dir,
       // Read by the autonomy table, which sorts a read out of the folder apart from a write.
       ...(options?.readOnly ? { readOnly: true } : {}),
+      ...(options?.searchesHidden ? { hidden: true } : {}),
     },
     harmless:
       options?.readOnly && ctx.trust?.library && libraryRead(full, ctx.trust.library, Reach.real) ? true : undefined,
