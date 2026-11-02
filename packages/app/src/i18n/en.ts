@@ -1186,7 +1186,7 @@ export const dict = {
     "General edition, source commit {{commit}}. Changes only when the app is rebuilt and is not checked against its source. What agents read is sent to the model in use, and goes along with the session history if you switch models; provider retention is not checked. Turning this off does not erase existing history.",
   "settings.general.row.autonomous.title": "Autonomous mode",
   "settings.general.row.autonomous.description":
-    "Routine steps go ahead without asking: a one-off model call decides them for you and each decision is listed in Activity. Anything outward, hard to undo, outside this folder or touching secrets waits there while other work continues. Spending limits and repeated calls still stop for you, and what your rules deny stays denied. Applies to this session and its subagents, or to new sessions in this folder. Without Git almost everything waits. Tests and builds run with your account. Swarm can't limit what the code inside them does.",
+    "Routine steps go ahead without asking: a one-off model call decides them for you and each decision is listed in Activity. Anything outward, hard to undo, outside this folder or touching secrets waits there while other work continues. Spending limits and repeated calls still stop for you, and what your rules deny stays denied. Applies to this session and its subagents, or to new sessions in this folder. Without Git almost everything waits. Tests, builds and commands like git commit (which run the repo's hooks) run with your account. Swarm can't limit what the code inside them does.",
   "settings.general.row.autonomous.disabledReason": "Open a project to turn this on.",
 
   "settings.updates.row.startup.title": "Check for updates on startup",

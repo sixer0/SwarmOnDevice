@@ -326,10 +326,10 @@ describe("settings v2 controllers", () => {
 
     test("the label states the S-7 sentence in both languages", () => {
       expect(en["settings.general.row.autonomous.description"]).toContain(
-        "Tests and builds run with your account. Swarm can't limit what the code inside them does.",
+        "Tests, builds and commands like git commit (which run the repo's hooks) run with your account. Swarm can't limit what the code inside them does.",
       )
       expect(id["settings.general.row.autonomous.description"]).toContain(
-        "Test dan build berjalan dengan akun Anda. Swarm tidak dapat membatasi apa yang dilakukan kode di dalamnya.",
+        "Test, build, dan perintah seperti git commit (yang menjalankan hook repo) berjalan dengan akun Anda. Aplikasi tidak dapat membatasi apa yang dilakukan kode di dalamnya.",
       )
     })
 

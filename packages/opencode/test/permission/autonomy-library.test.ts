@@ -403,7 +403,7 @@ it.instance("XF-01: the request itself, whatever folder it names and however it 
       ["root", ["/*"]],
       ["the library, without the predicate saying so", [`${env.S}/*`]],
       ["above the library", [`${env.R}/*`]],
-      ["a full clone by that name", [`${env.base}/AI Knowledge Library/*`]],
+      ["an unrelated folder by that name", [`${env.base}/Zorvex Quillmark/*`]],
       ["a home folder", [`${os.homedir()}/*`]],
       ["two folders", [`${env.far}/*`, `${env.S}/*`]],
     ] as const
