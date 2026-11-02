@@ -435,12 +435,18 @@ const layer = Layer.effect(
 
       const granted = grants.findIndex((grant) => sameRequest(grant, request))
       const id = request.id ?? PermissionV1.ID.ascending()
+      // As the event stream already sends it. The list route encodes every request or none, and rejects what JSON cannot
+      // say, such as the `undefined` of a tool parameter left out: one of those would hide every prompt in the folder.
+      const metadata = yield* Effect.try({
+        try: () => JSON.parse(JSON.stringify(request.metadata)) as Record<string, unknown>,
+        catch: String,
+      }).pipe(Effect.orElseSucceed(() => ({})))
       const asked: PermissionV1.Request = {
         id,
         sessionID: request.sessionID,
         permission: request.permission,
         patterns: request.patterns,
-        metadata: request.metadata,
+        metadata,
         always: request.always,
         tool: request.tool,
       }
