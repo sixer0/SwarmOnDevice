@@ -482,11 +482,21 @@ describe("a look through the shell", () => {
     expect(AutonomyTable.classify(bash("ls && bun test", { folder: "ask" }))).toEqual(HELD("folder_not_trusted"))
   })
 
-  test("a path beyond the folder is outside it, `~` and links included", async () => {
+  test("a look beyond the folder is class A on record (U11 rule 1), `~` and links included; a walk out of it is held", async () => {
     await using away = await tmpdir()
     fs.symlinkSync(away.path, path.join(dir, "look-out"))
-    for (const command of ["ls ~/.claude/agents", "ls ~", "rtk ls ~/x", "cat /etc/hosts", "ls ..", "ls ../x", `ls ${away.path}`, "ls look-out", "cat look-out/a", "wc -l /etc/hosts", "grep foo /etc/hosts", "find / -name x", "rg foo ../"])
+    const READ: Verdict = { class: "A", decidedBy: "gate", category: "outside_read" }
+    for (const command of ["ls ~/.claude/agents", "ls ~", "rtk ls ~/x", "cat /etc/hosts", "ls ..", "ls ../x", `ls ${away.path}`, "ls look-out", "cat look-out/a", "wc -l /etc/hosts", "grep foo /etc/hosts", "grep -n foo /etc/hosts | head -5"])
+      expect([command, judge(command)]).toEqual([command, READ])
+    // `find`, `tree` and `rg` walk into folders, and `rg` searches a hidden file an ignore file lists: those stay inside.
+    for (const command of ["find / -name x", "rg foo ../", "tree ..", `rg foo ${away.path}`])
       expect([command, judge(command)]).toEqual([command, HELD("outside_folder")])
+    // A secret beyond the folder is still a person's call, by its name or by the folder that holds it.
+    for (const command of ["cat ~/.ssh/id_rsa", "ls ~/.ssh", "cat ~/.aws/credentials", `cat ${away.path}/.env`])
+      expect([command, judge(command).class]).toEqual([command, "D"])
+    expect(judge("cat ~/.ssh/id_rsa")).toEqual(HELD("secret_file"))
+    // A look with a flag that makes it do more is not a look, wherever it points.
+    for (const command of ["grep -r foo ~", "tail -f /etc/hosts", "cat /etc/hosts > out"]) expect([command, judge(command).class]).toEqual([command, "D"])
   })
 
   test("what makes a look do more, or show a secret, is held", () => {
@@ -500,6 +510,82 @@ describe("a look through the shell", () => {
     ])
       expect([command, judge(command).class]).toEqual([command, "D"])
     expect(judge("cat .env")).toEqual(HELD("secret_file"))
+  })
+})
+
+describe("U11 rule 1: beyond the folder only reads", () => {
+  const OUT_READ: Verdict = { class: "A", decidedBy: "gate", category: "outside_read" }
+  const OUT_COPY: Verdict = { class: "A", decidedBy: "gate", category: "outside_copy" }
+  const prompt = (filepath: string, metadata: Record<string, unknown> = {}, fields: Partial<Input> = {}) =>
+    request("external_directory", { patterns: [path.join(path.dirname(filepath), "*")], metadata: { filepath, parentDir: path.dirname(filepath), ...metadata }, ...fields })
+  const fromShell = (command: string, fields: Partial<Input> = {}) =>
+    request("external_directory", { patterns: ["/tmp/*"], metadata: { command, workdir: dir }, follows: [{ permission: "bash" }], ...fields })
+
+  test("what the read tools ask before a look out of the folder is class A when what they name is readable", async () => {
+    await using away = await tmpdir()
+    fs.writeFileSync(path.join(away.path, "a.md"), "x\n")
+    expect(AutonomyTable.classify(prompt(path.join(away.path, "a.md"), { readOnly: true }))).toEqual(OUT_READ)
+    expect(AutonomyTable.classify(prompt(away.path, { readOnly: true }))).toEqual(OUT_READ)
+    // A secret out there, by its name or by the folder that holds it, is still a person's call.
+    for (const name of [".ssh/id_rsa", ".ssh", ".aws/credentials", ".env", "x/.git/config"])
+      expect([name, AutonomyTable.classify(prompt(path.join(away.path, name), { readOnly: true }))]).toEqual([name, HELD("secret_file")])
+    // A search that opens every file under a folder, hidden ones included, waits: nothing can say what a `.zshrc` holds.
+    expect(AutonomyTable.classify(prompt(away.path, { readOnly: true, hidden: true }))).toEqual(HELD("outside_folder"))
+    // Without `readOnly` the tool did not say it only reads, as for `lsp`: it waits rather than being taken for a look.
+    expect(AutonomyTable.classify(prompt(path.join(away.path, "a.md")))).toEqual(HELD("outside_folder"))
+  })
+
+  test("a write out of the folder is refused with nobody asked, and an edit of `~/.zshrc` with it; a secret waits", async () => {
+    const edits = { follows: [{ permission: "edit" }] }
+    const zshrc = path.join(os.homedir(), ".zshrc")
+    expect(AutonomyTable.classify(prompt(zshrc, {}, edits))).toEqual(REFUSED("outside_write"))
+    expect(AutonomyTable.classify(prompt("/tmp/a.ts", {}, edits))).toEqual(REFUSED("outside_write"))
+    expect(AutonomyTable.classify(prompt(path.join(os.homedir(), ".ssh/config"), {}, edits))).toEqual(HELD("secret_file"))
+    // The edit itself, should it get there: nothing can undo a file out of the folder either.
+    const outsideEdit = (file: string) =>
+      request("edit", { patterns: [path.relative(dir, file)], metadata: { filepath: file }, editClass: "no_undo", canUndo: false })
+    expect(AutonomyTable.classify(outsideEdit(zshrc))).toEqual(REFUSED("outside_write"))
+    expect(AutonomyTable.classify(outsideEdit(path.join(os.homedir(), ".ssh/config")))).toEqual(HELD("secret_file"))
+  })
+
+  test("from the shell: a look and a copy into the folder are class A, any other plain command out of it is refused", async () => {
+    await using away = await tmpdir()
+    const source = path.join(away.path, "notes.md")
+    fs.writeFileSync(source, "x\n")
+    fs.writeFileSync(path.join(away.path, ".env"), "SECRET=1\n")
+    fs.mkdirSync(path.join(away.path, "folder"))
+    for (const command of [`ls ${away.path}`, `cat ${source}`, "ls ~", `grep -n x ${source}`, `wc -l ${source} | tail -1`])
+      expect([command, AutonomyTable.classify(fromShell(command))]).toEqual([command, OUT_READ])
+    for (const command of [`cp ${source} src/notes.md`, `cp -p ${source} src/notes.md`, `cp ${source} ${path.join(dir, "src/notes.md")}`]) {
+      expect([command, AutonomyTable.classify(fromShell(command))]).toEqual([command, OUT_COPY])
+      expect([command, AutonomyTable.classify(bash(command))]).toEqual([command, OUT_COPY])
+    }
+    // Over what is there, under a name that runs or configures, into a secret, recursive, a folder, or a secret source.
+    for (const command of [
+      `cp ${source} src/a.ts`, `cp ${source} src`, `cp ${source} package.json`, `cp ${source} .env.local`, `cp ${source} .github/x.md`,
+      `cp -r ${path.join(away.path, "folder")} src/f`, `cp ${path.join(away.path, "folder")} src/f.md`, `cp ${path.join(away.path, ".env")} src/env.md`,
+      `cp ${source} ../out.md`, `cp ${source} missing/dir.md`,
+    ])
+      expect([command, AutonomyTable.classify(fromShell(command)).class]).not.toEqual([command, "A"])
+    expect(AutonomyTable.classify(fromShell(`cp ${path.join(away.path, ".env")} src/env.md`))).toEqual(HELD("secret_file"))
+    // Writing out, or running anything there, changes what is out of the folder.
+    for (const command of [`cp src/a.ts ${source}`, `touch ${source}`, `mv ${source} src/n.md`, `rm ${source}`, "bun test", `tee ${source}`])
+      expect([command, AutonomyTable.classify(fromShell(command))]).toEqual([command, REFUSED("outside_write")])
+    // What does not parse, and a walk, wait for a person; a secret by name too.
+    for (const command of [`tail -1 "${source}"`, `find ${away.path} -name x`, `rg x ${away.path}`, `cat ${source} && rm ${source}`])
+      expect([command, AutonomyTable.classify(fromShell(command))]).toEqual([command, HELD("outside_folder")])
+    expect(AutonomyTable.classify(fromShell("cat ~/.ssh/id_rsa"))).toEqual(HELD("secret_file"))
+    expect(AutonomyTable.classify(fromShell(`cat ${path.join(away.path, ".aws/config")}`))).toEqual(HELD("outside_folder"))
+    expect(fs.existsSync(path.join(dir, "src/notes.md"))).toBe(false)
+  })
+
+  test("a command run in a folder beyond the project may look there, and nothing more", async () => {
+    await using away = await tmpdir()
+    fs.writeFileSync(path.join(away.path, "a.md"), "x\n")
+    expect(AutonomyTable.classify(bash("ls", { cwd: away.path }))).toEqual(OUT_READ)
+    expect(AutonomyTable.classify(bash("cat a.md", { cwd: away.path }))).toEqual(OUT_READ)
+    expect(AutonomyTable.classify(bash("bun test", { cwd: away.path }))).toEqual(HELD("outside_folder"))
+    expect(AutonomyTable.classify(bash("touch a.md", { cwd: away.path }))).toEqual(HELD("outside_folder"))
   })
 })
 
@@ -520,9 +606,9 @@ describe("an edit nothing can undo", () => {
       ["Makefile", HELD("sensitive_file")],
       [".env", HELD("secret_file")],
       [".env.local", HELD("secret_file")],
-      ["edit-out/a.md", HELD("outside_folder")],
-      ["edit-out.md", HELD("outside_folder")],
-      ["../outside.md", HELD("outside_folder")],
+      ["edit-out/a.md", REFUSED("outside_write")],
+      ["edit-out.md", REFUSED("outside_write")],
+      ["../outside.md", REFUSED("outside_write")],
       ["state-link", REFUSED("app_state")],
     ]
     for (const [name, verdict] of cases) expect([name, AutonomyTable.classify(unrecoverable(name))]).toEqual([name, verdict])
@@ -563,8 +649,11 @@ describe("the twelve requests from the user's run", () => {
     return request("edit", inSession({ patterns: [path.relative("/", file)], metadata: { filepath: file }, editClass: "no_undo" }))
   }
   const run = (command: string) => bash(command, inSession({}))
+  // What `read.ts` sends for a folder beyond the project: `readOnly` is what tells a look from a write.
   const outside = (pattern: string): Input =>
-    request("external_directory", inSession({ patterns: [pattern], metadata: { filepath: pattern.replace(/\/\*$/, ""), parentDir: pattern.replace(/\/\*$/, "") } }))
+    request("external_directory", inSession({ patterns: [pattern], metadata: { filepath: pattern.replace(/\/\*$/, ""), parentDir: pattern.replace(/\/\*$/, ""), readOnly: true } }))
+  // U11 rule 1: what was held outside the folder in that run is a look, and runs on record with nobody asked.
+  const OUTSIDE_READ: Verdict = { class: "A", decidedBy: "gate", category: "outside_read" }
 
   const allowed = (): [string, Input][] => [
     ["status_tasks.md", write("alpha/docs/2026-01-01_task/status_tasks.md")],
@@ -578,10 +667,10 @@ describe("the twelve requests from the user's run", () => {
     ["rtk wc in the folder", run(`rtk wc -l ${path.join(session.directory, "alpha/docs/2026-01-01_task/status_tasks.md")}`)],
   ] as [string, Input][]
   const HELD_REQUESTS = (): [string, Input, Verdict][] => [
-    ["ls of ~/.claude/agents", run("ls ~/.claude/agents"), HELD("outside_folder")],
-    ["outside, first", outside(home(".claude/agents/*")), HELD("outside_folder")],
-    ["outside, second", outside(home(".claude/agents/*")), HELD("outside_folder")],
-    ["outside, third", outside(home(".claude/agents/*")), HELD("outside_folder")],
+    ["ls of ~/.claude/agents", run("ls ~/.claude/agents"), OUTSIDE_READ],
+    ["outside, first", outside(home(".claude/agents/*")), OUTSIDE_READ],
+    ["outside, second", outside(home(".claude/agents/*")), OUTSIDE_READ],
+    ["outside, third", outside(home(".claude/agents/*")), OUTSIDE_READ],
     ["graft_find_code", request("graft_find_code", inSession({})), HELD("external_tool")],
   ]
 
@@ -599,7 +688,7 @@ describe("the twelve requests from the user's run", () => {
     expect(AutonomyTable.classify({ ...input, metadata: {} })).toEqual({ class: "A", decidedBy: "gate" })
   })
 
-  test("the five beyond it stay held: outside the folder, and the MCP tool", () => {
+  test("of the five beyond it, the four looks outside the folder are class A (U11 rule 1); the MCP tool waits for row 104", () => {
     for (const [label, input, verdict] of HELD_REQUESTS()) expect([label, AutonomyTable.classify(input)]).toEqual([label, verdict])
   })
 
@@ -933,7 +1022,7 @@ describe("the twelve, through the gate", () => {
   afterAll(cleanState)
 
   gate.instance(
-    "seven run with no decider call and nothing held, five are held",
+    "seven run with no decider call and nothing held; of the five beyond, the four looks out run on record (U11 rule 1) and the MCP tool is held",
     () =>
       Effect.gen(function* () {
         const test = yield* TestInstance
@@ -969,18 +1058,24 @@ describe("the twelve, through the gate", () => {
         const agents = path.join(os.homedir(), ".claude/agents")
         const beyond = [
           shell.execute({ command: "ls ~/.claude/agents" }, ctx),
-          ...[1, 2, 3].map(() => ask({ permission: "external_directory", patterns: [path.join(agents, "*")], metadata: { filepath: agents, parentDir: agents } })),
+          ...[1, 2, 3].map(() => ask({ permission: "external_directory", patterns: [path.join(agents, "*")], metadata: { filepath: agents, parentDir: agents, readOnly: true } })),
           ask({ permission: "graft_find_code", patterns: ["*"] }),
         ]
         const held: string[] = []
         for (const one of beyond) held.push(yield* attempt(one))
-        expect(held).toEqual(Array(5).fill("held"))
+        expect(held).toEqual(["ran", "ran", "ran", "ran", "held"])
         expect(counted.calls).toBe(0)
 
         const lines = (yield* autonomy.readAudit(root.id)).lines.flatMap((line) => (line.type === "decision" ? [line] : []))
         const edits = lines.filter((line) => line.permission === "edit")
         expect(edits.map((line) => [line.class, line.decision, line.decidedBy, line.canUndo])).toEqual(Array(5).fill(["A", "allow", "gate", false]))
-        expect(lines.filter((line) => line.permission === "bash" && line.decision === "allow").map((line) => line.class)).toEqual(["A", "A"])
+        expect(lines.filter((line) => line.permission === "bash" && line.decision === "allow").map((line) => line.class)).toEqual(["A", "A", "A"])
+        // The `ls` out of the folder and the read tool's three prompts, each one line, on record as a look outside.
+        const out = lines.filter((line) => line.category === "outside_read")
+        expect(out.map((line) => [line.permission, line.class, line.decision, line.decidedBy])).toEqual([
+          ["bash", "A", "allow", "gate"],
+          ...Array(3).fill(["external_directory", "A", "allow", "gate"]),
+        ])
 
         // The agent's own read tools in the same folder never reach the gate: no prompt, no line, no decider. These are the
         // requests `read.ts`, `grep.ts` and `glob.ts` send for an ordinary file and folder, against the agent's shipped rules.

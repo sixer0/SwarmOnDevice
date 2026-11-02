@@ -9,6 +9,7 @@ import { Global } from "@opencode-ai/core/global"
 import { needsPerson } from "@opencode-ai/core/permission/needs-person"
 import type { ProjectTrust } from "@opencode-ai/core/project/trust"
 import { containsPath, type InstanceContext } from "../project/instance-context"
+import { LibraryRoot } from "../skill/library-root"
 import { GitGuard } from "../tool/git-guard"
 import { Reach } from "../tool/reach"
 import { Risk } from "../tool/risk"
@@ -27,9 +28,10 @@ export const CHECK_CLASS: CheckClass = "P"
 export type RoutineCategory = "check" | "file-op" | "git-local"
 /** What `routine` finds a command to be. "read" only looks at the folder, and is class A. */
 export type CommandKind = RoutineCategory | "read"
-export type AllowedCategory = RoutineCategory | "edit-not-ordinary"
+export type AllowedCategory = RoutineCategory | "edit-not-ordinary" | "outside_read" | "outside_copy"
 export type HeldCategory =
   | "outside_folder"
+  | "outside_write"
   | "outward"
   | "not_reversible"
   | "sensitive_file"
@@ -262,18 +264,24 @@ const READS = new Map<string, { short?: string; long?: readonly string[]; exact?
 ])
 const READ_FLAG = /^-[A-Za-z0-9@]+$|^--[a-z][a-z0-9-]*$/
 
+/** Whether no flag makes this program do more than look at what the command names. */
+function onlyLooks(words: readonly string[]) {
+  const rules = READS.get(words[0]!)
+  if (!rules) return false
+  return words.slice(1).every(
+    (word) =>
+      !word.startsWith("-") ||
+      (READ_FLAG.test(word) &&
+        !rules.exact?.includes(word) &&
+        !rules.long?.some((name) => word === name || word.startsWith(name + "-")) &&
+        (rules.exact !== undefined || word.startsWith("--") || ![...word.slice(1)].some((flag) => rules.short?.includes(flag)))),
+  )
+}
+
 /** "read", "outside" when a path it names is beyond the folder, or undefined when it is not only a look. */
 function readKind(words: readonly string[], cwd: string, instance: InstanceContext): "read" | "outside" | undefined {
-  const rules = READS.get(words[0]!)
-  if (!rules) return undefined
-  for (const word of words.slice(1)) {
-    if (word.startsWith("-")) {
-      if (!READ_FLAG.test(word)) return undefined
-      if (rules.exact?.includes(word)) return undefined
-      if (rules.long?.some((name) => word === name || word.startsWith(name + "-"))) return undefined
-      if (!rules.exact && !word.startsWith("--") && [...word.slice(1)].some((flag) => rules.short?.includes(flag))) return undefined
-      continue
-    }
+  if (!onlyLooks(words)) return undefined
+  for (const word of words.slice(1).filter((word) => !word.startsWith("-"))) {
     // A pattern or a count is judged as a path too. It lands inside, or the command is held: never the other way round.
     const file = path.resolve(cwd, word)
     if (!Reach.inside(file, instance)) return "outside"
@@ -329,11 +337,70 @@ export function routine(command: string, cwd: string, instance: InstanceContext)
   )
 }
 
-/** Whether a plain read names a path beyond the folder, with `~` read the way the shell reads it. Only ever a reason to hold. */
-function readsOutside(command: string, cwd: string, instance: InstanceContext) {
+/** The words of one plain command, with `~` read the way the shell reads it. */
+function homeWords(command: string) {
   const home = homedir()
-  const words = Risk.plainWords(unwrapped(command).replace(/(^| )~(?=\/| |$)/g, (_match, space: string) => space + home))
+  return Risk.plainWords(unwrapped(command).replace(/(^| )~(?=\/| |$)/g, (_match, space: string) => space + home))
+}
+
+/** Whether a plain read names a path beyond the folder. */
+function readsOutside(command: string, cwd: string, instance: InstanceContext) {
+  const words = homeWords(command.replace(OUTPUT_TAIL, ""))
   return words !== undefined && readKind(words, cwd, instance) === "outside"
+}
+
+// The looks that may name a place beyond the folder (U11 rule 1). Each reads only what the command names: `find`, `tree` and
+// `rg` walk into folders, and `rg` searches a hidden file once an ignore file there lists it, so they stay inside.
+const OUTSIDE_READS = new Set(["ls", "cat", "head", "tail", "wc", "stat", "file", "pwd", "grep"])
+
+/**
+ * What one command that reaches beyond the folder does there, when it only reads: "outside_read" for a look, and
+ * "outside_copy" for `cp <file> <new path in the folder>`, which is how an outside file gets changed without touching it.
+ * Everything it names must be what the read tool would show without asking, so a secret never gets here.
+ */
+export function outsideKind(command: string, cwd: string, instance: InstanceContext): "outside_read" | "outside_copy" | undefined {
+  const words = homeWords(command.replace(OUTPUT_TAIL, ""))
+  if (!words || !path.isAbsolute(cwd) || !Reach.readable(cwd)) return undefined
+  if (nearLibrary([cwd, ...words.slice(1).map((word) => path.resolve(cwd, word))])) return undefined
+  if (words[0] === "cp") return copiesIn(words, cwd, instance) ? "outside_copy" : undefined
+  if (!OUTSIDE_READS.has(words[0]!) || !onlyLooks(words)) return undefined
+  return words
+    .slice(1)
+    .filter((word) => !word.startsWith("-"))
+    .every((word) => Reach.readable(path.resolve(cwd, word)))
+    ? "outside_read"
+    : undefined
+}
+
+/**
+ * The bundled library copy, or a folder above it. Its text reaches the agent through the read tool, marked as library text,
+ * and the shell or a write has no business there (XF-03), so rule 1 does not open it: it stays as it was before U11.
+ */
+function nearLibrary(files: readonly string[]) {
+  const status = LibraryRoot.current()
+  if (status.kind !== "available") return false
+  return files.some((file) => [file, Reach.real(file)].some((place) => place !== undefined && (within(status.root, place) || within(place, status.root))))
+}
+
+/** One readable regular file from beyond the folder, to a name in it that nothing has yet. The original is only read. */
+function copiesIn(words: readonly string[], cwd: string, instance: InstanceContext) {
+  const args = words.slice(1)
+  const names = args.filter((word) => !word.startsWith("-"))
+  if (names.length !== 2 || args.some((word) => word.startsWith("-") && word !== "-p")) return false
+  if (names[1]!.split("/").includes("..")) return false
+  const source = path.resolve(cwd, names[0]!)
+  const target = path.resolve(cwd, names[1]!)
+  const from = Reach.real(source)
+  if (from === undefined || Reach.inside(source, instance) || !Reach.readable(source)) return false
+  if (fs.statSync(from, { throwIfNoEntry: false })?.isFile() !== true) return false
+  // A new name only: a copy over a file, or into a folder under the same name, would be a write the person never saw.
+  if (fs.lstatSync(target, { throwIfNoEntry: false })) return false
+  if (!Reach.inside(target, instance) || Reach.sensitive(target, instance) || Reach.secret(target)) return false
+  const into = Reach.real(path.dirname(target))
+  if (into === undefined || fs.statSync(into, { throwIfNoEntry: false })?.isDirectory() !== true) return false
+  // Without Git the worktree is `/`, and every name would be judged from the top of the disk.
+  const base = instance.worktree === "/" ? instance.directory : instance.worktree
+  return Risk.ordinaryEdit(path.relative(base, target)) && Risk.ordinaryEdit(path.relative(Reach.real(base) ?? base, path.join(into, path.basename(target))))
 }
 
 const within = (root: string, file: string) => {
@@ -414,8 +481,8 @@ function classifyUnrecoverableEdit(input: Input): Verdict {
   const base = instance.worktree === "/" ? { ...instance, worktree: instance.directory } : instance
   const targets = editTargets(input)
   if (targets.length === 0) return held("no_undo")
-  if (targets.some((file) => !Reach.inside(file, instance))) return held("outside_folder")
   if (targets.some((file) => Reach.secret(file) || !Reach.readable(file))) return held("secret_file")
+  if (targets.some((file) => !Reach.inside(file, instance))) return refused("outside_write")
   if (targets.some((file) => Reach.sensitive(file, base))) return held("sensitive_file")
   const ordinary = targets.every((file) => {
     const target = Reach.real(file)
@@ -442,6 +509,9 @@ function classifyBash(input: Input, checkClass: CheckClass): Verdict {
   const command = input.metadata.command
   if (typeof command !== "string" || !command) return held("not_routine")
   if (command.split(WORD_BREAK).some((word) => word && Secrets.secretFile(word))) return held("secret_file")
+  const outside = outsideKind(command, input.cwd, input.instance)
+  if (outside && (outsideProject(input.cwd, input.instance) || readsOutside(command, input.cwd, input.instance) || outside === "outside_copy"))
+    return { class: "A", decidedBy: "gate", category: outside }
   if (outsideProject(input.cwd, input.instance)) return held("outside_folder")
   const kind = routine(command, input.cwd, input.instance)
   if (!kind) return held(readsOutside(command, input.cwd, input.instance) ? "outside_folder" : "not_routine")
@@ -452,6 +522,35 @@ function classifyBash(input: Input, checkClass: CheckClass): Verdict {
   if (!input.canUndo) return held("no_undo")
   if (kind === "check" && checkClass === "D") return held("not_routine")
   return { class: "P", decidedBy: "agent", category: kind }
+}
+
+/**
+ * U11 rule 1, for the prompt a tool raises before it reaches beyond the folder. A read is class A when what it names is
+ * readable, a copy into the folder too, and a write is refused with nobody asked. A secret stays a person's call.
+ */
+function classifyOutside(input: Input): Verdict {
+  const command = input.metadata.command
+  if (typeof command === "string") {
+    if (command.split(WORD_BREAK).some((word) => word && Secrets.secretFile(word))) return held("secret_file")
+    const outside = outsideKind(command, input.cwd, input.instance)
+    if (outside) return { class: "A", decidedBy: "gate", category: outside }
+    const words = homeWords(command.replace(OUTPUT_TAIL, ""))
+    if (words && nearLibrary([input.cwd, ...words.slice(1).map((word) => path.resolve(input.cwd, word))])) return held("outside_folder")
+    // What does not parse, and a look this table cannot vouch for such as a walk, wait for a person. Any other plain command
+    // that reaches out may change what is there, so it is refused with nobody asked.
+    if (!words || READS.has(words[0]!)) return held("outside_folder")
+    if (words.slice(1).some((word) => !word.startsWith("-") && !Reach.readable(path.resolve(input.cwd, word)))) return held("secret_file")
+    return refused("outside_write")
+  }
+  const filepath = input.metadata.filepath
+  if (typeof filepath !== "string" || !path.isAbsolute(filepath) || nearLibrary([filepath])) return held("outside_folder")
+  const writes = input.follows?.some((prompt) => prompt.permission === "edit") === true
+  if (!Reach.readable(filepath) || (writes && Reach.secret(filepath))) return held("secret_file")
+  if (writes) return refused("outside_write")
+  if (input.metadata.readOnly !== true) return held("outside_folder")
+  // A search that opens every file under a folder, hidden ones too, would show a `.zshrc` or a token file no name marks.
+  if (input.metadata.hidden === true) return held("outside_folder")
+  return { class: "A", decidedBy: "gate", category: "outside_read" }
 }
 
 /**
@@ -478,7 +577,7 @@ export function classify(input: Input, checkClass: CheckClass = CHECK_CLASS): Ve
   if (input.harmless) return QUIET
   if (input.permission === "task") return QUIET
   if (input.permission === "question") return { class: "A", decidedBy: "gate" }
-  if (input.permission === "external_directory") return held("outside_folder")
+  if (input.permission === "external_directory") return classifyOutside(input)
   if (input.permission === "read") return held("secret_file")
   if (input.permission === "edit") return classifyEdit(input)
   if (input.permission === "bash") return classifyBash(input, checkClass)
