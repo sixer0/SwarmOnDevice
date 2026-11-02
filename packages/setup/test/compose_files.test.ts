@@ -375,10 +375,9 @@ describe("engine path (b) — fetched vs fallback, reported honestly", () => {
 describe("F-79-E version-label lint (e) — the pin-bump desync gate", () => {
   test("tampered LABEL fixture: label differing from lock.version is refused by lint AND by renderAll", () => {
     const findings = lintComposeText(
-      fileOf(renderClean(), "searxng/compose/searxng.yml").content.replace(
-        "swarm-tools-1.19.3-r1",
-        "swarm-tools-9.9.9-r9",
-      ),
+      // r274: mutate the label the lock actually renders (lock.version), not a version literal —
+      // a literal stops matching at the next lock bump and the mutation silently becomes a no-op.
+      fileOf(renderClean(), "searxng/compose/searxng.yml").content.replace(lock.version, "swarm-tools-9.9.9-r9"),
       {
         lockVersion: lock.version,
       },
@@ -484,7 +483,7 @@ describe("lint fixtures — one failing + one passing per §4.9 rule (blueprint 
     [
       "version-label",
       sx(),
-      'io.gsp.swarm.version: "swarm-tools-1.19.3-r1"',
+      `io.gsp.swarm.version: "${lock.version}"`, // r274: the rendered label, read from the lock
       'io.gsp.swarm.version: "swarm-tools-0.0.0-r0"',
     ],
     // The logs bind is the one non-ro mount; turning ITS source into the CA bundle must trip F-79-B.

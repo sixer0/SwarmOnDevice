@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "version": "swarm-tools-1.19.3-r1",
+  "version": "swarm-tools-1.19.3-r2",
   "_meta": {
     "artifact": "tools.lock.json",
     "register_id": "PC-PKG-02 - the register fixes the file name and says its schema is by row 73 and its content is authored by row 80 (01c0:250)",
@@ -17,10 +17,11 @@
     "null_rule": "A null value means the fact was never collected by any landed row. Its sibling field named *_closer states which row supplies it and cites the finding that opened it. Nothing in this file is inferred, rounded, mirrored from a similar artifact, or guessed.",
     "version_field_consumers": "PC-LBL-03 io.gsp.swarm.version takes this exact string (01c0:135); 01e_compose_spec.md:198 hard-codes it in every compose label and row 85's F-79-E lint asserts label equality against tools.lock.json:.version (10_preinstall_spec_review.md:311).",
     "authored_by": "row 80, driver data_analyst_r80, 2026-10-20",
+    "refresh_r274": "2026-10-23 row 274 (driver coder_execution_r274, user decision \"Refresh the lock\", decisions/decisions.md last entry): lock version swarm-tools-1.19.3-r1 -> swarm-tools-1.19.3-r2. Changed: components.runtime.docker_cli (version 29.9.1 -> 29.9.2, bottle_sha256 for the same three tags, sha256 = the arm64_golden_gate bottle) and components.runtime.docker_compose (v5.6.0 -> v5.6.1, url, size, sha256, brew_bottles for the same three tags), plus provenance notes and the PC-LBL-03 label text. Sources: brew info --json=v2 (Homebrew 7.0.10, host tag arm64_golden_gate only), https://formulae.brew.sh/api/formula/{docker,docker-compose,colima,lima,qemu}.json (all three tags; colima/lima/qemu re-checked and still equal to their pins), api.github.com docker/compose release v5.6.1 asset metadata, its per-asset .sha256 sidecar and checksums.txt, api.github.com repos docker/compose and docker/cli licence. Every other pin is byte-identical to r1. Record: implementation/s6_r274_lock_refresh.md.",
     "verification_status": "every hash below is a transcription from a landed pin report; none was re-fetched by this row, and rows 108/111/112 re-verify at run time (10_preinstall_spec_review.md:340-342)",
     "independent_refetches_by_the_controller": {
       "obsidian.dmg_sha256": "dcf818dd...9f70 MATCHES (formulae.brew.sh cask API, 2026-10-20 02:36) - delegation_progress_report.md:35",
-      "runtime.docker_cli.sha256": "arm64_golden_gate eb04b400...182b2 MATCHES (same call) - delegation_progress_report.md:35",
+      "runtime.docker_cli.sha256": "arm64_golden_gate eb04b400...182b2 MATCHES (same call) - delegation_progress_report.md:35 [r1 value; superseded by row 274 at r2, see refresh_r274]",
       "searxng.image": "index 5ed0323b5f5f... MATCHES (anonymous registry API, 2026-10-20 02:19) - delegation_progress_report.md:19",
       "firecrawl.api_image": "index 18b7ebb2c4f4... MATCHES (same call) - delegation_progress_report.md:19",
       "firecrawl.egress_proxy_image": "index 6a097f68... and arm64 eecf3533... BOTH MATCHED (2026-10-20 03:17) - delegation_progress_report.md:58 and :65",
@@ -136,34 +137,34 @@
       "docker_cli": {
         "channel": "homebrew",
         "formula": "docker",
-        "version": "29.9.1",
+        "version": "29.9.2",
         "size": null,
         "_size_closer": "row 86 - Homebrew reports bottle sizes per macOS codename and row 77 deliberately recorded no single byte size (02d:38, 02d:148-153); the size cap in row 82 applies to files the setup itself downloads, which this is not.",
         "bottle_sha256": {
-          "arm64_golden_gate": "eb04b400ba25f113c10ff1c3c9febc86e1b01f70d30640b50383978bb71182b2",
-          "arm64_tahoe": "fa2a87d71d8d14c8d38bbd3c94f8f41da96a61401e9f32c87c6228064d10bce8",
-          "arm64_sequoia": "afce07c3bd62b36e1821003e8cd2ece3dc92325be491a85292ac381d2d71c25f"
+          "arm64_golden_gate": "c7cf37be25bcdd4832a6a1c206e82be39f377167aa37ad052c61ab508aa2217c",
+          "arm64_tahoe": "08357b0b7b943417ed081f726f0d0c18aa84c4b3b6699eb2c9090a40fc76de8e",
+          "arm64_sequoia": "5566cf9b61acffdbedace1c3bffaac12c15148b5e6b8733eeeb41363609f5ed6"
         },
-        "hash_source": "brew formula JSON https://formulae.brew.sh/api/formula/docker.json - the only independent hash for this artifact (02d:206-211); arm64_golden_gate was one of the two values the controller re-fetched (02d:271-274)",
-        "_src": "02d:204-218",
-        "_rejected_alternative": "download.docker.com/mac/static/stable/aarch64/docker-29.9.1.tgz measured 19,655,010 bytes but has UNVERIFIED integrity (U-3) and its host is not in the allow-list, so it is not the pin.",
-        "sha256": "eb04b400ba25f113c10ff1c3c9febc86e1b01f70d30640b50383978bb71182b2",
+        "hash_source": "brew formula JSON https://formulae.brew.sh/api/formula/docker.json - the only independent hash for this artifact (02d:206-211); arm64_golden_gate was one of the two values the controller re-fetched (02d:271-274). r2 (row 274, 2026-10-23): all three tag hashes re-read from the same formula JSON and the golden_gate value cross-checked against local brew info --json=v2 docker (identical).",
+        "_src": "02d:204-218 (r1); r2 values: implementation/s6_r274_lock_refresh.md section 3",
+        "_rejected_alternative": "download.docker.com/mac/static/stable/aarch64/docker-29.9.1.tgz measured 19,655,010 bytes but has UNVERIFIED integrity (U-3) and its host is not in the allow-list, so it is not the pin. (r1 measurement at 29.9.1; row 274 did not re-measure the 29.9.2 tarball - the rejection reason is channel-level and unchanged.)",
+        "sha256": "c7cf37be25bcdd4832a6a1c206e82be39f377167aa37ad052c61ab508aa2217c",
         "url": null,
         "_url_closer": "not applicable to this row: the setup invokes an already-present Homebrew rather than fetching a URL, and the vendor static tarball was rejected as a pin because that channel publishes no checksum sidecar and docker/cli publishes no GitHub releases (02d U-3, 02d:211-218). The bottle blob is derivable from the hash via bottle_url_template, whose host ghcr.io is PC-HOST-05."
       },
       "docker_compose": {
-        "url": "https://github.com/docker/compose/releases/download/v5.6.0/docker-compose-darwin-aarch64",
-        "version": "v5.6.0",
-        "size": 30812418,
-        "sha256": "bd714a42b46e51757fc1121085b3096b9064e3f80d3ca5a991e33f44df4f43c9",
+        "url": "https://github.com/docker/compose/releases/download/v5.6.1/docker-compose-darwin-aarch64",
+        "version": "v5.6.1",
+        "size": 30813090,
+        "sha256": "fcce41226abd2b7b2936094e688bbd61284673dddafea542e08cb9a3b4423a8b",
         "hash_source": "release per-asset sidecar docker-compose-darwin-aarch64.sha256, plus a combined checksums.txt and per-asset provenance/sbom/sigstore JSON (02d:223-225)",
         "brew_bottles": {
-          "arm64_golden_gate": "70d879817d7ed5c4eeee7fa4ec757ec1adbc092068b099a738dfa27ab49a3857",
-          "arm64_tahoe": "7bd222c5b72ae1e35b0f330083ce3541e1bc3b4256f87eb546f75a5293ea77c1",
-          "arm64_sequoia": "d0c45f7c6b7a1d21ac71732c6bb680a90dea7553184833a63f982af19366dc95"
+          "arm64_golden_gate": "58245ee987c2697ecfa0952afe8ef9597c26e998a8d5158fad023cc46ee55f78",
+          "arm64_tahoe": "8a9fae90e8999f01d164cd359b70f7be7e30662738ba649b395ee59c056e0292",
+          "arm64_sequoia": "a8a12fa3e12a6c0fa07ec4cd7099d76cefb764927907fa9c01db97cc0c4a0c14"
         },
-        "_src": "02d:220-230 - version 02d:220, size and url 02d:221-222, sha256 02d:224, brew mirror 02d:226-229",
-        "_note": "every compose key used by 01e renders identically under 5.5.1 and 5.6.0 (01e:131-136)"
+        "_src": "02d:220-230 - version 02d:220, size and url 02d:221-222, sha256 02d:224, brew mirror 02d:226-229 (r1); r2 values (row 274, 2026-10-23): release v5.6.1 published 2026-10-21T07:54:18Z, size and asset digest from api.github.com, sha256 from the per-asset sidecar = checksums.txt line = API digest, brew mirror from formulae.brew.sh - implementation/s6_r274_lock_refresh.md section 3",
+        "_note": "every compose key used by 01e renders identically under 5.5.1 and 5.6.0 (01e:131-136); 5.6.1 not re-measured against 01e by row 274 (patch release, UNVERIFIED for that claim)"
       },
       "qemu": {
         "channel": "homebrew",
@@ -424,7 +425,7 @@
   "_labels": {
     "PC-LBL-01": "io.gsp.swarm.managed = true - marks every container/network/volume/image the setup created (01c0:133)",
     "PC-LBL-02": "io.gsp.swarm.component = <component id from class 1> - the key that distinguishes the two stacks under one project (01c0:134)",
-    "PC-LBL-03": "io.gsp.swarm.version = the top-level version field of this file, swarm-tools-1.19.3-r1 (01c0:135); row 85's F-79-E lint asserts label equality against .version",
+    "PC-LBL-03": "io.gsp.swarm.version = the top-level version field of this file, swarm-tools-1.19.3-r2 (01c0:135; r1 -> r2 by row 274); row 85's F-79-E lint asserts label equality against .version",
     "PC-PROJ-01": "compose project name swarm-tools for both stacks (01c0:141)",
     "PC-PROF-01": "Colima profile name swarm; the user default profile is never reconfigured (01c0:150)",
     "PC-PROF-02": "docker context swarm, passed explicitly; carried [H] until row 86 confirms it on first start (01c0:151)",

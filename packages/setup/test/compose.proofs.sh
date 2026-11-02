@@ -47,7 +47,8 @@ cp "$HERE/tools.lock.json" "$WORK/bin/tools.lock.json"   # compiled posture: loc
 mkdir -p "$WORK/home-status"
 HOME="$WORK/home-status" "$WORK/bin/compose-files" status > "$WORK/status.out" 2>&1
 check "renderer CLI status exits 0" 0 $?
-grep -q "renderer: compose-files" "$WORK/status.out" && grep -q "lock version: swarm-tools-1.19.3-r1" "$WORK/status.out" \
+LOCK_VERSION="$(sed -n 's/^  "version": "\(.*\)",$/\1/p' "$HERE/tools.lock.json" | head -1)"   # r274: read, never a literal
+grep -q "renderer: compose-files" "$WORK/status.out" && grep -q "lock version: $LOCK_VERSION" "$WORK/status.out" \
   && echo "  PASS status names the renderer + live lock version" || { echo "  FAIL status missing registration"; cat "$WORK/status.out"; fail=$((fail+1)); }
 grep -q "RESULT OK" "$WORK/status.out" && echo "  PASS RESULT OK token (D-23)" || { echo "  FAIL no RESULT OK"; fail=$((fail+1)); }
 # The directory scan stays intact: the main program's dry-run shows NO descriptor errors.
@@ -145,7 +146,7 @@ if (!clean.ok) { console.error("baseline render failed"); process.exit(2); }
 const sx = clean.files.find((f) => f.relPath === "searxng/compose/searxng.yml").content;
 
 // (1) tampered LABEL fixture
-const tamperedLabel = sx.replace("swarm-tools-1.19.3-r1", "swarm-tools-9.9.9-r9");
+const tamperedLabel = sx.replace(lock.version, "swarm-tools-9.9.9-r9"); // r274: the rendered label, not a literal
 const f1 = lintComposeText(tamperedLabel, { lockVersion: lock.version });
 console.log("tampered-LABEL  -> lintOk =", lintOk(f1), "| version-label findings =", f1.filter((x) => x.rule === "version-label").length);
 

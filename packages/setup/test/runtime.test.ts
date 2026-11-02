@@ -379,18 +379,29 @@ interface CycleOpts {
 function cycleRunner(opts: CycleOpts = {}) {
   const calls: string[] = []
   let contextLsCalls = 0
+  // r274: the brew mock reports exactly what the shipped lock pins (read from LOCK, never a
+  // literal), so a reviewed lock refresh does not need a test edit to keep the mock aligned.
   const infoJson = (name: string, sha: string): string => {
     const version =
-      name === "docker" ? "29.9.1" : name === "docker-compose" ? "5.6.0" : name === "lima" ? "2.2.1" : "0.10.3"
+      name === "docker"
+        ? lockPinVersion("docker_cli")
+        : name === "docker-compose"
+          ? lockPinVersion("docker_compose")
+          : name === "lima"
+            ? lockPinVersion("lima")
+            : lockPinVersion("colima")
     return JSON.stringify({
       formula: [{ name, stable: { version }, bottle: { stable: { files: { arm64_golden_gate: { sha256: sha } } } } }],
     })
   }
   const script = [
-    { match: "/opt/homebrew/bin/brew list --formula --versions colima", stdout: "colima 0.10.3\n" },
-    { match: "/opt/homebrew/bin/brew list --formula --versions lima", stdout: "lima 2.2.1\n" },
-    { match: "/opt/homebrew/bin/brew list --formula --versions docker-compose", stdout: "docker-compose 5.6.0\n" },
-    { match: "/opt/homebrew/bin/brew list --formula --versions docker", stdout: "docker 29.9.1\n" },
+    { match: "/opt/homebrew/bin/brew list --formula --versions colima", stdout: `colima ${lockPinVersion("colima")}\n` },
+    { match: "/opt/homebrew/bin/brew list --formula --versions lima", stdout: `lima ${lockPinVersion("lima")}\n` },
+    {
+      match: "/opt/homebrew/bin/brew list --formula --versions docker-compose",
+      stdout: `docker-compose ${lockPinVersion("docker_compose")}\n`,
+    },
+    { match: "/opt/homebrew/bin/brew list --formula --versions docker", stdout: `docker ${lockPinVersion("docker_cli")}\n` },
     { match: "/opt/homebrew/bin/brew list --formula --versions qemu", result: { exitCode: 1 } },
     {
       match: "/opt/homebrew/bin/brew info --json=v2 colima",
@@ -448,6 +459,14 @@ function cycleRunner(opts: CycleOpts = {}) {
       return calls
     },
   }
+}
+
+/** The pinned formula version for one runtime artifact, as brew prints it (no leading v). */
+function lockPinVersion(field: string): string {
+  const entry = (LOCK.components.runtime?.[field] ?? {}) as Record<string, unknown>
+  const v = entry.version
+  if (typeof v !== "string" || v.trim() === "") throw new Error(`lock has no runtime.${field}.version`)
+  return v.trim().replace(/^v/, "")
 }
 
 function lockBottle(field: string): string {
