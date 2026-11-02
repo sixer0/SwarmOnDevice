@@ -20,6 +20,7 @@ import { ConfigMCPV1 } from "@opencode-ai/core/v1/config/mcp"
 import { NamedError } from "@opencode-ai/core/util/error"
 import { InstallationVersion } from "@opencode-ai/core/installation/version"
 import { withTimeout } from "@/util/timeout"
+import { withoutServerCredentials } from "@/util/server-credentials"
 import { FSUtil } from "@opencode-ai/core/fs-util"
 import { McpOAuthPendingProvider, McpOAuthProvider, OAUTH_CALLBACK_PATH } from "./oauth-provider"
 import { McpOAuthCallback } from "./oauth-callback"
@@ -352,14 +353,15 @@ const layer = Layer.effect(
         command: cmd,
         args,
         cwd,
-        env: {
+        // Holding the password is a way to answer what autonomous mode holds, so a server's own config cannot ask for it.
+        env: withoutServerCredentials({
           ...process.env,
           // Register J03: the MCP self-spawn literal. A local MCP server configured to run Swarm
           // itself is recognised by the Swarm binary name only (Q3 creates no `opencode` alias),
           // and BUN_BE_BUN makes that child run as plain Bun rather than as the compiled CLI.
           ...(cmd === "swarm" ? { BUN_BE_BUN: "1" } : {}),
           ...mcp.environment,
-        },
+        }),
       })
 
       const connectTimeout = mcp.timeout ?? DEFAULT_TIMEOUT

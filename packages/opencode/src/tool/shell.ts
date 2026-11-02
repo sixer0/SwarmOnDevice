@@ -26,6 +26,7 @@ import { Risk } from "./risk"
 import { Reach } from "./reach"
 import { withholdsAlways } from "./external-directory"
 import { Secrets } from "./secrets"
+import { withoutServerCredentials } from "@/util/server-credentials"
 
 export { Parameters } from "./shell/prompt"
 
@@ -368,19 +369,9 @@ function reshapes(tokens: string[]) {
 
 const WORD_BREAK = /[\s'"|;&<>()=,:]+/
 
-// With these a command could call the server's API as its owner, past every prompt.
-const SERVER_CREDENTIALS = new Set([
-  "OPENCODE_SERVER_PASSWORD",
-  "SWARM_SERVER_PASSWORD",
-  "OPENCODE_SERVER_USERNAME",
-  "SWARM_SERVER_USERNAME",
-])
-
 // Every call asks, unless a rule a person wrote says otherwise. How the text parses never lowers that: the parse only names
 // the patterns, labels the prompt and withholds "Allow always", which is offered for one plain command and answers only that.
 const ask = Effect.fn("ShellTool.ask")(function* (
-  // Resolved, so leaving out `workdir` is the same call as naming the folder. The timeout changes nothing it does.
-  const call = { tool: ShellID.ToolID, args: { command: input.command, workdir: input.cwd } }
   ctx: Tool.Context,
   scan: Scan,
   input: { command: string; cwd: string },
@@ -388,6 +379,8 @@ const ask = Effect.fn("ShellTool.ask")(function* (
 ) {
   // A bare `cd x` or a text the parser found no command in still asks, as itself.
   const patterns = scan.patterns.size > 0 ? Array.from(scan.patterns) : [input.command]
+  // Resolved, so leaving out `workdir` is the same call as naming the folder. The timeout changes nothing it does.
+  const call = { tool: ShellID.ToolID, args: { command: input.command, workdir: input.cwd } }
   if (scan.dirs.size > 0) {
     const directories = Array.from(scan.dirs)
     const globs = directories.map((dir) => {
@@ -400,7 +393,6 @@ const ask = Effect.fn("ShellTool.ask")(function* (
       always: scan.risk || directories.some((dir) => withholdsAlways(dir, "directory")) ? [] : globs,
       metadata: {
         command: input.command,
-      call,
         workdir: input.cwd,
         directories,
         patterns: globs,
@@ -408,6 +400,7 @@ const ask = Effect.fn("ShellTool.ask")(function* (
       },
       // One command, so one decision: this prompt already shows it.
       follows: [{ permission: ShellID.ToolID, patterns }],
+      call,
     })
   }
 
@@ -416,7 +409,6 @@ const ask = Effect.fn("ShellTool.ask")(function* (
     permission: ShellID.ToolID,
     patterns,
     always: rule ? [rule] : [],
-    call,
     metadata: {
       command: input.command,
       // The folder the command runs in, since its relative paths mean nothing without it.
@@ -424,6 +416,7 @@ const ask = Effect.fn("ShellTool.ask")(function* (
       ...(scan.risk ? { risk: scan.risk } : {}),
     },
     noAlways: rule === undefined,
+    call,
   })
 })
 
@@ -607,10 +600,7 @@ export const ShellTool = Tool.define(
         { cwd, sessionID: ctx.sessionID, callID: ctx.callID },
         { env: {} },
       )
-      // After the hook, so a plugin cannot put them back. Upper-cased because Windows finds a variable under any spelling.
-      return Object.fromEntries(
-        Object.entries({ ...process.env, ...extra.env }).filter(([name]) => !SERVER_CREDENTIALS.has(name.toUpperCase())),
-      )
+      return withoutServerCredentials({ ...process.env, ...extra.env })
     })
 
     const run = Effect.fn("ShellTool.run")(function* (
