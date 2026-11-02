@@ -10,6 +10,7 @@ import {
   relativePath,
   sinceYouLooked,
   stepReference,
+  heldCall,
 } from "./session-map-model"
 
 const user = (id: string, created: number) => ({ id, role: "user", time: { created } }) as unknown as Message
@@ -458,6 +459,54 @@ describe("decisionGroups", () => {
     expect(groups.decided[0]?.patterns).toEqual([pattern])
   })
 
+  test("a folder's line names what its answer also covers, and the edit that ran has a line of its own", () => {
+    const covers = [{ permission: "edit", patterns: ["../home/.zshrc"] }]
+    const groups = decisionGroups(
+      [
+        decision("folder", {
+          permission: "external_directory",
+          patterns: ["/home/*"],
+          class: "D",
+          decision: "defer",
+          decidedBy: "gate",
+          category: "outside_folder",
+          follows: covers,
+        }),
+        decision("edit", {
+          permission: "edit",
+          patterns: ["../home/.zshrc"],
+          class: "D",
+          decision: "allow",
+          decidedBy: "person",
+          category: "no_undo",
+        }),
+      ],
+      "root",
+    )
+    expect(groups.waiting[0]?.follows).toEqual(covers)
+    expect(groups.decided[0]).toMatchObject({
+      id: "edit",
+      permission: "edit",
+      patterns: ["../home/.zshrc"],
+      by: "person",
+      undo: "none",
+    })
+  })
+
+  test("the call of a held request is read as data, whatever shape it arrives in", () => {
+    expect(heldCall({ call: { tool: "edit", args: { filePath: "/a", oldString: "x", replaceAll: true } } })).toEqual({
+      tool: "edit",
+      args: [
+        { name: "filePath", value: "/a" },
+        { name: "oldString", value: "x" },
+        { name: "replaceAll", value: "true" },
+      ],
+    })
+    expect(heldCall({ call: { tool: "mcp_x", args: "plain" } })?.args).toEqual([{ name: "input", value: "plain" }])
+    for (const metadata of [undefined, {}, { call: "text" }, { call: null }, { call: { args: {} } }])
+      expect(heldCall(metadata)).toBeUndefined()
+  })
+
   test("the decisions view takes no rows from the step list", () => {
     const model = buildSessionMap({ messages, parts: () => [] })
     expect(mapRows({ model, filter: "decisions", query: "", open: () => true })).toEqual([])
@@ -473,6 +522,7 @@ describe("decisionGroups", () => {
     const row = source.slice(start, end)
     expect(row).toContain("{pattern}")
     expect(row).toContain("{reason()}")
+    expect(row).toContain("{arg.value}")
     expect(row).not.toMatch(/innerHTML|Markdown|<a\b|href|marked|createLink|data-markdown/)
     expect(source).not.toMatch(/innerHTML|<Markdown/)
   })

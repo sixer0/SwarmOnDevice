@@ -57,6 +57,7 @@ export type Context<M extends Metadata = Metadata> = {
       noAlways?: boolean
       editClass?: PermissionV1.EditClass
       follows?: PermissionV1.Follows
+      call?: PermissionV1.ToolCall
       /** Under the plan agent's limits in autonomous mode: no rule or earlier answer settles this before the gate. */
       planLimited?: boolean
     },
@@ -158,6 +159,8 @@ function wrap<Parameters extends Schema.Decoder<unknown>, Result extends Metadat
             Effect.catch((error) => Effect.logWarning("could not end interrupted commands", { error }).pipe(Effect.as(0))),
           )
           if (orphans > 0) yield* Effect.logInfo("ended interrupted commands", { count: orphans, sessionID: ctx.sessionID })
+          // Every prompt of this call names the call, so an answer to it can be held to exactly this.
+          const ask: Context["ask"] = (request) => ctx.ask({ call: { tool: id, args: decoded }, ...request })
           const raw = yield* execute(
             decoded as Schema.Schema.Type<Parameters>,
             planLimited
@@ -166,18 +169,18 @@ function wrap<Parameters extends Schema.Decoder<unknown>, Result extends Metadat
                   // An edit nobody would be asked about never reaches the gate, so this has to be settled here.
                   ask: (request) =>
                     request.permission !== "edit" && request.permission !== "external_directory"
-                      ? ctx.ask(request)
+                      ? ask(request)
                       : planLimited(ctx).pipe(
                           Effect.flatMap((limited) => {
-                            if (!limited) return ctx.ask(request)
+                            if (!limited) return ask(request)
                             if (request.permission === "edit")
-                              return ctx.ask({ ...request, harmless: false, noAlways: true, planLimited: true })
+                              return ask({ ...request, harmless: false, noAlways: true, planLimited: true })
                             // The edit that follows is asked about on its own, and its plan is class A.
-                            return dataPlan(request.metadata.filepath) ? Effect.void : ctx.ask(request)
+                            return dataPlan(request.metadata.filepath) ? Effect.void : ask(request)
                           }),
                         ),
                 }
-              : ctx,
+              : { ...ctx, ask },
           )
           const instance = yield* InstanceRef
           const result = instance ? Secrets.scrubResult(raw, instance.worktree) : raw

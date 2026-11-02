@@ -95,6 +95,12 @@ export const Follows = Schema.Array(
 ).annotate({ identifier: "PermissionFollows" })
 export type Follows = typeof Follows.Type
 
+/** The one call a request belongs to, as its tool received it. In autonomous mode an answer is good for this and no other. */
+export const ToolCall = Schema.Struct({ tool: Schema.String, args: Schema.Unknown }).annotate({
+  identifier: "PermissionToolCall",
+})
+export type ToolCall = typeof ToolCall.Type
+
 export const AskInput = Schema.Struct({
   ...Request.fields,
   id: Schema.optional(ID),
@@ -109,6 +115,7 @@ export const AskInput = Schema.Struct({
   editClass: Schema.optional(EditClass),
   canUndo: Schema.optional(Schema.Boolean),
   follows: Schema.optional(Follows),
+  call: Schema.optional(ToolCall),
 }).annotate({
   identifier: "PermissionAskInput",
 })

@@ -20,9 +20,11 @@ import type { SessionMapController } from "./session-map-controller"
 import {
   decisionGroups,
   formatDuration,
+  heldCall,
   relativePath,
   type DecisionEntry,
   type DecisionNote,
+  type HeldCall,
   type MapChapter,
   type MapFile,
   type MapFilter,
@@ -286,6 +288,7 @@ const REFRESH_DEBOUNCE_MS = 1000
 // Patterns and reasons can come from an attacker. They stay JSX text: no Markdown, no links, nothing that parses them.
 export function DecisionRow(props: {
   entry: DecisionEntry
+  call?: HeldCall
   busy: boolean
   onReply?: (reply: "once" | "reject") => void
   onUndo: () => void
@@ -316,6 +319,37 @@ export function DecisionRow(props: {
       </For>
       <Show when={props.entry.patternsTruncated}>
         <span class="font-mono text-[12px] text-v2-text-text-faint">…</span>
+      </Show>
+      <For each={props.entry.follows}>
+        {(next) => (
+          <span data-decision-follows class="flex min-w-0 flex-col">
+            <span class="text-v2-text-text-faint [font-weight:440]">{next.permission}</span>
+            <For each={next.patterns}>
+              {(pattern) => (
+                <span class="min-w-0 whitespace-pre-wrap break-all font-mono text-[12px] text-v2-text-text-base">
+                  {pattern}
+                </span>
+              )}
+            </For>
+          </span>
+        )}
+      </For>
+      <Show when={props.call}>
+        {(call) => (
+          <span data-decision-call class="flex min-w-0 flex-col gap-1">
+            <span class="text-v2-text-text-faint [font-weight:440]">{call().tool}</span>
+            <For each={call().args}>
+              {(arg) => (
+                <span class="flex min-w-0 flex-col">
+                  <span class="text-v2-text-text-faint [font-weight:440]">{arg.name}</span>
+                  <span class="max-h-60 min-w-0 overflow-y-auto whitespace-pre-wrap break-all font-mono text-[12px] text-v2-text-text-base">
+                    {arg.value}
+                  </span>
+                </span>
+              )}
+            </For>
+          </span>
+        )}
       </Show>
       <Show when={category()}>
         {(key) => <span class="text-v2-text-text-muted [font-weight:440]">{language.t(key())}</span>}
@@ -504,6 +538,8 @@ function createDecisions(rootID: () => string | undefined) {
     // A running root can still be writing over what the Undo brings back, so nothing is undone until it stops.
     undoBusy: (entry: DecisionEntry) => !!store.acting[entry.id] || isBusy(rootID()) || isBusy(entry.sessionID),
     replyBusy: (entry: DecisionEntry) => !!store.acting[entry.id],
+    call: (entry: DecisionEntry) =>
+      heldCall(sessionData().permission[entry.sessionID]?.find((request) => request.id === entry.id)?.metadata),
     reply: (entry: DecisionEntry, reply: "once" | "reject") =>
       act(entry.id, "reply", () =>
         sdk().api.permission.reply({
@@ -550,6 +586,7 @@ function DecisionGroup(props: {
           {(entry) => (
             <DecisionRow
               entry={entry}
+              call={props.waiting ? props.decisions.call(entry) : undefined}
               busy={props.waiting ? props.decisions.replyBusy(entry) : props.decisions.undoBusy(entry)}
               onReply={props.waiting ? (reply) => props.decisions.reply(entry, reply) : undefined}
               onUndo={() =>

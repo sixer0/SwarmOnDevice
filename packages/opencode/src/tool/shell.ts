@@ -379,6 +379,8 @@ const SERVER_CREDENTIALS = new Set([
 // Every call asks, unless a rule a person wrote says otherwise. How the text parses never lowers that: the parse only names
 // the patterns, labels the prompt and withholds "Allow always", which is offered for one plain command and answers only that.
 const ask = Effect.fn("ShellTool.ask")(function* (
+  // Resolved, so leaving out `workdir` is the same call as naming the folder. The timeout changes nothing it does.
+  const call = { tool: ShellID.ToolID, args: { command: input.command, workdir: input.cwd } }
   ctx: Tool.Context,
   scan: Scan,
   input: { command: string; cwd: string },
@@ -398,6 +400,7 @@ const ask = Effect.fn("ShellTool.ask")(function* (
       always: scan.risk || directories.some((dir) => withholdsAlways(dir, "directory")) ? [] : globs,
       metadata: {
         command: input.command,
+      call,
         workdir: input.cwd,
         directories,
         patterns: globs,
@@ -413,6 +416,7 @@ const ask = Effect.fn("ShellTool.ask")(function* (
     permission: ShellID.ToolID,
     patterns,
     always: rule ? [rule] : [],
+    call,
     metadata: {
       command: input.command,
       // The folder the command runs in, since its relative paths mean nothing without it.

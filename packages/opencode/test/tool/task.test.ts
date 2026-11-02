@@ -413,6 +413,15 @@ describe("tool.task", () => {
           description: "inspect bug",
           subagent_type: "general",
         },
+        // Sent to the permission layer in every mode. Only an entry autonomous mode held ever publishes it.
+        call: {
+          tool: "task",
+          args: {
+            description: "inspect bug",
+            prompt: "look into the cache key path",
+            subagent_type: "general",
+          },
+        },
       })
     }),
   )

@@ -23,11 +23,13 @@ export const MAX_SKIPPED = 20
 export const QUEUE_LIMIT = 20
 
 /** The request an answer settled, with what that one answer also covers. Not public: `follows` never leaves the server. */
-export type Answered = PermissionV1.Request & { follows?: PermissionV1.Follows }
+export type Answered = PermissionV1.Request & { follows?: PermissionV1.Follows; call?: string }
 
 export interface Grant extends Pick<PermissionV1.Request, "sessionID" | "permission" | "patterns"> {
-  /** Came along with another request's answer, so nobody looked at this one by itself. A refusal still holds for it. */
+  /** Came along with another request's answer, on the entry that showed this call. A refusal still holds for it. */
   followed?: boolean
+  /** The exact call this answer was about. Without it, it is an answer from outside autonomous mode and means nothing inside. */
+  call?: string
 }
 
 export interface Interface {
@@ -50,6 +52,8 @@ interface PendingEntry {
   category?: PermissionV1.DeferredCategory
   /** Whose queue this counts against, set only on what autonomous mode held. A child's deleted session cannot lose it. */
   root?: SessionID
+  /** The exact call a person is shown, on what autonomous mode held. Gone after a restart, along with what was shown. */
+  call?: string
   deferred: Deferred.Deferred<void, PermissionV1.RejectedError | PermissionV1.CorrectedError>
 }
 
@@ -256,8 +260,10 @@ const layer = Layer.effect(
       userCatchAll: boolean,
       // Takes a place in the root's queue, in one step with counting it. False when there is none left.
       hold: (root: SessionID, category: PermissionV1.DeferredCategory) => Effect.Effect<boolean>,
-      // A person's answer to another request already covers this, so only a refusal is left to find.
+      // A person's answer to the entry that showed this call covers it, so only a refusal is left to find, and a line to write.
       followed = false,
+      // Let through by an "always" a person gave earlier: theirs to give, so it runs, but it was given outside the mode.
+      standing = false,
     ) {
       const instance = yield* InstanceState.context
       const root = yield* rootOf(input.sessionID)
@@ -304,10 +310,14 @@ const layer = Layer.effect(
           ),
         ),
       )
-      if (followed && table.class !== "X") return undefined
+      const answered = (followed || standing) && table.class !== "X"
       // Relative paths in a command mean nothing until its real folder is known, so no decider sees it without one.
       const placed = table.class === "P" && input.permission === "bash" && !cwd ? held("not_routine") : table
-      const verdict = Autonomy.afterCheck(placed.class, check) === placed.class ? placed : held("not_routine")
+      const verdict: AutonomyTable.Verdict = answered
+        ? { ...table, class: "A", decidedBy: "person" }
+        : Autonomy.afterCheck(placed.class, check) === placed.class
+          ? placed
+          : held("not_routine")
       const decided =
         verdict.class === "P"
           ? yield* decider.decide(input, root.id, verdict.category).pipe(
@@ -352,12 +362,12 @@ const layer = Layer.effect(
           // Logged by record, and the next call that finds it full tries again.
           .pipe(Effect.catch(() => Effect.sync(() => full.delete(root.id))))
       })
-      const queued =
-        decision !== "defer" || (yield* hold(root.id, isHeldCategory(judged) ? judged : "not_routine"))
+      const queued = decision !== "defer" || (yield* hold(root.id, isHeldCategory(judged) ? judged : "not_routine"))
       const category = queued ? judged : ("queue_full" as const)
 
       // An ordinary edit never asks in any mode, and shows up as an edit. Everything else leaves a line.
-      if (verdict.class === "A" && input.editClass === "ordinary") return { class: verdict.class, decision, category }
+      if (verdict.class === "A" && input.editClass === "ordinary" && (!answered || (standing && table.class === "A")))
+        return { class: verdict.class, decision, category }
       const written = yield* autonomy
         .record(root.id, {
           type: "decision",
@@ -370,16 +380,18 @@ const layer = Layer.effect(
           directory,
           permission: input.permission,
           patterns: input.patterns,
-          class: verdict.class,
+          // What it is, not that a person let it through: `decidedBy` says that.
+          class: answered ? table.class : verdict.class,
           category,
           risk: typeof input.metadata.risk === "string" ? input.metadata.risk : null,
           canUndo,
           decidedBy: decided?.decidedBy ?? (verdict.decidedBy === "person" ? "person" : "gate"),
           decision,
-          reason: decided?.reason,
+          reason: decided?.reason ?? (standing && answered ? "an earlier \"always\" from a person" : undefined),
           memo: decided?.memo,
           latencyMs: decided?.latencyMs,
           costUsd: decided?.costUsd,
+          follows: input.follows,
         })
         .pipe(
           Effect.as(true),
@@ -410,9 +422,10 @@ const layer = Layer.effect(
 
     const ask = Effect.fn("Permission.ask")(function* (input: PermissionV1.AskInput) {
       const { approved, away, grants, pending } = yield* InstanceState.get(state)
-      const { ruleset, harmless, noAlways, follows, ...request } = input
+      const { ruleset, harmless, noAlways, follows, call: toolCall, ...request } = input
       let needsAsk = false
       let userCatchAll = false
+      let standing = false
 
       for (const pattern of request.patterns) {
         const rule = evaluate(request.permission, pattern, ruleset, noAlways ? [] : approved)
@@ -423,7 +436,10 @@ const layer = Layer.effect(
             ruleset: ruleset.filter((rule) => Wildcard.match(request.permission, rule.permission)),
           })
         }
-        if (rule.action === "allow") continue
+        if (rule.action === "allow") {
+          if (approved.includes(rule)) standing = true
+          continue
+        }
         // The shipped baseline asks about anything it does not name. That is for what could hurt, and this cannot.
         // A person who wrote "*": "ask" themselves meant every call, and that is not this rule.
         if (harmless && isShippedCatchAll(rule)) continue
@@ -431,9 +447,8 @@ const layer = Layer.effect(
         needsAsk = true
       }
 
-      if (!needsAsk) return
+      if (!needsAsk && !standing) return
 
-      const granted = grants.findIndex((grant) => sameRequest(grant, request))
       const id = request.id ?? PermissionV1.ID.ascending()
       // As the event stream already sends it. The list route encodes every request or none, and rejects what JSON cannot
       // say, such as the `undefined` of a tool parameter left out: one of those would hide every prompt in the folder.
@@ -441,6 +456,13 @@ const layer = Layer.effect(
         try: () => JSON.parse(JSON.stringify(request.metadata)) as Record<string, unknown>,
         catch: String,
       }).pipe(Effect.orElseSucceed(() => ({})))
+      // Which call this is, to the letter. What cannot be written down is a call no answer was ever about.
+      const call = yield* Effect.try({ try: () => JSON.stringify(toolCall ?? request.metadata), catch: String }).pipe(
+        Effect.orElseSucceed(() => id),
+      )
+      const matching = grants.findIndex((grant) => sameRequest(grant, request) && grant.call === call)
+      const unbound = grants.findIndex((grant) => sameRequest(grant, request) && grant.call === undefined)
+      const granted = matching >= 0 ? matching : unbound >= 0 && !(yield* inMode(request.sessionID)) ? unbound : -1
       const asked: PermissionV1.Request = {
         id,
         sessionID: request.sessionID,
@@ -458,21 +480,46 @@ const layer = Layer.effect(
         InstanceState.get(state).pipe(
           Effect.map((current) => {
             if ([...current.pending.values()].filter((item) => item.root === root).length >= QUEUE_LIMIT) return false
-            const moved: PermissionV1.Request = { ...asked, always: [], movedOnAt: Date.now(), deferred: true }
-            current.pending.set(id, { info: moved, deferred, noAlways, follows, category, root })
+            const moved: PermissionV1.Request = {
+              ...asked,
+              // The person answers this one and not the next, so the entry has to show all of what the answer is good for.
+              metadata: toolCall && call !== id ? { ...metadata, call: JSON.parse(call) } : metadata,
+              always: [],
+              movedOnAt: Date.now(),
+              deferred: true,
+            }
+            current.pending.set(id, { info: moved, deferred, noAlways, follows, category, root, call })
             return true
           }),
         )
+      const stayHeld = Effect.fnUntraced(function* (gated: { category?: string }) {
+        const category = isHeldCategory(gated.category) ? gated.category : "not_routine"
+        const entry = (yield* InstanceState.get(state)).pending.get(id)
+        yield* Effect.logInfo("held", { id, permission: asked.permission, category })
+        if (entry) yield* events.publish(Event.Asked, entry.info)
+        return yield* new PermissionV1.DeferredError({ category })
+      })
+      if (!needsAsk) {
+        const gated = yield* gate(input, id, userCatchAll, hold, false, true)
+        if (gated?.class === "X") return yield* new RefusedByModeError({ ruleset: [] })
+        if (gated?.decision === "defer") return yield* stayHeld(gated)
+        return
+      }
       if (granted >= 0) {
         const [grant] = grants.splice(granted, 1)
         if (!grant?.followed) return
-        // The person answered the prompt before this one, so what this one turned out to be was never in front of them.
+        // This prompt's own answer was on the entry before it. It still gets its line, and what it is can still refuse it.
         const gated = yield* gate(input, id, userCatchAll, hold, true)
         if (gated?.class === "X") return yield* new RefusedByModeError({ ruleset: [] })
+        if (gated?.decision === "defer") return yield* stayHeld(gated)
         return
       }
       // Already waiting for the user's decision on exactly this. Asking again would only add a wait and a second row.
-      const waiting = [...pending.values()].find((item) => item.info.movedOnAt && sameRequest(item.info, request))
+      // Other content for the same path is another call, unless the entry came back from a restart and no longer knows.
+      const waiting = [...pending.values()].find(
+        (item) =>
+          item.info.movedOnAt && sameRequest(item.info, request) && (item.call === undefined || item.call === call),
+      )
       if (waiting && !waiting.category) return yield* new PermissionV1.AwayError()
       // With the mode off the entry stays answerable, and this is a new request that gets an ordinary prompt.
       if (waiting?.category && (yield* inMode(request.sessionID)))
@@ -490,13 +537,7 @@ const layer = Layer.effect(
       const info: PermissionV1.Request = wait ? { ...asked, movesOnAt: Date.now() + wait } : asked
       yield* Effect.logInfo("asking", { id, permission: info.permission })
 
-      if (gated?.decision === "defer") {
-        const category = isHeldCategory(gated.category) ? gated.category : "not_routine"
-        const entry = (yield* InstanceState.get(state)).pending.get(id)
-        yield* Effect.logInfo("held", { id, permission: asked.permission, category })
-        if (entry) yield* events.publish(Event.Asked, entry.info)
-        return yield* new PermissionV1.DeferredError({ category })
-      }
+      if (gated?.decision === "defer") return yield* stayHeld(gated)
       pending.set(id, { info, deferred, noAlways, follows })
       yield* events.publish(Event.Asked, info)
       const moveOn = Effect.gen(function* () {
@@ -557,7 +598,11 @@ const layer = Layer.effect(
               action: "allow" as const,
             })),
           )
-        return existing.follows ? { ...existing.info, follows: existing.follows } : existing.info
+        return {
+          ...existing.info,
+          ...(existing.follows && { follows: existing.follows }),
+          ...(existing.call !== undefined && { call: existing.call }),
+        }
       }
 
       if (input.reply === "reject") {
@@ -620,6 +665,7 @@ const layer = Layer.effect(
         permission: input.permission,
         patterns: input.patterns,
         followed: input.followed,
+        call: input.call,
       })
     })
 

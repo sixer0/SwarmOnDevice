@@ -73,9 +73,24 @@ export const make = Effect.gen(function* () {
     }),
     permission: Effect.fn("LateAnswer.permission")(function* (request: Permission.Answered) {
       const root = yield* rootOf(request.sessionID)
-      yield* permission.grant({ sessionID: root, permission: request.permission, patterns: request.patterns })
-      for (const next of request.follows ?? [])
-        yield* permission.grant({ sessionID: root, permission: next.permission, patterns: next.patterns, followed: true })
+      // Back from the file after a restart it has no call to show, so this answer wakes the agent and lets nothing through.
+      // The retry comes up as an entry that does show it.
+      if (!request.deferred || request.call !== undefined) {
+        yield* permission.grant({
+          sessionID: root,
+          permission: request.permission,
+          patterns: request.patterns,
+          call: request.call,
+        })
+        for (const next of request.follows ?? [])
+          yield* permission.grant({
+            sessionID: root,
+            permission: next.permission,
+            patterns: next.patterns,
+            call: request.call,
+            followed: true,
+          })
+      }
       yield* send(root, allowedText(request)).pipe(report(root))
     }),
     /** A no with a reason is a correction, which the agent has to hear. A plain no wakes nothing. */

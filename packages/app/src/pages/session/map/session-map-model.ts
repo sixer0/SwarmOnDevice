@@ -463,6 +463,8 @@ export type DecisionEntry = {
   // Written by whatever the agent read, so an attacker can reach them. Shown as they are, never as Markdown or links.
   patterns: readonly string[]
   patternsTruncated: boolean
+  // What else one answer to this covers, which is the actual edit or command when the line itself only names a folder.
+  follows: DecisionLine["follows"]
   reason?: string
   category?: DecisionLine["category"]
   // "person", or the model that answered. The gate and the system are nobody a reader needs named here.
@@ -471,6 +473,8 @@ export type DecisionEntry = {
   // Only for what actually ran. "button" is a promise that Undo brings it back; "none" says it cannot.
   undo?: "button" | "none"
 }
+
+export type HeldCall = { tool: string; args: { name: string; value: string }[] }
 
 export type DecisionNote = {
   id: string
@@ -552,6 +556,7 @@ export function decisionGroups(
       permission: line.permission,
       patterns: line.patterns,
       patternsTruncated: line.patternsTruncated,
+      follows: line.follows,
       reason: line.reason,
       category: line.category,
       by: byOf(line, later?.by),
@@ -573,6 +578,20 @@ export function decisionGroups(
   groups.limited.reverse()
   groups.notes.reverse()
   return groups
+}
+
+// The call a held request's answer is good for, as the server sent it. Only there while the request is open, and it never
+// goes in the audit file: a whole edit is more than a record of decisions should keep.
+export function heldCall(metadata: Record<string, unknown> | undefined): HeldCall | undefined {
+  const call = metadata?.call
+  if (typeof call !== "object" || call === null) return
+  const { tool, args } = call as { tool?: unknown; args?: unknown }
+  if (typeof tool !== "string") return
+  const fields = typeof args === "object" && args !== null ? Object.entries(args) : [["input", args] as const]
+  return {
+    tool,
+    args: fields.map(([name, value]) => ({ name, value: typeof value === "string" ? value : JSON.stringify(value) })),
+  }
 }
 
 // What goes into the composer when someone asks about a step: enough for the agent to know which one is meant.
