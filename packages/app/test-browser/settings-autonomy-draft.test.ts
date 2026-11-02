@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test"
 
 // Separate process: these tests replace app contexts with `mock.module`, which would otherwise reach every other file.
-test("the Settings row and the add menu change one folder level on a draft", async () => {
+test("Settings has no autonomous row; the add menu, the palette and its shortcut still change the mode", async () => {
   const run = Bun.spawn(
     [
       process.execPath,

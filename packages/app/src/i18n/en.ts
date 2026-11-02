@@ -573,6 +573,8 @@ export const dict = {
   "toast.permissions.autoaccept.off.description": "Permission requests will require approval",
   "toast.permissions.autonomous.on.title": "Autonomous mode is on",
   "toast.permissions.autonomous.off.title": "Autonomous mode is off. Decisions already waiting stay in Activity.",
+  "toast.permissions.autonomous.scan.title":
+    "Swarm listed the secret and sensitive files and the destinations this task may need. Approve them in Activity before you leave.",
 
   "toast.model.none.title": "No model selected",
   "toast.model.none.description": "Connect a provider to summarize this session",
@@ -887,6 +889,12 @@ export const dict = {
   "session.map.compaction": "Context compacted",
   "session.map.truncated": "Showing the first 200 of {{total}}",
   "session.autonomy.marker": "Autonomous, waiting: {{count}}",
+  "session.autonomy.consent.title": "Before you leave: files and destinations for this task",
+  "session.autonomy.consent.allow": "Allow selected",
+  "session.autonomy.consent.named": "Named in your message",
+  "session.autonomy.archive.title": "Moved to the archive instead of deleted: {{count}}",
+  "session.autonomy.archive.empty": "Empty archive",
+  "session.autonomy.archive.confirm": "Delete the archived files for good? This cannot be undone.",
   "session.map.decisions.group.waiting": "Waiting for you",
   "session.map.decisions.group.decided": "Decided",
   "session.map.decisions.group.limited": "Refused or limited",
@@ -1187,7 +1195,7 @@ export const dict = {
   "settings.general.row.autonomous.title": "Autonomous mode",
   "settings.general.row.autonomous.description":
     "Routine steps go ahead without asking: a one-off model call decides them for you and each decision is listed in Activity. Anything outward, hard to undo, outside this folder or touching secrets waits there while other work continues. Spending limits and repeated calls still stop for you, and what your rules deny stays denied. Applies to this session and its subagents, or to new sessions in this folder. Without Git almost everything waits. Tests, builds and commands like git commit (which run the repo's hooks) run with your account. Swarm can't limit what the code inside them does.",
-  "settings.general.row.autonomous.disabledReason": "Open a project to turn this on.",
+  "settings.general.row.autonomous.scripts": "Scripts the task needs run with your account's full rights.",
 
   "settings.updates.row.startup.title": "Check for updates on startup",
   "settings.updates.row.startup.description": "Automatically check for updates when Swarm launches",

@@ -148,15 +148,13 @@ describe("settings v2 controllers", () => {
       expect(backend.sessions.has("ses_new")).toBe(false)
     })
 
-    test("on Home stays off, says why, and never reaches the server", async () => {
+    test("without a folder stays off and never reaches the server", async () => {
       const backend = server({ folders: [directory] })
       const { seen, controller } = toggle(() => undefined, backend)
       await settled()
 
-      expect(controller.available()).toBe(false)
       expect(controller.enabled()).toBe(false)
       expect(controller.accepting()).toBe(false)
-      expect(controller.description()).toBe("settings.general.row.autonomous.disabledReason")
 
       await controller.set(true)
       await controller.toggle()
@@ -220,7 +218,6 @@ describe("settings v2 controllers", () => {
 
       expect(controller.accepting()).toBe(false)
       expect(controller.enabled()).toBe(false)
-      expect(controller.description()).toBe("common.requestFailed")
       expect(seen.failed).toBe(0)
     })
 
@@ -331,21 +328,6 @@ describe("settings v2 controllers", () => {
       expect(id["settings.general.row.autonomous.description"]).toContain(
         "Test, build, dan perintah seperti git commit (yang menjalankan hook repo) berjalan dengan akun Anda. Aplikasi tidak dapat membatasi apa yang dilakukan kode di dalamnya.",
       )
-    })
-
-    test("the settings row is one row with the agreed action, on the server's state alone", async () => {
-      const general = await Bun.file(new URL("./general.tsx", import.meta.url)).text()
-      const legacy = await Bun.file(new URL("../settings-general.tsx", import.meta.url)).text()
-      const palette = await Bun.file(new URL("../../pages/session/use-session-commands.tsx", import.meta.url)).text()
-
-      expect(general.match(/data-action="settings-autonomous-mode"/g)?.length).toBe(1)
-      expect(legacy.match(/data-action="settings-autonomous-mode"/g)?.length).toBe(1)
-      expect(palette).toContain('keybind: "mod+shift+a"')
-      ;[general, legacy, palette].forEach((source) => {
-        expect(source).not.toContain("usePermission")
-        expect(source).not.toContain("autoaccept")
-        expect(source).toContain("createAutonomousModeController")
-      })
     })
   })
 

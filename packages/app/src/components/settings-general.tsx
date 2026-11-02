@@ -8,9 +8,7 @@ import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { Tag } from "@opencode-ai/ui/v2/badge-v2"
 import { useTheme, type ColorScheme } from "@opencode-ai/ui/theme/context"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
-import { useParams } from "@solidjs/router"
 import { useLanguage } from "@/context/language"
-import { createAutonomousModeController } from "./settings-v2/general-controllers"
 import { usePlatform, type DisplayBackend } from "@/context/platform"
 import { useServerSync } from "@/context/server-sync"
 import { useServerSDK } from "@/context/server-sdk"
@@ -27,7 +25,6 @@ import {
   terminalInput,
   useSettings,
 } from "@/context/settings"
-import { decode64 } from "@/utils/base64"
 import { playSoundById, SOUND_OPTIONS } from "@/utils/sound"
 import { SettingsList } from "./settings-list"
 
@@ -86,16 +83,11 @@ export const SettingsGeneral: Component = () => {
   const language = useLanguage()
   const platform = usePlatform()
   const dialog = useDialog()
-  const params = useParams()
   const settings = useSettings()
 
   const updater = useUpdaterAction()
 
   const linux = createMemo(() => platform.platform === "desktop" && platform.os === "linux")
-  const autonomousMode = createAutonomousModeController({
-    sessionID: () => params.id,
-    directory: () => decode64(params.dir),
-  })
   const desktop = createMemo(() => platform.platform === "desktop")
 
   const themeOptions = createMemo<ThemeOption[]>(() => theme.ids().map((id) => ({ id, name: theme.name(id) })))
@@ -291,19 +283,6 @@ export const SettingsGeneral: Component = () => {
             size="small"
             triggerVariant="settings"
           />
-        </SettingsRow>
-
-        <SettingsRow
-          title={language.t("settings.general.row.autonomous.title")}
-          description={language.t(autonomousMode.description())}
-        >
-          <div data-action="settings-autonomous-mode">
-            <Switch
-              checked={autonomousMode.accepting()}
-              disabled={!autonomousMode.enabled()}
-              onChange={autonomousMode.set}
-            />
-          </div>
         </SettingsRow>
 
         <SettingsRow

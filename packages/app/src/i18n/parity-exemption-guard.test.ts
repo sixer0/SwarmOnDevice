@@ -7,7 +7,9 @@ import { join } from "path"
 // Why this file exists: the exemption is a deliberate, bounded weakening of a completeness invariant
 // (branch B of the 2026-10-21 decision in
 // `docs/2026-10-19_opencode_swarm_rebrand/decisions/decisions.md`). Its safety depends entirely on
-// staying bounded — thirty-seven entries as of row 77 of the 2026-11-01 Knowledge Library task, up from thirty-six
+// staying bounded — forty-four entries as of row 159 (register U11, gate G-U11) of the 2026-11-01 Knowledge Library
+// task, up from thirty-six since its decision C62 of the 2026-11-01 Knowledge Library task removed one,
+// thirty-seven as of its row 77, up from thirty-six
 // at its decision C18, twelve at its decision C2, ten at blueprint-11 row 249 (session 6), nine at row 204 and the original three.
 // This guard is the mechanism that keeps the exception from becoming the norm: any entry beyond the
 // approved set, any wildcard, or any relaxation of the `missing: []` assertion fails the suite here
@@ -34,7 +36,6 @@ const APPROVED_EXEMPT_KEYS = [
   "settings.general.row.knowledgeLibrary.description",
   "settings.general.row.autonomous.title",
   "settings.general.row.autonomous.description",
-  "settings.general.row.autonomous.disabledReason",
   "command.permissions.autonomous.enable",
   "command.permissions.autonomous.disable",
   "toast.permissions.autonomous.on.title",
@@ -57,6 +58,14 @@ const APPROVED_EXEMPT_KEYS = [
   "session.map.decisions.marker.externalChange",
   "notification.autonomy.blocked",
   "ui.messagePart.notRun.deferred",
+  "toast.permissions.autonomous.scan.title",
+  "session.autonomy.consent.title",
+  "session.autonomy.consent.allow",
+  "session.autonomy.consent.named",
+  "session.autonomy.archive.title",
+  "session.autonomy.archive.empty",
+  "session.autonomy.archive.confirm",
+  "settings.general.row.autonomous.scripts",
 ]
 
 function arrayLiteral(name: string) {
@@ -74,10 +83,10 @@ function arrayLiteral(name: string) {
 describe("i18n parity exemption guard", () => {
   const exemptKeys = arrayLiteral("UNTRANSLATED_KEY_PRESENCE_EXEMPTION")
 
-  test("the exemption holds exactly the thirty-seven approved keys and nothing else", () => {
+  test("the exemption holds exactly the forty-four approved keys and nothing else", () => {
     expect([...exemptKeys].sort()).toEqual([...APPROVED_EXEMPT_KEYS].sort())
-    expect(exemptKeys.length).toBe(37)
-    expect(new Set(exemptKeys).size).toBe(37)
+    expect(exemptKeys.length).toBe(44)
+    expect(new Set(exemptKeys).size).toBe(44)
   })
 
   test("every exemption entry is a literal dotted key, never a wildcard or pattern", () => {
@@ -126,8 +135,7 @@ describe("i18n parity exemption guard", () => {
           "settings.general.row.knowledgeLibrary.description",
           "settings.general.row.autonomous.title",
           "settings.general.row.autonomous.description",
-          "settings.general.row.autonomous.disabledReason",
-          "command.permissions.autonomous.enable",
+                  "command.permissions.autonomous.enable",
           "command.permissions.autonomous.disable",
           "toast.permissions.autonomous.on.title",
           "toast.permissions.autonomous.off.title",
@@ -148,6 +156,14 @@ describe("i18n parity exemption guard", () => {
           "session.map.decisions.undo.confirm",
           "session.map.decisions.marker.externalChange",
           "notification.autonomy.blocked",
+          "toast.permissions.autonomous.scan.title",
+          "session.autonomy.consent.title",
+          "session.autonomy.consent.allow",
+          "session.autonomy.consent.named",
+          "session.autonomy.archive.title",
+          "session.autonomy.archive.empty",
+          "session.autonomy.archive.confirm",
+          "settings.general.row.autonomous.scripts",
         ],
       },
       {

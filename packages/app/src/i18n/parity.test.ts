@@ -96,13 +96,17 @@ const pluralCategories = new Map(
 //     `setup.lanes.apply_warning` shown by the lane controls on the Home card);
 //   - two more for the Knowledge Library row in Settings (`settings.general.row.knowledgeLibrary.title`
 //     and `.description`, decision C2 in `docs/2026-11-01_knowledge_library_default/decisions/decisions.md`);
-//   - twenty-four more for autonomous mode (`settings.general.row.autonomous.*`, `command.permissions.autonomous.*`,
+//   - twenty-three more for autonomous mode (`settings.general.row.autonomous.*`, `command.permissions.autonomous.*`,
 //     `toast.permissions.autonomous.*`, `session.autonomy.marker`, `session.map.filter.decisions`,
-//     `session.map.decisions.*` and `notification.autonomy.blocked`, decision C18 in the same file, widening C2);
+//     `session.map.decisions.*` and `notification.autonomy.blocked`, decision C18 in the same file, widening C2;
+//     one fewer since decision C62 removed the Settings row and its disabled reason);
 //   - one more for a held decision's timeline row (`ui.messagePart.notRun.deferred`, routed by the controller to row 77
-//     of the same task).
+//     of the same task);
+//   - eight more for the U11 autonomy rules (`toast.permissions.autonomous.scan.title`, `session.autonomy.consent.*`,
+//     `session.autonomy.archive.*` and `settings.general.row.autonomous.scripts`, register U11 approved at gate G-U11,
+//     row 159 of the same task).
 // Widening this list is a decision, not drift: `parity-exemption-guard.test.ts` fails the suite on any
-// thirty-eighth entry, on any non-literal/wildcard, and if `en` or `id` ever stops carrying an exempt key.
+// forty-fifth entry, on any non-literal/wildcard, and if `en` or `id` ever stops carrying an exempt key.
 const UNTRANSLATED_KEY_PRESENCE_EXEMPTION: readonly string[] = [
   "command.project.openNumber",
   "settings.tab.servers",
@@ -118,7 +122,6 @@ const UNTRANSLATED_KEY_PRESENCE_EXEMPTION: readonly string[] = [
   "settings.general.row.knowledgeLibrary.description",
   "settings.general.row.autonomous.title",
   "settings.general.row.autonomous.description",
-  "settings.general.row.autonomous.disabledReason",
   "command.permissions.autonomous.enable",
   "command.permissions.autonomous.disable",
   "toast.permissions.autonomous.on.title",
@@ -141,6 +144,14 @@ const UNTRANSLATED_KEY_PRESENCE_EXEMPTION: readonly string[] = [
   "session.map.decisions.marker.externalChange",
   "notification.autonomy.blocked",
   "ui.messagePart.notRun.deferred",
+  "toast.permissions.autonomous.scan.title",
+  "session.autonomy.consent.title",
+  "session.autonomy.consent.allow",
+  "session.autonomy.consent.named",
+  "session.autonomy.archive.title",
+  "session.autonomy.archive.empty",
+  "session.autonomy.archive.confirm",
+  "settings.general.row.autonomous.scripts",
 ]
 // Locales the exemption never applies to. `en` is every domain's source, and `id` is the second
 // maintained locale: it already carries every exempt key, so it stays fully enforced like the rest.

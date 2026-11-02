@@ -678,6 +678,8 @@ export const dict = {
   "toast.permissions.autoaccept.off.description": "Permintaan izin akan memerlukan persetujuan",
   "toast.permissions.autonomous.on.title": "Mode otonom menyala",
   "toast.permissions.autonomous.off.title": "Mode otonom mati. Putusan yang sudah menunggu tetap di Aktivitas.",
+  "toast.permissions.autonomous.scan.title":
+    "Aplikasi sudah mendaftar berkas rahasia dan sensitif serta tujuan yang mungkin dibutuhkan tugas ini. Setujui di Aktivitas sebelum Anda pergi.",
 
   "toast.model.none.title": "Tidak ada model dipilih",
   "toast.model.none.description": "Hubungkan penyedia untuk meringkas sesi ini",
@@ -994,6 +996,12 @@ export const dict = {
   "session.map.compaction": "Konteks dipadatkan",
   "session.map.truncated": "Menampilkan 200 pertama dari {{total}}",
   "session.autonomy.marker": "Otonom, menunggu: {{count}}",
+  "session.autonomy.consent.title": "Sebelum Anda pergi: berkas dan tujuan untuk tugas ini",
+  "session.autonomy.consent.allow": "Izinkan yang dipilih",
+  "session.autonomy.consent.named": "Disebut dalam pesan Anda",
+  "session.autonomy.archive.title": "Dipindahkan ke arsip, bukan dihapus: {{count}}",
+  "session.autonomy.archive.empty": "Kosongkan arsip",
+  "session.autonomy.archive.confirm": "Hapus berkas yang diarsipkan secara permanen? Tindakan ini tidak dapat dibatalkan.",
   "session.map.decisions.group.waiting": "Menunggu Anda",
   "session.map.decisions.group.decided": "Sudah diputuskan",
   "session.map.decisions.group.limited": "Ditolak atau dibatasi",
@@ -1293,7 +1301,7 @@ export const dict = {
   "settings.general.row.autonomous.title": "Mode otonom",
   "settings.general.row.autonomous.description":
     "Langkah rutin berjalan tanpa bertanya: satu panggilan model memutuskannya untuk Anda dan setiap putusan tercatat di Aktivitas. Yang keluar dari mesin, sulit dibatalkan, di luar folder ini, atau menyentuh rahasia menunggu di sana sementara pekerjaan lain berlanjut. Batas biaya dan panggilan berulang tetap berhenti untuk Anda, dan yang ditolak aturan Anda tetap ditolak. Berlaku untuk sesi ini beserta subagennya, atau untuk sesi baru di folder ini. Tanpa Git hampir semuanya menunggu. Test, build, dan perintah seperti git commit (yang menjalankan hook repo) berjalan dengan akun Anda. Aplikasi tidak dapat membatasi apa yang dilakukan kode di dalamnya.",
-  "settings.general.row.autonomous.disabledReason": "Buka proyek untuk menyalakan ini.",
+  "settings.general.row.autonomous.scripts": "Skrip yang dibutuhkan tugas berjalan dengan hak penuh akun Anda.",
 
   "settings.updates.row.startup.title": "Periksa pembaruan saat dimulai",
   "settings.updates.row.startup.description": "Secara otomatis memeriksa pembaruan saat Swarm diluncurkan",

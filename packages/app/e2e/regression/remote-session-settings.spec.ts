@@ -20,23 +20,17 @@ test("session settings use the remote server context", async ({ page }) => {
   await page.keyboard.press("Control+,")
 
   const dialog = page.locator(".settings-v2-dialog")
-  const autonomous = dialog.locator('[data-action="settings-autonomous-mode"]')
-  const input = autonomous.getByRole("switch")
-  await expect(autonomous).toBeVisible()
-  await expect(input).toBeEnabled()
-  await expect(input).not.toBeChecked()
-  await autonomous.locator('[data-slot="switch-control"]').click()
-  await expect(input).toBeChecked()
-  expect(autonomyWrites).toEqual([
-    { origin: serverB, directory: directoryB, body: { on: true, sessionID: sessionB.id } },
-  ])
+  await expect(dialog).toBeVisible()
+  // Decision C62: autonomous mode is not in Settings; the add menu, the palette and mod+shift+a change it.
+  await expect(dialog.locator('[data-action="settings-autonomous-mode"]')).toHaveCount(0)
+  expect(autonomyWrites).toEqual([])
 
   await dialog.getByRole("tab", { name: "Models" }).click()
   await expect(dialog.getByRole("switch", { name: "Server B Model" })).toBeEnabled()
   await expect(dialog.getByRole("switch", { name: "Server A Model" })).toHaveCount(0)
 })
 
-test("autonomous mode belongs to the server and to the session it was turned on for", async ({ page }) => {
+test("the shortcut changes the mode for the server and the session it was pressed in", async ({ page }) => {
   const autonomyWrites: AutonomyWrite[] = []
   await mockServers(page, autonomyWrites)
   await configureServers(page, [
@@ -47,23 +41,20 @@ test("autonomous mode belongs to the server and to the session it was turned on 
   const hrefB = `/server/${base64Encode(serverB)}/session/${sessionB.id}`
   await page.goto(`/server/${base64Encode(serverA)}/session/${sessionA.id}`)
   await expect(page.getByText(sessionA.title).first()).toBeVisible()
-  await page.keyboard.press("Control+,")
-  const autonomous = page.locator(".settings-v2-dialog").locator('[data-action="settings-autonomous-mode"]')
-  await expect(autonomous.getByRole("switch")).toBeEnabled()
-  await autonomous.locator('[data-slot="switch-control"]').click()
-  await expect(autonomous.getByRole("switch")).toBeChecked()
-  expect(autonomyWrites).toEqual([
+  await page.keyboard.press("Control+Shift+A")
+  await expect.poll(() => autonomyWrites).toEqual([
     { origin: serverA, directory: directoryA, body: { on: true, sessionID: sessionA.id } },
   ])
-  await page.keyboard.press("Escape")
 
   await page.locator(`[data-titlebar-tab-slot]:has(a[href="${hrefB}"])`).click()
   await expect(page).toHaveURL(new RegExp(`${hrefB.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`))
   await expect(page.getByText(sessionB.title).first()).toBeVisible()
-  await page.keyboard.press("Control+,")
-  await expect(autonomous.getByRole("switch")).toBeEnabled()
-  await expect(autonomous.getByRole("switch")).not.toBeChecked()
-  expect(autonomyWrites).toHaveLength(1)
+  // Server B's session was never turned on, so the same shortcut turns it on there rather than off.
+  await page.keyboard.press("Control+Shift+A")
+  await expect.poll(() => autonomyWrites).toEqual([
+    { origin: serverA, directory: directoryA, body: { on: true, sessionID: sessionA.id } },
+    { origin: serverB, directory: directoryB, body: { on: true, sessionID: sessionB.id } },
+  ])
 })
 
 type AutonomyWrite = {

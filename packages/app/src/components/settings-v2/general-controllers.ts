@@ -54,7 +54,7 @@ export function createAutonomousToggle(input: {
   changed: (on: boolean) => void
   failed: () => void
 }) {
-  const [state, setState] = createStore({ on: false, known: false, unreadable: false, pending: false })
+  const [state, setState] = createStore({ on: false, known: false, pending: false })
   // An answer to an earlier scope or an older request is not an answer to this one.
   let run = 0
 
@@ -64,10 +64,10 @@ export function createAutonomousToggle(input: {
     const current = ++run
     await input.read(scope).then(
       (on) => {
-        if (current === run) setState({ on, known: true, unreadable: false })
+        if (current === run) setState({ on, known: true })
       },
       () => {
-        if (current === run) setState({ known: false, unreadable: true })
+        if (current === run) setState("known", false)
       },
     )
   }
@@ -80,7 +80,7 @@ export function createAutonomousToggle(input: {
     await next(scope).then(
       (on) => {
         input.changed(on)
-        if (current === run) setState({ on, known: true, unreadable: false, pending: false })
+        if (current === run) setState({ on, known: true, pending: false })
       },
       async () => {
         input.failed()
@@ -94,7 +94,7 @@ export function createAutonomousToggle(input: {
 
   const load = () => {
     run++
-    setState({ on: false, known: false, unreadable: false, pending: false })
+    setState({ on: false, known: false, pending: false })
     return refresh()
   }
 
@@ -106,13 +106,7 @@ export function createAutonomousToggle(input: {
 
   return {
     accepting: () => state.on,
-    available: () => !!input.scope(),
     enabled: () => !!input.scope() && state.known && !state.pending,
-    description: () => {
-      if (!input.scope()) return "settings.general.row.autonomous.disabledReason" as const
-      if (state.unreadable) return "common.requestFailed" as const
-      return "settings.general.row.autonomous.description" as const
-    },
     load,
     refresh,
     set: (checked: boolean) => change((scope) => input.write(scope, checked)),
@@ -354,7 +348,6 @@ export function createSoundSettingsController() {
   }
 }
 
-export type AutonomousModeController = ReturnType<typeof createAutonomousModeController>
 export type ShellSettingsController = ReturnType<typeof createShellSettingsController>
 export type KnowledgeLibraryController = ReturnType<typeof createKnowledgeLibraryController>
 export type AppearanceSettingsController = ReturnType<typeof createAppearanceSettingsController>
