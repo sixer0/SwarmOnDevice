@@ -74,6 +74,10 @@ const APP_IDS = {
 // package author, which would ship a brand string IA-5 measures.
 const COPYRIGHT = "Copyright (c) 2025 opencode (MIT). Swarm modifications Copyright (c) 2026 PT GSP."
 
+// Swarm release number (SP-BC 4.1, S6, G1c). It fills only Info.plist SwarmRelease, which the
+// swarm-patch applier reads with plutil; CFBundleShortVersionString and package.json stay 1.19.3.
+export const SWARM_RELEASE = "1.1.0"
+
 const getBase = (appId: string): Configuration => ({
   artifactName: "swarm-desktop-${os}-${arch}.${ext}",
   copyright: COPYRIGHT,
@@ -107,6 +111,8 @@ const getBase = (appId: string): Configuration => ({
     "!resources/icons/icon.ico",
     "!out/**/*.map",
     "!resources/rg",
+    // The patch applier and its trust anchor ride outside the asar (C3 RK-01: the folder and its contents).
+    "!resources/swarm-patch{,/**/*}",
   ],
   extraResources: [
     ...(channel === "dev"
@@ -128,6 +134,8 @@ const getBase = (appId: string): Configuration => ({
     // Bundled ripgrep slot (AD-15): staged to resources/rg by the build, lands at
     // Contents/Resources/rg; the sidecar's resolver finds it via process.resourcesPath.
     { from: "resources/rg", to: "rg" },
+    // Patch applier slot: resources/swarm-patch lands at Contents/Resources/swarm-patch/ (SP-BC 4.1).
+    { from: "resources/swarm-patch", to: "swarm-patch" },
     // Copied after beforePack writes the staging and before afterPack verifies it, so the seal covers it.
     { from: ".library-stage", to: "knowledge-library" },
     {
@@ -173,6 +181,10 @@ const getBase = (appId: string): Configuration => ({
     identity: "-",
     notarize: false,
     target: ["dmg", "zip"],
+    // bundleShortVersion stays unset on purpose (G1c): only this custom key carries the release.
+    extendInfo: {
+      SwarmRelease: SWARM_RELEASE,
+    },
   },
   dmg: {
     sign: false,

@@ -1,0 +1,1258 @@
+#!/bin/zsh -f
+# swarm-patch: local patch applier for Swarm.app (spec 01_specs.md section 5, 6).
+# Invocation: zsh -f <X>.app/Contents/Resources/swarm-patch/swarm-patch <subcommand> [args]
+# Rows 15 (core), 39 (verify), 17 (apply, 5.7), 18 (rollback, recover), 44 (review fixes).
+
+# Environment hardening (RK-13). Builtins only: no external tool runs before B1.
+unset UNZIP UNZIPOPT ZIPOPT
+unset ZIPINFO ZIPINFOOPT TMPDIR CDPATH ENV BASH_ENV
+export LC_ALL=C
+export PATH=/usr/bin:/bin:/usr/sbin:/sbin
+IFS=$' \t\n'
+umask 077
+
+# B1 (SP-BOOT): EUID is the first comparison, before any external tool (T10, RK-12, RK-19).
+if (( EUID == 0 )); then
+  print -ru2 -- "swarm-patch: E_USAGE: refusing to run as root; do not use sudo, run as the user who owns Swarm.app"
+  exit 2
+fi
+
+# B2 inputs, captured at top level because $0 inside a function is the function name.
+# The target is always derived from the applier's own location (C3, RK-18).
+typeset -r SP_SELF0=${0:A}
+typeset -r SP_TARGET0=${0:A:h:h:h:h}
+
+typeset -gA SP_CODE
+SP_CODE=(
+  E_OK 0 E_USAGE 2 E_CONTAINER 10 E_SIGNATURE 11 E_MANIFEST 12 E_HASH 13
+  E_DOWNGRADE 14 E_SEAL 15 E_RUNNING 20 E_DISK 21 E_VOLUME 22 E_BUSY 23
+  E_MIGRATION 24 E_CONFIRM 25 E_RESTORED 30 E_RECOVER 31
+)
+
+# Register constants (00_register.md).
+typeset -r SP_BUNDLE_ID='id.co.gsp.swarm.desktop'
+typeset -r SP_STATE_ID='id.co.gsp.swarm.patch'
+typeset -r SP_RE_SEMVER='^(0|[1-9][0-9]{0,5})\.(0|[1-9][0-9]{0,5})\.(0|[1-9][0-9]{0,5})$'
+typeset -r SP_RE_UINT='^(0|[1-9][0-9]{0,11})$'
+typeset -r SP_RE_PID='^[1-9][0-9]{0,6}$'
+typeset -r SP_RE_RUN='^[0-9]{10,11}-[0-9]{1,7}$'
+typeset -r SP_RE_EPOCH='^[0-9]{10,11}$'
+typeset -r SP_RE_SHA256='^[0-9a-f]{64}$'
+typeset -r SP_RE_CDHASH='^[0-9a-f]{40}$'
+typeset -r SP_JOURNAL_MAX=16384
+typeset -r SP_RE_KEYLINE='^([a-z][a-z0-9_]*)=(.*)$'   # spec 3.2 rule 3 (C7)
+# Package (3.1-3.3) and signature (register section 1).
+typeset -r SP_NS='id.co.gsp.swarm.patch.v1'
+typeset -r SP_PRINCIPAL='swarm-patch-gsp'
+typeset -r SP_MANIFEST_MAX=16384
+typeset -r SP_SIG_MAX=4096
+typeset -r SP_MARGIN=536870912   # 512 MiB (S15)
+typeset -r SP_RE_SIZE='^[1-9][0-9]{0,12}$'   # S16
+typeset -ra SP_MKEYS=(
+  format bundle_id release from_min payload_sha256 payload_bytes unpacked_bytes
+  migration data_min_release
+)
+# Journal keys (S2), in the fixed order they are written.
+typeset -ra SP_JKEYS=(
+  state_format phase run target_path from_release to_release data_min_release
+  started_at payload_sha256 previous_cdhash installed_cdhash last_apply
+)
+typeset -ra SP_PHASES=(
+  idle staged old_moved new_placed rollback_staged rollback_moved rollback_placed
+)
+
+# Process state shared with the exit trap.
+typeset -g SP_LOCK_HELD=0 SP_TAKE=0 SP_RUN_DIR='' SP_KEEP_RUN=0 SP_PROC_FILE=''
+typeset -g SP_SELF='' SP_TARGET='' SP_STATE='' SP_MODE='normal'
+typeset -g SP_PLIST='' SP_SIGNERS='' SP_RELEASE='' SP_BUNDLE_VERSION=''
+typeset -g SP_JSTATUS='none'   # none | valid | invalid
+typeset -gA SP_J
+
+# Error line (S11) and exit with the register code. Text is ASCII.
+sp_die() {
+  local name=$1 text=$2
+  print -ru2 -- "swarm-patch: ${name}: ${text}"
+  exit ${SP_CODE[$name]}
+}
+
+# Remove staging trees; u+w first, links not followed, so a read-only payload
+# folder cannot leave staging behind (C15, N-1).
+sp_rmtree() {
+  /bin/chmod -R -P u+w -- "$@" 2>/dev/null || :
+  /bin/rm -rf -- "$@" 2>/dev/null
+}
+
+# Exit trap: staging/<run> unless kept, the process list (F4), the lock only
+# when lock/pid is this process (C9), and this process's takeover marker.
+sp_on_exit() {
+  local rc=$? lock=$SP_STATE/lock line=''
+  if [[ -n $SP_RUN_DIR && $SP_KEEP_RUN == 0 && -d $SP_RUN_DIR && ! -L $SP_RUN_DIR ]]; then
+    sp_rmtree "$SP_RUN_DIR"
+  fi
+  [[ -n $SP_PROC_FILE && -f $SP_PROC_FILE && ! -L $SP_PROC_FILE ]] && /bin/rm -f -- "$SP_PROC_FILE" 2>/dev/null
+  if [[ $SP_LOCK_HELD == 1 && -d $lock && ! -L $lock && -f $lock/pid && ! -L $lock/pid ]]; then
+    { IFS= read -r line < "$lock/pid" } 2>/dev/null
+    [[ $line == $$ ]] && /bin/rm -rf -- "$lock" 2>/dev/null
+  fi
+  [[ $SP_TAKE == 1 && -d $lock.take && ! -L $lock.take ]] && /bin/rm -rf -- "$lock.take" 2>/dev/null
+  return $rc
+}
+
+# Numeric owner of a path, without following a final symlink (lstat). REPLY.
+sp_owner() {
+  local out
+  out=$(/usr/bin/stat -f %u -- "$1" 2>/dev/null) || return 1
+  [[ $out =~ $SP_RE_UINT ]] || return 1
+  REPLY=$out
+}
+
+# Directory, not a symlink, owned by EUID, mode 0700 (T8b, RK-11).
+sp_check_dir() {
+  local p=$1 out
+  [[ -d $p && ! -L $p ]] || return 1
+  out=$(/usr/bin/stat -f '%u %Lp' -- "$p" 2>/dev/null) || return 1
+  [[ $out =~ '^(0|[1-9][0-9]{0,11}) ([0-7]{3,4})$' ]] || return 1
+  (( match[1] == EUID )) || return 1
+  [[ $match[2] == 700 ]] || return 1
+  return 0
+}
+
+# Strict semver comparison after regex validation (T17). REPLY = -1, 0, 1.
+sp_semver_cmp() {
+  local a=$1 b=$2 i
+  [[ $a =~ $SP_RE_SEMVER ]] || return 1
+  local -a x=("${match[@]}")
+  [[ $b =~ $SP_RE_SEMVER ]] || return 1
+  local -a y=("${match[@]}")
+  for i in 1 2 3; do
+    if (( x[i] < y[i] )); then REPLY=-1; return 0; fi
+    if (( x[i] > y[i] )); then REPLY=1; return 0; fi
+  done
+  REPLY=0
+}
+
+# SP-BOOT B2-B6 (B1 runs first in sp_main). $1 = subcommand.
+sp_boot() {
+  local sub=$1
+  # B2: target from the applier's own location only (C3, RK-18).
+  SP_SELF=$SP_SELF0
+  SP_TARGET=$SP_TARGET0
+  [[ $SP_TARGET == /*.app ]] || sp_die E_USAGE "applier is not inside an .app bundle"
+  [[ $SP_SELF == $SP_TARGET/Contents/Resources/swarm-patch/swarm-patch ]] \
+    || sp_die E_USAGE "applier is not at Contents/Resources/swarm-patch/swarm-patch"
+  [[ -d $SP_TARGET && ! -L $SP_TARGET ]] || sp_die E_USAGE "target bundle is not a directory"
+  # M-2 (C12): the journal holds printable ASCII only, so the target path must too.
+  [[ $SP_TARGET != *[^\ -~]* ]] || sp_die E_USAGE "the path of the target bundle holds characters other than printable ASCII"
+  # B2b: target owned by EUID (T10, RK-12).
+  sp_owner "$SP_TARGET" || sp_die E_USAGE "cannot read the owner of the target bundle"
+  [[ $REPLY == $EUID ]] || sp_die E_USAGE "target bundle is owned by another account; run as its owner, not with sudo"
+
+  # State folder path (5.3). HOME is the only environment input.
+  local home=${HOME-}
+  [[ $home == /* ]] || sp_die E_BUSY "HOME is not an absolute path"
+  home=${home:A}
+  SP_STATE="$home/Library/Application Support/$SP_STATE_ID"
+
+  # B3: backup mode and staging copies.
+  if [[ $SP_SELF == $SP_STATE/staging/* ]]; then
+    sp_die E_USAGE "applier inside the staging folder cannot be run"
+  fi
+  if [[ $SP_TARGET == $SP_STATE/previous/Swarm.app ]]; then
+    SP_MODE=backup
+    [[ $sub == recover ]] || sp_die E_USAGE "the backup copy only accepts recover"
+  fi
+
+  # B4: capture identity before any rename (F4).
+  SP_PLIST=$SP_TARGET/Contents/Info.plist
+  SP_SIGNERS=$SP_TARGET/Contents/Resources/swarm-patch/allowed_signers
+  [[ -f $SP_PLIST && ! -L $SP_PLIST ]] || sp_die E_SEAL "Info.plist missing"
+  sp_plist_at "$SP_PLIST" SwarmRelease || sp_die E_SEAL "SwarmRelease missing in Info.plist"
+  [[ $REPLY =~ $SP_RE_SEMVER ]] || sp_die E_SEAL "SwarmRelease is not a valid release number"
+  SP_RELEASE=$REPLY
+  sp_plist_at "$SP_PLIST" CFBundleIdentifier || sp_die E_SEAL "CFBundleIdentifier missing"
+  [[ $REPLY == $SP_BUNDLE_ID ]] || sp_die E_SEAL "unexpected bundle identifier"
+  sp_plist_at "$SP_PLIST" CFBundleVersion || sp_die E_SEAL "CFBundleVersion missing"
+  [[ $REPLY =~ '^[0-9A-Za-z.]{1,32}$' ]] || sp_die E_SEAL "CFBundleVersion has an unexpected form"
+  SP_BUNDLE_VERSION=$REPLY
+
+  [[ $sub == status ]] && return 0
+  # B5: own seal.
+  /usr/bin/codesign --verify --deep --strict "$SP_TARGET" >/dev/null 2>&1 \
+    || sp_die E_SEAL "own bundle fails codesign verification"
+  # B6: trust anchor present.
+  [[ -f $SP_SIGNERS && ! -L $SP_SIGNERS && -s $SP_SIGNERS ]] \
+    || sp_die E_SIGNATURE "allowed_signers missing, not a regular file, or empty"
+  return 0
+}
+
+# Validate the state folder (5.3). $1 = create (1) or read-only (0).
+# Returns 1 when the folder is absent and create is 0.
+sp_state_prepare() {
+  local create=$1 home=${SP_STATE:h:h:h} p
+  [[ -d $home && ! -L $home ]] || sp_die E_BUSY "HOME is not a directory"
+  sp_owner "$home" || sp_die E_BUSY "cannot read the owner of HOME"
+  [[ $REPLY == $EUID ]] || sp_die E_BUSY "HOME is not owned by the current user"
+  p=${SP_STATE:h}
+  [[ -d $p && ! -L $p ]] || sp_die E_BUSY "Library/Application Support is missing or a symlink"
+
+  if [[ ! -e $SP_STATE && ! -L $SP_STATE ]]; then
+    (( create )) || return 1
+    /bin/mkdir -m 0700 -- "$SP_STATE" 2>/dev/null || sp_die E_BUSY "cannot create the state folder"
+  fi
+  sp_check_dir "$SP_STATE" || sp_die E_BUSY "state folder is not a private directory of this user (symlink, owner or mode)"
+  for p in staging previous; do
+    if [[ ! -e $SP_STATE/$p && ! -L $SP_STATE/$p ]]; then
+      if (( create )); then
+        /bin/mkdir -m 0700 -- "$SP_STATE/$p" 2>/dev/null || sp_die E_BUSY "cannot create state/$p"
+      else
+        continue
+      fi
+    fi
+    sp_check_dir "$SP_STATE/$p" || sp_die E_BUSY "state/$p is not a private directory of this user (symlink, owner or mode)"
+  done
+  for p in lock lock.take lock/pid state state.new; do
+    [[ -L $SP_STATE/$p ]] && sp_die E_BUSY "state/$p is a symlink"
+  done
+  return 0
+}
+
+# Existing lock (5.4, C9): E_BUSY when held (live pid, or no pid and younger
+# than 10 s). REPLY = inode of the stale lock.
+sp_lock_stale() {
+  local lock=$SP_STATE/lock out ino mt pid=''
+  sp_check_dir "$lock" || sp_die E_BUSY "lock is not a private directory of this user"
+  out=$(/usr/bin/stat -f '%i %m' -- "$lock" 2>/dev/null) || sp_die E_BUSY "cannot read the lock folder"
+  [[ $out =~ '^([0-9]{1,20}) ([0-9]{1,11})$' ]] || sp_die E_BUSY "unexpected stat output for the lock"
+  ino=$match[1] mt=$match[2]
+  [[ -L $lock/pid ]] && sp_die E_BUSY "lock/pid is a symlink"
+  if [[ -e $lock/pid ]]; then
+    [[ -f $lock/pid ]] || sp_die E_BUSY "lock/pid is not a regular file"
+    IFS= read -r pid < "$lock/pid" || true
+  fi
+  if [[ -n $pid ]]; then
+    # Validated before use (RK-14). Non-numeric content is tampering: fail closed.
+    [[ $pid =~ $SP_RE_PID ]] || sp_die E_BUSY "lock/pid has unexpected content; remove $lock after checking"
+    kill -0 $pid 2>/dev/null && sp_die E_BUSY "another swarm-patch run holds the lock (pid $pid)"
+  else
+    (( EPOCHSECONDS - mt >= 10 )) || sp_die E_BUSY "another swarm-patch run is taking the lock"
+  fi
+  REPLY=$ino
+}
+
+# Lock (5.4, C9); not used by status. $$ is written right after mkdir (m1). A
+# stale lock is removed only under lock.take after a second inspection, so no
+# run removes a lock another run just took (F1).
+sp_lock_take() {
+  local lock=$SP_STATE/lock take=$SP_STATE/lock.take attempt ino
+  for attempt in 1 2; do
+    if /bin/mkdir -m 0700 -- "$lock" 2>/dev/null; then
+      SP_LOCK_HELD=1
+      print -r -- $$ > "$lock/pid" || sp_die E_BUSY "cannot write lock/pid"
+      sp_check_dir "$lock" || sp_die E_BUSY "lock folder check failed"
+      (( SP_TAKE )) && /bin/rm -rf -- "$take" 2>/dev/null && SP_TAKE=0
+      return 0
+    fi
+    (( attempt == 2 )) && break
+    sp_lock_stale
+    ino=$REPLY
+    /bin/mkdir -m 0700 -- "$take" 2>/dev/null \
+      || sp_die E_BUSY "another swarm-patch run is taking over a stale lock; if none runs, remove $take"
+    SP_TAKE=1
+    [[ -e $lock || -L $lock ]] || continue
+    sp_lock_stale
+    [[ $REPLY == $ino ]] || sp_die E_BUSY "the lock changed during the takeover"
+    /bin/rm -rf -- "$lock" 2>/dev/null || sp_die E_BUSY "cannot remove a stale lock"
+  done
+  sp_die E_BUSY "cannot take the lock"
+}
+
+# Validate one journal value (5.5). $1 key, $2 value.
+sp_journal_value_ok() {
+  local k=$1 v=$2
+  case $k in
+    state_format) [[ $v == 1 ]] ;;
+    phase) (( ${SP_PHASES[(Ie)$v]} )) ;;
+    run) [[ -z $v || $v =~ $SP_RE_RUN ]] ;;
+    target_path)
+      [[ -z $v ]] && return 0
+      [[ $v == /*.app && $v != *[^\ -~]* && $v != *'/../'* && $v != *'/..' && $v != *'/./'* && $v != *'//'* ]] ;;
+    from_release|to_release|data_min_release|last_apply) [[ -z $v || $v =~ $SP_RE_SEMVER ]] ;;
+    started_at) [[ -z $v || $v =~ $SP_RE_EPOCH ]] ;;
+    payload_sha256) [[ -z $v || $v =~ $SP_RE_SHA256 ]] ;;
+    previous_cdhash|installed_cdhash) [[ -z $v || $v =~ $SP_RE_CDHASH ]] ;;
+    *) return 1 ;;
+  esac
+}
+
+# Spec 3.2 rules 1-5 for the journal and the manifest (m4): file $1, at most $2
+# bytes, each key of the array named $3 exactly once. Fills SP_KV; 1 on failure.
+typeset -gA SP_KV
+sp_kv_parse() {
+  local raw line
+  local -a keys=( "${(@P)3}" )
+  SP_KV=()
+  raw=$(/usr/bin/head -c $(( $2 + 1 )) -- "$1" 2>/dev/null; print -n x) || return 1
+  raw=${raw%x}
+  (( ${#raw} <= $2 )) || return 1
+  [[ $raw == *[^\ -~$'\n']* ]] && return 1
+  [[ $raw == *$'\n' && $raw != *$'\n\n'* && $raw != $'\n'* ]] || return 1
+  for line in "${(@f)raw%$'\n'}"; do
+    [[ $line =~ $SP_RE_KEYLINE ]] || return 1
+    (( ${keys[(Ie)$match[1]]} && ! ${+SP_KV[$match[1]]} )) || return 1
+    SP_KV[$match[1]]=$match[2]
+  done
+  (( ${#SP_KV} == ${#keys} ))
+}
+
+# Load the journal into SP_J. Sets SP_JSTATUS to none, valid or invalid.
+# Text-only parse into fixed keys; no value reaches arithmetic before its regex.
+sp_journal_load() {
+  local f=$SP_STATE/state k
+  SP_J=()
+  SP_JSTATUS=none
+  [[ -e $f || -L $f ]] || return 0
+  SP_JSTATUS=invalid
+  [[ -f $f && ! -L $f ]] || return 0
+  sp_kv_parse "$f" $SP_JOURNAL_MAX SP_JKEYS || return 0
+  for k in $SP_JKEYS; do
+    sp_journal_value_ok "$k" "$SP_KV[$k]" || return 0
+  done
+  SP_J=( "${(@kv)SP_KV}" )
+  # Cross-field rule: run is empty exactly when the phase is idle.
+  if [[ $SP_J[phase] == idle ]]; then
+    [[ -z $SP_J[run] ]] || return 0
+  else
+    [[ -n $SP_J[run] ]] || return 0
+  fi
+  # A journal written for another installation is not ours (5.5, RK-18).
+  if [[ $SP_MODE == normal && -n $SP_J[target_path] && $SP_J[target_path] != $SP_TARGET ]]; then
+    return 0
+  fi
+  SP_JSTATUS=valid
+  return 0
+}
+
+# Write SP_J to state.new, then rename over state (S20). Requires the lock.
+# sp_journal_try returns 1 instead of exiting, for phase 2 where a failed
+# write maps to E_RESTORED or E_RECOVER rather than E_BUSY.
+sp_journal_try() {
+  local k new=$SP_STATE/state.new
+  (( SP_LOCK_HELD )) || return 1
+  for k in $SP_JKEYS; do
+    sp_journal_value_ok "$k" "${SP_J[$k]-}" || return 1
+  done
+  [[ -L $new || -L $SP_STATE/state ]] && return 1
+  if [[ -e $new ]]; then
+    /bin/rm -f -- "$new" 2>/dev/null || return 1
+  fi
+  {
+    for k in $SP_JKEYS; do print -r -- "$k=${SP_J[$k]-}"; done
+  } > "$new" 2>/dev/null || return 1
+  /bin/mv -f -- "$new" "$SP_STATE/state" 2>/dev/null || return 1
+}
+
+# Staging (5.6). Clean leftovers when no operation is in progress.
+sp_staging_clean() {
+  local -a left=( "$SP_STATE"/proc.*(.N) )
+  # Process lists of a killed run (F4); the lock is held, none is live.
+  (( ${#left} )) && { /bin/rm -f -- "${left[@]}" || sp_die E_BUSY "cannot remove an old process list" }
+  [[ $SP_JSTATUS == none || ( $SP_JSTATUS == valid && $SP_J[phase] == idle ) ]] || return 0
+  left=( "$SP_STATE"/staging/*(DN) )
+  (( ${#left} )) || return 0
+  sp_rmtree "${left[@]}" || sp_die E_BUSY "cannot clean the staging folder"
+}
+
+# Create staging/<run>/ (S4) without -p; an existing folder is E_BUSY.
+sp_staging_create() {
+  local run="${EPOCHSECONDS}-$$"
+  [[ $run =~ $SP_RE_RUN ]] || sp_die E_BUSY "unexpected run identifier"
+  SP_RUN=$run
+  /bin/mkdir -m 0700 -- "$SP_STATE/staging/$run" 2>/dev/null \
+    || sp_die E_BUSY "staging/$run already exists or cannot be created"
+  SP_RUN_DIR=$SP_STATE/staging/$run
+  sp_check_dir "$SP_RUN_DIR" || sp_die E_BUSY "staging/$run check failed"
+}
+
+# Common prelude for the locking subcommands: state, lock, journal, staging.
+sp_prelude() {
+  sp_state_prepare 1
+  sp_lock_take
+  sp_journal_load
+  [[ $SP_JSTATUS == invalid ]] && sp_die E_BUSY "journal is invalid or belongs to another installation; run recover from the right bundle or inspect $SP_STATE/state"
+  sp_staging_clean
+}
+
+# Journal phase required per subcommand: verify, apply (V3) need none or idle;
+# rollback (RB2) needs idle, and no journal is E_MIGRATION; recover takes any.
+sp_require_phase() {
+  local sub=$1 ph=none
+  [[ $SP_JSTATUS == valid ]] && ph=$SP_J[phase]
+  case $sub in
+    verify|apply)
+      [[ $ph == none || $ph == idle ]] || sp_die E_BUSY "an interrupted operation is recorded (phase $ph); run recover first" ;;
+    rollback)
+      [[ $ph == none ]] && sp_die E_MIGRATION "no patch has been applied; there is nothing to roll back"
+      [[ $ph == idle ]] || sp_die E_BUSY "an interrupted operation is recorded (phase $ph); run recover first" ;;
+  esac
+  return 0
+}
+
+# ---------------------------------------------------------------------------
+# Phase 1 (SP-V 6.1, V2-V15), row 39. apply (row 17) reuses sp_phase1.
+# Every tool output is matched against a numeric or hex regex before use (RK-14).
+# After V6 the caller's file is never read again (TOCTOU, REV-8).
+typeset -g SP_PATCH_SRC='' SP_PATCH_SIZE='' SP_NEW_APP='' SP_NEW_KEY=''
+typeset -gA SP_M
+
+# Byte size of a regular file (stat -f %z, validated). REPLY.
+sp_size() {
+  local out
+  out=$(/usr/bin/stat -f %z -- "$1" 2>/dev/null) || return 1
+  [[ $out =~ $SP_RE_UINT ]] || return 1
+  REPLY=$out
+}
+
+# Filesystem id (stat -f %d, validated). REPLY.
+sp_dev() {
+  local out
+  out=$(/usr/bin/stat -f %d -- "$1" 2>/dev/null) || return 1
+  [[ $out =~ $SP_RE_UINT ]] || return 1
+  REPLY=$out
+}
+
+# Free bytes on the state volume: Avail of df -k -P x 1024 (S15). REPLY.
+sp_avail() {
+  local out
+  out=$(/bin/df -k -P -- "$SP_STATE" 2>/dev/null) || return 1
+  local -a lines=( "${(@f)out}" )
+  (( ${#lines} == 2 )) || return 1
+  [[ $lines[2] =~ ' ([0-9]{1,15}) +([0-9]{1,15}) +([0-9]{1,15}) +[0-9]{1,3}% +/' ]] || return 1
+  REPLY=$(( match[3] * 1024 ))
+}
+
+# Disk check (5.8, S15). $1 = bytes required.
+sp_disk_need() {
+  sp_avail || sp_die E_DISK "cannot read the free space of the state volume"
+  (( REPLY >= $1 )) || sp_die E_DISK "not enough free space: need $1 bytes, available $REPLY bytes"
+}
+
+# Volume check (5.8): state folder and the target's parent on one volume.
+sp_volume_check() {
+  local a b
+  sp_dev "$SP_STATE" || sp_die E_VOLUME "cannot read the volume of the state folder"
+  a=$REPLY
+  sp_dev "${SP_TARGET:h}" || sp_die E_VOLUME "cannot read the volume of the target folder"
+  b=$REPLY
+  [[ $a == $b ]] || sp_die E_VOLUME "the state folder and Swarm.app are on different volumes"
+}
+
+# Plist key of a given Info.plist. $1 plist, $2 key. REPLY.
+sp_plist_at() {
+  local out
+  out=$(/usr/bin/plutil -extract "$2" raw -o - -- "$1" 2>/dev/null) || return 1
+  REPLY=$out
+}
+
+# Extract one container entry with a byte bound (V8, V12). $1 entry, $2 limit,
+# $3 output file. REPLY = unzip exit status. Never extracts the container as a tree.
+sp_entry_extract() {
+  setopt local_options no_err_return
+  /usr/bin/unzip -p -- "$SP_RUN_DIR/patch" "$1" 2>/dev/null | /usr/bin/head -c $(( $2 + 1 )) > "$3"
+  REPLY=$pipestatus[1]
+  return 0
+}
+
+# V2: one argument, absolute path, no leading '-', regular file, .swarmpatch (RK-15).
+sp_v2_arg() {
+  local arg=$1 abs
+  [[ -n $arg ]] || sp_die E_USAGE "empty patch file argument"
+  [[ $arg != -* ]] || sp_die E_USAGE "patch file argument starts with '-'; options are not accepted here"
+  [[ ! -L $arg ]] || sp_die E_USAGE "patch file is a symlink"
+  abs=${arg:A}
+  [[ $abs == /* && ${abs:t} != -* ]] || sp_die E_USAGE "patch file name starts with '-'"
+  [[ $abs == *?.swarmpatch ]] || sp_die E_USAGE "patch file name must end in .swarmpatch"
+  [[ -f $abs && ! -L $abs ]] || sp_die E_USAGE "patch file is not a regular file"
+  sp_size "$abs" || sp_die E_USAGE "cannot read the size of the patch file"
+  SP_PATCH_SRC=$abs
+  SP_PATCH_SIZE=$REPLY
+}
+
+# V7: exactly the three flat regular-file entries of 3.1. The entry count comes
+# from the zipinfo summary line (RK-20); encrypted entries are refused.
+sp_v7_container() {
+  local p=$SP_RUN_DIR/patch out i
+  local -a names sorted lines f
+  out=$(/usr/bin/zipinfo -1 -- "$p" 2>/dev/null) || sp_die E_CONTAINER "the patch file is not a valid zip container"
+  names=( "${(@f)out}" )
+  sorted=( "${(@o)names}" )
+  (( ${#sorted} == 3 )) && [[ $sorted[1] == manifest && $sorted[2] == manifest.sig && $sorted[3] == payload.zip ]] \
+    || sp_die E_CONTAINER "the container must hold exactly manifest, manifest.sig and payload.zip"
+  out=$(/usr/bin/zipinfo -- "$p" 2>/dev/null) || sp_die E_CONTAINER "the patch file is not a valid zip container"
+  lines=( "${(@f)out}" )
+  (( ${#lines} == 6 )) || sp_die E_CONTAINER "unexpected zipinfo listing"
+  [[ $lines[2] =~ ', number of entries: ([0-9]{1,6})$' && $match[1] == 3 ]] \
+    || sp_die E_CONTAINER "the container summary does not report exactly 3 entries"
+  [[ $lines[6] == '3 files, '* ]] || sp_die E_CONTAINER "unexpected zipinfo summary"
+  for i in 3 4 5; do
+    [[ $lines[i] == -* ]] || sp_die E_CONTAINER "container entries must be regular files"
+    f=( ${=lines[i]} )
+    [[ ${#f} -ge 9 && $f[5] == [bt][x-] ]] || sp_die E_CONTAINER "container entries must not be encrypted"
+  done
+}
+
+# V8: manifest and manifest.sig with the register bounds (RK-02).
+sp_v8_entries() {
+  local d=$SP_RUN_DIR rc_m rc_s
+  sp_entry_extract manifest $SP_MANIFEST_MAX "$d/manifest"; rc_m=$REPLY
+  sp_entry_extract manifest.sig $SP_SIG_MAX "$d/manifest.sig"; rc_s=$REPLY
+  sp_size "$d/manifest" || sp_die E_CONTAINER "cannot read the extracted manifest"
+  (( REPLY <= SP_MANIFEST_MAX )) || sp_die E_MANIFEST "manifest is larger than $SP_MANIFEST_MAX bytes"
+  sp_size "$d/manifest.sig" || sp_die E_CONTAINER "cannot read the extracted manifest.sig"
+  (( REPLY <= SP_SIG_MAX )) || sp_die E_MANIFEST "manifest.sig is larger than $SP_SIG_MAX bytes"
+  [[ $rc_m == 0 && $rc_s == 0 ]] || sp_die E_CONTAINER "cannot read manifest or manifest.sig from the container"
+}
+
+# V9: register verify command over the staging copies (3.3, F3).
+sp_v9_signature() {
+  local d=$SP_RUN_DIR
+  /usr/bin/ssh-keygen -Y verify -f "$SP_SIGNERS" -I "$SP_PRINCIPAL" -n "$SP_NS" \
+    -s "$d/manifest.sig" < "$d/manifest" >/dev/null 2>&1 \
+    || sp_die E_SIGNATURE "manifest signature is not valid for the trusted GSP key"
+}
+
+# V10: manifest syntax and values (3.2), then the installed-release rules.
+sp_v10_manifest() {
+  local k
+  sp_kv_parse "$SP_RUN_DIR/manifest" $SP_MANIFEST_MAX SP_MKEYS \
+    || sp_die E_MANIFEST "manifest breaks the key=value rules of spec 3.2 (size, bytes, line form, unknown, duplicate or missing key)"
+  SP_M=( "${(@kv)SP_KV}" )
+
+  [[ $SP_M[format] == 1 ]] || sp_die E_MANIFEST "unsupported manifest format"
+  [[ $SP_M[bundle_id] == $SP_BUNDLE_ID ]] || sp_die E_MANIFEST "patch is for another bundle identifier"
+  for k in release from_min data_min_release; do
+    [[ $SP_M[$k] =~ $SP_RE_SEMVER ]] || sp_die E_MANIFEST "$k is not a valid release number"
+  done
+  sp_semver_cmp "$SP_M[from_min]" "$SP_M[release]" || sp_die E_MANIFEST "release comparison failed"
+  (( REPLY < 0 )) || sp_die E_MANIFEST "from_min must be lower than release"
+  [[ $SP_M[payload_sha256] =~ $SP_RE_SHA256 ]] || sp_die E_MANIFEST "payload_sha256 has an unexpected form"
+  [[ $SP_M[payload_bytes] =~ $SP_RE_SIZE ]] || sp_die E_MANIFEST "payload_bytes has an unexpected form"
+  [[ $SP_M[unpacked_bytes] =~ $SP_RE_SIZE ]] || sp_die E_MANIFEST "unpacked_bytes has an unexpected form"
+  case $SP_M[migration] in
+    none)
+      sp_semver_cmp "$SP_M[data_min_release]" "$SP_M[from_min]" || sp_die E_MANIFEST "release comparison failed"
+      (( REPLY <= 0 )) || sp_die E_MANIFEST "migration=none needs data_min_release <= from_min" ;;
+    forward)
+      [[ $SP_M[data_min_release] == $SP_M[release] ]] || sp_die E_MANIFEST "migration=forward needs data_min_release = release" ;;
+    *) sp_die E_MANIFEST "migration must be none or forward" ;;
+  esac
+
+  # Installed release from the own Info.plist only, never from the manifest (D8).
+  sp_semver_cmp "$SP_M[release]" "$SP_RELEASE" || sp_die E_MANIFEST "release comparison failed"
+  (( REPLY > 0 )) || sp_die E_DOWNGRADE "patch release $SP_M[release] is not newer than the installed release $SP_RELEASE"
+  sp_semver_cmp "$SP_RELEASE" "$SP_M[from_min]" || sp_die E_MANIFEST "release comparison failed"
+  (( REPLY >= 0 )) || sp_die E_DOWNGRADE "installed release $SP_RELEASE is older than from_min $SP_M[from_min]"
+}
+
+# V12: payload.zip bounded by payload_bytes, size and SHA-256 must match.
+sp_v12_payload() {
+  local d=$SP_RUN_DIR pb=$SP_M[payload_bytes] rc out
+  sp_entry_extract payload.zip $pb "$d/payload.zip"; rc=$REPLY
+  sp_size "$d/payload.zip" || sp_die E_HASH "cannot read the extracted payload"
+  [[ $REPLY == $pb ]] || sp_die E_HASH "payload size does not match payload_bytes"
+  out=$(/usr/bin/shasum -a 256 -- "$d/payload.zip" 2>/dev/null) || sp_die E_HASH "cannot hash the payload"
+  out=${out[1,64]}
+  [[ $out =~ $SP_RE_SHA256 && $out == $SP_M[payload_sha256] ]] || sp_die E_HASH "payload SHA-256 does not match payload_sha256"
+  [[ $rc == 0 ]] || sp_die E_CONTAINER "cannot read payload.zip from the container"
+  /bin/rm -f -- "$d/patch" || sp_die E_CONTAINER "cannot remove the staging copy of the patch"
+}
+
+# V13: extract to x/, exactly one top entry Swarm.app, hidden files counted (RK-16).
+sp_v13_extract() {
+  local d=$SP_RUN_DIR out
+  local -a top
+  /bin/mkdir -m 0700 -- "$d/x" 2>/dev/null || sp_die E_SEAL "cannot create the extraction folder"
+  /usr/bin/ditto -x -k --noqtn -- "$d/payload.zip" "$d/x" >/dev/null 2>&1 || sp_die E_SEAL "cannot extract payload.zip"
+  top=( "$d"/x/*(DN) )
+  (( ${#top} == 1 )) && [[ ${top[1]:t} == Swarm.app && -d $top[1] && ! -L $top[1] ]] \
+    || sp_die E_SEAL "payload must hold exactly one Swarm.app and nothing else"
+  /bin/rm -f -- "$d/payload.zip" || sp_die E_SEAL "cannot remove the staging copy of payload.zip"
+  out=$(/usr/bin/du -sk -- "$d/x/Swarm.app" 2>/dev/null) || sp_die E_HASH "cannot measure the extracted app"
+  [[ $out =~ '^([0-9]{1,15})[[:space:]]' ]] || sp_die E_HASH "unexpected du output"
+  (( match[1] * 1024 <= SP_M[unpacked_bytes] * 101 / 100 )) || sp_die E_HASH "extracted app is larger than unpacked_bytes allows"
+  SP_NEW_APP=$d/x/Swarm.app
+}
+
+# Quarantine attribute anywhere in the tree, symlinks not followed. 0 = found, 1 = none.
+sp_has_quarantine() {
+  local out line
+  out=$(/usr/bin/xattr -r -s -- "$1" 2>/dev/null) || return 2
+  for line in "${(@f)out}"; do
+    if [[ $line == *': com.apple.quarantine' ]]; then return 0; fi
+  done
+  return 1
+}
+
+# V14: checks on the new app. Symlinks (e) are checked first so that xattr and
+# codesign never act through a link that leaves the bundle.
+sp_v14_newapp() {
+  local app=$SP_NEW_APP l t lex rc
+  local -a links
+  [[ -d $app && ! -L $app ]] || sp_die E_SEAL "new app is not a directory"
+  # (e) relative targets only, lexically and really under the bundle.
+  links=( "$app"/**/*(DN@) )
+  for l in $links; do
+    t=$(/usr/bin/readlink -- "$l" 2>/dev/null) || sp_die E_SEAL "cannot read a symlink in the new app"
+    [[ -n $t && $t != /* ]] || sp_die E_SEAL "new app holds an absolute symlink"
+    lex="${l:h}/$t"
+    lex=${lex:a}
+    [[ $lex == $app/* ]] || sp_die E_SEAL "new app holds a symlink that leaves the bundle"
+    [[ ${l:A} == $app/* ]] || sp_die E_SEAL "new app holds a symlink that resolves outside the bundle"
+  done
+  # (a) quarantine (D9).
+  rc=0; sp_has_quarantine "$app" || rc=$?
+  if (( rc == 0 )); then
+    /usr/bin/xattr -d -r -s com.apple.quarantine -- "$app" >/dev/null 2>&1 || sp_die E_SEAL "cannot remove the quarantine attribute"
+    rc=0; sp_has_quarantine "$app" || rc=$?
+  fi
+  (( rc == 1 )) || sp_die E_SEAL "new app carries the quarantine attribute or cannot be inspected"
+  # (b) CA, (c) bundle_id, (d) release; not sp_ca: D39-2 anchors on codesign (m5).
+  /usr/bin/codesign --verify --deep --strict -- "$app" >/dev/null 2>&1 || sp_die E_SEAL "new app fails codesign verification"
+  [[ -f $app/Contents/Info.plist && ! -L $app/Contents/Info.plist ]] || sp_die E_SEAL "new app has no Info.plist"
+  sp_plist_at "$app/Contents/Info.plist" CFBundleIdentifier || sp_die E_SEAL "new app has no CFBundleIdentifier"
+  [[ $REPLY == $SP_BUNDLE_ID && $REPLY == $SP_M[bundle_id] ]] || sp_die E_SEAL "new app has another bundle identifier"
+  sp_plist_at "$app/Contents/Info.plist" SwarmRelease || sp_die E_SEAL "new app has no SwarmRelease"
+  [[ $REPLY =~ $SP_RE_SEMVER ]] || sp_die E_SEAL "new app SwarmRelease is not a valid release number"
+  [[ $REPLY == $SP_M[release] ]] || sp_die E_SEAL "new app SwarmRelease does not match the manifest release"
+  # (f) applier and trust anchor present, so the next patch can be accepted.
+  local pd=$app/Contents/Resources/swarm-patch
+  [[ -d $pd && ! -L $pd && -f $pd/swarm-patch && ! -L $pd/swarm-patch \
+     && -f $pd/allowed_signers && ! -L $pd/allowed_signers && -s $pd/allowed_signers ]] \
+    || sp_die E_SEAL "new app lacks the applier or a non-empty allowed_signers"
+}
+
+# V15: new_key = yes when the new trust anchor differs from the own one.
+sp_v15_newkey() {
+  local a b
+  a=$(/usr/bin/shasum -a 256 -- "$SP_SIGNERS" 2>/dev/null) || sp_die E_SIGNATURE "cannot hash allowed_signers"
+  b=$(/usr/bin/shasum -a 256 -- "$SP_NEW_APP/Contents/Resources/swarm-patch/allowed_signers" 2>/dev/null) \
+    || sp_die E_SEAL "cannot hash the new allowed_signers"
+  a=${a[1,64]} b=${b[1,64]}
+  [[ $a =~ $SP_RE_SHA256 && $b =~ $SP_RE_SHA256 ]] || sp_die E_SEAL "unexpected shasum output"
+  if [[ $a == $b ]]; then SP_NEW_KEY=no; else SP_NEW_KEY=yes; fi
+}
+
+# Phase 1, V2-V15. $1 subcommand, $2 patch file argument. Leaves the new app at
+# SP_NEW_APP and the manifest in SP_M; the target and the journal are unchanged.
+sp_phase1() {
+  local sub=$1
+  sp_v2_arg "$2"                                   # V2
+  sp_prelude                                       # V3
+  sp_require_phase "$sub"
+  sp_staging_create
+  sp_volume_check                                  # V4
+  if [[ $sub == apply ]]; then
+    sp_proc_check p1                               # AP-P1 (6.2)
+  fi
+  sp_disk_need $(( SP_PATCH_SIZE + SP_MARGIN ))     # V5
+  /usr/bin/ditto --noqtn -- "$SP_PATCH_SRC" "$SP_RUN_DIR/patch" >/dev/null 2>&1 \
+    || sp_die E_CONTAINER "cannot copy the patch file"   # V6
+  [[ -f $SP_RUN_DIR/patch && ! -L $SP_RUN_DIR/patch ]] || sp_die E_CONTAINER "staging copy is not a regular file"
+  sp_v7_container                                  # V7
+  sp_v8_entries                                    # V8
+  sp_v9_signature                                  # V9
+  sp_v10_manifest                                  # V10
+  sp_disk_need $(( 2 * SP_M[unpacked_bytes] + SP_MARGIN ))   # V11
+  sp_v12_payload                                   # V12
+  sp_v13_extract                                   # V13
+  sp_v14_newapp                                    # V14
+  sp_v15_newkey                                    # V15
+}
+
+# SP-V (6.1). V16: report, then the exit trap removes staging/<run>/ and the lock.
+sp_cmd_verify() {
+  (( $# == 1 )) || sp_die E_USAGE "usage: swarm-patch verify <file>.swarmpatch"
+  sp_phase1 verify "$1"
+  print -r -- "result=verified"
+  print -r -- "release=$SP_M[release]"
+  print -r -- "from_release=$SP_RELEASE"
+  print -r -- "migration=$SP_M[migration]"
+  print -r -- "new_key=$SP_NEW_KEY"
+  exit ${SP_CODE[E_OK]}
+}
+
+# ---------------------------------------------------------------------------
+# Process check P (5.7, C3 RK-04), row 17. Used by apply (AP-P1, AP1); rollback
+# and recover (row 18) reuse it.
+typeset -gA SP_MINE
+typeset -g SP_CA_RELEASE='' SP_RECOVER_CMD=''
+
+# PIDs of this applier and its ancestors (ppid chain via /bin/ps, S22) into SP_MINE.
+sp_ancestors() {
+  local pid=$$ out n
+  SP_MINE=( $$ 1 )
+  for n in {1..128}; do
+    out=$(/bin/ps -o ppid= -p $pid 2>/dev/null) || sp_die E_RUNNING "cannot read the parent of pid $pid with ps"
+    out=${out//[[:space:]]/}
+    [[ $out =~ '^(0|[1-9][0-9]{0,6})$' ]] || sp_die E_RUNNING "unexpected ps output for pid $pid"
+    (( out > 1 )) || return 0
+    SP_MINE[$out]=1
+    pid=$out
+  done
+  sp_die E_RUNNING "process ancestor chain is too long"
+}
+
+# E_RUNNING when a process other than this applier or its ancestors has an
+# argument starting with one of the six prefixes. The prefixes are compared as
+# quoted literals, never as a regex or glob, so '(', ')', '[', spaces and '.'
+# in the target path match only themselves. pgrep writes to a file, not via a
+# command substitution, so no zsh subshell with this argv exists while it runs.
+# The file is in the 0700 state folder, outside staging/ (F4, C11). $1 = label.
+sp_proc_check() {
+  setopt local_options no_err_return
+  local out=$SP_STATE/proc.$$.$1 rc line pid='' cmd p base
+  local -a prefixes hits running
+  for base in "$SP_TARGET" "$SP_STATE/previous/Swarm.app"; do
+    prefixes+=( "$base/Contents/MacOS/" "$base/Contents/Frameworks/" "$base/Contents/Resources/opencode-cli" )
+  done
+  [[ ! -e $out && ! -L $out ]] || sp_die E_RUNNING "process list file cannot be created"
+  SP_PROC_FILE=$out
+  /usr/bin/pgrep -lf . > "$out" 2>/dev/null
+  rc=$?
+  (( rc < 2 )) || sp_die E_RUNNING "cannot list processes (pgrep exit $rc), so a running Swarm cannot be ruled out"
+  [[ -f $out && ! -L $out ]] || sp_die E_RUNNING "process list file missing"
+  while IFS= read -r line || [[ -n $line ]]; do
+    if [[ $line =~ '^([1-9][0-9]{0,6})( |$)(.*)$' ]]; then
+      pid=$match[1] cmd=$match[3]
+    else
+      cmd=$line   # an argument holding a newline continues the previous process
+    fi
+    [[ -n $pid ]] || continue
+    for p in $prefixes; do
+      if [[ " $cmd" == *" $p"* ]]; then hits+=( $pid ); break; fi
+    done
+  done < "$out"
+  /bin/rm -f -- "$out" 2>/dev/null && SP_PROC_FILE=''
+  (( ${#hits} )) || return 0
+  sp_ancestors
+  for pid in ${(u)hits}; do
+    (( ${+SP_MINE[$pid]} )) || running+=( $pid )
+  done
+  (( ${#running} )) || return 0
+  sp_die E_RUNNING "Swarm is running (pid ${(j:, :)running}); quit Swarm and try again"
+}
+
+# CDHash of an app from codesign -dvvv (S21, S26): exactly one ^CDHash= line. REPLY.
+sp_cdhash() {
+  local out line
+  local -a hit
+  out=$(/usr/bin/codesign -dvvv -- "$1" 2>&1) || return 1
+  for line in "${(@f)out}"; do
+    if [[ $line =~ '^CDHash=(.*)$' ]]; then hit+=( "$match[1]" ); fi
+  done
+  (( ${#hit} == 1 )) || return 1
+  [[ $hit[1] =~ $SP_RE_CDHASH ]] || return 1
+  REPLY=$hit[1]
+}
+
+# CA (5.9) of the app at $1. SP_CA_RELEASE = its SwarmRelease, REPLY = its CDHash.
+sp_ca() {
+  local app=$1
+  [[ -d $app && ! -L $app ]] || return 1
+  /usr/bin/codesign --verify --deep --strict -- "$app" >/dev/null 2>&1 || return 1
+  [[ -f $app/Contents/Info.plist && ! -L $app/Contents/Info.plist ]] || return 1
+  sp_plist_at "$app/Contents/Info.plist" CFBundleIdentifier || return 1
+  [[ $REPLY == $SP_BUNDLE_ID ]] || return 1
+  sp_plist_at "$app/Contents/Info.plist" SwarmRelease || return 1
+  [[ $REPLY =~ $SP_RE_SEMVER ]] || return 1
+  SP_CA_RELEASE=$REPLY
+  sp_cdhash "$app"
+}
+
+# SHA256 fingerprints of the keys in an allowed_signers file (T20, RK-20).
+# $1 file, $2 scratch file in staging/<run>/. REPLY = space-separated list.
+sp_fingerprints() {
+  local f=$1 tmp=$2 line out fps=''
+  : > "$tmp" || return 1
+  while IFS= read -r line || [[ -n $line ]]; do
+    if [[ $line =~ '(^| )((ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp(256|384|521)|sk-ssh-ed25519@openssh\.com|sk-ecdsa-sha2-nistp256@openssh\.com) [A-Za-z0-9+/]+={0,2})( |$)' ]]; then
+      print -r -- "$match[2]" >> "$tmp"
+    fi
+  done < "$f"
+  out=$(/usr/bin/ssh-keygen -l -E sha256 -f "$tmp" 2>/dev/null) || return 1
+  for line in "${(@f)out}"; do
+    if [[ $line =~ ' (SHA256:[A-Za-z0-9+/]{43}) ' ]]; then fps+=" $match[1]"; fi
+  done
+  [[ -n $fps ]] || return 1
+  REPLY=${fps# }
+}
+
+# Journal "idle without backup" (5.5). $1 release at the target, $2 its CDHash.
+sp_journal_idle_nobackup() {
+  SP_J[phase]=idle SP_J[run]='' SP_J[from_release]='' SP_J[previous_cdhash]=''
+  SP_J[started_at]='' SP_J[payload_sha256]=''
+  SP_J[to_release]=$1 SP_J[installed_cdhash]=$2
+  sp_journal_try
+}
+
+# Phase 2 failure that left no intact app at a known place (S13).
+sp_die_recover() {
+  sp_die E_RECOVER "$1; target $SP_TARGET, backup $SP_STATE/previous/Swarm.app, staging $SP_RUN_DIR; run: $SP_RECOVER_CMD"
+}
+
+# Phase 2 failure after which the installed app is back in place: staging can go.
+sp_die_restored() {
+  SP_KEEP_RUN=0
+  sp_die E_RESTORED "$1"
+}
+
+# AP-R: AP6-AP8 failed, the installed app is back. The old backup returns from
+# expired/ and the pre-AP5 journal (orig, ost of the caller) is rewritten (M-3,
+# C12); else idle without backup with the pre-AP5 data_min_release (F5, C11).
+# Returns 1 when the journal cannot be written.
+sp_ap_restored() {
+  local exp=$SP_RUN_DIR/expired/Swarm.app prev=$SP_STATE/previous/Swarm.app back=1
+  if [[ -e $exp || -L $exp ]]; then
+    [[ ! -e $prev && ! -L $prev ]] && /bin/mv -- "$exp" "$prev" 2>/dev/null || back=0
+  fi
+  if (( back )) && [[ $ost == valid ]]; then
+    SP_J=( "${(@kv)orig}" )
+    sp_journal_try || return 1
+  else
+    SP_J[data_min_release]=${orig[data_min_release]-}
+    sp_journal_idle_nobackup "$SP_RELEASE" "$old_cd" || return 1
+  fi
+  sp_die_restored "$1"
+}
+
+# SP-AP (6.2): apply [--accept-new-key] [--accept-forward-migration] <file>.swarmpatch
+sp_cmd_apply() {
+  local accept_key=0 accept_fwd=0 old new
+  while (( $# > 1 )); do
+    case $1 in
+      --accept-new-key) (( ! accept_key )) || sp_die E_USAGE "option given twice: $1"; accept_key=1 ;;
+      --accept-forward-migration) (( ! accept_fwd )) || sp_die E_USAGE "option given twice: $1"; accept_fwd=1 ;;
+      *) sp_die E_USAGE "usage: swarm-patch apply [--accept-new-key] [--accept-forward-migration] <file>.swarmpatch" ;;
+    esac
+    shift
+  done
+  (( $# == 1 )) || sp_die E_USAGE "usage: swarm-patch apply [--accept-new-key] [--accept-forward-migration] <file>.swarmpatch"
+  sp_phase1 apply "$1"                             # V2-V15 with AP-P1
+
+  # AP-C: confirmations. Fingerprints are printed whenever the key changes (RK-20).
+  if [[ $SP_NEW_KEY == yes ]]; then
+    sp_fingerprints "$SP_SIGNERS" "$SP_RUN_DIR/fp.old" || sp_die E_SIGNATURE "cannot read the fingerprint of the trusted key"
+    old=$REPLY
+    sp_fingerprints "$SP_NEW_APP/Contents/Resources/swarm-patch/allowed_signers" "$SP_RUN_DIR/fp.new" \
+      || sp_die E_SEAL "cannot read the fingerprint of the new trusted key"
+    new=$REPLY
+    print -ru2 -- "swarm-patch: notice: this patch replaces the trusted GSP key: old key $old, new key $new; confirm the new fingerprint with GSP through another channel"
+  fi
+  if [[ $SP_M[migration] == forward ]] && (( ! accept_fwd )); then
+    sp_die E_CONFIRM "release $SP_M[release] migrates data forward; rollback to $SP_RELEASE is refused afterwards; rerun with --accept-forward-migration to continue"
+  fi
+  if [[ $SP_NEW_KEY == yes ]] && (( ! accept_key )); then
+    sp_die E_CONFIRM "the patch carries a new trusted key; compare the fingerprints above, then rerun with --accept-new-key"
+  fi
+  if [[ $SP_M[migration] == forward ]]; then
+    print -ru2 -- "swarm-patch: warning: migration=forward; after this apply, rollback to $SP_RELEASE is refused (data has moved forward); the backup is kept until the next patch succeeds"
+  fi
+  sp_apply_phase2
+}
+
+# Phase 2 (AP1-AP9). Runs only when phase 1 passed completely.
+sp_apply_phase2() {
+  local prev=$SP_STATE/previous/Swarm.app old_cd new_cd dmr bkp ost=$SP_JSTATUS
+  local -A orig
+  orig=( "${(@kv)SP_J}" )   # pre-AP5 journal for sp_ap_restored (M-3, F5)
+  # AP1: the extraction took time, so check again right before the first rename.
+  sp_proc_check ap1
+  # AP2
+  sp_cdhash "$SP_TARGET" || sp_die E_SEAL "cannot read the CDHash of the installed app"
+  old_cd=$REPLY
+  bkp=$prev/Contents/Resources/swarm-patch/swarm-patch
+  SP_RECOVER_CMD="/bin/zsh -f ${(qq)bkp} recover --target ${(qq)SP_TARGET}"
+  print -r -- "recover_command=$SP_RECOVER_CMD"
+  # AP3: signals ignored until phase 2 ends (REV-5).
+  trap '' INT TERM HUP
+  SP_KEEP_RUN=1
+
+  # AP4: the old backup goes aside; it is deleted with staging only after success.
+  if [[ -e $prev || -L $prev ]]; then
+    /bin/mkdir -m 0700 -- "$SP_RUN_DIR/expired" 2>/dev/null \
+      || sp_die_restored "cannot create staging/$SP_RUN/expired; nothing was changed"
+    /bin/mv -- "$prev" "$SP_RUN_DIR/expired/Swarm.app" 2>/dev/null \
+      || sp_die_restored "cannot move the old backup aside; nothing was changed"
+  fi
+
+  # AP5: data_min_release only grows (5.5).
+  dmr=$SP_M[data_min_release]
+  if [[ $SP_JSTATUS == valid && -n $SP_J[data_min_release] ]]; then
+    sp_semver_cmp "$SP_J[data_min_release]" "$dmr" || sp_die_recover "release comparison failed"
+    (( REPLY <= 0 )) || dmr=$SP_J[data_min_release]
+  fi
+  SP_J[state_format]=1 SP_J[phase]=staged SP_J[run]=$SP_RUN SP_J[target_path]=$SP_TARGET
+  SP_J[from_release]=$SP_RELEASE SP_J[to_release]=$SP_M[release] SP_J[data_min_release]=$dmr
+  SP_J[started_at]=$EPOCHSECONDS SP_J[payload_sha256]=$SP_M[payload_sha256] SP_J[previous_cdhash]=$old_cd
+  SP_J[installed_cdhash]=${SP_J[installed_cdhash]-} SP_J[last_apply]=${SP_J[last_apply]-}
+  sp_journal_try || sp_die_recover "cannot write the journal (phase staged)"
+
+  # AP6: installed app becomes the backup.
+  if [[ -e $prev || -L $prev ]] || ! /bin/mv -- "$SP_TARGET" "$prev" 2>/dev/null; then
+    sp_ap_restored "cannot move the installed app to the backup folder; the installed app is unchanged" \
+      || sp_die_recover "cannot move the installed app, and cannot write the journal"
+  fi
+  SP_J[phase]=old_moved
+  sp_journal_try || sp_die_recover "cannot write the journal (phase old_moved)"
+
+  # AP7: new app into place; on failure the backup goes back.
+  if [[ -e $SP_TARGET || -L $SP_TARGET ]] || ! /bin/mv -- "$SP_NEW_APP" "$SP_TARGET" 2>/dev/null; then
+    if [[ ! -e $SP_TARGET && ! -L $SP_TARGET ]] && /bin/mv -- "$prev" "$SP_TARGET" 2>/dev/null; then
+      sp_ap_restored "cannot place the new app; the installed app was put back" \
+        || sp_die_recover "cannot place the new app; the installed app was put back, but the journal cannot be written"
+    fi
+    sp_die_recover "cannot place the new app, and cannot put the installed app back"
+  fi
+  SP_J[phase]=new_placed
+  sp_journal_try || sp_die_recover "cannot write the journal (phase new_placed)"
+
+  # AP8: final check of the placed app.
+  new_cd=''
+  if sp_ca "$SP_TARGET" && [[ $SP_CA_RELEASE == $SP_M[release] && $REPLY != $old_cd ]]; then
+    new_cd=$REPLY
+  fi
+  if [[ -z $new_cd ]]; then
+    if /bin/mkdir -m 0700 -- "$SP_RUN_DIR/discard" 2>/dev/null \
+       && /bin/mv -- "$SP_TARGET" "$SP_RUN_DIR/discard/Swarm.app" 2>/dev/null \
+       && [[ ! -e $SP_TARGET && ! -L $SP_TARGET ]] \
+       && /bin/mv -- "$prev" "$SP_TARGET" 2>/dev/null; then
+      sp_ap_restored "the new app failed the final check; the installed app was put back" \
+        || sp_die_recover "the new app failed the final check; the installed app was put back, but the journal cannot be written"
+    fi
+    sp_die_recover "the new app failed the final check, and the installed app could not be put back"
+  fi
+
+  # AP9: idle; the other fields stay as written in AP5.
+  SP_J[phase]=idle SP_J[run]='' SP_J[started_at]='' SP_J[installed_cdhash]=$new_cd SP_J[last_apply]=$SP_M[release]
+  sp_journal_try || sp_die_recover "the new app is in place, but the journal cannot be written (phase new_placed)"
+  sp_finish_run
+  print -r -- "result=applied"
+  print -r -- "release=$SP_M[release]"
+  print -r -- "from_release=$SP_RELEASE"
+  print -r -- "migration=$SP_M[migration]"
+  print -r -- "new_key=$SP_NEW_KEY"
+  exit ${SP_CODE[E_OK]}
+}
+
+# ---------------------------------------------------------------------------
+# rollback (6.3) and recover (6.4), row 18.
+
+# SP-RB (6.3): rollback, no arguments.
+sp_cmd_rollback() {
+  (( $# == 0 )) || sp_die E_USAGE "rollback takes no arguments"
+  local prev=$SP_STATE/previous/Swarm.app disc bkp_rel bkp_cd tgt_cd
+  local -A orig
+  sp_prelude                                       # RB2: lock, journal
+  sp_require_phase rollback
+  sp_staging_create                                # RB3
+  sp_volume_check
+  sp_proc_check rb3
+
+  # RB4: register section 9 conditions; any failure is E_MIGRATION, nothing changed.
+  [[ -n $SP_J[previous_cdhash] ]] || sp_die E_MIGRATION "no backup is recorded; there is nothing to roll back"
+  sp_ca "$prev" || sp_die E_MIGRATION "the backup app is missing or fails its check"
+  bkp_rel=$SP_CA_RELEASE bkp_cd=$REPLY
+  [[ $bkp_cd == $SP_J[previous_cdhash] ]] || sp_die E_MIGRATION "the backup app is not the one recorded by the last apply"
+  [[ $bkp_rel == $SP_J[from_release] ]] || sp_die E_MIGRATION "the backup release does not match the journal"
+  sp_semver_cmp "$bkp_rel" "$SP_RELEASE" || sp_die E_MIGRATION "release comparison failed"
+  (( REPLY < 0 )) || sp_die E_MIGRATION "the backup release $bkp_rel is not older than the installed release $SP_RELEASE"
+  if [[ -n $SP_J[data_min_release] ]]; then
+    sp_semver_cmp "$bkp_rel" "$SP_J[data_min_release]" || sp_die E_MIGRATION "release comparison failed"
+    (( REPLY >= 0 )) || sp_die E_MIGRATION "data has moved forward to $SP_J[data_min_release] (migration=forward); rollback to $bkp_rel is refused; the backup is kept"
+  fi
+  sp_cdhash "$SP_TARGET" || sp_die E_MIGRATION "cannot read the CDHash of the installed app"
+  tgt_cd=$REPLY
+  [[ $tgt_cd == $SP_J[installed_cdhash] ]] || sp_die E_MIGRATION "the installed app was replaced outside swarm-patch; rollback is refused"
+
+  orig=( "${(@kv)SP_J}" )
+  disc=$SP_RUN_DIR/discard/Swarm.app
+  SP_RECOVER_CMD="/bin/zsh -f ${(qq)SP_SELF} recover, or when the target is missing: /bin/zsh -f ${(qq)prev}/Contents/Resources/swarm-patch/swarm-patch recover --target ${(qq)SP_TARGET}"
+  # RB5: signals ignored until the end (REV-5).
+  trap '' INT TERM HUP
+  SP_KEEP_RUN=1
+  SP_J[phase]=rollback_staged SP_J[run]=$SP_RUN SP_J[started_at]=$EPOCHSECONDS
+  sp_journal_try || sp_die_recover "cannot write the journal (phase rollback_staged)"
+
+  # RB6: installed app aside.
+  if ! /bin/mkdir -m 0700 -- "$SP_RUN_DIR/discard" 2>/dev/null || ! /bin/mv -- "$SP_TARGET" "$disc" 2>/dev/null; then
+    SP_J=( "${(@kv)orig}" )
+    if [[ -d $SP_TARGET && ! -L $SP_TARGET ]] && sp_journal_try; then
+      sp_die_restored "cannot move the installed app aside; nothing was changed"
+    fi
+    sp_die_recover "cannot move the installed app aside, and cannot restore the journal"
+  fi
+  SP_J[phase]=rollback_moved
+  sp_journal_try || sp_die_recover "cannot write the journal (phase rollback_moved)"
+
+  # RB7: backup into place; on failure the installed app goes back.
+  if [[ -e $SP_TARGET || -L $SP_TARGET ]] || ! /bin/mv -- "$prev" "$SP_TARGET" 2>/dev/null; then
+    SP_J=( "${(@kv)orig}" )
+    if [[ ! -e $SP_TARGET && ! -L $SP_TARGET ]] && /bin/mv -- "$disc" "$SP_TARGET" 2>/dev/null && sp_journal_try; then
+      sp_die_restored "cannot put the backup in place; the installed app was put back"
+    fi
+    sp_die_recover "cannot put the backup in place, and cannot put the installed app back"
+  fi
+  SP_J[phase]=rollback_placed
+  sp_journal_try || sp_die_recover "cannot write the journal (phase rollback_placed)"
+
+  # RB8: the placed app is the recorded backup.
+  if ! { sp_ca "$SP_TARGET" && [[ $REPLY == $orig[previous_cdhash] ]]; }; then
+    SP_J=( "${(@kv)orig}" )
+    if [[ ! -e $prev && ! -L $prev ]] && /bin/mv -- "$SP_TARGET" "$prev" 2>/dev/null \
+       && /bin/mv -- "$disc" "$SP_TARGET" 2>/dev/null && sp_journal_try; then
+      sp_die_restored "the backup failed the final check; the installed app was put back"
+    fi
+    sp_die_recover "the backup failed the final check, and the installed app could not be put back"
+  fi
+
+  # RB9
+  SP_J=( "${(@kv)orig}" )
+  SP_J[phase]=idle SP_J[to_release]=$bkp_rel SP_J[installed_cdhash]=$orig[previous_cdhash]
+  SP_J[from_release]='' SP_J[previous_cdhash]='' SP_J[run]='' SP_J[started_at]=''
+  sp_journal_try || sp_die_recover "the backup is in place, but the journal cannot be written (phase rollback_placed)"
+  sp_finish_run
+  print -r -- "result=rolled_back"
+  print -r -- "release=$bkp_rel"
+  exit ${SP_CODE[E_OK]}
+}
+
+# Remove this run's staging folder after a completed operation (5.6).
+sp_finish_run() {
+  SP_KEEP_RUN=0
+  if [[ -n $SP_RUN_DIR ]] && ! sp_rmtree "$SP_RUN_DIR"; then
+    print -ru2 -- "swarm-patch: warning: cannot remove $SP_RUN_DIR; the next run removes it"
+  fi
+  SP_RUN_DIR=''
+}
+
+# C4 condition (c): no component of the absolute path $1 is a symlink.
+sp_no_symlink_component() {
+  local p=$1 cur=''
+  local -a parts=( ${(s:/:)p} )
+  for p in $parts; do
+    cur+=/$p
+    [[ -L $cur ]] && return 1
+  done
+  return 0
+}
+
+# SP-RC (6.4): recover; in backup mode recover --target <path> (C4, S25).
+sp_cmd_recover() {
+  local arg='' jrun ph cd rel t=$SP_TARGET prev=$SP_STATE/previous/Swarm.app
+  if [[ $SP_MODE == backup ]]; then
+    (( $# == 2 )) && [[ $1 == --target ]] \
+      || sp_die E_USAGE "the backup copy needs: recover --target <path to Swarm.app as recorded in the journal>"
+    arg=$2
+  else
+    (( $# == 0 )) || sp_die E_USAGE "recover takes no arguments here; --target is only accepted by the backup copy"
+  fi
+  sp_prelude                                       # lock, journal (E_BUSY when invalid)
+  ph=none
+  [[ $SP_JSTATUS == valid ]] && ph=$SP_J[phase]
+
+  if [[ $SP_MODE == backup ]]; then
+    # C4 (a)-(d). The path never comes from the journal alone: the argument
+    # must equal it, so without a matching argument nothing is renamed (RK-18).
+    # M-1 (C12): no valid journal is E_USAGE, never an unset-parameter abort.
+    [[ $SP_JSTATUS == valid && -n ${SP_J[target_path]-} && $arg == ${SP_J[target_path]-} ]] \
+      || sp_die E_USAGE "--target must be exactly the target path recorded in the journal"
+    sp_journal_value_ok target_path "$arg" && [[ ${arg:t} == Swarm.app ]] \
+      || sp_die E_USAGE "--target must be an absolute path ending in /Swarm.app"
+    sp_no_symlink_component "$arg" || sp_die E_USAGE "--target holds a symlink"
+    [[ -d ${arg:h} ]] || sp_die E_USAGE "the folder of --target does not exist"
+    # C10 (F3): folder writable (/Applications is root:admin 775), bundle ours.
+    [[ -w ${arg:h} ]] || sp_die E_USAGE "the folder of --target is not writable by the current user"
+    if [[ -e $arg ]]; then
+      [[ -d $arg ]] || sp_die E_USAGE "--target exists and is not a directory"
+      sp_owner "$arg" && [[ $REPLY == $EUID ]] || sp_die E_USAGE "--target is owned by another account"
+    fi
+    SP_TARGET=$arg
+    t=$arg
+  fi
+  if [[ $ph == none || $ph == idle ]]; then
+    print -r -- "result=recovered"
+    print -r -- "outcome=none"
+    exit ${SP_CODE[E_OK]}
+  fi
+  sp_staging_create
+  sp_volume_check
+  sp_proc_check rc
+
+  jrun=$SP_STATE/staging/$SP_J[run]
+  if [[ -e $jrun || -L $jrun ]]; then
+    sp_check_dir "$jrun" || sp_die E_BUSY "staging/$SP_J[run] is not a private directory of this user"
+  fi
+  SP_RECOVER_CMD="reinstall Swarm.app manually (G3)"
+  trap '' INT TERM HUP
+
+  case $ph in
+    staged)
+      if sp_ca "$t" && [[ $REPLY == $SP_J[previous_cdhash] ]]; then
+        cd=$REPLY
+        sp_rc_journal_nobackup "$SP_CA_RELEASE" "$cd" "$jrun"
+        sp_rc_done restored
+      fi ;;
+    old_moved)
+      if [[ ! -e $t && ! -L $t ]] && sp_ca "$prev" && [[ $REPLY == $SP_J[previous_cdhash] ]]; then
+        cd=$REPLY
+        rel=$SP_CA_RELEASE
+        /bin/mv -- "$prev" "$t" 2>/dev/null || sp_rc_fail "cannot move the backup into place; nothing was changed"
+        sp_rc_journal_nobackup "$rel" "$cd" "$jrun"
+        sp_rc_done restored
+      fi ;;
+    new_placed)
+      if sp_ca "$t" && [[ $SP_CA_RELEASE == $SP_J[to_release] && $REPLY != $SP_J[previous_cdhash] ]]; then
+        SP_J[phase]=idle SP_J[run]='' SP_J[started_at]='' SP_J[installed_cdhash]=$REPLY SP_J[last_apply]=$SP_J[to_release]
+        sp_journal_try || sp_rc_fail "the new app is in place, but the journal cannot be written"
+        sp_rc_rmrun "$jrun"
+        sp_rc_done completed
+      fi
+      if sp_ca "$prev" && [[ $REPLY == $SP_J[previous_cdhash] ]]; then
+        cd=$REPLY
+        rel=$SP_CA_RELEASE
+        sp_rc_swap "$t" "$jrun/discard/Swarm.app" "$prev"
+        sp_rc_journal_nobackup "$rel" "$cd" "$jrun"
+        sp_rc_done restored
+      fi ;;
+    rollback_staged)
+      if sp_ca "$t" && [[ $REPLY == $SP_J[installed_cdhash] ]]; then
+        SP_J[phase]=idle SP_J[run]='' SP_J[started_at]=''
+        sp_journal_try || sp_rc_fail "cannot write the journal"
+        sp_rc_rmrun "$jrun"
+        sp_rc_done restored
+      fi ;;
+    rollback_moved)
+      if [[ ! -e $t && ! -L $t ]] && sp_ca "$jrun/discard/Swarm.app" && [[ $REPLY == $SP_J[installed_cdhash] ]]; then
+        /bin/mv -- "$jrun/discard/Swarm.app" "$t" 2>/dev/null || sp_rc_fail "cannot move the installed app back; nothing was changed"
+        SP_J[phase]=idle SP_J[run]='' SP_J[started_at]=''
+        sp_journal_try || sp_rc_fail "the installed app is back in place, but the journal cannot be written"
+        sp_rc_rmrun "$jrun"
+        sp_rc_done restored
+      fi ;;
+    rollback_placed)
+      if sp_ca "$t" && [[ $REPLY == $SP_J[previous_cdhash] ]]; then
+        SP_J[phase]=idle SP_J[to_release]=$SP_CA_RELEASE SP_J[installed_cdhash]=$SP_J[previous_cdhash]
+        SP_J[from_release]='' SP_J[previous_cdhash]='' SP_J[run]='' SP_J[started_at]=''
+        sp_journal_try || sp_rc_fail "the backup is in place, but the journal cannot be written"
+        sp_rc_rmrun "$jrun"
+        sp_rc_done completed
+      fi
+      if sp_ca "$jrun/discard/Swarm.app" && [[ $REPLY == $SP_J[installed_cdhash] ]]; then
+        sp_rc_swap "$t" "$prev" "$jrun/discard/Swarm.app"
+        SP_J[phase]=idle SP_J[run]='' SP_J[started_at]=''
+        sp_journal_try || sp_rc_fail "the installed app is back in place, but the journal cannot be written"
+        sp_rc_rmrun "$jrun"
+        sp_rc_done restored
+      fi ;;
+  esac
+  sp_rc_fail "no intact app can be reached for phase $ph; nothing was changed"
+}
+
+# recover helpers. E_RECOVER with the three paths (S13); the target is never
+# derived from the journal here, SP_TARGET is the checked one.
+sp_rc_fail() {
+  local jr=$SP_STATE/staging/${SP_J[run]-}
+  sp_die E_RECOVER "$1; target $SP_TARGET, backup $SP_STATE/previous/Swarm.app, staging $jr; $SP_RECOVER_CMD"
+}
+sp_rc_done() {
+  sp_finish_run
+  print -r -- "result=recovered"
+  print -r -- "outcome=$1"
+  exit ${SP_CODE[E_OK]}
+}
+sp_rc_rmrun() {
+  if [[ -d $1 && ! -L $1 ]] && ! sp_rmtree "$1"; then
+    print -ru2 -- "swarm-patch: warning: cannot remove $1; the next run removes it"
+  fi
+}
+# Journal idle without backup (5.5), then remove the interrupted run's staging.
+sp_rc_journal_nobackup() {
+  sp_journal_idle_nobackup "$1" "$2" || sp_rc_fail "the app is in place, but the journal cannot be written"
+  sp_rc_rmrun "$3"
+}
+# Move the app at target $1 (when present) to $2, then $3 to the target. On a
+# failed second rename the first is undone; E_RECOVER when that fails too.
+sp_rc_swap() {
+  local tgt=$1 aside=$2 src=$3 moved=0
+  if [[ -e $tgt || -L $tgt ]]; then
+    [[ ! -e $aside && ! -L $aside ]] || sp_rc_fail "${aside} already exists; nothing was changed"
+    if [[ ! -d ${aside:h} ]]; then
+      /bin/mkdir -m 0700 -- "${aside:h}" 2>/dev/null || sp_rc_fail "cannot create ${aside:h}; nothing was changed"
+    fi
+    /bin/mv -- "$tgt" "$aside" 2>/dev/null || sp_rc_fail "cannot move the target aside; nothing was changed"
+    moved=1
+  fi
+  if ! /bin/mv -- "$src" "$tgt" 2>/dev/null; then
+    if (( moved )) && /bin/mv -- "$aside" "$tgt" 2>/dev/null; then
+      sp_rc_fail "cannot move $src into place; the target was put back"
+    fi
+    sp_rc_fail "cannot move $src into place, and the target is at $aside"
+  fi
+}
+
+# SP-ST (6.5).
+sp_cmd_status() {
+  (( $# == 0 )) || sp_die E_USAGE "status takes no arguments"
+  local prev='' dmr='' jphase=none
+  if sp_state_prepare 0; then
+    sp_journal_load
+    case $SP_JSTATUS in
+      none) jphase=none ;;
+      invalid) jphase=invalid ;;
+      valid)
+        jphase=$SP_J[phase]
+        dmr=$SP_J[data_min_release]
+        if [[ $jphase == idle && -d $SP_STATE/previous/Swarm.app && ! -L $SP_STATE/previous/Swarm.app ]]; then
+          prev=$SP_J[from_release]
+        fi
+        ;;
+    esac
+  fi
+  print -r -- "release=$SP_RELEASE"
+  print -r -- "bundle_version=$SP_BUNDLE_VERSION"
+  print -r -- "previous_release=$prev"
+  print -r -- "data_min_release=$dmr"
+  print -r -- "journal_phase=$jphase"
+  # C5, C6: sixth line only when the backup is older than the recorded data floor.
+  if [[ -n $prev && -n $dmr ]] && sp_semver_cmp "$dmr" "$prev" && (( REPLY > 0 )); then
+    print -r -- "rollback_blocked=forward_migration"
+  fi
+  exit ${SP_CODE[E_OK]}
+}
+
+sp_main() {
+  emulate -L zsh
+  setopt err_return no_unset pipe_fail extended_glob
+  # B1 again, inside the option scope (defence in depth; the top-level check ran first).
+  (( EUID != 0 )) || sp_die E_USAGE "refusing to run as root; do not use sudo"
+  zmodload zsh/datetime || sp_die E_USAGE "zsh/datetime module unavailable"
+  (( $# >= 1 )) || sp_die E_USAGE "usage: swarm-patch verify|apply|rollback|recover|status [args]"
+  local sub=$1
+  shift
+  case $sub in
+    verify|apply|rollback|recover|status) ;;
+    *) sp_die E_USAGE "unknown subcommand" ;;
+  esac
+  sp_boot "$sub"
+  case $sub in
+    status) sp_cmd_status "$@" ;;
+    verify) sp_cmd_verify "$@" ;;
+    apply) sp_cmd_apply "$@" ;;
+    rollback) sp_cmd_rollback "$@" ;;
+    recover) sp_cmd_recover "$@" ;;
+  esac
+}
+
+typeset -g SP_RUN=''
+trap 'sp_on_exit' EXIT
+trap 'exit 130' INT TERM HUP
+sp_main "$@"

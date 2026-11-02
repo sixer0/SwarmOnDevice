@@ -5,7 +5,7 @@ import { createRequire } from "node:module"
 import os from "node:os"
 import path from "node:path"
 import type { Configuration } from "electron-builder"
-import { libraryHooks } from "./electron-builder.config"
+import { libraryHooks, SWARM_RELEASE } from "./electron-builder.config"
 import { LIBRARY_FOLDER, STAGE } from "./scripts/stage-library"
 
 const legacyDesktopEntry = "resources/linux/opencode-desktop.desktop"
@@ -452,4 +452,32 @@ test("a copy the real verifier rejects fails afterPack, removes the staging, and
   expect(result.failure).not.toContain(tempRoot)
   expect(result.steps).toEqual(["stage", "verify"])
   expect(await lstatOrNull(result.stage)).toBeNull()
+})
+
+// ROW 13 (SP-BC 4.1, G1c): the release label and the swarm-patch slot. importConfig keeps the
+// query non-literal, so TC-A sees no new TS2307.
+for (const channel of channels) {
+  test(`carries the swarm-patch release and slot for ${channel.channel} (SP-BC)`, async () => {
+    const config = await importConfig(`swarm-patch=${channel.channel}`, channel.channel)
+    expect(SWARM_RELEASE).toBe("1.1.0")
+    expect(config.mac?.extendInfo).toEqual({ SwarmRelease: "1.1.0" })
+    expect(config.mac).not.toHaveProperty("bundleShortVersion")
+    expect(config.mac).not.toHaveProperty("bundleVersion")
+    expect(config.files).toContain("!resources/swarm-patch{,/**/*}")
+    expect(config.extraResources).toContainEqual({ from: "resources/swarm-patch", to: "swarm-patch" })
+    // The exclusion covers the folder itself and its contents, so nothing of it reaches the asar.
+    const files = config.files as string[]
+    const shipped = (entry: string) =>
+      files.filter((p) => !p.startsWith("!")).some((p) => new Bun.Glob(p).match(entry)) &&
+      !files.filter((p) => p.startsWith("!")).some((p) => new Bun.Glob(p.slice(1)).match(entry))
+    for (const entry of ["resources/swarm-patch", "resources/swarm-patch/swarm-patch", "resources/swarm-patch/allowed_signers"]) {
+      expect(shipped(entry)).toBe(false)
+    }
+    expect(shipped("resources/icons/icon.icns")).toBe(true)
+  })
+}
+
+test("keeps package.json at 1.19.3 while the release label is 1.1.0 (G1c)", async () => {
+  const pkg = await Bun.file(path.join(import.meta.dir, "package.json")).json()
+  expect(pkg.version).toBe("1.19.3")
 })
