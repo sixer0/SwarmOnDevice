@@ -2,6 +2,7 @@ import { createEffect, createMemo, createResource, createSignal, on, onMount, ty
 import { createStore } from "solid-js/store"
 import type { ColorScheme } from "@opencode-ai/ui/theme/context"
 import { useTheme } from "@opencode-ai/ui/theme/context"
+import { useGlobal } from "@/context/global"
 import { useLanguage } from "@/context/language"
 import { usePlatform } from "@/context/platform"
 import { ServerConnection, useServer } from "@/context/server"
@@ -27,7 +28,7 @@ import { createSoundPreviewController, type ShellOption } from "./general-contro
 export { createShellOptions, createSoundPreviewController } from "./general-controller-behavior"
 export type { ShellOption, ShellSelectOption } from "./general-controller-behavior"
 
-export type AutonomousScope = { sessionID?: string; directory: string }
+export type AutonomousScope = { sessionID?: string; directory: string; server?: ServerConnection.Key }
 
 export function autonomousToast(
   t: (
@@ -99,7 +100,7 @@ export function createAutonomousToggle(input: {
 
   const where = createMemo(() => {
     const scope = input.scope()
-    return scope && `${scope.sessionID ?? ""}\0${scope.directory}`
+    return scope && `${scope.sessionID ?? ""}\0${scope.directory}\0${scope.server ?? ""}`
   })
   createEffect(on(where, () => void load()))
 
@@ -123,11 +124,22 @@ export function createAutonomousToggle(input: {
 export function createAutonomousModeController(input: {
   sessionID: Accessor<string | undefined>
   directory: Accessor<string | undefined>
+  /** A draft names its own server, which need not be the selected one. */
+  server?: Accessor<ServerConnection.Key | undefined>
 }) {
   const language = useLanguage()
+  const global = useGlobal()
   const serverSdk = useServerSDK()
   const serverSync = useServerSync()
-  const client = (directory: string) => serverSdk().createClient({ directory, throwOnError: true }).autonomy
+  const connection = (key: ServerConnection.Key) =>
+    global.servers.list().find((item) => ServerConnection.key(item) === key)
+  const client = (scope: AutonomousScope) => {
+    const conn = scope.server && connection(scope.server)
+    return (conn ? global.ensureServerCtx(conn).sdk : serverSdk()).createClient({
+      directory: scope.directory,
+      throwOnError: true,
+    }).autonomy
+  }
   // The server sends no event when the mode changes: this is how the composer learns of it.
   const announce = () => window.dispatchEvent(new Event(AUTONOMY_CHANGED))
 
@@ -136,18 +148,21 @@ export function createAutonomousModeController(input: {
       const sessionID = input.sessionID()
       const directory =
         (sessionID ? serverSync().session.lineage.peek(sessionID)?.session.directory : undefined) ?? input.directory()
-      return directory ? { sessionID, directory } : undefined
+      const server = input.server?.()
+      // A draft on a server that has gone has no folder this can reach, and the selected server is not that folder.
+      if (server && !connection(server)) return undefined
+      return directory ? { sessionID, directory, server } : undefined
     },
     read: (scope) =>
       scope.sessionID
-        ? client(scope.directory)
+        ? client(scope)
             .session({ sessionID: scope.sessionID })
             .then((result) => result.data!.on)
-        : client(scope.directory)
+        : client(scope)
             .mode()
             .then((result) => result.data!.on),
     write: (scope, on) =>
-      client(scope.directory)
+      client(scope)
         .modeUpdate({ on, sessionID: scope.sessionID })
         .then((result) => result.data!.on),
     changed: (on) => {

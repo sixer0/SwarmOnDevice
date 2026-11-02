@@ -12,7 +12,7 @@ import "./settings-v2.css"
 import { SettingsServersV2 } from "./servers"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { useLayout } from "@/context/layout"
-import { useTabs } from "@/context/tabs"
+import { useTabs, type DraftTab } from "@/context/tabs"
 import { useServerSync } from "@/context/server-sync"
 
 export const DialogSettings: Component<{
@@ -26,13 +26,15 @@ export const DialogSettings: Component<{
   const tabs = useTabs()
   const serverSync = useServerSync()
   const [tab, setTab] = createSignal(props.defaultValue ?? "general")
+  const draft = createMemo(() => {
+    const route = layout.route()
+    if (route.type !== "draft") return undefined
+    return tabs.store.find((item): item is DraftTab => item.type === "draft" && item.draftID === route.draftID)
+  })
   const directory = createMemo(() => {
     const route = layout.route()
     if (route.type === "dir-new-sesssion") return route.dir
-    if (route.type === "draft") {
-      const draft = tabs.store.find((item) => item.type === "draft" && item.draftID === route.draftID)
-      return draft?.type === "draft" ? draft.directory : undefined
-    }
+    if (route.type === "draft") return draft()?.directory
     if (route.type === "session") return serverSync().session.get(route.sessionId)?.directory
     return undefined
   })
@@ -94,7 +96,7 @@ export const DialogSettings: Component<{
           </div>
         </TabsV2.List>
         <TabsV2.Content value="general" class="settings-v2-panel">
-          <SettingsGeneralV2 sessionID={props.sessionID} />
+          <SettingsGeneralV2 sessionID={props.sessionID} draft={draft()} />
         </TabsV2.Content>
         <TabsV2.Content value="shortcuts" class="settings-v2-panel">
           <SettingsKeybinds v2 />

@@ -10,6 +10,7 @@ import { useLanguage } from "@/context/language"
 import { usePlatform } from "@/context/platform"
 import { useUpdaterAction } from "../updater-action"
 import { useSettings } from "@/context/settings"
+import type { DraftTab } from "@/context/tabs"
 import { decode64 } from "@/utils/base64"
 import { SettingsListV2 } from "./parts/list"
 import { SettingsRowV2 } from "./parts/row"
@@ -268,6 +269,7 @@ const LanguageSetting = () => {
 
 export const SettingsGeneralV2: Component<{
   sessionID?: string
+  draft?: DraftTab
 }> = (props) => {
   const language = useLanguage()
   const platform = usePlatform()
@@ -278,7 +280,8 @@ export const SettingsGeneralV2: Component<{
   const params = useParams<{ dir?: string; id?: string }>()
   const autonomousMode = createAutonomousModeController({
     sessionID: () => props.sessionID ?? params.id,
-    directory: () => decode64(params.dir),
+    directory: () => props.draft?.directory ?? decode64(params.dir),
+    server: () => props.draft?.server,
   })
   const shell = createShellSettingsController()
   const appearance = createAppearanceSettingsController()
