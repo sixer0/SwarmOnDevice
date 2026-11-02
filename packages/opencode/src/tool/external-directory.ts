@@ -48,6 +48,8 @@ export const assertExternalDirectoryEffect = Effect.fn("Tool.assertExternalDirec
     metadata: {
       filepath: landed,
       parentDir: dir,
+      // Read by the autonomy table, which sorts a read out of the folder apart from a write.
+      ...(options?.readOnly ? { readOnly: true } : {}),
     },
     harmless:
       options?.readOnly && ctx.trust?.library && libraryRead(full, ctx.trust.library, Reach.real) ? true : undefined,

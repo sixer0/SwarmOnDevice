@@ -709,6 +709,17 @@ describe("who decides the library's gate", () => {
     }),
   )
 
+  kit.live("the prompt carries readOnly only when the caller only reads", () =>
+    Effect.gen(function* () {
+      const reads = yield* gate(undefined, (e) => `${e.S}/a.md`, { readOnly: true })
+      expect(reads.request.metadata.readOnly).toBe(true)
+      const plain = yield* gate(undefined, (e) => `${e.S}/a.md`)
+      expect("readOnly" in plain.request.metadata).toBe(false)
+      const no = yield* gate(undefined, (e) => `${e.S}/a.md`, { readOnly: false })
+      expect("readOnly" in no.request.metadata).toBe(false)
+    }),
+  )
+
   for (const absent of [{ kind: "no-app" }, { kind: "failed", code: "edition" }] as RealLibraryRoot.Status[]) {
     kit.live(`without a root (${absent.kind}) the gate is what it was`, () =>
       Effect.gen(function* () {
