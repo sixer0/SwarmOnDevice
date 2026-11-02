@@ -338,6 +338,7 @@ it.instance("ADV-P2: nothing but the listed fields reaches the model, and no too
     expect(wire).not.toContain("MARK-")
     expect(stub.prompts[0]!.tools).toBeUndefined()
     expect(stub.prompts[0]!.toolChoice).toBeUndefined()
+    expect(stub.prompts[0]!.maxOutputTokens).toBe(2000)
     const input = seenInput()
     expect(Object.keys(input).sort()).toEqual(["goal", "request"])
     expect(input.goal).toBe("GOAL-TEXT please run the tests")

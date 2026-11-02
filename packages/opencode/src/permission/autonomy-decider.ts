@@ -42,7 +42,7 @@ const MAX_PATTERN = 300
 const MAX_NAME = 100
 const MAX_REASON = 200
 const MAX_ANSWER = 1024
-const MAX_OUTPUT_TOKENS = 1000
+const MAX_OUTPUT_TOKENS = 2000
 // What a provider that reports no usage is taken to have used.
 const UNREPORTED = new Usage({ inputTokens: 2000, outputTokens: 200 })
 const SPEND_STOP = SessionSpend.stopMessage(0).split("$")[0]!
