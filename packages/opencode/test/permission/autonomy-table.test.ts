@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test"
 import fs from "node:fs"
+import os from "node:os"
 import path from "node:path"
 import { $ } from "bun"
 import { Effect, Layer } from "effect"
@@ -21,6 +22,24 @@ import type * as Tool from "../../src/tool/tool"
 import { Truncate } from "../../src/tool/truncate"
 import { provideInstance, testInstanceStoreLayer, tmpdir, tmpdirScoped } from "../fixture/fixture"
 import { testEffect } from "../lib/effect"
+import { Cause, Exit } from "effect"
+import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
+import { SessionProjector } from "@opencode-ai/core/session/projector"
+import { PermissionV1 } from "@opencode-ai/core/v1/permission"
+import { EventV2Bridge } from "../../src/event-v2-bridge"
+import { Format } from "../../src/format"
+import { LSP } from "../../src/lsp/lsp"
+import { MCP } from "../../src/mcp"
+import { Permission } from "../../src/permission"
+import { Autonomy } from "../../src/permission/autonomy"
+import { InstanceBootstrap } from "../../src/project/bootstrap"
+import { InstanceStore } from "../../src/project/instance-store"
+import { Question } from "../../src/question"
+import type { SessionID as SessionIDType } from "../../src/session/schema"
+import { Session } from "../../src/session/session"
+import { ToolRegistry } from "../../src/tool/registry"
+import { WriteTool } from "../../src/tool/write"
+import { TestInstance } from "../fixture/fixture"
 
 type Input = AutonomyTable.Input
 type Verdict = AutonomyTable.Verdict
@@ -81,10 +100,13 @@ const TABLE: [row: number, title: string, samples: () => [Input, Verdict][]][] =
   [2, "edit that is not ordinary", () => [[edit("scripts/x.sh", { editClass: "not_ordinary" }), AGENT("edit-not-ordinary")]]],
   [
     3,
-    "edit with no Undo, whatever `risk` says",
+    "edit with no Undo: an ordinary file in the folder runs on record, the rest as without Undo or stricter",
     () => [
-      [edit("src/a.ts", { editClass: "no_undo", canUndo: false }), HELD("no_undo")],
-      [edit("src/a.ts", { editClass: "not_ordinary", canUndo: false }), HELD("no_undo")],
+      [edit("src/a.ts", { editClass: "no_undo", canUndo: false }), { class: "A", decidedBy: "gate" }],
+      [edit("docs/notes.md", { editClass: "not_ordinary", canUndo: false }), { class: "A", decidedBy: "gate" }],
+      [edit("scripts/x.sh", { editClass: "no_undo", canUndo: false }), AGENT("edit-not-ordinary")],
+      [edit("package.json", { editClass: "no_undo", canUndo: false }), HELD("sensitive_file")],
+      [edit(".env", { editClass: "no_undo", canUndo: false }), HELD("secret_file")],
     ],
   ],
   [4, "edit carrying `risk`", () => [[edit("src/a.ts", { editClass: "not_ordinary" }, { risk: "irreversible" }), HELD("not_reversible")]]],
@@ -113,7 +135,7 @@ const TABLE: [row: number, title: string, samples: () => [Input, Verdict][]][] =
     9,
     "any other command",
     () =>
-      ["node x.js", "npx x", "curl https://x.example", "docker ps", "npm install", "ls"].map((command) => [bash(command), HELD("not_routine")]),
+      ["node x.js", "npx x", "curl https://x.example", "docker ps", "npm install", "jq . src/a.json"].map((command) => [bash(command), HELD("not_routine")]),
   ],
   [
     10,
@@ -225,7 +247,11 @@ const TABLE: [row: number, title: string, samples: () => [Input, Verdict][]][] =
   [
     24,
     "harmless reads ask nobody",
-    () => ["read", "glob", "grep", "git", "skill"].map((permission) => [request(permission, { harmless: true }), QUIET]),
+    () => [
+      ...["read", "glob", "grep", "git", "skill"].map((permission): [Input, Verdict] => [request(permission, { harmless: true }), QUIET]),
+      // The same look through the shell runs nothing of the folder's, and is on record.
+      [bash("ls src"), { class: "A", decidedBy: "gate" }],
+    ],
   ],
   [
     25,
@@ -429,6 +455,166 @@ describe("where a command runs", () => {
       request("graft_find_code"),
     ]
     for (const sample of samples) expect(AutonomyTable.classify({ ...sample, cwd: link })).toEqual(AutonomyTable.classify(sample))
+  })
+})
+
+describe("a look through the shell", () => {
+  const LOOK: Verdict = { class: "A", decidedBy: "gate" }
+  const judge = (command: string) => AutonomyTable.classify(bash(command))
+
+  test("each read-only program, with paths inside the folder, is class A without the decider", () => {
+    fs.mkdirSync(path.join(dir, "docs"), { recursive: true })
+    fs.writeFileSync(path.join(dir, "docs/a.md"), "x\n")
+    const commands = [
+      "ls", "ls -la", "ls -la src", `ls ${path.join(dir, "src")}`, "cat src/a.ts", "head -5 src/a.ts", "head -n 5 src/a.ts", "tail -20 src/a.ts",
+      "wc -l src/a.ts", `wc -l ${path.join(dir, "docs/a.md")}`, "stat src/a.ts", "file src/a.ts", "pwd", "tree src", "tree -L 2",
+      "rg foo src", "rg -n foo", "grep -n foo src/a.ts", "grep foo src/a.ts docs/a.md", "find . -name a.ts", "find src -type f",
+      "rtk wc -l src/a.ts", "rtk ls src", "cat src/a.ts | tail -5", "cd src && ls", "ls src && cat src/a.ts",
+    ]
+    for (const command of commands) expect([command, judge(command)]).toEqual([command, LOOK])
+    // Not because the folder is trusted or Undo works: looking runs nothing of the folder's.
+    expect(AutonomyTable.classify(bash("ls src", { folder: "ask", canUndo: false }))).toEqual(LOOK)
+  })
+
+  test("a look beside real work is that work", () => {
+    expect(judge("ls src && bun test")).toEqual(AGENT("check"))
+    expect(judge("cat src/a.ts && rm src/a.ts")).toEqual(AGENT("file-op"))
+    expect(AutonomyTable.classify(bash("ls && bun test", { folder: "ask" }))).toEqual(HELD("folder_not_trusted"))
+  })
+
+  test("a path beyond the folder is outside it, `~` and links included", async () => {
+    await using away = await tmpdir()
+    fs.symlinkSync(away.path, path.join(dir, "look-out"))
+    for (const command of ["ls ~/.claude/agents", "ls ~", "rtk ls ~/x", "cat /etc/hosts", "ls ..", "ls ../x", `ls ${away.path}`, "ls look-out", "cat look-out/a", "wc -l /etc/hosts", "grep foo /etc/hosts", "find / -name x", "rg foo ../"])
+      expect([command, judge(command)]).toEqual([command, HELD("outside_folder")])
+  })
+
+  test("what makes a look do more, or show a secret, is held", () => {
+    for (const command of [
+      "find . -exec rm {} ;", "find . -name a -delete", "find . -ok rm", "find . -execdir x", "find . -fprint out", "find . -fprintf out x", "find . -fls out",
+      "rg --pre ./evil foo", "rg --pre=./evil foo", "rg -z foo", "rg --search-zip foo", "rg --hidden foo", "rg -uu foo", "rg -u foo", "rg -L foo", "rg --follow foo", "rg --no-ignore foo", "rg --no-ignore-vcs foo", "rg -. foo",
+      "grep -r foo .", "grep -rn foo src", "grep -R foo .", "grep --recursive foo .", "grep -d recurse foo .",
+      "tree -o out", "tree -R", "file -C", "tail -f src/a.ts", "tail -F src/a.ts", "tail --follow src/a.ts", "wc --files0-from list",
+      "cat .git/config", "ls .git", "cat src/a.ts > out", "cat src/a.ts | sh", "ls | xargs rm", "cat src/a.ts; curl x", "ls $(pwd)", "ls *.ts", "ls 'src'",
+      "rtk", "rtk proxy git push", "rtk git push", "less src/a.ts", "rtk curl x",
+    ])
+      expect([command, judge(command).class]).toEqual([command, "D"])
+    expect(judge("cat .env")).toEqual(HELD("secret_file"))
+  })
+})
+
+describe("an edit nothing can undo", () => {
+  const unrecoverable = (name: string, fields: Partial<Input> = {}) => edit(name, { editClass: "no_undo", canUndo: false, ...fields })
+
+  test("is held for what would be held, or refused, with Undo", async () => {
+    await using away = await tmpdir()
+    fs.symlinkSync(away.path, path.join(dir, "edit-out"))
+    fs.symlinkSync(path.join(away.path, "a.md"), path.join(dir, "edit-out.md"))
+    const cases: [string, Verdict][] = [
+      [".git/config", HELD("secret_file")],
+      [".git/hooks/pre-commit", HELD("secret_file")],
+      [".github/workflows/ci.yml", HELD("sensitive_file")],
+      [".swarm/rules.md", HELD("sensitive_file")],
+      [".husky/pre-commit", HELD("sensitive_file")],
+      ["AGENTS.md", HELD("sensitive_file")],
+      ["Makefile", HELD("sensitive_file")],
+      [".env", HELD("secret_file")],
+      [".env.local", HELD("secret_file")],
+      ["edit-out/a.md", HELD("outside_folder")],
+      ["edit-out.md", HELD("outside_folder")],
+      ["../outside.md", HELD("outside_folder")],
+      ["state-link", REFUSED("app_state")],
+    ]
+    for (const [name, verdict] of cases) expect([name, AutonomyTable.classify(unrecoverable(name))]).toEqual([name, verdict])
+    expect(AutonomyTable.classify(unrecoverable(path.join(Global.Path.state, "trust.json")))).toEqual(REFUSED("app_state"))
+    expect(AutonomyTable.classify(unrecoverable("src/a.ts", { plan: true }))).toEqual(REFUSED("plan_mode"))
+    expect(AutonomyTable.classify(request("edit", { editClass: "no_undo", canUndo: false, patterns: ["*"] }))).toEqual(HELD("no_undo"))
+  })
+
+  test("a `risk` label still holds it, and a sensitive class from the tool still wins", () => {
+    expect(AutonomyTable.classify(unrecoverable("src/a.ts", { metadata: { filepath: path.join(dir, "src/a.ts"), risk: "irreversible" } }))).toEqual(HELD("not_reversible"))
+    expect(AutonomyTable.classify(unrecoverable("src/a.ts", { editClass: "sensitive" }))).toEqual(HELD("sensitive_file"))
+    expect(AutonomyTable.classify(unrecoverable("src/a.ts", { editClass: "secret" }))).toEqual(HELD("secret_file"))
+  })
+})
+
+// The user's own run (row 97): a session folder that is not a repository, with the edited files in a repository of its own
+// below it, so nothing can undo them. Names are made up; the shapes, including patterns relative to `/`, are what was sent.
+describe("the twelve requests from the user's run", () => {
+  let research: Awaited<ReturnType<typeof tmpdir>>
+  let session: InstanceContext
+  const home = (...parts: string[]) => path.join(os.homedir(), ...parts)
+
+  beforeAll(async () => {
+    research = await tmpdir()
+    session = { directory: research.path, worktree: "/", project: { vcs: undefined } } as unknown as InstanceContext
+    const repo = path.join(research.path, "alpha")
+    fs.mkdirSync(path.join(repo, "docs/2026-01-01_task/identification"), { recursive: true })
+    await $`git init -q`.cwd(repo).quiet()
+  })
+  afterAll(async () => {
+    await research[Symbol.asyncDispose]()
+  })
+
+  const inSession = (fields: Partial<Input>): Partial<Input> => ({ instance: session, cwd: session.directory, canUndo: false, folder: undefined, ...fields })
+  const write = (relative: string): Input => {
+    const file = path.join(session.directory, relative)
+    // The edit tools name the file relative to the worktree, which is `/` here: no leading slash.
+    return request("edit", inSession({ patterns: [path.relative("/", file)], metadata: { filepath: file }, editClass: "no_undo" }))
+  }
+  const run = (command: string) => bash(command, inSession({}))
+  const outside = (pattern: string): Input =>
+    request("external_directory", inSession({ patterns: [pattern], metadata: { filepath: pattern.replace(/\/\*$/, ""), parentDir: pattern.replace(/\/\*$/, "") } }))
+
+  const allowed = (): [string, Input][] => [
+    ["status_tasks.md", write("alpha/docs/2026-01-01_task/status_tasks.md")],
+    ["01_translated.md", write("alpha/docs/2026-01-01_task/identification/01_translated.md")],
+    ["01_original.md", write("alpha/docs/2026-01-01_task/identification/01_original.md")],
+    ["README.md", write("alpha/docs/2026-01-01_task/README.md")],
+    ["02_structured.md", write("alpha/docs/2026-01-01_task/identification/02_structured.md")],
+  ]
+  const lookups = () => [
+    ["ls in the folder", run(`ls ${path.join(session.directory, "alpha/docs")}`)],
+    ["rtk wc in the folder", run(`rtk wc -l ${path.join(session.directory, "alpha/docs/2026-01-01_task/status_tasks.md")}`)],
+  ] as [string, Input][]
+  const HELD_REQUESTS = (): [string, Input, Verdict][] => [
+    ["ls of ~/.claude/agents", run("ls ~/.claude/agents"), HELD("outside_folder")],
+    ["outside, first", outside(home(".claude/agents/*")), HELD("outside_folder")],
+    ["outside, second", outside(home(".claude/agents/*")), HELD("outside_folder")],
+    ["outside, third", outside(home(".claude/agents/*")), HELD("outside_folder")],
+    ["graft_find_code", request("graft_find_code", inSession({})), HELD("external_tool")],
+  ]
+
+  test("the seven inside the folder are class A, so neither the decider nor a person is asked", () => {
+    expect(allowed().length + lookups().length + HELD_REQUESTS().length).toBe(12)
+    for (const [label, input] of [...allowed(), ...lookups()])
+      expect([label, AutonomyTable.classify(input)]).toEqual([label, { class: "A", decidedBy: "gate" }])
+  })
+
+  test("a pattern relative to `/` is the file it names, not a name under the folder", () => {
+    const [, input] = allowed()[0]!
+    expect(input.patterns[0]!.startsWith("/")).toBe(false)
+    expect(path.resolve(session.worktree, input.patterns[0]!)).toBe(input.metadata.filepath as string)
+    // The same name read against the folder would not exist, and would still be judged inside: so check it lands on the file.
+    expect(AutonomyTable.classify({ ...input, metadata: {} })).toEqual({ class: "A", decidedBy: "gate" })
+  })
+
+  test("the five beyond it stay held: outside the folder, and the MCP tool", () => {
+    for (const [label, input, verdict] of HELD_REQUESTS()) expect([label, AutonomyTable.classify(input)]).toEqual([label, verdict])
+  })
+
+  test("in that session, what would be held with Undo is held without it", () => {
+    fs.mkdirSync(path.join(session.directory, "alpha/.github"), { recursive: true })
+    for (const [relative, category] of [
+      ["alpha/.git/config", "secret_file"],
+      ["alpha/.git/hooks/pre-commit", "secret_file"],
+      ["alpha/.github/workflows/x.yml", "sensitive_file"],
+      ["alpha/.swarm/rules.md", "sensitive_file"],
+      ["alpha/.env", "secret_file"],
+      ["alpha/AGENTS.md", "sensitive_file"],
+    ] as const)
+      expect([relative, AutonomyTable.classify(write(relative))]).toEqual([relative, HELD(category)])
+    expect(AutonomyTable.classify(write("alpha/run.sh"))).toEqual(AGENT("edit-not-ordinary"))
   })
 })
 
@@ -679,5 +865,148 @@ describe("writing the trust store (ADV-A13)", () => {
         expect(fs.existsSync(store()) ? fs.readFileSync(store(), "utf8") : undefined).toBe(before)
       }),
     60_000,
+  )
+})
+
+// The same twelve against the real gate and the real tools, with a decider that counts its calls. Row 97: nothing inside
+// the folder may wait, for a person or for the decider, and what is beyond it must still be held.
+const counted = { calls: 0 }
+const countingDecider = Layer.succeed(
+  Permission.Decider,
+  Permission.Decider.of({
+    decide: () =>
+      Effect.sync(() => {
+        counted.calls++
+        return { decision: "allow" as const, decidedBy: "agent:test/stub" }
+      }),
+  }),
+)
+const gate = testEffect(
+  AppNodeBuilder.build(
+    LayerNode.group([
+      ToolRegistry.node, Agent.node, Permission.node, Session.node, Autonomy.node, Plugin.node, MCP.node, Truncate.node,
+      RuntimeFlags.node, EventV2Bridge.node, SessionProjector.node, CrossSpawnSpawner.node, InstanceStore.node, Question.node,
+      FSUtil.node, Config.node, LSP.node, Format.node,
+    ]),
+    [
+      [InstanceStore.bootstrapNode, Layer.succeed(InstanceBootstrap.Service, InstanceBootstrap.Service.of({ run: Effect.void }))],
+      [Permission.deciderNode, countingDecider],
+    ],
+  ),
+)
+
+const PASSED = new Error("past the gate")
+const session = (sessionID: SessionIDType) =>
+  Effect.gen(function* () {
+    const permission = yield* Permission.Service
+    const agent = (yield* (yield* Agent.Service).get("build"))!
+    return {
+      sessionID,
+      messageID: MessageID.ascending(),
+      callID: "",
+      agent: "build",
+      abort: AbortSignal.any([]),
+      messages: [],
+      metadata: () => Effect.void,
+      // The session folder is not a repository, so nothing can undo what is changed in it.
+      trust: { canUndo: false },
+      ask: ({ planLimited: _planLimited, ...request }: Parameters<Tool.Context["ask"]>[0]) =>
+        permission
+          .ask({ ...request, sessionID, agent: "build", canUndo: false, ruleset: agent.permission })
+          .pipe(Effect.orDie, Effect.tap(() => (request.permission === "bash" ? Effect.die(PASSED) : Effect.void))),
+    } as unknown as Tool.Context
+  })
+
+const attempt = <E, R>(self: Effect.Effect<unknown, E, R>) =>
+  self.pipe(
+    Effect.timeout("10 seconds"),
+    Effect.exit,
+    Effect.map((exit) => {
+      const error = Exit.isFailure(exit) ? Cause.squash(exit.cause) : undefined
+      return error === undefined || error === PASSED ? "ran" : error instanceof PermissionV1.DeferredError ? "held" : String(error)
+    }),
+  )
+
+describe("the twelve, through the gate", () => {
+  const cleanState = () => fs.rmSync(path.join(Global.Path.state, "autonomy"), { recursive: true, force: true })
+  beforeAll(cleanState)
+  afterAll(cleanState)
+
+  gate.instance(
+    "seven run with no decider call and nothing held, five are held",
+    () =>
+      Effect.gen(function* () {
+        const test = yield* TestInstance
+        // What the user had: a session folder that is no repository, so the worktree is the top of the disk.
+        expect((yield* InstanceState.context).worktree).toBe("/")
+        const sessions = yield* Session.Service
+        const autonomy = yield* Autonomy.Service
+        const permission = yield* Permission.Service
+        const root = yield* sessions.create({})
+        yield* autonomy.setMode({ scope: "session", root: root.id, on: true })
+        const ctx = yield* session(root.id)
+        const writing = yield* (yield* WriteTool).init()
+        const shell = yield* (yield* ShellTool).init()
+        const task = path.join(test.directory, "alpha/docs/2026-01-01_task")
+        const ask = (fields: { permission: string; patterns: string[]; metadata?: Record<string, unknown>; harmless?: boolean; ruleset?: PermissionV1.Ruleset }) =>
+          permission.ask({ sessionID: root.id, metadata: {}, always: [], ruleset: [], agent: "build", canUndo: false, ...fields } as PermissionV1.AskInput)
+
+        counted.calls = 0
+        const inside = [
+          ...["status_tasks.md", "identification/01_translated.md", "identification/01_original.md", "README.md", "identification/02_structured.md"].map(
+            (name) => writing.execute({ filePath: path.join(task, name), content: "written\n" }, ctx),
+          ),
+          shell.execute({ command: `ls ${path.join(test.directory, "alpha/docs")}` }, ctx),
+          shell.execute({ command: `rtk wc -l ${path.join(task, "README.md")}` }, ctx),
+        ]
+        const ran: string[] = []
+        for (const one of inside) ran.push(yield* attempt(one))
+        expect(ran).toEqual(Array(7).fill("ran"))
+        expect(counted.calls).toBe(0)
+        expect((yield* permission.list()).filter((item) => item.sessionID === root.id)).toEqual([])
+        expect(fs.readFileSync(path.join(task, "status_tasks.md"), "utf8")).toBe("written\n")
+
+        const agents = path.join(os.homedir(), ".claude/agents")
+        const beyond = [
+          shell.execute({ command: "ls ~/.claude/agents" }, ctx),
+          ...[1, 2, 3].map(() => ask({ permission: "external_directory", patterns: [path.join(agents, "*")], metadata: { filepath: agents, parentDir: agents } })),
+          ask({ permission: "graft_find_code", patterns: ["*"] }),
+        ]
+        const held: string[] = []
+        for (const one of beyond) held.push(yield* attempt(one))
+        expect(held).toEqual(Array(5).fill("held"))
+        expect(counted.calls).toBe(0)
+
+        const lines = (yield* autonomy.readAudit(root.id)).lines.flatMap((line) => (line.type === "decision" ? [line] : []))
+        const edits = lines.filter((line) => line.permission === "edit")
+        expect(edits.map((line) => [line.class, line.decision, line.decidedBy, line.canUndo])).toEqual(Array(5).fill(["A", "allow", "gate", false]))
+        expect(lines.filter((line) => line.permission === "bash" && line.decision === "allow").map((line) => line.class)).toEqual(["A", "A"])
+
+        // The agent's own read tools in the same folder never reach the gate: no prompt, no line, no decider. These are the
+        // requests `read.ts`, `grep.ts` and `glob.ts` send for an ordinary file and folder, against the agent's shipped rules.
+        const before = lines.length
+        const waiting = (yield* permission.list()).filter((item) => item.sessionID === root.id).length
+        const rules = (yield* (yield* Agent.Service).get("build"))!.permission
+        const relative = (file: string) => path.relative("/", file)
+        const looked = [
+          ask({ permission: "read", patterns: [relative(path.join(task, "README.md"))], harmless: true, ruleset: rules }),
+          ask({ permission: "grep", patterns: ["written"], metadata: { pattern: "written", path: task }, ruleset: rules }),
+          ask({ permission: "glob", patterns: ["**/*.md"], metadata: { pattern: "**/*.md", path: task }, ruleset: rules }),
+        ]
+        const results: string[] = []
+        for (const one of looked) results.push(yield* attempt(one))
+        expect(results).toEqual(["ran", "ran", "ran"])
+        expect(counted.calls).toBe(0)
+        expect((yield* permission.list()).filter((item) => item.sessionID === root.id).length).toBe(waiting)
+        expect((yield* autonomy.readAudit(root.id)).lines.filter((line) => line.type === "decision").length).toBe(before)
+      }),
+    {
+      init: (directory: string) =>
+        Effect.promise(async () => {
+          fs.mkdirSync(path.join(directory, "alpha/docs/2026-01-01_task/identification"), { recursive: true })
+          await $`git init -q`.cwd(path.join(directory, "alpha")).quiet()
+          fs.writeFileSync(path.join(directory, "alpha/docs/2026-01-01_task/README.md"), "x\n")
+        }),
+    },
   )
 })

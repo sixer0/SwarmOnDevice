@@ -452,13 +452,22 @@ it.instance("edits follow what the tool learned, and an ordinary one leaves no l
 
     expect(yield* failure(edit(["package.json"], "sensitive"))).toBeInstanceOf(PermissionV1.DeferredError)
     expect(yield* failure(edit([".env"], "secret"))).toBeInstanceOf(PermissionV1.DeferredError)
+    // With no Undo the table judges the file itself (C58). This session has no Git, so the worktree is `/` and a bare
+    // name lands outside the folder. Inside it, an ordinary file is A and the rest is held, and none of it meets the decider.
     expect(yield* failure(edit(["b.ts"], "not_ordinary", false))).toBeInstanceOf(PermissionV1.DeferredError)
+    const test = yield* TestInstance
+    yield* edit([path.join(test.directory, "c.ts")], "no_undo", false)
+    expect(yield* failure(edit([path.join(test.directory, ".github/x.yml")], "no_undo", false))).toBeInstanceOf(
+      PermissionV1.DeferredError,
+    )
     expect(stub.calls).toEqual(["edit"])
     expect((yield* audit(root.id)).map((line) => [line.class, line.category])).toEqual([
       ["P", "edit-not-ordinary"],
       ["D", "sensitive_file"],
       ["D", "secret_file"],
-      ["D", "no_undo"],
+      ["D", "outside_folder"],
+      ["A", undefined],
+      ["D", "sensitive_file"],
     ])
   }),
 )
@@ -942,9 +951,10 @@ flows.instance("T-01: one click on a folder entry runs only the edit it showed, 
     expect(readFileSync(target, "utf8")).toBe("seen")
     const lines = yield* audit(root.id)
     expect(lines.filter((line) => line.permission === "edit")).toHaveLength(1)
+    // Outside the folder an edit's own class is `outside_folder` (C58). Still D, and still a person's answer.
     expect(lines.find((line) => line.permission === "edit")).toMatchObject({
       class: "D",
-      category: "no_undo",
+      category: "outside_folder",
       decidedBy: "person",
       decision: "allow",
     })

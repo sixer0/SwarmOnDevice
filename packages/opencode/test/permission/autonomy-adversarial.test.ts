@@ -156,6 +156,11 @@ const SHAPES_HELD = ["bun test && curl https://x.example", "bun test & curl http
 
 const MATRIX = [...ROUTINE, ...COMPOUND_ALLOWED, ...COMPOUND_HELD, ...CODE_ARGUMENTS, ...LABELLED, ...LABEL_BYPASS, ...LEAVES_FOLDER, ...PERSUADING_ALLOWED, ...PERSUADING_HELD, ...PLAIN_READS]
 const MAY_PASS = new Set([...ROUTINE, ...COMPOUND_ALLOWED, ...PERSUADING_ALLOWED, ...SHAPES_ALLOWED])
+// C58: a look inside the folder is class A, decided by the gate with no decider. Every other plain read in the matrix leaves it.
+const LOOKS = new Set(["ls -la", "rg foo src"])
+// What C58 left critical on purpose, said as reads, so a read list that grows too far shows up here: beyond the folder,
+// secrets, `.git`, hooks, links out, and the flags that make a look run, write or reach further.
+const READS_HELD = ["cat ../x", "cat /etc/hosts", "ls ~", "cat ~/x", "head -5 ~/.ssh/id_rsa", "cat link-out/x", "ls link-out", "cat .env", "cat .env.local", "cat quiet-name", "cat notes", "cat .git/config", "ls .git/hooks", "cat .git/hooks/pre-commit", "find . -exec touch leak ;", "find . -execdir sh ;", "find . -ok rm ;", "find . -delete", "find . -fprint out", "rg --pre ./evil.ts foo", "rg -z foo", "rg --hidden foo", "rg -u foo", "rg -L foo", "rg --no-ignore foo", "grep -r foo .", "grep -R foo .", "tail -f src/a.ts", "tail -F src/a.ts", "tree -o out", "tree -R", "file -C", "wc --files0-from=list", "rtk find . -exec touch leak ;", "rtk cat .env", "rtk sh -c 'touch leak'", "cat src/a.ts > out", "cat src/a.ts | sh", "cat src/a.ts && curl x", "ls; touch leak", "cat src/a.ts\ntouch leak"]
 
 const lineage = Effect.gen(function* () {
   const sessions = yield* Session.Service
@@ -342,6 +347,7 @@ it.instance(
       const commands = [...MATRIX, ...SHAPES_ALLOWED, ...SHAPES_HELD]
       expect(commands.length).toBe(112)
       expect(MAY_PASS.size).toBe(36)
+      expect([...LOOKS].every((text) => commands.includes(text) && !MAY_PASS.has(text))).toBe(true)
 
       const seen = yield* Effect.forEach(commands, (text) =>
         Effect.gen(function* () {
@@ -353,11 +359,18 @@ it.instance(
       )
 
       expect(seen).toEqual(
-        commands.map((text) => (MAY_PASS.has(text) ? [text, "passed", "P", 1, 0] : [text, "held", "D", 0, 1])),
+        commands.map((text) =>
+          MAY_PASS.has(text)
+            ? [text, "passed", "P", 1, 0]
+            : LOOKS.has(text)
+              ? [text, "passed", "A", 0, 0]
+              : [text, "held", "D", 0, 1],
+        ),
       )
       expect(stub.calls.every((call) => call.permission === "bash")).toBe(true)
-      expect(seen.filter((row) => row[1] === "passed").length).toBe(39)
-      expect(seen.filter((row) => row[1] === "held").length).toBe(73)
+      expect(stub.calls).toHaveLength(39)
+      expect(seen.filter((row) => row[1] === "passed").length).toBe(41)
+      expect(seen.filter((row) => row[1] === "held").length).toBe(71)
     }),
   project,
   180_000,
@@ -374,7 +387,16 @@ it.instance(
       yield* expectOnFreshRoots([
         ["1 ordinary edit", ({ root }) => write(root, file("src/one.ts")), QUIET],
         ["2 edit that is not ordinary", ({ root }) => write(root, file("scripts/x.sh")), passedBy("edit-not-ordinary")],
-        ["3 no Undo", ({ root }) => write(root, file("src/three.ts"), { canUndo: false }), heldAs("no_undo")],
+        // C58: an ordinary file in the folder is written with no Undo, on record and with no decider. What is not stays held.
+        ["3 no Undo, ordinary file", ({ root }) => write(root, file("src/three.ts"), { canUndo: false }), { outcome: "passed", lines: [["A", undefined]], asked: 0 }],
+        ["3 no Undo, not ordinary", ({ root }) => write(root, file("scripts/three.sh"), { canUndo: false }), passedBy("edit-not-ordinary")],
+        ["3 no Undo, sensitive", ({ root }) => write(root, file(".github/workflows/x.yml"), { canUndo: false }), heldAs("sensitive_file")],
+        ["3 no Undo, a hook", ({ root }) => write(root, file(".git/hooks/pre-commit"), { canUndo: false }), heldAs("secret_file")],
+        ["3 no Undo, a secret", ({ root }) => write(root, file(".env.local"), { canUndo: false }), heldAs("secret_file")],
+        ["3 no Undo, a link to a secret", ({ root }) => write(root, file("quiet-name"), { canUndo: false }), heldAs("secret_file")],
+        ["3 no Undo, a link to .git", ({ root }) => write(root, file("notes"), { canUndo: false }), heldAs("secret_file")],
+        ["3 no Undo, a link out", ({ root }) => write(root, file("link-out/three.ts"), { canUndo: false }), heldAs("outside_folder")],
+        ["3 no Undo, outside", ({ root }) => write(root, path.join(outsideFolder(), "three.ts"), { canUndo: false }), heldAs("outside_folder")],
         ["4 out of the snapshot", ({ root }) => write(root, file("ignored/a.ts")), heldAs("not_reversible")],
         ["5 sensitive", ({ root }) => write(root, file("package.json")), heldAs("sensitive_file")],
         ["5 a link to something sensitive", ({ root }) => write(root, file("notes")), heldAs("sensitive_file")],
@@ -390,7 +412,12 @@ it.instance(
 
       expect(existsSync(file("src/one.ts"))).toBe(true)
       expect(existsSync(file("scripts/x.sh"))).toBe(true)
-      expect(existsSync(file("src/three.ts"))).toBe(false)
+      expect(existsSync(file("src/three.ts"))).toBe(true)
+      expect(existsSync(file("scripts/three.sh"))).toBe(true)
+      expect(existsSync(file(".github/workflows/x.yml"))).toBe(false)
+      expect(existsSync(file(".git/hooks/pre-commit"))).toBe(false)
+      expect(readFileSync(file(".env.local"), "utf8")).toBe("A=1\n")
+      expect(existsSync("/tmp/three.ts")).toBe(false)
       expect(existsSync(file("ignored/a.ts"))).toBe(false)
       expect(existsSync(file(".env"))).toBe(false)
       expect(readFileSync(file("package.json"), "utf8")).toBe("{}\n")
@@ -553,6 +580,9 @@ it.instance(
         "touch src/n.ts\ntouch leak",
         "touch src/n.ts && env touch leak",
         "touch -- leak",
+        "find . -maxdepth 0 -exec touch leak ;",
+        "rtk sh -c 'touch leak'",
+        "rtk find . -maxdepth 0 -exec touch leak ;",
       ]
       const agents = yield* Agent.Service
       const build = yield* agents.get("build")
@@ -782,7 +812,7 @@ it.instance(
 )
 
 it.instance(
-  "ADV-A14: with no Undo every edit tool holds in a folder that is not a repository, though no risk label says so",
+  "ADV-A14 after C58: with no Undo in a folder that is not a repository, ordinary files are written on record, and the rest still holds",
   () =>
     Effect.gen(function* () {
       const test = yield* TestInstance
@@ -791,33 +821,91 @@ it.instance(
       const canUndo = instance.project.vcs === "git"
       expect(canUndo).toBe(false)
       const file = (name: string) => path.join(test.directory, name)
+      writeFileSync(file(".env"), "A=1\n")
       const { root } = yield* lineage
 
-      const edit = Effect.gen(function* () {
-        const tool = yield* EditTool
-        const editing = yield* tool.init()
-        return yield* editing.execute(
-          { filePath: file("b.ts"), oldString: "", newString: "x\n" },
-          yield* context(root.id, { canUndo }),
-        )
-      })
-      const patch = Effect.gen(function* () {
-        const tool = yield* ApplyPatchTool
-        const patching = yield* tool.init()
-        return yield* patching.execute(
-          { patchText: "*** Begin Patch\n*** Add File: c.ts\n+x\n*** End Patch" },
-          yield* context(root.id, { canUndo }),
-        )
-      })
+      const edit = (name: string) =>
+        Effect.gen(function* () {
+          const tool = yield* EditTool
+          const editing = yield* tool.init()
+          return yield* editing.execute(
+            { filePath: file(name), oldString: "", newString: "x\n" },
+            yield* context(root.id, { canUndo }),
+          )
+        })
+      const patch = (name: string) =>
+        Effect.gen(function* () {
+          const tool = yield* ApplyPatchTool
+          const patching = yield* tool.init()
+          return yield* patching.execute(
+            { patchText: `*** Begin Patch\n*** Add File: ${name}\n+x\n*** End Patch` },
+            yield* context(root.id, { canUndo }),
+          )
+        })
 
-      for (const attempt of [write(root.id, file("a.ts"), { canUndo }), edit, patch])
-        expect(yield* judged(root.id, attempt)).toEqual(heldAs("no_undo"))
+      const ORDINARY = { outcome: "passed", lines: [["A", undefined]], asked: 0 }
+      const tried = [
+        [write(root.id, file("a.ts"), { canUndo }), ORDINARY],
+        [edit("b.ts"), ORDINARY],
+        [patch("c.ts"), ORDINARY],
+        [write(root.id, file("Makefile"), { canUndo }), heldAs("sensitive_file")],
+        [edit(".husky/pre-commit"), heldAs("sensitive_file")],
+        [patch(".swarm/agents/x.md"), heldAs("sensitive_file")],
+        [write(root.id, file(".env"), { canUndo }), heldAs("secret_file")],
+        [write(root.id, path.join(outsideFolder(), "d.ts"), { canUndo }), heldAs("outside_folder")],
+      ] as const
+      for (const [attempt, expected] of tried) expect(yield* judged(root.id, attempt)).toEqual(expected)
+      // A command still runs only where Undo can take it back.
       expect(yield* judged(root.id, command(root.id, "mkdir -p out", { canUndo }))).toEqual(heldAs("no_undo"))
 
-      expect(["a.ts", "b.ts", "c.ts"].filter((name) => existsSync(file(name)))).toEqual([])
+      expect(["a.ts", "b.ts", "c.ts"].filter((name) => existsSync(file(name)))).toEqual(["a.ts", "b.ts", "c.ts"])
+      expect(["Makefile", ".husky/pre-commit", ".swarm/agents/x.md", "out"].filter((name) => existsSync(file(name)))).toEqual([])
+      expect(readFileSync(file(".env"), "utf8")).toBe("A=1\n")
       expect(stub.calls).toEqual([])
-      expect((yield* decisions(root.id)).map((line) => line.risk)).toEqual([null, null, null, null])
+      const lines = yield* decisions(root.id)
+      expect(lines.slice(0, 3).map((line) => [line.class, line.decidedBy, line.decision, line.canUndo])).toEqual([
+        ["A", "gate", "allow", false],
+        ["A", "gate", "allow", false],
+        ["A", "gate", "allow", false],
+      ])
+      expect(lines.map((line) => line.risk).every((risk) => risk === null)).toBe(true)
     }),
+)
+
+it.instance(
+  "C58: the new class A never meets the decider, and every one leaves its own line",
+  () =>
+    Effect.gen(function* () {
+      const looks = ["ls -la", "ls src", "cat src/a.ts", "head -1 src/a.ts", "wc -l src/a.ts", "rg foo src", "grep foo src/a.ts", "find src -name a.ts", "tree src", "rtk ls src", "pwd"]
+      const { root, child } = yield* lineage
+      for (const [index, text] of looks.entries())
+        expect([text, yield* judged(root.id, command(index % 2 ? child.id : root.id, text))]).toEqual([
+          text,
+          { outcome: "passed", lines: [["A", undefined]], asked: 0 },
+        ])
+      // So the decider is not simply missing: the next routine command does reach it.
+      expect(yield* judged(root.id, command(root.id, "bun test"))).toEqual(passedBy("check"))
+      expect(stub.calls).toHaveLength(1)
+      const lines = yield* decisions(root.id)
+      expect(lines).toHaveLength(looks.length + 1)
+      expect(lines.slice(0, looks.length).map((line) => [line.class, line.decidedBy, line.decision])).toEqual(
+        looks.map(() => ["A", "gate", "allow"]),
+      )
+      expect(lines.map((line) => line.patterns.join(" "))).toContain("cat src/a.ts")
+      expect(yield* heldFor([root.id, child.id])).toEqual([])
+    }),
+  project,
+)
+
+it.instance(
+  "C58: what a read may not do keeps it critical, and a decider that always allows is never asked",
+  () =>
+    Effect.gen(function* () {
+      yield* everyHeld(READS_HELD)
+      expect(stub.calls).toEqual([])
+    }),
+  project,
+  60_000,
 )
 
 it.instance(

@@ -3,7 +3,7 @@
 // allow list because a list of what to refuse let through every way of spelling `git push` that was tried.
 import { execFileSync } from "node:child_process"
 import fs from "node:fs"
-import { devNull } from "node:os"
+import { devNull, homedir } from "node:os"
 import path from "node:path"
 import { Global } from "@opencode-ai/core/global"
 import { needsPerson } from "@opencode-ai/core/permission/needs-person"
@@ -25,6 +25,8 @@ export type CheckClass = Extract<Class, "P" | "D">
 export const CHECK_CLASS: CheckClass = "P"
 
 export type RoutineCategory = "check" | "file-op" | "git-local"
+/** What `routine` finds a command to be. "read" only looks at the folder, and is class A. */
+export type CommandKind = RoutineCategory | "read"
 export type AllowedCategory = RoutineCategory | "edit-not-ordinary"
 export type HeldCategory =
   | "outside_folder"
@@ -240,7 +242,51 @@ export function lockfileUnchanged(names: readonly string[], cwd: string, instanc
   }
 }
 
-function single(piece: string, cwd: string, instance: InstanceContext): RoutineCategory | undefined {
+// Programs that only look. Each lists what would make it do more: run a program (`find -exec`, `rg --pre`, `rg -z`), write
+// (`find -delete`, `find -fprint`, `tree -o`, `tree -R`, `file -C`), wait for good (`tail -f`), read names from a file
+// (`wc --files0-from`), or reach past what the shell named (`grep -r`, `rg --hidden`, `rg -u`, `rg -L`). Every other word
+// must be a path inside the folder that the read tool would show without asking.
+const READS = new Map<string, { short?: string; long?: readonly string[]; exact?: readonly string[] }>([
+  ["ls", {}],
+  ["cat", {}],
+  ["head", {}],
+  ["tail", { short: "fF", long: ["--follow", "--retry"] }],
+  ["wc", { long: ["--files0-from"] }],
+  ["stat", {}],
+  ["file", { short: "C", long: ["--compile"] }],
+  ["pwd", {}],
+  ["tree", { short: "oR", long: ["--output", "--fromfile"] }],
+  ["rg", { short: "uLz.", long: ["--pre", "--pre-glob", "--hidden", "--no-ignore", "--follow", "--search-zip", "--unrestricted"] }],
+  ["grep", { short: "rRdD", long: ["--recursive", "--dereference-recursive", "--directories", "--devices"] }],
+  ["find", { exact: ["-exec", "-execdir", "-ok", "-okdir", "-delete", "-fprint", "-fprint0", "-fprintf", "-fls"] }],
+])
+const READ_FLAG = /^-[A-Za-z0-9@]+$|^--[a-z][a-z0-9-]*$/
+
+/** "read", "outside" when a path it names is beyond the folder, or undefined when it is not only a look. */
+function readKind(words: readonly string[], cwd: string, instance: InstanceContext): "read" | "outside" | undefined {
+  const rules = READS.get(words[0]!)
+  if (!rules) return undefined
+  for (const word of words.slice(1)) {
+    if (word.startsWith("-")) {
+      if (!READ_FLAG.test(word)) return undefined
+      if (rules.exact?.includes(word)) return undefined
+      if (rules.long?.some((name) => word === name || word.startsWith(name + "-"))) return undefined
+      if (!rules.exact && !word.startsWith("--") && [...word.slice(1)].some((flag) => rules.short?.includes(flag))) return undefined
+      continue
+    }
+    // A pattern or a count is judged as a path too. It lands inside, or the command is held: never the other way round.
+    const file = path.resolve(cwd, word)
+    if (!Reach.inside(file, instance)) return "outside"
+    if (!Reach.readable(file)) return undefined
+  }
+  return "read"
+}
+
+// `rtk <cmd>` runs `<cmd>` and shortens what it prints, so it is judged as `<cmd>`.
+const unwrapped = (piece: string) => (piece.startsWith("rtk ") ? piece.slice(4) : piece)
+
+function single(piece: string, cwd: string, instance: InstanceContext): CommandKind | undefined {
+  piece = unwrapped(piece)
   if (COMMIT.test(piece) || (BRANCH.test(piece) && !piece.includes(".."))) return gitAllowed(cwd, instance) ? "git-local" : undefined
   const words = Risk.plainWords(piece)
   if (!words) return undefined
@@ -250,6 +296,7 @@ function single(piece: string, cwd: string, instance: InstanceContext): RoutineC
     const named = rest.length === 1 && rest[0] === "-A" ? true : rest.length > 0 && rest.every((word) => safePath(word, cwd, instance))
     return named && gitAllowed(cwd, instance) ? "git-local" : undefined
   }
+  if (readKind(words, cwd, instance) === "read") return "read"
   const lockfiles = INSTALLS.get(piece)
   if (lockfiles) return lockfileUnchanged(lockfiles, cwd, instance) ? "check" : undefined
   return matchesCheck(words, cwd, instance) ? "check" : undefined
@@ -259,10 +306,10 @@ function single(piece: string, cwd: string, instance: InstanceContext): RoutineC
  * The category of a command that is only routine work, or undefined. `[cd <path> && ]<row>[ && <row>...][ 2>&1][ | tail -N]`.
  * Splitting on the literal " && " is enough: every piece must then pass `Risk.plainWords`, so no other operator survives.
  */
-export function routine(command: string, cwd: string, instance: InstanceContext): RoutineCategory | undefined {
+export function routine(command: string, cwd: string, instance: InstanceContext): CommandKind | undefined {
   if (!canRunIn(cwd, instance)) return undefined
   let here = cwd
-  const kinds: RoutineCategory[] = []
+  const kinds: CommandKind[] = []
   for (const [index, piece] of command.replace(OUTPUT_TAIL, "").split(" && ").entries()) {
     const words = Risk.plainWords(piece)
     if (index === 0 && words?.[0] === "cd" && words.length === 2 && safePath(words[1]!, here, instance)) {
@@ -273,7 +320,20 @@ export function routine(command: string, cwd: string, instance: InstanceContext)
     if (!kind) return undefined
     kinds.push(kind)
   }
-  return kinds.find((kind) => kind === "check") ?? kinds.find((kind) => kind === "git-local") ?? kinds[0]
+  // A look beside real work is that work: the strongest piece decides.
+  return (
+    kinds.find((kind) => kind === "check") ??
+    kinds.find((kind) => kind === "git-local") ??
+    kinds.find((kind) => kind === "file-op") ??
+    kinds[0]
+  )
+}
+
+/** Whether a plain read names a path beyond the folder, with `~` read the way the shell reads it. Only ever a reason to hold. */
+function readsOutside(command: string, cwd: string, instance: InstanceContext) {
+  const home = homedir()
+  const words = Risk.plainWords(unwrapped(command).replace(/(^| )~(?=\/| |$)/g, (_match, space: string) => space + home))
+  return words !== undefined && readKind(words, cwd, instance) === "outside"
 }
 
 const within = (root: string, file: string) => {
@@ -343,11 +403,36 @@ function isPlanFile(input: Input) {
 
 const riskCategory = (risk: unknown): HeldCategory => (risk === "remote" ? "outward" : "not_reversible")
 
+/**
+ * An edit nothing can undo, judged again here, because the edit tools stop at the missing Undo and say nothing else about
+ * the file. Inside the folder and ordinary, it is the job the user asked for, with or without Git: it runs, on record. What
+ * changes later runs or what is allowed, a secret, and anything a link takes out of the folder stay held.
+ */
+function classifyUnrecoverableEdit(input: Input): Verdict {
+  const instance = input.instance
+  // Without Git the worktree is `/`, and every name would be judged from the top of the disk.
+  const base = instance.worktree === "/" ? { ...instance, worktree: instance.directory } : instance
+  const targets = editTargets(input)
+  if (targets.length === 0) return held("no_undo")
+  if (targets.some((file) => !Reach.inside(file, instance))) return held("outside_folder")
+  if (targets.some((file) => Reach.secret(file) || !Reach.readable(file))) return held("secret_file")
+  if (targets.some((file) => Reach.sensitive(file, base))) return held("sensitive_file")
+  const ordinary = targets.every((file) => {
+    const target = Reach.real(file)
+    return (
+      target !== undefined &&
+      Risk.ordinaryEdit(path.relative(base.worktree, file)) &&
+      Risk.ordinaryEdit(path.relative(Reach.real(base.worktree) ?? base.worktree, target))
+    )
+  })
+  return ordinary ? { class: "A", decidedBy: "gate" } : { class: "P", decidedBy: "agent", category: "edit-not-ordinary" }
+}
+
 function classifyEdit(input: Input): Verdict {
   if (input.editClass === "secret") return held("secret_file")
   if (input.editClass === "sensitive") return held("sensitive_file")
   // Not the absence of `risk`: an edit nothing can undo carries no risk label either.
-  if (input.editClass === "no_undo" || !input.canUndo) return held("no_undo")
+  if (input.editClass === "no_undo" || !input.canUndo) return classifyUnrecoverableEdit(input)
   if (input.editClass === "not_ordinary") return { class: "P", decidedBy: "agent", category: "edit-not-ordinary" }
   if (input.editClass === "ordinary") return QUIET
   return held("not_routine")
@@ -359,7 +444,9 @@ function classifyBash(input: Input, checkClass: CheckClass): Verdict {
   if (command.split(WORD_BREAK).some((word) => word && Secrets.secretFile(word))) return held("secret_file")
   if (outsideProject(input.cwd, input.instance)) return held("outside_folder")
   const kind = routine(command, input.cwd, input.instance)
-  if (!kind) return held("not_routine")
+  if (!kind) return held(readsOutside(command, input.cwd, input.instance) ? "outside_folder" : "not_routine")
+  // Looking runs nothing of the folder's, so neither its trust nor Undo has anything to say about it.
+  if (kind === "read") return { class: "A", decidedBy: "gate" }
   // A folder nobody has approved holds something nobody has looked at, so running its code is not routine yet.
   if (input.folder !== "clean" && input.folder !== "trusted") return held("folder_not_trusted")
   if (!input.canUndo) return held("no_undo")
