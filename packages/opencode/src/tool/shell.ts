@@ -31,6 +31,10 @@ import { withoutServerCredentials } from "@/util/server-credentials"
 import { Autonomy } from "@/permission/autonomy"
 import { Session } from "@/session/session"
 import { Archive } from "./archive"
+import { DELETE_COMPOUND_TEXT } from "@/permission/autonomy-texts"
+// Types only: the screen hashes with the `Bun` global, which the packaged app's Node server does not have.
+import type { ScriptScreen } from "@/permission/script-screen"
+import { createHash } from "node:crypto"
 
 export { Parameters } from "./shell/prompt"
 
@@ -327,8 +331,6 @@ const RM_LONG = new Set(["--recursive", "--force", "--verbose", "--dir", "--inte
 const GIT_RM_FLAGS = new Set(["-r", "-f", "-q", "--force", "--quiet", "--ignore-unmatch"])
 // These leave the working copy as it is, so they run.
 const GIT_RM_KEEPS = new Set(["--cached", "-n", "--dry-run"])
-export const DELETE_COMPOUND_TEXT =
-  "This call did not run. In autonomous mode a deletion must be a command of its own (rm, rmdir, unlink or git rm with paths only), so Swarm can move the paths to the archive instead."
 
 /** A deletion the shell can move instead of run: which program, what it may remove, and the paths as written. */
 export type Deletion = {
@@ -439,6 +441,66 @@ async function refusedBy(item: Deletion, cwd: string) {
   return undefined
 }
 
+// U11 rule 6: a script the gate let run is compared again right before it runs, so what runs is what was judged.
+// Written as a record so a program added to the screen's list fails the typecheck here until it is added too.
+const SCRIPT_PROGRAMS = new Set<string>(
+  Object.keys({
+    bash: 1,
+    sh: 1,
+    zsh: 1,
+    python: 1,
+    python3: 1,
+    node: 1,
+    bun: 1,
+    deno: 1,
+    ruby: 1,
+    perl: 1,
+  } satisfies Record<(typeof ScriptScreen.INTERPRETERS)[number], 1>),
+)
+const SCRIPT_MAX_BYTES: typeof ScriptScreen.SCRIPT_MAX_BYTES = 65_536
+export const SCRIPT_CHANGED_TEXT =
+  "This call did not run. A script it runs changed after autonomous mode checked it, so what would run is not what was checked. Run the command again to have the script checked as it is now."
+
+/**
+ * The files a command could run as a script: the words after a program in `ScriptScreen.INTERPRETERS` that are not
+ * options, and a command name with a `/` in it (`./run.sh`, `scripts/x`). Leading wrappers and `VAR=value` are skipped.
+ * Wider than any form the table judges on purpose: a file named here that did not change costs one read, while a file the
+ * table judged and this missed would run unchecked. The table answers P `script` only for a file listed with the same
+ * hash in the request's `metadata.scripts`, so a form this misses is held rather than run.
+ */
+function scriptFiles(root: Node) {
+  return commands(root).flatMap((node) => {
+    const words = parts(node).map((item) => unquote(item.text))
+    const start = words.findIndex(
+      (word) => !WRAPPERS.has(base(word)) && !word.startsWith("-") && !word.includes("=") && !/^\d+[smhd]?$/.test(word),
+    )
+    const name = words[start]
+    if (!name) return []
+    if (SCRIPT_PROGRAMS.has(base(name))) return words.slice(start + 1).filter((word) => word && !word.startsWith("-"))
+    return name.includes("/") ? [name] : []
+  })
+}
+
+/**
+ * The hash of each file as it is now, keyed by its absolute path. Undefined for a file that is not there, not a plain file
+ * or larger than the screen reads, since none of those is ever judged `script`. Only files inside the project are read.
+ */
+async function scriptHashes(files: string[], cwd: string, instance: InstanceContext) {
+  const inside = [...new Set(files.map((file) => path.resolve(cwd, home(file))))].filter((file) =>
+    containsPath(file, instance),
+  )
+  return new Map(
+    await Promise.all(
+      inside.map(async (file) => {
+        const stat = await fsp.stat(file).catch(() => undefined)
+        const bytes =
+          stat?.isFile() && stat.size <= SCRIPT_MAX_BYTES ? await fsp.readFile(file).catch(() => undefined) : undefined
+        return [file, bytes && createHash("sha256").update(bytes).digest("hex")] as const
+      }),
+    ),
+  )
+}
+
 /** Every redirect in the command, wherever it sits, and whether each is one this file can vouch for. */
 function redirectsIn(root: Node) {
   const writes: string[] = []
@@ -498,7 +560,7 @@ const WORD_BREAK = /[\s'"|;&<>()=,:]+/
 const ask = Effect.fn("ShellTool.ask")(function* (
   ctx: Tool.Context,
   scan: Scan,
-  input: { command: string; cwd: string },
+  input: { command: string; cwd: string; scripts?: Map<string, string | undefined>; archive?: boolean },
   always: string | undefined,
 ) {
   // A bare `cd x` or a text the parser found no command in still asks, as itself.
@@ -529,6 +591,7 @@ const ask = Effect.fn("ShellTool.ask")(function* (
   }
 
   const rule = scan.risk || scan.dirs.size > 0 ? undefined : always
+  const scripts = [...(input.scripts ?? [])].flatMap(([file, sha256]) => (sha256 ? [{ file, sha256 }] : []))
   yield* ctx.ask({
     permission: ShellID.ToolID,
     patterns,
@@ -538,6 +601,12 @@ const ask = Effect.fn("ShellTool.ask")(function* (
       // The folder the command runs in, since its relative paths mean nothing without it.
       workdir: input.cwd,
       ...(scan.risk ? { risk: scan.risk } : {}),
+      // U11 rule 6, set in autonomous mode only: the hash of each file it may run, as the shell will compare it right
+      // before it runs. The table judges a file `script` only when it is listed here with the hash it screened itself.
+      ...(scripts.length > 0 ? { scripts } : {}),
+      // U11 rule 4, set in autonomous mode only: this shell moves the paths to the archive instead of running the command.
+      // The table lets a plain deletion through as `archived` only with this, so no deletion it lets through is for good.
+      ...(input.archive ? { archive: true } : {}),
     },
     noAlways: rule === undefined,
     call,
@@ -721,6 +790,56 @@ export const ShellTool = Tool.define(
       return scan
     })
 
+    /** Where this session's root is and its autonomy service, when autonomous mode is on there; undefined otherwise. */
+    const modeOn = Effect.fn("ShellTool.modeOn")(function* (ctx: Tool.Context) {
+      if (Option.isNone(autonomy) || Option.isNone(sessions)) return
+      const place = yield* Autonomy.placeOf(sessions.value, ctx.sessionID)
+      const where = { root: place.root.id, directory: place.directory }
+      if (!(yield* autonomy.value.isOn(where))) return
+      return { place, where, autonomy: autonomy.value }
+    })
+
+    /**
+     * U11 rule 6. Right before a command runs, every file it may run as a script is hashed again and compared with the
+     * hash taken before the gate judged it. A file that changed, appeared or went away since means what would run is not
+     * what was judged, so nothing runs. A file that is not there either time is no script, so `bun test` runs as usual.
+     */
+    const scriptChanged = Effect.fn("ShellTool.scriptChanged")(function* (
+      before: Map<string, string | undefined>,
+      cwd: string,
+      instance: InstanceContext,
+      ctx: Tool.Context,
+    ) {
+      const now = yield* Effect.promise(() => scriptHashes([...before.keys()], cwd, instance))
+      if ([...before].every(([file, sha256]) => now.get(file) === sha256)) return
+      const on = yield* modeOn(ctx)
+      // The line is the record that it was stopped; the call is refused whether or not it is written.
+      if (on)
+        yield* on.autonomy
+          .record(on.where.root, {
+            type: "outcome",
+            directory: on.where.directory,
+            requestID: ctx.callID || ctx.messageID,
+            outcome: "not_run",
+            by: "system:script_changed",
+          })
+          .pipe(Effect.catch((error) => Effect.logError("could not record a changed script", { error: error.message })))
+      yield* Effect.logWarning("a script changed after it was judged, so the command did not run", {
+        callID: ctx.callID,
+        files: [...before.keys()].filter((file) => now.get(file) !== before.get(file)).length,
+      })
+      return {
+        title: "",
+        metadata: {
+          output: SCRIPT_CHANGED_TEXT,
+          exit: 1 as number | null,
+          truncated: false,
+          outputPath: undefined as string | undefined,
+        },
+        output: SCRIPT_CHANGED_TEXT,
+      }
+    })
+
     /**
      * U11 rule 4. With autonomous mode on for this session's root, a deletion does not run: a plain one has its paths
      * moved to the archive and the agent reads the register text, anything else that deletes is refused. With the mode
@@ -733,10 +852,10 @@ export const ShellTool = Tool.define(
       cwd: string,
       ctx: Tool.Context,
     ) {
-      if (Option.isNone(autonomy) || Option.isNone(sessions)) return
-      const place = yield* Autonomy.placeOf(sessions.value, ctx.sessionID)
-      const where = { root: place.root.id, directory: place.directory }
-      if (!(yield* autonomy.value.isOn(where))) return
+      const on = yield* modeOn(ctx)
+      if (!on) return
+      const place = on.place
+      const where = on.where
       const done = (output: string, exit: number) => ({
         title: command,
         metadata: { output: preview(output), exit: exit as number | null, truncated: false, outputPath: undefined as string | undefined },
@@ -751,7 +870,7 @@ export const ShellTool = Tool.define(
           cwd,
           paths: found.paths,
           requestID: ctx.callID ?? ctx.messageID,
-          record: Autonomy.archiveRecorder(autonomy.value.record, where),
+          record: Autonomy.archiveRecorder(on.autonomy.record, where),
         }),
       )
       if (!result.ok) return done(result.message, 1)
@@ -1005,13 +1124,20 @@ export const ShellTool = Tool.define(
                   const scan = yield* collect(tree.rootNode, cwd, ps, shell, instanceCtx, ctx.trust)
                   if (!containsPath(cwd, instanceCtx)) scan.dirs.add(cwd)
                   const posix = !ps && process.platform !== "win32" && Shell.posix(shell)
+                  // Taken before the gate judges the files, and compared again right before the command runs.
+                  const on = posix ? yield* modeOn(ctx) : undefined
+                  const scripts = on
+                    ? yield* Effect.promise(() => scriptHashes(scriptFiles(tree.rootNode), cwd, instanceCtx))
+                    : undefined
+                  const found = posix ? deletion(tree.rootNode) : undefined
                   yield* ask(
                     ctx,
                     scan,
-                    { command: params.command, cwd },
+                    // `archive` below moves exactly when the mode is on and this is one plain deletion.
+                    { command: params.command, cwd, scripts, archive: Boolean(on) && typeof found === "object" },
                     posix ? Reach.alwaysFor(params.command, cwd, instanceCtx) : undefined,
                   )
-                  return { ...scan, deletion: posix ? deletion(tree.rootNode) : undefined }
+                  return { ...scan, deletion: found, scripts }
                 }),
               )
               scanned.secretFiles.forEach(Secrets.learnFile)
@@ -1021,12 +1147,17 @@ export const ShellTool = Tool.define(
                 if (archived) return archived
               }
 
+              const env = yield* shellEnv(ctx, cwd)
+              if (scanned.scripts && scanned.scripts.size > 0) {
+                const changed = yield* scriptChanged(scanned.scripts, cwd, instanceCtx, ctx)
+                if (changed) return { ...changed, title: params.command }
+              }
               return yield* run(
                 {
                   shell,
                   command: params.command,
                   cwd,
-                  env: yield* shellEnv(ctx, cwd),
+                  env,
                   timeout,
                   withheld: scanned.withheld,
                 },

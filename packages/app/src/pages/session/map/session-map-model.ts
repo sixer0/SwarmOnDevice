@@ -1,4 +1,13 @@
-import type { AssistantMessage, AutonomyAuditLine, Message, Part, ToolPart, UserMessage } from "@opencode-ai/sdk/v2"
+import type {
+  AssistantMessage,
+  AutonomyArchive,
+  AutonomyArchiveEntry,
+  AutonomyAuditLine,
+  Message,
+  Part,
+  ToolPart,
+  UserMessage,
+} from "@opencode-ai/sdk/v2"
 import { notRun } from "@opencode-ai/session-ui/part-mark"
 
 // A long session is hundreds of tool calls in a virtualized transcript: the browser's find cannot see it and a failed
@@ -592,6 +601,84 @@ export function heldCall(metadata: Record<string, unknown> | undefined): HeldCal
     tool,
     args: fields.map(([name, value]) => ({ name, value: typeof value === "string" ? value : JSON.stringify(value) })),
   }
+}
+
+// Every call a held entry stands for. An entry that grew lists them in `calls`; one that did not has only `call`.
+export function heldCalls(metadata: Record<string, unknown> | undefined): HeldCall[] {
+  const calls = metadata?.calls
+  if (!Array.isArray(calls)) {
+    const one = heldCall(metadata)
+    return one ? [one] : []
+  }
+  return calls.flatMap((call) => {
+    const one = heldCall({ call })
+    return one ? [one] : []
+  })
+}
+
+export type ConsentItem = {
+  id: string
+  kind: "secret" | "sensitive" | "outside" | "destination"
+  pattern: string
+  files: readonly string[]
+  named: boolean
+  checked: boolean
+  given: boolean
+}
+
+export type ConsentList = {
+  id: string
+  hash: string
+  items: readonly ConsentItem[]
+  dropped: number
+}
+
+// Shown while something on the list is still not allowed. Once all of it is, the decided lines say so instead.
+export function consentShown(list: ConsentList | null | undefined): ConsentList | undefined {
+  if (!list || list.items.length === 0) return
+  return list.items.some((item) => !item.given) ? list : undefined
+}
+
+// What starts ticked: what the scan ticked, and what was already allowed. Ticks the person made since win.
+export function consentTicked(list: ConsentList, ticks: Readonly<Record<string, boolean | undefined>>) {
+  return new Set(list.items.flatMap((item) => (item.given || (ticks[item.id] ?? item.checked) ? [item.id] : [])))
+}
+
+// Only the items not yet allowed, in list order, on the list named by its hash. Nothing ticked sends nothing.
+export function consentAllowInput(rootID: string, list: ConsentList, ticked: ReadonlySet<string>) {
+  const ids = list.items.filter((item) => !item.given && ticked.has(item.id)).map((item) => item.id)
+  if (ids.length === 0) return
+  return { sessionID: rootID, hash: list.hash, ids }
+}
+
+// Shown while there is something in it, or while it is a link the server will not read or empty.
+export function archiveShown(archive: AutonomyArchive | null | undefined): AutonomyArchive | undefined {
+  if (!archive) return
+  return archive.unsafe || archive.entries.length > 0 ? archive : undefined
+}
+
+// The paths moved instead of deleted, over every entry.
+export function archiveCount(archive: AutonomyArchive) {
+  return archive.entries.reduce((sum, entry) => sum + entry.count, 0)
+}
+
+// Exactly the entries the person was shown in the confirmation. An unsafe archive is never emptied from here.
+export function archiveEmptyInput(rootID: string, entries: readonly AutonomyArchiveEntry[], unsafe: boolean) {
+  if (unsafe || entries.length === 0) return
+  return { sessionID: rootID, ids: entries.map((entry) => entry.id) }
+}
+
+const SIZE_UNITS = ["byte", "kilobyte", "megabyte", "gigabyte", "terabyte"] as const
+
+// A size in the person's locale, decimal units as the system file browsers show them.
+export function archiveSize(bytes: number, locale: string) {
+  const step = Math.min(SIZE_UNITS.length - 1, bytes < 1000 ? 0 : Math.floor(Math.log10(bytes) / 3))
+  return new Intl.NumberFormat(locale, {
+    style: "unit",
+    unit: SIZE_UNITS[step],
+    unitDisplay: "short",
+    maximumFractionDigits: step === 0 ? 0 : 1,
+  }).format(bytes / 1000 ** step)
 }
 
 // What goes into the composer when someone asks about a step: enough for the agent to know which one is meant.

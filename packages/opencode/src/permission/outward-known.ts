@@ -276,7 +276,8 @@ export function hostsIn(text: string) {
   const hosts = new Set<string>()
   const ssh: { user: string; host: string }[] = []
   for (const match of text.matchAll(/\b[a-z][a-z0-9+.-]*:\/\/[^\s'"<>`)]+/gi)) {
-    const parsed = parse(match[0])
+    // A sentence goes on after a URL: "fetch https://docs.example.com, then ..." names docs.example.com.
+    const parsed = parse(match[0].replace(/[.,;:!?]+$/, ""))
     if (parsed) hosts.add(parsed.host)
   }
   for (const match of text.matchAll(/(?<![\w.@/-])([\w.-]+)@((?:[a-z0-9-]+\.)*[a-z0-9-]+)(?![\w-])/gi)) {

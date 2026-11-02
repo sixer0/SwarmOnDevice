@@ -110,9 +110,11 @@ const pluralCategories = new Map(
 //   - one more for the tools dialog's retry countdown (`dialog.tools.retryIn`, senior finding 4 of row 239, U14 fix
 //     pass row 246 under decision C82 of the same task);
 //   - five more for main's native install confirmation (`desktop.setupTools.confirm.*`, security finding F1 of row
-//     238, decision C80; requested by row 245 and written by row 246 of the same task).
+//     238, decision C80; requested by row 245 and written by row 246 of the same task);
+//   - one more for the archive row's mark on an archive that is a link (`session.autonomy.archive.unsafe`, row 162
+//     of the same task, the archive route's `unsafe` field from row 152).
 // Widening this list is a decision, not drift: `parity-exemption-guard.test.ts` fails the suite on any
-// sixty-first entry, on any non-literal/wildcard, and if `en` or `id` ever stops carrying an exempt key.
+// sixty-second entry, on any non-literal/wildcard, and if `en` or `id` ever stops carrying an exempt key.
 const UNTRANSLATED_KEY_PRESENCE_EXEMPTION: readonly string[] = [
   "command.project.openNumber",
   "settings.tab.servers",
@@ -157,6 +159,7 @@ const UNTRANSLATED_KEY_PRESENCE_EXEMPTION: readonly string[] = [
   "session.autonomy.archive.title",
   "session.autonomy.archive.empty",
   "session.autonomy.archive.confirm",
+  "session.autonomy.archive.unsafe",
   "settings.general.row.autonomous.scripts",
   "dialog.tools.title",
   "dialog.tools.body",

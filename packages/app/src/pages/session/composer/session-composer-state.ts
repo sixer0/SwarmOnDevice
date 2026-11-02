@@ -3,6 +3,7 @@ import { createStore } from "solid-js/store"
 import type { PermissionRequest, QuestionRequest, Todo } from "@opencode-ai/sdk/v2"
 import { useParams } from "@solidjs/router"
 import { showToast } from "@/utils/toast"
+import { replyHeld } from "@/utils/permission-reply"
 import { useServerSync } from "@/context/server-sync"
 import { useLanguage } from "@/context/language"
 import { useSDK } from "@/context/sdk"
@@ -123,20 +124,16 @@ export function createSessionComposerController(options?: { closeMs?: number | (
   const decide = (response: "once" | "always" | "reject") => {
     const perm = permissionRequest()
     if (!perm) return
-    respond(perm.id, () =>
-      sdk().api.permission.reply({ sessionID: perm.sessionID, requestID: perm.id, reply: response }),
-    )
+    respond(perm.id, () => replyHeld(sdk().api, { request: perm, reply: response }))
   }
 
   const allowMovedOn = (request: PermissionRequest) =>
-    respond(request.id, () =>
-      sdk().api.permission.reply({ sessionID: request.sessionID, requestID: request.id, reply: "once" }),
-    )
+    respond(request.id, () => replyHeld(sdk().api, { request, reply: "once" }))
 
   const leaveMovedOn = (item: MovedOnRequest) =>
     respond(item.request.id, () =>
       item.kind === "permission"
-        ? sdk().api.permission.reply({ sessionID: item.request.sessionID, requestID: item.request.id, reply: "reject" })
+        ? replyHeld(sdk().api, { request: item.request, reply: "reject" })
         : sdk().api.question.reject({ sessionID: item.request.sessionID, requestID: item.request.id }),
     )
 

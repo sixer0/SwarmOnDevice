@@ -25131,7 +25131,14 @@
             "pattern": "^ses"
           },
           "consent": {
-            "$ref": "#/components/schemas/AutonomyConsentList"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AutonomyConsentList"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": ["rootID", "consent"],

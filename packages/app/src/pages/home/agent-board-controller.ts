@@ -8,6 +8,7 @@ import { useNotification } from "@/context/notification"
 import { ServerConnection } from "@/context/server"
 import { errorMessage } from "@/pages/layout/helpers"
 import { canonicalPathKey } from "@/utils/path-key"
+import { replyHeld } from "@/utils/permission-reply"
 import { showToast } from "@/utils/toast"
 import {
   agentSnapshotSessions,
@@ -221,12 +222,7 @@ export function createAgentBoardController(home: HomeController, sessions: HomeS
       act(
         need.key,
         (ctx) =>
-          ctx.sdk.api.permission.reply({
-            sessionID: need.session.id,
-            requestID: need.request.id,
-            reply,
-            location: { directory: need.session.directory },
-          }),
+          replyHeld(ctx.sdk.api, { request: need.request, reply, location: { directory: need.session.directory } }),
         (ctx) => drop.permission(ctx, need.request),
       ),
     answer: answerQuestion,

@@ -288,6 +288,39 @@ it.instance(
 )
 
 it.instance(
+  "U11 rule 8: the plan agent and its subagent may look with the shell, and any other command is refused",
+  () =>
+    Effect.gen(function* () {
+      const { root, child } = yield* lineage()
+      const test = yield* TestInstance
+      yield* said(root.id, "plan")
+      mkdirSync(path.join(test.directory, "src"), { recursive: true })
+      writeFileSync(path.join(test.directory, "src", "a.ts"), "x\n")
+      const shell = (session: Session.Info, agent: string, command: string) =>
+        call(session, agent, "bash", { command, description: "plan step" })
+
+      expect(yield* shell(root, "plan", "cat src/a.ts")).toBe("ran")
+      const refused = [
+        yield* shell(root, "plan", "touch a"),
+        yield* shell(child, "general", "mkdir -p out"),
+        yield* shell(root, "plan", "ls src && touch b"),
+      ]
+
+      expect(refused.every((error) => error instanceof PermissionV1.DeniedError)).toBe(true)
+      expect(["a", "out", "b"].filter((name) => existsSync(path.join(test.directory, name)))).toEqual([])
+      expect(stub.calls).toEqual([])
+      expect((yield* audit(root.id)).filter((line) => line[0] === "X")).toEqual([
+        ["X", "plan_mode"],
+        ["X", "plan_mode"],
+        ["X", "plan_mode"],
+      ])
+      // A look is never refused, and leaves no line saying it was held.
+      expect((yield* audit(root.id)).filter((line) => line[0] === "D")).toEqual([])
+    }),
+  shipped,
+)
+
+it.instance(
   "a rule that allows edits does not get a plan lineage past the gate",
   () =>
     Effect.gen(function* () {

@@ -11,6 +11,15 @@ import {
   sinceYouLooked,
   stepReference,
   heldCall,
+  heldCalls,
+  consentShown,
+  consentTicked,
+  consentAllowInput,
+  archiveShown,
+  archiveCount,
+  archiveEmptyInput,
+  archiveSize,
+  type ConsentList,
 } from "./session-map-model"
 
 const user = (id: string, created: number) => ({ id, role: "user", time: { created } }) as unknown as Message
@@ -507,6 +516,103 @@ describe("decisionGroups", () => {
       expect(heldCall(metadata)).toBeUndefined()
   })
 
+  test("row 160: an entry that grew shows every call it stands for", () => {
+    const one = { tool: "write", args: { filePath: "/p/a" } }
+    const two = { tool: "write", args: { filePath: "/p/b" } }
+    expect(heldCalls({ call: one }).map((call) => call.args[0]?.value)).toEqual(["/p/a"])
+    expect(heldCalls({ call: one, calls: [one, two], version: 2 }).map((call) => call.args[0]?.value)).toEqual([
+      "/p/a",
+      "/p/b",
+    ])
+    expect(heldCalls({ calls: [one, "text", null, two] })).toHaveLength(2)
+    expect(heldCalls(undefined)).toEqual([])
+  })
+
+  test("row 160: the consent list ticks per pattern and sends only what is ticked and not yet allowed", () => {
+    const list: ConsentList = {
+      id: "consent_1",
+      hash: "h1",
+      dropped: 0,
+      items: [
+        { id: "c1", kind: "secret", pattern: ".env*", files: ["/p/.env"], named: true, checked: true, given: false },
+        {
+          id: "c2",
+          kind: "sensitive",
+          pattern: "id_rsa",
+          files: ["/p/k/id_rsa"],
+          named: false,
+          checked: false,
+          given: false,
+        },
+        {
+          id: "c3",
+          kind: "destination",
+          pattern: "api.example.com",
+          files: [],
+          named: false,
+          checked: true,
+          given: true,
+        },
+      ],
+    }
+    expect(consentShown(list)).toBe(list)
+    expect(consentShown(null)).toBeUndefined()
+    expect(consentShown({ ...list, items: [] })).toBeUndefined()
+    expect(consentShown({ ...list, items: list.items.map((item) => ({ ...item, given: true })) })).toBeUndefined()
+
+    // What the scan ticked starts ticked; what is allowed stays ticked whatever the person does.
+    expect([...consentTicked(list, {})]).toEqual(["c1", "c3"])
+    expect([...consentTicked(list, { c1: false, c2: true, c3: false })]).toEqual(["c2", "c3"])
+
+    expect(consentAllowInput("root", list, consentTicked(list, {}))).toEqual({
+      sessionID: "root",
+      hash: "h1",
+      ids: ["c1"],
+    })
+    expect(consentAllowInput("root", list, consentTicked(list, { c2: true }))).toEqual({
+      sessionID: "root",
+      hash: "h1",
+      ids: ["c1", "c2"],
+    })
+    expect(consentAllowInput("root", list, consentTicked(list, { c1: false }))).toBeUndefined()
+    expect(consentAllowInput("root", list, new Set(["c3", "elsewhere"]))).toBeUndefined()
+  })
+
+  test("row 162: the archive row shows only while there is something in it, and empties exactly what was listed", () => {
+    const entries = [
+      { id: "20261102-101500-1", bytes: 1500, count: 2, paths: ["build/a.js", "build/b.js"] },
+      { id: "20261102-101700-2", bytes: 500, count: 1, paths: ["notes.txt"] },
+    ]
+    const archive = { rootID: "root", entries, bytes: 2000, unsafe: false }
+    expect(archiveShown(archive)).toBe(archive)
+    expect(archiveShown({ ...archive, entries: [], bytes: 0 })).toBeUndefined()
+    expect(archiveShown(null)).toBeUndefined()
+    expect(archiveShown(undefined)).toBeUndefined()
+    expect(archiveCount(archive)).toBe(3)
+
+    // The ids sent are the entries the confirmation listed, in that order, and nothing else.
+    expect(archiveEmptyInput("root", entries, false)).toEqual({
+      sessionID: "root",
+      ids: ["20261102-101500-1", "20261102-101700-2"],
+    })
+    expect(archiveEmptyInput("root", entries.slice(1), false)).toEqual({
+      sessionID: "root",
+      ids: ["20261102-101700-2"],
+    })
+    expect(archiveEmptyInput("root", [], false)).toBeUndefined()
+
+    // A link in place of the archive keeps a row with its mark, and nothing is emptied from it.
+    const unsafe = { rootID: "root", entries: [], bytes: 0, unsafe: true }
+    expect(archiveShown(unsafe)).toBe(unsafe)
+    expect(archiveEmptyInput("root", entries, true)).toBeUndefined()
+
+    expect(archiveSize(0, "en")).toBe("0 byte")
+    expect(archiveSize(999, "en")).toBe("999 byte")
+    expect(archiveSize(1500, "en")).toBe("1.5 kB")
+    expect(archiveSize(2_500_000, "en")).toBe("2.5 MB")
+    expect(archiveSize(1_500, "id")).toBe("1,5 kB")
+  })
+
   test("the decisions view takes no rows from the step list", () => {
     const model = buildSessionMap({ messages, parts: () => [] })
     expect(mapRows({ model, filter: "decisions", query: "", open: () => true })).toEqual([])
@@ -523,6 +629,15 @@ describe("decisionGroups", () => {
     expect(row).toContain("{pattern}")
     expect(row).toContain("{reason()}")
     expect(row).toContain("{arg.value}")
+    // The consent row sits in the same slice: patterns and file names go in as text.
+    expect(row).toContain("export function ConsentRow")
+    expect(row).toContain("{item.pattern}")
+    expect(row).toContain("{relativePath(file, props.directory)}")
+    // So do the archive row and its confirmation: entry ids and archived paths go in as text.
+    expect(row).toContain("export function ArchiveRow")
+    expect(row).toContain("function DialogEmptyArchive")
+    expect(row).toContain("{entry.id}")
+    expect(row).toContain("{file}")
     expect(row).not.toMatch(/innerHTML|Markdown|<a\b|href|marked|createLink|data-markdown/)
     expect(source).not.toMatch(/innerHTML|<Markdown/)
   })

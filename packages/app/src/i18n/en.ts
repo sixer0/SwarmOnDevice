@@ -895,6 +895,8 @@ export const dict = {
   "session.autonomy.archive.title": "Moved to the archive instead of deleted: {{count}}",
   "session.autonomy.archive.empty": "Empty archive",
   "session.autonomy.archive.confirm": "Delete the archived files for good? This cannot be undone.",
+  "session.autonomy.archive.unsafe":
+    "The archive folder is a link or not a folder, so Swarm does not read or empty it.",
   "session.map.decisions.group.waiting": "Waiting for you",
   "session.map.decisions.group.decided": "Decided",
   "session.map.decisions.group.limited": "Refused or limited",

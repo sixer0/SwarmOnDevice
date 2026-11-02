@@ -4,7 +4,9 @@ import { describe, expect, test } from "bun:test"
 import { spawnSync } from "node:child_process"
 import fs from "node:fs/promises"
 import path from "node:path"
+import { AutonomyTable } from "../../src/permission/autonomy-table"
 import { OutwardKnown } from "../../src/permission/outward-known"
+import type { InstanceContext } from "../../src/project/instance-context"
 import { tmpdir } from "../fixture/fixture"
 
 const git = (dir: string, ...args: string[]) => {
@@ -159,6 +161,32 @@ describe("permission.outward-known", () => {
       user: "deploy",
       host: "box.example.com",
     })
+  })
+
+  test("a URL followed by punctuation still names its host, and a fetch there matches once ticked", () => {
+    const snap: OutwardKnown.Snapshot = { at: 0, repos: [], accounts: [], rclone: [], drives: [] }
+    for (const text of [
+      "fetch https://docs.example.com, then summarise",
+      "read https://docs.example.com/guide. Then stop",
+      "see https://docs.example.com; and https://api.example.com:",
+    ])
+      expect([text, OutwardKnown.named(snap, text).some((item) => item.kind === "host" && item.host === "docs.example.com")]).toEqual([text, true])
+    const allowed = OutwardKnown.named(snap, "fetch https://docs.example.com, then summarise").map((destination, index) => ({
+      id: `destination:${index}`,
+      destination,
+    }))
+    const url = "https://docs.example.com/guide"
+    const verdict = AutonomyTable.classify({
+      permission: "webfetch",
+      patterns: [url],
+      metadata: { url },
+      instance: { directory: "/", worktree: "/", project: { vcs: "git" } } as InstanceContext,
+      cwd: "/",
+      canUndo: true,
+      folder: "clean",
+      outward: { allowed, snapshot: snap },
+    })
+    expect(verdict).toEqual({ class: "A", decidedBy: "gate", via: "outward", consentID: "destination:0", destination: "docs.example.com" })
   })
 
   test("the audit label hides account names", () => {

@@ -2,26 +2,37 @@ import { useLanguage } from "@/context/language"
 import { useSDK } from "@/context/sdk"
 import { useServerSync } from "@/context/server-sync"
 import { errorMessage } from "@/pages/layout/helpers"
+import { replyHeld } from "@/utils/permission-reply"
 import { showToast } from "@/utils/toast"
-import type { AutonomySession } from "@opencode-ai/sdk/v2"
+import type { AutonomyArchive, AutonomyArchiveEntry, AutonomySession } from "@opencode-ai/sdk/v2"
 import { getToolInfo } from "@opencode-ai/session-ui/message-part"
+import { Checkbox } from "@opencode-ai/ui/checkbox"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { Icon } from "@opencode-ai/ui/icon"
 import { Spinner } from "@opencode-ai/ui/spinner"
 import { Icon as IconV2 } from "@opencode-ai/ui/v2/icon"
 import { IconButtonV2 } from "@opencode-ai/ui/v2/icon-button-v2"
 import { ButtonV2 } from "@opencode-ai/ui/v2/button-v2"
-import { DialogFooter, DialogHeader, DialogTitleGroup, DialogV2 } from "@opencode-ai/ui/v2/dialog-v2"
+import { DialogBody, DialogFooter, DialogHeader, DialogTitleGroup, DialogV2 } from "@opencode-ai/ui/v2/dialog-v2"
 import { createEffect, createMemo, For, Match, on, onCleanup, onMount, Show, Switch, type JSX } from "solid-js"
 import { createStore } from "solid-js/store"
 import type { SwarmController } from "../swarm/swarm-controller"
 import { SwarmAgents } from "../swarm/swarm-view"
 import type { SessionMapController } from "./session-map-controller"
 import {
+  archiveCount,
+  archiveEmptyInput,
+  archiveShown,
+  archiveSize,
+  consentAllowInput,
+  consentShown,
+  consentTicked,
   decisionGroups,
   formatDuration,
-  heldCall,
+  heldCalls,
   relativePath,
+  type ConsentItem,
+  type ConsentList,
   type DecisionEntry,
   type DecisionNote,
   type HeldCall,
@@ -288,7 +299,7 @@ const REFRESH_DEBOUNCE_MS = 1000
 // Patterns and reasons can come from an attacker. They stay JSX text: no Markdown, no links, nothing that parses them.
 export function DecisionRow(props: {
   entry: DecisionEntry
-  call?: HeldCall
+  calls?: readonly HeldCall[]
   busy: boolean
   onReply?: (reply: "once" | "reject") => void
   onUndo: () => void
@@ -334,11 +345,11 @@ export function DecisionRow(props: {
           </span>
         )}
       </For>
-      <Show when={props.call}>
+      <For each={props.calls}>
         {(call) => (
           <span data-decision-call class="flex min-w-0 flex-col gap-1">
-            <span class="text-v2-text-text-faint [font-weight:440]">{call().tool}</span>
-            <For each={call().args}>
+            <span class="text-v2-text-text-faint [font-weight:440]">{call.tool}</span>
+            <For each={call.args}>
               {(arg) => (
                 <span class="flex min-w-0 flex-col">
                   <span class="text-v2-text-text-faint [font-weight:440]">{arg.name}</span>
@@ -350,7 +361,7 @@ export function DecisionRow(props: {
             </For>
           </span>
         )}
-      </Show>
+      </For>
       <Show when={category()}>
         {(key) => <span class="text-v2-text-text-muted [font-weight:440]">{language.t(key())}</span>}
       </Show>
@@ -398,6 +409,165 @@ export function DecisionRow(props: {
   )
 }
 
+const CONSENT_KIND_LABEL = {
+  secret: "session.review.flag.secret",
+  sensitive: "session.review.flag.sensitive-path",
+  outside: "settings.permissions.tool.external_directory.description",
+  destination: "session.permission.leavesMachine",
+} as const satisfies Record<ConsentItem["kind"], string>
+
+// The consent list as one more waiting row: a tick per pattern, the files it covers as text, one button for the ticks.
+export function ConsentRow(props: {
+  list: ConsentList
+  directory: string
+  ticked: ReadonlySet<string>
+  busy: boolean
+  onTick: (id: string, value: boolean) => void
+  onAllow: () => void
+}) {
+  const language = useLanguage()
+  return (
+    <div data-decision-consent class="flex min-w-0 flex-col gap-1 rounded-[6px] px-2 py-1.5 leading-[18px]">
+      <span class="text-v2-text-text-base [font-weight:440]">{language.t("session.autonomy.consent.title")}</span>
+      <For each={props.list.items}>
+        {(item) => (
+          <div data-consent-item={item.id} class="flex min-w-0 flex-col gap-0.5">
+            <Checkbox
+              checked={props.ticked.has(item.id)}
+              disabled={item.given || props.busy}
+              onChange={(value: boolean) => props.onTick(item.id, value)}
+            >
+              <span
+                data-consent-pattern
+                class="min-w-0 whitespace-pre-wrap break-all font-mono text-[12px] text-v2-text-text-base"
+              >
+                {item.pattern}
+              </span>
+            </Checkbox>
+            <span class="flex flex-wrap gap-x-2 text-v2-text-text-faint [font-weight:440]">
+              <span>{language.t(CONSENT_KIND_LABEL[item.kind])}</span>
+              <Show when={item.named}>
+                <span>{language.t("session.autonomy.consent.named")}</span>
+              </Show>
+            </span>
+            <For each={item.files}>
+              {(file) => (
+                <span
+                  data-consent-file
+                  class="min-w-0 whitespace-pre-wrap break-all font-mono text-[12px] text-v2-text-text-muted"
+                >
+                  {relativePath(file, props.directory)}
+                </span>
+              )}
+            </For>
+          </div>
+        )}
+      </For>
+      <Show when={props.list.dropped > 0}>
+        <span class="font-mono text-[12px] text-v2-text-text-faint">…</span>
+      </Show>
+      <span class="mt-0.5 flex">
+        <ButtonV2
+          data-consent-allow
+          size="small"
+          variant="contrast"
+          disabled={props.busy || !consentAllowInput("", props.list, props.ticked)}
+          onClick={props.onAllow}
+        >
+          {language.t("session.autonomy.consent.allow")}
+        </ButtonV2>
+      </span>
+    </div>
+  )
+}
+
+// The archive as one more waiting row: how many paths and how much space, and the one way to delete them for good.
+export function ArchiveRow(props: { archive: AutonomyArchive; busy: boolean; onEmpty: () => void }) {
+  const language = useLanguage()
+  return (
+    <div data-decision-archive class="flex min-w-0 flex-col gap-1 rounded-[6px] px-2 py-1.5 leading-[18px]">
+      <Show when={props.archive.entries.length > 0}>
+        <span class="flex flex-wrap items-baseline gap-x-2">
+          <span class="text-v2-text-text-base [font-weight:440]">
+            {language.t("session.autonomy.archive.title", { count: archiveCount(props.archive) })}
+          </span>
+          <span data-archive-size class="text-v2-text-text-faint [font-weight:440]">
+            {archiveSize(props.archive.bytes, language.intl())}
+          </span>
+        </span>
+      </Show>
+      <Show when={props.archive.unsafe}>
+        <span data-archive-unsafe class="text-v2-state-fg-warning [font-weight:440]">
+          {language.t("session.autonomy.archive.unsafe")}
+        </span>
+      </Show>
+      <Show when={archiveEmptyInput("", props.archive.entries, props.archive.unsafe)}>
+        <span class="mt-0.5 flex">
+          <ButtonV2 data-archive-empty size="small" variant="ghost" disabled={props.busy} onClick={props.onEmpty}>
+            {language.t("session.autonomy.archive.empty")}
+          </ButtonV2>
+        </span>
+      </Show>
+    </div>
+  )
+}
+
+// Names every entry that goes, with the paths in it as text: what is listed here is exactly what is sent.
+function DialogEmptyArchive(props: { entries: readonly AutonomyArchiveEntry[]; onConfirm: () => void }) {
+  const language = useLanguage()
+  const dialog = useDialog()
+  return (
+    <DialogV2 fit>
+      <DialogHeader hideClose>
+        <DialogTitleGroup
+          title={language.t("session.autonomy.archive.empty")}
+          description={language.t("session.autonomy.archive.confirm")}
+        />
+      </DialogHeader>
+      <DialogBody class="flex max-h-[min(360px,calc(100vh-200px))] flex-col gap-2 overflow-y-auto px-4 pb-1">
+        <For each={props.entries}>
+          {(entry) => (
+            <div data-archive-entry={entry.id} class="flex min-w-0 flex-col gap-0.5">
+              <span class="flex flex-wrap gap-x-2 font-mono text-[12px]">
+                <span class="text-v2-text-text-base">{entry.id}</span>
+                <span class="text-v2-text-text-faint">{archiveSize(entry.bytes, language.intl())}</span>
+              </span>
+              <For each={entry.paths}>
+                {(file) => (
+                  <span
+                    data-archive-path
+                    class="min-w-0 whitespace-pre-wrap break-all font-mono text-[12px] text-v2-text-text-muted"
+                  >
+                    {file}
+                  </span>
+                )}
+              </For>
+              <Show when={entry.count > entry.paths.length}>
+                <span class="font-mono text-[12px] text-v2-text-text-faint">…</span>
+              </Show>
+            </div>
+          )}
+        </For>
+      </DialogBody>
+      <DialogFooter>
+        <ButtonV2 variant="ghost" onClick={() => dialog.close()}>
+          {language.t("common.cancel")}
+        </ButtonV2>
+        <ButtonV2
+          data-archive-confirm
+          variant="danger"
+          onClick={() => {
+            dialog.close()
+            props.onConfirm()
+          }}
+        >
+          {language.t("session.autonomy.archive.empty")}
+        </ButtonV2>
+      </DialogFooter>
+    </DialogV2>
+  )
+}
+
 function DialogUndoDecision(props: { onConfirm: () => void }) {
   const language = useLanguage()
   const dialog = useDialog()
@@ -438,6 +608,11 @@ function createDecisions(rootID: () => string | undefined) {
     attempts: 0,
     cooling: false,
     acting: {} as Record<string, boolean | undefined>,
+    // The generated type misses that the route answers null while there is no mission yet.
+    consent: undefined as ConsentList | null | undefined,
+    // Ticks the person changed, by item id. What they did not touch starts as the scan ticked it.
+    ticks: {} as Record<string, boolean | undefined>,
+    archive: undefined as AutonomyArchive | undefined,
     // Until the session's own update arrives, or for a child whose session was never read here.
     reverted: {} as Record<string, string | undefined>,
   })
@@ -451,20 +626,50 @@ function createDecisions(rootID: () => string | undefined) {
       })
       .catch(() => undefined)
   }
-  const load = () => {
-    const id = rootID()
-    if (!id) return Promise.resolve()
-    return sdk()
-      .client.autonomy.session({ sessionID: id })
+  // A list that cannot be read leaves the decisions as they are: nothing on it is allowed until it can be.
+  const loadConsent = (id: string) =>
+    sdk()
+      .client.autonomy.consent({ sessionID: id })
       .then((result) => {
         if (rootID() !== id) return
-        setStore({ state: result.data, failed: false, attempts: 0 })
+        const list = result.data?.consent as ConsentList | null | undefined
+        if (list?.hash !== store.consent?.hash) setStore("ticks", {})
+        setStore("consent", list ?? null)
       })
       .catch((cause) => {
         if (rootID() !== id) return
-        setStore("failed", true)
-        report("load", cause)
+        setStore("consent", undefined)
+        report("consent", cause)
       })
+  const load = () => {
+    const id = rootID()
+    if (!id) return Promise.resolve()
+    return Promise.all([
+      sdk()
+        .client.autonomy.session({ sessionID: id })
+        .then((result) => {
+          if (rootID() !== id) return
+          setStore({ state: result.data, failed: false, attempts: 0 })
+        })
+        .catch((cause) => {
+          if (rootID() !== id) return
+          setStore("failed", true)
+          report("load", cause)
+        }),
+      loadConsent(id),
+      // An archive that cannot be read shows no row: nothing can be emptied from a list the person did not see.
+      sdk()
+        .client.autonomy.archive({ sessionID: id })
+        .then((result) => {
+          if (rootID() !== id) return
+          setStore("archive", result.data)
+        })
+        .catch((cause) => {
+          if (rootID() !== id) return
+          setStore("archive", undefined)
+          report("archive", cause)
+        }),
+    ]).then(() => undefined)
   }
 
   let refreshTimer: ReturnType<typeof setTimeout> | undefined
@@ -480,7 +685,15 @@ function createDecisions(rootID: () => string | undefined) {
 
   createEffect(
     on(rootID, () => {
-      setStore({ state: undefined, failed: false, attempts: 0, cooling: false })
+      setStore({
+        state: undefined,
+        failed: false,
+        attempts: 0,
+        cooling: false,
+        consent: undefined,
+        ticks: {},
+        archive: undefined,
+      })
       void load()
     }),
   )
@@ -504,6 +717,9 @@ function createDecisions(rootID: () => string | undefined) {
       return info ? info.revert?.messageID : store.reverted[sessionID]
     })
   })
+  // The open request as the server last sent it: its calls and the version of that list.
+  const held = (entry: DecisionEntry) =>
+    sessionData().permission[entry.sessionID]?.find((request) => request.id === entry.id)?.metadata
   const isBusy = (sessionID?: string) => (sessionData().session_status[sessionID ?? ""]?.type ?? "idle") !== "idle"
 
   const act = (key: string, source: string, run: () => Promise<unknown>) => {
@@ -538,17 +754,40 @@ function createDecisions(rootID: () => string | undefined) {
     // A running root can still be writing over what the Undo brings back, so nothing is undone until it stops.
     undoBusy: (entry: DecisionEntry) => !!store.acting[entry.id] || isBusy(rootID()) || isBusy(entry.sessionID),
     replyBusy: (entry: DecisionEntry) => !!store.acting[entry.id],
-    call: (entry: DecisionEntry) =>
-      heldCall(sessionData().permission[entry.sessionID]?.find((request) => request.id === entry.id)?.metadata),
+    calls: (entry: DecisionEntry) => heldCalls(held(entry)),
+    // Through the shared helper, which names the list version: an approval of an entry that grew without it is shown again.
     reply: (entry: DecisionEntry, reply: "once" | "reject") =>
       act(entry.id, "reply", () =>
-        sdk().api.permission.reply({
-          sessionID: entry.sessionID,
-          requestID: entry.id,
+        replyHeld(sdk().api, {
+          request: { id: entry.id, sessionID: entry.sessionID, metadata: held(entry) ?? {} },
           reply,
           location: { directory: entry.directory },
         }),
       ),
+    consent: createMemo(() => consentShown(store.consent)),
+    ticked: () => {
+      const list = store.consent
+      return list ? consentTicked(list, store.ticks) : new Set<string>()
+    },
+    consentBusy: () => !!store.acting.consent,
+    tick: (id: string, value: boolean) => setStore("ticks", id, value),
+    allowConsent: () => {
+      const id = rootID()
+      const list = store.consent
+      if (!id || !list) return
+      const input = consentAllowInput(id, list, consentTicked(list, store.ticks))
+      if (!input) return
+      act("consent", "consent", () => sdk().client.autonomy.consentAllow(input))
+    },
+    archive: createMemo(() => archiveShown(store.archive)),
+    archiveBusy: () => !!store.acting.archive,
+    // The entries the confirmation listed, and no others: the server leaves anything moved in since.
+    emptyArchive: (entries: readonly AutonomyArchiveEntry[]) => {
+      const id = rootID()
+      const input = id ? archiveEmptyInput(id, entries, !!store.archive?.unsafe) : undefined
+      if (!input) return
+      act("archive", "archive", () => sdk().client.autonomy.archiveEmpty(input))
+    },
     // Only the root's own lines get here: `decisionGroups` gives a subagent's line no button.
     undo: (entry: DecisionEntry) => {
       const messageID = entry.messageID
@@ -568,14 +807,44 @@ function DecisionGroup(props: {
   entries: readonly DecisionEntry[]
   decisions: ReturnType<typeof createDecisions>
   waiting?: boolean
+  directory?: string
 }) {
   const language = useLanguage()
   const dialog = useDialog()
+  const consent = () => (props.waiting ? props.decisions.consent() : undefined)
+  const archive = () => (props.waiting ? props.decisions.archive() : undefined)
   return (
     <section data-decision-group class="flex flex-col">
       <h3 class="m-0 px-2 py-1 text-v2-text-text-base [font-weight:530]">{props.title}</h3>
+      <Show when={consent()}>
+        {(list) => (
+          <ConsentRow
+            list={list()}
+            directory={props.directory ?? ""}
+            ticked={props.decisions.ticked()}
+            busy={props.decisions.consentBusy()}
+            onTick={props.decisions.tick}
+            onAllow={props.decisions.allowConsent}
+          />
+        )}
+      </Show>
+      <Show when={archive()}>
+        {(shown) => (
+          <ArchiveRow
+            archive={shown()}
+            busy={props.decisions.archiveBusy()}
+            onEmpty={() => {
+              // A copy, so a refresh while the dialog is open cannot change what it lists or what is sent.
+              const entries = shown().entries.map((entry) => ({ ...entry, paths: [...entry.paths] }))
+              void dialog.show(() => (
+                <DialogEmptyArchive entries={entries} onConfirm={() => props.decisions.emptyArchive(entries)} />
+              ))
+            }}
+          />
+        )}
+      </Show>
       <Show
-        when={props.entries.length > 0}
+        when={props.entries.length > 0 || consent() || archive()}
         fallback={
           <div class="px-2 py-1 text-v2-text-text-faint [font-weight:440]">
             {language.t("session.map.filter.empty")}
@@ -586,7 +855,7 @@ function DecisionGroup(props: {
           {(entry) => (
             <DecisionRow
               entry={entry}
-              call={props.waiting ? props.decisions.call(entry) : undefined}
+              calls={props.waiting ? props.decisions.calls(entry) : undefined}
               busy={props.waiting ? props.decisions.replyBusy(entry) : props.decisions.undoBusy(entry)}
               onReply={props.waiting ? (reply) => props.decisions.reply(entry, reply) : undefined}
               onUndo={() =>
@@ -600,7 +869,7 @@ function DecisionGroup(props: {
   )
 }
 
-function DecisionList(props: { decisions: ReturnType<typeof createDecisions> }) {
+function DecisionList(props: { decisions: ReturnType<typeof createDecisions>; directory: string }) {
   const language = useLanguage()
   const store = () => props.decisions.store
   return (
@@ -638,6 +907,7 @@ function DecisionList(props: { decisions: ReturnType<typeof createDecisions> }) 
               title={language.t("session.map.decisions.group.waiting")}
               entries={groups().waiting}
               decisions={props.decisions}
+              directory={props.directory}
               waiting
             />
             <DecisionGroup
@@ -998,7 +1268,13 @@ export function SessionMapPanel(props: {
 
       <Show
         when={!showingAgents() && !showingDecisions()}
-        fallback={showingAgents() ? <SwarmAgents swarm={props.swarm} /> : <DecisionList decisions={decisions} />}
+        fallback={
+          showingAgents() ? (
+            <SwarmAgents swarm={props.swarm} />
+          ) : (
+            <DecisionList decisions={decisions} directory={props.directory} />
+          )
+        }
       >
         <div class="mx-2 flex h-7 shrink-0 items-center gap-1.5 rounded-[6px] bg-v2-overlay-simple-overlay-hover px-2">
           <IconV2 name="magnifying-glass" class="shrink-0 text-v2-text-text-faint" />

@@ -405,7 +405,7 @@ const fieldsOf = (
 
 // A record so that a flag the screen gains cannot be left off here.
 const FLAGS = new Set<string>(
-  Object.keys({ network: 1, delete: 1, sudo: 1, eval: 1, base64: 1, exec_local: 1 } satisfies Record<
+  Object.keys({ network: 1, delete: 1, sudo: 1, eval: 1, base64: 1, exec_local: 1, outside_path: 1 } satisfies Record<
     ScriptScreen.Flag,
     1
   >),

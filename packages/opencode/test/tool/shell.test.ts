@@ -11,7 +11,7 @@ import { Config } from "@/config/config"
 import { InstanceState } from "@/effect/instance-state"
 import { AutonomyTable } from "@/permission/autonomy-table"
 import { Shell } from "@opencode-ai/core/shell"
-import { ShellTool } from "../../src/tool/shell"
+import { SCRIPT_CHANGED_TEXT, ShellTool } from "../../src/tool/shell"
 import { Filesystem } from "@/util/filesystem"
 import { provideInstance, testInstanceStoreLayer, tmpdirScoped } from "../fixture/fixture"
 import type { Permission } from "../../src/permission"
@@ -1212,7 +1212,9 @@ describe("tool.shell prompt workdir", () => {
             })
           expect(request.metadata.workdir).toBe(sub)
           expect(judge(request.metadata.workdir as string).class).toBe("D")
-          expect(judge(instance.directory).class).toBe("P")
+          // U11 rule 4: from the folder it is a plain deletion of a safe path. This shell is not in the mode, so it did not
+          // say it moves it, and a deletion for good waits for a person.
+          expect(judge(instance.directory)).toMatchObject({ class: "D", category: "not_reversible" })
           expect(yield* Effect.promise(() => Bun.file(path.join(outer, "keep.txt")).exists())).toBe(true)
         }),
       )
@@ -1585,6 +1587,262 @@ describe("tool.shell archive in autonomous mode", () => {
           yield* seed(tmp, ["b.txt"])
           yield* run({ command: "rm b.txt" })
           expect(yield* exists(path.join(tmp, "b.txt"))).toBe(false)
+        }),
+      )
+    }),
+  )
+
+  // Row 113: the table answers A `archived` only on the shell's word that it moves (`metadata.archive`). Here the gate is
+  // the table itself: whatever it does not answer A stops the call before anything runs.
+  const gated = (asked: Record<string, unknown>[]) =>
+    Effect.gen(function* () {
+      const instance = yield* InstanceState.context
+      return {
+        ...ctx,
+        ask: (req: Omit<PermissionV1.Request, "id" | "sessionID" | "tool">) =>
+          Effect.suspend(() => {
+            asked.push(req.metadata)
+            if (req.permission !== "bash") return Effect.void
+            const verdict = AutonomyTable.classify({
+              permission: req.permission,
+              patterns: req.patterns,
+              metadata: req.metadata,
+              instance,
+              cwd: String(req.metadata.workdir),
+              canUndo: true,
+              folder: "clean",
+            })
+            asked.push({ verdict })
+            return verdict.class === "A" ? Effect.void : Effect.die(new Error(`held ${verdict.class} ${verdict.category}`))
+          }),
+      } as Tool.Context
+    })
+
+  posixOnly("a plain deletion the shell says it moves is A `archived`, and the file is in the archive", () =>
+    Effect.gen(function* () {
+      const tmp = yield* tmpdirScoped({ git: true })
+      yield* seed(tmp, ["build/out.js", "keep.txt"])
+      yield* runIn(
+        tmp,
+        Effect.gen(function* () {
+          const asked: Record<string, unknown>[] = []
+          const tool = yield* archiveTool(true, [])
+          const result = yield* tool.execute({ command: "rm -rf build" }, yield* gated(asked))
+          expect(asked).toContainEqual(expect.objectContaining({ command: "rm -rf build", archive: true }))
+          expect(asked).toContainEqual({ verdict: { class: "A", decidedBy: "gate", category: "archived" } })
+          const id = result.output.match(/\.swarm\/archive\/(\S+) instead/)?.[1]
+          expect(yield* exists(path.join(tmp, "build", "out.js"))).toBe(false)
+          expect(yield* exists(path.join(tmp, ".swarm", "archive", id!, "build", "out.js"))).toBe(true)
+        }),
+      )
+    }),
+  )
+
+  posixOnly("the same deletion with the mode off sends no word, is D `not_reversible`, and deletes nothing", () =>
+    Effect.gen(function* () {
+      const tmp = yield* tmpdirScoped({ git: true })
+      yield* seed(tmp, ["build/out.js"])
+      yield* runIn(
+        tmp,
+        Effect.gen(function* () {
+          const asked: Record<string, unknown>[] = []
+          const tool = yield* archiveTool(false, [])
+          const exit = yield* tool.execute({ command: "rm -rf build" }, yield* gated(asked)).pipe(Effect.exit)
+          expect(Exit.isFailure(exit)).toBe(true)
+          expect(asked.some((item) => "archive" in item)).toBe(false)
+          expect(asked).toContainEqual({ verdict: { class: "D", decidedBy: "gate", category: "not_reversible" } })
+          expect(yield* exists(path.join(tmp, "build", "out.js"))).toBe(true)
+          expect(yield* exists(path.join(tmp, ".swarm"))).toBe(false)
+        }),
+      )
+    }),
+  )
+
+  posixOnly("under PowerShell the shell would run it, so it sends no word, it is D `not_reversible`, and nothing is deleted", () =>
+    Effect.gen(function* () {
+      const tmp = yield* tmpdirScoped({ git: true })
+      yield* seed(tmp, ["a.txt"])
+      // A file named pwsh is read as PowerShell by its name; the gate stops the call before it would start.
+      const pwsh = path.join(yield* tmpdirScoped(), "pwsh")
+      yield* Effect.promise(() => symlink("/bin/sh", pwsh))
+      yield* withShell(
+        { label: "pwsh", shell: pwsh },
+        runIn(
+          tmp,
+          Effect.gen(function* () {
+            expect(Shell.ps(Shell.acceptable())).toBe(true)
+            const asked: Record<string, unknown>[] = []
+            const tool = yield* archiveTool(true, [])
+            const exit = yield* tool.execute({ command: "rm a.txt" }, yield* gated(asked)).pipe(Effect.exit)
+            expect(Exit.isFailure(exit)).toBe(true)
+            expect(asked.some((item) => "archive" in item)).toBe(false)
+            expect(asked).toContainEqual({ verdict: { class: "D", decidedBy: "gate", category: "not_reversible" } })
+            expect(yield* exists(path.join(tmp, "a.txt"))).toBe(true)
+            expect(yield* exists(path.join(tmp, ".swarm"))).toBe(false)
+          }),
+        ),
+      )
+    }),
+  )
+})
+
+// U11 rule 6 (row 154): in autonomous mode a script is hashed before the gate judges it and again right before it runs.
+describe("tool.shell script hash in autonomous mode", () => {
+  const hashTool = (on: boolean, lines: unknown[]) =>
+    ShellTool.pipe(
+      Effect.flatMap((info) => info.init()),
+      Effect.provideService(
+        Autonomy.Service,
+        Autonomy.Service.of({
+          isOn: () => Effect.succeed(on),
+          record: (_root: unknown, line: unknown) => Effect.sync(() => void lines.push(line)),
+        } as unknown as Autonomy.Interface),
+      ),
+      Effect.provideService(
+        Session.Service,
+        Session.Service.of({
+          get: () => Effect.fail(new Error("no session")),
+        } as unknown as Session.Interface),
+      ),
+    )
+  const exists = (file: string) =>
+    Effect.promise(() =>
+      stat(file).then(
+        () => true,
+        () => false,
+      ),
+    )
+  const sha = (text: string) => new Bun.CryptoHasher("sha256").update(text).digest("hex")
+  const write = (file: string, text: string) =>
+    Effect.promise(async () => {
+      await Bun.write(file, text)
+      const { chmod } = await import("fs/promises")
+      await chmod(file, 0o755)
+    })
+  // The gate's answer is "allow"; `during` stands for whatever happens to the file while it is being judged.
+  const judged = (
+    requests: Array<{ permission: string; metadata: Record<string, unknown> }>,
+    during = Effect.void,
+  ) => ({
+    ...ctx,
+    ask: (req: { permission: string; metadata: Record<string, unknown> }) =>
+      Effect.gen(function* () {
+        requests.push(req)
+        if (req.permission === "bash") yield* during
+      }),
+  })
+  const posixOnly = process.platform === "win32" ? it.live.skip : it.live
+  const CLEAN = "echo ran\n"
+  const CHANGED = "touch changed.txt\necho ran\n"
+
+  posixOnly("a script that did not change runs, and the request carries its hash", () =>
+    Effect.gen(function* () {
+      const tmp = yield* tmpdirScoped()
+      yield* write(path.join(tmp, "run.sh"), CLEAN)
+      const lines: unknown[] = []
+      yield* runIn(
+        tmp,
+        Effect.gen(function* () {
+          const tool = yield* hashTool(true, lines)
+          for (const command of ["bash run.sh", "./run.sh"]) {
+            const requests: Array<{ permission: string; metadata: Record<string, unknown> }> = []
+            const result = yield* tool.execute({ command }, judged(requests))
+            expect(result.output.trim()).toBe("ran")
+            expect(requests.find((item) => item.permission === "bash")?.metadata.scripts).toEqual([
+              { file: path.join(tmp, "run.sh"), sha256: sha(CLEAN) },
+            ])
+          }
+          expect(lines).toEqual([])
+        }),
+      )
+    }),
+  )
+
+  posixOnly("a script that changed after it was judged does not run", () =>
+    Effect.gen(function* () {
+      const tmp = yield* tmpdirScoped()
+      const file = path.join(tmp, "run.sh")
+      const lines: unknown[] = []
+      yield* runIn(
+        tmp,
+        Effect.gen(function* () {
+          const tool = yield* hashTool(true, lines)
+          for (const command of ["bash run.sh", "./run.sh", "nohup python3 -u run.sh", "env A=1 sh ./run.sh x"]) {
+            yield* write(file, CLEAN)
+            const result = yield* tool.execute({ command }, judged([], write(file, CHANGED)))
+            expect(result.output).toBe(SCRIPT_CHANGED_TEXT)
+            expect(result.metadata.exit).toBe(1)
+            expect(yield* exists(path.join(tmp, "changed.txt"))).toBe(false)
+          }
+          expect(lines).toHaveLength(4)
+          expect(lines[0]).toMatchObject({ type: "outcome", outcome: "not_run", by: "system:script_changed" })
+        }),
+      )
+    }),
+  )
+
+  posixOnly("a script with no hash from before it was judged does not run", () =>
+    Effect.gen(function* () {
+      const tmp = yield* tmpdirScoped()
+      yield* runIn(
+        tmp,
+        Effect.gen(function* () {
+          const tool = yield* hashTool(true, [])
+          const requests: Array<{ permission: string; metadata: Record<string, unknown> }> = []
+          // Not there when judged, so nothing was hashed; there when it would run.
+          const result = yield* tool.execute(
+            { command: "./made.sh" },
+            judged(requests, write(path.join(tmp, "made.sh"), CHANGED)),
+          )
+          expect(requests.find((item) => item.permission === "bash")?.metadata.scripts).toBeUndefined()
+          expect(result.output).toBe(SCRIPT_CHANGED_TEXT)
+          expect(yield* exists(path.join(tmp, "changed.txt"))).toBe(false)
+          // Gone when it would run is no different.
+          yield* write(path.join(tmp, "gone.sh"), CLEAN)
+          const gone = yield* tool.execute(
+            { command: "bash gone.sh" },
+            judged(
+              [],
+              Effect.promise(() => import("fs/promises").then((fs) => fs.rm(path.join(tmp, "gone.sh")))),
+            ),
+          )
+          expect(gone.output).toBe(SCRIPT_CHANGED_TEXT)
+        }),
+      )
+    }),
+  )
+
+  posixOnly("a word that is no file either time, or inline code, runs as usual", () =>
+    Effect.gen(function* () {
+      const tmp = yield* tmpdirScoped()
+      yield* runIn(
+        tmp,
+        Effect.gen(function* () {
+          const tool = yield* hashTool(true, [])
+          expect((yield* tool.execute({ command: "sh -c 'echo inline'" }, judged([]))).output.trim()).toBe("inline")
+          const missing = yield* tool.execute({ command: "bash nothing.sh 2>/dev/null; echo after" }, judged([]))
+          expect(missing.output.trim()).toBe("after")
+        }),
+      )
+    }),
+  )
+
+  posixOnly("with the mode off nothing is hashed and the command runs as it is", () =>
+    Effect.gen(function* () {
+      const tmp = yield* tmpdirScoped()
+      const file = path.join(tmp, "run.sh")
+      yield* write(file, CLEAN)
+      const lines: unknown[] = []
+      yield* runIn(
+        tmp,
+        Effect.gen(function* () {
+          const tool = yield* hashTool(false, lines)
+          const requests: Array<{ permission: string; metadata: Record<string, unknown> }> = []
+          const result = yield* tool.execute({ command: "bash run.sh" }, judged(requests, write(file, CHANGED)))
+          expect(result.output.trim()).toBe("ran")
+          expect(yield* exists(path.join(tmp, "changed.txt"))).toBe(true)
+          expect(requests.every((item) => item.metadata.scripts === undefined)).toBe(true)
+          expect(lines).toEqual([])
         }),
       )
     }),

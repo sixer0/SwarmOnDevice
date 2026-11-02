@@ -9,6 +9,8 @@ import { Global } from "@opencode-ai/core/global"
 import { needsPerson } from "@opencode-ai/core/permission/needs-person"
 import type { ProjectTrust } from "@opencode-ai/core/project/trust"
 import { McpCatalog } from "../mcp/catalog"
+import { OutwardKnown } from "./outward-known"
+import { ScriptScreen } from "./script-screen"
 import { containsPath, type InstanceContext } from "../project/instance-context"
 import { LibraryRoot } from "../skill/library-root"
 import { GitGuard } from "../tool/git-guard"
@@ -29,12 +31,21 @@ export const CHECK_CLASS: CheckClass = "P"
 export type RoutineCategory = "check" | "file-op" | "git-local"
 /** What `routine` finds a command to be. "read" only looks at the folder, and is class A. */
 export type CommandKind = RoutineCategory | "read"
-export type AllowedCategory = RoutineCategory | "edit-not-ordinary" | "outside_read" | "outside_copy" | "mcp_tool"
+export type AllowedCategory =
+  | RoutineCategory
+  | "edit-not-ordinary"
+  | "outside_read"
+  | "outside_copy"
+  | "mcp_tool"
+  | "consented"
+  | "script"
+  | "archived"
 export type HeldCategory =
   | "outside_folder"
   | "outside_write"
   | "outward"
   | "outward_not_in_mission"
+  | "credential_change"
   | "not_reversible"
   | "sensitive_file"
   | "secret_file"
@@ -47,6 +58,10 @@ export type HeldCategory =
   | "plan_mode"
   | "app_state"
   | "asks_every_time"
+  | "script_flagged"
+  | "script_unreadable"
+  | "program_not_trusted"
+  | "delete_compound"
 
 /** What the edit tools learned from `Reach.editTrust`. Absent means nobody said, and that is held. */
 export type EditClass = "ordinary" | "not_ordinary" | "no_undo" | "sensitive" | "secret"
@@ -56,6 +71,28 @@ export type Verdict = {
   /** The name of who settled it. "agent" is filled in with the model by whoever calls it. Absent when it is not recorded. */
   decidedBy?: "gate" | "agent" | "person"
   category?: AllowedCategory | HeldCategory
+  /** U11 rule 3: it leaves the machine for a destination a person named and ticked, which `consentID` is the item of. */
+  via?: "outward"
+  /** The consent item a class A answer used: rule 3's destination with `via`, or rule 2's file with category "consented". */
+  consentID?: string
+  /** That destination as the audit shows it (`OutwardKnown.label`), with account names hidden. */
+  destination?: string
+  /**
+   * U11 rule 6: the screen behind a `script` or `script_flagged` answer, for the gate to put on record. The decider is only
+   * ever given the closed summary of it (C70), and none of it is the script's text.
+   */
+  screen?: { bytes: number; lines: number; sha256: string; flags: readonly ScriptScreen.Flag[] }
+}
+
+/**
+ * What the gate knows for U11 rule 3, from the root's consent: the destinations a person named and ticked, the snapshot
+ * they were matched in before the mode could change anything, and for a push the recheck it ran just now on the remote
+ * `pushTarget` names. The table only reads this, so nothing an agent says can add to it. Absent: nothing may leave.
+ */
+export type Outward = {
+  allowed: readonly { id: string; destination: OutwardKnown.Destination }[]
+  snapshot?: OutwardKnown.Snapshot
+  recheck?: { repo: string; remote: string; result: OutwardKnown.Recheck }
 }
 
 export type Input = {
@@ -76,6 +113,18 @@ export type Input = {
   rule?: "deny" | "user_catch_all"
   /** Prompts answered together with this one. An `external_directory` for an edit says so here. */
   follows?: readonly { permission: string }[]
+  outward?: Outward
+  /** U11 rule 2, as the gate passes it (`Permission.Consented`). Read only here; absent means no list, so all is held. */
+  consent?: Consent
+}
+
+/**
+ * What a person allowed of the root's consent list: each concrete path they were shown, with the id of the item covering
+ * it. A pattern such as `.env*` is only how the list reads to them; a file it would match that is not here is not covered.
+ */
+export type Consent = {
+  id: string
+  files: ReadonlyMap<string, string>
 }
 
 /** Not a prompt today. A folder's trust is a person's answer through its own endpoint, so nothing may answer it from here. */
@@ -181,8 +230,13 @@ function canRunIn(cwd: string, instance: InstanceContext) {
 function gitAllowed(cwd: string, instance: InstanceContext) {
   if (GitGuard.inspect(instance.worktree).refused !== undefined) return false
   const top = Reach.real(instance.worktree)
-  let folder = Reach.real(cwd)
-  if (top === undefined || folder === undefined) return false
+  const folder = Reach.real(cwd)
+  return top !== undefined && folder !== undefined && noRepositoryBetween(folder, top)
+}
+
+/** Whether git, run in the real folder `folder`, lands in the repository at the real folder `top`. */
+function noRepositoryBetween(start: string, top: string) {
+  let folder = start
   while (folder !== top) {
     if (fs.lstatSync(path.join(folder, ".git"), { throwIfNoEntry: false })) return false
     const parent: string = path.dirname(folder)
@@ -483,9 +537,9 @@ function classifyUnrecoverableEdit(input: Input): Verdict {
   const base = instance.worktree === "/" ? { ...instance, worktree: instance.directory } : instance
   const targets = editTargets(input)
   if (targets.length === 0) return held("no_undo")
-  if (targets.some((file) => Reach.secret(file) || !Reach.readable(file))) return held("secret_file")
+  if (targets.some((file) => Reach.secret(file) || !Reach.readable(file))) return classifyConsented(input, targets, "secret_file")
   if (targets.some((file) => !Reach.inside(file, instance))) return refused("outside_write")
-  if (targets.some((file) => Reach.sensitive(file, base))) return held("sensitive_file")
+  if (targets.some((file) => Reach.sensitive(file, base))) return classifyConsented(input, targets, "sensitive_file")
   const ordinary = targets.every((file) => {
     const target = Reach.real(file)
     return (
@@ -497,9 +551,44 @@ function classifyUnrecoverableEdit(input: Input): Verdict {
   return ordinary ? { class: "A", decidedBy: "gate" } : { class: "P", decidedBy: "agent", category: "edit-not-ordinary" }
 }
 
+/**
+ * U11 rule 2: the item of the root's consent that covers every one of these files, or undefined. A file is covered when a
+ * person allowed that concrete path, by the name the scan saw or by the file that name leads to. A name in the folder that
+ * leads out of it covers nothing, since what the person was shown as theirs is not what it is.
+ */
+function consentFor(input: Input, files: readonly string[]): string | undefined {
+  const consent = input.consent
+  if (!consent || files.length === 0) return undefined
+  const covered = new Map<string, string>()
+  for (const [file, id] of consent.files) {
+    const target = Reach.real(file)
+    if (target === undefined || (containsPath(file, input.instance) && !Reach.inside(file, input.instance))) continue
+    covered.set(file, id)
+    covered.set(target, id)
+  }
+  const ids = files.map((file) => {
+    const target = Reach.real(file)
+    return target === undefined ? undefined : (covered.get(file) ?? covered.get(target))
+  })
+  const [first] = ids
+  return first !== undefined && ids.every((id) => id === first) ? first : undefined
+}
+
+/**
+ * A secret or sensitive file a person allowed when the mission was known is class A, with the item it used for the gate to
+ * check and put on record (`via: consent`). Anything else stays `held`. Writing outside the folder is rule 1's, so a
+ * consent never lets that through.
+ */
+function classifyConsented(input: Input, files: readonly string[], category: HeldCategory): Verdict {
+  const id = consentFor(input, files)
+  if (id === undefined) return held(category)
+  if (input.permission === "edit" && files.some((file) => !Reach.inside(file, input.instance))) return refused("outside_write")
+  return { class: "A", decidedBy: "gate", category: "consented", consentID: id }
+}
+
 function classifyEdit(input: Input): Verdict {
-  if (input.editClass === "secret") return held("secret_file")
-  if (input.editClass === "sensitive") return held("sensitive_file")
+  if (input.editClass === "secret") return classifyConsented(input, editTargets(input), "secret_file")
+  if (input.editClass === "sensitive") return classifyConsented(input, editTargets(input), "sensitive_file")
   // Not the absence of `risk`: an edit nothing can undo carries no risk label either.
   if (input.editClass === "no_undo" || !input.canUndo) return classifyUnrecoverableEdit(input)
   if (input.editClass === "not_ordinary") return { class: "P", decidedBy: "agent", category: "edit-not-ordinary" }
@@ -511,12 +600,19 @@ function classifyBash(input: Input, checkClass: CheckClass): Verdict {
   const command = input.metadata.command
   if (typeof command !== "string" || !command) return held("not_routine")
   if (command.split(WORD_BREAK).some((word) => word && Secrets.secretFile(word))) return held("secret_file")
+  const send = classifySend(command, input)
+  if (send) return send
   const outside = outsideKind(command, input.cwd, input.instance)
   if (outside && (outsideProject(input.cwd, input.instance) || readsOutside(command, input.cwd, input.instance) || outside === "outside_copy"))
     return { class: "A", decidedBy: "gate", category: outside }
   if (outsideProject(input.cwd, input.instance)) return held("outside_folder")
   const kind = routine(command, input.cwd, input.instance)
-  if (!kind) return held(readsOutside(command, input.cwd, input.instance) ? "outside_folder" : "not_routine")
+  if (!kind) {
+    const form = scriptForm(command)
+    if (form) return classifyScript(input, form)
+    return held(readsOutside(command, input.cwd, input.instance) ? "outside_folder" : "not_routine")
+  }
+  if (programInProject(command, input.cwd, input.instance)) return held("program_not_trusted")
   // Looking runs nothing of the folder's, so neither its trust nor Undo has anything to say about it.
   if (kind === "read") return { class: "A", decidedBy: "gate" }
   // A folder nobody has approved holds something nobody has looked at, so running its code is not routine yet.
@@ -527,6 +623,131 @@ function classifyBash(input: Input, checkClass: CheckClass): Verdict {
 }
 
 /**
+ * U11 rule 6. `<interpreter> <file> [args]`, `./<file> [args]`, or `<interpreter> -c|-e '<code>'` with nothing else on the
+ * line. A file name has a `.` or a `/` in it, so `bun install` or `deno run` is no script and stays with the allow list.
+ * `bash -c`, `sh -c` and `zsh -c` are not here: their code is a command line, which the allow list judges as one, and a
+ * screen would let any program through that a fixed pattern does not name.
+ */
+type ScriptForm = { program?: string; file: string; code?: undefined } | { program: string; code: string; file?: undefined }
+
+const SCRIPT_WORD = /^[\w./@%+:,=-]+$/
+// Single quotes are taken as written. In double quotes the shell would expand `$`, backquotes and `\`, so what was screened
+// would not be what runs: none of them may appear there.
+const INLINE = /^([a-z0-9]+) (-[ce]) (?:'([^']*)'|"([^"$`\\]*)")$/
+const INLINE_FLAG: Readonly<Record<string, string>> = { python: "-c", python3: "-c", node: "-e", bun: "-e", ruby: "-e", perl: "-e" }
+const INTERPRETERS: ReadonlySet<string> = new Set(ScriptScreen.INTERPRETERS)
+
+function scriptForm(command: string): ScriptForm | undefined {
+  const inline = INLINE.exec(command)
+  if (inline) return INLINE_FLAG[inline[1]!] === inline[2] ? { program: inline[1]!, code: inline[3] ?? inline[4]! } : undefined
+  const words = command.split(" ")
+  if (!words.every((word) => SCRIPT_WORD.test(word))) return undefined
+  if (words[0]!.startsWith("./") && words[0]!.length > 2) return { file: words[0]! }
+  const file = words[1]
+  if (!INTERPRETERS.has(words[0]!) || !file || file.startsWith("-") || !/[./]/.test(file)) return undefined
+  return { program: words[0]!, file }
+}
+
+/**
+ * U11 rules 6 and 7. Code reads the script and looks for fixed patterns; what passes goes to the decider as P `script`,
+ * which judges it against the task on a closed summary. A file must be one the shell hashed for this request with the same
+ * bytes (`metadata.scripts`, row 154), so the shell can compare it again right before it runs: one it did not hash is held.
+ * A file that is not there is not a script, and is left as any other command. A screen raises the cost of hiding something
+ * in a script; it is no proof that the script is safe, and one that passes runs with the account's full rights (G1).
+ */
+function classifyScript(input: Input, form: ScriptForm): Verdict {
+  if (!canRunIn(input.cwd, input.instance)) return held("not_routine")
+  const file = form.file === undefined ? undefined : path.resolve(input.cwd, form.file)
+  // The bundled library stays as it was before U11 (XF-03): a script of it is not screened into anything.
+  if (file && nearLibrary([file])) return held("not_routine")
+  if ((form.program && programInProject(form.program, input.cwd, input.instance)) || (file && installed(file, input.instance)))
+    return held("program_not_trusted")
+  if (input.folder !== "clean" && input.folder !== "trusted") return held("folder_not_trusted")
+  if (!input.canUndo) return held("no_undo")
+  const screen =
+    form.code === undefined
+      ? ScriptScreen.file({ directory: input.instance.directory, file: form.file, cwd: input.cwd })
+      : ScriptScreen.inline(form.code, {
+          roots: [...new Set([input.instance.directory, Reach.real(input.instance.directory) ?? input.instance.directory])],
+          cwd: input.cwd,
+        })
+  if (!screen.ok) return held(screen.reason === "missing" ? "not_routine" : "script_unreadable")
+  const found = { bytes: screen.bytes, lines: screen.lines, sha256: screen.sha256, flags: [...screen.flags] }
+  if (found.flags.length > 0) return { ...held("script_flagged"), screen: found }
+  if (file && !hashed(input.metadata.scripts, file, found.sha256)) return held("script_unreadable")
+  return { class: "P", decidedBy: "agent", category: "script", screen: found }
+}
+
+/** Whether the shell listed `file` for this request with this hash. Anything else it says is read as not listed. */
+function hashed(scripts: unknown, file: string, sha256: string) {
+  if (!Array.isArray(scripts)) return false
+  return scripts.some(
+    (item: unknown) =>
+      typeof item === "object" && item !== null && "file" in item && "sha256" in item && item.file === file && item.sha256 === sha256,
+  )
+}
+
+/** A dependency's own program (`node_modules/.bin/x`, or a file of a package): code nobody in the project wrote or screened. */
+function installed(file: string, instance: InstanceContext) {
+  return [file, Reach.real(file)].some(
+    (place) => place !== undefined && path.relative(instance.directory, place).split(path.sep).includes("node_modules"),
+  )
+}
+
+/**
+ * U11 rule 7: a program the shell would find inside the project, through a `PATH` entry there or a relative one such as
+ * `node_modules/.bin` or `.`, is the repository's own code under a trusted name. `command` is one program or a command
+ * `routine` accepted, whose every piece is checked. A program not found at all cannot start, and is left as it was.
+ */
+function programInProject(command: string, cwd: string, instance: InstanceContext) {
+  let here = cwd
+  return command
+    .replace(OUTPUT_TAIL, "")
+    .split(" && ")
+    .some((piece, index) => {
+      const words = piece.split(" ")
+      if (index === 0 && words[0] === "cd" && words.length === 2) {
+        here = path.resolve(here, words[1]!)
+        return false
+      }
+      return (words[0] === "rtk" ? words.slice(0, 2) : words.slice(0, 1)).some((name) => {
+        const searched = (process.env.PATH ?? "")
+          .split(path.delimiter)
+          .filter(Boolean)
+          .map((entry) => path.resolve(here, entry))
+          .join(path.delimiter)
+        const found = findProgram(name, searched)
+        return found !== undefined && (containsPath(found, instance) || Reach.inside(found, instance))
+      })
+    })
+}
+
+/**
+ * U11 rule 8: the plan agent may look, here and beyond the folder as rule 1 lets build, and does nothing else. A look the
+ * table cannot vouch for, or one naming a secret, waits for a person as it would for build. Any other command is refused
+ * with nobody asked, a check and a copy into the folder included, since either one changes what is there.
+ */
+function classifyPlanBash(input: Input, checkClass: CheckClass): Verdict {
+  const command = input.metadata.command
+  if (input.metadata.risk || typeof command !== "string") return refused("plan_mode")
+  const verdict = classifyBash(input, checkClass)
+  // Sending a copy away is not looking either (rule 3 is build's).
+  if (verdict.class === "A" && verdict.category !== "outside_copy" && verdict.via !== "outward") return verdict
+  return verdict.class === "D" && onlyLookPieces(command) ? verdict : refused("plan_mode")
+}
+
+/** Whether every piece of `[cd <path> && ]<look>[ && <look>...][ | tail -N]` is a program that only looks. */
+function onlyLookPieces(command: string) {
+  return command
+    .replace(OUTPUT_TAIL, "")
+    .split(" && ")
+    .every((piece, index) => {
+      const words = homeWords(piece)
+      return words !== undefined && ((index === 0 && words[0] === "cd" && words.length === 2) || onlyLooks(words))
+    })
+}
+
+/**
  * U11 rule 1, for the prompt a tool raises before it reaches beyond the folder. A read is class A when what it names is
  * readable, a copy into the folder too, and a write is refused with nobody asked. A secret stays a person's call.
  */
@@ -534,6 +755,9 @@ function classifyOutside(input: Input): Verdict {
   const command = input.metadata.command
   if (typeof command === "string") {
     if (command.split(WORD_BREAK).some((word) => word && Secrets.secretFile(word))) return held("secret_file")
+    // The prompt for a drive the person named and ticked (G2): what the bash prompt beside it gets, so both agree.
+    const send = classifySend(command, input)
+    if (send?.class === "A") return send
     const outside = outsideKind(command, input.cwd, input.instance)
     if (outside) return { class: "A", decidedBy: "gate", category: outside }
     const words = homeWords(command.replace(OUTPUT_TAIL, ""))
@@ -547,6 +771,10 @@ function classifyOutside(input: Input): Verdict {
   const filepath = input.metadata.filepath
   if (typeof filepath !== "string" || !path.isAbsolute(filepath) || nearLibrary([filepath])) return held("outside_folder")
   const writes = input.follows?.some((prompt) => prompt.permission === "edit") === true
+  // Rule 2 lets a person allow touching a file out there; rule 1 still lets nothing be written there.
+  if (writes && consentFor(input, [filepath])) return refused("outside_write")
+  const looks = input.metadata.readOnly === true && input.metadata.hidden !== true
+  if (!Reach.readable(filepath) && looks) return classifyConsented(input, [filepath], "secret_file")
   if (!Reach.readable(filepath) || (writes && Reach.secret(filepath))) return held("secret_file")
   if (writes) return refused("outside_write")
   if (input.metadata.readOnly !== true) return held("outside_folder")
@@ -554,6 +782,141 @@ function classifyOutside(input: Input): Verdict {
   if (input.metadata.hidden === true) return held("outside_folder")
   return { class: "A", decidedBy: "gate", category: "outside_read" }
 }
+
+// U11 rule 3. Something leaves the machine without a person only for a destination the person named in the mission and
+// ticked, matched by code against what the gate passes in. No model judges "part of the mission": the agent writes the
+// command and repository text can shape where it points. Every other way out waits for a person as `outward_not_in_mission`.
+const PUSH_FLAGS = new Set(["-u", "--set-upstream", "-q", "--quiet", "-v", "--verbose"])
+const REF = /^[A-Za-z0-9][A-Za-z0-9._/-]*$/
+const RCLONE_FLAGS = new Set(["-P", "--progress", "-v", "--verbose", "--ignore-existing", "-n", "--dry-run"])
+// `-e`, `--rsh`, `--rsync-path`, `-o` and `-S` run a program; `--delete` and `--remove-source-files` remove. None is here.
+const SCP_FLAGS = new Set(["-p", "-q", "-C"])
+const RSYNC_FLAGS = /^-[avzhPtpqc]+$|^--(progress|partial|verbose|archive|compress|times|checksum)$/
+const SSH_TARGET = /^([A-Za-z0-9._-]+)@([A-Za-z0-9.-]+):(.*)$/
+
+/**
+ * The repository and remote of a plain `git push <remote> [<ref>...]`, as the snapshot taken before the mode knew them, or
+ * undefined. The gate runs `OutwardKnown.recheck` on what this returns. A raw URL, a remote added since, a push with no
+ * remote named, or a `.git` made between the folder and that repository gives nothing.
+ */
+export function pushTarget(input: Pick<Input, "metadata" | "cwd">, snapshot: OutwardKnown.Snapshot) {
+  const command = input.metadata.command
+  const words = typeof command === "string" ? Risk.plainWords(unwrapped(command)) : undefined
+  if (!words || words[0] !== "git" || words[1] !== "push") return
+  const [remote, ...refs] = words.slice(2).filter((word) => !PUSH_FLAGS.has(word))
+  if (!remote || !REF.test(remote) || refs.some((ref) => ref.split(":").length > 2 || !ref.split(":").every((part) => REF.test(part) && !part.includes(".."))))
+    return
+  const here = Reach.real(input.cwd)
+  if (here === undefined) return
+  const repo = snapshot.repos.filter((item) => within(item.dir, here)).toSorted((a, b) => b.dir.length - a.dir.length)[0]
+  if (!repo || !noRepositoryBetween(here, repo.dir) || !repo.remotes.some((item) => item.name === remote)) return
+  return { repo: repo.dir, remote }
+}
+
+function classifyPush(input: Input): Verdict {
+  const outward = input.outward
+  const target = outward?.snapshot && canRunIn(input.cwd, input.instance) ? pushTarget(input, outward.snapshot) : undefined
+  // The repository's own hooks and config run with the push, so it has to be one the guard can vouch for.
+  if (!outward || !target || GitGuard.inspect(target.repo).refused !== undefined) return held("outward_not_in_mission")
+  const check = outward.recheck
+  if (!check || check.repo !== target.repo || check.remote !== target.remote || !check.result.ok) return held("outward_not_in_mission")
+  return sentTo(input, (destination) => destination.kind === "git" && destination.repo === target.repo && destination.remote === target.remote)
+}
+
+/**
+ * A copy off the machine through the shell: `rclone copy`, `scp` or `rsync` of files in the folder, or `cp` of one to a new
+ * name on a mounted drive (G2). Undefined when the command is none of these, so the other rules judge it. A `cp` that does
+ * not land on a ticked drive is left to rule 1, which refuses writing out there.
+ */
+function classifySend(command: string, input: Input): Verdict | undefined {
+  const words = homeWords(command.replace(OUTPUT_TAIL, ""))
+  if (!words) return undefined
+  if (words[0] === "cp") return driveCopy(words, input)
+  if (words[0] !== "rclone" && words[0] !== "scp" && words[0] !== "rsync") return undefined
+  if (!canRunIn(input.cwd, input.instance)) return held("outward_not_in_mission")
+  const match = words[0] === "rclone" ? rcloneTo(words, input) : sshTo(words, input)
+  return match ? sentTo(input, match) : held("outward_not_in_mission")
+}
+
+/** `rclone copy|copyto <file> <remote>:<path>`. `sync` makes the far side match, which removes there, so it waits. */
+function rcloneTo(words: readonly string[], input: Input) {
+  if (words[1] !== "copy" && words[1] !== "copyto") return
+  const args = words.slice(2)
+  const names = args.filter((word) => !word.startsWith("-"))
+  if (names.length !== 2 || args.some((word) => word.startsWith("-") && !RCLONE_FLAGS.has(word))) return
+  const name = /^([A-Za-z0-9_][A-Za-z0-9_.-]*):/.exec(names[1]!)?.[1]
+  if (!name || !localFiles([names[0]!], input)) return
+  return (destination: OutwardKnown.Destination) => destination.kind === "rclone" && destination.name === name
+}
+
+/** `scp|rsync <file>... <user>@<host>:<path>`, to the login the person wrote with ssh, scp or rsync. */
+function sshTo(words: readonly string[], input: Input) {
+  const args = words.slice(1)
+  const allowed = (word: string) => (words[0] === "scp" ? SCP_FLAGS.has(word) : RSYNC_FLAGS.test(word))
+  const names = args.filter((word) => !word.startsWith("-"))
+  if (names.length < 2 || args.some((word) => word.startsWith("-") && !allowed(word))) return
+  const target = SSH_TARGET.exec(names.at(-1)!)
+  if (!target || !localFiles(names.slice(0, -1), input)) return
+  const user = target[1]!
+  const host = target[2]!.toLowerCase()
+  return (destination: OutwardKnown.Destination) => destination.kind === "ssh" && destination.user === user && destination.host === host
+}
+
+/** Regular files in the folder that are neither secret nor sensitive. A folder is not walked here, so it waits. */
+function localFiles(names: readonly string[], input: Input) {
+  return names.every((name) => {
+    if (name.includes(":")) return false
+    const file = path.resolve(input.cwd, name)
+    const target = Reach.real(file)
+    return (
+      target !== undefined &&
+      Reach.inside(file, input.instance) &&
+      Reach.readable(file) &&
+      !Reach.secret(file) &&
+      !Reach.sensitive(file, input.instance) &&
+      fs.statSync(target, { throwIfNoEntry: false })?.isFile() === true
+    )
+  })
+}
+
+/** `cp [-p] <file in the folder> <new name on a ticked drive>`: a new file only, nothing over one that is there (G2). */
+function driveCopy(words: readonly string[], input: Input): Verdict | undefined {
+  const args = words.slice(1)
+  const names = args.filter((word) => !word.startsWith("-"))
+  if (names.length !== 2 || args.some((word) => word.startsWith("-") && word !== "-p") || names[1]!.split("/").includes("..")) return
+  const target = path.resolve(input.cwd, names[1]!)
+  const into = Reach.real(path.dirname(target))
+  const given = input.outward?.allowed.find(
+    ({ destination }) => destination.kind === "drive" && into !== undefined && within(Reach.real(destination.path) ?? destination.path, into),
+  )
+  if (!given || into === undefined || Reach.inside(target, input.instance) || nearLibrary([target])) return
+  if (fs.lstatSync(target, { throwIfNoEntry: false }) || fs.statSync(into, { throwIfNoEntry: false })?.isDirectory() !== true) return
+  if (!canRunIn(input.cwd, input.instance) || !localFiles([names[0]!], input)) return
+  return sent(given)
+}
+
+/** `webfetch` of a URL on a host the person wrote. A search goes to a provider nobody named, so it waits. */
+function classifyFetch(input: Input): Verdict {
+  const url = input.metadata.url
+  if (input.permission !== "webfetch" || typeof url !== "string" || !input.patterns.every((pattern) => pattern === url))
+    return held("outward_not_in_mission")
+  const host = URL.canParse(url) ? new URL(url) : undefined
+  if (!host || (host.protocol !== "https:" && host.protocol !== "http:")) return held("outward_not_in_mission")
+  return sentTo(input, (destination) => destination.kind === "host" && destination.host === host.hostname.toLowerCase())
+}
+
+function sentTo(input: Input, match: (destination: OutwardKnown.Destination) => boolean): Verdict {
+  const given = input.outward?.allowed.find((item) => match(item.destination))
+  return given ? sent(given) : held("outward_not_in_mission")
+}
+
+const sent = (given: Outward["allowed"][number]): Verdict => ({
+  class: "A",
+  decidedBy: "gate",
+  via: "outward",
+  consentID: given.id,
+  destination: OutwardKnown.label(given.destination),
+})
 
 /**
  * U11 rules 5 and 7, for a tool of an MCP server. Its request says which server, how it is reached, and whose config set it
@@ -565,8 +928,221 @@ function classifyMcp(input: Input, mcp: Readonly<Record<string, unknown>>): Verd
   // A tool is named after its server, so a request cannot borrow another server's source.
   if (typeof mcp.server !== "string" || !input.permission.startsWith(McpCatalog.toolName(mcp.server, ""))) return held("external_tool")
   if (mcp.origin !== "global" && input.folder !== "clean" && input.folder !== "trusted") return held("folder_not_trusted")
+  // Rule 3 lets a way out through only to a destination it can match, and the source names the server, not its host.
   if (mcp.transport !== "local") return held("outward_not_in_mission")
   return { class: "A", decidedBy: "gate", category: "mcp_tool" }
+}
+
+// U11 rule 3: while the mode is on, nothing may change where a push goes or who it goes as, so the snapshot a person
+// consented over stays true. Read on every piece of the command and with quotes dropped, since a refusal that a spelling
+// slips past would leave it held for a person at best. Looking (`git remote -v`, `git remote get-url`) is not a change.
+const REMOTE_CHANGES = new Set(["add", "set-url", "rename", "remove", "rm", "set-head", "set-branches"])
+// `include.*` pulls a remote in from another file; `http.*.extraHeader`, `core.sshCommand` and `core.askPass` pick the
+// credential a push goes with.
+const CREDENTIAL_KEY = /^(remote|url|credential|include|includeif)\.|^http\..*extraheader$|^core\.(sshcommand|askpass)$/i
+// Environment that gives git or `gh` another config, credential or account for the command it is set on.
+const CREDENTIAL_ENV = /^(GIT_CONFIG|GIT_ASKPASS|GIT_SSH|SSH_ASKPASS|GH_|GITHUB_TOKEN)/
+const COMMAND_WRAPPERS = new Set(["rtk", "command", "builtin", "exec", "env", "nohup", "time", "nice", "sudo", "doas", "xargs"])
+const GIT_VALUE_OPTIONS = new Set(["-C", "-c", "--git-dir", "--work-tree", "--namespace", "--config-env"])
+const PUSH_VALUE_OPTIONS = new Set(["-o", "--push-option", "--receive-pack", "--exec"])
+const RAW_URL = /:\/\/|^[^/:\s]+@[^:\s]+:|^[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+:/
+const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/
+
+function changesCredentials(input: Input) {
+  const command = input.metadata.command
+  if (typeof command !== "string") return false
+  return command
+    .split(/&&|\|\||\$\(|[;&|\n()`{}]/)
+    .map((piece) => piece.replace(/["'\\]/g, "").trim().split(/\s+/).filter(Boolean))
+    .some((words) => pieceChangesCredentials(words, input.outward?.snapshot))
+}
+
+function pieceChangesCredentials(words: readonly string[], snapshot: OutwardKnown.Snapshot | undefined) {
+  const start = words.findIndex((word, index) => {
+    if (ASSIGNMENT.test(word)) return false
+    if (COMMAND_WRAPPERS.has(word)) return false
+    // A wrapper's own flags, such as `env -i` or `nice -n 5`.
+    return !(index > 0 && COMMAND_WRAPPERS.has(words[index - 1]!) && word.startsWith("-"))
+  })
+  const head = start < 0 ? words : words.slice(0, start)
+  if (head.some((word) => ASSIGNMENT.test(word) && CREDENTIAL_ENV.test(word))) return true
+  if (start < 0) return false
+  const name = words[start]!.split("/").at(-1)!
+  const args = words.slice(start + 1)
+  if (name === "export") return args.some((word) => CREDENTIAL_ENV.test(word))
+  if (name === "gh") return args[0] === "auth"
+  if (name !== "git") return false
+  const configs: string[] = []
+  let index = 0
+  while (args[index]?.startsWith("-")) {
+    const option = args[index]!
+    if (option === "-c" || option === "--config-env") configs.push(args[index + 1] ?? "")
+    if (option.startsWith("-c") && option.length > 2) configs.push(option.slice(2))
+    if (option.startsWith("--config-env=")) configs.push(option.slice("--config-env=".length))
+    index += GIT_VALUE_OPTIONS.has(option) ? 2 : 1
+  }
+  if (configs.some((value) => CREDENTIAL_KEY.test(value.split("=")[0]!))) return true
+  const [sub, ...rest] = args.slice(index)
+  if (sub === "remote") return REMOTE_CHANGES.has(rest[0] ?? "")
+  if (sub === "credential" || sub?.startsWith("credential-")) return true
+  if (sub === "config")
+    return rest.some((word) => word === "-e" || word === "--edit" || (!word.startsWith("-") && CREDENTIAL_KEY.test(word.split("=")[0]!)))
+  if (sub === "push") return pushesToRawUrl(rest, snapshot)
+  return false
+}
+
+/** `git push <url>` or `--repo=<url>` with a URL that is none of the push URLs the snapshot holds. */
+function pushesToRawUrl(args: readonly string[], snapshot: OutwardKnown.Snapshot | undefined) {
+  const repo = args.flatMap((word, index) =>
+    word.startsWith("--repo=") ? [word.slice("--repo=".length)] : word === "--repo" ? [args[index + 1] ?? ""] : [],
+  )
+  const positional = args.find((word, index) => !word.startsWith("-") && !PUSH_VALUE_OPTIONS.has(args[index - 1] ?? "") && args[index - 1] !== "--repo")
+  return [...repo, ...(positional ? [positional] : [])].some(
+    (target) =>
+      RAW_URL.test(target) && !(snapshot !== undefined && snapshot.repos.some((item) => OutwardKnown.pushTarget(snapshot, item.dir, target))),
+  )
+}
+
+// U11 rule 4, as the shell reads a deletion (`deletion` in `tool/shell.ts`, row 151). These sets are its sets: a plain
+// deletion the table lets through must be one the shell moves, never one it runs.
+const DELETES = new Set(["rm", "rmdir", "unlink"])
+const DELETE_WRAPPERS = new Set(["sudo", "doas", "command", "builtin", "exec", "env", "nice", "nohup", "time", "xargs", "timeout"])
+const RM_FLAGS = new Set(["r", "R", "f", "i", "I", "v", "d"])
+const RM_LONG = new Set(["--recursive", "--force", "--verbose", "--dir", "--interactive"])
+const GIT_RM_FLAGS = new Set(["-r", "-f", "-q", "--force", "--quiet", "--ignore-unmatch"])
+const GIT_RM_KEEPS = new Set(["--cached", "-n", "--dry-run"])
+// One command of words nothing rewrites: bare words the shell takes as written, single quotes, and double quotes without
+// `$`, backquotes, `\` or `!`, with spaces between, so the text the shell parses is one command and nothing else.
+const PLAIN_DELETE_WORD = /[\w./@%+:,-][\w./@%+:,=-]*|'[^']*'|"[^"$`\\!]*"/
+const PLAIN_DELETION = new RegExp(`^(?:${PLAIN_DELETE_WORD.source})(?: +(?:${PLAIN_DELETE_WORD.source}))*$`)
+const unquoteWord = (word: string) => (/^(['"]).*\1$/s.test(word) && word.length >= 2 ? word.slice(1, -1) : word)
+
+/**
+ * The commands of a text, as words, roughly as a shell would find them: split at `;`, `&`, `|`, newlines, brackets and
+ * command substitution outside single quotes. It only has to find a deletion wherever one could run; what it lets through
+ * as plain is decided by `PLAIN_DELETION` alone.
+ */
+function commandWords(command: string) {
+  const pieces: string[] = []
+  let current = ""
+  let quote: "'" | '"' | undefined
+  for (let index = 0; index < command.length; index++) {
+    const char = command[index]!
+    if (quote === "'") {
+      current += char
+      if (char === "'") quote = undefined
+      continue
+    }
+    const opens = char === "`" || (char === "$" && command[index + 1] === "(")
+    if (quote === '"') {
+      if (char === "\\") {
+        current += char + (command[++index] ?? "")
+        continue
+      }
+      if (char === '"') quote = undefined
+      if (opens || char === ")") {
+        pieces.push(current)
+        current = ""
+        if (char === "$") index++
+        continue
+      }
+      current += char
+      continue
+    }
+    if (char === "'" || char === '"') {
+      quote = char
+      current += char
+      continue
+    }
+    if (char === "\\") {
+      current += char + (command[++index] ?? "")
+      continue
+    }
+    if (opens || /[;&|\n\r()]/.test(char) || ((char === "{" || char === "}") && /(^|\s)$/.test(current))) {
+      pieces.push(current)
+      current = ""
+      if (char === "$") index++
+      continue
+    }
+    current += char
+  }
+  pieces.push(current)
+  return pieces.map((piece) => piece.trim().split(/\s+/).filter(Boolean).map(unquoteWord)).filter((words) => words.length > 0)
+}
+
+/** Whether one command removes files, the way the shell's `deletes` reads it. */
+function deletesFiles(words: readonly string[]) {
+  const base = (word: string) => path.posix.basename(word)
+  if (base(words[0] ?? "") === "git") {
+    const sub = words.slice(1).find((word, index, rest) => !word.startsWith("-") && !/^-[Cc]$/.test(rest[index - 1] ?? ""))
+    return sub === "rm" && !words.some((word) => GIT_RM_KEEPS.has(word))
+  }
+  for (const word of words) {
+    if (DELETES.has(base(word))) return true
+    if (!DELETE_WRAPPERS.has(base(word)) && !word.startsWith("-") && !word.includes("=")) return false
+  }
+  return false
+}
+
+/** The paths of a plain deletion whose flags the shell knows, or undefined, which the shell refuses as `compound`. */
+function deletionPaths(name: string, words: readonly string[]) {
+  const paths: string[] = []
+  let ended = false
+  for (const word of words) {
+    if (ended || !word.startsWith("-") || word === "-") {
+      paths.push(word)
+      continue
+    }
+    if (word === "--") {
+      ended = true
+      continue
+    }
+    if (name === "git rm") {
+      if (!GIT_RM_FLAGS.has(word)) return
+      continue
+    }
+    if (name === "rm" && word.startsWith("--")) {
+      if (!RM_LONG.has(word)) return
+      continue
+    }
+    if (name === "rmdir" && (word === "-v" || word === "--verbose")) continue
+    if (name !== "rm" || [...word.slice(1)].some((letter) => !RM_FLAGS.has(letter))) return
+  }
+  if (paths.length === 0 || (name === "unlink" && paths.length !== 1)) return
+  return paths
+}
+
+/**
+ * U11 rule 4. In autonomous mode the shell runs no deletion: `rm`, `rmdir`, `unlink` or `git rm` alone, with literal paths
+ * and flags it knows, has its paths moved to the archive, and any other text that deletes is refused with the register's
+ * text. So a plain one of safe paths in the folder is class A `archived`, since code only moves and a person empties, and
+ * any other deletion is X `delete_compound`. A plain one naming a path that is not safe here (beyond the folder, a secret,
+ * the folder itself, the archive under `.swarm`) is left to the rules below, which hold it. `find -delete` and a script that
+ * deletes name no deletion program, so they stay held as before. A plain one is `archived` only when the shell said it moves
+ * it (`metadata.archive`, row 113): PowerShell, cmd or Windows would run it, so without that it is D `not_reversible`.
+ */
+function classifyDeletion(input: Input): Verdict | undefined {
+  const command = input.metadata.command
+  if (typeof command !== "string") return undefined
+  if (!commandWords(command).some(deletesFiles)) return undefined
+  // A name with a line break, a control or a bidi mark in it is no plain line for anyone to read: the rules below hold it.
+  if (/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(command.trim())) return undefined
+  const text = command.trim()
+  if (!PLAIN_DELETION.test(text)) return refused("delete_compound")
+  // The program's own name as written: the shell takes no quoted name for one it moves.
+  const raw = text.match(new RegExp(PLAIN_DELETE_WORD.source, "g")) ?? []
+  const name = raw[0] === "git" && raw[1] === "rm" ? "git rm" : DELETES.has(raw[0] ?? "") ? raw[0]! : undefined
+  const paths = name && deletionPaths(name, raw.slice(name === "git rm" ? 2 : 1).map(unquoteWord))
+  if (!paths) return refused("delete_compound")
+  if (!canRunIn(input.cwd, input.instance)) return undefined
+  const roots = [input.cwd, input.instance.directory, input.instance.worktree].map((root) => Reach.real(root))
+  const safe = paths.every(
+    (word) => safePath(word, input.cwd, input.instance) && !roots.includes(Reach.real(path.resolve(input.cwd, word))),
+  )
+  if (!safe) return undefined
+  // Only the shell knows it will move instead of run (a POSIX shell it parsed, with the mode on). Without its word the
+  // command would delete for good, which this mode never lets happen unseen: a person decides.
+  return input.metadata.archive === true ? { class: "A", decidedBy: "gate", category: "archived" } : held("not_reversible")
 }
 
 /**
@@ -578,6 +1154,8 @@ export function classify(input: Input, checkClass: CheckClass = CHECK_CLASS): Ve
   if (needsPerson(input.permission)) return { class: "B", decidedBy: "person" }
   if (input.rule === "deny") return { class: "X" }
   if (input.permission === TRUST_PERMISSION) return { class: "X", decidedBy: "person", category: "folder_not_trusted" }
+  if ((input.permission === "bash" || input.permission === "external_directory") && changesCredentials(input))
+    return refused("credential_change")
 
   const planEdit = input.plan === true && input.permission === "edit"
   const planFile = planEdit && isPlanFile(input)
@@ -586,15 +1164,27 @@ export function classify(input: Input, checkClass: CheckClass = CHECK_CLASS): Ve
 
   if (input.rule === "user_catch_all") return held("asks_every_time")
   if (planFile) return { class: "A", decidedBy: "gate" }
-  if (input.plan === true && input.permission === "bash") return held("plan_mode")
+  if (input.plan === true && input.permission === "bash") return classifyPlanBash(input, checkClass)
+  // Before the labels: a deletion the shell moves to the archive takes nothing away, whatever Undo could have restored.
+  if (input.permission === "bash") {
+    const removal = classifyDeletion(input)
+    if (removal) return removal
+  }
 
-  // A label only ever raises a class. Nothing below may read its absence as safe.
+  // A label only ever raises a class. Nothing below may read its absence as safe. A push is the one way out the shell labels
+  // that rule 3 can let through; a force push is labelled "irreversible" and is held as that.
+  if (input.metadata.risk === "remote" && input.permission === "bash") return classifyPush(input)
   if (input.metadata.risk) return held(riskCategory(input.metadata.risk))
   if (input.harmless) return QUIET
   if (input.permission === "task") return QUIET
   if (input.permission === "question") return { class: "A", decidedBy: "gate" }
-  if (input.permission === "external_directory") return classifyOutside(input)
-  if (input.permission === "read") return held("secret_file")
+  if (input.permission === "external_directory") {
+    const verdict = classifyOutside(input)
+    // A copy into the folder is a write there, which the plan agent does not do (rule 8), and neither is a copy away.
+    return input.plan === true && (verdict.category === "outside_copy" || verdict.via === "outward") ? refused("plan_mode") : verdict
+  }
+  if (input.permission === "webfetch" || input.permission === "websearch") return classifyFetch(input)
+  if (input.permission === "read") return classifyConsented(input, editTargets(input), "secret_file")
   if (input.permission === "edit") return classifyEdit(input)
   if (input.permission === "bash") return classifyBash(input, checkClass)
   const mcp = input.metadata.mcp

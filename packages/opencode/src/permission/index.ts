@@ -13,8 +13,10 @@ import type { SessionID } from "@/session/schema"
 import { Autonomy } from "./autonomy"
 import { AutonomyDecider } from "./autonomy-decider"
 import { AutonomyTable } from "./autonomy-table"
+import { OutwardKnown } from "./outward-known"
 import type { ScriptScreen } from "./script-screen"
 import { Unattended } from "./unattended"
+import { CREDENTIAL_CHANGE_TEXT, DELETE_COMPOUND_TEXT, OUTSIDE_WRITE_TEXT } from "./autonomy-texts"
 
 export const Event = PermissionV1.Event
 
@@ -159,10 +161,14 @@ class RefusedByModeError extends PermissionV1.DeniedError {
   }
 }
 
-/** Class X for a write out of the folder (U11 rule 1). The way on is a copy inside the project, so the text names it. */
-class RefusedOutsideWriteError extends RefusedByModeError {
+/**
+ * Class X with its own register text (U11): the way on differs per category, so the text names it. The deletion text is
+ * the shell's own, so the two cannot drift; it is read at call time because the shell tool imports this service.
+ */
+class RefusedWithTextError extends RefusedByModeError {
+  text = ""
   override get message() {
-    return "This call did not run. Autonomous mode never writes outside the project folder. Copy the file into the project first and change the copy there; the original is not changed. Carry on with everything that does not depend on it, and list what was refused in your final message."
+    return this.text
   }
 }
 
@@ -187,8 +193,20 @@ const stoppedByMode = (input: PermissionV1.AskInput) => {
   return error
 }
 
-const refusedByMode = (category: string | undefined) =>
-  category === "outside_write" ? new RefusedOutsideWriteError({ ruleset: [] }) : new RefusedByModeError({ ruleset: [] })
+export const refusedByMode = (category: string | undefined) => {
+  const text =
+    category === "outside_write"
+      ? OUTSIDE_WRITE_TEXT
+      : category === "delete_compound"
+        ? DELETE_COMPOUND_TEXT
+        : category === "credential_change"
+          ? CREDENTIAL_CHANGE_TEXT
+          : undefined
+  if (text === undefined) return new RefusedByModeError({ ruleset: [] })
+  const error = new RefusedWithTextError({ ruleset: [] })
+  error.text = text
+  return error
+}
 
 /** Settles class P. A seam, so a test can count what reaches it. */
 export class Decider extends Context.Service<
@@ -214,6 +232,92 @@ const held = (category: AutonomyTable.HeldCategory): AutonomyTable.Verdict => ({
 
 const isHeldCategory = Schema.is(PermissionV1.DeferredCategory)
 const decodeRequest = Schema.decodeUnknownOption(PermissionV1.Request)
+
+/** What a person allowed of this root's consent list (U11 rule 2), as the gate hands it to the table. */
+export interface Consented {
+  /** The list's id. */
+  readonly id: string
+  /** Each concrete path a person allowed, with the id of the item that covers it. A pattern on its own covers nothing. */
+  readonly files: ReadonlyMap<string, string>
+}
+
+/**
+ * What the gate adds to the table's input for U11 rule 2 (row 124, contract for row 110). Absent means no list: no mission
+ * yet, the mode off, or a restart, after which every item is held again. Rule 3 has its own field, `outward` (row 108).
+ */
+export interface GateContext {
+  readonly consent?: Consented
+}
+
+/**
+ * What rows 110 and 112 may add to a verdict, beside what row 108 did. `consentID` is the item a class A answer used, and
+ * must be one the gate passed. `screen` is the script screen behind a `script` or `script_flagged` answer, of which the
+ * decider only ever gets the closed summary (C70). Read as optional, so the gate holds before those rows land.
+ */
+export type Answer = AutonomyTable.Verdict & {
+  readonly screen?: {
+    readonly bytes: number
+    readonly lines: number
+    readonly sha256: string
+    readonly flags: readonly ScriptScreen.Flag[]
+  }
+}
+
+/** The table, as a seam a test can replace to see what reaches it. Nothing else provides it. */
+export const Classify = Context.Reference<(input: AutonomyTable.Input & GateContext) => Answer>(
+  "~opencode/PermissionClassify",
+  {
+    defaultValue: () => AutonomyTable.classify,
+  },
+)
+
+// `ScriptScreen.SHA_PREFIX`, which is not imported as a value: the screen module uses the Bun global (C71).
+const SHA_PREFIX: typeof ScriptScreen.SHA_PREFIX = 12
+
+/** The allowed items of a root's list, by concrete path. */
+export function consented(consent: Autonomy.Consent | undefined): Consented | undefined {
+  if (!consent) return undefined
+  const given = consent.items.filter((item) => consent.given.has(item.id))
+  return { id: consent.id, files: new Map(given.flatMap((item) => item.files.map((file) => [file, item.id] as const))) }
+}
+
+/** `OutwardKnown.recheck`, as a seam: a test has no `gh` login to check against. Nothing else provides it. */
+export const Recheck = Context.Reference<typeof OutwardKnown.recheck>("~opencode/PermissionRecheck", {
+  defaultValue: () => OutwardKnown.recheck,
+})
+
+/**
+ * What the table needs for U11 rule 3 (row 108): the destinations a person named and ticked, the snapshot they were matched
+ * in, and for a push the recheck run just now. A recheck that fails to run is no recheck, which the table holds.
+ */
+export async function outwardOf(
+  input: Pick<PermissionV1.AskInput, "metadata">,
+  cwd: string,
+  consent: Autonomy.Consent | undefined,
+  recheck: typeof OutwardKnown.recheck = OutwardKnown.recheck,
+): Promise<AutonomyTable.Outward | undefined> {
+  if (!consent) return undefined
+  const allowed = Autonomy.consentedDestinations(consent)
+  const snapshot = consent.snapshot
+  const push = snapshot && AutonomyTable.pushTarget({ metadata: input.metadata, cwd }, snapshot)
+  if (!snapshot || !push) return { allowed, snapshot }
+  const result = await recheck(snapshot, push.repo, push.remote).catch(() => undefined)
+  return result ? { allowed, snapshot, recheck: { ...push, result } } : { allowed, snapshot }
+}
+
+/**
+ * How a class A answer came to be, for its line: a person's consent item or a ticked destination. A `consentID` the gate
+ * did not pass is not believed, and the call is held.
+ */
+export function usedConsent(
+  verdict: Answer,
+  context: GateContext & { outward?: AutonomyTable.Outward },
+): "consent" | "outward" | "unknown" | undefined {
+  if (verdict.consentID === undefined || verdict.class !== "A") return undefined
+  if (verdict.via === "outward")
+    return context.outward?.allowed.some((item) => item.id === verdict.consentID) ? "outward" : "unknown"
+  return context.consent && [...context.consent.files.values()].includes(verdict.consentID) ? "consent" : "unknown"
+}
 
 const layer = Layer.effect(
   Service,
@@ -359,22 +463,30 @@ const layer = Layer.effect(
       const workdir = input.metadata.workdir
       const cwd = typeof workdir === "string" && path.isAbsolute(workdir) ? workdir : undefined
       const canUndo = input.canUndo ?? false
-      const table = yield* Effect.try({
+      // U11 rules 2 and 3: what the person allowed of this root's list, and where this call would send something. Memory
+      // only, so after a restart there is no list and everything on it is held again.
+      const consent = yield* autonomy.consent(root.id).pipe(Effect.catchCause(() => Effect.succeed(undefined)))
+      const recheck = yield* Recheck
+      const outward = yield* Effect.promise(() => outwardOf(input, cwd ?? instance.directory, consent, recheck))
+      const context = { consent: consented(consent), outward }
+      const classify = yield* Classify
+      const tableInput: AutonomyTable.Input & GateContext = {
+        permission: input.permission,
+        patterns: input.patterns,
+        metadata: input.metadata,
+        instance,
+        cwd: cwd ?? instance.directory,
+        canUndo,
+        folder,
+        editClass: input.editClass,
+        plan: input.agent === "plan" || last === undefined || last.agent === "plan",
+        rule: userCatchAll ? "user_catch_all" : undefined,
+        follows: input.follows,
+        ...context,
+      }
+      const classified = yield* Effect.try({
         // `harmless` stays out: such a call only gets here when a rule naming its permission asked about it.
-        try: () =>
-          AutonomyTable.classify({
-            permission: input.permission,
-            patterns: input.patterns,
-            metadata: input.metadata,
-            instance,
-            cwd: cwd ?? instance.directory,
-            canUndo,
-            folder,
-            editClass: input.editClass,
-            plan: input.agent === "plan" || last === undefined || last.agent === "plan",
-            rule: userCatchAll ? "user_catch_all" : undefined,
-            follows: input.follows,
-          }),
+        try: () => classify(tableInput),
         catch: String,
       }).pipe(
         Effect.catch((error) =>
@@ -383,6 +495,10 @@ const layer = Layer.effect(
           ),
         ),
       )
+      // A consent the gate did not pass is not believed (row 124): the call is held rather than let through on it.
+      const used = usedConsent(classified, context)
+      const table: Answer = used === "unknown" ? held("not_routine") : classified
+      const via = used === "consent" || used === "outward" ? used : undefined
       // An "always" on what the mode lets anyway answers nothing: an ordinary edit is on record as the gate's, not a person's.
       const answered =
         (followed || standing) &&
@@ -395,9 +511,17 @@ const layer = Layer.effect(
         : Autonomy.afterCheck(placed.class, check) === placed.class
           ? placed
           : held("not_routine")
+      // The decider gets the screen's closed summary, never the script (C70, ADV-P2). Only what the table answered on.
+      const screen = verdict === table ? table.screen : undefined
+      const screened = screen && {
+        bytes: screen.bytes,
+        lines: screen.lines,
+        sha: screen.sha256.slice(0, SHA_PREFIX),
+        flags: [...screen.flags],
+      }
       const decided =
         verdict.class === "P"
-          ? yield* decider.decide(input, root.id, verdict.category).pipe(
+          ? yield* decider.decide(input, root.id, verdict.category, screened).pipe(
               // Cut off, by a reload or a cancelled run: nothing was decided, and nothing is waiting for anyone.
               Effect.onInterrupt(() =>
                 autonomy
@@ -476,13 +600,21 @@ const layer = Layer.effect(
             ? `system:${stopped}`
             : (decided?.decidedBy ?? (verdict.decidedBy === "person" ? "person" : "gate")),
           decision,
-          reason: decided?.reason ?? (standing && answered ? "an earlier \"always\" from a person" : undefined),
+          reason:
+            decided?.reason ??
+            (standing && answered
+              ? 'an earlier "always" from a person'
+              : verdict === table && via === "outward" && table.destination
+                ? `sent to ${table.destination}`
+                : undefined),
           memo: decided?.memo,
           latencyMs: decided?.latencyMs,
           costUsd: decided?.costUsd,
           attempts: decided?.attempts,
-          via: followed ? "grant" : into ? "duplicate" : undefined,
+          via: followed ? "grant" : into ? "duplicate" : verdict === table ? via : undefined,
           duplicateOf: into,
+          consentID: verdict === table && via ? table.consentID : undefined,
+          script: screen && { bytes: screen.bytes, sha: screen.sha256, flags: [...screen.flags] },
           follows: input.follows,
         })
         .pipe(
@@ -498,7 +630,9 @@ const layer = Layer.effect(
       if (!queued) yield* reportFull
       if (stopped) {
         // Logged by record. The run stops either way, and a missing line keeps nothing running.
-        yield* autonomy.record(root.id, { type: "marker", directory, marker: stopped, decidedBy: "gate" }).pipe(Effect.ignore)
+        yield* autonomy
+          .record(root.id, { type: "marker", directory, marker: stopped, decidedBy: "gate" })
+          .pipe(Effect.ignore)
         if (stopped === "force_stop") {
           yield* autonomy
             .record(root.id, { type: "marker", directory, marker: "b1", decidedBy: "system:force_stop" })
@@ -661,7 +795,9 @@ const layer = Layer.effect(
       )
       // A grant and a held entry belong to the family, so what a root was allowed or is waiting on covers its subagents.
       const family = (yield* rootOf(request.sessionID)).id
-      const matching = grants.findIndex((grant) => grant.root === family && samePrompt(grant, request) && grant.call === call)
+      const matching = grants.findIndex(
+        (grant) => grant.root === family && samePrompt(grant, request) && grant.call === call,
+      )
       const unbound = grants.findIndex(
         (grant) => grant.root === family && samePrompt(grant, request) && grant.call === undefined,
       )

@@ -7,6 +7,7 @@ import type { useSync } from "@/context/sync"
 import { useLanguage } from "@/context/language"
 import { errorMessage } from "@/pages/layout/helpers"
 import { showToast } from "@/utils/toast"
+import { replyHeld } from "@/utils/permission-reply"
 import type { MapStep } from "../map/session-map-model"
 import {
   buildSwarm,
@@ -284,13 +285,7 @@ export function createSwarm(input: {
   const allow = (lane: SwarmLane, request: PermissionRequest, reply: "once" | "always" | "reject") =>
     act(
       lane.id,
-      () =>
-        input.sdk().api.permission.reply({
-          sessionID: lane.id,
-          requestID: request.id,
-          reply,
-          location: { directory: lane.session.directory },
-        }),
+      () => replyHeld(input.sdk().api, { request, reply, location: { directory: lane.session.directory } }),
       () => session().set("permission", lane.id, (list = []) => list.filter((item) => item.id !== request.id)),
     )
 

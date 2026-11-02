@@ -2514,7 +2514,7 @@ export type AutonomyConsentList = {
 
 export type AutonomyConsent = {
   rootID: string
-  consent: AutonomyConsentList
+  consent: AutonomyConsentList | null
 }
 
 export type AutonomyConsentError = {

@@ -161,10 +161,16 @@ describe("no path left to an automatic answer", () => {
   test("only the four surfaces a person clicks on send a permission reply", async () => {
     const root = new URL("../src/", import.meta.url).pathname
     const senders: string[] = []
+    const direct: string[] = []
     for await (const path of new Bun.Glob("**/*.{ts,tsx}").scan(root)) {
       if (path.includes(".test.")) continue
-      if ((await Bun.file(root + path).text()).includes(".permission.reply(")) senders.push(path)
+      const text = await Bun.file(root + path).text()
+      if (text.includes(".permission.reply(")) direct.push(path)
+      // The shared helper sends for the surfaces that call it (row 160b); it answers nothing on its own.
+      if (path === "utils/permission-reply.ts") continue
+      if (text.includes(".permission.reply(") || text.includes("replyHeld(")) senders.push(path)
     }
+    expect(direct.toSorted()).toEqual(["utils/permission-reply.ts"])
     expect(senders.toSorted()).toEqual([
       "pages/home/agent-board-controller.ts",
       "pages/session/composer/session-composer-state.ts",

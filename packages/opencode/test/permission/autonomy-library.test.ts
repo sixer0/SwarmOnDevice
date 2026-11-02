@@ -750,7 +750,7 @@ it.instance(
       const library = env.S
       const unread = (yield* lineage).root
       const before = yield* verdictOf(unread, shell("git push", unread, { library }))
-      expect(before).toEqual(heldAs("outward", "bash"))
+      expect(before).toEqual(heldAs("outward_not_in_mission", "bash"))
       const forced = yield* verdictOf(unread, shell("git push -f origin main", unread, { library }))
       expect(forced).toEqual(heldAs("not_reversible", "bash"))
 

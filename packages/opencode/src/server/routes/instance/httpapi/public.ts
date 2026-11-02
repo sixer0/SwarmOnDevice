@@ -269,6 +269,9 @@ function applyLegacySchemaOverrides(spec: OpenApiSpec) {
   }
   if (schemas.GlobalSession?.properties?.project)
     schemas.GlobalSession.properties.project = nullable(schemas.GlobalSession.properties.project)
+  // No mission yet reads null, not an empty list.
+  if (schemas.AutonomyConsent?.properties?.consent)
+    schemas.AutonomyConsent.properties.consent = nullable(schemas.AutonomyConsent.properties.consent)
   const providerOptions = schemas.ProviderConfig?.properties?.options
   if (providerOptions) providerOptions.additionalProperties = {}
   const model = schemas.ProviderConfig?.properties?.models?.additionalProperties

@@ -2,7 +2,8 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } fr
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs"
 import os from "node:os"
 import path from "node:path"
-import { Context, Effect, Exit, Layer } from "effect"
+import { Clock, Context, Effect, Exit, Layer } from "effect"
+import { TestClock } from "effect/testing"
 import { Database } from "@opencode-ai/core/database/database"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { Global } from "@opencode-ai/core/global"
@@ -523,7 +524,10 @@ describe("row 130: consent state and when the scan runs", () => {
       const autonomy = yield* Autonomy.Service
       const where = yield* rootWithSecret()
       yield* say(where.root, "Perbaiki .env")
-      yield* switchMode(where, true)
+      // The line's time and the mode's time are two reads of the clock; a real one can tick between them (1 ms).
+      const clock = yield* TestClock.make()
+      yield* clock.adjust(1_000_000)
+      yield* switchMode(where, true).pipe(Effect.provideService(Clock.Clock, clock))
       const since = yield* autonomy.modeSince(where.root)
       expect(since).toBeNumber()
       const consent = (yield* autonomy.consent(where.root))!
@@ -532,7 +536,7 @@ describe("row 130: consent state and when the scan runs", () => {
       // A new process: the layer built again over the same files and database.
       const context = yield* Layer.build(Layer.fresh(Autonomy.layer))
       const restarted = Context.get(context, Autonomy.Service)
-      yield* restarted.markMode(where)
+      yield* restarted.markMode(where).pipe(Effect.provideService(Clock.Clock, clock))
       expect(yield* restarted.modeSince(where.root)).toBe(since)
       const lines = (yield* restarted.readAudit(where.root)).lines
       expect(markerNames(lines).filter((name) => name === "mode_on")).toHaveLength(1)

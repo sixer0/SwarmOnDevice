@@ -1007,6 +1007,8 @@ export const dict = {
   "session.autonomy.archive.title": "Dipindahkan ke arsip, bukan dihapus: {{count}}",
   "session.autonomy.archive.empty": "Kosongkan arsip",
   "session.autonomy.archive.confirm": "Hapus berkas yang diarsipkan secara permanen? Tindakan ini tidak dapat dibatalkan.",
+  "session.autonomy.archive.unsafe":
+    "Folder arsip berupa tautan atau bukan folder, jadi Aplikasi tidak membacanya atau mengosongkannya.",
   "session.map.decisions.group.waiting": "Menunggu Anda",
   "session.map.decisions.group.decided": "Sudah diputuskan",
   "session.map.decisions.group.limited": "Ditolak atau dibatasi",

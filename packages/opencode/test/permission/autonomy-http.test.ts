@@ -286,7 +286,7 @@ it.instance("E1 over HTTP: what the call goes on to do is still judged, and clas
     yield* delivered(1)
     expect(order).toEqual(["sent"])
     expect(sent[0]!.text).toContain("did not go through")
-    expect(sent[0]!.text).toContain("Autonomous mode never writes outside the project folder")
+    expect(sent[0]!.text).toContain("Autonomous mode only reads outside the project folder")
     const lines = auditLines(root.id)
     expect(lines.filter((line) => line.type === "decision" && line.class === "X")).toMatchObject([
       { permission: "external_directory", category: "outside_write", decision: "reject" },
