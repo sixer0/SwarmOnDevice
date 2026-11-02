@@ -118,6 +118,8 @@ const ask = (input: PermissionV1.AskInput) =>
     return yield* permission.ask(input)
   })
 
+// The P probe (C97): a move to a name that changes what runs stays P `file-op` for the decider, with or without Git, and
+// needs no file to be there. `mkdir -p` was the probe before C97 made it A with no decider.
 const bash = (sessionID: SessionID, command: string, directory: string, id?: PermissionV1.ID) =>
   ({
     id,
@@ -296,7 +298,7 @@ it.instance("XF-05: a decider call cut off gives no permission, and it is on rec
     const root = yield* rootInMode
     stub.release = yield* Deferred.make<Permission.Decided["decision"]>()
     const requestID = PermissionV1.ID.ascending()
-    const fiber = yield* ask(bash(root.id, "mkdir -p out", test.directory, requestID)).pipe(Effect.forkScoped)
+    const fiber = yield* ask(bash(root.id, "mv out.md out.sh", test.directory, requestID)).pipe(Effect.forkScoped)
     yield* pollWithTimeout(
       Effect.sync(() => (stub.calls === 1 ? true : undefined)),
       "the decider was never reached",
@@ -322,7 +324,7 @@ it.instance("XF-05: a call the decider holds while the folder is closed is in th
     const test = yield* TestInstance
     const root = yield* rootInMode
     stub.release = yield* Deferred.make<Permission.Decided["decision"]>()
-    const fiber = yield* failure(ask(bash(root.id, "mkdir -p out", test.directory))).pipe(Effect.forkScoped)
+    const fiber = yield* failure(ask(bash(root.id, "mv out.md out.sh", test.directory))).pipe(Effect.forkScoped)
     yield* pollWithTimeout(
       Effect.sync(() => (stub.calls === 1 ? true : undefined)),
       "the decider was never reached",
@@ -335,7 +337,7 @@ it.instance("XF-05: a call the decider holds while the folder is closed is in th
     expect(yield* Fiber.join(fiber)).toBeInstanceOf(PermissionV1.DeferredError)
 
     const [held] = yield* list
-    expect(held).toMatchObject({ deferred: true, patterns: ["mkdir -p out"] })
+    expect(held).toMatchObject({ deferred: true, patterns: ["mv out.md out.sh"] })
     const permission = yield* Permission.Service
     expect(yield* permission.reply({ requestID: held!.id, reply: "reject" })).toMatchObject({ id: held!.id })
   }),

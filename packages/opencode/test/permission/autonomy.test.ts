@@ -13,8 +13,9 @@ import {
 import os from "node:os"
 import path from "node:path"
 import { NodeHttpServer, NodeServices } from "@effect/platform-node"
-import { Cause, Effect, Exit, Fiber, Layer } from "effect"
+import { Cause, ConfigProvider, Effect, Exit, Fiber, Layer, Schema } from "effect"
 import { HttpClient, HttpClientRequest, HttpRouter, HttpServer } from "effect/unstable/http"
+import { HttpApiBuilder } from "effect/unstable/httpapi"
 import { layerWebSocketConstructorGlobal } from "effect/unstable/socket/Socket"
 import { CrossSpawnSpawner } from "@opencode-ai/core/cross-spawn-spawner"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
@@ -34,7 +35,15 @@ import { Format } from "../../src/format"
 import { LSP } from "../../src/lsp/lsp"
 import { Plugin } from "../../src/plugin"
 import { Question } from "../../src/question"
+import { ServerAuth } from "../../src/server/auth"
+import { AutonomyApi } from "../../src/server/routes/instance/httpapi/groups/autonomy"
+import { autonomyHandlers } from "../../src/server/routes/instance/httpapi/handlers/autonomy"
+import { authorizationLayer } from "../../src/server/routes/instance/httpapi/middleware/authorization"
+import { instanceContextLayer } from "../../src/server/routes/instance/httpapi/middleware/instance-context"
+import { schemaErrorLayer } from "../../src/server/routes/instance/httpapi/middleware/schema-error"
+import { workspaceRoutingLayer } from "../../src/server/routes/instance/httpapi/middleware/workspace-routing"
 import { HttpApiApp } from "../../src/server/routes/instance/httpapi/server"
+import { ToolRegistry } from "../../src/tool/registry"
 import { LateAnswer } from "../../src/session/late-answer"
 import { SessionProcessor } from "../../src/session/processor"
 import { SessionPrompt } from "../../src/session/prompt"
@@ -53,6 +62,7 @@ import { MessageID, PartID, SessionID } from "../../src/session/schema"
 import { Session } from "../../src/session/session"
 import { SUBAGENT_STOPPED } from "../../src/tool/task"
 import { provideInstanceEffect, TestInstance, tmpdirScoped } from "../fixture/fixture"
+import { workspaceLayerWithRuntimeFlags } from "../fixture/workspace"
 import { testEffect } from "../lib/effect"
 
 const folder = path.join(Global.Path.state, "autonomy")
@@ -335,18 +345,18 @@ it.instance("a grandchild's routine command goes to the decider, and its answer 
     const { grandchild, root } = yield* lineage
     const test = yield* TestInstance
 
-    yield* ask(bash(grandchild.id, "mkdir -p out", test.directory)).pipe(Effect.timeout("2 seconds"))
+    yield* ask(bash(grandchild.id, "mv src/a.ts src/run.sh", test.directory)).pipe(Effect.timeout("2 seconds"))
     expect(stub.calls).toEqual(["bash"])
     expect(yield* list).toEqual([])
 
     stub.answer = "reject"
-    expect(yield* failure(ask(bash(grandchild.id, "mkdir -p other", test.directory)))).toBeInstanceOf(
+    expect(yield* failure(ask(bash(grandchild.id, "mv src/a.ts src/other.sh", test.directory)))).toBeInstanceOf(
       PermissionV1.DeniedError,
     )
     expect(yield* list).toEqual([])
 
     stub.answer = "defer"
-    expect(yield* failure(ask(bash(grandchild.id, "mkdir -p third", test.directory)))).toBeInstanceOf(
+    expect(yield* failure(ask(bash(grandchild.id, "mv src/a.ts src/third.sh", test.directory)))).toBeInstanceOf(
       PermissionV1.DeferredError,
     )
     expect((yield* list).length).toBe(1)
@@ -365,7 +375,7 @@ it.instance("row 180: the decider's attempts, retries after a timeout included, 
     const { root } = yield* lineage
     const test = yield* TestInstance
     stub.attempts = 3
-    yield* ask(bash(root.id, "mkdir -p out", test.directory)).pipe(Effect.timeout("2 seconds"))
+    yield* ask(bash(root.id, "mv src/a.ts src/run.sh", test.directory)).pipe(Effect.timeout("2 seconds"))
     expect((yield* audit(root.id)).map((line) => [line.class, line.decision, line.attempts])).toEqual([
       ["P", "allow", 3],
     ])
@@ -376,11 +386,11 @@ it.instance("a command whose folder is not known goes no further than held, with
   Effect.gen(function* () {
     const { root } = yield* lineage
     // The prompt has not always carried this, and a relative path means nothing without it.
-    expect(yield* failure(ask(bash(root.id, "mkdir -p out")))).toBeInstanceOf(PermissionV1.DeferredError)
-    expect(yield* failure(ask(bash(root.id, "mkdir -p other", "relative/path")))).toBeInstanceOf(
+    expect(yield* failure(ask(bash(root.id, "mv src/a.ts src/run.sh")))).toBeInstanceOf(PermissionV1.DeferredError)
+    expect(yield* failure(ask(bash(root.id, "mv src/a.ts src/other.sh", "relative/path")))).toBeInstanceOf(
       PermissionV1.DeferredError,
     )
-    expect(yield* failure(ask(bash(root.id, "mkdir -p third", "/nowhere/at/all")))).toBeInstanceOf(
+    expect(yield* failure(ask(bash(root.id, "mv src/a.ts src/third.sh", "/nowhere/at/all")))).toBeInstanceOf(
       PermissionV1.DeferredError,
     )
     expect(stub.calls).toEqual([])
@@ -392,7 +402,7 @@ shipped.instance("with no decider in place, class P is held and says why", () =>
   Effect.gen(function* () {
     const { root } = yield* lineage
     const test = yield* TestInstance
-    expect(yield* failure(ask(bash(root.id, "mkdir -p out", test.directory)))).toBeInstanceOf(
+    expect(yield* failure(ask(bash(root.id, "mv src/a.ts src/run.sh", test.directory)))).toBeInstanceOf(
       PermissionV1.DeferredError,
     )
     const [line] = yield* audit(root.id)
@@ -475,9 +485,9 @@ it.instance("E2: in the mode every call that leaves ask through the gate, a gran
       })
 
     // Through the gate: allowed by the decider, refused by it, held, refused by what it is.
-    yield* count(bash(root.id, "mkdir -p out", test.directory), ask)
+    yield* count(bash(root.id, "mv src/a.ts src/run.sh", test.directory), ask)
     stub.answer = "reject"
-    expect(yield* failure(count(bash(child.id, "mkdir -p other", test.directory), ask))).toBeInstanceOf(
+    expect(yield* failure(count(bash(child.id, "mv src/a.ts src/other.sh", test.directory), ask))).toBeInstanceOf(
       PermissionV1.DeniedError,
     )
     expect(yield* failure(count(push, ask))).toBeInstanceOf(PermissionV1.DeferredError)
@@ -707,7 +717,7 @@ it.instance("a person's own catch-all holds everything that reaches the gate", (
     const { root } = yield* lineage
     const test = yield* TestInstance
     const ruleset = Permission.fromConfig({ "*": "ask", [Permission.USER_CATCH_ALL]: true } as never)
-    expect(yield* failure(ask({ ...bash(root.id, "mkdir -p out", test.directory), ruleset }))).toBeInstanceOf(
+    expect(yield* failure(ask({ ...bash(root.id, "mv src/a.ts src/run.sh", test.directory), ruleset }))).toBeInstanceOf(
       PermissionV1.DeferredError,
     )
     expect(stub.calls).toEqual([])
@@ -722,7 +732,7 @@ it.instance("a change to the state files from outside stops class P, without rea
     const autonomy = yield* Autonomy.Service
     writeFileSync(path.join(folder, "mode.json"), JSON.stringify({ v: 1, sessions: {}, directories: {} }))
 
-    expect(yield* failure(ask(bash(root.id, "mkdir -p out", test.directory)))).toBeInstanceOf(
+    expect(yield* failure(ask(bash(root.id, "mv src/a.ts src/run.sh", test.directory)))).toBeInstanceOf(
       PermissionV1.DeferredError,
     )
     expect(stub.calls).toEqual([])
@@ -758,7 +768,9 @@ it.instance("the plan agent's limits reach the whole lineage from the root's las
     } satisfies PermissionV1.AskInput
     expect(yield* failure(ask(edit))).toBeInstanceOf(PermissionV1.DeniedError)
     // U11 rule 8: a command other than a look is refused for the whole lineage too, not held.
-    expect(yield* failure(ask(bash(child.id, "mkdir -p out", test.directory)))).toBeInstanceOf(PermissionV1.DeniedError)
+    expect(yield* failure(ask(bash(child.id, "mv src/a.ts src/run.sh", test.directory)))).toBeInstanceOf(
+      PermissionV1.DeniedError,
+    )
     expect(stub.calls).toEqual([])
     expect((yield* audit(root.id)).map((line) => [line.class, line.category, line.rootAgent])).toEqual([
       ["X", "plan_mode", "plan"],
@@ -820,7 +832,7 @@ it.instance("a decision that cannot be recorded gives no approval, and refusing 
     mkdirSync(path.join(folder, `${root.id}.jsonl`))
 
     // The decider says yes, and the command still does not run.
-    expect(yield* failure(ask(bash(root.id, "mkdir -p out", test.directory)))).toBeInstanceOf(
+    expect(yield* failure(ask(bash(root.id, "mv src/a.ts src/run.sh", test.directory)))).toBeInstanceOf(
       PermissionV1.DeferredError,
     )
     expect(stub.calls).toEqual(["bash"])
@@ -839,7 +851,7 @@ it.instance("a decision that cannot be recorded gives no approval, and refusing 
     }).pipe(Effect.timeout("2 seconds"))
 
     stub.answer = "reject"
-    expect(yield* failure(ask(bash(root.id, "mkdir -p other", test.directory)))).toBeInstanceOf(
+    expect(yield* failure(ask(bash(root.id, "mv src/a.ts src/other.sh", test.directory)))).toBeInstanceOf(
       PermissionV1.DeniedError,
     )
     expect(yield* failure(ask(bash(root.id, "git push origin main", test.directory)))).toBeInstanceOf(
@@ -978,7 +990,7 @@ it.instance("C26: a decision that could not be recorded is held in those same wo
     const { root } = yield* lineage
     const test = yield* TestInstance
     mkdirSync(path.join(folder, `${root.id}.jsonl`))
-    const error = yield* failure(ask(bash(root.id, "mkdir -p out", test.directory)))
+    const error = yield* failure(ask(bash(root.id, "mv src/a.ts src/run.sh", test.directory)))
     expect((error as PermissionV1.DeferredError).message).toBe(HELD_TEXT("not_routine"))
     expect((yield* list)[0]!.deferred).toBe(true)
   }),
@@ -989,7 +1001,7 @@ it.instance("a call the decider could not settle says so", () =>
     const { root } = yield* lineage
     const test = yield* TestInstance
     stub.answer = "defer"
-    const error = yield* failure(ask(bash(root.id, "mkdir -p out", test.directory)))
+    const error = yield* failure(ask(bash(root.id, "mv src/a.ts src/run.sh", test.directory)))
     expect((error as PermissionV1.DeferredError).message).toBe(HELD_TEXT("decider_unavailable"))
   }),
 )
@@ -2006,7 +2018,7 @@ it.instance("C26: with no line written a full queue still takes nothing, and dec
     const refused = yield* failure(ask(bash(root.id, "git push origin more", test.directory)))
     expect((refused as PermissionV1.DeferredError).category).toBe("queue_full")
     // The decider says yes to this one, and with no line that yes is held. There is no place to hold it either.
-    const approved = yield* failure(ask(bash(root.id, "mkdir -p out", test.directory)))
+    const approved = yield* failure(ask(bash(root.id, "mv src/a.ts src/run.sh", test.directory)))
     expect(stub.calls).toEqual(["bash"])
     expect((approved as PermissionV1.DeferredError).category).toBe("queue_full")
     expect(yield* list).toHaveLength(20)
@@ -2517,5 +2529,377 @@ it.instance(
       expect(lines[0]!.reason).toStartWith("sent to origin github.com/")
       expect(lines[1]!.category).toBe("outward_not_in_mission")
     }),
+  { git: true },
+)
+
+// Row 251 (C98): once a person has allowed an entry it is closed. A repeat after that uses the person's grant and does
+// not join anything that answer settled; one before the answer still joins and moves the version.
+
+/** A table that holds a call for a person, then says it is class X: what the call is still decides after an allow. */
+const toggled = (state: { x: boolean }) => (): Permission.Answer =>
+  state.x
+    ? { class: "X", decidedBy: "gate", category: "outside_write" }
+    : { class: "D", decidedBy: "gate", category: "outward_not_in_mission" }
+
+flows.instance("row 251: a repeat after the person allows uses the grant, runs, and leaves no held entry", () =>
+  Effect.gen(function* () {
+    const { root, child } = yield* lineage
+    const test = yield* TestInstance
+    const push = bash(root.id, "git push origin main", test.directory)
+    const table = toggled({ x: false })
+    const run = (input: PermissionV1.AskInput) => ask(input).pipe(Effect.provideService(Permission.Classify, table))
+    expect(yield* failure(run(push))).toBeInstanceOf(PermissionV1.DeferredError)
+    // The same call again before the answer is the entry's call: no new entry and no new version.
+    expect(yield* failure(run(bash(child.id, "git push origin main", test.directory)))).toBeInstanceOf(
+      PermissionV1.DeferredError,
+    )
+    const [entry, ...rest] = yield* list
+    expect(rest).toEqual([])
+    expect(entry!.metadata.version).toBeUndefined()
+
+    yield* approve(entry!.id)
+    expect(yield* list).toEqual([])
+    // The repeat runs on the person's grant, from the subagent as well as the root, and nothing is held again.
+    yield* run(bash(child.id, "git push origin main", test.directory))
+    expect(yield* list).toEqual([])
+    const lines = yield* audit(root.id)
+    expect(lines.at(-1)).toMatchObject({ sessionID: child.id, decision: "allow", via: "grant", decidedBy: "person" })
+    expect(stub.calls).toEqual([])
+  }),
+)
+
+flows.instance(
+  "row 251: a repeat before the answer joins the open entry and moves its version, and both then run",
+  () =>
+    Effect.gen(function* () {
+      const { root, child } = yield* lineage
+      const test = yield* TestInstance
+      const table = toggled({ x: false })
+      const run = (input: PermissionV1.AskInput) => ask(input).pipe(Effect.provideService(Permission.Classify, table))
+      const first = bash(root.id, "git push origin main", test.directory)
+      // The same pattern from another folder: another call, so it joins the list.
+      const other = bash(child.id, "git push origin main", path.join(test.directory, "sub"))
+      expect(yield* failure(run(first))).toBeInstanceOf(PermissionV1.DeferredError)
+      expect(yield* failure(run(other))).toBeInstanceOf(PermissionV1.DeferredError)
+      // A call already on the list adds nothing to it.
+      expect(yield* failure(run(other))).toBeInstanceOf(PermissionV1.DeferredError)
+      const [entry, ...rest] = yield* list
+      expect(rest).toEqual([])
+      expect(entry!.metadata.version).toBe(2)
+      expect((yield* audit(root.id)).map((line) => line.via ?? null)).toEqual([null, "duplicate", "duplicate"])
+
+      yield* (yield* late).permission((yield* reply({ requestID: entry!.id, reply: "once", version: 2 }))!)
+      expect(yield* list).toEqual([])
+      yield* run(other)
+      yield* run(bash(child.id, "git push origin main", test.directory))
+      expect(yield* list).toEqual([])
+      expect((yield* audit(root.id)).slice(-2).map((line) => [line.decision, line.via])).toEqual([
+        ["allow", "grant"],
+        ["allow", "grant"],
+      ])
+    }),
+)
+
+flows.instance("row 251: class X stays refused after the person allows the entry", () =>
+  Effect.gen(function* () {
+    const { root } = yield* lineage
+    const test = yield* TestInstance
+    const state = { x: false }
+    const run = (input: PermissionV1.AskInput) =>
+      ask(input).pipe(Effect.provideService(Permission.Classify, toggled(state)))
+    const push = bash(root.id, "git push origin main", test.directory)
+    expect(yield* failure(run(push))).toBeInstanceOf(PermissionV1.DeferredError)
+    yield* approve((yield* list)[0]!.id)
+    // The grant is there, and what the call is now still refuses it: no run and nothing held.
+    state.x = true
+    const error = yield* failure(run(push))
+    expect(error).not.toBeInstanceOf(PermissionV1.DeferredError)
+    expect((error as Error).message).toBe((Permission.refusedByMode("outside_write") as Error).message)
+    expect(yield* list).toEqual([])
+    expect((yield* audit(root.id)).at(-1)).toMatchObject({ class: "X", decision: "reject" })
+  }),
+)
+
+it.instance(
+  "row 251: a read held before the person ticks its consent item passes on that tick, and does not join the entry",
+  () =>
+    Effect.gen(function* () {
+      const sessions = yield* Session.Service
+      const autonomy = yield* Autonomy.Service
+      const test = yield* TestInstance
+      const env = path.join(test.directory, ".env")
+      writeFileSync(env, "TOKEN=not-read\n")
+      const root = yield* sessions.create({})
+      const child = yield* sessions.create({ parentID: root.id })
+      yield* say(root.id, "Fix the settings in .env")
+      yield* autonomy.setMode({ scope: "session", root: root.id, on: true })
+      yield* autonomy.markMode({ root: root.id, directory: (yield* sessions.get(root.id)).directory })
+      const consent = (yield* autonomy.consent(root.id))!
+      const item = consent.items.find((entry) => entry.kind === "secret")!
+
+      // Held by the real table: nobody has ticked the item yet.
+      expect(yield* failure(ask(readOf(root.id, env)))).toBeInstanceOf(PermissionV1.DeferredError)
+      expect(yield* failure(ask(readOf(child.id, env)))).toBeInstanceOf(PermissionV1.DeferredError)
+      // A file made after the list was shown, which no item covers.
+      const later = path.join(test.directory, ".env.other")
+      writeFileSync(later, "TOKEN=later\n")
+      expect(yield* failure(ask(readOf(root.id, later)))).toBeInstanceOf(PermissionV1.DeferredError)
+      expect((yield* list).map((entry) => entry.metadata.version)).toEqual([undefined, undefined])
+
+      yield* autonomy.allowConsent({ root: root.id, hash: consent.hash, ids: [item.id] })
+      // The person's tick is the answer: the same read passes, from the root and the subagent, and joins nothing.
+      yield* ask(readOf(child.id, env))
+      yield* ask(readOf(root.id, env))
+      expect((yield* list).map((entry) => entry.metadata.version)).toEqual([undefined, undefined])
+      expect(
+        (yield* calls(root.id)).slice(-2).map((line) => [line.class, line.decision, line.via, line.consentID]),
+      ).toEqual([
+        ["A", "allow", "consent", item.id],
+        ["A", "allow", "consent", item.id],
+      ])
+      // What the tick does not cover is judged again and still held: on the entry it is already on, at the same version.
+      expect(yield* failure(ask(readOf(child.id, later)))).toBeInstanceOf(PermissionV1.DeferredError)
+      expect((yield* list).map((entry) => entry.metadata.version)).toEqual([undefined, undefined])
+      const last = (yield* calls(root.id)).at(-1)!
+      expect([last.class, last.category, last.via, last.duplicateOf]).toEqual([
+        "D",
+        "secret_file",
+        "duplicate",
+        (yield* list)[1]!.id,
+      ])
+      // Looked at again once per tick: the next repeat joins without the gate, as before.
+      expect(yield* failure(ask(readOf(root.id, later)))).toBeInstanceOf(PermissionV1.DeferredError)
+      expect((yield* list).map((entry) => entry.metadata.version)).toEqual([undefined, undefined])
+      expect(stub.calls).toEqual([])
+    }),
+  { git: true },
+)
+
+/** A root whose mission names `.env`, in the mode, with its consent list shown and nothing on it ticked yet. */
+const untickedRoot = Effect.gen(function* () {
+  const sessions = yield* Session.Service
+  const autonomy = yield* Autonomy.Service
+  const test = yield* TestInstance
+  const env = path.join(test.directory, ".env")
+  writeFileSync(env, "TOKEN=not-read\n")
+  const root = yield* sessions.create({})
+  const child = yield* sessions.create({ parentID: root.id })
+  yield* say(root.id, "Fix the settings in .env")
+  yield* autonomy.setMode({ scope: "session", root: root.id, on: true })
+  yield* autonomy.markMode({ root: root.id, directory: (yield* sessions.get(root.id)).directory })
+  const consent = (yield* autonomy.consent(root.id))!
+  return { root, child, env, consent, item: consent.items.find((entry) => entry.kind === "secret")! }
+})
+
+const ticked = (root: SessionID) =>
+  Effect.gen(function* () {
+    const permission = yield* Permission.Service
+    return yield* permission.consentTicked!(root)
+  })
+
+flows.instance(
+  "row 251: a tick that covers every call on an entry closes it, on record via consent, and the call runs",
+  () =>
+    Effect.gen(function* () {
+      const autonomy = yield* Autonomy.Service
+      const { root, child, env, consent, item } = yield* untickedRoot
+      expect(yield* failure(ask(readOf(root.id, env)))).toBeInstanceOf(PermissionV1.DeferredError)
+      expect(yield* failure(ask(readOf(child.id, env)))).toBeInstanceOf(PermissionV1.DeferredError)
+      const [entry] = yield* list
+      // Nothing ticked: nothing to close.
+      expect(yield* ticked(root.id)).toEqual([])
+      expect((yield* list).map((item) => item.id)).toEqual([entry!.id])
+
+      yield* autonomy.allowConsent({ root: root.id, hash: consent.hash, ids: [item.id] })
+      const answers = yield* ticked(root.id)
+      expect(answers.map((answer) => [answer.id, answer.calls?.length])).toEqual([[entry!.id, 1]])
+      expect(yield* list).toEqual([])
+      const lines = yield* audit(root.id)
+      expect(lines.at(-1)).toMatchObject({
+        requestID: entry!.id,
+        class: "A",
+        decision: "allow",
+        decidedBy: "person",
+        via: "consent",
+        consentID: item.id,
+      })
+      expect((yield* autonomy.openDecisions()).filter((line) => line.rootID === root.id)).toEqual([])
+      // The caller acts on it as on a person's approval: the agent hears, and the read runs.
+      yield* (yield* late).permission(answers[0]!)
+      expect(sent.map((item) => [item.sessionID, item.lateAnswer])).toEqual([[root.id, true]])
+      yield* ask(readOf(root.id, env))
+      expect(yield* list).toEqual([])
+      expect(stub.calls).toEqual([])
+    }),
+  { git: true },
+)
+
+flows.instance(
+  "row 251: a tick that covers some calls on an entry keeps the rest, under a new version",
+  () =>
+    Effect.gen(function* () {
+      const autonomy = yield* Autonomy.Service
+      const { root, child, env, consent, item } = yield* untickedRoot
+      // The tick covers a whole read of the file, and not one that starts part way into it.
+      const table = (input: Seen): Permission.Answer => {
+        const id = input.metadata.offset === undefined ? input.consent?.files.get(env) : undefined
+        return id
+          ? { class: "A", decidedBy: "gate", consentID: id }
+          : { class: "D", decidedBy: "gate", category: "secret_file" }
+      }
+      const run = <A, E, R>(self: Effect.Effect<A, E, R>) =>
+        self.pipe(Effect.provideService(Permission.Classify, table))
+      const whole = readOf(root.id, env)
+      const part = { ...readOf(child.id, env), metadata: { filepath: env, offset: 2 } }
+      expect(yield* failure(run(ask(whole)))).toBeInstanceOf(PermissionV1.DeferredError)
+      expect(yield* failure(run(ask(part)))).toBeInstanceOf(PermissionV1.DeferredError)
+      const [entry] = yield* list
+      expect(entry!.metadata.version).toBe(2)
+
+      yield* autonomy.allowConsent({ root: root.id, hash: consent.hash, ids: [item.id] })
+      const answers = yield* run(ticked(root.id))
+      // What the tick let through comes back to be run; the entry stays with what it did not cover.
+      expect(answers.map((answer) => answer.calls?.map((held) => held.call))).toEqual([
+        [JSON.stringify(whole.metadata)],
+      ])
+      const [left, ...more] = yield* list
+      expect(more).toEqual([])
+      expect(left!.id).toBe(entry!.id)
+      expect(left!.metadata.version).toBe(3)
+      expect(left!.metadata.calls).toEqual([part.metadata])
+      expect((yield* audit(root.id)).at(-1)).toMatchObject({ via: "consent", decidedBy: "person", decision: "allow" })
+      // A click on the list as it was is no answer; one on the list as it is now answers the rest.
+      expect(yield* reply({ requestID: entry!.id, reply: "once", version: 2 })).toBeUndefined()
+      const rest = (yield* reply({ requestID: entry!.id, reply: "once", version: 3 }))!
+      expect(rest.calls?.map((held) => held.call)).toEqual([JSON.stringify(part.metadata)])
+      expect(yield* list).toEqual([])
+    }),
+  { git: true },
+)
+
+// Row 251 over HTTP: the person's tick on the consent route closes what it answers, and the server runs the held call.
+
+const TICK_PASSWORD = "tick-route-test-only"
+const ticks = testEffect(
+  Layer.mergeAll(
+    AppNodeBuilder.build(
+      LayerNode.group([
+        Permission.node,
+        Session.node,
+        Autonomy.node,
+        EventV2Bridge.node,
+        SessionProjector.node,
+        CrossSpawnSpawner.node,
+        InstanceStore.node,
+        Question.node,
+      ]),
+      [
+        [InstanceStore.bootstrapNode, noopBootstrap],
+        [Permission.deciderNode, decider],
+      ],
+    ),
+    NodeHttpServer.layerTest,
+    NodeServices.layer,
+    workspaceLayerWithRuntimeFlags({}),
+  ),
+)
+
+const ran: string[] = []
+/** A read that asks as the real tool does, with its call named, so the gate and the person's tick decide. */
+const reader: Tool.Def = {
+  id: "read",
+  description: "",
+  parameters: Schema.Unknown,
+  execute: (args, ctx) =>
+    Effect.gen(function* () {
+      const filePath = (args as { filePath: string }).filePath
+      yield* ctx.ask({
+        permission: "read",
+        patterns: [filePath],
+        metadata: { filepath: filePath },
+        always: ["*"],
+        call: { tool: "read", args },
+      })
+      ran.push(filePath)
+      return { title: filePath, metadata: {}, output: `read ${filePath}` }
+    }),
+}
+
+const tickRoute = HttpApiBuilder.layer(AutonomyApi).pipe(
+  Layer.provide(autonomyHandlers as never),
+  Layer.provide([
+    authorizationLayer.pipe(Layer.provide(ServerAuth.Config.layer)),
+    workspaceRoutingLayer.pipe(Layer.provide(layerWebSocketConstructorGlobal)),
+    instanceContextLayer,
+    schemaErrorLayer,
+    Layer.succeed(
+      SessionPrompt.Service,
+      SessionPrompt.Service.of({
+        prompt: (input: SessionPrompt.PromptInput) =>
+          Effect.sync(() => {
+            const part = input.parts[0] as { text: string; metadata?: { lateAnswer?: boolean } }
+            sent.push({ sessionID: input.sessionID, text: part.text, lateAnswer: part.metadata?.lateAnswer === true })
+            return {} as never
+          }),
+      } as unknown as SessionPrompt.Interface),
+    ),
+    Layer.succeed(
+      ToolRegistry.Service,
+      ToolRegistry.Service.of({ all: () => Effect.succeed([reader]) } as unknown as ToolRegistry.Interface),
+    ) as never,
+    Layer.succeed(
+      Agent.Service,
+      Agent.Service.of({
+        get: (name: string) => Effect.succeed({ name, mode: "primary", permission: [], options: {} }),
+        defaultAgent: () => Effect.succeed("build"),
+      } as unknown as Agent.Interface),
+    ) as never,
+  ]),
+  HttpRouter.serve,
+  Layer.provide(ConfigProvider.layer(ConfigProvider.fromUnknown({ OPENCODE_SERVER_PASSWORD: TICK_PASSWORD }))),
+  Layer.build,
+) as unknown as Effect.Effect<unknown>
+
+ticks.instance(
+  "row 251 over HTTP: a consent tick closes the held entry it covers, and the server runs its call",
+  () =>
+    Effect.gen(function* () {
+      ran.length = 0
+      yield* tickRoute
+      const permission = yield* Permission.Service
+      const { root, child, env, consent, item } = yield* untickedRoot
+      const test = yield* TestInstance
+      const read = (sessionID: SessionID): PermissionV1.AskInput => ({
+        ...readOf(sessionID, env),
+        call: { tool: "read", args: { filePath: env } },
+      })
+      expect(yield* failure(ask(read(child.id)))).toBeInstanceOf(PermissionV1.DeferredError)
+      const [entry] = yield* permission.list()
+      expect(entry).toMatchObject({ deferred: true, patterns: [env] })
+
+      const request = yield* HttpClientRequest.post(`/session/${child.id}/autonomy/consent`).pipe(
+        HttpClientRequest.setHeader("x-opencode-directory", test.directory),
+        HttpClientRequest.setHeader(
+          "authorization",
+          `Basic ${Buffer.from(`opencode:${TICK_PASSWORD}`).toString("base64")}`,
+        ),
+        HttpClientRequest.bodyJson({ hash: consent.hash, ids: [item.id] }),
+      )
+      expect((yield* HttpClient.execute(request)).status).toBe(200)
+      // Gone from the list at once; the run is the server's, before any model turn.
+      expect(yield* permission.list()).toEqual([])
+      while (sent.length === 0) yield* Effect.sleep("10 millis")
+      expect(ran).toEqual([env])
+      expect(sent).toMatchObject([{ sessionID: root.id, lateAnswer: true }])
+      expect(sent[0]!.text).toContain(`read ${env}`)
+      const lines = yield* audit(root.id)
+      // The tick's own line, then the run on the grant that comes with an approval.
+      expect(lines.slice(-2).map((line) => [line.via, line.decidedBy, line.decision])).toEqual([
+        ["consent", "person", "allow"],
+        ["grant", "person", "allow"],
+      ])
+      expect((yield* (yield* Autonomy.Service).openDecisions()).filter((line) => line.rootID === root.id)).toEqual([])
+      expect(stub.calls).toEqual([])
+    }).pipe(Effect.timeout("10 seconds")),
   { git: true },
 )

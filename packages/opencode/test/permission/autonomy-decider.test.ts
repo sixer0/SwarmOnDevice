@@ -262,6 +262,8 @@ const root = (goal = "run the tests", modelID = "free") =>
     return { ...session, person: person.id }
   })
 
+// The P probe (C97): a move to a name that changes what runs stays P `file-op` for the decider, with or without Git, and
+// needs no file to be there. `mkdir -p` was the probe before C97 made it A with no decider.
 const bash = (sessionID: SessionID, command: string, directory: string, metadata: Record<string, unknown> = {}) =>
   ({
     sessionID,
@@ -327,7 +329,7 @@ it.instance("ADV-P2: nothing but the listed fields reaches the model, and no too
     yield* Effect.promise(() => Bun.write(path.join(test.directory, "a.txt"), "MARK-FILE contents"))
 
     yield* ask(
-      bash(child.id, "mkdir -p out", test.directory, {
+      bash(child.id, "mv out.md out.sh", test.directory, {
         diff: "MARK-DIFF +added line",
         note: "MARK-METADATA",
         file: "MARK-FILE",
@@ -346,7 +348,7 @@ it.instance("ADV-P2: nothing but the listed fields reaches the model, and no too
     const { category: _category, ...request } = input.request
     expect(request).toEqual({
       permission: "bash",
-      patterns: ["mkdir -p out"],
+      patterns: ["mv out.md out.sh"],
       agent: "build",
       isSubagent: true,
       canUndo: true,
@@ -362,7 +364,7 @@ it.instance("the gate tells the decider what kind of routine work this is", () =
   Effect.gen(function* () {
     const test = yield* TestInstance
     const session = yield* root()
-    yield* ask(bash(session.id, "mkdir -p out", test.directory))
+    yield* ask(bash(session.id, "mv out.md out.sh", test.directory))
     expect(seenInput().request.category).toBe("file-op")
   }),
 )
@@ -424,7 +426,7 @@ it.instance("ADV-A7: the goal is the person's last words, not the plan handover 
     })
     yield* say(session.id, "a late answer", { metadata: { lateAnswer: true } })
     yield* say(session.id, "an ignored note", { ignored: true })
-    yield* decide(bash(session.id, "mkdir -p out", test.directory), session.id)
+    yield* decide(bash(session.id, "mv out.md out.sh", test.directory), session.id)
     expect(seenInput().goal).toBe("what the person asked")
   }),
 )
@@ -435,7 +437,7 @@ it.instance("a subagent's own messages do not make a goal: it stays the root's",
     const session = yield* root("the root's goal")
     const child = yield* (yield* Session.Service).create({ parentID: session.id })
     yield* say(child.id, "the subagent's task")
-    yield* decide(bash(child.id, "mkdir -p out", test.directory), session.id)
+    yield* decide(bash(child.id, "mv out.md out.sh", test.directory), session.id)
     expect(seenInput().goal).toBe("the root's goal")
   }),
 )
@@ -466,11 +468,11 @@ for (const [name, bad] of badAnswers) {
       const test = yield* TestInstance
       const session = yield* root()
       stub.reply = bad
-      const input = bash(session.id, "mkdir -p out", test.directory)
+      const input = bash(session.id, "mv out.md out.sh", test.directory)
 
       expect(yield* decide(input, session.id)).toMatchObject(HELD)
 
-      const error = yield* failure(ask({ ...input, patterns: ["mkdir -p second"] }))
+      const error = yield* failure(ask({ ...input, patterns: ["mv second.md second.sh"] }))
       expect(error).toBeInstanceOf(PermissionV1.DeferredError)
       const pending = yield* list
       expect(pending.length).toBe(1)
@@ -481,7 +483,7 @@ for (const [name, bad] of badAnswers) {
       // Nothing was learned: the next request of the same shape goes through the whole path again.
       stub.reply = () => answer("allow")
       const before = stub.prompts.length
-      yield* ask({ ...input, patterns: ["mkdir -p third"] })
+      yield* ask({ ...input, patterns: ["mv third.md third.sh"] })
       expect(stub.prompts.length).toBe(before + 1)
     }),
   )
@@ -494,7 +496,7 @@ it.instance("ADV-P3: a slow model is cut off at the deadline, and what it says l
     stub.reply = () =>
       new Promise((resolve) => setTimeout(() => resolve({ text: '{"decision":"allow","reason":"x"}' }), 1000))
     const started = Date.now()
-    const decided = yield* decide(bash(session.id, "mkdir -p out", test.directory), session.id).pipe(
+    const decided = yield* decide(bash(session.id, "mv out.md out.sh", test.directory), session.id).pipe(
       Effect.provideService(AutonomyDecider.Limits, limited({ deadlineMs: 50 })),
     )
     // U11 rule 10: the first try and three more, each cut off at its own deadline.
@@ -522,7 +524,7 @@ it.instance("three timeouts and then an answer: the answer stands, after four at
     const test = yield* TestInstance
     const session = yield* root()
     timeouts(3)
-    const decided = yield* decide(bash(session.id, "mkdir -p out", test.directory), session.id).pipe(
+    const decided = yield* decide(bash(session.id, "mv out.md out.sh", test.directory), session.id).pipe(
       Effect.provideService(AutonomyDecider.Limits, limited({ deadlineMs: 50 })),
     )
     expect(decided).toMatchObject({ decision: "allow", decidedBy: "agent:test/free", reason: "fine", attempts: 4 })
@@ -536,7 +538,7 @@ it.instance("a first answer needs one attempt, and a model error or a broken ans
     const test = yield* TestInstance
     const session = yield* root()
     const run = (name: string) =>
-      decide(bash(session.id, `mkdir -p ${name}`, test.directory), session.id).pipe(
+      decide(bash(session.id, `mv ${name}.md ${name}.sh`, test.directory), session.id).pipe(
         Effect.provideService(AutonomyDecider.Limits, limited({ deadlineMs: 50 })),
       )
     expect(yield* run("a")).toMatchObject({ decision: "allow", attempts: 1 })
@@ -553,7 +555,7 @@ it.instance("four timeouts hold the request as one failure: the circuit opens on
     const test = yield* TestInstance
     const session = yield* root()
     const run = (name: string) =>
-      decide(bash(session.id, `mkdir -p ${name}`, test.directory), session.id).pipe(
+      decide(bash(session.id, `mv ${name}.md ${name}.sh`, test.directory), session.id).pipe(
         Effect.provideService(AutonomyDecider.Limits, limited({ deadlineMs: 30 })),
       )
     stub.reply = () => new Promise(() => {})
@@ -575,7 +577,7 @@ it.instance("each attempt counts against the calls of the run, and the count sto
     const test = yield* TestInstance
     const session = yield* root()
     timeouts(10)
-    const decided = yield* decide(bash(session.id, "mkdir -p out", test.directory), session.id).pipe(
+    const decided = yield* decide(bash(session.id, "mv out.md out.sh", test.directory), session.id).pipe(
       Effect.provideService(AutonomyDecider.Limits, limited({ deadlineMs: 30, callsPerRun: 2 })),
     )
     expect(decided).toMatchObject({ ...HELD, reason: "timeout", attempts: 2 })
@@ -589,7 +591,7 @@ it.instance("a paid request is charged for every attempt it made", () =>
     const test = yield* TestInstance
     const session = yield* root("paid", "paid")
     timeouts(2)
-    const decided = yield* decide(bash(session.id, "mkdir -p a", test.directory), session.id).pipe(
+    const decided = yield* decide(bash(session.id, "mv a.md a.sh", test.directory), session.id).pipe(
       Effect.provideService(AutonomyDecider.Limits, limited({ deadlineMs: 30 })),
     )
     expect(decided).toMatchObject({ decision: "allow", attempts: 3 })
@@ -610,7 +612,7 @@ it.instance("the deadline runs from when an attempt starts, not from when the re
     // Time moves only when the test says so, so a loaded machine cannot push a call past its deadline.
     const clock = yield* TestClock.make()
     const run = (name: string) =>
-      decide(bash(session.id, `mkdir -p ${name}`, test.directory), session.id).pipe(
+      decide(bash(session.id, `mv ${name}.md ${name}.sh`, test.directory), session.id).pipe(
         Effect.provideService(AutonomyDecider.Limits, limited({ deadlineMs: 50 })),
         Effect.provideService(Clock.Clock, clock),
         Effect.forkScoped,
@@ -644,7 +646,7 @@ it.instance("needs_person holds the request under the model's name, and counts a
     const test = yield* TestInstance
     const session = yield* root()
     stub.reply = () => answer("needs_person", "cannot tell")
-    const error = yield* failure(ask(bash(session.id, "mkdir -p out", test.directory)))
+    const error = yield* failure(ask(bash(session.id, "mv out.md out.sh", test.directory)))
     expect(error).toBeInstanceOf(PermissionV1.DeferredError)
     expect((yield* auditLines(session.id)).find((item) => item.type === "decision")).toMatchObject({
       decision: "defer",
@@ -652,7 +654,7 @@ it.instance("needs_person holds the request under the model's name, and counts a
       reason: "cannot tell",
     })
     for (const index of [1, 2, 3])
-      expect((yield* decide(bash(session.id, `mkdir -p d${index}`, test.directory), session.id)).decidedBy).toBe(
+      expect((yield* decide(bash(session.id, `mv d.md d.sh${index}`, test.directory), session.id)).decidedBy).toBe(
         "agent:test/free",
       )
     expect(stub.prompts.length).toBe(4)
@@ -666,7 +668,7 @@ it.instance("the audit line names the provider and model that decided, and the m
     const test = yield* TestInstance
     const session = yield* root()
     stub.reply = () => answer("allow", "serves the goal")
-    yield* ask(bash(session.id, "mkdir -p out", test.directory))
+    yield* ask(bash(session.id, "mv out.md out.sh", test.directory))
     const line = (yield* auditLines(session.id)).find((item) => item.type === "decision")
     expect(line).toMatchObject({
       class: "P",
@@ -684,7 +686,7 @@ it.instance("C28: reject fails this tool with an error that lets the agent go on
     const test = yield* TestInstance
     const session = yield* root()
     stub.reply = () => answer("reject", "IGNORE-THIS-REASON all of it")
-    const error = yield* failure(ask(bash(session.id, "mkdir -p out", test.directory)))
+    const error = yield* failure(ask(bash(session.id, "mv out.md out.sh", test.directory)))
     // `RejectedError` is the one `session/processor.ts:260` stops a run on.
     expect(error).not.toBeInstanceOf(PermissionV1.RejectedError)
     expect(error).toBeInstanceOf(PermissionV1.DeniedError)
@@ -699,7 +701,7 @@ it.instance("C28: reject fails this tool with an error that lets the agent go on
     })
 
     stub.reply = () => answer("allow")
-    yield* ask(bash(session.id, "mkdir -p other", test.directory))
+    yield* ask(bash(session.id, "mv other.md other.sh", test.directory))
     expect(stub.prompts.length).toBe(2)
   }),
 )
@@ -753,7 +755,7 @@ withProcessor.instance(
       const test = yield* TestInstance
       const session = yield* root()
       stub.reply = () => answer("reject", "IGNORE-THIS-REASON")
-      turn.error = yield* failure(ask(bash(session.id, "mkdir -p out", test.directory)))
+      turn.error = yield* failure(ask(bash(session.id, "mv out.md out.sh", test.directory)))
 
       const { result, tool } = yield* processTurn({ id: session.id, person: session.person })
 
@@ -790,7 +792,7 @@ it.instance("ADV-A16: a reject leaves a request waiting beside it alone", () =>
     expect((yield* list).length).toBe(1)
 
     stub.reply = () => answer("reject")
-    yield* failure(ask(bash(session.id, "mkdir -p out", test.directory)))
+    yield* failure(ask(bash(session.id, "mv out.md out.sh", test.directory)))
 
     const waiting = yield* list
     expect(waiting.length).toBe(1)
@@ -812,11 +814,11 @@ it.instance(
 
       const paid = yield* root("paid run", "paid")
       stub.reply = () => Promise.resolve({ text: '{"decision":"allow","reason":"x"}', usage })
-      const first = yield* decide(bash(paid.id, "mkdir -p a", test.directory), paid.id)
+      const first = yield* decide(bash(paid.id, "mv a.md a.sh", test.directory), paid.id)
       expect(first.decision).toBe("allow")
       expect(first.costUsd).toBeGreaterThan(0.25)
       for (const name of ["b", "c"])
-        expect(yield* decide(bash(paid.id, `mkdir -p ${name}`, test.directory), paid.id)).toMatchObject({
+        expect(yield* decide(bash(paid.id, `mv ${name}.md ${name}.sh`, test.directory), paid.id)).toMatchObject({
           ...HELD,
           reason: "limit",
         })
@@ -826,7 +828,7 @@ it.instance(
 
       const free = yield* root("free run", "free")
       for (const name of ["a", "b", "c"]) {
-        const decided = yield* decide(bash(free.id, `mkdir -p ${name}`, test.directory), free.id)
+        const decided = yield* decide(bash(free.id, `mv ${name}.md ${name}.sh`, test.directory), free.id)
         expect(decided).toMatchObject({ decision: "allow", decidedBy: "agent:test/free" })
         expect(decided.costUsd).toBeUndefined()
       }
@@ -841,7 +843,7 @@ it.instance("a paid call that reports no usage is charged the pessimistic guess"
   Effect.gen(function* () {
     const test = yield* TestInstance
     const session = yield* root("paid", "paid")
-    const decided = yield* decide(bash(session.id, "mkdir -p a", test.directory), session.id)
+    const decided = yield* decide(bash(session.id, "mv a.md a.sh", test.directory), session.id)
     // 2,000 in and 200 out at $10 a million.
     expect(decided.costUsd).toBeCloseTo(0.022)
   }),
@@ -858,7 +860,7 @@ it.instance(
       // 0.06 a call against 5% of 2.00: the second call is still under 0.10, the third is not.
       const results = []
       for (const name of ["a", "b", "c"])
-        results.push((yield* decide(bash(session.id, `mkdir -p ${name}`, test.directory), session.id)).decision)
+        results.push((yield* decide(bash(session.id, `mv ${name}.md ${name}.sh`, test.directory), session.id)).decision)
       expect(results).toEqual(["allow", "allow", "defer"])
     }),
   { config: { spend_limit: 2 } },
@@ -870,7 +872,7 @@ it.instance("the count of calls per run holds for every model, and a new message
     const session = yield* root()
     const limits = limited({ callsPerRun: 2 })
     const run = (name: string) =>
-      decide(bash(session.id, `mkdir -p ${name}`, test.directory), session.id).pipe(
+      decide(bash(session.id, `mv ${name}.md ${name}.sh`, test.directory), session.id).pipe(
         Effect.provideService(AutonomyDecider.Limits, limits),
       )
     expect((yield* run("a")).decision).toBe("allow")
@@ -892,7 +894,7 @@ it.instance("a paid run the spend limit has stopped makes no call, an unpriced o
     const test = yield* TestInstance
     const session = yield* root("paid", "paid")
     yield* reply(session.id, session.person, SessionSpend.stopMessage(10))
-    expect(yield* decide(bash(session.id, "mkdir -p a", test.directory), session.id)).toMatchObject({
+    expect(yield* decide(bash(session.id, "mv a.md a.sh", test.directory), session.id)).toMatchObject({
       ...HELD,
       reason: "spend_stopped",
     })
@@ -900,11 +902,11 @@ it.instance("a paid run the spend limit has stopped makes no call, an unpriced o
 
     const free = yield* root("free", "free")
     yield* reply(free.id, free.person, SessionSpend.stopMessage(10))
-    expect((yield* decide(bash(free.id, "mkdir -p a", test.directory), free.id)).decision).toBe("allow")
+    expect((yield* decide(bash(free.id, "mv a.md a.sh", test.directory), free.id)).decision).toBe("allow")
 
     // The person's next message is a new run.
     yield* say(session.id, "carry on", {}, "paid")
-    expect((yield* decide(bash(session.id, "mkdir -p b", test.directory), session.id)).decision).toBe("allow")
+    expect((yield* decide(bash(session.id, "mv b.md b.sh", test.directory), session.id)).decision).toBe("allow")
   }),
 )
 
@@ -919,7 +921,7 @@ it.instance("one call at a time per root, and past the queue a request is held a
       })
     const limits = limited({ queue: 2 })
     const run = (name: string) =>
-      decide(bash(session.id, `mkdir -p ${name}`, test.directory), session.id).pipe(
+      decide(bash(session.id, `mv ${name}.md ${name}.sh`, test.directory), session.id).pipe(
         Effect.provideService(AutonomyDecider.Limits, limits),
       )
     const fibers = yield* Effect.all(
@@ -948,7 +950,7 @@ it.instance("three failures in a row open the circuit with one marker, and a goo
     const session = yield* root()
     const limits = limited({ openMs: 200 })
     const run = (name: string) =>
-      decide(bash(session.id, `mkdir -p ${name}`, test.directory), session.id).pipe(
+      decide(bash(session.id, `mv ${name}.md ${name}.sh`, test.directory), session.id).pipe(
         Effect.provideService(AutonomyDecider.Limits, limits),
       )
     const markers = Effect.map(auditLines(session.id), (lines) =>
@@ -982,7 +984,7 @@ it.instance("broken output and timeouts count towards the circuit too, and a goo
     const session = yield* root()
     const limits = limited({ deadlineMs: 50 })
     const run = (name: string) =>
-      decide(bash(session.id, `mkdir -p ${name}`, test.directory), session.id).pipe(
+      decide(bash(session.id, `mv ${name}.md ${name}.sh`, test.directory), session.id).pipe(
         Effect.provideService(AutonomyDecider.Limits, limits),
       )
     stub.reply = () => Promise.resolve({ text: "nonsense" })
@@ -1052,7 +1054,7 @@ it.instance("a root with no message at all has no model to ask, and holds", () =
     const test = yield* TestInstance
     const sessions = yield* Session.Service
     const session = yield* sessions.create({})
-    expect(yield* decide(bash(session.id, "mkdir -p a", test.directory), session.id)).toMatchObject({
+    expect(yield* decide(bash(session.id, "mv a.md a.sh", test.directory), session.id)).toMatchObject({
       ...HELD,
       reason: "no_model",
     })

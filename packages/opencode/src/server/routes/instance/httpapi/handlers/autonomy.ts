@@ -1,12 +1,14 @@
 import fs from "node:fs/promises"
 import path from "node:path"
 import * as InstanceState from "@/effect/instance-state"
+import { Permission } from "@/permission"
 import { Autonomy } from "@/permission/autonomy"
 import type { SessionID } from "@/session/schema"
 import { ServerAuth } from "@/server/auth"
+import { LateAnswer } from "@/session/late-answer"
 import { Session } from "@/session/session"
 import { Archive } from "@/tool/archive"
-import { Effect } from "effect"
+import { Effect, Scope } from "effect"
 import { HttpApiBuilder } from "effect/unstable/httpapi"
 import { InstanceHttpApi } from "../api"
 import type { ApiNotFoundError } from "../errors"
@@ -89,6 +91,11 @@ export const autonomyHandlers = HttpApiBuilder.group(InstanceHttpApi, "autonomy"
   Effect.gen(function* () {
     const autonomy = yield* Autonomy.Service
     const sessions = yield* Session.Service
+    const permission = yield* Permission.Service
+    // What a person's approval goes through, here for the calls a consent tick answers (C98). A group served on its own
+    // without a session runner has none, and a tick there closes nothing: the entries stay for the person.
+    const late = yield* LateAnswer.make.pipe(Effect.catchCause(() => Effect.succeed(undefined)))
+    const scope = yield* Scope.Scope
     // Read once, as the authorization middleware does: the password a server starts with is the one it keeps.
     const password = ServerAuth.required(yield* ServerAuth.Config.pipe(Effect.provide(ServerAuth.Config.layer)))
 
@@ -193,6 +200,10 @@ export const autonomyHandlers = HttpApiBuilder.group(InstanceHttpApi, "autonomy"
             Effect.fail(new ApiAutonomyWriteError({ name: "AutonomyWriteError", data: { message: error.message } })),
         }),
       )
+      // Held calls the tick now covers run as on a person's approval, and an entry with nothing left leaves the list (C98).
+      if (late)
+        for (const answer of yield* permission.consentTicked?.(root.id) ?? Effect.succeed([]))
+          yield* late.permission(answer).pipe(Effect.forkIn(scope))
       return consentOf(root.id, given)
     })
 

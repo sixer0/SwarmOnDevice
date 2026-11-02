@@ -424,6 +424,33 @@ function deletion(root: Node): Deletion | "compound" | undefined {
   return { name, ...found }
 }
 
+/**
+ * C97 F2: one plain `cp` or `mv` of literal words and nothing else, read as the autonomy table reads it (`Risk.copyMove`),
+ * so the file it would replace is the one the table judged. Anything else is undefined and runs as it always has.
+ */
+function copyMove(root: Node) {
+  const list = commands(root)
+  if (list.length !== 1 || !understood(root)) return undefined
+  const node = list[0]!
+  const redirects = redirectsIn(root)
+  if (node.text.trim() !== root.text.trim() || redirects.writes.length || redirects.reads.length || redirects.loose.length) return undefined
+  const command = parts(node)
+  if (!command.every((item) => literal(item.type === "command_name" ? { ...item, type: "word" } : item))) return undefined
+  // The program's own name as written: a quoted or pathed `cp` is not the one read here.
+  if (command[0]?.text !== "cp" && command[0]?.text !== "mv") return undefined
+  return Risk.copyMove(command.map((item) => unquote(item.text)))
+}
+
+/** The files a copy or a move would replace now, folders left out: the program refuses those and replaces nothing. */
+async function replacedBy(item: Risk.CopyMove, cwd: string) {
+  const targets = Risk.copyTargets(item, cwd)
+  if (!targets) return []
+  const found = await Promise.all(
+    Risk.replaced(targets).map(async (file) => ((await fsp.stat(file).catch(() => undefined))?.isDirectory() ? [] : [file])),
+  )
+  return found.flat()
+}
+
 /** What the program itself would refuse, so a move never removes more than the command would have. */
 async function refusedBy(item: Deletion, cwd: string) {
   for (const file of item.paths) {
@@ -477,6 +504,8 @@ function scriptFiles(root: Node) {
     const name = words[start]
     if (!name) return []
     if (SCRIPT_PROGRAMS.has(base(name))) return words.slice(start + 1).filter((word) => word && !word.startsWith("-"))
+    // C97 F4: `source` and `.` run a file in this shell, which the table screens as a script.
+    if (name === "source" || name === ".") return words.slice(start + 1, start + 2)
     return name.includes("/") ? [name] : []
   })
 }
@@ -560,7 +589,7 @@ const WORD_BREAK = /[\s'"|;&<>()=,:]+/
 const ask = Effect.fn("ShellTool.ask")(function* (
   ctx: Tool.Context,
   scan: Scan,
-  input: { command: string; cwd: string; scripts?: Map<string, string | undefined>; archive?: boolean },
+  input: { command: string; cwd: string; scripts?: Map<string, string | undefined>; archive?: boolean; archiveTargets?: string[] },
   always: string | undefined,
 ) {
   // A bare `cd x` or a text the parser found no command in still asks, as itself.
@@ -607,6 +636,9 @@ const ask = Effect.fn("ShellTool.ask")(function* (
       // U11 rule 4, set in autonomous mode only: this shell moves the paths to the archive instead of running the command.
       // The table lets a plain deletion through as `archived` only with this, so no deletion it lets through is for good.
       ...(input.archive ? { archive: true } : {}),
+      // C97 F2, set in autonomous mode only: the files a plain `cp` or `mv` would replace, which this shell moves to the
+      // archive right before it runs. The table lets a replacing copy or move through as `archived` only with them listed.
+      ...(input.archiveTargets && input.archiveTargets.length > 0 ? { archiveTargets: input.archiveTargets } : {}),
     },
     noAlways: rule === undefined,
     call,
@@ -883,6 +915,42 @@ export const ShellTool = Tool.define(
       return done(lines.filter(Boolean).join("\n"), result.missing.length > 0 && !found.force ? 1 : 0)
     })
 
+    /**
+     * C97 F2. With the mode on, what a plain `cp` or `mv` would replace is moved to the archive right before it runs, as a
+     * deletion is (row 151), and looked up again now, so a file that appeared since the gate is kept too. Returns the text
+     * for the agent, or a result that stops the command when the archive refused: then nothing is replaced.
+     */
+    const archiveReplaced = Effect.fn("ShellTool.archiveReplaced")(function* (
+      item: Risk.CopyMove,
+      command: string,
+      cwd: string,
+      ctx: Tool.Context,
+    ) {
+      const on = yield* modeOn(ctx)
+      if (!on) return
+      const paths = yield* Effect.promise(() => replacedBy(item, cwd))
+      if (paths.length === 0) return
+      const result = yield* Effect.promise(() =>
+        Archive.move({
+          directory: on.place.directory,
+          cwd,
+          paths,
+          requestID: ctx.callID ?? ctx.messageID,
+          record: Autonomy.archiveRecorder(on.autonomy.record, on.where),
+        }),
+      )
+      if (!result.ok)
+        return {
+          stopped: {
+            title: command,
+            metadata: { output: preview(result.message), exit: 1 as number | null, truncated: false, outputPath: undefined as string | undefined },
+            output: result.message,
+          },
+        }
+      if (!result.recorded) yield* Effect.logError("could not record an archived replacement", { archive: result.id })
+      return { text: result.moved.length > 0 ? Archive.movedText(result.moved.length, result.id) : "" }
+    })
+
     const shellEnv = Effect.fn("ShellTool.shellEnv")(function* (ctx: Tool.Context, cwd: string) {
       const extra = yield* plugin.trigger(
         "shell.env",
@@ -1130,14 +1198,16 @@ export const ShellTool = Tool.define(
                     ? yield* Effect.promise(() => scriptHashes(scriptFiles(tree.rootNode), cwd, instanceCtx))
                     : undefined
                   const found = posix ? deletion(tree.rootNode) : undefined
+                  const copy = on ? copyMove(tree.rootNode) : undefined
+                  const archiveTargets = copy ? yield* Effect.promise(() => replacedBy(copy, cwd)) : undefined
                   yield* ask(
                     ctx,
                     scan,
                     // `archive` below moves exactly when the mode is on and this is one plain deletion.
-                    { command: params.command, cwd, scripts, archive: Boolean(on) && typeof found === "object" },
+                    { command: params.command, cwd, scripts, archive: Boolean(on) && typeof found === "object", archiveTargets },
                     posix ? Reach.alwaysFor(params.command, cwd, instanceCtx) : undefined,
                   )
-                  return { ...scan, deletion: found, scripts }
+                  return { ...scan, deletion: found, scripts, copy }
                 }),
               )
               scanned.secretFiles.forEach(Secrets.learnFile)
@@ -1152,7 +1222,9 @@ export const ShellTool = Tool.define(
                 const changed = yield* scriptChanged(scanned.scripts, cwd, instanceCtx, ctx)
                 if (changed) return { ...changed, title: params.command }
               }
-              return yield* run(
+              const kept = scanned.copy ? yield* archiveReplaced(scanned.copy, params.command, cwd, ctx) : undefined
+              if (kept?.stopped) return kept.stopped
+              const result = yield* run(
                 {
                   shell,
                   command: params.command,
@@ -1163,6 +1235,7 @@ export const ShellTool = Tool.define(
                 },
                 ctx,
               )
+              return kept?.text ? { ...result, output: `${kept.text}\n${result.output}` } : result
             }),
         }
       })

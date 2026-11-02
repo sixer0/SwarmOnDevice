@@ -349,10 +349,19 @@ function readKind(words: readonly string[], cwd: string, instance: InstanceConte
 // `rtk <cmd>` runs `<cmd>` and shortens what it prints, so it is judged as `<cmd>`.
 const unwrapped = (piece: string) => (piece.startsWith("rtk ") ? piece.slice(4) : piece)
 
+/**
+ * C97 F1: a look with quoted arguments (`cat "a b.md"`, `find d -name '*.ts'`), as the program will get them. Only a look:
+ * each of its words is judged again as a flag or as a path, so a quote changes nothing about what is let through.
+ */
+function quotedLook(piece: string) {
+  const words = Risk.quotedWords(piece)
+  return words && READS.has(words[0]!) ? words : undefined
+}
+
 function single(piece: string, cwd: string, instance: InstanceContext): CommandKind | undefined {
   piece = unwrapped(piece)
   if (COMMIT.test(piece) || (BRANCH.test(piece) && !piece.includes(".."))) return gitAllowed(cwd, instance) ? "git-local" : undefined
-  const words = Risk.plainWords(piece)
+  const words = Risk.plainWords(piece) ?? quotedLook(piece)
   if (!words) return undefined
   if (FILE_OPS.has(words[0]!)) return fileOp(words, cwd, instance) ? "file-op" : undefined
   if (words[0] === "git" && words[1] === "add") {
@@ -540,15 +549,7 @@ function classifyUnrecoverableEdit(input: Input): Verdict {
   if (targets.some((file) => Reach.secret(file) || !Reach.readable(file))) return classifyConsented(input, targets, "secret_file")
   if (targets.some((file) => !Reach.inside(file, instance))) return refused("outside_write")
   if (targets.some((file) => Reach.sensitive(file, base))) return classifyConsented(input, targets, "sensitive_file")
-  const ordinary = targets.every((file) => {
-    const target = Reach.real(file)
-    return (
-      target !== undefined &&
-      Risk.ordinaryEdit(path.relative(base.worktree, file)) &&
-      Risk.ordinaryEdit(path.relative(Reach.real(base.worktree) ?? base.worktree, target))
-    )
-  })
-  return ordinary ? { class: "A", decidedBy: "gate" } : { class: "P", decidedBy: "agent", category: "edit-not-ordinary" }
+  return targets.every((file) => ordinaryFile(file, base)) ? { class: "A", decidedBy: "gate" } : { class: "P", decidedBy: "agent", category: "edit-not-ordinary" }
 }
 
 /**
@@ -599,13 +600,16 @@ function classifyEdit(input: Input): Verdict {
 function classifyBash(input: Input, checkClass: CheckClass): Verdict {
   const command = input.metadata.command
   if (typeof command !== "string" || !command) return held("not_routine")
-  if (command.split(WORD_BREAK).some((word) => word && Secrets.secretFile(word))) return held("secret_file")
+  if (command.split(WORD_BREAK).some((word) => word && Secrets.secretFile(word)))
+    return classifyConsentedCommand(input, command) ?? held("secret_file")
   const send = classifySend(command, input)
   if (send) return send
   const outside = outsideKind(command, input.cwd, input.instance)
   if (outside && (outsideProject(input.cwd, input.instance) || readsOutside(command, input.cwd, input.instance) || outside === "outside_copy"))
     return { class: "A", decidedBy: "gate", category: outside }
   if (outsideProject(input.cwd, input.instance)) return held("outside_folder")
+  const op = classifyFileOp(input, command)
+  if (op) return op
   const kind = routine(command, input.cwd, input.instance)
   if (!kind) {
     const form = scriptForm(command)
@@ -620,6 +624,122 @@ function classifyBash(input: Input, checkClass: CheckClass): Verdict {
   if (!input.canUndo) return held("no_undo")
   if (kind === "check" && checkClass === "D") return held("not_routine")
   return { class: "P", decidedBy: "agent", category: kind }
+}
+
+// C97 F2. `mkdir` and `touch` only add, or change a time; `cp` and `mv` only replace what is there once the shell has moved
+// it to the archive. None runs anything of the folder's, so neither its trust nor Undo has a say, as for a look.
+const MAKES = { mkdir: /^-[pv]+$/, touch: /^-c$/ }
+
+/**
+ * C97 F2: one `mkdir`, `touch`, `cp` or `mv` whose every path is an ordinary place in the folder. A new name is class A
+ * with or without Git. A file it would replace is A `archived` only when the shell said it moves that file to the archive
+ * first (`metadata.archiveTargets`, the paths as it worked them out); without that it is D `not_reversible`, since what is
+ * there would be gone for good. A folder copied or moved is P for the decider, and a name that changes what later runs is
+ * P too, as an edit of one is. Anything else here, a source beyond the folder included, is left to the rules below:
+ * rule 1 lets a copy in through `outside_copy`, and a move would change the original, so it never gets here as A.
+ */
+function classifyFileOp(input: Input, command: string): Verdict | undefined {
+  const words = Risk.plainWords(command) ?? Risk.quotedWords(command)
+  const name = words?.[0]
+  if (!words || (name !== "mkdir" && name !== "touch" && name !== "cp" && name !== "mv")) return undefined
+  if (!canRunIn(input.cwd, input.instance)) return undefined
+  if (programInProject(name, input.cwd, input.instance)) return held("program_not_trusted")
+  const instance = input.instance
+  // Without Git the worktree is `/`, and every name would be judged from the top of the disk.
+  const base = instance.worktree === "/" ? { ...instance, worktree: instance.directory } : instance
+  const roots = [input.cwd, instance.directory, instance.worktree].map((root) => Reach.real(root))
+  const place = (file: string) =>
+    Reach.inside(file, instance) && !Reach.sensitive(file, base) && !Reach.secret(file) && !roots.includes(Reach.real(file)) && !nearLibrary([file])
+  if (words.slice(1).some((word) => !word.startsWith("-") && word.split("/").includes(".."))) return undefined
+  if (name === "mkdir" || name === "touch") {
+    const args = words.slice(1)
+    const paths = args.filter((word) => !word.startsWith("-"))
+    if (paths.length === 0 || args.some((word) => word.startsWith("-") && !MAKES[name].test(word))) return undefined
+    return paths.every((word) => place(path.resolve(input.cwd, word))) ? { class: "A", decidedBy: "gate", category: "file-op" } : undefined
+  }
+  const item = Risk.copyMove(words)
+  const targets = item && Risk.copyTargets(item, input.cwd)
+  if (!item || !targets) return undefined
+  const sources = item.sources.map((word) => path.resolve(input.cwd, word))
+  // A copy only reads its source, which the read tool would show; a move takes it away, so it must be a place a write may be.
+  const from = (file: string) =>
+    item.name === "mv" ? place(file) : Reach.inside(file, instance) && Reach.readable(file) && !roots.includes(Reach.real(file))
+  if (!sources.every(from) || !targets.every(place)) return undefined
+  const replaced = Risk.replaced(targets)
+  if (replaced.some(isFolder)) return undefined
+  const folders = sources.some(isFolder)
+  if (folders) return replaced.length === 0 ? { class: "P", decidedBy: "agent", category: "file-op" } : undefined
+  const archived = input.metadata.archiveTargets
+  if (replaced.length > 0 && !(Array.isArray(archived) && replaced.every((file) => archived.includes(file)))) return held("not_reversible")
+  const ordinary = targets.every((file) => ordinaryFile(file, base)) && (item.name === "cp" || sources.every((file) => ordinaryFile(file, base)))
+  if (!ordinary) return { class: "P", decidedBy: "agent", category: "file-op" }
+  return replaced.length > 0 ? { class: "A", decidedBy: "gate", category: "archived" } : { class: "A", decidedBy: "gate", category: "file-op" }
+}
+
+function isFolder(file: string) {
+  try {
+    return fs.statSync(file, { throwIfNoEntry: false })?.isDirectory() === true
+  } catch {
+    // What the disk will not show could be a folder.
+    return true
+  }
+}
+
+/** Whether a write here is the job, by its name in the folder and by where a link takes it. */
+function ordinaryFile(file: string, base: InstanceContext) {
+  const target = Reach.real(file)
+  return (
+    target !== undefined &&
+    Risk.ordinaryEdit(path.relative(base.worktree, file)) &&
+    Risk.ordinaryEdit(path.relative(Reach.real(base.worktree) ?? base.worktree, target))
+  )
+}
+
+// C97 F4: the looks a mission needs on a file a person allowed, each with the flags that take no file and change nothing
+// about which file is read. `grep -f` reads its patterns from a file, so it is not here.
+const CONSENTED_LOOKS: Readonly<Record<string, RegExp>> = {
+  cat: /^-[nbsuv]+$/,
+  head: /^-(\d+|[nc]\d*)$/,
+  tail: /^-(\d+|[nc]\d*)$/,
+  wc: /^-[lwcmL]+$/,
+  grep: /^-[inlvwcHhsqxFE]+$/,
+}
+
+/**
+ * C97 F4, U11 rule 2 for the shell. `cat`, `grep`, `head`, `tail` or `wc` whose every file is one a person allowed, under
+ * one item, is A `consented`, with nothing after it but the output cut down on this machine (` | tail -N`). `source` and `.`
+ * of an allowed file run it, which a consent to read it does not cover: they go through the script screen as any script
+ * does (rule 6, `outside_path` included). Undefined for anything else, which stays held as a secret.
+ */
+function classifyConsentedCommand(input: Input, command: string): Verdict | undefined {
+  if (!canRunIn(input.cwd, input.instance)) return undefined
+  const body = unwrapped(command.replace(OUTPUT_TAIL, ""))
+  // `.` is no program name `quotedWords` takes, and it means what `source` does.
+  const words = Risk.quotedWords(body.startsWith(". ") ? "source" + body.slice(1) : body)
+  if (!words) return undefined
+  if (words[0] === "source") {
+    const file = words.length === 2 ? path.resolve(input.cwd, words[1]!) : undefined
+    if (!file || body !== command || consentFor(input, [file]) === undefined) return undefined
+    return classifyScript(input, { file: words[1]! })
+  }
+  const flags = CONSENTED_LOOKS[words[0]!]
+  if (!flags || programInProject(command, input.cwd, input.instance)) return undefined
+  const files: string[] = []
+  const args = words.slice(1)
+  for (const [index, word] of args.entries()) {
+    if (word.startsWith("-")) {
+      if (!flags.test(word)) return undefined
+      continue
+    }
+    // `head -n 5`: the count belongs to the flag before it.
+    if ((args[index - 1] === "-n" || args[index - 1] === "-c") && /^\+?\d+$/.test(word)) continue
+    files.push(word)
+  }
+  // grep's first word is what it looks for, not a file.
+  const named = words[0] === "grep" ? files.slice(1) : files
+  if (named.length === 0) return undefined
+  const id = consentFor(input, named.map((word) => path.resolve(input.cwd, word)))
+  return id === undefined ? undefined : { class: "A", decidedBy: "gate", category: "consented", consentID: id }
 }
 
 /**
@@ -732,9 +852,12 @@ function classifyPlanBash(input: Input, checkClass: CheckClass): Verdict {
   if (input.metadata.risk || typeof command !== "string") return refused("plan_mode")
   const verdict = classifyBash(input, checkClass)
   // Sending a copy away is not looking either (rule 3 is build's).
-  if (verdict.class === "A" && verdict.category !== "outside_copy" && verdict.via !== "outward") return verdict
+  if (verdict.class === "A" && !PLAN_WRITES.has(verdict.category) && verdict.via !== "outward") return verdict
   return verdict.class === "D" && onlyLookPieces(command) ? verdict : refused("plan_mode")
 }
+
+// What the table lets through as A that writes, which the plan agent never does.
+const PLAN_WRITES = new Set<Verdict["category"]>(["outside_copy", "file-op", "archived"])
 
 /** Whether every piece of `[cd <path> && ]<look>[ && <look>...][ | tail -N]` is a program that only looks. */
 function onlyLookPieces(command: string) {

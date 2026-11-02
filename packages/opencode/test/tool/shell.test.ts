@@ -1684,6 +1684,108 @@ describe("tool.shell archive in autonomous mode", () => {
       )
     }),
   )
+
+  // C97 F2: a plain `cp`/`mv` that would replace a file moves that file to the archive first, and says so to the gate.
+  const write = (file: string, text: string) =>
+    Effect.promise(async () => {
+      await mkdir(path.dirname(file), { recursive: true })
+      await Bun.write(file, text)
+    })
+  const text = (file: string) => Effect.promise(() => Bun.file(file).text())
+
+  for (const [command, replaced] of [
+    ["cp docs/a.md docs/b.md", "docs/b.md"],
+    ["mv docs/a.md docs/b.md", "docs/b.md"],
+    ['cp "docs/a.md" docs/old', "docs/old/a.md"],
+  ] as const)
+    posixOnly(`C97 F2: ${command} keeps the file it replaces in the archive, and the gate lets it through as archived`, () =>
+      Effect.gen(function* () {
+        const tmp = yield* tmpdirScoped()
+        yield* write(path.join(tmp, "docs/a.md"), "new\n")
+        yield* write(path.join(tmp, replaced), "old\n")
+        const lines: unknown[] = []
+        yield* runIn(
+          tmp,
+          Effect.gen(function* () {
+            const asked: Record<string, unknown>[] = []
+            const tool = yield* archiveTool(true, lines)
+            const result = yield* tool.execute({ command }, yield* gated(asked))
+            expect(asked).toContainEqual(expect.objectContaining({ command, archiveTargets: [path.join(tmp, replaced)] }))
+            expect(asked).toContainEqual({ verdict: { class: "A", decidedBy: "gate", category: "archived" } })
+            expect(result.metadata.exit).toBe(0)
+            const id = result.output.match(/\.swarm\/archive\/(\S+) instead/)?.[1]
+            expect(id).toBeDefined()
+            expect(yield* text(path.join(tmp, replaced))).toBe("new\n")
+            expect(yield* text(path.join(tmp, ".swarm", "archive", id!, replaced))).toBe("old\n")
+            expect(lines).toEqual([expect.objectContaining({ type: "outcome", outcome: "archived", archive: id })])
+          }),
+        )
+      }),
+    )
+
+  posixOnly("C97 F2: a copy or move to a new name sends no word, is A `file-op`, and archives nothing", () =>
+    Effect.gen(function* () {
+      const tmp = yield* tmpdirScoped()
+      yield* write(path.join(tmp, "docs/a.md"), "new\n")
+      yield* runIn(
+        tmp,
+        Effect.gen(function* () {
+          for (const command of ["cp docs/a.md docs/c.md", "mv docs/c.md docs/d.md", "mkdir -p out/deep", "touch out/e.md"]) {
+            const asked: Record<string, unknown>[] = []
+            const result = yield* (yield* archiveTool(true, [])).execute({ command }, yield* gated(asked))
+            expect([command, asked.some((item) => "archiveTargets" in item)]).toEqual([command, false])
+            expect([command, asked.filter((item) => "verdict" in item)]).toEqual([command, [{ verdict: { class: "A", decidedBy: "gate", category: "file-op" } }]])
+            expect(result.metadata.exit).toBe(0)
+          }
+          expect(yield* text(path.join(tmp, "docs/d.md"))).toBe("new\n")
+          expect(yield* exists(path.join(tmp, "out/e.md"))).toBe(true)
+          expect(yield* exists(path.join(tmp, ".swarm"))).toBe(false)
+        }),
+      )
+    }),
+  )
+
+  posixOnly("C97 F2: with the mode off a replacing copy sends no word, is D `not_reversible`, and replaces nothing", () =>
+    Effect.gen(function* () {
+      const tmp = yield* tmpdirScoped()
+      yield* write(path.join(tmp, "docs/a.md"), "new\n")
+      yield* write(path.join(tmp, "docs/b.md"), "old\n")
+      yield* runIn(
+        tmp,
+        Effect.gen(function* () {
+          const asked: Record<string, unknown>[] = []
+          const exit = yield* (yield* archiveTool(false, [])).execute({ command: "cp docs/a.md docs/b.md" }, yield* gated(asked)).pipe(Effect.exit)
+          expect(Exit.isFailure(exit)).toBe(true)
+          expect(asked.some((item) => "archiveTargets" in item)).toBe(false)
+          expect(asked).toContainEqual({ verdict: { class: "D", decidedBy: "gate", category: "not_reversible" } })
+          expect(yield* text(path.join(tmp, "docs/b.md"))).toBe("old\n")
+        }),
+      )
+    }),
+  )
+
+  posixOnly("C97 F2: a source beyond the folder replacing a file is not let through, and neither file changes", () =>
+    Effect.gen(function* () {
+      const tmp = yield* tmpdirScoped()
+      const away = yield* tmpdirScoped()
+      yield* write(path.join(away, "n.md"), "away\n")
+      yield* write(path.join(tmp, "docs/b.md"), "old\n")
+      yield* runIn(
+        tmp,
+        Effect.gen(function* () {
+          for (const command of [`cp ${path.join(away, "n.md")} docs/b.md`, `mv ${path.join(away, "n.md")} docs/m.md`]) {
+            const asked: Record<string, unknown>[] = []
+            const exit = yield* (yield* archiveTool(true, [])).execute({ command }, yield* gated(asked)).pipe(Effect.exit)
+            expect([command, Exit.isFailure(exit)]).toEqual([command, true])
+            expect(asked.some((item) => "verdict" in item && (item.verdict as { class: string }).class === "A")).toBe(false)
+          }
+          expect(yield* text(path.join(tmp, "docs/b.md"))).toBe("old\n")
+          expect(yield* text(path.join(away, "n.md"))).toBe("away\n")
+          expect(yield* exists(path.join(tmp, "docs/m.md"))).toBe(false)
+        }),
+      )
+    }),
+  )
 })
 
 // U11 rule 6 (row 154): in autonomous mode a script is hashed before the gate judges it and again right before it runs.

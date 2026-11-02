@@ -102,23 +102,66 @@ function regexLiteral(text: string, match: RegExpMatchArray) {
   return /\/[gimsuyd]*$/.test(match[0])
 }
 
+// Any word that could be a relative path: `link-away/x`, `out.txt`, `../a`. Most name nothing on disk and resolve inside.
+const RELATIVE = /(?<![\w.@%/\\$~:-])[\w.@%-]+(?:\/[\w.@%-]*)*/g
+// More links than this in one path is a loop, which the system refuses as well.
+const MAX_LINKS = 40
+
 /** Where the text's relative paths start from, and the folder they must stay in. */
 export type Place = { readonly roots: readonly string[]; readonly cwd: string }
 
 /**
- * Whether the text names an absolute path, or a `..` path from `place.cwd`, that is not inside the folder. Without a place
- * every absolute path and every `..` counts. A `#!` line is how the file is run, not a path it uses.
+ * Whether the text names a path that is not inside the folder once links are followed. Every absolute path and every
+ * relative word from `place.cwd` is resolved on disk (row 250, F1): `link-away/x`, where `link-away` is a link in the
+ * folder to a place beyond it, is beyond the folder although its text reads as inside. Without a place every absolute
+ * path and every `..` counts and nothing is resolved. A `#!` line is how the file is run, not a path it uses.
  */
 function escapes(text: string, place?: Place) {
   const body = text.replace(/^#![^\n]*/, "")
-  const out = (file: string) =>
-    !place || !place.roots.some((root) => {
+  const absolute = [...body.matchAll(ABSOLUTE)].filter((match) => !regexLiteral(body, match) && !DEVICES.test(match[0]))
+  if (!place) return absolute.length > 0 || [...body.matchAll(UPWARD)].length > 0
+  const roots = [...new Set(place.roots.flatMap((root) => [root, physical(path.parse(root).root, root)]))]
+  const inside = (file: string) =>
+    roots.some((root) => {
       const relative = path.relative(root, file)
       return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative))
     })
-  const absolute = [...body.matchAll(ABSOLUTE)].filter((match) => !regexLiteral(body, match))
-  if (absolute.some(([found]) => !DEVICES.test(found) && out(path.resolve(found)))) return true
-  return [...body.matchAll(UPWARD)].some(([found]) => out(path.resolve(place?.cwd ?? "/", found)))
+  const cwd = physical(path.parse(place.cwd).root, path.resolve(place.cwd))
+  const relative = new Set([...body.matchAll(RELATIVE)].map((match) => match[0]))
+  return (
+    absolute.some((match) => !inside(physical(path.parse(match[0]).root, match[0]))) ||
+    [...relative].some((found) => !inside(physical(cwd, found)))
+  )
+}
+/**
+ * Where `rel`, from the real folder `from`, lands on disk: each part that exists is followed through its link, with `..`
+ * taken from where the link led rather than from the text, and the rest is joined on from the nearest part that exists. A
+ * dangling link is followed too, since writing through it makes the file at its target.
+ */
+function physical(from: string, rel: string) {
+  const parts = rel.split(/[\\/]+/)
+  let current = from
+  let links = 0
+  while (parts.length > 0) {
+    const part = parts.shift()!
+    if (part === "" || part === ".") continue
+    if (part === "..") {
+      current = path.dirname(current)
+      continue
+    }
+    const next = path.join(current, part)
+    const stat = attempt(() => fs.lstatSync(next))
+    if (!stat) return path.resolve(next, ...parts)
+    if (!stat.isSymbolicLink()) {
+      current = next
+      continue
+    }
+    const target = links++ < MAX_LINKS ? attempt(() => fs.readlinkSync(next)) : undefined
+    if (target === undefined) return next
+    parts.unshift(...target.split(/[\\/]+/))
+    if (path.isAbsolute(target)) current = path.parse(target).root
+  }
+  return current
 }
 
 const FLAGS = Object.keys(PATTERNS) as Flag[]

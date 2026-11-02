@@ -76,8 +76,19 @@ export const make = Effect.gen(function* () {
    * Runs the one call an approved entry showed, through its own tool and in the root's context. It asks like any call:
    * the grant just given is what lets it through, so other content is held anew and a class X call is still refused.
    * Undefined when nothing here can run it, and the answer only wakes the agent then.
+   *
+   * `granted` is what the answer already granted for this call: the entry's prompt and its `follows`. A tool can ask more
+   * than once for one call (a read beyond the folder asks `external_directory`, then `read`), and the entry showed only
+   * one of those prompts. The person approved the call, so each other prompt of that same call gets a grant of its own
+   * just before it asks (C97 F3). It still goes through the gate, so class X is refused, and the grant is used by that
+   * one prompt.
    */
-  const rerun = Effect.fnUntraced(function* (root: SessionID, requestID: PermissionV1.ID, call: string) {
+  const rerun = Effect.fnUntraced(function* (
+    root: SessionID,
+    requestID: PermissionV1.ID,
+    call: string,
+    granted: Pick<PermissionV1.Request, "permission" | "patterns">[],
+  ) {
     const bound = decodeCall(call)
     if (Option.isNone(bound) || !registry || !agents) return undefined
     const setup = yield* Effect.gen(function* () {
@@ -102,23 +113,28 @@ export const make = Effect.gen(function* () {
         metadata: () => Effect.void,
         // A real agent's call, with the stricter answer where this cannot know: no snapshot is assumed.
         trust: { canUndo: false },
-        ask: ({ planLimited, ...input }) =>
-          permission
-            .ask({
-              ...input,
-              sessionID: root,
-              agent: setup.agent.name,
-              canUndo: false,
-              // As `session/tools.ts` does for one request under the plan agent's limits: an edit allow asks instead.
-              ruleset: planLimited
-                ? setup.ruleset.map((rule) =>
-                    rule.action === "allow" && Wildcard.match("edit", rule.permission)
-                      ? { permission: "edit", pattern: rule.pattern, action: "ask" as const }
-                      : rule,
-                  )
-                : setup.ruleset,
-            })
-            .pipe(Effect.orDie),
+        ask: ({ planLimited, ...input }) => {
+          // As `session/tools.ts` does for one request under the plan agent's limits: an edit allow asks instead.
+          const ruleset = planLimited
+            ? setup.ruleset.map((rule) =>
+                rule.action === "allow" && Wildcard.match("edit", rule.permission)
+                  ? { permission: "edit", pattern: rule.pattern, action: "ask" as const }
+                  : rule,
+              )
+            : setup.ruleset
+          return Effect.gen(function* () {
+            const covered = granted.findIndex((item) => samePrompt(item, input))
+            if (covered >= 0) granted.splice(covered, 1)
+            // As `Permission.ask` writes the call down. What cannot be written down is no call anyone approved.
+            const asked = yield* Effect.try({ try: () => JSON.stringify(input.call), catch: String }).pipe(
+              Effect.orElseSucceed(() => undefined),
+            )
+            // Only a prompt of this very call, and only one that will ask: a grant nothing asks for would stay behind.
+            if (covered < 0 && input.call && asked === call && willAsk(input, ruleset))
+              yield* permission.grant({ sessionID: root, permission: input.permission, patterns: input.patterns, call })
+            yield* permission.ask({ ...input, sessionID: root, agent: setup.agent.name, canUndo: false, ruleset })
+          }).pipe(Effect.orDie)
+        },
       })
       .pipe(Effect.exit)
     const result =
@@ -180,7 +196,7 @@ export const make = Effect.gen(function* () {
       // nothing here can run is left to its grant, and the agent is told to do it.
       const ran: { ran: boolean; output: string }[] = []
       for (const held of calls) {
-        const result = yield* rerun(root, held.requestID, held.call)
+        const result = yield* rerun(root, held.requestID, held.call, [request, ...(held.follows ?? [])])
         if (result) ran.push(result)
       }
       yield* send(root, ran.length > 0 ? ranText(request, ran, calls.length - ran.length) : allowedText(request)).pipe(
@@ -213,6 +229,30 @@ function allowedText(request: PermissionV1.Request) {
 }
 
 const decodeCall = Schema.decodeUnknownOption(Schema.fromJsonString(PermissionV1.ToolCall))
+
+function samePrompt(
+  a: Pick<PermissionV1.Request, "permission" | "patterns">,
+  b: Pick<PermissionV1.Request, "permission" | "patterns">,
+) {
+  return (
+    a.permission === b.permission &&
+    a.patterns.length === b.patterns.length &&
+    a.patterns.every((pattern, index) => pattern === b.patterns[index])
+  )
+}
+
+/**
+ * Whether `Permission.ask` will look for a grant on this prompt: a pattern its rules ask about, none they deny. An
+ * "always" a person gave earlier is not visible here; such a prompt passes without the grant, which then stays unused.
+ */
+function willAsk(
+  input: Pick<PermissionV1.AskInput, "permission" | "patterns" | "harmless">,
+  ruleset: PermissionV1.Ruleset,
+) {
+  const rules = input.patterns.map((pattern) => Permission.evaluate(input.permission, pattern, ruleset))
+  if (rules.some((rule) => rule.action === "deny")) return false
+  return rules.some((rule) => rule.action === "ask" && !(input.harmless && Permission.isShippedCatchAll(rule)))
+}
 
 /** What the agent is told of a call that did not go through: the error a tool result would have carried. */
 function failure(cause: Cause.Cause<unknown>) {

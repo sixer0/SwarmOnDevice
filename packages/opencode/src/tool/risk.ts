@@ -5,6 +5,8 @@
 // It used to go further and let proven reads run unprompted. Three passes found a new disagreement between this parser's
 // words and the shell's each time, so safe reads moved to tools with no shell in them: read, glob, grep and git.
 
+import fs from "node:fs"
+import path from "node:path"
 import { BashArity } from "@/permission/arity"
 
 export type Risk = "irreversible" | "remote"
@@ -175,6 +177,72 @@ const GIT_RULE_FLAGS: Record<string, ReadonlySet<string>> = {
 /** The words of a command that can only be one program with those words, or undefined. */
 export function plainWords(command: string) {
   return PLAIN_COMMAND.test(command) ? command.split(" ") : undefined
+}
+
+// `plainWords` with whole-word quotes as well: single quotes taken as written, and double quotes holding no `$`, backquote,
+// `\` or `!`, so no shell rewrites what is inside. The program's name stays bare, a quote never joins a bare part, and no
+// control, format or line-separator character appears anywhere, so the line a person reads is the line that runs.
+const QUOTED_WORD = String.raw`[\w./@%+:,-][\w./@%+:,=-]*|'[^']*'|"[^"$` + "`" + String.raw`\\!]*"`
+const QUOTED_COMMAND = new RegExp(String.raw`^[A-Za-z0-9_][A-Za-z0-9_.+-]*(?: (?:${QUOTED_WORD}))*$`)
+const UNSEEN = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u
+
+/**
+ * The words of one program with literal arguments, quotes removed, or undefined. Only for a caller that judges every word
+ * as the program will see it: a quoted word may hold a space, a `*` or a `;`, which reach the program as they are.
+ */
+export function quotedWords(command: string) {
+  if (UNSEEN.test(command) || !QUOTED_COMMAND.test(command)) return undefined
+  return [...command.matchAll(new RegExp(QUOTED_WORD, "g"))].map((match) => {
+    const word = match[0]
+    return word.startsWith("'") || word.startsWith('"') ? word.slice(1, -1) : word
+  })
+}
+
+/** A plain `cp` or `mv`, as both the shell and the autonomy table read it (C97 F2). */
+export type CopyMove = { name: "cp" | "mv"; sources: string[]; dest: string }
+
+// Flags that change nothing about where the files land. `-n`, `-i`, `-t`, `--` and long options are not here, so the
+// targets worked out below are always the ones the program writes.
+const COPY_MOVE_FLAGS = { cp: /^-[prRfv]+$/, mv: /^-[fv]+$/ }
+
+/** `cp`/`mv` with flags that do not move the target and two or more names, from unquoted words, or undefined. */
+export function copyMove(words: readonly string[]): CopyMove | undefined {
+  const name = words[0]
+  if (name !== "cp" && name !== "mv") return undefined
+  const args = words.slice(1)
+  if (args.some((word) => word.startsWith("-") && !COPY_MOVE_FLAGS[name].test(word))) return undefined
+  const names = args.filter((word) => !word.startsWith("-"))
+  if (names.length < 2) return undefined
+  return { name, sources: names.slice(0, -1), dest: names.at(-1)! }
+}
+
+/**
+ * The absolute paths `cp`/`mv` writes, as the program picks them: into a folder that is there under each source's name,
+ * otherwise the name given. Undefined when the program would refuse, such as two sources and no folder to put them in.
+ */
+export function copyTargets(item: CopyMove, cwd: string) {
+  const dest = path.resolve(cwd, item.dest)
+  const found = look(() => fs.statSync(dest, { throwIfNoEntry: false }))
+  if (found === null) return undefined
+  if (found?.isDirectory() !== true) return item.sources.length === 1 ? [dest] : undefined
+  return item.sources.map((source) => path.join(dest, path.basename(path.resolve(cwd, source))))
+}
+
+/**
+ * Of these targets, the ones there now that a copy or a move would replace, a link as the link. One that cannot be looked
+ * at counts as there, so it is never taken for a new name.
+ */
+export function replaced(targets: readonly string[]) {
+  return targets.filter((file) => look(() => fs.lstatSync(file, { throwIfNoEntry: false })) !== undefined)
+}
+
+// `null` when the disk would not say (a file where a folder should be, no access), so a caller can tell that from "not there".
+function look(read: () => fs.Stats | undefined) {
+  try {
+    return read()
+  } catch {
+    return null
+  }
 }
 
 /** What an "Allow always" may cover for this command, or undefined when it should not be offered at all. */

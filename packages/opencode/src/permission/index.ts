@@ -63,6 +63,11 @@ export interface Interface {
   /** Lets one later call through without asking, for what the user allowed after the agent had carried on. */
   readonly grant: (input: Grant) => Effect.Effect<void>
   readonly list: () => Effect.Effect<ReadonlyArray<PermissionV1.Request>>
+  /**
+   * After a person ticks consent items of a root's list: closes what the tick answered and returns it, as `reply` does,
+   * for the caller to run (C98). Optional only so stand-ins elsewhere need not change; the real service always has it.
+   */
+  readonly consentTicked?: (root: SessionID) => Effect.Effect<ReadonlyArray<Answered>>
 }
 
 interface PendingEntry {
@@ -78,6 +83,18 @@ interface PendingEntry {
    * its version. Gone after a restart, along with what was shown.
    */
   calls?: HeldCall[]
+  /**
+   * How many consent items the person had allowed when the mode held this, or last added a call to it. A tick since is
+   * an answer the entry never saw, so a repeat goes to the gate again instead of joining (C98).
+   */
+  given?: number
+  /**
+   * The list's version when it is not its length: a consent tick that let some calls through leaves the rest under a new
+   * version, so a click on the list as it was is no answer (C98).
+   */
+  version?: number
+  /** What each call on the list asked, by its `call`, for the table to look at again when a consent item is ticked. */
+  asks?: ReadonlyMap<string, { input: PermissionV1.AskInput; userCatchAll: boolean }>
   deferred: Deferred.Deferred<void, PermissionV1.RejectedError | PermissionV1.CorrectedError>
 }
 
@@ -429,29 +446,12 @@ const layer = Layer.effect(
       }
     })
 
-    /** What autonomous mode does with this request. Undefined when its root is not in the mode, and nothing changes then. */
-    const gate = Effect.fn("Permission.gate")(function* (
-      input: PermissionV1.AskInput,
-      requestID: PermissionV1.ID,
-      userCatchAll: boolean,
-      // Takes a place in the root's queue, in one step with counting it. False when there is none left, and the id of the
-      // entry it joined when one of the family already holds the same permission and patterns.
-      hold: (root: SessionID, category: PermissionV1.DeferredCategory) => Effect.Effect<boolean | PermissionV1.ID>,
-      // A grant from a person's answer covers it, so only a refusal is left to find, and a line that says the grant was used.
-      followed = false,
-      // Let through by an "always" a person gave earlier: theirs to give, so it runs, but it was given outside the mode.
-      standing = false,
-    ) {
+    /** What the table makes of a call now, with what a person allowed of the root's consent list. No line, no decider. */
+    const judge = Effect.fnUntraced(function* (input: PermissionV1.AskInput, userCatchAll: boolean, root: SessionID) {
       const instance = yield* InstanceState.context
-      const root = yield* rootOf(input.sessionID)
-      const directory = root.directory ?? instance.directory
-      yield* autonomy.markMode({ root: root.id, directory })
-      const check = yield* autonomy.check({ root: root.id, directory })
-      if (!check.on) return undefined
-
       // Undefined when it could not be read, and a lineage nobody can place is held to the plan agent's limits.
       const last = yield* sessions
-        .findMessage(root.id, (message) => message.info.role === "user")
+        .findMessage(root, (message) => message.info.role === "user")
         .pipe(
           Effect.map(Option.getOrUndefined),
           Effect.map((message) => ({ agent: message?.info.role === "user" ? message.info.agent : undefined })),
@@ -465,7 +465,7 @@ const layer = Layer.effect(
       const canUndo = input.canUndo ?? false
       // U11 rules 2 and 3: what the person allowed of this root's list, and where this call would send something. Memory
       // only, so after a restart there is no list and everything on it is held again.
-      const consent = yield* autonomy.consent(root.id).pipe(Effect.catchCause(() => Effect.succeed(undefined)))
+      const consent = yield* autonomy.consent(root).pipe(Effect.catchCause(() => Effect.succeed(undefined)))
       const recheck = yield* Recheck
       const outward = yield* Effect.promise(() => outwardOf(input, cwd ?? instance.directory, consent, recheck))
       const context = { consent: consented(consent), outward }
@@ -499,6 +499,29 @@ const layer = Layer.effect(
       const used = usedConsent(classified, context)
       const table: Answer = used === "unknown" ? held("not_routine") : classified
       const via = used === "consent" || used === "outward" ? used : undefined
+      return { last, cwd, canUndo, table, via }
+    })
+
+    /** What autonomous mode does with this request. Undefined when its root is not in the mode, and nothing changes then. */
+    const gate = Effect.fn("Permission.gate")(function* (
+      input: PermissionV1.AskInput,
+      requestID: PermissionV1.ID,
+      userCatchAll: boolean,
+      // Takes a place in the root's queue, in one step with counting it. False when there is none left, and the id of the
+      // entry it joined when one of the family already holds the same permission and patterns.
+      hold: (root: SessionID, category: PermissionV1.DeferredCategory) => Effect.Effect<boolean | PermissionV1.ID>,
+      // A grant from a person's answer covers it, so only a refusal is left to find, and a line that says the grant was used.
+      followed = false,
+      // Let through by an "always" a person gave earlier: theirs to give, so it runs, but it was given outside the mode.
+      standing = false,
+    ) {
+      const instance = yield* InstanceState.context
+      const root = yield* rootOf(input.sessionID)
+      const directory = root.directory ?? instance.directory
+      yield* autonomy.markMode({ root: root.id, directory })
+      const check = yield* autonomy.check({ root: root.id, directory })
+      if (!check.on) return undefined
+      const { last, cwd, canUndo, table, via } = yield* judge(input, userCatchAll, root.id)
       // An "always" on what the mode lets anyway answers nothing: an ordinary edit is on record as the gate's, not a person's.
       const answered =
         (followed || standing) &&
@@ -750,6 +773,13 @@ const layer = Layer.effect(
       return (yield* autonomy.check({ root: root.id, directory: root.directory ?? instance.directory })).on
     })
 
+    /** How many of the root's consent items a person has allowed. None readable counts as none: nothing is looked at again. */
+    const consentGiven = (root: SessionID) =>
+      autonomy.consent(root).pipe(
+        Effect.map((consent) => consent?.given.size ?? 0),
+        Effect.catchCause(() => Effect.succeed(0)),
+      )
+
     const ask = Effect.fn("Permission.ask")(function* (input: PermissionV1.AskInput) {
       const { approved, away, grants, pending } = yield* InstanceState.get(state)
       const { ruleset, harmless, noAlways, follows, call: toolCall, ...request } = input
@@ -817,10 +847,11 @@ const layer = Layer.effect(
       // The state as it is now: the folder may have been closed and opened while the decider was thinking.
       const held: HeldCall = { requestID: id, sessionID: request.sessionID, call, follows }
       const hold = (root: SessionID, category: PermissionV1.DeferredCategory) =>
-        InstanceState.get(state).pipe(
-          Effect.map((current): boolean | PermissionV1.ID => {
+        Effect.all([InstanceState.get(state), consentGiven(root)]).pipe(
+          Effect.map(([current, given]): boolean | PermissionV1.ID => {
             // One entry per root, permission and patterns (E3). Another call joins its list, and the entry shows it, with
             // the list's new version for the answer to name. A full list starts another entry rather than lose a call.
+            // Only an open entry: one a person answered is gone from `pending`, so nothing can join it.
             const joined = [...current.pending.values()].find(
               (item) =>
                 item.root === root &&
@@ -829,14 +860,23 @@ const layer = Layer.effect(
                 item.calls.length < QUEUE_LIMIT &&
                 samePrompt(item.info, asked),
             )
+            // Back at the gate after a consent tick and held all the same: already on the list, so the version stays.
+            if (joined?.calls?.some((other) => other.call === call)) {
+              current.pending.set(joined.info.id, { ...joined, given })
+              return joined.info.id
+            }
             if (joined?.calls) {
               const calls = [...joined.calls, held]
+              const version = (joined.version ?? joined.calls.length) + 1
               current.pending.set(joined.info.id, {
                 ...joined,
+                given,
                 calls,
+                version,
+                asks: new Map([...(joined.asks ?? []), [call, { input, userCatchAll }]]),
                 info: {
                   ...joined.info,
-                  metadata: { ...joined.info.metadata, calls: shownCalls(calls), version: calls.length },
+                  metadata: { ...joined.info.metadata, calls: shownCalls(calls), version },
                 },
               })
               return joined.info.id
@@ -850,7 +890,17 @@ const layer = Layer.effect(
               movedOnAt: Date.now(),
               deferred: true,
             }
-            current.pending.set(id, { info: moved, deferred, noAlways, follows, category, root, calls: [held] })
+            current.pending.set(id, {
+              info: moved,
+              deferred,
+              noAlways,
+              follows,
+              category,
+              root,
+              calls: [held],
+              given,
+              asks: new Map([[call, { input, userCatchAll }]]),
+            })
             return true
           }),
         )
@@ -891,7 +941,13 @@ const layer = Layer.effect(
         return yield* new PermissionV1.AwayError()
       }
       // With the mode off the entry stays answerable, and this is a new request that gets an ordinary prompt.
-      if (waiting?.category && (yield* duplicate(input, id, waiting)))
+      // A consent item ticked since the entry was held may be what it waits on (C98): the gate looks again, and holding it
+      // still adds the call to that entry without a new version.
+      const ticked =
+        waiting?.root !== undefined &&
+        waiting.given !== undefined &&
+        (yield* consentGiven(waiting.root)) > waiting.given
+      if (waiting?.category && !ticked && (yield* duplicate(input, id, waiting)))
         return yield* new PermissionV1.DeferredError({ category: waiting.category })
 
       const gated = yield* gate(input, id, userCatchAll, hold)
@@ -952,7 +1008,7 @@ const layer = Layer.effect(
       if (!existing) return yield* new PermissionV1.NotFoundError({ requestID: input.requestID })
       // A yes is good for the list the person saw. One that grew since is shown again, unanswered, and nothing is let
       // through. An answer without a version counts as version 1, which is all an entry showed until it grew.
-      const listed = existing.calls?.length ?? 1
+      const listed = existing.version ?? existing.calls?.length ?? 1
       if (input.reply !== "reject" && listed > 1 && (input.version ?? 1) !== listed) {
         yield* Effect.logInfo("shown again", { id: existing.info.id, version: input.version ?? 1, listed })
         yield* events.publish(Event.Asked, existing.info)
@@ -1051,7 +1107,100 @@ const layer = Layer.effect(
       })
     })
 
-    return Service.of({ ask, reply, grant, list })
+    /**
+     * A person ticked consent items of this root's list (C98). Each open entry is looked at again by the table: a call the
+     * tick now lets through (class A via consent or outward) leaves the list with its line, and an entry with nothing left
+     * is closed as approved. What comes back is for the caller to act on as on a person's approval, which runs those calls.
+     */
+    const consentTicked = Effect.fn("Permission.consentTicked")(function* (root: SessionID) {
+      const { away, pending } = yield* InstanceState.get(state)
+      const instance = yield* InstanceState.context
+      const directory = (yield* rootOf(root)).directory ?? instance.directory
+      const given = yield* consentGiven(root)
+      const open = [...pending.values()].filter(
+        (item) => item.root === root && item.info.movedOnAt && item.calls !== undefined && item.asks !== undefined,
+      )
+      const answers: Answered[] = []
+      for (const entry of open) {
+        const covered: {
+          held: HeldCall
+          asked: PermissionV1.AskInput
+          covered: Effect.Success<ReturnType<typeof judge>> & { via: "consent" | "outward" }
+        }[] = []
+        for (const held of entry.calls!) {
+          const asked = entry.asks!.get(held.call)
+          if (!asked) continue
+          const result = yield* judge(asked.input, asked.userCatchAll, root)
+          if (result.table.class === "A" && result.via)
+            covered.push({ held, asked: asked.input, covered: { ...result, via: result.via } })
+        }
+        // Looked at for this tick: a repeat joins it again without the gate until the next one.
+        pending.set(entry.info.id, { ...entry, given })
+        if (covered.length === 0) continue
+        for (const item of covered)
+          yield* autonomy
+            .record(root, {
+              type: "decision",
+              sessionID: item.held.sessionID,
+              requestID: item.held.requestID,
+              agent: "person",
+              rootAgent: item.covered.last?.agent,
+              directory,
+              permission: item.asked.permission,
+              patterns: item.asked.patterns,
+              class: "A",
+              category: item.covered.table.category ?? "consented",
+              canUndo: item.covered.canUndo,
+              decidedBy: "person",
+              decision: "allow",
+              via: item.covered.via,
+              consentID: item.covered.table.consentID,
+              reason: "a consent item the person ticked after it was held",
+            })
+            // Logged by record. The call still goes through the gate when it runs, and leaves its own line then.
+            .pipe(Effect.ignore)
+        const rest = entry.calls!.filter((held) => !covered.some((item) => item.held === held))
+        const calls = covered.map((item) => item.held)
+        if (rest.length === 0) {
+          pending.delete(entry.info.id)
+          away.delete(entry.info.sessionID)
+          yield* close(entry, "approved_later", "person")
+          yield* events.publish(Event.Replied, {
+            sessionID: entry.info.sessionID,
+            requestID: entry.info.id,
+            reply: "once",
+          })
+          answers.push({ ...entry.info, follows: calls[0]!.follows, call: calls[0]!.call, calls })
+          continue
+        }
+        // Some calls are still waiting: the list shows only those, under a new version.
+        const version = (entry.version ?? entry.calls!.length) + 1
+        const first = rest[0]!
+        const info: PermissionV1.Request = {
+          ...entry.info,
+          metadata: {
+            ...entry.info.metadata,
+            ...(entry.info.metadata.call !== undefined && { call: JSON.parse(first.call) }),
+            calls: shownCalls(rest),
+            version,
+          },
+        }
+        pending.set(entry.info.id, {
+          ...entry,
+          info,
+          follows: first.follows,
+          given,
+          version,
+          calls: rest,
+          asks: new Map([...entry.asks!].filter(([call]) => rest.some((held) => held.call === call))),
+        })
+        yield* events.publish(Event.Asked, info)
+        answers.push({ ...entry.info, follows: calls[0]!.follows, call: calls[0]!.call, calls })
+      }
+      return answers
+    })
+
+    return Service.of({ ask, reply, grant, list, consentTicked })
   }),
 )
 
