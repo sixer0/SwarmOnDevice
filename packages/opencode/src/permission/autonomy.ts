@@ -26,6 +26,7 @@ import { ProjectTrust } from "@opencode-ai/core/project/trust"
 import { AbsolutePath } from "@opencode-ai/core/schema"
 import { SessionTable } from "@opencode-ai/core/session/sql"
 import { PermissionV1 } from "@opencode-ai/core/v1/permission"
+import { AutonomyEvent } from "@opencode-ai/schema/autonomy-event"
 import { QuestionV1 } from "@opencode-ai/schema/question-v1"
 import { SessionStatusEvent } from "@opencode-ai/schema/session-status-event"
 import { GlobalBus, type GlobalEvent } from "@/bus/global"
@@ -62,14 +63,7 @@ export const BLOCKED_DEBOUNCE_MS = 5000
  * Sent by the code below on what the code knows, never because of what a model or a file says, so it carries a count
  * and nothing that was written by anyone. A spend limit or a repeating call needs none of this: its prompt is the notice.
  */
-export const Blocked = EventV2.define({
-  type: "autonomy.blocked",
-  schema: {
-    sessionID: Schema.String,
-    level: Schema.Literals(["b0", "b1"]),
-    count: Schema.Int,
-  },
-})
+export const Blocked = AutonomyEvent.Blocked
 
 export type StateFile = typeof MODE_FILE | typeof TRUST_FILE
 

@@ -310,9 +310,21 @@ const layer = Layer.effect(
       const verdict = Autonomy.afterCheck(placed.class, check) === placed.class ? placed : held("not_routine")
       const decided =
         verdict.class === "P"
-          ? yield* decider
-              .decide(input, root.id, verdict.category)
-              .pipe(Effect.catchCause(() => Effect.succeed(UNDECIDED)))
+          ? yield* decider.decide(input, root.id, verdict.category).pipe(
+              // Cut off, by a reload or a cancelled run: nothing was decided, and nothing is waiting for anyone.
+              Effect.onInterrupt(() =>
+                autonomy
+                  .record(root.id, {
+                    type: "outcome",
+                    requestID,
+                    outcome: "not_run",
+                    by: "system:decider_interrupted",
+                  })
+                  // Logged by record, and the call does not run either way.
+                  .pipe(Effect.ignore),
+              ),
+              Effect.catchCause(() => Effect.succeed(UNDECIDED)),
+            )
           : undefined
       const judged =
         verdict.class === "P" && decided?.decision !== "allow" && decided?.decision !== "reject"
@@ -435,13 +447,16 @@ const layer = Layer.effect(
       const deferred = yield* Deferred.make<void, PermissionV1.RejectedError | PermissionV1.CorrectedError>()
       // Held for the person with the agent already released, whatever the unattended wait is set to. An "always" on one
       // of these would open more than the single call anyone looked at, so it has nothing to apply to.
+      // The state as it is now: the folder may have been closed and opened while the decider was thinking.
       const hold = (root: SessionID, category: PermissionV1.DeferredCategory) =>
-        Effect.sync(() => {
-          if ([...pending.values()].filter((item) => item.root === root).length >= QUEUE_LIMIT) return false
-          const moved: PermissionV1.Request = { ...asked, always: [], movedOnAt: Date.now(), deferred: true }
-          pending.set(id, { info: moved, deferred, noAlways, follows, category, root })
-          return true
-        })
+        InstanceState.get(state).pipe(
+          Effect.map((current) => {
+            if ([...current.pending.values()].filter((item) => item.root === root).length >= QUEUE_LIMIT) return false
+            const moved: PermissionV1.Request = { ...asked, always: [], movedOnAt: Date.now(), deferred: true }
+            current.pending.set(id, { info: moved, deferred, noAlways, follows, category, root })
+            return true
+          }),
+        )
       if (granted >= 0) {
         const [grant] = grants.splice(granted, 1)
         if (!grant?.followed) return
@@ -471,7 +486,7 @@ const layer = Layer.effect(
 
       if (gated?.decision === "defer") {
         const category = isHeldCategory(gated.category) ? gated.category : "not_routine"
-        const entry = pending.get(id)
+        const entry = (yield* InstanceState.get(state)).pending.get(id)
         yield* Effect.logInfo("held", { id, permission: asked.permission, category })
         if (entry) yield* events.publish(Event.Asked, entry.info)
         return yield* new PermissionV1.DeferredError({ category })
