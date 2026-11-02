@@ -296,6 +296,7 @@ const scenarios: Scenario[] = [
   http.protected.get("/config", "config.get").json(200, undefined, "status"),
   http.protected
     .patch("/config", "config.update")
+    .probe({ path: "/config", body: { username: 1 } })
     .mutating()
     .at((ctx) => ({ path: "/config", headers: ctx.headers(), body: { username: "httpapi-local" } }))
     .json(
@@ -308,6 +309,7 @@ const scenarios: Scenario[] = [
     ),
   http.protected
     .patch("/config", "config.update.invalid")
+    .probe({ path: "/config", body: { username: 1 } })
     .at((ctx) => ({ path: "/config", headers: ctx.headers(), body: { username: 1 } }))
     .status(400),
   http.protected.get("/config/providers", "config.providers").json(),
@@ -451,12 +453,108 @@ const scenarios: Scenario[] = [
       body: { reply: "bad" },
     }))
     .status(400),
+  // ADV-A18: in auth mode a well-formed answer without credentials gets 401, and the same request with them reaches
+  // the handler. The default probe sends an empty body, which says nothing about a reply that would have been valid.
   http.protected
-    .post("/permission/{requestID}/reply", "permission.reply")
+    .post("/permission/{requestID}/reply", "permission.reply.adv-a18")
+    .probe({ path: route("/permission/{requestID}/reply", { requestID: "per_httpapi" }), body: { reply: "once" } })
     .at((ctx) => ({
       path: route("/permission/{requestID}/reply", { requestID: "per_httpapi" }),
       headers: ctx.headers(),
       body: { reply: "once" },
+    }))
+    .json(404, object, "status"),
+  http.protected.get("/autonomy/mode", "autonomy.mode").json(
+    200,
+    (body) => {
+      object(body)
+      check(body.on === false, "a folder should start with autonomous mode off")
+      array(body.externalChange)
+    },
+    "status",
+  ),
+  http.protected
+    .put("/autonomy/mode", "autonomy.modeUpdate")
+    .mutating()
+    .at((ctx) => ({ path: "/autonomy/mode", headers: ctx.headers(), body: { on: true } }))
+    .json(
+      200,
+      (body) => {
+        object(body)
+        check(body.on === true, "the folder should report the mode it was given")
+      },
+      "status",
+    ),
+  http.protected
+    .put("/autonomy/mode", "autonomy.modeUpdate.session")
+    .mutating()
+    .seeded((ctx) => ctx.session({ title: "Autonomous root" }))
+    .at((ctx) => ({
+      path: "/autonomy/mode",
+      headers: ctx.headers(),
+      body: { on: true, sessionID: ctx.state.id },
+    }))
+    .json(
+      200,
+      (body) => {
+        object(body)
+        check(body.on === true, "the session should report the mode it was given")
+      },
+      "status",
+    ),
+  http.protected
+    .put("/autonomy/mode", "autonomy.modeUpdate.invalid")
+    .at((ctx) => ({ path: "/autonomy/mode", headers: ctx.headers(), body: { on: "yes" } }))
+    .status(400),
+  http.protected
+    .put("/autonomy/mode", "autonomy.modeUpdate.missing")
+    .at((ctx) => ({
+      path: "/autonomy/mode",
+      headers: ctx.headers(),
+      body: { on: true, sessionID: "ses_httpapi_missing" },
+    }))
+    .json(404, object, "status"),
+  http.protected
+    .post("/autonomy/confirm", "autonomy.confirm")
+    .mutating()
+    .json(
+      200,
+      (body) => {
+        object(body)
+        array(body.externalChange)
+        check(body.externalChange.length === 0, "confirming should leave no change to report")
+      },
+      "status",
+    ),
+  http.protected
+    .get("/session/{sessionID}/autonomy", "autonomy.session")
+    .seeded((ctx) =>
+      Effect.gen(function* () {
+        const root = yield* ctx.session({ title: "Autonomous root" })
+        return { root, child: yield* ctx.session({ title: "Subagent", parentID: root.id }) }
+      }),
+    )
+    .at((ctx) => ({
+      path: route("/session/{sessionID}/autonomy", { sessionID: ctx.state.child.id }),
+      headers: ctx.headers(),
+    }))
+    .json(
+      200,
+      (body, ctx) => {
+        object(body)
+        check(body.rootID === ctx.state.root.id, "a subagent should answer with its root")
+        check(body.on === false, "a new session should start with autonomous mode off")
+        check(body.open === 0, "a new session should have no open decisions")
+        check(body.intact === true, "a new session should have an intact record")
+        array(body.lines)
+      },
+      "status",
+    ),
+  http.protected
+    .get("/session/{sessionID}/autonomy", "autonomy.session.missing")
+    .at((ctx) => ({
+      path: route("/session/{sessionID}/autonomy", { sessionID: "ses_httpapi_missing" }),
+      headers: ctx.headers(),
     }))
     .json(404, object, "status"),
   http.protected.get("/memory", "memory.get").json(200, object),

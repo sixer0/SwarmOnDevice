@@ -1,4 +1,5 @@
 import { Flag } from "@opencode-ai/core/flag/flag"
+import { ProjectTrust } from "@opencode-ai/core/project/trust"
 import { ConfigV1 } from "@opencode-ai/core/v1/config/config"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
 import { Cause, Duration, Effect, Layer, Scope } from "effect"
@@ -71,7 +72,12 @@ function withContext<A, E>(
       const llm = scenario.project?.llm ? yield* TestLLMServer : undefined
       const project = scenario.project
       const dir = project
-        ? yield* Effect.promise(async () => (await runtime()).tmpdir(projectOptions(project, llm?.url)))
+        ? yield* Effect.promise(async () => {
+            const tmp = await (await runtime()).tmpdir(projectOptions(project, llm?.url))
+            // An untrusted folder's provider config is not loaded, and scenarios with a fake LLM depend on it.
+            ProjectTrust.trust(tmp.path)
+            return tmp
+          })
         : undefined
       yield* trace(options, scenario, `${label} context acquire done`)
       return { dir, llm }
