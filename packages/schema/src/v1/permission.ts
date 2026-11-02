@@ -78,8 +78,31 @@ export const DeferredCategory = Schema.Literals([
   "plan_mode",
   "app_state",
   "asks_every_time",
+  // D: held for a person
+  "outward_not_in_mission",
+  "script_flagged",
+  "script_unreadable",
+  "program_not_trusted",
+  // X: never run, whoever is asked
+  "outside_write",
+  "delete_compound",
+  "credential_change",
 ]).annotate({ identifier: "PermissionDeferredCategory" })
 export type DeferredCategory = typeof DeferredCategory.Type
+
+/** Why autonomous mode ran a call without a person, for the autonomous-mode kinds that need a name of their own. */
+export const AllowedCategory = Schema.Literals([
+  "outside_read",
+  "outside_copy",
+  "mcp_tool",
+  "consented",
+  "archived",
+  "script",
+]).annotate({ identifier: "PermissionAllowedCategory" })
+export type AllowedCategory = typeof AllowedCategory.Type
+
+/** Permission name of the consent prompt. Always X when an agent asks; only the server creates it. */
+export const AUTONOMY_CONSENT = "autonomy_consent"
 
 export class DeferredError extends Schema.TaggedErrorClass<DeferredError>()("PermissionDeferredError", {
   category: DeferredCategory,
