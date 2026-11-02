@@ -43,6 +43,8 @@ const MAX_NAME = 100
 const MAX_REASON = 200
 const MAX_ANSWER = 1024
 const MAX_OUTPUT_TOKENS = 2000
+// U11 rule 10, "retry max 3x": only a call that ran out of time is tried again, so a request makes at most four.
+const TIMEOUT_RETRIES = 3
 // What a provider that reports no usage is taken to have used.
 const UNREPORTED = new Usage({ inputTokens: 2000, outputTokens: 200 })
 const SPEND_STOP = SessionSpend.stopMessage(0).split("$")[0]!
@@ -72,13 +74,16 @@ type HoldReason =
   | "limit"
   | "spend_stopped"
 
+/** `attempts` is how many calls this request made, so the audit can show the retries a timeout cost. */
+export type Decided = Permission.Decided & { readonly attempts?: number }
+
 export interface Interface {
   /** `category` is the gate's, and only a command it calls a check can be remembered for the rest of the run. */
   readonly decide: (
     input: PermissionV1.AskInput,
     root: SessionID,
     category?: string,
-  ) => Effect.Effect<Permission.Decided>
+  ) => Effect.Effect<Decided>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@opencode/AutonomyDecider") {}
@@ -154,7 +159,7 @@ export const layer = Layer.effect(
       root: SessionID,
       category: string | undefined,
       state: RootState,
-      hold: (reason: HoldReason) => Effect.Effect<Permission.Decided>,
+      hold: (reason: HoldReason, attempts?: number) => Effect.Effect<Decided>,
     ) {
       const limits = yield* Limits
       const run = yield* readRun(sessions, root)
@@ -186,23 +191,37 @@ export const layer = Layer.effect(
       const spendLimit = (yield* config.get()).spend_limit ?? SessionSpend.DEFAULT_LIMIT
       const budget =
         spendLimit > 0 ? Math.min(limits.paidBudgetUsd, spendLimit * limits.paidBudgetShare) : limits.paidBudgetUsd
-      if (state.calls >= limits.callsPerRun || (paid && state.spentUsd >= budget)) {
+      const overLimit = Effect.fnUntraced(function* () {
+        if (state.calls < limits.callsPerRun && !(paid && state.spentUsd >= budget)) return false
         if (!state.limitMarked) yield* mark(root, "decider_limit")
         state.limitMarked = true
-        return yield* hold("limit")
-      }
+        return true
+      })
+      if (yield* overLimit()) return yield* hold("limit")
 
       // A call that dies on the way still cost something, so it is counted as the pessimistic guess until it reports.
       const guess = paid ? Session.getUsage({ model: model.value, usage: UNREPORTED }).cost : 0
-      state.calls++
-      state.spentUsd += guess
-      state.inCall = true
+      const text = JSON.stringify(fieldsOf(input, root, category, run.goal, run.directory))
       const started = yield* Clock.currentTimeMillis
-      const called = yield* callModel(
-        model.value,
-        JSON.stringify(fieldsOf(input, root, category, run.goal, run.directory)),
-      ).pipe(Effect.exit)
-      state.inCall = false
+      // Each try gets the whole deadline from when it starts, not from when the request joined the queue, and is a call
+      // like any other against the count and the budget. A request that uses them all up is one failure for the circuit,
+      // or three timeouts of a single request would open it.
+      const call = Effect.suspend(() => {
+        state.calls++
+        state.spentUsd += guess
+        return callModel(model.value, text).pipe(Effect.timeoutOption(limits.deadlineMs), Effect.exit)
+      })
+      let attempts = 1
+      let called = yield* call
+      while (
+        Exit.isSuccess(called) &&
+        Option.isNone(called.value) &&
+        attempts <= TIMEOUT_RETRIES &&
+        !(yield* overLimit())
+      ) {
+        attempts++
+        called = yield* call
+      }
       if (Exit.isFailure(called)) {
         // The name only: a provider's message can quote what it was sent.
         const error = Cause.squash(called.cause)
@@ -210,12 +229,17 @@ export const layer = Layer.effect(
           root,
           model: by,
           error: error instanceof Error ? error.name : "unknown",
+          attempts,
         })
         yield* failed(root, state)
-        return yield* hold("model_error")
+        return yield* hold("model_error", attempts)
+      }
+      if (Option.isNone(called.value)) {
+        yield* failed(root, state)
+        return yield* hold("timeout", attempts)
       }
 
-      const usage = called.value.usage
+      const usage = called.value.value.usage
       const costUsd =
         !paid || usage.inputTokens === undefined || usage.outputTokens === undefined
           ? guess
@@ -231,10 +255,11 @@ export const layer = Layer.effect(
             }).cost
       state.spentUsd += costUsd - guess
 
-      const answer = called.value.text.length > MAX_ANSWER ? Option.none() : decodeAnswer(called.value.text, STRICT)
+      const reply = called.value.value.text
+      const answer = reply.length > MAX_ANSWER ? Option.none() : decodeAnswer(reply, STRICT)
       if (Option.isNone(answer)) {
         yield* failed(root, state)
-        return yield* hold("invalid_output")
+        return yield* hold("invalid_output", attempts)
       }
 
       // Only an answer that came back whole closes it again, and a half-open one that fails reopens with its own marker.
@@ -249,8 +274,10 @@ export const layer = Layer.effect(
         decidedBy: by,
         reason: answer.value.reason,
         latencyMs: (yield* Clock.currentTimeMillis) - started,
-        costUsd: paid ? costUsd : undefined,
-      } satisfies Permission.Decided
+        // The tries that ran out of time are part of what this request cost.
+        costUsd: paid ? costUsd + guess * (attempts - 1) : undefined,
+        attempts,
+      } satisfies Decided
     })
 
     return Service.of({
@@ -259,30 +286,24 @@ export const layer = Layer.effect(
         const state = roots.get(root) ?? newRootState()
         roots.set(root, state)
 
-        const hold = (reason: HoldReason) =>
-          Effect.logWarning("decider held a request", { root, reason }).pipe(
+        const hold = (reason: HoldReason, attempts?: number) =>
+          Effect.logWarning("decider held a request", { root, reason, attempts }).pipe(
             Effect.as({
               decision: "defer",
               decidedBy: "system:decider_unavailable",
               reason,
-            } satisfies Permission.Decided),
+              attempts,
+            } satisfies Decided),
           )
 
         // One call at a time per root, and the one in progress is not part of the queue.
         if (state.waiting > limits.queue) return yield* hold("queue_full")
         state.waiting++
-        const settled = yield* settle(input, root, category, state, hold).pipe(
+        // Waiting in the queue says nothing about the model, so the deadline belongs to each call, inside `settle`.
+        return yield* settle(input, root, category, state, hold).pipe(
           state.lock.withPermits(1),
-          Effect.timeoutOption(limits.deadlineMs),
           Effect.ensuring(Effect.sync(() => state.waiting--)),
         )
-        if (Option.isSome(settled)) return settled.value
-        // Waiting in the queue says nothing about the model, so only a call that had begun counts against it.
-        if (state.inCall) {
-          state.inCall = false
-          yield* failed(root, state)
-        }
-        return yield* hold("timeout")
       }),
     })
   }),
@@ -298,7 +319,6 @@ interface RootState {
   spentUsd: number
   limitMarked: boolean
   waiting: number
-  inCall: boolean
   failures: number
   openUntil: number
 }
@@ -311,7 +331,6 @@ const newRootState = (): RootState => ({
   spentUsd: 0,
   limitMarked: false,
   waiting: 0,
-  inCall: false,
   failures: 0,
   openUntil: 0,
 })

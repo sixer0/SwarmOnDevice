@@ -491,13 +491,129 @@ it.instance("ADV-P3: a slow model is cut off at the deadline, and what it says l
     const test = yield* TestInstance
     const session = yield* root()
     stub.reply = () =>
-      new Promise((resolve) => setTimeout(() => resolve({ text: '{"decision":"allow","reason":"x"}' }), 400))
+      new Promise((resolve) => setTimeout(() => resolve({ text: '{"decision":"allow","reason":"x"}' }), 1000))
     const started = Date.now()
     const decided = yield* decide(bash(session.id, "mkdir -p out", test.directory), session.id).pipe(
       Effect.provideService(AutonomyDecider.Limits, limited({ deadlineMs: 50 })),
     )
-    expect(decided).toMatchObject({ ...HELD, reason: "timeout" })
-    expect(Date.now() - started).toBeLessThan(350)
+    // U11 rule 10: the first try and three more, each cut off at its own deadline.
+    expect(decided).toMatchObject({ ...HELD, reason: "timeout", attempts: 4 })
+    expect(stub.prompts.length).toBe(4)
+    expect(Date.now() - started).toBeLessThan(800)
+  }),
+)
+
+// U11 rule 10: a timeout is tried again, at most three times, and a request is one failure for the circuit
+
+const timeouts = (count: number, then = () => answer("allow", "fine")) => {
+  const calls = { made: 0 }
+  stub.reply = () => (calls.made++ < count ? new Promise(() => {}) : then())
+  return calls
+}
+
+const deciderMarkers = (id: SessionID) =>
+  Effect.map(auditLines(id), (lines) =>
+    lines.flatMap((line) => (line.type === "marker" && line.marker.startsWith("decider") ? [line.marker] : [])),
+  )
+
+it.instance("three timeouts and then an answer: the answer stands, after four attempts", () =>
+  Effect.gen(function* () {
+    const test = yield* TestInstance
+    const session = yield* root()
+    timeouts(3)
+    const decided = yield* decide(bash(session.id, "mkdir -p out", test.directory), session.id).pipe(
+      Effect.provideService(AutonomyDecider.Limits, limited({ deadlineMs: 50 })),
+    )
+    expect(decided).toMatchObject({ decision: "allow", decidedBy: "agent:test/free", reason: "fine", attempts: 4 })
+    expect(stub.prompts.length).toBe(4)
+    expect(yield* deciderMarkers(session.id)).toEqual([])
+  }),
+)
+
+it.instance("a first answer needs one attempt, and a model error or a broken answer is not tried again", () =>
+  Effect.gen(function* () {
+    const test = yield* TestInstance
+    const session = yield* root()
+    const run = (name: string) =>
+      decide(bash(session.id, `mkdir -p ${name}`, test.directory), session.id).pipe(
+        Effect.provideService(AutonomyDecider.Limits, limited({ deadlineMs: 50 })),
+      )
+    expect(yield* run("a")).toMatchObject({ decision: "allow", attempts: 1 })
+    stub.reply = () => Promise.reject(new Error("down"))
+    expect(yield* run("b")).toMatchObject({ ...HELD, reason: "model_error", attempts: 1 })
+    stub.reply = () => Promise.resolve({ text: "nonsense" })
+    expect(yield* run("c")).toMatchObject({ ...HELD, reason: "invalid_output", attempts: 1 })
+    expect(stub.prompts.length).toBe(3)
+  }),
+)
+
+it.instance("four timeouts hold the request as one failure: the circuit opens on the third such request only", () =>
+  Effect.gen(function* () {
+    const test = yield* TestInstance
+    const session = yield* root()
+    const run = (name: string) =>
+      decide(bash(session.id, `mkdir -p ${name}`, test.directory), session.id).pipe(
+        Effect.provideService(AutonomyDecider.Limits, limited({ deadlineMs: 30 })),
+      )
+    stub.reply = () => new Promise(() => {})
+    expect(yield* run("a")).toMatchObject({ ...HELD, reason: "timeout", attempts: 4 })
+    expect(stub.prompts.length).toBe(4)
+    expect(yield* deciderMarkers(session.id)).toEqual([])
+    expect(yield* run("b")).toMatchObject({ ...HELD, reason: "timeout", attempts: 4 })
+    expect(yield* deciderMarkers(session.id)).toEqual([])
+    expect(yield* run("c")).toMatchObject({ ...HELD, reason: "timeout", attempts: 4 })
+    expect(stub.prompts.length).toBe(12)
+    expect(yield* deciderMarkers(session.id)).toEqual(["decider_open"])
+    expect(yield* run("d")).toMatchObject({ ...HELD, reason: "circuit_open" })
+    expect(stub.prompts.length).toBe(12)
+  }),
+)
+
+it.instance("each attempt counts against the calls of the run, and the count stops the retries", () =>
+  Effect.gen(function* () {
+    const test = yield* TestInstance
+    const session = yield* root()
+    timeouts(10)
+    const decided = yield* decide(bash(session.id, "mkdir -p out", test.directory), session.id).pipe(
+      Effect.provideService(AutonomyDecider.Limits, limited({ deadlineMs: 30, callsPerRun: 2 })),
+    )
+    expect(decided).toMatchObject({ ...HELD, reason: "timeout", attempts: 2 })
+    expect(stub.prompts.length).toBe(2)
+    expect(yield* deciderMarkers(session.id)).toEqual(["decider_limit"])
+  }),
+)
+
+it.instance("a paid request is charged for every attempt it made", () =>
+  Effect.gen(function* () {
+    const test = yield* TestInstance
+    const session = yield* root("paid", "paid")
+    timeouts(2)
+    const decided = yield* decide(bash(session.id, "mkdir -p a", test.directory), session.id).pipe(
+      Effect.provideService(AutonomyDecider.Limits, limited({ deadlineMs: 30 })),
+    )
+    expect(decided).toMatchObject({ decision: "allow", attempts: 3 })
+    // Three times the guess of 2,000 in and 200 out at $10 a million: none of the calls reported usage.
+    expect(decided.costUsd).toBeCloseTo(0.066)
+  }),
+)
+
+it.instance("the deadline runs from when an attempt starts, not from when the request joined the queue", () =>
+  Effect.gen(function* () {
+    const test = yield* TestInstance
+    const session = yield* root()
+    stub.reply = () =>
+      new Promise((resolve) => setTimeout(() => resolve({ text: '{"decision":"allow","reason":"x"}' }), 120))
+    const run = (name: string) =>
+      decide(bash(session.id, `mkdir -p ${name}`, test.directory), session.id).pipe(
+        Effect.provideService(AutonomyDecider.Limits, limited({ deadlineMs: 200 })),
+      )
+    // The second waits about 120 ms for the lock, then answers within its own 200: 240 ms after it asked.
+    const done = yield* Effect.all([run("a"), run("b")], { concurrency: "unbounded" })
+    expect(done).toMatchObject([
+      { decision: "allow", attempts: 1 },
+      { decision: "allow", attempts: 1 },
+    ])
+    expect(stub.mostRunning).toBe(1)
   }),
 )
 
@@ -864,14 +980,15 @@ it.instance("broken output and timeouts count towards the circuit too, and a goo
     yield* run("c")
     stub.reply = () => Promise.resolve({ text: "nonsense" })
     yield* run("d")
+    // Four attempts that all run out of time are one failure, not four.
     stub.reply = () => new Promise(() => {})
     yield* run("e")
-    expect(stub.prompts.length).toBe(5)
+    expect(stub.prompts.length).toBe(8)
     stub.reply = () => Promise.resolve({ text: "nonsense" })
     yield* run("f")
-    expect(stub.prompts.length).toBe(6)
+    expect(stub.prompts.length).toBe(9)
     expect(yield* run("g")).toMatchObject({ ...HELD, reason: "circuit_open" })
-    expect(stub.prompts.length).toBe(6)
+    expect(stub.prompts.length).toBe(9)
   }),
 )
 
