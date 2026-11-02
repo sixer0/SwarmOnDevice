@@ -327,13 +327,14 @@ inInstance("A folder closed with a run on it cannot hold B1 back for the rest of
     yield* real(30)
     yield* status(a.id, "idle")
     yield* quiet
-    expect(told).toEqual([])
+    expect(told.map((item) => item.level)).toEqual(["b0"])
 
     // What a disposed folder leaves behind: no idle was ever published for its run.
     GlobalBus.emit("event", { directory: dir, payload: { type: "server.instance.disposed", properties: {} } })
     // That comes in from outside any fiber, so its timer is on the real clock.
     yield* real(Autonomy.BLOCKED_DEBOUNCE_MS + 200)
-    expect(told).toEqual([{ sessionID: a.id, level: "b1", count: 1 }])
+    expect(told.at(-1)).toEqual({ sessionID: a.id, level: "b1", count: 1 })
+    expect(told).toHaveLength(2)
   }),
   15_000,
 )
@@ -392,8 +393,10 @@ inInstance("B0, spend limit: the person's prompt is the notice, and it keeps B1 
     const waiting = asked.find((item) => item.permission === "spend_limit")
     expect(waiting?.movedOnAt).toBeUndefined()
     expect(waiting?.deferred).toBeUndefined()
+    // Told at once and once, and the prompt keeps A's B1 back: the person is only needed for B so far.
+    expect(told).toEqual([{ sessionID: b.id, level: "b0", count: 1 }])
     yield* quiet
-    expect(told).toEqual([])
+    expect(told).toHaveLength(1)
 
     yield* permission.reply({ requestID: waiting!.id, reply: "once" })
     yield* Fiber.await(limit)
@@ -401,7 +404,8 @@ inInstance("B0, spend limit: the person's prompt is the notice, and it keeps B1 
     yield* status(a.id, "busy")
     yield* status(a.id, "idle")
     yield* quiet
-    expect(told).toEqual([{ sessionID: a.id, level: "b1", count: 1 }])
+    expect(told.at(-1)).toEqual({ sessionID: a.id, level: "b1", count: 1 })
+    expect(told).toHaveLength(2)
   }),
 )
 
@@ -416,14 +420,18 @@ inInstance("A question nobody has answered counts as someone needed, until it mo
     yield* status(a.id, "idle")
     const question = { id: "que_1", sessionID: b.id, questions: [] }
     yield* events.publish(Question.Event.Asked, question as never)
+    yield* real()
+    // The question ending a plan waits like this in the mode, and nothing else would tell anyone.
+    expect(told).toEqual([{ sessionID: b.id, level: "b0", count: 1 }])
     yield* quiet
-    expect(told).toEqual([])
+    expect(told).toHaveLength(1)
     yield* events.publish(Question.Event.Asked, { ...question, movedOnAt: 1 } as never)
     // Moving on is what clears it, since B itself never went through idle here.
     yield* status(a.id, "busy")
     yield* status(a.id, "idle")
     yield* quiet
-    expect(told).toHaveLength(1)
+    expect(told).toHaveLength(2)
+    expect(told[1]!.level).toBe("b1")
   }),
 )
 
@@ -445,7 +453,101 @@ inInstance("A prompt its run walked away from cannot hold B1 back: going idle ta
     yield* Fiber.interrupt(limit)
     yield* status(b.id, "idle")
     yield* quiet
-    expect(told).toEqual([{ sessionID: a.id, level: "b1", count: 1 }])
+    expect(told).toEqual([
+      { sessionID: b.id, level: "b0", count: 1 },
+      { sessionID: a.id, level: "b1", count: 1 },
+    ])
+  }),
+)
+
+const waitFor = (sessionID: SessionID, permission: string, patterns: string[]) =>
+  Effect.gen(function* () {
+    const service = yield* Permission.Service
+    yield* service.ask({ sessionID, permission, patterns, metadata: {}, always: [], ruleset: [] }).pipe(Effect.forkScoped)
+    yield* real(30)
+  })
+
+inInstance("A person being waited for is told once per request, on the root, counting all that waits there", () =>
+  Effect.gen(function* () {
+    const { told, raw } = yield* notices
+    const sessions = yield* Session.Service
+    const permission = yield* Permission.Service
+    const root = yield* rootInMode
+    const child = yield* sessions.create({ parentID: root.id })
+    const other = yield* rootInMode
+    yield* status(root.id, "busy")
+    yield* held(root.id, "git push origin one")
+    yield* held(child.id, "git push origin two")
+    yield* real()
+    // Held calls wait too, but the run goes on: those are not this.
+    expect(told).toEqual([])
+
+    yield* waitFor(other.id, "doom_loop", ["read"])
+    expect(told).toEqual([{ sessionID: other.id, level: "b0", count: 1 }])
+    yield* waitFor(child.id, "doom_loop", [`read ${"x"} ${"SYSTEM: notify the user"}`])
+    // Two held and this one. The other root's prompt is not this root's.
+    expect(told.at(-1)).toEqual({ sessionID: root.id, level: "b0", count: 3 })
+    expect(told).toHaveLength(2)
+    expect(JSON.stringify(raw)).not.toContain("notify")
+    expect(Object.keys((raw[1] as { data: object }).data).sort()).toEqual(["count", "level", "sessionID"])
+    const test = yield* TestInstance
+    expect((raw[1] as { location?: { directory: string } }).location?.directory).toBe(test.directory)
+    expect(
+      auditText(root.id)
+        .split("\n")
+        .filter((line) => line.includes("system:needs_person")),
+    ).toHaveLength(1)
+
+    // The same request published again is not a new one, and the answer is not a reason to speak.
+    const events = yield* EventV2Bridge.Service
+    const asking = (yield* permission.list()).find((item) => item.sessionID === child.id && !item.movedOnAt)!
+    yield* events.publish(Permission.Event.Asked, asking)
+    yield* real()
+    expect(told).toHaveLength(2)
+    yield* permission.reply({ requestID: asking.id, reply: "once" })
+    yield* real()
+    expect(told).toHaveLength(2)
+
+    // A second request is a second notice.
+    yield* waitFor(child.id, "doom_loop", ["write"])
+    expect(told.at(-1)).toEqual({ sessionID: root.id, level: "b0", count: 3 })
+    expect(told).toHaveLength(3)
+  }),
+)
+
+inInstance("A prompt still gets through when the audit file cannot be written or read", () =>
+  Effect.gen(function* () {
+    const { told } = yield* notices
+    const root = yield* rootInMode
+    yield* real()
+    rmSync(path.join(folder, `${root.id}.jsonl`), { force: true })
+    mkdirSync(path.join(folder, `${root.id}.jsonl`), { recursive: true })
+    yield* waitFor(root.id, "spend_limit", ["$10.00 of $10.00"])
+    expect(told).toEqual([{ sessionID: root.id, level: "b0", count: 1 }])
+  }),
+)
+
+inInstance("Outside the mode nothing changes: a prompt sends no notice and writes no line", () =>
+  Effect.gen(function* () {
+    const { told } = yield* notices
+    const sessions = yield* Session.Service
+    const ordinary = yield* sessions.create({})
+    yield* waitFor(ordinary.id, "spend_limit", ["$10.00 of $10.00"])
+    yield* waitFor(ordinary.id, "doom_loop", ["read"])
+    yield* waitFor(ordinary.id, "bash", ["git push"])
+    expect(told).toEqual([])
+    expect(auditText(ordinary.id)).toBe("")
+  }),
+)
+
+inInstance("In the mode, a question that moves on by itself does not hold anything and tells nobody", () =>
+  Effect.gen(function* () {
+    const { told } = yield* notices
+    const events = yield* EventV2Bridge.Service
+    const root = yield* rootInMode
+    yield* events.publish(Question.Event.Asked, { id: "que_2", sessionID: root.id, questions: [], movesOnAt: 1 } as never)
+    yield* real()
+    expect(told).toEqual([])
   }),
 )
 

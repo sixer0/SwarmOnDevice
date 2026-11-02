@@ -539,7 +539,12 @@ export const removeAudit = Effect.fn("Autonomy.removeAudit")(function* (root: Se
 const isStatus = Schema.is(SessionStatusEvent.Status.data)
 const isIdle = Schema.is(SessionStatusEvent.Idle.data)
 const isPrompt = Schema.is(
-  Schema.Struct({ id: Schema.String, sessionID: Schema.String, movedOnAt: Schema.optional(Schema.Number) }),
+  Schema.Struct({
+    id: Schema.String,
+    sessionID: Schema.String,
+    movesOnAt: Schema.optional(Schema.Number),
+    movedOnAt: Schema.optional(Schema.Number),
+  }),
 )
 const isAnswer = Schema.is(Schema.Struct({ requestID: Schema.String }))
 const PROMPT_ASKED: readonly string[] = [PermissionV1.Event.Asked.type, QuestionV1.Event.Asked.type]
@@ -610,12 +615,19 @@ export const layer = Layer.effect(
     const tell = Effect.fnUntraced(function* (root: string, directory: string, level: "b0" | "b1") {
       if (!events) return
       const id = path.basename(root)
-      const open = openIn(readAuditText(auditFile(id)), id)
+      const open = yield* Effect.try({ try: () => openIn(readAuditText(auditFile(id)), id), catch: String }).pipe(
+        // Someone is still needed, and a queue that cannot be read now is no reason to keep that from them.
+        Effect.catch((error) =>
+          Effect.logError("could not read an audit file", { root, error }).pipe(Effect.as([] as OpenDecision[])),
+        ),
+      )
+      const asking = yield* Effect.forEach([...prompts.values()], (item) => rootOf(item.sessionID))
       // Only b1. A full queue says work is still going on, and whoever let that pass still has to hear when it stops.
       if (level === "b1") told.set(id, new Set(open.map((line) => line.requestID)))
       yield* events.publish(
         Blocked,
-        { sessionID: root, level, count: open.length },
+        // Everything under this root waiting on a person: what was held, and what is asking right now.
+        { sessionID: root, level, count: open.length + asking.filter((item) => item?.root === root).length },
         // Clients take events by folder, and this one may be sent from a timer that belongs to none.
         { location: { directory: AbsolutePath.make(directory) } },
       )
@@ -628,6 +640,7 @@ export const layer = Layer.effect(
         Effect.mapError(() => new WriteError({ message: "Could not write to the audit file" })),
       )
       if (entry.type !== "marker" || entry.marker !== "b0" || !entry.directory) return
+      if (entry.decidedBy !== "system:queue_full") return
       yield* tell(root, entry.directory, "b0").pipe(
         // The line is written, and the queue being full is not undone by a notice that failed.
         Effect.catchCause((cause) => Effect.logError("could not send a notice", { root, cause })),
@@ -771,6 +784,27 @@ export const layer = Layer.effect(
         )
       })
 
+      // What still stops a run in this mode, a spend limit, a repeating call or the question ending a plan, is the last
+      // resort actually reached. It gets through even when its line in the audit file does not.
+      const alertPerson = (sessionID: string) =>
+        rootOf(sessionID).pipe(
+          Effect.flatMap((place) => {
+            if (!place || !isOnNow({ root: place.root, directory: place.directory })) return Effect.void
+            return record(place.root, {
+              type: "marker",
+              directory: place.directory,
+              marker: "b0",
+              decidedBy: "system:needs_person",
+            }).pipe(Effect.ignore, Effect.andThen(tell(place.root, place.directory, "b0")))
+          }),
+          Effect.catchCauseIf(
+            (cause) => !Cause.hasInterrupts(cause),
+            (cause) => Effect.logError("could not send a notice", { sessionID, cause }),
+          ),
+          Effect.forkIn(scope),
+          Effect.asVoid,
+        )
+
       const unsubscribe = yield* events.listen((event) =>
         Effect.suspend(() => {
           const data = event.data
@@ -793,9 +827,14 @@ export const layer = Layer.effect(
           }
           if (PROMPT_ASKED.includes(event.type) && isPrompt(data)) {
             // A held call and a prompt that moved on are both published with this set, and neither is waiting for anyone.
-            if (data.movedOnAt === undefined) prompts.set(data.id, { sessionID: data.sessionID, directory })
-            else prompts.delete(data.id)
-            return Effect.void
+            if (data.movedOnAt !== undefined) {
+              prompts.delete(data.id)
+              return Effect.void
+            }
+            const again = prompts.has(data.id)
+            prompts.set(data.id, { sessionID: data.sessionID, directory })
+            // One with a time to move on at does not hold the run. Nothing here is told more than once per request.
+            return again || data.movesOnAt !== undefined ? Effect.void : alertPerson(data.sessionID)
           }
           if (PROMPT_ANSWERED.includes(event.type) && isAnswer(data)) prompts.delete(data.requestID)
           return Effect.void
