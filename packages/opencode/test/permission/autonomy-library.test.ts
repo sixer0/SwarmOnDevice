@@ -575,7 +575,8 @@ it.instance("XF-02: a rule a person wrote is not the shipped catch-all, so it st
     const denied = (yield* lineage).root
     expect(
       yield* verdictOf(denied, read(denied, [{ permission: "external_directory", pattern: "*", action: "deny" }])),
-    ).toEqual({ outcome: "refused", lines: [], asked: 0 })
+      // E2 (C100): the person's deny rule leaves its line in the mode.
+    ).toEqual({ outcome: "refused", lines: [["external_directory", "X", undefined]], asked: 0 })
     expect(stub.calls).toEqual([])
   }),
 )

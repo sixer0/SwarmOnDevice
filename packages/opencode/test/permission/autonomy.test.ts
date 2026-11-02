@@ -458,9 +458,12 @@ it.instance("rules, a grant and a shipped catch-all settle a request before the 
     yield* ask(push)
     yield* ask({ ...push, harmless: true, ruleset: Permission.fromConfig({ "*": "ask" }) })
 
-    // The grant is the one of these that is a decision the mode used, so it alone has a line (T2).
-    expect((yield* audit(root.id)).map((line) => [line.decision, line.decidedBy, line.via])).toEqual([
-      ["allow", "person", "grant"],
+    // E2 (C100): every way out of ask in the mode has a line. The rules a person wrote are on record as theirs, with the
+    // class their answer gives; the grant is the mode's (T2). The shipped catch-all, which a harmless call skips, has none.
+    expect((yield* audit(root.id)).map((line) => [line.class, line.decision, line.decidedBy, line.via])).toEqual([
+      ["X", "reject", "person", undefined],
+      ["A", "allow", "person", undefined],
+      ["D", "allow", "person", "grant"],
     ])
     expect(yield* list).toEqual([])
     expect(stub.calls).toEqual([])

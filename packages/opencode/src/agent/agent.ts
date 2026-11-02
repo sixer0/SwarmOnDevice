@@ -133,7 +133,7 @@ const layer = Layer.effect(
             "*.env.*": "ask",
             "*.env.example": "allow",
           },
-        })
+        }, { shipped: true })
 
         const user = Permission.fromConfig(cfg.permission ?? {})
 
@@ -147,7 +147,7 @@ const layer = Layer.effect(
               Permission.fromConfig({
                 question: "allow",
                 plan_enter: "allow",
-              }),
+              }, { shipped: true }),
               user,
             ),
             mode: "primary",
@@ -173,7 +173,7 @@ const layer = Layer.effect(
                   [path.join(".swarm", "plans", "*.md")]: "allow",
                   [path.relative(ctx.worktree, path.join(Global.Path.data, path.join("plans", "*.md")))]: "allow",
                 },
-              }),
+              }, { shipped: true }),
               user,
             ),
             mode: "primary",
@@ -186,7 +186,7 @@ const layer = Layer.effect(
               defaults,
               Permission.fromConfig({
                 todowrite: "deny",
-              }),
+              }, { shipped: true }),
               user,
             ),
             options: {},
@@ -207,7 +207,7 @@ const layer = Layer.effect(
                 websearch: "allow",
                 read: "allow",
                 external_directory: readonlyExternalDirectory,
-              }),
+              }, { shipped: true }),
               user,
             ),
             description: `Fast agent specialized for exploring codebases. Use this when you need to quickly find files by patterns (eg. "src/components/**/*.tsx"), search code for keywords (eg. "API endpoints"), or answer questions about the codebase (eg. "how do API endpoints work?"). When calling this agent, specify the desired thoroughness level: "quick" for basic searches, "medium" for moderate exploration, or "very thorough" for comprehensive analysis across multiple locations and naming conventions.`,
@@ -226,7 +226,7 @@ const layer = Layer.effect(
               defaults,
               Permission.fromConfig({
                 "*": "deny",
-              }),
+              }, { shipped: true }),
               user,
             ),
             options: {},
@@ -242,7 +242,7 @@ const layer = Layer.effect(
               defaults,
               Permission.fromConfig({
                 "*": "deny",
-              }),
+              }, { shipped: true }),
               user,
             ),
             prompt: PROMPT_TITLE,
@@ -257,7 +257,7 @@ const layer = Layer.effect(
               defaults,
               Permission.fromConfig({
                 "*": "deny",
-              }),
+              }, { shipped: true }),
               user,
             ),
             prompt: PROMPT_SUMMARY,
@@ -305,7 +305,7 @@ const layer = Layer.effect(
 
           agents[name].permission = Permission.merge(
             agents[name].permission,
-            Permission.fromConfig({ external_directory: { [Truncate.GLOB]: "allow" } }),
+            Permission.fromConfig({ external_directory: { [Truncate.GLOB]: "allow" } }, { shipped: true }),
           )
         }
 

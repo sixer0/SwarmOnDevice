@@ -7,6 +7,7 @@ import { Deferred, Effect, Layer, Context, Option, Schema } from "effect"
 import os from "os"
 import path from "path"
 import { PermissionV1 } from "@opencode-ai/core/v1/permission"
+import { AGENT_BASELINE, PERMISSION_BASELINE } from "@opencode-ai/core/swarm-permission-baseline"
 import { EventV2Bridge } from "@/event-v2-bridge"
 import { Session } from "@/session/session"
 import type { SessionID } from "@/session/schema"
@@ -14,9 +15,9 @@ import { Autonomy } from "./autonomy"
 import { AutonomyDecider } from "./autonomy-decider"
 import { AutonomyTable } from "./autonomy-table"
 import { OutwardKnown } from "./outward-known"
-import type { ScriptScreen } from "./script-screen"
+import { ScriptScreen } from "./script-screen"
 import { Unattended } from "./unattended"
-import { CREDENTIAL_CHANGE_TEXT, DELETE_COMPOUND_TEXT, OUTSIDE_WRITE_TEXT } from "./autonomy-texts"
+import { REFUSED_TEXT, SPEND_STOPPED_TEXT, subagentStoppedMessage } from "./autonomy-texts"
 
 export const Event = PermissionV1.Event
 
@@ -135,6 +136,25 @@ export const USER_CATCH_ALL = Symbol.for("swarm.permission.userCatchAll")
 
 export const isShippedCatchAll = (rule: PermissionV1.Rule) => shippedCatchAll.has(rule)
 
+// E2 (C100): which allow and deny rules Swarm ships, so the line an exit through one leaves in the mode credits the
+// built-in rule and not the person. Kept beside the rules, as the catch-all is; an object never marked counts as the person's.
+const shippedRules = new WeakSet<PermissionV1.Rule>()
+
+export const isShipped = (rule: PermissionV1.Rule) => shippedRules.has(rule)
+
+// The baseline is merged into the person's config, so its rules are known by their value. A person who writes the same
+// value as the baseline gets the same decision, and its line credits the built-in rule.
+const SHIPPED_BLOCKS: ReadonlyArray<Readonly<Record<string, string | Readonly<Record<string, string>>>>> = [
+  PERMISSION_BASELINE,
+  ...Object.values(AGENT_BASELINE).map((agent) => agent.permission),
+]
+const isBaselineRule = (key: string, pattern: string, action: string) =>
+  SHIPPED_BLOCKS.some((block) => {
+    const value = Object.hasOwn(block, key) ? block[key] : undefined
+    if (typeof value === "string") return pattern === "*" && value === action
+    return value !== undefined && Object.hasOwn(value, pattern) && value[pattern] === action
+  })
+
 export function evaluate(permission: string, pattern: string, ...rulesets: PermissionV1.Ruleset[]): PermissionV1.Rule {
   return (
     rulesets
@@ -179,8 +199,8 @@ class RefusedByModeError extends PermissionV1.DeniedError {
 }
 
 /**
- * Class X with its own register text (U11): the way on differs per category, so the text names it. The deletion text is
- * the shell's own, so the two cannot drift; it is read at call time because the shell tool imports this service.
+ * Class X with its own register text (U11): the way on differs per category, so the text names it. The texts are
+ * `autonomy-texts.ts`, which the shell reads as well, so the two cannot drift.
  */
 class RefusedWithTextError extends RefusedByModeError {
   text = ""
@@ -191,8 +211,8 @@ class RefusedWithTextError extends RefusedByModeError {
 
 /**
  * U11 rule 11: in the mode a spend limit or a repeating call waits for nobody. It ends the run, so it is a rejection.
- * The prefix is `SUBAGENT_STOPPED` in `tool/task.ts`, which turns a subagent's run ended by it into text for its parent;
- * importing it here would pull every tool into the permission service.
+ * The text starts with `SUBAGENT_STOPPED` (`autonomy-texts.ts`), by which `tool/task.ts` turns a subagent's run ended by
+ * it into text for its parent.
  */
 class StoppedByModeError extends PermissionV1.RejectedError {
   stopText = ""
@@ -204,21 +224,15 @@ class StoppedByModeError extends PermissionV1.RejectedError {
 const stoppedByMode = (input: PermissionV1.AskInput) => {
   const error = new StoppedByModeError()
   error.stopText =
-    input.permission === "doom_loop"
-      ? `Stopped by autonomous mode: repeated calls to \`${input.patterns[0] ?? "a tool"}\`.`
-      : "Stopped by autonomous mode: the spend limit was reached."
+    input.permission === "doom_loop" ? subagentStoppedMessage(input.patterns[0] ?? "a tool") : SPEND_STOPPED_TEXT
   return error
 }
 
 export const refusedByMode = (category: string | undefined) => {
   const text =
-    category === "outside_write"
-      ? OUTSIDE_WRITE_TEXT
-      : category === "delete_compound"
-        ? DELETE_COMPOUND_TEXT
-        : category === "credential_change"
-          ? CREDENTIAL_CHANGE_TEXT
-          : undefined
+    category !== undefined && Object.hasOwn(REFUSED_TEXT, category)
+      ? REFUSED_TEXT[category as keyof typeof REFUSED_TEXT]
+      : undefined
   if (text === undefined) return new RefusedByModeError({ ruleset: [] })
   const error = new RefusedWithTextError({ ruleset: [] })
   error.text = text
@@ -287,9 +301,6 @@ export const Classify = Context.Reference<(input: AutonomyTable.Input & GateCont
     defaultValue: () => AutonomyTable.classify,
   },
 )
-
-// `ScriptScreen.SHA_PREFIX`, which is not imported as a value: the screen module uses the Bun global (C71).
-const SHA_PREFIX: typeof ScriptScreen.SHA_PREFIX = 12
 
 /** The allowed items of a root's list, by concrete path. */
 export function consented(consent: Autonomy.Consent | undefined): Consented | undefined {
@@ -536,12 +547,7 @@ const layer = Layer.effect(
           : held("not_routine")
       // The decider gets the screen's closed summary, never the script (C70, ADV-P2). Only what the table answered on.
       const screen = verdict === table ? table.screen : undefined
-      const screened = screen && {
-        bytes: screen.bytes,
-        lines: screen.lines,
-        sha: screen.sha256.slice(0, SHA_PREFIX),
-        flags: [...screen.flags],
-      }
+      const screened = screen && ScriptScreen.summary(screen)
       const decided =
         verdict.class === "P"
           ? yield* decider.decide(input, root.id, verdict.category, screened).pipe(
@@ -736,7 +742,12 @@ const layer = Layer.effect(
      * An ordinary edit no rule asks about never reaches the gate. In the mode it still leaves its class A line (C58). The
      * write is one synchronous append on the same chain, and a failure is only logged: class A grants nothing critical.
      */
-    const recordQuiet = Effect.fnUntraced(function* (input: PermissionV1.AskInput) {
+    const recordQuiet = Effect.fnUntraced(function* (
+      input: PermissionV1.AskInput,
+      // E2 (C100): settled by an allow or deny rule, a person's or one Swarm ships. The rule's answer stands, and the line
+      // says whose rule it was.
+      rule?: { action: "allow" | "deny"; shipped: boolean },
+    ) {
       const instance = yield* InstanceState.context
       const root = yield* rootOf(input.sessionID)
       const directory = root.directory ?? instance.directory
@@ -753,16 +764,21 @@ const layer = Layer.effect(
           directory,
           permission: input.permission,
           patterns: input.patterns,
-          class: "A",
+          class: rule?.action === "deny" ? "X" : "A",
           risk: typeof input.metadata.risk === "string" ? input.metadata.risk : null,
           canUndo: input.canUndo ?? false,
-          decidedBy: "gate",
-          decision: "allow",
+          decidedBy: rule ? (rule.shipped ? "system:shipped_rule" : "person") : "gate",
+          decision: rule?.action === "deny" ? "reject" : "allow",
+          reason: rule ? (rule.shipped ? "a rule Swarm ships" : "a rule the person wrote") : undefined,
           follows: input.follows,
         })
+        // The rule decided before the mode was asked, so a line that cannot be written changes no answer.
         .pipe(
           Effect.catch((error) =>
-            Effect.logError("could not record a class A call", { permission: input.permission, error: error.message }),
+            Effect.logError("could not record a call settled before the gate", {
+              permission: input.permission,
+              error: error.message,
+            }),
           ),
         )
     })
@@ -786,18 +802,21 @@ const layer = Layer.effect(
       let needsAsk = false
       let userCatchAll = false
       let standing = false
+      let personAllowed = false
 
       for (const pattern of request.patterns) {
         const rule = evaluate(request.permission, pattern, ruleset, noAlways ? [] : approved)
         // Not the pattern: for a shell call it is the command, and that can hold a secret typed into its arguments.
         yield* Effect.logInfo("evaluated", { permission: request.permission, action: rule.action })
         if (rule.action === "deny") {
+          if (!isShipped(rule)) yield* recordQuiet(input, { action: "deny", shipped: false })
           return yield* new PermissionV1.DeniedError({
             ruleset: ruleset.filter((rule) => Wildcard.match(request.permission, rule.permission)),
           })
         }
         if (rule.action === "allow") {
           if (approved.includes(rule)) standing = true
+          else if (!isShipped(rule)) personAllowed = true
           continue
         }
         // The shipped baseline asks about anything it does not name. That is for what could hurt, and this cannot.
@@ -808,7 +827,10 @@ const layer = Layer.effect(
       }
 
       if (!needsAsk && !standing) {
-        if (input.editClass === "ordinary") yield* recordQuiet(input)
+        // One line either way (E2, C58): a person's rule is named as theirs, an ordinary edit as the gate's. A built-in
+        // rule's exit is never credited to the person; it leaves no line, as the read tools' exits always have (XF-02).
+        if (personAllowed) yield* recordQuiet(input, { action: "allow", shipped: false })
+        else if (input.editClass === "ordinary") yield* recordQuiet(input)
         return
       }
 
@@ -1212,17 +1234,26 @@ function expand(pattern: string): string {
   return pattern
 }
 
-export function fromConfig(permission: ConfigPermissionV1.Info) {
+/** `shipped` is for the rules Swarm itself brings (the agents' own): their line in the mode credits them, not the person (E2). */
+export function fromConfig(permission: ConfigPermissionV1.Info, options?: { shipped?: boolean }) {
   const ruleset: PermissionV1.Rule[] = []
+  const userCatchAll = USER_CATCH_ALL in permission
+  const mark = (rule: PermissionV1.Rule, pattern: string) => {
+    if (options?.shipped || (!(rule.permission === "*" && userCatchAll) && isBaselineRule(rule.permission, pattern, rule.action)))
+      shippedRules.add(rule)
+    return rule
+  }
   for (const [key, value] of Object.entries(permission)) {
     if (typeof value === "string") {
-      const rule = { permission: key, action: value, pattern: "*" }
-      if (key === "*" && value === "ask" && !(USER_CATCH_ALL in permission)) shippedCatchAll.add(rule)
+      const rule = mark({ permission: key, action: value, pattern: "*" }, "*")
+      if (key === "*" && value === "ask" && !userCatchAll) shippedCatchAll.add(rule)
       ruleset.push(rule)
       continue
     }
     ruleset.push(
-      ...Object.entries(value).map(([pattern, action]) => ({ permission: key, pattern: expand(pattern), action })),
+      ...Object.entries(value).map(([pattern, action]) =>
+        mark({ permission: key, pattern: expand(pattern), action }, pattern),
+      ),
     )
   }
   return ruleset

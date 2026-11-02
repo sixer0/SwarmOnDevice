@@ -327,7 +327,8 @@ const RAN_ON_RECORD = (category: AutonomyTable.AllowedCategory) => ({ outcome: "
 const mcpSource = (origin: string, transport = "local") => ({ server: "graft", transport, origin })
 const mcpTool = (sessionID: SessionID, permission: string, mcp: Record<string, unknown>) =>
   asked(sessionID, { permission, patterns: ["*"], always: ["*"], metadata: { mcp } })
-const RULE_DENIED = { outcome: "refused", lines: [], asked: 0 }
+// E2 (C100): a deny rule a person wrote still settles it first, and in the mode it leaves its line.
+const RULE_DENIED = { outcome: "refused", lines: [["X", undefined]], asked: 0 }
 
 type Attempts = ReturnType<typeof command> | ReturnType<typeof write> | ReturnType<typeof asked>
 type Case = readonly [
@@ -1094,7 +1095,7 @@ it.instance(
 )
 
 it.instance(
-  "ADV-A15: a deny rule on a command settles it first, in every shape, and the gate never hears of it",
+  "ADV-A15: a deny rule on a command settles it first, in every shape, and the gate never hears of it (one line each, E2)",
   () =>
     Effect.gen(function* () {
       const ruleset = Permission.fromConfig({ bash: { "bun test*": "deny" } })
@@ -1112,7 +1113,10 @@ it.instance(
         expect((error as PermissionV1.DeniedError).message).toContain("The user has specified a rule")
       }
       expect(stub.calls).toEqual([])
-      expect(yield* decisions(root.id)).toEqual([])
+      // E2 (C100): no class is judged, but every way out of ask in the mode has a line: the person's rule refused it.
+      expect((yield* decisions(root.id)).map((line) => [line.class, line.decision, line.decidedBy])).toEqual(
+        Array.from({ length: 5 }, () => ["X", "reject", "person"]),
+      )
       expect(yield* heldFor([root.id, child.id])).toEqual([])
     }),
   project,

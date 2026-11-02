@@ -31,12 +31,13 @@ import { withoutServerCredentials } from "@/util/server-credentials"
 import { Autonomy } from "@/permission/autonomy"
 import { Session } from "@/session/session"
 import { Archive } from "./archive"
-import { DELETE_COMPOUND_TEXT } from "@/permission/autonomy-texts"
-// Types only: the screen hashes with the `Bun` global, which the packaged app's Node server does not have.
-import type { ScriptScreen } from "@/permission/script-screen"
-import { createHash } from "node:crypto"
+import { DELETE_COMPOUND_TEXT, SCRIPT_CHANGED_TEXT } from "@/permission/autonomy-texts"
+import { ScriptScreen } from "@/permission/script-screen"
+import { DeletionWords, type Deletion } from "./deletion"
 
 export { Parameters } from "./shell/prompt"
+export { SCRIPT_CHANGED_TEXT } from "@/permission/autonomy-texts"
+export type { Deletion } from "./deletion"
 
 const MAX_METADATA_LENGTH = 30_000
 // Shown from the start of an output that gets cut. Setup failures print there, and the rest of the budget goes to the end.
@@ -323,78 +324,25 @@ function literal(part: { type: string; text: string }) {
   return part.type === "word" && PLAIN_WORD.test(part.text)
 }
 
-// U11 rule 4: in autonomous mode these do not run. A plain one has its paths moved to the archive instead.
-const DELETES = new Set(["rm", "rmdir", "unlink"])
-const WRAPPERS = new Set(["sudo", "doas", "command", "builtin", "exec", "env", "nice", "nohup", "time", "xargs", "timeout"])
-const RM_FLAGS = new Set(["r", "R", "f", "i", "I", "v", "d"])
-const RM_LONG = new Set(["--recursive", "--force", "--verbose", "--dir", "--interactive"])
-const GIT_RM_FLAGS = new Set(["-r", "-f", "-q", "--force", "--quiet", "--ignore-unmatch"])
-// These leave the working copy as it is, so they run.
-const GIT_RM_KEEPS = new Set(["--cached", "-n", "--dry-run"])
-
-/** A deletion the shell can move instead of run: which program, what it may remove, and the paths as written. */
-export type Deletion = {
-  name: "rm" | "rmdir" | "unlink" | "git rm"
-  /** Directories with what is in them (`rm -r`, `git rm -r`). */
-  recursive: boolean
-  /** Empty directories (`rm -d`, `rmdir`). */
-  dirs: boolean
-  /** A path that is not there is no error (`rm -f`, `git rm --ignore-unmatch`). */
-  force: boolean
-  paths: string[]
-}
+// U11 rule 4: in autonomous mode these do not run. A plain one has its paths moved to the archive instead. The sets and
+// the reading of the words are `tool/deletion.ts`, which the autonomy table reads with.
+const { WRAPPERS } = DeletionWords
 
 const base = (word: string) => path.posix.basename(unquote(word))
 
-function deletes(tokens: string[]) {
-  const words = tokens.map(unquote)
-  if (base(words[0] ?? "") === "git") {
-    // The subcommand is the first word that is not an option, nor the value `-C` or `-c` takes.
-    const sub = words.slice(1).find((word, index, rest) => !word.startsWith("-") && !/^-[Cc]$/.test(rest[index - 1] ?? ""))
-    return sub === "rm" && !words.some((word) => GIT_RM_KEEPS.has(word))
-  }
-  for (const word of words) {
-    if (DELETES.has(base(word))) return true
-    if (!WRAPPERS.has(base(word)) && !word.startsWith("-") && !word.includes("=")) return false
-  }
-  return false
-}
+const deletes = (tokens: string[]) => DeletionWords.deletes(tokens.map(unquote), base)
 
-function deleteFlags(name: Deletion["name"], words: string[]) {
-  const found = { recursive: false, dirs: name === "rmdir", force: false, paths: [] as string[] }
-  let ended = false
-  for (const word of words) {
-    if (ended || !word.startsWith("-") || word === "-") {
-      found.paths.push(word)
-      continue
-    }
-    if (word === "--") {
-      ended = true
-      continue
-    }
-    if (name === "git rm") {
-      if (!GIT_RM_FLAGS.has(word)) return
-      if (word === "-r") found.recursive = true
-      if (word === "--ignore-unmatch") found.force = true
-      continue
-    }
-    if (name === "rm" && word.startsWith("--")) {
-      if (!RM_LONG.has(word)) return
-      if (word === "--recursive") found.recursive = true
-      if (word === "--force") found.force = true
-      if (word === "--dir") found.dirs = true
-      continue
-    }
-    if (name === "rmdir" && (word === "-v" || word === "--verbose")) continue
-    if (name !== "rm") return
-    for (const letter of word.slice(1)) {
-      if (!RM_FLAGS.has(letter)) return
-      if (letter === "r" || letter === "R") found.recursive = true
-      if (letter === "f") found.force = true
-      if (letter === "d") found.dirs = true
-    }
-  }
-  return found.paths.length > 0 ? found : undefined
+/** The parts of the text when it is one command of literal words and nothing else: no redirect, no second command. */
+function plainCommand(root: Node) {
+  const list = commands(root)
+  if (list.length !== 1 || !understood(root)) return undefined
+  const node = list[0]!
+  const redirects = redirectsIn(root)
+  if (node.text.trim() !== root.text.trim() || redirects.writes.length || redirects.reads.length || redirects.loose.length)
+    return undefined
+  const command = parts(node)
+  if (!command.every((item) => literal(item.type === "command_name" ? { ...item, type: "word" } : item))) return undefined
+  return command
 }
 
 /**
@@ -402,15 +350,9 @@ function deleteFlags(name: Deletion["name"], words: string[]) {
  * shape is moved; any other text that deletes is refused in autonomous mode, so a deletion never rides along unseen.
  */
 function deletion(root: Node): Deletion | "compound" | undefined {
-  const list = commands(root)
-  if (!list.some((node) => deletes(parts(node).map((item) => item.text)))) return undefined
-  if (list.length !== 1 || !understood(root)) return "compound"
-  const node = list[0]!
-  const redirects = redirectsIn(root)
-  if (node.text.trim() !== root.text.trim() || redirects.writes.length || redirects.reads.length || redirects.loose.length)
-    return "compound"
-  const command = parts(node)
-  if (!command.every((item) => literal(item.type === "command_name" ? { ...item, type: "word" } : item))) return "compound"
+  if (!commands(root).some((node) => deletes(parts(node).map((item) => item.text)))) return undefined
+  const command = plainCommand(root)
+  if (!command) return "compound"
   const words = command.map((item) => unquote(item.text))
   const name =
     words[0] === "git" && words[1] === "rm"
@@ -419,9 +361,21 @@ function deletion(root: Node): Deletion | "compound" | undefined {
         ? words[0]
         : undefined
   if (!name) return "compound"
-  const found = deleteFlags(name, words.slice(name === "git rm" ? 2 : 1))
-  if (!found || (name === "unlink" && found.paths.length !== 1)) return "compound"
+  const found = DeletionWords.deletionFlags(name, words.slice(name === "git rm" ? 2 : 1))
+  if (!found) return "compound"
   return { name, ...found }
+}
+
+/**
+ * How the shell reads a text as a deletion, for `test/permission/u11-single-source.test.ts`, which holds it beside the
+ * autonomy table's reading of the same text. Parsed as bash, the way a POSIX shell's command is.
+ */
+export async function readDeletion(text: string) {
+  const tree = (await parser()).bash.parse(text)
+  if (!tree) return undefined
+  const found = deletion(tree.rootNode)
+  tree.delete()
+  return found
 }
 
 /**
@@ -429,13 +383,8 @@ function deletion(root: Node): Deletion | "compound" | undefined {
  * so the file it would replace is the one the table judged. Anything else is undefined and runs as it always has.
  */
 function copyMove(root: Node) {
-  const list = commands(root)
-  if (list.length !== 1 || !understood(root)) return undefined
-  const node = list[0]!
-  const redirects = redirectsIn(root)
-  if (node.text.trim() !== root.text.trim() || redirects.writes.length || redirects.reads.length || redirects.loose.length) return undefined
-  const command = parts(node)
-  if (!command.every((item) => literal(item.type === "command_name" ? { ...item, type: "word" } : item))) return undefined
+  const command = plainCommand(root)
+  if (!command) return undefined
   // The program's own name as written: a quoted or pathed `cp` is not the one read here.
   if (command[0]?.text !== "cp" && command[0]?.text !== "mv") return undefined
   return Risk.copyMove(command.map((item) => unquote(item.text)))
@@ -469,24 +418,7 @@ async function refusedBy(item: Deletion, cwd: string) {
 }
 
 // U11 rule 6: a script the gate let run is compared again right before it runs, so what runs is what was judged.
-// Written as a record so a program added to the screen's list fails the typecheck here until it is added too.
-const SCRIPT_PROGRAMS = new Set<string>(
-  Object.keys({
-    bash: 1,
-    sh: 1,
-    zsh: 1,
-    python: 1,
-    python3: 1,
-    node: 1,
-    bun: 1,
-    deno: 1,
-    ruby: 1,
-    perl: 1,
-  } satisfies Record<(typeof ScriptScreen.INTERPRETERS)[number], 1>),
-)
-const SCRIPT_MAX_BYTES: typeof ScriptScreen.SCRIPT_MAX_BYTES = 65_536
-export const SCRIPT_CHANGED_TEXT =
-  "This call did not run. A script it runs changed after autonomous mode checked it, so what would run is not what was checked. Run the command again to have the script checked as it is now."
+const SCRIPT_PROGRAMS = new Set<string>(ScriptScreen.INTERPRETERS)
 
 /**
  * The files a command could run as a script: the words after a program in `ScriptScreen.INTERPRETERS` that are not
@@ -523,8 +455,10 @@ async function scriptHashes(files: string[], cwd: string, instance: InstanceCont
       inside.map(async (file) => {
         const stat = await fsp.stat(file).catch(() => undefined)
         const bytes =
-          stat?.isFile() && stat.size <= SCRIPT_MAX_BYTES ? await fsp.readFile(file).catch(() => undefined) : undefined
-        return [file, bytes && createHash("sha256").update(bytes).digest("hex")] as const
+          stat?.isFile() && stat.size <= ScriptScreen.SCRIPT_MAX_BYTES
+            ? await fsp.readFile(file).catch(() => undefined)
+            : undefined
+        return [file, bytes && ScriptScreen.sha256(bytes)] as const
       }),
     ),
   )

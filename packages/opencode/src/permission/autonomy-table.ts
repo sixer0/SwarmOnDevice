@@ -8,6 +8,7 @@ import path from "node:path"
 import { Global } from "@opencode-ai/core/global"
 import { needsPerson } from "@opencode-ai/core/permission/needs-person"
 import type { ProjectTrust } from "@opencode-ai/core/project/trust"
+import { AUTONOMY_CONSENT, type PermissionV1 } from "@opencode-ai/core/v1/permission"
 import { McpCatalog } from "../mcp/catalog"
 import { OutwardKnown } from "./outward-known"
 import { ScriptScreen } from "./script-screen"
@@ -16,6 +17,7 @@ import { LibraryRoot } from "../skill/library-root"
 import { GitGuard } from "../tool/git-guard"
 import { Reach } from "../tool/reach"
 import { Risk } from "../tool/risk"
+import { DeletionWords, type Deletion } from "../tool/deletion"
 import { Secrets } from "../tool/secrets"
 import { findProgram } from "../util/find-program"
 
@@ -31,37 +33,12 @@ export const CHECK_CLASS: CheckClass = "P"
 export type RoutineCategory = "check" | "file-op" | "git-local"
 /** What `routine` finds a command to be. "read" only looks at the folder, and is class A. */
 export type CommandKind = RoutineCategory | "read"
-export type AllowedCategory =
-  | RoutineCategory
-  | "edit-not-ordinary"
-  | "outside_read"
-  | "outside_copy"
-  | "mcp_tool"
-  | "consented"
-  | "script"
-  | "archived"
-export type HeldCategory =
-  | "outside_folder"
-  | "outside_write"
-  | "outward"
-  | "outward_not_in_mission"
-  | "credential_change"
-  | "not_reversible"
-  | "sensitive_file"
-  | "secret_file"
-  | "external_tool"
-  | "no_undo"
-  | "not_routine"
-  | "queue_full"
-  | "decider_unavailable"
-  | "folder_not_trusted"
-  | "plan_mode"
-  | "app_state"
-  | "asks_every_time"
-  | "script_flagged"
-  | "script_unreadable"
-  | "program_not_trusted"
-  | "delete_compound"
+/**
+ * The category names are the schema's (`PermissionV1`), so the gate, the table and the audit cannot name a category the
+ * others lack. Only the routine kinds and "edit-not-ordinary" are the table's own.
+ */
+export type AllowedCategory = RoutineCategory | "edit-not-ordinary" | PermissionV1.AllowedCategory
+export type HeldCategory = PermissionV1.DeferredCategory
 
 /** What the edit tools learned from `Reach.editTrust`. Absent means nobody said, and that is held. */
 export type EditClass = "ordinary" | "not_ordinary" | "no_undo" | "sensitive" | "secret"
@@ -820,26 +797,24 @@ function installed(file: string, instance: InstanceContext) {
  * `routine` accepted, whose every piece is checked. A program not found at all cannot start, and is left as it was.
  */
 function programInProject(command: string, cwd: string, instance: InstanceContext) {
-  let here = cwd
-  return command
-    .replace(OUTPUT_TAIL, "")
-    .split(" && ")
-    .some((piece, index) => {
-      const words = piece.split(" ")
-      if (index === 0 && words[0] === "cd" && words.length === 2) {
-        here = path.resolve(here, words[1]!)
-        return false
-      }
-      return (words[0] === "rtk" ? words.slice(0, 2) : words.slice(0, 1)).some((name) => {
-        const searched = (process.env.PATH ?? "")
-          .split(path.delimiter)
-          .filter(Boolean)
-          .map((entry) => path.resolve(here, entry))
-          .join(path.delimiter)
-        const found = findProgram(name, searched)
-        return found !== undefined && (containsPath(found, instance) || Reach.inside(found, instance))
-      })
+  const pieces = command.replace(OUTPUT_TAIL, "").split(" && ")
+  const first = pieces[0]!.split(" ")
+  // A leading `cd <path>` is where every later piece looks for its program.
+  const moves = first[0] === "cd" && first.length === 2
+  const here = moves ? path.resolve(cwd, first[1]!) : cwd
+  return pieces.some((piece, index) => {
+    if (index === 0 && moves) return false
+    const words = piece.split(" ")
+    return (words[0] === "rtk" ? words.slice(0, 2) : words.slice(0, 1)).some((name) => {
+      const searched = (process.env.PATH ?? "")
+        .split(path.delimiter)
+        .filter(Boolean)
+        .map((entry) => path.resolve(here, entry))
+        .join(path.delimiter)
+      const found = findProgram(name, searched)
+      return found !== undefined && (containsPath(found, instance) || Reach.inside(found, instance))
     })
+  })
 }
 
 /**
@@ -1047,6 +1022,18 @@ const sent = (given: Outward["allowed"][number]): Verdict => ({
  * or from the project's in a folder a person approved, runs on record. A project's server in a folder nobody approved is code
  * nobody has looked at. A remote one takes what it is sent off the machine, so it is a way out like any other (G4, rule 3).
  */
+/** The shipped MCP servers that only read (C100): the plan agent may call their tools. */
+const READ_ONLY_SERVERS = new Set(["swarm-web", "graft"])
+
+/** A tool of a read-only server, by its name as well, so a request cannot borrow such a server's source. */
+function readOnlyServer(input: Input, mcp: Readonly<Record<string, unknown>>) {
+  return (
+    typeof mcp.server === "string" &&
+    READ_ONLY_SERVERS.has(mcp.server) &&
+    input.permission.startsWith(McpCatalog.toolName(mcp.server, ""))
+  )
+}
+
 function classifyMcp(input: Input, mcp: Readonly<Record<string, unknown>>): Verdict {
   // A tool is named after its server, so a request cannot borrow another server's source.
   if (typeof mcp.server !== "string" || !input.permission.startsWith(McpCatalog.toolName(mcp.server, ""))) return held("external_tool")
@@ -1126,14 +1113,8 @@ function pushesToRawUrl(args: readonly string[], snapshot: OutwardKnown.Snapshot
   )
 }
 
-// U11 rule 4, as the shell reads a deletion (`deletion` in `tool/shell.ts`, row 151). These sets are its sets: a plain
-// deletion the table lets through must be one the shell moves, never one it runs.
-const DELETES = new Set(["rm", "rmdir", "unlink"])
-const DELETE_WRAPPERS = new Set(["sudo", "doas", "command", "builtin", "exec", "env", "nice", "nohup", "time", "xargs", "timeout"])
-const RM_FLAGS = new Set(["r", "R", "f", "i", "I", "v", "d"])
-const RM_LONG = new Set(["--recursive", "--force", "--verbose", "--dir", "--interactive"])
-const GIT_RM_FLAGS = new Set(["-r", "-f", "-q", "--force", "--quiet", "--ignore-unmatch"])
-const GIT_RM_KEEPS = new Set(["--cached", "-n", "--dry-run"])
+// U11 rule 4. The program, the flags and the paths are read as the shell reads them (`tool/deletion.ts`): a plain deletion
+// the table lets through must be one the shell moves, never one it runs.
 // One command of words nothing rewrites: bare words the shell takes as written, single quotes, and double quotes without
 // `$`, backquotes, `\` or `!`, with spaces between, so the text the shell parses is one command and nothing else.
 const PLAIN_DELETE_WORD = /[\w./@%+:,-][\w./@%+:,=-]*|'[^']*'|"[^"$`\\!]*"/
@@ -1193,46 +1174,9 @@ function commandWords(command: string) {
   return pieces.map((piece) => piece.trim().split(/\s+/).filter(Boolean).map(unquoteWord)).filter((words) => words.length > 0)
 }
 
-/** Whether one command removes files, the way the shell's `deletes` reads it. */
-function deletesFiles(words: readonly string[]) {
-  const base = (word: string) => path.posix.basename(word)
-  if (base(words[0] ?? "") === "git") {
-    const sub = words.slice(1).find((word, index, rest) => !word.startsWith("-") && !/^-[Cc]$/.test(rest[index - 1] ?? ""))
-    return sub === "rm" && !words.some((word) => GIT_RM_KEEPS.has(word))
-  }
-  for (const word of words) {
-    if (DELETES.has(base(word))) return true
-    if (!DELETE_WRAPPERS.has(base(word)) && !word.startsWith("-") && !word.includes("=")) return false
-  }
-  return false
-}
-
 /** The paths of a plain deletion whose flags the shell knows, or undefined, which the shell refuses as `compound`. */
-function deletionPaths(name: string, words: readonly string[]) {
-  const paths: string[] = []
-  let ended = false
-  for (const word of words) {
-    if (ended || !word.startsWith("-") || word === "-") {
-      paths.push(word)
-      continue
-    }
-    if (word === "--") {
-      ended = true
-      continue
-    }
-    if (name === "git rm") {
-      if (!GIT_RM_FLAGS.has(word)) return
-      continue
-    }
-    if (name === "rm" && word.startsWith("--")) {
-      if (!RM_LONG.has(word)) return
-      continue
-    }
-    if (name === "rmdir" && (word === "-v" || word === "--verbose")) continue
-    if (name !== "rm" || [...word.slice(1)].some((letter) => !RM_FLAGS.has(letter))) return
-  }
-  if (paths.length === 0 || (name === "unlink" && paths.length !== 1)) return
-  return paths
+function deletionPaths(name: Deletion["name"], words: readonly string[]) {
+  return DeletionWords.deletionFlags(name, words)?.paths
 }
 
 /**
@@ -1247,14 +1191,19 @@ function deletionPaths(name: string, words: readonly string[]) {
 function classifyDeletion(input: Input): Verdict | undefined {
   const command = input.metadata.command
   if (typeof command !== "string") return undefined
-  if (!commandWords(command).some(deletesFiles)) return undefined
+  if (!commandWords(command).some((words) => DeletionWords.deletes(words))) return undefined
   // A name with a line break, a control or a bidi mark in it is no plain line for anyone to read: the rules below hold it.
   if (/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(command.trim())) return undefined
   const text = command.trim()
   if (!PLAIN_DELETION.test(text)) return refused("delete_compound")
   // The program's own name as written: the shell takes no quoted name for one it moves.
   const raw = text.match(new RegExp(PLAIN_DELETE_WORD.source, "g")) ?? []
-  const name = raw[0] === "git" && raw[1] === "rm" ? "git rm" : DELETES.has(raw[0] ?? "") ? raw[0]! : undefined
+  const name: Deletion["name"] | undefined =
+    raw[0] === "git" && raw[1] === "rm"
+      ? "git rm"
+      : raw[0] === "rm" || raw[0] === "rmdir" || raw[0] === "unlink"
+        ? raw[0]
+        : undefined
   const paths = name && deletionPaths(name, raw.slice(name === "git rm" ? 2 : 1).map(unquoteWord))
   if (!paths) return refused("delete_compound")
   if (!canRunIn(input.cwd, input.instance)) return undefined
@@ -1277,6 +1226,8 @@ export function classify(input: Input, checkClass: CheckClass = CHECK_CLASS): Ve
   if (needsPerson(input.permission)) return { class: "B", decidedBy: "person" }
   if (input.rule === "deny") return { class: "X" }
   if (input.permission === TRUST_PERMISSION) return { class: "X", decidedBy: "person", category: "folder_not_trusted" }
+  // U11 rule 2 (C100): only the server makes a consent entry, from its own scan. An agent that asks for one is refused.
+  if (input.permission === AUTONOMY_CONSENT) return { class: "X", decidedBy: "gate" }
   if ((input.permission === "bash" || input.permission === "external_directory") && changesCredentials(input))
     return refused("credential_change")
 
@@ -1311,7 +1262,11 @@ export function classify(input: Input, checkClass: CheckClass = CHECK_CLASS): Ve
   if (input.permission === "edit") return classifyEdit(input)
   if (input.permission === "bash") return classifyBash(input, checkClass)
   const mcp = input.metadata.mcp
-  if (typeof mcp === "object" && mcp !== null) return classifyMcp(input, mcp as Readonly<Record<string, unknown>>)
+  if (typeof mcp === "object" && mcp !== null) {
+    const source = mcp as Readonly<Record<string, unknown>>
+    // Rule 8 (C100): the table cannot tell what an MCP tool does, so the plan agent uses only the servers known to read.
+    return input.plan === true && !readOnlyServer(input, source) ? refused("plan_mode") : classifyMcp(input, source)
+  }
   // A tool that says nothing about itself has nothing to judge. No name is excepted, `graft_*` included.
   const opaque = input.patterns.every((pattern) => pattern === "*") && Object.keys(input.metadata).length === 0
   return held(opaque ? "external_tool" : "not_routine")

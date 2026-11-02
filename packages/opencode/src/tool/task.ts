@@ -16,6 +16,7 @@ import { Effect, Exit, Schema, Scope } from "effect"
 import { EffectBridge } from "@/effect/bridge"
 import { RuntimeFlags } from "@/effect/runtime-flags"
 import { Database } from "@opencode-ai/core/database/database"
+import { SUBAGENT_STOPPED } from "@/permission/autonomy-texts"
 
 export interface TaskPromptOps {
   cancel(sessionID: SessionID): Effect.Effect<void>
@@ -80,15 +81,9 @@ export function renderTaskOutput(input: {
   ].join("\n")
 }
 
-/**
- * How autonomous mode words a subagent run it stopped, so the task call can tell the stop from a failure. Whatever ends
- * the run (the error on its last message, or its last failed call) has to start with this text.
- */
-export const SUBAGENT_STOPPED = "Stopped by autonomous mode:"
-
-export function subagentStoppedMessage(tool: string) {
-  return `${SUBAGENT_STOPPED} repeated calls to \`${tool}\`.`
-}
+// How autonomous mode words a subagent run it stopped (`autonomy-texts.ts`, which the permission service writes it with),
+// so the task call can tell the stop from a failure.
+export { SUBAGENT_STOPPED, subagentStoppedMessage } from "@/permission/autonomy-texts"
 
 /** What a subagent's last message amounts to as a task result. Also read when a restart lost the waiting task call. */
 export function taskOutcome(sessionID: SessionID, result: SessionV1.WithParts) {

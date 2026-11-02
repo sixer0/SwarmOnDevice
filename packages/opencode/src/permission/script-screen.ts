@@ -219,7 +219,7 @@ export function category(screen: Screen): Category {
   return screen.flags.length ? "script_flagged" : "script"
 }
 
-export function summary(screen: Extract<Screen, { ok: true }>): Summary {
+export function summary(screen: Pick<Extract<Screen, { ok: true }>, "bytes" | "lines" | "sha256" | "flags">): Summary {
   return { bytes: screen.bytes, lines: screen.lines, sha: screen.sha256.slice(0, SHA_PREFIX), flags: [...screen.flags] }
 }
 
@@ -266,7 +266,8 @@ export async function hash(file: string) {
 }
 
 // `node:crypto`, not `Bun.CryptoHasher`: the table imports this module, and the packaged app's server runs on Node (C71).
-const sha256 = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex")
+/** The full hash `Screen` carries, which the shell compares right before a judged script runs. */
+export const sha256 = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex")
 
 function attempt<T>(read: () => T) {
   try {

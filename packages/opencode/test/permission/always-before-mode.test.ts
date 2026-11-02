@@ -219,7 +219,7 @@ it.instance("F6: with the line unwritable the call does not run, and waits for a
   }),
 )
 
-it.instance("F6: a rule from config is not this path, and adds no line (AU-02)", () =>
+it.instance("F6: a rule from config is not this path; in the mode it leaves the person's line (AU-02, E2 C100)", () =>
   Effect.gen(function* () {
     const root = yield* newRoot
     yield* modeOn(root.id)
@@ -228,7 +228,10 @@ it.instance("F6: a rule from config is not this path, and adds no line (AU-02)",
       ruleset: [{ permission: "graft_find_code", pattern: "*", action: "allow" as const }],
     }
     expect(Exit.isSuccess(yield* settled(input))).toBe(true)
-    expect(yield* decisions(root.id)).toEqual([])
+    // E2 (C100): a way out of ask through a rule the person wrote has its line, as theirs, and the class does not change.
+    expect((yield* decisions(root.id)).map((line) => [line.class, line.decision, line.decidedBy, line.via])).toEqual([
+      ["A", "allow", "person", undefined],
+    ])
   }),
 )
 

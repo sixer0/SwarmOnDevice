@@ -12,7 +12,7 @@ import type { SessionID } from "@/session/schema"
 import { Session } from "@/session/session"
 import { SessionSpend } from "@/session/spend"
 import { Autonomy } from "./autonomy"
-// Types only: the screen hashes with `Bun`, which the packaged Node sidecar does not have.
+// Types only: the decider needs the summary's shape, not the screen's code.
 import type { ScriptScreen } from "./script-screen"
 import type { Permission } from "."
 
@@ -46,7 +46,7 @@ const MAX_REASON = 200
 const MAX_ANSWER = 1024
 const MAX_OUTPUT_TOKENS = 2000
 // U11 rule 10, "retry max 3x": only a call that ran out of time is tried again, so a request makes at most four.
-const TIMEOUT_RETRIES = 3
+export const DECIDER_TIMEOUT_RETRIES = 3
 // What a provider that reports no usage is taken to have used.
 const UNREPORTED = new Usage({ inputTokens: 2000, outputTokens: 200 })
 const SPEND_STOP = SessionSpend.stopMessage(0).split("$")[0]!
@@ -221,7 +221,7 @@ export const layer = Layer.effect(
       while (
         Exit.isSuccess(called) &&
         Option.isNone(called.value) &&
-        attempts <= TIMEOUT_RETRIES &&
+        attempts <= DECIDER_TIMEOUT_RETRIES &&
         !(yield* overLimit())
       ) {
         attempts++
