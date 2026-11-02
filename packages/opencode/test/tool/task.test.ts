@@ -1,6 +1,7 @@
 import { afterEach, describe, expect } from "bun:test"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
 import { Database } from "@opencode-ai/core/database/database"
+import { ModelsDev } from "@opencode-ai/core/models-dev"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { SessionProjector } from "@opencode-ai/core/session/projector"
 import { Cause, Deferred, Effect, Exit, Fiber, Layer } from "effect"
@@ -66,7 +67,7 @@ function defer<T>() {
   return { promise, resolve }
 }
 
-const seed = Effect.fn("TaskToolTest.seed")(function* (title = "Pinned") {
+const seed = Effect.fn("TaskToolTest.seed")(function* (title = "Pinned", parent = ref) {
   const session = yield* Session.Service
   const chat = yield* session.create({ title })
   const user = yield* session.updateMessage({
@@ -87,8 +88,8 @@ const seed = Effect.fn("TaskToolTest.seed")(function* (title = "Pinned") {
     cost: 0,
     path: { cwd: "/tmp", root: "/tmp" },
     tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-    modelID: ref.modelID,
-    providerID: ref.providerID,
+    modelID: parent.modelID,
+    providerID: parent.providerID,
     variant: "xhigh",
     time: { created: Date.now() },
   }
@@ -1107,4 +1108,93 @@ describe("tool.task", () => {
       expect((yield* jobs.get(grandchild.id))?.status).toBe("cancelled")
     }),
   )
+
+  describe("a shipped provider's subagents", () => {
+    const shipped = { providerID: ProviderV2.ID.make("shipped-ai"), modelID: ModelV2.ID.make("thinker") }
+    const withShipped = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+      Effect.acquireUseRelease(
+        Effect.sync(() => {
+          process.env[ModelsDev.BUNDLED_ENV] = JSON.stringify({
+            provider: { id: "shipped-ai", name: "Shipped", env: [], models: {} },
+            subagents: { general: "worker", explore: "worker-fast" },
+          })
+        }),
+        () => effect,
+        () => Effect.sync(() => delete process.env[ModelsDev.BUNDLED_ENV]),
+      )
+    const run = (subagent_type: string, parent = shipped) =>
+      Effect.gen(function* () {
+        const { chat, assistant } = yield* seed("Pinned", parent)
+        const def = yield* (yield* TaskTool).init()
+        let seen: SessionPrompt.PromptInput | undefined
+        yield* def.execute(
+          { description: "inspect bug", prompt: "look", subagent_type },
+          {
+            sessionID: chat.id,
+            messageID: assistant.id,
+            agent: "build",
+            abort: new AbortController().signal,
+            extra: { promptOps: stubOps({ onPrompt: (input) => (seen = input) }) },
+            messages: [],
+            metadata: () => Effect.void,
+            ask: () => Effect.void,
+          },
+        )
+        return seen
+      })
+
+    it.instance("run on the models it names while the session is on it", () =>
+      withShipped(
+        Effect.gen(function* () {
+          const general = yield* run("general")
+          expect(String(general?.model?.modelID)).toBe("worker")
+          expect(String(general?.model?.providerID)).toBe("shipped-ai")
+          expect(general?.variant).toBeUndefined()
+          expect(String((yield* run("explore"))?.model?.modelID)).toBe("worker-fast")
+        }),
+      ),
+    )
+
+    it.instance("stay on the session's model on any other provider", () =>
+      withShipped(
+        Effect.gen(function* () {
+          expect((yield* run("general", ref))?.model).toEqual(ref)
+        }),
+      ),
+    )
+
+    it.instance(
+      "an agent model the user set wins",
+      () =>
+        withShipped(
+          Effect.gen(function* () {
+            expect(String((yield* run("general"))?.model?.modelID)).toBe("mine")
+          }),
+        ),
+      { config: { agent: { general: { model: "shipped-ai/mine" } } } },
+    )
+
+    it.instance(
+      "anyone who wrote their own providers keeps the session's model",
+      () =>
+        withShipped(
+          Effect.gen(function* () {
+            expect(String((yield* run("general"))?.model?.modelID)).toBe("thinker")
+          }),
+        ),
+      {
+        config: {
+          provider: {
+            own: { npm: "@ai-sdk/openai-compatible", options: { baseURL: "http://127.0.0.1:2/v1" }, models: { own: {} } },
+          },
+        },
+      },
+    )
+
+    it.instance("without the app's handover nothing is mapped", () =>
+      Effect.gen(function* () {
+        expect(String((yield* run("general"))?.model?.modelID)).toBe("thinker")
+      }),
+    )
+  })
 })

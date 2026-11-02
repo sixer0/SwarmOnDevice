@@ -1,5 +1,6 @@
 import * as http from "node:http"
 import * as tls from "node:tls"
+import { BUNDLED_PROVIDER_ENV } from "./bundled-provider"
 
 type NodeHttpWithEnvProxy = typeof http & {
   setGlobalProxyFromEnv: () => void
@@ -86,6 +87,7 @@ function prepareSidecarEnv(password: string, userDataPath: string) {
     OPENCODE_SERVER_USERNAME: "opencode",
     OPENCODE_SERVER_PASSWORD: password,
     XDG_STATE_HOME: process.env.XDG_STATE_HOME ?? userDataPath,
+    ...BUNDLED_PROVIDER_ENV,
   })
 }
 

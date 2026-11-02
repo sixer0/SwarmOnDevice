@@ -1812,6 +1812,11 @@ const layer = Layer.effect(
           mergeProvider(providerID, partial)
         }
 
+        // With a key, a shipped provider stands where a written one would: same request handling, same place as the
+        // default. Anyone who wrote their own providers keeps those ahead of it, so it only adds models for them.
+        const shipped = ProviderV2.ID.make(ModelsDev.bundled()?.provider.id ?? "")
+        if (configProviders.length === 0 && providers[shipped]) mergeProvider(shipped, { source: "config" })
+
         const gitlab = ProviderV2.ID.make("gitlab")
         if (discoveryLoaders[gitlab] && providers[gitlab] && isProviderAllowed(gitlab)) {
           yield* Effect.promise(async () => {
@@ -2197,7 +2202,9 @@ const layer = Layer.effect(
         return { providerID: entry.providerID, modelID: entry.modelID }
       }
 
-      const configured = Object.keys(cfg.provider ?? {})
+      const written = Object.keys(cfg.provider ?? {})
+      const shipped = ProviderV2.ID.make(ModelsDev.bundled()?.provider.id ?? "")
+      const configured = written.length === 0 && s.providers[shipped] ? [shipped] : written
       const candidates = Object.values(s.providers).filter((p) => configured.length === 0 || configured.includes(p.id))
       const free = configured.length > 0 ? freeDefault(candidates) : undefined
       const provider = free?.provider ?? candidates[0]
@@ -2214,7 +2221,8 @@ const layer = Layer.effect(
   }),
 )
 
-const priority = ["gpt-5", "claude-sonnet", "big-pickle", "gemini-3-pro"]
+// Later wins. A shipped provider's models are all named, so without "thinker" here the sort would start a session on a worker.
+const priority = ["thinker", "gpt-5", "claude-sonnet", "big-pickle", "gemini-3-pro"]
 const smallModelFamilyPriority = ["gemini-flash", "gpt-nano", "claude-haiku"]
 export function sort<T extends { id: string }>(models: T[]) {
   return sortBy(

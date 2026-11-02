@@ -134,6 +134,18 @@ export type Provider = Schema.Schema.Type<typeof Provider>
 
 export const Event = ModelsDev.Event
 
+// What a distribution ships as its own provider, handed over by its launcher. It joins the catalog and from there is a
+// provider like any other: offered for connecting, and connected once a key exists. Never read a key from here.
+export const BUNDLED_ENV = "SWARM_BUNDLED_PROVIDER"
+
+const Bundled = Schema.Struct({
+  provider: Provider,
+  /** Which of its models a subagent runs on, by agent name, while the session is on this provider. */
+  subagents: Schema.optional(Schema.Record(Schema.String, Schema.String)),
+})
+
+export const bundled = () =>
+  Option.getOrUndefined(Schema.decodeUnknownOption(Schema.fromJsonString(Bundled))(process.env[BUNDLED_ENV] ?? ""))
 
 export interface Interface {
   readonly get: () => Effect.Effect<Record<string, Provider>>
@@ -237,7 +249,14 @@ const layer = Layer.effect(
         }),
       )
       return JSON.parse(text) as Record<string, Provider>
-    }).pipe(Effect.withSpan("ModelsDev.populate"), Effect.orDie)
+    }).pipe(
+      Effect.map((catalog): Record<string, Provider> => {
+        const shipped = bundled()?.provider
+        return shipped ? { ...catalog, [shipped.id]: shipped } : catalog
+      }),
+      Effect.withSpan("ModelsDev.populate"),
+      Effect.orDie,
+    )
 
     const [cachedGet, invalidate] = yield* Effect.cachedInvalidateWithTTL(populate, Duration.infinity)
 

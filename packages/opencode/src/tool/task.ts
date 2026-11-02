@@ -10,6 +10,8 @@ import { Agent } from "../agent/agent"
 import { deriveSubagentSessionPermission } from "../agent/subagent-permissions"
 import type { SessionPrompt } from "../session/prompt"
 import { Config } from "@/config/config"
+import { ModelsDev } from "@opencode-ai/core/models-dev"
+import { ModelV2 } from "@opencode-ai/core/model"
 import { Effect, Exit, Schema, Scope } from "effect"
 import { EffectBridge } from "@/effect/bridge"
 import { RuntimeFlags } from "@/effect/runtime-flags"
@@ -201,7 +203,16 @@ export const TaskTool = Tool.define(
       if (msg.info.role !== "assistant") return yield* Effect.fail(new Error("Not an assistant message"))
       const variant = msg.info.variant
 
-      const model = next.model ?? {
+      // A shipped provider says which of its models carry the delegated work. Only while the session is on it, and not for
+      // anyone who wrote their own providers: their agents run as they wrote them.
+      const shipped = ModelsDev.bundled()
+      const delegated =
+        shipped?.provider.id === msg.info.providerID && Object.keys(cfg.provider ?? {}).length === 0
+          ? shipped.subagents?.[next.name]
+          : undefined
+      const assigned =
+        next.model ?? (delegated ? { modelID: ModelV2.ID.make(delegated), providerID: msg.info.providerID } : undefined)
+      const model = assigned ?? {
         modelID: msg.info.modelID,
         providerID: msg.info.providerID,
       }
@@ -229,7 +240,7 @@ export const TaskTool = Tool.define(
             modelID: model.modelID,
             providerID: model.providerID,
           },
-          variant: next.model ? undefined : variant,
+          variant: assigned ? undefined : variant,
           agent: next.name,
           parts,
         })

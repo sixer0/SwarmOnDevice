@@ -238,7 +238,7 @@ function ProviderPickerV2(props: {
     active: undefined as string | undefined,
     connecting: undefined as string | undefined,
   })
-  const featured = ["opencode", "opencode-go", "anthropic", "openai", "google", "openrouter", "vercel"]
+  const featured = ["gsp-ai-tail", "opencode", "opencode-go", "anthropic", "openai", "google", "openrouter", "vercel"]
   const custom = () => ({ id: CUSTOM_ID, name: language.t("dialog.provider.custom.label") })
   const all = createMemo(() => {
     language.locale()
