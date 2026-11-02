@@ -1548,9 +1548,14 @@ const layer = Layer.effect(
       const inputFiles = new Set(
         input.parts?.filter((part) => new URL(part.url).protocol === "file:").map((part) => fileURLToPath(part.url)),
       )
-      const uniqueTemplateParts = templateParts.filter(
-        (part) => part.type !== "file" || !inputFiles.has(fileURLToPath(part.url)),
-      )
+      // The template is the repo's text, not the person's: the mark lets the mission window keep only their arguments.
+      const uniqueTemplateParts = templateParts
+        .filter((part) => part.type !== "file" || !inputFiles.has(fileURLToPath(part.url)))
+        .map((part) =>
+          part.type === "text"
+            ? { ...part, metadata: { ...part.metadata, command: input.command, arguments: input.arguments } }
+            : part,
+        )
       const isSubtask = (agent.mode === "subagent" && cmd.subtask !== false) || cmd.subtask === true
       const parts = isSubtask
         ? [
