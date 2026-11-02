@@ -44,14 +44,18 @@ const folder = path.join(Global.Path.state, "autonomy")
 const trustFile = path.join(Global.Path.state, "trust.json")
 
 // A decider that would let everything through: what it is never asked about is the whole point of most of these.
-const stub = { calls: [] as string[], answer: "allow" as Permission.Decided["decision"] }
+const stub = {
+  calls: [] as string[],
+  answer: "allow" as Permission.Decided["decision"],
+  attempts: undefined as number | undefined,
+}
 const decider = Layer.succeed(
   Permission.Decider,
   Permission.Decider.of({
     decide: (input) =>
       Effect.sync(() => {
         stub.calls.push(input.permission)
-        return { decision: stub.answer, decidedBy: "agent:test/stub" }
+        return { decision: stub.answer, decidedBy: "agent:test/stub", attempts: stub.attempts }
       }),
   }),
 )
@@ -110,6 +114,7 @@ beforeEach(() => {
   clean()
   stub.calls.length = 0
   stub.answer = "allow"
+  stub.attempts = undefined
 })
 afterEach(clean)
 
@@ -260,14 +265,18 @@ it.instance("ADV-A11: a critical call from a subagent fails at once, and the par
     expect((yield* list).length).toBe(2)
 
     const lines = yield* audit(root.id)
-    expect(lines.map((line) => [line.sessionID, line.permission, line.class, line.decision])).toEqual([
-      [child.id, "bash", "D", "defer"],
-      [grandchild.id, "bash", "D", "defer"],
-      [root.id, "task", "A", "allow"],
+    expect(lines.map((line) => [line.sessionID, line.permission, line.class, line.decision, line.via])).toEqual([
+      [child.id, "bash", "D", "defer", undefined],
+      [grandchild.id, "bash", "D", "defer", undefined],
+      [child.id, "bash", "D", "defer", "duplicate"],
+      [root.id, "task", "A", "allow", undefined],
     ])
     expect(lines[0]!.rootID).toBe(root.id)
     expect(lines[0]!.category).toBe("not_routine")
     expect(lines[0]!.decidedBy).toBe("gate")
+    // The duplicate's line points at its entry and is not one more open entry (row 120).
+    const autonomy = yield* Autonomy.Service
+    expect((yield* autonomy.openDecisions()).filter((line) => line.rootID === root.id)).toHaveLength(2)
   }),
 )
 
@@ -298,6 +307,16 @@ it.instance("a grandchild's routine command goes to the decider, and its answer 
       ["P", "reject", "agent:test/stub", "file-op"],
       ["P", "defer", "agent:test/stub", "decider_unavailable"],
     ])
+  }),
+)
+
+it.instance("row 180: the decider's attempts, retries after a timeout included, reach the audit line", () =>
+  Effect.gen(function* () {
+    const { root } = yield* lineage
+    const test = yield* TestInstance
+    stub.attempts = 3
+    yield* ask(bash(root.id, "mkdir -p out", test.directory)).pipe(Effect.timeout("2 seconds"))
+    expect((yield* audit(root.id)).map((line) => [line.class, line.decision, line.attempts])).toEqual([["P", "allow", 3]])
   }),
 )
 
@@ -373,10 +392,159 @@ it.instance("rules, a grant and a shipped catch-all settle a request before the 
     yield* ask(push)
     yield* ask({ ...push, harmless: true, ruleset: Permission.fromConfig({ "*": "ask" }) })
 
-    expect(yield* audit(root.id)).toEqual([])
+    // The grant is the one of these that is a decision the mode used, so it alone has a line (T2).
+    expect((yield* audit(root.id)).map((line) => [line.decision, line.decidedBy, line.via])).toEqual([
+      ["allow", "person", "grant"],
+    ])
     expect(yield* list).toEqual([])
     expect(stub.calls).toEqual([])
   }),
+)
+
+it.instance("E2: in the mode every call that leaves ask through the gate, a grant or a duplicate has one line", () =>
+  Effect.gen(function* () {
+    const { root, child } = yield* lineage
+    const permission = yield* Permission.Service
+    const test = yield* TestInstance
+    const push = bash(root.id, "git push origin main", test.directory)
+    const asked: PermissionV1.ID[] = []
+    const count = <A, E, R>(
+      input: PermissionV1.AskInput,
+      self: (input: PermissionV1.AskInput) => Effect.Effect<A, E, R>,
+    ) =>
+      Effect.gen(function* () {
+        const id = PermissionV1.ID.ascending()
+        asked.push(id)
+        return yield* self({ ...input, id })
+      })
+
+    // Through the gate: allowed by the decider, refused by it, held, refused by what it is.
+    yield* count(bash(root.id, "mkdir -p out", test.directory), ask)
+    stub.answer = "reject"
+    expect(yield* failure(count(bash(child.id, "mkdir -p other", test.directory), ask))).toBeInstanceOf(
+      PermissionV1.DeniedError,
+    )
+    expect(yield* failure(count(push, ask))).toBeInstanceOf(PermissionV1.DeferredError)
+    expect(
+      yield* failure(
+        count(
+          {
+            sessionID: root.id,
+            permission: "edit",
+            patterns: [path.join(Global.Path.state, "trust.json")],
+            metadata: {},
+            always: [],
+            ruleset: [],
+            editClass: "not_ordinary",
+            canUndo: true,
+          },
+          ask,
+        ),
+      ),
+    ).toBeInstanceOf(PermissionV1.DeniedError)
+    // The same call again, twice: told it is held, without a second entry.
+    const [held] = yield* list
+    expect(yield* failure(count(push, ask))).toBeInstanceOf(PermissionV1.DeferredError)
+    expect(yield* failure(count(push, ask))).toBeInstanceOf(PermissionV1.DeferredError)
+    // A grant on its own call, and one that came along with another answer.
+    const fetch = bash(root.id, "git fetch origin", test.directory)
+    yield* permission.grant({ ...fetch, call: JSON.stringify(fetch.metadata) })
+    yield* count(fetch, ask)
+    const pull = bash(root.id, "git pull origin main", test.directory)
+    yield* permission.grant({ ...pull, call: JSON.stringify(pull.metadata), followed: true })
+    yield* count(pull, ask)
+
+    const lines = yield* audit(root.id)
+    expect(lines.map((line) => line.requestID)).toEqual(asked)
+    expect(lines.map((line) => [line.decision, line.via ?? null, line.duplicateOf ?? null])).toEqual([
+      ["allow", null, null],
+      ["reject", null, null],
+      ["defer", null, null],
+      ["reject", null, null],
+      ["defer", "duplicate", held!.id],
+      ["defer", "duplicate", held!.id],
+      ["allow", "grant", null],
+      ["allow", "grant", null],
+    ])
+    expect(lines[4]!.category).toBe(lines[2]!.category)
+    expect(yield* list).toHaveLength(1)
+  }),
+)
+
+it.instance("T2 replay: a held write asked for three more times leaves three more lines, and its grant one", () =>
+  Effect.gen(function* () {
+    const { root } = yield* lineage
+    const permission = yield* Permission.Service
+    const test = yield* TestInstance
+    const write = {
+      sessionID: root.id,
+      permission: "edit",
+      patterns: [path.join(test.directory, ".github/x.yml")],
+      metadata: {},
+      always: ["*"],
+      ruleset: [],
+      editClass: "no_undo",
+      canUndo: false,
+    } satisfies PermissionV1.AskInput
+    for (const _ of [0, 1, 2, 3]) expect(yield* failure(ask(write))).toBeInstanceOf(PermissionV1.DeferredError)
+    const [held] = yield* list
+    expect((yield* audit(root.id)).map((line) => line.via ?? null)).toEqual([
+      null,
+      "duplicate",
+      "duplicate",
+      "duplicate",
+    ])
+
+    yield* reply({ requestID: held!.id, reply: "once" })
+    yield* permission.grant({ ...write, call: JSON.stringify(write.metadata) })
+    yield* ask(write)
+    const lines = yield* audit(root.id)
+    expect(lines).toHaveLength(5)
+    expect(lines.slice(1, 4).every((line) => line.duplicateOf === held!.id)).toBe(true)
+    expect([lines[4]!.via, lines[4]!.decision, lines[4]!.decidedBy]).toEqual(["grant", "allow", "person"])
+  }),
+)
+
+it.instance(
+  "C26 with a grant: a used grant whose line cannot be written lets nothing run, and duplicates still answer",
+  () =>
+    Effect.gen(function* () {
+      const { root } = yield* lineage
+      const permission = yield* Permission.Service
+      const test = yield* TestInstance
+      mkdirSync(path.join(folder, `${root.id}.jsonl`))
+      const fetch = bash(root.id, "git fetch origin", test.directory)
+      yield* permission.grant({ ...fetch, call: JSON.stringify(fetch.metadata) })
+      expect(yield* failure(ask(fetch))).toBeInstanceOf(PermissionV1.DeferredError)
+      expect(yield* failure(ask(fetch))).toBeInstanceOf(PermissionV1.DeferredError)
+      expect(yield* list).toHaveLength(1)
+    }),
+)
+
+it.instance(
+  "with the mode off a grant and a duplicate write no line, and an entry from then is a duplicate once it is on",
+  () =>
+    Effect.gen(function* () {
+      process.env.SWARM_UNATTENDED_AFTER_MS = "1"
+      const sessions = yield* Session.Service
+      const permission = yield* Permission.Service
+      const autonomy = yield* Autonomy.Service
+      const root = yield* sessions.create({})
+      const push = bash(root.id, "git push origin main")
+      expect(yield* failure(ask(push))).toBeInstanceOf(PermissionV1.AwayError)
+      expect(yield* failure(ask(push))).toBeInstanceOf(PermissionV1.AwayError)
+      const fetch = bash(root.id, "git fetch origin")
+      yield* permission.grant({ ...fetch, call: JSON.stringify(fetch.metadata) })
+      yield* ask(fetch)
+      expect(existsSync(path.join(folder, `${root.id}.jsonl`))).toBe(false)
+
+      const [waiting] = yield* list
+      yield* autonomy.setMode({ scope: "session", root: root.id, on: true })
+      expect(yield* failure(ask(push))).toBeInstanceOf(PermissionV1.AwayError)
+      expect((yield* audit(root.id)).map((line) => [line.via, line.duplicateOf, line.decision])).toEqual([
+        ["duplicate", waiting!.id, "defer"],
+      ])
+    }),
 )
 
 it.instance("what nobody knows or nobody may be asked about gets no further", () =>
@@ -429,7 +597,7 @@ it.instance("what nobody knows or nobody may be asked about gets no further", ()
   }),
 )
 
-it.instance("edits follow what the tool learned, and an ordinary one leaves no line", () =>
+it.instance("edits follow what the tool learned, and an ordinary one leaves its class A line (C58)", () =>
   Effect.gen(function* () {
     const { root } = yield* lineage
     const edit = (patterns: string[], editClass: PermissionV1.EditClass, canUndo = true) =>
@@ -445,7 +613,7 @@ it.instance("edits follow what the tool learned, and an ordinary one leaves no l
       })
 
     yield* edit(["src/a.ts"], "ordinary")
-    expect(yield* audit(root.id)).toEqual([])
+    expect((yield* audit(root.id)).map((line) => [line.permission, line.class, line.decision])).toEqual([["edit", "A", "allow"]])
 
     yield* edit(["scripts/x.sh"], "not_ordinary")
     expect(stub.calls).toEqual(["edit"])
@@ -453,8 +621,11 @@ it.instance("edits follow what the tool learned, and an ordinary one leaves no l
     expect(yield* failure(edit(["package.json"], "sensitive"))).toBeInstanceOf(PermissionV1.DeferredError)
     expect(yield* failure(edit([".env"], "secret"))).toBeInstanceOf(PermissionV1.DeferredError)
     // With no Undo the table judges the file itself (C58). This session has no Git, so the worktree is `/` and a bare
-    // name lands outside the folder. Inside it, an ordinary file is A and the rest is held, and none of it meets the decider.
-    expect(yield* failure(edit(["b.ts"], "not_ordinary", false))).toBeInstanceOf(PermissionV1.DeferredError)
+    // name lands outside the folder, where a write is refused (U11 rule 1) and the agent is told to copy it in first.
+    // Inside it, an ordinary file is A and the rest is held, and none of it meets the decider.
+    const outside = yield* failure(edit(["b.ts"], "not_ordinary", false))
+    expect(outside).toBeInstanceOf(PermissionV1.DeniedError)
+    expect((outside as Error).message).toContain("Copy the file into the project first")
     const test = yield* TestInstance
     yield* edit([path.join(test.directory, "c.ts")], "no_undo", false)
     expect(yield* failure(edit([path.join(test.directory, ".github/x.yml")], "no_undo", false))).toBeInstanceOf(
@@ -462,10 +633,11 @@ it.instance("edits follow what the tool learned, and an ordinary one leaves no l
     )
     expect(stub.calls).toEqual(["edit"])
     expect((yield* audit(root.id)).map((line) => [line.class, line.category])).toEqual([
+      ["A", undefined],
       ["P", "edit-not-ordinary"],
       ["D", "sensitive_file"],
       ["D", "secret_file"],
-      ["D", "outside_folder"],
+      ["X", "outside_write"],
       ["A", undefined],
       ["D", "sensitive_file"],
     ])
@@ -593,12 +765,10 @@ it.instance("a decision that cannot be recorded gives no approval, and refusing 
     expect(held!.movedOnAt).toBeNumber()
     expect(held!.always).toEqual([])
 
-    // The automatic class gets no pass either.
-    expect(
-      yield* failure(
-        ask({ sessionID: root.id, permission: "task", patterns: ["general"], metadata: {}, always: [], ruleset: [] }),
-      ),
-    ).toBeInstanceOf(PermissionV1.DeferredError)
+    // Class A grants nothing critical, so its line is a record and not a condition: it runs, with the failure logged.
+    yield* ask({ sessionID: root.id, permission: "task", patterns: ["general"], metadata: {}, always: [], ruleset: [] }).pipe(
+      Effect.timeout("2 seconds"),
+    )
 
     stub.answer = "reject"
     expect(yield* failure(ask(bash(root.id, "mkdir -p other", test.directory)))).toBeInstanceOf(
@@ -631,7 +801,7 @@ it.instance("a decision that cannot be recorded gives no approval, and refusing 
       always: [],
       ruleset: [],
     }).pipe(Effect.exit, Effect.forkScoped)
-    const items = yield* waitForPending(4)
+    const items = yield* waitForPending(3)
     const waiting = items.find((item) => item.permission === "spend_limit")!
     expect(waiting.movedOnAt).toBeUndefined()
     yield* reply({ requestID: waiting.id, reply: "once" })
@@ -805,12 +975,16 @@ flows.instance(
       const { root } = yield* lineage
       const test = yield* TestInstance
       const outside = outsideFolder()
+      // A plain look out of the folder runs on record with nobody asked (U11 rule 1). A secret out there still waits.
       writeFileSync(path.join(outside, "note.txt"), "from outside\n")
-      const command = `cat ${path.join(outside, "note.txt")}`
+      yield* shell(root.id, `cat ${path.join(outside, "note.txt")}`, test.directory)
+      expect(yield* list).toEqual([])
+      writeFileSync(path.join(outside, ".env"), "from outside\n")
+      const command = `cat ${path.join(outside, ".env")}`
 
       const error = yield* failure(shell(root.id, command, test.directory))
       expect(error).toBeInstanceOf(PermissionV1.DeferredError)
-      expect((error as PermissionV1.DeferredError).category).toBe("outside_folder")
+      expect((error as PermissionV1.DeferredError).category).toBe("secret_file")
       const held = yield* list
       expect(held.map((item) => item.permission)).toEqual(["external_directory"])
 
@@ -833,7 +1007,15 @@ flows.instance("AU-22: an edit outside the project is one decision too, for writ
     const one = outsideFolder()
     const two = outsideFolder()
 
-    const target = path.join(one, "a.txt")
+    // An ordinary write out of the folder is refused with nobody asked, and the agent is told to copy it in (U11 rule 1).
+    const plain = yield* failure(write(root.id, path.join(one, "a.txt"), "written"))
+    expect(plain).toBeInstanceOf(PermissionV1.DeniedError)
+    expect((plain as Error).message).toContain("the original is not changed")
+    expect(existsSync(path.join(one, "a.txt"))).toBe(false)
+    expect(yield* list).toEqual([])
+
+    // A secret out there is a person's call, and that answer is one decision.
+    const target = path.join(one, ".env")
     expect(yield* failure(write(root.id, target, "written"))).toBeInstanceOf(PermissionV1.DeferredError)
     const held = yield* list
     expect(held.map((item) => item.permission)).toEqual(["external_directory"])
@@ -845,11 +1027,11 @@ flows.instance("AU-22: an edit outside the project is one decision too, for writ
     // Two files in one folder, one in another: retrying prompt by prompt would never reach the end of this.
     const text = [
       "*** Begin Patch",
-      `*** Add File: ${path.join(one, "b.txt")}`,
+      `*** Add File: ${path.join(one, ".env.b")}`,
       "+b",
-      `*** Add File: ${path.join(one, "c.txt")}`,
+      `*** Add File: ${path.join(one, ".env.c")}`,
       "+c",
-      `*** Add File: ${path.join(two, "d.txt")}`,
+      `*** Add File: ${path.join(two, ".env.d")}`,
       "+d",
       "*** End Patch",
     ].join("\n")
@@ -858,11 +1040,11 @@ flows.instance("AU-22: an edit outside the project is one decision too, for writ
     expect(patchHeld.length).toBe(1)
     yield* approve(patchHeld[0]!.id)
     yield* patch(root.id, text)
-    expect(readFileSync(path.join(two, "d.txt"), "utf8").trim()).toBe("d")
+    expect(readFileSync(path.join(two, ".env.d"), "utf8").trim()).toBe("d")
     expect(yield* list).toEqual([])
 
     // Nothing is left over from that answer: the folder is asked about again, not passed on the way to the edit.
-    expect(yield* failure(write(root.id, path.join(one, "e.txt"), "e"))).toBeInstanceOf(PermissionV1.DeferredError)
+    expect(yield* failure(write(root.id, path.join(one, ".env.e"), "e"))).toBeInstanceOf(PermissionV1.DeferredError)
     expect((yield* list).map((item) => item.permission)).toEqual(["external_directory"])
   }),
 )
@@ -901,7 +1083,7 @@ flows.instance("an answer to one prompt does not lift a refusal on what followed
     const state = path.join(Global.Path.state, "row67-probe.txt")
     const text = [
       "*** Begin Patch",
-      `*** Add File: ${path.join(outside, "fine.txt")}`,
+      `*** Add File: ${path.join(outside, ".env")}`,
       "+fine",
       `*** Add File: ${state}`,
       "+no",
@@ -915,7 +1097,7 @@ flows.instance("an answer to one prompt does not lift a refusal on what followed
     const error = yield* failure(patch(root.id, text))
     expect((error as PermissionV1.DeniedError).message).toBe(REFUSED_TEXT)
     expect(existsSync(state)).toBe(false)
-    expect(existsSync(path.join(outside, "fine.txt"))).toBe(false)
+    expect(existsSync(path.join(outside, ".env"))).toBe(false)
     expect((yield* audit(root.id)).filter((line) => line.class === "X").length).toBe(1)
   }),
 )
@@ -925,7 +1107,8 @@ flows.instance("an answer to one prompt does not lift a refusal on what followed
 flows.instance("T-01: one click on a folder entry runs only the edit it showed, and that edit has its own line", () =>
   Effect.gen(function* () {
     const { root } = yield* lineage
-    const target = path.join(outsideFolder(), ".zshrc")
+    // A secret out of the folder: still held for a person, where a plain write out of it is refused (U11 rule 1).
+    const target = path.join(outsideFolder(), ".env")
     const answers = yield* late
 
     expect(yield* failure(write(root.id, target, "seen"))).toBeInstanceOf(PermissionV1.DeferredError)
@@ -934,7 +1117,7 @@ flows.instance("T-01: one click on a folder entry runs only the edit it showed, 
     expect(held?.metadata.call).toEqual({ tool: "write", args: { filePath: target, content: "seen" } })
     const [folderLine] = yield* audit(root.id)
     expect(folderLine?.follows[0]?.permission).toBe("edit")
-    expect(folderLine?.follows[0]?.patterns[0]).toEndWith(".zshrc")
+    expect(folderLine?.follows[0]?.patterns[0]).toEndWith(".env")
     // What goes on record is that the edit was asked about, never what it would have written.
     expect(auditLines(root.id).some((line) => JSON.stringify(line).includes("seen"))).toBe(false)
     yield* answers.permission((yield* reply({ requestID: held!.id, reply: "once" }))!)
@@ -951,10 +1134,10 @@ flows.instance("T-01: one click on a folder entry runs only the edit it showed, 
     expect(readFileSync(target, "utf8")).toBe("seen")
     const lines = yield* audit(root.id)
     expect(lines.filter((line) => line.permission === "edit")).toHaveLength(1)
-    // Outside the folder an edit's own class is `outside_folder` (C58). Still D, and still a person's answer.
+    // A secret's edit is its own class (C58). Still D, and still a person's answer.
     expect(lines.find((line) => line.permission === "edit")).toMatchObject({
       class: "D",
-      category: "outside_folder",
+      category: "secret_file",
       decidedBy: "person",
       decision: "allow",
     })
@@ -970,17 +1153,17 @@ flows.instance("T-01: a folder answer that named nothing else does not answer th
     const folderAsk = {
       sessionID: root.id,
       permission: "external_directory",
-      patterns: ["/outside/*"],
-      metadata: { filepath: "/outside/.zshrc" },
+      patterns: ["/outside/.ssh/*"],
+      metadata: { filepath: "/outside/.ssh/config" },
       always: [],
       ruleset: [],
-      follows: [{ permission: "edit", patterns: ["../outside/.zshrc"] }],
+      follows: [{ permission: "edit", patterns: ["../outside/.ssh/config"] }],
     } satisfies PermissionV1.AskInput
     const editAsk = {
       sessionID: root.id,
       permission: "edit",
-      patterns: ["../outside/.zshrc"],
-      metadata: { filepath: "/outside/.zshrc", diff: "+unseen" },
+      patterns: ["../outside/.ssh/config"],
+      metadata: { filepath: "/outside/.ssh/config", diff: "+unseen" },
       always: [],
       ruleset: [],
       editClass: "no_undo",
@@ -1032,7 +1215,7 @@ flows.instance("T-01: with no line for what the answer covers, it does not run",
   Effect.gen(function* () {
     const { root } = yield* lineage
     const answers = yield* late
-    const target = path.join(outsideFolder(), "a.txt")
+    const target = path.join(outsideFolder(), ".env")
     expect(yield* failure(write(root.id, target, "x"))).toBeInstanceOf(PermissionV1.DeferredError)
     yield* answers.permission((yield* reply({ requestID: (yield* list)[0]!.id, reply: "once" }))!)
     rmSync(path.join(folder, `${root.id}.jsonl`), { force: true })
@@ -1547,8 +1730,9 @@ flows.instance("AU-25: after a restart the prompt that follows is judged again, 
     const test = yield* TestInstance
     const answers = yield* late
     const outside = outsideFolder()
-    writeFileSync(path.join(outside, "note.txt"), "from outside\n")
-    const command = `cat ${path.join(outside, "note.txt")}`
+    // A secret: a plain look out of the folder would run with nobody asked (U11 rule 1).
+    writeFileSync(path.join(outside, ".env"), "from outside\n")
+    const command = `cat ${path.join(outside, ".env")}`
     expect(yield* failure(shell(root.id, command, test.directory))).toBeInstanceOf(PermissionV1.DeferredError)
 
     yield* store.reload({ directory: test.directory })

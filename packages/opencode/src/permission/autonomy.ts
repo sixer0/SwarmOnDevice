@@ -33,6 +33,7 @@ import { GlobalBus, type GlobalEvent } from "@/bus/global"
 import { InstanceState } from "@/effect/instance-state"
 import type { SessionID } from "@/session/schema"
 import { Secrets } from "@/tool/secrets"
+import type { Archive } from "@/tool/archive"
 
 // Whether a session runs without a person at the prompt, kept on the server so it holds with every window closed.
 //
@@ -51,6 +52,9 @@ const MAX_SHORT_DIRECTORY = 200
 const MAX_NAME = 100
 const MAX_PATTERN = 300
 const MAX_REASON = 200
+const MAX_MOVED = 10
+const MAX_MOVED_PATH = 150
+const MAX_FLAGS = 10
 const AUDIT_LINE_BYTES = 4096
 const AUDIT_RETENTION_DAYS = 30
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -136,7 +140,32 @@ const Decision = Schema.Struct({
       "plan_mode",
       "app_state",
       "asks_every_time",
+      // U11 register: D, X and A categories.
+      "outward_not_in_mission",
+      "script_flagged",
+      "script_unreadable",
+      "program_not_trusted",
+      "outside_write",
+      "delete_compound",
+      "credential_change",
+      "outside_read",
+      "outside_copy",
+      "mcp_tool",
+      "consented",
+      "archived",
+      "script",
     ]),
+  ),
+  via: Schema.optional(Schema.Literals(["grant", "duplicate", "consent", "outward", "user_request"])),
+  duplicateOf: Schema.optional(Schema.String),
+  consentID: Schema.optional(Schema.String),
+  attempts: Schema.optional(Schema.Int),
+  script: Schema.optional(
+    Schema.Struct({
+      bytes: Schema.Int,
+      sha: Schema.String.check(Schema.isPattern(/^[0-9a-f]{64}$/)),
+      flags: Schema.Array(Schema.String),
+    }),
   ),
   risk: Schema.NullOr(Schema.String),
   canUndo: Schema.Boolean,
@@ -152,9 +181,13 @@ const Outcome = Schema.Struct({
   ...Chained,
   type: Schema.Literal("outcome"),
   requestID: Schema.String,
-  outcome: Schema.Literals(["ran", "failed", "not_run", "approved_later", "rejected_later", "abandoned", "undone"]),
+  outcome: Schema.Literals(["ran", "failed", "not_run", "approved_later", "rejected_later", "abandoned", "undone", "archived"]),
   exit: Schema.optional(Schema.Finite),
   by: Schema.optional(DecidedBy),
+  // Only on `archived`, as `Archive.ArchivedLine` in `tool/archive.ts` names them. Paths are relative to the session folder.
+  archive: Schema.optional(Schema.String),
+  moved: Schema.optional(Schema.Array(Schema.Struct({ from: Schema.String, to: Schema.String }))),
+  bytes: Schema.optional(Schema.Int),
 })
 const Marker = Schema.Struct({
   ...Chained,
@@ -170,6 +203,13 @@ const Marker = Schema.Struct({
     "decider_limit",
     "b0",
     "b1",
+    "consent_shown",
+    "consent_given",
+    "consent_cleared",
+    "archive_emptied",
+    "credential_snapshot",
+    "subagent_stopped",
+    "force_stop",
   ]),
   files: Schema.optional(Schema.Array(Schema.Literals([MODE_FILE, TRUST_FILE]))),
   decidedBy: DecidedBy,
@@ -195,7 +235,11 @@ export type AuditEntry =
       readonly memo?: boolean
       readonly follows?: typeof Decision.Type.follows
     })
-  | (Omit<Unchained<typeof Outcome.Type>, "by"> & { readonly by?: DecidedByName })
+  | (Omit<Unchained<typeof Outcome.Type>, "by"> & {
+      readonly by?: DecidedByName
+      // Never written: it only lets the paths of an `archived` line be masked like a pattern is.
+      readonly directory?: string
+    })
   | (Omit<Unchained<typeof Marker.Type>, "rootID" | "decidedBy"> & { readonly decidedBy: DecidedByName })
 
 export interface SkippedQuestion {
@@ -271,6 +315,14 @@ export const placeOf = Effect.fnUntraced(function* (
 /** The one way a change from outside alters a class: nothing more runs without a person. P only ever goes down. */
 export const afterCheck = <Class extends string>(value: Class, check: Check) =>
   value === "P" && check.externalChange.length > 0 ? ("D" as const) : value
+
+/**
+ * The recorder `Archive.move` takes (row 150), on the root's own chain. The archive module stays free of this file, and
+ * the session folder is added here so the moved paths are masked as a pattern is. A line that fails rejects, and the move
+ * reports it as not recorded.
+ */
+export const archiveRecorder = (record: Interface["record"], where: Where) => (line: Archive.ArchivedLine) =>
+  Effect.runPromise(record(where.root, { ...line, directory: where.directory }))
 
 const folder = () => path.join(Global.Path.state, "autonomy")
 const filePath = (file: StateFile) =>
@@ -373,6 +425,12 @@ function auditFields(root: string, entry: AuditEntry) {
       outcome: entry.outcome,
       exit: entry.exit,
       by: entry.by && ProjectTrust.printable(entry.by, MAX_NAME),
+      archive: entry.archive && ProjectTrust.printable(entry.archive, MAX_NAME),
+      moved: entry.moved?.slice(0, MAX_MOVED).map((item) => ({
+        from: ProjectTrust.printable(hide(item.from, entry.directory ?? "", MAX_MOVED_PATH), MAX_MOVED_PATH),
+        to: ProjectTrust.printable(hide(item.to, entry.directory ?? "", MAX_MOVED_PATH), MAX_MOVED_PATH),
+      })),
+      bytes: entry.bytes,
     }
   if (entry.type === "marker")
     return {
@@ -399,6 +457,15 @@ function auditFields(root: string, entry: AuditEntry) {
     patternsTruncated: patterns.some((item) => item.length > MAX_PATTERN),
     class: entry.class,
     category: entry.category,
+    via: entry.via,
+    duplicateOf: entry.duplicateOf && ProjectTrust.printable(entry.duplicateOf, MAX_NAME),
+    consentID: entry.consentID && ProjectTrust.printable(entry.consentID, MAX_NAME),
+    attempts: entry.attempts,
+    script: entry.script && {
+      bytes: entry.script.bytes,
+      sha: entry.script.sha,
+      flags: entry.script.flags.slice(0, MAX_FLAGS).map((flag) => ProjectTrust.printable(flag, MAX_NAME)),
+    },
     risk: entry.risk === undefined || entry.risk === null ? null : ProjectTrust.printable(entry.risk, MAX_NAME),
     canUndo: entry.canUndo,
     decidedBy: ProjectTrust.printable(entry.decidedBy, MAX_NAME),
@@ -422,6 +489,11 @@ function smaller(fields: Fields): Fields[] {
     "directory" in fields && fields.directory
       ? { ...fields, directory: ProjectTrust.printable(fields.directory, MAX_SHORT_DIRECTORY) }
       : fields
+  if (short.type === "outcome" && short.moved && short.moved.length > 0)
+    return [
+      { ...short, moved: short.moved.slice(0, Math.ceil(short.moved.length / 2)) },
+      { ...short, moved: [] },
+    ]
   if (short.type !== "decision") return [short]
   const base = { ...short, follows: [], patternsTruncated: true }
   return [
@@ -526,6 +598,8 @@ function openIn(text: string, id: string) {
       line.type === "decision" &&
       line.rootID === id &&
       line.decision === "defer" &&
+      // A call that matched one already held points at that entry: one entry, however many times it was asked (row 120).
+      line.via !== "duplicate" &&
       // Class A with "defer" is a skipped question, which nobody is asked to answer. A full queue took nothing in.
       (line.class === "D" || line.class === "P") &&
       line.category !== "queue_full" &&

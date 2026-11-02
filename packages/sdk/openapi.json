@@ -24323,8 +24323,54 @@
                   "folder_not_trusted",
                   "plan_mode",
                   "app_state",
-                  "asks_every_time"
+                  "asks_every_time",
+                  "outward_not_in_mission",
+                  "script_flagged",
+                  "script_unreadable",
+                  "program_not_trusted",
+                  "outside_write",
+                  "delete_compound",
+                  "credential_change",
+                  "outside_read",
+                  "outside_copy",
+                  "mcp_tool",
+                  "consented",
+                  "archived",
+                  "script"
                 ]
+              },
+              "via": {
+                "type": "string",
+                "enum": ["grant", "duplicate", "consent", "outward", "user_request"]
+              },
+              "duplicateOf": {
+                "type": "string"
+              },
+              "consentID": {
+                "type": "string"
+              },
+              "attempts": {
+                "type": "integer"
+              },
+              "script": {
+                "type": "object",
+                "properties": {
+                  "bytes": {
+                    "type": "integer"
+                  },
+                  "sha": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}$"
+                  },
+                  "flags": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": ["bytes", "sha", "flags"],
+                "additionalProperties": false
               },
               "risk": {
                 "type": "string"
@@ -24422,7 +24468,16 @@
               },
               "outcome": {
                 "type": "string",
-                "enum": ["ran", "failed", "not_run", "approved_later", "rejected_later", "abandoned", "undone"]
+                "enum": [
+                  "ran",
+                  "failed",
+                  "not_run",
+                  "approved_later",
+                  "rejected_later",
+                  "abandoned",
+                  "undone",
+                  "archived"
+                ]
               },
               "exit": {
                 "type": "number"
@@ -24430,6 +24485,28 @@
               "by": {
                 "type": "string",
                 "pattern": "^(gate|person|agent:[^/]+\\/.+|system:.+)$"
+              },
+              "archive": {
+                "type": "string"
+              },
+              "moved": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "from": {
+                      "type": "string"
+                    },
+                    "to": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["from", "to"],
+                  "additionalProperties": false
+                }
+              },
+              "bytes": {
+                "type": "integer"
               }
             },
             "required": ["v", "seq", "prev", "at", "type", "requestID", "outcome"],
@@ -24472,7 +24549,14 @@
                   "decider_closed",
                   "decider_limit",
                   "b0",
-                  "b1"
+                  "b1",
+                  "consent_shown",
+                  "consent_given",
+                  "consent_cleared",
+                  "archive_emptied",
+                  "credential_snapshot",
+                  "subagent_stopped",
+                  "force_stop"
                 ]
               },
               "files": {

@@ -2400,6 +2400,28 @@ export type AutonomyAuditLine =
         | "plan_mode"
         | "app_state"
         | "asks_every_time"
+        | "outward_not_in_mission"
+        | "script_flagged"
+        | "script_unreadable"
+        | "program_not_trusted"
+        | "outside_write"
+        | "delete_compound"
+        | "credential_change"
+        | "outside_read"
+        | "outside_copy"
+        | "mcp_tool"
+        | "consented"
+        | "archived"
+        | "script"
+      via?: "grant" | "duplicate" | "consent" | "outward" | "user_request"
+      duplicateOf?: string
+      consentID?: string
+      attempts?: number
+      script?: {
+        bytes: number
+        sha: string
+        flags: Array<string>
+      }
       risk: string
       canUndo: boolean
       decidedBy: string
@@ -2420,9 +2442,15 @@ export type AutonomyAuditLine =
       at: number
       type: "outcome"
       requestID: string
-      outcome: "ran" | "failed" | "not_run" | "approved_later" | "rejected_later" | "abandoned" | "undone"
+      outcome: "ran" | "failed" | "not_run" | "approved_later" | "rejected_later" | "abandoned" | "undone" | "archived"
       exit?: number
       by?: string
+      archive?: string
+      moved?: Array<{
+        from: string
+        to: string
+      }>
+      bytes?: number
     }
   | {
       v: 1
@@ -2441,6 +2469,13 @@ export type AutonomyAuditLine =
         | "decider_limit"
         | "b0"
         | "b1"
+        | "consent_shown"
+        | "consent_given"
+        | "consent_cleared"
+        | "archive_emptied"
+        | "credential_snapshot"
+        | "subagent_stopped"
+        | "force_stop"
       files?: Array<"mode.json" | "trust.json">
       decidedBy: string
     }

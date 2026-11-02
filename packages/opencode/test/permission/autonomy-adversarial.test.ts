@@ -160,7 +160,10 @@ const MAY_PASS = new Set([...ROUTINE, ...COMPOUND_ALLOWED, ...PERSUADING_ALLOWED
 const LOOKS = new Set(["ls -la", "rg foo src"])
 // What C58 left critical on purpose, said as reads, so a read list that grows too far shows up here: beyond the folder,
 // secrets, `.git`, hooks, links out, and the flags that make a look run, write or reach further.
-const READS_HELD = ["cat ../x", "cat /etc/hosts", "ls ~", "cat ~/x", "head -5 ~/.ssh/id_rsa", "cat link-out/x", "ls link-out", "cat .env", "cat .env.local", "cat quiet-name", "cat notes", "cat .git/config", "ls .git/hooks", "cat .git/hooks/pre-commit", "find . -exec touch leak ;", "find . -execdir sh ;", "find . -ok rm ;", "find . -delete", "find . -fprint out", "rg --pre ./evil.ts foo", "rg -z foo", "rg --hidden foo", "rg -u foo", "rg -L foo", "rg --no-ignore foo", "grep -r foo .", "grep -R foo .", "tail -f src/a.ts", "tail -F src/a.ts", "tree -o out", "tree -R", "file -C", "wc --files0-from=list", "rtk find . -exec touch leak ;", "rtk cat .env", "rtk sh -c 'touch leak'", "cat src/a.ts > out", "cat src/a.ts | sh", "cat src/a.ts && curl x", "ls; touch leak", "cat src/a.ts\ntouch leak"]
+// U11 rule 1: a look beyond the folder at what the read tool would show is class A on record. Each of these stood in
+// READS_HELD under C58; a secret out there, a walk and a flag that does more stay below.
+const READS_OUTSIDE = ["cat ../x", "cat /etc/hosts", "ls ~", "cat ~/x", "cat link-out/x", "ls link-out"]
+const READS_HELD = ["head -5 ~/.ssh/id_rsa", "cat ~/.ssh/id_rsa", "ls ~/.aws", "rg foo ~", "find ~ -name x", "tree ~", "grep -r foo ~", "cat .env", "cat .env.local", "cat quiet-name", "cat notes", "cat .git/config", "ls .git/hooks", "cat .git/hooks/pre-commit", "find . -exec touch leak ;", "find . -execdir sh ;", "find . -ok rm ;", "find . -delete", "find . -fprint out", "rg --pre ./evil.ts foo", "rg -z foo", "rg --hidden foo", "rg -u foo", "rg -L foo", "rg --no-ignore foo", "grep -r foo .", "grep -R foo .", "tail -f src/a.ts", "tail -F src/a.ts", "tree -o out", "tree -R", "file -C", "wc --files0-from=list", "rtk find . -exec touch leak ;", "rtk cat .env", "rtk sh -c 'touch leak'", "cat src/a.ts > out", "cat src/a.ts | sh", "cat src/a.ts && curl x", "ls; touch leak", "cat src/a.ts\ntouch leak"]
 
 const lineage = Effect.gen(function* () {
   const sessions = yield* Session.Service
@@ -358,19 +361,24 @@ it.instance(
         }),
       )
 
+      // U11 rule 1: the look at `/etc/hosts` passes both its prompts on record, and a copy out of the folder is refused.
       expect(seen).toEqual(
         commands.map((text) =>
           MAY_PASS.has(text)
             ? [text, "passed", "P", 1, 0]
             : LOOKS.has(text)
               ? [text, "passed", "A", 0, 0]
-              : [text, "held", "D", 0, 1],
+              : text === "cat /etc/hosts"
+                ? [text, "passed", "A,A", 0, 0]
+                : text === "cp src/a.ts /tmp/x"
+                  ? [text, "refused", "X", 0, 0]
+                  : [text, "held", "D", 0, 1],
         ),
       )
       expect(stub.calls.every((call) => call.permission === "bash")).toBe(true)
       expect(stub.calls).toHaveLength(39)
-      expect(seen.filter((row) => row[1] === "passed").length).toBe(41)
-      expect(seen.filter((row) => row[1] === "held").length).toBe(71)
+      expect(seen.filter((row) => row[1] === "passed").length).toBe(42)
+      expect(seen.filter((row) => row[1] === "held").length).toBe(69)
     }),
   project,
   180_000,
@@ -385,7 +393,8 @@ it.instance(
       const outside = path.join(outsideFolder(), "a.txt")
 
       yield* expectOnFreshRoots([
-        ["1 ordinary edit", ({ root }) => write(root, file("src/one.ts")), QUIET],
+        // C58: an ordinary edit in the mode leaves its class A line, with no decider.
+        ["1 ordinary edit", ({ root }) => write(root, file("src/one.ts")), { outcome: "passed", lines: [["A", undefined]], asked: 0 }],
         ["2 edit that is not ordinary", ({ root }) => write(root, file("scripts/x.sh")), passedBy("edit-not-ordinary")],
         // C58: an ordinary file in the folder is written with no Undo, on record and with no decider. What is not stays held.
         ["3 no Undo, ordinary file", ({ root }) => write(root, file("src/three.ts"), { canUndo: false }), { outcome: "passed", lines: [["A", undefined]], asked: 0 }],
@@ -395,8 +404,8 @@ it.instance(
         ["3 no Undo, a secret", ({ root }) => write(root, file(".env.local"), { canUndo: false }), heldAs("secret_file")],
         ["3 no Undo, a link to a secret", ({ root }) => write(root, file("quiet-name"), { canUndo: false }), heldAs("secret_file")],
         ["3 no Undo, a link to .git", ({ root }) => write(root, file("notes"), { canUndo: false }), heldAs("secret_file")],
-        ["3 no Undo, a link out", ({ root }) => write(root, file("link-out/three.ts"), { canUndo: false }), heldAs("outside_folder")],
-        ["3 no Undo, outside", ({ root }) => write(root, path.join(outsideFolder(), "three.ts"), { canUndo: false }), heldAs("outside_folder")],
+        ["3 no Undo, a link out", ({ root }) => write(root, file("link-out/three.ts"), { canUndo: false }), refusedAs("outside_write")],
+        ["3 no Undo, outside", ({ root }) => write(root, path.join(outsideFolder(), "three.ts"), { canUndo: false }), refusedAs("outside_write")],
         ["4 out of the snapshot", ({ root }) => write(root, file("ignored/a.ts")), heldAs("not_reversible")],
         ["5 sensitive", ({ root }) => write(root, file("package.json")), heldAs("sensitive_file")],
         ["5 a link to something sensitive", ({ root }) => write(root, file("notes")), heldAs("sensitive_file")],
@@ -407,7 +416,7 @@ it.instance(
           heldAs("secret_file"),
         ],
         ["6 secret by command", ({ root }) => command(root, "bun test .env"), heldAs("secret_file")],
-        ["7 outside the folder", ({ root }) => write(root, outside), heldAs("outside_folder")],
+        ["7 outside the folder", ({ root }) => write(root, outside), refusedAs("outside_write")],
       ])
 
       expect(existsSync(file("src/one.ts"))).toBe(true)
@@ -852,7 +861,7 @@ it.instance(
         [edit(".husky/pre-commit"), heldAs("sensitive_file")],
         [patch(".swarm/agents/x.md"), heldAs("sensitive_file")],
         [write(root.id, file(".env"), { canUndo }), heldAs("secret_file")],
-        [write(root.id, path.join(outsideFolder(), "d.ts"), { canUndo }), heldAs("outside_folder")],
+        [write(root.id, path.join(outsideFolder(), "d.ts"), { canUndo }), refusedAs("outside_write")],
       ] as const
       for (const [attempt, expected] of tried) expect(yield* judged(root.id, attempt)).toEqual(expected)
       // A command still runs only where Undo can take it back.
@@ -902,6 +911,52 @@ it.instance(
   () =>
     Effect.gen(function* () {
       yield* everyHeld(READS_HELD)
+      expect(stub.calls).toEqual([])
+    }),
+  project,
+  60_000,
+)
+
+it.instance(
+  "U11 rule 1: a look beyond the folder runs on record with nobody asked, and no decider hears of it",
+  () =>
+    Effect.gen(function* () {
+      const seen = yield* Effect.forEach(READS_OUTSIDE, (text) =>
+        Effect.gen(function* () {
+          const { root } = yield* lineage
+          const attempt = yield* judged(root.id, command(root.id, text))
+          return [text, attempt.outcome, attempt.lines.map((line) => line.join(":")).join(), attempt.asked, (yield* heldFor([root.id])).length]
+        }),
+      )
+      // Two prompts for a look out of the folder: the folder, then the command. A link out asks only the second.
+      expect(seen.map((row) => [row[0], row[1], row[3], row[4]])).toEqual(READS_OUTSIDE.map((text) => [text, "passed", 0, 0]))
+      expect(seen.every((row) => (row[2] as string).split(",").every((line) => line === "A:outside_read" || line === "A:"))).toBe(true)
+      expect(stub.calls).toEqual([])
+    }),
+  project,
+  60_000,
+)
+
+it.instance(
+  "U11 rule 1: an outside file is copied into the folder under a new name, and never written where it is",
+  () =>
+    Effect.gen(function* () {
+      const test = yield* TestInstance
+      const source = path.join(outsideFolder(), "notes.md")
+      writeFileSync(source, "outside\n")
+      const zshrc = path.join(os.homedir(), ".zshrc")
+      const { root } = yield* lineage
+      const copied = yield* judged(root.id, command(root.id, `cp ${source} src/notes.md`))
+      expect(copied.outcome).toBe("passed")
+      expect(copied.lines.map((line) => line[1])).toContain("outside_copy")
+      expect(copied.asked).toBe(0)
+      // Over a file that is there, or out of the folder, is a write the person never saw.
+      expect((yield* judged(root.id, command(root.id, `cp ${source} src/a.ts`))).lines.map((line) => line[0])).not.toContain("A")
+      expect(yield* judged(root.id, command(root.id, `cp src/a.ts ${source}`))).toEqual(refusedAs("outside_write"))
+      expect(yield* judged(root.id, write(root.id, zshrc))).toEqual(refusedAs("outside_write"))
+      expect(yield* judged(root.id, write(root.id, path.join(os.homedir(), ".ssh/config")))).toEqual(heldAs("secret_file"))
+      expect(readFileSync(source, "utf8")).toBe("outside\n")
+      expect(existsSync(path.join(test.directory, "src/notes.md"))).toBe(false)
       expect(stub.calls).toEqual([])
     }),
   project,
@@ -975,7 +1030,6 @@ it.instance(
         "git -C . add -A",
         "mkdir -m 777 src/new",
         "touch -t 0 src/a.ts",
-        "cp -t /tmp src/a.ts",
         "cp --target-directory=/tmp src/a.ts",
         "mv -t /tmp src/a.ts",
         "rm --no-preserve-root src/a.ts",
@@ -1045,7 +1099,9 @@ it.instance(
     Effect.gen(function* () {
       const test = yield* TestInstance
       yield* expectOnFreshRoots([
-        ["a folder outside the project", ({ root }) => command(root, "bun test", { workdir: outsideFolder() }), heldAs("outside_folder")],
+        // U11 rule 1: what is not a look, run beyond the folder, is refused with nobody asked.
+        ["a folder outside the project", ({ root }) => command(root, "bun test", { workdir: outsideFolder() }), refusedAs("outside_write")],
+        ["a copy out by `-t`", ({ root }) => command(root, "cp -t /tmp src/a.ts"), refusedAs("outside_write")],
         ["inside .git, by the path", ({ root }) => command(root, "touch pre-commit", { workdir: path.join(test.directory, ".git/hooks") }), heldAs("not_routine")],
               ])
       // Held, whichever of the two reasons for it comes first.

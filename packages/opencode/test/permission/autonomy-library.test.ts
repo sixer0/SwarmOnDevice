@@ -275,21 +275,33 @@ const heldAs = (category: string, permission = "external_directory") => ({
   lines: [[permission, "D", category]],
   asked: 0,
 })
+/** U11 rule 1: a look out of the folder runs on record with nobody asked, and a write out of it is refused. */
+const looked = (...permissions: string[]) => ({
+  outcome: "passed",
+  lines: permissions.map((permission) => [permission, "A", "outside_read"]),
+  asked: 0,
+})
+const refusedAs = (category: string) => ({ outcome: "refused", lines: [["external_directory", "X", category]], asked: 0 })
+type Seen = { outcome: string; lines: (string | undefined)[][]; asked: number }
 const SILENT = { outcome: "passed", lines: [], asked: 0 }
 const QUIET_READ = { outcome: "passed", lines: [], added: 0, asked: 0 }
 
 type Attempt = (root: SessionID) => ReturnType<typeof use>
 
-const everyHeld = (cases: readonly (readonly [label: string, attempt: Attempt, category?: string, permission?: string])[]) =>
+/** Each attempt is held for a person unless the case says what else becomes of it. Only what is held leaves an entry. */
+const everyHeld = (
+  cases: readonly (readonly [label: string, attempt: Attempt, category?: string | Seen, permission?: string])[],
+) =>
   Effect.forEach(cases, ([label, attempt, category, permission]) =>
     Effect.gen(function* () {
       const ids = yield* lineage
       const seen = yield* verdictOf(ids.root, attempt(ids.root))
-      expect([label, seen]).toEqual([label, heldAs(category ?? "outside_folder", permission)])
+      const expected: Seen = typeof category === "object" ? category : heldAs(category ?? "outside_folder", permission)
+      expect([label, seen]).toEqual([label, expected])
       const entries = yield* heldFor([ids.root])
       expect([label, entries.map((entry) => [entry.deferred, entry.always, typeof entry.movedOnAt])]).toEqual([
         label,
-        [[true, [], "number"]],
+        expected.outcome === "held" ? [[true, [], "number"]] : [],
       ])
     }),
   )
@@ -363,17 +375,31 @@ it.instance("XF-01: with a decider that says allow, no tool gets past the folder
     const env = install()
     const library = env.S
     const far = env.far
+    // U11 rule 1: what only looks runs on record and never meets the decider; a write is refused; the rest waits.
     yield* everyHeld([
-      ["read a file", (root) => use("read", { filePath: `${far}/f.md` }, root, { library })],
-      ["read a folder", (root) => use("read", { filePath: far }, root, { library })],
+      ["read a file", (root) => use("read", { filePath: `${far}/f.md` }, root, { library }), looked("external_directory")],
+      ["read a folder", (root) => use("read", { filePath: far }, root, { library }), looked("external_directory")],
+      // ripgrep opens hidden files, so a search out of the folder waits.
       ["grep", (root) => use("grep", { pattern: "alpha", path: far }, root, { library })],
-      ["glob", (root) => use("glob", { pattern: "*.md", path: far }, root, { library })],
-      ["write", (root) => use("write", { filePath: `${far}/new.md`, content: "x\n" }, root, { library })],
-      ["edit", (root) => use("edit", { filePath: `${far}/f.md`, oldString: "alpha", newString: "x" }, root, { library })],
-      ["apply_patch", (root) => use("apply_patch", { patchText: PATCH(`${far}/f.md`) }, root, { library })],
+      ["glob", (root) => use("glob", { pattern: "*.md", path: far }, root, { library }), looked("external_directory")],
+      [
+        "write",
+        (root) => use("write", { filePath: `${far}/new.md`, content: "x\n" }, root, { library }),
+        refusedAs("outside_write"),
+      ],
+      [
+        "edit",
+        (root) => use("edit", { filePath: `${far}/f.md`, oldString: "alpha", newString: "x" }, root, { library }),
+        refusedAs("outside_write"),
+      ],
+      [
+        "apply_patch",
+        (root) => use("apply_patch", { patchText: PATCH(`${far}/f.md`) }, root, { library }),
+        refusedAs("outside_write"),
+      ],
       ["lsp", (root) => use("lsp", { operation: "hover", filePath: `${far}/a.ts`, line: 1, character: 1 }, root, { library })],
-      ["bash", (root) => shell(`cat ${far}/f.md`, root, { library })],
-      ["bash in that folder", (root) => shell("ls", root, { library, workdir: far })],
+      ["bash", (root) => shell(`cat ${far}/f.md`, root, { library }), looked("external_directory", "bash")],
+      ["bash in that folder", (root) => shell("ls", root, { library, workdir: far }), looked("external_directory", "bash")],
     ])
     expect(stub.calls).toEqual([])
     expect(readFileSync(path.join(far, "f.md"), "utf8")).toBe("alpha far away\n")
@@ -418,9 +444,10 @@ it.instance("XF-01: the request itself, whatever folder it names and however it 
           ids.root,
           ask(ids.root, [`${env.far}/for-edit/*`], { follows: [{ permission: "edit", patterns: ["x"] }] }),
         )
-        expect([label, edit]).toEqual([label, heldAs("outside_folder")])
+        // A write out of the folder is refused with nobody asked (U11 rule 1), and leaves no entry.
+        expect([label, edit]).toEqual([label, refusedAs("outside_write")])
         const entries = yield* heldFor([ids.root, ids.child])
-        expect(entries.map((entry) => entry.always)).toEqual([[], [], []])
+        expect(entries.map((entry) => entry.always)).toEqual([[], []])
       }),
     )
     expect(stub.calls).toEqual([])
@@ -485,18 +512,21 @@ it.instance("XF-02: the pass covers nothing but the copy", () =>
     const read = (file: string) => (root: SessionID) => use("read", { filePath: file }, root, { library })
     const grep = (dir: string) => (root: SessionID) => use("grep", { pattern: "alpha", path: dir }, root, { library })
     const glob = (dir: string) => (root: SessionID) => use("glob", { pattern: "*.md", path: dir }, root, { library })
+    // Whatever touches the copy or a folder above it is held. What lands elsewhere out of the folder is an ordinary look
+    // (U11 rule 1): on record, with no pass and no decider, and a search that opens hidden files still waits.
+    const OUT = looked("external_directory")
     yield* everyHeld([
-      ["a link in it leading out", read(`${env.S}/link-out/f.md`)],
+      ["a link in it leading out", read(`${env.S}/link-out/f.md`), OUT],
       ["dots that stay inside", read(`${env.S}/a/../b.md`)],
-      ["dots that leave", read(`${env.S}/../app.asar`)],
-      ["a sibling by the same prefix", read(`${env.S}-baru/a.md`)],
+      ["dots that leave", read(`${env.S}/../app.asar`), OUT],
+      ["a sibling by the same prefix", read(`${env.S}-baru/a.md`), OUT],
       ["the folder above", read(env.R)],
-      ["a file in the folder above", read(`${env.R}/app.asar`)],
+      ["a file in the folder above", read(`${env.R}/app.asar`), OUT],
       ["a project link to the copy", read(`${test.directory}/lnk/a.md`)],
       ["grep above", grep(env.R)],
       ["glob above", glob(env.R)],
       ["grep through the link out", grep(`${env.S}/link-out`)],
-      ["glob through the link out", glob(`${env.S}/link-out`)],
+      ["glob through the link out", glob(`${env.S}/link-out`), OUT],
       ["grep with dots", grep(`${env.S}/../knowledge-library`)],
       ["a secret's name stays a secret", read(`${env.S}/x/.env`), "secret_file", "read"],
     ])
@@ -790,11 +820,18 @@ it.instance("XF-08: with the library off, or no library, a read of the same file
     expect(denied).toBeUndefined()
     expect(yield* attempts(denied)).toEqual(held)
 
+    // With no library known the folder is any folder out of the project: a look runs on record (U11 rule 1), never with the
+    // decider, and a search that opens hidden files waits.
+    const outside = [
+      { name: "read", ...looked("external_directory"), always: [] },
+      { name: "grep", ...heldAs("outside_folder"), always: [[] as readonly string[]] },
+      { name: "glob", ...looked("external_directory"), always: [] },
+    ]
     for (const none of [{ kind: "no-app" }, { kind: "failed", code: "missing" }] as const) {
       status = none
       const library = yield* libraryFor("build", {})
       expect(library).toBeUndefined()
-      expect(yield* attempts(library)).toEqual(held)
+      expect(yield* attempts(library)).toEqual(outside)
     }
     expect(stub.calls).toEqual([])
   }),

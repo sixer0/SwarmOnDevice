@@ -18,6 +18,7 @@ import path from "node:path"
 import { Effect, Exit, Schema } from "effect"
 import { Global } from "@opencode-ai/core/global"
 import { Autonomy } from "../../src/permission/autonomy"
+import { Archive } from "../../src/tool/archive"
 import { SessionID } from "../../src/session/schema"
 
 const folder = path.join(Global.Path.state, "autonomy")
@@ -118,6 +119,77 @@ describe("schema", () => {
     expect(Exit.isSuccess(decode({ ...outcome, outcome: "ran", by: "somebody" }))).toBe(false)
     expect(Exit.isSuccess(decode({ ...outcome, outcome: "ran", prev: "short" }))).toBe(false)
     expect(Exit.isSuccess(decode({ ...outcome, outcome: "ran", diff: "x" }))).toBe(false)
+  })
+
+  test("U11 fields, the archived outcome and the new markers are written and read back", async () => {
+    const hash = sha("script")
+    const moved = Array.from({ length: 40 }, (_, index) => ({ from: `src/${"a".repeat(140)}${index}`, to: `to/${"b".repeat(140)}${index}` }))
+    await run((service) =>
+      Effect.gen(function* () {
+        yield* service.record(
+          root,
+          decision({
+            class: "A",
+            category: "script",
+            via: "consent",
+            duplicateOf: "per_0",
+            consentID: "con_1",
+            attempts: 2,
+            script: { bytes: 12, sha: hash, flags: ["network", "rm"] },
+          }),
+        )
+        yield* service.record(root, { type: "outcome", requestID: "per_2", outcome: "archived", archive: "arc_1", moved: [{ from: "a.txt", to: ".swarm/archive/arc_1/a.txt" }], bytes: 5, directory })
+        yield* service.record(root, { type: "outcome", requestID: "per_3", outcome: "archived", archive: "arc_2", moved, bytes: 9, directory })
+        for (const marker of ["consent_shown", "consent_given", "consent_cleared", "archive_emptied", "credential_snapshot", "subagent_stopped", "force_stop"] as const)
+          yield* service.record(root, { type: "marker", marker, decidedBy: "gate" })
+      }),
+    )
+    const written = lines()
+    const decode = Schema.decodeUnknownExit(Autonomy.AuditLine, { onExcessProperty: "error" })
+    written.forEach((line) => expect(Exit.isSuccess(decode(line))).toBe(true))
+    expect(written[0]).toMatchObject({ via: "consent", duplicateOf: "per_0", consentID: "con_1", attempts: 2, category: "script", script: { bytes: 12, sha: hash, flags: ["network", "rm"] } })
+    expect(written[1]).toMatchObject({ outcome: "archived", archive: "arc_1", bytes: 5, moved: [{ from: "a.txt", to: ".swarm/archive/arc_1/a.txt" }] })
+    expect(written[1]).not.toHaveProperty("directory")
+    expect(written[2].moved.length).toBeLessThan(40)
+    expect(raw().every((line) => Buffer.byteLength(line) < 4096)).toBe(true)
+    const read = await run((service) => service.readAudit(root))
+    expect(read.problems).toEqual([])
+    expect(read.lines.length).toBe(10)
+  })
+
+  test("row 150: a real move records its archived line through Autonomy.record, on the same chain", async () => {
+    const work = mkdtempSync(path.join(os.tmpdir(), "swarm-archive-"))
+    try {
+      writeFileSync(path.join(work, "old.txt"), "gone\n")
+      const result = await run((service) =>
+        Effect.gen(function* () {
+          yield* service.record(root, decision())
+          return yield* Effect.promise(() =>
+            Archive.move({
+              directory: work,
+              paths: ["old.txt"],
+              requestID: "per_9",
+              record: Autonomy.archiveRecorder(service.record, { root, directory: work }),
+            }),
+          )
+        }),
+      )
+      expect(result).toMatchObject({ ok: true, recorded: true })
+      const written = lines()
+      expect(written[1]).toMatchObject({ seq: 2, type: "outcome", requestID: "per_9", outcome: "archived", prev: sha(raw()[0]!) })
+      expect(written[1].moved).toEqual([{ from: "old.txt", to: expect.stringMatching(/^\.swarm\/archive\/.+\/old\.txt$/) }])
+      expect(written[1]).not.toHaveProperty("directory")
+      expect((await run((service) => service.readAudit(root))).problems).toEqual([])
+    } finally {
+      rmSync(work, { recursive: true, force: true })
+    }
+  })
+
+  test("old lines without the new fields still decode", () => {
+    const old = { v: 1, seq: 1, prev: null, at: 1, type: "outcome", requestID: "per_1", outcome: "ran" }
+    expect(Exit.isSuccess(decode(old))).toBe(true)
+    expect(Exit.isSuccess(decode({ ...old, outcome: "archived", moved: [{ from: "a" }] }))).toBe(false)
+    expect(Exit.isSuccess(decode({ ...old, type: "decision", via: "other" }))).toBe(false)
   })
 
   test("decidedBy tells the four deciders apart", async () => {

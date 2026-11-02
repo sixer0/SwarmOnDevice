@@ -107,6 +107,8 @@ export interface Decided {
   readonly memo?: boolean
   readonly latencyMs?: number
   readonly costUsd?: number
+  /** Calls made to the model for this answer, retries after a timeout included. */
+  readonly attempts?: number
 }
 
 /**
@@ -125,6 +127,16 @@ class RefusedByModeError extends PermissionV1.DeniedError {
     return "This call did not run. Autonomous mode never allows this kind of call, whoever is asked. Do not try to get the same effect another way. Carry on with everything that does not depend on it, and list what was refused in your final message."
   }
 }
+
+/** Class X for a write out of the folder (U11 rule 1). The way on is a copy inside the project, so the text names it. */
+class RefusedOutsideWriteError extends RefusedByModeError {
+  override get message() {
+    return "This call did not run. Autonomous mode never writes outside the project folder. Copy the file into the project first and change the copy there; the original is not changed. Carry on with everything that does not depend on it, and list what was refused in your final message."
+  }
+}
+
+const refusedByMode = (category: string | undefined) =>
+  category === "outside_write" ? new RefusedOutsideWriteError({ ruleset: [] }) : new RefusedByModeError({ ruleset: [] })
 
 /** Settles class P. A seam, so a test can count what reaches it. */
 export class Decider extends Context.Service<
@@ -206,6 +218,8 @@ const layer = Layer.effect(
     const restore = Effect.fnUntraced(function* (directory: string, pending: State["pending"]) {
       const counted = new Map<string, number>()
       for (const line of yield* autonomy.openDecisions()) {
+        // A duplicate points at the entry it repeated and was never an entry itself.
+        if (line.via === "duplicate") continue
         const sessionID = line.sessionID as SessionID
         const session = yield* sessions.get(sessionID).pipe(Effect.catchCause(() => Effect.succeed(undefined)))
         const root = yield* rootOf(sessionID)
@@ -260,7 +274,7 @@ const layer = Layer.effect(
       userCatchAll: boolean,
       // Takes a place in the root's queue, in one step with counting it. False when there is none left.
       hold: (root: SessionID, category: PermissionV1.DeferredCategory) => Effect.Effect<boolean>,
-      // A person's answer to the entry that showed this call covers it, so only a refusal is left to find, and a line to write.
+      // A grant from a person's answer covers it, so only a refusal is left to find, and a line that says the grant was used.
       followed = false,
       // Let through by an "always" a person gave earlier: theirs to give, so it runs, but it was given outside the mode.
       standing = false,
@@ -310,7 +324,11 @@ const layer = Layer.effect(
           ),
         ),
       )
-      const answered = (followed || standing) && table.class !== "X"
+      // An "always" on what the mode lets anyway answers nothing: an ordinary edit is on record as the gate's, not a person's.
+      const answered =
+        (followed || standing) &&
+        table.class !== "X" &&
+        !(standing && !followed && table.class === "A" && input.editClass === "ordinary")
       // Relative paths in a command mean nothing until its real folder is known, so no decider sees it without one.
       const placed = table.class === "P" && input.permission === "bash" && !cwd ? held("not_routine") : table
       const verdict: AutonomyTable.Verdict = answered
@@ -365,9 +383,7 @@ const layer = Layer.effect(
       const queued = decision !== "defer" || (yield* hold(root.id, isHeldCategory(judged) ? judged : "not_routine"))
       const category = queued ? judged : ("queue_full" as const)
 
-      // An ordinary edit never asks in any mode, and shows up as an edit. Everything else leaves a line.
-      if (verdict.class === "A" && input.editClass === "ordinary" && (!answered || (standing && table.class === "A")))
-        return { class: verdict.class, decision, category }
+      // Every call that reaches the gate in the mode leaves a line, an ordinary edit too (C58).
       const written = yield* autonomy
         .record(root.id, {
           type: "decision",
@@ -391,6 +407,8 @@ const layer = Layer.effect(
           memo: decided?.memo,
           latencyMs: decided?.latencyMs,
           costUsd: decided?.costUsd,
+          attempts: decided?.attempts,
+          via: followed ? "grant" : undefined,
           follows: input.follows,
         })
         .pipe(
@@ -405,13 +423,92 @@ const layer = Layer.effect(
         )
       if (!queued) yield* reportFull
       // Nothing runs without a person unless the decision to let it is on record. Refusing or holding needs no such line.
-      if (!written && decision === "allow") {
+      // Class A grants nothing critical, so its line is a record and not a condition: a failed write is logged and it runs
+      // (C26 covers approvals of class P and what a person granted beyond class A).
+      if (!written && decision === "allow" && (answered ? table.class : verdict.class) !== "A") {
         if (yield* hold(root.id, "not_routine"))
           return { class: "D" as const, decision: "defer" as const, category: "not_routine" as const }
         yield* reportFull
         return { class: "D" as const, decision: "defer" as const, category: "queue_full" as const }
       }
       return { class: verdict.class, decision, category }
+    })
+
+    /**
+     * A call that is the same as one already held, told so without another entry. In the mode it still gets its own line,
+     * pointing at the entry, so every call that left `ask` can be found. False when the root is not in the mode.
+     */
+    const duplicate = Effect.fnUntraced(function* (
+      input: PermissionV1.AskInput,
+      requestID: PermissionV1.ID,
+      waiting: PendingEntry,
+    ) {
+      const instance = yield* InstanceState.context
+      const root = yield* rootOf(input.sessionID)
+      const directory = root.directory ?? instance.directory
+      yield* autonomy.markMode({ root: root.id, directory })
+      if (!(yield* autonomy.check({ root: root.id, directory })).on) return false
+      yield* autonomy
+        .record(root.id, {
+          type: "decision",
+          sessionID: input.sessionID,
+          requestID,
+          messageID: input.tool?.messageID,
+          callID: input.tool?.callID,
+          agent: input.agent ?? "unknown",
+          directory,
+          permission: input.permission,
+          patterns: input.patterns,
+          class: "D",
+          category: waiting.category,
+          canUndo: input.canUndo ?? false,
+          decidedBy: "gate",
+          decision: "defer",
+          via: "duplicate",
+          duplicateOf: waiting.info.id,
+        })
+        // Nothing is let through here, so a line that cannot be written changes no answer (C26).
+        .pipe(
+          Effect.catch((error) =>
+            Effect.logError("could not record a duplicate request", { requestID, error: error.message }),
+          ),
+        )
+      return true
+    })
+
+    /**
+     * An ordinary edit no rule asks about never reaches the gate. In the mode it still leaves its class A line (C58). The
+     * write is one synchronous append on the same chain, and a failure is only logged: class A grants nothing critical.
+     */
+    const recordQuiet = Effect.fnUntraced(function* (input: PermissionV1.AskInput) {
+      const instance = yield* InstanceState.context
+      const root = yield* rootOf(input.sessionID)
+      const directory = root.directory ?? instance.directory
+      yield* autonomy.markMode({ root: root.id, directory })
+      if (!(yield* autonomy.check({ root: root.id, directory })).on) return
+      yield* autonomy
+        .record(root.id, {
+          type: "decision",
+          sessionID: input.sessionID,
+          requestID: input.id ?? PermissionV1.ID.ascending(),
+          messageID: input.tool?.messageID,
+          callID: input.tool?.callID,
+          agent: input.agent ?? "unknown",
+          directory,
+          permission: input.permission,
+          patterns: input.patterns,
+          class: "A",
+          risk: typeof input.metadata.risk === "string" ? input.metadata.risk : null,
+          canUndo: input.canUndo ?? false,
+          decidedBy: "gate",
+          decision: "allow",
+          follows: input.follows,
+        })
+        .pipe(
+          Effect.catch((error) =>
+            Effect.logError("could not record a class A call", { permission: input.permission, error: error.message }),
+          ),
+        )
     })
 
     const inMode = Effect.fnUntraced(function* (sessionID: SessionID) {
@@ -447,7 +544,10 @@ const layer = Layer.effect(
         needsAsk = true
       }
 
-      if (!needsAsk && !standing) return
+      if (!needsAsk && !standing) {
+        if (input.editClass === "ordinary") yield* recordQuiet(input)
+        return
+      }
 
       const id = request.id ?? PermissionV1.ID.ascending()
       // As the event stream already sends it. The list route encodes every request or none, and rejects what JSON cannot
@@ -501,16 +601,16 @@ const layer = Layer.effect(
       })
       if (!needsAsk) {
         const gated = yield* gate(input, id, userCatchAll, hold, false, true)
-        if (gated?.class === "X") return yield* new RefusedByModeError({ ruleset: [] })
+        if (gated?.class === "X") return yield* refusedByMode(gated.category)
         if (gated?.decision === "defer") return yield* stayHeld(gated)
         return
       }
       if (granted >= 0) {
-        const [grant] = grants.splice(granted, 1)
-        if (!grant?.followed) return
-        // This prompt's own answer was on the entry before it. It still gets its line, and what it is can still refuse it.
+        grants.splice(granted, 1)
+        // A person answered for this call, on its own entry or one that showed it. It still gets its line in the mode, and
+        // what it is can still refuse it.
         const gated = yield* gate(input, id, userCatchAll, hold, true)
-        if (gated?.class === "X") return yield* new RefusedByModeError({ ruleset: [] })
+        if (gated?.class === "X") return yield* refusedByMode(gated.category)
         if (gated?.decision === "defer") return yield* stayHeld(gated)
         return
       }
@@ -520,15 +620,18 @@ const layer = Layer.effect(
         (item) =>
           item.info.movedOnAt && sameRequest(item.info, request) && (item.call === undefined || item.call === call),
       )
-      if (waiting && !waiting.category) return yield* new PermissionV1.AwayError()
+      if (waiting && !waiting.category) {
+        yield* duplicate(input, id, waiting)
+        return yield* new PermissionV1.AwayError()
+      }
       // With the mode off the entry stays answerable, and this is a new request that gets an ordinary prompt.
-      if (waiting?.category && (yield* inMode(request.sessionID)))
+      if (waiting?.category && (yield* duplicate(input, id, waiting)))
         return yield* new PermissionV1.DeferredError({ category: waiting.category })
 
       const gated = yield* gate(input, id, userCatchAll, hold)
       if (gated?.decision === "allow") return
       // Refused by what it is, so no person is asked. Not a rejection: that error ends the run, and this one reports back.
-      if (gated?.class === "X") return yield* new RefusedByModeError({ ruleset: [] })
+      if (gated?.class === "X") return yield* refusedByMode(gated.category)
       if (gated?.decision === "reject") return yield* new DeciderRefusedError({ ruleset: [] })
 
       // A repeating call stops the run on purpose until a person looks. Carrying on would defeat that guard.

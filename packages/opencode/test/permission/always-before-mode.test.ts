@@ -170,7 +170,7 @@ it.instance("F6: class X is refused whatever \"always\" a person gave before, an
   }),
 )
 
-it.instance("F6: an ordinary edit stays as quiet as it is without any rule, since the mode lets it with no person", () =>
+it.instance("F6: an ordinary edit is on record as the gate's, as it is without any rule, since the mode lets it with no person", () =>
   Effect.gen(function* () {
     const test = yield* TestInstance
     const root = yield* newRoot
@@ -179,7 +179,10 @@ it.instance("F6: an ordinary edit stays as quiet as it is without any rule, sinc
     yield* modeOn(root.id)
 
     expect(Exit.isSuccess(yield* settled(editCall(root.id, target)))).toBe(true)
-    expect(yield* decisions(root.id)).toEqual([])
+    // One class A line (C58), and not a person's: the "always" was not needed.
+    expect((yield* decisions(root.id)).map((line) => [line.class, line.decidedBy, line.decision, line.reason])).toEqual([
+      ["A", "gate", "allow", undefined],
+    ])
   }),
 )
 

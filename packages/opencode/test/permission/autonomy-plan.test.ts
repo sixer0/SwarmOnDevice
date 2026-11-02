@@ -364,8 +364,11 @@ it.instance(
       expect(yield* call(root, "build", "write", { filePath: target, content: "x\n" })).toBe("ran")
       expect(existsSync(target)).toBe(true)
       expect(yield* autonomy.isOn(where)).toBe(true)
-      // The refusal is on record. An ordinary edit never leaves a line of its own.
-      expect(yield* audit(root.id)).toEqual([["X", "plan_mode"]])
+      // The refusal is on record, and the ordinary edit after it has its class A line (C58).
+      expect(yield* audit(root.id)).toEqual([
+        ["X", "plan_mode"],
+        ["A", undefined],
+      ])
     }),
   shipped,
 )
@@ -386,7 +389,10 @@ it.instance(
         content: "{}\n",
       })
       expect(held).toBeInstanceOf(PermissionV1.DeferredError)
-      expect(yield* audit(root.id)).toEqual([["D", "sensitive_file"]])
+      expect(yield* audit(root.id)).toEqual([
+        ["A", undefined],
+        ["D", "sensitive_file"],
+      ])
     }),
   shipped,
 )
