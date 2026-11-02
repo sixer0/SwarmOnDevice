@@ -342,7 +342,9 @@ export const ApplyPatchTool = Tool.define(
             if (change.type === "delete" && archiving) {
               const result = yield* Effect.promise(() =>
                 Archive.move({
-                  directory: instance.directory,
+                  // The root's folder, as the shell and the person's archive route use: a subagent running in another
+                  // folder still archives where the person looks and empties.
+                  directory: archiving.where.directory,
                   paths: [change.filePath],
                   requestID: ctx.callID,
                   record: Autonomy.archiveRecorder(archiving.record, archiving.where),

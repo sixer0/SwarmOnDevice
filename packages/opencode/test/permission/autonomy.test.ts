@@ -130,7 +130,7 @@ const list = Effect.gen(function* () {
   return yield* permission.list()
 })
 
-const reply = (input: PermissionV1.ReplyInput) =>
+const reply = (input: Parameters<Permission.Interface["reply"]>[0]) =>
   Effect.gen(function* () {
     const permission = yield* Permission.Service
     return yield* permission.reply(input)
@@ -266,8 +266,9 @@ it.instance("ADV-A11: a critical call from a subagent fails at once, and the par
       const error = yield* failure(ask(bash(sessionID, "git push origin main", test.directory)))
       expect(error).toBeInstanceOf(PermissionV1.DeferredError)
     }
+    // One family, one permission and pattern: the grandchild's same call is the child's entry (E3).
     const held = yield* list
-    expect(held.map((item) => item.sessionID)).toEqual([child.id, grandchild.id])
+    expect(held.map((item) => item.sessionID)).toEqual([child.id])
     for (const item of held) {
       expect(item.movedOnAt).toBeNumber()
       expect(item.movesOnAt).toBeUndefined()
@@ -278,7 +279,7 @@ it.instance("ADV-A11: a critical call from a subagent fails at once, and the par
     // The same call again adds nothing and waits for nothing.
     const again = yield* failure(ask(bash(child.id, "git push origin main", test.directory)))
     expect(again).toBeInstanceOf(PermissionV1.DeferredError)
-    expect((yield* list).length).toBe(2)
+    expect((yield* list).length).toBe(1)
 
     // `task` stays automatic, for the parent while its children's calls sit in the queue.
     yield* ask({
@@ -289,12 +290,12 @@ it.instance("ADV-A11: a critical call from a subagent fails at once, and the par
       always: ["*"],
       ruleset: [],
     })
-    expect((yield* list).length).toBe(2)
+    expect((yield* list).length).toBe(1)
 
     const lines = yield* audit(root.id)
     expect(lines.map((line) => [line.sessionID, line.permission, line.class, line.decision, line.via])).toEqual([
       [child.id, "bash", "D", "defer", undefined],
-      [grandchild.id, "bash", "D", "defer", undefined],
+      [grandchild.id, "bash", "D", "defer", "duplicate"],
       [child.id, "bash", "D", "defer", "duplicate"],
       [root.id, "task", "A", "allow", undefined],
     ])
@@ -303,7 +304,7 @@ it.instance("ADV-A11: a critical call from a subagent fails at once, and the par
     expect(lines[0]!.decidedBy).toBe("gate")
     // The duplicate's line points at its entry and is not one more open entry (row 120).
     const autonomy = yield* Autonomy.Service
-    expect((yield* autonomy.openDecisions()).filter((line) => line.rootID === root.id)).toHaveLength(2)
+    expect((yield* autonomy.openDecisions()).filter((line) => line.rootID === root.id)).toHaveLength(1)
   }),
 )
 
@@ -1246,10 +1247,10 @@ flows.instance("T-01: with no line for what the answer covers, it does not run",
   }),
 )
 
-flows.instance("T-02: other content for an allowed edit is a new entry, and so is one asked while the first still waits", () =>
+flows.instance("T-02 and E3: other content asked while the first waits joins its list, and after the answer is new", () =>
   Effect.gen(function* () {
     const { root } = yield* lineage
-    const answers = yield* late
+    const permission = yield* Permission.Service
     const edit = (diff: string) =>
       ({
         sessionID: root.id,
@@ -1263,14 +1264,30 @@ flows.instance("T-02: other content for an allowed edit is a new entry, and so i
       }) satisfies PermissionV1.AskInput
     expect(yield* failure(ask(edit("+seen")))).toBeInstanceOf(PermissionV1.DeferredError)
     expect(yield* failure(ask(edit("+other")))).toBeInstanceOf(PermissionV1.DeferredError)
-    expect(yield* list).toHaveLength(2)
     expect(yield* failure(ask(edit("+other")))).toBeInstanceOf(PermissionV1.DeferredError)
-    expect(yield* list).toHaveLength(2)
+    const [entry] = yield* list
+    expect(yield* list).toHaveLength(1)
+    expect(entry!.metadata.version).toBe(2)
+    expect(entry!.metadata.calls).toEqual([edit("+seen").metadata, edit("+other").metadata])
 
-    yield* answers.permission((yield* reply({ requestID: (yield* list)[0]!.id, reply: "once" }))!)
+    // The whole list, at the version that was shown, and nothing granted here: whoever acts on the answer grants each.
+    const answered = (yield* reply({ requestID: entry!.id, reply: "once", version: 2 }))!
+    expect(answered.calls?.map((held) => held.call)).toEqual([
+      JSON.stringify(edit("+seen").metadata),
+      JSON.stringify(edit("+other").metadata),
+    ])
+    expect(answered.call).toBe(answered.calls![0]!.call)
+    for (const held of answered.calls!)
+      yield* permission.grant({ sessionID: root.id, permission: "edit", patterns: ["package.json"], call: held.call })
+
+    // Asked after the click: not on the list, so a new entry.
     expect(yield* failure(ask(edit("+third")))).toBeInstanceOf(PermissionV1.DeferredError)
-    expect(yield* list).toHaveLength(2)
+    expect((yield* list).map((item) => item.metadata.version)).toEqual([undefined])
+    yield* ask(edit("+other"))
     yield* ask(edit("+seen"))
+    // Each answer is good once. The repeat joins the open entry.
+    expect(yield* failure(ask(edit("+seen")))).toBeInstanceOf(PermissionV1.DeferredError)
+    expect((yield* list).map((item) => item.metadata.version)).toEqual([2])
   }),
 )
 
@@ -1293,9 +1310,132 @@ flows.instance("T-02: the same words joined differently, or in another folder, a
     expect(yield* failure(ask(push("git push origin main && echo b", outsideFolder())))).toBeInstanceOf(
       PermissionV1.DeferredError,
     )
-    expect(yield* list).toHaveLength(2)
+    // Both are other calls with the same patterns: one entry that shows both (E3).
+    expect((yield* list).map((item) => item.metadata.version)).toEqual([2])
     yield* ask(allowed)
     expect(yield* failure(ask(allowed))).toBeInstanceOf(PermissionV1.DeferredError)
+  }),
+)
+
+// E3 (T3): what one family asks again under one permission and pattern is one entry, and one click
+
+/** A read of a secret out of the folder, as the read tool asks it: held for a person (U11 rule 1). */
+const secretRead = (sessionID: SessionID, filepath: string, offset: number) =>
+  ({
+    sessionID,
+    permission: "external_directory",
+    patterns: [path.join(path.dirname(filepath), "*")],
+    metadata: { filepath, parentDir: path.dirname(filepath), readOnly: true },
+    always: [],
+    ruleset: [],
+    call: { tool: "read", args: { filePath: filepath, offset } },
+  }) satisfies PermissionV1.AskInput
+
+it.instance("E3: five asks for one pattern by a root and its subagent are one entry, one click, and no more", () =>
+  Effect.gen(function* () {
+    const { root, child } = yield* lineage
+    const permission = yield* Permission.Service
+    const target = path.join(outsideFolder(), ".env")
+    writeFileSync(target, "x\n")
+    const asks = [
+      secretRead(root.id, target, 1),
+      secretRead(root.id, target, 2),
+      secretRead(child.id, target, 3),
+      // The subagent repeats the root's call: the same call, so not one more on the list.
+      secretRead(child.id, target, 1),
+      secretRead(child.id, target, 4),
+    ]
+    for (const input of asks) expect(yield* failure(ask(input))).toBeInstanceOf(PermissionV1.DeferredError)
+
+    const [entry, ...rest] = yield* list
+    expect(rest).toEqual([])
+    expect(entry!.metadata.version).toBe(4)
+    expect(entry!.metadata.calls).toEqual([1, 2, 3, 4].map((offset) => secretRead(root.id, target, offset).call))
+    // Every ask has its line, and each one after the first points at the entry.
+    const lines = yield* audit(root.id)
+    expect(lines.map((line) => [line.sessionID, line.decision, line.via ?? null, line.duplicateOf ?? null])).toEqual([
+      [root.id, "defer", null, null],
+      [root.id, "defer", "duplicate", entry!.id],
+      [child.id, "defer", "duplicate", entry!.id],
+      [child.id, "defer", "duplicate", entry!.id],
+      [child.id, "defer", "duplicate", entry!.id],
+    ])
+    expect(new Set(lines.map((line) => line.category))).toEqual(new Set(["secret_file"]))
+    const autonomy = yield* Autonomy.Service
+    expect((yield* autonomy.openDecisions()).filter((line) => line.rootID === root.id)).toHaveLength(1)
+
+    // A click on a list that has grown since is no answer: shown again, and nothing is settled.
+    expect(yield* reply({ requestID: entry!.id, reply: "once", version: 3 })).toBeUndefined()
+    expect(yield* reply({ requestID: entry!.id, reply: "once" })).toBeUndefined()
+    expect((yield* list).map((item) => item.id)).toEqual([entry!.id])
+
+    const answered = (yield* reply({ requestID: entry!.id, reply: "once", version: 4 }))!
+    expect(answered.calls?.map((held) => held.sessionID)).toEqual([root.id, root.id, child.id, child.id])
+    expect(yield* list).toEqual([])
+    // Granted at the root, as an answer that comes late is: good for the subagent's calls too.
+    for (const held of answered.calls!)
+      yield* permission.grant({
+        sessionID: root.id,
+        permission: answered.permission,
+        patterns: answered.patterns,
+        call: held.call,
+      })
+    // A call that showed up after the click is not on the list.
+    expect(yield* failure(ask(secretRead(child.id, target, 5)))).toBeInstanceOf(PermissionV1.DeferredError)
+    for (const offset of [3, 1, 4, 2]) yield* ask(secretRead(offset % 2 ? child.id : root.id, target, offset))
+    expect(yield* failure(ask(secretRead(child.id, target, 3)))).toBeInstanceOf(PermissionV1.DeferredError)
+    expect((yield* list).map((item) => [item.metadata.call, item.metadata.version])).toEqual([
+      [secretRead(child.id, target, 5).call, 2],
+    ])
+    expect(
+      (yield* audit(root.id)).filter((line) => line.via === "grant").map((line) => [line.sessionID, line.decision]),
+    ).toEqual([
+      [child.id, "allow"],
+      [child.id, "allow"],
+      [root.id, "allow"],
+      [root.id, "allow"],
+    ])
+  }),
+)
+
+it.instance("E3: a rejection settles the whole list whatever it was shown at, and another pattern is its own entry", () =>
+  Effect.gen(function* () {
+    const { root, child } = yield* lineage
+    const outside = outsideFolder()
+    const one = path.join(outside, ".env")
+    const two = path.join(outside, "sub", ".env")
+    mkdirSync(path.dirname(two))
+    for (const file of [one, two]) writeFileSync(file, "x\n")
+    for (const input of [secretRead(root.id, one, 1), secretRead(child.id, one, 2), secretRead(child.id, two, 1)])
+      expect(yield* failure(ask(input))).toBeInstanceOf(PermissionV1.DeferredError)
+    const entries = yield* list
+    expect(entries.map((item) => item.metadata.version)).toEqual([2, undefined])
+
+    const answered = (yield* reply({ requestID: entries[0]!.id, reply: "reject" }))!
+    expect(answered.calls).toHaveLength(2)
+    expect((yield* list).map((item) => item.id)).toEqual([entries[1]!.id])
+    // A single call needs no version, as before.
+    expect((yield* reply({ requestID: entries[1]!.id, reply: "once" }))!.calls).toHaveLength(1)
+  }),
+)
+
+it.instance("E3 with the mode off: entries stay per session, and a grant at the root still covers a subagent", () =>
+  Effect.gen(function* () {
+    process.env.SWARM_UNATTENDED_AFTER_MS = "1"
+    const sessions = yield* Session.Service
+    const permission = yield* Permission.Service
+    const root = yield* sessions.create({})
+    const child = yield* sessions.create({ parentID: root.id })
+    expect(yield* failure(ask(bash(root.id, "git push origin main")))).toBeInstanceOf(PermissionV1.AwayError)
+    expect(yield* failure(ask(bash(child.id, "git push origin main")))).toBeInstanceOf(PermissionV1.AwayError)
+    expect((yield* list).map((item) => [item.sessionID, item.metadata.version])).toEqual([
+      [root.id, undefined],
+      [child.id, undefined],
+    ])
+    const fetch = bash(child.id, "git fetch origin")
+    yield* permission.grant({ ...fetch, sessionID: root.id })
+    yield* ask(fetch)
+    expect(existsSync(path.join(folder, `${root.id}.jsonl`))).toBe(false)
   }),
 )
 

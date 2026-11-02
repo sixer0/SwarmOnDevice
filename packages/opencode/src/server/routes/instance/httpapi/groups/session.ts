@@ -73,6 +73,7 @@ export const ShellPayload = Schema.Struct(Struct.omit(SessionPrompt.ShellInput.f
 export const RevertPayload = Schema.Struct(Struct.omit(SessionRevert.RevertInput.fields, ["sessionID"]))
 export const PermissionResponsePayload = Schema.Struct({
   response: PermissionV1.Reply,
+  version: PermissionV1.ReplyBody.fields.version,
 })
 
 export const SessionPaths = {

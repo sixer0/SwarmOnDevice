@@ -15,8 +15,16 @@ import type {
   AuthRemoveResponses,
   AuthSetErrors,
   AuthSetResponses,
+  AutonomyArchiveEmptyErrors,
+  AutonomyArchiveEmptyResponses,
+  AutonomyArchiveErrors,
+  AutonomyArchiveResponses,
   AutonomyConfirmErrors,
   AutonomyConfirmResponses,
+  AutonomyConsentAllowErrors,
+  AutonomyConsentAllowResponses,
+  AutonomyConsentErrors,
+  AutonomyConsentResponses,
   AutonomyModeErrors,
   AutonomyModeResponses,
   AutonomyModeUpdateErrors,
@@ -1693,6 +1701,158 @@ export class Autonomy extends HeyApiClient {
       url: "/session/{sessionID}/autonomy",
       ...options,
       ...params,
+    })
+  }
+
+  /**
+   * Get a session's consent list
+   *
+   * The secret and sensitive files and the destinations autonomous mode asks about once, and which a person allowed. Null while there is no mission yet or the mode is off. Paths and labels can come from an attacker: show them as plain text.
+   */
+  public consent<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<AutonomyConsentResponses, AutonomyConsentErrors, ThrowOnError>({
+      url: "/session/{sessionID}/autonomy/consent",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Allow items of a consent list
+   *
+   * A person allows the items they ticked on the list named by its hash. Only a server with a password takes this, and an agent's shell is never given it. Each item is recorded before it counts.
+   */
+  public consentAllow<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      directory?: string
+      workspace?: string
+      hash?: string
+      ids?: Array<string>
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "hash" },
+            { in: "body", key: "ids" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      AutonomyConsentAllowResponses,
+      AutonomyConsentAllowErrors,
+      ThrowOnError
+    >({
+      url: "/session/{sessionID}/autonomy/consent",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Get a session's archive
+   *
+   * The entries under .swarm/archive in the folder of the session's root, with their size and the first paths in each. Paths can come from an attacker: show them as plain text.
+   */
+  public archive<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<AutonomyArchiveResponses, AutonomyArchiveErrors, ThrowOnError>({
+      url: "/session/{sessionID}/autonomy/archive",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Empty a session's archive
+   *
+   * A person deletes for good the archive entries they were shown, named by id. Only a server with a password takes this, and an agent's shell is never given it. Nothing outside the archive is deleted, and the emptying is recorded before anything goes.
+   */
+  public archiveEmpty<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      directory?: string
+      workspace?: string
+      ids?: Array<string>
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "ids" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      AutonomyArchiveEmptyResponses,
+      AutonomyArchiveEmptyErrors,
+      ThrowOnError
+    >({
+      url: "/session/{sessionID}/autonomy/archive/empty",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
     })
   }
 }
@@ -3992,6 +4152,7 @@ export class Permission extends HeyApiClient {
       workspace?: string
       reply?: "once" | "always" | "reject"
       message?: string
+      version?: number
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -4005,6 +4166,7 @@ export class Permission extends HeyApiClient {
             { in: "query", key: "workspace" },
             { in: "body", key: "reply" },
             { in: "body", key: "message" },
+            { in: "body", key: "version" },
           ],
         },
       ],
@@ -4035,6 +4197,7 @@ export class Permission extends HeyApiClient {
       directory?: string
       workspace?: string
       response?: "once" | "always" | "reject"
+      version?: number
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -4048,6 +4211,7 @@ export class Permission extends HeyApiClient {
             { in: "query", key: "directory" },
             { in: "query", key: "workspace" },
             { in: "body", key: "response" },
+            { in: "body", key: "version" },
           ],
         },
       ],

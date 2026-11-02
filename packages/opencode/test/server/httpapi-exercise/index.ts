@@ -453,6 +453,15 @@ const scenarios: Scenario[] = [
       body: { reply: "bad" },
     }))
     .status(400),
+  // Row 122b: a reply's list version is a positive whole number; anything else is turned away before the gate.
+  http.protected
+    .post("/permission/{requestID}/reply", "permission.reply.version-invalid")
+    .at((ctx) => ({
+      path: route("/permission/{requestID}/reply", { requestID: "per_httpapi" }),
+      headers: ctx.headers(),
+      body: { reply: "once", version: 0 },
+    }))
+    .status(400),
   // ADV-A18: in auth mode a well-formed answer without credentials gets 401, and the same request with them reaches
   // the handler. The default probe sends an empty body, which says nothing about a reply that would have been valid.
   http.protected
@@ -557,6 +566,123 @@ const scenarios: Scenario[] = [
       headers: ctx.headers(),
     }))
     .json(404, object, "status"),
+  http.protected
+    .get("/session/{sessionID}/autonomy/consent", "autonomy.consent")
+    .seeded((ctx) =>
+      Effect.gen(function* () {
+        const root = yield* ctx.session({ title: "Autonomous root" })
+        return { root, child: yield* ctx.session({ title: "Subagent", parentID: root.id }) }
+      }),
+    )
+    .at((ctx) => ({
+      path: route("/session/{sessionID}/autonomy/consent", { sessionID: ctx.state.child.id }),
+      headers: ctx.headers(),
+    }))
+    .json(
+      200,
+      (body, ctx) => {
+        object(body)
+        check(body.rootID === ctx.state.root.id, "a subagent should answer with its root")
+        check(body.consent === null, "a session with no mission should have no consent list")
+      },
+      "status",
+    ),
+  http.protected
+    .get("/session/{sessionID}/autonomy/consent", "autonomy.consent.missing")
+    .at((ctx) => ({
+      path: route("/session/{sessionID}/autonomy/consent", { sessionID: "ses_httpapi_missing" }),
+      headers: ctx.headers(),
+    }))
+    .json(404, object, "status"),
+  // Row 132: this backend has no password, and a server without one takes no consent: anyone on the machine could send it.
+  // In auth mode the probe shows the route also wants the password like every other.
+  http.protected
+    .post("/session/{sessionID}/autonomy/consent", "autonomy.consentAllow")
+    .seeded((ctx) => ctx.session({ title: "Autonomous root" }))
+    .probe({
+      path: route("/session/{sessionID}/autonomy/consent", { sessionID: "ses_httpapi" }),
+      body: { hash: "0".repeat(64), ids: [] },
+    })
+    .at((ctx) => ({
+      path: route("/session/{sessionID}/autonomy/consent", { sessionID: ctx.state.id }),
+      headers: ctx.headers(),
+      body: { hash: "0".repeat(64), ids: [] },
+    }))
+    .json(
+      403,
+      (body) => {
+        object(body)
+        check(body.name === "AutonomyNoPasswordError", "a server with no password should refuse consent")
+      },
+      "status",
+    ),
+  http.protected
+    .post("/session/{sessionID}/autonomy/consent", "autonomy.consentAllow.invalid")
+    .at((ctx) => ({
+      path: route("/session/{sessionID}/autonomy/consent", { sessionID: "ses_httpapi_missing" }),
+      headers: ctx.headers(),
+      body: { hash: "0".repeat(64) },
+    }))
+    .status(400),
+  http.protected
+    .get("/session/{sessionID}/autonomy/archive", "autonomy.archive")
+    .seeded((ctx) =>
+      Effect.gen(function* () {
+        const root = yield* ctx.session({ title: "Autonomous root" })
+        return { root, child: yield* ctx.session({ title: "Subagent", parentID: root.id }) }
+      }),
+    )
+    .at((ctx) => ({
+      path: route("/session/{sessionID}/autonomy/archive", { sessionID: ctx.state.child.id }),
+      headers: ctx.headers(),
+    }))
+    .json(
+      200,
+      (body, ctx) => {
+        object(body)
+        check(body.rootID === ctx.state.root.id, "a subagent should answer with its root")
+        array(body.entries)
+        check(body.entries.length === 0, "a new folder should have nothing archived")
+        check(body.unsafe === false, "a folder with no archive is not unsafe")
+      },
+      "status",
+    ),
+  http.protected
+    .get("/session/{sessionID}/autonomy/archive", "autonomy.archive.missing")
+    .at((ctx) => ({
+      path: route("/session/{sessionID}/autonomy/archive", { sessionID: "ses_httpapi_missing" }),
+      headers: ctx.headers(),
+    }))
+    .json(404, object, "status"),
+  // Row 152: as with consent, a server without a password empties no archive: anyone on the machine could ask.
+  http.protected
+    .post("/session/{sessionID}/autonomy/archive/empty", "autonomy.archiveEmpty")
+    .seeded((ctx) => ctx.session({ title: "Autonomous root" }))
+    .probe({
+      path: route("/session/{sessionID}/autonomy/archive/empty", { sessionID: "ses_httpapi" }),
+      body: { ids: [] },
+    })
+    .at((ctx) => ({
+      path: route("/session/{sessionID}/autonomy/archive/empty", { sessionID: ctx.state.id }),
+      headers: ctx.headers(),
+      body: { ids: [] },
+    }))
+    .json(
+      403,
+      (body) => {
+        object(body)
+        check(body.name === "AutonomyNoPasswordError", "a server with no password should not empty the archive")
+      },
+      "status",
+    ),
+  http.protected
+    .post("/session/{sessionID}/autonomy/archive/empty", "autonomy.archiveEmpty.invalid")
+    .at((ctx) => ({
+      path: route("/session/{sessionID}/autonomy/archive/empty", { sessionID: "ses_httpapi_missing" }),
+      headers: ctx.headers(),
+      body: { ids: "all" },
+    }))
+    .status(400),
   http.protected.get("/memory", "memory.get").json(200, object),
   http.protected
     .post("/memory", "memory.add")
@@ -1962,6 +2088,18 @@ const scenarios: Scenario[] = [
       body: { response: "once" },
     }))
     .json(404, object, "status"),
+  http.protected
+    .post("/session/{sessionID}/permissions/{permissionID}", "permission.respond.version-invalid")
+    .seeded((ctx) => ctx.session({ title: "Deprecated permission session" }))
+    .at((ctx) => ({
+      path: route("/session/{sessionID}/permissions/{permissionID}", {
+        sessionID: ctx.state.id,
+        permissionID: "per_httpapi_deprecated",
+      }),
+      headers: ctx.headers(),
+      body: { response: "once", version: "2" },
+    }))
+    .status(400),
   http.protected
     .post("/session/{sessionID}/share", "session.share")
     .mutating()

@@ -3,7 +3,7 @@ import path from "path"
 import * as fs from "fs/promises"
 import { PermissionV1 } from "@opencode-ai/core/v1/permission"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
-import { Cause, Effect, Exit, Layer, Schema } from "effect"
+import { Cause, ConfigProvider, Effect, Exit, Layer, Schema } from "effect"
 import { ApplyPatchTool } from "../../src/tool/apply_patch"
 import { Archive } from "../../src/tool/archive"
 import { LSP } from "@/lsp/lsp"
@@ -12,10 +12,31 @@ import { Format } from "../../src/format"
 import { Agent } from "../../src/agent/agent"
 import { EventV2Bridge } from "../../src/event-v2-bridge"
 import { Truncate } from "@/tool/truncate"
-import { TestInstance } from "../fixture/fixture"
+import { provideInstance, TestInstance } from "../fixture/fixture"
 import { SessionID, MessageID } from "../../src/session/schema"
 import { testEffect } from "../lib/effect"
 import { Autonomy } from "../../src/permission/autonomy"
+import { NodeHttpServer, NodeServices } from "@effect/platform-node"
+import { HttpClient, HttpClientRequest, HttpRouter } from "effect/unstable/http"
+import { HttpApiBuilder } from "effect/unstable/httpapi"
+import * as Socket from "effect/unstable/socket/Socket"
+import { CrossSpawnSpawner } from "@opencode-ai/core/cross-spawn-spawner"
+import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
+import { EventV2 } from "@opencode-ai/core/event"
+import { SessionProjector } from "@opencode-ai/core/session/projector"
+import { Workspace } from "../../src/control-plane/workspace"
+import { RuntimeFlags } from "../../src/effect/runtime-flags"
+import { Permission } from "../../src/permission"
+import { InstanceBootstrap } from "../../src/project/bootstrap"
+import { InstanceStore } from "../../src/project/instance-store"
+import { ServerAuth } from "../../src/server/auth"
+import { AutonomyApi } from "../../src/server/routes/instance/httpapi/groups/autonomy"
+import { autonomyHandlers } from "../../src/server/routes/instance/httpapi/handlers/autonomy"
+import { authorizationLayer } from "../../src/server/routes/instance/httpapi/middleware/authorization"
+import { instanceContextLayer } from "../../src/server/routes/instance/httpapi/middleware/instance-context"
+import { schemaErrorLayer } from "../../src/server/routes/instance/httpapi/middleware/schema-error"
+import { workspaceRoutingLayer } from "../../src/server/routes/instance/httpapi/middleware/workspace-routing"
+import { Session } from "../../src/session/session"
 
 const it = testEffect(
   LayerNode.compile(
@@ -674,3 +695,123 @@ EOF`
     { git: true },
   )
 })
+
+// Row 153b: the archive a patch deletion lands in is the root session's, the one the person's route shows and empties,
+// also when the patch runs in a subagent whose instance is another folder. The route and the sessions here are real.
+const served = testEffect(
+  Layer.mergeAll(
+    AppNodeBuilder.build(
+      LayerNode.group([
+        LSP.node,
+        FSUtil.node,
+        Format.node,
+        Truncate.node,
+        Agent.node,
+        Permission.node,
+        Session.node,
+        Autonomy.node,
+        EventV2Bridge.node,
+        SessionProjector.node,
+        CrossSpawnSpawner.node,
+        InstanceStore.node,
+        Workspace.node,
+        EventV2.node,
+      ]),
+      [
+        [
+          InstanceStore.bootstrapNode,
+          Layer.succeed(InstanceBootstrap.Service, InstanceBootstrap.Service.of({ run: Effect.void })),
+        ],
+        [RuntimeFlags.node, RuntimeFlags.layer({})],
+      ],
+    ),
+    NodeHttpServer.layerTest,
+    NodeServices.layer,
+  ),
+)
+
+const serveAutonomy = HttpApiBuilder.layer(AutonomyApi).pipe(
+  Layer.provide(autonomyHandlers as never),
+  Layer.provide([
+    authorizationLayer.pipe(Layer.provide(ServerAuth.Config.layer)),
+    workspaceRoutingLayer.pipe(Layer.provide(Socket.layerWebSocketConstructorGlobal)),
+    instanceContextLayer,
+    schemaErrorLayer,
+  ]),
+  HttpRouter.serve,
+  Layer.provide(ConfigProvider.layer(ConfigProvider.fromUnknown({}))),
+  Layer.build,
+) as unknown as Effect.Effect<unknown>
+
+describe("tool.apply_patch archive root", () => {
+  served.instance(
+    "row 153b: a subagent in another folder archives into the root's folder, and the person's route shows it",
+    () =>
+      Effect.gen(function* () {
+        yield* serveAutonomy
+        const test = yield* TestInstance
+        const sessions = yield* Session.Service
+        const sub = path.join(test.directory, "packages", "sub")
+        yield* makeDir(sub)
+        const root = yield* sessions.create({})
+        const child = yield* sessions.create({ parentID: root.id }).pipe(provideInstance(sub))
+        expect(root.directory).toBe(test.directory)
+        expect(child.directory).toBe(sub)
+        yield* writeText(path.join(sub, "gone.txt"), "obsolete\n")
+
+        const lines: Autonomy.AuditEntry[] = []
+        const on = Layer.succeed(Autonomy.Service, {
+          isOn: () => Effect.succeed(true),
+          record: (_root: SessionID, entry: Autonomy.AuditEntry) => Effect.sync(() => void lines.push(entry)),
+        } as unknown as Autonomy.Interface)
+        const { ctx } = makeCtx()
+        const result = yield* execute(
+          { patchText: "*** Begin Patch\n*** Delete File: gone.txt\n*** End Patch" },
+          { ...ctx, sessionID: child.id, callID: "call_sub" },
+        ).pipe(Effect.provide(on), provideInstance(sub))
+
+        yield* expectReadFailure(path.join(sub, "gone.txt"))
+        // Nothing in the subagent's own folder: an archive there is one the person never sees.
+        expect(yield* Effect.promise(() => fs.readdir(path.join(sub, ".swarm")).catch(() => [] as string[]))).toEqual(
+          [],
+        )
+
+        for (const [sessionID, directory] of [
+          [child.id, sub],
+          [root.id, test.directory],
+        ] as const) {
+          const response = yield* HttpClient.execute(
+            HttpClientRequest.get(`/session/${sessionID}/autonomy/archive`).pipe(
+              HttpClientRequest.setHeader("x-opencode-directory", directory),
+            ),
+          )
+          expect(response.status).toBe(200)
+          const shown = (yield* response.json) as { rootID: string; entries: { id: string; paths: string[] }[] }
+          expect(shown.rootID).toBe(root.id)
+          expect(shown.entries.map((entry) => entry.paths)).toEqual([["packages/sub/gone.txt"]])
+          expect(result.output).toContain(Archive.movedText(1, shown.entries[0]!.id))
+        }
+        const [id] = yield* archiveIDs(test.directory)
+        expect(
+          yield* readText(path.join(test.directory, Archive.ARCHIVE_DIR, id!, "packages", "sub", "gone.txt")),
+        ).toBe("obsolete\n")
+        expect(lines).toEqual([
+          expect.objectContaining({
+            outcome: "archived",
+            requestID: "call_sub",
+            directory: test.directory,
+            moved: [expect.objectContaining({ from: "packages/sub/gone.txt" })],
+          }),
+        ])
+      }),
+    { git: true },
+  )
+})
+
+const archiveIDs = (directory: string) =>
+  Effect.promise(() =>
+    fs
+      .readdir(path.join(directory, Archive.ARCHIVE_DIR))
+      .then((names) => names.filter((name) => name !== ".gitignore"))
+      .catch(() => [] as string[]),
+  )

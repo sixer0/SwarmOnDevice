@@ -14,6 +14,9 @@ export const AutonomyPaths = {
   mode: `${root}/mode`,
   confirm: `${root}/confirm`,
   session: "/session/:sessionID/autonomy",
+  consent: "/session/:sessionID/autonomy/consent",
+  archive: "/session/:sessionID/autonomy/archive",
+  archiveEmpty: "/session/:sessionID/autonomy/archive/empty",
 } as const
 
 export class ApiAutonomyWriteError extends Schema.ErrorClass<ApiAutonomyWriteError>("AutonomyWriteError")(
@@ -24,6 +27,30 @@ export class ApiAutonomyWriteError extends Schema.ErrorClass<ApiAutonomyWriteErr
     }),
   },
   { httpApiStatus: 500 },
+) {}
+
+/** The list answered is not the one on show any more: the mode went off, the server restarted, or it was made again. */
+export class ApiAutonomyConsentError extends Schema.ErrorClass<ApiAutonomyConsentError>("AutonomyConsentError")(
+  {
+    name: Schema.Literal("AutonomyConsentError"),
+    data: Schema.Struct({
+      message: Schema.String,
+    }),
+  },
+  { httpApiStatus: 409 },
+) {}
+
+/** A server anyone on the machine can call has no way to tell a person from an agent, so it takes no consent. */
+export class ApiAutonomyNoPasswordError extends Schema.ErrorClass<ApiAutonomyNoPasswordError>(
+  "AutonomyNoPasswordError",
+)(
+  {
+    name: Schema.Literal("AutonomyNoPasswordError"),
+    data: Schema.Struct({
+      message: Schema.String,
+    }),
+  },
+  { httpApiStatus: 403 },
 ) {}
 
 const ExternalChange = Schema.Array(Schema.Literals(["mode.json", "trust.json"]))
@@ -49,6 +76,54 @@ export const SessionState = Schema.Struct({
   problems: Schema.Array(Schema.String),
   notFromHere: Schema.Int,
 }).annotate({ identifier: "AutonomySession" })
+
+export const ConsentItem = Schema.Struct({
+  id: Schema.String,
+  kind: Schema.Literals(["secret", "sensitive", "outside", "destination"]),
+  pattern: Schema.String,
+  files: Schema.Array(Schema.String),
+  named: Schema.Boolean,
+  checked: Schema.Boolean,
+  given: Schema.Boolean,
+}).annotate({ identifier: "AutonomyConsentItem" })
+
+export const ConsentList = Schema.Struct({
+  id: Schema.String,
+  hash: Schema.String,
+  at: Schema.Number,
+  items: Schema.Array(ConsentItem),
+  stopped: Schema.optional(Schema.Literals(["files", "time"])),
+  dropped: Schema.Int,
+}).annotate({ identifier: "AutonomyConsentList" })
+
+export const ConsentState = Schema.Struct({
+  rootID: SessionID,
+  consent: Schema.NullOr(ConsentList),
+}).annotate({ identifier: "AutonomyConsent" })
+
+export const ConsentPayload = Schema.Struct({
+  hash: Schema.String,
+  ids: Schema.Array(Schema.String),
+})
+
+export const ArchiveEntry = Schema.Struct({
+  id: Schema.String,
+  bytes: Schema.Int,
+  count: Schema.Int,
+  paths: Schema.Array(Schema.String),
+}).annotate({ identifier: "AutonomyArchiveEntry" })
+
+export const ArchiveState = Schema.Struct({
+  rootID: SessionID,
+  entries: Schema.Array(ArchiveEntry),
+  bytes: Schema.Int,
+  // `.swarm` or the archive is there but is a link or not a folder: nothing in it is shown or deleted.
+  unsafe: Schema.Boolean,
+}).annotate({ identifier: "AutonomyArchive" })
+
+export const ArchiveEmptyPayload = Schema.Struct({
+  ids: Schema.Array(Schema.String),
+})
 
 export const AutonomyApi = HttpApi.make("autonomy")
   .add(
@@ -99,6 +174,66 @@ export const AutonomyApi = HttpApi.make("autonomy")
             summary: "Get a session's autonomous decisions",
             description:
               "The mode and audit record of the session's root. Patterns and reasons can come from an attacker: show them as plain text.",
+          }),
+        ),
+        HttpApiEndpoint.get("consent", AutonomyPaths.consent, {
+          params: { sessionID: SessionID },
+          query: WorkspaceRoutingQuery,
+          success: described(ConsentState, "What the session's root was asked once its mission was known"),
+          error: [HttpApiError.BadRequest, ApiNotFoundError],
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "autonomy.consent",
+            summary: "Get a session's consent list",
+            description:
+              "The secret and sensitive files and the destinations autonomous mode asks about once, and which a person allowed. Null while there is no mission yet or the mode is off. Paths and labels can come from an attacker: show them as plain text.",
+          }),
+        ),
+        HttpApiEndpoint.post("consentAllow", AutonomyPaths.consent, {
+          params: { sessionID: SessionID },
+          query: WorkspaceRoutingQuery,
+          payload: ConsentPayload,
+          success: described(ConsentState, "The consent list after the answer"),
+          error: [
+            HttpApiError.BadRequest,
+            ApiNotFoundError,
+            ApiAutonomyConsentError,
+            ApiAutonomyNoPasswordError,
+            ApiAutonomyWriteError,
+          ],
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "autonomy.consentAllow",
+            summary: "Allow items of a consent list",
+            description:
+              "A person allows the items they ticked on the list named by its hash. Only a server with a password takes this, and an agent's shell is never given it. Each item is recorded before it counts.",
+          }),
+        ),
+        HttpApiEndpoint.get("archive", AutonomyPaths.archive, {
+          params: { sessionID: SessionID },
+          query: WorkspaceRoutingQuery,
+          success: described(ArchiveState, "What autonomous mode moved to the archive instead of deleting"),
+          error: [HttpApiError.BadRequest, ApiNotFoundError],
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "autonomy.archive",
+            summary: "Get a session's archive",
+            description:
+              "The entries under .swarm/archive in the folder of the session's root, with their size and the first paths in each. Paths can come from an attacker: show them as plain text.",
+          }),
+        ),
+        HttpApiEndpoint.post("archiveEmpty", AutonomyPaths.archiveEmpty, {
+          params: { sessionID: SessionID },
+          query: WorkspaceRoutingQuery,
+          payload: ArchiveEmptyPayload,
+          success: described(ArchiveState, "The archive after emptying"),
+          error: [HttpApiError.BadRequest, ApiNotFoundError, ApiAutonomyNoPasswordError, ApiAutonomyWriteError],
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "autonomy.archiveEmpty",
+            summary: "Empty a session's archive",
+            description:
+              "A person deletes for good the archive entries they were shown, named by id. Only a server with a password takes this, and an agent's shell is never given it. Nothing outside the archive is deleted, and the emptying is recorded before anything goes.",
           }),
         ),
       )

@@ -4,7 +4,7 @@ import { Schema } from "effect"
 import { define, inventory } from "../event"
 import { ascending } from "../identifier"
 import { Project } from "../project"
-import { statics } from "../schema"
+import { PositiveInt, statics } from "../schema"
 import { SessionID } from "../session-id"
 
 export const ID = Schema.String.check(Schema.isStartsWith("per")).pipe(
@@ -47,7 +47,14 @@ export type Request = typeof Request.Type
 export const Reply = Schema.Literals(["once", "always", "reject"])
 export type Reply = typeof Reply.Type
 
-export const ReplyBody = Schema.Struct({ reply: Reply, message: Schema.optional(Schema.String) }).annotate({
+export const ReplyBody = Schema.Struct({
+  reply: Reply,
+  message: Schema.optional(Schema.String),
+  version: Schema.optional(PositiveInt).annotate({
+    description:
+      "The metadata.version of the request that was shown. An approval only counts for that list; leave it out for a single call",
+  }),
+}).annotate({
   identifier: "PermissionReplyBody",
 })
 export type ReplyBody = typeof ReplyBody.Type

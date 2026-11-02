@@ -1129,6 +1129,415 @@
         ]
       }
     },
+    "/session/{sessionID}/autonomy/consent": {
+      "get": {
+        "tags": ["autonomy"],
+        "operationId": "autonomy.consent",
+        "parameters": [
+          {
+            "name": "sessionID",
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "pattern": "^ses"
+            },
+            "required": true
+          },
+          {
+            "name": "directory",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          },
+          {
+            "name": "workspace",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "What the session's root was asked once its mission was known",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutonomyConsent"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "BadRequest | InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/effect_HttpApiError_BadRequest"
+                    },
+                    {
+                      "$ref": "#/components/schemas/InvalidRequestError"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        },
+        "description": "The secret and sensitive files and the destinations autonomous mode asks about once, and which a person allowed. Null while there is no mission yet or the mode is off. Paths and labels can come from an attacker: show them as plain text.",
+        "summary": "Get a session's consent list",
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.autonomy.consent({\n  ...\n})"
+          }
+        ]
+      },
+      "post": {
+        "tags": ["autonomy"],
+        "operationId": "autonomy.consentAllow",
+        "parameters": [
+          {
+            "name": "sessionID",
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "pattern": "^ses"
+            },
+            "required": true
+          },
+          {
+            "name": "directory",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          },
+          {
+            "name": "workspace",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The consent list after the answer",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutonomyConsent"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "BadRequest | InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/effect_HttpApiError_BadRequest"
+                    },
+                    {
+                      "$ref": "#/components/schemas/InvalidRequestError"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "AutonomyNoPasswordError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutonomyNoPasswordError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "AutonomyConsentError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutonomyConsentError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "AutonomyWriteError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutonomyWriteError"
+                }
+              }
+            }
+          }
+        },
+        "description": "A person allows the items they ticked on the list named by its hash. Only a server with a password takes this, and an agent's shell is never given it. Each item is recorded before it counts.",
+        "summary": "Allow items of a consent list",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "hash": {
+                    "type": "string"
+                  },
+                  "ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": ["hash", "ids"],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.autonomy.consentAllow({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/session/{sessionID}/autonomy/archive": {
+      "get": {
+        "tags": ["autonomy"],
+        "operationId": "autonomy.archive",
+        "parameters": [
+          {
+            "name": "sessionID",
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "pattern": "^ses"
+            },
+            "required": true
+          },
+          {
+            "name": "directory",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          },
+          {
+            "name": "workspace",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "What autonomous mode moved to the archive instead of deleting",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutonomyArchive"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "BadRequest | InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/effect_HttpApiError_BadRequest"
+                    },
+                    {
+                      "$ref": "#/components/schemas/InvalidRequestError"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        },
+        "description": "The entries under .swarm/archive in the folder of the session's root, with their size and the first paths in each. Paths can come from an attacker: show them as plain text.",
+        "summary": "Get a session's archive",
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.autonomy.archive({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/session/{sessionID}/autonomy/archive/empty": {
+      "post": {
+        "tags": ["autonomy"],
+        "operationId": "autonomy.archiveEmpty",
+        "parameters": [
+          {
+            "name": "sessionID",
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "pattern": "^ses"
+            },
+            "required": true
+          },
+          {
+            "name": "directory",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          },
+          {
+            "name": "workspace",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The archive after emptying",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutonomyArchive"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "BadRequest | InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/effect_HttpApiError_BadRequest"
+                    },
+                    {
+                      "$ref": "#/components/schemas/InvalidRequestError"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "AutonomyNoPasswordError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutonomyNoPasswordError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "AutonomyWriteError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutonomyWriteError"
+                }
+              }
+            }
+          }
+        },
+        "description": "A person deletes for good the archive entries they were shown, named by id. Only a server with a password takes this, and an agent's shell is never given it. Nothing outside the archive is deleted, and the emptying is recorded before anything goes.",
+        "summary": "Empty a session's archive",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": ["ids"],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.autonomy.archiveEmpty({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/config": {
       "get": {
         "tags": ["config"],
@@ -6621,6 +7030,10 @@
                   },
                   "message": {
                     "type": "string"
+                  },
+                  "version": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0
                   }
                 },
                 "required": ["reply"],
@@ -9515,6 +9928,10 @@
                   "response": {
                     "type": "string",
                     "enum": ["once", "always", "reject"]
+                  },
+                  "version": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0
                   }
                 },
                 "required": ["response"],
@@ -24623,6 +25040,188 @@
           }
         },
         "required": ["rootID", "on", "externalChange", "open", "lines", "intact", "problems", "notFromHere"],
+        "additionalProperties": false
+      },
+      "AutonomyConsentItem": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": ["secret", "sensitive", "outside", "destination"]
+          },
+          "pattern": {
+            "type": "string"
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "named": {
+            "type": "boolean"
+          },
+          "checked": {
+            "type": "boolean"
+          },
+          "given": {
+            "type": "boolean"
+          }
+        },
+        "required": ["id", "kind", "pattern", "files", "named", "checked", "given"],
+        "additionalProperties": false
+      },
+      "AutonomyConsentList": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "hash": {
+            "type": "string"
+          },
+          "at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "enum": ["NaN"]
+              },
+              {
+                "type": "string",
+                "enum": ["Infinity"]
+              },
+              {
+                "type": "string",
+                "enum": ["-Infinity"]
+              },
+              {
+                "type": "string",
+                "enum": ["Infinity", "-Infinity", "NaN"]
+              }
+            ]
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AutonomyConsentItem"
+            }
+          },
+          "stopped": {
+            "type": "string",
+            "enum": ["files", "time"]
+          },
+          "dropped": {
+            "type": "integer"
+          }
+        },
+        "required": ["id", "hash", "at", "items", "dropped"],
+        "additionalProperties": false
+      },
+      "AutonomyConsent": {
+        "type": "object",
+        "properties": {
+          "rootID": {
+            "type": "string",
+            "pattern": "^ses"
+          },
+          "consent": {
+            "$ref": "#/components/schemas/AutonomyConsentList"
+          }
+        },
+        "required": ["rootID", "consent"],
+        "additionalProperties": false
+      },
+      "AutonomyConsentError": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "enum": ["AutonomyConsentError"]
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": ["message"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["name", "data"],
+        "additionalProperties": false
+      },
+      "AutonomyNoPasswordError": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "enum": ["AutonomyNoPasswordError"]
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": ["message"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["name", "data"],
+        "additionalProperties": false
+      },
+      "AutonomyArchiveEntry": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "bytes": {
+            "type": "integer"
+          },
+          "count": {
+            "type": "integer"
+          },
+          "paths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": ["id", "bytes", "count", "paths"],
+        "additionalProperties": false
+      },
+      "AutonomyArchive": {
+        "type": "object",
+        "properties": {
+          "rootID": {
+            "type": "string",
+            "pattern": "^ses"
+          },
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AutonomyArchiveEntry"
+            }
+          },
+          "bytes": {
+            "type": "integer"
+          },
+          "unsafe": {
+            "type": "boolean"
+          }
+        },
+        "required": ["rootID", "entries", "bytes", "unsafe"],
         "additionalProperties": false
       },
       "Model": {

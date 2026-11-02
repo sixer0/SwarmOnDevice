@@ -2493,6 +2493,58 @@ export type AutonomySession = {
   notFromHere: number
 }
 
+export type AutonomyConsentItem = {
+  id: string
+  kind: "secret" | "sensitive" | "outside" | "destination"
+  pattern: string
+  files: Array<string>
+  named: boolean
+  checked: boolean
+  given: boolean
+}
+
+export type AutonomyConsentList = {
+  id: string
+  hash: string
+  at: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  items: Array<AutonomyConsentItem>
+  stopped?: "files" | "time"
+  dropped: number
+}
+
+export type AutonomyConsent = {
+  rootID: string
+  consent: AutonomyConsentList
+}
+
+export type AutonomyConsentError = {
+  name: "AutonomyConsentError"
+  data: {
+    message: string
+  }
+}
+
+export type AutonomyNoPasswordError = {
+  name: "AutonomyNoPasswordError"
+  data: {
+    message: string
+  }
+}
+
+export type AutonomyArchiveEntry = {
+  id: string
+  bytes: number
+  count: number
+  paths: Array<string>
+}
+
+export type AutonomyArchive = {
+  rootID: string
+  entries: Array<AutonomyArchiveEntry>
+  bytes: number
+  unsafe: boolean
+}
+
 export type Model = {
   id: string
   providerID: string
@@ -8220,6 +8272,167 @@ export type AutonomySessionResponses = {
 
 export type AutonomySessionResponse = AutonomySessionResponses[keyof AutonomySessionResponses]
 
+export type AutonomyConsentData = {
+  body?: never
+  path: {
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/session/{sessionID}/autonomy/consent"
+}
+
+export type AutonomyConsentErrors = {
+  /**
+   * BadRequest | InvalidRequestError
+   */
+  400: EffectHttpApiErrorBadRequest | InvalidRequestError
+  /**
+   * NotFoundError
+   */
+  404: NotFoundError
+}
+
+export type AutonomyConsentError2 = AutonomyConsentErrors[keyof AutonomyConsentErrors]
+
+export type AutonomyConsentResponses = {
+  /**
+   * What the session's root was asked once its mission was known
+   */
+  200: AutonomyConsent
+}
+
+export type AutonomyConsentResponse = AutonomyConsentResponses[keyof AutonomyConsentResponses]
+
+export type AutonomyConsentAllowData = {
+  body?: {
+    hash: string
+    ids: Array<string>
+  }
+  path: {
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/session/{sessionID}/autonomy/consent"
+}
+
+export type AutonomyConsentAllowErrors = {
+  /**
+   * BadRequest | InvalidRequestError
+   */
+  400: EffectHttpApiErrorBadRequest | InvalidRequestError
+  /**
+   * AutonomyNoPasswordError
+   */
+  403: AutonomyNoPasswordError
+  /**
+   * NotFoundError
+   */
+  404: NotFoundError
+  /**
+   * AutonomyConsentError
+   */
+  409: AutonomyConsentError
+  /**
+   * AutonomyWriteError
+   */
+  500: AutonomyWriteError
+}
+
+export type AutonomyConsentAllowError = AutonomyConsentAllowErrors[keyof AutonomyConsentAllowErrors]
+
+export type AutonomyConsentAllowResponses = {
+  /**
+   * The consent list after the answer
+   */
+  200: AutonomyConsent
+}
+
+export type AutonomyConsentAllowResponse = AutonomyConsentAllowResponses[keyof AutonomyConsentAllowResponses]
+
+export type AutonomyArchiveData = {
+  body?: never
+  path: {
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/session/{sessionID}/autonomy/archive"
+}
+
+export type AutonomyArchiveErrors = {
+  /**
+   * BadRequest | InvalidRequestError
+   */
+  400: EffectHttpApiErrorBadRequest | InvalidRequestError
+  /**
+   * NotFoundError
+   */
+  404: NotFoundError
+}
+
+export type AutonomyArchiveError = AutonomyArchiveErrors[keyof AutonomyArchiveErrors]
+
+export type AutonomyArchiveResponses = {
+  /**
+   * What autonomous mode moved to the archive instead of deleting
+   */
+  200: AutonomyArchive
+}
+
+export type AutonomyArchiveResponse = AutonomyArchiveResponses[keyof AutonomyArchiveResponses]
+
+export type AutonomyArchiveEmptyData = {
+  body?: {
+    ids: Array<string>
+  }
+  path: {
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/session/{sessionID}/autonomy/archive/empty"
+}
+
+export type AutonomyArchiveEmptyErrors = {
+  /**
+   * BadRequest | InvalidRequestError
+   */
+  400: EffectHttpApiErrorBadRequest | InvalidRequestError
+  /**
+   * AutonomyNoPasswordError
+   */
+  403: AutonomyNoPasswordError
+  /**
+   * NotFoundError
+   */
+  404: NotFoundError
+  /**
+   * AutonomyWriteError
+   */
+  500: AutonomyWriteError
+}
+
+export type AutonomyArchiveEmptyError = AutonomyArchiveEmptyErrors[keyof AutonomyArchiveEmptyErrors]
+
+export type AutonomyArchiveEmptyResponses = {
+  /**
+   * The archive after emptying
+   */
+  200: AutonomyArchive
+}
+
+export type AutonomyArchiveEmptyResponse = AutonomyArchiveEmptyResponses[keyof AutonomyArchiveEmptyResponses]
+
 export type ConfigGetData = {
   body?: never
   path?: never
@@ -10567,6 +10780,7 @@ export type PermissionReplyData = {
   body?: {
     reply: "once" | "always" | "reject"
     message?: string
+    version?: number
   }
   path: {
     requestID: string
@@ -11673,6 +11887,7 @@ export type SessionUnrevertResponse = SessionUnrevertResponses[keyof SessionUnre
 export type PermissionRespondData = {
   body?: {
     response: "once" | "always" | "reject"
+    version?: number
   }
   path: {
     sessionID: string
