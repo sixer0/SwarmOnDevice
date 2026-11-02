@@ -121,7 +121,8 @@ export default function LegacyLayout(props: ParentProps) {
   const command = useCommand()
   const theme = useTheme()
   const language = useLanguage()
-  createEffect(() => setV2Toast(false))
+  // Under the new layout this one only passes through on its way to a redirect, and that layout's toaster stays.
+  createEffect(() => setV2Toast(settings.general.newLayoutDesigns()))
   const initialDirectory = decode64(params.dir)
   const route = createMemo(() => {
     const slug = params.dir
