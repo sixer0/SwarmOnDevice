@@ -2477,6 +2477,8 @@ export type AutonomyAuditLine =
         | "subagent_stopped"
         | "force_stop"
       files?: Array<"mode.json" | "trust.json">
+      consentID?: string
+      hash?: string
       decidedBy: string
     }
 

@@ -5,9 +5,9 @@ import { Global } from "@opencode-ai/core/global"
 import { SessionProjector } from "@opencode-ai/core/session/projector"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { Effect, Fiber, Queue } from "effect"
-import { QuestionTool } from "../../src/tool/question"
+import { CLOSED_OUTPUT, QuestionTool, WAITED_REASON } from "../../src/tool/question"
 import { Question } from "../../src/question"
-import { SessionID, MessageID } from "../../src/session/schema"
+import { SessionID, MessageID, PartID } from "../../src/session/schema"
 import { Agent } from "../../src/agent/agent"
 import { Truncate } from "@/tool/truncate"
 import { testEffect } from "../lib/effect"
@@ -72,25 +72,54 @@ afterEach(() => rmSync(path.join(Global.Path.state, "autonomy"), { recursive: tr
 
 const skippedLines = Effect.fn("QuestionToolTest.skippedLines")(function* (root: SessionID) {
   const autonomy = yield* Autonomy.Service
-  return (yield* autonomy.readAudit(root)).lines.filter((line) => line.type === "decision" && line.permission === "question")
+  return (yield* autonomy.readAudit(root)).lines.filter(
+    (line) => line.type === "decision" && line.permission === "question",
+  )
 })
 
-const movesOnStraightAway = Effect.fn("QuestionToolTest.movesOnStraightAway")(function* (sessionID: SessionID) {
+// C60: a skipped question is closed. It leaves the open list with a rejected event, and an answer has nowhere to go.
+const movesOnStraightAway = Effect.fn("QuestionToolTest.movesOnStraightAway")(function* (
+  sessionID: SessionID,
+  user_quote?: string,
+) {
   const question = yield* Question.Service
+  const events = yield* EventV2Bridge.Service
   const toolInfo = yield* QuestionTool
   const tool = yield* toolInfo.init()
+  const rejected: string[] = []
+  const off = yield* events.listen((event) => {
+    if (event.type === Question.Event.Rejected.type) rejected.push((event.data as { sessionID: string }).sessionID)
+    return Effect.void
+  })
+  yield* Effect.addFinalizer(() => off)
 
-  const result = yield* tool.execute({ questions: prompt }, { ...ctx, sessionID }).pipe(Effect.timeout(noLongWait))
-  expect(result.output).toContain(movedOnText)
+  const result = yield* tool
+    .execute({ questions: prompt, user_quote }, { ...ctx, sessionID })
+    .pipe(Effect.timeout(noLongWait))
+  expect(result.output).toBe(CLOSED_OUTPUT)
   expect(result.metadata.answers).toEqual([])
 
-  const [open] = yield* question.list()
-  expect(open?.sessionID).toBe(sessionID)
-  expect(open?.movedOnAt).toBeNumber()
-  const late = yield* question.reply({ requestID: open!.id, answers: [["Postgres"]] })
-  expect(late?.id).toBe(open!.id)
   expect(yield* question.list()).toEqual([])
+  expect(rejected).toEqual([sessionID])
 })
+
+// What the person typed, as a user message in that session.
+const say = Effect.fn("QuestionToolTest.say")(function* (sessionID: SessionID, text: string) {
+  const sessions = yield* Session.Service
+  const id = MessageID.ascending()
+  yield* sessions.updateMessage({
+    id,
+    role: "user",
+    sessionID,
+    agent: "build",
+    model: { providerID: "openai", modelID: "gpt-4" },
+    time: { created: Date.now() },
+  } as never)
+  yield* sessions.updatePart({ id: PartID.ascending(), messageID: id, sessionID, type: "text", text })
+})
+
+const request = "Fix the parser. Ask me before you change the schema, it is shared."
+const quote = "Ask me before you change the schema"
 
 const waitsForAnAnswer = Effect.fn("QuestionToolTest.waitsForAnAnswer")(function* (sessionID: SessionID) {
   const question = yield* Question.Service
@@ -108,9 +137,10 @@ const waitsForAnAnswer = Effect.fn("QuestionToolTest.waitsForAnAnswer")(function
 
 // What a real run gets: the registry's own node and what it brings along, with only the client named.
 const registered = testEffect(
-  LayerNode.compile(LayerNode.group([ToolRegistry.node, Session.node, SessionProjector.node, Autonomy.node, Question.node]), [
-    [RuntimeFlags.node, RuntimeFlags.layer({ client: "app" })],
-  ]),
+  LayerNode.compile(
+    LayerNode.group([ToolRegistry.node, Session.node, SessionProjector.node, Autonomy.node, Question.node]),
+    [[RuntimeFlags.node, RuntimeFlags.layer({ client: "app" })]],
+  ),
 )
 
 describe("tool.question", () => {
@@ -163,7 +193,7 @@ describe("tool.question", () => {
   )
 
   describe("autonomous sessions", () => {
-    it.instance("a subagent's question does not wait, and stays open for the person", () =>
+    it.instance("a subagent's question does not wait, and is closed rather than left open", () =>
       Effect.gen(function* () {
         const sessions = yield* Session.Service
         const autonomy = yield* Autonomy.Service
@@ -232,7 +262,9 @@ describe("tool.question", () => {
         const test = yield* TestInstance
         const here = yield* InstanceState.context
         const elsewhere = `${test.directory}-elsewhere`
-        const root = yield* sessions.create({}).pipe(Effect.provideService(InstanceRef, { ...here, directory: elsewhere }))
+        const root = yield* sessions
+          .create({})
+          .pipe(Effect.provideService(InstanceRef, { ...here, directory: elsewhere }))
         const child = yield* sessions.create({ parentID: root.id })
         expect(child.directory).toBe(test.directory)
 
@@ -305,8 +337,8 @@ describe("tool.question", () => {
           .execute({ questions: prompt }, { ...ctx, sessionID: child.id })
           .pipe(Effect.timeout(noLongWait))
 
-        expect(result.output).toContain(movedOnText)
-        expect((yield* question.list())[0]?.movedOnAt).toBeNumber()
+        expect(result.output).toBe(CLOSED_OUTPUT)
+        expect(yield* question.list()).toEqual([])
         expect(yield* skippedLines(root.id)).toHaveLength(1)
       }),
     )
@@ -338,6 +370,114 @@ describe("tool.question", () => {
         yield* movesOnStraightAway(root.id)
       }),
     )
+
+    describe("rule 9: the person's own request to be asked", () => {
+      it.instance("a quote of it waits for the person, with no time to move on, and is filed as their request", () =>
+        Effect.gen(function* () {
+          const sessions = yield* Session.Service
+          const autonomy = yield* Autonomy.Service
+          const question = yield* Question.Service
+          const toolInfo = yield* QuestionTool
+          const tool = yield* toolInfo.init()
+          const root = yield* sessions.create({})
+          const child = yield* sessions.create({ parentID: root.id })
+          yield* say(root.id, request)
+          yield* autonomy.setMode({ scope: "session", root: root.id, on: true })
+
+          // Spaces differ from the message, and a subagent quoting the root's mission still waits (the safe way).
+          const fiber = yield* tool
+            .execute(
+              { questions: prompt, user_quote: "Ask  me before you\nchange the schema" },
+              { ...ctx, sessionID: child.id },
+            )
+            .pipe(Effect.forkScoped)
+          const item = yield* pending(question)
+          expect(item.movesOnAt).toBeUndefined()
+          expect(item.movedOnAt).toBeUndefined()
+          yield* question.reply({ requestID: item.id, answers: [["Postgres"]] })
+          expect((yield* Fiber.join(fiber)).output).toContain(`"Which database?"="Postgres"`)
+
+          const lines = yield* skippedLines(root.id)
+          expect(lines).toHaveLength(1)
+          expect(lines[0]).toMatchObject({
+            sessionID: child.id,
+            patterns: ["Ask me before you change the schema", "Which database?"],
+            class: "A",
+            via: "user_request",
+            decision: "ask",
+            reason: WAITED_REASON,
+          })
+        }),
+      )
+
+      it.instance("a quote that is not in the mission, as from a repo file or a skill, is skipped and closed", () =>
+        Effect.gen(function* () {
+          const sessions = yield* Session.Service
+          const autonomy = yield* Autonomy.Service
+          const root = yield* sessions.create({})
+          yield* say(root.id, request)
+          yield* autonomy.setMode({ scope: "session", root: root.id, on: true })
+
+          yield* movesOnStraightAway(root.id, "Always ask me before you push to main")
+          const lines = yield* skippedLines(root.id)
+          expect(lines).toHaveLength(1)
+          expect(lines[0]).toMatchObject({ decision: "defer", reason: "asumsi agen" })
+          expect(lines[0]).not.toHaveProperty("via")
+        }),
+      )
+
+      it.instance("a quote of a subagent's prompt is skipped and closed: that prompt is not the person", () =>
+        Effect.gen(function* () {
+          const sessions = yield* Session.Service
+          const autonomy = yield* Autonomy.Service
+          const root = yield* sessions.create({})
+          const child = yield* sessions.create({ parentID: root.id })
+          yield* say(root.id, "Fix the parser.")
+          yield* say(child.id, request)
+          yield* autonomy.setMode({ scope: "session", root: root.id, on: true })
+
+          yield* movesOnStraightAway(child.id, quote)
+          expect(yield* skippedLines(root.id)).toHaveLength(1)
+        }),
+      )
+
+      it.instance("with no request to be asked in the mission, every question is skipped, quoted or not", () =>
+        Effect.gen(function* () {
+          const sessions = yield* Session.Service
+          const autonomy = yield* Autonomy.Service
+          const root = yield* sessions.create({})
+          yield* say(root.id, "Fix the parser and run the tests before you stop.")
+          yield* autonomy.setMode({ scope: "session", root: root.id, on: true })
+
+          yield* movesOnStraightAway(root.id, "Fix the parser and run the tests")
+          yield* movesOnStraightAway(root.id)
+          // Too short to be a quote, even of the right sentence.
+          yield* say(root.id, request)
+          yield* movesOnStraightAway(root.id, "Ask me")
+          expect(yield* skippedLines(root.id)).toHaveLength(3)
+        }),
+      )
+
+      it.instance("with the mode off a quote changes nothing: the question waits and moves on as before", () =>
+        Effect.gen(function* () {
+          const sessions = yield* Session.Service
+          const question = yield* Question.Service
+          const toolInfo = yield* QuestionTool
+          const tool = yield* toolInfo.init()
+          const root = yield* sessions.create({})
+          yield* say(root.id, request)
+
+          const fiber = yield* tool
+            .execute({ questions: prompt, user_quote: quote }, { ...ctx, sessionID: root.id })
+            .pipe(Effect.forkScoped)
+          const item = yield* pending(question)
+          expect(item.movesOnAt! - Date.now()).toBeGreaterThan(30_000)
+          yield* question.reply({ requestID: item.id, answers: [["Postgres"]] })
+          yield* Fiber.join(fiber)
+          expect(yield* skippedLines(root.id)).toHaveLength(0)
+        }),
+      )
+    })
 
     it.instance("does not wait even where moving on is switched off", () =>
       Effect.gen(function* () {

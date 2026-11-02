@@ -37,6 +37,7 @@ import { InstanceBootstrap } from "../../src/project/bootstrap"
 import { InstanceStore } from "../../src/project/instance-store"
 import { MessageID, SessionID } from "../../src/session/schema"
 import { Session } from "../../src/session/session"
+import { SUBAGENT_STOPPED } from "../../src/tool/task"
 import { provideInstanceEffect, TestInstance, tmpdirScoped } from "../fixture/fixture"
 import { testEffect } from "../lib/effect"
 
@@ -194,37 +195,63 @@ it.instance("without the mode the path is what it was: a prompt with a wait, no 
   }),
 )
 
-it.instance("ADV-A8: spend_limit and doom_loop never reach a decider and keep waiting for a person", () =>
+it.instance("ADV-A8 (U11 rule 11): spend_limit and doom_loop reach no decider and wait for nobody", () =>
   Effect.gen(function* () {
+    const autonomy = yield* Autonomy.Service
     const { root, child } = yield* lineage
+    const stop = (sessionID: SessionID, permission: string, pattern: string) =>
+      failure(ask({ sessionID, permission, patterns: [pattern], metadata: {}, always: [], ruleset: [] }))
+
+    // A subagent's run is stopped, with the text its parent gets back from `task`.
+    const childLoop = yield* stop(child.id, "doom_loop", "read")
+    expect(childLoop).toBeInstanceOf(PermissionV1.RejectedError)
+    expect((childLoop as Error).message).toBe(`${SUBAGENT_STOPPED} repeated calls to \`read\`.`)
+    // The root's is force stopped. A spend limit is the family's, and is asked on the root.
+    const rootLoop = yield* stop(root.id, "doom_loop", "edit")
+    expect(rootLoop).toBeInstanceOf(PermissionV1.RejectedError)
+    expect((rootLoop as Error).message).toBe(`${SUBAGENT_STOPPED} repeated calls to \`edit\`.`)
+    const spend = yield* stop(root.id, "spend_limit", "$10.00 of $10.00")
+    expect(spend).toBeInstanceOf(PermissionV1.RejectedError)
+    expect((spend as Error).message).toBe(`${SUBAGENT_STOPPED} the spend limit was reached.`)
+
+    expect(yield* list).toEqual([])
+    expect(stub.calls).toEqual([])
+    const lines = yield* audit(root.id)
+    expect(lines.map((line) => [line.sessionID, line.permission, line.class, line.decision, line.decidedBy])).toEqual([
+      [child.id, "doom_loop", "B", "reject", "system:subagent_stopped"],
+      [root.id, "doom_loop", "B", "reject", "system:force_stop"],
+      [root.id, "spend_limit", "B", "reject", "system:force_stop"],
+    ])
+    const marks = (yield* autonomy.readAudit(root.id)).lines.flatMap((line) =>
+      line.type === "marker" && line.marker !== "mode_on" ? [line.marker] : [],
+    )
+    expect(marks).toEqual(["subagent_stopped", "force_stop", "b1", "force_stop", "b1"])
+  }),
+)
+
+it.instance("ADV-A8 with the mode off: a spend limit and a repeating call still wait for a person", () =>
+  Effect.gen(function* () {
+    const sessions = yield* Session.Service
+    const root = yield* sessions.create({})
+    const child = yield* sessions.create({ parentID: root.id })
     for (const [sessionID, name] of [
       [root.id, "spend_limit"],
       [child.id, "doom_loop"],
     ] as const) {
-      const fiber = yield* ask({
-        sessionID,
-        permission: name,
-        patterns: ["*"],
-        metadata: {},
-        always: [],
-        ruleset: [],
-      }).pipe(Effect.exit, Effect.forkScoped)
+      const fiber = yield* ask({ sessionID, permission: name, patterns: ["*"], metadata: {}, always: [], ruleset: [] }).pipe(
+        Effect.exit,
+        Effect.forkScoped,
+      )
       const [waiting] = yield* waitForPending(1)
       expect(waiting!.permission).toBe(name)
-      // No time at which the agent carries on, and it has not carried on.
       expect(waiting!.movesOnAt).toBeUndefined()
-      expect(waiting!.movedOnAt).toBeUndefined()
       yield* Effect.sleep("50 millis")
       expect(fiber.pollUnsafe()).toBeUndefined()
       yield* reply({ requestID: waiting!.id, reply: "once" })
       expect(Exit.isSuccess(yield* Fiber.join(fiber))).toBe(true)
     }
     expect(stub.calls).toEqual([])
-    const lines = yield* audit(root.id)
-    expect(lines.map((line) => [line.permission, line.class, line.decision, line.decidedBy])).toEqual([
-      ["spend_limit", "B", "ask", "person"],
-      ["doom_loop", "B", "ask", "person"],
-    ])
+    expect(existsSync(path.join(folder, `${root.id}.jsonl`))).toBe(false)
   }),
 )
 
@@ -792,20 +819,13 @@ it.instance("a decision that cannot be recorded gives no approval, and refusing 
       ),
     ).toBeInstanceOf(PermissionV1.DeniedError)
 
-    // A spend limit still waits for a person.
-    const fiber = yield* ask({
-      sessionID: root.id,
-      permission: "spend_limit",
-      patterns: ["*"],
-      metadata: {},
-      always: [],
-      ruleset: [],
-    }).pipe(Effect.exit, Effect.forkScoped)
-    const items = yield* waitForPending(3)
-    const waiting = items.find((item) => item.permission === "spend_limit")!
-    expect(waiting.movedOnAt).toBeUndefined()
-    yield* reply({ requestID: waiting.id, reply: "once" })
-    expect(Exit.isSuccess(yield* Fiber.join(fiber))).toBe(true)
+    // A spend limit still stops the run, with no line written, and waits for nobody (U11 rule 11).
+    expect(
+      yield* failure(
+        ask({ sessionID: root.id, permission: "spend_limit", patterns: ["*"], metadata: {}, always: [], ruleset: [] }),
+      ),
+    ).toBeInstanceOf(PermissionV1.RejectedError)
+    expect(yield* list).toHaveLength(2)
   }),
 )
 
@@ -1533,7 +1553,7 @@ it.instance("AU-24: work that is not critical goes on with the queue full", () =
   }),
 )
 
-it.instance("AU-24: a person's spend limit is not a queue, and waits even with the queue full", () =>
+it.instance("AU-24: a spend limit is not a queue: with the queue full it still stops the run, and takes no place", () =>
   Effect.gen(function* () {
     const { root } = yield* lineage
     const test = yield* TestInstance
@@ -1541,19 +1561,12 @@ it.instance("AU-24: a person's spend limit is not a queue, and waits even with t
       Array.from({ length: 21 }, (_, index) => `git push origin branch-${index}`),
       (command) => failure(ask(bash(root.id, command, test.directory))),
     )
-    const fiber = yield* ask({
-      sessionID: root.id,
-      permission: "spend_limit",
-      patterns: ["*"],
-      metadata: {},
-      always: [],
-      ruleset: [],
-    }).pipe(Effect.exit, Effect.forkScoped)
-    const items = yield* waitForPending(21)
-    const waiting = items.find((item) => item.permission === "spend_limit")!
-    expect(waiting.movedOnAt).toBeUndefined()
-    yield* reply({ requestID: waiting.id, reply: "once" })
-    expect(Exit.isSuccess(yield* Fiber.join(fiber))).toBe(true)
+    expect(
+      yield* failure(
+        ask({ sessionID: root.id, permission: "spend_limit", patterns: ["*"], metadata: {}, always: [], ruleset: [] }),
+      ),
+    ).toBeInstanceOf(PermissionV1.RejectedError)
+    expect(yield* list).toHaveLength(Permission.QUEUE_LIMIT)
   }),
 )
 

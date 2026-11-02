@@ -4,7 +4,7 @@ import os from "node:os"
 import path from "node:path"
 import { MockLanguageModelV3 } from "ai/test"
 import { $ } from "bun"
-import { Cause, Effect, Exit, Fiber, Layer } from "effect"
+import { Cause, Effect, Exit, Layer } from "effect"
 import { CrossSpawnSpawner } from "@opencode-ai/core/cross-spawn-spawner"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
@@ -290,6 +290,11 @@ const passedBy = (category: AutonomyTable.AllowedCategory) => ({
 const heldAs = (category: AutonomyTable.HeldCategory) => ({ outcome: "held", lines: [["D", category]], asked: 0 })
 const refusedAs = (category: AutonomyTable.HeldCategory) => ({ outcome: "refused", lines: [["X", category]], asked: 0 })
 const QUIET = { outcome: "passed", lines: [], asked: 0 }
+const RAN_ON_RECORD = (category: AutonomyTable.AllowedCategory) => ({ outcome: "passed", lines: [["A", category]], asked: 0 })
+// What `session/tools.ts` sends for a tool of an MCP server (row 105).
+const mcpSource = (origin: string, transport = "local") => ({ server: "graft", transport, origin })
+const mcpTool = (sessionID: SessionID, permission: string, mcp: Record<string, unknown>) =>
+  asked(sessionID, { permission, patterns: ["*"], always: ["*"], metadata: { mcp } })
 const RULE_DENIED = { outcome: "refused", lines: [], asked: 0 }
 
 type Attempts = ReturnType<typeof command> | ReturnType<typeof write> | ReturnType<typeof asked>
@@ -452,6 +457,10 @@ it.instance(
         ["10 a risk label", ({ root }) => command(root, "git push origin main"), heldAs("outward")],
         ["11 an MCP tool", ({ root }) => asked(root, { permission: "graft_find_code", always: ["*"] }), heldAs("external_tool")],
         ["11 a sending tool", ({ root }) => asked(root, { permission: "some_mcp_send", always: ["*"] }), heldAs("external_tool")],
+        ["11 a global local server (U11 rule 5)", ({ root }) => mcpTool(root, "graft_find_code", mcpSource("global")), RAN_ON_RECORD("mcp_tool")],
+        ["11 a project's server, folder approved", ({ root }) => mcpTool(root, "graft_find_code", mcpSource("project")), RAN_ON_RECORD("mcp_tool")],
+        ["11 a remote server (G4)", ({ root }) => mcpTool(root, "graft_find_code", mcpSource("global", "remote")), heldAs("outward_not_in_mission")],
+        ["11 another server's source", ({ root }) => mcpTool(root, "some_mcp_send", mcpSource("global")), heldAs("external_tool")],
         ["12 push by alias", ({ root }) => command(root, "git -c alias.p=push p origin main"), heldAs("not_routine")],
         ["13 publish", ({ root }) => command(root, "npm publish"), heldAs("outward")],
         ["13 deploy", ({ root }) => command(root, "make deploy"), heldAs("not_routine")],
@@ -509,7 +518,8 @@ it.instance(
 )
 
 it.instance(
-  "ADV-P1, row 18: a yes is never asked for on a spend limit or a repeating call, and they wait for a person",
+  // U11 rule 11 replaced the wait: a subagent's run is stopped for its parent to decide, a root's is force stopped.
+  "ADV-P1, row 18: a yes is never asked for on a spend limit or a repeating call, and they stop the run instead of waiting",
   () =>
     Effect.gen(function* () {
       const { root, child } = yield* lineage
@@ -517,25 +527,17 @@ it.instance(
         [root.id, "spend_limit"],
         [child.id, "doom_loop"],
       ] as const) {
-        const fiber = yield* asked(sessionID, { permission: name, always: ["*"] }).pipe(Effect.exit, Effect.forkScoped)
-        const waiting = yield* Effect.gen(function* () {
-          while (true) {
-            const [entry] = yield* heldFor([sessionID])
-            if (entry) return entry
-            yield* Effect.sleep("10 millis")
-          }
-        }).pipe(Effect.timeout("2 seconds"))
-        expect(waiting.movedOnAt).toBeUndefined()
-        expect(waiting.movesOnAt).toBeUndefined()
-        expect(fiber.pollUnsafe()).toBeUndefined()
-        const permission = yield* Permission.Service
-        yield* permission.reply({ requestID: waiting.id, reply: "once" })
-        expect(Exit.isSuccess(yield* Fiber.join(fiber))).toBe(true)
+        const exit = yield* asked(sessionID, { permission: name, always: ["*"] }).pipe(
+          Effect.timeout("2 seconds"),
+          Effect.exit,
+        )
+        expect(Exit.isFailure(exit) && Cause.squash(exit.cause)).toBeInstanceOf(PermissionV1.RejectedError)
+        expect(yield* heldFor([sessionID])).toEqual([])
       }
       expect(stub.calls).toEqual([])
-      expect((yield* decisions(root.id)).map((line) => [line.class, line.decidedBy])).toEqual([
-        ["B", "person"],
-        ["B", "person"],
+      expect((yield* decisions(root.id)).map((line) => [line.class, line.decision, line.decidedBy])).toEqual([
+        ["B", "reject", "system:force_stop"],
+        ["B", "reject", "system:subagent_stopped"],
       ])
     }),
   project,
@@ -554,6 +556,27 @@ it.instance(
       expect(ProjectTrust.status(test.directory).state).toBe("ask")
       const { root } = yield* lineage
       expect(yield* judged(root.id, command(root.id, "bun test"))).toEqual(heldAs("folder_not_trusted"))
+      expect(stub.calls).toEqual([])
+    }),
+  project,
+)
+
+it.instance(
+  "ADV-U11 rule 7: in a folder nobody approved, a server from the project's config is held and the user's own is not",
+  () =>
+    Effect.gen(function* () {
+      const test = yield* TestInstance
+      ProjectTrust.assumeTrustedForTests(false)
+      yield* Effect.addFinalizer(() => Effect.sync(() => ProjectTrust.assumeTrustedForTests(true)))
+      mkdirSync(path.join(test.directory, ".swarm/tools"), { recursive: true })
+      writeFileSync(path.join(test.directory, ".swarm/tools/x.ts"), "export default {}\n")
+      expect(ProjectTrust.status(test.directory).state).toBe("ask")
+      yield* expectOnFreshRoots([
+        ["a project's server", ({ root }) => mcpTool(root, "graft_find_code", mcpSource("project")), heldAs("folder_not_trusted")],
+        ["a tool with no known source", ({ root }) => mcpTool(root, "graft_find_code", { origin: "project" }), heldAs("external_tool")],
+        ["a project's remote server", ({ root }) => mcpTool(root, "graft_find_code", mcpSource("project", "remote")), heldAs("folder_not_trusted")],
+        ["the user's global server", ({ root }) => mcpTool(root, "graft_find_code", mcpSource("global")), RAN_ON_RECORD("mcp_tool")],
+      ])
       expect(stub.calls).toEqual([])
     }),
   project,

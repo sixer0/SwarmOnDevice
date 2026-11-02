@@ -266,7 +266,9 @@ it.instance("XF-05: what the gate held survives closing every folder, and the mo
 
 it.instance("XF-05: a prompt a person was looking at still ends with the folder, as it always has", () =>
   Effect.gen(function* () {
-    const root = yield* rootInMode
+    // Outside the mode: in it a spend limit waits for nobody (U11 rule 11), and nothing else prompts a person.
+    const sessions = yield* Session.Service
+    const root = yield* sessions.create({})
     const fiber = yield* ask({
       sessionID: root.id,
       permission: "spend_limit",

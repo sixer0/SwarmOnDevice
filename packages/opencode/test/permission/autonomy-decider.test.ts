@@ -2,7 +2,8 @@ import { afterEach, beforeEach, expect } from "bun:test"
 import { readFileSync, rmSync } from "node:fs"
 import path from "node:path"
 import { MockLanguageModelV3 } from "ai/test"
-import { Cause, Effect, Exit, Fiber, Layer, Stream } from "effect"
+import { Cause, Clock, Effect, Exit, Fiber, Layer, Stream } from "effect"
+import { TestClock } from "effect/testing"
 import { CrossSpawnSpawner } from "@opencode-ai/core/cross-spawn-spawner"
 import { Database } from "@opencode-ai/core/database/database"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
@@ -601,19 +602,40 @@ it.instance("the deadline runs from when an attempt starts, not from when the re
   Effect.gen(function* () {
     const test = yield* TestInstance
     const session = yield* root()
+    const release: Array<() => void> = []
     stub.reply = () =>
-      new Promise((resolve) => setTimeout(() => resolve({ text: '{"decision":"allow","reason":"x"}' }), 120))
+      new Promise((resolve) => {
+        release.push(() => resolve({ text: '{"decision":"allow","reason":"x"}' }))
+      })
+    // Time moves only when the test says so, so a loaded machine cannot push a call past its deadline.
+    const clock = yield* TestClock.make()
     const run = (name: string) =>
       decide(bash(session.id, `mkdir -p ${name}`, test.directory), session.id).pipe(
-        Effect.provideService(AutonomyDecider.Limits, limited({ deadlineMs: 200 })),
+        Effect.provideService(AutonomyDecider.Limits, limited({ deadlineMs: 50 })),
+        Effect.provideService(Clock.Clock, clock),
+        Effect.forkScoped,
       )
-    // The second waits about 120 ms for the lock, then answers within its own 200: 240 ms after it asked.
-    const done = yield* Effect.all([run("a"), run("b")], { concurrency: "unbounded" })
-    expect(done).toMatchObject([
-      { decision: "allow", attempts: 1 },
-      { decision: "allow", attempts: 1 },
-    ])
-    expect(stub.mostRunning).toBe(1)
+    // A real pause: the clock only moves timers that exist. The first holds the lock, the second waits in the queue.
+    const settle = Effect.promise(() => Bun.sleep(15))
+    const until = (count: number) =>
+      Effect.gen(function* () {
+        while (release.length < count) yield* settle
+      })
+    const first = yield* run("a")
+    yield* until(1)
+    const second = yield* run("b")
+    yield* settle
+
+    // A whole deadline passes: the first's call runs out and it tries again, while the second has waited as long.
+    yield* clock.adjust(50)
+    yield* until(2)
+    release[1]!()
+    yield* until(3)
+    expect(stub.prompts.length).toBe(3)
+    release[2]!()
+    expect(yield* Fiber.join(first)).toMatchObject({ decision: "allow", attempts: 2 })
+    expect(yield* Fiber.join(second)).toMatchObject({ decision: "allow", attempts: 1 })
+    release[0]!()
   }),
 )
 
@@ -761,31 +783,21 @@ it.instance("ADV-A16: a reject leaves a request waiting beside it alone", () =>
     const test = yield* TestInstance
     const session = yield* root()
     const permission = yield* Permission.Service
-    const sibling = yield* ask({
-      sessionID: session.id,
-      permission: "spend_limit",
-      patterns: ["$1.00 of $1.00"],
-      metadata: {},
-      always: [],
-      ruleset: [],
-    }).pipe(Effect.exit, Effect.forkScoped)
-    while ((yield* list).length !== 1) yield* Effect.sleep("10 millis")
+    // In the mode a spend limit no longer waits for anyone (U11 rule 11), so the held call is what waits beside it.
     const held = yield* failure(ask(bash(session.id, "git push origin main", test.directory)))
     expect(held).toBeInstanceOf(PermissionV1.DeferredError)
-    expect((yield* list).length).toBe(2)
+    const [before] = yield* list
+    expect((yield* list).length).toBe(1)
 
     stub.reply = () => answer("reject")
     yield* failure(ask(bash(session.id, "mkdir -p out", test.directory)))
 
     const waiting = yield* list
-    expect(waiting.length).toBe(2)
-    expect(waiting.find((item) => item.permission === "spend_limit")!.always).toEqual([])
-    expect(sibling.pollUnsafe()).toBeUndefined()
-    yield* permission.reply({
-      requestID: waiting.find((item) => item.permission === "spend_limit")!.id,
-      reply: "once",
-    })
-    expect(Exit.isSuccess(yield* Fiber.join(sibling))).toBe(true)
+    expect(waiting.length).toBe(1)
+    expect(waiting[0]!.id).toBe(before!.id)
+    expect(waiting[0]!.always).toEqual([])
+    yield* permission.reply({ requestID: before!.id, reply: "once" })
+    expect(yield* list).toEqual([])
   }),
 )
 

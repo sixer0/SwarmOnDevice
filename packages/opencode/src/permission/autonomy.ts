@@ -16,7 +16,7 @@ import {
 } from "node:fs"
 import { createHash } from "node:crypto"
 import path from "node:path"
-import { Cause, Clock, Context, Effect, Layer, Option, Schema, Scope } from "effect"
+import { Cause, Clock, Context, Deferred, Effect, Layer, Option, Schema, Scope } from "effect"
 import { eq } from "drizzle-orm"
 import { Database } from "@opencode-ai/core/database/database"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
@@ -30,10 +30,14 @@ import { AutonomyEvent } from "@opencode-ai/schema/autonomy-event"
 import { QuestionV1 } from "@opencode-ai/schema/question-v1"
 import { SessionStatusEvent } from "@opencode-ai/schema/session-status-event"
 import { GlobalBus, type GlobalEvent } from "@/bus/global"
+import { InstanceRef } from "@/effect/instance-ref"
 import { InstanceState } from "@/effect/instance-state"
 import type { SessionID } from "@/session/schema"
 import { Secrets } from "@/tool/secrets"
 import type { Archive } from "@/tool/archive"
+import { ConsentScan } from "./consent-scan"
+import { MissionWindow } from "./mission-window"
+import { OutwardKnown } from "./outward-known"
 
 // Whether a session runs without a person at the prompt, kept on the server so it holds with every window closed.
 //
@@ -59,6 +63,11 @@ const AUDIT_LINE_BYTES = 4096
 const AUDIT_RETENTION_DAYS = 30
 const DAY_MS = 24 * 60 * 60 * 1000
 const SKIPPED_QUESTION_REASON = "asumsi agen"
+// The gate waits this long for the consent list before its first call. Past it the call goes on, and what the list would
+// have covered stays held.
+const CONSENT_WAIT_MS = 15_000
+// Person messages read to find the mission: far more than the window's 3 before the switch and whatever came since.
+const MISSION_MESSAGES = 100
 
 /** How long everything has to stay quiet before it counts as finished: a run can pass through idle between two steps. */
 export const BLOCKED_DEBOUNCE_MS = 5000
@@ -95,6 +104,41 @@ export interface Check {
 export class WriteError extends Schema.TaggedErrorClass<WriteError>()("AutonomyWriteError", {
   message: Schema.String,
 }) {}
+
+/** The list the person answered is not the one on show: the mode went off, the process restarted, or it was made again. */
+export class ConsentError extends Schema.TaggedErrorClass<ConsentError>()("AutonomyConsentError", {
+  message: Schema.String,
+}) {}
+
+/**
+ * What one root was asked once its mission was known (U11 rule 2, U13), and what the person allowed. Memory only: it is
+ * gone when the mode goes off or the process ends, and nothing in a file brings it back.
+ */
+export interface Consent {
+  readonly id: string
+  readonly hash: string
+  readonly at: number
+  readonly directory: string
+  readonly items: readonly ConsentScan.Item[]
+  /** Item ids a person allowed through the server's own route. Nothing an agent or a file says adds to this. */
+  readonly given: ReadonlySet<string>
+  readonly stopped?: ConsentScan.Result["stopped"]
+  readonly dropped: number
+  /** What was known about destinations before anything this run did could change it, for the push recheck. */
+  readonly snapshot?: OutwardKnown.Snapshot
+  /** The known destinations behind each `destination` item, by item id. */
+  readonly destinations: ReadonlyMap<string, OutwardKnown.Destination>
+}
+
+/** The allowed item that names this concrete path, if any. A pattern on its own covers nothing. */
+export const consentedFile = (consent: Consent | undefined, file: string) =>
+  consent?.items.find((item) => consent.given.has(item.id) && item.files.includes(file))
+
+/** The allowed destinations, as row 107 matches a call against them. */
+export const consentedDestinations = (consent: Consent | undefined) =>
+  consent
+    ? [...consent.destinations].flatMap(([id, destination]) => (consent.given.has(id) ? [{ id, destination }] : []))
+    : []
 
 const Follow = Schema.Struct({ permission: Schema.String, patterns: Schema.Array(Schema.String) })
 const Chained = {
@@ -212,6 +256,9 @@ const Marker = Schema.Struct({
     "force_stop",
   ]),
   files: Schema.optional(Schema.Array(Schema.Literals([MODE_FILE, TRUST_FILE]))),
+  // Only on the consent markers: which list, and its hash, so a line can be matched to what the person saw.
+  consentID: Schema.optional(Schema.String),
+  hash: Schema.optional(Schema.String.check(Schema.isPattern(/^[0-9a-f]{64}$/))),
   decidedBy: DecidedBy,
 })
 /** One line of `autonomy/<rootID>.jsonl`. */
@@ -289,6 +336,19 @@ export interface Interface {
   readonly readAudit: (root: SessionID) => Effect.Effect<AuditRead>
   /** Every root's held calls still open, oldest first per root. What is in the file only ever becomes a question. */
   readonly openDecisions: () => Effect.Effect<readonly OpenDecision[]>
+  /** When the root's mode came on in this run of it: its first mode_on after the last mode_off. */
+  readonly modeSince: (root: SessionID) => Effect.Effect<number | undefined>
+  /** The root's consent list, once its scan is done. Undefined while there is no mission yet, or the mode is off. */
+  readonly consent: (root: SessionID) => Effect.Effect<Consent | undefined>
+  /**
+   * A person allows items of the list they saw, named by its hash. Only the server's password route may call this: an
+   * agent never reaches it. Each item counts once its own line is written, and a line that fails allows nothing more.
+   */
+  readonly allowConsent: (input: {
+    readonly root: SessionID
+    readonly hash: string
+    readonly ids: readonly string[]
+  }) => Effect.Effect<Consent, WriteError | ConsentError>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@opencode/Autonomy") {}
@@ -439,6 +499,8 @@ function auditFields(root: string, entry: AuditEntry) {
       directory: entry.directory && ProjectTrust.printable(entry.directory, MAX_DIRECTORY),
       marker: entry.marker,
       files: entry.files,
+      consentID: entry.consentID && ProjectTrust.printable(entry.consentID, MAX_NAME),
+      hash: entry.hash,
       decidedBy: ProjectTrust.printable(entry.decidedBy, MAX_NAME),
     }
   const patterns = entry.patterns.map((item) => hide(item, entry.directory))
@@ -665,6 +727,12 @@ export const layer = Layer.effect(
     // The chain's head for each root this service wrote to. A change to the file cannot reach it.
     const heads = new Map<string, { seq: number; hash: string | null; torn: boolean }>()
     const modeMarked = new Map<string, boolean>()
+    // Per root: when its mode came on, its consent list, and the scan making one. All memory, so a restart starts over.
+    const onSince = new Map<string, number>()
+    const consents = new Map<string, Consent>()
+    const scans = new Map<string, Deferred.Deferred<void>>()
+    const cleared = new Set<string>()
+    const scanScope = yield* Scope.Scope
     // What can still go on, across every open folder: SessionStatus and the prompts each keep theirs per folder.
     const running = new Map<string, string | undefined>()
     const prompts = new Map<string, { sessionID: string; directory: string | undefined }>()
@@ -741,20 +809,216 @@ export const layer = Layer.effect(
       )
     })
 
+    // What the root's own file last said, for a process that has not marked it yet. A restart must not mark the mode
+    // again, or the mission would start at the restart and not at the switch.
+    const markedInFile = (id: string) => {
+      const modes = verifyAudit(readAuditText(auditFile(id)), undefined).lines.flatMap((line) =>
+        line.type === "marker" && (line.marker === "mode_on" || line.marker === "mode_off") ? [line] : [],
+      )
+      const run = modes.slice(modes.findLastIndex((line) => line.marker === "mode_off") + 1)
+      return { on: run.length > 0, since: run[0]?.at }
+    }
+
     const markMode = Effect.fn("Autonomy.markMode")(function* (input: Where) {
+      const id = path.basename(input.root)
       const on = isOnNow(input)
-      const last = modeMarked.get(input.root) ?? false
-      if (on === last) return
+      const known = modeMarked.get(input.root)
+      const last =
+        known ??
+        (yield* Effect.try({ try: () => markedInFile(id), catch: String }).pipe(
+          Effect.tap((found) => Effect.sync(() => found.since !== undefined && onSince.set(id, found.since))),
+          Effect.map((found) => found.on),
+          // An unreadable file says nothing, and the mark below is written as it was before.
+          Effect.catch(() => Effect.succeed(false)),
+        ))
+      if (known === undefined && on === last) modeMarked.set(input.root, on)
+      if (on !== last)
+        yield* record(input.root, {
+          type: "marker",
+          directory: input.directory,
+          marker: on ? "mode_on" : "mode_off",
+          decidedBy: "system:mode_change",
+        }).pipe(
+          Effect.tap(() => Effect.sync(() => modeMarked.set(input.root, on))),
+          Effect.tap(() =>
+            on ? Clock.currentTimeMillis.pipe(Effect.map((now) => onSince.set(id, now))) : Effect.void,
+          ),
+          // Logged by record, and the next request tries again.
+          Effect.ignore,
+        )
+      if (!on) return yield* clearConsent(input)
+      yield* identify(input)
+    })
+
+    const clearConsent = Effect.fnUntraced(function* (input: Where) {
+      const id = path.basename(input.root)
+      const had = consents.get(id)
+      consents.delete(id)
+      scans.delete(id)
+      onSince.delete(id)
+      if (!had && !cleared.has(id)) return
+      cleared.delete(id)
       yield* record(input.root, {
         type: "marker",
         directory: input.directory,
-        marker: on ? "mode_on" : "mode_off",
+        marker: "consent_cleared",
+        consentID: had?.id,
         decidedBy: "system:mode_change",
-      }).pipe(
-        Effect.tap(() => Effect.sync(() => modeMarked.set(input.root, on))),
-        // Logged by record, and the next request tries again.
-        Effect.ignore,
+      }).pipe(Effect.ignore)
+    })
+
+    /**
+     * The mission is known once the root has a person message while the mode is on (U13): right away when the mode came
+     * on after one, otherwise with the first. The first request then waits for the list, so it is there before any call
+     * runs. A root with no person message yet is looked at again on its next request.
+     */
+    const identify = Effect.fnUntraced(function* (input: Where) {
+      const id = path.basename(input.root)
+      const running = scans.get(id)
+      const done = running ?? (yield* Deferred.make<void>())
+      if (!running) {
+        if (!database) return
+        scans.set(id, done)
+        yield* scanMission(input, done).pipe(
+          Effect.tap((found) => Effect.sync(() => !found && scans.delete(id))),
+          Effect.catchCause((cause) => Effect.logError("could not make the consent list", { root: input.root, cause })),
+          Effect.ensuring(Deferred.succeed(done, undefined)),
+          Effect.forkIn(scanScope),
+        )
+      }
+      yield* Deferred.await(done).pipe(Effect.timeout(CONSENT_WAIT_MS), Effect.ignore)
+    })
+
+    // False when the root has no person message yet. Only names are looked at, and only the person's own text is read.
+    const scanMission = Effect.fnUntraced(function* (input: Where, running: Deferred.Deferred<void>) {
+      const id = path.basename(input.root)
+      if (!database) return false
+      const { MessageV2 } = yield* Effect.promise(() => import("@/session/message-v2"))
+      const messages = (yield* MessageV2.page({ sessionID: input.root, limit: MISSION_MESSAGES }).pipe(
+        Effect.provideService(Database.Service, database),
+      )).items
+      const now = yield* Clock.currentTimeMillis
+      const mission = MissionWindow.window(messages, { root: input.root, since: onSince.get(id) ?? now }).map(
+        (entry) => entry.text,
       )
+      if (mission.length === 0) return false
+      const instance = yield* InstanceRef
+      if (!instance) return yield* Effect.die(new Error("no folder to scan"))
+      const snapshot = yield* Effect.tryPromise(() => OutwardKnown.snapshot({ dir: input.directory })).pipe(
+        Effect.tapError((error) => Effect.logError("could not take the destinations snapshot", { error })),
+        Effect.option,
+        Effect.map(Option.getOrUndefined),
+      )
+      const destinations = new Map(
+        (snapshot ? OutwardKnown.named(snapshot, mission.join("\n")) : []).map(
+          (destination) =>
+            [
+              `destination:${destination.kind}:${hashOf(JSON.stringify(destination)).slice(0, 12)}`,
+              destination,
+            ] as const,
+        ),
+      )
+      const result = yield* Effect.promise(() =>
+        ConsentScan.scan({
+          // A root opened in another folder than the one serving it is scanned in its own.
+          instance:
+            instance.directory === input.directory
+              ? instance
+              : { ...instance, directory: input.directory, worktree: input.directory },
+          mission,
+          destinations: [...destinations].map(([key, destination]) => ({
+            id: key.slice("destination:".length),
+            label: OutwardKnown.label(destination),
+            named: true,
+          })),
+        }),
+      )
+      // Still on, and still the same run: a switch off while this ran must not leave a list behind.
+      if (!isOnNow(input) || scans.get(id) !== running) return true
+      const consent: Consent = {
+        id: `consent_${result.hash.slice(0, 16)}`,
+        hash: result.hash,
+        at: now,
+        directory: input.directory,
+        items: result.items,
+        given: new Set(),
+        stopped: result.stopped,
+        dropped: result.dropped,
+        snapshot,
+        destinations,
+      }
+      consents.set(id, consent)
+      if (snapshot && consent.items.length > 0)
+        yield* record(input.root, {
+          type: "marker",
+          directory: input.directory,
+          marker: "credential_snapshot",
+          consentID: consent.id,
+          decidedBy: "system:consent",
+        }).pipe(Effect.ignore)
+      if (consent.items.length > 0)
+        yield* record(input.root, {
+          type: "marker",
+          directory: input.directory,
+          marker: "consent_shown",
+          consentID: consent.id,
+          hash: consent.hash,
+          decidedBy: "system:consent",
+        }).pipe(Effect.ignore)
+      return true
+    })
+
+    const consent = Effect.fn("Autonomy.consent")(function* (root: SessionID) {
+      const running = scans.get(path.basename(root))
+      if (running) yield* Deferred.await(running).pipe(Effect.timeout(CONSENT_WAIT_MS), Effect.ignore)
+      return consents.get(path.basename(root))
+    })
+
+    const allowConsent = Effect.fn("Autonomy.allowConsent")(function* (input: {
+      readonly root: SessionID
+      readonly hash: string
+      readonly ids: readonly string[]
+    }) {
+      const id = path.basename(input.root)
+      const current = consents.get(id)
+      if (!current || current.hash !== input.hash)
+        return yield* new ConsentError({ message: "This list is no longer the one on show" })
+      const given = new Set(current.given)
+      const picked = current.items.filter((item) => input.ids.includes(item.id) && !given.has(item.id))
+      yield* Effect.forEach(
+        picked,
+        (item) =>
+          record(input.root, {
+            type: "decision",
+            sessionID: input.root,
+            requestID: current.id,
+            agent: "person",
+            directory: current.directory,
+            permission: "autonomy_consent",
+            patterns: [item.pattern],
+            class: "A",
+            category: "consented",
+            consentID: item.id,
+            canUndo: false,
+            decidedBy: "person",
+            decision: "allow",
+          }).pipe(
+            // Each item is allowed with its own line, so the file never says less than memory does.
+            Effect.tap(() => Effect.sync(() => given.add(item.id))),
+            Effect.ensuring(Effect.sync(() => consents.set(id, { ...current, given: new Set(given) }))),
+          ),
+        { discard: true },
+      )
+      if (picked.length > 0)
+        yield* record(input.root, {
+          type: "marker",
+          directory: current.directory,
+          marker: "consent_given",
+          consentID: current.id,
+          hash: current.hash,
+          decidedBy: "person",
+        }).pipe(Effect.ignore)
+      return consents.get(id) ?? current
     })
 
     const recordSkippedQuestion = Effect.fn("Autonomy.recordSkippedQuestion")(function* (input: SkippedQuestion) {
@@ -960,6 +1224,13 @@ export const layer = Layer.effect(
           const next = withChange(mode, input)
           // Stopping is honoured whatever happens to the file. Starting without a saved answer is not started.
           if (!input.on) mode = next
+          // A list goes with the mode at once, and its marker with the root's next mark.
+          if (!input.on)
+            consents.forEach((item, id) => {
+              if (isOnNow({ root: id as SessionID, directory: item.directory })) return
+              consents.delete(id)
+              cleared.add(id)
+            })
           seen[MODE_FILE] = writeMode(next)
           mode = next
         },
@@ -1046,6 +1317,9 @@ export const layer = Layer.effect(
       markMode,
       readAudit,
       openDecisions,
+      modeSince: (root) => Effect.sync(() => onSince.get(path.basename(root))),
+      consent,
+      allowConsent,
     })
   }),
 )

@@ -61,7 +61,10 @@ export interface Interface {
     tool?: Tool
     /** The caller can carry on without an answer, so it does not have to wait for one forever. */
     movesOn?: boolean
-    /** Nobody is at the prompt by choice, so move on at once. Wins over `SWARM_UNATTENDED_AFTER_MS=0`. */
+    /**
+     * Nobody is at the prompt by choice, so move on at once and close the question: it is not left open for an answer
+     * nobody will be asked for (C60). Wins over `SWARM_UNATTENDED_AFTER_MS=0`.
+     */
     noWait?: boolean
   }) => Effect.Effect<ReadonlyArray<Answer>, RejectedError | AwayError>
   /** Returns the request when the agent had already carried on without an answer. */
@@ -117,7 +120,14 @@ const layer = Layer.effect(
         questions: input.questions,
         tool: input.tool,
       }
-      const wait = input.noWait ? 0 : input.movesOn ? Unattended.wait(away.has(input.sessionID)) : undefined
+      if (input.noWait) {
+        // Published as asked and closed in the same breath, so a client that shows it drops it again at once.
+        yield* Effect.logInfo("closed unasked", { id })
+        yield* events.publish(Event.Asked, { ...asked, movedOnAt: Date.now() })
+        yield* events.publish(Event.Rejected, { sessionID: input.sessionID, requestID: id })
+        return yield* new AwayError()
+      }
+      const wait = input.movesOn ? Unattended.wait(away.has(input.sessionID)) : undefined
       const info: Request = wait === undefined ? asked : { ...asked, movesOnAt: Date.now() + wait }
       pending.set(id, { info, deferred })
       yield* events.publish(Event.Asked, info)

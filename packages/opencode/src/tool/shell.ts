@@ -1,6 +1,7 @@
-import { Effect, Fiber, Stream } from "effect"
+import { Effect, Fiber, Option, Stream } from "effect"
 import os from "os"
 import { createWriteStream } from "node:fs"
+import fsp from "node:fs/promises"
 import * as Tool from "./tool"
 import path from "path"
 import { containsPath, type InstanceContext } from "../project/instance-context"
@@ -27,6 +28,9 @@ import { Reach } from "./reach"
 import { withholdsAlways } from "./external-directory"
 import { Secrets } from "./secrets"
 import { withoutServerCredentials } from "@/util/server-credentials"
+import { Autonomy } from "@/permission/autonomy"
+import { Session } from "@/session/session"
+import { Archive } from "./archive"
 
 export { Parameters } from "./shell/prompt"
 
@@ -315,6 +319,126 @@ function literal(part: { type: string; text: string }) {
   return part.type === "word" && PLAIN_WORD.test(part.text)
 }
 
+// U11 rule 4: in autonomous mode these do not run. A plain one has its paths moved to the archive instead.
+const DELETES = new Set(["rm", "rmdir", "unlink"])
+const WRAPPERS = new Set(["sudo", "doas", "command", "builtin", "exec", "env", "nice", "nohup", "time", "xargs", "timeout"])
+const RM_FLAGS = new Set(["r", "R", "f", "i", "I", "v", "d"])
+const RM_LONG = new Set(["--recursive", "--force", "--verbose", "--dir", "--interactive"])
+const GIT_RM_FLAGS = new Set(["-r", "-f", "-q", "--force", "--quiet", "--ignore-unmatch"])
+// These leave the working copy as it is, so they run.
+const GIT_RM_KEEPS = new Set(["--cached", "-n", "--dry-run"])
+export const DELETE_COMPOUND_TEXT =
+  "This call did not run. In autonomous mode a deletion must be a command of its own (rm, rmdir, unlink or git rm with paths only), so Swarm can move the paths to the archive instead."
+
+/** A deletion the shell can move instead of run: which program, what it may remove, and the paths as written. */
+export type Deletion = {
+  name: "rm" | "rmdir" | "unlink" | "git rm"
+  /** Directories with what is in them (`rm -r`, `git rm -r`). */
+  recursive: boolean
+  /** Empty directories (`rm -d`, `rmdir`). */
+  dirs: boolean
+  /** A path that is not there is no error (`rm -f`, `git rm --ignore-unmatch`). */
+  force: boolean
+  paths: string[]
+}
+
+const base = (word: string) => path.posix.basename(unquote(word))
+
+function deletes(tokens: string[]) {
+  const words = tokens.map(unquote)
+  if (base(words[0] ?? "") === "git") {
+    // The subcommand is the first word that is not an option, nor the value `-C` or `-c` takes.
+    const sub = words.slice(1).find((word, index, rest) => !word.startsWith("-") && !/^-[Cc]$/.test(rest[index - 1] ?? ""))
+    return sub === "rm" && !words.some((word) => GIT_RM_KEEPS.has(word))
+  }
+  for (const word of words) {
+    if (DELETES.has(base(word))) return true
+    if (!WRAPPERS.has(base(word)) && !word.startsWith("-") && !word.includes("=")) return false
+  }
+  return false
+}
+
+function deleteFlags(name: Deletion["name"], words: string[]) {
+  const found = { recursive: false, dirs: name === "rmdir", force: false, paths: [] as string[] }
+  let ended = false
+  for (const word of words) {
+    if (ended || !word.startsWith("-") || word === "-") {
+      found.paths.push(word)
+      continue
+    }
+    if (word === "--") {
+      ended = true
+      continue
+    }
+    if (name === "git rm") {
+      if (!GIT_RM_FLAGS.has(word)) return
+      if (word === "-r") found.recursive = true
+      if (word === "--ignore-unmatch") found.force = true
+      continue
+    }
+    if (name === "rm" && word.startsWith("--")) {
+      if (!RM_LONG.has(word)) return
+      if (word === "--recursive") found.recursive = true
+      if (word === "--force") found.force = true
+      if (word === "--dir") found.dirs = true
+      continue
+    }
+    if (name === "rmdir" && (word === "-v" || word === "--verbose")) continue
+    if (name !== "rm") return
+    for (const letter of word.slice(1)) {
+      if (!RM_FLAGS.has(letter)) return
+      if (letter === "r" || letter === "R") found.recursive = true
+      if (letter === "f") found.force = true
+      if (letter === "d") found.dirs = true
+    }
+  }
+  return found.paths.length > 0 ? found : undefined
+}
+
+/**
+ * Whether the text deletes, and if so whether it is one plain deletion of literal paths and nothing else. Only that
+ * shape is moved; any other text that deletes is refused in autonomous mode, so a deletion never rides along unseen.
+ */
+function deletion(root: Node): Deletion | "compound" | undefined {
+  const list = commands(root)
+  if (!list.some((node) => deletes(parts(node).map((item) => item.text)))) return undefined
+  if (list.length !== 1 || !understood(root)) return "compound"
+  const node = list[0]!
+  const redirects = redirectsIn(root)
+  if (node.text.trim() !== root.text.trim() || redirects.writes.length || redirects.reads.length || redirects.loose.length)
+    return "compound"
+  const command = parts(node)
+  if (!command.every((item) => literal(item.type === "command_name" ? { ...item, type: "word" } : item))) return "compound"
+  const words = command.map((item) => unquote(item.text))
+  const name =
+    words[0] === "git" && words[1] === "rm"
+      ? ("git rm" as const)
+      : words[0] === "rm" || words[0] === "rmdir" || words[0] === "unlink"
+        ? words[0]
+        : undefined
+  if (!name) return "compound"
+  const found = deleteFlags(name, words.slice(name === "git rm" ? 2 : 1))
+  if (!found || (name === "unlink" && found.paths.length !== 1)) return "compound"
+  return { name, ...found }
+}
+
+/** What the program itself would refuse, so a move never removes more than the command would have. */
+async function refusedBy(item: Deletion, cwd: string) {
+  for (const file of item.paths) {
+    const stat = await fsp.lstat(path.resolve(cwd, file)).catch(() => undefined)
+    if (!stat?.isDirectory()) continue
+    if (item.name === "unlink") return `${item.name}: ${file}: is a directory`
+    if (item.recursive) continue
+    const empty = (await fsp.readdir(path.resolve(cwd, file)).catch(() => ["?"])).length === 0
+    if (item.dirs && empty) continue
+    if (item.dirs) return `${item.name}: ${file}: Directory not empty`
+    return item.name === "git rm"
+      ? `fatal: not removing '${file}' recursively without -r`
+      : `${item.name}: ${file}: is a directory`
+  }
+  return undefined
+}
+
 /** Every redirect in the command, wherever it sits, and whether each is one this file can vouch for. */
 function redirectsIn(root: Node) {
   const writes: string[] = []
@@ -474,6 +598,9 @@ export const ShellTool = Tool.define(
     const trunc = yield* Truncate.Service
     const plugin = yield* Plugin.Service
     const flags = yield* RuntimeFlags.Service
+    // Optional, as in `tool.ts`: a shell built on its own, as most of its tests do, has no autonomous mode.
+    const autonomy = yield* Effect.serviceOption(Autonomy.Service)
+    const sessions = yield* Effect.serviceOption(Session.Service)
     const defaultTimeoutMs = flags.bashDefaultTimeoutMs ?? 2 * 60 * 1000
 
     const cygpath = Effect.fn("ShellTool.cygpath")(function* (shell: string, text: string) {
@@ -592,6 +719,49 @@ export const ShellTool = Tool.define(
       if (reshaped && named.size > 0) scan.withheld = path.relative(instance.worktree, [...named][0]!)
 
       return scan
+    })
+
+    /**
+     * U11 rule 4. With autonomous mode on for this session's root, a deletion does not run: a plain one has its paths
+     * moved to the archive and the agent reads the register text, anything else that deletes is refused. With the mode
+     * off, or without the services, this returns nothing and the command runs as it always has. The permission was
+     * already asked, so moving instead only ever does less than the command would have.
+     */
+    const archive = Effect.fn("ShellTool.archive")(function* (
+      found: Deletion | "compound",
+      command: string,
+      cwd: string,
+      ctx: Tool.Context,
+    ) {
+      if (Option.isNone(autonomy) || Option.isNone(sessions)) return
+      const place = yield* Autonomy.placeOf(sessions.value, ctx.sessionID)
+      const where = { root: place.root.id, directory: place.directory }
+      if (!(yield* autonomy.value.isOn(where))) return
+      const done = (output: string, exit: number) => ({
+        title: command,
+        metadata: { output: preview(output), exit: exit as number | null, truncated: false, outputPath: undefined as string | undefined },
+        output,
+      })
+      if (found === "compound") return done(DELETE_COMPOUND_TEXT, 1)
+      const refused = yield* Effect.promise(() => refusedBy(found, cwd))
+      if (refused) return done(refused, 1)
+      const result = yield* Effect.promise(() =>
+        Archive.move({
+          directory: place.directory,
+          cwd,
+          paths: found.paths,
+          requestID: ctx.callID ?? ctx.messageID,
+          record: Autonomy.archiveRecorder(autonomy.value.record, where),
+        }),
+      )
+      if (!result.ok) return done(result.message, 1)
+      if (!result.recorded) yield* Effect.logError("could not record an archived deletion", { archive: result.id })
+      const missing =
+        result.missing.length > 0
+          ? `${found.force ? "Not there, so nothing to move" : "No such file or directory"}: ${result.missing.join(", ")}`
+          : ""
+      const lines = [result.moved.length > 0 ? Archive.movedText(result.moved.length, result.id) : "", missing]
+      return done(lines.filter(Boolean).join("\n"), result.missing.length > 0 && !found.force ? 1 : 0)
     })
 
     const shellEnv = Effect.fn("ShellTool.shellEnv")(function* (ctx: Tool.Context, cwd: string) {
@@ -841,10 +1011,15 @@ export const ShellTool = Tool.define(
                     { command: params.command, cwd },
                     posix ? Reach.alwaysFor(params.command, cwd, instanceCtx) : undefined,
                   )
-                  return scan
+                  return { ...scan, deletion: posix ? deletion(tree.rootNode) : undefined }
                 }),
               )
               scanned.secretFiles.forEach(Secrets.learnFile)
+
+              if (scanned.deletion) {
+                const archived = yield* archive(scanned.deletion, params.command, cwd, ctx)
+                if (archived) return archived
+              }
 
               return yield* run(
                 {

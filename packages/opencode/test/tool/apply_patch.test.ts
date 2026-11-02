@@ -5,6 +5,7 @@ import { PermissionV1 } from "@opencode-ai/core/v1/permission"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { Cause, Effect, Exit, Layer, Schema } from "effect"
 import { ApplyPatchTool } from "../../src/tool/apply_patch"
+import { Archive } from "../../src/tool/archive"
 import { LSP } from "@/lsp/lsp"
 import { FSUtil } from "@opencode-ai/core/fs-util"
 import { Format } from "../../src/format"
@@ -14,6 +15,7 @@ import { Truncate } from "@/tool/truncate"
 import { TestInstance } from "../fixture/fixture"
 import { SessionID, MessageID } from "../../src/session/schema"
 import { testEffect } from "../lib/effect"
+import { Autonomy } from "../../src/permission/autonomy"
 
 const it = testEffect(
   LayerNode.compile(
@@ -545,5 +547,130 @@ EOF`
       // Result has ASCII quotes because that's what the patch specifies
       expect(yield* readText(target)).toBe(`He said "hi"\nsome${emDash}dash\nend\n`)
     }),
+  )
+
+  // U11 rule 4. Only the two calls the tool makes are real here: whether the mode is on, and the audit line.
+  const autonomous = (on: boolean) => {
+    const lines: Autonomy.AuditEntry[] = []
+    const service = {
+      isOn: () => Effect.succeed(on),
+      record: (_root: SessionID, entry: Autonomy.AuditEntry) => Effect.sync(() => void lines.push(entry)),
+    } as unknown as Autonomy.Interface
+    return { lines, layer: Layer.succeed(Autonomy.Service, service) }
+  }
+  const archiveEntries = (directory: string) =>
+    Effect.promise(() => fs.readdir(path.join(directory, ".swarm", "archive")).catch(() => [] as string[]))
+
+  it.instance(
+    "moves a deleted file into the archive when autonomous mode is on",
+    () =>
+      Effect.gen(function* () {
+        const test = yield* TestInstance
+        const { ctx } = makeCtx()
+        const mode = autonomous(true)
+        const deletePath = path.join(test.directory, "delete.txt")
+        const modifyPath = path.join(test.directory, "modify.txt")
+        yield* writeText(deletePath, "obsolete\n")
+        yield* writeText(modifyPath, "line1\n")
+
+        const result = yield* execute(
+          {
+            patchText:
+              "*** Begin Patch\n*** Delete File: delete.txt\n*** Update File: modify.txt\n@@\n-line1\n+changed\n*** End Patch",
+          },
+          { ...ctx, callID: "call_patch" },
+        ).pipe(Effect.provide(mode.layer))
+
+        yield* expectReadFailure(deletePath)
+        expect(yield* readText(modifyPath)).toBe("changed\n")
+        const entries = (yield* archiveEntries(test.directory)).filter((name) => name !== ".gitignore")
+        expect(entries).toHaveLength(1)
+        expect(yield* readText(path.join(test.directory, ".swarm", "archive", entries[0], "delete.txt"))).toBe(
+          "obsolete\n",
+        )
+        expect(yield* readText(path.join(test.directory, ".swarm", "archive", ".gitignore"))).toBe("*\n")
+        expect(result.output).toMatch(/D delete\.txt/)
+        expect(result.output).toContain(Archive.movedText(1, entries[0]))
+        expect(mode.lines).toEqual([
+          expect.objectContaining({
+            type: "outcome",
+            outcome: "archived",
+            requestID: "call_patch",
+            archive: entries[0],
+            moved: [{ from: "delete.txt", to: `.swarm/archive/${entries[0]}/delete.txt` }],
+          }),
+        ])
+      }),
+    { git: true },
+  )
+
+  it.instance(
+    "deletes as before when autonomous mode is off",
+    () =>
+      Effect.gen(function* () {
+        const test = yield* TestInstance
+        const { ctx } = makeCtx()
+        const mode = autonomous(false)
+        const deletePath = path.join(test.directory, "delete.txt")
+        yield* writeText(deletePath, "obsolete\n")
+
+        const result = yield* execute(
+          { patchText: "*** Begin Patch\n*** Delete File: delete.txt\n*** End Patch" },
+          ctx,
+        ).pipe(Effect.provide(mode.layer))
+
+        yield* expectReadFailure(deletePath)
+        expect(yield* archiveEntries(test.directory)).toEqual([])
+        expect(result.output).not.toContain(".swarm/archive")
+        expect(mode.lines).toEqual([])
+      }),
+    { git: true },
+  )
+
+  it.instance(
+    "keeps a moved file a move when autonomous mode is on",
+    () =>
+      Effect.gen(function* () {
+        const test = yield* TestInstance
+        const { ctx } = makeCtx()
+        const mode = autonomous(true)
+        yield* writeText(path.join(test.directory, "old.txt"), "line1\n")
+
+        yield* execute(
+          { patchText: "*** Begin Patch\n*** Update File: old.txt\n*** Move to: new.txt\n@@\n-line1\n+line2\n*** End Patch" },
+          ctx,
+        ).pipe(Effect.provide(mode.layer))
+
+        yield* expectReadFailure(path.join(test.directory, "old.txt"))
+        expect(yield* readText(path.join(test.directory, "new.txt"))).toBe("line2\n")
+        expect(yield* archiveEntries(test.directory)).toEqual([])
+        expect(mode.lines).toEqual([])
+      }),
+    { git: true },
+  )
+
+  it.instance(
+    "refuses an archive folder that is a link and deletes nothing",
+    () =>
+      Effect.gen(function* () {
+        const test = yield* TestInstance
+        const { ctx } = makeCtx()
+        const mode = autonomous(true)
+        const elsewhere = path.join(test.directory, "elsewhere")
+        yield* makeDir(elsewhere)
+        yield* Effect.promise(() => fs.symlink(elsewhere, path.join(test.directory, ".swarm")))
+        const deletePath = path.join(test.directory, "delete.txt")
+        yield* writeText(deletePath, "obsolete\n")
+
+        yield* expectFailure(
+          execute({ patchText: "*** Begin Patch\n*** Delete File: delete.txt\n*** End Patch" }, ctx).pipe(
+            Effect.provide(mode.layer),
+          ),
+          "Nothing was written",
+        )
+        expect(yield* readText(deletePath)).toBe("obsolete\n")
+        expect(yield* Effect.promise(() => fs.readdir(elsewhere))).toEqual([])
+      }),
+    { git: true },
   )
 })

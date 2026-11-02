@@ -35,14 +35,21 @@ export function autonomousToast(
     key:
       | "toast.permissions.autonomous.on.title"
       | "toast.permissions.autonomous.off.title"
+      | "toast.permissions.autonomous.scan.title"
+      | "settings.general.row.autonomous.scripts"
       | "settings.general.row.autonomous.description",
   ) => string,
   on: boolean,
 ) {
   if (!on) return { title: t("toast.permissions.autonomous.off.title") }
+  // With the Settings row gone (C62), this toast is the only place the mode's label is shown.
   return {
     title: t("toast.permissions.autonomous.on.title"),
-    description: t("settings.general.row.autonomous.description"),
+    description: [
+      t("toast.permissions.autonomous.scan.title"),
+      t("settings.general.row.autonomous.scripts"),
+      t("settings.general.row.autonomous.description"),
+    ].join(" "),
   }
 }
 

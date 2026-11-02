@@ -245,6 +245,10 @@ exports[`tool parameters JSON Schema (wire shape) question 1`] = `
       },
       "type": "array",
     },
+    "user_quote": {
+      "description": "The user's own words asking you to ask them, copied exactly from their message. Leave it out when they did not ask.",
+      "type": "string",
+    },
   },
   "required": [
     "questions",

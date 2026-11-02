@@ -93,6 +93,7 @@ const AGENT = (category: AutonomyTable.AllowedCategory): Verdict => ({ class: "P
 const HELD = (category: AutonomyTable.HeldCategory): Verdict => ({ class: "D", decidedBy: "gate", category })
 const REFUSED = (category: AutonomyTable.HeldCategory): Verdict => ({ class: "X", decidedBy: "gate", category })
 const QUIET: Verdict = { class: "A" }
+const MCP_TOOL: Verdict = { class: "A", decidedBy: "gate", category: "mcp_tool" }
 
 // One entry per row of the table the mode was specified with. A row with several shapes lists each of them.
 const TABLE: [row: number, title: string, samples: () => [Input, Verdict][]][] = [
@@ -589,6 +590,72 @@ describe("U11 rule 1: beyond the folder only reads", () => {
   })
 })
 
+describe("U11 rules 5 and 7: an MCP tool by where its server comes from", () => {
+  const tool = (mcp: Record<string, unknown> | undefined, fields: Partial<Input> = {}, name = "graft_find_code") =>
+    request(name, { metadata: mcp === undefined ? {} : { mcp }, ...fields })
+  const source = (origin: string, transport = "local", server = "graft") => ({ server, transport, origin })
+  const UNTRUSTED = [undefined, "ask", "later"] as const
+
+  test("a local server from the user's global config runs on record, in any folder", () => {
+    for (const folder of ["clean", "trusted", ...UNTRUSTED] as const)
+      expect([folder, AutonomyTable.classify(tool(source("global"), { folder }))]).toEqual([folder, MCP_TOOL])
+    // The same tool from the alugra run, `canUndo: false` in a folder that is no repository.
+    expect(AutonomyTable.classify(tool(source("global"), { canUndo: false, folder: undefined }))).toEqual(MCP_TOOL)
+  })
+
+  test("a server from the project's config runs only in a folder a person approved (rule 7)", () => {
+    for (const folder of ["clean", "trusted"] as const) expect(AutonomyTable.classify(tool(source("project"), { folder }))).toEqual(MCP_TOOL)
+    for (const folder of UNTRUSTED)
+      expect([folder, AutonomyTable.classify(tool(source("project"), { folder }))]).toEqual([folder, HELD("folder_not_trusted")])
+  })
+
+  test("an origin nobody can vouch for counts as the project's", () => {
+    // `session/tools.ts` sends `{ origin: "project" }` alone for a tool it has no source for.
+    expect(AutonomyTable.classify(tool({ origin: "project" }, { folder: "ask" }))).toEqual(HELD("external_tool"))
+    for (const origin of [undefined, "", "Global", "user", 1])
+      expect([origin, AutonomyTable.classify(tool({ server: "graft", transport: "local", origin }, { folder: "ask" }))]).toEqual([
+        origin,
+        HELD("folder_not_trusted"),
+      ])
+  })
+
+  test("a remote server takes data off the machine, so it waits as a way out (G4, rule 3)", () => {
+    for (const origin of ["global", "project"])
+      for (const folder of ["clean", "trusted"] as const)
+        expect([origin, folder, AutonomyTable.classify(tool(source(origin, "remote"), { folder }))]).toEqual([
+          origin,
+          folder,
+          HELD("outward_not_in_mission"),
+        ])
+    // Not said, or said some other way, is remote.
+    for (const transport of [undefined, "", "Local", "stdio", "http"])
+      expect([transport, AutonomyTable.classify(tool({ server: "graft", transport, origin: "global" }))]).toEqual([
+        transport,
+        HELD("outward_not_in_mission"),
+      ])
+    // A project's remote server in a folder nobody approved is held for the folder first.
+    expect(AutonomyTable.classify(tool(source("project", "remote"), { folder: "ask" }))).toEqual(HELD("folder_not_trusted"))
+  })
+
+  test("a request cannot borrow the source of another server", () => {
+    // The tool is named `<server>_<tool>` (`McpCatalog.toolName`); a name of another server's, or none, is opaque.
+    expect(AutonomyTable.classify(tool(source("global"), {}, "evil_send"))).toEqual(HELD("external_tool"))
+    expect(AutonomyTable.classify(tool(source("global"), {}, "graft"))).toEqual(HELD("external_tool"))
+    expect(AutonomyTable.classify(tool(source("global", "local", "my.server"), {}, "my_server_ping"))).toEqual(MCP_TOOL)
+    for (const server of [undefined, 1, ""]) expect(AutonomyTable.classify(tool({ server, transport: "local", origin: "global" }))).toEqual(HELD("external_tool"))
+    // Not an object at all is no source, and something was said, so it is not opaque either.
+    for (const mcp of [null, "global", 1]) expect([mcp, AutonomyTable.classify(request("graft_find_code", { metadata: { mcp } }))]).toEqual([mcp, HELD("not_routine")])
+  })
+
+  test("the stricter rules still come first", () => {
+    expect(AutonomyTable.classify(tool(source("global"), { rule: "user_catch_all" }))).toEqual(HELD("asks_every_time"))
+    expect(AutonomyTable.classify(tool(source("global"), { rule: "deny" }))).toEqual({ class: "X" })
+    expect(AutonomyTable.classify(request("graft_find_code", { metadata: { mcp: source("global"), risk: "remote" } }))).toEqual(HELD("outward"))
+    // With nothing said about the tool, it stays what it was before rule 5.
+    expect(AutonomyTable.classify(tool(undefined))).toEqual(HELD("external_tool"))
+  })
+})
+
 describe("an edit nothing can undo", () => {
   const unrecoverable = (name: string, fields: Partial<Input> = {}) => edit(name, { editClass: "no_undo", canUndo: false, ...fields })
 
@@ -654,6 +721,8 @@ describe("the twelve requests from the user's run", () => {
     request("external_directory", inSession({ patterns: [pattern], metadata: { filepath: pattern.replace(/\/\*$/, ""), parentDir: pattern.replace(/\/\*$/, ""), readOnly: true } }))
   // U11 rule 1: what was held outside the folder in that run is a look, and runs on record with nobody asked.
   const OUTSIDE_READ: Verdict = { class: "A", decidedBy: "gate", category: "outside_read" }
+  // U11 rule 5: `graft` is a local server from the user's global config, so its tools run on record too.
+  const GRAFT = { mcp: { server: "graft", transport: "local", origin: "global" } }
 
   const allowed = (): [string, Input][] => [
     ["status_tasks.md", write("alpha/docs/2026-01-01_task/status_tasks.md")],
@@ -671,7 +740,7 @@ describe("the twelve requests from the user's run", () => {
     ["outside, first", outside(home(".claude/agents/*")), OUTSIDE_READ],
     ["outside, second", outside(home(".claude/agents/*")), OUTSIDE_READ],
     ["outside, third", outside(home(".claude/agents/*")), OUTSIDE_READ],
-    ["graft_find_code", request("graft_find_code", inSession({})), HELD("external_tool")],
+    ["graft_find_code", request("graft_find_code", inSession({ metadata: GRAFT })), MCP_TOOL],
   ]
 
   test("the seven inside the folder are class A, so neither the decider nor a person is asked", () => {
@@ -688,7 +757,7 @@ describe("the twelve requests from the user's run", () => {
     expect(AutonomyTable.classify({ ...input, metadata: {} })).toEqual({ class: "A", decidedBy: "gate" })
   })
 
-  test("of the five beyond it, the four looks outside the folder are class A (U11 rule 1); the MCP tool waits for row 104", () => {
+  test("of the five beyond it, the four looks outside the folder are class A (U11 rule 1) and the global MCP tool too (rule 5)", () => {
     for (const [label, input, verdict] of HELD_REQUESTS()) expect([label, AutonomyTable.classify(input)]).toEqual([label, verdict])
   })
 
@@ -1022,7 +1091,7 @@ describe("the twelve, through the gate", () => {
   afterAll(cleanState)
 
   gate.instance(
-    "seven run with no decider call and nothing held; of the five beyond, the four looks out run on record (U11 rule 1) and the MCP tool is held",
+    "seven run with no decider call and nothing held; of the five beyond, the four looks out (U11 rule 1) and the global MCP tool (rule 5) run on record",
     () =>
       Effect.gen(function* () {
         const test = yield* TestInstance
@@ -1059,11 +1128,11 @@ describe("the twelve, through the gate", () => {
         const beyond = [
           shell.execute({ command: "ls ~/.claude/agents" }, ctx),
           ...[1, 2, 3].map(() => ask({ permission: "external_directory", patterns: [path.join(agents, "*")], metadata: { filepath: agents, parentDir: agents, readOnly: true } })),
-          ask({ permission: "graft_find_code", patterns: ["*"] }),
+          ask({ permission: "graft_find_code", patterns: ["*"], metadata: { mcp: { server: "graft", transport: "local", origin: "global" } } }),
         ]
         const held: string[] = []
         for (const one of beyond) held.push(yield* attempt(one))
-        expect(held).toEqual(["ran", "ran", "ran", "ran", "held"])
+        expect(held).toEqual(["ran", "ran", "ran", "ran", "ran"])
         expect(counted.calls).toBe(0)
 
         const lines = (yield* autonomy.readAudit(root.id)).lines.flatMap((line) => (line.type === "decision" ? [line] : []))
@@ -1075,6 +1144,9 @@ describe("the twelve, through the gate", () => {
         expect(out.map((line) => [line.permission, line.class, line.decision, line.decidedBy])).toEqual([
           ["bash", "A", "allow", "gate"],
           ...Array(3).fill(["external_directory", "A", "allow", "gate"]),
+        ])
+        expect(lines.filter((line) => line.category === "mcp_tool").map((line) => [line.permission, line.class, line.decision, line.decidedBy])).toEqual([
+          ["graft_find_code", "A", "allow", "gate"],
         ])
 
         // The agent's own read tools in the same folder never reach the gate: no prompt, no line, no decider. These are the

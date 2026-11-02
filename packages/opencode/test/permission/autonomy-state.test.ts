@@ -2,11 +2,19 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } fr
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs"
 import os from "node:os"
 import path from "node:path"
-import { Effect, Exit } from "effect"
+import { Context, Effect, Exit, Layer } from "effect"
+import { Database } from "@opencode-ai/core/database/database"
+import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { Global } from "@opencode-ai/core/global"
+import { ModelV2 } from "@opencode-ai/core/model"
 import { ProjectTrust } from "@opencode-ai/core/project/trust"
+import { ProviderV2 } from "@opencode-ai/core/provider"
+import { SessionProjector } from "@opencode-ai/core/session/projector"
+import { EventV2Bridge } from "../../src/event-v2-bridge"
 import { Autonomy } from "../../src/permission/autonomy"
-import { SessionID } from "../../src/session/schema"
+import { MessageID, PartID, SessionID } from "../../src/session/schema"
+import { Session } from "../../src/session/session"
+import { testEffect } from "../lib/effect"
 
 const folder = path.join(Global.Path.state, "autonomy")
 const modeFile = path.join(folder, "mode.json")
@@ -360,4 +368,177 @@ describe("the class after a check", () => {
     expect(Autonomy.afterCheck("P", changed)).toBe("D")
     expect(Autonomy.afterCheck("P", quiet)).toBe("P")
   })
+})
+
+// Row 130: the consent list per root, made once the mission is known, with real sessions and messages.
+const live = testEffect(
+  LayerNode.compile(
+    LayerNode.group([Database.node, EventV2Bridge.node, Session.node, SessionProjector.node, Autonomy.node]),
+  ),
+)
+
+const say = Effect.fn("AutonomyStateTest.say")(function* (sessionID: SessionID, text: string) {
+  const session = yield* Session.Service
+  const message = yield* session.updateMessage({
+    id: MessageID.ascending(),
+    role: "user",
+    sessionID,
+    agent: "build",
+    model: { providerID: ProviderV2.ID.make("openai"), modelID: ModelV2.ID.make("gpt-4") },
+    time: { created: Date.now() },
+  })
+  yield* session.updatePart({ id: PartID.ascending(), messageID: message.id, sessionID, type: "text", text })
+})
+
+// A root in a folder with one secret file, as the switch in the `+` menu leaves it: setMode, then the route's mark.
+const rootWithSecret = Effect.fn("AutonomyStateTest.rootWithSecret")(function* () {
+  const sessions = yield* Session.Service
+  const root = yield* sessions.create({})
+  const directory = (yield* sessions.get(root.id)).directory
+  writeFileSync(path.join(directory, ".env"), "TOKEN=not-read\n")
+  return { root: root.id, directory }
+})
+
+const switchMode = Effect.fn("AutonomyStateTest.switchMode")(function* (where: Autonomy.Where, on: boolean) {
+  const autonomy = yield* Autonomy.Service
+  yield* autonomy.setMode({ scope: "session", root: where.root, on })
+  yield* autonomy.markMode(where)
+})
+
+const linesOf = Effect.fn("AutonomyStateTest.linesOf")(function* (root: SessionID) {
+  const autonomy = yield* Autonomy.Service
+  return (yield* autonomy.readAudit(root)).lines
+})
+
+const markerNames = (lines: readonly Autonomy.AuditLine[]) =>
+  lines.flatMap((line) => (line.type === "marker" ? [line.marker] : []))
+
+describe("row 130: consent state and when the scan runs", () => {
+  live.instance("mode on with a person message: the list is there before the first call, and names it", () =>
+    Effect.gen(function* () {
+      const autonomy = yield* Autonomy.Service
+      const where = yield* rootWithSecret()
+      yield* say(where.root, "Perbaiki konfigurasi di .env lalu jalankan uji.")
+      yield* switchMode(where, true)
+
+      // No wait between the switch and the first call: the list is already made.
+      const consent = yield* autonomy.consent(where.root)
+      expect(consent?.items.map((item) => [item.pattern, item.named, item.checked, item.files])).toEqual([
+        [".env*", true, true, [path.join(where.directory, ".env")]],
+      ])
+      expect(consent?.given.size).toBe(0)
+      // The first request's gate marks the mode again, and nothing is written twice.
+      yield* autonomy.markMode(where)
+      const lines = yield* linesOf(where.root)
+      expect(markerNames(lines)).toEqual(["mode_on", "credential_snapshot", "consent_shown"])
+      const shown = lines.find((line) => line.type === "marker" && line.marker === "consent_shown")
+      expect(shown?.type === "marker" && [shown.hash, shown.consentID]).toEqual([consent!.hash, consent!.id])
+      // Names only: the scan left the file's text out of the record.
+      expect(JSON.stringify(lines)).not.toContain("not-read")
+    }),
+  )
+
+  live.instance("mode on without a person message: nothing yet, and the list comes with the first one", () =>
+    Effect.gen(function* () {
+      const autonomy = yield* Autonomy.Service
+      const where = yield* rootWithSecret()
+      yield* switchMode(where, true)
+      expect(yield* autonomy.consent(where.root)).toBeUndefined()
+      expect(markerNames(yield* linesOf(where.root))).toEqual(["mode_on"])
+
+      yield* say(where.root, "Rapikan README.")
+      // The gate's mark on the first request after that message.
+      yield* autonomy.markMode(where)
+      const consent = yield* autonomy.consent(where.root)
+      // Not named in the message: listed, and left for the person to tick.
+      expect(consent?.items.map((item) => [item.pattern, item.named, item.checked])).toEqual([[".env*", false, false]])
+      expect(markerNames(yield* linesOf(where.root))).toEqual(["mode_on", "credential_snapshot", "consent_shown"])
+    }),
+  )
+
+  live.instance("mode off takes the list and what was allowed with it, and on again starts a new one", () =>
+    Effect.gen(function* () {
+      const autonomy = yield* Autonomy.Service
+      const where = yield* rootWithSecret()
+      yield* say(where.root, "Perbaiki .env")
+      yield* switchMode(where, true)
+      const first = (yield* autonomy.consent(where.root))!
+      yield* autonomy.allowConsent({ root: where.root, hash: first.hash, ids: [first.items[0]!.id] })
+
+      yield* autonomy.setMode({ scope: "session", root: where.root, on: false })
+      // Gone with the switch itself, before any mark.
+      expect(yield* autonomy.consent(where.root)).toBeUndefined()
+      yield* autonomy.markMode(where)
+      expect(markerNames(yield* linesOf(where.root)).slice(-2)).toEqual(["mode_off", "consent_cleared"])
+      const stale = yield* autonomy
+        .allowConsent({ root: where.root, hash: first.hash, ids: [first.items[0]!.id] })
+        .pipe(Effect.exit)
+      expect(Exit.isFailure(stale)).toBe(true)
+
+      yield* switchMode(where, true)
+      const again = yield* autonomy.consent(where.root)
+      expect(again?.items).toHaveLength(1)
+      expect(again?.given.size).toBe(0)
+      expect(Autonomy.consentedFile(again, path.join(where.directory, ".env"))).toBeUndefined()
+    }),
+  )
+
+  live.instance("only the shown list can be answered, and each allowed item gets a line of its own by the person", () =>
+    Effect.gen(function* () {
+      const autonomy = yield* Autonomy.Service
+      const where = yield* rootWithSecret()
+      yield* say(where.root, "Kerjakan tugas ini.")
+      yield* switchMode(where, true)
+      const consent = (yield* autonomy.consent(where.root))!
+      const file = path.join(where.directory, ".env")
+
+      const wrong = yield* autonomy
+        .allowConsent({ root: where.root, hash: "0".repeat(64), ids: [consent.items[0]!.id] })
+        .pipe(Effect.exit)
+      expect(Exit.isFailure(wrong)).toBe(true)
+      expect(Autonomy.consentedFile(yield* autonomy.consent(where.root), file)).toBeUndefined()
+
+      // An id that is not on the list allows nothing.
+      yield* autonomy.allowConsent({ root: where.root, hash: consent.hash, ids: ["secret:*.pem"] })
+      expect((yield* autonomy.consent(where.root))?.given.size).toBe(0)
+
+      const after = yield* autonomy.allowConsent({ root: where.root, hash: consent.hash, ids: [consent.items[0]!.id] })
+      expect(Autonomy.consentedFile(after, file)?.pattern).toBe(".env*")
+      // Only the concrete path that was scanned: a file added later is not covered by the pattern.
+      expect(Autonomy.consentedFile(after, path.join(where.directory, ".env.local"))).toBeUndefined()
+      const lines = yield* linesOf(where.root)
+      expect(
+        lines.flatMap((line) =>
+          line.type === "decision"
+            ? [[line.permission, line.class, line.category, line.decidedBy, line.consentID]]
+            : [],
+        ),
+      ).toEqual([["autonomy_consent", "A", "consented", "person", consent.items[0]!.id]])
+      expect(markerNames(lines).at(-1)).toBe("consent_given")
+    }),
+  )
+
+  live.instance("a restart keeps when the mode came on, does not mark it again, and forgets what was allowed", () =>
+    Effect.gen(function* () {
+      const autonomy = yield* Autonomy.Service
+      const where = yield* rootWithSecret()
+      yield* say(where.root, "Perbaiki .env")
+      yield* switchMode(where, true)
+      const since = yield* autonomy.modeSince(where.root)
+      expect(since).toBeNumber()
+      const consent = (yield* autonomy.consent(where.root))!
+      yield* autonomy.allowConsent({ root: where.root, hash: consent.hash, ids: [consent.items[0]!.id] })
+
+      // A new process: the layer built again over the same files and database.
+      const context = yield* Layer.build(Layer.fresh(Autonomy.layer))
+      const restarted = Context.get(context, Autonomy.Service)
+      yield* restarted.markMode(where)
+      expect(yield* restarted.modeSince(where.root)).toBe(since)
+      const lines = (yield* restarted.readAudit(where.root)).lines
+      expect(markerNames(lines).filter((name) => name === "mode_on")).toHaveLength(1)
+      const fresh = yield* restarted.consent(where.root)
+      expect(fresh?.given.size).toBe(0)
+      expect(Autonomy.consentedFile(fresh, path.join(where.directory, ".env"))).toBeUndefined()
+    }),
+  )
 })

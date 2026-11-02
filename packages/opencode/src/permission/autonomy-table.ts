@@ -8,6 +8,7 @@ import path from "node:path"
 import { Global } from "@opencode-ai/core/global"
 import { needsPerson } from "@opencode-ai/core/permission/needs-person"
 import type { ProjectTrust } from "@opencode-ai/core/project/trust"
+import { McpCatalog } from "../mcp/catalog"
 import { containsPath, type InstanceContext } from "../project/instance-context"
 import { LibraryRoot } from "../skill/library-root"
 import { GitGuard } from "../tool/git-guard"
@@ -28,11 +29,12 @@ export const CHECK_CLASS: CheckClass = "P"
 export type RoutineCategory = "check" | "file-op" | "git-local"
 /** What `routine` finds a command to be. "read" only looks at the folder, and is class A. */
 export type CommandKind = RoutineCategory | "read"
-export type AllowedCategory = RoutineCategory | "edit-not-ordinary" | "outside_read" | "outside_copy"
+export type AllowedCategory = RoutineCategory | "edit-not-ordinary" | "outside_read" | "outside_copy" | "mcp_tool"
 export type HeldCategory =
   | "outside_folder"
   | "outside_write"
   | "outward"
+  | "outward_not_in_mission"
   | "not_reversible"
   | "sensitive_file"
   | "secret_file"
@@ -554,6 +556,20 @@ function classifyOutside(input: Input): Verdict {
 }
 
 /**
+ * U11 rules 5 and 7, for a tool of an MCP server. Its request says which server, how it is reached, and whose config set it
+ * up (`session/tools.ts`); anything else said there is read as the stricter case. A local server from the user's own config,
+ * or from the project's in a folder a person approved, runs on record. A project's server in a folder nobody approved is code
+ * nobody has looked at. A remote one takes what it is sent off the machine, so it is a way out like any other (G4, rule 3).
+ */
+function classifyMcp(input: Input, mcp: Readonly<Record<string, unknown>>): Verdict {
+  // A tool is named after its server, so a request cannot borrow another server's source.
+  if (typeof mcp.server !== "string" || !input.permission.startsWith(McpCatalog.toolName(mcp.server, ""))) return held("external_tool")
+  if (mcp.origin !== "global" && input.folder !== "clean" && input.folder !== "trusted") return held("folder_not_trusted")
+  if (mcp.transport !== "local") return held("outward_not_in_mission")
+  return { class: "A", decidedBy: "gate", category: "mcp_tool" }
+}
+
+/**
  * The class of one request, per the table this mode was specified with. Stricter rules are asked first, so a request can
  * only get here with less room than a later rule would give it. `checkClass` exists for the test of both values.
  */
@@ -581,7 +597,9 @@ export function classify(input: Input, checkClass: CheckClass = CHECK_CLASS): Ve
   if (input.permission === "read") return held("secret_file")
   if (input.permission === "edit") return classifyEdit(input)
   if (input.permission === "bash") return classifyBash(input, checkClass)
-  // MCP tools ask with `*` and empty metadata, so there is nothing about the call to judge. No name is excepted, `graft_*` included.
+  const mcp = input.metadata.mcp
+  if (typeof mcp === "object" && mcp !== null) return classifyMcp(input, mcp as Readonly<Record<string, unknown>>)
+  // A tool that says nothing about itself has nothing to judge. No name is excepted, `graft_*` included.
   const opaque = input.patterns.every((pattern) => pattern === "*") && Object.keys(input.metadata).length === 0
   return held(opaque ? "external_tool" : "not_routine")
 }

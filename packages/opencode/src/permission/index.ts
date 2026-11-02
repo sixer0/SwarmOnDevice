@@ -13,6 +13,7 @@ import type { SessionID } from "@/session/schema"
 import { Autonomy } from "./autonomy"
 import { AutonomyDecider } from "./autonomy-decider"
 import { AutonomyTable } from "./autonomy-table"
+import type { ScriptScreen } from "./script-screen"
 import { Unattended } from "./unattended"
 
 export const Event = PermissionV1.Event
@@ -135,6 +136,27 @@ class RefusedOutsideWriteError extends RefusedByModeError {
   }
 }
 
+/**
+ * U11 rule 11: in the mode a spend limit or a repeating call waits for nobody. It ends the run, so it is a rejection.
+ * The prefix is `SUBAGENT_STOPPED` in `tool/task.ts`, which turns a subagent's run ended by it into text for its parent;
+ * importing it here would pull every tool into the permission service.
+ */
+class StoppedByModeError extends PermissionV1.RejectedError {
+  stopText = ""
+  override get message() {
+    return this.stopText
+  }
+}
+
+const stoppedByMode = (input: PermissionV1.AskInput) => {
+  const error = new StoppedByModeError()
+  error.stopText =
+    input.permission === "doom_loop"
+      ? `Stopped by autonomous mode: repeated calls to \`${input.patterns[0] ?? "a tool"}\`.`
+      : "Stopped by autonomous mode: the spend limit was reached."
+  return error
+}
+
 const refusedByMode = (category: string | undefined) =>
   category === "outside_write" ? new RefusedOutsideWriteError({ ruleset: [] }) : new RefusedByModeError({ ruleset: [] })
 
@@ -142,7 +164,13 @@ const refusedByMode = (category: string | undefined) =>
 export class Decider extends Context.Service<
   Decider,
   {
-    readonly decide: (input: PermissionV1.AskInput, root: SessionID, category?: string) => Effect.Effect<Decided>
+    readonly decide: (
+      input: PermissionV1.AskInput,
+      root: SessionID,
+      category?: string,
+      // The screen's closed summary of the script a command runs (U11 rule 6), never the script itself.
+      script?: ScriptScreen.Summary,
+    ) => Effect.Effect<Decided>
   }
 >()("@opencode/PermissionDecider") {}
 
@@ -358,8 +386,17 @@ const layer = Layer.effect(
         verdict.class === "P" && decided?.decision !== "allow" && decided?.decision !== "reject"
           ? ("decider_unavailable" as const)
           : verdict.category
-      const decision =
-        verdict.class === "P"
+      // Nobody is waited for (U11 rule 11): a subagent's run is stopped and its parent decides, a root's run is force
+      // stopped. A spend limit is always asked on the root, since the limit is the family's.
+      const stopped =
+        verdict.class === "B" && needsPerson(input.permission)
+          ? root.id === input.sessionID
+            ? ("force_stop" as const)
+            : ("subagent_stopped" as const)
+          : undefined
+      const decision = stopped
+        ? ("reject" as const)
+        : verdict.class === "P"
           ? decided?.decision === "allow" || decided?.decision === "reject"
             ? decided.decision
             : ("defer" as const)
@@ -401,7 +438,9 @@ const layer = Layer.effect(
           category,
           risk: typeof input.metadata.risk === "string" ? input.metadata.risk : null,
           canUndo,
-          decidedBy: decided?.decidedBy ?? (verdict.decidedBy === "person" ? "person" : "gate"),
+          decidedBy: stopped
+            ? `system:${stopped}`
+            : (decided?.decidedBy ?? (verdict.decidedBy === "person" ? "person" : "gate")),
           decision,
           reason: decided?.reason ?? (standing && answered ? "an earlier \"always\" from a person" : undefined),
           memo: decided?.memo,
@@ -422,6 +461,25 @@ const layer = Layer.effect(
           ),
         )
       if (!queued) yield* reportFull
+      if (stopped) {
+        // Logged by record. The run stops either way, and a missing line keeps nothing running.
+        yield* autonomy.record(root.id, { type: "marker", directory, marker: stopped, decidedBy: "gate" }).pipe(Effect.ignore)
+        if (stopped === "force_stop") {
+          yield* autonomy
+            .record(root.id, { type: "marker", directory, marker: "b1", decidedBy: "system:force_stop" })
+            .pipe(Effect.ignore)
+          // Nothing in this run can go on, and the person hears it now rather than when everything has gone quiet.
+          const open = yield* autonomy.openDecisions().pipe(Effect.catchCause(() => Effect.succeed([])))
+          yield* events
+            .publish(Autonomy.Blocked, {
+              sessionID: root.id,
+              level: "b1",
+              count: open.filter((line) => line.rootID === root.id).length,
+            })
+            .pipe(Effect.catchCause((cause) => Effect.logError("could not send a notice", { root: root.id, cause })))
+        }
+        return { class: verdict.class, decision, category, stopped }
+      }
       // Nothing runs without a person unless the decision to let it is on record. Refusing or holding needs no such line.
       // Class A grants nothing critical, so its line is a record and not a condition: a failed write is logged and it runs
       // (C26 covers approvals of class P and what a person granted beyond class A).
@@ -630,6 +688,7 @@ const layer = Layer.effect(
 
       const gated = yield* gate(input, id, userCatchAll, hold)
       if (gated?.decision === "allow") return
+      if (gated?.stopped) return yield* stoppedByMode(input)
       // Refused by what it is, so no person is asked. Not a rejection: that error ends the run, and this one reports back.
       if (gated?.class === "X") return yield* refusedByMode(gated.category)
       if (gated?.decision === "reject") return yield* new DeciderRefusedError({ ruleset: [] })

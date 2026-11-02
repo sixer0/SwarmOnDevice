@@ -3,7 +3,7 @@ import { describe, expect } from "bun:test"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { Cause, Effect, Exit, Layer } from "effect"
 import type * as Scope from "effect/Scope"
-import { mkdir, symlink } from "fs/promises"
+import { mkdir, stat, symlink } from "fs/promises"
 import os from "os"
 import path from "path"
 import { pathToFileURL } from "url"
@@ -25,6 +25,8 @@ import { testEffect } from "../lib/effect"
 import { Tool } from "@/tool/tool"
 import { RuntimeFlags } from "@/effect/runtime-flags"
 import { InstanceStore } from "@/project/instance-store"
+import { Autonomy } from "@/permission/autonomy"
+import { Session } from "@/session/session"
 
 const shellLayer = Layer.mergeAll(
   LayerNode.compile(
@@ -1436,5 +1438,155 @@ describe("tool.shell truncation", () => {
         expect(lines[lineCount - 1]).toBe(String(lineCount))
       }),
     ),
+  )
+})
+
+// U11 rule 4 (row 151): with autonomous mode on, a deletion is moved to `.swarm/archive` instead of run.
+describe("tool.shell archive in autonomous mode", () => {
+  const archiveTool = (on: boolean, lines: unknown[]) =>
+    ShellTool.pipe(
+      Effect.flatMap((info) => info.init()),
+      Effect.provideService(
+        Autonomy.Service,
+        Autonomy.Service.of({
+          isOn: () => Effect.succeed(on),
+          record: (_root: unknown, line: unknown) => Effect.sync(() => void lines.push(line)),
+        } as unknown as Autonomy.Interface),
+      ),
+      Effect.provideService(
+        Session.Service,
+        Session.Service.of({
+          get: () => Effect.fail(new Error("no session")),
+        } as unknown as Session.Interface),
+      ),
+    )
+  const exists = (file: string) => Effect.promise(() => stat(file).then(() => true, () => false))
+  const seed = (dir: string, files: string[]) =>
+    Effect.promise(async () => {
+      for (const file of files) {
+        await mkdir(path.dirname(path.join(dir, file)), { recursive: true })
+        await Bun.write(path.join(dir, file), "x")
+      }
+    })
+  const archived = (dir: string) =>
+    Effect.promise(async () => {
+      const { readdir } = await import("fs/promises")
+      return readdir(path.join(dir, ".swarm", "archive"), { recursive: true }).catch(() => [] as string[])
+    })
+  const posixOnly = process.platform === "win32" ? it.live.skip : it.live
+
+  for (const [command, files, left] of [
+    ["rm -rf build", ["build/out.js", "keep.txt"], "build/out.js"],
+    ["rm a.txt", ["a.txt", "keep.txt"], "a.txt"],
+    ["unlink a.txt", ["a.txt", "keep.txt"], "a.txt"],
+    ["git rm -r -- src", ["src/a.ts", "keep.txt"], "src/a.ts"],
+  ] as const) {
+    posixOnly(`moves for ${command}`, () =>
+      Effect.gen(function* () {
+        const tmp = yield* tmpdirScoped({ git: true })
+        yield* seed(tmp, [...files])
+        const lines: unknown[] = []
+        yield* runIn(
+          tmp,
+          Effect.gen(function* () {
+            const tool = yield* archiveTool(true, lines)
+            const result = yield* tool.execute({ command }, ctx)
+            const id = result.output.match(/\.swarm\/archive\/(\S+) instead/)?.[1]
+            expect(result.output).toBe(
+              `Swarm moved 1 path(s) to .swarm/archive/${id} instead of deleting them. The person empties the archive when they return.`,
+            )
+            expect(result.metadata.exit).toBe(0)
+            expect(yield* exists(path.join(tmp, left))).toBe(false)
+            expect(yield* exists(path.join(tmp, "keep.txt"))).toBe(true)
+            expect(yield* exists(path.join(tmp, ".swarm", "archive", id!, left))).toBe(true)
+            expect(lines).toHaveLength(1)
+            expect(lines[0]).toMatchObject({ type: "outcome", outcome: "archived", archive: id })
+          }),
+        )
+      }),
+    )
+  }
+
+  posixOnly("rmdir moves an empty folder and refuses a full one as rmdir would", () =>
+    Effect.gen(function* () {
+      const tmp = yield* tmpdirScoped()
+      yield* Effect.promise(() => mkdir(path.join(tmp, "empty")))
+      yield* seed(tmp, ["full/a.txt"])
+      yield* runIn(
+        tmp,
+        Effect.gen(function* () {
+          const tool = yield* archiveTool(true, [])
+          expect((yield* tool.execute({ command: "rmdir empty" }, ctx)).output).toContain("Swarm moved 1 path(s)")
+          const full = yield* tool.execute({ command: "rm full" }, ctx)
+          expect(full.output).toBe("rm: full: is a directory")
+          expect(yield* exists(path.join(tmp, "full", "a.txt"))).toBe(true)
+        }),
+      )
+    }),
+  )
+
+  posixOnly("a deletion joined to another command does not run", () =>
+    Effect.gen(function* () {
+      const tmp = yield* tmpdirScoped()
+      yield* seed(tmp, ["a.txt", "b.log"])
+      yield* runIn(
+        tmp,
+        Effect.gen(function* () {
+          const tool = yield* archiveTool(true, [])
+          for (const command of ["rm a.txt && echo ran", "rm *.log", "echo x | xargs rm", "rm $FILE", "sudo rm a.txt"]) {
+            const result = yield* tool.execute({ command }, ctx)
+            expect(result.output).toBe(
+              "This call did not run. In autonomous mode a deletion must be a command of its own (rm, rmdir, unlink or git rm with paths only), so Swarm can move the paths to the archive instead.",
+            )
+          }
+          expect(yield* exists(path.join(tmp, "a.txt"))).toBe(true)
+          expect(yield* exists(path.join(tmp, "b.log"))).toBe(true)
+          expect(yield* archived(tmp)).toEqual([])
+        }),
+      )
+    }),
+  )
+
+  posixOnly("the archive itself is not moved, and other commands run", () =>
+    Effect.gen(function* () {
+      const tmp = yield* tmpdirScoped()
+      yield* seed(tmp, ["a.txt"])
+      yield* runIn(
+        tmp,
+        Effect.gen(function* () {
+          const tool = yield* archiveTool(true, [])
+          yield* tool.execute({ command: "rm a.txt" }, ctx)
+          const again = yield* tool.execute({ command: "rm -rf .swarm" }, ctx)
+          expect(again.output).not.toContain("Swarm moved")
+          expect((yield* archived(tmp)).length).toBeGreaterThan(0)
+          expect((yield* tool.execute({ command: "echo hello" }, ctx)).output.trim()).toBe("hello")
+          const cached = yield* tool.execute({ command: "git rm --cached nothing 2>/dev/null; echo ok" }, ctx)
+          expect(cached.output).not.toContain("did not run")
+        }),
+      )
+    }),
+  )
+
+  posixOnly("with the mode off the command deletes as usual", () =>
+    Effect.gen(function* () {
+      const tmp = yield* tmpdirScoped()
+      yield* seed(tmp, ["a.txt"])
+      const lines: unknown[] = []
+      yield* runIn(
+        tmp,
+        Effect.gen(function* () {
+          const tool = yield* archiveTool(false, lines)
+          const result = yield* tool.execute({ command: "rm a.txt" }, ctx)
+          expect(result.metadata.exit).toBe(0)
+          expect(yield* exists(path.join(tmp, "a.txt"))).toBe(false)
+          expect(yield* exists(path.join(tmp, ".swarm"))).toBe(false)
+          expect(lines).toEqual([])
+          // Without the services at all, as every other test here builds the tool.
+          yield* seed(tmp, ["b.txt"])
+          yield* run({ command: "rm b.txt" })
+          expect(yield* exists(path.join(tmp, "b.txt"))).toBe(false)
+        }),
+      )
+    }),
   )
 })

@@ -312,13 +312,20 @@ describe("settings v2 controllers", () => {
       expect(controller.enabled()).toBe(false)
     })
 
-    test("toast turning on carries the whole label, turning off only the title", () => {
+    test("toast turning on carries the scan sentence and the whole label, turning off only the title", () => {
       const t = (key: keyof typeof en) => en[key]
       expect(autonomousToast(t, true)).toEqual({
         title: en["toast.permissions.autonomous.on.title"],
-        description: en["settings.general.row.autonomous.description"],
+        description: [
+          en["toast.permissions.autonomous.scan.title"],
+          en["settings.general.row.autonomous.scripts"],
+          en["settings.general.row.autonomous.description"],
+        ].join(" "),
       })
       expect(autonomousToast(t, false)).toEqual({ title: en["toast.permissions.autonomous.off.title"] })
+      expect(autonomousToast((key: keyof typeof id) => id[key], true).description).toContain(
+        id["toast.permissions.autonomous.scan.title"],
+      )
     })
 
     test("the label states the S-7 sentence in both languages", () => {

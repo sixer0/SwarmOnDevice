@@ -24566,6 +24566,13 @@
                   "enum": ["mode.json", "trust.json"]
                 }
               },
+              "consentID": {
+                "type": "string"
+              },
+              "hash": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
               "decidedBy": {
                 "type": "string",
                 "pattern": "^(gate|person|agent:[^/]+\\/.+|system:.+)$"

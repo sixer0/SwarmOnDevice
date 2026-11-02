@@ -1,5 +1,5 @@
 import * as path from "path"
-import { Effect, Schema } from "effect"
+import { Effect, Option, Schema } from "effect"
 import * as Tool from "./tool"
 import { EventV2Bridge } from "@/event-v2-bridge"
 import { Watcher } from "@opencode-ai/core/filesystem/watcher"
@@ -17,6 +17,9 @@ import DESCRIPTION from "./apply_patch.txt"
 import { FileSystem } from "@opencode-ai/core/filesystem"
 import { Format } from "../format"
 import * as Bom from "@/util/bom"
+import { Archive } from "./archive"
+import { Autonomy } from "@/permission/autonomy"
+import { Session } from "@/session/session"
 
 export const Parameters = Schema.Struct({
   patchText: Schema.String.annotate({ description: "The full patch text that describes all changes to be made" }),
@@ -29,6 +32,9 @@ export const ApplyPatchTool = Tool.define(
     const afs = yield* FSUtil.Service
     const format = yield* Format.Service
     const events = yield* EventV2Bridge.Service
+    // Optional, as in `Tool.define`: a tool built on its own for its unit tests has neither, and then deletes as before.
+    const sessions = yield* Effect.serviceOption(Session.Service)
+    const autonomy = yield* Effect.serviceOption(Autonomy.Service)
 
     const run = Effect.fn("ApplyPatchTool.execute")(function* (
       params: Schema.Schema.Type<typeof Parameters>,
@@ -276,6 +282,25 @@ export const ApplyPatchTool = Tool.define(
         editClass: trust.editClass,
       })
 
+      // In autonomous mode a deleted file is moved into the session's archive instead (U11 rule 4); only the person empties
+      // it. A move hunk keeps its content at the new name, so it is not a deletion and stays as it was.
+      const where = Option.isSome(autonomy)
+        ? Option.isSome(sessions)
+          ? yield* Autonomy.placeOf(sessions.value, ctx.sessionID).pipe(
+              Effect.map((place) => ({ root: place.root.id, directory: place.directory })),
+            )
+          : { root: ctx.sessionID, directory: instance.directory }
+        : undefined
+      const archiving =
+        where &&
+        Option.isSome(autonomy) &&
+        fileChanges.some((change) => change.type === "delete") &&
+        (yield* autonomy.value.isOn(where))
+          ? { where, record: autonomy.value.record }
+          : undefined
+      const archived: Archive.Moved[] = []
+      const archiveIDs: string[] = []
+
       // Apply the changes
       const updates: Array<{ file: string; event: "add" | "change" | "unlink" }> = []
       const label = (file: string) => path.relative(instance.worktree, file).replaceAll("\\", "/")
@@ -314,6 +339,29 @@ export const ApplyPatchTool = Tool.define(
         for (const { change, text } of planned) {
           const target = change.movePath ?? change.filePath
           yield* Effect.gen(function* () {
+            if (change.type === "delete" && archiving) {
+              const result = yield* Effect.promise(() =>
+                Archive.move({
+                  directory: instance.directory,
+                  paths: [change.filePath],
+                  requestID: ctx.callID,
+                  record: Autonomy.archiveRecorder(archiving.record, archiving.where),
+                }),
+              )
+              if (!result.ok) return yield* Effect.fail(new Error(result.message))
+              if (result.missing.length) return yield* Effect.fail(redo(change.filePath))
+              // Same as the permission gate: a line that could not be written must not hold the agent up.
+              if (!result.recorded)
+                yield* Effect.logError("could not record an archived patch deletion", {
+                  root: archiving.where.root,
+                  archive: result.id,
+                })
+              archived.push(...result.moved)
+              archiveIDs.push(result.id)
+              updates.push({ file: change.filePath, event: "unlink" })
+              written.push(change.filePath)
+              return
+            }
             if (change.type === "delete") {
               yield* afs.remove(change.filePath)
               updates.push({ file: change.filePath, event: "unlink" })
@@ -379,6 +427,7 @@ export const ApplyPatchTool = Tool.define(
         return `M ${path.relative(instance.worktree, target).replaceAll("\\", "/")}`
       })
       let output = `Success. Updated the following files:\n${summaryLines.join("\n")}`
+      if (archived.length) output += `\n\n${Archive.movedText(archived.length, archiveIDs.join(", "))}`
 
       for (const change of fileChanges) {
         if (change.type === "delete") continue

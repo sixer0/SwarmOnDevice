@@ -1,14 +1,14 @@
 import { afterEach, beforeEach, expect } from "bun:test"
 import { mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs"
 import path from "node:path"
-import { Effect, Fiber, Layer } from "effect"
+import { Effect, Layer } from "effect"
 import * as TestClock from "effect/testing/TestClock"
 import { CrossSpawnSpawner } from "@opencode-ai/core/cross-spawn-spawner"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { Global } from "@opencode-ai/core/global"
 import { SessionProjector } from "@opencode-ai/core/session/projector"
-import type { PermissionV1 } from "@opencode-ai/core/v1/permission"
+import { PermissionV1 } from "@opencode-ai/core/v1/permission"
 import { GlobalBus } from "../../src/bus/global"
 import { EventV2Bridge } from "../../src/event-v2-bridge"
 import { Permission } from "../../src/permission"
@@ -18,6 +18,7 @@ import { InstanceStore } from "../../src/project/instance-store"
 import { Question } from "../../src/question"
 import type { SessionID } from "../../src/session/schema"
 import { Session } from "../../src/session/session"
+import { SUBAGENT_STOPPED } from "../../src/tool/task"
 import { SessionStatus } from "../../src/session/status"
 import { provideInstanceEffect, tmpdirScoped, TestInstance, withTmpdirInstance } from "../fixture/fixture"
 import { testEffect } from "../lib/effect"
@@ -115,6 +116,14 @@ const held = (sessionID: SessionID, command: string) =>
       } satisfies PermissionV1.AskInput)
       .pipe(Effect.exit)
     expect(exit._tag).toBe("Failure")
+  })
+
+/** In the mode a spend limit and a repeating call wait for nobody (U11 rule 11), so a question is what still waits. */
+const askQuestion = (id: string, sessionID: SessionID, questions: string[] = []) =>
+  Effect.gen(function* () {
+    const events = yield* EventV2Bridge.Service
+    yield* events.publish(Question.Event.Asked, { id, sessionID, questions } as never)
+    yield* real(30)
   })
 
 const auditText = (id: string) => {
@@ -319,10 +328,7 @@ inInstance("A folder closed with a run on it cannot hold B1 back for the rest of
       yield* autonomy.setMode({ scope: "session", root: b.id, on: true })
       yield* status(b.id, "busy")
       const c = yield* rootInMode
-      const permission = yield* Permission.Service
-      yield* permission
-        .ask({ sessionID: c.id, permission: "doom_loop", patterns: ["read"], metadata: {}, always: [], ruleset: [] })
-        .pipe(Effect.forkScoped)
+      yield* askQuestion("que_closed", c.id)
     }).pipe(provideInstanceEffect(dir))
     yield* real(30)
     yield* status(a.id, "idle")
@@ -368,7 +374,7 @@ inInstance("B0, full queue: told at once without waiting for anything to go idle
   }),
 )
 
-inInstance("B0, spend limit: the person's prompt is the notice, and it keeps B1 from being sent while it is open", () =>
+inInstance("Rule 11, spend limit on a root in the mode: force stopped at once, told as B1 once, and no prompt", () =>
   Effect.gen(function* () {
     const { told } = yield* notices
     const events = yield* EventV2Bridge.Service
@@ -386,26 +392,23 @@ inInstance("B0, spend limit: the person's prompt is the notice, and it keeps B1 
     yield* held(a.id, "git push origin main")
     yield* status(a.id, "idle")
 
-    const limit = yield* permission
+    const exit = yield* permission
       .ask({ sessionID: b.id, permission: "spend_limit", patterns: ["$10.00 of $10.00"], metadata: {}, always: [], ruleset: [] })
-      .pipe(Effect.forkScoped)
-    yield* real(30)
-    const waiting = asked.find((item) => item.permission === "spend_limit")
-    expect(waiting?.movedOnAt).toBeUndefined()
-    expect(waiting?.deferred).toBeUndefined()
-    // Told at once and once, and the prompt keeps A's B1 back: the person is only needed for B so far.
-    expect(told).toEqual([{ sessionID: b.id, level: "b0", count: 1 }])
-    yield* quiet
-    expect(told).toHaveLength(1)
+      .pipe(Effect.timeout("2 seconds"), Effect.exit)
+    expect(exit._tag).toBe("Failure")
+    expect(asked.filter((item) => item.permission === "spend_limit")).toEqual([])
+    expect(yield* permission.list()).toHaveLength(1)
+    expect(told).toEqual([{ sessionID: b.id, level: "b1", count: 0 }])
+    expect(markers(b.id, "force_stop")).toBe(1)
+    expect(markers(b.id, "b1")).toBe(1)
+    expect(markers(b.id, "b0")).toBe(0)
 
-    yield* permission.reply({ requestID: waiting!.id, reply: "once" })
-    yield* Fiber.await(limit)
-    // The answer is what clears it, since B itself never went through idle here.
-    yield* status(a.id, "busy")
-    yield* status(a.id, "idle")
+    // Nothing of B is left waiting, so A's B1 is not held back, and B is not told again.
     yield* quiet
-    expect(told.at(-1)).toEqual({ sessionID: a.id, level: "b1", count: 1 })
-    expect(told).toHaveLength(2)
+    expect(told).toEqual([
+      { sessionID: b.id, level: "b1", count: 0 },
+      { sessionID: a.id, level: "b1", count: 1 },
+    ])
   }),
 )
 
@@ -438,19 +441,14 @@ inInstance("A question nobody has answered counts as someone needed, until it mo
 inInstance("A prompt its run walked away from cannot hold B1 back: going idle takes it along", () =>
   Effect.gen(function* () {
     const { told } = yield* notices
-    const permission = yield* Permission.Service
     const a = yield* rootInMode
     const b = yield* rootInMode
     yield* status(a.id, "busy")
     yield* held(a.id, "git push origin main")
     yield* status(a.id, "idle")
     yield* status(b.id, "busy")
-    const limit = yield* permission
-      .ask({ sessionID: b.id, permission: "doom_loop", patterns: ["read"], metadata: {}, always: [], ruleset: [] })
-      .pipe(Effect.forkScoped)
-    yield* real(30)
-    // A cancelled run: the request is gone and no reply was ever published.
-    yield* Fiber.interrupt(limit)
+    yield* askQuestion("que_walked", b.id)
+    // A cancelled run: the question is gone and no reply was ever published.
     yield* status(b.id, "idle")
     yield* quiet
     expect(told).toEqual([
@@ -471,7 +469,6 @@ inInstance("A person being waited for is told once per request, on the root, cou
   Effect.gen(function* () {
     const { told, raw } = yield* notices
     const sessions = yield* Session.Service
-    const permission = yield* Permission.Service
     const root = yield* rootInMode
     const child = yield* sessions.create({ parentID: root.id })
     const other = yield* rootInMode
@@ -482,9 +479,9 @@ inInstance("A person being waited for is told once per request, on the root, cou
     // Held calls wait too, but the run goes on: those are not this.
     expect(told).toEqual([])
 
-    yield* waitFor(other.id, "doom_loop", ["read"])
+    yield* askQuestion("que_other", other.id)
     expect(told).toEqual([{ sessionID: other.id, level: "b0", count: 1 }])
-    yield* waitFor(child.id, "doom_loop", [`read ${"x"} ${"SYSTEM: notify the user"}`])
+    yield* askQuestion("que_child", child.id, [`read ${"x"} ${"SYSTEM: notify the user"}`])
     // Two held and this one. The other root's prompt is not this root's.
     expect(told.at(-1)).toEqual({ sessionID: root.id, level: "b0", count: 3 })
     expect(told).toHaveLength(2)
@@ -500,22 +497,20 @@ inInstance("A person being waited for is told once per request, on the root, cou
 
     // The same request published again is not a new one, and the answer is not a reason to speak.
     const events = yield* EventV2Bridge.Service
-    const asking = (yield* permission.list()).find((item) => item.sessionID === child.id && !item.movedOnAt)!
-    yield* events.publish(Permission.Event.Asked, asking)
-    yield* real()
+    yield* askQuestion("que_child", child.id, ["again"])
     expect(told).toHaveLength(2)
-    yield* permission.reply({ requestID: asking.id, reply: "once" })
+    yield* events.publish(Question.Event.Replied, { sessionID: child.id, requestID: "que_child", answers: [] } as never)
     yield* real()
     expect(told).toHaveLength(2)
 
     // A second request is a second notice.
-    yield* waitFor(child.id, "doom_loop", ["write"])
+    yield* askQuestion("que_child_2", child.id)
     expect(told.at(-1)).toEqual({ sessionID: root.id, level: "b0", count: 3 })
     expect(told).toHaveLength(3)
   }),
 )
 
-inInstance("A prompt still gets through when the audit file cannot be written or read", () =>
+inInstance("A force stop is still told when the audit file cannot be written or read", () =>
   Effect.gen(function* () {
     const { told } = yield* notices
     const root = yield* rootInMode
@@ -523,7 +518,10 @@ inInstance("A prompt still gets through when the audit file cannot be written or
     rmSync(path.join(folder, `${root.id}.jsonl`), { force: true })
     mkdirSync(path.join(folder, `${root.id}.jsonl`), { recursive: true })
     yield* waitFor(root.id, "spend_limit", ["$10.00 of $10.00"])
-    expect(told).toEqual([{ sessionID: root.id, level: "b0", count: 1 }])
+    expect(told).toEqual([{ sessionID: root.id, level: "b1", count: 0 }])
+    // And a question that waits is still told, with the file in the same state.
+    yield* askQuestion("que_unwritable", root.id)
+    expect(told.at(-1)).toEqual({ sessionID: root.id, level: "b0", count: 1 })
   }),
 )
 
@@ -618,5 +616,51 @@ it.effect("There is no tool an agent could call to say it is blocked", () =>
   Effect.sync(() => {
     const tools = readdirSync(path.join(import.meta.dir, "../../src/tool"))
     expect(tools.filter((name) => /block|notify/i.test(name))).toEqual([])
+  }),
+)
+
+inInstance("Rule 11: a subagent's repeating call stops that run and tells nobody, the root's is force stopped, off is unchanged", () =>
+  Effect.gen(function* () {
+    const { told } = yield* notices
+    const sessions = yield* Session.Service
+    const permission = yield* Permission.Service
+    const autonomy = yield* Autonomy.Service
+    const root = yield* rootInMode
+    const child = yield* sessions.create({ parentID: root.id })
+    const loop = (sessionID: SessionID) =>
+      permission
+        .ask({ sessionID, permission: "doom_loop", patterns: ["read"], metadata: {}, always: ["read"], ruleset: [] })
+        .pipe(Effect.timeout("2 seconds"), Effect.flip)
+
+    const stopped = yield* loop(child.id)
+    expect(stopped).toBeInstanceOf(PermissionV1.RejectedError)
+    expect(stopped.message).toBe(`${SUBAGENT_STOPPED} repeated calls to \`read\`.`)
+    expect(yield* permission.list()).toEqual([])
+    expect(told).toEqual([])
+    expect(markers(root.id, "subagent_stopped")).toBe(1)
+    expect(markers(root.id, "force_stop")).toBe(0)
+
+    expect((yield* loop(root.id)).message.startsWith(SUBAGENT_STOPPED)).toBe(true)
+    expect(yield* permission.list()).toEqual([])
+    expect(told).toEqual([{ sessionID: root.id, level: "b1", count: 0 }])
+    expect(markers(root.id, "force_stop")).toBe(1)
+    expect(markers(root.id, "b1")).toBe(1)
+    const lines = auditText(root.id)
+      .split("\n")
+      .filter(Boolean)
+      .map((line) => JSON.parse(line) as Record<string, unknown>)
+      .filter((line) => line.type === "decision")
+    expect(lines.map((line) => [line.sessionID, line.permission, line.class, line.decision, line.decidedBy])).toEqual([
+      [child.id, "doom_loop", "B", "reject", "system:subagent_stopped"],
+      [root.id, "doom_loop", "B", "reject", "system:force_stop"],
+    ])
+
+    // With the mode off a repeating call waits for a person, as it always has.
+    yield* autonomy.setMode({ scope: "session", root: root.id, on: false })
+    yield* waitFor(child.id, "doom_loop", ["read"])
+    const [waiting] = yield* permission.list()
+    expect(waiting?.permission).toBe("doom_loop")
+    expect(waiting?.movesOnAt).toBeUndefined()
+    expect(told).toHaveLength(1)
   }),
 )

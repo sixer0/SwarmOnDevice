@@ -12,6 +12,8 @@ import type { SessionID } from "@/session/schema"
 import { Session } from "@/session/session"
 import { SessionSpend } from "@/session/spend"
 import { Autonomy } from "./autonomy"
+// Types only: the screen hashes with `Bun`, which the packaged Node sidecar does not have.
+import type { ScriptScreen } from "./script-screen"
 import type { Permission } from "."
 
 // The "main agent" that settles a routine request is one model call of its own, on the model the root session uses. The
@@ -79,10 +81,12 @@ export type Decided = Permission.Decided & { readonly attempts?: number }
 
 export interface Interface {
   /** `category` is the gate's, and only a command it calls a check can be remembered for the rest of the run. */
+  /** `script` is the screen's closed summary of the script a command runs (U11 rule 6), never the script itself. */
   readonly decide: (
     input: PermissionV1.AskInput,
     root: SessionID,
     category?: string,
+    script?: ScriptScreen.Summary,
   ) => Effect.Effect<Decided>
 }
 
@@ -158,6 +162,7 @@ export const layer = Layer.effect(
       input: PermissionV1.AskInput,
       root: SessionID,
       category: string | undefined,
+      script: ScriptScreen.Summary | undefined,
       state: RootState,
       hold: (reason: HoldReason, attempts?: number) => Effect.Effect<Decided>,
     ) {
@@ -173,7 +178,7 @@ export const layer = Layer.effect(
         state.memo.clear()
       }
 
-      const memoKey = JSON.stringify([input.permission, input.patterns])
+      const memoKey = JSON.stringify([input.permission, input.patterns, script?.sha])
       const by: `agent:${string}/${string}` = `agent:${run.model.providerID}/${run.model.modelID}`
       if (state.memo.has(memoKey))
         return { decision: "allow", decidedBy: by, memo: true, latencyMs: 0 } satisfies Permission.Decided
@@ -201,7 +206,7 @@ export const layer = Layer.effect(
 
       // A call that dies on the way still cost something, so it is counted as the pessimistic guess until it reports.
       const guess = paid ? Session.getUsage({ model: model.value, usage: UNREPORTED }).cost : 0
-      const text = JSON.stringify(fieldsOf(input, root, category, run.goal, run.directory))
+      const text = JSON.stringify(fieldsOf(input, root, category, script, run.goal, run.directory))
       const started = yield* Clock.currentTimeMillis
       // Each try gets the whole deadline from when it starts, not from when the request joined the queue, and is a call
       // like any other against the count and the budget. A request that uses them all up is one failure for the circuit,
@@ -281,7 +286,7 @@ export const layer = Layer.effect(
     })
 
     return Service.of({
-      decide: Effect.fn("AutonomyDecider.decide")(function* (input, root, category) {
+      decide: Effect.fn("AutonomyDecider.decide")(function* (input, root, category, script) {
         const limits = yield* Limits
         const state = roots.get(root) ?? newRootState()
         roots.set(root, state)
@@ -300,7 +305,7 @@ export const layer = Layer.effect(
         if (state.waiting > limits.queue) return yield* hold("queue_full")
         state.waiting++
         // Waiting in the queue says nothing about the model, so the deadline belongs to each call, inside `settle`.
-        return yield* settle(input, root, category, state, hold).pipe(
+        return yield* settle(input, root, category, script, state, hold).pipe(
           state.lock.withPermits(1),
           Effect.ensuring(Effect.sync(() => state.waiting--)),
         )
@@ -382,6 +387,7 @@ const fieldsOf = (
   input: PermissionV1.AskInput,
   root: SessionID,
   category: string | undefined,
+  script: ScriptScreen.Summary | undefined,
   goal: string,
   directory: string,
 ) => ({
@@ -393,7 +399,30 @@ const fieldsOf = (
     agent: Autonomy.hide(input.agent ?? "unknown", directory, MAX_NAME),
     isSubagent: input.sessionID !== root,
     canUndo: input.canUndo ?? false,
+    ...(script ? { script: scriptFields(script) } : {}),
   },
+})
+
+// A record so that a flag the screen gains cannot be left off here.
+const FLAGS = new Set<string>(
+  Object.keys({ network: 1, delete: 1, sudo: 1, eval: 1, base64: 1, exec_local: 1 } satisfies Record<
+    ScriptScreen.Flag,
+    1
+  >),
+)
+// `ScriptScreen.SHA_PREFIX` hex digits; `autonomy-decider-script.test.ts` holds the two together.
+const SHA = /^[0-9a-f]{12}$/
+const count = (value: unknown) => (Number.isSafeInteger(value) && (value as number) >= 0 ? (value as number) : 0)
+
+/** The register's four fields and nothing else, each checked again: an object with more on it, or a hash or flag that is
+ * not one, says nothing of the script's text here (ADV-P2). */
+const scriptFields = (script: ScriptScreen.Summary) => ({
+  bytes: count(script.bytes),
+  lines: count(script.lines),
+  sha: typeof script.sha === "string" && SHA.test(script.sha) ? script.sha : "",
+  flags: Array.isArray(script.flags)
+    ? [...new Set(script.flags.filter((flag) => typeof flag === "string" && FLAGS.has(flag)))]
+    : [],
 })
 
 export const node = LayerNode.make({
