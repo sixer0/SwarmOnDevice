@@ -469,7 +469,15 @@ export const resolve = Effect.fn("SessionTools.resolve")(function* (input: {
             { args },
           )
           const result: Awaited<ReturnType<NonNullable<typeof execute>>> = yield* Effect.gen(function* () {
-            yield* ctx.ask({ permission: key, metadata: {}, patterns: ["*"], always: ["*"], call: { tool: key, args } })
+            // Rule 5 reads server, transport and origin from here; a tool without a known source counts as project.
+            const mcp: MCP.Source | { origin: "project" } = entry.source ?? { origin: "project" }
+            yield* ctx.ask({
+              permission: key,
+              metadata: { mcp },
+              patterns: ["*"],
+              always: ["*"],
+              call: { tool: key, args },
+            })
             return yield* Effect.promise(() => execute(args, opts))
           }).pipe(
             Effect.withSpan("Tool.execute", {

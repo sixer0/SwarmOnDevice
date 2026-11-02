@@ -1,5 +1,6 @@
 import path from "node:path"
 import { pathToFileURL } from "node:url"
+import { isDeepStrictEqual } from "node:util"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { ConfigV1 } from "@opencode-ai/core/v1/config/config"
 import { serviceUse } from "@opencode-ai/core/effect/service-use"
@@ -124,6 +125,28 @@ function isMcpConfigured(entry: McpEntry): entry is ConfigMCPV1.Info {
   return typeof entry === "object" && entry !== null && "type" in entry
 }
 
+/**
+ * Config does not record which file an `mcp` entry came from, so origin is proven by comparison: the entry in
+ * effect must equal the global one. A project override of any field, a custom config, managed config, or a
+ * runtime `add` breaks the equality and the server counts as project. Unknown transport counts as remote.
+ */
+function sourceOf(
+  name: string,
+  added: McpEntry | undefined,
+  effective: McpEntry | undefined,
+  global: McpEntry | undefined,
+): Source {
+  const entry = added ?? effective
+  return {
+    server: name,
+    transport: entry && isMcpConfigured(entry) && entry.type === "local" ? "local" : "remote",
+    origin:
+      !added && effective !== undefined && global !== undefined && isDeepStrictEqual(effective, global)
+        ? "global"
+        : "project",
+  }
+}
+
 function remoteURL(value: string) {
   if (URL.canParse(value)) return new URL(value)
 }
@@ -157,12 +180,27 @@ export interface ServerInstructions {
   tools: string[]
 }
 
+/**
+ * Where a server's config came from. `global` only when the entry in effect is exactly the one in the user's
+ * global config; anything a project file, a custom config, or a runtime `add` set or changed is `project`.
+ */
+export type Origin = "global" | "project"
+
+/** Which server a tool belongs to, as permission requests report it (U11 rule 5). */
+export interface Source {
+  readonly server: string
+  readonly transport: "local" | "remote"
+  readonly origin: Origin
+}
+
 /** An MCP tool in its native shape; consumers adapt it to their own tool format. */
 export interface McpTool {
   /** Shared cached definition; consumers must copy rather than mutate it. */
   readonly def: MCPToolDef
   readonly client: MCPClient
   readonly timeout?: number
+  /** Absent means unknown, and readers treat unknown as `project`. */
+  readonly source?: Source
 }
 
 export interface Interface {
@@ -677,6 +715,7 @@ const layer = Layer.effect(
 
       const cfg = yield* cfgSvc.get()
       const config = cfg.mcp ?? {}
+      const global = (yield* cfgSvc.getGlobal()).mcp ?? {}
       const defaultTimeout = cfg.experimental?.mcp_timeout
 
       for (const [clientName, client] of Object.entries(s.clients)) {
@@ -688,8 +727,9 @@ const layer = Layer.effect(
           continue
         }
         const timeout = requestTimeout(s, clientName, mcpConfig, defaultTimeout)
+        const source = sourceOf(clientName, s.config[clientName], mcpConfig, global[clientName])
         for (const def of listed) {
-          result[McpCatalog.toolName(clientName, def.name)] = { def, client, timeout }
+          result[McpCatalog.toolName(clientName, def.name)] = { def, client, timeout, source }
         }
       }
       return result
