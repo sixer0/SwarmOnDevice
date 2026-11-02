@@ -4,6 +4,7 @@ import { DebugBar } from "@/components/debug-bar"
 import { TabsInfoPopup } from "@/components/help-button"
 import { Titlebar, type TitlebarUpdate } from "@/components/titlebar"
 import { usePlatform } from "@/context/platform"
+import { useAutonomyBlockedAlerts } from "@/pages/autonomy-blocked-alerts"
 import { setV2Toast, ToastRegion } from "@/utils/toast"
 
 export default function NewLayout(props: ParentProps) {
@@ -11,6 +12,7 @@ export default function NewLayout(props: ParentProps) {
   const [state, setState] = createStore({ debugTools: true })
 
   createEffect(() => setV2Toast(true))
+  useAutonomyBlockedAlerts()
 
   const update: TitlebarUpdate = {
     version: () => {

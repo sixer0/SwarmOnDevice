@@ -40,29 +40,6 @@ export function composerMovedOn(...input: Parameters<typeof sessionMovedOnReques
   return sessionMovedOnRequests(...input).filter((item) => item.kind !== "permission" || !item.request.deferred)
 }
 
-/**
- * The alert for `autonomy.blocked`. Nothing from the repository reaches it: the event carries only a session id, a level
- * and a count. It shows on the open session too, because held decisions have no dock there to say the work stopped.
- */
-export function autonomyBlockedToast(input: {
-  count: number
-  sessionTitle: string
-  current: boolean
-  t: ReturnType<typeof useLanguage>["t"]
-  open: () => void
-}) {
-  return {
-    persistent: !input.current,
-    icon: "checklist" as const,
-    title: input.t("notification.permission.title"),
-    description: input.t("notification.autonomy.blocked", { sessionTitle: input.sessionTitle, count: input.count }),
-    actions: [
-      ...(input.current ? [] : [{ label: input.t("notification.action.goToSession"), onClick: input.open }]),
-      { label: input.t("common.dismiss"), onClick: "dismiss" as const },
-    ],
-  }
-}
-
 export function createSessionComposerController(options?: { closeMs?: number | (() => number) }) {
   const params = useParams()
   const sdk = useSDK()

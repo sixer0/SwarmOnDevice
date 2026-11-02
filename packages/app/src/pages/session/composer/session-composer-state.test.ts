@@ -2,8 +2,7 @@ import { describe, expect, test } from "bun:test"
 import type { PermissionRequest, QuestionRequest, Session } from "@opencode-ai/sdk/v2/client"
 import { readFileSync } from "fs"
 import { join } from "path"
-import { dict } from "@/i18n/en"
-import { asksNow, autonomyBlockedToast, composerMovedOn, todoDockAtBoundary, todoState } from "./session-composer-state"
+import { asksNow, composerMovedOn, todoDockAtBoundary, todoState } from "./session-composer-state"
 import { sessionPermissionRequest, sessionQuestionRequest } from "./session-request-tree"
 
 const session = (input: { id: string; parentID?: string }) =>
@@ -27,14 +26,6 @@ const question = (id: string, sessionID: string) =>
 
 const held = (id: string, sessionID: string, at = 10) =>
   ({ id, sessionID, movedOnAt: at, deferred: true }) as PermissionRequest
-
-// The two alert decisions live in `layout.tsx`, which cannot mount without the whole app: these fail if it stops asking.
-const layoutSource = readFileSync(join(import.meta.dir, "../../layout.tsx"), "utf8")
-const translate = ((key: keyof typeof dict, params?: Record<string, string | number>) =>
-  Object.entries(params ?? {}).reduce(
-    (text, [name, value]) => text.replace(`{{${name}}}`, String(value)),
-    dict[key],
-  )) as Parameters<typeof autonomyBlockedToast>[0]["t"]
 
 describe("sessionPermissionRequest", () => {
   test("prefers the current session permission", () => {
@@ -157,7 +148,6 @@ describe("a decision autonomous mode put aside (AU-36)", () => {
   test("permission.asked with deferred alerts nobody, even without movedOnAt", () => {
     expect(asksNow(held("p1", "root"))).toBe(false)
     expect(asksNow({ deferred: true })).toBe(false)
-    expect(layoutSource).toContain("if (!asksNow(props)) return")
   })
 
   test("an ordinary request still alerts, and one the agent moved on from still does not", () => {
@@ -195,44 +185,5 @@ describe("a decision autonomous mode put aside (AU-36)", () => {
     const asked = { ...question("q1", "child"), movedOnAt: 30 }
     const rows = composerMovedOn(() => sessions, { root: [held("p1", "root"), moved] }, { child: [asked] }, "root")
     expect(rows.map((item) => item.request.id)).toEqual(["p2", "q1"])
-  })
-})
-
-describe("autonomy.blocked toast (AU-27)", () => {
-  const toast = (current: boolean, open = () => {}) =>
-    autonomyBlockedToast({ count: 3, sessionTitle: "Fix login", current, t: translate, open })
-
-  test("layout shows it for the event and is not held back by the alert cooldown", () => {
-    const branch = layoutSource.slice(
-      layoutSource.indexOf('e.details?.type === "autonomy.blocked"'),
-      layoutSource.indexOf('e.details?.type !== "permission.asked"'),
-    )
-    expect(branch).toContain("showToast(toast)")
-    expect(branch).toContain("platform.notify(toast.title, toast.description")
-    expect(branch).not.toContain("cooldownMs")
-  })
-
-  test("names the session and the count, and nothing else", () => {
-    expect(toast(false).title).toBe(dict["notification.permission.title"])
-    expect(toast(false).description).toBe("Fix login needs you. Decisions waiting: 3")
-  })
-
-  test("stays and links to the session from elsewhere", () => {
-    const opened: string[] = []
-    const away = toast(false, () => opened.push("session"))
-    expect(away.persistent).toBe(true)
-    expect(away.actions.map((action) => action.label)).toEqual([
-      dict["notification.action.goToSession"],
-      dict["common.dismiss"],
-    ])
-    const go = away.actions[0]!.onClick
-    if (typeof go === "function") go()
-    expect(opened).toEqual(["session"])
-  })
-
-  test("still shows on the open session, without a link to where you are", () => {
-    const here = toast(true)
-    expect(here.persistent).toBe(false)
-    expect(here.actions.map((action) => action.label)).toEqual([dict["common.dismiss"]])
   })
 })

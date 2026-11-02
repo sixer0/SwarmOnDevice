@@ -45,7 +45,8 @@ import { playSoundById } from "@/utils/sound"
 import { createAim } from "@/utils/aim"
 import { Worktree as WorktreeState } from "@/utils/worktree"
 import { setSessionHandoff } from "@/pages/session/handoff"
-import { asksNow, autonomyBlockedToast } from "@/pages/session/composer/session-composer-state"
+import { useAutonomyBlockedAlerts } from "@/pages/autonomy-blocked-alerts"
+import { asksNow } from "@/pages/session/composer/session-composer-state"
 import { SessionRouteKey, SessionStateKey } from "@/utils/server-scope"
 import { listAllSessions } from "@/utils/session"
 
@@ -416,30 +417,6 @@ export default function LegacyLayout(props: ParentProps) {
           return
         }
 
-        // Autonomous mode has nothing left it can do without a person. The server sends this once per state, so the
-        // per-session cooldown must not swallow the second level.
-        if (e.details?.type === "autonomy.blocked") {
-          const directory = e.name
-          const sessionID = e.details.properties.sessionID
-          const [store] = serverSync().child(directory, { bootstrap: false })
-          const sessionKey = `${directory}:${sessionID}`
-          const href = `/${base64Encode(directory)}/session/${sessionID}`
-          const toast = autonomyBlockedToast({
-            count: e.details.properties.count,
-            sessionTitle: store.session.find((s) => s.id === sessionID)?.title ?? language.t("command.session.new"),
-            current: canonicalPathKey(directory) === canonicalPathKey(currentDir()) && sessionID === params.id,
-            t: language.t,
-            open: () => navigate(href),
-          })
-          if (settings.sounds.permissionsEnabled()) void playSoundById(settings.sounds.permissions())
-          if (settings.notifications.permissions()) {
-            void platform.notify(toast.title, toast.description, () => navigate(href))
-          }
-          dismissSessionAlert(sessionKey)
-          toastBySession.set(sessionKey, showToast(toast))
-          return
-        }
-
         if (e.details?.type !== "permission.asked" && e.details?.type !== "question.asked") return
         const title =
           e.details.type === "permission.asked"
@@ -525,6 +502,7 @@ export default function LegacyLayout(props: ParentProps) {
     })
 
   useSDKNotificationToasts()
+  useAutonomyBlockedAlerts()
 
   function scrollToSession(sessionId: string, sessionKey: string) {
     if (!scrollContainerRef) return
