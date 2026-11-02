@@ -4,6 +4,7 @@
 import { spawnSync } from "node:child_process"
 import fs from "node:fs"
 import path from "node:path"
+import { setTimeout as sleep } from "node:timers/promises"
 import { Global } from "@opencode-ai/core/global"
 
 type Started = { pid: number; started?: string }
@@ -114,7 +115,7 @@ export async function end(session: string) {
       if (same) {
         signalGroup(running.pid, "SIGTERM")
         const deadline = Date.now() + FORCE_AFTER_MS
-        while (groupAlive(running.pid) && Date.now() < deadline) await Bun.sleep(POLL_MS)
+        while (groupAlive(running.pid) && Date.now() < deadline) await sleep(POLL_MS)
         if (groupAlive(running.pid)) signalGroup(running.pid, "SIGKILL")
         ended++
       }

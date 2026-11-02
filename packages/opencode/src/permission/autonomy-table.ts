@@ -13,6 +13,7 @@ import { GitGuard } from "../tool/git-guard"
 import { Reach } from "../tool/reach"
 import { Risk } from "../tool/risk"
 import { Secrets } from "../tool/secrets"
+import { findProgram } from "../util/find-program"
 
 export type Class = "A" | "P" | "D" | "B" | "X"
 export type CheckClass = Extract<Class, "P" | "D">
@@ -209,7 +210,7 @@ export function lockfileUnchanged(names: readonly string[], cwd: string, instanc
     GIT_CONFIG_GLOBAL: devNull,
     GIT_OPTIONAL_LOCKS: "0",
   }
-  const binary = Bun.which("git", { PATH: env.PATH })
+  const binary = findProgram("git", env.PATH)
   if (!binary) return false
   const git = (...args: string[]) =>
     execFileSync(

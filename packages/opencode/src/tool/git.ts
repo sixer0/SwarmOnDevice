@@ -7,6 +7,7 @@ import path from "node:path"
 import { Effect, Schema } from "effect"
 import { InstanceState } from "@/effect/instance-state"
 import { containsPath, type InstanceContext } from "../project/instance-context"
+import { findProgram } from "../util/find-program"
 import DESCRIPTION from "./git.txt"
 import { GitGuard } from "./git-guard"
 import { Reach } from "./reach"
@@ -296,7 +297,7 @@ export const GitTool = Tool.define(
           const guarded = GitGuard.inspect(instance.worktree)
           if (guarded.refused !== undefined) return refuseRepository(guarded.refused)
           const env = hardenedEnv(instance)
-          const binary = Bun.which("git", { PATH: env.PATH })
+          const binary = findProgram("git", env.PATH)
           if (!binary) return refuseRepository("no git program outside this project")
 
           // Reading runs nothing, by everything above. Windows has not been tried, so it keeps asking there.
