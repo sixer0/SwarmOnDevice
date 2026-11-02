@@ -30,6 +30,7 @@ import { AutonomyEvent } from "@opencode-ai/schema/autonomy-event"
 import { QuestionV1 } from "@opencode-ai/schema/question-v1"
 import { SessionStatusEvent } from "@opencode-ai/schema/session-status-event"
 import { GlobalBus, type GlobalEvent } from "@/bus/global"
+import { InstanceState } from "@/effect/instance-state"
 import type { SessionID } from "@/session/schema"
 import { Secrets } from "@/tool/secrets"
 
@@ -247,6 +248,25 @@ export interface Interface {
 }
 
 export class Service extends Context.Service<Service, Interface>()("@opencode/Autonomy") {}
+
+type Lineage = { id: SessionID; parentID?: SessionID; directory?: string; time?: { archived?: number } }
+
+/**
+ * Where a session's mode is read: the session at the top of its line, and the folder that one was opened in. A subagent can
+ * run in another folder and still goes by this one. A session that cannot be read is its own root, in the folder running it.
+ */
+export const placeOf = Effect.fnUntraced(function* (
+  sessions: { readonly get: (id: SessionID) => Effect.Effect<Lineage, unknown> },
+  sessionID: SessionID,
+) {
+  const rootOf = (id: SessionID): Effect.Effect<Lineage> =>
+    sessions.get(id).pipe(
+      Effect.flatMap((session) => (session.parentID ? rootOf(session.parentID) : Effect.succeed(session))),
+      Effect.catchCause(() => Effect.succeed({ id })),
+    )
+  const root = yield* rootOf(sessionID)
+  return { root, directory: root.directory ?? (yield* InstanceState.directory) }
+})
 
 /** The one way a change from outside alters a class: nothing more runs without a person. P only ever goes down. */
 export const afterCheck = <Class extends string>(value: Class, check: Check) =>

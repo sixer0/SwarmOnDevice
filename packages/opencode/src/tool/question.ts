@@ -1,9 +1,7 @@
 import { Effect, Schema } from "effect"
 import * as Tool from "./tool"
 import { Question } from "../question"
-import { InstanceState } from "@/effect/instance-state"
 import { Autonomy } from "@/permission/autonomy"
-import { SessionID } from "@/session/schema"
 import { Session } from "@/session/session"
 import DESCRIPTION from "./question.txt"
 
@@ -26,20 +24,15 @@ export const QuestionTool = Tool.define<
     const sessions = yield* Session.Service
     const autonomy = yield* Autonomy.Service
 
-    // A subagent has no mode of its own: it runs under whatever the session at the top of its line runs under.
-    const rootOf = (sessionID: SessionID): Effect.Effect<SessionID> =>
-      sessions.get(sessionID).pipe(
-        Effect.flatMap((session) => (session.parentID ? rootOf(session.parentID) : Effect.succeed(session.id))),
-        Effect.catch(() => Effect.succeed(sessionID)),
-      )
-
     return {
       description: DESCRIPTION,
       parameters: Parameters,
       execute: (params: Schema.Schema.Type<typeof Parameters>, ctx: Tool.Context<Metadata>) =>
         Effect.gen(function* () {
-          const root = yield* rootOf(ctx.sessionID)
-          const directory = yield* InstanceState.directory
+          // A subagent has no mode of its own: it runs under whatever the session at the top of its line runs under.
+          const place = yield* Autonomy.placeOf(sessions, ctx.sessionID)
+          const root = place.root.id
+          const directory = place.directory
           const noWait = yield* autonomy.isOn({ root, directory })
           const answers = yield* question.ask({
             sessionID: ctx.sessionID,

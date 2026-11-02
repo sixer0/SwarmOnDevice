@@ -16,6 +16,8 @@ import { Autonomy } from "../../src/permission/autonomy"
 import { Session } from "../../src/session/session"
 import { RuntimeFlags } from "../../src/effect/runtime-flags"
 import { ToolRegistry } from "../../src/tool/registry"
+import { InstanceRef } from "../../src/effect/instance-ref"
+import { InstanceState } from "../../src/effect/instance-state"
 import { TestInstance } from "../fixture/fixture"
 
 const ctx = {
@@ -219,6 +221,56 @@ describe("tool.question", () => {
         expect(yield* skippedLines(inherits.id)).toHaveLength(1)
         yield* waitsForAnAnswer(optedOut.id)
         expect(yield* skippedLines(optedOut.id)).toHaveLength(0)
+      }),
+    )
+
+    // A session has the folder it was opened in, and the instance running a child may be another. The gate reads the root's.
+    it.instance("a child in another folder goes by the root's folder, as the gate does", () =>
+      Effect.gen(function* () {
+        const sessions = yield* Session.Service
+        const autonomy = yield* Autonomy.Service
+        const test = yield* TestInstance
+        const here = yield* InstanceState.context
+        const elsewhere = `${test.directory}-elsewhere`
+        const root = yield* sessions.create({}).pipe(Effect.provideService(InstanceRef, { ...here, directory: elsewhere }))
+        const child = yield* sessions.create({ parentID: root.id })
+        expect(child.directory).toBe(test.directory)
+
+        yield* autonomy.setMode({ scope: "directory", directory: elsewhere, on: true })
+        yield* movesOnStraightAway(child.id)
+        const lines = yield* skippedLines(root.id)
+        expect(lines).toHaveLength(1)
+        expect(lines[0]).toMatchObject({ sessionID: child.id, directory: elsewhere })
+      }),
+    )
+
+    it.instance("and the mode of the folder it runs in does not count for it", () =>
+      Effect.gen(function* () {
+        const sessions = yield* Session.Service
+        const autonomy = yield* Autonomy.Service
+        const test = yield* TestInstance
+        const here = yield* InstanceState.context
+        const root = yield* sessions
+          .create({})
+          .pipe(Effect.provideService(InstanceRef, { ...here, directory: `${test.directory}-elsewhere` }))
+        const child = yield* sessions.create({ parentID: root.id })
+
+        yield* autonomy.setMode({ scope: "directory", directory: test.directory, on: true })
+        yield* waitsForAnAnswer(child.id)
+        expect(yield* skippedLines(root.id)).toHaveLength(0)
+      }),
+    )
+
+    it.instance("placeOf reads a session it cannot find as its own root, in this folder", () =>
+      Effect.gen(function* () {
+        const test = yield* TestInstance
+        const id = SessionID.make("ses_nobody")
+        const dies = { get: () => Effect.die(new Error("no database")) }
+        const fails = { get: () => Effect.fail(new Error("not found")) }
+        for (const sessions of [dies, fails]) {
+          const place = yield* Autonomy.placeOf(sessions, id)
+          expect(place).toMatchObject({ root: { id }, directory: test.directory })
+        }
       }),
     )
 
