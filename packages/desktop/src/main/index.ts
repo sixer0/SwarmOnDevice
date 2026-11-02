@@ -1,9 +1,8 @@
 import "../../../core/src/swarm-defaults"
 import { randomUUID } from "node:crypto"
-import { mkdirSync, rmSync } from "node:fs"
 import * as http from "node:http"
 import { createServer } from "node:net"
-import { homedir, tmpdir } from "node:os"
+import { homedir } from "node:os"
 import { join } from "node:path"
 import { getCACertificates, setDefaultCACertificates } from "node:tls"
 import type { Event } from "electron"
@@ -25,6 +24,7 @@ import {
   isFirstLaunchOnboardingPending,
   isOldLayoutEligible,
 } from "./onboarding"
+import { prepareOnboardingTestRoot } from "./onboarding-test-root"
 import {
   getDefaultServerUrl,
   preferAppEnv,
@@ -129,21 +129,7 @@ const main = Effect.gen(function* () {
   process.env.OPENCODE_DISABLE_EMBEDDED_WEB_UI = "true"
 
   const appId = app.isPackaged ? APP_IDS[CHANNEL] : "id.co.gsp.swarm.desktop.dev"
-  const onboardingTestRoot = ((): string | undefined => {
-    if (!TEST_ONBOARDING) return
-
-    const root = join(tmpdir(), `swarm-onboarding-${randomUUID()}`)
-    rmSync(root, { recursive: true, force: true })
-    ;["data", "config", "cache", "state", "desktop", "session"].forEach((dir) =>
-      mkdirSync(join(root, dir), { recursive: true }),
-    )
-    process.env.OPENCODE_DB = ":memory:"
-    process.env.XDG_DATA_HOME = join(root, "data")
-    process.env.XDG_CONFIG_HOME = join(root, "config")
-    process.env.XDG_CACHE_HOME = join(root, "cache")
-    process.env.XDG_STATE_HOME = join(root, "state")
-    return root
-  })()
+  const onboardingTestRoot = prepareOnboardingTestRoot(process.env)
   app.setName(app.isPackaged ? APP_NAMES[CHANNEL] : "Swarm Dev")
   app.setAppUserModelId(appId)
   app.setAboutPanelOptions({ copyright: ABOUT_COPYRIGHT, credits: ABOUT_CREDITS })
