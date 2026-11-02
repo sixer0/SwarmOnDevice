@@ -1052,10 +1052,12 @@ export function createServerSession(
         }
         const result = Binary.search(messages, messageKey(info), messageKey)
         if (result.found) setData("message", info.sessionID, result.index, reconcile(info))
+        // The key carries time.created, and an optimistic copy carries the client's clock: a miss on the key
+        // may still be the same ID, which is moved rather than added a second time.
         if (!result.found)
           setData("message", info.sessionID, (value = []) => {
-            const next = value.slice()
-            next.splice(result.index, 0, info)
+            const next = value.filter((message) => message.id !== info.id)
+            next.splice(Binary.search(next, messageKey(info), messageKey).index, 0, info)
             return next
           })
         return
