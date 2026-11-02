@@ -17,7 +17,7 @@ import { MessageID, PartID, SessionID } from "../../src/session/schema"
 import { SessionRunState } from "@/session/run-state"
 import { SessionStatus } from "@/session/status"
 
-import { TaskTool, type TaskPromptOps } from "../../src/tool/task"
+import { TaskTool, subagentStoppedMessage, type TaskPromptOps } from "../../src/tool/task"
 import { Truncate } from "@/tool/truncate"
 import { ToolRegistry } from "@/tool/registry"
 import { RuntimeFlags } from "@/effect/runtime-flags"
@@ -369,6 +369,79 @@ describe("tool.task", () => {
       expect(failure.message).toBe(
         `Subagent failed (task_id: ${child?.id}): The user rejected permission to use this specific tool call.`,
       )
+    }),
+  )
+
+  it.instance("execute hands an autonomous stop back to the parent with the partial result", () =>
+    Effect.gen(function* () {
+      const sessions = yield* Session.Service
+      const { chat, assistant } = yield* seed()
+      const tool = yield* TaskTool
+      const def = yield* tool.init()
+
+      const result = yield* def.execute(
+        {
+          description: "inspect cache",
+          prompt: "look into the cache key path",
+          subagent_type: "general",
+        },
+        {
+          sessionID: chat.id,
+          messageID: assistant.id,
+          agent: "build",
+          abort: new AbortController().signal,
+          extra: {
+            promptOps: stubOps({
+              text: "The key is built in cache.ts:40.",
+              toolError: subagentStoppedMessage("read"),
+            }),
+          },
+          messages: [],
+          metadata: () => Effect.void,
+          ask: () => Effect.void,
+        },
+      )
+
+      const child = (yield* sessions.children(chat.id))[0]
+      expect(result.output).toContain(`state="completed"`)
+      expect(result.output).toContain(`Stopped by autonomous mode: repeated calls to \`read\`. (task_id: ${child?.id})`)
+      expect(result.output).toContain("Decide the next step yourself")
+      expect(result.output).toContain("What the subagent had so far:\nThe key is built in cache.ts:40.")
+    }),
+  )
+
+  it.instance("execute hands back an autonomous stop on the message error when nothing was written", () =>
+    Effect.gen(function* () {
+      const { chat, assistant } = yield* seed()
+      const tool = yield* TaskTool
+      const def = yield* tool.init()
+
+      const result = yield* def.execute(
+        {
+          description: "inspect cache",
+          prompt: "look into the cache key path",
+          subagent_type: "general",
+        },
+        {
+          sessionID: chat.id,
+          messageID: assistant.id,
+          agent: "build",
+          abort: new AbortController().signal,
+          extra: {
+            promptOps: stubOps({
+              text: "",
+              error: new SessionV1.APIError({ message: subagentStoppedMessage("bash"), isRetryable: false }).toObject(),
+            }),
+          },
+          messages: [],
+          metadata: () => Effect.void,
+          ask: () => Effect.void,
+        },
+      )
+
+      expect(result.output).toContain("Stopped by autonomous mode: repeated calls to `bash`.")
+      expect(result.output).toContain("The subagent left no partial result.")
+      expect(result.output).not.toContain("Subagent failed")
     }),
   )
 

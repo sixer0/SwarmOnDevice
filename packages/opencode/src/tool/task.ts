@@ -80,20 +80,44 @@ export function renderTaskOutput(input: {
   ].join("\n")
 }
 
+/**
+ * How autonomous mode words a subagent run it stopped, so the task call can tell the stop from a failure. Whatever ends
+ * the run (the error on its last message, or its last failed call) has to start with this text.
+ */
+export const SUBAGENT_STOPPED = "Stopped by autonomous mode:"
+
+export function subagentStoppedMessage(tool: string) {
+  return `${SUBAGENT_STOPPED} repeated calls to \`${tool}\`.`
+}
+
 /** What a subagent's last message amounts to as a task result. Also read when a restart lost the waiting task call. */
 export function taskOutcome(sessionID: SessionID, result: SessionV1.WithParts) {
   if (result.info.role !== "assistant") return { type: "unfinished" as const }
-  if (result.info.error) {
-    const message =
-      "message" in result.info.error.data && typeof result.info.error.data.message === "string"
-        ? result.info.error.data.message
-        : result.info.error.name
-    return { type: "failed" as const, message: `Subagent failed (task_id: ${sessionID}): ${message}` }
-  }
   const failed = result.parts.findLast((item) => item.type === "tool" && item.state.status === "error")
-  if (failed?.type === "tool" && failed.state.status === "error") {
-    return { type: "failed" as const, message: `Subagent failed (task_id: ${sessionID}): ${failed.state.error}` }
+  const message = result.info.error
+    ? "message" in result.info.error.data && typeof result.info.error.data.message === "string"
+      ? result.info.error.data.message
+      : result.info.error.name
+    : failed?.type === "tool" && failed.state.status === "error"
+      ? failed.state.error
+      : undefined
+  // Nobody waits on a stopped subagent, so the parent gets the reason and what the subagent had so far, and decides
+  // what comes next. Its turn goes on.
+  const stop = [message, failed?.type === "tool" && failed.state.status === "error" ? failed.state.error : undefined].find(
+    (text) => text?.startsWith(SUBAGENT_STOPPED),
+  )
+  if (stop) {
+    const partial = result.parts.findLast((item) => item.type === "text" && item.text.trim() !== "")
+    return {
+      type: "stopped" as const,
+      text: [
+        `${stop} (task_id: ${sessionID})`,
+        "The subagent's run was stopped and nobody was asked. Decide the next step yourself: carry on another way, or pass this task_id to continue it with different instructions.",
+        partial?.type === "text" ? `What the subagent had so far:\n${partial.text}` : "The subagent left no partial result.",
+      ].join("\n\n"),
+    }
   }
+  if (message) return { type: "failed" as const, message: `Subagent failed (task_id: ${sessionID}): ${message}` }
   return {
     type: "completed" as const,
     text: result.parts.findLast((item) => item.type === "text")?.text ?? "",
@@ -246,7 +270,7 @@ export const TaskTool = Tool.define(
         })
         const outcome = taskOutcome(nextSession.id, result)
         if (outcome.type === "failed") return yield* Effect.fail(new Error(outcome.message))
-        return outcome.type === "completed" ? outcome.text : ""
+        return outcome.type === "unfinished" ? "" : outcome.text
       })
 
       const inject = Effect.fn("TaskTool.injectBackgroundResult")(function* (
