@@ -26,6 +26,13 @@ export const WIRE_VERB = "wire"
  *  not here. */
 export const APPLY_VERB = "apply"
 
+/** Row 221b (G-U14 Q2): `--consent-mode app` says the desktop app collected the ticks, so consent.log
+ *  records `mode: app` instead of `mode: non-interactive`. It is NOT an acceptance channel: it is
+ *  valid only on `install --non-interactive` with at least one --terms-token, and the token gate in
+ *  consent.ts still decides every grant. It changes the recorded mode only, never the selection. */
+export const CONSENT_MODE_FLAG = "--consent-mode"
+export const CONSENT_MODE_APP = "app"
+
 export type Verb = "install" | "status" | "remove" | "wire" | "apply" | "help"
 
 export interface ParsedCommand {
@@ -35,6 +42,8 @@ export interface ParsedCommand {
   nonInteractive: boolean
   dryRun: boolean
   tokens: Partial<Record<ComponentId, string>>
+  /** Row 221b: true only for a validated `--consent-mode app` (see CONSENT_MODE_FLAG). */
+  appConsent: boolean
 }
 
 export type ParseResult = { ok: true; cmd: ParsedCommand } | { ok: false; error: string }
@@ -47,6 +56,7 @@ export function parseArgs(argv: readonly string[]): ParseResult {
   let nonInteractive = false
   let dryRun = false
   let help = false
+  let appConsent = false
 
   for (let i = 0; i < argv.length; i++) {
     const t = argv[i] as string
@@ -78,6 +88,12 @@ export function parseArgs(argv: readonly string[]): ParseResult {
       if (!r.ok) return r
       continue
     }
+    if (t === CONSENT_MODE_FLAG || t.startsWith(CONSENT_MODE_FLAG + "=")) {
+      const val = t === CONSENT_MODE_FLAG ? argv[++i] : t.slice(CONSENT_MODE_FLAG.length + 1)
+      if (val !== CONSENT_MODE_APP) return { ok: false, error: `${CONSENT_MODE_FLAG} accepts only "${CONSENT_MODE_APP}"` }
+      appConsent = true
+      continue
+    }
     if (t.startsWith("-") && t.length > 1) {
       return { ok: false, error: `unknown flag: ${t}` }
     }
@@ -103,14 +119,21 @@ export function parseArgs(argv: readonly string[]): ParseResult {
   if (verb === undefined) {
     // No bare verb: `swarm-setup` with nothing, or an explicit --help, is the usage screen.
     if (argv.length === 0 || help) verb = "help"
-    else if (Object.keys(tokens).length > 0 || nonInteractive || dryRun) {
+    else if (Object.keys(tokens).length > 0 || nonInteractive || dryRun || appConsent) {
       return { ok: false, error: "missing command verb (install | status | remove | wire | apply)" }
     } else {
       return { ok: false, error: `unknown command${help ? "" : ""}: expected install | status | remove | wire | apply` }
     }
   }
 
-  return { ok: true, cmd: { verb, components, nonInteractive, dryRun, tokens } }
+  if (appConsent && (verb !== VERBS.INSTALL || !nonInteractive || Object.keys(tokens).length === 0)) {
+    return {
+      ok: false,
+      error: `${CONSENT_MODE_FLAG} ${CONSENT_MODE_APP} is valid only with install ${FLAGS.NON_INTERACTIVE} and ${FLAGS.TERMS_TOKEN}`,
+    }
+  }
+
+  return { ok: true, cmd: { verb, components, nonInteractive, dryRun, tokens, appConsent } }
 }
 
 function absorbToken(

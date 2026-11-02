@@ -24,6 +24,49 @@ import { LocationServiceMap, locationServiceMapLayer } from "@opencode-ai/core/l
 import { Reference } from "@opencode-ai/core/reference"
 import { MCP } from "@/mcp"
 import { PermissionV1 } from "@opencode-ai/core/v1/permission"
+import { InstalledTools } from "./installed-tools"
+
+/** One fixed line per component (U14 register, identification/04_structured_u14.md section 3). Only these strings
+ *  reach the prompt: the state file decides which lines appear, never what they say. */
+const INSTALLED_TOOL_LINES: Record<InstalledTools.ComponentId, { text: string; mcp?: string }> = {
+  runtime: { text: "runtime: container runtime for the tool stacks. Do not manage it yourself." },
+  node: { text: "node: private Node.js used by the tools only." },
+  graft: {
+    text: "graft: use the graft MCP tools to find code, callers and blast radius before grep or reading files by hand.",
+    mcp: InstalledTools.GRAFT_MCP,
+  },
+  rtk: { text: "rtk: prefix commands with long output with `rtk` (for example `rtk bun test`, `rtk git log`)." },
+  searxng: {
+    text: "web search: use the swarm-web `search` tool (local SearXNG) as the default web search.",
+    mcp: InstalledTools.SWARM_WEB_MCP,
+  },
+  firecrawl: {
+    text: "crawl: use swarm-web `fetch` with mode=crawl (local Firecrawl); mode=page for a single page.",
+    mcp: InstalledTools.SWARM_WEB_MCP,
+  },
+  obsidian: {
+    text: "notes: use swarm-web `vault_inbox` to drop a note in the Obsidian inbox. It is not the memory store.",
+    mcp: InstalledTools.SWARM_WEB_MCP,
+  },
+}
+
+/** The `<installed_tools>` block, or undefined when no line applies. Lines follow COMPONENT_IDS order. A line that
+ *  tells the agent to use an MCP server (graft, and the three swarm-web lines) needs that server `connected`, since a
+ *  healthy component is useless to the agent without its tools (C76; senior review 239 finding 10a for graft).
+ *  `connected` holds the MCP keys whose status is `connected`. The lead line is part of the U14 register (C86). */
+export function installedTools(healthy: readonly InstalledTools.ComponentId[], connected: readonly string[]) {
+  const lines = InstalledTools.COMPONENT_IDS.filter((id) => healthy.includes(id))
+    .map((id) => INSTALLED_TOOL_LINES[id])
+    .filter((line) => line.mcp === undefined || connected.includes(line.mcp))
+    .map((line) => `  ${line.text}`)
+  if (lines.length === 0) return
+  return [
+    "Swarm tools installed and healthy on this machine:",
+    "<installed_tools>",
+    ...lines,
+    "</installed_tools>",
+  ].join("\n")
+}
 
 export function provider(model: Provider.Model) {
   if (model.api.id.includes("muse")) {
@@ -71,6 +114,18 @@ const layer = Layer.effect(
         const references = yield* Effect.gen(function* () {
           return (yield* (yield* Reference.Service).list()).filter((reference) => reference.description !== undefined)
         }).pipe(Effect.provide(locations.get(Location.Ref.make({ directory: AbsolutePath.make(ctx.directory) }))))
+        // Read fresh on every call: the prompt loop calls this once per person message, so a tool installed or
+        // removed mid-session shows from the next message on, and subagent sessions run the same loop.
+        const healthy = yield* InstalledTools.healthy()
+        const tools =
+          healthy.length === 0
+            ? undefined
+            : installedTools(
+                healthy,
+                Object.entries(yield* mcp.status())
+                  .filter(([, entry]) => entry.status === "connected")
+                  .map(([key]) => key),
+              )
         return [
           [
             `You are powered by the model named ${model.api.id}. The exact model ID is ${model.providerID}/${model.api.id}`,
@@ -101,6 +156,7 @@ const layer = Layer.effect(
                   ]),
                 "</available_references>",
               ].join("\n"),
+          tools,
         ].filter((part): part is string => part !== undefined)
       }),
 

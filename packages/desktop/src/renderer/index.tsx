@@ -286,6 +286,9 @@ const createPlatform = (windowState: DesktopWindowState): Platform => {
 
     wslServers: wslServersApi,
 
+    // Assigned without a cast, so tsgo checks the preload's SetupToolsAPI against the app's SetupToolsPlatform.
+    setupTools: window.api.setupTools,
+
     getDisplayBackend: async () => {
       return window.api.getDisplayBackend().catch(() => null)
     },

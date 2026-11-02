@@ -987,6 +987,57 @@ describe("what reaches the decider", () => {
   )
 })
 
+// U14 row 237. Installing tools is a person's click in the desktop dialog. An agent that reaches swarm-setup through the
+// shell, with or without the tokens the dialog would pass, waits for a person in this mode and never reaches the decider.
+const SETUP_TOKEN = "0123456789ab"
+const SWARM_SETUP = [
+  "swarm-setup install",
+  "swarm-setup install --dry-run",
+  `swarm-setup install node rtk --non-interactive --terms-token node=node@${SETUP_TOKEN} --terms-token rtk=rtk@${SETUP_TOKEN}`,
+  `swarm-setup install graft --non-interactive --terms-token graft=graft@${SETUP_TOKEN} --consent-mode app`,
+  '"/Applications/Swarm.app/Contents/Resources/swarm-setup/swarm-setup" install',
+  `/Applications/Swarm.app/Contents/Resources/swarm-setup/swarm-setup install searxng --non-interactive --terms-token searxng=searxng@${SETUP_TOKEN}`,
+  `~/.swarm/bin/swarm-setup install firecrawl --non-interactive --terms-token firecrawl=firecrawl@${SETUP_TOKEN}`,
+  `cd src && swarm-setup install node --non-interactive --terms-token node=node@${SETUP_TOKEN}`,
+  "swarm-setup install 2>&1 | tail -30",
+  "yes | swarm-setup install",
+  "bash -c 'swarm-setup install node'",
+  "sh -c 'swarm-setup install'",
+  "env swarm-setup install",
+  "npx swarm-setup install",
+  "bunx swarm-setup install",
+  "swarm-setup wire",
+  "swarm-setup remove runtime",
+]
+
+describe("swarm-setup through the shell (U14 row 237)", () => {
+  test("every form is held for a person by the table, with checks run either way", () => {
+    for (const checkClass of ["P", "D"] as const)
+      for (const command of SWARM_SETUP) {
+        const verdict = AutonomyTable.classify(bash(command, { folder: "trusted" }), checkClass)
+        expect([checkClass, command, verdict.class]).toEqual([checkClass, command, "D"])
+      }
+    for (const command of SWARM_SETUP) expect(AutonomyTable.routine(command, dir, instance)).toBeUndefined()
+  })
+
+  it.live(
+    "the prompts the shell tool forms for each form are held, and none reaches the decider",
+    () =>
+      Effect.gen(function* () {
+        const directory = yield* project()
+        yield* Effect.gen(function* () {
+          for (const checkClass of ["P", "D"] as const)
+            for (const command of SWARM_SETUP) {
+              const verdict = yield* classifyCommand(command, checkClass)
+              expect([checkClass, command, verdict.class]).toEqual([checkClass, command, "D"])
+            }
+          expect(yield* allowedOf(SWARM_SETUP)).toEqual([])
+        }).pipe(provideInstance(directory))
+      }),
+    120_000,
+  )
+})
+
 describe("writing the trust store (ADV-A13)", () => {
   const store = () => path.join(Global.Path.state, "trust.json")
 

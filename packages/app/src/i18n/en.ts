@@ -1466,4 +1466,16 @@ export const dict = {
   "session.movedOn.answer": "Answer",
   "home.agents.movedOn": "Went on without this · {{time}}",
   "home.setup.attention": "Part of your setup needs attention.",
+  "dialog.tools.title": "Install the Swarm tools",
+  "dialog.tools.body":
+    "Swarm can download and set up these tools. Each one is checked against its pinned hash before use.",
+  "dialog.tools.terms": "Show what each tool installs",
+  "dialog.tools.install": "Install selected",
+  "dialog.tools.later": "Not now",
+  "dialog.tools.terminal": "Or run this in Terminal:",
+  "dialog.tools.healthy": "Ready",
+  "dialog.tools.skipped": "Skipped: {{reason}}",
+  "dialog.tools.failed": "Failed: {{reason}}",
+  "dialog.tools.retryIn": "Retry in {{seconds}}s",
+  "command.tools.install": "Install tools",
 }

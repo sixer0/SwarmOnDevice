@@ -20,13 +20,14 @@
 import { existsSync, readFileSync } from "fs"
 import { join } from "path"
 import os from "os"
+import { InstalledTools } from "@/session/installed-tools"
 
-/** Register vocabulary PC-CMP-01..07 (packages/setup/src/constants.ts:9-17), restated as literals.
- *  All seven keys are always published so the card renders one row per component even when the record
- *  names none of them; drift risk is covered by test/server/httpapi-global-setup.test.ts. */
-export const SETUP_COMPONENT_IDS = ["runtime", "node", "graft", "rtk", "obsidian", "searxng", "firecrawl"] as const
+/** Register vocabulary PC-CMP-01..07. The one opencode copy lives in session/installed-tools.ts, with its drift
+ *  test against packages/setup/src/constants.ts (senior review 239 finding 6). All seven keys are always
+ *  published so the card renders one row per component even when the record names none of them. */
+export const SETUP_COMPONENT_IDS = InstalledTools.COMPONENT_IDS
 
-export type SetupComponentId = (typeof SETUP_COMPONENT_IDS)[number]
+export type SetupComponentId = InstalledTools.ComponentId
 
 /** The five texts the writer installs (TEXT_TARGETS, packages/setup/src/skills/researcher_text.ts:70-76). */
 export const SETUP_SKILL_PATHS = [
@@ -36,9 +37,6 @@ export const SETUP_SKILL_PATHS = [
   "skills/rtk/SKILL.md",
   "skills/obsidian-inbox/SKILL.md",
 ] as const
-
-/** Key under `mcp` for the search proxy: MCP_SERVER_NAME at packages/setup/src/mcpproxy/register.ts:9. */
-const SWARM_WEB_MCP_KEY = "swarm-web"
 
 export interface StateFileObservation {
   path: string
@@ -104,7 +102,7 @@ function homeDir() {
 }
 
 export function setupStateFilePath(): string {
-  return join(homeDir(), ".swarm", "setup", "state.json") // PC-PATH-02
+  return InstalledTools.stateFileUnder(homeDir())
 }
 
 function emptyComponents(): Record<string, ComponentObservation> {
@@ -146,10 +144,11 @@ export function observeStateFile(path: string): { stateFile: StateFileObservatio
     }
   }
 
-  const raw = isRecord(parsed.components) ? parsed.components : {}
+  // Own properties only (security review 238 F7, the same rule as session/installed-tools.ts).
+  const raw = Object.hasOwn(parsed, "components") && isRecord(parsed.components) ? parsed.components : {}
   const components: Record<string, ComponentObservation> = {}
   for (const id of SETUP_COMPONENT_IDS) {
-    const entry = raw[id]
+    const entry = Object.hasOwn(raw, id) ? raw[id] : undefined
     // A missing or non-object entry carries no observation at all; publishing `absent` for it would be the
     // silent default this route exists to refuse (§5 E5, R9).
     if (!isRecord(entry)) {
@@ -207,8 +206,15 @@ export function observeRegistration(configDirPath: string): RegistrationObservat
 
   if (!isRecord(parsed)) return answer({ path, present: true, parseError: "swarm.json top level is not an object", entries: none })
 
-  const mcp = isRecord(parsed.mcp) ? parsed.mcp : {}
-  return answer({ path, present: true, entries: { graft: "graft" in mcp, swarmWeb: SWARM_WEB_MCP_KEY in mcp } })
+  const mcp = Object.hasOwn(parsed, "mcp") && isRecord(parsed.mcp) ? parsed.mcp : {}
+  return answer({
+    path,
+    present: true,
+    entries: {
+      graft: Object.hasOwn(mcp, InstalledTools.GRAFT_MCP),
+      swarmWeb: Object.hasOwn(mcp, InstalledTools.SWARM_WEB_MCP),
+    },
+  })
 }
 
 /** One fresh read per call: no cache, no spawn, no internal request to `/mcp` (§4 rule 3, row 194 §3). */

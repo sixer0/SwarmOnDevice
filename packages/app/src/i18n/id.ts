@@ -70,6 +70,11 @@ export const dict = {
   "desktop.dialog.chooseFile": "Pilih berkas",
   "desktop.dialog.saveFile": "Simpan berkas",
   "desktop.dialog.files": "Berkas",
+  "desktop.setupTools.confirm.title": "Instal alat",
+  "desktop.setupTools.confirm.message": "Instal alat yang dipilih?",
+  "desktop.setupTools.confirm.detail": "Swarm akan mengunduh dan menginstal:\n{{components}}",
+  "desktop.setupTools.confirm.install": "Instal",
+  "desktop.setupTools.confirm.cancel": "Batal",
 
   "desktop.server.local": "Server lokal",
 
@@ -1570,4 +1575,16 @@ export const dict = {
   "session.movedOn.answer": "Jawab",
   "home.agents.movedOn": "Lanjut tanpa ini · {{time}}",
   "home.setup.attention": "Sebagian penyiapan Anda perlu diperhatikan.",
+  "dialog.tools.title": "Instal alat Swarm",
+  "dialog.tools.body":
+    "Swarm dapat mengunduh dan menyiapkan alat-alat ini. Masing-masing diperiksa terhadap hash yang dipatok sebelum dipakai.",
+  "dialog.tools.terms": "Tampilkan apa yang diinstal tiap alat",
+  "dialog.tools.install": "Instal yang dipilih",
+  "dialog.tools.later": "Jangan sekarang",
+  "dialog.tools.terminal": "Atau jalankan ini di Terminal:",
+  "dialog.tools.healthy": "Siap",
+  "dialog.tools.skipped": "Dilewati: {{reason}}",
+  "dialog.tools.failed": "Gagal: {{reason}}",
+  "dialog.tools.retryIn": "Coba lagi dalam {{seconds}} dtk",
+  "command.tools.install": "Instal alat",
 }

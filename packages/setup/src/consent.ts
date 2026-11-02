@@ -53,6 +53,9 @@ export interface ConsentRequest {
   /** Components the user asked to install (empty = "all seven", resolved by caller). */
   selected: ComponentId[]
   nonInteractive: boolean
+  /** Row 221b: record `mode: app` for non-interactive grants. Read ONLY inside the token branch, so
+   *  it cannot grant, cannot skip the token check and has no effect on the interactive path. */
+  appConsent?: boolean
   /** Map of component id -> terms token supplied via --terms-token. */
   tokens: Partial<Record<ComponentId, string>>
   /** Validated lock (row 81 loadLock()) — pins and the token hash derive from it. */
@@ -296,7 +299,12 @@ export function evaluateConsent(req: ConsentRequest): ConsentResult {
 
     const granted: ComponentId[] = []
     for (const id of offered) {
-      recordConsent({ component: id, mode: "non-interactive", token: req.tokens[id], lock: req.lock })
+      recordConsent({
+        component: id,
+        mode: req.appConsent ? "app" : "non-interactive",
+        token: req.tokens[id],
+        lock: req.lock,
+      })
       granted.push(id)
     }
     // Grant-in-effect: only components whose token VALIDATED count as selected for this run.
@@ -368,7 +376,8 @@ function readLineFromStdin(): string | null {
 
 export interface ConsentEntryInput {
   component: ComponentId
-  mode: "interactive" | "non-interactive"
+  /** "app" = a token grant whose ticks were collected by the desktop app (row 221b). */
+  mode: "interactive" | "non-interactive" | "app"
   /** The validated token value for non-interactive grants; logged as evidence, never secret (§6.4). */
   token?: string
   lock: LockFile

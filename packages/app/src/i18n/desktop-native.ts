@@ -323,6 +323,13 @@ export const DESKTOP_NATIVE_ENGLISH = {
 
   "desktop.picker.error.notSelected": "File was not selected by the picker",
   "desktop.picker.error.sizeLimit": "Selected attachments exceed the {{limit}} MB limit",
+
+  // Appended, never inserted: hr, hu, is and lt map these keys by position (U14 F1, C80).
+  "desktop.setupTools.confirm.title": "Install tools",
+  "desktop.setupTools.confirm.message": "Install the selected tools?",
+  "desktop.setupTools.confirm.detail": "Swarm will download and install:\n{{components}}",
+  "desktop.setupTools.confirm.install": "Install",
+  "desktop.setupTools.confirm.cancel": "Cancel",
 } as const
 
 export type DesktopNativeKey = keyof typeof DESKTOP_NATIVE_ENGLISH

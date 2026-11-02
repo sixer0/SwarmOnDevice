@@ -477,6 +477,25 @@ for (const channel of channels) {
   })
 }
 
+// ROW 223: the swarm-setup slot mirrors the swarm-patch one.
+for (const channel of channels) {
+  test(`carries the swarm-setup asar exclusion and slot for ${channel.channel} (row 223)`, async () => {
+    const config = await importConfig(`swarm-setup=${channel.channel}`, channel.channel)
+    expect(config.files).toContain("!resources/swarm-setup{,/**/*}")
+    expect(config.extraResources).toContainEqual({ from: "resources/swarm-setup", to: "swarm-setup" })
+    const files = config.files as string[]
+    const shipped = (entry: string) =>
+      files.filter((p) => !p.startsWith("!")).some((p) => new Bun.Glob(p).match(entry)) &&
+      !files.filter((p) => p.startsWith("!")).some((p) => new Bun.Glob(p.slice(1)).match(entry))
+    for (const entry of ["resources/swarm-setup", "resources/swarm-setup/swarm-setup", "resources/swarm-setup/tools.lock.json", "resources/swarm-setup/swarm-web-proxy"]) {
+      expect(shipped(entry)).toBe(false)
+    }
+    // swarm-patch entries stay as they were.
+    expect(config.files).toContain("!resources/swarm-patch{,/**/*}")
+    expect(config.extraResources).toContainEqual({ from: "resources/swarm-patch", to: "swarm-patch" })
+  })
+}
+
 test("keeps package.json at 1.19.3 while the release label is 1.1.0 (G1c)", async () => {
   const pkg = await Bun.file(path.join(import.meta.dir, "package.json")).json()
   expect(pkg.version).toBe("1.19.3")

@@ -51,6 +51,8 @@ import { ModelsProvider } from "@/context/models"
 import { NotificationProvider } from "@/context/notification"
 import { PermissionProvider } from "@/context/permission"
 import { usePlatform } from "@/context/platform"
+import { SetupToolsOffer } from "@/components/setup-tools-offer"
+import { InstallToolsCommand } from "@/components/install-tools-command"
 import { PromptProvider } from "@/context/prompt"
 import { ServerConnection, ServerProvider, serverName, useServer } from "@/context/server"
 import { SettingsProvider, useSettings } from "@/context/settings"
@@ -355,6 +357,8 @@ function ServerScopedProviders(props: ServerScopedShellProps) {
   return (
     <LayoutProvider>
       {props.serverScoped}
+      <SetupToolsOffer />
+      <InstallToolsCommand />
       <ModelsProvider directory={props.directory}>{props.children}</ModelsProvider>
     </LayoutProvider>
   )

@@ -126,13 +126,44 @@ type PlatformBase = {
   recordFatalRendererError?(error: FatalRendererErrorLog): Promise<void>
 }
 
+/** One swarm-setup run. stdout and stderr are passed through unedited, so the dialog shows the
+ *  same `step <id>: <TOKEN>` and `RESULT <TOKEN>` lines and error text as Terminal. */
+export type SetupToolsRun = {
+  exitCode: number | null
+  stdout: string
+  stderr: string
+}
+
+/** Per-component `state` values read from swarm-setup's state.json, keyed by component id. */
+export type SetupToolsState = {
+  components: Partial<Record<string, string>>
+  /** Whether this release has not yet offered the tools dialog */
+  offerPending: boolean
+}
+
+/** Bundled swarm-setup (desktop only). A renderer call alone never installs: main shows a native confirmation
+ *  for the ticked ids first (C80 F1), and a cancel there rejects with `SETUP_TOOLS_REFUSED:cancelled`. */
+export type SetupToolsPlatform = {
+  /** `install --dry-run`: the consent text to show as-is (it ends REFUSED_NO_CONSENT by design) */
+  preview(): Promise<SetupToolsRun>
+  /** After main's native confirmation: `install <ids> --non-interactive` with one terms token per checked id */
+  install(ids: string[]): Promise<SetupToolsRun>
+  state(): Promise<SetupToolsState>
+  /** state.json polled while a run is active; returns the unsubscribe function */
+  onProgress(cb: (state: SetupToolsState) => void): () => void
+  /** Marks this release as offered (C74): call on "Not now" or when an install starts, not on read */
+  markOffered(): Promise<void>
+}
+
 export type Platform = PlatformBase &
   (
-    | { platform: "web"; os?: never }
+    | { platform: "web"; os?: never; setupTools?: never }
     | {
         platform: "desktop"
         os?: DesktopOS
         openDirectoryPickerDialog(opts?: OpenDirectoryPickerOptions): Promise<PickerPaths>
+        /** Absent until the preload exposes it; callers hide the tools triggers when undefined */
+        setupTools?: SetupToolsPlatform
       }
   )
 

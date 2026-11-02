@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer, webUtils } from "electron"
-import type { ElectronAPI, WslServersEvent } from "./types"
+import type { ElectronAPI, SetupToolsState, WslServersEvent } from "./types"
+import { SETUP_TOOLS_IPC } from "./setup-tools-channels"
 import type { UpdaterState } from "@opencode-ai/app/updater"
 
 const updaterCallbacks = new Set<(state: UpdaterState) => void>()
@@ -55,6 +56,18 @@ const api: ElectronAPI = {
     },
     check: () => ipcRenderer.invoke("updater-check"),
     install: () => ipcRenderer.invoke("updater-install"),
+  },
+  // U14 register channels (and C74 mark-offered). Only the ticked ids cross to main.
+  setupTools: {
+    preview: () => ipcRenderer.invoke(SETUP_TOOLS_IPC.preview),
+    install: (ids) => ipcRenderer.invoke(SETUP_TOOLS_IPC.install, [...ids]),
+    state: () => ipcRenderer.invoke(SETUP_TOOLS_IPC.state),
+    onProgress: (cb) => {
+      const handler = (_: unknown, state: SetupToolsState) => cb(state)
+      ipcRenderer.on(SETUP_TOOLS_IPC.progress, handler)
+      return () => ipcRenderer.removeListener(SETUP_TOOLS_IPC.progress, handler)
+    },
+    markOffered: () => ipcRenderer.invoke(SETUP_TOOLS_IPC.markOffered),
   },
   consumeInitialDeepLinks: () => ipcRenderer.invoke("consume-initial-deep-links"),
   getDefaultServerUrl: () => ipcRenderer.invoke("get-default-server-url"),

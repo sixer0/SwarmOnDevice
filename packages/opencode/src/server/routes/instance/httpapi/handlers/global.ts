@@ -162,6 +162,9 @@ export const globalHandlers = HttpApiBuilder.group(RootHttpApi, "global", (handl
     })
 
     const dispose = Effect.fn("GlobalHttpApi.dispose")(function* () {
+      // Row 229b: drop the cached global config so the next instance rereads swarm.json (e.g. an MCP
+      // entry swarm-setup wrote). The reread goes through the same load/validate path as boot.
+      yield* config.invalidate()
       yield* disposeAllInstancesAndEmitGlobalDisposed()
       return true
     })

@@ -104,9 +104,15 @@ const pluralCategories = new Map(
 //     of the same task);
 //   - eight more for the U11 autonomy rules (`toast.permissions.autonomous.scan.title`, `session.autonomy.consent.*`,
 //     `session.autonomy.archive.*` and `settings.general.row.autonomous.scripts`, register U11 approved at gate G-U11,
-//     row 159 of the same task).
+//     row 159 of the same task);
+//   - ten more for the U14 tools dialog (`dialog.tools.*` and `command.tools.install`, register U14 approved at
+//     gate G-U14, row 228 of the same task);
+//   - one more for the tools dialog's retry countdown (`dialog.tools.retryIn`, senior finding 4 of row 239, U14 fix
+//     pass row 246 under decision C82 of the same task);
+//   - five more for main's native install confirmation (`desktop.setupTools.confirm.*`, security finding F1 of row
+//     238, decision C80; requested by row 245 and written by row 246 of the same task).
 // Widening this list is a decision, not drift: `parity-exemption-guard.test.ts` fails the suite on any
-// forty-fifth entry, on any non-literal/wildcard, and if `en` or `id` ever stops carrying an exempt key.
+// sixty-first entry, on any non-literal/wildcard, and if `en` or `id` ever stops carrying an exempt key.
 const UNTRANSLATED_KEY_PRESENCE_EXEMPTION: readonly string[] = [
   "command.project.openNumber",
   "settings.tab.servers",
@@ -152,6 +158,22 @@ const UNTRANSLATED_KEY_PRESENCE_EXEMPTION: readonly string[] = [
   "session.autonomy.archive.empty",
   "session.autonomy.archive.confirm",
   "settings.general.row.autonomous.scripts",
+  "dialog.tools.title",
+  "dialog.tools.body",
+  "dialog.tools.terms",
+  "dialog.tools.install",
+  "dialog.tools.later",
+  "dialog.tools.terminal",
+  "dialog.tools.healthy",
+  "dialog.tools.skipped",
+  "dialog.tools.failed",
+  "command.tools.install",
+  "dialog.tools.retryIn",
+  "desktop.setupTools.confirm.title",
+  "desktop.setupTools.confirm.message",
+  "desktop.setupTools.confirm.detail",
+  "desktop.setupTools.confirm.install",
+  "desktop.setupTools.confirm.cancel",
 ]
 // Locales the exemption never applies to. `en` is every domain's source, and `id` is the second
 // maintained locale: it already carries every exempt key, so it stays fully enforced like the rest.

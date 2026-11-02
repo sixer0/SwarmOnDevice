@@ -34,6 +34,23 @@ describe("electron renderer html", () => {
         }
       })
 
+      // U14 F1 (C80): no inline or injected script runs in the renderer. 'wasm-unsafe-eval' is required by the
+      // terminal (ghostty-web) and the markdown/shiki workers, which compile WebAssembly; it does not allow JS eval.
+      test("a CSP limits scripts to the app's own files, before any script tag", async () => {
+        const content = await html(name)
+        const csp = `<meta http-equiv="Content-Security-Policy" content="script-src 'self' 'wasm-unsafe-eval'" />`
+        expect(content).toContain(csp)
+        expect(content.indexOf(csp)).toBeLessThan(content.indexOf("<script"))
+      })
+
+      test("no inline script: every script tag loads a file", async () => {
+        const content = await html(name)
+        for (const tag of content.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g)) {
+          expect(tag[0]).toMatch(/\bsrc=/)
+          expect(tag[1]!.trim()).toBe("")
+        }
+      })
+
       test("no web manifest link (not applicable in Electron)", async () => {
         const content = await html(name)
         expect(content).not.toContain('rel="manifest"')

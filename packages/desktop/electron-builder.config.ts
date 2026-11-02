@@ -113,6 +113,8 @@ const getBase = (appId: string): Configuration => ({
     "!resources/rg",
     // The patch applier and its trust anchor ride outside the asar (C3 RK-01: the folder and its contents).
     "!resources/swarm-patch{,/**/*}",
+    // The setup runner and its tools.lock.json ride outside the asar too (row 223).
+    "!resources/swarm-setup{,/**/*}",
   ],
   extraResources: [
     ...(channel === "dev"
@@ -136,6 +138,8 @@ const getBase = (appId: string): Configuration => ({
     { from: "resources/rg", to: "rg" },
     // Patch applier slot: resources/swarm-patch lands at Contents/Resources/swarm-patch/ (SP-BC 4.1).
     { from: "resources/swarm-patch", to: "swarm-patch" },
+    // Setup runner slot: swarm-setup, tools.lock.json, swarm-web-proxy land at Contents/Resources/swarm-setup/.
+    { from: "resources/swarm-setup", to: "swarm-setup" },
     // Copied after beforePack writes the staging and before afterPack verifies it, so the seal covers it.
     { from: ".library-stage", to: "knowledge-library" },
     {

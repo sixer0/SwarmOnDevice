@@ -505,7 +505,8 @@ function addRendererHeaders(value: string, headers: Record<string, any>) {
   if (isRendererUrl(value, true)) upsertKeyValue(headers, documentPolicyHeader, [jsCallStacksDocumentPolicy])
 }
 
-function isRendererUrl(value?: string, html = false) {
+// Exported for the setup-tools sender check (U14 F9).
+export function isRendererUrl(value?: string, html = false) {
   if (!value || !URL.canParse(value)) return false
   const url = new URL(value)
   if (html && !url.pathname.endsWith(".html")) return false

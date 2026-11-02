@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process"
 import { stat } from "node:fs/promises"
-import { basename, join } from "node:path"
+import { basename, dirname, join } from "node:path"
+import { fileURLToPath } from "node:url"
 import { app, BrowserWindow, clipboard, dialog, ipcMain, shell } from "electron"
 import type { IpcMainEvent, IpcMainInvokeEvent } from "electron"
 import type { DesktopMenuAction } from "@opencode-ai/app/desktop-menu"
@@ -14,6 +15,7 @@ import { getStore, removeStoreFileIfEmpty } from "./store"
 import {
   getPinchZoomEnabled,
   getWindowID,
+  isRendererUrl,
   openExternalURL,
   openLocalFileURL,
   setPinchZoomEnabled,
@@ -24,6 +26,10 @@ import type { UpdaterController } from "./updater-controller"
 import { createUpdaterSubscriptions } from "./updater-subscriptions"
 import { createDesktopDraftStore } from "./draft-store"
 import { nativeT } from "./native-translations"
+import { getLogger } from "./logging"
+import { isSetupToolsOfferPending, markSetupToolsOffered } from "./onboarding"
+import { createSetupRunner, setupDir, type SetupRunner } from "./setup-runner"
+import { createInstallConfirm, registerSetupToolsHandlers } from "./setup-tools-ipc"
 
 const pickerFilters = (ext?: string[]) => {
   if (!ext || ext.length === 0) return undefined
@@ -62,6 +68,30 @@ export function registerIpcHandlers(deps: Deps) {
   app.once("will-quit", () => drafts.close())
   app.on("browser-window-created", (_event, win) => win.on("session-end", () => drafts.flush()))
 
+  let setupRunner: SetupRunner | undefined
+  app.once("will-quit", () => setupRunner?.dispose())
+  registerSetupToolsHandlers({
+    ipcMain,
+    windowOf: (sender) => BrowserWindow.fromWebContents(sender),
+    isRendererUrl,
+    runner: () =>
+      (setupRunner ??= createSetupRunner({
+        dir: setupDir({
+          packaged: app.isPackaged,
+          resourcesPath: process.resourcesPath,
+          devRoot: dirname(fileURLToPath(import.meta.url)),
+        }),
+        logger: getLogger(),
+      })),
+    confirmInstall: createInstallConfirm({
+      windowOf: (sender) => BrowserWindow.fromWebContents(sender),
+      showMessageBox: (win, options) => (win ? dialog.showMessageBox(win, options) : dialog.showMessageBox(options)),
+      t: nativeT,
+    }),
+    isOfferPending: isSetupToolsOfferPending,
+    markOffered: markSetupToolsOffered,
+    log: (message, meta) => getLogger().log(message, meta),
+  })
   ipcMain.handle("kill-sidecar", () => deps.killSidecar())
   ipcMain.handle("await-initialization", () => deps.awaitInitialization())
   ipcMain.handle("consume-initial-deep-links", () => deps.consumeInitialDeepLinks())

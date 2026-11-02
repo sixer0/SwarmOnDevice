@@ -20,11 +20,13 @@ import { existsSync, readFileSync } from "node:fs"
 import { parseArgs, type ParsedCommand } from "./cli.ts"
 import { runEntryGates } from "./gates.ts"
 import { loadLock } from "./lockfile.ts"
-import { readState } from "./state.ts"
+import { readState, type StateFile } from "./state.ts"
 import { acquireLock, releaseLock } from "./lockdir.ts"
 import { printHostList, evaluateConsent, renderConsentScreen } from "./consent.ts"
 import { enforcePolicy } from "./wiring/policy_enforce.ts"
 import { writeConfigEntries, checkSkillFiles, type WriteResult } from "./wiring/config_writer.ts"
+import { stageProxyBinary, type ProxyStageOptions, type ProxyStageResult } from "./wiring/proxy_stage.ts"
+import { PROXY_BINARY_NAME } from "./mcpproxy/register.ts"
 import { discoverSteps, orderSteps, type StepDescriptor } from "./steps.ts"
 import { GENERATED_MODULES_BY_ID } from "./steps.gen.ts"
 import type { StepContext, StepResult } from "./steps/_template/index.ts"
@@ -33,7 +35,7 @@ import { applyEstate, type ApplyReport } from "./estate/apply.ts"
 import { homeDir } from "./paths.ts"
 import { makeRealDockerRunner } from "./dockerRunner.real.ts"
 import { makeReadinessProbe } from "./readinessProbe.ts"
-import { COMPONENT_IDS, PROGRAM_NAME, type ComponentId } from "./constants.ts"
+import { COMPONENT_IDS, PROGRAM_NAME, STATES, type ComponentId } from "./constants.ts"
 import { OUTCOME, EXIT_OK, EXIT_FAIL, exitCodeFor, messageFor, type OutcomeToken } from "./outcomes.ts"
 
 function usageText(lockVersion?: string): string {
@@ -64,6 +66,8 @@ function usageText(lockVersion?: string): string {
     "                                   silently selecting all seven)",
     "  --terms-token <component>=<value>  per-tool acknowledgement unlocking --non-interactive",
     "                                   (value = <component_id>@<lock_sha256_12>, shown on the consent screen)",
+    "  --consent-mode app               with --non-interactive and --terms-token only: consent.log records",
+    "                                   mode app (the Swarm app collected the ticks); the token gate is unchanged",
     "  --dry-run                        touch nothing; install shows exactly what consent would be asked for, remove lists what would be deleted",
     "",
     `Components: ${COMPONENT_IDS.join(", ")}`,
@@ -355,6 +359,7 @@ async function cmdInstall(cmd: ParsedCommand): Promise<OutcomeToken> {
     const consent = evaluateConsent({
       selected: offered,
       nonInteractive: cmd.nonInteractive,
+      appConsent: cmd.appConsent,
       tokens: cmd.tokens,
       lock: lockRes.lock,
       forbidden,
@@ -405,9 +410,16 @@ async function cmdInstall(cmd: ParsedCommand): Promise<OutcomeToken> {
     // steps just mutated (st.state) instead of re-reading disk at the moment it most recently changed
     // (§1.1 property 3). Skip reasons are printed verbatim; a writer refusal (D13 unparseable config,
     // symlinked target, unreadable state) folds FAILED in so the run exits non-zero (§1.1 property 2, AC-T4).
+    // U14 row 221: copy the shipped swarm-web-proxy into PC-PATH-14 (hash-checked) BEFORE the writer, so its
+    // existsSync gate can pass. The writer still decides eligibility; staging is only skipped when the
+    // component behind swarm-web is not healthy, since the writer would skip it anyway (senior 239 finding 15).
+    // A missing source keeps the writer's own skip reason; a refused or mismatched copy folds FAILED in.
+    const stage = stageProxyForWiring(st.state)
+    printProxyStageOutcome(stage)
     const wire = writeConfigEntries({ state: st.state, lock: lockRes.lock })
     printWiringOutcome(wire)
     if (!wire.ok) return moreSevere(report.token, OUTCOME.FAILED)
+    if (!stage.ok) return moreSevere(report.token, OUTCOME.FAILED)
     return report.token
   } finally {
     releaseLock()
@@ -416,7 +428,7 @@ async function cmdInstall(cmd: ParsedCommand): Promise<OutcomeToken> {
 
 /** Surface the writer's own result honestly: every skip reason verbatim, what changed, or the refusal.
  *  Never summarise a skip away into a bare OK (directive N9 refuse-silently class; §1.1 property 2). */
-function printWiringOutcome(wire: WriteResult): void {
+export function printWiringOutcome(wire: WriteResult): void {
   if (!wire.ok) {
     console.error(`${PROGRAM_NAME}: wiring refused: ${wire.reason}`)
     return
@@ -437,12 +449,31 @@ function printWiringOutcome(wire: WriteResult): void {
   for (const b of wire.backups) console.log(`wire: backup ${b}`)
 }
 
+/** The proxy stager's result, verbatim (row 221). */
+export function printProxyStageOutcome(stage: ProxyStageResult): void {
+  if (!stage.ok) console.error(`${PROGRAM_NAME}: stage ${PROXY_BINARY_NAME} refused: ${stage.reason}`)
+  else if (!stage.staged) console.log(`stage ${PROXY_BINARY_NAME}: skipped — ${stage.reason}`)
+  else console.log(`stage ${PROXY_BINARY_NAME}: ${stage.changed ? "copied" : "already current"} (sha256 ${stage.sha256.slice(0, 12)})`)
+}
+
+/** The component behind the writer's `swarmWeb` gate (config_writer.ts eligibility(): searxng plus the proxy). */
+const SWARM_WEB_COMPONENT: ComponentId = "searxng"
+
+/** Stage the proxy only when swarm-web can be wired this run (senior 239 finding 15). The ~61 MiB copy and its
+ *  hashes are pointless when the component behind the gate is not healthy, e.g. `install node` on a machine
+ *  without searxng. The writer keeps the eligibility rule and its own skip reason; this only avoids the copy. */
+export function stageProxyForWiring(state: StateFile, opts: ProxyStageOptions = {}): ProxyStageResult {
+  if (state.components[SWARM_WEB_COMPONENT]?.state !== STATES.HEALTHY)
+    return { ok: true, staged: false, reason: `${SWARM_WEB_COMPONENT} component is not healthy (P-15)` }
+  return stageProxyBinary(opts)
+}
+
 /** Which component actually has to become healthy for a writer gate to open. The writer keys eligibility
  *  on its own gate names (`Eligibility` in config_writer.ts), and `swarmWeb` is backed by the searxng
  *  component plus its staged proxy binary — so the repair command must name searxng, not "swarm-web". */
 const WIRE_GATE_TO_COMPONENT: Readonly<Record<string, ComponentId>> = {
   graft: "graft",
-  swarmWeb: "searxng",
+  swarmWeb: SWARM_WEB_COMPONENT,
   rtk: "rtk",
   obsidian: "obsidian",
 }

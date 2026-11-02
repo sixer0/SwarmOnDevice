@@ -29,6 +29,28 @@ export type UpdaterAPI = {
   install: () => Promise<void>
 }
 
+// Same shapes as SetupToolsRun, SetupToolsState and SetupToolsPlatform in
+// app/src/context/platform.tsx (row 227). Restated here because importing the app root into the preload
+// lets app.tsx's own `window.api` declaration replace ElectronAPI in the desktop program.
+export type SetupToolsRun = {
+  exitCode: number | null
+  stdout: string
+  stderr: string
+}
+export type SetupToolsState = {
+  components: Partial<Record<string, string>>
+  offerPending: boolean
+}
+export type SetupToolsPlatform = {
+  preview: () => Promise<SetupToolsRun>
+  install: (ids: string[]) => Promise<SetupToolsRun>
+  state: () => Promise<SetupToolsState>
+  onProgress: (cb: (state: SetupToolsState) => void) => () => void
+  /** C74 `setup-tools:mark-offered`: "Not now" or an install start marks this release as offered */
+  markOffered: () => Promise<void>
+}
+export type SetupToolsAPI = SetupToolsPlatform
+
 export type LinuxDisplayBackend = "wayland" | "auto"
 export type TitlebarTheme = {
   mode: "light" | "dark"
@@ -48,6 +70,7 @@ export type ElectronAPI = {
   awaitInitialization: () => Promise<ServerReadyData>
   wslServers: WslServersAPI
   updater: UpdaterAPI
+  setupTools: SetupToolsAPI
   consumeInitialDeepLinks: () => Promise<string[]>
   getDefaultServerUrl: () => Promise<string | null>
   setDefaultServerUrl: (url: string | null) => Promise<void>
