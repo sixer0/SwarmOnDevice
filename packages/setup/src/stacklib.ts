@@ -206,6 +206,13 @@ function composeBase(composeFile: string): string[] {
   return ["--context", DOCKER_CONTEXT, "compose", "-p", COMPOSE_PROJECT, "-f", composeFile]
 }
 
+/** Row 269: nothing in the product pulled the images, so `up --pull never` failed on every fresh VM.
+ *  `pull --policy missing` fetches only absent images; every reference is digest-pinned, so dockerd
+ *  inside the swarm VM accepts exactly the reviewed bytes (consent block names these registries). */
+export function composePullCmd(composeFile: string): string[] {
+  return [...composeBase(composeFile), "pull", "--policy", "missing", "--quiet"]
+}
+
 export function composeUpCmd(composeFile: string): string[] {
   // --pull never: images are content-pinned and pre-pulled by the VM bring-up rows (01e §3);
   // the daemon enforces the digest, a silent drift can never happen at up time.
@@ -963,6 +970,7 @@ export async function bringUp(opts: BringUpOptions): Promise<BringUpResult> {
   // This stack's own declared services, read FROM the artefact (PORT RULE's discipline extended to
   // service names): they scope the status query per compose file and define what "absent" means.
   const expectedServices = parseComposeServices(report.composeText ?? "")
+  const pullCmd = formatCmd(composePullCmd(plan.composeFile))
   const upCmd = formatCmd(composeUpCmd(plan.composeFile))
   const healthLine = `${formatCmd(composePsArgs(plan.composeFile, expectedServices))}  # repeated until every container of THIS file is green: -a so EXITED containers are named with their exit code (never counted out of the verdict), services listed positionally because -f alone does not scope ps in the shared project, a declared service with no container reads absent, declared healthchecks must be green, and no-healthcheck services additionally pass their host-side readiness probe`
   // The probe target follows the runtime step's RECORDED context (colima names it colima-<profile>,
@@ -974,7 +982,7 @@ export async function bringUp(opts: BringUpOptions): Promise<BringUpResult> {
   if (kit.dryRun) {
     // Dry-run prints the EXACT commands and does nothing else: no runner call, no mkdir, no
     // provenance line, no committed state (kit records in-memory markers only).
-    const commands = [ctxProbeCmd, upCmd, healthLine]
+    const commands = [ctxProbeCmd, pullCmd, upCmd, healthLine]
     for (const c of commands) kit.log("info", `${plan.component} dry-run: ${c}`)
     kit.transition(STATES.HEALTHY)
     return {
@@ -1021,10 +1029,37 @@ export async function bringUp(opts: BringUpOptions): Promise<BringUpResult> {
     }
   }
 
+  kit.log("info", `${plan.component}: pulling missing images (digest-pinned; the first install downloads them)`)
+  const pullRes = await run(composePullCmd(plan.composeFile))
+  if (pullRes.exitCode !== 0) {
+    commitFailure(kit)
+    kit.log("error", `${plan.component}: compose pull failed`, { context: { stderr: pullRes.stderr.trim().slice(-600) } })
+    recordBringUp(
+      opts,
+      OUTCOME.FAILED,
+      pullRes.exitCode,
+      1,
+      Date.now() - startedAt,
+      `compose pull exited ${pullRes.exitCode}`,
+      [],
+      [],
+      ctxName,
+    )
+    return {
+      token: OUTCOME.FAILED,
+      message: `compose pull failed (exit ${pullRes.exitCode}): ${pullRes.stderr.trim().slice(-300)}`,
+      missing: [],
+      commands: [ctxProbeCmd, pullCmd],
+      healthUrls: urls,
+      attempts: 1,
+    }
+  }
+
   const upRes = await run(composeUpCmd(plan.composeFile))
   if (upRes.exitCode !== 0) {
     commitFailure(kit)
-    kit.log("error", `${plan.component}: compose up failed`, { context: { stderr: upRes.stderr.trim().slice(0, 300) } })
+    // The error line comes last; the head is compose's "Network ... Creating" progress (row 269).
+    kit.log("error", `${plan.component}: compose up failed`, { context: { stderr: upRes.stderr.trim().slice(-600) } })
     recordBringUp(
       opts,
       OUTCOME.FAILED,
@@ -1038,9 +1073,9 @@ export async function bringUp(opts: BringUpOptions): Promise<BringUpResult> {
     )
     return {
       token: OUTCOME.FAILED,
-      message: `compose up failed (exit ${upRes.exitCode}): ${upRes.stderr.trim().slice(0, 300)}`,
+      message: `compose up failed (exit ${upRes.exitCode}): ${upRes.stderr.trim().slice(-300)}`,
       missing: [],
-      commands: [ctxProbeCmd, upCmd],
+      commands: [ctxProbeCmd, pullCmd, upCmd],
       healthUrls: urls,
       attempts: 1,
     }

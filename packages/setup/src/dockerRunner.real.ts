@@ -41,11 +41,10 @@ import type { DockerResult, DockerRunner } from "./stacklib.ts"
  *  resolves /opt/homebrew or /usr/local (Intel) first. A PATH-resolved `docker` is deliberately NOT used. */
 export const DOCKER_BINARY_DEFAULT = "/opt/homebrew/bin/docker"
 
-/** Per-command ceiling. Cold-start `compose up -d --pull never` of the Firecrawl stack (seven
- *  containers) plus its health-gate polls can legitimately run past row 86's 300s colima-start
- *  window on a contended laptop; image PULLS are NOT routed through this runner (they stream from
- *  the proof harness), so no call here needs a multi-minute budget. 600s is the safety margin. */
-export const DEFAULT_TIMEOUT_MS = 600_000
+/** Per-command ceiling. Since row 269 the first install's `compose pull --policy missing` runs
+ *  through this runner: the Firecrawl stack is several GB of images, so 30 minutes leaves room for a
+ *  slow connection. Commands that do not download finish long before it. */
+export const DEFAULT_TIMEOUT_MS = 1_800_000
 
 /** Normalise piped spawn output — the exact r87/r86 helper. Bun hands back Buffer (Uint8Array) for
  *  both streams on 1.3.14; the global TextDecoder shim is declared in types/node-step.d.ts. */

@@ -46,6 +46,7 @@ import {
   composeDownCmd,
   composeNetworksArgs,
   composePsArgs,
+  composePullCmd,
   composeUpCmd,
   containerInspectArgs,
   containerRmArgs,
@@ -308,6 +309,39 @@ describe("(3) dry-run performs ZERO exec and ZERO filesystem writes", () => {
   })
 })
 
+describe("row 269 — image pull before up", () => {
+  it("a failed pull stops before up, fails the stack and logs the END of stderr (where the error is)", async () => {
+    const home = freshHome("pull-fail")
+    stageArtefacts(home)
+    writeSecrets(home, "searxng")
+    const noise = "Pulling searxng ... ".repeat(40)
+    const shim = makeFakeDockerShim([
+      { match: "context inspect", stdout: "swarm" },
+      { match: "pull --policy missing", exitCode: 18, stderr: `${noise}\nError response from daemon: manifest unknown` },
+    ])
+    const st = readyState("searxng")
+    const kit = createStepKit({ componentId: "searxng", lock: LOCK, state: st, dryRun: false, consentGate: () => true })
+    const out = await bringUp({ kit, plan: searxngPlan(home), run: shim.runner, healthIntervalMs: 1, sleep: async () => {} })
+    expect(out.token).toBe(OUTCOME.FAILED)
+    expect(out.message).toContain("compose pull failed (exit 18)")
+    expect(out.message).toContain("manifest unknown")
+    expect(shim.formatted().some((c) => c.includes("up -d"))).toBe(false)
+    expect(st.components.searxng.state).toBe(STATES.FAILED)
+    expect(readFileSync(`${home}/.swarm/setup/setup.log`, "utf8")).toContain("manifest unknown")
+  })
+
+  it("the dry-run plan prints the pull between the context probe and up", async () => {
+    const home = freshHome("pull-dry")
+    stageArtefacts(home)
+    writeSecrets(home, "searxng")
+    const st = readyState("searxng")
+    const kit = createStepKit({ componentId: "searxng", lock: LOCK, state: st, dryRun: true, consentGate: () => true })
+    const out = await bringUp({ kit, plan: searxngPlan(home), run: greenShim().runner })
+    expect(out.commands.findIndex((c) => c.includes("pull --policy missing"))).toBe(1)
+    expect(out.commands[2]).toContain("up -d --pull never")
+  })
+})
+
 describe("happy path — up, health gate green, healthy transition, provenance row", () => {
   it("brings the stack up under project swarm-tools and records one provenance line", async () => {
     const home = freshHome("happy")
@@ -336,6 +370,10 @@ describe("happy path — up, health gate green, healthy transition, provenance r
     expect(cmds.some((c) => c.includes(`context inspect ${DOCKER_CONTEXT}`))).toBe(true)
     expect(cmds.some((c) => c.includes("-f ") && c.includes("up -d --pull never"))).toBe(true)
     expect(cmds.some((c) => c.includes("={{.Health}}"))).toBe(true)
+    // Row 269: missing images are pulled first, file-scoped, before up.
+    const pullAt = cmds.findIndex((c) => c.includes("-f ") && c.includes("pull --policy missing"))
+    expect(pullAt).toBeGreaterThan(-1)
+    expect(pullAt).toBeLessThan(cmds.findIndex((c) => c.includes("up -d --pull never")))
     // Provenance per bring-up. A GREEN sequence keeps the bare "up" verb (R112b-7 vocabulary:
     // only failed phases carry the "-failed"/"-incomplete" suffix).
     const rows = readStackProvenanceRecords()
@@ -760,6 +798,7 @@ describe("FIX2 R111-1 — every shipped builder uses a SUPPORTED verb (fixture e
   it("accepts EVERY builder the stack lifecycle emits", async () => {
     const v = verbValidatingRunner()
     const cmds = [
+      composePullCmd("/abs/searxng.yml"),
       composeUpCmd("/abs/searxng.yml"),
       composeDownCmd("/abs/searxng.yml"),
       composePsArgs("/abs/searxng.yml"),
