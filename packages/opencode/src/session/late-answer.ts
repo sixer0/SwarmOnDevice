@@ -167,14 +167,21 @@ export const make = Effect.gen(function* () {
     }),
     permission: Effect.fn("LateAnswer.permission")(function* (request: Permission.Answered) {
       const root = yield* rootOf(request.sessionID)
-      // Back from the file after a restart it has no call to show, so this answer wakes the agent and lets nothing through.
-      // The retry comes up as an entry that does show it.
       // Every call the entry showed when the person approved it (E3), or the one it stood for before entries were shared.
       const calls =
         request.calls ??
         (request.call === undefined
           ? []
           : [{ requestID: request.id, sessionID: request.sessionID, call: request.call, follows: request.follows }])
+      // Back from the file after a restart it has no call to show or run, so this answer wakes the agent, and its repeat
+      // of the same permission and patterns from that session goes through once (F1), with the other prompts of that one call. Each still passes the gate.
+      if (calls.length === 0 && request.deferred)
+        yield* permission.grant({
+          sessionID: request.sessionID,
+          permission: request.permission,
+          patterns: request.patterns,
+          uses: "once",
+        })
       const grants = calls.length > 0 ? calls : request.deferred ? [] : [{ call: undefined, follows: request.follows }]
       for (const held of grants) {
         yield* permission.grant({

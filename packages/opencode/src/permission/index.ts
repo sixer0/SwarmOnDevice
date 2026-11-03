@@ -51,6 +51,12 @@ export interface Grant extends Pick<PermissionV1.Request, "sessionID" | "permiss
   followed?: boolean
   /** The exact call this answer was about. Without it, it is an answer from outside autonomous mode and means nothing inside. */
   call?: string
+  /**
+   * An approval of an entry back from a restart, which no longer knows its call (F1). It lets the agent's repeat through:
+   * the same permission and patterns, from the session that asked, in the run of the mode it was given in. "once" is used
+   * up by that one prompt.
+   */
+  uses?: "once"
 }
 
 export interface Interface {
@@ -103,7 +109,7 @@ interface State {
   pending: Map<PermissionV1.ID, PendingEntry>
   approved: PermissionV1.Rule[]
   /** Each with the root of the session it was given to: an answer at the root is good for its subagents too. */
-  grants: (Grant & { root: SessionID })[]
+  grants: (Grant & { root: SessionID; since?: number })[]
   /** Sessions whose last request went unanswered: nobody is there, so the next one is not worth a long wait. */
   away: Set<PermissionV1.Request["sessionID"]>
   /** Roots already reported as full. One report for each time it fills up, however many calls find it so. */
@@ -851,9 +857,18 @@ const layer = Layer.effect(
         (grant) => grant.root === family && samePrompt(grant, request) && grant.call === call,
       )
       const unbound = grants.findIndex(
-        (grant) => grant.root === family && samePrompt(grant, request) && grant.call === undefined,
+        (grant) => grant.root === family && samePrompt(grant, request) && grant.call === undefined && !grant.uses,
       )
-      const granted = matching >= 0 ? matching : unbound >= 0 && !(yield* inMode(request.sessionID)) ? unbound : -1
+      const repeat = grants.findIndex(
+        (grant) => grant.uses !== undefined && grant.sessionID === request.sessionID && samePrompt(grant, request),
+      )
+      // Turned off since, even if on again now, and it answers nothing: it was given for the run that was going then.
+      const current =
+        repeat >= 0 &&
+        (yield* inMode(request.sessionID)) &&
+        (yield* autonomy.modeSince(family)) === grants[repeat]!.since
+      const granted =
+        matching >= 0 ? matching : current ? repeat : unbound >= 0 && !(yield* inMode(request.sessionID)) ? unbound : -1
       const asked: PermissionV1.Request = {
         id,
         sessionID: request.sessionID,
@@ -940,12 +955,25 @@ const layer = Layer.effect(
         return
       }
       if (granted >= 0) {
-        grants.splice(granted, 1)
+        const [used] = grants.splice(granted, 1)
         // A person answered for this call, on its own entry or one that showed it. It still gets its line in the mode, and
         // what it is can still refuse it.
         const gated = yield* gate(input, id, userCatchAll, hold, true)
         if (gated?.class === "X") return yield* refusedByMode(gated.category)
         if (gated?.decision === "defer") return yield* stayHeld(gated)
+        // The entry back from a restart had lost what else this call asks (a shell read beyond the folder asks `bash`
+        // next). The person approved the call, so each of those prompts of this very call is let through once, as on an
+        // entry that still showed them.
+        if (used?.uses)
+          for (const next of follows ?? [])
+            grants.push({
+              sessionID: request.sessionID,
+              root: family,
+              permission: next.permission,
+              patterns: next.patterns,
+              call,
+              followed: true,
+            })
         return
       }
       // Already waiting for the user's decision on exactly this. Asking again would only add a wait and a second row.
@@ -1126,6 +1154,7 @@ const layer = Layer.effect(
         patterns: input.patterns,
         followed: input.followed,
         call: input.call,
+        ...(input.uses && { uses: input.uses, since: yield* autonomy.modeSince(root.id) }),
       })
     })
 

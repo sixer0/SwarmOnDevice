@@ -1547,6 +1547,73 @@ flows.instance("an answer to an entry back from a restart leaves nothing behind 
   }),
 )
 
+flows.instance("F1: after a restart, an approval lets the agent's repeat through once, and only in that session", () =>
+  Effect.gen(function* () {
+    const store = yield* InstanceStore.Service
+    const { root, child } = yield* lineage
+    const test = yield* TestInstance
+    const outside = outsideFolder()
+    writeFileSync(path.join(outside, ".env"), "from outside\n")
+    const command = `cat ${path.join(outside, ".env")}`
+    expect(yield* failure(shell(root.id, command, test.directory))).toBeInstanceOf(PermissionV1.DeferredError)
+
+    // The restart: the held call is gone, and the entry comes back from the file with nothing to run.
+    yield* store.reload({ directory: test.directory })
+    const [restored] = yield* list
+    expect(restored).toMatchObject({ permission: "external_directory", deferred: true })
+    expect(restored!.metadata.calls).toBeUndefined()
+    yield* approve(restored!.id)
+    expect(sent.at(-1)!.text).toContain("Do it now if it's still needed")
+
+    // The agent does it now, and it runs without a second entry. Its line says a person let it through.
+    const output = yield* shell(root.id, command, test.directory)
+    expect(output.output).toContain("from outside")
+    expect(yield* list).toEqual([])
+    expect((yield* audit(root.id)).filter((line) => line.permission === "external_directory").at(-1)).toMatchObject({
+      decision: "allow",
+      decidedBy: "person",
+      via: "grant",
+    })
+
+    // Once: the same call again is held again, as a new entry.
+    expect(yield* failure(shell(root.id, command, test.directory))).toBeInstanceOf(PermissionV1.DeferredError)
+    const again = yield* list
+    expect(again).toHaveLength(1)
+    expect(again[0]!.id).not.toBe(restored!.id)
+
+    // Only the session that asked: an approval after the next restart does not let a subagent's same call through.
+    yield* store.reload({ directory: test.directory })
+    yield* approve((yield* list)[0]!.id)
+    expect(yield* failure(shell(child.id, command, test.directory))).toBeInstanceOf(PermissionV1.DeferredError)
+    // Nor another path under the same folder's pattern than the one asked about.
+    const other = outsideFolder()
+    writeFileSync(path.join(other, ".env"), "elsewhere\n")
+    expect(yield* failure(shell(root.id, `cat ${path.join(other, ".env")}`, test.directory))).toBeInstanceOf(
+      PermissionV1.DeferredError,
+    )
+  }),
+)
+
+flows.instance("F1: after a restart, an approval does not outlive the run of the mode it was given in", () =>
+  Effect.gen(function* () {
+    process.env.SWARM_UNATTENDED_AFTER_MS = "1"
+    const store = yield* InstanceStore.Service
+    const autonomy = yield* Autonomy.Service
+    const { root } = yield* lineage
+    const test = yield* TestInstance
+    const push = bash(root.id, "git push origin main", test.directory)
+    expect(yield* failure(ask(push))).toBeInstanceOf(PermissionV1.DeferredError)
+    yield* store.reload({ directory: test.directory })
+    yield* approve((yield* list)[0]!.id)
+    // Off, with a call made meanwhile, and on again before the agent repeats it: that is another run of the mode, which
+    // nobody approved anything in.
+    yield* autonomy.setMode({ scope: "session", root: root.id, on: false })
+    yield* ask(bash(root.id, "git fetch origin", test.directory)).pipe(Effect.exit)
+    yield* autonomy.setMode({ scope: "session", root: root.id, on: true })
+    expect(yield* failure(ask(push))).toBeInstanceOf(PermissionV1.DeferredError)
+  }),
+)
+
 flows.instance("outside the mode a late answer means what it did: the pattern and what follows, with no record", () =>
   Effect.gen(function* () {
     process.env.SWARM_UNATTENDED_AFTER_MS = "1"
@@ -1972,16 +2039,16 @@ flows.instance("AU-25: after a restart the prompt that follows is judged again, 
     expect(held?.permission).toBe("external_directory")
     yield* answers.permission((yield* reply({ requestID: held!.id, reply: "once" }))!)
 
-    // Back from the file the entry has no call to show, so that answer only wakes the agent. Two clicks: the retry comes up
-    // as one entry that shows the command, and nothing ran on the first.
+    // Back from the file the entry has no call to show, so that answer only wakes the agent, and nothing ran on it. One
+    // click (F1): the retry goes through, and the prompt that follows still passes the gate and gets its own line.
     expect(sent).toHaveLength(1)
-    expect(yield* failure(shell(root.id, command, test.directory))).toBeInstanceOf(PermissionV1.DeferredError)
-    const [second] = yield* list
-    expect(second?.permission).toBe("external_directory")
-    expect(second?.metadata.call).toEqual({ tool: "bash", args: { command, workdir: test.directory } })
-    yield* answers.permission((yield* reply({ requestID: second!.id, reply: "once" }))!)
     yield* shell(root.id, command, test.directory)
     expect(yield* list).toEqual([])
+    expect((yield* audit(root.id)).filter((line) => line.permission === "bash").at(-1)).toMatchObject({
+      decision: "allow",
+      decidedBy: "person",
+      via: "grant",
+    })
   }),
 )
 
