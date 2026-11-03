@@ -421,6 +421,31 @@ describe("decisionGroups", () => {
     })
   })
 
+  test("a held call the server ran after the answer stays answered, as do the ones the same always released", () => {
+    // Row 260: the server writes `approved_later`, then `ran` or `failed` once it has run the held call.
+    const groups = decisionGroups(
+      [
+        decision("always", { class: "D", decision: "defer", decidedBy: "gate", category: "secret_file" }),
+        decision("released", { class: "D", decision: "defer", decidedBy: "gate", category: "secret_file" }),
+        decision("failed", { class: "D", decision: "defer", decidedBy: "gate" }),
+        outcome("always", "approved_later", "person"),
+        outcome("released", "approved_later", "person"),
+        outcome("failed", "approved_later", "person"),
+        outcome("always", "ran", "person"),
+        outcome("released", "ran", "person"),
+        outcome("failed", "failed", "person"),
+      ],
+      "root",
+    )
+    expect(groups.waiting).toEqual([])
+    expect(groups.limited).toEqual([])
+    expect(groups.decided.map((entry) => [entry.id, entry.outcome, entry.by])).toEqual([
+      ["failed", "failed", "person"],
+      ["released", "ran", "person"],
+      ["always", "ran", "person"],
+    ])
+  })
+
   test("a line of another root stays out, and an outcome without a decision makes nothing up", () => {
     const groups = decisionGroups([decision("other", { rootID: "elsewhere" }), outcome("nobody", "ran")], "root")
     expect([...groups.waiting, ...groups.decided, ...groups.limited]).toEqual([])

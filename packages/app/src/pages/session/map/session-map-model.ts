@@ -543,6 +543,12 @@ export function decisionGroups(
   revertedAt: (sessionID: string) => string | undefined = () => undefined,
 ): DecisionGroups {
   const outcomes = new Map(lines.flatMap((line) => (line.type === "outcome" ? [[line.requestID, line] as const] : [])))
+  // The answer, which a later "ran" or "failed" for the call the server then ran does not take back (row 260).
+  const answers = new Map(
+    lines.flatMap((line) =>
+      line.type === "outcome" && CLOSED_OUTCOMES.includes(line.outcome) ? [[line.requestID, line.outcome] as const] : [],
+    ),
+  )
   const groups: DecisionGroups = { waiting: [], decided: [], limited: [], notes: [] }
   lines.forEach((line) => {
     if (line.type === "marker") {
@@ -552,7 +558,8 @@ export function decisionGroups(
     }
     if (line.type !== "decision" || line.rootID !== rootID) return
     const later = outcomes.get(line.requestID)
-    const ran = line.decision === "allow" || later?.outcome === "approved_later"
+    const answer = answers.get(line.requestID)
+    const ran = line.decision === "allow" || answer === "approved_later"
     const reverted = revertedAt(line.sessionID)
     const taken = !!(ran && line.messageID && reverted && line.messageID >= reverted)
     const outcome = taken ? "undone" : later?.outcome
@@ -578,8 +585,8 @@ export function decisionGroups(
             ? "button"
             : "none",
     }
-    if (isWaiting(line, later?.outcome)) groups.waiting.push(entry)
-    else if (isLimited(line, later?.outcome)) groups.limited.push(entry)
+    if (isWaiting(line, answer)) groups.waiting.push(entry)
+    else if (isLimited(line, answer)) groups.limited.push(entry)
     else groups.decided.push(entry)
   })
   // What waits longest comes first. Everything else reads as a log, latest on top.
