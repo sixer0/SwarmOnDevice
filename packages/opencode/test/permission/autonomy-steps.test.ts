@@ -133,6 +133,63 @@ describe("writes in the folder through the shell are the job, as edits are", () 
   })
 })
 
+describe("row 276: the checks and looks the alugra session kept waiting on", () => {
+  test("`npm test <file>`, `npm run check:x` and `npx vitest run <file>` are checks, with what makes them more still held", async () => {
+    fs.mkdirSync(path.join(dir, "tests"), { recursive: true })
+    fs.writeFileSync(path.join(dir, "tests/a.test.ts"), "x\n")
+    for (const command of ["npm test tests/a.test.ts", "npm run check:registry", "npm run test:unit", "rtk npm test tests/a.test.ts"])
+      expect([command, (await judge(command)).class]).toEqual([command, "P"])
+    // No local vitest: npx would fetch one from the registry and run it.
+    expect((await judge("npx vitest run tests/a.test.ts")).class).toBe("D")
+    fs.mkdirSync(path.join(dir, "node_modules/.bin"), { recursive: true })
+    fs.writeFileSync(path.join(dir, "node_modules/.bin/vitest"), "#!/bin/sh\n")
+    expect((await judge("npx vitest run tests/a.test.ts")).class).toBe("P")
+    for (const command of [
+      "npm test -- --config evil.ts",
+      "npm test /etc/x",
+      "npm test ../x",
+      "npm run deploy",
+      "npm run check:x -- --flag",
+      "npm run test:unit extra",
+      "npx vitest tests/a.test.ts",
+      "npx vitest run --config evil.ts",
+    ])
+      expect([command, (await judge(command)).class]).not.toEqual([command, "P"])
+    // A folder nobody trusted runs none of the project's code.
+    expect(await judge("npm run check:registry", { folder: "ask" })).toMatchObject({ class: "D", category: "folder_not_trusted" })
+  })
+
+  test("`grep -r` over a tree with nothing secret, `\\\"` in double quotes, `sed -n '/re/,/re/p'` and an empty pattern", async () => {
+    for (const command of [
+      'grep -rn "x" src',
+      'grep -rln "x" . --include=*.ts --include=*.md',
+      "rtk grep -rn x src --include='*.tsx'",
+      'grep -rn "x" src --exclude-dir=node_modules -l',
+      'grep -n "^import\\|from \\"../src" src/a.ts',
+      "sed -n '/^## 8\\./,/^## 9\\./p' docs/a.md",
+      'rtk grep -n "" docs/a.md | rtk grep -n "## 7"',
+    ])
+      expect([command, (await judge(command)).class]).toEqual([command, "A"])
+    // The folder holds `.env` and `.git`: a walk over it, a kind that may be a secret, or a flag that follows links or
+    // reads patterns from a file is still held.
+    for (const command of ['grep -rn "x" .', "grep -rn x . --include=*.json", "grep -Rn x src", "grep -rf p src", "grep -rn x --devices=read src"])
+      expect([command, (await judge(command)).class]).not.toEqual([command, "A"])
+  })
+
+  test("`git -C <folder>` looks in a repository nested in the folder when the guard vets that repository", async () => {
+    const nested = path.join(bare, "proto")
+    fs.mkdirSync(nested, { recursive: true })
+    await $`git init -q`.cwd(nested)
+    for (const command of [`git -C ${nested} status --short`, "git -C proto log --oneline -3", "cd proto && git status"])
+      expect([command, (await judge(command, { cwd: bare, git: false })).class]).toEqual([command, "A"])
+    // Out of the folder, a write, or a repository the guard refuses stays held.
+    expect((await judge("git -C /tmp status", { cwd: bare, git: false })).class).not.toBe("A")
+    expect((await judge("git -C proto add -A", { cwd: bare, git: false })).class).not.toBe("A")
+    await $`git config core.fsmonitor ./x`.cwd(nested)
+    expect((await judge("git -C proto status", { cwd: bare, git: false })).class).not.toBe("A")
+  })
+})
+
 describe("what the steps must never let through", () => {
   test("a deletion beside anything else, a push, a pipe into a shell, a secret, and a program from the network", async () => {
     expect(await judge("ls && rm -rf src")).toMatchObject({ class: "X", category: "delete_compound" })

@@ -112,26 +112,34 @@ const refused = (category: HeldCategory): Verdict => ({ class: "X", decidedBy: "
 const QUIET: Verdict = { class: "A" }
 
 const CHECK_NAMES = new Set(["test", "build", "typecheck", "lint", "check"])
+// Row 276: a script named for one of those with a part after a colon, as projects split them (`check:registry`, `test:unit`).
+const CHECK_SCRIPT = /^(test|check|lint|typecheck):[\w.-]+$/
 const QUIET_FLAGS = ["-q", "-x", "-v"]
 
 // Each row is the whole of what is accepted. `--preload`, `npm test -- x`, `pytest -p`, `go test -exec`, `make -f` and `VAR=`
 // all name code an attacker chose, and they fall off the end of this list with nothing having to recognise them.
+// `local`: the program `npx` must find in the project's own `node_modules/.bin`; without it npx downloads one and runs it.
 const CHECKS: readonly {
   prefix: readonly string[]
   exact?: boolean
   names?: ReadonlySet<string>
+  script?: RegExp
   flags?: readonly string[]
   paths?: boolean
+  local?: string
 }[] = [
   { prefix: ["bun", "test"], flags: ["--bail", "--only"], paths: true },
-  { prefix: ["bun", "run"], names: CHECK_NAMES },
+  { prefix: ["bun", "run"], names: CHECK_NAMES, script: CHECK_SCRIPT },
   { prefix: ["bun"], names: new Set(["typecheck", "lint"]) },
-  { prefix: ["npm", "test"], exact: true },
-  { prefix: ["npm", "run"], names: CHECK_NAMES },
+  // Row 276: `npm test <file>` hands the files to the project's test script; only names inside the folder, no flags.
+  { prefix: ["npm", "test"], paths: true },
+  { prefix: ["npm", "run"], names: CHECK_NAMES, script: CHECK_SCRIPT },
   { prefix: ["pnpm", "test"], exact: true },
-  { prefix: ["pnpm", "run"], names: CHECK_NAMES },
+  { prefix: ["pnpm", "run"], names: CHECK_NAMES, script: CHECK_SCRIPT },
   { prefix: ["yarn", "test"], exact: true },
-  { prefix: ["yarn", "run"], names: CHECK_NAMES },
+  { prefix: ["yarn", "run"], names: CHECK_NAMES, script: CHECK_SCRIPT },
+  { prefix: ["npx", "vitest", "run"], paths: true, local: "vitest" },
+  { prefix: ["npx", "tsc", "--noEmit"], exact: true, local: "tsc" },
   { prefix: ["tsc", "--noEmit"], exact: true },
   { prefix: ["cargo"], names: new Set(["test", "build", "check", "clippy"]) },
   { prefix: ["go", "test"], paths: true },
@@ -179,11 +187,26 @@ function fileOp(words: readonly string[], cwd: string, instance: InstanceContext
 function matchesCheck(words: readonly string[], cwd: string, instance: InstanceContext) {
   return CHECKS.some((row) => {
     if (row.prefix.some((word, index) => words[index] !== word)) return false
+    if (row.local && !localBin(row.local, cwd, instance)) return false
     const rest = words.slice(row.prefix.length)
     if (row.exact) return rest.length === 0
-    if (row.names) return rest.length === 1 && row.names.has(rest[0]!)
+    if (row.names) return rest.length === 1 && (row.names.has(rest[0]!) || row.script?.test(rest[0]!) === true)
     return rest.every((word) => (word.startsWith("-") ? row.flags?.includes(word) : row.paths && safePath(word, cwd, instance)))
   })
+}
+
+/** Whether `npx <name>` finds the project's own copy: `node_modules/.bin/<name>` from here up to the folder, as npx looks. */
+function localBin(name: string, cwd: string, instance: InstanceContext) {
+  const top = Reach.real(instance.directory) ?? instance.directory
+  let folder = Reach.real(cwd) ?? cwd
+  while (containsPath(folder, { ...instance, directory: top, worktree: top })) {
+    const bin = path.join(folder, "node_modules", ".bin", name)
+    if (fs.lstatSync(bin, { throwIfNoEntry: false }) && Reach.inside(bin, instance)) return true
+    const parent = path.dirname(folder)
+    if (parent === folder) return false
+    folder = parent
+  }
+  return false
 }
 
 const outsideProject = (cwd: string, instance: InstanceContext) => !path.isAbsolute(cwd) || !Reach.inside(cwd, instance)
@@ -393,6 +416,7 @@ function single(piece: string, cwd: string, instance: InstanceContext): CommandK
     const named = rest.length === 1 && rest[0] === "-A" ? true : rest.length > 0 && rest.every((word) => safePath(word, cwd, instance))
     return named && gitAllowed(cwd, instance) ? "git-local" : undefined
   }
+  if ((words[0] === "grep" || words[0] === "egrep") && words.some(recursiveFlag)) return grepTree(words, cwd, instance) ? "read" : undefined
   if (readKind(words, cwd, instance) === "read") return "read"
   if (words[0] === "sed") return sedPrints(words, cwd, instance) ? "read" : undefined
   if (words[0] === "awk") return awkReads(words, cwd, instance) ? "read" : undefined
@@ -410,8 +434,57 @@ const SED_PRINT = /^(?:\d+|\$)(?:,(?:\d+|\$))?p$/
 /** `sed -n <range>p <file>...`, printing lines of files the read tool would show without asking. */
 function sedPrints(words: readonly string[], cwd: string, instance: InstanceContext) {
   const files = words.slice(3)
-  if (words[1] !== "-n" || !SED_PRINT.test(words[2] ?? "") || files.length === 0) return false
+  // Row 276: a `/regex/` address too (`sed -n '/^## 8\./,/^## 9\./p'`): it only picks the lines, and `p` prints them.
+  const script = words[2] ?? ""
+  const printsRange = SED_PRINT.test(script) || new RegExp(String.raw`^${SED_ADDR}(?:,${SED_ADDR})?p$`).test(script)
+  if (words[1] !== "-n" || !printsRange || files.length === 0) return false
   return !files.some((word) => word.startsWith("-")) && readKind(["cat", ...files], cwd, instance) === "read"
+}
+
+// Row 276: `grep -r` reads every file under what it names, so it is a look only where that tree holds nothing the read
+// tool would not show. Either every `--include` names a kind of source or text file, which no secret is, or a bounded walk
+// of the tree, skipping what `--exclude-dir` skips, finds no secret, no link and no more than MAX_TREE entries.
+const recursiveFlag = (word: string) => /^-[A-Za-z]*r[A-Za-z]*$/.test(word) || word === "--recursive"
+const TEXT_KINDS = new Set(["ts", "tsx", "js", "jsx", "mjs", "cjs", "md", "mdx", "sql", "py", "go", "rs", "css", "scss", "html", "vue", "svelte", "txt", "rb", "java", "kt", "swift", "c", "h", "cpp", "hpp"])
+const MAX_TREE = 5000
+
+function grepTree(words: readonly string[], cwd: string, instance: InstanceContext) {
+  const includes: string[] = []
+  const skipped: string[] = []
+  const named: string[] = []
+  for (const word of words.slice(1)) {
+    if (word.startsWith("--include=")) includes.push(word.slice(10))
+    else if (word.startsWith("--exclude-dir=")) skipped.push(word.slice(14))
+    else if (word.startsWith("--exclude=")) continue
+    else if (word === "--recursive") continue
+    // Short flags only, none that follows links (`R`), reads patterns from a file (`f`), or changes how folders and
+    // devices are read (`d`, `D`).
+    else if (word.startsWith("-")) {
+      if (!/^-[A-Za-z]+$/.test(word) || /[RfdD]/.test(word.slice(1))) return false
+    } else named.push(word)
+  }
+  const [, ...targets] = named
+  const roots = (targets.length > 0 ? targets : ["."]).map((word) => path.resolve(cwd, word))
+  if (!roots.every((root) => Reach.inside(root, instance) && Reach.readable(root))) return false
+  if (includes.length > 0 && includes.every((glob) => /^\*\.([a-z0-9]+)$/.test(glob) && TEXT_KINDS.has(glob.slice(2)))) return true
+  // `.git`, hooks and the like are sensitive, as a plain `cat .git/config` is: a token can sit in a remote's address.
+  const base = instance.worktree === "/" ? { ...instance, worktree: instance.directory } : instance
+  let seen = 0
+  const clean = (folder: string): boolean => {
+    for (const entry of fs.readdirSync(folder, { withFileTypes: true })) {
+      if (++seen > MAX_TREE) return false
+      if (entry.isDirectory() && skipped.includes(entry.name)) continue
+      const file = path.join(folder, entry.name)
+      if (entry.isSymbolicLink() || !Reach.readable(file) || Reach.sensitive(file, base)) return false
+      if (entry.isDirectory() && !clean(file)) return false
+    }
+    return true
+  }
+  try {
+    return roots.every((root) => (fs.statSync(root).isDirectory() ? clean(root) : true))
+  } catch {
+    return false
+  }
 }
 
 // Row 274: programs whose arguments name no file. They print, wait or answer, and nothing more.
@@ -472,8 +545,29 @@ const GIT_ACTS = /^(--output(=.*)?|--ext-diff|--open-files-in-pager(=.*)?|-O.*|-
 const GIT_REV_FLAG = /^--(contains|merged|no-merged|points-at)$/
 
 function gitReads(words: readonly string[], cwd: string, instance: InstanceContext) {
-  const [, sub, ...args] = words
-  return sub !== undefined && gitLook(sub, args) && gitAllowed(cwd, instance)
+  // Row 276: `git -C <folder> <look>` is the same look run in that folder, which must be one a command may run in.
+  const moved = words[1] === "-C" && words[2] !== undefined
+  const here = moved ? path.resolve(cwd, words[2]!) : cwd
+  const [sub, ...args] = words.slice(moved ? 3 : 1)
+  if (moved && !canRunIn(here, instance)) return false
+  return sub !== undefined && gitLook(sub, args) && (gitAllowed(here, instance) || nestedGitAllowed(here, instance))
+}
+
+/**
+ * Row 276: a look may also run in a repository nested in the folder (a project opened one level up, as `Research` holds
+ * `alugra`), when the guard vets that repository itself and nothing lies between it and where git runs. Only for looks;
+ * local git that writes keeps to the project's own repository.
+ */
+function nestedGitAllowed(cwd: string, instance: InstanceContext) {
+  const folder = Reach.real(cwd)
+  if (folder === undefined || !Reach.inside(folder, instance)) return false
+  let top = folder
+  while (!fs.lstatSync(path.join(top, ".git"), { throwIfNoEntry: false })) {
+    const parent = path.dirname(top)
+    if (parent === top || !Reach.inside(parent, instance)) return false
+    top = parent
+  }
+  return GitGuard.inspect(top).refused === undefined && noRepositoryBetween(folder, top)
 }
 
 function gitLook(sub: string, args: readonly string[]) {

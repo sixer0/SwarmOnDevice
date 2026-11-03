@@ -529,6 +529,9 @@ export function decompose(root: Node, cwd: string): ShellReading | undefined {
         }
         // `~` and `^` inside a word are only letters to bash (`HEAD~3`, `HEAD^`), but zsh with EXTENDED_GLOB reads
         // `.env~x` as a pattern that matches `.env`. `command` lets them through for git's revisions alone.
+        // Row 276: `--include=*.ts` unquoted. A pattern after `--name=` could only match a file whose name starts with
+        // `--name=`, so whatever the shell does with it the program gets the same option.
+        if (/^--[a-z][a-z0-9-]*=[\w.*?-]*$/.test(text)) return text
         if (!/^[\w./@%+:,-][\w./@%+:,=~^-]*$/.test(text)) fail()
         if (/[~^]/.test(text)) revisionWords++
         return text
@@ -536,6 +539,7 @@ export function decompose(root: Node, cwd: string): ShellReading | undefined {
       case "raw_string":
         return node.text.slice(1, -1)
       case "string": {
+        if (node.text === '""') return ""
         const parts = named(node)
         // Everything inside the quotes must be one of the parts read here, and nothing but the quotes around them.
         const between = gaps(node, parts)
@@ -543,9 +547,9 @@ export function decompose(root: Node, cwd: string): ShellReading | undefined {
         return parts
           .map((part) => {
             if (part.type !== "string_content") return expansion(part)
-            // In double quotes the shell removes `\` before `$`, a backquote, `"`, `\` or a new line.
-            if (/\\[$`"\\\n]/.test(part.text)) fail()
-            return part.text
+            // Row 276: in double quotes the shell removes `\` before `$`, a backquote, `"` or `\`, and a `\` with a line
+            // break goes away with it; any other `\` stays. That is what the program gets, so it is what is judged.
+            return part.text.replace(/\\([$`"\\\n])/g, (_, next: string) => (next === "\n" ? "" : next))
           })
           .join("")
       }

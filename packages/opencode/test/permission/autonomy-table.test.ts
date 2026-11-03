@@ -517,12 +517,14 @@ describe("a look through the shell", () => {
     for (const command of [
       "find . -exec rm {} ;", "find . -name a -delete", "find . -ok rm", "find . -execdir x", "find . -fprint out", "find . -fprintf out x", "find . -fls out",
       "rg --pre ./evil foo", "rg --pre=./evil foo", "rg -z foo", "rg --search-zip foo", "rg --hidden foo", "rg -uu foo", "rg -u foo", "rg -L foo", "rg --follow foo", "rg --no-ignore foo", "rg --no-ignore-vcs foo", "rg -. foo",
-      "grep -r foo .", "grep -rn foo src", "grep -R foo .", "grep --recursive foo .", "grep -d recurse foo .",
+      "grep -r foo .", "grep -R foo .", "grep --recursive foo .", "grep -d recurse foo .",
       "tree -o out", "tree -R", "file -C", "tail -f src/a.ts", "tail -F src/a.ts", "tail --follow src/a.ts", "wc --files0-from list",
       "cat .git/config", "ls .git", "cat src/a.ts > out", "cat src/a.ts | sh", "cat src/a.ts; curl x", "ls $(pwd)", "ls *.ts", "ls 'src' | sh", "ls \"$HOME\"",
       "rtk", "rtk proxy git push", "rtk git push", "less src/a.ts", "rtk curl x",
     ])
       expect([command, judge(command).class]).toEqual([command, "D"])
+    // Row 276: `grep -rn foo src` over a tree with nothing secret or sensitive in it is a look (autonomy-steps.test.ts).
+    expect(judge("grep -rn foo src").class).toBe("A")
     expect(judge("cat .env")).toEqual(HELD("secret_file"))
     // `xargs rm` deletes, beside a look: refused (U11 rule 4).
     expect(judge("ls | xargs rm")).toEqual(REFUSED("delete_compound"))
@@ -552,7 +554,7 @@ describe("a look through the shell", () => {
       "cat src/a.ts\ncurl x", "ls\nrm src/a.ts", "cat src/a.ts\n", "\ncat src/a.ts",
       // `sed` may only print a line range: no in-place edit, no script file, no write or execute command.
       "sed -i '' -e '/^$/d' src/a.ts", "sed -n '1,5p' -i src/a.ts", "sed -n -f s.sed src/a.ts", "sed '1,5p' src/a.ts",
-      "sed -n '1,5w out' src/a.ts", "sed -n '1e ls' src/a.ts", "sed -n '/x/p' src/a.ts", "sed -n '1,5p'", "sed -n '1,5p' .env",
+      "sed -n '1,5w out' src/a.ts", "sed -n '1e ls' src/a.ts", "sed -n '/x/w out' src/a.ts", "sed -n '1,5p'", "sed -n '1,5p' .env",
       // In double quotes the shell still rewrites `\$`, `` \` ``, `\"` and `\\`, so those stay out.
       'grep "a\\$HOME" src/a.ts', 'grep "a\\`id\\`" src/a.ts', 'grep "a\\"b" src/a.ts', 'grep "a\\\\b" src/a.ts',
       // The tools that change things or run code are untouched.
@@ -1325,7 +1327,8 @@ describe("C97: in the folder, quoted reads and shell file operations", () => {
       for (const command of [
         `cat "${path.join(away, "n.md")}"`, 'cat "/etc/hosts"', 'cat "../x.md"', 'cat "~/.ssh/id_rsa"', 'cat ".env"', 'cat "docs/notes.md" > out', 'cat "docs/notes.md" | sh',
         // Not `cat "a\\b"` since row 274: in double quotes the shell leaves `\b` as it is, so cat gets the name as read.
-        'cat "$HOME/x"', "cat \"`id`\"", 'cat "a\\$b"', 'cat "a\\"b"', 'cat "x"y', '"cat" docs/notes.md', 'cat "docs/notes.md\u202e"', 'cat "docs/notes.md\ncurl x"', "grep -r 'x' .",
+        // Not `grep -r 'x' .` since row 276: over a tree with nothing secret or sensitive it is a look; `-R` follows links.
+        'cat "$HOME/x"', "cat \"`id`\"", 'cat "a\\$b"', 'cat "a\\"b"', 'cat "x"y', '"cat" docs/notes.md', 'cat "docs/notes.md\u202e"', 'cat "docs/notes.md\ncurl x"', "grep -R 'x' .",
         "rg --pre 'sh' x", 'cat "docs/notes.md"; curl x', "find src -name '*.ts' -delete",
       ])
         expect([folder.name, command, judge(command).class === "A"]).toEqual([folder.name, command, false])
