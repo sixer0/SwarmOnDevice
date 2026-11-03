@@ -1425,6 +1425,7 @@ export const dict = {
   "session.trust.later": "Ҳоло не",
   "session.movedOn.title": "Бе шумо идома дод",
   "session.movedOn.allow": "Иҷозат додан ва идома",
+  "session.movedOn.alwaysInSession": "Дар ин сеанс ҳамеша иҷозат додан",
   "session.movedOn.leave": "Гузоштан",
   "session.movedOn.answer": "Ҷавоб додан",
   "home.agents.movedOn": "Бе ин идома дод · {{time}}",

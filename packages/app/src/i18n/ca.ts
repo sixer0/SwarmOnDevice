@@ -1433,6 +1433,7 @@ export const dict = {
   "session.trust.later": "Ara no",
   "session.movedOn.title": "Ha continuat sense tu",
   "session.movedOn.allow": "Permet i continua",
+  "session.movedOn.alwaysInSession": "Permet sempre en aquesta sessió",
   "session.movedOn.leave": "Deixa-ho",
   "session.movedOn.answer": "Respon",
   "home.agents.movedOn": "Ha continuat sense això · {{time}}",

@@ -1413,6 +1413,7 @@ export const dict: Record<string, string> = {
   "session.trust.later": "දැන් නොවේ",
   "session.movedOn.title": "ඔබ නොමැතිව ඉදිරියට ගියේය",
   "session.movedOn.allow": "අවසර දී ඉදිරියට",
+  "session.movedOn.alwaysInSession": "මෙම සැසියේ සෑම විටම ඉඩ දෙන්න",
   "session.movedOn.leave": "එලෙසම තබන්න",
   "session.movedOn.answer": "පිළිතුරු දෙන්න",
   "home.agents.movedOn": "මෙය නොමැතිව ඉදිරියට ගියේය · {{time}}",

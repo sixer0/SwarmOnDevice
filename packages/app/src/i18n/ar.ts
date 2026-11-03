@@ -1437,6 +1437,7 @@ export const dict = {
   "session.trust.later": "ليس الآن",
   "session.movedOn.title": "تابع من دونك",
   "session.movedOn.allow": "السماح والمتابعة",
+  "session.movedOn.alwaysInSession": "السماح دائمًا في هذه الجلسة",
   "session.movedOn.leave": "اتركه",
   "session.movedOn.answer": "إجابة",
   "home.agents.movedOn": "تابع من دون هذا · {{time}}",

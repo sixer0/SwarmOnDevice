@@ -1434,6 +1434,7 @@ export const dict = {
   "session.trust.later": "Όχι τώρα",
   "session.movedOn.title": "Συνέχισε χωρίς εσάς",
   "session.movedOn.allow": "Επιτρέψτε και συνεχίστε",
+  "session.movedOn.alwaysInSession": "Να επιτρέπεται πάντα σε αυτή τη συνεδρία",
   "session.movedOn.leave": "Αφήστε το",
   "session.movedOn.answer": "Απάντηση",
   "home.agents.movedOn": "Συνέχισε χωρίς αυτό · {{time}}",

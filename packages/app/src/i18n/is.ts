@@ -1418,6 +1418,7 @@ export const dict = {
   "session.trust.later": "Ekki núna",
   "session.movedOn.title": "Hélt áfram án þín",
   "session.movedOn.allow": "Leyfa og halda áfram",
+  "session.movedOn.alwaysInSession": "Leyfa alltaf í þessari setu",
   "session.movedOn.leave": "Láta vera",
   "session.movedOn.answer": "Svara",
   "home.agents.movedOn": "Hélt áfram án þessa · {{time}}",

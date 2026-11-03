@@ -1423,6 +1423,7 @@ export const dict = {
   "session.trust.later": "Nu acum",
   "session.movedOn.title": "A continuat fără tine",
   "session.movedOn.allow": "Permite și continuă",
+  "session.movedOn.alwaysInSession": "Permite mereu în această sesiune",
   "session.movedOn.leave": "Lasă așa",
   "session.movedOn.answer": "Răspunde",
   "home.agents.movedOn": "A continuat fără asta · {{time}}",

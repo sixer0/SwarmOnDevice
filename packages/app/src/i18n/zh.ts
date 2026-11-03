@@ -1496,6 +1496,7 @@ export const dict = {
   "session.trust.later": "暂不",
   "session.movedOn.title": "已在你不在时继续",
   "session.movedOn.allow": "允许并继续",
+  "session.movedOn.alwaysInSession": "在此会话中始终允许",
   "session.movedOn.leave": "不处理",
   "session.movedOn.answer": "回答",
   "home.agents.movedOn": "已跳过此项继续 · {{time}}",

@@ -1429,6 +1429,7 @@ export const dict = {
   "session.trust.later": "Одоо биш",
   "session.movedOn.title": "Таныгүйгээр үргэлжилсэн",
   "session.movedOn.allow": "Зөвшөөрч үргэлжлүүлэх",
+  "session.movedOn.alwaysInSession": "Энэ сесст үргэлж зөвшөөрөх",
   "session.movedOn.leave": "Орхих",
   "session.movedOn.answer": "Хариулах",
   "home.agents.movedOn": "Үүнгүйгээр үргэлжилсэн · {{time}}",

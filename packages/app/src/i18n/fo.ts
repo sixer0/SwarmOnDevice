@@ -1415,6 +1415,7 @@ export const dict = {
   "session.trust.later": "Ikki nú",
   "session.movedOn.title": "Helt fram uttan teg",
   "session.movedOn.allow": "Loyv og halt fram",
+  "session.movedOn.alwaysInSession": "Loyva altíð í hesi setuni",
   "session.movedOn.leave": "Lat vera",
   "session.movedOn.answer": "Svara",
   "home.agents.movedOn": "Helt fram uttan hetta · {{time}}",

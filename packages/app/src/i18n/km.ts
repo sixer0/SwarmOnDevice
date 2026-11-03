@@ -1412,6 +1412,7 @@ export const dict = {
   "session.trust.later": "មិនមែនឥឡូវនេះ",
   "session.movedOn.title": "បានបន្តដោយគ្មានអ្នក",
   "session.movedOn.allow": "អនុញ្ញាត និងបន្ត",
+  "session.movedOn.alwaysInSession": "អនុញ្ញាតជានិច្ចក្នុងសម័យនេះ",
   "session.movedOn.leave": "ទុកចោល",
   "session.movedOn.answer": "ឆ្លើយ",
   "home.agents.movedOn": "បានបន្តដោយគ្មានវា · {{time}}",

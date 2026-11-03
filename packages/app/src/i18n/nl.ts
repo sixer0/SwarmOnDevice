@@ -1438,6 +1438,7 @@ export const dict = {
   "session.trust.later": "Niet nu",
   "session.movedOn.title": "Zonder jou doorgegaan",
   "session.movedOn.allow": "Toestaan en doorgaan",
+  "session.movedOn.alwaysInSession": "Altijd toestaan in deze sessie",
   "session.movedOn.leave": "Laten zo",
   "session.movedOn.answer": "Antwoorden",
   "home.agents.movedOn": "Hier zonder doorgegaan · {{time}}",

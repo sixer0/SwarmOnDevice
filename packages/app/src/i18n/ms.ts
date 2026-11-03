@@ -1418,6 +1418,7 @@ export const dict = {
   "session.trust.later": "Bukan sekarang",
   "session.movedOn.title": "Diteruskan tanpa anda",
   "session.movedOn.allow": "Benarkan dan teruskan",
+  "session.movedOn.alwaysInSession": "Sentiasa benarkan dalam sesi ini",
   "session.movedOn.leave": "Biarkan",
   "session.movedOn.answer": "Jawab",
   "home.agents.movedOn": "Diteruskan tanpa ini · {{time}}",

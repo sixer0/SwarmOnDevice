@@ -1423,6 +1423,7 @@ export const dict = {
   "session.trust.later": "Jo tani",
   "session.movedOn.title": "Vazhdoi pa ju",
   "session.movedOn.allow": "Lejo dhe vazhdo",
+  "session.movedOn.alwaysInSession": "Lejo gjithmonë në këtë sesion",
   "session.movedOn.leave": "Lëre",
   "session.movedOn.answer": "Përgjigju",
   "home.agents.movedOn": "Vazhdoi pa këtë · {{time}}",

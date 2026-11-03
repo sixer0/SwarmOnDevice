@@ -1433,6 +1433,7 @@ export const dict = {
   "session.trust.later": "Ne dabar",
   "session.movedOn.title": "Tęsė be jūsų",
   "session.movedOn.allow": "Leisti ir tęsti",
+  "session.movedOn.alwaysInSession": "Visada leisti šiame seanse",
   "session.movedOn.leave": "Palikti",
   "session.movedOn.answer": "Atsakyti",
   "home.agents.movedOn": "Tęsė be šito · {{time}}",

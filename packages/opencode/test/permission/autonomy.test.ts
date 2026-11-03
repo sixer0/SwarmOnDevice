@@ -415,10 +415,11 @@ shipped.instance("with no decider in place, class P is held and says why", () =>
   }),
 )
 
-it.instance("the mode writes no rule, and an answer on a held call opens nothing further", () =>
+it.instance("the mode writes no rule, and an always on a held call opens nothing beyond its session", () =>
   Effect.gen(function* () {
     const sessions = yield* Session.Service
     const { root } = yield* lineage
+    const other = yield* lineage
     const test = yield* TestInstance
     const before = (yield* sessions.get(root.id)).permission
     const input = bash(root.id, "git push origin main", test.directory)
@@ -431,8 +432,12 @@ it.instance("the mode writes no rule, and an answer on a held call opens nothing
     expect((yield* sessions.get(root.id)).permission).toEqual(before)
     expect(readFileSync(path.join(folder, "mode.json"), "utf8")).not.toContain("allow")
 
-    // Nothing was approved: the same command is held again rather than let through.
-    expect(yield* failure(ask(input))).toBeInstanceOf(PermissionV1.DeferredError)
+    // Row 258: the "always" is the session's, in memory, for this run of the mode. Its repeat runs, the same command from
+    // another session is held, and still no rule was written.
+    yield* ask(input)
+    expect(yield* failure(ask({ ...input, sessionID: other.root.id }))).toBeInstanceOf(PermissionV1.DeferredError)
+    expect(input.ruleset).toEqual([])
+    expect((yield* sessions.get(root.id)).permission).toEqual(before)
     expect(stub.calls).toEqual([])
   }),
 )

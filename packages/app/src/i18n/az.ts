@@ -1433,6 +1433,7 @@ export const dict = {
   "session.trust.later": "İndi yox",
   "session.movedOn.title": "Sizsiz davam etdi",
   "session.movedOn.allow": "İcazə ver və davam et",
+  "session.movedOn.alwaysInSession": "Bu sessiyada həmişə icazə ver",
   "session.movedOn.leave": "Belə qalsın",
   "session.movedOn.answer": "Cavabla",
   "home.agents.movedOn": "Bunsuz davam etdi · {{time}}",

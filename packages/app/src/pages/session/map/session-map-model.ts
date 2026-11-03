@@ -616,6 +616,14 @@ export function heldCalls(metadata: Record<string, unknown> | undefined): HeldCa
   })
 }
 
+// What an "always in this session" on a held entry would cover, as the server named it (row 258). Empty, and no button,
+// when the call offered no "always" or the entry came back from a restart.
+export function heldAlways(metadata: Record<string, unknown> | undefined): string[] {
+  const always = metadata?.sessionAlways
+  if (!Array.isArray(always)) return []
+  return always.filter((pattern): pattern is string => typeof pattern === "string" && pattern.length > 0)
+}
+
 export type ConsentItem = {
   id: string
   kind: "secret" | "sensitive" | "outside" | "destination"

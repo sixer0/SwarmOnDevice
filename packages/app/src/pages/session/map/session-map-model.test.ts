@@ -12,6 +12,7 @@ import {
   stepReference,
   heldCall,
   heldCalls,
+  heldAlways,
   consentShown,
   consentTicked,
   consentAllowInput,
@@ -526,6 +527,13 @@ describe("decisionGroups", () => {
     ])
     expect(heldCalls({ calls: [one, "text", null, two] })).toHaveLength(2)
     expect(heldCalls(undefined)).toEqual([])
+  })
+
+  test("row 258: an always in this session is offered only for what the server named", () => {
+    expect(heldAlways({ sessionAlways: ["git push *"] })).toEqual(["git push *"])
+    expect(heldAlways({ sessionAlways: ["a/*", "", 3, null] })).toEqual(["a/*"])
+    for (const metadata of [undefined, {}, { sessionAlways: [] }, { sessionAlways: "*" }, { always: ["*"] }])
+      expect(heldAlways(metadata)).toEqual([])
   })
 
   test("row 160: the consent list ticks per pattern and sends only what is ticked and not yet allowed", () => {

@@ -1431,6 +1431,7 @@ export const dict = {
   "session.trust.later": "Most nem",
   "session.movedOn.title": "Nélküled folytatta",
   "session.movedOn.allow": "Engedélyezés és folytatás",
+  "session.movedOn.alwaysInSession": "Mindig engedélyezés ebben a munkamenetben",
   "session.movedOn.leave": "Hagyd",
   "session.movedOn.answer": "Válasz",
   "home.agents.movedOn": "Enélkül folytatta · {{time}}",

@@ -1390,6 +1390,7 @@ export const dict = {
   "session.trust.later": "አሁን አይደለም",
   "session.movedOn.title": "ያለ እርስዎ ቀጥሏል",
   "session.movedOn.allow": "ፍቀድ እና ቀጥል",
+  "session.movedOn.alwaysInSession": "በዚህ ክፍለ ጊዜ ሁልጊዜ ፍቀድ",
   "session.movedOn.leave": "ተወው",
   "session.movedOn.answer": "መልስ",
   "home.agents.movedOn": "ያለዚህ ቀጥሏል · {{time}}",

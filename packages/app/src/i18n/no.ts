@@ -1534,6 +1534,7 @@ export const dict = {
   "session.trust.later": "Ikke nå",
   "session.movedOn.title": "Fortsatte uten deg",
   "session.movedOn.allow": "Tillat og fortsett",
+  "session.movedOn.alwaysInSession": "Tillat alltid i denne sesjonen",
   "session.movedOn.leave": "La være",
   "session.movedOn.answer": "Svar",
   "home.agents.movedOn": "Fortsatte uten dette · {{time}}",

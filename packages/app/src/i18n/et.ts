@@ -1412,6 +1412,7 @@ export const dict = {
   "session.trust.later": "Mitte praegu",
   "session.movedOn.title": "Jätkas ilma sinuta",
   "session.movedOn.allow": "Luba ja jätka",
+  "session.movedOn.alwaysInSession": "Luba selles seansis alati",
   "session.movedOn.leave": "Jäta nii",
   "session.movedOn.answer": "Vasta",
   "home.agents.movedOn": "Jätkas ilma selleta · {{time}}",

@@ -1505,6 +1505,7 @@ export const dict = {
   "session.trust.later": "ไม่ใช่ตอนนี้",
   "session.movedOn.title": "ทำต่อโดยไม่มีคุณ",
   "session.movedOn.allow": "อนุญาตและทำต่อ",
+  "session.movedOn.alwaysInSession": "อนุญาตเสมอในเซสชันนี้",
   "session.movedOn.leave": "ปล่อยไว้",
   "session.movedOn.answer": "ตอบ",
   "home.agents.movedOn": "ทำต่อโดยไม่มีสิ่งนี้ · {{time}}",

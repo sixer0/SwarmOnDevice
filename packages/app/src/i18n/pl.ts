@@ -1451,6 +1451,7 @@ export const dict = {
   "session.trust.later": "Nie teraz",
   "session.movedOn.title": "Kontynuował bez Ciebie",
   "session.movedOn.allow": "Zezwól i kontynuuj",
+  "session.movedOn.alwaysInSession": "Zawsze zezwalaj w tej sesji",
   "session.movedOn.leave": "Zostaw",
   "session.movedOn.answer": "Odpowiedz",
   "home.agents.movedOn": "Kontynuował bez tego · {{time}}",

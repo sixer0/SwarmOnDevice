@@ -1435,6 +1435,7 @@ export const dict = {
   "session.trust.later": "나중에",
   "session.movedOn.title": "사용자 없이 계속했습니다",
   "session.movedOn.allow": "허용하고 계속",
+  "session.movedOn.alwaysInSession": "이 세션에서 항상 허용",
   "session.movedOn.leave": "그대로 두기",
   "session.movedOn.answer": "답변",
   "home.agents.movedOn": "이것 없이 계속했습니다 · {{time}}",

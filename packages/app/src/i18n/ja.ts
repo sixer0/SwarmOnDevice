@@ -1437,6 +1437,7 @@ export const dict = {
   "session.trust.later": "今はしない",
   "session.movedOn.title": "あなたの回答なしで続行しました",
   "session.movedOn.allow": "許可して続行",
+  "session.movedOn.alwaysInSession": "このセッションでは常に許可",
   "session.movedOn.leave": "そのままにする",
   "session.movedOn.answer": "回答",
   "home.agents.movedOn": "これなしで続行しました · {{time}}",

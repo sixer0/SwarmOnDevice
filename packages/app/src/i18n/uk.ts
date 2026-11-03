@@ -1533,6 +1533,7 @@ export const dict = {
   "session.trust.later": "Не зараз",
   "session.movedOn.title": "Продовжив без вас",
   "session.movedOn.allow": "Дозволити й продовжити",
+  "session.movedOn.alwaysInSession": "Завжди дозволяти в цій сесії",
   "session.movedOn.leave": "Залишити",
   "session.movedOn.answer": "Відповісти",
   "home.agents.movedOn": "Продовжив без цього · {{time}}",

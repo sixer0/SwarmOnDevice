@@ -1527,6 +1527,7 @@ export const dict = {
   "session.trust.later": "Şimdi değil",
   "session.movedOn.title": "Sensiz devam etti",
   "session.movedOn.allow": "İzin ver ve devam et",
+  "session.movedOn.alwaysInSession": "Bu oturumda her zaman izin ver",
   "session.movedOn.leave": "Böyle kalsın",
   "session.movedOn.answer": "Yanıtla",
   "home.agents.movedOn": "Bu olmadan devam etti · {{time}}",

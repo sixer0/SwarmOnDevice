@@ -1409,6 +1409,7 @@ export const dict = {
   "session.trust.later": "ບໍ່ແມ່ນຕອນນີ້",
   "session.movedOn.title": "ດຳເນີນຕໍ່ໂດຍບໍ່ມີທ່ານ",
   "session.movedOn.allow": "ອະນຸຍາດ ແລະ ດຳເນີນຕໍ່",
+  "session.movedOn.alwaysInSession": "ອະນຸຍາດສະເໝີໃນເຊດຊັນນີ້",
   "session.movedOn.leave": "ປະໄວ້",
   "session.movedOn.answer": "ຕອບ",
   "home.agents.movedOn": "ດຳເນີນຕໍ່ໂດຍບໍ່ມີສິ່ງນີ້ · {{time}}",

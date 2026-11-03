@@ -1437,6 +1437,7 @@ export const dict = {
   "session.trust.later": "ယခုမဟုတ်ပါ",
   "session.movedOn.title": "သင်မပါဘဲ ဆက်လုပ်ခဲ့သည်",
   "session.movedOn.allow": "ခွင့်ပြုပြီး ဆက်လုပ်ရန်",
+  "session.movedOn.alwaysInSession": "ဤစက်ရှင်တွင် အမြဲခွင့်ပြုရန်",
   "session.movedOn.leave": "ထားလိုက်ပါ",
   "session.movedOn.answer": "ဖြေရန်",
   "home.agents.movedOn": "ဤအရာမပါဘဲ ဆက်လုပ်ခဲ့သည် · {{time}}",

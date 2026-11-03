@@ -1424,6 +1424,7 @@ export const dict = {
   "session.trust.later": "Ne zdaj",
   "session.movedOn.title": "Nadaljeval je brez vas",
   "session.movedOn.allow": "Dovoli in nadaljuj",
+  "session.movedOn.alwaysInSession": "Vedno dovoli v tej seji",
   "session.movedOn.leave": "Pusti",
   "session.movedOn.answer": "Odgovori",
   "home.agents.movedOn": "Nadaljeval je brez tega · {{time}}",

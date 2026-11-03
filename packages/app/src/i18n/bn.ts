@@ -1411,6 +1411,7 @@ export const dict: Record<string, string> = {
   "session.trust.later": "এখন নয়",
   "session.movedOn.title": "আপনাকে ছাড়াই চালিয়ে গেছে",
   "session.movedOn.allow": "অনুমতি দিন ও চালিয়ে যান",
+  "session.movedOn.alwaysInSession": "এই সেশনে সর্বদা অনুমতি দিন",
   "session.movedOn.leave": "থাক",
   "session.movedOn.answer": "উত্তর দিন",
   "home.agents.movedOn": "এটি ছাড়াই চালিয়ে গেছে · {{time}}",

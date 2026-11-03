@@ -155,6 +155,53 @@ export const make = Effect.gen(function* () {
     return result
   })
 
+  /** One approved entry: its calls are granted and run, and the agent is told. */
+  const approved = Effect.fnUntraced(function* (request: Permission.Answered) {
+    const root = yield* rootOf(request.sessionID)
+    // Every call the entry showed when the person approved it (E3), or the one it stood for before entries were shared.
+    const calls =
+      request.calls ??
+      (request.call === undefined
+        ? []
+        : [{ requestID: request.id, sessionID: request.sessionID, call: request.call, follows: request.follows }])
+    // Back from the file after a restart it has no call to show or run, so this answer wakes the agent, and its repeat
+    // of the same permission and patterns from that session goes through once (F1), with the other prompts of that one call. Each still passes the gate.
+    if (calls.length === 0 && request.deferred)
+      yield* permission.grant({
+        sessionID: request.sessionID,
+        permission: request.permission,
+        patterns: request.patterns,
+        uses: "once",
+      })
+    const grants = calls.length > 0 ? calls : request.deferred ? [] : [{ call: undefined, follows: request.follows }]
+    for (const held of grants) {
+      yield* permission.grant({
+        sessionID: root,
+        permission: request.permission,
+        patterns: request.patterns,
+        call: held.call,
+      })
+      for (const next of held.follows ?? [])
+        yield* permission.grant({
+          sessionID: root,
+          permission: next.permission,
+          patterns: next.patterns,
+          call: held.call,
+          followed: true,
+        })
+    }
+    // U11 E1: each call the person saw runs once now, without waiting for a model turn to ask for it again. One that
+    // nothing here can run is left to its grant, and the agent is told to do it.
+    const ran: { ran: boolean; output: string }[] = []
+    for (const held of calls) {
+      const result = yield* rerun(root, held.requestID, held.call, [request, ...(held.follows ?? [])])
+      if (result) ran.push(result)
+    }
+    yield* send(root, ran.length > 0 ? ranText(request, ran, calls.length - ran.length) : allowedText(request)).pipe(
+      report(root),
+    )
+  })
+
   return {
     forgetAbandoned: Effect.fn("LateAnswer.forgetAbandoned")(function* () {
       for (const item of (yield* permission.list()).filter((item) => item.movedOnAt)) {
@@ -166,49 +213,8 @@ export const make = Effect.gen(function* () {
       }
     }),
     permission: Effect.fn("LateAnswer.permission")(function* (request: Permission.Answered) {
-      const root = yield* rootOf(request.sessionID)
-      // Every call the entry showed when the person approved it (E3), or the one it stood for before entries were shared.
-      const calls =
-        request.calls ??
-        (request.call === undefined
-          ? []
-          : [{ requestID: request.id, sessionID: request.sessionID, call: request.call, follows: request.follows }])
-      // Back from the file after a restart it has no call to show or run, so this answer wakes the agent, and its repeat
-      // of the same permission and patterns from that session goes through once (F1), with the other prompts of that one call. Each still passes the gate.
-      if (calls.length === 0 && request.deferred)
-        yield* permission.grant({
-          sessionID: request.sessionID,
-          permission: request.permission,
-          patterns: request.patterns,
-          uses: "once",
-        })
-      const grants = calls.length > 0 ? calls : request.deferred ? [] : [{ call: undefined, follows: request.follows }]
-      for (const held of grants) {
-        yield* permission.grant({
-          sessionID: root,
-          permission: request.permission,
-          patterns: request.patterns,
-          call: held.call,
-        })
-        for (const next of held.follows ?? [])
-          yield* permission.grant({
-            sessionID: root,
-            permission: next.permission,
-            patterns: next.patterns,
-            call: held.call,
-            followed: true,
-          })
-      }
-      // U11 E1: each call the person saw runs once now, without waiting for a model turn to ask for it again. One that
-      // nothing here can run is left to its grant, and the agent is told to do it.
-      const ran: { ran: boolean; output: string }[] = []
-      for (const held of calls) {
-        const result = yield* rerun(root, held.requestID, held.call, [request, ...(held.follows ?? [])])
-        if (result) ran.push(result)
-      }
-      yield* send(root, ran.length > 0 ? ranText(request, ran, calls.length - ran.length) : allowedText(request)).pipe(
-        report(root),
-      )
+      // An "always in this session" also approved the family's other entries it covers (row 258): each as its own answer.
+      for (const answer of [request, ...(request.released ?? [])]) yield* approved(answer)
     }),
     /** A no with a reason is a correction, which the agent has to hear. A plain no wakes nothing. */
     rejected: Effect.fn("LateAnswer.rejected")(function* (request: PermissionV1.Request, message: string | undefined) {

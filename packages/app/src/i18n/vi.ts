@@ -1436,6 +1436,7 @@ export const dict = {
   "session.trust.later": "Để sau",
   "session.movedOn.title": "Đã tiếp tục mà không có bạn",
   "session.movedOn.allow": "Cho phép và tiếp tục",
+  "session.movedOn.alwaysInSession": "Luôn cho phép trong phiên này",
   "session.movedOn.leave": "Để nguyên",
   "session.movedOn.answer": "Trả lời",
   "home.agents.movedOn": "Đã tiếp tục mà không có điều này · {{time}}",

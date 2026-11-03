@@ -1438,6 +1438,7 @@ export const dict = {
   "session.trust.later": "މިހާރު ނޫން",
   "session.movedOn.title": "ތިޔަބޭފުޅާއާ ނުލައި ކުރިއަށްދިޔައީ",
   "session.movedOn.allow": "ހުއްދަދީ ކުރިއަށްދާ",
+  "session.movedOn.alwaysInSession": "މި ޖަލްސާގައި އަބަދުވެސް ހުއްދަ ދޭށެވެ",
   "session.movedOn.leave": "ދޫކޮށްލާ",
   "session.movedOn.answer": "ޖަވާބުދޭ",
   "home.agents.movedOn": "މިއާ ނުލައި ކުރިއަށްދިޔައީ · {{time}}",

@@ -1441,6 +1441,7 @@ export const dict: Record<string, string> = {
   "session.trust.later": "ད་ལྟོ་མེན།",
   "session.movedOn.title": "ཁྱོད་མེད་པར་འཕྲོ་མཐུད་འབད་ཡི།",
   "session.movedOn.allow": "གནང་བ་བྱིན་ཏེ་འཕྲོ་མཐུད།",
+  "session.movedOn.alwaysInSession": "ལཱ་ཡུན་འདི་ནང་ཨ་རྟག་ར་གནང་བཅུག།",
   "session.movedOn.leave": "བཞག",
   "session.movedOn.answer": "ལན་འདེབས།",
   "home.agents.movedOn": "འདི་མེད་པར་འཕྲོ་མཐུད་འབད་ཡི། · {{time}}",

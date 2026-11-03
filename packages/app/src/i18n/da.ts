@@ -1515,6 +1515,7 @@ export const dict = {
   "session.trust.later": "Ikke nu",
   "session.movedOn.title": "Fortsatte uden dig",
   "session.movedOn.allow": "Tillad og fortsæt",
+  "session.movedOn.alwaysInSession": "Tillad altid i denne session",
   "session.movedOn.leave": "Lad være",
   "session.movedOn.answer": "Svar",
   "home.agents.movedOn": "Fortsatte uden dette · {{time}}",

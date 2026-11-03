@@ -1419,6 +1419,7 @@ export const dict = {
   "session.trust.later": "Häzir däl",
   "session.movedOn.title": "Sizsiz dowam etdi",
   "session.movedOn.allow": "Rugsat ber we dowam et",
+  "session.movedOn.alwaysInSession": "Bu sessiýada elmydama rugsat ber",
   "session.movedOn.leave": "Goý",
   "session.movedOn.answer": "Jogap ber",
   "home.agents.movedOn": "Munsuz dowam etdi · {{time}}",

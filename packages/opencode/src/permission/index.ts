@@ -44,6 +44,8 @@ export type Answered = PermissionV1.Request & {
   follows?: PermissionV1.Follows
   call?: string
   calls?: ReadonlyArray<HeldCall>
+  /** Other entries of the family an "always in this session" covered, closed as approved with it (row 258). */
+  released?: ReadonlyArray<Answered>
 }
 
 export interface Grant extends Pick<PermissionV1.Request, "sessionID" | "permission" | "patterns"> {
@@ -55,8 +57,12 @@ export interface Grant extends Pick<PermissionV1.Request, "sessionID" | "permiss
    * An approval of an entry back from a restart, which no longer knows its call (F1). It lets the agent's repeat through:
    * the same permission and patterns, from the session that asked, in the run of the mode it was given in. "once" is used
    * up by that one prompt.
+   *
+   * "session" is a person's "always in this session" on a held entry (row 258). `patterns` are that request's own "always"
+   * patterns. It lets through what the mode would hold of the same permission within them, in the family, for the run of
+   * the mode it was given in. Memory only: a restart ends it.
    */
-  uses?: "once"
+  uses?: "once" | "session"
 }
 
 export interface Interface {
@@ -102,6 +108,11 @@ interface PendingEntry {
   version?: number
   /** What each call on the list asked, by its `call`, for the table to look at again when a consent item is ticked. */
   asks?: ReadonlyMap<string, { input: PermissionV1.AskInput; userCatchAll: boolean }>
+  /**
+   * The "always" patterns of the call the mode held, which the shown request leaves out: what "always in this session"
+   * covers (row 258). None when the call offers no "always", or after a restart.
+   */
+  always?: ReadonlyArray<string>
   deferred: Deferred.Deferred<void, PermissionV1.RejectedError | PermissionV1.CorrectedError>
 }
 
@@ -123,6 +134,17 @@ const samePrompt = (
   a.permission === b.permission &&
   a.patterns.length === b.patterns.length &&
   a.patterns.every((pattern, index) => pattern === b.patterns[index])
+
+/** What the line of a call let through by a person's "always in this session" says, for Activity to show (row 258). */
+const SESSION_REASON = 'a person\'s "always in this session"'
+
+/** Whether a "session" grant covers this prompt: its permission, and every pattern within the "always" it named. */
+const withinSession = (
+  grant: Pick<Grant, "permission" | "patterns">,
+  request: Pick<PermissionV1.Request, "permission" | "patterns">,
+) =>
+  grant.permission === request.permission &&
+  request.patterns.every((pattern) => grant.patterns.some((always) => Wildcard.match(pattern, always)))
 
 const sameRequest = (
   a: Pick<PermissionV1.Request, "sessionID" | "permission" | "patterns">,
@@ -531,6 +553,9 @@ const layer = Layer.effect(
       followed = false,
       // Let through by an "always" a person gave earlier: theirs to give, so it runs, but it was given outside the mode.
       standing = false,
+      // Within a person's "always in this session" (row 258): what the mode would hold for them runs instead. Only a hold:
+      // a refusal, a stop, a decider's answer or anything the person is asked about directly stays as it is.
+      session = false,
     ) {
       const instance = yield* InstanceState.context
       const root = yield* rootOf(input.sessionID)
@@ -584,7 +609,7 @@ const layer = Layer.effect(
             ? ("force_stop" as const)
             : ("subagent_stopped" as const)
           : undefined
-      const decision = stopped
+      const reached = stopped
         ? ("reject" as const)
         : verdict.class === "P"
           ? decided?.decision === "allow" || decided?.decision === "reject"
@@ -597,6 +622,8 @@ const layer = Layer.effect(
               : verdict.class === "X"
                 ? ("reject" as const)
                 : ("defer" as const)
+      const bySession = session && reached === "defer"
+      const decision = bySession ? ("allow" as const) : reached
 
       const reportFull = Effect.gen(function* () {
         const { full } = yield* InstanceState.get(state)
@@ -633,20 +660,23 @@ const layer = Layer.effect(
           canUndo,
           decidedBy: stopped
             ? `system:${stopped}`
-            : (decided?.decidedBy ?? (verdict.decidedBy === "person" ? "person" : "gate")),
+            : bySession
+              ? "person"
+              : (decided?.decidedBy ?? (verdict.decidedBy === "person" ? "person" : "gate")),
           decision,
-          reason:
-            decided?.reason ??
-            (standing && answered
-              ? 'an earlier "always" from a person'
-              : verdict === table && via === "outward" && table.destination
-                ? `sent to ${table.destination}`
-                : undefined),
+          reason: bySession
+            ? SESSION_REASON
+            : (decided?.reason ??
+              (standing && answered
+                ? 'an earlier "always" from a person'
+                : verdict === table && via === "outward" && table.destination
+                  ? `sent to ${table.destination}`
+                  : undefined)),
           memo: decided?.memo,
           latencyMs: decided?.latencyMs,
           costUsd: decided?.costUsd,
           attempts: decided?.attempts,
-          via: followed ? "grant" : into ? "duplicate" : verdict === table ? via : undefined,
+          via: followed || bySession ? "grant" : into ? "duplicate" : verdict === table ? via : undefined,
           duplicateOf: into,
           consentID: verdict === table && via ? table.consentID : undefined,
           script: screen && { bytes: screen.bytes, sha: screen.sha256, flags: [...screen.flags] },
@@ -860,8 +890,20 @@ const layer = Layer.effect(
         (grant) => grant.root === family && samePrompt(grant, request) && grant.call === undefined && !grant.uses,
       )
       const repeat = grants.findIndex(
-        (grant) => grant.uses !== undefined && grant.sessionID === request.sessionID && samePrompt(grant, request),
+        (grant) => grant.uses === "once" && grant.sessionID === request.sessionID && samePrompt(grant, request),
       )
+      // A person's "always in this session" (row 258) is good for the family, in the run of the mode it was given in. The
+      // gate still judges the call, and only what it would hold runs on it. A call its tool offers no "always" for (one the
+      // shell scan flags, say) is never covered by one.
+      const since = yield* autonomy.modeSince(family)
+      const inSession =
+        since !== undefined &&
+        !noAlways &&
+        request.always.length > 0 &&
+        grants.some(
+          (grant) =>
+            grant.uses === "session" && grant.root === family && grant.since === since && withinSession(grant, request),
+        )
       // Turned off since, even if on again now, and it answers nothing: it was given for the run that was going then.
       const current =
         repeat >= 0 &&
@@ -879,8 +921,9 @@ const layer = Layer.effect(
         tool: request.tool,
       }
       const deferred = yield* Deferred.make<void, PermissionV1.RejectedError | PermissionV1.CorrectedError>()
-      // Held for the person with the agent already released, whatever the unattended wait is set to. An "always" on one
-      // of these would open more than the single call anyone looked at, so it has nothing to apply to.
+      // Held for the person with the agent already released, whatever the unattended wait is set to. The request shows no
+      // "always": one would write a rule beyond the mode. Its patterns are kept on the entry, and in `sessionAlways` for the
+      // app, for an "always in this session" that ends with the run of the mode (row 258).
       // The state as it is now: the folder may have been closed and opened while the decider was thinking.
       const held: HeldCall = { requestID: id, sessionID: request.sessionID, call, follows }
       const hold = (root: SessionID, category: PermissionV1.DeferredCategory) =>
@@ -919,10 +962,15 @@ const layer = Layer.effect(
               return joined.info.id
             }
             if ([...current.pending.values()].filter((item) => item.root === root).length >= QUEUE_LIMIT) return false
+            const always = noAlways || request.always.length === 0 ? undefined : [...request.always]
+            // The person answers this one and not the next, so the entry has to show all of what the answer is good for.
+            const shown = toolCall && call !== id ? { ...metadata, call: JSON.parse(call) } : metadata
+            // Only the server names it: a tool's own metadata cannot offer the app a button. Left out rather than
+            // undefined, which the list route cannot encode.
+            const plain = Object.fromEntries(Object.entries(shown).filter(([key]) => key !== "sessionAlways"))
             const moved: PermissionV1.Request = {
               ...asked,
-              // The person answers this one and not the next, so the entry has to show all of what the answer is good for.
-              metadata: toolCall && call !== id ? { ...metadata, call: JSON.parse(call) } : metadata,
+              metadata: always ? { ...plain, sessionAlways: always } : plain,
               always: [],
               movedOnAt: Date.now(),
               deferred: true,
@@ -937,6 +985,7 @@ const layer = Layer.effect(
               calls: [held],
               given,
               asks: new Map([[call, { input, userCatchAll }]]),
+              always,
             })
             return true
           }),
@@ -1000,7 +1049,9 @@ const layer = Layer.effect(
       if (waiting?.category && !ticked && (yield* duplicate(input, id, waiting)))
         return yield* new PermissionV1.DeferredError({ category: waiting.category })
 
-      const gated = yield* gate(input, id, userCatchAll, hold)
+      // A session's "always" covers this prompt only. What else this call asks (a shell read beyond the folder asks `bash`
+      // next) is another call than the one the person saw, so it is judged, and held, on its own.
+      const gated = yield* gate(input, id, userCatchAll, hold, false, false, inSession)
       if (gated?.decision === "allow") return
       if (gated?.stopped) return yield* stoppedByMode(input)
       // Refused by what it is, so no person is asked. Not a rejection: that error ends the run, and this one reports back.
@@ -1053,7 +1104,7 @@ const layer = Layer.effect(
     const reply = Effect.fn("Permission.reply")(function* (
       input: PermissionV1.ReplyInput & { abandoned?: boolean; version?: number },
     ) {
-      const { approved, away, pending } = yield* InstanceState.get(state)
+      const { approved, away, grants, pending } = yield* InstanceState.get(state)
       const existing = pending.get(input.requestID)
       if (!existing) return yield* new PermissionV1.NotFoundError({ requestID: input.requestID })
       // A yes is good for the list the person saw. One that grew since is shown again, unanswered, and nothing is let
@@ -1075,6 +1126,11 @@ const layer = Layer.effect(
         reply: input.reply,
       })
 
+      const answered = (entry: PendingEntry): Answered => ({
+        ...entry.info,
+        ...(entry.follows && { follows: entry.follows }),
+        ...(entry.calls && { call: entry.calls[0]!.call, calls: entry.calls }),
+      })
       if (existing.info.movedOnAt) {
         if (input.reply === "always")
           approved.push(
@@ -1084,11 +1140,28 @@ const layer = Layer.effect(
               action: "allow" as const,
             })),
           )
-        return {
-          ...existing.info,
-          ...(existing.follows && { follows: existing.follows }),
-          ...(existing.calls && { call: existing.calls[0]!.call, calls: existing.calls }),
+        // What the mode held writes no rule: an "always" on it is good for its family until the mode goes off (row 258).
+        // Its other entries the same "always" covers are approved with it, as the loop below does for ordinary prompts.
+        const root = existing.root
+        const always = existing.always
+        if (input.reply !== "always" || !root || !always) return answered(existing)
+        const scope = { permission: existing.info.permission, patterns: always }
+        grants.push({
+          sessionID: existing.info.sessionID,
+          root,
+          ...scope,
+          uses: "session",
+          since: yield* autonomy.modeSince(root),
+        })
+        const released: Answered[] = []
+        for (const [id, item] of pending.entries()) {
+          if (item.root !== root || !item.info.movedOnAt || item.noAlways || !withinSession(scope, item.info)) continue
+          pending.delete(id)
+          yield* close(item, "approved_later", "person")
+          yield* events.publish(Event.Replied, { sessionID: item.info.sessionID, requestID: id, reply: "always" })
+          released.push(answered(item))
         }
+        return { ...answered(existing), ...(released.length > 0 && { released }) }
       }
 
       if (input.reply === "reject") {

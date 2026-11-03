@@ -1464,6 +1464,7 @@ export const dict = {
   "session.trust.later": "Pas maintenant",
   "session.movedOn.title": "A continué sans vous",
   "session.movedOn.allow": "Autoriser et continuer",
+  "session.movedOn.alwaysInSession": "Toujours autoriser dans cette session",
   "session.movedOn.leave": "Laisser",
   "session.movedOn.answer": "Répondre",
   "home.agents.movedOn": "A continué sans cela · {{time}}",

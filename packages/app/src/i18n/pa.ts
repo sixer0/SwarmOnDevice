@@ -1428,6 +1428,7 @@ export const dict = {
   "session.trust.later": "ਹੁਣ ਨਹੀਂ",
   "session.movedOn.title": "ਤੁਹਾਡੇ ਤੋਂ ਬਿਨਾਂ ਜਾਰੀ ਰੱਖਿਆ",
   "session.movedOn.allow": "ਇਜਾਜ਼ਤ ਦਿਓ ਅਤੇ ਜਾਰੀ ਰੱਖੋ",
+  "session.movedOn.alwaysInSession": "ਇਸ ਸੈਸ਼ਨ ਵਿੱਚ ਹਮੇਸ਼ਾ ਇਜਾਜ਼ਤ ਦਿਓ",
   "session.movedOn.leave": "ਰਹਿਣ ਦਿਓ",
   "session.movedOn.answer": "ਜਵਾਬ ਦਿਓ",
   "home.agents.movedOn": "ਇਸ ਤੋਂ ਬਿਨਾਂ ਜਾਰੀ ਰੱਖਿਆ · {{time}}",

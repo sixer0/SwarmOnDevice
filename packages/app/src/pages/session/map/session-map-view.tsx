@@ -29,6 +29,7 @@ import {
   consentTicked,
   decisionGroups,
   formatDuration,
+  heldAlways,
   heldCalls,
   relativePath,
   type ConsentItem,
@@ -301,7 +302,9 @@ export function DecisionRow(props: {
   entry: DecisionEntry
   calls?: readonly HeldCall[]
   busy: boolean
-  onReply?: (reply: "once" | "reject") => void
+  // Only for an entry the mode held whose call offered an "always" (row 258).
+  canAlways?: boolean
+  onReply?: (reply: "once" | "always" | "reject") => void
   onUndo: () => void
 }) {
   const language = useLanguage()
@@ -392,6 +395,17 @@ export function DecisionRow(props: {
             <ButtonV2 size="small" variant="contrast" disabled={props.busy} onClick={() => reply()("once")}>
               {language.t("session.movedOn.allow")}
             </ButtonV2>
+            <Show when={props.canAlways}>
+              <ButtonV2
+                data-decision-always
+                size="small"
+                variant="ghost"
+                disabled={props.busy}
+                onClick={() => reply()("always")}
+              >
+                {language.t("session.movedOn.alwaysInSession")}
+              </ButtonV2>
+            </Show>
             <ButtonV2 size="small" variant="ghost" disabled={props.busy} onClick={() => reply()("reject")}>
               {language.t("ui.permission.deny")}
             </ButtonV2>
@@ -755,8 +769,9 @@ function createDecisions(rootID: () => string | undefined) {
     undoBusy: (entry: DecisionEntry) => !!store.acting[entry.id] || isBusy(rootID()) || isBusy(entry.sessionID),
     replyBusy: (entry: DecisionEntry) => !!store.acting[entry.id],
     calls: (entry: DecisionEntry) => heldCalls(held(entry)),
+    canAlways: (entry: DecisionEntry) => heldAlways(held(entry)).length > 0,
     // Through the shared helper, which names the list version: an approval of an entry that grew without it is shown again.
-    reply: (entry: DecisionEntry, reply: "once" | "reject") =>
+    reply: (entry: DecisionEntry, reply: "once" | "always" | "reject") =>
       act(entry.id, "reply", () =>
         replyHeld(sdk().api, {
           request: { id: entry.id, sessionID: entry.sessionID, metadata: held(entry) ?? {} },
@@ -857,6 +872,7 @@ function DecisionGroup(props: {
               entry={entry}
               calls={props.waiting ? props.decisions.calls(entry) : undefined}
               busy={props.waiting ? props.decisions.replyBusy(entry) : props.decisions.undoBusy(entry)}
+              canAlways={props.waiting && props.decisions.canAlways(entry)}
               onReply={props.waiting ? (reply) => props.decisions.reply(entry, reply) : undefined}
               onUndo={() =>
                 void dialog.show(() => <DialogUndoDecision onConfirm={() => props.decisions.undo(entry)} />)
