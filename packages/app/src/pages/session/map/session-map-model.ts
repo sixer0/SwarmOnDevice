@@ -536,6 +536,18 @@ const byOf = (line: DecisionLine, later?: string) => {
   return line.decidedBy.startsWith("agent:") ? line.decidedBy.slice("agent:".length) : undefined
 }
 
+// The reason the server writes on a call let through by a person's "always in this session" (permission/index.ts).
+const SESSION_REASON = 'a person\'s "always in this session"'
+
+// What one answer to `answered` was good for: its own prompt, or one it named as following from it.
+const covers = (answered: DecisionLine, line: DecisionLine) =>
+  [{ permission: answered.permission, patterns: answered.patterns }, ...answered.follows].some(
+    (item) =>
+      item.permission === line.permission &&
+      item.patterns.length === line.patterns.length &&
+      item.patterns.every((pattern, index) => pattern === line.patterns[index]),
+  )
+
 // A revert only marks where the session went back to, so what it took away is everything from that message on.
 export function decisionGroups(
   lines: readonly AutonomyAuditLine[],
@@ -550,6 +562,9 @@ export function decisionGroups(
     ),
   )
   const groups: DecisionGroups = { waiting: [], decided: [], limited: [], notes: [] }
+  // Decided rows by the call they stand for, and the approvals a person gave later, oldest first.
+  const calls = new Map<string, DecisionEntry>()
+  const approved: { line: DecisionLine; entry: DecisionEntry }[] = []
   lines.forEach((line) => {
     if (line.type === "marker") {
       const note = NOTE_OF[line.marker]
@@ -585,9 +600,39 @@ export function decisionGroups(
             ? "button"
             : "none",
     }
-    if (isWaiting(line, answer)) groups.waiting.push(entry)
-    else if (isLimited(line, answer)) groups.limited.push(entry)
-    else groups.decided.push(entry)
+    if (isWaiting(line, answer)) {
+      groups.waiting.push(entry)
+      return
+    }
+    if (isLimited(line, answer)) {
+      groups.limited.push(entry)
+      return
+    }
+    // One person's decision is one row (row 262). A grant line only carries out an answer already on screen: a follow-on
+    // prompt of a call that has a row joins it, and a call let through by an earlier approval joins that approval's row.
+    // A later call an "always in this session" let through keeps a row of its own, one per call.
+    const call = line.callID ? `${line.sessionID}:${line.callID}` : undefined
+    const into =
+      line.via !== "grant"
+        ? undefined
+        : ((call ? calls.get(call) : undefined) ??
+          (line.reason === SESSION_REASON
+            ? undefined
+            : approved.findLast((item) => item.line.sessionID === line.sessionID && covers(item.line, line))?.entry))
+    if (call) calls.set(call, into ?? entry)
+    if (!into) {
+      groups.decided.push(entry)
+      if (answer === "approved_later") approved.push({ line, entry })
+      return
+    }
+    // The row keeps its own Undo. Only when it has none to give does it take one a folded line had, so no undoable step
+    // is lost, and a step a revert already took reads as undone there too.
+    if (into.undo !== "button" && into.outcome !== "undone" && (entry.undo === "button" || entry.outcome === "undone"))
+      Object.assign(into, {
+        messageID: entry.messageID,
+        undo: entry.undo,
+        ...(entry.outcome === "undone" && { outcome: "undone" }),
+      })
   })
   // What waits longest comes first. Everything else reads as a log, latest on top.
   groups.decided.reverse()

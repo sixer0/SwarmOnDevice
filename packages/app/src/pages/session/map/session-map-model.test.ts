@@ -446,6 +446,90 @@ describe("decisionGroups", () => {
     ])
   })
 
+  test("row 262: one approval after a restart is one Decided row, not one per prompt of the repeat", () => {
+    // The audit lines of p18_restart (seq 2-6): the held `.ssh` entry, its approval, the repeat's two grant lines.
+    const ssh = { permission: "external_directory", patterns: ["/root_h/home/.ssh/*"] }
+    const cat = { permission: "bash", patterns: ["cat ~/.ssh/id_rsa"] }
+    const granted = { class: "D", category: "secret_file", decision: "allow", decidedBy: "person", via: "grant" } as const
+    const groups = decisionGroups(
+      [
+        decision("held", {
+          ...ssh,
+          class: "D",
+          category: "secret_file",
+          decision: "defer",
+          decidedBy: "gate",
+          messageID: "msg_3",
+          callID: "call_1",
+          canUndo: false,
+          follows: [cat],
+        }),
+        decision("push", {
+          patterns: ["git push origin main"],
+          class: "D",
+          category: "outward_not_in_mission",
+          decision: "defer",
+          decidedBy: "gate",
+          messageID: "msg_3",
+          callID: "call_2",
+        }),
+        outcome("held", "approved_later", "person"),
+        decision("repeat-dir", { ...ssh, ...granted, messageID: "msg_7", callID: "call_9", canUndo: false }),
+        decision("repeat-bash", { ...cat, ...granted, messageID: "msg_7", callID: "call_9" }),
+      ],
+      "root",
+    )
+    expect(ids(groups.waiting)).toEqual(["push"])
+    expect(groups.decided).toHaveLength(1)
+    // The row had no Undo of its own; the repeat's bash step had one, so it is kept, on the repeat's message.
+    expect(groups.decided[0]).toMatchObject({ id: "held", by: "person", undo: "button", messageID: "msg_7" })
+    expect(groups.limited).toEqual([])
+  })
+
+  test("row 262: a row keeps its own Undo, and a folded step a revert took reads as undone", () => {
+    const granted = { decision: "allow", decidedBy: "person", via: "grant" } as const
+    const held = { class: "D", decision: "defer", decidedBy: "gate" } as const
+    const groups = decisionGroups(
+      [
+        decision("own", { ...held, patterns: ["make"], messageID: "msg_3" }),
+        outcome("own", "approved_later", "person"),
+        decision("own-ran", { ...granted, patterns: ["make"], messageID: "msg_7" }),
+        decision("taken", { ...held, patterns: ["rm x"], canUndo: false, messageID: "msg_3" }),
+        outcome("taken", "approved_later", "person"),
+        decision("taken-ran", { ...granted, patterns: ["rm x"], messageID: "msg_8" }),
+      ],
+      "root",
+      () => "msg_8",
+    )
+    const seen = Object.fromEntries(
+      groups.decided.map((entry) => [entry.id, [entry.messageID, entry.undo, entry.outcome]]),
+    )
+    expect(seen).toEqual({
+      own: ["msg_3", "button", "approved_later"],
+      taken: ["msg_8", undefined, "undone"],
+    })
+  })
+
+  test("row 262: later calls an always in this session let through are one row per call", () => {
+    const session = { decision: "allow", decidedBy: "person", via: "grant" } as const
+    const reason = 'a person\'s "always in this session"'
+    const groups = decisionGroups(
+      [
+        decision("always", { class: "D", decision: "defer", decidedBy: "gate", patterns: ["cat a"], callID: "call_1" }),
+        outcome("always", "approved_later", "person"),
+        decision("always-ran", { ...session, patterns: ["cat a"], callID: "call_2" }),
+        decision("next-dir", { ...session, reason, permission: "external_directory", patterns: ["/x/*"], callID: "c3" }),
+        decision("next-bash", { ...session, reason, patterns: ["cat /x/b"], callID: "c3" }),
+        decision("other", { ...session, reason, patterns: ["cat a"], callID: "c4" }),
+        // A grant line with nothing on screen to carry out still shows.
+        decision("stray", { ...session, patterns: ["ls -la"], callID: "c5" }),
+      ],
+      "root",
+    )
+    expect(ids(groups.decided)).toEqual(["stray", "other", "next-dir", "always"])
+    expect(groups.waiting).toEqual([])
+  })
+
   test("a line of another root stays out, and an outcome without a decision makes nothing up", () => {
     const groups = decisionGroups([decision("other", { rootID: "elsewhere" }), outcome("nobody", "ran")], "root")
     expect([...groups.waiting, ...groups.decided, ...groups.limited]).toEqual([])
