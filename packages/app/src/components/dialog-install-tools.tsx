@@ -89,90 +89,11 @@ export function DialogInstallTools(props: { api: SetupToolsPlatform; offer?: boo
 
   return (
     <Dialog title={language.t("dialog.tools.title")} class="w-full max-w-[560px] mx-auto">
-      <div class="flex flex-col gap-4 p-6 pt-0">
-        <p class="text-14-regular text-text-base">{language.t("dialog.tools.body")}</p>
+      <div data-tools-dialog class="flex min-h-0 flex-1 flex-col gap-4 p-6 pt-0">
+        <p class="shrink-0 text-14-regular text-text-base">{language.t("dialog.tools.body")}</p>
 
-        <div class="flex flex-col gap-2">
-          <For each={SETUP_COMPONENT_IDS}>
-            {(id) => (
-              <div class="flex items-center justify-between gap-3">
-                <Checkbox
-                  checked={state.ticked[id]}
-                  disabled={running()}
-                  onChange={(value: boolean) => controller.toggle(id, value)}
-                >
-                  {id}
-                </Checkbox>
-                <span class="flex items-center gap-2 text-12-regular text-text-weak min-w-0 truncate">
-                  <Show when={running() && state.ticked[id] && !state.steps[id] && state.states[id] !== "healthy"}>
-                    <Spinner class="size-3" />
-                  </Show>
-                  {status(id)}
-                </span>
-              </div>
-            )}
-          </For>
-        </div>
-
-        <Switch>
-          <Match when={state.preview.kind === "loading"}>
-            <span class="text-12-regular text-text-weak">{language.t("common.loading")}</span>
-          </Match>
-          <Match when={previewFailed()}>
-            <div class="flex items-center justify-between gap-3">
-              <span class="text-12-regular text-text-weak">{language.t("common.requestFailed")}</span>
-              <Show when={retriesLeft()}>
-                <Button size="small" disabled={retryIn() > 0} onClick={() => void controller.retryPreview()}>
-                  {retryIn() > 0
-                    ? language.t("dialog.tools.retryIn", { seconds: retryIn() })
-                    : language.t("home.agents.retry")}
-                </Button>
-              </Show>
-            </div>
-          </Match>
-          <Match when={previewRun()}>
-            {(run) => (
-              <div class="flex flex-col gap-2">
-                <button
-                  type="button"
-                  class="self-start text-12-medium text-text-interactive-base"
-                  aria-expanded={ui.showTerms}
-                  onClick={() => setUi("showTerms", !ui.showTerms)}
-                >
-                  {language.t("dialog.tools.terms")}
-                </button>
-                <Show when={ui.showTerms}>
-                  <pre class="max-h-60 overflow-auto whitespace-pre-wrap rounded-md bg-surface-base p-3 text-11-regular text-text-base">
-                    {run().stdout}
-                    {run().stderr}
-                  </pre>
-                </Show>
-              </div>
-            )}
-          </Match>
-        </Switch>
-
-        <Show when={state.run}>
-          {(run) => (
-            <Show when={run().stderr || resultLine(run().stdout)}>
-              <pre class="max-h-40 overflow-auto whitespace-pre-wrap rounded-md bg-surface-base p-3 text-11-regular text-text-base">
-                {[resultLine(run().stdout), run().stderr].filter(Boolean).join("\n")}
-              </pre>
-            </Show>
-          )}
-        </Show>
-        <Show when={state.phase === "failed"}>
-          <span class="text-12-regular text-text-weak">{language.t("common.requestFailed")}</span>
-        </Show>
-
-        <div class="flex flex-col gap-1">
-          <span class="text-12-regular text-text-weak">{language.t("dialog.tools.terminal")}</span>
-          <code class="select-all break-all rounded-md bg-surface-base p-2 text-11-regular text-text-base">
-            {TOOLS_TERMINAL_COMMAND}
-          </code>
-        </div>
-
-        <div class="flex justify-end gap-2">
+        {/* The action row sits above the list so Install stays in view however long the statuses or result run. */}
+        <div data-tools-actions class="flex shrink-0 justify-end gap-2">
           <Show
             when={state.phase === "done"}
             fallback={
@@ -191,6 +112,93 @@ export function DialogInstallTools(props: { api: SetupToolsPlatform; offer?: boo
             </Show>
             {language.t("dialog.tools.install")}
           </Button>
+        </div>
+
+        <div data-tools-scroll class="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto">
+          <div class="flex flex-col gap-2">
+            <For each={SETUP_COMPONENT_IDS}>
+              {(id) => (
+                <div class="flex items-center justify-between gap-3">
+                  <div class="shrink-0">
+                    <Checkbox
+                      checked={state.ticked[id]}
+                      disabled={running()}
+                      onChange={(value: boolean) => controller.toggle(id, value)}
+                    >
+                      {id}
+                    </Checkbox>
+                  </div>
+                  {/* One line per tool: a long reason ends in an ellipsis, the full text is on hover. */}
+                  <span class="flex min-w-0 items-center gap-2 text-12-regular text-text-weak">
+                    <Show when={running() && state.ticked[id] && !state.steps[id] && state.states[id] !== "healthy"}>
+                      <Spinner class="size-3 shrink-0" />
+                    </Show>
+                    <span data-tools-status class="min-w-0 truncate" title={status(id) || undefined}>
+                      {status(id)}
+                    </span>
+                  </span>
+                </div>
+              )}
+            </For>
+          </div>
+
+          <Switch>
+            <Match when={state.preview.kind === "loading"}>
+              <span class="text-12-regular text-text-weak">{language.t("common.loading")}</span>
+            </Match>
+            <Match when={previewFailed()}>
+              <div class="flex items-center justify-between gap-3">
+                <span class="text-12-regular text-text-weak">{language.t("common.requestFailed")}</span>
+                <Show when={retriesLeft()}>
+                  <Button size="small" disabled={retryIn() > 0} onClick={() => void controller.retryPreview()}>
+                    {retryIn() > 0
+                      ? language.t("dialog.tools.retryIn", { seconds: retryIn() })
+                      : language.t("home.agents.retry")}
+                  </Button>
+                </Show>
+              </div>
+            </Match>
+            <Match when={previewRun()}>
+              {(run) => (
+                <div class="flex flex-col gap-2">
+                  <button
+                    type="button"
+                    class="self-start text-12-medium text-text-interactive-base"
+                    aria-expanded={ui.showTerms}
+                    onClick={() => setUi("showTerms", !ui.showTerms)}
+                  >
+                    {language.t("dialog.tools.terms")}
+                  </button>
+                  <Show when={ui.showTerms}>
+                    <pre class="max-h-60 overflow-auto whitespace-pre-wrap rounded-md bg-surface-base p-3 text-11-regular text-text-base">
+                      {run().stdout}
+                      {run().stderr}
+                    </pre>
+                  </Show>
+                </div>
+              )}
+            </Match>
+          </Switch>
+
+          <Show when={state.run}>
+            {(run) => (
+              <Show when={run().stderr || resultLine(run().stdout)}>
+                <pre class="max-h-40 overflow-auto whitespace-pre-wrap rounded-md bg-surface-base p-3 text-11-regular text-text-base">
+                  {[resultLine(run().stdout), run().stderr].filter(Boolean).join("\n")}
+                </pre>
+              </Show>
+            )}
+          </Show>
+          <Show when={state.phase === "failed"}>
+            <span class="text-12-regular text-text-weak">{language.t("common.requestFailed")}</span>
+          </Show>
+
+          <div class="flex flex-col gap-1">
+            <span class="text-12-regular text-text-weak">{language.t("dialog.tools.terminal")}</span>
+            <code class="select-all break-all rounded-md bg-surface-base p-2 text-11-regular text-text-base">
+              {TOOLS_TERMINAL_COMMAND}
+            </code>
+          </div>
         </div>
       </div>
     </Dialog>
