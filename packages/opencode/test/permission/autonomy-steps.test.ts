@@ -165,6 +165,8 @@ describe("row 276: the checks and looks the alugra session kept waiting on", () 
       'grep -rln "x" . --include=*.ts --include=*.md',
       "rtk grep -rn x src --include='*.tsx'",
       'grep -rn "x" src --exclude-dir=node_modules -l',
+      'grep -rn "export function f" -A 40 src/a.ts 2>/dev/null | head -60',
+      "grep -rn -e x -C 2 src",
       'grep -n "^import\\|from \\"../src" src/a.ts',
       "sed -n '/^## 8\\./,/^## 9\\./p' docs/a.md",
       'rtk grep -n "" docs/a.md | rtk grep -n "## 7"',

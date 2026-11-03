@@ -452,8 +452,13 @@ function grepTree(words: readonly string[], cwd: string, instance: InstanceConte
   const includes: string[] = []
   const skipped: string[] = []
   const named: string[] = []
-  for (const word of words.slice(1)) {
-    if (word.startsWith("--include=")) includes.push(word.slice(10))
+  const args = words.slice(1)
+  for (let index = 0; index < args.length; index++) {
+    const word = args[index]!
+    // Context and count flags take the next word as a number; `-e` takes it as the pattern.
+    if (/^-[ABCm]$/.test(word) && /^\d+$/.test(args[index + 1] ?? "")) index++
+    else if (word === "-e" && args[index + 1] !== undefined) named.unshift(args[++index]!)
+    else if (word.startsWith("--include=")) includes.push(word.slice(10))
     else if (word.startsWith("--exclude-dir=")) skipped.push(word.slice(14))
     else if (word.startsWith("--exclude=")) continue
     else if (word === "--recursive") continue
