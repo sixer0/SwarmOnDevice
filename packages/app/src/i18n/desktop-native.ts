@@ -330,6 +330,14 @@ export const DESKTOP_NATIVE_ENGLISH = {
   "desktop.setupTools.confirm.detail": "Swarm will download and install:\n{{components}}",
   "desktop.setupTools.confirm.install": "Install",
   "desktop.setupTools.confirm.cancel": "Cancel",
+  "desktop.menu.installCli": "Install Command Line Tool...",
+  "desktop.cli.confirm.message": "Install the swarm command?",
+  "desktop.cli.confirm.detail":
+    "Swarm will create {{path}}, a link to the swarm command inside this app. The command uses the same engine, settings and sessions as the app, and while the app is open it runs through the app.",
+  "desktop.cli.done.message": "The swarm command is installed",
+  "desktop.cli.done.detail": "{{path}}",
+  "desktop.cli.done.pathHint": "{{path}}\n\n{{dir}} is not on your PATH yet. Add this line to your shell profile:\nexport PATH=\"{{dir}}:$PATH\"",
+  "desktop.cli.failed.message": "The swarm command could not be installed",
 } as const
 
 export type DesktopNativeKey = keyof typeof DESKTOP_NATIVE_ENGLISH

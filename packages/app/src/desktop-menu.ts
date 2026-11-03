@@ -4,6 +4,7 @@ export type DesktopMenuPlatform = "macos" | "windows"
 
 export type DesktopMenuAction =
   | "app.checkForUpdates"
+  | "app.installCli"
   | "app.relaunch"
   | "edit.undo"
   | "edit.redo"
@@ -85,6 +86,7 @@ export const DESKTOP_MENU: DesktopMenu[] = [
         enabled: "updater",
       },
       { type: "item", labelKey: "desktop.menu.settings", command: "settings.open", accelerator: { macos: "Cmd+," } },
+      { type: "item", labelKey: "desktop.menu.installCli", action: "app.installCli" },
       { type: "item", labelKey: "desktop.menu.reloadWebview", action: "view.reload" },
       { type: "item", labelKey: "desktop.menu.restart", action: "app.relaunch" },
       { type: "item", labelKey: "desktop.menu.exportLogs", command: "logs.export" },

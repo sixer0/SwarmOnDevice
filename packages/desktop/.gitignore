@@ -30,3 +30,4 @@ resources/rg
 resources/icons
 resources/*.metainfo.xml
 resources/swarm-setup/
+resources/swarm-cli/

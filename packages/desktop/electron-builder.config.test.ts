@@ -135,6 +135,9 @@ for (const channel of channels) {
       to: "THIRD_PARTY_LICENSES.txt",
     })
     expect(config.extraResources).toContainEqual({ from: "resources/rg", to: "rg" })
+    // C120: the swarm command rides beside the app, outside the asar.
+    expect(config.extraResources).toContainEqual({ from: "resources/swarm-cli", to: "swarm-cli" })
+    expect(config.files).toContain("!resources/swarm-cli{,/**/*}")
 
     // A11 asar exclusions plus the rg slot exclusion (AD-10, AD-15):
     for (const exclusion of [

@@ -9,6 +9,8 @@ await $`bun ./scripts/copy-metainfo.ts ${channel}`
 // Senior 3 (C82 c): fail before a macOS build when resources/swarm-setup is missing, incomplete or stale.
 // The bundled swarm-setup is darwin-arm64 only, so other hosts do not check it.
 if (process.platform === "darwin") await $`bun ./scripts/check-setup-stage.ts`
+// C120: the same gate for the swarm command slot (bun ./scripts/stage-cli.ts).
+if (process.platform === "darwin") await $`bun ./scripts/check-cli-stage.ts`
 
 await $`cd ../opencode && bun script/build-node.ts`
 if (channel === "dev") await downloadCliToResources()

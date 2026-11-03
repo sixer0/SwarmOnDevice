@@ -115,6 +115,8 @@ const getBase = (appId: string): Configuration => ({
     "!resources/swarm-patch{,/**/*}",
     // The setup runner and its tools.lock.json ride outside the asar too (row 223).
     "!resources/swarm-setup{,/**/*}",
+    // The swarm command rides outside the asar too (C120).
+    "!resources/swarm-cli{,/**/*}",
   ],
   extraResources: [
     ...(channel === "dev"
@@ -140,6 +142,8 @@ const getBase = (appId: string): Configuration => ({
     { from: "resources/swarm-patch", to: "swarm-patch" },
     // Setup runner slot: swarm-setup, tools.lock.json, swarm-web-proxy land at Contents/Resources/swarm-setup/.
     { from: "resources/swarm-setup", to: "swarm-setup" },
+    // swarm command slot (C120): swarm, swarm-launcher and bundled-provider.json land at Contents/Resources/swarm-cli/.
+    { from: "resources/swarm-cli", to: "swarm-cli" },
     // Copied after beforePack writes the staging and before afterPack verifies it, so the seal covers it.
     { from: ".library-stage", to: "knowledge-library" },
     {

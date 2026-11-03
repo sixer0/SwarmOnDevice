@@ -113,8 +113,10 @@ const pluralCategories = new Map(
 //     238, decision C80; requested by row 245 and written by row 246 of the same task);
 //   - one more for the archive row's mark on an archive that is a link (`session.autonomy.archive.unsafe`, row 162
 //     of the same task, the archive route's `unsafe` field from row 152).
+//   - seven more for main's native Install Command Line Tool menu and dialogs (`desktop.menu.installCli`,
+//     `desktop.cli.*`, decision C121 of the same task).
 // Widening this list is a decision, not drift: `parity-exemption-guard.test.ts` fails the suite on any
-// sixty-second entry, on any non-literal/wildcard, and if `en` or `id` ever stops carrying an exempt key.
+// sixty-ninth entry, on any non-literal/wildcard, and if `en` or `id` ever stops carrying an exempt key.
 const UNTRANSLATED_KEY_PRESENCE_EXEMPTION: readonly string[] = [
   "command.project.openNumber",
   "settings.tab.servers",
@@ -177,6 +179,13 @@ const UNTRANSLATED_KEY_PRESENCE_EXEMPTION: readonly string[] = [
   "desktop.setupTools.confirm.detail",
   "desktop.setupTools.confirm.install",
   "desktop.setupTools.confirm.cancel",
+  "desktop.menu.installCli",
+  "desktop.cli.confirm.message",
+  "desktop.cli.confirm.detail",
+  "desktop.cli.done.message",
+  "desktop.cli.done.detail",
+  "desktop.cli.done.pathHint",
+  "desktop.cli.failed.message",
 ]
 // Locales the exemption never applies to. `en` is every domain's source, and `id` is the second
 // maintained locale: it already carries every exempt key, so it stays fully enforced like the rest.

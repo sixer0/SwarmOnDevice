@@ -6,7 +6,7 @@ import { homedir } from "node:os"
 import { join } from "node:path"
 import { getCACertificates, setDefaultCACertificates } from "node:tls"
 import type { Event } from "electron"
-import { app, BrowserWindow } from "electron"
+import { app, BrowserWindow, dialog } from "electron"
 
 import { Deferred, Effect, Fiber } from "effect"
 import contextMenu from "electron-context-menu"
@@ -49,7 +49,9 @@ import { spawnWslSidecar } from "./wsl/sidecar"
 import { migrate } from "./migrate"
 import { cleanupStoreFiles } from "./store-cleanup"
 import { startBackgroundCli } from "./background-cli"
-import { setNativeTranslations } from "./native-translations"
+import { nativeT, setNativeTranslations } from "./native-translations"
+import { appServerFilePath, appStateHome, removeAppServerFile, writeAppServerFile } from "./app-server-file"
+import { cliLauncherPath, createCliInstaller } from "./cli-install"
 
 const APP_NAMES: Record<string, string> = {
   dev: "Swarm Dev",
@@ -194,6 +196,9 @@ const main = Effect.gen(function* () {
   }
 
   const shellEnv = preferAppEnv(app.getPath("userData"))
+  // After preferAppEnv this is the state root the sidecar uses; the swarm command is pointed at the same one (C120).
+  const stateHome = appStateHome(process.env, app.getPath("userData"))
+  const serverFile = appServerFilePath(stateHome)
 
   app.on("second-instance", (_event: Event, argv: string[]) => {
     const urls = argv.filter((arg: string) => arg.startsWith("swarm://"))
@@ -221,6 +226,7 @@ const main = Effect.gen(function* () {
 
   app.on("will-quit", () => {
     setAppQuitting()
+    removeAppServerFile(serverFile)
     void stopSidecars()
   })
 
@@ -271,6 +277,16 @@ const main = Effect.gen(function* () {
       if (win) sendMenuCommand(win, id)
     },
     checkForUpdates: () => void showUpdaterDialog(updater, true),
+    installCli: () =>
+      void createCliInstaller({
+        window: () => getLastFocusedWindow() ?? null,
+        showMessageBox: (win, options) => (win ? dialog.showMessageBox(win, options) : dialog.showMessageBox(options)),
+        t: nativeT,
+        launcher: cliLauncherPath(process.resourcesPath),
+        stateHome,
+        binDir: join(homedir(), ".local", "bin"),
+        pathEnv: () => shellEnv?.PATH ?? process.env.PATH,
+      })().catch((error) => logger.error("install command line tool failed", error)),
     relaunch,
   }
   registerIpcHandlers({
@@ -393,6 +409,11 @@ const main = Effect.gen(function* () {
         Effect.sync(() => {
           logger.error("sidecar health check failed", e.toString())
         }),
+      ),
+    )
+    yield* Effect.promise(() =>
+      writeAppServerFile(serverFile, { url, username: "opencode", password, pid: process.pid }).catch((error) =>
+        logger.warn("failed to write the app server descriptor for the swarm command", error),
       ),
     )
 

@@ -75,6 +75,14 @@ export const dict = {
   "desktop.setupTools.confirm.detail": "Swarm akan mengunduh dan menginstal:\n{{components}}",
   "desktop.setupTools.confirm.install": "Instal",
   "desktop.setupTools.confirm.cancel": "Batal",
+  "desktop.menu.installCli": "Instal Alat Baris Perintah...",
+  "desktop.cli.confirm.message": "Instal perintah swarm?",
+  "desktop.cli.confirm.detail":
+    "Swarm akan membuat {{path}}, tautan ke perintah swarm di dalam app ini. Perintah ini memakai mesin, pengaturan, dan sesi yang sama dengan app, dan saat app terbuka perintah ini berjalan lewat app.",
+  "desktop.cli.done.message": "Perintah swarm sudah terpasang",
+  "desktop.cli.done.detail": "{{path}}",
+  "desktop.cli.done.pathHint": "{{path}}\n\n{{dir}} belum ada di PATH. Tambahkan baris ini ke profil shell Anda:\nexport PATH=\"{{dir}}:$PATH\"",
+  "desktop.cli.failed.message": "Perintah swarm tidak dapat dipasang",
 
   "desktop.server.local": "Server lokal",
 
