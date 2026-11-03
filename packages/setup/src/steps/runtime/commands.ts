@@ -287,6 +287,12 @@ export function brewInstallArgv(brewPath: string, formula: string): string[] {
   return [brewPath, "install", "--formula", formula]
 }
 
+/** Row 264: the lock version of a brew formula is a MINIMUM; an installed keg below it is
+ *  moved up through the user's own Homebrew (consent = pressing Install for runtime). */
+export function brewUpgradeArgv(brewPath: string, formula: string): string[] {
+  return [brewPath, "upgrade", "--formula", formula]
+}
+
 export function brewInfoJsonArgv(brewPath: string, formula: string): string[] {
   return [brewPath, "info", "--json=v2", formula]
 }

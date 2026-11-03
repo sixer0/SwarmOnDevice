@@ -39,7 +39,7 @@ import { defaultState, readState } from "../src/state.ts"
 import { discoverSteps, orderSteps, validateDescriptor } from "../src/steps.ts"
 import { OUTCOME, exitCodeFor } from "../src/outcomes.ts"
 import { COLIMA_PROFILE, DOCKER_CONTEXT, LABELS, STATES, type ComponentId } from "../src/constants.ts"
-import { installWithDeps, removeWithDeps } from "../src/steps/runtime/index.ts"
+import { compareVersions, installWithDeps, removeWithDeps } from "../src/steps/runtime/index.ts"
 import {
   evaluatePreflight,
   bottleFloor,
@@ -918,5 +918,174 @@ console.log(JSON.stringify({
     const src = readFileSync(join(import.meta.dir, "../src/steps/runtime/commands.ts"), "utf8")
     expect({ importsDockerSpawnEnv: /import \{[^}]*\bdockerSpawnEnv\b[^}]*\} from "\.\.\/\.\.\/dockerRunner\.real\.ts"/.test(src) }).toEqual({ importsDockerSpawnEnv: true })
     expect({ ownDenyLiterals: src.match(/["']DOCKER_(HOST|CONTEXT|CONFIG)["']/g) ?? [] }).toEqual({ ownDenyLiterals: [] })
+  })
+})
+
+// ---- row 264: brew formula lock versions are a MINIMUM, not an exact pin -------------------
+// Real-world failure: brew had docker 29.8.0 while the lock said 29.9.2 and the step refused.
+// Every brew answer below is a fixture; nothing touches the user's Homebrew.
+
+const BREW_DOCKER_LIST = "/opt/homebrew/bin/brew list --formula --versions docker"
+
+/** cycleRunner with a scripted `docker` formula: `docker` is the queue of `brew list` answers
+ *  (null = not installed; the last answer repeats), plus upgrade/install fixtures and an
+ *  optional `brew info` stable answer for the verify phase. */
+function minimumRunner(o: {
+  docker: (string | null)[]
+  upgradeExit?: number
+  info?: { version: string; sha: string }
+}) {
+  const base = cycleRunner()
+  const queue = [...o.docker]
+  const answer = (line: string, stdout: string, exitCode = 0) => {
+    base.calls.push(line)
+    return { ok: exitCode === 0, exitCode, stdout, stderr: exitCode === 0 ? "" : "fixture: brew refused" }
+  }
+  return {
+    calls: base.calls,
+    run(argv: readonly string[]) {
+      const line = argv.join(" ")
+      if (line === BREW_DOCKER_LIST) {
+        const v = queue.length > 1 ? queue.shift() : queue[0]
+        return v === null || v === undefined ? answer(line, "", 1) : answer(line, `docker ${v}\n`)
+      }
+      if (line === "/opt/homebrew/bin/brew upgrade --formula docker") return answer(line, "", o.upgradeExit ?? 0)
+      if (line === "/opt/homebrew/bin/brew install --formula docker") return answer(line, "")
+      if (line === "/opt/homebrew/bin/brew info --json=v2 docker" && o.info)
+        return answer(
+          line,
+          JSON.stringify({
+            formula: [
+              {
+                name: "docker",
+                stable: { version: o.info.version },
+                bottle: { stable: { files: { arm64_golden_gate: { sha256: o.info.sha } } } },
+              },
+            ],
+          }),
+        )
+      return base.run(argv)
+    },
+    get executedCount() {
+      return base.calls.length
+    },
+    get printed() {
+      return base.calls
+    },
+  }
+}
+
+async function runMinimum(label: string, runner: ReturnType<typeof minimumRunner>) {
+  const home = freshHome(label)
+  stageColimaFootprint(home)
+  const res = await installWithDeps(
+    { lock: LOCK, state: defaultState(LOCK.version), dryRun: false },
+    { runner, host: host(), consentGate: granted, consentFirecrawl: false, signatureRun: sigOk },
+  )
+  const ledger = existsSync(join(home, ".swarm", "tools", "runtime", "guest-image-capture.jsonl"))
+    ? readFileSync(join(home, ".swarm", "tools", "runtime", "guest-image-capture.jsonl"), "utf8")
+    : ""
+  const formulas = ledger
+    .split("\n")
+    .filter((l) => l.includes('"type":"formula_versions"'))
+    .flatMap((l) => (JSON.parse(l) as { payload: { formulas: { formula: string; have: string; action: string }[] } }).payload.formulas)
+  return { res, docker: formulas.find((f) => f.formula === "docker") }
+}
+
+describe("row 264: brew formula versions are a reviewed minimum", () => {
+  it("compareVersions: numeric dotted compare, leading v, brew _N revision, unparseable -> null", () => {
+    expect(compareVersions("29.8.0", "29.9.2")).toBe(-1)
+    expect(compareVersions("29.10.0", "29.9.2")).toBe(1) // numeric, not lexical
+    expect(compareVersions("v5.6.1", "5.6.1")).toBe(0)
+    expect(compareVersions("29.9", "29.9.0")).toBe(0)
+    expect(compareVersions("29.9.2_1", "29.9.2")).toBe(1)
+    expect(compareVersions("29.9.1_3", "29.9.2")).toBe(-1) // the revision never outranks the dotted part
+    expect(compareVersions("1.2.3-rc1", "1.2.3")).toBe(0)
+    expect(compareVersions("abc", "1.0")).toBeNull()
+    expect(compareVersions("", "1.0")).toBeNull()
+  })
+
+  it("older -> brew upgrade -> now equal -> healthy, the upgrade recorded", async () => {
+    const runner = minimumRunner({ docker: ["29.8.0", lockPinVersion("docker_cli")] })
+    const r = await runMinimum("min-upgrade-ok", runner)
+    expect(r.res.token).toBe(OUTCOME.OK)
+    expect(runner.calls.filter((c) => c.startsWith("/opt/homebrew/bin/brew upgrade"))).toEqual([
+      "/opt/homebrew/bin/brew upgrade --formula docker",
+    ])
+    expect(runner.calls.some((c) => c.includes("brew install"))).toBe(false)
+    expect(r.docker).toMatchObject({ have: lockPinVersion("docker_cli"), action: "upgraded" })
+  })
+
+  it("older -> brew upgrade -> still older -> FAILED naming have and want, nothing brought up", async () => {
+    const runner = minimumRunner({ docker: ["29.8.0"] })
+    const r = await runMinimum("min-upgrade-still-old", runner)
+    expect(r.res.token).toBe(OUTCOME.FAILED)
+    expect(r.res.message).toContain('"29.8.0" after brew upgrade')
+    expect(r.res.message).toContain(`at least "${lockPinVersion("docker_cli")}"`)
+    expect(r.res.message).toContain("brew update")
+    expect(runner.calls.some((c) => c.includes("colima start"))).toBe(false)
+    const back = readState(LOCK.version)
+    if (back.ok) expect(back.state.components.runtime.state).toBe(STATES.FAILED)
+  })
+
+  it("brew upgrade itself failing -> FAILED with the brew exit, no further formulas touched", async () => {
+    const runner = minimumRunner({ docker: ["29.8.0"], upgradeExit: 1 })
+    const r = await runMinimum("min-upgrade-exit", runner)
+    expect(r.res.token).toBe(OUTCOME.FAILED)
+    expect(r.res.message).toContain("brew upgrade docker failed (exit 1)")
+    expect(runner.calls.some((c) => c.includes("--versions docker-compose"))).toBe(false)
+  })
+
+  it("newer than the pin -> accepted without upgrade; brew's newer bottle hash is not lock drift", async () => {
+    const runner = minimumRunner({ docker: ["99.0.0"], info: { version: "99.0.0", sha: "e".repeat(64) } })
+    const r = await runMinimum("min-newer", runner)
+    expect(r.res.token).toBe(OUTCOME.OK)
+    expect(runner.calls.some((c) => c.includes("brew upgrade") || c.includes("brew install"))).toBe(false)
+    expect(r.docker).toMatchObject({ have: "99.0.0", action: "present" })
+  })
+
+  it("brew stable EQUAL to the pin with a different bottle hash is still drift -> FAILED", async () => {
+    const runner = minimumRunner({
+      docker: [lockPinVersion("docker_cli")],
+      info: { version: lockPinVersion("docker_cli"), sha: "e".repeat(64) },
+    })
+    const r = await runMinimum("min-equal-drift", runner)
+    expect(r.res.token).toBe(OUTCOME.FAILED)
+    expect(r.res.message).toContain("drifted")
+    expect(r.res.message).toContain("docker")
+  })
+
+  it("equal to the pin -> accepted, no brew mutation at all", async () => {
+    const runner = minimumRunner({ docker: [lockPinVersion("docker_cli")] })
+    const r = await runMinimum("min-equal", runner)
+    expect(r.res.token).toBe(OUTCOME.OK)
+    expect(runner.calls.some((c) => c.includes("brew upgrade") || c.includes("brew install"))).toBe(false)
+    expect(r.docker).toMatchObject({ have: lockPinVersion("docker_cli"), action: "present" })
+  })
+
+  it("absent -> brew install lands a NEWER version -> accepted without upgrade, installedBySwarm recorded", async () => {
+    const runner = minimumRunner({ docker: [null, "99.1.0"], info: { version: "99.1.0", sha: "e".repeat(64) } })
+    const r = await runMinimum("min-absent-newer", runner)
+    expect(r.res.token).toBe(OUTCOME.OK)
+    expect(runner.calls).toContain("/opt/homebrew/bin/brew install --formula docker")
+    expect(runner.calls.some((c) => c.includes("brew upgrade"))).toBe(false)
+    expect(r.docker).toMatchObject({ have: "99.1.0", action: "installed" })
+    const back = readState(LOCK.version)
+    if (back.ok) expect(back.state.components.runtime.installedBySwarm).toBe(true)
+  })
+
+  it("brew revision suffix on the pinned version (_1) counts as >= the pin -> accepted, no upgrade", async () => {
+    const runner = minimumRunner({ docker: [`${lockPinVersion("docker_cli")}_1`] })
+    const r = await runMinimum("min-revision", runner)
+    expect(r.res.token).toBe(OUTCOME.OK)
+    expect(runner.calls.some((c) => c.includes("brew upgrade"))).toBe(false)
+    expect(r.docker).toMatchObject({ have: `${lockPinVersion("docker_cli")}_1`, action: "present" })
+  })
+
+  it("several kegs listed (old one not cleaned up) -> the highest counts", async () => {
+    const runner = minimumRunner({ docker: [`29.8.0 ${lockPinVersion("docker_cli")}`] })
+    const r = await runMinimum("min-two-kegs", runner)
+    expect(r.res.token).toBe(OUTCOME.OK)
+    expect(runner.calls.some((c) => c.includes("brew upgrade"))).toBe(false)
   })
 })

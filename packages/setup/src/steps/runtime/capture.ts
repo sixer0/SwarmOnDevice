@@ -393,7 +393,7 @@ export function writeCapture(capture: GuestImageCapture, lock: LockFile, jsonlPa
  *  when asked under a dry-run posture — belt and braces for the zero-write proof. */
 export function appendObservation(
   jsonlPath: string,
-  type: "qemu_scope" | "bottle_observation",
+  type: "qemu_scope" | "bottle_observation" | "formula_versions",
   payload: unknown,
   dryRun = false,
 ): void {

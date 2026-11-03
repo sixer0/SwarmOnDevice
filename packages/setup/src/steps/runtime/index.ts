@@ -45,6 +45,7 @@ import {
   brewBin,
   brewInstallArgv,
   brewListVersionsArgv,
+  brewUpgradeArgv,
   colimaDeleteArgv,
   colimaStartArgv,
   colimaStopArgv,
@@ -240,7 +241,7 @@ function dryRunPlan(
   for (const f of ["colima", "lima", "docker", "docker-compose"]) {
     plan(
       ["/opt/homebrew/bin/brew", "list", "--formula", "--versions", f],
-      `absent -> brew install --formula ${f}; version drift vs lock -> refuse fail-closed`,
+      `absent -> brew install --formula ${f}; below the lock minimum -> brew upgrade --formula ${f}; still below -> refuse fail-closed`,
     )
   }
   const branch = firecrawlConsented
@@ -311,14 +312,22 @@ function ensureFormulas(
   runner: CommandRunner,
   brewPath: string,
 ): BrewOk | PhaseFail {
+  // Row 264: Homebrew can only install its CURRENT formula version, so an exact pin breaks
+  // whenever brew moves. For these four formulas the lock version is a MINIMUM: >= accepts,
+  // < runs `brew upgrade` and re-reads, still < fails closed naming have/want. Brew verifies
+  // its own bottles; exact binary-download hash pins elsewhere in the lock are unaffected.
   let installedBySwarm = false
   let colimaVersion = ""
-  for (const field of ["colima", "lima", "docker_cli", "docker_compose"]) {
+  const accepted: { formula: string; want: string; have: string; action: string }[] = []
+  for (const field of BREW_FORMULA_FIELDS) {
     const formula = formulaName(ctx.lock, field)
-    const pinned = (ctx.lock.components.runtime?.[field] ?? {}) as Record<string, unknown>
-    const want = typeof pinned.version === "string" ? normalizeVersion(pinned.version) : ""
-    const listed = runner.run(brewListVersionsArgv(brewPath, formula))
-    let have = listed.ok ? parseBrewVersion(listed.stdout, formula) : null
+    const want = pinnedVersion(ctx.lock, field)
+    const readVersion = () => {
+      const listed = runner.run(brewListVersionsArgv(brewPath, formula))
+      return listed.ok ? parseBrewVersion(listed.stdout, formula) : null
+    }
+    let have = readVersion()
+    let action = "present"
     if (have === null) {
       kit.log(
         "info",
@@ -334,18 +343,73 @@ function ensureFormulas(
           message: `brew install ${formula} failed (exit ${inst.exitCode}): ${tail(inst.stderr)}`,
         }
       }
-      have = parseBrewVersion(runner.run(brewListVersionsArgv(brewPath, formula)).stdout, formula)
+      action = "installed"
+      have = readVersion()
     }
-    if (have === null || (want !== "" && have !== want)) {
+    if (have !== null && want !== "" && compareVersions(have, want) === -1) {
+      kit.log(
+        "info",
+        `formula ${formula} ${have} is below the reviewed minimum ${want} — upgrading via the user's existing Homebrew`,
+        { context: { formula, have, want } },
+      )
+      const up = runner.run(brewUpgradeArgv(brewPath, formula))
+      if (!up.ok) {
+        kit.transition("failed")
+        return {
+          token: OUTCOME.FAILED,
+          message: `brew upgrade ${formula} failed (exit ${up.exitCode}): ${tail(up.stderr)}`,
+        }
+      }
+      action = "upgraded"
+      have = readVersion()
+    }
+    const verdict = have === null || want === "" ? null : compareVersions(have, want)
+    if (have === null || (want !== "" && (verdict === null || verdict === -1))) {
       kit.transition("failed")
       return {
         token: OUTCOME.FAILED,
-        message: `formula ${formula}: brew reports ${JSON.stringify(have)}, tools.lock.json ${ctx.lock.version} pins ${JSON.stringify(want)} — ship a refreshed reviewed lock rather than drifting (fail-closed)`,
+        message: `formula ${formula}: brew reports ${JSON.stringify(have)}${action === "upgraded" ? " after brew upgrade" : ""}, tools.lock.json ${ctx.lock.version} requires at least ${JSON.stringify(want)} — run \`brew update\` and press Install again (fail-closed)`,
       }
     }
+    kit.log("info", `formula ${formula} ${have} accepted (${action}; reviewed minimum ${want || "none"})`, {
+      context: { formula, have, want, action },
+    })
+    accepted.push({ formula, want, have, action })
     if (field === "colima") colimaVersion = have
   }
+  appendObservation(captureFilePath(), "formula_versions", { policy: "minimum", formulas: accepted })
   return { colimaVersion: colimaVersion || "unknown", installedBySwarm }
+}
+
+const BREW_FORMULA_FIELDS = ["colima", "lima", "docker_cli", "docker_compose"] as const
+
+function pinnedVersion(lock: LockFile, field: string): string {
+  const pinned = (lock.components.runtime?.[field] ?? {}) as Record<string, unknown>
+  return typeof pinned.version === "string" ? normalizeVersion(pinned.version) : ""
+}
+
+/** Numeric dotted compare for brew versions: leading `v` stripped, brew's `_N` revision
+ *  suffix is a tiebreaker after the dotted part (29.9.2_1 > 29.9.2). Each dot segment is
+ *  read by its leading digits (3-rc1 -> 3); a segment without leading digits makes the
+ *  version unparseable -> null, which every caller treats as fail-closed. */
+export function compareVersions(a: string, b: string): -1 | 0 | 1 | null {
+  const pa = versionParts(a)
+  const pb = versionParts(b)
+  if (pa === null || pb === null) return null
+  // Dotted parts padded with 0 (29.9 == 29.9.0); the revision is compared only after them.
+  const len = Math.max(pa.dotted.length, pb.dotted.length)
+  const x = [...Array.from({ length: len }, (_, i) => pa.dotted[i] ?? 0), pa.revision]
+  const y = [...Array.from({ length: len }, (_, i) => pb.dotted[i] ?? 0), pb.revision]
+  const diff = x.findIndex((n, i) => n !== y[i])
+  if (diff === -1) return 0
+  return (x[diff] ?? 0) < (y[diff] ?? 0) ? -1 : 1
+}
+
+function versionParts(v: string): { dotted: number[]; revision: number } | null {
+  const [base = "", revision = "0"] = normalizeVersion(v).split("_")
+  const dotted = base.split(".").map((s) => Number.parseInt(s, 10))
+  if (dotted.some((n) => Number.isNaN(n))) return null
+  return { dotted, revision: Number.parseInt(revision, 10) || 0 }
 }
 
 function formulaName(lock: LockFile, field: string): string {
@@ -358,11 +422,17 @@ function normalizeVersion(v: string): string {
   return v.trim().replace(/^v/, "")
 }
 
+/** `brew list --versions <f>` prints `<f> <v1> [<v2> ...]` (several kegs when an old one was
+ *  not cleaned up): the highest parseable version is the one that counts. The name must be the
+ *  exact first token so `docker` never reads a `docker-compose` line. */
 function parseBrewVersion(stdout: string, formula: string): string | null {
-  const line = stdout.split("\n").find((l) => l.trim().startsWith(formula))
-  if (!line) return null
-  const ver = line.trim().split(/\s+/)[1]
-  return ver ? normalizeVersion(ver) : null
+  const tokens = stdout
+    .split("\n")
+    .map((l) => l.trim().split(/\s+/))
+    .find((t) => t[0] === formula)
+  const versions = (tokens ?? []).slice(1).map(normalizeVersion).filter((v) => versionParts(v) !== null)
+  if (versions.length === 0) return null
+  return versions.reduce((best, v) => (compareVersions(v, best) === 1 ? v : best))
 }
 
 interface VerifyOk {
@@ -387,14 +457,25 @@ function verifyArtifacts(
     }
   }
   const codenameKey = `arm64_${codenameOfMajor(host.darwinMajor ?? -1) ?? "unknown"}`
-  const observations = observeBottles(runner, ctx.lock, brewPath, codenameKey, [
-    { field: "colima", formula: formulaName(ctx.lock, "colima") },
-    { field: "lima", formula: formulaName(ctx.lock, "lima") },
-    { field: "docker_cli", formula: formulaName(ctx.lock, "docker_cli") },
-    { field: "docker_compose", formula: formulaName(ctx.lock, "docker_compose") },
-  ])
+  const fields = BREW_FORMULA_FIELDS.map((field) => ({ field, formula: formulaName(ctx.lock, field) }))
+  const observations = observeBottles(runner, ctx.lock, brewPath, codenameKey, fields)
   appendObservation(captureFilePath(), "bottle_observation", { codenameKey, observations })
-  const drifted = observations.filter((o) => o.matchesLock === false)
+  // Row 264 (minimum policy): the lock's bottle hash describes the bottle of the PINNED version.
+  // When brew's stable version is that same version a different hash is real drift (fail-closed);
+  // when brew has moved on, the lock hash does not describe its bottle and brew's own bottle
+  // verification is the gate — recorded, not refused. An unreadable brew version stays drift.
+  const drifted = observations.filter((o, i) => {
+    if (o.matchesLock !== false) return false
+    const want = pinnedVersion(ctx.lock, fields[i]?.field ?? "")
+    const verdict = o.brewVersion === null || want === "" ? null : compareVersions(o.brewVersion, want)
+    if (verdict === null || verdict === 0) return true
+    kit.log(
+      "info",
+      `formula ${o.formula}: brew's stable ${o.brewVersion} is not the reviewed ${want}, so the lock bottle hash does not apply; Homebrew verifies its own bottle`,
+      { context: { formula: o.formula, brewVersion: o.brewVersion, want } },
+    )
+    return false
+  })
   if (drifted.length > 0) {
     kit.transition("failed")
     return {
