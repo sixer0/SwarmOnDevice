@@ -17,6 +17,7 @@ import { AutonomyTable } from "./autonomy-table"
 import { OutwardKnown } from "./outward-known"
 import { ScriptScreen } from "./script-screen"
 import { Unattended } from "./unattended"
+import { Risk } from "../tool/risk"
 import { REFUSED_TEXT, SPEND_STOPPED_TEXT, subagentStoppedMessage } from "./autonomy-texts"
 
 export const Event = PermissionV1.Event
@@ -61,8 +62,15 @@ export interface Grant extends Pick<PermissionV1.Request, "sessionID" | "permiss
    * "session" is a person's "always in this session" on a held entry (row 258). `patterns` are that request's own "always"
    * patterns. It lets through what the mode would hold of the same permission within them, in the family, for the run of
    * the mode it was given in. Memory only: a restart ends it.
+   *
+   * "same" is a person's plain yes on a held entry (row 278): the very call they approved, to the letter (`call`: the tool,
+   * the command and its folder), is let through again whenever the mode would hold it, in the family, for the run of the
+   * mode it was given in, so an agent that repeats a command does not block on it twice. What the mode refuses is still
+   * refused. Memory only: a restart ends it.
    */
-  uses?: "once" | "session"
+  uses?: "once" | "session" | "same"
+  /** A "session" grant from a plain yes (row 278): it covers only what is held for a repeatable reason. */
+  repeatOnly?: boolean
 }
 
 export interface Interface {
@@ -137,6 +145,23 @@ const samePrompt = (
 
 /** What the line of a call let through by a person's "always in this session" says, for Activity to show (row 258). */
 const SESSION_REASON = 'a person\'s "always in this session"'
+
+/**
+ * Row 278: what a plain yes is good for again. Only holds about a call not being routine yet; a send or push, anything
+ * nothing can undo, a secret, a sensitive file and a person's own "ask every time" are asked about each time.
+ */
+const REPEATABLE: ReadonlySet<string> = new Set(["not_routine", "outside_folder", "no_undo", "folder_not_trusted", "program_not_trusted", "external_tool"])
+
+/** Whether a call is one a yes is good for again: a repeatable hold, and no command in it the shell's own scan calls risky. */
+const repeatable = (entry: { category?: string; info: PermissionV1.Request }) => {
+  if (!REPEATABLE.has(entry.category ?? "")) return false
+  if (typeof entry.info.metadata.risk === "string") return false
+  const command = entry.info.metadata.command
+  if (typeof command !== "string") return true
+  return !command
+    .split(/&&|\|\||[;|\n]/)
+    .some((piece) => Risk.classify(piece.trim().split(/\s+/).filter(Boolean)).kind === "risky")
+}
 
 /** Whether a "session" grant covers this prompt: its permission, and every pattern within the "always" it named. */
 const withinSession = (
@@ -555,7 +580,8 @@ const layer = Layer.effect(
       standing = false,
       // Within a person's "always in this session" (row 258): what the mode would hold for them runs instead. Only a hold:
       // a refusal, a stop, a decider's answer or anything the person is asked about directly stays as it is.
-      session = false,
+      // "same" (row 278): the very call a person said yes to before, which runs only where it is held as not yet routine.
+      session: boolean | "same" = false,
     ) {
       const instance = yield* InstanceState.context
       const root = yield* rootOf(input.sessionID)
@@ -622,7 +648,7 @@ const layer = Layer.effect(
               : verdict.class === "X"
                 ? ("reject" as const)
                 : ("defer" as const)
-      const bySession = session && reached === "defer"
+      const bySession = (session === true || (session === "same" && REPEATABLE.has(judged as string))) && reached === "defer"
       const decision = bySession ? ("allow" as const) : reached
 
       const reportFull = Effect.gen(function* () {
@@ -884,7 +910,7 @@ const layer = Layer.effect(
       // A grant and a held entry belong to the family, so what a root was allowed or is waiting on covers its subagents.
       const family = (yield* rootOf(request.sessionID)).id
       const matching = grants.findIndex(
-        (grant) => grant.root === family && samePrompt(grant, request) && grant.call === call,
+        (grant) => grant.root === family && samePrompt(grant, request) && grant.call === call && grant.uses !== "same",
       )
       const unbound = grants.findIndex(
         (grant) => grant.root === family && samePrompt(grant, request) && grant.call === undefined && !grant.uses,
@@ -896,14 +922,27 @@ const layer = Layer.effect(
       // gate still judges the call, and only what it would hold runs on it. A call its tool offers no "always" for (one the
       // shell scan flags, say) is never covered by one.
       const since = yield* autonomy.modeSince(family)
-      const inSession =
+      const covering = (repeatOnly: boolean) =>
         since !== undefined &&
         !noAlways &&
         request.always.length > 0 &&
         grants.some(
           (grant) =>
-            grant.uses === "session" && grant.root === family && grant.since === since && withinSession(grant, request),
+            grant.uses === "session" &&
+            Boolean(grant.repeatOnly) === repeatOnly &&
+            grant.root === family &&
+            grant.since === since &&
+            withinSession(grant, request),
         )
+      // Row 278: the very call a person said yes to before, or the same kind of call, in this run of the mode.
+      const inSame =
+        since !== undefined &&
+        (covering(true) ||
+          grants.some(
+            (grant) =>
+              grant.uses === "same" && grant.root === family && grant.since === since && samePrompt(grant, request) && grant.call === call,
+          ))
+      const inSession = covering(false) ? true : inSame ? ("same" as const) : false
       // Turned off since, even if on again now, and it answers nothing: it was given for the run that was going then.
       const current =
         repeat >= 0 &&
@@ -1144,21 +1183,28 @@ const layer = Layer.effect(
         // Its other entries the same "always" covers are approved with it, as the loop below does for ordinary prompts.
         const root = existing.root
         const always = existing.always
-        if (input.reply !== "always" || !root || !always) return answered(existing)
-        const scope = { permission: existing.info.permission, patterns: always }
-        grants.push({
-          sessionID: existing.info.sessionID,
-          root,
-          ...scope,
-          uses: "session",
-          since: yield* autonomy.modeSince(root),
-        })
+        // Row 278: a plain yes on a hold that is only about a call not being routine yet is good, for the rest of this run
+        // of the mode, for the very calls it saw and for the same kind of call: the request's own "always" patterns, as an
+        // "always in this session" would be, but each later call still has to be held for a repeatable reason. Entries of
+        // the family that either covers are approved with it.
+        const plainYes = input.reply === "once" && root !== undefined && repeatable(existing)
+        if ((input.reply !== "always" && !plainYes) || !root) return answered(existing)
+        const since = yield* autonomy.modeSince(root)
+        const seen = new Set((plainYes ? (existing.calls ?? []) : []).map((item) => item.call))
+        for (const call of seen)
+          grants.push({ sessionID: existing.info.sessionID, root, permission: existing.info.permission, patterns: existing.info.patterns, call, uses: "same", since })
+        const scope = always && (input.reply === "always" || !existing.noAlways) ? { permission: existing.info.permission, patterns: always } : undefined
+        if (scope) grants.push({ sessionID: existing.info.sessionID, root, ...scope, uses: "session", since, ...(plainYes && { repeatOnly: true }) })
+        if (!scope && seen.size === 0) return answered(existing)
         const released: Answered[] = []
         for (const [id, item] of pending.entries()) {
-          if (item.root !== root || !item.info.movedOnAt || item.noAlways || !withinSession(scope, item.info)) continue
+          if (item.root !== root || !item.info.movedOnAt) continue
+          const bySame = seen.size > 0 && samePrompt(item.info, existing.info) && (item.calls ?? []).length > 0 && item.calls!.every((other) => seen.has(other.call))
+          const byScope = scope !== undefined && !item.noAlways && withinSession(scope, item.info) && (!plainYes || repeatable(item))
+          if (!bySame && !byScope) continue
           pending.delete(id)
           yield* close(item, "approved_later", "person")
-          yield* events.publish(Event.Replied, { sessionID: item.info.sessionID, requestID: id, reply: "always" })
+          yield* events.publish(Event.Replied, { sessionID: item.info.sessionID, requestID: id, reply: input.reply })
           released.push(answered(item))
         }
         return { ...answered(existing), ...(released.length > 0 && { released }) }

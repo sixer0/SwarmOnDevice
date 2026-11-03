@@ -1294,10 +1294,12 @@ flows.instance(
       expect(held?.metadata.call).toEqual({ tool: "bash", args: { command, workdir: test.directory } })
       yield* answers.permission((yield* reply({ requestID: held!.id, reply: "once" }))!)
 
+      // Row 278: the yes covers that folder for the rest of the run, so a write there is still refused by what it is
+      // (U11 rule 1) and lands nowhere, while the same read from inside that folder now runs without a second click.
       const other = `cat ${note} | tee ${path.join(outside, "copy")}`
-      expect(yield* failure(shell(root.id, other, test.directory))).toBeInstanceOf(PermissionV1.DeferredError)
+      expect(yield* failure(shell(root.id, other, test.directory))).toBeDefined()
       expect(existsSync(path.join(outside, "copy"))).toBe(false)
-      expect(yield* failure(shell(root.id, command, outside))).toBeInstanceOf(PermissionV1.DeferredError)
+      expect((yield* shell(root.id, command, outside)).output.trim()).toBe("13")
 
       // With another timeout and the folder left to its default, it does the same thing and is the same call.
       const tool = yield* (yield* ShellTool).init()
@@ -1305,7 +1307,7 @@ flows.instance(
       expect(ran.output.trim()).toBe("13")
       const lines = yield* audit(root.id)
       expect(lines[0]?.follows[0]?.permission).toBe("bash")
-      expect(lines.find((line) => line.permission === "bash" && line.decision === "allow")).toMatchObject({
+      expect(lines.find((line) => line.permission === "bash" && line.decision === "allow" && line.decidedBy === "person")).toMatchObject({
         decidedBy: "person",
         patterns: expect.arrayContaining([expect.stringContaining("wc -c")]),
       })
@@ -1371,6 +1373,33 @@ flows.instance(
       expect(yield* failure(ask(edit("+seen")))).toBeInstanceOf(PermissionV1.DeferredError)
       expect((yield* list).map((item) => item.metadata.version)).toEqual([2])
     }),
+)
+
+// Row 278: the user's "a repeated request needs one permission per session". A plain yes on a hold that is only about a
+// call not being routine yet covers that call and the same kind of call (its "always" patterns) for the run of the mode;
+// a push, a send, a secret and anything nothing can undo are asked each time.
+flows.instance("row 278: a plain yes covers the same call and its kind for the run of the mode, and a risky kind is asked again", () =>
+  Effect.gen(function* () {
+    const { root } = yield* lineage
+    const test = yield* TestInstance
+    const answers = yield* late
+    const kind = (command: string, always: string) => ({ ...bash(root.id, command, test.directory), always: [always] })
+    expect(yield* failure(ask(kind("docker ps", "docker ps *")))).toBeInstanceOf(PermissionV1.DeferredError)
+    yield* answers.permission((yield* reply({ requestID: (yield* list)[0]!.id, reply: "once" }))!)
+    yield* ask(kind("docker ps", "docker ps *"))
+    yield* ask(kind("docker ps -a", "docker ps *"))
+    expect(yield* list).toHaveLength(0)
+    // Another kind is judged on its own.
+    expect(yield* failure(ask(kind("docker images", "docker images *")))).toBeInstanceOf(PermissionV1.DeferredError)
+
+    const push = kind("git push origin main", "git push *")
+    expect(yield* failure(ask(push))).toBeInstanceOf(PermissionV1.DeferredError)
+    const held = (yield* list).find((item) => item.patterns[0] === "git push origin main")!
+    yield* answers.permission((yield* reply({ requestID: held.id, reply: "once" }))!)
+    // The approved push itself runs once (AU-23), and the next one is asked again: a yes on a push is no grant.
+    yield* ask(push)
+    expect(yield* failure(ask(push))).toBeInstanceOf(PermissionV1.DeferredError)
+  }),
 )
 
 flows.instance("T-02: the same words joined differently, or in another folder, are not the allowed command", () =>
