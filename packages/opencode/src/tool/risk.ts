@@ -179,10 +179,13 @@ export function plainWords(command: string) {
   return PLAIN_COMMAND.test(command) ? command.split(" ") : undefined
 }
 
-// `plainWords` with whole-word quotes as well: single quotes taken as written, and double quotes holding no `$`, backquote,
-// `\` or `!`, so no shell rewrites what is inside. The program's name stays bare, a quote never joins a bare part, and no
-// control, format or line-separator character appears anywhere, so the line a person reads is the line that runs.
-const QUOTED_WORD = String.raw`[\w./@%+:,-][\w./@%+:,=-]*|'[^']*'|"[^"$` + "`" + String.raw`\\!]*"`
+// `plainWords` with whole-word quotes as well: single quotes taken as written, and double quotes holding no `$`, backquote
+// or `!`, so no shell rewrites what is inside. A `\` inside double quotes is let through only before a character the shell
+// leaves alone there (grep's `\|`, row 273): before `$`, backquote, `"`, `\`, `!` or a line break it would be rewritten.
+// The program's name stays bare, a quote never joins a bare part, and no control, format or line-separator character
+// appears anywhere, so the line a person reads is the line that runs.
+const QUOTED_WORD =
+  String.raw`[\w./@%+:,-][\w./@%+:,=-]*|'[^']*'|"(?:[^"$` + "`" + String.raw`\\!]|\\[^"$` + "`" + String.raw`\\!\n])*"`
 const QUOTED_COMMAND = new RegExp(String.raw`^[A-Za-z0-9_][A-Za-z0-9_.+-]*(?: (?:${QUOTED_WORD}))*$`)
 const UNSEEN = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u
 

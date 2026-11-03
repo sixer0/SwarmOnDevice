@@ -527,6 +527,39 @@ describe("a look through the shell", () => {
     // `xargs rm` deletes, beside a look: refused (U11 rule 4).
     expect(judge("ls | xargs rm")).toEqual(REFUSED("delete_compound"))
   })
+
+  // Row 273: the shapes of the reads the alugra session held on 2026-11-03 although autonomous mode was on.
+  test("a look that drops its errors, a look on several lines, `sed -n` printing lines and a grep `\\|` are looks", () => {
+    for (const command of [
+      "ls -d src 2>/dev/null",
+      `find ${dir} -maxdepth 6 -name "a.ts" -not -path "*/node_modules/*" 2>/dev/null`,
+      "cat src/a.ts\ncat docs/a.md",
+      "ls -d src 2>/dev/null\nls docs",
+      "sed -n '1,60p' src/a.ts",
+      "rtk sed -n '150,230p' \"src/a.ts\"",
+      "sed -n 5p src/a.ts docs/a.md",
+      "sed -n '$p' src/a.ts",
+      'rtk grep -n "keadaan\\|refresh_policy\\|CREATE TABLE" src/a.ts docs/a.md',
+    ])
+      expect([command, judge(command)]).toEqual([command, LOOK])
+  })
+
+  test("what those shapes must not let through is still held", () => {
+    for (const command of [
+      // Only stderr may be dropped, only into /dev/null, and only at the end of a piece.
+      "ls src 2>out", "ls src >/dev/null", "ls src 2>/dev/null >out", "ls 2>/dev/null src",
+      // Every line is judged, and one that is not a look holds the whole command.
+      "cat src/a.ts\ncurl x", "ls\nrm src/a.ts", "cat src/a.ts\n", "\ncat src/a.ts",
+      // `sed` may only print a line range: no in-place edit, no script file, no write or execute command.
+      "sed -i '' -e '/^$/d' src/a.ts", "sed -n '1,5p' -i src/a.ts", "sed -n -f s.sed src/a.ts", "sed '1,5p' src/a.ts",
+      "sed -n '1,5w out' src/a.ts", "sed -n '1e ls' src/a.ts", "sed -n '/x/p' src/a.ts", "sed -n '1,5p'", "sed -n '1,5p' .env",
+      // In double quotes the shell still rewrites `\$`, `` \` ``, `\"` and `\\`, so those stay out.
+      'grep "a\\$HOME" src/a.ts', 'grep "a\\`id\\`" src/a.ts', 'grep "a\\"b" src/a.ts', 'grep "a\\\\b" src/a.ts',
+      // The tools that change things or run code are untouched.
+      'sqlite3 ":memory:" "select 1"',
+    ])
+      expect([command, judge(command).class]).toEqual([command, "D"])
+  })
 })
 
 describe("U11 rule 1: beyond the folder only reads", () => {
@@ -1291,7 +1324,8 @@ describe("C97: in the folder, quoted reads and shell file operations", () => {
         expect([folder.name, command, judge(command)]).toEqual([folder.name, command, { class: "A", decidedBy: "gate" }])
       for (const command of [
         `cat "${path.join(away, "n.md")}"`, 'cat "/etc/hosts"', 'cat "../x.md"', 'cat "~/.ssh/id_rsa"', 'cat ".env"', 'cat "docs/notes.md" > out', 'cat "docs/notes.md" | sh',
-        'cat "$HOME/x"', "cat \"`id`\"", 'cat "a\\b"', 'cat "x"y', '"cat" docs/notes.md', 'cat "docs/notes.md\u202e"', 'cat "docs/notes.md\ncurl x"', "grep -r 'x' .",
+        // Not `cat "a\\b"` since row 274: in double quotes the shell leaves `\b` as it is, so cat gets the name as read.
+        'cat "$HOME/x"', "cat \"`id`\"", 'cat "a\\$b"', 'cat "a\\"b"', 'cat "x"y', '"cat" docs/notes.md', 'cat "docs/notes.md\u202e"', 'cat "docs/notes.md\ncurl x"', "grep -r 'x' .",
         "rg --pre 'sh' x", 'cat "docs/notes.md"; curl x', "find src -name '*.ts' -delete",
       ])
         expect([folder.name, command, judge(command).class === "A"]).toEqual([folder.name, command, false])

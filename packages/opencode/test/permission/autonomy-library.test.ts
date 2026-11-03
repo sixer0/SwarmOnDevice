@@ -662,7 +662,10 @@ it.instance(
           return [text, result.outcome, result.lines.map((line) => line[1]), result.asked]
         }),
       )
-      expect(seen).toEqual([...named, ...linked].map((text) => [text, "held", ["D"], 0]))
+      // Row 274: a write the shell would make into the copy, straight or through the link, is now read from its parse and
+      // refused as a write beyond the folder (U11 rule 1) rather than held. Either way nobody is asked and nothing lands.
+      const writes = new Set([`sed -i '' s/a/b/ ${S}/a.md`, `echo x > ${S}/a.md`, `tee ${S}/a.md`, `cat > ${S}/a.md`, "echo x > lnk/a.md"])
+      expect(seen).toEqual([...named, ...linked].map((text) => (writes.has(text) ? [text, "refused", ["X"], 0] : [text, "held", ["D"], 0])))
       const workdirs = yield* Effect.forEach([S, path.join(test.directory, "lnk")], (workdir) =>
         Effect.gen(function* () {
           const ids = yield* lineage

@@ -464,6 +464,332 @@ async function scriptHashes(files: string[], cwd: string, instance: InstanceCont
   )
 }
 
+/**
+ * Row 274: the commands a text runs, as the autonomy table judges them one by one (`metadata.steps`). Each step is a
+ * program's literal argv and every folder it could run in; `writes` are the files its redirects write. Only what is
+ * understood in full is read: lists (`&&`, `||`, `;`, new lines), pipelines, `( )` and `{ }`, `if`, `for` over literal
+ * words, `while`, `[ ]`, redirects to literal names, a quoted heredoc fed to an interpreter, `cd` to a literal folder, and
+ * `NAME=literal` used later as `$NAME`. Anything else (a function, `case`, an unknown variable, a glob, a program name
+ * that is not a plain word, `VAR=x cmd`, `eval`-like text the grammar does not show as a command) returns undefined, and
+ * the table judges the whole text as before. A `cd` that may fail leaves both folders possible for what follows it.
+ */
+export type ShellStep = { argv: string[]; cwds: string[]; code?: string }
+export type ShellReading = { v: 1; steps: ShellStep[]; writes: string[] }
+
+const MAX_STEPS = 400
+const MAX_LOOP = 64
+// Variables a command may set for the rest of the text without changing what any program does.
+const HARMLESS_EXPORTS = new Set(["LC_ALL", "LANG", "TZ", "NO_COLOR", "FORCE_COLOR", "CI", "COLUMNS", "TERM"])
+
+class Unread extends Error {}
+
+export function decompose(root: Node, cwd: string): ShellReading | undefined {
+  const steps: ShellStep[] = []
+  const writes = new Set<string>()
+  const vars = new Map<string, string>()
+  // Bare words with `~` or `^` read since the last command started (see `value`).
+  let revisionWords = 0
+  const fail = (): never => {
+    throw new Unread()
+  }
+  const step = (argv: string[], cwds: Set<string>, code?: string) => {
+    if (steps.length >= MAX_STEPS) fail()
+    steps.push({ argv, cwds: [...cwds], ...(code === undefined ? {} : { code }) })
+  }
+  type Where = { ok: Set<string>; any: Set<string> }
+  const same = (cwds: Set<string>): Where => ({ ok: cwds, any: cwds })
+  const union = (...sets: Iterable<string>[]) => new Set(sets.flatMap((set) => [...set]))
+  const named = (node: Node) => node.namedChildren.filter((child): child is Node => child !== null && child.type !== "comment")
+
+  // What lies between the children of `node` in its text, in order. The grammar drops some words (`python3 -` before a
+  // heredoc), so a reader that only walked the children could judge less than what runs.
+  const gaps = (node: Node, children: readonly Node[]) => {
+    const text = node.text
+    const found: string[] = []
+    let at = 0
+    for (const child of children) {
+      const start = text.indexOf(child.text, at)
+      if (start < 0) fail()
+      found.push(text.slice(at, start))
+      at = start + child.text.length
+    }
+    found.push(text.slice(at))
+    return found
+  }
+
+  // The literal value of one word as the shell will pass it, or a failure.
+  const value = (node: Node): string => {
+    switch (node.type) {
+      case "word":
+      case "number": {
+        const text = node.text
+        if (text === "~" || text.startsWith("~/")) {
+          if (!PLAIN_WORD.test(text.slice(1) || "a")) fail()
+          return home(text)
+        }
+        // `~` and `^` inside a word are only letters to bash (`HEAD~3`, `HEAD^`), but zsh with EXTENDED_GLOB reads
+        // `.env~x` as a pattern that matches `.env`. `command` lets them through for git's revisions alone.
+        if (!/^[\w./@%+:,-][\w./@%+:,=~^-]*$/.test(text)) fail()
+        if (/[~^]/.test(text)) revisionWords++
+        return text
+      }
+      case "raw_string":
+        return node.text.slice(1, -1)
+      case "string": {
+        const parts = named(node)
+        // Everything inside the quotes must be one of the parts read here, and nothing but the quotes around them.
+        const between = gaps(node, parts)
+        if (between[0] !== '"' || between.at(-1) !== '"' || between.slice(1, -1).some((gap) => gap !== "")) fail()
+        return parts
+          .map((part) => {
+            if (part.type !== "string_content") return expansion(part)
+            // In double quotes the shell removes `\` before `$`, a backquote, `"`, `\` or a new line.
+            if (/\\[$`"\\\n]/.test(part.text)) fail()
+            return part.text
+          })
+          .join("")
+      }
+      case "simple_expansion":
+      case "expansion":
+        return expansion(node)
+      case "concatenation": {
+        const parts = named(node)
+        if (gaps(node, parts).some((gap) => gap !== "")) fail()
+        return parts.map(value).join("")
+      }
+      default:
+        return fail()
+    }
+  }
+  const expansion = (node: Node): string => {
+    const parts = named(node)
+    const name = parts[0]
+    if ((node.type !== "simple_expansion" && node.type !== "expansion") || parts.length !== 1 || name?.type !== "variable_name")
+      return fail()
+    if (node.text !== `$${name.text}` && node.text !== `\${${name.text}}`) return fail()
+    if (name.text === "HOME") return os.homedir()
+    const known = vars.get(name.text)
+    return known === undefined ? fail() : known
+  }
+
+  // One command: its literal words, the folders it may run in, and what `cd`, `export` or `set` do to what follows.
+  const command = (node: Node, cwds: Set<string>, stdin?: string): Where => {
+    const children = named(node)
+    const words: string[] = []
+    revisionWords = 0
+    for (const child of children) {
+      // `VAR=x cmd` changes what the program does; a redirect is read where it is attached, never inside a command.
+      if (child.type === "variable_assignment" || child.type.endsWith("redirect")) fail()
+      if (child.type === "command_name") {
+        const name = child.namedChildren[0]
+        if (child.namedChildCount !== 1 || name?.type !== "word" || !PLAIN_WORD.test(name.text)) fail()
+        words.push(name!.text)
+        continue
+      }
+      words.push(value(child))
+    }
+    const between = gaps(node, children)
+    if (between[0]!.trim() !== "" || between.at(-1)!.trim() !== "") fail()
+    for (const [index, gap] of between.slice(1, -1).entries()) {
+      if (gap !== "" && gap.trim() === "") continue
+      // The one word the grammar drops: `-` for "read the program from standard input", before a heredoc.
+      if (stdin !== undefined && gap.trim() === "-" && /^\s+-\s+$/.test(gap)) {
+        words.splice(index + 1 + words.length - children.length, 0, "-")
+        continue
+      }
+      fail()
+    }
+    if (words.length === 0) fail()
+    const [name, ...args] = words
+    if (revisionWords > 0 && name !== "git") fail()
+    if (name === "cd") {
+      // `-`, `-1` and `+1` are zsh's directory stack. A bare name may be found through CDPATH, anywhere on the disk.
+      if (args.length !== 1 || /^[-+]/.test(args[0]!) || stdin !== undefined) fail()
+      if (process.env.CDPATH && !/^(\/|\.{1,2}(\/|$))/.test(args[0]!)) fail()
+      const targets = new Set([...cwds].map((dir) => path.resolve(dir, args[0]!)))
+      return { ok: targets, any: union(cwds, targets) }
+    }
+    if (name === "set") {
+      if (!args.every((arg) => /^[-+][euxo]+$|^pipefail$/.test(arg))) fail()
+      return same(cwds)
+    }
+    // Code fed to an interpreter is screened as code; anything else just reads the text.
+    step(words, cwds, stdin !== undefined && INLINE_CODE.has(path.posix.basename(name!)) ? stdin : undefined)
+    return same(cwds)
+  }
+
+  // `top`: a direct statement of the text, the only place a variable is set for sure before what follows reads it.
+  const statement = (node: Node, cwds: Set<string>, top = false): Where => {
+    const kids = named(node)
+    switch (node.type) {
+      case "command": {
+        const words = kids.map((kid) => kid.text)
+        if (words[0] === "export") {
+          if (!top) return fail()
+          for (const arg of words.slice(1)) {
+            const match = /^([A-Za-z_][A-Za-z0-9_]*)=([\w./@%+:,=-]*)$/.exec(arg)
+            if (!match || !HARMLESS_EXPORTS.has(match[1]!)) fail()
+            vars.set(match![1]!, match![2]!)
+          }
+          return same(cwds)
+        }
+        return command(node, cwds)
+      }
+      case "variable_assignment": {
+        const [name, right] = kids
+        if (!top || name?.type !== "variable_name" || kids.length > 2) return fail()
+        vars.set(name.text, right ? value(right) : "")
+        return same(cwds)
+      }
+      case "list": {
+        const operator = node.children.find((child) => child?.type === "&&" || child?.type === "||")?.type
+        const [left, right] = kids
+        if (!left || !right || kids.length !== 2 || !operator) return fail()
+        const first = statement(left, cwds)
+        const second = statement(right, operator === "&&" ? first.ok : first.any)
+        return { ok: union(second.ok, operator === "||" ? first.ok : []), any: union(first.any, second.any) }
+      }
+      case "pipeline":
+        for (const kid of kids) statement(kid, cwds)
+        return same(cwds)
+      case "subshell":
+        sequence(kids, cwds)
+        return same(cwds)
+      case "compound_statement":
+      case "do_group":
+        return sequence(kids, cwds)
+      case "negated_command":
+        if (kids.length !== 1) return fail()
+        return statement(kids[0]!, cwds)
+      case "test_command": {
+        // `[ ... ]` only: `[[` is bash's own grammar, with patterns this does not read.
+        if (!node.text.startsWith("[ ") || !node.text.endsWith(" ]")) return fail()
+        const leaves: string[] = []
+        const walk = (item: Node) => {
+          if (item.type === "unary_expression" || item.type === "binary_expression" || item.type === "parenthesized_expression") {
+            for (const child of item.children) {
+              if (!child) continue
+              if (child.isNamed && child.type !== "test_operator") walk(child)
+              else leaves.push(child.text)
+            }
+            return
+          }
+          leaves.push(value(item))
+        }
+        kids.forEach(walk)
+        step(["test", ...leaves], cwds)
+        return same(cwds)
+      }
+      case "if_statement":
+      case "elif_clause":
+      case "else_clause": {
+        const clauses = kids.filter((kid) => kid.type === "elif_clause" || kid.type === "else_clause")
+        const main = sequence(kids.filter((kid) => !clauses.includes(kid)), cwds)
+        const branches = clauses.map((clause) => statement(clause, main.any))
+        return {
+          ok: union(cwds, main.ok, ...branches.map((branch) => branch.ok)),
+          any: union(main.any, ...branches.map((branch) => branch.any)),
+        }
+      }
+      case "for_statement": {
+        const variable = node.childForFieldName("variable")
+        const body = node.childForFieldName("body")
+        const values = node.childrenForFieldName("value").filter((child): child is Node => child !== null)
+        if (!variable || !body || values.length === 0 || values.length > MAX_LOOP || vars.has(variable.text)) return fail()
+        let possible = new Set(cwds)
+        for (const item of values) {
+          vars.set(variable!.text, value(item))
+          possible = union(possible, statement(body!, cwds).any)
+        }
+        vars.delete(variable!.text)
+        return same(possible)
+      }
+      case "while_statement": {
+        const condition = node.childrenForFieldName("condition").filter((child): child is Node => child !== null)
+        const body = node.childForFieldName("body")
+        if (condition.length === 0 || !body) return fail()
+        const done = sequence(condition, cwds)
+        const after = statement(body!, done.ok)
+        return same(union(done.any, after.any))
+      }
+      case "redirected_statement": {
+        const body = node.childForFieldName("body")
+        const redirects = node.childrenForFieldName("redirect").filter((child): child is Node => child !== null)
+        if (!body || redirects.length === 0) return fail()
+        // The grammar hangs a trailing redirect on a whole list (`cd /etc && echo x > passwd`), where the shell gives it to
+        // the last command, after the `cd`. So a redirect on anything but one command names a file in every folder the
+        // body could have been in, before or after it ran: a single folder outside the project is enough to refuse it.
+        const result = body.type === "command" ? undefined : statement(body, cwds)
+        const where = result ? union(cwds, result.any) : cwds
+        let stdin: string | undefined
+        for (const redirect of redirects) {
+          if (redirect.type === "heredoc_redirect") {
+            const parts = named(redirect)
+            const start = parts.find((part) => part.type === "heredoc_start")
+            const content = parts.find((part) => part.type === "heredoc_body")
+            // Only a quoted delimiter keeps the body as written; an unquoted one expands `$` and backquotes in it.
+            if (!start || !/^(['"]).+\1$/.test(start.text) || parts.some((part) => !part.type.startsWith("heredoc_"))) return fail()
+            if (stdin !== undefined) return fail()
+            stdin = content?.text ?? ""
+            continue
+          }
+          if (redirect.type !== "file_redirect") return fail()
+          const destinations = redirect.childrenForFieldName("destination").filter((child) => child !== null)
+          const destination = destinations[0]
+          if (destinations.length !== 1 || !destination) return fail()
+          const operator = redirect.text.slice(0, redirect.text.lastIndexOf(destination.text)).trim()
+          // `2>&1` and `>&-` move a stream and name no file.
+          if (/^\d*[<>]&$/.test(operator) && /^(\d+|-)$/.test(destination.text)) continue
+          const target = value(destination)
+          if (target === "/dev/null" && /^\d*>>?$|^&>>?$/.test(operator)) continue
+          // bash opens `/dev/tcp/host/port` and `/dev/udp/...` as a network connection in a redirect, never as a file.
+          if (target.startsWith("/dev/")) return fail()
+          if (/^\d*>>?$|^&>>?$|^\d*>\|$/.test(operator)) [...where].forEach((dir) => writes.add(path.resolve(dir, target)))
+          else if (/^\d*<$/.test(operator)) step(["cat", target], where)
+          else return fail()
+        }
+        if (result) {
+          if (stdin !== undefined) return fail()
+          return result
+        }
+        return command(body, cwds, stdin)
+      }
+      default:
+        return fail()
+    }
+  }
+
+  const sequence = (nodes: Node[], cwds: Set<string>, top = false): Where => {
+    let here = new Set(cwds)
+    let ok = new Set(cwds)
+    for (const item of nodes) {
+      const done = statement(item, here, top)
+      ok = done.ok
+      // After `;` or a new line the next statement runs whether this one worked or not.
+      here = done.any
+    }
+    return { ok, any: here }
+  }
+
+  try {
+    if (root.type !== "program" || root.hasError) return undefined
+    sequence(named(root), new Set([cwd]), true)
+    return steps.length > 0 || writes.size > 0 ? { v: 1, steps, writes: [...writes] } : undefined
+  } catch (error) {
+    if (error instanceof Unread) return undefined
+    throw error
+  }
+}
+
+/** `decompose` over a text parsed as bash, for the tests and the inventory replay (`research/20_shell_command_inventory.md`). */
+export async function readSteps(text: string, cwd: string) {
+  const tree = (await parser()).bash.parse(text)
+  if (!tree) return undefined
+  const found = decompose(tree.rootNode, cwd)
+  tree.delete()
+  return found
+}
+
 /** Every redirect in the command, wherever it sits, and whether each is one this file can vouch for. */
 function redirectsIn(root: Node) {
   const writes: string[] = []
@@ -523,7 +849,14 @@ const WORD_BREAK = /[\s'"|;&<>()=,:]+/
 const ask = Effect.fn("ShellTool.ask")(function* (
   ctx: Tool.Context,
   scan: Scan,
-  input: { command: string; cwd: string; scripts?: Map<string, string | undefined>; archive?: boolean; archiveTargets?: string[] },
+  input: {
+    command: string
+    cwd: string
+    scripts?: Map<string, string | undefined>
+    archive?: boolean
+    archiveTargets?: string[]
+    steps?: ShellReading
+  },
   always: string | undefined,
 ) {
   // A bare `cd x` or a text the parser found no command in still asks, as itself.
@@ -573,6 +906,9 @@ const ask = Effect.fn("ShellTool.ask")(function* (
       // C97 F2, set in autonomous mode only: the files a plain `cp` or `mv` would replace, which this shell moves to the
       // archive right before it runs. The table lets a replacing copy or move through as `archived` only with them listed.
       ...(input.archiveTargets && input.archiveTargets.length > 0 ? { archiveTargets: input.archiveTargets } : {}),
+      // Row 274, set in autonomous mode only: the commands this text runs, read from its parse (`decompose`). The table
+      // judges them one by one only where the whole text would otherwise be held as not routine.
+      ...(input.steps ? { steps: input.steps } : {}),
     },
     noAlways: rule === undefined,
     call,
@@ -1138,7 +1474,14 @@ export const ShellTool = Tool.define(
                     ctx,
                     scan,
                     // `archive` below moves exactly when the mode is on and this is one plain deletion.
-                    { command: params.command, cwd, scripts, archive: Boolean(on) && typeof found === "object", archiveTargets },
+                    {
+                      command: params.command,
+                      cwd,
+                      scripts,
+                      archive: Boolean(on) && typeof found === "object",
+                      archiveTargets,
+                      steps: on ? decompose(tree.rootNode, cwd) : undefined,
+                    },
                     posix ? Reach.alwaysFor(params.command, cwd, instanceCtx) : undefined,
                   )
                   return { ...scan, deletion: found, scripts, copy }
