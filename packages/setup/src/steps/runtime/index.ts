@@ -36,7 +36,7 @@ import { consentWasGranted } from "../../consent.ts"
 import { COLIMA_PROFILE, LABELS, PROGRAM_NAME, type ComponentId } from "../../constants.ts"
 import { OUTCOME, type OutcomeToken } from "../../outcomes.ts"
 import { toolDir } from "../../paths.ts"
-import { existsSync, rmSync } from "node:fs"
+import { existsSync, realpathSync, rmSync } from "node:fs"
 import { macSignatureCheck } from "../../verify.ts"
 import type { SignatureSpec } from "../../verify.ts"
 import type { LockFile } from "../../lockfile.ts"
@@ -58,10 +58,9 @@ import {
   formatArgv,
   printOnlyRunner,
   spawnRunner,
-  SYSTEM_TOOLS,
 } from "./commands.ts"
 import type { CommandRunner } from "./commands.ts"
-import { codenameOfMajor, evaluatePreflight, probeHost, preflightProbeArgv } from "./preflight.ts"
+import { bottleKeyFor, evaluatePreflight, probeHost, preflightProbeArgv } from "./preflight.ts"
 import type { HostInfo, PreflightOutcome } from "./preflight.ts"
 import {
   appendIncompleteCapture,
@@ -90,6 +89,8 @@ export interface RuntimeStepDeps {
   readonly consentFirecrawl?: boolean
   /** TEST SEAM forwarded to verify.ts's own narrowing seam for the signature gate. */
   readonly signatureRun?: SignatureSpec["run"]
+  /** TEST SEAM: resolves the colima symlink to its Cellar path (default: realpathSync). */
+  readonly realPath?: (path: string) => string
   /** TEST SEAM identical in discipline to stepkit's own StepKitOptions.consentGate (r84):
    *  forwards a replacement predicate to createStepKit so tests can drive the granted
    *  path. It cannot grant consent out-of-band — nothing here writes consent.log; the
@@ -161,19 +162,25 @@ export async function installWithDeps(ctx: StepContext, deps: RuntimeStepDeps = 
   // but AFTER preflight so a refused host executes zero docker calls.
   const contextBefore = readContextTable(runner, dockerPath)
 
+  // A phase failure is also written to setup.log: the returned message alone never reached it.
+  const logged = (fail: PhaseFail) => {
+    kit.log("error", fail.message ?? fail.token)
+    return fail
+  }
+
   const brewPhase = ensureFormulas(ctx, kit, runner, brewPath)
-  if ("token" in brewPhase) return brewPhase
+  if ("token" in brewPhase) return logged(brewPhase)
   kit.transition("downloaded", {
     version: brewPhase.colimaVersion,
     ...(brewPhase.installedBySwarm ? { installedBySwarm: true } : {}),
   })
 
   const verifyPhase = verifyArtifacts(ctx, kit, runner, brewPath, colimaPath, host, deps)
-  if ("token" in verifyPhase) return verifyPhase
+  if ("token" in verifyPhase) return logged(verifyPhase)
   kit.transition("verified", { integrity: `sha256:${verifyPhase.colimaSha256}` })
 
   const bringUp = bringUpProfile(ctx, kit, runner, colimaPath, limactlPath, pre.sizing, nowIso)
-  if ("token" in bringUp) return bringUp
+  if ("token" in bringUp) return logged(bringUp)
 
   // OBSERVE the real docker context name (r93 H-R93-1: colima 0.10.3 creates `colima-swarm`,
   // the register literal says `swarm`). Recorded into state for consumers — row 91 reads
@@ -198,7 +205,7 @@ export async function installWithDeps(ctx: StepContext, deps: RuntimeStepDeps = 
   })
 
   const isolation = restoreUserContext(kit, runner, dockerPath, contextBefore)
-  if ("token" in isolation) return isolation
+  if ("token" in isolation) return logged(isolation)
   kit.transition("configured", { paths: [toolDir("runtime"), captureFilePath(), limaLayoutPath()] })
 
   const health = runner.run(dockerInfoArgv(dockerPath, observedContext))
@@ -236,7 +243,7 @@ function dryRunPlan(
   console.log("dry-run runtime step — every command below is PRINTED, none executed:")
   for (const argv of preflightProbeArgv()) plan(argv, "host probe (read-only introspection)")
   note(
-    "preflight: macOS floor computed from tools.lock.json bottle maps (fail-closed below floor AND above reviewed set); Virtualization.framework present (vz-only, D-12); brew at /opt/homebrew (absent -> stop with instructions, P-3)",
+    "preflight: macOS 13 or later (colima vz floor); hosts without a reviewed bottle hash in tools.lock.json are noted, Homebrew verifies its own bottle; Virtualization.framework present (vz-only, D-12); brew at /opt/homebrew on Apple Silicon or /usr/local on Intel (absent -> stop with instructions, P-3)",
   )
   for (const f of ["colima", "lima", "docker", "docker-compose"]) {
     plan(
@@ -449,14 +456,27 @@ function verifyArtifacts(
   deps: RuntimeStepDeps,
 ): VerifyOk | PhaseFail {
   const sig = macSignatureCheck(colimaPath, deps.signatureRun ? { run: deps.signatureRun } : {})
-  if (!sig.codesignOk || !sig.spctlOk) {
+  // Row 266: Homebrew bottles are never notarized. arm64 bottles are ad-hoc linker-signed and
+  // Intel bottles are unsigned, so Gatekeeper (spctl) rejects colima on every Mac. A binary that
+  // really lives in this brew's Cellar is accepted when its ad-hoc signature verifies, or when it
+  // has none at all; the bottle hash check below is its integrity gate. A signature that is
+  // present but broken still refuses.
+  const cellar = `${host.brewPrefix ?? "/opt/homebrew"}/Cellar/`
+  const realColima = (deps.realPath ?? realPathOrSelf)(colimaPath)
+  const homebrewBottle =
+    realColima.startsWith(cellar) && ((sig.adhoc === true && sig.codesignOk) || sig.unsigned === true)
+  if (!(sig.codesignOk && sig.spctlOk) && !homebrewBottle) {
     kit.transition("failed")
     return {
       token: OUTCOME.FAILED,
       message: `macOS signature gate refused ${colimaPath}: ${sig.detail} (P-1/P-2 fail-closed)`,
     }
   }
-  const codenameKey = `arm64_${codenameOfMajor(host.darwinMajor ?? -1) ?? "unknown"}`
+  if (!(sig.codesignOk && sig.spctlOk))
+    kit.log("info", `colima is a Homebrew bottle (${sig.detail}); Gatekeeper does not assess Homebrew bottles, the bottle hash is the gate`, {
+      context: { colimaPath, realPath: realColima },
+    })
+  const codenameKey = bottleKeyFor(host)
   const fields = BREW_FORMULA_FIELDS.map((field) => ({ field, formula: formulaName(ctx.lock, field) }))
   const observations = observeBottles(runner, ctx.lock, brewPath, codenameKey, fields)
   appendObservation(captureFilePath(), "bottle_observation", { codenameKey, observations })
@@ -664,6 +684,11 @@ export async function removeWithDeps(ctx: StepContext, deps: RuntimeStepDeps = {
     }
   }
   const runner = deps.runner ?? (ctx.dryRun ? printOnlyRunner() : spawnRunner())
+  // The brew that holds colima: /opt/homebrew on Apple Silicon, /usr/local on Intel (row 266).
+  const prefix =
+    deps.host?.brewPrefix ?? ["/opt/homebrew", "/usr/local"].find((p) => existsSync(brewBin("colima", p))) ?? "/opt/homebrew"
+  const colimaPath = brewBin("colima", prefix)
+  const dockerPath = brewBin("docker", prefix)
   const entry = ctx.state.components.runtime
   const profileObj = (entry.dockerObjects ?? []).find((o) => o.kind === "profile" && o.id === COLIMA_PROFILE)
   // The OBSERVED context name recorded at install time (H-R93-1); fall back to the register
@@ -675,15 +700,15 @@ export async function removeWithDeps(ctx: StepContext, deps: RuntimeStepDeps = {
   if (ctx.dryRun) {
     console.log("dry-run runtime remove — would execute (printed, not run):")
     if (profileObj?.createdBySwarm) {
-      runner.run(foreignContainersArgv("/opt/homebrew/bin/docker", observedContext))
+      runner.run(foreignContainersArgv(dockerPath, observedContext))
       console.log(
-        `  ${formatArgv(foreignContainersArgv("/opt/homebrew/bin/docker", observedContext))}   # refuse if ANY container lacks ${LABELS.MANAGED_KEY}=true`,
+        `  ${formatArgv(foreignContainersArgv(dockerPath, observedContext))}   # refuse if ANY container lacks ${LABELS.MANAGED_KEY}=true`,
       )
-      runner.run(colimaStopArgv(SYSTEM_TOOLS.colimaDefault))
-      console.log(`  ${formatArgv(colimaStopArgv(SYSTEM_TOOLS.colimaDefault))}`)
-      runner.run(colimaDeleteArgv(SYSTEM_TOOLS.colimaDefault))
+      runner.run(colimaStopArgv(colimaPath))
+      console.log(`  ${formatArgv(colimaStopArgv(colimaPath))}`)
+      runner.run(colimaDeleteArgv(colimaPath))
       console.log(
-        `  ${formatArgv(colimaDeleteArgv(SYSTEM_TOOLS.colimaDefault))}   # colima cleans its own context (${observedContext}) with the profile (measured r93 L7); we never docker context rm behind its back`,
+        `  ${formatArgv(colimaDeleteArgv(colimaPath))}   # colima cleans its own context (${observedContext}) with the profile (measured r93 L7); we never docker context rm behind its back`,
       )
       console.log(
         `  rm -rf ${toolDir("runtime")}   # only paths recorded in the state manifest (fs removal, not a spawn)`,
@@ -703,11 +728,10 @@ export async function removeWithDeps(ctx: StepContext, deps: RuntimeStepDeps = {
   if (!profileObj?.createdBySwarm) {
     return {
       token: OUTCOME.SKIPPED_WITH_INSTRUCTIONS,
-      message: `runtime was not created by swarm-setup (state manifest empty) — nothing deleted. Manual removal, if you really want it: ${formatArgv(colimaDeleteArgv(SYSTEM_TOOLS.colimaDefault))}`,
+      message: `runtime was not created by swarm-setup (state manifest empty) — nothing deleted. Manual removal, if you really want it: ${formatArgv(colimaDeleteArgv(colimaPath))}`,
     }
   }
 
-  const dockerPath = brewBin("docker", "/opt/homebrew")
   const foreign = runner.run(foreignContainersArgv(dockerPath, observedContext))
   const foreignIds = foreign.ok
     ? foreign.stdout
@@ -725,12 +749,12 @@ export async function removeWithDeps(ctx: StepContext, deps: RuntimeStepDeps = {
     }
   }
 
-  const stop = runner.run(colimaStopArgv(SYSTEM_TOOLS.colimaDefault))
+  const stop = runner.run(colimaStopArgv(colimaPath))
   if (!stop.ok) {
     kit.transition("failed")
     return { token: OUTCOME.FAILED, message: `colima stop failed (exit ${stop.exitCode}): ${tail(stop.stderr)}` }
   }
-  const del = runner.run(colimaDeleteArgv(SYSTEM_TOOLS.colimaDefault))
+  const del = runner.run(colimaDeleteArgv(colimaPath))
   if (!del.ok) {
     kit.transition("failed")
     return { token: OUTCOME.FAILED, message: `colima delete failed (exit ${del.exitCode}): ${tail(del.stderr)}` }
@@ -750,6 +774,14 @@ export async function removeWithDeps(ctx: StepContext, deps: RuntimeStepDeps = {
   return {
     token: OUTCOME.OK,
     message: `profile ${COLIMA_PROFILE} removed; user's default profile and current context untouched`,
+  }
+}
+
+function realPathOrSelf(path: string): string {
+  try {
+    return realpathSync(path)
+  } catch {
+    return path
   }
 }
 

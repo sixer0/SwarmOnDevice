@@ -250,6 +250,7 @@ function probeHostLocal(runner: CommandRunner): HostInfo {
     memsizeBytes: /^\d+$/.test(memRaw) ? Number(memRaw) : 0,
     ncpu: /^\d+$/.test(cpuRaw) ? Number(cpuRaw) : 0,
     virtualizationFramework: existsSync("/System/Library/Frameworks/Virtualization.framework"),
+    appleSilicon: true, // this live smoke runs on the Apple Silicon dev host only
     brewPrefix: armBrew ? "/opt/homebrew" : null,
     rosettaBrewOnly: !armBrew && existsSync("/usr/local/bin/brew"),
   }

@@ -109,6 +109,10 @@ export interface SignatureOutcome {
   readonly spctlOk: boolean
   /** TeamIdentifier parsed from `codesign -dvvv` stderr, when present. */
   readonly teamId?: string
+  /** `codesign -dvvv` printed `Signature=adhoc` (Homebrew's arm64 bottles are linker-signed so). */
+  readonly adhoc?: boolean
+  /** `codesign -dvvv` reported no signature at all (Homebrew's Intel bottles ship so). */
+  readonly unsigned?: boolean
   readonly detail: string
 }
 
@@ -135,10 +139,13 @@ export function macSignatureCheck(absPath: string, spec: SignatureSpec = {}): Si
   const identity = `${detailed.stdout ?? ""}\n${detailed.stderr ?? ""}`
   const teamMatch = /TeamIdentifier=(\S+)/.exec(identity)
   const teamId = teamMatch?.[1]
+  const adhoc = /^Signature=adhoc$/m.test(identity)
+  const unsigned = /code object is not signed at all/.test(identity)
   const codesignOk = codesign.status === 0
   const spctlOk = spctl.status === 0
-  const detail = `codesign exit=${codesign.status}; spctl exit=${spctl.status}${teamId ? `; TeamIdentifier=${teamId}` : "; TeamIdentifier=<none>"}`
-  if (!codesignOk || !spctlOk) return { codesignOk, spctlOk, ...(teamId !== undefined ? { teamId } : {}), detail }
+  const detail = `codesign exit=${codesign.status}; spctl exit=${spctl.status}${teamId ? `; TeamIdentifier=${teamId}` : "; TeamIdentifier=<none>"}${adhoc ? "; Signature=adhoc" : ""}${unsigned ? "; unsigned" : ""}`
+  if (!codesignOk || !spctlOk)
+    return { codesignOk, spctlOk, ...(teamId !== undefined ? { teamId } : {}), adhoc, unsigned, detail }
   if (spec.teamId !== undefined && teamId !== spec.teamId) {
     return {
       codesignOk,

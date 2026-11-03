@@ -158,15 +158,14 @@ export function scriptedRunner(
 }
 
 // --- absolute binary paths ---------------------------------------------------------------
-// Homebrew's arm64 prefix is fixed (/opt/homebrew); resolving through the detected brew
-// prefix keeps x86/Rosetta installs OUT of reach (02d §5.4: an x86_64 brew on M-series
-// breaks startup — preflight refuses that host shape anyway).
+// Brew binaries resolve through the detected native prefix: /opt/homebrew on Apple Silicon,
+// /usr/local on Intel (row 266). An x86_64 brew on Apple Silicon breaks colima startup
+// (02d §5.4) and preflight refuses that host shape.
 
 export const SYSTEM_TOOLS = {
   sw_vers: "/usr/bin/sw_vers",
   // MEASURED (r93 live, H-R93-7): macOS ships sysctl at /usr/sbin, not /sbin.
   sysctl: "/usr/sbin/sysctl",
-  colimaDefault: "/opt/homebrew/bin/colima", // canonical arm64 install (also the P-1 signature-gate target)
 } as const
 
 export function brewBin(name: string, brewPrefix: string): string {

@@ -37,9 +37,8 @@
 
 import type { DockerResult, DockerRunner } from "./stacklib.ts"
 
-/** Canonical arm64 Homebrew install path (same constant class as row 86 SYSTEM_TOOLS.colimaDefault).
- *  Resolved through the caller's brew prefix via the option below; this default is the P-1 signature
- *  target the runtime step also pins. A PATH-resolved `docker` is deliberately NOT used. */
+/** Canonical arm64 Homebrew install path, the fallback when the caller passes no binary; the engine
+ *  resolves /opt/homebrew or /usr/local (Intel) first. A PATH-resolved `docker` is deliberately NOT used. */
 export const DOCKER_BINARY_DEFAULT = "/opt/homebrew/bin/docker"
 
 /** Per-command ceiling. Cold-start `compose up -d --pull never` of the Firecrawl stack (seven

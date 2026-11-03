@@ -43,6 +43,7 @@ import { compareVersions, installWithDeps, removeWithDeps } from "../src/steps/r
 import {
   evaluatePreflight,
   bottleFloor,
+  bottleKeyFor,
   reviewedCodenames,
   FIRECRAWL_MEM_FLOOR_BYTES,
   parseDarwinMajor,
@@ -120,6 +121,7 @@ function host(over: Partial<HostInfo> = {}): HostInfo {
     memsizeBytes: 24 * GIB,
     ncpu: 10,
     virtualizationFramework: true,
+    appleSilicon: true,
     brewPrefix: "/opt/homebrew",
     rosettaBrewOnly: false,
     ...over,
@@ -163,32 +165,44 @@ describe("preflight: brew-bottle floor computed mechanically from tools.lock.jso
     expect(reviewedCodenames(LOCK)).toEqual(["golden_gate", "tahoe", "sequoia"]) // sonoma is colima-ONLY -> excluded
   })
 
-  it("fake-old-macOS fixture (13.6 Ventura) is REFUSED naming the floor (fail-closed, decisions.md brew-floor ruling)", () => {
-    const r = evaluatePreflight(host({ productVersion: "13.6.9", darwinMajor: 13 }), LOCK, false)
+  it("macOS 12 is REFUSED: colima's vz vm-type needs macOS 13 (row 266 floor)", () => {
+    const r = evaluatePreflight(host({ productVersion: "12.7.6", darwinMajor: 12 }), LOCK, false)
     expect(r.verdict).toBe("refuse")
     if (r.verdict === "refuse") {
       expect(r.token).toBe(OUTCOME.REFUSED_PLATFORM)
-      expect(r.message).toContain("macOS 15")
-      expect(r.message).toContain("sequoia")
-      expect(r.message).toContain(LOCK.version)
+      expect(r.message).toContain("macOS 13")
     }
     expect(exitCodeFor(OUTCOME.REFUSED_PLATFORM)).toBe(1)
   })
 
-  it("macOS 14 sonoma is ALSO refused: lima/docker_cli/qemu/compose have no sonoma bottle (intersection rule)", () => {
-    const r = evaluatePreflight(host({ productVersion: "14.7.2", darwinMajor: 14 }), LOCK, false)
-    expect(r.verdict).toBe("refuse")
+  it("macOS 13, 14 and an unknown future 28 PASS with a note: Homebrew verifies its own bottle (row 266)", () => {
+    for (const [productVersion, darwinMajor] of [
+      ["13.6.9", 13],
+      ["14.7.2", 14],
+      ["28.0", 28],
+    ] as const) {
+      const r = evaluatePreflight(host({ productVersion, darwinMajor }), LOCK, false)
+      expect(r.verdict).toBe("pass")
+      if (r.verdict === "pass") expect(r.notes.join(" ")).toContain("no reviewed bottle hash")
+    }
   })
 
-  it("unknown future major (28) is refused too — unreviewed hashes are never silently used", () => {
-    const r = evaluatePreflight(host({ productVersion: "28.0", darwinMajor: 28 }), LOCK, false)
-    expect(r.verdict).toBe("refuse")
-    if (r.verdict === "refuse") expect(r.message).toContain("no reviewed brew bottle")
+  it("an Intel Mac with Homebrew in /usr/local PASSES with a note (row 266)", () => {
+    const r = evaluatePreflight(host({ appleSilicon: false, brewPrefix: "/usr/local" }), LOCK, false)
+    expect(r.verdict).toBe("pass")
+    if (r.verdict === "pass") expect(r.notes.join(" ")).toContain("Intel")
   })
 
-  it("golden_gate 27.0.1 passes (this dev host's shape)", () => {
+  it("golden_gate 27.0.1 passes without a bottle note (this dev host's shape)", () => {
     const r = evaluatePreflight(host(), LOCK, false)
     expect(r.verdict).toBe("pass")
+    if (r.verdict === "pass") expect(r.notes.join(" ")).not.toContain("no reviewed bottle hash")
+  })
+
+  it("bottle keys follow Homebrew's naming: arm64_<codename> on Apple Silicon, bare codename on Intel", () => {
+    expect(bottleKeyFor(host())).toBe("arm64_golden_gate")
+    expect(bottleKeyFor(host({ appleSilicon: false, brewPrefix: "/usr/local" }))).toBe("golden_gate")
+    expect(bottleKeyFor(host({ darwinMajor: 28, productVersion: "28.0" }))).toBe("arm64_unknown")
   })
 
   it("missing Virtualization.framework refuses naming the vz-only D-12 closure", () => {
@@ -197,7 +211,7 @@ describe("preflight: brew-bottle floor computed mechanically from tools.lock.jso
     if (r.verdict === "refuse") expect(r.message).toContain("vm-type vz ONLY")
   })
 
-  it("Rosetta-prefix brew alone refuses citing the startup-break warning", () => {
+  it("Rosetta-prefix brew alone on Apple Silicon refuses citing the startup-break warning", () => {
     const r = evaluatePreflight(host({ brewPrefix: null, rosettaBrewOnly: true }), LOCK, false)
     expect(r.verdict).toBe("refuse")
     if (r.verdict === "refuse") expect(r.message).toContain("x86_64-prefix")
@@ -621,6 +635,83 @@ describe("mocked install -> healthy -> remove cycle (blueprint gate: 'passes aga
     )
     expect(res.token).toBe(OUTCOME.FAILED)
     expect(res.message).toContain("drifted")
+  })
+
+  // Row 266: Homebrew bottles are ad-hoc signed (arm64) or unsigned (Intel); Gatekeeper rejects both.
+  const homebrewSig = (over: Record<string, unknown>) => () => ({
+    codesignOk: true,
+    spctlOk: false,
+    detail: "codesign exit=0; spctl exit=3; TeamIdentifier=<none>; Signature=adhoc",
+    ...over,
+  })
+  const inCellar = (p: string) => p.replace("/bin/colima", "/Cellar/colima/0.10.3/bin/colima")
+
+  it("an ad-hoc signed colima inside the brew Cellar passes the signature gate although spctl rejects it", async () => {
+    const home = freshHome("sig1")
+    stageColimaFootprint(home)
+    const res = await installWithDeps(
+      { lock: LOCK, state: defaultState(LOCK.version), dryRun: false },
+      {
+        runner: cycleRunner(),
+        host: host(),
+        consentGate: granted,
+        consentFirecrawl: false,
+        signatureRun: homebrewSig({ adhoc: true }),
+        realPath: inCellar,
+      },
+    )
+    expect(res.token).toBe(OUTCOME.OK)
+  })
+
+  it("an unsigned colima inside an Intel /usr/local Cellar passes the signature gate", async () => {
+    const home = freshHome("sig2")
+    stageColimaFootprint(home)
+    // The scripted host answers on /opt/homebrew paths; record what the step really ran.
+    const base = cycleRunner()
+    const seen: string[] = []
+    const runner = {
+      get executedCount() {
+        return base.executedCount
+      },
+      get printed() {
+        return base.printed
+      },
+      run(argv: readonly string[]) {
+        seen.push(argv.join(" "))
+        return base.run(argv.map((a) => a.replace(/^\/usr\/local\/bin\//, "/opt/homebrew/bin/")))
+      },
+    }
+    const res = await installWithDeps(
+      { lock: LOCK, state: defaultState(LOCK.version), dryRun: false },
+      {
+        runner,
+        host: host({ appleSilicon: false, brewPrefix: "/usr/local" }),
+        consentGate: granted,
+        consentFirecrawl: false,
+        signatureRun: homebrewSig({ codesignOk: false, unsigned: true }),
+        realPath: inCellar,
+      },
+    )
+    expect(res.token).toBe(OUTCOME.OK)
+    expect(seen.some((c) => c.startsWith("/usr/local/bin/colima start"))).toBe(true)
+    expect(seen.some((c) => c.includes("/opt/homebrew"))).toBe(false)
+  })
+
+  it("an ad-hoc colima OUTSIDE the brew Cellar, or one whose signature is broken, is still refused", async () => {
+    for (const [name, sig, realPath] of [
+      ["sig3", homebrewSig({ adhoc: true }), (p: string) => p.replace("/opt/homebrew/bin", "/tmp/elsewhere")],
+      ["sig4", homebrewSig({ adhoc: true, codesignOk: false }), inCellar],
+    ] as const) {
+      const home = freshHome(name)
+      stageColimaFootprint(home)
+      const res = await installWithDeps(
+        { lock: LOCK, state: defaultState(LOCK.version), dryRun: false },
+        { runner: cycleRunner(), host: host(), consentGate: granted, consentFirecrawl: false, signatureRun: sig, realPath },
+      )
+      expect(res.token).toBe(OUTCOME.FAILED)
+      expect(res.message).toContain("signature gate refused")
+      expect(readFileSync(join(home, ".swarm", "setup", "setup.log"), "utf8")).toContain("signature gate refused")
+    }
   })
 
   it("D-13 capture with NO evidence at all (no footprint) -> FAILED: total blindness is what verification/10:143 forbids", async () => {

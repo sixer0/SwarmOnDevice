@@ -3,20 +3,18 @@
 // Three refusals + one stop-with-instructions, each fail-closed and each naming its
 // evidence in the message:
 //
-//  1. macOS floor vs reviewed bottles (decisions.md 2026-10-20 BREW-CODENAME ruling):
-//     the vendor FAQ floor (macOS 13, 02d §5.4) was RAISED to the oldest brew bottle
-//     codename reviewed across ALL runtime artifacts, because below it Homebrew would
-//     resolve hashes nobody reviewed. The floor is computed MECHANICALLY from
-//     tools.lock.json bottle maps (intersection across colima/lima/docker_cli/
-//     docker_compose/qemu) — never hardcoded — so a refreshed lock moves the floor by
-//     itself. A host whose codename has NO reviewed bottle (newer than the reviewed
-//     set) is refused too: same principle, unreviewed hashes are never silently used.
+//  1. macOS floor: macOS 13, colima's vz floor (02d §5.4). Row 266 lowered it back from the
+//     oldest reviewed bottle codename: since row 264 the lock versions are minimums and
+//     Homebrew verifies its own bottles, so a macOS or CPU without a reviewed bottle hash
+//     in tools.lock.json is accepted with a note instead of refused. The reviewed set is
+//     still computed mechanically from the lock bottle maps (intersection across colima/
+//     lima/docker_cli/docker_compose/qemu) and still checked where it applies.
 //  2. Virtualization.framework presence — D-12 is closed by this row declaring vz the
 //     ONLY supported vm-type (colima's own default on modern macOS, 02d §5.2), so the
 //     framework is a hard prerequisite and QEMU is never installed.
-//  3. Rosetta-shaped Homebrew (/usr/local brew without the arm64 /opt/homebrew brew) —
+//  3. Rosetta-shaped Homebrew on Apple Silicon (/usr/local brew without /opt/homebrew) —
 //     Colima's FAQ warns it breaks startup (02d §5.4); refuse rather than start a VM
-//     that cannot come up.
+//     that cannot come up. On an Intel Mac /usr/local is the native prefix and is used.
 //  4. Homebrew absent entirely -> SKIPPED_WITH_INSTRUCTIONS (P-3: stop with
 //     instructions; the setup never installs Homebrew itself, never pipes curl to bash).
 //
@@ -112,13 +110,17 @@ export interface HostInfo {
   readonly memsizeBytes: number // sysctl hw.memsize
   readonly ncpu: number // sysctl hw.ncpu
   readonly virtualizationFramework: boolean // /System/Library/Frameworks/Virtualization.framework
-  readonly brewPrefix: string | null // "/opt/homebrew" when its brew exists, else null
-  readonly rosettaBrewOnly: boolean // x86-style /usr/local brew present AND arm64 brew absent
+  readonly appleSilicon: boolean // sysctl hw.optional.arm64 == 1 (also true under Rosetta)
+  readonly brewPrefix: string | null // the native Homebrew for this CPU when it exists, else null
+  readonly rosettaBrewOnly: boolean // Apple Silicon with only the x86 /usr/local brew
 }
 
 const VIRT_FRAMEWORK = "/System/Library/Frameworks/Virtualization.framework"
 const ARM64_BREW = "/opt/homebrew/bin/brew"
 const X86_BREW = "/usr/local/bin/brew"
+
+/** colima's vz vm-type needs macOS 13 Ventura (Virtualization.framework file sharing). */
+export const VZ_MACOS_FLOOR = 13
 
 /** The probe commands, exported so --dry-run prints EXACTLY what the real path executes
  *  (same argv, zero spawn). Read-only system introspection; binds nothing, writes nothing. */
@@ -127,6 +129,7 @@ export function preflightProbeArgv(): string[][] {
     [SYSTEM_TOOLS.sw_vers, "-productVersion"],
     [SYSTEM_TOOLS.sysctl, "-n", "hw.memsize"],
     [SYSTEM_TOOLS.sysctl, "-n", "hw.ncpu"],
+    [SYSTEM_TOOLS.sysctl, "-n", "hw.optional.arm64"],
   ]
 }
 
@@ -134,15 +137,31 @@ export function probeHost(runner: CommandRunner): HostInfo {
   const version = runner.run([SYSTEM_TOOLS.sw_vers, "-productVersion"]).stdout.trim()
   const memRaw = runner.run([SYSTEM_TOOLS.sysctl, "-n", "hw.memsize"]).stdout.trim()
   const cpuRaw = runner.run([SYSTEM_TOOLS.sysctl, "-n", "hw.ncpu"]).stdout.trim()
+  // Intel Macs have no hw.optional.arm64 key (sysctl exits nonzero): that reads as Intel.
+  const appleSilicon = runner.run([SYSTEM_TOOLS.sysctl, "-n", "hw.optional.arm64"]).stdout.trim() === "1"
   return {
     productVersion: version,
     darwinMajor: parseDarwinMajor(version),
     memsizeBytes: /^\d+$/.test(memRaw) ? Number(memRaw) : 0,
     ncpu: /^\d+$/.test(cpuRaw) ? Number(cpuRaw) : 0,
     virtualizationFramework: existsSync(VIRT_FRAMEWORK),
-    brewPrefix: existsSync(ARM64_BREW) ? "/opt/homebrew" : null,
-    rosettaBrewOnly: !existsSync(ARM64_BREW) && existsSync(X86_BREW),
+    appleSilicon,
+    brewPrefix: nativeBrewPrefix(appleSilicon),
+    rosettaBrewOnly: appleSilicon && !existsSync(ARM64_BREW) && existsSync(X86_BREW),
   }
+}
+
+/** Homebrew's own default prefix per CPU: /opt/homebrew on Apple Silicon, /usr/local on Intel. */
+export function nativeBrewPrefix(appleSilicon: boolean): string | null {
+  if (appleSilicon) return existsSync(ARM64_BREW) ? "/opt/homebrew" : null
+  return existsSync(X86_BREW) ? "/usr/local" : null
+}
+
+/** The key Homebrew uses for this host's bottle: `arm64_<codename>` on Apple Silicon, the bare
+ *  codename on Intel; "unknown" when the macOS major has no codename in the table. */
+export function bottleKeyFor(host: HostInfo): string {
+  const codename = codenameOfMajor(host.darwinMajor ?? -1) ?? "unknown"
+  return host.appleSilicon ? `${BOTTLE_KEY_PREFIX}${codename}` : codename
 }
 
 export function parseDarwinMajor(productVersion: string): number | null {
@@ -210,17 +229,20 @@ export function evaluatePreflight(host: HostInfo, lock: LockFile, firecrawlConse
       host,
     )
   }
-  if (host.darwinMajor < floor.major) {
+  if (host.darwinMajor < VZ_MACOS_FLOOR) {
     return refuse(
-      `unsupported macOS ${host.productVersion}: this build reviews brew bottles only down to macOS ${floor.major} "${floor.codename}" (${floor.lockVersion}); hosts below the reviewed floor get an explicit refusal rather than unreviewed hashes (decisions.md 2026-10-20 brew-floor ruling)`,
+      `unsupported macOS ${host.productVersion}: the runtime VM (colima vm-type vz) needs macOS ${VZ_MACOS_FLOOR} Ventura or later`,
       host,
     )
   }
+  // Row 266 (universal install): with the minimum-version policy (row 264) Homebrew installs and
+  // verifies its own bottle for any macOS and CPU. The lock's bottle hashes are an extra check
+  // where they apply (arm64 on a reviewed macOS); elsewhere the host is accepted and the gap noted.
+  const notes: string[] = []
   const codename = codenameOfMajor(host.darwinMajor)
-  if (codename === null || !reviewedCodenames(lock).includes(codename)) {
-    return refuse(
-      `macOS ${host.productVersion} has no reviewed brew bottle in ${floor.lockVersion} (reviewed: ${reviewedCodenames(lock).join(", ")}) — ship a refreshed tools.lock.json instead of installing unreviewed bottles (fail-closed)`,
-      host,
+  if (!host.appleSilicon || codename === null || !reviewedCodenames(lock).includes(codename)) {
+    notes.push(
+      `macOS ${host.productVersion} ${host.appleSilicon ? "Apple Silicon" : "Intel"}: ${floor.lockVersion} has no reviewed bottle hash for this host (reviewed: arm64 ${reviewedCodenames(lock).join(", ")}); Homebrew installs and verifies its own bottle`,
     )
   }
 
@@ -254,7 +276,6 @@ export function evaluatePreflight(host: HostInfo, lock: LockFile, firecrawlConse
   const firecrawlOffered = firecrawlConsented && meetsMem
   const target = firecrawlConsented && meetsMem ? SIZING_FIRECRAWL : SIZING_SEARXNG_ONLY
 
-  const notes: string[] = []
   if (firecrawlConsented && !meetsMem) {
     notes.push(
       `host RAM ${(host.memsizeBytes / 1024 ** 3).toFixed(1)} GiB < 16 GiB floor: Firecrawl is SKIPPED (decision 12 / [H-MEM]); SearXNG-only sizing applies — row 92 reads firecrawlOffered=false`,
