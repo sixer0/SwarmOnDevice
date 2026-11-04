@@ -5,6 +5,7 @@ import { Permission } from "@/permission"
 import { Autonomy } from "@/permission/autonomy"
 import type { SessionID } from "@/session/schema"
 import { ServerAuth } from "@/server/auth"
+import { AutonomyReport } from "@/session/autonomy-report"
 import { LateAnswer } from "@/session/late-answer"
 import { Session } from "@/session/session"
 import { Archive } from "@/tool/archive"
@@ -95,6 +96,10 @@ export const autonomyHandlers = HttpApiBuilder.group(InstanceHttpApi, "autonomy"
     // What a person's approval goes through, here for the calls a consent tick answers (C98). A group served on its own
     // without a session runner has none, and a tick there closes nothing: the entries stay for the person.
     const late = yield* LateAnswer.make.pipe(Effect.catchCause(() => Effect.succeed(undefined)))
+    // The end report of a consented run (1.1.1, S1.51). This group is the only caller of `setMode`, so every way a run
+    // ends passes through a server that has registered it. Without a session store there is nothing to report from.
+    const report = yield* AutonomyReport.make.pipe(Effect.catchCause(() => Effect.succeed(undefined)))
+    if (report) yield* autonomy.onRunEnded(report.write)
     const scope = yield* Scope.Scope
     // Read once, as the authorization middleware does: the password a server starts with is the one it keeps.
     const password = ServerAuth.required(yield* ServerAuth.Config.pipe(Effect.provide(ServerAuth.Config.layer)))
@@ -105,7 +110,11 @@ export const autonomyHandlers = HttpApiBuilder.group(InstanceHttpApi, "autonomy"
       )
 
     const modeAt = Effect.fn("AutonomyHttpApi.modeAt")(function* (where: Autonomy.Where) {
-      return { on: yield* autonomy.isOn(where), externalChange: yield* autonomy.externalChange() }
+      return {
+        on: yield* autonomy.isOn(where),
+        externalChange: yield* autonomy.externalChange(),
+        bypass: (yield* autonomy.bypassOf(where)) !== undefined,
+      }
     })
 
     const folderMode = Effect.fn("AutonomyHttpApi.folderMode")(function* () {
@@ -122,17 +131,24 @@ export const autonomyHandlers = HttpApiBuilder.group(InstanceHttpApi, "autonomy"
         )
 
     const modeUpdate = Effect.fn("AutonomyHttpApi.modeUpdate")(function* (ctx: {
-      payload: { on: boolean; sessionID?: SessionID }
+      payload: {
+        on: boolean
+        sessionID?: SessionID
+        bypassConsent?: Autonomy.BypassConsent
+        reportLanguage?: Autonomy.ReportLanguage
+      }
     }) {
       const instance = yield* InstanceState.context
+      // The consent rides only with the request that turns the mode on; `setMode` ignores it otherwise (S1.1, S1.2).
+      const consent = { bypassConsent: ctx.payload.bypassConsent, reportLanguage: ctx.payload.reportLanguage }
       if (!ctx.payload.sessionID) {
-        yield* saved({ scope: "directory", directory: instance.directory, on: ctx.payload.on })
+        yield* saved({ scope: "directory", directory: instance.directory, on: ctx.payload.on, ...consent })
         return yield* folderMode()
       }
       const root = yield* rootOf(ctx.payload.sessionID)
       const where = { root: root.id, directory: root.directory ?? instance.directory }
       // Also when saving failed: stopping holds in memory all the same, and the record should say so.
-      yield* saved({ scope: "session", root: root.id, on: ctx.payload.on }).pipe(
+      yield* saved({ scope: "session", root: root.id, on: ctx.payload.on, ...consent }).pipe(
         Effect.ensuring(autonomy.markMode(where)),
       )
       return yield* modeAt(where)

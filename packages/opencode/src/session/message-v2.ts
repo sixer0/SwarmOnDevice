@@ -206,6 +206,9 @@ export const toModelMessagesEffect = Effect.fnUntraced(function* (
     if (msg.parts.length === 0) continue
 
     if (msg.info.role === "user") {
+      // The autonomous run's end report is for the person (1.1.1, S1.57): its text is `ignored` already, and its
+      // attached documents must not reach a model either, so the whole message is left out.
+      if (msg.parts.some((part) => part.type === "text" && part.metadata?.autonomyReport === true)) continue
       const userMessage: UIMessage = {
         id: msg.info.id,
         role: "user",

@@ -26,7 +26,8 @@ export type Verdict =
 const UNKNOWN: Verdict = { kind: "unknown" }
 const risky = (risk: Risk): Verdict => ({ kind: "risky", risk })
 
-const REMOTE: [string, RegExp][] = [
+/** What reaches another machine by a program's first argument. Exported for the consented bypass's outward forms (1.1.1 F1b). */
+export const REMOTE: readonly (readonly [string, RegExp])[] = [
   ["npm", /^publish$/], ["pnpm", /^publish$/], ["yarn", /^publish$/], ["bun", /^publish$/], ["cargo", /^publish$/],
   ["gem", /^push$/], ["twine", /^upload$/], ["docker", /^push$/], ["vercel", /./], ["netlify", /^deploy$/], ["fly", /^deploy$/],
   ["terraform", /^(apply|destroy|import)$/], ["pulumi", /^(up|destroy)$/], ["kubectl", /^(apply|delete|replace|patch|scale|rollout)$/],
@@ -43,7 +44,7 @@ const dynamic = (arg: string) => /[$`]/.test(arg)
 const glob = (arg: string) => /[*?[\]{}]/.test(arg)
 
 // Git cuts long options short and lets short ones share a dash, so `--har`, `--am` and `-qD` mean what they appear to.
-const long = (arg: string, ...names: string[]) => {
+export const long = (arg: string, ...names: string[]) => {
   if (!arg.startsWith("--") || arg.length === 2) return false
   const given = arg.slice(2).split("=")[0]!
   return names.some((name) => name.startsWith(given))
@@ -51,10 +52,26 @@ const long = (arg: string, ...names: string[]) => {
 const short = (arg: string, letters: string) =>
   /^-[^-]/.test(arg) && [...arg.slice(1)].some((letter) => letters.includes(letter))
 
+/**
+ * 1.1.1 F10a (G3-1): whether a long option word names one of `names` (each spelled with its `--`), as GNU `getopt_long`,
+ * Python's `argparse` and git's option parser read it: the name itself, or any shortening of it, with or without
+ * `=value`. A word that is exactly another of the program's own options (`exact`, bare names) is that option. A shortening
+ * several names share counts for each of them, so a check that refuses any one of them refuses it: the reading errs strict.
+ */
+export function abbreviates(word: string, names: readonly string[], exact: readonly string[] = [], caseless = false) {
+  if (!word.startsWith("--") || word.length === 2) return false
+  const fold = (text: string) => (caseless ? text.toLowerCase() : text)
+  const given = fold(word.slice(2).split("=")[0]!)
+  const bare = names.filter((name) => name.startsWith("--")).map((name) => fold(name.slice(2)))
+  if (bare.includes(given)) return true
+  if (exact.some((name) => fold(name) === given)) return false
+  return bare.some((name) => name.startsWith(given))
+}
+
 const GIT_TAKES_VALUE = new Set(["-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path", "--config-env"])
 
 /** What git runs once its own options are out of the way, so `git -C . push -f` reads as the push it is. */
-function gitCommand(args: string[]) {
+export function gitCommand(args: string[]) {
   let index = 0
   while (args[index]?.startsWith("-")) index += GIT_TAKES_VALUE.has(args[index]!) ? 2 : 1
   return args.slice(index)
@@ -324,6 +341,40 @@ export function sensitive(relative: string) {
     SENSITIVE_FILES.has(name) ||
     SENSITIVE_NAME.test(name)
   )
+}
+
+// 1.1.1 F12b (S4-2): configuration a compiler, bundler, test runner, coverage tool, linter or formatter reads to decide
+// where it writes or what it runs (`outDir`, `outputs`, a reporter file, a plugin). A run the consent opens then writes
+// wherever the file says, outside the project included, so under consent an edit of one stays the person's. Names a tool
+// reads that `sensitive` already lists (`pyproject.toml`, `setup.cfg`, `tox.ini`, `cargo.toml`, `.cargo/`, `*.config.js`,
+// `.eslintrc*`, `.prettierrc*`, `.babelrc*`) are not repeated. This is not part of `sensitive`, which 1.1.0 verdicts read.
+const TOOL_CONFIG_FILES = new Set([
+  // TypeScript and JavaScript tools.
+  "jsconfig.json", "biome.json", "biome.jsonc", ".swcrc", ".parcelrc", ".nycrc", ".c8rc", ".jshintrc", "tslint.json",
+  ".stylelintrc", ".postcssrc", "turbo.json", "nx.json", "project.json", "lerna.json", "rush.json",
+  "angular.json", ".angular-cli.json", "nest-cli.json", ".markdownlint.json", ".markdownlint.jsonc", ".markdownlint.yaml", ".markdownlint.yml",
+  // Python.
+  "ruff.toml", ".ruff.toml", "mypy.ini", ".mypy.ini", ".coveragerc", ".flake8", ".isort.cfg", "pyrightconfig.json", "pylintrc", ".pytest.ini", "pytest.toml", ".pytest.toml",
+  // Rust, Go, Swift and others.
+  "rustfmt.toml", ".rustfmt.toml", "clippy.toml", ".clippy.toml", "rust-toolchain", "rust-toolchain.toml", "go.work", "go.work.sum",
+  ".golangci.yml", ".golangci.yaml", ".golangci.toml", ".golangci.json", "package.swift", ".swiftlint.yml", ".swift-format", ".bazelrc",
+  // 1.1.1 F39 (G15-1, P54): where a publish or hosted deploy the consent opens sends, and what it uploads. `.npmrc`,
+  // `.yarnrc*`, `bunfig.toml`, `.pypirc`, `pip.conf` and `.cargo/` are in `sensitive` already; `.netlify/` below.
+  "uv.toml", "poetry.toml", "netlify.toml", "netlify.yml", "netlify.yaml", "netlify.json", "firebase.json", ".firebaserc",
+  // 1.1.1 F40 (n88, P56): what `fly deploy` and `vercel` read, for the same reason.
+  "fly.toml", "vercel.json",
+])
+// `tsconfig.json` and every `tsconfig.*.json` an `extends` names (1.1.1 F14: with a `.jsonc` extension too), any `*.config.json|yaml|toml` (`jest.config.json`,
+// `babel.config.json`), and the rc files that take a format suffix (`.nycrc.json`, `.stylelintrc.yml`, `.swcrc.json`).
+const TOOL_CONFIG_NAME =
+  /^tsconfig(\..+)?\.jsonc?$|^jsconfig\..+\.jsonc?$|\.config\.(json|jsonc|json5|ya?ml|toml)$|^\.(nycrc|c8rc|stylelintrc|postcssrc|swcrc|jshintrc|markdownlint|remarkrc|golangci)\./
+
+/** 1.1.1 F12b (S4-2): a tool's configuration, read only by the consent overlay (`Reach.consentSensitive`). */
+export function toolConfig(relative: string) {
+  const parts = canonical(relative).split("/")
+  const name = parts.at(-1)!
+  // 1.1.1 F39 (G15-1): netlify's linked-site state (`.netlify/state.json`) and anything else in its folder.
+  return TOOL_CONFIG_FILES.has(name) || TOOL_CONFIG_NAME.test(name) || parts.includes(".netlify")
 }
 
 // What an edit may touch with nobody asked. This is a list of what is ordinary, because the list above can only name what

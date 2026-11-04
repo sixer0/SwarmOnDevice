@@ -3,7 +3,7 @@ import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { ConfigPermissionV1 } from "@opencode-ai/core/v1/config/permission"
 import { InstanceState } from "@/effect/instance-state"
 import { Wildcard } from "@opencode-ai/core/util/wildcard"
-import { Deferred, Effect, Layer, Context, Option, Schema } from "effect"
+import { Deferred, Duration, Effect, Layer, Context, Option, Schema } from "effect"
 import os from "os"
 import path from "path"
 import { PermissionV1 } from "@opencode-ai/core/v1/permission"
@@ -17,8 +17,24 @@ import { AutonomyTable } from "./autonomy-table"
 import { OutwardKnown } from "./outward-known"
 import { ScriptScreen } from "./script-screen"
 import { Unattended } from "./unattended"
+import { Reach } from "../tool/reach"
 import { Risk } from "../tool/risk"
-import { REFUSED_TEXT, SPEND_STOPPED_TEXT, subagentStoppedMessage } from "./autonomy-texts"
+import {
+  MAIN_AGENT_UNAVAILABLE_TEXT,
+  REFUSED_TEXT,
+  SPEND_STOPPED_TEXT,
+  mainAgentDeclined,
+  subagentStoppedMessage,
+} from "./autonomy-texts"
+import { ProcessTree } from "./process-tree"
+import { ScriptReader } from "./script-reader"
+import { BypassScreen } from "./bypass-screen"
+import { ProjectTrust } from "@opencode-ai/core/project/trust"
+
+/** 1.1.1 F12a (P4, m29): how long a consented request waits for the script reader before it is judged without it. */
+export const SCRIPT_READER_WAIT = "2 seconds"
+/** 1.1.1 F14 (G5-P4): the same bound in ms, counted from when the reader's start began (one deadline for all requests). */
+export const SCRIPT_READER_WAIT_MS = 2_000
 
 export const Event = PermissionV1.Event
 
@@ -244,6 +260,44 @@ class DeciderRefusedError extends PermissionV1.DeniedError {
   }
 }
 
+/**
+ * 1.1.1 (S1.37): the main agent said no to a subagent's call under the consented bypass, or could not be reached. The text
+ * is the main agent's own reason (one printable line) or the fixed unavailable text: the subagent reads it and goes on.
+ */
+export class MainAgentRefusedError extends PermissionV1.DeniedError {
+  text = ""
+  override get message() {
+    return this.text
+  }
+}
+
+const mainAgentRefused = (text: string) => {
+  const error = new MainAgentRefusedError({ ruleset: [] })
+  error.text = text
+  return error
+}
+
+/** 1.1.1 (S0.1): the reason on the line of a call the consented bypass let the main agent decide. */
+export const BYPASS_REASON = "the person agreed that the main agent decides during this run"
+
+/**
+ * Defence in depth (S1.36): categories the overlay never opens. A verdict that claims to have opened one of them did not
+ * come from `underConsent`, and runs nowhere near the main agent. The X ones are refused, the rest held for a person.
+ */
+const NEVER_OPENED_X: ReadonlySet<string> = new Set([
+  "irreversible",
+  "admin_rights",
+  "delete_compound",
+  "outside_write",
+  "credential_change",
+  "plan_mode",
+  "app_state",
+])
+// The D ones and the hard script flags are the overlay's own lists (`AutonomyTable.KEPT_D`, `HARD_SCRIPT_FLAGS`), so the
+// gate and the overlay cannot drift (D-F1-3).
+const NEVER_OPENED_D = AutonomyTable.KEPT_D
+const HARD_SCRIPT_FLAGS = AutonomyTable.HARD_SCRIPT_FLAGS
+
 /** Class X. Nobody wrote a rule and nobody can answer this, so the text says neither. */
 class RefusedByModeError extends PermissionV1.DeniedError {
   override get message() {
@@ -302,11 +356,19 @@ export class Decider extends Context.Service<
       category?: string,
       // The screen's closed summary of the script a command runs (U11 rule 6), never the script itself.
       script?: ScriptScreen.Summary,
+      // 1.1.1 (S1.34): set when the main agent decides for a subagent under the consented bypass.
+      options?: AutonomyDecider.Options,
     ) => Effect.Effect<Decided>
   }
 >()("@opencode/PermissionDecider") {}
 
 const UNDECIDED: Decided = { decision: "defer", decidedBy: "system:decider_unavailable" }
+/** S1.33: the main agent could not decide for a subagent. Refused, never held. */
+const MAIN_AGENT_FAILED: Decided = {
+  decision: "reject",
+  decidedBy: "system:main_agent_unavailable",
+  reason: "model_error",
+}
 
 const held = (category: AutonomyTable.HeldCategory): AutonomyTable.Verdict => ({
   class: "D",
@@ -362,6 +424,17 @@ export function consented(consent: Autonomy.Consent | undefined): Consented | un
   return { id: consent.id, files: new Map(given.flatMap((item) => item.files.map((file) => [file, item.id] as const))) }
 }
 
+/**
+ * `ProcessTree.ofSession`, as a seam: the processes this session's shell tool started and everything below them. A test
+ * names its own processes. Nothing else provides it.
+ */
+export const OwnProcesses = Context.Reference<(session: SessionID) => Promise<ReadonlySet<number>>>(
+  "~opencode/PermissionOwnProcesses",
+  {
+    defaultValue: () => (session) => ProcessTree.ofSession(session),
+  },
+)
+
 /** `OutwardKnown.recheck`, as a seam: a test has no `gh` login to check against. Nothing else provides it. */
 export const Recheck = Context.Reference<typeof OutwardKnown.recheck>("~opencode/PermissionRecheck", {
   defaultValue: () => OutwardKnown.recheck,
@@ -376,14 +449,33 @@ export async function outwardOf(
   cwd: string,
   consent: Autonomy.Consent | undefined,
   recheck: typeof OutwardKnown.recheck = OutwardKnown.recheck,
+  // 1.1.1 F29 (P44): the hosts the person's messages of the mission window name now (`Autonomy.missionHosts`), and the
+  // project, so a push inside a project script the call runs by name is rechecked too.
+  more: { readonly hosts?: readonly OutwardKnown.Destination[]; readonly instance?: AutonomyTable.Input["instance"] } = {},
 ): Promise<AutonomyTable.Outward | undefined> {
   if (!consent) return undefined
   const allowed = Autonomy.consentedDestinations(consent)
   const snapshot = consent.snapshot
-  const push = snapshot && AutonomyTable.pushTarget({ metadata: input.metadata, cwd }, snapshot)
-  if (!snapshot || !push) return { allowed, snapshot }
+  // 1.1.1 F26 (P42): every destination the mission named, ticked or not, for the consented bypass only. 1.1.1 F29 (P44,
+  // D-F26-3 reversed): and every host the person's messages name at this call, those after the scan included.
+  // 1.1.1 F30 (P46, CR12-3): when the person's messages are read at this call, their hosts are taken from that reading
+  // only (URLs, and bare names that are no file name), never from the scan's own list of hosts, which read the same
+  // messages without that rule. Ticked items count as before (`allowed`).
+  const scanned = [...consent.destinations.values()]
+  const named = more.hosts ? [...scanned.filter((item) => item.kind !== "host"), ...more.hosts] : scanned
+  // The 1.1.0 target first; only when it names none, the consented bypass's (a push with no remote named, or a step of a
+  // compound call). The 1.1.0 table holds any push whose own target differs from the recheck's, so this loosens nothing.
+  // 1.1.1 F30 (G12-P3): in a classify scope of its own, so the scripts it expands are read once.
+  const push =
+    snapshot &&
+    Reach.snapshotScope(
+      () =>
+        AutonomyTable.pushTarget({ metadata: input.metadata, cwd }, snapshot) ??
+        AutonomyTable.consentPushTarget({ metadata: input.metadata, cwd }, snapshot, more.instance),
+    )
+  if (!snapshot || !push) return { allowed, snapshot, named }
   const result = await recheck(snapshot, push.repo, push.remote).catch(() => undefined)
-  return result ? { allowed, snapshot, recheck: { ...push, result } } : { allowed, snapshot }
+  return result ? { allowed, snapshot, named, recheck: { ...push, result } } : { allowed, snapshot, named }
 }
 
 /**
@@ -511,7 +603,14 @@ const layer = Layer.effect(
     })
 
     /** What the table makes of a call now, with what a person allowed of the root's consent list. No line, no decider. */
-    const judge = Effect.fnUntraced(function* (input: PermissionV1.AskInput, userCatchAll: boolean, root: SessionID) {
+    // `bypass` (S1.30): set only while the person's consent to the bypass applies to this root and nothing changed the state
+    // files from outside. Absent, the table answers exactly as in 1.1.0.
+    const judge = Effect.fnUntraced(function* (
+      input: PermissionV1.AskInput,
+      userCatchAll: boolean,
+      root: SessionID,
+      bypass?: { readonly caller: "root" | "subagent" },
+    ) {
       const instance = yield* InstanceState.context
       // Undefined when it could not be read, and a lineage nobody can place is held to the plan agent's limits.
       const last = yield* sessions
@@ -531,8 +630,25 @@ const layer = Layer.effect(
       // only, so after a restart there is no list and everything on it is held again.
       const consent = yield* autonomy.consent(root).pipe(Effect.catchCause(() => Effect.succeed(undefined)))
       const recheck = yield* Recheck
-      const outward = yield* Effect.promise(() => outwardOf(input, cwd ?? instance.directory, consent, recheck))
+      // 1.1.1 F29 (P44): the mission's hosts are read once per call, so every step of it is judged on the same list.
+      // 1.1.1 F30 (G12-P1): only for a call that can send (a shell call or a fetch); the read itself is incremental.
+      const sends = input.permission === "bash" || input.permission === "webfetch" || input.permission === "external_directory"
+      const hosts = consent && sends && autonomy.missionHosts ? yield* autonomy.missionHosts(root) : []
+      const outward = yield* Effect.promise(() =>
+        outwardOf(input, cwd ?? instance.directory, consent, recheck, { hosts, instance }),
+      )
       const context = { consent: consented(consent), outward }
+      // S1.31: only a command that may kill something needs to know which processes are Swarm's. A failure is none.
+      const command = input.metadata.command
+      const own = yield* OwnProcesses
+      const ownProcesses =
+        bypass && input.permission === "bash" && typeof command === "string" && BypassScreen.namesKill({ metadata: input.metadata, cwd: cwd ?? instance.directory })
+          ? yield* Effect.promise(() =>
+              Promise.resolve(input.sessionID)
+                .then(own)
+                .catch(() => new Set<number>() as ReadonlySet<number>),
+            )
+          : undefined
       const classify = yield* Classify
       const tableInput: AutonomyTable.Input & GateContext = {
         permission: input.permission,
@@ -546,6 +662,8 @@ const layer = Layer.effect(
         plan: input.agent === "plan" || last === undefined || last.agent === "plan",
         rule: userCatchAll ? "user_catch_all" : undefined,
         follows: input.follows,
+        ...(bypass && { bypass }),
+        ...(ownProcesses && { ownProcesses }),
         ...context,
       }
       const classified = yield* Effect.try({
@@ -563,7 +681,7 @@ const layer = Layer.effect(
       const used = usedConsent(classified, context)
       const table: Answer = used === "unknown" ? held("not_routine") : classified
       const via = used === "consent" || used === "outward" ? used : undefined
-      return { last, cwd, canUndo, table, via }
+      return { last, cwd, canUndo, table, via, tableInput }
     })
 
     /** What autonomous mode does with this request. Undefined when its root is not in the mode, and nothing changes then. */
@@ -589,7 +707,54 @@ const layer = Layer.effect(
       yield* autonomy.markMode({ root: root.id, directory })
       const check = yield* autonomy.check({ root: root.id, directory })
       if (!check.on) return undefined
-      const { last, cwd, canUndo, table, via } = yield* judge(input, userCatchAll, root.id)
+      // S1.30: the person's consent to the bypass, for this request. A change to the state files from outside turns it off
+      // for the request (S1.39), and so does a consent that cannot be read: the table then answers as in 1.1.0.
+      const consentNow =
+        check.externalChange.length === 0
+          ? yield* autonomy
+              .bypassOf({ root: root.id, directory })
+              .pipe(Effect.catchCause(() => Effect.succeed(undefined)))
+          : undefined
+      const bypass = consentNow
+        ? ({ caller: root.id === input.sessionID ? "root" : "subagent" } as const)
+        : undefined
+      // The table reads project scripts synchronously; its shell reader starts asynchronously, so wait for it once.
+      // 1.1.1 F12a (P4, m29): for at most `SCRIPT_READER_WAIT`; a reader still not ready leaves scripts at 1.1.0.
+      // 1.1.1 F14 (G5-P4): the bound counts from when the start began, so a start that hangs is waited for once in all.
+      if (bypass && !ScriptReader.isReady()) {
+        const starting = ScriptReader.prepare()
+        const left = ScriptReader.waitLeft(SCRIPT_READER_WAIT_MS)
+        if (left > 0) yield* Effect.promise(() => starting).pipe(Effect.timeoutOption(Duration.millis(left)))
+      }
+      const { last, cwd, canUndo, table: judgedTable, via, tableInput } = yield* judge(input, userCatchAll, root.id, bypass)
+      // S1.36, defence in depth: only `underConsent` opens a call, only under consent, and never one of the categories it
+      // keeps. A verdict that says otherwise is not believed: what nothing may run is refused, the rest waits for a person.
+      const opened = judgedTable.class === "A" ? judgedTable.bypassed : undefined
+      // A script the screen flagged for the network, deleting, sudo or a path outside is never opened either.
+      const hardScript =
+        opened === "script_flagged" && (judgedTable.screen?.flags.some((flag) => HARD_SCRIPT_FLAGS.has(flag)) ?? false)
+      // 1.1.1 F26 (P42): an outward category is opened only for a send the table finds again, to the same places.
+      const sent =
+        opened !== undefined &&
+        AutonomyTable.OUTWARD_HELD.has(opened) &&
+        judgedTable.destination !== undefined &&
+        // 1.1.1 F30 (G12-P3): inside a classify scope of its own, so the scripts it walks are read once.
+        Reach.snapshotScope(() => AutonomyTable.consentOutward(tableInput))?.join(", ") === judgedTable.destination
+      const forged =
+        opened !== undefined &&
+        (bypass === undefined || NEVER_OPENED_X.has(opened) || (NEVER_OPENED_D.has(opened) && !sent) || hardScript)
+      if (forged)
+        yield* Effect.logError("a verdict opened a call the bypass never opens", {
+          requestID,
+          permission: input.permission,
+          bypassed: opened,
+          consent: bypass !== undefined,
+        })
+      const table: Answer = !forged
+        ? judgedTable
+        : NEVER_OPENED_X.has(opened)
+          ? { class: "X", decidedBy: "gate", category: opened as AutonomyTable.Verdict["category"] }
+          : held(isHeldCategory(opened) ? opened : "not_routine")
       // An "always" on what the mode lets anyway answers nothing: an ordinary edit is on record as the gate's, not a person's.
       const answered =
         (followed || standing) &&
@@ -605,7 +770,12 @@ const layer = Layer.effect(
       // The decider gets the screen's closed summary, never the script (C70, ADV-P2). Only what the table answered on.
       const screen = verdict === table ? table.screen : undefined
       const screened = screen && ScriptScreen.summary(screen)
-      const decided =
+      // S1.32/S1.33: a call the consented bypass opened. The main agent's own call runs on the person's consent; a
+      // subagent's goes to the main agent, which answers yes or no and never holds it.
+      const overlaid = !answered && bypass !== undefined && verdict.class === "A" && verdict.bypassed !== undefined
+      const forSubagent = overlaid && bypass.caller === "subagent"
+      const mainAgent = `agent:main/${last?.agent ?? "build"}` as const
+      const asked =
         verdict.class === "P"
           ? yield* decider.decide(input, root.id, verdict.category, screened).pipe(
               // Cut off, by a reload or a cancelled run: nothing was decided, and nothing is waiting for anyone.
@@ -622,7 +792,48 @@ const layer = Layer.effect(
               ),
               Effect.catchCause(() => Effect.succeed(UNDECIDED)),
             )
-          : undefined
+          : forSubagent
+            ? yield* decider
+                .decide(input, root.id, verdict.bypassed, screened, { forSubagent: { agent: last?.agent ?? "build" } })
+                .pipe(
+                  Effect.onInterrupt(() =>
+                    autonomy
+                      .record(root.id, {
+                        type: "outcome",
+                        requestID,
+                        outcome: "not_run",
+                        by: "system:decider_interrupted",
+                      })
+                      // Logged by record, and the call does not run either way.
+                      .pipe(Effect.ignore),
+                  ),
+                  Effect.catchCause(() => Effect.succeed(MAIN_AGENT_FAILED)),
+                )
+            : undefined
+      // For a subagent only a clean yes or no from the main agent is an answer, on the main agent's name; anything else
+      // is the main agent being unavailable, and the call is refused (S1.33).
+      const decided: Decided | undefined =
+        forSubagent && asked
+          ? asked.decision === "defer" || asked.decidedBy === "system:main_agent_unavailable"
+            ? {
+                ...MAIN_AGENT_FAILED,
+                // The failure code (S1.33). A "not sure" from a model is no clean answer, and reads as one it could not give.
+                reason: asked.decidedBy.startsWith("system:") ? (asked.reason ?? "model_error") : "invalid_output",
+                attempts: asked.attempts,
+                latencyMs: asked.latencyMs,
+                costUsd: asked.costUsd,
+              }
+            : { ...asked, decidedBy: mainAgent, reason: ProjectTrust.printable(asked.reason ?? "", 200) }
+          : asked
+      // S1.36: a yes counts only on what the main agent may decide: class P, or a call the bypass opened. Never reached
+      // while the gate asks for nothing else, and here so that a change elsewhere cannot make it reachable.
+      if (decided?.decision === "allow" && verdict.class !== "P" && !overlaid)
+        yield* Effect.logError("ignored a yes on a call the decider may not decide", {
+          requestID,
+          class: verdict.class,
+          category: verdict.category,
+        })
+      const allowed = decided?.decision === "allow" && (verdict.class === "P" || overlaid)
       const judged =
         verdict.class === "P" && decided?.decision !== "allow" && decided?.decision !== "reject"
           ? ("decider_unavailable" as const)
@@ -638,10 +849,16 @@ const layer = Layer.effect(
       const reached = stopped
         ? ("reject" as const)
         : verdict.class === "P"
-          ? decided?.decision === "allow" || decided?.decision === "reject"
-            ? decided.decision
-            : ("defer" as const)
-          : verdict.class === "A"
+          ? allowed
+            ? ("allow" as const)
+            : decided?.decision === "reject"
+              ? ("reject" as const)
+              : ("defer" as const)
+          : forSubagent
+            ? allowed
+              ? ("allow" as const)
+              : ("reject" as const)
+            : verdict.class === "A"
             ? ("allow" as const)
             : verdict.class === "B"
               ? ("ask" as const)
@@ -688,11 +905,13 @@ const layer = Layer.effect(
             ? `system:${stopped}`
             : bySession
               ? "person"
-              : (decided?.decidedBy ?? (verdict.decidedBy === "person" ? "person" : "gate")),
+              : (decided?.decidedBy ??
+                (overlaid ? mainAgent : verdict.decidedBy === "person" ? "person" : "gate")),
           decision,
           reason: bySession
             ? SESSION_REASON
             : (decided?.reason ??
+              (overlaid ? BYPASS_REASON : undefined) ??
               (standing && answered
                 ? 'an earlier "always" from a person'
                 : verdict === table && via === "outward" && table.destination
@@ -702,9 +921,24 @@ const layer = Layer.effect(
           latencyMs: decided?.latencyMs,
           costUsd: decided?.costUsd,
           attempts: decided?.attempts,
-          via: followed || bySession ? "grant" : into ? "duplicate" : verdict === table ? via : undefined,
+          via:
+            followed || bySession
+              ? "grant"
+              : into
+                ? "duplicate"
+                : overlaid
+                  ? forSubagent
+                    ? "for_subagent"
+                    : "main_agent"
+                  : verdict === table
+                    ? via
+                    : undefined,
+          // The category the call had before the bypass opened it (S1.32), present only on such a line.
+          bypassed: overlaid ? verdict.bypassed : undefined,
           duplicateOf: into,
           consentID: verdict === table && via ? table.consentID : undefined,
+          // 1.1.1 F26 (P42): where a call the consent let out sends (`host[:port]`, a remote name, a registry or target).
+          destination: overlaid ? verdict.destination : undefined,
           script: screen && { bytes: screen.bytes, sha: screen.sha256, flags: [...screen.flags] },
           follows: input.follows,
         })
@@ -742,8 +976,9 @@ const layer = Layer.effect(
       }
       // Nothing runs without a person unless the decision to let it is on record. Refusing or holding needs no such line.
       // Class A grants nothing critical, so its line is a record and not a condition: a failed write is logged and it runs
-      // (C26 covers approvals of class P and what a person granted beyond class A).
-      if (!written && decision === "allow" && (answered ? table.class : verdict.class) !== "A") {
+      // (C26 covers approvals of class P and what a person granted beyond class A). A call the bypass opened was not class
+      // A before it, so its line is a condition too.
+      if (!written && decision === "allow" && ((answered ? table.class : verdict.class) !== "A" || overlaid)) {
         const again = yield* hold(root.id, "not_routine")
         if (again !== false)
           return {
@@ -755,7 +990,14 @@ const layer = Layer.effect(
         yield* reportFull
         return { class: "D" as const, decision: "defer" as const, category: "queue_full" as const }
       }
-      return { class: verdict.class, decision, category, into }
+      // What the subagent reads when the main agent said no, or could not answer (S1.33).
+      const refusal =
+        forSubagent && decision === "reject"
+          ? decided?.decidedBy === "system:main_agent_unavailable"
+            ? MAIN_AGENT_UNAVAILABLE_TEXT
+            : mainAgentDeclined(decided?.reason || "no reason given.")
+          : undefined
+      return { class: verdict.class, decision, category, into, refusal }
     })
 
     /**
@@ -1039,6 +1281,7 @@ const layer = Layer.effect(
       if (!needsAsk) {
         const gated = yield* gate(input, id, userCatchAll, hold, false, true)
         if (gated?.class === "X") return yield* refusedByMode(gated.category)
+        if (gated?.refusal !== undefined) return yield* mainAgentRefused(gated.refusal)
         if (gated?.decision === "defer") return yield* stayHeld(gated)
         return
       }
@@ -1048,6 +1291,7 @@ const layer = Layer.effect(
         // what it is can still refuse it.
         const gated = yield* gate(input, id, userCatchAll, hold, true)
         if (gated?.class === "X") return yield* refusedByMode(gated.category)
+        if (gated?.refusal !== undefined) return yield* mainAgentRefused(gated.refusal)
         if (gated?.decision === "defer") return yield* stayHeld(gated)
         // The entry back from a restart had lost what else this call asks (a shell read beyond the folder asks `bash`
         // next). The person approved the call, so each of those prompts of this very call is let through once, as on an
@@ -1095,6 +1339,8 @@ const layer = Layer.effect(
       if (gated?.stopped) return yield* stoppedByMode(input)
       // Refused by what it is, so no person is asked. Not a rejection: that error ends the run, and this one reports back.
       if (gated?.class === "X") return yield* refusedByMode(gated.category)
+      // S1.37: the main agent's no to a subagent has its own text; the 1.1.0 class P no keeps its fixed one.
+      if (gated?.refusal !== undefined) return yield* mainAgentRefused(gated.refusal)
       if (gated?.decision === "reject") return yield* new DeciderRefusedError({ ruleset: [] })
 
       // A repeating call stops the run on purpose until a person looks. Carrying on would defeat that guard.

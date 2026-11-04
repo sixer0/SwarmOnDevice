@@ -17,14 +17,15 @@ import {
 import { createHash } from "node:crypto"
 import path from "node:path"
 import { Cause, Clock, Context, Deferred, Effect, Layer, Option, Schema, Scope } from "effect"
-import { eq } from "drizzle-orm"
+import { and, desc, eq, gt, inArray, lte, sql } from "drizzle-orm"
 import { Database } from "@opencode-ai/core/database/database"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { EventV2 } from "@opencode-ai/core/event"
 import { Global } from "@opencode-ai/core/global"
 import { ProjectTrust } from "@opencode-ai/core/project/trust"
 import { AbsolutePath } from "@opencode-ai/core/schema"
-import { SessionTable } from "@opencode-ai/core/session/sql"
+import { MessageTable, PartTable, SessionTable } from "@opencode-ai/core/session/sql"
+import type { SessionV1 } from "@opencode-ai/core/v1/session"
 import { PermissionV1 } from "@opencode-ai/core/v1/permission"
 import { AutonomyEvent } from "@opencode-ai/schema/autonomy-event"
 import { QuestionV1 } from "@opencode-ai/schema/question-v1"
@@ -38,6 +39,7 @@ import type { Archive } from "@/tool/archive"
 import { ConsentScan } from "./consent-scan"
 import { MissionWindow } from "./mission-window"
 import { OutwardKnown } from "./outward-known"
+import { ScriptReader } from "./script-reader"
 
 // Whether a session runs without a person at the prompt, kept on the server so it holds with every window closed.
 //
@@ -68,6 +70,18 @@ const SKIPPED_QUESTION_REASON = "asumsi agen"
 const CONSENT_WAIT_MS = 15_000
 // Person messages read to find the mission: far more than the window's 3 before the switch and whatever came since.
 const MISSION_MESSAGES = 100
+// 1.1.1 F30 (CR12-5, G12-P1): the live read of the person's hosts takes new messages in pages of this many, at most this
+// many pages a call (what is left is read at the next call). A message's stored time may differ a little from the time it
+// carries, so the reads reach this far either side of the switch and judge by the time the message carries.
+const MISSION_PAGE = 500
+const MISSION_PAGES = 20
+const MISSION_SLACK_MS = 60_000
+// 1.1.1 F33 (CR13-8): a person message still without parts is waited for this long, then passed over.
+const PARTS_WAIT_MS = 10_000
+
+/** Test seam (1.1.1 F30, CR12-5): message rows the live host read looked at, and how many of them it read in full;
+ * 1.1.1 F39 (G15-P1): how many revert checks it made (one statement each). */
+export const missionCounters = { rows: 0, hydrated: 0, anchors: 0 }
 
 /** How long everything has to stay quiet before it counts as finished: a run can pass through idle between two steps. */
 export const BLOCKED_DEBOUNCE_MS = 5000
@@ -91,9 +105,20 @@ export interface Where {
   readonly directory: string
 }
 
+/** The one consent text version the app shows before the main agent may decide during a run (1.1.1, S0.1). */
+export const BYPASS_CONSENT = "bypass-v1" as const
+export type BypassConsent = typeof BYPASS_CONSENT
+export type ReportLanguage = "en" | "id"
+
+/** Consent fields ride with `on: true`; without `bypassConsent` the mode behaves exactly as in 1.1.0. */
+interface ModeConsent {
+  readonly bypassConsent?: BypassConsent
+  readonly reportLanguage?: ReportLanguage
+}
+
 export type ModeChange =
-  | { readonly scope: "session"; readonly root: SessionID; readonly on: boolean }
-  | { readonly scope: "directory"; readonly directory: string; readonly on: boolean }
+  | ({ readonly scope: "session"; readonly root: SessionID; readonly on: boolean } & ModeConsent)
+  | ({ readonly scope: "directory"; readonly directory: string; readonly on: boolean } & ModeConsent)
 
 export interface Check {
   readonly on: boolean
@@ -149,6 +174,15 @@ const Chained = {
   at: Schema.Finite,
 }
 const DecidedBy = Schema.String.check(Schema.isPattern(/^(gate|person|agent:[^/]+\/.+|system:.+)$/))
+// The schema's category names (`PermissionV1`), in the order the generated API lists them, after the table's own.
+const DecisionCategory = Schema.Literals([
+  "check",
+  "file-op",
+  "git-local",
+  "edit-not-ordinary",
+  ...PermissionV1.DeferredCategory.literals,
+  ...PermissionV1.AllowedCategory.literals,
+])
 const Decision = Schema.Struct({
   ...Chained,
   type: Schema.Literal("decision"),
@@ -164,20 +198,18 @@ const Decision = Schema.Struct({
   patterns: Schema.Array(Schema.String),
   patternsTruncated: Schema.Boolean,
   class: Schema.Literals(["A", "P", "D", "B", "X"]),
-  // The schema's category names (`PermissionV1`), in the order the generated API lists them, after the table's own.
-  category: Schema.optional(
-    Schema.Literals([
-      "check",
-      "file-op",
-      "git-local",
-      "edit-not-ordinary",
-      ...PermissionV1.DeferredCategory.literals,
-      ...PermissionV1.AllowedCategory.literals,
-    ]),
+  category: Schema.optional(DecisionCategory),
+  // Under the consented bypass: the category the call had before the overlay changed it (S1.43).
+  bypassed: Schema.optional(DecisionCategory),
+  // `main_agent`: the root's own call, decided by the main agent; `for_subagent`: the main agent decided for a subagent.
+  via: Schema.optional(
+    Schema.Literals(["grant", "duplicate", "consent", "outward", "user_request", "main_agent", "for_subagent"]),
   ),
-  via: Schema.optional(Schema.Literals(["grant", "duplicate", "consent", "outward", "user_request"])),
   duplicateOf: Schema.optional(Schema.String),
   consentID: Schema.optional(Schema.String),
+  // 1.1.1 F26 (P42): where a call the consented bypass let out sends: `host[:port]` for a request, a remote name for a
+  // push, a registry or target for a publish, image push or deploy; comma separated. Only on such a line.
+  destination: Schema.optional(Schema.String),
   attempts: Schema.optional(Schema.Int),
   script: Schema.optional(
     Schema.Struct({
@@ -229,6 +261,8 @@ const Marker = Schema.Struct({
     "credential_snapshot",
     "subagent_stopped",
     "force_stop",
+    "bypass_on",
+    "bypass_report",
   ]),
   files: Schema.optional(Schema.Array(Schema.Literals([MODE_FILE, TRUST_FILE]))),
   // Only on the consent markers: which list, and its hash, so a line can be matched to what the person saw.
@@ -290,6 +324,24 @@ export interface AuditRead {
 /** A held call nobody has answered, as its line in the audit file says it. */
 export type OpenDecision = typeof Decision.Type
 
+/**
+ * The person's consent that the main agent decides during this activation (1.1.1, S1.2). Memory only: no file sets it, a
+ * restart forgets it, and switching the mode on without the consent or off takes it away.
+ */
+export interface Bypass {
+  readonly at: number
+  readonly language: ReportLanguage
+}
+
+/** A consented run that has ended, handed to the end-report hook (S1.42). */
+export interface EndedRun {
+  readonly root: SessionID
+  readonly directory: string
+  readonly since: number
+  readonly until: number
+  readonly language: ReportLanguage
+}
+
 export interface Interface {
   readonly isOn: (input: Where) => Effect.Effect<boolean>
   readonly setMode: (input: ModeChange) => Effect.Effect<void, WriteError>
@@ -316,6 +368,12 @@ export interface Interface {
   /** The root's consent list, once its scan is done. Undefined while there is no mission yet, or the mode is off. */
   readonly consent: (root: SessionID) => Effect.Effect<Consent | undefined>
   /**
+   * 1.1.1 F29 (P44, D-F26-3 reversed): the hosts the person named in any of their own messages of the root's mission
+   * window, those sent after the mode came on included, read now. Empty while the root has no consent list. Only the
+   * person's typed text is read (`MissionWindow.personText`): an agent's or a tool's message, or a file, names nothing.
+   */
+  readonly missionHosts: (root: SessionID) => Effect.Effect<readonly OutwardKnown.Destination[]>
+  /**
    * A person allows items of the list they saw, named by its hash. Only the server's password route may call this: an
    * agent never reaches it. Each item counts once its own line is written, and a line that fails allows nothing more.
    */
@@ -324,6 +382,13 @@ export interface Interface {
     readonly hash: string
     readonly ids: readonly string[]
   }) => Effect.Effect<Consent, WriteError | ConsentError>
+  /**
+   * The consent behind the scope that decides this root's mode, or undefined: off, switched on without it, or a restart
+   * since. The session's own answer wins over its folder's, as for the mode itself.
+   */
+  readonly bypassOf: (input: Where) => Effect.Effect<Bypass | undefined>
+  /** The one hook told when a consented run ends, whichever way it ends. The last registration wins. */
+  readonly onRunEnded: (hook: (run: EndedRun) => Effect.Effect<void>) => Effect.Effect<void>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@opencode/Autonomy") {}
@@ -494,9 +559,11 @@ function auditFields(root: string, entry: AuditEntry) {
     patternsTruncated: patterns.some((item) => item.length > MAX_PATTERN),
     class: entry.class,
     category: entry.category,
+    bypassed: entry.bypassed,
     via: entry.via,
     duplicateOf: entry.duplicateOf && ProjectTrust.printable(entry.duplicateOf, MAX_NAME),
     consentID: entry.consentID && ProjectTrust.printable(entry.consentID, MAX_NAME),
+    destination: entry.destination && ProjectTrust.printable(entry.destination, MAX_PATTERN),
     attempts: entry.attempts,
     script: entry.script && {
       bytes: entry.script.bytes,
@@ -704,6 +771,13 @@ export const layer = Layer.effect(
     const modeMarked = new Map<string, boolean>()
     // Per root: when its mode came on, its consent list, and the scan making one. All memory, so a restart starts over.
     const onSince = new Map<string, number>()
+    // 1.1.1 F30 (P46, CR12-5, G12-P1): the person's hosts per root, read incrementally: the 3 nearest of their messages up
+    // to the switch once, then at each call only the messages stored since the last one read. Cleared with the consent.
+    // 1.1.1 F36 (CR14-3): `anchor` is the message ID of the row at `cursor` when the cursor was set (undefined: no row there).
+    const missions = new Map<
+      string,
+      { consentID: string; since: number; cursor: number; anchor: string | undefined; hosts: Set<string> }
+    >()
     const consents = new Map<string, Consent>()
     const scans = new Map<string, Deferred.Deferred<void>>()
     const cleared = new Set<string>()
@@ -716,6 +790,11 @@ export const layer = Layer.effect(
     // Per root, the held calls a b1 already named. Saying the same again adds nothing anyone can act on.
     const told = new Map<string, ReadonlySet<string>>()
     let lastIdle = 0
+    // 1.1.1 (S1.2, S1.40): the consent per scope, keyed `session:<root>` or `directory:<folder>`, and the consented runs
+    // per root. Memory only, never written and never read back from a file (AU-23): a restart starts with neither.
+    const bypass = new Map<string, Bypass>()
+    const runs = new Map<string, { root: SessionID; directory: string; since: number; language: ReportLanguage }>()
+    let runEnded: ((run: EndedRun) => Effect.Effect<void>) | undefined
 
     const started = yield* Clock.currentTimeMillis
     yield* Effect.try({ try: () => sweepAudit(started), catch: String }).pipe(
@@ -726,6 +805,38 @@ export const layer = Layer.effect(
     )
 
     const isOnNow = (input: Where) => mode.sessions.get(input.root) ?? mode.directories.has(input.directory)
+
+    // The same precedence as `isOnNow`: a session with an answer of its own goes by its own consent only.
+    const bypassNow = (input: Where) => {
+      if (!isOnNow(input)) return undefined
+      return mode.sessions.has(input.root)
+        ? bypass.get(`session:${input.root}`)
+        : bypass.get(`directory:${input.directory}`)
+    }
+
+    // The run is gone from memory before the hook runs, so a hook that is slow or fails cannot end it twice.
+    const endRun = Effect.fnUntraced(function* (root: string) {
+      const run = runs.get(root)
+      if (!run) return
+      runs.delete(root)
+      const until = yield* Clock.currentTimeMillis
+      const ended: EndedRun = {
+        root: run.root,
+        directory: run.directory,
+        since: run.since,
+        until,
+        language: run.language,
+      }
+      const hook = runEnded
+      if (!hook) return yield* Effect.logWarning("autonomous run ended with no report hook", { root })
+      yield* Effect.suspend(() => hook(ended)).pipe(
+        Effect.catchCauseIf(
+          (cause) => !Cause.hasInterrupts(cause),
+          (cause) => Effect.logError("the end of an autonomous run could not be reported", { root, cause }),
+        ),
+        Effect.forkIn(scanScope),
+      )
+    })
 
     const observe = () => {
       if (readState(MODE_FILE).hash !== seen[MODE_FILE]) changed.add(MODE_FILE)
@@ -821,6 +932,24 @@ export const layer = Layer.effect(
           // Logged by record, and the next request tries again.
           Effect.ignore,
         )
+      // S1.40-S1.41: a run ends once its consent is gone (mode_off just above, or consent taken away), and a root that is
+      // on with consent and has no run starts one, with its marker written once.
+      const consented = bypassNow(input)
+      if (!consented) yield* endRun(input.root)
+      if (on && consented && !runs.has(input.root)) {
+        runs.set(input.root, {
+          root: input.root,
+          directory: input.directory,
+          since: consented.at,
+          language: consented.language,
+        })
+        yield* record(input.root, {
+          type: "marker",
+          directory: input.directory,
+          marker: "bypass_on",
+          decidedBy: "person",
+        }).pipe(Effect.ignore)
+      }
       if (!on) return yield* clearConsent(input)
       yield* identify(input)
     })
@@ -831,6 +960,7 @@ export const layer = Layer.effect(
       consents.delete(id)
       scans.delete(id)
       onSince.delete(id)
+      missions.delete(id)
       if (!had && !cleared.has(id)) return
       cleared.delete(id)
       yield* record(input.root, {
@@ -947,6 +1077,160 @@ export const layer = Layer.effect(
       const running = scans.get(path.basename(root))
       if (running) yield* Deferred.await(running).pipe(Effect.timeout(CONSENT_WAIT_MS), Effect.ignore)
       return consents.get(path.basename(root))
+    })
+
+
+    /** Messages of `rows` with their parts, in the shape `MissionWindow.personText` reads. */
+    const withParts = (rows: readonly (typeof MessageTable.$inferSelect)[]) =>
+      Effect.gen(function* () {
+        if (!database || rows.length === 0) return [] as SessionV1.WithParts[]
+        missionCounters.hydrated += rows.length
+        const parts = yield* database.db
+          .select()
+          .from(PartTable)
+          .where(
+            inArray(
+              PartTable.message_id,
+              rows.map((row) => row.id),
+            ),
+          )
+          .orderBy(PartTable.message_id, PartTable.id)
+          .all()
+          .pipe(Effect.orDie)
+        const byMessage = new Map<string, unknown[]>()
+        for (const part of parts) {
+          const list = byMessage.get(part.message_id) ?? []
+          list.push({ ...part.data, id: part.id, sessionID: part.session_id, messageID: part.message_id })
+          byMessage.set(part.message_id, list)
+        }
+        return rows.map(
+          (row) =>
+            ({
+              info: { ...row.data, id: row.id, sessionID: row.session_id },
+              parts: byMessage.get(row.id) ?? [],
+            }) as unknown as SessionV1.WithParts,
+        )
+      })
+
+    // The row's stored sequence. SQLite keeps a row's `rowid` through `INSERT … ON CONFLICT DO UPDATE`.
+    const MESSAGE_ROW = sql.raw(`"message"."rowid"`)
+    const userRole = sql`json_extract(${MessageTable.data}, '$.role') = 'user'`
+
+    const missionHosts = Effect.fn("Autonomy.missionHosts")(function* (root: SessionID) {
+      const id = path.basename(root)
+      const consent = consents.get(id)
+      if (!database || !consent) return [] as OutwardKnown.Destination[]
+      const db = database.db
+      const now = yield* Clock.currentTimeMillis
+      const since = onSince.get(id) ?? now
+      let state = missions.get(id)
+      // 1.1.1 F36 (CR14-3): SQLite hands the next row `max(rowid) + 1`, so when a revert removes the newest rows their
+      // rowids come back, at or below the cursor, and the person's next message would never be read. A rowid at or below
+      // the cursor can come back only once the row at the cursor is gone, so the read starts over from the switch when
+      // that row is no longer the message it was, or when no row of the table reaches the cursor any more.
+      if (state && state.consentID === consent.id && state.since === since) {
+        // 1.1.1 F39 (G15-P1): the row at the cursor and the top rowid, in one statement.
+        missionCounters.anchors++
+        const [anchor] = yield* db
+          .select({
+            id: sql<string | null>`(select "id" from "message" where "rowid" = ${state.cursor})`,
+            row: sql<number | null>`max(${MESSAGE_ROW})`,
+          })
+          .from(MessageTable)
+          .all()
+          .pipe(Effect.orDie)
+        if ((anchor?.id ?? undefined) !== state.anchor || (anchor?.row ?? 0) < state.cursor) state = undefined
+      }
+      if (!state || state.consentID !== consent.id || state.since !== since) {
+        // The 3 nearest of the person's messages up to the switch (MissionWindow.window's "before").
+        const rows = yield* db
+          .select()
+          .from(MessageTable)
+          .where(and(eq(MessageTable.session_id, root), lte(MessageTable.time_created, since + MISSION_SLACK_MS), userRole))
+          .orderBy(desc(MessageTable.time_created), desc(MessageTable.id))
+          .limit(MISSION_MESSAGES)
+          .all()
+          .pipe(Effect.orDie)
+        missionCounters.rows += rows.length
+        const before = (yield* withParts(rows))
+          .filter((message) => message.info.time.created <= since)
+          .flatMap((message) => {
+            const text = MissionWindow.personText(message)
+            return text ? [{ created: message.info.time.created, text }] : []
+          })
+          .toSorted((a, b) => a.created - b.created)
+          .slice(-MissionWindow.MISSION_WINDOW)
+        // 1.1.1 F33 (CR13-7): the cursor is the row's stored sequence (`rowid`, which an upsert keeps), not its time: a
+        // message is stamped before it is stored, so a later-stamped row can be stored first. It starts before the first row
+        // stamped within the slack before the switch, or after the last row stored when there is none.
+        const [first] = yield* db
+          .select({ row: sql<number | null>`min(${MESSAGE_ROW})` })
+          .from(MessageTable)
+          .where(and(eq(MessageTable.session_id, root), gt(MessageTable.time_created, since - MISSION_SLACK_MS)))
+          .all()
+          .pipe(Effect.orDie)
+        const [last] = yield* db
+          .select({ row: sql<number | null>`max(${MESSAGE_ROW})` })
+          .from(MessageTable)
+          .where(eq(MessageTable.session_id, root))
+          .all()
+          .pipe(Effect.orDie)
+        const cursor = first?.row != null ? first.row - 1 : (last?.row ?? 0)
+        const [anchor] = yield* db
+          .select({ id: MessageTable.id })
+          .from(MessageTable)
+          .where(sql`${MESSAGE_ROW} = ${cursor}`)
+          .all()
+          .pipe(Effect.orDie)
+        state = {
+          consentID: consent.id,
+          since,
+          cursor,
+          anchor: anchor?.id as string | undefined,
+          hosts: new Set(OutwardKnown.personHosts(before.map((entry) => entry.text).join("\n"))),
+        }
+        missions.set(id, state)
+      }
+      const current = state
+      // Every message stored after the last one read, any role, in the order stored; only the person's are read in full.
+      for (let page = 0; page < MISSION_PAGES; page++) {
+        const fresh = yield* db
+          .select({ id: MessageTable.id, row: sql<number>`${MESSAGE_ROW}`, time: MessageTable.time_created, user: userRole })
+          .from(MessageTable)
+          .where(and(eq(MessageTable.session_id, root), sql`${MESSAGE_ROW} > ${current.cursor}`))
+          .orderBy(sql`${MESSAGE_ROW}`)
+          .limit(MISSION_PAGE)
+          .all()
+          .pipe(Effect.orDie)
+        missionCounters.rows += fresh.length
+        const userIDs = fresh.filter((row) => Boolean(row.user)).map((row) => row.id)
+        const full =
+          userIDs.length === 0
+            ? []
+            : yield* db.select().from(MessageTable).where(inArray(MessageTable.id, userIDs)).all().pipe(Effect.orDie)
+        const messages = new Map((yield* withParts(full)).map((message) => [message.info.id as string, message]))
+        const texts: string[] = []
+        let stopped = false
+        for (const row of fresh) {
+          const message = messages.get(row.id)
+          // A message of the person's stored before its parts: read again at the next call. 1.1.1 F33 (CR13-8): only for a
+          // while; one that still has no parts after that never gets them (an empty prompt, a crash between the two
+          // writes) and is passed over, so it does not stop the read for the rest of the session.
+          if (row.user && (!message || message.parts.length === 0) && row.time > now - PARTS_WAIT_MS) {
+            stopped = true
+            break
+          }
+          if (message && message.info.time.created > since) {
+            const text = MissionWindow.personText(message)
+            if (text) texts.push(text)
+          }
+          current.cursor = row.row
+          current.anchor = row.id
+        }
+        for (const host of OutwardKnown.personHosts(texts.join("\n"))) current.hosts.add(host)
+        if (stopped || fresh.length < MISSION_PAGE) break
+      }
+      return [...current.hosts].map((host): OutwardKnown.Destination => ({ kind: "host", host }))
     })
 
     const allowConsent = Effect.fn("Autonomy.allowConsent")(function* (input: {
@@ -1191,7 +1475,27 @@ export const layer = Layer.effect(
       yield* Effect.addFinalizer(() => Effect.sync(() => GlobalBus.off("event", onClosed)))
     }
 
+    // S1.41(b): every run whose consent this change took away ends now. A root that went off gets its mode_off marker now
+    // (markMode ends the run after it); one still on without consent only ends its run.
+    const endStaleRuns = Effect.fnUntraced(function* () {
+      yield* Effect.forEach(
+        [...runs.values()].filter((run) => !bypassNow(run)),
+        Effect.fnUntraced(function* (run) {
+          if (!isOnNow(run)) yield* markMode({ root: run.root, directory: run.directory })
+          yield* endRun(run.root)
+        }),
+        { discard: true },
+      )
+    })
+
     const setMode = Effect.fn("Autonomy.setMode")(function* (input: ModeChange) {
+      const key = input.scope === "session" ? `session:${input.root}` : `directory:${input.directory}`
+      const consented = input.on && input.bypassConsent === BYPASS_CONSENT
+      // Start the script reader now, so the first consented tool call does not pay for it (1.1.1 F12a, Perf P4).
+      if (consented) ScriptReader.warm()
+      // Taken away before the write: off is honoured whatever happens to the file, and on without consent never keeps one.
+      if (!consented) bypass.delete(key)
+      const now = yield* Clock.currentTimeMillis
       yield* Effect.try({
         try: () => {
           // Before the write replaces it: a change nobody has looked at yet must not vanish under this one.
@@ -1211,8 +1515,13 @@ export const layer = Layer.effect(
         },
         catch: String,
       }).pipe(
+        // Only once the mode is saved on: a switch that did not take gives no consent.
+        Effect.tap(() =>
+          Effect.sync(() => consented && bypass.set(key, { at: now, language: input.reportLanguage ?? "en" })),
+        ),
         Effect.tapError((error) => Effect.logError("could not save the autonomous mode", { input, error })),
         Effect.mapError(() => new WriteError({ message: "Could not save the autonomous mode" })),
+        Effect.ensuring(endStaleRuns()),
       )
     })
 
@@ -1294,7 +1603,18 @@ export const layer = Layer.effect(
       openDecisions,
       modeSince: (root) => Effect.sync(() => onSince.get(path.basename(root))),
       consent,
+      missionHosts: (root) =>
+        missionHosts(root).pipe(
+          Effect.catchCause((cause) =>
+            Effect.logError("could not read the mission's hosts", { root, cause }).pipe(Effect.as([] as OutwardKnown.Destination[])),
+          ),
+        ),
       allowConsent,
+      bypassOf: (input) => Effect.sync(() => bypassNow(input)),
+      onRunEnded: (hook) =>
+        Effect.sync(() => {
+          runEnded = hook
+        }),
     })
   }),
 )

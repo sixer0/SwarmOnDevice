@@ -34,6 +34,7 @@ import { Archive } from "./archive"
 import { DELETE_COMPOUND_TEXT, SCRIPT_CHANGED_TEXT } from "@/permission/autonomy-texts"
 import { ScriptScreen } from "@/permission/script-screen"
 import { DeletionWords, type Deletion } from "./deletion"
+import { BypassLists } from "@/permission/bypass-lists"
 
 export { Parameters } from "./shell/prompt"
 export { SCRIPT_CHANGED_TEXT } from "@/permission/autonomy-texts"
@@ -470,23 +471,62 @@ async function scriptHashes(files: string[], cwd: string, instance: InstanceCont
  * understood in full is read: lists (`&&`, `||`, `;`, new lines), pipelines, `( )` and `{ }`, `if`, `for` over literal
  * words, `while`, `[ ]`, redirects to literal names, a quoted heredoc fed to an interpreter, `cd` to a literal folder, and
  * `NAME=literal` used later as `$NAME`. Anything else (a function, `case`, an unknown variable, a glob, a program name
- * that is not a plain word, `VAR=x cmd`, `eval`-like text the grammar does not show as a command) returns undefined, and
- * the table judges the whole text as before. A `cd` that may fail leaves both folders possible for what follows it.
+ * that is not a plain word, `VAR=x cmd` for any name or value outside `BypassLists.SAFE_ASSIGNMENT`, `eval`-like text the
+ * grammar does not show as a command) returns undefined, and the table judges the whole text as before. A `cd` that may
+ * fail leaves both folders possible for what follows it.
+ *
+ * A step's `argv` may start with `NAME=value` words (1.1.1 F40, P56 item 7): only names and values of
+ * `BypassLists.SAFE_ASSIGNMENT`, only before the program, never before `cd`, `set`, `export` or a heredoc. So `argv[0]` is
+ * not always the program: a reader that needs the program skips those words first (`DeletionWords.program`).
+ * `assigned` (1.1.1 F41, G17-2): every `NAME=value` the text sets for its later steps (an assignment statement, an
+ * `export`, a `for` over a name that may be in the environment), which the consented screen checks against
+ * `BypassLists.harmlessAssignment`. Absent when empty.
  */
 export type ShellStep = { argv: string[]; cwds: string[]; code?: string }
-export type ShellReading = { v: 1; steps: ShellStep[]; writes: string[] }
+/**
+ * 1.1.1 F20 (P34): a name as the text wrote it (`to`) and the folder it is taken from (`from`), kept where tidying it
+ * would lose what the system does with it. `upward`: a redirect target with a `..`, which the system resolves one name at
+ * a time, so through a link it can land elsewhere than its tidied path says. `chdirs`: every `cd`, whose folder the shell
+ * takes logically, unless that folder does not exist as written (bash then falls back to the physical path) or the shell
+ * is set to resolve links. Neither field is present when it would be empty.
+ */
+export type ShellPlace = { from: string; to: string }
+export type ShellReading = {
+  v: 1
+  steps: ShellStep[]
+  writes: string[]
+  upward?: ShellPlace[]
+  chdirs?: ShellPlace[]
+  assigned?: string[]
+}
 
 const MAX_STEPS = 400
 const MAX_LOOP = 64
-// Variables a command may set for the rest of the text without changing what any program does.
-const HARMLESS_EXPORTS = new Set(["LC_ALL", "LANG", "TZ", "NO_COLOR", "FORCE_COLOR", "CI", "COLUMNS", "TERM"])
+// Variables a command may set for the rest of the text without changing what any program does (one list with the
+// consented screen's, 1.1.1 F41 CR17-3).
+const HARMLESS_EXPORTS = BypassLists.HARMLESS_EXPORTS
+// 1.1.1 F40 (P56 item 7), F41 (CR17-3): the names a `NAME=value` word before a program may set, and their value rule,
+// from the one source the consented screen reads them through by. Exported for the test that pins them as one object.
+export const READ_THROUGH = BypassLists.SAFE_ASSIGNMENT
 
 class Unread extends Error {}
 
 export function decompose(root: Node, cwd: string): ShellReading | undefined {
   const steps: ShellStep[] = []
   const writes = new Set<string>()
+  // 1.1.1 F22 (CR10-1): each place once, keyed by where it is taken from and how it is written. A `cd` or a redirect the
+  // text repeats asks the same question again, so a repeat adds nothing to judge, and the lists stay as long as the
+  // distinct places, not the text.
+  const upward = new Map<string, ShellPlace>()
+  const chdirs = new Map<string, ShellPlace>()
+  const place = (into: Map<string, ShellPlace>, from: string, to: string) => {
+    const key = `${from}\0${to}`
+    if (!into.has(key)) into.set(key, { from, to })
+  }
   const vars = new Map<string, string>()
+  // 1.1.1 F41 (G17-2): what the text sets for its later steps, and whether the home folder is among it.
+  const assigned: string[] = []
+  const homeSet = () => vars.has("HOME") || assigned.some((word) => word.startsWith("HOME="))
   // Bare words with `~` or `^` read since the last command started (see `value`).
   let revisionWords = 0
   const fail = (): never => {
@@ -524,7 +564,8 @@ export function decompose(root: Node, cwd: string): ShellReading | undefined {
       case "number": {
         const text = node.text
         if (text === "~" || text.startsWith("~/")) {
-          if (!PLAIN_WORD.test(text.slice(1) || "a")) fail()
+          // 1.1.1 F41 (G17-2): once the text sets HOME, `~` is no longer the server's home.
+          if (homeSet() || !PLAIN_WORD.test(text.slice(1) || "a")) fail()
           return home(text)
         }
         // `~` and `^` inside a word are only letters to bash (`HEAD~3`, `HEAD^`), but zsh with EXTENDED_GLOB reads
@@ -571,19 +612,38 @@ export function decompose(root: Node, cwd: string): ShellReading | undefined {
     if ((node.type !== "simple_expansion" && node.type !== "expansion") || parts.length !== 1 || name?.type !== "variable_name")
       return fail()
     if (node.text !== `$${name.text}` && node.text !== `\${${name.text}}`) return fail()
-    if (name.text === "HOME") return os.homedir()
+    if (name.text === "HOME") return homeSet() ? fail() : os.homedir()
     const known = vars.get(name.text)
     return known === undefined ? fail() : known
   }
 
+  // 1.1.1 F40 (P56 item 7): `NAME=value` before the program, kept as a word of its own in front of it, only for a name of
+  // `READ_THROUGH` and a value that passes its rule (bare, or in quotes with nothing to expand; F41 G17-3: no path for
+  // the locale, time-zone and terminal names). The consented screen reads such words through; the 1.1.0 table judges the
+  // step's words as written.
+  const assignment = (node: Node) => {
+    const [name, right, ...more] = named(node)
+    if (name?.type !== "variable_name" || more.length > 0 || !READ_THROUGH.names.has(name.text)) return fail()
+    const raw = right?.text ?? ""
+    const quoted = /^(['"]?)([^'"]*)\1$/.exec(raw)
+    if (node.text !== `${name.text}=${raw}` || !quoted || !READ_THROUGH.value(name.text, quoted[2]!)) return fail()
+    return `${name.text}=${quoted[2]!}`
+  }
   // One command: its literal words, the folders it may run in, and what `cd`, `export` or `set` do to what follows.
   const command = (node: Node, cwds: Set<string>, stdin?: string): Where => {
     const children = named(node)
     const words: string[] = []
+    let assigned = 0
     revisionWords = 0
     for (const child of children) {
-      // `VAR=x cmd` changes what the program does; a redirect is read where it is attached, never inside a command.
-      if (child.type === "variable_assignment" || child.type.endsWith("redirect")) fail()
+      if (child.type === "variable_assignment") {
+        if (words.length !== assigned) fail()
+        words.push(assignment(child))
+        assigned++
+        continue
+      }
+      // Any other `VAR=x cmd` changes what the program does; a redirect is read where it is attached, never inside a command.
+      if (child.type.endsWith("redirect")) fail()
       if (child.type === "command_name") {
         const name = child.namedChildren[0]
         if (child.namedChildCount !== 1 || name?.type !== "word" || !PLAIN_WORD.test(name.text)) fail()
@@ -603,14 +663,16 @@ export function decompose(root: Node, cwd: string): ShellReading | undefined {
       }
       fail()
     }
-    if (words.length === 0) fail()
-    const [name, ...args] = words
+    if (words.length === assigned) fail()
+    const [name, ...args] = words.slice(assigned)
+    if (assigned > 0 && (name === "cd" || name === "set" || name === "export" || stdin !== undefined)) fail()
     if (revisionWords > 0 && name !== "git") fail()
     if (name === "cd") {
       // `-`, `-1` and `+1` are zsh's directory stack. A bare name may be found through CDPATH, anywhere on the disk.
       if (args.length !== 1 || /^[-+]/.test(args[0]!) || stdin !== undefined) fail()
       if (process.env.CDPATH && !/^(\/|\.{1,2}(\/|$))/.test(args[0]!)) fail()
       const targets = new Set([...cwds].map((dir) => path.resolve(dir, args[0]!)))
+      cwds.forEach((dir) => place(chdirs, dir, args[0]!))
       return { ok: targets, any: union(cwds, targets) }
     }
     if (name === "set") {
@@ -634,6 +696,7 @@ export function decompose(root: Node, cwd: string): ShellReading | undefined {
             const match = /^([A-Za-z_][A-Za-z0-9_]*)=([\w./@%+:,=-]*)$/.exec(arg)
             if (!match || !HARMLESS_EXPORTS.has(match[1]!)) fail()
             vars.set(match![1]!, match![2]!)
+            assigned.push(arg)
           }
           return same(cwds)
         }
@@ -642,7 +705,9 @@ export function decompose(root: Node, cwd: string): ShellReading | undefined {
       case "variable_assignment": {
         const [name, right] = kids
         if (!top || name?.type !== "variable_name" || kids.length > 2) return fail()
-        vars.set(name.text, right ? value(right) : "")
+        const given = right ? value(right) : ""
+        vars.set(name.text, given)
+        assigned.push(`${name.text}=${given}`)
         return same(cwds)
       }
       case "list": {
@@ -701,8 +766,12 @@ export function decompose(root: Node, cwd: string): ShellReading | undefined {
         const values = node.childrenForFieldName("value").filter((child): child is Node => child !== null)
         if (!variable || !body || values.length === 0 || values.length > MAX_LOOP || vars.has(variable.text)) return fail()
         let possible = new Set(cwds)
+        // 1.1.1 F41 (G17-2): a loop over a name that may be in the environment (inherited, so exported) sets it for every
+        // program in the body. A lower-case name nobody exported stays local.
+        const exported = /[A-Z]/.test(variable.text) || /_proxy$/.test(variable.text) || process.env[variable.text] !== undefined
         for (const item of values) {
           vars.set(variable!.text, value(item))
+          if (exported) assigned.push(`${variable!.text}=${vars.get(variable!.text)}`)
           possible = union(possible, statement(body!, cwds).any)
         }
         vars.delete(variable!.text)
@@ -748,7 +817,11 @@ export function decompose(root: Node, cwd: string): ShellReading | undefined {
           if (target === "/dev/null" && /^\d*>>?$|^&>>?$/.test(operator)) continue
           // bash opens `/dev/tcp/host/port` and `/dev/udp/...` as a network connection in a redirect, never as a file.
           if (target.startsWith("/dev/")) return fail()
-          if (/^\d*>>?$|^&>>?$|^\d*>\|$/.test(operator)) [...where].forEach((dir) => writes.add(path.resolve(dir, target)))
+          if (/^\d*>>?$|^&>>?$|^\d*>\|$/.test(operator))
+            [...where].forEach((dir) => {
+              writes.add(path.resolve(dir, target))
+              if (Reach.upward(target)) place(upward, dir, target)
+            })
           else if (/^\d*<$/.test(operator)) step(["cat", target], where)
           else return fail()
         }
@@ -778,7 +851,15 @@ export function decompose(root: Node, cwd: string): ShellReading | undefined {
   try {
     if (root.type !== "program" || root.hasError) return undefined
     sequence(named(root), new Set([cwd]), true)
-    return steps.length > 0 || writes.size > 0 ? { v: 1, steps, writes: [...writes] } : undefined
+    if (steps.length === 0 && writes.size === 0) return undefined
+    return {
+      v: 1,
+      steps,
+      writes: [...writes],
+      ...(upward.size > 0 ? { upward: [...upward.values()] } : {}),
+      ...(chdirs.size > 0 ? { chdirs: [...chdirs.values()] } : {}),
+      ...(assigned.length > 0 ? { assigned } : {}),
+    }
   } catch (error) {
     if (error instanceof Unread) return undefined
     throw error

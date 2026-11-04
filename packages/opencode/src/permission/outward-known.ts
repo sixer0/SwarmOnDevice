@@ -287,7 +287,35 @@ export function hostsIn(text: string) {
   for (const match of text.matchAll(/(?<![\w@/.-])((?:[a-z0-9-]+\.)+([a-z]{2,}))(?![\w-])/gi)) {
     if (TLDS.has(match[2].toLowerCase())) hosts.add(match[1].toLowerCase())
   }
+  // 1.1.1 F26 (P42, D-F26-1): `.example.com` or `*.example.com` names that host and every name below it, as `*.example.com`.
+  for (const match of text.matchAll(/(?<![\w@/.*-])\*?\.((?:[a-z0-9-]+\.)+([a-z]{2,}))(?![\w-])/gi)) {
+    if (TLDS.has(match[2].toLowerCase())) hosts.add(`*.${match[1].toLowerCase()}`)
+  }
   return { hosts: [...hosts], ssh }
+}
+
+/**
+ * 1.1.1 F33 (P49 4): the endings a bare name the person wrote must have to be read as a host: the usual web endings of
+ * `TLDS` without those that name files as often (`sh` a shell script, `app` a macOS app, `ai` an Illustrator file). Kept
+ * small on purpose: a host with another ending counts when the person writes it as a URL. 1.1.1 F36 (P52, CR14-5): nor
+ * `id` and `info`, which end code member names as often (`user.id`, `node.info`); written as a URL they still count.
+ */
+export const WEB_TLDS: ReadonlySet<string> = new Set(
+  [...TLDS].filter((ending) => !["sh", "app", "ai", "id", "info"].includes(ending)),
+)
+
+/**
+ * 1.1.1 F30 (P46, CR12-3), F33 (P49 4, CR13-6, G13-P1): the hosts in the person's words that open a request under
+ * consent: every host of a URL they wrote, and a bare name (a wildcard one included) whose last label is in `WEB_TLDS`.
+ * No project file is looked at. What the consent list shows for ticking is unchanged (`hostsIn`).
+ */
+export function personHosts(text: string): string[] {
+  const fromUrls = new Set<string>()
+  for (const match of text.matchAll(/\b[a-z][a-z0-9+.-]*:\/\/[^\s'"<>`)]+/gi)) {
+    const parsed = parse(match[0].replace(/[.,;:!?]+$/, ""))
+    if (parsed) fromUrls.add(parsed.host)
+  }
+  return hostsIn(text).hosts.filter((host) => fromUrls.has(host) || WEB_TLDS.has(host.slice(host.lastIndexOf(".") + 1)))
 }
 
 /** Known destinations the person named, and hosts they named for fetches. Repo text is never passed here, only theirs. */

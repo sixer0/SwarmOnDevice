@@ -58,18 +58,30 @@ const ExternalChange = Schema.Array(Schema.Literals(["mode.json", "trust.json"])
 export const ModeState = Schema.Struct({
   on: Schema.Boolean,
   externalChange: ExternalChange,
+  bypass: Schema.Boolean.annotate({
+    description: "True only while a consented activation is live for this scope; a restart turns it off",
+  }),
 }).annotate({ identifier: "AutonomyMode" })
 
 // No session means the folder: what a draft shows, and what a new session in it starts from.
 export const ModePayload = Schema.Struct({
   on: Schema.Boolean,
   sessionID: Schema.optional(SessionID),
+  bypassConsent: Schema.optional(Schema.Literal(Autonomy.BYPASS_CONSENT)).annotate({
+    description: "The consent the person gave in the app: the main agent decides during this run. Only with on: true",
+  }),
+  reportLanguage: Schema.optional(Schema.Literals(["en", "id"])).annotate({
+    description: "Language of the end-of-run report; en when left out",
+  }),
 })
 
 export const SessionState = Schema.Struct({
   rootID: SessionID,
   on: Schema.Boolean,
   externalChange: ExternalChange,
+  bypass: Schema.Boolean.annotate({
+    description: "True only while a consented activation is live for the session's root; a restart turns it off",
+  }),
   open: Schema.Int,
   lines: Schema.Array(Autonomy.AuditLine.annotate({ identifier: "AutonomyAuditLine" })),
   intact: Schema.Boolean,

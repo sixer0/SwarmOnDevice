@@ -90,10 +90,18 @@ export const DeferredCategory = Schema.Literals([
   "script_flagged",
   "script_unreadable",
   "program_not_trusted",
+  // D under the 1.1.1 consented bypass: still held for a person
+  "outside_write_held",
+  "system_service",
+  "process_not_own",
+  "unreadable_command",
   // X: never run, whoever is asked
   "outside_write",
   "delete_compound",
   "credential_change",
+  // X under the 1.1.1 consented bypass
+  "irreversible",
+  "admin_rights",
 ]).annotate({ identifier: "PermissionDeferredCategory" })
 export type DeferredCategory = typeof DeferredCategory.Type
 
@@ -105,6 +113,8 @@ export const AllowedCategory = Schema.Literals([
   "consented",
   "archived",
   "script",
+  // ran under the 1.1.1 consented bypass; the category it had before is kept in the audit line's \`bypassed\`
+  "by_main_agent",
 ]).annotate({ identifier: "PermissionAllowedCategory" })
 export type AllowedCategory = typeof AllowedCategory.Type
 

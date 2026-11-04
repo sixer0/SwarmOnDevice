@@ -86,11 +86,15 @@ export const EditTool = Tool.define(
           }
 
           const instance = yield* InstanceState.context
-          const filePath = path.isAbsolute(params.filePath)
-            ? params.filePath
-            : path.join(instance.directory, params.filePath)
+          // 1.1.1 F25 (CR11-3): the file is written at its tidied path, and judged both there and where the path as given
+          // lands (`Reach.fileTarget`): through a link and `..` that is beside the link's target, which asks as any path
+          // outside the project does.
+          const target = Reach.fileTarget(params.filePath, instance.directory)
+          const filePath = target.written
           const label = path.relative(instance.worktree, filePath)
+          if (target.landing === undefined) throw new Error(`Cannot resolve ${label}: a link on the way loops`)
           yield* assertExternalDirectoryEffect(followedByEdit(ctx, [label]), filePath)
+          if (target.landing !== filePath) yield* assertExternalDirectoryEffect(followedByEdit(ctx, [label]), target.landing)
 
           let diff = ""
           let contentOld = ""

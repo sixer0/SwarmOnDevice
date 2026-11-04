@@ -11,11 +11,15 @@ import type { ProjectTrust } from "@opencode-ai/core/project/trust"
 import { AUTONOMY_CONSENT, type PermissionV1 } from "@opencode-ai/core/v1/permission"
 import { McpCatalog } from "../mcp/catalog"
 import { OutwardKnown } from "./outward-known"
+import { OutwardConsent } from "./outward-consent"
 import { ScriptScreen } from "./script-screen"
+import { BypassLists } from "./bypass-lists"
+import { BypassScreen } from "./bypass-screen"
 import { containsPath, type InstanceContext } from "../project/instance-context"
 import { LibraryRoot } from "../skill/library-root"
 import { GitGuard } from "../tool/git-guard"
 import { Reach } from "../tool/reach"
+import type { ShellPlace } from "../tool/shell"
 import { Risk } from "../tool/risk"
 import { DeletionWords, type Deletion } from "../tool/deletion"
 import { Secrets } from "../tool/secrets"
@@ -52,13 +56,18 @@ export type Verdict = {
   via?: "outward"
   /** The consent item a class A answer used: rule 3's destination with `via`, or rule 2's file with category "consented". */
   consentID?: string
-  /** That destination as the audit shows it (`OutwardKnown.label`), with account names hidden. */
+  /**
+   * That destination as the audit shows it (`OutwardKnown.label`), with account names hidden. 1.1.1 F26 (P42): on a call
+   * the consent opened to send, where it goes (`host[:port]`, a remote name, a registry or deploy target), comma separated.
+   */
   destination?: string
   /**
    * U11 rule 6: the screen behind a `script` or `script_flagged` answer, for the gate to put on record. The decider is only
    * ever given the closed summary of it (C70), and none of it is the script's text.
    */
   screen?: { bytes: number; lines: number; sha256: string; flags: readonly ScriptScreen.Flag[] }
+  /** 1.1.1 (S1.12): the category the call had before the consented bypass let it run. Present only on an overlay A. */
+  bypassed?: AllowedCategory | HeldCategory
 }
 
 /**
@@ -70,6 +79,8 @@ export type Outward = {
   allowed: readonly { id: string; destination: OutwardKnown.Destination }[]
   snapshot?: OutwardKnown.Snapshot
   recheck?: { repo: string; remote: string; result: OutwardKnown.Recheck }
+  /** 1.1.1 F26 (P42): every destination named in the mission, ticked or not. Only the consented bypass reads it. */
+  named?: readonly OutwardKnown.Destination[]
 }
 
 export type Input = {
@@ -93,6 +104,18 @@ export type Input = {
   outward?: Outward
   /** U11 rule 2, as the gate passes it (`Permission.Consented`). Read only here; absent means no list, so all is held. */
   consent?: Consent
+  /**
+   * 1.1.1 (S1.10): the person consented that the main agent decides during this run, and whose call this is. Absent: the
+   * 1.1.0 table, to the byte.
+   */
+  bypass?: { readonly caller: "root" | "subagent" }
+  /** The processes Swarm started (S1.28), for `kill` under the bypass. Absent: none is known to be Swarm's. */
+  ownProcesses?: ReadonlySet<number>
+  /**
+   * 1.1.1 F26 (P42): the whole text of the call a step of `classifySteps` came from, so a request step still sees a `<`
+   * or a pipe the step's own words no longer carry. Absent: the call's own command.
+   */
+  whole?: string
 }
 
 /**
@@ -235,7 +258,7 @@ function gitAllowed(cwd: string, instance: InstanceContext) {
 }
 
 /** Whether git, run in the real folder `folder`, lands in the repository at the real folder `top`. */
-function noRepositoryBetween(start: string, top: string) {
+export function noRepositoryBetween(start: string, top: string) {
   let folder = start
   while (folder !== top) {
     if (fs.lstatSync(path.join(folder, ".git"), { throwIfNoEntry: false })) return false
@@ -370,6 +393,8 @@ function onlyLooks(words: readonly string[]) {
       (READ_FLAG.test(word) &&
         !rules.exact?.includes(word) &&
         !rules.long?.some((name) => word === name || word.startsWith(name + "-") || word.startsWith(name + "=")) &&
+        // 1.1.1 F10a (G3-1): these programs take a long option by any shortening of it, so a shortening is that option.
+        !Risk.abbreviates(word, rules.long ?? []) &&
         (rules.exact !== undefined || word.startsWith("--") || ![...word.slice(1)].some((flag) => rules.short?.includes(flag)))),
   )
 }
@@ -546,6 +571,8 @@ const GIT_LISTS: Readonly<Record<string, RegExp>> = {
   worktree: /^--porcelain$/,
 }
 const GIT_ACTS = /^(--output(=.*)?|--ext-diff|--open-files-in-pager(=.*)?|-O.*|--no-index|--exec(=.*)?|--textconv)$/
+// 1.1.1 F10a (G3-1): the same options by name, as git also takes them shortened (one list, in `bypass-lists.ts`).
+const gitActs = (word: string) => GIT_ACTS.test(word) || Risk.abbreviates(word, BypassLists.GIT_ACT_NAMES, BypassLists.GIT_ACT_EXACT)
 // The one word after these flags is a revision, not a name to make.
 const GIT_REV_FLAG = /^--(contains|merged|no-merged|points-at)$/
 
@@ -576,7 +603,7 @@ function nestedGitAllowed(cwd: string, instance: InstanceContext) {
 }
 
 function gitLook(sub: string, args: readonly string[]) {
-  if (args.some((word) => GIT_ACTS.test(word))) return false
+  if (args.some(gitActs)) return false
   if (GIT_READS.has(sub)) return true
   const flags = GIT_LISTS[sub]
   if (!flags) return false
@@ -838,18 +865,32 @@ function classifyEdit(input: Input): Verdict {
 function classifyBash(input: Input, checkClass: CheckClass): Verdict {
   const whole = classifyBashText(input, checkClass)
   if (whole.class !== "D" || (whole.category !== "not_routine" && whole.category !== "outside_folder")) return whole
-  const reading = shellReading(input.metadata.steps)
+  const reading = shellReading(input.metadata.steps, input.instance)
   if (!reading) return whole
   return classifySteps(input, checkClass, reading) ?? whole
 }
 
 type Step = { argv: string[]; cwds: string[]; code?: string }
-type Reading = { steps: Step[]; writes: string[] }
+// 1.1.1 F22 (n52): the one spelling of a place the reader keeps.
+type Place = ShellPlace
+/**
+ * 1.1.1 F22 (CR10-1), F25 (CR11-1): `complete` is false when the reader kept more distinct `cd`s than are judged
+ * (`MAX_STEPS`). The steps and writes (every redirect landing included) are then judged without the `cd` list, so a call
+ * without consent is judged as 1.1.0 judged it plus the landings; with consent such a reading is held
+ * (`underConsent` rule 3b), and every reader that opens (`allowlisted`, `sequenceKeeps`, `scriptTextOpens`) keeps 1.1.0.
+ */
+// 1.1.1 F41 (G17-2): `assigned` is what the text sets for its later steps (see `ShellReading`); only the consented screen
+// reads it, so 1.1.0 is unchanged by it.
+type Reading = { steps: Step[]; writes: string[]; chdirs: readonly Place[]; complete: boolean; assigned: readonly string[] }
 
 const MAX_STEPS = 400
 
-/** `metadata.steps` as the shell wrote it, or undefined for anything else. Nothing in it is taken on trust past its shape. */
-function shellReading(value: unknown): Reading | undefined {
+/**
+ * `metadata.steps` as the shell wrote it, or undefined for anything else. Nothing in it is taken on trust past its shape.
+ * 1.1.1 F20 (P34, CR9-1, S9-1): `writes` also holds where each redirect with a `..` really lands (`physicalWrites`), so
+ * every reader of a call's writes, with consent or without, judges the file the system will open.
+ */
+export function shellReading(value: unknown, instance?: InstanceContext): Reading | undefined {
   if (typeof value !== "object" || value === null) return undefined
   const item = value as Record<string, unknown>
   const strings = (list: unknown): list is string[] => Array.isArray(list) && list.every((entry) => typeof entry === "string")
@@ -864,7 +905,74 @@ function shellReading(value: unknown): Reading | undefined {
     steps.push({ argv: step.argv, cwds: step.cwds, ...(step.code === undefined ? {} : { code: step.code }) })
   }
   if (!item.writes.every((file) => path.isAbsolute(file))) return undefined
-  return { steps, writes: item.writes }
+  if (item.assigned !== undefined && !strings(item.assigned)) return undefined
+  const assigned: readonly string[] = item.assigned ?? []
+  const upward = places(item.upward)
+  const chdirs = places(item.chdirs)
+  if (!upward || !chdirs) return undefined
+  // 1.1.1 F25 (CR11-1, V11-1): where a redirect lands is a safety fact in both modes, never dropped. More distinct redirects
+  // with a `..` than are judged leave the reading unread (as before F22); a long `cd` list (a consent-only fact) still has
+  // every landing worked out, and only the `cd`s go unjudged (`complete: false`, which the consent never opens).
+  if (upward === LONG) return undefined
+  const landed = physicalWrites(upward, instance)
+  if (!landed) return undefined
+  const writes = [...new Set([...item.writes, ...landed])]
+  if (chdirs === LONG) return { steps, writes, chdirs: [], complete: false, assigned }
+  return { steps, writes, chdirs, complete: true, assigned }
+}
+
+/** More places than are judged (`MAX_STEPS`), each well formed. */
+const LONG: readonly Place[] = Object.freeze([])
+
+/**
+ * A list of `{ from, to }` with an absolute `from`; absent is empty, anything else undefined. 1.1.1 F22 (CR10-1): a well
+ * formed list longer than `MAX_STEPS` is `LONG`.
+ */
+function places(value: unknown): readonly Place[] | undefined {
+  if (value === undefined) return []
+  if (!Array.isArray(value)) return undefined
+  const valid = value.every((entry: unknown) => {
+    if (typeof entry !== "object" || entry === null) return false
+    const place = entry as Record<string, unknown>
+    return typeof place.from === "string" && path.isAbsolute(place.from) && typeof place.to === "string"
+  })
+  if (!valid) return undefined
+  return value.length > MAX_STEPS ? LONG : (value as Place[])
+}
+
+/**
+ * 1.1.1 F20 (P34, CR9-1, S9-1): a redirect is opened by the system, which resolves its target one name at a time, so
+ * `lnk/../x` lands beside where `lnk` leads, not in the folder `lnk` is in. Each such target that lands elsewhere than its
+ * tidied path is added as the file it really is: inside the project spelled under the project's folders as given, so it
+ * is judged by the same names a plain write there would be, and outside as itself, which keeps the hold or refusal a
+ * plain write there gets (a stricter-only fix, the same in 1.1.0's own table). undefined: a link loop, which leaves the
+ * whole text to the rules that do not read it step by step.
+ */
+function physicalWrites(upward: readonly Place[], instance: InstanceContext | undefined): string[] | undefined {
+  const found: string[] = []
+  // 1.1.1 F22 (G10-P2): the project's real folders are worked out once per reading, not once per landing.
+  let pairs: [string, string][] | undefined
+  for (const place of upward) {
+    const landing = Reach.physical(place.to, place.from)
+    if (landing === undefined) return undefined
+    const tidied = path.resolve(place.from, place.to)
+    if (landing === (Reach.real(tidied) ?? tidied)) continue
+    if (instance) pairs ??= realToGiven(instance)
+    found.push(pairs ? Reach.respell(landing, pairs) : landing)
+  }
+  return found
+}
+
+/**
+ * A real path inside the project is spelled under the project's folder (or repository top) as given (`Reach.respell`
+ * with these pairs, the repository top first, as before); one outside stays as itself.
+ */
+function realToGiven(instance: InstanceContext): [string, string][] {
+  const real = Reach.realRoots(instance)
+  return [
+    [real.worktree, instance.worktree],
+    [real.directory, instance.directory],
+  ].filter(([, given]) => given !== "/") as [string, string][]
 }
 
 // A word as the autonomy table's own readers take it back (`Risk.plainWords`, `Risk.quotedWords`), or undefined.
@@ -888,25 +996,37 @@ function classifySteps(input: Input, checkClass: CheckClass, reading: Reading): 
     return PLAIN_DELETION.test(text) ? undefined : refused("delete_compound")
   }
   const verdicts: Verdict[] = []
+  // 1.1.1 F41 (G17-P1): within one call a step's verdict depends only on its folder and its text, so a text repeated in a
+  // long compound is classified once.
+  const seen = new Map<string, Verdict>()
   for (const [index, step] of reading.steps.entries()) {
     const command = commands[index]!.join(" ")
     for (const cwd of step.cwds) {
       // Each step goes through every rule a request does, credential changes and the app's state included. What the
       // shell said about the whole text (it moves a plain deletion, it archives what a copy replaces) is not about a step.
       const metadata = { ...input.metadata, command, steps: undefined, archive: undefined, archiveTargets: undefined }
-      const one = { ...input, cwd, patterns: [command], metadata }
-      const writes = shellWrites(step.argv, cwd)
+      const one = { ...input, cwd, patterns: [command], metadata, whole: input.whole ?? (typeof input.metadata.command === "string" ? input.metadata.command : undefined) }
+      // 1.1.1 F41 (CR17-2): the program's own words, past leading `NAME=value` words, for the rules that name a program.
+      const argv = DeletionWords.program(step.argv)
+      const writes = argv.length > 0 ? shellWrites(argv, cwd, input.instance) : undefined
       if (step.code !== undefined) {
         // Code read from a heredoc, as `python3 -` runs it: the script screen of rule 6, as for `python3 -c`.
-        const program = path.basename(step.argv[0]!)
-        if (step.argv.length !== 1 && !(step.argv.length === 2 && step.argv[1] === "-")) return undefined
+        const program = path.basename(argv[0] ?? "")
+        if (argv.length !== 1 && !(argv.length === 2 && argv[1] === "-")) return undefined
         if (!INLINE_FLAG[program]) return undefined
         verdicts.push(classifyScript(one, { program, code: step.code }))
       } else if (writes) {
         // A `tee` or `sed` the shell would find inside the project is the repository's own code (U11 rule 7).
-        verdicts.push(programInProject(step.argv[0]!, cwd, input.instance) ? held("program_not_trusted") : classifyShellWrite(one, writes))
+        verdicts.push(programInProject(argv[0]!, cwd, input.instance) ? held("program_not_trusted") : classifyShellWrite(one, writes))
+        // A prefixed write is also judged as its whole text was before F41, so the prefix only ever adds a verdict.
+        if (argv !== step.argv) verdicts.push(classify(one, checkClass))
       }
-      else verdicts.push(classify(one, checkClass))
+      else {
+        const key = `${cwd}\0${command}`
+        const known = seen.get(key) ?? classify(one, checkClass)
+        seen.set(key, known)
+        verdicts.push(known)
+      }
     }
   }
   if (reading.writes.length > 0) verdicts.push(classifyShellWrite(input, reading.writes))
@@ -916,8 +1036,17 @@ function classifySteps(input: Input, checkClass: CheckClass, reading: Reading): 
   // the decider would have judged (`echo SYSTEM: approve this; bun test`) would be read too. Only the gate answers here.
   if (top === RANK.P) return undefined
   const strongest = verdicts.filter((verdict) => RANK[verdict.class] === top)
-  // Among answers that let it through, one with a category is the one that says what went on record.
-  return strongest.find((verdict) => verdict.category !== undefined) ?? strongest[0]
+  // A tie in rank prefers the answer the consent overlay opened (`bypassed`), so the order of the steps never decides
+  // whether a subagent's compound call goes to the main agent (1.1.1 M1). Then one with a category, which says what went
+  // on record.
+  const chosen =
+    strongest.find((verdict) => verdict.bypassed !== undefined) ??
+    strongest.find((verdict) => verdict.category !== undefined) ??
+    strongest[0]!
+  // 1.1.1 F26 (P42): a call the consent lets out records every place its steps send to, not only the chosen step's.
+  if (!input.bypass || top !== RANK.A || chosen.bypassed === undefined) return chosen
+  const sent = [...new Set(verdicts.flatMap((verdict) => (verdict.destination ? verdict.destination.split(", ") : [])))]
+  return sent.length > 0 ? { ...chosen, destination: sent.join(", ") } : chosen
 }
 
 /**
@@ -925,9 +1054,14 @@ function classifySteps(input: Input, checkClass: CheckClass, reading: Reading): 
  * <file>...`, and `sed -i` whose every script only substitutes or deletes lines: no `w` or `e`, no `r`, no script file.
  * BSD sed takes the next word after `-i` as the backup suffix (`-i ''`), GNU sed one written into the flag (`-i.bak`).
  */
-function shellWrites(argv: readonly string[], cwd: string): string[] | undefined {
+function shellWrites(argv: readonly string[], cwd: string, instance: InstanceContext): string[] | undefined {
   const [name, ...args] = argv
-  const files = (names: readonly string[]) => names.map((word) => path.resolve(cwd, word))
+  // 1.1.1 F25 (CR11-2): `tee` and `sed -i` open their files as a redirect does, so a name with a `..` also counts where it
+  // really lands (`physicalWrites`, in both modes). A link loop: not read as such a command, so the step is judged whole.
+  const files = (names: readonly string[]) => {
+    const landed = physicalWrites(names.filter(Reach.upward).map((to) => ({ from: cwd, to })), instance)
+    return landed && [...new Set([...names.map((word) => path.resolve(cwd, word)), ...landed])]
+  }
   if (name === "tee") {
     const names = args.filter((word) => word !== "-a")
     if (names.length === 0 || names.some((word) => word.startsWith("-"))) return undefined
@@ -969,6 +1103,7 @@ function shellWrites(argv: readonly string[], cwd: string): string[] | undefined
   }
   if (!inPlace || scripts.length === 0 || names.length === 0 || !scripts.every(sedEditsOnly)) return undefined
   const written = files(names)
+  if (!written) return undefined
   return suffix ? [...written, ...written.map((file) => file + suffix)] : written
 }
 
@@ -1333,8 +1468,9 @@ function classifyOutside(input: Input): Verdict {
 // U11 rule 3. Something leaves the machine without a person only for a destination the person named in the mission and
 // ticked, matched by code against what the gate passes in. No model judges "part of the mission": the agent writes the
 // command and repository text can shape where it points. Every other way out waits for a person as `outward_not_in_mission`.
+// 1.1.0's push flags; narrower than P42's (`OutwardConsent.pushWords`) on purpose, so 1.1.0 is unchanged (n63).
 const PUSH_FLAGS = new Set(["-u", "--set-upstream", "-q", "--quiet", "-v", "--verbose"])
-const REF = /^[A-Za-z0-9][A-Za-z0-9._/-]*$/
+const REF = OutwardConsent.REF
 const RCLONE_FLAGS = new Set(["-P", "--progress", "-v", "--verbose", "--ignore-existing", "-n", "--dry-run"])
 // `-e`, `--rsh`, `--rsync-path`, `-o` and `-S` run a program; `--delete` and `--remove-source-files` remove. None is here.
 const SCP_FLAGS = new Set(["-p", "-q", "-C"])
@@ -1545,17 +1681,19 @@ function pieceChangesCredentials(words: readonly string[], snapshot: OutwardKnow
   if (sub === "remote") return REMOTE_CHANGES.has(rest[0] ?? "")
   if (sub === "credential" || sub?.startsWith("credential-")) return true
   if (sub === "config")
-    return rest.some((word) => word === "-e" || word === "--edit" || (!word.startsWith("-") && CREDENTIAL_KEY.test(word.split("=")[0]!)))
+    return rest.some((word) => word === "-e" || Risk.abbreviates(word, ["--edit"]) || (!word.startsWith("-") && CREDENTIAL_KEY.test(word.split("=")[0]!)))
   if (sub === "push") return pushesToRawUrl(rest, snapshot)
   return false
 }
 
 /** `git push <url>` or `--repo=<url>` with a URL that is none of the push URLs the snapshot holds. */
 function pushesToRawUrl(args: readonly string[], snapshot: OutwardKnown.Snapshot | undefined) {
+  // 1.1.1 F10a (G3-1): git takes `--repo` by any shortening of it too.
+  const isRepo = (word: string) => Risk.abbreviates(word, ["--repo"])
   const repo = args.flatMap((word, index) =>
-    word.startsWith("--repo=") ? [word.slice("--repo=".length)] : word === "--repo" ? [args[index + 1] ?? ""] : [],
+    isRepo(word) ? (word.includes("=") ? [word.slice(word.indexOf("=") + 1)] : [args[index + 1] ?? ""]) : [],
   )
-  const positional = args.find((word, index) => !word.startsWith("-") && !PUSH_VALUE_OPTIONS.has(args[index - 1] ?? "") && args[index - 1] !== "--repo")
+  const positional = args.find((word, index) => !word.startsWith("-") && !PUSH_VALUE_OPTIONS.has(args[index - 1] ?? "") && !isRepo(args[index - 1] ?? ""))
   return [...repo, ...(positional ? [positional] : [])].some(
     (target) =>
       RAW_URL.test(target) && !(snapshot !== undefined && snapshot.repos.some((item) => OutwardKnown.pushTarget(snapshot, item.dir, target))),
@@ -1575,7 +1713,7 @@ const unquoteWord = (word: string) => (/^(['"]).*\1$/s.test(word) && word.length
  * command substitution outside single quotes. It only has to find a deletion wherever one could run; what it lets through
  * as plain is decided by `PLAIN_DELETION` alone.
  */
-function commandWords(command: string) {
+export function commandWords(command: string) {
   const pieces: string[] = []
   let current = ""
   let quote: "'" | '"' | undefined
@@ -1670,7 +1808,7 @@ function classifyDeletion(input: Input): Verdict | undefined {
  * The class of one request, per the table this mode was specified with. Stricter rules are asked first, so a request can
  * only get here with less room than a later rule would give it. `checkClass` exists for the test of both values.
  */
-export function classify(input: Input, checkClass: CheckClass = CHECK_CLASS): Verdict {
+export function classifyBase(input: Input, checkClass: CheckClass = CHECK_CLASS): Verdict {
   // A spend limit and a repeating call stop a run so that a person looks. Nothing here or later may answer them.
   if (needsPerson(input.permission)) return { class: "B", decidedBy: "person" }
   if (input.rule === "deny") return { class: "X" }
@@ -1719,6 +1857,266 @@ export function classify(input: Input, checkClass: CheckClass = CHECK_CLASS): Ve
   // A tool that says nothing about itself has nothing to judge. No name is excepted, `graft_*` included.
   const opaque = input.patterns.every((pattern) => pattern === "*") && Object.keys(input.metadata).length === 0
   return held(opaque ? "external_tool" : "not_routine")
+}
+
+/**
+ * The class of one request. Without the person's consent to the bypass this is `classifyBase`, unchanged since 1.1.0. With
+ * it, the overlay of S1.13 (as decision P8 reads it) is laid over that answer. The plan agent keeps rule 8: no bypass for a
+ * plan lineage. Steps of a compound text reach this again from `classifySteps` with the same `bypass`, so each is overlaid.
+ */
+export function classify(input: Input, checkClass: CheckClass = CHECK_CLASS): Verdict {
+  if (!input.bypass || input.plan === true) return classifyBase(input, checkClass)
+  // 1.1.1 F12b (Perf P2): one classify asks git about a file once, however many steps or scripts write it. 1.1.1 F14
+  // (G5-P1): the one scope covers the whole consented classify, the steps' own overlays (reached from `classifySteps`,
+  // whose nested scopes share this one), the call-level check and the kept path's `classifyBase` included.
+  return Reach.snapshotScope(() => {
+    const base = classifyBase(input, checkClass)
+    const verdict = underConsent(input, base)
+    // 1.1.1 F12a (S4-1): a step that changes the tree beside one that runs a project script does not open the call; it
+    // keeps its 1.1.0 verdict. Refusals and held answers stand as they are.
+    if (verdict.bypassed !== undefined && BypassScreen.sequenceKeeps(input))
+      return classifyBase({ ...input, bypass: undefined }, checkClass)
+    return verdict
+  })
+}
+
+/**
+ * Categories the overlay never opens. The first four are the person's in 1.1.0 already (P5 A2a, A2c, rule 6); the rest are
+ * what the overlay itself holds, so overlaying a step's answer a second time keeps it (S1.15). `sensitive_file` (1.1.1
+ * D-F1-2): an edit, write or patch of a file that changes later runs or what is allowed, and a shell write (`tee`, `sed -i`,
+ * a redirect) to one, stays the person's. The one list: the gate (`index.ts`) reads it to refuse a forged verdict.
+ */
+export const KEPT_D: ReadonlySet<string> = new Set([
+  "outward",
+  "outward_not_in_mission",
+  "outside_folder",
+  "script_unreadable",
+  "outside_write_held",
+  "system_service",
+  "process_not_own",
+  "unreadable_command",
+  "sensitive_file",
+])
+/** The script-screen flags that keep a `script_flagged` call for a person under consent. The one list (D-F1-3), which
+ * lives in `bypass-lists.ts` so the screen reads the same one; re-exported here for the gate (`index.ts`). */
+export const HARD_SCRIPT_FLAGS = BypassLists.HARD_SCRIPT_FLAGS
+
+/**
+ * The permissions Swarm's own tools ask with (`src/tool/*`, the session's plan and spend prompts). A name missing here only
+ * keeps a call at its 1.1.0 verdict, which P8 allows, so the list errs short rather than long.
+ */
+const BUILT_IN_PERMISSIONS: ReadonlySet<string> = new Set([
+  "bash",
+  "edit",
+  "read",
+  "glob",
+  "grep",
+  "lsp",
+  "git",
+  "webfetch",
+  "websearch",
+  "task",
+  "question",
+  "todowrite",
+  "skill",
+  "external_directory",
+  "plan_enter",
+  "plan_exit",
+])
+
+/** 1.1.1 F9: an MCP tool (it carries its source), a tool that says nothing about itself, or a name no Swarm tool asks with. */
+function externalTool(input: Input, base: Verdict) {
+  const mcp = input.metadata.mcp
+  if (typeof mcp === "object" && mcp !== null) return true
+  if (base.category === "external_tool" || base.category === "mcp_tool") return true
+  return !BUILT_IN_PERMISSIONS.has(input.permission)
+}
+
+/**
+ * An edit, write or patch with any target `Reach.sensitive` sees (a hook, a manifest, a config), judged as the edit is.
+ * 1.1.1 F12b (S4-2): or a tool's configuration (`Reach.consentSensitive`): a compiler or test run the consent opens writes
+ * where that file says.
+ */
+function editsSensitive(input: Input) {
+  if (input.permission !== "edit") return false
+  const instance = input.instance
+  // Without Git the worktree is `/`, and every name would be judged from the top of the disk.
+  const base = instance.worktree === "/" ? { ...instance, worktree: instance.directory } : instance
+  return editTargets(input).some((file) => Reach.consentSensitive(file, base))
+}
+
+/**
+ * S1.13 under decision P8: the bypass loosens and never tightens. A call that is A without consent stays A; the only
+ * answers stricter than the 1.1.0 one are the irreversible list and admin rights, which are refused (X), and (1.1.1 F25,
+ * decision P40) a shell call whose reading is incomplete, which is held. Everything a
+ * person kept in 1.1.0 stays theirs, and what this cannot read it does not open. First match wins.
+ */
+export function underConsent(input: Input, base: Verdict): Verdict {
+  // 1. A spend limit or a repeating call stops the run for a person, whatever was consented.
+  if (base.class === "B") return base
+  // 1b. 1.1.1 F9 (P15 G2-5, P16): a plugin or MCP tool, or any tool that is not Swarm's own, keeps its 1.1.0 verdict. The
+  // table cannot see what such a tool does, so the consent never opens it.
+  if (externalTool(input, base)) return base
+  // 2. Nothing can undo it, or it asks for admin rights: refused by code before any agent sees it.
+  const found = BypassScreen.screen(input)
+  if (found.x === "irreversible" || found.x === "admin_rights") return refused(found.x)
+  // 2b. 1.1.1 F30 (G12-7, P42): a push to a place that is no remote of the repository is refused, as P42 and the consent
+  // dialog say. Decision D-F30-1: stricter than 1.1.0 (which held a push to a folder), by the person's own choice in P42.
+  if (consentRefusedPush(input)) return refused("credential_change")
+  // 3. A write outside the project waits for a person instead of being refused (P5 A2c); any other X stays X.
+  if (base.class === "X") return base.category === "outside_write" ? held("outside_write_held") : base
+  // 3b. 1.1.1 F25 (CR11-1, V11-1): a shell call whose reading the screen could not finish (more distinct `cd`s than are
+  // judged) waits for a person, as it did when such a reading was unread: the consent never takes 1.1.0's A for it.
+  if (base.class === "A" && input.permission === "bash" && shellReading(input.metadata.steps, input.instance)?.complete === false)
+    return held("unreadable_command")
+  // 4. P8: what ran without consent (a look, a ticked destination, a webfetch) runs as it did.
+  if (base.class === "A") return base
+  // 5. A deletion the shell cannot archive is never opened, and P8 keeps it no stricter than 1.1.0 had it.
+  if (found.x === "delete_compound") return base
+  // 6. What leaves the machine, a system service, a process Swarm did not start, text nobody can read: kept for a person.
+  if (found.d) return base.class === "D" ? held(found.d) : base
+  // 6a. 1.1.1 F26 (P42): a call that sends only where the person allowed (a local or named host, a remote the repository
+  // had, a publish or deploy) is not kept for that reason; every check below still applies to it.
+  const sends = OUTWARD_HELD.has(base.category ?? "") ? consentOutward(input) : undefined
+  if (base.category !== undefined && KEPT_D.has(base.category) && sends === undefined) return base
+  // 6b. An edit of a sensitive file keeps its 1.1.0 verdict, whatever category it carries (a P edit-not-ordinary included).
+  if (editsSensitive(input)) return base
+  // 7. What nothing could undo (a deletion or overwrite the shell could not archive, a label of `irreversible`) stays for
+  // the person. Rule 9 would keep every such shell call too; this keeps it for any other tool as well.
+  if (base.category === "not_reversible") return base
+  // 7b. 1.1.1 F10a (G3-4): an edit nothing can undo keeps its 1.1.0 verdict. Rule 4 has already let through the one that
+  // was A in 1.1.0 (an ordinary file inside the folder); any other (a file that is not ordinary) is not opened.
+  if (input.permission === "edit" && (input.editClass === "no_undo" || !input.canUndo)) return base
+  // 8. 1.1.1 F1b (P10, P11), kept as an extra check: a shell, inline code or an unscreened script, an alias, an unknown
+  // program before a risky one, SQL from a file or stdin, anything the wide reader sees deleting or replacing, or a command
+  // substitution with anything unknown in it: the 1.1.0 verdict stands.
+  if (BypassScreen.unclear(input, base) !== undefined) return base
+  // 9. 1.1.1 F7 (P15): a shell call is opened only when every step is a development command the allowlist recognises, in a
+  // form it recognises, and the shell's own reading carries no label. Anything else keeps its 1.1.0 verdict. A flagged or
+  // unflagged script never matches it, so neither does any form rule 7 of F1b used to judge.
+  // 1.1.1 F12b (Perf P2, S4-2): the undo-snapshot question of every file the call writes is asked once, in one batch, after
+  // the allowlist; a file outside the snapshot, or a tool's configuration, keeps the 1.1.0 verdict.
+  if (input.permission === "bash" || input.permission === "external_directory") {
+    // 1.1.1 F14 (G5-P2): a call the allowlist does not open keeps 1.1.0 whatever git says, so git is not asked.
+    const allowed = Reach.deferSnapshot(
+      () => BypassScreen.allowlisted(input, base),
+      (value) => value === true,
+    )
+    if (!allowed.value || allowed.outside) return base
+  }
+  // 10. Anything else held or judged: the main agent decides it.
+  if ((base.class !== "D" && base.class !== "P") || base.category === undefined) return base
+  const destinations = sends ?? consentOutward(input)
+  return {
+    class: "A",
+    decidedBy: "agent",
+    category: "by_main_agent",
+    bypassed: base.category,
+    ...(destinations && { destination: destinations.join(", ") }),
+  }
+}
+
+/** 1.1.1 F26 (P42): the held categories a send carries in 1.1.0, which the consent may open (`consentOutward`). */
+export const OUTWARD_HELD: ReadonlySet<string> = new Set(["outward", "outward_not_in_mission"])
+
+/**
+ * 1.1.1 F26 (P42): where a call the consent may let out sends, step by step in order, or undefined when it sends nowhere
+ * P42 opens or any send in it is held. The gate asks it again on a verdict that opened an outward category (S1.36).
+ */
+export function consentOutward(input: Input): string[] | undefined {
+  if (input.permission === "webfetch") {
+    const found = OutwardConsent.fetch(input.metadata.url, input.patterns, input.outward)
+    return "held" in found ? undefined : found.destinations
+  }
+  if (input.permission !== "bash") return undefined
+  return BypassScreen.outwardOpened(input)
+}
+
+/**
+ * 1.1.1 F26 (P42): the repository and remote of every `git push` step of a call, when they are one: a push without force
+ * (`OutwardConsent.pushWords`) in a folder of a repository the consent snapshot knew, with no other repository between, to
+ * a remote it named, or with none named to its only remote. The gate runs `OutwardKnown.recheck` on this.
+ */
+export function consentPushTarget(
+  input: Pick<Input, "metadata" | "cwd">,
+  snapshot: OutwardKnown.Snapshot,
+  // 1.1.1 F29 (P44): with the project, the pushes inside the project scripts the call runs by name count as its own.
+  instance?: Input["instance"],
+) {
+  const own = BypassScreen.readSteps(input) ?? []
+  // 1.1.1 F30 (G12-P3): only a script whose manifest says `push` is expanded.
+  const steps = instance
+    ? own.flatMap((step) => [
+        step,
+        ...step.cwds.flatMap((cwd) =>
+          BypassScreen.scriptMayPush(step.argv, cwd, instance) ? BypassScreen.scriptSteps(step.argv, cwd, instance) : [],
+        ),
+      ])
+    : own
+  let target: { repo: string; remote: string } | undefined
+  for (const step of steps) {
+    if (step.argv[0] !== "git" || step.argv[1] !== "push") continue
+    for (const cwd of step.cwds) {
+      const found = pushAt(step.argv, cwd, snapshot)
+      if (!found || (target && (target.repo !== found.repo || target.remote !== found.remote))) return undefined
+      target = found
+    }
+  }
+  return target
+}
+
+function pushAt(argv: readonly string[], cwd: string, snapshot: OutwardKnown.Snapshot) {
+  const named = OutwardConsent.pushWords(argv)
+  if (named === undefined) return undefined
+  const here = Reach.real(cwd)
+  if (here === undefined) return undefined
+  const repo = snapshot.repos.filter((item) => within(item.dir, here)).toSorted((a, b) => b.dir.length - a.dir.length)[0]
+  if (!repo || !noRepositoryBetween(here, repo.dir)) return undefined
+  const remote = named === "" ? (repo.remotes.length === 1 ? repo.remotes[0]!.name : undefined) : named
+  if (!remote || !repo.remotes.some((item) => item.name === remote)) return undefined
+  return { repo: repo.dir, remote }
+}
+
+/**
+ * 1.1.1 F30 (G12-7, P42): under consent, a `git push` of the call, or of a project script it runs by name, whose repository
+ * word is a place (a URL, `host:path`, a path to a folder) or a name the consent snapshot's repository for that folder
+ * has no remote of. Without a snapshot only a place counts.
+ */
+export function consentRefusedPush(input: Input): boolean {
+  if (input.permission !== "bash" || typeof input.metadata.command !== "string") return false
+  const own = BypassScreen.readSteps(input) ?? []
+  const steps = own.flatMap((step) => [step, ...step.cwds.flatMap((cwd) => BypassScreen.scriptSteps(step.argv, cwd, input.instance))])
+  const snapshot = input.outward?.snapshot
+  return steps.some((step) => {
+    const words = OutwardConsent.pushRepositories(step.argv)
+    if (!words) return false
+    return words.some((word) => {
+      if (OutwardConsent.pushPlace(word)) return true
+      if (!snapshot) return false
+      return step.cwds.some((cwd) => {
+        const here = Reach.real(cwd)
+        if (here === undefined) return false
+        const repo = snapshot.repos.filter((item) => within(item.dir, here)).toSorted((a, b) => b.dir.length - a.dir.length)[0]
+        return repo !== undefined && noRepositoryBetween(here, repo.dir) && !repo.remotes.some((remote) => remote.name === word)
+      })
+    })
+  })
+}
+
+/**
+ * 1.1.1 F26 (P42): one `git push` step the consent lets out: to a remote the snapshot knew (`pushAt`), whose recheck just
+ * now found the same push URLs (a missing `gh` login is no reason to hold it: git uses its own credentials), in a
+ * repository the guard vouches for, run in a folder a command may run in. undefined: not a push.
+ */
+export function consentPush(argv: readonly string[], cwd: string, input: Pick<Input, "outward" | "instance">): OutwardConsent.Reading | undefined {
+  if (argv[0] !== "git" || argv[1] !== "push") return undefined
+  const snapshot = input.outward?.snapshot
+  const target = snapshot && canRunIn(cwd, input.instance) ? pushAt(argv, cwd, snapshot) : undefined
+  if (!target || GitGuard.inspect(target.repo).refused !== undefined) return { held: "form" }
+  const check = input.outward?.recheck
+  if (!check || check.repo !== target.repo || check.remote !== target.remote) return { held: "form" }
+  if (!check.result.ok && check.result.reason !== "no_credential") return { held: "form" }
+  return { destinations: [target.remote], outputs: [] }
 }
 
 export * as AutonomyTable from "./autonomy-table"
