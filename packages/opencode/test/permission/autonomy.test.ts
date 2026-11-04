@@ -12,9 +12,10 @@ import {
 } from "node:fs"
 import os from "node:os"
 import path from "node:path"
-import { NodeHttpServer, NodeServices } from "@effect/platform-node"
+import { NodeServices } from "@effect/platform-node"
 import { Cause, ConfigProvider, Effect, Exit, Fiber, Layer, Schema } from "effect"
 import { HttpClient, HttpClientRequest, HttpRouter, HttpServer } from "effect/unstable/http"
+import { loopbackServer } from "./loopback-server"
 import { HttpApiBuilder } from "effect/unstable/httpapi"
 import { layerWebSocketConstructorGlobal } from "effect/unstable/socket/Socket"
 import { CrossSpawnSpawner } from "@opencode-ai/core/cross-spawn-spawner"
@@ -2295,7 +2296,7 @@ const served = testEffect(
       >
     ).pipe(
       Layer.provide(layerWebSocketConstructorGlobal),
-      Layer.provideMerge(NodeHttpServer.layerTest),
+      Layer.provideMerge(loopbackServer),
       Layer.provideMerge(NodeServices.layer),
     ),
   ),
@@ -2902,7 +2903,7 @@ const ticks = testEffect(
         [Permission.deciderNode, decider],
       ],
     ),
-    NodeHttpServer.layerTest,
+    loopbackServer,
     NodeServices.layer,
     workspaceLayerWithRuntimeFlags({}),
   ),

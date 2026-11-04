@@ -312,6 +312,232 @@ describe("settings v2 controllers", () => {
       expect(controller.enabled()).toBe(false)
     })
 
+    describe("consent before turning on (S1.8b)", () => {
+      const consenting = (
+        scope: () => AutonomousScope | undefined,
+        backend: ReturnType<typeof server>,
+        answer: boolean | (() => Promise<boolean>),
+        language: "en" | "id" = "id",
+      ) => {
+        const seen = { changed: [] as boolean[], failed: 0, asked: 0 }
+        const sent: unknown[][] = []
+        const controller = createRoot(() =>
+          createAutonomousToggle({
+            scope,
+            read: backend.read,
+            write: (where, on, consent) => {
+              sent.push(consent === undefined ? [where, on] : [where, on, consent])
+              return backend.write(where, on)
+            },
+            changed: (on) => seen.changed.push(on),
+            failed: () => seen.failed++,
+            confirm: () => {
+              seen.asked++
+              return typeof answer === "function" ? answer() : Promise.resolve(answer)
+            },
+            language: () => language,
+          }),
+        )
+        void controller.load()
+        return { seen, sent, controller }
+      }
+
+      test("a no sends nothing, announces nothing and leaves the switch usable", async () => {
+        const backend = server({ sessions: { ses_a: false } })
+        const { seen, sent, controller } = consenting(() => ({ sessionID: "ses_a", directory }), backend, false)
+        await settled()
+
+        await controller.toggle()
+
+        expect(seen).toEqual({ changed: [], failed: 0, asked: 1 })
+        expect(sent).toEqual([])
+        expect(backend.calls.writes).toEqual([])
+        expect(controller.accepting()).toBe(false)
+        expect(controller.enabled()).toBe(true)
+      })
+
+      test("a yes turns it on with the consent and the app language", async () => {
+        const backend = server({ sessions: { ses_a: false } })
+        const { seen, sent, controller } = consenting(() => ({ sessionID: "ses_a", directory }), backend, true)
+        await settled()
+
+        await controller.toggle()
+
+        expect(sent).toEqual([
+          [{ sessionID: "ses_a", directory }, true, { bypassConsent: "bypass-v1", reportLanguage: "id" }],
+        ])
+        expect(seen).toEqual({ changed: [true], failed: 0, asked: 1 })
+        expect(controller.accepting()).toBe(true)
+      })
+
+      test("set(true) asks the same way, and the language defaults to English", async () => {
+        const backend = server()
+        const { sent, controller } = consenting(() => ({ directory }), backend, true, "en")
+        await settled()
+
+        await controller.set(true)
+
+        expect(sent).toEqual([[{ directory }, true, { bypassConsent: "bypass-v1", reportLanguage: "en" }]])
+      })
+
+      test("turning off never asks and carries no consent", async () => {
+        const backend = server({ sessions: { ses_a: true } })
+        const { seen, sent, controller } = consenting(() => ({ sessionID: "ses_a", directory }), backend, true)
+        await settled()
+
+        await controller.toggle()
+        await controller.set(false)
+
+        expect(seen.asked).toBe(0)
+        expect(sent).toEqual([
+          [{ sessionID: "ses_a", directory }, false],
+          [{ sessionID: "ses_a", directory }, false],
+        ])
+      })
+
+      test("off then on asks again: the consent is per activation", async () => {
+        const backend = server({ sessions: { ses_a: false } })
+        const { seen, controller } = consenting(() => ({ sessionID: "ses_a", directory }), backend, true)
+        await settled()
+
+        await controller.toggle()
+        await controller.toggle()
+        await controller.toggle()
+
+        expect(seen.asked).toBe(2)
+        expect(seen.changed).toEqual([true, false, true])
+      })
+
+      test("while the question is open a second toggle is ignored", async () => {
+        let answer = (_: boolean) => {}
+        const backend = server({ sessions: { ses_a: false } })
+        const { seen, controller } = consenting(
+          () => ({ sessionID: "ses_a", directory }),
+          backend,
+          () => new Promise<boolean>((resolve) => (answer = resolve)),
+        )
+        await settled()
+
+        const first = controller.toggle()
+        await settled()
+        expect(controller.enabled()).toBe(false)
+        await controller.toggle()
+        answer(false)
+        await first
+
+        expect(seen.asked).toBe(1)
+        expect(backend.calls.writes).toEqual([])
+        expect(controller.enabled()).toBe(true)
+      })
+
+      test("a dialog that fails to open counts as a no", async () => {
+        const backend = server({ sessions: { ses_a: false } })
+        const { seen, controller } = consenting(
+          () => ({ sessionID: "ses_a", directory }),
+          backend,
+          () => Promise.reject(new Error("no dialog")),
+        )
+        await settled()
+
+        await controller.toggle()
+
+        expect(seen).toEqual({ changed: [], failed: 0, asked: 1 })
+        expect(backend.calls.writes).toEqual([])
+      })
+
+      // Verifier M2: after a server restart the mode reads on while the consent is gone.
+      test("on but not bypassed: agree asks again and sends on with the consent", async () => {
+        const modes: { on: boolean; bypass: boolean }[] = [{ on: true, bypass: false }]
+        const sent: unknown[][] = []
+        const seen = { asked: 0, changed: [] as boolean[] }
+        const controller = createRoot(() =>
+          createAutonomousToggle({
+            scope: () => ({ sessionID: "ses_a", directory }),
+            read: async () => modes.at(-1)!,
+            write: async (where, on, consent) => {
+              sent.push(consent === undefined ? [where, on] : [where, on, consent])
+              modes.push({ on, bypass: on && consent !== undefined })
+              return modes.at(-1)!
+            },
+            changed: (on) => seen.changed.push(on),
+            failed: () => {},
+            confirm: async () => (seen.asked++, true),
+            language: () => "en",
+          }),
+        )
+        void controller.load()
+        await settled()
+        expect(controller.accepting()).toBe(true)
+        expect(controller.notBypassed()).toBe(true)
+
+        await controller.agree()
+
+        expect(seen.asked).toBe(1)
+        expect(sent).toEqual([
+          [{ sessionID: "ses_a", directory }, true, { bypassConsent: "bypass-v1", reportLanguage: "en" }],
+        ])
+        expect(controller.accepting()).toBe(true)
+        expect(controller.notBypassed()).toBe(false)
+        expect(seen.changed).toEqual([true])
+
+        // Now bypassed: agree has nothing to agree to, and the next toggle turns it off and never asks.
+        await controller.agree()
+        expect(seen.asked).toBe(1)
+        expect(sent.length).toBe(1)
+        await controller.toggle()
+        expect(seen.asked).toBe(1)
+        expect(sent.at(-1)).toEqual([{ sessionID: "ses_a", directory }, false])
+      })
+
+      // Code review m19: the person who only wants it off is not sent through the consent dialog.
+      test("on but not bypassed: the toggle turns it off without asking", async () => {
+        const sent: unknown[][] = []
+        let asked = 0
+        const controller = createRoot(() =>
+          createAutonomousToggle({
+            scope: () => ({ sessionID: "ses_a", directory }),
+            read: async () => ({ on: true, bypass: false }),
+            write: async (where, on, consent) => (sent.push([where, on, consent]), { on, bypass: false }),
+            changed: () => {},
+            failed: () => {},
+            confirm: async () => (asked++, true),
+            language: () => "en",
+          }),
+        )
+        void controller.load()
+        await settled()
+
+        await controller.toggle()
+
+        expect(asked).toBe(0)
+        expect(sent).toEqual([[{ sessionID: "ses_a", directory }, false, undefined]])
+        expect(controller.accepting()).toBe(false)
+        expect(controller.notBypassed()).toBe(false)
+      })
+
+      test("on but not bypassed: a no leaves it on, not bypassed, and sends nothing", async () => {
+        const sent: unknown[] = []
+        const controller = createRoot(() =>
+          createAutonomousToggle({
+            scope: () => ({ sessionID: "ses_a", directory }),
+            read: async () => ({ on: true, bypass: false }),
+            write: async (_where, on) => (sent.push(on), on),
+            changed: () => {},
+            failed: () => {},
+            confirm: async () => false,
+          }),
+        )
+        void controller.load()
+        await settled()
+
+        await controller.agree()
+
+        expect(sent).toEqual([])
+        expect(controller.accepting()).toBe(true)
+        expect(controller.notBypassed()).toBe(true)
+      })
+    })
+
     test("toast turning on carries the scan sentence and the whole label, turning off only the title", () => {
       const t = (key: keyof typeof en) => en[key]
       expect(autonomousToast(t, true)).toEqual({

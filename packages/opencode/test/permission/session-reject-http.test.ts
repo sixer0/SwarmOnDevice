@@ -3,12 +3,13 @@
 // because a live call is failed by `Permission.reply` itself and a held entry's agent has already carried on. The only
 // thing `late.rejected` delivers is a reason, and the session route has no field to carry one.
 
-import { NodeHttpServer, NodeServices } from "@effect/platform-node"
+import { NodeServices } from "@effect/platform-node"
 import { afterEach, beforeEach, expect } from "bun:test"
 import { rmSync } from "node:fs"
 import path from "node:path"
 import { Cause, Effect, Exit, Fiber, Layer } from "effect"
 import { HttpClient, HttpClientRequest, HttpRouter } from "effect/unstable/http"
+import { loopbackServer } from "./loopback-server"
 import { HttpApiBuilder } from "effect/unstable/httpapi"
 import * as Socket from "effect/unstable/socket/Socket"
 import { CrossSpawnSpawner } from "@opencode-ai/core/cross-spawn-spawner"
@@ -75,7 +76,7 @@ const it = testEffect(
         ],
       ],
     ),
-    NodeHttpServer.layerTest,
+    loopbackServer,
     NodeServices.layer,
     workspaceLayerWithRuntimeFlags({}),
   ),

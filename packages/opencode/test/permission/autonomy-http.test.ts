@@ -1,12 +1,13 @@
 // A person's answer on a held call, through the real route: the handler is what decides whether the agent hears about it.
 
-import { NodeHttpServer, NodeServices } from "@effect/platform-node"
+import { NodeServices } from "@effect/platform-node"
 import { afterAll, afterEach, beforeEach, expect } from "bun:test"
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs"
 import os from "node:os"
 import path from "node:path"
 import { Cause, Effect, Exit, Layer, Schema } from "effect"
 import { HttpClient, HttpClientRequest, HttpRouter } from "effect/unstable/http"
+import { loopbackServer } from "./loopback-server"
 import { HttpApiBuilder } from "effect/unstable/httpapi"
 import * as Socket from "effect/unstable/socket/Socket"
 import { CrossSpawnSpawner } from "@opencode-ai/core/cross-spawn-spawner"
@@ -21,7 +22,9 @@ import { Autonomy } from "../../src/permission/autonomy"
 import { InstanceBootstrap } from "../../src/project/bootstrap"
 import { InstanceStore } from "../../src/project/instance-store"
 import { Question } from "../../src/question"
+import { AutonomyApi } from "../../src/server/routes/instance/httpapi/groups/autonomy"
 import { PermissionApi } from "../../src/server/routes/instance/httpapi/groups/permission"
+import { autonomyHandlers } from "../../src/server/routes/instance/httpapi/handlers/autonomy"
 import { permissionHandlers } from "../../src/server/routes/instance/httpapi/handlers/permission"
 import { authorizationLayer } from "../../src/server/routes/instance/httpapi/middleware/authorization"
 import { instanceContextLayer } from "../../src/server/routes/instance/httpapi/middleware/instance-context"
@@ -78,7 +81,7 @@ const it = testEffect(
         ],
       ],
     ),
-    NodeHttpServer.layerTest,
+    loopbackServer,
     NodeServices.layer,
     workspaceLayerWithRuntimeFlags({}),
   ),
@@ -490,5 +493,106 @@ it.instance("C97 F3 over HTTP: a second prompt of class X inside the rerun stays
     expect(lines.filter((line) => line.type === "outcome" && line.outcome === "failed")).toHaveLength(2)
     expect(lines.filter((line) => line.type === "outcome" && line.outcome === "ran")).toEqual([])
     expect(yield* permission.list()).toEqual([])
+  }),
+)
+
+// 1.1.1 (S1.1, S1.5, S1.51): the consent rides on the mode switch, the state says whether it holds, and switching off
+// posts one end report to the root. The report's own content is `test/session/autonomy-report.test.ts`.
+const reportsFolder = path.join(Global.Path.state, "autonomy", "reports")
+const posted: SessionPrompt.PromptInput[] = []
+beforeEach(() => {
+  posted.length = 0
+  rmSync(reportsFolder, { recursive: true, force: true })
+})
+const serveAutonomy = HttpApiBuilder.layer(AutonomyApi).pipe(
+  Layer.provide(autonomyHandlers as never),
+  Layer.provide([
+    authorizationLayer.pipe(Layer.provide(ServerAuth.Config.layer)),
+    workspaceRoutingLayer.pipe(Layer.provide(Socket.layerWebSocketConstructorGlobal)),
+    instanceContextLayer,
+    schemaErrorLayer,
+    Layer.succeed(
+      SessionPrompt.Service,
+      SessionPrompt.Service.of({
+        prompt: (input: SessionPrompt.PromptInput) => Effect.sync(() => (posted.push(input), {} as never)),
+      } as unknown as SessionPrompt.Interface),
+    ),
+  ]),
+  HttpRouter.serve,
+  Layer.build,
+) as unknown as Effect.Effect<unknown>
+
+const putMode = (directory: string, body: unknown) =>
+  Effect.gen(function* () {
+    const request = yield* HttpClientRequest.put("/autonomy/mode").pipe(
+      HttpClientRequest.setHeader("x-opencode-directory", directory),
+      HttpClientRequest.bodyJson(body),
+    )
+    const response = yield* HttpClient.execute(request)
+    return { status: response.status, body: (yield* response.json) as { on?: boolean; bypass?: boolean } }
+  })
+
+it.instance("1.1.1 over HTTP: the mode switch takes the bypass consent and says whether it holds", () =>
+  Effect.gen(function* () {
+    yield* serveAutonomy
+    const test = yield* TestInstance
+    const root = yield* (yield* Session.Service).create({})
+    const plain = yield* putMode(test.directory, { on: true, sessionID: root.id })
+    expect(plain).toMatchObject({ status: 200, body: { on: true, bypass: false } })
+    const consented = yield* putMode(test.directory, {
+      on: true,
+      sessionID: root.id,
+      bypassConsent: "bypass-v1",
+      reportLanguage: "id",
+    })
+    expect(consented).toMatchObject({ status: 200, body: { on: true, bypass: true } })
+    // The folder has no consent of its own: the session's answer is not the folder's.
+    expect((yield* putMode(test.directory, { on: false })).body).toMatchObject({ bypass: false })
+  }),
+)
+
+it.instance("1.1.1 over HTTP: any other consent value or report language is refused", () =>
+  Effect.gen(function* () {
+    yield* serveAutonomy
+    const test = yield* TestInstance
+    const root = yield* (yield* Session.Service).create({})
+    for (const body of [
+      { on: true, sessionID: root.id, bypassConsent: "bypass-v2" },
+      { on: true, sessionID: root.id, bypassConsent: true },
+      { on: true, sessionID: root.id, bypassConsent: "bypass-v1", reportLanguage: "fr" },
+    ])
+      expect((yield* putMode(test.directory, body)).status).toBe(400)
+    expect(yield* (yield* Autonomy.Service).bypassOf({ root: root.id, directory: test.directory })).toBeUndefined()
+  }),
+)
+
+it.instance("1.1.1 over HTTP: switching a consented run off posts one report to the root", () =>
+  Effect.gen(function* () {
+    yield* serveAutonomy
+    const test = yield* TestInstance
+    const root = yield* (yield* Session.Service).create({})
+    yield* putMode(test.directory, { on: true, sessionID: root.id, bypassConsent: "bypass-v1", reportLanguage: "id" })
+    const off = yield* putMode(test.directory, { on: false, sessionID: root.id })
+    expect(off).toMatchObject({ status: 200, body: { on: false, bypass: false } })
+    yield* Effect.gen(function* () {
+      while (posted.length < 1) yield* Effect.sleep("10 millis")
+    }).pipe(Effect.timeout("3 seconds"))
+    // A second report, if one were sent, would be forked the same way and land in this pause.
+    yield* Effect.sleep("150 millis")
+    expect(posted).toHaveLength(1)
+    const [text, file] = posted[0]!.parts as { type: string; text?: string; ignored?: boolean; filename?: string }[]
+    expect(posted[0]).toMatchObject({ sessionID: root.id, noReply: true })
+    expect(text).toMatchObject({ type: "text", ignored: true, metadata: { autonomyReport: true } })
+    expect(text!.text).toStartWith("Laporan sesi otonom:")
+    expect(file!.type).toBe("file")
+    expect(file!.filename!.startsWith(path.join(reportsFolder, root.id))).toBe(true)
+    expect(readFileSync(file!.filename!, "utf8")).toContain("# Laporan sesi otonom")
+    const markers = auditLines(root.id).flatMap((line) => (line.type === "marker" ? [line.marker] : []))
+    expect(markers).toEqual(["mode_on", "bypass_on", "mode_off", "bypass_report"])
+    // On again without the consent, then off: no run, so no report.
+    yield* putMode(test.directory, { on: true, sessionID: root.id })
+    yield* putMode(test.directory, { on: false, sessionID: root.id })
+    yield* Effect.sleep("150 millis")
+    expect(posted).toHaveLength(1)
   }),
 )

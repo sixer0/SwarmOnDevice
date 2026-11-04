@@ -4,6 +4,9 @@ import path from "path"
 import {
   buildSessionMap,
   decisionGroups,
+  historyOf,
+  reuseById,
+  type DecisionEntry,
   failureLine,
   mapRows,
   nextProblem,
@@ -21,6 +24,7 @@ import {
   archiveEmptyInput,
   archiveSize,
   type ConsentList,
+  type HistoryItem,
 } from "./session-map-model"
 
 const user = (id: string, created: number) => ({ id, role: "user", time: { created } }) as unknown as Message
@@ -757,5 +761,108 @@ describe("decisionGroups", () => {
     expect(row).toContain("{file}")
     expect(row).not.toMatch(/innerHTML|Markdown|<a\b|href|marked|createLink|data-markdown/)
     expect(source).not.toMatch(/innerHTML|<Markdown/)
+  })
+
+  test("1.1.1: History is decided, limited and notes in one log, latest first, the groups unchanged", () => {
+    const lines = [
+      marker("mode_on"),
+      decision("ran", { decidedBy: "person" }),
+      outcome("ran", "ran"),
+      decision("stopped", { class: "B", decision: "defer", decidedBy: "gate" }),
+      marker("bypass_on"),
+      decision("main", {
+        class: "A",
+        category: "by_main_agent",
+        bypassed: "outside_folder",
+        decidedBy: "agent:main/build",
+        via: "main_agent",
+      }),
+      decision("held", { class: "D", decision: "defer", decidedBy: "gate", category: "outward" }),
+      decision("declined", {
+        sessionID: "child",
+        decision: "reject",
+        decidedBy: "agent:main/build",
+        via: "for_subagent",
+        reason: "not part of the goal",
+      }),
+      marker("bypass_report"),
+    ]
+    const groups = decisionGroups(lines, "root")
+    const history = historyOf(groups)
+    expect(history.map((item) => [item.kind, item.kind === "note" ? item.note.note : item.entry.id])).toEqual([
+      ["note", "report"],
+      ["limited", "declined"],
+      ["decided", "main"],
+      ["note", "bypass_on"],
+      ["limited", "stopped"],
+      ["decided", "ran"],
+      ["note", "mode_on"],
+    ])
+    // Waiting stays out of History, and the groups History reads are the same objects, untouched.
+    expect(ids(groups.waiting)).toEqual(["held"])
+    expect(ids(groups.decided)).toEqual(["main", "ran"])
+    expect(history.flatMap((item) => (item.kind === "decided" ? [item.entry] : []))).toEqual(groups.decided)
+    const entry = (id: string) => [...groups.decided, ...groups.limited].find((item) => item.id === id)
+    expect(entry("stopped")?.stopped).toBe(true)
+    expect(entry("declined")?.stopped).toBeUndefined()
+    expect(entry("main")).toMatchObject({ by: "main/build", bypassed: "outside_folder", via: "main_agent" })
+    expect(entry("declined")).toMatchObject({ by: "main/build", via: "for_subagent", reason: "not part of the goal" })
+  })
+
+  test("1.1.1: the consent and report markers become notes; nothing else new does", () => {
+    const groups = decisionGroups([marker("bypass_on"), marker("consent_shown"), marker("bypass_report")], "root")
+    expect(groups.notes.map((note) => note.note)).toEqual(["report", "bypass_on"])
+    expect(historyOf({ waiting: [], decided: [], limited: [], notes: [] })).toEqual([])
+  })
+
+  test("row F16: a refresh hands back the same Waiting entry for an unchanged id, a new one for a changed id", () => {
+    const entry = (id: string, pattern = "git push"): DecisionEntry => ({
+      id,
+      sessionID: "root",
+      directory: "/repo",
+      at: 1,
+      permission: "bash",
+      patterns: [pattern],
+      patternsTruncated: false,
+      follows: [],
+    })
+    const first = [entry("a"), entry("b")]
+    const same = reuseById(first, [entry("a"), entry("b")])
+    expect(same[0] === first[0]).toBe(true)
+    expect(same[1] === first[1]).toBe(true)
+    const next = reuseById(first, [entry("c"), entry("a"), entry("b", "git push -f")])
+    expect(next[0]?.id).toBe("c")
+    expect(next[1] === first[0]).toBe(true)
+    expect(next[2] === first[1]).toBe(false)
+    expect(reuseById([], [entry("a")])).toHaveLength(1)
+  })
+
+  test("review P6: a refresh hands back the same History item for an unchanged id, a new one for a changed id", () => {
+    const entry = (id: string, outcome?: "ran" | "undone"): HistoryItem => ({
+      kind: "decided",
+      id,
+      at: 1,
+      entry: {
+        id,
+        sessionID: "root",
+        directory: "/repo",
+        at: 1,
+        permission: "bash",
+        patterns: ["ls"],
+        patternsTruncated: false,
+        follows: [],
+        outcome,
+      },
+    })
+    const first = [entry("a", "ran"), entry("b", "ran")]
+    const same = reuseById(first, [entry("a", "ran"), entry("b", "ran")])
+    expect(same[0]).toBe(first[0])
+    expect(same[1]).toBe(first[1])
+    const changed = reuseById(first, [entry("c"), entry("a", "undone"), entry("b", "ran")])
+    expect(changed[0]?.id).toBe("c")
+    expect(changed[1]).not.toBe(first[0])
+    expect(changed[1]).toMatchObject({ entry: { outcome: "undone" } })
+    expect(changed[2]).toBe(first[1])
+    expect(reuseById([], first)).toBe(first)
   })
 })

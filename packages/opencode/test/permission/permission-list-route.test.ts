@@ -1,12 +1,13 @@
 // The list every client loads a folder's prompts from, through the real route. Encoding it is all or nothing, so one
 // prompt it cannot encode would hide the others: a tool's optional parameter left out is the ordinary way to get one.
 
-import { NodeHttpServer, NodeServices } from "@effect/platform-node"
+import { NodeServices } from "@effect/platform-node"
 import { afterEach, beforeEach, expect } from "bun:test"
 import { rmSync } from "node:fs"
 import path from "node:path"
 import { Effect, Exit, Fiber, Layer } from "effect"
 import { FetchHttpClient, HttpClient, HttpClientRequest, HttpRouter } from "effect/unstable/http"
+import { loopbackServer } from "./loopback-server"
 import { HttpApiBuilder } from "effect/unstable/httpapi"
 import * as Socket from "effect/unstable/socket/Socket"
 import { CrossSpawnSpawner } from "@opencode-ai/core/cross-spawn-spawner"
@@ -69,7 +70,7 @@ const it = testEffect(
         [httpClient, FetchHttpClient.layer as Layer.Layer<HttpClient.HttpClient>],
       ],
     ),
-    NodeHttpServer.layerTest,
+    loopbackServer,
     NodeServices.layer,
     workspaceLayerWithRuntimeFlags({}),
   ),

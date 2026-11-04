@@ -1,12 +1,13 @@
 // The list version an answer was given at, through both routes the app can answer on (U11 E3, row 122b): a click on
 // an entry that has grown since is shown again, and only the version that was shown lets the list through.
 
-import { NodeHttpServer, NodeServices } from "@effect/platform-node"
+import { NodeServices } from "@effect/platform-node"
 import { afterEach, beforeEach, expect } from "bun:test"
 import { rmSync } from "node:fs"
 import path from "node:path"
 import { Cause, Effect, Exit, Layer } from "effect"
 import { HttpClient, HttpClientRequest, HttpRouter } from "effect/unstable/http"
+import { loopbackServer } from "./loopback-server"
 import { HttpApiBuilder } from "effect/unstable/httpapi"
 import * as Socket from "effect/unstable/socket/Socket"
 import { CrossSpawnSpawner } from "@opencode-ai/core/cross-spawn-spawner"
@@ -73,7 +74,7 @@ const it = testEffect(
         ],
       ],
     ),
-    NodeHttpServer.layerTest,
+    loopbackServer,
     NodeServices.layer,
     workspaceLayerWithRuntimeFlags({}),
   ),

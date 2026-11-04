@@ -7,10 +7,12 @@ import { AUTONOMY_CHANGED, createPromptAutonomy } from "@/components/prompt-inpu
 const tick = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms))
 
 // The server's side of the wire: every assertion below is about what crossed it, and what the composer did with it.
-function fakeServer(start: { on?: boolean; open?: number } = {}) {
+function fakeServer(start: { on?: boolean; open?: number; bypass?: boolean } = {}) {
   const server = {
     on: start.on ?? false,
     open: start.open ?? 0,
+    // Left out of the answers while undefined, as a server that does not report it.
+    bypass: start.bypass,
     failWrite: false,
     failRead: false,
     reads: [] as string[],
@@ -25,14 +27,16 @@ function fakeServer(start: { on?: boolean; open?: number } = {}) {
       const body = await request.json()
       server.writes.push(body)
       server.on = body.on
-      return json({ on: server.on, externalChange: [] })
+      if (server.bypass !== undefined) server.bypass = body.on && body.bypassConsent === "bypass-v1"
+      return json({ on: server.on, externalChange: [], bypass: server.bypass })
     }
     server.reads.push(path)
     if (server.failRead) return json({ name: "NotFoundError", data: { message: "no" } }, 404)
-    if (path === "/autonomy/mode") return json({ on: server.on, externalChange: [] })
+    if (path === "/autonomy/mode") return json({ on: server.on, externalChange: [], bypass: server.bypass })
     return json({
       rootID: "root",
       on: server.on,
+      bypass: server.bypass,
       externalChange: [],
       open: server.open,
       lines: [],
@@ -51,11 +55,16 @@ function fakeServer(start: { on?: boolean; open?: number } = {}) {
   }
 }
 
-function mount(start: { on?: boolean; open?: number } = {}, sessionID?: string) {
+function mount(
+  start: { on?: boolean; open?: number; bypass?: boolean } = {},
+  sessionID?: string,
+  answer: () => Promise<boolean> = async () => true,
+) {
   const { server, client } = fakeServer(start)
   const emitter = createGlobalEmitter<Record<string, { properties: Record<string, unknown> }>>()
   const changed: boolean[] = []
   let failed = 0
+  let asked = 0
   const [session, setSession] = createSignal(sessionID)
   return createRoot((dispose) => {
     disposers.push(dispose)
@@ -64,8 +73,13 @@ function mount(start: { on?: boolean; open?: number } = {}, sessionID?: string) 
       sessionID: session,
       onChanged: (on) => changed.push(on),
       onFailed: () => failed++,
+      confirm: () => {
+        asked++
+        return answer()
+      },
+      language: () => "en",
     })
-    return { server, autonomy, emitter, changed, failed: () => failed, setSession }
+    return { server, autonomy, emitter, changed, failed: () => failed, asked: () => asked, setSession }
   })
 }
 
@@ -73,6 +87,79 @@ const disposers: (() => void)[] = []
 afterEach(() => {
   disposers.splice(0).forEach((dispose) => dispose())
   document.body.innerHTML = ""
+})
+
+describe("on, but approvals not bypassed (after a server restart, verifier M2)", () => {
+  test("the composer says so, and the hint asks again and sends the consent without turning the mode off", async () => {
+    const view = mount({ on: true, bypass: false }, "ses_1")
+    await tick(5)
+    expect(view.autonomy.on()).toBe(true)
+    expect(view.autonomy.notBypassed()).toBe(true)
+
+    await view.autonomy.agree()
+
+    expect(view.asked()).toBe(1)
+    expect(view.server.writes).toEqual([
+      { on: true, sessionID: "ses_1", bypassConsent: "bypass-v1", reportLanguage: "en" },
+    ])
+    expect(view.autonomy.on()).toBe(true)
+    expect(view.autonomy.notBypassed()).toBe(false)
+    expect(view.changed).toEqual([true])
+
+    // Agreed again: the hint has nothing more to ask, and the switch turns it off without asking.
+    await view.autonomy.agree()
+    expect(view.asked()).toBe(1)
+    expect(view.server.writes.length).toBe(1)
+    await view.autonomy.toggle()
+    expect(view.asked()).toBe(1)
+    expect(view.server.writes.at(-1)).toEqual({ on: false, sessionID: "ses_1" })
+  })
+
+  // Code review m19: the switch is a plain toggle, so a person who only wants it off is never sent to the dialog.
+  test("the switch turns the mode off without asking", async () => {
+    const view = mount({ on: true, bypass: false }, "ses_1")
+    await tick(5)
+
+    await view.autonomy.toggle()
+
+    expect(view.asked()).toBe(0)
+    expect(view.server.writes).toEqual([{ on: false, sessionID: "ses_1" }])
+    expect(view.autonomy.on()).toBe(false)
+    expect(view.autonomy.notBypassed()).toBe(false)
+  })
+
+  test("a no sends nothing, and the mode stays on with the hint", async () => {
+    const view = mount({ on: true, bypass: false }, "ses_1", async () => false)
+    await tick(5)
+
+    await view.autonomy.agree()
+
+    expect(view.asked()).toBe(1)
+    expect(view.server.writes).toEqual([])
+    expect(view.autonomy.on()).toBe(true)
+    expect(view.autonomy.notBypassed()).toBe(true)
+  })
+
+  test("the same on a draft, through the folder", async () => {
+    const view = mount({ on: true, bypass: false })
+    await tick(5)
+    expect(view.autonomy.notBypassed()).toBe(true)
+
+    await view.autonomy.agree()
+
+    expect(view.server.writes).toEqual([{ on: true, bypassConsent: "bypass-v1", reportLanguage: "en" }])
+  })
+
+  test("a server that does not report bypass shows no hint, and the click turns the mode off as before", async () => {
+    const view = mount({ on: true }, "ses_1")
+    await tick(5)
+    expect(view.autonomy.notBypassed()).toBe(false)
+
+    await view.autonomy.toggle()
+
+    expect(view.asked()).toBe(0)
+    expect(view.server.writes).toEqual([{ on: false, sessionID: "ses_1" }])
+  })
 })
 
 describe("autonomous mode in the composer", () => {
@@ -84,7 +171,9 @@ describe("autonomous mode in the composer", () => {
 
     await view.autonomy.toggle()
 
-    expect(view.server.writes).toEqual([{ on: true, sessionID: "ses_1" }])
+    expect(view.server.writes).toEqual([
+      { on: true, sessionID: "ses_1", bypassConsent: "bypass-v1", reportLanguage: "en" },
+    ])
     expect(view.autonomy.on()).toBe(true)
     expect(view.autonomy.waiting()).toBe(2)
     expect(view.changed).toEqual([true])
@@ -102,7 +191,7 @@ describe("autonomous mode in the composer", () => {
 
     await view.autonomy.toggle()
 
-    expect(view.server.writes).toEqual([{ on: true }])
+    expect(view.server.writes).toEqual([{ on: true, bypassConsent: "bypass-v1", reportLanguage: "en" }])
     expect(view.autonomy.on()).toBe(true)
     expect(view.autonomy.waiting()).toBe(0)
   })
@@ -142,6 +231,8 @@ describe("autonomous mode in the composer", () => {
         sessionID: () => "ses_1",
         onChanged: () => {},
         onFailed: () => {},
+        confirm: async () => true,
+        language: () => "en",
       })
     })
     expect(autonomy.on()).toBeUndefined()

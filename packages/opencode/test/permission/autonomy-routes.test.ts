@@ -2,12 +2,13 @@
 // with a stub decider, and the other is the route tree production serves, because a service that is not wired there
 // passes everything else.
 
-import { NodeHttpServer, NodeServices } from "@effect/platform-node"
+import { NodeServices } from "@effect/platform-node"
 import { afterEach, beforeEach, expect, test } from "bun:test"
 import { existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
 import path from "node:path"
 import { Cause, Config, ConfigProvider, Effect, Exit, Layer, Stream } from "effect"
 import { HttpClient, HttpClientRequest, HttpRouter, HttpServer } from "effect/unstable/http"
+import { loopbackServer } from "./loopback-server"
 import { HttpApiBuilder } from "effect/unstable/httpapi"
 import * as Socket from "effect/unstable/socket/Socket"
 import { eq } from "drizzle-orm"
@@ -113,7 +114,7 @@ const gated = testEffect(
         [RuntimeFlags.node, RuntimeFlags.layer({})],
       ],
     ),
-    NodeHttpServer.layerTest,
+    loopbackServer,
     NodeServices.layer,
   ),
 )
@@ -156,7 +157,7 @@ const full = testEffect(
     ),
     served.pipe(
       Layer.provide(Socket.layerWebSocketConstructorGlobal),
-      Layer.provideMerge(NodeHttpServer.layerTest),
+      Layer.provideMerge(loopbackServer),
       Layer.provideMerge(NodeServices.layer),
     ),
   ),
@@ -199,7 +200,10 @@ const ok = <T>(method: "GET" | "PUT" | "POST", url: string, directory: string, b
     return (yield* response.json) as T
   })
 
-const putMode = (directory: string, body: { on: boolean; sessionID?: string }) =>
+const putMode = (
+  directory: string,
+  body: { on: boolean; sessionID?: string; bypassConsent?: string; reportLanguage?: string },
+) =>
   ok<Mode>("PUT", "/autonomy/mode", directory, body)
 const getFolder = (directory: string) => ok<Mode>("GET", "/autonomy/mode", directory)
 const getSession = (id: string, directory: string) => ok<SessionState>("GET", `/session/${id}/autonomy`, directory)
@@ -335,6 +339,20 @@ gated.instance("the session route counts only its own root's open decisions, and
   }),
 )
 
+gated.instance("the session route says whether the bypass consent holds: no without it, yes with bypass-v1", () =>
+  Effect.gen(function* () {
+    yield* serveGroup
+    const test = yield* TestInstance
+    const sessions = yield* Session.Service
+    const root = yield* sessions.create({})
+    yield* putMode(test.directory, { on: true, sessionID: root.id })
+    expect(yield* getSession(root.id, test.directory)).toMatchObject({ on: true, bypass: false })
+
+    yield* putMode(test.directory, { on: true, sessionID: root.id, bypassConsent: "bypass-v1", reportLanguage: "id" })
+    expect(yield* getSession(root.id, test.directory)).toMatchObject({ on: true, bypass: true })
+  }),
+)
+
 gated.instance("the session route says when the record has been changed", () =>
   Effect.gen(function* () {
     yield* serveGroup
@@ -386,14 +404,14 @@ full.live(
   () =>
     Effect.gen(function* () {
       const directory = yield* tmpdirScoped({ git: true })
-      expect(yield* getFolder(directory)).toEqual({ on: false, externalChange: [] })
+      expect(yield* getFolder(directory)).toEqual({ on: false, externalChange: [], bypass: false } as Mode)
       expect(existsSync(modeFile)).toBe(false)
 
       const session = yield* createSession(directory)
       expect((yield* getSession(session.id, directory)).on).toBe(false)
 
       expect((yield* putMode(directory, { on: true })).on).toBe(true)
-      expect(yield* getFolder(directory)).toEqual({ on: true, externalChange: [] })
+      expect(yield* getFolder(directory)).toEqual({ on: true, externalChange: [], bypass: false } as Mode)
       expect(savedMode()).toEqual({ v: 1, sessions: {}, directories: { [directory]: true } } as never)
       expect((yield* getSession(session.id, directory)).on).toBe(true)
 

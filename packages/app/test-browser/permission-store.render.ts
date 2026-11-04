@@ -145,6 +145,8 @@ describe("the old preference", () => {
         sessionID: () => undefined,
         onChanged: () => undefined,
         onFailed: () => undefined,
+        confirm: async () => true,
+        language: () => "en",
       })
       return { on: autonomy.on, dispose }
     })

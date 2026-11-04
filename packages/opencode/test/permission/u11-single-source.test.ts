@@ -188,8 +188,10 @@ describe("M4, M6: the register's names", () => {
       AutonomyTable.HeldCategory | AutonomyTable.AllowedCategory
     > = true
     expect([held, audit]).toEqual([true, true])
-    // The register's 21 held and 6 allowed names, as the review counted them.
-    expect(PermissionV1.DeferredCategory.literals).toHaveLength(21)
-    expect(PermissionV1.AllowedCategory.literals).toHaveLength(6)
+    // The register's 21 held and 6 allowed names, as the review counted them, plus the 1.1.1 bypass register (S0.2):
+    // six held (irreversible, admin_rights, outside_write_held, system_service, process_not_own, unreadable_command)
+    // and one allowed (by_main_agent).
+    expect(PermissionV1.DeferredCategory.literals).toHaveLength(27)
+    expect(PermissionV1.AllowedCategory.literals).toHaveLength(7)
   })
 })

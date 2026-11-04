@@ -159,6 +159,62 @@ describe("session.message-v2.toModelMessage", () => {
     expect(await MessageV2.toModelMessages(input, model)).toStrictEqual([])
   })
 
+  test("leaves out an autonomous run's end report, its attached documents too (1.1.1, S1.57)", async () => {
+    const report = "m-report"
+    const next = "m-next"
+    const input: SessionV1.WithParts[] = [
+      {
+        info: userInfo(report),
+        parts: [
+          {
+            ...basePart(report, "r1"),
+            type: "text",
+            text: "Autonomous run report: 2 steps ran",
+            ignored: true,
+            metadata: { autonomyReport: true },
+          },
+          {
+            ...basePart(report, "r2"),
+            type: "file",
+            mime: "text/markdown",
+            filename: "/state/autonomy/reports/ses/20261103-120000-report.md",
+            url: `data:text/markdown;base64,${Buffer.from("# report").toString("base64")}`,
+          },
+          {
+            ...basePart(report, "r3"),
+            type: "file",
+            mime: "application/pdf",
+            filename: "/project/docs/laporan_akhir.pdf",
+            url: "data:application/pdf;base64,JVBERi0=",
+          },
+        ] as SessionV1.Part[],
+      },
+      {
+        info: userInfo(next),
+        parts: [{ ...basePart(next, "n1"), type: "text", text: "carry on" }] as SessionV1.Part[],
+      },
+    ]
+
+    const messages = await MessageV2.toModelMessages(input, model)
+    expect(messages).toHaveLength(1)
+    expect(JSON.stringify(messages)).not.toContain("report")
+    expect(JSON.stringify(messages)).not.toContain("base64")
+    expect(JSON.stringify(messages)).toContain("carry on")
+  })
+
+  test("keeps a user message whose text part only has other metadata", async () => {
+    const id = "m-meta"
+    const input: SessionV1.WithParts[] = [
+      {
+        info: userInfo(id),
+        parts: [
+          { ...basePart(id, "t1"), type: "text", text: "late answer", metadata: { lateAnswer: true } },
+        ] as SessionV1.Part[],
+      },
+    ]
+    expect(JSON.stringify(await MessageV2.toModelMessages(input, model))).toContain("late answer")
+  })
+
   test("filters out user messages with only empty text parts", async () => {
     const messageID = "m-user"
 

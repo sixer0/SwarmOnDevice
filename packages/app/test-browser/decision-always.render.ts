@@ -56,7 +56,9 @@ function mount(props: { canAlways?: boolean; waiting?: boolean }) {
       }),
     host,
   )
-  const buttons = () => [...host.querySelectorAll("button")].map((button) => button.textContent?.trim())
+  // The answer buttons. The Details toggle (1.1.1) sits beside them on every row and is not an answer.
+  const buttons = () =>
+    [...host.querySelectorAll("button:not([data-decision-details-toggle])")].map((button) => button.textContent?.trim())
   const always = () => host.querySelector<HTMLButtonElement>("[data-decision-always]")
   return { replies, buttons, always }
 }

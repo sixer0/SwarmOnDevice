@@ -9,8 +9,9 @@
 // writes below, is class D.
 
 import { afterAll, beforeAll, beforeEach, describe, expect } from "bun:test"
-import { NodeHttpServer, NodeServices } from "@effect/platform-node"
+import { NodeServices } from "@effect/platform-node"
 import { HttpClient, HttpClientRequest, HttpRouter } from "effect/unstable/http"
+import { loopbackServer } from "./loopback-server"
 import { HttpApiBuilder } from "effect/unstable/httpapi"
 import * as Socket from "effect/unstable/socket/Socket"
 import fs from "node:fs"
@@ -794,7 +795,7 @@ const C95_WAITS = { nogit: 6, git: 4 }
 const served = testEffect(
   Layer.mergeAll(
     workspaceLayerWithRuntimeFlags({}),
-    NodeHttpServer.layerTest,
+    loopbackServer,
     NodeServices.layer,
     AppNodeBuilder.build(
       LayerNode.group([

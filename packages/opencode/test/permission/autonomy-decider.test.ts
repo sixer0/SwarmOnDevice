@@ -1061,3 +1061,115 @@ it.instance("a root with no message at all has no model to ask, and holds", () =
     expect(stub.prompts.length).toBe(0)
   }),
 )
+
+// 1.1.1 (S1.34, S1.35): the main agent decides for its subagent under the consented bypass. Same model, same fields, same
+// limits; its own prompt, no "needs_person", and every way it cannot answer is a refusal, never a hold.
+
+const systemOf = (index = 0) => {
+  const prompt = stub.prompts[index]!.prompt as Array<{ role: string; content: unknown }>
+  const system = prompt.find((message) => message.role === "system")?.content
+  return typeof system === "string" ? system : JSON.stringify(system)
+}
+
+const forSubagent = (input: PermissionV1.AskInput, sessionID: SessionID, agent = "build", category = "not_routine") =>
+  Effect.gen(function* () {
+    const decider = yield* AutonomyDecider.Service
+    return yield* decider.decide(input, sessionID, category, undefined, { forSubagent: { agent } })
+  })
+
+const UNAVAILABLE = { decision: "reject", decidedBy: "system:main_agent_unavailable" }
+
+it.instance("forSubagent: the main agent's prompt, the same closed fields, and its answer under its own name", () =>
+  Effect.gen(function* () {
+    const test = yield* TestInstance
+    const session = yield* root()
+    stub.reply = () => answer("allow", "serves the goal")
+    const decided = yield* forSubagent(bash(session.id, "mv out.md out.sh", test.directory), session.id, "build")
+    expect(decided).toMatchObject({ decision: "allow", decidedBy: "agent:main/build", reason: "serves the goal" })
+    expect(systemOf()).toBe(AutonomyDecider.SYSTEM_FOR_SUBAGENT)
+    expect(systemOf()).not.toContain("needs_person")
+    // 1.1.1 F1a: the text never tells the model the gate already removed what is risky; the model judges the risk itself.
+    expect(AutonomyDecider.SYSTEM_FOR_SUBAGENT).not.toContain("has already refused")
+    expect(AutonomyDecider.SYSTEM_FOR_SUBAGENT).not.toContain("may run if it serves")
+    expect(AutonomyDecider.SYSTEM_FOR_SUBAGENT).toContain("judge the risk of the call itself")
+    expect(AutonomyDecider.SYSTEM_FOR_SUBAGENT).toContain(
+      "Reject anything that deletes files or data, sends data out of the machine, or cannot be undone.",
+    )
+    expect(Object.keys(seenInput())).toEqual(["goal", "request"])
+    expect(seenInput().goal).toBe("run the tests")
+    expect(stub.prompts[0]!.tools).toBeUndefined()
+  }),
+)
+
+it.instance("forSubagent: the agent's name is the one passed, and without the option the 1.1.0 prompt and name stay", () =>
+  Effect.gen(function* () {
+    const test = yield* TestInstance
+    const session = yield* root()
+    expect((yield* forSubagent(bash(session.id, "mv a.md a.sh", test.directory), session.id, "review")).decidedBy).toBe(
+      "agent:main/review",
+    )
+    expect((yield* decide(bash(session.id, "mv b.md b.sh", test.directory), session.id)).decidedBy).toBe(
+      "agent:test/free",
+    )
+    expect(systemOf(1)).not.toBe(AutonomyDecider.SYSTEM_FOR_SUBAGENT)
+    expect(systemOf(1)).toContain("needs_person")
+  }),
+)
+
+it.instance("forSubagent: needs_person is a no, with the model's reason, and a reject keeps its reason", () =>
+  Effect.gen(function* () {
+    const test = yield* TestInstance
+    const session = yield* root()
+    stub.reply = () => answer("needs_person", "cannot tell")
+    expect(yield* forSubagent(bash(session.id, "mv a.md a.sh", test.directory), session.id)).toMatchObject({
+      decision: "reject",
+      decidedBy: "agent:main/build",
+      reason: "cannot tell",
+    })
+    stub.reply = () => answer("reject", "not what was asked")
+    expect(yield* forSubagent(bash(session.id, "mv b.md b.sh", test.directory), session.id)).toMatchObject({
+      decision: "reject",
+      decidedBy: "agent:main/build",
+      reason: "not what was asked",
+    })
+  }),
+)
+
+it.instance("forSubagent: four timeouts, a model error, broken output and no model are refusals, never holds", () =>
+  Effect.gen(function* () {
+    const test = yield* TestInstance
+    const session = yield* root()
+    const run = (name: string) =>
+      forSubagent(bash(session.id, `mv ${name}.md ${name}.sh`, test.directory), session.id).pipe(
+        Effect.provideService(AutonomyDecider.Limits, limited({ deadlineMs: 30 })),
+      )
+    timeouts(10)
+    expect(yield* run("a")).toMatchObject({ ...UNAVAILABLE, reason: "timeout", attempts: 4 })
+    stub.reply = () => Promise.reject(new Error("down"))
+    expect(yield* run("b")).toMatchObject({ ...UNAVAILABLE, reason: "model_error" })
+    stub.reply = () => Promise.resolve({ text: "nonsense" })
+    // The third failure in a row opens the circuit, as on the class P path.
+    expect(yield* run("c")).toMatchObject({ ...UNAVAILABLE, reason: "invalid_output" })
+    expect(yield* run("d")).toMatchObject({ ...UNAVAILABLE, reason: "circuit_open" })
+
+    const sessions = yield* Session.Service
+    const empty = yield* sessions.create({})
+    expect(yield* forSubagent(bash(empty.id, "mv e.md e.sh", test.directory), empty.id)).toMatchObject({
+      ...UNAVAILABLE,
+      reason: "no_model",
+    })
+  }),
+)
+
+it.instance("forSubagent: a remembered class P allow is not the main agent's, and is not reused for a subagent", () =>
+  Effect.gen(function* () {
+    const test = yield* TestInstance
+    const session = yield* root()
+    const input = bash(session.id, "bun test a.test.ts", test.directory)
+    yield* decide(input, session.id, "check")
+    const decided = yield* forSubagent(input, session.id, "build", "check")
+    expect(decided.memo).toBeUndefined()
+    expect(stub.prompts.length).toBe(2)
+    expect(systemOf(1)).toBe(AutonomyDecider.SYSTEM_FOR_SUBAGENT)
+  }),
+)

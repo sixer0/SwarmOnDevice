@@ -115,8 +115,14 @@ const pluralCategories = new Map(
 //     of the same task, the archive route's `unsafe` field from row 152).
 //   - seven more for main's native Install Command Line Tool menu and dialogs (`desktop.menu.installCli`,
 //     `desktop.cli.*`, decision C121 of the same task).
+//   - forty-two more for 1.1.1 (consent dialog, Decisions view, session switcher), decision P6 of
+//     docs/2026-11-03_swarm_1_1_1_patch (`dialog.autonomyBypass.*`, `session.map.decisions.*` additions and
+//     `session.header.sessions.*`).
+//   - two more for the 1.1.1 healing loop F3, decision P12 of the same task: the composer's hint when the mode is on
+//     but approvals are not bypassed (`session.autonomy.notBypassed`) and its palette command
+//     (`command.permissions.autonomous.reconsent`).
 // Widening this list is a decision, not drift: `parity-exemption-guard.test.ts` fails the suite on any
-// sixty-ninth entry, on any non-literal/wildcard, and if `en` or `id` ever stops carrying an exempt key.
+// hundred-and-thirteenth entry, on any non-literal/wildcard, and if `en` or `id` ever stops carrying an exempt key.
 const UNTRANSLATED_KEY_PRESENCE_EXEMPTION: readonly string[] = [
   "command.project.openNumber",
   "settings.tab.servers",
@@ -186,6 +192,50 @@ const UNTRANSLATED_KEY_PRESENCE_EXEMPTION: readonly string[] = [
   "desktop.cli.done.detail",
   "desktop.cli.done.pathHint",
   "desktop.cli.failed.message",
+  "dialog.autonomyBypass.title",
+  "dialog.autonomyBypass.intro",
+  "dialog.autonomyBypass.archive",
+  "dialog.autonomyBypass.refused",
+  "dialog.autonomyBypass.waits",
+  "dialog.autonomyBypass.secrets",
+  "dialog.autonomyBypass.report",
+  "dialog.autonomyBypass.scope",
+  "dialog.autonomyBypass.accept",
+  "session.map.decisions.group.history",
+  "session.map.decisions.details.show",
+  "session.map.decisions.details.hide",
+  "session.map.decisions.by.mainAgent",
+  "session.map.decisions.by.rules",
+  "session.map.decisions.by.model",
+  "session.map.decisions.state.waiting",
+  "session.map.decisions.state.allowed",
+  "session.map.decisions.state.refused",
+  "session.map.decisions.state.stopped",
+  "session.map.decisions.what.bash",
+  "session.map.decisions.what.edit",
+  "session.map.decisions.what.read",
+  "session.map.decisions.what.outside",
+  "session.map.decisions.what.web",
+  "session.map.decisions.what.other",
+  "session.map.decisions.category.irreversible",
+  "session.map.decisions.category.admin_rights",
+  "session.map.decisions.category.outside_write_held",
+  "session.map.decisions.category.system_service",
+  "session.map.decisions.category.process_not_own",
+  "session.map.decisions.category.unreadable_command",
+  "session.map.decisions.category.by_main_agent",
+  "session.map.decisions.category.delete_compound",
+  "session.map.decisions.category.credential_change",
+  "session.map.decisions.category.script_flagged",
+  "session.map.decisions.category.archived",
+  "session.map.decisions.note.bypassOn",
+  "session.map.decisions.note.report",
+  "session.header.sessions.label",
+  "session.header.sessions.empty",
+  "session.header.sessions.current",
+  "session.header.sessions.open",
+  "session.autonomy.notBypassed",
+  "command.permissions.autonomous.reconsent",
 ]
 // Locales the exemption never applies to. `en` is every domain's source, and `id` is the second
 // maintained locale: it already carries every exempt key, so it stays fully enforced like the rest.

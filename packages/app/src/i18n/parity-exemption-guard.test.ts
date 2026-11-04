@@ -7,7 +7,7 @@ import { join } from "path"
 // Why this file exists: the exemption is a deliberate, bounded weakening of a completeness invariant
 // (branch B of the 2026-10-21 decision in
 // `docs/2026-10-19_opencode_swarm_rebrand/decisions/decisions.md`). Its safety depends entirely on
-// staying bounded — sixty-eight entries as of decision C121 (Install Command Line Tool), sixty-one as of row 162 (U11 archive row), sixty as of row 246 (U14 fix pass, C80 and C82), fifty-four as of row 228 (register U14, gate G-U14), forty-four as of row 159 (register U11, gate G-U11) of the 2026-11-01 Knowledge Library
+// staying bounded — one hundred and twelve entries as of decision P12 (two more for the 1.1.1 healing loop F3: the not-bypassed hint and its palette command), one hundred and ten as of decision P6 (forty-two more for 1.1.1: consent dialog, Decisions view, session switcher) of docs/2026-11-03_swarm_1_1_1_patch, sixty-eight as of decision C121 (Install Command Line Tool), sixty-one as of row 162 (U11 archive row), sixty as of row 246 (U14 fix pass, C80 and C82), fifty-four as of row 228 (register U14, gate G-U14), forty-four as of row 159 (register U11, gate G-U11) of the 2026-11-01 Knowledge Library
 // task, up from thirty-six since its decision C62 of the 2026-11-01 Knowledge Library task removed one,
 // thirty-seven as of its row 77, up from thirty-six
 // at its decision C18, twelve at its decision C2, ten at blueprint-11 row 249 (session 6), nine at row 204 and the original three.
@@ -90,6 +90,50 @@ const APPROVED_EXEMPT_KEYS = [
   "desktop.cli.done.detail",
   "desktop.cli.done.pathHint",
   "desktop.cli.failed.message",
+  "dialog.autonomyBypass.title",
+  "dialog.autonomyBypass.intro",
+  "dialog.autonomyBypass.archive",
+  "dialog.autonomyBypass.refused",
+  "dialog.autonomyBypass.waits",
+  "dialog.autonomyBypass.secrets",
+  "dialog.autonomyBypass.report",
+  "dialog.autonomyBypass.scope",
+  "dialog.autonomyBypass.accept",
+  "session.map.decisions.group.history",
+  "session.map.decisions.details.show",
+  "session.map.decisions.details.hide",
+  "session.map.decisions.by.mainAgent",
+  "session.map.decisions.by.rules",
+  "session.map.decisions.by.model",
+  "session.map.decisions.state.waiting",
+  "session.map.decisions.state.allowed",
+  "session.map.decisions.state.refused",
+  "session.map.decisions.state.stopped",
+  "session.map.decisions.what.bash",
+  "session.map.decisions.what.edit",
+  "session.map.decisions.what.read",
+  "session.map.decisions.what.outside",
+  "session.map.decisions.what.web",
+  "session.map.decisions.what.other",
+  "session.map.decisions.category.irreversible",
+  "session.map.decisions.category.admin_rights",
+  "session.map.decisions.category.outside_write_held",
+  "session.map.decisions.category.system_service",
+  "session.map.decisions.category.process_not_own",
+  "session.map.decisions.category.unreadable_command",
+  "session.map.decisions.category.by_main_agent",
+  "session.map.decisions.category.delete_compound",
+  "session.map.decisions.category.credential_change",
+  "session.map.decisions.category.script_flagged",
+  "session.map.decisions.category.archived",
+  "session.map.decisions.note.bypassOn",
+  "session.map.decisions.note.report",
+  "session.header.sessions.label",
+  "session.header.sessions.empty",
+  "session.header.sessions.current",
+  "session.header.sessions.open",
+  "session.autonomy.notBypassed",
+  "command.permissions.autonomous.reconsent",
 ]
 
 function arrayLiteral(name: string) {
@@ -107,10 +151,10 @@ function arrayLiteral(name: string) {
 describe("i18n parity exemption guard", () => {
   const exemptKeys = arrayLiteral("UNTRANSLATED_KEY_PRESENCE_EXEMPTION")
 
-  test("the exemption holds exactly the sixty-eight approved keys and nothing else", () => {
+  test("the exemption holds exactly the hundred-and-twelve approved keys and nothing else", () => {
     expect([...exemptKeys].sort()).toEqual([...APPROVED_EXEMPT_KEYS].sort())
-    expect(exemptKeys.length).toBe(68)
-    expect(new Set(exemptKeys).size).toBe(68)
+    expect(exemptKeys.length).toBe(112)
+    expect(new Set(exemptKeys).size).toBe(112)
   })
 
   test("every exemption entry is a literal dotted key, never a wildcard or pattern", () => {
@@ -212,6 +256,50 @@ describe("i18n parity exemption guard", () => {
           "desktop.cli.done.detail",
           "desktop.cli.done.pathHint",
           "desktop.cli.failed.message",
+          "dialog.autonomyBypass.title",
+          "dialog.autonomyBypass.intro",
+          "dialog.autonomyBypass.archive",
+          "dialog.autonomyBypass.refused",
+          "dialog.autonomyBypass.waits",
+          "dialog.autonomyBypass.secrets",
+          "dialog.autonomyBypass.report",
+          "dialog.autonomyBypass.scope",
+          "dialog.autonomyBypass.accept",
+          "session.map.decisions.group.history",
+          "session.map.decisions.details.show",
+          "session.map.decisions.details.hide",
+          "session.map.decisions.by.mainAgent",
+          "session.map.decisions.by.rules",
+          "session.map.decisions.by.model",
+          "session.map.decisions.state.waiting",
+          "session.map.decisions.state.allowed",
+          "session.map.decisions.state.refused",
+          "session.map.decisions.state.stopped",
+          "session.map.decisions.what.bash",
+          "session.map.decisions.what.edit",
+          "session.map.decisions.what.read",
+          "session.map.decisions.what.outside",
+          "session.map.decisions.what.web",
+          "session.map.decisions.what.other",
+          "session.map.decisions.category.irreversible",
+          "session.map.decisions.category.admin_rights",
+          "session.map.decisions.category.outside_write_held",
+          "session.map.decisions.category.system_service",
+          "session.map.decisions.category.process_not_own",
+          "session.map.decisions.category.unreadable_command",
+          "session.map.decisions.category.by_main_agent",
+          "session.map.decisions.category.delete_compound",
+          "session.map.decisions.category.credential_change",
+          "session.map.decisions.category.script_flagged",
+          "session.map.decisions.category.archived",
+          "session.map.decisions.note.bypassOn",
+          "session.map.decisions.note.report",
+          "session.header.sessions.label",
+          "session.header.sessions.empty",
+          "session.header.sessions.current",
+          "session.header.sessions.open",
+          "session.autonomy.notBypassed",
+          "command.permissions.autonomous.reconsent",
         ],
       },
       {

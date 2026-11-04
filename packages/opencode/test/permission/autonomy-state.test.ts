@@ -2,7 +2,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } fr
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs"
 import os from "node:os"
 import path from "node:path"
-import { Clock, Context, Effect, Exit, Layer } from "effect"
+import { Clock, Context, Deferred, Effect, Exit, Layer, Logger } from "effect"
 import { TestClock } from "effect/testing"
 import { Database } from "@opencode-ai/core/database/database"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
@@ -142,6 +142,260 @@ describe("mode state", () => {
         expect(yield* service.isOn(at)).toBe(false)
       }),
     )
+  })
+})
+
+// 1.1.1 R3a (S1.2-S1.4, S1.40-S1.42): the consent is memory only, per scope, and a consented run ends with one hook call.
+describe("1.1.1: the consented bypass and its run", () => {
+  const consent = { bypassConsent: Autonomy.BYPASS_CONSENT, reportLanguage: "id" } as const
+
+  const hookInto = (service: Autonomy.Interface) =>
+    Effect.gen(function* () {
+      const calls: Autonomy.EndedRun[] = []
+      const first = yield* Deferred.make<Autonomy.EndedRun>()
+      yield* service.onRunEnded((ended) =>
+        Effect.sync(() => calls.push(ended)).pipe(Effect.andThen(Deferred.succeed(first, ended)), Effect.asVoid),
+      )
+      return { calls, first: Deferred.await(first).pipe(Effect.timeout("2 seconds")) }
+    })
+
+  // The hook is forked; a second call, if there were one, would be forked the same way and land in this pause.
+  const settle = Effect.promise(() => Bun.sleep(50))
+
+  test("on with the consent sets it, on without it leaves it unset, and off clears it", async () => {
+    await run((service) =>
+      Effect.gen(function* () {
+        expect(yield* service.bypassOf(at)).toBeUndefined()
+        yield* service.setMode({ scope: "session", root, on: true })
+        expect(yield* service.bypassOf(at)).toBeUndefined()
+        const before = Date.now()
+        yield* service.setMode({ scope: "session", root, on: true, ...consent })
+        const given = yield* service.bypassOf(at)
+        expect(given?.language).toBe("id")
+        expect(given?.at).toBeGreaterThanOrEqual(before)
+        expect(yield* service.bypassOf({ root: other, directory })).toBeUndefined()
+        yield* service.setMode({ scope: "session", root, on: false })
+        expect(yield* service.bypassOf(at)).toBeUndefined()
+        // On again needs the consent again.
+        yield* service.setMode({ scope: "session", root, on: true })
+        expect(yield* service.bypassOf(at)).toBeUndefined()
+      }),
+    )
+  })
+
+  test("the report language defaults to English", async () => {
+    await run((service) =>
+      Effect.gen(function* () {
+        yield* service.setMode({ scope: "session", root, on: true, bypassConsent: Autonomy.BYPASS_CONSENT })
+        expect((yield* service.bypassOf(at))?.language).toBe("en")
+      }),
+    )
+  })
+
+  test("on without the consent takes an earlier consent away", async () => {
+    await run((service) =>
+      Effect.gen(function* () {
+        yield* service.setMode({ scope: "session", root, on: true, ...consent })
+        yield* service.setMode({ scope: "session", root, on: true })
+        expect(yield* service.isOn(at)).toBe(true)
+        expect(yield* service.bypassOf(at)).toBeUndefined()
+      }),
+    )
+  })
+
+  test("a new process starts unset although the mode file says on, and the files carry no consent", async () => {
+    await run((service) => service.setMode({ scope: "session", root, on: true, ...consent }))
+    expect(readFileSync(modeFile, "utf8")).not.toContain("bypass")
+    await run((service) =>
+      Effect.gen(function* () {
+        expect(yield* service.isOn(at)).toBe(true)
+        expect(yield* service.bypassOf(at)).toBeUndefined()
+        // Marking the mode in the new process starts no run either.
+        yield* service.markMode(at)
+      }),
+    )
+    expect(markers(root).map((line) => line.marker)).not.toContain("bypass_on")
+  })
+
+  test("a failed switch on gives no consent", async () => {
+    mkdirSync(modeFile, { recursive: true })
+    await run((service) =>
+      Effect.gen(function* () {
+        const exit = yield* service.setMode({ scope: "session", root, on: true, ...consent }).pipe(Effect.exit)
+        expect(Exit.isFailure(exit)).toBe(true)
+        expect(yield* service.bypassOf(at)).toBeUndefined()
+      }),
+    )
+  })
+
+  test("directory scope: the folder's consent covers its roots, and a session's own answer wins", async () => {
+    await run((service) =>
+      Effect.gen(function* () {
+        yield* service.setMode({ scope: "directory", directory, on: true, ...consent })
+        expect(yield* service.bypassOf(at)).toBeDefined()
+        expect(yield* service.bypassOf({ root: other, directory })).toBeDefined()
+        expect(yield* service.bypassOf({ root, directory: "/abs/elsewhere" })).toBeUndefined()
+
+        // On by its own answer, without consent: the folder's consent does not reach it.
+        yield* service.setMode({ scope: "session", root, on: true })
+        expect(yield* service.bypassOf(at)).toBeUndefined()
+        expect(yield* service.bypassOf({ root: other, directory })).toBeDefined()
+
+        // A session's own consent stands alone once the folder goes off.
+        yield* service.setMode({ scope: "session", root, on: true, ...consent })
+        yield* service.setMode({ scope: "directory", directory, on: false })
+        expect(yield* service.bypassOf(at)).toBeDefined()
+        expect(yield* service.bypassOf({ root: other, directory })).toBeUndefined()
+      }),
+    )
+  })
+
+  test("the bypass_on marker is written once per run, by the person, after mode_on", async () => {
+    await run((service) =>
+      Effect.gen(function* () {
+        yield* service.setMode({ scope: "session", root, on: true, ...consent })
+        yield* service.markMode(at)
+        yield* service.markMode(at)
+        yield* service.markMode(at)
+      }),
+    )
+    expect(markers(root)).toMatchObject([
+      { marker: "mode_on", decidedBy: "system:mode_change" },
+      { marker: "bypass_on", decidedBy: "person", directory, rootID: root },
+    ])
+  })
+
+  test("a root on without consent writes no bypass_on, as in 1.1.0", async () => {
+    await run((service) =>
+      Effect.gen(function* () {
+        yield* service.setMode({ scope: "session", root, on: true })
+        yield* service.markMode(at)
+      }),
+    )
+    expect(markers(root).map((line) => line.marker)).toEqual(["mode_on"])
+  })
+
+  test("off ends the run: mode_off is written at once and the hook is called once with since and until", async () => {
+    await run((service) =>
+      Effect.gen(function* () {
+        const hook = yield* hookInto(service)
+        yield* service.setMode({ scope: "session", root, on: true, ...consent })
+        const since = (yield* service.bypassOf(at))!.at
+        yield* service.markMode(at)
+        yield* service.setMode({ scope: "session", root, on: false })
+        const ended = yield* hook.first
+        expect(ended).toEqual({ root, directory, since, until: ended.until, language: "id" })
+        expect(ended.until).toBeGreaterThanOrEqual(since)
+        // Written by the switch itself, before any request marks the mode.
+        expect(markers(root).map((line) => line.marker)).toEqual(["mode_on", "bypass_on", "mode_off"])
+        yield* service.markMode(at)
+        yield* service.setMode({ scope: "session", root, on: false })
+        yield* settle
+        expect(hook.calls).toHaveLength(1)
+      }),
+    )
+    expect(markers(root).filter((line) => line.marker === "mode_off")).toHaveLength(1)
+  })
+
+  test("on without consent ends the run too, and the mode stays on", async () => {
+    await run((service) =>
+      Effect.gen(function* () {
+        const hook = yield* hookInto(service)
+        yield* service.setMode({ scope: "session", root, on: true, ...consent })
+        yield* service.markMode(at)
+        yield* service.setMode({ scope: "session", root, on: true })
+        expect((yield* hook.first).root).toBe(root)
+        expect(yield* service.isOn(at)).toBe(true)
+        // Still on without consent: the next mark starts nothing.
+        yield* service.markMode(at)
+        yield* settle
+        expect(hook.calls).toHaveLength(1)
+      }),
+    )
+    expect(markers(root).map((line) => line.marker)).toEqual(["mode_on", "bypass_on"])
+  })
+
+  test("the folder going off ends the runs of its roots", async () => {
+    await run((service) =>
+      Effect.gen(function* () {
+        const hook = yield* hookInto(service)
+        yield* service.setMode({ scope: "directory", directory, on: true, ...consent })
+        yield* service.markMode(at)
+        yield* service.setMode({ scope: "directory", directory, on: false })
+        expect((yield* hook.first).root).toBe(root)
+      }),
+    )
+    expect(markers(root).map((line) => line.marker)).toEqual(["mode_on", "bypass_on", "mode_off"])
+  })
+
+  test("a root marked with consent and switched on again starts a new run with its own marker", async () => {
+    await run((service) =>
+      Effect.gen(function* () {
+        const hook = yield* hookInto(service)
+        yield* service.setMode({ scope: "session", root, on: true, ...consent })
+        yield* service.markMode(at)
+        yield* service.setMode({ scope: "session", root, on: false })
+        yield* hook.first
+        yield* service.setMode({ scope: "session", root, on: true, ...consent })
+        yield* service.markMode(at)
+      }),
+    )
+    expect(markers(root).map((line) => line.marker)).toEqual([
+      "mode_on",
+      "bypass_on",
+      "mode_off",
+      "mode_on",
+      "bypass_on",
+    ])
+  })
+
+  test("with no hook the end is logged and nothing fails", async () => {
+    const messages: string[] = []
+    await run((service) =>
+      Effect.gen(function* () {
+        yield* service.setMode({ scope: "session", root, on: true, ...consent })
+        yield* service.markMode(at)
+        const exit = yield* service.setMode({ scope: "session", root, on: false }).pipe(Effect.exit)
+        expect(Exit.isSuccess(exit)).toBe(true)
+      }).pipe(
+        Effect.provide(
+          Logger.layer([
+            Logger.make<unknown, void>((options) => {
+              messages.push(JSON.stringify(options.message))
+            }),
+          ]),
+        ),
+      ),
+    )
+    expect(messages.some((message) => message.includes("autonomous run ended with no report hook"))).toBe(true)
+  })
+
+  test("a failing hook is logged and does not fail the switch", async () => {
+    const messages: string[] = []
+    await run((service) =>
+      Effect.gen(function* () {
+        yield* service.onRunEnded(() => Effect.die("boom"))
+        yield* service.setMode({ scope: "session", root, on: true, ...consent })
+        yield* service.markMode(at)
+        const exit = yield* service.setMode({ scope: "session", root, on: false }).pipe(Effect.exit)
+        expect(Exit.isSuccess(exit)).toBe(true)
+        expect(yield* service.isOn(at)).toBe(false)
+        // The hook runs forked: wait for its log line, not for a fixed time.
+        yield* Effect.promise(async () => {
+          for (let i = 0; i < 200 && !messages.some((message) => message.includes("could not be reported")); i++)
+            await Bun.sleep(10)
+        })
+      }).pipe(
+        Effect.provide(
+          Logger.layer([
+            Logger.make<unknown, void>((options) => {
+              messages.push(JSON.stringify(options.message))
+            }),
+          ]),
+        ),
+      ),
+    )
+    expect(messages.some((message) => message.includes("could not be reported"))).toBe(true)
   })
 })
 

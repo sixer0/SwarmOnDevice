@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, expect, test } from "bun:test"
 import { rmSync, readFileSync } from "node:fs"
 import path from "node:path"
-import { NodeHttpServer, NodeServices } from "@effect/platform-node"
+import { NodeServices } from "@effect/platform-node"
 import { Cause, Deferred, Effect, Exit, Fiber, Layer } from "effect"
 import { HttpClient, HttpClientRequest, HttpRouter, HttpServer } from "effect/unstable/http"
+import { loopbackServer } from "./loopback-server"
 import { layerWebSocketConstructorGlobal } from "effect/unstable/socket/Socket"
 import { AutonomyEvent } from "@opencode-ai/schema/autonomy-event"
 import { CrossSpawnSpawner } from "@opencode-ai/core/cross-spawn-spawner"
@@ -78,7 +79,7 @@ const served = testEffect(
       >
     ).pipe(
       Layer.provide(layerWebSocketConstructorGlobal),
-      Layer.provideMerge(NodeHttpServer.layerTest),
+      Layer.provideMerge(loopbackServer),
       Layer.provideMerge(NodeServices.layer),
     ),
   ),

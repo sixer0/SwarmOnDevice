@@ -42,10 +42,20 @@ const partly = (values: object): any =>
   new Proxy(values, { get: (target, key) => (key in target ? target[key as never] : anything()[key]) })
 
 // The server's own rule: a session's value, or else its folder's. One state per server.
-type Call = { server: string; directory: string; on: boolean; sessionID?: string }
+type Call = {
+  server: string
+  directory: string
+  on: boolean
+  sessionID?: string
+  bypassConsent?: string
+  reportLanguage?: string
+}
 const world = {
   folders: new Set<string>(),
   sessions: new Set<string>(),
+  // Sessions the server reads as on but not bypassed (after a restart): the consent has to be given again.
+  unbypassed: new Set<string>(),
+  asked: 0,
   writes: [] as Call[],
   reads: [] as string[],
   tabs: [] as { type: string; draftID?: string; server?: string; directory?: string }[],
@@ -64,15 +74,20 @@ const autonomyOf = (server: string, directory: string) => ({
       data: {
         on: world.sessions.has(`${server}:${input.sessionID}`) || world.folders.has(`${server}:${directory}`),
         open: 0,
+        ...(world.unbypassed.has(`${server}:${input.sessionID}`) ? { bypass: false } : {}),
       },
     }
   },
-  modeUpdate: async (input: { on: boolean; sessionID?: string }) => {
-    world.writes.push({ server, directory, on: input.on, sessionID: input.sessionID })
+  modeUpdate: async (input: { on: boolean; sessionID?: string; bypassConsent?: string; reportLanguage?: string }) => {
+    const consent = input.bypassConsent
+      ? { bypassConsent: input.bypassConsent, reportLanguage: input.reportLanguage }
+      : {}
+    world.writes.push({ server, directory, on: input.on, sessionID: input.sessionID, ...consent })
     const key = input.sessionID ? `${server}:${input.sessionID}` : `${server}:${directory}`
     const level = input.sessionID ? world.sessions : world.folders
     if (input.on) level.add(key)
     if (!input.on) level.delete(key)
+    if (!input.on || input.bypassConsent) world.unbypassed.delete(key)
     return { data: { on: input.on } }
   },
 })
@@ -146,6 +161,8 @@ await override("@/pages/session/session-layout", {
   useSessionLayout: () => partly({ params: { id: "ses_a" } }),
 })
 await override("@/components/project-memory", { createProjectMemoryNotices: () => {} })
+// The person agrees in the consent dialog; the dialog itself has its own test.
+await override("@/components/dialog-autonomy-bypass", { confirmAutonomyBypass: async () => (world.asked++, true) })
 await override("@/pages/session/session-archive", { useSessionArchive: anything })
 for (const [id, name] of [
   ["@/context/file", "useFile"],
@@ -193,10 +210,14 @@ async function mount(pathname: string, search: string, root: () => unknown) {
 }
 
 const palette = () => world.commands.get("session")!().find((option) => option.id === "permissions.autonomous")!
+const reconsent = () =>
+  world.commands.get("session")!().find((option) => option.id === "permissions.autonomous.reconsent")
 
 beforeEach(() => {
   world.folders = new Set()
   world.sessions = new Set()
+  world.unbypassed = new Set()
+  world.asked = 0
   world.writes = []
   world.reads = []
   world.tabs.length = 0
@@ -239,13 +260,24 @@ describe("the ways that stay", () => {
         sessionID: () => undefined,
         onChanged: () => {},
         onFailed: () => {},
+        confirm: async () => true,
+        language: () => "en",
       }),
     )
     await tick()
     expect(composer.on()).toBe(false)
 
     await composer.toggle()
-    expect(world.writes).toEqual([{ server: "remote", directory: "/work/proj", on: true, sessionID: undefined }])
+    expect(world.writes).toEqual([
+      {
+        server: "remote",
+        directory: "/work/proj",
+        on: true,
+        sessionID: undefined,
+        bypassConsent: "bypass-v1",
+        reportLanguage: "en",
+      },
+    ])
     expect(composer.on()).toBe(true)
   })
 
@@ -268,7 +300,64 @@ describe("the ways that stay", () => {
     world.folders.clear()
     await palette().onSelect!()
     await tick()
-    expect(world.writes.at(-1)).toEqual({ server: "local", directory: "/work/proj", on: true, sessionID: "ses_a" })
+    expect(world.writes.at(-1)).toEqual({
+      server: "local",
+      directory: "/work/proj",
+      on: true,
+      sessionID: "ses_a",
+      bypassConsent: "bypass-v1",
+      reportLanguage: "en",
+    })
+    expect(palette().title).toBe(dict["command.permissions.autonomous.disable"])
+  })
+})
+
+// Code review m19: on but not bypassed (a server restart), the palette can still turn the mode off, and a separate
+// command asks for the consent again.
+describe("the palette while the mode is on but not bypassed", () => {
+  const session = async () => {
+    world.sessions.add("local:ses_a")
+    world.unbypassed.add("local:ses_a")
+    await mount(`/server/${base64Encode("local")}/session/ses_a`, "", () =>
+      createComponent(() => {
+        useSessionCommands(anything())
+        return null
+      }, {}),
+    )
+  }
+
+  test("the toggle turns it off without asking, and the agree-again command goes away", async () => {
+    await session()
+    expect(palette().title).toBe(dict["command.permissions.autonomous.disable"])
+    expect(reconsent()?.title).toBe(dict["command.permissions.autonomous.reconsent"])
+
+    await palette().onSelect!()
+    await tick()
+
+    expect(world.asked).toBe(0)
+    expect(world.writes).toEqual([{ server: "local", directory: "/work/proj", on: false, sessionID: "ses_a" }])
+    expect(palette().title).toBe(dict["command.permissions.autonomous.enable"])
+    expect(reconsent()).toBeUndefined()
+  })
+
+  test("agree again asks, sends on with the consent, and leaves the toggle to turn it off", async () => {
+    await session()
+
+    await reconsent()!.onSelect!()
+    await tick()
+
+    expect(world.asked).toBe(1)
+    expect(world.writes).toEqual([
+      {
+        server: "local",
+        directory: "/work/proj",
+        on: true,
+        sessionID: "ses_a",
+        bypassConsent: "bypass-v1",
+        reportLanguage: "en",
+      },
+    ])
+    expect(reconsent()).toBeUndefined()
     expect(palette().title).toBe(dict["command.permissions.autonomous.disable"])
   })
 })

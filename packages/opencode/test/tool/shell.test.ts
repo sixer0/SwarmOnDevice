@@ -1,5 +1,5 @@
 import { PermissionV1 } from "@opencode-ai/core/v1/permission"
-import { describe, expect } from "bun:test"
+import { describe, expect, test } from "bun:test"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { Cause, Effect, Exit, Layer } from "effect"
 import type * as Scope from "effect/Scope"
@@ -11,7 +11,8 @@ import { Config } from "@/config/config"
 import { InstanceState } from "@/effect/instance-state"
 import { AutonomyTable } from "@/permission/autonomy-table"
 import { Shell } from "@opencode-ai/core/shell"
-import { SCRIPT_CHANGED_TEXT, ShellTool } from "../../src/tool/shell"
+import { READ_THROUGH, SCRIPT_CHANGED_TEXT, ShellTool, readSteps } from "../../src/tool/shell"
+import { BypassLists } from "../../src/permission/bypass-lists"
 import { Filesystem } from "@/util/filesystem"
 import { provideInstance, testInstanceStoreLayer, tmpdirScoped } from "../fixture/fixture"
 import type { Permission } from "../../src/permission"
@@ -1949,4 +1950,46 @@ describe("tool.shell script hash in autonomous mode", () => {
       )
     }),
   )
+})
+
+// 1.1.1 F41 (V17-1, CR17-3, CR17-4): the reader keeps a leading allowlisted `NAME=value` word before the program, and every
+// guard of that seam holds at the reader itself.
+describe("tool.shell decompose: leading assignments", () => {
+  const argv = async (text: string) => (await readSteps(text, "/tmp"))?.steps.map((step) => step.argv)
+  test("the allowlist is the consented screen's own object", () => {
+    expect(READ_THROUGH).toBe(BypassLists.SAFE_ASSIGNMENT)
+  })
+  test("an allowlisted name with a plain value is kept as a word before the program", async () => {
+    expect(await argv("CI=1 npm test")).toEqual([["CI=1", "npm", "test"]])
+    expect(await argv("CI='1' npm test && npm run build")).toEqual([["CI=1", "npm", "test"], ["npm", "run", "build"]])
+    expect(await argv('CI="1" NODE_ENV=production npm test')).toEqual([["CI=1", "NODE_ENV=production", "npm", "test"]])
+    expect(await argv("TZ=Europe/Berlin date")).toEqual([["TZ=Europe/Berlin", "date"]])
+  })
+  test("each guard: name, value, position, and what may follow", async () => {
+    for (const text of [
+      "PATH=/x ls",
+      "NODE_OPTIONS=x npm test",
+      "CI=$(x) npm test",
+      "CI=`x` npm test",
+      'CI="$X" npm test',
+      "CI=$HOME npm test",
+      "CI=a\\ b npm test",
+      "CI+=1 npm test",
+      "CI=1 cd src",
+      "CI=1 cd /etc && ls",
+      "CI=1 export X=1",
+      "CI=1 set -e",
+      "CI=1 cat <<'EOF'\nx\nEOF",
+      "CI=1 python3 - <<'E'\nprint(1)\nE",
+      "CI=1 > o.txt ls",
+      "TZ=/etc/localtime date",
+      "TZ=:/etc/passwd date",
+      "TZ=../../x date",
+      "LANG=../../x ls",
+      "LANG=a/b ls",
+      "LC_ALL=/tmp/x ls",
+      "TERM=~/x ls",
+    ])
+      expect([text, await argv(text)]).toEqual([text, undefined])
+  })
 })

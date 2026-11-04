@@ -192,6 +192,136 @@ describe("schema", () => {
     expect(Exit.isSuccess(decode({ ...old, type: "decision", via: "other" }))).toBe(false)
   })
 
+  test("1.1.1: bypassed, the main-agent via values and the bypass markers are written and read back", async () => {
+    await run((service) =>
+      Effect.gen(function* () {
+        yield* service.record(
+          root,
+          decision({
+            class: "A",
+            category: "by_main_agent",
+            bypassed: "outward_not_in_mission",
+            via: "main_agent",
+            decidedBy: "agent:main/build",
+          }),
+        )
+        yield* service.record(
+          root,
+          decision({ requestID: "per_2", class: "A", category: "by_main_agent", bypassed: "not_reversible", via: "for_subagent", decidedBy: "agent:main/build" }),
+        )
+        yield* service.record(root, decision({ requestID: "per_3", class: "X", category: "irreversible" }))
+        yield* service.record(root, decision({ requestID: "per_4", class: "D", category: "outside_write_held" }))
+        for (const marker of ["bypass_on", "bypass_report"] as const)
+          yield* service.record(root, { type: "marker", directory, marker, decidedBy: "person" })
+      }),
+    )
+    const written = lines()
+    written.forEach((line) => expect(Exit.isSuccess(decode(line))).toBe(true))
+    expect(written[0]).toMatchObject({ category: "by_main_agent", bypassed: "outward_not_in_mission", via: "main_agent", decidedBy: "agent:main/build" })
+    expect(written[1]).toMatchObject({ bypassed: "not_reversible", via: "for_subagent" })
+    expect(written[2]).toMatchObject({ class: "X", category: "irreversible" })
+    expect(written[2]).not.toHaveProperty("bypassed")
+    expect(written[3]).toMatchObject({ class: "D", category: "outside_write_held" })
+    expect(written.slice(4).map((line) => line.marker)).toEqual(["bypass_on", "bypass_report"])
+    const read = await run((service) => service.readAudit(root))
+    expect(read).toMatchObject({ intact: true, problems: [] })
+    expect(read.lines.length).toBe(6)
+  })
+
+  test("1.1.1 F26: the destination of a call the consent let out is written, read back and decodes; a line without it too", async () => {
+    await run((service) =>
+      Effect.gen(function* () {
+        yield* service.record(
+          root,
+          decision({
+            class: "A",
+            category: "by_main_agent",
+            bypassed: "not_routine",
+            via: "main_agent",
+            decidedBy: "agent:main/build",
+            patterns: ["curl -s http://localhost:3000/health"],
+            destination: "localhost:3000",
+          }),
+        )
+        yield* service.record(
+          root,
+          decision({
+            requestID: "per_2",
+            class: "A",
+            category: "by_main_agent",
+            bypassed: "outward_not_in_mission",
+            via: "for_subagent",
+            decidedBy: "agent:main/build",
+            destination: "origin, registry.npmjs.org",
+          }),
+        )
+        yield* service.record(root, decision({ requestID: "per_3" }))
+      }),
+    )
+    const written = lines()
+    written.forEach((line) => expect(Exit.isSuccess(decode(line))).toBe(true))
+    expect(written[0]).toMatchObject({ destination: "localhost:3000", bypassed: "not_routine" })
+    expect(written[1]).toMatchObject({ destination: "origin, registry.npmjs.org" })
+    expect(written[2]).not.toHaveProperty("destination")
+    const read = await run((service) => service.readAudit(root))
+    expect(read).toMatchObject({ intact: true, problems: [] })
+    expect(read.lines.map((line) => (line.type === "decision" ? line.destination : "-"))).toEqual([
+      "localhost:3000",
+      "origin, registry.npmjs.org",
+      undefined,
+    ])
+    expect(Exit.isSuccess(decode({ ...written[0], destination: 7 }))).toBe(false)
+  })
+
+  test("1.1.1: every new category decodes, a 1.1.0 decision line still decodes, and bypassed stays a closed list", () => {
+    const chain = { v: 1, seq: 1, prev: null, at: 1 }
+    const old = {
+      ...chain,
+      type: "decision",
+      rootID: root,
+      sessionID: "ses_child",
+      requestID: "per_1",
+      agent: "general",
+      directory,
+      permission: "bash",
+      patterns: ["bun test"],
+      patternsTruncated: false,
+      class: "P",
+      category: "check",
+      via: "grant",
+      risk: null,
+      canUndo: true,
+      decidedBy: "gate",
+      decision: "allow",
+      memo: false,
+      follows: [],
+    }
+    expect(Exit.isSuccess(decode(old))).toBe(true)
+    for (const category of [
+      "irreversible",
+      "admin_rights",
+      "outside_write_held",
+      "system_service",
+      "process_not_own",
+      "unreadable_command",
+      "by_main_agent",
+    ]) {
+      expect(Exit.isSuccess(decode({ ...old, category }))).toBe(true)
+      expect(Exit.isSuccess(decode({ ...old, category: "by_main_agent", bypassed: category }))).toBe(true)
+    }
+    for (const via of ["main_agent", "for_subagent"]) expect(Exit.isSuccess(decode({ ...old, via }))).toBe(true)
+    expect(Exit.isSuccess(decode({ ...old, bypassed: "anything" }))).toBe(false)
+    const marker = { ...chain, type: "marker", rootID: root, decidedBy: "person" }
+    expect(Exit.isSuccess(decode({ ...marker, marker: "mode_on" }))).toBe(true)
+    expect(Exit.isSuccess(decode({ ...marker, marker: "bypass_on" }))).toBe(true)
+    expect(Exit.isSuccess(decode({ ...marker, marker: "bypass_report" }))).toBe(true)
+    expect(Exit.isSuccess(decode({ ...marker, marker: "bypass_off" }))).toBe(false)
+  })
+
+  test("1.1.1: the consent constant is the one value the register names", () => {
+    expect(Autonomy.BYPASS_CONSENT).toBe("bypass-v1")
+  })
+
   test("decidedBy tells the four deciders apart", async () => {
     const names = ["gate", "agent:gsp-ai-tail/thinker", "person", "system:decider_timeout"] as const
     await run((service) => Effect.forEach(names, (decidedBy) => service.record(root, decision({ decidedBy }))))

@@ -3,11 +3,12 @@ import { execFileSync } from "node:child_process"
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
 import os from "node:os"
 import path from "node:path"
-import { NodeHttpServer, NodeServices } from "@effect/platform-node"
+import { NodeServices } from "@effect/platform-node"
 import { MockLanguageModelV3 } from "ai/test"
 import { $ } from "bun"
 import { Cause, Effect, Exit, Fiber, Layer } from "effect"
 import { HttpClient, HttpClientRequest, HttpRouter } from "effect/unstable/http"
+import { loopbackServer } from "./loopback-server"
 import { HttpApiBuilder } from "effect/unstable/httpapi"
 import * as Socket from "effect/unstable/socket/Socket"
 import { CrossSpawnSpawner } from "@opencode-ai/core/cross-spawn-spawner"
@@ -1843,7 +1844,7 @@ describe("row 201 boundaries", () => {
           [Permission.deciderNode, decider],
         ],
       ),
-      NodeHttpServer.layerTest,
+      loopbackServer,
       NodeServices.layer,
       workspaceLayerWithRuntimeFlags({}),
     ),
