@@ -1614,6 +1614,8 @@ export class Autonomy extends HeyApiClient {
       workspace?: string
       on?: boolean
       sessionID?: string
+      bypassConsent?: "bypass-v1"
+      reportLanguage?: "en" | "id"
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -1626,6 +1628,8 @@ export class Autonomy extends HeyApiClient {
             { in: "query", key: "workspace" },
             { in: "body", key: "on" },
             { in: "body", key: "sessionID" },
+            { in: "body", key: "bypassConsent" },
+            { in: "body", key: "reportLanguage" },
           ],
         },
       ],

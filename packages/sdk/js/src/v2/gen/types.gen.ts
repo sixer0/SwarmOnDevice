@@ -2346,6 +2346,10 @@ export type Config = {
 export type AutonomyMode = {
   on: boolean
   externalChange: Array<"mode.json" | "trust.json">
+  /**
+   * True only while a consented activation is live for this scope; a restart turns it off
+   */
+  bypass: boolean
 }
 
 export type NotFoundError = {
@@ -2404,18 +2408,65 @@ export type AutonomyAuditLine =
         | "script_flagged"
         | "script_unreadable"
         | "program_not_trusted"
+        | "outside_write_held"
+        | "system_service"
+        | "process_not_own"
+        | "unreadable_command"
         | "outside_write"
         | "delete_compound"
         | "credential_change"
+        | "irreversible"
+        | "admin_rights"
         | "outside_read"
         | "outside_copy"
         | "mcp_tool"
         | "consented"
         | "archived"
         | "script"
-      via?: "grant" | "duplicate" | "consent" | "outward" | "user_request"
+        | "by_main_agent"
+      bypassed?:
+        | "check"
+        | "file-op"
+        | "git-local"
+        | "edit-not-ordinary"
+        | "outside_folder"
+        | "outward"
+        | "not_reversible"
+        | "sensitive_file"
+        | "secret_file"
+        | "external_tool"
+        | "no_undo"
+        | "not_routine"
+        | "queue_full"
+        | "decider_unavailable"
+        | "folder_not_trusted"
+        | "plan_mode"
+        | "app_state"
+        | "asks_every_time"
+        | "outward_not_in_mission"
+        | "script_flagged"
+        | "script_unreadable"
+        | "program_not_trusted"
+        | "outside_write_held"
+        | "system_service"
+        | "process_not_own"
+        | "unreadable_command"
+        | "outside_write"
+        | "delete_compound"
+        | "credential_change"
+        | "irreversible"
+        | "admin_rights"
+        | "outside_read"
+        | "outside_copy"
+        | "mcp_tool"
+        | "consented"
+        | "archived"
+        | "script"
+        | "by_main_agent"
+      via?: "grant" | "duplicate" | "consent" | "outward" | "user_request" | "main_agent" | "for_subagent"
       duplicateOf?: string
       consentID?: string
+      destination?: string
       attempts?: number
       script?: {
         bytes: number
@@ -2476,6 +2527,8 @@ export type AutonomyAuditLine =
         | "credential_snapshot"
         | "subagent_stopped"
         | "force_stop"
+        | "bypass_on"
+        | "bypass_report"
       files?: Array<"mode.json" | "trust.json">
       consentID?: string
       hash?: string
@@ -2486,6 +2539,10 @@ export type AutonomySession = {
   rootID: string
   on: boolean
   externalChange: Array<"mode.json" | "trust.json">
+  /**
+   * True only while a consented activation is live for the session's root; a restart turns it off
+   */
+  bypass: boolean
   open: number
   lines: Array<AutonomyAuditLine>
   intact: boolean
@@ -8175,6 +8232,8 @@ export type AutonomyModeUpdateData = {
   body?: {
     on: boolean
     sessionID?: string
+    bypassConsent?: "bypass-v1"
+    reportLanguage?: "en" | "id"
   }
   path?: never
   query?: {

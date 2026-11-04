@@ -76,7 +76,7 @@ const COPYRIGHT = "Copyright (c) 2025 opencode (MIT). Swarm modifications Copyri
 
 // Swarm release number (SP-BC 4.1, S6, G1c). It fills only Info.plist SwarmRelease, which the
 // swarm-patch applier reads with plutil; CFBundleShortVersionString and package.json stay 1.19.3.
-export const SWARM_RELEASE = "1.1.0"
+export const SWARM_RELEASE = "1.1.1"
 
 const getBase = (appId: string): Configuration => ({
   artifactName: "swarm-desktop-${os}-${arch}.${ext}",
