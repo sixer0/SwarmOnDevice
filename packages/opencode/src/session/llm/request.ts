@@ -58,6 +58,8 @@ export const prepare = Effect.fn("LLMRequestPrep.prepare")(function* (input: Pre
   const system = [
     [
       ...(input.agent.prompt ? [input.agent.prompt] : SystemPrompt.provider(input.model)),
+      // GSP workflow and language rule: build and general only, on every model (specs S4.3, S5.1).
+      ...SystemPrompt.workflow(input.agent.name),
       ...input.system,
       ...(input.user.system ? [input.user.system] : []),
     ]

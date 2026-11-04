@@ -14,6 +14,7 @@ import PROMPT_META from "./prompt/meta.txt"
 
 import PROMPT_CODEX from "./prompt/codex.txt"
 import PROMPT_TRINITY from "./prompt/trinity.txt"
+import PROMPT_GSP_WORKFLOW from "./prompt/gsp-workflow.txt"
 import type { Provider } from "@/provider/provider"
 import type { Agent } from "@/agent/agent"
 import { Permission } from "@/permission"
@@ -92,6 +93,17 @@ export function provider(model: Provider.Model) {
     return [PROMPT_KIMI]
   return [PROMPT_DEFAULT]
 }
+
+/** Agents that get the GSP workflow and language rule (specs S0.1, S4.2). The gate is the agent name, not the model,
+ *  so every model gets the block; `plan` and the hidden agents (`explore`, `compaction`, `title`, `summary`) do not. */
+export const GSP_WORKFLOW_AGENTS: ReadonlySet<string> = new Set(["build", "general"])
+
+/** The `<gsp_workflow>` block for `agentName`, or nothing (specs S4.2-S4.5, S5.1). */
+export function workflow(agentName: string): string[] {
+  return GSP_WORKFLOW_AGENTS.has(agentName) ? [PROMPT_GSP_WORKFLOW] : []
+}
+
+export { PROMPT_GSP_WORKFLOW }
 
 export interface Interface {
   readonly environment: (model: Provider.Model) => Effect.Effect<string[]>

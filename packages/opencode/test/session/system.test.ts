@@ -180,6 +180,77 @@ describe("session.system", () => {
     }),
   )
 
+  describe("GSP workflow block (R8, specs S4.1-S4.5, S5.1)", () => {
+    // Exact text of specs S4.5. A change here is a spec change (every word is paid on every turn).
+    const SPEC_TEXT = [
+      "<gsp_workflow>",
+      "Work in these steps. Steps marked * are optional: skip them for small requests and say in one line which you skip.",
+      '1. Intent: say in one or two sentences what the person wants and what "done" means.',
+      "2. Blueprint plan*: for multi-step work, list the steps, what each one touches and how each is checked.",
+      '3. Approval (HIL): put the blueprint to the person with the question tool and wait for the answer. If the tool says nobody will answer because autonomous mode is on, approve it yourself, write "Blueprint approved by the main agent (autonomous mode)", and continue. A subagent skips this step: its parent already approved the task.',
+      "4. Research*: read what you need before you change anything.",
+      "5. Plan adjustment*: update the blueprint with what research showed and say what changed.",
+      "6. Implementation: make the changes step by step.",
+      "7. Gate check and healing loop: run the project's own checks (tests, typecheck, lint, build, whichever exist). When one fails, fix the cause and run it again, at most 3 times per check. Then stop and report what still fails as a blocker. Never say a check passed without running it.",
+      "8. Report: what was done, what you checked and the result, what you decided on the person's behalf, which files you created or changed, and what is still open.",
+      "",
+      "Write like a capable colleague: clear, professional and human, without filler.",
+      'Language: reply in the language the person writes in. Do not over-translate. Keep common technical terms and loanwords in their original form, such as commit, build, deploy, branch, pull request, file, folder, test, and write them in *italic* or "quotes" when the sentence is not in English. Never force a translation that sounds unnatural.',
+      "</gsp_workflow>",
+    ].join("\n")
+    const text = SystemPrompt.PROMPT_GSP_WORKFLOW
+
+    test("the block is the spec text", () => {
+      expect(text.trimEnd()).toBe(SPEC_TEXT)
+    })
+
+    test("8 steps in order, steps 2, 4 and 5 marked optional", () => {
+      const steps = text
+        .split("\n")
+        .filter((line) => /^\d+\. /.test(line))
+        .map((line) => line.slice(0, line.indexOf(":")))
+      expect(steps).toEqual([
+        "1. Intent",
+        "2. Blueprint plan*",
+        "3. Approval (HIL)",
+        "4. Research*",
+        "5. Plan adjustment*",
+        "6. Implementation",
+        "7. Gate check and healing loop",
+        "8. Report",
+      ])
+      expect(steps.filter((step) => step.endsWith("*"))).toEqual(["2. Blueprint plan*", "4. Research*", "5. Plan adjustment*"])
+    })
+
+    test("healing loop is capped, HIL uses the question tool, autonomous approval is recorded", () => {
+      expect(text).toContain("at most 3 times per check")
+      expect(text).toContain("report what still fails as a blocker")
+      expect(text).toContain("with the question tool")
+      expect(text).toContain('write "Blueprint approved by the main agent (autonomous mode)"')
+      expect(text).toContain("A subagent skips this step")
+    })
+
+    test("language rule is the last paragraph", () => {
+      const paragraphs = text.trimEnd().replace("</gsp_workflow>", "").trimEnd().split("\n\n")
+      const last = paragraphs.at(-1)?.split("\n").at(-1) ?? ""
+      expect(last.startsWith("Language: reply in the language the person writes in. Do not over-translate.")).toBe(true)
+      expect(last).toContain('*italic* or "quotes"')
+      expect(text).toContain("clear, professional and human")
+    })
+
+    test("word count is at most 330", () => {
+      expect(text.split(/\s+/).filter((word) => word.length > 0).length).toBeLessThanOrEqual(330)
+    })
+
+    test("only build and general get the block", () => {
+      expect(SystemPrompt.workflow("build")).toEqual([text])
+      expect(SystemPrompt.workflow("general")).toEqual([text])
+      for (const name of ["explore", "plan", "compaction", "title", "summary", "", "Build"])
+        expect(SystemPrompt.workflow(name)).toEqual([])
+      expect([...SystemPrompt.GSP_WORKFLOW_AGENTS].toSorted()).toEqual(["build", "general"])
+    })
+  })
+
   describe("installed tools block (U14b)", () => {
     // Exact register text, identification/04_structured_u14.md section 3. A change here is a register change.
     const REGISTER = {
