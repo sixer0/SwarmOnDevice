@@ -1,6 +1,7 @@
 import { useNavigate } from "@solidjs/router"
 import { createEffect, on } from "solid-js"
 import { DialogProjectMemory, createProjectMemoryNotices } from "@/components/project-memory"
+import { confirmAutonomyBypass } from "@/components/dialog-autonomy-bypass"
 import { createAutonomousModeController } from "@/components/settings-v2/general-controllers"
 import { useCommand, type CommandOption } from "@/context/command"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
@@ -149,6 +150,7 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
   const autonomousMode = createAutonomousModeController({
     sessionID: () => params.id,
     directory: () => sdk().directory,
+    confirm: () => confirmAutonomyBypass(dialog),
   })
   // Settings and the add menu change the mode too. Opening any dialog, the palette included, reads it again.
   createEffect(
@@ -555,6 +557,7 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
   ]
 
   const permissionsCmds = () => [
+    // The toggle always flips, so the mode can be turned off from here also while it is on but not bypassed (m19).
     permissionsCommand({
       id: "permissions.autonomous",
       title: autonomousMode.accepting()
@@ -564,6 +567,17 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
       disabled: false,
       onSelect: () => void autonomousMode.toggle(),
     }),
+    // On but not bypassed (after a server restart): a separate command asks for the consent again.
+    ...(autonomousMode.notBypassed()
+      ? [
+          permissionsCommand({
+            id: "permissions.autonomous.reconsent",
+            title: language.t("command.permissions.autonomous.reconsent"),
+            disabled: false,
+            onSelect: () => void autonomousMode.agree(),
+          }),
+        ]
+      : []),
   ]
 
   command.register("session", () => [

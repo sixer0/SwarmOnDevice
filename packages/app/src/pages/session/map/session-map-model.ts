@@ -481,6 +481,12 @@ export type DecisionEntry = {
   outcome?: Extract<AutonomyAuditLine, { type: "outcome" }>["outcome"]
   // Only for what actually ran. "button" is a promise that Undo brings it back; "none" says it cannot.
   undo?: "button" | "none"
+  // A class B line: a stop for a person, never held, so it reads "Stopped" rather than "Refused".
+  stopped?: boolean
+  // The category the call had before the main agent decided it under consent (category is then `by_main_agent`).
+  bypassed?: DecisionLine["bypassed"]
+  // How the line came about. `for_subagent` is the main agent deciding a subagent's call, and its reason says why.
+  via?: DecisionLine["via"]
 }
 
 export type HeldCall = { tool: string; args: { name: string; value: string }[] }
@@ -488,8 +494,13 @@ export type HeldCall = { tool: string; args: { name: string; value: string }[] }
 export type DecisionNote = {
   id: string
   at: number
-  note: "mode_on" | "mode_off" | "decider_unavailable" | "queue_full"
+  note: "mode_on" | "mode_off" | "decider_unavailable" | "queue_full" | "bypass_on" | "report"
 }
+
+// One line of History: a decided or limited entry, or a note, in the order they happened.
+export type HistoryItem =
+  | { kind: "decided" | "limited"; id: string; at: number; entry: DecisionEntry }
+  | { kind: "note"; id: string; at: number; note: DecisionNote }
 
 export type DecisionGroups = {
   waiting: DecisionEntry[]
@@ -515,6 +526,8 @@ const NOTE_OF: Partial<Record<Extract<AutonomyAuditLine, { type: "marker" }>["ma
   decider_open: "decider_unavailable",
   decider_limit: "decider_unavailable",
   b0: "queue_full",
+  bypass_on: "bypass_on",
+  bypass_report: "report",
 }
 
 // The same reading as `openIn` on the server, so the groups' waiting list and the route's `open` count cannot differ.
@@ -592,6 +605,9 @@ export function decisionGroups(
       category: line.category,
       by: byOf(line, later?.by),
       outcome,
+      ...(line.class === "B" && { stopped: true }),
+      ...(line.bypassed && { bypassed: line.bypassed }),
+      ...(line.via && { via: line.via }),
       undo:
         !ran || outcome === "undone"
           ? undefined
@@ -639,6 +655,30 @@ export function decisionGroups(
   groups.limited.reverse()
   groups.notes.reverse()
   return groups
+}
+
+// Everything that no longer waits, as one log, latest on top. The groups stay as they are (rows 260 and 262); this only
+// interleaves them, and on the same time keeps decided before limited before notes.
+export function historyOf(groups: DecisionGroups): HistoryItem[] {
+  const items: HistoryItem[] = [
+    ...groups.decided.map((entry) => ({ kind: "decided" as const, id: entry.id, at: entry.at, entry })),
+    ...groups.limited.map((entry) => ({ kind: "limited" as const, id: entry.id, at: entry.at, entry })),
+    ...groups.notes.map((note) => ({ kind: "note" as const, id: note.id, at: note.at, note })),
+  ]
+  return items.sort((a, b) => b.at - a.at)
+}
+
+// Review P6, n36: a refresh re-reads the audit, so every item is a new object and a list keyed by identity would draw every
+// row again. This hands back the previous object for an id whose content is the same, so only new or changed rows are
+// drawn. The content is compared whole (plain data, built the same way each time), so a changed outcome, kind or Undo is
+// never hidden behind a reused row. Used for the History items and for the Waiting entries.
+export function reuseById<T extends { id: string }>(previous: readonly T[], next: T[]): T[] {
+  if (previous.length === 0) return next
+  const known = new Map(previous.map((item) => [item.id, item]))
+  return next.map((item) => {
+    const old = known.get(item.id)
+    return old && JSON.stringify(old) === JSON.stringify(item) ? old : item
+  })
 }
 
 // The call a held request's answer is good for, as the server sent it. Only there while the request is open, and it never

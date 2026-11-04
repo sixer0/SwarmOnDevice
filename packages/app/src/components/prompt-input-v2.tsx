@@ -9,13 +9,14 @@ import type { ReferenceInfo } from "@opencode-ai/sdk/v2/client"
 import { createEffect, createMemo, on, Show } from "solid-js"
 import { ModelSelectorPopoverV2 } from "@/components/dialog-select-model"
 import { DialogSelectModelUnpaidV2 } from "@/components/dialog-select-model-unpaid-v2"
+import { confirmAutonomyBypass } from "@/components/dialog-autonomy-bypass"
 import type { PromptInputProps } from "@/components/prompt-input/contracts"
 import { normalizePromptHistoryEntry, promptLength, type PromptHistoryComment } from "@/components/prompt-input/history"
 import { createPersistedPromptInputHistory } from "@/components/prompt-input/history-store"
 import { promptDesignPlaceholder, promptPlaceholder } from "@/components/prompt-input/placeholder"
 import { PromptPreflight } from "@/components/prompt-input/preflight-panel"
 import type { PreflightWorktree } from "@/components/prompt-input/preflight-controller"
-import { createPromptAutonomy } from "@/components/prompt-input/autonomy"
+import { createPromptAutonomy, reportLanguageOf } from "@/components/prompt-input/autonomy"
 import { createPromptSubmit } from "@/components/prompt-input/submit"
 import { autonomousToast } from "@/components/settings-v2/general-controllers"
 import { selectionFromLines, type SelectedLineRange, useFile } from "@/context/file"
@@ -226,6 +227,8 @@ export function usePromptInputV2Controller(props: PromptInputV2ControllerProps):
     sessionID: () => props.controls.session.id,
     onChanged: (on) => showToast(autonomousToast(language.t, on)),
     onFailed: () => showToast({ variant: "error", title: language.t("common.requestFailed") }),
+    confirm: () => confirmAutonomyBypass(dialog),
+    language: () => reportLanguageOf(language.locale()),
   })
   const submission = createPromptSubmit({
     onModelRequired: () => dialog.show(() => <DialogSelectModelUnpaidV2 model={props.controls.model.selection} />),
@@ -453,9 +456,13 @@ export function usePromptInputV2Controller(props: PromptInputV2ControllerProps):
         return autonomy.on() === undefined
       },
       get marker() {
+        // On, but the consent is gone (a server restart): say so, and let the marker ask again. The switch still turns
+        // the mode off (code review m19).
+        if (autonomy.notBypassed()) return language.t("session.autonomy.notBypassed")
         return autonomy.on() ? language.t("session.autonomy.marker", { count: autonomy.waiting() }) : undefined
       },
       get onMarker() {
+        if (autonomy.notBypassed()) return () => void autonomy.agree()
         return props.controls.session.id ? props.openDecisions : undefined
       },
       onToggle: () => void autonomy.toggle(),

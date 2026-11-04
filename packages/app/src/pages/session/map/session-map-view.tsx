@@ -14,7 +14,20 @@ import { Icon as IconV2 } from "@opencode-ai/ui/v2/icon"
 import { IconButtonV2 } from "@opencode-ai/ui/v2/icon-button-v2"
 import { ButtonV2 } from "@opencode-ai/ui/v2/button-v2"
 import { DialogBody, DialogFooter, DialogHeader, DialogTitleGroup, DialogV2 } from "@opencode-ai/ui/v2/dialog-v2"
-import { createEffect, createMemo, For, Match, on, onCleanup, onMount, Show, Switch, type JSX } from "solid-js"
+import { AccordionV2 } from "@opencode-ai/ui/v2/accordion-v2"
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  For,
+  Match,
+  on,
+  onCleanup,
+  onMount,
+  Show,
+  Switch,
+  type JSX,
+} from "solid-js"
 import { createStore } from "solid-js/store"
 import type { SwarmController } from "../swarm/swarm-controller"
 import { SwarmAgents } from "../swarm/swarm-view"
@@ -31,12 +44,15 @@ import {
   formatDuration,
   heldAlways,
   heldCalls,
+  historyOf,
   relativePath,
+  reuseById,
   type ConsentItem,
   type ConsentList,
   type DecisionEntry,
   type DecisionNote,
   type HeldCall,
+  type HistoryItem,
   type MapChapter,
   type MapFile,
   type MapFilter,
@@ -272,6 +288,20 @@ const CATEGORY_LABEL = {
   plan_mode: "session.map.decisions.category.plan_mode",
   app_state: "session.map.decisions.category.app_state",
   asks_every_time: "session.map.decisions.category.asks_every_time",
+  irreversible: "session.map.decisions.category.irreversible",
+  admin_rights: "session.map.decisions.category.admin_rights",
+  outside_write_held: "session.map.decisions.category.outside_write_held",
+  outside_write: "session.map.decisions.category.outside_write_held",
+  system_service: "session.map.decisions.category.system_service",
+  process_not_own: "session.map.decisions.category.process_not_own",
+  unreadable_command: "session.map.decisions.category.unreadable_command",
+  by_main_agent: "session.map.decisions.category.by_main_agent",
+  delete_compound: "session.map.decisions.category.delete_compound",
+  credential_change: "session.map.decisions.category.credential_change",
+  script_flagged: "session.map.decisions.category.script_flagged",
+  script_unreadable: "session.map.decisions.category.script_flagged",
+  archived: "session.map.decisions.category.archived",
+  outward_not_in_mission: "session.permission.leavesMachine",
 } as const
 
 // These labels already say Undo cannot help, so the row does not say it twice.
@@ -291,7 +321,41 @@ const NOTE_LABEL = {
   mode_off: "toast.permissions.autonomous.off.title",
   decider_unavailable: "session.map.decisions.category.decider_unavailable",
   queue_full: "session.map.decisions.category.queue_full",
+  bypass_on: "session.map.decisions.note.bypassOn",
+  report: "session.map.decisions.note.report",
 } satisfies Record<DecisionNote["note"], string>
+
+// The first line of a decision in plain words: what was asked, what became of it, who decided and why.
+const WHAT_LABEL = {
+  bash: "session.map.decisions.what.bash",
+  edit: "session.map.decisions.what.edit",
+  write: "session.map.decisions.what.edit",
+  apply_patch: "session.map.decisions.what.edit",
+  read: "session.map.decisions.what.read",
+  external_directory: "session.map.decisions.what.outside",
+  webfetch: "session.map.decisions.what.web",
+  websearch: "session.map.decisions.what.web",
+} as const
+const FILE_PERMISSIONS: readonly string[] = ["edit", "write", "apply_patch", "read"]
+const SUBJECT_MAX = 80
+
+const whatOf = (permission: string) =>
+  permission in WHAT_LABEL ? WHAT_LABEL[permission as keyof typeof WHAT_LABEL] : "session.map.decisions.what.other"
+
+// A file by its path in the project; anything else by its first line, cut short. Text only, as the agent wrote it.
+const subjectOf = (entry: DecisionEntry) => {
+  const first = entry.patterns[0]
+  if (!first) return
+  if (FILE_PERMISSIONS.includes(entry.permission)) return relativePath(first, entry.directory)
+  const line = first.split("\n")[0] ?? ""
+  return line.length > SUBJECT_MAX ? `${line.slice(0, SUBJECT_MAX)}…` : line
+}
+
+const whoOf = (by: string | undefined) => {
+  if (by === "person") return "memory.source.user"
+  if (by === undefined) return "session.map.decisions.by.rules"
+  return by.startsWith("main/") ? "session.map.decisions.by.mainAgent" : "session.map.decisions.by.model"
+}
 
 const RETRY_BASE_MS = 3000
 const RETRY_LIMIT = 3
@@ -304,10 +368,21 @@ export function DecisionRow(props: {
   busy: boolean
   // Only for an entry the mode held whose call offered an "always" (row 258).
   canAlways?: boolean
+  // Where History put it. Waiting is told by `onReply`; without either the entry reads as decided.
+  kind?: "decided" | "limited"
+  /**
+   * Whether Details is shown, held by the list by entry id: the audit is read again about once a second while a run
+   * is live, which draws every row anew, and a row's own state would close Details each time. Without it the row
+   * holds its own.
+   */
+  details?: { open: boolean; toggle: () => void }
   onReply?: (reply: "once" | "always" | "reject") => void
   onUndo: () => void
 }) {
   const language = useLanguage()
+  const [own, setOwn] = createSignal(false)
+  const open = () => (props.details ? props.details.open : own())
+  const toggle = () => (props.details ? props.details.toggle() : setOwn(!own()))
   const category = () => {
     const name = props.entry.category
     return name && name in CATEGORY_LABEL ? CATEGORY_LABEL[name as keyof typeof CATEGORY_LABEL] : undefined
@@ -318,106 +393,162 @@ export function DecisionRow(props: {
   }
   const by = () => (props.entry.by === "person" ? language.t("memory.source.user") : props.entry.by)
   const cannotUndo = () => props.entry.undo === "none" && !SAYS_NO_UNDO.includes(props.entry.category ?? "")
+  const subject = () => subjectOf(props.entry)
+  const state = () => {
+    if (props.onReply) return language.t("session.map.decisions.state.waiting")
+    if (props.kind === "limited")
+      return language.t(
+        props.entry.stopped ? "session.map.decisions.state.stopped" : "session.map.decisions.state.refused",
+      )
+    const key = outcome()
+    return language.t(key ?? "session.map.decisions.state.allowed")
+  }
+  // The main agent's answer for a subagent carries its own reason; everything else says why by its category.
+  const why = () => {
+    if (props.entry.via === "for_subagent") return props.entry.reason
+    const key = category()
+    return key ? language.t(key) : undefined
+  }
   return (
     <div data-decision={props.entry.id} class="flex min-w-0 flex-col gap-1 rounded-[6px] px-2 py-1.5 leading-[18px]">
-      <span class="text-v2-text-text-faint [font-weight:440]">{props.entry.permission}</span>
-      <For each={props.entry.patterns}>
-        {(pattern) => (
-          <span
-            data-decision-pattern
-            class="min-w-0 whitespace-pre-wrap break-all font-mono text-[12px] text-v2-text-text-base"
-          >
-            {pattern}
-          </span>
-        )}
-      </For>
-      <Show when={props.entry.patternsTruncated}>
-        <span class="font-mono text-[12px] text-v2-text-text-faint">…</span>
-      </Show>
-      <For each={props.entry.follows}>
-        {(next) => (
-          <span data-decision-follows class="flex min-w-0 flex-col">
-            <span class="text-v2-text-text-faint [font-weight:440]">{next.permission}</span>
-            <For each={next.patterns}>
-              {(pattern) => (
-                <span class="min-w-0 whitespace-pre-wrap break-all font-mono text-[12px] text-v2-text-text-base">
-                  {pattern}
-                </span>
-              )}
-            </For>
-          </span>
-        )}
-      </For>
-      <For each={props.calls}>
-        {(call) => (
-          <span data-decision-call class="flex min-w-0 flex-col gap-1">
-            <span class="text-v2-text-text-faint [font-weight:440]">{call.tool}</span>
-            <For each={call.args}>
-              {(arg) => (
-                <span class="flex min-w-0 flex-col">
-                  <span class="text-v2-text-text-faint [font-weight:440]">{arg.name}</span>
-                  <span class="max-h-60 min-w-0 overflow-y-auto whitespace-pre-wrap break-all font-mono text-[12px] text-v2-text-text-base">
-                    {arg.value}
-                  </span>
-                </span>
-              )}
-            </For>
-          </span>
-        )}
-      </For>
-      <Show when={category()}>
-        {(key) => <span class="text-v2-text-text-muted [font-weight:440]">{language.t(key())}</span>}
-      </Show>
-      <Show when={props.entry.reason}>
-        {(reason) => (
-          <span
-            data-decision-reason
-            class="min-w-0 whitespace-pre-wrap break-words text-v2-text-text-muted [font-weight:440]"
-          >
-            {reason()}
-          </span>
-        )}
-      </Show>
-      <Show when={by() || outcome()}>
-        <span class="flex flex-wrap items-center gap-x-2 text-v2-text-text-faint [font-weight:440]">
-          <Show when={by()}>{(value) => <span class="min-w-0 break-all">{value()}</span>}</Show>
-          <Show when={outcome()}>{(key) => <span>{language.t(key())}</span>}</Show>
+      <span data-decision-summary class="min-w-0 break-words text-v2-text-text-base [font-weight:440]">
+        <span data-decision-what>
+          {language.t(whatOf(props.entry.permission))}
+          <Show when={subject()}>
+            {(text) => (
+              <>
+                {": "}
+                <span class="break-all font-mono text-[12px]">{text()}</span>
+              </>
+            )}
+          </Show>
         </span>
-      </Show>
-      <Show when={cannotUndo()}>
-        <span data-decision-no-undo class="text-v2-text-text-faint [font-weight:440]">
-          {language.t("session.permission.cannotUndo")}
-        </span>
-      </Show>
-      <Show when={props.onReply}>
-        {(reply) => (
-          <span class="mt-0.5 flex flex-wrap gap-1">
-            <ButtonV2 size="small" variant="contrast" disabled={props.busy} onClick={() => reply()("once")}>
-              {language.t("session.movedOn.allow")}
-            </ButtonV2>
-            <Show when={props.canAlways}>
-              <ButtonV2
-                data-decision-always
-                size="small"
-                variant="ghost"
-                disabled={props.busy}
-                onClick={() => reply()("always")}
-              >
-                {language.t("session.movedOn.alwaysInSession")}
+        {" · "}
+        <span data-decision-state>{state()}</span>
+        {" · "}
+        <span data-decision-who>{language.t(whoOf(props.entry.by))}</span>
+        <Show when={why()}>
+          {(text) => (
+            <>
+              {" · "}
+              <span data-decision-why class="text-v2-text-text-muted">
+                {text()}
+              </span>
+            </>
+          )}
+        </Show>
+      </span>
+      <span class="mt-0.5 flex flex-wrap gap-1">
+        <Show when={props.onReply}>
+          {(reply) => (
+            <>
+              <ButtonV2 size="small" variant="contrast" disabled={props.busy} onClick={() => reply()("once")}>
+                {language.t("session.movedOn.allow")}
               </ButtonV2>
-            </Show>
-            <ButtonV2 size="small" variant="ghost" disabled={props.busy} onClick={() => reply()("reject")}>
-              {language.t("ui.permission.deny")}
-            </ButtonV2>
-          </span>
-        )}
-      </Show>
-      <Show when={props.entry.undo === "button"}>
-        <span class="mt-0.5 flex">
+              <Show when={props.canAlways}>
+                <ButtonV2
+                  data-decision-always
+                  size="small"
+                  variant="ghost"
+                  disabled={props.busy}
+                  onClick={() => reply()("always")}
+                >
+                  {language.t("session.movedOn.alwaysInSession")}
+                </ButtonV2>
+              </Show>
+              <ButtonV2 size="small" variant="ghost" disabled={props.busy} onClick={() => reply()("reject")}>
+                {language.t("ui.permission.deny")}
+              </ButtonV2>
+            </>
+          )}
+        </Show>
+        <Show when={props.entry.undo === "button"}>
           <ButtonV2 data-decision-undo size="small" variant="ghost" disabled={props.busy} onClick={props.onUndo}>
             {language.t("command.session.undo")}
           </ButtonV2>
-        </span>
+        </Show>
+        <ButtonV2
+          data-decision-details-toggle
+          size="small"
+          variant="ghost-muted"
+          aria-expanded={open()}
+          onClick={toggle}
+        >
+          {language.t(open() ? "session.map.decisions.details.hide" : "session.map.decisions.details.show")}
+        </ButtonV2>
+      </span>
+      <Show when={open()}>
+        <div data-decision-details class="flex min-w-0 flex-col gap-1">
+          <span class="text-v2-text-text-faint [font-weight:440]">{props.entry.permission}</span>
+          <For each={props.entry.patterns}>
+            {(pattern) => (
+              <span
+                data-decision-pattern
+                class="min-w-0 whitespace-pre-wrap break-all font-mono text-[12px] text-v2-text-text-base"
+              >
+                {pattern}
+              </span>
+            )}
+          </For>
+          <Show when={props.entry.patternsTruncated}>
+            <span class="font-mono text-[12px] text-v2-text-text-faint">…</span>
+          </Show>
+          <For each={props.entry.follows}>
+            {(next) => (
+              <span data-decision-follows class="flex min-w-0 flex-col">
+                <span class="text-v2-text-text-faint [font-weight:440]">{next.permission}</span>
+                <For each={next.patterns}>
+                  {(pattern) => (
+                    <span class="min-w-0 whitespace-pre-wrap break-all font-mono text-[12px] text-v2-text-text-base">
+                      {pattern}
+                    </span>
+                  )}
+                </For>
+              </span>
+            )}
+          </For>
+          <For each={props.calls}>
+            {(call) => (
+              <span data-decision-call class="flex min-w-0 flex-col gap-1">
+                <span class="text-v2-text-text-faint [font-weight:440]">{call.tool}</span>
+                <For each={call.args}>
+                  {(arg) => (
+                    <span class="flex min-w-0 flex-col">
+                      <span class="text-v2-text-text-faint [font-weight:440]">{arg.name}</span>
+                      <span class="max-h-60 min-w-0 overflow-y-auto whitespace-pre-wrap break-all font-mono text-[12px] text-v2-text-text-base">
+                        {arg.value}
+                      </span>
+                    </span>
+                  )}
+                </For>
+              </span>
+            )}
+          </For>
+          <Show when={category()}>
+            {(key) => <span class="text-v2-text-text-muted [font-weight:440]">{language.t(key())}</span>}
+          </Show>
+          <Show when={props.entry.reason}>
+            {(reason) => (
+              <span
+                data-decision-reason
+                class="min-w-0 whitespace-pre-wrap break-words text-v2-text-text-muted [font-weight:440]"
+              >
+                {reason()}
+              </span>
+            )}
+          </Show>
+          <Show when={by() || outcome()}>
+            <span class="flex flex-wrap items-center gap-x-2 text-v2-text-text-faint [font-weight:440]">
+              <Show when={by()}>{(value) => <span class="min-w-0 break-all">{value()}</span>}</Show>
+              <Show when={outcome()}>{(key) => <span>{language.t(key())}</span>}</Show>
+            </span>
+          </Show>
+          <Show when={cannotUndo()}>
+            <span data-decision-no-undo class="text-v2-text-text-faint [font-weight:440]">
+              {language.t("session.permission.cannotUndo")}
+            </span>
+          </Show>
+        </div>
       </Show>
     </div>
   )
@@ -817,25 +948,24 @@ function createDecisions(rootID: () => string | undefined) {
   }
 }
 
-function DecisionGroup(props: {
-  title: string
+// What waits on the person: the consent list, the archive, then the held entries, oldest first.
+function DecisionWaiting(props: {
   entries: readonly DecisionEntry[]
   decisions: ReturnType<typeof createDecisions>
-  waiting?: boolean
-  directory?: string
+  directory: string
+  details: (id: string) => { open: boolean; toggle: () => void }
 }) {
   const language = useLanguage()
   const dialog = useDialog()
-  const consent = () => (props.waiting ? props.decisions.consent() : undefined)
-  const archive = () => (props.waiting ? props.decisions.archive() : undefined)
+  const consent = () => props.decisions.consent()
+  const archive = () => props.decisions.archive()
   return (
-    <section data-decision-group class="flex flex-col">
-      <h3 class="m-0 px-2 py-1 text-v2-text-text-base [font-weight:530]">{props.title}</h3>
+    <section data-decision-group="waiting" class="flex flex-col">
       <Show when={consent()}>
         {(list) => (
           <ConsentRow
             list={list()}
-            directory={props.directory ?? ""}
+            directory={props.directory}
             ticked={props.decisions.ticked()}
             busy={props.decisions.consentBusy()}
             onTick={props.decisions.tick}
@@ -870,10 +1000,11 @@ function DecisionGroup(props: {
           {(entry) => (
             <DecisionRow
               entry={entry}
-              calls={props.waiting ? props.decisions.calls(entry) : undefined}
-              busy={props.waiting ? props.decisions.replyBusy(entry) : props.decisions.undoBusy(entry)}
-              canAlways={props.waiting && props.decisions.canAlways(entry)}
-              onReply={props.waiting ? (reply) => props.decisions.reply(entry, reply) : undefined}
+              calls={props.decisions.calls(entry)}
+              busy={props.decisions.replyBusy(entry)}
+              canAlways={props.decisions.canAlways(entry)}
+              details={props.details(entry.id)}
+              onReply={(reply) => props.decisions.reply(entry, reply)}
               onUndo={() =>
                 void dialog.show(() => <DialogUndoDecision onConfirm={() => props.decisions.undo(entry)} />)
               }
@@ -885,9 +1016,77 @@ function DecisionGroup(props: {
   )
 }
 
-function DecisionList(props: { decisions: ReturnType<typeof createDecisions>; directory: string }) {
+// Everything decided, refused or noted, as one log, latest on top. One line each; the rest behind Details.
+function DecisionHistory(props: {
+  items: readonly HistoryItem[]
+  decisions: ReturnType<typeof createDecisions>
+  details: (id: string) => { open: boolean; toggle: () => void }
+}) {
+  const language = useLanguage()
+  const dialog = useDialog()
+  return (
+    <section data-decision-group="history" class="flex flex-col">
+      <Show
+        when={props.items.length > 0}
+        fallback={
+          <div class="px-2 py-1 text-v2-text-text-faint [font-weight:440]">
+            {language.t("session.map.filter.empty")}
+          </div>
+        }
+      >
+        <For each={props.items}>
+          {(item) => (
+            <Switch>
+              <Match when={item.kind === "note" ? item.note : undefined}>
+                {(note) => (
+                  <div data-decision-note class="px-2 py-1 text-v2-text-text-faint [font-weight:440]">
+                    {language.t(NOTE_LABEL[note().note])}
+                  </div>
+                )}
+              </Match>
+              <Match when={item.kind !== "note" ? item : undefined}>
+                {(row) => (
+                  <DecisionRow
+                    entry={row().entry}
+                    kind={row().kind}
+                    details={props.details(row().entry.id)}
+                    busy={props.decisions.undoBusy(row().entry)}
+                    onUndo={() =>
+                      void dialog.show(() => <DialogUndoDecision onConfirm={() => props.decisions.undo(row().entry)} />)
+                    }
+                  />
+                )}
+              </Match>
+            </Switch>
+          )}
+        </For>
+      </Show>
+    </section>
+  )
+}
+
+// Exported for the render test, which drives it with a stand-in for `createDecisions`.
+export function DecisionList(props: { decisions: ReturnType<typeof createDecisions>; directory: string }) {
   const language = useLanguage()
   const store = () => props.decisions.store
+  // Reuses the previous item for an unchanged id (review P6), so a refresh draws only new or changed History rows.
+  const history = createMemo<HistoryItem[]>((previous) => {
+    const groups = props.decisions.groups()
+    return groups ? reuseById(previous, historyOf(groups)) : []
+  }, [])
+  // The same for the Waiting rows: an unchanged entry keeps its row across a refresh.
+  const waiting = createMemo<DecisionEntry[]>((previous) => {
+    const groups = props.decisions.groups()
+    return groups ? reuseById(previous, groups.waiting) : []
+  }, [])
+  // Outside the rows, by entry id, so a re-read of the audit (new row objects) leaves Details as the person left it.
+  const [expanded, setExpanded] = createStore<Record<string, boolean>>({})
+  const details = (id: string) => ({
+    get open() {
+      return expanded[id] === true
+    },
+    toggle: () => setExpanded(id, !expanded[id]),
+  })
   return (
     <div data-map-decisions data-scrollable class="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-1.5 pb-1">
       <Show when={store().state?.externalChange.length}>
@@ -918,32 +1117,39 @@ function DecisionList(props: { decisions: ReturnType<typeof createDecisions>; di
       </Show>
       <Show when={props.decisions.groups()}>
         {(groups) => (
-          <>
-            <DecisionGroup
-              title={language.t("session.map.decisions.group.waiting")}
-              entries={groups().waiting}
-              decisions={props.decisions}
-              directory={props.directory}
-              waiting
-            />
-            <DecisionGroup
-              title={language.t("session.map.decisions.group.decided")}
-              entries={groups().decided}
-              decisions={props.decisions}
-            />
-            <DecisionGroup
-              title={language.t("session.map.decisions.group.limited")}
-              entries={groups().limited}
-              decisions={props.decisions}
-            />
-            <For each={groups().notes}>
-              {(note) => (
-                <div data-decision-note class="px-2 text-v2-text-text-faint [font-weight:440]">
-                  {language.t(NOTE_LABEL[note.note])}
-                </div>
-              )}
-            </For>
-          </>
+          <AccordionV2 multiple collapsible defaultValue={["waiting"]}>
+            <AccordionV2.Item value="waiting" data-decision-section="waiting">
+              <AccordionV2.Header>
+                <AccordionV2.Trigger>
+                  <span class="min-w-0 flex-1">{language.t("session.map.decisions.group.waiting")}</span>
+                  <span data-decision-count class="text-v2-text-text-faint">
+                    {groups().waiting.length}
+                  </span>
+                </AccordionV2.Trigger>
+              </AccordionV2.Header>
+              <AccordionV2.Content>
+                <DecisionWaiting
+                  entries={waiting()}
+                  decisions={props.decisions}
+                  directory={props.directory}
+                  details={details}
+                />
+              </AccordionV2.Content>
+            </AccordionV2.Item>
+            <AccordionV2.Item value="history" data-decision-section="history">
+              <AccordionV2.Header>
+                <AccordionV2.Trigger>
+                  <span class="min-w-0 flex-1">{language.t("session.map.decisions.group.history")}</span>
+                  <span data-decision-count class="text-v2-text-text-faint">
+                    {history().length}
+                  </span>
+                </AccordionV2.Trigger>
+              </AccordionV2.Header>
+              <AccordionV2.Content>
+                <DecisionHistory items={history()} decisions={props.decisions} details={details} />
+              </AccordionV2.Content>
+            </AccordionV2.Item>
+          </AccordionV2>
         )}
       </Show>
     </div>

@@ -20,7 +20,15 @@ import {
   terminalInput,
   useSettings,
 } from "@/context/settings"
-import { AUTONOMY_CHANGED } from "@/components/prompt-input/autonomy"
+import {
+  AUTONOMY_CHANGED,
+  nextMode,
+  notBypassed,
+  reportLanguageOf,
+  type AutonomousConsent,
+  type ModeView,
+  type ReportLanguage,
+} from "@/components/prompt-input/autonomy"
 import { playSoundById, SOUND_OPTIONS } from "@/utils/sound"
 import { showToast } from "@/utils/toast"
 import { createSoundPreviewController, type ShellOption } from "./general-controller-behavior"
@@ -29,6 +37,7 @@ export { createShellOptions, createSoundPreviewController } from "./general-cont
 export type { ShellOption, ShellSelectOption } from "./general-controller-behavior"
 
 export type AutonomousScope = { sessionID?: string; directory: string; server?: ServerConnection.Key }
+export type { AutonomousConsent } from "@/components/prompt-input/autonomy"
 
 export function autonomousToast(
   t: (
@@ -56,12 +65,21 @@ export function autonomousToast(
 // The server alone holds the mode. This keeps only its last answer, for as long as the view is open.
 export function createAutonomousToggle(input: {
   scope: Accessor<AutonomousScope | undefined>
-  read: (scope: AutonomousScope) => Promise<boolean>
-  write: (scope: AutonomousScope, on: boolean) => Promise<boolean>
+  /** A plain boolean is a server that does not say whether approvals are bypassed. */
+  read: (scope: AutonomousScope) => Promise<boolean | ModeView>
+  write: (scope: AutonomousScope, on: boolean, consent?: AutonomousConsent) => Promise<boolean | ModeView>
   changed: (on: boolean) => void
   failed: () => void
+  /** Asked before turning on, never before turning off. Without it a turn-on carries no consent (1.1.0). */
+  confirm?: () => Promise<boolean>
+  language?: () => ReportLanguage
 }) {
-  const [state, setState] = createStore({ on: false, known: false, pending: false })
+  const [state, setState] = createStore<{ on: boolean; bypass?: boolean; known: boolean; pending: boolean }>({
+    on: false,
+    known: false,
+    pending: false,
+  })
+  const view = (mode: boolean | ModeView): ModeView => (typeof mode === "boolean" ? { on: mode } : mode)
   // An answer to an earlier scope or an older request is not an answer to this one.
   let run = 0
 
@@ -70,8 +88,9 @@ export function createAutonomousToggle(input: {
     if (!scope || state.pending) return
     const current = ++run
     await input.read(scope).then(
-      (on) => {
-        if (current === run) setState({ on, known: true })
+      (mode) => {
+        const { on, bypass } = view(mode)
+        if (current === run) setState({ on, bypass, known: true })
       },
       () => {
         if (current === run) setState("known", false)
@@ -79,15 +98,21 @@ export function createAutonomousToggle(input: {
     )
   }
 
-  const change = async (next: (scope: AutonomousScope) => Promise<boolean>) => {
+  // Undefined: the person said no, so nothing was sent and nothing is announced.
+  const change = async (next: (scope: AutonomousScope) => Promise<boolean | ModeView | undefined>) => {
     const scope = input.scope()
     if (!scope || state.pending) return
     const current = ++run
     setState("pending", true)
     await next(scope).then(
-      (on) => {
-        input.changed(on)
-        if (current === run) setState({ on, known: true, pending: false })
+      (answer) => {
+        if (answer === undefined) {
+          if (current === run) setState("pending", false)
+          return
+        }
+        const mode = view(answer)
+        input.changed(mode.on)
+        if (current === run) setState({ on: mode.on, bypass: mode.bypass, known: true, pending: false })
       },
       async () => {
         input.failed()
@@ -99,9 +124,16 @@ export function createAutonomousToggle(input: {
     )
   }
 
+  const ask = input.confirm && { confirm: input.confirm, language: () => input.language?.() ?? "en" }
+  // The same rule as the composer's switch (`nextMode`): one place decides when the person is asked.
+  const write = async (scope: AutonomousScope, mode: ModeView, intent: "flip" | "agree" = "flip") => {
+    const next = await nextMode(mode, ask, intent)
+    return next && input.write(scope, next.on, next.consent)
+  }
+
   const load = () => {
     run++
-    setState({ on: false, known: false, pending: false })
+    setState({ on: false, bypass: undefined, known: false, pending: false })
     return refresh()
   }
 
@@ -113,20 +145,33 @@ export function createAutonomousToggle(input: {
 
   return {
     accepting: () => state.on,
+    /** On, but approvals wait for the person again: `agree` asks for the consent; `toggle` still turns it off (m19). */
+    notBypassed: () => state.known && notBypassed(state),
     enabled: () => !!input.scope() && state.known && !state.pending,
     load,
     refresh,
-    set: (checked: boolean) => change((scope) => input.write(scope, checked)),
+    // As if pressed from the other side: `set(true)` always asks (also to agree again), `set(false)` never does.
+    set: (checked: boolean) => change((scope) => write(scope, { on: !checked })),
     // Decides from what the server says now: Settings or the add menu may have changed it since this view last read.
-    toggle: () => change((scope) => input.read(scope).then((on) => input.write(scope, !on))),
+    toggle: () => change((scope) => input.read(scope).then((mode) => write(scope, view(mode)))),
+    // Agree again, only while the server says on but not bypassed; otherwise there is nothing to agree to.
+    agree: () =>
+      change((scope) =>
+        input.read(scope).then((mode) => (notBypassed(view(mode)) ? write(scope, view(mode), "agree") : undefined)),
+      ),
   }
 }
+
+// The session's answer carries `bypass` only from a server that reports it there (AutonomySession).
+const modeOf = (data: { on: boolean; bypass?: boolean }): ModeView => ({ on: data.on, bypass: data.bypass })
 
 export function createAutonomousModeController(input: {
   sessionID: Accessor<string | undefined>
   directory: Accessor<string | undefined>
   /** A draft names its own server, which need not be the selected one. */
   server?: Accessor<ServerConnection.Key | undefined>
+  /** The consent dialog; asked before turning on only. */
+  confirm?: () => Promise<boolean>
 }) {
   const language = useLanguage()
   const global = useGlobal()
@@ -158,14 +203,16 @@ export function createAutonomousModeController(input: {
       scope.sessionID
         ? client(scope)
             .session({ sessionID: scope.sessionID })
-            .then((result) => result.data!.on)
+            .then((result) => modeOf(result.data!))
         : client(scope)
             .mode()
-            .then((result) => result.data!.on),
-    write: (scope, on) =>
+            .then((result) => modeOf(result.data!)),
+    write: (scope, on, consent) =>
       client(scope)
-        .modeUpdate({ on, sessionID: scope.sessionID })
-        .then((result) => result.data!.on),
+        .modeUpdate({ on, sessionID: scope.sessionID, ...consent })
+        .then((result) => modeOf(result.data!)),
+    confirm: input.confirm,
+    language: () => reportLanguageOf(language.locale()),
     changed: (on) => {
       announce()
       showToast(autonomousToast(language.t, on))
