@@ -4,6 +4,8 @@ export type DesktopMenuPlatform = "macos" | "windows"
 
 export type DesktopMenuAction =
   | "app.checkForUpdates"
+  | "app.updateFromFile"
+  | "app.undoLastUpdate"
   | "app.installCli"
   | "app.relaunch"
   | "edit.undo"
@@ -53,7 +55,9 @@ export type DesktopMenuItem = {
   role?: DesktopMenuRole
   href?: string
   accelerator?: Partial<Record<DesktopMenuPlatform, string>>
-  enabled?: "updater"
+  // "updater": electron-updater gate. "patch": signed-patch menu gate
+  // (PATCH_MENU_ENABLED, register 14.5-8), resolved by the desktop main process.
+  enabled?: "updater" | "patch"
   platforms?: DesktopMenuPlatform[]
 }
 
@@ -85,6 +89,8 @@ export const DESKTOP_MENU: DesktopMenu[] = [
         action: "app.checkForUpdates",
         enabled: "updater",
       },
+      { type: "item", labelKey: "desktop.menu.updateFromFile", action: "app.updateFromFile", enabled: "patch" },
+      { type: "item", labelKey: "desktop.menu.undoLastUpdate", action: "app.undoLastUpdate", enabled: "patch" },
       { type: "item", labelKey: "desktop.menu.settings", command: "settings.open", accelerator: { macos: "Cmd+," } },
       { type: "item", labelKey: "desktop.menu.installCli", action: "app.installCli" },
       { type: "item", labelKey: "desktop.menu.reloadWebview", action: "view.reload" },

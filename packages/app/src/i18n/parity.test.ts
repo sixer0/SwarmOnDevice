@@ -121,8 +121,11 @@ const pluralCategories = new Map(
 //   - two more for the 1.1.1 healing loop F3, decision P12 of the same task: the composer's hint when the mode is on
 //     but approvals are not bypassed (`session.autonomy.notBypassed`) and its palette command
 //     (`command.permissions.autonomous.reconsent`).
+//   - twenty-five more for main's native Update from File and Undo Last Update menu items and their dialogs
+//     (`desktop.menu.updateFromFile`, `desktop.menu.undoLastUpdate`, `desktop.patch.*`), register BN-30..BN-54 with
+//     section 14.5 of docs/2026-11-02_swarm_system_patch_updates, row 54.
 // Widening this list is a decision, not drift: `parity-exemption-guard.test.ts` fails the suite on any
-// hundred-and-thirteenth entry, on any non-literal/wildcard, and if `en` or `id` ever stops carrying an exempt key.
+// hundred-and-thirty-eighth entry, on any non-literal/wildcard, and if `en` or `id` ever stops carrying an exempt key.
 const UNTRANSLATED_KEY_PRESENCE_EXEMPTION: readonly string[] = [
   "command.project.openNumber",
   "settings.tab.servers",
@@ -236,6 +239,31 @@ const UNTRANSLATED_KEY_PRESENCE_EXEMPTION: readonly string[] = [
   "session.header.sessions.open",
   "session.autonomy.notBypassed",
   "command.permissions.autonomous.reconsent",
+  "desktop.menu.updateFromFile",
+  "desktop.menu.undoLastUpdate",
+  "desktop.patch.picker.title",
+  "desktop.patch.picker.filter",
+  "desktop.patch.cancel",
+  "desktop.patch.invalid.message",
+  "desktop.patch.invalid.detail",
+  "desktop.patch.newKey.message",
+  "desktop.patch.newKey.detail",
+  "desktop.patch.confirm.message",
+  "desktop.patch.confirm.detail",
+  "desktop.patch.confirm.migration",
+  "desktop.patch.confirm.update",
+  "desktop.patch.undo.confirm.message",
+  "desktop.patch.undo.confirm.detail",
+  "desktop.patch.undo.confirm.undo",
+  "desktop.patch.undo.none.message",
+  "desktop.patch.undo.blocked.message",
+  "desktop.patch.undo.blocked.detail",
+  "desktop.patch.result.updated.message",
+  "desktop.patch.result.undone.message",
+  "desktop.patch.result.failed.message",
+  "desktop.patch.result.failed.detail",
+  "desktop.patch.result.running.detail",
+  "desktop.patch.result.recover.detail",
 ]
 // Locales the exemption never applies to. `en` is every domain's source, and `id` is the second
 // maintained locale: it already carries every exempt key, so it stays fully enforced like the rest.

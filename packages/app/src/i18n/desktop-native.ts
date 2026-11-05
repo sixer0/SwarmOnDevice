@@ -338,6 +338,37 @@ export const DESKTOP_NATIVE_ENGLISH = {
   "desktop.cli.done.detail": "{{path}}",
   "desktop.cli.done.pathHint": "{{path}}\n\n{{dir}} is not on your PATH yet. Add this line to your shell profile:\nexport PATH=\"{{dir}}:$PATH\"",
   "desktop.cli.failed.message": "The swarm command could not be installed",
+  "desktop.menu.updateFromFile": "Update from File…",
+  "desktop.menu.undoLastUpdate": "Undo Last Update",
+  "desktop.patch.picker.title": "Choose a Swarm update file",
+  "desktop.patch.picker.filter": "Swarm update",
+  "desktop.patch.cancel": "Cancel",
+  "desktop.patch.invalid.message": "This update file cannot be used",
+  "desktop.patch.invalid.detail": "{{error}}\n\nNothing was changed.",
+  "desktop.patch.newKey.message": "This update is signed with a different key",
+  "desktop.patch.newKey.detail":
+    "It cannot be installed from the menu. Install it from Terminal after checking the key fingerprint.",
+  "desktop.patch.confirm.message": "Update Swarm to release {{release}}?",
+  "desktop.patch.confirm.detail":
+    "Installed release: {{installed}}\nNew release: {{release}}\nSigning key: {{fingerprint}}\n\nSwarm will quit, install the update and open again.",
+  "desktop.patch.confirm.migration":
+    "This update upgrades your stored data. After it is installed, Undo Last Update will not be possible.",
+  "desktop.patch.confirm.update": "Update",
+  "desktop.patch.undo.confirm.message": "Return to release {{release}}?",
+  "desktop.patch.undo.confirm.detail":
+    "Installed release: {{installed}}\n\nSwarm will quit, restore release {{release}} and open again.",
+  "desktop.patch.undo.confirm.undo": "Undo",
+  "desktop.patch.undo.none.message": "There is no update to undo",
+  "desktop.patch.undo.blocked.message": "The last update cannot be undone",
+  "desktop.patch.undo.blocked.detail": "It upgraded your stored data, which release {{release}} cannot read.",
+  "desktop.patch.result.updated.message": "Swarm was updated to release {{release}}",
+  "desktop.patch.result.undone.message": "Swarm was returned to release {{release}}",
+  "desktop.patch.result.failed.message": "The update was not completed",
+  "desktop.patch.result.failed.detail": "{{error}}",
+  "desktop.patch.result.running.detail":
+    "Swarm, the swarm command or the tools installer was still running, so nothing was changed. Close them and try again.",
+  "desktop.patch.result.recover.detail":
+    "The update stopped partway. Run this command in Terminal to finish it:\n{{command}}",
 } as const
 
 export type DesktopNativeKey = keyof typeof DESKTOP_NATIVE_ENGLISH

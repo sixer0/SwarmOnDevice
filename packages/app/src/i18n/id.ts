@@ -83,6 +83,37 @@ export const dict = {
   "desktop.cli.done.detail": "{{path}}",
   "desktop.cli.done.pathHint": "{{path}}\n\n{{dir}} belum ada di PATH. Tambahkan baris ini ke profil shell Anda:\nexport PATH=\"{{dir}}:$PATH\"",
   "desktop.cli.failed.message": "Perintah swarm tidak dapat dipasang",
+  "desktop.menu.updateFromFile": "Update dari Berkas…",
+  "desktop.menu.undoLastUpdate": "Urungkan Update Terakhir",
+  "desktop.patch.picker.title": "Pilih berkas update Swarm",
+  "desktop.patch.picker.filter": "Update Swarm",
+  "desktop.patch.cancel": "Batal",
+  "desktop.patch.invalid.message": "Berkas update ini tidak dapat dipakai",
+  "desktop.patch.invalid.detail": "{{error}}\n\nTidak ada yang diubah.",
+  "desktop.patch.newKey.message": "Update ini ditandatangani dengan kunci lain",
+  "desktop.patch.newKey.detail":
+    "Update ini tidak dapat dipasang dari menu. Pasang lewat Terminal sesudah mencocokkan fingerprint kunci.",
+  "desktop.patch.confirm.message": "Update Swarm ke rilis {{release}}?",
+  "desktop.patch.confirm.detail":
+    "Rilis terpasang: {{installed}}\nRilis baru: {{release}}\nKunci penanda tangan: {{fingerprint}}\n\nSwarm akan ditutup, memasang update, lalu dibuka lagi.",
+  "desktop.patch.confirm.migration":
+    "Update ini meningkatkan data tersimpan Anda. Sesudah update dipasang, Urungkan Update Terakhir tidak dapat dilakukan.",
+  "desktop.patch.confirm.update": "Update",
+  "desktop.patch.undo.confirm.message": "Kembali ke rilis {{release}}?",
+  "desktop.patch.undo.confirm.detail":
+    "Rilis terpasang: {{installed}}\n\nSwarm akan ditutup, memulihkan rilis {{release}}, lalu dibuka lagi.",
+  "desktop.patch.undo.confirm.undo": "Urungkan",
+  "desktop.patch.undo.none.message": "Tidak ada update yang dapat diurungkan",
+  "desktop.patch.undo.blocked.message": "Update terakhir tidak dapat diurungkan",
+  "desktop.patch.undo.blocked.detail": "Update itu meningkatkan data tersimpan Anda, yang tidak dapat dibaca rilis {{release}}.",
+  "desktop.patch.result.updated.message": "Swarm sudah di-update ke rilis {{release}}",
+  "desktop.patch.result.undone.message": "Swarm sudah dikembalikan ke rilis {{release}}",
+  "desktop.patch.result.failed.message": "Update tidak selesai",
+  "desktop.patch.result.failed.detail": "{{error}}",
+  "desktop.patch.result.running.detail":
+    "Swarm, perintah swarm, atau penginstal alat masih berjalan, jadi tidak ada yang diubah. Tutup semuanya, lalu coba lagi.",
+  "desktop.patch.result.recover.detail":
+    "Update berhenti di tengah jalan. Jalankan perintah ini di Terminal untuk menuntaskannya:\n{{command}}",
 
   "desktop.server.local": "Server lokal",
 
