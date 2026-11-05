@@ -70,6 +70,86 @@ describe("HANDOFF_SCRIPT text", () => {
   test("HO-20 no line reads as a pgrep PID line", () => {
     expect(HANDOFF_SCRIPT.split("\n").filter((l) => /^[1-9][0-9]{0,6}( |$)/.test(l))).toEqual([])
   })
+  // F-CP (C34, C35): Swarm's own crash handler is matched by two exact literals and stopped before every attempt.
+  test("F-CP prefix and database literals, both roots, quoted comparison only", () => {
+    const lines = HANDOFF_SCRIPT.split("\n")
+    const body = lines.slice(lines.indexOf("stopcp() {"), lines.indexOf("}", lines.indexOf("stopcp() {")) + 1).join("\n")
+    expect(body).toContain(
+      '  local list r p line cpid cmd i=0 db=" --database=$HOME/Library/Application Support/id.co.gsp.swarm.desktop/Crashpad "; local -a exe pids left ok',
+    )
+    expect(body).toContain('for r in "$target" "$HOME/Library/Application Support/id.co.gsp.swarm.patch/previous/Swarm.app"; do')
+    expect(body).toContain('exe+=( "$r/Contents/Frameworks/Electron Framework.framework/Helpers/chrome_crashpad_handler" )')
+    // Begins with the prefix (quoted literal + *), holds the database argument (quoted literal between *).
+    expect(body).toContain('[[ $cmd == "$p "* && " $cmd " == *"$db"* ]]; then cpok $cpid && pids+=( $cpid ); break; fi')
+    expect(body).toContain("list=$(/usr/bin/pgrep -lf '.' 2>/dev/null); (( $? < 2 )) || return 0")
+    expect(body).toContain("[[ $cpid != $$ ]] || continue")
+    expect(body).toContain("kill -TERM $pids 2>/dev/null")
+    expect(body).toContain("(( ${#left} && i < 10 )) || break")
+    expect(body).toContain("/bin/sleep 0.5; (( i++ ))")
+    expect(body).toContain("for p in $left; do cpok $p && ok+=( $p ); done")
+    expect(body).toContain("(( ${#ok} )) && kill -KILL $ok 2>/dev/null")
+    // No pattern flags or regex on the paths; the only regex is the pgrep line split.
+    expect(body.includes("${~")).toBe(false)
+    expect(body.match(/=~/g)?.length).toBe(1)
+    expect(body.includes("(#")).toBe(false)
+    // Only the collected pids are signalled.
+    expect(body.split("\n").filter((l) => /\bkill\b/.test(l)).map((l) => l.trim())).toEqual([
+      "kill -TERM $pids 2>/dev/null",
+      "left=(); for p in $pids; do kill -0 $p 2>/dev/null && left+=( $p ); done",
+      "(( ${#ok} )) && kill -KILL $ok 2>/dev/null",
+    ])
+  })
+  // CP-1: a pgrep line is only a candidate (a same-user argv can forge one with a newline); each pid is re-read alone.
+  test("CP-1 cpok re-reads each pid on its own: uid, exact comm, command prefix, whole database argument", () => {
+    const lines = HANDOFF_SCRIPT.split("\n")
+    const start = lines.indexOf("cpok() {")
+    const body = lines.slice(start, lines.indexOf("}", start) + 1).map((l) => l.trim())
+    expect(start).toBeGreaterThan(-1)
+    expect(start).toBeLessThan(lines.indexOf("stopcp() {"))
+    expect(body).toEqual([
+      "cpok() {",
+      "local r u x c",
+      "[[ $1 =~ '^[1-9][0-9]{0,6}$' && $1 != $$ ]] || return 1",
+      "u=$(/bin/ps -p $1 -o uid= 2>/dev/null) || return 1",
+      "[[ $u =~ '^ *([0-9]+)$' && $match[1] == $UID ]] || return 1",
+      "x=$(/bin/ps -ww -p $1 -o comm= 2>/dev/null) || return 1",
+      "c=$(/bin/ps -ww -p $1 -o command= 2>/dev/null) || return 1",
+      'for r in $exe; do [[ $x == "$r" && $c == "$r "* && " $c " == *"$db"* ]] && return 0; done',
+      "return 1",
+      "}",
+    ])
+    // Exactly the two call sites: every candidate before SIGTERM, every survivor before SIGKILL.
+    const calls = lines.filter((l) => /\bcpok \$/.test(l)).map((l) => l.trim())
+    expect(calls).toEqual([
+      'for p in $exe; do if [[ $cmd == "$p "* && " $cmd " == *"$db"* ]]; then cpok $cpid && pids+=( $cpid ); break; fi; done',
+      "for p in $left; do cpok $p && ok+=( $p ); done",
+    ])
+    // Single-pid queries only, no listing-wide ps, no glob or pattern flags on the paths.
+    expect(body.filter((l) => l.includes("/bin/ps")).every((l) => l.includes("/bin/ps") && / -p \$1 -o /.test(l))).toBe(true)
+    expect(body.join("\n").includes("${~")).toBe(false)
+    expect(body.join("\n").includes("(#")).toBe(false)
+  })
+  test("F-CP runs after the main-dead wait and before every attempt, ahead of busy and the applier", () => {
+    const lines = HANDOFF_SCRIPT.split("\n")
+    const wait = lines.indexOf("while kill -0 $pid 2>/dev/null; do")
+    const waitEnd = lines.indexOf("done", wait)
+    const loop = lines.indexOf("  while (( attempts < max )); do")
+    const inc = lines.indexOf("    (( attempts++ ))")
+    const call = lines.indexOf("    stopcp")
+    const busy = lines.findIndex((l) => l.startsWith("    if busy; then"))
+    const applier = lines.findIndex((l) => l.includes('out=$("$@" 2>&1)'))
+    expect(lines.filter((l) => l.trim() === "stopcp")).toHaveLength(1)
+    expect(wait).toBeGreaterThan(lines.indexOf("stopcp() {"))
+    expect([wait < waitEnd, waitEnd < loop, loop < inc, inc + 1 === call, call + 1 === busy, busy <= applier]).toEqual([
+      true, true, true, true, true, true,
+    ])
+  })
+  test("F-CP result line follows the five handoff_* lines", () => {
+    expect(HANDOFF_SCRIPT).toContain(
+      "print -r -- handoff_attempts=$attempts; print -r -- handoff_exit=$rc; print -r -- handoff_crashpad_stopped=$cpn",
+    )
+    expect(HANDOFF_SCRIPT).toContain("action=$4 outcome='' attempts=0 rc='' out='' n=0 cpn=0")
+  })
   test("output cap literal equals HANDOFF_OUTPUT_MAX_BYTES", () => {
     expect(HANDOFF_SCRIPT.includes(`\${out[1,${HANDOFF_OUTPUT_MAX_BYTES}]}`)).toBe(true)
   })
@@ -165,7 +245,7 @@ describe("wrapper in the sandbox", () => {
     main.kill()
     expect(run.status).toBe(0)
     const result = readFileSync(join(ud, "swarm-patch-result"), "utf8")
-    expect(result).toBe("handoff_format=1\nhandoff_action=rollback\nhandoff_outcome=main_alive\nhandoff_attempts=0\nhandoff_exit=\n")
+    expect(result).toBe("handoff_format=1\nhandoff_action=rollback\nhandoff_outcome=main_alive\nhandoff_attempts=0\nhandoff_exit=\nhandoff_crashpad_stopped=0\n")
     expect(statSync(join(ud, "swarm-patch-result")).mode & 0o777).toBe(0o600)
     expect(existsSync(join(T, "applier.log"))).toBe(false)
     expect(readFileSync(join(T, "relaunch.log"), "utf8")).toBe(`${app}\n`)

@@ -30,9 +30,27 @@ export const HANDOFF_OUTPUT_MAX_BYTES = 12000 // R51-6, the literal 12000 in HAN
 //  W3 wait while `kill -0 <main_pid>` succeeds, at most wait_s / poll_s polls, then main_alive (applier never runs).
 //  W4 attempts 1..max: busy() is the 13.5 check (BN-70..BN-73 under the target and the backup), fail closed when
 //     pgrep exits >= 2; otherwise run the applier, stop unless it exited 20.
+//  W4a F-CP (C34, C35): before every attempt, and so only after W3 saw the main PID gone, stopcp() stops Swarm's own
+//     Electron crash handler. The wrapper is spawned by main and keeps main's crash-reporter link, so that handler
+//     stays alive as long as the wrapper does, and the applier's own check (Contents/Frameworks/) would return
+//     E_RUNNING on every attempt. A pgrep -lf line counts only when its command BEGINS with
+//     "<root>/Contents/Frameworks/Electron Framework.framework/Helpers/chrome_crashpad_handler " for <root> = the
+//     target or <state>/previous/Swarm.app, and holds the whole argument
+//     "--database=$HOME/Library/Application Support/id.co.gsp.swarm.desktop/Crashpad"; the wrapper's own PID is
+//     skipped. Quoted literals only, no glob or regex on the paths, as in busy(). CP-1: a listing line is only a
+//     candidate, because a same-user process can put a newline in its own argv and forge a line naming any pid.
+//     cpok() re-reads each candidate pid on its own, from that pid's own process record: `ps -p <pid> -o uid=` must
+//     be $UID, `ps -ww -p <pid> -o comm=` must equal the handler path exactly, and `ps -ww -p <pid> -o command=`
+//     must begin with that path plus a space and hold the whole database argument. A forger can only make its OWN
+//     pid pass (self-harm); it cannot change another pid's record. On macOS comm mirrors argv[0] (checked on this
+//     Mac, row 77), so it is a consistency check, not an independent one. PPID is not used: crash handlers are
+//     reparented to launchd (ppid 1), as is any double-forked process. Verified PIDs get SIGTERM, are polled with
+//     kill -0 for up to 5 s (10 x 0.5 s), then any left are verified again and only those get SIGKILL. No other
+//     process is ever signalled (other apps' crash handlers have another path or another database). The count of
+//     verified PIDs goes to handoff_crashpad_stopped.
 //  W5 the applier runs as a grandchild (command-substitution subshell), so the main PID is never its ancestor.
 //  W6 result file: remove <result>.new, create it exclusively without following a link (D52-6, 14.5-9), write the five
-//     handoff_* lines and at most 12000 bytes of applier output, then mv over <result>. A planted link or directory at
+//     handoff_* lines, then handoff_crashpad_stopped=<count> (F-CP, additive: R5 ignores it), and at most 12000 bytes of applier output, then mv over <result>. A planted link or directory at
 //     <result> is removed or left alone, never written through. The move uses `mv -h` (row 32 N-1), so a link
 //     planted at <result> after the check is replaced, never followed into a directory. Any failure skips to W7
 //     without a result file.
@@ -62,7 +80,7 @@ export const HANDOFF_SCRIPT =
     "else exit 2; fi",
     "applier=$3 want=$target/Contents/Resources/swarm-patch/swarm-patch",
     "[[ -f $applier && -f $want && $applier:A == $want:A ]] || exit 2",
-    "action=$4 outcome='' attempts=0 rc='' out='' n=0",
+    "action=$4 outcome='' attempts=0 rc='' out='' n=0 cpn=0",
     "busy() {",
     "  local list r p line pid2='' cmd=''; local -a pre",
     '  for r in "$target" "$HOME/Library/Application Support/id.co.gsp.swarm.patch/previous/Swarm.app"; do',
@@ -76,6 +94,40 @@ export const HANDOFF_SCRIPT =
     "  done",
     "  return 1",
     "}",
+    "cpok() {",
+    "  local r u x c",
+    "  [[ $1 =~ '^[1-9][0-9]{0,6}$' && $1 != $$ ]] || return 1",
+    "  u=$(/bin/ps -p $1 -o uid= 2>/dev/null) || return 1",
+    "  [[ $u =~ '^ *([0-9]+)$' && $match[1] == $UID ]] || return 1",
+    "  x=$(/bin/ps -ww -p $1 -o comm= 2>/dev/null) || return 1",
+    "  c=$(/bin/ps -ww -p $1 -o command= 2>/dev/null) || return 1",
+    '  for r in $exe; do [[ $x == "$r" && $c == "$r "* && " $c " == *"$db"* ]] && return 0; done',
+    "  return 1",
+    "}",
+    "stopcp() {",
+    '  local list r p line cpid cmd i=0 db=" --database=$HOME/Library/Application Support/id.co.gsp.swarm.desktop/Crashpad "; local -a exe pids left ok',
+    '  for r in "$target" "$HOME/Library/Application Support/id.co.gsp.swarm.patch/previous/Swarm.app"; do',
+    '    exe+=( "$r/Contents/Frameworks/Electron Framework.framework/Helpers/chrome_crashpad_handler" )',
+    "  done",
+    "  list=$(/usr/bin/pgrep -lf '.' 2>/dev/null); (( $? < 2 )) || return 0",
+    '  for line in "${(@f)list}"; do',
+    "    [[ $line =~ '^([1-9][0-9]{0,6}) (.*)$' ]] || continue",
+    "    cpid=$match[1] cmd=$match[2]",
+    "    [[ $cpid != $$ ]] || continue",
+    '    for p in $exe; do if [[ $cmd == "$p "* && " $cmd " == *"$db"* ]]; then cpok $cpid && pids+=( $cpid ); break; fi; done',
+    "  done",
+    "  (( ${#pids} )) || return 0",
+    "  kill -TERM $pids 2>/dev/null",
+    "  while :; do",
+    "    left=(); for p in $pids; do kill -0 $p 2>/dev/null && left+=( $p ); done",
+    "    (( ${#left} && i < 10 )) || break",
+    "    /bin/sleep 0.5; (( i++ ))",
+    "  done",
+    "  for p in $left; do cpok $p && ok+=( $p ); done",
+    "  (( ${#ok} )) && kill -KILL $ok 2>/dev/null",
+    "  (( cpn += ${#pids} ))",
+    "  return 0",
+    "}",
     "while kill -0 $pid 2>/dev/null; do",
     "  if (( n >= wait_s / poll )); then outcome=main_alive; break; fi",
     "  /bin/sleep $poll; (( n++ ))",
@@ -83,6 +135,7 @@ export const HANDOFF_SCRIPT =
     "if [[ -z $outcome ]]; then",
     "  while (( attempts < max )); do",
     "    (( attempts++ ))",
+    "    stopcp",
     "    if busy; then outcome=still_running rc='' out=''",
     '    else out=$("$@" 2>&1); rc=$?; outcome=ran; (( rc == 20 )) || break; fi',
     "    (( attempts < max )) && /bin/sleep $delay",
@@ -92,7 +145,7 @@ export const HANDOFF_SCRIPT =
     '/bin/rm -f -- "$new" 2>/dev/null',
     'if sysopen -w -m 600 -o excl,creat,nofollow -u fd "$new" 2>/dev/null; then',
     "  { print -r -- handoff_format=1; print -r -- handoff_action=$action; print -r -- handoff_outcome=$outcome",
-    "    print -r -- handoff_attempts=$attempts; print -r -- handoff_exit=$rc",
+    "    print -r -- handoff_attempts=$attempts; print -r -- handoff_exit=$rc; print -r -- handoff_crashpad_stopped=$cpn",
     '    [[ -z $out ]] || print -r -- "${out[1,12000]}"; } >&$fd 2>/dev/null; wrote=$?',
     "  exec {fd}>&-",
     "  if (( wrote == 0 )); then",

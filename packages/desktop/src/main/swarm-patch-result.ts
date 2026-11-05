@@ -145,6 +145,16 @@ export function parsePatchResult(bytes: Uint8Array): PatchResultFile | undefined
   }
 }
 
+// F-LOG (C35): the result block as one log-safe line. At most HANDOFF_RESULT_MAX_BYTES bytes are decoded (invalid
+// UTF-8 becomes U+FFFD, never an exception); a backslash and every Unicode Cc character, LF included, are escaped
+// (\\, \n, \uXXXX), so the block cannot add lines or terminal sequences to the log.
+export function escapeResultBlock(bytes: Uint8Array) {
+  const text = new TextDecoder("utf-8").decode(bytes.subarray(0, HANDOFF_RESULT_MAX_BYTES))
+  return text.replace(/[\\\u0000-\u001f\u007f-\u009f]/g, (c) =>
+    c === "\\" ? "\\\\" : c === "\n" ? "\\n" : `\\u${c.charCodeAt(0).toString(16).padStart(4, "0")}`,
+  )
+}
+
 // zsh ${(qq)x}: single quotes, an embedded ' written as '\'' (the applier quotes recover_command this way, :873).
 export function zshSingleQuote(value: string) {
   return `'${value.replaceAll("'", `'\\''`)}'`
@@ -291,7 +301,8 @@ export function createPatchResultReader(input: {
   // S-1 `status` of this bundle's own applier: resolves to its `release`, or undefined when status failed (R7).
   // Row 60 wires the S-1 implementation of rows 56/59; only called when a success dialog is possible.
   installedRelease: () => Promise<string | undefined>
-  // Persistent log (row 60: logging.ts `write("swarm-patch", ...)`). Never given file content.
+  // Persistent log (row 60: logging.ts `write("swarm-patch", ...)`). Given file content only as the escaped block of a
+  // file that passed R4 (F-LOG, C35).
   log: PatchResultLog
   fs?: PatchResultFs
   homeDir?: () => string
@@ -324,6 +335,11 @@ export function createPatchResultReader(input: {
     if (taken.state !== "taken") return { shown: false, reason: taken.state }
 
     const file = taken.bytes ? parsePatchResult(taken.bytes) : undefined
+    // F-LOG (C35): a valid block is logged whole (escaped, bounded) so a failure keeps the applier's own S11 line in
+    // swarm-patch.log. R2 still holds: the path was removed before validation (takeResultFile); these are the bytes
+    // read from the fd of the removed file, so nothing is lost by the removal. A block that fails R4 is not logged.
+    if (file && taken.bytes)
+      input.log("update result file", { bytes: taken.bytes.length, block: escapeResultBlock(taken.bytes) }, "info")
     const successPossible =
       file?.outcome === "ran" &&
       file.exit === 0 &&

@@ -9,6 +9,7 @@ import { nativeT } from "./native-translations"
 import {
   computeRecoverCommand,
   createPatchResultReader,
+  escapeResultBlock,
   HANDOFF_RESULT_FILE_NAME,
   HANDOFF_RESULT_MAX_BYTES,
   parsePatchResult,
@@ -270,8 +271,10 @@ describe("UM-19 broken files", () => {
       expect(r.dialogs[0]).toMatchObject(failedOnly)
       expect(r.dialogs[0]!.detail).toBeUndefined()
       expect(existsSync(FILE)).toBe(false)
-      // File content is never logged.
-      expect(JSON.stringify(r.logs)).not.toContain("handoff_format")
+      // File content is logged only as the escaped block of a file whose header passed R4 (F-LOG, C35).
+      if (parsePatchResult(Buffer.from(content)))
+        expect(r.logs.filter((l) => l.message === "update result file")).toHaveLength(1)
+      else expect(JSON.stringify(r.logs)).not.toContain("handoff_format")
     })
 
   test("exactly 16384 bytes is still read", async () => {
@@ -496,5 +499,59 @@ describe("parsePatchResult", () => {
       release: undefined,
       error: { name: "E_HASH", line: "swarm-patch: E_HASH: two" },
     })
+  })
+})
+
+// ---- F-CP result line and F-LOG (C34, C35) ---------------------------------------------------------------------------
+
+describe("F-CP handoff_crashpad_stopped line", () => {
+  test("the sixth line is accepted and ignored by R5; the header and values are unchanged", () => {
+    const base = header({ exit: "20" }) + "swarm-patch: E_RUNNING: Swarm is running (pid 79687); quit Swarm and try again\n"
+    const withLine = header({ exit: "20" }) + "handoff_crashpad_stopped=1\n" + base.split("\n").slice(5).join("\n")
+    expect(parsePatchResult(Buffer.from(withLine))).toEqual(parsePatchResult(Buffer.from(base)))
+    expect(parsePatchResult(Buffer.from(withLine))!.error!.name).toBe("E_RUNNING")
+  })
+})
+
+describe("F-LOG result block in the log", () => {
+  test("a valid block is logged whole, escaped, at info, and the file is removed", async () => {
+    const s11 = "swarm-patch: E_RUNNING: Swarm is running (pid 79687); quit Swarm and try again"
+    const text = header({ exit: "20", attempts: "10" }) + "handoff_crashpad_stopped=0\n" + s11 + "\n"
+    writeFileSync(FILE, text)
+    const r = reader()
+    await r.read()
+    expect(existsSync(FILE)).toBe(false)
+    const block = r.logs.filter((l) => l.message === "update result file")
+    expect(block).toEqual([
+      { message: "update result file", extra: { bytes: Buffer.byteLength(text), block: text.replaceAll("\n", "\\n") }, level: "info" },
+    ])
+    expect(block[0]!.extra!.block as string).toContain(s11)
+    // Logged before the dialog summary line.
+    expect(r.logs.findIndex((l) => l.message === "update result file")).toBeLessThan(r.logs.findIndex((l) => l.message === "update result"))
+  })
+
+  test("control characters, a backslash and invalid UTF-8 in later lines are escaped, never raw", async () => {
+    const tail = Buffer.concat([Buffer.from("noise \x1b[2J \\ \u0085 x"), Buffer.from([0xff]), Buffer.from("\n")])
+    writeFileSync(FILE, Buffer.concat([Buffer.from(header() + "result=applied\nrelease=1.1.3\n"), tail]))
+    const r = reader()
+    await r.read()
+    const block = r.logs.find((l) => l.message === "update result file")!.extra!.block as string
+    expect(block).toContain("noise \\u001b[2J \\\\ \\u0085 x\ufffd\\n")
+    expect(/[\u0000-\u001f\u007f-\u009f]/.test(block)).toBe(false)
+    expect(r.dialogs[0]!.type).toBe("info")
+  })
+
+  test("escapeResultBlock is bounded by HANDOFF_RESULT_MAX_BYTES", () => {
+    const out = escapeResultBlock(Buffer.alloc(HANDOFF_RESULT_MAX_BYTES + 100, 0x61))
+    expect(out.length).toBe(HANDOFF_RESULT_MAX_BYTES)
+  })
+
+  test("a file that fails R4 is not logged", async () => {
+    writeFileSync(FILE, header({ format: "2" }) + "swarm-patch: E_RUNNING: x\n")
+    const r = reader()
+    await r.read()
+    expect(existsSync(FILE)).toBe(false)
+    expect(r.logs.some((l) => l.message === "update result file")).toBe(false)
+    expect(JSON.stringify(r.logs)).not.toContain("handoff_format")
   })
 })

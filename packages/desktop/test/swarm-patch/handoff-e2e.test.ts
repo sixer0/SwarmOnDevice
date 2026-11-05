@@ -710,3 +710,153 @@ test("HO-21 (D52-7): applier outside the target is refused; a symlink resolving 
     await afterMain(b, list)
     await relaunchedOnce(b, b.target, list)
   }))
+
+// ---- F-CP (C34, C35): Swarm's own Electron crash handler is stopped after main died, before each attempt ----------
+
+const CRASHPAD = ["Contents", "Frameworks", "Electron Framework.framework", "Helpers", "chrome_crashpad_handler"]
+const CRASHPAD_DB = ["Library", "Application Support", "id.co.gsp.swarm.desktop", "Crashpad"]
+const crashpadAt = (root: string) => path.join(root, ...CRASHPAD)
+const swarmDb = (home: string) => path.join(home, ...CRASHPAD_DB)
+
+/**
+ * Decoy crash handler: `exec -a <argv0>` makes pgrep -lf show `<argv0> -c <loop> --database=<db>`, so the command
+ * BEGINS with the handler path as the real one does. With `ignoreTerm` the shell ignores SIGTERM (SIGKILL path).
+ * The loop sleeps 1 s at a time, so no child outlives the shell by more than a second.
+ */
+async function crashpadDecoy(argv0: string, database: string, ignoreTerm = false) {
+  const loop = `${ignoreTerm ? "trap '' TERM" : "trap 'exit 0' TERM"}; while :; do sleep 1; done`
+  return patternProcess(
+    ["/bin/zsh", "-fc", 'exec -a "$1" /bin/sh -c "$2" "$3"', "decoy", argv0, loop, `--database=${database}`],
+    `${argv0} -c `,
+  )
+}
+
+const gone = async (proc: ReturnType<typeof Bun.spawn>, ms = 2000) =>
+  (await Promise.race([proc.exited.then(() => true), Bun.sleep(ms).then(() => false)])) as boolean
+
+async function stopDecoys(list: ReturnType<typeof Bun.spawn>[]) {
+  for (const p of list) {
+    p.kill("SIGKILL")
+    await p.exited
+  }
+}
+
+const crashpadLine = async (b: Box) => (await fs.readFile(b.result, "utf8")).split("\n")[5]
+
+test("F-CP (real applier): Swarm's crash handler under the target is stopped, applied on attempt 1", () =>
+  withEnv(async (e) => {
+    await writeRelaunch(e.root)
+    const target = await installApp(e)
+    const b = layout(e.root, e.home, target)
+    await fs.mkdir(b.ud, { recursive: true })
+    const p = await pkg(e, await buildApp(e, { release: "1.1.1" }))
+    expect(await swarmRelease(target)).toBe("1.1.0")
+    const decoy = await crashpadDecoy(crashpadAt(target), swarmDb(e.home))
+    try {
+      const main = await fakeMain(b, 0.5)
+      const s = viaModule(b, { action: "apply", packagePath: p.path, acceptForwardMigration: false }, main.pid, {
+        maxAttempts: 3,
+      })
+      expect((await wrapper(b, s)).code).toBe(0)
+      expect(await gone(decoy)).toBe(true)
+      const r = await resultHead(b)
+      expect(r.head).toEqual(head("apply", "ran", 1, "0"))
+      expect(await crashpadLine(b)).toBe("handoff_crashpad_stopped=1")
+      expect(r.text).toContain("result=applied")
+      expect(await swarmRelease(target)).toBe("1.1.1")
+      await relaunchedOnce(b, target)
+    } finally {
+      await stopDecoys([decoy])
+    }
+  }))
+
+test("F-CP (real applier): other crash handlers survive; the applier still sees them, ran:20 as before", () =>
+  withEnv(async (e) => {
+    await writeRelaunch(e.root)
+    const target = await installApp(e)
+    const b = layout(e.root, e.home, target)
+    await fs.mkdir(b.ud, { recursive: true })
+    const p = await pkg(e, await buildApp(e, { release: "1.1.1" }))
+    const before = await treeHash(target)
+    const handler = crashpadAt(target)
+    const decoys = [
+      // Same path, another app's database (Chrome, VS Code and other Electron apps have their own).
+      await crashpadDecoy(handler, path.join(e.home, "Library", "Application Support", "com.example.other", "Crashpad")),
+      // Swarm's database name as the start of a longer argument: not the whole argument.
+      await crashpadDecoy(handler, swarmDb(e.home) + "2"),
+      // Swarm's database under another app path.
+      await crashpadDecoy(crashpadAt(path.join(e.root, "apps", "Other.app")), swarmDb(e.home)),
+      // The handler path and database only as later arguments (the command does not begin with them).
+      await patternProcess(["/bin/sh", "-c", "sleep 120; :", handler, `--database=${swarmDb(e.home)}`], handler),
+    ]
+    try {
+      const main = await fakeMain(b, 0.5)
+      const s = viaModule(b, { action: "apply", packagePath: p.path, acceptForwardMigration: false }, main.pid, {
+        maxAttempts: 2,
+        retryDelayS: 0.2,
+      })
+      expect((await wrapper(b, s)).code).toBe(0)
+      for (const d of decoys) expect(d.exitCode).toBeNull()
+      const r = await resultHead(b)
+      expect(r.head).toEqual(head("apply", "ran", 2, "20"))
+      expect(await crashpadLine(b)).toBe("handoff_crashpad_stopped=0")
+      expect(r.text).toContain("swarm-patch: E_RUNNING: ")
+      expect(await treeHash(target)).toBe(before)
+      await relaunchedOnce(b, target)
+    } finally {
+      await stopDecoys(decoys)
+    }
+  }))
+
+test("F-CP (stub): handler under <state>/previous/Swarm.app stopped; one that ignores SIGTERM gets SIGKILL after 5 s", () =>
+  withBox(async (b) => {
+    const db = swarmDb(b.home)
+    const polite = await crashpadDecoy(crashpadAt(b.target), db)
+    const stubborn = await crashpadDecoy(crashpadAt(path.join(b.home, ...PREVIOUS)), db, true)
+    try {
+      const main = await fakeMain(b, 0.3)
+      const start = Date.now() / 1000
+      expect((await wrapper(b, viaModule(b, apply(b), main.pid))).code).toBe(0)
+      expect(await gone(polite, 100)).toBe(true)
+      expect(await gone(stubborn, 100)).toBe(true)
+      expect(polite.exitCode).toBe(0)
+      expect(stubborn.signalCode).toBe("SIGKILL")
+      const list = await calls(b)
+      expect(list.length).toBe(1)
+      const died = await afterMain(b, list)
+      // The SIGKILL came only after the 5 s poll, and the applier only after that.
+      expect(list[0]!.t - Math.max(died, start)).toBeGreaterThanOrEqual(4.5)
+      expect((await resultHead(b)).head).toEqual(head("apply", "ran", 1, "0"))
+      expect(await crashpadLine(b)).toBe("handoff_crashpad_stopped=2")
+      await relaunchedOnce(b, b.target, list)
+    } finally {
+      await stopDecoys([polite, stubborn])
+    }
+  }))
+
+// CP-1 (row 76): a same-user process puts a newline in its own argv, so pgrep -lf prints a forged line
+// "<victim pid> <handler path> --database=<Swarm db>" for an unrelated `sleep` it does not own the argv of. The
+// per-pid recheck (cpok: uid, comm, command of that pid alone) must reject it: the sleep survives, nothing counted.
+test("CP-1 (stub): a newline-forged pgrep line naming an unrelated sleep pid is never signalled", () =>
+  withBox(async (b) => {
+    const handler = crashpadAt(b.target)
+    const victim = Bun.spawn(["/bin/sleep", "120"], { stdout: "ignore", stderr: "ignore", env: { PATH: CHILD_PATH } })
+    const forged = `${victim.pid} ${handler} --database=${swarmDb(b.home)} --x`
+    const forger = await patternProcess(["/bin/zsh", "-fc", "while :; do sleep 1; done", "forger", `x\n${forged}`], "forger x")
+    try {
+      // The forged line is really in the listing the wrapper parses, so this case exercises the attack.
+      const listing = (await run(["/usr/bin/pgrep", "-lf", "."])).stdout.split("\n")
+      expect(listing).toContain(forged)
+      const main = await fakeMain(b, 0.3)
+      expect((await wrapper(b, viaModule(b, apply(b), main.pid))).code).toBe(0)
+      expect(victim.exitCode).toBeNull()
+      expect(victim.signalCode).toBeNull()
+      expect(forger.exitCode).toBeNull()
+      expect(Bun.spawnSync(["/bin/kill", "-0", String(victim.pid)]).exitCode).toBe(0)
+      expect((await resultHead(b)).head).toEqual(head("apply", "ran", 1, "0"))
+      expect(await crashpadLine(b)).toBe("handoff_crashpad_stopped=0")
+      await relaunchedOnce(b, b.target)
+    } finally {
+      await stopDecoys([forger, victim])
+    }
+  }))
