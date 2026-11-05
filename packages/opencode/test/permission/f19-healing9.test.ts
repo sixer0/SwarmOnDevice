@@ -21,6 +21,7 @@ import type { InstanceContext } from "../../src/project/instance-context"
 import { readSteps } from "../../src/tool/shell"
 import { tmpdir } from "../fixture/fixture"
 import { expectBareFrom } from "./install-fixture"
+import { ARCHIVE_FIRST, answerOf } from "./consented-literals"
 
 type Input = AutonomyTable.Input
 type Verdict = AutonomyTable.Verdict
@@ -70,13 +71,30 @@ const subagent = (input: Input) => AutonomyTable.classify({ ...input, bypass: { 
 const opened = (verdict: Verdict): Verdict =>
   verdict.class === "A" ? verdict : { class: "A", decidedBy: "agent", category: "by_main_agent", bypassed: verdict.category }
 
-async function keeps(commands: readonly string[], cwd: string, scope: InstanceContext) {
+// 1.1.3 (T9 G8, code review M2): the consented verdicts are stated literally, with the agent's answer text; nothing here
+// computes them with the code under test (`noWait`, `destinationsOf`).
+type Shape = { class: string; category?: string; bypassed?: string; destination?: string; answer?: string }
+const RUNS = (bypassed: string): Shape => ({ class: "A", category: "by_main_agent", bypassed })
+const REDIRECTED: Shape = { class: "X", category: "not_reversible", bypassed: "not_routine", answer: ARCHIVE_FIRST }
+const shape = (verdict: Verdict): Shape => ({
+  class: verdict.class,
+  category: verdict.category,
+  bypassed: verdict.bypassed,
+  destination: verdict.destination,
+  answer: answerOf(verdict),
+})
+
+async function keeps(commands: readonly string[], cwd: string, scope: InstanceContext, expected: Shape, except: Record<string, Shape> = {}) {
   for (const command of commands) {
     const input = await sh(command, cwd, scope)
     const before = base(input)
     expect([command, before.class === "A"]).toEqual([command, false])
-    expect([command, root(input)]).toEqual([command, before])
-    expect([command, subagent(input)]).toEqual([command, before])
+    // 1.1.3 (spec section 3 rule 5; matrix rows 3, 8, 16-23, 31): the overlay keeps the 1.1.0 verdict, and under consent
+    // that kept verdict no longer waits: a D or P runs as the main agent's, a deletion or replacement is redirected to the
+    // archive method at once, an X stays. `expected` states it literally; `except` names the cases that differ.
+    const want = except[command] ?? expected
+    expect([command, shape(root(input))]).toEqual([command, want])
+    expect([command, shape(subagent(input))]).toEqual([command, want])
   }
 }
 
@@ -117,14 +135,14 @@ describe("principle 1 (S8-1): the step's folder by its real path", () => {
 
   test("a folder reached through a link to a folder under another manifest is judged by that manifest", async () => {
     // From the link itself, and through a `cd` into it.
-    await keeps(["npm install", "bun install", "npm run build", "pnpm run build"], path.join(dir, "lnk"), gitScope(dir))
-    await keeps(["cd lnk && npm install", "cd lnk && npm run build"], dir, gitScope(dir))
+    await keeps(["npm install", "bun install", "npm run build", "pnpm run build"], path.join(dir, "lnk"), gitScope(dir), RUNS("not_routine"), { "npm run build": RUNS("check"), "pnpm run build": RUNS("check") })
+    await keeps(["cd lnk && npm install", "cd lnk && npm run build"], dir, gitScope(dir), RUNS("not_routine"), { "cd lnk && npm run build": RUNS("check") })
   })
 
   test("near miss: a link to a folder under a manifest whose hooks pass opens", async () => {
     await opens(["npm install", "npm run build"], path.join(dir, "clean"), gitScope(dir))
     // 1.1.1 F20 (P34, S9-2): a `cd` through a link keeps 1.1.0 (a shell set to resolve links lands elsewhere).
-    await keeps(["cd clean && npm install"], dir, gitScope(dir))
+    await keeps(["cd clean && npm install"], dir, gitScope(dir), RUNS("not_routine"))
     // And the project's own folder, as before.
     await opens(["npm install", "npm run build"], dir, gitScope(dir))
   })
@@ -136,7 +154,7 @@ describe("principle 1 (S8-1): the step's folder by its real path", () => {
     write(dir, "src/a.ts", "x\n")
     write(dir, "node_modules/.bin/prettier", "#!/bin/sh\n")
     fs.symlinkSync(path.join(outside, "a/b"), path.join(dir, "out"))
-    await keeps(["prettier --check out/../x.ts"], dir, gitScope(dir))
+    await keeps(["prettier --check out/../x.ts"], dir, gitScope(dir), RUNS("not_routine"))
     // Near miss: a step back that stays inside by both readings.
     await opens(["prettier --check src/../src/a.ts"], dir, gitScope(dir))
   })
@@ -173,6 +191,7 @@ describe("principle 2 (S8-3): a change of the tree beside a step that writes", (
       ],
       dir,
       gitScope(dir),
+      RUNS("not_routine"), { "git checkout main && cp src/a.ts src/c.ts": REDIRECTED },
     )
   })
 
@@ -212,13 +231,14 @@ describe("S8-2, S8-4, G7-1: listeners, cargo's separator, placeholder tokens", (
       ],
       dir,
       gitScope(dir),
+      RUNS("not_routine"),
     )
     // Near misses: the plain runs.
     await opens(["vitest run", "bun test", "vitest run --coverage"], dir, gitScope(dir))
   })
 
   test("S8-4: cargo with a `--` keeps 1.1.0", async () => {
-    await keeps(["cargo clippy -- -o x", "cargo test -- --nocapture", "cargo fmt -- --emit files", "cargo check --"], dir, gitScope(dir))
+    await keeps(["cargo clippy -- -o x", "cargo test -- --nocapture", "cargo fmt -- --emit files", "cargo check --"], dir, gitScope(dir), RUNS("not_routine"))
     await opens(["cargo clippy", "cargo test", "cargo check"], dir, gitScope(dir))
   })
 
@@ -227,6 +247,7 @@ describe("S8-2, S8-4, G7-1: listeners, cargo's separator, placeholder tokens", (
       ["jest --modulePaths '<rootDir>/../x'", "jest '--prettierPath=<rootDir>/../x'", "jest '--modulePaths=<rootDir>'"],
       dir,
       gitScope(dir),
+      RUNS("not_routine"),
     )
     // 1.1.1 F20 (CR9-3): only jest expands its root-dir token; to prettier `<rootDir>` is a folder name like any other.
     await opens(["jest --modulePaths src", "prettier --check src/a.ts", "prettier --check '<rootDir>/src'"], dir, gitScope(dir))

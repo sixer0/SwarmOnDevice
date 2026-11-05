@@ -19,6 +19,7 @@ import type { InstanceContext } from "../../src/project/instance-context"
 import { Reach } from "../../src/tool/reach"
 import { Risk } from "../../src/tool/risk"
 import { readSteps } from "../../src/tool/shell"
+import { ADMIN_RIGHTS, ARCHIVE_FIRST, CREDENTIAL_CHANGE, DELETE_COMPOUND, IRREVERSIBLE_ARCHIVE, OUTSIDE_WRITE, answerOf } from "./consented-literals"
 import { tmpdir } from "../fixture/fixture"
 
 type Input = AutonomyTable.Input
@@ -74,6 +75,14 @@ const root = (given: Input) => AutonomyTable.classify({ ...given, bypass: { call
 const subagent = (given: Input) => AutonomyTable.classify({ ...given, bypass: { caller: "subagent" } })
 const short = (verdict: Verdict) => [verdict.class, verdict.category, verdict.destination]
 
+/** 1.1.3 (T9 G8): a literal consented verdict per case: class, category, `bypassed`, destination, and the agent's answer. */
+type Want = { verdict: [string, string, string | undefined, string | undefined]; answer: string | undefined }
+const RUNS = (bypassed: string, destination?: string): Want => ({ verdict: ["A", "by_main_agent", bypassed, destination], answer: undefined })
+const REFUSED = (category: string, bypassed: string | undefined, answer: string): Want => ({ verdict: ["X", category, bypassed, undefined], answer })
+function expectWant(label: string, verdict: Verdict, want: Want) {
+  expect([label, verdict.class, verdict.category, verdict.bypassed, verdict.destination, answerOf(verdict)]).toEqual([label, ...want.verdict, want.answer])
+}
+
 /** Opens for the root and a subagent alike, to `destination`; the no-consent verdict is not A and has no destination. */
 function expectOpens(given: Input, destination: string) {
   const label = String(given.metadata.command ?? given.metadata.url)
@@ -84,19 +93,24 @@ function expectOpens(given: Input, destination: string) {
   // The gate finds the same places again (S1.36).
   expect([label, AutonomyTable.consentOutward({ ...given, bypass: { caller: "root" } })?.join(", ")]).toEqual([label, destination])
 }
-/** Held for a person as a send (by the screen, `outward`, or as 1.1.0 had it), with no destination. */
-function expectHeldSend(given: Input) {
+/**
+ * Held as a send (by the screen, `outward`, or as 1.1.0 had it). 1.1.3 (matrix rows 2, 15, spec section 3 rule 5): that
+ * hold no longer waits; the call runs as the main agent's, recorded as the send category it was held on, with the places
+ * `consentOutward` finds, else (T7 F1) the host the call names (`destinationsOf`, pinned in f113-fixes-f1-f4).
+ */
+function expectHeldSend(given: Input, want: Want) {
   const label = String(given.metadata.command ?? given.metadata.url)
-  for (const verdict of [root(given), subagent(given)]) {
-    expect([label, verdict.class, verdict.destination]).toEqual([label, "D", undefined])
-    expect([label, ["outward", "outward_not_in_mission"].includes(verdict.category ?? "")]).toEqual([label, true])
-  }
+  for (const verdict of [root(given), subagent(given)]) expectWant(label, verdict, want)
 }
-/** Not opened: the root and a subagent get `consented`, and no destination. */
-function expectKept(given: Input, consented: [string, string]) {
+/**
+ * Not opened by the overlay, which keeps `consented`. 1.1.3 (spec section 3 `noWait`; matrix rows 2, 15, 3, 31): a kept D
+ * no longer waits; it runs as the main agent's with `bypassed` = that category, or is redirected to the archive method
+ * when it deletes or replaces. An X stays. T9 G8: the consented verdict is stated literally per case (`want`).
+ */
+function expectKept(given: Input, consented: [string, string], want: Want) {
   const label = String(given.metadata.command ?? given.metadata.url)
-  for (const verdict of [root(given), subagent(given)])
-    expect([label, short(verdict)]).toEqual([label, [...consented, undefined]])
+  expect([label, consented.length]).toEqual([label, 2])
+  for (const verdict of [root(given), subagent(given)]) expectWant(label, verdict, want)
 }
 
 const snapshotOf = (dir: string, remotes = ["origin"]): OutwardKnown.Snapshot => ({
@@ -139,7 +153,7 @@ describe("F26 item 1: requests to local and named hosts", () => {
     expectOpens(await sh("curl http://192.168.1.20:9000", dir), "192.168.1.20:9000")
     expectOpens(await sh("curl http://172.20.1.1", dir), "172.20.1.1")
     // 1.1.1 F33 (P49 1): no link-local IPv4 address opens any more (f33-outward.test.ts).
-    expectHeldSend(await sh("curl http://169.254.10.20/latest", dir))
+    expectHeldSend(await sh("curl http://169.254.10.20/latest", dir), RUNS("outward", "169.254.10.20"))
     expectOpens(await sh("curl -g 'http://[::1]:3000/'", dir), "::1:3000")
     expectOpens(await sh("curl http://db:5432", dir), "db:5432")
     expectOpens(await sh("curl http://printer.local/", dir), "printer.local")
@@ -167,24 +181,24 @@ describe("F26 item 1: requests to local and named hosts", () => {
 
   test("the webfetch tool", async () => {
     expectOpens(fetchInput("http://localhost:3000/", dir), "localhost:3000")
-    expectKept(fetchInput("https://example.com/", dir), ["D", "outward_not_in_mission"])
+    expectKept(fetchInput("https://example.com/", dir), ["D", "outward_not_in_mission"], RUNS("outward_not_in_mission", "example.com"))
     expectOpens(fetchInput("https://example.com/docs", dir, named("example.com")), "example.com")
   })
 
   test("a remote host is held unless the person named it; a named parent with a wildcard covers names below it", async () => {
-    expectKept(await sh("curl https://example.com", dir), ["D", "outward"])
-    expectKept(await sh("curl http://8.8.8.8/", dir), ["D", "outward"])
+    expectKept(await sh("curl https://example.com", dir), ["D", "outward"], RUNS("outward", "example.com"))
+    expectKept(await sh("curl http://8.8.8.8/", dir), ["D", "outward"], RUNS("outward", "8.8.8.8"))
     // Carrier-grade NAT (a tailnet address) is not local.
-    expectKept(await sh("curl http://100.102.23.27:8000/v1", dir), ["D", "outward"])
-    expectKept(await sh("curl http://0x08080808/", dir), ["D", "outward"])
+    expectKept(await sh("curl http://100.102.23.27:8000/v1", dir), ["D", "outward"], RUNS("outward", "100.102.23.27:8000"))
+    expectKept(await sh("curl http://0x08080808/", dir), ["D", "outward"], RUNS("outward", "8.8.8.8"))
     expectOpens(await sh("curl https://api.example.com/v1", dir, named("api.example.com")), "api.example.com")
     // Exact: a named host does not cover another host below or beside it.
-    expectKept(await sh("curl https://evil.api.example.com/", dir, named("api.example.com")), ["D", "outward"])
-    expectKept(await sh("curl https://example.com.evil.io/", dir, named("example.com")), ["D", "outward"])
+    expectKept(await sh("curl https://evil.api.example.com/", dir, named("api.example.com")), ["D", "outward"], RUNS("outward", "evil.api.example.com"))
+    expectKept(await sh("curl https://example.com.evil.io/", dir, named("example.com")), ["D", "outward"], RUNS("outward", "example.com.evil.io"))
     expectOpens(await sh("curl https://a.b.example.com/", dir, named("*.example.com")), "a.b.example.com")
     expectOpens(await sh("curl https://example.com/", dir, named("*.example.com")), "example.com")
     // One remote host held holds the whole call.
-    expectKept(await sh("curl http://localhost:3000 https://example.com", dir), ["D", "outward"])
+    expectKept(await sh("curl http://localhost:3000 https://example.com", dir), ["D", "outward"], RUNS("outward", "localhost:3000, example.com"))
     // Ticked in the consent list.
     const ticked: AutonomyTable.Outward = { allowed: [{ id: "d1", destination: { kind: "host", host: "api.acme.io" } }] }
     expectOpens(await sh("curl https://api.acme.io/x", dir, ticked), "api.acme.io")
@@ -195,12 +209,12 @@ describe("F26 item 1: requests to local and named hosts", () => {
   })
 
   test("an option this does not read, a proxy, another scheme or a range keeps the hold", async () => {
-    expectKept(await sh("curl -x http://proxy.example.com:3128 http://localhost:3000", dir), ["D", "outward"])
-    expectKept(await sh("curl --resolve localhost:80:1.2.3.4 http://localhost", dir), ["D", "outward"])
-    expectKept(await sh("curl ftp://localhost/x", dir), ["D", "outward"])
-    expectKept(await sh("curl file:///etc/passwd", dir), ["D", "outward"])
-    expectKept(await sh("curl 'http://localhost:3000/{a,b}'", dir), ["D", "outward"])
-    expectKept(await sh("HTTPS_PROXY=http://evil.io curl http://localhost:3000", dir), ["D", "unreadable_command"])
+    expectKept(await sh("curl -x http://proxy.example.com:3128 http://localhost:3000", dir), ["D", "outward"], RUNS("outward", "proxy.example.com:3128, localhost:3000"))
+    expectKept(await sh("curl --resolve localhost:80:1.2.3.4 http://localhost", dir), ["D", "outward"], RUNS("outward", "localhost"))
+    expectKept(await sh("curl ftp://localhost/x", dir), ["D", "outward"], RUNS("outward"))
+    expectKept(await sh("curl file:///etc/passwd", dir), ["D", "outward"], RUNS("outward"))
+    expectKept(await sh("curl 'http://localhost:3000/{a,b}'", dir), ["D", "outward"], RUNS("outward"))
+    expectKept(await sh("HTTPS_PROXY=http://evil.io curl http://localhost:3000", dir), ["D", "unreadable_command"], RUNS("unreadable_command"))
   })
 
   test("without consent nothing changes", async () => {
@@ -239,14 +253,14 @@ describe("F26 item 2: uploads from disk stay held", () => {
       "http POST :3000/up X-Key:@src/a.ts",
       "xh --form :3000/up file@src/a.ts",
     ]
-    for (const command of forms) expectKept(await sh(command, dir), ["D", "outward"])
+    for (const command of forms) expectKept(await sh(command, dir), ["D", "outward"], RUNS("outward", "localhost:3000"))
   })
 
   test("stdin from a file, or httpie reading a pipe, stays held", async () => {
-    expectKept(await sh("curl -d @- http://localhost:3000/up < src/a.ts", dir), ["D", "outward"])
-    expectKept(await sh("curl http://localhost:3000/up < src/a.ts", dir), ["D", "outward"])
-    expectKept(await sh("http POST :3000/up < src/a.ts", dir), ["D", "outward"])
-    expectKept(await sh("cat src/a.ts | http POST :3000/up", dir), ["D", "outward"])
+    expectKept(await sh("curl -d @- http://localhost:3000/up < src/a.ts", dir), ["D", "outward"], RUNS("outward", "localhost:3000"))
+    expectKept(await sh("curl http://localhost:3000/up < src/a.ts", dir), ["D", "outward"], RUNS("outward", "localhost:3000"))
+    expectKept(await sh("http POST :3000/up < src/a.ts", dir), ["D", "outward"], RUNS("outward", "localhost:3000"))
+    expectKept(await sh("cat src/a.ts | http POST :3000/up", dir), ["D", "outward"], RUNS("outward", "localhost:3000"))
     // Told to ignore stdin, a pipe into it sends nothing more.
     expectOpens(await sh("echo hi | http --ignore-stdin POST :3000/up a=1", dir), "localhost:3000")
   })
@@ -280,14 +294,14 @@ describe("F26 item 3: push, publish, image push, deploy", () => {
 
   test("an unknown remote, a URL, --repo, a changed remote, no recheck or two remotes and none named keep the hold", async () => {
     // 1.1.1 F30 (G12-7): a name that is no remote of the repository is refused, as a URL is.
-    expectKept(await sh("git push evil main", dir, pushing(dir, ok(dir))), ["X", "credential_change"])
-    expectKept(await sh("git push origin main", dir, pushing(dir, { ok: false, reason: "url_changed" })), ["D", "outward"])
-    expectKept(await sh("git push origin main", dir, pushing(dir, { ok: false, reason: "account_changed" })), ["D", "outward"])
-    expectKept(await sh("git push origin main", dir, { allowed: [], snapshot: snapshotOf(dir) }), ["D", "outward"])
-    expectKept(await sh("git push origin main", dir), ["D", "outward"])
-    expectKept(await sh("git push", dir, pushing(dir, ok(dir), ["origin", "fork"])), ["D", "outward"])
-    expectKept(await sh("git push --repo=origin", dir, pushing(dir, ok(dir))), ["D", "outward"])
-    expectKept(await sh("git push https://github.com/x/y main", dir, pushing(dir, ok(dir))), ["X", "credential_change"])
+    expectKept(await sh("git push evil main", dir, pushing(dir, ok(dir))), ["X", "credential_change"], REFUSED("credential_change", undefined, CREDENTIAL_CHANGE))
+    expectKept(await sh("git push origin main", dir, pushing(dir, { ok: false, reason: "url_changed" })), ["D", "outward"], RUNS("outward", "origin"))
+    expectKept(await sh("git push origin main", dir, pushing(dir, { ok: false, reason: "account_changed" })), ["D", "outward"], RUNS("outward", "origin"))
+    expectKept(await sh("git push origin main", dir, { allowed: [], snapshot: snapshotOf(dir) }), ["D", "outward"], RUNS("outward", "origin"))
+    expectKept(await sh("git push origin main", dir), ["D", "outward"], RUNS("outward", "origin"))
+    expectKept(await sh("git push", dir, pushing(dir, ok(dir), ["origin", "fork"])), ["D", "outward"], RUNS("outward"))
+    expectKept(await sh("git push --repo=origin", dir, pushing(dir, ok(dir))), ["D", "outward"], RUNS("outward"))
+    expectKept(await sh("git push https://github.com/x/y main", dir, pushing(dir, ok(dir))), ["X", "credential_change"], REFUSED("credential_change", undefined, CREDENTIAL_CHANGE))
   })
 
   test("force, mirror, delete and history rewrites stay refused", async () => {
@@ -300,13 +314,13 @@ describe("F26 item 3: push, publish, image push, deploy", () => {
       "git push --delete origin topic",
       "git push origin :topic",
     ])
-      expectKept(await sh(command, dir, pushing(dir, ok(dir))), ["X", "irreversible"])
+      expectKept(await sh(command, dir, pushing(dir, ok(dir))), ["X", "irreversible"], REFUSED("irreversible", undefined, IRREVERSIBLE_ARCHIVE))
   })
 
   test("publish, image push, deploy, pull request and release open with their target", async () => {
     expectOpens(await sh("npm publish", dir), "registry.npmjs.org")
     // 1.1.1 F33 (P49 3): a registry option holds, also when the person named that registry.
-    expectHeldSend(await sh("npm publish --access public --registry https://npm.acme.io/", dir, named("npm.acme.io")))
+    expectHeldSend(await sh("npm publish --access public --registry https://npm.acme.io/", dir, named("npm.acme.io")), RUNS("outward"))
     expectOpens(await sh("npm publish --access public", dir), "registry.npmjs.org")
     expectOpens(await sh("bun publish", dir), "registry.npmjs.org")
     expectOpens(await sh("pnpm publish", dir), "registry.npmjs.org")
@@ -332,19 +346,20 @@ describe("F26 item 3: push, publish, image push, deploy", () => {
     expectOpens(await sh("gh release create v1.0.0 --notes 'first'", dir), "github release")
   })
 
-  test("a publish hook nobody can vouch for, a local build hook, notes or assets from disk keep the hold", async () => {
+  test("a publish hook nobody can vouch for, a local build hook, notes or assets from disk keep the hold; vercel rm is refused (T9 G3)", async () => {
     const other = await temp()
     await gitInit(other)
     write(other, "package.json", JSON.stringify({ name: "q", version: "1.0.0", scripts: { prepublishOnly: "node scripts/evil.js" } }))
-    expectHeldSend(await sh("npm publish", other))
+    expectHeldSend(await sh("npm publish", other), RUNS("outward_not_in_mission", "registry.npmjs.org"))
     write(other, "firebase.json", JSON.stringify({ hosting: { predeploy: ["node x.js"] } }))
-    expectHeldSend(await sh("firebase deploy", other))
-    expectHeldSend(await sh("netlify deploy --build", dir))
-    expectHeldSend(await sh("gh pr create --body-file notes.md", dir))
-    expectHeldSend(await sh("gh release create v1 dist/app.tgz", dir))
-    expectHeldSend(await sh("gh release create v1 --notes-file notes.md", dir))
-    expectHeldSend(await sh("vercel rm my-app", dir))
-    expectHeldSend(await sh("npm publish ../elsewhere", dir))
+    expectHeldSend(await sh("firebase deploy", other), RUNS("outward"))
+    expectHeldSend(await sh("netlify deploy --build", dir), RUNS("outward"))
+    expectHeldSend(await sh("gh pr create --body-file notes.md", dir), RUNS("outward"))
+    expectHeldSend(await sh("gh release create v1 dist/app.tgz", dir), RUNS("outward"))
+    expectHeldSend(await sh("gh release create v1 --notes-file notes.md", dir), RUNS("outward"))
+    // 1.1.3 (T9 G3, T10): `vercel rm` deletes a remote resource, so it is refused at once with the archive way.
+    expectHeldSend(await sh("vercel rm my-app", dir), REFUSED("irreversible", "outward", IRREVERSIBLE_ARCHIVE))
+    expectHeldSend(await sh("npm publish ../elsewhere", dir), RUNS("outward"))
   })
 
   test("firebase deploy without hooks opens", async () => {
@@ -416,6 +431,9 @@ describe("P43: the formatter link scan skips folders the tool never walks", () =
     const given = await sh("npx eslint --fix .", at)
     expect(short(root(given)).slice(0, 2)).toEqual(["A", "by_main_agent"])
     fs.symlinkSync("/tmp", path.join(at, "src", "lnk"))
-    expect(root(await sh("npx eslint --fix .", at)).class).not.toBe("A")
+    // Not opened by the overlay; 1.1.3 (matrix rows 8, 22): that kept verdict no longer waits, it runs as the main agent's.
+    const linked = await sh("npx eslint --fix .", at)
+    expect(base(linked).class).not.toBe("A")
+    expectWant("npx eslint --fix . (linked)", root(linked), RUNS("not_routine"))
   })
 })

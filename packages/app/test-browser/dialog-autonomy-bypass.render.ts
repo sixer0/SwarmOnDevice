@@ -122,6 +122,7 @@ describe("the consent dialog before autonomous mode turns on", () => {
 })
 
 // Gate 2 N2 / P15: the Indonesian text keeps loanwords in italics, so the dialog shows them as <em> and no asterisk.
+// 1.1.3 row 5: the list follows the rewritten intro, archive, refused, waits and report texts.
 describe("the consent text in Indonesian", () => {
   const keys = [
     "dialog.autonomyBypass.intro",
@@ -140,23 +141,14 @@ describe("the consent text in Indonesian", () => {
     expect([...host.querySelectorAll("em")].map((item) => item.textContent)).toEqual([
       "bypass",
       "build",
-      "build",
-      "Script",
       "force push",
-      "cloud",
+      "snapshot",
       "upload",
-      "Token",
+      "token",
       "force",
-      "remote",
-      "push",
-      "image",
-      "Deploy",
       "deploy",
-      "build",
-      "deploy",
-      "Publish",
-      "Push",
-      "remote",
+      "publish",
+      "script",
     ])
     expect(host.textContent).not.toContain("*")
   })

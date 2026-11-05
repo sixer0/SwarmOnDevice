@@ -21,6 +21,7 @@ import { Risk } from "../../src/tool/risk"
 import { readSteps } from "../../src/tool/shell"
 import { DeletionWords } from "../../src/tool/deletion"
 import { tmpdir } from "../fixture/fixture"
+import { IRREVERSIBLE_ARCHIVE, answerOf } from "./consented-literals"
 
 type Input = AutonomyTable.Input
 type Verdict = AutonomyTable.Verdict
@@ -91,8 +92,28 @@ async function prefixed(prefix: string[], command: string, dir: string): Promise
 const root = (given: Input) => AutonomyTable.classify({ ...given, bypass: { caller: "root" } })
 const subagent = (given: Input) => AutonomyTable.classify({ ...given, bypass: { caller: "subagent" } })
 const base = (given: Input) => AutonomyTable.classify(given)
+/**
+ * 1.1.3 (spec section 3 `noWait`; matrix rows 2, 15, 8, 22, 3, 24-27, 31): a call the overlay does not open no longer
+ * waits. It is refused at once (X), or it runs as the main agent's with `bypassed` = the category it was held on, recording
+ * where it sends as each case states it (G8). Before 1.1.3 this asserted "not A".
+ */
+const unopened = (verdict: AutonomyTable.Verdict) =>
+  verdict.class === "X" || (verdict.class === "A" && verdict.category === "by_main_agent" && verdict.bypassed !== undefined)
 const short = (verdict: Verdict) => [verdict.class, verdict.category, verdict.destination]
 const label = (given: Input) => String(given.metadata.command)
+/**
+ * 1.1.3 (decision T9 G8): the consented verdict each case expects, written out: class, category, `bypassed`, destination,
+ * and the words the agent is told (undefined when it runs). Spec section 3 rule 5 and T7 F1: a kept D/P runs as the main
+ * agent's with `bypassed` = the category it was held on, recording where it sends when the call names it.
+ */
+type Want = readonly [cls: string, category: string | undefined, bypassed: string | undefined, destination: string | undefined, answer: string | undefined]
+const RUNS = (bypassed: string, destination?: string): Want => ["A", "by_main_agent", bypassed, destination, undefined]
+const IRREVERSIBLE: Want = ["X", "irreversible", undefined, undefined, IRREVERSIBLE_ARCHIVE]
+type Wants = Want | Readonly<Record<string, Want>>
+const shape = (verdict: Verdict): Want => [verdict.class, verdict.category, verdict.bypassed, verdict.destination, answerOf(verdict)]
+function wanted(given: Input, wants: Wants): Want | undefined {
+  return Array.isArray(wants) ? (wants as Want) : (wants as Readonly<Record<string, Want>>)[label(given)]
+}
 function expectOpens(given: Input, destination?: string) {
   for (const verdict of [root(given), subagent(given)])
     expect([label(given), short(verdict)]).toEqual([label(given), ["A", "by_main_agent", destination]])
@@ -109,16 +130,19 @@ function formOf(given: Input) {
   return found === undefined ? "none" : "held" in found ? found.held : "opens"
 }
 /** Neither the root nor a subagent opens it, and the rule named held it: "form" (the publish's own reading) or "call". */
-function expectHeld(given: Input, rule: "form" | "call", why = "") {
+function expectHeld(given: Input, rule: "form" | "call", why: string, wants: Wants) {
   for (const verdict of [root(given), subagent(given)])
-    expect([label(given), why, verdict.class === "A", verdict.destination]).toEqual([label(given), why, false, undefined])
+    expect([label(given), why, shape(verdict)] as unknown[]).toEqual([label(given), why, wanted(given, wants)])
   expect([label(given), why, formOf(given)]).toEqual([label(given), why, rule === "form" ? "form" : "opens"])
 }
-/** The consent does not open the call: it waits as it did in 1.1.0 (the reason may be the screen's own, P8). */
-function expectKept(given: Input) {
-  const kept = base(given).class
-  expect([label(given), kept]).not.toEqual([label(given), "A"])
-  for (const verdict of [root(given), subagent(given)]) expect([label(given), verdict.class]).toEqual([label(given), kept])
+/**
+ * The consent does not open the call: the overlay keeps it as it was in 1.1.0 (the reason may be the screen's own, P8).
+ * 1.1.3 (spec section 3 `noWait`; matrix rows 2, 8, 22, 31): that kept verdict no longer waits.
+ */
+function expectKept(given: Input, wants: Wants) {
+  const kept = base(given)
+  expect([label(given), kept.class]).not.toEqual([label(given), "A"])
+  for (const verdict of [root(given), subagent(given)]) expect([label(given), shape(verdict)] as unknown[]).toEqual([label(given), wanted(given, wants)])
 }
 
 const home = () => process.env.HOME || os.homedir()
@@ -164,6 +188,117 @@ afterAll(async () => {
   for (const made of temps) await made[Symbol.asyncDispose]()
 })
 
+/** 1.1.3 (T9 G8): the consented verdict of each call of the loop below, literally. */
+const WANTS_1: Readonly<Record<string, Want>> = {
+  "git merge other && uv publish": RUNS("not_routine"),
+  "git merge other; uv publish": RUNS("not_routine"),
+  "uv publish && git merge other": RUNS("not_routine"),
+  "git merge --ff-only other && uv publish": RUNS("not_routine"),
+  "git merge --ff-only other; uv publish": RUNS("not_routine"),
+  "uv publish && git merge --ff-only other": RUNS("not_routine"),
+  "git switch other && uv publish": RUNS("not_routine"),
+  "git switch other; uv publish": RUNS("not_routine"),
+  "uv publish && git switch other": RUNS("not_routine"),
+  "git checkout other && uv publish": RUNS("not_routine"),
+  "git checkout other; uv publish": RUNS("not_routine"),
+  "uv publish && git checkout other": RUNS("not_routine"),
+  "git stash pop && uv publish": RUNS("not_routine"),
+  "git stash pop; uv publish": RUNS("not_routine"),
+  "uv publish && git stash pop": RUNS("not_routine"),
+  "git stash apply && uv publish": RUNS("not_routine"),
+  "git stash apply; uv publish": RUNS("not_routine"),
+  "uv publish && git stash apply": RUNS("not_routine"),
+  "git merge other && poetry publish": RUNS("not_routine"),
+  "git merge other; poetry publish": RUNS("not_routine"),
+  "poetry publish && git merge other": RUNS("not_routine"),
+  "git merge --ff-only other && poetry publish": RUNS("not_routine"),
+  "git merge --ff-only other; poetry publish": RUNS("not_routine"),
+  "poetry publish && git merge --ff-only other": RUNS("not_routine"),
+  "git switch other && poetry publish": RUNS("not_routine"),
+  "git switch other; poetry publish": RUNS("not_routine"),
+  "poetry publish && git switch other": RUNS("not_routine"),
+  "git checkout other && poetry publish": RUNS("not_routine"),
+  "git checkout other; poetry publish": RUNS("not_routine"),
+  "poetry publish && git checkout other": RUNS("not_routine"),
+  "git stash pop && poetry publish": RUNS("not_routine"),
+  "git stash pop; poetry publish": RUNS("not_routine"),
+  "poetry publish && git stash pop": RUNS("not_routine"),
+  "git stash apply && poetry publish": RUNS("not_routine"),
+  "git stash apply; poetry publish": RUNS("not_routine"),
+  "poetry publish && git stash apply": RUNS("not_routine"),
+  "git merge other && twine upload dist/x-0.1.0.tar.gz": RUNS("outward_not_in_mission", "pypi.org"),
+  "git merge other; twine upload dist/x-0.1.0.tar.gz": RUNS("outward_not_in_mission", "pypi.org"),
+  "twine upload dist/x-0.1.0.tar.gz && git merge other": RUNS("outward_not_in_mission", "pypi.org"),
+  "git merge --ff-only other && twine upload dist/x-0.1.0.tar.gz": RUNS("outward_not_in_mission", "pypi.org"),
+  "git merge --ff-only other; twine upload dist/x-0.1.0.tar.gz": RUNS("outward_not_in_mission", "pypi.org"),
+  "twine upload dist/x-0.1.0.tar.gz && git merge --ff-only other": RUNS("outward_not_in_mission", "pypi.org"),
+  "git switch other && twine upload dist/x-0.1.0.tar.gz": RUNS("outward_not_in_mission", "pypi.org"),
+  "git switch other; twine upload dist/x-0.1.0.tar.gz": RUNS("outward_not_in_mission", "pypi.org"),
+  "twine upload dist/x-0.1.0.tar.gz && git switch other": RUNS("outward_not_in_mission", "pypi.org"),
+  "git checkout other && twine upload dist/x-0.1.0.tar.gz": RUNS("outward_not_in_mission", "pypi.org"),
+  "git checkout other; twine upload dist/x-0.1.0.tar.gz": RUNS("outward_not_in_mission", "pypi.org"),
+  "twine upload dist/x-0.1.0.tar.gz && git checkout other": RUNS("outward_not_in_mission", "pypi.org"),
+  "git stash pop && twine upload dist/x-0.1.0.tar.gz": RUNS("outward_not_in_mission", "pypi.org"),
+  "git stash pop; twine upload dist/x-0.1.0.tar.gz": RUNS("outward_not_in_mission", "pypi.org"),
+  "twine upload dist/x-0.1.0.tar.gz && git stash pop": RUNS("outward_not_in_mission", "pypi.org"),
+  "git stash apply && twine upload dist/x-0.1.0.tar.gz": RUNS("outward_not_in_mission", "pypi.org"),
+  "git stash apply; twine upload dist/x-0.1.0.tar.gz": RUNS("outward_not_in_mission", "pypi.org"),
+  "twine upload dist/x-0.1.0.tar.gz && git stash apply": RUNS("outward_not_in_mission", "pypi.org"),
+  "git merge other && cargo publish": RUNS("outward_not_in_mission", "crates.io"),
+  "git merge other; cargo publish": RUNS("outward_not_in_mission", "crates.io"),
+  "cargo publish && git merge other": RUNS("outward_not_in_mission", "crates.io"),
+  "git merge --ff-only other && cargo publish": RUNS("outward_not_in_mission", "crates.io"),
+  "git merge --ff-only other; cargo publish": RUNS("outward_not_in_mission", "crates.io"),
+  "cargo publish && git merge --ff-only other": RUNS("outward_not_in_mission", "crates.io"),
+  "git switch other && cargo publish": RUNS("outward_not_in_mission", "crates.io"),
+  "git switch other; cargo publish": RUNS("outward_not_in_mission", "crates.io"),
+  "cargo publish && git switch other": RUNS("outward_not_in_mission", "crates.io"),
+  "git checkout other && cargo publish": RUNS("outward_not_in_mission", "crates.io"),
+  "git checkout other; cargo publish": RUNS("outward_not_in_mission", "crates.io"),
+  "cargo publish && git checkout other": RUNS("outward_not_in_mission", "crates.io"),
+  "git stash pop && cargo publish": RUNS("outward_not_in_mission", "crates.io"),
+  "git stash pop; cargo publish": RUNS("outward_not_in_mission", "crates.io"),
+  "cargo publish && git stash pop": RUNS("outward_not_in_mission", "crates.io"),
+  "git stash apply && cargo publish": RUNS("outward_not_in_mission", "crates.io"),
+  "git stash apply; cargo publish": RUNS("outward_not_in_mission", "crates.io"),
+  "cargo publish && git stash apply": RUNS("outward_not_in_mission", "crates.io"),
+  "git merge other && netlify deploy --prod --no-build --dir dist": RUNS("outward_not_in_mission", "netlify"),
+  "git merge other; netlify deploy --prod --no-build --dir dist": RUNS("outward_not_in_mission", "netlify"),
+  "netlify deploy --prod --no-build --dir dist && git merge other": RUNS("outward_not_in_mission", "netlify"),
+  "git merge --ff-only other && netlify deploy --prod --no-build --dir dist": RUNS("outward_not_in_mission", "netlify"),
+  "git merge --ff-only other; netlify deploy --prod --no-build --dir dist": RUNS("outward_not_in_mission", "netlify"),
+  "netlify deploy --prod --no-build --dir dist && git merge --ff-only other": RUNS("outward_not_in_mission", "netlify"),
+  "git switch other && netlify deploy --prod --no-build --dir dist": RUNS("outward_not_in_mission", "netlify"),
+  "git switch other; netlify deploy --prod --no-build --dir dist": RUNS("outward_not_in_mission", "netlify"),
+  "netlify deploy --prod --no-build --dir dist && git switch other": RUNS("outward_not_in_mission", "netlify"),
+  "git checkout other && netlify deploy --prod --no-build --dir dist": RUNS("outward_not_in_mission", "netlify"),
+  "git checkout other; netlify deploy --prod --no-build --dir dist": RUNS("outward_not_in_mission", "netlify"),
+  "netlify deploy --prod --no-build --dir dist && git checkout other": RUNS("outward_not_in_mission", "netlify"),
+  "git stash pop && netlify deploy --prod --no-build --dir dist": RUNS("outward_not_in_mission", "netlify"),
+  "git stash pop; netlify deploy --prod --no-build --dir dist": RUNS("outward_not_in_mission", "netlify"),
+  "netlify deploy --prod --no-build --dir dist && git stash pop": RUNS("outward_not_in_mission", "netlify"),
+  "git stash apply && netlify deploy --prod --no-build --dir dist": RUNS("outward_not_in_mission", "netlify"),
+  "git stash apply; netlify deploy --prod --no-build --dir dist": RUNS("outward_not_in_mission", "netlify"),
+  "netlify deploy --prod --no-build --dir dist && git stash apply": RUNS("outward_not_in_mission", "netlify"),
+  "git merge other && firebase deploy --only hosting": RUNS("not_routine"),
+  "git merge other; firebase deploy --only hosting": RUNS("not_routine"),
+  "firebase deploy --only hosting && git merge other": RUNS("not_routine"),
+  "git merge --ff-only other && firebase deploy --only hosting": RUNS("not_routine"),
+  "git merge --ff-only other; firebase deploy --only hosting": RUNS("not_routine"),
+  "firebase deploy --only hosting && git merge --ff-only other": RUNS("not_routine"),
+  "git switch other && firebase deploy --only hosting": RUNS("not_routine"),
+  "git switch other; firebase deploy --only hosting": RUNS("not_routine"),
+  "firebase deploy --only hosting && git switch other": RUNS("not_routine"),
+  "git checkout other && firebase deploy --only hosting": RUNS("not_routine"),
+  "git checkout other; firebase deploy --only hosting": RUNS("not_routine"),
+  "firebase deploy --only hosting && git checkout other": RUNS("not_routine"),
+  "git stash pop && firebase deploy --only hosting": RUNS("not_routine"),
+  "git stash pop; firebase deploy --only hosting": RUNS("not_routine"),
+  "firebase deploy --only hosting && git stash pop": RUNS("not_routine"),
+  "git stash apply && firebase deploy --only hosting": RUNS("not_routine"),
+  "git stash apply; firebase deploy --only hosting": RUNS("not_routine"),
+  "firebase deploy --only hosting && git stash apply": RUNS("not_routine"),
+}
 describe("G16-1: a tree change in the same call as a publish or deploy keeps the call at 1.1.0", () => {
   test("merge, fast-forward, switch, branch checkout, stash pop or apply, before or after the publish, hold the call", async () => {
     for (const [send, make, destination] of PUBLISHERS) {
@@ -173,7 +308,7 @@ describe("G16-1: a tree change in the same call as a publish or deploy keeps the
       expectOpen(await sh("git switch other", here))
       for (const change of ["git merge other", "git merge --ff-only other", "git switch other", "git checkout other", "git stash pop", "git stash apply"])
         for (const call of [`${change} && ${send}`, `${change}; ${send}`, `${send} && ${change}`])
-          expectHeld(await sh(call, here), "call", call)
+          expectHeld(await sh(call, here), "call", call, WANTS_1)
     }
   })
 
@@ -183,10 +318,10 @@ describe("G16-1: a tree change in the same call as a publish or deploy keeps the
     expectOpens(await sh("npm run plain", here), "pypi.org")
     for (const call of ["npm run ship", "git merge other && npm run plain"]) {
       const given = await sh(call, here)
-      for (const verdict of [root(given), subagent(given)]) expect([call, verdict.class === "A"]).toEqual([call, false])
+      for (const verdict of [root(given), subagent(given)]) expect([call, unopened(verdict)]).toEqual([call, true])
     }
     const hooked = await committed(await npmProject({ "package.json": withScripts({ prepublishOnly: "git switch other" }) }))
-    expectHeld(await sh("npm publish", hooked), "call", "hook switches")
+    expectHeld(await sh("npm publish", hooked), "call", "hook switches", RUNS("outward_not_in_mission", "registry.npmjs.org"))
     const plainHook = await committed(await npmProject({ "package.json": withScripts({ prepublishOnly: "git status" }) }))
     expectOpens(await sh("npm publish", plainHook), "registry.npmjs.org")
   })
@@ -209,7 +344,7 @@ describe("G16-2: a readme or licence file with glob characters is judged where i
       fs.symlinkSync(outside, path.join(here, "d[1]"))
       const file = key === "readme" ? "README.md" : "LICENSE"
       write(here, "Cargo.toml", `${CRATE}${key} = "d[1]/${file}"\n`)
-      expectHeld(await sh("cargo publish", here), "form", key)
+      expectHeld(await sh("cargo publish", here), "form", key, RUNS("outward"))
     }
     const plain = await crate({ "Cargo.toml": `${CRATE}readme = "doc[s]/R.md"\nlicense-file = "LICEN*"\n`, "doc[s]/R.md": "r", "LICEN*": "l" })
     expectOpens(await sh("cargo publish", plain), "crates.io")
@@ -227,7 +362,7 @@ describe("G16-2: a readme or licence file with glob characters is judged where i
     for (const [tool, pyproject] of cases) {
       const here = await python({ "pyproject.toml": pyproject })
       fs.symlinkSync(outside, path.join(here, "d[1]"))
-      expectHeld(await sh(`${tool} publish`, here), "form", pyproject)
+      expectHeld(await sh(`${tool} publish`, here), "form", pyproject, RUNS("outward"))
     }
     const pattern = PYPROJECT.replace('version = "0.1.0"', 'version = "0.1.0"\nlicense-files = ["LICEN[CS]E*"]')
     expectOpens(await sh("uv publish", await python({ "pyproject.toml": pattern })), "pypi.org")
@@ -254,7 +389,7 @@ describe("CR16-1: a tracked link inside a submodule that lands outside holds the
         write(here, "inner.txt", "i")
         await git(here, "-c", "protocol.file.allow=always", "submodule", "add", "-q", sub, "vendor/sub")
         if (opens) expectOpens(await sh(send, here), destination)
-        else expectHeld(await sh(send, here), "form", `${send} submodule link outside`)
+        else expectHeld(await sh(send, here), "form", `${send} submodule link outside`, RUNS("outward"))
       }
     }
   })
@@ -274,7 +409,7 @@ describe("CR16-2 / V16-1 / n90: git's message is read in the C locale", () => {
     const here = await npmProject()
     fs.symlinkSync(path.join(outside, "s.txt"), path.join(here, "notes.txt"))
     await git(here, "add", "notes.txt")
-    expectHeld(await sh("npm publish", here), "form", "tracked link outside, German")
+    expectHeld(await sh("npm publish", here), "form", "tracked link outside, German", RUNS("outward"))
   })
 
   test("one helper: git's environment is the C locale, and only it reads git's failure text", () => {
@@ -298,7 +433,7 @@ describe("CR16-2 / V16-1 / n90: git's message is read in the C locale", () => {
       await git(here, "add", "-A")
       fs.writeFileSync(path.join(here, ".git", "index"), "not an index")
       expect(Reach.trackedLinks(here)).toBeNull()
-      expectHeld(await sh(send, here), "form", send)
+      expectHeld(await sh(send, here), "form", send, RUNS("outward"))
     }
   })
 })
@@ -307,12 +442,12 @@ describe("CR16-3: netlify's default functions folders hold the deploy", () => {
   test("netlify/functions or netlify/edge-functions, in the step's folder or above it up to the top", async () => {
     expectOpens(await sh(NETLIFY, await site()), "netlify")
     for (const folder of ["netlify/functions/a.js", "netlify/edge-functions/a.ts"]) {
-      expectHeld(await sh(NETLIFY, await site({ [folder]: "x" })), "form", folder)
+      expectHeld(await sh(NETLIFY, await site({ [folder]: "x" })), "form", folder, RUNS("outward"))
       const here = await site({ [folder]: "x", "web/dist/index.html": "x" })
       const given = await sh(NETLIFY, path.join(here, "web"), here)
-      for (const verdict of [root(given), subagent(given)]) expect([folder, verdict.class === "A"]).toEqual([folder, false])
+      for (const verdict of [root(given), subagent(given)]) expect([folder, unopened(verdict)]).toEqual([folder, true])
     }
-    expectHeld(await sh(NETLIFY, await site({ "netlify/functions": "" })), "form", "a file at the name")
+    expectHeld(await sh(NETLIFY, await site({ "netlify/functions": "" })), "form", "a file at the name", RUNS("outward"))
   })
 })
 
@@ -321,7 +456,7 @@ describe("n88: fly.toml and vercel.json are consent-sensitive", () => {
     for (const name of ["fly.toml", "vercel.json"]) {
       expect([name, Risk.toolConfig(name), Risk.sensitive(name)]).toEqual([name, true, false])
       const here = await site({ "alt.txt": "x" })
-      expectKept(await sh(`cat alt.txt > ${name}`, here))
+      expectKept(await sh(`cat alt.txt > ${name}`, here), RUNS("not_routine"))
     }
     expectOpen(await sh("cat alt.txt > notes.txt", await site({ "alt.txt": "x" })))
   })
@@ -350,10 +485,32 @@ describe("n89: .npmrc allows the default registry line and spaces around `=`", (
       "save-exact = = true\n",
       "@corp:registry = https://registry.npmjs.org/\n",
     ])
-      for (const command of NODE_PUBLISH) expectHeld(await sh(command, await npmProject({ ".npmrc": text })), "form", JSON.stringify(text))
+      for (const command of NODE_PUBLISH) expectHeld(await sh(command, await npmProject({ ".npmrc": text })), "form", JSON.stringify(text), RUNS("outward"))
   })
 })
 
+/** 1.1.3 (T9 G8): the consented verdict of each call of the loop below, literally. */
+const WANTS_2: Readonly<Record<string, Want>> = {
+  "NODE_OPTIONS=--require=./x.js npm test": RUNS("unreadable_command"),
+  "PATH=/tmp/x npm test": RUNS("unreadable_command"),
+  "PATH=/tmp/x:$PATH npm test": RUNS("unreadable_command"),
+  "CI=1 PATH=/tmp/x npm test": RUNS("unreadable_command"),
+  "LD_PRELOAD=/tmp/x.so npm test": RUNS("unreadable_command"),
+  "DYLD_INSERT_LIBRARIES=/tmp/x npm test": RUNS("unreadable_command"),
+  "BASH_ENV=/tmp/x npm test": RUNS("unreadable_command"),
+  "GIT_DIR=/tmp/x git status": RUNS("unreadable_command"),
+  "npm_config_registry=https://npm.evil.example/ npm publish": RUNS("unreadable_command"),
+  "PYTHONPATH=/tmp/x npm test": RUNS("unreadable_command"),
+  "CI='a b' npm test": RUNS("unreadable_command"),
+  "CI=$X npm test": RUNS("unreadable_command"),
+  "CI=`x` npm test": RUNS("unreadable_command"),
+  "CI=\"$HOME\" npm test": RUNS("unreadable_command"),
+  "LC_NUMERIC=C npm test": RUNS("unreadable_command"),
+  "DEBUG=app:* npm test": RUNS("unreadable_command"),
+  "DEBUG=a;b npm test": RUNS("not_routine"),
+  "CI=1 > out.txt npm test": RUNS("unreadable_command"),
+  "CI=1": RUNS("unreadable_command"),
+}
 describe("usability item 7: leading NAME=value words from a short list are read through", () => {
   const SCRIPTS = withScripts({ test: "vitest run", build: "tsc" })
   test("CI=1 npm test and NODE_ENV=production npm run build open as the command alone does", async () => {
@@ -394,7 +551,7 @@ describe("usability item 7: leading NAME=value words from a short list are read 
       "CI=1 > out.txt npm test",
       "CI=1",
     ])
-      expectKept(await sh(call, here))
+      expectKept(await sh(call, here), WANTS_2)
   })
 
   test("readThrough: the words and only the words", () => {
@@ -409,14 +566,14 @@ describe("usability item 7: leading NAME=value words from a short list are read 
     expectOpen(await prefixed(["CI=1"], "npm test && npm run build", here))
     expectOpen(await prefixed(["NODE_ENV=production"], "npm run build && npm test", here))
     for (const prefix of [["NODE_OPTIONS=--require=./x.js"], ["PATH=/tmp/x"], ["CI=1", "LD_PRELOAD=/x"], ["CI=a b"]])
-      expectKept(await prefixed(prefix, "npm test && npm run build", here))
+      expectKept(await prefixed(prefix, "npm test && npm run build", here), RUNS("unreadable_command"))
     // 1.1.1 F41 (V17-1, n93): the seam is in the tree, so the reader must keep the words.
     expect((await readSteps("CI=1 npm test && npm run build", here))?.steps.map((step) => step.argv)).toEqual([
       ["CI=1", "npm", "test"],
       ["npm", "run", "build"],
     ])
     expectOpen(await sh("CI=1 npm test && NODE_ENV=production npm run build", here))
-    expectKept(await sh("NODE_OPTIONS=--require=./x.js npm test && npm run build", here))
+    expectKept(await sh("NODE_OPTIONS=--require=./x.js npm test && npm run build", here), RUNS("unreadable_command"))
   })
 })
 
@@ -434,9 +591,9 @@ describe("usability item 8: a plain npm version is no writer beside a publish", 
     const writes = await committed(await npmProject({ "package.json": withScripts({ version: "cat alt.txt > notes.txt" }), "alt.txt": "a" }))
     expectOpen(await sh("npm version patch", writes))
     const held = await sh("npm version patch && npm publish", writes)
-    for (const verdict of [root(held), subagent(held)]) expect(["a version hook that writes", verdict.class === "A"]).toEqual(["a version hook that writes", false])
+    for (const verdict of [root(held), subagent(held)]) expect(["a version hook that writes", unopened(verdict)]).toEqual(["a version hook that writes", true])
     const sends = await committed(await npmProject({ "package.json": withScripts({ preversion: "frobnicate --all" }) }))
-    expectKept(await sh("npm version patch", sends))
+    expectKept(await sh("npm version patch", sends), RUNS("not_routine"))
     const fine = await committed(await npmProject({ "package.json": withScripts({ preversion: "tsc --noEmit" }) }))
     expectOpens(await sh("npm version patch && npm publish", fine), "registry.npmjs.org")
     const here = await committed(await npmProject())
@@ -449,6 +606,7 @@ describe("usability item 8: a plain npm version is no writer beside a publish", 
       "npm version 1.2",
       "pnpm version patch",
     ])
-      expect([call, root(await sh(call, here)).class]).not.toEqual([call, "A"])
+      // 1.1.3: not opened by the overlay, so not A before 1.1.3; now it runs or is refused at once (`unopened`).
+      expect([call, unopened(root(await sh(call, here)))]).toEqual([call, true])
   })
 })

@@ -19,6 +19,7 @@ import { ScriptReader } from "../../src/permission/script-reader"
 import type { InstanceContext } from "../../src/project/instance-context"
 import { Risk } from "../../src/tool/risk"
 import { readSteps } from "../../src/tool/shell"
+import { ADMIN_RIGHTS, ARCHIVE_FIRST, CREDENTIAL_CHANGE, DELETE_COMPOUND, IRREVERSIBLE_ARCHIVE, OUTSIDE_WRITE, answerOf } from "./consented-literals"
 import { tmpdir } from "../fixture/fixture"
 
 type Input = AutonomyTable.Input
@@ -65,6 +66,14 @@ const root = (given: Input) => AutonomyTable.classify({ ...given, bypass: { call
 const subagent = (given: Input) => AutonomyTable.classify({ ...given, bypass: { caller: "subagent" } })
 const short = (verdict: Verdict) => [verdict.class, verdict.category, verdict.destination]
 
+/** 1.1.3 (T9 G8): a literal consented verdict per case: class, category, `bypassed`, destination, and the agent's answer. */
+type Want = { verdict: [string, string, string | undefined, string | undefined]; answer: string | undefined }
+const RUNS = (bypassed: string, destination?: string): Want => ({ verdict: ["A", "by_main_agent", bypassed, destination], answer: undefined })
+const REFUSED = (category: string, bypassed: string | undefined, answer: string): Want => ({ verdict: ["X", category, bypassed, undefined], answer })
+function expectWant(label: string, verdict: Verdict, want: Want) {
+  expect([label, verdict.class, verdict.category, verdict.bypassed, verdict.destination, answerOf(verdict)]).toEqual([label, ...want.verdict, want.answer])
+}
+
 /** Opens for the root and a subagent alike, to `destination`; the no-consent verdict is not A and has no destination. */
 function expectOpens(given: Input, destination: string) {
   const label = String(given.metadata.command ?? given.metadata.url)
@@ -75,10 +84,15 @@ function expectOpens(given: Input, destination: string) {
   // The gate finds the same places again (S1.36).
   expect([label, AutonomyTable.consentOutward({ ...given, bypass: { caller: "root" } })?.join(", ")]).toEqual([label, destination])
 }
-/** Not opened: the root and a subagent get `kept`, no destination, and the no-consent verdict is unchanged. */
-function expectKept(given: Input, kept: [string, string]) {
+/**
+ * Not opened by the overlay, which keeps `kept`, and the no-consent verdict is unchanged. 1.1.3 (spec section 3 `noWait`;
+ * matrix rows 2, 8, 15, 3, 31): a kept D no longer waits; it runs as the main agent's with `bypassed` = that category (and
+ * the places `consentOutward` finds, if any), or is redirected to the archive method when it deletes or replaces. An X stays.
+ */
+function expectKept(given: Input, kept: [string, string], want: Want) {
   const label = String(given.metadata.command ?? given.metadata.url)
-  for (const verdict of [root(given), subagent(given)]) expect([label, short(verdict)]).toEqual([label, [...kept, undefined]])
+  expect([label, kept.length]).toEqual([label, 2])
+  for (const verdict of [root(given), subagent(given)]) expectWant(label, verdict, want)
 }
 
 const snapshotOf = (dir: string): OutwardKnown.Snapshot => ({
@@ -130,7 +144,7 @@ describe("F29 item 1: hosts the person's messages name, read at each call", () =
     const here = await project({})
     const call = await sh("curl -s https://api.later.com/v1/status", here)
     const before = await Permission.outwardOf(call, here, consent())
-    expectKept({ ...call, outward: before }, ["D", "outward"])
+    expectKept({ ...call, outward: before }, ["D", "outward"], RUNS("outward", "api.later.com"))
     const after = await Permission.outwardOf(call, here, consent(), undefined, { hosts: [{ kind: "host", host: "api.later.com" }] })
     expectOpens({ ...call, outward: after }, "api.later.com")
     // The scan's own list still counts beside them.
@@ -145,7 +159,7 @@ describe("F29 item 1: hosts the person's messages name, read at each call", () =
     expectKept({ ...evil, outward: await Permission.outwardOf(evil, here, consent(), undefined, { hosts: hosts("api.later.com") }) }, [
       "D",
       "outward",
-    ])
+    ], RUNS("outward", "evil.api.later.com"))
     const below = await sh("curl -s https://a.later.com/", here)
     expectOpens({ ...below, outward: await Permission.outwardOf(below, here, consent(), undefined, { hosts: hosts("*.later.com") }) }, "a.later.com")
   })
@@ -175,7 +189,7 @@ describe("F29 item 2: an allowed send inside a project script opens like the bar
     const here = await project({ smoke: "curl -s http://localhost:3000/health", release: "npm publish", ping: "curl -s https://api.acme.com/x" })
     expectOpens(await sh("npm run smoke", here), "localhost:3000")
     expectOpens(await sh("npm run release", here), "registry.npmjs.org")
-    expectKept(await sh("npm run ping", here), ["D", "not_routine"])
+    expectKept(await sh("npm run ping", here), ["D", "not_routine"], RUNS("not_routine"))
     const named: AutonomyTable.Outward = { allowed: [], named: [{ kind: "host", host: "api.acme.com" }] }
     expectOpens(await sh("npm run ping", here, named), "api.acme.com")
   })
@@ -186,21 +200,21 @@ describe("F29 item 2: an allowed send inside a project script opens like the bar
       up: "curl -T dist/app.zip http://localhost:3000/",
       stdin: "curl -s --data-binary @- http://localhost:3000/ < secrets.txt",
     })
-    expectKept(await sh("npm run deploy", here), ["D", "not_routine"])
-    expectKept(await sh("npm run up", here), ["D", "not_routine"])
-    expectKept(await sh("npm run stdin", here), ["D", "not_routine"])
+    expectKept(await sh("npm run deploy", here), ["D", "not_routine"], RUNS("not_routine"))
+    expectKept(await sh("npm run up", here), ["D", "not_routine"], RUNS("not_routine"))
+    expectKept(await sh("npm run stdin", here), ["D", "not_routine"], RUNS("not_routine"))
   })
 
   test("a script with a step the allowlist does not accept, or a send the screen holds, stays held", async () => {
     const here = await project({ a: "vercel deploy --prod && node scripts/x.js", b: "vercel rm my-app", c: "vercel deploy --prod && scp a b:c" })
-    expectKept(await sh("npm run a", here), ["D", "not_routine"])
-    expectKept(await sh("npm run b", here), ["D", "not_routine"])
-    expectKept(await sh("npm run c", here), ["D", "not_routine"])
+    expectKept(await sh("npm run a", here), ["D", "not_routine"], RUNS("not_routine"))
+    expectKept(await sh("npm run b", here), ["D", "not_routine"], REFUSED("irreversible", "not_routine", IRREVERSIBLE_ARCHIVE))
+    expectKept(await sh("npm run c", here), ["D", "not_routine"], RUNS("not_routine"))
   })
 
   test("the interference rule still applies: a tree change beside a script that sends keeps 1.1.0", async () => {
     const here = await project({ deploy: "vercel deploy --prod" })
-    expectKept(await sh("git checkout main && npm run deploy", here), ["D", "not_routine"])
+    expectKept(await sh("git checkout main && npm run deploy", here), ["D", "not_routine"], RUNS("not_routine"))
   })
 
   test("a push inside a script opens only on the recheck of its remote; with force it is refused", async () => {
@@ -210,17 +224,17 @@ describe("F29 item 2: an allowed send inside a project script opens like the bar
     expect(AutonomyTable.consentPushTarget(await sh("npm run ship", here), snapshotOf(here))).toBeUndefined()
     expectOpens(await sh("npm run ship", here, pushing(here)), "origin")
     // No recheck ran: held.
-    expectKept(await sh("npm run ship", here, { allowed: [], snapshot: snapshotOf(here) }), ["D", "not_routine"])
-    expectKept(await sh("npm run fp", here, pushing(here)), ["X", "irreversible"])
+    expectKept(await sh("npm run ship", here, { allowed: [], snapshot: snapshotOf(here) }), ["D", "not_routine"], RUNS("not_routine"))
+    expectKept(await sh("npm run fp", here, pushing(here)), ["X", "irreversible"], REFUSED("irreversible", undefined, IRREVERSIBLE_ARCHIVE))
     // Words the manager appends are the script's: a force added on the line is a force push.
-    expectKept(await sh("npm run fp2 -- --force", here, pushing(here)), ["X", "irreversible"])
+    expectKept(await sh("npm run fp2 -- --force", here, pushing(here)), ["X", "irreversible"], REFUSED("irreversible", undefined, IRREVERSIBLE_ARCHIVE))
     // Without consent the script push keeps 1.1.0.
     expect(base(await sh("npm run fp", here, pushing(here))).class).toBe("D")
   })
 
   test("admin rights inside a script run by name are refused too", async () => {
     const here = await project({ setup: "sudo make install" })
-    expectKept(await sh("npm run setup", here), ["X", "admin_rights"])
+    expectKept(await sh("npm run setup", here), ["X", "admin_rights"], REFUSED("admin_rights", undefined, ADMIN_RIGHTS))
   })
 })
 
@@ -239,18 +253,18 @@ describe("F29 item 2: a hosted deploy through a launcher opens like the bare for
 
   test("the tool's own name of another registry package counts only when the project has that program", async () => {
     const here = await project({})
-    expectKept(await sh("npx netlify deploy --no-build --dir dist", here), ["D", "outward"])
+    expectKept(await sh("npx netlify deploy --no-build --dir dist", here), ["D", "outward"], RUNS("outward"))
     write(here, "node_modules/.bin/netlify", "#!/bin/sh\n")
     expectOpens(await sh("npx netlify deploy --no-build --dir dist", here), "netlify")
   })
 
   test("a version, a package option, another launcher, another send or a held form keeps the hold", async () => {
     const here = await project({})
-    expectKept(await sh("bun x vercel@latest deploy", here), ["D", "not_routine"])
-    expectKept(await sh("npx -p vercel vercel deploy", here), ["D", "outward"])
-    expectKept(await sh("npx wrangler deploy", here), ["D", "outward"])
-    expectKept(await sh("npx vercel rm my-app", here), ["D", "outward"])
-    expectKept(await sh("npx netlify-cli deploy --build", here), ["D", "not_routine"])
+    expectKept(await sh("bun x vercel@latest deploy", here), ["D", "not_routine"], RUNS("not_routine"))
+    expectKept(await sh("npx -p vercel vercel deploy", here), ["D", "outward"], RUNS("outward"))
+    expectKept(await sh("npx wrangler deploy", here), ["D", "outward"], RUNS("outward"))
+    expectKept(await sh("npx vercel rm my-app", here), ["D", "outward"], REFUSED("irreversible", "outward", IRREVERSIBLE_ARCHIVE))
+    expectKept(await sh("npx netlify-cli deploy --build", here), ["D", "not_routine"], RUNS("not_routine"))
   })
 
   test("a deploy through a launcher inside a script opens too", async () => {

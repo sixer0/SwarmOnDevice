@@ -260,9 +260,10 @@ it.instance("m29: a reader that never starts is waited for at most SCRIPT_READER
     const took = performance.now() - started
     expect(took).toBeGreaterThanOrEqual(1900)
     expect(took).toBeLessThan(5000)
-    // Not opened: the 1.1.0 verdict (P, check) went to the decider, which the stub answers.
+    // Not opened by the overlay: the 1.1.0 verdict (P, check). 1.1.3 (matrix rows 8, 40-48, spec section 3 "Class P
+    // choice"): under consent that P runs as the main agent's decision in the table; the decider is not called.
     expect(Exit.isSuccess(exit)).toBe(true)
-    expect(stub.calls).toEqual([expect.objectContaining({ permission: "bash", category: "check" })])
+    expect(stub.calls).toEqual([])
     // A second request waits on the same start, not a new one.
     // 1.1.1 F14 (G5-P4): and not for another 2 s: the bound counts from when the start began, so it is used up.
     const second = performance.now()
@@ -270,12 +271,9 @@ it.instance("m29: a reader that never starts is waited for at most SCRIPT_READER
     const secondTook = performance.now() - second
     expect(loads).toBe(1)
     expect(secondTook).toBeLessThan(200)
-    // Still the 1.1.0 verdict: the decider was asked again.
+    // Still the 1.1.0 verdict; 1.1.3 (matrix row 8): it runs without the decider.
     expect(Exit.isSuccess(again)).toBe(true)
-    expect(stub.calls).toEqual([
-      expect.objectContaining({ permission: "bash", category: "check" }),
-      expect.objectContaining({ permission: "bash", category: "check" }),
-    ])
+    expect(stub.calls).toEqual([])
     console.log(`[F14 G5-P4] hanging start: first request ${took.toFixed(0)} ms, second ${secondTook.toFixed(1)} ms`)
   }),
   { timeout: 30_000 },
@@ -315,8 +313,8 @@ it.instance("m29: a reader that fails starts once and warns once over three requ
     for (const command of ["npm test", "npm run build", "npm run test"])
       expect(Exit.isSuccess(yield* long(bash(root.id, command, test.directory)))).toBe(true)
     expect([loads, warnings.length]).toEqual([1, 1])
-    // Each kept its 1.1.0 verdict and went to the decider.
-    expect(stub.calls.length).toBe(3)
+    // Each kept its 1.1.0 verdict; 1.1.3 (matrix row 8, spec section 3 "Class P choice"): it runs without the decider.
+    expect(stub.calls.length).toBe(0)
     expect(ScriptReader.read("tsc", test.directory)).toBeUndefined()
     expect([loads, warnings.length]).toEqual([1, 1])
     ScriptReader.testing.expireFailure()

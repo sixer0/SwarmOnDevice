@@ -18,6 +18,7 @@ import { Reach } from "../../src/tool/reach"
 import { readSteps } from "../../src/tool/shell"
 import { tmpdir } from "../fixture/fixture"
 import { expectBareFrom } from "./install-fixture"
+import { ARCHIVE_FIRST, answerOf } from "./consented-literals"
 
 type Input = AutonomyTable.Input
 type Verdict = AutonomyTable.Verdict
@@ -62,12 +63,30 @@ const opened = (verdict: Verdict): Verdict =>
   verdict.class === "A" ? verdict : { class: "A", decidedBy: "agent", category: "by_main_agent", bypassed: verdict.category }
 const all = (input: Input) => [base(input), root(input), subagent(input)]
 
-async function keeps(commands: readonly string[], cwd: string, scope: InstanceContext) {
+// 1.1.3 (T9 G8, code review M2): the consented verdicts are stated literally, with the agent's answer text; nothing here
+// computes them with the code under test (`noWait`, `destinationsOf`).
+type Shape = { class: string; category?: string; bypassed?: string; destination?: string; answer?: string }
+const RUNS = (bypassed: string): Shape => ({ class: "A", category: "by_main_agent", bypassed })
+const REDIRECTED: Shape = { class: "X", category: "not_reversible", bypassed: "not_routine", answer: ARCHIVE_FIRST }
+const shape = (verdict: Verdict): Shape => ({
+  class: verdict.class,
+  category: verdict.category,
+  bypassed: verdict.bypassed,
+  destination: verdict.destination,
+  answer: answerOf(verdict),
+})
+
+async function keeps(commands: readonly string[], cwd: string, scope: InstanceContext, expected: Shape, except: Record<string, Shape> = {}) {
   for (const command of commands) {
     const input = await sh(command, cwd, scope)
     const kept = AutonomyTable.classifyBase(input)
-    expect([command, root(input)]).toEqual([command, kept])
-    expect([command, subagent(input)]).toEqual([command, kept])
+    // 1.1.3 (spec section 3 rule 5; matrix rows 3, 8, 16-23, 31): the overlay keeps the 1.1.0 verdict, and under consent
+    // that kept verdict no longer waits: a D or P runs as the main agent's, a deletion or replacement is redirected to the
+    // archive method at once, an X stays. `expected` states it literally; `except` names the cases that differ.
+    expect([command, kept.class]).not.toEqual([command, "A"])
+    const want = except[command] ?? expected
+    expect([command, shape(root(input))]).toEqual([command, want])
+    expect([command, shape(subagent(input))]).toEqual([command, want])
   }
 }
 
@@ -176,18 +195,21 @@ describe("CR9-1, S9-1: a redirect is judged where the system opens it", () => {
       const one = await sh(via, dir, gitScope(dir))
       const two = await sh(plain, dir, gitScope(dir))
       expect([via, ...all(one)]).toEqual([via, ...all(two)])
-      expect([via, root(one).class]).not.toEqual([via, "A"])
+      // 1.1.3 (matrix rows 4, 19, 22, 23): a write held there no longer waits; it runs as the main agent's, recorded with
+      // the category it was held on (it was "not A" before 1.1.3).
+      expect([via, root(one).class, root(one).category, root(one).bypassed === undefined]).toEqual([via, "A", "by_main_agent", false])
     }
   })
 
   test("a redirect with a step back inside a project script keeps 1.1.0", async () => {
-    await keeps(["npm run logs"], dir, gitScope(dir))
+    await keeps(["npm run logs"], dir, gitScope(dir), RUNS("not_routine"))
   })
 
   test("a link loop leaves the text to the rules that do not read it step by step", async () => {
     const input = await sh("prettier --check src/a.ts > loop-a/../x.txt", dir, gitScope(dir))
-    // Unread, as any text the screen cannot read word by word: held for a person under consent, never opened.
-    for (const verdict of [root(input), subagent(input)]) expect([verdict.class, verdict.bypassed]).toEqual([base(input).class, undefined])
+    // Unread, as any text the screen cannot read word by word: held under consent as unreadable. 1.1.3 (matrix row 22): that
+    // hold no longer waits; it runs as the main agent's.
+    for (const verdict of [root(input), subagent(input)]) expect([verdict.class, verdict.bypassed]).toEqual(["A", "unreadable_command"])
     expect(base(input).class).not.toBe("A")
   })
 
@@ -236,6 +258,7 @@ describe("CR9-2, S9-3, S9-4: one interference rule", () => {
       ],
       dir,
       gitScope(dir),
+      RUNS("not_routine"),
     )
   })
 
@@ -252,6 +275,7 @@ describe("CR9-2, S9-3, S9-4: one interference rule", () => {
       ],
       dir,
       gitScope(dir),
+      RUNS("not_routine"), { "npm install && cp src/a.ts src/c.ts": REDIRECTED },
     )
   })
 
@@ -278,7 +302,7 @@ describe("CR9-2, S9-3, S9-4: one interference rule", () => {
     write(writes, "src/a.ts", "x\n")
     write(writes, "node_modules/.bin/prettier", "#!/bin/sh\n")
     write(writes, "package.json", JSON.stringify({ name: "w", scripts: { postinstall: "prettier --write src/a.ts" } }))
-    await keeps(["npm install"], writes, gitScope(writes))
+    await keeps(["npm install"], writes, gitScope(writes), RUNS("not_routine"))
     const checks = await temp()
     expectBareFrom(path.dirname(checks))
     await gitInit(checks)
@@ -308,6 +332,7 @@ describe("S9-2: a `cd` the shell may not take logically", () => {
       ["cd missing && vitest run", "cd srclink && vitest run", "cd srclink/.. && vitest run", "cd srclink/.. && npm test", "npm run insrc"],
       dir,
       gitScope(dir),
+      RUNS("not_routine"),
     )
   })
 
@@ -345,6 +370,7 @@ describe("S9-2: a `cd` the shell may not take logically", () => {
       ],
       dir,
       gitScope(dir),
+      RUNS("not_routine"),
     )
   })
 })
@@ -367,6 +393,7 @@ describe("S9-5, CR9-3: pytest's distributed execution, and text that only looks 
       ],
       dir,
       gitScope(dir),
+      RUNS("not_routine"),
     )
     await opens(["pytest", "pytest -q", "pytest -n auto", "pytest -x -q"], dir, gitScope(dir))
   })
@@ -379,6 +406,6 @@ describe("S9-5, CR9-3: pytest's distributed execution, and text that only looks 
       dir,
       gitScope(dir),
     )
-    await keeps(["jest --roots '<rootDir>/../x'", "jest '--rootDir=<rootDir>/..'"], dir, gitScope(dir))
+    await keeps(["jest --roots '<rootDir>/../x'", "jest '--rootDir=<rootDir>/..'"], dir, gitScope(dir), RUNS("not_routine"))
   })
 })

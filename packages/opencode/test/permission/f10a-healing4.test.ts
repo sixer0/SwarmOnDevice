@@ -2,7 +2,8 @@
 // - B3 / M4.2: a redirect into the repository's own storage, a secret or a sensitive file keeps its 1.1.0 verdict.
 // - G3-1: a shortened long option is the option it shortens, in the 1.1.0 table and in the allowlist.
 // - G3-3: an output option that writes where Undo's snapshot does not reach keeps its 1.1.0 verdict.
-// - G3-4: an edit nothing can undo of a file that is not ordinary keeps its 1.1.0 verdict.
+// - G3-4: an edit nothing can undo of a file that is not ordinary keeps its 1.1.0 verdict (T8: the edit tools are not
+//   redirected by T7 F3).
 // - G3-5: showing or pruning a remote asks the remote, so it waits as outward.
 // - m20: `-C` among git's own options is read wherever it stands.
 // - P5 A2d: a kill of a process this session's own shell tool started is the main agent's again.
@@ -18,6 +19,7 @@ import type { InstanceContext } from "../../src/project/instance-context"
 import { Risk } from "../../src/tool/risk"
 import { readSteps } from "../../src/tool/shell"
 import { tmpdir } from "../fixture/fixture"
+import { ARCHIVE_FIRST, answerOf } from "./consented-literals"
 
 type Input = AutonomyTable.Input
 type Verdict = AutonomyTable.Verdict
@@ -75,14 +77,31 @@ const subagent = (input: Input) => AutonomyTable.classify({ ...input, bypass: { 
 const opened = (verdict: Verdict): Verdict =>
   verdict.class === "A" ? verdict : { class: "A", decidedBy: "agent", category: "by_main_agent", bypassed: verdict.category }
 
+/** T9 G8: the consented verdict a case expects, written out. */
+type Expected = { class: string; category: string | undefined; bypassed?: string; destination?: string }
+type Case = readonly [command: string, expected: Expected, answer?: string]
+const OPENED = (bypassed: string): Expected => ({ class: "A", category: "by_main_agent", bypassed })
+const REDIRECTED = (bypassed: string): Expected => ({ class: "X", category: "not_reversible", bypassed })
+const shortG8 = (verdict: Verdict): Expected => ({
+  class: verdict.class,
+  category: verdict.category,
+  ...(verdict.bypassed !== undefined && { bypassed: verdict.bypassed }),
+  ...(verdict.destination !== undefined && { destination: verdict.destination }),
+})
+
 /** The call keeps its 1.1.0 verdict exactly, for the root and for a subagent; it was not A without consent. */
-async function keeps(commands: readonly string[], extra: Partial<Input> = {}) {
-  for (const command of commands) {
+async function keeps(cases: readonly Case[], extra: Partial<Input> = {}) {
+  for (const [command, expected, answer] of cases) {
     const input = await sh(command, extra)
     const before = base(input)
     expect([command, before.class === "A"]).toEqual([command, false])
-    expect([command, root(input)]).toEqual([command, before])
-    expect([command, subagent(input)]).toEqual([command, before])
+    // 1.1.3 (spec section 3, `noWait`; matrix rows 3, 8, 16-23, 31): the overlay keeps the 1.1.0 verdict, and under consent
+    // that kept verdict no longer waits: a D or P runs as the main agent's, a deletion or replacement is redirected to the
+    // archive method at once, an X stays.
+    // T9 G8: the expected verdict and the agent's answer are written per case, not computed by the code under test.
+    for (const verdict of [root(input), subagent(input)]) {
+      expect([command, shortG8(verdict), answerOf(verdict)]).toEqual([command, expected, answer])
+    }
   }
 }
 
@@ -99,17 +118,17 @@ async function opens(commands: readonly string[], extra: Partial<Input> = {}) {
 describe("B3 / M4.2: a redirect into the repository's storage, a secret or a sensitive file keeps 1.1.0", () => {
   test("an allowlisted reader redirected over the repository's refs, index, HEAD, config or exclude list", async () => {
     await keeps([
-      "cat /dev/null > .git/packed-refs",
-      "cat /dev/null > .git/HEAD",
-      "head -c 0 src/a.ts > .git/index",
-      "cat /dev/null > .git/refs/heads/main",
-      "ls > .git/config",
-      "git log --oneline > .git/info/exclude",
+      ["cat /dev/null > .git/packed-refs", OPENED("secret_file")],
+      ["cat /dev/null > .git/HEAD", OPENED("secret_file")],
+      ["head -c 0 src/a.ts > .git/index", OPENED("secret_file")],
+      ["cat /dev/null > .git/refs/heads/main", OPENED("secret_file")],
+      ["ls > .git/config", OPENED("secret_file")],
+      ["git log --oneline > .git/info/exclude", OPENED("secret_file")],
     ])
   })
 
   test("planting: appending to the repository's config, overwriting an existing hook, writing a new one", async () => {
-    await keeps(["cat payload.txt >> .git/config", "cat payload.txt > .git/hooks/pre-commit", "sed -n 1p payload.txt > .git/hooks/post-checkout"])
+    await keeps([["cat payload.txt >> .git/config", OPENED("secret_file")], ["cat payload.txt > .git/hooks/pre-commit", OPENED("secret_file")], ["sed -n 1p payload.txt > .git/hooks/post-checkout", OPENED("secret_file")]])
   })
 
   test("plant, then run: neither the planting step nor the compound is opened; the later git command is as in 1.1.0", async () => {
@@ -117,7 +136,9 @@ describe("B3 / M4.2: a redirect into the repository's storage, a secret or a sen
     for (const command of ["cat payload.txt >> .git/config && git status", "cat payload.txt > .git/hooks/pre-commit && git commit -m x"]) {
       const input = await sh(command)
       expect([command, base(input).class]).toEqual([command, "D"])
-      for (const verdict of [root(input), subagent(input)]) expect([command, verdict.class, verdict.decidedBy]).toEqual([command, "D", "gate"])
+      // 1.1.3 (matrix rows 4, 22, spec section 3 rule 5): the held compound no longer waits; it runs as the main agent's.
+      for (const verdict of [root(input), subagent(input)])
+        expect([command, verdict.class, verdict.decidedBy, verdict.category]).toEqual([command, "A", "agent", "by_main_agent"])
     }
     // The run step alone is what it was: `git status` is A without consent and stays A (P8); a commit is the agent's.
     const status = await sh("git status")
@@ -127,8 +148,8 @@ describe("B3 / M4.2: a redirect into the repository's storage, a secret or a sen
   })
 
   test("a redirect over a secret or a sensitive file, and over any non-ordinary file where nothing can undo it", async () => {
-    await keeps(["cat src/a.ts > .env", "cat src/a.ts > package.json", "cat src/a.ts > .gitignore"])
-    await keeps(["cat src/a.ts > .env", "cat src/a.ts > data.db"], { canUndo: false })
+    await keeps([["cat src/a.ts > .env", OPENED("secret_file")], ["cat src/a.ts > package.json", OPENED("sensitive_file")], ["cat src/a.ts > .gitignore", OPENED("sensitive_file")]])
+    await keeps([["cat src/a.ts > .env", REDIRECTED("secret_file"), ARCHIVE_FIRST], ["cat src/a.ts > data.db", REDIRECTED("not_routine"), ARCHIVE_FIRST]], { canUndo: false })
   })
 
   test("near miss: a redirect into an ordinary file in the folder is opened as before, with or without Undo", async () => {
@@ -172,10 +193,10 @@ describe("G3-1: a shortened long option is the option it shortens", () => {
 
   test("under consent: the allowlist reads the shortened word as the excluded option", async () => {
     await keeps([
-      "git log --outp=src/c.ts", "git grep --open-files-in=less foo", "sort --out=src/c.ts src/a.ts", "git commit --temp=x.txt",
-      "git commit --ree=HEAD", "git stash push --pat", "npm install --glob zod", "bun test --prel=./x.ts", "pip install --us requests",
-      "pytest --conf=x", "pytest --overr=x=y", "eslint --conf x.js src", "prettier --plug=x --check .", "jest --conf=x.js",
-      "vitest run --setupF=x.ts", "cargo build --conf x", "git merge --strat=ours feature",
+      ["git log --outp=src/c.ts", OPENED("not_routine")], ["git grep --open-files-in=less foo", OPENED("not_routine")], ["sort --out=src/c.ts src/a.ts", OPENED("not_routine")], ["git commit --temp=x.txt", OPENED("not_routine")],
+      ["git commit --ree=HEAD", OPENED("not_routine")], ["git stash push --pat", OPENED("not_routine")], ["npm install --glob zod", OPENED("not_routine")], ["bun test --prel=./x.ts", OPENED("not_routine")], ["pip install --us requests", OPENED("not_routine")],
+      ["pytest --conf=x", OPENED("not_routine")], ["pytest --overr=x=y", OPENED("not_routine")], ["eslint --conf x.js src", OPENED("not_routine")], ["prettier --plug=x --check .", OPENED("not_routine")], ["jest --conf=x.js", OPENED("not_routine")],
+      ["vitest run --setupF=x.ts", OPENED("not_routine")], ["cargo build --conf x", OPENED("not_routine")], ["git merge --strat=ours feature", OPENED("not_routine")],
     ])
   })
 
@@ -202,23 +223,23 @@ describe("G3-1: a shortened long option is the option it shortens", () => {
 describe("G3-3: an output option writing where Undo's snapshot does not reach keeps 1.1.0", () => {
   test("an ignored file or folder that is not rebuilt, named by a build, test, lint or type-check tool's output option", async () => {
     await keeps([
-      "go build -o data.db .", "go test -coverprofile=data.db ./...", "bun build src/a.ts --outfile data.db", "tsc --outFile data.db",
-      "tsc --outfile=data.db", "pytest --junitxml=data.db", "pytest --junit-x data.db", "ruff check --output-file=data.db",
-      "ruff check -o data.db", "eslint -o data.db .", "eslint --output-file data.db .", "cargo build --target-dir=local",
-      "jest --outputFile=data.db", "vitest run --coverage.reportsDirectory=local", "mypy --html-report local src",
+      ["go build -o data.db .", OPENED("not_routine")], ["go test -coverprofile=data.db ./...", OPENED("not_routine")], ["bun build src/a.ts --outfile data.db", OPENED("not_routine")], ["tsc --outFile data.db", OPENED("not_routine")],
+      ["tsc --outfile=data.db", OPENED("not_routine")], ["pytest --junitxml=data.db", OPENED("not_routine")], ["pytest --junit-x data.db", OPENED("not_routine")], ["ruff check --output-file=data.db", OPENED("not_routine")],
+      ["ruff check -o data.db", OPENED("not_routine")], ["eslint -o data.db .", OPENED("not_routine")], ["eslint --output-file data.db .", OPENED("not_routine")], ["cargo build --target-dir=local", OPENED("not_routine")],
+      ["jest --outputFile=data.db", OPENED("not_routine")], ["vitest run --coverage.reportsDirectory=local", OPENED("not_routine")], ["mypy --html-report local src", OPENED("not_routine")],
     ])
   })
 
   test("a secret, a sensitive file or the repository's storage named by an output option", async () => {
-    await keeps(["go build -o .env .", "eslint -o package.json .", "tsc --outDir .git/x"])
+    await keeps([["go build -o .env .", OPENED("secret_file")], ["eslint -o package.json .", OPENED("not_routine")], ["tsc --outDir .git/x", OPENED("not_routine")]])
   })
 
   test("an output option with no value to read keeps 1.1.0", async () => {
-    await keeps(["eslint . -o"])
+    await keeps([["eslint . -o", OPENED("not_routine")]])
   })
 
   test("without Undo, an output option onto a file that is not ordinary keeps 1.1.0", async () => {
-    await keeps(["go build -o bin.db ."], { canUndo: false })
+    await keeps([["go build -o bin.db .", OPENED("not_routine")]], { canUndo: false })
   })
 
   test("near miss: an output into a new place, or into a rebuilt folder, opens; an option that writes nothing opens", async () => {
@@ -260,15 +281,22 @@ describe("G3-4: an edit nothing can undo of a file that is not ordinary keeps 1.
     for (const input of [edit("scripts/x.sh"), edit("data.db"), edit("scripts/x.sh", { canUndo: true })]) {
       const before = base(input)
       expect(before.class).not.toBe("A")
-      expect(root(input)).toEqual(before)
-      expect(subagent(input)).toEqual(before)
+      // 1.1.3 (matrix rows 7, 8, spec section 3 rule 5): the kept verdict runs as the main agent's. T8: the edit tools
+      // are not redirected by T7 F3, even when the file exists and has no Undo.
+      // T9 G8: written out. 1.1.0 P `edit-not-ordinary` (pinned above as not A); under consent the main agent's, no answer text.
+      expect(before).toEqual({ class: "P", decidedBy: "agent", category: "edit-not-ordinary" })
+      for (const verdict of [root(input), subagent(input)])
+        expect([shortG8(verdict), answerOf(verdict)]).toEqual([OPENED("edit-not-ordinary"), undefined])
     }
+    // data.db exists in the fixture: an existing file with no Undo still runs (T8)
+    expect(fs.existsSync(path.join(dir, "data.db"))).toBe(true)
   })
 
-  test("near miss: an ordinary file with no Undo is A in 1.1.0 and stays A; one with Undo that is not ordinary opens", () => {
+  test("near miss: an ordinary file with no Undo is A in 1.1.0 and stays A (T8); one with Undo that is not ordinary opens", () => {
     const ordinary = edit("src/a.ts")
     expect(base(ordinary).class).toBe("A")
     expect(root(ordinary)).toEqual(base(ordinary))
+    expect(subagent(ordinary)).toEqual(base(ordinary))
     const undoable = edit("scripts/x.sh", { canUndo: true, editClass: "not_ordinary" })
     expect(root(undoable)).toEqual(opened(base(undoable)))
   })
@@ -279,8 +307,9 @@ describe("G3-5: inspecting a remote that asks the remote waits as outward", () =
     for (const command of ["git remote show origin", "git remote -v show origin", "git remote prune origin"]) {
       const input = await sh(command)
       expect([command, BypassScreen.screen(input).d]).toEqual([command, "outward"])
-      expect([command, root(input)]).toEqual([command, { class: "D", decidedBy: "gate", category: "outward" }])
-      expect([command, subagent(input)]).toEqual([command, { class: "D", decidedBy: "gate", category: "outward" }])
+      // 1.1.3 (matrix row 2): it no longer waits as outward; it runs, recorded as outward.
+      expect([command, root(input)]).toEqual([command, opened({ class: "D", decidedBy: "gate", category: "outward" })])
+      expect([command, subagent(input)]).toEqual([command, opened({ class: "D", decidedBy: "gate", category: "outward" })])
     }
   })
 
@@ -300,7 +329,7 @@ describe("G3-5: inspecting a remote that asks the remote waits as outward", () =
 
 describe("m20: `-C` among git's own options is read wherever it stands, one after the other", () => {
   test("a path checkout under `-C` after another global option keeps 1.1.0", async () => {
-    await keeps(["git --no-pager -C src checkout a.ts", "git -P -C src checkout a.ts", "git -C src --no-pager checkout a.ts", "git -C src -C sub checkout a.ts"])
+    await keeps([["git --no-pager -C src checkout a.ts", OPENED("not_routine")], ["git -P -C src checkout a.ts", OPENED("not_routine")], ["git -C src --no-pager checkout a.ts", OPENED("not_routine")], ["git -C src -C sub checkout a.ts", OPENED("not_routine")]])
   })
 
   test("a `-C` that names no folder inside the project, or no folder at all, is not on the list", async () => {
@@ -322,12 +351,21 @@ describe("P5 A2d: a kill of a process this session's own shell tool started is t
   })
 
   test("any process that is not one of them, a group, this server, a list of signals or a word nobody can read stays held", async () => {
-    expect(root(await sh("kill 4242 9999", own))).toEqual({ class: "D", decidedBy: "gate", category: "process_not_own" })
-    expect(root(await sh("kill 4242"))).toEqual({ class: "D", decidedBy: "gate", category: "process_not_own" })
-    expect(root(await sh("kill -- -4242", own))).toEqual({ class: "D", decidedBy: "gate", category: "process_not_own" })
-    expect(root(await sh(`kill ${process.pid}`, { ownProcesses: new Set([process.pid]) }))).toEqual({ class: "D", decidedBy: "gate", category: "process_not_own" })
-    await keeps(["kill -l"], own)
-    expect(root(await sh("kill $PID", own)).class).toBe("D")
+    // 1.1.3 (matrix rows 21, 22): held as before, and that hold no longer waits; it runs as the main agent's.
+    const notOwn = opened({ class: "D", decidedBy: "gate", category: "process_not_own" })
+    expect(root(await sh("kill 4242 9999", own))).toEqual(notOwn)
+    expect(root(await sh("kill 4242"))).toEqual(notOwn)
+    expect(root(await sh("kill -- -4242", own))).toEqual(notOwn)
+    // 1.1.3 (T7 F4): this server is Swarm's own; stopping it would stop the run, so it is refused at once (its text ends
+    // with CONSENT_CONTINUE_SUFFIX at the gate), never run and never held.
+    expect(root(await sh(`kill ${process.pid}`, { ownProcesses: new Set([process.pid]) }))).toEqual({
+      class: "X",
+      decidedBy: "gate",
+      category: "process_not_own",
+      bypassed: "process_not_own",
+    })
+    await keeps([["kill -l", OPENED("not_routine")]], own)
+    expect(root(await sh("kill $PID", own))).toMatchObject({ class: "A", category: "by_main_agent", bypassed: "unreadable_command" })
   })
 })
 

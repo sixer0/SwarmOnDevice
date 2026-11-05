@@ -15,6 +15,7 @@ import type { InstanceContext } from "../../src/project/instance-context"
 import { Risk } from "../../src/tool/risk"
 import { readSteps } from "../../src/tool/shell"
 import { tmpdir } from "../fixture/fixture"
+import { IRREVERSIBLE_ARCHIVE, answerOf } from "./consented-literals"
 
 type Input = AutonomyTable.Input
 type Verdict = AutonomyTable.Verdict
@@ -55,14 +56,27 @@ const root = (given: Input) => AutonomyTable.classify({ ...given, bypass: { call
 const subagent = (given: Input) => AutonomyTable.classify({ ...given, bypass: { caller: "subagent" } })
 const short = (verdict: Verdict) => [verdict.class, verdict.category, verdict.destination]
 const label = (given: Input) => String(given.metadata.command)
+/**
+ * 1.1.3 (decision T9 G8): the consented verdict each case expects, written out: class, category, `bypassed`, destination,
+ * and the words the agent is told (undefined when it runs). Spec section 3 rule 5 and T7 F1: a kept D/P runs as the main
+ * agent's with `bypassed` = the category it was held on, recording where it sends when the call names it.
+ */
+type Want = readonly [cls: string, category: string | undefined, bypassed: string | undefined, destination: string | undefined, answer: string | undefined]
+const RUNS = (bypassed: string, destination?: string): Want => ["A", "by_main_agent", bypassed, destination, undefined]
+const IRREVERSIBLE: Want = ["X", "irreversible", undefined, undefined, IRREVERSIBLE_ARCHIVE]
+type Wants = Want | Readonly<Record<string, Want>>
+const shape = (verdict: Verdict): Want => [verdict.class, verdict.category, verdict.bypassed, verdict.destination, answerOf(verdict)]
+function wanted(given: Input, wants: Wants): Want | undefined {
+  return Array.isArray(wants) ? (wants as Want) : (wants as Readonly<Record<string, Want>>)[label(given)]
+}
 function expectOpens(given: Input, destination: string) {
   for (const verdict of [root(given), subagent(given)])
     expect([label(given), short(verdict)]).toEqual([label(given), ["A", "by_main_agent", destination]])
 }
 /** Neither the root nor a subagent opens it, and the rule that held it is the publish's own reading (`form`). */
-function expectNotOpen(given: Input, why = "") {
+function expectNotOpen(given: Input, why: string, wants: Wants) {
   for (const verdict of [root(given), subagent(given)])
-    expect([label(given), why, verdict.class === "A", verdict.destination]).toEqual([label(given), why, false, undefined])
+    expect([label(given), why, shape(verdict)] as unknown[]).toEqual([label(given), why, wanted(given, wants)])
   const steps = (given.metadata.steps as { steps: { argv: string[] }[] } | undefined)?.steps ?? []
   const step = steps.find((item) => OutwardConsent.SEND_PROGRAMS.has(item.argv[0]!))!
   const found = OutwardConsent.sendForm(step.argv[0]!, step.argv.slice(1), given.cwd, { instance: given.instance })
@@ -190,13 +204,13 @@ describe("F38 / D-F36-5: an otherwise clean project with ordinary manifests open
     for (const command of NODE_PUBLISH) expectOpens(await sh(command, here), "registry.npmjs.org")
     for (const file of ["user.npmrc", "etc/npmrc"]) {
       write(places, file, "registry=https://npm.evil.example/\n")
-      for (const command of NODE_PUBLISH) expectNotOpen(await sh(command, here), file)
+      for (const command of NODE_PUBLISH) expectNotOpen(await sh(command, here), file, RUNS("outward"))
       fs.rmSync(path.join(places, file))
     }
     expectOpens(await sh("npm publish", here), "registry.npmjs.org")
     // A pointer npm would resolve itself (`~`, relative) holds.
     setEnv("npm_config_userconfig", "~/.npmrc")
-    expectNotOpen(await sh("npm publish", here), "tilde")
+    expectNotOpen(await sh("npm publish", here), "tilde", RUNS("outward"))
   })
 })
 
@@ -211,7 +225,7 @@ describe("F38: each gap class F36 closed still holds", () => {
       '{"name":"p","version":"1.0.0",}',
       '["p"]',
     ])
-      for (const command of NODE_PUBLISH) expectNotOpen(await sh(command, await project({ "package.json": manifest })), manifest)
+      for (const command of NODE_PUBLISH) expectNotOpen(await sh(command, await project({ "package.json": manifest })), manifest, RUNS("outward"))
   })
 
   test("rule 2(a): a table header written with a quote or an escape holds", async () => {
@@ -223,9 +237,9 @@ describe("F38: each gap class F36 closed still holds", () => {
       // A key before any header names its own table the same way.
       ["uv", '"tool".uv.native-tls = true\n' + PYPROJECT],
     ] as const)
-      expectNotOpen(await sh(`${tool} publish`, await python({ "pyproject.toml": pyproject })), pyproject)
+      expectNotOpen(await sh(`${tool} publish`, await python({ "pyproject.toml": pyproject })), pyproject, RUNS("outward"))
     for (const manifest of ['["package"]\nname = "x"\nversion = "0.1.0"\n', "['p\\u0061ckage']\nname = \"x\"\nversion = \"0.1.0\"\n", CRATE + '["workspace"]\n'])
-      expectNotOpen(await sh("cargo publish", await project({ "Cargo.toml": manifest })), manifest)
+      expectNotOpen(await sh("cargo publish", await project({ "Cargo.toml": manifest })), manifest, RUNS("outward"))
   })
 
   test("rule 2(b): an escaped or quoted key, an escape, an inline table or a destination word in a checked table holds", async () => {
@@ -244,7 +258,7 @@ describe("F38: each gap class F36 closed still holds", () => {
       ["poetry", PYPROJECT + '[tool.poetry]\nname = "x"\npackages = [{ include = "x" }]\n'],
       ["uv", PYPROJECT + "[tool.uv\n"],
     ] as const)
-      expectNotOpen(await sh(`${tool} publish`, await python({ "pyproject.toml": pyproject })), pyproject)
+      expectNotOpen(await sh(`${tool} publish`, await python({ "pyproject.toml": pyproject })), pyproject, RUNS("outward"))
   })
 
   // 1.1.1 F39 (n86): `[patch]` holds only in an inline table or under a quoted key; a plain `[patch.crates-io.foo]`
@@ -265,7 +279,7 @@ describe("F38: each gap class F36 closed still holds", () => {
       CRATE + '[replace]\n"foo:0.1.0" = { path = "../foo" }\n',
       '[dependencies]\nserde = "1"\n',
     ])
-      expectNotOpen(await sh("cargo publish", await project({ "Cargo.toml": manifest })), manifest)
+      expectNotOpen(await sh("cargo publish", await project({ "Cargo.toml": manifest })), manifest, RUNS("outward"))
     expectOpens(await sh("cargo publish", await project({ "Cargo.toml": CRATE + '[patch.crates-io.foo]\npath = "../foo"\n' })), "crates.io")
   })
 
@@ -302,14 +316,14 @@ describe("F38: each gap class F36 closed still holds", () => {
     for (const [command, key] of cases) {
       const here = await make((PLAIN.find(([plain]) => plain === command) ?? [])[1]!)
       setEnv(key, "x")
-      expectNotOpen(await sh(command, here), key)
+      expectNotOpen(await sh(command, here), key, RUNS("outward"))
       delete process.env[key]
       expectOpens(await sh(command, here), destinationOf(command))
     }
   })
 
   test("rule 4: config-file presence still holds (an .npmrc line outside the allowlist, an empty uv.toml)", async () => {
-    expectNotOpen(await sh("npm publish", await npmProject({ ".npmrc": "//registry.npmjs.org/:_authToken=x\ncafile=/x\n" })))
-    expectNotOpen(await sh("uv publish", await python({ "uv.toml": "" })))
+    expectNotOpen(await sh("npm publish", await npmProject({ ".npmrc": "//registry.npmjs.org/:_authToken=x\ncafile=/x\n" })), "", RUNS("outward"))
+    expectNotOpen(await sh("uv publish", await python({ "uv.toml": "" })), "", RUNS("outward"))
   })
 })

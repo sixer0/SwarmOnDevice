@@ -22,6 +22,7 @@ import { READ_THROUGH } from "../../src/tool/shell"
 import { readSteps } from "../../src/tool/shell"
 import { DeletionWords } from "../../src/tool/deletion"
 import { tmpdir } from "../fixture/fixture"
+import { IRREVERSIBLE_ARCHIVE, answerOf } from "./consented-literals"
 
 type Input = AutonomyTable.Input
 type Verdict = AutonomyTable.Verdict
@@ -92,8 +93,28 @@ async function prefixed(prefix: string[], command: string, dir: string): Promise
 const root = (given: Input) => AutonomyTable.classify({ ...given, bypass: { caller: "root" } })
 const subagent = (given: Input) => AutonomyTable.classify({ ...given, bypass: { caller: "subagent" } })
 const base = (given: Input) => AutonomyTable.classify(given)
+/**
+ * 1.1.3 (spec section 3 `noWait`; matrix rows 2, 15, 8, 22, 3, 24-27, 31): a call the overlay does not open no longer
+ * waits. It is refused at once (X), or it runs as the main agent's with `bypassed` = the category it was held on, recording
+ * where it sends as each case states it (G8). Before 1.1.3 this asserted "not A".
+ */
+const unopened = (verdict: AutonomyTable.Verdict) =>
+  verdict.class === "X" || (verdict.class === "A" && verdict.category === "by_main_agent" && verdict.bypassed !== undefined)
 const short = (verdict: Verdict) => [verdict.class, verdict.category, verdict.destination]
 const label = (given: Input) => String(given.metadata.command)
+/**
+ * 1.1.3 (decision T9 G8): the consented verdict each case expects, written out: class, category, `bypassed`, destination,
+ * and the words the agent is told (undefined when it runs). Spec section 3 rule 5 and T7 F1: a kept D/P runs as the main
+ * agent's with `bypassed` = the category it was held on, recording where it sends when the call names it.
+ */
+type Want = readonly [cls: string, category: string | undefined, bypassed: string | undefined, destination: string | undefined, answer: string | undefined]
+const RUNS = (bypassed: string, destination?: string): Want => ["A", "by_main_agent", bypassed, destination, undefined]
+const IRREVERSIBLE: Want = ["X", "irreversible", undefined, undefined, IRREVERSIBLE_ARCHIVE]
+type Wants = Want | Readonly<Record<string, Want>>
+const shape = (verdict: Verdict): Want => [verdict.class, verdict.category, verdict.bypassed, verdict.destination, answerOf(verdict)]
+function wanted(given: Input, wants: Wants): Want | undefined {
+  return Array.isArray(wants) ? (wants as Want) : (wants as Readonly<Record<string, Want>>)[label(given)]
+}
 function expectOpens(given: Input, destination?: string) {
   for (const verdict of [root(given), subagent(given)])
     expect([label(given), short(verdict)]).toEqual([label(given), ["A", "by_main_agent", destination]])
@@ -110,16 +131,19 @@ function formOf(given: Input) {
   return found === undefined ? "none" : "held" in found ? found.held : "opens"
 }
 /** Neither the root nor a subagent opens it, and the rule named held it: "form" (the publish's own reading) or "call". */
-function expectHeld(given: Input, rule: "form" | "call", why = "") {
+function expectHeld(given: Input, rule: "form" | "call", why: string, wants: Wants) {
   for (const verdict of [root(given), subagent(given)])
-    expect([label(given), why, verdict.class === "A", verdict.destination]).toEqual([label(given), why, false, undefined])
+    expect([label(given), why, shape(verdict)] as unknown[]).toEqual([label(given), why, wanted(given, wants)])
   expect([label(given), why, formOf(given)]).toEqual([label(given), why, rule === "form" ? "form" : "opens"])
 }
-/** The consent does not open the call: it waits as it did in 1.1.0 (the reason may be the screen's own, P8). */
-function expectKept(given: Input) {
-  const kept = base(given).class
-  expect([label(given), kept]).not.toEqual([label(given), "A"])
-  for (const verdict of [root(given), subagent(given)]) expect([label(given), verdict.class]).toEqual([label(given), kept])
+/**
+ * The consent does not open the call: the overlay keeps it as it was in 1.1.0 (the reason may be the screen's own, P8).
+ * 1.1.3 (spec section 3 `noWait`; matrix rows 2, 8, 22, 31): that kept verdict no longer waits.
+ */
+function expectKept(given: Input, wants: Wants) {
+  const kept = base(given)
+  expect([label(given), kept.class]).not.toEqual([label(given), "A"])
+  for (const verdict of [root(given), subagent(given)]) expect([label(given), shape(verdict)] as unknown[]).toEqual([label(given), wanted(given, wants)])
 }
 
 const home = () => process.env.HOME || os.homedir()
@@ -165,12 +189,15 @@ afterAll(async () => {
   for (const made of temps) await made[Symbol.asyncDispose]()
 })
 
-/** The consent does not open it: the class 1.1.0 gives, and no destination (the reason may be the screen's own, P8). */
-const kept = (given: Input) => {
-  const was = base(given).class
-  expect([label(given), was]).not.toEqual([label(given), "A"])
-  for (const verdict of [root(given), subagent(given)])
-    expect([label(given), verdict.class, verdict.destination]).toEqual([label(given), was, undefined])
+/**
+ * The consent does not open it: the overlay keeps the 1.1.0 verdict (the reason may be the screen's own, P8). 1.1.3 (spec
+ * section 3 `noWait`; matrix rows 2, 8, 22, 31): that kept verdict no longer waits, and records a destination only as
+ * each case states it (G8).
+ */
+const kept = (given: Input, wants: Wants) => {
+  const was = base(given)
+  expect([label(given), was.class]).not.toEqual([label(given), "A"])
+  for (const verdict of [root(given), subagent(given)]) expect([label(given), shape(verdict)] as unknown[]).toEqual([label(given), wanted(given, wants)])
 }
 
 describe("G17-2: under consent, an assignment of a name outside the harmless list keeps the call at 1.1.0", () => {
@@ -179,7 +206,7 @@ describe("G17-2: under consent, an assignment of a name outside the harmless lis
     expectOpens(await sh("npm publish", here), "registry.npmjs.org")
     expectOpens(await sh("CI=1; npm publish", here), "registry.npmjs.org")
     // An `export` is no step the consented screen reads (unchanged since F40).
-    kept(await sh("export CI=1; npm publish", here))
+    kept(await sh("export CI=1; npm publish", here), RUNS("unreadable_command"))
     for (const call of [
       "HOME=/tmp/elsewhere; npm publish",
       "HOME=/tmp/elsewhere\nnpm publish",
@@ -194,11 +221,11 @@ describe("G17-2: under consent, an assignment of a name outside the harmless lis
       "for https_proxy in http://127.0.0.1:9; do npm publish; done",
     ]) {
       expect([call, (await readSteps(call, here))?.assigned?.length ?? 0]).not.toEqual([call, 0])
-      kept(await sh(call, here))
+      kept(await sh(call, here), RUNS("outward_not_in_mission", "registry.npmjs.org"))
     }
     const crateHere = await committed(await crate())
     expectOpens(await sh("cargo publish", crateHere), "crates.io")
-    for (const call of ["CARGO_HOME=/tmp/elsewhere; cargo publish", "HOME=/tmp/elsewhere; cargo publish"]) kept(await sh(call, crateHere))
+    for (const call of ["CARGO_HOME=/tmp/elsewhere; cargo publish", "HOME=/tmp/elsewhere; cargo publish"]) kept(await sh(call, crateHere), RUNS("outward_not_in_mission", "crates.io"))
   })
 
   test("a harmless name stays harmless only with a name for its value; development calls are unchanged", async () => {
@@ -207,7 +234,7 @@ describe("G17-2: under consent, an assignment of a name outside the harmless lis
     expectOpen(await sh("TZ=Europe/Berlin; npm test && npm run build", here))
     expectOpen(await sh("for f in a b; do npm test; done", here))
     for (const call of ["TZ=/etc/localtime; npm test && npm run build", "export TZ=:/etc/passwd; npm test", "LANG=../../x; npm test"])
-      kept(await sh(call, here))
+      kept(await sh(call, here), { "TZ=/etc/localtime; npm test && npm run build": RUNS("not_routine"), "export TZ=:/etc/passwd; npm test": RUNS("unreadable_command"), "LANG=../../x; npm test": RUNS("not_routine") })
   })
 
   test("once HOME is set in the text, `~` and `$HOME` are no longer the server's home", async () => {
@@ -218,6 +245,15 @@ describe("G17-2: under consent, an assignment of a name outside the harmless lis
   })
 })
 
+/** 1.1.3 (T9 G8): the consented verdict of each call of the loop below, literally. */
+const WANTS_1: Readonly<Record<string, Want>> = {
+  "npm version patch -m --sign-git-tag && npm publish": RUNS("outward_not_in_mission", "registry.npmjs.org"),
+  "npm version patch -m -s && npm publish": RUNS("outward_not_in_mission", "registry.npmjs.org"),
+  "npm version patch --message --preid=beta && npm publish": RUNS("outward_not_in_mission", "registry.npmjs.org"),
+  "npm version patch -m --include-workspace-root": RUNS("not_routine"),
+  "npm version patch -m": RUNS("not_routine"),
+  "npm version patch --message": RUNS("not_routine"),
+}
 describe("G17-1: npm version's message flag takes no option as its message", () => {
   test("a message that starts with `-`, or none, is not the plain form", async () => {
     const here = await committed(await npmProject())
@@ -231,7 +267,7 @@ describe("G17-1: npm version's message flag takes no option as its message", () 
       "npm version patch -m",
       "npm version patch --message",
     ])
-      kept(await sh(call, here))
+      kept(await sh(call, here), WANTS_1)
   })
 })
 
@@ -243,8 +279,8 @@ describe("G17-3 / n95: locale, time-zone and terminal values are names, not path
       expectOpen(await sh(`${prefix} npm test && npm run build`, here))
     }
     for (const prefix of ["TZ=/etc/localtime", "TZ=:/etc/passwd", "TZ=../../x", "LANG=../../x", "LANG=a/b", "LC_CTYPE=/tmp/x", "TERM=~/x", "LC_MESSAGES=:x"]) {
-      kept(await sh(`${prefix} npm test`, here))
-      kept(await sh(`${prefix} npm test && npm run build`, here))
+      kept(await sh(`${prefix} npm test`, here), RUNS("unreadable_command"))
+      kept(await sh(`${prefix} npm test && npm run build`, here), RUNS("unreadable_command"))
     }
   })
 })
@@ -313,7 +349,7 @@ describe("V17-5: gh pr create and gh release create count as a publish beside a 
       "cat alt.txt > notes.txt && gh pr create --fill",
     ]) {
       const given = await sh(call, here)
-      for (const verdict of [root(given), subagent(given)]) expect([call, verdict.class === "A"]).toEqual([call, false])
+      for (const verdict of [root(given), subagent(given)]) expect([call, unopened(verdict)]).toEqual([call, true])
     }
   })
 })

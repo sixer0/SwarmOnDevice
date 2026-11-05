@@ -17,6 +17,7 @@ import type { InstanceContext } from "../../src/project/instance-context"
 import { Reach } from "../../src/tool/reach"
 import { readSteps } from "../../src/tool/shell"
 import { tmpdir } from "../fixture/fixture"
+import { answerOf } from "./consented-literals"
 
 type Input = AutonomyTable.Input
 type Verdict = AutonomyTable.Verdict
@@ -58,11 +59,23 @@ const root = (given: Input) => AutonomyTable.classify({ ...given, bypass: { call
 const subagent = (given: Input) => AutonomyTable.classify({ ...given, bypass: { caller: "subagent" } })
 const short = (verdict: Verdict): (string | undefined)[] => [verdict.class, verdict.category]
 
+/** 1.1.3: a consented verdict also shows `bypassed`, the category it would have waited on, when it carries one. */
+const shortConsented = (verdict: Verdict): (string | undefined)[] =>
+  verdict.bypassed === undefined ? short(verdict) : [...short(verdict), verdict.bypassed]
+
+/** 1.1.3 (T9 G8): a kept D under consent, literally: it runs as the main agent's, recorded as `not_routine`. */
+const RUNS_KEPT = ["A", "by_main_agent", "not_routine"]
+
 /** Without consent, and for the root and a subagent with it. */
 async function judged(command: string, dir: string) {
   const given = await sh(command, dir, gitScope(dir))
-  return { given, without: short(base(given)), root: short(root(given)), subagent: short(subagent(given)) }
+  return { given, without: short(base(given)), root: shortConsented(root(given)), subagent: shortConsented(subagent(given)) }
 }
+
+// 1.1.3 (matrix rows 19, 23, spec section 3 rule 2): a write outside held under consent no longer waits; it runs, recorded
+// as outside_write_held. Matrix row 22: an unreadable text held under consent runs the same way.
+const RUNS_OUTSIDE = ["A", "by_main_agent", "outside_write_held"]
+const RUNS_UNREAD = ["A", "by_main_agent", "unreadable_command"]
 
 async function expectAll(command: string, dir: string, without: (string | undefined)[], consented: (string | undefined)[]) {
   const found = await judged(command, dir)
@@ -97,12 +110,12 @@ describe("CR11-1 / V11-1: a long list never drops a redirect landing", () => {
   })
 
   test("control: the plain write through the link is refused, and held with consent", async () => {
-    await expectAll("cat src/a.ts > lnk/../esc.txt", dir, ["X", "outside_write"], ["D", "outside_write_held"])
+    await expectAll("cat src/a.ts > lnk/../esc.txt", dir, ["X", "outside_write"], RUNS_OUTSIDE)
   })
 
   test("up to 400 places the landing is judged: 399 harmless redirects, or 200 `cd` pairs, then the write", async () => {
-    await expectAll(`cat src/a.ts ${pads(399)} > lnk/../esc.txt`, dir, ["X", "outside_write"], ["D", "outside_write_held"])
-    await expectAll(`${cdPairs(200)}cat src/a.ts > lnk/../esc.txt`, dir, ["X", "outside_write"], ["D", "outside_write_held"])
+    await expectAll(`cat src/a.ts ${pads(399)} > lnk/../esc.txt`, dir, ["X", "outside_write"], RUNS_OUTSIDE)
+    await expectAll(`${cdPairs(200)}cat src/a.ts > lnk/../esc.txt`, dir, ["X", "outside_write"], RUNS_OUTSIDE)
   })
 
   test("more distinct redirects with a `..` than are judged: unread, never A, and held with consent", async () => {
@@ -115,15 +128,15 @@ describe("CR11-1 / V11-1: a long list never drops a redirect landing", () => {
       expect(AutonomyTable.shellReading(given.metadata.steps, gitScope(dir))).toBeUndefined()
       const without = base(given)
       expect(without.class).not.toBe("A")
-      expect(short(root(given))).toEqual(["D", "unreadable_command"])
-      expect(short(subagent(given))).toEqual(["D", "unreadable_command"])
+      expect(shortConsented(root(given))).toEqual(RUNS_UNREAD)
+      expect(shortConsented(subagent(given))).toEqual(RUNS_UNREAD)
     }
   })
 
   test("more distinct `cd`s than are judged: every landing still counts, so the write is refused, and held with consent", async () => {
     for (const link of ["lnk", "abslnk"]) {
       const command = `${cdPairs(201)}cat src/a.ts > ${link}/../esc.txt`
-      const found = await expectAll(command, dir, ["X", "outside_write"], ["D", "outside_write_held"])
+      const found = await expectAll(command, dir, ["X", "outside_write"], RUNS_OUTSIDE)
       const reading = AutonomyTable.shellReading(found.given.metadata.steps, gitScope(dir))
       expect(reading?.complete).toBe(false)
       expect(reading?.writes).toContain(path.join(outside, "esc.txt"))
@@ -131,7 +144,7 @@ describe("CR11-1 / V11-1: a long list never drops a redirect landing", () => {
   })
 
   test("a long `cd` list with nothing outside: 1.1.0's A without consent, held with it", async () => {
-    await expectAll(`${cdPairs(201)}ls`, dir, ["A", undefined], ["D", "unreadable_command"])
+    await expectAll(`${cdPairs(201)}ls`, dir, ["A", undefined], RUNS_UNREAD)
     // A `cd` the text repeats is one place: the reading is complete and opens as before.
     const found = await judged(`${"cd src && cd .. && ".repeat(201)}ls`, dir)
     expect(found.without[0]).toBe("A")
@@ -168,7 +181,7 @@ describe("CR11-2: `tee` and `sed -i` targets are judged where they land", () => 
       "sed -i.bak s/x/y/ lnk/../v.ts",
       "cd lnk && cat ../src/a.ts | tee ../esc.txt",
     ]) {
-      await expectAll(command, dir, ["X", "outside_write"], ["D", "outside_write_held"])
+      await expectAll(command, dir, ["X", "outside_write"], RUNS_OUTSIDE)
     }
   })
 
@@ -184,7 +197,9 @@ describe("CR11-2: `tee` and `sed -i` targets are judged where they land", () => 
     for (const command of ["cat src/a.ts | tee hk/../config", "sed -i '' s/x/y/ hk/../config", "cat src/a.ts | tee loop-a/../x.txt"]) {
       const found = await judged(command, dir)
       expect([command, found.without[0]]).not.toEqual([command, "A"])
-      expect([command, found.root[0]]).not.toEqual([command, "A"])
+      // 1.1.3 (matrix rows 4, 22, spec section 3 rule 5): what the overlay held there no longer waits; it runs as the main
+      // agent's, recorded with the category it was held on.
+      expect([command, found.root[0], found.root[1], found.root[2] === undefined]).toEqual([command, "A", "by_main_agent", false])
     }
   })
 })
@@ -222,8 +237,10 @@ describe("item 4: a formatter that walks a folder with a link below it keeps 1.1
     for (const command of [...formatters, "cargo fmt"]) {
       const found = await judged(command, dir)
       expect([command, found.without[0]]).not.toEqual([command, "A"])
-      expect([command, found.root]).toEqual([command, found.without])
-      expect([command, found.subagent]).toEqual([command, found.without])
+      // 1.1.3 (matrix rows 8, 22, spec section 3 rule 5; T9 G8: stated literally): the kept verdict no longer waits; it
+      // runs as the main agent's, and the agent is told nothing.
+      expect([command, found.root, found.subagent]).toEqual([command, RUNS_KEPT, RUNS_KEPT])
+      expect([command, answerOf(root(found.given)), answerOf(subagent(found.given))]).toEqual([command, undefined, undefined])
     }
   })
 
@@ -263,7 +280,9 @@ describe("item 4: a formatter that walks a folder with a link below it keeps 1.1
     await setup(big)
     for (let index = 0; index <= Reach.LINK_SCAN_CAP; index++) write(big, `src/gen/f${index}.ts`, "")
     const found = await judged("eslint --fix src", big)
-    expect(found.root).toEqual(found.without)
+    // 1.1.3 (matrix rows 8, 22; T9 G8: stated literally): the kept verdict no longer waits.
+    expect(found.root).toEqual(RUNS_KEPT)
+    expect(answerOf(root(found.given))).toBeUndefined()
     const given = await sh("eslint --fix src && biome check --write src", plain, gitScope(plain))
     const before = Reach.linkScanEntries()
     root(given)

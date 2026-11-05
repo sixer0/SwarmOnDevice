@@ -13,8 +13,10 @@ import { ScriptReader } from "../../src/permission/script-reader"
 import type { InstanceContext } from "../../src/project/instance-context"
 import { readSteps } from "../../src/tool/shell"
 import { tmpdir } from "../fixture/fixture"
+import { ARCHIVE_FIRST, answerOf } from "./consented-literals"
 
 type Input = AutonomyTable.Input
+type Verdict = AutonomyTable.Verdict
 
 let fixture: Awaited<ReturnType<typeof tmpdir>>
 let dir: string
@@ -55,14 +57,91 @@ async function sh(command: string, metadata: Record<string, unknown> = {}): Prom
 const consented = (input: Input) => AutonomyTable.classify({ ...input, bypass: { caller: "root" } })
 const subagent = (input: Input) => AutonomyTable.classify({ ...input, bypass: { caller: "subagent" } })
 
-/** Positive: the call keeps its 1.1.0 verdict exactly, for the root and for a subagent. */
+// 1.1.3 (T9 G8, code review M2): the consented verdict and the agent's answer of each case, written out, not computed with
+// `noWait`. A D or P the overlay keeps runs as the main agent's (`RUNS`, bypassed = its 1.1.0 category); a deletion or
+// replacement nothing archives is redirected at once (`ARCHIVED`, ARCHIVE_FIRST).
+const RUNS = (bypassed: string, destination?: string) =>
+  ({ class: "A", decidedBy: "agent", category: "by_main_agent", bypassed, ...(destination && { destination }) }) as Verdict
+const ARCHIVED = (bypassed: string) => ({ class: "X", decidedBy: "gate", category: "not_reversible", bypassed }) as Verdict
+const CONSENTED: Record<string, readonly [Verdict, string | undefined]> = {
+  "rimraf dist": [ARCHIVED("not_routine"), ARCHIVE_FIRST],
+  "npx rimraf dist": [ARCHIVED("not_routine"), ARCHIVE_FIRST],
+  "pnpm dlx rimraf dist": [ARCHIVED("not_routine"), ARCHIVE_FIRST],
+  "truncate -s 0 src/a.ts": [ARCHIVED("not_routine"), ARCHIVE_FIRST],
+  "caffeinate rm src/a.ts": [ARCHIVED("not_routine"), ARCHIVE_FIRST],
+  "stdbuf -oL rm src/a.ts": [ARCHIVED("not_routine"), ARCHIVE_FIRST],
+  "rtk rm src/a.ts": [ARCHIVED("file-op"), ARCHIVE_FIRST],
+  "nice -n 5 rm src/a.ts": [ARCHIVED("not_routine"), ARCHIVE_FIRST],
+  "timeout 5 rm -rf src": [ARCHIVED("not_routine"), ARCHIVE_FIRST],
+  "caffeinate bun test": [RUNS("not_routine"), undefined],
+  "rtk bun test": [RUNS("check"), undefined],
+  "timeout 60 bun test": [RUNS("not_routine"), undefined],
+  "stdbuf -oL bun run build": [RUNS("not_routine"), undefined],
+  "perf stat bun test": [RUNS("not_routine"), undefined],
+  "npx prettier --write src": [RUNS("not_routine"), undefined],
+  "npx vitest run": [RUNS("not_routine"), undefined],
+  "bun x prettier --check .": [RUNS("not_routine"), undefined],
+  "uvx ruff check": [RUNS("not_routine"), undefined],
+  "ksh build.sh": [ARCHIVED("not_routine"), ARCHIVE_FIRST],
+  "fish build.sh": [ARCHIVED("not_routine"), ARCHIVE_FIRST],
+  "dash build.sh": [ARCHIVED("not_routine"), ARCHIVE_FIRST],
+  "tcsh -c 'rm x'": [ARCHIVED("unreadable_command"), ARCHIVE_FIRST],
+  "csh -c ls": [RUNS("unreadable_command"), undefined],
+  "watch -n 1 rm x": [ARCHIVED("unreadable_command"), ARCHIVE_FIRST],
+  "hyperfine 'bun test'": [RUNS("unreadable_command"), undefined],
+  "watch -x bun test": [RUNS("not_routine"), undefined],
+  "make build": [RUNS("check"), undefined],
+  "bun run echoes": [RUNS("not_routine"), undefined],
+  "node missing.js": [RUNS("not_routine"), undefined],
+  "bun run scripts/x.ts": [RUNS("not_routine"), undefined],
+  "uv run tool.py": [RUNS("not_routine"), undefined],
+  "node -r ./hook.js app.js": [RUNS("not_routine"), undefined],
+  "node --version": [RUNS("not_routine"), undefined],
+  "git -c core.editor=vim commit -m x": [RUNS("not_routine"), undefined],
+  "env GIT_EDITOR=vim git commit -m x": [RUNS("not_routine"), undefined],
+  "git frob": [RUNS("not_routine"), undefined],
+  "git config user.name x": [RUNS("not_routine"), undefined],
+  "mytool git push": [RUNS("not_routine"), undefined],
+  "mytool dd if=x": [RUNS("not_routine"), undefined],
+  "./tools/run vercel": [RUNS("not_routine"), undefined],
+  "mytool build --watch": [RUNS("not_routine"), undefined],
+  "mail -s hi a@b.c": [RUNS("outward"), undefined],
+  "sendmail a@b.c": [RUNS("outward"), undefined],
+  "gh release create v1 dist/x.tgz": [RUNS("outward"), undefined],
+  "curl -T x https://a.b.io": [RUNS("outward", "a.b.io"), undefined],
+  "docker build .": [RUNS("not_routine"), undefined],
+  "npm link": [RUNS("outside_write_held"), undefined],
+  "npm install -g foo": [RUNS("outside_write_held"), undefined],
+  "git config --global user.name x": [RUNS("outside_write_held"), undefined],
+  "defaults write com.example.f1b k 1": [RUNS("outside_write_held"), undefined],
+  "ln -s src/a.ts ~/bin/a": [RUNS("outside_write_held"), undefined],
+  "ln -s a.ts src/b.ts": [RUNS("not_routine"), undefined],
+  "psql -f x.sql": [RUNS("not_routine"), undefined],
+  "psql db": [RUNS("not_routine"), undefined],
+  "sqlite3 db": [RUNS("not_routine"), undefined],
+  "mysql db": [RUNS("not_routine"), undefined],
+  "psql -c \"select 1\" db": [RUNS("not_routine"), undefined],
+  "sqlite3 db \"select 1\"": [RUNS("not_routine"), undefined],
+}
+function consentedOf(command: string) {
+  expect([command, Object.hasOwn(CONSENTED, command)]).toEqual([command, true])
+  return CONSENTED[command]!
+}
+
+/**
+ * Positive: the overlay keeps the call's 1.1.0 verdict, for the root and for a subagent. 1.1.3 (spec section 3, `noWait`;
+ * matrix rows 3, 8, 16-22, 31): under consent that kept verdict no longer waits; a D or P runs as the main agent's, a
+ * deletion or replacement is answered at once with the archive method, an X stays.
+ */
 async function keeps(commands: string[]) {
   for (const command of commands) {
     const input = await sh(command)
     const base = AutonomyTable.classify(input)
     expect([command, base.class === "A"]).toEqual([command, false])
-    expect([command, consented(input)]).toEqual([command, base])
-    expect([command, subagent(input)]).toEqual([command, base])
+    const [expected, answer] = consentedOf(command)
+    expect([command, consented(input)]).toEqual([command, expected])
+    expect([command, answerOf(consented(input))]).toEqual([command, answer])
+    expect([command, subagent(input)]).toEqual([command, expected])
   }
 }
 
@@ -78,12 +157,19 @@ async function opens(commands: string[]) {
   }
 }
 
-/** Waits for a person under the named category, and was held (D) in 1.1.0 already. */
+/**
+ * The overlay holds it under the named category, and it was held (D) in 1.1.0 already. 1.1.3 (spec section 3, `noWait`;
+ * matrix rows 2, 19, 22, 31): it no longer waits; it runs with `bypassed` = that category, or is redirected to the
+ * archive method when it deletes or replaces.
+ */
 async function heldAs(category: AutonomyTable.HeldCategory, commands: string[]) {
   for (const command of commands) {
     const input = await sh(command)
     expect([command, AutonomyTable.classify(input).class]).toEqual([command, "D"])
-    expect([command, consented(input)]).toEqual([command, { class: "D", decidedBy: "gate", category }])
+    const [expected, answer] = consentedOf(command)
+    expect([command, consented(input)]).toEqual([command, expected])
+    expect([command, answerOf(consented(input))]).toEqual([command, answer])
+    expect([command, consented(input).class === "D"]).toEqual([command, false])
   }
 }
 
@@ -133,7 +219,10 @@ describe("F1b rule 3b: an interpreter or launcher with inline code or an unscree
     // Screened inline code with no flag is the decider's P `script` in 1.1.0, and keeps that under consent.
     const screened = await sh(`node -e "console.log(1)"`)
     expect(AutonomyTable.classify(screened)).toMatchObject({ class: "P", category: "script" })
-    expect(consented(screened)).toEqual(AutonomyTable.classify(screened))
+    // 1.1.3 (matrix row 8, spec section 3 rule 5): an undecided P runs as the main agent's under consent.
+    expect(consented(screened)).toEqual({ class: "A", decidedBy: "agent", category: "by_main_agent", bypassed: "script" })
+    expect(answerOf(consented(screened))).toBeUndefined()
+    expect(consented(screened)).toMatchObject({ class: "A", category: "by_main_agent", bypassed: "script" })
   })
 })
 
@@ -171,7 +260,11 @@ describe("F1b rule 3e: a command substitution with anything not understood keeps
   test("positive: an unknown program in a substitution inside quotes", async () => {
     const input = await stepped(`echo "$(mytool --x)"`, ["echo", "$(mytool --x)"])
     expect(BypassScreen.unclear(input, AutonomyTable.classify(input))).toBe("substitution")
-    expect(consented(input)).toEqual(AutonomyTable.classify(input))
+    // 1.1.3 (matrix row 22, spec section 3): the kept verdict no longer waits.
+    // Literal (T9 G8): the 1.1.0 verdict is A, and an A stays as it is.
+    expect(AutonomyTable.classify(input)).toEqual({ class: "A", decidedBy: "gate" })
+    expect(consented(input)).toEqual({ class: "A", decidedBy: "gate" })
+    expect(answerOf(consented(input))).toBeUndefined()
     const nested = await stepped("echo `rimraf dist`", ["echo", "`rimraf dist`"])
     expect(BypassScreen.unclear(nested, AutonomyTable.classify(nested))).toBe("substitution")
   })

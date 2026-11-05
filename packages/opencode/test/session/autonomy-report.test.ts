@@ -783,3 +783,93 @@ describe("sent outside the computer", () => {
     expect(section).toContain("- and 4 more")
   })
 })
+
+// 1.1.3 (row 6, spec section 2): a class X line is redirected to the archive method (Rd) or refused (F); every line names
+// the category it had before the consent changed it; under consent nothing is left waiting.
+describe("1.1.3 redirected, refused and the previous category", () => {
+  const between = (report: string, from: string, to: string) => report.slice(report.indexOf(from), report.indexOf(to))
+  const consented = () => [
+    // Rd: the three ARCHIVE_REDIRECT categories.
+    decision(since + 1, { class: "X", category: "not_reversible", bypassed: "unreadable_command", decision: "reject", patterns: ["rm -rf build && make"] } as never),
+    decision(since + 2, { class: "X", category: "delete_compound", decision: "reject", patterns: ["rm old.txt; ls"] }),
+    decision(since + 3, { class: "X", category: "irreversible", decision: "reject", patterns: ["git reset --hard"] }),
+    // F: every other class X category.
+    decision(since + 4, { class: "X", category: "credential_change", decision: "reject", patterns: ["git remote set-url origin x"] }),
+    decision(since + 5, { class: "X", category: "admin_rights", bypassed: "script_flagged", decision: "reject", patterns: ["sudo make install"] } as never),
+    decision(since + 6, { class: "X", category: "not_routine", decision: "reject", patterns: ["unjudged call"] } as never),
+    decision(since + 7, { class: "X", category: "plan_mode", decision: "reject", patterns: ["plan refused"] } as never),
+    // M: a call that runs, with its previous category.
+    decision(since + 8, { decidedBy: "agent:main/build", via: "main_agent", category: "by_main_agent", bypassed: "system_service", patterns: ["launchctl kickstart x"] } as never),
+  ]
+
+  test("the archive-redirect categories are listed under their own heading and never under Refused", async () => {
+    const { files, posted } = await run(world({ lines: consented() }))
+    const report = readFileSync(files[0]!, "utf8")
+    expect(AutonomyReport.ARCHIVE_REDIRECT).toEqual(new Set(["not_reversible", "delete_compound", "irreversible"]))
+    expect(report.indexOf("## Moved to the archive")).toBeLessThan(report.indexOf("## Redirected to the archive method"))
+    expect(report.indexOf("## Redirected to the archive method")).toBeLessThan(report.indexOf("## Refused"))
+    const rd = between(report, "## Redirected to the archive method", "## Refused")
+    expect(rd).toContain(
+      "- `bash rm -rf build && make`: Deletes or replaces something Swarm could not archive first (before the consent: Swarm could not read this command well enough)",
+    )
+    expect(rd).toContain("- `bash rm old.txt; ls`: A deletion mixed with other commands\n")
+    expect(rd).toContain("- `bash git reset --hard`: Can't be undone, so it is never run\n")
+    for (const other of ["git remote set-url", "sudo make install", "unjudged call", "plan refused"]) expect(rd).not.toContain(other)
+    const f = between(report, "## Refused", "## Still waiting for you")
+    expect(f).toContain("- `bash git remote set-url origin x`: Changes a remote, a credential or a git account\n")
+    expect(f).toContain(
+      "- `bash sudo make install`: Needs admin rights (sudo), so it is never run (before the consent: A script that needs a closer look)",
+    )
+    expect(f).toContain("- `bash unjudged call`: not_routine\n")
+    expect(f).toContain("- `bash plan refused`: plan_mode\n")
+    for (const redirect of ["rm -rf build", "rm old.txt", "git reset --hard"]) expect(f).not.toContain(redirect)
+    // Under consent nothing waits.
+    expect(between(report, "## Still waiting for you", "## Work list")).toContain("None.")
+    // The summary still counts every class X line as refused (its wording is unchanged by 1.1.3).
+    expect((posted[0]!.parts[0] as { text: string }).text).toContain("1 decided by the main agent, 7 refused, 0 still waiting")
+  })
+
+  test("each decision of the main agent names its previous category", async () => {
+    const { files } = await run(world({ lines: consented() }))
+    const report = readFileSync(files[0]!, "utf8")
+    const m = between(report, "## Decided by the main agent", "## Sent outside the computer")
+    expect(m).toContain(" · bash · `launchctl kickstart x` · Changes a system service · allowed")
+  })
+
+  test("a line whose previous category equals its category, or has none, names no previous category", () => {
+    const text = AutonomyReport.render({
+      run: { root, directory: project, since, until, language: "en" },
+      lines: [decision(since + 1, { class: "X", category: "irreversible", bypassed: "irreversible", decision: "reject", patterns: ["dd if=/dev/zero"] } as never)],
+      open: [],
+      goal: [],
+      files: [],
+      todos: [],
+      attached: [],
+      skipped: [],
+      sends: new Map(),
+    })
+    expect(text).toContain("- `bash dd if=/dev/zero`: Can't be undone, so it is never run\n")
+    expect(text).not.toContain("before the consent")
+    expect(text).toContain("## Refused\n\nNone.")
+  })
+
+  test("Indonesian: the redirect heading, its label and the previous category", async () => {
+    const { files } = await run(world({ lines: consented() }), "id")
+    const report = readFileSync(files[0]!, "utf8")
+    const rd = between(report, "## Dialihkan ke metode arsip", "## Ditolak")
+    expect(rd).toContain(
+      "- `bash rm -rf build && make`: Menghapus atau mengganti sesuatu yang tidak bisa diarsipkan Swarm lebih dulu (sebelum persetujuan: Swarm tidak bisa membaca perintah ini dengan cukup jelas)",
+    )
+    expect(rd).toContain("- `bash git reset --hard`: Tidak bisa dibatalkan, jadi tidak pernah dijalankan")
+    expect(between(report, "## Ditolak", "## Masih menunggu Anda")).toContain(
+      "- `bash sudo make install`: Butuh hak admin (sudo), jadi tidak pernah dijalankan (sebelum persetujuan: Skrip yang perlu diperiksa lebih dulu)",
+    )
+  })
+
+  test("redirects() takes only class X lines of the three categories", () => {
+    expect(AutonomyReport.redirects({ class: "X", category: "not_reversible" })).toBe(true)
+    expect(AutonomyReport.redirects({ class: "D", category: "not_reversible" })).toBe(false)
+    expect(AutonomyReport.redirects({ class: "X", category: "admin_rights" })).toBe(false)
+    expect(AutonomyReport.redirects({ class: "X" })).toBe(false)
+  })
+})

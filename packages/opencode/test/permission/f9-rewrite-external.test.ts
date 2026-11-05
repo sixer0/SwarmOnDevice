@@ -13,6 +13,7 @@ import { BypassScreen } from "../../src/permission/bypass-screen"
 import type { InstanceContext } from "../../src/project/instance-context"
 import { readSteps } from "../../src/tool/shell"
 import { tmpdir } from "../fixture/fixture"
+import { answerOf } from "./consented-literals"
 
 type Input = AutonomyTable.Input
 
@@ -60,6 +61,17 @@ const tool = (permission: string, fields: Partial<Input> = {}): Input => ({
 
 const consented = (input: Input) => AutonomyTable.classify({ ...input, bypass: { caller: "root" } })
 const subagent = (input: Input) => AutonomyTable.classify({ ...input, bypass: { caller: "subagent" } })
+
+// 1.1.3 (T9 G8, code review M2): the consented verdicts are stated literally, with the agent's answer text; nothing here
+// computes them with the code under test (`noWait`).
+type Shape = { class: string; category?: string; bypassed?: string; answer?: string }
+const RUNS = (bypassed: string): Shape => ({ class: "A", category: "by_main_agent", bypassed })
+const shape = (verdict: AutonomyTable.Verdict): Shape => ({
+  class: verdict.class,
+  category: verdict.category,
+  bypassed: verdict.bypassed,
+  answer: answerOf(verdict),
+})
 const REFUSED: AutonomyTable.Verdict = { class: "X", decidedBy: "gate", category: "irreversible" }
 
 /** Refused under consent, for the root and a subagent; without consent the 1.1.0 verdict, which was not this refusal. */
@@ -182,30 +194,33 @@ describe("F9 (G2-2): git forms that rewrite commits or refs are refused under co
 
 describe("F9 (G2-5): plugin and MCP tools keep their 1.1.0 verdict under consent", () => {
   const local = { server: "notes", transport: "local", origin: "project" }
-  const cases: [string, Input][] = [
-    ["an MCP tool of an untrusted project", tool("notes_search", { folder: "ask", metadata: { mcp: local } })],
-    ["an MCP tool the gate opens in 1.1.0", tool("notes_search", { metadata: { mcp: { ...local, origin: "global" } } })],
-    ["a remote MCP tool", tool("notes_search", { metadata: { mcp: { ...local, transport: "remote" } } })],
-    ["an MCP tool borrowing another server's name", tool("other_search", { metadata: { mcp: local } })],
-    ["a plugin tool that says nothing about itself", tool("myplugin_run")],
-    ["a plugin tool with its own patterns and metadata", tool("myplugin_run", { patterns: ["build"], metadata: { target: "x" } })],
-    ["a tool asking with a name no Swarm tool uses", tool("list", { patterns: ["src"], metadata: { path: "src" } })],
-    ["the external_tool path of a built-in name", tool("lsp")],
+  const cases: [string, Input, Shape][] = [
+    ["an MCP tool of an untrusted project", tool("notes_search", { folder: "ask", metadata: { mcp: local } }), RUNS("folder_not_trusted")],
+    ["an MCP tool the gate opens in 1.1.0", tool("notes_search", { metadata: { mcp: { ...local, origin: "global" } } }), { class: "A", category: "mcp_tool" }],
+    ["a remote MCP tool", tool("notes_search", { metadata: { mcp: { ...local, transport: "remote" } } }), RUNS("outward_not_in_mission")],
+    ["an MCP tool borrowing another server's name", tool("other_search", { metadata: { mcp: local } }), RUNS("external_tool")],
+    ["a plugin tool that says nothing about itself", tool("myplugin_run"), RUNS("external_tool")],
+    ["a plugin tool with its own patterns and metadata", tool("myplugin_run", { patterns: ["build"], metadata: { target: "x" } }), RUNS("not_routine")],
+    ["a tool asking with a name no Swarm tool uses", tool("list", { patterns: ["src"], metadata: { path: "src" } }), RUNS("not_routine")],
+    ["the external_tool path of a built-in name", tool("lsp"), RUNS("external_tool")],
   ]
 
-  for (const [name, input] of cases)
+  for (const [name, input, expected] of cases)
     test(name, () => {
       const base = AutonomyTable.classify(input)
-      expect(consented(input)).toEqual(base)
-      expect(subagent(input)).toEqual(base)
-      expect(consented(input).category).not.toBe("by_main_agent")
+      // 1.1.3 (matrix rows 6, 11, 15, 8, spec section 3 rule 5; T9 G8: stated literally per case): the kept 1.1.0 verdict
+      // no longer waits; a held one runs as the main agent's, recorded with its 1.1.0 category; an A stays A.
+      expect(shape(consented(input))).toEqual(expected)
+      expect(shape(subagent(input))).toEqual(expected)
+      if (base.class !== "A") expect(consented(input)).toEqual({ class: "A", decidedBy: "agent", category: "by_main_agent", bypassed: base.category })
     })
 
   test("an MCP source on a shell-named request is not opened either, though the same command would be", async () => {
     const plain = await sh("bun install")
     expect(consented(plain).category).toBe("by_main_agent")
     const borrowed = { ...plain, metadata: { ...plain.metadata, mcp: local } }
-    expect(consented(borrowed)).toEqual(AutonomyTable.classify(borrowed))
+    // 1.1.3 (matrix rows 6, 8; T9 G8: stated literally): the kept 1.1.0 verdict no longer waits.
+    expect(shape(consented(borrowed))).toEqual(RUNS("not_routine"))
   })
 
   test("near miss: Swarm's own tools are still opened", () => {

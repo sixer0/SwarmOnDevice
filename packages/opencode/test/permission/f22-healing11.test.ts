@@ -20,6 +20,7 @@ import { Reach } from "../../src/tool/reach"
 import { readSteps } from "../../src/tool/shell"
 import { tmpdir } from "../fixture/fixture"
 import { expectBareFrom } from "./install-fixture"
+import { ARCHIVE_FIRST, answerOf } from "./consented-literals"
 
 type Input = AutonomyTable.Input
 type Verdict = AutonomyTable.Verdict
@@ -62,13 +63,35 @@ const subagent = (given: Input) => AutonomyTable.classify({ ...given, bypass: { 
 const opened = (verdict: Verdict): Verdict =>
   verdict.class === "A" ? verdict : { class: "A", decidedBy: "agent", category: "by_main_agent", bypassed: verdict.category }
 
-async function keeps(commands: readonly string[], cwd: string, scope: InstanceContext) {
+const recorded = (verdict: Verdict): Verdict =>
+  verdict.bypassed === undefined ? verdict : { ...verdict, bypassed: "not_routine" }
+
+// 1.1.3 (T9 G8, code review M2): the consented verdicts are stated literally, with the agent's answer text; nothing here
+// computes them with the code under test (`noWait`, `destinationsOf`).
+type Shape = { class: string; category?: string; bypassed?: string; destination?: string; answer?: string }
+const RUNS = (bypassed: string): Shape => ({ class: "A", category: "by_main_agent", bypassed })
+const REDIRECTED: Shape = { class: "X", category: "not_reversible", bypassed: "not_routine", answer: ARCHIVE_FIRST }
+const shape = (verdict: Verdict): Shape => ({
+  class: verdict.class,
+  category: verdict.category,
+  bypassed: verdict.bypassed,
+  destination: verdict.destination,
+  answer: answerOf(verdict),
+})
+
+async function keeps(commands: readonly string[], cwd: string, scope: InstanceContext, expected: Shape, except: Record<string, Shape> = {}) {
   for (const command of commands) {
     const given = await sh(command, cwd, scope)
     const kept = AutonomyTable.classifyBase(given)
     expect([command, kept.class]).not.toEqual([command, "A"])
-    expect([command, root(given)]).toEqual([command, kept])
-    expect([command, subagent(given)]).toEqual([command, kept])
+    // 1.1.3 (spec section 3 rule 5; matrix rows 3, 8, 16-23, 31): the overlay keeps the 1.1.0 verdict, and under consent
+    // that kept verdict no longer waits: a D or P runs as the main agent's, a deletion or replacement is redirected to the
+    // archive method at once, an X stays. `expected` states it literally; `except` names the cases that differ.
+    // In a compound each step is overlaid first, so which step's category `bypassed` records follows the tie rule of
+    // `classifySteps`; only its presence is compared (`recorded` names it "not_routine").
+    const want = except[command] ?? expected
+    expect([command, shape(recorded(root(given)))]).toEqual([command, want])
+    expect([command, shape(recorded(subagent(given)))]).toEqual([command, want])
   }
 }
 
@@ -128,6 +151,7 @@ describe("P37 (S9-1): output options, in-place targets and named config files ar
       ],
       dir,
       gitScope(dir),
+      RUNS("not_routine"),
     )
   })
 
@@ -145,6 +169,7 @@ describe("P37 (S9-1): output options, in-place targets and named config files ar
       ],
       dir,
       gitScope(dir),
+      RUNS("not_routine"),
     )
   })
 
@@ -164,17 +189,19 @@ describe("P37 (S9-1): output options, in-place targets and named config files ar
       ],
       dir,
       gitScope(dir),
+      RUNS("not_routine"),
     )
   })
 
   test("a link made where a step back leads out is held as a write outside", async () => {
     const given = await sh("ln -s src/a.ts ol/../y", dir, gitScope(dir))
-    expect(root(given).category).toBe("outside_write_held")
-    expect(subagent(given).category).toBe("outside_write_held")
+    // 1.1.3 (matrix rows 19, 23): held as a write outside, which no longer waits; it runs, recorded as outside_write_held.
+    expect(root(given)).toMatchObject({ class: "A", category: "by_main_agent", bypassed: "outside_write_held" })
+    expect(subagent(given)).toMatchObject({ class: "A", category: "by_main_agent", bypassed: "outside_write_held" })
   })
 
   test("a config file named through a link and back up is judged where it lands", async () => {
-    await keeps(["tsc -p hk/../tsconfig.json --noEmit", "tsc -p ig/../tsconfig.json --noEmit"], dir, gitScope(dir))
+    await keeps(["tsc -p hk/../tsconfig.json --noEmit", "tsc -p ig/../tsconfig.json --noEmit"], dir, gitScope(dir), RUNS("not_routine"))
     await opens(["tsc -p tsconfig.json --noEmit", "tsc -p src/../tsconfig.json --noEmit"], dir, gitScope(dir))
   })
 
@@ -234,8 +261,9 @@ describe("CR10-1: repeated places are read once, and an over-long list keeps the
     expect(base(given)).toEqual(base(without))
     expect(AutonomyTable.shellReading(given.metadata.steps, gitScope(dir))?.complete).toBe(false)
     expect(AutonomyTable.classifyBase(given).class).toBe("A")
-    expect([root(given).class, root(given).category]).toEqual(["D", "unreadable_command"])
-    expect([subagent(given).class, subagent(given).category]).toEqual(["D", "unreadable_command"])
+    // 1.1.3 (matrix row 22): held as unreadable, which no longer waits; it runs as the main agent's.
+    expect([root(given).class, root(given).category, root(given).bypassed]).toEqual(["A", "by_main_agent", "unreadable_command"])
+    expect([subagent(given).class, subagent(given).category, subagent(given).bypassed]).toEqual(["A", "by_main_agent", "unreadable_command"])
   })
 
   // 1.1.1 F25 (CR11-1): a landing is a safety fact in both modes, so this reading is unread, as before F22.
@@ -245,7 +273,8 @@ describe("CR10-1: repeated places are read once, and an over-long list keeps the
     expect((given.metadata.steps as { upward: unknown[] }).upward.length).toBe(401)
     expect(AutonomyTable.shellReading(given.metadata.steps, gitScope(dir))).toBeUndefined()
     expect(base(given).class).not.toBe("A")
-    expect([root(given).class, root(given).category]).toEqual(["D", "unreadable_command"])
+    // 1.1.3 (matrix row 22): held as unreadable, which no longer waits; it runs as the main agent's.
+    expect([root(given).class, root(given).category, root(given).bypassed]).toEqual(["A", "by_main_agent", "unreadable_command"])
   })
 })
 
@@ -278,7 +307,7 @@ describe("CR10-2: `mkdir` then `cd` in a script of a project opened by a link na
   })
 
   test("a script `cd` the rule does not take still keeps 1.1.0", async () => {
-    await keeps(["npm run ml"], named, gitScope(named))
+    await keeps(["npm run ml"], named, gitScope(named), RUNS("not_routine"))
   })
 })
 
@@ -314,11 +343,11 @@ describe("CR10-3, n56: each F21 guard has a case that opens without it", () => {
   })
 
   test("a step that writes between the `mkdir` and the `cd` keeps 1.1.0", async () => {
-    await keeps(["mkdir -p build && prettier --write src/a.ts && cd build && vitest run"], dir, gitScope(dir))
+    await keeps(["mkdir -p build && prettier --write src/a.ts && cd build && vitest run"], dir, gitScope(dir), RUNS("not_routine"))
   })
 
   test("a `mkdir` form other than the exact two keeps 1.1.0", async () => {
-    await keeps(["mkdir -pv build && cd build && vitest run", "mkdir -p build build && cd build && vitest run"], dir, gitScope(dir))
+    await keeps(["mkdir -pv build && cd build && vitest run", "mkdir -p build build && cd build && vitest run"], dir, gitScope(dir), RUNS("not_routine"))
   })
 
   // n56: `madeBefore` does not look before the `mkdir`; what keeps these is that no program that makes a link is allowlisted.
@@ -333,6 +362,7 @@ describe("CR10-3, n56: each F21 guard has a case that opens without it", () => {
       ],
       dir,
       gitScope(dir),
+      RUNS("not_routine"), { "cp -R lnk build; mkdir -p build && cd build && vitest run": REDIRECTED },
     )
   })
 })

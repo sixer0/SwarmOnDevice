@@ -20,6 +20,7 @@ import type { InstanceContext } from "../../src/project/instance-context"
 import { Reach } from "../../src/tool/reach"
 import { readSteps } from "../../src/tool/shell"
 import { tmpdir } from "../fixture/fixture"
+import { answerOf } from "./consented-literals"
 
 type Input = AutonomyTable.Input
 type Verdict = AutonomyTable.Verdict
@@ -82,13 +83,29 @@ const subagent = (input: Input) => AutonomyTable.classify({ ...input, bypass: { 
 const opened = (verdict: Verdict): Verdict =>
   verdict.class === "A" ? verdict : { class: "A", decidedBy: "agent", category: "by_main_agent", bypassed: verdict.category }
 
-async function keeps(commands: readonly string[], cwd = dir) {
+// 1.1.3 (T9 G8, code review M2): the consented verdicts are stated literally, with the agent's answer text; nothing here
+// computes them with the code under test (`noWait`, `destinationsOf`).
+type Shape = { class: string; category?: string; bypassed?: string; destination?: string; answer?: string }
+const RUNS = (bypassed: string): Shape => ({ class: "A", category: "by_main_agent", bypassed })
+const shape = (verdict: Verdict): Shape => ({
+  class: verdict.class,
+  category: verdict.category,
+  bypassed: verdict.bypassed,
+  destination: verdict.destination,
+  answer: answerOf(verdict),
+})
+
+async function keeps(commands: readonly string[], ...args: [expected: Shape] | [cwd: string, expected: Shape]) {
+  const [cwd, expected] = args.length === 1 ? [dir, args[0]] : args
   for (const command of commands) {
     const input = await sh(command, cwd)
     const before = base(input)
     expect([command, before.class === "A"]).toEqual([command, false])
-    expect([command, root(input)]).toEqual([command, before])
-    expect([command, subagent(input)]).toEqual([command, before])
+    // 1.1.3 (spec section 3 rule 5; matrix rows 3, 8, 16-23, 31): the overlay keeps the 1.1.0 verdict, and under consent
+    // that kept verdict no longer waits: a D or P runs as the main agent's, a deletion or replacement is redirected to the
+    // archive method at once, an X stays. `expected` states it literally;
+    expect([command, shape(root(input))]).toEqual([command, expected])
+    expect([command, shape(subagent(input))]).toEqual([command, expected])
   }
 }
 
@@ -107,7 +124,7 @@ describe("G4-2 variant: a config or project file chosen on the line, or config i
     await keeps([
       "tsc -p other.json", "tsc --project other.json", "tsc -project other.json", "tsc --Project=other.json", "tsc -P other.json",
       "tsc -b other.json", "tsc --build sub/other.json", "tsc -b --clean", "tsc @args.txt", "tsgo -p other.json", "tsgo --build x.json",
-    ])
+    ], RUNS("not_routine"))
   })
 
   test("linters, formatters and type checkers: config files and inline config", async () => {
@@ -117,7 +134,7 @@ describe("G4-2 variant: a config or project file chosen on the line, or config i
       "eslint --rule semi:2 src", "eslint --global x src", "eslint --parser-options ecmaVersion:2020 src", "eslint --env browser src",
       // 1.1.1 F15 (n27): inputs only `selectsConfig` holds (the allowlist itself passes them).
       "mypy --config-file sub/other.ini src", "swift test --package-path sub",
-    ])
+    ], RUNS("not_routine"))
   })
 
   test("test runners, builders and managers: another root, manifest, module file, package folder or config", async () => {
@@ -126,11 +143,11 @@ describe("G4-2 variant: a config or project file chosen on the line, or config i
       "cargo build --manifest-path sub/Cargo.toml", "go build -modfile other.mod ./...", "go test -C sub ./...",
       "swift build --package-path sub", "xcodebuild -project X.xcodeproj build", "uv sync --project sub", "poetry install -C sub",
       "bun test --config other.toml", "pnpm install --config.ignore-scripts=false", "npm install --config.foo=bar",
-    ])
+    ], RUNS("not_routine"))
   })
 
   test("a place quoted inside a data value is not read as inside", async () => {
-    await keeps([`prettier --check '{"a":"/etc/x"}'`, `prettier --check '["~/x"]'`])
+    await keeps([`prettier --check '{"a":"/etc/x"}'`, `prettier --check '["~/x"]'`], RUNS("not_routine"))
   })
 
   test("near misses: the tool's own default config, and no config option, still open", async () => {
@@ -157,7 +174,7 @@ describe("G4-4: jest option names in every spelling its reader folds", () => {
       "jest --output_file data.db", "jest --OUTPUT-FILE data.db", "jest --Output-File data.db", "jest --OUTPUTFILE=data.db",
       "jest --coverage_directory local", "jest --CACHE_DIRECTORY=local", "jest --setup_files x.ts", "jest --SETUP-FILES x.ts",
       "jest --Global-Setup x.ts", "jest --test_runner x", "jest --CONFIG x.js", "vitest run --output_file data.db", "vitest --SETUP_FILES x.ts",
-    ])
+    ], RUNS("not_routine"))
   })
 
   test("near misses: inside the snapshot, and the runner's own options", async () => {
@@ -170,7 +187,7 @@ describe("G5-1: a manager's `--` does not hide a local program's options", () =>
     await keeps([
       "npm exec tsc -- --outDir local", "npm exec -- tsc --outDir local", "npx tsc -- --outDir local", "bunx tsc -- --outDir local",
       "npx prettier -- --write local/keep.txt", "npm exec prettier -- --write data.db", "npx tsc -- -p other.json",
-    ])
+    ], RUNS("not_routine"))
   })
 
   test("near misses: the same calls writing inside the snapshot open", async () => {
@@ -185,15 +202,16 @@ describe("G5-1: a manager's `--` does not hide a local program's options", () =>
 
 describe("G5-2: installs in a workspace, or for other packages, keep 1.1.0", () => {
   test("a root that declares workspaces, its members, and a pnpm workspace", async () => {
-    await keeps(["npm install", "yarn", "bun install", "npm ci"], path.join(dir, "ws"))
-    await keeps(["npm install"], path.join(dir, "ws/pkgs/b"))
-    await keeps(["pnpm install", "pnpm add zod"], path.join(dir, "pws"))
+    await keeps(["npm install", "yarn", "bun install", "npm ci"], path.join(dir, "ws"), RUNS("not_routine"))
+    await keeps(["npm install"], path.join(dir, "ws/pkgs/b"), RUNS("not_routine"))
+    await keeps(["pnpm install", "pnpm add zod"], path.join(dir, "pws"), RUNS("not_routine"))
   })
 
   test("workspace, filter, recursive and folder options", async () => {
     await keeps(
       ["npm install -w a", "npm install --workspace=a", "npm ci --workspaces", "npm i -ws", "pnpm install -r", "pnpm install --filter a", "pnpm add zod -F a", "yarn add zod -W", "npm install --prefix sub"],
       path.join(dir, "plain"),
+      RUNS("not_routine"),
     )
   })
 
@@ -212,7 +230,7 @@ describe("V5-3: a new branch made at HEAD is no change of the tree", () => {
 
   test("through the table: a new branch beside a script opens; one with a start point keeps 1.1.0", async () => {
     await opens(["git checkout -b feat && npm run build", "git switch -c feat && npm test"])
-    await keeps(["git checkout -b feat main && npm run build", "git switch -c feat origin/main && npm test"])
+    await keeps(["git checkout -b feat main && npm run build", "git switch -c feat origin/main && npm test"], RUNS("not_routine"))
   })
 })
 
@@ -229,7 +247,8 @@ describe("G5-P3: a step past MAX_STEP_WORDS keeps 1.1.0 without further reading"
     const started = performance.now()
     const verdict = root(input)
     const ms = performance.now() - started
-    expect(verdict).toEqual(before)
+    // 1.1.3 (matrix rows 8, 22, spec section 3): the kept 1.1.0 verdict no longer waits.
+    expect(shape(verdict)).toEqual(RUNS("not_routine"))
     expect(BypassScreen.unclear({ ...input, bypass: { caller: "root" } }, before)).toBe("unreadable")
     expect(BypassScreen.counters.manifestReads).toBe(0)
     expect(Reach.snapshotGitCalls() - git).toBe(0)
@@ -239,7 +258,7 @@ describe("G5-P3: a step past MAX_STEP_WORDS keeps 1.1.0 without further reading"
 
   test("a formatter over more files than the cap keeps 1.1.0; a short unknown call before a risky one still does", async () => {
     const files = Array.from({ length: BypassScreen.MAX_STEP_WORDS + 1 }, () => "src/a.ts")
-    await keeps([`prettier --write ${files.join(" ")}`])
+    await keeps([`prettier --write ${files.join(" ")}`], RUNS("not_routine"))
     const risky = await sh("frobnicate a b c d rm -rf src")
     expect(BypassScreen.unclear({ ...risky, bypass: { caller: "root" } }, base(risky))).toBe("unknown_then_risky")
   })

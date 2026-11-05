@@ -14,6 +14,7 @@ import { ScriptReader } from "../../src/permission/script-reader"
 import type { InstanceContext } from "../../src/project/instance-context"
 import { readSteps } from "../../src/tool/shell"
 import { tmpdir } from "../fixture/fixture"
+import { ARCHIVE_FIRST, CREDENTIAL_CHANGE, answerOf } from "./consented-literals"
 
 type Input = AutonomyTable.Input
 
@@ -77,24 +78,50 @@ async function opens(commands: readonly string[]) {
   }
 }
 
-/** A form the allowlist does not accept: the call keeps its 1.1.0 verdict exactly, for the root and a subagent. */
-async function keeps(commands: readonly string[], metadata: Record<string, unknown> = {}) {
-  for (const command of commands) {
+/** T9 G8: the consented verdict a case expects, written out. */
+type Expected = { class: string; category: string | undefined; bypassed?: string; destination?: string }
+type Case = readonly [command: string, expected: Expected, answer?: string]
+const OPENED = (bypassed: string): Expected => ({ class: "A", category: "by_main_agent", bypassed })
+const REDIRECTED = (bypassed: string): Expected => ({ class: "X", category: "not_reversible", bypassed })
+const shortG8 = (verdict: AutonomyTable.Verdict): Expected => ({
+  class: verdict.class,
+  category: verdict.category,
+  ...(verdict.bypassed !== undefined && { bypassed: verdict.bypassed }),
+  ...(verdict.destination !== undefined && { destination: verdict.destination }),
+})
+
+/**
+ * A form the allowlist does not accept: the overlay keeps its 1.1.0 verdict, for the root and a subagent. 1.1.3 (spec
+ * section 3, `noWait`; matrix rows 3, 8, 16-22, 31): under consent that kept verdict no longer waits; a D or P runs as
+ * the main agent's, a deletion or replacement is answered at once with the archive method, an X stays.
+ */
+async function keeps(cases: readonly Case[], metadata: Record<string, unknown> = {}) {
+  for (const [command, expected, answer] of cases) {
     const input = await sh(command, metadata)
     const base = AutonomyTable.classify(input)
     expect([command, allowlisted(input)]).toEqual([command, false])
     expect([command, base.class === "A"]).toEqual([command, false])
-    expect([command, consented(input)]).toEqual([command, base])
-    expect([command, subagent(input)]).toEqual([command, base])
+    // T9 G8: the expected verdict and the agent's answer are written per case, not computed by the code under test.
+    for (const verdict of [consented(input), subagent(input)]) {
+      expect([command, shortG8(verdict), answerOf(verdict)]).toEqual([command, expected, answer])
+    }
   }
 }
 
-/** Not on the allowlist; whatever the earlier rules make of it, it is never the main agent's. */
+/**
+ * Not on the allowlist. 1.1.3 (spec section 3, `noWait`; matrix rows 2, 8, 16-27, 31-33): whatever the earlier rules make
+ * of it no longer waits. It runs as the main agent's, recorded with the category it was held on, or is answered at once.
+ */
 async function notOpened(commands: readonly string[]) {
   for (const command of commands) {
     const input = await sh(command)
     expect([command, allowlisted(input)]).toEqual([command, false])
-    expect([command, consented(input).category]).not.toEqual([command, "by_main_agent"])
+    for (const verdict of [consented(input), subagent(input)]) {
+      expect([command, verdict.class === "D" || verdict.class === "P"]).toEqual([command, false])
+      // An A is the 1.1.0 A (P8), or the main agent's with the category it was held on.
+      if (verdict.class === "A" && verdict.category !== "by_main_agent") expect([command, verdict]).toEqual([command, AutonomyTable.classify(input)])
+      if (verdict.category === "by_main_agent") expect([command, verdict.bypassed === undefined]).toEqual([command, false])
+    }
   }
 }
 
@@ -110,11 +137,12 @@ describe("F7: each allowlist entry opens in a plain form", () => {
     ])
   })
 
-  test("git fetch and pull without rebase or force are on the list, and still wait as `outward` (kept categories first)", async () => {
+  test("git fetch and pull without rebase or force are on the list, and and are held as `outward` (kept categories first), which 1.1.3 runs", async () => {
     for (const command of ["git fetch origin", "git pull origin main"]) {
       const input = await sh(command)
       expect([command, allowlisted(input)]).toEqual([command, true])
-      expect([command, consented(input).category]).not.toEqual([command, "by_main_agent"])
+      // 1.1.3 (matrix row 2): an outward call no longer waits; it runs, recorded as outward.
+      expect([command, consented(input)]).toMatchObject([command, { class: "A", category: "by_main_agent", bypassed: "outward" }])
     }
   })
 
@@ -134,7 +162,7 @@ describe("F7: each allowlist entry opens in a plain form", () => {
       "go fmt ./...",
     ])
     // 1.1.1 F10b (P19): a make target runs what the makefile says, which nothing reads; it keeps 1.1.0.
-    await keeps(["make", "make build", "make -j4 test", "gmake build"])
+    await keeps([["make", OPENED("not_routine")], ["make build", OPENED("check")], ["make -j4 test", OPENED("not_routine")], ["gmake build", OPENED("not_routine")]])
   })
 
   test("compilers, type checkers, linters, formatters and test runners invoked directly", async () => {
@@ -155,11 +183,21 @@ describe("F7: each allowlist entry opens in a plain form", () => {
   test("F10a (m21): `cp` and `mv` are not on the list; each keeps its 1.1.0 verdict exactly, for the root and a subagent", async () => {
     // A copy or move to a new name is A in 1.1.0 already (the shell archives what it would replace); every other form is
     // held as it was.
-    for (const command of ["cp src/a.ts src/c.ts", "mv src/a.ts src/d.ts", "cp src/a.ts package.json", "mv -v src/a.ts src/b.ts"]) {
+    // 1.1.3 (matrix rows 30, 31, spec section 3 `noWait`): a replacement the shell would not archive no longer waits; it is
+    // redirected to the archive method at once. A copy or move the shell archives runs as before.
+    // T9 G8: written per case. A copy or move to a new name is the 1.1.0 A `file-op`; a copy over package.json is redirected.
+    const FILE_OP: Expected = { class: "A", category: "file-op" }
+    const cases: readonly Case[] = [
+      ["cp src/a.ts src/c.ts", FILE_OP],
+      ["mv src/a.ts src/d.ts", FILE_OP],
+      ["cp src/a.ts package.json", REDIRECTED("not_routine"), ARCHIVE_FIRST],
+      ["mv -v src/a.ts src/b.ts", FILE_OP],
+    ]
+    for (const [command, expected, answer] of cases) {
       const input = await sh(command)
       expect([command, allowlisted(input)]).toEqual([command, false])
-      expect([command, consented(input)]).toEqual([command, AutonomyTable.classify(input)])
-      expect([command, subagent(input)]).toEqual([command, AutonomyTable.classify(input)])
+      for (const verdict of [consented(input), subagent(input)])
+        expect([command, shortG8(verdict), answerOf(verdict)]).toEqual([command, expected, answer])
     }
   })
 })
@@ -168,28 +206,28 @@ describe("F7: the same program with an excluded subcommand or option keeps its 1
   test("git", async () => {
     await keeps([
       // `branch -d`, `branch -f`, `switch -C` and `tag -f` rewrite refs and are refused since F9 (f9-rewrite-external.test.ts).
-      "git branch --edit-description", "git checkout src/a.ts", "git checkout src",
-      "git checkout -- src/a.ts", "git checkout -f main", "git switch -f main", "git switch --discard-changes main",
-      "git commit -e -m x", "git commit --template x.txt", "git stash branch x",
-      "git merge -s ours feature", "git tag -e v1", "git remote rename a b", "git worktree add x",
-      "git diff --ext-diff", "git log --output=out.txt", "git grep -O foo", "git -c core.pager=less status",
-      "git config user.name x", "git cherry-pick abc", "git revert abc", "git restore src/a.ts",
+      ["git branch --edit-description", OPENED("not_routine")], ["git checkout src/a.ts", OPENED("not_routine")], ["git checkout src", OPENED("not_routine")],
+      ["git checkout -- src/a.ts", OPENED("not_routine")], ["git checkout -f main", OPENED("not_routine")], ["git switch -f main", OPENED("not_routine")], ["git switch --discard-changes main", OPENED("not_routine")],
+      ["git commit -e -m x", OPENED("not_routine")], ["git commit --template x.txt", OPENED("not_routine")], ["git stash branch x", OPENED("not_routine")],
+      ["git merge -s ours feature", OPENED("not_routine")], ["git tag -e v1", OPENED("not_routine")], ["git remote rename a b", {category: "credential_change", class: "X"}, CREDENTIAL_CHANGE], ["git worktree add x", OPENED("not_routine")],
+      ["git diff --ext-diff", OPENED("not_routine")], ["git log --output=out.txt", OPENED("not_routine")], ["git grep -O foo", OPENED("not_routine")], ["git -c core.pager=less status", OPENED("not_routine")],
+      ["git config user.name x", OPENED("not_routine")], ["git cherry-pick abc", OPENED("not_routine")], ["git revert abc", OPENED("not_routine")], ["git restore src/a.ts", OPENED("not_routine")],
     ])
     await notOpened(["git pull --rebase origin main", "git pull --force", "git fetch --upload-pack=x origin", "git tag -d v1"])
   })
 
   test("git commit --amend is refused as irreversible since F9; a fixup commit only adds one and keeps its 1.1.0 verdict", async () => {
     expect(consented(await sh("git commit --amend -m x"))).toEqual({ class: "X", decidedBy: "gate", category: "irreversible" })
-    await keeps(["git commit --fixup=amend:HEAD"])
+    await keeps([["git commit --fixup=amend:HEAD", OPENED("not_routine")]])
   })
 
   test("package managers", async () => {
     await keeps([
-      "bun test --preload ./x.ts", "bun run scripts/x.ts", "bun run deploy", "bun x drizzle-kit push", "bun x missing",
-      "bun pm cache rm", "npm run deploy", "npx -p x y", "npx drizzle-kit push", "pnpm dlx x", "yarn dlx x", "bun add file:../x",
-      "pip uninstall x", "uv run python x.py",
-      "poetry run python x.py", "cargo run", "cargo build --config x", "go run .", "go test -exec x ./...",
-      "go build -toolexec x", "go generate", "make -f other.mk", "make CC=gcc", "make --eval=x", "make -E x",
+      ["bun test --preload ./x.ts", OPENED("not_routine")], ["bun run scripts/x.ts", OPENED("not_routine")], ["bun run deploy", OPENED("not_routine")], ["bun x drizzle-kit push", OPENED("not_routine")], ["bun x missing", OPENED("not_routine")],
+      ["bun pm cache rm", OPENED("not_routine")], ["npm run deploy", OPENED("not_routine")], ["npx -p x y", OPENED("not_routine")], ["npx drizzle-kit push", OPENED("not_routine")], ["pnpm dlx x", OPENED("not_routine")], ["yarn dlx x", OPENED("not_routine")], ["bun add file:../x", OPENED("not_routine")],
+      ["pip uninstall x", OPENED("not_routine")], ["uv run python x.py", OPENED("not_routine")],
+      ["poetry run python x.py", OPENED("not_routine")], ["cargo run", OPENED("not_routine")], ["cargo build --config x", OPENED("not_routine")], ["go run .", OPENED("not_routine")], ["go test -exec x ./...", OPENED("not_routine")],
+      ["go build -toolexec x", OPENED("not_routine")], ["go generate", OPENED("not_routine")], ["make -f other.mk", OPENED("not_routine")], ["make CC=gcc", OPENED("not_routine")], ["make --eval=x", OPENED("not_routine")], ["make -E x", OPENED("not_routine")],
     ])
     // A global or user install is outside_write_held before the allowlist is read.
     await notOpened(["uv tool install x", "pip install --user x", "pip install --target vendor x", "bun install -g x", "npm install -g x", "npm exec --package=x y", "yarn global add x", "cargo install x"])
@@ -198,16 +236,16 @@ describe("F7: the same program with an excluded subcommand or option keeps its 1
 
   test("compilers, linters, formatters and test runners", async () => {
     await keeps([
-      "eslint --rulesdir x src", "eslint -c x.js src", "prettier --plugin x .", "pytest -p x", "pytest -o addopts=x", "vitest --config x",
-      "jest --setupFiles x", "mypy --python-executable x src", "xcodebuild clean build", "xcodebuild archive", "gradle -I x.gradle build",
-      "mvn -Dexec.executable=x test", "swift run",
+      ["eslint --rulesdir x src", OPENED("not_routine")], ["eslint -c x.js src", OPENED("not_routine")], ["prettier --plugin x .", OPENED("not_routine")], ["pytest -p x", OPENED("not_routine")], ["pytest -o addopts=x", OPENED("not_routine")], ["vitest --config x", OPENED("not_routine")],
+      ["jest --setupFiles x", OPENED("not_routine")], ["mypy --python-executable x src", OPENED("not_routine")], ["xcodebuild clean build", OPENED("not_routine")], ["xcodebuild archive", OPENED("not_routine")], ["gradle -I x.gradle build", OPENED("not_routine")],
+      ["mvn -Dexec.executable=x test", OPENED("not_routine")], ["swift run", OPENED("not_routine")],
     ])
     // A publish or deploy is `outward` before the allowlist is read.
     await notOpened(["mvn install", "mvn deploy", "gradle publish", "gradle assembleRelease publish"])
   })
 
   test("file utilities", async () => {
-    await keeps(["sort -o out.txt src/a.ts", "rg --pre x foo", "sed -n 'w out' src/a.ts", "sed -n '1e ls' src/a.ts"])
+    await keeps([["sort -o out.txt src/a.ts", OPENED("not_routine")], ["rg --pre x foo", OPENED("not_routine")], ["sed -n 'w out' src/a.ts", OPENED("not_routine")], ["sed -n '1e ls' src/a.ts", OPENED("not_routine")]])
     await notOpened([
       "cp -f src/a.ts src/b.ts", "mv -f src/a.ts src/b.ts", "find . -exec ls {} ;", "find . -delete", "mkdir /tmp/f7-outside",
       "cat ~/.ssh/config", "ls ../..", "sed -i s/a/b/ src/a.ts",
@@ -218,17 +256,17 @@ describe("F7: the same program with an excluded subcommand or option keeps its 1
 describe("F7: a program that is not on the list keeps its 1.1.0 verdict", () => {
   test("unknown programs, launchers, a program by a path outside the system folders", async () => {
     await keeps([
-      "docker build .", "mytool build", "deno test", "rake test", "env CI=1 bun test", "timeout 5 bun test", "./node_modules/.bin/vitest run",
-      "node app.js", "python3 tool.py", "java -jar x.jar",
+      ["docker build .", OPENED("not_routine")], ["mytool build", OPENED("not_routine")], ["deno test", OPENED("not_routine")], ["rake test", OPENED("not_routine")], ["env CI=1 bun test", OPENED("not_routine")], ["timeout 5 bun test", OPENED("not_routine")], ["./node_modules/.bin/vitest run", OPENED("program_not_trusted")],
+      ["node app.js", OPENED("not_routine")], ["python3 tool.py", OPENED("not_routine")], ["java -jar x.jar", OPENED("not_routine")],
     ])
     expect(Object.hasOwn(BypassLists.ALLOWLIST, "constructor")).toBe(false)
     expect(Object.hasOwn(BypassLists.ALLOWLIST, "__proto__")).toBe(false)
-    await keeps(["constructor x", "__proto__ x"])
+    await keeps([["constructor x", OPENED("not_routine")], ["__proto__ x", OPENED("not_routine")]])
   })
 
   test("a listed program by a system path opens", async () => {
     await opens(["/opt/homebrew/bin/cargo build", "/usr/bin/git status"])
-    await keeps(["/tmp/bin/cargo build"])
+    await keeps([["/tmp/bin/cargo build", OPENED("not_routine")]])
   })
 
   test("an assignment before the program: the shell gives no reading for one; only a safe one is read through", async () => {
@@ -247,11 +285,12 @@ describe("F7: a program that is not on the list keeps its 1.1.0 verdict", () => 
 
 describe("F7: the shell's own labels keep 1.1.0 whatever the words", () => {
   test("`irreversible` and `remote` labels", async () => {
-    await keeps(["bun test", "make build", "git status --short"], { risk: "irreversible" })
+    await keeps([["bun test", REDIRECTED("not_reversible"), ARCHIVE_FIRST], ["make build", REDIRECTED("not_reversible"), ARCHIVE_FIRST], ["git status --short", REDIRECTED("not_reversible"), ARCHIVE_FIRST]], { risk: "irreversible" })
     for (const command of ["bun test", "make build"]) {
       const input = await sh(command, { risk: "remote" })
       expect([command, allowlisted(input)]).toEqual([command, false])
-      expect([command, consented(input).category]).not.toEqual([command, "by_main_agent"])
+      // 1.1.3 (matrix row 32): a `remote` label no longer waits; it runs, recorded as outward.
+      expect([command, consented(input)]).toMatchObject([command, { class: "A", category: "by_main_agent", bypassed: "outward" }])
     }
   })
 
@@ -291,7 +330,15 @@ describe("F7: compounds", () => {
   })
 
   test("a compound with one unlisted step keeps its 1.1.0 verdict", async () => {
-    await keeps(["bun install && docker build .", "bun test; mytool x", "git add -A && git config user.name x", "make && node app.js"])
+    // 1.1.3 (spec section 3, matrix rows 8, 22): each step is overlaid and then `noWait`ed, so the unlisted step runs as the
+    // main agent's too and the compound is A; which step's category it records follows the tie rule of `classifySteps`.
+    for (const command of ["bun install && docker build .", "bun test; mytool x", "git add -A && git config user.name x", "make && node app.js"]) {
+      const input = await sh(command)
+      expect([command, allowlisted(input)]).toEqual([command, false])
+      expect([command, AutonomyTable.classify(input).class === "A"]).toEqual([command, false])
+      for (const verdict of [consented(input), subagent(input)])
+        expect([command, verdict.class, verdict.category, verdict.bypassed !== undefined]).toEqual([command, "A", "by_main_agent", true])
+    }
   })
 })
 

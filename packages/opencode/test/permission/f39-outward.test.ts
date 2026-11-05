@@ -19,6 +19,7 @@ import type { InstanceContext } from "../../src/project/instance-context"
 import { Risk } from "../../src/tool/risk"
 import { readSteps } from "../../src/tool/shell"
 import { tmpdir } from "../fixture/fixture"
+import { IRREVERSIBLE_ARCHIVE, answerOf } from "./consented-literals"
 
 type Input = AutonomyTable.Input
 type Verdict = AutonomyTable.Verdict
@@ -57,8 +58,28 @@ async function sh(command: string, dir: string): Promise<Input> {
 }
 const root = (given: Input) => AutonomyTable.classify({ ...given, bypass: { caller: "root" } })
 const subagent = (given: Input) => AutonomyTable.classify({ ...given, bypass: { caller: "subagent" } })
+/**
+ * 1.1.3 (spec section 3 `noWait`; matrix rows 2, 15, 8, 22, 3, 24-27, 31): a call the overlay does not open no longer
+ * waits. It is refused at once (X), or it runs as the main agent's with `bypassed` = the category it was held on, recording
+ * where it sends as each case states it (G8). Before 1.1.3 this asserted "not A".
+ */
+const unopened = (verdict: AutonomyTable.Verdict) =>
+  verdict.class === "X" || (verdict.class === "A" && verdict.category === "by_main_agent" && verdict.bypassed !== undefined)
 const short = (verdict: Verdict) => [verdict.class, verdict.category, verdict.destination]
 const label = (given: Input) => String(given.metadata.command)
+/**
+ * 1.1.3 (decision T9 G8): the consented verdict each case expects, written out: class, category, `bypassed`, destination,
+ * and the words the agent is told (undefined when it runs). Spec section 3 rule 5 and T7 F1: a kept D/P runs as the main
+ * agent's with `bypassed` = the category it was held on, recording where it sends when the call names it.
+ */
+type Want = readonly [cls: string, category: string | undefined, bypassed: string | undefined, destination: string | undefined, answer: string | undefined]
+const RUNS = (bypassed: string, destination?: string): Want => ["A", "by_main_agent", bypassed, destination, undefined]
+const IRREVERSIBLE: Want = ["X", "irreversible", undefined, undefined, IRREVERSIBLE_ARCHIVE]
+type Wants = Want | Readonly<Record<string, Want>>
+const shape = (verdict: Verdict): Want => [verdict.class, verdict.category, verdict.bypassed, verdict.destination, answerOf(verdict)]
+function wanted(given: Input, wants: Wants): Want | undefined {
+  return Array.isArray(wants) ? (wants as Want) : (wants as Readonly<Record<string, Want>>)[label(given)]
+}
 function expectOpens(given: Input, destination: string) {
   for (const verdict of [root(given), subagent(given)])
     expect([label(given), short(verdict)]).toEqual([label(given), ["A", "by_main_agent", destination]])
@@ -75,9 +96,9 @@ function formOf(given: Input) {
  * Neither the root nor a subagent opens it, and the rule that held it is the one named: "form" (the publish's own
  * reading), "call" (the publish alone opens; the call around it keeps 1.1.0).
  */
-function expectHeld(given: Input, rule: "form" | "call", why = "") {
+function expectHeld(given: Input, rule: "form" | "call", why: string, wants: Wants) {
   for (const verdict of [root(given), subagent(given)])
-    expect([label(given), why, verdict.class === "A", verdict.destination]).toEqual([label(given), why, false, undefined])
+    expect([label(given), why, shape(verdict)] as unknown[]).toEqual([label(given), why, wanted(given, wants)])
   expect([label(given), why, formOf(given)]).toEqual([label(given), why, rule === "form" ? "form" : "opens"])
 }
 
@@ -124,6 +145,37 @@ afterAll(async () => {
   for (const made of temps) await made[Symbol.asyncDispose]()
 })
 
+/** 1.1.3 (T9 G8): the consented verdict of each call of the loop below, literally. */
+const WANTS_1: Readonly<Record<string, Want>> = {
+  "cat alt.txt > notes.txt && uv publish": RUNS("not_routine"),
+  "uv publish; cat alt.txt > notes.txt": RUNS("not_routine"),
+  "cat alt.txt > notes.txt\nuv publish": RUNS("not_routine"),
+  "cat alt.txt > notes.txt && poetry publish": RUNS("not_routine"),
+  "poetry publish; cat alt.txt > notes.txt": RUNS("not_routine"),
+  "cat alt.txt > notes.txt\npoetry publish": RUNS("not_routine"),
+  "cat alt.txt > notes.txt && npm publish": RUNS("outward_not_in_mission", "registry.npmjs.org"),
+  "npm publish; cat alt.txt > notes.txt": RUNS("outward_not_in_mission", "registry.npmjs.org"),
+  "cat alt.txt > notes.txt\nnpm publish": RUNS("outward_not_in_mission", "registry.npmjs.org"),
+  "cat alt.txt > notes.txt && cargo publish": RUNS("outward_not_in_mission", "crates.io"),
+  "cargo publish; cat alt.txt > notes.txt": RUNS("outward_not_in_mission", "crates.io"),
+  "cat alt.txt > notes.txt\ncargo publish": RUNS("outward_not_in_mission", "crates.io"),
+  "cat alt.txt > notes.txt && netlify deploy --prod --no-build --dir dist": RUNS("outward_not_in_mission", "netlify"),
+  "netlify deploy --prod --no-build --dir dist; cat alt.txt > notes.txt": RUNS("outward_not_in_mission", "netlify"),
+  "cat alt.txt > notes.txt\nnetlify deploy --prod --no-build --dir dist": RUNS("outward_not_in_mission", "netlify"),
+  "cat alt.txt > notes.txt && firebase deploy --only hosting": RUNS("not_routine"),
+  "firebase deploy --only hosting; cat alt.txt > notes.txt": RUNS("not_routine"),
+  "cat alt.txt > notes.txt\nfirebase deploy --only hosting": RUNS("not_routine"),
+}
+/** 1.1.3 (T9 G8): the consented verdict of each call of the loop below, literally. */
+const WANTS_2: Readonly<Record<string, Want>> = {
+  "cat alt.txt > uv.toml && uv publish": RUNS("not_routine"),
+  "cat alt.txt > poetry.toml && poetry publish": RUNS("not_routine"),
+  "cat alt.txt > netlify.toml && netlify deploy --prod --no-build --dir dist": RUNS("outward_not_in_mission", "netlify"),
+  "cat alt.txt > netlify.yml && netlify deploy --prod --no-build --dir dist": RUNS("outward_not_in_mission", "netlify"),
+  "cat alt.txt > .netlify/state.json && netlify deploy --prod --no-build --dir dist": RUNS("outward_not_in_mission", "netlify"),
+  "cat alt.txt > firebase.json && firebase deploy --only hosting": RUNS("not_routine"),
+  "cat alt.txt > .firebaserc && firebase deploy --only hosting": RUNS("not_routine"),
+}
 describe("G15-1: a file written in the same call as a publish or deploy keeps the call at 1.1.0", () => {
   test("a redirect beside a publish or deploy, before or after it, holds the call; the publish alone opens", async () => {
     const cases: [string, () => Promise<string>, string][] = [
@@ -139,7 +191,7 @@ describe("G15-1: a file written in the same call as a publish or deploy keeps th
       write(here, "alt.txt", "a")
       expectOpens(await sh(send, here), destination)
       for (const call of [`cat alt.txt > notes.txt && ${send}`, `${send}; cat alt.txt > notes.txt`, `cat alt.txt > notes.txt\n${send}`])
-        expectHeld(await sh(call, here), "call", call)
+        expectHeld(await sh(call, here), "call", call, WANTS_1)
     }
   })
 
@@ -159,7 +211,7 @@ describe("G15-1: a file written in the same call as a publish or deploy keeps th
     ]
     for (const [call, make] of writes) {
       const given = await sh(call, await make())
-      for (const verdict of [root(given), subagent(given)]) expect([call, verdict.class === "A"]).toEqual([call, false])
+      for (const verdict of [root(given), subagent(given)]) expect([call, unopened(verdict)]).toEqual([call, true])
     }
     const plain = await sh("cat alt.txt > notes.txt", await site(alt))
     for (const verdict of [root(plain), subagent(plain)]) expect(verdict.class).toBe("A")
@@ -176,7 +228,7 @@ describe("G15-1: a file written in the same call as a publish or deploy keeps th
       ["cat alt.txt > firebase.json && firebase deploy --only hosting", () => site(alt)],
       ["cat alt.txt > .firebaserc && firebase deploy --only hosting", () => site(alt)],
     ]
-    for (const [call, make] of cases) expectHeld(await sh(call, await make()), "call", call)
+    for (const [call, make] of cases) expectHeld(await sh(call, await make()), "call", call, WANTS_2)
   })
 
   test("inside a project script: a write and a publish in one script hold; the publish alone opens", async () => {
@@ -184,7 +236,7 @@ describe("G15-1: a file written in the same call as a publish or deploy keeps th
     const here = await python({ "package.json": JSON.stringify({ name: "p", version: "1.0.0", scripts }), "alt.txt": "a" })
     expectOpens(await sh("npm run plain", here), "pypi.org")
     const given = await sh("npm run ship", here)
-    for (const verdict of [root(given), subagent(given)]) expect(verdict.class === "A").toBe(false)
+    for (const verdict of [root(given), subagent(given)]) expect(unopened(verdict)).toBe(true)
   })
 
   test("the publish and deploy config names are consent-sensitive, and 1.1.0's sensitive list is unchanged", () => {
@@ -202,10 +254,10 @@ describe("G15-1: a file written in the same call as a publish or deploy keeps th
 describe("G15-2: any netlify config other than netlify.toml holds the deploy", () => {
   test("netlify.yml, .yaml and .json, in the folder or above it up to the top", async () => {
     for (const name of ["netlify.yml", "netlify.yaml", "netlify.json"]) {
-      expectHeld(await sh(NETLIFY, await site({ [name]: "" })), "form", name)
+      expectHeld(await sh(NETLIFY, await site({ [name]: "" })), "form", name, RUNS("outward"))
       const here = await site({ [name]: "", "web/dist/index.html": "x" })
       const given = { ...(await sh(NETLIFY, path.join(here, "web"))), instance: scope(here) }
-      for (const verdict of [root(given), subagent(given)]) expect([name, verdict.class === "A"]).toEqual([name, false])
+      for (const verdict of [root(given), subagent(given)]) expect([name, unopened(verdict)]).toEqual([name, true])
     }
   })
 })
@@ -216,14 +268,14 @@ describe("G15-3: yarn 1's user and system config locations hold yarn", () => {
     expectOpens(await sh("yarn npm publish", here), "registry.npmjs.org")
     for (const file of [".config/yarn/config", ".yarn/config"]) {
       atHome(file, "registry https://npm.evil.example/\n")
-      expectHeld(await sh("yarn npm publish", here), "form", file)
+      expectHeld(await sh("yarn npm publish", here), "form", file, RUNS("outward"))
       expectOpens(await sh("npm publish", here), "registry.npmjs.org")
       for (const made of placed.splice(0)) fs.rmSync(made, { force: true })
     }
     // `~/.config/yarn` as a file is a config file; as a folder (yarn's global packages) it is none.
     fs.rmSync(path.join(home(), ".config/yarn"), { recursive: true, force: true })
     atHome(".config/yarn", "registry https://npm.evil.example/\n")
-    expectHeld(await sh("yarn npm publish", here), "form", "config/yarn file")
+    expectHeld(await sh("yarn npm publish", here), "form", "config/yarn file", RUNS("outward"))
     for (const made of placed.splice(0)) fs.rmSync(made, { force: true })
     atHome(".config/yarn/global/package.json", "{}")
     placed.push(path.join(home(), ".config/yarn"))
@@ -231,10 +283,10 @@ describe("G15-3: yarn 1's user and system config locations hold yarn", () => {
     const xdg = await temp()
     setEnv("XDG_CONFIG_HOME", xdg)
     write(xdg, "yarn/config", "")
-    expectHeld(await sh("yarn npm publish", here), "form", "xdg")
+    expectHeld(await sh("yarn npm publish", here), "form", "xdg", RUNS("outward"))
     restoreEnv()
     setEnv("yarn_config", "/x/yarnrc")
-    expectHeld(await sh("yarn npm publish", here), "form", "yarn_config")
+    expectHeld(await sh("yarn npm publish", here), "form", "yarn_config", RUNS("outward"))
   })
 })
 
@@ -244,8 +296,8 @@ describe("CR15-1: the files a package carries by name land inside the project", 
     write(outside, "secret.txt", "s")
     const linked = await crate({ "README.md": "r" })
     fs.symlinkSync(path.join(outside, "secret.txt"), path.join(linked, "notes.md"))
-    expectHeld(await sh("cargo publish", await crate({ "Cargo.toml": CRATE + 'readme = "/etc/hosts"\n' })), "form", "abs readme")
-    expectHeld(await sh("cargo publish", await crate({ "Cargo.toml": CRATE + 'license-file = "../x.txt"\n' })), "form", "up license")
+    expectHeld(await sh("cargo publish", await crate({ "Cargo.toml": CRATE + 'readme = "/etc/hosts"\n' })), "form", "abs readme", RUNS("outward"))
+    expectHeld(await sh("cargo publish", await crate({ "Cargo.toml": CRATE + 'license-file = "../x.txt"\n' })), "form", "up license", RUNS("outward"))
     for (const manifest of [
       CRATE + 'include = ["../outside/**"]\n',
       CRATE + 'include = ["src/**", "../*"]\n',
@@ -255,9 +307,9 @@ describe("CR15-1: the files a package carries by name land inside the project", 
       CRATE + 'readme = { workspace = true }\n',
       CRATE + 'include = "src"\n',
     ])
-      expectHeld(await sh("cargo publish", await crate({ "Cargo.toml": manifest })), "form", manifest)
+      expectHeld(await sh("cargo publish", await crate({ "Cargo.toml": manifest })), "form", manifest, RUNS("outward"))
     fs.writeFileSync(path.join(linked, "Cargo.toml"), CRATE + 'readme = "notes.md"\n')
-    expectHeld(await sh("cargo publish", linked), "form", "readme through a link")
+    expectHeld(await sh("cargo publish", linked), "form", "readme through a link", RUNS("outward"))
     for (const manifest of [
       CRATE + 'readme = "README.md"\nlicense-file = "LICENSE"\n',
       CRATE + "readme = false\n",
@@ -279,7 +331,7 @@ describe("CR15-1: the files a package carries by name land inside the project", 
       ["poetry", PYPROJECT + '[tool.poetry]\nexclude = ["/etc"]\n'],
       ["poetry", PYPROJECT + '[tool.poetry]\npackages = [{ include = "x" }]\n'],
     ] as const)
-      expectHeld(await sh(`${tool} publish`, await python({ "pyproject.toml": pyproject })), "form", pyproject)
+      expectHeld(await sh(`${tool} publish`, await python({ "pyproject.toml": pyproject })), "form", pyproject, RUNS("outward"))
     for (const pyproject of [
       PYPROJECT.replace('version = "0.1.0"', 'version = "0.1.0"\nreadme = "README.md"\nlicense = { text = "MIT" }'),
       PYPROJECT.replace('version = "0.1.0"', 'version = "0.1.0"\nreadme = { file = "README.md", content-type = "text/markdown" }\nlicense = "MIT"\nlicense-files = ["LICEN[CS]E*"]'),
@@ -311,7 +363,7 @@ describe("CR15-2: a tracked link under the package folder that lands outside hol
       // Untracked, it keeps the earlier behaviour (documented in coder_execution_f39.md).
       expectOpens(await sh(command, here), destination)
       await $`git add docs/notes.txt`.cwd(here).quiet()
-      expectHeld(await sh(command, here), "form", command)
+      expectHeld(await sh(command, here), "form", command, RUNS("outward"))
     }
   })
 })
@@ -353,14 +405,14 @@ describe("V15-1: .npmrc lines are judged by a strict allowlist", () => {
       "userconfig=/tmp/x\n",
       "save-exact[]=true\n",
     ])
-      for (const command of NODE_PUBLISH) expectHeld(await sh(command, await npmProject({ ".npmrc": text })), "form", JSON.stringify(text))
+      for (const command of NODE_PUBLISH) expectHeld(await sh(command, await npmProject({ ".npmrc": text })), "form", JSON.stringify(text), RUNS("outward"))
     const linked = await npmProject()
     write(linked, "real.npmrc", "save-exact=true\n")
     fs.symlinkSync(path.join(linked, "real.npmrc"), path.join(linked, ".npmrc"))
-    expectHeld(await sh("npm publish", linked), "form", "link")
+    expectHeld(await sh("npm publish", linked), "form", "link", RUNS("outward"))
     const folder = await npmProject()
     fs.mkdirSync(path.join(folder, ".npmrc"))
-    expectHeld(await sh("npm publish", folder), "form", "folder")
+    expectHeld(await sh("npm publish", folder), "form", "folder", RUNS("outward"))
   })
 
   test("a global npmrc beside node on PATH, and the userconfig pointer npm run exports, by the same lines", async () => {
@@ -371,18 +423,18 @@ describe("V15-1: .npmrc lines are judged by a strict allowlist", () => {
     write(prefix, "etc/npmrc", "//registry.npmjs.org/:_authToken=x\n")
     expectOpens(await sh("npm publish", here), "registry.npmjs.org")
     write(prefix, "etc/npmrc", "registry=https://npm.evil.example/\n")
-    expectHeld(await sh("npm publish", here), "form", "global")
+    expectHeld(await sh("npm publish", here), "form", "global", RUNS("outward"))
     restoreEnv()
     write(prefix, "user.npmrc", "//registry.npmjs.org/:_authToken=x\n")
     setEnv("npm_config_userconfig", path.join(prefix, "user.npmrc"))
     expectOpens(await sh("npm publish", here), "registry.npmjs.org")
     write(prefix, "user.npmrc", "registry=https://npm.evil.example/\n")
-    expectHeld(await sh("npm publish", here), "form", "pointer")
+    expectHeld(await sh("npm publish", here), "form", "pointer", RUNS("outward"))
   })
 
   test("yarn and bun rc files keep the presence rule", async () => {
-    expectHeld(await sh("yarn npm publish", await npmProject({ ".yarnrc.yml": "nodeLinker: node-modules\n" })), "form")
-    expectHeld(await sh("bun publish", await npmProject({ "bunfig.toml": "" })), "form")
+    expectHeld(await sh("yarn npm publish", await npmProject({ ".yarnrc.yml": "nodeLinker: node-modules\n" })), "form", "", RUNS("outward"))
+    expectHeld(await sh("bun publish", await npmProject({ "bunfig.toml": "" })), "form", "", RUNS("outward"))
   })
 })
 
@@ -419,7 +471,7 @@ describe("V15-1: netlify.toml opens with [build] command and publish, [[redirect
       '[build]\ncommand = "echo \\u0041"\n',
       '[build]\ncommand = "make"\n[[redirects]]\nfrom = "/a"\n[dev]\nport = 1\n',
     ])
-      expectHeld(await sh(NETLIFY, await site({ "netlify.toml": toml })), "form", toml)
+      expectHeld(await sh(NETLIFY, await site({ "netlify.toml": toml })), "form", toml, RUNS("outward"))
   })
 })
 
@@ -443,7 +495,7 @@ describe("V15-2: pyproject is looked into only in the tool.uv and tool.poetry ta
       PYPROJECT + '[tool."black"]\nline-length = 88\n',
       PYPROJECT + '[tool]\n"u\\u0076" = { publish-url = "https://pypi.evil.example/" }\n',
     ])
-      for (const tool of ["uv", "poetry"]) expectHeld(await sh(`${tool} publish`, await python({ "pyproject.toml": pyproject })), "form", pyproject)
+      for (const tool of ["uv", "poetry"]) expectHeld(await sh(`${tool} publish`, await python({ "pyproject.toml": pyproject })), "form", pyproject, RUNS("outward"))
   })
 })
 
@@ -454,7 +506,7 @@ describe("V15-3 / n82 / n83: environment", () => {
     expectOpens(await sh("cargo publish", here), "crates.io")
     for (const key of ["CARGO_REGISTRY_CREDENTIAL_PROVIDER", "CARGO_REGISTRY_GLOBAL_CREDENTIAL_PROVIDERS", "CARGO_REGISTRIES_CRATES_IO_TOKEN"]) {
       setEnv(key, "x")
-      expectHeld(await sh("cargo publish", here), "form", key)
+      expectHeld(await sh("cargo publish", here), "form", key, RUNS("outward"))
       delete process.env[key]
     }
   })
@@ -463,7 +515,7 @@ describe("V15-3 / n82 / n83: environment", () => {
     const here = await npmProject()
     for (const key of ["npm_config_workspace", "npm_config_workspaces", "npm_config_include_workspace_root"]) {
       setEnv(key, "true")
-      for (const command of NODE_PUBLISH) expectHeld(await sh(command, here), "form", key)
+      for (const command of NODE_PUBLISH) expectHeld(await sh(command, here), "form", key, RUNS("outward"))
       delete process.env[key]
     }
   })
@@ -479,7 +531,7 @@ describe("V15-3 / n82 / n83: environment", () => {
       const here = await make()
       write(here, file, "")
       setEnv(key, file.split("/")[0]!)
-      expectHeld(await sh(command, here), "form", key)
+      expectHeld(await sh(command, here), "form", key, RUNS("outward"))
       restoreEnv()
     }
   })

@@ -87,8 +87,9 @@ describe("a sensitive file under consent keeps its 1.1.0 verdict", () => {
     for (const editClass of ["not_ordinary", "sensitive"] as const) {
       const base = edit(".husky/pre-commit", editClass)
       const consented = edit(".husky/pre-commit", editClass, SUBAGENT)
-      expect(consented).toEqual(base)
-      expect(consented.bypassed).toBeUndefined()
+      // 1.1.3 (matrix rows 4, 8, spec section 3 rule 5): no longer kept waiting; it runs as the main agent's, recorded
+      // with its 1.1.0 category.
+      expect(consented).toEqual({ class: "A", decidedBy: "agent", category: "by_main_agent", bypassed: base.category })
     }
     expect(edit(".husky/pre-commit", "not_ordinary")).toMatchObject({ class: "P", category: "edit-not-ordinary" })
     expect(edit(".husky/pre-commit", "sensitive")).toMatchObject({ class: "D", category: "sensitive_file" })
@@ -104,8 +105,8 @@ describe("a sensitive file under consent keeps its 1.1.0 verdict", () => {
       const base = await bash(command)
       expect(base.class).not.toBe("A")
       const consented = await bash(command, SUBAGENT)
-      expect(consented.bypassed).toBeUndefined()
-      expect(consented).toEqual(base)
+      // 1.1.3 (matrix rows 4, 22, spec section 3 rule 5): it no longer waits; it runs as the main agent's.
+      expect(consented).toMatchObject({ class: "A", decidedBy: "agent", category: "by_main_agent", bypassed: base.category })
     }
   })
 })

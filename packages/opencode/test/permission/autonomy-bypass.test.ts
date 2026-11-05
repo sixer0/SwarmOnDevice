@@ -14,6 +14,7 @@ import { ScriptReader } from "../../src/permission/script-reader"
 import type { InstanceContext } from "../../src/project/instance-context"
 import { readSteps } from "../../src/tool/shell"
 import { tmpdir } from "../fixture/fixture"
+import { answerOf } from "./consented-literals"
 import { expectNoManifestAbove } from "./install-fixture"
 
 type Input = AutonomyTable.Input
@@ -76,6 +77,8 @@ const OPENED = (bypassed: AutonomyTable.Verdict["category"]): Verdict => ({
 })
 const HELD = (category: AutonomyTable.HeldCategory): Verdict => ({ class: "D", decidedBy: "gate", category })
 const REFUSED = (category: AutonomyTable.HeldCategory): Verdict => ({ class: "X", decidedBy: "gate", category })
+/** 1.1.3 (spec section 3 rule 4): the archive redirect keeps the category the call would have waited on. */
+const REDIRECTED = (bypassed: AutonomyTable.HeldCategory): Verdict => ({ ...REFUSED("not_reversible"), bypassed })
 
 const allowed = [
   { id: "dest-host", destination: { kind: "host", host: "docs.example.com" } },
@@ -126,14 +129,16 @@ describe("S1.13 the overlay, rule by rule (P8)", () => {
       follows: [{ permission: "edit" }],
     })
     expect(AutonomyTable.classify(outside)).toEqual(REFUSED("outside_write"))
-    expect(consented(outside)).toEqual(HELD("outside_write_held"))
+    // 1.1.3 (matrix row 23, spec section 3 rule 2): it no longer waits; it runs, recorded as outside_write_held.
+    expect(consented(outside)).toEqual(OPENED("outside_write_held"))
     const zshrc = request("edit", {
       patterns: [path.relative(dir, path.join(os.homedir(), ".zshrc"))],
       metadata: { filepath: path.join(os.homedir(), ".zshrc") },
       editClass: "no_undo",
       canUndo: false,
     })
-    expect(consented(zshrc)).toEqual(HELD("outside_write_held"))
+    // 1.1.3 (matrix row 19): runs.
+    expect(consented(zshrc)).toEqual(OPENED("outside_write_held"))
     // X that is not about where it writes is unchanged.
     expect(consented(await sh("rm src/a.ts && ls"))).toEqual(REFUSED("delete_compound"))
     expect(consented(await sh("git remote add x https://github.com/evil/app.git"))).toEqual(REFUSED("credential_change"))
@@ -170,57 +175,69 @@ describe("S1.13 the overlay, rule by rule (P8)", () => {
       metadata: { url: "https://evil.example.net/" },
       outward: { allowed },
     })
-    expect(consented(away)).toEqual(HELD("outward_not_in_mission"))
-    expect(consented(request("websearch", { patterns: ["x"], metadata: { query: "x" } }))).toEqual(HELD("outward_not_in_mission"))
-    expect(consented(await sh("git push origin main", {}, { risk: "remote" })).class).toBe("D")
+    // 1.1.3 (matrix rows 15, 32, 1): none of them waits any more; each runs, recorded with the category it was held on, and
+    // (T7 F1) a send with the host it goes to.
+    expect(consented(away)).toEqual({ ...OPENED("outward_not_in_mission"), destination: "evil.example.net" })
+    expect(consented(request("websearch", { patterns: ["x"], metadata: { query: "x" } }))).toEqual(OPENED("outward_not_in_mission"))
+    expect(consented(await sh("git push origin main", {}, { risk: "remote" }))).toMatchObject(OPENED("outward"))
     expect(consented(request("external_directory", { patterns: ["/tmp/*"], metadata: { filepath: "/tmp/a" } }))).toEqual(
-      HELD("outside_folder"),
+      OPENED("outside_folder"),
     )
   })
 
   test("6. D triggers hold what the table held under the trigger's name", async () => {
-    expect(consented(await sh("curl https://x.example"))).toEqual(HELD("outward"))
-    expect(consented(await sh("node x.js --url https://api.example.com"))).toEqual(HELD("outward"))
-    expect(consented(await sh("launchctl list", {}, { risk: "irreversible" }))).toEqual(HELD("system_service"))
-    expect(consented(await sh("crontab -l"))).toEqual(HELD("system_service"))
-    expect(consented(await sh("killall node", {}, { risk: "irreversible" }))).toEqual(HELD("process_not_own"))
-    expect(consented(await sh("kill 4242"))).toEqual(HELD("process_not_own"))
+    // 1.1.3 (matrix rows 2, 20, 21, 22): what a trigger held no longer waits; it runs, recorded under the trigger's name.
+    // T7 F1: the host nobody named is on the line too.
+    expect(consented(await sh("curl https://x.example"))).toEqual({ ...OPENED("outward"), destination: "x.example" })
+    expect(consented(await sh("node x.js --url https://api.example.com"))).toEqual(OPENED("outward"))
+    expect(consented(await sh("launchctl list", {}, { risk: "irreversible" }))).toEqual(OPENED("system_service"))
+    expect(consented(await sh("crontab -l"))).toEqual(OPENED("system_service"))
+    expect(consented(await sh("killall node", {}, { risk: "irreversible" }))).toEqual(OPENED("process_not_own"))
+    expect(consented(await sh("kill 4242"))).toEqual(OPENED("process_not_own"))
     // 1.1.1 F10a (P5 A2d, P19): a kill of a process this session's own shell tool started is the main agent's again.
     const own = await sh("kill 4242", { ownProcesses: new Set([4242]) })
     expect(consented(own)).toEqual({ class: "A", decidedBy: "agent", category: "by_main_agent", bypassed: "not_routine" })
-    expect(consented(await sh("kill 4242 4243", { ownProcesses: new Set([4242]) }))).toEqual(HELD("process_not_own"))
-    expect(consented(await sh("kill -l"))).toEqual(AutonomyTable.classify(await sh("kill -l")))
-    expect(consented(await sh("bash -c 'make'"))).toEqual(HELD("unreadable_command"))
-    expect(consented(await sh("source .venv/bin/activate"))).toEqual(HELD("unreadable_command"))
-    expect(consented(await sh("make", {}, { risk: "remote" })).class).toBe("D")
+    expect(consented(await sh("kill 4242 4243", { ownProcesses: new Set([4242]) }))).toEqual(OPENED("process_not_own"))
+    // 1.1.3 (matrix row 8): the kept not_routine verdict runs.
+    expect(AutonomyTable.classify(await sh("kill -l"))).toEqual(HELD("not_routine"))
+    expect(consented(await sh("kill -l"))).toEqual(OPENED("not_routine"))
+    expect(consented(await sh("bash -c 'make'"))).toEqual(OPENED("unreadable_command"))
+    expect(consented(await sh("source .venv/bin/activate"))).toEqual(OPENED("unreadable_command"))
+    expect(consented(await sh("make", {}, { risk: "remote" }))).toMatchObject(OPENED("outward"))
   })
 
   test("5. a delete the shell cannot archive is not opened, and no stricter than in 1.1.0 (P8)", async () => {
     const find = await sh("find . -name '*.log' -delete")
-    expect(consented(find)).toEqual(AutonomyTable.classify(find))
+    // 1.1.3 (matrix row 24, spec section 3 "underConsent rule 5"): refused at once as delete_compound (the archive method),
+    // now also where the 1.1.0 verdict was a D.
+    expect(AutonomyTable.classify(find).class).toBe("D")
+    expect(consented(find)).toEqual(REFUSED("delete_compound"))
     expect(consented(find).class).not.toBe("A")
   })
 
   test("9. a flagged script keeps its 1.1.0 verdict, soft flags alone included (F7: no script is on the allowlist)", async () => {
     const hard = await sh(`python3 -c 'import socket; socket.create_connection(("x", 80))'`)
     expect(AutonomyTable.classify(hard)).toMatchObject({ class: "D", category: "script_flagged" })
-    expect(consented(hard)).toMatchObject({ class: "D", category: "script_flagged" })
-    // An address in the code is outward before it is a flag: held all the same.
-    expect(consented(await sh(`python3 -c 'import requests; requests.get("https://x.example")'`))).toEqual(HELD("outward"))
+    // 1.1.3 (matrix row 16): a script with no `sudo` or `delete` flag no longer waits; it runs as the main agent's.
+    expect(consented(hard)).toEqual(OPENED("script_flagged"))
+    // An address in the code is outward before it is a flag: held all the same, and 1.1.3 runs it (matrix row 2).
+    expect(consented(await sh(`python3 -c 'import requests; requests.get("https://x.example")'`))).toEqual(OPENED("outward"))
     const soft = await sh(`python3 -c 'print(eval("1+1"))'`)
     expect(AutonomyTable.classify(soft)).toMatchObject({ class: "D", category: "script_flagged", screen: { flags: ["eval"] } })
-    expect(consented(soft)).toEqual(AutonomyTable.classify(soft))
+    expect(consented(soft)).toEqual(OPENED("script_flagged"))
   })
 
   test("7. a deletion or an overwrite the shell could not archive stays for the person", async () => {
     // Without the shell's word that it moves the paths, a plain deletion would delete for good.
     const rm = await sh("rm src/a.ts")
     expect(AutonomyTable.classify(rm)).toEqual(HELD("not_reversible"))
-    expect(consented(rm)).toEqual(HELD("not_reversible"))
+    // 1.1.3 (matrix row 29): not a wait any more; the agent is redirected to the archive method at once.
+    expect(consented(rm)).toEqual(REDIRECTED("not_reversible"))
     expect(consented(await sh("rm src/a.ts", {}, { archive: true }))).toEqual({ class: "A", decidedBy: "gate", category: "archived" })
     const cp = await sh("cp src/a.ts src/b.ts")
     expect(AutonomyTable.classify(cp)).toEqual(HELD("not_reversible"))
-    expect(consented(cp)).toEqual(HELD("not_reversible"))
+    // 1.1.3 (matrix row 30): redirected to the archive method.
+    expect(consented(cp)).toEqual(REDIRECTED("not_reversible"))
     // 1.1.1 F7 (P15, G2-1): the shell's own `irreversible` label keeps 1.1.0 whatever the words, as for `chmod -R`.
     // 1.1.1 F9 (G2-2): `git commit --amend` rewrites a commit, so under consent it is refused instead.
     expect(consented(await sh("git commit --amend -m x", {}, { risk: "irreversible" }))).toEqual({
@@ -228,7 +245,8 @@ describe("S1.13 the overlay, rule by rule (P8)", () => {
       decidedBy: "gate",
       category: "irreversible",
     })
-    expect(consented(await sh("chmod -R 755 src", {}, { risk: "irreversible" }))).toEqual(HELD("not_reversible"))
+    // 1.1.3 (matrix row 3, a non-remote risk label): redirected to the archive method.
+    expect(consented(await sh("chmod -R 755 src", {}, { risk: "irreversible" }))).toEqual(REDIRECTED("not_reversible"))
   })
 
   test("10. anything else held or judged is the main agent's: D and P categories, for the root and for a subagent", async () => {
@@ -242,11 +260,17 @@ describe("S1.13 the overlay, rule by rule (P8)", () => {
     expect(consented(request("read", { patterns: [".env"] }))).toEqual(OPENED("secret_file"))
     expect(consented(request("edit", { patterns: ["scripts/x.sh"], editClass: "not_ordinary" }))).toEqual(OPENED("edit-not-ordinary"))
     expect(consented(request("bash", { rule: "user_catch_all", metadata: { command: "tsc" } }))).toEqual(OPENED("asks_every_time"))
-    // 1.1.1 F10b (P19): a make target keeps its 1.1.0 verdict.
+    // 1.1.1 F10b (P19): a make target keeps its 1.1.0 verdict; 1.1.3 (matrix row 14) runs that kept verdict.
     const make = request("bash", { rule: "user_catch_all", metadata: { command: "make" } })
-    expect(consented(make)).toEqual(AutonomyTable.classify(make))
-    // 1.1.1 F9 (G2-5): the `external_tool` path keeps its 1.1.0 verdict, whichever tool takes it.
-    expect(consented(request("lsp", { patterns: ["*"] }))).toEqual(AutonomyTable.classify(request("lsp", { patterns: ["*"] })))
+    expect(AutonomyTable.classify(make)).toEqual(HELD("asks_every_time"))
+    expect(consented(make)).toEqual(OPENED("asks_every_time"))
+    // 1.1.1 F9 (G2-5): the `external_tool` path keeps its 1.1.0 verdict, whichever tool takes it; 1.1.3 (matrix row 6) runs it.
+    const lsp = request("lsp", { patterns: ["*"] })
+    // T9 G8: written out. 1.1.0 holds it as D `external_tool`; under consent it runs as the main agent's, no answer text.
+    expect(AutonomyTable.classify(lsp)).toEqual({ class: "D", decidedBy: "gate", category: "external_tool" })
+    expect(consented(lsp)).toEqual({ class: "A", decidedBy: "agent", category: "by_main_agent", bypassed: "external_tool" })
+    expect(answerOf(consented(lsp))).toBeUndefined()
+    expect(consented(lsp)).toMatchObject({ class: "A", category: "by_main_agent" })
   })
 })
 
@@ -258,8 +282,10 @@ describe("S1.15 the step path inherits the overlay", () => {
     expect(consented(opened)).toEqual(OPENED("not_routine"))
     expect(consented(await sh("bun install && git reset --hard"))).toEqual(REFUSED("irreversible"))
     expect(consented(await sh("cd src && bun install; sudo make install"))).toEqual(REFUSED("admin_rights"))
-    expect(consented(await sh("bun install && curl https://x.example"))).toEqual(HELD("outward"))
-    expect(consented(await sh("bun install && launchctl list"))).toEqual(HELD("system_service"))
+    // 1.1.3 (matrix rows 2, 20): the curl or launchctl step no longer holds the compound; each step runs as the main
+    // agent's, so the compound does. Which step's category it records follows the tie rule of `classifySteps`.
+    for (const command of ["bun install && curl https://x.example", "bun install && launchctl list"])
+      expect([command, consented(await sh(command))]).toMatchObject([command, { class: "A", decidedBy: "agent", category: "by_main_agent" }])
     // A step whose program is a path is read word by word as well.
     expect(consented(await sh("bun install && /opt/homebrew/bin/cargo build"))).toEqual(OPENED("not_routine"))
   })
@@ -275,7 +301,7 @@ describe("S1.15 the step path inherits the overlay", () => {
   })
 })
 
-describe("P8: under consent nothing is stricter than without, except the irreversible list and admin rights", () => {
+describe("P8: under consent nothing is stricter than without, except the irreversible list, admin rights and (1.1.3) the archive redirect", () => {
   const RANK: Record<AutonomyTable.Class, number> = { A: 0, P: 1, B: 2, D: 3, X: 4 }
   test("over every call of the corpus, for the root and for a subagent", async () => {
     let tightened = 0
@@ -284,14 +310,20 @@ describe("P8: under consent nothing is stricter than without, except the irrever
       for (const bypass of [ROOT, SUB]) {
         const over = consented(input, bypass)
         const name = input.metadata.command ?? input.permission
-        if (over.class === "X" && (over.category === "irreversible" || over.category === "admin_rights")) {
+        // 1.1.3 (matrix rows 3, 24, 29-31, 36): a deletion or replacement that waited is now redirected to the archive
+        // method at once (X `not_reversible` or `delete_compound`), never a wait.
+        const redirect = over.category === "not_reversible" || over.category === "delete_compound"
+        if (over.class === "X" && (over.category === "irreversible" || over.category === "admin_rights" || redirect)) {
           tightened++
           continue
         }
         if (base.class === "A") expect([name, over]).toEqual([name, base])
         expect([name, RANK[over.class] <= RANK[base.class]]).toEqual([name, true])
-        // Only a call the table held or judged can come out as the main agent's.
-        if (over.category === "by_main_agent") expect([name, ["D", "P"].includes(base.class)]).toEqual([name, true])
+        // Only a call the table held or judged can come out as the main agent's; 1.1.3 (matrix row 23) adds a write outside.
+        if (over.category === "by_main_agent")
+          expect([name, ["D", "P"].includes(base.class) || base.category === "outside_write"]).toEqual([name, true])
+        // 1.1.3 (spec section 2): no consented call waits.
+        expect([name, over.class === "D" || over.class === "P"]).toEqual([name, false])
       }
     }
     expect(tightened).toBeGreaterThan(0)

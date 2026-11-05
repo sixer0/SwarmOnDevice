@@ -294,8 +294,9 @@ describe("S1.25 D triggers: kept for a person", () => {
     const one = (argv: string[]) => BypassScreen.screen(stepsOf(argv.join(" "), [{ argv }]))
     expect(one(["git", "push", "$REMOTE"])).toEqual(D("unreadable_command"))
     expect(one(["git", "$SUB"])).toEqual(D("unreadable_command"))
-    expect(one(["psql", "-c", "$Q"])).toEqual(D("unreadable_command"))
-    expect(one(["diskutil", "`x`"])).toEqual(D("unreadable_command"))
+    // 1.1.3 (matrix row 37): an SQL tool or diskutil with dynamic arguments is refused as irreversible (archive redirect).
+    expect(one(["psql", "-c", "$Q"])).toEqual(X("irreversible"))
+    expect(one(["diskutil", "`x`"])).toEqual(X("irreversible"))
     expect(one(["$TOOL", "x"])).toEqual(D("unreadable_command"))
     // An X found among the literal words still refuses, whatever else is dynamic.
     expect(one(["git", "reset", "--hard", "$REF"])).toEqual(X("irreversible"))

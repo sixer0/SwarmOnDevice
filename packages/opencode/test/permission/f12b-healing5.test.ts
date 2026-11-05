@@ -15,6 +15,7 @@ import { Reach } from "../../src/tool/reach"
 import { Risk } from "../../src/tool/risk"
 import { readSteps } from "../../src/tool/shell"
 import { tmpdir } from "../fixture/fixture"
+import { answerOf } from "./consented-literals"
 
 type Input = AutonomyTable.Input
 type Verdict = AutonomyTable.Verdict
@@ -110,8 +111,9 @@ describe("S4-2: a tool's configuration is sensitive under consent only", () => {
       const input = edit(file, "not_ordinary")
       const before = base(input)
       expect([file, before]).toEqual([file, { class: "P", decidedBy: "agent", category: "edit-not-ordinary" }])
-      expect([file, root(input)]).toEqual([file, before])
-      expect([file, subagent(input)]).toEqual([file, before])
+      // 1.1.3 (matrix row 8, spec section 3 rule 5): the kept P no longer waits for a decision; it runs as the main agent's.
+      expect([file, root(input)]).toEqual([file, opened(before)])
+      expect([file, subagent(input)]).toEqual([file, opened(before)])
     }
   })
 
@@ -125,8 +127,12 @@ describe("S4-2: a tool's configuration is sensitive under consent only", () => {
       const input = await sh(command)
       const before = base(input)
       expect([command, before.class === "A"]).toEqual([command, false])
-      expect([command, root(input)]).toEqual([command, before])
-      expect([command, subagent(input)]).toEqual([command, before])
+      // 1.1.3 (spec section 3 `noWait`; matrix rows 4, 8, 22, 31): the kept verdict no longer waits.
+      // Literal (T9 G8): with Undo the replace is covered, so the D runs as the main agent's.
+      const expected = { class: "A", decidedBy: "agent", category: "by_main_agent", bypassed: "not_routine" }
+      expect([command, root(input)] as unknown[]).toEqual([command, expected])
+      expect([command, subagent(input)] as unknown[]).toEqual([command, expected])
+      expect([command, answerOf(root(input))]).toEqual([command, undefined])
     }
     for (const command of ["cat payload.txt > src/f1.ts", "prettier --write src/f0.ts"]) {
       const input = await sh(command)
@@ -154,7 +160,9 @@ describe("Perf P2: one batched snapshot check per classify", () => {
     const input = await sh(`prettier --write ${files.join(" ")}`)
     const before = base(input)
     expect(before.class === "A").toBe(false)
-    expect(root(input)).toEqual(before)
+    // 1.1.3 (spec section 3 `noWait`; matrix rows 8, 22): the kept verdict no longer waits.
+    expect(root(input)).toEqual({ class: "A", decidedBy: "agent", category: "by_main_agent", bypassed: "not_routine" })
+    expect(answerOf(root(input))).toBeUndefined()
   })
 
   test("inside one scope, the same paths are answered once", () => {
@@ -244,12 +252,14 @@ describe("m35: compound calls ask git once per classify", () => {
 
   test("a call that is not opened asks no git: a write beside a step the allowlist does not know", async () => {
     const plain = await count("tsc --noEmit > src/t.log && make")
-    expect(plain.verdict).toEqual(plain.expected)
+    // 1.1.3 (matrix rows 8, 22): the kept verdict no longer waits; it runs as the main agent's.
+    expect(plain.verdict).toEqual(opened(plain.expected))
     expect(plain.git).toBe(0)
     console.log(`[F14 G5-P2] tsc --noEmit > src/t.log && make: ${plain.ms.toFixed(1)} ms, ${plain.git} git`)
     // A step that is opened on its own still asks for itself (its overlay cannot see the step beside it), once.
     const step = await count(`prettier --write ${files.join(" ")} && make`)
-    expect(step.verdict).toEqual(step.expected)
+    // 1.1.3 (matrix rows 8, 22): the kept verdict no longer waits; it runs as the main agent's.
+    expect(step.verdict).toEqual(opened(step.expected))
     expect(step.git).toBeLessThanOrEqual(3)
     console.log(`[F14 G5-P2] prettier --write <40> && make: ${step.ms.toFixed(1)} ms, ${step.git} git`)
   })

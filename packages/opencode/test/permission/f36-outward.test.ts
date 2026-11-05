@@ -17,6 +17,7 @@ import { TomlReader } from "../../src/permission/toml-reader"
 import type { InstanceContext } from "../../src/project/instance-context"
 import { Risk } from "../../src/tool/risk"
 import { readSteps } from "../../src/tool/shell"
+import { ADMIN_RIGHTS, ARCHIVE_FIRST, CREDENTIAL_CHANGE, DELETE_COMPOUND, IRREVERSIBLE_ARCHIVE, OUTSIDE_WRITE, answerOf } from "./consented-literals"
 import { tmpdir } from "../fixture/fixture"
 
 type Input = AutonomyTable.Input
@@ -58,13 +59,20 @@ const root = (given: Input) => AutonomyTable.classify({ ...given, bypass: { call
 const subagent = (given: Input) => AutonomyTable.classify({ ...given, bypass: { caller: "subagent" } })
 const short = (verdict: Verdict) => [verdict.class, verdict.category, verdict.destination]
 const label = (given: Input) => String(given.metadata.command)
+
+/** 1.1.3 (T9 G8): a literal consented verdict per case: class, category, `bypassed`, destination, and the agent's answer. */
+type Want = { verdict: [string, string, string | undefined, string | undefined]; answer: string | undefined }
+const RUNS = (bypassed: string, destination?: string): Want => ({ verdict: ["A", "by_main_agent", bypassed, destination], answer: undefined })
+const REFUSED = (category: string, bypassed: string | undefined, answer: string): Want => ({ verdict: ["X", category, bypassed, undefined], answer })
+function expectWant(label: string, verdict: Verdict, want: Want) {
+  expect([label, verdict.class, verdict.category, verdict.bypassed, verdict.destination, answerOf(verdict)]).toEqual([label, ...want.verdict, want.answer])
+}
 function expectOpens(given: Input, destination: string) {
   for (const verdict of [root(given), subagent(given)])
     expect([label(given), short(verdict)]).toEqual([label(given), ["A", "by_main_agent", destination]])
 }
-function expectNotOpen(given: Input, why = "") {
-  for (const verdict of [root(given), subagent(given)])
-    expect([label(given), why, verdict.class === "A", verdict.destination]).toEqual([label(given), why, false, undefined])
+function expectNotOpen(given: Input, why: string, want: Want) {
+  for (const verdict of [root(given), subagent(given)]) expectWant(`${label(given)} ${why}`.trim(), verdict, want)
 }
 
 const home = () => process.env.HOME || os.homedir()
@@ -145,7 +153,7 @@ describe("G14-1 / G14-3 / CR14-1 / P52: a registry-capable config file in the pr
       ["poetry publish", "python", "poetry.toml", "[virtualenvs]\nin-project = true\n"],
       ["twine upload dist/x-0.1.0.tar.gz", "python", ".pypirc", "[distutils]\nindex-servers = pypi\n"],
     ]
-    for (const [command, kind, file, content] of cases) expectNotOpen(await sh(command, await make(kind, { [file]: content })), file)
+    for (const [command, kind, file, content] of cases) expectNotOpen(await sh(command, await make(kind, { [file]: content })), file, RUNS("outward"))
   })
 
   test("a config file in a folder above the project holds too", async () => {
@@ -156,15 +164,15 @@ describe("G14-1 / G14-3 / CR14-1 / P52: a registry-capable config file in the pr
     write(inner, "package.json", PACKAGE)
     expectOpens(await sh("npm publish", inner), "registry.npmjs.org")
     write(outer, ".npmrc", "registry=https://npm.evil.example/\n")
-    expectNotOpen(await sh("npm publish", inner))
+    expectNotOpen(await sh("npm publish", inner), "", RUNS("outward"))
     write(inner, "Cargo.toml", CRATE)
     expectOpens(await sh("cargo publish", inner), "crates.io")
     write(outer, ".cargo/config.toml", "")
-    expectNotOpen(await sh("cargo publish", inner))
+    expectNotOpen(await sh("cargo publish", inner), "", RUNS("outward"))
     // A workspace root above, by its manifest alone.
     fs.rmSync(path.join(outer, ".cargo"), { recursive: true })
     write(outer, "Cargo.toml", '[workspace]\nmembers = ["proj"]\n')
-    expectNotOpen(await sh("cargo publish", inner))
+    expectNotOpen(await sh("cargo publish", inner), "", RUNS("outward"))
   })
 })
 
@@ -197,7 +205,7 @@ describe("G14-1 / G14-4 / G14-5 / CR14-8 / P52: a config file in the user's loca
     for (const [command, kind, where, file] of cases) {
       const here = await make(kind)
       ;(where === "home" ? atHome : atConfig)(file, "[pypi]\r\nREPOSITORY = https://pypi.evil.example/\r\n")
-      expectNotOpen(await sh(command, here), `${where}:${file}`)
+      expectNotOpen(await sh(command, here), `${where}:${file}`, RUNS("outward"))
       for (const made of placed.splice(0)) fs.rmSync(made, { force: true })
       expectOpens(await sh(command, here), (PLAIN.find(([plain]) => plain === command) ?? [])[2]!)
     }
@@ -209,10 +217,10 @@ describe("G14-1 / G14-4 / G14-5 / CR14-8 / P52: a config file in the user's loca
     setEnv("CARGO_HOME", cargoHome)
     expectOpens(await sh("cargo publish", here), "crates.io")
     write(cargoHome, "config.toml", "")
-    expectNotOpen(await sh("cargo publish", here))
+    expectNotOpen(await sh("cargo publish", here), "", RUNS("outward"))
     const node = await npmProject()
     atConfig("pnpm/rc", "registry=https://npm.evil.example/\n")
-    expectNotOpen(await sh("pnpm publish", node))
+    expectNotOpen(await sh("pnpm publish", node), "", RUNS("outward"))
     expectOpens(await sh("npm publish", node), "registry.npmjs.org")
   })
 })
@@ -234,7 +242,7 @@ describe("P52: any listed environment variable holds", () => {
     for (const [command, kind, key] of cases) {
       const here = await make(kind)
       setEnv(key, "x")
-      expectNotOpen(await sh(command, here), key)
+      expectNotOpen(await sh(command, here), key, RUNS("outward"))
       delete process.env[key]
       expectOpens(await sh(command, here), (PLAIN.find(([plain]) => plain === command) ?? [])[2]!)
     }
@@ -247,7 +255,7 @@ describe("P52 / CR14-1 / CR14-4 / G14-7: the root manifest must be plain", () =>
       JSON.stringify({ name: "p", version: "1.0.0", publishConfig: { tag: "next" } }),
       '{"name":"p","version":"1.0.0","publish\\u0043onfig":{"registry":"https://npm.evil.example/"}}',
     ])
-      expectNotOpen(await sh("npm publish", await project({ "package.json": manifest })), manifest)
+      expectNotOpen(await sh("npm publish", await project({ "package.json": manifest })), manifest, RUNS("outward"))
   })
 
   test("pyproject.toml: no backslash, no quoted key, no destination word or inline table in a tool table", async () => {
@@ -264,7 +272,7 @@ describe("P52 / CR14-1 / CR14-4 / G14-7: the root manifest must be plain", () =>
       ["poetry", PYPROJECT + '[tool.poetry]\nname = "x"\npackages = [{ include = "x" }]\n'],
       ["uv", PYPROJECT + "[tool.uv\n"],
     ] as const)
-      expectNotOpen(await sh(`${tool} publish`, await python({ "pyproject.toml": pyproject })), pyproject)
+      expectNotOpen(await sh(`${tool} publish`, await python({ "pyproject.toml": pyproject })), pyproject, RUNS("outward"))
     // Words in [project] (its URLs, its description) and plain tool tables do not hold.
     const plain = PYPROJECT + '[project.urls]\nRepository = "https://x.test/source"\n[tool.ruff]\nline-length = 100\n'
     expectOpens(await sh("uv publish", await python({ "pyproject.toml": plain })), "pypi.org")
@@ -279,7 +287,7 @@ describe("P52 / CR14-1 / CR14-4 / G14-7: the root manifest must be plain", () =>
       '[package]\nname = "x"\nversion = "0.1.0"\nmetadata = { a = 1 }\n',
       '["package"]\nname = "x"\nversion = "0.1.0"\n',
     ])
-      expectNotOpen(await sh("cargo publish", await project({ "Cargo.toml": manifest })), manifest)
+      expectNotOpen(await sh("cargo publish", await project({ "Cargo.toml": manifest })), manifest, RUNS("outward"))
     // A description with a destination word in it is prose: still plain.
     expectOpens(await sh("cargo publish", await project({ "Cargo.toml": CRATE.replace('edition', 'description = "an open source registry tool"\nedition') })), "crates.io")
   })
@@ -304,7 +312,7 @@ describe("CR14-2 / P52: netlify.toml opens only as a [build] table with a plain 
       '[build]\npublish = "dist"\n[context.production]\n',
       '[build\npublish = "dist"\n',
     ])
-      expectNotOpen(await sh(command, await project({ "dist/index.html": "x", "netlify.toml": toml })), toml)
+      expectNotOpen(await sh(command, await project({ "dist/index.html": "x", "netlify.toml": toml })), toml, RUNS("outward"))
   })
 })
 
@@ -314,7 +322,7 @@ describe("CR14-7: uv, poetry and twine upload files that land inside the project
     write(outside, "secret.tar.gz", "s")
     const here = await python()
     fs.symlinkSync(path.join(outside, "secret.tar.gz"), path.join(here, "dist", "a-1.0.tar.gz"))
-    for (const command of ["uv publish", "poetry publish", "twine upload dist/a-1.0.tar.gz"]) expectNotOpen(await sh(command, here))
+    for (const command of ["uv publish", "poetry publish", "twine upload dist/a-1.0.tar.gz"]) expectNotOpen(await sh(command, here), "", RUNS("outward"))
     // The form itself holds a twine file that lands outside, before the bypass screen looks at the word.
     expect(OutwardConsent.sendForm("twine", ["upload", "dist/a-1.0.tar.gz"], here, { instance: scope(here) })).toEqual({ held: "form" })
     expect(OutwardConsent.sendForm("twine", ["upload", "dist/*"], here, { instance: scope(here) })).toEqual({ held: "form" })

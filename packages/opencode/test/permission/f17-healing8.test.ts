@@ -19,6 +19,7 @@ import type { InstanceContext } from "../../src/project/instance-context"
 import { Reach } from "../../src/tool/reach"
 import { readSteps } from "../../src/tool/shell"
 import { tmpdir } from "../fixture/fixture"
+import { ARCHIVE_FIRST, answerOf } from "./consented-literals"
 import { expectBareFrom } from "./install-fixture"
 
 type Input = AutonomyTable.Input
@@ -71,13 +72,55 @@ const subagent = (input: Input) => AutonomyTable.classify({ ...input, bypass: { 
 const opened = (verdict: Verdict): Verdict =>
   verdict.class === "A" ? verdict : { class: "A", decidedBy: "agent", category: "by_main_agent", bypassed: verdict.category }
 
+// 1.1.3 (T9 G8, code review M2): the consented verdict and the agent's answer of each case, written out, not computed with
+// `noWait`. A D or P the overlay keeps runs as the main agent's (`RUNS`, bypassed = its 1.1.0 category); a deletion or
+// replacement nothing archives is redirected at once (`ARCHIVED`, ARCHIVE_FIRST).
+const RUNS = (bypassed: string, destination?: string) =>
+  ({ class: "A", decidedBy: "agent", category: "by_main_agent", bypassed, ...(destination && { destination }) }) as Verdict
+const ARCHIVED = (bypassed: string) => ({ class: "X", decidedBy: "gate", category: "not_reversible", bypassed }) as Verdict
+const CONSENTED: Record<string, readonly [Verdict, string | undefined]> = {
+  "npm install": [RUNS("not_routine"), undefined],
+  "npm ci": [RUNS("not_routine"), undefined],
+  "pnpm install": [RUNS("not_routine"), undefined],
+  "yarn": [RUNS("not_routine"), undefined],
+  "bun install": [RUNS("not_routine"), undefined],
+  "prettier --check '{\"a\":\"./../x\"}'": [RUNS("not_routine"), undefined],
+  "prettier --check '[\"<rootDir>/../x\"]'": [RUNS("not_routine"), undefined],
+  "prettier --check '{\"a\":\"b/c\",\"d\":\"e/f/../../../x\"}'": [RUNS("not_routine"), undefined],
+  "prettier --check '[\"..\"]'": [RUNS("not_routine"), undefined],
+  "vitest run --typecheck.checker x": [RUNS("not_routine"), undefined],
+  "vitest run --typecheck.checker=x": [RUNS("not_routine"), undefined],
+  "vitest run --TYPECHECK.CHECKER x": [RUNS("not_routine"), undefined],
+  "vitest run --type-check.checker x": [RUNS("not_routine"), undefined],
+  "vitest run --typecheck.check x": [RUNS("not_routine"), undefined],
+  "vitest run --execArgv=--require=./x.js": [RUNS("not_routine"), undefined],
+  "vitest run --exec-argv x": [RUNS("not_routine"), undefined],
+  "vitest run --execArgv.0 x": [RUNS("not_routine"), undefined],
+  "xcodebuild -- -xcconfig x.xcconfig build": [RUNS("not_routine"), undefined],
+  "xcodebuild build -scheme A -- -project X.xcodeproj": [RUNS("not_routine"), undefined],
+  "xcodebuild test -scheme A --": [RUNS("not_routine"), undefined],
+  "npx tsc -p tsconfig.json": [RUNS("not_routine"), undefined],
+  "bunx tsc -p tsconfig.json": [RUNS("not_routine"), undefined],
+  "bun x tsc -p tsconfig.json": [RUNS("not_routine"), undefined],
+  "bunx --package x tsc": [RUNS("not_routine"), undefined],
+}
+function consentedOf(command: string) {
+  expect([command, Object.hasOwn(CONSENTED, command)]).toEqual([command, true])
+  return CONSENTED[command]!
+}
+
 async function keeps(commands: readonly string[], cwd: string, scope: InstanceContext) {
   for (const command of commands) {
     const input = await sh(command, cwd, scope)
     const before = base(input)
     expect([command, before.class === "A"]).toEqual([command, false])
-    expect([command, root(input)]).toEqual([command, before])
-    expect([command, subagent(input)]).toEqual([command, before])
+    // 1.1.3 (spec section 3, `noWait`; matrix rows 3, 8, 16-23, 31): the overlay keeps the 1.1.0 verdict, and under consent
+    // that kept verdict no longer waits: a D or P runs as the main agent's, a deletion or replacement is redirected to the
+    // archive method at once, an X stays.
+    const [expected, answer] = consentedOf(command)
+    expect([command, root(input)]).toEqual([command, expected])
+    expect([command, answerOf(root(input))]).toEqual([command, answer])
+    expect([command, subagent(input)]).toEqual([command, expected])
   }
 }
 

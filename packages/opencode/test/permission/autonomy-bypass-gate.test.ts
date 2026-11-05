@@ -20,7 +20,8 @@ import { Autonomy } from "../../src/permission/autonomy"
 import type { AutonomyDecider } from "../../src/permission/autonomy-decider"
 import {
   ADMIN_RIGHTS_TEXT,
-  IRREVERSIBLE_TEXT,
+  CONSENT_CONTINUE_SUFFIX,
+  IRREVERSIBLE_ARCHIVE_TEXT,
   MAIN_AGENT_UNAVAILABLE_TEXT,
   mainAgentDeclined,
 } from "../../src/permission/autonomy-texts"
@@ -166,6 +167,9 @@ const settled = (input: PermissionV1.AskInput, wrap: Wrap = (self) => self) =>
     return yield* wrap(permission.ask(input)).pipe(Effect.timeout("2 seconds"), Effect.exit)
   })
 
+/** The options the gate gives the main agent for a subagent's opened call. */
+const SUB = { forSubagent: { agent: "build" } }
+
 const failureOf = <A, E>(exit: Exit.Exit<A, E>) => {
   if (Exit.isSuccess(exit)) throw new Error("expected the call to be stopped")
   return Cause.squash(exit.cause)
@@ -276,32 +280,44 @@ it.instance("a main agent that cannot answer refuses with the unavailable text, 
   }),
 )
 
-it.instance("X, the irreversible list, admin rights and every kept D never reach the main agent", () =>
+it.instance("X, the irreversible list and admin rights never reach the main agent; a subagent's former waits do (1.1.3)", () =>
   Effect.gen(function* () {
     const test = yield* TestInstance
     const { root, child } = yield* family()
     const dir = test.directory
     const refused = (yield* settled(bash(child.id, "git reset --hard HEAD~1", dir))) as Exit.Exit<void, unknown>
-    expect((failureOf(refused) as Error).message).toBe(IRREVERSIBLE_TEXT)
-    expect((failureOf(yield* settled(bash(child.id, "sudo rm -rf build", dir))) as Error).message).toBe(ADMIN_RIGHTS_TEXT)
+    // 1.1.3 (matrix rows 26, 33, T3): the irreversible list is answered with the archive method; (matrix row 27, T5, T6)
+    // admin rights with the consented suffix.
+    expect((failureOf(refused) as Error).message).toBe(IRREVERSIBLE_ARCHIVE_TEXT)
+    expect((failureOf(yield* settled(bash(child.id, "sudo rm -rf build", dir))) as Error).message).toBe(
+      `${ADMIN_RIGHTS_TEXT} ${CONSENT_CONTINUE_SUFFIX}`,
+    )
     for (const command of ["curl https://example.com", "launchctl list", "pkill node", "eval $X"])
-      expect(failureOf(yield* settled(bash(child.id, command, dir)))).toBeInstanceOf(PermissionV1.DeferredError)
+      // 1.1.3 (matrix rows 2, 20, 21, 22: a subagent's held D no longer waits; it is opened and goes to the main agent).
+      expect(Exit.isSuccess(yield* settled(bash(child.id, command, dir)))).toBe(true)
     // The same from the root itself.
     expect(failureOf(yield* settled(bash(root.id, "git push --force", dir)))).toBeInstanceOf(PermissionV1.DeniedError)
-    expect(stub.calls).toEqual([])
-    expect((yield* decisions(root.id)).map((line) => [line.class, line.category])).toEqual([
-      ["X", "irreversible"],
-      ["X", "admin_rights"],
-      ["D", "outward"],
-      ["D", "system_service"],
-      ["D", "process_not_own"],
-      ["D", "unreadable_command"],
-      ["X", "irreversible"],
+    // 1.1.3: X, the irreversible list and admin rights still never reach the main agent; the four opened D calls of the
+    // subagent do (spec section 3: a subagent's opened call goes to the main agent for yes or no, as in 1.1.1).
+    expect(stub.calls.map((call) => [call.category, call.options])).toEqual([
+      ["outward", SUB],
+      ["system_service", SUB],
+      ["process_not_own", SUB],
+      ["unreadable_command", SUB],
+    ])
+    expect((yield* decisions(root.id)).map((line) => [line.class, line.category, line.bypassed])).toEqual([
+      ["X", "irreversible", undefined],
+      ["X", "admin_rights", undefined],
+      ["A", "by_main_agent", "outward"],
+      ["A", "by_main_agent", "system_service"],
+      ["A", "by_main_agent", "process_not_own"],
+      ["A", "by_main_agent", "unreadable_command"],
+      ["X", "irreversible", undefined],
     ])
   }),
 )
 
-it.instance("a verdict that claims to open a kept category is not believed: the decider's yes never gets the chance", () =>
+it.instance("a verdict that claims to open a never-opened X is not believed; an opened D category is (1.1.3)", () =>
   Effect.gen(function* () {
     const { root, child } = yield* family()
     const forge =
@@ -315,17 +331,19 @@ it.instance("a verdict that claims to open a kept category is not believed: the 
             bypassed: bypassed as never,
           })),
         )
-    expect(failureOf(yield* settled(mcpCall(child.id), forge("system_service")))).toBeInstanceOf(
-      PermissionV1.DeferredError,
-    )
-    expect(failureOf(yield* settled(mcpCall(root.id, "b"), forge("outward")))).toBeInstanceOf(PermissionV1.DeferredError)
+    // 1.1.3 (spec section 3 "Gate": under consent only a never-opened X is not believed; an opened D category is believed).
+    expect(Exit.isSuccess(yield* settled(mcpCall(child.id), forge("system_service")))).toBe(true)
+    // 1.1.3 (spec section 3 "Gate": under consent only a never-opened X is not believed; an opened D category is believed).
+    expect(Exit.isSuccess(yield* settled(mcpCall(root.id, "b"), forge("outward")))).toBe(true)
     expect((failureOf(yield* settled(mcpCall(child.id, "c"), forge("irreversible"))) as Error).message).toBe(
-      IRREVERSIBLE_TEXT,
+      IRREVERSIBLE_ARCHIVE_TEXT,
     )
-    expect(stub.calls).toEqual([])
+    // 1.1.3: the subagent's believed opening goes to the main agent; the root's runs on its consent; the never-opened X
+    // is still refused before the decider.
+    expect(stub.calls.map((call) => [call.category, call.options])).toEqual([["system_service", SUB]])
     expect((yield* decisions(root.id)).map((line) => [line.class, line.category, line.via, line.bypassed])).toEqual([
-      ["D", "system_service", undefined, undefined],
-      ["D", "outward", undefined, undefined],
+      ["A", "by_main_agent", "for_subagent", "system_service"],
+      ["A", "by_main_agent", "main_agent", "outward"],
       ["X", "irreversible", undefined, undefined],
     ])
   }),
@@ -429,7 +447,7 @@ it.instance("the gate tells the table root or subagent, and which processes are 
   }),
 )
 
-it.instance("kill: a process this session's shell tool started is the main agent's on the consent (P5 A2d); any other waits for a person", () =>
+it.instance("kill: a process this session's shell tool started is the main agent's on the consent (P5 A2d); since 1.1.3 any other runs too", () =>
   Effect.gen(function* () {
     const test = yield* TestInstance
     const { root } = yield* family()
@@ -440,9 +458,8 @@ it.instance("kill: a process this session's shell tool started is the main agent
         ),
       )
     expect(Exit.isSuccess(yield* settled(bash(root.id, "kill 4242", test.directory), own([4242])))).toBe(true)
-    expect(failureOf(yield* settled(bash(root.id, "kill 4343", test.directory), own([4242])))).toBeInstanceOf(
-      PermissionV1.DeferredError,
-    )
+    // 1.1.3 (matrix row 21: a process Swarm did not start no longer waits; it runs as the main agent's).
+    expect(Exit.isSuccess(yield* settled(bash(root.id, "kill 4343", test.directory), own([4242])))).toBe(true)
     // A process tree that cannot be read is none.
     const broken = <A, E, R>(self: Effect.Effect<A, E, R>) =>
       self.pipe(
@@ -450,13 +467,13 @@ it.instance("kill: a process this session's shell tool started is the main agent
           throw new Error("no ps")
         }),
       )
-    expect(failureOf(yield* settled(bash(root.id, "kill 4444", test.directory), broken))).toBeInstanceOf(
-      PermissionV1.DeferredError,
-    )
-    expect((yield* decisions(root.id)).map((line) => [line.class, line.category, line.via])).toEqual([
-      ["A", "by_main_agent", "main_agent"],
-      ["D", "process_not_own", undefined],
-      ["D", "process_not_own", undefined],
+    // 1.1.3 (matrix row 21: a process Swarm did not start no longer waits; it runs as the main agent's).
+    expect(Exit.isSuccess(yield* settled(bash(root.id, "kill 4444", test.directory), broken))).toBe(true)
+    // 1.1.3 (matrix row 21): the other two run as well, recorded as process_not_own.
+    expect((yield* decisions(root.id)).map((line) => [line.class, line.category, line.via, line.bypassed])).toEqual([
+      ["A", "by_main_agent", "main_agent", "not_routine"],
+      ["A", "by_main_agent", "main_agent", "process_not_own"],
+      ["A", "by_main_agent", "main_agent", "process_not_own"],
     ])
     expect(stub.calls).toEqual([])
   }),
@@ -487,7 +504,7 @@ it.instance("a subagent's compound call of two allowed steps reaches the main ag
   }),
 )
 
-it.instance("a forged opening of a sensitive file or a hard-flagged script is not believed (F1a)", () =>
+it.instance("an opening of a sensitive file or a hard-flagged script is believed under consent since 1.1.3 (was F1a)", () =>
   Effect.gen(function* () {
     const { root, child } = yield* family()
     const forge =
@@ -495,34 +512,39 @@ it.instance("a forged opening of a sensitive file or a hard-flagged script is no
       <A, E, R>(self: Effect.Effect<A, E, R>) =>
         self.pipe(Effect.provideService(Permission.Classify, () => verdict))
     const opened = { class: "A", decidedBy: "agent", category: "by_main_agent" } as const
-    expect(
-      failureOf(yield* settled(mcpCall(child.id), forge({ ...opened, bypassed: "sensitive_file" }))),
-    ).toBeInstanceOf(PermissionV1.DeferredError)
+    // 1.1.3 (spec section 3 "Gate": the `KEPT_D`/`hardScript` terms are dropped; the opening is believed (noWait refuses sudo/delete flags itself)).
+    expect(Exit.isSuccess(yield* settled(mcpCall(child.id), forge({ ...opened, bypassed: "sensitive_file" })))).toBe(true)
     const screen = { bytes: 10, lines: 1, sha256: "0".repeat(64), flags: ["network"] as const }
-    expect(
-      failureOf(yield* settled(mcpCall(child.id, "b"), forge({ ...opened, bypassed: "script_flagged", screen }))),
-    ).toBeInstanceOf(PermissionV1.DeferredError)
-    expect(stub.calls).toEqual([])
-    expect((yield* decisions(root.id)).map((line) => [line.class, line.category, line.via])).toEqual([
-      ["D", "sensitive_file", undefined],
-      ["D", "script_flagged", undefined],
+    // 1.1.3 (spec section 3 "Gate": the `KEPT_D`/`hardScript` terms are dropped; the opening is believed (noWait refuses sudo/delete flags itself)).
+    expect(Exit.isSuccess(yield* settled(mcpCall(child.id, "b"), forge({ ...opened, bypassed: "script_flagged", screen })))).toBe(true)
+    // 1.1.3: both are the subagent's, so both go to the main agent for yes or no.
+    expect(stub.calls.map((call) => [call.category, call.options])).toEqual([
+      ["sensitive_file", SUB],
+      ["script_flagged", SUB],
+    ])
+    expect((yield* decisions(root.id)).map((line) => [line.class, line.category, line.via, line.bypassed])).toEqual([
+      ["A", "by_main_agent", "for_subagent", "sensitive_file"],
+      ["A", "by_main_agent", "for_subagent", "script_flagged"],
     ])
   }),
 )
 
-it.instance("an MCP or plugin tool keeps its 1.1.0 verdict under the consent and never reaches the main agent (F9, G2-5)", () =>
+it.instance("an MCP or plugin tool's kept 1.1.0 verdict no longer waits under the consent (F9, G2-5; 1.1.3)", () =>
   Effect.gen(function* () {
     const { root, child } = yield* family()
-    expect(failureOf(yield* settled(mcpCall(root.id)))).toBeInstanceOf(PermissionV1.DeferredError)
-    expect(failureOf(yield* settled(mcpCall(child.id, "b")))).toBeInstanceOf(PermissionV1.DeferredError)
+    // 1.1.3 (matrix rows 6, 8: the kept 1.1.0 D no longer waits; it runs as the main agent's).
+    expect(Exit.isSuccess(yield* settled(mcpCall(root.id)))).toBe(true)
+    // 1.1.3 (matrix rows 6, 8: the kept 1.1.0 D no longer waits; it runs as the main agent's).
+    expect(Exit.isSuccess(yield* settled(mcpCall(child.id, "b")))).toBe(true)
     const source = { server: "outside", transport: "local", origin: "project" }
     const mcp = { ...mcpCall(child.id, "c"), permission: "outside_lookup", metadata: { mcp: source } }
     // A local MCP tool the 1.1.0 gate opens runs as it did, on the gate's own line, and still never reaches the main agent.
     expect(Exit.isSuccess(yield* settled(mcp))).toBe(true)
-    expect(stub.calls).toEqual([])
+    // 1.1.3: the subagent's opened call goes to the main agent; the root's runs on its consent.
+    expect(stub.calls.map((call) => [call.category, call.options])).toEqual([["not_routine", SUB]])
     expect((yield* decisions(root.id)).map((line) => [line.class, line.category, line.via, line.bypassed])).toEqual([
-      ["D", "external_tool", undefined, undefined],
-      ["D", "not_routine", undefined, undefined],
+      ["A", "by_main_agent", "main_agent", "external_tool"],
+      ["A", "by_main_agent", "for_subagent", "not_routine"],
       ["A", "mcp_tool", undefined, undefined],
     ])
   }),
@@ -530,7 +552,7 @@ it.instance("an MCP or plugin tool keeps its 1.1.0 verdict under the consent and
 
 // 1.1.1 F26 (P42): a send the consent lets out runs on the root's consent with its destination on the line; a verdict
 // that claims to open an outward category the table does not find again is not believed.
-it.instance("F26: a local request runs with its destination recorded; a remote one waits; a forged send is held", () =>
+it.instance("F26: a local request runs with its destination recorded; since 1.1.3 a remote one and a forged send run too", () =>
   Effect.gen(function* () {
     const { root, child } = yield* family()
     const test = yield* TestInstance
@@ -546,7 +568,8 @@ it.instance("F26: a local request runs with its destination recorded; a remote o
       }) satisfies PermissionV1.AskInput
     expect(Exit.isSuccess(yield* settled(fetchCall(root.id, "http://localhost:3000/")))).toBe(true)
     expect(Exit.isSuccess(yield* settled(bash(root.id, "curl -s http://127.0.0.1:8080/x", test.directory)))).toBe(true)
-    expect(failureOf(yield* settled(fetchCall(root.id, "https://example.com/")))).toBeInstanceOf(PermissionV1.DeferredError)
+    // 1.1.3 (matrix row 15 and spec section 3 "Gate" (the `sent` term dropped): no longer waits).
+    expect(Exit.isSuccess(yield* settled(fetchCall(root.id, "https://example.com/")))).toBe(true)
     const forged = (self: Effect.Effect<any, any, any>) =>
       self.pipe(
         Effect.provideService(Permission.Classify, () => ({
@@ -557,20 +580,23 @@ it.instance("F26: a local request runs with its destination recorded; a remote o
           destination: "localhost:3000",
         })),
       )
-    expect(failureOf(yield* settled(mcpCall(child.id, "z"), forged))).toBeInstanceOf(PermissionV1.DeferredError)
-    expect(stub.calls).toEqual([])
+    // 1.1.3 (matrix row 15 and spec section 3 "Gate" (the `sent` term dropped): no longer waits).
+    expect(Exit.isSuccess(yield* settled(mcpCall(child.id, "z"), forged))).toBe(true)
+    // 1.1.3: the subagent's believed send goes to the main agent; the remote fetch runs, and (T7 F1) its line carries the
+    // host it went to although nobody named it.
+    expect(stub.calls.map((call) => [call.category, call.options])).toEqual([["outward_not_in_mission", SUB]])
     expect((yield* decisions(root.id)).map((line) => [line.class, line.category, line.via, line.bypassed, line.destination])).toEqual([
       ["A", "by_main_agent", "main_agent", "outward_not_in_mission", "localhost:3000"],
       ["A", "by_main_agent", "main_agent", "not_routine", "127.0.0.1:8080"],
-      ["D", "outward_not_in_mission", undefined, undefined, undefined],
-      ["D", "outward_not_in_mission", undefined, undefined, undefined],
+      ["A", "by_main_agent", "main_agent", "outward_not_in_mission", "example.com"],
+      ["A", "by_main_agent", "for_subagent", "outward_not_in_mission", "localhost:3000"],
     ])
   }),
 )
 
 // 1.1.1 F29 (P44, D-F26-3 reversed): a host the person names in a message sent after the mode came on opens a request at
 // the next call; a host only an agent's message, a tool's output or a file the agent read names stays held.
-it.instance("F29: a host named in a later message of the person opens; one in an agent, tool or file text stays held", () =>
+it.instance("F29: a host named in a later message of the person opens; one in an agent, tool or file text runs, its host on the line (1.1.3, T7 F1)", () =>
   Effect.gen(function* () {
     const { root } = yield* family()
     const sessions = yield* Session.Service
@@ -648,8 +674,9 @@ it.instance("F29: a host named in a later message of the person opens; one in an
         } satisfies SessionV1.ToolPart)
       })
 
-    // Not named yet: held.
-    expect(failureOf(yield* settled(fetchCall("https://api.later.com/a")))).toBeInstanceOf(PermissionV1.DeferredError)
+    // Not named yet (held before 1.1.3).
+    // 1.1.3 (matrix rows 2, 15: a host nobody named no longer waits; it runs, T7 F1: with its host on its line).
+    expect(Exit.isSuccess(yield* settled(fetchCall("https://api.later.com/a")))).toBe(true)
     // The person names it after the mode came on, after the list was made: the next call reads it.
     yield* person("now also check https://api.later.com/status please")
     expect(Exit.isSuccess(yield* settled(fetchCall("https://api.later.com/b")))).toBe(true)
@@ -658,15 +685,17 @@ it.instance("F29: a host named in a later message of the person opens; one in an
     yield* agent("I will call https://api.agent.com/x next", "see https://api.tool.com/y")
     yield* person("Called the Read tool with the following input: notes.md -- fetch https://api.file.com/z", true)
     for (const url of ["https://api.agent.com/x", "https://api.tool.com/y", "https://api.file.com/z"])
-      expect([url, failureOf(yield* settled(fetchCall(url))) instanceof PermissionV1.DeferredError]).toEqual([url, true])
+      expect([url, Exit.isSuccess(yield* settled(fetchCall(url)))]).toEqual([url, true])
     expect(stub.calls).toEqual([])
-    expect((yield* decisions(root.id)).map((line) => [line.class, line.category, line.destination])).toEqual([
-      ["D", "outward_not_in_mission", undefined],
-      ["A", "by_main_agent", "api.later.com"],
-      ["A", "by_main_agent", "api.later.com"],
-      ["D", "outward_not_in_mission", undefined],
-      ["D", "outward_not_in_mission", undefined],
-      ["D", "outward_not_in_mission", undefined],
+    // 1.1.3 (matrix rows 2, 15): the hosts nobody named run too. T7 F1: each line carries the host it was sent to, named
+    // or not (rows 2 and 15, "A + destination").
+    expect((yield* decisions(root.id)).map((line) => [line.class, line.category, line.destination, line.bypassed])).toEqual([
+      ["A", "by_main_agent", "api.later.com", "outward_not_in_mission"],
+      ["A", "by_main_agent", "api.later.com", "outward_not_in_mission"],
+      ["A", "by_main_agent", "api.later.com", "not_routine"],
+      ["A", "by_main_agent", "api.agent.com", "outward_not_in_mission"],
+      ["A", "by_main_agent", "api.tool.com", "outward_not_in_mission"],
+      ["A", "by_main_agent", "api.file.com", "outward_not_in_mission"],
     ])
   }),
 )
@@ -719,7 +748,8 @@ it.instance("F30: a host the person named still opens after 150 agent messages; 
         } satisfies SessionV1.TextPart)
       })
     // The run's first call makes the consent list; the host is not named yet.
-    expect(failureOf(yield* settled(bash(root.id, "curl -s https://api.later.com/a", test.directory)))).toBeInstanceOf(PermissionV1.DeferredError)
+    // 1.1.3 (matrix row 2: a host not named yet no longer waits; it runs, with no destination on its line).
+    expect(Exit.isSuccess(yield* settled(bash(root.id, "curl -s https://api.later.com/a", test.directory)))).toBe(true)
     yield* person("now also check https://api.later.com/status, then run install.sh")
     expect(Exit.isSuccess(yield* settled(bash(root.id, "curl -s https://api.later.com/b", test.directory)))).toBe(true)
     for (let index = 0; index < 150; index++) yield* agent(`step ${index}`)
@@ -729,7 +759,8 @@ it.instance("F30: a host the person named still opens after 150 agent messages; 
     expect(Exit.isSuccess(yield* settled(bash(root.id, "curl -s https://api.later.com/d", test.directory)))).toBe(true)
     expect(Autonomy.missionCounters.hydrated).toBe(before)
     // A bare name that ends like a file is no host; written as a URL by the person it is one.
-    expect(failureOf(yield* settled(bash(root.id, "curl -s https://install.sh/x", test.directory)))).toBeInstanceOf(PermissionV1.DeferredError)
+    // 1.1.3 (matrix row 2: a host not named yet no longer waits; it runs, with no destination on its line).
+    expect(Exit.isSuccess(yield* settled(bash(root.id, "curl -s https://install.sh/x", test.directory)))).toBe(true)
     yield* person("ok, and fetch https://install.sh/latest too")
     expect(Exit.isSuccess(yield* settled(bash(root.id, "curl -s https://install.sh/y", test.directory)))).toBe(true)
     expect(Autonomy.missionCounters.hydrated).toBe(before + 1)
@@ -786,13 +817,15 @@ it.instance("F33: a person message stored after a later-stamped agent row is rea
       })
     const curl = (url: string) => settled(bash(root.id, `curl -s ${url}`, test.directory))
     // The run's first call makes the consent list.
-    expect(failureOf(yield* curl("https://api.late.com/a"))).toBeInstanceOf(PermissionV1.DeferredError)
+    // 1.1.3 (matrix row 2: a host not named yet no longer waits; it runs, with no destination on its line).
+    expect(Exit.isSuccess(yield* curl("https://api.late.com/a"))).toBe(true)
     // CR13-7: stamped before an agent row the read has already passed, stored after it.
     yield* Effect.sleep("30 millis")
     const stamped = Date.now()
     yield* Effect.sleep("30 millis")
     yield* agent(Date.now())
-    expect(failureOf(yield* curl("https://api.late.com/b"))).toBeInstanceOf(PermissionV1.DeferredError)
+    // 1.1.3 (matrix row 2: a host not named yet no longer waits; it runs, with no destination on its line).
+    expect(Exit.isSuccess(yield* curl("https://api.late.com/b"))).toBe(true)
     yield* person("please also check https://api.late.com/status", stamped)
     expect(Exit.isSuccess(yield* curl("https://api.late.com/c"))).toBe(true)
     // CR13-8: a person message that never got parts, stamped long enough ago, is passed over.
@@ -855,7 +888,8 @@ it.instance("F36: after a revert frees the top rowids, the person's next message
         return message.id
       })
     const curl = (url: string) => settled(bash(root.id, `curl -s ${url}`, test.directory))
-    expect(failureOf(yield* curl("https://api.first.com/a"))).toBeInstanceOf(PermissionV1.DeferredError)
+    // 1.1.3 (matrix row 2: a host not named yet no longer waits; it runs, with no destination on its line).
+    expect(Exit.isSuccess(yield* curl("https://api.first.com/a"))).toBe(true)
     yield* person("check https://api.first.com/status")
     const removed = [yield* agent(), yield* agent(), yield* agent()]
     // The read passes the three agent rows: its cursor is the newest row of the table.

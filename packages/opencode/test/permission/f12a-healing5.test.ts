@@ -19,6 +19,7 @@ import { ScriptReader } from "../../src/permission/script-reader"
 import type { InstanceContext } from "../../src/project/instance-context"
 import { readSteps } from "../../src/tool/shell"
 import { tmpdir } from "../fixture/fixture"
+import { ARCHIVE_FIRST, answerOf } from "./consented-literals"
 
 type Input = AutonomyTable.Input
 type Verdict = AutonomyTable.Verdict
@@ -113,13 +114,82 @@ const subagent = (input: Input) => AutonomyTable.classify({ ...input, bypass: { 
 const opened = (verdict: Verdict): Verdict =>
   verdict.class === "A" ? verdict : { class: "A", decidedBy: "agent", category: "by_main_agent", bypassed: verdict.category }
 
+// 1.1.3 (T9 G8, code review M2): the consented verdict and the agent's answer of each case, written out, not computed with
+// `noWait`. A D or P the overlay keeps runs as the main agent's (`RUNS`, bypassed = its 1.1.0 category); a deletion or
+// replacement nothing archives is redirected at once (`ARCHIVED`, ARCHIVE_FIRST).
+const RUNS = (bypassed: string, destination?: string) =>
+  ({ class: "A", decidedBy: "agent", category: "by_main_agent", bypassed, ...(destination && { destination }) }) as Verdict
+const ARCHIVED = (bypassed: string) => ({ class: "X", decidedBy: "gate", category: "not_reversible", bypassed }) as Verdict
+const CONSENTED: Record<string, readonly [Verdict, string | undefined]> = {
+  "npm run swbuild": [RUNS("not_routine"), undefined],
+  "npm run stashbuild": [RUNS("not_routine"), undefined],
+  "npm run merged": [RUNS("not_routine"), undefined],
+  "npm run chk": [RUNS("not_routine"), undefined],
+  "npm install": [RUNS("not_routine"), undefined],
+  "git checkout dev && npm run build": [RUNS("not_routine"), undefined],
+  "git switch dev; npm test": [RUNS("not_routine"), undefined],
+  "npm run swonly && npm run build": [RUNS("not_routine"), undefined],
+  "npm run build -ws": [RUNS("not_routine"), undefined],
+  "npm run build --ws": [RUNS("not_routine"), undefined],
+  "npm run build -iwr": [RUNS("not_routine"), undefined],
+  "npm run build --iwr": [RUNS("not_routine"), undefined],
+  "npm run build -sw": [RUNS("not_routine"), undefined],
+  "npm test -ws": [RUNS("not_routine"), undefined],
+  "npm test --workspaces=true": [RUNS("not_routine"), undefined],
+  "npm run build -w pkg": [RUNS("not_routine"), undefined],
+  "npm run build --prefix=sub": [RUNS("not_routine"), undefined],
+  "pnpm run build --filter-prod x": [RUNS("not_routine"), undefined],
+  "pnpm build -rs": [RUNS("not_routine"), undefined],
+  "pnpm test -r": [RUNS("not_routine"), undefined],
+  "npm run build --loglevel silent": [RUNS("not_routine"), undefined],
+  "npm i -sg foo": [RUNS("not_routine"), undefined],
+  "vitest run --output-file data.db": [RUNS("not_routine"), undefined],
+  "vitest run --outputFile.json=data.db": [RUNS("not_routine"), undefined],
+  "vitest run --output-file.junit=data.db": [RUNS("not_routine"), undefined],
+  "vitest run --coverage.reports-directory=local": [RUNS("not_routine"), undefined],
+  "jest --output-file data.db": [RUNS("not_routine"), undefined],
+  "jest --coverage-directory local": [RUNS("not_routine"), undefined],
+  "jest --cache-directory=local": [RUNS("not_routine"), undefined],
+  "vitest --global-setup x.ts": [RUNS("not_routine"), undefined],
+  "vitest --setup-files x.ts": [RUNS("not_routine"), undefined],
+  "vitest --pool-options.threads=x": [RUNS("not_routine"), undefined],
+  "jest --setup-files-after-env x.ts": [RUNS("not_routine"), undefined],
+  "jest --test-runner x": [RUNS("not_routine"), undefined],
+  "prettier -lw .": [RUNS("not_routine"), undefined],
+  "prettier -wl data.db": [RUNS("not_routine"), undefined],
+  "prettier -uw local": [RUNS("not_routine"), undefined],
+  "npm i": [RUNS("not_routine"), undefined],
+  "npm ci": [RUNS("not_routine"), undefined],
+  "pnpm install": [RUNS("not_routine"), undefined],
+  "pnpm add foo": [RUNS("not_routine"), undefined],
+  "yarn": [RUNS("not_routine"), undefined],
+  "yarn add foo": [RUNS("not_routine"), undefined],
+  "bun install": [RUNS("not_routine"), undefined],
+  "bun add foo": [RUNS("not_routine"), undefined],
+  "npm run s0": [RUNS("not_routine"), undefined],
+  "touch outlink/x": [RUNS("not_routine"), undefined],
+  "mkdir -p outlink/new": [RUNS("not_routine"), undefined],
+  "mkdir outlink/deep/new": [RUNS("not_routine"), undefined],
+  "tsc --noEmit > vitest.config.ts": [RUNS("sensitive_file"), undefined],
+  "tsc --noEmit > tsconfig.json": [RUNS("not_routine"), undefined],
+}
+function consentedOf(command: string) {
+  expect([command, Object.hasOwn(CONSENTED, command)]).toEqual([command, true])
+  return CONSENTED[command]!
+}
+
 async function keeps(commands: readonly string[], cwd = dir, extra: Partial<Input> = {}) {
   for (const command of commands) {
     const input = await sh(command, cwd, extra)
     const before = base(input)
     expect([command, before.class === "A"]).toEqual([command, false])
-    expect([command, root(input)]).toEqual([command, before])
-    expect([command, subagent(input)]).toEqual([command, before])
+    // 1.1.3 (spec section 3, `noWait`; matrix rows 3, 8, 16-23, 31): the overlay keeps the 1.1.0 verdict, and under consent
+    // that kept verdict no longer waits: a D or P runs as the main agent's, a deletion or replacement is redirected to the
+    // archive method at once, an X stays.
+    const [expected, answer] = consentedOf(command)
+    expect([command, root(input)]).toEqual([command, expected])
+    expect([command, answerOf(root(input))]).toEqual([command, answer])
+    expect([command, subagent(input)]).toEqual([command, expected])
   }
 }
 
@@ -264,11 +334,12 @@ describe("m25: touch and mkdir targets through a link", () => {
 describe("F12b routing: a redirect into a tool's config keeps 1.1.0", () => {
   test("with Undo and without it", async () => {
     await keeps(["tsc --noEmit > vitest.config.ts", "tsc --noEmit > tsconfig.json"])
-    // Without Undo the call stays held for a person (its held category can differ: the compound's tie-break, not F12a).
+    // Without Undo the overlay keeps the call held (its held category can differ: the compound's tie-break, not F12a).
+    // 1.1.3 (matrix rows 7, 22, spec section 3 rule 5): that hold no longer waits; it runs as the main agent's.
     const noUndo = await sh("tsc --noEmit > vitest.config.ts", dir, { canUndo: false })
     expect(base(noUndo).class).toBe("D")
-    expect(root(noUndo).class).toBe("D")
-    expect(subagent(noUndo).class).toBe("D")
+    expect(root(noUndo)).toMatchObject({ class: "A", category: "by_main_agent" })
+    expect(subagent(noUndo)).toMatchObject({ class: "A", category: "by_main_agent" })
     await opens(["tsc --noEmit > src/types.log"])
   })
 })

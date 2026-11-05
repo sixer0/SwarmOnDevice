@@ -17,6 +17,7 @@ import { ScriptReader } from "../../src/permission/script-reader"
 import type { InstanceContext } from "../../src/project/instance-context"
 import { readSteps } from "../../src/tool/shell"
 import { tmpdir } from "../fixture/fixture"
+import { answerOf } from "./consented-literals"
 
 type Input = AutonomyTable.Input
 type Verdict = AutonomyTable.Verdict
@@ -111,14 +112,30 @@ const subagent = (input: Input) => AutonomyTable.classify({ ...input, bypass: { 
 const opened = (verdict: Verdict): Verdict =>
   verdict.class === "A" ? verdict : { class: "A", decidedBy: "agent", category: "by_main_agent", bypassed: verdict.category }
 
+/** T9 G8: the consented verdict a case expects, written out. */
+type Expected = { class: string; category: string | undefined; bypassed?: string; destination?: string }
+type Case = readonly [command: string, expected: Expected, answer?: string]
+const OPENED = (bypassed: string): Expected => ({ class: "A", category: "by_main_agent", bypassed })
+const shortG8 = (verdict: Verdict): Expected => ({
+  class: verdict.class,
+  category: verdict.category,
+  ...(verdict.bypassed !== undefined && { bypassed: verdict.bypassed }),
+  ...(verdict.destination !== undefined && { destination: verdict.destination }),
+})
+
 /** The call keeps its 1.1.0 verdict exactly, for the root and for a subagent; it was not A without consent. */
-async function keeps(commands: readonly string[], extra: Partial<Input> = {}, cwd = dir) {
-  for (const command of commands) {
+async function keeps(cases: readonly Case[], extra: Partial<Input> = {}, cwd = dir) {
+  for (const [command, expected, answer] of cases) {
     const input = await sh(command, extra, cwd)
     const before = base(input)
     expect([command, before.class === "A"]).toEqual([command, false])
-    expect([command, root(input)]).toEqual([command, before])
-    expect([command, subagent(input)]).toEqual([command, before])
+    // 1.1.3 (spec section 3, `noWait`; matrix rows 3, 8, 16-23, 31): the overlay keeps the 1.1.0 verdict, and under consent
+    // that kept verdict no longer waits: a D or P runs as the main agent's, a deletion or replacement is redirected to the
+    // archive method at once, an X stays.
+    // T9 G8: the expected verdict and the agent's answer are written per case, not computed by the code under test.
+    for (const verdict of [root(input), subagent(input)]) {
+      expect([command, shortG8(verdict), answerOf(verdict)]).toEqual([command, expected, answer])
+    }
   }
 }
 
@@ -140,13 +157,13 @@ describe("item 1: a manifest script opens only when the allowlist accepts every 
 
   test("(a) near miss: what the call appends is read with the script, as the manager appends it", async () => {
     await opens(["npm run build -- --noEmit", "npm test -- --coverage", "bun run build --pretty"])
-    await keeps(["npm run build -- --outDir /tmp/elsewhere", "npm test -- --clearCache", "npm run build -- --outDir data.db"])
+    await keeps([["npm run build -- --outDir /tmp/elsewhere", OPENED("not_routine")], ["npm test -- --clearCache", OPENED("not_routine")], ["npm run build -- --outDir data.db", OPENED("not_routine")]])
   })
 
   test("(b) one step the allowlist does not accept keeps 1.1.0", async () => {
     await keeps([
-      "npm run deploy", "npm run clean", "npm run push", "npm run fetch", "bun run deploy", "pnpm run clean", "yarn deploy",
-      "npm run fmtall", "npm run overwrite", "npm run sub", "npm run maker",
+      ["npm run deploy", OPENED("not_routine")], ["npm run clean", OPENED("not_routine")], ["npm run push", OPENED("not_routine")], ["npm run fetch", OPENED("not_routine")], ["bun run deploy", OPENED("not_routine")], ["pnpm run clean", OPENED("not_routine")], ["yarn deploy", OPENED("not_routine")],
+      ["npm run fmtall", OPENED("not_routine")], ["npm run overwrite", OPENED("not_routine")], ["npm run sub", OPENED("not_routine")], ["npm run maker", OPENED("not_routine")],
     ])
     // 1.1.1 F40 (P56 item 7), F41 (V17-1, n93): the shell's reader keeps `NODE_ENV=production` before `tsc` (the shell.ts
     // seam, landed P57), and the consented screen reads it through.
@@ -157,38 +174,38 @@ describe("item 1: a manifest script opens only when the allowlist accepts every 
   test("(c) a script calling another follows the chain, three scripts deep", async () => {
     await opens(["npm run ci", "npm run chain3", "npm run viabun"])
     // A fourth level is not read, and a chain that reaches an unrecognised step keeps 1.1.0.
-    await keeps(["npm run chain4", "npm run bad"])
+    await keeps([["npm run chain4", OPENED("not_routine")], ["npm run bad", OPENED("not_routine")]])
   })
 
   test("(d) a cycle keeps 1.1.0", async () => {
-    await keeps(["npm run loop-a", "npm run loop-b", "npm run self", "bun run self"])
+    await keeps([["npm run loop-a", OPENED("not_routine")], ["npm run loop-b", OPENED("not_routine")], ["npm run self", OPENED("not_routine")], ["bun run self", OPENED("not_routine")]])
   })
 
   test("(e) a pre or post hook with a step the allowlist does not accept keeps 1.1.0, as does a hook that is no text", async () => {
-    await keeps(["npm run check", "bun run check", "npm run pack", "npm run hooked"])
+    await keeps([["npm run check", OPENED("check")], ["bun run check", OPENED("check")], ["npm run pack", OPENED("not_routine")], ["npm run hooked", OPENED("not_routine")]])
     // Its main script alone is fine: the hook is what keeps it.
     expect(SCRIPTS.check).toBe("tsc")
   })
 
   test("a missing script, a script that is no text, an unreadable or oversized manifest keeps 1.1.0", async () => {
-    await keeps(["npm run nope", "npm run weird", "yarn nope"])
-    await keeps(["npm run build"], {}, path.join(dir, "broken"))
-    await keeps(["npm run build"], {}, path.join(dir, "huge"))
+    await keeps([["npm run nope", OPENED("not_routine")], ["npm run weird", OPENED("not_routine")], ["yarn nope", OPENED("not_routine")]])
+    await keeps([["npm run build", OPENED("check")]], {}, path.join(dir, "broken"))
+    await keeps([["npm run build", OPENED("check")]], {}, path.join(dir, "huge"))
   })
 
   test("an option that runs other packages' or another folder's scripts keeps 1.1.0", async () => {
-    await keeps(["npm run build --workspaces", "npm run build -w pkg", "pnpm -r run build", "pnpm --filter x build", "yarn --cwd sub build", "bun run --filter x build"])
+    await keeps([["npm run build --workspaces", OPENED("not_routine")], ["npm run build -w pkg", OPENED("not_routine")], ["pnpm -r run build", OPENED("not_routine")], ["pnpm --filter x build", OPENED("not_routine")], ["yarn --cwd sub build", OPENED("not_routine")], ["bun run --filter x build", OPENED("not_routine")]])
   })
 
   test("`npm build` is no script; `bun build` is the bundler and `bun test` the runner, whatever the manifest says", async () => {
-    await keeps(["npm build"])
+    await keeps([["npm build", OPENED("not_routine")]])
     await opens(["bun build ./src/a.ts --outdir dist", "bun test"])
   })
 
   test("make keeps its 1.1.0 verdict, with any target", async () => {
     expect(Object.hasOwn(BypassLists.ALLOWLIST, "make")).toBe(false)
     expect(Object.hasOwn(BypassLists.ALLOWLIST, "gmake")).toBe(false)
-    await keeps(["make", "make build", "make -j4 test", "gmake all"])
+    await keeps([["make", OPENED("not_routine")], ["make build", OPENED("check")], ["make -j4 test", OPENED("not_routine")], ["gmake all", OPENED("not_routine")]])
   })
 
   test("without consent nothing changes: each is its 1.1.0 verdict", async () => {
@@ -201,18 +218,18 @@ describe("item 1: a manifest script opens only when the allowlist accepts every 
 
 describe("item 2 (G3-2): a test runner's option that cleans or moves its temp, cache or coverage folder keeps 1.1.0", () => {
   test("pytest", async () => {
-    await keeps(["pytest --basetemp=tmp", "pytest --basetemp tmp", "pytest --cache-clear", "pytest --cache-c", "pytest --cov-reset", "pytest --cov-report=html:elsewhere", "python3 -m pytest --cache-clear"])
+    await keeps([["pytest --basetemp=tmp", OPENED("not_routine")], ["pytest --basetemp tmp", OPENED("not_routine")], ["pytest --cache-clear", OPENED("not_routine")], ["pytest --cache-c", OPENED("not_routine")], ["pytest --cov-reset", OPENED("not_routine")], ["pytest --cov-report=html:elsewhere", OPENED("not_routine")], ["python3 -m pytest --cache-clear", OPENED("not_routine")]])
     await opens(["pytest", "pytest -q src", "pytest --cov=src", "pytest --co", "pytest --cache-show", "python3 -m pytest -x"])
   })
 
   test("jest and vitest", async () => {
-    await keeps(["jest --clearCache", "jest --clear-cache", "jest --cacheDirectory=x", "jest --coverageDirectory x", "jest --coverage-directory=x"])
-    await keeps(["vitest --clearCache", "vitest run --coverage.clean", "vitest run --coverage.clean=false", "vitest run --coverage.reportsDirectory=x", "vitest run --coverage.cleanOnRerun", "vitest --cache.dir=x"])
+    await keeps([["jest --clearCache", OPENED("not_routine")], ["jest --clear-cache", OPENED("not_routine")], ["jest --cacheDirectory=x", OPENED("not_routine")], ["jest --coverageDirectory x", OPENED("not_routine")], ["jest --coverage-directory=x", OPENED("not_routine")]])
+    await keeps([["vitest --clearCache", OPENED("not_routine")], ["vitest run --coverage.clean", OPENED("not_routine")], ["vitest run --coverage.clean=false", OPENED("not_routine")], ["vitest run --coverage.reportsDirectory=x", OPENED("not_routine")], ["vitest run --coverage.cleanOnRerun", OPENED("not_routine")], ["vitest --cache.dir=x", OPENED("not_routine")]])
     await opens(["jest", "jest --coverage", "jest --ci", "jest --cache", "vitest run", "vitest run --coverage", "vitest run --coverage.enabled"])
   })
 
   test("bun, cargo, go, swift and xcodebuild", async () => {
-    await keeps(["bun test --coverage-dir=x", "cargo test --target-dir x", "go test -outputdir x ./...", "go test --test.gocoverdir=x", "swift test --scratch-path x", "xcodebuild test -scheme A -derivedDataPath x", "ruff clean"])
+    await keeps([["bun test --coverage-dir=x", OPENED("not_routine")], ["cargo test --target-dir x", OPENED("not_routine")], ["go test -outputdir x ./...", OPENED("not_routine")], ["go test --test.gocoverdir=x", OPENED("not_routine")], ["swift test --scratch-path x", OPENED("not_routine")], ["xcodebuild test -scheme A -derivedDataPath x", OPENED("not_routine")], ["ruff clean", OPENED("not_routine")]])
     await opens(["bun test --coverage", "cargo test", "cargo build", "go test ./...", "swift test", "xcodebuild test -scheme A", "xcodebuild build -scheme A"])
   })
 })
@@ -228,9 +245,9 @@ describe("item 3: a formatter or linter that rewrites in place opens only on wha
 
   test("near miss: a file or folder the snapshot leaves out, or the project with one in it, keeps 1.1.0", async () => {
     await keeps([
-      "prettier --write data.db", "prettier --write .", "prettier --write 'local/**'", "eslint --fix", "eslint --fix local",
-      "ruff format", "ruff format local", "ruff check local", "ruff local", "black local", "black .", "biome check --write", "biome lint --write local",
-      "go fmt", "go fmt ./local", "go fmt example.com/x", "cargo fmt", "cargo fmt --all", "python3 -m black local",
+      ["prettier --write data.db", OPENED("not_routine")], ["prettier --write .", OPENED("not_routine")], ["prettier --write 'local/**'", OPENED("not_routine")], ["eslint --fix", OPENED("not_routine")], ["eslint --fix local", OPENED("not_routine")],
+      ["ruff format", OPENED("not_routine")], ["ruff format local", OPENED("not_routine")], ["ruff check local", OPENED("check")], ["ruff local", OPENED("not_routine")], ["black local", OPENED("not_routine")], ["black .", OPENED("not_routine")], ["biome check --write", OPENED("not_routine")], ["biome lint --write local", OPENED("not_routine")],
+      ["go fmt", OPENED("not_routine")], ["go fmt ./local", OPENED("not_routine")], ["go fmt example.com/x", OPENED("not_routine")], ["cargo fmt", OPENED("not_routine")], ["cargo fmt --all", OPENED("not_routine")], ["python3 -m black local", OPENED("not_routine")],
     ])
   })
 
@@ -239,7 +256,7 @@ describe("item 3: a formatter or linter that rewrites in place opens only on wha
   })
 
   test("without Undo a folder is never ordinary, so a rewrite of one keeps 1.1.0", async () => {
-    await keeps(["prettier --write src", "black src"], { canUndo: false })
+    await keeps([["prettier --write src", OPENED("not_routine")], ["black src", OPENED("not_routine")]], { canUndo: false })
   })
 
   test("the targets each tool names", () => {
