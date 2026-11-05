@@ -13,7 +13,7 @@ const DEFAULT_PROJECT_DIR = "Default Project"
 
 // Equal to SWARM_RELEASE in electron-builder.config.ts (Info.plist SwarmRelease); onboarding.test.ts
 // fails if they drift. The main bundle cannot import the builder config.
-export const SWARM_RELEASE = "1.1.1"
+export const SWARM_RELEASE = "1.1.2"
 
 export function initializeOldLayoutEligibility(userDataPath: string) {
   const entries = existsSync(userDataPath) ? readdirSync(userDataPath, { withFileTypes: true }) : []
