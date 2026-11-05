@@ -5,7 +5,7 @@ import { createServer } from "node:net"
 import { homedir } from "node:os"
 import { join } from "node:path"
 import { getCACertificates, setDefaultCACertificates } from "node:tls"
-import type { Event } from "electron"
+import type { Event, MessageBoxOptions } from "electron"
 import { app, BrowserWindow, dialog } from "electron"
 
 import { Deferred, Effect, Fiber } from "effect"
@@ -52,6 +52,11 @@ import { startBackgroundCli } from "./background-cli"
 import { nativeT, setNativeTranslations } from "./native-translations"
 import { appServerFilePath, appStateHome, removeAppServerFile, writeAppServerFile } from "./app-server-file"
 import { cliLauncherPath, createCliInstaller } from "./cli-install"
+import { createExecFileRunner, createPatchFlowGuard, patchApplierPath, runPatchStatus } from "./patch-common"
+import { createPatchUpdateFlow } from "./patch-update-flow"
+import { createUndoLastUpdate } from "./patch-undo"
+import { createHandoffLauncher } from "./swarm-patch-handoff"
+import { createPatchResultReader, HANDOFF_RESULT_FILE_NAME } from "./swarm-patch-result"
 
 const APP_NAMES: Record<string, string> = {
   dev: "Swarm Dev",
@@ -170,6 +175,11 @@ const main = Effect.gen(function* () {
       app.quit()
     })
   }
+  // The app's normal quit, without app.relaunch (also H4 of the patch handoff: the wrapper relaunches after the applier).
+  const quit = () => {
+    setAppQuitting()
+    void stopSidecars().finally(() => app.quit())
+  }
 
   try {
     setDefaultCACertificates([...new Set([...getCACertificates("default"), ...getCACertificates("system")])])
@@ -243,10 +253,7 @@ const main = Effect.gen(function* () {
   })
 
   for (const signal of ["SIGINT", "SIGTERM"] as const) {
-    process.on(signal, () => {
-      setAppQuitting()
-      void stopSidecars().finally(() => app.quit())
-    })
+    process.on(signal, quit)
   }
 
   const serverReady = Deferred.makeUnsafe<ServerReadyData, unknown>()
@@ -271,6 +278,42 @@ const main = Effect.gen(function* () {
   registerRendererProtocol()
   setDockIcon()
   const updater = setupAutoUpdater(stopSidecars)
+  // Update from File… / Undo Last Update (rows 56-59). One handoff launcher (row 57) and one M8 guard for both flows;
+  // each flow is created once and run per click. The launcher calls `quit` itself once the wrapper has spawned (H4);
+  // neither flow has an exit step of its own. Both keep the guard after a started handoff (C27 D-1).
+  const launchHandoff = createHandoffLauncher(
+    { resourcesPath: process.resourcesPath, userData: app.getPath("userData"), home: homedir() },
+    { logger, quit },
+  )
+  const handoff = (applierArgv: readonly string[]) => launchHandoff([...applierArgv])
+  const patchGuard = createPatchFlowGuard()
+  const patchWindow = () => getLastFocusedWindow() ?? null
+  const patchMessageBox = (win: BrowserWindow | null, options: MessageBoxOptions) =>
+    win ? dialog.showMessageBox(win, options) : dialog.showMessageBox(options)
+  const patchLog = (level: "info" | "warn" | "error", message: string, extra?: Record<string, unknown>) =>
+    writeLog("swarm-patch", message, extra, level)
+  const updateFromFile = createPatchUpdateFlow({
+    window: patchWindow,
+    showOpenDialog: (win, options) => (win ? dialog.showOpenDialog(win, options) : dialog.showOpenDialog(options)),
+    showMessageBox: patchMessageBox,
+    t: nativeT,
+    resourcesPath: process.resourcesPath,
+    home: homedir(),
+    handoff,
+    log: patchLog,
+    guard: patchGuard,
+  })
+  const undoLastUpdate = createUndoLastUpdate({
+    window: patchWindow,
+    showMessageBox: patchMessageBox,
+    handoff,
+    resourcesPath: () => process.resourcesPath,
+    log: {
+      info: (message, meta) => patchLog("info", message, meta),
+      error: (message, meta) => patchLog("error", message, meta),
+    },
+    guard: patchGuard,
+  })
   const menuDeps = {
     trigger: (id: string) => {
       const win = getLastFocusedWindow()
@@ -288,6 +331,8 @@ const main = Effect.gen(function* () {
         pathEnv: () => shellEnv?.PATH ?? process.env.PATH,
       })().catch((error) => logger.error("install command line tool failed", error)),
     relaunch,
+    updateFromFile: () => void updateFromFile().catch((error) => logger.error("update from file failed", error)),
+    undoLastUpdate: () => void undoLastUpdate().catch((error) => logger.error("undo last update failed", error)),
   }
   registerIpcHandlers({
     killSidecar: () => killSidecar(),
@@ -433,6 +478,27 @@ const main = Effect.gen(function* () {
 
   const windows = restoreMainWindows()
   if (windows.length) createMenu(menuDeps)
+  // Result of a patch handoff (row 58), once per start after the first window is shown. `installedRelease` is the S-1
+  // `status` of this bundle (row 56); it runs only when the result file claims success.
+  if (process.platform === "darwin" && windows[0]) {
+    const readPatchResult = createPatchResultReader({
+      resultFile: join(app.getPath("userData"), HANDOFF_RESULT_FILE_NAME),
+      resourcesPath: process.resourcesPath,
+      window: patchWindow,
+      showMessageBox: patchMessageBox,
+      t: nativeT,
+      installedRelease: () =>
+        runPatchStatus({
+          run: createExecFileRunner(),
+          applier: patchApplierPath(process.resourcesPath),
+          home: homedir(),
+        }).then((status) => (status.ok ? status.status.release : undefined)),
+      log: (message, extra, level) => writeLog("swarm-patch", message, extra, level),
+    })
+    windows[0].once("ready-to-show", () =>
+      void readPatchResult().catch((error) => logger.error("patch result check failed", error)),
+    )
+  }
 })
 
 Effect.runFork(main)

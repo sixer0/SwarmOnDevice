@@ -6,6 +6,8 @@ export type DesktopMenuActionHandlers = Partial<{
   checkForUpdates: () => void
   installCli: () => void
   relaunch: () => void
+  updateFromFile: () => void
+  undoLastUpdate: () => void
 }>
 
 export function runDesktopMenuAction(
@@ -22,6 +24,12 @@ export function runDesktopMenuAction(
       return
     case "app.relaunch":
       handlers.relaunch?.()
+      return
+    case "app.updateFromFile":
+      handlers.updateFromFile?.()
+      return
+    case "app.undoLastUpdate":
+      handlers.undoLastUpdate?.()
       return
     case "window.new":
       createMainWindow()
