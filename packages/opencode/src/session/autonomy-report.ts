@@ -10,6 +10,7 @@ import { Secrets } from "@/tool/secrets"
 import { MissionWindow } from "@/permission/mission-window"
 import type { AutonomyTable } from "@/permission/autonomy-table"
 import { BypassScreen } from "@/permission/bypass-screen"
+import { AutonomyTexts } from "@/permission/autonomy-texts"
 import { OutwardConsent } from "@/permission/outward-consent"
 import { ScriptReader } from "@/permission/script-reader"
 import { Reach } from "@/tool/reach"
@@ -55,6 +56,41 @@ const REPORT_SEGMENTS = new Set(["docs", "doc", "report", "reports", "laporan"])
 // A path the person named in their goal: a run of non-space characters ending in one of the extensions above.
 const NAMED_FILE = /[^\s"'`<>()[\]{},;]+\.(?:md|docx|pdf|xlsx|pptx)\b/gi
 const EDIT_PERMISSIONS = new Set(["edit", "write", "patch", "multiedit"])
+
+// 1.1.3 (spec names register): the class X categories the gate answers with the archive method instead of a plain
+// refusal. The set is owned by `autonomy-texts.ts`; the report only reads it.
+export const ARCHIVE_REDIRECT: ReadonlySet<string> = AutonomyTexts.ARCHIVE_REDIRECT
+/** A class X line the gate answered with the archive method (report section "Redirected to the archive method"). */
+export const redirects = (line: { readonly class: string; readonly category?: string }) =>
+  line.class === "X" && line.category !== undefined && ARCHIVE_REDIRECT.has(line.category)
+
+/** 1.1.3 (T9): a path inside a repository's own git settings or hooks (`.git/config`, `.git/hooks/...`). */
+const GIT_SETUP_PATH = /(^|[\s/'"=:])\.git\/(config\b|hooks(\/|\b))/
+/** Shell programs that only read what they name, so naming `.git/config` with them changes nothing. */
+const ONLY_READS = /^\s*(cat|less|more|head|tail|grep|rg|ls|stat|file|wc|diff|bat|od|xxd|hexdump|git\s+(diff|log|show|status))\b/
+/** `git config` reading only: a get, a list, or no value after the key. */
+const GIT_CONFIG = /(^|[\s;&|(])git(\s+-C\s+\S+|\s+-c\s+\S+)*\s+config\b([^;&|\n]*)/
+
+/**
+ * 1.1.3 (T9, row 11 "Items to judge"): a call that ran and wrote the repository's git settings or a git hook. Both run later
+ * on the person's own git commands, outside autonomous mode, so the end report lists each under "Open issues" for the
+ * person to review. Read roughly from what the line records: a file tool on such a path, a shell call naming such a path
+ * that is no plain read, or a `git config` that sets, adds, unsets or edits (a `--global` or `--system` one included).
+ */
+export function writesGitSetup(line: Pick<DecisionLine, "permission" | "patterns" | "decision">): boolean {
+  if (line.decision !== "allow") return false
+  const text = line.patterns.join(" ")
+  if (EDIT_PERMISSIONS.has(line.permission)) return GIT_SETUP_PATH.test(text)
+  if (line.permission !== "bash") return false
+  if (GIT_SETUP_PATH.test(text) && !ONLY_READS.test(text)) return true
+  const config = GIT_CONFIG.exec(text)
+  if (!config) return false
+  const rest = config[3] ?? ""
+  if (/(^|\s)(--get(-all|-regexp|-urlmatch)?|--list|-l|--show-origin|--show-scope|get|list)(\s|$)/.test(rest)) return false
+  if (/(^|\s)(--unset(-all)?|--add|--replace-all|--remove-section|--rename-section|--edit|-e|set|unset)(\s|$)/.test(rest)) return true
+  // `git config key value`: two words that are not options set a value; one alone reads it.
+  return rest.split(/\s+/).filter((word) => word && !word.startsWith("-")).length >= 2
+}
 
 type Line = Autonomy.AuditLine
 type DecisionLine = Extract<Line, { type: "decision" }>
@@ -505,9 +541,19 @@ export function render(facts: Facts) {
   const archived = outcomes
     .filter((line) => line.outcome === "archived")
     .flatMap((line) => (line.moved ?? []).map((item) => `\`${hide(item.from)}\` -> \`${hide(item.to)}\``))
-  const refused = decisions
-    .filter((line) => line.class === "X")
-    .map((line) => `${call(line)}: ${line.category ? (labels[line.category] ?? line.category) : texts.none}`)
+  // 1.1.3: a class X line is either redirected to the archive method or refused (spec section 2, Rd and F). Each names its
+  // category and, when the consent changed it, the category it had before (`bypassed`).
+  const labelOf = (category: string | undefined) => (category ? (labels[category] ?? category) : texts.none)
+  const answered = (line: DecisionLine) => {
+    const before =
+      line.bypassed !== undefined && line.bypassed !== line.category
+        ? ` (${texts.previously.replace("{category}", labelOf(line.bypassed))})`
+        : ""
+    return `${call(line)}: ${labelOf(line.category)}${before}`
+  }
+  const refusals = decisions.filter((line) => line.class === "X")
+  const redirected = refusals.filter(redirects).map(answered)
+  const refused = refusals.filter((line) => !redirects(line)).map(answered)
   // Each call the main agent decided (verifier M3, P3 "riwayat kerja"): when, which tool, what it asked, the category
   // it had before the consent changed it, the answer and why. Capped, with a count of the rest.
   const mainDecisions = decisions.filter(byMainAgent)
@@ -582,6 +628,7 @@ export function render(facts: Facts) {
       .filter((line) => line.category === "queue_full" || line.decidedBy === "system:queue_full")
       .map((line) => `${texts.queueFull}: ${call(line)}`),
     ...decisions.filter((line) => line.class === "B").map((line) => `${texts.stopped}: ${call(line)}`),
+    ...decisions.filter(writesGitSetup).map((line) => `${texts.gitSetup}: ${call(line)}`),
     ...markers.filter((line) => line.marker === "b0").map(() => texts.queueFull),
     ...markers.filter((line) => line.marker === "b1").map(() => texts.stopped),
   ]
@@ -616,6 +663,7 @@ export function render(facts: Facts) {
       list(facts.files.map((item) => `\`${hide(item.file)}\` (+${item.additions}, -${item.deletions})`)),
     ),
     ...section(texts.archived, list(archived)),
+    ...section(texts.redirected, list(redirected)),
     ...section(texts.refused, list(refused)),
     ...section(texts.waiting, list(facts.open.map((line) => `${call(line)} (${hide(line.agent)})`))),
     ...section(

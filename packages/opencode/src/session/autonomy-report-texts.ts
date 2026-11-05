@@ -14,6 +14,8 @@ export interface Texts {
   readonly outward: string
   readonly files: string
   readonly archived: string
+  /** 1.1.3: the class X calls answered with the archive method (`AutonomyTexts.ARCHIVE_REDIRECT`), not plain refusals. */
+  readonly redirected: string
   readonly refused: string
   readonly waiting: string
   readonly todos: string
@@ -50,6 +52,8 @@ export interface Texts {
   readonly verdicts: { readonly allow: string; readonly reject: string; readonly defer: string }
   /** `{agent}` is the subagent's name. */
   readonly forSubagent: string
+  /** 1.1.3: `{category}` is the category a call had before the consent changed it. */
+  readonly previously: string
   /** `{n}` is how many more rows there are than the list shows. */
   readonly more: string
   /** What an outward action was (P42). */
@@ -78,6 +82,9 @@ export interface Texts {
   readonly unavailable: string
   readonly stopped: string
   readonly queueFull: string
+  /** 1.1.3 (T9): a call that ran and changed the repository's git settings or a git hook, which run later on the person's
+   * own git commands, outside autonomous mode. */
+  readonly gitSetup: string
 }
 
 export const TEXTS: Record<Autonomy.ReportLanguage, Texts> = {
@@ -90,6 +97,7 @@ export const TEXTS: Record<Autonomy.ReportLanguage, Texts> = {
     outward: "Sent outside the computer",
     files: "Files changed",
     archived: "Moved to the archive",
+    redirected: "Redirected to the archive method",
     refused: "Refused",
     waiting: "Still waiting for you",
     todos: "Work list",
@@ -122,6 +130,7 @@ export const TEXTS: Record<Autonomy.ReportLanguage, Texts> = {
     },
     verdicts: { allow: "allowed", reject: "declined", defer: "left for you" },
     forSubagent: "for subagent {agent}",
+    previously: "before the consent: {category}",
     more: "and {n} more",
     outwardKinds: {
       request: "request",
@@ -145,6 +154,7 @@ export const TEXTS: Record<Autonomy.ReportLanguage, Texts> = {
     unavailable: "The main agent could not be reached",
     stopped: "Stopped for you",
     queueFull: "Too many calls were waiting",
+    gitSetup: "Changed git settings or a git hook, which run later on your own git commands; please review",
   },
   id: {
     title: "Laporan sesi otonom",
@@ -155,6 +165,7 @@ export const TEXTS: Record<Autonomy.ReportLanguage, Texts> = {
     outward: "Dikirim ke luar komputer",
     files: "*File* yang berubah",
     archived: "Dipindahkan ke arsip",
+    redirected: "Dialihkan ke metode arsip",
     refused: "Ditolak",
     waiting: "Masih menunggu Anda",
     todos: "Daftar kerja",
@@ -187,6 +198,7 @@ export const TEXTS: Record<Autonomy.ReportLanguage, Texts> = {
     },
     verdicts: { allow: "diizinkan", reject: "ditolak", defer: "diserahkan kepada Anda" },
     forSubagent: "untuk subagen {agent}",
+    previously: "sebelum persetujuan: {category}",
     more: "dan {n} lainnya",
     outwardKinds: {
       request: "permintaan",
@@ -210,6 +222,7 @@ export const TEXTS: Record<Autonomy.ReportLanguage, Texts> = {
     unavailable: "Agen utama tidak dapat dihubungi",
     stopped: "Dihentikan untuk Anda",
     queueFull: "Terlalu banyak panggilan menunggu",
+    gitSetup: "Mengubah pengaturan git atau git hook, yang nanti berjalan pada perintah git Anda sendiri; mohon periksa",
   },
 }
 
@@ -227,6 +240,7 @@ export const CATEGORY: Record<Autonomy.ReportLanguage, Readonly<Record<string, s
     credential_change: "Changes a remote, a credential or a git account",
     script_flagged: "A script that needs a closer look",
     archived: "Moved to the archive instead of deleted",
+    not_reversible: "Deletes or replaces something Swarm could not archive first",
   },
   id: {
     irreversible: "Tidak bisa dibatalkan, jadi tidak pernah dijalankan",
@@ -240,6 +254,7 @@ export const CATEGORY: Record<Autonomy.ReportLanguage, Readonly<Record<string, s
     credential_change: "Mengubah remote, kredensial, atau akun git",
     script_flagged: "Skrip yang perlu diperiksa lebih dulu",
     archived: "Dipindahkan ke arsip, bukan dihapus",
+    not_reversible: "Menghapus atau mengganti sesuatu yang tidak bisa diarsipkan Swarm lebih dulu",
   },
 }
 

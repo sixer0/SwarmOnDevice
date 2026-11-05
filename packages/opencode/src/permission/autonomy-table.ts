@@ -1038,15 +1038,25 @@ function classifySteps(input: Input, checkClass: CheckClass, reading: Reading): 
   const strongest = verdicts.filter((verdict) => RANK[verdict.class] === top)
   // A tie in rank prefers the answer the consent overlay opened (`bypassed`), so the order of the steps never decides
   // whether a subagent's compound call goes to the main agent (1.1.1 M1). Then one with a category, which says what went
-  // on record.
+  // on record. 1.1.3: a refusal from `noWait` carries `bypassed` too; only an opened A counts as opened here.
+  // 1.1.3 (T7 F2): among the opened ones, the step that would have waited before 1.1.3 (`noWait` opened it), a send
+  // first, so the line's category says what waited and a send stays under "Sent outside the computer"; then a send the
+  // overlay opened; then the first opened step, as in 1.1.1.
+  const openedSteps = strongest.filter((verdict) => verdict.class === "A" && verdict.bypassed !== undefined)
+  const sends = (verdict: Verdict) => verdict.bypassed !== undefined && OUTWARD_HELD.has(verdict.bypassed)
   const chosen =
-    strongest.find((verdict) => verdict.bypassed !== undefined) ??
+    openedSteps.find((verdict) => OPENED_BY_NO_WAIT.has(verdict) && sends(verdict)) ??
+    openedSteps.find((verdict) => sends(verdict)) ??
+    openedSteps.find((verdict) => OPENED_BY_NO_WAIT.has(verdict)) ??
+    openedSteps[0] ??
     strongest.find((verdict) => verdict.category !== undefined) ??
     strongest[0]!
   // 1.1.1 F26 (P42): a call the consent lets out records every place its steps send to, not only the chosen step's.
   if (!input.bypass || top !== RANK.A || chosen.bypassed === undefined) return chosen
   const sent = [...new Set(verdicts.flatMap((verdict) => (verdict.destination ? verdict.destination.split(", ") : [])))]
-  return sent.length > 0 ? { ...chosen, destination: sent.join(", ") } : chosen
+  if (sent.length === 0) return chosen
+  const merged = { ...chosen, destination: sent.join(", ") }
+  return OPENED_BY_NO_WAIT.has(chosen) ? openedByNoWait(merged) : merged
 }
 
 /**
@@ -1865,7 +1875,9 @@ export function classifyBase(input: Input, checkClass: CheckClass = CHECK_CLASS)
  * plan lineage. Steps of a compound text reach this again from `classifySteps` with the same `bypass`, so each is overlaid.
  */
 export function classify(input: Input, checkClass: CheckClass = CHECK_CLASS): Verdict {
-  if (!input.bypass || input.plan === true) return classifyBase(input, checkClass)
+  if (!input.bypass) return classifyBase(input, checkClass)
+  // 1.1.3 (T3): under consent no verdict waits, the plan lineage's included; rule 8 still refuses what it refused.
+  if (input.plan === true) return noWait(input, classifyBase(input, checkClass))
   // 1.1.1 F12b (Perf P2): one classify asks git about a file once, however many steps or scripts write it. 1.1.1 F14
   // (G5-P1): the one scope covers the whole consented classify, the steps' own overlays (reached from `classifySteps`,
   // whose nested scopes share this one), the call-level check and the kept path's `classifyBase` included.
@@ -1873,11 +1885,520 @@ export function classify(input: Input, checkClass: CheckClass = CHECK_CLASS): Ve
     const base = classifyBase(input, checkClass)
     const verdict = underConsent(input, base)
     // 1.1.1 F12a (S4-1): a step that changes the tree beside one that runs a project script does not open the call; it
-    // keeps its 1.1.0 verdict. Refusals and held answers stand as they are.
-    if (verdict.bypassed !== undefined && BypassScreen.sequenceKeeps(input))
-      return classifyBase({ ...input, bypass: undefined }, checkClass)
-    return verdict
+    // keeps its 1.1.0 verdict. Refusals and held answers stand as they are (1.1.3: also one carrying `bypassed`).
+    if (verdict.class === "A" && verdict.bypassed !== undefined && BypassScreen.sequenceKeeps(input)) {
+      const kept = noWait(input, classifyBase({ ...input, bypass: undefined }, checkClass))
+      // 1.1.3 (T7 F2): the kept call runs too, so its line names the step that would have waited (`classifySteps` chose
+      // it, a send first) rather than the whole text's `not_routine`: a send stays under "Sent outside the computer".
+      const waited = OPENED_BY_NO_WAIT.has(verdict) || OUTWARD_HELD.has(verdict.bypassed)
+      if (kept.class !== "A" || kept.bypassed === undefined || !waited) return kept
+      const { destination: _, ...rest } = kept
+      return openedByNoWait({ ...rest, bypassed: verdict.bypassed, ...(verdict.destination && { destination: verdict.destination }) })
+    }
+    return noWait(input, verdict)
   })
+}
+
+/**
+ * 1.1.3: the wide reader (`DeletionWords.deletesOrReplacesWide`) sees a shell call remove, empty or replace a file, or
+ * cannot tell (a launcher it cannot read).
+ */
+function destroys(input: Input) {
+  if (input.permission !== "bash") return false
+  const command = input.metadata.command
+  if (typeof command !== "string") return false
+  // 1.1.3 (T9 G1): the shell's own reading first, whose words carry no quote marks, so a `-c` text is seen as written.
+  const read = (BypassScreen.readSteps(input) ?? []).map((step) => step.argv)
+  return [...read, ...commandWords(command)].some((words) => DeletionWords.deletesOrReplacesWide(words, commandWords))
+}
+
+/**
+ * 1.1.3 (T9 G1): a word of a text nobody can read word by word that names a deletion or an action nothing can undo. Read
+ * roughly, on purpose: it only ever answers with the archive way instead of running.
+ */
+const DESTRUCTIVE_TOKEN =
+  /(^|[\s;&|(){}'"`=])(rm|rmdir|unlink|shred|truncate|rimraf|srm|wipe|dd|mkfs(\.\w+)?|dropdb|crontab|delete|destroy|drop|flushall|flushdb|reset|clean|unpublish|uninstall|terminate|-{1,2}delete)(?=$|[\s;&|(){}'"`])/i
+
+/**
+ * 1.1.3 (T9 G2): a step of a project script deletes: a deletion program or form the wide reader sees, but not one that only
+ * replaces (`cp`, `mv`, `install`, `ditto`, a plain `rsync`) or a shell running a script file, which build scripts do all
+ * the time. `rsync --delete`, a `dd` and a move to the null device still count.
+ */
+function scriptDeletes(argv: readonly string[]) {
+  if (!DeletionWords.deletesOrReplacesWide(argv, commandWords)) return false
+  const found = DeletionWords.launched(argv)
+  if (found.kind !== "program") return found.kind !== "none"
+  const { name, args } = found
+  if (DeletionWords.SHELLS.has(name)) return DeletionWords.shellText(name, args) !== undefined
+  if (name === "ln") return false
+  if (name === "rsync") return args.some((word) => word.startsWith("--delete"))
+  if (name === "mv") return args.some((word) => word === "/dev/null" || word === devNull)
+  if (DeletionWords.REPLACERS.has(name) && name !== "dd") return false
+  return true
+}
+
+/**
+ * 1.1.3 (T10): the folders a build writes and a clean step empties again. A deletion in a project script that targets only
+ * these, inside the project, runs; any other deletion in a script still gets the archive way (T9 G2).
+ */
+export const OUTPUT_FOLDERS: ReadonlySet<string> = new Set([
+  "dist", "build", "out", ".next", ".nuxt", ".turbo", ".svelte-kit", "coverage", "target", ".cache", "tmp",
+])
+/** The plain deletion programs whose operands are all paths; anything else in a script is judged by `scriptDeletes`. */
+const OUTPUT_DELETERS: ReadonlySet<string> = new Set(["rm", "rmdir", "unlink", "rimraf", "del", "del-cli"])
+const GLOB = /[*?[\]]/
+
+/**
+ * 1.1.3 (T10): one operand of a script's deletion names a generated-output folder, or something in one, of the folder the
+ * script runs in, inside the project. Refused as the write checks refuse (`safePath`): a `~`, an option, a `..` anywhere,
+ * a brace, an expansion, a glob in the folder's own name, or a link on the way (the folder or any named part under it),
+ * and the whole path must still be inside the project once links are followed.
+ */
+function outputPath(word: string, cwd: string, input: Input) {
+  if (word === "" || word.startsWith("~") || word.startsWith("-") || word.includes("..") || /[{}$`\\\0]/.test(word)) return false
+  if (!Reach.inside(cwd, input.instance)) return false
+  const file = path.resolve(cwd, word)
+  const parts = path.relative(cwd, file).split(path.sep)
+  if (parts[0] === "" || parts[0] === ".." || path.isAbsolute(parts[0]!) || !OUTPUT_FOLDERS.has(parts[0]!)) return false
+  let at = cwd
+  for (const part of parts) {
+    if (GLOB.test(part)) break
+    at = path.join(at, part)
+    if (fs.lstatSync(at, { throwIfNoEntry: false })?.isSymbolicLink()) return false
+  }
+  const literal = parts.findIndex((part) => GLOB.test(part))
+  const checked = literal === -1 ? file : path.join(cwd, ...parts.slice(0, literal))
+  return Reach.inside(checked, input.instance) && containsPath(checked, input.instance)
+}
+
+/** 1.1.3 (T10): a script step that deletes, with every operand a generated-output path (`outputPath`) in every folder. */
+function deletesOutputOnly(step: { argv: readonly string[]; cwds: readonly string[] }, input: Input) {
+  const found = DeletionWords.launched(step.argv)
+  if (found.kind !== "program" || found.fed || !OUTPUT_DELETERS.has(found.name)) return false
+  // Admin rights (or a feed of names nobody sees) are never a plain clean step.
+  if (found.launchers.some((name) => /^(sudo|doas|su|pkexec|run0)\b/.test(name))) return false
+  const operands: string[] = []
+  let ended = false
+  for (const word of found.args) {
+    if (!ended && word === "--") ended = true
+    else if (!ended && word.startsWith("-")) continue
+    else operands.push(word)
+  }
+  if (operands.length === 0 || step.cwds.length === 0) return false
+  return step.cwds.every((cwd) => operands.every((word) => outputPath(word, cwd, input)))
+}
+
+/**
+ * 1.1.3 (T9 G4): a git step that throws away work nothing has committed: a checkout of paths (`--`, `.`, a path that is
+ * there, `-f`), a `restore` of the working tree, a `switch` that discards (`--discard-changes`, `-f`), a forced
+ * `worktree remove`, or a forced `checkout-index`. It counts only when no Undo snapshot covers it: Undo is off (a folder
+ * without Git, snapshots off), or it acts outside the project (its folder, a `-C` folder, or the worktree it removes).
+ */
+function discardsWork(step: { argv: readonly string[]; cwds: readonly string[] }, input: Input) {
+  const found = BypassScreen.unwrap(step.argv)
+  if (found.kind !== "program" || found.name !== "git") return false
+  const args = found.args
+  const moves: string[] = []
+  let at = 0
+  while (at < args.length) {
+    const word = args[at]!
+    if (word === "-C") {
+      moves.push(args[at + 1] ?? ".")
+      at += 2
+    } else if (word === "-c" || word === "--git-dir" || word === "--work-tree" || word === "--namespace") at += 2
+    else if (word.startsWith("-")) at++
+    else break
+  }
+  const sub = args[at]
+  const rest = args.slice(at + 1)
+  const has = (...names: string[]) => rest.some((word) => names.includes(word))
+  const forced = has("--force") || rest.some((word) => /^-[A-Za-z]*f[A-Za-z]*$/.test(word))
+  const places = step.cwds.map((cwd) => moves.reduce((dir, move) => path.resolve(dir, move), cwd))
+  const positional = rest.filter((word) => !word.startsWith("-"))
+  let targets = places
+  const discards = (() => {
+    if (sub === "checkout")
+      return (
+        has("--", ".") ||
+        forced ||
+        positional.some((word) => places.some((place) => fs.existsSync(path.resolve(place, word))))
+      )
+    if (sub === "restore") return !(has("--staged", "-S") && !has("--worktree", "-W"))
+    if (sub === "switch") return has("--discard-changes") || forced
+    if (sub === "checkout-index") return forced
+    if (sub === "worktree" && positional[0] === "remove" && forced) {
+      const named = positional.slice(1)
+      if (named.length > 0) targets = places.flatMap((place) => named.map((word) => path.resolve(place, word)))
+      return true
+    }
+    return false
+  })()
+  if (!discards) return false
+  return !input.canUndo || targets.some((target) => !Reach.inside(target, input.instance))
+}
+
+/** 1.1.3 (T9 G5): a path of the person's own configuration outside the project: under the home folder, not in the project. */
+function userConfigPath(word: string, cwd: string, input: Input) {
+  const home = homedir()
+  const file = word === "~" || word.startsWith("~/") ? path.join(home, word.slice(1)) : path.resolve(cwd, word)
+  if (path.relative(home, file).startsWith("..") || path.isAbsolute(path.relative(home, file))) return false
+  // Through links, as the project's own folders are spelled (`Reach.realRoots`); a file not there yet counts by its folder.
+  const parent = Reach.real(path.dirname(file)) ?? path.dirname(file)
+  return !containsPath(path.join(parent, path.basename(file)), Reach.realRoots(input.instance)) && !containsPath(file, input.instance)
+}
+
+/** 1.1.3 (T9, row 11 re-run): the script screen's flags of a call that is inline code or a script file (`scriptForm`). */
+function consentScriptFlags(input: Input, command: string): readonly string[] {
+  const form = scriptForm(command.trim())
+  if (!form) return []
+  const directory = input.instance.directory
+  const screen =
+    form.code === undefined
+      ? ScriptScreen.file({ directory, file: form.file, cwd: input.cwd })
+      : ScriptScreen.inline(form.code, { roots: [...new Set([directory, Reach.real(directory) ?? directory])], cwd: input.cwd })
+  return screen.ok ? screen.flags : []
+}
+
+/**
+ * 1.1.3 (T9 G1-G5): under consent, what a shell call does past its own top-level words, and what it removes that nothing
+ * archives. "irreversible": an X trigger inside a shell text or a project script, or a cloud or remote resource deleted
+ * (`BypassScreen.cloudDeletes`); "admin_rights": admin rights inside a text; "not_reversible": a deletion or replacement
+ * inside a shell text (`-c`, `eval`), a deletion in a project script run by name, git that discards uncommitted work no
+ * snapshot covers, the person's configuration outside the project deleted, or a text nobody can read that names a
+ * deletion or an irreversible action. undefined: none of these.
+ */
+function consentRedirect(input: Input): "irreversible" | "admin_rights" | "delete_compound" | "not_reversible" | undefined {
+  if (input.permission !== "bash") return undefined
+  if (typeof input.metadata.command !== "string") return undefined
+  // Inline code or a script file the 1.1.0 table held before screening it (no Undo, a folder not trusted, a program of the
+  // project): its sudo and delete flags get the answer a screened one gets (rule 3), so it never runs unscreened.
+  const flags = consentScriptFlags(input, input.metadata.command)
+  if (flags.includes("sudo")) return "admin_rights"
+  if (flags.includes("delete")) return "delete_compound"
+  const deep = BypassScreen.deepSteps(input)
+  let archive = false
+  for (const step of deep.steps) {
+    const program = BypassScreen.unwrap(step.argv)
+    if (program.kind === "program" && BypassScreen.cloudDeletes(program.name, program.args)) return "irreversible"
+    if (step.from !== "call") {
+      const x = BypassScreen.stepX(step, input)
+      if (x === "irreversible" || x === "admin_rights") return x
+      if (x === "delete_compound") archive = true
+      if (step.from === "text" && DeletionWords.deletesOrReplacesWide(step.argv, commandWords)) archive = true
+      if (step.from === "script" && scriptDeletes(step.argv) && !deletesOutputOnly(step, input)) archive = true
+    }
+    if (discardsWork(step, input)) archive = true
+    if (BypassScreen.deletesUserConfig(step.argv)) archive = true
+    if (program.kind === "program" && (DeletionWords.DELETERS.has(program.name) || DeletionWords.deletes(step.argv))) {
+      const named = program.args.filter((word) => !word.startsWith("-"))
+      if (named.some((word) => step.cwds.some((cwd) => userConfigPath(word, cwd, input)))) archive = true
+    }
+  }
+  if (deep.unreadable.some((text) => DESTRUCTIVE_TOKEN.test(text))) archive = true
+  return archive ? "not_reversible" : undefined
+}
+
+/** 1.1.3 (T7 F3): an existing regular file, through links. Anything that cannot be read counts as not existing. */
+function existingFile(file: string) {
+  try {
+    return fs.statSync(file).isFile()
+  } catch {
+    return false
+  }
+}
+
+/**
+ * 1.1.3 (T7 F3, T9 G6): the file words of the text's redirects that replace (`>`, `N>`, `>|`, `&>`), read outside quotes
+ * and comments. An append (`>>`, `&>>`) replaces nothing, a stream move (`2>&1`, `>&-`) names no file, and `<>` opens
+ * without emptying. A `>` inside quotes (`"a -> b"`, `awk '$1 > 5'`) is no redirect.
+ */
+export function replacingTargets(command: string): string[] {
+  const found: string[] = []
+  let quote: string | undefined
+  for (let index = 0; index < command.length; index++) {
+    const char = command[index]!
+    if (quote) {
+      if (char === "\\" && quote === '"') index++
+      else if (char === quote) quote = undefined
+      continue
+    }
+    if (char === "\\") {
+      index++
+      continue
+    }
+    if (char === "'" || char === '"') {
+      quote = char
+      continue
+    }
+    if (char === "#" && (index === 0 || /\s/.test(command[index - 1]!))) {
+      const end = command.indexOf("\n", index)
+      if (end < 0) break
+      index = end
+      continue
+    }
+    if (char !== ">") continue
+    let at = index + 1
+    if (command[at] === ">") {
+      index = at
+      continue
+    }
+    if (command[index - 1] === "<") continue
+    if (command[at] === "&") {
+      const moved = /^(\d+|-)(?=$|[\s;&|()<>])/.exec(command.slice(at + 1))
+      if (moved) {
+        index = at + moved[0].length
+        continue
+      }
+      at++
+    } else if (command[at] === "|") at++
+    while (command[at] === " " || command[at] === "\t") at++
+    let word = ""
+    let inner: string | undefined
+    for (; at < command.length; at++) {
+      const next = command[at]!
+      if (inner) {
+        if (next === inner) inner = undefined
+        else word += next
+        continue
+      }
+      if (next === "'" || next === '"') {
+        inner = next
+        continue
+      }
+      if (/[\s;&|()<>]/.test(next)) break
+      word += next
+    }
+    if (word) found.push(word)
+    index = at - 1
+  }
+  return found
+}
+
+/** 1.1.3 (T9 G6): the files of the reading's `writes` that a replacing redirect (`replacingTargets`) names. */
+function replacedWrites(command: string, writes: readonly string[], cwds: readonly string[]) {
+  const words = replacingTargets(command).map((word) => (word === "~" || word.startsWith("~/") ? path.join(homedir(), word.slice(1)) : word))
+  if (words.length === 0) return []
+  return writes.filter((file) =>
+    words.some(
+      (word) =>
+        cwds.some((cwd) => path.resolve(cwd, word) === file) ||
+        // A target through `..` may land elsewhere once links are followed (`physicalWrites`); its name is the same.
+        (word.includes("..") && path.basename(word) === path.basename(file)),
+    ),
+  )
+}
+
+/** 1.1.3 (T7 F3): the files a `tee` without `-a` of these steps writes, as each folder it may run in reads them. */
+function teeTargets(steps: readonly { argv: readonly string[]; cwds: readonly string[] }[]) {
+  const files: string[] = []
+  for (const step of steps) {
+    const found = BypassScreen.unwrap(step.argv)
+    if (found.kind !== "program" || found.name !== "tee") continue
+    const flags = found.args.filter((word) => word.startsWith("-") && word !== "-")
+    if (flags.some((word) => word === "--append" || (/^-[A-Za-z]+$/.test(word) && word.includes("a")))) continue
+    const named = found.args.filter((word) => !word.startsWith("-"))
+    for (const cwd of step.cwds) files.push(...named.map((word) => path.resolve(cwd, word)))
+  }
+  return files
+}
+
+/**
+ * 1.1.3 (T7 F3, narrowed by T8): a shell call replaces a file that exists and that no Undo snapshot covers: a `>` (or
+ * `>|`, `&>`) redirect or a `tee` without `-a` onto such a file, without Undo (a folder without Git, snapshots off) or
+ * outside the project, where no snapshot reaches. A file that does not exist yet is created, not replaced; an append
+ * (`>>`, `tee -a`) replaces nothing. T8: the write, edit and patch tools are not judged here and keep running everywhere,
+ * a folder without Git included; nor is `sed -i`.
+ */
+function overwritesWithoutUndo(input: Input) {
+  if (input.permission !== "bash") return false
+  const command = input.metadata.command
+  if (typeof command !== "string") return false
+  const reading = shellReading(input.metadata.steps, input.instance)
+  const steps = reading?.steps ?? BypassScreen.readSteps(input) ?? commandWords(command).map((argv) => ({ argv, cwds: [input.cwd] }))
+  const cwds = [...new Set([input.cwd, ...steps.flatMap((step) => step.cwds)])]
+  const targets = [...(reading ? replacedWrites(command, reading.writes, cwds) : []), ...teeTargets(steps)]
+  return targets.some((file) => (!input.canUndo || !Reach.inside(file, input.instance)) && existingFile(file))
+}
+
+/**
+ * 1.1.3 (T7 F4): a word naming Swarm's own app or server as a process name (the desktop app `Swarm`, `Swarm.app`, its
+ * `Swarm Helper` processes, the `opencode` / `swarm` server), alone or as the last part of a path, with arguments after a
+ * space. A folder called `swarm` inside a path (a project's own `swarm/node_modules/.bin/vite`) is not such a name.
+ */
+const SWARM_PROCESS = /(^|\/)(swarm|opencode)(\.app|\s|$)/i
+const SIGNALLERS = new Set(["kill", "pkill", "killall"])
+
+/** 1.1.3 (T7 F4): the targets of a `kill`, a negative number (a process group) or `-1` (every process) included. */
+function killTargets(args: readonly string[]) {
+  const targets: string[] = []
+  let ended = false
+  for (let index = 0; index < args.length; index++) {
+    const word = args[index]!
+    if (ended) targets.push(word)
+    else if (word === "--") ended = true
+    else if (word === "-s" || word === "-n" || word === "--signal") index++
+    else if (index === 0 && /^-[A-Za-z0-9]+$/.test(word)) continue
+    else if (/^-\d+$/.test(word) || !word.startsWith("-")) targets.push(word)
+  }
+  return targets
+}
+
+/** 1.1.3 (T7 F4): a pid word that names this server, the app that started it, or a group or set holding them. */
+function swarmPid(word: string) {
+  if (word === "0" || word === "-1" || /^\$\{?PPID\}?$/.test(word)) return true
+  if (!/^-?[1-9]\d*$/.test(word)) return false
+  const pid = Math.abs(Number(word))
+  return pid === process.pid || (process.ppid > 1 && pid === process.ppid)
+}
+
+/**
+ * 1.1.3 (T7 F4): a shell call that would stop Swarm's own app or server, and with it this run: a `kill` of this server's
+ * pid, of the app that started it (`$PPID` included), of a group or every process; a `pkill` or `killall` naming Swarm or
+ * the server; or a signal sent to what `pgrep`, `pidof` or `lsof` finds under those names. Read roughly, on purpose: it
+ * only ever refuses more.
+ */
+function stopsSwarm(input: Input) {
+  if (input.permission !== "bash") return false
+  const command = input.metadata.command
+  if (typeof command !== "string") return false
+  const steps = [
+    ...(BypassScreen.readSteps(input) ?? []).map((step) => step.argv),
+    ...commandWords(command),
+  ]
+  let signals = false
+  let finds = false
+  for (const argv of steps) {
+    const found = BypassScreen.unwrap(argv)
+    if (found.kind !== "program") continue
+    const name = path.basename(found.name)
+    if (name === "kill" && killTargets(found.args).some(swarmPid)) return true
+    if ((name === "pkill" || name === "killall") && found.args.some((word) => !word.startsWith("-") && SWARM_PROCESS.test(word)))
+      return true
+    if (SIGNALLERS.has(name) || (name === "xargs" && found.args.some((word) => SIGNALLERS.has(path.basename(word))))) signals = true
+    if (["pgrep", "pidof", "lsof"].includes(name) && found.args.some((word) => SWARM_PROCESS.test(word))) finds = true
+  }
+  return signals && finds
+}
+
+/**
+ * 1.1.3 (T7 F2): the verdicts `noWait` opened from a D or P (or the X `outside_write`): the calls that waited before 1.1.3.
+ * A compound records the category of such a step (`classifySteps`), not of a step the 1.1.1 overlay already opened.
+ */
+const OPENED_BY_NO_WAIT = new WeakSet<Verdict>()
+
+/**
+ * 1.1.3 (T7 F1): where a call that carries an outward category sends. What the consent lets out (`consentOutward`) when it
+ * names it; otherwise the place read from the call's own words, a project script's steps included: a fetch's host, the
+ * hosts a request tool connects to (`requestHosts`), and the remote a push names. Labels are `host[:port]` or a remote
+ * name, so no account name, path or query is kept. undefined: nothing names a place (the report then reads the call).
+ */
+export function destinationsOf(input: Input): string[] | undefined {
+  const opened = consentOutward(input)
+  if (opened) return opened
+  if (input.permission === "webfetch") {
+    const url = typeof input.metadata.url === "string" ? OutwardConsent.urlOf(input.metadata.url) : undefined
+    return url ? [OutwardConsent.label(url)] : undefined
+  }
+  if (input.permission !== "bash") return undefined
+  const found: string[] = []
+  for (const step of BypassScreen.readSteps(input) ?? []) {
+    const scripts = step.cwds.flatMap((cwd) => BypassScreen.scriptSteps(step.argv, cwd, input.instance))
+    for (const each of [step, ...scripts]) {
+      const argv = DeletionWords.program(each.argv)
+      const name = path.basename(argv[0] ?? "")
+      if (name === "git") {
+        const remote = OutwardConsent.pushWords(argv)
+        if (remote) found.push(remote)
+      } else if (OutwardConsent.REQUEST_TOOLS.has(name)) found.push(...requestHosts(name, argv.slice(1)))
+    }
+  }
+  return found.length > 0 ? [...new Set(found)] : undefined
+}
+
+/**
+ * 1.1.3 (T7 F1): the hosts a request tool's step connects to. Every word that reads as a URL is a candidate; the tool's
+ * own reader (`OutwardConsent.request`) is then asked with those candidates named, so it picks the words it really takes
+ * as URLs (not an output file or a header). When it holds the step for another reason (an upload, a word it cannot read),
+ * the words with a scheme stand, or else the candidates that are no `name=value` or `user@file` item.
+ */
+function requestHosts(name: string, args: readonly string[]): string[] {
+  const candidates = args.flatMap((word) => {
+    // httpie and xh read a bare `:port` as localhost.
+    const url = OutwardConsent.urlOf(/^:\d+(\/|$)/.test(word) ? `localhost${word}` : word)
+    return url && (word.includes("://") || /[.:]/.test(url.host) || url.hostname === "localhost") ? [{ word, url }] : []
+  })
+  const known: OutwardConsent.Known = {
+    allowed: [],
+    named: candidates.map((item) => ({ kind: "host" as const, host: item.url.hostname })),
+  }
+  // The whole text's `<` is about holding the call, not about where it goes, so it is not passed here.
+  const read = OutwardConsent.request(name, args, known, "")
+  if (read && !("held" in read)) return read.destinations
+  const schemed = candidates.filter((item) => item.word.includes("://"))
+  const chosen = schemed.length > 0 ? schemed : candidates.filter((item) => !/[@=]/.test(item.word))
+  return chosen.map((item) => OutwardConsent.label(item.url))
+}
+
+/**
+ * 1.1.3 (T1, T3, T5, T7): under consent nothing waits for a person. Every consented verdict ends as a run or as an answer
+ * the agent gets at once; a destructive call is redirected to the archive method. First match wins:
+ * 1. B, or X other than `outside_write`: unchanged.
+ * 1a. (T7 F4) A call that stops Swarm's own app or server (`stopsSwarm`): refused at once as X `process_not_own`, whose
+ *     consented text ends with `CONSENT_CONTINUE_SUFFIX`; stopping Swarm would stop this run.
+ * 1b. (T7 F3, T8) A shell call that replaces an existing file no Undo snapshot covers (`overwritesWithoutUndo`): refused at once as
+ *     X `not_reversible` (`ARCHIVE_FIRST_TEXT`), whatever its class was, so it never runs silently and never waits.
+ * 1c. A: unchanged, except that a send the overlay opened with no destination gets the one `destinationsOf` reads (T7 F1).
+ * 2. X `outside_write`: runs, recorded as `outside_write_held` (the gate believes it: not a never-opened X).
+ * 3. A script flagged `sudo` is refused as `admin_rights`; one flagged `delete` as `delete_compound`.
+ * 4. `not_reversible`, or a shell call that deletes or replaces (`destroys`): refused as `not_reversible`.
+ * 5. Any other D or P: the main agent's decision, run, with where it sends to (`destinationsOf`) when it carries an outward
+ *    category, a host nobody named included (T7 F1).
+ */
+export function noWait(input: Input, verdict: Verdict): Verdict {
+  if (verdict.class === "B" || (verdict.class === "X" && verdict.category !== "outside_write")) return verdict
+  // The refusals below keep the category the call would have waited on (`bypassed`), so its line says what it was. For a
+  // call that ran in 1.1.2 (class A), the reason it is refused now.
+  const category = verdict.category
+  const waited = verdict.class === "X" ? "outside_write_held" : (category ?? "not_routine")
+  if (stopsSwarm(input))
+    return { ...refused("process_not_own"), bypassed: verdict.class === "A" ? "process_not_own" : waited }
+  if (overwritesWithoutUndo(input))
+    return { ...refused("not_reversible"), bypassed: verdict.class === "A" ? "no_undo" : waited }
+  // 1.1.3 (T9 G1-G5): what a call runs inside a shell text or a project script, a cloud deletion, discarded git work and
+  // the person's configuration: redirected at once. A call that ran in 1.1.0 (class A the overlay did not open) is not
+  // judged here, so an archived `rm` keeps running.
+  if (verdict.class !== "A" || verdict.bypassed !== undefined) {
+    const redirect = consentRedirect(input)
+    if (redirect) return { ...refused(redirect), bypassed: verdict.class === "A" ? verdict.bypassed : waited }
+  }
+  if (verdict.class === "A") {
+    // T7 F1: a send the overlay opened (rule 10) with no place it found names the host from the call's words as well.
+    if (verdict.destination || verdict.bypassed === undefined || !OUTWARD_HELD.has(verdict.bypassed)) return verdict
+    const destinations = destinationsOf(input)
+    return destinations ? { ...verdict, destination: destinations.join(", ") } : verdict
+  }
+  if (verdict.class === "X") return openedByNoWait({ class: "A", decidedBy: "agent", category: "by_main_agent", bypassed: "outside_write_held" })
+  const bypassed = waited
+  if (category === "script_flagged") {
+    const flags = verdict.screen?.flags ?? []
+    if (flags.includes("sudo")) return { ...refused("admin_rights"), bypassed }
+    if (flags.includes("delete")) return { ...refused("delete_compound"), bypassed }
+  }
+  if (category === "not_reversible" || destroys(input)) return { ...refused("not_reversible"), bypassed }
+  const destinations = category !== undefined && OUTWARD_HELD.has(category) ? destinationsOf(input) : undefined
+  return openedByNoWait({
+    class: "A",
+    decidedBy: "agent",
+    category: "by_main_agent",
+    bypassed,
+    ...(destinations && { destination: destinations.join(", ") }),
+  })
+}
+
+/** 1.1.3 (T7 F2): marks a verdict `noWait` opened (`OPENED_BY_NO_WAIT`). */
+function openedByNoWait(verdict: Verdict) {
+  OPENED_BY_NO_WAIT.add(verdict)
+  return verdict
 }
 
 /**
@@ -1971,8 +2492,9 @@ export function underConsent(input: Input, base: Verdict): Verdict {
     return held("unreadable_command")
   // 4. P8: what ran without consent (a look, a ticked destination, a webfetch) runs as it did.
   if (base.class === "A") return base
-  // 5. A deletion the shell cannot archive is never opened, and P8 keeps it no stricter than 1.1.0 had it.
-  if (found.x === "delete_compound") return base
+  // 5. A deletion the shell cannot archive is never opened. 1.1.3 (T3): it does not wait either; the agent is told at once
+  // to delete with a command of its own, which the shell moves to the archive.
+  if (found.x === "delete_compound") return refused("delete_compound")
   // 6. What leaves the machine, a system service, a process Swarm did not start, text nobody can read: kept for a person.
   if (found.d) return base.class === "D" ? held(found.d) : base
   // 6a. 1.1.1 F26 (P42): a call that sends only where the person allowed (a local or named host, a remote the repository

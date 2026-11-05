@@ -586,9 +586,18 @@ function stepScreen(step: Step, input: Pick<AutonomyTable.Input, "instance" | "o
     const own = killIsOwn(args, input.ownProcesses)
     return own === false ? { d: "process_not_own" } : {}
   }
+  // 1.1.3 (T9 G1): what a shell's `-c` text or an `eval` runs is unwrapped and judged for X, as a launcher's text is. It
+  // stays D `unreadable_command` otherwise; the table's `consentRedirect` judges its deletions.
+  const ran = runText(step.argv)
+  if (ran !== undefined && (RUNS_TEXT.has(name) || SHELLS.has(name))) {
+    const inner = depth > 4 ? undefined : (textX(ran, step, input, depth + 1) ?? textStepsX(ran, step, input, depth + 1))
+    if (inner) return { x: inner }
+  }
   if (RUNS_TEXT.has(name)) return { d: "unreadable_command" }
   if (SHELLS.has(name) && args.some((word) => word === "-c" || shortHas(word, "c"))) return { d: "unreadable_command" }
-  if ((SQL_TOOLS.has(name) || name === "diskutil") && args.some(dynamic)) return { d: "unreadable_command" }
+  // 1.1.3 (T3, matrix row 37): a SQL tool or diskutil whose arguments nobody can read may wipe; under consent it is answered
+  // at once with the archive or snapshot way (X `irreversible`) instead of waiting.
+  if ((SQL_TOOLS.has(name) || name === "diskutil") && args.some(dynamic)) return { x: "irreversible" }
   return {}
 }
 
@@ -627,6 +636,184 @@ function textX(text: string, step: Step, input: Pick<AutonomyTable.Input, "insta
     if (found.x) return found.x
   }
   return undefined
+}
+
+/** 1.1.3 (T9 G1): X triggers on a text a shell runs, read as the shell reads it (`textSteps`). */
+function textStepsX(text: string, step: Step, input: Pick<AutonomyTable.Input, "instance" | "ownProcesses">, depth: number) {
+  for (const inner of textSteps(text, step.cwds).steps) {
+    const found = stepScreen(inner, input, depth)
+    if (found.x) return found.x
+  }
+  return undefined
+}
+
+/** 1.1.3 (T9 G1): the X trigger of one step, if any, as the consented screen reads it (`stepScreen`). */
+export function stepX(step: Step, input: Pick<AutonomyTable.Input, "instance" | "ownProcesses">): XTrigger | undefined {
+  return stepScreen(step, input).x
+}
+
+/**
+ * 1.1.3 (T9 G1): the text a step hands to a shell to run: a shell's `-c` text, the words of an `eval`, or a launcher's
+ * code (`watch`, `npx -c`). undefined: the step runs a program, a script file or stdin.
+ */
+export function runText(argv: readonly string[]): string | undefined {
+  const found = unwrap(argv)
+  if (found.kind === "code") return found.code
+  if (found.kind !== "program") return undefined
+  if (found.name === "eval") return found.args.join(" ")
+  if (SHELLS.has(found.name)) return DeletionWords.shellText(found.name, found.args)
+  return undefined
+}
+
+/** A word with one pair of outer quotes and nothing the shell expands inside them, as the shell passes it on. */
+function unquoteWord(word: string) {
+  if (/^'[^']*'$/.test(word)) return word.slice(1, -1)
+  if (/^"[^"`$\\]*"$/.test(word)) return word.slice(1, -1)
+  return word
+}
+
+/**
+ * 1.1.3 (T9 G1): the steps of a text a shell runs, read as the shell's reader reads it (`ScriptReader`), else split as the
+ * table splits a text with each word's outer quotes taken off. `readable: false` when the reader could not read it and a
+ * word of the rough split holds an expansion, a quote or a substitution: what would run cannot be told word by word.
+ */
+export function textSteps(text: string, cwds: readonly string[]): { steps: Step[]; readable: boolean } {
+  const cwd = cwds[0]
+  const reading = cwd === undefined ? undefined : consentReading(ScriptReader.read(text, cwd))
+  if (reading && reading.complete && reading.steps.length > 0)
+    return { steps: reading.steps.map((step) => ({ argv: step.argv, cwds: step.cwds, code: step.code })), readable: true }
+  const steps = commandWords(text).map((words) => ({ argv: words.map(unquoteWord), cwds }))
+  const readable = steps.length > 0 && !steps.some((step) => step.argv.some((word) => /[$`'"\\]/.test(word)))
+  return { steps, readable }
+}
+
+/** 1.1.3 (T9 G1, G2): one step a call runs, and where it comes from: the call itself, a shell text, or a project script. */
+export type DeepStep = Step & { from: "call" | "text" | "script" }
+
+/**
+ * 1.1.3 (T9 G1, G2): every step a shell call runs, with its shell texts (`-c`, `eval`, a launcher's code) and the project
+ * scripts it runs by name unwrapped, five levels deep and at most `MAX_SCRIPT_STEPS` steps. `unreadable` holds each text
+ * that could not be read word by word, and the whole command when nothing of it can (`readSteps` undefined). A step
+ * inside a script keeps `from: "script"` through any text it runs, so a script body is judged as a script.
+ */
+export function deepSteps(input: AutonomyTable.Input): { steps: DeepStep[]; unreadable: string[] } {
+  const unreadable: string[] = []
+  const top = readSteps(input)
+  if (!top) {
+    if (typeof input.metadata.command === "string") unreadable.push(input.metadata.command)
+    return { steps: [], unreadable }
+  }
+  const steps: DeepStep[] = []
+  const queue: { step: DeepStep; depth: number }[] = top.map((step) => ({ step: { ...step, from: "call" }, depth: 0 }))
+  while (queue.length > 0 && steps.length < MAX_SCRIPT_STEPS) {
+    const { step, depth } = queue.shift()!
+    steps.push(step)
+    if (depth > 4) continue
+    const text = runText(step.argv) ?? (shellRunsCode(step) ? step.code : undefined)
+    if (text !== undefined) {
+      const inner = textSteps(text, step.cwds)
+      if (!inner.readable) unreadable.push(text)
+      const from = step.from === "script" ? "script" : "text"
+      queue.push(...inner.steps.map((each) => ({ step: { ...each, from } as DeepStep, depth: depth + 1 })))
+    }
+    // `scriptSteps` already follows the scripts a script runs by name, so a script's own steps are not expanded again.
+    if (step.from !== "script" && step.code === undefined)
+      for (const cwd of step.cwds)
+        queue.push(
+          ...scriptSteps(step.argv, cwd, input.instance).map((each) => ({ step: { ...each, from: "script" } as DeepStep, depth: depth + 1 })),
+        )
+  }
+  return { steps, unreadable }
+}
+
+/** A shell fed its text on stdin (a heredoc the reader kept as `code`). */
+function shellRunsCode(step: Step) {
+  if (step.code === undefined) return false
+  const found = unwrap(step.argv)
+  return found.kind === "program" && SHELLS.has(found.name)
+}
+
+/**
+ * 1.1.3 (T9 G3): the cloud and remote command lines that delete what they manage, by tool. Read on the words that are not
+ * options (`positional`), roughly: it only ever answers with the archive or snapshot way instead of running. A network
+ * call of the same tool that deletes nothing keeps running.
+ */
+const CLOUD_DELETES: Readonly<Record<string, (words: readonly string[], args: readonly string[]) => boolean>> = {
+  // aws s3 rm / rb, aws s3 sync --delete, any `delete-*`, `remove-*`, `terminate-*`, `deregister-*` operation.
+  aws: (words, args) =>
+    words.some((word) => /^(delete|remove|terminate|deregister|purge)(-|$)/.test(word)) ||
+    (words[0] === "s3" && ["rm", "rb"].includes(words[1] ?? "")) ||
+    (words[0] === "s3" && words[1] === "sync" && args.some((word) => word.startsWith("--delete"))),
+  gcloud: (words) => words.some((word) => word === "delete" || word === "rm" || word === "purge"),
+  gsutil: (words, args) => ["rm", "rb"].includes(words[0] ?? "") || (words[0] === "rsync" && args.includes("-d")),
+  az: (words) => words.some((word) => /^(delete|purge|delete-batch|remove)$/.test(word)),
+  kubectl: (words) => words[0] === "delete",
+  oc: (words) => words[0] === "delete",
+  helm: (words) => ["uninstall", "delete", "del", "un"].includes(words[0] ?? ""),
+  eksctl: (words) => words[0] === "delete",
+  terraform: (words, args) =>
+    words[0] === "destroy" ||
+    (words[0] === "apply" && args.includes("-destroy")) ||
+    (words[0] === "state" && words[1] === "rm") ||
+    (words[0] === "workspace" && words[1] === "delete"),
+  tofu: (words, args) => CLOUD_DELETES.terraform!(words, args),
+  terragrunt: (words, args) => CLOUD_DELETES.terraform!(words, args) || words.some((word) => word === "destroy"),
+  pulumi: (words) => words[0] === "destroy" || (words[0] === "stack" && words[1] === "rm"),
+  cdk: (words) => words[0] === "destroy",
+  serverless: (words) => words[0] === "remove",
+  sls: (words) => words[0] === "remove",
+  doctl: (words) => words.some((word) => word === "delete" || word === "rm"),
+  fly: (words) => words.some((word) => ["destroy", "delete", "rm", "remove"].includes(word)),
+  flyctl: (words) => words.some((word) => ["destroy", "delete", "rm", "remove"].includes(word)),
+  vercel: (words) => ["remove", "rm"].includes(words[0] ?? "") || words.slice(1).some((word) => word === "rm" || word === "remove"),
+  heroku: (words) => words.some((word) => /(^|:)(destroy|delete|remove|reset)$/.test(word)),
+  netlify: (words) => words.some((word) => /(^|:)delete$/.test(word)),
+  firebase: (words) => words.some((word) => /:(delete|remove)$/.test(word)),
+  wrangler: (words) => words.some((word) => word === "delete"),
+  supabase: (words) => words.some((word) => word === "delete"),
+  railway: (words) => words[0] === "delete" || words[0] === "down",
+  gh: (words) => words[1] === "delete",
+  glab: (words) => words[1] === "delete",
+  npm: (words) => words[0] === "unpublish",
+  rclone: (words) => ["delete", "deletefile", "purge", "rmdir", "rmdirs"].includes(words[0] ?? ""),
+  s3cmd: (words) => ["del", "rm", "rb"].includes(words[0] ?? ""),
+  mc: (words) => ["rm", "rb"].includes(words[0] ?? ""),
+  // A container removed by force (its writable layer is gone), as row 11 (S3) lists it.
+  docker: (words, args) =>
+    (words[0] === "rm" || (words[0] === "container" && words[1] === "rm")) &&
+    args.some((word) => word === "--force" || /^-[A-Za-z]*f[A-Za-z]*$/.test(word)),
+}
+
+/** 1.1.3 (T9 G3): the tools `CLOUD_DELETES` reads; the report and the spec name them. */
+export const CLOUD_DELETE_TOOLS: readonly string[] = Object.keys(CLOUD_DELETES)
+
+/** 1.1.3 (T9 G3): `name args` deletes a cloud or remote resource (`CLOUD_DELETES`). */
+export function cloudDeletes(name: string, args: readonly string[]): boolean {
+  const rule = lookup(CLOUD_DELETES, name)
+  return rule !== undefined && rule(args.filter((word) => !word.startsWith("-")), args)
+}
+
+/**
+ * 1.1.3 (T9 G5): a step that deletes the person's own configuration outside the project, which nothing archives: the whole
+ * crontab (`crontab -r`), a keychain or an item of one (`security delete-*`), an app's settings (`defaults delete`,
+ * `PlistBuddy -c Delete`, `plutil -remove`), a directory record (`dscl . -delete`), a privacy grant (`tccutil reset`), or
+ * the Trash emptied through `osascript`.
+ */
+export function deletesUserConfig(argv: readonly string[]): boolean {
+  const found = unwrap(argv)
+  if (found.kind !== "program") return false
+  const { name, args } = found
+  const words = args.filter((word) => !word.startsWith("-"))
+  if (name === "crontab") return args.some((word) => /^-[A-Za-z]*r[A-Za-z]*$/.test(word))
+  if (name === "security") return /^delete-/.test(words[0] ?? "")
+  if (name === "defaults") return words.find((word) => word !== "-currentHost") === "delete"
+  if (name === "PlistBuddy") return args.some((word) => /^\s*delete\b/i.test(word))
+  if (name === "plutil") return args.includes("-remove")
+  if (name === "dscl") return args.includes("-delete")
+  if (name === "tccutil") return words[0] === "reset"
+  // Emptying the Trash removes for good what the person (or Swarm's archive way) put there.
+  if (name === "osascript") return args.some((word) => /\bempty\s+(the\s+)?trash\b/i.test(word))
+  return false
 }
 
 /**

@@ -23,6 +23,8 @@ import {
   MAIN_AGENT_UNAVAILABLE_TEXT,
   REFUSED_TEXT,
   SPEND_STOPPED_TEXT,
+  UNJUDGED_TEXT,
+  consentedRefusalText,
   mainAgentDeclined,
   subagentStoppedMessage,
 } from "./autonomy-texts"
@@ -293,10 +295,16 @@ const NEVER_OPENED_X: ReadonlySet<string> = new Set([
   "plan_mode",
   "app_state",
 ])
-// The D ones and the hard script flags are the overlay's own lists (`AutonomyTable.KEPT_D`, `HARD_SCRIPT_FLAGS`), so the
-// gate and the overlay cannot drift (D-F1-3).
-const NEVER_OPENED_D = AutonomyTable.KEPT_D
-const HARD_SCRIPT_FLAGS = AutonomyTable.HARD_SCRIPT_FLAGS
+// 1.1.3: the KEPT_D categories, outward sends and soft script flags are opened by `noWait` under consent, so the gate
+// believes them there; only the X categories above stay forged (spec section 3), and (T9 G7) a script flagged for sudo
+// or for deleting, which `noWait` refuses as `admin_rights` or `delete_compound`.
+const GATE_HARD_SCRIPT_FLAGS: ReadonlySet<string> = new Set(["sudo", "delete"])
+
+/**
+ * 1.1.3: the gate's belt answer under consent. Anything that would have waited (a defer, an ask, a record that failed, a
+ * table that could not judge) is refused at once with `UNJUDGED_TEXT` (`REFUSED_TEXT.not_routine`).
+ */
+const UNJUDGED: AutonomyTable.Verdict = { class: "X", decidedBy: "gate", category: "not_routine" }
 
 /** Class X. Nobody wrote a rule and nobody can answer this, so the text says neither. */
 class RefusedByModeError extends PermissionV1.DeniedError {
@@ -332,6 +340,18 @@ const stoppedByMode = (input: PermissionV1.AskInput) => {
   const error = new StoppedByModeError()
   error.stopText =
     input.permission === "doom_loop" ? subagentStoppedMessage(input.patterns[0] ?? "a tool") : SPEND_STOPPED_TEXT
+  return error
+}
+
+/**
+ * 1.1.3 (T6): the class X answer while the person's consent to the bypass applies. Same error classes as 1.1.0; the text is
+ * `consentedRefusalText`, which adds the continue suffix to credential_change and admin_rights.
+ */
+export const refusedUnderConsent = (category: string | undefined) => {
+  const text = consentedRefusalText(category)
+  if (text === undefined) return new RefusedByModeError({ ruleset: [] })
+  const error = new RefusedWithTextError({ ruleset: [] })
+  error.text = text
   return error
 }
 
@@ -673,13 +693,15 @@ const layer = Layer.effect(
       }).pipe(
         Effect.catch((error) =>
           Effect.logError("could not classify a permission request", { permission: input.permission, error }).pipe(
-            Effect.as(held("not_routine")),
+            // 1.1.3: under consent nothing waits, so a call the table could not judge is refused at once.
+            Effect.as(bypass ? UNJUDGED : held("not_routine")),
           ),
         ),
       )
       // A consent the gate did not pass is not believed (row 124): the call is held rather than let through on it.
+      // 1.1.3: under consent it is refused at once instead.
       const used = usedConsent(classified, context)
-      const table: Answer = used === "unknown" ? held("not_routine") : classified
+      const table: Answer = used === "unknown" ? (bypass ? UNJUDGED : held("not_routine")) : classified
       const via = used === "consent" || used === "outward" ? used : undefined
       return { last, cwd, canUndo, table, via, tableInput }
     })
@@ -726,23 +748,17 @@ const layer = Layer.effect(
         const left = ScriptReader.waitLeft(SCRIPT_READER_WAIT_MS)
         if (left > 0) yield* Effect.promise(() => starting).pipe(Effect.timeoutOption(Duration.millis(left)))
       }
-      const { last, cwd, canUndo, table: judgedTable, via, tableInput } = yield* judge(input, userCatchAll, root.id, bypass)
-      // S1.36, defence in depth: only `underConsent` opens a call, only under consent, and never one of the categories it
-      // keeps. A verdict that says otherwise is not believed: what nothing may run is refused, the rest waits for a person.
+      const { last, cwd, canUndo, table: judgedTable, via } = yield* judge(input, userCatchAll, root.id, bypass)
+      // S1.36, defence in depth: only the consent overlay opens a call, only under consent, and never one of the X
+      // categories. A verdict that says otherwise is not believed: what nothing may run is refused, the rest (1.1.0 path
+      // only) waits for a person. 1.1.3: `noWait` opens the KEPT_D categories, outward sends and soft script flags, so under
+      // consent only `NEVER_OPENED_X` is forged (spec section 3).
       const opened = judgedTable.class === "A" ? judgedTable.bypassed : undefined
-      // A script the screen flagged for the network, deleting, sudo or a path outside is never opened either.
-      const hardScript =
-        opened === "script_flagged" && (judgedTable.screen?.flags.some((flag) => HARD_SCRIPT_FLAGS.has(flag)) ?? false)
-      // 1.1.1 F26 (P42): an outward category is opened only for a send the table finds again, to the same places.
-      const sent =
-        opened !== undefined &&
-        AutonomyTable.OUTWARD_HELD.has(opened) &&
-        judgedTable.destination !== undefined &&
-        // 1.1.1 F30 (G12-P3): inside a classify scope of its own, so the scripts it walks are read once.
-        Reach.snapshotScope(() => AutonomyTable.consentOutward(tableInput))?.join(", ") === judgedTable.destination
-      const forged =
-        opened !== undefined &&
-        (bypass === undefined || NEVER_OPENED_X.has(opened) || (NEVER_OPENED_D.has(opened) && !sent) || hardScript)
+      // 1.1.3 (T9 G7): a script the screen flagged for sudo or for deleting is never opened either; the table refuses it
+      // (`noWait` rule 3), so an A that says otherwise is forged and gets that refusal.
+      const hardFlag =
+        opened === "script_flagged" ? judgedTable.screen?.flags.find((flag) => GATE_HARD_SCRIPT_FLAGS.has(flag)) : undefined
+      const forged = opened !== undefined && (bypass === undefined || NEVER_OPENED_X.has(opened) || hardFlag !== undefined)
       if (forged)
         yield* Effect.logError("a verdict opened a call the bypass never opens", {
           requestID,
@@ -754,7 +770,9 @@ const layer = Layer.effect(
         ? judgedTable
         : NEVER_OPENED_X.has(opened)
           ? { class: "X", decidedBy: "gate", category: opened as AutonomyTable.Verdict["category"] }
-          : held(isHeldCategory(opened) ? opened : "not_routine")
+          : hardFlag !== undefined && bypass !== undefined
+            ? { class: "X", decidedBy: "gate", category: hardFlag === "sudo" ? "admin_rights" : "delete_compound", bypassed: "script_flagged" }
+            : held(isHeldCategory(opened) ? opened : "not_routine")
       // An "always" on what the mode lets anyway answers nothing: an ordinary edit is on record as the gate's, not a person's.
       const answered =
         (followed || standing) &&
@@ -762,11 +780,27 @@ const layer = Layer.effect(
         !(standing && !followed && table.class === "A" && input.editClass === "ordinary")
       // Relative paths in a command mean nothing until its real folder is known, so no decider sees it without one.
       const placed = table.class === "P" && input.permission === "bash" && !cwd ? held("not_routine") : table
-      const verdict: AutonomyTable.Verdict = answered
+      const checked: AutonomyTable.Verdict = answered
         ? { ...table, class: "A", decidedBy: "person" }
         : Autonomy.afterCheck(placed.class, check) === placed.class
           ? placed
           : held("not_routine")
+      // 1.1.3, the belt: under consent no call waits and class P is the main agent's (the table's `noWait`), so the decider
+      // is never asked for it. Whatever would still wait here (a D, a P, a B no stop covers) is refused at once, and its
+      // line keeps the category it would have waited on.
+      const belted =
+        bypass !== undefined &&
+        (checked.class === "D" || checked.class === "P" || (checked.class === "B" && !needsPerson(input.permission)))
+      if (belted)
+        yield* Effect.logError("a consented call would have waited", {
+          requestID,
+          permission: input.permission,
+          class: checked.class,
+          category: checked.category,
+        })
+      const verdict: AutonomyTable.Verdict = belted
+        ? { ...UNJUDGED, ...(isHeldCategory(checked.category) && { bypassed: checked.category }) }
+        : checked
       // The decider gets the screen's closed summary, never the script (C70, ADV-P2). Only what the table answered on.
       const screen = verdict === table ? table.screen : undefined
       const screened = screen && ScriptScreen.summary(screen)
@@ -934,7 +968,8 @@ const layer = Layer.effect(
                     ? via
                     : undefined,
           // The category the call had before the bypass opened it (S1.32), present only on such a line.
-          bypassed: overlaid ? verdict.bypassed : undefined,
+          // 1.1.3: under consent also on a refusal that names it (the belt's, or the table's), so every line keeps it.
+          bypassed: overlaid || bypass !== undefined ? verdict.bypassed : undefined,
           duplicateOf: into,
           consentID: verdict === table && via ? table.consentID : undefined,
           // 1.1.1 F26 (P42): where a call the consent let out sends (`host[:port]`, a remote name, a registry or target).
@@ -972,13 +1007,16 @@ const layer = Layer.effect(
             })
             .pipe(Effect.catchCause((cause) => Effect.logError("could not send a notice", { root: root.id, cause })))
         }
-        return { class: verdict.class, decision, category, stopped }
+        return { class: verdict.class, decision, category, stopped, consented: bypass !== undefined }
       }
       // Nothing runs without a person unless the decision to let it is on record. Refusing or holding needs no such line.
       // Class A grants nothing critical, so its line is a record and not a condition: a failed write is logged and it runs
       // (C26 covers approvals of class P and what a person granted beyond class A). A call the bypass opened was not class
       // A before it, so its line is a condition too.
       if (!written && decision === "allow" && ((answered ? table.class : verdict.class) !== "A" || overlaid)) {
+        // 1.1.3: under consent nothing is held. The call is refused at once; the failed write is logged above.
+        if (bypass !== undefined)
+          return { class: "X" as const, decision: "reject" as const, category: "not_routine" as const, consented: true }
         const again = yield* hold(root.id, "not_routine")
         if (again !== false)
           return {
@@ -997,7 +1035,7 @@ const layer = Layer.effect(
             ? MAIN_AGENT_UNAVAILABLE_TEXT
             : mainAgentDeclined(decided?.reason || "no reason given.")
           : undefined
-      return { class: verdict.class, decision, category, into, refusal }
+      return { class: verdict.class, decision, category, into, refusal, consented: bypass !== undefined }
     })
 
     /**
@@ -1091,6 +1129,17 @@ const layer = Layer.effect(
       const instance = yield* InstanceState.context
       const root = yield* rootOf(sessionID)
       return (yield* autonomy.check({ root: root.id, directory: root.directory ?? instance.directory })).on
+    })
+
+    /** 1.1.3: whether the person's consent to the bypass applies to this session's root now, as the gate reads it. */
+    const bypassNow = Effect.fnUntraced(function* (sessionID: SessionID) {
+      const instance = yield* InstanceState.context
+      const root = yield* rootOf(sessionID)
+      const where = { root: root.id, directory: root.directory ?? instance.directory }
+      const check = yield* autonomy.check(where)
+      if (!check.on || check.externalChange.length > 0) return false
+      const consent = yield* autonomy.bypassOf(where).pipe(Effect.catchCause(() => Effect.succeed(undefined)))
+      return consent !== undefined
     })
 
     /** How many of the root's consent items a person has allowed. None readable counts as none: nothing is looked at again. */
@@ -1278,11 +1327,24 @@ const layer = Layer.effect(
         if (entry) yield* events.publish(Event.Asked, entry.info)
         return yield* new PermissionV1.DeferredError({ category })
       })
+      // 1.1.3: the gate's answer as the agent reads it. Under consent a refusal uses the consented texts, and anything that
+      // would still wait is refused at once with `UNJUDGED_TEXT`: no DeferredError on the consented path.
+      const refusedBy = (gated: { category?: string; consented?: boolean }) =>
+        gated.consented ? refusedUnderConsent(gated.category) : refusedByMode(gated.category)
+      const heldOrRefused = Effect.fnUntraced(function* (gated: {
+        category?: string
+        into?: PermissionV1.ID
+        consented?: boolean
+      }) {
+        if (!gated.consented) return yield* stayHeld(gated)
+        yield* Effect.logError("a consented call would have waited", { id, permission: asked.permission, category: gated.category })
+        return yield* refusedUnderConsent("not_routine")
+      })
       if (!needsAsk) {
         const gated = yield* gate(input, id, userCatchAll, hold, false, true)
-        if (gated?.class === "X") return yield* refusedByMode(gated.category)
+        if (gated?.class === "X") return yield* refusedBy(gated)
         if (gated?.refusal !== undefined) return yield* mainAgentRefused(gated.refusal)
-        if (gated?.decision === "defer") return yield* stayHeld(gated)
+        if (gated?.decision === "defer") return yield* heldOrRefused(gated)
         return
       }
       if (granted >= 0) {
@@ -1290,9 +1352,9 @@ const layer = Layer.effect(
         // A person answered for this call, on its own entry or one that showed it. It still gets its line in the mode, and
         // what it is can still refuse it.
         const gated = yield* gate(input, id, userCatchAll, hold, true)
-        if (gated?.class === "X") return yield* refusedByMode(gated.category)
+        if (gated?.class === "X") return yield* refusedBy(gated)
         if (gated?.refusal !== undefined) return yield* mainAgentRefused(gated.refusal)
-        if (gated?.decision === "defer") return yield* stayHeld(gated)
+        if (gated?.decision === "defer") return yield* heldOrRefused(gated)
         // The entry back from a restart had lost what else this call asks (a shell read beyond the folder asks `bash`
         // next). The person approved the call, so each of those prompts of this very call is let through once, as on an
         // entry that still showed them.
@@ -1318,7 +1380,9 @@ const layer = Layer.effect(
           (item.root ? item.root === family && samePrompt(item.info, request) : sameRequest(item.info, request)) &&
           (item.calls === undefined || item.calls.some((other) => other.call === call)),
       )
-      if (waiting && !waiting.category) {
+      // 1.1.3 (matrix row 54): under consent no shortcut to a held entry; the call is judged afresh by its own row.
+      const consentedNow = waiting !== undefined && (yield* bypassNow(request.sessionID))
+      if (waiting && !waiting.category && !consentedNow) {
         yield* duplicate(input, id, waiting)
         return yield* new PermissionV1.AwayError()
       }
@@ -1329,7 +1393,7 @@ const layer = Layer.effect(
         waiting?.root !== undefined &&
         waiting.given !== undefined &&
         (yield* consentGiven(waiting.root)) > waiting.given
-      if (waiting?.category && !ticked && (yield* duplicate(input, id, waiting)))
+      if (waiting?.category && !ticked && !consentedNow && (yield* duplicate(input, id, waiting)))
         return yield* new PermissionV1.DeferredError({ category: waiting.category })
 
       // A session's "always" covers this prompt only. What else this call asks (a shell read beyond the folder asks `bash`
@@ -1338,7 +1402,7 @@ const layer = Layer.effect(
       if (gated?.decision === "allow") return
       if (gated?.stopped) return yield* stoppedByMode(input)
       // Refused by what it is, so no person is asked. Not a rejection: that error ends the run, and this one reports back.
-      if (gated?.class === "X") return yield* refusedByMode(gated.category)
+      if (gated?.class === "X") return yield* refusedBy(gated)
       // S1.37: the main agent's no to a subagent has its own text; the 1.1.0 class P no keeps its fixed one.
       if (gated?.refusal !== undefined) return yield* mainAgentRefused(gated.refusal)
       if (gated?.decision === "reject") return yield* new DeciderRefusedError({ ruleset: [] })
@@ -1349,7 +1413,7 @@ const layer = Layer.effect(
       const info: PermissionV1.Request = wait ? { ...asked, movesOnAt: Date.now() + wait } : asked
       yield* Effect.logInfo("asking", { id, permission: info.permission })
 
-      if (gated?.decision === "defer") return yield* stayHeld(gated)
+      if (gated?.decision === "defer") return yield* heldOrRefused(gated)
       pending.set(id, { info, deferred, noAlways, follows })
       yield* events.publish(Event.Asked, info)
       const moveOn = Effect.gen(function* () {
