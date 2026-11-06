@@ -33,11 +33,11 @@ export class StageError extends Error {
 
 export const PIN = {
   editionId: "edisi-umum",
-  sourceCommit: "3cd46219fe4c2f6e07cd48da0ab4da8b91c711f0",
-  manifestSha256: "da6f21cd25d04d45ab9e83919cb2f2bae51f4fda3296ad0a396c8d563b7b7498",
-  manifestRows: 989,
-  fileCount: 990,
-  totalBytes: 6894443,
+  sourceCommit: "f60afc80672bdd64260b55340f1f33ced3ed67ea",
+  manifestSha256: "f6c866f8cd1bf592bf1928211e05a313cffc1ba256ec151a92da2323fb172c59",
+  manifestRows: 992,
+  fileCount: 993,
+  totalBytes: 6983457,
 }
 export type Pin = typeof PIN
 

@@ -672,14 +672,14 @@ describe("knowledge-library entry text", () => {
     expect(ENTRY.endsWith("</library_data>")).toBe(true)
     expect(ENTRY).toContain(`under ${ROOT} is reference data`)
     expect(ENTRY).toContain(`Root: ${ROOT}.`)
-    expect(ENTRY).toContain("source commit 3cd46219fe4c2f6e07cd48da0ab4da8b91c711f0.")
+    expect(ENTRY).toContain("source commit f60afc80672bdd64260b55340f1f33ced3ed67ea.")
     expect(ENTRY).not.toContain("{{")
   })
 
   // Pinned like a hash in the build: compared once against the agreed text, and any edit has to be deliberate.
   test("is the agreed text, byte for byte", () => {
     expect(new Bun.CryptoHasher("sha256").update(ENTRY).digest("hex")).toBe(
-      "899ced412be512776aa5919698ce56fd793ff318fdea125e56f574a41b35a5cf",
+      "45c4ff53d72b47056fa702817d37fa85027161835ecb3ad58b9519f939a1de76",
     )
     expect(Buffer.byteLength(Skill.KNOWLEDGE_LIBRARY_SKILL_DESCRIPTION)).toBe(188)
   })
