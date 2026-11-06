@@ -13,7 +13,7 @@ import { createLandedWork } from "@/pages/session/review/landed-work"
 import { createAgentBoardController } from "./agent-board-controller"
 import { AgentBoardView } from "./agent-board-view"
 import { createHomeController } from "./home-controller"
-import { createPaneFocusKeeper, shouldCloseOnWindowEscape } from "./home-pane-focus"
+import { focusPaneSearch, shouldCloseOnWindowEscape } from "./home-pane-focus"
 import { homePaneScope, routeTab } from "./home-pane-scope"
 import { closeHomePane, isChatRoute, setHomePaneRoot, takeHomePaneFocusRequest } from "./home-pane-state"
 import { createHomeScrollController } from "./home-scroll-controller"
@@ -112,27 +112,26 @@ export function HomePane(props: { overlay: boolean }) {
   )
 
   const escape = homePaneEscape(closeHomePane)
-  // Esc with nothing focused (for example after a Suspense detach dropped focus to <body>) still closes the pane.
+  // Esc with nothing focused (for example after Esc in the search box cleared and blurred it) still closes the pane.
   const windowEscape = (event: KeyboardEvent) => {
     if (!shouldCloseOnWindowEscape(event, root)) return
     event.preventDefault()
     closeHomePane()
   }
-  let keeper: ReturnType<typeof createPaneFocusKeeper> | undefined
+  let stopFocus: (() => void) | undefined
   onMount(() => {
     if (!root) return
     setHomePaneRoot(root)
     // Capture phase: the pane sees Esc before its search box does (see homePaneEscape).
     root.addEventListener("keydown", escape.capture, true)
     window.addEventListener("keydown", windowEscape)
-    keeper = createPaneFocusKeeper(root)
-    // The search box once it is mounted (the pane itself until then, so Esc still closes it), kept across Suspense.
-    if (takeHomePaneFocusRequest()) keeper.request()
+    // Opened from the keyboard: the search box (the pane itself until the box is there, so Esc already closes it).
+    if (takeHomePaneFocusRequest()) stopFocus = focusPaneSearch(root)
   })
   onCleanup(() => {
     root?.removeEventListener("keydown", escape.capture, true)
     window.removeEventListener("keydown", windowEscape)
-    keeper?.dispose()
+    stopFocus?.()
     setHomePaneRoot(undefined)
   })
 

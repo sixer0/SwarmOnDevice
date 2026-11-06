@@ -1,7 +1,5 @@
-// Keyboard behaviour of the Home pane that has to survive Suspense. A query read inside the pane can suspend its
-// boundary after mount (and again on a refetch); Solid then takes the pane's DOM out of the document and puts the same
-// nodes back once the read settles. A focused element that leaves the document drops focus to <body>, so without this
-// the search box loses focus right after mod+b and Esc has no pane target.
+// Keyboard behaviour of the Home pane. The pane's search box is never taken out of the document by a refetch (its
+// query reads settle once, see settled-query-data.ts), so focus only has to be put there once.
 
 const isIdle = (root: HTMLElement) => {
   const active = document.activeElement
@@ -22,86 +20,33 @@ export function shouldCloseOnWindowEscape(event: KeyboardEvent, root: HTMLElemen
 }
 
 /**
- * Puts focus in the pane's search box and keeps it there across Suspense detaches. `request()` focuses the search box
- * (the pane itself until the box exists, then the box). An element of the pane that loses focus because it left the
- * document gets it back when it returns, as long as focus did not go anywhere else meanwhile.
+ * Puts the keyboard in the pane's search box, from wherever it was (the chat composer included). Until the box exists
+ * (its project and first session list still loading) the pane itself holds focus, so Esc already closes it; the box
+ * takes over when it appears, unless focus has gone somewhere else meanwhile. Returns a function that stops waiting.
  */
-export function createPaneFocusKeeper(root: HTMLElement) {
-  let pending: (() => HTMLElement | null) | undefined
-  let observer: MutationObserver | undefined
-  let disposed = false
-
-  const stop = () => {
-    pending = undefined
-    observer?.disconnect()
-    observer = undefined
+export function focusPaneSearch(root: HTMLElement) {
+  const search = () => root.querySelector<HTMLInputElement>('[data-component="home-session-search"] input')
+  const box = search()
+  if (box) {
+    box.focus()
+    return () => {}
   }
-
-  const apply = () => {
-    if (!pending || disposed) return stop()
-    const target = pending()
-    if (target?.isConnected && isIdle(root) && document.activeElement !== target) target.focus()
-    // Done once a real control (not the pane fallback) holds focus; otherwise wait for the next DOM change.
-    if (target && target !== root && document.activeElement === target) return stop()
-    if (!observer) {
-      observer = new MutationObserver(apply)
-      observer.observe(document.body, { childList: true, subtree: true })
-    }
-  }
-
-  const search = () => root.querySelector<HTMLInputElement>("input") ?? root
-
-  // The pane element that holds focus. Tracked on the document: a node Suspense took out of the pane may report its
-  // focusout after it left, so the event would no longer pass through the pane root.
-  let inside: HTMLElement | undefined
-
-  const onFocusIn = (event: FocusEvent) => {
-    const target = event.target
-    if (target === root) return
-    inside = target instanceof HTMLElement && root.contains(target) ? target : undefined
-    // Focus landed somewhere real (the composer, a pane row, the box itself): nothing left to restore.
+  root.focus()
+  const observer = new MutationObserver(() => {
+    const box = search()
+    if (!box) return
     stop()
-  }
-
-  const onFocusOut = (event: FocusEvent) => {
-    const element = inside
-    if (event.relatedTarget || !element || event.target !== element) return
-    // The search box blurring itself on Esc, or a click on the chat background, leaves it in the document: not ours.
-    lost(element)
-    queueMicrotask(() => {
-      lost(element)
-      // Still in the document: a deliberate blur, so a later detach of this node must not pull focus back.
-      if (element.isConnected && inside === element) inside = undefined
-    })
-  }
-
-  const lost = (element: HTMLElement) => {
-    if (disposed || element.isConnected || pending) return
-    inside = undefined
-    pending = () => element
-    apply()
-  }
-
-  // Covers an engine that drops focus from a removed node without any focusout: a removal inside the pane is seen here.
-  const watch = new MutationObserver(() => {
-    if (inside) lost(inside)
+    if (isIdle(root)) box.focus()
   })
-  watch.observe(root, { childList: true, subtree: true })
-
-  document.addEventListener("focusin", onFocusIn, true)
-  document.addEventListener("focusout", onFocusOut, true)
-
-  return {
-    request() {
-      pending = search
-      apply()
-    },
-    dispose() {
-      disposed = true
-      stop()
-      watch.disconnect()
-      document.removeEventListener("focusin", onFocusIn, true)
-      document.removeEventListener("focusout", onFocusOut, true)
-    },
+  // Any focus that lands elsewhere (a click on the composer, a row, the close button) ends the wait.
+  const onFocusIn = (event: FocusEvent) => {
+    if (event.target !== root) stop()
   }
+  const stop = () => {
+    observer.disconnect()
+    document.removeEventListener("focusin", onFocusIn, true)
+  }
+  observer.observe(root, { childList: true, subtree: true })
+  document.addEventListener("focusin", onFocusIn, true)
+  return stop
 }

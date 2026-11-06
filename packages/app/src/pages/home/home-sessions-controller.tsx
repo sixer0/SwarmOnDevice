@@ -21,6 +21,7 @@ import { showToast } from "@/utils/toast"
 import { Binary } from "@opencode-ai/core/util/binary"
 import { archiveHomeSession } from "../home-session-archive"
 import type { HomeController } from "./home-controller"
+import { settledQueryData } from "./settled-query-data"
 
 const HOME_SESSION_LIMIT = 64
 export type HomeSessionRecord = {
@@ -88,7 +89,8 @@ export function createHomeSessionsController(home: HomeController, options?: Hom
   }))
   const indexedSessions = createMemo(() =>
     retainHomeSessions(
-      homeSessions().sessions(sessionLoad.data, sessionEventLoad.data),
+      // Suspends (list skeleton) only until the first data; a refetch must not hide the pane's search box (row 15c).
+      homeSessions().sessions(settledQueryData(sessionLoad), settledQueryData(sessionEventLoad)),
       HOME_SESSION_LIMIT,
       Date.now(),
     ),

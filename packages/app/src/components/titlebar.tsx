@@ -39,7 +39,7 @@ import type { PromptSession } from "@/context/prompt"
 import "./titlebar.css"
 import { newTabTooltipKeybind } from "./command-tooltip-keybind"
 import { normalizeSessionInfo } from "@/utils/session"
-import { createAgentAttention, requestAgentBoardFocus } from "@/pages/home/agent-board-controller"
+import { createAgentAttention } from "@/pages/home/agent-board-controller"
 import { closeHomePane, homeButtonAction, homePaneOpen, openHomePane } from "@/pages/home/home-pane-state"
 
 const legacyTitlebarHeight = 40
@@ -345,12 +345,9 @@ export function Titlebar(props: { update?: TitlebarUpdate; debugTools?: { visibl
                 category: language.t("command.category.view"),
                 keybind: "mod+b",
                 hidden: true,
-                // From the keyboard, arriving at Home with agents waiting puts the keyboard on the first of them.
-                onSelect: () => {
-                  const waiting = agentsWaiting() > 0
-                  const action = toggleHome({ focus: !waiting })
-                  if (action === "open" && waiting) requestAgentBoardFocus()
-                },
+                // From the keyboard the pane opens with the keyboard in its search box, from the composer too; never on
+                // a board row, whose single-letter keys answer permissions (decisions C10).
+                onSelect: () => void toggleHome({ focus: true }),
               },
             ])
 

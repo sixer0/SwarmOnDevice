@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test"
-import { createPaneFocusKeeper, shouldCloseOnWindowEscape } from "./home-pane-focus"
+import { focusPaneSearch, shouldCloseOnWindowEscape } from "./home-pane-focus"
 
 const cleanups: Array<() => void> = []
 afterEach(() => {
@@ -10,7 +10,7 @@ afterEach(() => {
 
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0))
 
-/** The app as far as Esc cares: a composer, the pane (search box in a list that Suspense can take out) and a window listener. */
+/** The app as far as Esc and focus care: a composer, the pane (search box in a list mounted later) and a window listener. */
 function app() {
   const composer = document.createElement("div")
   composer.contentEditable = "true"
@@ -18,6 +18,7 @@ function app() {
   const root = document.createElement("aside")
   root.tabIndex = -1
   const list = document.createElement("div")
+  list.setAttribute("data-component", "home-session-search")
   const input = document.createElement("input")
   list.append(input)
   root.append(list)
@@ -80,7 +81,8 @@ describe("home pane Esc at the window (row 15a)", () => {
 
   test("literal cases of shouldCloseOnWindowEscape", () => {
     const a = app()
-    const esc = (init: KeyboardEventInit = {}) => new KeyboardEvent("keydown", { key: "Escape", cancelable: true, ...init })
+    const esc = (init: KeyboardEventInit = {}) =>
+      new KeyboardEvent("keydown", { key: "Escape", cancelable: true, ...init })
     expect(shouldCloseOnWindowEscape(esc(), a.root)).toBe(true)
     expect(shouldCloseOnWindowEscape(esc({ isComposing: true }), a.root)).toBe(false)
     expect(shouldCloseOnWindowEscape(new KeyboardEvent("keydown", { key: "Enter" }), a.root)).toBe(false)
@@ -94,77 +96,57 @@ describe("home pane Esc at the window (row 15a)", () => {
   })
 })
 
-describe("home pane focus keeper (row 15a)", () => {
-  test("request() focuses the search box when it is mounted", () => {
+describe("focusPaneSearch (row 15c)", () => {
+  test("focuses the search box when it is mounted", () => {
     const a = app()
-    const keeper = createPaneFocusKeeper(a.root)
-    cleanups.push(keeper.dispose)
-    keeper.request()
+    cleanups.push(focusPaneSearch(a.root))
     expect(document.activeElement === a.input).toBe(true)
   })
 
-  test("request() before the list is mounted focuses the pane, then the search box once it appears", async () => {
+  test("takes the keyboard out of the chat composer (decisions C10, D-3)", () => {
+    const a = app()
+    a.composer.focus()
+    cleanups.push(focusPaneSearch(a.root))
+    expect(document.activeElement === a.input).toBe(true)
+  })
+
+  test("before the box is mounted the pane holds focus, then the box once it appears", async () => {
     const a = app()
     a.list.remove()
-    const keeper = createPaneFocusKeeper(a.root)
-    cleanups.push(keeper.dispose)
-    keeper.request()
+    a.composer.focus()
+    cleanups.push(focusPaneSearch(a.root))
     expect(document.activeElement === a.root).toBe(true)
     a.root.append(a.list)
     await tick()
     expect(document.activeElement === a.input).toBe(true)
   })
 
-  test("a Suspense detach and re-insert of the same nodes gives focus back to the search box", async () => {
+  test("focus moved elsewhere while waiting stays there when the box appears", async () => {
     const a = app()
-    const keeper = createPaneFocusKeeper(a.root)
-    cleanups.push(keeper.dispose)
-    keeper.request()
     a.list.remove()
-    await tick()
-    expect(a.input.isConnected).toBe(false)
-    expect(document.activeElement === a.input).toBe(false)
-    a.root.append(a.list)
-    await tick()
-    expect(document.activeElement === a.input).toBe(true)
-  })
-
-  test("focus moved to the composer during the detach stays in the composer", async () => {
-    const a = app()
-    const keeper = createPaneFocusKeeper(a.root)
-    cleanups.push(keeper.dispose)
-    keeper.request()
-    a.list.remove()
-    await tick()
+    cleanups.push(focusPaneSearch(a.root))
     a.composer.focus()
     a.root.append(a.list)
     await tick()
     expect(document.activeElement === a.composer).toBe(true)
   })
 
-  test("a deliberate blur is not undone by a later detach and re-insert", async () => {
+  test("after stop the box is not focused when it appears", async () => {
     const a = app()
-    const keeper = createPaneFocusKeeper(a.root)
-    cleanups.push(keeper.dispose)
-    keeper.request()
-    a.input.blur()
-    await tick()
     a.list.remove()
-    await tick()
+    const stop = focusPaneSearch(a.root)
+    stop()
     a.root.append(a.list)
     await tick()
-    expect(document.activeElement === document.body).toBe(true)
+    expect(document.activeElement === a.root).toBe(true)
   })
 
-  test("after dispose nothing is restored", async () => {
+  test("an input of the pane that is not the search box is never chosen", () => {
     const a = app()
-    const keeper = createPaneFocusKeeper(a.root)
-    keeper.request()
     a.list.remove()
-    await tick()
-    keeper.dispose()
-    a.root.append(a.list)
-    await tick()
-    expect(document.activeElement === a.input).toBe(false)
+    const other = document.createElement("input")
+    a.root.append(other)
+    cleanups.push(focusPaneSearch(a.root))
+    expect(document.activeElement === a.root).toBe(true)
   })
 })
