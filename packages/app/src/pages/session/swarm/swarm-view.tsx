@@ -1,5 +1,5 @@
 import { useLanguage } from "@/context/language"
-import { alwaysLabel } from "@/pages/session/composer/permission-always"
+import { alwaysLabel, offersAlways } from "@/pages/session/composer/permission-always"
 import { inlineQuestion, permissionDetail, permissionRisk } from "@/pages/home/agent-board-model"
 import { Icon } from "@opencode-ai/ui/icon"
 import { Spinner } from "@opencode-ai/ui/spinner"
@@ -164,7 +164,8 @@ function LaneDetail(props: { swarm: SwarmController; lane: SwarmLane }) {
               {permissionDetail(request)}
             </pre>
             <div class="mt-2 flex flex-wrap justify-end gap-1.5">
-              <Show when={request.always.length > 0}>
+              {/* A moved-on prompt (autonomous mode) keeps the button it had: only when the tool named a rule. */}
+              <Show when={request.movedOnAt ? request.always.length > 0 : offersAlways(request)}>
                 <ButtonV2
                   type="button"
                   variant="ghost-muted"

@@ -40,6 +40,7 @@ import "./titlebar.css"
 import { newTabTooltipKeybind } from "./command-tooltip-keybind"
 import { normalizeSessionInfo } from "@/utils/session"
 import { createAgentAttention, requestAgentBoardFocus } from "@/pages/home/agent-board-controller"
+import { closeHomePane, homeButtonAction, homePaneOpen, openHomePane } from "@/pages/home/home-pane-state"
 
 const legacyTitlebarHeight = 40
 const v2TitlebarHeight = 36
@@ -325,7 +326,15 @@ export function Titlebar(props: { update?: TitlebarUpdate; debugTools?: { visibl
               }),
             )
 
-            const toggleHome = () => tabs.toggleHome({ home: layout.route().type === "home", current: currentTab() })
+            // Over a chat, Home opens beside it instead of replacing it; on Home it goes back to the last tab.
+            const toggleHome = (options?: { focus?: boolean }) => {
+              const action = homeButtonAction({ route: layout.route(), paneOpen: homePaneOpen() })
+              if (action === "recent") tabs.toggleHome({ home: true, current: currentTab() })
+              else if (action === "open") openHomePane(options)
+              else closeHomePane()
+              return action
+            }
+            const homeShown = () => layout.route().type === "home" || homePaneOpen()
 
             const agentsWaiting = createAgentAttention(() => server.current)
 
@@ -338,9 +347,9 @@ export function Titlebar(props: { update?: TitlebarUpdate; debugTools?: { visibl
                 hidden: true,
                 // From the keyboard, arriving at Home with agents waiting puts the keyboard on the first of them.
                 onSelect: () => {
-                  const arriving = layout.route().type !== "home"
-                  toggleHome()
-                  if (arriving && agentsWaiting() > 0) requestAgentBoardFocus()
+                  const waiting = agentsWaiting() > 0
+                  const action = toggleHome({ focus: !waiting })
+                  if (action === "open" && waiting) requestAgentBoardFocus()
                 },
               },
             ])
@@ -409,14 +418,14 @@ export function Titlebar(props: { update?: TitlebarUpdate; debugTools?: { visibl
                     size="large"
                     class="!w-9 shrink-0"
                     icon={<IconV2 name="grid-plus" />}
-                    state={layout.route().type === "home" ? "pressed" : undefined}
-                    onClick={toggleHome}
+                    state={homeShown() ? "pressed" : undefined}
+                    onClick={() => toggleHome()}
                     aria-label={
                       agentsWaiting() > 0
                         ? `${language.t("home.title")}, ${language.t("home.agents.badge", { count: agentsWaiting() })}`
                         : language.t("home.title")
                     }
-                    aria-pressed={layout.route().type === "home"}
+                    aria-pressed={homeShown()}
                   />
                   <Show when={agentsWaiting() > 0}>
                     <span

@@ -774,7 +774,7 @@ it.instance(
 )
 
 it.instance(
-  "reply - always persists approval and resolves",
+  "reply - always resolves and persists for its session only, another session is asked (1.1.4 U2)",
   () =>
     Effect.gen(function* () {
       const fiber = yield* ask({
@@ -791,15 +791,34 @@ it.instance(
       yield* reply({ requestID: PermissionV1.ID.make("per_test3"), reply: "always" })
       yield* Fiber.join(fiber)
 
-      const result = yield* ask({
-        sessionID: SessionID.make("session_test2"),
+      // Same session: persisted, not asked.
+      const same = yield* ask({
+        sessionID: SessionID.make("session_test"),
         permission: "bash",
         patterns: ["ls"],
         metadata: {},
         always: [],
         ruleset: [],
       })
-      expect(result).toBeUndefined()
+      expect(same).toBeUndefined()
+      expect(yield* list()).toHaveLength(0)
+
+      // Another session: asked again.
+      const other = yield* ask({
+        id: PermissionV1.ID.make("per_test3b"),
+        sessionID: SessionID.make("session_test2"),
+        permission: "bash",
+        patterns: ["ls"],
+        metadata: {},
+        always: [],
+        ruleset: [],
+      }).pipe(Effect.forkScoped)
+      const asked = yield* waitForPending(1)
+      expect(asked.map((item) => ({ id: item.id, sessionID: item.sessionID, patterns: item.patterns }))).toEqual([
+        { id: PermissionV1.ID.make("per_test3b"), sessionID: SessionID.make("session_test2"), patterns: ["ls"] },
+      ])
+      yield* rejectAll()
+      expect(Exit.isFailure(yield* Fiber.await(other))).toBe(true)
     }),
   { git: true },
 )

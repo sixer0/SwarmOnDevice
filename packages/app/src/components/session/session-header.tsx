@@ -33,8 +33,6 @@ import { KeybindV2 } from "@opencode-ai/ui/v2/keybind-v2"
 import { TooltipV2 } from "@opencode-ai/ui/v2/tooltip-v2"
 import { reviewTooltipKeybind } from "../command-tooltip-keybind"
 import { useTitlebarRightMount } from "../titlebar"
-import { SessionSwitcher } from "./session-switcher"
-import { projectDirectories } from "./session-switcher-model"
 
 const OPEN_APPS = [
   "vscode",
@@ -163,7 +161,6 @@ export function SessionHeader(props: { map?: SessionHeaderMap }) {
     if (!directory) return
     return layout.projects.list().find((p) => p.worktree === directory || p.sandboxes?.includes(directory))
   })
-  const sessionDirectories = createMemo(() => projectDirectories(project(), projectDirectory()))
   const name = createMemo(() => {
     const current = project()
     if (current) return current.name || getFilename(current.worktree)
@@ -450,7 +447,6 @@ export function SessionHeader(props: { map?: SessionHeaderMap }) {
                     </div>
                   </Show>
                   <div class="flex items-center gap-1">
-                    <SessionSwitcher variant="legacy" directories={sessionDirectories()} />
                     <Show when={status()}>
                       <Tooltip placement="bottom" value={language.t("status.popover.trigger")}>
                         <StatusPopover />
@@ -538,7 +534,6 @@ export function SessionHeader(props: { map?: SessionHeaderMap }) {
             >
               <SessionHeaderV2Actions
                 state={v2ActionsState()}
-                directories={sessionDirectories()}
                 map={props.map}
                 mapKeybind={command.keybindParts("session.map.toggle")}
               />
@@ -578,7 +573,6 @@ function SessionMapDot(props: { attention?: "warning" | "danger" }) {
 
 function SessionHeaderV2Actions(props: {
   state: SessionHeaderV2ActionsState
-  directories: string[]
   map?: SessionHeaderMap
   mapKeybind: string[]
 }) {
@@ -586,7 +580,6 @@ function SessionHeaderV2Actions(props: {
 
   return (
     <div class="flex items-center gap-2">
-      <SessionSwitcher variant="v2" directories={props.directories} />
       <Show when={props.state.statusVisible}>
         <Tooltip placement="bottom" value={props.state.statusLabel}>
           <StatusPopoverV2 />

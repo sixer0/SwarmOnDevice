@@ -139,12 +139,21 @@ interface PendingEntry {
    * covers (row 258). None when the call offers no "always", or after a restart.
    */
   always?: ReadonlyArray<string>
+  /** Asked with autonomous mode off for its root: only such an entry is released by a session's exact "always" (1.1.4). */
+  offMode?: true
   deferred: Deferred.Deferred<void, PermissionV1.RejectedError | PermissionV1.CorrectedError>
 }
 
 interface State {
   pending: Map<PermissionV1.ID, PendingEntry>
   approved: PermissionV1.Rule[]
+  /** 1.1.4 (U2): a person's "always in this session" outside autonomous mode, by root session. Memory only. */
+  sessionRules: Map<SessionID, PermissionV1.Rule[]>
+  /**
+   * The same, on a prompt that offered no "always": the very prompt, matched by string equality (never a glob), with the
+   * command folder when it has one. Acts only while autonomous mode is off for the root.
+   */
+  sessionExact: Map<SessionID, SessionExact[]>
   /** Each with the root of the session it was given to: an answer at the root is good for its subagents too. */
   grants: (Grant & { root: SessionID; since?: number })[]
   /** Sessions whose last request went unanswered: nobody is there, so the next one is not worth a long wait. */
@@ -160,6 +169,25 @@ const samePrompt = (
   a.permission === b.permission &&
   a.patterns.length === b.patterns.length &&
   a.patterns.every((pattern, index) => pattern === b.patterns[index])
+
+interface SessionExact {
+  permission: string
+  patterns: string[]
+  workdir?: string
+}
+
+const workdirOf = (request: Pick<PermissionV1.Request, "metadata">) =>
+  typeof request.metadata?.workdir === "string" ? request.metadata.workdir : undefined
+
+/** Whether a session's exact "always" is this prompt: same permission, same patterns in order, same command folder. */
+const exactCovers = (
+  rules: ReadonlyArray<SessionExact> | undefined,
+  request: Pick<PermissionV1.Request, "permission" | "patterns" | "metadata">,
+) => {
+  if (!rules || rules.length === 0) return false
+  const workdir = workdirOf(request)
+  return rules.some((rule) => samePrompt(rule, request) && rule.workdir === workdir)
+}
 
 /** What the line of a call let through by a person's "always in this session" says, for Activity to show (row 258). */
 const SESSION_REASON = 'a person\'s "always in this session"'
@@ -524,6 +552,8 @@ const layer = Layer.effect(
         const state = {
           pending: new Map<PermissionV1.ID, PendingEntry>(),
           approved: [],
+          sessionRules: new Map(),
+          sessionExact: new Map(),
           grants: [],
           away: new Set(),
           full: new Set(),
@@ -1150,15 +1180,20 @@ const layer = Layer.effect(
       )
 
     const ask = Effect.fn("Permission.ask")(function* (input: PermissionV1.AskInput) {
-      const { approved, away, grants, pending } = yield* InstanceState.get(state)
+      const { approved, away, grants, pending, sessionRules, sessionExact } = yield* InstanceState.get(state)
       const { ruleset, harmless, noAlways, follows, call: toolCall, ...request } = input
       let needsAsk = false
       let userCatchAll = false
       let standing = false
       let personAllowed = false
+      // 1.1.4 (U2): a person's "always in this session" is the family's. Looked up only when one was ever given, so a
+      // tool that never asks adds no session lookup.
+      const remembered =
+        !noAlways && sessionRules.size > 0 ? (sessionRules.get((yield* rootOf(request.sessionID)).id) ?? []) : []
+      const standingRules = remembered.length > 0 ? [...approved, ...remembered] : approved
 
       for (const pattern of request.patterns) {
-        const rule = evaluate(request.permission, pattern, ruleset, noAlways ? [] : approved)
+        const rule = evaluate(request.permission, pattern, ruleset, noAlways ? [] : standingRules)
         // Not the pattern: for a shell call it is the command, and that can hold a secret typed into its arguments.
         yield* Effect.logInfo("evaluated", { permission: request.permission, action: rule.action })
         if (rule.action === "deny") {
@@ -1168,7 +1203,7 @@ const layer = Layer.effect(
           })
         }
         if (rule.action === "allow") {
-          if (approved.includes(rule)) standing = true
+          if (approved.includes(rule) || remembered.includes(rule)) standing = true
           else if (!isShipped(rule)) personAllowed = true
           continue
         }
@@ -1406,6 +1441,9 @@ const layer = Layer.effect(
       // S1.37: the main agent's no to a subagent has its own text; the 1.1.0 class P no keeps its fixed one.
       if (gated?.refusal !== undefined) return yield* mainAgentRefused(gated.refusal)
       if (gated?.decision === "reject") return yield* new DeciderRefusedError({ ruleset: [] })
+      // 1.1.4: a person's exact "always in this session" on a prompt that offered none. Only with the mode off for the
+      // root (`gate` answers undefined only then), so it never changes what autonomous mode does.
+      if (gated === undefined && exactCovers(sessionExact.get(family), request)) return
 
       // A repeating call stops the run on purpose until a person looks. Carrying on would defeat that guard.
       // The same goes for a spend limit: nobody being there is exactly when it must hold.
@@ -1414,12 +1452,13 @@ const layer = Layer.effect(
       yield* Effect.logInfo("asking", { id, permission: info.permission })
 
       if (gated?.decision === "defer") return yield* heldOrRefused(gated)
-      pending.set(id, { info, deferred, noAlways, follows })
+      const offMode = gated === undefined ? ({ offMode: true } as const) : {}
+      pending.set(id, { info, deferred, noAlways, follows, ...offMode })
       yield* events.publish(Event.Asked, info)
       const moveOn = Effect.gen(function* () {
         // The request stays listed and answerable. The agent is released, not the decision.
         const moved: PermissionV1.Request = { ...asked, movedOnAt: Date.now() }
-        pending.set(id, { info: moved, deferred, noAlways, follows })
+        pending.set(id, { info: moved, deferred, noAlways, follows, ...offMode })
         away.add(request.sessionID)
         yield* Effect.logInfo("moved on", { id, permission: info.permission })
         yield* events.publish(Event.Asked, moved)
@@ -1453,7 +1492,7 @@ const layer = Layer.effect(
     const reply = Effect.fn("Permission.reply")(function* (
       input: PermissionV1.ReplyInput & { abandoned?: boolean; version?: number },
     ) {
-      const { approved, away, grants, pending } = yield* InstanceState.get(state)
+      const { approved, away, grants, pending, sessionRules, sessionExact } = yield* InstanceState.get(state)
       const existing = pending.get(input.requestID)
       if (!existing) return yield* new PermissionV1.NotFoundError({ requestID: input.requestID })
       // A yes is good for the list the person saw. One that grew since is shown again, unanswered, and nothing is let
@@ -1480,6 +1519,29 @@ const layer = Layer.effect(
         ...(entry.follows && { follows: entry.follows }),
         ...(entry.calls && { call: entry.calls[0]!.call, calls: entry.calls }),
       })
+      // 1.1.4 (U2): an "always" outside autonomous mode is the session family's, never the whole project's. The tool's own
+      // "always" patterns when it offered some; otherwise the very prompt, matched to the letter. A spend limit keeps no
+      // "always" in any form (Q1): the answer there is a "once", and nothing is stored.
+      const remember = Effect.fnUntraced(function* (entry: PendingEntry) {
+        if (entry.info.permission === "spend_limit") return
+        const root = (yield* rootOf(entry.info.sessionID)).id
+        if (!entry.noAlways && entry.info.always.length > 0) {
+          const rules = sessionRules.get(root) ?? []
+          for (const pattern of entry.info.always)
+            rules.push({ permission: entry.info.permission, pattern, action: "allow" })
+          sessionRules.set(root, rules)
+          return
+        }
+        const rules = sessionExact.get(root) ?? []
+        const workdir = workdirOf(entry.info)
+        rules.push({ permission: entry.info.permission, patterns: [...entry.info.patterns], ...(workdir !== undefined && { workdir }) })
+        sessionExact.set(root, rules)
+      })
+      // A moved-on prompt the mode did not hold: its "always" is remembered for the session, as on a prompt still open.
+      if (existing.info.movedOnAt && existing.root === undefined) {
+        if (input.reply === "always") yield* remember(existing)
+        return answered(existing)
+      }
       if (existing.info.movedOnAt) {
         if (input.reply === "always")
           approved.push(
@@ -1544,20 +1606,20 @@ const layer = Layer.effect(
       yield* Deferred.succeed(existing.deferred, undefined)
       if (input.reply === "once") return
 
-      for (const pattern of existing.info.always) {
-        approved.push({
-          permission: existing.info.permission,
-          pattern,
-          action: "allow",
-        })
-      }
-
+      yield* remember(existing)
+      // Other prompts of the same session this answer, or one before it, covers are approved with it.
+      const root = (yield* rootOf(existing.info.sessionID)).id
+      const standingRules = [...approved, ...(sessionRules.get(root) ?? [])]
+      const exact = sessionExact.get(root)
       for (const [id, item] of pending.entries()) {
-        if (item.info.sessionID !== existing.info.sessionID || item.info.movedOnAt || item.noAlways) continue
-        const ok = item.info.patterns.every(
-          (pattern) => evaluate(item.info.permission, pattern, approved).action === "allow",
-        )
-        if (!ok) continue
+        if (item.info.sessionID !== existing.info.sessionID || item.info.movedOnAt) continue
+        const byRule =
+          !item.noAlways &&
+          item.info.patterns.every(
+            (pattern) => evaluate(item.info.permission, pattern, standingRules).action === "allow",
+          )
+        const byExact = item.offMode === true && exactCovers(exact, item.info)
+        if (!byRule && !byExact) continue
         pending.delete(id)
         yield* events.publish(Event.Replied, {
           sessionID: item.info.sessionID,

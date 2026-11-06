@@ -25,10 +25,36 @@ const AGENT_SNAPSHOT_INTERVAL_MS = 30_000
 
 type ServerContext = ReturnType<ReturnType<typeof useGlobal>["ensureServerCtx"]>
 
-const [focusRequest, setFocusRequest] = createSignal(0)
+const [focusRequest, setFocusRequest] = createSignal(false)
 /** Asks the board to put the keyboard on its first row, including a board Home is only about to mount. */
-export const requestAgentBoardFocus = () => setFocusRequest((value) => value + 1)
+export const requestAgentBoardFocus = () => setFocusRequest(true)
 export const agentBoardFocusRequest = focusRequest
+
+/** Where typing goes: an input, a textarea, or anything inside a contenteditable (the chat composer). */
+export const isTextField = (element: Element | null) =>
+  !!element?.closest("input, textarea, [contenteditable]:not([contenteditable='false'])")
+
+/**
+ * Takes the pending request (once: a later board mount never sees it). It is refused, and dropped, while `active` is a
+ * text field: a row's single-letter keys answer permissions, so the next keystroke typed there must not land on a row.
+ */
+export function takeAgentBoardFocusRequest(active: Element | null) {
+  if (!focusRequest()) return false
+  setFocusRequest(false)
+  return !isTextField(active)
+}
+
+/** Puts the keyboard on the board's first row when a focus request is pending and the board has rows. */
+export function createAgentBoardFocus(total: Accessor<number>, first: () => HTMLElement | undefined) {
+  createEffect(() => {
+    if (!focusRequest() || total() === 0) return
+    queueMicrotask(() => {
+      if (takeAgentBoardFocusRequest(document.activeElement)) first()?.focus()
+    })
+  })
+  // A request this board never got to (no rows while it was open) must not wait for the next mount.
+  onCleanup(() => setFocusRequest(false))
+}
 
 /**
  * Keeps the session store honest about agents already running or blocked when this window opened. Shared through the

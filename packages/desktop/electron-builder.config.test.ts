@@ -462,8 +462,8 @@ test("a copy the real verifier rejects fails afterPack, removes the staging, and
 for (const channel of channels) {
   test(`carries the swarm-patch release and slot for ${channel.channel} (SP-BC)`, async () => {
     const config = await importConfig(`swarm-patch=${channel.channel}`, channel.channel)
-    expect(SWARM_RELEASE).toBe("1.1.3")
-    expect(config.mac?.extendInfo).toEqual({ SwarmRelease: "1.1.3" })
+    expect(SWARM_RELEASE).toBe("1.1.4")
+    expect(config.mac?.extendInfo).toEqual({ SwarmRelease: "1.1.4" })
     expect(config.mac).not.toHaveProperty("bundleShortVersion")
     expect(config.mac).not.toHaveProperty("bundleVersion")
     expect(config.files).toContain("!resources/swarm-patch{,/**/*}")
@@ -499,7 +499,7 @@ for (const channel of channels) {
   })
 }
 
-test("keeps package.json at 1.19.3 while the release label is 1.1.3 (G1c)", async () => {
+test("keeps package.json at 1.19.3 while the release label is 1.1.4 (G1c)", async () => {
   const pkg = await Bun.file(path.join(import.meta.dir, "package.json")).json()
   expect(pkg.version).toBe("1.19.3")
 })

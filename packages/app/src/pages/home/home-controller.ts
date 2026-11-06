@@ -6,13 +6,22 @@ import { useTabs } from "@/context/tabs"
 import { toggleHomeProjectSelection } from "@/pages/layout/helpers"
 import { createEffect, createMemo } from "solid-js"
 
-export function createHomeController() {
+export type HomeControllerOptions = {
+  /**
+   * A fixed scope instead of the persisted Home selection. The Home pane beside a chat follows the chat's project and
+   * must never rewrite what the full Home page remembers, so with a scope the selection is read-only.
+   */
+  scope?: () => HomeProjectSelection
+}
+
+export function createHomeController(options?: HomeControllerOptions) {
   const sync = useServerSync()
   const layout = useLayout()
   const server = useServer()
   const global = useGlobal()
   const tabs = useTabs()
-  const selection = layout.home.selection
+  const scope = options?.scope
+  const selection = scope ?? layout.home.selection
   const focusedServer = createMemo(
     () => global.servers.list().find((conn) => ServerConnection.key(conn) === selection().server) ?? server.current,
   )
@@ -36,6 +45,7 @@ export function createHomeController() {
   )
 
   createEffect(() => {
+    if (scope) return
     const list = global.servers.list()
     if (list.some((conn) => ServerConnection.key(conn) === selection().server)) return
     const conn = list.find((conn) => ServerConnection.key(conn) === server.key) ?? list[0]
@@ -43,6 +53,7 @@ export function createHomeController() {
   })
 
   function setSelection(next: HomeProjectSelection) {
+    if (scope) return
     layout.home.setSelection(next)
   }
 

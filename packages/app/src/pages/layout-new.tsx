@@ -1,11 +1,15 @@
-import { createEffect, Suspense, type ParentProps } from "solid-js"
+import { createEffect, lazy, Show, Suspense, type ParentProps } from "solid-js"
 import { createStore } from "solid-js/store"
 import { DebugBar } from "@/components/debug-bar"
 import { TabsInfoPopup } from "@/components/help-button"
 import { Titlebar, type TitlebarUpdate } from "@/components/titlebar"
 import { usePlatform } from "@/context/platform"
+import { homePaneOpen } from "@/pages/home/home-pane-state"
 import { useAutonomyBlockedAlerts } from "@/pages/autonomy-blocked-alerts"
 import { setV2Toast, ToastRegion } from "@/utils/toast"
+
+// Home beside the chat. Loaded on first open, so a layout that never opens it never pulls the Home controllers in.
+const HomePaneHost = lazy(() => import("@/pages/home/home-pane").then((module) => ({ default: module.HomePaneHost })))
 
 export default function NewLayout(props: ParentProps) {
   const platform = usePlatform()
@@ -40,8 +44,15 @@ export default function NewLayout(props: ParentProps) {
             : undefined
         }
       />
-      <main class="flex-1 min-h-0 min-w-0 overflow-x-hidden flex flex-col items-start contain-strict">
-        <Suspense>{props.children}</Suspense>
+      <main class="relative flex-1 min-h-0 min-w-0 overflow-x-hidden flex flex-row contain-strict">
+        <Show when={homePaneOpen()}>
+          <Suspense>
+            <HomePaneHost />
+          </Suspense>
+        </Show>
+        <div class="flex-1 min-h-0 min-w-0 flex flex-col items-start">
+          <Suspense>{props.children}</Suspense>
+        </div>
       </main>
       {import.meta.env.DEV && state.debugTools && <DebugBar inline />}
       <TabsInfoPopup />

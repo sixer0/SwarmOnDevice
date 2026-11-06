@@ -1,5 +1,5 @@
 import { SessionTabAvatarView } from "@/pages/layout/session-tab-avatar"
-import { alwaysLabel } from "@/pages/session/composer/permission-always"
+import { alwaysLabel, offersAlways } from "@/pages/session/composer/permission-always"
 import { useLanguage } from "@/context/language"
 import { formatUsd, spendLimitDetail } from "@/components/session/session-spend"
 import { displayName, errorMessage } from "@/pages/layout/helpers"
@@ -11,7 +11,7 @@ import { Icon as IconV2 } from "@opencode-ai/ui/v2/icon"
 import { IconButtonV2 } from "@opencode-ai/ui/v2/icon-button-v2"
 import { KeybindV2 } from "@opencode-ai/ui/v2/keybind-v2"
 import { createEffect, createMemo, For, type JSX, on, Show } from "solid-js"
-import { agentBoardFocusRequest, createMinuteClock, type AgentBoardController } from "./agent-board-controller"
+import { createAgentBoardFocus, createMinuteClock, type AgentBoardController } from "./agent-board-controller"
 import { inlineQuestion, permissionDetail, permissionRisk, type AgentBoardNeed } from "./agent-board-model"
 
 const SECTION_LABEL = "text-v2-text-text-muted [font-weight:440]"
@@ -148,7 +148,7 @@ function NeedRow(props: { board: AgentBoardController; need: AgentBoardNeed }) {
             <div class="flex min-w-0 items-center gap-1.5">
               <RowTitle board={props.board} root={props.need.root} />
               {/* "Allow always" is a standing decision, so it is offered once the row has someone's attention. */}
-              <Show when={!item.request.movedOnAt && !spendLimitDetail(item.request) && item.request.always.length > 0}>
+              <Show when={offersAlways(item.request)}>
                 <KeyButton
                   label={alwaysLabel(item.request, language.t)}
                   keys={["⇧", "A"]}
@@ -354,7 +354,6 @@ export function AgentBoardView(props: { board: AgentBoardController }) {
   const language = useLanguage()
   const now = createMinuteClock()
   let root: HTMLElement | undefined
-  let handledFocusRequest = 0
 
   const rows = () => [...(root?.querySelectorAll<HTMLElement>("[data-agent-row]") ?? [])]
   const retrying = () =>
@@ -379,12 +378,7 @@ export function AgentBoardView(props: { board: AgentBoardController }) {
     }),
   )
 
-  createEffect(() => {
-    const request = agentBoardFocusRequest()
-    if (request === handledFocusRequest || total() === 0) return
-    handledFocusRequest = request
-    queueMicrotask(() => rows()[0]?.focus())
-  })
+  createAgentBoardFocus(total, () => rows()[0])
 
   const onKeyDown = (event: KeyboardEvent) => {
     if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return
