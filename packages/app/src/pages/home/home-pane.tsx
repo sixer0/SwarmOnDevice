@@ -3,7 +3,7 @@ import { ButtonV2 } from "@opencode-ai/ui/v2/button-v2"
 import { IconButtonV2 } from "@opencode-ai/ui/v2/icon-button-v2"
 import { Icon as IconV2 } from "@opencode-ai/ui/v2/icon"
 import { createMediaQuery } from "@solid-primitives/media"
-import { type Accessor, createEffect, createMemo, on, onCleanup, onMount, Show } from "solid-js"
+import { type Accessor, createEffect, createMemo, on, onCleanup, onMount, Show, Suspense } from "solid-js"
 import { useGlobal } from "@/context/global"
 import { useLanguage } from "@/context/language"
 import { type HomeProjectSelection, useLayout } from "@/context/layout"
@@ -13,6 +13,7 @@ import { createLandedWork } from "@/pages/session/review/landed-work"
 import { createAgentBoardController } from "./agent-board-controller"
 import { AgentBoardView } from "./agent-board-view"
 import { createHomeController } from "./home-controller"
+import { createPaneFocusKeeper, shouldCloseOnWindowEscape } from "./home-pane-focus"
 import { homePaneScope, routeTab } from "./home-pane-scope"
 import { closeHomePane, isChatRoute, setHomePaneRoot, takeHomePaneFocusRequest } from "./home-pane-state"
 import { createHomeScrollController } from "./home-scroll-controller"
@@ -111,17 +112,27 @@ export function HomePane(props: { overlay: boolean }) {
   )
 
   const escape = homePaneEscape(closeHomePane)
+  // Esc with nothing focused (for example after a Suspense detach dropped focus to <body>) still closes the pane.
+  const windowEscape = (event: KeyboardEvent) => {
+    if (!shouldCloseOnWindowEscape(event, root)) return
+    event.preventDefault()
+    closeHomePane()
+  }
+  let keeper: ReturnType<typeof createPaneFocusKeeper> | undefined
   onMount(() => {
+    if (!root) return
     setHomePaneRoot(root)
     // Capture phase: the pane sees Esc before its search box does (see homePaneEscape).
-    root?.addEventListener("keydown", escape.capture, true)
-    if (!takeHomePaneFocusRequest()) return
-    // The search box when there is a project to search; otherwise the pane itself, so Esc still closes it.
-    const input = root?.querySelector<HTMLInputElement>("input")
-    ;(input ?? root)?.focus()
+    root.addEventListener("keydown", escape.capture, true)
+    window.addEventListener("keydown", windowEscape)
+    keeper = createPaneFocusKeeper(root)
+    // The search box once it is mounted (the pane itself until then, so Esc still closes it), kept across Suspense.
+    if (takeHomePaneFocusRequest()) keeper.request()
   })
   onCleanup(() => {
     root?.removeEventListener("keydown", escape.capture, true)
+    window.removeEventListener("keydown", windowEscape)
+    keeper?.dispose()
     setHomePaneRoot(undefined)
   })
 
@@ -161,7 +172,12 @@ export function HomePane(props: { overlay: boolean }) {
         </ButtonV2>
       </div>
       <Show when={scope()} fallback={<p class="px-3 py-6 text-v2-text-text-muted">{language.t("common.loading")}</p>}>
-        {(selection) => <HomePaneSessions scope={selection} />}
+        {/* A query read that suspends hides only the list, not the pane, its close button or its Esc handling. */}
+        {(selection) => (
+          <Suspense>
+            <HomePaneSessions scope={selection} />
+          </Suspense>
+        )}
       </Show>
     </aside>
   )
