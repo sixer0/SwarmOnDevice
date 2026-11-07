@@ -59,7 +59,7 @@ const CSS = `
 .hq-agent,.hq-beacon{cursor:pointer;outline:none}
 .hq-agent:focus-visible .hq-ring{stroke:var(--hq-glow);stroke-width:2}
 .hq-beacon:focus-visible rect{stroke-width:2.4}
-.hq-legend{position:absolute;left:12px;bottom:8px;display:flex;gap:10px;flex-wrap:wrap;font-size:11.5px;color:var(--hq-ink-2);pointer-events:none}
+.hq-legend{display:flex;justify-content:center;padding:4px 12px 10px;gap:10px;flex-wrap:wrap;font-size:11.5px;color:var(--hq-ink-2);pointer-events:none}
 .hq-legend span{display:inline-flex;align-items:center;gap:5px}.hq-legend i{width:7px;height:7px;border-radius:50%;display:inline-block}
 @keyframes hq-bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-2.5px)}}
 @keyframes hq-flick{0%,100%{opacity:.85}50%{opacity:1}}
