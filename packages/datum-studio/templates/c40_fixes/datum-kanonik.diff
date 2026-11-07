@@ -1,0 +1,40 @@
+--- seed-export/datum-kanonik.json
++++ templates/datum-kanonik.json
+@@ -13,6 +13,37 @@
+     "classification.level": "Terbatas",
+     "layout.railMode": "auto"
+   },
++  "advanced": {
++    "color.wrapper.cream": "F4F5F6",
++    "cover.controlBlock.fields": [
++      "NOMOR DOKUMEN",
++      "REVISI",
++      "PENYUSUN",
++      "KUSTODIAN",
++      "DITUJUKAN KEPADA",
++      "HALAMAN",
++      "DATUM GEODETIK",
++      "VERIFIKASI"
++    ],
++    "cover.controlBlock.preparerUnit": "Divisi Engineering PT GSP",
++    "cover.title.maxWidthMm": 150,
++    "controlSheet.subtitle.enabled": true,
++    "controlSheet.signatures.fillRoles": true,
++    "controlSheet.columns.form": "manual"
++  },
++  "roleFormats": {
++    "wrapper.kicker": {
++      "run": {
++        "faceRole": "condensed",
++        "szHalfPt": 15,
++        "color": "6E1420",
++        "b": true,
++        "i": false,
++        "caps": true,
++        "spacingTw": 30
++      }
++    }
++  },
+   "skeleton": {
+     "slots": [
+       {

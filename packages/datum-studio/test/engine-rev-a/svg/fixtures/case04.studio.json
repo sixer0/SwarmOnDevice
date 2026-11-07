@@ -1,0 +1,142 @@
+{
+  "$schema": "studio.diagram/v1",
+  "family": "layered",
+  "id": "4.1",
+  "title": "Arsitektur sistem pemantauan iklim ruang simpan arsip.",
+  "classification": "TERBATAS",
+  "width_mm": 128,
+  "apparatus": "figure",
+  "sources": [
+    "Kajian Teknis 012/GSP/KT/XI/2026 §4.1 · register ruang Rev A"
+  ],
+  "notes": [
+    "jumlah titik [TERUKUR, keandalan A1] · daya perangkat [PEMASOK, keandalan B2]"
+  ],
+  "nodes": [
+    {
+      "id": "s1",
+      "label": "Sensor R1–R2",
+      "sub": "25 titik · RS-485",
+      "mark": "TERUKUR",
+      "class": {
+        "tier": 0
+      }
+    },
+    {
+      "id": "s2",
+      "label": "Sensor R3–R4",
+      "sub": "23 titik · RS-485",
+      "mark": "TERUKUR",
+      "class": {
+        "tier": 0
+      }
+    },
+    {
+      "id": "g1",
+      "label": "Gerbang Data A",
+      "sub": "32 kanal · PoE",
+      "tag": "REQ-NET-01",
+      "class": {
+        "tier": 1
+      }
+    },
+    {
+      "id": "g2",
+      "label": "Gerbang Data B",
+      "sub": "32 kanal · PoE",
+      "tag": "REQ-NET-01",
+      "class": {
+        "tier": 1
+      }
+    },
+    {
+      "id": "srv",
+      "label": "Server Pemantauan",
+      "sub": "1U · 2 × 960 GB",
+      "tag": "REQ-MON-01",
+      "class": {
+        "tier": 2,
+        "accent": true
+      }
+    },
+    {
+      "id": "db",
+      "label": "Arsip Data Iklim",
+      "sub": "retensi 5 tahun",
+      "shape": "cylinder",
+      "class": {
+        "tier": 3
+      }
+    },
+    {
+      "id": "ups",
+      "label": "UPS Daring",
+      "sub": "1 kVA · 22,4 menit",
+      "mark": "DITURUNKAN",
+      "class": {
+        "tier": 3
+      }
+    },
+    {
+      "id": "op",
+      "label": "Konsol Operator",
+      "sub": "ruang kendali",
+      "mark": "PEMASOK",
+      "class": {
+        "tier": 3
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": "s1",
+      "to": "g1",
+      "kind": "data",
+      "label": "RS-485 · 9,6 kbps"
+    },
+    {
+      "from": "s2",
+      "to": "g2",
+      "kind": "data",
+      "label": "RS-485 · 9,6 kbps"
+    },
+    {
+      "from": "g1",
+      "to": "srv",
+      "kind": "data",
+      "label": "Ethernet · 1 Gbps"
+    },
+    {
+      "from": "g2",
+      "to": "srv",
+      "kind": "data",
+      "label": "Ethernet · 1 Gbps"
+    },
+    {
+      "from": "srv",
+      "to": "db",
+      "kind": "sync",
+      "label": "rekaman 1 menit"
+    },
+    {
+      "from": "ups",
+      "to": "srv",
+      "kind": "control",
+      "label": "230 V · 492,6 W"
+    },
+    {
+      "from": "srv",
+      "to": "op",
+      "kind": "data",
+      "label": "peringatan ambang"
+    }
+  ],
+  "legend": [
+    "data = aliran data sensor",
+    "control = catu daya",
+    "sync = perekaman",
+    "DITURUNKAN = nilai turunan",
+    "TERUKUR = nilai terukur",
+    "PEMASOK = data pemasok"
+  ]
+}

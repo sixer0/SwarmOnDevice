@@ -1,0 +1,42 @@
+{
+  "$schema": "studio.chart/v1",
+  "kind": "K-03",
+  "title": "Responden paling puas pada aspek kehandalan.",
+  "source": "Data ilustratif korpus paritas S63 (sintetis, bukan data klien).",
+  "widthMm": 166,
+  "data": {
+    "shape": "series",
+    "categories": [
+      "Kehandalan",
+      "Respons",
+      "Dokumentasi",
+      "Harga",
+      "Komunikasi"
+    ],
+    "series": [
+      {
+        "name": "Setuju",
+        "values": [
+          61,
+          49,
+          38,
+          33,
+          57
+        ]
+      },
+      {
+        "name": "Tidak setuju",
+        "values": [
+          -12,
+          -25,
+          -31,
+          -42,
+          -19
+        ]
+      }
+    ]
+  },
+  "heightMm": 58,
+  "unit": "%",
+  "dec": 0
+}

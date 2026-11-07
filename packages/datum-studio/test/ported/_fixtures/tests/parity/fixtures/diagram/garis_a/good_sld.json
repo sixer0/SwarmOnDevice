@@ -1,0 +1,24 @@
+{
+  "_provenans": "Basal BAIK keluarga sld — menguji limit E-17 (butuh rel bus) lewat jalur positif. Sumber: 000 RevA register temuan baris 734 (E-17).",
+  "family": "sld",
+  "id": "4.3",
+  "title": "Rantai daya unit digantung dari satu rel bus utama.",
+  "classification": "TERBATAS",
+  "width_mm": 128,
+  "apparatus": "figure",
+  "labels_verified": true,
+  "sources": ["Standar DATUM 000-GSP-STD-X-2026 RevA 6.4 temuan E-17"],
+  "nodes": [
+    {"id": "bus", "label": "Rel bus 380 V", "shape": "bus", "class": {"tier": 0}},
+    {"id": "cb1", "label": "Pemutus daya", "shape": "box", "class": {"tier": 1}},
+    {"id": "cb2", "label": "Pemutus kontrol", "shape": "box", "class": {"tier": 1}},
+    {"id": "load", "label": "Beban fan", "sub": "PEMASOK", "shape": "box", "mark": "PEMASOK", "class": {"tier": 2}}
+  ],
+  "edges": [
+    {"from": "bus", "to": "cb1", "kind": "data", "label": "daya utama"},
+    {"from": "bus", "to": "cb2", "kind": "control", "label": "sirkuit kontrol"},
+    {"from": "cb1", "to": "load", "kind": "data", "label": "ke beban"}
+  ],
+  "legend": ["solid daya", "dashed kontrol", "PEMASOK"],
+  "notes": ["apparatus figure: SVG memikul caption, SUMBER dan baris kunci sendiri (P6)."]
+}

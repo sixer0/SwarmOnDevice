@@ -1,0 +1,27 @@
+{
+  "$schema": "studio.chart/v1",
+  "kind": "K-07",
+  "title": "Enam puluh persen butir uji sudah terpenuhi.",
+  "source": "Data ilustratif korpus paritas S63 (sintetis, bukan data klien).",
+  "widthMm": 128,
+  "data": {
+    "shape": "categorical",
+    "points": [
+      {
+        "label": "Terpenuhi",
+        "value": 60
+      },
+      {
+        "label": "Belum memenuhi",
+        "value": 25
+      },
+      {
+        "label": "Belum diuji",
+        "value": 15
+      }
+    ]
+  },
+  "heightMm": 78,
+  "unit": "%",
+  "dec": 0
+}

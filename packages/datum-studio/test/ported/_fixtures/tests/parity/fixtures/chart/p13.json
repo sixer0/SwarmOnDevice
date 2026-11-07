@@ -1,0 +1,65 @@
+{
+  "$schema": "studio.chart/v1",
+  "kind": "P-13",
+  "title": "Tiga lokasi berada di kuadran biaya tinggi dan keandalan rendah.",
+  "source": "Data ilustratif korpus paritas S63 (sintetis, bukan data klien).",
+  "widthMm": 166,
+  "data": {
+    "shape": "xy",
+    "points": [
+      {
+        "x": 128.4,
+        "y": 91.9,
+        "label": "L1"
+      },
+      {
+        "x": 99.4,
+        "y": 92
+      },
+      {
+        "x": 111.8,
+        "y": 92.9
+      },
+      {
+        "x": 126.9,
+        "y": 96.7
+      },
+      {
+        "x": 86.7,
+        "y": 97,
+        "label": "L5"
+      },
+      {
+        "x": 69.4,
+        "y": 97.9
+      },
+      {
+        "x": 97.5,
+        "y": 94.6
+      },
+      {
+        "x": 159.1,
+        "y": 95.9
+      },
+      {
+        "x": 144.4,
+        "y": 99.7,
+        "label": "L9"
+      },
+      {
+        "x": 43.6,
+        "y": 93.3
+      },
+      {
+        "x": 79.5,
+        "y": 91.7
+      },
+      {
+        "x": 71.9,
+        "y": 96.2
+      }
+    ]
+  },
+  "heightMm": 70,
+  "dec": 1
+}

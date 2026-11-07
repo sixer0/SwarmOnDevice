@@ -5,8 +5,9 @@ import { createRequire } from "node:module"
 import os from "node:os"
 import path from "node:path"
 import type { Configuration } from "electron-builder"
-import { libraryHooks, SWARM_RELEASE } from "./electron-builder.config"
+import { composeHooks, datumHooks, libraryHooks, SWARM_RELEASE } from "./electron-builder.config"
 import { LIBRARY_FOLDER, STAGE } from "./scripts/stage-library"
+import { STUDIO_STAGE_FOLDER, STUDIO_STAGE_MANIFEST } from "./src/main/datum-studio-host/layout"
 
 const legacyDesktopEntry = "resources/linux/opencode-desktop.desktop"
 
@@ -208,6 +209,8 @@ test("minimises macOS entitlements to the ad-hoc hardened minimum", async () => 
 // KL-26: the staged edition reaches the bundle through extraResources, guarded by both hooks. No test here
 // runs the real `stage` mode, so none of them reads the edition; content is synthetic.
 const stageScript = path.join(import.meta.dir, "scripts", "stage-library.ts")
+// Row 45: the DATUM gate script (register line 80). Tests here never run it; the spy or a stub stands in.
+const datumScript = path.join(import.meta.dir, "scripts", "check-datum-stage.ts")
 const savedPath = process.env.PATH
 const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "swarm-builder-config-"))
 const realBin = path.join(tempRoot, "real-bin")
@@ -275,17 +278,78 @@ test("importing the config starts nothing and touches no disk", async () => {
   // The script holds Bun-only APIs and the builder loads this config on node, so only a subprocess may reach it.
   const source = await Bun.file(path.join(import.meta.dir, "electron-builder.config.ts")).text()
   expect(source).not.toMatch(/(from|import\()\s*["'][^"']*stage-library/)
+  // Row 45: the DATUM gate and the DATUM stage scripts are Bun-only too.
+  expect(source).not.toMatch(/(from|import\()\s*["'][^"']*(check-datum-stage|stage-datum-)/)
 })
 
-test("the configured beforePack runs the staging script in stage mode", async () => {
+test("the configured beforePack runs the library stage and then the DATUM stage gate (row 45)", async () => {
   const config = await importConfig("before-pack")
   process.env.PATH = `${spyBin}:${savedPath}`
-  // The spy stands in for bun, so the real script never runs here.
+  // The spy stands in for bun, so the real scripts never run here.
   await (config.beforePack as () => Promise<void>)()
   process.env.PATH = `${realBin}:${savedPath}`
 
-  expect(await readLog(spyLog)).toEqual([`${stageScript} stage`])
+  expect(await readLog(spyLog)).toEqual([`${stageScript} stage`, `${datumScript} stage`])
   await fs.rm(spyLog)
+})
+
+// Not the configured afterPack: its library half removes the package's real .library-stage.
+test("the composed afterPack verifies the library and then the DATUM folders, and keeps the DATUM stages (row 45)", async () => {
+  const project = await fs.mkdtemp(path.join(tempRoot, "composed-after-"))
+  const stage = path.join(project, ".library-stage")
+  const studio = path.join(project, STUDIO_STAGE_FOLDER)
+  await fs.mkdir(stage)
+  await fs.mkdir(studio)
+  const resources = path.join(project, "Resources")
+  const hooks = composeHooks(libraryHooks(stageScript, stage), datumHooks(datumScript))
+  process.env.PATH = `${spyBin}:${savedPath}`
+  await hooks.afterPack({ appOutDir: project, packager: { getResourcesDir: () => resources } })
+  process.env.PATH = `${realBin}:${savedPath}`
+
+  expect(await readLog(spyLog)).toEqual([`${stageScript} verify ${resources}`, `${datumScript} verify ${resources}`])
+  expect(await lstatOrNull(stage)).toBeNull()
+  expect(await lstatOrNull(studio)).not.toBeNull()
+  await fs.rm(spyLog)
+})
+
+test("composeHooks: beforePack stops at the first rejection; afterPack runs every hook and rethrows the first error", async () => {
+  const calls: string[] = []
+  const hook = (name: string, before: boolean, after: boolean) => ({
+    beforePack: async () => {
+      calls.push(`${name}:before`)
+      if (!before) throw new Error(`${name} before failed`)
+    },
+    afterPack: async () => {
+      calls.push(`${name}:after`)
+      if (!after) throw new Error(`${name} after failed`)
+    },
+  })
+  const context = { appOutDir: "x", packager: { getResourcesDir: () => "x" } }
+
+  const before = await composeHooks(hook("library", false, true), hook("datum", true, true))
+    .beforePack()
+    .catch((error: Error) => error.message)
+  expect(before).toBe("library before failed")
+  expect(calls).toEqual(["library:before"])
+
+  calls.length = 0
+  const after = await composeHooks(hook("library", true, false), hook("datum", true, false))
+    .afterPack(context)
+    .catch((error: Error) => error.message)
+  expect(after).toBe("library after failed")
+  expect(calls).toEqual(["library:after", "datum:after"])
+})
+
+test("a DATUM hook without bun fails instead of skipping the gate (row 45)", async () => {
+  const project = await fs.mkdtemp(path.join(tempRoot, "no-bun-datum-"))
+  process.env.PATH = path.join(project, "absent")
+  const failure = await datumHooks(datumScript)
+    .beforePack()
+    .catch((error: Error) => error.message)
+  process.env.PATH = `${realBin}:${savedPath}`
+
+  expect(failure).toMatch(/^check-datum-stage: cannot run bun/)
+  expect(failure).not.toContain(project)
 })
 
 test("a hook without bun fails instead of skipping the gate", async () => {
@@ -322,7 +386,8 @@ const builderRequire = createRequire(
 const { Platform, Arch, PlatformPackager } = builderRequire("app-builder-lib")
 const { AsyncEventEmitter } = builderRequire("app-builder-lib/out/util/asyncEventEmitter")
 
-async function runDoPack(stageBody: string, verifyBody: string) {
+// Row 45: with `datum`, a second stub stands in for check-datum-stage.ts and the hooks are composed as in the config.
+async function runDoPack(stageBody: string, verifyBody: string, datum?: { stage: string; verify: string }) {
   const project = await fs.mkdtemp(path.join(tempRoot, "do-pack-"))
   const stage = path.join(project, ".library-stage")
   const log = path.join(project, "steps.log")
@@ -343,12 +408,31 @@ if (mode === "verify") {
 }
 `,
   )
-  const hooks = libraryHooks(script, stage)
+  const datumStub = path.join(project, "datum-stub.ts")
+  if (datum)
+    await fs.writeFile(
+      datumStub,
+      `import fs from "node:fs"
+import path from "node:path"
+import { verifyStudioStage } from ${JSON.stringify(path.join(import.meta.dir, "scripts", "stage-datum-studio.ts"))}
+const [mode, resources] = process.argv.slice(2)
+const project = ${JSON.stringify(project)}
+fs.appendFileSync(${JSON.stringify(log)}, "datum-" + mode + "\\n")
+if (mode === "stage") {
+  ${datum.stage}
+}
+if (mode === "verify") {
+  ${datum.verify}
+}
+`,
+    )
+  const hooks = datum ? composeHooks(libraryHooks(script, stage), datumHooks(datumStub)) : libraryHooks(script, stage)
   const emitter = new AsyncEventEmitter()
   emitter.on("beforePack", hooks.beforePack, "user")
   emitter.on("afterPack", hooks.afterPack, "user")
   const config = await importConfig("do-pack")
-  const entry = (config.extraResources as { from: string }[]).filter((item) => item.from === ".library-stage")
+  const copied = datum ? [".library-stage", "datum/datum-house-style", ".datum-runtime-stage", STUDIO_STAGE_FOLDER] : [".library-stage"]
+  const entry = (config.extraResources as { from: string }[]).filter((item) => copied.includes(item.from))
   const step = (name: string) => async () => appendFileSync(log, `${name}\n`)
 
   class Harness extends PlatformPackager {
@@ -400,9 +484,11 @@ if (mode === "verify") {
 
   return {
     failure,
+    project,
     stage,
     steps: await readLog(log),
     library: path.join(appOutDir, "Swarm.app", "Contents", "Resources", LIBRARY_FOLDER),
+    resources: path.join(appOutDir, "Swarm.app", "Contents", "Resources"),
   }
 }
 
@@ -457,13 +543,151 @@ test("a copy the real verifier rejects fails afterPack, removes the staging, and
   expect(await lstatOrNull(result.stage)).toBeNull()
 })
 
+// ROW 45 (packaging spec §3.1): the three DATUM folders, their slots and their gate.
+const DATUM_SLOTS = [
+  { from: "datum/datum-house-style", to: "datum-house-style", filter: ["**/*", "!**/__pycache__{,/**}", "!**/*.pyc"] },
+  { from: ".datum-runtime-stage", to: "datum-runtime", filter: ["**/*", "!**/__pycache__{,/**}", "!**/*.pyc"] },
+  { from: ".datum-studio-stage", to: "datum-studio" },
+]
+
+for (const channel of channels) {
+  test(`carries the skill copy, runtime and Studio stage slots with their gate for ${channel.channel} (row 45)`, async () => {
+    const config = await importConfig(`datum=${channel.channel}`, channel.channel)
+    const runtime = await import("./scripts/stage-datum-runtime")
+    const studio = await import("./scripts/stage-datum-studio")
+
+    for (const slot of DATUM_SLOTS) expect(config.extraResources).toContainEqual(slot)
+    // Each source is the folder its stage script writes (or the committed skill copy the Studio stage pairs fonts with).
+    expect(path.join(import.meta.dir, ".datum-runtime-stage")).toBe(runtime.STAGE)
+    expect(path.join(import.meta.dir, ".datum-studio-stage")).toBe(studio.STAGE)
+    expect(STUDIO_STAGE_FOLDER).toBe(".datum-studio-stage")
+    expect(path.join(import.meta.dir, "datum/datum-house-style", "assets", "fonts")).toBe(studio.SKILL_FONTS)
+    expect(await Bun.file(path.join(import.meta.dir, "datum/datum-house-style/SKILL.md")).exists()).toBe(true)
+    expect(config.beforePack).toBeFunction()
+    expect(config.afterPack).toBeFunction()
+    // Never inside the asar: no positive `files` pattern reaches a DATUM folder.
+    const included = (config.files as string[]).filter((pattern) => !pattern.startsWith("!"))
+    for (const pattern of included)
+      for (const entry of DATUM_SLOTS.flatMap((slot) => [slot.from, `${slot.from}/SKILL.md`, `${slot.from}/bin/datum-python`]))
+        expect(new Bun.Glob(pattern).match(entry)).toBe(false)
+  })
+}
+
+const writeDatumStages = `const put = (rel, text) => {
+    fs.mkdirSync(path.dirname(path.join(project, rel)), { recursive: true })
+    fs.writeFileSync(path.join(project, rel), text)
+  }
+  put("datum/datum-house-style/SKILL.md", "skill")
+  put("datum/datum-house-style/scripts/__pycache__/x.cpython-314.pyc", "pyc")
+  put(".datum-runtime-stage/bin/datum-python", "#!/bin/sh")
+  put(".datum-runtime-stage/python/lib/x.pyc", "pyc")
+  put(".datum-studio-stage/${STUDIO_STAGE_MANIFEST}", "{}")`
+const requireDatumCopies = `for (const rel of ["datum-house-style/SKILL.md", "datum-runtime/bin/datum-python", "datum-studio/${STUDIO_STAGE_MANIFEST}"])
+    if (!fs.existsSync(path.join(resources, rel))) {
+      console.error("DATUM_VERIFY: missing " + rel)
+      process.exit(1)
+    }`
+
+test("passing DATUM gates carry the three folders into Resources before fuses and signing, and keep the stages (row 45)", async () => {
+  const result = await runDoPack(
+    writeStage,
+    `if (!fs.existsSync(path.join(resources, "knowledge-library/knowledge/a.md"))) process.exit(9)`,
+    { stage: writeDatumStages, verify: requireDatumCopies },
+  )
+
+  expect(result.failure).toBeUndefined()
+  expect(result.steps).toEqual(["stage", "datum-stage", "verify", "datum-verify", "fuses", "sign"])
+  expect(await Bun.file(path.join(result.resources, "datum-studio", STUDIO_STAGE_MANIFEST)).text()).toBe("{}")
+  // The filters drop bytecode from the skill copy and the runtime.
+  expect(await lstatOrNull(path.join(result.resources, "datum-house-style/scripts/__pycache__"))).toBeNull()
+  expect(await lstatOrNull(path.join(result.resources, "datum-runtime/python/lib/x.pyc"))).toBeNull()
+  // The library staging goes; the DATUM stages are the recipe's and stay.
+  expect(await lstatOrNull(result.stage)).toBeNull()
+  expect(await lstatOrNull(path.join(result.project, STUDIO_STAGE_FOLDER, STUDIO_STAGE_MANIFEST))).not.toBeNull()
+  expect(await lstatOrNull(path.join(result.project, ".datum-runtime-stage/bin/datum-python"))).not.toBeNull()
+})
+
+test("a missing Studio manifest fails beforePack before the copy, the fuses and the signature (row 45, row 36 contract)", async () => {
+  // The stub runs row 36's real verifyStudioStage on an empty Studio stage, as check-datum-stage.ts item (b) does.
+  const result = await runDoPack(writeStage, realVerify, {
+    stage: `const dir = path.join(project, ${JSON.stringify(STUDIO_STAGE_FOLDER)})
+  fs.mkdirSync(dir, { recursive: true })
+  const report = await verifyStudioStage(dir, { skillFonts: null })
+  if (report.problems.length > 0) {
+    console.error("DATUM_STAGE_STUDIO: " + report.problems[0].split(":")[0])
+    process.exit(1)
+  }`,
+    verify: requireDatumCopies,
+  })
+
+  expect(result.failure).toBe(`DATUM_STAGE_STUDIO: ${STUDIO_STAGE_MANIFEST} unreadable`)
+  expect(result.steps).toEqual(["stage", "datum-stage"])
+  expect(await lstatOrNull(path.join(result.resources, "datum-studio"))).toBeNull()
+  expect(await lstatOrNull(result.library)).toBeNull()
+})
+
+test("a DATUM folder the builder skipped fails afterPack, the library staging still goes, and no signed app forms (row 45)", async () => {
+  // The builder only warns about a missing extraResources source, so the DATUM verify is the guard.
+  const result = await runDoPack(
+    writeStage,
+    `if (!fs.existsSync(path.join(resources, "knowledge-library/knowledge/a.md"))) process.exit(9)`,
+    { stage: "", verify: requireDatumCopies },
+  )
+
+  expect(result.failure).toBe("DATUM_VERIFY: missing datum-house-style/SKILL.md")
+  expect(result.steps).toEqual(["stage", "datum-stage", "verify", "datum-verify"])
+  expect(await lstatOrNull(result.stage)).toBeNull()
+})
+
+test("prebuild runs the darwin stage gates in the documented order, the DATUM gate last (row 45)", async () => {
+  const source = await Bun.file(path.join(import.meta.dir, "scripts", "prebuild.ts")).text()
+  const gates = [...source.matchAll(/^if \(process\.platform === "darwin"\) await \$`bun \.\/scripts\/([^`]+)`$/gm)].map(
+    (match) => match[1],
+  )
+
+  expect(gates).toEqual(["check-setup-stage.ts", "check-cli-stage.ts", "check-datum-stage.ts stage"])
+  // All gates come before the server build, so a missing stage fails the build before any heavy step.
+  expect(source.indexOf("check-datum-stage.ts stage")).toBeLessThan(source.indexOf("build-node.ts"))
+})
+
+test("electron-vite builds the datum-studio-host entry and resolves its host module (row 45, row 111 contract)", async () => {
+  const module = await import("./electron.vite.config")
+  const main = module.default.main as {
+    build: { rollupOptions: { input: Record<string, string> } }
+    plugins: { name?: string; resolveId?: Function }[]
+  }
+  const input = main.build.rollupOptions.input
+  expect(input["datum-studio-host"]).toBe("src/main/datum-studio-host.ts")
+  expect(input.index).toBe("src/main/index.ts")
+  expect(input.sidecar).toBe("src/main/sidecar.ts")
+  expect(await Bun.file(path.join(import.meta.dir, input["datum-studio-host"])).exists()).toBe(true)
+  // The output name is the default entryPath the host launcher forks.
+  const start = await Bun.file(path.join(import.meta.dir, "src/main/datum-studio-host/start.ts")).text()
+  expect(start).toContain(`"datum-studio-host.js"`)
+
+  const plugin = main.plugins.find((item) => item?.name === "datum:studio-host-module")!
+  const studio = path.resolve(import.meta.dir, "../datum-studio")
+  const resolved: string[] = []
+  const context = { resolve: async (id: string) => (resolved.push(id), { id }) }
+  const resolve = (id: string, importer?: string) => plugin.resolveId!.call(context, id, importer)
+
+  const host = await resolve("virtual:datum-studio-host")
+  expect(host).toBe(path.join(studio, "src/mcp-host/index.ts"))
+  expect(await Bun.file(host).exists()).toBe(true)
+  // `@/` maps to Studio's vendor/src only for importers inside packages/datum-studio.
+  await resolve("@/lib/studio/contract/env", path.join(studio, "src/mcp-host/local-api/db.ts"))
+  expect(resolved).toEqual([path.join(studio, "vendor/src/lib/studio/contract/env")])
+  expect(await resolve("@/lib/x", path.join(import.meta.dir, "src/main/index.ts"))).toBeUndefined()
+  expect(await resolve("@/lib/x", `${studio}-other/a.ts`)).toBeUndefined()
+})
+
 // ROW 13 (SP-BC 4.1, G1c): the release label and the swarm-patch slot. importConfig keeps the
 // query non-literal, so TC-A sees no new TS2307.
 for (const channel of channels) {
   test(`carries the swarm-patch release and slot for ${channel.channel} (SP-BC)`, async () => {
     const config = await importConfig(`swarm-patch=${channel.channel}`, channel.channel)
-    expect(SWARM_RELEASE).toBe("1.1.4")
-    expect(config.mac?.extendInfo).toEqual({ SwarmRelease: "1.1.4" })
+    expect(SWARM_RELEASE).toBe("1.2.0")
+    expect(config.mac?.extendInfo).toEqual({ SwarmRelease: "1.2.0" })
     expect(config.mac).not.toHaveProperty("bundleShortVersion")
     expect(config.mac).not.toHaveProperty("bundleVersion")
     expect(config.files).toContain("!resources/swarm-patch{,/**/*}")
@@ -499,7 +723,8 @@ for (const channel of channels) {
   })
 }
 
-test("keeps package.json at 1.19.3 while the release label is 1.1.4 (G1c)", async () => {
+test("package.json version equals the release 1.2.0 (U4)", async () => {
   const pkg = await Bun.file(path.join(import.meta.dir, "package.json")).json()
-  expect(pkg.version).toBe("1.19.3")
+  expect(pkg.version).toBe("1.2.0")
+  expect(pkg.version).toBe(SWARM_RELEASE)
 })

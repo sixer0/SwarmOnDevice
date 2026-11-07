@@ -1,0 +1,36 @@
+{
+  "$schema": "studio.chart/v1",
+  "kind": "P-11",
+  "title": "Dua ruang melampaui batas konsumsi daya 40 kW.",
+  "source": "Data ilustratif korpus paritas S63 (sintetis, bukan data klien).",
+  "widthMm": 128,
+  "data": {
+    "shape": "categorical",
+    "points": [
+      {
+        "label": "Ruang A",
+        "value": 32
+      },
+      {
+        "label": "Ruang B",
+        "value": 38
+      },
+      {
+        "label": "Ruang C",
+        "value": 44
+      },
+      {
+        "label": "Ruang D",
+        "value": 29
+      },
+      {
+        "label": "Ruang E",
+        "value": 41
+      }
+    ]
+  },
+  "unit": "kW",
+  "dec": 0,
+  "limit": 40,
+  "limitLabel": "Batas 40 kW"
+}

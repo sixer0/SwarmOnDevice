@@ -1,0 +1,39 @@
+{
+  "$schema": "studio.chart/v1",
+  "kind": "P-01",
+  "title": "Pendingin menyumbang waktu henti terbesar pada kuartal ini.",
+  "source": "Data ilustratif korpus paritas S63 (sintetis, bukan data klien).",
+  "widthMm": 128,
+  "data": {
+    "shape": "categorical",
+    "points": [
+      {
+        "label": "Pendingin",
+        "value": 42,
+        "accent": true
+      },
+      {
+        "label": "Catu daya",
+        "value": 31
+      },
+      {
+        "label": "Jaringan",
+        "value": 24
+      },
+      {
+        "label": "Akses pintu",
+        "value": 15
+      },
+      {
+        "label": "Pencahayaan",
+        "value": 11
+      },
+      {
+        "label": "Sensor",
+        "value": 7
+      }
+    ]
+  },
+  "unit": "jam",
+  "dec": 0
+}

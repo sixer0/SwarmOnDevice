@@ -1,0 +1,126 @@
+{
+  "$schema": "datum-studio.builtin-templates/v1",
+  "note": "TEST FIXTURES ONLY, never shipped (C54): restricted templates exported by scripts/export-builtin-templates.ts.",
+  "provenanceCommit": "b0ae7a729d27bd4021393b615ff8450f8777b77c",
+  "sources": {
+    "seedStudio": {
+      "path": "packages/datum-studio/vendor/prisma/seed-studio.ts",
+      "sha256": "0620fe31bce6f12aa793273e7d876effec6fe091a7a0b6584eb1d8ea5eefbe4c"
+    },
+    "seedStudioTemplates": {
+      "path": "packages/datum-studio/vendor/prisma/seed-studio-templates.ts",
+      "sha256": "65a09d8a55387abd762c9007eafbfc0c237e11cb2916d61a2ea862142febb78f"
+    },
+    "seedDocTypeTemplates": {
+      "path": "packages/datum-studio/vendor/prisma/seed-doc-type-templates.ts",
+      "sha256": "438189a2d6d9c4be437763ac2e2f1dea293145d7979fed974c8e1b47fa3eded7"
+    },
+    "seedDerivedPresets": {
+      "path": "packages/datum-studio/vendor/prisma/seed-derived-presets.ts",
+      "sha256": "3f9afaab1ba2e6cb473860ce0341fd55969e29a957f3208ee4d9dd43b212d7bb"
+    },
+    "manual000Profile": {
+      "path": "packages/datum-studio/vendor/benchmark/manual000/template.json",
+      "sha256": "930a26ed93a0496a75209b92c7e59246525d14b349e98e01cfdfbbeb65e77e82"
+    },
+    "manual000V2": {
+      "path": "packages/datum-studio/vendor/benchmark/manual000/template.v2.json",
+      "sha256": "882057c5743273fed1b444a47df64a5dcbe1331a4262f3d8d290a1c1be1c6ba2"
+    },
+    "manual000Preset": {
+      "path": "packages/datum-studio/vendor/benchmark/manual000/datum-manual-000.preset.json",
+      "sha256": "a951b149180345951355c1935e42093334f19789a583e6c7b495cd6abb18804c"
+    }
+  },
+  "count": 2,
+  "templates": [
+    {
+      "slug": "datum-manual-000-preset",
+      "file": "datum-manual-000-preset.json",
+      "sha256": "6bfc5b7794cce1f6a6eb4c762198937a4cc45f6136f7f16c10f20cdc86e78ac7",
+      "bytes": 53182,
+      "name": "DATUM Manual 000",
+      "description": "Gaya acuan Manual 000 untuk pengujian format terukur (khusus admin).",
+      "kind": "DOCUMENT",
+      "isPreset": true,
+      "contractKind": null,
+      "preset": null,
+      "language": "ID",
+      "restricted": true,
+      "releasedChecks": [
+        "DATUM-04",
+        "DATUM-09",
+        "G3"
+      ],
+      "skeletonSha256": "c2abd0d9816a2dc98c2e60e5c5fed3d6ef32137fa53863426751f5e74a2f71be",
+      "slots": [
+        "cover",
+        "controlSheet",
+        "toc",
+        "signature",
+        "content",
+        "appendices"
+      ],
+      "c40Fixes": 0,
+      "seedRef": "seed-studio.ts:969-988 ensurePreset (SR-38)",
+      "sources": [
+        {
+          "path": "packages/datum-studio/vendor/prisma/seed-studio.ts",
+          "sha256": "0620fe31bce6f12aa793273e7d876effec6fe091a7a0b6584eb1d8ea5eefbe4c"
+        },
+        {
+          "path": "packages/datum-studio/vendor/benchmark/manual000/template.v2.json",
+          "sha256": "882057c5743273fed1b444a47df64a5dcbe1331a4262f3d8d290a1c1be1c6ba2"
+        },
+        {
+          "path": "packages/datum-studio/vendor/benchmark/manual000/datum-manual-000.preset.json",
+          "sha256": "a951b149180345951355c1935e42093334f19789a583e6c7b495cd6abb18804c"
+        }
+      ]
+    },
+    {
+      "slug": "datum-manual-000",
+      "file": "datum-manual-000.json",
+      "sha256": "319d74876f5a92baa124a1d0f58f4d02d0245d13ebc28e7d351e4822d04bc96e",
+      "bytes": 4384,
+      "name": "DATUM Manual 000",
+      "description": "Templat acuan Manual 000 untuk pengujian format terukur (khusus admin).",
+      "kind": "DOCUMENT",
+      "isPreset": false,
+      "contractKind": null,
+      "preset": "datum-manual-000-preset",
+      "language": "ID",
+      "restricted": true,
+      "releasedChecks": [
+        "DATUM-04",
+        "DATUM-09",
+        "G3"
+      ],
+      "skeletonSha256": "280a288aa4c64ce0dbd04da62d39f7b62488b36078d36f4dd8a82e743bf3c1c0",
+      "slots": [
+        "cover",
+        "controlSheet",
+        "toc",
+        "signature",
+        "content",
+        "appendices"
+      ],
+      "c40Fixes": 0,
+      "seedRef": "seed-studio.ts:990-1002 ensureSkeletonVersion (SR-38)",
+      "sources": [
+        {
+          "path": "packages/datum-studio/vendor/prisma/seed-studio.ts",
+          "sha256": "0620fe31bce6f12aa793273e7d876effec6fe091a7a0b6584eb1d8ea5eefbe4c"
+        },
+        {
+          "path": "packages/datum-studio/vendor/benchmark/manual000/template.v2.json",
+          "sha256": "882057c5743273fed1b444a47df64a5dcbe1331a4262f3d8d290a1c1be1c6ba2"
+        },
+        {
+          "path": "packages/datum-studio/vendor/benchmark/manual000/datum-manual-000.preset.json",
+          "sha256": "a951b149180345951355c1935e42093334f19789a583e6c7b495cd6abb18804c"
+        }
+      ]
+    }
+  ]
+}

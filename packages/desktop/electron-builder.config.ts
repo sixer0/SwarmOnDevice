@@ -39,20 +39,53 @@ async function signWindows(configuration: { path: string }) {
 // git, and the next `stage` replaces it. The script's own message carries the token and relative paths only;
 // execFile's message would add the absolute command line.
 export function libraryHooks(script: string, stage: string) {
-  const run = async (...args: string[]) => {
-    const result = await execFileAsync("bun", [script, ...args], { cwd: packageDir }).catch(
-      (error: { stderr?: string; code?: unknown }) => {
-        throw new Error(error.stderr?.trim() || `stage-library: cannot run bun (${error.code})`)
-      },
-    )
-    process.stdout.write(result.stdout)
-  }
+  const run = bunScript("stage-library", script)
   return {
     beforePack: () => run("stage"),
-    afterPack: (context: { appOutDir: string; packager: { getResourcesDir(appOutDir: string): string } }) =>
+    afterPack: (context: PackContext) =>
       run("verify", context.packager.getResourcesDir(context.appOutDir)).finally(() =>
         rm(stage, { recursive: true, force: true }),
       ),
+  }
+}
+
+// Row 45 (packaging spec §3.1): the three DATUM folders (skill copy, Python runtime stage, Studio stage) have one
+// gate script, run like the library one. Unlike libraryHooks, afterPack keeps the stage folders: they are costly
+// build outputs the recipe stages before `bun run build` and removes after the build (packaging spec §3.1, §5.2).
+export function datumHooks(script: string) {
+  const run = bunScript("check-datum-stage", script)
+  return {
+    beforePack: () => run("stage"),
+    afterPack: (context: PackContext) => run("verify", context.packager.getResourcesDir(context.appOutDir)),
+  }
+}
+
+// The builder takes one beforePack and one afterPack. beforePack runs the hooks in order and stops at the first
+// rejection, so no later gate and no copy run. afterPack runs every hook even when one fails, so the library's
+// cleanup still happens, then rethrows the first error.
+export function composeHooks(...hooks: { beforePack(): Promise<void>; afterPack(context: PackContext): Promise<void> }[]) {
+  return {
+    beforePack: async () => {
+      for (const hook of hooks) await hook.beforePack()
+    },
+    afterPack: async (context: PackContext) => {
+      const failures: unknown[] = []
+      for (const hook of hooks) await hook.afterPack(context).catch((error: unknown) => failures.push(error))
+      if (failures.length > 0) throw failures[0]
+    },
+  }
+}
+
+type PackContext = { appOutDir: string; packager: { getResourcesDir(appOutDir: string): string } }
+
+function bunScript(name: string, script: string) {
+  return async (...args: string[]) => {
+    const result = await execFileAsync("bun", [script, ...args], { cwd: packageDir }).catch(
+      (error: { stderr?: string; code?: unknown }) => {
+        throw new Error(error.stderr?.trim() || `${name}: cannot run bun (${error.code})`)
+      },
+    )
+    process.stdout.write(result.stdout)
   }
 }
 
@@ -75,8 +108,9 @@ const APP_IDS = {
 const COPYRIGHT = "Copyright (c) 2025 opencode (MIT). Swarm modifications Copyright (c) 2026 PT GSP."
 
 // Swarm release number (SP-BC 4.1, S6, G1c). It fills only Info.plist SwarmRelease, which the
-// swarm-patch applier reads with plutil; CFBundleShortVersionString and package.json stay 1.19.3.
-export const SWARM_RELEASE = "1.1.4"
+// swarm-patch applier reads with plutil. Since 1.2.0 (U4) CFBundleShortVersionString and
+// package.json carry the same number as the release.
+export const SWARM_RELEASE = "1.2.0"
 
 const getBase = (appId: string): Configuration => ({
   artifactName: "swarm-desktop-${os}-${arch}.${ext}",
@@ -131,7 +165,7 @@ const getBase = (appId: string): Configuration => ({
     // Notices ride in Contents/Resources beside the app, never inside the asar
     // (03c N3/N4). electron-builder only warns and skips a missing source
     // (fileMatcher.js copyFiles), so this list does not enforce IA-4 by itself;
-    // only the knowledge library below has a build gate, its two hooks.
+    // only the knowledge library and the DATUM folders below have a build gate, their hooks.
     { from: "../../LICENSE", to: "LICENSE" },
     { from: "../../NOTICE", to: "NOTICE" },
     { from: "../../THIRD_PARTY_LICENSES.txt", to: "THIRD_PARTY_LICENSES.txt" },
@@ -146,13 +180,23 @@ const getBase = (appId: string): Configuration => ({
     { from: "resources/swarm-cli", to: "swarm-cli" },
     // Copied after beforePack writes the staging and before afterPack verifies it, so the seal covers it.
     { from: ".library-stage", to: "knowledge-library" },
+    // DATUM (row 45, packaging spec §3.1): the skill copy straight from the repo, the Python runtime and the Studio
+    // stage pre-staged by the recipe (stage-datum-runtime.ts, stage-datum-studio.ts). None sits under resources/,
+    // so no `files` pattern reaches them. The filters are a second line of defence; datumHooks are the gate.
+    { from: "datum/datum-house-style", to: "datum-house-style", filter: ["**/*", "!**/__pycache__{,/**}", "!**/*.pyc"] },
+    { from: ".datum-runtime-stage", to: "datum-runtime", filter: ["**/*", "!**/__pycache__{,/**}", "!**/*.pyc"] },
+    { from: ".datum-studio-stage", to: "datum-studio" },
     {
       from: "native/",
       to: "native/",
       filter: ["index.js", "index.d.ts", "build/Release/mac_window.node", "swift-build/**"],
     },
   ],
-  ...libraryHooks(path.join(packageDir, "scripts", "stage-library.ts"), path.join(packageDir, ".library-stage")),
+  // Library first, then DATUM (row 45): one beforePack and one afterPack for both gates.
+  ...composeHooks(
+    libraryHooks(path.join(packageDir, "scripts", "stage-library.ts"), path.join(packageDir, ".library-stage")),
+    datumHooks(path.join(packageDir, "scripts", "check-datum-stage.ts")),
+  ),
   // Electron fuse lockdown (NR-09 / research 03e C4-1). Names verified against the
   // installed app-builder-lib@26.15.2 FuseOptionsV1 (configuration.d.ts:475-505);
   // electron-builder maps them to @electron/fuses FuseV1Options in platformPackager.js
@@ -189,7 +233,8 @@ const getBase = (appId: string): Configuration => ({
     identity: "-",
     notarize: false,
     target: ["dmg", "zip"],
-    // bundleShortVersion stays unset on purpose (G1c): only this custom key carries the release.
+    // bundleShortVersion stays unset on purpose (U4): electron-builder takes it from package.json
+    // (1.2.0, equal to the release); this custom key carries the release for swarm-patch.
     extendInfo: {
       SwarmRelease: SWARM_RELEASE,
     },

@@ -1,0 +1,1815 @@
+{
+  "_provenans": "S73: salinan beku spec panel galeri S94 (benchmark/manual000/figures/specs/bm-fig-17..21 pada 2026-10-23) untuk 12 kode tergambar tanpa fixture paritas tests/parity/fixtures/chart, ditambah K-08 (fixture paritas k08.json berisi 688 unit sehingga ditolak penjaga K-08 > 100 ikon). Dibuat mandiri: widthMm 128, title, source ditambahkan; data dan params apa adanya.",
+  "specs": {
+    "P-14": {
+      "$schema": "studio.chart/v1",
+      "kind": "P-14",
+      "style": "gallery",
+      "data": {
+        "shape": "series",
+        "categories": [
+          "Cakupan",
+          "Alarm palsu",
+          "Insiden",
+          "MTTR"
+        ],
+        "series": [
+          {
+            "name": "awal",
+            "values": [
+              71.2,
+              53.8,
+              38.9,
+              60.7
+            ]
+          },
+          {
+            "name": "akhir",
+            "values": [
+              82.3,
+              23.8,
+              33,
+              39.7
+            ]
+          }
+        ]
+      },
+      "params": {
+        "axis": [
+          15,
+          95
+        ],
+        "accentCategory": "MTTR"
+      },
+      "heightMm": 44.01,
+      "title": "Panel uji P-14 dari galeri bm-fig-17.",
+      "source": "Salinan panel galeri S94 bm-fig-17 (uji unit S73).",
+      "widthMm": 128
+    },
+    "H-08": {
+      "$schema": "studio.chart/v1",
+      "kind": "H-08",
+      "style": "gallery",
+      "data": {
+        "shape": "graph",
+        "nodes": [
+          {
+            "id": "E1",
+            "label": "E1"
+          },
+          {
+            "id": "E2",
+            "label": "E2"
+          },
+          {
+            "id": "E3",
+            "label": "E3"
+          },
+          {
+            "id": "E4",
+            "label": "E4"
+          },
+          {
+            "id": "E5",
+            "label": "E5"
+          },
+          {
+            "id": "E6",
+            "label": "E6"
+          },
+          {
+            "id": "E7",
+            "label": "E7"
+          },
+          {
+            "id": "E8",
+            "label": "E8"
+          }
+        ],
+        "links": [
+          {
+            "from": "E1",
+            "to": "E8",
+            "value": 1
+          },
+          {
+            "from": "E2",
+            "to": "E7",
+            "value": 2
+          },
+          {
+            "from": "E1",
+            "to": "E4",
+            "value": 1
+          },
+          {
+            "from": "E2",
+            "to": "E3",
+            "value": 1
+          },
+          {
+            "from": "E3",
+            "to": "E6",
+            "value": 1
+          },
+          {
+            "from": "E4",
+            "to": "E8",
+            "value": 1
+          },
+          {
+            "from": "E5",
+            "to": "E7",
+            "value": 1
+          }
+        ]
+      },
+      "params": {
+        "accentLink": [
+          "E2",
+          "E7"
+        ]
+      },
+      "heightMm": 44.01,
+      "title": "Panel uji H-08 dari galeri bm-fig-18.",
+      "source": "Salinan panel galeri S94 bm-fig-18 (uji unit S73).",
+      "widthMm": 128
+    },
+    "H-09": {
+      "$schema": "studio.chart/v1",
+      "kind": "H-09",
+      "style": "gallery",
+      "data": {
+        "shape": "sets",
+        "sets": [
+          {
+            "name": "OSINT",
+            "size": 53
+          },
+          {
+            "name": "Forensik",
+            "size": 40
+          }
+        ],
+        "overlaps": [
+          {
+            "sets": [
+              "OSINT",
+              "Forensik"
+            ],
+            "size": 12
+          }
+        ]
+      },
+      "params": {
+        "accentSet": "Forensik",
+        "regionLabels": "eksklusif"
+      },
+      "dec": 0,
+      "heightMm": 44.01,
+      "title": "Panel uji H-09 dari galeri bm-fig-18.",
+      "source": "Salinan panel galeri S94 bm-fig-18 (uji unit S73).",
+      "widthMm": 128
+    },
+    "K-05": {
+      "$schema": "studio.chart/v1",
+      "kind": "K-05",
+      "style": "gallery",
+      "data": {
+        "shape": "categorical",
+        "points": [
+          {
+            "label": "pemerintah",
+            "value": 68,
+            "accent": true
+          },
+          {
+            "label": "swasta",
+            "value": 22
+          },
+          {
+            "label": "lainnya",
+            "value": 10
+          }
+        ]
+      },
+      "params": {
+        "chart.kind.K-05.startAngle": 0,
+        "chart.kind.K-05.clockwise": true
+      },
+      "unit": "%",
+      "dec": 0,
+      "heightMm": 44,
+      "title": "Panel uji K-05 dari galeri bm-fig-19.",
+      "source": "Salinan panel galeri S94 bm-fig-19 (uji unit S73).",
+      "widthMm": 128
+    },
+    "K-06": {
+      "$schema": "studio.chart/v1",
+      "kind": "K-06",
+      "style": "gallery",
+      "data": {
+        "shape": "categorical",
+        "points": [
+          {
+            "label": "Bagian A",
+            "value": 58,
+            "accent": true
+          },
+          {
+            "label": "Bagian B",
+            "value": 20
+          },
+          {
+            "label": "Bagian C",
+            "value": 12
+          },
+          {
+            "label": "Bagian D",
+            "value": 10
+          }
+        ]
+      },
+      "params": {
+        "chart.kind.K-06.oneDominant": true
+      },
+      "unit": "%",
+      "dec": 0,
+      "heightMm": 44,
+      "title": "Panel uji K-06 dari galeri bm-fig-19.",
+      "source": "Salinan panel galeri S94 bm-fig-19 (uji unit S73).",
+      "widthMm": 128
+    },
+    "K-08": {
+      "$schema": "studio.chart/v1",
+      "kind": "K-08",
+      "style": "gallery",
+      "data": {
+        "shape": "categorical",
+        "points": [
+          {
+            "label": "petugas tersorot",
+            "value": 3,
+            "accent": true
+          },
+          {
+            "label": "petugas lain",
+            "value": 7
+          }
+        ]
+      },
+      "params": {
+        "chart.kind.K-08.grid": [
+          2,
+          5
+        ],
+        "chart.kind.K-08.icon": "orang",
+        "chart.kind.K-08.caption": "3 dari 10 petugas"
+      },
+      "dec": 0,
+      "heightMm": 44,
+      "title": "Panel uji K-08 dari galeri bm-fig-19.",
+      "source": "Salinan panel galeri S94 bm-fig-19 (uji unit S73).",
+      "widthMm": 128
+    },
+    "K-11": {
+      "$schema": "studio.chart/v1",
+      "kind": "K-11",
+      "style": "gallery",
+      "data": {
+        "shape": "graph",
+        "nodes": [
+          {
+            "id": "rab",
+            "label": "RAB",
+            "value": 100
+          },
+          {
+            "id": "jasa",
+            "label": "Jasa",
+            "value": 16
+          },
+          {
+            "id": "sipil",
+            "label": "Sipil",
+            "value": 30
+          },
+          {
+            "id": "perangkat",
+            "label": "Perangkat",
+            "value": 50
+          }
+        ],
+        "links": [
+          {
+            "from": "rab",
+            "to": "jasa",
+            "value": 16
+          },
+          {
+            "from": "rab",
+            "to": "sipil",
+            "value": 30
+          },
+          {
+            "from": "rab",
+            "to": "perangkat",
+            "value": 50
+          }
+        ]
+      },
+      "params": {
+        "chart.kind.K-11.accentLink": [
+          "rab",
+          "perangkat"
+        ]
+      },
+      "dec": 0,
+      "heightMm": 44,
+      "title": "Panel uji K-11 dari galeri bm-fig-19.",
+      "source": "Salinan panel galeri S94 bm-fig-19 (uji unit S73).",
+      "widthMm": 128
+    },
+    "W-09": {
+      "$schema": "studio.chart/v1",
+      "kind": "W-09",
+      "style": "gallery",
+      "data": {
+        "shape": "series",
+        "categories": [
+          "0",
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9",
+          "10",
+          "11",
+          "12",
+          "13",
+          "14",
+          "15",
+          "16",
+          "17",
+          "18",
+          "19",
+          "20",
+          "21",
+          "22",
+          "23",
+          "24",
+          "25",
+          "26",
+          "27",
+          "28",
+          "29",
+          "30",
+          "31",
+          "32",
+          "33",
+          "34",
+          "35",
+          "36",
+          "37",
+          "38",
+          "39",
+          "40",
+          "41",
+          "42",
+          "43",
+          "44",
+          "45",
+          "46",
+          "47"
+        ],
+        "series": [
+          {
+            "name": "S-01",
+            "values": [
+              0,
+              0,
+              0.29,
+              0.36,
+              0.8,
+              0.48,
+              0.64,
+              0.68,
+              0.39,
+              0.42,
+              0.58,
+              0.26,
+              0.04,
+              0,
+              -0.45,
+              -0.52,
+              -0.39,
+              -0.71,
+              -0.48,
+              -0.68,
+              -0.58,
+              -0.55,
+              -0.39,
+              -0.17,
+              -0.17,
+              0,
+              0.42,
+              0.42,
+              0.45,
+              0.48,
+              0.45,
+              0.64,
+              0.55,
+              0.64,
+              0.42,
+              0.36,
+              -0.01,
+              0.07,
+              0.07,
+              -0.39,
+              -0.83,
+              -0.52,
+              -0.39,
+              -0.71,
+              -0.68,
+              -0.61,
+              -0.32,
+              -0.45
+            ]
+          },
+          {
+            "name": "S-02",
+            "values": [
+              0.63,
+              0.75,
+              0.53,
+              0.59,
+              0.66,
+              0.56,
+              0.4,
+              0.08,
+              -0.12,
+              -0.08,
+              -0.21,
+              -0.34,
+              -0.63,
+              -0.82,
+              -0.82,
+              -0.59,
+              -0.72,
+              -0.47,
+              -0.5,
+              -0.4,
+              0.08,
+              0.05,
+              0.28,
+              0.43,
+              0.47,
+              0.63,
+              0.66,
+              0.69,
+              0.5,
+              0.53,
+              0.18,
+              0.21,
+              0.31,
+              0.21,
+              -0.24,
+              -0.12,
+              -0.43,
+              -0.66,
+              -0.79,
+              -0.82,
+              -0.98,
+              -0.72,
+              -0.66,
+              -0.53,
+              -0.47,
+              -0.15,
+              0.4,
+              0.24
+            ]
+          },
+          {
+            "name": "S-03",
+            "values": [
+              0.58,
+              0.48,
+              0.03,
+              0.29,
+              -0.1,
+              -0.07,
+              -0.45,
+              -0.39,
+              -0.45,
+              -0.67,
+              -0.8,
+              -0.61,
+              -0.48,
+              -0.29,
+              -0.39,
+              -0.1,
+              -0.16,
+              -0.16,
+              0.23,
+              0.26,
+              0.45,
+              0.74,
+              0.61,
+              0.48,
+              0.83,
+              0.74,
+              0.64,
+              0.13,
+              0.07,
+              -0.16,
+              -0.29,
+              -0.48,
+              -0.51,
+              -0.77,
+              -0.64,
+              -0.74,
+              -0.83,
+              -0.7,
+              -0.1,
+              -0.54,
+              -0.51,
+              -0.1,
+              0.23,
+              0.26,
+              0.29,
+              0.35,
+              0.54,
+              0.39
+            ]
+          },
+          {
+            "name": "S-04",
+            "values": [
+              0.08,
+              -0.24,
+              -0.4,
+              -0.34,
+              -0.59,
+              -0.53,
+              -0.59,
+              -0.5,
+              -0.34,
+              -0.72,
+              -0.34,
+              -0.08,
+              0.34,
+              -0.37,
+              0.21,
+              0.14,
+              0.46,
+              0.75,
+              0.72,
+              0.72,
+              0.78,
+              0.53,
+              0.46,
+              0.11,
+              0.27,
+              0.05,
+              -0.37,
+              -0.59,
+              -1.91,
+              -2.07,
+              -2.07,
+              -2.07,
+              -2.07,
+              -2.07,
+              -0.24,
+              -0.37,
+              -0.56,
+              0.11,
+              0.24,
+              -0.08,
+              0.59,
+              0.18,
+              0.81,
+              0.72,
+              0.62,
+              0.65,
+              0.69,
+              0.5
+            ]
+          },
+          {
+            "name": "S-05",
+            "values": [
+              -0.38,
+              -1.02,
+              -0.41,
+              -0.83,
+              -0.51,
+              -0.35,
+              -0.7,
+              -0.25,
+              0,
+              -0.45,
+              0.19,
+              0.54,
+              0.38,
+              0.96,
+              0.92,
+              0.57,
+              0.83,
+              0.54,
+              0.61,
+              0.38,
+              0.13,
+              0.06,
+              -0.45,
+              -0.41,
+              -0.32,
+              -0.45,
+              -0.41,
+              -0.76,
+              -0.51,
+              -0.7,
+              -0.32,
+              -0.29,
+              -0.22,
+              0.09,
+              0.25,
+              0.16,
+              0.48,
+              0.57,
+              0.76,
+              0.8,
+              0.73,
+              0.8,
+              0.67,
+              0.57,
+              0.51,
+              0.25,
+              -0.19,
+              -0.13
+            ]
+          },
+          {
+            "name": "S-06",
+            "values": [
+              -0.75,
+              -0.2,
+              -0.56,
+              -0.46,
+              -0.27,
+              -0.14,
+              -0.05,
+              -0.08,
+              0.46,
+              0.2,
+              0.81,
+              0.65,
+              0.94,
+              0.68,
+              0.43,
+              0.27,
+              0.11,
+              -0.27,
+              0.08,
+              -0.3,
+              -0.46,
+              -0.3,
+              -0.94,
+              -0.56,
+              -0.59,
+              -0.43,
+              -0.52,
+              -0.52,
+              -0.65,
+              -0.2,
+              0.43,
+              0.24,
+              0.36,
+              0.56,
+              0.52,
+              0.68,
+              0.59,
+              0.56,
+              0.59,
+              0.4,
+              0.36,
+              0.2,
+              0,
+              -0.17,
+              0.2,
+              -0.36,
+              -0.14,
+              -0.43
+            ]
+          }
+        ]
+      },
+      "params": {
+        "chart.kind.W-09.bands": 2,
+        "chart.kind.W-09.fold": true,
+        "chart.kind.W-09.subtractBaseline": true,
+        "chart.kind.W-09.bandLegend": false
+      },
+      "heightMm": 44,
+      "title": "Panel uji W-09 dari galeri bm-fig-20.",
+      "source": "Salinan panel galeri S94 bm-fig-20 (uji unit S73).",
+      "widthMm": 128
+    },
+    "W-10": {
+      "$schema": "studio.chart/v1",
+      "kind": "W-10",
+      "style": "gallery",
+      "data": {
+        "shape": "ohlc",
+        "points": [
+          {
+            "t": "1",
+            "o": 99.9,
+            "h": 102.7,
+            "l": 98.9,
+            "c": 102.2
+          },
+          {
+            "t": "2",
+            "o": 101.9,
+            "h": 104.8,
+            "l": 100.6,
+            "c": 103.7
+          },
+          {
+            "t": "3",
+            "o": 103.4,
+            "h": 105.7,
+            "l": 102.4,
+            "c": 104.6
+          },
+          {
+            "t": "4",
+            "o": 104.6,
+            "h": 106.3,
+            "l": 102,
+            "c": 103
+          },
+          {
+            "t": "5",
+            "o": 103,
+            "h": 104.2,
+            "l": 101.8,
+            "c": 103.5
+          },
+          {
+            "t": "6",
+            "o": 103.5,
+            "h": 105.1,
+            "l": 101.9,
+            "c": 102.9
+          },
+          {
+            "t": "7",
+            "o": 103.2,
+            "h": 103.9,
+            "l": 100.9,
+            "c": 102.7
+          },
+          {
+            "t": "8",
+            "o": 102.7,
+            "h": 105.9,
+            "l": 100.8,
+            "c": 105
+          },
+          {
+            "t": "9",
+            "o": 104.7,
+            "h": 107.4,
+            "l": 104,
+            "c": 106.5
+          },
+          {
+            "t": "10",
+            "o": 106.3,
+            "h": 107.6,
+            "l": 104.6,
+            "c": 106.8
+          },
+          {
+            "t": "11",
+            "o": 106.8,
+            "h": 108.5,
+            "l": 102.9,
+            "c": 104.9
+          },
+          {
+            "t": "12",
+            "o": 104.9,
+            "h": 112.1,
+            "l": 103.9,
+            "c": 111.2
+          },
+          {
+            "t": "13",
+            "o": 111,
+            "h": 115.4,
+            "l": 109.2,
+            "c": 114.1
+          },
+          {
+            "t": "14",
+            "o": 114.1,
+            "h": 114.8,
+            "l": 108.8,
+            "c": 110.3
+          }
+        ]
+      },
+      "heightMm": 44,
+      "title": "Panel uji W-10 dari galeri bm-fig-20.",
+      "source": "Salinan panel galeri S94 bm-fig-20 (uji unit S73).",
+      "widthMm": 128
+    },
+    "S-07": {
+      "$schema": "studio.chart/v1",
+      "kind": "S-07",
+      "style": "gallery",
+      "data": {
+        "shape": "distribution",
+        "groups": [
+          {
+            "name": "Tim 1",
+            "values": [
+              10.4,
+              10.5,
+              13.8,
+              14.3,
+              15,
+              15.4,
+              15.4,
+              15.9,
+              15.9,
+              16.2,
+              16.3,
+              16.5,
+              16.7,
+              17.1,
+              17.1,
+              17.4,
+              17.9,
+              18.5,
+              18.7,
+              18.7,
+              19.2,
+              19.4,
+              20.3,
+              20.5,
+              20.6,
+              20.9,
+              20.9,
+              21,
+              21.5,
+              21.8,
+              21.8,
+              22.7,
+              23.3,
+              24.8,
+              25.1,
+              25.3,
+              25.4,
+              26.5,
+              26.5,
+              26.8,
+              27.2,
+              27.2,
+              29.8,
+              31.1,
+              31.2
+            ]
+          },
+          {
+            "name": "Tim 2",
+            "values": [
+              6.6,
+              9.7,
+              9.8,
+              10.4,
+              11.3,
+              11.7,
+              12.1,
+              12.1,
+              12.2,
+              12.6,
+              13.9,
+              15.1,
+              15.2,
+              15.8,
+              17,
+              17.1,
+              17.2,
+              17.3,
+              17.3,
+              18,
+              18.4,
+              18.5,
+              18.6,
+              19.2,
+              19.7,
+              19.9,
+              20,
+              20.4,
+              21.3,
+              23,
+              23.3,
+              23.6,
+              23.9,
+              24.2,
+              24.8,
+              25.4,
+              25.4,
+              26.6,
+              26.9,
+              26.9,
+              29.1,
+              29.7,
+              30.3,
+              34.5
+            ]
+          },
+          {
+            "name": "Tim 3",
+            "values": [
+              2.3,
+              3.5,
+              4.6,
+              4.7,
+              4.9,
+              5.3,
+              8.4,
+              11.3,
+              12.5,
+              13.2,
+              13.7,
+              14.5,
+              14.9,
+              17,
+              17.8,
+              19,
+              19.1,
+              19.3,
+              20.3,
+              20.6,
+              20.6,
+              21.5,
+              22.6,
+              22.7,
+              23.3,
+              23.8,
+              24.4,
+              25.1,
+              25.1,
+              25.3,
+              26.3,
+              26.3,
+              27,
+              28,
+              29.7,
+              31.6,
+              32.1,
+              32.9,
+              33.4,
+              33.7,
+              36,
+              38.1,
+              38.4,
+              41.5
+            ]
+          }
+        ]
+      },
+      "params": {
+        "accentGroup": "Tim 3",
+        "chart.kind.S-07.columnPerGroup": true,
+        "chart.kind.S-07.medianMarker": false
+      },
+      "heightMm": 44,
+      "title": "Panel uji S-07 dari galeri bm-fig-21.",
+      "source": "Salinan panel galeri S94 bm-fig-21 (uji unit S73).",
+      "widthMm": 128
+    },
+    "S-08": {
+      "$schema": "studio.chart/v1",
+      "kind": "S-08",
+      "style": "gallery",
+      "data": {
+        "shape": "distribution",
+        "groups": [
+          {
+            "name": "arah",
+            "values": [
+              5,
+              5,
+              5,
+              5,
+              5,
+              5,
+              15,
+              15,
+              15,
+              15,
+              15,
+              15,
+              25,
+              25,
+              35,
+              35,
+              35,
+              45,
+              45,
+              45,
+              45,
+              45,
+              45,
+              45,
+              45,
+              45,
+              45,
+              45,
+              45,
+              45,
+              45,
+              45,
+              45,
+              55,
+              55,
+              55,
+              55,
+              55,
+              55,
+              55,
+              55,
+              55,
+              55,
+              55,
+              65,
+              65,
+              65,
+              65,
+              65,
+              65,
+              65,
+              65,
+              65,
+              65,
+              65,
+              75,
+              75,
+              75,
+              75,
+              75,
+              75,
+              75,
+              75,
+              75,
+              75,
+              75,
+              75,
+              75,
+              75,
+              75,
+              75,
+              75,
+              75,
+              75,
+              85,
+              85,
+              85,
+              85,
+              95,
+              95,
+              95,
+              95,
+              105,
+              105,
+              105,
+              105,
+              105,
+              115,
+              115,
+              115,
+              115,
+              115,
+              115,
+              115,
+              115,
+              115,
+              125,
+              125,
+              125,
+              125,
+              125,
+              125,
+              125,
+              125,
+              125,
+              135,
+              135,
+              135,
+              135,
+              135,
+              135,
+              135,
+              135,
+              135,
+              145,
+              145,
+              145,
+              145,
+              145,
+              145,
+              145,
+              155,
+              155,
+              155,
+              155,
+              155,
+              155,
+              155,
+              165,
+              165,
+              165,
+              165,
+              165,
+              165,
+              165,
+              165,
+              175,
+              175,
+              175,
+              175,
+              175,
+              185,
+              185,
+              185,
+              185,
+              185,
+              195,
+              195,
+              195,
+              195,
+              205,
+              205,
+              205,
+              205,
+              205,
+              205,
+              205,
+              215,
+              215,
+              215,
+              215,
+              215,
+              215,
+              215,
+              225,
+              225,
+              225,
+              225,
+              225,
+              225,
+              235,
+              235,
+              235,
+              235,
+              235,
+              245,
+              245,
+              245,
+              245,
+              245,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              265,
+              265,
+              265,
+              265,
+              265,
+              275,
+              275,
+              275,
+              275,
+              275,
+              285,
+              285,
+              285,
+              285,
+              285,
+              285,
+              285,
+              285,
+              285,
+              285,
+              295,
+              295,
+              295,
+              295,
+              295,
+              295,
+              295,
+              295,
+              295,
+              295,
+              305,
+              305,
+              305,
+              305,
+              305,
+              305,
+              305,
+              305,
+              305,
+              305,
+              315,
+              315,
+              315,
+              315,
+              315,
+              315,
+              325,
+              325,
+              325,
+              325,
+              325,
+              325,
+              335,
+              335,
+              335,
+              335,
+              335,
+              335,
+              345,
+              345,
+              345,
+              345,
+              345,
+              345,
+              355,
+              355,
+              355,
+              355,
+              355
+            ]
+          }
+        ]
+      },
+      "params": {
+        "sectors": 36,
+        "chart.kind.S-08.northUp": true,
+        "chart.kind.S-08.clockwise": true,
+        "chart.kind.S-08.uniformSectors": true,
+        "compassLabels": [
+          "U",
+          "T",
+          "S",
+          "B"
+        ],
+        "accentSectorDeg": 75
+      },
+      "unit": "derajat",
+      "heightMm": 44,
+      "title": "Panel uji S-08 dari galeri bm-fig-21.",
+      "source": "Salinan panel galeri S94 bm-fig-21 (uji unit S73).",
+      "widthMm": 128
+    },
+    "G-02": {
+      "$schema": "studio.chart/v1",
+      "kind": "G-02",
+      "style": "gallery",
+      "data": {
+        "shape": "tiles",
+        "tiles": [
+          {
+            "code": "WIL",
+            "row": 0,
+            "col": 0,
+            "label": "wilayah ilustrasi"
+          }
+        ],
+        "dots": [
+          {
+            "tile": "WIL",
+            "dx": 0.06,
+            "dy": 0.64
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.06,
+            "dy": 0.87
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.08,
+            "dy": 0.56
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.11,
+            "dy": 0.44
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.13,
+            "dy": 0.38
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.13,
+            "dy": 0.25
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.16,
+            "dy": 0.38
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.16,
+            "dy": 0.54
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.16,
+            "dy": 0.57
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.16,
+            "dy": 0.6
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.18,
+            "dy": 0.38
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.18,
+            "dy": 0.63
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.18,
+            "dy": 0.4
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.18,
+            "dy": 0.43
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.2,
+            "dy": 0.51
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.21,
+            "dy": 0.66
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.21,
+            "dy": 0.79
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.21,
+            "dy": 0.59
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.22,
+            "dy": 0.36
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.23,
+            "dy": 0.42
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.23,
+            "dy": 0.44
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.23,
+            "dy": 0.47
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.23,
+            "dy": 0.49
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.23,
+            "dy": 0.52
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.24,
+            "dy": 0.36
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.25,
+            "dy": 0.52
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.25,
+            "dy": 0.61
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.26,
+            "dy": 0.4
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.26,
+            "dy": 0.36
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.27,
+            "dy": 0.4
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.28,
+            "dy": 0.46
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.28,
+            "dy": 0.49
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.28,
+            "dy": 0.51
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.29,
+            "dy": 0.4
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.3,
+            "dy": 0.32
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.3,
+            "dy": 0.58
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.3,
+            "dy": 0.71
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.31,
+            "dy": 0.43
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.31,
+            "dy": 0.32
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.31,
+            "dy": 0.36
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.33,
+            "dy": 0.51
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.33,
+            "dy": 0.43
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.33,
+            "dy": 0.4
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.36,
+            "dy": 0.4
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.36,
+            "dy": 0.66
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.39,
+            "dy": 0.65
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.41,
+            "dy": 0.56
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.43,
+            "dy": 0.6
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.44,
+            "dy": 0.57
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.46,
+            "dy": 0.88
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.47,
+            "dy": 0.56
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.49,
+            "dy": 0.34
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.5,
+            "dy": 0.57
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.5,
+            "dy": 0.59
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.5,
+            "dy": 0.62
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.5,
+            "dy": 0.65
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.53,
+            "dy": 0.5
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.54,
+            "dy": 0.59
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.55,
+            "dy": 0.46
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.55,
+            "dy": 0.65
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.56,
+            "dy": 0.41
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.56,
+            "dy": 0.52
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.56,
+            "dy": 0.65
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.58,
+            "dy": 0.65
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.58,
+            "dy": 0.56
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.58,
+            "dy": 0.6
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.59,
+            "dy": 0.42
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.61,
+            "dy": 0.73
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.63,
+            "dy": 0.49
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.64,
+            "dy": 0.56
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.65,
+            "dy": 0.23
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.65,
+            "dy": 0.68
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.67,
+            "dy": 0.13
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.75,
+            "dy": 0.36
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.76,
+            "dy": 0.26
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.77,
+            "dy": 0.45
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.78,
+            "dy": 0.42
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.8,
+            "dy": 0.42
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.83,
+            "dy": 0.39
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.84,
+            "dy": 0.23
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.91,
+            "dy": 0.2
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.91,
+            "dy": 0.31
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.91,
+            "dy": 0.41
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.92,
+            "dy": 0.27
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.95,
+            "dy": 0.38
+          },
+          {
+            "tile": "WIL",
+            "dx": 0.55,
+            "dy": 0.58,
+            "label": "sorot"
+          }
+        ]
+      },
+      "accent": {
+        "point": "sorot"
+      },
+      "heightMm": 44,
+      "title": "Panel uji G-02 dari galeri bm-fig-21.",
+      "source": "Salinan panel galeri S94 bm-fig-21 (uji unit S73).",
+      "widthMm": 128
+    },
+    "G-03": {
+      "$schema": "studio.chart/v1",
+      "kind": "G-03",
+      "style": "gallery",
+      "data": {
+        "shape": "tiles",
+        "tiles": [
+          {
+            "code": "MDN",
+            "row": 0,
+            "col": 0,
+            "label": "Medan"
+          },
+          {
+            "code": "JKT",
+            "row": 5,
+            "col": 1,
+            "label": "Jakarta"
+          },
+          {
+            "code": "SBY",
+            "row": 6,
+            "col": 4,
+            "label": "Surabaya"
+          },
+          {
+            "code": "MKS",
+            "row": 3,
+            "col": 6,
+            "label": "Makassar"
+          },
+          {
+            "code": "JYP",
+            "row": 4,
+            "col": 9,
+            "label": "Jayapura"
+          }
+        ],
+        "flows": [
+          {
+            "from": "JKT",
+            "to": "MDN",
+            "value": 15
+          },
+          {
+            "from": "JKT",
+            "to": "SBY",
+            "value": 40
+          },
+          {
+            "from": "SBY",
+            "to": "MKS",
+            "value": 25
+          },
+          {
+            "from": "MKS",
+            "to": "JYP",
+            "value": 10
+          }
+        ]
+      },
+      "accent": {
+        "point": "JKT>SBY"
+      },
+      "heightMm": 44,
+      "title": "Panel uji G-03 dari galeri bm-fig-21.",
+      "source": "Salinan panel galeri S94 bm-fig-21 (uji unit S73).",
+      "widthMm": 128
+    }
+  }
+}

@@ -1,0 +1,77 @@
+{
+  "$schema": "studio.diagram/v1",
+  "family": "flow",
+  "id": "6.1",
+  "title": "Prosedur penanganan alarm suhu berakhir pada laporan penutupan.",
+  "classification": "BIASA",
+  "width_mm": 128,
+  "apparatus": "page",
+  "labels_verified": true,
+  "sources": [
+    "Contoh ilustratif korpus paritas S63, prosedur alarm"
+  ],
+  "nodes": [
+    {
+      "id": "mulai",
+      "label": "Alarm diterima",
+      "shape": "stadium",
+      "class": {
+        "row": 0
+      }
+    },
+    {
+      "id": "baca",
+      "label": "Baca suhu terakhir",
+      "shape": "parallelogram",
+      "class": {
+        "row": 1
+      }
+    },
+    {
+      "id": "cek",
+      "label": "Di atas batas?",
+      "shape": "diamond",
+      "class": {
+        "row": 2
+      }
+    },
+    {
+      "id": "selesai",
+      "label": "Laporan penutupan",
+      "shape": "stadium",
+      "class": {
+        "row": 3
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": "mulai",
+      "to": "baca",
+      "kind": "data",
+      "label": "tiket"
+    },
+    {
+      "from": "baca",
+      "to": "cek",
+      "kind": "data",
+      "label": "nilai"
+    },
+    {
+      "from": "cek",
+      "to": "selesai",
+      "kind": "control",
+      "label": "Ya, kirim teknisi"
+    },
+    {
+      "from": "cek",
+      "to": "baca",
+      "kind": "control",
+      "label": "Tidak, pantau ulang"
+    }
+  ],
+  "legend": [
+    "solid data",
+    "dashed keputusan"
+  ]
+}

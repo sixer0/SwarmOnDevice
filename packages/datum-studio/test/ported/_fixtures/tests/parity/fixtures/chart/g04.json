@@ -1,0 +1,111 @@
+{
+  "$schema": "studio.chart/v1",
+  "kind": "G-04",
+  "title": "Tiket prioritas tinggi langsung dikirim ke teknisi.",
+  "source": "Data ilustratif korpus paritas S63 (sintetis, bukan data klien).",
+  "widthMm": 166,
+  "data": {
+    "shape": "steps",
+    "spec": {
+      "$schema": "studio.diagram/v1",
+      "family": "flow",
+      "id": "6.9",
+      "title": "Alur tiket gangguan dari penerimaan sampai penutupan.",
+      "classification": "BIASA",
+      "width_mm": 166,
+      "labels_verified": true,
+      "sources": [
+        "Data ilustratif korpus paritas S63 (sintetis, bukan data klien)."
+      ],
+      "nodes": [
+        {
+          "id": "s1",
+          "label": "Tiket masuk",
+          "shape": "box",
+          "class": {
+            "row": 0
+          }
+        },
+        {
+          "id": "s2",
+          "label": "Klasifikasi",
+          "shape": "box",
+          "class": {
+            "row": 1
+          }
+        },
+        {
+          "id": "s3",
+          "label": "Prioritas tinggi?",
+          "shape": "diamond",
+          "class": {
+            "row": 2
+          }
+        },
+        {
+          "id": "s4",
+          "label": "Kirim teknisi",
+          "shape": "box",
+          "class": {
+            "row": 3
+          }
+        },
+        {
+          "id": "s5",
+          "label": "Jadwalkan",
+          "shape": "box",
+          "class": {
+            "row": 3
+          }
+        },
+        {
+          "id": "s6",
+          "label": "Tutup tiket",
+          "shape": "box",
+          "class": {
+            "row": 4
+          }
+        }
+      ],
+      "edges": [
+        {
+          "from": "s1",
+          "to": "s2",
+          "kind": "data",
+          "label": "tiket"
+        },
+        {
+          "from": "s2",
+          "to": "s3",
+          "kind": "data",
+          "label": "kelas"
+        },
+        {
+          "from": "s3",
+          "to": "s4",
+          "kind": "control",
+          "label": "Ya"
+        },
+        {
+          "from": "s3",
+          "to": "s5",
+          "kind": "control",
+          "label": "Tidak"
+        },
+        {
+          "from": "s4",
+          "to": "s6",
+          "kind": "data",
+          "label": "berita acara"
+        },
+        {
+          "from": "s5",
+          "to": "s6",
+          "kind": "data",
+          "label": "log"
+        }
+      ]
+    }
+  },
+  "heightMm": 70
+}

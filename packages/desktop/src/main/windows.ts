@@ -16,6 +16,7 @@ import { nativeT } from "./native-translations"
 import { createWindowRegistry } from "./window-registry"
 import { safeWindowURL } from "./window-state"
 import { resolveExternalURL, resolveLocalFilePath } from "./external-url"
+import { mainWindowWebPreferences, wirePreviewFramePolicy } from "./preview-policy"
 
 const root = dirname(fileURLToPath(import.meta.url))
 const rendererRoot = join(root, "../renderer")
@@ -196,12 +197,8 @@ export function createMainWindow(id: string = randomUUID()) {
           titleBarOverlay: overlay({ mode }),
         }
       : {}),
-    webPreferences: {
-      preload: join(root, "../preload/index.js"),
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true,
-    },
+    // contextIsolation/nodeIntegration/sandbox as before, plus plugins for the file-tab PDF preview (row 112, P5).
+    webPreferences: mainWindowWebPreferences(join(root, "../preload/index.js")),
   })
 
   allowRendererPermissions(win)
@@ -265,6 +262,12 @@ function wireNavigationPolicy(win: BrowserWindow) {
     event.preventDefault()
     openExternalURL(url)
   })
+  // Sub-frames (the file-tab preview frames, row 112 P6) are not seen by will-navigate.
+  wirePreviewFramePolicy(
+    win.webContents,
+    (url) => isRendererUrl(url),
+    (message, data) => writeLog("window", message, data, "warn"),
+  )
 }
 
 function registerWindow(win: BrowserWindow, id: string) {

@@ -1,0 +1,25 @@
+--- seed-export/datum-gsp.json
++++ templates/datum-gsp.json
+@@ -207,5 +207,22 @@
+         }
+       }
+     ]
++  },
++  "advanced": {
++    "cover.controlBlock.fields": [
++      "NOMOR DOKUMEN",
++      "REVISI",
++      "PENYUSUN",
++      "KUSTODIAN",
++      "DITUJUKAN KEPADA",
++      "HALAMAN",
++      "DATUM GEODETIK",
++      "VERIFIKASI"
++    ],
++    "cover.controlBlock.preparerUnit": "Divisi Engineering PT GSP",
++    "cover.title.maxWidthMm": 150,
++    "controlSheet.subtitle.enabled": true,
++    "controlSheet.signatures.fillRoles": true,
++    "controlSheet.columns.form": "manual"
+   }
+ }

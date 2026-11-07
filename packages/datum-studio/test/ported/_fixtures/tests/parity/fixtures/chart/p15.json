@@ -1,0 +1,51 @@
+{
+  "$schema": "studio.chart/v1",
+  "kind": "P-15",
+  "title": "Lokasi 3 dan 5 belum memenuhi sasaran ketersediaan.",
+  "source": "Data ilustratif korpus paritas S63 (sintetis, bukan data klien).",
+  "widthMm": 128,
+  "data": {
+    "shape": "matrix",
+    "rows": [
+      "Lokasi 1",
+      "Lokasi 2",
+      "Lokasi 3",
+      "Lokasi 4",
+      "Lokasi 5"
+    ],
+    "cols": [
+      "Ketersediaan %",
+      "Titik aktif",
+      "Tiket terbuka"
+    ],
+    "values": [
+      [
+        98.4,
+        410,
+        2
+      ],
+      [
+        96.9,
+        231,
+        4
+      ],
+      [
+        92.1,
+        186,
+        9
+      ],
+      [
+        99.2,
+        305,
+        1
+      ],
+      [
+        89.7,
+        97,
+        12
+      ]
+    ]
+  },
+  "heightMm": 46,
+  "dec": 1
+}

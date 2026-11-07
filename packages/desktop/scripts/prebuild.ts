@@ -11,6 +11,8 @@ await $`bun ./scripts/copy-metainfo.ts ${channel}`
 if (process.platform === "darwin") await $`bun ./scripts/check-setup-stage.ts`
 // C120: the same gate for the swarm command slot (bun ./scripts/stage-cli.ts).
 if (process.platform === "darwin") await $`bun ./scripts/check-cli-stage.ts`
+// Row 45 (packaging spec §3.1): the same gate for the three DATUM folders (skill copy, runtime and Studio stages).
+if (process.platform === "darwin") await $`bun ./scripts/check-datum-stage.ts stage`
 
 await $`cd ../opencode && bun script/build-node.ts`
 if (channel === "dev") await downloadCliToResources()

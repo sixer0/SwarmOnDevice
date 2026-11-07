@@ -5,6 +5,7 @@ import { createMainWindow, updateTitlebar } from "./windows"
 export type DesktopMenuActionHandlers = Partial<{
   checkForUpdates: () => void
   installCli: () => void
+  installDatumStudio: () => void
   relaunch: () => void
   updateFromFile: () => void
   undoLastUpdate: () => void
@@ -21,6 +22,9 @@ export function runDesktopMenuAction(
       return
     case "app.installCli":
       handlers.installCli?.()
+      return
+    case "app.installDatumStudio":
+      handlers.installDatumStudio?.()
       return
     case "app.relaunch":
       handlers.relaunch?.()

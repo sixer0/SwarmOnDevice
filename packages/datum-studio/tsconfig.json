@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "@tsconfig/bun/tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "types": ["bun"],
+    "noUncheckedIndexedAccess": false,
+    "verbatimModuleSyntax": false,
+    "isolatedModules": true,
+    "resolveJsonModule": true,
+    "paths": {
+      "@/*": ["./vendor/src/*"]
+    }
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts", "vendor/src/**/*.ts", "vendor/scripts/**/*.ts"],
+  "exclude": ["node_modules", "vendor/prisma/**", "vendor/scripts/parity/**"]
+}

@@ -18,6 +18,8 @@ type Deps = {
   trigger: (id: string) => void
   checkForUpdates: () => void
   installCli: () => void
+  // Install DATUM Studio for Claude (rows 34/34b). Optional so menu tests built before it keep their deps shape.
+  installDatumStudio?: () => void
   relaunch: () => void
   updateFromFile: () => void
   undoLastUpdate: () => void
@@ -63,6 +65,7 @@ function nativeItem(entry: DesktopMenuEntry, deps: Deps, patchEnabled: boolean):
       runDesktopMenuAction(BrowserWindow.getFocusedWindow(), action, {
         checkForUpdates: deps.checkForUpdates,
         installCli: deps.installCli,
+        installDatumStudio: deps.installDatumStudio,
         relaunch: deps.relaunch,
         updateFromFile: deps.updateFromFile,
         undoLastUpdate: deps.undoLastUpdate,

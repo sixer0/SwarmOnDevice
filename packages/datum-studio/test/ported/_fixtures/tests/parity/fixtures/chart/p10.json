@@ -1,0 +1,35 @@
+{
+  "$schema": "studio.chart/v1",
+  "kind": "P-10",
+  "title": "Diskon volume menurunkan total biaya proyek.",
+  "source": "Data ilustratif korpus paritas S63 (sintetis, bukan data klien).",
+  "widthMm": 166,
+  "data": {
+    "shape": "categorical",
+    "points": [
+      {
+        "label": "Perangkat",
+        "value": 405.5
+      },
+      {
+        "label": "Instalasi",
+        "value": 136
+      },
+      {
+        "label": "Konfigurasi",
+        "value": 92.4
+      },
+      {
+        "label": "Lisensi",
+        "value": 52
+      },
+      {
+        "label": "Diskon",
+        "value": -21.5
+      }
+    ]
+  },
+  "heightMm": 62,
+  "unit": "juta rupiah",
+  "dec": 1
+}

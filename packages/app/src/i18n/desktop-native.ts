@@ -369,6 +369,16 @@ export const DESKTOP_NATIVE_ENGLISH = {
     "Swarm, the swarm command or the tools installer was still running, so nothing was changed. Close them and try again.",
   "desktop.patch.result.recover.detail":
     "The update stopped partway. Run this command in Terminal to finish it:\n{{command}}",
+  // Install DATUM Studio for Claude (1.2.0 rows 34/34b). Appended for the same positional reason as above.
+  "desktop.menu.installDatumStudio": "Install DATUM Studio for Claude...",
+  "desktop.datumStudio.confirm.message": "Install the datum-studio command for Claude?",
+  "desktop.datumStudio.confirm.detail":
+    "Swarm will create {{path}}, a link to DATUM Studio inside this app. Claude Code can then use DATUM Studio as an MCP server while Swarm is open. No Claude settings are changed.",
+  "desktop.datumStudio.done.message": "The datum-studio command is installed",
+  "desktop.datumStudio.done.detail": "{{path}}\n\nTo add it to Claude Code, run this line in Terminal:\n{{claude}}",
+  "desktop.datumStudio.done.pathHint":
+    "{{path}}\n\n{{dir}} is not on your PATH yet. Add this line to your shell profile:\nexport PATH=\"{{dir}}:$PATH\"\n\nTo add it to Claude Code, run this line in Terminal:\n{{claude}}",
+  "desktop.datumStudio.failed.message": "DATUM Studio could not be installed for Claude",
 } as const
 
 export type DesktopNativeKey = keyof typeof DESKTOP_NATIVE_ENGLISH

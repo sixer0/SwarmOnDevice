@@ -1,0 +1,21 @@
+{
+  "$schema": "studio.chart/v1",
+  "kind": "P-09",
+  "title": "Ketepatan waktu penyelesaian tiket masih di bawah sasaran.",
+  "source": "Data ilustratif korpus paritas S63 (sintetis, bukan data klien).",
+  "widthMm": 128,
+  "data": {
+    "shape": "categorical",
+    "points": [
+      {
+        "label": "Ketepatan waktu Q3",
+        "value": 74
+      }
+    ]
+  },
+  "heightMm": 30,
+  "unit": "%",
+  "dec": 0,
+  "limit": 85,
+  "limitLabel": "Sasaran 85 %"
+}

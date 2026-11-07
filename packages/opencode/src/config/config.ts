@@ -35,6 +35,7 @@ import { ConfigPaths } from "./paths"
 import { ConfigPlugin } from "./plugin"
 import { ConfigVariable } from "./variable"
 import { ConfigV2Compat } from "./v2-compat"
+import { DatumStudioMcp } from "../mcp/datum-studio"
 import { withTransientReadRetry } from "@/util/effect-http-client"
 
 // Custom merge function that concatenates array fields instead of replacing them
@@ -279,6 +280,14 @@ const layer = Layer.effect(
             .catch(() => {}),
         )
       }
+
+      // Row 33: the app's built-in MCP servers, below every global file (the user's own entry wins) and added only
+      // after the legacy write above, so no config file ever receives them. None outside the app's utility process.
+      const datumStudio = DatumStudioMcp.current()
+      if (datumStudio.kind === "failed")
+        yield* Effect.logWarning("built-in datum-studio MCP entry left out", { code: datumStudio.code })
+      const builtinMcp = DatumStudioMcp.builtin(datumStudio)
+      if (Object.keys(builtinMcp).length) result = mergeConfig({ mcp: builtinMcp } as Info, result)
 
       return result
     })

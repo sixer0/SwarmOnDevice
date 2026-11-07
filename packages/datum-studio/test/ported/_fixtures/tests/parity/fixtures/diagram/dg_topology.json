@@ -1,0 +1,117 @@
+{
+  "$schema": "studio.diagram/v1",
+  "family": "topology",
+  "id": "3.2",
+  "title": "Jaringan pemantauan menghubungkan sensor lantai ke server pusat lewat dua sakelar.",
+  "classification": "BIASA",
+  "width_mm": 166,
+  "apparatus": "page",
+  "labels_verified": true,
+  "sources": [
+    "Contoh ilustratif korpus paritas S63, topologi jaringan pemantauan"
+  ],
+  "nodes": [
+    {
+      "id": "srv",
+      "label": "Server pusat",
+      "sub": "2 unit",
+      "shape": "box",
+      "class": {
+        "tier": 0
+      }
+    },
+    {
+      "id": "arsip",
+      "label": "Arsip data",
+      "shape": "cylinder",
+      "class": {
+        "tier": 0
+      }
+    },
+    {
+      "id": "swa",
+      "label": "Sakelar A",
+      "shape": "box",
+      "class": {
+        "tier": 1
+      }
+    },
+    {
+      "id": "swb",
+      "label": "Sakelar B",
+      "shape": "box",
+      "class": {
+        "tier": 1
+      }
+    },
+    {
+      "id": "s1",
+      "label": "Sensor lantai 1",
+      "shape": "circle",
+      "mark": "TERUKUR",
+      "class": {
+        "tier": 2
+      }
+    },
+    {
+      "id": "s2",
+      "label": "Sensor lantai 2",
+      "shape": "circle",
+      "class": {
+        "tier": 2
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": "srv",
+      "to": "arsip",
+      "kind": "sync",
+      "label": "replikasi harian"
+    },
+    {
+      "from": "swa",
+      "to": "srv",
+      "kind": "accent",
+      "label": "jalur utama"
+    },
+    {
+      "from": "swb",
+      "to": "srv",
+      "kind": "data",
+      "label": "jalur cadangan"
+    },
+    {
+      "from": "s1",
+      "to": "swa",
+      "kind": "data",
+      "label": "Ethernet"
+    },
+    {
+      "from": "s2",
+      "to": "swb",
+      "kind": "alert",
+      "label": "alarm suhu"
+    }
+  ],
+  "zones": [
+    {
+      "id": "z1",
+      "label": "Ruang server",
+      "members": [
+        "srv",
+        "arsip"
+      ]
+    }
+  ],
+  "legend": [
+    "solid data",
+    "dotted replikasi",
+    "longdash alarm",
+    "aksen jalur utama",
+    "TERUKUR"
+  ],
+  "notes": [
+    "Satu aksen per gambar."
+  ]
+}

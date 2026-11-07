@@ -7,6 +7,7 @@ export type DesktopMenuAction =
   | "app.updateFromFile"
   | "app.undoLastUpdate"
   | "app.installCli"
+  | "app.installDatumStudio"
   | "app.relaunch"
   | "edit.undo"
   | "edit.redo"
@@ -93,6 +94,7 @@ export const DESKTOP_MENU: DesktopMenu[] = [
       { type: "item", labelKey: "desktop.menu.undoLastUpdate", action: "app.undoLastUpdate", enabled: "patch" },
       { type: "item", labelKey: "desktop.menu.settings", command: "settings.open", accelerator: { macos: "Cmd+," } },
       { type: "item", labelKey: "desktop.menu.installCli", action: "app.installCli" },
+      { type: "item", labelKey: "desktop.menu.installDatumStudio", action: "app.installDatumStudio" },
       { type: "item", labelKey: "desktop.menu.reloadWebview", action: "view.reload" },
       { type: "item", labelKey: "desktop.menu.restart", action: "app.relaunch" },
       { type: "item", labelKey: "desktop.menu.exportLogs", command: "logs.export" },

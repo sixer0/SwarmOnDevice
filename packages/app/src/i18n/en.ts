@@ -598,6 +598,12 @@ export const dict = {
   "toast.file.loadFailed.title": "Failed to load file",
   "toast.file.listFailed.title": "Failed to list files",
 
+  "file.preview.showSource": "Show source",
+  "file.preview.showPreview": "Show preview",
+  "file.preview.companion": "Preview from {{file}}",
+  "file.preview.docxHint": "No preview for this document yet. Render pdf or html with studio_render, then it shows here.",
+  "file.preview.none": "No preview for this file type. Open it in its default app.",
+
   "toast.context.noLineSelection.title": "No line selection",
   "toast.context.noLineSelection.description": "Select a line range in a file tab first.",
 

@@ -1,0 +1,68 @@
+{
+  "$schema": "studio.diagram/v1",
+  "family": "rack",
+  "id": "8.1",
+  "title": "Elevasi rak 12U memuat perangkat jaringan dan catu daya.",
+  "classification": "BIASA",
+  "width_mm": 128,
+  "apparatus": "page",
+  "labels_verified": true,
+  "sources": [
+    "Contoh ilustratif korpus paritas S63, elevasi rak"
+  ],
+  "nodes": [
+    {
+      "id": "patch",
+      "label": "Panel tambal",
+      "u": 1,
+      "class": {
+        "row": 0
+      }
+    },
+    {
+      "id": "sw",
+      "label": "Sakelar 24 port",
+      "u": 1,
+      "class": {
+        "row": 1
+      }
+    },
+    {
+      "id": "srv",
+      "label": "Server pemantauan",
+      "sub": "2U",
+      "u": 2,
+      "class": {
+        "row": 2
+      }
+    },
+    {
+      "id": "nas",
+      "label": "Penyimpanan",
+      "u": 2,
+      "class": {
+        "row": 3
+      }
+    },
+    {
+      "id": "ups",
+      "label": "Catu daya cadangan",
+      "sub": "3U",
+      "u": 3,
+      "class": {
+        "row": 4
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": "sw",
+      "to": "srv",
+      "kind": "data",
+      "label": "uplink"
+    }
+  ],
+  "legend": [
+    "solid data"
+  ]
+}

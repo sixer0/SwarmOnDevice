@@ -1,0 +1,37 @@
+--- seed-export/datum-laporan-verifikasi-en.json
++++ templates/datum-laporan-verifikasi-en.json
+@@ -20,12 +20,12 @@
+     "cover.controlBlock.fields": [
+       "NOMOR DOKUMEN",
+       "REVISI",
+-      "KLASIFIKASI",
+       "PENYUSUN",
+       "KUSTODIAN",
+       "DITUJUKAN KEPADA",
+-      "TIER",
+-      "BAHASA"
++      "HALAMAN",
++      "DATUM GEODETIK",
++      "VERIFIKASI"
+     ],
+     "cover.controlBlock.preparerUnit": "Engineering Division, PT GSP",
+     "cover.title.maxWidthMm": 150,
+@@ -58,7 +58,17 @@
+     "render.rail.reserveColumn": true,
+     "render.rhythm.snapToBaseline": true,
+     "runningHead.ruleColour": "6E1420",
+-    "table.zebra.minRows": 1000
++    "table.zebra.minRows": 1000,
++    "controlSheet.distribution.defaults": {
++      "rows": [
++        [
++          "Master",
++          "Engineering Division, PT GSP (ENG-01)",
++          "Word and PDF, standards folder",
++          "No"
++        ]
++      ]
++    }
+   },
+   "roleFormats": {},
+   "skeleton": {

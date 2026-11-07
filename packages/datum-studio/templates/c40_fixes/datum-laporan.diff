@@ -1,0 +1,18 @@
+--- seed-export/datum-laporan.json
++++ templates/datum-laporan.json
+@@ -20,12 +20,12 @@
+     "cover.controlBlock.fields": [
+       "NOMOR DOKUMEN",
+       "REVISI",
+-      "KLASIFIKASI",
+       "PENYUSUN",
+       "KUSTODIAN",
+       "DITUJUKAN KEPADA",
+-      "TIER",
+-      "BAHASA"
++      "HALAMAN",
++      "DATUM GEODETIK",
++      "VERIFIKASI"
+     ],
+     "cover.controlBlock.preparerUnit": "Divisi Engineering PT GSP",
+     "cover.title.maxWidthMm": 150,

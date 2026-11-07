@@ -1,0 +1,92 @@
+{
+  "$schema": "studio.chart/v1",
+  "kind": "H-03",
+  "title": "Faktor kelembapan menjadi skor risiko tertinggi di semua lokasi.",
+  "source": "Data ilustratif korpus paritas S63 (sintetis, bukan data klien).",
+  "widthMm": 166,
+  "data": {
+    "shape": "matrix",
+    "rows": [
+      "Lokasi 1",
+      "Lokasi 2",
+      "Lokasi 3",
+      "Lokasi 4",
+      "Lokasi 5",
+      "Lokasi 6"
+    ],
+    "cols": [
+      "F1",
+      "F2",
+      "F3",
+      "F4",
+      "F5",
+      "F6",
+      "F7",
+      "F8"
+    ],
+    "values": [
+      [
+        29,
+        30,
+        74,
+        6,
+        80,
+        50,
+        51,
+        89
+      ],
+      [
+        43,
+        10,
+        48,
+        49,
+        49,
+        20,
+        72,
+        46
+      ],
+      [
+        41,
+        47,
+        34,
+        8,
+        14,
+        17,
+        36,
+        79
+      ],
+      [
+        56,
+        56,
+        72,
+        85,
+        42,
+        91,
+        44,
+        42
+      ],
+      [
+        23,
+        64,
+        61,
+        23,
+        78,
+        79,
+        12,
+        95
+      ],
+      [
+        66,
+        54,
+        56,
+        78,
+        76,
+        92,
+        92,
+        73
+      ]
+    ]
+  },
+  "heightMm": 72,
+  "dec": 0
+}

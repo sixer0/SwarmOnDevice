@@ -1,0 +1,78 @@
+{
+  "$schema": "studio.diagram/v1",
+  "family": "sequence",
+  "id": "7.1",
+  "title": "Urutan pesan pembacaan sensor dari pengumpul ke dasbor.",
+  "classification": "BIASA",
+  "width_mm": 166,
+  "apparatus": "page",
+  "labels_verified": true,
+  "sources": [
+    "Contoh ilustratif korpus paritas S63, urutan pesan"
+  ],
+  "nodes": [
+    {
+      "id": "sensor",
+      "label": "Sensor",
+      "shape": "box",
+      "class": {
+        "col": 0
+      }
+    },
+    {
+      "id": "kumpul",
+      "label": "Pengumpul",
+      "shape": "box",
+      "class": {
+        "col": 1
+      }
+    },
+    {
+      "id": "server",
+      "label": "Server",
+      "shape": "box",
+      "class": {
+        "col": 2
+      }
+    },
+    {
+      "id": "dasbor",
+      "label": "Dasbor",
+      "shape": "box",
+      "class": {
+        "col": 3
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": "kumpul",
+      "to": "sensor",
+      "kind": "control",
+      "label": "minta nilai"
+    },
+    {
+      "from": "sensor",
+      "to": "kumpul",
+      "kind": "data",
+      "label": "nilai suhu"
+    },
+    {
+      "from": "kumpul",
+      "to": "server",
+      "kind": "data",
+      "label": "paket 1 menit"
+    },
+    {
+      "from": "server",
+      "to": "dasbor",
+      "kind": "sync",
+      "label": "dorong pembaruan"
+    }
+  ],
+  "legend": [
+    "solid data",
+    "dashed permintaan",
+    "dotted pembaruan"
+  ]
+}

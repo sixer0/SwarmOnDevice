@@ -1,0 +1,1017 @@
+{
+  "$schema": "studio.doc/v2",
+  "template": {
+    "slug": "datum-kanonik",
+    "version": 1
+  },
+  "meta": {
+    "title": "Kajian pemantauan suhu ruang server",
+    "docNumber": "003/GSP/KT/X/2026",
+    "rev": "A",
+    "typeCode": "KT",
+    "tier": "TERBIT",
+    "classification": "TERBATAS",
+    "language": "ID",
+    "author": "Tim Infrastruktur",
+    "issueDate": "2026-10-20",
+    "custodian": "Kepala fasilitas",
+    "audience": "Manajemen operasi",
+    "basis": "Permintaan kajian internal",
+    "issueNumber": 1,
+    "copyControl": "Salinan terkendali 1 dari 3"
+  },
+  "sections": {
+    "cover": {
+      "type": "cover",
+      "tagline": {
+        "text": "KAJIAN TEKNIS"
+      },
+      "titleLines": [
+        {
+          "text": "Kajian pemantauan"
+        },
+        {
+          "text": "suhu ruang server"
+        }
+      ],
+      "standfirst": {
+        "text": "Dua ruang server melampaui batas suhu 27 C pada jam sibuk; kajian mengusulkan penambahan satu unit pendingin."
+      },
+      "scopeLine": {
+        "text": "Lingkup: ruang server lantai 2 dan 3, Juli sampai September 2026."
+      },
+      "addressLine": {
+        "text": "Kepada manajemen operasi"
+      },
+      "control": [
+        [
+          {
+            "text": "Nomor"
+          },
+          {
+            "text": "003/GSP/KT/X/2026"
+          },
+          {
+            "text": "Revisi"
+          },
+          {
+            "text": "A"
+          }
+        ],
+        [
+          {
+            "text": "Tanggal"
+          },
+          {
+            "text": "2026-10-20"
+          },
+          {
+            "text": "Klasifikasi"
+          },
+          {
+            "text": "TERBATAS"
+          }
+        ]
+      ],
+      "colophon": {
+        "left": {
+          "text": "Tim Infrastruktur"
+        },
+        "right": {
+          "text": "Oktober 2026"
+        }
+      },
+      "identityString": {
+        "text": "Kajian teknis oleh Tim Infrastruktur untuk manajemen operasi; jangkar terukur: puncak suhu 29,4 C."
+      }
+    },
+    "controlSheet": {
+      "type": "controlSheet",
+      "title": {
+        "text": "Kendali dokumen"
+      },
+      "revisionHistory": {
+        "type": "registerTable",
+        "columns": [
+          {
+            "role": "id"
+          },
+          {
+            "role": "text"
+          },
+          {
+            "role": "text"
+          },
+          {
+            "role": "text"
+          }
+        ],
+        "rows": [
+          {
+            "cells": [
+              {
+                "text": "Rev"
+              },
+              {
+                "text": "Tanggal"
+              },
+              {
+                "text": "Uraian"
+              },
+              {
+                "text": "Oleh"
+              }
+            ],
+            "kind": "header"
+          },
+          {
+            "cells": [
+              {
+                "text": "A"
+              },
+              {
+                "text": "2026-10-20"
+              },
+              {
+                "text": "Terbit pertama"
+              },
+              {
+                "text": "Tim Infrastruktur"
+              }
+            ]
+          }
+        ],
+        "preset": "revisionHistory"
+      },
+      "verificationChain": {
+        "type": "table",
+        "columns": [
+          {
+            "role": "text"
+          },
+          {
+            "role": "text"
+          },
+          {
+            "role": "text"
+          }
+        ],
+        "rows": [
+          {
+            "cells": [
+              {
+                "text": "Peran"
+              },
+              {
+                "text": "Nama jabatan"
+              },
+              {
+                "text": "Tanggal"
+              }
+            ],
+            "kind": "header"
+          },
+          {
+            "cells": [
+              {
+                "text": "Penyusun"
+              },
+              {
+                "text": "Analis infrastruktur"
+              },
+              {
+                "text": "2026-10-20"
+              }
+            ]
+          },
+          {
+            "cells": [
+              {
+                "text": "Pemeriksa"
+              },
+              {
+                "text": "Insinyur senior"
+              },
+              {
+                "text": "2026-10-20"
+              }
+            ]
+          }
+        ]
+      },
+      "distribution": {
+        "type": "registerTable",
+        "columns": [
+          {
+            "role": "id"
+          },
+          {
+            "role": "text"
+          },
+          {
+            "role": "text"
+          },
+          {
+            "role": "text"
+          }
+        ],
+        "rows": [
+          {
+            "cells": [
+              {
+                "text": "No"
+              },
+              {
+                "text": "Penerima"
+              },
+              {
+                "text": "Bentuk"
+              },
+              {
+                "text": "Salinan"
+              }
+            ],
+            "kind": "header"
+          },
+          {
+            "cells": [
+              {
+                "text": "1"
+              },
+              {
+                "text": "Manajemen operasi"
+              },
+              {
+                "text": "PDF"
+              },
+              {
+                "text": "1"
+              }
+            ]
+          },
+          {
+            "cells": [
+              {
+                "text": "2"
+              },
+              {
+                "text": "Kepala fasilitas"
+              },
+              {
+                "text": "Cetak"
+              },
+              {
+                "text": "1"
+              }
+            ]
+          }
+        ],
+        "preset": "distribution"
+      },
+      "methodStatement": {
+        "text": "Suhu dibaca sensor setiap menit, dirata-rata per jam, dan dibandingkan dengan batas 27 C."
+      }
+    },
+    "signature": {
+      "type": "signatureBlock",
+      "roles": [
+        {
+          "role": {
+            "text": "Disusun"
+          },
+          "holder": {
+            "text": "Penyusun laporan"
+          },
+          "date": {
+            "text": "2026-10-20"
+          }
+        },
+        {
+          "role": {
+            "text": "Diperiksa"
+          },
+          "holder": {
+            "text": "Pemeriksa teknis"
+          },
+          "date": {
+            "text": "2026-10-20"
+          }
+        },
+        {
+          "role": {
+            "text": "Disetujui"
+          },
+          "holder": {
+            "text": "Kepala fasilitas"
+          },
+          "date": {
+            "text": "2026-10-20"
+          }
+        }
+      ]
+    },
+    "toc": {
+      "type": "toc"
+    },
+    "content": {
+      "type": "chapter",
+      "parts": [
+        {
+          "id": "P1",
+          "title": {
+            "text": "Kondisi saat ini"
+          },
+          "lede": {
+            "text": "Data suhu dan tata letak ruang server."
+          }
+        },
+        {
+          "id": "P2",
+          "title": {
+            "text": "Usulan"
+          }
+        }
+      ],
+      "chapters": [
+        {
+          "key": "1",
+          "title": {
+            "text": "Data suhu"
+          },
+          "sections": [
+            {
+              "title": {
+                "text": "Pengukuran"
+              },
+              "blocks": [
+                {
+                  "type": "paragraph",
+                  "text": "Suhu rata-rata jam sibuk ruang lantai 3 mencapai 28,6 C.",
+                  "rail": [
+                    {
+                      "kind": "mark",
+                      "mark": "TERUKUR"
+                    },
+                    {
+                      "kind": "source",
+                      "text": "Log sensor suhu, Oktober 2026"
+                    }
+                  ]
+                },
+                {
+                  "type": "list",
+                  "ordered": false,
+                  "items": [
+                    {
+                      "text": "Ruang lantai 2: puncak 27,8 C.",
+                      "rail": [
+                        {
+                          "kind": "mark",
+                          "mark": "TERUKUR"
+                        }
+                      ]
+                    },
+                    {
+                      "text": "Ruang lantai 3: puncak 29,4 C.",
+                      "rail": [
+                        {
+                          "kind": "note",
+                          "text": "Melampaui batas"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "chart",
+                  "code": "P-02",
+                  "caption": {
+                    "text": "Jumlah tiket perawatan naik setiap tahun sejak 2023."
+                  },
+                  "source": {
+                    "text": "Data ilustratif korpus paritas S63 (sintetis, bukan data klien)."
+                  },
+                  "data": {
+                    "shape": "categorical",
+                    "points": [
+                      {
+                        "label": "2021",
+                        "value": 118
+                      },
+                      {
+                        "label": "2022",
+                        "value": 132
+                      },
+                      {
+                        "label": "2023",
+                        "value": 127
+                      },
+                      {
+                        "label": "2024",
+                        "value": 149
+                      },
+                      {
+                        "label": "2025",
+                        "value": 161
+                      },
+                      {
+                        "label": "2026",
+                        "value": 174
+                      }
+                    ]
+                  },
+                  "highlight": [
+                    "2026"
+                  ],
+                  "unit": "tiket",
+                  "dec": 0
+                }
+              ]
+            },
+            {
+              "title": {
+                "text": "Tata letak"
+              },
+              "blocks": [
+                {
+                  "type": "image",
+                  "asset": "denah-ruang",
+                  "caption": {
+                    "text": "Denah ilustratif ruang server lantai 3."
+                  },
+                  "source": {
+                    "text": "Gambar ilustratif korpus paritas S63."
+                  }
+                },
+                {
+                  "type": "diagram",
+                  "spec": {
+                    "family": "topology",
+                    "nodes": [
+                      {
+                        "id": "srv",
+                        "label": "Server pusat",
+                        "sub": "2 unit",
+                        "shape": "box",
+                        "class": {
+                          "tier": 0
+                        }
+                      },
+                      {
+                        "id": "arsip",
+                        "label": "Arsip data",
+                        "shape": "cylinder",
+                        "class": {
+                          "tier": 0
+                        }
+                      },
+                      {
+                        "id": "swa",
+                        "label": "Sakelar A",
+                        "shape": "box",
+                        "class": {
+                          "tier": 1
+                        }
+                      },
+                      {
+                        "id": "swb",
+                        "label": "Sakelar B",
+                        "shape": "box",
+                        "class": {
+                          "tier": 1
+                        }
+                      },
+                      {
+                        "id": "s1",
+                        "label": "Sensor lantai 1",
+                        "shape": "circle",
+                        "mark": "TERUKUR",
+                        "class": {
+                          "tier": 2
+                        }
+                      },
+                      {
+                        "id": "s2",
+                        "label": "Sensor lantai 2",
+                        "shape": "circle",
+                        "class": {
+                          "tier": 2
+                        }
+                      }
+                    ],
+                    "classification": "BIASA",
+                    "labels_verified": true,
+                    "sources": [
+                      "Contoh ilustratif korpus paritas S63, topologi jaringan pemantauan"
+                    ],
+                    "edges": [
+                      {
+                        "from": "srv",
+                        "to": "arsip",
+                        "kind": "sync",
+                        "label": "replikasi harian"
+                      },
+                      {
+                        "from": "swa",
+                        "to": "srv",
+                        "kind": "accent",
+                        "label": "jalur utama"
+                      },
+                      {
+                        "from": "swb",
+                        "to": "srv",
+                        "kind": "data",
+                        "label": "jalur cadangan"
+                      },
+                      {
+                        "from": "s1",
+                        "to": "swa",
+                        "kind": "data",
+                        "label": "Ethernet"
+                      },
+                      {
+                        "from": "s2",
+                        "to": "swb",
+                        "kind": "alert",
+                        "label": "alarm suhu"
+                      }
+                    ],
+                    "zones": [
+                      {
+                        "id": "z1",
+                        "label": "Ruang server",
+                        "members": [
+                          "srv",
+                          "arsip"
+                        ]
+                      }
+                    ],
+                    "legend": [
+                      "solid data",
+                      "dotted replikasi",
+                      "longdash alarm",
+                      "aksen jalur utama",
+                      "TERUKUR"
+                    ],
+                    "notes": [
+                      "Satu aksen per gambar."
+                    ]
+                  },
+                  "caption": {
+                    "text": "Jaringan pemantauan menghubungkan sensor lantai ke server pusat lewat dua sakelar."
+                  },
+                  "source": {
+                    "text": "Data ilustratif korpus paritas S63 (sintetis, bukan data klien)."
+                  },
+                  "keyRow": {
+                    "text": "Garis tebal berwarna = jalur utama."
+                  }
+                }
+              ]
+            }
+          ],
+          "shortTitle": "Data suhu",
+          "partId": "P1",
+          "intro": [
+            {
+              "type": "paragraph",
+              "text": "Kajian ini disusun Tim Infrastruktur untuk manajemen operasi; jangkar terukur: puncak suhu 29,4 C di ruang lantai 3.",
+              "role": "identity"
+            }
+          ]
+        },
+        {
+          "key": "2",
+          "title": {
+            "text": "Analisis"
+          },
+          "sections": [
+            {
+              "title": {
+                "text": "Prosedur dan aturan"
+              },
+              "blocks": [
+                {
+                  "type": "diagram",
+                  "spec": {
+                    "family": "flow",
+                    "nodes": [
+                      {
+                        "id": "mulai",
+                        "label": "Alarm diterima",
+                        "shape": "stadium",
+                        "class": {
+                          "row": 0
+                        }
+                      },
+                      {
+                        "id": "baca",
+                        "label": "Baca suhu terakhir",
+                        "shape": "parallelogram",
+                        "class": {
+                          "row": 1
+                        }
+                      },
+                      {
+                        "id": "cek",
+                        "label": "Di atas batas?",
+                        "shape": "diamond",
+                        "class": {
+                          "row": 2
+                        }
+                      },
+                      {
+                        "id": "selesai",
+                        "label": "Laporan penutupan",
+                        "shape": "stadium",
+                        "class": {
+                          "row": 3
+                        }
+                      }
+                    ],
+                    "classification": "BIASA",
+                    "labels_verified": true,
+                    "sources": [
+                      "Contoh ilustratif korpus paritas S63, prosedur alarm"
+                    ],
+                    "edges": [
+                      {
+                        "from": "mulai",
+                        "to": "baca",
+                        "kind": "data",
+                        "label": "tiket"
+                      },
+                      {
+                        "from": "baca",
+                        "to": "cek",
+                        "kind": "data",
+                        "label": "nilai"
+                      },
+                      {
+                        "from": "cek",
+                        "to": "selesai",
+                        "kind": "control",
+                        "label": "Ya, kirim teknisi"
+                      },
+                      {
+                        "from": "cek",
+                        "to": "baca",
+                        "kind": "control",
+                        "label": "Tidak, pantau ulang"
+                      }
+                    ],
+                    "legend": [
+                      "solid data",
+                      "dashed keputusan"
+                    ]
+                  },
+                  "caption": {
+                    "text": "Prosedur penanganan alarm suhu berakhir pada laporan penutupan."
+                  },
+                  "source": {
+                    "text": "Data ilustratif korpus paritas S63 (sintetis, bukan data klien)."
+                  }
+                },
+                {
+                  "type": "ruleTable",
+                  "columns": [
+                    {
+                      "role": "id"
+                    },
+                    {
+                      "role": "text"
+                    }
+                  ],
+                  "rows": [
+                    {
+                      "cells": [
+                        {
+                          "text": "ID"
+                        },
+                        {
+                          "text": "Aturan"
+                        }
+                      ],
+                      "kind": "header"
+                    },
+                    {
+                      "cells": [
+                        {
+                          "text": "SU-01"
+                        },
+                        {
+                          "text": "Suhu masuk rak tidak melebihi 27 C."
+                        }
+                      ]
+                    },
+                    {
+                      "cells": [
+                        {
+                          "text": "SU-02"
+                        },
+                        {
+                          "text": "Kelembapan relatif dijaga 40 sampai 60 persen."
+                        }
+                      ]
+                    }
+                  ],
+                  "caption": {
+                    "text": "Aturan batas suhu ruang server."
+                  },
+                  "source": {
+                    "text": "Data ilustratif korpus paritas S63 (sintetis, bukan data klien)."
+                  }
+                },
+                {
+                  "type": "checklist",
+                  "columns": [
+                    {
+                      "role": "text"
+                    },
+                    {
+                      "role": "text"
+                    }
+                  ],
+                  "rows": [
+                    {
+                      "cells": [
+                        {
+                          "text": "Butir"
+                        },
+                        {
+                          "text": "Status"
+                        }
+                      ],
+                      "kind": "header"
+                    },
+                    {
+                      "cells": [
+                        {
+                          "text": "Pintu rak tertutup"
+                        },
+                        {
+                          "text": "Ya"
+                        }
+                      ]
+                    },
+                    {
+                      "cells": [
+                        {
+                          "text": "Filter pendingin bersih"
+                        },
+                        {
+                          "text": "Belum"
+                        }
+                      ]
+                    }
+                  ],
+                  "caption": {
+                    "text": "Daftar periksa harian ruang server."
+                  },
+                  "source": {
+                    "text": "Data ilustratif korpus paritas S63 (sintetis, bukan data klien)."
+                  }
+                },
+                {
+                  "type": "symbolSheet",
+                  "dialect": "iec",
+                  "caption": {
+                    "text": "Lembar simbol IEC yang dipakai gambar kelistrikan."
+                  },
+                  "source": {
+                    "text": "datumsimbol.py lembar iec (Garis A)."
+                  }
+                }
+              ]
+            }
+          ],
+          "partId": "P1"
+        },
+        {
+          "key": "3",
+          "title": {
+            "text": "Usulan dan penutup"
+          },
+          "sections": [
+            {
+              "title": {
+                "text": "Usulan"
+              },
+              "blocks": [
+                {
+                  "type": "paragraph",
+                  "text": "Penambahan satu unit pendingin 7 kW menurunkan suhu puncak di bawah batas.",
+                  "role": "pivot"
+                },
+                {
+                  "type": "specTable",
+                  "columns": [
+                    {
+                      "role": "text"
+                    },
+                    {
+                      "role": "text"
+                    },
+                    {
+                      "role": "numeral"
+                    },
+                    {
+                      "role": "unit"
+                    }
+                  ],
+                  "rows": [
+                    {
+                      "cells": [
+                        {
+                          "text": "Parameter"
+                        },
+                        {
+                          "text": "Syarat"
+                        },
+                        {
+                          "text": "Nilai"
+                        },
+                        {
+                          "text": "Satuan"
+                        }
+                      ],
+                      "kind": "header"
+                    },
+                    {
+                      "cells": [
+                        {
+                          "text": "Kapasitas"
+                        },
+                        {
+                          "text": "minimum"
+                        },
+                        {
+                          "text": "7"
+                        },
+                        {
+                          "text": "kW"
+                        }
+                      ]
+                    },
+                    {
+                      "cells": [
+                        {
+                          "text": "Aliran udara"
+                        },
+                        {
+                          "text": "minimum"
+                        },
+                        {
+                          "text": "1.800"
+                        },
+                        {
+                          "text": "m3/jam"
+                        }
+                      ]
+                    }
+                  ],
+                  "caption": {
+                    "text": "Spesifikasi pendingin usulan."
+                  },
+                  "source": {
+                    "text": "Data ilustratif korpus paritas S63 (sintetis, bukan data klien)."
+                  }
+                },
+                {
+                  "type": "paragraph",
+                  "text": "Mohon manajemen operasi menyetujui pengadaan pendingin paling lambat 15 November 2026.",
+                  "role": "closingAction"
+                }
+              ]
+            }
+          ],
+          "partId": "P2"
+        }
+      ]
+    },
+    "appendices": {
+      "type": "appendix",
+      "chapters": [
+        {
+          "key": "A",
+          "title": {
+            "text": "Glosarium dan sumber"
+          },
+          "sections": [
+            {
+              "title": {
+                "text": "Istilah"
+              },
+              "blocks": [
+                {
+                  "type": "glossary",
+                  "columns": [
+                    {
+                      "role": "text"
+                    },
+                    {
+                      "role": "text"
+                    }
+                  ],
+                  "rows": [
+                    {
+                      "cells": [
+                        {
+                          "text": "Istilah"
+                        },
+                        {
+                          "text": "Arti"
+                        }
+                      ],
+                      "kind": "header"
+                    },
+                    {
+                      "cells": [
+                        {
+                          "text": "Suhu masuk rak"
+                        },
+                        {
+                          "text": "Suhu udara pada sisi masuk rak perangkat."
+                        }
+                      ]
+                    }
+                  ],
+                  "caption": {
+                    "text": "Istilah kajian."
+                  },
+                  "source": {
+                    "text": "Data ilustratif korpus paritas S63 (sintetis, bukan data klien)."
+                  }
+                },
+                {
+                  "type": "sourceRegister",
+                  "columns": [
+                    {
+                      "role": "id"
+                    },
+                    {
+                      "role": "text"
+                    },
+                    {
+                      "role": "text"
+                    },
+                    {
+                      "role": "text"
+                    }
+                  ],
+                  "rows": [
+                    {
+                      "cells": [
+                        {
+                          "text": "Kode"
+                        },
+                        {
+                          "text": "Sumber"
+                        },
+                        {
+                          "text": "Edisi"
+                        },
+                        {
+                          "text": "Nilai"
+                        }
+                      ],
+                      "kind": "header"
+                    },
+                    {
+                      "cells": [
+                        {
+                          "text": "SR-01"
+                        },
+                        {
+                          "text": "Log sensor suhu"
+                        },
+                        {
+                          "text": "Oktober 2026"
+                        },
+                        {
+                          "text": "A1"
+                        }
+                      ]
+                    }
+                  ],
+                  "caption": {
+                    "text": "Daftar sumber kajian."
+                  },
+                  "source": {
+                    "text": "Data ilustratif korpus paritas S63 (sintetis, bukan data klien)."
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "assets": {
+    "denah-ruang": {
+      "mime": "image/png",
+      "dataBase64": "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"
+    }
+  }
+}

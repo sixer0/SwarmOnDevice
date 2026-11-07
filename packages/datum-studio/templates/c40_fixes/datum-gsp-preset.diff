@@ -1,0 +1,53 @@
+--- seed-export/datum-gsp-preset.json
++++ templates/datum-gsp-preset.json
+@@ -243,7 +243,29 @@
+     "type.scale.tableBody.size": 8,
+     "type.scale.tableHeader.size": 6.5,
+     "type.scale.tableHeader.trackEm": 0.0923,
+-    "type.scale.tableNumerals.size": 7
++    "type.scale.tableNumerals.size": 7,
++    "color.wrapper.cream": "F4F5F6",
++    "cover.controlBlock.fields": [
++      "NOMOR DOKUMEN",
++      "REVISI",
++      "PENYUSUN",
++      "KUSTODIAN",
++      "DITUJUKAN KEPADA",
++      "HALAMAN",
++      "DATUM GEODETIK",
++      "VERIFIKASI"
++    ],
++    "cover.controlBlock.geodeticDatum": "WGS 84",
++    "controlSheet.distribution.defaults": {
++      "rows": [
++        [
++          "Induk",
++          "Divisi Engineering PT GSP (ENG-01)",
++          "Word dan PDF, folder standar",
++          "Tidak"
++        ]
++      ]
++    }
+   },
+   "roleFormats": {
+     "aside.body": {
+@@ -1874,7 +1896,7 @@
+       },
+       "run": {
+         "face": "IBM Plex Sans Cond",
+-        "szHalfPt": 14,
++        "szHalfPt": 15,
+         "color": "6E1420",
+         "b": true,
+         "i": false,
+@@ -1892,8 +1914,8 @@
+       },
+       "run": {
+         "face": "IBM Plex Sans Cond",
+-        "szHalfPt": 12,
+-        "color": "F6E9E9",
++        "szHalfPt": 13,
++        "color": "F4F5F6",
+         "b": true,
+         "i": false,
+         "caps": true,

@@ -1,0 +1,93 @@
+{
+  "$schema": "studio.diagram/v1",
+  "family": "graph",
+  "id": "9.5",
+  "title": "Jalur telemetri utama bersilang dengan dua jalur kendali.",
+  "classification": "BIASA",
+  "width_mm": 166,
+  "apparatus": "figure",
+  "labels_verified": true,
+  "sources": [
+    "Contoh ilustratif korpus paritas FIX-3, graf bersilang (F-S78-5)"
+  ],
+  "nodes": [
+    {
+      "id": "sen",
+      "label": "Sensor ruang",
+      "shape": "box",
+      "class": {
+        "col": 0,
+        "row": 1
+      }
+    },
+    {
+      "id": "srv",
+      "label": "Server pusat",
+      "shape": "box",
+      "class": {
+        "col": 3,
+        "row": 1
+      }
+    },
+    {
+      "id": "pa",
+      "label": "Panel A",
+      "shape": "box",
+      "class": {
+        "col": 1,
+        "row": 0
+      }
+    },
+    {
+      "id": "ka",
+      "label": "Katup A",
+      "shape": "box",
+      "class": {
+        "col": 1,
+        "row": 3
+      }
+    },
+    {
+      "id": "pb",
+      "label": "Panel B",
+      "shape": "box",
+      "class": {
+        "col": 2,
+        "row": 0
+      }
+    },
+    {
+      "id": "kb",
+      "label": "Katup B",
+      "shape": "box",
+      "class": {
+        "col": 2,
+        "row": 3
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": "sen",
+      "to": "srv",
+      "kind": "data",
+      "label": "telemetri"
+    },
+    {
+      "from": "pa",
+      "to": "ka",
+      "kind": "control",
+      "label": "buka A"
+    },
+    {
+      "from": "pb",
+      "to": "kb",
+      "kind": "control",
+      "label": "buka B"
+    }
+  ],
+  "legend": [
+    "solid data",
+    "dashed kendali"
+  ]
+}

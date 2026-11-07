@@ -1,0 +1,31 @@
+--- seed-export/datum-kanonik-preset.json
++++ templates/datum-kanonik-preset.json
+@@ -153,5 +153,28 @@
+         "essentials": {}
+       }
+     ]
++  },
++  "advanced": {
++    "cover.controlBlock.fields": [
++      "NOMOR DOKUMEN",
++      "REVISI",
++      "PENYUSUN",
++      "KUSTODIAN",
++      "DITUJUKAN KEPADA",
++      "HALAMAN",
++      "DATUM GEODETIK",
++      "VERIFIKASI"
++    ],
++    "cover.controlBlock.geodeticDatum": "WGS 84",
++    "controlSheet.distribution.defaults": {
++      "rows": [
++        [
++          "Induk",
++          "Divisi Engineering PT GSP (ENG-01)",
++          "Word dan PDF, folder standar",
++          "Tidak"
++        ]
++      ]
++    }
+   }
+ }

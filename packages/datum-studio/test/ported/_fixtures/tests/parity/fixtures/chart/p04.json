@@ -1,0 +1,35 @@
+{
+  "$schema": "studio.chart/v1",
+  "kind": "P-04",
+  "title": "Biaya pos perangkat jauh di atas pos kabel.",
+  "source": "Data ilustratif korpus paritas S63 (sintetis, bukan data klien).",
+  "widthMm": 128,
+  "data": {
+    "shape": "categorical",
+    "points": [
+      {
+        "label": "Kamera",
+        "value": 405.5
+      },
+      {
+        "label": "Perekam",
+        "value": 372
+      },
+      {
+        "label": "Sakelar",
+        "value": 248.8
+      },
+      {
+        "label": "Jasa",
+        "value": 136
+      },
+      {
+        "label": "Kabel",
+        "value": 92.4
+      }
+    ]
+  },
+  "heightMm": 58,
+  "unit": "juta rupiah",
+  "dec": 1
+}

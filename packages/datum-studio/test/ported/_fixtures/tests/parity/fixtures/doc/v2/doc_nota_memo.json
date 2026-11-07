@@ -1,0 +1,402 @@
+{
+  "$schema": "studio.doc/v2",
+  "template": {
+    "slug": "datum-kanonik",
+    "version": 1
+  },
+  "meta": {
+    "title": "Nota teknis perawatan pompa air bersih gedung kantor",
+    "docNumber": "001/GSP/KT/X/2026",
+    "rev": "A",
+    "typeCode": "KT",
+    "tier": "NOTA",
+    "classification": "BIASA",
+    "language": "ID",
+    "author": "Tim Fasilitas",
+    "issueDate": "2026-10-20",
+    "audience": "Pengelola gedung",
+    "subject": "Perawatan pompa",
+    "urgency": "biasa"
+  },
+  "mission": {
+    "folder": "2026-10-20_nota-pompa-air"
+  },
+  "sections": {
+    "content": {
+      "type": "chapter",
+      "chapters": [
+        {
+          "key": "1",
+          "id": "nota-ch1",
+          "title": {
+            "text": "Ringkasan temuan"
+          },
+          "sections": [
+            {
+              "id": "nota-1-1",
+              "title": {
+                "text": "Kondisi pompa"
+              },
+              "blocks": [
+                {
+                  "type": "paragraph",
+                  "text": "Pemeriksaan dilakukan pada **tiga pompa** transfer di ruang pompa lantai dasar.",
+                  "role": "lede"
+                },
+                {
+                  "type": "paragraph",
+                  "text": "Getaran pompa P-2 mencapai 7,1 mm/s, di atas batas *zona B* yang dipakai pemeliharaan.",
+                  "role": "anchor"
+                },
+                {
+                  "type": "paragraph",
+                  "runs": [
+                    {
+                      "t": "Nilai "
+                    },
+                    {
+                      "t": "terukur",
+                      "strong": true
+                    },
+                    {
+                      "t": " ditandai dengan kode "
+                    },
+                    {
+                      "t": "TRK-01",
+                      "code": true
+                    },
+                    {
+                      "t": " dan dicetak "
+                    },
+                    {
+                      "t": "kapital kecil"
+                    },
+                    {
+                      "t": "; catatan kaki",
+                      "em": true
+                    },
+                    {
+                      "t": "1",
+                      "sup": true
+                    },
+                    {
+                      "t": "."
+                    }
+                  ]
+                },
+                {
+                  "type": "list",
+                  "ordered": false,
+                  "items": [
+                    {
+                      "text": "Pompa P-1 normal; segel kering."
+                    },
+                    {
+                      "text": "Pompa P-2 bergetar; bantalan perlu diperiksa."
+                    },
+                    {
+                      "text": "Pompa P-3 bocor halus pada segel mekanis."
+                    }
+                  ]
+                },
+                {
+                  "type": "list",
+                  "ordered": true,
+                  "items": [
+                    {
+                      "text": "Ganti segel P-3 minggu ini."
+                    },
+                    {
+                      "text": "Ukur ulang getaran P-2 sesudah penyeimbangan."
+                    },
+                    {
+                      "text": "Laporkan hasil ke pengelola gedung."
+                    }
+                  ]
+                },
+                {
+                  "type": "assumptionInline",
+                  "text": "Jam operasi rata-rata pompa dianggap 16 jam per hari.",
+                  "asmId": "ASM-FAS-01",
+                  "impact": "Bila jam operasi lebih tinggi, interval penggantian segel memendek."
+                },
+                {
+                  "type": "monoBlock",
+                  "label": {
+                    "text": "Catatan ukur"
+                  },
+                  "lines": [
+                    {
+                      "text": "P-1  getaran 2,3 mm/s  suhu bantalan 41 C"
+                    },
+                    {
+                      "text": "P-2  getaran 7,1 mm/s  suhu bantalan 58 C"
+                    },
+                    {
+                      "text": "P-3  getaran 3,0 mm/s  suhu bantalan 44 C"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "nota-1-2",
+              "title": {
+                "text": "Data pengukuran"
+              },
+              "blocks": [
+                {
+                  "type": "table",
+                  "columns": [
+                    {
+                      "role": "id"
+                    },
+                    {
+                      "role": "numeral",
+                      "unit": "mm/s"
+                    },
+                    {
+                      "role": "numeral",
+                      "unit": "C"
+                    },
+                    {
+                      "role": "text"
+                    }
+                  ],
+                  "rows": [
+                    {
+                      "cells": [
+                        {
+                          "text": "Pompa"
+                        },
+                        {
+                          "text": "Getaran (mm/s)"
+                        },
+                        {
+                          "text": "Suhu (C)"
+                        },
+                        {
+                          "text": "Status"
+                        }
+                      ],
+                      "kind": "header"
+                    },
+                    {
+                      "cells": [
+                        {
+                          "text": "P-1"
+                        },
+                        {
+                          "text": "2,3"
+                        },
+                        {
+                          "text": "41"
+                        },
+                        {
+                          "text": "Normal"
+                        }
+                      ]
+                    },
+                    {
+                      "cells": [
+                        {
+                          "text": "P-2"
+                        },
+                        {
+                          "text": "7,1"
+                        },
+                        {
+                          "text": "58"
+                        },
+                        {
+                          "text": "Periksa"
+                        }
+                      ]
+                    },
+                    {
+                      "cells": [
+                        {
+                          "text": "P-3"
+                        },
+                        {
+                          "text": "3,0"
+                        },
+                        {
+                          "text": "44"
+                        },
+                        {
+                          "text": "Bocor halus"
+                        }
+                      ]
+                    }
+                  ],
+                  "caption": {
+                    "text": "Hasil ukur getaran dan suhu bantalan per pompa."
+                  },
+                  "source": {
+                    "text": "Data ilustratif korpus paritas S63 (sintetis, bukan data klien)."
+                  }
+                },
+                {
+                  "type": "chart",
+                  "code": "P-01",
+                  "caption": {
+                    "text": "Pendingin menyumbang waktu henti terbesar pada kuartal ini."
+                  },
+                  "source": {
+                    "text": "Data ilustratif korpus paritas S63 (sintetis, bukan data klien).",
+                    "provenance": [
+                      "TERUKUR"
+                    ]
+                  },
+                  "keyRow": {
+                    "text": "Batang beraksen = subsistem dengan waktu henti terbesar."
+                  },
+                  "data": {
+                    "shape": "categorical",
+                    "points": [
+                      {
+                        "label": "Pendingin",
+                        "value": 42
+                      },
+                      {
+                        "label": "Catu daya",
+                        "value": 31
+                      },
+                      {
+                        "label": "Jaringan",
+                        "value": 24
+                      },
+                      {
+                        "label": "Akses pintu",
+                        "value": 15
+                      },
+                      {
+                        "label": "Pencahayaan",
+                        "value": 11
+                      },
+                      {
+                        "label": "Sensor",
+                        "value": 7
+                      }
+                    ]
+                  },
+                  "highlight": [
+                    "Pendingin"
+                  ],
+                  "unit": "jam",
+                  "dec": 0
+                },
+                {
+                  "type": "paragraph",
+                  "text": "Hasil ini menjadi dasar usulan anggaran perawatan triwulan berikut.",
+                  "role": "pivot"
+                }
+              ]
+            }
+          ],
+          "intro": [
+            {
+              "type": "paragraph",
+              "text": "Nota ini disusun Tim Fasilitas untuk pengelola gedung: dua dari tiga pompa memerlukan penggantian segel dalam 30 hari, dengan jangkar terukur getaran 7,1 mm/s.",
+              "role": "identity"
+            }
+          ]
+        },
+        {
+          "key": "2",
+          "title": {
+            "text": "Pedoman tindak"
+          },
+          "sections": [
+            {
+              "title": {
+                "text": "Aturan dan pengingat"
+              },
+              "blocks": [
+                {
+                  "type": "aside",
+                  "variant": "generic",
+                  "label": {
+                    "text": "Catatan"
+                  },
+                  "body": [
+                    {
+                      "text": "Segel mekanis tidak boleh dijalankan kering."
+                    }
+                  ]
+                },
+                {
+                  "type": "aside",
+                  "variant": "doctrine",
+                  "label": {
+                    "text": "Doktrin"
+                  },
+                  "body": [
+                    {
+                      "text": "Ukur dulu, baru ganti; penggantian tanpa ukur ulang tidak dicatat sebagai perbaikan."
+                    }
+                  ]
+                },
+                {
+                  "type": "aside",
+                  "variant": "story",
+                  "label": {
+                    "text": "Kisah lapangan"
+                  },
+                  "body": [
+                    {
+                      "text": "Pompa serupa di gedung lain gagal karena bantalan tidak dilumasi selama setahun."
+                    }
+                  ]
+                },
+                {
+                  "type": "aside",
+                  "variant": "quickCheck",
+                  "label": {
+                    "text": "Cek cepat"
+                  },
+                  "body": [
+                    {
+                      "text": "Getaran di bawah 4,5 mm/s?"
+                    },
+                    {
+                      "text": "Suhu bantalan di bawah 60 C?"
+                    }
+                  ]
+                },
+                {
+                  "type": "aside",
+                  "variant": "ifInDoubt",
+                  "label": {
+                    "text": "Bila ragu"
+                  },
+                  "body": [
+                    {
+                      "text": "Hentikan pompa dan hubungi teknisi jaga."
+                    }
+                  ]
+                },
+                {
+                  "type": "paragraph",
+                  "text": "Rincian prosedur",
+                  "role": "subheading"
+                },
+                {
+                  "type": "paragraph",
+                  "text": "Prosedur lengkap tersedia di buku perawatan gedung, bagian pompa.",
+                  "role": "note"
+                },
+                {
+                  "type": "paragraph",
+                  "text": "Mohon pengelola gedung menyetujui penggantian segel P-3 paling lambat 27 Oktober 2026.",
+                  "role": "closingAction"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

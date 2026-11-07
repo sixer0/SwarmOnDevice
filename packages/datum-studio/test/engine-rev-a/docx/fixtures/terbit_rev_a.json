@@ -1,0 +1,361 @@
+{
+  "$schema": "studio.doc/v1",
+  "template": {
+    "slug": "datum-kanonik",
+    "version": 1
+  },
+  "meta": {
+    "title": "Pemantauan Iklim Ruang Simpan Arsip Statis Gedung B",
+    "docNumber": "012/GSP/KT/XI/2026",
+    "rev": "A",
+    "typeCode": "KT",
+    "tier": "TERBIT",
+    "classification": "TERBATAS",
+    "language": "ID",
+    "author": "Divisi Engineering",
+    "issueDate": "2026-11-06",
+    "custodian": "ENG-UJI-01",
+    "audience": "Kepala Balai Konservasi Arsip Kota Arunika",
+    "issueNumber": 1
+  },
+  "front": {
+    "cover": {
+      "mode": "auto",
+      "data": {
+        "kicker": {
+          "text": "Kajian Teknis · Laporan Baseline Engineering"
+        },
+        "titleLines": [
+          {
+            "text": "Pemantauan Iklim Ruang Simpan"
+          },
+          {
+            "text": "Arsip Statis Gedung B"
+          }
+        ],
+        "standfirst": {
+          "text": "Baseline engineering terverifikasi untuk 48 titik sensor pada ruang simpan."
+        },
+        "control": {
+          "type": "controlBlock",
+          "rows": [
+            [
+              {
+                "text": "Nomor dokumen"
+              },
+              {
+                "text": "012/GSP/KT/XI/2026"
+              },
+              {
+                "text": "Revisi"
+              },
+              {
+                "text": "A · 6 November 2026"
+              }
+            ],
+            [
+              {
+                "text": "Penyusun"
+              },
+              {
+                "text": "Divisi Engineering"
+              },
+              {
+                "text": "Kustodian"
+              },
+              {
+                "text": "ENG-UJI-01"
+              }
+            ]
+          ]
+        },
+        "colophon": {
+          "type": "colophon",
+          "left": {
+            "text": "PT GEMILANG SATRIA PERKASA · DIVISI ENGINEERING"
+          },
+          "right": {
+            "text": "// 20261106 ID A · TERBITAN 1"
+          }
+        }
+      }
+    },
+    "controlSheet": {
+      "mode": "auto",
+      "data": {
+        "title": {
+          "text": "Lembar Kendali"
+        },
+        "revisionHistory": {
+          "type": "registerTable",
+          "columns": [
+            {
+              "role": "id"
+            },
+            {
+              "role": "text"
+            },
+            {
+              "role": "text"
+            },
+            {
+              "role": "text"
+            }
+          ],
+          "rows": [
+            {
+              "kind": "header",
+              "cells": [
+                {
+                  "text": "Rev"
+                },
+                {
+                  "text": "Tanggal"
+                },
+                {
+                  "text": "Uraian"
+                },
+                {
+                  "text": "Oleh"
+                }
+              ]
+            },
+            {
+              "cells": [
+                {
+                  "text": "A"
+                },
+                {
+                  "text": "2026-11-06"
+                },
+                {
+                  "text": "Terbitan 1"
+                },
+                {
+                  "text": "Divisi Engineering"
+                }
+              ]
+            }
+          ]
+        },
+        "verificationChain": {
+          "type": "registerTable",
+          "columns": [
+            {
+              "role": "id"
+            },
+            {
+              "role": "text"
+            },
+            {
+              "role": "text"
+            },
+            {
+              "role": "text"
+            }
+          ],
+          "rows": [
+            {
+              "kind": "header",
+              "cells": [
+                {
+                  "text": "Lapis"
+                },
+                {
+                  "text": "Peran"
+                },
+                {
+                  "text": "Nama"
+                },
+                {
+                  "text": "Tanggal"
+                }
+              ]
+            },
+            {
+              "cells": [
+                {
+                  "text": "V2"
+                },
+                {
+                  "text": "Verifikasi"
+                },
+                {
+                  "text": "lulus"
+                },
+                {
+                  "text": ""
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "toc": {
+      "mode": "field"
+    }
+  },
+  "parts": [],
+  "chapters": [
+    {
+      "key": "1",
+      "title": {
+        "text": "Dasar Data Ruang Simpan"
+      },
+      "sections": [
+        {
+          "title": {
+            "text": "Kuantitas perangkat dan kabel"
+          },
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "Kuantitas perangkat diturunkan dari register ruang pada Tabel 1.1."
+            },
+            {
+              "type": "table",
+              "columns": [
+                {
+                  "role": "id"
+                },
+                {
+                  "role": "text"
+                },
+                {
+                  "role": "numeral",
+                  "unit": "unit"
+                }
+              ],
+              "rows": [
+                {
+                  "kind": "header",
+                  "cells": [
+                    {
+                      "text": "No"
+                    },
+                    {
+                      "text": "Uraian"
+                    },
+                    {
+                      "text": "Volume"
+                    }
+                  ]
+                },
+                {
+                  "cells": [
+                    {
+                      "text": "1"
+                    },
+                    {
+                      "text": "Sensor ruang"
+                    },
+                    {
+                      "text": "48"
+                    }
+                  ]
+                },
+                {
+                  "cells": [
+                    {
+                      "text": "2"
+                    },
+                    {
+                      "text": "Gerbang data"
+                    },
+                    {
+                      "text": "2"
+                    }
+                  ]
+                },
+                {
+                  "cells": [
+                    {
+                      "text": "3"
+                    },
+                    {
+                      "text": "Server pemantauan"
+                    },
+                    {
+                      "text": "1"
+                    }
+                  ]
+                }
+              ],
+              "caption": {
+                "inline": {
+                  "text": "Daftar kuantitas perangkat pemantauan iklim, per 6 November 2026."
+                }
+              },
+              "source": {
+                "inline": {
+                  "text": "Register ruang Rev A."
+                }
+              }
+            },
+            {
+              "type": "derivation",
+              "title": {
+                "text": "Turunan D-1.1 · Beban puncak perangkat"
+              },
+              "lines": [
+                {
+                  "label": {
+                    "text": "Sensor ruang 48 × 1,2 W"
+                  },
+                  "value": {
+                    "registerKey": "beban_sensor_w"
+                  }
+                },
+                {
+                  "label": {
+                    "text": "Server pemantauan 1 × 320,0 W"
+                  },
+                  "value": {
+                    "registerKey": "beban_server_w"
+                  }
+                }
+              ],
+              "closing": {
+                "text": "Bila beban naik di atas 400 W, kapasitas catu harus dinaikkan."
+              },
+              "result": {
+                "label": {
+                  "text": "Beban puncak"
+                },
+                "expr": "beban_sensor_w + beban_server_w",
+                "registerKey": "beban_puncak_w",
+                "tol": 0.05
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "appendices": [],
+  "assets": {},
+  "register": {
+    "beban_sensor_w": {
+      "v": 57.6,
+      "dec": 1,
+      "unit": "W",
+      "mark": "PEMASOK",
+      "src": "Lembar data pemasok"
+    },
+    "beban_server_w": {
+      "v": 320.0,
+      "dec": 1,
+      "unit": "W",
+      "mark": "PEMASOK",
+      "src": "Lembar data pemasok"
+    },
+    "beban_puncak_w": {
+      "v": 377.6,
+      "dec": 1,
+      "unit": "W",
+      "mark": "DITURUNKAN",
+      "src": "D-1.1"
+    }
+  }
+}

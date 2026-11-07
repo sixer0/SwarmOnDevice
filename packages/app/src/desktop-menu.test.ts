@@ -31,7 +31,7 @@ describe("desktop menu", () => {
     const start = actions.indexOf("app.checkForUpdates")
 
     expect(app?.platforms).toEqual(["macos"])
-    expect(items).toHaveLength(15)
+    expect(items).toHaveLength(16)
     expect(actions.slice(start, start + 3)).toEqual(["app.checkForUpdates", "app.updateFromFile", "app.undoLastUpdate"])
 
     const patch = items.filter((item) => item.type === "item" && item.enabled === "patch")
@@ -45,6 +45,23 @@ describe("desktop menu", () => {
     const elsewhere = DESKTOP_MENU.filter((menu) => menu.id !== "app")
       .flatMap((menu) => menu.items ?? [])
       .filter((item) => item.type === "item" && (item.action === "app.updateFromFile" || item.action === "app.undoLastUpdate"))
+    expect(elsewhere).toHaveLength(0)
+  })
+
+  // Row 34b (C63/C64): Install DATUM Studio for Claude... right below Install Command Line Tool..., macOS app menu only.
+  test("places Install DATUM Studio for Claude below Install Command Line Tool in the macOS app menu only", () => {
+    const app = DESKTOP_MENU.find((menu) => menu.id === "app")
+    const actions = (app?.items ?? []).flatMap((item) => (item.type === "item" && item.action ? [item.action] : []))
+    const at = actions.indexOf("app.installCli")
+    expect(actions.slice(at, at + 2)).toEqual(["app.installCli", "app.installDatumStudio"])
+    expect(app?.items).toContainEqual({
+      type: "item",
+      labelKey: "desktop.menu.installDatumStudio",
+      action: "app.installDatumStudio",
+    })
+    const elsewhere = DESKTOP_MENU.filter((menu) => menu.id !== "app")
+      .flatMap((menu) => menu.items ?? [])
+      .filter((item) => item.type === "item" && item.action === "app.installDatumStudio")
     expect(elsewhere).toHaveLength(0)
   })
 })

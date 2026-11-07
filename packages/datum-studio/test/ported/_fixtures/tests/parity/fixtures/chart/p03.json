@@ -1,0 +1,42 @@
+{
+  "$schema": "studio.chart/v1",
+  "kind": "P-03",
+  "title": "Penawaran B lebih murah pada tiga dari lima pos.",
+  "source": "Data ilustratif korpus paritas S63 (sintetis, bukan data klien).",
+  "widthMm": 166,
+  "data": {
+    "shape": "series",
+    "categories": [
+      "Kamera",
+      "Perekam",
+      "Sakelar",
+      "Kabel",
+      "Jasa"
+    ],
+    "series": [
+      {
+        "name": "Penawaran A",
+        "values": [
+          405.5,
+          372,
+          248.8,
+          92.4,
+          136
+        ]
+      },
+      {
+        "name": "Penawaran B",
+        "values": [
+          389,
+          398.5,
+          229.6,
+          101.3,
+          149.5
+        ]
+      }
+    ]
+  },
+  "heightMm": 58,
+  "unit": "juta rupiah",
+  "dec": 1
+}

@@ -1,0 +1,2090 @@
+{
+  "$schema": "studio.template/v2",
+  "essentials": {
+    "layout.railMode": "A",
+    "render.toc.mode": "static",
+    "table.widthClass": "full"
+  },
+  "advanced": {
+    "cover.title.sizePt": 25,
+    "device.registerBlock.boldFields": [
+      "nomor dokumen",
+      "revisi",
+      "nomor lembar",
+      "jumlah lembar",
+      "klasifikasi"
+    ],
+    "device.sealBand.heightMm": 6.1736,
+    "device.spine.placements": [
+      "margin luar sampul"
+    ],
+    "device.spine.rotationDeg": 0,
+    "org.entityName": "PT Gemilang Satria Perkasa",
+    "render.caption.separator": "   ",
+    "render.derivation.renderer": "nestedTable",
+    "render.docx.compatibilityMode": 14,
+    "render.docx.docDefaults": {
+      "szHalfPt": 22,
+      "spacingAfterTw": 200,
+      "lineTw": 276,
+      "lineRule": "auto",
+      "lang": "en-US",
+      "langEastAsia": "en-US",
+      "langBidi": "ar-SA",
+      "rFontsTheme": {
+        "ascii": "minorHAnsi",
+        "hAnsi": "minorHAnsi",
+        "eastAsia": "minorEastAsia",
+        "cs": "minorBidi"
+      }
+    },
+    "render.docx.embedFonts": [
+      {
+        "family": "IBM Plex Serif",
+        "slots": [
+          "regular",
+          "bold",
+          "italic",
+          "boldItalic"
+        ],
+        "boldFace": "semibold"
+      },
+      {
+        "family": "IBM Plex Sans Cond",
+        "slots": [
+          "regular",
+          "bold",
+          "italic",
+          "boldItalic"
+        ],
+        "boldFace": "semibold"
+      },
+      {
+        "family": "IBM Plex Mono",
+        "slots": [
+          "regular",
+          "bold",
+          "italic",
+          "boldItalic"
+        ],
+        "boldFace": "semibold"
+      },
+      {
+        "family": "IBM Plex Sans",
+        "slots": [
+          "regular",
+          "bold",
+          "italic",
+          "boldItalic"
+        ],
+        "boldFace": "semibold"
+      },
+      {
+        "family": "DejaVu Sans",
+        "slots": [
+          "regular",
+          "bold"
+        ]
+      }
+    ],
+    "render.docx.updateFieldsOnOpen": false,
+    "render.list.bulletMarker": {
+      "t": "–",
+      "face": "IBM Plex Serif",
+      "szHalfPt": 19,
+      "color": "6B7783",
+      "b": false,
+      "i": false
+    },
+    "render.list.numberMarker": {
+      "face": "IBM Plex Mono",
+      "szHalfPt": 16,
+      "color": "B45309",
+      "b": true,
+      "i": false
+    },
+    "render.rail.renderer": "framePr",
+    "render.run.strong": {
+      "color": "101418"
+    },
+    "render.run.symbolGlyphByRole": {
+      "body.paragraph": {
+        "szHalfPt": 17
+      },
+      "list.bullet": {
+        "szHalfPt": 17
+      },
+      "list.number": {
+        "szHalfPt": 17
+      },
+      "aside.body": {
+        "szHalfPt": 15
+      },
+      "table.cellText": {
+        "szHalfPt": 14
+      },
+      "table.cellMono": {
+        "szHalfPt": 12
+      },
+      "table.cellNumeralRight": {
+        "szHalfPt": 12
+      },
+      "table.source": {
+        "szHalfPt": 12
+      },
+      "figure.source": {
+        "szHalfPt": 12
+      },
+      "figure.keyRow": {
+        "szHalfPt": 12
+      }
+    },
+    "render.section.interior": {
+      "pageSizeTw": [
+        11906,
+        16838
+      ],
+      "marginTw": {
+        "top": 1474,
+        "bottom": 1361,
+        "left": 1361,
+        "right": 1134,
+        "header": 737,
+        "footer": 737,
+        "gutter": 0
+      },
+      "cols": {
+        "num": 1,
+        "spaceTw": 720
+      },
+      "docGridLinePitch": 360,
+      "header": {
+        "mode": "runningHead",
+        "format": {
+          "spacingBeforeTw": 0,
+          "spacingAfterTw": 0,
+          "lineTw": 180,
+          "lineRule": "exact",
+          "tabs": [
+            {
+              "posTw": 9411,
+              "val": "right"
+            }
+          ],
+          "borders": {
+            "bottom": {
+              "val": "single",
+              "sz": 5,
+              "color": "C3CBD1",
+              "space": 1
+            }
+          }
+        }
+      },
+      "footer": {
+        "mode": "registerBlock"
+      }
+    },
+    "render.section.wrapper": {
+      "pageSizeTw": [
+        11906,
+        16838
+      ],
+      "marginTw": {
+        "top": 1474,
+        "bottom": 1361,
+        "left": 1361,
+        "right": 1134,
+        "header": 737,
+        "footer": 737,
+        "gutter": 0
+      },
+      "cols": {
+        "num": 1,
+        "spaceTw": 720
+      },
+      "docGridLinePitch": 360,
+      "header": {
+        "mode": "empty",
+        "format": {
+          "spacingBeforeTw": 0,
+          "spacingAfterTw": 0,
+          "lineTw": 40,
+          "lineRule": "exact"
+        }
+      },
+      "footer": {
+        "mode": "empty",
+        "format": {
+          "spacingBeforeTw": 0,
+          "spacingAfterTw": 0,
+          "lineTw": 40,
+          "lineRule": "exact"
+        }
+      }
+    },
+    "rules.asideTopMm": 0.44,
+    "symbol.sheet.fit": true,
+    "table.numeral.align": "right",
+    "table.zebra.minRows": 1000,
+    "type.face.condensed": "IBM Plex Sans Cond",
+    "type.scale.asideBody.size": 8.5,
+    "type.scale.caption.size": 7.5,
+    "type.scale.chapterKicker.size": 6.5,
+    "type.scale.chapterKicker.trackEm": 0.2154,
+    "type.scale.derivation.leading": 11,
+    "type.scale.derivation.size": 7,
+    "type.scale.evidenceRail.size": 5.5,
+    "type.scale.groupBand.size": 7,
+    "type.scale.registerBlock.size": 6,
+    "type.scale.runningHead.size": 6.5,
+    "type.scale.sourceLine.size": 6.5,
+    "type.scale.tableBody.leading": 11,
+    "type.scale.tableBody.size": 8,
+    "type.scale.tableHeader.size": 6.5,
+    "type.scale.tableHeader.trackEm": 0.0923,
+    "type.scale.tableNumerals.size": 7,
+    "color.wrapper.cream": "F4F5F6",
+    "cover.controlBlock.fields": [
+      "NOMOR DOKUMEN",
+      "REVISI",
+      "PENYUSUN",
+      "KUSTODIAN",
+      "DITUJUKAN KEPADA",
+      "HALAMAN",
+      "DATUM GEODETIK",
+      "VERIFIKASI"
+    ],
+    "cover.controlBlock.geodeticDatum": "WGS 84",
+    "controlSheet.distribution.defaults": {
+      "rows": [
+        [
+          "Induk",
+          "Divisi Engineering PT GSP (ENG-01)",
+          "Word dan PDF, folder standar",
+          "Tidak"
+        ]
+      ]
+    }
+  },
+  "roleFormats": {
+    "aside.body": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 0,
+        "lineTw": 250,
+        "lineRule": "exact",
+        "jc": "left"
+      },
+      "run": {
+        "face": "IBM Plex Serif",
+        "szHalfPt": 17,
+        "color": "2B3640",
+        "b": false,
+        "i": false
+      },
+      "numberRun": {
+        "face": "IBM Plex Serif",
+        "szHalfPt": 17,
+        "color": "101418",
+        "b": true,
+        "i": false
+      },
+      "cell": {
+        "marginsTw": {
+          "top": 124,
+          "left": 0,
+          "bottom": 136,
+          "right": 0
+        },
+        "borders": {
+          "top": {
+            "val": "single",
+            "sz": 10,
+            "color": "101418",
+            "space": 0
+          },
+          "bottom": {
+            "val": "single",
+            "sz": 5,
+            "color": "C3CBD1",
+            "space": 0
+          }
+        }
+      }
+    },
+    "aside.label": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 30,
+        "lineTw": 200,
+        "lineRule": "exact"
+      },
+      "run": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 14,
+        "color": "101418",
+        "b": true,
+        "i": false,
+        "caps": true,
+        "spacingTw": 18
+      },
+      "cell": {
+        "marginsTw": {
+          "top": 124,
+          "left": 0,
+          "bottom": 136,
+          "right": 0
+        },
+        "borders": {
+          "top": {
+            "val": "single",
+            "sz": 10,
+            "color": "101418",
+            "space": 0
+          },
+          "bottom": {
+            "val": "single",
+            "sz": 5,
+            "color": "C3CBD1",
+            "space": 0
+          }
+        }
+      }
+    },
+    "body.paragraph": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 135,
+        "lineTw": 270,
+        "lineRule": "exact",
+        "jc": "both",
+        "indRightTw": 2154
+      },
+      "run": {
+        "face": "IBM Plex Serif",
+        "szHalfPt": 19,
+        "color": "2B3640",
+        "b": false,
+        "i": false
+      }
+    },
+    "body.subheading": {
+      "para": {
+        "spacingBeforeTw": 180,
+        "spacingAfterTw": 20,
+        "lineTw": 270,
+        "lineRule": "exact",
+        "keepNext": true
+      },
+      "run": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 19,
+        "color": "101418",
+        "b": true,
+        "i": false
+      }
+    },
+    "caption": {
+      "para": {
+        "spacingBeforeTw": 120,
+        "spacingAfterTw": 48,
+        "lineTw": 220,
+        "lineRule": "exact",
+        "keepNext": true
+      },
+      "run": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 15,
+        "color": "2B3640",
+        "b": false,
+        "i": false
+      },
+      "labelRun": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 14,
+        "color": "101418",
+        "b": true,
+        "i": false,
+        "caps": true,
+        "spacingTw": 16
+      }
+    },
+    "cell.empty": {
+      "para": {},
+      "cell": {}
+    },
+    "chapter.datumRule": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 80,
+        "lineTw": 240,
+        "lineRule": "auto",
+        "keepNext": true
+      }
+    },
+    "chapter.kicker": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 80,
+        "lineTw": 180,
+        "lineRule": "exact",
+        "keepNext": true
+      },
+      "run": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 13,
+        "color": "B45309",
+        "b": true,
+        "i": false,
+        "caps": true,
+        "spacingTw": 28
+      }
+    },
+    "chapter.title": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 140,
+        "lineTw": 400,
+        "lineRule": "exact",
+        "keepNext": true,
+        "outlineLvl": 0
+      },
+      "run": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 32,
+        "color": "101418",
+        "b": true,
+        "i": false
+      }
+    },
+    "controlSheet.blockHeading": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 60,
+        "lineTw": 240,
+        "lineRule": "exact"
+      },
+      "run": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 18,
+        "color": "14110F",
+        "b": true,
+        "i": false
+      }
+    },
+    "controlSheet.methodStatement": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 160,
+        "lineTw": 250,
+        "lineRule": "exact",
+        "jc": "both",
+        "indRightTw": 1701
+      },
+      "run": {
+        "face": "IBM Plex Serif",
+        "szHalfPt": 17,
+        "color": "33302C",
+        "b": false,
+        "i": false
+      },
+      "glyphRun": {
+        "TERUKUR": {
+          "face": "DejaVu Sans",
+          "szHalfPt": 15
+        },
+        "DITURUNKAN": {
+          "face": "DejaVu Sans",
+          "szHalfPt": 15
+        },
+        "PEMASOK": {
+          "face": "DejaVu Sans",
+          "szHalfPt": 15
+        },
+        "ASUMSI": {
+          "face": "DejaVu Sans",
+          "szHalfPt": 15
+        }
+      }
+    },
+    "controlTable.cell": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 0,
+        "lineTw": 220,
+        "lineRule": "exact"
+      },
+      "run": {
+        "face": "IBM Plex Serif",
+        "szHalfPt": 16,
+        "color": "33302C",
+        "b": false,
+        "i": false
+      },
+      "cell": {
+        "marginsTw": {
+          "top": 79,
+          "left": 0,
+          "bottom": 79,
+          "right": 141
+        },
+        "borders": {
+          "bottom": {
+            "val": "single",
+            "sz": 5,
+            "color": "C4BEB4",
+            "space": 0
+          }
+        }
+      }
+    },
+    "controlTable.header": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 0,
+        "lineTw": 180,
+        "lineRule": "exact"
+      },
+      "run": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 13,
+        "color": "7A756E",
+        "b": true,
+        "i": false,
+        "caps": true,
+        "spacingTw": 12
+      },
+      "cell": {
+        "marginsTw": {
+          "top": 85,
+          "left": 0,
+          "bottom": 85,
+          "right": 141
+        },
+        "borders": {
+          "top": {
+            "val": "single",
+            "sz": 10,
+            "color": "14110F",
+            "space": 0
+          },
+          "bottom": {
+            "val": "single",
+            "sz": 6,
+            "color": "7A756E",
+            "space": 0
+          }
+        }
+      }
+    },
+    "cover.addressLine": {
+      "para": {
+        "spacingBeforeTw": 100,
+        "spacingAfterTw": 80,
+        "lineTw": 210,
+        "lineRule": "exact"
+      },
+      "run": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 14,
+        "color": "7A756E",
+        "b": false,
+        "i": false
+      }
+    },
+    "cover.colophonLeft": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 0,
+        "lineTw": 180,
+        "lineRule": "exact",
+        "jc": "left"
+      },
+      "run": {
+        "face": "IBM Plex Mono",
+        "szHalfPt": 12,
+        "color": "7A756E",
+        "b": false,
+        "i": false
+      },
+      "cell": {
+        "marginsTw": {
+          "top": 102,
+          "left": 0,
+          "bottom": 0,
+          "right": 0
+        },
+        "borders": {
+          "top": {
+            "val": "single",
+            "sz": 5,
+            "color": "C4BEB4",
+            "space": 0
+          }
+        }
+      }
+    },
+    "cover.colophonRight": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 0,
+        "lineTw": 180,
+        "lineRule": "exact",
+        "jc": "right"
+      },
+      "run": {
+        "face": "IBM Plex Mono",
+        "szHalfPt": 12,
+        "color": "6E1420",
+        "b": true,
+        "i": false
+      },
+      "cell": {
+        "marginsTw": {
+          "top": 102,
+          "left": 0,
+          "bottom": 0,
+          "right": 0
+        },
+        "borders": {
+          "top": {
+            "val": "single",
+            "sz": 5,
+            "color": "C4BEB4",
+            "space": 0
+          }
+        }
+      }
+    },
+    "cover.controlLabel": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 0,
+        "lineTw": 220,
+        "lineRule": "exact"
+      },
+      "run": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 12,
+        "color": "7A756E",
+        "b": true,
+        "i": false,
+        "caps": true,
+        "spacingTw": 14
+      },
+      "cell": {
+        "marginsTw": {
+          "top": 85,
+          "left": 0,
+          "bottom": 85,
+          "right": 170
+        },
+        "borders": {
+          "bottom": {
+            "val": "single",
+            "sz": 5,
+            "color": "C4BEB4",
+            "space": 0
+          }
+        }
+      }
+    },
+    "cover.controlValue": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 0,
+        "lineTw": 220,
+        "lineRule": "exact"
+      },
+      "run": {
+        "face": "IBM Plex Mono",
+        "szHalfPt": 14,
+        "color": "14110F",
+        "b": false,
+        "i": false
+      },
+      "cell": {
+        "marginsTw": {
+          "top": 85,
+          "left": 0,
+          "bottom": 85,
+          "right": 170
+        },
+        "borders": {
+          "bottom": {
+            "val": "single",
+            "sz": 5,
+            "color": "C4BEB4",
+            "space": 0
+          }
+        }
+      }
+    },
+    "cover.hairline": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 800,
+        "lineTw": 120,
+        "lineRule": "exact",
+        "borders": {
+          "bottom": {
+            "val": "single",
+            "sz": 5,
+            "color": "C4BEB4",
+            "space": 1
+          }
+        }
+      }
+    },
+    "cover.identityString": {
+      "para": {
+        "spacingBeforeTw": 200,
+        "spacingAfterTw": 0,
+        "lineTw": 180,
+        "lineRule": "exact"
+      },
+      "run": {
+        "face": "IBM Plex Mono",
+        "szHalfPt": 12,
+        "color": "7A756E",
+        "b": false,
+        "i": false,
+        "spacingTw": 24
+      }
+    },
+    "cover.logo": {
+      "para": {
+        "spacingBeforeTw": 360,
+        "spacingAfterTw": 0,
+        "lineTw": 240,
+        "lineRule": "auto"
+      }
+    },
+    "cover.scopeLine": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 520,
+        "lineTw": 240,
+        "lineRule": "exact",
+        "indRightTw": 1134
+      },
+      "run": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 15,
+        "color": "7A756E",
+        "b": false,
+        "i": false
+      }
+    },
+    "cover.standfirst": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 120,
+        "lineTw": 300,
+        "lineRule": "exact",
+        "indRightTw": 1701
+      },
+      "run": {
+        "face": "IBM Plex Serif",
+        "szHalfPt": 21,
+        "color": "33302C",
+        "b": false,
+        "i": true
+      }
+    },
+    "cover.titleFirst": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 0,
+        "lineTw": 580,
+        "lineRule": "exact"
+      },
+      "run": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 50,
+        "color": "14110F",
+        "b": true,
+        "i": false
+      }
+    },
+    "cover.titleLast": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 180,
+        "lineTw": 580,
+        "lineRule": "exact"
+      },
+      "run": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 50,
+        "color": "14110F",
+        "b": true,
+        "i": false
+      }
+    },
+    "derivation.expr": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 0,
+        "lineTw": 220,
+        "lineRule": "exact"
+      },
+      "run": {
+        "face": "IBM Plex Mono",
+        "szHalfPt": 14,
+        "color": "101418",
+        "b": false,
+        "i": false
+      },
+      "cell": {}
+    },
+    "derivation.intro": {
+      "para": {
+        "spacingBeforeTw": 40,
+        "spacingAfterTw": 0,
+        "lineTw": 200,
+        "lineRule": "exact"
+      },
+      "run": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 14,
+        "color": "6B7783",
+        "b": false,
+        "i": false
+      },
+      "cell": {
+        "marginsTw": {
+          "top": 147,
+          "left": 255,
+          "bottom": 147,
+          "right": 0
+        },
+        "borders": {
+          "left": {
+            "val": "single",
+            "sz": 10,
+            "color": "B45309",
+            "space": 0
+          }
+        }
+      }
+    },
+    "derivation.label": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 40,
+        "lineTw": 180,
+        "lineRule": "exact"
+      },
+      "run": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 13,
+        "color": "B45309",
+        "b": true,
+        "i": false,
+        "caps": true,
+        "spacingTw": 22
+      },
+      "cell": {
+        "marginsTw": {
+          "top": 147,
+          "left": 255,
+          "bottom": 147,
+          "right": 0
+        },
+        "borders": {
+          "left": {
+            "val": "single",
+            "sz": 10,
+            "color": "B45309",
+            "space": 0
+          }
+        }
+      }
+    },
+    "derivation.value": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 0,
+        "lineTw": 220,
+        "lineRule": "exact",
+        "jc": "right"
+      },
+      "run": {
+        "face": "IBM Plex Mono",
+        "szHalfPt": 14,
+        "color": "101418",
+        "b": false,
+        "i": false
+      },
+      "glyphRun": {
+        "TERUKUR": {
+          "face": "DejaVu Sans",
+          "szHalfPt": 13,
+          "color": "101418",
+          "b": false,
+          "i": false
+        },
+        "DITURUNKAN": {
+          "face": "DejaVu Sans",
+          "szHalfPt": 13,
+          "color": "101418",
+          "b": false,
+          "i": false
+        }
+      },
+      "cell": {}
+    },
+    "figure.keyRow": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 20,
+        "lineTw": 180,
+        "lineRule": "exact",
+        "keepNext": true
+      },
+      "run": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 13,
+        "color": "6B7783",
+        "b": false,
+        "i": false
+      },
+      "labelRun": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 13,
+        "color": "6B7783",
+        "b": true,
+        "i": false,
+        "spacingTw": 12
+      }
+    },
+    "figure.paragraph": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 48,
+        "lineTw": 240,
+        "lineRule": "auto",
+        "keepNext": true
+      }
+    },
+    "figure.source": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 0,
+        "lineTw": 180,
+        "lineRule": "exact",
+        "borders": {
+          "top": {
+            "val": "single",
+            "sz": 5,
+            "color": "C3CBD1",
+            "space": 1
+          }
+        }
+      },
+      "run": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 13,
+        "color": "6B7783",
+        "b": false,
+        "i": false
+      },
+      "labelRun": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 13,
+        "color": "6B7783",
+        "b": true,
+        "i": false,
+        "spacingTw": 12
+      }
+    },
+    "front.kicker": {
+      "para": {
+        "spacingBeforeTw": 360,
+        "spacingAfterTw": 120,
+        "lineTw": 220,
+        "lineRule": "exact"
+      },
+      "run": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 14,
+        "color": "6E1420",
+        "b": true,
+        "i": false,
+        "caps": true,
+        "spacingTw": 30
+      }
+    },
+    "front.pageTitle": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 200,
+        "lineTw": 400,
+        "lineRule": "exact"
+      },
+      "run": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 32,
+        "color": "14110F",
+        "b": true,
+        "i": false
+      }
+    },
+    "list.bullet": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 60,
+        "lineTw": 270,
+        "lineRule": "exact",
+        "jc": "left",
+        "indLeftTw": 283,
+        "indRightTw": 2154,
+        "indHangingTw": 283,
+        "tabs": [
+          {
+            "posTw": 283,
+            "val": "left"
+          }
+        ]
+      },
+      "run": {
+        "face": "IBM Plex Serif",
+        "szHalfPt": 19,
+        "color": "2B3640",
+        "b": false,
+        "i": false
+      },
+      "markerRun": {
+        "face": "IBM Plex Serif",
+        "szHalfPt": 19,
+        "color": "6B7783",
+        "b": false,
+        "i": false
+      }
+    },
+    "list.number": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 60,
+        "lineTw": 270,
+        "lineRule": "exact",
+        "indLeftTw": 397,
+        "indRightTw": 2154,
+        "indHangingTw": 397,
+        "tabs": [
+          {
+            "posTw": 397,
+            "val": "left"
+          }
+        ]
+      },
+      "run": {
+        "face": "IBM Plex Serif",
+        "szHalfPt": 19,
+        "color": "2B3640",
+        "b": false,
+        "i": false
+      },
+      "markerRun": {
+        "face": "IBM Plex Mono",
+        "szHalfPt": 16,
+        "color": "B45309",
+        "b": true,
+        "i": false
+      }
+    },
+    "monoBlock.label": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 40,
+        "lineTw": 180,
+        "lineRule": "exact"
+      },
+      "run": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 13,
+        "color": "6B7783",
+        "b": true,
+        "i": false,
+        "caps": true,
+        "spacingTw": 22
+      },
+      "cell": {
+        "marginsTw": {
+          "top": 136,
+          "left": 255,
+          "bottom": 136,
+          "right": 0
+        },
+        "borders": {
+          "left": {
+            "val": "single",
+            "sz": 10,
+            "color": "6B7783",
+            "space": 0
+          }
+        }
+      }
+    },
+    "part.chapterNo": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 0,
+        "lineTw": 220,
+        "lineRule": "exact"
+      },
+      "run": {
+        "face": "IBM Plex Mono",
+        "szHalfPt": 14,
+        "color": "7A756E",
+        "b": false,
+        "i": false
+      },
+      "cell": {
+        "marginsTw": {
+          "top": 79,
+          "left": 0,
+          "bottom": 79,
+          "right": 113
+        },
+        "borders": {
+          "bottom": {
+            "val": "single",
+            "sz": 5,
+            "color": "C4BEB4",
+            "space": 0
+          }
+        }
+      }
+    },
+    "part.chapterTitle": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 0,
+        "lineTw": 220,
+        "lineRule": "exact"
+      },
+      "run": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 18,
+        "color": "14110F",
+        "b": false,
+        "i": false
+      },
+      "cell": {
+        "marginsTw": {
+          "top": 79,
+          "left": 0,
+          "bottom": 79,
+          "right": 113
+        },
+        "borders": {
+          "bottom": {
+            "val": "single",
+            "sz": 5,
+            "color": "C4BEB4",
+            "space": 0
+          }
+        }
+      }
+    },
+    "part.lede": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 360,
+        "lineTw": 300,
+        "lineRule": "exact",
+        "indRightTw": 2154
+      },
+      "run": {
+        "face": "IBM Plex Serif",
+        "szHalfPt": 21,
+        "color": "33302C",
+        "b": false,
+        "i": true
+      }
+    },
+    "part.title": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 180,
+        "lineTw": 560,
+        "lineRule": "exact",
+        "outlineLvl": 0
+      },
+      "run": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 48,
+        "color": "14110F",
+        "b": true,
+        "i": false
+      }
+    },
+    "rail.mark": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 0,
+        "lineTw": 168,
+        "lineRule": "exact"
+      },
+      "run": {
+        "face": "IBM Plex Mono",
+        "szHalfPt": 11,
+        "b": true,
+        "i": false,
+        "caps": true
+      },
+      "glyphRun": {
+        "TERUKUR": {
+          "face": "DejaVu Sans",
+          "szHalfPt": 10,
+          "color": "101418",
+          "b": true,
+          "i": false,
+          "caps": true
+        },
+        "DITURUNKAN": {
+          "face": "DejaVu Sans",
+          "szHalfPt": 10,
+          "color": "B45309",
+          "b": true,
+          "i": false,
+          "caps": true
+        },
+        "ASUMSI": {
+          "face": "DejaVu Sans",
+          "szHalfPt": 10,
+          "color": "9B1C1C",
+          "b": true,
+          "i": false,
+          "caps": true
+        }
+      },
+      "cell": {}
+    },
+    "rail.note": {
+      "para": {
+        "spacingBeforeTw": 30,
+        "spacingAfterTw": 0,
+        "lineTw": 168,
+        "lineRule": "exact"
+      },
+      "run": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 12,
+        "color": "6B7783",
+        "b": false,
+        "i": false
+      },
+      "cell": {}
+    },
+    "rail.prose": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 0,
+        "lineTw": 270,
+        "lineRule": "exact",
+        "jc": "both"
+      },
+      "run": {
+        "face": "IBM Plex Serif",
+        "szHalfPt": 19,
+        "color": "2B3640",
+        "b": false,
+        "i": false
+      },
+      "cell": {}
+    },
+    "rail.source": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 0,
+        "lineTw": 168,
+        "lineRule": "exact"
+      },
+      "run": {
+        "face": "IBM Plex Mono",
+        "szHalfPt": 11,
+        "color": "6B7783",
+        "b": false,
+        "i": false,
+        "caps": true
+      },
+      "cell": {}
+    },
+    "section.heading": {
+      "para": {
+        "spacingBeforeTw": 270,
+        "spacingAfterTw": 80,
+        "lineTw": 270,
+        "lineRule": "exact",
+        "keepNext": true,
+        "outlineLvl": 1
+      },
+      "run": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 22,
+        "color": "101418",
+        "b": true,
+        "i": false
+      },
+      "numberRun": {
+        "face": "IBM Plex Mono",
+        "szHalfPt": 16,
+        "color": "6B7783",
+        "b": false,
+        "i": false
+      }
+    },
+    "signature.space": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 0,
+        "lineTw": 680,
+        "lineRule": "exact"
+      },
+      "cell": {
+        "marginsTw": {
+          "top": 0,
+          "left": 0,
+          "bottom": 0,
+          "right": 226
+        }
+      }
+    },
+    "spacer.afterBlock": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 0,
+        "lineTw": 135,
+        "lineRule": "exact"
+      }
+    },
+    "spacer.afterList": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 0,
+        "lineTw": 68,
+        "lineRule": "exact"
+      }
+    },
+    "spacer.generic": {
+      "para": {
+        "spacingBeforeTw": 1400,
+        "spacingAfterTw": 0,
+        "lineTw": 120,
+        "lineRule": "exact"
+      }
+    },
+    "table.cellGlyph": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 0,
+        "lineTw": 210,
+        "lineRule": "exact"
+      },
+      "run": {
+        "face": "DejaVu Sans",
+        "szHalfPt": 12,
+        "color": "101418",
+        "b": false,
+        "i": false
+      },
+      "cell": {
+        "marginsTw": {
+          "top": 85,
+          "left": 0,
+          "bottom": 85,
+          "right": 141
+        },
+        "borders": {
+          "bottom": {
+            "val": "single",
+            "sz": 5,
+            "color": "C3CBD1",
+            "space": 0
+          }
+        }
+      }
+    },
+    "table.cellMono": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 0,
+        "lineTw": 210,
+        "lineRule": "exact"
+      },
+      "run": {
+        "face": "IBM Plex Mono",
+        "szHalfPt": 14,
+        "color": "101418",
+        "b": false,
+        "i": false
+      },
+      "cell": {
+        "marginsTw": {
+          "top": 85,
+          "left": 0,
+          "bottom": 85,
+          "right": 141
+        },
+        "borders": {
+          "bottom": {
+            "val": "single",
+            "sz": 5,
+            "color": "C3CBD1",
+            "space": 0
+          }
+        }
+      }
+    },
+    "table.cellNumeralRight": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 0,
+        "lineTw": 220,
+        "lineRule": "exact",
+        "jc": "right"
+      },
+      "run": {
+        "face": "IBM Plex Mono",
+        "szHalfPt": 15,
+        "color": "101418",
+        "b": false,
+        "i": false
+      },
+      "cell": {
+        "marginsTw": {
+          "top": 85,
+          "left": 0,
+          "bottom": 85,
+          "right": 141
+        },
+        "borders": {
+          "bottom": {
+            "val": "single",
+            "sz": 5,
+            "color": "C3CBD1",
+            "space": 0
+          }
+        }
+      }
+    },
+    "table.cellText": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 0,
+        "lineTw": 220,
+        "lineRule": "exact"
+      },
+      "run": {
+        "face": "IBM Plex Serif",
+        "szHalfPt": 16,
+        "color": "2B3640",
+        "b": false,
+        "i": false
+      },
+      "cell": {
+        "marginsTw": {
+          "top": 85,
+          "left": 0,
+          "bottom": 85,
+          "right": 141
+        },
+        "borders": {
+          "bottom": {
+            "val": "single",
+            "sz": 5,
+            "color": "C3CBD1",
+            "space": 0
+          }
+        }
+      }
+    },
+    "table.groupBand": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 0,
+        "lineTw": 200,
+        "lineRule": "exact"
+      },
+      "run": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 14,
+        "color": "101418",
+        "b": true,
+        "i": false,
+        "caps": true,
+        "spacingTw": 14
+      },
+      "cell": {
+        "marginsTw": {
+          "top": 192,
+          "left": 0,
+          "bottom": 68,
+          "right": 0
+        },
+        "borders": {
+          "bottom": {
+            "val": "single",
+            "sz": 5,
+            "color": "C3CBD1",
+            "space": 0
+          }
+        }
+      }
+    },
+    "table.headerLeft": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 0,
+        "lineTw": 180,
+        "lineRule": "exact",
+        "jc": "left"
+      },
+      "run": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 13,
+        "color": "6B7783",
+        "b": true,
+        "i": false,
+        "caps": true,
+        "spacingTw": 12
+      },
+      "cell": {
+        "marginsTw": {
+          "top": 102,
+          "left": 0,
+          "bottom": 102,
+          "right": 141
+        },
+        "borders": {
+          "top": {
+            "val": "single",
+            "sz": 10,
+            "color": "101418",
+            "space": 0
+          },
+          "bottom": {
+            "val": "single",
+            "sz": 6,
+            "color": "6B7783",
+            "space": 0
+          }
+        }
+      }
+    },
+    "table.headerRight": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 0,
+        "lineTw": 180,
+        "lineRule": "exact",
+        "jc": "right"
+      },
+      "run": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 13,
+        "color": "6B7783",
+        "b": true,
+        "i": false,
+        "caps": true,
+        "spacingTw": 12
+      },
+      "cell": {
+        "marginsTw": {
+          "top": 102,
+          "left": 0,
+          "bottom": 102,
+          "right": 141
+        },
+        "borders": {
+          "top": {
+            "val": "single",
+            "sz": 10,
+            "color": "101418",
+            "space": 0
+          },
+          "bottom": {
+            "val": "single",
+            "sz": 6,
+            "color": "6B7783",
+            "space": 0
+          }
+        }
+      }
+    },
+    "table.source": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 0,
+        "lineTw": 180,
+        "lineRule": "exact"
+      },
+      "run": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 13,
+        "color": "6B7783",
+        "b": false,
+        "i": false
+      },
+      "labelRun": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 13,
+        "color": "6B7783",
+        "b": true,
+        "i": false,
+        "spacingTw": 12
+      },
+      "cell": {
+        "marginsTw": {
+          "top": 102,
+          "left": 0,
+          "bottom": 0,
+          "right": 0
+        },
+        "borders": {
+          "top": {
+            "val": "single",
+            "sz": 5,
+            "color": "C3CBD1",
+            "space": 0
+          }
+        }
+      }
+    },
+    "toc.chapterLabel": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 0,
+        "lineTw": 200,
+        "lineRule": "exact"
+      },
+      "run": {
+        "face": "IBM Plex Mono",
+        "szHalfPt": 14,
+        "color": "7A756E",
+        "b": false,
+        "i": false
+      },
+      "cell": {
+        "marginsTw": {
+          "top": 62,
+          "left": 0,
+          "bottom": 62,
+          "right": 113
+        },
+        "borders": {
+          "bottom": {
+            "val": "single",
+            "sz": 5,
+            "color": "C4BEB4",
+            "space": 0
+          }
+        }
+      }
+    },
+    "toc.chapterPage": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 0,
+        "lineTw": 200,
+        "lineRule": "exact",
+        "jc": "right"
+      },
+      "run": {
+        "face": "IBM Plex Mono",
+        "szHalfPt": 14,
+        "color": "14110F",
+        "b": false,
+        "i": false
+      },
+      "cell": {
+        "marginsTw": {
+          "top": 62,
+          "left": 0,
+          "bottom": 62,
+          "right": 113
+        },
+        "borders": {
+          "bottom": {
+            "val": "single",
+            "sz": 5,
+            "color": "C4BEB4",
+            "space": 0
+          }
+        }
+      }
+    },
+    "toc.chapterTitle": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 0,
+        "lineTw": 200,
+        "lineRule": "exact"
+      },
+      "run": {
+        "face": "IBM Plex Serif",
+        "szHalfPt": 16,
+        "color": "33302C",
+        "b": false,
+        "i": false
+      },
+      "cell": {
+        "marginsTw": {
+          "top": 62,
+          "left": 0,
+          "bottom": 62,
+          "right": 113
+        },
+        "borders": {
+          "bottom": {
+            "val": "single",
+            "sz": 5,
+            "color": "C4BEB4",
+            "space": 0
+          }
+        }
+      }
+    },
+    "toc.note": {
+      "para": {
+        "spacingBeforeTw": 160,
+        "spacingAfterTw": 0,
+        "lineTw": 200,
+        "lineRule": "exact",
+        "indRightTw": 1701
+      },
+      "run": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 14,
+        "color": "7A756E",
+        "b": false,
+        "i": false
+      }
+    },
+    "toc.partLabel": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 0,
+        "lineTw": 200,
+        "lineRule": "exact"
+      },
+      "run": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 13,
+        "color": "6E1420",
+        "b": true,
+        "i": false,
+        "caps": true,
+        "spacingTw": 18
+      },
+      "cell": {
+        "marginsTw": {
+          "top": 124,
+          "left": 0,
+          "bottom": 62,
+          "right": 113
+        },
+        "borders": {
+          "bottom": {
+            "val": "single",
+            "sz": 8,
+            "color": "14110F",
+            "space": 0
+          }
+        }
+      }
+    },
+    "toc.partPage": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 0,
+        "lineTw": 200,
+        "lineRule": "exact",
+        "jc": "right"
+      },
+      "run": {
+        "face": "IBM Plex Mono",
+        "szHalfPt": 14,
+        "color": "14110F",
+        "b": true,
+        "i": false
+      },
+      "cell": {
+        "marginsTw": {
+          "top": 124,
+          "left": 0,
+          "bottom": 62,
+          "right": 113
+        },
+        "borders": {
+          "bottom": {
+            "val": "single",
+            "sz": 8,
+            "color": "14110F",
+            "space": 0
+          }
+        }
+      }
+    },
+    "toc.partTitle": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 0,
+        "lineTw": 200,
+        "lineRule": "exact"
+      },
+      "run": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 17,
+        "color": "14110F",
+        "b": true,
+        "i": false
+      },
+      "cell": {
+        "marginsTw": {
+          "top": 124,
+          "left": 0,
+          "bottom": 62,
+          "right": 113
+        },
+        "borders": {
+          "bottom": {
+            "val": "single",
+            "sz": 8,
+            "color": "14110F",
+            "space": 0
+          }
+        }
+      }
+    },
+    "toc.title": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 160,
+        "lineTw": 400,
+        "lineRule": "exact"
+      },
+      "run": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 32,
+        "color": "14110F",
+        "b": true,
+        "i": false
+      }
+    },
+    "unit.sectionHolder": {
+      "para": {}
+    },
+    "wrapper.datumRule": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 140,
+        "lineTw": 240,
+        "lineRule": "auto"
+      }
+    },
+    "wrapper.kicker": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 160,
+        "lineTw": 220,
+        "lineRule": "exact"
+      },
+      "run": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 15,
+        "color": "6E1420",
+        "b": true,
+        "i": false,
+        "caps": true,
+        "spacingTw": 30
+      }
+    },
+    "wrapper.sealBand": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 0,
+        "lineTw": 180,
+        "lineRule": "exact",
+        "jc": "left"
+      },
+      "run": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 13,
+        "color": "F4F5F6",
+        "b": true,
+        "i": false,
+        "caps": true,
+        "spacingTw": 26
+      },
+      "cell": {
+        "marginsTw": {
+          "top": 85,
+          "left": 141,
+          "bottom": 85,
+          "right": 141
+        },
+        "shading": {
+          "fill": "6E1420",
+          "val": "clear"
+        }
+      }
+    }
+  },
+  "skeleton": {
+    "slots": [
+      {
+        "slotKey": "cover",
+        "sectionType": "cover",
+        "label": "Sampul",
+        "position": 1,
+        "required": true,
+        "positionLocked": true,
+        "repeatable": false,
+        "contentMode": "MIXED",
+        "tiers": [
+          "TERBIT",
+          "SERAH"
+        ],
+        "admits": [],
+        "essentials": {}
+      },
+      {
+        "slotKey": "controlSheet",
+        "sectionType": "controlSheet",
+        "label": "Lembar Kendali",
+        "position": 2,
+        "required": true,
+        "positionLocked": false,
+        "repeatable": false,
+        "contentMode": "INPUT",
+        "tiers": [
+          "TERBIT",
+          "SERAH"
+        ],
+        "admits": [],
+        "essentials": {}
+      },
+      {
+        "slotKey": "signature",
+        "sectionType": "signatureBlock",
+        "label": "Tanda Tangan",
+        "position": 3,
+        "required": true,
+        "positionLocked": false,
+        "repeatable": false,
+        "contentMode": "INPUT",
+        "tiers": [
+          "TERBIT",
+          "SERAH"
+        ],
+        "admits": [],
+        "essentials": {}
+      },
+      {
+        "slotKey": "toc",
+        "sectionType": "toc",
+        "label": "Daftar Isi",
+        "position": 4,
+        "required": true,
+        "positionLocked": false,
+        "repeatable": false,
+        "contentMode": "AUTO",
+        "tiers": [
+          "TERBIT",
+          "SERAH"
+        ],
+        "admits": [],
+        "essentials": {}
+      },
+      {
+        "slotKey": "content",
+        "sectionType": "chapter",
+        "label": "Isi",
+        "position": 5,
+        "required": true,
+        "positionLocked": false,
+        "repeatable": true,
+        "minItems": 1,
+        "contentMode": "INPUT",
+        "tiers": [],
+        "admits": [
+          "paragraph",
+          "list",
+          "aside",
+          "monoBlock",
+          "assumptionInline",
+          "table",
+          "specTable",
+          "registerTable",
+          "exampleWrongRight",
+          "ruleTable",
+          "checklist",
+          "glossary",
+          "sourceRegister",
+          "ruleIndex",
+          "referenceScale",
+          "financialTable",
+          "derivation",
+          "chart",
+          "diagram",
+          "image",
+          "symbolSheet"
+        ],
+        "essentials": {}
+      },
+      {
+        "slotKey": "references",
+        "sectionType": "sourceRegister",
+        "label": "Referensi",
+        "position": 6,
+        "required": false,
+        "positionLocked": false,
+        "repeatable": false,
+        "contentMode": "INPUT",
+        "tiers": [],
+        "admits": [],
+        "essentials": {}
+      },
+      {
+        "slotKey": "appendices",
+        "sectionType": "appendix",
+        "label": "Lampiran",
+        "position": 7,
+        "required": false,
+        "positionLocked": true,
+        "repeatable": true,
+        "contentMode": "INPUT",
+        "tiers": [],
+        "admits": [
+          "paragraph",
+          "list",
+          "aside",
+          "monoBlock",
+          "assumptionInline",
+          "table",
+          "specTable",
+          "registerTable",
+          "exampleWrongRight",
+          "ruleTable",
+          "checklist",
+          "glossary",
+          "sourceRegister",
+          "ruleIndex",
+          "referenceScale",
+          "financialTable",
+          "derivation",
+          "chart",
+          "diagram",
+          "image",
+          "symbolSheet"
+        ],
+        "essentials": {}
+      }
+    ]
+  }
+}

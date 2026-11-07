@@ -1,0 +1,63 @@
+{
+  "$schema": "studio.chart/v1",
+  "kind": "W-04",
+  "title": "Beban pendingin tertinggi terjadi pada awal tahun.",
+  "source": "Data ilustratif korpus paritas S63 (sintetis, bukan data klien).",
+  "widthMm": 128,
+  "data": {
+    "shape": "categorical",
+    "points": [
+      {
+        "label": "Jan",
+        "value": 11.2
+      },
+      {
+        "label": "Feb",
+        "value": 7.9
+      },
+      {
+        "label": "Mar",
+        "value": 8.6
+      },
+      {
+        "label": "Apr",
+        "value": 4.1
+      },
+      {
+        "label": "Mei",
+        "value": 3.8
+      },
+      {
+        "label": "Jun",
+        "value": 9.7
+      },
+      {
+        "label": "Jul",
+        "value": 7.4
+      },
+      {
+        "label": "Agu",
+        "value": 8.9
+      },
+      {
+        "label": "Sep",
+        "value": 10.8
+      },
+      {
+        "label": "Okt",
+        "value": 9.3
+      },
+      {
+        "label": "Nov",
+        "value": 8.4
+      },
+      {
+        "label": "Des",
+        "value": 8.9
+      }
+    ]
+  },
+  "heightMm": 54,
+  "unit": "kW",
+  "dec": 1
+}

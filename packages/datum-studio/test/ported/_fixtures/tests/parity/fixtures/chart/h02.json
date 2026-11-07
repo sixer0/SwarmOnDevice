@@ -1,0 +1,75 @@
+{
+  "$schema": "studio.chart/v1",
+  "kind": "H-02",
+  "title": "Lokasi berbeban besar juga memiliki latensi tinggi.",
+  "source": "Data ilustratif korpus paritas S63 (sintetis, bukan data klien).",
+  "widthMm": 128,
+  "data": {
+    "shape": "xy",
+    "points": [
+      {
+        "x": 9.3,
+        "y": 9.5,
+        "size": 298.7
+      },
+      {
+        "x": 7.2,
+        "y": 5.7,
+        "size": 233.7
+      },
+      {
+        "x": 13.1,
+        "y": 10.4,
+        "size": 64.5
+      },
+      {
+        "x": 13.3,
+        "y": 6.2,
+        "size": 149.5,
+        "label": "Lokasi 4"
+      },
+      {
+        "x": 11.6,
+        "y": 6.3,
+        "size": 131.4
+      },
+      {
+        "x": 21.1,
+        "y": 14.2,
+        "size": 254.9
+      },
+      {
+        "x": 45.5,
+        "y": 18.1,
+        "size": 347.8
+      },
+      {
+        "x": 40.5,
+        "y": 18.5,
+        "size": 350.8
+      },
+      {
+        "x": 31.6,
+        "y": 10.4,
+        "size": 216.1
+      },
+      {
+        "x": 47.2,
+        "y": 19.4,
+        "size": 238.1
+      },
+      {
+        "x": 19,
+        "y": 6.9,
+        "size": 109.5
+      },
+      {
+        "x": 5.8,
+        "y": 4.6,
+        "size": 352.7
+      }
+    ]
+  },
+  "heightMm": 66,
+  "dec": 1
+}

@@ -1,0 +1,31 @@
+{
+  "$schema": "studio.chart/v1",
+  "kind": "K-08",
+  "title": "Gedung pusat memegang sebagian besar titik kamera.",
+  "source": "Data ilustratif korpus paritas S63 (sintetis, bukan data klien).",
+  "widthMm": 128,
+  "data": {
+    "shape": "categorical",
+    "points": [
+      {
+        "label": "Gedung pusat",
+        "value": 58
+      },
+      {
+        "label": "Gudang utara",
+        "value": 25
+      },
+      {
+        "label": "Cabang timur",
+        "value": 13
+      },
+      {
+        "label": "Depo selatan",
+        "value": 4
+      }
+    ]
+  },
+  "heightMm": 56,
+  "unit": "titik",
+  "dec": 0
+}

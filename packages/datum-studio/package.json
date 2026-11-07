@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json.schemastore.org/package.json",
+  "name": "@swarm/datum-studio",
+  "version": "1.2.0",
+  "private": true,
+  "license": "MIT",
+  "description": "DATUM Studio for Swarm: vendored Studio copy (vendor/, provenance.json), local adapter, store and MCP server (rows 27-31, 37).",
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsgo --noEmit"
+  },
+  "imports": {
+    "#sqlite": {
+      "bun": "./src/store/sqlite.bun.ts",
+      "node": "./src/store/sqlite.node.ts",
+      "default": "./src/store/sqlite.bun.ts"
+    }
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.1",
+    "ajv": "8.20.0",
+    "fflate": "0.8.3"
+  },
+  "devDependencies": {
+    "@tsconfig/bun": "catalog:",
+    "@types/bun": "catalog:",
+    "@typescript/native-preview": "catalog:",
+    "typescript": "catalog:"
+  }
+}

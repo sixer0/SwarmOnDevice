@@ -1,0 +1,39 @@
+{
+  "$schema": "studio.chart/v1",
+  "kind": "P-02",
+  "title": "Jumlah tiket perawatan naik setiap tahun sejak 2023.",
+  "source": "Data ilustratif korpus paritas S63 (sintetis, bukan data klien).",
+  "widthMm": 128,
+  "data": {
+    "shape": "categorical",
+    "points": [
+      {
+        "label": "2021",
+        "value": 118
+      },
+      {
+        "label": "2022",
+        "value": 132
+      },
+      {
+        "label": "2023",
+        "value": 127
+      },
+      {
+        "label": "2024",
+        "value": 149
+      },
+      {
+        "label": "2025",
+        "value": 161
+      },
+      {
+        "label": "2026",
+        "value": 174,
+        "accent": true
+      }
+    ]
+  },
+  "unit": "tiket",
+  "dec": 0
+}

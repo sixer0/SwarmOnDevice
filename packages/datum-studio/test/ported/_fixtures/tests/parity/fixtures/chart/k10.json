@@ -1,0 +1,35 @@
+{
+  "$schema": "studio.chart/v1",
+  "kind": "K-10",
+  "title": "Hanya sembilan dari 120 dokumen sampai ke kontrak.",
+  "source": "Data ilustratif korpus paritas S63 (sintetis, bukan data klien).",
+  "widthMm": 128,
+  "data": {
+    "shape": "categorical",
+    "points": [
+      {
+        "label": "Dokumen masuk",
+        "value": 120
+      },
+      {
+        "label": "Verifikasi teknis",
+        "value": 84
+      },
+      {
+        "label": "Verifikasi harga",
+        "value": 51
+      },
+      {
+        "label": "Evaluasi akhir",
+        "value": 22
+      },
+      {
+        "label": "Kontrak terbit",
+        "value": 9
+      }
+    ]
+  },
+  "heightMm": 62,
+  "unit": "dokumen",
+  "dec": 0
+}

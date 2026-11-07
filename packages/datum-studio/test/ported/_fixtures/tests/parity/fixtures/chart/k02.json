@@ -1,0 +1,48 @@
+{
+  "$schema": "studio.chart/v1",
+  "kind": "K-02",
+  "title": "Porsi instalasi paling besar pada proyek 4.",
+  "source": "Data ilustratif korpus paritas S63 (sintetis, bukan data klien).",
+  "widthMm": 128,
+  "data": {
+    "shape": "series",
+    "categories": [
+      "Proyek 1",
+      "Proyek 2",
+      "Proyek 3",
+      "Proyek 4"
+    ],
+    "series": [
+      {
+        "name": "Perangkat",
+        "values": [
+          66.7,
+          62.7,
+          64.3,
+          61.3
+        ]
+      },
+      {
+        "name": "Instalasi",
+        "values": [
+          25,
+          26.9,
+          25,
+          25.8
+        ]
+      },
+      {
+        "name": "Lain-lain",
+        "values": [
+          8.3,
+          10.4,
+          10.7,
+          12.9
+        ]
+      }
+    ]
+  },
+  "heightMm": 50,
+  "unit": "%",
+  "dec": 1
+}

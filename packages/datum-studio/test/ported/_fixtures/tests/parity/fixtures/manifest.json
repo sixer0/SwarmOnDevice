@@ -1,0 +1,1750 @@
+{
+  "$schema": "studio.parity.fixtures/v1",
+  "row": "S63",
+  "generatedBy": "tests/parity/fixtures/src/build_fixtures.ts",
+  "validatedBy": "tests/parity/fixtures/src/validate_fixtures.ts",
+  "dataNote": "Data ilustratif netral (sintetis), bukan data klien.",
+  "parityClasses": "research/06_chart_map_parity_matrix.md 6.2 (CA, CB1, CB2, CC, DG, SY, DX, PD, HT)",
+  "counts": {
+    "doc": 4,
+    "docV2": 4,
+    "docTemplate": 3,
+    "chart": 46,
+    "diagram": 11,
+    "symbol": 41,
+    "symbolSheet": 4,
+    "sources": 2
+  },
+  "fixtures": [
+    {
+      "id": "doc-nota-memo",
+      "kind": "doc",
+      "file": "doc/doc_nota_memo.json",
+      "schema": "studio.doc/v1",
+      "parityClass": [
+        "DX",
+        "PD",
+        "HT"
+      ],
+      "reference": "DX/PD: adapter S64 scripts/parity/reference/doc/ref_doc.py (DatumDocx Garis A) lalu soffice; HT: tanpa acuan Python (lint + snapshot)",
+      "referenceCli": "H02",
+      "tier": "NOTA",
+      "sha256": "9b643e1c475b72d662294761b9cec095a24df368462b35ce847864c74ddea333",
+      "bytes": 11534,
+      "notes": "NOTA tanpa halaman depan; 5 varian aside; chart CA P-01"
+    },
+    {
+      "id": "doc-nota-memo-v2",
+      "kind": "docV2",
+      "file": "doc/v2/doc_nota_memo.json",
+      "schema": "studio.doc/v2",
+      "parityClass": [
+        "DX",
+        "PD",
+        "HT"
+      ],
+      "reference": "DX/PD: acuan Python dari pasangan v1 doc/doc_nota_memo.json (ref_doc.py hanya membaca v1); HT: tanpa acuan Python",
+      "referenceCli": "H02",
+      "tier": "NOTA",
+      "sha256": "bbfaec86e7973b0c117dc2aa2671f0bfcb2a249df9755d2153c05f75ff994d77",
+      "bytes": 12511,
+      "notes": "salinan studio.doc/v2 dari doc/doc_nota_memo.json lewat adaptor SR-09 (SR-41)"
+    },
+    {
+      "id": "doc-nota-tables",
+      "kind": "doc",
+      "file": "doc/doc_nota_tables.json",
+      "schema": "studio.doc/v1",
+      "parityClass": [
+        "DX",
+        "PD",
+        "HT"
+      ],
+      "reference": "DX/PD: adapter S64 scripts/parity/reference/doc/ref_doc.py (DatumDocx Garis A) lalu soffice; HT: tanpa acuan Python (lint + snapshot)",
+      "referenceCli": "H02",
+      "tier": "NOTA",
+      "sha256": "03a943e975abebfb77de2734e6f544169006b0dbbb22d87aa048b599dc6fb7ca",
+      "bytes": 46741,
+      "notes": "11 keluarga tabel, 8 preset register, 3 preset keuangan, gridSpan/vMerge/nested, lampiran"
+    },
+    {
+      "id": "doc-nota-tables-template",
+      "kind": "docTemplate",
+      "file": "doc/doc_nota_tables.template.json",
+      "parityClass": [],
+      "reference": "profil tampilan pendamping doc/doc_nota_tables.json (dipungut penemuan fixture sebagai <stem>.template.json)",
+      "referenceCli": "H01 --template",
+      "tier": "NOTA",
+      "sha256": "a46c23862ea08b59602b20434c9c12beb46b1b525b8b14b3c1bbe709502a263f",
+      "bytes": 392,
+      "notes": "override dokumen dipindah ke templat (D-138/D-139): grid.innerMarginMm, grid.marginBottomMm, grid.outerMarginMm, grid.topBottomMarginMm"
+    },
+    {
+      "id": "doc-nota-tables-v2",
+      "kind": "docV2",
+      "file": "doc/v2/doc_nota_tables.json",
+      "schema": "studio.doc/v2",
+      "parityClass": [
+        "DX",
+        "PD",
+        "HT"
+      ],
+      "reference": "DX/PD: acuan Python dari pasangan v1 doc/doc_nota_tables.json (ref_doc.py hanya membaca v1); HT: tanpa acuan Python",
+      "referenceCli": "H02",
+      "tier": "NOTA",
+      "sha256": "c85f8d97454ce9b67619ca8342e4ceeb8a13561f3c0dbdbceac9906780fb84ce",
+      "bytes": 51269,
+      "notes": "salinan studio.doc/v2 dari doc/doc_nota_tables.json lewat adaptor SR-09 (SR-41)"
+    },
+    {
+      "id": "doc-terbit-report",
+      "kind": "doc",
+      "file": "doc/doc_terbit_report.json",
+      "schema": "studio.doc/v1",
+      "parityClass": [
+        "DX",
+        "PD",
+        "HT"
+      ],
+      "reference": "DX/PD: adapter S64 scripts/parity/reference/doc/ref_doc.py (DatumDocx Garis A) lalu soffice; HT: tanpa acuan Python (lint + snapshot)",
+      "referenceCli": "H02",
+      "tier": "TERBIT",
+      "sha256": "a3478624220518c1f7da603bce738f840aefe391be9be4740dd6d97379e6649f",
+      "bytes": 46356,
+      "notes": "halaman depan auto, toc field, 2 bagian, tanda tangan, rel bukti moda A (layout.railMode)"
+    },
+    {
+      "id": "doc-terbit-report-template",
+      "kind": "docTemplate",
+      "file": "doc/doc_terbit_report.template.json",
+      "parityClass": [],
+      "reference": "profil tampilan pendamping doc/doc_terbit_report.json (dipungut penemuan fixture sebagai <stem>.template.json)",
+      "referenceCli": "H01 --template",
+      "tier": "TERBIT",
+      "sha256": "64ce3ec85f2723b017877bfc4b1122f52af612fdb69ecc656336a819f3ff7761",
+      "bytes": 299,
+      "notes": "override dokumen dipindah ke templat (D-138/D-139): layout.railMode"
+    },
+    {
+      "id": "doc-terbit-report-v2",
+      "kind": "docV2",
+      "file": "doc/v2/doc_terbit_report.json",
+      "schema": "studio.doc/v2",
+      "parityClass": [
+        "DX",
+        "PD",
+        "HT"
+      ],
+      "reference": "DX/PD: acuan Python dari pasangan v1 doc/doc_terbit_report.json (ref_doc.py hanya membaca v1); HT: tanpa acuan Python",
+      "referenceCli": "H02",
+      "tier": "TERBIT",
+      "sha256": "959a4192dba28b2551a0bc91e4df3db410e2e569e51beffd42e14bc2467922d7",
+      "bytes": 46327,
+      "notes": "salinan studio.doc/v2 dari doc/doc_terbit_report.json lewat adaptor SR-09 (SR-41)"
+    },
+    {
+      "id": "doc-serah-handover",
+      "kind": "doc",
+      "file": "doc/doc_serah_handover.json",
+      "schema": "studio.doc/v1",
+      "parityClass": [
+        "DX",
+        "PD",
+        "HT"
+      ],
+      "reference": "DX/PD: adapter S64 scripts/parity/reference/doc/ref_doc.py (DatumDocx Garis A) lalu soffice; HT: tanpa acuan Python (lint + snapshot)",
+      "referenceCli": "H02",
+      "tier": "SERAH",
+      "sha256": "428e3276678d56c718405371fcfed7a9775254772120d65832b319bfcc5eec8c",
+      "bytes": 54806,
+      "notes": "halaman depan explicit, toc statis, register + turunan, rekonsiliasi, rel bukti moda B (layout.railMode)"
+    },
+    {
+      "id": "doc-serah-handover-template",
+      "kind": "docTemplate",
+      "file": "doc/doc_serah_handover.template.json",
+      "parityClass": [],
+      "reference": "profil tampilan pendamping doc/doc_serah_handover.json (dipungut penemuan fixture sebagai <stem>.template.json)",
+      "referenceCli": "H01 --template",
+      "tier": "SERAH",
+      "sha256": "c412feabe6d42c6b070ece59b406c29830be631c309e7e9602c0ef24ae98e5a2",
+      "bytes": 301,
+      "notes": "override dokumen dipindah ke templat (D-138/D-139): layout.railMode"
+    },
+    {
+      "id": "doc-serah-handover-v2",
+      "kind": "docV2",
+      "file": "doc/v2/doc_serah_handover.json",
+      "schema": "studio.doc/v2",
+      "parityClass": [
+        "DX",
+        "PD",
+        "HT"
+      ],
+      "reference": "DX/PD: acuan Python dari pasangan v1 doc/doc_serah_handover.json (ref_doc.py hanya membaca v1); HT: tanpa acuan Python",
+      "referenceCli": "H02",
+      "tier": "SERAH",
+      "sha256": "92ea31e4458c0426bd733d4304039b431db994e01ae205b3def9a5fe3a7dfff7",
+      "bytes": 55676,
+      "notes": "salinan studio.doc/v2 dari doc/doc_serah_handover.json lewat adaptor SR-09 (SR-41)"
+    },
+    {
+      "id": "dg-layered-good",
+      "kind": "diagram",
+      "file": "diagram/dg_layered_good.json",
+      "schema": "studio.diagram/v1",
+      "parityClass": [
+        "DG"
+      ],
+      "reference": "HS datum_diagram.build_svg (Garis A)",
+      "referenceCli": "H03 --kind diagram",
+      "family": "layered",
+      "sha256": "99edc213012e6b89fbfa7f42c113b6fb07aaabad2b53a7a9f10c4e2673c72cee",
+      "bytes": 1624,
+      "notes": "versi kontrak dari diagram/garis_a/good_layered.json: $schema ditambah, _provenans dipindah ke sini. Provenans: Basal BAIK kelas diagram DHS-RB-04. Bentuk mengikuti spesimen nyata 000 RevA 6.4 baris 728-731 (Gambar 4.2 arsitektur kendali UPK-70, keluarga layered). Sumber gaya: tokens.json v2.0.0; spesifikasi P1-P6 (lihat header datum_diagram.py)."
+    },
+    {
+      "id": "dg-sld-good",
+      "kind": "diagram",
+      "file": "diagram/dg_sld_good.json",
+      "schema": "studio.diagram/v1",
+      "parityClass": [
+        "DG"
+      ],
+      "reference": "HS datum_diagram.build_svg (Garis A)",
+      "referenceCli": "H03 --kind diagram",
+      "family": "sld",
+      "sha256": "62120db0666262fd6242df2dcc2f68ee7f50116c0a6159af10f1b77b9807808c",
+      "bytes": 1406,
+      "notes": "versi kontrak dari diagram/garis_a/good_sld.json: $schema ditambah, _provenans dipindah ke sini. Provenans: Basal BAIK keluarga sld — menguji limit E-17 (butuh rel bus) lewat jalur positif. Sumber: 000 RevA register temuan baris 734 (E-17)."
+    },
+    {
+      "id": "dg-topology",
+      "kind": "diagram",
+      "file": "diagram/dg_topology.json",
+      "schema": "studio.diagram/v1",
+      "parityClass": [
+        "DG"
+      ],
+      "reference": "HS datum_diagram.build_svg (Garis A)",
+      "referenceCli": "H03 --kind diagram",
+      "family": "topology",
+      "sha256": "63b34dc5a292674fbbb1ad51c039314199d111dfe6fea066c09971a33950b357",
+      "bytes": 2056
+    },
+    {
+      "id": "dg-stack",
+      "kind": "diagram",
+      "file": "diagram/dg_stack.json",
+      "schema": "studio.diagram/v1",
+      "parityClass": [
+        "DG"
+      ],
+      "reference": "HS datum_diagram.build_svg (Garis A)",
+      "referenceCli": "H03 --kind diagram",
+      "family": "stack",
+      "sha256": "27a610b4f4e18df74ec57077c806c5d8158580657fd6de810367d89cd056ad48",
+      "bytes": 1290
+    },
+    {
+      "id": "dg-flow",
+      "kind": "diagram",
+      "file": "diagram/dg_flow.json",
+      "schema": "studio.diagram/v1",
+      "parityClass": [
+        "DG"
+      ],
+      "reference": "HS datum_diagram.build_svg (Garis A)",
+      "referenceCli": "H03 --kind diagram",
+      "family": "flow",
+      "sha256": "49d6365c93d9abb4b71136e187d739cbfa7e0ee53e7fdf4154c0a9b049f6b88b",
+      "bytes": 1406
+    },
+    {
+      "id": "dg-flow-wrapped",
+      "kind": "diagram",
+      "file": "diagram/dg_flow_wrapped.json",
+      "schema": "studio.diagram/v1",
+      "parityClass": [
+        "DG"
+      ],
+      "reference": "HS datum_diagram.build_svg (Garis A)",
+      "referenceCli": "H03 --kind diagram",
+      "family": "flow",
+      "sha256": "5e4d80e246f2072b9d67e32271357b45d18d5f43508225ace29a708799bf781a",
+      "bytes": 1730,
+      "notes": "varian per_row (E-30)"
+    },
+    {
+      "id": "dg-swimlane",
+      "kind": "diagram",
+      "file": "diagram/dg_swimlane.json",
+      "schema": "studio.diagram/v1",
+      "parityClass": [
+        "DG"
+      ],
+      "reference": "HS datum_diagram.build_svg (Garis A)",
+      "referenceCli": "H03 --kind diagram",
+      "family": "swimlane",
+      "sha256": "199751806ed0b9a174f2ef0f99f9cd8bb9afb3c712ed232c41a874540e108c87",
+      "bytes": 1544
+    },
+    {
+      "id": "dg-sequence",
+      "kind": "diagram",
+      "file": "diagram/dg_sequence.json",
+      "schema": "studio.diagram/v1",
+      "parityClass": [
+        "DG"
+      ],
+      "reference": "HS datum_diagram.build_svg (Garis A)",
+      "referenceCli": "H03 --kind diagram",
+      "family": "sequence",
+      "sha256": "2dc9bd23e8c2e06911ee8984b9b6b1d4c7d23c173857a86e40a2e5c1609e3dea",
+      "bytes": 1388
+    },
+    {
+      "id": "dg-rack",
+      "kind": "diagram",
+      "file": "diagram/dg_rack.json",
+      "schema": "studio.diagram/v1",
+      "parityClass": [
+        "DG"
+      ],
+      "reference": "HS datum_diagram.build_svg (Garis A)",
+      "referenceCli": "H03 --kind diagram",
+      "family": "rack",
+      "sha256": "d435de31ab5f15702184eda3dd56c9edaa12227da2548184fb2699746b3f3432",
+      "bytes": 1132
+    },
+    {
+      "id": "dg-graph",
+      "kind": "diagram",
+      "file": "diagram/dg_graph.json",
+      "schema": "studio.diagram/v1",
+      "parityClass": [
+        "DG"
+      ],
+      "reference": "HS datum_diagram.build_svg (Garis A)",
+      "referenceCli": "H03 --kind diagram",
+      "family": "graph",
+      "sha256": "748939be25a353538a32b3723cf2e8445e2bea72b4c5b024572ef54aa7536867",
+      "bytes": 1629
+    },
+    {
+      "id": "dg-graph-hops",
+      "kind": "diagram",
+      "file": "diagram/dg_graph_hops.json",
+      "schema": "studio.diagram/v1",
+      "parityClass": [
+        "DG"
+      ],
+      "reference": "HS datum_diagram.build_svg (Garis A)",
+      "referenceCli": "H03 --kind diagram",
+      "family": "graph",
+      "sha256": "2616b34a7d6363664058bfd634f204c387fb4896f9f127eff3af5881a102e8e9",
+      "bytes": 1576,
+      "notes": "FIX-3 F-S78-5: 2 lompatan persilangan (n_hops = 2)"
+    },
+    {
+      "id": "chart-P-01",
+      "kind": "chart",
+      "file": "chart/p01.json",
+      "schema": "studio.chart/v1",
+      "parityClass": [
+        "CA"
+      ],
+      "reference": "datumchart:bar",
+      "referenceCli": "H03 --kind chart",
+      "code": "P-01",
+      "dataShape": "categorical",
+      "form": "PENUH",
+      "sha256": "6195e80af9422e9dbf44ee982e0ae88a96d366b274f92d5cbb87f557e46d5a12",
+      "bytes": 745,
+      "notes": "D-63: data sudah urut menurun (valueDesc) dan titik pertama beraksen (default P-01 sort/accent topBarOnly); tanpa nilai negatif (CH-01); tanpa points[].sub sehingga adapter DC tidak perlu sub tingkat atas"
+    },
+    {
+      "id": "chart-P-02",
+      "kind": "chart",
+      "file": "chart/p02.json",
+      "schema": "studio.chart/v1",
+      "parityClass": [
+        "CA"
+      ],
+      "reference": "datumchart:column",
+      "referenceCli": "H03 --kind chart",
+      "code": "P-02",
+      "dataShape": "categorical",
+      "form": "PENUH",
+      "sha256": "7a5297d555154b5e6df5a18a39b94d12f963fc0de57357ee39ffd625842d5c20",
+      "bytes": 717
+    },
+    {
+      "id": "chart-P-11",
+      "kind": "chart",
+      "file": "chart/p11.json",
+      "schema": "studio.chart/v1",
+      "parityClass": [
+        "CA"
+      ],
+      "reference": "datumchart:threshold",
+      "referenceCli": "H03 --kind chart",
+      "code": "P-11",
+      "dataShape": "categorical",
+      "form": "PENUH",
+      "sha256": "52ab5af8c3171ceefcba05e66d5f59cceb6f7a6b1dc2c644c6b0c18ce52d5e5c",
+      "bytes": 677
+    },
+    {
+      "id": "chart-W-02",
+      "kind": "chart",
+      "file": "chart/w02.json",
+      "schema": "studio.chart/v1",
+      "parityClass": [
+        "CA"
+      ],
+      "reference": "datumchart:column",
+      "referenceCli": "H03 --kind chart",
+      "code": "W-02",
+      "dataShape": "categorical",
+      "form": "PENUH",
+      "sha256": "f3bd40a2cab2041b415ec4f2c077ae4fb0cbb1b808a118274c78923303c37f56",
+      "bytes": 1078
+    },
+    {
+      "id": "chart-P-03",
+      "kind": "chart",
+      "file": "chart/p03.json",
+      "schema": "studio.chart/v1",
+      "parityClass": [
+        "CB1"
+      ],
+      "reference": "pustakachart:v04_grouped_column",
+      "referenceCli": "H03 --kind chart",
+      "code": "P-03",
+      "dataShape": "series",
+      "form": "PENUH",
+      "sha256": "e4c4bb75fc63cfee67b39ae5ce4c7ef9f388fd21e1ff2816ff9abfaffa01c891",
+      "bytes": 752
+    },
+    {
+      "id": "chart-P-04",
+      "kind": "chart",
+      "file": "chart/p04.json",
+      "schema": "studio.chart/v1",
+      "parityClass": [
+        "CB1"
+      ],
+      "reference": "pustakachart:v05_lollipop",
+      "referenceCli": "H03 --kind chart",
+      "code": "P-04",
+      "dataShape": "categorical",
+      "form": "PENUH",
+      "sha256": "2bf178de2ce5cb74114e1ac4dec74906250f04857fb588d638fb9ff19f4ab812",
+      "bytes": 659
+    },
+    {
+      "id": "chart-P-05",
+      "kind": "chart",
+      "file": "chart/p05.json",
+      "schema": "studio.chart/v1",
+      "parityClass": [
+        "CB2"
+      ],
+      "reference": "pustakachart:v06_dotplot",
+      "referenceCli": "H03 --kind chart",
+      "code": "P-05",
+      "dataShape": "distribution",
+      "form": "PARSIAL",
+      "sha256": "d4bdd7ba8bff93d8f12b6543fe5ac6f52fa31a2fa9d22603dc4073716324e784",
+      "bytes": 1618
+    },
+    {
+      "id": "chart-P-06",
+      "kind": "chart",
+      "file": "chart/p06.json",
+      "schema": "studio.chart/v1",
+      "parityClass": [
+        "CB1"
+      ],
+      "reference": "pustakachart:v07_dumbbell",
+      "referenceCli": "H03 --kind chart",
+      "code": "P-06",
+      "dataShape": "series",
+      "form": "PENUH",
+      "sha256": "7927ac50cf25611e14a26aff5ef3a2ae06f0748f18b3d3d9ad4580e4a377311d",
+      "bytes": 742
+    },
+    {
+      "id": "chart-P-07",
+      "kind": "chart",
+      "file": "chart/p07.json",
+      "schema": "studio.chart/v1",
+      "parityClass": [
+        "CB1"
+      ],
+      "reference": "pustakachart:v09_range",
+      "referenceCli": "H03 --kind chart",
+      "code": "P-07",
+      "dataShape": "distribution",
+      "form": "PENUH",
+      "sha256": "d15f40bfc8ee1b13191c23656bdcb2b0ada09a984e80d78e7f5c8b1fb49f25d8",
+      "bytes": 2671,
+      "notes": "data = dataInjection.literalData ref_report.json S65 (LITERAL acuan, tidak disuntik)"
+    },
+    {
+      "id": "chart-P-08",
+      "kind": "chart",
+      "file": "chart/p08.json",
+      "schema": "studio.chart/v1",
+      "parityClass": [
+        "CB1"
+      ],
+      "reference": "pustakachart:v11_slope",
+      "referenceCli": "H03 --kind chart",
+      "code": "P-08",
+      "dataShape": "series",
+      "form": "PENUH",
+      "sha256": "1768871869976c76ea7c88c35eafbfece8335663b18ba12837d100586ad59d24",
+      "bytes": 754
+    },
+    {
+      "id": "chart-P-09",
+      "kind": "chart",
+      "file": "chart/p09.json",
+      "schema": "studio.chart/v1",
+      "parityClass": [
+        "CB2"
+      ],
+      "reference": "pustakachart:v95_bullet",
+      "referenceCli": "H03 --kind chart",
+      "code": "P-09",
+      "dataShape": "categorical",
+      "form": "PARSIAL",
+      "sha256": "1c629192539c82faf73b0b5023d3c0168cb6921275f5e12d4e2c0a4f32bfce09",
+      "bytes": 458,
+      "notes": "target dari limit (pc_inject inj_bullet: params.target atau limit); params.max absen = 100"
+    },
+    {
+      "id": "chart-P-10",
+      "kind": "chart",
+      "file": "chart/p10.json",
+      "schema": "studio.chart/v1",
+      "parityClass": [
+        "CB1"
+      ],
+      "reference": "pustakachart:v91_waterfall",
+      "referenceCli": "H03 --kind chart",
+      "code": "P-10",
+      "dataShape": "categorical",
+      "form": "PENUH",
+      "sha256": "836e7cbee161a3fe44927f79e3bf3645ad67eaf2a0961d6f4950ab78c7cf6bd4",
+      "bytes": 672
+    },
+    {
+      "id": "chart-P-12",
+      "kind": "chart",
+      "file": "chart/p12.json",
+      "schema": "studio.chart/v1",
+      "parityClass": [
+        "CB1"
+      ],
+      "reference": "pustakachart:v13_small_multiples",
+      "referenceCli": "H03 --kind chart",
+      "code": "P-12",
+      "dataShape": "series",
+      "form": "PENUH",
+      "sha256": "741d99d058170beb41b9c535be0a2096425f29f735a31b19f827301e3c46a1b3",
+      "bytes": 2026
+    },
+    {
+      "id": "chart-P-13",
+      "kind": "chart",
+      "file": "chart/p13.json",
+      "schema": "studio.chart/v1",
+      "parityClass": [
+        "CB1"
+      ],
+      "reference": "pustakachart:v72_quadrant",
+      "referenceCli": "H03 --kind chart",
+      "code": "P-13",
+      "dataShape": "xy",
+      "form": "PENUH",
+      "sha256": "5157c1579f5acc38342f0cc6414056021670ed31ffac45d5c0c8c945927314cf",
+      "bytes": 1035
+    },
+    {
+      "id": "chart-P-15",
+      "kind": "chart",
+      "file": "chart/p15.json",
+      "schema": "studio.chart/v1",
+      "parityClass": [
+        "CB1"
+      ],
+      "reference": "pustakachart:v15_table",
+      "referenceCli": "H03 --kind chart",
+      "code": "P-15",
+      "dataShape": "matrix",
+      "form": "PENUH",
+      "sha256": "af762982e5c9f964ff4938ccaf8d41ad28cdb6d739b05c519d196c2f404e6e6e",
+      "bytes": 776,
+      "notes": "bentuk matrix; adapter menambah kolom kepala baris kosong (params.rowHeader absen)"
+    },
+    {
+      "id": "chart-H-01",
+      "kind": "chart",
+      "file": "chart/h01.json",
+      "schema": "studio.chart/v1",
+      "parityClass": [
+        "CB1"
+      ],
+      "reference": "pustakachart:v66_scatter",
+      "referenceCli": "H03 --kind chart",
+      "code": "H-01",
+      "dataShape": "xy",
+      "form": "PENUH",
+      "sha256": "cfee5a3d22be42093c8ef8361378efa2d57401cb09b46fa80b943ed1d962798c",
+      "bytes": 1608
+    },
+    {
+      "id": "chart-H-02",
+      "kind": "chart",
+      "file": "chart/h02.json",
+      "schema": "studio.chart/v1",
+      "parityClass": [
+        "CB1"
+      ],
+      "reference": "pustakachart:v67_bubble",
+      "referenceCli": "H03 --kind chart",
+      "code": "H-02",
+      "dataShape": "xy",
+      "form": "PENUH",
+      "sha256": "1368199641935fc7144dd1681c44b2f001bf19a7e45e4e9d34daae4092a8d3b9",
+      "bytes": 1245
+    },
+    {
+      "id": "chart-H-03",
+      "kind": "chart",
+      "file": "chart/h03.json",
+      "schema": "studio.chart/v1",
+      "parityClass": [
+        "CB2"
+      ],
+      "reference": "pustakachart:v73_heatmap",
+      "referenceCli": "H03 --kind chart",
+      "code": "H-03",
+      "dataShape": "matrix",
+      "form": "PARSIAL",
+      "sha256": "3b18b108fbfb5bf7ed5b08e175f56392e03753517213a518a31dcea6c4ed6978",
+      "bytes": 1235,
+      "notes": "matrix tepat 6 x 8 (CHART_DATA_CONSTRAINTS H-03)"
+    },
+    {
+      "id": "chart-H-04",
+      "kind": "chart",
+      "file": "chart/h04.json",
+      "schema": "studio.chart/v1",
+      "parityClass": [
+        "CB1"
+      ],
+      "reference": "pustakachart:v68_conn_scatter",
+      "referenceCli": "H03 --kind chart",
+      "code": "H-04",
+      "dataShape": "xy",
+      "form": "PENUH",
+      "sha256": "08cea0c6dd71e908c9456e068133f63cce61da3ec5116cc4d6969e4e8704a55b",
+      "bytes": 1150,
+      "notes": "anotasi 08:00/23:00 LITERAL acuan pada titik pertama dan terakhir"
+    },
+    {
+      "id": "chart-H-05",
+      "kind": "chart",
+      "file": "chart/h05.json",
+      "schema": "studio.chart/v1",
+      "parityClass": [
+        "CB1"
+      ],
+      "reference": "pustakachart:v70_hexbin",
+      "referenceCli": "H03 --kind chart",
+      "code": "H-05",
+      "dataShape": "xy",
+      "form": "PENUH",
+      "sha256": "7364fb5343a76caf499be2b5137bed836d68c17337028243be5cfcfcded84174",
+      "bytes": 6741
+    },
+    {
+      "id": "chart-H-06",
+      "kind": "chart",
+      "file": "chart/h06.json",
+      "schema": "studio.chart/v1",
+      "parityClass": [
+        "CB1"
+      ],
+      "reference": "pustakachart:v71_contour",
+      "referenceCli": "H03 --kind chart",
+      "code": "H-06",
+      "dataShape": "matrix",
+      "form": "PENUH",
+      "sha256": "fccbb9209d38fc08d76ade228ddb7df12ab5527336b3d56e14a4b219f74f5427",
+      "bytes": 1750,
+      "notes": "matriks 8 x 10 diresampel bilinear ke grid literal 40 x 60 acuan"
+    },
+    {
+      "id": "chart-H-07",
+      "kind": "chart",
+      "file": "chart/h07.json",
+      "schema": "studio.chart/v1",
+      "parityClass": [
+        "CB1"
+      ],
+      "reference": "pustakachart:v79_network",
+      "referenceCli": "H03 --kind chart",
+      "code": "H-07",
+      "dataShape": "graph",
+      "form": "PENUH",
+      "sha256": "e47bc6b7fa096ea3b41d3ad7a122ad766caf7e2e093cedb06dd2ce281c3f165c",
+      "bytes": 1702,
+      "notes": "params.positions + params.accentLink (CHART_DATA_CONSTRAINTS H-07) agar tata letak sama di kedua sisi"
+    },
+    {
+      "id": "chart-K-01",
+      "kind": "chart",
+      "file": "chart/k01.json",
+      "schema": "studio.chart/v1",
+      "parityClass": [
+        "CB1"
+      ],
+      "reference": "pustakachart:_stack_rows",
+      "referenceCli": "H03 --kind chart",
+      "code": "K-01",
+      "dataShape": "series",
+      "form": "PENUH",
+      "sha256": "b819ce4bffd8c2e5fba224524949e32efd67f6a9fe065836a87de7301bdd51e5",
+      "bytes": 828,
+      "notes": "acuan _stack_rows(total100=False), kanvas = widthMm x heightMm spec. TEMUAN S63: acuan GAGAL di VENV (numpy menolak np.sum(generator), pustakachart.py:421) untuk total100=False apa pun datanya; paritas CB1 K-01 tidak dapat dijalankan sampai acuan diperbaiki"
+    },
+    {
+      "id": "chart-K-02",
+      "kind": "chart",
+      "file": "chart/k02.json",
+      "schema": "studio.chart/v1",
+      "parityClass": [
+        "CB1"
+      ],
+      "reference": "pustakachart:v19_stacked_bar",
+      "referenceCli": "H03 --kind chart",
+      "code": "K-02",
+      "dataShape": "series",
+      "form": "PENUH",
+      "sha256": "41a591850400d5885dd3c10808c412ec7f67fcfa2913741413f8527eafff40ec",
+      "bytes": 825,
+      "notes": "acuan _stack_rows(total100=True)"
+    },
+    {
+      "id": "chart-K-03",
+      "kind": "chart",
+      "file": "chart/k03.json",
+      "schema": "studio.chart/v1",
+      "parityClass": [
+        "CB1"
+      ],
+      "reference": "pustakachart:v21_diverging_bar",
+      "referenceCli": "H03 --kind chart",
+      "code": "K-03",
+      "dataShape": "series",
+      "form": "PENUH",
+      "sha256": "30b80c71b46b80bf9642ff4edf3f62f7e8cb7f528848fdac3732abfb8b225a23",
+      "bytes": 730,
+      "notes": "seri kedua bernilai negatif sesuai konvensi acuan v21 (TIDAK_SETUJU)"
+    },
+    {
+      "id": "chart-K-04",
+      "kind": "chart",
+      "file": "chart/k04.json",
+      "schema": "studio.chart/v1",
+      "parityClass": [
+        "CB1"
+      ],
+      "reference": "pustakachart:v23_pyramid",
+      "referenceCli": "H03 --kind chart",
+      "code": "K-04",
+      "dataShape": "series",
+      "form": "PENUH",
+      "sha256": "b189415cc9e3102558f3f1bc807dae829aabb41abe542342466d2e4de377bee7",
+      "bytes": 733
+    },
+    {
+      "id": "chart-K-07",
+      "kind": "chart",
+      "file": "chart/k07.json",
+      "schema": "studio.chart/v1",
+      "parityClass": [
+        "CB1"
+      ],
+      "reference": "pustakachart:v24_waffle",
+      "referenceCli": "H03 --kind chart",
+      "code": "K-07",
+      "dataShape": "categorical",
+      "form": "PENUH",
+      "sha256": "ea5b8ee875c4a767e9c815acecbbb9dd94e7aefa2fe8eaeba9f7dd90a54eac11",
+      "bytes": 529
+    },
+    {
+      "id": "chart-K-08",
+      "kind": "chart",
+      "file": "chart/k08.json",
+      "schema": "studio.chart/v1",
+      "parityClass": [
+        "CB2"
+      ],
+      "reference": "pustakachart:v26_icon_circles",
+      "referenceCli": "H03 --kind chart",
+      "code": "K-08",
+      "dataShape": "categorical",
+      "form": "PARSIAL",
+      "sha256": "5b1672674125fb56ce3e3b9645d972632460aeeed0ff666dccf71a44f5c54dc4",
+      "bytes": 610,
+      "notes": "F-054: total 100 unit (batas MAX_ICON_UNITS 100, satu ikon satu unit); proporsi setara 400/170/90/28"
+    },
+    {
+      "id": "chart-K-09",
+      "kind": "chart",
+      "file": "chart/k09.json",
+      "schema": "studio.chart/v1",
+      "parityClass": [
+        "CB1"
+      ],
+      "reference": "pustakachart:v32_treemap",
+      "referenceCli": "H03 --kind chart",
+      "code": "K-09",
+      "dataShape": "categorical",
+      "form": "PENUH",
+      "sha256": "26d1ae5c625f6f06c1a7bdf66e203be829eadebf783f50378e6ce741b9de6bca",
+      "bytes": 1231,
+      "notes": "grup treemap dari points[].sub"
+    },
+    {
+      "id": "chart-K-10",
+      "kind": "chart",
+      "file": "chart/k10.json",
+      "schema": "studio.chart/v1",
+      "parityClass": [
+        "CB1"
+      ],
+      "reference": "pustakachart:v37_funnel",
+      "referenceCli": "H03 --kind chart",
+      "code": "K-10",
+      "dataShape": "categorical",
+      "form": "PENUH",
+      "sha256": "5d663e0dba81cb8e1d74065cf117dd579a9d98103c776bf3436974d6018cebe5",
+      "bytes": 697
+    },
+    {
+      "id": "chart-K-12",
+      "kind": "chart",
+      "file": "chart/k12.json",
+      "schema": "studio.chart/v1",
+      "parityClass": [
+        "CB1"
+      ],
+      "reference": "pustakachart:v31_marimekko",
+      "referenceCli": "H03 --kind chart",
+      "code": "K-12",
+      "dataShape": "series",
+      "form": "PENUH",
+      "sha256": "de86c51010e9626ed539c2b13463941e4894f78f2bc35de1e6e5a192275e70ec",
+      "bytes": 804,
+      "notes": "lebar kolom dari params.widths (panjang = jumlah kategori); F1/F-051: accent.series = seri kedua yang diwarnai SIGNAL oleh acuan v31_marimekko (D-77)"
+    },
+    {
+      "id": "chart-W-01",
+      "kind": "chart",
+      "file": "chart/w01.json",
+      "schema": "studio.chart/v1",
+      "parityClass": [
+        "CB1"
+      ],
+      "reference": "pustakachart:v41_line",
+      "referenceCli": "H03 --kind chart",
+      "code": "W-01",
+      "dataShape": "series",
+      "form": "PENUH",
+      "sha256": "18df9fc2ba44543eeee818b40449dff6c4dfb94cf87f902c268ea524f6f28c1d",
+      "bytes": 1045,
+      "notes": "tepat 2 seri x 12 nilai; label ujung Site A/Site B LITERAL acuan"
+    },
+    {
+      "id": "chart-W-03",
+      "kind": "chart",
+      "file": "chart/w03.json",
+      "schema": "studio.chart/v1",
+      "parityClass": [
+        "CB1"
+      ],
+      "reference": "pustakachart:v48_step",
+      "referenceCli": "H03 --kind chart",
+      "code": "W-03",
+      "dataShape": "series",
+      "form": "PENUH",
+      "sha256": "7ee76d73d9f640b365dc405a30b9d48a1cf80f2720619d436bad44db6ccaf28c",
+      "bytes": 804,
+      "notes": "data = dataInjection.literalData ref_report.json S65 (LITERAL acuan, tidak disuntik)"
+    },
+    {
+      "id": "chart-W-04",
+      "kind": "chart",
+      "file": "chart/w04.json",
+      "schema": "studio.chart/v1",
+      "parityClass": [
+        "CB1"
+      ],
+      "reference": "pustakachart:v42_area",
+      "referenceCli": "H03 --kind chart",
+      "code": "W-04",
+      "dataShape": "categorical",
+      "form": "PENUH",
+      "sha256": "06773e844e338bec486a26920d3fe9b9dc8158872832f1d5aa92a1c61d8b8c09",
+      "bytes": 1074
+    },
+    {
+      "id": "chart-W-05",
+      "kind": "chart",
+      "file": "chart/w05.json",
+      "schema": "studio.chart/v1",
+      "parityClass": [
+        "CB1"
+      ],
+      "reference": "pustakachart:v43_stacked_area",
+      "referenceCli": "H03 --kind chart",
+      "code": "W-05",
+      "dataShape": "series",
+      "form": "PENUH",
+      "sha256": "a732235b4a52459c49ebaf58c4c69cba182f5dae5086b21f8ccae3efeb1f817c",
+      "bytes": 1346,
+      "notes": "tepat 3 seri x 12 nilai; F1/F-051: accent.series = seri kedua yang diwarnai SIGNAL oleh acuan v43_stacked_area (D-77)"
+    },
+    {
+      "id": "chart-W-06",
+      "kind": "chart",
+      "file": "chart/w06.json",
+      "schema": "studio.chart/v1",
+      "parityClass": [
+        "CB1"
+      ],
+      "reference": "pustakachart:v45_bump",
+      "referenceCli": "H03 --kind chart",
+      "code": "W-06",
+      "dataShape": "series",
+      "form": "PENUH",
+      "sha256": "f382081ce1f98aadb4a93fcc3c449b5ed28cc258d8f018095408489b59153d64",
+      "bytes": 1018,
+      "notes": "tepat 4 kategori (periode)"
+    },
+    {
+      "id": "chart-W-07",
+      "kind": "chart",
+      "file": "chart/w07.json",
+      "schema": "studio.chart/v1",
+      "parityClass": [
+        "CB1"
+      ],
+      "reference": "pustakachart:v94_gantt",
+      "referenceCli": "H03 --kind chart",
+      "code": "W-07",
+      "dataShape": "intervals",
+      "form": "PENUH",
+      "sha256": "dc338cd7c1a9f6f2960370214530983c5c554f478348d3b93cdb245bad0c4a12",
+      "bytes": 984,
+      "notes": "start/end numerik (minggu); tepat satu milestone"
+    },
+    {
+      "id": "chart-W-08",
+      "kind": "chart",
+      "file": "chart/w08.json",
+      "schema": "studio.chart/v1",
+      "parityClass": [
+        "CB2"
+      ],
+      "reference": "pustakachart:v60_barcode",
+      "referenceCli": "H03 --kind chart",
+      "code": "W-08",
+      "dataShape": "distribution",
+      "form": "PARSIAL",
+      "sha256": "dc84aacd5be5557ca644d06a5a954a86ee3c72770fb102f9ba3c967af983bb40",
+      "bytes": 2925
+    },
+    {
+      "id": "chart-S-01",
+      "kind": "chart",
+      "file": "chart/s01.json",
+      "schema": "studio.chart/v1",
+      "parityClass": [
+        "CB2"
+      ],
+      "reference": "pustakachart:v52_hist",
+      "referenceCli": "H03 --kind chart",
+      "code": "S-01",
+      "dataShape": "distribution",
+      "form": "PARSIAL",
+      "sha256": "20e9dbc58ae7c27dae8e6d9c4213be14b336f98c3c177ecb6e8c58b0779fdd80",
+      "bytes": 4183
+    },
+    {
+      "id": "chart-S-02",
+      "kind": "chart",
+      "file": "chart/s02.json",
+      "schema": "studio.chart/v1",
+      "parityClass": [
+        "CB1"
+      ],
+      "reference": "pustakachart:v54_box",
+      "referenceCli": "H03 --kind chart",
+      "code": "S-02",
+      "dataShape": "distribution",
+      "form": "PENUH",
+      "sha256": "49f93b7d313731f79b9ed66ba63dcde6b4117ebce600180949782c4b22378138",
+      "bytes": 2148
+    },
+    {
+      "id": "chart-S-03",
+      "kind": "chart",
+      "file": "chart/s03.json",
+      "schema": "studio.chart/v1",
+      "parityClass": [
+        "CB1"
+      ],
+      "reference": "pustakachart:v53_density",
+      "referenceCli": "H03 --kind chart",
+      "code": "S-03",
+      "dataShape": "distribution",
+      "form": "PENUH",
+      "sha256": "49bf251735ff36efc674f2f373c5a9a6c2a538d1207ff63f6a56e6c2478a5d76",
+      "bytes": 4178
+    },
+    {
+      "id": "chart-S-04",
+      "kind": "chart",
+      "file": "chart/s04.json",
+      "schema": "studio.chart/v1",
+      "parityClass": [
+        "CB1"
+      ],
+      "reference": "pustakachart:v55_violin",
+      "referenceCli": "H03 --kind chart",
+      "code": "S-04",
+      "dataShape": "distribution",
+      "form": "PENUH",
+      "sha256": "82739fd55e39b343d64a3f801c19ffe7cb6436a43a16a8c84d1575231cebe1ae",
+      "bytes": 2685,
+      "notes": "tepat 3 grup"
+    },
+    {
+      "id": "chart-S-05",
+      "kind": "chart",
+      "file": "chart/s05.json",
+      "schema": "studio.chart/v1",
+      "parityClass": [
+        "CB1"
+      ],
+      "reference": "pustakachart:v59_ridge",
+      "referenceCli": "H03 --kind chart",
+      "code": "S-05",
+      "dataShape": "distribution",
+      "form": "PENUH",
+      "sha256": "81c13a2a6200d77b30c371f817426f62dd7943a7a6d41cfaf77737c3156efeba",
+      "bytes": 3132
+    },
+    {
+      "id": "chart-S-06",
+      "kind": "chart",
+      "file": "chart/s06.json",
+      "schema": "studio.chart/v1",
+      "parityClass": [
+        "CB1"
+      ],
+      "reference": "pustakachart:v57_jitter",
+      "referenceCli": "H03 --kind chart",
+      "code": "S-06",
+      "dataShape": "distribution",
+      "form": "PENUH",
+      "sha256": "cbfe43d2188e178cd631e224afaac3bc861f1ce311878ec439144622cf7cd227",
+      "bytes": 1872
+    },
+    {
+      "id": "chart-G-01",
+      "kind": "chart",
+      "file": "chart/g01.json",
+      "schema": "studio.chart/v1",
+      "parityClass": [
+        "CB2"
+      ],
+      "reference": "pustakachart:v84_tilemap",
+      "referenceCli": "H03 --kind chart",
+      "code": "G-01",
+      "dataShape": "tiles",
+      "form": "PARSIAL",
+      "sha256": "d414e0d7ec0ec3af5c054abc9611b209681b61eb16dc6428c7db1666b05acea2",
+      "bytes": 2748,
+      "notes": "denah zona 4 x 6 (wilayah ilustrasi); kisi dari row/col maksimum"
+    },
+    {
+      "id": "chart-G-04",
+      "kind": "chart",
+      "file": "chart/g04.json",
+      "schema": "studio.chart/v1",
+      "parityClass": [
+        "CB2"
+      ],
+      "reference": "pustakachart:v81_flow",
+      "referenceCli": "H03 --kind chart",
+      "code": "G-04",
+      "dataShape": "steps",
+      "form": "PARSIAL",
+      "sha256": "d7c665bbb1cfbf4dd277bc2a1b858ca2958ebc501ccc774098f74a29b7554914",
+      "bytes": 2366,
+      "notes": "steps 6 langkah (posisi literal acuan galeri); paritas utama lewat diagram flow (S43)"
+    },
+    {
+      "id": "sy-iec-arrester",
+      "kind": "symbol",
+      "file": "symbol/symbols.json",
+      "parityClass": [
+        "SY"
+      ],
+      "reference": "HS datumsimbol.symbol_svg; port mm RL datum_symbols.render",
+      "referenceCli": "H03 --kind symbol --spec iec:arrester",
+      "dialect": "iec",
+      "symbol": "iec:arrester",
+      "sha256": "b1fcaa9c542d24a6bd9a2f1f7ab50c57ff2ca0c47d430b3cc55e599a262c62aa",
+      "bytes": 904
+    },
+    {
+      "id": "sy-iec-battery",
+      "kind": "symbol",
+      "file": "symbol/symbols.json",
+      "parityClass": [
+        "SY"
+      ],
+      "reference": "HS datumsimbol.symbol_svg; port mm RL datum_symbols.render",
+      "referenceCli": "H03 --kind symbol --spec iec:battery",
+      "dialect": "iec",
+      "symbol": "iec:battery",
+      "sha256": "b1fcaa9c542d24a6bd9a2f1f7ab50c57ff2ca0c47d430b3cc55e599a262c62aa",
+      "bytes": 904
+    },
+    {
+      "id": "sy-iec-breaker",
+      "kind": "symbol",
+      "file": "symbol/symbols.json",
+      "parityClass": [
+        "SY"
+      ],
+      "reference": "HS datumsimbol.symbol_svg; port mm RL datum_symbols.render",
+      "referenceCli": "H03 --kind symbol --spec iec:breaker",
+      "dialect": "iec",
+      "symbol": "iec:breaker",
+      "sha256": "b1fcaa9c542d24a6bd9a2f1f7ab50c57ff2ca0c47d430b3cc55e599a262c62aa",
+      "bytes": 904
+    },
+    {
+      "id": "sy-iec-busbar",
+      "kind": "symbol",
+      "file": "symbol/symbols.json",
+      "parityClass": [
+        "SY"
+      ],
+      "reference": "HS datumsimbol.symbol_svg; port mm RL datum_symbols.render",
+      "referenceCli": "H03 --kind symbol --spec iec:busbar",
+      "dialect": "iec",
+      "symbol": "iec:busbar",
+      "sha256": "b1fcaa9c542d24a6bd9a2f1f7ab50c57ff2ca0c47d430b3cc55e599a262c62aa",
+      "bytes": 904
+    },
+    {
+      "id": "sy-iec-changeover",
+      "kind": "symbol",
+      "file": "symbol/symbols.json",
+      "parityClass": [
+        "SY"
+      ],
+      "reference": "HS datumsimbol.symbol_svg; port mm RL datum_symbols.render",
+      "referenceCli": "H03 --kind symbol --spec iec:changeover",
+      "dialect": "iec",
+      "symbol": "iec:changeover",
+      "sha256": "b1fcaa9c542d24a6bd9a2f1f7ab50c57ff2ca0c47d430b3cc55e599a262c62aa",
+      "bytes": 904
+    },
+    {
+      "id": "sy-iec-contactor",
+      "kind": "symbol",
+      "file": "symbol/symbols.json",
+      "parityClass": [
+        "SY"
+      ],
+      "reference": "HS datumsimbol.symbol_svg; port mm RL datum_symbols.render",
+      "referenceCli": "H03 --kind symbol --spec iec:contactor",
+      "dialect": "iec",
+      "symbol": "iec:contactor",
+      "sha256": "b1fcaa9c542d24a6bd9a2f1f7ab50c57ff2ca0c47d430b3cc55e599a262c62aa",
+      "bytes": 904
+    },
+    {
+      "id": "sy-iec-ct",
+      "kind": "symbol",
+      "file": "symbol/symbols.json",
+      "parityClass": [
+        "SY"
+      ],
+      "reference": "HS datumsimbol.symbol_svg; port mm RL datum_symbols.render",
+      "referenceCli": "H03 --kind symbol --spec iec:ct",
+      "dialect": "iec",
+      "symbol": "iec:ct",
+      "sha256": "b1fcaa9c542d24a6bd9a2f1f7ab50c57ff2ca0c47d430b3cc55e599a262c62aa",
+      "bytes": 904
+    },
+    {
+      "id": "sy-iec-disconnector",
+      "kind": "symbol",
+      "file": "symbol/symbols.json",
+      "parityClass": [
+        "SY"
+      ],
+      "reference": "HS datumsimbol.symbol_svg; port mm RL datum_symbols.render",
+      "referenceCli": "H03 --kind symbol --spec iec:disconnector",
+      "dialect": "iec",
+      "symbol": "iec:disconnector",
+      "sha256": "b1fcaa9c542d24a6bd9a2f1f7ab50c57ff2ca0c47d430b3cc55e599a262c62aa",
+      "bytes": 904
+    },
+    {
+      "id": "sy-iec-earth",
+      "kind": "symbol",
+      "file": "symbol/symbols.json",
+      "parityClass": [
+        "SY"
+      ],
+      "reference": "HS datumsimbol.symbol_svg; port mm RL datum_symbols.render",
+      "referenceCli": "H03 --kind symbol --spec iec:earth",
+      "dialect": "iec",
+      "symbol": "iec:earth",
+      "sha256": "b1fcaa9c542d24a6bd9a2f1f7ab50c57ff2ca0c47d430b3cc55e599a262c62aa",
+      "bytes": 904
+    },
+    {
+      "id": "sy-iec-enclosure",
+      "kind": "symbol",
+      "file": "symbol/symbols.json",
+      "parityClass": [
+        "SY"
+      ],
+      "reference": "HS datumsimbol.symbol_svg; port mm RL datum_symbols.render",
+      "referenceCli": "H03 --kind symbol --spec iec:enclosure",
+      "dialect": "iec",
+      "symbol": "iec:enclosure",
+      "sha256": "b1fcaa9c542d24a6bd9a2f1f7ab50c57ff2ca0c47d430b3cc55e599a262c62aa",
+      "bytes": 904
+    },
+    {
+      "id": "sy-iec-fuse",
+      "kind": "symbol",
+      "file": "symbol/symbols.json",
+      "parityClass": [
+        "SY"
+      ],
+      "reference": "HS datumsimbol.symbol_svg; port mm RL datum_symbols.render",
+      "referenceCli": "H03 --kind symbol --spec iec:fuse",
+      "dialect": "iec",
+      "symbol": "iec:fuse",
+      "sha256": "b1fcaa9c542d24a6bd9a2f1f7ab50c57ff2ca0c47d430b3cc55e599a262c62aa",
+      "bytes": 904
+    },
+    {
+      "id": "sy-iec-generator",
+      "kind": "symbol",
+      "file": "symbol/symbols.json",
+      "parityClass": [
+        "SY"
+      ],
+      "reference": "HS datumsimbol.symbol_svg; port mm RL datum_symbols.render",
+      "referenceCli": "H03 --kind symbol --spec iec:generator",
+      "dialect": "iec",
+      "symbol": "iec:generator",
+      "sha256": "b1fcaa9c542d24a6bd9a2f1f7ab50c57ff2ca0c47d430b3cc55e599a262c62aa",
+      "bytes": 904
+    },
+    {
+      "id": "sy-iec-lamp",
+      "kind": "symbol",
+      "file": "symbol/symbols.json",
+      "parityClass": [
+        "SY"
+      ],
+      "reference": "HS datumsimbol.symbol_svg; port mm RL datum_symbols.render",
+      "referenceCli": "H03 --kind symbol --spec iec:lamp",
+      "dialect": "iec",
+      "symbol": "iec:lamp",
+      "sha256": "b1fcaa9c542d24a6bd9a2f1f7ab50c57ff2ca0c47d430b3cc55e599a262c62aa",
+      "bytes": 904
+    },
+    {
+      "id": "sy-iec-motor",
+      "kind": "symbol",
+      "file": "symbol/symbols.json",
+      "parityClass": [
+        "SY"
+      ],
+      "reference": "HS datumsimbol.symbol_svg; port mm RL datum_symbols.render",
+      "referenceCli": "H03 --kind symbol --spec iec:motor",
+      "dialect": "iec",
+      "symbol": "iec:motor",
+      "sha256": "b1fcaa9c542d24a6bd9a2f1f7ab50c57ff2ca0c47d430b3cc55e599a262c62aa",
+      "bytes": 904
+    },
+    {
+      "id": "sy-iec-switch",
+      "kind": "symbol",
+      "file": "symbol/symbols.json",
+      "parityClass": [
+        "SY"
+      ],
+      "reference": "HS datumsimbol.symbol_svg; port mm RL datum_symbols.render",
+      "referenceCli": "H03 --kind symbol --spec iec:switch",
+      "dialect": "iec",
+      "symbol": "iec:switch",
+      "sha256": "b1fcaa9c542d24a6bd9a2f1f7ab50c57ff2ca0c47d430b3cc55e599a262c62aa",
+      "bytes": 904
+    },
+    {
+      "id": "sy-iec-transformer",
+      "kind": "symbol",
+      "file": "symbol/symbols.json",
+      "parityClass": [
+        "SY"
+      ],
+      "reference": "HS datumsimbol.symbol_svg; port mm RL datum_symbols.render",
+      "referenceCli": "H03 --kind symbol --spec iec:transformer",
+      "dialect": "iec",
+      "symbol": "iec:transformer",
+      "sha256": "b1fcaa9c542d24a6bd9a2f1f7ab50c57ff2ca0c47d430b3cc55e599a262c62aa",
+      "bytes": 904
+    },
+    {
+      "id": "sy-isa-auxiliary",
+      "kind": "symbol",
+      "file": "symbol/symbols.json",
+      "parityClass": [
+        "SY"
+      ],
+      "reference": "HS datumsimbol.symbol_svg; port mm RL datum_symbols.render",
+      "referenceCli": "H03 --kind symbol --spec isa:auxiliary",
+      "dialect": "isa",
+      "symbol": "isa:auxiliary",
+      "sha256": "b1fcaa9c542d24a6bd9a2f1f7ab50c57ff2ca0c47d430b3cc55e599a262c62aa",
+      "bytes": 904
+    },
+    {
+      "id": "sy-isa-computer",
+      "kind": "symbol",
+      "file": "symbol/symbols.json",
+      "parityClass": [
+        "SY"
+      ],
+      "reference": "HS datumsimbol.symbol_svg; port mm RL datum_symbols.render",
+      "referenceCli": "H03 --kind symbol --spec isa:computer",
+      "dialect": "isa",
+      "symbol": "isa:computer",
+      "sha256": "b1fcaa9c542d24a6bd9a2f1f7ab50c57ff2ca0c47d430b3cc55e599a262c62aa",
+      "bytes": 904
+    },
+    {
+      "id": "sy-isa-field",
+      "kind": "symbol",
+      "file": "symbol/symbols.json",
+      "parityClass": [
+        "SY"
+      ],
+      "reference": "HS datumsimbol.symbol_svg; port mm RL datum_symbols.render",
+      "referenceCli": "H03 --kind symbol --spec isa:field",
+      "dialect": "isa",
+      "symbol": "isa:field",
+      "sha256": "b1fcaa9c542d24a6bd9a2f1f7ab50c57ff2ca0c47d430b3cc55e599a262c62aa",
+      "bytes": 904
+    },
+    {
+      "id": "sy-isa-inaccessible",
+      "kind": "symbol",
+      "file": "symbol/symbols.json",
+      "parityClass": [
+        "SY"
+      ],
+      "reference": "HS datumsimbol.symbol_svg; port mm RL datum_symbols.render",
+      "referenceCli": "H03 --kind symbol --spec isa:inaccessible",
+      "dialect": "isa",
+      "symbol": "isa:inaccessible",
+      "sha256": "b1fcaa9c542d24a6bd9a2f1f7ab50c57ff2ca0c47d430b3cc55e599a262c62aa",
+      "bytes": 904
+    },
+    {
+      "id": "sy-isa-plc",
+      "kind": "symbol",
+      "file": "symbol/symbols.json",
+      "parityClass": [
+        "SY"
+      ],
+      "reference": "HS datumsimbol.symbol_svg; port mm RL datum_symbols.render",
+      "referenceCli": "H03 --kind symbol --spec isa:plc",
+      "dialect": "isa",
+      "symbol": "isa:plc",
+      "sha256": "b1fcaa9c542d24a6bd9a2f1f7ab50c57ff2ca0c47d430b3cc55e599a262c62aa",
+      "bytes": 904
+    },
+    {
+      "id": "sy-isa-primary",
+      "kind": "symbol",
+      "file": "symbol/symbols.json",
+      "parityClass": [
+        "SY"
+      ],
+      "reference": "HS datumsimbol.symbol_svg; port mm RL datum_symbols.render",
+      "referenceCli": "H03 --kind symbol --spec isa:primary",
+      "dialect": "isa",
+      "symbol": "isa:primary",
+      "sha256": "b1fcaa9c542d24a6bd9a2f1f7ab50c57ff2ca0c47d430b3cc55e599a262c62aa",
+      "bytes": 904
+    },
+    {
+      "id": "sy-isa-shared",
+      "kind": "symbol",
+      "file": "symbol/symbols.json",
+      "parityClass": [
+        "SY"
+      ],
+      "reference": "HS datumsimbol.symbol_svg; port mm RL datum_symbols.render",
+      "referenceCli": "H03 --kind symbol --spec isa:shared",
+      "dialect": "isa",
+      "symbol": "isa:shared",
+      "sha256": "b1fcaa9c542d24a6bd9a2f1f7ab50c57ff2ca0c47d430b3cc55e599a262c62aa",
+      "bytes": 904
+    },
+    {
+      "id": "sy-isa-shared-field",
+      "kind": "symbol",
+      "file": "symbol/symbols.json",
+      "parityClass": [
+        "SY"
+      ],
+      "reference": "HS datumsimbol.symbol_svg; port mm RL datum_symbols.render",
+      "referenceCli": "H03 --kind symbol --spec isa:shared-field",
+      "dialect": "isa",
+      "symbol": "isa:shared-field",
+      "sha256": "b1fcaa9c542d24a6bd9a2f1f7ab50c57ff2ca0c47d430b3cc55e599a262c62aa",
+      "bytes": 904
+    },
+    {
+      "id": "sy-isa-valve",
+      "kind": "symbol",
+      "file": "symbol/symbols.json",
+      "parityClass": [
+        "SY"
+      ],
+      "reference": "HS datumsimbol.symbol_svg; port mm RL datum_symbols.render",
+      "referenceCli": "H03 --kind symbol --spec isa:valve",
+      "dialect": "isa",
+      "symbol": "isa:valve",
+      "sha256": "b1fcaa9c542d24a6bd9a2f1f7ab50c57ff2ca0c47d430b3cc55e599a262c62aa",
+      "bytes": 904
+    },
+    {
+      "id": "sy-isa-valve-diaphragm",
+      "kind": "symbol",
+      "file": "symbol/symbols.json",
+      "parityClass": [
+        "SY"
+      ],
+      "reference": "HS datumsimbol.symbol_svg; port mm RL datum_symbols.render",
+      "referenceCli": "H03 --kind symbol --spec isa:valve-diaphragm",
+      "dialect": "isa",
+      "symbol": "isa:valve-diaphragm",
+      "sha256": "b1fcaa9c542d24a6bd9a2f1f7ab50c57ff2ca0c47d430b3cc55e599a262c62aa",
+      "bytes": 904
+    },
+    {
+      "id": "sy-isa-valve-motor",
+      "kind": "symbol",
+      "file": "symbol/symbols.json",
+      "parityClass": [
+        "SY"
+      ],
+      "reference": "HS datumsimbol.symbol_svg; port mm RL datum_symbols.render",
+      "referenceCli": "H03 --kind symbol --spec isa:valve-motor",
+      "dialect": "isa",
+      "symbol": "isa:valve-motor",
+      "sha256": "b1fcaa9c542d24a6bd9a2f1f7ab50c57ff2ca0c47d430b3cc55e599a262c62aa",
+      "bytes": 904
+    },
+    {
+      "id": "sy-isa-valve-solenoid",
+      "kind": "symbol",
+      "file": "symbol/symbols.json",
+      "parityClass": [
+        "SY"
+      ],
+      "reference": "HS datumsimbol.symbol_svg; port mm RL datum_symbols.render",
+      "referenceCli": "H03 --kind symbol --spec isa:valve-solenoid",
+      "dialect": "isa",
+      "symbol": "isa:valve-solenoid",
+      "sha256": "b1fcaa9c542d24a6bd9a2f1f7ab50c57ff2ca0c47d430b3cc55e599a262c62aa",
+      "bytes": 904
+    },
+    {
+      "id": "sy-mil-friend",
+      "kind": "symbol",
+      "file": "symbol/symbols.json",
+      "parityClass": [
+        "SY"
+      ],
+      "reference": "HS datumsimbol.symbol_svg; port mm RL datum_symbols.render",
+      "referenceCli": "H03 --kind symbol --spec mil:friend",
+      "dialect": "mil",
+      "symbol": "mil:friend",
+      "sha256": "b1fcaa9c542d24a6bd9a2f1f7ab50c57ff2ca0c47d430b3cc55e599a262c62aa",
+      "bytes": 904
+    },
+    {
+      "id": "sy-mil-friend-air",
+      "kind": "symbol",
+      "file": "symbol/symbols.json",
+      "parityClass": [
+        "SY"
+      ],
+      "reference": "HS datumsimbol.symbol_svg; port mm RL datum_symbols.render",
+      "referenceCli": "H03 --kind symbol --spec mil:friend-air",
+      "dialect": "mil",
+      "symbol": "mil:friend-air",
+      "sha256": "b1fcaa9c542d24a6bd9a2f1f7ab50c57ff2ca0c47d430b3cc55e599a262c62aa",
+      "bytes": 904
+    },
+    {
+      "id": "sy-mil-hostile",
+      "kind": "symbol",
+      "file": "symbol/symbols.json",
+      "parityClass": [
+        "SY"
+      ],
+      "reference": "HS datumsimbol.symbol_svg; port mm RL datum_symbols.render",
+      "referenceCli": "H03 --kind symbol --spec mil:hostile",
+      "dialect": "mil",
+      "symbol": "mil:hostile",
+      "sha256": "b1fcaa9c542d24a6bd9a2f1f7ab50c57ff2ca0c47d430b3cc55e599a262c62aa",
+      "bytes": 904
+    },
+    {
+      "id": "sy-mil-hostile-air",
+      "kind": "symbol",
+      "file": "symbol/symbols.json",
+      "parityClass": [
+        "SY"
+      ],
+      "reference": "HS datumsimbol.symbol_svg; port mm RL datum_symbols.render",
+      "referenceCli": "H03 --kind symbol --spec mil:hostile-air",
+      "dialect": "mil",
+      "symbol": "mil:hostile-air",
+      "sha256": "b1fcaa9c542d24a6bd9a2f1f7ab50c57ff2ca0c47d430b3cc55e599a262c62aa",
+      "bytes": 904
+    },
+    {
+      "id": "sy-mil-neutral",
+      "kind": "symbol",
+      "file": "symbol/symbols.json",
+      "parityClass": [
+        "SY"
+      ],
+      "reference": "HS datumsimbol.symbol_svg; port mm RL datum_symbols.render",
+      "referenceCli": "H03 --kind symbol --spec mil:neutral",
+      "dialect": "mil",
+      "symbol": "mil:neutral",
+      "sha256": "b1fcaa9c542d24a6bd9a2f1f7ab50c57ff2ca0c47d430b3cc55e599a262c62aa",
+      "bytes": 904
+    },
+    {
+      "id": "sy-mil-unknown",
+      "kind": "symbol",
+      "file": "symbol/symbols.json",
+      "parityClass": [
+        "SY"
+      ],
+      "reference": "HS datumsimbol.symbol_svg; port mm RL datum_symbols.render",
+      "referenceCli": "H03 --kind symbol --spec mil:unknown",
+      "dialect": "mil",
+      "symbol": "mil:unknown",
+      "sha256": "b1fcaa9c542d24a6bd9a2f1f7ab50c57ff2ca0c47d430b3cc55e599a262c62aa",
+      "bytes": 904
+    },
+    {
+      "id": "sy-sec-barrier",
+      "kind": "symbol",
+      "file": "symbol/symbols.json",
+      "parityClass": [
+        "SY"
+      ],
+      "reference": "HS datumsimbol.symbol_svg; port mm RL datum_symbols.render",
+      "referenceCli": "H03 --kind symbol --spec sec:barrier",
+      "dialect": "sec",
+      "symbol": "sec:barrier",
+      "sha256": "b1fcaa9c542d24a6bd9a2f1f7ab50c57ff2ca0c47d430b3cc55e599a262c62aa",
+      "bytes": 904
+    },
+    {
+      "id": "sy-sec-camera",
+      "kind": "symbol",
+      "file": "symbol/symbols.json",
+      "parityClass": [
+        "SY"
+      ],
+      "reference": "HS datumsimbol.symbol_svg; port mm RL datum_symbols.render",
+      "referenceCli": "H03 --kind symbol --spec sec:camera",
+      "dialect": "sec",
+      "symbol": "sec:camera",
+      "sha256": "b1fcaa9c542d24a6bd9a2f1f7ab50c57ff2ca0c47d430b3cc55e599a262c62aa",
+      "bytes": 904
+    },
+    {
+      "id": "sy-sec-fence",
+      "kind": "symbol",
+      "file": "symbol/symbols.json",
+      "parityClass": [
+        "SY"
+      ],
+      "reference": "HS datumsimbol.symbol_svg; port mm RL datum_symbols.render",
+      "referenceCli": "H03 --kind symbol --spec sec:fence",
+      "dialect": "sec",
+      "symbol": "sec:fence",
+      "sha256": "b1fcaa9c542d24a6bd9a2f1f7ab50c57ff2ca0c47d430b3cc55e599a262c62aa",
+      "bytes": 904
+    },
+    {
+      "id": "sy-sec-mast",
+      "kind": "symbol",
+      "file": "symbol/symbols.json",
+      "parityClass": [
+        "SY"
+      ],
+      "reference": "HS datumsimbol.symbol_svg; port mm RL datum_symbols.render",
+      "referenceCli": "H03 --kind symbol --spec sec:mast",
+      "dialect": "sec",
+      "symbol": "sec:mast",
+      "sha256": "b1fcaa9c542d24a6bd9a2f1f7ab50c57ff2ca0c47d430b3cc55e599a262c62aa",
+      "bytes": 904
+    },
+    {
+      "id": "sy-sec-pir",
+      "kind": "symbol",
+      "file": "symbol/symbols.json",
+      "parityClass": [
+        "SY"
+      ],
+      "reference": "HS datumsimbol.symbol_svg; port mm RL datum_symbols.render",
+      "referenceCli": "H03 --kind symbol --spec sec:pir",
+      "dialect": "sec",
+      "symbol": "sec:pir",
+      "sha256": "b1fcaa9c542d24a6bd9a2f1f7ab50c57ff2ca0c47d430b3cc55e599a262c62aa",
+      "bytes": 904
+    },
+    {
+      "id": "sy-sec-ptz",
+      "kind": "symbol",
+      "file": "symbol/symbols.json",
+      "parityClass": [
+        "SY"
+      ],
+      "reference": "HS datumsimbol.symbol_svg; port mm RL datum_symbols.render",
+      "referenceCli": "H03 --kind symbol --spec sec:ptz",
+      "dialect": "sec",
+      "symbol": "sec:ptz",
+      "sha256": "b1fcaa9c542d24a6bd9a2f1f7ab50c57ff2ca0c47d430b3cc55e599a262c62aa",
+      "bytes": 904
+    },
+    {
+      "id": "sy-sec-reader",
+      "kind": "symbol",
+      "file": "symbol/symbols.json",
+      "parityClass": [
+        "SY"
+      ],
+      "reference": "HS datumsimbol.symbol_svg; port mm RL datum_symbols.render",
+      "referenceCli": "H03 --kind symbol --spec sec:reader",
+      "dialect": "sec",
+      "symbol": "sec:reader",
+      "sha256": "b1fcaa9c542d24a6bd9a2f1f7ab50c57ff2ca0c47d430b3cc55e599a262c62aa",
+      "bytes": 904
+    },
+    {
+      "id": "sy-sheet-iec",
+      "kind": "symbolSheet",
+      "file": "symbol/sheet_iec.json",
+      "parityClass": [
+        "SY"
+      ],
+      "reference": "HS datumsimbol.sheet_svg",
+      "referenceCli": "H03 --kind symbol",
+      "dialect": "iec",
+      "sha256": "2944bcdc85857121b40a5dd3edb6ea47b7e8a51d168a7387aebaa577897a69e0",
+      "bytes": 34
+    },
+    {
+      "id": "sy-sheet-isa",
+      "kind": "symbolSheet",
+      "file": "symbol/sheet_isa.json",
+      "parityClass": [
+        "SY"
+      ],
+      "reference": "HS datumsimbol.sheet_svg",
+      "referenceCli": "H03 --kind symbol",
+      "dialect": "isa",
+      "sha256": "4cbe05243648939d682d5bd52c3cccbda44d7ccd455e6407be7fbe1e9671fba1",
+      "bytes": 34
+    },
+    {
+      "id": "sy-sheet-sec",
+      "kind": "symbolSheet",
+      "file": "symbol/sheet_sec.json",
+      "parityClass": [
+        "SY"
+      ],
+      "reference": "HS datumsimbol.sheet_svg",
+      "referenceCli": "H03 --kind symbol",
+      "dialect": "sec",
+      "sha256": "ece0d36a8c3fa67f4a5083b1d65364304f9034aee2ffdac064b9cd279be6d888",
+      "bytes": 34
+    },
+    {
+      "id": "sy-sheet-mil",
+      "kind": "symbolSheet",
+      "file": "symbol/sheet_mil.json",
+      "parityClass": [
+        "SY"
+      ],
+      "reference": "HS datumsimbol.sheet_svg",
+      "referenceCli": "H03 --kind symbol",
+      "dialect": "mil",
+      "sha256": "be191c9d49b97fe8ae3a592045c385cd1a8377241b46b8b773d7c50a5896efc4",
+      "bytes": 34
+    }
+  ],
+  "sources": [
+    {
+      "file": "diagram/garis_a/good_layered.json",
+      "origin": "HS/fixtures_diagram/good_layered.json",
+      "sha256": "02ae796de6eaf7c7bffeae1b53ee7b7c2eef5fb7b1c86da41f8c04c7911ccd9e",
+      "bytes": 1516,
+      "note": "salinan byte-identik Garis A; bukan fixture kontrak (tanpa $schema, memuat _provenans)"
+    },
+    {
+      "file": "diagram/garis_a/good_sld.json",
+      "origin": "HS/fixtures_diagram/good_sld.json",
+      "sha256": "6ef25472eb1a026902e476f4d22314a46934fb4fca581f16f15ef3c68e63526d",
+      "bytes": 1208,
+      "note": "salinan byte-identik Garis A; bukan fixture kontrak (tanpa $schema, memuat _provenans)"
+    }
+  ]
+}

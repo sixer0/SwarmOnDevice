@@ -1,0 +1,301 @@
+{
+  "generatedBy": "S13",
+  "copiedAt": "2026-10-22T17:17:10.028Z",
+  "count": 30,
+  "entries": [
+    {
+      "path": "fonts/DejaVuSans.ttf",
+      "source": "C:\\Users\\TRIAL\\AppData\\Local\\hermes\\profiles\\gspuser02\\skills\\datum-revl\\assets\\fonts\\DejaVuSans.ttf",
+      "sha256": "ae7b7855e115a5966d8b1b3f80f254ccc117ec86f9965e202ee2940453837280",
+      "bytes": 759720,
+      "license": "Bitstream Vera / Arev (DejaVu Fonts License; perubahan DejaVu public domain)",
+      "kind": "font",
+      "note": "tertera OFL di brief; lisensi DejaVu sebenarnya turunan Bitstream Vera, lihat catatan",
+      "licenseFile": "fonts/LICENSE-DejaVu.txt"
+    },
+    {
+      "path": "fonts/IBMPlexMono-Italic.ttf",
+      "source": "C:\\Users\\TRIAL\\AppData\\Local\\hermes\\profiles\\gspuser02\\skills\\datum-revl\\assets\\fonts\\IBMPlexMono-Italic.ttf",
+      "sha256": "eed67babf14f4b45de0a57017c1291f37cc96ceede2bc98cbf7873bbd0c0a784",
+      "bytes": 27096,
+      "license": "SIL OFL 1.1",
+      "kind": "font",
+      "licenseFile": "fonts/LICENSE-IBM-Plex.txt"
+    },
+    {
+      "path": "fonts/IBMPlexMono-Regular.ttf",
+      "source": "C:\\Users\\TRIAL\\AppData\\Local\\hermes\\profiles\\gspuser02\\skills\\datum-revl\\assets\\fonts\\IBMPlexMono-Regular.ttf",
+      "sha256": "73ac3f3d34ea63d0336449d8312fb8ae163d4bd922c2e78d16b4d7504baa0528",
+      "bytes": 23976,
+      "license": "SIL OFL 1.1",
+      "kind": "font",
+      "licenseFile": "fonts/LICENSE-IBM-Plex.txt"
+    },
+    {
+      "path": "fonts/IBMPlexMono-SemiBold.ttf",
+      "source": "C:\\Users\\TRIAL\\AppData\\Local\\hermes\\profiles\\gspuser02\\skills\\datum-revl\\assets\\fonts\\IBMPlexMono-SemiBold.ttf",
+      "sha256": "5801cade8aa6cc81bdb3a463e05d55819339b738db383d55863e4a24139d99fd",
+      "bytes": 23828,
+      "license": "SIL OFL 1.1",
+      "kind": "font",
+      "licenseFile": "fonts/LICENSE-IBM-Plex.txt"
+    },
+    {
+      "path": "fonts/IBMPlexMono-SemiBoldItalic.ttf",
+      "source": "C:\\Users\\TRIAL\\AppData\\Local\\hermes\\profiles\\gspuser02\\skills\\datum-revl\\assets\\fonts\\IBMPlexMono-SemiBoldItalic.ttf",
+      "sha256": "34617bc3fd8a92b16adc6608896e39449336f2c22ef5cf12a261a36a4d6cd235",
+      "bytes": 26700,
+      "license": "SIL OFL 1.1",
+      "kind": "font",
+      "licenseFile": "fonts/LICENSE-IBM-Plex.txt"
+    },
+    {
+      "path": "fonts/IBMPlexSans-Italic.ttf",
+      "source": "C:\\Users\\TRIAL\\AppData\\Local\\hermes\\profiles\\gspuser02\\skills\\datum-revl\\assets\\fonts\\IBMPlexSans-Italic.ttf",
+      "sha256": "c6adc2080aa80b36935d1c34fe392180d33bdda4d75945c91bf2c3ccea182498",
+      "bytes": 49552,
+      "license": "SIL OFL 1.1",
+      "kind": "font",
+      "licenseFile": "fonts/LICENSE-IBM-Plex.txt"
+    },
+    {
+      "path": "fonts/IBMPlexSans-Regular.ttf",
+      "source": "C:\\Users\\TRIAL\\AppData\\Local\\hermes\\profiles\\gspuser02\\skills\\datum-revl\\assets\\fonts\\IBMPlexSans-Regular.ttf",
+      "sha256": "76e907c029eb4643ae219d9a38a894374e9a92545cb339b81fa321419cf010da",
+      "bytes": 46220,
+      "license": "SIL OFL 1.1",
+      "kind": "font",
+      "licenseFile": "fonts/LICENSE-IBM-Plex.txt"
+    },
+    {
+      "path": "fonts/IBMPlexSans-SemiBold.ttf",
+      "source": "C:\\Users\\TRIAL\\AppData\\Local\\hermes\\profiles\\gspuser02\\skills\\datum-revl\\assets\\fonts\\IBMPlexSans-SemiBold.ttf",
+      "sha256": "90664322004606a83b106b28009200450aafe8622110367b8d4becd1bb5dd2a0",
+      "bytes": 46228,
+      "license": "SIL OFL 1.1",
+      "kind": "font",
+      "licenseFile": "fonts/LICENSE-IBM-Plex.txt"
+    },
+    {
+      "path": "fonts/IBMPlexSans-SemiBoldItalic.ttf",
+      "source": "C:\\Users\\TRIAL\\AppData\\Local\\hermes\\profiles\\gspuser02\\skills\\datum-revl\\assets\\fonts\\IBMPlexSans-SemiBoldItalic.ttf",
+      "sha256": "e96c3c1ac695c642591aaebd2fe4068c5326f99507acbcb6c558cc4603451a21",
+      "bytes": 49724,
+      "license": "SIL OFL 1.1",
+      "kind": "font",
+      "licenseFile": "fonts/LICENSE-IBM-Plex.txt"
+    },
+    {
+      "path": "fonts/IBMPlexSansCond-Italic.ttf",
+      "source": "C:\\Users\\TRIAL\\AppData\\Local\\hermes\\profiles\\gspuser02\\skills\\datum-revl\\assets\\fonts\\IBMPlexSansCond-Italic.ttf",
+      "sha256": "be0b2f99eba64e5e27e7e2ea4610c48d8b097c8d68d9f08bad635252569db1da",
+      "bytes": 39948,
+      "license": "SIL OFL 1.1",
+      "kind": "font",
+      "licenseFile": "fonts/LICENSE-IBM-Plex.txt"
+    },
+    {
+      "path": "fonts/IBMPlexSansCond-Regular.ttf",
+      "source": "C:\\Users\\TRIAL\\AppData\\Local\\hermes\\profiles\\gspuser02\\skills\\datum-revl\\assets\\fonts\\IBMPlexSansCond-Regular.ttf",
+      "sha256": "d3057856ccc7ef347ea104b9b7fb3bf42b7b1befd8b06b9b91c33e5e787a5045",
+      "bytes": 36556,
+      "license": "SIL OFL 1.1",
+      "kind": "font",
+      "licenseFile": "fonts/LICENSE-IBM-Plex.txt"
+    },
+    {
+      "path": "fonts/IBMPlexSansCond-SemiBold.ttf",
+      "source": "C:\\Users\\TRIAL\\AppData\\Local\\hermes\\profiles\\gspuser02\\skills\\datum-revl\\assets\\fonts\\IBMPlexSansCond-SemiBold.ttf",
+      "sha256": "09d25ecc8ad8de40f73daa949cc45a5cb43fcc883b5475c0155f54d09c40a471",
+      "bytes": 36436,
+      "license": "SIL OFL 1.1",
+      "kind": "font",
+      "licenseFile": "fonts/LICENSE-IBM-Plex.txt"
+    },
+    {
+      "path": "fonts/IBMPlexSansCond-SemiBoldItalic.ttf",
+      "source": "C:\\Users\\TRIAL\\AppData\\Local\\hermes\\profiles\\gspuser02\\skills\\datum-revl\\assets\\fonts\\IBMPlexSansCond-SemiBoldItalic.ttf",
+      "sha256": "0d9e2ff27098bffd12c0e9d634a7705f50c52a36cd78f4ef8ce54d62bea97582",
+      "bytes": 39588,
+      "license": "SIL OFL 1.1",
+      "kind": "font",
+      "licenseFile": "fonts/LICENSE-IBM-Plex.txt"
+    },
+    {
+      "path": "fonts/IBMPlexSerif-Italic.ttf",
+      "source": "C:\\Users\\TRIAL\\AppData\\Local\\hermes\\profiles\\gspuser02\\skills\\datum-revl\\assets\\fonts\\IBMPlexSerif-Italic.ttf",
+      "sha256": "075483ede0be9d2db4d3b0b78ea83a43ac0609db4b07a0771cd2f7b45902edf6",
+      "bytes": 41772,
+      "license": "SIL OFL 1.1",
+      "kind": "font",
+      "licenseFile": "fonts/LICENSE-IBM-Plex.txt"
+    },
+    {
+      "path": "fonts/IBMPlexSerif-Regular.ttf",
+      "source": "C:\\Users\\TRIAL\\AppData\\Local\\hermes\\profiles\\gspuser02\\skills\\datum-revl\\assets\\fonts\\IBMPlexSerif-Regular.ttf",
+      "sha256": "5fdc492c8b95eeb740b75831266bb37d93bd2ff066c1166f30e5db9918001b7b",
+      "bytes": 39008,
+      "license": "SIL OFL 1.1",
+      "kind": "font",
+      "licenseFile": "fonts/LICENSE-IBM-Plex.txt"
+    },
+    {
+      "path": "fonts/IBMPlexSerif-SemiBold.ttf",
+      "source": "C:\\Users\\TRIAL\\AppData\\Local\\hermes\\profiles\\gspuser02\\skills\\datum-revl\\assets\\fonts\\IBMPlexSerif-SemiBold.ttf",
+      "sha256": "07866ea3cc7642e7c11035e557a747be2e61fe7f7487e62a6193cc2b85d2f8d7",
+      "bytes": 39392,
+      "license": "SIL OFL 1.1",
+      "kind": "font",
+      "licenseFile": "fonts/LICENSE-IBM-Plex.txt"
+    },
+    {
+      "path": "fonts/IBMPlexSerif-SemiBoldItalic.ttf",
+      "source": "C:\\Users\\TRIAL\\AppData\\Local\\hermes\\profiles\\gspuser02\\skills\\datum-revl\\assets\\fonts\\IBMPlexSerif-SemiBoldItalic.ttf",
+      "sha256": "aaa6a27ef637f0c45248cdbed9675916441409b1db364162d3724b2b43a78f31",
+      "bytes": 41960,
+      "license": "SIL OFL 1.1",
+      "kind": "font",
+      "licenseFile": "fonts/LICENSE-IBM-Plex.txt"
+    },
+    {
+      "path": "fonts/PASANG-DULU.txt",
+      "source": "C:\\Users\\TRIAL\\AppData\\Local\\hermes\\profiles\\gspuser02\\skills\\datum-revl\\assets\\fonts\\PASANG-DULU.txt",
+      "sha256": "c34e61350af996f153381fcb4aba65887336c873ee3ed747103290f1718f20a7",
+      "bytes": 881,
+      "license": "n/a",
+      "kind": "note",
+      "note": "catatan sumber; menyatakan lisensi SIL OFL untuk IBM Plex"
+    },
+    {
+      "path": "fonts/Inter-Regular.ttf",
+      "source": "C:\\Users\\TRIAL\\AppData\\Local\\Microsoft\\Windows\\Fonts\\Inter-Regular.ttf",
+      "sha256": "1b08e7fc267a5c7e1d614100f604b83e7e8a0be241f0f288faa2b3ac93a683ba",
+      "bytes": 324820,
+      "license": "SIL OFL 1.1",
+      "kind": "font",
+      "note": "dipakai benchmark",
+      "licenseFile": "fonts/LICENSE-Inter.txt"
+    },
+    {
+      "path": "base/default.docx",
+      "source": "C:\\Users\\TRIAL\\AppData\\Local\\hermes\\hermes-agent\\venv\\Lib\\site-packages\\docx\\templates\\default.docx",
+      "sha256": "2094b5bddffe9cf973d61fe03388413804f034160718494a65db7e98da40d35d",
+      "bytes": 38116,
+      "license": "MIT (python-docx)",
+      "kind": "base",
+      "note": "templat bawaan python-docx"
+    },
+    {
+      "path": "logo/gsp-duo.png",
+      "source": "C:\\Users\\TRIAL\\AppData\\Local\\hermes\\profiles\\gspuser02\\skills\\datum-revl\\assets\\logo\\gsp-duo.png",
+      "sha256": "2f4b9bc77aba25bb2df4dcaa3f81ce6d75bcf8c68743dbcf7833852f65857586",
+      "bytes": 42017,
+      "license": "milik GSP/DATUM (internal)",
+      "kind": "raster"
+    },
+    {
+      "path": "logo/gsp-penuh.png",
+      "source": "C:\\Users\\TRIAL\\AppData\\Local\\hermes\\profiles\\gspuser02\\skills\\datum-revl\\assets\\logo\\gsp-penuh.png",
+      "sha256": "8969ac930c18a437681ec1c2464e56a04a353ef549bd3f5e48776fb7f2c467f5",
+      "bytes": 631976,
+      "license": "milik GSP/DATUM (internal)",
+      "kind": "raster"
+    },
+    {
+      "path": "logo/gsp-putih.png",
+      "source": "C:\\Users\\TRIAL\\AppData\\Local\\hermes\\profiles\\gspuser02\\skills\\datum-revl\\assets\\logo\\gsp-putih.png",
+      "sha256": "020443c539fb080397a5ab1069f30276bd9c1ed290cde49c2d77295349015457",
+      "bytes": 36305,
+      "license": "milik GSP/DATUM (internal)",
+      "kind": "raster"
+    },
+    {
+      "path": "logo/gsp-seal.png",
+      "source": "swarm/packages/desktop/datum/datum-house-style/assets/logo/gsp-seal.png",
+      "sha256": "a43657da7dd8e5c06e3474a15b349036a0066011d8272597840f5b3bb8dfe95d",
+      "bytes": 29234,
+      "license": "milik GSP/DATUM (internal)",
+      "kind": "raster",
+      "addedBy": "69b (C82)"
+    },
+    {
+      "path": "logo/gsp-tinta.png",
+      "source": "C:\\Users\\TRIAL\\AppData\\Local\\hermes\\profiles\\gspuser02\\skills\\datum-revl\\assets\\logo\\gsp-tinta.png",
+      "sha256": "69636059ddc4155c66430007d9c8bf280ce44090f408b5ab557f5efd0962111e",
+      "bytes": 36661,
+      "license": "milik GSP/DATUM (internal)",
+      "kind": "raster"
+    },
+    {
+      "path": "logo/gsp-tinta9.png",
+      "source": "C:\\Users\\TRIAL\\AppData\\Local\\hermes\\profiles\\gspuser02\\skills\\datum-revl\\assets\\logo\\gsp-tinta9.png",
+      "sha256": "abbc77082c596bcce14104159bec1a7496f02019786ca932b3957266b4252454",
+      "bytes": 36664,
+      "license": "milik GSP/DATUM (internal)",
+      "kind": "raster"
+    },
+    {
+      "path": "fonts/DejaVuSans-Bold.ttf",
+      "source": "C:\\Windows\\Fonts\\DejaVuSans-Bold.ttf",
+      "sha256": "e6476c1b80502924294eed40894c5b18e06c181444ca953e5334262df9c27724",
+      "bytes": 705684,
+      "license": "Bitstream Vera / Arev (DejaVu Fonts License; perubahan DejaVu public domain)",
+      "kind": "font",
+      "note": "Ditambahkan controller (D-43): wajah tebal DejaVu yang ditanam BM.docx",
+      "licenseFile": "fonts/LICENSE-DejaVu.txt"
+    },
+    {
+      "path": "fonts/LICENSE-IBM-Plex.txt",
+      "source": "C:Program FilesLibreOfficelicense.txt (teks OFL 1.1) + tabel name nameID 0/14 berkas IBMPlex*.ttf (pemberitahuan hak cipta)",
+      "sha256": "24539eb0b89db3531916f5a21b94ab48e2d494436d3e1518b9c6d08471cc4fe4",
+      "bytes": 4985,
+      "license": "SIL OFL 1.1 (Reserved Font Name \"Plex\")",
+      "kind": "license",
+      "appliesTo": [
+        "fonts/IBMPlexMono-Italic.ttf",
+        "fonts/IBMPlexMono-Regular.ttf",
+        "fonts/IBMPlexMono-SemiBold.ttf",
+        "fonts/IBMPlexMono-SemiBoldItalic.ttf",
+        "fonts/IBMPlexSans-Italic.ttf",
+        "fonts/IBMPlexSans-Regular.ttf",
+        "fonts/IBMPlexSans-SemiBold.ttf",
+        "fonts/IBMPlexSans-SemiBoldItalic.ttf",
+        "fonts/IBMPlexSansCond-Italic.ttf",
+        "fonts/IBMPlexSansCond-Regular.ttf",
+        "fonts/IBMPlexSansCond-SemiBold.ttf",
+        "fonts/IBMPlexSansCond-SemiBoldItalic.ttf",
+        "fonts/IBMPlexSerif-Italic.ttf",
+        "fonts/IBMPlexSerif-Regular.ttf",
+        "fonts/IBMPlexSerif-SemiBold.ttf",
+        "fonts/IBMPlexSerif-SemiBoldItalic.ttf"
+      ],
+      "addedBy": "INT-K (IP-16, F-017)",
+      "note": "RFN \"Plex\" dari LICENSE.txt hulu IBM (tidak tersedia lokal) - verifikasi terhadap https://github.com/IBM/plex/blob/master/LICENSE.txt"
+    },
+    {
+      "path": "fonts/LICENSE-Inter.txt",
+      "source": "C:Program FilesLibreOfficelicense.txt (teks OFL 1.1) + tabel name nameID 0/14 Inter-Regular.ttf",
+      "sha256": "2566bd5adaf639f209497f401517af162b026831893a4d6b30dbe7790414f3bc",
+      "bytes": 4573,
+      "license": "SIL OFL 1.1",
+      "kind": "license",
+      "appliesTo": [
+        "fonts/Inter-Regular.ttf"
+      ],
+      "addedBy": "INT-K (IP-16, F-017)"
+    },
+    {
+      "path": "fonts/LICENSE-DejaVu.txt",
+      "source": "C:UsersTRIALAppDataLocalhermeshermes-agent\u000benvLibsite-packagesmatplotlibmpl-data\fonts\ttfLICENSE_DEJAVU (salinan byte-identik di bawah kepala berkas)",
+      "sha256": "0009b5daa1ebfab20b9206c467c62100e1853d379744511ba0f7860f149f7b64",
+      "bytes": 5289,
+      "license": "Bitstream Vera + Arev; perubahan DejaVu public domain",
+      "kind": "license",
+      "appliesTo": [
+        "fonts/DejaVuSans.ttf",
+        "fonts/DejaVuSans-Bold.ttf"
+      ],
+      "addedBy": "INT-K (IP-16, F-017)"
+    }
+  ]
+}

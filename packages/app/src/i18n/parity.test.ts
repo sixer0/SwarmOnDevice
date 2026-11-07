@@ -124,8 +124,13 @@ const pluralCategories = new Map(
 //   - twenty-five more for main's native Update from File and Undo Last Update menu items and their dialogs
 //     (`desktop.menu.updateFromFile`, `desktop.menu.undoLastUpdate`, `desktop.patch.*`), register BN-30..BN-54 with
 //     section 14.5 of docs/2026-11-02_swarm_system_patch_updates, row 54.
+//   - seven more for main's native Install DATUM Studio for Claude menu item and dialogs
+//     (`desktop.menu.installDatumStudio`, `desktop.datumStudio.*`), decisions C63/C64 of
+//     docs/2026-11-06_swarm_1_2_0_datum_installer (EN and ID only), row 34b.
+//   - five more for the document preview inside the existing file tab (`file.preview.*`), decision U12 and studio
+//     spec §8.2 of the same task (EN and ID only), row 112.
 // Widening this list is a decision, not drift: `parity-exemption-guard.test.ts` fails the suite on any
-// hundred-and-thirty-eighth entry, on any non-literal/wildcard, and if `en` or `id` ever stops carrying an exempt key.
+// hundred-and-fiftieth entry, on any non-literal/wildcard, and if `en` or `id` ever stops carrying an exempt key.
 const UNTRANSLATED_KEY_PRESENCE_EXEMPTION: readonly string[] = [
   "command.project.openNumber",
   "settings.tab.servers",
@@ -264,6 +269,18 @@ const UNTRANSLATED_KEY_PRESENCE_EXEMPTION: readonly string[] = [
   "desktop.patch.result.failed.detail",
   "desktop.patch.result.running.detail",
   "desktop.patch.result.recover.detail",
+  "desktop.menu.installDatumStudio",
+  "desktop.datumStudio.confirm.message",
+  "desktop.datumStudio.confirm.detail",
+  "desktop.datumStudio.done.message",
+  "desktop.datumStudio.done.detail",
+  "desktop.datumStudio.done.pathHint",
+  "desktop.datumStudio.failed.message",
+  "file.preview.showSource",
+  "file.preview.showPreview",
+  "file.preview.companion",
+  "file.preview.docxHint",
+  "file.preview.none",
 ]
 // Locales the exemption never applies to. `en` is every domain's source, and `id` is the second
 // maintained locale: it already carries every exempt key, so it stays fully enforced like the rest.

@@ -1,0 +1,149 @@
+/**
+ * Validation of mission records against `studio.mission/v1` (spec §6.1): ajv 8.20.0 Ajv2020 with Studio's options
+ * (vendor contract/index.ts:96 STUDIO_AJV_OPTIONS), no ajv-formats. Failures are SCHEMA_INVALID with the ajv
+ * issues, capped like Studio's ingest validator (MAX_SCHEMA_ISSUES = 500, vendor services/ingest/validate.ts:31).
+ * The C57 entities are not in the v1 schema (a schema change is v2, §6.1); they are checked in code here.
+ */
+import Ajv2020 from "ajv/dist/2020.js"
+import type { ErrorObject, ValidateFunction } from "ajv"
+import { StoreError } from "../errors.ts"
+import { MISSION_SCHEMA_V1, MISSION_SCHEMA_V1_ID } from "./schema.ts"
+import type { DecisionAnswer, NewDecisionRequest, NewMissionMessage } from "./types.ts"
+
+export const MISSION_AJV_OPTIONS = { strict: true, allErrors: true, discriminator: true, allowUnionTypes: true } as const
+export const MAX_MISSION_SCHEMA_ISSUES = 500
+
+export type MissionSchemaDef = "MissionDoc" | "MissionTypeDoc" | "ReportEnvelope" | "StatusSnapshot" | "Row" | "Decision" | "Finding" | "SessionLink" | "Lock" | "Actor" | "MissionId" | "RowId" | "DecisionId"
+
+let ajv: Ajv2020 | null = null
+const compiled = new Map<string, ValidateFunction>()
+
+function getAjv(): Ajv2020 {
+  if (!ajv) {
+    const a = new Ajv2020({ ...MISSION_AJV_OPTIONS })
+    a.addSchema(MISSION_SCHEMA_V1)
+    ajv = a
+  }
+  return ajv
+}
+
+function validatorOf(def: MissionSchemaDef | "root"): ValidateFunction {
+  const ref = def === "root" ? MISSION_SCHEMA_V1_ID : `${MISSION_SCHEMA_V1_ID}#/$defs/${def}`
+  let v = compiled.get(ref)
+  if (!v) {
+    v = getAjv().getSchema(ref)
+    if (!v) throw new StoreError("SCHEMA_INVALID", `schema ref not found: ${ref}`)
+    compiled.set(ref, v)
+  }
+  return v
+}
+
+export interface SchemaIssue {
+  path: string
+  keyword: string
+  message: string
+}
+
+function issuesOf(errors: ErrorObject[] | null | undefined): SchemaIssue[] {
+  return (errors ?? []).slice(0, MAX_MISSION_SCHEMA_ISSUES).map((e) => ({ path: e.instancePath || "/", keyword: e.keyword, message: e.message ?? e.keyword }))
+}
+
+/** Validate `value` against one `$defs` entry (or the root `oneOf`); returns the issues, empty when valid. */
+export function checkMissionSchema(def: MissionSchemaDef | "root", value: unknown): SchemaIssue[] {
+  const v = validatorOf(def)
+  return v(value) ? [] : issuesOf(v.errors)
+}
+
+/** Validate or throw SCHEMA_INVALID {def, issues}. */
+export function assertMissionSchema(def: MissionSchemaDef | "root", value: unknown, at?: string): void {
+  const issues = checkMissionSchema(def, value)
+  if (issues.length > 0) throw new StoreError("SCHEMA_INVALID", `${at ?? def} does not match ${MISSION_SCHEMA_V1_ID}#/$defs/${def}`, { def, at, issues })
+}
+
+// ── C57 entities, checked in code ──────────────────────────────────────────
+
+const CTRL = /[\u0000-\u001f]/
+const OPTION_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$/
+const REQUEST_ID = /^D-[0-9]{1,5}$/
+const ROW_ID = /^[1-9][0-9]{0,3}[a-z]?$/
+const ACTOR = /^[a-z0-9][a-z0-9._-]{0,63}$/
+
+function text(v: unknown, max: number): boolean {
+  return typeof v === "string" && v.length >= 1 && v.length <= max && !CTRL.test(v)
+}
+
+function invalid(at: string, issues: SchemaIssue[]): never {
+  throw new StoreError("SCHEMA_INVALID", `${at} is malformed`, { at, issues })
+}
+
+export function assertDecisionRequest(r: NewDecisionRequest): void {
+  const issues: SchemaIssue[] = []
+  const bad = (path: string, message: string) => issues.push({ path, keyword: "c57", message })
+  const allowed = new Set(["id", "question", "context", "options", "recommended", "blockingRows"])
+  for (const k of Object.keys(r ?? {})) if (!allowed.has(k)) bad(`/${k}`, "unknown field")
+  if (typeof r?.id !== "string" || !REQUEST_ID.test(r.id)) bad("/id", "must match ^D-[0-9]{1,5}$")
+  if (!text(r?.question, 1000)) bad("/question", "1-1000 characters, no control characters")
+  if (r?.context !== undefined && !text(r.context, 300)) bad("/context", "one line, 1-300 characters")
+  const opts = Array.isArray(r?.options) ? r.options : []
+  if (!Array.isArray(r?.options) || opts.length < 2 || opts.length > 8) bad("/options", "2-8 options")
+  const ids = new Set<string>()
+  opts.forEach((o, i) => {
+    const keys = Object.keys(o ?? {})
+    if (keys.some((k) => !["id", "label", "consequence"].includes(k))) bad(`/options/${i}`, "unknown field")
+    if (typeof o?.id !== "string" || !OPTION_ID.test(o.id)) bad(`/options/${i}/id`, "must match ^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$")
+    else if (ids.has(o.id)) bad(`/options/${i}/id`, "duplicate option id")
+    else ids.add(o.id)
+    if (!text(o?.label, 300)) bad(`/options/${i}/label`, "one line, 1-300 characters")
+    if (!text(o?.consequence, 300)) bad(`/options/${i}/consequence`, "one line, 1-300 characters")
+  })
+  if (r?.recommended !== undefined && !ids.has(r.recommended)) bad("/recommended", "must be one of the option ids")
+  if (r?.blockingRows !== undefined) {
+    if (!Array.isArray(r.blockingRows) || r.blockingRows.length > 64) bad("/blockingRows", "array of at most 64 row ids")
+    else {
+      if (new Set(r.blockingRows).size !== r.blockingRows.length) bad("/blockingRows", "row ids must be unique")
+      r.blockingRows.forEach((x, i) => {
+        if (typeof x !== "string" || !ROW_ID.test(x)) bad(`/blockingRows/${i}`, "must be a row id")
+      })
+    }
+  }
+  if (issues.length > 0) invalid("decision request", issues)
+}
+
+export function assertDecisionAnswer(a: DecisionAnswer): void {
+  const issues: SchemaIssue[] = []
+  const bad = (path: string, message: string) => issues.push({ path, keyword: "c57", message })
+  if (typeof a?.option !== "string" || !OPTION_ID.test(a.option)) bad("/option", "must be an option id")
+  if (a?.by !== "user" && a?.by !== "controller") bad("/by", "user or controller")
+  if (a?.text !== undefined && !text(a.text, 8000)) bad("/text", "1-8000 characters, no control characters")
+  if (issues.length > 0) invalid("decision answer", issues)
+}
+
+const PARTIES = new Set(["controller", "agent", "owner"])
+const KINDS = new Set(["report", "instruction", "question"])
+
+export function assertMessage(m: NewMissionMessage): void {
+  const issues: SchemaIssue[] = []
+  const bad = (path: string, message: string) => issues.push({ path, keyword: "c57", message })
+  const allowed = new Set(["from", "to", "kind", "text", "row", "actor"])
+  for (const k of Object.keys(m ?? {})) if (!allowed.has(k)) bad(`/${k}`, "unknown field")
+  if (!PARTIES.has(m?.from as string)) bad("/from", "controller, agent or owner")
+  if (!PARTIES.has(m?.to as string)) bad("/to", "controller, agent or owner")
+  if (m?.from === m?.to) bad("/to", "must differ from `from`")
+  if (!KINDS.has(m?.kind as string)) bad("/kind", "report, instruction or question")
+  if (!text(m?.text, 8000)) bad("/text", "1-8000 characters, no control characters")
+  if (m?.row !== undefined && (typeof m.row !== "string" || !ROW_ID.test(m.row))) bad("/row", "must be a row id")
+  if (m?.actor !== undefined && (typeof m.actor !== "string" || !ACTOR.test(m.actor))) bad("/actor", "must match the actor pattern")
+  if (issues.length > 0) invalid("message", issues)
+}
+
+export function assertCheckpoint(n: unknown, m: unknown, label: unknown): void {
+  const issues: SchemaIssue[] = []
+  if (!Number.isInteger(m) || (m as number) < 1 || (m as number) > 1000) issues.push({ path: "/m", keyword: "c57", message: "integer 1-1000" })
+  if (!Number.isInteger(n) || (n as number) < 0 || (Number.isInteger(m) && (n as number) > (m as number))) issues.push({ path: "/n", keyword: "c57", message: "integer 0..m" })
+  if (label !== undefined && !text(label, 300)) issues.push({ path: "/label", keyword: "c57", message: "one line, 1-300 characters" })
+  if (issues.length > 0) invalid("checkpoint", issues)
+}
+
+export function assertActor(actor: string): void {
+  if (!ACTOR.test(actor)) invalid("actor", [{ path: "/actor", keyword: "pattern", message: "must match ^[a-z0-9][a-z0-9._-]{0,63}$" }])
+}

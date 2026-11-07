@@ -1,0 +1,802 @@
+{
+  "$schema": "datum-studio.c40-template-fixes/v1",
+  "decision": "C40 (decisions/decisions.md): template defaults owned by row 110; fixes with a `decision` field were made by row 110d (C61, C69, C72)",
+  "count": 39,
+  "fixes": [
+    {
+      "cp": "CP-07",
+      "manual": "ID p.49 Tabel 8.1",
+      "slug": "datum-kanonik",
+      "pointer": "/advanced/color.wrapper.cream",
+      "before": "F6E9E9",
+      "after": "F4F5F6",
+      "note": "band text colour"
+    },
+    {
+      "cp": "CP-05, CP-15",
+      "manual": "ID p.47 butir 10; EN p.49; ID p.13-14 DT-28c",
+      "slug": "datum-kanonik",
+      "pointer": "/advanced/cover.controlBlock.fields",
+      "before": [
+        "NOMOR DOKUMEN",
+        "REVISI",
+        "PENYUSUN",
+        "KUSTODIAN",
+        "DITUJUKAN KEPADA",
+        "TIER",
+        "DASAR",
+        "BAHASA"
+      ],
+      "after": [
+        "NOMOR DOKUMEN",
+        "REVISI",
+        "PENYUSUN",
+        "KUSTODIAN",
+        "DITUJUKAN KEPADA",
+        "HALAMAN",
+        "DATUM GEODETIK",
+        "VERIFIKASI"
+      ],
+      "note": "the manual's 8 fields in order, no KLASIFIKASI (the engine prints the classification line under the number, CP-15; C61, row 110d)",
+      "decision": "C61, C69, C72 (row 110d)"
+    },
+    {
+      "cp": "CP-05",
+      "manual": "ID p.47",
+      "slug": "datum-kanonik",
+      "pointer": "/advanced/cover.controlBlock.preparerUnit",
+      "before": "",
+      "after": "Divisi Engineering PT GSP",
+      "note": "preparer value; ID text (EN documents should use the -en doc types)"
+    },
+    {
+      "cp": "CP-04",
+      "manual": "ID p.47 butir 7",
+      "slug": "datum-kanonik",
+      "pointer": "/advanced/cover.title.maxWidthMm",
+      "before": null,
+      "after": 150,
+      "note": "longest title line <= 150 mm"
+    },
+    {
+      "cp": "CP-06",
+      "manual": "ID p.48",
+      "slug": "datum-kanonik",
+      "pointer": "/advanced/controlSheet.subtitle.enabled",
+      "before": false,
+      "after": true,
+      "note": "control-sheet subtitle"
+    },
+    {
+      "cp": "CP-06, CP-09",
+      "manual": "ID p.48; ID p.10 DT-02",
+      "slug": "datum-kanonik",
+      "pointer": "/advanced/controlSheet.signatures.fillRoles",
+      "before": false,
+      "after": true,
+      "note": "three signature columns"
+    },
+    {
+      "cp": "CP-06",
+      "manual": "ID p.48",
+      "slug": "datum-kanonik",
+      "pointer": "/advanced/controlSheet.columns.form",
+      "before": "mesin",
+      "after": "manual",
+      "note": "manual column form of the control-sheet tables"
+    },
+    {
+      "cp": "CP-04",
+      "manual": "ID p.47 butir 6; ID p.48 DT-13c",
+      "slug": "datum-kanonik",
+      "pointer": "/roleFormats/wrapper.kicker/run",
+      "before": null,
+      "after": {
+        "faceRole": "condensed",
+        "szHalfPt": 15,
+        "color": "6E1420",
+        "b": true,
+        "i": false,
+        "caps": true,
+        "spacingTw": 30
+      },
+      "note": "kicker 7,5 pt (nearest half point to 7,4) seal caps +0,20 em"
+    },
+    {
+      "cp": "CP-07",
+      "manual": "ID p.49 Tabel 8.1",
+      "slug": "datum-gsp-preset",
+      "pointer": "/advanced/color.wrapper.cream",
+      "before": "F6E9E9",
+      "after": "F4F5F6",
+      "note": "band text colour (HTML band)"
+    },
+    {
+      "cp": "CP-07",
+      "manual": "ID p.49 Tabel 8.1",
+      "slug": "datum-gsp-preset",
+      "pointer": "/roleFormats/wrapper.sealBand/run",
+      "before": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 12,
+        "color": "F6E9E9",
+        "b": true,
+        "i": false,
+        "caps": true,
+        "spacingTw": 26
+      },
+      "after": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 12,
+        "color": "F4F5F6",
+        "b": true,
+        "i": false,
+        "caps": true,
+        "spacingTw": 26
+      },
+      "note": "band text colour (DOCX band role)"
+    },
+    {
+      "cp": "CP-04",
+      "manual": "ID p.47 butir 6",
+      "slug": "datum-gsp-preset",
+      "pointer": "/roleFormats/wrapper.kicker/run",
+      "before": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 14,
+        "color": "6E1420",
+        "b": true,
+        "i": false,
+        "caps": true,
+        "spacingTw": 30
+      },
+      "after": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 15,
+        "color": "6E1420",
+        "b": true,
+        "i": false,
+        "caps": true,
+        "spacingTw": 30
+      },
+      "note": "kicker 7,5 pt (nearest half point to 7,4)"
+    },
+    {
+      "cp": "C104 M1",
+      "manual": "ID p.90 Tabel A.2 pita segel 6,4 (manual_id.txt:4920)",
+      "slug": "datum-gsp-preset",
+      "pointer": "/roleFormats/wrapper.sealBand/run",
+      "before": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 12,
+        "color": "F4F5F6",
+        "b": true,
+        "i": false,
+        "caps": true,
+        "spacingTw": 26
+      },
+      "after": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 13,
+        "color": "F4F5F6",
+        "b": true,
+        "i": false,
+        "caps": true,
+        "spacingTw": 26
+      },
+      "note": "band text 6,5 pt (w:sz 13, nearest half point to 6,4, as the C54 kicker ruling); was 6,0 pt",
+      "decision": "C104 (row 49a)"
+    },
+    {
+      "cp": "CP-05, CP-15",
+      "manual": "ID p.47 butir 10; EN p.49; ID p.13-14 DT-28c",
+      "slug": "datum-gsp",
+      "pointer": "/advanced/cover.controlBlock.fields",
+      "before": [
+        "NOMOR DOKUMEN",
+        "REVISI",
+        "PENYUSUN",
+        "KUSTODIAN",
+        "DITUJUKAN KEPADA",
+        "TIER",
+        "DASAR",
+        "BAHASA"
+      ],
+      "after": [
+        "NOMOR DOKUMEN",
+        "REVISI",
+        "PENYUSUN",
+        "KUSTODIAN",
+        "DITUJUKAN KEPADA",
+        "HALAMAN",
+        "DATUM GEODETIK",
+        "VERIFIKASI"
+      ],
+      "note": "the manual's 8 fields in order, no KLASIFIKASI (the engine prints the classification line under the number, CP-15; C61, row 110d)",
+      "decision": "C61, C69, C72 (row 110d)"
+    },
+    {
+      "cp": "CP-05",
+      "manual": "ID p.47",
+      "slug": "datum-gsp",
+      "pointer": "/advanced/cover.controlBlock.preparerUnit",
+      "before": "",
+      "after": "Divisi Engineering PT GSP",
+      "note": "preparer value; ID text (EN documents should use the -en doc types)"
+    },
+    {
+      "cp": "CP-04",
+      "manual": "ID p.47 butir 7",
+      "slug": "datum-gsp",
+      "pointer": "/advanced/cover.title.maxWidthMm",
+      "before": null,
+      "after": 150,
+      "note": "longest title line <= 150 mm"
+    },
+    {
+      "cp": "CP-06",
+      "manual": "ID p.48",
+      "slug": "datum-gsp",
+      "pointer": "/advanced/controlSheet.subtitle.enabled",
+      "before": false,
+      "after": true,
+      "note": "control-sheet subtitle"
+    },
+    {
+      "cp": "CP-06, CP-09",
+      "manual": "ID p.48; ID p.10 DT-02",
+      "slug": "datum-gsp",
+      "pointer": "/advanced/controlSheet.signatures.fillRoles",
+      "before": false,
+      "after": true,
+      "note": "three signature columns"
+    },
+    {
+      "cp": "CP-06",
+      "manual": "ID p.48",
+      "slug": "datum-gsp",
+      "pointer": "/advanced/controlSheet.columns.form",
+      "before": "mesin",
+      "after": "manual",
+      "note": "manual column form of the control-sheet tables"
+    },
+    {
+      "cp": "CP-05, CP-15",
+      "manual": "ID p.47 butir 10; EN p.49; ID p.13-14 DT-28c",
+      "slug": "datum-kanonik-preset",
+      "pointer": "/advanced/cover.controlBlock.fields",
+      "before": [
+        "NOMOR DOKUMEN",
+        "REVISI",
+        "PENYUSUN",
+        "KUSTODIAN",
+        "DITUJUKAN KEPADA",
+        "TIER",
+        "DASAR",
+        "BAHASA"
+      ],
+      "after": [
+        "NOMOR DOKUMEN",
+        "REVISI",
+        "PENYUSUN",
+        "KUSTODIAN",
+        "DITUJUKAN KEPADA",
+        "HALAMAN",
+        "DATUM GEODETIK",
+        "VERIFIKASI"
+      ],
+      "note": "the manual's 8 fields in order, no KLASIFIKASI (the engine prints the classification line under the number, CP-15; C61, row 110d)",
+      "decision": "C61, C69, C72 (row 110d)"
+    },
+    {
+      "cp": "CP-05",
+      "manual": "ID p.37 DT-30i; EN p.38 DT-30i; ID p.47 butir 10",
+      "slug": "datum-kanonik-preset",
+      "pointer": "/advanced/cover.controlBlock.geodeticDatum",
+      "before": "",
+      "after": "WGS 84",
+      "note": "R-83 geodetic datum of the control block: WGS 84, the manual's coordinate datum",
+      "decision": "C61, C69, C72 (row 110d)"
+    },
+    {
+      "cp": "CP-06",
+      "manual": "ID p.2 C; ID p.48 DT-13b",
+      "slug": "datum-kanonik-preset",
+      "pointer": "/advanced/controlSheet.distribution.defaults",
+      "before": {
+        "rows": []
+      },
+      "after": {
+        "rows": [
+          [
+            "Induk",
+            "Divisi Engineering PT GSP (ENG-01)",
+            "Word dan PDF, folder standar",
+            "Tidak"
+          ]
+        ]
+      },
+      "note": "R-82 controlled distribution, master-copy row of the manual's ID control sheet",
+      "decision": "C61, C69, C72 (row 110d)"
+    },
+    {
+      "cp": "CP-05, CP-15",
+      "manual": "ID p.47 butir 10; EN p.49; ID p.13-14 DT-28c",
+      "slug": "datum-gsp-preset",
+      "pointer": "/advanced/cover.controlBlock.fields",
+      "before": [
+        "NOMOR DOKUMEN",
+        "REVISI",
+        "PENYUSUN",
+        "KUSTODIAN",
+        "DITUJUKAN KEPADA",
+        "TIER",
+        "DASAR",
+        "BAHASA"
+      ],
+      "after": [
+        "NOMOR DOKUMEN",
+        "REVISI",
+        "PENYUSUN",
+        "KUSTODIAN",
+        "DITUJUKAN KEPADA",
+        "HALAMAN",
+        "DATUM GEODETIK",
+        "VERIFIKASI"
+      ],
+      "note": "the manual's 8 fields in order, no KLASIFIKASI (the engine prints the classification line under the number, CP-15; C61, row 110d)",
+      "decision": "C61, C69, C72 (row 110d)"
+    },
+    {
+      "cp": "CP-05",
+      "manual": "ID p.37 DT-30i; EN p.38 DT-30i; ID p.47 butir 10",
+      "slug": "datum-gsp-preset",
+      "pointer": "/advanced/cover.controlBlock.geodeticDatum",
+      "before": "",
+      "after": "WGS 84",
+      "note": "R-83 geodetic datum of the control block: WGS 84, the manual's coordinate datum",
+      "decision": "C61, C69, C72 (row 110d)"
+    },
+    {
+      "cp": "CP-06",
+      "manual": "ID p.2 C; ID p.48 DT-13b",
+      "slug": "datum-gsp-preset",
+      "pointer": "/advanced/controlSheet.distribution.defaults",
+      "before": {
+        "rows": []
+      },
+      "after": {
+        "rows": [
+          [
+            "Induk",
+            "Divisi Engineering PT GSP (ENG-01)",
+            "Word dan PDF, folder standar",
+            "Tidak"
+          ]
+        ]
+      },
+      "note": "R-82 controlled distribution, master-copy row of the manual's ID control sheet",
+      "decision": "C61, C69, C72 (row 110d)"
+    },
+    {
+      "cp": "CP-05, CP-15",
+      "manual": "ID p.47 butir 10; EN p.49; ID p.13-14 DT-28c",
+      "slug": "datum-proposal-teknis",
+      "pointer": "/advanced/cover.controlBlock.fields",
+      "before": [
+        "NOMOR DOKUMEN",
+        "REVISI",
+        "KLASIFIKASI",
+        "PENYUSUN",
+        "KUSTODIAN",
+        "DITUJUKAN KEPADA",
+        "TIER",
+        "BAHASA"
+      ],
+      "after": [
+        "NOMOR DOKUMEN",
+        "REVISI",
+        "PENYUSUN",
+        "KUSTODIAN",
+        "DITUJUKAN KEPADA",
+        "HALAMAN",
+        "DATUM GEODETIK",
+        "VERIFIKASI"
+      ],
+      "note": "the manual's 8 fields in order, no KLASIFIKASI (the engine prints the classification line under the number, CP-15; C61, row 110d)",
+      "decision": "C61, C69, C72 (row 110d)"
+    },
+    {
+      "cp": "CP-05, CP-15",
+      "manual": "ID p.47 butir 10; EN p.49; ID p.13-14 DT-28c",
+      "slug": "datum-proposal-teknis-en",
+      "pointer": "/advanced/cover.controlBlock.fields",
+      "before": [
+        "NOMOR DOKUMEN",
+        "REVISI",
+        "KLASIFIKASI",
+        "PENYUSUN",
+        "KUSTODIAN",
+        "DITUJUKAN KEPADA",
+        "TIER",
+        "BAHASA"
+      ],
+      "after": [
+        "NOMOR DOKUMEN",
+        "REVISI",
+        "PENYUSUN",
+        "KUSTODIAN",
+        "DITUJUKAN KEPADA",
+        "HALAMAN",
+        "DATUM GEODETIK",
+        "VERIFIKASI"
+      ],
+      "note": "the manual's 8 fields in order, no KLASIFIKASI (the engine prints the classification line under the number, CP-15; C61, row 110d)",
+      "decision": "C61, C69, C72 (row 110d)"
+    },
+    {
+      "cp": "CP-06",
+      "manual": "EN p.2 C; EN p.49-50",
+      "slug": "datum-proposal-teknis-en",
+      "pointer": "/advanced/controlSheet.distribution.defaults",
+      "before": {
+        "rows": [
+          [
+            "Induk",
+            "Divisi Engineering PT GSP (ENG-01)",
+            "Word dan PDF, folder standar",
+            "Tidak"
+          ]
+        ]
+      },
+      "after": {
+        "rows": [
+          [
+            "Master",
+            "Engineering Division, PT GSP (ENG-01)",
+            "Word and PDF, standards folder",
+            "No"
+          ]
+        ]
+      },
+      "note": "R-82 controlled distribution, master-copy row of the manual's EN control sheet",
+      "decision": "C61, C69, C72 (row 110d)"
+    },
+    {
+      "cp": "CP-05, CP-15",
+      "manual": "ID p.47 butir 10; EN p.49; ID p.13-14 DT-28c",
+      "slug": "datum-laporan",
+      "pointer": "/advanced/cover.controlBlock.fields",
+      "before": [
+        "NOMOR DOKUMEN",
+        "REVISI",
+        "KLASIFIKASI",
+        "PENYUSUN",
+        "KUSTODIAN",
+        "DITUJUKAN KEPADA",
+        "TIER",
+        "BAHASA"
+      ],
+      "after": [
+        "NOMOR DOKUMEN",
+        "REVISI",
+        "PENYUSUN",
+        "KUSTODIAN",
+        "DITUJUKAN KEPADA",
+        "HALAMAN",
+        "DATUM GEODETIK",
+        "VERIFIKASI"
+      ],
+      "note": "the manual's 8 fields in order, no KLASIFIKASI (the engine prints the classification line under the number, CP-15; C61, row 110d)",
+      "decision": "C61, C69, C72 (row 110d)"
+    },
+    {
+      "cp": "CP-05, CP-15",
+      "manual": "ID p.47 butir 10; EN p.49; ID p.13-14 DT-28c",
+      "slug": "datum-laporan-en",
+      "pointer": "/advanced/cover.controlBlock.fields",
+      "before": [
+        "NOMOR DOKUMEN",
+        "REVISI",
+        "KLASIFIKASI",
+        "PENYUSUN",
+        "KUSTODIAN",
+        "DITUJUKAN KEPADA",
+        "TIER",
+        "BAHASA"
+      ],
+      "after": [
+        "NOMOR DOKUMEN",
+        "REVISI",
+        "PENYUSUN",
+        "KUSTODIAN",
+        "DITUJUKAN KEPADA",
+        "HALAMAN",
+        "DATUM GEODETIK",
+        "VERIFIKASI"
+      ],
+      "note": "the manual's 8 fields in order, no KLASIFIKASI (the engine prints the classification line under the number, CP-15; C61, row 110d)",
+      "decision": "C61, C69, C72 (row 110d)"
+    },
+    {
+      "cp": "CP-06",
+      "manual": "EN p.2 C; EN p.49-50",
+      "slug": "datum-laporan-en",
+      "pointer": "/advanced/controlSheet.distribution.defaults",
+      "before": {
+        "rows": [
+          [
+            "Induk",
+            "Divisi Engineering PT GSP (ENG-01)",
+            "Word dan PDF, folder standar",
+            "Tidak"
+          ]
+        ]
+      },
+      "after": {
+        "rows": [
+          [
+            "Master",
+            "Engineering Division, PT GSP (ENG-01)",
+            "Word and PDF, standards folder",
+            "No"
+          ]
+        ]
+      },
+      "note": "R-82 controlled distribution, master-copy row of the manual's EN control sheet",
+      "decision": "C61, C69, C72 (row 110d)"
+    },
+    {
+      "cp": "CP-05, CP-15",
+      "manual": "ID p.47 butir 10; EN p.49; ID p.13-14 DT-28c",
+      "slug": "datum-laporan-verifikasi",
+      "pointer": "/advanced/cover.controlBlock.fields",
+      "before": [
+        "NOMOR DOKUMEN",
+        "REVISI",
+        "KLASIFIKASI",
+        "PENYUSUN",
+        "KUSTODIAN",
+        "DITUJUKAN KEPADA",
+        "TIER",
+        "BAHASA"
+      ],
+      "after": [
+        "NOMOR DOKUMEN",
+        "REVISI",
+        "PENYUSUN",
+        "KUSTODIAN",
+        "DITUJUKAN KEPADA",
+        "HALAMAN",
+        "DATUM GEODETIK",
+        "VERIFIKASI"
+      ],
+      "note": "the manual's 8 fields in order, no KLASIFIKASI (the engine prints the classification line under the number, CP-15; C61, row 110d)",
+      "decision": "C61, C69, C72 (row 110d)"
+    },
+    {
+      "cp": "CP-05, CP-15",
+      "manual": "ID p.47 butir 10; EN p.49; ID p.13-14 DT-28c",
+      "slug": "datum-laporan-verifikasi-en",
+      "pointer": "/advanced/cover.controlBlock.fields",
+      "before": [
+        "NOMOR DOKUMEN",
+        "REVISI",
+        "KLASIFIKASI",
+        "PENYUSUN",
+        "KUSTODIAN",
+        "DITUJUKAN KEPADA",
+        "TIER",
+        "BAHASA"
+      ],
+      "after": [
+        "NOMOR DOKUMEN",
+        "REVISI",
+        "PENYUSUN",
+        "KUSTODIAN",
+        "DITUJUKAN KEPADA",
+        "HALAMAN",
+        "DATUM GEODETIK",
+        "VERIFIKASI"
+      ],
+      "note": "the manual's 8 fields in order, no KLASIFIKASI (the engine prints the classification line under the number, CP-15; C61, row 110d)",
+      "decision": "C61, C69, C72 (row 110d)"
+    },
+    {
+      "cp": "CP-06",
+      "manual": "EN p.2 C; EN p.49-50",
+      "slug": "datum-laporan-verifikasi-en",
+      "pointer": "/advanced/controlSheet.distribution.defaults",
+      "before": {
+        "rows": [
+          [
+            "Induk",
+            "Divisi Engineering PT GSP (ENG-01)",
+            "Word dan PDF, folder standar",
+            "Tidak"
+          ]
+        ]
+      },
+      "after": {
+        "rows": [
+          [
+            "Master",
+            "Engineering Division, PT GSP (ENG-01)",
+            "Word and PDF, standards folder",
+            "No"
+          ]
+        ]
+      },
+      "note": "R-82 controlled distribution, master-copy row of the manual's EN control sheet",
+      "decision": "C61, C69, C72 (row 110d)"
+    },
+    {
+      "cp": "CP-05, CP-15",
+      "manual": "ID p.47 butir 10; EN p.49; ID p.13-14 DT-28c",
+      "slug": "datum-standar",
+      "pointer": "/advanced/cover.controlBlock.fields",
+      "before": [
+        "NOMOR DOKUMEN",
+        "REVISI",
+        "KLASIFIKASI",
+        "PENYUSUN",
+        "KUSTODIAN",
+        "DITUJUKAN KEPADA",
+        "TIER",
+        "BAHASA"
+      ],
+      "after": [
+        "NOMOR DOKUMEN",
+        "REVISI",
+        "PENYUSUN",
+        "KUSTODIAN",
+        "DITUJUKAN KEPADA",
+        "HALAMAN",
+        "DATUM GEODETIK",
+        "VERIFIKASI"
+      ],
+      "note": "the manual's 8 fields in order, no KLASIFIKASI (the engine prints the classification line under the number, CP-15; C61, row 110d)",
+      "decision": "C61, C69, C72 (row 110d)"
+    },
+    {
+      "cp": "CP-05, CP-15",
+      "manual": "ID p.47 butir 10; EN p.49; ID p.13-14 DT-28c",
+      "slug": "datum-standar-en",
+      "pointer": "/advanced/cover.controlBlock.fields",
+      "before": [
+        "NOMOR DOKUMEN",
+        "REVISI",
+        "KLASIFIKASI",
+        "PENYUSUN",
+        "KUSTODIAN",
+        "DITUJUKAN KEPADA",
+        "TIER",
+        "BAHASA"
+      ],
+      "after": [
+        "NOMOR DOKUMEN",
+        "REVISI",
+        "PENYUSUN",
+        "KUSTODIAN",
+        "DITUJUKAN KEPADA",
+        "HALAMAN",
+        "DATUM GEODETIK",
+        "VERIFIKASI"
+      ],
+      "note": "the manual's 8 fields in order, no KLASIFIKASI (the engine prints the classification line under the number, CP-15; C61, row 110d)",
+      "decision": "C61, C69, C72 (row 110d)"
+    },
+    {
+      "cp": "CP-06",
+      "manual": "EN p.2 C; EN p.49-50",
+      "slug": "datum-standar-en",
+      "pointer": "/advanced/controlSheet.distribution.defaults",
+      "before": {
+        "rows": [
+          [
+            "Induk",
+            "Divisi Engineering PT GSP (ENG-01)",
+            "Word dan PDF, folder standar",
+            "Tidak"
+          ]
+        ]
+      },
+      "after": {
+        "rows": [
+          [
+            "Master",
+            "Engineering Division, PT GSP (ENG-01)",
+            "Word and PDF, standards folder",
+            "No"
+          ]
+        ]
+      },
+      "note": "R-82 controlled distribution, master-copy row of the manual's EN control sheet",
+      "decision": "C61, C69, C72 (row 110d)"
+    },
+    {
+      "cp": "CP-05, CP-15",
+      "manual": "ID p.47 butir 10; EN p.49; ID p.13-14 DT-28c",
+      "slug": "datum-nota",
+      "pointer": "/advanced/cover.controlBlock.fields",
+      "before": [
+        "NOMOR DOKUMEN",
+        "REVISI",
+        "KLASIFIKASI",
+        "PENYUSUN",
+        "KUSTODIAN",
+        "DITUJUKAN KEPADA",
+        "TIER",
+        "BAHASA"
+      ],
+      "after": [
+        "NOMOR DOKUMEN",
+        "REVISI",
+        "PENYUSUN",
+        "KUSTODIAN",
+        "DITUJUKAN KEPADA",
+        "HALAMAN",
+        "DATUM GEODETIK",
+        "VERIFIKASI"
+      ],
+      "note": "the manual's 8 fields in order, no KLASIFIKASI (the engine prints the classification line under the number, CP-15; C61, row 110d)",
+      "decision": "C61, C69, C72 (row 110d)"
+    },
+    {
+      "cp": "CP-05, CP-15",
+      "manual": "ID p.47 butir 10; EN p.49; ID p.13-14 DT-28c",
+      "slug": "datum-nota-en",
+      "pointer": "/advanced/cover.controlBlock.fields",
+      "before": [
+        "NOMOR DOKUMEN",
+        "REVISI",
+        "KLASIFIKASI",
+        "PENYUSUN",
+        "KUSTODIAN",
+        "DITUJUKAN KEPADA",
+        "TIER",
+        "BAHASA"
+      ],
+      "after": [
+        "NOMOR DOKUMEN",
+        "REVISI",
+        "PENYUSUN",
+        "KUSTODIAN",
+        "DITUJUKAN KEPADA",
+        "HALAMAN",
+        "DATUM GEODETIK",
+        "VERIFIKASI"
+      ],
+      "note": "the manual's 8 fields in order, no KLASIFIKASI (the engine prints the classification line under the number, CP-15; C61, row 110d)",
+      "decision": "C61, C69, C72 (row 110d)"
+    },
+    {
+      "cp": "CP-06",
+      "manual": "EN p.2 C; EN p.49-50",
+      "slug": "datum-nota-en",
+      "pointer": "/advanced/controlSheet.distribution.defaults",
+      "before": {
+        "rows": [
+          [
+            "Induk",
+            "Divisi Engineering PT GSP (ENG-01)",
+            "Word dan PDF, folder standar",
+            "Tidak"
+          ]
+        ]
+      },
+      "after": {
+        "rows": [
+          [
+            "Master",
+            "Engineering Division, PT GSP (ENG-01)",
+            "Word and PDF, standards folder",
+            "No"
+          ]
+        ]
+      },
+      "note": "R-82 controlled distribution, master-copy row of the manual's EN control sheet",
+      "decision": "C61, C69, C72 (row 110d)"
+    }
+  ]
+}

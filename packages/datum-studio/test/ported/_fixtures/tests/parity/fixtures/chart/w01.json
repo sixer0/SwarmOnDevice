@@ -1,0 +1,63 @@
+{
+  "$schema": "studio.chart/v1",
+  "kind": "W-01",
+  "title": "Laju data lokasi B melampaui lokasi A sejak pertengahan tahun.",
+  "source": "Data ilustratif korpus paritas S63 (sintetis, bukan data klien).",
+  "widthMm": 128,
+  "data": {
+    "shape": "series",
+    "categories": [
+      "Jan",
+      "Feb",
+      "Mar",
+      "Apr",
+      "Mei",
+      "Jun",
+      "Jul",
+      "Agu",
+      "Sep",
+      "Okt",
+      "Nov",
+      "Des"
+    ],
+    "series": [
+      {
+        "name": "Lokasi A",
+        "values": [
+          44.3,
+          43.6,
+          38.5,
+          45.9,
+          47.3,
+          39.1,
+          43.3,
+          41.2,
+          44.5,
+          35.2,
+          45.2,
+          42.4
+        ]
+      },
+      {
+        "name": "Lokasi B",
+        "values": [
+          36,
+          37.4,
+          38.8,
+          40.2,
+          41.6,
+          43,
+          44.4,
+          45.8,
+          47.2,
+          48.6,
+          50,
+          51.4
+        ]
+      }
+    ]
+  },
+  "heightMm": 56,
+  "unit": "Mbps",
+  "dec": 1
+}

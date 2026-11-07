@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="id"><head><meta charset="utf-8">
+<title>DATUM — GSP House Style v1.0 — Proof Spreads</title>
+<style>
+/* ============ FONTS ============ */
+@font-face{font-family:'PlexSerif';src:url('file:///tmp/fonts/node_modules/@fontsource/ibm-plex-serif/files/ibm-plex-serif-latin-400-normal.woff') format('woff');font-weight:400;font-style:normal}
+@font-face{font-family:'PlexSerif';src:url('file:///tmp/fonts/node_modules/@fontsource/ibm-plex-serif/files/ibm-plex-serif-latin-400-italic.woff') format('woff');font-weight:400;font-style:italic}
+@font-face{font-family:'PlexSerif';src:url('file:///tmp/fonts/node_modules/@fontsource/ibm-plex-serif/files/ibm-plex-serif-latin-600-normal.woff') format('woff');font-weight:600;font-style:normal}
+@font-face{font-family:'PlexSerif';src:url('file:///tmp/fonts/node_modules/@fontsource/ibm-plex-serif/files/ibm-plex-serif-latin-600-italic.woff') format('woff');font-weight:600;font-style:italic}
+@font-face{font-family:'PlexCond';src:url('file:///tmp/fonts/node_modules/@fontsource/ibm-plex-sans-condensed/files/ibm-plex-sans-condensed-latin-400-normal.woff') format('woff');font-weight:400}
+@font-face{font-family:'PlexCond';src:url('file:///tmp/fonts/node_modules/@fontsource/ibm-plex-sans-condensed/files/ibm-plex-sans-condensed-latin-500-normal.woff') format('woff');font-weight:500}
+@font-face{font-family:'PlexCond';src:url('file:///tmp/fonts/node_modules/@fontsource/ibm-plex-sans-condensed/files/ibm-plex-sans-condensed-latin-600-normal.woff') format('woff');font-weight:600}
+@font-face{font-family:'PlexCond';src:url('file:///tmp/fonts/node_modules/@fontsource/ibm-plex-sans-condensed/files/ibm-plex-sans-condensed-latin-700-normal.woff') format('woff');font-weight:700}
+@font-face{font-family:'PlexMono';src:url('file:///tmp/fonts/node_modules/@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-400-normal.woff') format('woff');font-weight:400}
+@font-face{font-family:'PlexMono';src:url('file:///tmp/fonts/node_modules/@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-500-normal.woff') format('woff');font-weight:500}
+@font-face{font-family:'PlexMono';src:url('file:///tmp/fonts/node_modules/@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-600-normal.woff') format('woff');font-weight:600}
+@font-face{font-family:'PlexSans';src:url('file:///tmp/fonts/node_modules/@fontsource/ibm-plex-sans/files/ibm-plex-sans-latin-400-normal.woff') format('woff');font-weight:400}
+@font-face{font-family:'PlexSans';src:url('file:///tmp/fonts/node_modules/@fontsource/ibm-plex-sans/files/ibm-plex-sans-latin-600-normal.woff') format('woff');font-weight:600}
+
+/* ============ TOKENS ============ */
+:root{
+  /* wrapper — sovereign */
+  --w-paper:#FBFAF7; --w-ink:#14110F; --w-body:#33302C; --w-meta:#7A756E; --w-rule:#C4BEB4; --seal:#6E1420;
+  /* interior — instrument */
+  --paper:#FCFCFB; --ink9:#101418; --ink7:#2B3640; --ink4:#6B7783; --ink1:#E8EBEE; --ink05:#F3F5F6;
+  --signal:#B45309; --alert:#9B1C1C; --verd:#2F6F6B;
+  /* geometry */
+  --mL:24mm; --mR:20mm; --col:128mm; --gut:6mm; --rail:32mm; --pitch:10.6667mm;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:#8A8A8A}
+.page{width:210mm;height:297mm;position:relative;overflow:hidden;page-break-after:always;
+  background:var(--paper);font-family:'PlexSerif',serif;color:var(--ink7);
+  -webkit-font-smoothing:antialiased}
+.page.wrap{background:var(--w-paper);color:var(--w-body)}
+@page{size:A4;margin:0}
+@media screen{.page{margin:10mm auto;box-shadow:0 2px 18px rgba(0,0,0,.45)}}
+
+/* ============ PAGE FURNITURE ============ */
+.runhead{position:absolute;left:var(--mL);right:var(--mR);top:13mm;
+  font-family:'PlexCond';font-size:6.8pt;font-weight:500;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--ink4);display:flex;justify-content:space-between;padding-bottom:1.6mm;border-bottom:.18mm solid var(--ink1)}
+.runhead .cls{color:var(--alert);font-weight:600}
+
+/* register block — GSP signature device #3 */
+.reg{position:absolute;left:var(--mL);right:var(--mR);bottom:13mm;height:8.5mm;
+  display:grid;grid-template-columns:1fr 1fr 1fr auto;align-items:center;
+  border-top:.35mm solid var(--ink9);border-bottom:.18mm solid var(--ink1);
+  font-family:'PlexMono';font-size:6.2pt;letter-spacing:.02em;color:var(--ink4)}
+.reg > div{padding:0 2.5mm;border-right:.18mm solid var(--ink1);height:5.4mm;display:flex;align-items:center}
+.reg > div:first-child{padding-left:0}
+.reg > div:last-child{border-right:0;padding-right:0;color:var(--alert);font-weight:600}
+.reg b{color:var(--ink9);font-weight:600}
+
+/* datum rule — GSP signature device #1 */
+.datum{position:relative;height:2.4mm;margin-bottom:2.2mm}
+.datum::before{content:'';position:absolute;left:0;right:0;top:0;height:.2mm;background:var(--ink9)}
+.datum::after{content:'';position:absolute;left:0;top:0;width:9mm;height:.75mm;background:var(--ink9)}
+.datum i{position:absolute;left:0;top:.2mm;height:1.15mm;width:100%;
+  background-image:repeating-linear-gradient(to right,var(--ink9) 0 .17mm,transparent .17mm var(--pitch))}
+.datum.w::before,.datum.w::after{background:var(--w-ink)}
+.datum.w i{background-image:repeating-linear-gradient(to right,var(--w-ink) 0 .17mm,transparent .17mm var(--pitch))}
+
+/* ============ BODY GRID + EVIDENCE RAIL (signature device #2) ============ */
+.body{position:absolute;left:var(--mL);right:var(--mR);top:26mm;bottom:24mm;
+  display:grid;grid-template-columns:var(--col) var(--gut) var(--rail);align-content:start}
+.t{grid-column:1;font-size:9.5pt;line-height:13.5pt;text-align:justify;hyphens:auto}
+.t + .r{grid-column:3}
+.r{grid-column:3;font-family:'PlexMono';font-size:5.9pt;line-height:8.4pt;color:var(--ink4);
+  letter-spacing:.02em;text-transform:uppercase;padding-top:1.2pt}
+.r .g{color:var(--ink9);font-weight:600}
+.r .d{color:var(--signal);font-weight:600}
+.r .v{color:var(--ink4);font-weight:600}
+.r .a{color:var(--alert);font-weight:600}
+.r em{display:block;font-style:normal;text-transform:none;letter-spacing:0;color:var(--ink4);margin-top:.6mm}
+.sp{grid-column:1/4;height:13.5pt}
+.sp.h{height:6.75pt}
+/* revision bar */
+.r.rev{border-right:.5mm solid var(--ink9);padding-right:2mm;margin-right:-2mm}
+
+/* ============ HEADINGS ============ */
+h1{grid-column:1/4;font-family:'PlexCond';font-weight:600;font-size:16pt;line-height:20pt;
+  color:var(--ink9);letter-spacing:-.005em;margin-bottom:4pt}
+h1 .kick{display:block;font-size:6.8pt;font-weight:600;letter-spacing:.16em;color:var(--signal);
+  text-transform:uppercase;margin-bottom:2.4mm;font-family:'PlexCond'}
+h2{grid-column:1;font-family:'PlexCond';font-weight:600;font-size:11pt;line-height:13.5pt;
+  color:var(--ink9);margin:13.5pt 0 4pt 0}
+h2 span{font-family:'PlexMono';font-size:8pt;font-weight:500;color:var(--ink4);margin-right:2.5mm}
+h3{grid-column:1;font-family:'PlexCond';font-weight:600;font-size:9.5pt;line-height:13.5pt;
+  color:var(--ink9);margin:9pt 0 1pt 0;letter-spacing:.01em}
+
+/* ============ TABLES ============ */
+.tbl{grid-column:1/4;margin-top:6pt}
+.tbl.narrow{grid-column:1}
+.tcap{font-family:'PlexCond';font-size:7.6pt;line-height:11pt;color:var(--ink7);margin-bottom:2.2mm;
+  padding-bottom:0;display:block}
+.tcap b{font-weight:600;color:var(--ink9);letter-spacing:.05em;text-transform:uppercase;font-size:7pt;margin-right:3mm}
+table{width:100%;border-collapse:collapse;font-size:8.2pt;line-height:11.5pt}
+thead th{font-family:'PlexCond';font-size:6.8pt;font-weight:600;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--ink4);text-align:left;padding:0 2.5mm 1.6mm 0;vertical-align:bottom;
+  border-top:.45mm solid var(--ink9);border-bottom:.18mm solid var(--ink4);padding-top:1.6mm}
+tbody td{padding:1.5mm 2.5mm 1.5mm 0;vertical-align:top;border-bottom:.15mm solid var(--ink1)}
+tbody tr:last-child td{border-bottom:0}
+tfoot td{padding:1.8mm 2.5mm 1.4mm 0;border-top:.45mm solid var(--ink9);font-weight:600;color:var(--ink9);
+  font-family:'PlexCond';font-size:8.4pt}
+.num{font-family:'PlexMono';font-size:7.8pt;font-variant-numeric:tabular-nums;text-align:right;
+  white-space:nowrap;color:var(--ink9)}
+.unit{font-family:'PlexCond';font-size:7.2pt;color:var(--ink4);white-space:nowrap}
+.idc{font-family:'PlexMono';font-size:7pt;color:var(--ink4)}
+.grp td{padding-top:3.2mm;padding-bottom:1mm;font-family:'PlexCond';font-weight:600;font-size:7.4pt;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--ink9);border-bottom:.15mm solid var(--ink1)}
+.src{font-family:'PlexCond';font-size:6.6pt;line-height:9pt;color:var(--ink4);font-style:normal;margin-top:2.2mm;
+  padding-top:1.6mm;border-top:.15mm solid var(--ink1)}
+.src b{font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--ink4)}
+
+/* ============ DERIVATION BLOCK (apparatus, not ornament) ============ */
+.der{grid-column:1;margin:8pt 0 4pt 0;padding-left:4.5mm;border-left:.45mm solid var(--signal)}
+.der .lbl{font-family:'PlexCond';font-size:6.6pt;font-weight:600;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--signal);margin-bottom:1.8mm}
+.der pre{font-family:'PlexMono';font-size:7.4pt;line-height:11.5pt;color:var(--ink9);white-space:pre;
+  font-variant-numeric:tabular-nums}
+.der .note{font-family:'PlexCond';font-size:7pt;line-height:10pt;color:var(--ink4);margin-top:1.8mm}
+
+/* aside — replaces the boxed callout. ruled, unfilled. */
+.aside{grid-column:1;margin:8pt 0 2pt 0;padding:3mm 0 3mm 0;border-top:.35mm solid var(--ink9);
+  border-bottom:.15mm solid var(--ink1)}
+.aside .lbl{font-family:'PlexCond';font-size:6.6pt;font-weight:600;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--ink9);margin-bottom:1.6mm}
+.aside p{font-size:8.6pt;line-height:12.4pt}
+
+.fig{grid-column:1/4;margin-top:6pt}
+.fcap{font-family:'PlexCond';font-size:7.6pt;line-height:11pt;color:var(--ink7);margin-top:3mm;
+  padding-top:2mm;border-top:.15mm solid var(--ink1)}
+.fcap b{font-weight:600;color:var(--ink9);letter-spacing:.05em;text-transform:uppercase;font-size:7pt;margin-right:3mm}
+
+/* ============ COVER (wrapper) ============ */
+.sealband{position:absolute;left:0;right:0;top:0;height:5mm;background:var(--seal);
+  display:flex;align-items:center;justify-content:space-between;padding:0 var(--mR) 0 var(--mL);
+  font-family:'PlexCond';font-size:6.4pt;font-weight:600;letter-spacing:.22em;color:#F6E9E9;text-transform:uppercase}
+.cvr{position:absolute;left:var(--mL);right:var(--mR);top:40mm}
+.mark{display:block;margin-bottom:4mm}
+.mark .gsp{font-family:'PlexCond';font-weight:700;font-size:23pt;letter-spacing:.02em;color:var(--w-ink);line-height:1}
+.mark .full{font-family:'PlexCond';font-weight:500;font-size:7.4pt;letter-spacing:.19em;text-transform:uppercase;
+  color:var(--w-meta);padding-bottom:1.2mm}
+.orgline{font-family:'PlexCond';font-size:7pt;line-height:10.5pt;color:var(--w-meta);letter-spacing:.05em;
+  padding-bottom:6mm;border-bottom:.18mm solid var(--w-rule);margin-bottom:13mm}
+.ctype{font-family:'PlexCond';font-size:7.4pt;font-weight:600;letter-spacing:.2em;text-transform:uppercase;
+  color:var(--seal);margin-bottom:5mm}
+.ctitle{font-family:'PlexCond';font-weight:600;font-size:26pt;line-height:29pt;color:var(--w-ink);
+  letter-spacing:-.012em;max-width:150mm}
+.csub{font-family:'PlexSerif';font-style:italic;font-size:11pt;line-height:15pt;color:var(--w-body);
+  margin-top:6mm;max-width:140mm}
+.cscope{font-family:'PlexCond';font-size:7.6pt;line-height:12pt;color:var(--w-meta);margin-top:5mm;
+  letter-spacing:.03em;max-width:130mm}
+.ctrl{position:absolute;left:var(--mL);right:var(--mR);bottom:26mm}
+.ctrl table{font-size:7.6pt;line-height:11pt}
+.ctrl th{font-family:'PlexCond';font-size:6.4pt;font-weight:600;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--w-meta);text-align:left;padding:1.4mm 4mm 1.4mm 0;width:34mm;vertical-align:top;
+  border-bottom:.15mm solid var(--w-rule);border-top:0}
+.ctrl td{padding:1.4mm 0;border-bottom:.15mm solid var(--w-rule);color:var(--w-body);vertical-align:top}
+.ctrl td.mono{font-family:'PlexMono';font-size:7.4pt;color:var(--w-ink)}
+.ctrl .head{border-top:.45mm solid var(--w-ink)}
+.cfoot{position:absolute;left:var(--mL);right:var(--mR);bottom:13mm;
+  font-family:'PlexMono';font-size:6.2pt;color:var(--w-meta);display:flex;justify-content:space-between;
+  padding-top:2mm;border-top:.18mm solid var(--w-rule)}
+.cfoot .c{color:var(--seal);font-weight:600}
+
+.spine{position:absolute;right:6mm;top:14mm;bottom:26mm;display:flex;align-items:center;
+  font-family:'PlexMono';font-size:5.8pt;letter-spacing:.06em;color:var(--w-meta);
+  writing-mode:vertical-rl;text-orientation:mixed;transform:rotate(180deg)}
+/* wrapper interior page */
+.wbody{position:absolute;left:var(--mL);right:var(--mR);top:26mm;bottom:24mm}
+.wh1{font-family:'PlexCond';font-weight:600;font-size:15pt;line-height:19pt;color:var(--w-ink);margin-bottom:5mm}
+.wh1 .kick{display:block;font-size:6.6pt;font-weight:600;letter-spacing:.18em;color:var(--seal);
+  text-transform:uppercase;margin-bottom:2.4mm}
+.wtbl{width:100%;border-collapse:collapse;font-size:7.8pt;line-height:11pt;margin-bottom:9mm}
+.wtbl th{font-family:'PlexCond';font-size:6.4pt;font-weight:600;letter-spacing:.11em;text-transform:uppercase;
+  color:var(--w-meta);text-align:left;padding:1.6mm 3mm 1.6mm 0;border-top:.45mm solid var(--w-ink);
+  border-bottom:.18mm solid var(--w-meta)}
+.wtbl td{padding:1.5mm 3mm 1.5mm 0;border-bottom:.15mm solid var(--w-rule);vertical-align:top;color:var(--w-body)}
+.wtbl td.mono{font-family:'PlexMono';font-size:7.2pt;color:var(--w-ink);font-variant-numeric:tabular-nums}
+.wh2{font-family:'PlexCond';font-weight:600;font-size:10pt;color:var(--w-ink);margin:0 0 3mm 0;
+  letter-spacing:.02em}
+.wp{font-size:9pt;line-height:13pt;color:var(--w-body);text-align:justify;max-width:150mm;margin-bottom:4mm}
+.stmt{border-top:.45mm solid var(--w-ink);border-bottom:.18mm solid var(--w-rule);padding:4mm 0;margin-top:6mm}
+.sig{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8mm;margin-top:14mm}
+.sig div{border-top:.18mm solid var(--w-meta);padding-top:2mm;font-family:'PlexCond';font-size:6.6pt;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--w-meta)}
+.sig div b{display:block;font-family:'PlexSerif';font-size:8.4pt;letter-spacing:0;text-transform:none;
+  color:var(--w-ink);font-weight:600;margin-top:1mm}
+
+/* ============ SPECIMEN PAGE (xlsx / pptx) ============ */
+.spec{position:absolute;left:var(--mL);right:var(--mR);top:26mm;bottom:24mm}
+.xl{border:.2mm solid var(--ink1);font-family:'PlexSans';font-size:6.4pt;width:100%;border-collapse:collapse}
+.xl th,.xl td{border:.12mm solid #DFE3E6;padding:1.1mm 1.6mm;line-height:8.6pt}
+.xl .hdr td{background:var(--ink9);color:#fff;font-family:'PlexCond';font-weight:600;font-size:6.2pt;
+  letter-spacing:.08em;text-transform:uppercase;border-color:var(--ink9)}
+.xl .ttl td{background:#fff;font-family:'PlexCond';font-weight:600;font-size:8.4pt;color:var(--ink9);
+  border:0;padding-top:2mm;padding-bottom:.5mm;letter-spacing:.01em}
+.xl .sub td{background:#fff;font-family:'PlexMono';font-size:5.8pt;color:var(--ink4);border:0;padding-bottom:2mm}
+.xl .grp td{background:#F3F5F6;font-family:'PlexCond';font-weight:600;font-size:6pt;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--ink9)}
+.xl .n{font-family:'PlexMono';font-size:6.2pt;text-align:right;font-variant-numeric:tabular-nums;color:var(--ink9)}
+.xl .n.in{color:var(--signal)}          /* hand-entered constant */
+.xl .n.link{color:var(--verd)}          /* cross-sheet reference */
+.xl .tot td{background:#fff;border-top:.4mm solid var(--ink9);font-family:'PlexCond';font-weight:600;
+  font-size:6.6pt;color:var(--ink9)}
+.xl .rowh{font-family:'PlexCond';color:var(--ink7)}
+.legend{display:flex;gap:6mm;margin-top:2.5mm;font-family:'PlexCond';font-size:6.2pt;color:var(--ink4);
+  letter-spacing:.05em;text-transform:uppercase}
+.legend s{text-decoration:none;font-family:'PlexMono';font-weight:600;margin-right:1.2mm}
+
+.slide{width:166mm;height:93.4mm;background:#0E1216;position:relative;overflow:hidden;margin-top:3mm}
+.slide .sh{position:absolute;left:9mm;right:9mm;top:6mm;display:flex;justify-content:space-between;
+  font-family:'PlexCond';font-size:5.6pt;letter-spacing:.16em;text-transform:uppercase;color:#7C8894;
+  padding-bottom:1.6mm;border-bottom:.15mm solid #232B33}
+.slide .sh .c{color:#D9756A;font-weight:600}
+.slide h4{position:absolute;left:9mm;top:15mm;font-family:'PlexCond';font-weight:600;font-size:15pt;
+  line-height:18pt;color:#F2F4F5;max-width:98mm;letter-spacing:-.01em}
+.slide .kick{position:absolute;left:9mm;top:11mm;font-family:'PlexCond';font-size:5.6pt;font-weight:600;
+  letter-spacing:.2em;text-transform:uppercase;color:#D98324}
+.slide .lead{position:absolute;left:9mm;top:42mm;width:84mm;font-family:'PlexSerif';font-size:8pt;
+  line-height:12pt;color:#AEB8C0}
+.slide .stat{position:absolute;right:9mm;top:22mm;width:60mm;border-top:.35mm solid #D98324;padding-top:3mm}
+.slide .stat dl{display:grid;grid-template-columns:auto 1fr;gap:1.6mm 4mm;font-family:'PlexMono';font-size:6.4pt;
+  color:#7C8894;font-variant-numeric:tabular-nums}
+.slide .stat dt{color:#F2F4F5;font-weight:600;text-align:right}
+.slide .sf{position:absolute;left:9mm;right:9mm;bottom:6mm;display:flex;justify-content:space-between;
+  font-family:'PlexMono';font-size:5.4pt;color:#5C6670;padding-top:1.6mm;border-top:.15mm solid #232B33}
+.speclbl{font-family:'PlexCond';font-size:6.6pt;font-weight:600;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--ink4);margin:0 0 2.5mm 0;padding-bottom:1.4mm;border-bottom:.15mm solid var(--ink1)}
+</style></head><body>
+
+<!-- ============================================================ 1. COVER ============================================================ -->
+<div class="page wrap">
+  <div class="sealband"><span>Klasifikasi · Rahasia</span><span>Salinan 03 dari 06 · Tidak untuk diedarkan</span></div>
+  <div class="cvr">
+    <div class="mark"><img src="file:///tmp/datum/assets/gsp-tinta.png" style="width:46mm;display:block"></div>
+    <div class="orgline">Divisi Engineering &amp; Technical Intelligence · Jl. Bangka Raya No. 27, Pela Mampang, Jakarta Selatan 12720 · Tel. (021) 22715320</div>
+    <div class="datum w"><i></i></div>
+    <div class="ctype">Kajian Teknis · Laporan Pemahaman Data &amp; Baseline Engineering</div>
+    <div class="ctitle">Perluasan Perimeter Ring Terluar<br>Arsenal Barat dan Timur</div>
+    <div class="csub">Baseline engineering terverifikasi untuk 70 titik deteksi pada perimeter 6.546,2 m — Arsenal TNI Angkatan Laut, Batu Poron, Madura.</div>
+    <div class="cscope">Dasar penyusunan proposal teknis · daftar kuantitas dan harga · rencana pelaksanaan · dokumen pengadaan dan tender</div>
+  </div>
+  <div class="ctrl">
+    <table>
+      <tr class="head"><th>Nomor dokumen</th><td class="mono">005/GSP/KT/VII/2026</td>
+          <th style="width:26mm">Revisi</th><td class="mono">B · 31 Juli 2026</td></tr>
+      <tr><th>Penyusun</th><td>Divisi Engineering PT Gemilang Satria Perkasa</td>
+          <th>Kustodian</th><td class="mono">ENG-01</td></tr>
+      <tr><th>Ditujukan kepada</th><td>Direktur PT Gemilang Satria Perkasa</td>
+          <th>Halaman</th><td class="mono">83</td></tr>
+      <tr><th>Datum geodetik</th><td class="mono">UTM Zona 49S · WGS-84 · grid 500 m</td>
+          <th>Verifikasi</th><td class="mono">V3 — lulus</td></tr>
+    </table>
+  </div>
+  <div class="spine">Kajian Teknis · Arsenal Barat dan Timur · Bahasa Indonesia · Rev B · Agustus 2026</div>
+  <div class="cfoot"><span>PT GSP · NIB 9120208940517 &nbsp;·&nbsp; // 20260801 ID R — Terbitan 2</span><span class="c">RAHASIA · PERMENHAN 26/2017</span></div>
+</div>
+
+<!-- ============================================================ 2. DOCUMENT CONTROL ============================================================ -->
+<div class="page wrap">
+  <div class="sealband"><span>Klasifikasi · Rahasia</span><span>005/GSP/KT/VII/2026 · Rev B</span></div>
+  <div class="wbody">
+    <div class="datum w" style="margin-bottom:5mm"><i></i></div>
+    <div class="wh1"><span class="kick">Lembar Kendali</span>Kendali Dokumen, Riwayat Revisi &amp; Pernyataan Verifikasi</div>
+
+    <div class="wh2">A · Riwayat revisi</div>
+    <table class="wtbl">
+      <tr><th style="width:16mm">Rev</th><th style="width:24mm">Tanggal</th><th style="width:30mm">Disiapkan</th><th>Uraian perubahan</th><th style="width:22mm">Status</th></tr>
+      <tr><td class="mono">A</td><td class="mono">18-VII-2026</td><td>Div. Engineering</td><td>Terbit pertama — pembacaan 25 berkas sumber, baseline awal</td><td class="mono">Digantikan</td></tr>
+      <tr><td class="mono">B</td><td class="mono">31-VII-2026</td><td>Div. Engineering</td><td>Kalibrasi ulang kuantitas galian dan kabel terhadap register koordinat 70 titik; penambahan Lampiran C (matriks verifikasi)</td><td class="mono">Berlaku</td></tr>
+    </table>
+
+    <div class="wh2">B · Rantai verifikasi tiga lapis</div>
+    <table class="wtbl">
+      <tr><th style="width:16mm">Lapis</th><th style="width:44mm">Metode</th><th>Objek</th><th style="width:34mm">Hasil</th></tr>
+      <tr><td class="mono">V1</td><td>Pembacaan baris per baris</td><td>25 berkas · 3.891 baris teks kajian · 2.669 baris ekstraksi workbook · 7.432 baris OCR kontrak · 3.583 baris peta</td><td>Nihil berkas dilewati</td></tr>
+      <tr><td class="mono">V2</td><td>Verifikasi visual citra halaman</td><td>114 halaman kontrak terpindai · 14 lembar peta A0/A3 · 13 halaman datasheet · 9 gambar tertanam</td><td>Angka kunci cocok</td></tr>
+      <tr><td class="mono">V3</td><td>Perhitungan ulang dengan kode</td><td>Seluruh subtotal, PPN, volume, statistik armada, jarak geodetik haversine</td><td>Selisih ≤ 0,05 %</td></tr>
+    </table>
+
+    <div class="wh2">C · Pernyataan metodologi</div>
+    <div class="stmt">
+      <div class="wp" style="margin-bottom:0">Setiap angka yang tercantum dalam dokumen ini dihitung ulang dengan kode langsung terhadap berkas sumber. Tidak terdapat satu angka pun yang diperkirakan, disalin dari ingatan, atau diinterpolasi. Setiap butir yang tidak dapat diverifikasi diberi label <b style="font-family:PlexMono;font-size:7.6pt">[ASUMSI]</b> beserta nomor sumber dan alasannya. Nama pabrikan disebut hanya bila tercantum dalam narasi keluaran; perangkat dirujuk berdasarkan kapabilitas dan istilah pengadaan.</div>
+    </div>
+
+    <div class="wh2" style="margin-top:9mm">D · Distribusi terkendali</div>
+    <table class="wtbl">
+      <tr><th style="width:16mm">Salinan</th><th style="width:56mm">Pemegang</th><th>Media</th><th style="width:30mm">Pengembalian</th></tr>
+      <tr><td class="mono">01</td><td>Direktur Utama</td><td>Cetak berjilid + berkas terenkripsi</td><td class="mono">Tidak</td></tr>
+      <tr><td class="mono">02</td><td>Kepala Divisi Engineering</td><td>Cetak berjilid</td><td class="mono">Tidak</td></tr>
+      <tr><td class="mono">03</td><td>Arsip kendali mutu</td><td>Cetak berjilid</td><td class="mono">Ya · 31-XII-2026</td></tr>
+    </table>
+
+    <div class="sig">
+      <div>Disusun<b>Divisi Engineering</b></div>
+      <div>Diperiksa<b>Kendali Mutu</b></div>
+      <div>Disahkan<b>Direktur Utama</b></div>
+    </div>
+  </div>
+  <div class="cfoot"><span>005/GSP/KT/VII/2026 · REV B</span><span class="c">RAHASIA</span><span>LEMBAR 2 DARI 83</span></div>
+</div>
+
+<!-- ============================================================ 3. BODY + TABLE ============================================================ -->
+<div class="page">
+  <div class="runhead"><span>PT Gemilang Satria Perkasa · Divisi Engineering</span><span>Bab 5 · Baseline Kuantitas</span><span class="cls">Rahasia</span></div>
+  <div class="body">
+    <h1><span class="kick">Bab 5</span><span class="datum" style="display:block"><i></i></span>Baseline Kuantitas Terverifikasi</h1>
+
+    <h2><span>5.1</span>Dasar geodetik dan konsekuensi kuantitasnya</h2>
+    <p class="t">Seluruh kuantitas pada bab ini diturunkan dari satu sumber tunggal: register koordinat 70 titik kamera yang diekstraksi dari Peta 001–014 dan diverifikasi silang terhadap survei lapangan 16–21 Agustus 2021. Jarak antartitik dihitung dengan rumus haversine pada datum WGS-84, bukan diukur dari skala gambar, sehingga panjang perimeter yang dilaporkan tidak bergantung pada ketelitian cetak lembar peta.</p>
+    <div class="r"><span class="g">■ TERUKUR</span><br>SRC 001–014/lbr 1–14<br>SRV 16–21·VIII·2021<br>KEANDALAN [A1]<em>Register geodetik lengkap pada Lampiran A.</em></div>
+
+    <div class="sp h"></div>
+
+    <p class="t">Konsekuensinya dapat diaudit. Panjang perimeter menentukan panjang galian; galian menentukan kebutuhan serat optik dan kabel kelistrikan; kabel kelistrikan bersama beban puncak menentukan kapasitas catu daya. Satu koreksi pada register koordinat merambat ke seluruh rantai tersebut.</p>
+    <div class="r rev"><span class="d">◈ DITURUNKAN</span><br>REQ-IDS-07<br>REV B<em>Kuantitas dikalibrasi ulang pada Rev B.</em></div>
+
+    <div class="der">
+      <div class="lbl">Turunan D-5.1 · Spasi nominal antartitik</div>
+<pre>Perimeter terukur          6.546,2  m    [TERUKUR]
+Titik deteksi                   70  titik [TERUKUR]
+                          ─────────────────
+Spasi nominal   6.546,2 ÷ 70 =  93,5  m
+Spasi median terukur            97,7  m
+Selisih terhadap nominal       + 4,5  %   dalam toleransi ± 8 %</pre>
+      <div class="note">Selisih timbul dari 6 segmen pesisir tanpa tiang; jarak diserap segmen daratan. Tidak ada celah cakupan.</div>
+    </div>
+
+    <h2><span>5.2</span>Kuantitas pekerjaan sipil dan kelistrikan — Sisi Timur</h2>
+
+    <div class="tbl">
+      <span class="tcap"><b>Tabel 5.2</b>Daftar kuantitas Bab I — Intrusion Detection System, Arsenal Timur (B1–B35), diturunkan dari register koordinat Rev B.</span>
+      <table>
+        <thead><tr>
+          <th style="width:9mm">No</th><th>Uraian pekerjaan</th>
+          <th style="width:20mm" class="num">Volume</th><th style="width:13mm">Satuan</th>
+          <th style="width:24mm" class="num">Harga satuan</th><th style="width:26mm" class="num">Jumlah</th>
+        </tr></thead>
+        <tbody>
+          <tr class="grp"><td colspan="6">A · Pekerjaan sipil &amp; struktur</td></tr>
+          <tr><td class="idc">1</td><td>Galian jalur kabel 0,30 × 0,60 m termasuk urugan pasir dan pemadatan kembali</td><td class="num">3.538,8</td><td class="unit">m′</td><td class="num">128.000</td><td class="num">452.966.400</td></tr>
+          <tr><td class="idc">2</td><td>Tapak/pondasi kamera beton K-250 termasuk angkur dan <i>stub</i></td><td class="num">35</td><td class="unit">titik</td><td class="num">2.400.000</td><td class="num">84.000.000</td></tr>
+          <tr><td class="idc">3</td><td>Tiang kamera oktagonal 5 m, galvanis celup panas 85 µm</td><td class="num">35</td><td class="unit">set</td><td class="num">9.600.000</td><td class="num">336.000.000</td></tr>
+          <tr class="grp"><td colspan="6">B · Pekerjaan kelistrikan &amp; proteksi</td></tr>
+          <tr><td class="idc">4</td><td>Kabel NYFGBY 4 × 10 mm² — distribusi utama perimeter</td><td class="num">3.707,4</td><td class="unit">m</td><td class="num">155.000</td><td class="num">574.647.000</td></tr>
+          <tr><td class="idc">5</td><td>Kabel NYFGBY 4 × 2,5 mm² — sambungan titik</td><td class="num">962,5</td><td class="unit">m</td><td class="num">80.000</td><td class="num">77.000.000</td></tr>
+        </tbody>
+        <tfoot><tr><td colspan="5">Subtotal kelompok A + B — Arsenal Timur (sebelum PPN)</td><td class="num" style="font-size:8.4pt">1.524.613.400</td></tr></tfoot>
+      </table>
+      <div class="src"><b>Sumber</b> Register koordinat Rev B · Peta 001–014 · AHS 008/GSP/RAB/VII/2026. <b style="margin-left:4mm">Provenans</b> volume [DITURUNKAN] · harga satuan [PEMASOK, 3 kutipan, median].</div>
+    </div>
+  </div>
+  <div class="reg">
+    <div>GSP · <b>005/GSP/KT/VII/2026</b></div>
+    <div>REV <b>B</b> · 31-VII-2026</div>
+    <div>LEMBAR <b>34</b> DARI 83</div>
+    <div>RAHASIA</div>
+  </div>
+</div>
+
+<!-- ============================================================ 4. FIGURE PAGE ============================================================ -->
+<div class="page">
+  <div class="runhead"><span>PT Gemilang Satria Perkasa · Divisi Engineering</span><span>Bab 3 · Konteks Program</span><span class="cls">Rahasia</span></div>
+  <div class="body">
+    <h2 style="margin-top:0"><span>3.2</span>Kedudukan sesi ini dalam program empat fase</h2>
+    <p class="t">Project Arsenal Barat dan Timur bukan pekerjaan berdiri sendiri. Ia adalah fase ketiga dari satu program berkelanjutan yang telah berjalan sejak 2021 dan diproyeksikan hingga 2028, dengan PT Gemilang Satria Perkasa sebagai penyedia pada seluruh fase.</p>
+    <div class="r"><span class="g">■ TERUKUR</span><br>KONTRAK INDUK 2021<br>KTR-24/2026<em>Nilai kontrak dibaca langsung dari dokumen terpindai.</em></div>
+
+    <div class="fig">
+      <svg width="620" height="235" viewBox="0 0 620 235" xmlns="http://www.w3.org/2000/svg" font-family="PlexMono, monospace">
+        <!-- axis -->
+        <line x1="52" y1="196" x2="606" y2="196" stroke="#101418" stroke-width="1.1"/>
+        <g stroke="#E8EBEE" stroke-width=".6">
+          <line x1="52" y1="156" x2="606" y2="156"/><line x1="52" y1="116" x2="606" y2="116"/>
+          <line x1="52" y1="76" x2="606" y2="76"/><line x1="52" y1="36" x2="606" y2="36"/>
+        </g>
+        <g fill="#6B7783" font-size="8.5" text-anchor="end">
+          <text x="44" y="199">0</text><text x="44" y="159">20</text><text x="44" y="119">40</text>
+          <text x="44" y="79">60</text><text x="44" y="39">80</text>
+        </g>
+        <text x="52" y="18" fill="#6B7783" font-size="8" font-family="PlexCond, sans-serif" letter-spacing="1.4">MILIAR RUPIAH</text>
+        <!-- bars: 65.37 / 7.33 / 24.48 / 19.98  scale 2px per 1 M -->
+        <g>
+          <rect x="72"  y="65.5" width="96" height="130.5" fill="#2B3640"/>
+          <rect x="212" y="181.4" width="96" height="14.6" fill="#2B3640"/>
+          <rect x="352" y="147.0" width="96" height="49.0" fill="#B45309"/>
+          <rect x="492" y="156.0" width="96" height="40.0" fill="#CBD2D7"/>
+        </g>
+        <!-- value labels, direct, unboxed -->
+        <g font-size="10" font-weight="600" text-anchor="middle">
+          <text x="120" y="58"  fill="#101418">65,37</text>
+          <text x="260" y="174" fill="#101418">7,33</text>
+          <text x="400" y="139" fill="#B45309">24,48</text>
+          <text x="540" y="148" fill="#6B7783">19,98</text>
+        </g>
+        <!-- category labels -->
+        <g font-family="PlexCond, sans-serif" font-size="8.6" text-anchor="middle" fill="#101418" font-weight="600">
+          <text x="120" y="212">FASE 1</text><text x="260" y="212">FASE 2</text>
+          <text x="400" y="212" fill="#B45309">FASE 3</text><text x="540" y="212">FASE 4</text>
+        </g>
+        <g font-family="PlexCond, sans-serif" font-size="7.4" text-anchor="middle" fill="#6B7783">
+          <text x="120" y="223">Kontrak Induk 2021–2023</text><text x="260" y="223">Pemeliharaan I · KTR-24/2026</text>
+          <text x="400" y="223" fill="#B45309">Perluasan perimeter · objek sesi ini</text><text x="540" y="223">Pemeliharaan TA 2027–2028</text>
+        </g>
+        <g font-family="PlexCond, sans-serif" font-size="7.4" text-anchor="middle" fill="#6B7783">
+          <text x="120" y="233">realisasi</text><text x="260" y="233">realisasi</text>
+          <text x="400" y="233" fill="#B45309">rencana · HPS</text><text x="540" y="233">usulan · RAB</text>
+        </g>
+        <!-- signal tick on the current phase -->
+        <line x1="352" y1="196" x2="448" y2="196" stroke="#B45309" stroke-width="2.4"/>
+      </svg>
+      <div class="fcap"><b>Gambar 3.1</b>Nilai program Project Arsenal lintas empat fase, total ≈ Rp 117,16 miliar. Fase 3 (kolom bertanda) adalah objek kajian dokumen ini dan merupakan investasi terbesar setelah Kontrak Induk.
+      <div class="src" style="margin-top:2mm"><b>Sumber</b> Kontrak Induk 2021 (nilai dibaca dari dokumen terpindai, hal. 4) · KTR-24/2026 · HPS Barat–Timur 2026 · Kajian 003/GSP/KT/VII/2026. <b style="margin-left:4mm">Provenans</b> Fase 1–2 [TERUKUR] · Fase 3 [TERUKUR, HPS resmi] · Fase 4 [ASUMSI — proyeksi internal, belum ada dokumen anggaran].</div></div>
+    </div>
+
+    <div class="aside">
+      <div class="lbl">Implikasi bagi strategi penawaran</div>
+      <p>Fase 4 belum memiliki dasar anggaran resmi. Ia dicantumkan sebagai konteks, bukan sebagai pendapatan yang dapat diandalkan, dan tidak boleh dikutip dalam materi komersial mana pun tanpa label asumsi yang menyertainya.</p>
+    </div>
+    <div class="r a" style="grid-column:3"><span class="a">△ ASUMSI</span><br>FASE 4<em>Tidak boleh dikutip tanpa label.</em></div>
+    <div class="sp h"></div>
+    <p class="t">Yang dapat diandalkan adalah rekam jejak pada Fase 1 dan Fase 2, keduanya telah direalisasikan penuh dan dapat diperiksa terhadap dokumen kontrak. Rekam jejak itulah — bukan proyeksi Fase 4 — yang menjadi dasar posisi PT Gemilang Satria Perkasa sebagai penyedia berkelanjutan pada objek ini, dan yang akan dikutip dalam dokumen penawaran.</p>
+    <div class="r"><span class="g">■ TERUKUR</span><br>REALISASI 2021–2026<em>Dapat diperiksa terhadap dokumen kontrak.</em></div>
+  </div>
+  <div class="reg">
+    <div>GSP · <b>005/GSP/KT/VII/2026</b></div><div>REV <b>B</b> · 31-VII-2026</div>
+    <div>LEMBAR <b>18</b> DARI 83</div><div>RAHASIA</div>
+  </div>
+</div>
+
+<!-- ============================================================ 5. DERIVATION / ENGINEERING PAGE ============================================================ -->
+<div class="page">
+  <div class="runhead"><span>PT Gemilang Satria Perkasa · Divisi Engineering</span><span>Bab 7 · Beban &amp; Catu Daya</span><span class="cls">Rahasia</span></div>
+  <div class="body">
+    <h2 style="margin-top:0"><span>7.3</span>Beban puncak sistem dan penampang penghantar</h2>
+    <p class="t">Beban puncak dihitung dari konsumsi per titik pada kondisi terburuk — pemanas lensa aktif, iluminator inframerah penuh, dan pemanas kabinet aktif secara bersamaan — dikalikan jumlah titik, ditambah beban perangkat jaringan pada setiap simpul agregasi. Faktor keserempakan tidak diterapkan, karena kondisi terburuk pada objek pesisir Madura adalah malam hari musim hujan ketika seluruh beban tersebut memang aktif serentak.</p>
+    <div class="r"><span class="d">◈ DITURUNKAN</span><br>REQ-PWR-02<em>Faktor keserempakan sengaja tidak diterapkan.</em></div>
+
+    <div class="der">
+      <div class="lbl">Turunan D-7.3a · Beban puncak agregat</div>
+<pre>Kamera + pemanas lensa      70 × 32,0 W  =  2.240,0  W  [PEMASOK]
+Iluminator IR               70 × 28,0 W  =  1.960,0  W  [PEMASOK]
+Pemanas kabinet             70 × 18,0 W  =  1.260,0  W  [PEMASOK]
+Sakelar agregasi PoE         7 × 95,0 W  =    665,0  W  [PEMASOK]
+Radio backhaul               7 × 24,0 W  =    168,0  W  [PEMASOK]
+                                          ───────────
+Beban puncak DC/AC                           6.293,0  W
+Daya semu   6.293 ÷ cos φ 0,85            =  7.403,5  VA  =  7,40 kVA
+Kapasitas terpasang  7,40 × 1,25 headroom =  9,25 kVA  →  pilih 10 kVA</pre>
+      <div class="note">Konsumsi per perangkat diambil dari lembar data pemasok pada kondisi nominal 24 V; belum ada pengukuran lapangan. Ditandai [PEMASOK] dan wajib diverifikasi pada uji terima pabrik.</div>
+    </div>
+
+    <div class="der">
+      <div class="lbl">Turunan D-7.3b · Susut tegangan pada segmen terjauh</div>
+<pre>Segmen terpanjang B22 → panel Timur          412,0  m   [TERUKUR]
+Arus segmen (8 titik × 78 W ÷ 230 V)           2,71  A
+Penghantar NYFGBY 4 × 10 mm², ρ 0,0175 Ω·mm²/m
+Susut  ΔV = 2 × ρ × L × I ÷ A
+          = 2 × 0,0175 × 412,0 × 2,71 ÷ 10   =  3,91  V
+Susut relatif  3,91 ÷ 230                    =  1,70  %   batas 3 % — memenuhi</pre>
+      <div class="note">Pada penampang 4 mm² susut menjadi 4,25 % dan tidak memenuhi. Pemilihan 10 mm² karena itu bersifat mengikat, bukan cadangan.</div>
+    </div>
+
+    <h3>Register asumsi yang mengikat pasal ini</h3>
+    <div class="tbl narrow">
+      <table>
+        <thead><tr><th style="width:23mm">ID</th><th>Asumsi</th><th style="width:36mm">Dampak bila salah</th><th style="width:28mm">Verifikasi</th></tr></thead>
+        <tbody>
+          <tr><td class="idc">ASM-PWR-01</td><td>cos φ terpasang 0,85</td><td>Kapasitas kVA naik ≈ 9 % pada 0,78</td><td class="unit">Uji terima pabrik</td></tr>
+          <tr><td class="idc">ASM-PWR-02</td><td>Pemanas kabinet aktif serentak</td><td>Konservatif — tidak menaikkan risiko</td><td class="unit">Tidak perlu</td></tr>
+          <tr><td class="idc">ASM-PWR-03</td><td>Tegangan jaringan PLN stabil 230 V ± 5 %</td><td>Susut melebihi batas pada 218 V</td><td class="unit">Perekaman 7 hari</td></tr>
+        </tbody>
+      </table>
+      <div class="src"><b>Sumber</b> Lembar data pemasok (3 kutipan) · register koordinat Rev B · SNI 0225:2020 (PUIL) pasal 525 untuk batas susut tegangan.</div>
+    </div>
+  </div>
+  <div class="reg">
+    <div>GSP · <b>005/GSP/KT/VII/2026</b></div><div>REV <b>B</b> · 31-VII-2026</div>
+    <div>LEMBAR <b>47</b> DARI 83</div><div>RAHASIA</div>
+  </div>
+</div>
+
+<!-- ============================================================ 6. XLSX + PPTX SPECIMEN ============================================================ -->
+<div class="page">
+  <div class="runhead"><span>DATUM · GSP House Style v1.0</span><span>Lampiran · Spesimen lintas format</span><span class="cls">Rahasia</span></div>
+  <div class="spec">
+    <div class="datum" style="margin-bottom:4mm"><i></i></div>
+    <div class="speclbl">Spesimen A · Workbook (.xlsx) — lembar RAB</div>
+    <table class="xl">
+      <tr class="ttl"><td colspan="6">RAB — Bab I · Intrusion Detection System, Arsenal Timur</td></tr>
+      <tr class="sub"><td colspan="6">008/GSP/RAB/VII/2026 · REV B · 31-VII-2026 · TERBATAS · sumber: register koordinat Rev B</td></tr>
+      <tr class="hdr"><td style="width:8%">No</td><td style="width:40%">Uraian pekerjaan</td><td style="width:11%">Volume</td><td style="width:9%">Satuan</td><td style="width:15%">Harga satuan</td><td style="width:17%">Jumlah</td></tr>
+      <tr class="grp"><td colspan="6">A · Pekerjaan sipil &amp; struktur</td></tr>
+      <tr><td class="n">1</td><td class="rowh">Galian jalur kabel 0,30 × 0,60 m</td><td class="n link">3.538,8</td><td>m′</td><td class="n in">128.000</td><td class="n">452.966.400</td></tr>
+      <tr><td class="n">2</td><td class="rowh">Tapak/pondasi kamera beton K-250</td><td class="n link">35</td><td>titik</td><td class="n in">2.400.000</td><td class="n">84.000.000</td></tr>
+      <tr><td class="n">3</td><td class="rowh">Tiang kamera oktagonal 5 m, HDG 85 µm</td><td class="n link">35</td><td>set</td><td class="n in">9.600.000</td><td class="n">336.000.000</td></tr>
+      <tr class="grp"><td colspan="6">B · Pekerjaan kelistrikan &amp; proteksi</td></tr>
+      <tr><td class="n">4</td><td class="rowh">Kabel NYFGBY 4 × 10 mm²</td><td class="n link">3.707,4</td><td>m</td><td class="n in">155.000</td><td class="n">574.647.000</td></tr>
+      <tr><td class="n">5</td><td class="rowh">Kabel NYFGBY 4 × 2,5 mm²</td><td class="n link">962,5</td><td>m</td><td class="n in">80.000</td><td class="n">77.000.000</td></tr>
+      <tr class="tot"><td></td><td>Subtotal kelompok A + B — sebelum PPN</td><td></td><td></td><td></td><td class="n">1.524.613.400</td></tr>
+    </table>
+    <div class="legend">
+      <span><s style="color:#B45309">■</s>Konstanta dimasukkan tangan</span>
+      <span><s style="color:#2F6F6B">■</s>Rujukan antar-lembar</span>
+      <span><s style="color:#101418">■</s>Hasil rumus</span>
+      <span>Warna angka menyatakan provenans, bukan hiasan</span>
+    </div>
+
+    <div class="speclbl" style="margin-top:8mm">Spesimen B · Command brief (.pptx) — master 16:9</div>
+    <div class="slide">
+      <div class="sh"><span>PT Gemilang Satria Perkasa · Divisi Engineering</span><span>Arsenal Barat &amp; Timur 2026</span><span class="c">Rahasia</span></div>
+      <div class="kick">Bagian 2 · Baseline</div>
+      <h4>Perimeter 6.546,2 m menuntut 70 titik. Kuantitas berikutnya mengikuti, tidak dinegosiasikan.</h4>
+      <div class="lead">Register koordinat adalah satu-satunya sumber kebenaran dimensional. Galian, serat optik, penghantar, dan kapasitas catu daya seluruhnya diturunkan darinya — sehingga setiap angka pada RAB dapat ditelusuri kembali ke satu berkas yang dapat diaudit.</div>
+      <div class="stat"><dl>
+        <dt>6.546,2 m</dt><dd>perimeter terukur</dd>
+        <dt>70</dt><dd>titik deteksi</dd>
+        <dt>97,7 m</dt><dd>spasi median</dd>
+        <dt>13.404,5 m′</dt><dd>galian total</dd>
+        <dt>47.466,8 m</dt><dd>serat optik</dd>
+        <dt>7,40 kVA</dt><dd>daya semu puncak</dd>
+      </dl></div>
+      <div class="sf"><span>005/GSP/KT/VII/2026 · REV B</span><span>SUMBER: REGISTER KOORDINAT REV B · PETA 001–014</span><span>SLIDE 07 / 24</span></div>
+    </div>
+  </div>
+  <div class="reg">
+    <div>GSP · <b>DATUM v1.0</b></div><div>SPESIMEN · 01-VIII-2026</div>
+    <div>LEMBAR <b>6</b> DARI 6</div><div>RAHASIA</div>
+  </div>
+</div>
+
+</body></html>

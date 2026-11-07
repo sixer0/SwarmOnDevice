@@ -1,0 +1,103 @@
+{
+  "$schema": "studio.diagram/v1",
+  "family": "flow",
+  "id": "6.2",
+  "title": "Rantai pengadaan suku cadang dibungkus tiga langkah per baris.",
+  "classification": "BIASA",
+  "width_mm": 166,
+  "apparatus": "page",
+  "labels_verified": true,
+  "sources": [
+    "Contoh ilustratif korpus paritas S63, rantai pengadaan"
+  ],
+  "per_row": 3,
+  "nodes": [
+    {
+      "id": "a",
+      "label": "Permintaan",
+      "shape": "stadium",
+      "class": {
+        "row": 0
+      }
+    },
+    {
+      "id": "b",
+      "label": "Kajian kebutuhan",
+      "shape": "box",
+      "class": {
+        "row": 0
+      }
+    },
+    {
+      "id": "c",
+      "label": "Penawaran",
+      "shape": "box",
+      "class": {
+        "row": 0
+      }
+    },
+    {
+      "id": "d",
+      "label": "Pesanan",
+      "shape": "box",
+      "class": {
+        "row": 1
+      }
+    },
+    {
+      "id": "e",
+      "label": "Penerimaan",
+      "shape": "box",
+      "class": {
+        "row": 1
+      }
+    },
+    {
+      "id": "f",
+      "label": "Gudang",
+      "shape": "stadium",
+      "class": {
+        "row": 1
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": "a",
+      "to": "b",
+      "kind": "data",
+      "label": "formulir"
+    },
+    {
+      "from": "b",
+      "to": "c",
+      "kind": "data",
+      "label": "spesifikasi"
+    },
+    {
+      "from": "c",
+      "to": "d",
+      "kind": "data",
+      "label": "harga"
+    },
+    {
+      "from": "d",
+      "to": "e",
+      "kind": "data",
+      "label": "barang"
+    },
+    {
+      "from": "e",
+      "to": "f",
+      "kind": "verify",
+      "label": "uji terima"
+    }
+  ],
+  "legend": [
+    "solid data",
+    "dash-dot uji terima"
+  ],
+  "notes": [
+    "per_row membungkus rantai (E-30)."
+  ]
+}

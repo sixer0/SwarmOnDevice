@@ -1,0 +1,176 @@
+{
+  "$schema": "studio.template/v2",
+  "preset": {
+    "slug": "datum-manual-000"
+  },
+  "essentials": {
+    "color.interior.signal": "B45309",
+    "doc.language": "ID",
+    "grid.marginDensity": "standard",
+    "layout.railMode": "A",
+    "page.orientation": "portrait",
+    "page.size": "A4",
+    "type.scale.body.size": 9.5
+  },
+  "skeleton": {
+    "slots": [
+      {
+        "slotKey": "cover",
+        "sectionType": "cover",
+        "label": "Sampul",
+        "position": 1,
+        "required": true,
+        "positionLocked": false,
+        "repeatable": false,
+        "contentMode": "MIXED",
+        "tiers": [],
+        "admits": [],
+        "essentials": {
+          "cover.elementOrder": [
+            "pita segel",
+            "logo",
+            "baris alamat di atas garis rambut",
+            "ruang putih",
+            "Datum Rule 166 mm",
+            "kicker jenis dokumen",
+            "judul",
+            "standfirst",
+            "baris cakupan",
+            "blok kendali",
+            "kolofon",
+            "string punggung"
+          ],
+          "cover.kicker.text": "",
+          "device.sealBand.enabled": true,
+          "device.spine.enabled": true
+        }
+      },
+      {
+        "slotKey": "controlSheet",
+        "sectionType": "controlSheet",
+        "label": "Lembar Kendali",
+        "position": 2,
+        "required": true,
+        "positionLocked": false,
+        "repeatable": false,
+        "contentMode": "INPUT",
+        "tiers": [],
+        "admits": [],
+        "essentials": {
+          "device.sealBand.enabled": true
+        }
+      },
+      {
+        "slotKey": "toc",
+        "sectionType": "toc",
+        "label": "Daftar Isi",
+        "position": 3,
+        "required": true,
+        "positionLocked": false,
+        "repeatable": false,
+        "contentMode": "MIXED",
+        "tiers": [],
+        "admits": [],
+        "essentials": {
+          "device.sealBand.enabled": true,
+          "render.toc.mode": "static"
+        }
+      },
+      {
+        "slotKey": "signature",
+        "sectionType": "signatureBlock",
+        "label": "Blok Tanda Tangan",
+        "position": 4,
+        "required": false,
+        "positionLocked": false,
+        "repeatable": false,
+        "contentMode": "INPUT",
+        "tiers": [],
+        "admits": [],
+        "essentials": {
+          "slot.placement": "inControlSheet"
+        }
+      },
+      {
+        "slotKey": "content",
+        "sectionType": "chapter",
+        "label": "Bab",
+        "position": 5,
+        "required": true,
+        "positionLocked": false,
+        "repeatable": true,
+        "contentMode": "INPUT",
+        "tiers": [],
+        "admits": [
+          "paragraph",
+          "list",
+          "aside",
+          "monoBlock",
+          "assumptionInline",
+          "table",
+          "specTable",
+          "registerTable",
+          "exampleWrongRight",
+          "ruleTable",
+          "checklist",
+          "glossary",
+          "sourceRegister",
+          "ruleIndex",
+          "referenceScale",
+          "financialTable",
+          "derivation",
+          "chart",
+          "diagram",
+          "image",
+          "symbolSheet"
+        ],
+        "essentials": {
+          "chapter.kicker.pattern": "Bab {n}",
+          "chart.widthClass": "full",
+          "device.datumRule.enabled": true,
+          "diagram.widthClass": "full",
+          "table.widthClass": "full"
+        },
+        "minItems": 1
+      },
+      {
+        "slotKey": "appendices",
+        "sectionType": "appendix",
+        "label": "Lampiran",
+        "position": 6,
+        "required": false,
+        "positionLocked": false,
+        "repeatable": true,
+        "contentMode": "INPUT",
+        "tiers": [],
+        "admits": [
+          "paragraph",
+          "list",
+          "aside",
+          "monoBlock",
+          "assumptionInline",
+          "table",
+          "specTable",
+          "registerTable",
+          "exampleWrongRight",
+          "ruleTable",
+          "checklist",
+          "glossary",
+          "sourceRegister",
+          "ruleIndex",
+          "referenceScale",
+          "financialTable",
+          "derivation",
+          "chart",
+          "diagram",
+          "image",
+          "symbolSheet"
+        ],
+        "essentials": {
+          "device.datumRule.enabled": true,
+          "page.orientation": "portrait"
+        }
+      }
+    ]
+  }
+}

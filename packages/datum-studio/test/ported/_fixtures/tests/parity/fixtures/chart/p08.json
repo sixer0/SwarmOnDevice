@@ -1,0 +1,45 @@
+{
+  "$schema": "studio.chart/v1",
+  "kind": "P-08",
+  "title": "Dua ruang turun skor di antara audit pertama dan kedua.",
+  "source": "Data ilustratif korpus paritas S63 (sintetis, bukan data klien).",
+  "widthMm": 166,
+  "data": {
+    "shape": "series",
+    "categories": [
+      "R-01",
+      "R-02",
+      "R-03",
+      "R-04",
+      "R-05",
+      "R-06"
+    ],
+    "series": [
+      {
+        "name": "Audit 1",
+        "values": [
+          61,
+          73,
+          56,
+          80,
+          69,
+          58
+        ]
+      },
+      {
+        "name": "Audit 2",
+        "values": [
+          70,
+          68,
+          65,
+          87,
+          63,
+          76
+        ]
+      }
+    ]
+  },
+  "heightMm": 62,
+  "unit": "skor",
+  "dec": 0
+}

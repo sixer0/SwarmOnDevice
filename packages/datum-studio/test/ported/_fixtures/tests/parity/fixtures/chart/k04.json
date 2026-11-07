@@ -1,0 +1,42 @@
+{
+  "$schema": "studio.chart/v1",
+  "kind": "K-04",
+  "title": "Komposisi jenjang tim lapangan dan tim kantor serupa.",
+  "source": "Data ilustratif korpus paritas S63 (sintetis, bukan data klien).",
+  "widthMm": 166,
+  "data": {
+    "shape": "series",
+    "categories": [
+      "Teknisi",
+      "Insinyur",
+      "Senior",
+      "Spesialis",
+      "Manajer"
+    ],
+    "series": [
+      {
+        "name": "Tim lapangan",
+        "values": [
+          40,
+          27,
+          16,
+          9,
+          4
+        ]
+      },
+      {
+        "name": "Tim kantor",
+        "values": [
+          34,
+          26,
+          18,
+          10,
+          5
+        ]
+      }
+    ]
+  },
+  "heightMm": 58,
+  "unit": "orang",
+  "dec": 0
+}

@@ -3,8 +3,14 @@ import { defineConfig } from "electron-vite"
 import appPlugin from "@opencode-ai/app/vite"
 import { readFileSync } from "node:fs"
 import * as fs from "node:fs/promises"
+import path from "node:path"
 
 const OPENCODE_SERVER_DIST = "../opencode/dist/node"
+// Row 45 (file_requests row 111, row 31 D9): the datum-studio-host utility process loads the Studio host barrel
+// through `virtual:datum-studio-host`; Studio's vendored sources import `@/...` = vendor/src/ (its tsconfig paths).
+const DATUM_STUDIO_DIR = path.resolve("../datum-studio")
+const DATUM_STUDIO_HOST = path.join(DATUM_STUDIO_DIR, "src/mcp-host/index.ts")
+const DATUM_STUDIO_VENDOR_SRC = path.join(DATUM_STUDIO_DIR, "vendor/src")
 
 // Read as text: electron-vite runs this config under Node, and stage-library.ts only loads under Bun.
 const knowledgeLibraryCommit = (() => {
@@ -46,7 +52,12 @@ export default defineConfig({
     },
     build: {
       rollupOptions: {
-        input: { index: "src/main/index.ts", sidecar: "src/main/sidecar.ts" },
+        // datum-studio-host: out/main/datum-studio-host.js, the default entryPath of src/main/datum-studio-host/start.ts.
+        input: {
+          index: "src/main/index.ts",
+          sidecar: "src/main/sidecar.ts",
+          "datum-studio-host": "src/main/datum-studio-host.ts",
+        },
         // Keep this identical to electron-vite's Node 20.11+ shim. Its regex insertion can
         // corrupt bundled TypeScript, while a Rollup banner places the shim safely.
         output: {
@@ -74,6 +85,17 @@ const require = __cjs_mod__.createRequire(import.meta.url);
         enforce: "pre",
         resolveId(id) {
           if (id === "virtual:opencode-server") return this.resolve(`${OPENCODE_SERVER_DIST}/node.js`)
+        },
+      },
+      {
+        // The main preset's `node` condition picks `#sqlite` -> sqlite.node.ts (node:sqlite under Electron's Node).
+        // `@/` is mapped only for importers inside packages/datum-studio, so no other main source changes meaning.
+        name: "datum:studio-host-module",
+        enforce: "pre",
+        resolveId(id, importer) {
+          if (id === "virtual:datum-studio-host") return DATUM_STUDIO_HOST
+          if (!id.startsWith("@/") || !importer?.startsWith(DATUM_STUDIO_DIR + path.sep)) return
+          return this.resolve(path.join(DATUM_STUDIO_VENDOR_SRC, id.slice(2)), importer, { skipSelf: true })
         },
       },
       {

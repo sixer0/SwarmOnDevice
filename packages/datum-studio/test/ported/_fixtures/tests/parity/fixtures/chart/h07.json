@@ -1,0 +1,109 @@
+{
+  "$schema": "studio.chart/v1",
+  "kind": "H-07",
+  "title": "Tautan inti ke distribusi 2 memikul lalu lintas terbesar.",
+  "source": "Data ilustratif korpus paritas S63 (sintetis, bukan data klien).",
+  "widthMm": 166,
+  "data": {
+    "shape": "graph",
+    "nodes": [
+      {
+        "id": "core",
+        "label": "Inti"
+      },
+      {
+        "id": "d1",
+        "label": "Distribusi 1"
+      },
+      {
+        "id": "d2",
+        "label": "Distribusi 2"
+      },
+      {
+        "id": "a1",
+        "label": "Akses 1"
+      },
+      {
+        "id": "a2",
+        "label": "Akses 2"
+      },
+      {
+        "id": "a3",
+        "label": "Akses 3"
+      },
+      {
+        "id": "a4",
+        "label": "Akses 4"
+      }
+    ],
+    "links": [
+      {
+        "from": "core",
+        "to": "d1",
+        "value": 4.2
+      },
+      {
+        "from": "core",
+        "to": "d2",
+        "value": 7.8
+      },
+      {
+        "from": "d1",
+        "to": "a1",
+        "value": 1.1
+      },
+      {
+        "from": "d1",
+        "to": "a2",
+        "value": 1.6
+      },
+      {
+        "from": "d2",
+        "to": "a3",
+        "value": 2.4
+      },
+      {
+        "from": "d2",
+        "to": "a4",
+        "value": 3.1
+      }
+    ]
+  },
+  "heightMm": 74,
+  "params": {
+    "positions": {
+      "core": [
+        0.5,
+        0.78
+      ],
+      "d1": [
+        0.3,
+        0.5
+      ],
+      "d2": [
+        0.7,
+        0.5
+      ],
+      "a1": [
+        0.18,
+        0.22
+      ],
+      "a2": [
+        0.4,
+        0.22
+      ],
+      "a3": [
+        0.6,
+        0.22
+      ],
+      "a4": [
+        0.82,
+        0.22
+      ]
+    },
+    "accentLink": [
+      "core",
+      "d2"
+    ]
+  }
+}

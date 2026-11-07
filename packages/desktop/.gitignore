@@ -24,6 +24,9 @@ dist-ssr
 *.sw?
 out/
 .library-stage/
+.datum-runtime-stage/
+.datum-runtime-stage.tmp-*/
+.datum-studio-stage/
 
 resources/opencode-cli*
 resources/rg

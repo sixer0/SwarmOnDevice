@@ -1,0 +1,164 @@
+{
+  "$schema": "studio.chart/v1",
+  "kind": "G-01",
+  "title": "Cakupan nirkabel terendah berada di zona sudut gudang.",
+  "source": "Data ilustratif korpus paritas S63 (sintetis, bukan data klien).",
+  "widthMm": 166,
+  "data": {
+    "shape": "tiles",
+    "tiles": [
+      {
+        "code": "Z01",
+        "row": 0,
+        "col": 0,
+        "value": 64,
+        "label": "Z01"
+      },
+      {
+        "code": "Z02",
+        "row": 0,
+        "col": 1,
+        "value": 71
+      },
+      {
+        "code": "Z03",
+        "row": 0,
+        "col": 2,
+        "value": 78
+      },
+      {
+        "code": "Z04",
+        "row": 0,
+        "col": 3,
+        "value": 78
+      },
+      {
+        "code": "Z05",
+        "row": 0,
+        "col": 4,
+        "value": 71
+      },
+      {
+        "code": "Z06",
+        "row": 0,
+        "col": 5,
+        "value": 64,
+        "label": "Z06"
+      },
+      {
+        "code": "Z07",
+        "row": 1,
+        "col": 0,
+        "value": 73
+      },
+      {
+        "code": "Z08",
+        "row": 1,
+        "col": 1,
+        "value": 80
+      },
+      {
+        "code": "Z09",
+        "row": 1,
+        "col": 2,
+        "value": 87
+      },
+      {
+        "code": "Z10",
+        "row": 1,
+        "col": 3,
+        "value": 87
+      },
+      {
+        "code": "Z11",
+        "row": 1,
+        "col": 4,
+        "value": 80,
+        "label": "Z11"
+      },
+      {
+        "code": "Z12",
+        "row": 1,
+        "col": 5,
+        "value": 73
+      },
+      {
+        "code": "Z13",
+        "row": 2,
+        "col": 0,
+        "value": 73
+      },
+      {
+        "code": "Z14",
+        "row": 2,
+        "col": 1,
+        "value": 80
+      },
+      {
+        "code": "Z15",
+        "row": 2,
+        "col": 2,
+        "value": 87
+      },
+      {
+        "code": "Z16",
+        "row": 2,
+        "col": 3,
+        "value": 87,
+        "label": "Z16"
+      },
+      {
+        "code": "Z17",
+        "row": 2,
+        "col": 4,
+        "value": 80
+      },
+      {
+        "code": "Z18",
+        "row": 2,
+        "col": 5,
+        "value": 73
+      },
+      {
+        "code": "Z19",
+        "row": 3,
+        "col": 0,
+        "value": 64
+      },
+      {
+        "code": "Z20",
+        "row": 3,
+        "col": 1,
+        "value": 71
+      },
+      {
+        "code": "Z21",
+        "row": 3,
+        "col": 2,
+        "value": 78,
+        "label": "Z21"
+      },
+      {
+        "code": "Z22",
+        "row": 3,
+        "col": 3,
+        "value": 78
+      },
+      {
+        "code": "Z23",
+        "row": 3,
+        "col": 4,
+        "value": 71
+      },
+      {
+        "code": "Z24",
+        "row": 3,
+        "col": 5,
+        "value": 64
+      }
+    ]
+  },
+  "heightMm": 76,
+  "unit": "%",
+  "dec": 0
+}

@@ -1,0 +1,26 @@
+{
+  "_provenans": "Basal BAIK kelas diagram DHS-RB-04. Bentuk mengikuti spesimen nyata 000 RevA 6.4 baris 728-731 (Gambar 4.2 arsitektur kendali UPK-70, keluarga layered). Sumber gaya: tokens.json v2.0.0; spesifikasi P1-P6 (lihat header datum_diagram.py).",
+  "family": "layered",
+  "id": "4.2",
+  "title": "Arsitektur kendali unit menghubungkan sensor ruang ke pemantauan jarak jauh.",
+  "classification": "TERBATAS",
+  "width_mm": 166,
+  "apparatus": "page",
+  "labels_verified": true,
+  "sources": ["Proposal Teknis Spesimen UPK-70 000-GSP-PT-X-2026 RevA, Gambar 4.2"],
+  "nodes": [
+    {"id": "sensor", "label": "Sensor ruang", "sub": "16 titik", "shape": "box", "mark": "TERUKUR",
+     "class": {"tier": 0}},
+    {"id": "panel", "label": "Panel kendali lokal", "shape": "box", "class": {"tier": 1}},
+    {"id": "gateway", "label": "Gerbang data", "shape": "box", "class": {"tier": 2}},
+    {"id": "cloud", "label": "Pemantauan jarak jauh", "shape": "shadowed", "external": true,
+     "class": {"tier": 3, "external": true}}
+  ],
+  "edges": [
+    {"from": "sensor", "to": "panel", "kind": "data", "label": "analog 4-20 mA"},
+    {"from": "panel", "to": "gateway", "kind": "control", "label": "Modbus TCP"},
+    {"from": "gateway", "to": "cloud", "kind": "verify", "label": "atestas integritas"}
+  ],
+  "legend": ["solid data", "dashed perintah", "dash-dot verifikasi integritas", "bingkai berbayang entitas eksternal", "TERUKUR"],
+  "notes": ["Satu aksen per gambar; glif rumah wajib baris kunci (DATUM-34)."]
+}

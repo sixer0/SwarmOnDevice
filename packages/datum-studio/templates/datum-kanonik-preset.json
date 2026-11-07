@@ -1,0 +1,180 @@
+{
+  "$schema": "studio.template/v2",
+  "essentials": {},
+  "roleFormats": {},
+  "skeleton": {
+    "slots": [
+      {
+        "slotKey": "cover",
+        "sectionType": "cover",
+        "label": "Sampul",
+        "position": 1,
+        "required": true,
+        "positionLocked": true,
+        "repeatable": false,
+        "contentMode": "MIXED",
+        "tiers": [
+          "TERBIT",
+          "SERAH"
+        ],
+        "admits": [],
+        "essentials": {}
+      },
+      {
+        "slotKey": "controlSheet",
+        "sectionType": "controlSheet",
+        "label": "Lembar Kendali",
+        "position": 2,
+        "required": true,
+        "positionLocked": false,
+        "repeatable": false,
+        "contentMode": "INPUT",
+        "tiers": [
+          "TERBIT",
+          "SERAH"
+        ],
+        "admits": [],
+        "essentials": {}
+      },
+      {
+        "slotKey": "signature",
+        "sectionType": "signatureBlock",
+        "label": "Tanda Tangan",
+        "position": 3,
+        "required": true,
+        "positionLocked": false,
+        "repeatable": false,
+        "contentMode": "INPUT",
+        "tiers": [
+          "TERBIT",
+          "SERAH"
+        ],
+        "admits": [],
+        "essentials": {}
+      },
+      {
+        "slotKey": "toc",
+        "sectionType": "toc",
+        "label": "Daftar Isi",
+        "position": 4,
+        "required": true,
+        "positionLocked": false,
+        "repeatable": false,
+        "contentMode": "AUTO",
+        "tiers": [
+          "TERBIT",
+          "SERAH"
+        ],
+        "admits": [],
+        "essentials": {}
+      },
+      {
+        "slotKey": "content",
+        "sectionType": "chapter",
+        "label": "Isi",
+        "position": 5,
+        "required": true,
+        "positionLocked": false,
+        "repeatable": true,
+        "minItems": 1,
+        "contentMode": "INPUT",
+        "tiers": [],
+        "admits": [
+          "paragraph",
+          "list",
+          "aside",
+          "monoBlock",
+          "assumptionInline",
+          "table",
+          "specTable",
+          "registerTable",
+          "exampleWrongRight",
+          "ruleTable",
+          "checklist",
+          "glossary",
+          "sourceRegister",
+          "ruleIndex",
+          "referenceScale",
+          "financialTable",
+          "derivation",
+          "chart",
+          "diagram",
+          "image",
+          "symbolSheet"
+        ],
+        "essentials": {}
+      },
+      {
+        "slotKey": "references",
+        "sectionType": "sourceRegister",
+        "label": "Referensi",
+        "position": 6,
+        "required": false,
+        "positionLocked": false,
+        "repeatable": false,
+        "contentMode": "INPUT",
+        "tiers": [],
+        "admits": [],
+        "essentials": {}
+      },
+      {
+        "slotKey": "appendices",
+        "sectionType": "appendix",
+        "label": "Lampiran",
+        "position": 7,
+        "required": false,
+        "positionLocked": true,
+        "repeatable": true,
+        "contentMode": "INPUT",
+        "tiers": [],
+        "admits": [
+          "paragraph",
+          "list",
+          "aside",
+          "monoBlock",
+          "assumptionInline",
+          "table",
+          "specTable",
+          "registerTable",
+          "exampleWrongRight",
+          "ruleTable",
+          "checklist",
+          "glossary",
+          "sourceRegister",
+          "ruleIndex",
+          "referenceScale",
+          "financialTable",
+          "derivation",
+          "chart",
+          "diagram",
+          "image",
+          "symbolSheet"
+        ],
+        "essentials": {}
+      }
+    ]
+  },
+  "advanced": {
+    "cover.controlBlock.fields": [
+      "NOMOR DOKUMEN",
+      "REVISI",
+      "PENYUSUN",
+      "KUSTODIAN",
+      "DITUJUKAN KEPADA",
+      "HALAMAN",
+      "DATUM GEODETIK",
+      "VERIFIKASI"
+    ],
+    "cover.controlBlock.geodeticDatum": "WGS 84",
+    "controlSheet.distribution.defaults": {
+      "rows": [
+        [
+          "Induk",
+          "Divisi Engineering PT GSP (ENG-01)",
+          "Word dan PDF, folder standar",
+          "Tidak"
+        ]
+      ]
+    }
+  }
+}

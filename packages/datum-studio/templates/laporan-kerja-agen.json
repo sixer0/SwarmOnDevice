@@ -1,0 +1,112 @@
+{
+  "$schema": "studio.template/v2",
+  "preset": {
+    "slug": "datum-gsp-preset"
+  },
+  "essentials": {
+    "classification.level": "Terbatas",
+    "color.interior.signal": "B45309",
+    "doc.language": "ID",
+    "grid.marginDensity": "standard",
+    "layout.railMode": "A",
+    "page.orientation": "portrait",
+    "page.size": "A4",
+    "type.scale.body.size": 9.5
+  },
+  "advanced": {
+    "doc.defaultTier": "NOTA",
+    "doc.defaultTypeCode": "LAP",
+    "doc.typeCode": [
+      "KT",
+      "PT",
+      "RAB",
+      "SPH",
+      "SP",
+      "BA",
+      "DS",
+      "STD",
+      "LAP"
+    ]
+  },
+  "roleFormats": {},
+  "skeleton": {
+    "slots": [
+      {
+        "slotKey": "record",
+        "sectionType": "contractRecord",
+        "label": "Catatan Laporan",
+        "position": 1,
+        "required": true,
+        "positionLocked": true,
+        "repeatable": false,
+        "contentMode": "INPUT",
+        "tiers": [],
+        "admits": [],
+        "essentials": {}
+      },
+      {
+        "slotKey": "content",
+        "sectionType": "chapter",
+        "label": "Isi Laporan",
+        "position": 2,
+        "required": true,
+        "positionLocked": false,
+        "repeatable": true,
+        "minItems": 1,
+        "contentMode": "INPUT",
+        "tiers": [],
+        "admits": [
+          "paragraph",
+          "list",
+          "aside",
+          "monoBlock",
+          "assumptionInline",
+          "table",
+          "specTable",
+          "registerTable",
+          "exampleWrongRight",
+          "ruleTable",
+          "checklist",
+          "glossary",
+          "sourceRegister",
+          "ruleIndex",
+          "referenceScale",
+          "financialTable",
+          "derivation",
+          "chart",
+          "diagram",
+          "image",
+          "symbolSheet"
+        ],
+        "essentials": {
+          "chapter.kicker.pattern": "BAB {n}",
+          "device.datumRule.enabled": true,
+          "table.widthClass": "full",
+          "chart.widthClass": "text",
+          "diagram.widthClass": "text"
+        }
+      },
+      {
+        "slotKey": "references",
+        "sectionType": "sourceRegister",
+        "label": "Referensi",
+        "position": 3,
+        "required": false,
+        "positionLocked": false,
+        "repeatable": false,
+        "contentMode": "INPUT",
+        "tiers": [],
+        "admits": [],
+        "essentials": {
+          "sourceRegister.columns": [
+            "DOKUMEN",
+            "VERSI/TANGGAL",
+            "BAHASA/HALAMAN",
+            "KLASIFIKASI",
+            "DIPAKAI DI"
+          ]
+        }
+      }
+    ]
+  }
+}

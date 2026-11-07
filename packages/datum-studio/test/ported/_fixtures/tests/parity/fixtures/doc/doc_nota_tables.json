@@ -1,0 +1,1746 @@
+{
+  "$schema": "studio.doc/v1",
+  "template": {
+    "slug": "datum-kanonik",
+    "version": 1
+  },
+  "meta": {
+    "title": "Katalog tabel keluarga lengkap untuk uji paritas",
+    "docNumber": "002/GSP/STD/X/2026",
+    "rev": "A",
+    "typeCode": "STD",
+    "tier": "NOTA",
+    "classification": "BIASA",
+    "language": "ID",
+    "author": "Tim Fasilitas",
+    "issueDate": "2026-10-20"
+  },
+  "chapters": [
+    {
+      "key": "1",
+      "title": {
+        "text": "Keluarga tabel"
+      },
+      "intro": [
+        {
+          "type": "paragraph",
+          "role": "identity",
+          "text": "Bab ini memuat setiap jenis tabel keluarga beserta sel gabung dan tabel bersarang."
+        }
+      ],
+      "sections": [
+        {
+          "title": {
+            "text": "Tabel umum dan spesifikasi"
+          },
+          "blocks": [
+            {
+              "type": "table",
+              "columns": [
+                {
+                  "role": "id"
+                },
+                {
+                  "role": "text"
+                },
+                {
+                  "role": "numeral",
+                  "unit": "unit"
+                },
+                {
+                  "role": "numeral",
+                  "unit": "unit"
+                }
+              ],
+              "rows": [
+                {
+                  "kind": "header",
+                  "cells": [
+                    {
+                      "text": "Kode",
+                      "vMerge": "restart"
+                    },
+                    {
+                      "text": "Uraian",
+                      "vMerge": "restart"
+                    },
+                    {
+                      "text": "Jumlah",
+                      "gridSpan": 2
+                    }
+                  ]
+                },
+                {
+                  "kind": "header",
+                  "cells": [
+                    {
+                      "text": "",
+                      "vMerge": "continue"
+                    },
+                    {
+                      "text": "",
+                      "vMerge": "continue"
+                    },
+                    {
+                      "text": "Rencana"
+                    },
+                    {
+                      "text": "Realisasi"
+                    }
+                  ]
+                },
+                {
+                  "kind": "group",
+                  "cells": [
+                    {
+                      "text": "Kelompok mekanikal",
+                      "gridSpan": 4
+                    }
+                  ]
+                },
+                {
+                  "cells": [
+                    {
+                      "text": "M-01"
+                    },
+                    {
+                      "text": "Pompa transfer"
+                    },
+                    {
+                      "text": "3"
+                    },
+                    {
+                      "text": "3"
+                    }
+                  ]
+                },
+                {
+                  "cells": [
+                    {
+                      "text": "M-02"
+                    },
+                    {
+                      "text": "Kipas ventilasi"
+                    },
+                    {
+                      "text": "6"
+                    },
+                    {
+                      "text": "5"
+                    }
+                  ]
+                },
+                {
+                  "kind": "total",
+                  "cells": [
+                    {
+                      "text": "Jumlah",
+                      "gridSpan": 2
+                    },
+                    {
+                      "text": "9"
+                    },
+                    {
+                      "text": "8"
+                    }
+                  ]
+                }
+              ],
+              "caption": {
+                "inline": {
+                  "text": "Tabel umum dengan sel gabung mendatar dan menurun."
+                }
+              },
+              "source": {
+                "inline": {
+                  "text": "Data ilustratif korpus paritas S63 (sintetis, bukan data klien)."
+                }
+              }
+            },
+            {
+              "type": "specTable",
+              "columns": [
+                {
+                  "role": "text"
+                },
+                {
+                  "role": "text"
+                },
+                {
+                  "role": "numeral"
+                },
+                {
+                  "role": "unit"
+                }
+              ],
+              "rows": [
+                {
+                  "cells": [
+                    {
+                      "text": "Parameter"
+                    },
+                    {
+                      "text": "Syarat"
+                    },
+                    {
+                      "text": "Nilai"
+                    },
+                    {
+                      "text": "Satuan"
+                    }
+                  ],
+                  "kind": "header"
+                },
+                {
+                  "cells": [
+                    {
+                      "text": "Debit"
+                    },
+                    {
+                      "text": "minimum"
+                    },
+                    {
+                      "text": "12"
+                    },
+                    {
+                      "text": "m3/jam"
+                    }
+                  ]
+                },
+                {
+                  "cells": [
+                    {
+                      "text": "Tinggi tekan"
+                    },
+                    {
+                      "text": "minimum"
+                    },
+                    {
+                      "text": "35"
+                    },
+                    {
+                      "text": "m"
+                    }
+                  ]
+                },
+                {
+                  "cells": [
+                    {
+                      "text": "Daya motor"
+                    },
+                    {
+                      "text": "maksimum"
+                    },
+                    {
+                      "text": "3,0"
+                    },
+                    {
+                      "text": "kW"
+                    }
+                  ]
+                }
+              ],
+              "caption": {
+                "inline": {
+                  "text": "Spesifikasi pompa transfer pengganti."
+                }
+              },
+              "source": {
+                "inline": {
+                  "text": "Data ilustratif korpus paritas S63 (sintetis, bukan data klien)."
+                }
+              }
+            },
+            {
+              "type": "exampleWrongRight",
+              "columns": [
+                {
+                  "role": "text"
+                },
+                {
+                  "role": "text"
+                }
+              ],
+              "rows": [
+                {
+                  "cells": [
+                    {
+                      "text": "Salah"
+                    },
+                    {
+                      "text": "Benar"
+                    }
+                  ],
+                  "kind": "header"
+                },
+                {
+                  "cells": [
+                    {
+                      "text": "1.5 kW"
+                    },
+                    {
+                      "text": "1,5 kW"
+                    }
+                  ]
+                },
+                {
+                  "cells": [
+                    {
+                      "text": "10000 jam"
+                    },
+                    {
+                      "text": "10.000 jam"
+                    }
+                  ]
+                }
+              ],
+              "caption": {
+                "inline": {
+                  "text": "Contoh penulisan angka salah dan benar."
+                }
+              },
+              "source": {
+                "inline": {
+                  "text": "Data ilustratif korpus paritas S63 (sintetis, bukan data klien)."
+                }
+              }
+            },
+            {
+              "type": "ruleTable",
+              "columns": [
+                {
+                  "role": "id"
+                },
+                {
+                  "role": "text"
+                }
+              ],
+              "rows": [
+                {
+                  "cells": [
+                    {
+                      "text": "ID"
+                    },
+                    {
+                      "text": "Aturan"
+                    }
+                  ],
+                  "kind": "header"
+                },
+                {
+                  "cells": [
+                    {
+                      "text": "AT-01"
+                    },
+                    {
+                      "text": "Setiap angka ukur membawa tanda asal."
+                    }
+                  ]
+                },
+                {
+                  "cells": [
+                    {
+                      "text": "AT-02"
+                    },
+                    {
+                      "text": "Angka turunan menyebut rumus dan sumbernya."
+                    }
+                  ]
+                }
+              ],
+              "caption": {
+                "inline": {
+                  "text": "Aturan penandaan hasil ukur."
+                }
+              },
+              "source": {
+                "inline": {
+                  "text": "Data ilustratif korpus paritas S63 (sintetis, bukan data klien)."
+                }
+              }
+            },
+            {
+              "type": "checklist",
+              "columns": [
+                {
+                  "role": "text"
+                },
+                {
+                  "role": "text"
+                }
+              ],
+              "rows": [
+                {
+                  "cells": [
+                    {
+                      "text": "Butir"
+                    },
+                    {
+                      "text": "Status"
+                    }
+                  ],
+                  "kind": "header"
+                },
+                {
+                  "cells": [
+                    {
+                      "text": "Katup isap terbuka"
+                    },
+                    {
+                      "text": "Ya"
+                    }
+                  ]
+                },
+                {
+                  "cells": [
+                    {
+                      "text": "Segel terendam"
+                    },
+                    {
+                      "text": "Ya"
+                    }
+                  ]
+                },
+                {
+                  "cells": [
+                    {
+                      "text": "Arah putaran benar"
+                    },
+                    {
+                      "text": "Belum"
+                    }
+                  ]
+                }
+              ],
+              "caption": {
+                "inline": {
+                  "text": "Daftar periksa sebelum pompa dinyalakan."
+                }
+              },
+              "source": {
+                "inline": {
+                  "text": "Data ilustratif korpus paritas S63 (sintetis, bukan data klien)."
+                }
+              }
+            },
+            {
+              "type": "glossary",
+              "columns": [
+                {
+                  "role": "text"
+                },
+                {
+                  "role": "text"
+                }
+              ],
+              "rows": [
+                {
+                  "cells": [
+                    {
+                      "text": "Istilah"
+                    },
+                    {
+                      "text": "Arti"
+                    }
+                  ],
+                  "kind": "header"
+                },
+                {
+                  "cells": [
+                    {
+                      "text": "Segel mekanis"
+                    },
+                    {
+                      "text": "Perapat poros pompa berbahan cincin geser."
+                    }
+                  ]
+                },
+                {
+                  "cells": [
+                    {
+                      "text": "Tinggi tekan"
+                    },
+                    {
+                      "text": "Tinggi kolom air yang dapat dinaikkan pompa."
+                    }
+                  ]
+                }
+              ],
+              "caption": {
+                "inline": {
+                  "text": "Istilah yang dipakai nota."
+                }
+              },
+              "source": {
+                "inline": {
+                  "text": "Data ilustratif korpus paritas S63 (sintetis, bukan data klien)."
+                }
+              }
+            },
+            {
+              "type": "sourceRegister",
+              "columns": [
+                {
+                  "role": "id"
+                },
+                {
+                  "role": "text"
+                },
+                {
+                  "role": "text"
+                }
+              ],
+              "rows": [
+                {
+                  "cells": [
+                    {
+                      "text": "Kode"
+                    },
+                    {
+                      "text": "Sumber"
+                    },
+                    {
+                      "text": "Edisi"
+                    }
+                  ],
+                  "kind": "header"
+                },
+                {
+                  "cells": [
+                    {
+                      "text": "SR-01"
+                    },
+                    {
+                      "text": "Buku perawatan gedung"
+                    },
+                    {
+                      "text": "2025"
+                    }
+                  ]
+                },
+                {
+                  "cells": [
+                    {
+                      "text": "SR-02"
+                    },
+                    {
+                      "text": "Lembar data pompa pemasok"
+                    },
+                    {
+                      "text": "rev 3"
+                    }
+                  ]
+                }
+              ],
+              "caption": {
+                "inline": {
+                  "text": "Daftar sumber nota."
+                }
+              },
+              "source": {
+                "inline": {
+                  "text": "Data ilustratif korpus paritas S63 (sintetis, bukan data klien)."
+                }
+              }
+            },
+            {
+              "type": "ruleIndex",
+              "columns": [
+                {
+                  "role": "id"
+                },
+                {
+                  "role": "text"
+                },
+                {
+                  "role": "text"
+                }
+              ],
+              "rows": [
+                {
+                  "cells": [
+                    {
+                      "text": "ID"
+                    },
+                    {
+                      "text": "Aturan"
+                    },
+                    {
+                      "text": "Bab"
+                    }
+                  ],
+                  "kind": "header"
+                },
+                {
+                  "cells": [
+                    {
+                      "text": "AT-01"
+                    },
+                    {
+                      "text": "Tanda asal angka"
+                    },
+                    {
+                      "text": "1"
+                    }
+                  ]
+                },
+                {
+                  "cells": [
+                    {
+                      "text": "AT-02"
+                    },
+                    {
+                      "text": "Rumus turunan"
+                    },
+                    {
+                      "text": "2"
+                    }
+                  ]
+                }
+              ],
+              "caption": {
+                "inline": {
+                  "text": "Indeks aturan menurut bab."
+                }
+              },
+              "source": {
+                "inline": {
+                  "text": "Data ilustratif korpus paritas S63 (sintetis, bukan data klien)."
+                }
+              }
+            },
+            {
+              "type": "referenceScale",
+              "columns": [
+                {
+                  "role": "id"
+                },
+                {
+                  "role": "text"
+                },
+                {
+                  "role": "numeral",
+                  "unit": "mm/s"
+                }
+              ],
+              "rows": [
+                {
+                  "cells": [
+                    {
+                      "text": "Zona"
+                    },
+                    {
+                      "text": "Arti"
+                    },
+                    {
+                      "text": "Batas atas"
+                    }
+                  ],
+                  "kind": "header"
+                },
+                {
+                  "cells": [
+                    {
+                      "text": "A"
+                    },
+                    {
+                      "text": "Baru dipasang"
+                    },
+                    {
+                      "text": "2,3"
+                    }
+                  ]
+                },
+                {
+                  "cells": [
+                    {
+                      "text": "B"
+                    },
+                    {
+                      "text": "Layak operasi terus"
+                    },
+                    {
+                      "text": "4,5"
+                    }
+                  ]
+                },
+                {
+                  "cells": [
+                    {
+                      "text": "C"
+                    },
+                    {
+                      "text": "Operasi terbatas"
+                    },
+                    {
+                      "text": "7,1"
+                    }
+                  ]
+                }
+              ],
+              "caption": {
+                "inline": {
+                  "text": "Skala acuan tingkat getaran."
+                }
+              },
+              "source": {
+                "inline": {
+                  "text": "Data ilustratif korpus paritas S63 (sintetis, bukan data klien)."
+                }
+              }
+            },
+            {
+              "type": "table",
+              "columns": [
+                {
+                  "role": "text"
+                },
+                {
+                  "role": "text"
+                }
+              ],
+              "rows": [
+                {
+                  "cells": [
+                    {
+                      "text": "Butir"
+                    },
+                    {
+                      "text": "Rincian"
+                    }
+                  ],
+                  "kind": "header"
+                },
+                {
+                  "cells": [
+                    {
+                      "text": "Paket perbaikan"
+                    },
+                    {
+                      "paragraphs": [
+                        {
+                          "text": "Rincian di bawah:"
+                        }
+                      ],
+                      "nested": {
+                        "type": "table",
+                        "columns": [
+                          {
+                            "role": "text"
+                          },
+                          {
+                            "role": "numeral"
+                          }
+                        ],
+                        "rows": [
+                          {
+                            "cells": [
+                              {
+                                "text": "Sub-butir"
+                              },
+                              {
+                                "text": "Nilai"
+                              }
+                            ],
+                            "kind": "header"
+                          },
+                          {
+                            "cells": [
+                              {
+                                "text": "Segel"
+                              },
+                              {
+                                "text": "2"
+                              }
+                            ]
+                          },
+                          {
+                            "cells": [
+                              {
+                                "text": "Bantalan"
+                              },
+                              {
+                                "text": "4"
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "nestedIndex": 1
+                    }
+                  ]
+                },
+                {
+                  "cells": [
+                    {
+                      "text": "Catatan"
+                    },
+                    {
+                      "paragraphs": []
+                    }
+                  ]
+                }
+              ],
+              "caption": {
+                "inline": {
+                  "text": "Tabel dengan tabel bersarang dan sel kosong."
+                }
+              },
+              "source": {
+                "inline": {
+                  "text": "Data ilustratif korpus paritas S63 (sintetis, bukan data klien)."
+                }
+              }
+            }
+          ]
+        },
+        {
+          "title": {
+            "text": "Tabel register delapan preset"
+          },
+          "blocks": [
+            {
+              "type": "registerTable",
+              "columns": [
+                {
+                  "role": "id"
+                },
+                {
+                  "role": "text"
+                },
+                {
+                  "role": "text"
+                },
+                {
+                  "role": "text"
+                }
+              ],
+              "rows": [
+                {
+                  "cells": [
+                    {
+                      "text": "ID"
+                    },
+                    {
+                      "text": "Asumsi"
+                    },
+                    {
+                      "text": "Dasar"
+                    },
+                    {
+                      "text": "Dampak"
+                    }
+                  ],
+                  "kind": "header"
+                },
+                {
+                  "cells": [
+                    {
+                      "text": "ASM-FAS-01"
+                    },
+                    {
+                      "text": "Jam operasi 16 jam per hari"
+                    },
+                    {
+                      "text": "Log operasi"
+                    },
+                    {
+                      "text": "Interval segel"
+                    }
+                  ]
+                }
+              ],
+              "blockId": "tbl-reg-assumption",
+              "caption": {
+                "inline": {
+                  "text": "Register asumsi."
+                }
+              },
+              "source": {
+                "inline": {
+                  "text": "Data ilustratif korpus paritas S63 (sintetis, bukan data klien)."
+                }
+              },
+              "preset": "assumption"
+            },
+            {
+              "type": "registerTable",
+              "columns": [
+                {
+                  "role": "id"
+                },
+                {
+                  "role": "text"
+                },
+                {
+                  "role": "text"
+                },
+                {
+                  "role": "text"
+                }
+              ],
+              "rows": [
+                {
+                  "cells": [
+                    {
+                      "text": "ID"
+                    },
+                    {
+                      "text": "Besaran"
+                    },
+                    {
+                      "text": "Rute 1 (m³/jam)"
+                    },
+                    {
+                      "text": "Rute 2 (m³/jam)"
+                    }
+                  ],
+                  "kind": "header"
+                },
+                {
+                  "cells": [
+                    {
+                      "text": "RK-01"
+                    },
+                    {
+                      "text": "Debit total"
+                    },
+                    {
+                      "text": "36"
+                    },
+                    {
+                      "text": "36"
+                    }
+                  ]
+                }
+              ],
+              "blockId": "tbl-reg-reconciliation",
+              "caption": {
+                "inline": {
+                  "text": "Rekonsiliasi dua rute hitung."
+                }
+              },
+              "source": {
+                "inline": {
+                  "text": "Data ilustratif korpus paritas S63 (sintetis, bukan data klien)."
+                }
+              },
+              "preset": "reconciliation"
+            },
+            {
+              "type": "registerTable",
+              "columns": [
+                {
+                  "role": "id"
+                },
+                {
+                  "role": "text"
+                },
+                {
+                  "role": "text"
+                },
+                {
+                  "role": "text"
+                }
+              ],
+              "rows": [
+                {
+                  "cells": [
+                    {
+                      "text": "ID"
+                    },
+                    {
+                      "text": "Temuan"
+                    },
+                    {
+                      "text": "Tingkat"
+                    },
+                    {
+                      "text": "Tindak"
+                    }
+                  ],
+                  "kind": "header"
+                },
+                {
+                  "cells": [
+                    {
+                      "text": "TM-01"
+                    },
+                    {
+                      "text": "Getaran P-2 tinggi"
+                    },
+                    {
+                      "text": "Sedang"
+                    },
+                    {
+                      "text": "Penyeimbangan"
+                    }
+                  ]
+                }
+              ],
+              "blockId": "tbl-reg-finding",
+              "caption": {
+                "inline": {
+                  "text": "Register temuan."
+                }
+              },
+              "source": {
+                "inline": {
+                  "text": "Data ilustratif korpus paritas S63 (sintetis, bukan data klien)."
+                }
+              },
+              "preset": "finding"
+            },
+            {
+              "type": "registerTable",
+              "columns": [
+                {
+                  "role": "id"
+                },
+                {
+                  "role": "text"
+                },
+                {
+                  "role": "text"
+                },
+                {
+                  "role": "text"
+                }
+              ],
+              "rows": [
+                {
+                  "cells": [
+                    {
+                      "text": "Peraturan"
+                    },
+                    {
+                      "text": "Pasal"
+                    },
+                    {
+                      "text": "Isi"
+                    },
+                    {
+                      "text": "Status"
+                    }
+                  ],
+                  "kind": "header"
+                },
+                {
+                  "cells": [
+                    {
+                      "text": "Pedoman perawatan gedung"
+                    },
+                    {
+                      "text": "4"
+                    },
+                    {
+                      "text": "Interval perawatan"
+                    },
+                    {
+                      "text": "Berlaku"
+                    }
+                  ]
+                }
+              ],
+              "blockId": "tbl-reg-regulation",
+              "caption": {
+                "inline": {
+                  "text": "Register peraturan."
+                }
+              },
+              "source": {
+                "inline": {
+                  "text": "Data ilustratif korpus paritas S63 (sintetis, bukan data klien)."
+                }
+              },
+              "preset": "regulation"
+            },
+            {
+              "type": "registerTable",
+              "columns": [
+                {
+                  "role": "id"
+                },
+                {
+                  "role": "text"
+                },
+                {
+                  "role": "text"
+                },
+                {
+                  "role": "text"
+                }
+              ],
+              "rows": [
+                {
+                  "cells": [
+                    {
+                      "text": "Standar"
+                    },
+                    {
+                      "text": "Edisi"
+                    },
+                    {
+                      "text": "Ruang lingkup"
+                    },
+                    {
+                      "text": "Status"
+                    }
+                  ],
+                  "kind": "header"
+                },
+                {
+                  "cells": [
+                    {
+                      "text": "Standar getaran mesin"
+                    },
+                    {
+                      "text": "2016"
+                    },
+                    {
+                      "text": "Zona getaran"
+                    },
+                    {
+                      "text": "Berlaku"
+                    }
+                  ]
+                }
+              ],
+              "blockId": "tbl-reg-standardEdition",
+              "caption": {
+                "inline": {
+                  "text": "Register edisi standar."
+                }
+              },
+              "source": {
+                "inline": {
+                  "text": "Data ilustratif korpus paritas S63 (sintetis, bukan data klien)."
+                }
+              },
+              "preset": "standardEdition"
+            },
+            {
+              "type": "registerTable",
+              "columns": [
+                {
+                  "role": "id"
+                },
+                {
+                  "role": "text"
+                },
+                {
+                  "role": "text"
+                },
+                {
+                  "role": "text"
+                }
+              ],
+              "rows": [
+                {
+                  "cells": [
+                    {
+                      "text": "ID"
+                    },
+                    {
+                      "text": "Usulan"
+                    },
+                    {
+                      "text": "Pemilik"
+                    },
+                    {
+                      "text": "Tenggat"
+                    }
+                  ],
+                  "kind": "header"
+                },
+                {
+                  "cells": [
+                    {
+                      "text": "PB-01"
+                    },
+                    {
+                      "text": "Pasang sensor getaran tetap"
+                    },
+                    {
+                      "text": "Tim Fasilitas"
+                    },
+                    {
+                      "text": "2026-12"
+                    }
+                  ]
+                }
+              ],
+              "blockId": "tbl-reg-improvement",
+              "caption": {
+                "inline": {
+                  "text": "Register perbaikan."
+                }
+              },
+              "source": {
+                "inline": {
+                  "text": "Data ilustratif korpus paritas S63 (sintetis, bukan data klien)."
+                }
+              },
+              "preset": "improvement"
+            },
+            {
+              "type": "registerTable",
+              "columns": [
+                {
+                  "role": "id"
+                },
+                {
+                  "role": "text"
+                },
+                {
+                  "role": "text"
+                },
+                {
+                  "role": "text"
+                }
+              ],
+              "rows": [
+                {
+                  "cells": [
+                    {
+                      "text": "Rev"
+                    },
+                    {
+                      "text": "Tanggal"
+                    },
+                    {
+                      "text": "Uraian"
+                    },
+                    {
+                      "text": "Oleh"
+                    }
+                  ],
+                  "kind": "header"
+                },
+                {
+                  "cells": [
+                    {
+                      "text": "A"
+                    },
+                    {
+                      "text": "2026-10-20"
+                    },
+                    {
+                      "text": "Terbit pertama"
+                    },
+                    {
+                      "text": "Tim Fasilitas"
+                    }
+                  ]
+                }
+              ],
+              "blockId": "tbl-reg-revisionHistory",
+              "caption": {
+                "inline": {
+                  "text": "Riwayat revisi."
+                }
+              },
+              "source": {
+                "inline": {
+                  "text": "Data ilustratif korpus paritas S63 (sintetis, bukan data klien)."
+                }
+              },
+              "preset": "revisionHistory"
+            },
+            {
+              "type": "registerTable",
+              "columns": [
+                {
+                  "role": "id"
+                },
+                {
+                  "role": "text"
+                },
+                {
+                  "role": "text"
+                },
+                {
+                  "role": "text"
+                }
+              ],
+              "rows": [
+                {
+                  "cells": [
+                    {
+                      "text": "No"
+                    },
+                    {
+                      "text": "Penerima"
+                    },
+                    {
+                      "text": "Bentuk"
+                    },
+                    {
+                      "text": "Salinan"
+                    }
+                  ],
+                  "kind": "header"
+                },
+                {
+                  "cells": [
+                    {
+                      "text": "1"
+                    },
+                    {
+                      "text": "Pengelola gedung"
+                    },
+                    {
+                      "text": "PDF"
+                    },
+                    {
+                      "text": "1"
+                    }
+                  ]
+                }
+              ],
+              "blockId": "tbl-reg-distribution",
+              "caption": {
+                "inline": {
+                  "text": "Daftar distribusi."
+                }
+              },
+              "source": {
+                "inline": {
+                  "text": "Data ilustratif korpus paritas S63 (sintetis, bukan data klien)."
+                }
+              },
+              "preset": "distribution"
+            }
+          ]
+        },
+        {
+          "title": {
+            "text": "Tabel keuangan tiga preset"
+          },
+          "blocks": [
+            {
+              "type": "financialTable",
+              "columns": [
+                {
+                  "role": "id"
+                },
+                {
+                  "role": "text"
+                },
+                {
+                  "role": "numeral"
+                },
+                {
+                  "role": "unit"
+                },
+                {
+                  "role": "numeral",
+                  "unit": "rupiah"
+                },
+                {
+                  "role": "numeral",
+                  "unit": "rupiah"
+                }
+              ],
+              "rows": [
+                {
+                  "cells": [
+                    {
+                      "text": "No"
+                    },
+                    {
+                      "text": "Uraian"
+                    },
+                    {
+                      "text": "Volume"
+                    },
+                    {
+                      "text": "Satuan"
+                    },
+                    {
+                      "text": "Harga satuan"
+                    },
+                    {
+                      "text": "Jumlah"
+                    }
+                  ],
+                  "kind": "header"
+                },
+                {
+                  "cells": [
+                    {
+                      "text": "1"
+                    },
+                    {
+                      "text": "Segel mekanis"
+                    },
+                    {
+                      "text": "2"
+                    },
+                    {
+                      "text": "set"
+                    },
+                    {
+                      "text": "1.850.000"
+                    },
+                    {
+                      "text": "3.700.000"
+                    }
+                  ]
+                },
+                {
+                  "cells": [
+                    {
+                      "text": "2"
+                    },
+                    {
+                      "text": "Bantalan"
+                    },
+                    {
+                      "text": "4"
+                    },
+                    {
+                      "text": "buah"
+                    },
+                    {
+                      "text": "420.000"
+                    },
+                    {
+                      "text": "1.680.000"
+                    }
+                  ]
+                },
+                {
+                  "kind": "total",
+                  "cells": [
+                    {
+                      "text": "Jumlah",
+                      "gridSpan": 2
+                    },
+                    {
+                      "text": ""
+                    },
+                    {
+                      "text": ""
+                    },
+                    {
+                      "text": ""
+                    },
+                    {
+                      "text": "5.380.000"
+                    }
+                  ]
+                }
+              ],
+              "caption": {
+                "inline": {
+                  "text": "Daftar kuantitas dan harga perbaikan pompa."
+                }
+              },
+              "source": {
+                "inline": {
+                  "text": "Data ilustratif korpus paritas S63 (sintetis, bukan data klien)."
+                }
+              },
+              "preset": "boq"
+            },
+            {
+              "type": "financialTable",
+              "columns": [
+                {
+                  "role": "id"
+                },
+                {
+                  "role": "text"
+                },
+                {
+                  "role": "numeral"
+                },
+                {
+                  "role": "numeral",
+                  "unit": "rupiah"
+                }
+              ],
+              "rows": [
+                {
+                  "cells": [
+                    {
+                      "text": "Kode"
+                    },
+                    {
+                      "text": "Komponen"
+                    },
+                    {
+                      "text": "Koefisien"
+                    },
+                    {
+                      "text": "Harga"
+                    }
+                  ],
+                  "kind": "header"
+                },
+                {
+                  "cells": [
+                    {
+                      "text": "T-01"
+                    },
+                    {
+                      "text": "Teknisi"
+                    },
+                    {
+                      "text": "0,5"
+                    },
+                    {
+                      "text": "175.000"
+                    }
+                  ]
+                },
+                {
+                  "cells": [
+                    {
+                      "text": "B-01"
+                    },
+                    {
+                      "text": "Segel mekanis"
+                    },
+                    {
+                      "text": "1"
+                    },
+                    {
+                      "text": "1.850.000"
+                    }
+                  ]
+                },
+                {
+                  "kind": "total",
+                  "cells": [
+                    {
+                      "text": "Harga satuan",
+                      "gridSpan": 2
+                    },
+                    {
+                      "text": ""
+                    },
+                    {
+                      "text": "2.025.000"
+                    }
+                  ]
+                }
+              ],
+              "caption": {
+                "inline": {
+                  "text": "Analisa harga satuan penggantian segel."
+                }
+              },
+              "source": {
+                "inline": {
+                  "text": "Data ilustratif korpus paritas S63 (sintetis, bukan data klien)."
+                }
+              },
+              "preset": "ahs"
+            },
+            {
+              "type": "financialTable",
+              "columns": [
+                {
+                  "role": "id"
+                },
+                {
+                  "role": "text"
+                },
+                {
+                  "role": "numeral",
+                  "unit": "rupiah"
+                }
+              ],
+              "rows": [
+                {
+                  "cells": [
+                    {
+                      "text": "No"
+                    },
+                    {
+                      "text": "Uraian"
+                    },
+                    {
+                      "text": "Jumlah"
+                    }
+                  ],
+                  "kind": "header"
+                },
+                {
+                  "cells": [
+                    {
+                      "text": "1"
+                    },
+                    {
+                      "text": "Material"
+                    },
+                    {
+                      "text": "5.380.000"
+                    }
+                  ]
+                },
+                {
+                  "cells": [
+                    {
+                      "text": "2"
+                    },
+                    {
+                      "text": "Upah"
+                    },
+                    {
+                      "text": "700.000"
+                    }
+                  ]
+                },
+                {
+                  "kind": "total",
+                  "cells": [
+                    {
+                      "text": "Total",
+                      "gridSpan": 2
+                    },
+                    {
+                      "text": "6.080.000"
+                    }
+                  ]
+                }
+              ],
+              "caption": {
+                "inline": {
+                  "text": "Rekapitulasi biaya perbaikan."
+                }
+              },
+              "source": {
+                "inline": {
+                  "text": "Data ilustratif korpus paritas S63 (sintetis, bukan data klien)."
+                }
+              },
+              "preset": "recap"
+            },
+            {
+              "type": "paragraph",
+              "role": "closingAction",
+              "text": "Mohon tim pengadaan memeriksa rekapitulasi ini sebelum 30 Oktober 2026."
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "appendices": [
+    {
+      "key": "A",
+      "title": {
+        "text": "Tabel lampiran"
+      },
+      "sections": [
+        {
+          "title": {
+            "text": "Data mentah"
+          },
+          "blocks": [
+            {
+              "type": "table",
+              "columns": [
+                {
+                  "role": "text"
+                },
+                {
+                  "role": "numeral",
+                  "unit": "mm/s"
+                },
+                {
+                  "role": "numeral",
+                  "unit": "mm/s"
+                },
+                {
+                  "role": "numeral",
+                  "unit": "mm/s"
+                }
+              ],
+              "rows": [
+                {
+                  "cells": [
+                    {
+                      "text": "Jam"
+                    },
+                    {
+                      "text": "P-1"
+                    },
+                    {
+                      "text": "P-2"
+                    },
+                    {
+                      "text": "P-3"
+                    }
+                  ],
+                  "kind": "header"
+                },
+                {
+                  "cells": [
+                    {
+                      "text": "08:00"
+                    },
+                    {
+                      "text": "2,2"
+                    },
+                    {
+                      "text": "6,9"
+                    },
+                    {
+                      "text": "2,9"
+                    }
+                  ]
+                },
+                {
+                  "cells": [
+                    {
+                      "text": "12:00"
+                    },
+                    {
+                      "text": "2,4"
+                    },
+                    {
+                      "text": "7,2"
+                    },
+                    {
+                      "text": "3,1"
+                    }
+                  ]
+                },
+                {
+                  "cells": [
+                    {
+                      "text": "16:00"
+                    },
+                    {
+                      "text": "2,3"
+                    },
+                    {
+                      "text": "7,1"
+                    },
+                    {
+                      "text": "3,0"
+                    }
+                  ]
+                }
+              ],
+              "caption": {
+                "inline": {
+                  "text": "Data mentah getaran per jam."
+                }
+              },
+              "source": {
+                "inline": {
+                  "text": "Data ilustratif korpus paritas S63 (sintetis, bukan data klien)."
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

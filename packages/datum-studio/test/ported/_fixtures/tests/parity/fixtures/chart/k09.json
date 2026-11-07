@@ -1,0 +1,60 @@
+{
+  "$schema": "studio.chart/v1",
+  "kind": "K-09",
+  "title": "Proyek daya menyerap porsi anggaran terbesar.",
+  "source": "Data ilustratif korpus paritas S63 (sintetis, bukan data klien).",
+  "widthMm": 166,
+  "data": {
+    "shape": "categorical",
+    "points": [
+      {
+        "label": "Kamera",
+        "value": 185,
+        "sub": "Proyek pemantauan"
+      },
+      {
+        "label": "Perekam",
+        "value": 118.5,
+        "sub": "Proyek pemantauan"
+      },
+      {
+        "label": "Instalasi",
+        "value": 86,
+        "sub": "Proyek pemantauan"
+      },
+      {
+        "label": "Kabinet",
+        "value": 72.2,
+        "sub": "Proyek serat"
+      },
+      {
+        "label": "Penarikan kabel",
+        "value": 94,
+        "sub": "Proyek serat"
+      },
+      {
+        "label": "Terminasi",
+        "value": 30.5,
+        "sub": "Proyek serat"
+      },
+      {
+        "label": "UPS 10 kVA",
+        "value": 142,
+        "sub": "Proyek daya"
+      },
+      {
+        "label": "Panel",
+        "value": 50.8,
+        "sub": "Proyek daya"
+      },
+      {
+        "label": "Genset",
+        "value": 205,
+        "sub": "Proyek daya"
+      }
+    ]
+  },
+  "heightMm": 70,
+  "unit": "juta rupiah",
+  "dec": 1
+}

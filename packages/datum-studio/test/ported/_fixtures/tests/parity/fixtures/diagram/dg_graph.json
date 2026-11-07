@@ -1,0 +1,93 @@
+{
+  "$schema": "studio.diagram/v1",
+  "family": "graph",
+  "id": "9.4",
+  "title": "Ketergantungan antarlayanan ditata lewat kolom dan baris.",
+  "classification": "BIASA",
+  "width_mm": 166,
+  "apparatus": "figure",
+  "labels_verified": true,
+  "sources": [
+    "Contoh ilustratif korpus paritas S63, graf layanan"
+  ],
+  "nodes": [
+    {
+      "id": "gw",
+      "label": "Gerbang API",
+      "shape": "hexagon",
+      "class": {
+        "col": 0,
+        "row": 0
+      }
+    },
+    {
+      "id": "auth",
+      "label": "Otentikasi",
+      "shape": "box",
+      "class": {
+        "col": 1,
+        "row": 0
+      }
+    },
+    {
+      "id": "svc",
+      "label": "Layanan data",
+      "shape": "box",
+      "class": {
+        "col": 1,
+        "row": 1
+      }
+    },
+    {
+      "id": "db",
+      "label": "Basis data",
+      "shape": "cylinder",
+      "class": {
+        "col": 2,
+        "row": 1
+      }
+    },
+    {
+      "id": "log",
+      "label": "Log audit",
+      "shape": "cylinder",
+      "mark": "DITURUNKAN",
+      "class": {
+        "col": 2,
+        "row": 0
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": "gw",
+      "to": "auth",
+      "kind": "control",
+      "label": "validasi token"
+    },
+    {
+      "from": "gw",
+      "to": "svc",
+      "kind": "data",
+      "label": "permintaan"
+    },
+    {
+      "from": "svc",
+      "to": "db",
+      "kind": "data",
+      "label": "kueri"
+    },
+    {
+      "from": "auth",
+      "to": "log",
+      "kind": "verify",
+      "label": "jejak masuk"
+    }
+  ],
+  "legend": [
+    "solid data",
+    "dashed validasi",
+    "dash-dot jejak",
+    "DITURUNKAN"
+  ]
+}

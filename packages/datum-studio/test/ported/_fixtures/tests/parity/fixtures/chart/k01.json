@@ -1,0 +1,48 @@
+{
+  "$schema": "studio.chart/v1",
+  "kind": "K-01",
+  "title": "Pos perangkat mendominasi biaya pada setiap proyek.",
+  "source": "Data ilustratif korpus paritas S63 (sintetis, bukan data klien).",
+  "widthMm": 128,
+  "data": {
+    "shape": "series",
+    "categories": [
+      "Proyek 1",
+      "Proyek 2",
+      "Proyek 3",
+      "Proyek 4"
+    ],
+    "series": [
+      {
+        "name": "Perangkat",
+        "values": [
+          320,
+          210,
+          180,
+          95
+        ]
+      },
+      {
+        "name": "Instalasi",
+        "values": [
+          120,
+          90,
+          70,
+          40
+        ]
+      },
+      {
+        "name": "Lain-lain",
+        "values": [
+          40,
+          35,
+          30,
+          20
+        ]
+      }
+    ]
+  },
+  "heightMm": 50,
+  "unit": "juta rupiah",
+  "dec": 0
+}

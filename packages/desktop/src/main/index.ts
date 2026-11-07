@@ -51,12 +51,18 @@ import { cleanupStoreFiles } from "./store-cleanup"
 import { startBackgroundCli } from "./background-cli"
 import { nativeT, setNativeTranslations } from "./native-translations"
 import { appServerFilePath, appStateHome, removeAppServerFile, writeAppServerFile } from "./app-server-file"
-import { cliLauncherPath, createCliInstaller } from "./cli-install"
+import { cliLauncherPath, createCliInstaller, createDatumStudioInstaller, datumStudioLauncherPath } from "./cli-install"
 import { createExecFileRunner, createPatchFlowGuard, patchApplierPath, runPatchStatus } from "./patch-common"
 import { createPatchUpdateFlow } from "./patch-update-flow"
 import { createUndoLastUpdate } from "./patch-undo"
 import { createHandoffLauncher } from "./swarm-patch-handoff"
 import { createPatchResultReader, HANDOFF_RESULT_FILE_NAME } from "./swarm-patch-result"
+import { createDatumStudio } from "./datum-studio-host/start"
+import { startRenderBridge } from "./datum-render"
+import { createRenderEnvGate } from "./sidecar-env"
+
+// Row 33: longest the sidecar spawn waits for the render bridge (normally a socket listen, milliseconds).
+const SIDECAR_RENDER_ENV_WAIT_MS = 5_000
 
 const APP_NAMES: Record<string, string> = {
   dev: "Swarm Dev",
@@ -277,6 +283,21 @@ const main = Effect.gen(function* () {
   app.setAsDefaultProtocolClient("swarm")
   registerRendererProtocol()
   setDockIcon()
+  // DATUM Studio (row 111): render bridge + datum-studio-host utility process; started in the background, and the
+  // first quit waits for its stop (descriptor removed, store lock released; bounded by the host stop timeout).
+  // Row 33: the same bridge's DATUM_RENDER_* also go to the sidecar (createSidecarEnv), for datum-python in its shell.
+  const sidecarRenderEnv = createRenderEnvGate()
+  const datumStudio = createDatumStudio({
+    isPackaged: app.isPackaged,
+    resourcesPath: process.resourcesPath,
+    appPath: app.getAppPath(),
+    stateHome,
+    env: process.env,
+    log: (level, source, message, context) => writeLog(source, message, context, level),
+    startBridge: (options) => sidecarRenderEnv.track(startRenderBridge(options)),
+  })
+  void datumStudio.start()
+  app.on("before-quit", (event) => datumStudio.holdQuit(event, () => app.quit()))
   const updater = setupAutoUpdater(stopSidecars)
   // Update from File… / Undo Last Update (rows 56-59). One handoff launcher (row 57) and one M8 guard for both flows;
   // each flow is created once and run per click. The launcher calls `quit` itself once the wrapper has spawned (H4);
@@ -330,6 +351,17 @@ const main = Effect.gen(function* () {
         binDir: join(homedir(), ".local", "bin"),
         pathEnv: () => shellEnv?.PATH ?? process.env.PATH,
       })().catch((error) => logger.error("install command line tool failed", error)),
+    // Install DATUM Studio for Claude (rows 34/34b): same consent flow; the done dialog shows the `claude mcp add` line.
+    installDatumStudio: () =>
+      void createDatumStudioInstaller({
+        window: () => getLastFocusedWindow() ?? null,
+        showMessageBox: (win, options) => (win ? dialog.showMessageBox(win, options) : dialog.showMessageBox(options)),
+        t: nativeT,
+        launcher: datumStudioLauncherPath(process.resourcesPath),
+        stateHome,
+        binDir: join(homedir(), ".local", "bin"),
+        pathEnv: () => shellEnv?.PATH ?? process.env.PATH,
+      })().catch((error) => logger.error("install DATUM Studio for Claude failed", error)),
     relaunch,
     updateFromFile: () => void updateFromFile().catch((error) => logger.error("update from file failed", error)),
     undoLastUpdate: () => void undoLastUpdate().catch((error) => logger.error("undo last update failed", error)),
@@ -429,9 +461,12 @@ const main = Effect.gen(function* () {
     const password = randomUUID()
 
     logger.log("spawning sidecar", { url })
+    const renderEnv = yield* Effect.promise(() => sidecarRenderEnv.wait(SIDECAR_RENDER_ENV_WAIT_MS))
+    if (!renderEnv) logger.warn("sidecar starts without the DATUM render bridge")
     const { listener, health } = yield* Effect.promise(() =>
       spawnLocalServer(hostname, port, password, {
         userDataPath: app.getPath("userData"),
+        renderEnv,
         onStdout: (message) => writeLog("server", "stdout", { message }),
         onStderr: (message) => writeLog("server", "stderr", { message }, "warn"),
         onExit: (code) => writeLog("utility", "sidecar exited", { code }, "warn"),

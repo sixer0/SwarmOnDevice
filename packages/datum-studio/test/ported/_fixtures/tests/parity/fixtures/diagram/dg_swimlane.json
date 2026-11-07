@@ -1,0 +1,85 @@
+{
+  "$schema": "studio.diagram/v1",
+  "family": "swimlane",
+  "id": "6.3",
+  "title": "Tiga peran berbagi alur izin kerja ruang server.",
+  "classification": "BIASA",
+  "width_mm": 166,
+  "apparatus": "page",
+  "labels_verified": true,
+  "sources": [
+    "Contoh ilustratif korpus paritas S63, izin kerja"
+  ],
+  "nodes": [
+    {
+      "id": "aju",
+      "label": "Ajukan izin",
+      "shape": "box",
+      "class": {
+        "lane": "Pemohon"
+      }
+    },
+    {
+      "id": "periksa",
+      "label": "Periksa jadwal",
+      "shape": "box",
+      "class": {
+        "lane": "Pengelola"
+      }
+    },
+    {
+      "id": "setuju",
+      "label": "Setujui izin",
+      "shape": "box",
+      "class": {
+        "lane": "Pengelola"
+      }
+    },
+    {
+      "id": "kerja",
+      "label": "Kerjakan tugas",
+      "shape": "box",
+      "class": {
+        "lane": "Teknisi"
+      }
+    },
+    {
+      "id": "lapor",
+      "label": "Lapor selesai",
+      "shape": "box",
+      "class": {
+        "lane": "Teknisi"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": "aju",
+      "to": "periksa",
+      "kind": "data",
+      "label": "formulir izin"
+    },
+    {
+      "from": "periksa",
+      "to": "setuju",
+      "kind": "data",
+      "label": "slot kosong"
+    },
+    {
+      "from": "setuju",
+      "to": "kerja",
+      "kind": "control",
+      "label": "perintah kerja"
+    },
+    {
+      "from": "kerja",
+      "to": "lapor",
+      "kind": "data",
+      "label": "catatan"
+    }
+  ],
+  "legend": [
+    "solid data",
+    "dashed perintah"
+  ]
+}

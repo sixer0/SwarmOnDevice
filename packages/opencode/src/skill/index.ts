@@ -1,6 +1,7 @@
 import { ProjectTrust } from "@opencode-ai/core/project/trust"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import path from "path"
+import { readFile } from "node:fs/promises"
 import { Effect, Layer, Context, Schema } from "effect"
 import { NamedError } from "@opencode-ai/core/util/error"
 import type { Agent } from "@/agent/agent"
@@ -17,6 +18,7 @@ import { RuntimeFlags } from "@/effect/runtime-flags"
 import { Glob } from "@opencode-ai/core/util/glob"
 import { Discovery } from "./discovery"
 import { LibraryRoot } from "./library-root"
+import { DatumRoot } from "./datum-root"
 import { isRecord } from "@/util/record"
 import { escapeHtml } from "@/util/html"
 
@@ -75,6 +77,24 @@ const KNOWLEDGE_LIBRARY_NO_APP =
 const KNOWLEDGE_LIBRARY_FAILED =
   "Knowledge Library could not be opened in this app because its copy is missing or failed a check. Tell the user and continue without it. Do not look for a copy on disk."
 
+// Built-in entry for DATUM, the GSP house style the app ships (datum-root.ts finds it). The name is reserved like the
+// library's, so no disk copy can shadow the bundled one. It does not depend on the Knowledge Library switch. The bundled
+// SKILL.md carries the full Swarm note; this opening note only gives what SKILL.md cannot know: the absolute root, the
+// interpreter and the command form. The tool sends built-in text without a base directory, so the root has to be here.
+export const DATUM_SKILL_NAME = "datum-house-style"
+export const DATUM_SKILL_DESCRIPTION =
+  "DATUM, the GSP house style (Rev A): the form authority for every GSP document and drawing. Grid, type, colour, page furniture, tables, charts and drawings, classification (RAHASIA/TERBATAS), numbers, naming, workbooks, briefings and the 38-check lint. Use it for any GSP document or drawing: house style, template GSP, format laporan, rapikan formatnya, tipografi, klasifikasi dokumen, penamaan berkas, nomor dokumen, RAB, workbook, paparan, cek lint, diagram arsitektur, diagram alur, flowchart, skema, topologi jaringan, swimlane, Mermaid."
+export const DATUM_SKILL_MAX_BYTES = 65536
+export const DATUM_SKILL_NOTE = `Swarm note for this built-in copy of DATUM (read before SKILL.md below):
+- Root: {{DATUM_ROOT}}. Every relative path in SKILL.md (scripts/, references/, assets/, tokens.json) is under this root. It is read-only: never write inside it.
+- Python: {{DATUM_PYTHON}}. This is the bundled Python that SKILL.md refers to. Never run a DATUM script with another interpreter.
+- Commands: run a script as \`{{DATUM_PYTHON}} {{DATUM_ROOT}}/scripts/<name>.py ...\`. Workbooks: scripts/datum_xlsx.py. Briefings: scripts/datum_pptx.py. Release check: scripts/datum_lint.py. A build script may import datumbind, datumcheck and embed_fonts directly. DOCX, HTML, SVG and PDF go through the datum-studio tools (SKILL.md section 1).
+- DATUM runs only in the Swarm desktop app, and rendering needs the app open.`
+const DATUM_NO_APP =
+  "DATUM is available only in sessions run by the Swarm desktop app. Tell the user and continue without it. Do not look for a copy on disk."
+const DATUM_FAILED =
+  "DATUM's bundled copy is missing or failed a check. Tell the user and continue without it. Do not look for a copy on disk."
+
 export const Info = Schema.Struct({
   name: Schema.String,
   description: Schema.optional(Schema.String),
@@ -127,6 +147,8 @@ type State = {
   dirs: Set<string>
   /** The library is switched on and sound, but its root cannot be written into the entry. */
   libraryRejected?: boolean
+  /** DATUM's copy is sound, but its SKILL.md could not be read or failed a guard. */
+  datumRejected?: boolean
 }
 
 type DiscoveryState = {
@@ -171,7 +193,7 @@ const add = Effect.fnUntraced(function* (
   if (!md) return
 
   if (!isSkillFrontmatter(md.data)) return
-  if (md.data.name === KNOWLEDGE_LIBRARY_SKILL_NAME) {
+  if (md.data.name === KNOWLEDGE_LIBRARY_SKILL_NAME || md.data.name === DATUM_SKILL_NAME) {
     yield* Effect.logWarning("reserved skill name ignored", { name: md.data.name, skill: match })
     return
   }
@@ -205,6 +227,60 @@ export function knowledgeLibraryEntry(root: string) {
   if (ConfigMarkdown.files(content).length > 0) return undefined
   return content
 }
+
+/** SKILL.md without its frontmatter, or nothing when the file does not open with a closed frontmatter block. */
+function skillBody(text: string) {
+  const match = /^---\r?\n[\s\S]*?\r?\n---\r?\n/.exec(text)
+  return match ? text.slice(match[0].length).replace(/^(?:\r?\n)+/, "") : undefined
+}
+
+/** DATUM's entry text: the Swarm note with the paths filled in, then the SKILL.md body. Nothing when a guard fails. */
+export function datumSkillEntry(input: { skillRoot: string; python: string }, skillText: string) {
+  const body = skillBody(skillText)
+  if (body === undefined) return undefined
+  const note = DATUM_SKILL_NOTE.replaceAll("{{DATUM_ROOT}}", () => input.skillRoot).replaceAll(
+    "{{DATUM_PYTHON}}",
+    () => input.python,
+  )
+  const content = `${note}\n\n${body}`
+  if (Buffer.byteLength(content) > DATUM_SKILL_MAX_BYTES) return undefined
+  if (content.includes("!`") || /\$(?:\d|ARGUMENTS)/.test(content)) return undefined
+  if (ConfigMarkdown.files(content).length > 0) return undefined
+  if (content.includes("{{DATUM_")) return undefined
+  return content
+}
+
+/** What to say about DATUM when it is not registered. */
+const datumAbsence = Effect.fnUntraced(function* (state: State) {
+  const datum = DatumRoot.current()
+  if (datum.kind === "no-app") return DATUM_NO_APP
+  if (datum.kind === "failed") {
+    yield* Effect.logWarning("datum skill unavailable", { code: datum.code })
+    return DATUM_FAILED
+  }
+  return state.datumRejected ? DATUM_FAILED : undefined
+})
+
+/** Registers DATUM when its copy is sound. Runs before the library's early returns, so it never depends on them. */
+const registerDatum = Effect.fnUntraced(function* (state: State) {
+  const datum = DatumRoot.current()
+  if (datum.kind !== "available") return
+  const text = yield* Effect.tryPromise(() => readFile(path.join(datum.skillRoot, "SKILL.md"), "utf8")).pipe(
+    Effect.catch(() => Effect.succeed(undefined)),
+  )
+  const content = text === undefined ? undefined : datumSkillEntry(datum, text)
+  if (!content) {
+    yield* Effect.logWarning("datum skill text cannot be written into its entry")
+    state.datumRejected = true
+    return
+  }
+  state.skills[DATUM_SKILL_NAME] = {
+    name: DATUM_SKILL_NAME,
+    description: DATUM_SKILL_DESCRIPTION,
+    location: "<built-in>",
+    content,
+  }
+})
 
 /** What to say about a library that is not there. Nothing when it is simply switched off: that reads as any unknown name. */
 const libraryAbsence = Effect.fnUntraced(function* (state: State) {
@@ -361,6 +437,7 @@ const layer = Layer.effect(
           content: CUSTOMIZE_SWARM_SKILL_BODY,
         }
         yield* loadSkills(s, yield* InstanceState.get(discovered), events, ProjectTrust.isTrusted(ctx.directory))
+        yield* registerDatum(s)
         const library = LibraryRoot.current()
         if (library.kind !== "available") return s
         // getGlobal dies on a broken config. A user who may have switched the library off must not get it back that way.
@@ -399,7 +476,12 @@ const layer = Layer.effect(
       return yield* new NotFoundError({
         name,
         available: Object.keys(s.skills).toSorted(),
-        reason: name === KNOWLEDGE_LIBRARY_SKILL_NAME ? yield* libraryAbsence(s) : undefined,
+        reason:
+          name === KNOWLEDGE_LIBRARY_SKILL_NAME
+            ? yield* libraryAbsence(s)
+            : name === DATUM_SKILL_NAME
+              ? yield* datumAbsence(s)
+              : undefined,
       })
     })
 

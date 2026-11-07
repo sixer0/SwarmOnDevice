@@ -23,6 +23,7 @@ import { useSettings } from "@/context/settings"
 import { getSessionHandoff } from "@/pages/session/handoff"
 import { useSessionLayout } from "@/pages/session/session-layout"
 import { createSessionTabs } from "@/pages/session/helpers"
+import { FilePreviewGate } from "@/pages/session/file-preview"
 
 type SessionFileViewProps = {
   tab: string
@@ -491,18 +492,22 @@ function SessionFileViewV1(props: { tab: string }) {
     </div>
   )
 
+  // Row 112 (studio spec §8.2, U12): PDF/HTML/DOCX/XLSX/PPTX get their preview inside this same tab; every other
+  // file, and these until they load, keep the view below unchanged.
   const content = () => (
-    <div class="mt-3 relative h-full min-h-0">
-      <ScrollView class="h-full" viewportRef={scrollSync.setViewport} onScroll={scrollSync.handleScroll as any}>
-        <Switch>
-          <Match when={state()?.loaded}>{renderFile(contents())}</Match>
-          <Match when={state()?.loading}>
-            <div class="px-6 py-4 text-text-weak">{language.t("common.loading")}...</div>
-          </Match>
-          <Match when={state()?.error}>{(err) => <div class="px-6 py-4 text-text-weak">{err()}</div>}</Match>
-        </Switch>
-      </ScrollView>
-    </div>
+    <FilePreviewGate path={path()} state={state()}>
+      <div class="mt-3 relative h-full min-h-0">
+        <ScrollView class="h-full" viewportRef={scrollSync.setViewport} onScroll={scrollSync.handleScroll as any}>
+          <Switch>
+            <Match when={state()?.loaded}>{renderFile(contents())}</Match>
+            <Match when={state()?.loading}>
+              <div class="px-6 py-4 text-text-weak">{language.t("common.loading")}...</div>
+            </Match>
+            <Match when={state()?.error}>{(err) => <div class="px-6 py-4 text-text-weak">{err()}</div>}</Match>
+          </Switch>
+        </ScrollView>
+      </div>
+    </FilePreviewGate>
   )
 
   return content()
@@ -782,18 +787,22 @@ function SessionFileViewV2(props: { tab: string }) {
     </div>
   )
 
+  // Row 112 (studio spec §8.2, U12): PDF/HTML/DOCX/XLSX/PPTX get their preview inside this same tab; every other
+  // file, and these until they load, keep the view below unchanged.
   const content = () => (
-    <div class="mt-3 relative h-full min-h-0">
-      <ScrollView class="h-full" viewportRef={scrollSync.setViewport} onScroll={scrollSync.handleScroll as any}>
-        <Switch>
-          <Match when={state()?.loaded}>{renderFile(contents())}</Match>
-          <Match when={state()?.loading}>
-            <div class="px-6 py-4 text-text-weak">{language.t("common.loading")}...</div>
-          </Match>
-          <Match when={state()?.error}>{(err) => <div class="px-6 py-4 text-text-weak">{err()}</div>}</Match>
-        </Switch>
-      </ScrollView>
-    </div>
+    <FilePreviewGate path={path()} state={state()}>
+      <div class="mt-3 relative h-full min-h-0">
+        <ScrollView class="h-full" viewportRef={scrollSync.setViewport} onScroll={scrollSync.handleScroll as any}>
+          <Switch>
+            <Match when={state()?.loaded}>{renderFile(contents())}</Match>
+            <Match when={state()?.loading}>
+              <div class="px-6 py-4 text-text-weak">{language.t("common.loading")}...</div>
+            </Match>
+            <Match when={state()?.error}>{(err) => <div class="px-6 py-4 text-text-weak">{err()}</div>}</Match>
+          </Switch>
+        </ScrollView>
+      </div>
+    </FilePreviewGate>
   )
 
   return content()

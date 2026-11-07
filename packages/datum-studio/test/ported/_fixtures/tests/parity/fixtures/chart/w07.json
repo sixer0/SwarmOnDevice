@@ -1,0 +1,51 @@
+{
+  "$schema": "studio.chart/v1",
+  "kind": "W-07",
+  "title": "Serah terima jatuh pada minggu ke-14 setelah uji terima.",
+  "source": "Data ilustratif korpus paritas S63 (sintetis, bukan data klien).",
+  "widthMm": 166,
+  "data": {
+    "shape": "intervals",
+    "items": [
+      {
+        "label": "Survei lokasi",
+        "start": 0,
+        "end": 2
+      },
+      {
+        "label": "Desain rinci",
+        "start": 1,
+        "end": 4
+      },
+      {
+        "label": "Pengadaan",
+        "start": 2,
+        "end": 7
+      },
+      {
+        "label": "Instalasi kabel",
+        "start": 6,
+        "end": 10
+      },
+      {
+        "label": "Pemasangan perangkat",
+        "start": 9,
+        "end": 12
+      },
+      {
+        "label": "Uji terima",
+        "start": 12,
+        "end": 14
+      },
+      {
+        "label": "Serah terima",
+        "start": 14,
+        "end": 14,
+        "milestone": true
+      }
+    ]
+  },
+  "heightMm": 62,
+  "unit": "minggu",
+  "dec": 0
+}

@@ -114,6 +114,16 @@ export const dict = {
     "Swarm, perintah swarm, atau penginstal alat masih berjalan, jadi tidak ada yang diubah. Tutup semuanya, lalu coba lagi.",
   "desktop.patch.result.recover.detail":
     "Update berhenti di tengah jalan. Jalankan perintah ini di Terminal untuk menuntaskannya:\n{{command}}",
+  "desktop.menu.installDatumStudio": "Instal DATUM Studio untuk Claude...",
+  "desktop.datumStudio.confirm.message": "Instal perintah datum-studio untuk Claude?",
+  "desktop.datumStudio.confirm.detail":
+    "Swarm akan membuat {{path}}, tautan ke DATUM Studio di dalam app ini. Sesudah itu Claude Code dapat memakai DATUM Studio sebagai server MCP selama Swarm terbuka. Pengaturan Claude tidak diubah.",
+  "desktop.datumStudio.done.message": "Perintah datum-studio sudah terpasang",
+  "desktop.datumStudio.done.detail":
+    "{{path}}\n\nUntuk menambahkannya ke Claude Code, jalankan baris ini di Terminal:\n{{claude}}",
+  "desktop.datumStudio.done.pathHint":
+    "{{path}}\n\n{{dir}} belum ada di PATH. Tambahkan baris ini ke profil shell Anda:\nexport PATH=\"{{dir}}:$PATH\"\n\nUntuk menambahkannya ke Claude Code, jalankan baris ini di Terminal:\n{{claude}}",
+  "desktop.datumStudio.failed.message": "DATUM Studio tidak dapat dipasang untuk Claude",
 
   "desktop.server.local": "Server lokal",
 
@@ -746,6 +756,12 @@ export const dict = {
 
   "toast.file.loadFailed.title": "Gagal memuat berkas",
   "toast.file.listFailed.title": "Gagal mendaftar berkas",
+
+  "file.preview.showSource": "Tampilkan sumber",
+  "file.preview.showPreview": "Tampilkan pratinjau",
+  "file.preview.companion": "Pratinjau dari {{file}}",
+  "file.preview.docxHint": "Dokumen ini belum punya pratinjau. Render pdf atau html dengan studio_render, lalu pratinjau tampil di sini.",
+  "file.preview.none": "Jenis berkas ini tidak punya pratinjau. Buka dengan aplikasi bawaannya.",
 
   "toast.context.noLineSelection.title": "Tidak ada pilihan baris",
   "toast.context.noLineSelection.description": "Pilih rentang baris di tab berkas terlebih dahulu.",

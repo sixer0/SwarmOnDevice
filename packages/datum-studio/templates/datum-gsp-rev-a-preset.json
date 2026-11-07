@@ -1,0 +1,374 @@
+{
+  "$schema": "studio.template/v2",
+  "preset": {
+    "slug": "datum-gsp-preset"
+  },
+  "essentials": {},
+  "advanced": {
+    "type.scale.caption.size": 7.6,
+    "type.scale.tableHeader.size": 6.8,
+    "type.scale.tableHeader.trackEm": 0.09,
+    "type.scale.tableNumerals.size": 7.8
+  },
+  "roleFormats": {
+    "caption": {
+      "para": {
+        "spacingBeforeTw": 120,
+        "spacingAfterTw": 48,
+        "lineTw": 220,
+        "lineRule": "exact",
+        "keepNext": true
+      },
+      "run": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 15,
+        "color": "2B3640",
+        "b": false,
+        "i": false
+      },
+      "labelRun": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 15,
+        "color": "101418",
+        "b": true,
+        "i": false,
+        "caps": true,
+        "spacingTw": 16
+      }
+    },
+    "table.headerLeft": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 0,
+        "lineTw": 180,
+        "lineRule": "exact",
+        "jc": "left"
+      },
+      "run": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 14,
+        "color": "6B7783",
+        "b": true,
+        "i": false,
+        "caps": true,
+        "spacingTw": 12
+      },
+      "cell": {
+        "marginsTw": {
+          "top": 102,
+          "left": 0,
+          "bottom": 102,
+          "right": 141
+        },
+        "borders": {
+          "top": {
+            "val": "single",
+            "sz": 10,
+            "color": "101418",
+            "space": 0
+          },
+          "bottom": {
+            "val": "single",
+            "sz": 6,
+            "color": "6B7783",
+            "space": 0
+          }
+        }
+      }
+    },
+    "table.headerRight": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 0,
+        "lineTw": 180,
+        "lineRule": "exact",
+        "jc": "right"
+      },
+      "run": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 14,
+        "color": "6B7783",
+        "b": true,
+        "i": false,
+        "caps": true,
+        "spacingTw": 12
+      },
+      "cell": {
+        "marginsTw": {
+          "top": 102,
+          "left": 0,
+          "bottom": 102,
+          "right": 141
+        },
+        "borders": {
+          "top": {
+            "val": "single",
+            "sz": 10,
+            "color": "101418",
+            "space": 0
+          },
+          "bottom": {
+            "val": "single",
+            "sz": 6,
+            "color": "6B7783",
+            "space": 0
+          }
+        }
+      }
+    },
+    "controlTable.header": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 0,
+        "lineTw": 180,
+        "lineRule": "exact"
+      },
+      "run": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 14,
+        "color": "7A756E",
+        "b": true,
+        "i": false,
+        "caps": true,
+        "spacingTw": 12
+      },
+      "cell": {
+        "marginsTw": {
+          "top": 85,
+          "left": 0,
+          "bottom": 85,
+          "right": 141
+        },
+        "borders": {
+          "top": {
+            "val": "single",
+            "sz": 10,
+            "color": "14110F",
+            "space": 0
+          },
+          "bottom": {
+            "val": "single",
+            "sz": 6,
+            "color": "7A756E",
+            "space": 0
+          }
+        }
+      }
+    },
+    "table.cellNumeralRight": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 0,
+        "lineTw": 220,
+        "lineRule": "exact",
+        "jc": "right"
+      },
+      "run": {
+        "face": "IBM Plex Mono",
+        "szHalfPt": 16,
+        "color": "101418",
+        "b": false,
+        "i": false
+      },
+      "cell": {
+        "marginsTw": {
+          "top": 85,
+          "left": 0,
+          "bottom": 85,
+          "right": 141
+        },
+        "borders": {
+          "bottom": {
+            "val": "single",
+            "sz": 5,
+            "color": "C3CBD1",
+            "space": 0
+          }
+        }
+      }
+    },
+    "table.cellMono": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 0,
+        "lineTw": 210,
+        "lineRule": "exact"
+      },
+      "run": {
+        "face": "IBM Plex Mono",
+        "szHalfPt": 16,
+        "color": "101418",
+        "b": false,
+        "i": false
+      },
+      "cell": {
+        "marginsTw": {
+          "top": 85,
+          "left": 0,
+          "bottom": 85,
+          "right": 141
+        },
+        "borders": {
+          "bottom": {
+            "val": "single",
+            "sz": 5,
+            "color": "C3CBD1",
+            "space": 0
+          }
+        }
+      }
+    }
+  },
+  "skeleton": {
+    "slots": [
+      {
+        "slotKey": "cover",
+        "sectionType": "cover",
+        "label": "Sampul",
+        "position": 1,
+        "required": true,
+        "positionLocked": true,
+        "repeatable": false,
+        "contentMode": "MIXED",
+        "tiers": [
+          "TERBIT",
+          "SERAH"
+        ],
+        "admits": [],
+        "essentials": {}
+      },
+      {
+        "slotKey": "controlSheet",
+        "sectionType": "controlSheet",
+        "label": "Lembar Kendali",
+        "position": 2,
+        "required": true,
+        "positionLocked": false,
+        "repeatable": false,
+        "contentMode": "INPUT",
+        "tiers": [
+          "TERBIT",
+          "SERAH"
+        ],
+        "admits": [],
+        "essentials": {}
+      },
+      {
+        "slotKey": "signature",
+        "sectionType": "signatureBlock",
+        "label": "Tanda Tangan",
+        "position": 3,
+        "required": true,
+        "positionLocked": false,
+        "repeatable": false,
+        "contentMode": "INPUT",
+        "tiers": [
+          "TERBIT",
+          "SERAH"
+        ],
+        "admits": [],
+        "essentials": {}
+      },
+      {
+        "slotKey": "toc",
+        "sectionType": "toc",
+        "label": "Daftar Isi",
+        "position": 4,
+        "required": true,
+        "positionLocked": false,
+        "repeatable": false,
+        "contentMode": "AUTO",
+        "tiers": [
+          "TERBIT",
+          "SERAH"
+        ],
+        "admits": [],
+        "essentials": {}
+      },
+      {
+        "slotKey": "content",
+        "sectionType": "chapter",
+        "label": "Isi",
+        "position": 5,
+        "required": true,
+        "positionLocked": false,
+        "repeatable": true,
+        "minItems": 1,
+        "contentMode": "INPUT",
+        "tiers": [],
+        "admits": [
+          "paragraph",
+          "list",
+          "aside",
+          "monoBlock",
+          "assumptionInline",
+          "table",
+          "specTable",
+          "registerTable",
+          "exampleWrongRight",
+          "ruleTable",
+          "checklist",
+          "glossary",
+          "sourceRegister",
+          "ruleIndex",
+          "referenceScale",
+          "financialTable",
+          "derivation",
+          "chart",
+          "diagram",
+          "image",
+          "symbolSheet"
+        ],
+        "essentials": {}
+      },
+      {
+        "slotKey": "references",
+        "sectionType": "sourceRegister",
+        "label": "Referensi",
+        "position": 6,
+        "required": false,
+        "positionLocked": false,
+        "repeatable": false,
+        "contentMode": "INPUT",
+        "tiers": [],
+        "admits": [],
+        "essentials": {}
+      },
+      {
+        "slotKey": "appendices",
+        "sectionType": "appendix",
+        "label": "Lampiran",
+        "position": 7,
+        "required": false,
+        "positionLocked": true,
+        "repeatable": true,
+        "contentMode": "INPUT",
+        "tiers": [],
+        "admits": [
+          "paragraph",
+          "list",
+          "aside",
+          "monoBlock",
+          "assumptionInline",
+          "table",
+          "specTable",
+          "registerTable",
+          "exampleWrongRight",
+          "ruleTable",
+          "checklist",
+          "glossary",
+          "sourceRegister",
+          "ruleIndex",
+          "referenceScale",
+          "financialTable",
+          "derivation",
+          "chart",
+          "diagram",
+          "image",
+          "symbolSheet"
+        ],
+        "essentials": {}
+      }
+    ]
+  }
+}

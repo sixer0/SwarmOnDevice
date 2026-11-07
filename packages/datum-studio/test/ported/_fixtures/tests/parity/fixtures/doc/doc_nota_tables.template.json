@@ -1,0 +1,12 @@
+{
+  "base": "datum-kanonik",
+  "slug": "parity-doc-nota-tables",
+  "kind": "DOCUMENT",
+  "description": "Profil tampilan fixture paritas doc_nota_tables (SR-41: tampilan dokumen dipindah dari fixture konten-saja ke templat, D-138/D-139/D-248)",
+  "overrides": {
+    "grid.innerMarginMm": 25,
+    "grid.outerMarginMm": 20,
+    "grid.topBottomMarginMm": 20,
+    "grid.marginBottomMm": 20
+  }
+}

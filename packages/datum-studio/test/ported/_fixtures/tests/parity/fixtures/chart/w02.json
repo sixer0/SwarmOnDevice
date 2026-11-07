@@ -1,0 +1,63 @@
+{
+  "$schema": "studio.chart/v1",
+  "kind": "W-02",
+  "title": "Volume pekerjaan bulanan memuncak pada bulan Desember.",
+  "source": "Data ilustratif korpus paritas S63 (sintetis, bukan data klien).",
+  "widthMm": 166,
+  "data": {
+    "shape": "categorical",
+    "points": [
+      {
+        "label": "Jan",
+        "value": 64
+      },
+      {
+        "label": "Feb",
+        "value": 58
+      },
+      {
+        "label": "Mar",
+        "value": 71
+      },
+      {
+        "label": "Apr",
+        "value": 69
+      },
+      {
+        "label": "Mei",
+        "value": 75
+      },
+      {
+        "label": "Jun",
+        "value": 80
+      },
+      {
+        "label": "Jul",
+        "value": 77
+      },
+      {
+        "label": "Agu",
+        "value": 83
+      },
+      {
+        "label": "Sep",
+        "value": 79
+      },
+      {
+        "label": "Okt",
+        "value": 88
+      },
+      {
+        "label": "Nov",
+        "value": 91
+      },
+      {
+        "label": "Des",
+        "value": 102,
+        "accent": true
+      }
+    ]
+  },
+  "unit": "pekerjaan",
+  "dec": 0
+}

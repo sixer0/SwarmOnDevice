@@ -1,0 +1,2785 @@
+{
+  "base": "datum-kanonik",
+  "meta": {
+    "slug": "datum-manual-000",
+    "name": "DATUM Manual 000 (profil turunan terukur BM.docx)",
+    "kind": "DOCUMENT",
+    "owner": "ADMINISTRATOR",
+    "ownerCallerKind": "ADMIN_SESSION",
+    "classKOverrides": [
+      "render.png.dpi",
+      "table.columnWidthSumMm",
+      "table.numeral.align",
+      "table.zebra.minRows"
+    ],
+    "profileOf": "C:\\Users\\TRIAL\\workspace\\Manual DATUM GSP\\Manual_Komprehensif_DATUM_GSP_000-GSP-STD-X-2026_RevA.docx",
+    "measuredFrom": "docs/2026-10-22_doc_artifact_studio/research/07_benchmark_inventory.md + 07_benchmark_data.json (S90)",
+    "row": "S95",
+    "date": "2026-10-23",
+    "decisions": [
+      "D-31 (nama wajah IBM Plex Sans Cond apa adanya)",
+      "D-33 (margin bawah turunan 24 mm = 1361 tw)",
+      "D-43 (R-08 boldFace semibold)",
+      "D-44 (slug datum-manual-000)"
+    ],
+    "notes": [
+      "roleFormats memuat format paragraf/run/sel terukur per klaster utama tiap peran (U01-U70); sub-objek menang utuh atas turunan katalog (engine/tokens/roles.ts).",
+      "Kunci kelas T tidak ditimpa: render.rail.colsTw diturunkan = [7257, 340, 1814], margin bawah diturunkan 24 mm.",
+      "Cap terbit BM memakai U+2014 ('// 20261008 ID T — TERBITAN 1'); device.issueStamp.format tidak ditimpa (sampul explicit, KT-06).",
+      "table.zebra.minRows = 1000 menonaktifkan zebra (BM tanpa zebra; P5-07 tanpa saklar).",
+      "RT-01 (D-119): doc.json konten-saja; seluruh setup/format dari profil ini: render.section.wrapper|interior (setup per jenis unit), header/footer berjalan dari meta, roleFormats per peran, spacer otomatis, run semantik (render.run.strong, render.run.symbolGlyphByRole), sampul/lembar kendali/pembatas mode auto."
+    ],
+    "gaps": [
+      {
+        "id": "S95-C01",
+        "clusters": [
+          "KT-02"
+        ],
+        "what": "Pita segel: sel kanan berbeda dari sel kiri (jc right, tcMar left 0 = TCP-02); peran U32 dan DeviceBlock sealBand hanya satu format paragraf/sel",
+        "measured": {
+          "para": {
+            "spacingBeforeTw": 0,
+            "spacingAfterTw": 0,
+            "lineTw": 180,
+            "lineRule": "exact",
+            "jc": "right"
+          },
+          "cell": {
+            "marginsTw": {
+              "top": 85,
+              "left": 0,
+              "bottom": 85,
+              "right": 141
+            },
+            "shading": {
+              "fill": "6E1420",
+              "val": "clear"
+            }
+          }
+        },
+        "proposal": "RoleFormat `rightCell?: {para, cell}` atau peran terpisah wrapper.sealBandRight",
+        "path": "src/lib/studio/contract/engine.ts (RoleFormat) + enums.ts (ROLE_KEYS)"
+      },
+      {
+        "id": "S95-C02",
+        "clusters": [
+          "KT-03",
+          "KT-04"
+        ],
+        "what": "ControlBlock baris pertama memakai garis atas 14110F sz10 (TCP-03) yang tidak dimiliki baris lain (TCP-04); ControlBlock.rows berupa Inline tanpa medan sel",
+        "measured": {
+          "firstRowCell": {
+            "marginsTw": {
+              "top": 85,
+              "left": 0,
+              "bottom": 85,
+              "right": 170
+            },
+            "borders": {
+              "top": {
+                "val": "single",
+                "sz": 10,
+                "color": "14110F",
+                "space": 0
+              },
+              "bottom": {
+                "val": "single",
+                "sz": 5,
+                "color": "C4BEB4",
+                "space": 0
+              }
+            }
+          }
+        },
+        "proposal": "ControlBlock.firstRowCell?: {borders, marginsTw} atau RoleFormat `firstRowCell`",
+        "path": "src/lib/studio/contract/types/doc.ts (ControlBlock)"
+      },
+      {
+        "id": "S95-C03",
+        "clusters": [
+          "KT-07",
+          "KT-08"
+        ],
+        "what": "SignatureBlock: sel baris peran (TCP-08) dan pemegang (TCP-10) berbeda dari tabel lembar kendali (TCP-06/TCP-07) padahal memakai peran U37/U38 yang sama; SignatureBlock tanpa medan sel",
+        "measured": {
+          "roleCell": {
+            "marginsTw": {
+              "top": 113,
+              "left": 0,
+              "bottom": 0,
+              "right": 226
+            }
+          },
+          "holderCell": {
+            "marginsTw": {
+              "top": 79,
+              "left": 0,
+              "bottom": 0,
+              "right": 226
+            },
+            "borders": {
+              "top": {
+                "val": "single",
+                "sz": 5,
+                "color": "C4BEB4",
+                "space": 0
+              }
+            }
+          },
+          "signCell": {
+            "marginsTw": {
+              "top": 0,
+              "left": 0,
+              "bottom": 0,
+              "right": 226
+            }
+          },
+          "colsTw": [
+            3118,
+            3175,
+            3118
+          ]
+        },
+        "proposal": "peran signature.role/signature.holder atau SignatureBlock.cellFormats",
+        "path": "src/lib/studio/contract/enums.ts (ROLE_KEYS) + types/doc.ts (SignatureBlock)"
+      },
+      {
+        "id": "S95-C04",
+        "clusters": [
+          "KT-20",
+          "KT-29",
+          "KT-39"
+        ],
+        "what": "Rel bukti: warna run label tanda berbeda per tanda (TERUKUR 101418, ASUMSI 9B1C1C, DITURUNKAN B45309); RoleFormat punya glyphRun per tanda tetapi run label tunggal (warna dikosongkan di profil)",
+        "measured": {
+          "TERUKUR": {
+            "face": "IBM Plex Mono",
+            "szHalfPt": 11,
+            "color": "101418",
+            "b": true,
+            "i": false,
+            "caps": true
+          },
+          "ASUMSI": {
+            "face": "IBM Plex Mono",
+            "szHalfPt": 11,
+            "color": "9B1C1C",
+            "b": true,
+            "i": false,
+            "caps": true
+          },
+          "DITURUNKAN": {
+            "face": "IBM Plex Mono",
+            "szHalfPt": 11,
+            "color": "B45309",
+            "b": true,
+            "i": false,
+            "caps": true
+          }
+        },
+        "proposal": "RoleFormat `labelRunByMark?: Partial<Record<ProvenanceMark, RunProps>>` atau renderer mewarnai label dengan marks.<tanda>.colour",
+        "path": "src/lib/studio/contract/engine.ts (RoleFormat)"
+      },
+      {
+        "id": "S95-C05",
+        "clusters": [],
+        "what": "Kepala halaman interior: spasi huruf 0,6 pt (spc 12) run kiri dan run kanan klasifikasi tebal ink900 tidak punya kunci (type.scale.runningHead tanpa trackEm; HeaderFooterSpec tanpa RunProps); doc.json Manual 000 menulis runs eksplisit per bab",
+        "measured": {
+          "left": {
+            "face": "IBM Plex Sans Cond",
+            "szHalfPt": 13,
+            "color": "6B7783",
+            "b": false,
+            "i": false,
+            "caps": true,
+            "spacingTw": 12
+          },
+          "right": {
+            "face": "IBM Plex Sans Cond",
+            "szHalfPt": 13,
+            "color": "101418",
+            "b": true,
+            "i": false,
+            "caps": true,
+            "spacingTw": 12
+          }
+        },
+        "proposal": "parameter type.scale.runningHead.trackEm + runningHead.classification.style, atau HeaderFooterSpec runningHead.leftProps/rightProps",
+        "path": "src/lib/studio/params/color-type.ts (S05) atau contract/types/doc.ts"
+      },
+      {
+        "id": "S95-C06",
+        "clusters": [
+          "KT-10",
+          "KT-11",
+          "KT-12",
+          "KT-13",
+          "KT-14",
+          "KT-15"
+        ],
+        "what": "Daftar isi statis T010: lebar kolom [1474, 7144, 793] tw; TocSpec tanpa colsTw",
+        "measured": {
+          "colsTw": [
+            1474,
+            7144,
+            793
+          ],
+          "widthTw": 9411
+        },
+        "proposal": "TocSpec.colsTw?: Tw[]",
+        "path": "src/lib/studio/contract/types/doc.ts (TocSpec)"
+      },
+      {
+        "id": "S95-C07",
+        "clusters": [
+          "KT-01",
+          "KT-02",
+          "KT-05",
+          "KT-06"
+        ],
+        "what": "Tabel pita segel dan kolofon: dua kolom [4706, 4706] tw, tblW 9412; DeviceBlock dan Colophon tanpa colsTw",
+        "measured": {
+          "colsTw": [
+            4706,
+            4706
+          ],
+          "widthTw": 9412
+        },
+        "proposal": "DeviceBlock.colsTw?/Colophon.colsTw? (atau renderer membagi rentang penuh sama besar)",
+        "path": "src/lib/studio/contract/types/doc.ts"
+      },
+      {
+        "id": "S95-C08",
+        "clusters": [
+          "KT-35",
+          "KT-36"
+        ],
+        "what": "Tabel bersarang turunan N01/N02: kolom [5216, 1814] tw, tblW 7030 (TP-03); tidak ada kunci lebar kolom turunan",
+        "measured": {
+          "colsTw": [
+            5216,
+            1814
+          ],
+          "widthTw": 7030
+        },
+        "proposal": "parameter render.derivation.nestedColsTw (list int)",
+        "path": "src/lib/studio/params/render.ts (S03)"
+      },
+      {
+        "id": "S95-C09",
+        "clusters": [],
+        "what": "G-08 S93: blok register footer (21 seksi interior) tidak dapat diungkapkan registerBlock: kolom [2948, 2381, 2381, 1701] tblW 9412, tcMar sel 1 {top 90, left 0, bottom 79, right 141} sel 2-4 left 141, garis atas single sz8 101418, bawah single sz5 C3CBD1, kanan single sz5 C3CBD1 kecuali sel 4, paragraf sel line 168 exact jc left (sel 4 right), paragraf kosong sesudah tabel pStyle Footer line 20 exact",
+        "measured": {
+          "colsTw": [
+            2948,
+            2381,
+            2381,
+            1701
+          ],
+          "widthTw": 9412,
+          "cellMarginsTw": [
+            {
+              "top": 90,
+              "left": 0,
+              "bottom": 79,
+              "right": 141
+            },
+            {
+              "top": 90,
+              "left": 141,
+              "bottom": 79,
+              "right": 141
+            },
+            {
+              "top": 90,
+              "left": 141,
+              "bottom": 79,
+              "right": 141
+            },
+            {
+              "top": 90,
+              "left": 141,
+              "bottom": 79,
+              "right": 141
+            }
+          ],
+          "borders": {
+            "top": {
+              "val": "single",
+              "sz": 8,
+              "color": "101418",
+              "space": 0
+            },
+            "bottom": {
+              "val": "single",
+              "sz": 5,
+              "color": "C3CBD1",
+              "space": 0
+            },
+            "right": {
+              "val": "single",
+              "sz": 5,
+              "color": "C3CBD1",
+              "space": 0,
+              "exceptLastCell": true
+            }
+          },
+          "cellPara": {
+            "spacingBeforeTw": 0,
+            "spacingAfterTw": 0,
+            "lineTw": 168,
+            "lineRule": "exact",
+            "jc": [
+              "left",
+              "left",
+              "left",
+              "right"
+            ]
+          },
+          "trailingPara": {
+            "pStyle": "Footer",
+            "spacingBeforeTw": 0,
+            "spacingAfterTw": 0,
+            "lineTw": 20,
+            "lineRule": "exact"
+          }
+        },
+        "proposal": "parameter render.section.registerBlockLayout (object) atau HeaderFooterSpec registerBlock.{colsTw, cellFormats, trailingFormat}",
+        "path": "src/lib/studio/params/render.ts + contract/types/doc.ts (HeaderFooterSpec)"
+      },
+      {
+        "id": "S95-C10",
+        "clusters": [],
+        "what": "G-07 S93: gaya Header/Footer styles.xml (basedOn Normal, tabs 4680 center + 9360 right, spacing after 0 line 240 auto) yang dirujuk pStyle 58 paragraf header/footer; tab gaya ikut menentukan letak klasifikasi kepala halaman",
+        "measured": {
+          "Header": {
+            "basedOn": "Normal",
+            "tabs": [
+              {
+                "posTw": 4680,
+                "val": "center"
+              },
+              {
+                "posTw": 9360,
+                "val": "right"
+              }
+            ],
+            "spacingAfterTw": 0,
+            "lineTw": 240,
+            "lineRule": "auto"
+          },
+          "Footer": {
+            "basedOn": "Normal",
+            "tabs": [
+              {
+                "posTw": 4680,
+                "val": "center"
+              },
+              {
+                "posTw": 9360,
+                "val": "right"
+              }
+            ],
+            "spacingAfterTw": 0,
+            "lineTw": 240,
+            "lineRule": "auto"
+          }
+        },
+        "proposal": "parameter render.docx.headerFooterStyles (object)",
+        "path": "src/lib/studio/params/render.ts (S03)"
+      },
+      {
+        "id": "S95-C11",
+        "clusters": [],
+        "what": "settings.xml di luar R-01..R-05: compatSetting overrideTableStyleFontSizeAndJustification=1, enableOpenTypeFeatures=1, doNotFlipMirrorIndents=1; useFELayout; characterSpacingControl doNotCompress; zoom bestFit; themeFontLang en-US/ja-JP; decimalSymbol '.'; listSeparator ','; w14:defaultImageDpi 300; savePreviewPicture; doNotAutoCompressPictures",
+        "measured": {
+          "compatSettings": {
+            "overrideTableStyleFontSizeAndJustification": 1,
+            "enableOpenTypeFeatures": 1,
+            "doNotFlipMirrorIndents": 1
+          },
+          "useFELayout": true,
+          "characterSpacingControl": "doNotCompress",
+          "zoom": "bestFit",
+          "themeFontLang": {
+            "val": "en-US",
+            "eastAsia": "ja-JP"
+          },
+          "decimalSymbol": ".",
+          "listSeparator": ",",
+          "defaultImageDpi": 300
+        },
+        "proposal": "parameter render.docx.settingsExtras (map)",
+        "path": "src/lib/studio/params/render.ts (S03)"
+      },
+      {
+        "id": "S95-C12",
+        "clusters": [],
+        "what": "styles.xml (164 gaya, latentStyles count 276), tema (mayor Calibri, minor Cambria), numbering.xml (9 abstractNum, tidak dipakai), fontTable 8 entri tanpa tanam; docDefaults merujuk fon tema. Kunci tambahan di R-06 (langEastAsia, langBidi, rFontsTheme) belum tentu dibaca S14",
+        "measured": {
+          "styles": 164,
+          "latentCount": 276,
+          "themeMajor": "Calibri",
+          "themeMinor": "Cambria",
+          "abstractNum": 9,
+          "fontTableUnembedded": [
+            "Symbol",
+            "Times New Roman",
+            "Cambria",
+            "MS Mincho",
+            "Calibri",
+            "MS Gothic",
+            "Courier",
+            "Arial"
+          ]
+        },
+        "proposal": "tidak perlu delta bila diagnosis S98 tidak menunjukkan dampak (semua paragraf berformat langsung)",
+        "path": "src/lib/studio/engine/docx/package (S14)"
+      },
+      {
+        "id": "S95-C13",
+        "clusters": [
+          "KT-23",
+          "KT-27"
+        ],
+        "what": "Kepala tabel tanpa vAlign (= atas); P5-03 table.header.verticalAlign hanya membolehkan 'bottom'",
+        "measured": {
+          "vAlign": null
+        },
+        "proposal": "P5-03 enum tambah 'top' (atau 'none')",
+        "path": "src/lib/studio/params/apparatus.ts (S07)"
+      },
+      {
+        "id": "S95-C14",
+        "clusters": [
+          "K-26"
+        ],
+        "what": "G-01 S93: pemisah nomor-judul seksi 3 spasi di dalam run nomor Mono ('1.1   '); R-15 hanya untuk caption",
+        "measured": {
+          "separator": "   ",
+          "inRun": "numberRun"
+        },
+        "proposal": "Section.numberSeparator?: string atau parameter render.section.numberSeparator",
+        "path": "src/lib/studio/contract/types/doc.ts atau params/render.ts"
+      },
+      {
+        "id": "S95-C15",
+        "clusters": [],
+        "what": "R-08: BM menanam IBM Plex Sans (4 slot) walau tidak dipakai run mana pun; perencana fon S15 hanya menanam keluarga yang dipakai (facesUsed), sehingga 16 dari 18 berkas tereproduksi",
+        "measured": {
+          "embedded": 18,
+          "usedFamilies": [
+            "IBM Plex Serif",
+            "IBM Plex Sans Cond",
+            "IBM Plex Mono",
+            "DejaVu Sans"
+          ]
+        },
+        "proposal": "opsi R-08 per entri `always: true` (tanam walau tidak dipakai)",
+        "path": "src/lib/studio/engine/docx/fonts (S15) + params/render.ts"
+      }
+    ],
+    "clusters": {
+      "K-01": {
+        "role": "cover.logo",
+        "status": "nilai"
+      },
+      "K-02": {
+        "role": "cover.addressLine",
+        "status": "nilai"
+      },
+      "K-03": {
+        "role": "cover.hairline",
+        "status": "nilai"
+      },
+      "K-04": {
+        "role": "wrapper.datumRule",
+        "status": "nilai"
+      },
+      "K-05": {
+        "role": "wrapper.kicker",
+        "status": "nilai"
+      },
+      "K-06": {
+        "role": "cover.titleFirst",
+        "status": "nilai"
+      },
+      "K-07": {
+        "role": "cover.titleLast",
+        "status": "nilai"
+      },
+      "K-08": {
+        "role": "cover.standfirst",
+        "status": "nilai"
+      },
+      "K-09": {
+        "role": "cover.scopeLine",
+        "status": "nilai"
+      },
+      "K-10": {
+        "role": "spacer.generic",
+        "status": "varian",
+        "via": "templat: susun otomatis sampul/lembar kendali (RT-01, D-119)"
+      },
+      "K-11": {
+        "role": "cover.identityString",
+        "status": "nilai"
+      },
+      "K-12": {
+        "role": "unit.sectionHolder",
+        "status": "nilai"
+      },
+      "K-13": {
+        "role": "front.kicker",
+        "status": "nilai"
+      },
+      "K-14": {
+        "role": "front.pageTitle",
+        "status": "nilai"
+      },
+      "K-15": {
+        "role": "controlSheet.blockHeading",
+        "status": "nilai"
+      },
+      "K-16": {
+        "role": "spacer.generic",
+        "status": "varian",
+        "via": "templat: susun otomatis sampul/lembar kendali (RT-01, D-119)"
+      },
+      "K-17": {
+        "role": "controlSheet.methodStatement",
+        "status": "nilai"
+      },
+      "K-18": {
+        "role": "toc.title",
+        "status": "nilai"
+      },
+      "K-19": {
+        "role": "toc.note",
+        "status": "nilai"
+      },
+      "K-20": {
+        "role": "spacer.generic",
+        "status": "nilai"
+      },
+      "K-21": {
+        "role": "part.title",
+        "status": "nilai"
+      },
+      "K-22": {
+        "role": "part.lede",
+        "status": "nilai"
+      },
+      "K-23": {
+        "role": "chapter.kicker",
+        "status": "nilai"
+      },
+      "K-24": {
+        "role": "chapter.datumRule",
+        "status": "nilai"
+      },
+      "K-25": {
+        "role": "chapter.title",
+        "status": "nilai"
+      },
+      "K-26": {
+        "role": "section.heading",
+        "status": "nilai"
+      },
+      "K-27": {
+        "role": "spacer.afterBlock",
+        "status": "nilai"
+      },
+      "K-28": {
+        "role": "body.paragraph",
+        "status": "nilai"
+      },
+      "K-29": {
+        "role": "caption",
+        "status": "nilai"
+      },
+      "K-30": {
+        "role": "list.bullet",
+        "status": "nilai"
+      },
+      "K-31": {
+        "role": "spacer.afterList",
+        "status": "nilai"
+      },
+      "K-32": {
+        "role": "figure.paragraph",
+        "status": "nilai"
+      },
+      "K-33": {
+        "role": "figure.keyRow",
+        "status": "nilai"
+      },
+      "K-34": {
+        "role": "figure.source",
+        "status": "nilai"
+      },
+      "K-35": {
+        "role": "list.number",
+        "status": "nilai"
+      },
+      "K-36": {
+        "role": "body.subheading",
+        "status": "nilai"
+      },
+      "KT-01": {
+        "role": "wrapper.sealBand",
+        "status": "nilai"
+      },
+      "KT-02": {
+        "role": "wrapper.sealBand",
+        "status": "celah",
+        "gap": "S95-C01"
+      },
+      "KT-03": {
+        "role": "cover.controlLabel",
+        "status": "nilai+celah",
+        "gap": "S95-C02"
+      },
+      "KT-04": {
+        "role": "cover.controlValue",
+        "status": "nilai+celah",
+        "gap": "S95-C02",
+        "note": "sel nilai Mono tabel lembar kendali (TCP-07) lewat Cell.borders/marginsTw eksplisit"
+      },
+      "KT-05": {
+        "role": "cover.colophonLeft",
+        "status": "nilai"
+      },
+      "KT-06": {
+        "role": "cover.colophonRight",
+        "status": "nilai"
+      },
+      "KT-07": {
+        "role": "controlTable.header",
+        "status": "nilai+celah",
+        "gap": "S95-C03"
+      },
+      "KT-08": {
+        "role": "controlTable.cell",
+        "status": "nilai+celah",
+        "gap": "S95-C03"
+      },
+      "KT-09": {
+        "role": "signature.space",
+        "status": "nilai"
+      },
+      "KT-10": {
+        "role": "toc.partLabel",
+        "status": "nilai"
+      },
+      "KT-11": {
+        "role": "toc.partTitle",
+        "status": "nilai"
+      },
+      "KT-12": {
+        "role": "toc.partPage",
+        "status": "nilai"
+      },
+      "KT-13": {
+        "role": "toc.chapterLabel",
+        "status": "nilai"
+      },
+      "KT-14": {
+        "role": "toc.chapterTitle",
+        "status": "nilai"
+      },
+      "KT-15": {
+        "role": "toc.chapterPage",
+        "status": "nilai"
+      },
+      "KT-16": {
+        "role": "part.chapterNo",
+        "status": "nilai"
+      },
+      "KT-17": {
+        "role": "part.chapterTitle",
+        "status": "nilai"
+      },
+      "KT-18": {
+        "role": "rail.prose",
+        "status": "nilai"
+      },
+      "KT-19": {
+        "role": "cell.empty",
+        "status": "nilai",
+        "note": "sel kotak turunan (TCP-20) dibawa peran derivation.label"
+      },
+      "KT-20": {
+        "role": "rail.mark",
+        "status": "nilai+celah",
+        "gap": "S95-C04"
+      },
+      "KT-21": {
+        "role": "rail.source",
+        "status": "nilai"
+      },
+      "KT-22": {
+        "role": "rail.note",
+        "status": "nilai"
+      },
+      "KT-23": {
+        "role": "table.headerLeft",
+        "status": "nilai"
+      },
+      "KT-24": {
+        "role": "table.cellMono",
+        "status": "nilai"
+      },
+      "KT-25": {
+        "role": "table.cellText",
+        "status": "nilai"
+      },
+      "KT-26": {
+        "role": "table.source",
+        "status": "nilai"
+      },
+      "KT-27": {
+        "role": "table.headerRight",
+        "status": "nilai"
+      },
+      "KT-28": {
+        "role": "table.cellNumeralRight",
+        "status": "nilai"
+      },
+      "KT-29": {
+        "role": "rail.mark",
+        "status": "nilai+celah",
+        "gap": "S95-C04",
+        "via": "glyphRun.ASUMSI"
+      },
+      "KT-30": {
+        "role": "aside.label",
+        "status": "nilai"
+      },
+      "KT-31": {
+        "role": "aside.body",
+        "status": "nilai"
+      },
+      "KT-32": {
+        "role": "table.groupBand",
+        "status": "nilai"
+      },
+      "KT-33": {
+        "role": "derivation.label",
+        "status": "nilai"
+      },
+      "KT-34": {
+        "role": "derivation.intro",
+        "status": "nilai"
+      },
+      "KT-35": {
+        "role": "derivation.expr",
+        "status": "nilai",
+        "note": "sel kotak monoBlock (TCP-21) dibawa peran monoBlock.label"
+      },
+      "KT-36": {
+        "role": "derivation.value",
+        "status": "nilai"
+      },
+      "KT-37": {
+        "role": "cell.empty",
+        "status": "varian",
+        "via": "RT-01: peran cell.empty templat (format sel tidak lagi di doc.json)"
+      },
+      "KT-38": {
+        "role": "table.cellGlyph",
+        "status": "nilai"
+      },
+      "KT-39": {
+        "role": "rail.mark",
+        "status": "nilai+celah",
+        "gap": "S95-C04",
+        "via": "glyphRun.DITURUNKAN"
+      },
+      "KT-40": {
+        "role": "monoBlock.label",
+        "status": "nilai"
+      }
+    }
+  },
+  "overrides": {
+    "page.sizeMm": [
+      210,
+      297
+    ],
+    "grid.innerMarginMm": 24,
+    "grid.textColumnMm": 128,
+    "grid.gutterMm": 6,
+    "grid.evidenceRailMm": 32,
+    "grid.outerMarginMm": 20,
+    "grid.topBottomMarginMm": 26,
+    "layout.railMode": "A",
+    "type.baselinePt": 13.5,
+    "color.wrapper.ink": "14110F",
+    "color.wrapper.body": "33302C",
+    "color.wrapper.meta": "7A756E",
+    "color.wrapper.rule": "C4BEB4",
+    "color.wrapper.seal": "6E1420",
+    "color.wrapper.cream": "F6E9E9",
+    "color.interior.ink900": "101418",
+    "color.interior.ink700": "2B3640",
+    "color.interior.ink400": "6B7783",
+    "color.interior.ink200": "C3CBD1",
+    "color.interior.signal": "B45309",
+    "color.interior.alert": "9B1C1C",
+    "type.face.serif": "IBM Plex Serif",
+    "type.face.condensed": "IBM Plex Sans Cond",
+    "type.face.mono": "IBM Plex Mono",
+    "type.face.workbookUi": "IBM Plex Sans",
+    "type.face.symbolGlyph": "DejaVu Sans",
+    "type.scale.chapterTitle.size": 16,
+    "type.scale.chapterTitle.leading": 20,
+    "type.scale.chapterKicker.size": 6.5,
+    "type.scale.chapterKicker.trackEm": 0.2154,
+    "type.scale.sectionHeading.size": 11,
+    "type.scale.sectionHeading.leading": 13.5,
+    "type.scale.body.size": 9.5,
+    "type.scale.body.leading": 13.5,
+    "type.scale.tableBody.size": 8,
+    "type.scale.tableBody.leading": 11,
+    "type.scale.tableNumerals.size": 7,
+    "type.scale.tableHeader.size": 6.5,
+    "type.scale.tableHeader.trackEm": 0.0923,
+    "type.scale.caption.size": 7.5,
+    "type.scale.caption.leading": 11,
+    "type.scale.sourceLine.size": 6.5,
+    "type.scale.sourceLine.leading": 9,
+    "type.scale.evidenceRail.size": 5.5,
+    "type.scale.evidenceRail.leading": 8.4,
+    "type.scale.runningHead.size": 6.5,
+    "type.scale.registerBlock.size": 6,
+    "type.scale.derivation.size": 7,
+    "type.scale.derivation.leading": 11,
+    "type.scale.groupBand.size": 7,
+    "type.scale.asideBody.size": 8.5,
+    "type.body.align": "justify",
+    "cover.title.sizePt": 25,
+    "device.spine.rotationDeg": 0,
+    "device.spine.placements": [
+      "margin luar sampul"
+    ],
+    "lint.enforcementOverride": {
+      "DATUM-09": "release",
+      "DATUM-04": "release",
+      "G3": "release"
+    },
+    "device.sealBand.heightMm": 6.1736,
+    "device.registerBlock.boldFields": [
+      "nomor dokumen",
+      "revisi",
+      "nomor lembar",
+      "jumlah lembar",
+      "klasifikasi"
+    ],
+    "rules.asideTopMm": 0.44,
+    "table.columnWidthSumMm": 166,
+    "table.numeral.align": "right",
+    "table.zebra.minRows": 1000,
+    "render.docx.compatibilityMode": 14,
+    "render.docx.defaultTabStopTw": 720,
+    "render.docx.updateFieldsOnOpen": false,
+    "render.docx.embedTrueTypeFonts": true,
+    "render.docx.saveSubsetFonts": false,
+    "render.docx.docDefaults": {
+      "szHalfPt": 22,
+      "spacingAfterTw": 200,
+      "lineTw": 276,
+      "lineRule": "auto",
+      "lang": "en-US",
+      "langEastAsia": "en-US",
+      "langBidi": "ar-SA",
+      "rFontsTheme": {
+        "ascii": "minorHAnsi",
+        "hAnsi": "minorHAnsi",
+        "eastAsia": "minorEastAsia",
+        "cs": "minorBidi"
+      }
+    },
+    "render.docx.normalStyle": {
+      "faceRole": "serif",
+      "szHalfPt": 19,
+      "color": "2B3640",
+      "spacingAfterTw": 0,
+      "lineTw": 270,
+      "lineRule": "exact",
+      "lang": "id-ID"
+    },
+    "render.docx.embedFonts": [
+      {
+        "family": "IBM Plex Serif",
+        "slots": [
+          "regular",
+          "bold",
+          "italic",
+          "boldItalic"
+        ],
+        "boldFace": "semibold"
+      },
+      {
+        "family": "IBM Plex Sans Cond",
+        "slots": [
+          "regular",
+          "bold",
+          "italic",
+          "boldItalic"
+        ],
+        "boldFace": "semibold"
+      },
+      {
+        "family": "IBM Plex Mono",
+        "slots": [
+          "regular",
+          "bold",
+          "italic",
+          "boldItalic"
+        ],
+        "boldFace": "semibold"
+      },
+      {
+        "family": "IBM Plex Sans",
+        "slots": [
+          "regular",
+          "bold",
+          "italic",
+          "boldItalic"
+        ],
+        "boldFace": "semibold"
+      },
+      {
+        "family": "DejaVu Sans",
+        "slots": [
+          "regular",
+          "bold"
+        ]
+      }
+    ],
+    "render.section.wrapper": {
+      "pageSizeTw": [
+        11906,
+        16838
+      ],
+      "marginTw": {
+        "top": 1474,
+        "bottom": 1361,
+        "left": 1361,
+        "right": 1134,
+        "header": 737,
+        "footer": 737,
+        "gutter": 0
+      },
+      "cols": {
+        "num": 1,
+        "spaceTw": 720
+      },
+      "docGridLinePitch": 360,
+      "header": {
+        "mode": "empty",
+        "format": {
+          "spacingBeforeTw": 0,
+          "spacingAfterTw": 0,
+          "lineTw": 40,
+          "lineRule": "exact"
+        }
+      },
+      "footer": {
+        "mode": "empty",
+        "format": {
+          "spacingBeforeTw": 0,
+          "spacingAfterTw": 0,
+          "lineTw": 40,
+          "lineRule": "exact"
+        }
+      }
+    },
+    "render.section.interior": {
+      "pageSizeTw": [
+        11906,
+        16838
+      ],
+      "marginTw": {
+        "top": 1474,
+        "bottom": 1361,
+        "left": 1361,
+        "right": 1134,
+        "header": 737,
+        "footer": 737,
+        "gutter": 0
+      },
+      "cols": {
+        "num": 1,
+        "spaceTw": 720
+      },
+      "docGridLinePitch": 360,
+      "header": {
+        "mode": "runningHead",
+        "format": {
+          "spacingBeforeTw": 0,
+          "spacingAfterTw": 0,
+          "lineTw": 180,
+          "lineRule": "exact",
+          "tabs": [
+            {
+              "posTw": 9411,
+              "val": "right"
+            }
+          ],
+          "borders": {
+            "bottom": {
+              "val": "single",
+              "sz": 5,
+              "color": "C3CBD1",
+              "space": 1
+            }
+          }
+        }
+      },
+      "footer": {
+        "mode": "registerBlock"
+      }
+    },
+    "render.section.breakPerUnit": true,
+    "render.rail.renderer": "table3col",
+    "render.derivation.renderer": "nestedTable",
+    "render.caption.separator": "   ",
+    "render.table.sourcePlacement": "lastRowMerged",
+    "render.table.layout": {
+      "fixed": true,
+      "indentTw": 0,
+      "cellMarginTw": {
+        "left": 0,
+        "right": 0
+      },
+      "borders": "none"
+    },
+    "render.spacer.autoMode": "template",
+    "render.list.bulletMarker": {
+      "t": "–",
+      "face": "IBM Plex Serif",
+      "szHalfPt": 19,
+      "color": "6B7783",
+      "b": false,
+      "i": false
+    },
+    "render.list.numberMarker": {
+      "face": "IBM Plex Mono",
+      "szHalfPt": 16,
+      "color": "B45309",
+      "b": true,
+      "i": false
+    },
+    "render.toc.mode": "static",
+    "render.cover.mode": "auto",
+    "render.html.paged": true,
+    "render.png.dpi": 300,
+    "render.run.strong": {
+      "color": "101418"
+    },
+    "org.entityName": "PT Gemilang Satria Perkasa",
+    "render.run.symbolGlyphByRole": {
+      "body.paragraph": {
+        "szHalfPt": 17
+      },
+      "list.bullet": {
+        "szHalfPt": 17
+      },
+      "list.number": {
+        "szHalfPt": 17
+      },
+      "aside.body": {
+        "szHalfPt": 15
+      },
+      "table.cellText": {
+        "szHalfPt": 14
+      },
+      "table.cellMono": {
+        "szHalfPt": 12
+      },
+      "table.cellNumeralRight": {
+        "szHalfPt": 12
+      },
+      "table.source": {
+        "szHalfPt": 12
+      },
+      "figure.source": {
+        "szHalfPt": 12
+      },
+      "figure.keyRow": {
+        "szHalfPt": 12
+      }
+    }
+  },
+  "roleFormats": {
+    "cover.logo": {
+      "para": {
+        "spacingBeforeTw": 360,
+        "spacingAfterTw": 0,
+        "lineTw": 240,
+        "lineRule": "auto"
+      }
+    },
+    "cover.addressLine": {
+      "para": {
+        "spacingBeforeTw": 100,
+        "spacingAfterTw": 80,
+        "lineTw": 210,
+        "lineRule": "exact"
+      },
+      "run": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 14,
+        "color": "7A756E",
+        "b": false,
+        "i": false
+      }
+    },
+    "cover.hairline": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 800,
+        "lineTw": 120,
+        "lineRule": "exact",
+        "borders": {
+          "bottom": {
+            "val": "single",
+            "sz": 5,
+            "color": "C4BEB4",
+            "space": 1
+          }
+        }
+      }
+    },
+    "wrapper.datumRule": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 140,
+        "lineTw": 240,
+        "lineRule": "auto"
+      }
+    },
+    "wrapper.kicker": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 160,
+        "lineTw": 220,
+        "lineRule": "exact"
+      },
+      "run": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 14,
+        "color": "6E1420",
+        "b": true,
+        "i": false,
+        "caps": true,
+        "spacingTw": 30
+      }
+    },
+    "cover.titleFirst": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 0,
+        "lineTw": 580,
+        "lineRule": "exact"
+      },
+      "run": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 50,
+        "color": "14110F",
+        "b": true,
+        "i": false
+      }
+    },
+    "cover.titleLast": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 180,
+        "lineTw": 580,
+        "lineRule": "exact"
+      },
+      "run": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 50,
+        "color": "14110F",
+        "b": true,
+        "i": false
+      }
+    },
+    "cover.standfirst": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 120,
+        "lineTw": 300,
+        "lineRule": "exact",
+        "indRightTw": 1701
+      },
+      "run": {
+        "face": "IBM Plex Serif",
+        "szHalfPt": 21,
+        "color": "33302C",
+        "b": false,
+        "i": true
+      }
+    },
+    "cover.scopeLine": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 520,
+        "lineTw": 240,
+        "lineRule": "exact",
+        "indRightTw": 1134
+      },
+      "run": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 15,
+        "color": "7A756E",
+        "b": false,
+        "i": false
+      }
+    },
+    "cover.identityString": {
+      "para": {
+        "spacingBeforeTw": 200,
+        "spacingAfterTw": 0,
+        "lineTw": 180,
+        "lineRule": "exact"
+      },
+      "run": {
+        "face": "IBM Plex Mono",
+        "szHalfPt": 12,
+        "color": "7A756E",
+        "b": false,
+        "i": false,
+        "spacingTw": 24
+      }
+    },
+    "unit.sectionHolder": {
+      "para": {}
+    },
+    "front.kicker": {
+      "para": {
+        "spacingBeforeTw": 360,
+        "spacingAfterTw": 120,
+        "lineTw": 220,
+        "lineRule": "exact"
+      },
+      "run": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 14,
+        "color": "6E1420",
+        "b": true,
+        "i": false,
+        "caps": true,
+        "spacingTw": 30
+      }
+    },
+    "front.pageTitle": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 200,
+        "lineTw": 400,
+        "lineRule": "exact"
+      },
+      "run": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 32,
+        "color": "14110F",
+        "b": true,
+        "i": false
+      }
+    },
+    "controlSheet.blockHeading": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 60,
+        "lineTw": 240,
+        "lineRule": "exact"
+      },
+      "run": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 18,
+        "color": "14110F",
+        "b": true,
+        "i": false
+      }
+    },
+    "controlSheet.methodStatement": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 160,
+        "lineTw": 250,
+        "lineRule": "exact",
+        "jc": "both",
+        "indRightTw": 1701
+      },
+      "run": {
+        "face": "IBM Plex Serif",
+        "szHalfPt": 17,
+        "color": "33302C",
+        "b": false,
+        "i": false
+      },
+      "glyphRun": {
+        "TERUKUR": {
+          "face": "DejaVu Sans",
+          "szHalfPt": 15
+        },
+        "DITURUNKAN": {
+          "face": "DejaVu Sans",
+          "szHalfPt": 15
+        },
+        "PEMASOK": {
+          "face": "DejaVu Sans",
+          "szHalfPt": 15
+        },
+        "ASUMSI": {
+          "face": "DejaVu Sans",
+          "szHalfPt": 15
+        }
+      }
+    },
+    "toc.title": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 160,
+        "lineTw": 400,
+        "lineRule": "exact"
+      },
+      "run": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 32,
+        "color": "14110F",
+        "b": true,
+        "i": false
+      }
+    },
+    "toc.note": {
+      "para": {
+        "spacingBeforeTw": 160,
+        "spacingAfterTw": 0,
+        "lineTw": 200,
+        "lineRule": "exact",
+        "indRightTw": 1701
+      },
+      "run": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 14,
+        "color": "7A756E",
+        "b": false,
+        "i": false
+      }
+    },
+    "part.title": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 180,
+        "lineTw": 560,
+        "lineRule": "exact",
+        "outlineLvl": 0
+      },
+      "run": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 48,
+        "color": "14110F",
+        "b": true,
+        "i": false
+      }
+    },
+    "part.lede": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 360,
+        "lineTw": 300,
+        "lineRule": "exact",
+        "indRightTw": 2154
+      },
+      "run": {
+        "face": "IBM Plex Serif",
+        "szHalfPt": 21,
+        "color": "33302C",
+        "b": false,
+        "i": true
+      }
+    },
+    "chapter.kicker": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 80,
+        "lineTw": 180,
+        "lineRule": "exact",
+        "keepNext": true
+      },
+      "run": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 13,
+        "color": "B45309",
+        "b": true,
+        "i": false,
+        "caps": true,
+        "spacingTw": 28
+      }
+    },
+    "chapter.datumRule": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 80,
+        "lineTw": 240,
+        "lineRule": "auto",
+        "keepNext": true
+      }
+    },
+    "chapter.title": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 140,
+        "lineTw": 400,
+        "lineRule": "exact",
+        "keepNext": true,
+        "outlineLvl": 0
+      },
+      "run": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 32,
+        "color": "101418",
+        "b": true,
+        "i": false
+      }
+    },
+    "section.heading": {
+      "para": {
+        "spacingBeforeTw": 270,
+        "spacingAfterTw": 80,
+        "lineTw": 270,
+        "lineRule": "exact",
+        "keepNext": true,
+        "outlineLvl": 1
+      },
+      "run": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 22,
+        "color": "101418",
+        "b": true,
+        "i": false
+      },
+      "numberRun": {
+        "face": "IBM Plex Mono",
+        "szHalfPt": 16,
+        "color": "6B7783",
+        "b": false,
+        "i": false
+      }
+    },
+    "body.paragraph": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 135,
+        "lineTw": 270,
+        "lineRule": "exact",
+        "jc": "both",
+        "indRightTw": 2154
+      },
+      "run": {
+        "face": "IBM Plex Serif",
+        "szHalfPt": 19,
+        "color": "2B3640",
+        "b": false,
+        "i": false
+      }
+    },
+    "caption": {
+      "para": {
+        "spacingBeforeTw": 120,
+        "spacingAfterTw": 48,
+        "lineTw": 220,
+        "lineRule": "exact",
+        "keepNext": true
+      },
+      "run": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 15,
+        "color": "2B3640",
+        "b": false,
+        "i": false
+      },
+      "labelRun": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 14,
+        "color": "101418",
+        "b": true,
+        "i": false,
+        "caps": true,
+        "spacingTw": 16
+      }
+    },
+    "list.bullet": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 60,
+        "lineTw": 270,
+        "lineRule": "exact",
+        "jc": "left",
+        "indLeftTw": 283,
+        "indRightTw": 2154,
+        "indHangingTw": 283,
+        "tabs": [
+          {
+            "posTw": 283,
+            "val": "left"
+          }
+        ]
+      },
+      "run": {
+        "face": "IBM Plex Serif",
+        "szHalfPt": 19,
+        "color": "2B3640",
+        "b": false,
+        "i": false
+      },
+      "markerRun": {
+        "face": "IBM Plex Serif",
+        "szHalfPt": 19,
+        "color": "6B7783",
+        "b": false,
+        "i": false
+      }
+    },
+    "list.number": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 60,
+        "lineTw": 270,
+        "lineRule": "exact",
+        "indLeftTw": 397,
+        "indRightTw": 2154,
+        "indHangingTw": 397,
+        "tabs": [
+          {
+            "posTw": 397,
+            "val": "left"
+          }
+        ]
+      },
+      "run": {
+        "face": "IBM Plex Serif",
+        "szHalfPt": 19,
+        "color": "2B3640",
+        "b": false,
+        "i": false
+      },
+      "markerRun": {
+        "face": "IBM Plex Mono",
+        "szHalfPt": 16,
+        "color": "B45309",
+        "b": true,
+        "i": false
+      }
+    },
+    "figure.paragraph": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 48,
+        "lineTw": 240,
+        "lineRule": "auto",
+        "keepNext": true
+      }
+    },
+    "figure.keyRow": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 20,
+        "lineTw": 180,
+        "lineRule": "exact",
+        "keepNext": true
+      },
+      "run": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 13,
+        "color": "6B7783",
+        "b": false,
+        "i": false
+      },
+      "labelRun": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 13,
+        "color": "6B7783",
+        "b": true,
+        "i": false,
+        "spacingTw": 12
+      }
+    },
+    "figure.source": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 0,
+        "lineTw": 180,
+        "lineRule": "exact",
+        "borders": {
+          "top": {
+            "val": "single",
+            "sz": 5,
+            "color": "C3CBD1",
+            "space": 1
+          }
+        }
+      },
+      "run": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 13,
+        "color": "6B7783",
+        "b": false,
+        "i": false
+      },
+      "labelRun": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 13,
+        "color": "6B7783",
+        "b": true,
+        "i": false,
+        "spacingTw": 12
+      }
+    },
+    "body.subheading": {
+      "para": {
+        "spacingBeforeTw": 180,
+        "spacingAfterTw": 20,
+        "lineTw": 270,
+        "lineRule": "exact",
+        "keepNext": true
+      },
+      "run": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 19,
+        "color": "101418",
+        "b": true,
+        "i": false
+      }
+    },
+    "wrapper.sealBand": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 0,
+        "lineTw": 180,
+        "lineRule": "exact",
+        "jc": "left"
+      },
+      "run": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 12,
+        "color": "F6E9E9",
+        "b": true,
+        "i": false,
+        "caps": true,
+        "spacingTw": 26
+      },
+      "cell": {
+        "marginsTw": {
+          "top": 85,
+          "left": 141,
+          "bottom": 85,
+          "right": 141
+        },
+        "shading": {
+          "fill": "6E1420",
+          "val": "clear"
+        }
+      }
+    },
+    "cover.controlLabel": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 0,
+        "lineTw": 220,
+        "lineRule": "exact"
+      },
+      "run": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 12,
+        "color": "7A756E",
+        "b": true,
+        "i": false,
+        "caps": true,
+        "spacingTw": 14
+      },
+      "cell": {
+        "marginsTw": {
+          "top": 85,
+          "left": 0,
+          "bottom": 85,
+          "right": 170
+        },
+        "borders": {
+          "bottom": {
+            "val": "single",
+            "sz": 5,
+            "color": "C4BEB4",
+            "space": 0
+          }
+        }
+      }
+    },
+    "cover.controlValue": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 0,
+        "lineTw": 220,
+        "lineRule": "exact"
+      },
+      "run": {
+        "face": "IBM Plex Mono",
+        "szHalfPt": 14,
+        "color": "14110F",
+        "b": false,
+        "i": false
+      },
+      "cell": {
+        "marginsTw": {
+          "top": 85,
+          "left": 0,
+          "bottom": 85,
+          "right": 170
+        },
+        "borders": {
+          "bottom": {
+            "val": "single",
+            "sz": 5,
+            "color": "C4BEB4",
+            "space": 0
+          }
+        }
+      }
+    },
+    "cover.colophonLeft": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 0,
+        "lineTw": 180,
+        "lineRule": "exact",
+        "jc": "left"
+      },
+      "run": {
+        "face": "IBM Plex Mono",
+        "szHalfPt": 12,
+        "color": "7A756E",
+        "b": false,
+        "i": false
+      },
+      "cell": {
+        "marginsTw": {
+          "top": 102,
+          "left": 0,
+          "bottom": 0,
+          "right": 0
+        },
+        "borders": {
+          "top": {
+            "val": "single",
+            "sz": 5,
+            "color": "C4BEB4",
+            "space": 0
+          }
+        }
+      }
+    },
+    "cover.colophonRight": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 0,
+        "lineTw": 180,
+        "lineRule": "exact",
+        "jc": "right"
+      },
+      "run": {
+        "face": "IBM Plex Mono",
+        "szHalfPt": 12,
+        "color": "6E1420",
+        "b": true,
+        "i": false
+      },
+      "cell": {
+        "marginsTw": {
+          "top": 102,
+          "left": 0,
+          "bottom": 0,
+          "right": 0
+        },
+        "borders": {
+          "top": {
+            "val": "single",
+            "sz": 5,
+            "color": "C4BEB4",
+            "space": 0
+          }
+        }
+      }
+    },
+    "controlTable.header": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 0,
+        "lineTw": 180,
+        "lineRule": "exact"
+      },
+      "run": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 13,
+        "color": "7A756E",
+        "b": true,
+        "i": false,
+        "caps": true,
+        "spacingTw": 12
+      },
+      "cell": {
+        "marginsTw": {
+          "top": 85,
+          "left": 0,
+          "bottom": 85,
+          "right": 141
+        },
+        "borders": {
+          "top": {
+            "val": "single",
+            "sz": 10,
+            "color": "14110F",
+            "space": 0
+          },
+          "bottom": {
+            "val": "single",
+            "sz": 6,
+            "color": "7A756E",
+            "space": 0
+          }
+        }
+      }
+    },
+    "controlTable.cell": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 0,
+        "lineTw": 220,
+        "lineRule": "exact"
+      },
+      "run": {
+        "face": "IBM Plex Serif",
+        "szHalfPt": 16,
+        "color": "33302C",
+        "b": false,
+        "i": false
+      },
+      "cell": {
+        "marginsTw": {
+          "top": 79,
+          "left": 0,
+          "bottom": 79,
+          "right": 141
+        },
+        "borders": {
+          "bottom": {
+            "val": "single",
+            "sz": 5,
+            "color": "C4BEB4",
+            "space": 0
+          }
+        }
+      }
+    },
+    "signature.space": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 0,
+        "lineTw": 680,
+        "lineRule": "exact"
+      },
+      "cell": {
+        "marginsTw": {
+          "top": 0,
+          "left": 0,
+          "bottom": 0,
+          "right": 226
+        }
+      }
+    },
+    "toc.partLabel": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 0,
+        "lineTw": 200,
+        "lineRule": "exact"
+      },
+      "run": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 13,
+        "color": "6E1420",
+        "b": true,
+        "i": false,
+        "caps": true,
+        "spacingTw": 18
+      },
+      "cell": {
+        "marginsTw": {
+          "top": 124,
+          "left": 0,
+          "bottom": 62,
+          "right": 113
+        },
+        "borders": {
+          "bottom": {
+            "val": "single",
+            "sz": 8,
+            "color": "14110F",
+            "space": 0
+          }
+        }
+      }
+    },
+    "toc.partTitle": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 0,
+        "lineTw": 200,
+        "lineRule": "exact"
+      },
+      "run": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 17,
+        "color": "14110F",
+        "b": true,
+        "i": false
+      },
+      "cell": {
+        "marginsTw": {
+          "top": 124,
+          "left": 0,
+          "bottom": 62,
+          "right": 113
+        },
+        "borders": {
+          "bottom": {
+            "val": "single",
+            "sz": 8,
+            "color": "14110F",
+            "space": 0
+          }
+        }
+      }
+    },
+    "toc.partPage": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 0,
+        "lineTw": 200,
+        "lineRule": "exact",
+        "jc": "right"
+      },
+      "run": {
+        "face": "IBM Plex Mono",
+        "szHalfPt": 14,
+        "color": "14110F",
+        "b": true,
+        "i": false
+      },
+      "cell": {
+        "marginsTw": {
+          "top": 124,
+          "left": 0,
+          "bottom": 62,
+          "right": 113
+        },
+        "borders": {
+          "bottom": {
+            "val": "single",
+            "sz": 8,
+            "color": "14110F",
+            "space": 0
+          }
+        }
+      }
+    },
+    "toc.chapterLabel": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 0,
+        "lineTw": 200,
+        "lineRule": "exact"
+      },
+      "run": {
+        "face": "IBM Plex Mono",
+        "szHalfPt": 14,
+        "color": "7A756E",
+        "b": false,
+        "i": false
+      },
+      "cell": {
+        "marginsTw": {
+          "top": 62,
+          "left": 0,
+          "bottom": 62,
+          "right": 113
+        },
+        "borders": {
+          "bottom": {
+            "val": "single",
+            "sz": 5,
+            "color": "C4BEB4",
+            "space": 0
+          }
+        }
+      }
+    },
+    "toc.chapterTitle": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 0,
+        "lineTw": 200,
+        "lineRule": "exact"
+      },
+      "run": {
+        "face": "IBM Plex Serif",
+        "szHalfPt": 16,
+        "color": "33302C",
+        "b": false,
+        "i": false
+      },
+      "cell": {
+        "marginsTw": {
+          "top": 62,
+          "left": 0,
+          "bottom": 62,
+          "right": 113
+        },
+        "borders": {
+          "bottom": {
+            "val": "single",
+            "sz": 5,
+            "color": "C4BEB4",
+            "space": 0
+          }
+        }
+      }
+    },
+    "toc.chapterPage": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 0,
+        "lineTw": 200,
+        "lineRule": "exact",
+        "jc": "right"
+      },
+      "run": {
+        "face": "IBM Plex Mono",
+        "szHalfPt": 14,
+        "color": "14110F",
+        "b": false,
+        "i": false
+      },
+      "cell": {
+        "marginsTw": {
+          "top": 62,
+          "left": 0,
+          "bottom": 62,
+          "right": 113
+        },
+        "borders": {
+          "bottom": {
+            "val": "single",
+            "sz": 5,
+            "color": "C4BEB4",
+            "space": 0
+          }
+        }
+      }
+    },
+    "part.chapterNo": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 0,
+        "lineTw": 220,
+        "lineRule": "exact"
+      },
+      "run": {
+        "face": "IBM Plex Mono",
+        "szHalfPt": 14,
+        "color": "7A756E",
+        "b": false,
+        "i": false
+      },
+      "cell": {
+        "marginsTw": {
+          "top": 79,
+          "left": 0,
+          "bottom": 79,
+          "right": 113
+        },
+        "borders": {
+          "bottom": {
+            "val": "single",
+            "sz": 5,
+            "color": "C4BEB4",
+            "space": 0
+          }
+        }
+      }
+    },
+    "part.chapterTitle": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 0,
+        "lineTw": 220,
+        "lineRule": "exact"
+      },
+      "run": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 18,
+        "color": "14110F",
+        "b": false,
+        "i": false
+      },
+      "cell": {
+        "marginsTw": {
+          "top": 79,
+          "left": 0,
+          "bottom": 79,
+          "right": 113
+        },
+        "borders": {
+          "bottom": {
+            "val": "single",
+            "sz": 5,
+            "color": "C4BEB4",
+            "space": 0
+          }
+        }
+      }
+    },
+    "rail.prose": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 0,
+        "lineTw": 270,
+        "lineRule": "exact",
+        "jc": "both"
+      },
+      "run": {
+        "face": "IBM Plex Serif",
+        "szHalfPt": 19,
+        "color": "2B3640",
+        "b": false,
+        "i": false
+      },
+      "cell": {}
+    },
+    "cell.empty": {
+      "para": {},
+      "cell": {}
+    },
+    "rail.mark": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 0,
+        "lineTw": 168,
+        "lineRule": "exact"
+      },
+      "run": {
+        "face": "IBM Plex Mono",
+        "szHalfPt": 11,
+        "b": true,
+        "i": false,
+        "caps": true
+      },
+      "glyphRun": {
+        "TERUKUR": {
+          "face": "DejaVu Sans",
+          "szHalfPt": 10,
+          "color": "101418",
+          "b": true,
+          "i": false,
+          "caps": true
+        },
+        "DITURUNKAN": {
+          "face": "DejaVu Sans",
+          "szHalfPt": 10,
+          "color": "B45309",
+          "b": true,
+          "i": false,
+          "caps": true
+        },
+        "ASUMSI": {
+          "face": "DejaVu Sans",
+          "szHalfPt": 10,
+          "color": "9B1C1C",
+          "b": true,
+          "i": false,
+          "caps": true
+        }
+      },
+      "cell": {}
+    },
+    "rail.source": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 0,
+        "lineTw": 168,
+        "lineRule": "exact"
+      },
+      "run": {
+        "face": "IBM Plex Mono",
+        "szHalfPt": 11,
+        "color": "6B7783",
+        "b": false,
+        "i": false,
+        "caps": true
+      },
+      "cell": {}
+    },
+    "rail.note": {
+      "para": {
+        "spacingBeforeTw": 30,
+        "spacingAfterTw": 0,
+        "lineTw": 168,
+        "lineRule": "exact"
+      },
+      "run": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 12,
+        "color": "6B7783",
+        "b": false,
+        "i": false
+      },
+      "cell": {}
+    },
+    "table.headerLeft": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 0,
+        "lineTw": 180,
+        "lineRule": "exact",
+        "jc": "left"
+      },
+      "run": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 13,
+        "color": "6B7783",
+        "b": true,
+        "i": false,
+        "caps": true,
+        "spacingTw": 12
+      },
+      "cell": {
+        "marginsTw": {
+          "top": 102,
+          "left": 0,
+          "bottom": 102,
+          "right": 141
+        },
+        "borders": {
+          "top": {
+            "val": "single",
+            "sz": 10,
+            "color": "101418",
+            "space": 0
+          },
+          "bottom": {
+            "val": "single",
+            "sz": 6,
+            "color": "6B7783",
+            "space": 0
+          }
+        }
+      }
+    },
+    "table.cellMono": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 0,
+        "lineTw": 210,
+        "lineRule": "exact"
+      },
+      "run": {
+        "face": "IBM Plex Mono",
+        "szHalfPt": 14,
+        "color": "101418",
+        "b": false,
+        "i": false
+      },
+      "cell": {
+        "marginsTw": {
+          "top": 85,
+          "left": 0,
+          "bottom": 85,
+          "right": 141
+        },
+        "borders": {
+          "bottom": {
+            "val": "single",
+            "sz": 5,
+            "color": "C3CBD1",
+            "space": 0
+          }
+        }
+      }
+    },
+    "table.cellText": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 0,
+        "lineTw": 220,
+        "lineRule": "exact"
+      },
+      "run": {
+        "face": "IBM Plex Serif",
+        "szHalfPt": 16,
+        "color": "2B3640",
+        "b": false,
+        "i": false
+      },
+      "cell": {
+        "marginsTw": {
+          "top": 85,
+          "left": 0,
+          "bottom": 85,
+          "right": 141
+        },
+        "borders": {
+          "bottom": {
+            "val": "single",
+            "sz": 5,
+            "color": "C3CBD1",
+            "space": 0
+          }
+        }
+      }
+    },
+    "table.source": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 0,
+        "lineTw": 180,
+        "lineRule": "exact"
+      },
+      "run": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 13,
+        "color": "6B7783",
+        "b": false,
+        "i": false
+      },
+      "labelRun": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 13,
+        "color": "6B7783",
+        "b": true,
+        "i": false,
+        "spacingTw": 12
+      },
+      "cell": {
+        "marginsTw": {
+          "top": 102,
+          "left": 0,
+          "bottom": 0,
+          "right": 0
+        },
+        "borders": {
+          "top": {
+            "val": "single",
+            "sz": 5,
+            "color": "C3CBD1",
+            "space": 0
+          }
+        }
+      }
+    },
+    "table.headerRight": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 0,
+        "lineTw": 180,
+        "lineRule": "exact",
+        "jc": "right"
+      },
+      "run": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 13,
+        "color": "6B7783",
+        "b": true,
+        "i": false,
+        "caps": true,
+        "spacingTw": 12
+      },
+      "cell": {
+        "marginsTw": {
+          "top": 102,
+          "left": 0,
+          "bottom": 102,
+          "right": 141
+        },
+        "borders": {
+          "top": {
+            "val": "single",
+            "sz": 10,
+            "color": "101418",
+            "space": 0
+          },
+          "bottom": {
+            "val": "single",
+            "sz": 6,
+            "color": "6B7783",
+            "space": 0
+          }
+        }
+      }
+    },
+    "table.cellNumeralRight": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 0,
+        "lineTw": 220,
+        "lineRule": "exact",
+        "jc": "right"
+      },
+      "run": {
+        "face": "IBM Plex Mono",
+        "szHalfPt": 15,
+        "color": "101418",
+        "b": false,
+        "i": false
+      },
+      "cell": {
+        "marginsTw": {
+          "top": 85,
+          "left": 0,
+          "bottom": 85,
+          "right": 141
+        },
+        "borders": {
+          "bottom": {
+            "val": "single",
+            "sz": 5,
+            "color": "C3CBD1",
+            "space": 0
+          }
+        }
+      }
+    },
+    "aside.label": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 30,
+        "lineTw": 200,
+        "lineRule": "exact"
+      },
+      "run": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 14,
+        "color": "101418",
+        "b": true,
+        "i": false,
+        "caps": true,
+        "spacingTw": 18
+      },
+      "cell": {
+        "marginsTw": {
+          "top": 124,
+          "left": 0,
+          "bottom": 136,
+          "right": 0
+        },
+        "borders": {
+          "top": {
+            "val": "single",
+            "sz": 10,
+            "color": "101418",
+            "space": 0
+          },
+          "bottom": {
+            "val": "single",
+            "sz": 5,
+            "color": "C3CBD1",
+            "space": 0
+          }
+        }
+      }
+    },
+    "aside.body": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 0,
+        "lineTw": 250,
+        "lineRule": "exact",
+        "jc": "left"
+      },
+      "run": {
+        "face": "IBM Plex Serif",
+        "szHalfPt": 17,
+        "color": "2B3640",
+        "b": false,
+        "i": false
+      },
+      "numberRun": {
+        "face": "IBM Plex Serif",
+        "szHalfPt": 17,
+        "color": "101418",
+        "b": true,
+        "i": false
+      },
+      "cell": {
+        "marginsTw": {
+          "top": 124,
+          "left": 0,
+          "bottom": 136,
+          "right": 0
+        },
+        "borders": {
+          "top": {
+            "val": "single",
+            "sz": 10,
+            "color": "101418",
+            "space": 0
+          },
+          "bottom": {
+            "val": "single",
+            "sz": 5,
+            "color": "C3CBD1",
+            "space": 0
+          }
+        }
+      }
+    },
+    "table.groupBand": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 0,
+        "lineTw": 200,
+        "lineRule": "exact"
+      },
+      "run": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 14,
+        "color": "101418",
+        "b": true,
+        "i": false,
+        "caps": true,
+        "spacingTw": 14
+      },
+      "cell": {
+        "marginsTw": {
+          "top": 192,
+          "left": 0,
+          "bottom": 68,
+          "right": 0
+        },
+        "borders": {
+          "bottom": {
+            "val": "single",
+            "sz": 5,
+            "color": "C3CBD1",
+            "space": 0
+          }
+        }
+      }
+    },
+    "derivation.label": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 40,
+        "lineTw": 180,
+        "lineRule": "exact"
+      },
+      "run": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 13,
+        "color": "B45309",
+        "b": true,
+        "i": false,
+        "caps": true,
+        "spacingTw": 22
+      },
+      "cell": {
+        "marginsTw": {
+          "top": 147,
+          "left": 255,
+          "bottom": 147,
+          "right": 0
+        },
+        "borders": {
+          "left": {
+            "val": "single",
+            "sz": 10,
+            "color": "B45309",
+            "space": 0
+          }
+        }
+      }
+    },
+    "derivation.intro": {
+      "para": {
+        "spacingBeforeTw": 40,
+        "spacingAfterTw": 0,
+        "lineTw": 200,
+        "lineRule": "exact"
+      },
+      "run": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 14,
+        "color": "6B7783",
+        "b": false,
+        "i": false
+      },
+      "cell": {
+        "marginsTw": {
+          "top": 147,
+          "left": 255,
+          "bottom": 147,
+          "right": 0
+        },
+        "borders": {
+          "left": {
+            "val": "single",
+            "sz": 10,
+            "color": "B45309",
+            "space": 0
+          }
+        }
+      }
+    },
+    "derivation.expr": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 0,
+        "lineTw": 220,
+        "lineRule": "exact"
+      },
+      "run": {
+        "face": "IBM Plex Mono",
+        "szHalfPt": 14,
+        "color": "101418",
+        "b": false,
+        "i": false
+      },
+      "cell": {}
+    },
+    "derivation.value": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 0,
+        "lineTw": 220,
+        "lineRule": "exact",
+        "jc": "right"
+      },
+      "run": {
+        "face": "IBM Plex Mono",
+        "szHalfPt": 14,
+        "color": "101418",
+        "b": false,
+        "i": false
+      },
+      "glyphRun": {
+        "TERUKUR": {
+          "face": "DejaVu Sans",
+          "szHalfPt": 13,
+          "color": "101418",
+          "b": false,
+          "i": false
+        },
+        "DITURUNKAN": {
+          "face": "DejaVu Sans",
+          "szHalfPt": 13,
+          "color": "101418",
+          "b": false,
+          "i": false
+        }
+      },
+      "cell": {}
+    },
+    "table.cellGlyph": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 0,
+        "lineTw": 210,
+        "lineRule": "exact"
+      },
+      "run": {
+        "face": "DejaVu Sans",
+        "szHalfPt": 12,
+        "color": "101418",
+        "b": false,
+        "i": false
+      },
+      "cell": {
+        "marginsTw": {
+          "top": 85,
+          "left": 0,
+          "bottom": 85,
+          "right": 141
+        },
+        "borders": {
+          "bottom": {
+            "val": "single",
+            "sz": 5,
+            "color": "C3CBD1",
+            "space": 0
+          }
+        }
+      }
+    },
+    "monoBlock.label": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 40,
+        "lineTw": 180,
+        "lineRule": "exact"
+      },
+      "run": {
+        "face": "IBM Plex Sans Cond",
+        "szHalfPt": 13,
+        "color": "6B7783",
+        "b": true,
+        "i": false,
+        "caps": true,
+        "spacingTw": 22
+      },
+      "cell": {
+        "marginsTw": {
+          "top": 136,
+          "left": 255,
+          "bottom": 136,
+          "right": 0
+        },
+        "borders": {
+          "left": {
+            "val": "single",
+            "sz": 10,
+            "color": "6B7783",
+            "space": 0
+          }
+        }
+      }
+    },
+    "spacer.afterBlock": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 0,
+        "lineTw": 135,
+        "lineRule": "exact"
+      }
+    },
+    "spacer.afterList": {
+      "para": {
+        "spacingBeforeTw": 0,
+        "spacingAfterTw": 0,
+        "lineTw": 68,
+        "lineRule": "exact"
+      }
+    },
+    "spacer.generic": {
+      "para": {
+        "spacingBeforeTw": 1400,
+        "spacingAfterTw": 0,
+        "lineTw": 120,
+        "lineRule": "exact"
+      }
+    }
+  },
+  "changeNote": "S95: profil turunan Manual 000 terukur dari BM.docx (format langsung, research/07); RT-01: tampilan dipindah dari doc.json ke templat (D-119)"
+}

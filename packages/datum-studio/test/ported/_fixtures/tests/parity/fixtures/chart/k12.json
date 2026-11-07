@@ -1,0 +1,50 @@
+{
+  "$schema": "studio.chart/v1",
+  "kind": "K-12",
+  "title": "Tingkat menang tertinggi ada pada segmen daya cadangan.",
+  "source": "Data ilustratif korpus paritas S63 (sintetis, bukan data klien).",
+  "widthMm": 166,
+  "data": {
+    "shape": "series",
+    "categories": [
+      "Pemantauan",
+      "Serat",
+      "Daya cadangan",
+      "Lainnya"
+    ],
+    "series": [
+      {
+        "name": "Menang",
+        "values": [
+          55,
+          40,
+          65,
+          30
+        ]
+      },
+      {
+        "name": "Kalah",
+        "values": [
+          45,
+          60,
+          35,
+          70
+        ]
+      }
+    ]
+  },
+  "heightMm": 66,
+  "unit": "%",
+  "dec": 0,
+  "params": {
+    "widths": [
+      38,
+      27,
+      21,
+      14
+    ]
+  },
+  "accent": {
+    "series": "Kalah"
+  }
+}

@@ -1,0 +1,72 @@
+{
+  "$schema": "studio.diagram/v1",
+  "family": "stack",
+  "id": "5.1",
+  "title": "Tumpukan perangkat lunak pemantauan tersusun dari empat lapis.",
+  "classification": "BIASA",
+  "width_mm": 128,
+  "apparatus": "page",
+  "labels_verified": true,
+  "sources": [
+    "Contoh ilustratif korpus paritas S63, lapis perangkat lunak"
+  ],
+  "nodes": [
+    {
+      "id": "ui",
+      "label": "Antarmuka operator",
+      "shape": "box",
+      "class": {
+        "tier": 0
+      }
+    },
+    {
+      "id": "app",
+      "label": "Layanan aplikasi",
+      "shape": "doubled",
+      "class": {
+        "tier": 1
+      }
+    },
+    {
+      "id": "db",
+      "label": "Basis data waktu",
+      "shape": "box",
+      "class": {
+        "tier": 2
+      }
+    },
+    {
+      "id": "os",
+      "label": "Sistem operasi",
+      "shape": "box",
+      "class": {
+        "tier": 3
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": "ui",
+      "to": "app",
+      "kind": "control",
+      "label": "perintah"
+    },
+    {
+      "from": "app",
+      "to": "db",
+      "kind": "data",
+      "label": "tulis deret"
+    },
+    {
+      "from": "db",
+      "to": "os",
+      "kind": "data",
+      "label": "berkas"
+    }
+  ],
+  "legend": [
+    "solid data",
+    "dashed perintah",
+    "bingkai ganda subsistem"
+  ]
+}

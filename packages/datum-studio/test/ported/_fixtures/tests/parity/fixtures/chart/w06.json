@@ -1,0 +1,65 @@
+{
+  "$schema": "studio.chart/v1",
+  "kind": "W-06",
+  "title": "Pemasok Bravo turun ke peringkat ketiga pada kuartal keempat.",
+  "source": "Data ilustratif korpus paritas S63 (sintetis, bukan data klien).",
+  "widthMm": 166,
+  "data": {
+    "shape": "series",
+    "categories": [
+      "Q1-26",
+      "Q2-26",
+      "Q3-26",
+      "Q4-26"
+    ],
+    "series": [
+      {
+        "name": "Alfa",
+        "values": [
+          3,
+          1,
+          2,
+          1
+        ]
+      },
+      {
+        "name": "Bravo",
+        "values": [
+          1,
+          2,
+          1,
+          3
+        ]
+      },
+      {
+        "name": "Cakra",
+        "values": [
+          2,
+          4,
+          3,
+          2
+        ]
+      },
+      {
+        "name": "Delta",
+        "values": [
+          5,
+          3,
+          4,
+          5
+        ]
+      },
+      {
+        "name": "Elang",
+        "values": [
+          4,
+          5,
+          5,
+          4
+        ]
+      }
+    ]
+  },
+  "heightMm": 62,
+  "dec": 0
+}

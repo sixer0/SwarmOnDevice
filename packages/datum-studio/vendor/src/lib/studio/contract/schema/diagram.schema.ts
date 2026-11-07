@@ -1,0 +1,115 @@
+/**
+ * JSON Schema 2020-12 `studio.diagram/v1` (01_specs.md §3.6, §3.10).
+ * Bentuk = SPEC_FIELDS Garis A; aturan isi (id memuat `\d+\.\d+`, judul
+ * diakhiri titik, rujukan edge ke simpul ada, tolak Mermaid DATUM-31) ditegakkan
+ * `validateSpec`/`loadSpec` (I16), bukan skema.
+ */
+import { DIAGRAM_EDGE_KINDS, DIAGRAM_FAMILIES, DIAGRAM_SHAPES, PROVENANCE_MARKS } from "../enums";
+import { JSON_SCHEMA_DIALECT, STUDIO_SCHEMA_URL_BASE } from "./common.schema";
+import { FIGURE_BOUNDS as B } from "./figure-bounds";
+
+export const DIAGRAM_SCHEMA_ID = `${STUDIO_SCHEMA_URL_BASE}/studio.diagram/v1.json`;
+
+const str = { type: "string", minLength: 1, maxLength: B.diagramText.label } as const;
+// SEC-FIX2 (D-506): setiap larik berbatas (`FIGURE_BOUNDS`, uji secfix2-schema-walk); biaya mesin super-linear.
+const strList = (max: number) => ({ type: "array", maxItems: max, items: { type: "string", maxLength: B.diagramText.item } }) as const;
+
+export const diagramSchema = {
+  $schema: JSON_SCHEMA_DIALECT,
+  $id: DIAGRAM_SCHEMA_ID,
+  title: "studio.diagram/v1",
+  type: "object",
+  properties: {
+    $schema: { const: "studio.diagram/v1" },
+    family: { enum: [...DIAGRAM_FAMILIES] },
+    id: { type: "string", minLength: 1, maxLength: 64 },
+    title: str,
+    classification: { type: "string", minLength: 1, maxLength: 64 },
+    // D-245 H1: lebar sah = turunan kertas (A4 128/166); keanggotaan ditegakkan mesin diagram (P1-width_mm).
+    width_mm: { type: "number", exclusiveMinimum: 0 },
+    apparatus: { enum: ["page", "figure"] },
+    labels_verified: { type: "boolean" },
+    sources: { type: "array", minItems: 1, maxItems: B.diagramSources, items: { type: "string", minLength: 1, maxLength: B.diagramText.source } },
+    source: { type: "string", maxLength: B.diagramText.source },
+    nodes: {
+      type: "array",
+      minItems: 1,
+      maxItems: B.diagramNodes,
+      items: {
+        type: "object",
+        properties: {
+          id: { type: "string", minLength: 1, maxLength: 64 },
+          label: str,
+          sub: { type: "string", maxLength: B.diagramText.label },
+          shape: { enum: [...DIAGRAM_SHAPES] },
+          mark: { enum: [...PROVENANCE_MARKS] },
+          tag: { type: "string", maxLength: 64 },
+          u: { type: "number", minimum: 0 },
+          external: { type: "boolean" },
+          // Swarm patch (row 124b, CP-45; Table 10.1, SM-01/03/04 ID p.63, 66): library symbol id
+          // (e.g. "iec:battery"); additive, optional; known-id and one-dialect rules are the engine's.
+          symbol: { type: "string", minLength: 1, maxLength: 64 },
+          class: {
+            type: "object",
+            properties: {
+              tier: { type: "integer", minimum: 0 },
+              lane: { type: ["integer", "string"], maxLength: 64 },
+              col: { type: "integer", minimum: 0 },
+              row: { type: "integer", minimum: 0 },
+              accent: { type: "boolean" },
+              secondary: { type: "boolean" },
+              external: { type: "boolean" },
+            },
+            additionalProperties: false,
+          },
+        },
+        required: ["id", "label", "class"],
+        additionalProperties: false,
+      },
+    },
+    edges: {
+      type: "array",
+      maxItems: B.diagramEdges,
+      items: {
+        type: "object",
+        properties: {
+          from: { type: "string", minLength: 1, maxLength: 64 },
+          to: { type: "string", minLength: 1, maxLength: 64 },
+          kind: { enum: [...DIAGRAM_EDGE_KINDS] },
+          label: { type: "string", maxLength: B.diagramText.label },
+        },
+        required: ["from", "to", "kind", "label"],
+        additionalProperties: false,
+      },
+    },
+    zones: {
+      type: "array",
+      maxItems: B.diagramZones,
+      items: {
+        type: "object",
+        properties: {
+          id: { type: "string", minLength: 1, maxLength: 64 },
+          label: str,
+          members: { type: "array", maxItems: B.zoneMembers, items: { type: "string", minLength: 1, maxLength: 64 } },
+        },
+        required: ["id", "label", "members"],
+        additionalProperties: false,
+      },
+    },
+    legend: strList(B.diagramLegend),
+    notes: strList(B.diagramNotes),
+    per_row: { type: "integer", minimum: 1, maximum: 20 },
+    // Delta S03-d2 (D-89): opt-in multi-rel layout-c; aditif.
+    sld: {
+      type: "object",
+      properties: { multiBus: { type: "boolean" } },
+      additionalProperties: false,
+    },
+    // INTERNAL compose (D-288): diisi `services/compose/blocks.ts`, bukan medan agen.
+    // `not: {}` = selalu ditolak pada masukan agen (artefak v1, dokumen v1); spec
+    // terkomposisi tidak divalidasi ulang di jalur render.
+    keyRowOnPage: { not: {}, description: "INTERNAL compose: not an agent field; always rejected on agent input" },
+  },
+  required: ["$schema", "family", "id", "title", "classification", "width_mm", "sources", "nodes"],
+  additionalProperties: false,
+} as const;

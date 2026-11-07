@@ -1,0 +1,18 @@
+DATUM — GSP House Style v1.1
+TIPOGRAFI SISTEM · IBM PLEX (lisensi SIL Open Font, bebas dipakai komersial)
+
+Pasang 16 berkas .ttf di folder ini sebelum membuka contoh .xlsx dan .pptx.
+
+  macOS    : pilih semua .ttf, klik dua kali, "Install Font"
+  Windows  : pilih semua .ttf, klik kanan, "Install for all users"
+
+Contoh .docx TIDAK memerlukan langkah ini — tipografinya sudah ditanam
+(embedded) di dalam berkas, sehingga tampil identik di mesin mana pun.
+Excel dan PowerPoint tidak mendukung penanaman huruf lintas platform,
+karena itu font perlu dipasang sekali di setiap mesin yang memakainya.
+
+Peran huruf dalam sistem:
+  IBM Plex Sans Condensed  struktur — judul, kepala tabel, label
+  IBM Plex Serif           bacaan   — seluruh prosa
+  IBM Plex Mono            data     — setiap angka, ID, koordinat, satuan
+  IBM Plex Sans            antarmuka — teks sel Excel
