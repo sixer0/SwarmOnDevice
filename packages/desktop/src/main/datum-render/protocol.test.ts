@@ -67,6 +67,40 @@ describe("render bridge request validation", () => {
     expect(code(() => validateRequest({ op: "checkPage", src: "/a.svg", wMm: 1, hMm: 1, script: "x" }))).toBe("BAD_REQUEST")
   })
 
+  test("pagePng (row 151b): html src, a dstDir, optional pages/dpi/page size; everything else refused", () => {
+    expect(validateRequest({ op: "pagePng", src: "/a/doc.html", dstDir: "/a/verify/o1" })).toEqual({
+      op: "pagePng",
+      src: "/a/doc.html",
+      dstDir: "/a/verify/o1",
+    })
+    expect(validateRequest({ op: "pagePng", src: "/a/doc.htm", dstDir: "/a", pages: [3, 1], dpi: 96, widthMm: 148, heightMm: 210 })).toEqual({
+      op: "pagePng",
+      src: "/a/doc.htm",
+      dstDir: "/a",
+      pages: [3, 1],
+      dpi: 96,
+      widthMm: 148,
+      heightMm: 210,
+    })
+    const ok = { op: "pagePng", src: "/a/doc.html", dstDir: "/a" }
+    expect(code(() => validateRequest({ ...ok, src: "/a/fig.svg" }))).toBe("BAD_REQUEST")
+    expect(code(() => validateRequest({ ...ok, dstDir: "" }))).toBe("BAD_REQUEST")
+    expect(code(() => validateRequest({ op: "pagePng", src: "/a/doc.html" }))).toBe("BAD_REQUEST")
+    expect(code(() => validateRequest({ ...ok, dst: "/a/p.png" }))).toBe("BAD_REQUEST")
+    expect(code(() => validateRequest({ ...ok, script: "(function(){})" }))).toBe("BAD_REQUEST")
+    expect(code(() => validateRequest({ ...ok, pages: [] }))).toBe("BAD_REQUEST")
+    expect(code(() => validateRequest({ ...ok, pages: [1, 1] }))).toBe("BAD_REQUEST")
+    expect(code(() => validateRequest({ ...ok, pages: [0] }))).toBe("BAD_REQUEST")
+    expect(code(() => validateRequest({ ...ok, pages: [2001] }))).toBe("BAD_REQUEST")
+    expect(code(() => validateRequest({ ...ok, pages: [1.5] }))).toBe("BAD_REQUEST")
+    expect(code(() => validateRequest({ ...ok, pages: Array.from({ length: 13 }, (_, i) => i + 1) }))).toBe("BAD_REQUEST")
+    expect(code(() => validateRequest({ ...ok, dpi: 35 }))).toBe("BAD_REQUEST")
+    expect(code(() => validateRequest({ ...ok, dpi: 301 }))).toBe("BAD_REQUEST")
+    expect(code(() => validateRequest({ ...ok, dpi: 150.5 }))).toBe("BAD_REQUEST")
+    expect(code(() => validateRequest({ ...ok, widthMm: 148 }))).toBe("BAD_REQUEST")
+    expect(code(() => validateRequest({ ...ok, widthMm: 5001, heightMm: 10 }))).toBe("BAD_REQUEST")
+  })
+
   test("parses the envelope and keeps the token out of the error response", () => {
     const env = parseLine(JSON.stringify({ token: "secret", id: "j1", op: "hello" }))
     expect(env).toMatchObject({ id: "j1", token: "secret" })

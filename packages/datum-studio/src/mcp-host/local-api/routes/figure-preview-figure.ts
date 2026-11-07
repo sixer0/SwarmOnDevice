@@ -19,11 +19,12 @@ import { StudioEngineError } from "@/lib/studio/contract/errors";
 import { applyChartIntent, orientationTarget } from "@/lib/studio/engine/chart/core";
 import { figureGrid } from "@/lib/studio/engine/chart/core/guards";
 import type { ChartLang } from "@/lib/studio/engine/chart/core/lang";
-import { buildDiagramSvg } from "@/lib/studio/engine/diagram/build";
+import { buildDiagramSvgAuto } from "@/lib/studio/engine/diagram/elk";
 import { glyphSet, mapBlock, storedComposeContext } from "@/lib/studio/services/compose";
 import { templateForDoc } from "@/lib/studio/services/render/common";
 import { ArtifactSpecReader, chartSvg, diagramApparatusOptions, diagramSpecForBlock } from "@/lib/studio/services/render/figures";
 import { capacityMessage, figureBytesIssues, figureCapacityIssuesFor, type CapacityIssue } from "@/lib/studio/services/render/figure-limits";
+import { renderVegaFigure, vegaCodeOf } from "@/lib/studio/services/render/vega-figure";
 
 export const FIGURE_TYPES: ReadonlySet<string> = new Set(["chart", "diagram"]);
 /** Batas isu yang dikembalikan (hasil kecil; jumlah penuh di `issueCount`). */
@@ -52,7 +53,8 @@ export interface PreviewIssue {
  * letak diagram beradaptasi dan lolos lint; keduanya bukan alasan merevisi. `HINT_IGNORED` tetap dihitung (medan
  * maksud tidak berlaku untuk kode itu: agen perlu membuangnya).
  */
-export const INFO_CODES: ReadonlySet<string> = new Set(["DATUM-36", "FIGURE_LIMITS_DEFAULT", "PARAM_ALIAS", "AUTO_FIT", "INTENT_APPLIED", "CAPACITY_ADAPT"]);
+// Row 163b: VEGA_ENGINE = which Vega engine drew the chart (informative, not a layout issue).
+export const INFO_CODES: ReadonlySet<string> = new Set(["DATUM-36", "FIGURE_LIMITS_DEFAULT", "PARAM_ALIAS", "AUTO_FIT", "INTENT_APPLIED", "CAPACITY_ADAPT", "VEGA_ENGINE"]);
 
 /**
  * Saran baku untuk catatan tata letak yang tidak membawa `suggest` dari mesin (medan maksud D-482: `orientation`,
@@ -177,6 +179,11 @@ function labelsOf(data: Rec): string[] {
       return pick(data.groups, "name");
     case "sets":
       return pick(data.sets, "name");
+    // Swarm patch (row 163b, C155): Vega family shapes.
+    case "days":
+      return pick(data.days, "date");
+    case "hierarchy":
+      return pick(data.nodes, "label");
     default:
       return [];
   }
@@ -252,20 +259,27 @@ function renderedSummary(spec: StudioChartV1, tpl: ResolvedTemplate, svg: string
 }
 
 /** Render figur terselesaikan (sinkron, CPU); galat mesin (StudioEngineError) diteruskan ke pemanggil. */
-export function renderResolved(f: ResolvedFigure, tpl: ResolvedTemplate, o: { inline: boolean; withSvg: boolean; lang?: ChartLang }): FigurePreview {
+export async function renderResolved(f: ResolvedFigure, tpl: ResolvedTemplate, o: { inline: boolean; withSvg: boolean; lang?: ChartLang }): Promise<FigurePreview> {
   const { block } = f;
   let r: SvgResult;
   let code: string | null;
   let data: FigurePreview["data"] = null;
   let rendered: FigurePreview["rendered"] = null;
-  if (f.type === "chart") {
+  const vega = f.type === "chart" ? vegaCodeOf(f.spec.kind) : null;
+  if (f.type === "chart" && vega !== null) {
+    // Row 163b (C155): V-01..V-08 (or a DF code vegaChartFor maps) through the Vega family, as buildFigures does.
+    r = await renderVegaFigure(f.spec, vega, tpl, o.lang);
+    code = typeof f.spec.kind === "string" ? f.spec.kind : null;
+    data = dataSummary(f.spec);
+    rendered = { code: renderedCodeOf(r.svg) ?? vega, orientation: null, ...(data ?? { shape: "", items: 0, maxLabelChars: 0 }) };
+  } else if (f.type === "chart") {
     r = chartSvg(f.spec, tpl, o.lang);
     code = typeof f.spec.kind === "string" ? f.spec.kind : null;
     data = dataSummary(f.spec);
     rendered = renderedSummary(f.spec, tpl, r.svg);
   } else {
     // I-2 (C74): the in-SVG key in the document language (ID: KUNCI, PENUH / PUTUS-PUTUS / ...), as buildFigures does.
-    r = buildDiagramSvg(f.spec, { release: false, grid: figureGrid(tpl.params), ...(o.lang ? diagramApparatusOptions(o.lang) : {}) });
+    r = await buildDiagramSvgAuto(f.spec, { release: false, grid: figureGrid(tpl.params), ...(o.lang ? diagramApparatusOptions(o.lang) : {}) });
     code = typeof f.spec.family === "string" ? f.spec.family : null;
   }
   const issues = issuesOf(r);

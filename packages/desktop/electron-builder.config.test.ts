@@ -697,8 +697,8 @@ test("electron-vite builds the datum-studio-host entry and resolves its host mod
 for (const channel of channels) {
   test(`carries the swarm-patch release and slot for ${channel.channel} (SP-BC)`, async () => {
     const config = await importConfig(`swarm-patch=${channel.channel}`, channel.channel)
-    expect(SWARM_RELEASE).toBe("1.2.0")
-    expect(config.mac?.extendInfo).toEqual({ SwarmRelease: "1.2.0" })
+    expect(SWARM_RELEASE).toBe("1.2.1")
+    expect(config.mac?.extendInfo).toEqual({ SwarmRelease: "1.2.1" })
     expect(config.mac).not.toHaveProperty("bundleShortVersion")
     expect(config.mac).not.toHaveProperty("bundleVersion")
     expect(config.files).toContain("!resources/swarm-patch{,/**/*}")
@@ -734,8 +734,8 @@ for (const channel of channels) {
   })
 }
 
-test("package.json version equals the release 1.2.0 (U4)", async () => {
+test("package.json version equals the release 1.2.1 (U4)", async () => {
   const pkg = await Bun.file(path.join(import.meta.dir, "package.json")).json()
-  expect(pkg.version).toBe("1.2.0")
+  expect(pkg.version).toBe("1.2.1")
   expect(pkg.version).toBe(SWARM_RELEASE)
 })

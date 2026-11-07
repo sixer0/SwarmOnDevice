@@ -103,7 +103,9 @@ describe('bad_cases Garis A: buildDiagramSvg(release=true) menolak setiap kasus'
   for (const c of REFUSED) {
     it(`${c.name} -> memuat "${c.expect}"`, () => {
       const e = catchErr(() => buildDiagramSvg(clone(c.spec) as unknown as StudioDiagramV1, { release: true }));
-      expect(e.code).toBe('BY_CONSTRUCTION_FAILED');
+      // row42 ADAPT A11 (U24 B, row 158): the two capacity cases (DATUM-33 height, DATUM-37 width) are
+      // refused FIGURE_OVER_CAPACITY (still DiagramDefect, same checkId and message text); others unchanged.
+      expect(e.code).toBe(/^DATUM-3[37]/.test(EXPECTED[c.name].checkId) ? 'FIGURE_OVER_CAPACITY' : 'BY_CONSTRUCTION_FAILED');
       expect(e.message).toContain(c.expect);
       expect(checkIdOf(e)).toBe(EXPECTED[c.name].checkId);
     });

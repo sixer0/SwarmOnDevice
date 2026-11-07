@@ -7,6 +7,7 @@ import { join } from "node:path"
 import { STUDIO_DESCRIPTOR_FILE, studioDescriptorPath } from "./descriptor"
 import { studioStoreRoot, type StudioLayout } from "./layout"
 import { startStudioHost, StudioHostError, type ForkHost, type HostChild, type StudioHostStartOptions } from "./lifecycle"
+import { STUDIO_RELEASE } from "./protocol"
 
 const SCRATCH = "/private/tmp/claude-501/row111"
 mkdirSync(SCRATCH, { recursive: true })
@@ -149,7 +150,7 @@ describe("datum-studio-host lifecycle (row 111)", () => {
     expect(fx.logs.find((l) => l.source === "fixture.templates")?.context).toEqual({
       templatesDir: fx.layout.templatesDir,
       assetRepoRoot: fx.studio,
-      release: "1.2.0",
+      release: STUDIO_RELEASE,
     })
 
     // Descriptor: <stateHome>/swarm/datum-studio.env, 0600, URL/TOKEN/PID (main PID), token never in env or logs.
@@ -165,7 +166,7 @@ describe("datum-studio-host lifecycle (row 111)", () => {
 
     // Store lock held by the host process; the store exists.
     expect(host.hostPid).toBe(run.child.pid!)
-    expect(readLock(fx.storeRoot)).toMatchObject({ pid: host.hostPid, release: "1.2.0" })
+    expect(readLock(fx.storeRoot)).toMatchObject({ pid: host.hostPid, release: STUDIO_RELEASE })
     expect(mode(lockOf(fx.storeRoot))).toBe("600")
     expect(existsSync(join(fx.storeRoot, "datum-studio.sqlite"))).toBe(true)
 

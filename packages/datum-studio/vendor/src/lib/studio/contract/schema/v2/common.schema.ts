@@ -338,8 +338,45 @@ const CHART_DATA_V2 = {
       ["sets", "overlaps"],
     ),
     shapeVariant("steps", { spec: ref("DiagramSpecV2") }, ["spec"]),
+    // Swarm patch (row 163b, C155): bentuk khusus keluarga Vega. Batas di sini longgar di atas kapasitas tiap jenis
+    // (V-01 <= 371 hari, V-07 <= 200 simpul, V-08 <= 120 simpul) agar penolakan kapasitas (FIGURE_OVER_CAPACITY,
+    // dengan saran) datang dari mesin, bukan dari skema.
+    shapeVariant(
+      "days",
+      { days: { type: "array", minItems: 1, maxItems: 800, items: obj({ date: isoDate, value: num }, ["date", "value"]) } },
+      ["days"],
+    ),
+    shapeVariant(
+      "hierarchy",
+      {
+        nodes: {
+          type: "array",
+          minItems: 2,
+          maxItems: 400,
+          items: obj({ id: { type: "string", minLength: 1, maxLength: 80 }, parent: { type: "string", minLength: 1, maxLength: 80 }, label: { type: "string", minLength: 1, maxLength: 120 }, value: { type: "number", minimum: 0 } }, ["id", "label"]),
+        },
+      },
+      ["nodes"],
+    ),
   ],
 } as const;
+
+/**
+ * Swarm patch (row 163b, C155): kode keluarga Vega (engine/chart/family-v, registry/charts.ts VEGA_CHART_REGISTRY) dan
+ * kode DF yang dipetakan `vegaChartFor` (dikunci uji test/render-vega). `options` hanya sah pada kode-kode ini.
+ */
+export const VEGA_CHART_CODES_V2 = ["V-01", "V-02", "V-03", "V-04", "V-05", "V-06", "V-07", "V-08"] as const;
+export const VEGA_ALIAS_CHART_CODES_V2 = ["DF-01", "DF-02", "DF-03", "DF-07", "DF-09", "DF-13"] as const;
+const CHART_VEGA_OPTIONS_V2 = obj(
+  {
+    weekStart: { enum: ["monday", "sunday"] },
+    offset: { enum: ["center", "zero", "normalize"] },
+    max: { type: "number", exclusiveMinimum: 0 },
+    form: { enum: ["sunburst", "icicle", "tidy", "dendrogram"] },
+  },
+  [],
+  { minProperties: 1 },
+);
 
 // ── Halaman depan dan slot (T2-33..T2-45) ────────────────────────────────
 
@@ -532,7 +569,9 @@ export const commonV2Schema = {
         type: { const: "chart" },
         ...BLOCK_ID,
         // AM-03 (DC-05): `custom` + `form` berbatas (T2-66); aturan pasangan di `allOf` (CH-05).
-        code: { enum: [...CHART_CODES, "composite", "custom"] },
+        code: { enum: [...CHART_CODES, ...VEGA_CHART_CODES_V2, "composite", "custom"] },
+        // Swarm patch (row 163b, C155): opsi tertutup keluarga Vega (aturan kode di allOf).
+        options: CHART_VEGA_OPTIONS_V2,
         form: ref("ChartCustomFormV2"),
         data: ref("ChartDataV2"),
         panels: { type: "array", minItems: 1, maxItems: 24, items: ref("ChartPanelV2") },
@@ -564,6 +603,11 @@ export const commonV2Schema = {
             if: { properties: { code: { const: "custom" } }, required: ["code"] },
             then: { properties: { form: true, data: true }, required: ["form", "data"] },
             else: { not: { properties: { form: true }, required: ["form"] } },
+          },
+          // Swarm patch (row 163b, C155): `options` hanya pada kode Vega / alias DF-nya.
+          {
+            if: { properties: { options: true }, required: ["options"] },
+            then: { properties: { code: { enum: [...VEGA_CHART_CODES_V2, ...VEGA_ALIAS_CHART_CODES_V2] } }, required: ["code"] },
           },
         ],
       },

@@ -7,10 +7,17 @@
  * `CAPACITY_ADAPT`, tetapi hanya hasil yang lolos `capacityAcceptable` (D-503: tanpa teks
  * bertumpuk, persilangan + berimpit <= 3). Bila semua gagal atau tidak ada yang lolos, penolakan
  * asli dilempar ulang (kelas, kode, checkId sama) dengan saran aksi konkret di pesannya.
+ *
+ * Swarm patch (row 158, U24 B): (1) a capacity layout is used only when it is CLEAN (geometry lint
+ * score 0); one that would render with crossings/overlaps is refused instead of squeezed;
+ * (2) every capacity refusal (DATUM-33 height, DATUM-37* width) is re-thrown as a
+ * `DiagramOverCapacity` (code FIGURE_OVER_CAPACITY, class DiagramDefect, checkId kept) whose
+ * details carry {limit, measured, unit, suggestion}; other defects keep their code (withAction).
  */
 import { StudioEngineError } from "../../../contract/errors";
 import type { StudioDiagramV1 } from "../../../contract";
 import { DiagramDefect, LATTICE_X } from "../core";
+import { DiagramOverCapacity, type FigureOverCapacityDetails } from "../../figure-capacity";
 import { lintDiagramGeometry, type DiagramGeomLint } from "../fit/lint";
 import { withDiagramFit, type DiagramFitState } from "../fit/state";
 import { diagramGeometryIssues, type DiagramGeometryIssue } from "./autofit";
@@ -48,9 +55,86 @@ export function capacityAction(s: StudioDiagramV1, checkId: string): string | nu
   return `persingkat label atau pecah menjadi 2 diagram (lebar ${W} mm)`;
 }
 
+/** Row 158: check ids that mean "the figure does not fit the sheet" (height or width). */
+export function isCapacityCheck(checkId: string): boolean {
+  return checkId.startsWith("DATUM-33") || checkId.startsWith("DATUM-37");
+}
+
+type Measure = Pick<FigureOverCapacityDetails, "quantity" | "unit" | "limit" | "measured">;
+
+const n1 = (v: string | undefined): number | null => (v === undefined || !Number.isFinite(Number(v)) ? null : Number(v));
+
+/** mm figures the engine already printed in its own DATUM-33/37 message (fallback measure). */
+function measureFromMessage(msg: string): Measure | null {
+  const h = /tinggi gambar ([\d.]+) mm melewati blok teks ([\d.]+) mm/.exec(msg);
+  if (h) return { quantity: "tinggi gambar", unit: "mm", measured: n1(h[1]), limit: n1(h[2]) };
+  const w = /\(([\d.]+)\.\.([\d.]+) dari ([\d.]+) mm\)/.exec(msg);
+  if (w) return { quantity: "tepi kanan simpul", unit: "mm", measured: n1(w[2]), limit: n1(w[3]) };
+  const r = /tidak muat di ([\d.]+) mm .*butuh ([\d.]+) mm/.exec(msg);
+  if (r) return { quantity: "lebar baris graph", unit: "mm", measured: n1(r[2]), limit: n1(r[1]) };
+  return null;
+}
+
+/** Graph: contiguous column span vs the most columns that fit at the figure width. */
+function graphColumns(s: StudioDiagramV1): { cols: number[]; span: number; maxCols: number; width: number } {
+  const W = Number(s.width_mm) || 166;
+  const cols = [...new Set((s.nodes ?? []).map((n) => Number((n.class as Record<string, unknown> | undefined)?.col ?? 0)))].sort((a, b) => a - b);
+  const span = cols.length ? cols[cols.length - 1] - cols[0] + 1 : 0;
+  const maxCols = Math.floor((W - LATTICE_X * 2) / (LATTICE_X * 3) + 1e-9) + 1;
+  return { cols, span, maxCols, width: W };
+}
+
+/** Swimlane: busiest lane vs the nodes one wrapped lane row holds (layout-b/swimcap.ts `perRow`). */
+function swimlaneLoad(s: StudioDiagramV1): { lane: string; count: number; perRow: number; width: number } {
+  const W = Number(s.width_mm) || 166;
+  const per = new Map<string, number>();
+  for (const n of s.nodes ?? []) {
+    const lane = String((n.class as Record<string, unknown> | undefined)?.lane ?? "");
+    per.set(lane, (per.get(lane) ?? 0) + 1);
+  }
+  let lane = "";
+  let count = 0;
+  for (const [k, v] of per) if (v > count) [lane, count] = [k, v];
+  // gutter 3 kisi + 1 kisi tepi, simpul 3 kisi + 1 kisi jarak (swimlane.ts gutter, swimcap.ts x0/pitch)
+  const perRow = Math.max(1, Math.floor((W - LATTICE_X * 4 + LATTICE_X) / (LATTICE_X * 4) + 1e-9));
+  return { lane, count, perRow, width: W };
+}
+
+/**
+ * Row 158: `e` as a FIGURE_OVER_CAPACITY refusal (measured value, limit, concrete suggestion), or
+ * null when `e` is not a capacity defect. `note` is appended to the engine text (e.g. why the
+ * capacity layout was not used).
+ */
+export function overCapacityOf(e: unknown, s: StudioDiagramV1, note?: string): DiagramOverCapacity | null {
+  if (!(e instanceof StudioEngineError)) return null;
+  if (e instanceof DiagramOverCapacity) return e;
+  const checkId = checkIdOf(e);
+  if (!isCapacityCheck(checkId)) return null;
+  const fam = String(s.family);
+  const action = capacityAction(s, checkId) ?? "pecah menjadi 2 diagram";
+  let m: Measure | null = null;
+  let suggestion = action;
+  if (checkId.startsWith("DATUM-37") && fam === "graph") {
+    const g = graphColumns(s);
+    if (g.span > g.maxCols) m = { quantity: "kolom graph", unit: "kolom", measured: g.span, limit: g.maxCols };
+  } else if (checkId.startsWith("DATUM-37") && fam === "swimlane") {
+    const l = swimlaneLoad(s);
+    m = { quantity: "simpul per baris lajur", unit: "simpul", measured: l.count, limit: l.perRow };
+    suggestion = `${action}; lajur "${l.lane}" memuat ${l.count} simpul, maks ${l.perRow} per baris lajur pada ${l.width} mm (bungkus lajur hanya dipakai bila hasilnya bersih)`;
+  }
+  m ??= measureFromMessage(e.message) ?? { quantity: checkId.startsWith("DATUM-33") ? "tinggi gambar" : "lebar gambar", unit: "mm", measured: null, limit: null };
+  if (checkId.startsWith("DATUM-33")) suggestion = `${action} (${(s.nodes ?? []).length} simpul, ${(s.edges ?? []).length} konektor dalam gambar ini)`;
+  const pointer = e instanceof DiagramDefect ? e.pointer : undefined;
+  const base = note ? `${e.message}; ${note}` : e.message;
+  return new DiagramOverCapacity(base, { checkId, family: fam, ...m, suggestion, ...(pointer ? { pointer } : {}) });
+}
+
 /** Lempar ulang `e` dengan saran aksi (kelas, kode, checkId, pointer dipertahankan). */
 export function withAction(e: unknown, s: StudioDiagramV1): unknown {
   if (!(e instanceof StudioEngineError)) return e;
+  // Row 158 (U24 B): capacity defects become FIGURE_OVER_CAPACITY with limit/measured/suggestion.
+  const over = overCapacityOf(e, s);
+  if (over) return over;
   const action = capacityAction(s, checkIdOf(e));
   if (!action || e.message.includes("saran:")) return e;
   const msg = `${e.message}; saran: ${action}`;
@@ -92,15 +176,17 @@ export function capacityRetry(s: StudioDiagramV1, original: unknown, rebuild: ()
     try {
       const res = withDiagramFit(state, rebuild);
       const g = lintDiagramGeometry(res.svg);
-      const ok = capacityAcceptable(g);
-      tried.push(`${m.capMode}${m.grow ? "" : ", tanpa tumbuh"}: ${g.score}${ok ? "" : " (ditolak: teks bertumpuk atau persilangan + berimpit > 3)"}`);
+      // Row 158 (U24 B): only a CLEAN capacity layout (lint score 0) is used; D-503's looser
+      // `capacityAcceptable` (<= 3 route defects) stays exported for its pinned unit test.
+      const ok = capacityAcceptable(g) && g.score === 0;
+      tried.push(`${m.capMode}${m.grow ? "" : ", tanpa tumbuh"}: ${g.score}${ok ? "" : " (ditolak: tidak bersih)"}`);
       if (ok && (!best || g.score < best.g.score)) best = { res, g, state };
       if (g.score === 0) break;
     } catch (e) {
       tried.push(`${m.capMode}${m.grow ? "" : ", tanpa tumbuh"}: gagal ${checkIdOf(e)}`);
     }
   }
-  if (!best) throw withAction(original, s);
+  if (!best) throw overCapacityOf(original, s, `tata letak kapasitas tidak bersih (dicoba: ${tried.join("; ")})`) ?? withAction(original, s);
   const geometry: DiagramGeometryIssue[] = [
     {
       checkId: "AUTO_FIT",

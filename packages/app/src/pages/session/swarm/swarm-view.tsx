@@ -8,6 +8,7 @@ import { Icon as IconV2 } from "@opencode-ai/ui/v2/icon"
 import { createMemo, For, Index, Match, Show, Switch } from "solid-js"
 import { formatDuration, relativePath, type MapStep } from "../map/session-map-model"
 import type { SwarmController } from "./swarm-controller"
+import { MissionControl, type MissionControlMount } from "./mission-control"
 import { coalesceSegments, type SwarmLane, type SwarmModel, type SwarmOverlap, type SwarmSegmentKind } from "./swarm-model"
 
 const LABEL = "text-v2-text-text-muted [font-weight:440]"
@@ -352,7 +353,8 @@ function OverlapRow(props: { swarm: SwarmController; overlap: SwarmOverlap; mode
   )
 }
 
-export function SwarmAgents(props: { swarm: SwarmController }) {
+/** `missions` (row 133): mission control at the top of the Agents view; absent or empty = this view is unchanged. */
+export function SwarmAgents(props: { swarm: SwarmController; missions?: MissionControlMount }) {
   const language = useLanguage()
   const usd = useUsd()
   const line = useLaneLine(props.swarm)
@@ -389,6 +391,8 @@ export function SwarmAgents(props: { swarm: SwarmController }) {
       data-scrollable
       onKeyDown={onKey}
     >
+      <Show when={props.missions}>{(missions) => <MissionControl {...missions()} />}</Show>
+
       <Show when={props.swarm.view.discoverFailed || failedReads() > 0}>
         <div
           data-swarm-error

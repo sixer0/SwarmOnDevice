@@ -348,6 +348,8 @@ export const STUDIO_ERROR_CODES = [
   "CHART_CUSTOM_FORM_UNSUPPORTED",
   // Swarm patch (row 69a, C78; templates spec §4): new document on an archived template. 403.
   "TEMPLATE_ARCHIVED",
+  // Swarm patch (row 158, U24 B): a diagram/chart over engine capacity is refused, not squeezed. 422.
+  "FIGURE_OVER_CAPACITY",
 ] as const;
 export type StudioErrorCode = (typeof STUDIO_ERROR_CODES)[number];
 

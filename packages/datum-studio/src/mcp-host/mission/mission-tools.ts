@@ -18,9 +18,10 @@ import type { MissionDoc, MissionWriteOptions, NewMissionMessage, RowPatch, Sess
 import type { HostToolExtension, HostToolSession } from "../tool-table.ts"
 import { ACTOR_PATTERN, EXPORT_FILES, MISSION_TOOL_NAMES, MISSION_TOOL_SCHEMAS, type ExportFile, type GetInclude } from "./schemas.ts"
 import { errorResult, MissionToolError, okResult, type MissionLog } from "./tool-result.ts"
+import { readActivityAt, readDeliverables, readMessagesTail, type OutputVerificationSource } from "./deliverables.ts"
 
-/** The part of SqliteStudioStore the mission tools use. */
-export interface MissionHostStore {
+/** The part of SqliteStudioStore the mission tools use (row 126/155: + the G4 source, row 149's listOutputVerifications, see deliverables.ts). */
+export interface MissionHostStore extends OutputVerificationSource {
   readonly missions: MissionStore
   transaction<T>(fn: (tx: StoreTx) => Promise<T>, opts?: { timeoutMs?: number; correlationId?: string }): Promise<T>
 }
@@ -107,6 +108,11 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
     }
   }
 
+  /** Row 126: a read-only job on the write queue (committed data; nothing written). */
+  function read<T>(fn: (q: StoreTx) => T): Promise<T> {
+    return store.transaction(async (tx) => fn(tx))
+  }
+
   function requireMission(id: string): { mission: MissionDoc } {
     const got = M.get(id)
     if (!got) throw new MissionToolError("MISSION_NOT_FOUND", "unknown mission id", { mission: id })
@@ -153,7 +159,7 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
     tool(
       "studio_mission_get",
       "Read a mission",
-      "Read one mission: the stored MissionDoc plus derived {phases (only the mission type's phases, U20), waves, ready, counts, progress, checkpoints}. include: rows, decisions, findings, locks, reports, events, snapshots, requests, checkpoints, messages.",
+      "Read one mission: the stored MissionDoc plus derived {phases (only the mission type's phases, U20), waves, ready, counts, progress, checkpoints}. include: rows, decisions, findings, locks, reports, events, snapshots, requests, checkpoints, messages, deliverables (the mission's Studio documents with the current revision's outputs: finalFileName, sha256, verified). messagesTail: N = the newest N messages.",
       true,
       async (a) => {
         const id = a.mission as string
@@ -177,6 +183,15 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
         if (include?.includes("requests")) extra.requests = M.listDecisionRequests(id)
         if (include?.includes("checkpoints")) extra.checkpoints = M.listCheckpoints(id)
         if (include?.includes("messages")) extra.messages = M.listMessages(id)
+        // Row 126 (spec mission control §8 G1, G3).
+        const tail = typeof a.messagesTail === "number" ? a.messagesTail : undefined
+        if (tail !== undefined || include?.includes("deliverables")) {
+          const rowIds = new Set((got.mission.rows ?? []).map((r) => r.id))
+          await read(async (q) => {
+            if (tail !== undefined) extra.messages = readMessagesTail(q, M, id, tail)
+            if (include?.includes("deliverables")) extra.deliverables = readDeliverables(q, id, rowIds) // row 136b: sync, the store's one rule
+          })
+        }
         const d = got.derived
         const text = [
           `mission ${id} (${got.mission.type} v${got.mission.typeVersion}): ${got.mission.status}${got.mission.supersededBy ? `, superseded by ${got.mission.supersededBy}` : ""}`,
@@ -189,7 +204,7 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
     tool(
       "studio_mission_list",
       "List missions",
-      "Session overview: missions filtered by session (several missions per session), status, type, projectDir or text q (mission_fts); newest first with a keyset cursor (take <= 200, default 50).",
+      "Session overview: missions filtered by session (several missions per session), status, type, projectDir or text q (mission_fts); newest first with a keyset cursor (take <= 200, default 50). Each item has activityAt: the newest change of the mission, its documents, outputs or output verification.",
       true,
       async (a, s) => {
         // A read: the session is only a filter (another client's overview may be read; client defaults to this agent).
@@ -203,8 +218,11 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
           take: typeof a.take === "number" ? a.take : 50,
           ...(str(a, "cursor") ? { cursor: str(a, "cursor") } : {}),
         })
-        const text = [`${r.items.length} missions${r.nextCursor ? " (more: nextCursor)" : ""}`, ...r.items.map((m) => `  ${m.id} [${m.type}] ${m.status} ${m.progress.done}/${m.progress.total}`)].join("\n")
-        return { text, data: { items: r.items, nextCursor: r.nextCursor } }
+        // Row 126 (spec mission control §8 G2): activityAt per item.
+        const activity = await read((q) => readActivityAt(q, store, r.items.map((m) => m.id)))
+        const items = r.items.map((m) => ({ ...m, activityAt: activity.get(m.id) ?? m.updatedAt }))
+        const text = [`${items.length} missions${r.nextCursor ? " (more: nextCursor)" : ""}`, ...items.map((m) => `  ${m.id} [${m.type}] ${m.status} ${m.progress.done}/${m.progress.total}`)].join("\n")
+        return { text, data: { items, nextCursor: r.nextCursor } }
       },
     ),
     tool(

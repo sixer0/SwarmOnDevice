@@ -6,6 +6,7 @@
  *   - png        SVG file -> PNG file (fixed sandboxed window, page JS off, network blocked)
  *   - pdf        HTML file -> PDF file (printToPDF, preferCSSPageSize)
  *   - checkPage  allow-listed fixed page script (Studio MEASURE_SCRIPT) on HTML content
+ *   - pagePng    HTML file -> one PNG per printed page (row 151b, C130 GAP-1): {@link rasterizeHtmlPages}
  *   - hello      handshake: the bridge reports its window settings
  *
  * Replaces the original sandbox rules (runtime.ts:1-23 of the clone):
@@ -69,7 +70,7 @@ export const RENDER_TOKEN_ENV = "DATUM_RENDER_TOKEN";
 /** Upper bound of one reply line (bridge MAX_LINE_BYTES is 24 MiB for requests; replies are small). */
 const MAX_REPLY_BYTES = 32 * 1024 * 1024;
 
-export type BridgeOp = "hello" | "png" | "pdf" | "checkPage";
+export type BridgeOp = "hello" | "png" | "pdf" | "checkPage" | "pagePng";
 export type BridgeRequest = { op: BridgeOp } & Record<string, unknown>;
 export type BridgeReply = ({ ok: true } & Record<string, unknown>) | { ok: false; code?: string; message?: string; error?: string };
 /** One request -> one reply. The token is added by the transport, never by callers. */
@@ -496,6 +497,82 @@ export class BridgePage {
     });
     return readFileSync(dst);
   }
+}
+
+/** One page image written by the bridge `pagePng` op (row 151b). `png` is an absolute path inside `dstDir`. */
+export interface HtmlPageImage {
+  n: number;
+  png: string;
+  width: number;
+  height: number;
+  sha256: string;
+}
+
+/** Result of {@link rasterizeHtmlPages}: what the verification report's `pages[].png` is filled from. */
+export interface HtmlPageImages {
+  layout: "paged" | "flow";
+  pageCount: number;
+  pageSizeMm: { wMm: number; hMm: number };
+  pageSizeSource: "css" | "fallback";
+  dpi: number;
+  pages: HtmlPageImage[];
+  /** Swarm row 151c (DEFECT-157-1): why the images only approximate the printed pages (flow layout), else null. */
+  approximate?: string | null;
+}
+
+/**
+ * Swarm patch (row 151b, decision C130 GAP-1, output verification spec §11): page images of a stored HTML
+ * render through the bridge `pagePng` op (print media emulated, page size from CSS @page, default 150 dpi,
+ * at most 12 pages per call, files `<dstDir>/p001.png` ...). `dstDir` must exist; the bridge applies its path
+ * allow-list to `src` and every output. Same semaphore and handshake as every other page operation.
+ */
+export async function rasterizeHtmlPages(o: {
+  src: string;
+  dstDir: string;
+  pages?: number[];
+  dpi?: number;
+  widthMm?: number;
+  heightMm?: number;
+}): Promise<HtmlPageImages> {
+  const op = "page-png";
+  return withLock(async () => {
+    const started = Date.now();
+    await ensureBrowser();
+    const req: BridgeRequest = { op: "pagePng", src: o.src, dstDir: o.dstDir };
+    if (o.pages !== undefined) req.pages = [...o.pages];
+    if (o.dpi !== undefined) req.dpi = o.dpi;
+    if (o.widthMm !== undefined || o.heightMm !== undefined) Object.assign(req, { widthMm: o.widthMm, heightMm: o.heightMm });
+    const r = await bridgeCall(op, req);
+    const size = (r.pageSizeMm ?? {}) as { wMm?: unknown; hMm?: unknown };
+    const pages = (Array.isArray(r.pages) ? r.pages : []).map((p: Record<string, unknown>) => ({
+      n: Number(p.n),
+      png: String(p.dst),
+      width: Number(p.width),
+      height: Number(p.height),
+      sha256: String(p.sha256),
+    }));
+    const out: HtmlPageImages = {
+      layout: r.layout === "flow" ? "flow" : "paged",
+      pageCount: Number(r.pageCount),
+      pageSizeMm: { wMm: Number(size.wMm), hMm: Number(size.hMm) },
+      pageSizeSource: r.pageSizeSource === "css" ? "css" : "fallback",
+      dpi: Number(r.dpi),
+      pages,
+    };
+    // Swarm row 151c: present only when the bridge says its page images approximate the printed pages.
+    if (typeof r.approximate === "string" && r.approximate.length > 0) out.approximate = r.approximate.slice(0, 200);
+    const prefix = o.dstDir.endsWith(path.sep) ? o.dstDir : o.dstDir + path.sep;
+    const sane =
+      Number.isInteger(out.pageCount) &&
+      out.pageCount >= 1 &&
+      pages.every((p) => Number.isInteger(p.n) && p.n >= 1 && p.n <= out.pageCount && p.png.startsWith(prefix) && /^[0-9a-f]{64}$/.test(p.sha256));
+    if (!sane) {
+      logBrowser("error", `${op}: render bridge reply is malformed`, { op, code: "BROWSER_UNAVAILABLE" });
+      throw new StudioBrowserError("RENDER_FAILED", op, "Render bridge page images reply is malformed (see engine/browser log)");
+    }
+    logBrowser("info", `${op} done (${pages.length}/${out.pageCount} pages, ${out.layout})`, { op, durationMs: Date.now() - started });
+    return out;
+  });
 }
 
 export interface PageSession {

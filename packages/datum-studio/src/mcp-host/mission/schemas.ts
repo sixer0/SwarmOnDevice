@@ -39,7 +39,8 @@ function obj(properties: Record<string, Schema>, required: string[] = []): Schem
   return { type: "object", additionalProperties: false, properties, ...(required.length > 0 ? { required } : {}) }
 }
 
-const GET_INCLUDE = ["rows", "decisions", "findings", "locks", "reports", "events", "snapshots", "requests", "checkpoints", "messages"] as const
+// Row 126 (spec mission control §8 G1): + "deliverables".
+const GET_INCLUDE = ["rows", "decisions", "findings", "locks", "reports", "events", "snapshots", "requests", "checkpoints", "messages", "deliverables"] as const
 export type GetInclude = (typeof GET_INCLUDE)[number]
 export const EXPORT_FILES = ["blueprint", "status", "decisions", "delegation"] as const
 export type ExportFile = (typeof EXPORT_FILES)[number]
@@ -95,6 +96,8 @@ export const MISSION_TOOL_SCHEMAS: Record<string, Schema> = {
     {
       mission: missionId,
       include: { type: "array", uniqueItems: true, items: { type: "string", enum: [...GET_INCLUDE] }, description: "Default: the whole MissionDoc (rows with reports, decisions, findings, locks)." },
+      // Row 126 (spec mission control §8 G3).
+      messagesTail: { type: "integer", minimum: 1, maximum: 50, description: "Return `messages` as the newest N messages (ascending seq) instead of the oldest 200." },
     },
     ["mission"],
   ),

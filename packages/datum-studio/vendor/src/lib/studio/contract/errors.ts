@@ -99,6 +99,9 @@ export const STUDIO_ERROR_HTTP: Readonly<Record<StudioErrorCode, number>> = {
   CHART_CUSTOM_FORM_UNSUPPORTED: 422,
   // Swarm patch (row 69a, C78; templates spec §4): new document on an archived template.
   TEMPLATE_ARCHIVED: 403,
+  // Swarm patch (row 158, U24 B; engine/figure-capacity.ts): figure over engine capacity, refused
+  // with details {limit, measured, suggestion}. Same status as BY_CONSTRUCTION_FAILED (422).
+  FIGURE_OVER_CAPACITY: 422,
 };
 
 /** Galat mesin/layanan bertipe kode; route memetakan ke HTTP lewat studioError. */

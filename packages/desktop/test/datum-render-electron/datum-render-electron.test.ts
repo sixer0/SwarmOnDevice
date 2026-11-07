@@ -4,7 +4,7 @@
 // HOME/userData and the mock keychain, and parses the PDFs it wrote: %PDF header, page count, MediaBox.
 // ROW24A_HARNESS_MAIN may point at another harness entry (used once to show the old CDP path failing this test).
 import { afterAll, beforeAll, describe, expect, test } from "bun:test"
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, mkdtempSync, rmSync, readFileSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { countPdfPages } from "../../../app/src/pages/session/file-preview-policy"
@@ -12,6 +12,7 @@ import { countPdfPages } from "../../../app/src/pages/session/file-preview-polic
 const here = import.meta.dir
 const electron = join(here, "../../node_modules/electron/dist/Electron.app/Contents/MacOS/Electron")
 const runnable = existsSync(electron) && !electron.startsWith("/Applications/") && process.platform === "darwin"
+const ownWork = !process.env.ROW24A_WORK
 const work = process.env.ROW24A_WORK ?? mkdtempSync(join(tmpdir(), "row24a-render-"))
 const entry = process.env.ROW24A_HARNESS_MAIN ?? join(here, "harness-main.ts")
 
@@ -78,6 +79,8 @@ beforeAll(async () => {
 afterAll(() => {
   kill?.()
   if (runnable) console.log(`row24a harness work dir: ${work} (electron pid ${electronPid})`)
+  // Best effort: remove the folder only when this file created it (the env var was unset).
+  if (ownWork) rmSync(work, { recursive: true, force: true })
 })
 
 const pdfOf = (name: string) => {

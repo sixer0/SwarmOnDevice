@@ -9,6 +9,11 @@
 //   src/lib/studio/assets/                Studio assets (fonts without renamed/ (C31, U9.7), logos, base, manifest.json)
 //   docs/STUDIO-AGENT-GUIDE.md            read by path at run time (packaging A.1)
 //   benchmark/manual000/template.json     read by path at run time (packaging A.1)
+//   third_party/elkjs/elk.bundled.js      elkjs 0.12.0, byte-identical to the npm file (row 162c, C126; loaded at run
+//                                         time by src/main/datum-studio-host/elk-runtime.ts, never inlined in a chunk)
+//   third_party/elkjs/LICENSE.md          elkjs's LICENSE.md verbatim (EPL-2.0 OR GPL-3.0-or-later)
+//   third_party/elkjs/NOTICE.md           third-party notice (version, licence, source location)
+//   third_party/elkjs/package.json        {"type": "commonjs"}: the UMD file takes its CommonJS branch under require
 //   studio-manifest.json                  sha256, size and mode of every file above (register line 66)
 //
 // C79: the root is vendor-shaped. Template assets are stored as `src/lib/studio/assets/...` and resolved under
@@ -41,6 +46,27 @@ export const TTF_EXPECTED = 19
 export const PROVENANCE_PREFIX = "b0ae7a729d"
 export const LAUNCHER = "datum-studio-launcher"
 export const BRIDGE = "server/datum-studio-bridge.js"
+/** Row 162c (C126, C153): elkjs shipped as its own unmodified file. Pins = row 159 tarball (research/16 §1). */
+export const ELK_VERSION = "0.12.0"
+export const ELK_DIR = "third_party/elkjs"
+export const ELK_BUNDLE = `${ELK_DIR}/elk.bundled.js`
+export const ELK_LICENSE = `${ELK_DIR}/LICENSE.md`
+export const ELK_NOTICE = `${ELK_DIR}/NOTICE.md`
+export const ELK_PACKAGE_JSON = `${ELK_DIR}/package.json`
+export const ELK_BUNDLE_SHA256 = "1222e44f953ce7746af23801e723708f8e6f436b8b377a6a5fc7552f34a307b3"
+export const ELK_LICENSE_SHA256 = "637e81f4a1b6b4079535c499fca05e238cf7605c1ff5b76d60d7da7ce96700c9"
+export const ELK_NOTICE_TEXT = [
+  "# Third-party notice: elkjs",
+  "",
+  "elkjs 0.12.0, EPL-2.0 OR GPL-3.0-or-later (distributed under EPL-2.0), Source Code: https://github.com/kieler/elkjs.git",
+  "",
+  "- File: elk.bundled.js, the unmodified file lib/elk.bundled.js of the npm package elkjs@0.12.0",
+  `  (sha256 ${ELK_BUNDLE_SHA256}), header comments kept.`,
+  "- Licence text: LICENSE.md in this folder (verbatim from the package).",
+  "- Swarm loads this file by path at run time; it is not combined into any other file of the application.",
+  "",
+].join("\n")
+export const ELK_PACKAGE_JSON_TEXT = `${JSON.stringify({ type: "commonjs" })}\n`
 const EXEC_MODE = "755"
 const DATA_MODE = "644"
 
@@ -104,6 +130,22 @@ export type StageSources = {
 export const DEFAULT_SOURCES: StageSources = { desktop: DESKTOP, pkg: PKG, vendor: VENDOR, bun: process.execPath }
 
 type Copy = { from: string; to: string; mode: string }
+type Write = { text: string; to: string; mode: string }
+
+/** Row 162c: the installed elkjs package of datum-studio (version and both pinned sha256 checked). */
+async function elkCopies(src: StageSources): Promise<Copy[]> {
+  const dir = path.join(src.pkg, "node_modules", "elkjs")
+  const pj = JSON.parse(await fs.readFile(path.join(dir, "package.json"), "utf8").catch(() => fail(`elkjs not installed at ${dir}`))) as { version?: string }
+  if (pj.version !== ELK_VERSION) fail(`elkjs version ${pj.version} != ${ELK_VERSION} (C126)`)
+  const bundle = path.join(dir, "lib", "elk.bundled.js")
+  const license = path.join(dir, "LICENSE.md")
+  if ((await sha256File(bundle)) !== ELK_BUNDLE_SHA256) fail("elkjs/lib/elk.bundled.js sha256 differs from the row 159 pin")
+  if ((await sha256File(license)) !== ELK_LICENSE_SHA256) fail("elkjs/LICENSE.md sha256 differs from the row 159 pin")
+  return [
+    { from: bundle, to: ELK_BUNDLE, mode: DATA_MODE },
+    { from: license, to: ELK_LICENSE, mode: DATA_MODE },
+  ]
+}
 
 /** The file list (source -> stage path) from the repo; checks the template catalog and the asset manifest on the way. */
 export async function planStage(src: StageSources = DEFAULT_SOURCES) {
@@ -167,8 +209,13 @@ export async function planStage(src: StageSources = DEFAULT_SOURCES) {
   // Vendor files the engine reads by path (packaging A.1).
   for (const rel of ["docs/STUDIO-AGENT-GUIDE.md", "benchmark/manual000/template.json"])
     copies.push({ from: path.join(src.vendor, ...rel.split("/")), to: rel, mode: DATA_MODE })
+  copies.push(...(await elkCopies(src)))
+  const writes: Write[] = [
+    { text: ELK_NOTICE_TEXT, to: ELK_NOTICE, mode: DATA_MODE },
+    { text: ELK_PACKAGE_JSON_TEXT, to: ELK_PACKAGE_JSON, mode: DATA_MODE },
+  ]
   for (const c of copies) if (!(await exists(c.from))) fail(`missing input ${c.from}`)
-  return { copies, provenanceCommit, templates: catalog.templates.length, notes }
+  return { copies, writes, provenanceCommit, templates: catalog.templates.length, notes }
 }
 
 /** `bun build <bridge.ts> --target=bun` into `outFile`; the bundle may import only node:/bun builtins (row 34: no deps). */
@@ -198,6 +245,12 @@ export async function stageDatumStudio(opts: { out?: string; sources?: StageSour
       await fs.mkdir(path.dirname(dest), { recursive: true })
       await fs.copyFile(c.from, dest)
       await fs.chmod(dest, Number.parseInt(c.mode, 8))
+    }
+    for (const w of plan.writes) {
+      const dest = path.join(work, ...w.to.split("/"))
+      await fs.mkdir(path.dirname(dest), { recursive: true })
+      await fs.writeFile(dest, w.text)
+      await fs.chmod(dest, Number.parseInt(w.mode, 8))
     }
     await buildBridge(src, path.join(work, ...BRIDGE.split("/")))
 
@@ -306,6 +359,21 @@ export async function verifyStudioStage(dir: string, opts: { skillFonts?: string
   ])
     if (!listed.has(need)) problems.push(`required file missing from manifest: ${need}`)
   if (all.some((p) => p.startsWith("assets/"))) problems.push("assets/ at the root: C79 layout is src/lib/studio/assets")
+  // ELK-1 (row 162c, C126): elk.bundled.js and LICENSE.md byte-identical to the pins, the notice and the CommonJS marker
+  // exactly as written; nothing else under third_party/elkjs. (The sha256 equality to the disk was checked above.)
+  const elkWant = new Map([
+    [ELK_BUNDLE, ELK_BUNDLE_SHA256],
+    [ELK_LICENSE, ELK_LICENSE_SHA256],
+    [ELK_NOTICE, sha256(ELK_NOTICE_TEXT)],
+    [ELK_PACKAGE_JSON, sha256(ELK_PACKAGE_JSON_TEXT)],
+  ])
+  for (const [p, want] of elkWant) {
+    const f = listed.get(p)
+    if (!f) problems.push(`ELK-1: ${p} missing from manifest`)
+    else if (f.sha256 !== want) problems.push(`ELK-1: ${p} sha256 ${f.sha256} is not the pinned ${want}`)
+  }
+  const elkExtra = [...new Set([...all, ...onDisk])].filter((p) => p.startsWith("third_party/") && !elkWant.has(p))
+  if (elkExtra.length) problems.push(`ELK-1: unexpected third_party file(s): ${elkExtra.join(", ")}`)
   // A.4 guard: each staged IBM Plex face equals the skill copy's.
   const skillFonts = opts.skillFonts === undefined ? SKILL_FONTS : opts.skillFonts
   if (skillFonts) {
@@ -350,6 +418,12 @@ async function main() {
   }
   const report = await verifyStudioStage(args.out)
   console.log(reportLine(report))
+  const listedFiles = await fs
+    .readFile(path.join(args.out, STUDIO_STAGE_MANIFEST), "utf8")
+    .then((t) => (JSON.parse(t) as StudioManifest).files ?? [])
+    .catch(() => [] as ManifestFile[])
+  for (const f of listedFiles.filter((x) => x.path.startsWith(`${ELK_DIR}/`)))
+    console.log(`DATUM_STUDIO_STAGE third_party ${f.path} size=${f.size} sha256=${f.sha256}`)
   if (report.problems.length) fail(report.problems.join("; "))
   console.log(`DATUM_STUDIO_STAGE_OK ${args.out}`)
 }

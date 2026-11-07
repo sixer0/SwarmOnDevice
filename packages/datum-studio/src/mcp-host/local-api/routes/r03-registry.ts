@@ -81,6 +81,8 @@ import { templateRestriction } from "@/lib/studio/services/templates/access";
 import { listTemplates } from "@/lib/studio/services/templates";
 import { presetTemplates } from "../db";
 import { CONTRACT_KIND_DEFS } from "@/lib/studio/registry/contracts";
+import { VEGA_CHART_REGISTRY, type VegaChartCodeDef } from "@/lib/studio/registry/charts";
+import { VEGA_CHART_SCHEMA, vegaChartInputSchema } from "@/lib/studio/engine/chart/family-v/input";
 import { apiLog, failure, issue, json, reject, reqCtx, schemaInvalid, withCorrelation, type ReqCtx } from "@/lib/studio/http";
 
 export const dynamic = "force-dynamic";
@@ -104,6 +106,74 @@ const NO_CACHE = { "Cache-Control": "no-store" };
 
 /** stack/topology memakai tata letak layered (§8.3 D01). */
 const DIAGRAM_LAYOUT_ALIAS: Readonly<Record<string, string>> = { stack: "layered", topology: "layered" };
+
+// ── Row 163b (C155): the Vega chart family in the agent catalog (studio_registry kind=charts -> meta.vega) ──────────
+// A document chart block `{ type: "chart", code, data, highlight?, options?, unit?, dec?, note?, caption, source }` with
+// code V-01..V-08 (or the DF code in `replaces`) renders through the Vega family. `data` and `options` below are the
+// exact closed JSON Schemas the family validates with ajv (engine/chart/family-v/input.ts); agents send data and these
+// options only, never Vega, colours, fonts, field names or URLs.
+
+const VEGA_HIGHLIGHT: Readonly<Record<VegaChartCodeDef, string>> = {
+  "V-01": "one date (YYYY-MM-DD)",
+  "V-02": "one series name",
+  "V-03": "one row name",
+  "V-04": "one group name",
+  "V-05": "one category label",
+  "V-06": "one series name",
+  "V-07": "one node id",
+  "V-08": "one node id",
+};
+
+const VEGA_EXAMPLE_DATA: Readonly<Record<VegaChartCodeDef, { data: unknown; highlight?: string[]; options?: Record<string, unknown> }>> = {
+  "V-01": { data: { shape: "days", days: [{ date: "2026-01-01", value: 4 }, { date: "2026-01-02", value: 7 }] }, options: { weekStart: "monday" } },
+  "V-02": { data: { shape: "series", categories: ["Jan", "Feb", "Mar"], series: [{ name: "Telepon", values: [20, 26, 31] }, { name: "Aplikasi", values: [30, 44, 52] }] }, highlight: ["Aplikasi"], options: { offset: "center" } },
+  "V-03": { data: { shape: "matrix", rows: ["Wilayah A", "Wilayah B"], cols: ["Respons", "Tuntas", "Biaya"], values: [[62, 70, 41], [48, 81, 55]] }, highlight: ["Wilayah B"] },
+  "V-04": { data: { shape: "distribution", groups: [{ name: "Unit utara", values: [3, 8, 12, 15, 21] }, { name: "Unit selatan", values: [5, 9, 18, 26, 40] }] }, highlight: ["Unit selatan"] },
+  "V-05": { data: { shape: "categorical", points: [{ label: "Banjir", value: 42 }, { label: "Longsor", value: 25 }, { label: "Angin", value: 9 }] }, highlight: ["Banjir"] },
+  "V-06": { data: { shape: "series", categories: ["Analisis", "Respons", "Koordinasi", "Logistik"], series: [{ name: "Tim A", values: [80, 65, 70, 55] }, { name: "Tim B", values: [60, 85, 50, 75] }] }, highlight: ["Tim B"], options: { max: 100 } },
+  "V-07": { data: { shape: "hierarchy", nodes: [{ id: "root", label: "Anggaran" }, { id: "a", parent: "root", label: "Operasi", value: 40 }, { id: "b", parent: "root", label: "Dukungan", value: 25 }] }, options: { form: "sunburst" } },
+  "V-08": { data: { shape: "hierarchy", nodes: [{ id: "k", label: "Komandan" }, { id: "o", parent: "k", label: "Operasi" }, { id: "l", parent: "k", label: "Logistik" }] }, options: { form: "tidy" } },
+};
+
+function vegaCatalogItem(d: (typeof VEGA_CHART_REGISTRY)[number]) {
+  const schema = vegaChartInputSchema(d.code) as { properties: Record<string, unknown> };
+  const ex = VEGA_EXAMPLE_DATA[d.code];
+  return {
+    code: d.code,
+    name: d.name,
+    description: `${d.fn}. Use when: ${d.useWhen}. Avoid when: ${d.avoidWhen}.`,
+    group: d.group,
+    purpose: d.purpose,
+    dataShape: d.dataShape,
+    replaces: d.replaces ?? null,
+    capacity: d.capacity,
+    highlight: VEGA_HIGHLIGHT[d.code],
+    data: schema.properties.data,
+    options: schema.properties.options ?? null,
+    example: {
+      type: "chart",
+      code: d.code,
+      caption: { text: `${d.name}.` },
+      source: { text: "Sumber data." },
+      data: ex.data,
+      ...(ex.highlight ? { highlight: ex.highlight } : {}),
+      ...(ex.options ? { options: ex.options } : {}),
+    },
+  };
+}
+
+/** `meta.vega` of kind=charts: how to use the Vega family in a document chart block, one entry per type. */
+export function vegaChartCatalog() {
+  return {
+    schema: VEGA_CHART_SCHEMA,
+    count: VEGA_CHART_REGISTRY.length,
+    usage:
+      "Chart block with code V-01..V-08 (or the DF code in `replaces`): { type: \"chart\", code, data, highlight?, options?, unit?, dec?, note?, caption, source }. " +
+      "`data` and `options` must match the schemas below exactly (closed; extra fields are refused). Not supported on Vega codes: limit, orientation, sort, topN, labelShort, panels. " +
+      "Check one figure first with studio_figure_preview; FIGURE_OVER_CAPACITY names what to reduce.",
+    items: VEGA_CHART_REGISTRY.map(vegaCatalogItem),
+  };
+}
 
 function countBy<T>(items: readonly T[], key: (t: T) => string): Record<string, number> {
   const out: Record<string, number> = {};
@@ -412,6 +482,8 @@ function listPayload(kind: ListKind, ctx: ReqCtx): Response {
           meta: {
             drawn: CHART_REGISTRY.filter((c) => c.drawn).length,
             byGroup: countBy(CHART_REGISTRY, (c) => c.group),
+            // Row 163b (C155): the Vega family (V-01..V-08) for agents; `items` stays the 76 Rev A codes.
+            vega: vegaChartCatalog(),
           },
         },
         200,

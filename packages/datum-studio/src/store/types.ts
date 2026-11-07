@@ -399,6 +399,70 @@ export interface NewOutputFile {
   draft?: boolean
 }
 
+// ── row 149: output verification state (masterplan/01_specs_output_verification.md §5, §7.1; C130) ──────────
+
+/** Spec §2 VERIFY_REPORT_MAX_BYTES (256 KiB); a larger report is refused with VERIFY_REPORT_TOO_LARGE. */
+export const OUTPUT_VERIFICATION_REPORT_MAX_BYTES = 256 * 1024
+export type OutputVerificationStateValue = "verified" | "unverified"
+/** Why an output is not verified (spec §7.1). */
+export type OutputUnverifiedReason = "NOT_CHECKED" | "CHECK_FAILED" | "CHECK_UNKNOWN" | "STALE"
+/** Why a deliverable revision is not Final (spec §7.2, §7.3): the output reasons plus the two set-level ones. */
+export type RevisionNotFinalReason = OutputUnverifiedReason | "NOT_RENDERED" | "NO_LAYOUT_WITNESS"
+
+/** Input of `putOutputVerification` (spec §5). `report` is the output's VerifiedOutput plus the report header fields. */
+export interface NewOutputVerification {
+  outputFileId: string
+  outputSha256: string
+  renderJobId?: string | null
+  state: OutputVerificationStateValue
+  checksVersion: number
+  failCount: number
+  unknownCount: number
+  report: Record<string, unknown>
+  verifiedBy: string
+}
+
+/** One `output_verification` row; `report` is parsed JSON. */
+export interface OutputVerificationRow {
+  output_file_id: string
+  output_sha256: string
+  revision_id: string | null
+  render_job_id: string | null
+  state: OutputVerificationStateValue
+  checks_version: number
+  fail_count: number
+  unknown_count: number
+  report: Record<string, unknown>
+  report_sha256: string
+  attempt: number
+  verified_by: string
+  time_verified: number
+}
+
+/** One output of a revision's §7.1 output set, with its derived state. */
+export interface RevisionOutputVerification {
+  outputId: string
+  format: string
+  role: string
+  figureLabel: string | null
+  sha256: string
+  state: OutputVerificationStateValue
+  /** null when verified */
+  reason: OutputUnverifiedReason | null
+  /** the stored record's attempt, null when there is no record */
+  attempt: number | null
+}
+
+/** `revisionVerification` result: Final iff §7.2 holds. `reasons` is empty iff `final`. */
+export interface RevisionVerification {
+  documentId: string
+  revisionNo: number
+  revisionId: string
+  final: boolean
+  reasons: RevisionNotFinalReason[]
+  outputs: RevisionOutputVerification[]
+}
+
 export interface AssetMeta {
   mime: "image/png" | "image/jpeg"
   widthPx: number
@@ -555,4 +619,9 @@ export interface StudioStore {
   /** row 64: every version of a template, oldest first, with its guard verdict and pinned revision/document counts */
   listTemplateVersions(slug: string, tx?: StoreTx): Promise<TemplateVersionSummary[]>
   exportTo(target: string): Promise<ExportManifest>
+  /** row 149: output verification state (masterplan/01_specs_output_verification.md §5) */
+  putOutputVerification(tx: StoreTx, rec: NewOutputVerification): Promise<OutputVerificationRow>
+  getOutputVerification(outputFileId: string, tx?: StoreTx): Promise<OutputVerificationRow | null>
+  listOutputVerifications(outputFileIds: readonly string[], tx?: StoreTx): Promise<OutputVerificationRow[]>
+  revisionVerification(documentId: string, revisionNo: number | "latest", tx?: StoreTx): Promise<RevisionVerification>
 }

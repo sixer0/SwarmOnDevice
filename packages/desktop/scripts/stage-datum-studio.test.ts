@@ -9,7 +9,22 @@ import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, realpathSync } fr
 import * as fs from "node:fs/promises"
 import * as path from "node:path"
 import { resolveStudioLayout, STUDIO_ASSETS_REL } from "../src/main/datum-studio-host/layout"
-import { BRIDGE, LAUNCHER, sha256, stageDatumStudio, SZ3_LIMIT_KB, verifyStudioStage, type StudioManifest } from "./stage-datum-studio"
+import {
+  BRIDGE,
+  ELK_BUNDLE,
+  ELK_BUNDLE_SHA256,
+  ELK_DIR,
+  ELK_LICENSE,
+  ELK_LICENSE_SHA256,
+  ELK_NOTICE,
+  ELK_PACKAGE_JSON,
+  LAUNCHER,
+  sha256,
+  stageDatumStudio,
+  SZ3_LIMIT_KB,
+  verifyStudioStage,
+  type StudioManifest,
+} from "./stage-datum-studio"
 
 const SCRIPT = path.join(import.meta.dir, "stage-datum-studio.ts")
 const PKG = path.resolve(import.meta.dir, "..", "..", "datum-studio")
@@ -112,6 +127,62 @@ describe("row 36: stage and verify", () => {
     expect(real.exitCode).toBe(0)
     expect(real.stdout.toString()).toContain(`DATUM_STUDIO_STAGE_OK ${STAGED}`)
   }, 120_000)
+})
+
+// ---- Row 162c (C126, C153): elkjs shipped as its own unmodified file with LICENSE.md and a notice ----
+
+describe("row 162c: third_party/elkjs in the stage", () => {
+  const ELK_NPM = path.join(PKG, "node_modules", "elkjs")
+
+  test("elk.bundled.js and LICENSE.md byte-identical to the npm 0.12.0 files and the pins; notice text; CommonJS marker", async () => {
+    const byPath = new Map(manifest.files.map((f) => [f.path, f]))
+    const third = manifest.files.filter((f) => f.path.startsWith("third_party/")).map((f) => f.path)
+    expect(third).toEqual([ELK_LICENSE, ELK_NOTICE, ELK_BUNDLE, ELK_PACKAGE_JSON])
+    expect(byPath.get(ELK_BUNDLE)!.sha256).toBe(ELK_BUNDLE_SHA256)
+    expect(byPath.get(ELK_BUNDLE)!.sha256).toBe(sha256(readFileSync(path.join(ELK_NPM, "lib", "elk.bundled.js"))))
+    expect(byPath.get(ELK_LICENSE)!.sha256).toBe(ELK_LICENSE_SHA256)
+    expect(byPath.get(ELK_LICENSE)!.sha256).toBe(sha256(readFileSync(path.join(ELK_NPM, "LICENSE.md"))))
+    expect(readFileSync(path.join(STAGED, ELK_BUNDLE), "utf8").startsWith("(function(f){if(typeof exports===\"object\"")).toBe(true)
+    const notice = readFileSync(path.join(STAGED, ELK_NOTICE), "utf8")
+    expect(notice).toContain(
+      "elkjs 0.12.0, EPL-2.0 OR GPL-3.0-or-later (distributed under EPL-2.0), Source Code: https://github.com/kieler/elkjs.git",
+    )
+    expect(JSON.parse(readFileSync(path.join(STAGED, ELK_PACKAGE_JSON), "utf8"))).toEqual({ type: "commonjs" })
+    for (const p of third) expect(byPath.get(p)!.mode).toBe("644")
+  })
+
+  test("ELK-1: a changed bundle (manifest updated to match), an extra third_party file each fail verify", async () => {
+    const changed = await copyStage("elk-changed")
+    const file = path.join(changed, ELK_BUNDLE)
+    await fs.appendFile(file, "\n// patched\n")
+    const m = JSON.parse(readFileSync(path.join(changed, "studio-manifest.json"), "utf8")) as StudioManifest
+    const entry = m.files.find((f) => f.path === ELK_BUNDLE)!
+    entry.sha256 = sha256(readFileSync(file))
+    entry.size = (await fs.stat(file)).size
+    await fs.writeFile(path.join(changed, "studio-manifest.json"), `${JSON.stringify(m, null, 1)}\n`)
+    const v = await verifyStudioStage(changed)
+    console.log(`row162c: changed bundle -> ${JSON.stringify(v.problems)}`)
+    expect(v.problems).toEqual([`ELK-1: ${ELK_BUNDLE} sha256 ${entry.sha256} is not the pinned ${ELK_BUNDLE_SHA256}`])
+
+    const extra = await copyStage("elk-extra")
+    const extraRel = `${ELK_DIR}/elk-worker.min.js`
+    await fs.writeFile(path.join(extra, extraRel), "x")
+    const m2 = JSON.parse(readFileSync(path.join(extra, "studio-manifest.json"), "utf8")) as StudioManifest
+    m2.files.push({ path: extraRel, size: 1, sha256: sha256("x"), mode: "644" })
+    await fs.writeFile(path.join(extra, "studio-manifest.json"), `${JSON.stringify(m2, null, 1)}\n`)
+    expect((await verifyStudioStage(extra)).problems).toEqual([`ELK-1: unexpected third_party file(s): ${extraRel}`])
+
+    const gone = await copyStage("elk-gone")
+    await fs.rm(path.join(gone, ELK_NOTICE))
+    expect((await verifyStudioStage(gone)).problems).toEqual([`missing ${ELK_NOTICE}`])
+  }, 120_000)
+
+  test("the host-side loader (elk-runtime.ts) picks the staged copy under the packaged layout and gets the ELK constructor", async () => {
+    const rt = await import("../src/main/datum-studio-host/elk-runtime")
+    expect(layout.vendorRoot).toBe(STAGED)
+    expect(rt.resolveElkBundle({ STUDIO_VENDOR_ROOT: layout.vendorRoot })).toEqual({ file: path.join(STAGED, ELK_BUNDLE) })
+    expect(typeof rt.loadElkConstructor({ STUDIO_VENDOR_ROOT: layout.vendorRoot })).toBe("function")
+  })
 })
 
 // ---- C79: render from the staged folder with the packaged layout ----

@@ -129,7 +129,10 @@ export function toMissionRow(r: HandRow, notes: ImportNote[]): Record<string, un
   const [, title, agent, output, tableDeps, verification, label] = r.bp as [string, string, string, string, string, string, string]
   const kind = LABEL_TO_KIND[label]
   if (!kind) throw new Error(`row ${r.id}: unknown Phase label ${label}`)
-  const tDeps = tableDeps === "-" ? [] : tableDeps.split(", ")
+  const rawDeps = tableDeps === "-" ? [] : tableDeps.split(", ")
+  // Row 120d: a Depends On token that is not a row id (e.g. U23, a decision id) is not a mission dependency; the schema refuses it.
+  const tDeps = rawDeps.filter((d) => /^[1-9][0-9]{0,3}[a-z]?$/.test(d))
+  for (const d of rawDeps) if (!tDeps.includes(d)) notes.push({ row: r.id, note: `Depends On token ${d} is not a row id (decision reference), skipped` })
   let deps = tDeps.map((d) => `${d}:B`)
   let size: "S" | "M" | null = null
   let model: { tier: string; reason?: string } = { tier: "inherit" }
@@ -142,7 +145,7 @@ export function toMissionRow(r: HandRow, notes: ImportNote[]): Record<string, un
     if (/^[1-9][0-9]{0,3}[a-z]?:[BC](, [1-9][0-9]{0,3}[a-z]?:[BC])*$/.test(p.deps)) {
       deps = p.deps.split(", ")
       const ids = deps.map((d) => d.split(":")[0])
-      if (ids.join(",") !== tDeps.join(",")) notes.push({ row: r.id, note: `profile deps ${ids.join(",")} != table deps ${tDeps.join(",") || "-"} (profile used)` })
+      if (ids.join(",") !== rawDeps.join(",")) notes.push({ row: r.id, note: `profile deps ${ids.join(",")} != table deps ${rawDeps.join(",") || "-"} (profile used)` })
     } else if (p.deps !== "-") notes.push({ row: r.id, note: `profile deps not parseable ("${p.deps}"), table deps used as B` })
     size = p.size === "S" || p.size === "M" ? p.size : null
     const mm = /^(opus|sonnet|inherit)(?: \((.+)\))?$/.exec(p.model)

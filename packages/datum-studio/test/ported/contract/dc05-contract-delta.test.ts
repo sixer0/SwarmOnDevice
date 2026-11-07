@@ -112,12 +112,14 @@ describe('kode galat EC25-EC28 (§13.1, §13.3: 69 -> 73)', () => {
     CHART_CUSTOM_FORM_UNSUPPORTED: 422,
   };
   // row42 ADAPT A1 (C78, row 69a): Swarm adds TEMPLATE_ARCHIVED (enums.ts:349-350, errors.ts:100-101); 73 -> 74.
+  // row42 ADAPT A11 (U24 B, row 158): Swarm adds FIGURE_OVER_CAPACITY (enums.ts last entry, errors.ts 422); 74 -> 75.
   it('STUDIO_ERROR_CODES dan STUDIO_ERROR_HTTP masing-masing 73 kode, himpunan sama', () => {
-    expect(STUDIO_ERROR_CODES).toHaveLength(74);
-    expect(Object.keys(STUDIO_ERROR_HTTP)).toHaveLength(74);
+    expect(STUDIO_ERROR_CODES).toHaveLength(75);
+    expect(Object.keys(STUDIO_ERROR_HTTP)).toHaveLength(75);
     expect([...STUDIO_ERROR_CODES].sort()).toEqual(Object.keys(STUDIO_ERROR_HTTP).sort());
-    expect(new Set(STUDIO_ERROR_CODES).size).toBe(74);
+    expect(new Set(STUDIO_ERROR_CODES).size).toBe(75);
     expect(STUDIO_ERROR_CODES).toContain('TEMPLATE_ARCHIVED');
+    expect(STUDIO_ERROR_CODES).toContain('FIGURE_OVER_CAPACITY');
   });
   it.each(Object.entries(NEW_CODES))('%s -> HTTP %i', (code, status) => {
     expect((STUDIO_ERROR_CODES as readonly string[]).includes(code)).toBe(true);

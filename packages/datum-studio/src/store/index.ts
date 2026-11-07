@@ -19,6 +19,8 @@ export { assetRelPath } from "./files.ts"
 export * as mission from "./mission/index.ts"
 export { MissionStore, type MissionReader } from "./mission/mission-store.ts"
 export { MIGRATION_0003_ID } from "./migrations/0003_datum_mission.ts"
+// row 149: output verification state (U24, C130); API on SqliteStudioStore
+export { MIGRATION_0004_ID, MIGRATION_0004_SQL, MIGRATION_0004_SPEC_SHA256 } from "./migrations/0004_datum_output_verification.ts"
 
 let current: SqliteStudioStore | null = null
 

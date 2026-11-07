@@ -506,6 +506,7 @@ describe("row 69: static checks (U.6, U.9)", () => {
 
   test("no host fetch during the whole suite; the render bridge stand-in saw only hello/checkPage/pdf", () => {
     expect(h.fetchCalls()).toBe(0)
-    expect([...new Set(h.bridgeOps)].every((o) => ["hello", "checkPage", "pdf"].includes(o))).toBe(true)
+    // Row 154: studio_render's verification also asks for page images (bridge op pagePng, row 151b).
+    expect([...new Set(h.bridgeOps)].every((o) => ["hello", "checkPage", "pdf", "pagePng"].includes(o))).toBe(true)
   })
 })

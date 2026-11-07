@@ -19,7 +19,9 @@
  * - `textStraddleMark` tidak berlaku (diagram tidak punya tanda isian data) dan tidak dihitung.
  *
  * Murni dan deterministik. Parser hanya memahami keluaran `Sheet`/`core/svg.ts` (atribut
- * ber-kutip ganda, angka mm, tanpa transform) — bukan parser SVG umum.
+ * ber-kutip ganda, angka mm, tanpa transform) — bukan parser SVG umum. Satu-satunya transform yang
+ * dipetakan: `translate(...)` pada `<g data-symbol>` dan grup di dalamnya (petak lembar simbol,
+ * row 150c / C144); teks di grup berskala (lencana simpul) tetap dilewati.
  */
 import {
   attrsOf,
@@ -137,6 +139,19 @@ export function textBlockBox(
   return [x0, top + sh, x1, bot - sh];
 }
 
+/**
+ * Row 150c: offset of a transform that is only `translate(x[, y])` (absent = no offset); null for any
+ * other transform (scale, matrix, rotate, a chain), whose coordinates the lint does not map.
+ */
+export function translateOnly(tr: string | undefined): [number, number] | null {
+  if (tr === undefined || !tr.trim()) return [0, 0];
+  const m = /^\s*translate\(\s*([-+]?[\d.]+(?:e[-+]?\d+)?)(?:\s*[\s,]\s*([-+]?[\d.]+(?:e[-+]?\d+)?))?\s*\)\s*$/i.exec(tr);
+  if (!m) return null;
+  const x = Number(m[1]);
+  const y = m[2] !== undefined ? Number(m[2]) : 0;
+  return Number.isFinite(x) && Number.isFinite(y) ? [x, y] : null;
+}
+
 interface Scan {
   W: number;
   H: number;
@@ -156,14 +171,20 @@ function scan(svg: string): Scan {
   const links: Pt[][] = [];
   const linkHalf: number[] = [];
   let inDefs = 0;
-  let inSymbol = 0;
+  // Row 150c (C144 A): one frame per open <g> inside a `data-symbol` group. A group whose transform is
+  // only translate(...) (symbol-sheet cell, symbols/index.ts, sheet-fit.ts) prints at 1:1, so its text
+  // (cell labels, letters drawn in the symbol) is read with the accumulated offset. A scaled group (node
+  // badge, diagram/core/svg.ts nodeSymbolSvg) is cell units: its text stays skipped, as in row 124.
+  const symStack: { read: boolean; dx: number; dy: number }[] = [];
   let prevKnock = false;
   const re = /<text\b([^>]*)>([\s\S]*?)<\/text>|<(\/?)([a-zA-Z]+)\b([^>]*?)(\/?)>/g;
   for (let k = re.exec(svg); k; k = re.exec(svg)) {
     if (k[1] !== undefined) {
       const knock = prevKnock;
       prevKnock = false;
-      if (inDefs || inSymbol) continue; // row 124: text of a node symbol cell is symbol geometry
+      if (inDefs) continue;
+      const sym = symStack.length ? symStack[symStack.length - 1] : null;
+      if (sym && !sym.read) continue; // row 124: text of a scaled node symbol badge is symbol geometry
       const a = attrsOf(k[1]);
       const sizeMm = Number(a["font-size"] ?? 0);
       if (!(sizeMm > 0)) continue;
@@ -172,8 +193,10 @@ function scan(svg: string): Scan {
       const track = Number(a["letter-spacing"] ?? 0) || 0;
       const anchor = a["text-anchor"] ?? "start";
       const body = k[2].replace(/<title>[\s\S]*?<\/title>/g, "");
-      const x0 = Number(a.x ?? 0);
-      const y0 = Number(a.y ?? 0);
+      const ox = sym ? sym.dx : 0;
+      const oy = sym ? sym.dy : 0;
+      const x0 = Number(a.x ?? 0) + ox;
+      const y0 = Number(a.y ?? 0) + oy;
       const spans = [...body.matchAll(/<tspan\b([^>]*)>([\s\S]*?)<\/tspan>/g)];
       const lines: { x: number; y: number; s: string; segs?: { s: string; bold: boolean }[] }[] = [];
       // Row 124 (CP-28/48): tspans without x, y and dy are inline runs of ONE line (the bold label of
@@ -198,7 +221,7 @@ function scan(svg: string): Scan {
         for (const sp of spans) {
           const sa = attrsOf(sp[1]);
           cy += Number(sa.dy ?? 0) || 0;
-          lines.push({ x: sa.x !== undefined ? Number(sa.x) : x0, y: sa.y !== undefined ? Number(sa.y) : cy, s: unesc(sp[2]) });
+          lines.push({ x: sa.x !== undefined ? Number(sa.x) + ox : x0, y: sa.y !== undefined ? Number(sa.y) + oy : cy, s: unesc(sp[2]) });
         }
       } else lines.push({ x: x0, y: y0, s: unesc(body.replace(/<[^>]+>/g, "")) });
       const box = textBlockBox(lines, sizeMm, anchor, face, bold, track);
@@ -217,16 +240,19 @@ function scan(svg: string): Scan {
     const selfClose = k[6] === "/";
     if (closing) {
       if (tag === "defs") inDefs = Math.max(0, inDefs - 1);
-      if (tag === "g" && inSymbol) inSymbol--;
+      if (tag === "g" && symStack.length) symStack.pop();
       continue;
     }
     // Row 124 (CP-45): a node symbol badge (`<g data-symbol>`, scaled cell) is drawn inside its node;
     // its shapes are neither nodes nor connectors and its coordinates are cell units.
-    if (tag === "g" && !selfClose && (inSymbol || /\bdata-symbol="/.test(k[5]))) {
-      inSymbol++;
+    // Row 150c: shapes stay skipped; texts are read when every group up to the symbol group is translate-only.
+    if (tag === "g" && !selfClose && (symStack.length || /\bdata-symbol="/.test(k[5]))) {
+      const parent = symStack.length ? symStack[symStack.length - 1] : { read: true, dx: 0, dy: 0 };
+      const t = translateOnly(attrsOf(k[5]).transform);
+      symStack.push(parent.read && t ? { read: true, dx: parent.dx + t[0], dy: parent.dy + t[1] } : { read: false, dx: 0, dy: 0 });
       continue;
     }
-    if (inSymbol) continue;
+    if (symStack.length) continue;
     if (tag === "defs" && !selfClose) {
       inDefs++;
       prevKnock = false;

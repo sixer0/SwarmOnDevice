@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { join } from "node:path"
 import { STUDIO_BRIDGE_SCRIPTS } from "../../../../datum-studio/vendor/src/lib/studio/engine/browser/runtime"
+import { OVERLAP_SCRIPT, OVERLAP_SCRIPT_NAME } from "../../../../datum-studio/src/mcp-host/verify/overlap-script"
 import type { RenderBridge, RenderBridgeOptions } from "../datum-render"
 import { StudioHostError, type StudioHostHandle, type StudioHostStartOptions } from "./lifecycle"
 import { createDatumStudio, STUDIO_BRIDGE_EXTRA_SCRIPTS } from "./start"
@@ -44,8 +45,21 @@ const handle = (events: string[]): StudioHostHandle => ({
 })
 
 describe("DATUM Studio main wiring (row 111)", () => {
-  test("the bridge allow-list is exactly Studio's STUDIO_BRIDGE_SCRIPTS (row108 line)", () => {
-    expect(Object.entries(STUDIO_BRIDGE_EXTRA_SCRIPTS)).toEqual(STUDIO_BRIDGE_SCRIPTS.map((s) => [s.name, s.text]))
+  test("the bridge allow-list is Studio's STUDIO_BRIDGE_SCRIPTS plus the row 151 overlap script (row108 line, row 152)", () => {
+    const studio = Object.entries(STUDIO_BRIDGE_EXTRA_SCRIPTS).filter(([n]) => n !== "swarm.verify.overlap")
+    expect(studio).toEqual(STUDIO_BRIDGE_SCRIPTS.map((s) => [s.name, s.text]))
+  })
+
+  test("the overlap script id is registered with the fixed script text (row 152)", () => {
+    expect(OVERLAP_SCRIPT_NAME).toBe("swarm.verify.overlap")
+    expect(STUDIO_BRIDGE_EXTRA_SCRIPTS[OVERLAP_SCRIPT_NAME]).toBe(OVERLAP_SCRIPT)
+    expect(Object.keys(STUDIO_BRIDGE_EXTRA_SCRIPTS).sort()).toEqual(["studio.measure", "swarm.verify.overlap"])
+  })
+
+  test("row 151c (C161 I1): the bridge gets the host's own store root and HOME for its narrow store grants", async () => {
+    const d = deps(async () => handle(d.events))
+    await d.studio.start()
+    expect(d.bridgeOpts[0]).toMatchObject({ home: "/h", storeRoot: "/data/swarm/datum-studio" })
   })
 
   test("starts the bridge with the packaged skill paths, then the host with the bridge env, store root and descriptor", async () => {

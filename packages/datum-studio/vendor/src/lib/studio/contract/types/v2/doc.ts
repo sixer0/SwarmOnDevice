@@ -8,7 +8,7 @@
  * ../../schema/v2/common.schema.ts dan ../../schema/v2/doc.schema.ts.
  */
 import type { ChartCode, ChartIntentOrientation, ChartIntentSort, DiagramFamily, ParagraphRoleV2, ProvenanceMark, SymbolDialect, TableBlockType } from "../../enums";
-import type { ChartLabelShort } from "../chart";
+import type { ChartLabelShort, ChartVegaOptions, VegaChartKind } from "../chart";
 import type { DiagramEdge, DiagramNode, DiagramZone } from "../diagram";
 import type { DocMeta, RegisterEntry, StudioMissionRef } from "../doc";
 import type {
@@ -153,7 +153,10 @@ export type ChartDataV2 =
     }
   | { shape: "ohlc"; points: Array<{ t: string; o: number; h: number; l: number; c: number }> }
   | { shape: "sets"; sets: Array<{ name: string; size: number }>; overlaps: Array<{ sets: string[]; size: number }> }
-  | { shape: "steps"; spec: DiagramSpecV2 };
+  | { shape: "steps"; spec: DiagramSpecV2 }
+  // Swarm patch (row 163b, C155): bentuk khusus keluarga Vega (V-01 `days`, V-07/V-08 `hierarchy`).
+  | { shape: "days"; days: Array<{ date: string; value: number }> }
+  | { shape: "hierarchy"; nodes: Array<{ id: string; parent?: string; label: string; value?: number }> };
 
 /** T2-25 (+ `limit` RQ-11/D-223: ambang panel = DATA, bentuk sama dengan `ChartV2.limit`). */
 export interface ChartPanelV2 {
@@ -179,7 +182,12 @@ export interface ChartPanelV2 {
  */
 export interface ChartV2 extends BlockBaseV2 {
   type: "chart";
-  code: ChartCode | "composite" | "custom";
+  code: ChartCode | VegaChartKind | "composite" | "custom";
+  /**
+   * Swarm patch (row 163b, C155): opsi tertutup keluarga Vega; hanya untuk kode V-01..V-08 atau kode DF yang
+   * dipetakan ke Vega (DF-01/02/03/07/09/13).
+   */
+  options?: ChartVegaOptions;
   /** T2-66 — hanya (dan wajib) bila `code = "custom"`. */
   form?: ChartCustomFormV2;
   data?: ChartDataV2;

@@ -63,6 +63,33 @@ const MAX_COLS = 6;
 /** Acuan HS lebar bungkus catatan: 56 karakter pada lebar isi 158 mm (166 - 8). */
 const HS_NOTE_REF_INNER_MM = 158.0;
 const HS_NOTE_REF_CHARS = 56;
+/** Ukuran huruf catatan HS (`LABEL_MM - 0.5`, mm) yang menjadi acuan 56 karakter itu. */
+const HS_NOTE_REF_SIZE_MM = LABEL_MM - 0.5;
+const MM_PER_PT = 25.4 / 72;
+
+/**
+ * Swarm patch (row 150c, C144 A): catatan kepala dan dua label petak lembar HS memakai skala
+ * Caption DATUM 7,6 / 11 pt Cond (manual Rev A ID Tabel 8.2, LEMBAR 50 DARI 98; registri
+ * `type.scale.caption.size` / `.leading`). HS menulis catatan 5,5 mm pada jarak baris 3,6 mm dan
+ * label petak 6 + 5 mm pada 3,6 mm: baris saling menimpa saat dicetak (implementation/118). Jarak
+ * baris >= ukuran huruf kini dijamin skala; byte-paritas dengan `sheet_svg` HS sengaja dilepas
+ * (C23, implementation/119_row150c_c23_recorded_diff.json).
+ */
+function captionScaleMm(): { size: number; lead: number } {
+  const size = PARAMS_BY_KEY.get("type.scale.caption.size")?.default;
+  const lead = PARAMS_BY_KEY.get("type.scale.caption.leading")?.default;
+  if (typeof size !== "number" || typeof lead !== "number" || !(size > 0) || !(lead >= size)) {
+    throw new StudioEngineError("BY_CONSTRUCTION_FAILED", "engine/symbols: skala caption (type.scale.caption.size/leading) tidak terbaca", {
+      size: size ?? null,
+      leading: lead ?? null,
+    });
+  }
+  return { size: size * MM_PER_PT, lead: lead * MM_PER_PT };
+}
+const CAPTION = captionScaleMm();
+/** Garis dasar baris catatan pertama (HS :337) dan label id petak di bawah sel (HS :349), mm. */
+const NOTE_Y0 = 12;
+const CELL_ID_DY = 4;
 
 function isDialect(d: string): d is SymbolDialect {
   return (SYMBOL_DIALECTS as readonly string[]).includes(d);
@@ -210,8 +237,12 @@ export function symbolSheetSvg(d: SymbolDialect, colsIn?: number, opts: SymbolSh
   const perPage = Math.max(1, Math.floor((sheetH - HEAD_H - 12) / cellH));
   const chunks: string[][] = [];
   for (let i = 0; i < ids.length; i += perPage * cols) chunks.push(ids.slice(i, i + perPage * cols));
-  // Lebar bungkus catatan sebanding lebar isi (HS: 56 karakter pada 158 mm).
-  const noteChars = Math.max(16, Math.floor((HS_NOTE_REF_CHARS * (sheetW - 8.0)) / HS_NOTE_REF_INNER_MM));
+  // Lebar bungkus catatan sebanding lebar isi (HS: 56 karakter pada 158 mm) dan berbanding terbalik
+  // dengan ukuran huruf (row 150c: ukuran caption, lebar baris dalam mm tetap ukuran HS).
+  const noteChars = Math.max(
+    16,
+    Math.floor((HS_NOTE_REF_CHARS * (HS_NOTE_REF_SIZE_MM / CAPTION.size) * (sheetW - 8.0)) / HS_NOTE_REF_INNER_MM),
+  );
   const noteLines = wrapText(DIALECT_NOTES[d], noteChars).slice(0, 2);
   const W = num(sheetW);
   const H = num(sheetH);
@@ -225,7 +256,7 @@ export function symbolSheetSvg(d: SymbolDialect, colsIn?: number, opts: SymbolSh
       label(`PUSTAKA SIMBOL ${d.toUpperCase()} LEMBAR ${pi + 1}/${chunks.length}`, 4, 6, LABEL_MM + 1.0, INK900, "start", true),
       g(4, 8, sheetW - 4, 8, INK200, HAIR),
     ];
-    noteLines.forEach((ln, li) => parts.push(label(ln, 4, 12 + li * 3.6, LABEL_MM - 0.5, INK400)));
+    noteLines.forEach((ln, li) => parts.push(label(ln, 4, NOTE_Y0 + li * CAPTION.lead, CAPTION.size, INK400)));
     chunk.forEach((sid, j) => {
       const row = Math.floor(j / cols);
       const cidx = j % cols;
@@ -236,8 +267,8 @@ export function symbolSheetSvg(d: SymbolDialect, colsIn?: number, opts: SymbolSh
       );
       parts.push(r(inset, 0, CELL, CELL, INK200, HAIR));
       parts.push(`<g transform="translate(${num(inset)},0)">${lib[sid]()}</g>`);
-      parts.push(label(sid, lx, CELL + 4, LABEL_MM, INK900, "middle", true));
-      parts.push(label("geometri konvensional", lx, CELL + 7.6, LABEL_MM - 1, INK400, "middle"));
+      parts.push(label(sid, lx, CELL + CELL_ID_DY, CAPTION.size, INK900, "middle", true));
+      parts.push(label("geometri konvensional", lx, CELL + CELL_ID_DY + CAPTION.lead, CAPTION.size, INK400, "middle"));
       parts.push("</g>");
     });
     parts.push(label("SUMBER katalog-simbol.md SIM-nn · datumsimbol.py v1.0", 4, sheetH - 4, LABEL_MM - 1, INK400));

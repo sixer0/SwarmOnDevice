@@ -11,6 +11,7 @@
  */
 import type { LayoutFn, StudioDiagramV1 } from "../../../contract";
 import { DiagramDefect } from "./defect";
+import { DiagramOverCapacity } from "../../figure-capacity";
 import { pyFixed, pyRound0 } from "./pyfmt";
 import { diagramColourValues } from "./colour";
 import { Sheet, footReserveMm } from "./sheet";
@@ -101,10 +102,16 @@ export function estimate(s: StudioDiagramV1, layout?: LayoutFn, opts: { grid?: D
   sheet.foot = footReserveMm(s, sheet.widthMm); // row 124 (CP-46): a wrapped key counts every line
   const H = sheet.height();
   if (H > grid.maxHeightMm + 1e-6) {
-    throw new DiagramDefect(
-      `DATUM-33: tinggi gambar ${pyFixed(H, 2)} mm melewati blok teks ${pyFixed(grid.maxHeightMm, 1)} mm (P8)`,
-      { checkId: "DATUM-33" },
-    );
+    // Swarm patch (row 158, U24 B): over-capacity refusal with the measured height and the limit.
+    throw new DiagramOverCapacity(`DATUM-33: tinggi gambar ${pyFixed(H, 2)} mm melewati blok teks ${pyFixed(grid.maxHeightMm, 1)} mm (P8)`, {
+      checkId: "DATUM-33",
+      family: String(s.family),
+      quantity: "tinggi gambar",
+      unit: "mm",
+      limit: Math.round(grid.maxHeightMm * 10) / 10,
+      measured: Math.round(H * 100) / 100,
+      suggestion: `kurangi simpul/pesan per gambar atau pecah menjadi 2 diagram (${(s.nodes ?? []).length} simpul, ${nEdges} konektor dalam gambar ini)`,
+    });
   }
   ran.push("DATUM-33");
 

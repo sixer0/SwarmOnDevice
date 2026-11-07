@@ -11,14 +11,16 @@ Row 49b (C106, manual DT-28d) changed scripts/datum_docx.py (2 classification ru
 skillSha (sha256 of the bundled SKILL.md, the runtime-manifest field; row 117b, C46 ruling 5):
 
 ```
-cf4d6d3d44fc33df835fe3810e9a5cb7649f14fd96dcc2d524df103c993ba218  SKILL.md
+0270ab8118b109bd9d5fc7218fe7f84a4b93e25b532d41e496771265a055c895  SKILL.md
 ```
+
+Row 156 (C130, decision U24) added the "Output verification" bullets to SKILL.md section 15 (verbatim from masterplan/01_specs_output_verification.md section 8); only SKILL.md changed, file counts are unchanged.
 
 ## 1. Base files that differ from the row 4 inventory (16)
 
 | File | Old sha256 (row 4 / v1.7) | New sha256 | Row |
 |---|---|---|---|
-| SKILL.md | 1629b407fe68dc7a9cf96c41d7b1a9466ec71cf4ea6178e27c542698cf6add7b | cf4d6d3d44fc33df835fe3810e9a5cb7649f14fd96dcc2d524df103c993ba218 | 117, 117b (final) |
+| SKILL.md | 1629b407fe68dc7a9cf96c41d7b1a9466ec71cf4ea6178e27c542698cf6add7b | 0270ab8118b109bd9d5fc7218fe7f84a4b93e25b532d41e496771265a055c895 | 117, 117b, 156 (C130, final) |
 | references/01-kepatuhan-klasifikasi.md | 7f6be78d442bd8c689fb141be3a0ab20afbdecf48ef638c60acd9e788bae58f9 | fe5fdcbc4dd42a38e4d481460b8b8b522b57dd13682a48b6cdfa63cff123b518 | 117 |
 | references/02-grid-tipografi.md | bf7f7dcea718860c6b9adaaad355340a99f076e3090f39decca0d0b2da3045a1 | 93a9a5575407125147566635148249b8340c23f29d76e622578d237296def62c | 117, 117b (final) |
 | references/03-tabel-gambar-apparatus.md | 069065cf5c97fb0935fc5d219b154fbd9fe6d571d56d2bae962ed70a24934f32 | 5401d711fa578065388bc07b291637a787c0e578bd5214afaee334e047e1c6ff | 117, 117b (final) |

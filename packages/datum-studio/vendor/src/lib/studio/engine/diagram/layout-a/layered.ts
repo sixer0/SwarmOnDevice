@@ -5,10 +5,11 @@
 import type { DiagramBox, DiagramNode, DiagramSheet, LayoutResult, StudioDiagramV1 } from "../../../contract";
 import { diagramFitActive, diagramFitAllows, diagramFitNote } from "../fit/state";
 import { fitTierWidth, grownHeight, planNodeText } from "../fit/text";
-import { baselineStepMm, latticeOf, nodeSize, pyStr, sheetHeight, snap } from "./geometry";
+import { baselineStepMm, latticeOf, nodeSize, pyStr, sheetHeight, snap, type Lattice } from "./geometry";
+import { elkPlanFor, elkTierOrder, elkTierXs } from "../elk/plan";
 
-/** `n.get("class", {}).get("tier", n.get("class", {}).get("row", 0))` lalu `str()`. */
-function tierKey(n: DiagramNode): string {
+/** `n.get("class", {}).get("tier", n.get("class", {}).get("row", 0))` lalu `str()`. Row 162: exported for the ELK adapter. */
+export function tierKey(n: DiagramNode): string {
   const cls = (n.class ?? {}) as Record<string, unknown>;
   const has = (k: string) => Object.prototype.hasOwnProperty.call(cls, k);
   const v = has("tier") ? cls.tier : has("row") ? cls.row : 0;
@@ -28,6 +29,12 @@ function tierKey(n: DiagramNode): string {
  */
 export const LAYERED_TIER_GAP_BASELINES = 5;
 
+/** Nominal tier node width (mm) before label fit; row 162: one formula shared with the ELK adapter. */
+export function tierWidthMm(m: number, W: number, lat: Pick<Lattice, "x">): number {
+  const w = snap((W - (m - 1) * lat.x) / m, lat.x);
+  return Math.max(Math.min(w, lat.x * 10), lat.x * 3);
+}
+
 export function layoutLayered(s: StudioDiagramV1, sheet: DiagramSheet): LayoutResult {
   const lat = latticeOf(sheet);
   const W = sheet.widthMm;
@@ -44,16 +51,20 @@ export function layoutLayered(s: StudioDiagramV1, sheet: DiagramSheet): LayoutRe
     tiers[i].push(n);
   }
 
+  // Swarm patch (row 162, U24 C): when the ELK adapter (engine/diagram/elk) has an active plan for
+  // this spec and width, the order inside each tier and the node x come from ELK; tier y, sizes, fit
+  // and snap stay as below. No plan (the default) = the original layout, unchanged.
+  const elk = elkPlanFor(s, W);
   const nodes: Record<string, DiagramBox> = {};
   // D-242: dua baseline (Python: BASELINE_PT * 2 dibaca mm); keluarga layered
   // memakai langkah pita tingkat (FIX-B2, LAYERED_TIER_GAP_BASELINES).
   const tierStep = baselineStepMm(s.family === "layered" ? LAYERED_TIER_GAP_BASELINES : 2, lat);
   let y = lat.top;
-  for (const group of tiers) {
+  for (const [ti, tierNodes] of tiers.entries()) {
+    const group = elk ? elkTierOrder(elk, [...index.keys()][ti], tierNodes) : tierNodes;
     const m = group.length;
     const gap = lat.x;
-    let w = snap((W - (m - 1) * gap) / m, lat.x);
-    w = Math.max(Math.min(w, lat.x * 10), lat.x * 3);
+    let w = tierWidthMm(m, W, lat);
     let hmax = -Infinity;
     for (const n of group) {
       const [, h] = nodeSize(n, lat, group);
@@ -80,8 +91,9 @@ export function layoutLayered(s: StudioDiagramV1, sheet: DiagramSheet): LayoutRe
     }
     const total = m * w + (m - 1) * gap;
     const x = snap(Math.max(0.0, (W - total) / 2.0), lat.x);
+    const xs = elk ? elkTierXs(elk, group, w, gap, W, lat.x) : undefined; // row 162
     group.forEach((n, i) => {
-      nodes[n.id] = { x: x + i * (w + gap), y, w, h: hmax };
+      nodes[n.id] = { x: xs ? xs[i] : x + i * (w + gap), y, w, h: hmax };
     });
     // Python: `y = y + hmax + snap(...)` = (y + hmax) + langkah.
     y = y + hmax + tierStep;

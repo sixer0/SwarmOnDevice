@@ -58,6 +58,7 @@ Behaviour changed on purpose by a Swarm patch (assertion adapted to the patched 
 | A8 | C40, row 124b CP-35 | key row label in the document language (`KUNCI` for ID) |
 | A9 | row 107 M1 | MCP file roots: no cwd default, empty roots refused, UNC refused by the absolute-path rule |
 | A10 | row 29 (spec §5.1, mission contract §8.1, U19/C51) | toolsets documents, query, write, templates, reports, missions all on: `studio_write`/`studio_edit` listed by default; the 30 KB list budget checked on the original default set; "no oneOf/anyOf at the root" checked for every tool, the whole-schema check kept for the original default tools |
+| A11 | U24 B, row 158 | `STUDIO_ERROR_CODES` 74 -> 75 (`FIGURE_OVER_CAPACITY`, contract/dc05); the two capacity bad cases (DATUM-33, DATUM-37) refused `FIGURE_OVER_CAPACITY` instead of `BY_CONSTRUCTION_FAILED` (figures/diagram-bad-cases); P-02 with `orientation: vertical` and six ~42-character labels refused `FIGURE_OVER_CAPACITY` (`CAPACITY-LABELS`, family P-02) instead of rendering overlapped columns (figures/fig03a-chart-intent) |
 
 Cases kept but skipped (`it.skip`/`describe.skip`, reason at the line):
 

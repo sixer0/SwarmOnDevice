@@ -31,6 +31,8 @@ import {
 import { createStore } from "solid-js/store"
 import type { SwarmController } from "../swarm/swarm-controller"
 import { SwarmAgents } from "../swarm/swarm-view"
+import type { MissionControlMount } from "../swarm/mission-control"
+import { offersAgentsView } from "../swarm/mission-control-layout"
 import type { SessionMapController } from "./session-map-controller"
 import {
   archiveCount,
@@ -1159,6 +1161,8 @@ export function DecisionList(props: { decisions: ReturnType<typeof createDecisio
 export function SessionMapPanel(props: {
   map: SessionMapController
   swarm: SwarmController
+  /** row 133: mission control inside the Agents view */
+  missions?: MissionControlMount
   directory: string
   onAsk: (step: MapStep) => void
   onRewind: (chapter: MapChapter) => void
@@ -1179,7 +1183,8 @@ export function SessionMapPanel(props: {
       tone: "danger",
     },
     { id: "edits", label: language.t("session.map.filter.edits"), count: props.map.model().files.length },
-    ...(props.swarm.pulse().agents > 1
+    // Row 133 (C127): a one-agent session with a mission still reaches mission control.
+    ...(offersAgentsView(props.swarm.pulse().agents, props.missions?.control.state.options.length ?? 0)
       ? [
           {
             id: "agents" as const,
@@ -1492,7 +1497,7 @@ export function SessionMapPanel(props: {
         when={!showingAgents() && !showingDecisions()}
         fallback={
           showingAgents() ? (
-            <SwarmAgents swarm={props.swarm} />
+            <SwarmAgents swarm={props.swarm} missions={props.missions} />
           ) : (
             <DecisionList decisions={decisions} directory={props.directory} />
           )

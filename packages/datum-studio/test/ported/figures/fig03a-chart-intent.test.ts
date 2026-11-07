@@ -145,9 +145,14 @@ describe('orientation per keluarga', () => {
   it('P-02 vertical mematikan AUTO_ORIENT (label panjang tetap kolom)', () => {
     const s = cat(longLabels, [4, 6, 2, 8, 5, 3]);
     expect(ids(renderChart(s))).toContain('AUTO_ORIENT');
-    const r = renderChart(with_(s, { orientation: 'vertical' }));
-    expect(ids(r)).not.toContain('AUTO_ORIENT');
-    expect(ids(r)).not.toContain('HINT_IGNORED');
+    // row42 ADAPT A11 (U24 B, row 158): kept as columns, the six ~42-character labels overlap; the
+    // engine now refuses FIGURE_OVER_CAPACITY instead of returning that render. The refusal is for
+    // the P-02 column chart itself, so AUTO_ORIENT stayed off (the point of this case).
+    const e = catchErr(() => renderChart(with_(s, { orientation: 'vertical' })));
+    expect(e.code).toBe('FIGURE_OVER_CAPACITY');
+    expect(e.details).toMatchObject({ checkId: 'CAPACITY-LABELS', family: 'P-02', measured: 6 });
+    expect(e.message).not.toContain('AUTO_ORIENT');
+    expect(e.message).not.toContain('HINT_IGNORED');
   });
   it('tanpa varian: P-03 horizontal, K-01 vertical, K-05 -> HINT_IGNORED; arah bawaan = tanpa laporan', () => {
     const cases: Array<[string, 'horizontal' | 'vertical']> = [['P-03', 'horizontal'], ['K-01', 'vertical'], ['K-05', 'horizontal']];

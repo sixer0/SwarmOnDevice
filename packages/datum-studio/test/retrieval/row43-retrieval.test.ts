@@ -177,6 +177,7 @@ describe("row 43: retrieval in phase B", () => {
     quote("phase B counts", { a: A.counts, b: B.counts, mutation: MUTATION || null })
     expect(B.counts.document).toBe(A.counts.document)
     expect(B.counts.revision).toBe(A.counts.revision)
-    expect(B.counts.output_file).toBe(A.counts.output_file)
+    // Row 154: phase B's docx re-renders also store the HTML the studio_render wrapper adds (spec §6.1); phase A rows are unchanged.
+    expect(B.counts.output_file - (B.counts.output_file_added_html ?? 0)).toBe(A.counts.output_file)
   })
 })

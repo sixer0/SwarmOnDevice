@@ -11,7 +11,7 @@ import { existsSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import { createDispatcher, type PageEngine } from "./dispatch"
 import { buildFontBundle } from "./fonts"
-import { defaultPolicy, type PathPolicy } from "./paths"
+import { defaultPolicy, studioStoreGrants, type PathPolicy } from "./paths"
 import { extractRenderPyCheckScript, ScriptAllowList } from "./scripts"
 import { startSocketServer, type BridgeLog, type SocketServerHandle } from "./socket-server"
 
@@ -24,6 +24,13 @@ export type RenderBridgeOptions = {
   extraScripts?: Record<string, string>
   log: BridgeLog
   policy?: PathPolicy
+  /** Row 151c (C161 I1): HOME the default policy protects (default os.homedir()). */
+  home?: string
+  /**
+   * Row 151c (C161 I1): the Studio store root from the host lifecycle (layout.ts studioStoreRoot), never from a
+   * request. The default policy then grants read of `<store>/docs/**.html` and write of `<store>/verify/<id>/*.png`.
+   */
+  storeRoot?: string
   /** Test seam: a page engine other than Electron's. */
   engine?: PageEngine
   baseDir?: string
@@ -55,7 +62,7 @@ export function buildScriptAllowList(renderScriptPath: string | undefined, extra
 export async function startRenderBridge(opts: RenderBridgeOptions): Promise<RenderBridge> {
   const fonts = buildFontBundle(opts.fontsDir)
   const scripts = buildScriptAllowList(opts.renderScriptPath, opts.extraScripts, opts.log)
-  const policy = opts.policy ?? defaultPolicy()
+  const policy = opts.policy ?? defaultPolicy(opts.home, [], opts.storeRoot ? studioStoreGrants(opts.storeRoot) : [])
   const engine =
     opts.engine ?? (await import("./electron-renderer")).createElectronEngine(new Set(fonts.files), opts.log)
   const token = randomBytes(32).toString("hex")

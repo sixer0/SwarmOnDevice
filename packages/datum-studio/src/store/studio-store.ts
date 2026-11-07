@@ -24,8 +24,9 @@ import { canonicalJson, docNumberSafe, newId, sha256Hex } from "./ids.ts"
 import { acquireStoreLock, type StoreLock } from "./lock.ts"
 import { applyMigrations } from "./migrations/index.ts"
 import { MissionStore, pinBuiltinMissionTypes } from "./mission/mission-store.ts"
+import { revisionOutputState } from "./mission/output-gate.ts"
 import { assertStoreRoot, isInside, resolveStoreRel, STORE_DB_FILE } from "./paths.ts"
-import { TEMPLATE_GUARD_REPORT_MAX_BYTES } from "./types.ts"
+import { OUTPUT_VERIFICATION_REPORT_MAX_BYTES, TEMPLATE_GUARD_REPORT_MAX_BYTES } from "./types.ts"
 import type {
   AssetMeta,
   AssetRow,
@@ -39,9 +40,12 @@ import type {
   NewDocument,
   NewOutputFile,
   NewRevision,
+  NewOutputVerification,
   NewTemplateVersion,
   NewUserTemplate,
   OutputFileRow,
+  OutputVerificationRow,
+  RevisionVerification,
   QueryContractsResult,
   RenderJobUpdate,
   RevisionContent,
@@ -90,6 +94,8 @@ const JSON_COLUMNS: Record<string, readonly string[]> = {
   contract_record: ["card_ids"],
   contract_item: ["depends_on"],
   render_job: ["formats", "engine"],
+  // row 149: migration 0004
+  output_verification: ["report"],
 }
 
 function parseRow<T>(table: string, row: Row | undefined): T | null {
@@ -105,6 +111,31 @@ function parseRows<T>(table: string, rows: Row[]): T[] {
 
 function jsonOrNull(v: unknown): string | null {
   return v === undefined || v === null ? null : JSON.stringify(v)
+}
+
+// ── row 149: output verification helpers ─────────────────────────────────────
+
+/** FAIL / UNKNOWN counts of a report's `checks` array (VerifiedOutput.checks), or null when the report has none. */
+function reportCheckCounts(report: Record<string, unknown>): { fail: number; unknown: number; other: string[] } | null {
+  const checks = report.checks
+  if (!Array.isArray(checks)) return null
+  let fail = 0
+  let unknown = 0
+  const other: string[] = []
+  for (const c of checks) {
+    const st = c !== null && typeof c === "object" ? (c as { status?: unknown }).status : undefined
+    if (st === "FAIL") fail += 1
+    else if (st === "UNKNOWN") unknown += 1
+    else if (st !== "PASS" && st !== "NOT_APPLICABLE") other.push(String(st))
+  }
+  return { fail, unknown, other }
+}
+
+/** node:sqlite and bun:sqlite may differ in integer types; the row type promises numbers. */
+function normaliseVerification(r: OutputVerificationRow | null): OutputVerificationRow | null {
+  if (!r) return null
+  for (const k of ["checks_version", "fail_count", "unknown_count", "attempt", "time_verified"] as const) r[k] = Number(r[k])
+  return r
 }
 
 /** Studio cursor `{r, id}` base64url (clone services/query/filters.ts encodeSearchCursor). */
@@ -241,7 +272,7 @@ export class SqliteStudioStore implements StudioStore {
   /** Row 119a: the mission contract API over this store (writes take a tx of `transaction()`). */
   get missions(): MissionStore {
     if (!this.missionStore) {
-      this.missionStore = new MissionStore({ reader: () => this.q(), log: (level, source, err, context) => this.emit(level, source, err, context) })
+      this.missionStore = new MissionStore({ reader: () => this.q(), log: (level, source, err, context) => this.emit(level, source, err, context), outputGate: () => this.missionGuard })
     }
     return this.missionStore
   }
@@ -835,6 +866,101 @@ export class SqliteStudioStore implements StudioStore {
     }
     if (old.rows.length > 0) this.emit("info", "StudioStore.prunePreviewOutputs", null, { keep, removedPreviews: old.folders.length, removedRows: old.rows.length, removedFiles }, opts.correlationId)
     return { keptPreviews: old.kept, removedPreviews: old.folders.length, removedRows: old.rows.length, removedFiles }
+  }
+
+  // ── row 149: output verification state (masterplan/01_specs_output_verification.md §5, §7.1, §7.2) ────────
+
+  /**
+   * Upsert the verification record of one output file (one record per output, PK). A re-verify replaces the
+   * record and sets `attempt = attempt + 1`; the newest verification wins, also when it downgrades (D-7).
+   * `revision_id` is copied from the output row. Refusals: NOT_FOUND (no output row), VERIFY_SHA_MISMATCH,
+   * VERIFY_STATE_INVALID (`verified` with any FAIL/UNKNOWN, or counts/state that contradict the report's own
+   * checks; the 0004 table CHECK refuses the first case too), VERIFY_REPORT_TOO_LARGE (> 256 KiB), SCHEMA_INVALID.
+   */
+  async putOutputVerification(tx: StoreTx, rec: NewOutputVerification): Promise<OutputVerificationRow> {
+    const refuse = (code: "NOT_FOUND" | "SCHEMA_INVALID" | "VERIFY_SHA_MISMATCH" | "VERIFY_STATE_INVALID" | "VERIFY_REPORT_TOO_LARGE", message: string, details: Record<string, unknown>) => {
+      const err = new StoreError(code, message, details)
+      this.emit("warn", "StudioStore.putOutputVerification", err, details)
+      return err
+    }
+    const id = rec?.outputFileId
+    if (typeof id !== "string" || id.length === 0) throw refuse("SCHEMA_INVALID", "outputFileId is required", {})
+    if (rec.state !== "verified" && rec.state !== "unverified") throw refuse("SCHEMA_INVALID", "state must be verified or unverified", { outputFileId: id, state: String(rec.state) })
+    for (const [k, v, min] of [["failCount", rec.failCount, 0], ["unknownCount", rec.unknownCount, 0], ["checksVersion", rec.checksVersion, 1]] as const) {
+      if (!Number.isInteger(v) || (v as number) < min) throw refuse("SCHEMA_INVALID", `${k} must be an integer >= ${min}`, { outputFileId: id, field: k })
+    }
+    if (typeof rec.verifiedBy !== "string" || rec.verifiedBy.trim().length === 0) throw refuse("SCHEMA_INVALID", "verifiedBy is required", { outputFileId: id })
+    if (typeof rec.outputSha256 !== "string" || !/^[0-9a-f]{64}$/.test(rec.outputSha256)) throw refuse("SCHEMA_INVALID", "outputSha256 must be 64 lowercase hex", { outputFileId: id })
+    if (rec.report === null || typeof rec.report !== "object" || Array.isArray(rec.report)) throw refuse("SCHEMA_INVALID", "report must be a JSON object", { outputFileId: id })
+
+    const out = tx.get<{ id: string; sha256: string; revision_id: string | null; render_job_id: string | null }>("SELECT id, sha256, revision_id, render_job_id FROM output_file WHERE id = ?", [id])
+    if (!out) throw refuse("NOT_FOUND", "output not found", { outputFileId: id })
+    if (out.sha256 !== rec.outputSha256) throw refuse("VERIFY_SHA_MISMATCH", "verified bytes are not the output's recorded bytes", { outputFileId: id, expected: out.sha256, got: rec.outputSha256 })
+    // UNKNOWN never counts as a pass (spec §2, §5; C130): verified only with zero FAIL and zero UNKNOWN
+    if (rec.state === "verified" && (rec.failCount > 0 || rec.unknownCount > 0)) {
+      throw refuse("VERIFY_STATE_INVALID", "a verified output cannot have FAIL or UNKNOWN checks", { outputFileId: id, failCount: rec.failCount, unknownCount: rec.unknownCount })
+    }
+    const fromReport = reportCheckCounts(rec.report)
+    if (fromReport) {
+      if (fromReport.other.length > 0) throw refuse("SCHEMA_INVALID", "report has a check status outside PASS/FAIL/UNKNOWN/NOT_APPLICABLE", { outputFileId: id, statuses: fromReport.other.slice(0, 10) })
+      if (fromReport.fail !== rec.failCount || fromReport.unknown !== rec.unknownCount) {
+        throw refuse("VERIFY_STATE_INVALID", "failCount/unknownCount differ from the report's checks", { outputFileId: id, failCount: rec.failCount, unknownCount: rec.unknownCount, reportFail: fromReport.fail, reportUnknown: fromReport.unknown })
+      }
+    }
+    const reportState = (rec.report as { state?: unknown }).state
+    if (reportState !== undefined && reportState !== rec.state) throw refuse("VERIFY_STATE_INVALID", "state differs from the report's state", { outputFileId: id, state: rec.state, reportState: String(reportState) })
+    const text = canonicalJson(rec.report)
+    const bytes = Buffer.byteLength(text, "utf8")
+    if (bytes > OUTPUT_VERIFICATION_REPORT_MAX_BYTES) throw refuse("VERIFY_REPORT_TOO_LARGE", `report is ${bytes} bytes, max ${OUTPUT_VERIFICATION_REPORT_MAX_BYTES}`, { outputFileId: id, bytes, max: OUTPUT_VERIFICATION_REPORT_MAX_BYTES })
+
+    const renderJobId = rec.renderJobId === undefined ? out.render_job_id : rec.renderJobId
+    tx.run(
+      `INSERT INTO output_verification (output_file_id, output_sha256, revision_id, render_job_id, state, checks_version, fail_count, unknown_count, report, report_sha256, attempt, verified_by, time_verified)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+       ON CONFLICT(output_file_id) DO UPDATE SET output_sha256 = excluded.output_sha256, revision_id = excluded.revision_id, render_job_id = excluded.render_job_id,
+         state = excluded.state, checks_version = excluded.checks_version, fail_count = excluded.fail_count, unknown_count = excluded.unknown_count,
+         report = excluded.report, report_sha256 = excluded.report_sha256, attempt = output_verification.attempt + 1,
+         verified_by = excluded.verified_by, time_verified = excluded.time_verified`,
+      [id, rec.outputSha256, out.revision_id, renderJobId ?? null, rec.state, rec.checksVersion, rec.failCount, rec.unknownCount, text, sha256Hex(text), rec.verifiedBy, tx.now],
+    )
+    return (await this.getOutputVerification(id, tx))!
+  }
+
+  /** The verification record of one output, or null (no record = unverified, reason NOT_CHECKED). */
+  async getOutputVerification(outputFileId: string, tx?: StoreTx): Promise<OutputVerificationRow | null> {
+    return normaliseVerification(parseRow<OutputVerificationRow>("output_verification", this.q(tx).get<Row>("SELECT * FROM output_verification WHERE output_file_id = ?", [outputFileId])))
+  }
+
+  /** Records for the ids given, in the order given; ids without a record are omitted; duplicates read once. */
+  async listOutputVerifications(outputFileIds: readonly string[], tx?: StoreTx): Promise<OutputVerificationRow[]> {
+    const ids = [...new Set(outputFileIds.filter((x): x is string => typeof x === "string"))]
+    const q = this.q(tx)
+    const byId = new Map<string, OutputVerificationRow>()
+    for (let i = 0; i < ids.length; i += 500) {
+      const part = ids.slice(i, i + 500)
+      const rows = q.all<Row>(`SELECT * FROM output_verification WHERE output_file_id IN (${part.map(() => "?").join(", ")})`, part)
+      for (const r of parseRows<OutputVerificationRow>("output_verification", rows)) byId.set(r.output_file_id, normaliseVerification(r)!)
+    }
+    return ids.flatMap((x) => (byId.has(x) ? [byId.get(x)!] : []))
+  }
+
+  /**
+   * The §7.1 output set of one revision (output_file kind 'document', scope DOCUMENT, draft 0; newest per
+   * (role, format, figure_label) by time_created DESC, rowid DESC), each with its derived state, and §7.2 Final:
+   * at least one PRIMARY output, every output verified, and a verified PRIMARY PDF or HTML (layout witness).
+   * An output is verified only if a record exists, its sha equals the output's sha and its state is `verified`.
+   */
+  async revisionVerification(documentId: string, revisionNo: number | "latest", tx?: StoreTx): Promise<RevisionVerification> {
+    const q = this.q(tx)
+    const doc = q.get<{ id: string; current_revision_no: number }>("SELECT id, current_revision_no FROM document WHERE id = ?", [documentId])
+    if (!doc) throw new StoreError("NOT_FOUND", "document not found", { documentId })
+    const n = revisionNo === "latest" ? Number(doc.current_revision_no) : revisionNo
+    if (!Number.isInteger(n) || n < 1) throw new StoreError("SCHEMA_INVALID", "revisionNo must be an integer >= 1 or 'latest'", { documentId, revisionNo })
+    const rev = q.get<{ id: string }>("SELECT id FROM revision WHERE document_id = ? AND revision_no = ?", [doc.id, n])
+    if (!rev) throw new StoreError("NOT_FOUND", "revision not found", { documentId, revisionNo: n })
+    // Row 136b (M4): the one synchronous rule, shared with the mission gate and mission control's G1 read.
+    const { final, reasons, outputs } = revisionOutputState(q, doc.id, rev.id)
+    return { documentId: doc.id, revisionNo: n, revisionId: rev.id, final, reasons, outputs }
   }
 
   async putAsset(bytes: Uint8Array, meta: AssetMeta, tx?: StoreTx): Promise<AssetRow> {

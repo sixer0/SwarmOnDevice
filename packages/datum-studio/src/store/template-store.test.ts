@@ -35,6 +35,7 @@ const ID_0001 = "20261106000000_datum_studio_init"
 const ID_0002 = "20261106120000_datum_template_guard"
 /** row 119a: opening the store now also applies 0003 (mission tables only; filtered from `counts`). */
 const ID_0003 = "20261107000000_datum_mission"
+const ID_0004 = "20261107120000_datum_output_verification" // row 149
 const opened: SqliteStudioStore[] = []
 let tick = 1_800_000_000_000
 const clock = () => ++tick
@@ -234,7 +235,7 @@ describe("template versions (row 64)", () => {
 function counts(file: string): Record<string, number> {
   const db = openSqlite(file, { readonly: true })
   try {
-    const names = db.all<{ name: string }>("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'doc_block_fts_%' AND name NOT LIKE 'mission%' ORDER BY name").map((r) => r.name)
+    const names = db.all<{ name: string }>("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'doc_block_fts_%' AND name NOT LIKE 'mission%' AND name <> 'output_verification' ORDER BY name").map((r) => r.name)
     return Object.fromEntries(names.map((n) => [n, Number(db.get<{ n: number }>(`SELECT count(*) AS n FROM "${n}"`)!.n)]))
   } finally {
     db.close()
@@ -332,12 +333,12 @@ describe("migration 0002 on an existing 0001 store (row 64)", () => {
     const shaAfter = contentSha(file)
     console.log(`[row64] 0001 -> 0002 counts before ${JSON.stringify(before)}`)
     console.log(`[row64] 0001 -> 0002 counts after  ${JSON.stringify(after)}`)
-    expect({ ...after, migration: after.migration! - 2 }).toEqual(before)
+    expect({ ...after, migration: after.migration! - 3 }).toEqual(before) // row 149: + 0004
     expect(shaAfter).toEqual(shaBefore)
 
     const db = openSqlite(file, { readonly: true })
     try {
-      expect(db.all<{ id: string }>("SELECT id FROM migration ORDER BY id").map((r) => r.id)).toEqual([ID_0001, ID_0002, ID_0003])
+      expect(db.all<{ id: string }>("SELECT id FROM migration ORDER BY id").map((r) => r.id)).toEqual([ID_0001, ID_0002, ID_0003, ID_0004])
       expect(db.get<{ value: string }>("SELECT value FROM store_meta WHERE key = 'schema_version'")!.value).toBe(latestSchemaId())
       expect(db.get<{ value: string }>("SELECT value FROM store_meta WHERE key = 'created_by_release'")!.value).toBe("1.2.0-pre64")
       expect(Number(db.get<{ n: number }>("SELECT count(*) AS n FROM template_version WHERE guard_verdict IS NOT NULL OR guard_report IS NOT NULL OR guard_skill_sha IS NOT NULL")!.n)).toBe(0)
@@ -358,6 +359,6 @@ describe("migration 0002 on an existing 0001 store (row 64)", () => {
     const v3 = await again.transaction((tx) => again.addTemplateVersion(tx, { slug: "user-lama", baseVersionNo: 2, definition: { a: 3 }, changeNote: "after 0002", createdBy: "swarm", guard: guard("pass") }))
     expect([v3.version_no, v3.guard_verdict]).toEqual([3, "pass"])
     await again.close()
-    expect(counts(file).migration).toBe(3)
+    expect(counts(file).migration).toBe(4) // row 149: + 0004
   })
 })

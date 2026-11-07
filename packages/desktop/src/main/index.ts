@@ -396,6 +396,7 @@ const main = Effect.gen(function* () {
     setNativeTranslations: (bundle) => {
       if (setNativeTranslations(bundle)) createMenu(menuDeps)
     },
+    missionControl: () => datumStudio.missions(),
   })
   registerWslIpcHandlers(wslServers)
   void updater.start()

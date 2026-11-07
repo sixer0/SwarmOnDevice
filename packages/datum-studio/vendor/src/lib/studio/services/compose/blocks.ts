@@ -400,7 +400,8 @@ function chart(b: ChartV2, pid: string, ctx: BlockCtx): ChartBlock {
     // AM-03 (DC-27): `code = "custom"` disalin apa adanya lalu didispatch mesin chart di bawah.
     const s: StudioChartDraft = {
       $schema: "studio.chart/v1",
-      kind: b.code,
+      // Swarm patch (row 163b): V-01..V-08 diteruskan apa adanya ke cabang Vega (services/render/vega-figure.ts).
+      kind: b.code as StudioChartDraft["kind"],
       title,
       source: sourceText,
       widthMm,
@@ -448,6 +449,8 @@ function chart(b: ChartV2, pid: string, ctx: BlockCtx): ChartBlock {
     // FIG-03a (D-482 butir 2): medan maksud analitis blok v2 diteruskan ke mesin; absen = undefined, spec tidak berubah.
     const intent = chartIntentOf(b);
     if (intent) s.intent = intent;
+    // Swarm patch (row 163b, C155): opsi tertutup keluarga Vega diteruskan apa adanya (render: services/render/vega-figure.ts).
+    if (b.options !== undefined) s.options = { ...b.options };
     spec = chartSpecFromDraft(s, b.form);
   }
   const out: ChartBlock = withId({ type: "chart" as const, caption: caption(b.caption, ctx), source: figureSource(b.source, ctx), widthMm, spec }, pid);

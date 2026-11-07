@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer, webUtils } from "electron"
 import type { ElectronAPI, SetupToolsState, WslServersEvent } from "./types"
 import { SETUP_TOOLS_IPC } from "./setup-tools-channels"
+import { MISSION_CONTROL_IPC } from "./mission-control-channels"
 import type { UpdaterState } from "@opencode-ai/app/updater"
 
 const updaterCallbacks = new Set<(state: UpdaterState) => void>()
@@ -68,6 +69,23 @@ const api: ElectronAPI = {
       return () => ipcRenderer.removeListener(SETUP_TOOLS_IPC.progress, handler)
     },
     markOffered: () => ipcRenderer.invoke(SETUP_TOOLS_IPC.markOffered),
+  },
+  // Mission control (row 127): one plain object argument each; main validates it and holds the host token.
+  missions: {
+    list: (input) => ipcRenderer.invoke(MISSION_CONTROL_IPC.list, { directory: input?.directory }),
+    get: (input) => ipcRenderer.invoke(MISSION_CONTROL_IPC.get, { mission: input?.mission }),
+    answer: (input) =>
+      ipcRenderer.invoke(MISSION_CONTROL_IPC.answer, {
+        mission: input?.mission,
+        request: input?.request,
+        option: input?.option,
+      }),
+    instruct: (input) =>
+      ipcRenderer.invoke(MISSION_CONTROL_IPC.instruct, {
+        mission: input?.mission,
+        text: input?.text,
+        ...(input?.row === undefined ? {} : { row: input.row }),
+      }),
   },
   consumeInitialDeepLinks: () => ipcRenderer.invoke("consume-initial-deep-links"),
   getDefaultServerUrl: () => ipcRenderer.invoke("get-default-server-url"),

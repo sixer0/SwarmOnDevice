@@ -73,6 +73,11 @@ export const STORE_ERROR_CODES = [
   "OPTION_UNKNOWN",
   "CHECKPOINT_IMMUTABLE",
   "MESSAGE_IMMUTABLE",
+  // row 149: output verification (masterplan/01_specs_output_verification.md §5, §7.3; C130). OUTPUT_UNVERIFIED is row 155's refusal.
+  "VERIFY_SHA_MISMATCH",
+  "VERIFY_STATE_INVALID",
+  "VERIFY_REPORT_TOO_LARGE",
+  "OUTPUT_UNVERIFIED",
 ] as const
 
 export type StoreErrorCode = (typeof STORE_ERROR_CODES)[number]
@@ -123,6 +128,8 @@ export function mapSqliteError(e: unknown): unknown {
   if (msg.includes("UNIQUE constraint failed: mission_decision_request.mission_id")) return pick("DECISION_REQUEST_ID_TAKEN")
   if (msg.includes("UNIQUE constraint failed: mission_lock.resource")) return pick("LOCK_HELD")
   if (/database is locked|SQLITE_BUSY/i.test(msg)) return pick("STORE_BUSY")
+  // row 149: the 0004 table CHECK (a verified record with any FAIL/UNKNOWN), before the generic CHECK mapping
+  if (msg.includes("CHECK constraint failed") && msg.includes("state = 'unverified'")) return pick("VERIFY_STATE_INVALID")
   if (msg.includes("UNIQUE constraint failed: document.mission_folder, document.mission_doc_key")) return pick("DOC_KEY_TAKEN")
   if (msg.includes("UNIQUE constraint failed: document.doc_number")) return pick("DOC_NUMBER_TAKEN")
   if (msg.includes("UNIQUE constraint failed")) return pick("ALREADY_EXISTS")

@@ -30,6 +30,8 @@ import { getLogger } from "./logging"
 import { isSetupToolsOfferPending, markSetupToolsOffered } from "./onboarding"
 import { createSetupRunner, setupDir, type SetupRunner } from "./setup-runner"
 import { createInstallConfirm, registerSetupToolsHandlers } from "./setup-tools-ipc"
+import { registerMissionControlHandlers } from "./datum-studio-host/mission-ipc"
+import type { MissionControlPlatform } from "../preload/types"
 
 const pickerFilters = (ext?: string[]) => {
   if (!ext || ext.length === 0) return undefined
@@ -58,6 +60,8 @@ type Deps = {
   exportDebugLogs: () => Promise<string>
   recordFatalRendererError: (error: FatalRendererError) => Promise<void> | void
   setNativeTranslations: (bundle: DesktopNativeBundle) => void
+  /** Row 127: the running DATUM Studio host's mission control client (index.ts: () => datumStudio.missions()). */
+  missionControl?: () => MissionControlPlatform | undefined
 }
 
 export function registerIpcHandlers(deps: Deps) {
@@ -91,6 +95,14 @@ export function registerIpcHandlers(deps: Deps) {
     isOfferPending: isSetupToolsOfferPending,
     markOffered: markSetupToolsOffered,
     log: (message, meta) => getLogger().log(message, meta),
+  })
+  // Mission control (row 127): four channels, validated in main; the host token never leaves main.
+  registerMissionControlHandlers({
+    ipcMain,
+    windowOf: (sender) => BrowserWindow.fromWebContents(sender),
+    isRendererUrl,
+    client: () => deps.missionControl?.(),
+    log: (level, message, context) => getLogger()[level](message, { source: "mission-control", ...context }),
   })
   ipcMain.handle("kill-sidecar", () => deps.killSidecar())
   ipcMain.handle("await-initialization", () => deps.awaitInitialization())

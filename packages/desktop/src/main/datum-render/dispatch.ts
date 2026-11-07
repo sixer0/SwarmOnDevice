@@ -3,7 +3,18 @@
 
 import { randomBytes, createHash } from "node:crypto"
 import { readFileSync, renameSync, writeFileSync } from "node:fs"
-import { type CheckPageRequest, type PdfRequest, type PngRequest, type RenderRequest, validateRequest } from "./protocol"
+import {
+  type CheckPageRequest,
+  type PagePngRequest,
+  type PdfRequest,
+  type PngRequest,
+  type RenderRequest,
+  BridgeError,
+  MAX_PAGE_IMAGES,
+  PAGE_PNG_DPI,
+  validateRequest,
+} from "./protocol"
+import { A4_MM, pageFileName, type PageSizeMm } from "./page-images"
 import { checkInputPath, checkOutputPath, type PathPolicy } from "./paths"
 import { htmlWithFonts, mmToPx, svgPdfPage, svgPngPage, svgSizeMm } from "./pages"
 import { checkPageExpression, type ScriptAllowList } from "./scripts"
@@ -24,7 +35,29 @@ export interface PageEngine {
   png(job: { html: string; width: number; height: number }): Promise<Buffer>
   pdf(job: { html: string; widthMm: number; heightMm: number; preferCSSPageSize: boolean }): Promise<Buffer>
   evaluate(job: { html: string; viewportWidth: number; viewportHeight: number; expression: string }): Promise<unknown>
+  /** Row 151b: print-emulated layout, one PNG per selected page (page-images.ts). */
+  pagePngs(job: PagePngsJob): Promise<PagePngsResult>
   info(): EngineInfo
+}
+
+export type PagePngsJob = {
+  html: string
+  /** Page size when the document has no CSS @page size. */
+  fallback: PageSizeMm
+  dpi: number
+  /** 1-based pages to image; null = the first MAX_PAGE_IMAGES. */
+  pages: number[] | null
+}
+export type PagePngsResult = {
+  layout: "paged" | "flow"
+  media: "print"
+  pageCount: number
+  pageSizeMm: PageSizeMm
+  /** "css" when an @page size rule was read, else "fallback". */
+  pageSizeSource: "css" | "fallback"
+  images: Array<{ n: number; png: Buffer; width: number; height: number }>
+  /** Row 151c (DEFECT-157-1): why the images only approximate the printed pages (flow layout); absent when exact. */
+  approximate?: string
 }
 
 export type DispatchDeps = {
@@ -102,6 +135,33 @@ async function checkPage(req: CheckPageRequest, d: DispatchDeps) {
   return { script, result }
 }
 
+async function pagePng(req: PagePngRequest, d: DispatchDeps) {
+  const src = checkInputPath(req.src, d.policy)
+  // The folder must exist, be within reach and not protected; checked before any render, per file again after.
+  checkOutputPath(`${req.dstDir}/${pageFileName(1)}`, d.policy)
+  const html = htmlWithFonts(readText(src), d.fonts().css)
+  const dpi = req.dpi ?? PAGE_PNG_DPI
+  const fallback = req.widthMm !== undefined ? { wMm: req.widthMm, hMm: req.heightMm! } : { ...A4_MM }
+  const r = await d.engine.pagePngs({ html, fallback, dpi, pages: req.pages ?? null })
+  if (r.images.length > MAX_PAGE_IMAGES) throw new BridgeError("RENDER_FAILED", "page engine returned too many images")
+  const pages = r.images.map((img) => ({
+    n: img.n,
+    ...written(checkOutputPath(`${req.dstDir}/${pageFileName(img.n)}`, d.policy), img.png),
+    width: img.width,
+    height: img.height,
+  }))
+  return {
+    layout: r.layout,
+    media: r.media,
+    pageCount: r.pageCount,
+    pageSizeMm: r.pageSizeMm,
+    pageSizeSource: r.pageSizeSource,
+    dpi,
+    pages,
+    approximate: typeof r.approximate === "string" && r.approximate.length > 0 ? r.approximate : null,
+  }
+}
+
 /** Serialises jobs: one render at a time keeps output deterministic and the host light. */
 export function createDispatcher(deps: DispatchDeps) {
   let chain: Promise<unknown> = Promise.resolve()
@@ -116,6 +176,8 @@ export function createDispatcher(deps: DispatchDeps) {
         return pdf(req, deps)
       case "checkPage":
         return checkPage(req, deps)
+      case "pagePng":
+        return pagePng(req, deps)
     }
   }
   // Every success reply names the Electron version: the row 106 shim prints it in its stderr label.

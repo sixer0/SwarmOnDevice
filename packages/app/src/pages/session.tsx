@@ -104,6 +104,10 @@ import { stepReference, type MapChapter, type MapStep } from "@/pages/session/ma
 import { SessionMapPanel } from "@/pages/session/map/session-map-view"
 import { createReviewBrief } from "@/pages/session/review/review-brief-controller"
 import { createSwarm } from "@/pages/session/swarm/swarm-controller"
+import { createMissionControl, missionSourceOf } from "@/pages/session/swarm/mission-poll"
+import { missionWriterOf } from "@/pages/session/swarm/mission-command-model"
+import { agentsFilterFallsBack } from "@/pages/session/swarm/mission-control-layout"
+import type { MissionControlMount } from "@/pages/session/swarm/mission-control"
 import { Identifier } from "@/utils/id"
 import { diffs as list } from "@/utils/diffs"
 import { Persist, persisted } from "@/utils/persist"
@@ -1193,9 +1197,43 @@ export default function Page() {
     },
     watching: () => sessionMap.opened() && sessionMap.view.filter === "agents",
   })
-  // Leaving a run for a session with no agents leaves nothing to show on that tab.
+  // Row 133 (spec §11): mission control in the Agents view; absent when the platform has no `missions`.
+  const missionControl = createMissionControl({
+    source: missionSourceOf(platform),
+    directory: () => sdk().directory,
+    lang: () => (language.locale() === "id" ? "id" : "en"),
+    watching: () => sessionMap.opened() && sessionMap.view.filter === "agents",
+    mapOpen: () => sessionMap.opened(),
+    listFiles: (path) =>
+      sdk()
+        .client.file.list({ path })
+        .then((result) => (result.data ?? []).filter((node) => node.type === "file").map((node) => node.name)),
+  })
+  const missions: MissionControlMount | undefined = missionControl.available
+    ? {
+        control: missionControl,
+        writer: missionWriterOf(platform),
+        prompt: (text) => {
+          const sessionID = swarm.rootID() ?? params.id
+          if (!sessionID) return Promise.reject(new Error("no session"))
+          return sdk().api.session.prompt({ sessionID, text } as Parameters<
+            ReturnType<typeof sdk>["api"]["session"]["prompt"]
+          >[0])
+        },
+        openFile: (path) => tabs().open(file.tab(path)),
+      }
+    : undefined
+  // Leaving a run for a session with no agents (and no mission) leaves nothing to show on that tab. Missions still
+  // loading are not a reason to leave it (row 136 L1, C145): decide once the first list answered.
   createEffect(() => {
-    if (sessionMap.view.filter === "agents" && swarm.pulse().agents <= 1) sessionMap.setFilter("all")
+    if (
+      sessionMap.view.filter === "agents" &&
+      agentsFilterFallsBack(swarm.pulse().agents, {
+        known: !missionControl.available || missionControl.state.listed,
+        count: missionControl.state.options.length,
+      })
+    )
+      sessionMap.setFilter("all")
   })
   const reviewBrief = createReviewBrief({
     sessionID: () => params.id,
@@ -2185,6 +2223,7 @@ export default function Page() {
         <SessionMapPanel
           map={sessionMap}
           swarm={swarm}
+          missions={missions}
           directory={sdk().directory}
           onAsk={askAboutStep}
           onRewind={rewindToChapter}

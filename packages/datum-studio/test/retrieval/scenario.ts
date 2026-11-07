@@ -358,7 +358,8 @@ async function phaseB(cfg: PhaseConfig, log: (line: string) => void): Promise<S>
   for (const [docKey, d] of Object.entries(docsA)) {
     const first = d.rendered[0]
     const r = await h.call("studio_render", { documentId: d.documentId, revisionNo: first.revisionNo, formats: ["docx"], ...first.scope })
-    const o = ((r.outputs ?? []) as S[])[0]
+    // Row 154: the studio_render wrapper adds the measured HTML to a docx render (spec §6.1); compare the DOCX.
+    const o = ((r.outputs ?? []) as S[]).find((x) => x.format === "DOCX")
     const row = o ? h.sql<{ rel_path: string; sha256: string; render_job_id: string }>("SELECT rel_path, sha256, render_job_id FROM output_file WHERE id = ?", [o.id])[0] : undefined
     const before = (a.outputs as OutputRec[]).find((x) => x.docKey === docKey && x.revisionNo === first.revisionNo && x.format === "DOCX")
     out.rerender.push({
@@ -384,6 +385,9 @@ async function phaseB(cfg: PhaseConfig, log: (line: string) => void): Promise<S>
     out.search[k] = { ok: s.ok ?? null, code: s.code ?? null, ids: ((s.hits ?? []) as S[]).map((x) => String(x.documentId)), snippets: ((s.hits ?? []) as S[]).map((x) => String(x.snippet ?? "")) }
   }
   out.counts = Object.fromEntries(["document", "revision", "output_file", "render_job"].map((t) => [t, Number(h.sql<{ n: number }>(`SELECT count(*) AS n FROM ${t}`)[0].n)]))
+  // Row 154: HTML rows made by phase B's re-renders (the wrapper's added measured source), not phase A outputs.
+  const jobs = (out.rerender as S[]).map((x) => x.jobId).filter((x): x is string => typeof x === "string")
+  out.counts.output_file_added_html = jobs.length === 0 ? 0 : Number(h.sql<{ n: number }>(`SELECT count(*) AS n FROM output_file WHERE format = 'HTML' AND render_job_id IN (${jobs.map(() => "?").join(",")})`, jobs)[0].n)
   await h.stop()
   return out
 }

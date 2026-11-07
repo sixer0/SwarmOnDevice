@@ -119,12 +119,12 @@ describe("I-2 C74: figure preview route key in the document language", () => {
     const block = JSON.parse(readFileSync(path.join(PKG, "test", "engine-rev-a", "svg", "fixtures", "case05_diagram_block.json"), "utf8"))
     const spec = compose.diagramSpec(block.spec, block.caption.text, block.source.text, 128, { artifactLabel: "4.1", classification: "TERBATAS" })
     const tpl = { params: {} } as never
-    const svgOf = (lang?: "ID" | "EN") =>
-      route.renderResolved({ block: { type: "diagram", address: "1.1", content: {} } as never, type: "diagram", spec }, tpl, { inline: true, withSvg: true, ...(lang ? { lang } : {}) }).svg as string
-    const id = svgOf("ID")
+    const svgOf = async (lang?: "ID" | "EN") =>
+      (await route.renderResolved({ block: { type: "diagram", address: "1.1", content: {} } as never, type: "diagram", spec }, tpl, { inline: true, withSvg: true, ...(lang ? { lang } : {}) })).svg as string
+    const id = await svgOf("ID")
     expect(id).toContain("KUNCI  ")
     expect(id).not.toMatch(/>KEY  /)
     expect(id).toContain("PENUH = ")
-    expect(svgOf("EN")).toContain("KEY  ")
+    expect(await svgOf("EN")).toContain("KEY  ")
   })
 })

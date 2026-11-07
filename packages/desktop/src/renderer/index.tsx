@@ -288,6 +288,8 @@ const createPlatform = (windowState: DesktopWindowState): Platform => {
 
     // Assigned without a cast, so tsgo checks the preload's SetupToolsAPI against the app's SetupToolsPlatform.
     setupTools: window.api.setupTools,
+    // Row 133: mission control (row 127 bridge). Assigned without a cast so tsgo checks the preload against the app type.
+    missions: window.api.missions,
 
     getDisplayBackend: async () => {
       return window.api.getDisplayBackend().catch(() => null)

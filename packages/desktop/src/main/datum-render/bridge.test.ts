@@ -2,7 +2,7 @@
 // The real Electron engine (byte-equal rasters, network and script canaries) is the later smoke row.
 import { afterAll, beforeAll, describe, expect, test } from "bun:test"
 import { createHash } from "node:crypto"
-import { existsSync, mkdtempSync, readFileSync, realpathSync, statSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, statSync, writeFileSync } from "node:fs"
 import { createConnection } from "node:net"
 import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
@@ -39,6 +39,29 @@ const fakeEngine: PageEngine = {
   async evaluate(job) {
     jobs.push({ kind: "evaluate", ...job })
     return { measured: true }
+  },
+  // Row 151b: a 3-page document; one tiny PNG per selected page.
+  async pagePngs(job) {
+    jobs.push({ kind: "pagePngs", ...job })
+    const sel = job.pages ?? [1, 2, 3]
+    const png = (n: number) => {
+      const b = Buffer.alloc(33)
+      b.writeUInt32BE(0x89504e47, 0)
+      b.writeUInt32BE(0x0d0a1a0a, 4)
+      b.writeUInt32BE(13, 8)
+      b.write("IHDR", 12, "latin1")
+      b.writeUInt32BE(10 * n, 16)
+      b.writeUInt32BE(14 * n, 20)
+      return b
+    }
+    return {
+      layout: "paged",
+      media: "print",
+      pageCount: 3,
+      pageSizeMm: job.fallback,
+      pageSizeSource: "fallback",
+      images: sel.filter((n) => n <= 3).map((n) => ({ n, png: png(n), width: 10 * n, height: 14 * n })),
+    }
   },
   info: (): EngineInfo => ({
     electron: "fake",
@@ -252,6 +275,46 @@ describe("render bridge over the socket", () => {
       fonts: 20,
     })
     expect(res[2].scripts).toEqual(["datum_render.check_page", "studio.MEASURE_SCRIPT"])
+  })
+
+  test("pagePng (row 151b): one file per page in dstDir, fonts + CSP prepended, A4 fallback, 150 dpi default", async () => {
+    const out = join(work, "pages")
+    mkdirSync(out)
+    const [res] = await call(bridge.env.DATUM_RENDER_SOCKET, [
+      { token: bridge.env.DATUM_RENDER_TOKEN, id: "pp", op: "pagePng", src: join(work, "sheet.html"), dstDir: out },
+    ])
+    expect(res).toMatchObject({ id: "pp", ok: true, layout: "paged", media: "print", pageCount: 3, dpi: 150 })
+    expect(res.pageSizeMm).toEqual({ wMm: 210, hMm: 297 })
+    expect(res.pages.map((p: any) => [p.n, p.dst, p.width, p.height])).toEqual([
+      [1, join(out, "p001.png"), 10, 14],
+      [2, join(out, "p002.png"), 20, 28],
+      [3, join(out, "p003.png"), 30, 42],
+    ])
+    for (const p of res.pages) expect(p.sha256).toBe(createHash("sha256").update(readFileSync(p.dst)).digest("hex"))
+    const job = jobs.findLast((j) => j.kind === "pagePngs")!
+    expect(job).toMatchObject({ dpi: 150, pages: null, fallback: { wMm: 210, hMm: 297 } })
+    expect(job.html as string).toContain("Content-Security-Policy")
+    expect(job.html as string).toContain('font-family:"IBM Plex Sans"')
+  })
+
+  test("pagePng: selected pages, dpi and fallback size are passed through; refusals happen before any render", async () => {
+    const out = join(work, "pages2")
+    mkdirSync(out)
+    const tok = bridge.env.DATUM_RENDER_TOKEN
+    const before = jobs.filter((j) => j.kind === "pagePngs").length
+    const res = await call(bridge.env.DATUM_RENDER_SOCKET, [
+      { token: tok, op: "pagePng", src: join(work, "sheet.html"), dstDir: out, pages: [2], dpi: 96, widthMm: 148, heightMm: 210 },
+      { token: tok, op: "pagePng", src: join(work, "sheet.html"), dstDir: "/etc" },
+      { token: tok, op: "pagePng", src: join(work, "sheet.html"), dstDir: join(work, "absent") },
+      { token: tok, op: "pagePng", src: join(work, "sheet.html"), dstDir: `${out}/` },
+      { token: tok, op: "pagePng", src: join(work, "fig.svg"), dstDir: out },
+      { op: "pagePng", src: join(work, "sheet.html"), dstDir: out },
+    ])
+    expect(res[0]).toMatchObject({ ok: true, dpi: 96, pageSizeMm: { wMm: 148, hMm: 210 } })
+    expect(res[0].pages.map((p: any) => p.dst)).toEqual([join(out, "p002.png")])
+    expect(res.slice(1).map((r) => r.code)).toEqual(["PATH_REFUSED", "PATH_REFUSED", "PATH_REFUSED", "BAD_REQUEST", "UNAUTHORIZED"])
+    expect(existsSync(join(out, "p001.png"))).toBe(false)
+    expect(jobs.filter((j) => j.kind === "pagePngs").length - before).toBe(1)
   })
 
   test("failures are written to the persistent log sink with code, not content", () => {

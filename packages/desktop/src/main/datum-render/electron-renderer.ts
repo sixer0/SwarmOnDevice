@@ -7,13 +7,17 @@
 //             Not CDP Page.printToPDF: Electron 42's webContents.debugger answers "'Page.printToPDF' wasn't
 //             found" (row 55 F55-1); Electron's own API prints the same Chromium page (row 24a).
 //   checkPage Runtime.evaluate of an allow-listed fixed script
+//   pagePngs  (row 151b) Emulation.setEmulatedMedia print + the bridge's own fixed PAGE_LAYOUT_SCRIPT (page-images.ts)
+//             + Page.captureScreenshot clipped to each page, at dpi/96 deviceScaleFactor
 // Content is set with Page.setDocumentContent on about:blank (setContent-equivalent): no goto, no
 // file:// document. Every request except data:, about:blank and the allowed font/input files is
 // cancelled, navigation and new windows are refused, permissions and downloads are denied.
 
 import { BrowserWindow, session, type Debugger, type Session, type WebContents } from "electron"
 import { BridgeError } from "./protocol"
-import type { EngineInfo, PageEngine } from "./dispatch"
+import type { EngineInfo, PageEngine, PagePngsJob, PagePngsResult } from "./dispatch"
+import { backgroundRgb, composePage, decodePngRgb, flowApproximation, MAX_PAGE_INDEX, pageBackground, pageLayoutExpression, parseMargins, parsePageSize, pngSize, readLayout, readSizeInfo, selectPages } from "./page-images"
+import { MAX_PX } from "./protocol"
 import { isAllowedRendererUrl } from "./paths"
 import { MM_PER_INCH, RENDER_PARTITION, renderWebPreferences, type WindowKind } from "./pages"
 import type { BridgeLog } from "./socket-server"
@@ -61,7 +65,7 @@ async function withTimeout<T>(p: Promise<T>, ms: number, onTimeout: () => void):
 
 type Job<T> = (dbg: Debugger, wc: WebContents) => Promise<T>
 
-async function inWindow<T>(kind: WindowKind, width: number, height: number, html: string, job: Job<T>): Promise<T> {
+async function inWindow<T>(kind: WindowKind, width: number, height: number, html: string, job: Job<T>, deviceScaleFactor = 1): Promise<T> {
   const win = new BrowserWindow({
     show: false,
     paintWhenInitiallyHidden: true,
@@ -90,7 +94,7 @@ async function inWindow<T>(kind: WindowKind, width: number, height: number, html
     await dbg.sendCommand("Page.enable")
     // Page script never runs, also in the check window where V8 stays on for Runtime.evaluate.
     await dbg.sendCommand("Emulation.setScriptExecutionDisabled", { value: true })
-    await dbg.sendCommand("Emulation.setDeviceMetricsOverride", { width, height, deviceScaleFactor: 1, mobile: false })
+    await dbg.sendCommand("Emulation.setDeviceMetricsOverride", { width, height, deviceScaleFactor, mobile: false })
     const tree = (await dbg.sendCommand("Page.getFrameTree")) as { frameTree: { frame: { id: string } } }
     await dbg.sendCommand("Page.setDocumentContent", { frameId: tree.frameTree.frame.id, html })
     try {
@@ -110,6 +114,123 @@ async function inWindow<T>(kind: WindowKind, width: number, height: number, html
       if (dbg.isAttached()) dbg.detach()
     } catch {}
     if (!win.isDestroyed()) win.destroy()
+  }
+}
+
+async function evalValue(dbg: Debugger, expression: string): Promise<unknown> {
+  const res = (await dbg.sendCommand("Runtime.evaluate", { expression, awaitPromise: true, returnByValue: true })) as {
+    result?: { value?: unknown }
+    exceptionDetails?: { text?: string }
+  }
+  if (res.exceptionDetails) throw new BridgeError("RENDER_FAILED", "page script raised an exception")
+  return res.result?.value ?? null
+}
+
+const cssPx = (mm: number) => (mm * 96) / MM_PER_INCH
+
+/**
+ * Row 151b: page images of an HTML render. Same hidden window, partition, network gate and timeout as every
+ * other job; the check window kind (V8 on for CDP only, page script disabled, CSP script-src 'none').
+ */
+function pagePngs(job: PagePngsJob): Promise<PagePngsResult> {
+  const scale = job.dpi / 96
+  const w0 = Math.ceil(cssPx(job.fallback.wMm))
+  const h0 = Math.ceil(cssPx(job.fallback.hMm))
+  const job0 = async (dbg: Debugger): Promise<PagePngsResult> => {
+    // Print CSS (@media print) as printToPDF would apply it. Verified on Electron 42 by the row 151b real-Electron test.
+    await dbg.sendCommand("Emulation.setEmulatedMedia", { media: "print" })
+    const info = readSizeInfo(await evalValue(dbg, pageLayoutExpression({ phase: "size" })))
+    const css = parsePageSize(info.size)
+    const size = css ?? job.fallback
+    const vw = Math.ceil(cssPx(size.wMm))
+    const vh = Math.ceil(cssPx(size.hMm))
+    if (vw * scale > MAX_PX || vh * scale > MAX_PX) throw new BridgeError("INPUT_TOO_LARGE", `a page image would exceed ${MAX_PX} px`)
+    if (!info.paged) return flowPages(dbg, job, size, css ? "css" : "fallback", info, scale)
+    if (vw !== w0 || vh !== h0) {
+      await dbg.sendCommand("Emulation.setDeviceMetricsOverride", { width: vw, height: vh, deviceScaleFactor: scale, mobile: false })
+    }
+    const layout = readLayout(
+      await evalValue(dbg, pageLayoutExpression({ phase: "layout", wMm: size.wMm, hMm: size.hMm, maxRects: MAX_PAGE_INDEX })),
+    )
+    const images: PagePngsResult["images"] = []
+    for (const n of selectPages(Math.min(layout.pageCount, layout.rects.length), job.pages)) {
+      const r = layout.rects[n - 1]
+      if (r.w < 1 || r.h < 1 || r.w * scale > MAX_PX || r.h * scale > MAX_PX) {
+        throw new BridgeError("RENDER_FAILED", `page ${n} has no usable size for an image`)
+      }
+      const shot = (await dbg.sendCommand("Page.captureScreenshot", {
+        format: "png",
+        fromSurface: true,
+        captureBeyondViewport: true,
+        clip: { x: r.x, y: r.y, width: r.w, height: r.h, scale: 1 },
+      })) as { data: string }
+      const png = Buffer.from(shot.data, "base64")
+      images.push({ n, png, ...pngSize(png) })
+    }
+    return {
+      layout: layout.layout,
+      media: "print",
+      pageCount: layout.pageCount,
+      pageSizeMm: size,
+      pageSizeSource: css ? "css" : "fallback",
+      images,
+    }
+  }
+  return inWindow("check", w0, h0, job.html, job0, scale)
+}
+
+/**
+ * Row 151c (DEFECT-157-1): a flow document (no Studio `.page` elements) as the printer lays it out: content at the
+ * @page content width, cut at the content height (flowCut in PAGE_LAYOUT_SCRIPT), each cut drawn on a whole page in
+ * the @page background at the margins. Printed fragmentation is estimated, so the result says `approximate` and why.
+ */
+async function flowPages(
+  dbg: Debugger,
+  job: PagePngsJob,
+  size: { wMm: number; hMm: number },
+  source: "css" | "fallback",
+  info: ReturnType<typeof readSizeInfo>,
+  scale: number,
+): Promise<PagePngsResult> {
+  const read = parseMargins(info.margins)
+  const m = read ?? { top: 0, right: 0, bottom: 0, left: 0 }
+  const cwMm = size.wMm - m.left - m.right
+  const chMm = size.hMm - m.top - m.bottom
+  if (!(cwMm >= 10 && chMm >= 10)) throw new BridgeError("RENDER_FAILED", "page margins leave no content area")
+  // Same pixel size as a paged image of this sheet: Chromium truncates a fractional CSS clip, then scales.
+  const W = Math.round(Math.trunc(cssPx(size.wMm)) * scale)
+  const H = Math.round(Math.trunc(cssPx(size.hMm)) * scale)
+  const cw = Math.round(cssPx(cwMm))
+  const ch = cssPx(chMm)
+  if (W > MAX_PX || H > MAX_PX) throw new BridgeError("INPUT_TOO_LARGE", `a page image would exceed ${MAX_PX} px`)
+  const bg = backgroundRgb(info.background)
+  await dbg.sendCommand("Emulation.setDeviceMetricsOverride", { width: cw, height: Math.ceil(ch), deviceScaleFactor: scale, mobile: false })
+  // Studio prints `body{background:none}`; the page colour comes from @page. The cut is captured on a transparent
+  // canvas and its alpha composited over the page colour in main (decodePngRgb); an opaque override was not honoured.
+  await dbg.sendCommand("Emulation.setDefaultBackgroundColorOverride", { color: { r: 0, g: 0, b: 0, a: 0 } })
+  const layout = readLayout(await evalValue(dbg, pageLayoutExpression({ phase: "flowcut", hMm: chMm, maxRects: MAX_PAGE_INDEX })))
+  const images: PagePngsResult["images"] = []
+  for (const n of selectPages(Math.min(layout.pageCount, layout.rects.length), job.pages)) {
+    const r = layout.rects[n - 1]
+    const h = Math.min(Math.max(1, r.h), ch)
+    const shot = (await dbg.sendCommand("Page.captureScreenshot", {
+      format: "png",
+      fromSurface: true,
+      captureBeyondViewport: true,
+      clip: { x: 0, y: r.y, width: cw, height: h, scale: 1 },
+    })) as { data: string }
+    const content = decodePngRgb(Buffer.from(shot.data, "base64"), bg)
+    const png = composePage({ width: W, height: H, bg, content, left: Math.round(cssPx(m.left) * scale), top: Math.round(cssPx(m.top) * scale) })
+    images.push({ n, png, width: W, height: H })
+  }
+  return {
+    layout: "flow",
+    media: "print",
+    pageCount: layout.pageCount,
+    pageSizeMm: size,
+    pageSizeSource: source,
+    images,
+    approximate: flowApproximation(info, read !== null),
   }
 }
 
@@ -152,6 +273,7 @@ export function createElectronEngine(allowedFiles: ReadonlySet<string>, log: Bri
         if (res.exceptionDetails) throw new BridgeError("RENDER_FAILED", "page script raised an exception")
         return res.result?.value ?? null
       }),
+    pagePngs,
     info: (): EngineInfo => ({
       electron: process.versions.electron ?? "unknown",
       chrome: process.versions.chrome ?? "unknown",

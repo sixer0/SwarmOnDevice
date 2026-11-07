@@ -17,6 +17,33 @@ export type PathPolicy = {
   /** Real paths under which nothing is read or written, even inside a root. */
   deny: string[]
   maxInputBytes: number
+  /**
+   * Row 151c (C161 I1): narrow exceptions to `deny`, built by the host from its own store root (never from a
+   * request). A path inside a deny folder is allowed only when one grant of the right mode matches it exactly.
+   */
+  grants?: PathGrant[]
+}
+
+/**
+ * One exception to the deny list. `root` is the folder (resolved to its real path at every check, so a store that
+ * is created after the bridge starts still matches); the path must lie strictly inside it, end with `ext`
+ * (lower case compare) and, when `depth` is set, sit exactly `depth` path segments below `root`.
+ */
+export type PathGrant = { root: string; mode: "read" | "write"; ext: string; depth?: number }
+
+/**
+ * Row 151c (C161 I1): the Studio store lives under `~/.local/share/swarm/datum-studio` (layout.ts studioStoreRoot),
+ * which HOME_DENY protects. Output verification needs exactly two things there:
+ *   read  `<store>/docs/**.html`            the stored HTML render the pagePng op images;
+ *   write `<store>/verify/<outputId>/<f>.png` the page images (verify-outputs.ts dstDir), one folder level only.
+ * Everything else in the store (the sqlite file, assets, tmp, logs, templates) and in the rest of the protected
+ * folder stays refused.
+ */
+export function studioStoreGrants(storeRoot: string): PathGrant[] {
+  return [
+    { root: join(storeRoot, "docs"), mode: "read", ext: ".html" },
+    { root: join(storeRoot, "verify"), mode: "write", ext: ".png", depth: 2 },
+  ]
 }
 
 const HOME_DENY = [
@@ -43,10 +70,10 @@ function real(p: string) {
   }
 }
 
-export function defaultPolicy(home = homedir(), extraDeny: string[] = []): PathPolicy {
+export function defaultPolicy(home = homedir(), extraDeny: string[] = [], grants: PathGrant[] = []): PathPolicy {
   const roots = [home, tmpdir(), "/private/tmp", "/tmp", "/Volumes"].map(real)
   const deny = [...HOME_DENY.map((d) => join(home, d)), "/Applications", ...extraDeny].map(real)
-  return { roots: [...new Set(roots)], deny: [...new Set(deny)], maxInputBytes: MAX_INPUT_BYTES }
+  return { roots: [...new Set(roots)], deny: [...new Set(deny)], maxInputBytes: MAX_INPUT_BYTES, grants: grants.map((g) => ({ ...g })) }
 }
 
 export function isInside(child: string, parent: string) {
@@ -66,9 +93,26 @@ function checkShape(p: string, label: string) {
   if (normalize(p) !== p || p.split(sep).includes("..")) refuse(`${label} must be a normalised path`)
 }
 
+/** Row 151c: true when a grant of `mode` covers `realPath` (strictly inside the grant's real root, ext, depth). */
+export function granted(realPath: string, policy: PathPolicy, mode: PathGrant["mode"]): boolean {
+  for (const g of policy.grants ?? []) {
+    if (g.mode !== mode) continue
+    const root = real(g.root)
+    if (realPath === root || !isInside(realPath, root)) continue
+    if (!realPath.toLowerCase().endsWith(g.ext.toLowerCase())) continue
+    const rel = realPath.slice(root.length + (root.endsWith(sep) ? 0 : 1)).split(sep)
+    if (rel.some((s) => s === "" || s === "." || s === "..")) continue
+    if (g.depth !== undefined && rel.length !== g.depth) continue
+    return true
+  }
+  return false
+}
+
 function checkReach(realPath: string, policy: PathPolicy, label: string) {
   if (!policy.roots.some((r) => isInside(realPath, r))) refuse(`${label} is outside the allowed roots`)
-  if (policy.deny.some((d) => isInside(realPath, d))) refuse(`${label} is inside a protected folder`)
+  if (policy.deny.some((d) => isInside(realPath, d)) && !granted(realPath, policy, label === "src" ? "read" : "write")) {
+    refuse(`${label} is inside a protected folder`)
+  }
 }
 
 /** Returns the real path of a readable regular input file within reach. */

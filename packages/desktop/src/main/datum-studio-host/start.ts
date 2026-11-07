@@ -15,7 +15,13 @@ import { studioDescriptorPath } from "./descriptor"
 import { resolveStudioLayout, studioStoreRoot } from "./layout"
 import { startStudioHost, type ForkHost, type HostLog, type StudioHostHandle, type StudioHostStartOptions } from "./lifecycle"
 
-export const STUDIO_BRIDGE_EXTRA_SCRIPTS: Record<string, string> = { "studio.measure": MEASURE_SCRIPT }
+// Row 151/152: the OVERLAP_CLIP page script (overlap-script.ts has no imports, like measure.ts).
+import { OVERLAP_SCRIPT } from "../../../../datum-studio/src/mcp-host/verify/overlap-script"
+
+export const STUDIO_BRIDGE_EXTRA_SCRIPTS: Record<string, string> = {
+  "studio.measure": MEASURE_SCRIPT,
+  "swarm.verify.overlap": OVERLAP_SCRIPT,
+}
 
 export type DatumStudioState =
   | { status: "idle" | "starting" | "stopped" }
@@ -61,6 +67,9 @@ export function createDatumStudio(deps: DatumStudioDeps) {
   const res = deps.isPackaged ? deps.resourcesPath : undefined
   const skillRoot = res ? join(res, "datum-house-style") : join(deps.appPath, "datum", "datum-house-style")
 
+  // Row 151c (C161 I1): one store root for the host and for the bridge's narrow store grants.
+  const storeRoot = studioStoreRoot(deps.env, home)
+
   async function run() {
     state = { status: "starting" }
     try {
@@ -69,6 +78,8 @@ export function createDatumStudio(deps: DatumStudioDeps) {
         renderScriptPath: join(skillRoot, "scripts", "datum_render.py"),
         extraScripts: STUDIO_BRIDGE_EXTRA_SCRIPTS,
         log: deps.log,
+        home,
+        storeRoot,
       })
     } catch (error) {
       // Without the bridge the host still serves the store and templates; renders fail BROWSER_UNAVAILABLE.
@@ -81,7 +92,7 @@ export function createDatumStudio(deps: DatumStudioDeps) {
         fork: deps.fork ?? (await electronFork()),
         entryPath: deps.entryPath ?? join(dirname(fileURLToPath(import.meta.url)), "datum-studio-host.js"),
         layout,
-        storeRoot: studioStoreRoot(deps.env, home),
+        storeRoot,
         descriptorPath: studioDescriptorPath(deps.stateHome),
         mainPid: deps.mainPid ?? process.pid,
         home,
@@ -115,6 +126,10 @@ export function createDatumStudio(deps: DatumStudioDeps) {
   return {
     get state() {
       return state
+    },
+    /** Row 127: the running host's mission control client (token inside it), or undefined when not running. */
+    missions() {
+      return state.status === "running" && host?.running ? host.missions : undefined
     },
     start() {
       starting ??= run()

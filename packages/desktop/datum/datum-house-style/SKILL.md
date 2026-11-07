@@ -513,6 +513,35 @@ Full text: `references/06-lint.md`.
   document's status in one honest colophon sentence ("Dokumen ini lulus pemeriksaan bentuk dan
   dinilai dua juri."). Instruments and inspection tools (forensic software, meters) are named
   with their versions.
+- **Output verification (Swarm, decision U24).** Every `studio_render` answer carries a
+  verification report (`verification` in its structured content). Each output is
+  **verified** or **unverified**. An output is verified only when every check that applies to
+  it passed: Rev A lint, overlap and clipping per page, content fidelity (text, numbers and
+  tables against what you submitted), page count, figure fit and empty required slots. A
+  check that could not be measured reads UNKNOWN and leaves the output unverified; UNKNOWN is
+  never a pass. Work every deliverable through this loop, every time:
+  1. **Render.** Call `studio_render` with the formats the reader needs, and add `pdf` for a
+     client document. Studio adds the HTML it measures; keep it.
+  2. **Read the report.** Read every FAIL and UNKNOWN line: check, page, address, detail.
+  3. **Look at the pages.** Open every page image the report lists under `pages[].png`. When
+     it lists none, open the PDF or HTML output and look at every page. Look for what the
+     checks cannot see: wrong emphasis, awkward breaks, a figure that says the wrong thing.
+  4. **Fix at the source.** Change the content, the figure spec or the template parameter
+     that caused the finding (`studio_edit`, `studio_chapter_submit`, `studio_slot_fill`,
+     `studio_figure_revise`). Never edit an output file by hand.
+  5. **Render again** and go back to step 2 until every output is verified.
+- **Never report unverified output as done.** Do not call a deliverable done, final or ready
+  while any of its outputs is unverified. Report it as blocked or needs-review, quote the
+  failing checks and say what you tried. Stop after five render rounds on one deliverable
+  without reaching verified, and report what still fails instead of looping. An UNKNOWN that
+  stays UNKNOWN after one more render (for example when the Swarm app is not running) is
+  reported the same way.
+- **Missions.** Give a deliverable document the docKey `row-<row>-<name>` of the row that
+  makes it. Studio refuses to set that row to done (`OUTPUT_UNVERIFIED`) until every output of
+  the deliverable's current revision is verified, including a verified PDF or HTML.
+- **Two different "verified".** `studio_write` and `studio_file_verify` report a file as
+  verified ("terverifikasi") when its sha256 matches. That is a file check, not this
+  verification: after `studio_write`, call `studio_render` for the report.
 
 ---
 

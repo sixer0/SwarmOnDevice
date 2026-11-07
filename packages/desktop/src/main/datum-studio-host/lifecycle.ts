@@ -6,8 +6,9 @@
 
 import { randomBytes } from "node:crypto"
 import { realpathSync } from "node:fs"
-import { resolve } from "node:path"
+import { dirname, join, resolve } from "node:path"
 import { removeStudioDescriptor, writeStudioDescriptor } from "./descriptor"
+import { createMissionControlClient, type MissionControlClient } from "./mission-client"
 import { assertLayoutUsable, assertStoreRootAllowed, studioStoreLogFile, type StudioLayout } from "./layout"
 import { isHostMessage, STUDIO_HOST_SERVICE_NAME, STUDIO_RELEASE, type HostCommand, type HostErrorPayload, type HostMessage } from "./protocol"
 
@@ -55,6 +56,8 @@ export type StudioHostStartOptions = {
   onUnexpectedExit?: (code: number) => void
   /** Aborting during start (a quit) stops the child at once instead of waiting for the ready timeout. */
   signal?: AbortSignal
+  /** Row 127: X-Studio-Caller-Cwd of mission control (default `<stateHome>/swarm/datum-studio-mission-control`). */
+  missionCallerCwd?: string
 }
 
 export type StudioHostHandle = {
@@ -62,6 +65,8 @@ export type StudioHostHandle = {
   hostPid: number
   stop(): Promise<void>
   readonly running: boolean
+  /** Row 127: mission control client; holds the token in its closure (no token field on this handle). */
+  missions: MissionControlClient
 }
 
 export class StudioHostError extends Error {
@@ -239,9 +244,18 @@ export async function startStudioHost(opts: StudioHostStartOptions): Promise<Stu
     }
   }
 
+  const missions = createMissionControlClient({
+    url: ready.url,
+    token,
+    callerCwd: opts.missionCallerCwd ?? join(dirname(opts.descriptorPath), "datum-studio-mission-control"),
+    running: () => !exited && !stopping,
+    log: opts.log,
+  })
+
   return {
     url: ready.url,
     hostPid: ready.pid,
+    missions,
     get running() {
       return !exited && !stopping
     },

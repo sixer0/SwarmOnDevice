@@ -1,0 +1,247 @@
+{
+  "$schema": "studio.diagram/v1",
+  "family": "layered",
+  "id": "9.1",
+  "title": "Uji tata letak ELK untuk diagram berlapis besar.",
+  "classification": "TERBATAS",
+  "width_mm": 166,
+  "apparatus": "figure",
+  "sources": [
+    "Uji row 162 (fixture sintetis)"
+  ],
+  "nodes": [
+    {
+      "id": "t0n0",
+      "label": "Sensor Ruang A",
+      "sub": "RS-485",
+      "class": {
+        "tier": 0
+      },
+      "mark": "TERUKUR"
+    },
+    {
+      "id": "t0n1",
+      "label": "Sensor Ruang B",
+      "sub": "RS-485",
+      "class": {
+        "tier": 0
+      }
+    },
+    {
+      "id": "t0n2",
+      "label": "Sensor Ruang C",
+      "sub": "RS-485",
+      "class": {
+        "tier": 0
+      }
+    },
+    {
+      "id": "t0n3",
+      "label": "Sensor Ruang D",
+      "sub": "RS-485",
+      "class": {
+        "tier": 0
+      }
+    },
+    {
+      "id": "t1n0",
+      "label": "Gerbang 1",
+      "sub": "PoE",
+      "class": {
+        "tier": 1
+      }
+    },
+    {
+      "id": "t1n1",
+      "label": "Gerbang 2",
+      "sub": "PoE",
+      "class": {
+        "tier": 1
+      }
+    },
+    {
+      "id": "t1n2",
+      "label": "Gerbang 3",
+      "sub": "PoE",
+      "class": {
+        "tier": 1
+      }
+    },
+    {
+      "id": "t1n3",
+      "label": "Gerbang 4",
+      "sub": "PoE",
+      "class": {
+        "tier": 1
+      }
+    },
+    {
+      "id": "t2n0",
+      "label": "Server Data",
+      "sub": "1U",
+      "class": {
+        "tier": 2,
+        "accent": true
+      }
+    },
+    {
+      "id": "t2n1",
+      "label": "Server Analitik",
+      "sub": "1U",
+      "class": {
+        "tier": 2
+      },
+      "mark": "DITURUNKAN"
+    },
+    {
+      "id": "t2n2",
+      "label": "Server Cadangan",
+      "sub": "1U",
+      "class": {
+        "tier": 2
+      }
+    },
+    {
+      "id": "t2n3",
+      "label": "Server Laporan",
+      "sub": "1U",
+      "class": {
+        "tier": 2
+      }
+    },
+    {
+      "id": "t3n0",
+      "label": "Arsip Data",
+      "sub": "ruang kendali",
+      "class": {
+        "tier": 3
+      }
+    },
+    {
+      "id": "t3n1",
+      "label": "Konsol Operator",
+      "sub": "ruang kendali",
+      "class": {
+        "tier": 3
+      },
+      "mark": "PEMASOK"
+    },
+    {
+      "id": "t3n2",
+      "label": "Dasbor Pimpinan",
+      "sub": "ruang kendali",
+      "class": {
+        "tier": 3
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": "t0n0",
+      "to": "t1n2",
+      "kind": "data",
+      "label": "Ethernet"
+    },
+    {
+      "from": "t0n1",
+      "to": "t1n1",
+      "kind": "data",
+      "label": "Ethernet"
+    },
+    {
+      "from": "t0n2",
+      "to": "t1n3",
+      "kind": "data",
+      "label": "Ethernet"
+    },
+    {
+      "from": "t0n3",
+      "to": "t1n1",
+      "kind": "sync",
+      "label": "sinkron"
+    },
+    {
+      "from": "t1n0",
+      "to": "t2n1",
+      "kind": "data",
+      "label": "Ethernet"
+    },
+    {
+      "from": "t1n1",
+      "to": "t2n2",
+      "kind": "data",
+      "label": "Ethernet"
+    },
+    {
+      "from": "t1n2",
+      "to": "t2n3",
+      "kind": "data",
+      "label": "Ethernet"
+    },
+    {
+      "from": "t1n3",
+      "to": "t2n2",
+      "kind": "data",
+      "label": "Ethernet"
+    },
+    {
+      "from": "t2n0",
+      "to": "t3n0",
+      "kind": "data",
+      "label": "Ethernet"
+    },
+    {
+      "from": "t2n1",
+      "to": "t3n1",
+      "kind": "data",
+      "label": "Ethernet"
+    },
+    {
+      "from": "t2n2",
+      "to": "t3n2",
+      "kind": "data",
+      "label": "Ethernet"
+    },
+    {
+      "from": "t2n3",
+      "to": "t3n1",
+      "kind": "data",
+      "label": "Ethernet"
+    },
+    {
+      "from": "t2n0",
+      "to": "t3n2",
+      "kind": "control",
+      "label": "kendali"
+    },
+    {
+      "from": "t1n0",
+      "to": "t2n3",
+      "kind": "control",
+      "label": "kendali"
+    },
+    {
+      "from": "t1n3",
+      "to": "t2n3",
+      "kind": "control",
+      "label": "kendali"
+    },
+    {
+      "from": "t1n1",
+      "to": "t2n2",
+      "kind": "control",
+      "label": "kendali"
+    }
+  ],
+  "notes": [
+    "jumlah titik [TERUKUR, keandalan A1]"
+  ],
+  "legend": [
+    "data = aliran data",
+    "control = kendali",
+    "sync = sinkronisasi",
+    "DITURUNKAN = nilai turunan",
+    "TERUKUR = nilai terukur",
+    "PEMASOK = data pemasok"
+  ]
+}

@@ -51,6 +51,67 @@ export type SetupToolsPlatform = {
 }
 export type SetupToolsAPI = SetupToolsPlatform
 
+// Mission control (row 127; masterplan/01_specs_mission_control_ui.md §3.2, §9.1). Wire types are the host JSON as
+// returned through IPC (row 126 produces the fields marked G1-G4). Type-only import: nothing of datum-studio is bundled.
+export type {
+  MissionListItem,
+  MissionDoc,
+  MissionDerived,
+  DecisionRequest,
+  MissionMessage,
+} from "../../../datum-studio/src/store/mission/types"
+import type {
+  MissionListItem,
+  MissionDoc,
+  MissionDerived,
+  DecisionRequest,
+  MissionMessage,
+} from "../../../datum-studio/src/store/mission/types"
+
+export type MissionControlResult<T> = { ok: true; data: T } | { ok: false; code: string; message: string }
+export type MissionListItemWire = MissionListItem & { activityAt: string } // G2
+export type DeliverableOutputWire = {
+  fileId: string
+  format: "DOCX" | "PDF" | "HTML" | "SVG" | "PNG"
+  role: "PRIMARY" | "FIGURE"
+  finalFileName: string
+  sha256: string
+  bytes: number
+  createdAt: string
+  verified: boolean // G4
+}
+export type DeliverableWire = {
+  documentId: string
+  docNumber: string
+  title: string
+  docKey: string | null
+  rowId?: string
+  revisionNo: number
+  docRev: string
+  updatedAt: string
+  outputs: DeliverableOutputWire[]
+  verified: boolean // C160: host one rule (revisionOutputState)
+  final: boolean // C160
+}
+export type MissionGetWire = {
+  mission: Omit<MissionDoc, "findings" | "locks">
+  derived: MissionDerived
+  requests: DecisionRequest[]
+  messages: MissionMessage[] // newest N (G3), ascending seq
+  deliverables: DeliverableWire[] // G1
+}
+export type MissionControlPlatform = {
+  list(input: { directory: string }): Promise<MissionControlResult<{ items: MissionListItemWire[] }>>
+  get(input: { mission: string }): Promise<MissionControlResult<MissionGetWire>>
+  answer(input: {
+    mission: string
+    request: string
+    option: string
+  }): Promise<MissionControlResult<{ decision: string; released: string[] }>>
+  instruct(input: { mission: string; text: string; row?: string }): Promise<MissionControlResult<{ seq: number }>>
+}
+export type MissionControlAPI = MissionControlPlatform
+
 export type LinuxDisplayBackend = "wayland" | "auto"
 export type TitlebarTheme = {
   mode: "light" | "dark"
@@ -71,6 +132,8 @@ export type ElectronAPI = {
   wslServers: WslServersAPI
   updater: UpdaterAPI
   setupTools: SetupToolsAPI
+  /** Mission control (row 127): four allow-listed host calls; the host token stays in main. */
+  missions: MissionControlAPI
   consumeInitialDeepLinks: () => Promise<string[]>
   getDefaultServerUrl: () => Promise<string | null>
   setDefaultServerUrl: (url: string | null) => Promise<void>

@@ -13,7 +13,10 @@ import type { StudioDiagramV1 } from "./diagram";
 
 export interface StudioChartV1 {
   $schema: "studio.chart/v1";
-  /** Kode drawn=false -> 422 CHART_KIND_NOT_DRAWN + alternatives. */
+  /**
+   * Kode drawn=false -> 422 CHART_KIND_NOT_DRAWN + alternatives. Swarm patch (row 163b): spec blok dapat membawa
+   * `VegaChartKind` (V-01..V-08; perakit meneruskannya apa adanya), yang dirender keluarga Vega, bukan mesin Rev A.
+   */
   kind: ChartCode | "composite";
   /** "Gambar 8.1" (P3-14). */
   id?: string;
@@ -60,6 +63,22 @@ export interface StudioChartV1 {
    * tingkat atas (panel komposit tidak membawanya).
    */
   intent?: ChartIntent;
+  /**
+   * Swarm patch (row 163b, C155): opsi tertutup keluarga Vega (`kind` V-01..V-08 atau kode DF yang dipetakan
+   * `vegaChartFor`); divalidasi skema per jenis `studio.chart-vega/v1` (engine/chart/family-v/input.ts).
+   */
+  options?: ChartVegaOptions;
+}
+
+/** Swarm patch (row 163b, C155): kode keluarga chart Vega (registry/charts.ts `VEGA_CHART_REGISTRY`). */
+export type VegaChartKind = "V-01" | "V-02" | "V-03" | "V-04" | "V-05" | "V-06" | "V-07" | "V-08";
+
+/** Swarm patch (row 163b, C155): opsi per jenis Vega (V-01 weekStart, V-02 offset, V-06 max, V-07/V-08 form). */
+export interface ChartVegaOptions {
+  weekStart?: "monday" | "sunday";
+  offset?: "center" | "zero" | "normalize";
+  max?: number;
+  form?: "sunburst" | "icicle" | "tidy" | "dendrogram";
 }
 
 /** FIG-03a — maksud analitis chart (E58, E59, C61; register agen §17 bagian grafik). */

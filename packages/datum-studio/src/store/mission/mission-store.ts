@@ -43,6 +43,7 @@ import type {
   RowStatus,
   SessionLink,
 } from "./types.ts"
+import { rowDeliverablesNotFinal } from "./output-gate.ts"
 import { assertActor, assertCheckpoint, assertDecisionAnswer, assertDecisionRequest, assertMessage, assertMissionSchema } from "./validate.ts"
 
 export interface MissionReader {
@@ -53,6 +54,11 @@ export interface MissionReader {
 export interface MissionStoreHost {
   reader(): MissionReader
   log(level: "error" | "warn" | "info", source: string, err: unknown, context: Record<string, unknown>): void
+  /**
+   * Row 155 (spec output verification §7.3, D-10): true when the row `done` gate is on. The Studio store passes
+   * `() => this.missionGuard` (the same switch as the 119a-d MISSION_REQUIRED guards). Absent = off.
+   */
+  outputGate?(): boolean
 }
 
 /** §2.2 mission transitions. `approved` is reached only through approve(). */
@@ -587,6 +593,19 @@ export class MissionStore {
     const noteOk = (n: string | undefined) => typeof n === "string" && n.length >= 1 && n.length <= 4000 && !/[\u0000-\u001f]/.test(n)
     if ((to === "blocked" || to === "dropped") && !noteOk(a.note)) throw err("SCHEMA_INVALID", `${to} needs a note (the ${to === "blocked" ? "blocker" : "reason"})`, { row: rowId, field: "note" })
     if (a.note !== undefined && !noteOk(a.note)) throw err("SCHEMA_INVALID", "note must be a cell: 1-4000 characters, no control characters", { row: rowId })
+    // Row 155 (spec output verification §7.3; C129, C130): done only when every deliverable bound to the row
+    // (docKey row-<R>-<name>) is Final. Checked before any decision is read: no decision lifts it (D-6).
+    if (to === "done" && this.host.outputGate?.() === true) {
+      const gate = rowDeliverablesNotFinal(tx, m.id, rowId, WORK_REPORT_CONTRACT_KIND)
+      if (gate.total > 0) {
+        throw err("OUTPUT_UNVERIFIED", `row ${rowId} has deliverables that are not verified`, {
+          mission: m.id,
+          row: rowId,
+          deliverables: gate.deliverables,
+          ...(gate.total > gate.deliverables.length ? { more: gate.total - gate.deliverables.length } : {}),
+        })
+      }
+    }
     let decision: string | null = null
     if (to === "running") {
       if (m.status === "draft") throw err("MISSION_NOT_APPROVED", "rows start only after approval", { mission: m.id, row: rowId })

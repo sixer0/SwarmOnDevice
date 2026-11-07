@@ -19,8 +19,9 @@ import { BLUEPRINT_HEADER, DECISIONS_HEADER, PROFILE_HEADER, droppedRow, readBlu
 const PKG = path.resolve(import.meta.dir, "..", "..")
 const VENDOR = path.join(PKG, "vendor")
 const TEMPLATES = path.join(PKG, "templates")
-// The task folder is the repo's sibling `docs/` folder (<repo parent>/docs/<task>); PKG is <repo>/packages/datum-studio.
-const TASK = process.env.ROW120_TASK_DIR ?? path.resolve(PKG, "..", "..", "..", "docs", "2026-11-06_swarm_1_2_0_datum_installer")
+// Default: a frozen copy of the task docs (fixtures/task-docs, row 120d / C133) so the live, changing docs cannot fail the tests.
+// ROW120_TASK_DIR overrides it (e.g. the live <repo parent>/docs/<task> folder).
+const TASK = process.env.ROW120_TASK_DIR ?? path.join(import.meta.dir, "fixtures", "task-docs")
 // The tests that read the task's hand-written files are skipped when that folder is missing.
 const HAVE_TASK = existsSync(TASK)
 const TASK_SKIP_REASON = `task folder not found: ${TASK} (set ROW120_TASK_DIR); tests that read the hand-written blueprint/decisions are skipped`
@@ -449,7 +450,8 @@ describe("row 120: this task's whole blueprint and decisions as one mission (§1
     quote(`full blueprint: ${ids.length - differ.length} of ${ids.length} lines byte-equal; differ`, differ)
     quote("full blueprint diff", d.text)
     // explained: exactly the rows whose profile deps disagree with the table deps (§10.3.1; today 54, 82-84, 106, 118)
-    const lagging = notes.filter((n) => /^profile deps .* != table deps/.test(n.note)).map((n) => n.row)
+    // plus (row 120d) rows whose table Depends On holds a non-row token such as U23 (a decision id): skipped, so the cell differs.
+    const lagging = [...new Set(notes.filter((n) => /^profile deps .* != table deps|is not a row id/.test(n.note)).map((n) => n.row))].sort((a, b) => ids.indexOf(a) - ids.indexOf(b))
     expect(differ).toEqual(lagging)
     for (const id of differ) {
       const g = genById.get(id)!.split(" | ")
@@ -478,7 +480,7 @@ describe("row 120: this task's whole blueprint and decisions as one mission (§1
     const explained = withLine
       .filter((r) => {
         const p = r.profile!
-        return notes.some((n) => n.row === r.id && /not parseable/.test(n.note)) || (p.deps === "-" && r.bp[4] !== "-") || p.model === "-"
+        return notes.some((n) => n.row === r.id && /not parseable/.test(n.note)) || (p.deps === "-" && r.bp[4].split(", ").some((d) => /^[1-9][0-9]{0,3}[a-z]?$/.test(d))) || p.model === "-"
       })
       .map((r) => r.id)
     expect(differ).toEqual(explained)

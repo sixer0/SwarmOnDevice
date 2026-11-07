@@ -4,6 +4,7 @@ import { newId } from "../ids.ts"
 import { MIGRATION_0001_SQL } from "./0001_datum_studio_init.ts"
 import { MIGRATION_0002_ID, MIGRATION_0002_SQL } from "./0002_datum_template_guard.ts"
 import { MIGRATION_0003_ID, MIGRATION_0003_SQL } from "./0003_datum_mission.ts"
+import { MIGRATION_0004_ID, MIGRATION_0004_SQL } from "./0004_datum_output_verification.ts"
 
 /**
  * Store migrations (spec §3.1: own runner, journal table shaped like core's
@@ -21,12 +22,15 @@ export const MIGRATIONS: readonly Migration[] = [
   { seq: 2, id: MIGRATION_0002_ID, sql: MIGRATION_0002_SQL },
   // row 119a: mission contract tables (U19, U20, C57; masterplan/01_specs_mission_contract.md §7), additive only
   { seq: 3, id: MIGRATION_0003_ID, sql: MIGRATION_0003_SQL },
+  // row 149: output verification state (U24, C130; masterplan/01_specs_output_verification.md §5), additive only
+  { seq: 4, id: MIGRATION_0004_ID, sql: MIGRATION_0004_SQL },
 ]
 
 /**
  * Numbers held for later rows. Only the owner row may use its number, and must remove it here.
  * 0002: taken by row 64 (`20261106120000_datum_template_guard`, see MIGRATIONS).
  * 0003: taken by row 119a (`20261107000000_datum_mission`, see MIGRATIONS).
+ * 0004: taken by row 149 (`20261107120000_datum_output_verification`, see MIGRATIONS).
  * Nothing is reserved now.
  */
 export const RESERVED_MIGRATIONS: Readonly<Record<number, string>> = {}

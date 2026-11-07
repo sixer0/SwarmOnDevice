@@ -23,13 +23,15 @@ import { StudioEngineError } from "../../contract/errors";
 import { figureGrid } from "../../engine/chart/core/guards";
 import type { ChartLang } from "../../engine/chart/core/lang";
 import { APPARATUS_TEXT, keyLineText, wrapperLangOf, type WrapperLang } from "../../engine/front/texts";
-import { buildDiagramSvg, type DiagramBuildOptions } from "../../engine/diagram/build";
+import { type DiagramBuildOptions } from "../../engine/diagram/build";
+import { buildDiagramSvgAuto } from "../../engine/diagram/elk";
 import { prepareFigureStore, type FigureSvgSheet, type PreparedFigureStore } from "../../engine/docx/figures";
 import { symbolSheetSvg, type SymbolSheetOptions } from "../../engine/symbols";
 import { db } from "./db";
 import { assertFigureCapacity, figureBytesIssues } from "./figure-limits";
 import type { RenderJobHandle } from "./job";
 import { pureChartSvg } from "./pure/chart";
+import { renderVegaFigure, vegaCodeOf } from "./vega-figure";
 
 // D-156: tipe opsi lembar simbol milik mesin (IP-42a); diekspor ulang untuk pemanggil lama.
 export type { SymbolSheetOptions };
@@ -204,6 +206,15 @@ export async function buildFigures(i: {
     try {
       if (block.type === "chart") {
         const spec = await i.reader.chart(c.spec);
+        // Swarm patch (row 163b, C155): V-01..V-08 (or a DF code vegaChartFor maps) -> the Vega family (async). Same
+        // limits as below first; the family then applies its input limits (C8) and capacity (FIGURE_OVER_CAPACITY).
+        const vega = vegaCodeOf(spec.kind);
+        if (vega !== null) {
+          assertFigureCapacity("chart", spec, figureBytesIssues(block.content, "/content"));
+          const r = await renderVegaFigure(spec, vega, i.tpl, wrapperLangOf(i.snapshot.doc.meta));
+          svgs.push(r);
+          return { svg: r.svg, widthMm: r.widthMm, heightMm: r.heightMm };
+        }
         // SEC-FIX / SEC-FIX2 (D-505, D-506): batas yang sama dengan rute pratinjau (spec + byte blok) SEBELUM render, agar
         // figur tersimpan sebelum batas ada (atau rujukan artefak) tidak membekukan proses HQ. Gagal -> galat figur di job.
         assertFigureCapacity("chart", spec, figureBytesIssues(block.content, "/content"));
@@ -216,7 +227,7 @@ export async function buildFigures(i: {
         assertFigureCapacity("diagram", spec, figureBytesIssues(block.content, "/content"));
         // D-245/D-252: grid turunan kertas (lebar sah, blok teks, kisi X) dari templat efektif.
         // Row 124b (CP-35): caption label and key words drawn inside the SVG follow the document language.
-        const r = buildDiagramSvg(spec, { release: false, grid: figureGrid(i.tpl.params), ...diagramApparatusOptions(wrapperLangOf(i.snapshot.doc.meta)) });
+        const r = await buildDiagramSvgAuto(spec, { release: false, grid: figureGrid(i.tpl.params), ...diagramApparatusOptions(wrapperLangOf(i.snapshot.doc.meta)) });
         svgs.push(r);
         if (releaseTier) {
           extra.push({

@@ -1466,3 +1466,48 @@ export function resolveChartCustom(form: ChartCustomFormV2, dataShape: ChartData
   );
   return hit?.code ?? null;
 }
+
+// ── Swarm patch (row 163, decision U24 C): Vega chart family V-01..V-08 ─────────────
+//
+// Chart types the eleven Rev A families do not draw (research/16_engine_deps.md §6), rendered by
+// `engine/chart/family-v` (Vega-Lite / Vega under the CSP-safe interpreter, verification/18_row160 §4).
+// Additive: CHART_REGISTRY, CHART_REGISTRY_COUNT and the DF-* entries above are unchanged; a DF code named
+// in `replaces` keeps CHART_KIND_NOT_DRAWN on the Rev A path and points agents to the Vega code.
+
+export type VegaChartCodeDef = "V-01" | "V-02" | "V-03" | "V-04" | "V-05" | "V-06" | "V-07" | "V-08";
+
+export interface VegaChartDef {
+  code: VegaChartCodeDef;
+  name: string;
+  group: Group;
+  purpose: Purpose;
+  /** `data.shape` the family accepts (studio.chart-vega/v1); `days` and `hierarchy` are family-only shapes. */
+  dataShape: ChartDataShape | "days" | "hierarchy";
+  engine: "vega-lite" | "vega";
+  module: "family-v";
+  /** Rev A undrawn code this type now covers, when there is one. */
+  replaces?: UndrawnChartCode;
+  fn: string;
+  useWhen: string;
+  avoidWhen: string;
+  /** Limits refused with FIGURE_OVER_CAPACITY (row 158 code) instead of squeezing. */
+  capacity: string;
+}
+
+export const VEGA_CHART_REGISTRY: readonly VegaChartDef[] = [
+  { code: "V-01", name: "Calendar heatmap", group: "W", purpose: "waktu", dataShape: "days", engine: "vega-lite", module: "family-v", fn: "Nilai harian dalam kisi minggu x hari", useWhen: "Pola harian/mingguan sepanjang tahun", avoidWhen: "Lebih dari 12 bulan; ganti W-01", capacity: "rentang <= 371 hari; sel >= 2 mm" },
+  { code: "V-02", name: "Streamgraph", group: "W", purpose: "waktu", dataShape: "series", engine: "vega-lite", module: "family-v", replaces: "DF-13", fn: "Komposisi beberapa seri mengalir sepanjang waktu", useWhen: "Pergeseran porsi 2 sampai 4 seri", avoidWhen: "Butuh nilai presisi; ganti W-05", capacity: "2..4 seri; <= 60 titik" },
+  { code: "V-03", name: "Parallel coordinates", group: "P", purpose: "perbandingan", dataShape: "matrix", engine: "vega-lite", module: "family-v", replaces: "DF-02", fn: "Profil banyak butir pada 3 sampai 8 dimensi", useWhen: "Pola dan pencilan lintas dimensi", avoidWhen: "Dua dimensi; ganti H-01", capacity: "3..8 dimensi; <= 200 baris" },
+  { code: "V-04", name: "ECDF", group: "S", purpose: "sebaran", dataShape: "distribution", engine: "vega-lite", module: "family-v", fn: "Proporsi kumulatif nilai", useWhen: "Membandingkan sebaran 1 sampai 4 grup, persentil", avoidWhen: "Pembaca awam; ganti S-01", capacity: "<= 4 grup; <= 5 000 nilai" },
+  { code: "V-05", name: "Polar area (Nightingale)", group: "P", purpose: "perbandingan", dataShape: "categorical", engine: "vega-lite", module: "family-v", replaces: "DF-03", fn: "Sektor sama sudut, luas ~ nilai", useWhen: "Siklus atau kategori melingkar", avoidWhen: "Butuh presisi; ganti P-01", capacity: "3..16 kategori" },
+  { code: "V-06", name: "Radar", group: "P", purpose: "perbandingan", dataShape: "series", engine: "vega-lite", module: "family-v", replaces: "DF-01", fn: "Profil 1 sampai 3 seri pada sumbu melingkar", useWhen: "Profil kemampuan multi-kriteria", avoidWhen: "Butuh presisi; ganti P-03", capacity: "3..12 sumbu; <= 3 seri; nilai >= 0" },
+  { code: "V-07", name: "Sunburst / icicle", group: "K", purpose: "komposisi", dataShape: "hierarchy", engine: "vega", module: "family-v", replaces: "DF-07", fn: "Hierarki bagian-keseluruhan (partisi)", useWhen: "Hierarki 2 sampai 4 tingkat", avoidWhen: "Presisi penting; ganti treemap K-09", capacity: "<= 200 simpul; <= 4 tingkat" },
+  { code: "V-08", name: "Tree / dendrogram", group: "H", purpose: "hubungan", dataShape: "hierarchy", engine: "vega", module: "family-v", replaces: "DF-09", fn: "Struktur pohon (tidy) atau dendrogram (daun sejajar)", useWhen: "Organisasi, taksonomi, klaster", avoidWhen: "Graf dengan siklus; ganti H-07", capacity: "<= 120 simpul; <= 6 tingkat; daun sesuai tinggi blok teks" },
+];
+
+export const VEGA_CHART_REGISTRY_COUNT = 8;
+
+/** Vega code that covers an undrawn Rev A code (DF-01 -> V-06 ...), or null. */
+export function vegaChartFor(undrawn: string): VegaChartCodeDef | null {
+  return VEGA_CHART_REGISTRY.find((d) => d.replaces === undrawn)?.code ?? null;
+}

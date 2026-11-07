@@ -4,6 +4,8 @@
  *
  * Tokenizer berbasis string (tanpa DOM): setiap tag dibangun ulang dari daftar
  * putih struktur, bukan disalin mentah.
+ * - Swarm row 151c: hanya elemen SVG dalam SVG_ALLOWED_ELEMENTS yang lolos; nama lain (mis. `img`, `div`,
+ *   `form`, yang keluar dari konten asing parser HTML) dibuang beserta subpohonnya; `aria-hidden` pada root dibuang.
  * - Elemen dibuang beserta subpohonnya: `script`, `foreignObject`, elemen
  *   animasi (`set`, `animate*`, dapat menulis `href`), `iframe`, `object`,
  *   `embed`, media, `handler`, `listener`, `discard`.
@@ -47,6 +49,26 @@ export const SVG_DROPPED_ELEMENTS: readonly string[] = [
 ];
 
 const DROPPED = new Set(SVG_DROPPED_ELEMENTS);
+
+/**
+ * Swarm row 151c (C161 L1): allow-list of SVG element names (SVG 1.1 + SVG 2, lower case; no `font`, `font-face*`,
+ * `glyph*`, `cursor`, `color-profile`, `tref`, `altGlyph*`). Any other name is dropped with its subtree. Reason:
+ * the HTML parser's foreign-content breakout turns `<img>`, `<div>`, `<p>`, `<span>`, `<table>`, `<font color>`
+ * and the like inside an inline `<svg>` into HTML elements in the page, where `<img name="body">` shadows
+ * `document.body` and `<div class="reg">` poses as page furniture for the in-page measurement scripts.
+ */
+export const SVG_ALLOWED_ELEMENTS: readonly string[] = [
+  "svg", "g", "defs", "symbol", "use", "switch", "a", "view", "title", "desc", "metadata",
+  "path", "rect", "circle", "ellipse", "line", "polyline", "polygon", "text", "tspan", "textpath", "image",
+  "lineargradient", "radialgradient", "stop", "pattern", "clippath", "mask", "marker", "filter", "mpath",
+  "feblend", "fecolormatrix", "fecomponenttransfer", "fecomposite", "feconvolvematrix", "fediffuselighting",
+  "fedisplacementmap", "fedistantlight", "fedropshadow", "feflood", "fefunca", "fefuncb", "fefuncg", "fefuncr",
+  "fegaussianblur", "feimage", "femerge", "femergenode", "femorphology", "feoffset", "fepointlight",
+  "fespecularlighting", "fespotlight", "fetile", "feturbulence",
+];
+const ALLOWED = new Set(SVG_ALLOWED_ELEMENTS);
+/** Swarm row 151c (C161 L2): root attributes the sanitizer drops (a root may not hide itself from measurement). */
+const ROOT_DROPPED_ATTRS = new Set(["aria-hidden"]);
 const NAME_RE = /^[A-Za-z_][A-Za-z0-9_.:-]*$/;
 const RASTER_DATA_RE = /^data:image\/(?:png|jpe?g|gif|webp);base64,[A-Za-z0-9+/=\s]*$/i;
 const HREF_ATTRS = new Set(["href", "xlink:href", "src"]);
@@ -214,7 +236,7 @@ export function sanitizeSvg(input: string, opts: SvgSanitizeOptions): SvgSanitiz
       if (stack.length === 0) break; // root selesai
       continue;
     }
-    if (DROPPED.has(lname)) {
+    if (DROPPED.has(lname) || !ALLOWED.has(lname)) {
       removed.elements++;
       if (!tag.selfClose) {
         dropName = lname;
@@ -232,6 +254,10 @@ export function sanitizeSvg(input: string, opts: SvgSanitizeOptions): SvgSanitiz
     for (const [name, rawValue] of tag.attrs) {
       const ln = name.toLowerCase();
       if (isRoot && (ln === "width" || ln === "height") && (opts.widthMm !== undefined || opts.heightMm !== undefined)) continue;
+      if (isRoot && ROOT_DROPPED_ATTRS.has(ln)) {
+        removed.attributes++;
+        continue;
+      }
       const value = cleanAttr(name, rawValue, prefix);
       if (value === null) {
         removed.attributes++;

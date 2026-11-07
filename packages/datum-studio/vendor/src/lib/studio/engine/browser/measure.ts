@@ -23,6 +23,25 @@ export interface MeasureScriptArgs {
 }
 
 export const MEASURE_SCRIPT = String.raw`(function (o) {
+  // Swarm row 151c (C161 L1): stable references from the DOM prototypes, taken before any page member is read.
+  // Markup can shadow document members by name (<img name="body">) and form members (<input name="closest">);
+  // a prototype getter or method called on the node cannot be shadowed (page JavaScript is off). Page markers
+  // (.page, .reg, .body) count only on HTML elements, so SVG content cannot pose as a page or its furniture.
+  var DOC = document;
+  var GOPD = Object.getOwnPropertyDescriptor;
+  var DP = Document.prototype, EP = Element.prototype, NP = Node.prototype;
+  function getter(P, n) { var g = GOPD(P, n).get; return function (x) { return g.call(x); }; }
+  function method(P, n) { var f = P[n]; return function (x, a) { return f.call(x, a); }; }
+  var docBody = getter(DP, 'body')(DOC), docEl = getter(DP, 'documentElement')(DOC);
+  if (!(docBody instanceof HTMLBodyElement) || !(docEl instanceof HTMLHtmlElement)) return { paged: false, pageCount: 0, truncated: true, untrusted: true, elements: [] };
+  var qsa = method(EP, 'querySelectorAll'), matches = method(EP, 'matches'), attr = method(EP, 'getAttribute');
+  var clientRects = method(EP, 'getClientRects'), bcr = method(EP, 'getBoundingClientRect'), contains = method(NP, 'contains');
+  var tagOf = getter(EP, 'tagName'), parentEl = getter(NP, 'parentElement'), firstChild = getter(NP, 'firstChild'), nextSib = getter(NP, 'nextSibling');
+  var nodeType = getter(NP, 'nodeType'), nodeValue = getter(NP, 'nodeValue'), textOf = getter(NP, 'textContent');
+  var clientW = getter(EP, 'clientWidth'), scrollW = getter(EP, 'scrollWidth'), scrollH = getter(EP, 'scrollHeight');
+  function tagLc(el) { return String(tagOf(el)).toLowerCase(); }
+  function up(el, sel) { for (var e = el; e; e = parentEl(e)) if (e instanceof HTMLElement && matches(e, sel)) return e; return null; }
+  function firstHtml(root, sel) { var l = qsa(root, sel); for (var i = 0; i < l.length; i++) if (l[i] instanceof HTMLElement) return l[i]; return null; }
   var PX = 96 / 25.4;
   var out = [];
   var truncated = false;
@@ -30,16 +49,12 @@ export const MEASURE_SCRIPT = String.raw`(function (o) {
   function mm(v) { return Math.round((v / PX) * 100) / 100; }
   function push(e) { if (out.length >= o.maxElements) { truncated = true; return; } out.push(e); }
   function addrOf(el) {
-    var a = el.closest('[data-address],[data-addr]');
+    var a = up(el, '[data-address],[data-addr]');
     if (!a) return undefined;
-    return a.getAttribute('data-address') || a.getAttribute('data-addr') || undefined;
+    return attr(a, 'data-address') || attr(a, 'data-addr') || undefined;
   }
-  function cls(el) {
-    var c = el.className;
-    if (c && typeof c === 'object' && c.baseVal !== undefined) c = c.baseVal;
-    return (c ? String(c) : '').trim();
-  }
-  function label(el) { var c = cls(el); return (c ? c.split(/\s+/)[0] : el.tagName.toLowerCase()).slice(0, 40); }
+  function cls(el) { var c = attr(el, 'class'); return (c ? String(c) : '').trim(); }
+  function label(el) { var c = cls(el); return (c ? c.split(/\s+/)[0] : tagLc(el)).slice(0, 40); }
   function hex(c) {
     if (!c) return null;
     var m = /^rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)(?:[\s,/]+([\d.]+%?))?\s*\)$/.exec(c);
@@ -54,19 +69,19 @@ export const MEASURE_SCRIPT = String.raw`(function (o) {
   }
   function visible(el, cs) {
     if (cs.display === 'none' || cs.visibility === 'hidden' || cs.visibility === 'collapse') return false;
-    return el.getClientRects().length > 0;
+    return clientRects(el).length > 0;
   }
-  var allPages = Array.prototype.slice.call(document.querySelectorAll(SEL));
-  var pages = allPages.filter(function (p) { return !p.parentElement || !p.parentElement.closest(SEL); });
+  var allPages = Array.prototype.slice.call(qsa(docEl, SEL)).filter(function (p) { return p instanceof HTMLElement; });
+  var pages = allPages.filter(function (p) { var q = parentEl(p); return !q || !up(q, SEL); });
   var paged = pages.length > 0;
   var sx = window.scrollX, sy = window.scrollY;
   function pageOf(el) {
     if (!paged) return -1;
-    var p = el.closest(SEL);
-    while (p && p.parentElement && p.parentElement.closest(SEL)) p = p.parentElement.closest(SEL);
+    var p = up(el, SEL);
+    while (p && parentEl(p) && up(parentEl(p), SEL)) p = up(parentEl(p), SEL);
     return p ? pages.indexOf(p) : -1;
   }
-  var pageRects = pages.map(function (p) { return p.getBoundingClientRect(); });
+  var pageRects = pages.map(function (p) { return bcr(p); });
   function box(el, r) {
     var i = pageOf(el);
     var ox = i >= 0 ? pageRects[i].left : -sx, oy = i >= 0 ? pageRects[i].top : -sy;
@@ -78,19 +93,19 @@ export const MEASURE_SCRIPT = String.raw`(function (o) {
   function addColour(set, c) { var h = hex(c); if (h) set[h] = 1; }
   function colourSetFor(root) {
     var set = {};
-    var els = root.querySelectorAll('*');
+    var els = qsa(root, '*');
     for (var i = 0; i < els.length; i++) {
       var el = els[i], cs = getComputedStyle(el);
       if (!visible(el, cs)) continue;
       var isSvg = el instanceof SVGElement;
       if (isSvg) {
-        if (el.tagName.toLowerCase() === 'svg' || el.tagName.toLowerCase() === 'g' || el.tagName.toLowerCase() === 'defs') continue;
+        if (tagLc(el) === 'svg' || tagLc(el) === 'g' || tagLc(el) === 'defs') continue;
         if (cs.fill && cs.fill !== 'none' && cs.fill.indexOf('url(') !== 0 && parseFloat(cs.fillOpacity) > 0) addColour(set, cs.fill);
         if (cs.stroke && cs.stroke !== 'none' && cs.stroke.indexOf('url(') !== 0 && parseFloat(cs.strokeWidth) > 0 && parseFloat(cs.strokeOpacity) > 0) addColour(set, cs.stroke);
         continue;
       }
       var hasText = false;
-      for (var n = el.firstChild; n; n = n.nextSibling) if (n.nodeType === 3 && /\S/.test(n.nodeValue)) { hasText = true; break; }
+      for (var n = firstChild(el); n; n = nextSib(n)) if (nodeType(n) === 3 && /\S/.test(nodeValue(n))) { hasText = true; break; }
       if (hasText) addColour(set, cs.color);
       addColour(set, cs.backgroundColor);
       var sides = ['Top', 'Right', 'Bottom', 'Left'];
@@ -109,8 +124,8 @@ export const MEASURE_SCRIPT = String.raw`(function (o) {
       push({ kind: 'page', page: i + 1, xMm: mm(r.left + sx), yMm: mm(r.top + sy), widthMm: mm(r.width), heightMm: mm(r.height), colors: colourSetFor(p), label: label(p) });
     });
   } else {
-    var de = document.documentElement;
-    push({ kind: 'document', xMm: 0, yMm: 0, widthMm: mm(de.scrollWidth), heightMm: mm(de.scrollHeight), colors: colourSetFor(document.body || de), overflow: de.scrollWidth > de.clientWidth + 1 });
+    var de = docEl;
+    push({ kind: 'document', xMm: 0, yMm: 0, widthMm: mm(scrollW(de)), heightMm: mm(scrollH(de)), colors: colourSetFor(docBody), overflow: scrollW(de) > clientW(de) + 1 });
   }
 
   // 2. Luapan lembar (DATUM-37, pola check_page RL): terburuk per halaman+label+sumbu.
@@ -124,33 +139,33 @@ export const MEASURE_SCRIPT = String.raw`(function (o) {
     pages.forEach(function (p, i) {
       var pr = pageRects[i];
       var limitB = pr.top + o.pageHeightMm * PX, limitR = pr.left + o.pageWidthMm * PX;
-      var reg = p.querySelector('.reg');
-      var floor = reg ? reg.getBoundingClientRect().top : limitB;
-      var scope = p.querySelector('.body') || p;
-      var els = scope.querySelectorAll('*');
+      var reg = firstHtml(p, '.reg');
+      var floor = reg ? bcr(reg).top : limitB;
+      var scope = firstHtml(p, '.body') || p;
+      var els = qsa(scope, '*');
       for (var j = 0; j < els.length; j++) {
         var el = els[j];
-        if (reg && (el === reg || reg.contains(el))) continue;
-        if (!el.getClientRects().length) continue;
-        var b = el.getBoundingClientRect();
+        if (reg && (el === reg || contains(reg, el))) continue;
+        if (!clientRects(el).length) continue;
+        var b = bcr(el);
         if (b.height < 1 && b.width < 1) continue;
         note(el, b, 'bottom', b.bottom - floor, i);
         note(el, b, 'right', b.right - limitR, i);
       }
     });
   } else {
-    var lim = document.documentElement.clientWidth;
-    var all = document.body ? document.body.querySelectorAll('*') : [];
+    var lim = clientW(docEl);
+    var all = qsa(docBody, '*');
     for (var q = 0; q < all.length; q++) {
       var e2 = all[q];
-      if (!e2.getClientRects().length) continue;
-      var b2 = e2.getBoundingClientRect();
+      if (!clientRects(e2).length) continue;
+      var b2 = bcr(e2);
       note(e2, b2, 'right', b2.right - lim, -1);
     }
   }
   Object.keys(worst).sort(function (a, b) { return worst[b].over - worst[a].over; }).forEach(function (k) {
     var w = worst[k], e = box(w.el, w.r);
-    e.kind = 'overflow'; e.overflow = true; e.axis = w.axis; e.overflowMm = mm(w.over); e.label = label(w.el); e.tag = w.el.tagName.toLowerCase();
+    e.kind = 'overflow'; e.overflow = true; e.axis = w.axis; e.overflowMm = mm(w.over); e.label = label(w.el); e.tag = tagLc(w.el);
     if (e.page) overflowed[e.page] = 1;
     push(e);
   });
@@ -158,22 +173,22 @@ export const MEASURE_SCRIPT = String.raw`(function (o) {
 
   // 3. Blok teks: lebar ukur, jumlah baris, karakter per baris (DATUM-15), ukuran fon terhitung.
   //    Isi yang terpotong di kotaknya sendiri (scrollWidth > clientWidth) ditandai kind "clip".
-  var blocks = document.body ? document.body.querySelectorAll('*') : [];
+  var blocks = qsa(docBody, '*');
   for (var bi = 0; bi < blocks.length; bi++) {
     var el = blocks[bi];
     if (el instanceof SVGElement) continue;
     var cs = getComputedStyle(el);
     if (!visible(el, cs)) continue;
-    if (el.clientWidth > 0 && el.scrollWidth > el.clientWidth + 1 && cs.display !== 'inline') {
-      var cb = box(el, el.getBoundingClientRect());
-      cb.kind = 'clip'; cb.overflow = true; cb.axis = 'right'; cb.overflowMm = mm(el.scrollWidth - el.clientWidth); cb.label = label(el); cb.tag = el.tagName.toLowerCase();
+    if (clientW(el) > 0 && scrollW(el) > clientW(el) + 1 && cs.display !== 'inline') {
+      var cb = box(el, bcr(el));
+      cb.kind = 'clip'; cb.overflow = true; cb.axis = 'right'; cb.overflowMm = mm(scrollW(el) - clientW(el)); cb.label = label(el); cb.tag = tagLc(el);
       push(cb);
     }
     if (cs.display === 'inline' || cs.display === 'contents') continue;
     var direct = false;
-    for (var tn = el.firstChild; tn; tn = tn.nextSibling) if (tn.nodeType === 3 && /\S/.test(tn.nodeValue)) { direct = true; break; }
+    for (var tn = firstChild(el); tn; tn = nextSib(tn)) if (nodeType(tn) === 3 && /\S/.test(nodeValue(tn))) { direct = true; break; }
     if (!direct) continue;
-    var range = document.createRange();
+    var range = DP.createRange.call(DOC);
     range.selectNodeContents(el);
     var rects = range.getClientRects();
     var lines = [];
@@ -186,40 +201,40 @@ export const MEASURE_SCRIPT = String.raw`(function (o) {
       else lines.push({ left: rr.left, right: rr.right, top: rr.top, bottom: rr.bottom });
     }
     if (!lines.length) continue;
-    var text = (el.textContent || '').replace(/\s+/g, ' ').trim();
+    var text = (textOf(el) || '').replace(/\s+/g, ' ').trim();
     var widths = lines.map(function (l) { return l.right - l.left; });
     var total = widths.reduce(function (s, v) { return s + v; }, 0);
     var maxW = Math.max.apply(null, widths);
     var cpl = text.length;
     if (lines.length > 1 && total > 0) cpl = (text.length * (total - widths[widths.length - 1]) / total) / (lines.length - 1);
     var pl = parseFloat(cs.paddingLeft) || 0, pr2 = parseFloat(cs.paddingRight) || 0;
-    var tb = box(el, el.getBoundingClientRect());
-    tb.kind = 'text'; tb.tag = el.tagName.toLowerCase(); tb.label = label(el);
+    var tb = box(el, bcr(el));
+    tb.kind = 'text'; tb.tag = tagLc(el); tb.label = label(el);
     tb.fontSizePt = Math.round(parseFloat(cs.fontSize) * 0.75 * 100) / 100;
-    tb.measureMm = mm(el.clientWidth - pl - pr2);
+    tb.measureMm = mm(clientW(el) - pl - pr2);
     tb.lineCount = lines.length; tb.charCount = text.length;
     tb.charsPerLine = Math.round(cpl * 10) / 10; tb.maxLineWidthMm = mm(maxW);
     push(tb);
   }
 
   // 4. Figur SVG (warna per figur DATUM-25, tinggi DATUM-33) dan teks SVG terhitung (DATUM-28).
-  var svgs = Array.prototype.slice.call(document.querySelectorAll('svg')).filter(function (s) { return !s.parentElement || !s.parentElement.closest('svg'); });
+  var svgs = Array.prototype.slice.call(qsa(docEl, 'svg')).filter(function (s) { var q = parentEl(s); return !q || !method(EP, 'closest')(q, 'svg'); });
   svgs.forEach(function (s) {
     var cs = getComputedStyle(s);
     if (!visible(s, cs)) return;
-    var fe = box(s, s.getBoundingClientRect());
-    var host = s.closest('figure,[data-figure]');
+    var fe = box(s, bcr(s));
+    var host = up(s, 'figure,[data-figure]');
     fe.kind = 'figure'; fe.tag = 'svg';
-    fe.label = (s.getAttribute('data-figure') || (host && (host.getAttribute('data-figure') || host.id)) || s.getAttribute('aria-label') || s.id || 'svg').slice(0, 80);
+    fe.label = String(attr(s, 'data-figure') || (host && (attr(host, 'data-figure') || attr(host, 'id'))) || attr(s, 'aria-label') || attr(s, 'id') || 'svg').slice(0, 80);
     fe.colors = colourSetFor(s);
     push(fe);
-    var texts = s.querySelectorAll('text');
+    var texts = qsa(s, 'text');
     for (var ti = 0; ti < texts.length; ti++) {
       var t = texts[ti], tcs = getComputedStyle(t);
       if (!visible(t, tcs)) continue;
       var m = t.getScreenCTM();
       var scale = m ? Math.sqrt(Math.abs(m.a * m.d - m.b * m.c)) : 1;
-      var te = box(t, t.getBoundingClientRect());
+      var te = box(t, bcr(t));
       te.kind = 'svgText'; te.tag = 'text'; te.label = fe.label;
       te.fontSizePt = Math.round(parseFloat(tcs.fontSize) * scale * 0.75 * 100) / 100;
       push(te);
@@ -227,25 +242,25 @@ export const MEASURE_SCRIPT = String.raw`(function (o) {
   });
 
   // 5. Gambar raster: ukuran tampil vs piksel asli (pxGuard DATUM-39 di hilir).
-  var imgs = document.querySelectorAll('img');
+  var imgs = qsa(docEl, 'img');
   for (var ii = 0; ii < imgs.length; ii++) {
     var im = imgs[ii], ics = getComputedStyle(im);
     if (!visible(im, ics)) continue;
-    var ie = box(im, im.getBoundingClientRect());
+    var ie = box(im, bcr(im));
     ie.kind = 'image'; ie.tag = 'img'; ie.label = label(im);
     ie.naturalWidthPx = im.naturalWidth; ie.naturalHeightPx = im.naturalHeight;
     push(ie);
   }
 
   // 6. Tabel: kotak tabel untuk perbandingan dengan lebar ukur.
-  var tables = document.querySelectorAll('table');
+  var tables = qsa(docEl, 'table');
   for (var tj = 0; tj < tables.length; tj++) {
     var tbl = tables[tj], tcs2 = getComputedStyle(tbl);
     if (!visible(tbl, tcs2)) continue;
-    var te2 = box(tbl, tbl.getBoundingClientRect());
+    var te2 = box(tbl, bcr(tbl));
     te2.kind = 'table'; te2.tag = 'table'; te2.label = label(tbl);
-    var par = tbl.parentElement;
-    te2.overflow = !!par && tbl.getBoundingClientRect().right > par.getBoundingClientRect().right + 0.5;
+    var par = parentEl(tbl);
+    te2.overflow = !!par && bcr(tbl).right > bcr(par).right + 0.5;
     push(te2);
   }
 

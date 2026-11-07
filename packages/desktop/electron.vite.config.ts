@@ -11,6 +11,9 @@ const OPENCODE_SERVER_DIST = "../opencode/dist/node"
 const DATUM_STUDIO_DIR = path.resolve("../datum-studio")
 const DATUM_STUDIO_HOST = path.join(DATUM_STUDIO_DIR, "src/mcp-host/index.ts")
 const DATUM_STUDIO_VENDOR_SRC = path.join(DATUM_STUDIO_DIR, "vendor/src")
+// Row 162c: the build-time stand-in for elkjs/lib/elk.bundled.js (loads the staged copy at run time).
+const DATUM_ELK_RUNTIME = path.resolve("src/main/datum-studio-host/elk-runtime.ts")
+const CANVAS_STUB_ID = "\0datum-canvas-stub"
 
 // Read as text: electron-vite runs this config under Node, and stage-library.ts only loads under Bun.
 const knowledgeLibraryCommit = (() => {
@@ -96,6 +99,28 @@ const require = __cjs_mod__.createRequire(import.meta.url);
           if (id === "virtual:datum-studio-host") return DATUM_STUDIO_HOST
           if (!id.startsWith("@/") || !importer?.startsWith(DATUM_STUDIO_DIR + path.sep)) return
           return this.resolve(path.join(DATUM_STUDIO_VENDOR_SRC, id.slice(2)), importer, { skipSelf: true })
+        },
+      },
+      {
+        // Row 162c (C126, C153): elk.bundled.js (EPL-2.0) is never inlined into the mixed host chunk. The adapter's
+        // import resolves to elk-runtime.ts, which requires the staged byte-identical copy
+        // Res/datum-studio/third_party/elkjs/elk.bundled.js (scripts/stage-datum-studio.ts) at the first `new ELK()`.
+        // Row 163 / C11 (row 160 T9, build half): vega-canvas's optional `await import("canvas")` resolves to an empty
+        // module, so the host chunk has no canvas dependency and vega-canvas falls back to null (no createCanvas).
+        name: "datum:studio-third-party",
+        enforce: "pre",
+        resolveId(id, importer) {
+          if (!importer) return
+          if (id === "elkjs/lib/elk.bundled.js" && importer.startsWith(DATUM_STUDIO_DIR + path.sep)) return DATUM_ELK_RUNTIME
+          if (id === "elkjs" || id.startsWith("elkjs/lib/elk-worker") || id === "elkjs/lib/main.js")
+            this.error(`row 162c: ${id} must not be bundled (only elkjs/lib/elk.bundled.js through elk-runtime.ts)`)
+          if (id === "canvas" && /[\\/]vega-canvas[\\/]/.test(importer)) {
+            this.info("datum:studio-third-party: canvas -> empty stub (C11)")
+            return CANVAS_STUB_ID
+          }
+        },
+        load(id) {
+          if (id === CANVAS_STUB_ID) return "export {}\n"
         },
       },
       {

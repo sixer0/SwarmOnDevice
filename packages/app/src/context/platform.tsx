@@ -6,6 +6,8 @@ import { ServerConnection } from "./server"
 import type { WslServersPlatform } from "../wsl/types"
 import type { UpdaterPlatform } from "../updater"
 import type { DraftStore } from "@/utils/draft-store"
+import type { MissionSource } from "@/pages/session/swarm/mission-poll"
+import type { MissionWriter } from "@/pages/session/swarm/mission-command-model"
 
 type PickerPaths = string | string[] | null
 type OpenDirectoryPickerOptions = { title?: string; multiple?: boolean }
@@ -155,15 +157,21 @@ export type SetupToolsPlatform = {
   markOffered(): Promise<void>
 }
 
+/** Mission control bridge (desktop only, row 127 window.api.missions; spec 01_specs_mission_control_ui.md §3.2).
+ *  The wire types live in the mission modules (row 129 read half, row 131 write half). */
+export type MissionControlPlatform = MissionSource & MissionWriter
+
 export type Platform = PlatformBase &
   (
-    | { platform: "web"; os?: never; setupTools?: never }
+    | { platform: "web"; os?: never; setupTools?: never; missions?: never }
     | {
         platform: "desktop"
         os?: DesktopOS
         openDirectoryPickerDialog(opts?: OpenDirectoryPickerOptions): Promise<PickerPaths>
         /** Absent until the preload exposes it; callers hide the tools triggers when undefined */
         setupTools?: SetupToolsPlatform
+        /** Absent = mission control absent (row 133 mount hides it) */
+        missions?: MissionControlPlatform
       }
   )
 

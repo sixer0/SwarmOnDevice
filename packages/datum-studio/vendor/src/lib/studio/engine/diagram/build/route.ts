@@ -13,6 +13,7 @@ import type { DiagramEdge, RoutedEdge, StudioDiagramV1 } from "../../../contract
 import { DiagramDefect, LATTICE_Y, polylineD, snap, type Sheet, type SheetNode } from "../core";
 import { diagramFitNote, diagramFitRoute } from "../fit/state";
 import { nudgeRoutes } from "./lanesroute";
+import { activeElkRoutes } from "../elk/routes";
 
 type Pt = readonly [number, number];
 type Side = "bottom" | "top" | "right" | "left";
@@ -233,6 +234,8 @@ function sideCandidates(a: SheetNode, b: SheetNode): SidePair[] {
 
 /** HS `route_edges` atas lembar tertempat (keluarga selain sequence). */
 export function routePlaced(s: StudioDiagramV1, sheet: Sheet): RoutedEdge[] {
+  const elk = activeElkRoutes(s, sheet);
+  if (elk) return elk;
   if (s.family === "rack" && diagramFitRoute("lineThroughText")) {
     diagramFitNote("RACK_ROUTE", "konektor rak dirute pada jalur di sisi kanan badan rak", "tidak ada");
     return routeRackSide(s, sheet);

@@ -12,6 +12,12 @@ export const MAX_INPUT_BYTES = 16 * 1024 * 1024
 export const MAX_SCRIPT_BYTES = 256 * 1024
 export const MAX_PX = 16384
 export const MAX_MM = 5000
+// pagePng (row 151b): default 150 dpi (A4 = 1239 x 1753 px: Chromium truncates the fractional CSS clip), at most 12 page images per request (spec §11 GAP-1).
+export const PAGE_PNG_DPI = 150
+export const PAGE_PNG_MIN_DPI = 36
+export const PAGE_PNG_MAX_DPI = 300
+export const MAX_PAGE_IMAGES = 12
+export const MAX_PAGE_INDEX = 2000
 
 export type PngRequest = { op: "png"; src: string; dst: string; width: number; height?: number }
 export type PdfRequest = {
@@ -33,8 +39,20 @@ export type CheckPageRequest = {
   viewportWidth?: number
   viewportHeight?: number
 }
+/** Row 151b: one PNG per printed page of an HTML file, written as <dstDir>/p001.png, p002.png, ... */
+export type PagePngRequest = {
+  op: "pagePng"
+  src: string
+  dstDir: string
+  /** 1-based page numbers to image; default the first MAX_PAGE_IMAGES pages. */
+  pages?: number[]
+  dpi?: number
+  /** Page size when the document has no CSS @page size; default A4. */
+  widthMm?: number
+  heightMm?: number
+}
 export type HelloRequest = { op: "hello" }
-export type RenderRequest = PngRequest | PdfRequest | CheckPageRequest | HelloRequest
+export type RenderRequest = PngRequest | PdfRequest | CheckPageRequest | PagePngRequest | HelloRequest
 
 export type BridgeErrorCode =
   | "BAD_REQUEST"
@@ -64,6 +82,7 @@ const ALLOWED_KEYS: Record<RenderRequest["op"], readonly string[]> = {
   pdf: ["op", "src", "dst", "widthMm", "heightMm", "preferCSSPageSize"],
   // width/height: viewport px as sent by the row 106 shim (render.py:166 new_page viewport); alias of viewport*.
   checkPage: ["op", "html", "src", "wMm", "hMm", "script", "arg", "viewportWidth", "viewportHeight", "width", "height"],
+  pagePng: ["op", "src", "dstDir", "pages", "dpi", "widthMm", "heightMm"],
   hello: ["op"],
 }
 
@@ -145,6 +164,32 @@ export function validateRequest(raw: unknown): RenderRequest {
     const out: PdfRequest = { op, src, dst }
     if (widthMm !== undefined) Object.assign(out, { widthMm, heightMm })
     if (pref !== undefined) out.preferCSSPageSize = pref
+    return out
+  }
+
+  if (op === "pagePng") {
+    const src = str(raw, "src", true)
+    const dstDir = str(raw, "dstDir", true)
+    if (!hasExt(src, HTML_EXT)) bad("pagePng src must end .html or .htm")
+    const dpi = raw.dpi
+    if (dpi !== undefined && (typeof dpi !== "number" || !Number.isInteger(dpi) || dpi < PAGE_PNG_MIN_DPI || dpi > PAGE_PNG_MAX_DPI)) {
+      bad(`dpi must be an integer ${PAGE_PNG_MIN_DPI}..${PAGE_PNG_MAX_DPI}`)
+    }
+    const pages = raw.pages
+    if (pages !== undefined) {
+      if (!Array.isArray(pages) || pages.length === 0 || pages.length > MAX_PAGE_IMAGES) bad(`pages must list 1..${MAX_PAGE_IMAGES} page numbers`)
+      for (const n of pages) {
+        if (typeof n !== "number" || !Number.isInteger(n) || n < 1 || n > MAX_PAGE_INDEX) bad(`pages must be integers 1..${MAX_PAGE_INDEX}`)
+      }
+      if (new Set(pages).size !== pages.length) bad("pages must not repeat")
+    }
+    const widthMm = mm(raw, "widthMm", false)
+    const heightMm = mm(raw, "heightMm", false)
+    if ((widthMm === undefined) !== (heightMm === undefined)) bad("widthMm and heightMm go together")
+    const out: PagePngRequest = { op, src, dstDir }
+    if (pages !== undefined) out.pages = [...(pages as number[])]
+    if (dpi !== undefined) out.dpi = dpi as number
+    if (widthMm !== undefined) Object.assign(out, { widthMm, heightMm })
     return out
   }
 

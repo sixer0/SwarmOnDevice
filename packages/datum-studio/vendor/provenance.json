@@ -31,15 +31,21 @@
   "row31b": "2026-11-07: services/revisions ported (C60, row 109-style Prisma cut): 12 NEW files from clone b0ae7a7 at their clone paths: index.ts, diff.ts, locate.ts, log.ts, v2/{service,body,commit,history,ops,rows,structure-ops,tree}.ts; 7 copied verbatim, 4 patched (index, v2/service, v2/commit, v2/history), 1 replaced (v2/rows twin); files[].patch.row == \"31b\", diffs in implementation/55_row31b_diffs/. Open for row 31c: index.ts assertPdfRenderReady/renderRevision are local StudioNotImplemented stubs until services/render/index.ts is vendored (replace them with the import from ../render). Counts block left as found (recompute at the end of the wave, row 32 note): +12 files, +141929 bytes",
   "row31c": "2026-11-07: services/render ported (C60, C65, row 109-style Prisma cut): 6 NEW files from clone b0ae7a7 at their clone paths (index, scope, preflight, admission, revision patched; artifact replaced by a twin refusing ARTIFACT_NOT_FOUND, store M07) + NEW readiness.ts (added: PDF readiness = render bridge handshake). No Prisma import, no desktop-office PDF engine reference. revisions/index.ts render seam closed (stubs -> import from ../render; entry updated, cumulative diff in implementation/57_row31c_diffs/). files[].patch.row == \"31c\". Counts block left as found: +7 files, +51666 bytes (revisions/index.ts -752 bytes)",
   "row124b": "2026-11-07: CP-45 contract field + CP-35 in-SVG key language (C62 (3), C69). contract/types/diagram.ts and contract/schema/diagram.schema.ts copied -> patched (additive nodes[].symbol); engine/diagram/build/svg.ts, engine/diagram/core/sheet.ts, services/render/figures.ts re-patched (files[].patch_row124b, diff_base = previous after_sha256). Diffs in implementation/61_row124b_diffs/. Counts block left as found: 0 files, +2468 bytes, copied -2 / patched +2",
-  "row49a": "2026-11-07: C104 H1/M1/M3 + counts. H1 classification seal: params/color-type.ts, engine/html/base/{params,css,markup}.ts copied -> patched, engine/docx/package/header-footer.ts re-patched (patch_row49a); M1 engine/docx/wrapper/formats.ts re-patched (patch_row49a); M3 NEW byte copies benchmark/manual000/{template.v2.json,datum-manual-000.preset.json} (status copied, clone b0ae7a7). Diffs in implementation/81_row49a_diffs/. `counts` RECOMPUTED from files[] (was stale since row 27: 559/510/36/10/3/9052762): files = len(files[]), copied/patched/replaced/added = count of files[].status, bytes = sum(files[].bytes); every entry checked against disk (sha256, bytes, missing, unlisted: all 0)"
+  "row49a": "2026-11-07: C104 H1/M1/M3 + counts. H1 classification seal: params/color-type.ts, engine/html/base/{params,css,markup}.ts copied -> patched, engine/docx/package/header-footer.ts re-patched (patch_row49a); M1 engine/docx/wrapper/formats.ts re-patched (patch_row49a); M3 NEW byte copies benchmark/manual000/{template.v2.json,datum-manual-000.preset.json} (status copied, clone b0ae7a7). Diffs in implementation/81_row49a_diffs/. `counts` RECOMPUTED from files[] (was stale since row 27: 559/510/36/10/3/9052762): files = len(files[]), copied/patched/replaced/added = count of files[].status, bytes = sum(files[].bytes); every entry checked against disk (sha256, bytes, missing, unlisted: all 0)",
+  "row158": "2026-11-07: U24 B (refuse over-capacity figures, do not squeeze). NEW engine/figure-capacity.ts (status added); engine/diagram/build/capacity.ts and engine/chart/core/render.ts copied -> patched (patch row158-*); engine/diagram/core/estimate.ts, contract/enums.ts, contract/errors.ts re-patched (files[].patch_row158, diff_base = previous after_sha256). Error code FIGURE_OVER_CAPACITY (422). Diffs in implementation/112_row158_diffs/. Counts: files +1, copied -2, patched +2, added +1, bytes +13992",
+  "row162": "2026-11-07: U24 C (ELK as the diagram LAYOUT engine; C126, C131, C134). NEW engine/diagram/elk/{plan,adapter,routes,index}.ts (status added; adapter.ts imports elkjs/lib/elk.bundled.js only, no worker URL/factory); engine/diagram/layout-a/layered.ts copied -> patched (patch row162-elk-layout-hook: exported tierKey, NEW tierWidthMm, ELK plan hook; no plan = original output). Diffs and copies in implementation/114_row162_diffs/. Counts: files +4, copied -1, patched +1, added +4, bytes +32177",
+  "row162b": "2026-11-07: C153 wiring of row 162. engine/diagram/build/route.ts (2-line activeElkRoutes seam) and services/render/figures.ts (await buildDiagramSvgAuto) re-patched (files[].patch_row162b, diff_base = previous after_sha256). Diffs in implementation/114b_row162b_diffs/. Counts block left as found (+113 and +57 bytes, no status change)",
+  "row163": "2026-11-07: U24 C (Vega-Lite/Vega chart family V-01..V-08; C126, C131, C134; security verification/18_row160 §4 C1-C9, C11). NEW engine/chart/family-v/{guard,index,input,sandbox,specs,svg,theme}.ts (status added; sandbox.ts is the only parse/View call: interpreter + deny-all loader); registry/charts.ts copied -> patched (patch row163-vega-chart-registry, additive VEGA_CHART_REGISTRY). Diffs and copies in implementation/115_row163_diffs/. Counts: files +7, copied -1, patched +1, added +7, bytes +90777",
+  "I-3": "2026-11-08: C164 L8. engine/chart/family-v/index.ts (added by 163) edited: aliasLabels + PROTO_ALIAS so the data value '__proto__' is an ordinary label in V-02/V-03 (files[].patch_i3); bytes 9693 -> 10762, counts.bytes +1069 (9651545). Test test/engine-rev-a/chart-vega/i3-proto-labels.test.ts",
+  "row163b": "2026-11-08: C155 wiring of row 163 (Vega family on the agent render path). NEW services/render/vega-figure.ts (status added); contract/schema/v2/common.schema.ts, contract/types/chart.ts, contract/types/v2/doc.ts, services/compose/blocks.ts copied -> patched (patch row163b-*); services/render/figures.ts and engine/chart/family-v/input.ts re-patched (files[].patch_row163b). Diffs in implementation/122_row163b_diffs/. `counts` RECOMPUTED from files[] (601 = 466 copied + 100 patched + 12 replaced + 23 added; bytes = sum of files[].bytes, which also takes in 6861 bytes of earlier drift the block had not counted: 9633845 + 9770 (this row) + 6861 = 9650476); every entry checked against disk: 0 sha/bytes mismatches, 0 missing"
  },
  "counts": {
-  "files": 588,
-  "copied": 474,
-  "patched": 92,
+  "files": 601,
+  "copied": 466,
+  "patched": 100,
   "replaced": 12,
-  "added": 10,
-  "bytes": 9496899
+  "added": 23,
+  "bytes": 9651545
  },
  "files": [
   {
@@ -715,9 +721,20 @@
   {
    "path": "src/lib/studio/contract/enums.ts",
    "status": "patched",
-   "bytes": 21437,
+   "bytes": 21566,
    "source_sha256": "06afe5476f373900c81ce876711322b952f2b4b8985ae8f3b86ad861620454e2",
-   "sha256": "9a9c9999a794ee7add2cda5b9ca39a4f7b9000948c91b31eec0c3ec273ec7381",
+   "sha256": "ec86a5130ef14d06d28c607e9e01fb1934134dbf6a06ce7b132a1314f31605eb",
+   "patch_row158": {
+    "id": "row158-error-code-figure-over-capacity",
+    "row": 158,
+    "decision": "U24 B; registered like row 69a's TEMPLATE_ARCHIVED (ported pin dc05 74 -> 75, test/ported/README.md A11)",
+    "summary": "STUDIO_ERROR_CODES += \"FIGURE_OVER_CAPACITY\" (additive, last entry)",
+    "diff_base": "patch.after_sha256 (row 69a)",
+    "before_sha256": "9a9c9999a794ee7add2cda5b9ca39a4f7b9000948c91b31eec0c3ec273ec7381",
+    "after_sha256": "ec86a5130ef14d06d28c607e9e01fb1934134dbf6a06ce7b132a1314f31605eb",
+    "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/112_row158_diffs/contract__enums.ts.diff",
+    "diff_sha256": "7eebf63faedc5a6f12e20dbb102cd0cc486fc8e67313ec996b7ec137e72de0f3"
+   },
    "patch": {
     "id": "row69a-error-code-template-archived",
     "row": "69a",
@@ -758,9 +775,20 @@
   {
    "path": "src/lib/studio/contract/errors.ts",
    "status": "patched",
-   "bytes": 5327,
+   "bytes": 5549,
    "source_sha256": "4ad184e5e01c0e55864baf55ccc30b0c2bf2213aff69829375a1d7405a3ef08e",
-   "sha256": "74a011293de36bdbaf74a3d24fc27f7bc4338ecc15c9a04b938d996c31e92f55",
+   "sha256": "bb1d23264fccfb300e142aa1cd5f453b0da161c68ee6e1d4d4d6d75136e9dc8f",
+   "patch_row158": {
+    "id": "row158-error-http-figure-over-capacity",
+    "row": 158,
+    "decision": "U24 B; same status as BY_CONSTRUCTION_FAILED (422), the code these refusals had before",
+    "summary": "STUDIO_ERROR_HTTP += FIGURE_OVER_CAPACITY: 422 (additive, last entry)",
+    "diff_base": "patch.after_sha256 (row 69a)",
+    "before_sha256": "74a011293de36bdbaf74a3d24fc27f7bc4338ecc15c9a04b938d996c31e92f55",
+    "after_sha256": "bb1d23264fccfb300e142aa1cd5f453b0da161c68ee6e1d4d4d6d75136e9dc8f",
+    "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/112_row158_diffs/contract__errors.ts.diff",
+    "diff_sha256": "7ef293065ba777c0463cc0d82aca9d2c2d839ea553b5973edc70c41930c087f6"
+   },
    "patch": {
     "id": "row69a-error-http-template-archived",
     "row": "69a",
@@ -854,10 +882,11 @@
   },
   {
    "path": "src/lib/studio/contract/schema/v2/common.schema.ts",
-   "status": "copied",
-   "bytes": 30972,
+   "status": "patched",
+   "bytes": 33098,
    "source_sha256": "49f4c3c9f35bcf2969bd1f5db852b995fa2e8119366addc25c20c7768432049e",
-   "sha256": "49f4c3c9f35bcf2969bd1f5db852b995fa2e8119366addc25c20c7768432049e"
+   "sha256": "d4ffaa0ae3b2f1680a5bdec76e680f122628823db188c6f44954ddbec820d50c",
+   "patch": {"id": "row163b-v2-chart-vega", "row": "163b", "decision": "C155 (Vega chart family on the agent render path)", "summary": "additive: ChartV2.code enum += V-01..V-08 (VEGA_CHART_CODES_V2), ChartV2.options (closed: weekStart/offset/max/form) allowed only on V codes and the DF codes vegaChartFor maps (VEGA_ALIAS_CHART_CODES_V2, allOf rule), ChartDataV2 shapes days + hierarchy. Rev A codes, shapes and rules unchanged", "before_sha256": "49f4c3c9f35bcf2969bd1f5db852b995fa2e8119366addc25c20c7768432049e", "after_sha256": "d4ffaa0ae3b2f1680a5bdec76e680f122628823db188c6f44954ddbec820d50c", "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/122_row163b_diffs/contract_schema_v2_common.schema.ts.diff", "diff_sha256": "6aec9051c5fdbcb902029186ccc79b07ecec5a00ee504152817cfb98475ad6bd"}
   },
   {
    "path": "src/lib/studio/contract/schema/v2/doc.schema.ts",
@@ -910,10 +939,11 @@
   },
   {
    "path": "src/lib/studio/contract/types/chart.ts",
-   "status": "copied",
-   "bytes": 6347,
+   "status": "patched",
+   "bytes": 7288,
    "source_sha256": "e50ccb9b44ed6aa1aca658d0683178a51e78d4d7f6c6c00848ac06458183f6a7",
-   "sha256": "e50ccb9b44ed6aa1aca658d0683178a51e78d4d7f6c6c00848ac06458183f6a7"
+   "sha256": "3ed8bd8ea91e3090d9bfed9d9ff5d89d647270784306b469a9db408cb60d36e0",
+   "patch": {"id": "row163b-chart-vega-types", "row": "163b", "decision": "C155", "summary": "additive: StudioChartV1.options?: ChartVegaOptions, NEW types VegaChartKind (V-01..V-08) and ChartVegaOptions; kind type and doc comment note that a block spec may carry a V code (rendered by the Vega family)", "before_sha256": "e50ccb9b44ed6aa1aca658d0683178a51e78d4d7f6c6c00848ac06458183f6a7", "after_sha256": "3ed8bd8ea91e3090d9bfed9d9ff5d89d647270784306b469a9db408cb60d36e0", "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/122_row163b_diffs/contract_types_chart.ts.diff", "diff_sha256": "72f4d28f59a0ddb0ad81998b7a8441c554c4ddf72d9e13a4e64ee7f1133ee101"}
   },
   {
    "path": "src/lib/studio/contract/types/common.ts",
@@ -1011,10 +1041,11 @@
   },
   {
    "path": "src/lib/studio/contract/types/v2/doc.ts",
-   "status": "copied",
-   "bytes": 11321,
+   "status": "patched",
+   "bytes": 11843,
    "source_sha256": "3848686b0c685205e693227b4904cc6813fe29ffc1cfd2d183e7283a5ed8b0dd",
-   "sha256": "3848686b0c685205e693227b4904cc6813fe29ffc1cfd2d183e7283a5ed8b0dd"
+   "sha256": "d59778455ee546ab278f96952066778a6a257d18e4b49cddb3b0d8df49d2deb6",
+   "patch": {"id": "row163b-v2-chart-vega-types", "row": "163b", "decision": "C155", "summary": "additive: ChartV2.code += VegaChartKind, ChartV2.options?: ChartVegaOptions, ChartDataV2 += days and hierarchy shapes (matches common.schema.ts patch row163b-v2-chart-vega)", "before_sha256": "3848686b0c685205e693227b4904cc6813fe29ffc1cfd2d183e7283a5ed8b0dd", "after_sha256": "d59778455ee546ab278f96952066778a6a257d18e4b49cddb3b0d8df49d2deb6", "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/122_row163b_diffs/contract_types_v2_doc.ts.diff", "diff_sha256": "7410732cfd5e754a893fdc308531b57dd07ef200ca61a93f08a5fb07b4ba16c5"}
   },
   {
    "path": "src/lib/studio/contract/types/v2/index.ts",
@@ -1142,10 +1173,21 @@
   },
   {
    "path": "src/lib/studio/engine/browser/measure.ts",
-   "status": "copied",
-   "bytes": 13718,
+   "status": "patched",
+   "bytes": 15043,
    "source_sha256": "705b768cb644cc023c78e786f4665cf6f7a1571556a99d3d91a839a0587606fb",
-   "sha256": "705b768cb644cc023c78e786f4665cf6f7a1571556a99d3d91a839a0587606fb"
+   "sha256": "0a1c722f1e148bdb2a5a93ac38eb469ce1e43800b28c3bfc14dca55321f337de",
+   "patch_row151c": {
+    "id": "row151c-measure-stable-refs",
+    "row": "151c",
+    "decision": "C161 L1 (verification/19_row135b_verify_write_security.md L1: DOM clobbering of the in-page measurement)",
+    "summary": "MEASURE_SCRIPT reads every document and element member through Document/Element/Node prototype references taken before any page member is read (named elements such as <img name=body> or form controls can no longer shadow document.body / querySelectorAll / createRange / closest ...); returns {truncated:true, untrusted:true, elements:[]} when the document body is not an HTMLBodyElement; page markers .page/[data-page], .reg, .body and data-address count only on HTML elements; class read through getAttribute; nothing else changed (same elements, kinds and fields)",
+    "diff_base": "source_sha256 above (copied verbatim before this row)",
+    "before_sha256": "705b768cb644cc023c78e786f4665cf6f7a1571556a99d3d91a839a0587606fb",
+    "after_sha256": "0a1c722f1e148bdb2a5a93ac38eb469ce1e43800b28c3bfc14dca55321f337de",
+    "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/123_row151c_diffs/vendor_browser_measure.ts.diff",
+    "diff_sha256": "a5147dea5428134fcf7a856f2c09ed6f1add7e2d770382fe8a3f10c99ca52028"
+   }
   },
   {
    "path": "src/lib/studio/engine/browser/png.ts",
@@ -1164,9 +1206,31 @@
   {
    "path": "src/lib/studio/engine/browser/runtime.ts",
    "status": "replaced",
-   "bytes": 25086,
+   "bytes": 28577,
    "source_sha256": "d05569cbe8d96addc63b84fac773b1f107b48dc0949cb949c54a8111986c310a",
-   "sha256": "02b69b88d67d914e8a7b932c7989b84c4cd844dd3d6380cb5972da97597ce368",
+   "sha256": "77610a3f17afbb5792cc98cbf9fd3d68bf3024900f400c61be077f141a6350a0",
+   "patch_row151c": {
+    "id": "row151c-page-images-approximate",
+    "row": "151c",
+    "decision": "controller message DEFECT-157-1 (row 157: flow-layout page images did not match the printed PDF)",
+    "summary": "HtmlPageImages gains optional approximate?: string | null; rasterizeHtmlPages copies the bridge reply's `approximate` string (cut to 200 chars) only when present; nothing else changed",
+    "diff_base": "patch_row151b.after_sha256",
+    "before_sha256": "03ba851a0ff1314fa578e191ad53c5d4561ba5ec67e183f263c0440071f33b31",
+    "after_sha256": "77610a3f17afbb5792cc98cbf9fd3d68bf3024900f400c61be077f141a6350a0",
+    "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/123_row151c_diffs/vendor_browser_runtime.ts.diff",
+    "diff_sha256": "3112f5e89052dd9431c50625bcb63105c9a0028a84badd824ddff08e7d6163f4"
+   },
+   "patch_row151b": {
+    "id": "row151b-html-page-images",
+    "row": "151b",
+    "decision": "C130 GAP-1, C140; output verification spec 01_specs_output_verification.md §11 (pages[].png)",
+    "summary": "BridgeOp += \"pagePng\"; NEW exports HtmlPageImage, HtmlPageImages, rasterizeHtmlPages({src, dstDir, pages?, dpi?, widthMm?, heightMm?}) -> bridge pagePng under the same semaphore + handshake; reply validated (page numbers within pageCount, every png path inside dstDir, sha256 hex) else StudioBrowserError RENDER_FAILED; header comment line; nothing else changed",
+    "diff_base": "patch.after_sha256 (row 108)",
+    "before_sha256": "02b69b88d67d914e8a7b932c7989b84c4cd844dd3d6380cb5972da97597ce368",
+    "after_sha256": "03ba851a0ff1314fa578e191ad53c5d4561ba5ec67e183f263c0440071f33b31",
+    "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/105b_row151b_diffs/runtime.ts.diff",
+    "diff_sha256": "39500b4de70abb8924950efb2ff3385551eb5bfcbf2f2505f5fdc571de77e13d"
+   },
    "patch": {
     "id": "row108-twin-browser-runtime",
     "row": 108,
@@ -1352,10 +1416,20 @@
   },
   {
    "path": "src/lib/studio/engine/chart/core/render.ts",
-   "status": "copied",
-   "bytes": 6135,
+   "status": "patched",
+   "bytes": 10076,
    "source_sha256": "0cbae90e4cfe4dc2db0effc18b9c1f72fb8a6784dbac56f9647e66038d0d6c9b",
-   "sha256": "0cbae90e4cfe4dc2db0effc18b9c1f72fb8a6784dbac56f9647e66038d0d6c9b"
+   "sha256": "27b69d71df6f1a597994e10e8bbc567eac2d0ac261c548b4d04fbc687c6a9b11",
+   "patch": {
+    "id": "row158-chart-over-capacity",
+    "row": 158,
+    "decision": "U24 B (refuse over-capacity figures with a concrete suggestion instead of squeezing)",
+    "summary": "renderPreset: DATUM-33 estimated-height refusal thrown as ChartOverCapacity (code FIGURE_OVER_CAPACITY, details {checkId DATUM-33, limit maxHeightMm, measured height, unit mm, suggestion with the category count + capacityAdvice}); after autofit, assertNotCrowded refuses FIGURE_OVER_CAPACITY (checkId CAPACITY-LABELS) when the chosen render still has textOverlap + textOutside > 0 (limit = categories that fit as columns with the longest label, else crowded labels vs 0). Clean renders unchanged (byte-identical); other residual GEOM_* stay REPORT",
+    "before_sha256": "0cbae90e4cfe4dc2db0effc18b9c1f72fb8a6784dbac56f9647e66038d0d6c9b",
+    "after_sha256": "27b69d71df6f1a597994e10e8bbc567eac2d0ac261c548b4d04fbc687c6a9b11",
+    "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/112_row158_diffs/engine__chart__core__render.ts.diff",
+    "diff_sha256": "0e5b6799c0563b68180650bcce4c2022caa9e4d69fe7268aa21934317b85de31"
+   }
   },
   {
    "path": "src/lib/studio/engine/chart/core/scale.ts",
@@ -1820,6 +1894,71 @@
    "sha256": "c9e5f6288146cb523769ee53fe93fce5cd57d8788bc2a48324382efbbe1e700c"
   },
   {
+   "path": "src/lib/studio/engine/chart/family-v/guard.ts",
+   "status": "added",
+   "bytes": 4261,
+   "source_sha256": null,
+   "sha256": "61c5276c8b931aa96cf4295a7802fb0bf624d278a0282f18d2c0f19a98d40744",
+   "added_by": "163",
+   "note": "NEW Swarm file of row 163 (U24 C): assertStudioVegaSpec (compiled spec: inline JSON only, no image/href/url/cursor/bind, C7 transform allow-list) and assertSafeSvg (C6 output gate). Copy: implementation/115_row163_diffs/engine__chart__family-v__guard.ts.new"
+  },
+  {
+   "path": "src/lib/studio/engine/chart/family-v/index.ts",
+   "status": "added",
+   "bytes": 10762,
+   "source_sha256": null,
+   "sha256": "a51095db17335792fbfc5525ec0581ed65cbceee5e658e2283db31dc6475f576",
+   "added_by": "163",
+   "patch_i3": {"row": "I-3", "decision": "C164 L8", "summary": "label '__proto__' as a data value: Vega group maps are plain objects keyed by label; labels in data/accent are aliased to U+2063+'__proto__' before the build and restored in the SVG text (aliasLabels, PROTO_ALIAS)", "before_sha256": "d413b2d27fcccc88706f3e7e67bb897109a1ea561c4fccfcdc6ad5eed69ae89a", "before_bytes": 9693},
+   "note": "NEW Swarm file of row 163: renderVegaChart (validate -> build -> vega-lite compile -> guard -> sandbox -> DATUM canvas + Rev A apparatus -> colour gate -> chart/geometry lint, FIGURE_OVER_CAPACITY on crowded labels), rasterizeVegaChart (render bridge, 300 dpi), tokenColours. Copy: implementation/115_row163_diffs/engine__chart__family-v__index.ts.new"
+  },
+  {
+   "path": "src/lib/studio/engine/chart/family-v/input.ts",
+   "status": "added",
+   "bytes": 21198,
+   "source_sha256": null,
+   "sha256": "ab9ece699d9393012bba12bbda2140a99abe3fcb898c97d3c72d56bd4dfdf0c3",
+   "added_by": "163",
+   "note": "NEW Swarm file of row 163: studio.chart-vega/v1 typed input, closed ajv schemas per type (V-01..V-08), size/depth/rows/string limits (C8), forbidden keys at any depth (C2, C4, C5, C9), semantic checks. Copy: implementation/115_row163_diffs/engine__chart__family-v__input.ts.new",
+   "patch_row163b": {"row": "163b", "decision": "C155", "summary": "additive export vegaChartInputSchema(kind): a copy of the closed schema the validator compiles (for the studio_registry kind=charts catalog); no behaviour change", "before_sha256": "c83734489523484fc0a7fe8bb372b64082b9b30f25cc255480b39a37017bdc74", "after_sha256": "ab9ece699d9393012bba12bbda2140a99abe3fcb898c97d3c72d56bd4dfdf0c3", "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/122_row163b_diffs/engine_chart_family-v_input.ts.diff", "diff_sha256": "ae55ec5886af52ad29eee6a2a8e654d87c3cf3d244fc74f613546e8b0c6b31e5"}
+  },
+  {
+   "path": "src/lib/studio/engine/chart/family-v/sandbox.ts",
+   "status": "added",
+   "bytes": 6962,
+   "source_sha256": null,
+   "sha256": "2565c3f169bb74d2eb3107e2995e9a28aed7eda34520dbdc0e51db427c0bff52",
+   "added_by": "163",
+   "note": "NEW Swarm file of row 163: the only Vega parse/View call (C1 parse {ast:true} + View {expr: expressionInterpreter}), denyAllLoader (C3, sanitize resolves {href:''}), collecting logger, time and output-size limits, Studio text measurement in vega textMetrics. Copy: implementation/115_row163_diffs/engine__chart__family-v__sandbox.ts.new"
+  },
+  {
+   "path": "src/lib/studio/engine/chart/family-v/specs.ts",
+   "status": "added",
+   "bytes": 35048,
+   "source_sha256": null,
+   "sha256": "7f57e0b720ea5261bd6db05e7af03678ddabcfc83104778883da9466ecce142c",
+   "added_by": "163",
+   "note": "NEW Swarm file of row 163: Studio-built Vega-Lite/Vega specs for the 8 types (agent strings only as data values), capacity refusals FIGURE_OVER_CAPACITY. Copy: implementation/115_row163_diffs/engine__chart__family-v__specs.ts.new"
+  },
+  {
+   "path": "src/lib/studio/engine/chart/family-v/svg.ts",
+   "status": "added",
+   "bytes": 4027,
+   "source_sha256": null,
+   "sha256": "df0d5493888f62f5dec32e55ab6064f96a388a3f432760af73fb067f9ffd9911",
+   "added_by": "163",
+   "note": "NEW Swarm file of row 163: vegaInnerMarkup (strip Vega ARIA/interaction attributes, rescale 1/10 mm Vega units to mm incl. path data and transforms). Copy: implementation/115_row163_diffs/engine__chart__family-v__svg.ts.new"
+  },
+  {
+   "path": "src/lib/studio/engine/chart/family-v/theme.ts",
+   "status": "added",
+   "bytes": 5699,
+   "source_sha256": null,
+   "sha256": "26191f8066a8183c0a142bef00824f4102b1d66ca034ad63bd0e8a003fc53c18",
+   "added_by": "163",
+   "note": "NEW Swarm file of row 163: DATUM tokens -> Vega-Lite/Vega config (Plex faces, pt sizes, >= 0.18 mm strokes, 5 colour roles, number locale). Copy: implementation/115_row163_diffs/engine__chart__family-v__theme.ts.new"
+  },
+  {
    "path": "src/lib/studio/engine/chart/family-w1/frame.ts",
    "status": "copied",
    "bytes": 10856,
@@ -1919,10 +2058,20 @@
   },
   {
    "path": "src/lib/studio/engine/diagram/build/capacity.ts",
-   "status": "copied",
-   "bytes": 6202,
+   "status": "patched",
+   "bytes": 11559,
    "source_sha256": "ce41b46ce7c7418c379af22f50302c18bb80decc6fea3663cf121e61eb539588",
-   "sha256": "ce41b46ce7c7418c379af22f50302c18bb80decc6fea3663cf121e61eb539588"
+   "sha256": "b1f8ba10220ec25a8f88ad6719081d364dd8edf6fad4befe0811bf811a5cd1a3",
+   "patch": {
+    "id": "row158-diagram-over-capacity",
+    "row": 158,
+    "decision": "U24 B (refuse over-capacity figures with a concrete suggestion instead of squeezing)",
+    "summary": "capacityRetry uses a capacity layout only when CLEAN (capacityAcceptable && lint score 0; capacityAcceptable itself unchanged); NEW isCapacityCheck / overCapacityOf: DATUM-33* and DATUM-37* defects re-thrown as DiagramOverCapacity (code FIGURE_OVER_CAPACITY, class DiagramDefect, checkId kept) with details {limit, measured, unit, quantity, suggestion}: graph = column span vs max columns at the width, swimlane = busiest lane vs nodes per wrapped lane row, else the mm figures of the engine message; withAction routes capacity defects there, other defects unchanged",
+    "before_sha256": "ce41b46ce7c7418c379af22f50302c18bb80decc6fea3663cf121e61eb539588",
+    "after_sha256": "b1f8ba10220ec25a8f88ad6719081d364dd8edf6fad4befe0811bf811a5cd1a3",
+    "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/112_row158_diffs/engine__diagram__build__capacity.ts.diff",
+    "diff_sha256": "e7bda0e70f824cb2c218c5b91691123c06cabe450db9197572e0d019f55c9613"
+   }
   },
   {
    "path": "src/lib/studio/engine/diagram/build/fitlabels.ts",
@@ -1969,9 +2118,20 @@
   {
    "path": "src/lib/studio/engine/diagram/build/route.ts",
    "status": "patched",
-   "bytes": 17916,
+   "bytes": 18029,
    "source_sha256": "2189c545c59473987ba23d3dc64eeeaf9c336c0624c0e9029a34a29773ffa769",
-   "sha256": "3baefdcc82fd9760786bebd3d41534ed9d7ef7e00ad8bbc6a20f152b28fa7e66",
+   "sha256": "1e5c034f041eafa18df9214a9fae0061bebfaf10fc0dcf3a80ebc467fc79bccd",
+   "patch_row162b": {
+    "id": "row162b-route-elk-seam",
+    "row": "162b",
+    "decision": "C153 (row 162 route seam); U24 C",
+    "summary": "routePlaced starts with `const elk = activeElkRoutes(s, sheet); if (elk) return elk;` (import from ../elk/routes); inert without an active ELK plan, so existing outputs stay byte-identical. Applied on top of row124",
+    "diff_base": "patch.after_sha256 (row 124)",
+    "before_sha256": "3baefdcc82fd9760786bebd3d41534ed9d7ef7e00ad8bbc6a20f152b28fa7e66",
+    "after_sha256": "1e5c034f041eafa18df9214a9fae0061bebfaf10fc0dcf3a80ebc467fc79bccd",
+    "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/114b_row162b_diffs/diagram__build__route.ts.diff",
+    "diff_sha256": "b1504398a599062af5f388b73fada8200e802a16303d89a967dede01fbd3b8ce"
+   },
    "patch": {
     "id": "row124-revA-diagram-build-route",
     "row": 124,
@@ -2038,9 +2198,20 @@
   {
    "path": "src/lib/studio/engine/diagram/core/estimate.ts",
    "status": "patched",
-   "bytes": 5435,
+   "bytes": 5926,
    "source_sha256": "d4b599ce20ffe1c0047b067c6c5ccce2796a94d9398c55777906b86b0084d6db",
-   "sha256": "e5b7643d52255d64bafc852a0286b4e45597eb30fea67fb6c98bfae6a4528951",
+   "sha256": "75bcb5ff733943de9410d54ebefefa9d17677ec8300cfb6fdcb546a8d847bf9e",
+   "patch_row158": {
+    "id": "row158-diagram-estimate-over-capacity",
+    "row": 158,
+    "decision": "U24 B",
+    "summary": "estimate(): DATUM-33 height refusal thrown as DiagramOverCapacity (code FIGURE_OVER_CAPACITY, details {limit text-block mm, measured height mm, suggestion with node/connector counts}); applied on top of row124-revA-diagram-core-estimate",
+    "diff_base": "patch.after_sha256 (row 124)",
+    "before_sha256": "e5b7643d52255d64bafc852a0286b4e45597eb30fea67fb6c98bfae6a4528951",
+    "after_sha256": "75bcb5ff733943de9410d54ebefefa9d17677ec8300cfb6fdcb546a8d847bf9e",
+    "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/112_row158_diffs/engine__diagram__core__estimate.ts.diff",
+    "diff_sha256": "78492d7a3d90f55eeba1e63aeb1574865127c13c0d3b7ff87ec15b130501e584"
+   },
    "patch": {
     "id": "row124-revA-diagram-core-estimate",
     "row": 124,
@@ -2157,6 +2328,42 @@
    "sha256": "3e6ce4f0f8d93ab66362ffc7945081885924bf40c3e9d37d41598edad055b254"
   },
   {
+   "path": "src/lib/studio/engine/diagram/elk/adapter.ts",
+   "status": "added",
+   "bytes": 11448,
+   "source_sha256": null,
+   "sha256": "35678d1b14d4ed95db3fda8ddf092c6c66ecaf21f6be5c0fe0854537cf1cd8bb",
+   "added_by": "162",
+   "note": "NEW Swarm file of row 162 (U24 C; no clone original): ELK graph (generated ids n<k>/e<k>, fixed options, Studio sizes), elkLayoutPlan (C8 bounds before layout, 10 s budget, L4 guard: `self` hidden only around the first `new ELK()`, globalThis.onmessage checked), ElkUnavailable. Imports elkjs/lib/elk.bundled.js (EPL-2.0 OR GPL-3.0-or-later, shipped unmodified as its own file, C126). Copy: implementation/114_row162_diffs/engine__diagram__elk__adapter.ts.new"
+  },
+  {
+   "path": "src/lib/studio/engine/diagram/elk/index.ts",
+   "status": "added",
+   "bytes": 7170,
+   "source_sha256": null,
+   "sha256": "18c9a304afb34032f32225b99b3c0a9a72672bf9415461192499328c9f92d65b",
+   "added_by": "162",
+   "note": "NEW Swarm file of row 162: selection rule R1-R4 and async buildDiagramSvgAuto (original first; ELK only on route defects or DATUM-32, kept only when better). Copy: implementation/114_row162_diffs/engine__diagram__elk__index.ts.new"
+  },
+  {
+   "path": "src/lib/studio/engine/diagram/elk/plan.ts",
+   "status": "added",
+   "bytes": 4438,
+   "source_sha256": null,
+   "sha256": "a2e87a1409288fee984e15f05f33be85368fa01be7bf41755676e03878069b75",
+   "added_by": "162",
+   "note": "NEW Swarm file of row 162: ElkPlan type, withElkPlan / elkPlanFor (active plan for one synchronous build), elkTierOrder, elkTierXs. No ELK import. Copy: implementation/114_row162_diffs/engine__diagram__elk__plan.ts.new"
+  },
+  {
+   "path": "src/lib/studio/engine/diagram/elk/routes.ts",
+   "status": "added",
+   "bytes": 8237,
+   "source_sha256": null,
+   "sha256": "656da41c4bdb638809d3ca531618d0852d414b9378a1ca097551c5f32f655fa7",
+   "added_by": "162",
+   "note": "NEW Swarm file of row 162: ELK orthogonal routes mapped onto the lattice-snapped sheet with validation (elkRoutesOnSheet), activeElkRoutes for the requested build/route.ts seam. No ELK import. Copy: implementation/114_row162_diffs/engine__diagram__elk__routes.ts.new"
+  },
+  {
    "path": "src/lib/studio/engine/diagram/fit/labels.ts",
    "status": "copied",
    "bytes": 12694,
@@ -2173,9 +2380,20 @@
   {
    "path": "src/lib/studio/engine/diagram/fit/lint.ts",
    "status": "patched",
-   "bytes": 16956,
+   "bytes": 18858,
    "source_sha256": "2b169e21faaa4064307ab8fdcec45c0b7a0d4f9d2982ebc56094d3a704ebc3d8",
-   "sha256": "c2e84e3cc0e6ea9c79ffc2ad11934f6af226c32ddc65bdd432f48c0567993b89",
+   "sha256": "6b9d83313a49012bf14e0a3490fbf0a04ff76e737aeee7a1d180a65da6027472",
+   "patch_row150c": {
+    "id": "row150c-lint-symbol-cell-text",
+    "row": "150c",
+    "decision": "C144 option A (implementation/118_row150b_symbol_lint.md)",
+    "summary": "scan(): text inside <g data-symbol> is read when every group from the symbol group down carries only translate(...) (symbol-sheet cells), with the accumulated offset applied to x/y and tspan x/y; scaled groups (row 124 node badges) keep their text skipped; shapes inside symbol groups stay skipped. NEW export translateOnly(transform). Header note on the one mapped transform.",
+    "diff_base": "patch.after_sha256 (row 124)",
+    "before_sha256": "c2e84e3cc0e6ea9c79ffc2ad11934f6af226c32ddc65bdd432f48c0567993b89",
+    "after_sha256": "6b9d83313a49012bf14e0a3490fbf0a04ff76e737aeee7a1d180a65da6027472",
+    "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/119_row150c_diffs/diagram_fit_lint.ts.diff",
+    "diff_sha256": "ef63b95196d2713b5134572371978ae4042361f6e379344b9086e59156e50f31"
+   },
    "patch": {
     "id": "row124-revA-diagram-fit-lint",
     "row": 124,
@@ -2231,10 +2449,20 @@
   },
   {
    "path": "src/lib/studio/engine/diagram/layout-a/layered.ts",
-   "status": "copied",
-   "bytes": 3906,
+   "status": "patched",
+   "bytes": 4790,
    "source_sha256": "e2aeaaaf87dff87779b6aaa3610860ed717fc93bb043a80e234e6c5747abb44d",
-   "sha256": "e2aeaaaf87dff87779b6aaa3610860ed717fc93bb043a80e234e6c5747abb44d"
+   "sha256": "6e755e65086a0f5db6387c4b81d8ece4a621e6690f53569a3bc7a9af07ecbe50",
+   "patch": {
+    "id": "row162-elk-layout-hook",
+    "row": 162,
+    "decision": "U24 C (ELK.js as the diagram LAYOUT engine; Studio keeps drawing SVG with the Rev A apparatus), C134",
+    "summary": "tierKey exported; NEW tierWidthMm (the original nominal tier width formula, now shared with the ELK adapter, same arithmetic); when engine/diagram/elk has an active plan for this spec and width (elkPlanFor), each tier is ordered by ELK (elkTierOrder) and node x comes from the ELK centres on the lattice (elkTierXs; a tier that cannot fit falls back to the original centring). Tier y, node size, label fit and snap unchanged. No active plan = original output byte for byte",
+    "before_sha256": "e2aeaaaf87dff87779b6aaa3610860ed717fc93bb043a80e234e6c5747abb44d",
+    "after_sha256": "6e755e65086a0f5db6387c4b81d8ece4a621e6690f53569a3bc7a9af07ecbe50",
+    "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/114_row162_diffs/engine__diagram__layout-a__layered.ts.diff",
+    "diff_sha256": "4066ee4a13b9c7aeab4136494652854885a682b9704061e2c4901b4508fe4fe6"
+   }
   },
   {
    "path": "src/lib/studio/engine/diagram/layout-b/geometry.ts",
@@ -2917,6 +3145,15 @@
    "sha256": "3292623e5841eb585b8a917fec8318efd8e8b9248f0c9ffcc38dd057c72c4c52"
   },
   {
+   "path": "src/lib/studio/engine/figure-capacity.ts",
+   "status": "added",
+   "bytes": 3852,
+   "source_sha256": null,
+   "sha256": "8e7bdf3466a29bc42396698a942386839bd36900abc404efc4842cce022ebf4f",
+   "added_by": "158",
+   "note": "NEW Swarm file of row 158 (U24 B; no clone original): FIGURE_OVER_CAPACITY, FigureOverCapacityDetails {checkId, figure, family, quantity, unit, limit, measured, suggestion, pointer?}, overCapacityMessage (engine text + '; batas: ...; saran: ...'), DiagramOverCapacity (extends DiagramDefect, code FIGURE_OVER_CAPACITY), ChartOverCapacity (StudioEngineError), isFigureOverCapacity. Used by engine/diagram/build/capacity.ts, engine/diagram/core/estimate.ts, engine/chart/core/render.ts. Copy: implementation/112_row158_diffs/engine__figure-capacity.ts.new"
+  },
+  {
    "path": "src/lib/studio/engine/front/alt-text.ts",
    "status": "copied",
    "bytes": 4729,
@@ -3331,10 +3568,21 @@
   },
   {
    "path": "src/lib/studio/engine/html/tables/svg.ts",
-   "status": "copied",
-   "bytes": 11300,
+   "status": "patched",
+   "bytes": 13185,
    "source_sha256": "638bb3ae13d74f9e012417829a894e870eeccf5cc7b4aa912a6bc6e83b8c17ac",
-   "sha256": "638bb3ae13d74f9e012417829a894e870eeccf5cc7b4aa912a6bc6e83b8c17ac"
+   "sha256": "a46299030fb7d068715727ae70c491bcaa074d552eb15be2ff261a5d75b70ae2",
+   "patch_row151c": {
+    "id": "row151c-svg-allow-list",
+    "row": "151c",
+    "decision": "C161 L1/L2 (verification/19_row135b_verify_write_security.md L1 remediation c, L2: sanitizer kept <img name>, <div class>, root aria-hidden)",
+    "summary": "NEW export SVG_ALLOWED_ELEMENTS (SVG 1.1 + 2 element names, lower case, no font/glyph/cursor/color-profile/tref/altGlyph); any element not on it is dropped with its subtree like SVG_DROPPED_ELEMENTS (HTML foreign-content breakout names img, div, p, span, table, font, form ... never reach the page); aria-hidden on the root is dropped (counted in removed.attributes); header comment line; nothing else changed",
+    "diff_base": "source_sha256 above (copied verbatim before this row)",
+    "before_sha256": "638bb3ae13d74f9e012417829a894e870eeccf5cc7b4aa912a6bc6e83b8c17ac",
+    "after_sha256": "a46299030fb7d068715727ae70c491bcaa074d552eb15be2ff261a5d75b70ae2",
+    "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/123_row151c_diffs/vendor_html_tables_svg.ts.diff",
+    "diff_sha256": "b195c2ae34effa49584e6591d9917daa1edd5a50d2382b097023447d8d080cb4"
+   }
   },
   {
    "path": "src/lib/studio/engine/html/tables/table.ts",
@@ -3544,9 +3792,20 @@
   {
    "path": "src/lib/studio/engine/symbols/index.ts",
    "status": "patched",
-   "bytes": 11371,
+   "bytes": 13038,
    "source_sha256": "53257606397db8cac4cbc1e3a06b44896d264775f0b563b8c6e9668aa0c09f58",
-   "sha256": "1f1fd34c9d06290458d530b85e7b606d22ffd87c1f1e6fbea6d473aa5080817c",
+   "sha256": "05dec7ec359e001eb56e7e99cfb2b02d7050d62bce6fd7f06c5958215bb247d8",
+   "patch_row150c": {
+    "id": "row150c-hs-sheet-caption-scale",
+    "row": "150c",
+    "decision": "C144 option A; manual Rev A ID Table 8.2 (LEMBAR 50 DARI 98): Caption 7.6 / 11 pt Cond",
+    "summary": "symbolSheetSvg HS sheet: the 2 note lines and the 2 cell labels (id Cond 600, 'geometri konvensional') are set at the caption scale read from the registry (type.scale.caption.size/leading, pt -> mm), leading 11 pt >= size 7.6 pt; HS set 5.5 mm notes and 6 + 5 mm labels on 3.6 mm leading, which printed overlapping. Note wrap width scaled by the size ratio so the line measure in mm stays HS's. Cell pitch, page count, title, footer and the fit sheet unchanged. Byte parity with HS datumsimbol.py sheet_svg deliberately dropped (C23 record implementation/119_row150c_c23_recorded_diff.json).",
+    "diff_base": "patch.after_sha256 (row 124)",
+    "before_sha256": "1f1fd34c9d06290458d530b85e7b606d22ffd87c1f1e6fbea6d473aa5080817c",
+    "after_sha256": "05dec7ec359e001eb56e7e99cfb2b02d7050d62bce6fd7f06c5958215bb247d8",
+    "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/119_row150c_diffs/symbols_index.ts.diff",
+    "diff_sha256": "79fd41b0402ffdf50db7752a2196da07cd0513097ed5553800834f0ac8cdebda"
+   },
    "patch": {
     "id": "row124-revA-symbols-index",
     "row": 124,
@@ -3827,10 +4086,11 @@
   },
   {
    "path": "src/lib/studio/registry/charts.ts",
-   "status": "copied",
-   "bytes": 56741,
+   "status": "patched",
+   "bytes": 60998,
    "source_sha256": "f3cc2685c726667415c27f35105df5518d7e128e33e3ecb707e5b3c48bc0fa96",
-   "sha256": "f3cc2685c726667415c27f35105df5518d7e128e33e3ecb707e5b3c48bc0fa96"
+   "sha256": "7248379c4c66a71e5f03fd2be5ed0c27ceb04b67541f2936eeba170244099fc2",
+   "patch": {"id": "row163-vega-chart-registry", "row": 163, "decision": "U24 C (Vega-Lite/Vega for chart types the Rev A families lack)", "summary": "additive at the end of the file: VegaChartCodeDef, VegaChartDef, VEGA_CHART_REGISTRY (V-01..V-08 with dataShape, engine, replaced DF code, capacity), VEGA_CHART_REGISTRY_COUNT = 8, vegaChartFor(undrawn). CHART_REGISTRY, CHART_REGISTRY_COUNT (76) and the DF-* entries unchanged", "before_sha256": "f3cc2685c726667415c27f35105df5518d7e128e33e3ecb707e5b3c48bc0fa96", "after_sha256": "7248379c4c66a71e5f03fd2be5ed0c27ceb04b67541f2936eeba170244099fc2", "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/115_row163_diffs/registry__charts.ts.diff", "diff_sha256": "e56b048f6e4b7d0c513ef67352d447b23deebd3c269bc2afc3d73db425b6c5b9"}
   },
   {
    "path": "src/lib/studio/registry/contracts.ts",
@@ -3965,10 +4225,11 @@
   },
   {
    "path": "src/lib/studio/services/compose/blocks.ts",
-   "status": "copied",
-   "bytes": 22502,
+   "status": "patched",
+   "bytes": 22837,
    "source_sha256": "111e9a84d36f7ce54bbde3c5fd386a8114e5066dd2474879c189c171e27c05e2",
-   "sha256": "111e9a84d36f7ce54bbde3c5fd386a8114e5066dd2474879c189c171e27c05e2"
+   "sha256": "85567a74c851e1c37bbbc0293a2c3ca3154a63fffed802e7f66ea291a0ffe6d6",
+   "patch": {"id": "row163b-compose-chart-vega", "row": "163b", "decision": "C155", "summary": "chart(): the block code is passed as the spec kind with a cast (V-01..V-08 reach the Vega branch of services/render/vega-figure.ts) and `options` is copied onto the spec. Rev A blocks compose byte-identically", "before_sha256": "111e9a84d36f7ce54bbde3c5fd386a8114e5066dd2474879c189c171e27c05e2", "after_sha256": "85567a74c851e1c37bbbc0293a2c3ca3154a63fffed802e7f66ea291a0ffe6d6", "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/122_row163b_diffs/services_compose_blocks.ts.diff", "diff_sha256": "3a2b9df945d3ab81ea300f1ddb0bc810e283a6b4fffbbff6b2a507e79aa14eb3"}
   },
   {
    "path": "src/lib/studio/services/compose/context.ts",
@@ -4515,11 +4776,32 @@
    "sha256": "81fad78604e787696e5d61ada5d19a7954b0fead5c747c7e241138dbdda17995"
   },
   {
+   "path": "src/lib/studio/services/render/vega-figure.ts",
+   "status": "added",
+   "bytes": 4807,
+   "source_sha256": null,
+   "sha256": "155140b50d43633eba29bc430097666fa83af4064d02e7abc92f6ca7d0c9bc9a",
+   "added_by": "163b",
+   "note": "NEW Swarm file of row 163b (C155): vegaCodeOf (V-01..V-08 or a DF code vegaChartFor maps), vegaInputFromChartSpec (composed block spec -> studio.chart-vega/v1 input field by field; limit/intent/panels/data hints refused SCHEMA_INVALID), renderVegaFigure (renderVegaChart). One seam for figures.ts buildFigures and the figure preview route. Copy: implementation/122_row163b_diffs/services_render_vega-figure.ts.new"
+  },
+  {
    "path": "src/lib/studio/services/render/figures.ts",
    "status": "patched",
-   "bytes": 11436,
+   "bytes": 12164,
    "source_sha256": "58003ca9140dc752efaf2a6ef824763f8129763c966f4639008a22928218fc7c",
-   "sha256": "4139e2b321cf861ba1bca6ce2945fcd410a2435d0e24f36442ad603e74e51755",
+   "sha256": "2907a709f92b103d7c0224817b33cf3b0e52a24c0705e06cabb48cb47d001b79",
+   "patch_row163b": {"id": "row163b-render-figures-vega", "row": "163b", "decision": "C155 (Vega chart family on the agent render path)", "summary": "chart branch of buildFigures: a spec whose kind vegaCodeOf maps (V-01..V-08, DF-01/02/03/07/09/13) goes through assertFigureCapacity then `await renderVegaFigure(...)` (vega-figure.ts); other charts unchanged. Applied on top of row162b", "diff_base": "patch_row162b.after_sha256", "before_sha256": "54159a43f080a4ee3210863f3cba23e54439e85e8d9b98c7cc027ba050db99db", "after_sha256": "2907a709f92b103d7c0224817b33cf3b0e52a24c0705e06cabb48cb47d001b79", "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/122_row163b_diffs/services_render_figures.ts.diff", "diff_sha256": "c5d26babac5fcd427e501a5e9c59c206c6e72ec52ed50d5dfe63916e8b6ee490"},
+   "patch_row162b": {
+    "id": "row162b-render-figures-elk-auto",
+    "row": "162b",
+    "decision": "C153 (wire row 162 ELK layout into renders); U24 C",
+    "summary": "the diagram build call is `await buildDiagramSvgAuto(spec, ...)` imported from engine/diagram/elk (same options and result type; buildDiagramSvg import dropped, type DiagramBuildOptions kept). Applied on top of row124b",
+    "diff_base": "patch_row124b.after_sha256",
+    "before_sha256": "4139e2b321cf861ba1bca6ce2945fcd410a2435d0e24f36442ad603e74e51755",
+    "after_sha256": "54159a43f080a4ee3210863f3cba23e54439e85e8d9b98c7cc027ba050db99db",
+    "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/114b_row162b_diffs/services_render_figures.ts.diff",
+    "diff_sha256": "ecc522140e42bacf9423da15bc6495b4df80bf6e435236efa68cc1fe5b55e60f"
+   },
    "patch_row124b": {
     "id": "row124b-render-figures-key-language",
     "row": "124b",
@@ -5451,6 +5733,14 @@
   "70a",
   "43a",
   "122c",
-  "49a"
+  "49a",
+  "158",
+  "151b",
+  "162",
+  "150c",
+  "163",
+  "162b",
+  "163b",
+  "151c"
  ]
 }
