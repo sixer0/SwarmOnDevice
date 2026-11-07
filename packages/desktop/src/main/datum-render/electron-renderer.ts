@@ -1,15 +1,17 @@
 // DATUM render bridge: the Electron page engine (row 24, runtime spec §3.2, §3.6; prereview M6).
 //
 // A fresh hidden BrowserWindow per job in the in-memory session partition "datum-render", driven
-// through webContents.debugger (CDP), the same calls Playwright issues for screenshot/pdf/evaluate:
+// through webContents.debugger (CDP), the same calls Playwright issues for screenshot/evaluate:
 //   png       Emulation.setDeviceMetricsOverride + Page.captureScreenshot
-//   pdf       Page.printToPDF (paper in inches, margins 0, printBackground, preferCSSPageSize)
+//   pdf       webContents.printToPDF (paper in inches, margins 0, printBackground, preferCSSPageSize, no header/footer).
+//             Not CDP Page.printToPDF: Electron 42's webContents.debugger answers "'Page.printToPDF' wasn't
+//             found" (row 55 F55-1); Electron's own API prints the same Chromium page (row 24a).
 //   checkPage Runtime.evaluate of an allow-listed fixed script
 // Content is set with Page.setDocumentContent on about:blank (setContent-equivalent): no goto, no
 // file:// document. Every request except data:, about:blank and the allowed font/input files is
 // cancelled, navigation and new windows are refused, permissions and downloads are denied.
 
-import { BrowserWindow, session, type Debugger, type Session } from "electron"
+import { BrowserWindow, session, type Debugger, type Session, type WebContents } from "electron"
 import { BridgeError } from "./protocol"
 import type { EngineInfo, PageEngine } from "./dispatch"
 import { isAllowedRendererUrl } from "./paths"
@@ -57,7 +59,7 @@ async function withTimeout<T>(p: Promise<T>, ms: number, onTimeout: () => void):
   }
 }
 
-type Job<T> = (dbg: Debugger) => Promise<T>
+type Job<T> = (dbg: Debugger, wc: WebContents) => Promise<T>
 
 async function inWindow<T>(kind: WindowKind, width: number, height: number, html: string, job: Job<T>): Promise<T> {
   const win = new BrowserWindow({
@@ -97,7 +99,7 @@ async function inWindow<T>(kind: WindowKind, width: number, height: number, html
       // Hypothesis (row smoke to confirm): evaluate is unavailable with javascript:false; the settle delay covers fonts.
     }
     await delay(SETTLE_MS)
-    return job(dbg)
+    return job(dbg, wc)
   }
   try {
     return await withTimeout(run(), JOB_TIMEOUT_MS, () => {
@@ -126,20 +128,19 @@ export function createElectronEngine(allowedFiles: ReadonlySet<string>, log: Bri
         return Buffer.from(shot.data, "base64")
       }),
     pdf: ({ html, widthMm, heightMm, preferCSSPageSize }) =>
-      inWindow("raster", Math.round((widthMm * 96) / MM_PER_INCH), Math.round((heightMm * 96) / MM_PER_INCH), html, async (dbg) => {
-        const out = (await dbg.sendCommand("Page.printToPDF", {
+      inWindow("raster", Math.round((widthMm * 96) / MM_PER_INCH), Math.round((heightMm * 96) / MM_PER_INCH), html, async (_dbg, wc) => {
+        // Electron 42 PrintToPDFOptions (electron.d.ts): pageSize {width,height} in inches; margins in inches and
+        // each one defaults to 0.4 when left out (marginType is not read), so all four are set to 0 here.
+        const out = await wc.printToPDF({
           printBackground: true,
           preferCSSPageSize,
-          paperWidth: widthMm / MM_PER_INCH,
-          paperHeight: heightMm / MM_PER_INCH,
-          marginTop: 0,
-          marginBottom: 0,
-          marginLeft: 0,
-          marginRight: 0,
+          pageSize: { width: widthMm / MM_PER_INCH, height: heightMm / MM_PER_INCH },
+          margins: { top: 0, bottom: 0, left: 0, right: 0 },
           displayHeaderFooter: false,
-          transferMode: "ReturnAsBase64",
-        })) as { data: string }
-        return Buffer.from(out.data, "base64")
+          landscape: false,
+          scale: 1,
+        })
+        return out
       }),
     evaluate: ({ html, viewportWidth, viewportHeight, expression }) =>
       inWindow("check", viewportWidth, viewportHeight, html, async (dbg) => {
