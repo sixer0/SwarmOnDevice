@@ -29,6 +29,7 @@ import {
   PREVIEW_HTML_SANDBOX,
   previewKindFromPath,
 } from "./file-preview-policy"
+import { registeredStudioOutputs } from "./studio-output-registry"
 
 /** Chromium's PDF viewer over a `blob:` URL; the URL is revoked when the bytes change or the tab unmounts (P7). */
 export function PdfPreviewFrame(props: { path: string; bytes: Uint8Array }) {
@@ -150,7 +151,8 @@ export function FilePreviewBody(props: FilePreviewBodyProps) {
  * The gate `file-tabs.tsx` wraps around its existing tab content. A file without a preview kind, a path that fails
  * the client guard, or a file that has not loaded yet renders `children` (the existing view) unchanged. An `.html`
  * file opens as its source (the existing code view) with a toggle to render it; only a Studio output `.html`
- * (C51 file name, `isStudioOutputPath`) opens rendered by default (row 112b, C101). Either way the toggle flips it.
+ * (C51 file name, or a DATUM title name registered as a deliverable - row 165E, C192; `isStudioOutputPath`) opens
+ * rendered by default (row 112b, C101). Either way the toggle flips it.
  */
 export function FilePreviewGate(props: { path: string | undefined; state: FileState | undefined; children: JSX.Element }) {
   const file = useFile()
@@ -164,7 +166,8 @@ export function FilePreviewGate(props: { path: string | undefined; state: FileSt
   const source = () => {
     const choice = toggled()
     if (choice && choice.path === props.path) return choice.source
-    return !isStudioOutputPath(props.path)
+    // Row 165E (C192): a DATUM title name renders only when it is a registered Studio output of this directory.
+    return !isStudioOutputPath(props.path, registeredStudioOutputs(sdk().directory))
   }
   const setSource = (next: boolean) => setToggled({ path: props.path, source: next })
 

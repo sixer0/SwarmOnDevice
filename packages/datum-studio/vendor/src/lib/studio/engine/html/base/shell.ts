@@ -51,6 +51,11 @@ export interface ShellUnit {
    * "bab1"): its pages set the sheet counter to 0 and carry no register block, so Bab 1 prints LEMBAR 1.
    */
   beforeSheetOne?: boolean;
+  /**
+   * Wave 165 row 165A (C188 F113-7): an interior unit before Bab 1 (the contents) keeps its register block but prints
+   * no sheet number (ID p.48: numbering starts at Bab 1; the original printed the register from p3 to the end).
+   */
+  sheetless?: boolean;
 }
 
 const ATTR_RE = /([A-Za-z_:][-A-Za-z0-9_:.]*)\s*=\s*"([^"]*)"/g;
@@ -145,7 +150,24 @@ const BODY_UNIT_KINDS = new Set(["chapter", "appendix"]);
 export function withSheetRestart(tpl: ResolvedTemplate, meta: DocMeta, units: readonly ShellUnit[]): ShellUnit[] {
   const first = units.findIndex((u) => BODY_UNIT_KINDS.has(u.kind));
   if (first <= 0 || !sheetNumberingFromChapter1(tpl.params, wrapperLangOf(meta))) return [...units];
-  return units.map((u, i) => (i < first ? { ...u, footer: "none", beforeSheetOne: true } : u));
+  // Wave 165 row 165A (F113-7): the register of an interior unit before Bab 1 (contents) stays, without its sheet cell.
+  return units.map((u, i) =>
+    i < first ? (!u.wrapper && u.footer === "registerBlock" ? { ...u, beforeSheetOne: true, sheetless: true } : { ...u, footer: "none", beforeSheetOne: true }) : u,
+  );
+}
+
+/** Wave 165 row 165A (F113-6): marker around the register "N" that the PDF print replaces with the numbered-sheet total. */
+export const SHEET_TOTAL_MARK = { open: "/*st-N*/", close: "/*/st-N*/" } as const;
+
+/**
+ * Wave 165 row 165A (C188 F113-6, ID p.48 numbering from Bab 1): Chromium's `counter(pages)` is the document total
+ * (LEMBAR 4 DARI 7 on case 01 with 3 unnumbered sheets). The PDF print (services/render/pdf.ts) prints once with this
+ * style switched on (`media="all"`): the units before Bab 1 are hidden, so its page count is the number of numbered
+ * sheets N; the final print replaces the marked `counter(pages)` with N. Inert (`media="not all"`) everywhere else.
+ */
+export function numberedPassStyle(units: readonly ShellUnit[]): string {
+  const keys = units.filter((u) => u.beforeSheetOne && u.key !== undefined).map((u) => `.st-unit[data-unit-key=${cssString(u.key as string)}]`);
+  return keys.length === 0 ? "" : `<style data-studio="pdf-numbered-pass" media="not all">${keys.join(",")}{display:none !important}</style>\n`;
 }
 
 const DATUM_RULE_SVG_RE = /<svg class="st-datum-rule"[^>]*\bviewBox="0 0 ([0-9.]+) [0-9.]+"[^>]*>[\s\S]*?<\/svg>/g;
@@ -209,13 +231,14 @@ const BOXES = ["top-left", "top-center", "top-right", "bottom-left", "bottom-cen
 type Box = (typeof BOXES)[number];
 
 /** Isi kotak register: sel ber-{n} di tengah, sel terakhir di kanan, sisanya digabung di kiri. */
-function registerBoxes(tpl: ResolvedTemplate, meta: DocMeta): Partial<Record<Box, string>> {
+function registerBoxes(tpl: ResolvedTemplate, meta: DocMeta, markTotal = false): Partial<Record<Box, string>> {
   const cells = registerCellParts(tpl, meta.language).map((parts) =>
     parts
       .map((part) => {
         if ("text" in part) return cssString(part.text);
         if (part.field === "n") return "counter(page)";
-        if (part.field === "N") return "counter(pages)";
+        // Wave 165 row 165A (F113-6): marked so the PDF print can put the numbered-sheet total in its place.
+        if (part.field === "N") return markTotal ? `${SHEET_TOTAL_MARK.open}counter(pages)${SHEET_TOTAL_MARK.close}` : "counter(pages)";
         return cssString(registerFieldValue(meta, part.field, tpl));
       })
       .join(" "),
@@ -243,6 +266,8 @@ function boxDecl(box: Box, content: string | undefined, styles: Record<"top" | "
 
 /** R-76 (CL-02 NOTA): baris klasifikasi di bawah nomor dokumen; absen/false = tanpa baris. */
 const P_CLASSIFICATION_LINE = "render.nota.classificationLine";
+/** Wave 165 row 165A for 165D (F113-12): the R-76 foot line is retired (see `classificationLine`). */
+const FOOT_CLASSIFICATION_LINE_RETIRED = true;
 /** Warna nilai klasifikasi (DT-28d, segel): token `color.wrapper.seal`, sama dengan DOCX C16 (cadangan INK900). */
 const P_CLASSIFICATION_COLOUR = "color.wrapper.seal";
 
@@ -264,7 +289,9 @@ interface ClassificationLine {
  * diikuti: tanpa baris (DOCX mencatat `CLASSIFICATION_LINE_NO_NUMBER`; kerangka HTML tidak punya kanal log).
  */
 function classificationLine(tpl: ResolvedTemplate, meta: DocMeta): ClassificationLine | undefined {
-  if (tpl.params[P_CLASSIFICATION_LINE] !== true) return undefined;
+  // Wave 165 row 165A for row 165D (C188 F113-12, file request 165D -> 165A): no Klasifikasi line in the foot any
+  // more (it belongs under the number in the cover control block, F56-1); = DOCX registerBody. R-76 stays accepted.
+  if (FOOT_CLASSIFICATION_LINE_RETIRED || tpl.params[P_CLASSIFICATION_LINE] !== true) return undefined;
   const parts = registerCellParts(tpl, meta.language);
   const cell = parts.findIndex((c) => c.some((x) => "field" in x && x.field === "nomor"));
   if (cell < 0) return undefined;
@@ -318,7 +345,7 @@ export function pageFurnitureCss(tpl: ResolvedTemplate, meta: DocMeta, units: re
   };
   const docRh = runningHeadText(tpl, meta);
   const line = classificationLine(tpl, meta);
-  const reg = registerBoxes(tpl, meta);
+  const reg = registerBoxes(tpl, meta, units.some((u) => u.beforeSheetOne));
   // CL-02 NOTA (cetak): baris kedua di kotak margin yang memuat nomor.
   if (line && reg[line.box] !== undefined) reg[line.box] = `${reg[line.box]} "\\A" ${cssString(line.label + line.value)}`;
   const headBoxes = (t: RunningHeadText): Partial<Record<Box, string>> => ({
@@ -342,7 +369,8 @@ export function pageFurnitureCss(tpl: ResolvedTemplate, meta: DocMeta, units: re
   for (const u of units) {
     const name = `st-u-${u.index}`;
     const head = u.header === "runningHead" ? headBoxes({ ...docRh, center: u.center }) : {};
-    const foot = u.footer === "registerBlock" ? reg : {};
+    // Wave 165 row 165A (F113-7): a sheetless unit (contents before Bab 1) prints the register without the sheet cell.
+    const foot = u.footer === "registerBlock" ? (u.sheetless ? { ...reg, "bottom-center": undefined } : reg) : {};
     // Row 123 (CP-11): `counter-set:page 0` on every page of the units before Bab 1, so the first Bab 1 page counts 1
     // (Chromium 1234 probe p6: a counter-set on a named page holds on each of its pages and the count continues after).
     out.push(pageRule(name, head, foot, u.wrapper ? wrapperBg : interiorBg, u.beforeSheetOne ? "counter-set:page 0;" : ""));
@@ -461,6 +489,7 @@ export function buildHtmlShell(i: HtmlShellInput): string {
     `<style data-studio="fonts">\n${i.fontsCss}\n</style>\n` +
     `<style data-studio="tokens">\n${buildTokenCss(tpl)}</style>\n` +
     `<style data-studio="pages">\n${pageFurnitureCss(tpl, meta, units, sheets)}${k2 ? `\n${RAIL_K2_CSS}` : ""}${reserve ? `\n${RAIL_RESERVE_CSS}` : ""}\n</style>\n` +
+    numberedPassStyle(units) +
     `</head>\n<body class="${flags.join(" ")}" data-rail-mode="${rail}">${label}\n${body}\n</body></html>\n`
   );
 }

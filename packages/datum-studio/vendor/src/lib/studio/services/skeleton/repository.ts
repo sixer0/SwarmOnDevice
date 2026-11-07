@@ -43,6 +43,7 @@ import type { DeriveContext, PinPolicy } from "../../engine/tokens";
 import type { EssentialKnobSpec } from "../../registry/essentials";
 import { builtinTemplate, presetFoldBase } from "../templates";
 import { templateRestriction } from "../templates/access";
+import { canonicalizeFaceNames } from "../templates/face-names";
 import { foldOverrides, TEMPLATE_BASE_CHAIN_MAX } from "../templates/profile";
 import { skeletonLog } from "./log";
 import { resolveSkeletonSlots, type SlotParamLayers } from "./resolve";
@@ -299,7 +300,9 @@ export async function resolveSlotsForVersion(
         context: { templateVersionId, issues: issues.map((i) => ({ key: i.key, code: i.code, pointer: i.pointer ?? null })) },
       });
     }
-    return { ...read, template, slots };
+    // Swarm patch (row 165D, F113-11): the per-slot params/role formats the render uses carry the canonical family
+    // names too ("IBM Plex Sans Cond" -> "IBM Plex Sans Condensed"), as templates/index.ts resolvedFromVersion.
+    return { ...read, template: canonicalizeFaceNames(template), slots: canonicalizeFaceNames(slots) };
   }));
 }
 

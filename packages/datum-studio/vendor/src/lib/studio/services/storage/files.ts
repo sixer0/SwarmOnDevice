@@ -244,8 +244,8 @@ async function assertWritableTarget(abs: string): Promise<boolean> {
 const MAX_OUTPUT_NAME_CHARS = 255;
 
 /**
- * Swarm patch (row 43a): the names one write may take in its folder, in order: the caller's name, then
- * `<stem>_<sha8><ext>`, `<stem>_<sha16><ext>`, `<stem>_<sha64><ext>` (stem shortened to fit one segment).
+ * Swarm patch (row 43a; separator row 165D): the names one write may take in its folder, in order: the caller's name,
+ * then `<stem> <sha8><ext>`, `<stem> <sha16><ext>`, `<stem> <sha64><ext>` (stem shortened to fit one segment).
  * Deterministic per content, so the same bytes always land on (and reuse) the same name.
  */
 function candidateNames(fileName: string, sha256: string): string[] {
@@ -253,7 +253,8 @@ function candidateNames(fileName: string, sha256: string): string[] {
   const stem = fileName.slice(0, fileName.length - ext.length);
   const names = [fileName];
   for (const n of [8, 16, 64]) {
-    const suffix = `_${sha256.slice(0, n)}${ext}`;
+    // Swarm patch (row 165D, F56-2): a space, not `_`, so the delivered DATUM name keeps zero underscores (CP-17).
+    const suffix = ` ${sha256.slice(0, n)}${ext}`;
     names.push(`${stem.slice(0, Math.max(0, MAX_OUTPUT_NAME_CHARS - suffix.length)).replace(/[. ]+$/, "")}${suffix}`);
   }
   return names;

@@ -11,6 +11,7 @@ import {
   type MissionOption,
   type MissionVM,
 } from "./mission-model"
+import { registerStudioOutputs } from "../studio-output-registry"
 
 export type MissionControlResult<T> = { ok: true; data: T } | { ok: false; code: string; message: string }
 
@@ -183,7 +184,10 @@ export function createMissionPoller(input: {
     if (stale()) return
     failures = 0
     seen = { directory, key, selected }
-    emit({ options, selected, mission: buildMission(got.data, input.lang(), present), readFailed: false })
+    const mission = buildMission(got.data, input.lang(), present)
+    // Row 165E (C192): the deliverables found in the project are the registered Studio outputs the file tab renders.
+    registerStudioOutputs(directory, mission.deliverables.map((d) => d.projectPath))
+    emit({ options, selected, mission, readFailed: false })
   }
 
   const refresh = () => {

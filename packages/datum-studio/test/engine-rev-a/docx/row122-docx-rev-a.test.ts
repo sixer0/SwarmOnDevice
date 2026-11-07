@@ -51,16 +51,18 @@ describe("CP-14 issue stamp: U+2014 and the classification letter (ID p.1, p.37 
 });
 
 describe("CP-15 classification line under the number (DT-28c ID p.14)", () => {
-  test("number cell of the cover control block carries a line break, then 'Klasifikasi : ' and TERBATAS bold seal", async () => {
+  // Wave 165 row 165A (C189 F56-1): own Klasifikasi field under the number (consequence edit; was: w:br +
+  // "Klasifikasi : " + TERBATAS inside the number cell).
+  test("number cell holds the number only; a Klasifikasi field carries TERBATAS bold seal", async () => {
     const r = await renderDocx();
     const control = coverTables(r.doc).find((t) => textOf(t).includes("Nomor dokumen"))!;
     const cellP = paragraphs(control).find((p) => textOf(p).startsWith("012/GSP/KT/XI/2026"))!;
     expect(cellP).toBeDefined();
-    expect(cellP).toContain("<w:br/>");
-    const rs = runs(cellP);
-    const label = rs.find((x) => x.text === "Klasifikasi : ")!;
-    const level = rs.find((x) => x.text === "TERBATAS")!;
-    expect(label).toBeDefined();
+    expect(cellP).not.toContain("<w:br/>");
+    expect(textOf(cellP)).toBe("012/GSP/KT/XI/2026");
+    expect(paragraphs(control).some((p) => textOf(p) === "Klasifikasi")).toBe(true);
+    const valueP = paragraphs(control).find((p) => textOf(p) === "TERBATAS")!;
+    const level = runs(valueP).find((x) => x.text === "TERBATAS")!;
     expect(level.rPr).toContain("<w:b/>");
     expect(level.rPr).toContain('w:val="6E1420"');
   });
@@ -87,7 +89,8 @@ describe("CP-05 eight control fields from template data (ID p.47 butir 10)", () 
     });
     const control = coverTables(r.doc).find((t) => textOf(t).includes("Nomor dokumen"))!;
     const rows = control.match(/<w:tr[\s>]/g) ?? [];
-    expect(rows.length).toBe(4);
+    // Wave 165 row 165A (F56-1): eight fields plus the Klasifikasi field = 9 pairs = 5 rows (consequence edit; was 4).
+    expect(rows.length).toBe(5);
     const t = textOf(control);
     for (const label of ["Nomor dokumen", "Revisi", "Penyusun", "Kustodian", "Ditujukan kepada", "Halaman", "Datum geodetik", "Verifikasi"]) expect(t).toContain(label);
     expect(t).toContain("Divisi Engineering PT GSP");

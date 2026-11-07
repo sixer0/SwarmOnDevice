@@ -53,6 +53,9 @@ import {
   isFullWrapperTier,
   normalizedIssueStampText,
   verificationSummaryText,
+  // Wave 165 row 165A (C188 F113-3/F113-4): HALAMAN field marker and the method statement built from the layers.
+  CONTROL_FIELD_SHEETS_FIELD,
+  defaultMethodStatementText,
 } from "../../front/texts";
 import { DEFAULT_LOGO_WIDTH_MM } from "../../docx/wrapper/media";
 import { railK2ReserveOf } from "../../docx/blocks/rail";
@@ -136,12 +139,26 @@ function tableHtml(parent: NormBlock, ctx: RenderContext, t: TableBlock, index: 
 
 // ── Unsur halaman depan ──────────────────────────────────────────────────
 
+/**
+ * Wave 165 row 165A (C188 F113-3): column shares of a control block / signature block without `colsTw`, the DOCX
+ * grids of `docx/wrapper/render.ts` (`controlBlockXml` [1814, 3175, 1474, 2948], `signatureXml` [3118, 3175, 3118]
+ * or equal) as percentages of the 166 mm text span, so the PDF prints the same 4 x 2 grid with a gap between the
+ * pairs and three signature columns across the span. Before: no colgroup, auto widths (05 PDF: PENYUSUN value and
+ * DATUM GEODETIK label abutting at 0 pt; three signature columns inside the left 48 mm).
+ */
+const CONTROL_BLOCK_GRID_TW = [1814, 3175, 1474, 2948] as const;
+const SIGNATURE_GRID_TW_3 = [3118, 3175, 3118] as const;
+function shareColgroup(grid: readonly number[]): string {
+  const total = grid.reduce((a, b) => a + b, 0);
+  return `<colgroup>${grid.map((w) => `<col${attr("style", `width:${num(Math.round((w / total) * 1e6) / 1e4)}%`)}>`).join("")}</colgroup>`;
+}
+
 function controlBlockHtml(ctx: RenderContext, cb: ControlBlock, address: string | null): string {
   if (!Array.isArray(cb.rows)) return "";
   const cols = Array.isArray(cb.colsTw) ? cb.colsTw.map((w) => finite(w, 0, 31680)) : [];
   const colgroup = cols.length
     ? `<colgroup>${cols.map((w) => `<col${attr("style", w !== undefined ? `width:${num(twToMm(w))}mm` : undefined)}>`).join("")}</colgroup>`
-    : "";
+    : shareColgroup(CONTROL_BLOCK_GRID_TW);
   const rows = cb.rows
     .filter(Array.isArray)
     .map((row) => {
@@ -178,13 +195,19 @@ function signatureHtml(ctx: RenderContext, s: SignatureBlock, address: string | 
   const cols = Array.isArray(s.colsTw) ? s.colsTw.map((w) => finite(w, 0, 31680)) : [];
   const colgroup = cols.length
     ? `<colgroup>${cols.map((w) => `<col${attr("style", w !== undefined ? `width:${num(twToMm(w))}mm` : undefined)}>`).join("")}</colgroup>`
-    : "";
+    : roles.length > 0
+      ? shareColgroup(roles.length === 3 ? SIGNATURE_GRID_TW_3 : roles.map(() => 1))
+      : "";
   const head = roles.map((r) => el(ctx, "th", { classes: [C.signatureRole], role: "controlTable.header", attrs: [["scope", "col"]] }, inlineHtml(r.role))).join("");
   const space = roles.map(() => el(ctx, "td", { classes: [C.signatureSpace], role: "signature.space", format: s.signRowFormat }, "&nbsp;")).join("");
   const holder = roles.map((r) => el(ctx, "td", { classes: [C.signatureHolder], role: "controlTable.cell" }, inlineHtml(r.holder))).join("");
   const anyDate = roles.some((r) => hasInline(r.date));
   const date = anyDate ? `<tr>${roles.map((r) => el(ctx, "td", { classes: [C.signatureDate], role: "controlTable.cell" }, inlineHtml(r.date))).join("")}</tr>` : "";
-  return `<table class="${C.signature}"${attr("data-address", address ?? undefined)}${attr("data-block", blockId)}>${colgroup}<thead><tr>${head}</tr></thead><tbody><tr>${space}</tr><tr>${holder}</tr>${date}</tbody></table>`;
+  // Wave 165 row 165A (C188 F113-4): one signature line per column (DOCX `signatureXml` top border of the holder row,
+  // `color.wrapper.rule`), drawn per cell short of the 4 mm column gap so the three lines stay separate.
+  const rule = paramStr(ctx, "color.wrapper.rule", "C4BEB4").replace(/^#/, "");
+  const ruleStyle = /^[0-9A-Fa-f]{6}$/.test(rule) ? `--st-sign-rule:#${rule.toUpperCase()}` : undefined;
+  return `<table class="${C.signature}"${attr("style", ruleStyle)}${attr("data-address", address ?? undefined)}${attr("data-block", blockId)}>${colgroup}<thead><tr>${head}</tr></thead><tbody><tr>${space}</tr><tr>${holder}</tr>${date}</tbody></table>`;
 }
 
 /** Satu unsur `body[]` halaman depan / pembatas bagian. */
@@ -276,8 +299,11 @@ function autoControlBlock(ctx: RenderContext): ControlBlock | undefined {
   // p1 in implementation/52), so no sheet count is invented; row 122's DOCX prints it as a NUMPAGES field.
   const cs = ctx.snapshot?.doc?.front?.controlSheet?.data as ControlSheetData | undefined;
   const verification = verificationSummaryText(cs?.verificationChain);
-  const rows = controlBlockRowsText(meta, ctx.tpl?.params ?? {}, language(ctx), verification ? { verification } : {});
-  return rows ? { type: "controlBlock", rows: rows.map((r) => [runText(r[0]), runText(r[1]), runText(r[2]), runText(r[3])]) } : undefined;
+  // Wave 165 row 165A (C188 F113-3): HALAMAN is printed as in the DOCX. Its value is a NUMPAGES field span; the PDF
+  // print (services/render/pdf.ts) fills it with the printed page count, the DOCX NUMPAGES meaning.
+  const rows = controlBlockRowsText(meta, ctx.tpl?.params ?? {}, language(ctx), { sheets: CONTROL_FIELD_SHEETS_FIELD, ...(verification ? { verification } : {}) });
+  const cell = (t: string): Inline => (t === CONTROL_FIELD_SHEETS_FIELD ? { runs: [{ field: "NUMPAGES" }] } : runText(t));
+  return rows ? { type: "controlBlock", rows: rows.map((r) => [cell(r[0]), cell(r[1]), cell(r[2]), cell(r[3])]) } : undefined;
 }
 
 /** Kolofon sampul auto (FIX-2 O-3): entitas + NIB | cap terbit, sama dengan DOCX `autoColophon`. */
@@ -294,9 +320,11 @@ function withClassificationLine(ctx: RenderContext, cb: ControlBlock): ControlBl
   if (!meta || !Array.isArray(cb.rows)) return cb;
   const given = cb.rows.filter(Array.isArray);
   const rows = given.map((r) => [r[0], r[1], r[2], r[3]] as [Inline, Inline, Inline, Inline]);
-  // Each row keeps its own cell count (a two-cell row stays two cells); only the number's value cell changes.
-  const out = controlRowsWithClassificationLine(rows, meta, ctx.tpl?.params ?? {}, language(ctx)).map((r, i) => r.slice(0, given[i].length));
-  return { ...cb, rows: out as ControlBlock["rows"] };
+  // Wave 165 row 165A (F56-1): the helper re-flows the pairs with the Klasifikasi field under the number, so the rows
+  // are four cells each (= DOCX); an unchanged block keeps its own rows and cell counts.
+  const out = controlRowsWithClassificationLine(rows, meta, ctx.tpl?.params ?? {}, language(ctx));
+  const changed = out.length !== given.length || out.some((r, i) => r.some((c, j) => c !== rows[i]?.[j]));
+  return changed ? { ...cb, rows: out as ControlBlock["rows"] } : cb;
 }
 
 /** Row 123 (C40 FIX CP-14, ID p.1, p.37 Tabel 6.2, p.49): a colophon right text that is an issue stamp is re-derived from meta. */
@@ -370,11 +398,16 @@ function coverAuto(block: NormBlock, ctx: RenderContext, data: Partial<CoverData
           ? el(ctx, "div", { classes: [C.device, C.logo], role: "cover.logo" }, `<img${attr("src", uri)}${DECORATIVE_IMG_ATTRS}${attr("style", `width:${num(DEFAULT_LOGO_WIDTH_MM)}mm;height:auto`)}>`)
           : "";
       }
-      case "baris alamat di atas garis rambut":
+      case "baris alamat di atas garis rambut": {
+        // Wave 165 row 165A (C188 F113-3, ID p.49 Tabel 8.1): the template address line `cover.addressLine` when the
+        // cover data has none, as the DOCX `autoCoverItems` does (05 PDF printed no address, the 05 DOCX did).
+        const tplAddr = paramStr(ctx, "cover.addressLine", "").trim();
+        const addr: Inline | undefined = hasInline(data.addressLine) ? data.addressLine : tplAddr !== "" ? runText(tplAddr) : undefined;
         return (
-          (hasInline(data.addressLine) ? el(ctx, "p", { classes: [C.paragraph, C.coverAddress], role: "cover.addressLine" }, inlineHtml(data.addressLine)) : "") +
+          (addr ? el(ctx, "p", { classes: [C.paragraph, C.coverAddress], role: "cover.addressLine" }, inlineHtml(addr)) : "") +
           el(ctx, "div", { classes: [C.device], role: "cover.hairline" }, `<hr class="${C.hairline}">`)
         );
+      }
       case "ruang putih":
         return el(ctx, "p", { classes: [C.spacer], role: "spacer.generic", attrs: [["aria-hidden", "true"]] }, "&nbsp;");
       case "Datum Rule 166 mm":
@@ -501,7 +534,9 @@ function withControlSheetTemplateData(ctx: RenderContext, data: Partial<ControlS
   const t = controlSheetTemplateData(params);
   const out: Partial<ControlSheetData> = { ...data };
   if (isObj(out.verificationChain)) out.verificationChain = completedVerificationChainTable(out.verificationChain, t.layers);
-  if (!hasText(out.methodStatement) && t.method) out.methodStatement = runText(t.method);
+  // Wave 165 row 165A (C188 F113-4, ID p.48): no document/template method statement -> the one built from the layers (= DOCX).
+  const method = t.method ?? defaultMethodStatementText(t.layers, language(ctx));
+  if (!hasText(out.methodStatement) && method) out.methodStatement = runText(method);
   if (!isObj(out.distribution) && t.distribution.length > 0) out.distribution = controlSheetTextTable(controlSheetDistributionHeads(params, language(ctx)), t.distribution);
   return out;
 }

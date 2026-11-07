@@ -176,6 +176,17 @@ export const STUDIO_FINAL_FILENAME_HEADER = "X-Studio-Final-Filename";
 /** C51 — `<docNumberSafe>_rev<n>_<YYYYMMDDTHHMMSSZ>_<sha8>.<ext>` (FN-01). */
 export const FINAL_FILENAME_PATTERN =
   "^([A-Za-z0-9](?:[A-Za-z0-9.-]{0,78}[A-Za-z0-9])?)_rev(0|[1-9][0-9]{0,5})_([0-9]{8}T[0-9]{6}Z)_([0-9a-f]{8})\\.(docx|pdf|html|svg|png)$";
+/**
+ * Swarm patch (row 165D, F56-2, CP-17; manual Tabel 2.3 p.11-12): the DATUM name an output is DELIVERED under
+ * (studio_file_verify, deliverables, the app's file tab), as built by storage/paths.ts `datumFileName` /
+ * `datumDateFileName` / `datumPlainName` (figures) and kept in `output_file.file_name`:
+ * `<Judul> <nomor-berkas> Rev<X>.<ext>`, `<Judul> <YYYY-MM-DD>.<ext>`, `Gambar <C.n> <Judul>.<ext>`, each with the
+ * optional store collision suffix ` <sha8|sha16|sha64>` (storage/files.ts candidateNames). One path segment: no
+ * `/`, `\`, `<>:"|?*`, control or bidi characters, no `_`, no leading space or dot, at most 255 characters.
+ * The app copies this string verbatim (packages/app/src/pages/session/file-preview-policy.ts; a test pins it).
+ */
+export const DATUM_FILENAME_PATTERN =
+  "^(?=[^\\u0000-\\u001f]{1,255}$)(?![ .])(?:(?:[^\\u0000-\\u001f\\u007f<>:\"/\\\\|?*_\\u200e\\u200f\\u202a-\\u202e\\u2066-\\u2069]+ )?(?:[0-9A-Za-z][0-9A-Za-z.-]* Rev[0-9A-Za-z]{1,8}|[0-9]{4}-[0-9]{2}-[0-9]{2})|(?:Gambar|Figure) [0-9A-Za-z]+(?:\\.[0-9A-Za-z]+)* [^\\u0000-\\u001f\\u007f<>:\"/\\\\|?*_\\u200e\\u200f\\u202a-\\u202e\\u2066-\\u2069]+)(?: (?:[0-9a-f]{8}|[0-9a-f]{16}|[0-9a-f]{64}))?\\.(docx|pdf|html|svg|png)$";
 /** C52 — panjang maks `docNumberSafe` (FN-02). */
 export const FINAL_DOC_NUMBER_MAX = 80;
 /** C53 — awalan nama final berkas artefak (FN-03). */

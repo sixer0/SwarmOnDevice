@@ -124,7 +124,9 @@ function autoControlDoc(base: StudioDocV1): StudioDocV1 {
 const ID_LABELS = ["Nomor dokumen", "Revisi", "Penyusun", "Kustodian", "Ditujukan kepada", "Halaman", "Datum geodetik", "Verifikasi"];
 
 describe("datum-gsp builtin rendered (DOCX, row 122 kit): 8 fields and the classification line", () => {
-  test("cover control block: 4 x 2, the 8 labels, WGS 84, V2 · lulus, NUMPAGES, Klasifikasi line under the number", async () => {
+  // Wave 165 row 165A (C189 F56-1, consequence edit): Klasifikasi is its own field under the number (9 pairs, 5 rows);
+  // was a "Klasifikasi : " line inside the number cell (4 rows).
+  test("cover control block: the 8 labels plus a Klasifikasi field under the number, WGS 84, V2 · lulus, NUMPAGES", async () => {
     const tpl = builtinResolved("datum-gsp");
     const { ctx } = makeCtx(snapshotOf(autoControlDoc(loadFixture())), tpl);
     const { bytes } = await docxAssemble.assembleDocx(ctx);
@@ -133,21 +135,24 @@ describe("datum-gsp builtin rendered (DOCX, row 122 kit): 8 fields and the class
     const end = blocks.findIndex((b) => b.includes("<w:sectPr"));
     const control = blocks.slice(0, end + 1).find((b) => b.startsWith("<w:tbl") && textOf(b).includes("Nomor dokumen"))!;
     expect(control).toBeDefined();
-    expect((control.match(/<w:tr[\s>]/g) ?? []).length).toBe(4);
+    expect((control.match(/<w:tr[\s>]/g) ?? []).length).toBe(5);
     const t = textOf(control);
     const at = ID_LABELS.map((l) => t.indexOf(l));
     for (const i of at) expect(i).toBeGreaterThanOrEqual(0);
-    expect(t).not.toMatch(/Klasifikasi(?! : )/); // no KLASIFIKASI field label; only the line "Klasifikasi : "
+    expect(t).not.toContain("Klasifikasi : ");
+    expect(t.split("Klasifikasi").length - 1).toBe(1); // one Klasifikasi field label
     expect(t).toContain("Divisi Engineering PT GSP");
     expect(t).toContain("WGS 84");
     expect(t).toContain("V2 · lulus");
     expect(control).toMatch(/NUMPAGES/);
     const numberCell = paragraphs(control).find((p) => textOf(p).startsWith("012/GSP/KT/XI/2026"))!;
-    expect(numberCell).toContain("<w:br/>");
-    const level = runs(numberCell).find((r) => r.text === "TERBATAS")!;
-    expect(runs(numberCell).some((r) => r.text === "Klasifikasi : ")).toBe(true);
+    expect(numberCell).not.toContain("<w:br/>");
+    const levelP = paragraphs(control).find((p) => textOf(p) === "TERBATAS")!;
+    const level = runs(levelP).find((r) => r.text === "TERBATAS")!;
     expect(level.rPr).toContain('w:val="6E1420"');
-    // control sheet: R-82 distribution printed, R-81 empty so no default method statement
+    // control sheet: R-82 distribution printed. R-81 is empty, so since wave 165 row 165A (C188 F113-4, ID p.48) the
+    // method statement is the default one built from the template's verification layers (not asserted here; pinned in
+    // test/engine-rev-a/row165a). Comment corrected by row 165E (C193 ruling 6).
     const sheet = doc.slice(doc.indexOf("Lembar Kendali"));
     expect(textOf(sheet)).toContain("Divisi Engineering PT GSP (ENG-01)");
     expect(textOf(sheet)).toContain("Word dan PDF, folder standar");
@@ -156,13 +161,17 @@ describe("datum-gsp builtin rendered (DOCX, row 122 kit): 8 fields and the class
 });
 
 describe("datum-gsp builtin rendered (HTML, row 123 kit): fields and the classification line", () => {
-  test("cover control block labels and Klasifikasi line; HALAMAN in HTML is C69's open two-pass item", async () => {
+  // Wave 165 row 165A (F56-1 / F113-3, consequence edit): Klasifikasi field (no "Klasifikasi : " line); HALAMAN printed
+  // as a page-count field that the PDF print fills (C69's two-pass item is closed by row 165A).
+  test("cover control block labels, Klasifikasi field and HALAMAN field", async () => {
     const tpl = builtinResolved("datum-gsp");
     const { ctx } = htmlKit.makeCtx(htmlKit.snapshotOf(autoControlDoc(htmlKit.loadFixture())), tpl);
     const html = await htmlKit.assemble.assembleHtml(ctx, { preview: false });
     const text = htmlKit.textOf(html);
-    for (const l of ID_LABELS.filter((x) => x !== "Halaman")) expect(text).toContain(l);
-    expect(text).toContain("Klasifikasi : TERBATAS");
+    for (const l of ID_LABELS) expect(text).toContain(l);
+    expect(text).not.toContain("Klasifikasi : TERBATAS");
+    expect(html).toMatch(/>Klasifikasi<\/th><td[^>]*><span[^>]*>TERBATAS<\/span>/);
+    expect(html).toMatch(/>Halaman<\/th><td[^>]*><span class="st-field[^"]*"[^>]*data-field="NUMPAGES">/);
     expect(text).toContain("WGS 84");
     expect(text).toContain("Divisi Engineering PT GSP (ENG-01)");
     console.log(`row110d html: Halaman label present = ${text.includes("Halaman")}`);

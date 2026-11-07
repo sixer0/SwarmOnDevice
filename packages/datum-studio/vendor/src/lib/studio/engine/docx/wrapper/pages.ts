@@ -50,6 +50,7 @@ import {
   controlBlockRowsText,
   controlRowsWithClassificationLine,
   controlSheetTemplateData,
+  defaultMethodStatementText,
   normalizedIssueStampText,
   verificationSummaryText,
   CONTROL_SHEET_COLUMN_LABELS,
@@ -180,7 +181,7 @@ export function autoControlBlock(b: WrapperBuilder): ControlBlock | undefined {
   return rows ? { type: "controlBlock", rows: rows.map((r) => [cell(r[0]), cell(r[1]), cell(r[2]), cell(r[3])]) } : undefined;
 }
 
-/** Row 122 (CP-15): baris "Klasifikasi : <K>" di bawah nomor dokumen blok kendali (helper bersama `front/texts.ts`). */
+/** Row 122 (CP-15), shape wave 165 row 165A (F56-1): medan "Klasifikasi" sendiri tepat di bawah nomor dokumen (helper bersama `front/texts.ts`). */
 function withClassificationLine(b: WrapperBuilder, cb: ControlBlock): ControlBlock {
   return { ...cb, rows: controlRowsWithClassificationLine(cb.rows, b.ctx.snapshot.doc.meta, b.params, b.lang) };
 }
@@ -401,7 +402,9 @@ function withControlSheetTemplateData(b: WrapperBuilder, data: ControlSheetData 
   const t = controlSheetTemplateData(b.params);
   const out: ControlSheetData = { ...(data ?? { title: textInline(b.ctx.snapshot.doc.meta.title) }) };
   if (out.verificationChain) out.verificationChain = completedVerificationChain(out.verificationChain, t.layers);
-  if (!hasText(out.methodStatement) && t.method) out.methodStatement = textInline(t.method);
+  // Wave 165 row 165A (C188 F113-4, ID p.48): no document/template method statement -> the one built from the template layers.
+  const method = t.method ?? defaultMethodStatementText(t.layers, b.lang);
+  if (!hasText(out.methodStatement) && method) out.methodStatement = textInline(method);
   if (!out.distribution && t.distribution.length > 0) {
     const manual = b.params["controlSheet.columns.form"] === "manual";
     const heads = manual ? (["SALINAN", "PEMEGANG", "MEDIA", "KEMBALI"] as const).map((k) => CONTROL_SHEET_COLUMN_LABELS[k][b.lang]) : [...controlSheetColumnHeads("distribution", b.lang)];

@@ -55,6 +55,10 @@ const SYMBOL_RANGES: readonly (readonly [number, number])[] = [
   [0x0370, 0x03ff],
   [0x2190, 0x21ff],
   [0x2200, 0x22ff],
+  // Row 165B (C188 F113-2, CP-19): Box Drawing. The derivation rule line `─` (U+2500) sits in a Plex Mono run and
+  // Plex Mono has no glyph for it; without this range Chromium took it from a system face (Menlo-Regular embedded in
+  // the bundled PDFs). The embedded DejaVu Sans covers the block.
+  [0x2500, 0x257f],
   [0x25a0, 0x25ff],
 ];
 

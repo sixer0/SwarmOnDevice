@@ -8,6 +8,7 @@ import { useStudioEnv } from '../_env'; useStudioEnv(); // row42 W5: host env (S
 import { beforeAll, describe, expect, it } from '../_vitest';
 import type { ParamMap, ResolvedTemplate, StudioDocV1 } from '@/lib/studio/contract';
 import { assembleDocxDetailed } from '@/lib/studio/engine/docx/assemble';
+import { sheetZeroBookmarkXml, withNumberedSheetTotal } from '@/lib/studio/engine/docx/package/header-footer';
 import { canonicalTemplate, loadFixtureDoc, makeCtx, partText, sha256, snapshotOf, unzip, type FixtureName } from './_kit';
 
 type Lang = 'ID' | 'EN';
@@ -158,50 +159,22 @@ describe('C16 CL-02 NOTA: baris klasifikasi di bawah nomor dokumen', () => {
     for (const f of footers) expect(footerParagraphsOutsideTable(f)).not.toContain(line);
   });
 
-  it.each([
-    ['ID', 'Klasifikasi : ', 'BIASA'],
-    ['EN', 'Classification: ', 'BIASA'],
-  ] as const)('%s opt-in: "%s%s" tepat di bawah tabel register di setiap kaki interior', async (lang, label, value) => {
+  // Wave 165 row 165A for row 165D (C188 F113-12, consequence edit): the R-76 foot line is retired; the classification
+  // belongs under the number in the cover control block (F56-1). R-76 true now gives the default footers byte for byte
+  // (was: a "Klasifikasi : BIASA" paragraph under the register table of every interior foot).
+  it.each(['ID', 'EN'] as const)('%s opt-in R-76: kaki = bawaan, tanpa baris klasifikasi', async (lang) => {
     const def = await render('doc_nota_memo', lang, base);
     const o = await render('doc_nota_memo', lang, tplWith({ 'render.nota.classificationLine': true }));
     const footers = registerFooters(o);
-    expect(footers.length).toBe(registerFooters(def).length);
-    footers.forEach((f, i) => {
-      // Tabel register (sel nomor, revisi, lembar, klasifikasi) byte-identik dengan bawaan.
-      expect(tableOf(f)).toBe(tableOf(registerFooters(def)[i]));
-      const after = f.slice(f.indexOf('</w:tbl>') + '</w:tbl>'.length);
-      const first = /^<w:p>(.*?)<\/w:p>/.exec(after)?.[1] ?? '';
-      const runs = [...first.matchAll(/<w:r>(.*?)<\/w:r>/g)].map((m) => m[1]);
-      expect(runs).toHaveLength(2);
-      expect(runs[0]).toContain(`<w:t xml:space="preserve">${label}</w:t>`);
-      expect(runs[0]).toContain('<w:color w:val="6B7783"/>');
-      expect(runs[0]).not.toContain('<w:b/>');
-      // Nilai: kapital, tebal, warna segel color.wrapper.seal (DT-28d, 6E1420).
-      expect(runs[1]).toContain(`>${value}</w:t>`);
-      expect(runs[1]).toContain('<w:b/>');
-      expect(runs[1]).toContain('<w:color w:val="6E1420"/>');
-      expect(footerParagraphsOutsideTable(f)).toContain(`${label}${value}`);
-    });
+    expect(footers.length).toBeGreaterThan(0);
+    expect(footers).toEqual(registerFooters(def));
+    for (const f of footers) expect(footerParagraphsOutsideTable(f).join("\n")).not.toMatch(/Klasifikasi : |Classification: /);
   });
 
-  it('klasifikasi ditulis kapital (classificationMarkText)', async () => {
-    const doc = docOf('doc_nota_memo', 'ID');
-    doc.meta.classification = 'terbatas';
-    const { ctx } = makeCtx(snapshotOf(doc), tplWith({ 'render.nota.classificationLine': true }));
-    const o = unzip((await assembleDocxDetailed(ctx)).bytes);
-    const f = Object.keys(o).filter((p) => /^word\/footer\d+\.xml$/.test(p)).map((p) => partText(o, p)).filter((x) => x.includes('<w:tbl>'));
-    expect(f.length).toBeGreaterThan(0);
-    for (const x of f) expect(footerParagraphsOutsideTable(x)).toContain('Klasifikasi : TERBATAS');
-  });
-
-  it('hanya kaki bertabel register yang mendapat baris (kaki pembungkus kosong tetap)', async () => {
+  it('dokumen TERBIT + R-76: kaki sama dengan bawaan (tidak ada baris di kaki mana pun)', async () => {
     const def = await render('doc_terbit_report', 'ID', base);
     const o = await render('doc_terbit_report', 'ID', tplWith({ 'render.nota.classificationLine': true }));
-    for (const p of partsMatching(o, /^word\/footer\d+\.xml$/)) {
-      const x = partText(o.parts, p);
-      if (x.includes('<w:tbl>')) expect(footerParagraphsOutsideTable(x)).toContain('Klasifikasi : TERBATAS');
-      else expect(x).toBe(partText(def.parts, p));
-    }
+    for (const p of partsMatching(o, /^word\/footer\d+\.xml$/)) expect(partText(o.parts, p)).toBe(partText(def.parts, p));
   });
 
   it.each(['ID', 'EN'] as const)('%s absen = false = byte identik', async (lang) => {
@@ -256,18 +229,20 @@ describe('C26 RB-08c: nomor lembar mulai 1 di Bab 1', () => {
     expect(withStart[0].sectPr).toMatch(/<w:pgMar [^>]*\/><w:pgNumType w:start="1"\/><w:cols /);
   });
 
-  it('kaki halaman tidak berubah: sel 3 tetap PAGE lalu NUMPAGES (CR-4), seksi pembungkus tetap tanpa medan', async () => {
+  // Wave 165 row 165A (C188 F113-6, consequence edit): with sheets numbered from Bab 1 the register "DARI N" is
+  // `= NUMPAGES - PAGEREF _StSheet0` (numbered sheets, = PDF); before, the footers stayed byte-identical (N = total).
+  it('kaki halaman: sel 3 tetap PAGE lalu NUMPAGES (CR-4), N = NUMPAGES - lembar sebelum Bab 1; seksi pembungkus tetap tanpa medan', async () => {
     // row42 ADAPT A6 (C40, row 122 CP-11): compared on EN, where the default still has no restart (see above).
     const def = await render('doc_terbit_report', 'EN', base);
     const o = await render('doc_terbit_report', 'EN', tplWith({ 'device.registerBlock.sheetNumbering': 'bab1' }));
     const footers = partsMatching(o, /^word\/(?:footer|header)\d+\.xml$/);
     expect(footers).toEqual(partsMatching(def, /^word\/(?:footer|header)\d+\.xml$/));
-    for (const p of footers) expect(partText(o.parts, p)).toBe(partText(def.parts, p));
+    for (const p of footers) expect(partText(o.parts, p)).toBe(withNumberedSheetTotal(partText(def.parts, p)));
     const reg = registerFooters(o)[0];
-    const fields = [...reg.matchAll(/w:instr=" (\w+) "/g)].map((m) => m[1]);
-    expect(fields).toEqual(['PAGE', 'NUMPAGES']);
-    // Selain sisipan pgNumType, document.xml sama persis.
-    expect(partText(o.parts, 'word/document.xml').replace('<w:pgNumType w:start="1"/>', '')).toBe(partText(def.parts, 'word/document.xml'));
+    const fields = [...reg.matchAll(/w:instr=" (\w+) "|<w:instrText xml:space="preserve"> (\w+)[^<]*<\/w:instrText>/g)].map((m) => m[1] ?? m[2]);
+    expect(fields).toEqual(['PAGE', 'NUMPAGES', 'PAGEREF']);
+    // Selain sisipan pgNumType dan penanda _StSheet0, document.xml sama persis.
+    expect(partText(o.parts, 'word/document.xml').replace('<w:pgNumType w:start="1"/>', '').replace(sheetZeroBookmarkXml(), '')).toBe(partText(def.parts, 'word/document.xml'));
   });
 
   it('NOTA (tanpa pembungkus): Bab 1 = seksi pertama', async () => {

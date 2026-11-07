@@ -18,6 +18,7 @@
 import crypto from "node:crypto";
 import path from "node:path";
 import { PID_PATTERN, studioRoutePath } from "../../../src/lib/studio/contract/env";
+import { datumSafeName } from "../../../src/lib/studio/services/render/naming";
 import { ADOPT, adoptedWarning, BASE_REV, bodyAgentId, CHANGE, checkOwnership, completenessBrief, existingData, rememberRevision, requireBasis, withWarnings, type ExistingDoc, type Ownership } from "./doc-tools";
 import { assertFileWriteEnabled, McpToolError, prepareDownloadDir, resolveDownloadDir, writeFileGuarded } from "./safety";
 import {
@@ -67,7 +68,24 @@ async function callPreview(ctx: ToolContext, id: string, body: Rec): Promise<Rec
 function figureBrief(fig: Rec): Rec {
   const rest = { ...fig };
   delete rest.svg;
+  delete rest.png; // row 165C: the stand-alone PNG is written to downloadDir, never returned
   return rest;
+}
+
+/**
+ * Swarm patch (row 165C, F56-3): DATUM file name of a stand-alone figure (`Gambar 4.1 <Judul>.svg`, server
+ * `figure.standalone.fileName`). The server text is untrusted: it is cleaned again here with the same DATUM rule
+ * (naming.ts datumSafeName: no path separators, no control characters, max 120 characters, no trailing dot), so
+ * the name can never leave `downloadDir`; anything unusable falls back to the token-safe store name.
+ */
+export function standaloneFileName(f: Rec, ext: "svg" | "png", fallback: string): string {
+  const sa = isRecord(f.standalone) ? f.standalone : {};
+  const names = isRecord(sa.fileName) ? sa.fileName : {};
+  const raw = typeof names[ext] === "string" ? (names[ext] as string) : "";
+  const stem = raw.toLowerCase().endsWith(`.${ext}`) ? raw.slice(0, -(ext.length + 1)) : raw;
+  // DATUM rule first (drops separators and control characters), then no leading dot or space (no hidden file).
+  const safe = datumSafeName(stem, ext, "").replace(/^[.\s]+/, "");
+  return safe === ext || safe === `.${ext}` || safe.length <= ext.length + 1 ? fallback : safe;
 }
 
 /**
@@ -114,7 +132,7 @@ function svgFileName(id: string, b: Rec, f: Rec): string {
 const figurePreviewTool: ToolDef = {
   name: "studio_figure_preview",
   description:
-    "Pratinjau satu chart/diagram tanpa render dokumen: ukuran + isu tata letak bersaran. Sasaran pid/address atau block v2 (dry-run). SVG: downloadDir atau includeSvg.",
+    "Pratinjau satu chart/diagram tanpa render dokumen: ukuran + isu tata letak bersaran. Sasaran pid/address atau block v2 (dry-run). SVG: downloadDir atau includeSvg. standalone: gambar mandiri (caption, KUNCI, SUMBER; Gambar n.m Judul); png: +PNG.",
   inputSchema: obj(
     {
       documentId: S.documentId,
@@ -123,6 +141,9 @@ const figurePreviewTool: ToolDef = {
       block: { type: "object", description: "chart/diagram" },
       rev: S.rev,
       includeSvg: { type: "boolean", description: "SVG terpotong." },
+      // Row 165E (C192, tools/list < 30 KB): the meaning of standalone/png lives in the tool description and the guide.
+      standalone: { type: "boolean" },
+      png: { type: "boolean" },
       downloadDir: { type: "string", minLength: 1, maxLength: 1024, description: "Folder di akar." },
       overwrite: { type: "boolean" },
       agentId: S.agentId,
@@ -144,12 +165,19 @@ const figurePreviewTool: ToolDef = {
     if (dirRaw !== null) assertFileWriteEnabled(ctx.deps.config.fileWriteEnabled, "studio_figure_preview (downloadDir)");
     const dir = dirRaw !== null ? resolveDownloadDir(dirRaw, ctx.deps.config.fileRoots, ctx.deps.nfs) : null;
     const includeSvg = bool(a, "includeSvg");
+    // Row 165C (F56-3): stand-alone figure (the original's apparatus "figure" render); PNG only into downloadDir.
+    const standalone = bool(a, "standalone");
+    const png = bool(a, "png");
+    if (png && !standalone) throw new McpToolError("INVALID_ARGUMENT", "png hanya bersama standalone: true");
+    if (png && dir === null) throw new McpToolError("INVALID_ARGUMENT", "png hanya bersama downloadDir");
     const body: Rec = {
       ...(pid !== null ? { pid } : {}),
       ...(address !== null ? { address } : {}),
       ...(a.block !== undefined ? { block: a.block } : {}),
       ...(num(a, "rev") !== null ? { revisionNo: num(a, "rev") } : {}),
       ...(includeSvg || dir !== null ? { svg: true } : {}),
+      ...(standalone ? { standalone: true } : {}),
+      ...(png ? { png: true } : {}),
       ...bodyAgentId(a, ctx),
     };
     const b = await callPreview(ctx, id, body);
@@ -161,18 +189,36 @@ const figurePreviewTool: ToolDef = {
     const f = isRecord(b.figure) ? b.figure : {};
     const svg = typeof f.svg === "string" ? f.svg : "";
     const extra: Rec = {};
+    const fields = ["figure.issues", "figure.label"];
+    if (standalone) fields.push("figure.standalone");
     if (dir !== null) {
       if (svg === "") throw new McpToolError("SVG_UNAVAILABLE", "server tidak mengirim SVG; tidak ada yang disimpan");
-      const buf = Buffer.from(svg, "utf8");
-      const dest = path.join(dir, svgFileName(id, b, f));
+      const pngB64 = typeof f.png === "string" ? f.png : "";
+      if (png && pngB64 === "") throw new McpToolError("PNG_UNAVAILABLE", "server tidak mengirim PNG; tidak ada yang disimpan");
+      const save = (name: string, buf: Buffer) => {
+        const dest = path.join(dir, name);
+        const got = sha256Hex(buf);
+        const w = writeFileGuarded(dest, buf, { roots: ctx.deps.config.fileRoots, purpose: "write-file", overwrite: bool(a, "overwrite"), nfs: ctx.deps.nfs, now: ctx.now, log: ctx.fsLog.writes, isSame: (x) => sha256Hex(x) === got });
+        return { dest, bytes: buf.length, sha256: got, w };
+      };
       prepareDownloadDir(dir, ctx.deps.config.fileRoots, ctx.deps.nfs);
-      const got = sha256Hex(buf);
-      const w = writeFileGuarded(dest, buf, { roots: ctx.deps.config.fileRoots, purpose: "write-file", overwrite: bool(a, "overwrite"), nfs: ctx.deps.nfs, now: ctx.now, log: ctx.fsLog.writes, isSame: (x) => sha256Hex(x) === got });
-      Object.assign(extra, { savedTo: dest, bytes: buf.length, sha256: got, alreadyPresent: w.unchanged, backup: w.backup });
-      lines.push(`  SVG disimpan ke: ${dest} (${buf.length} B)${w.unchanged ? " (sudah ada dengan isi sama)" : ""}${w.backup !== null ? `; cadangan: ${w.backup}` : ""}`);
+      const tokName = svgFileName(id, b, f);
+      const s1 = save(standalone ? standaloneFileName(f, "svg", tokName) : tokName, Buffer.from(svg, "utf8"));
+      Object.assign(extra, { savedTo: s1.dest, bytes: s1.bytes, sha256: s1.sha256, alreadyPresent: s1.w.unchanged, backup: s1.w.backup });
+      const saved = [`SVG disimpan ke: ${s1.dest} (${s1.bytes} B)${s1.w.unchanged ? " (sudah ada dengan isi sama)" : ""}${s1.w.backup !== null ? `; cadangan: ${s1.w.backup}` : ""}`];
+      if (png) {
+        const s2 = save(standaloneFileName(f, "png", tokName.replace(/\.svg$/, ".png")), Buffer.from(pngB64, "base64"));
+        Object.assign(extra, { pngSavedTo: s2.dest, pngBytes: s2.bytes, pngSha256: s2.sha256, pngAlreadyPresent: s2.w.unchanged, pngBackup: s2.w.backup });
+        saved.push(`PNG disimpan ke: ${s2.dest} (${s2.bytes} B)${s2.w.unchanged ? " (sudah ada dengan isi sama)" : ""}${s2.w.backup !== null ? `; cadangan: ${s2.w.backup}` : ""}`);
+      }
+      if (standalone) {
+        // The stand-alone name carries the caption (server text): the lines go in the untrusted block.
+        fields.push("savedTo", "backup", ...(png ? ["pngSavedTo", "pngBackup"] : []));
+        lines.push(`  gambar mandiri disimpan (${png ? "SVG + PNG" : "SVG"}); lokasi di blok di bawah`);
+        lines.push(serverBlock(saved, { jenis: "berkas-gambar", documentId: id }) as string);
+      } else lines.push(`  ${saved[0]}`);
     }
     const fig = figureBrief(f);
-    const fields = ["figure.issues", "figure.label"];
     if (includeSvg) {
       const cut = neutralizeMarkers(svg).slice(0, SVG_CAP);
       fig.svg = cut;

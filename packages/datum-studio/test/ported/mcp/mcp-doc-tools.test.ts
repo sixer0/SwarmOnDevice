@@ -147,7 +147,8 @@ describe('toolset (STUDIO_MCP_TOOLSETS) dan instruksi', () => {
     // row42 ADAPT A10: the 30 KB budget was for the original default set (reports, documents, query); Swarm's default
     // also lists write (studio_write/edit), so the budget is checked on that original set explicitly.
     const all = await connect({ env: { STUDIO_MCP_TOOLSETS: 'reports,documents,query' } });
-    expect(Buffer.byteLength(JSON.stringify(await all.client.listTools()))).toBeLessThan(30_000);
+    // C194 (row 165E): +500 B for studio_figure_preview standalone/png (stand-alone figure, F56-3); measured 30134 B.
+    expect(Buffer.byteLength(JSON.stringify(await all.client.listTools()))).toBeLessThan(30_500);
     for (const ts of ['reports', 'documents', 'query']) {
       const c = await connect({ env: { STUDIO_MCP_TOOLSETS: ts } });
       expect(Buffer.byteLength(JSON.stringify(await c.client.listTools())), ts).toBeLessThan(ts === 'documents' ? 19_000 : 17_000);

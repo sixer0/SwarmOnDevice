@@ -56,6 +56,9 @@ export function beaconPill(text: string, max: number): { text: string; w: number
 const CSS = `
 .hq-root{position:relative;width:100%;color:var(--hq-ink);background:radial-gradient(120% 90% at 50% 52%,var(--hq-stage-2),var(--hq-stage) 70%);border-radius:12px;overflow:hidden}
 .hq-root svg{display:block;width:100%;height:auto}
+.hq-root[data-mission-hq="radial"]{height:100%;display:flex;flex-direction:column}
+.hq-root[data-mission-hq="radial"] svg{flex:1 1 0;min-height:0;height:100%}
+.hq-root[data-mission-hq="radial"] .hq-legend{flex:none}
 .hq-agent,.hq-beacon{cursor:pointer;outline:none}
 .hq-agent:focus-visible .hq-ring{stroke:var(--hq-glow);stroke-width:2}
 .hq-beacon:focus-visible rect{stroke-width:2.4}

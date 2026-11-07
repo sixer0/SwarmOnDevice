@@ -93,7 +93,10 @@ describe("row 43: the restart", () => {
     expect(Object.keys(docs).sort()).toEqual(["lap-retrieval", "nota-retrieval"])
     for (const d of Object.values(docs)) expect(d.revisions.length).toBe(3)
     expect(A.storedOutputs.map((o: S) => o.format).sort()).toEqual(expect.arrayContaining(["DOCX", "HTML", "PDF"]))
-    expect(A.pdfJobs).toBe(4)
+    // Wave 165 row 165A (C188 F113-3/F113-6, pin by delta 4 -> 6): a TERBIT report whose cover HALAMAN and register
+    // "DARI N" need pagination prints twice (numbered pass + final, services/render/pdf.ts); the two lap-retrieval
+    // PDF renders add one bridge job each, the NOTA renders still print once.
+    expect(A.pdfJobs).toBe(6)
     expect(A.log).toContain("host closed; lock file present after close: false")
     expect(A.fetchCalls).toBe(0)
   })

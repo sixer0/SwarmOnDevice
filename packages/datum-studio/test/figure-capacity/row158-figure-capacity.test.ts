@@ -108,7 +108,9 @@ describe("row 158: over-capacity charts are refused with limit, measured and sug
 describe("row 158: at-capacity figures render unchanged (sha256 before the patch)", () => {
   const BEFORE: Record<keyof typeof AT_CAPACITY, string> = {
     swimlane6: "6d9b0b5f257a9f7088a77c6479ad279a3bf1003daccbabc6c3927fb9da7255cc",
-    graph5: "28b63edf50ac499fa5d9deb995606e10e82cde0236dcb1dd92c51144675364b4",
+    // Row 165C (F113-9, C23 recorded diff): node g0 sits on the sheet edge, its outline is now drawn half a stroke
+    // inside (x 0.0 -> 0.23, width 21.33 -> 21.1); the only changed line. Before: 28b63edf50ac499f...
+    graph5: "cd9dc8569bbc20b823e05237d6db7a19acc90feda9f89f83321ec840ed232695",
     bars30: "4c083a8330ada122686d85bce992ef43590e83479b0261f0c01eca1bb956390f",
     columns12: "1060e9b9d8043480cde380c532614a7f5ec3331e64590f5e20217cc19f90a107",
     columns20: "319d26993d5eeb7011530be6bda27249035d55b5155bb3c7741c91e35f63a1f6",

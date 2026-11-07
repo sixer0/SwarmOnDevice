@@ -324,3 +324,52 @@ describe("helpers", () => {
     ).toEqual([{ id: "a", title: "A", type: "debug", status: "running", pct: 33, openDecisions: 1 }])
   })
 })
+
+// Row 165D (F56-2, CP-17): the host sends each output's delivered DATUM title name; a file saved under it in
+// docs/<mission>/ is found and opened (older C51 downloads still are); unsafe names never become a project path.
+describe("row 165D: deliverables under the DATUM title name", () => {
+  const DOCX = "Pemantauan Iklim Ruang Simpan Arsip Statis Gedung B 012-GSP-KT-XI-2026 RevA.docx"
+  const PDF = "Pemantauan Iklim Ruang Simpan Arsip Statis Gedung B 012-GSP-KT-XI-2026 RevA.pdf"
+  const titled = () => {
+    const get = fixture("research")
+    get.deliverables![0].outputs = [
+      { fileId: "f1", format: "DOCX", role: "PRIMARY", finalFileName: "012-GSP-KT-XI-2026_rev8_20261107T194129Z_293ba138.docx", fileName: DOCX, verified: true },
+      { fileId: "f2", format: "PDF", role: "PRIMARY", finalFileName: "012-GSP-KT-XI-2026_rev8_20261107T194129Z_aaaabbbb.pdf", fileName: PDF, verified: true },
+    ]
+    return get
+  }
+
+  test("a file in the project under the DATUM name is the deliverable's project path", () => {
+    const vm = buildMission(titled(), "en", new Set([PDF]))
+    expect(vm.deliverables[0].projectPath).toBe(`docs/${vm.id}/${PDF}`)
+    expect(vm.deliverables[0].files.map((f) => f.fileName)).toEqual([PDF, DOCX])
+  })
+
+  test("an older C51 download is still found; the DATUM name wins when both are present", () => {
+    const c51 = "012-GSP-KT-XI-2026_rev8_20261107T194129Z_aaaabbbb.pdf"
+    expect(buildMission(titled(), "en", new Set([c51])).deliverables[0].projectPath).toEndWith(`/${c51}`)
+    expect(buildMission(titled(), "en", new Set([c51, PDF])).deliverables[0].projectPath).toEndWith(`/${PDF}`)
+  })
+
+  test("unsafe DATUM names from the host are ignored, never a project path", () => {
+    const get = titled()
+    get.deliverables![0].outputs = [
+      { fileId: "x", format: "PDF", role: "PRIMARY", finalFileName: "012-GSP-KT-XI-2026_rev8_20261107T194129Z_aaaabbbb.pdf", fileName: "../evil 012-GSP RevA.pdf", verified: true },
+    ]
+    const vm = buildMission(get, "en", new Set(["../evil 012-GSP RevA.pdf"]))
+    expect(vm.deliverables[0].files[0].fileName).toBeUndefined()
+    expect(vm.deliverables[0].projectPath).toBeNull()
+  })
+})
+
+describe("row 165D: the file tab opens the DATUM-named deliverable", () => {
+  test("openablePath accepts docs/<mission>/<DATUM name>, refuses traversal and non-Studio names", async () => {
+    const { openablePath } = await import("./mission-deliverables-model")
+    const ok = "docs/2026-11-07_research/Pemantauan Iklim Ruang Simpan Arsip Statis Gedung B 012-GSP-KT-XI-2026 RevA.pdf"
+    expect(openablePath(ok)).toBe(ok)
+    expect(openablePath("docs/2026-11-07_research/Nota uji 2026-11-08.html")).toBe("docs/2026-11-07_research/Nota uji 2026-11-08.html")
+    expect(openablePath("docs/../Pemantauan 012-GSP-KT-XI-2026 RevA.pdf")).toBeNull()
+    expect(openablePath("docs/m/sub/Pemantauan 012-GSP-KT-XI-2026 RevA.pdf")).toBeNull()
+    expect(openablePath("docs/m/report.pdf")).toBeNull()
+  })
+})

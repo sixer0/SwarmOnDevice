@@ -38,14 +38,40 @@ export const STUDIO_FINAL_NAME_PATTERN =
 const STUDIO_FINAL_NAME = new RegExp(STUDIO_FINAL_NAME_PATTERN)
 
 /**
- * Row 112b (decision C101): whether a tab path is a Studio output, decided by its FILE NAME only (C51 above), not by
- * folder. Only a Studio output `.html` opens rendered by default; any other `.html` opens as code (the behaviour before
- * row 112) with the preview toggle. PDF, DOCX, XLSX and PPTX do not depend on this.
+ * Row 165D (F56-2, CP-17): the DATUM title name Studio now delivers outputs under (`<Judul> <nomor> Rev<X>.<ext>`,
+ * `<Judul> <YYYY-MM-DD>.<ext>`, `Gambar <C.n> <Judul>.<ext>`, optional ` <sha8>` collision suffix; no `_`), copied
+ * verbatim from packages/datum-studio/vendor/src/lib/studio/contract/env.ts `DATUM_FILENAME_PATTERN` (a unit test pins
+ * the copy). One path segment only: separators, control/bidi characters and a leading dot or space never match.
  */
-export function isStudioOutputPath(path: string | undefined) {
-  if (!path) return false
-  return STUDIO_FINAL_NAME.test(fileNameOf(path))
+export const STUDIO_DATUM_NAME_PATTERN =
+  "^(?=[^\\u0000-\\u001f]{1,255}$)(?![ .])(?:(?:[^\\u0000-\\u001f\\u007f<>:\"/\\\\|?*_\\u200e\\u200f\\u202a-\\u202e\\u2066-\\u2069]+ )?(?:[0-9A-Za-z][0-9A-Za-z.-]* Rev[0-9A-Za-z]{1,8}|[0-9]{4}-[0-9]{2}-[0-9]{2})|(?:Gambar|Figure) [0-9A-Za-z]+(?:\\.[0-9A-Za-z]+)* [^\\u0000-\\u001f\\u007f<>:\"/\\\\|?*_\\u200e\\u200f\\u202a-\\u202e\\u2066-\\u2069]+)(?: (?:[0-9a-f]{8}|[0-9a-f]{16}|[0-9a-f]{64}))?\\.(docx|pdf|html|svg|png)$"
+const STUDIO_DATUM_NAME = new RegExp(STUDIO_DATUM_NAME_PATTERN)
+
+/** Row 165D: a Studio output file name, final (C51) or delivered DATUM title name. */
+export function isStudioOutputName(name: string | undefined) {
+  if (!name) return false
+  return STUDIO_FINAL_NAME.test(name) || STUDIO_DATUM_NAME.test(name)
 }
+
+/**
+ * Row 112b (decision C101): whether a tab path is a Studio output. Only a Studio output `.html` opens rendered by
+ * default; any other `.html` opens as code (the behaviour before row 112) with the preview toggle. PDF, DOCX, XLSX and
+ * PPTX do not depend on this.
+ * - The C51 store name (`<nomor>_rev<n>_<ts>Z_<sha8>`) is decided by FILE NAME alone, in any folder, as before: no
+ *   ordinary user file is named like that.
+ * - Row 165E (C192, security narrowing): a DATUM title name (`<Judul> <nomor> RevA.html`, `<Judul> 2026-11-02.html`,
+ *   `Gambar 4.1 <Judul>.svg`) looks like a name a person would give a file, so the name alone never decides. It counts
+ *   only when the exact path is in `registered`: the project paths of the session's Studio deliverables (the store's
+ *   delivered `fileName` found in docs/<mission>/, see ./studio-output-registry.ts). An ordinary user
+ *   `Laporan 2026-11-02.html` stays code view.
+ */
+export function isStudioOutputPath(path: string | undefined, registered: ReadonlySet<string> = NO_REGISTERED_OUTPUTS) {
+  if (!path) return false
+  const name = fileNameOf(path)
+  if (STUDIO_FINAL_NAME.test(name)) return true
+  return STUDIO_DATUM_NAME.test(name) && registered.has(path)
+}
+const NO_REGISTERED_OUTPUTS: ReadonlySet<string> = new Set()
 
 /**
  * Client-side guard: a tab path is previewed only when it is relative to the session root and never climbs out of it.

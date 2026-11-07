@@ -45,29 +45,29 @@ async function html(tpl: ResolvedTemplate): Promise<string> {
   return assembleHtml(ctx, { preview: false });
 }
 
-describe('C34 #4 DOCX: CLASSIFICATION_LINE_NO_NUMBER', () => {
-  it('pola tanpa {nomor} + R-76 true: satu peringatan per dokumen, tanpa baris, kaki = opt-in mati', async () => {
+// Wave 165 row 165A for row 165D (C188 F113-12, consequence edit): the R-76 foot line is retired in DOCX and HTML (the
+// classification belongs under the number in the cover control block, F56-1). R-76 true now prints what R-76 false
+// prints, and no CLASSIFICATION_LINE_NO_NUMBER warning is logged (was: line in the foot, one warning without {nomor}).
+describe('C34 #4 DOCX: R-76 foot line retired (F113-12)', () => {
+  it('pola tanpa {nomor} + R-76 true: tanpa peringatan, tanpa baris, kaki = opt-in mati', async () => {
     const on = await docx(tplWith({ [LINE]: true, [CELLS]: NO_NUMBER_CELLS }));
     const off = await docx(tplWith({ [LINE]: false, [CELLS]: NO_NUMBER_CELLS }));
-    // Dokumen uji punya lebih dari satu kaki register, jadi "sekali" bukan kebetulan satu unit.
     expect(on.registerFooters.length).toBeGreaterThan(1);
-    const warns = on.logs.filter((l) => l.code === 'CLASSIFICATION_LINE_NO_NUMBER');
-    expect(warns).toHaveLength(1);
-    expect(warns[0].level).toBe('warn');
-    expect(warns[0].message).toContain('{nomor}');
+    expect(on.logs.some((l) => l.code === 'CLASSIFICATION_LINE_NO_NUMBER')).toBe(false);
     for (const f of on.registerFooters) expect(f).not.toContain('Klasifikasi : ');
     expect(on.footers).toEqual(off.footers);
-    expect(off.logs.some((l) => l.code === 'CLASSIFICATION_LINE_NO_NUMBER')).toBe(false);
   }, 60_000);
 
-  it('pola bawaan (ada {nomor}) + R-76 true: baris dicetak, tanpa peringatan', async () => {
+  it('pola bawaan (ada {nomor}) + R-76 true: tanpa baris di kaki, tanpa peringatan, kaki = opt-in mati', async () => {
     const on = await docx(tplWith({ [LINE]: true }));
+    const off = await docx(tplWith({ [LINE]: false }));
     expect(on.logs.some((l) => l.code === 'CLASSIFICATION_LINE_NO_NUMBER')).toBe(false);
-    for (const f of on.registerFooters) expect(f).toContain('Klasifikasi : ');
+    for (const f of on.registerFooters) expect(f).not.toContain('Klasifikasi : ');
+    expect(on.footers).toEqual(off.footers);
   }, 60_000);
 });
 
-describe('C34 #4 HTML: lewati diam-diam tanpa {nomor} (tanpa kanal log)', () => {
+describe('C34 #4 HTML: R-76 foot line retired (F113-12)', () => {
   it('pola tanpa {nomor} + R-76 true: tanpa .reg-cls, keluaran = opt-in mati', async () => {
     const on = await html(tplWith({ [LINE]: true, [CELLS]: NO_NUMBER_CELLS }));
     const off = await html(tplWith({ [LINE]: false, [CELLS]: NO_NUMBER_CELLS }));
@@ -75,7 +75,9 @@ describe('C34 #4 HTML: lewati diam-diam tanpa {nomor} (tanpa kanal log)', () => 
     expect(on).toBe(off);
   }, 60_000);
 
-  it('kontrol: pola bawaan + R-76 true memancarkan .reg-cls', async () => {
-    expect(await html(tplWith({ [LINE]: true }))).toContain('reg-cls');
+  it('pola bawaan + R-76 true: tanpa .reg-cls, keluaran = opt-in mati', async () => {
+    const on = await html(tplWith({ [LINE]: true }));
+    expect(on).not.toContain('reg-cls');
+    expect(on).toBe(await html(tplWith({ [LINE]: false })));
   }, 60_000);
 });

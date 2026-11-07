@@ -59,6 +59,7 @@ import {
 import { flattenSlotParams, skeletonSha256 as skeletonShaOfSlots, validateSkeleton } from "../skeleton/pure";
 import { templateRestriction, type TemplateAccessOptions, type TemplateRestriction, assertTemplateUsable } from "./access";
 import { resolveRepoAssetPath } from "./assets";
+import { canonicalizeFaceNames } from "./face-names";
 import type { ReadProfileOptions } from "./import";
 import { templatesLog } from "./log";
 import {
@@ -537,12 +538,15 @@ function resolvedFromVersion(t: Pick<StudioTemplate, "id" | "slug">, v: StudioTe
       context: { templateId: t.id, slug: t.slug, versionId: v.id, versionNo: v.versionNo, stored: v.paramsSha256, computed: sha },
     });
   }
+  // Swarm patch (row 165D, F113-11): canonical family names ("IBM Plex Sans Cond" -> "IBM Plex Sans Condensed") in
+  // the params and role formats every store-resolved template hands to the engines (runs, fontTable, @font-face).
+  // After the sha check above, so the stored definition and its sha stay as saved.
   return toResolvedTemplate({
     templateId: t.id,
     versionId: v.id,
     versionNo: v.versionNo,
-    resolvedParams: params,
-    roleFormats: (v.roleFormats ?? {}) as unknown as RoleFormatMap,
+    resolvedParams: canonicalizeFaceNames(params),
+    roleFormats: canonicalizeFaceNames((v.roleFormats ?? {}) as unknown as RoleFormatMap),
     sectionPlan: (v.sectionPlan ?? {}) as unknown as SectionPlan,
     assets: (v.assets ?? {}) as unknown as TemplateAssets,
     resolveAssetPath: (rel) => resolveRepoAssetPath(rel, cfg().assetRepoRoot),

@@ -279,9 +279,127 @@ export function nodeSymbolSvg(nd: SheetNode): string {
  * Semua elemen satu simpul, urutan `build_svg`: bentuk, label (caption ink900),
  * sub (source_line), glif asal, tag (table_header ink400 rata kiri).
  */
-export function nodeSvg(nd: SheetNode, opts: SvgMarkOptions = {}): string[] {
+// ---------------------------------------------------------------- row 165C
+/** Row 165C (F113-10): spacing and weight of the hatch lines, as the original `<pattern>` declared them. */
+export const HATCH_PITCH_MM = 1.6;
+export const HATCH_STROKE_MM = 0.3;
+
+/** Row 165C (F113-10): hatch angle of a node (45 accent, 135 secondary, as `nodeFill`), null = no hatch. */
+export function nodeHatchAngle(nd: Pick<SheetNode, "spec">): 45 | 135 | null {
+  const c = nd.spec.class ?? {};
+  if (c.accent) return 45;
+  if (c.secondary) return 135;
+  return null;
+}
+
+/**
+ * Swarm patch (row 165C, F113-10, CP-47): hatch as plain vector `<line>`s instead of an SVG `<pattern>` fill.
+ * Chromium prints a pattern fill into the PDF as a raster image (measured: a 363 x 554 px image block under the
+ * whole figure, PyMuPDF get_image_info), so the figure was not fully vector. The lines lie where the pattern put
+ * them (pattern space x = 0 mod 1.6 mm, rotated by `angle` about the origin: x cos a + y sin a = 1.6 k) and are
+ * cut to the box `x, y, w, h` here (Liang-Barsky on the box); a non-rectangular node also gets a `clipPath`
+ * (`clipSvg`). Weight 0.3 mm = the declared pattern line (the pattern tile showed only half of it, 0.15 mm,
+ * below the 0.18 mm photocopy floor of tokens.json).
+ */
+export function hatchLinesSvg(x: number, y: number, w: number, h: number, angle: 45 | 135, clip?: { id: string; shape: string }): string {
+  if (!(w > 0) || !(h > 0)) return "";
+  const a = (angle * Math.PI) / 180;
+  const cos = Math.cos(a);
+  const sin = Math.sin(a);
+  const us = [x * cos + y * sin, (x + w) * cos + y * sin, x * cos + (y + h) * sin, (x + w) * cos + (y + h) * sin];
+  const kMin = Math.ceil(Math.min(...us) / HATCH_PITCH_MM - 1e-9);
+  const kMax = Math.floor(Math.max(...us) / HATCH_PITCH_MM + 1e-9);
+  const dx = -sin;
+  const dy = cos;
+  const lines: string[] = [];
+  for (let k = kMin; k <= kMax; k++) {
+    const c = k * HATCH_PITCH_MM;
+    const px = c * cos;
+    const py = c * sin;
+    // t-range where (px + t dx, py + t dy) lies in the box.
+    const tx = [(x - px) / dx, (x + w - px) / dx].sort((p, q) => p - q);
+    const ty = [(y - py) / dy, (y + h - py) / dy].sort((p, q) => p - q);
+    const t0 = Math.max(tx[0], ty[0]);
+    const t1 = Math.min(tx[1], ty[1]);
+    if (t1 - t0 < 0.05) continue; // shorter than 0.05 mm: a corner touch, nothing to print
+    lines.push(`<line x1="${r2(px + t0 * dx)}" y1="${r2(py + t0 * dy)}" x2="${r2(px + t1 * dx)}" y2="${r2(py + t1 * dy)}"/>`);
+  }
+  if (!lines.length) return "";
+  const g = `stroke="${colourOf("ink400")}" stroke-width="${pyStrNum(HATCH_STROKE_MM)}" data-hatch="${angle}"`;
+  if (!clip) return `<g ${g}>${lines.join("")}</g>`;
+  return `<clipPath id="${escAttr(clip.id)}">${clip.shape}</clipPath><g ${g} clip-path="url(#${escAttr(clip.id)})">${lines.join("")}</g>`;
+}
+
+/** Row 165C: shapes whose outline is the box itself (hatch cut to the box exactly, no clipPath). */
+const BOX_SHAPES: ReadonlySet<string> = new Set(["box", "shadowed", "doubled"]);
+
+/** Row 165C: outline of a non-box node as a bare clip element (same geometry as `shapeSvg`), null = box/unknown/bus. */
+function clipShapeSvg(shape: string, x: number, y: number, w: number, h: number): string | null {
+  switch (shape) {
+    case "stadium":
+      return `<rect x="${r2(x)}" y="${r2(y)}" width="${r2(w)}" height="${r2(h)}" rx="${r2(h / 2)}" ry="${r2(h / 2)}"/>`;
+    case "diamond":
+      return `<polygon points="${r2(x + w / 2)},${r2(y)} ${r2(x + w)},${r2(y + h / 2)} ${r2(x + w / 2)},${r2(y + h)} ${r2(x)},${r2(y + h / 2)}"/>`;
+    case "parallelogram": {
+      const k = w * 0.18;
+      return `<polygon points="${r2(x + k)},${r2(y)} ${r2(x + w)},${r2(y)} ${r2(x + w - k)},${r2(y + h)} ${r2(x)},${r2(y + h)}"/>`;
+    }
+    case "hexagon": {
+      const k = w * 0.22;
+      return `<polygon points="${r2(x + k)},${r2(y)} ${r2(x + w - k)},${r2(y)} ${r2(x + w)},${r2(y + h / 2)} ${r2(x + w - k)},${r2(y + h)} ${r2(x + k)},${r2(y + h)} ${r2(x)},${r2(y + h / 2)}"/>`;
+    }
+    case "cylinder": {
+      const ry = h * 0.16;
+      return `<path d="M${r2(x)} ${r2(y + ry)} a${r2(w / 2)} ${r2(ry)} 0 0 0 ${r2(w)} 0 L${r2(x + w)} ${r2(y + h - ry)} a${r2(w / 2)} ${r2(ry)} 0 0 1 -${r2(w)} 0 Z"/>`;
+    }
+    case "circle":
+      return `<circle cx="${r2(x + w / 2)}" cy="${r2(y + h / 2)}" r="${r2(Math.min(w, h) / 2)}"/>`;
+    default:
+      return null;
+  }
+}
+
+/**
+ * Swarm patch (row 165C, F113-9, CP-37): a node outline that lies on the sheet edge (x = 0 or x + w = W, the same
+ * for y) had half of its stroke outside the canvas, so the PNG/SVG cut it. The DRAWN outline is moved inside by
+ * half a stroke on the sides that would cross the edge; layout, routes and texts keep the placed geometry.
+ */
+export function insetForStroke<T extends Pick<SheetNode, "x" | "y" | "w" | "h">>(nd: T, canvas: { widthMm: number; heightMm: number } | undefined, sw: number): T {
+  if (!canvas) return nd;
+  // Limits on the 0.01 mm grid the SVG numbers are written on (r2), rounded inward, so rounding never puts the
+  // stroke back across the edge.
+  const lo = Math.ceil((sw / 2) * 100 - 1e-9) / 100;
+  const hiX = Math.floor((canvas.widthMm - sw / 2) * 100 + 1e-9) / 100;
+  const hiY = Math.floor((canvas.heightMm - sw / 2) * 100 + 1e-9) / 100;
+  const x0 = Math.max(nd.x, lo);
+  const y0 = Math.max(nd.y, lo);
+  const x1 = Math.min(nd.x + nd.w, hiX);
+  const y1 = Math.min(nd.y + nd.h, hiY);
+  if (x0 === nd.x && y0 === nd.y && x1 === nd.x + nd.w && y1 === nd.y + nd.h) return nd;
+  if (x1 <= x0 || y1 <= y0) return nd;
+  return { ...nd, x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+}
+
+/** Row 165C: options of `nodeSvg` (sheet size for the half-stroke inset of F113-9). */
+export interface NodeSvgOptions extends SvgMarkOptions {
+  canvas?: { widthMm: number; heightMm: number };
+}
+
+export function nodeSvg(nd: SheetNode, opts: NodeSvgOptions = {}): string[] {
   const n = nd.spec;
-  const out: string[] = [shapeSvg(nd, nodeStrokeToken(nd), nodeFill(nd), { ...opts, strokeW: STROKE_PRIMARY })];
+  // Row 165C (F113-9/F113-10): outline inset at the sheet edge; hatch drawn as vector lines under the outline.
+  const { canvas, ...markOpts } = opts;
+  const g = insetForStroke(nd, canvas, STROKE_PRIMARY);
+  const angle = (n.shape ?? "box") === "bus" ? null : nodeHatchAngle(nd);
+  const out: string[] = [];
+  if (angle !== null) {
+    const shape = n.shape ?? "box";
+    const clipShape = BOX_SHAPES.has(shape) ? null : clipShapeSvg(shape, g.x, g.y, g.w, g.h);
+    const clipId = `datum-hatch-clip-${opts.index ?? escAttr(nd.id).replace(/[^A-Za-z0-9_-]/g, "_")}`;
+    const hatch = hatchLinesSvg(g.x, g.y, g.w, g.h, angle, clipShape !== null ? { id: clipId, shape: clipShape } : undefined);
+    if (hatch) out.push(hatch);
+  }
+  out.push(shapeSvg(g, nodeStrokeToken(nd), "none", { ...markOpts, strokeW: STROKE_PRIMARY }));
   const sym = nodeSymbolSvg(nd); // row 124 (CP-45): specified symbol, drawn before the texts
   if (sym) out.push(sym);
   const cx = nd.x + nd.w / 2.0;

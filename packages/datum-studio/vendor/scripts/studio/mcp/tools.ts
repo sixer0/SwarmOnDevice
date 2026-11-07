@@ -57,6 +57,7 @@ import { templateText } from "./resources";
 import { DOCUMENT_TOOLS, guardReportSubmit } from "./doc-tools";
 import { FIGURE_TOOLS } from "./figure-tools";
 import { WRITE_TOOLS } from "./write-tools";
+import { deliveredDatumName, joinInside, safeDatumName } from "./datum-name";
 import { assertFileWriteEnabled, guardedFetch, McpToolError, prepareDownloadDir, resolveAllowedPath, resolveDownloadDir, virtualFs, writeFileGuarded, type VirtualFsLog } from "./safety";
 import {
   bool,
@@ -860,7 +861,9 @@ const renderTool: ToolDef = {
       throw pdfUnavailableHint(e);
     }
     const b = isRecord(reply.body) ? reply.body : {};
-    const outputs = (Array.isArray(b.outputs) ? b.outputs.filter(isRecord) : []).map((o) => ({ id: o.id, role: o.role, format: o.format, scope: o.scope, sha256: o.sha256, bytes: o.byteSize ?? o.bytes ?? null, finalFileName: o.finalFileName }));
+    // Swarm patch (row 165D, F56-2): `fileName` = the DATUM title name the file is delivered under (studio_file_verify);
+    // only when it is a safe DATUM name, else null. Agent-written title text: listed in untrustedFields below.
+    const outputs = (Array.isArray(b.outputs) ? b.outputs.filter(isRecord) : []).map((o) => ({ id: o.id, role: o.role, format: o.format, scope: o.scope, sha256: o.sha256, bytes: o.byteSize ?? o.bytes ?? null, finalFileName: o.finalFileName, fileName: safeDatumName(o.fileName) ? o.fileName : null }));
     const job = isRecord(b.job) ? b.job : {};
     const comp = isRecord(b.completeness) ? b.completeness : {};
     // MCP-D4 L-5: di luar blok hanya token aman (status, format, id) dan nama final yang lolos pola C51.
@@ -873,7 +876,7 @@ const renderTool: ToolDef = {
     const errBlock = serverBlock(errors.slice(0, 10).map((e) => JSON.stringify(e)), { jenis: "galat-render", documentId: id });
     if (errBlock !== null) lines.push(`  galat per format (${errors.length}):`, errBlock);
     const data = { job: b.job ?? null, outputs, completeness: b.completeness ?? null, partial: b.partial ?? false, failedFormats: b.failedFormats ?? [], errors, correlationId: reply.correlationId ?? null };
-    return { text: lines.join("\n"), data: { ...(neutralizeDeep(data) as Record<string, unknown>), ...untrustedFields(["errors", "job", "completeness", "failedFormats", "outputs[].finalFileName"]) } };
+    return { text: lines.join("\n"), data: { ...(neutralizeDeep(data) as Record<string, unknown>), ...untrustedFields(["errors", "job", "completeness", "failedFormats", "outputs[].finalFileName", "outputs[].fileName"]) } };
   },
 };
 
@@ -922,6 +925,9 @@ const fileVerifyTool: ToolDef = {
     const finalFileName = head.headers.get("x-studio-final-filename") ?? "";
     const sha = (head.headers.get("x-studio-sha256") ?? "").toLowerCase();
     const nameOk = finalFileName !== "" && safeFinalName(finalFileName);
+    // Swarm patch (row 165D, F56-2): deliver under the DATUM title name from R10's Content-Disposition when it is a safe
+    // DATUM name (datum-name.ts); else under the C51 final name as before.
+    const datumName = deliveredDatumName(head.headers);
     const expected = str(a, "expectedSha256");
     const cid = head.correlationId ?? null;
     if (!verified) throw new McpToolError("VERIFY_FAILED", "server melaporkan X-Studio-Sha256-Verified bukan true (isi disk berbeda dari catatan)", { correlationId: head.correlationId, step: "verifikasi R10" });
@@ -933,8 +939,9 @@ const fileVerifyTool: ToolDef = {
     let bytes: number | null = null;
     let backup: string | null = null;
     let alreadyPresent = false;
+    let deliveredName: string | null = null;
     if (dir !== null) {
-      if (!nameOk) throw new McpToolError("OUT_NAME_UNSAFE", "nama final dari server tidak lolos pola C51; berkas tidak diunduh (nama di blok rincian)", { correlationId: head.correlationId, untrusted: true, details: { finalFileName } });
+      if (!nameOk && datumName === null) throw new McpToolError("OUT_NAME_UNSAFE", "nama final dari server tidak lolos pola C51; berkas tidak diunduh (nama di blok rincian)", { correlationId: head.correlationId, untrusted: true, details: { finalFileName } });
       const dl = await http(ctx, "GET", `${r10}?download=1`, "GET /api/studio/files/{id}", { binary: true });
       downloadCid = dl.correlationId ?? null;
       const buf = dl.bytes ?? Buffer.alloc(0);
@@ -945,7 +952,10 @@ const fileVerifyTool: ToolDef = {
       if (want.some((w) => w !== got)) throw new McpToolError("SHA_MISMATCH", `sha256 unduhan (${got.slice(0, 16)}) tidak cocok dengan catatan server`, { correlationId: dl.correlationId });
       const dlName = dl.headers.get("x-studio-final-filename");
       if (dlName !== null && dlName !== finalFileName) throw new McpToolError("VERIFY_FAILED", "nama final tidak konsisten antara verifikasi dan unduhan (kedua nama di blok rincian)", { correlationId: dl.correlationId, untrusted: true, details: { verifyName: finalFileName, downloadName: dlName } });
-      const dest = path.join(dir, finalFileName);
+      if (datumName !== null && deliveredDatumName(dl.headers) !== datumName) throw new McpToolError("VERIFY_FAILED", "nama DATUM tidak konsisten antara verifikasi dan unduhan (kedua nama di blok rincian)", { correlationId: dl.correlationId, untrusted: true, details: { verifyName: datumName, downloadName: deliveredDatumName(dl.headers) } });
+      const dest = datumName !== null ? joinInside(dir, datumName) : path.join(dir, finalFileName);
+      if (dest === null) throw new McpToolError("OUT_NAME_UNSAFE", "nama DATUM dari server keluar dari folder unduhan; berkas tidak diunduh", { correlationId: dl.correlationId, untrusted: true, details: { fileName: datumName } });
+      deliveredName = datumName ?? finalFileName;
       const nfs = ctx.deps.nfs;
       prepareDownloadDir(dir, ctx.deps.config.fileRoots, nfs);
       const w = writeFileGuarded(dest, buf, { roots: ctx.deps.config.fileRoots, purpose: "write-file", overwrite: bool(a, "overwrite"), nfs, now: ctx.now, log: ctx.fsLog.writes, isSame: (existing) => sha256Hex(existing) === got });
@@ -954,12 +964,17 @@ const fileVerifyTool: ToolDef = {
       savedTo = dest;
       bytes = buf.length;
     }
-    const saved = savedTo !== null ? `  diunduh ke: ${savedTo} (${bytes} B)${alreadyPresent ? " — sudah ada dengan isi sama, tidak ditulis ulang" : ""}${backup !== null ? `; cadangan berkas lama: ${backup}` : ""}` : "  tidak diunduh (berikan downloadDir untuk menyimpan)";
+    // Row 165D: a DATUM name carries the agent-written title, so it (and the path built from it) is printed only inside
+    // the untrusted block and marked untrusted in structuredContent (MCP-D4 L-5); the folder alone stays outside.
+    const viaDatum = savedTo !== null && datumName !== null && deliveredName === datumName;
+    const savedLine = savedTo === null ? "" : viaDatum ? `  diunduh ke folder: ${dir} dengan nama DATUM (judul; nama di blok di bawah) (${bytes} B)` : `  diunduh ke: ${savedTo} (${bytes} B)`;
+    const saved = savedTo !== null ? `${savedLine}${alreadyPresent ? " — sudah ada dengan isi sama, tidak ditulis ulang" : ""}${backup !== null ? `; cadangan berkas lama: ${backup}` : ""}${viaDatum ? `\n${untrustedBlock(String(datumName), { jenis: "nama-berkas-datum", fileId })}` : ""}` : "  tidak diunduh (berikan downloadDir untuk menyimpan)";
     const nameShown = nameOk ? finalFileName : finalFileName === "" ? "-" : "(tidak dicetak; lihat structuredContent.finalFileName, data tak tepercaya)";
     const text = [`berkas ${fileId}: ${verified ? "TERVERIFIKASI" : "tidak terverifikasi"} (sha256 ${shaShown})`, `  nama final: ${nameShown} (${nameOk ? "lolos pola C51" : "TIDAK lolos pola C51"})`, saved].join("\n");
-    const raw = { fileId, verified, sha256: sha || null, finalFileName: finalFileName || null, finalNameValid: nameOk, savedTo, bytes, ...(savedTo !== null ? { alreadyPresent, backup } : {}), correlationId: cid, downloadCorrelationId: downloadCid };
+    const raw = { fileId, verified, sha256: sha || null, finalFileName: finalFileName || null, finalNameValid: nameOk, fileName: datumName, deliveredFileName: deliveredName, savedTo, bytes, ...(savedTo !== null ? { alreadyPresent, backup } : {}), correlationId: cid, downloadCorrelationId: downloadCid };
     const suspect = (finalFileName !== "" && !nameOk) || (sha !== "" && !HEX64.test(sha));
-    return { text, data: suspect ? { ...(neutralizeDeep(raw) as Record<string, unknown>), ...untrustedFields(["finalFileName", "sha256"]) } : raw };
+    const marked = [...(suspect ? ["finalFileName", "sha256"] : []), ...(datumName !== null ? ["fileName", "deliveredFileName", "savedTo"] : [])];
+    return { text, data: marked.length > 0 ? { ...(neutralizeDeep(raw) as Record<string, unknown>), ...untrustedFields(marked) } : raw };
   },
 };
 

@@ -57,6 +57,8 @@ export type DeliverableOutputWire = {
   format: "DOCX" | "PDF" | "HTML" | "SVG" | "PNG"
   role: "PRIMARY" | "FIGURE"
   finalFileName: string
+  /** Row 165D (F56-2): the DATUM title name the file is delivered under; absent/null from an older host. */
+  fileName?: string | null
   verified: boolean
 }
 
@@ -149,7 +151,8 @@ export type MissionDeliverableVM = {
   formats: DeliverableFormat[]
   status: DeliverableStatus
   verified: boolean
-  files: Array<{ format: DeliverableFormat; finalFileName: string }>
+  /** Row 165D: `fileName` = the delivered DATUM title name when the host sent a plain one. */
+  files: Array<{ format: DeliverableFormat; finalFileName: string; fileName?: string }>
   projectPath: string | null
 }
 export type MissionVM = {
@@ -287,9 +290,16 @@ function deliverableVM(
     wire.final === true && rowStatus === "done" ? "final" : rowStatus === "needs-review" || verified ? "review" : "draft"
   const files = CLICK_ORDER.flatMap((format) => {
     const out = byFormat.get(format)
-    return out && PLAIN_NAME.test(out.finalFileName) ? [{ format, finalFileName: out.finalFileName }] : []
+    if (!out || !PLAIN_NAME.test(out.finalFileName)) return []
+    // Row 165D (F56-2): the delivered DATUM title name, when the host sent one that is a plain, safe name.
+    const datum = typeof out.fileName === "string" && PLAIN_NAME.test(out.fileName) && out.fileName !== "." && out.fileName !== ".." ? out.fileName : undefined
+    return [{ format, finalFileName: out.finalFileName, ...(datum ? { fileName: datum } : {}) }]
   })
-  const hit = files.find((file) => present.has(file.finalFileName))
+  // The file in the project carries the DATUM name (studio_file_verify since row 165D) or, from older downloads, the
+  // C51 final name; the DATUM name is preferred.
+  const hitName = files
+    .map((file) => (file.fileName && present.has(file.fileName) ? file.fileName : present.has(file.finalFileName) ? file.finalFileName : undefined))
+    .find((name): name is string => name !== undefined)
   return {
     documentId: wire.documentId,
     title: wire.title,
@@ -300,7 +310,7 @@ function deliverableVM(
     status,
     verified,
     files,
-    projectPath: hit ? `docs/${missionId}/${hit.finalFileName}` : null,
+    projectPath: hitName ? `docs/${missionId}/${hitName}` : null,
   }
 }
 

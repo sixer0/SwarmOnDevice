@@ -75,6 +75,8 @@ export type DeliverableOutputWire = {
   format: "DOCX" | "PDF" | "HTML" | "SVG" | "PNG"
   role: "PRIMARY" | "FIGURE"
   finalFileName: string
+  /** Row 165D/165E (F56-2): the delivered DATUM title name (`<Judul> 012-GSP-KT-XI-2026 RevA.docx`); null when unsafe. */
+  fileName: string | null
   sha256: string
   bytes: number
   createdAt: string

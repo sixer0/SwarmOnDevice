@@ -53,6 +53,7 @@ import {
   DEFAULT_LOGO_WIDTH_MM,
   inlineImageRunXml,
   loadDatumRule,
+  datumRuleUnitLeadMm,
   loadLogo,
   mediaName,
   mediaRelId,
@@ -433,7 +434,8 @@ export function datumRuleParagraphXml(b: WrapperBuilder, d: Partial<DeviceBlock>
   const c = palette(b.params);
   const interior = b.unit === "appendix";
   const widthMm = d.widthMm ?? datumRuleWidthMm(b, interior);
-  const rule = loadDatumRule(b.ctx, widthMm, interior ? c.interiorInk : c.ink, d.asset);
+  // Row 165B (F113-8): lead = width x sheet / sheets, as the HTML/PDF shell (`withDatumRuleLeads`).
+  const rule = loadDatumRule(b.ctx, widthMm, interior ? c.interiorInk : c.ink, d.asset, datumRuleUnitLeadMm(b.ctx, b.block.unitKey, widthMm));
   const heightMm = d.heightMm ?? rule.heightMm;
   return paragraphXml(paraOf(b.ctx, datumRuleRoleFor(b.unit), d.format), b.imageRun(rule.img, rule.widthMm, heightMm, "datumRule"));
 }
@@ -578,11 +580,16 @@ export function signatureXml(b: WrapperBuilder, block: SignatureBlock): void {
       })),
     },
     {
+      // Row 165E (C193 ruling 4, F113-4): the signature line is the holder paragraph's own top border, so it spans the
+      // cell's text width only (cell minus `rightPad`): three separate lines with a gap, not one line across the span
+      // (cell top borders of adjacent cells join).
       cells: s.roles.map((r, i) => ({
         widthTw: grid[i],
-        borders: { top: { val: "single", sz: 5, color: c.rule, space: 0 } },
         marginsTw: { top: 79, left: 0, bottom: 0, right: rightPad },
-        paragraphsXml: paragraphXml(holder.para, runsXml(inlineRuns(r.holder), holder.run ?? {}, b.params)),
+        paragraphsXml: paragraphXml(
+          mergePara(holder.para, { borders: { top: { val: "single", sz: 5, color: c.rule, space: 1 } } }),
+          runsXml(inlineRuns(r.holder), holder.run ?? {}, b.params),
+        ),
       })),
     },
   ];

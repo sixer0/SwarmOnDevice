@@ -1,7 +1,8 @@
 /**
  * FIG-03b `POST /api/studio/documents/[id]/figures/preview` — pratinjau SATU figur (chart/diagram), BACA SAJA.
  *
- * Badan `{ pid? | address?, block?, revisionNo?, svg?, agentId? }` (lihat `_lib/request.ts`).
+ * Badan `{ pid? | address?, block?, revisionNo?, svg?, agentId?, standalone?, png? }` (lihat `_lib/request.ts`; row 165C:
+ * `standalone` = gambar mandiri dengan caption, KUNCI dan SUMBER di SVG, `png` = PNG 300 dpi gambar itu, base64).
  * - 200 `{ documentId, revisionNo, currentRevisionNo, rendered: true, figure }`; `figure` = jenis, kode,
  *   pid/alamat/label, `size { widthMm, heightMm, svgBytes }`, `issues[]` lint/tata letak (`checkId`, `status`,
  *   `detail`, `suggest`; maks 40, jumlah penuh `issueCount`), ringkasan data, dan `svg` hanya bila `svg: true`.
@@ -68,7 +69,8 @@ async function preview(req: NextRequest, params: Params["params"], ctx: ReqCtx):
     const parsed = parsePreviewBody(body.value);
     if (!parsed.ok) return reject(ctx, "SCHEMA_INVALID", schemaInvalidMessage(parsed.issues, "Invalid figure preview body"), parsed.issues, { documentId: id });
     const r = parsed.value;
-    const logCtx = { documentId: id, pid: r.pid ?? null, address: r.address ?? null, inline: r.block !== undefined, revisionNo: r.revisionNo ?? null };
+    // Row 165C (F56-3): `standalone` / `png` = the stand-alone figure of the original Studio (figure-preview-figure.ts).
+    const logCtx = { documentId: id, pid: r.pid ?? null, address: r.address ?? null, inline: r.block !== undefined, revisionNo: r.revisionNo ?? null, standalone: r.standalone, png: r.png };
     const fc = await loadFigureContext(id, r.revisionNo);
     const target = r.pid !== undefined || r.address !== undefined ? findFigureBlock(fc.snapshot, { pid: r.pid, address: r.address }) : null;
     const block = r.block !== undefined ? composeInlineBlock(fc.snapshot, r.block, target) : target;
@@ -82,7 +84,7 @@ async function preview(req: NextRequest, params: Params["params"], ctx: ReqCtx):
       if (over.length > 0) return reject(ctx, "BY_CONSTRUCTION_FAILED", capacityMessage(resolved.type, over), { checkId: "FIGURE_CAPACITY", issues: over }, { ...logCtx, revisionNo: fc.revisionNo });
       const tpl = effectiveTemplate(fc.template, fc.snapshot);
       // Render lewat antrean render berbatas proses (sama dengan R08 ?preview=html): penuh -> 503 RENDER_QUEUE_FULL.
-      const figure = await renderGate().run(async () => renderResolved(resolved, tpl, { inline: r.block !== undefined, withSvg: r.svg, lang: wrapperLangOf(fc.snapshot.doc.meta) }));
+      const figure = await renderGate().run(async () => renderResolved(resolved, tpl, { inline: r.block !== undefined, withSvg: r.svg, lang: wrapperLangOf(fc.snapshot.doc.meta), standalone: r.standalone, png: r.png }));
       apiLog({
         ...ctx,
         level: "info",

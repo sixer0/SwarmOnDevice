@@ -152,7 +152,8 @@ test("row 43a (F1 fixed): re-rendering a revision with other raster bytes adds a
   expect(out2.id).not.toBe(out1.id)
   expect(rowsAfterSecond).toBe(rowsAfterFirst + 1)
   expect(path.dirname(row2.rel_path)).toBe(path.dirname(row1.rel_path))
-  expect(row2.file_name).toBe(`${row1.file_name.replace(/\.docx$/, "")}_${String(out2.sha256).slice(0, 8)}.docx`)
+  // Row 165D (F56-2): the collision suffix is separated by a space, so the delivered DATUM name has no underscore.
+  expect(row2.file_name).toBe(`${row1.file_name.replace(/\.docx$/, "")} ${String(out2.sha256).slice(0, 8)}.docx`)
   expect(evidence.diskSecond).toBe(out2.sha256)
   // U6 / store spec :357: the first output of the revision is untouched, by id, path, sha and job.
   expect(row1Now).toEqual(row1)

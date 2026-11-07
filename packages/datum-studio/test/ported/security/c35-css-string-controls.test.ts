@@ -72,9 +72,10 @@ describe('C35 M-01 sink CSS halaman: klasifikasi bermusuhan tetap inert', () => 
     it(`${name}: running head (markup.ts) dan baris NOTA (shell.ts) tidak menyisipkan aturan`, () => {
       const cls = `X${ch}}} ${PAYLOAD}`;
       const css = pageFurnitureCss(tplWith({ 'render.nota.classificationLine': true }), metaWith(cls), [], 1);
-      // Kedua sink memuat nilai: running head (kanan) dan baris kedua kotak register NOTA.
+      // Wave 165 row 165A for 165D (F113-12, consequence edit): the NOTA register second line is retired, so the running
+      // head (right) is the sink left; was: both sinks (also `"\A" "Klasifikasi : X..."`).
       expect(css).toContain('@top-right');
-      expect(css).toMatch(/"\\A" "[^"]*: ?X/);
+      expect(css).not.toMatch(/"\\A" "[^"]*: ?X/);
       const outside = outsideStrings(css);
       expect(outside).not.toContain(PAYLOAD);
       expect(outside).not.toContain(PAYLOAD.toUpperCase());

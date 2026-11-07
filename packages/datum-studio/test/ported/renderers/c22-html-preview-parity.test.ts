@@ -117,7 +117,10 @@ describe('C22 CS-06: tiga kolom tanda tangan di HTML (controlSheet.signatures.fi
     const t = signatureTable((await html('doc_terbit_report', 'ID', tplWith(FILL), two)).html);
     expect(t.rows[0]).toEqual(['Disusun', 'Diperiksa', 'Disetujui']);
     expect(t.rows[2]).toEqual(['A', '', 'C']);
-    expect(t.cols).toBe(0);
+    // Wave 165 row 165A (C188 F113-4, consequence edit): the sent colsTw is still dropped, but the block now carries
+    // the DOCX signature grid as shares of the 166 mm span (3 cols); was 0 cols (auto widths, squeezed in 48 mm).
+    expect(t.cols).toBe(3);
+    expect(/<table class="st-signature"[\s\S]*?<\/colgroup>/.exec((await html('doc_terbit_report', 'ID', tplWith(FILL), two)).html)?.[0]).not.toMatch(/width:[0-9.]+mm/);
   });
 
   it('EN, 1 peran: label EN Prepared by / Reviewed by / Approved by', async () => {
@@ -299,35 +302,15 @@ describe('C22 CL-02 NOTA: baris klasifikasi di bawah sel nomor register HTML (re
   const terbatas = (d: any) => (d.meta.classification = 'terbatas');
   const EXPECT = { ID: 'Klasifikasi : TERBATAS', EN: 'Classification: TERBATAS' } as const;
 
+  // Wave 165 row 165A for row 165D (C188 F113-12, consequence edit): the R-76 foot line is retired in HTML too (screen
+  // `.reg-cls` and the print margin box second line); was: "Klasifikasi : TERBATAS" after every register.
   for (const lang of ['ID', 'EN'] as const) {
-    it(`${lang}: perabot layar = baris "${EXPECT[lang]}" tepat sesudah setiap register; sel register tidak berubah`, async () => {
+    it(`${lang}: R-76 true = keluaran tanpa baris "${EXPECT[lang]}" (layar dan cetak), sama dengan opt-in mati`, async () => {
       const on = (await html('doc_nota_memo', lang, tplWith(LINE), terbatas)).html;
       const off = (await html('doc_nota_memo', lang, tplWith({}), terbatas)).html;
-      const regs = [...on.matchAll(/<div class="reg st-screen">[\s\S]*?<\/div><\/div>/g)].map((m) => m[0]);
-      expect(regs.length).toBeGreaterThan(0);
-      expect(regs).toEqual([...off.matchAll(/<div class="reg st-screen">[\s\S]*?<\/div><\/div>/g)].map((m) => m[0]));
-      const lines = [...on.matchAll(/<div class="reg st-screen">[\s\S]*?<\/div><\/div>(<div class="reg-cls st-screen">[\s\S]*?<\/div><\/div>)/g)].map((m) => m[1]);
-      expect(lines).toHaveLength(regs.length);
-      for (const l of lines) {
-        expect(textOf(l)).toBe(EXPECT[lang]);
-        // Nilai kapital tebal (warna segel lewat CSS halaman); label = run register.
-        expect(l).toMatch(/<b>TERBATAS<\/b>/);
-      }
-      const css = pagesCss(on);
-      expect(css).toMatch(/\.reg-cls b\{color:#6E1420;font-weight:600\}/);
-      // Sel nomor = sel 1 (pola bawaan "{org} · {nomor}"): baris di kolom 1 grid register, tanpa jorokan.
-      expect(css).toMatch(/\.reg-cls > div\{grid-column:1;padding-left:0\}/);
-    });
-
-    it(`${lang}: cetak = kotak margin @page yang memuat nomor mendapat baris kedua "${EXPECT[lang]}"`, async () => {
-      const css = pagesCss((await html('doc_nota_memo', lang, tplWith(LINE), terbatas)).html);
-      const boxes = [...css.matchAll(/@bottom-left\{content:(?!none)([^;]*);[^}]*\}/g)];
-      expect(boxes.length).toBeGreaterThan(0);
-      for (const b of boxes) {
-        expect(b[1]).toContain('001/GSP/KT/X/2026');
-        expect(b[1]).toContain(`"\\A" "${EXPECT[lang]}"`);
-        expect(b[0]).toContain('white-space:pre');
-      }
+      expect(on).not.toContain('reg-cls');
+      expect(pagesCss(on)).not.toContain(`"\\A" "${EXPECT[lang]}"`);
+      expect(sha256(on)).toBe(sha256(off));
     });
   }
 
@@ -415,10 +398,13 @@ describe('C22 konfirmasi CL-02 T/S + CV-15: blok kendali sampul auto di HTML', (
     });
   }
 
-  it('bawaan (daftar medan registri, tanpa unit): tanpa baris klasifikasi, penyusun = meta.author; absen = kosong byte-identik', async () => {
+  // Wave 165 row 165A (C189 F56-1, consequence edit): without a KLASIFIKASI field in the list the engine adds its own
+  // Klasifikasi field under the number (was: a second line inside the number cell, so no 'Klasifikasi' cell).
+  it('bawaan (daftar medan registri, tanpa unit): medan Klasifikasi di bawah nomor, penyusun = meta.author; absen = kosong byte-identik', async () => {
     const absent = await htmlComposed({}, 'ID');
     const rows = coverControlRows(absent);
-    expect(rows.flat()).not.toContain('Klasifikasi');
+    expect(rows[1].slice(0, 2)).toEqual(['Klasifikasi', 'TERBATAS']);
+    expect(rows.flat().filter((c) => c === 'Klasifikasi')).toHaveLength(1);
     expect(rows.flat()).not.toContain(UNIT.ID);
     expect(sha256(await htmlComposed({ 'cover.controlBlock.preparerUnit': '' }, 'ID'))).toBe(sha256(absent));
   });

@@ -15,7 +15,8 @@ import { formatAddress, parseAddress } from "@/lib/studio/contract/address";
 import { parsePosInt } from "@/lib/studio/http";
 import { validateBlockV2 } from "@/lib/studio/services/revisions/v2/body";
 
-const ALLOWED_KEYS: ReadonlySet<string> = new Set(["pid", "address", "block", "revisionNo", "svg", "agentId"]);
+// Row 165C (F56-3): `standalone` (the original's apparatus "figure" mode) and `png` (a 300 dpi PNG of that figure).
+const ALLOWED_KEYS: ReadonlySet<string> = new Set(["pid", "address", "block", "revisionNo", "svg", "agentId", "standalone", "png"]);
 const PID_RE = new RegExp(PID_PATTERN);
 
 export interface PreviewRequest {
@@ -25,6 +26,10 @@ export interface PreviewRequest {
   revisionNo?: number;
   svg: boolean;
   agentId: string | null;
+  /** Row 165C (F56-3): diagram drawn as a stand-alone figure: caption, KUNCI and SUMBER inside the SVG. */
+  standalone: boolean;
+  /** Row 165C (F56-3): also a 300 dpi PNG of the stand-alone figure (needs `standalone`). */
+  png: boolean;
 }
 
 export type PreviewParse = { ok: true; value: PreviewRequest } | { ok: false; issues: ValidationIssue[] };
@@ -34,7 +39,7 @@ export function parsePreviewBody(b: Record<string, unknown>): PreviewParse {
   const push = (pointer: string, keyword: string, message: string) => issues.push({ pointer, keyword, message });
   for (const k of Object.keys(b)) if (!ALLOWED_KEYS.has(k)) push(`/${k}`, "additionalProperties", "unknown property");
 
-  const out: PreviewRequest = { svg: b.svg === true, agentId: typeof b.agentId === "string" ? b.agentId : null };
+  const out: PreviewRequest = { svg: b.svg === true, agentId: typeof b.agentId === "string" ? b.agentId : null, standalone: b.standalone === true, png: b.png === true };
   if (b.pid !== undefined) {
     if (typeof b.pid === "string" && PID_RE.test(b.pid)) out.pid = b.pid;
     else push("/pid", "pattern", `must match ${PID_PATTERN}`);
@@ -62,5 +67,10 @@ export function parsePreviewBody(b: Record<string, unknown>): PreviewParse {
   }
   if (b.svg !== undefined && typeof b.svg !== "boolean") push("/svg", "type", "must be boolean");
   if (b.agentId !== undefined && typeof b.agentId !== "string") push("/agentId", "type", "must be string");
+  // Row 165C (F56-3): stand-alone figure options.
+  if (b.standalone !== undefined && typeof b.standalone !== "boolean") push("/standalone", "type", "must be boolean");
+  if (b.png !== undefined && typeof b.png !== "boolean") push("/png", "type", "must be boolean");
+  if (b.png === true && b.standalone !== true) push("/png", "dependencies", "png needs standalone: true");
+  if (b.standalone === true && out.block !== undefined && out.block.type !== "diagram") push("/standalone", "enum", "standalone is for a diagram block");
   return issues.length > 0 ? { ok: false, issues } : { ok: true, value: out };
 }

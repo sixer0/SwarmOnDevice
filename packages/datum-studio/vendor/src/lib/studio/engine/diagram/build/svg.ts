@@ -409,12 +409,13 @@ function buildOnce(s: StudioDiagramV1, opts: DiagramBuildOptions, deps: DiagramB
   sheet.add(generatorComment(String(s.family)));
   if (apparatus === "page") sheet.add(APPARATUS_REQUIRED_COMMENT);
   // Row 124 (CP-43 / C23 check 25): define only the hatches and arrow heads this figure uses.
-  const nodeClasses = nodes.map((n) => n.spec.class ?? {});
+  // Row 165C (F113-10, CP-47): hatches are vector lines drawn with each node (core/svg.ts hatchLinesSvg), so no
+  // `<pattern>` is defined any more (Chromium printed the pattern fill into the PDF as a raster image).
   sheet.addAll(
     diagramDefs({
       kinds: hopped.map((p) => p.kind),
-      hatch45: nodeClasses.some((c) => c.accent),
-      hatch135: nodeClasses.some((c) => !c.accent && c.secondary),
+      hatch45: false,
+      hatch135: false,
     }),
   );
   sheet.add(paperRectSvg(W, H));
@@ -471,7 +472,8 @@ function buildOnce(s: StudioDiagramV1, opts: DiagramBuildOptions, deps: DiagramB
   }
 
   // simpul + label + glif asal + tag
-  nodes.forEach((nd, i) => sheet.addAll(nodeSvg(nd, { index: i })));
+  // Row 165C (F113-9, CP-37): the sheet size lets nodeSvg keep every outline stroke inside the canvas.
+  nodes.forEach((nd, i) => sheet.addAll(nodeSvg(nd, { index: i, canvas: { widthMm: W, heightMm: H } })));
 
   // apparatus figure: SVG memikul caption, baris KUNCI dan SUMBER sendiri (P6)
   // D-288: baris KEY tidak digambar bila halaman mencetak baris KUNCI figur ini (satu aparatus).

@@ -145,4 +145,13 @@ export const HTML_BLOCKS_CSS = [
   // FIX-H4: entri daftar isi turunan = tautan jangkar internal; tampilan tetap milik peran sel.
   `.${C.tocLink}{color:inherit;text-decoration:none}`,
   `.${C.field}:empty::before{content:"\\2007"}`,
+  // Wave 165 row 165A (C188 F113-3/F113-4): the control block and the signature block span the 166 mm text column
+  // (shares from wrapper.ts `shareColgroup`, DOCX grids); 3 mm between a value and the next label so no pair abuts;
+  // three signature columns 4 mm apart, each with its own signature line (DOCX holder top border, colour
+  // `--st-sign-rule` = `color.wrapper.rule`); HALAMAN = the printed page count set by the PDF print.
+  `.${C.controlBlock},.${C.signature}{width:100%}`,
+  `.${C.controlValue}{padding-right:3mm}`,
+  `.${C.signature} th,.${C.signature} td{padding-right:4mm;text-align:left;vertical-align:top}`,
+  `.${C.signatureHolder}{background:linear-gradient(var(--st-sign-rule,#C4BEB4),var(--st-sign-rule,#C4BEB4)) left top/calc(100% - 4mm) 0.22mm no-repeat;padding-top:1.4mm}`,
+  `.${C.controlBlock} .${C.field}[data-field="NUMPAGES"]:empty::before{content:var(--st-pages-total,"\\2007")}`,
 ].join("\n");

@@ -324,7 +324,9 @@ describe("row 31c: R17 over the real host server, store and render bridge", () =
     expect(outputs.map((o) => o.format).sort()).toEqual(["DOCX", "HTML", "PDF"])
     const stored = checkStored(outputs)
     for (const s of stored) expect(s.diskSha).toBe(s.sha256)
-    expect(pdfJobs.length).toBe(before + 1)
+    // Wave 165 row 165A (C193, F113-6): a document with the register "DARI N" prints twice (numbered pass + final);
+    // consequence edit by row 165E (was before + 1).
+    expect(pdfJobs.length).toBe(before + 2)
     expect(pdfJobs.at(-1)?.preferCSSPageSize).toBe(true)
     const pdf = stored.find((s) => s.format === "PDF")!
     const head = readFileSync(path.join(STORE, pdf.relPath)).subarray(0, 5).toString("latin1")

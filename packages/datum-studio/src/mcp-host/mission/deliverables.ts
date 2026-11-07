@@ -13,6 +13,7 @@
  * - G4: verification times for G2 through `outputVerification` below (row 155: awaits row 149's store read). Per-output
  *   `verified` in G1 is the one rule's state (row 136b), not this seam.
  */
+import { DATUM_FILENAME_PATTERN } from "../../../vendor/src/lib/studio/contract/env"
 import { finalFileNameOfRow } from "../../../vendor/src/lib/studio/services/storage/files"
 import { outputFileOf } from "../../store-bridge/rows.ts"
 import { WORK_REPORT_CONTRACT_KIND, type MissionReader, type MissionStore } from "../../store/mission/index.ts"
@@ -59,6 +60,11 @@ export type DeliverableOutputWire = {
   format: "DOCX" | "PDF" | "HTML" | "SVG" | "PNG"
   role: "PRIMARY" | "FIGURE"
   finalFileName: string
+  /**
+   * Row 165D (F56-2, CP-17): the DATUM title name the file is delivered under (`output_file.file_name`, e.g.
+   * `<Judul> 012-GSP-KT-XI-2026 RevA.docx`); null when the stored name is not a safe DATUM name (DATUM_FILENAME_PATTERN).
+   */
+  fileName: string | null
   sha256: string
   bytes: number
   createdAt: string
@@ -87,6 +93,8 @@ const ROW_KEY = /^row-([1-9][0-9]{0,3}[a-z]?)-(.+)$/
 const FORMAT_ORDER = ["PDF", "DOCX", "HTML", "SVG", "PNG"]
 
 const iso = (ms: unknown): string => new Date(Number(ms)).toISOString()
+/** Row 165D: a stored name is passed on as the delivered DATUM name only in the DATUM form (one safe segment). */
+const DATUM_NAME = new RegExp(DATUM_FILENAME_PATTERN)
 type R = Record<string, unknown>
 
 /**
@@ -117,6 +125,7 @@ export function readDeliverables(q: MissionReader, mission: string, rowIds: Read
           format: row.format as DeliverableOutputWire["format"],
           role: row.role,
           finalFileName: finalFileNameOfRow(row as never),
+          fileName: typeof row.fileName === "string" && DATUM_NAME.test(row.fileName) ? row.fileName : null,
           sha256: row.sha256,
           bytes: row.bytes,
           createdAt: iso(f.time_created),

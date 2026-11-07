@@ -128,6 +128,9 @@ describe('rel bukti rev B (framePr) dari medan rail paragraf v2', () => {
   }, 60_000);
 });
 
+// Wave 165 row 165A (C188 F113-6, consequence edit): the register's sheet-zero bookmark `_StSheet0` (not a TOC target) is left out.
+const withoutSheetZero = (x: string) => x.replace('<w:bookmarkStart w:id="900000" w:name="_StSheet0"/><w:bookmarkEnd w:id="900000"/>', '');
+
 describe('daftar isi bernomor halaman', () => {
   // FIX-T2: kedalaman 1 (bab/bagian/lampiran) dipatok; entri section bawaan (kedalaman 2) diuji fixt2-toc-sections.
   const TOC1 = () => withParams(BENCH, { 'toc.levels': 1 });
@@ -135,6 +138,7 @@ describe('daftar isi bernomor halaman', () => {
   const TITLES = ['Lingkup Survei', 'Bagian Satu', 'Temuan Utama', 'Data Mentah'];
 
   function bookmarks(xml: string) {
+    xml = withoutSheetZero(xml);
     const starts = [...xml.matchAll(/<w:bookmarkStart w:id="(\d+)" w:name="([^"]+)"\/>/g)].map((m) => ({ id: m[1], name: m[2] }));
     const ends = [...xml.matchAll(/<w:bookmarkEnd w:id="(\d+)"\/>/g)].map((m) => m[1]);
     return { starts, ends };
@@ -181,7 +185,7 @@ describe('daftar isi bernomor halaman', () => {
     const toc = snap.blocks.find((b) => b.type === 'toc')!;
     toc.content = { ...(toc.content as object), entries: [{ level: 'chapter', label: { text: 'Bab 1' }, title: { text: 'Lingkup Survei' }, page: '5' }] } as never;
     const { xml } = await render(snap, TOC1());
-    expect(xml).not.toContain('w:bookmarkStart');
+    expect(withoutSheetZero(xml)).not.toContain('w:bookmarkStart');
     expect(xml).not.toContain('PAGEREF');
     expect(paragraphsXml(xml).map(textOf)).toContain('5');
   }, 60_000);
@@ -190,7 +194,7 @@ describe('daftar isi bernomor halaman', () => {
     const snap = composeDoc('static');
     snap.blocks = snap.blocks.filter((b) => b.type !== 'toc');
     const { xml } = await render(snap, TOC1());
-    expect(xml).not.toContain('w:bookmarkStart');
+    expect(withoutSheetZero(xml)).not.toContain('w:bookmarkStart');
   }, 60_000);
 
   it('HTML: entri turunan = tautan jangkar internal ke kepala bab/bagian/lampiran yang ada', async () => {

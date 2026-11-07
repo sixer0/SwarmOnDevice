@@ -50,8 +50,11 @@ const textOf = (p: string) => (p.match(/<w:t[^>]*>[^<]*<\/w:t>/g) ?? []).map((t)
 const pageRefs = (xml: string) => [...xml.matchAll(/<w:instrText xml:space="preserve"> PAGEREF (\S+) \\h <\/w:instrText>/g)].map((m) => m[1]);
 const names = (n: number) => Array.from({ length: n }, (_, i) => `_StToc_${String(i + 1).padStart(3, '0')}`);
 
+// Wave 165 row 165A (C188 F113-6, consequence edit): the register's sheet-zero bookmark `_StSheet0` (not a TOC target) is left out.
+const withoutSheetZero = (x: string) => x.replace('<w:bookmarkStart w:id="900000" w:name="_StSheet0"/><w:bookmarkEnd w:id="900000"/>', '');
 /** Penanda unik, berpasangan, nama sah Word, dan masing-masing di paragraf judul sasaran (urut). */
 function assertTargets(xml: string, titles: readonly string[]) {
+  xml = withoutSheetZero(xml);
   const starts = [...xml.matchAll(/<w:bookmarkStart w:id="(\d+)" w:name="([^"]+)"\/>/g)].map((m) => ({ id: m[1], name: m[2] }));
   const ends = [...xml.matchAll(/<w:bookmarkEnd w:id="(\d+)"\/>/g)].map((m) => m[1]);
   expect(starts.map((s) => s.name)).toEqual(names(titles.length));
@@ -155,12 +158,12 @@ describe('daftar isi per section + lampiran (DOCX)', () => {
     const toc = snap.blocks.find((b) => b.type === 'toc')!;
     toc.content = { ...(toc.content as object), entries: [{ level: 'chapter', label: { text: 'Bab 1' }, title: { text: 'Lingkup Survei' }, page: '5' }] } as never;
     const a = await render(snap, BENCH);
-    expect(a.xml).not.toContain('w:bookmarkStart');
+    expect(withoutSheetZero(a.xml)).not.toContain('w:bookmarkStart');
     expect(a.xml).not.toContain('PAGEREF');
     const none = composeDoc('static');
     none.blocks = none.blocks.filter((b) => b.type !== 'toc');
     const b = await render(none, BENCH);
-    expect(b.xml).not.toContain('w:bookmarkStart');
+    expect(withoutSheetZero(b.xml)).not.toContain('w:bookmarkStart');
   }, 60_000);
 });
 

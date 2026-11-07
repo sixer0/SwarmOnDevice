@@ -61,7 +61,7 @@ import {
   sectionBreakParagraphXml,
   type SectionPackagePart,
 } from "../package";
-import { draftMarkerOf } from "../package/header-footer";
+import { draftMarkerOf, isSheetZeroUnit, sheetZeroBookmarkXml } from "../package/header-footer";
 import { bindBlockRuns } from "./bind";
 import { MediaCollector, renumberDrawingIds } from "./media";
 import { computeNumbering } from "./numbering";
@@ -457,7 +457,9 @@ export async function assembleDocxDetailed(ctx: RenderContext, opts: AssembleDoc
     const last = i === plans.length - 1;
     if (breakPerUnit && !last) {
       const holder = resolveRoleFormat(uctx.tpl, "unit.sectionHolder");
-      body += sectionBreakParagraphXml(sectionPkg.sections[i].sectPr, sectionHolderPPrInner(holder.para, holder.run, uctx.tpl.params));
+      // Wave 165 row 165A (F113-6): `_StSheet0` on the last sheet before Bab 1, read by the register "DARI N" formula.
+      const brk = sectionBreakParagraphXml(sectionPkg.sections[i].sectPr, sectionHolderPPrInner(holder.para, holder.run, uctx.tpl.params));
+      body += isSheetZeroUnit(uctx, plans.map((p) => p.unit), i) ? brk.replace(/<\/w:p>$/, `${sheetZeroBookmarkXml()}</w:p>`) : brk;
     }
   });
   body += keep[keep.length - 1].sectPr;

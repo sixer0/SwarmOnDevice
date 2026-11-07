@@ -1,6 +1,6 @@
 // Deliverables panel helpers (row 132; masterplan/01_specs_mission_control_ui.md §6 items 32-34, §7, §12; C101, C102, C127).
 // Pure: the row 129 view model -> what each deliverable line shows, and what a click does. The view never re-derives.
-import { isStudioOutputPath } from "../file-preview-policy"
+import { fileNameOf, isStudioOutputName } from "../file-preview-policy"
 import type { DeliverableFormat, DeliverableStatus, MissionDeliverableVM, MissionVM } from "./mission-model"
 
 export type DeliverableLine = {
@@ -24,13 +24,16 @@ export type DeliverableLine = {
   selected: boolean
 }
 
-// §12: the only path ever opened is docs/<mission id>/<finalFileName>. The model built it from a listed, plain file
-// name; this re-checks the shape and the Studio output name (C102), so a Studio PDF/HTML opens rendered in the tab.
+// §12: the only path ever opened is docs/<mission id>/<name>, name = the delivered DATUM title name (row 165D) or the
+// C51 final name. The model built it from a listed, plain file name; this re-checks the shape and the Studio output
+// name (C102, row 165D: C51 or DATUM form), so a Studio PDF/HTML opens rendered in the tab.
 const PROJECT_PATH = /^docs\/[^/\\\u0000-\u001f]+\/[^/\\\u0000-\u001f]+$/
 
 export function openablePath(path: string | null | undefined): string | null {
   if (!path || !PROJECT_PATH.test(path) || path.includes("..")) return null
-  return isStudioOutputPath(path) ? path : null
+  // Row 165E (C192): the path was built from the Studio store's delivered name (mission-model.ts), so the name check
+  // suffices here; the mission poll registers the same path for the file tab (../studio-output-registry.ts).
+  return isStudioOutputName(fileNameOf(path)) ? path : null
 }
 
 export function deliverableLine(d: MissionDeliverableVM, selectedRow: string | undefined): DeliverableLine {

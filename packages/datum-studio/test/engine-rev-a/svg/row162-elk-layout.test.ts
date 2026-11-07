@@ -227,10 +227,12 @@ describe("R3/R4: large layered figure", () => {
     expect(r.svg).toContain('<tspan font-weight="600">GAMBAR 9.1</tspan>');
     expect(r.svg).toMatch(/>KEY {2}/);
     for (const mark of ["■", "◈", "◇"]) expect(r.svg).toContain(mark); // TERUKUR, DITURUNKAN (accent), PEMASOK glyphs
+    // Row 165C (F113-9): an outline on the sheet edge is drawn half a stroke (0.23 mm) inside; its placed x is 0.
+    const placed = (v: number) => (Math.abs(v - 0.23) < 0.006 ? 0 : v);
     for (const b of nodeBoxes(r.svg)) {
       // the SVG prints 2 decimals: on the lattice within the print rounding (0.005 mm)
-      expect(Math.abs(b.x - Math.round(b.x / core.LATTICE_X) * core.LATTICE_X)).toBeLessThan(0.006);
-      expect(Math.abs(b.y - Math.round(b.y / core.LATTICE_Y) * core.LATTICE_Y)).toBeLessThan(0.006);
+      expect(Math.abs(placed(b.x) - Math.round(placed(b.x) / core.LATTICE_X) * core.LATTICE_X)).toBeLessThan(0.006);
+      expect(Math.abs(placed(b.y) - Math.round(placed(b.y) / core.LATTICE_Y) * core.LATTICE_Y)).toBeLessThan(0.006);
     }
     // same nodes, same tiers (rows), same sheet width as the original; only order and x changed
     const rowsOf = (svg: string) => [...new Set(nodeBoxes(svg).map((b) => b.y))].sort((a, b) => a - b);

@@ -18,6 +18,7 @@
  * text (runtime.ts keeps that in the engine/browser log).
  */
 import { StudioEngineError } from "../../contract/errors";
+import { STUDIO_CHROMIUM_TIMEOUT_MS } from "../../contract/env";
 import { StudioBrowserError, withSandboxedPage } from "../../engine/browser/runtime";
 
 /** Bridge input cap for a `src` file (desktop/src/main/datum-render/protocol.ts:11, MAX_INPUT_BYTES). */
@@ -57,6 +58,45 @@ export function countPdfPages(pdf: Uint8Array): number {
   return (s.match(/\/Type\s*\/Page(?![s\w])/g) ?? []).length;
 }
 
+// ── Wave 165 row 165A (F113-3, F113-6): sheet totals filled after pagination ───────────────────────────────────
+const NUMBERED_PASS_OFF = '<style data-studio="pdf-numbered-pass" media="not all">';
+const NUMBERED_PASS_ON = '<style data-studio="pdf-numbered-pass" media="all">';
+/** engine/html/base/shell.ts SHEET_TOTAL_MARK around the register `counter(pages)`. */
+const SHEET_TOTAL_RE = /\/\*st-N\*\/counter\(pages\)\/\*\/st-N\*\//g;
+/** engine/html/blocks/classes.ts: the HALAMAN NUMPAGES span of a cover control value reads `--st-pages-total`. */
+const PAGES_FIELD_RE = /<td class="st-control-value[^"]*"[^>]*><span class="st-field[^"]*"[^>]*data-field="NUMPAGES"/;
+
+/** Which totals the HTML asks for: `pages` (a HALAMAN field) and `numbered` (register N from Bab 1). */
+export function sheetTotalPlan(html: string): { pages: boolean; numbered: boolean } {
+  return { pages: PAGES_FIELD_RE.test(html), numbered: html.includes(NUMBERED_PASS_OFF) && html.includes("/*st-N*/counter(pages)/*/st-N*/") };
+}
+
+/** The HTML of the final print: register N = `numbered`, HALAMAN = `total` (CSS strings; no markup is added to the body). */
+export function withSheetTotals(html: string, total: number, numbered: number): string {
+  const out = numbered > 0 ? html.replace(SHEET_TOTAL_RE, `"${numbered}"`) : html;
+  const style = `<style data-studio="pdf-sheet-totals">:root{--st-pages-total:"${total}"}</style>\n`;
+  const at = out.indexOf("</head>");
+  return at < 0 ? out : `${out.slice(0, at)}${style}${out.slice(at)}`;
+}
+
+/** Units hidden by the numbered pass (one sheet each in the estimate). */
+function numberedPassHiddenUnits(html: string): number {
+  const at = html.indexOf(NUMBERED_PASS_OFF);
+  if (at < 0) return 0;
+  const css = html.slice(at, html.indexOf("</style>", at));
+  return (css.match(/\.st-unit\[data-unit-key=/g) ?? []).length;
+}
+
+/** Flow units of the document (one sheet each in the estimate). */
+function unitCount(html: string): number {
+  return Math.max(1, (html.match(/<section class="st-unit\b/g) ?? []).length);
+}
+
+function pdfPagesOf(b: Buffer): number {
+  const u = new Uint8Array(b.buffer, b.byteOffset, b.byteLength);
+  return Buffer.from(u.subarray(0, 5)).toString("latin1") === "%PDF-" ? countPdfPages(u) : 0;
+}
+
 function validMm(v: number | undefined, fallback: number): number {
   return typeof v === "number" && Number.isFinite(v) && v > 0 && v <= 5000 ? v : fallback;
 }
@@ -81,9 +121,27 @@ export async function printHtmlToPdf(html: string, opts: HtmlPdfOptions): Promis
 
   let buf: Buffer;
   try {
-    buf = await withSandboxedPage("printPdf", { viewport, timeoutMs: opts.timeoutMs }, async ({ page }) => {
-      await page.setContent(html, { waitUntil: "load" });
-      return page.pdf({ width: `${widthMm}mm`, height: `${heightMm}mm`, preferCSSPageSize: true, printBackground: true });
+    // Wave 165 row 165A: one session for every pass, so the per-operation timeout covers each print (at most 3).
+    const plan = sheetTotalPlan(html);
+    const timeoutMs = !plan.pages && !plan.numbered ? opts.timeoutMs : (opts.timeoutMs ?? STUDIO_CHROMIUM_TIMEOUT_MS) * 3;
+    buf = await withSandboxedPage("printPdf", { viewport, timeoutMs }, async ({ page }) => {
+      const print = async (h: string) => {
+        await page.setContent(h, { waitUntil: "load" });
+        return page.pdf({ width: `${widthMm}mm`, height: `${heightMm}mm`, preferCSSPageSize: true, printBackground: true });
+      };
+      // Wave 165 row 165A (C188 F113-3/F113-6): sheet totals that only pagination knows, with as few prints as the
+      // document allows. N (register "DARI N", ID p.48) = pages of a print with the units before Bab 1 hidden. T (the
+      // HALAMAN value = DOCX NUMPAGES) is first estimated (N + one sheet per hidden unit, else one sheet per unit) and
+      // checked against the final print's page count: digits in a margin box or a table cell do not move the page
+      // breaks, so a wrong estimate costs exactly one reprint. Typical TERBIT document: 2 prints (was 1); a document
+      // with neither marker prints once, byte-for-byte as before.
+      if (!plan.pages && !plan.numbered) return print(html);
+      const numbered = plan.numbered ? pdfPagesOf(await print(html.replace(NUMBERED_PASS_OFF, NUMBERED_PASS_ON))) : 0;
+      const guess = plan.numbered ? numbered + numberedPassHiddenUnits(html) : unitCount(html);
+      const final = await print(withSheetTotals(html, guess, numbered));
+      const total = pdfPagesOf(final);
+      if (!plan.pages || total === guess || total < 1) return final;
+      return print(withSheetTotals(html, total, numbered));
     });
   } catch (err) {
     if (err instanceof StudioBrowserError && (err.reason === "LAUNCH_FAILED" || err.reason === "SANDBOX_UNAVAILABLE")) {

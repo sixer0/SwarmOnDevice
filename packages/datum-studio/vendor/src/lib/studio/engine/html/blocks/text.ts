@@ -27,6 +27,7 @@ import {
 } from "../../../contract";
 import { StudioEngineError } from "../../../contract/errors";
 import { railK2ReserveOf } from "../../docx/blocks/rail";
+import { resolveTokenColor } from "../../tokens";
 import { baselineSnapTw, snapParaToBaseline } from "../../docx/blocks/rhythm";
 import { datumRulePlaced } from "../../front/apparatus";
 import { appendixOpenerKickerText, chapterKickerText, kickerSuppressed, provenanceMarkLabelText } from "../../front/texts";
@@ -84,6 +85,18 @@ function markLabelProps(ctx: RenderContext, mark: ProvenanceMark): RunProps | un
   return color ? { color } : undefined;
 }
 
+/**
+ * Row 165B (C188 F113-1, CP-29, ID p.38 Tabel 7.1): glyph run of a rail mark when the template writes no `glyphRun`
+ * for it. Same rule as DOCX `glyphRunProps` (docx/blocks/rail.ts): the symbol face plus the mark colour
+ * `marks.<m>.colour` (■ ink900 #101418, ◈ signal #B45309, ◇ ink400 #6B7783, △ alert #9B1C1C). Before, the glyph
+ * inherited the rail colour (#6B7783 for every mark) while the DOCX rail printed the mark colours.
+ */
+function railGlyphFallbackRun(ctx: RenderContext, mark: ProvenanceMark): RunProps {
+  const ref = ctx.tpl?.params?.[`marks.${mark.toLowerCase()}.colour`];
+  const color = typeof ref === "string" && ctx.tpl ? resolveTokenColor(ctx.tpl, ref) : undefined;
+  return { faceRole: "symbolGlyph", ...(color ? { color } : {}) };
+}
+
 /** Chip rel bukti (moda A) untuk satu paragraf inang. */
 export function railHtml(ctx: RenderContext, rail: readonly RailLine[]): string {
   const lines = rail.filter(isObj).map((line) => {
@@ -91,7 +104,7 @@ export function railHtml(ctx: RenderContext, rail: readonly RailLine[]): string 
     const mark = kind === "mark" && line.mark && (PROVENANCE_MARKS as readonly string[]).includes(line.mark) ? line.mark : undefined;
     let glyph = "";
     if (mark) {
-      const gr = roleFormat(ctx, "rail.mark").glyphRun?.[mark];
+      const gr = roleFormat(ctx, "rail.mark").glyphRun?.[mark] ?? railGlyphFallbackRun(ctx, mark);
       const st = runStyle(gr, 0, ctx.tpl);
       const { cls, style } = classStyle([C.railGlyph, ...st.classes], st.decl);
       glyph = `<span${attr("class", cls)}${attr("style", style)}${attr("data-mark", mark)}>${escapeHtml(PROVENANCE_GLYPHS[mark])}</span> `;

@@ -38,15 +38,19 @@
   "row163": "2026-11-07: U24 C (Vega-Lite/Vega chart family V-01..V-08; C126, C131, C134; security verification/18_row160 §4 C1-C9, C11). NEW engine/chart/family-v/{guard,index,input,sandbox,specs,svg,theme}.ts (status added; sandbox.ts is the only parse/View call: interpreter + deny-all loader); registry/charts.ts copied -> patched (patch row163-vega-chart-registry, additive VEGA_CHART_REGISTRY). Diffs and copies in implementation/115_row163_diffs/. Counts: files +7, copied -1, patched +1, added +7, bytes +90777",
   "I-3": "2026-11-08: C164 L8. engine/chart/family-v/index.ts (added by 163) edited: aliasLabels + PROTO_ALIAS so the data value '__proto__' is an ordinary label in V-02/V-03 (files[].patch_i3); bytes 9693 -> 10762, counts.bytes +1069 (9651545). Test test/engine-rev-a/chart-vega/i3-proto-labels.test.ts",
   "row163b": "2026-11-08: C155 wiring of row 163 (Vega family on the agent render path). NEW services/render/vega-figure.ts (status added); contract/schema/v2/common.schema.ts, contract/types/chart.ts, contract/types/v2/doc.ts, services/compose/blocks.ts copied -> patched (patch row163b-*); services/render/figures.ts and engine/chart/family-v/input.ts re-patched (files[].patch_row163b). Diffs in implementation/122_row163b_diffs/. `counts` RECOMPUTED from files[] (601 = 466 copied + 100 patched + 12 replaced + 23 added; bytes = sum of files[].bytes, which also takes in 6861 bytes of earlier drift the block had not counted: 9633845 + 9770 (this row) + 6861 = 9650476); every entry checked against disk: 0 sha/bytes mismatches, 0 missing",
-  "row143a": "2026-11-08: C177 F143-1 engine faults. NEW engine/table-fit.ts (status added); engine/bind/derivation.ts, engine/bind/index.ts, engine/docx/assemble/numbering.ts, services/compose/snapshot.ts, services/ingest/normalize.ts copied -> patched (patch row143a-engine-faults); engine/docx/figures/derivation.ts, engine/html/tables/table.ts, engine/docx/tables/render.ts, engine/figure-capacity.ts re-patched (files[].patch_row143a). Diffs in implementation/132_row143a_diffs/. `counts` RECOMPUTED from files[] (602 = 459 copied + 107 patched + 12 replaced + 24 added; bytes = sum of files[].bytes = 9668789); the block before this row said copied 466 / patched 100 while files[] held 464 / 102 (earlier drift, not this row); every entry checked against disk after this row: 0 sha/bytes mismatches, 0 missing"
+  "row143a": "2026-11-08: C177 F143-1 engine faults. NEW engine/table-fit.ts (status added); engine/bind/derivation.ts, engine/bind/index.ts, engine/docx/assemble/numbering.ts, services/compose/snapshot.ts, services/ingest/normalize.ts copied -> patched (patch row143a-engine-faults); engine/docx/figures/derivation.ts, engine/html/tables/table.ts, engine/docx/tables/render.ts, engine/figure-capacity.ts re-patched (files[].patch_row143a). Diffs in implementation/132_row143a_diffs/. `counts` RECOMPUTED from files[] (602 = 459 copied + 107 patched + 12 replaced + 24 added; bytes = sum of files[].bytes = 9668789); the block before this row said copied 466 / patched 100 while files[] held 464 / 102 (earlier drift, not this row); every entry checked against disk after this row: 0 sha/bytes mismatches, 0 missing",
+  "row165C": "2026-11-08: C188 F113-9/F113-10 + C189 F56-3 (wave 165, parallel run). engine/diagram/core/svg.ts, engine/diagram/core/index.ts, engine/diagram/build/svg.ts, scripts/studio/mcp/figure-tools.ts re-patched (files[].patch_row165C, before = previous after_sha256). Diffs in implementation/136_row165C_diffs/. `counts` left as found (no status change; bytes not recomputed while rows 165A/B/D write the same file)",
+  "row165D": "2026-11-08: C188 F113-11 + C189 F56-2 (wave 165, parallel run). scripts/studio/mcp/tools.ts copied -> patched; contract/env.ts, services/templates/index.ts, services/skeleton/repository.ts, services/storage/files.ts re-patched (files[].patch_row165D, before = previous sha256); NEW scripts/studio/mcp/datum-name.ts and services/templates/face-names.ts (status added). Diffs in implementation/137_row165D_diffs/. `counts` left as found for the controller to recompute after wave 165 (165D: files +2, added +2, copied -1, patched +1)",
+  "row165A": "2026-11-08: C189 F56-1 + C188 F113-3/4/6/7 + F113-12 for 165D (wave 165, parallel run). engine/front/texts.ts, engine/html/blocks/wrapper.ts, engine/html/base/shell.ts, engine/docx/wrapper/pages.ts, engine/docx/package/header-footer.ts, services/render/pdf.ts re-patched; engine/html/blocks/classes.ts and engine/docx/assemble/index.ts copied -> patched (files[].patch_row165A, before = previous sha256). Diffs in implementation/138_row165A_diffs/. `counts` left as found (165A: copied -2, patched +2)",
+  "row165E": "2026-11-08: wave 165 integration (C191 ruling 4, C192, C193 ruling 4). scripts/studio/mcp/resources.ts copied -> patched (guide line); scripts/studio/mcp/figure-tools.ts and engine/docx/wrapper/render.ts re-patched (files[].patch_row165E, before = previous sha256). Diffs in implementation/139_row165E_diffs/. `counts` RECOMPUTED from files[] after wave 165: before {files 602, copied 456, patched 110, replaced 12, added 24, bytes 9671390} -> after {files 604 = 452 copied + 114 patched + 12 replaced + 26 added, bytes = sum of files[].bytes = 9708981}; every entry checked against disk after this row: 0 sha/bytes mismatches, 0 missing. patch_rows += 165A (present in files[] but missing from the list), 165E"
  },
  "counts": {
-  "files": 602,
-  "copied": 459,
-  "patched": 107,
+  "files": 604,
+  "copied": 452,
+  "patched": 114,
   "replaced": 12,
-  "added": 24,
-  "bytes": 9668789
+  "added": 26,
+  "bytes": 9708981
  },
  "files": [
   {
@@ -207,9 +211,11 @@
   {
    "path": "scripts/studio/mcp/figure-tools.ts",
    "status": "patched",
-   "bytes": 18698,
+   "bytes": 22173,
    "source_sha256": "b7b2658186c53d9fe1f9dac50cc6eba76df2abfe815c232ee793e5d64dc5b463",
-   "sha256": "31b95f846eabc10e846d869c7ed871f3078fa8b4857e42631caa61548ac72ffc",
+   "sha256": "e78ff8daeed4b7cd16305129ce4ed29d0180c1107e0f6c17de8e7f33d11c5e3b",
+   "patch_row165E": {"id": "row165E-integration", "row": "165E", "decision": "C192 (tools/list 30306 B > 30000 B budget)", "summary": "studio_figure_preview: the standalone/png property descriptions dropped and the tool description sentence shortened (meaning kept, no schema change); tools/list default set 30306 -> 30134 B", "before_sha256": "445d3dfd92b5f52ba7a982a5a7d5f1e9e245197e366cb8ba7cdf16f5a7ded98e", "after_sha256": "e78ff8daeed4b7cd16305129ce4ed29d0180c1107e0f6c17de8e7f33d11c5e3b", "diff": "implementation/139_row165E_diffs/scripts_studio_mcp_figure-tools.ts.diff"},
+   "patch_row165C": {"id": "row165C-standalone-figure", "row": "165C", "decision": "C189 F56-3", "summary": "studio_figure_preview: standalone (stand-alone figure: caption, KUNCI, SUMBER in the SVG) and png (300 dpi, with standalone + downloadDir) arguments; downloadDir saves 'Gambar <n> <Judul>.svg/.png' (server name re-cleaned by datumSafeName, standaloneFileName) with the saved paths in the untrusted block; figureBrief drops png; tool count unchanged", "before_sha256": "31b95f846eabc10e846d869c7ed871f3078fa8b4857e42631caa61548ac72ffc", "after_sha256": "445d3dfd92b5f52ba7a982a5a7d5f1e9e245197e366cb8ba7cdf16f5a7ded98e", "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/136_row165C_diffs/scripts_studio_mcp_figure-tools.ts.diff", "diff_sha256": "5f8d600fe3b7b1c8d575e15df4df82be66025e2154f517a05a71ecb04505a6a7"},
    "patch": {
     "id": "row107-L5",
     "row": 107,
@@ -229,10 +235,11 @@
   },
   {
    "path": "scripts/studio/mcp/resources.ts",
-   "status": "copied",
-   "bytes": 11197,
+   "status": "patched",
+   "bytes": 11438,
    "source_sha256": "1baf1d948b975ea5f44a5d249ba7a138259bccc4b2b460b12c5bc89db390c193",
-   "sha256": "1baf1d948b975ea5f44a5d249ba7a138259bccc4b2b460b12c5bc89db390c193"
+   "sha256": "624e36068d5f281ee8c059058704709080ec24eb6d60f8d5fa080c482178c9e2",
+   "patch_row165E": {"id": "row165E-integration", "row": "165E", "decision": "C191 ruling 4 (row 165C file request)", "summary": "guide text: one line (two strings) after the FIG-03b studio_figure_preview lines documenting the stand-alone figure (standalone: true, downloadDir[, png: true]) -> Gambar <n> <Judul>.svg/.png with caption, KUNCI, SUMBER", "before_sha256": "1baf1d948b975ea5f44a5d249ba7a138259bccc4b2b460b12c5bc89db390c193", "after_sha256": "624e36068d5f281ee8c059058704709080ec24eb6d60f8d5fa080c482178c9e2", "diff": "implementation/139_row165E_diffs/scripts_studio_mcp_resources.ts.diff"}
   },
   {
    "path": "scripts/studio/mcp/safety.ts",
@@ -286,10 +293,20 @@
   },
   {
    "path": "scripts/studio/mcp/tools.ts",
-   "status": "copied",
-   "bytes": 76803,
+   "status": "patched",
+   "bytes": 78975,
    "source_sha256": "afe82e84205ea4167feb0d0afafc81bf7a168e25213ed5fbbfbfd19e5d71e154",
-   "sha256": "afe82e84205ea4167feb0d0afafc81bf7a168e25213ed5fbbfbfd19e5d71e154"
+   "sha256": "cfd2373eb102cd5b679902c8656545bb9eeb17193f560ffd77ce1acf6ec1d28b",
+   "patch_row165D": {"id": "row165D-delivered-name", "row": "165D", "decision": "C189 F56-2 (CP-17)", "summary": "studio_file_verify: saves under the DATUM title name from R10 Content-Disposition when it is a safe DATUM segment (datum-name.ts deliveredDatumName/joinInside, DATUM_FILENAME_PATTERN), else under the C51 final name as before; HEAD vs GET DATUM name must agree (VERIFY_FAILED); the title is printed only in the untrusted block, data adds fileName/deliveredFileName (untrusted when present). studio_render: outputs[].fileName (safe DATUM name or null, untrusted field). No schema or description change; tool count unchanged", "before_sha256": "afe82e84205ea4167feb0d0afafc81bf7a168e25213ed5fbbfbfd19e5d71e154", "after_sha256": "cfd2373eb102cd5b679902c8656545bb9eeb17193f560ffd77ce1acf6ec1d28b", "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/137_row165D_diffs/scripts_studio_mcp_tools.ts.diff", "diff_sha256": "1a1ea19c74387f5606a7b08c8e96efc5df95c473b0f82fde5de6bdcbba87b92d"}
+  },
+  {
+   "path": "scripts/studio/mcp/datum-name.ts",
+   "status": "added",
+   "bytes": 2753,
+   "source_sha256": null,
+   "sha256": "60a7af4397090abf97e10e66361c405d8ff729cb575491fe27287e635a835065",
+   "added_by": "165D",
+   "note": "NEW Swarm file of row 165D (C189 F56-2): safeDatumName, dispositionFileName, deliveredDatumName, joinInside - the delivered-name path policy of studio_file_verify. Copy: implementation/137_row165D_diffs/scripts_studio_mcp_datum-name.ts.new"
   },
   {
    "path": "scripts/studio/mcp/write-client-edit.ts",
@@ -750,9 +767,10 @@
   {
    "path": "src/lib/studio/contract/env.ts",
    "status": "patched",
-   "bytes": 16819,
+   "bytes": 18046,
    "source_sha256": "73232eea6c3db8f8e94ce88fef574c03f29155440a390c5947b16d55427913a2",
-   "sha256": "bda08348adaadb55195bcb85ebb1fa57c7b57ca7b5574240b85085041e5f188d",
+   "sha256": "e6e9099068dd8bf3d1ff64bfe340820dc173ea45c450ad57110cfa477cb50744",
+   "patch_row165D": {"id": "row165D-delivered-name", "row": "165D", "decision": "C189 F56-2 (CP-17)", "summary": "additive: DATUM_FILENAME_PATTERN (the delivered DATUM title name: <Judul> <nomor> Rev<X> / <Judul> <YYYY-MM-DD> / Gambar <C.n> <Judul>, optional ' <sha8|16|64>' collision suffix, one safe segment, no '_'); the app copies it verbatim (file-preview-policy.ts, pinned by a test)", "before_sha256": "bda08348adaadb55195bcb85ebb1fa57c7b57ca7b5574240b85085041e5f188d", "after_sha256": "e6e9099068dd8bf3d1ff64bfe340820dc173ea45c450ad57110cfa477cb50744", "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/137_row165D_diffs/contract_env.ts.diff", "diff_sha256": "ebde370faf48724aa233f8618ddae96289c94436f525ec573fff6a4fed715742"},
    "patch_row29": {
     "id": "row29-env-macos",
     "row": 29,
@@ -2158,9 +2176,10 @@
   {
    "path": "src/lib/studio/engine/diagram/build/svg.ts",
    "status": "patched",
-   "bytes": 25812,
+   "bytes": 26039,
    "source_sha256": "a9ab8856426161f4b087bb26315fdd57c534ba81ee3e9d8117eb271d683c4ea0",
-   "sha256": "d00ed096ae2ee9775dac86045c845ca532b89833c469df1f9889c1af434ba100",
+   "sha256": "0feb88508fbedb07c813e0cc4c5bcc65b4647f5bf5d18ccd33fc43041f4392b7",
+   "patch_row165C": {"id": "row165C-figure-engine", "row": "165C", "decision": "C188 F113-9 (CP-37), F113-10 (CP-47)", "summary": "buildOnce: no hatch <pattern> defined (diagramDefs hatch45/hatch135 false; hatches are vector lines from nodeSvg); nodeSvg gets the sheet size (canvas W x H) for the half-stroke edge inset", "before_sha256": "d00ed096ae2ee9775dac86045c845ca532b89833c469df1f9889c1af434ba100", "after_sha256": "0feb88508fbedb07c813e0cc4c5bcc65b4647f5bf5d18ccd33fc43041f4392b7", "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/136_row165C_diffs/engine_diagram_build_svg.ts.diff", "diff_sha256": "b0eb988881e88aef2e4615a4ae468d623d9292de9cc04a839b681a797f20f8f9"},
    "patch_row124b": {
     "id": "row124b-diagram-build-svg-key-text",
     "row": "124b",
@@ -2252,9 +2271,10 @@
   {
    "path": "src/lib/studio/engine/diagram/core/index.ts",
    "status": "patched",
-   "bytes": 3081,
+   "bytes": 3287,
    "source_sha256": "fd178ae4bb6b0617ab1157fe12f7806a9fde345eb5375b4376baabee11472eee",
-   "sha256": "8904ef623c890a9511b07c538c28589af061248e889edea757960047a6f7d054",
+   "sha256": "71676b65f78289e5e74c73f343b1f79f58e28ad687efda34d2e09786d0298d34",
+   "patch_row165C": {"id": "row165C-figure-engine", "row": "165C", "decision": "C188 F113-9, F113-10", "summary": "export names of the row 165C core/svg.ts helpers (HATCH_PITCH_MM, HATCH_STROKE_MM, hatchLinesSvg, insetForStroke, nodeHatchAngle, NodeSvgOptions)", "before_sha256": "8904ef623c890a9511b07c538c28589af061248e889edea757960047a6f7d054", "after_sha256": "71676b65f78289e5e74c73f343b1f79f58e28ad687efda34d2e09786d0298d34", "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/136_row165C_diffs/engine_diagram_core_index.ts.diff", "diff_sha256": "09e4042532f81c6486c2b76ab1f43b8f362225b497ea39c01c7ef52bd67c5d0d"},
    "patch": {
     "id": "row124-revA-diagram-core-index",
     "row": 124,
@@ -2311,9 +2331,10 @@
   {
    "path": "src/lib/studio/engine/diagram/core/svg.ts",
    "status": "patched",
-   "bytes": 20307,
+   "bytes": 26828,
    "source_sha256": "6c1846b3c5b2966476dbe1fff3fe44283daea1c70eb7bf12d5b3fbece817c741",
-   "sha256": "89290c4b734e6775d94f09b11347a3286cb54052591ff18a5d56eb5037ac0d45",
+   "sha256": "f660dcc9a86582c6721142e5f4c682551b5d9abb8536ed2700c06bcf85a7e7e8",
+   "patch_row165C": {"id": "row165C-figure-engine", "row": "165C", "decision": "C188 F113-9 (CP-37), F113-10 (CP-47)", "summary": "nodeSvg: hatch drawn as vector lines (hatchLinesSvg: pattern geometry x cos a + y sin a = 1.6 k, cut to the box, clipPath for non-box shapes, 0.3 mm ink400) under an unfilled outline instead of fill url(#datum-hatch..); outline inset by half a stroke on the sheet edge (insetForStroke, canvas option); NEW exports HATCH_PITCH_MM, HATCH_STROKE_MM, nodeHatchAngle, NodeSvgOptions", "before_sha256": "89290c4b734e6775d94f09b11347a3286cb54052591ff18a5d56eb5037ac0d45", "after_sha256": "f660dcc9a86582c6721142e5f4c682551b5d9abb8536ed2700c06bcf85a7e7e8", "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/136_row165C_diffs/engine_diagram_core_svg.ts.diff", "diff_sha256": "e238d1ca42d0ce33e2f9168e9406a74d420ee9536c3466678d09dbe8f5afbb5d"},
    "patch": {
     "id": "row124-revA-diagram-core-svg",
     "row": 124,
@@ -2562,10 +2583,11 @@
   },
   {
    "path": "src/lib/studio/engine/docx/assemble/index.ts",
-   "status": "copied",
-   "bytes": 23526,
+   "status": "patched",
+   "bytes": 23822,
    "source_sha256": "fd8fead174950066a7a75a8738e21bea3df2742cf2fb6a99badb51efaf810b8e",
-   "sha256": "fd8fead174950066a7a75a8738e21bea3df2742cf2fb6a99badb51efaf810b8e"
+   "sha256": "727f90a3ec3ed4d7ef25eabe2fc1dc77d6e03fc8db74eb0a27f2cb7c859e14bc",
+   "patch_row165A": {"id": "row165A-cover-control-furniture", "row": "165A", "decision": "C188 F113-6", "summary": "the section-break paragraph of the last unit before Bab 1 carries the _StSheet0 bookmark read by the register formula. Status copied -> patched", "before_sha256": "fd8fead174950066a7a75a8738e21bea3df2742cf2fb6a99badb51efaf810b8e", "after_sha256": "727f90a3ec3ed4d7ef25eabe2fc1dc77d6e03fc8db74eb0a27f2cb7c859e14bc", "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/138_row165A_diffs/engine_docx_assemble_index.ts.diff", "diff_sha256": "cb3d84ad8abdb6d2428e28b2147a13c6ddd238377ce4cb2cc16ac9edb7e2b8fe"}
   },
   {
    "path": "src/lib/studio/engine/docx/assemble/media.ts",
@@ -2698,10 +2720,11 @@
   },
   {
    "path": "src/lib/studio/engine/docx/blocks/structure.ts",
-   "status": "copied",
-   "bytes": 9101,
+   "status": "patched",
+   "bytes": 9304,
    "source_sha256": "713bb1b43246bc097fc4341208f82170ce4ff9befa3bb7aae8dcd3bcd71bb7a1",
-   "sha256": "713bb1b43246bc097fc4341208f82170ce4ff9befa3bb7aae8dcd3bcd71bb7a1"
+   "sha256": "c4dbab772ea72f35df490a32a38021d67f0e3236ad76daaa095b44b380b33b05",
+   "patch_row165B": {"id": "row165B-marks-glyphs-rule", "row": "165B", "decision": "C188 F113-8 (CP-23, Manual Rev A ID p.53 DT-13f)", "summary": "generatedDatumRule: chapter Datum Rule lead = datumRuleUnitLeadMm (width x unit position / unit count, as the HTML/PDF withDatumRuleLeads) instead of the fixed device.datumRule.frontSegmentMm", "before_sha256": "713bb1b43246bc097fc4341208f82170ce4ff9befa3bb7aae8dcd3bcd71bb7a1", "after_sha256": "c4dbab772ea72f35df490a32a38021d67f0e3236ad76daaa095b44b380b33b05", "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/135_row165B_diffs/engine_docx_blocks_structure.ts.diff", "diff_sha256": "53286cd039f043e25f99dfbd7f214262018abfed4aa807d5eb0749a3d7610a4a"}
   },
   {
    "path": "src/lib/studio/engine/docx/blocks/table.ts",
@@ -2913,9 +2936,10 @@
   {
    "path": "src/lib/studio/engine/docx/package/header-footer.ts",
    "status": "patched",
-   "bytes": 33098,
+   "bytes": 36162,
    "source_sha256": "08883ba9a62436bfd211a5ef24d251217399f6a9cf61b82fb4d94a99d8b75387",
-   "sha256": "816f5c58f1ec57b153b165e77191d7190aebb1aecc3ff0de18b1d6652a6b9928",
+   "sha256": "578a35f5791ed2b692f85ece09b929fa14ba0a6447c1f127b625d597b1b285ba",
+   "patch_row165A": {"id": "row165A-cover-control-furniture", "row": "165A", "decision": "C188 F113-6, F113-12 (file request of 165D)", "summary": "register footers of the chapter units of a document numbered from Bab 1: NUMPAGES -> { = { NUMPAGES } - { PAGEREF _StSheet0 } } (withNumberedSheetTotal; nested fields without cached text, outer cached value kept); NEW SHEET_ZERO_BOOKMARK, sheetZeroBookmarkXml, isSheetZeroUnit; registerBody no longer appends the R-76 classification line (classificationLineXml kept, unused)", "before_sha256": "816f5c58f1ec57b153b165e77191d7190aebb1aecc3ff0de18b1d6652a6b9928", "after_sha256": "578a35f5791ed2b692f85ece09b929fa14ba0a6447c1f127b625d597b1b285ba", "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/138_row165A_diffs/engine_docx_package_header-footer.ts.diff", "diff_sha256": "fcf102639454255d1f0e50e3cadd973b8d887602e529dc4f85167237ebcc2109"},
    "patch_row49a": {
     "id": "row49a-classification-seal",
     "row": "49a",
@@ -3108,9 +3132,10 @@
   {
    "path": "src/lib/studio/engine/docx/wrapper/media.ts",
    "status": "patched",
-   "bytes": 15651,
+   "bytes": 16690,
    "source_sha256": "fc7bf35c02723d421754a92d31b1e781064e05121c793af1967b47dde941a016",
-   "sha256": "14cc5af7401e14b6bf79131948d12dddc687c149d62953b744acfe5032e6693c",
+   "sha256": "6f223edd6d362bc1fe88c3198feb40eb70e4908e649039b4b907169823ec87ba",
+   "patch_row165B": {"id": "row165B-marks-glyphs-rule", "row": "165B", "decision": "C188 F113-8 (CP-23, Manual Rev A ID p.53 DT-13f)", "summary": "loadDatumRule: optional leadMm for a generated rule; NEW datumRuleUnitLeadMm(ctx, unitKey, widthMm) = datumRuleLeadMm(width, unit position, unit count), the HTML/PDF estimate", "before_sha256": "14cc5af7401e14b6bf79131948d12dddc687c149d62953b744acfe5032e6693c", "after_sha256": "6f223edd6d362bc1fe88c3198feb40eb70e4908e649039b4b907169823ec87ba", "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/135_row165B_diffs/engine_docx_wrapper_media.ts.diff", "diff_sha256": "78ef36027a95811bc699cbeca9b73e8cd2b7c561809279638f4defb8abe50ae1"},
    "patch": {
     "id": "row107-M4M3",
     "row": 107,
@@ -3124,9 +3149,10 @@
   {
    "path": "src/lib/studio/engine/docx/wrapper/pages.ts",
    "status": "patched",
-   "bytes": 35359,
+   "bytes": 35616,
    "source_sha256": "c87ef17540b87d95034c5625f080afc903c9b30dd4010238f8d256bacfc814dd",
-   "sha256": "d32ff40f60f2426c6d7649c14d6903b700c8dab05086509fa0081b9a432e6b5a",
+   "sha256": "155464725dd96629aeca5708fdd099bea9ed68c656fb130e2e9ca7ba1131f02b",
+   "patch_row165A": {"id": "row165A-cover-control-furniture", "row": "165A", "decision": "C189 F56-1, C188 F113-4", "summary": "withControlSheetTemplateData: method statement = R-81 or defaultMethodStatementText(layers); withClassificationLine comment for the new field shape (helper in front/texts.ts)", "before_sha256": "d32ff40f60f2426c6d7649c14d6903b700c8dab05086509fa0081b9a432e6b5a", "after_sha256": "155464725dd96629aeca5708fdd099bea9ed68c656fb130e2e9ca7ba1131f02b", "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/138_row165A_diffs/engine_docx_wrapper_pages.ts.diff", "diff_sha256": "03fc6705fdaf096a103acd82a6e5059098e761d17516589b394640dc9614970a"},
    "patch": {
     "id": "row122-front-matter",
     "row": 122,
@@ -3140,10 +3166,12 @@
   },
   {
    "path": "src/lib/studio/engine/docx/wrapper/render.ts",
-   "status": "copied",
-   "bytes": 29093,
+   "status": "patched",
+   "bytes": 29600,
    "source_sha256": "33b3220d8828068c1d146bc97425efbd6be4e17b17ee67c9b1474d896d0f5972",
-   "sha256": "33b3220d8828068c1d146bc97425efbd6be4e17b17ee67c9b1474d896d0f5972"
+   "sha256": "9fb3e2d9630514f57913c42e5d53fd8fdfd5db6453e6a5359c106740fef3213b",
+   "patch_row165E": {"id": "row165E-integration", "row": "165E", "decision": "C193 ruling 4 (F113-4 DOCX half)", "summary": "signatureXml: the signature line is the holder paragraph's top border (w:pBdr/w:top, sz 5, color.wrapper.rule) instead of a cell top border, so each of the three columns has its own line with the rightPad gap", "before_sha256": "c5fcf65bbff07b21b00d6384a79c97121cd854d444b84a8b5a1c24dbd84047d1", "after_sha256": "9fb3e2d9630514f57913c42e5d53fd8fdfd5db6453e6a5359c106740fef3213b", "diff": "implementation/139_row165E_diffs/engine_docx_wrapper_render.ts.diff"},
+   "patch_row165B": {"id": "row165B-marks-glyphs-rule", "row": "165B", "decision": "C188 F113-8 (CP-23, Manual Rev A ID p.53 DT-13f)", "summary": "datumRuleParagraphXml: cover/divider/appendix Datum Rule passes datumRuleUnitLeadMm to loadDatumRule (lead grows with the sheet as the HTML/PDF)", "before_sha256": "33b3220d8828068c1d146bc97425efbd6be4e17b17ee67c9b1474d896d0f5972", "after_sha256": "c5fcf65bbff07b21b00d6384a79c97121cd854d444b84a8b5a1c24dbd84047d1", "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/135_row165B_diffs/engine_docx_wrapper_render.ts.diff", "diff_sha256": "c416d3e45d453f709c9fb98d87804b423ebecc30e43c60995412bdd9afcf2afc"}
   },
   {
    "path": "src/lib/studio/engine/docx/wrapper/toc-refs.ts",
@@ -3209,9 +3237,10 @@
   {
    "path": "src/lib/studio/engine/front/texts.ts",
    "status": "patched",
-   "bytes": 45952,
+   "bytes": 48892,
    "source_sha256": "c09b8b9bc95acb2524925974c68871fb9f9e4e8098a0bc9ef89f8c9b0c8c1b15",
-   "sha256": "9be4567e6d67d3c60e39a18a08dd9a161ee6b8ba30769adc007387ea11a99d75",
+   "sha256": "ef706b3a7d75ed00cd62dcb178ffea3f0a5fb2e798ded6f23eef82fbaa6fcd27",
+   "patch_row165A": {"id": "row165A-cover-control-furniture", "row": "165A", "decision": "C189 F56-1, C188 F113-4", "summary": "controlRowsWithClassificationLine: Klasifikasi as its own label/value field directly under Nomor dokumen (pairs re-flowed two per row), no second line in the number cell; NEW defaultMethodStatementText (method statement built from the template verification layers when neither document nor R-81 gives one)", "before_sha256": "9be4567e6d67d3c60e39a18a08dd9a161ee6b8ba30769adc007387ea11a99d75", "after_sha256": "ef706b3a7d75ed00cd62dcb178ffea3f0a5fb2e798ded6f23eef82fbaa6fcd27", "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/138_row165A_diffs/engine_front_texts.ts.diff", "diff_sha256": "081b84fdc22db575062eb0f745e63a983ef7483208add4cae71c3d4ec7b8e2b7"},
    "patch_row123": {
     "id": "row123-front-texts",
     "row": 123,
@@ -3306,9 +3335,10 @@
   {
    "path": "src/lib/studio/engine/html/base/fonts.ts",
    "status": "patched",
-   "bytes": 14107,
+   "bytes": 14429,
    "source_sha256": "7e058824fc63df12debbc5e66105250c88a0ea2bb64e74ddbf62d62f8bb51913",
-   "sha256": "d39d998d58a4915ba6910e80b1e5df29887034957da15471d5f881d49af8680d",
+   "sha256": "4424b0c8c0f136bf4ecf2d22f3742bbf73123e411a8b816a50a5376d1d48580d",
+   "patch_row165B": {"id": "row165B-marks-glyphs-rule", "row": "165B", "decision": "C188 F113-2 (CP-19, Manual Rev A ID p.89 A.2)", "summary": "SYMBOL_RANGES += U+2500-257F (Box Drawing) in the DejaVu Sans unicode-range, so the derivation rule line in a Plex Mono run (no U+2500 glyph) falls back to the embedded DejaVu Sans, not Menlo", "before_sha256": "d39d998d58a4915ba6910e80b1e5df29887034957da15471d5f881d49af8680d", "after_sha256": "4424b0c8c0f136bf4ecf2d22f3742bbf73123e411a8b816a50a5376d1d48580d", "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/135_row165B_diffs/engine_html_base_fonts.ts.diff", "diff_sha256": "21a12ab5e07eb3b878d5910304cf7c7ccaebf0a9bc520ea51064f084133c3a92"},
    "patch": {
     "id": "row107-M4",
     "row": 107,
@@ -3363,9 +3393,10 @@
   {
    "path": "src/lib/studio/engine/html/base/shell.ts",
    "status": "patched",
-   "bytes": 25867,
+   "bytes": 28282,
    "source_sha256": "d8db482134a88bf83875de4cc9fbb83ff3aa0f2792bce6e182a2e42766542dda",
-   "sha256": "6c9232dc44cbc209247905e561bd75f0f4427554ffee3972d9422a201a43f544",
+   "sha256": "19949f880e623ae76055e5f9ede07958d3c7de65bf635a8a46ec24fbf204ad66",
+   "patch_row165A": {"id": "row165A-cover-control-furniture", "row": "165A", "decision": "C188 F113-6, F113-7, F113-12 (file request of 165D)", "summary": "withSheetRestart keeps the register of an interior unit before Bab 1 (contents) without its sheet cell (sheetless); register N marked /*st-N*/counter(pages)/*/st-N*/ when numbering starts at Bab 1; NEW numberedPassStyle (inert media=\"not all\" style hiding the units before Bab 1, switched on by the PDF numbered pass) and SHEET_TOTAL_MARK; classificationLine retired (no R-76 line in the foot, FOOT_CLASSIFICATION_LINE_RETIRED)", "before_sha256": "6c9232dc44cbc209247905e561bd75f0f4427554ffee3972d9422a201a43f544", "after_sha256": "19949f880e623ae76055e5f9ede07958d3c7de65bf635a8a46ec24fbf204ad66", "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/138_row165A_diffs/engine_html_base_shell.ts.diff", "diff_sha256": "b2a1f2853fa71211d0e8134a6f1aba541bc5c3df4eedece906e71225dae177dc"},
    "patch": {
     "id": "row123-html-shell",
     "row": 123,
@@ -3379,10 +3410,11 @@
   },
   {
    "path": "src/lib/studio/engine/html/blocks/classes.ts",
-   "status": "copied",
-   "bytes": 5450,
+   "status": "patched",
+   "bytes": 6368,
    "source_sha256": "9e226d416ebb6a2942c48939e3169f77e423ee57791110010f90cfcc80ce4f89",
-   "sha256": "9e226d416ebb6a2942c48939e3169f77e423ee57791110010f90cfcc80ce4f89"
+   "sha256": "4550a575db62b044688b6ebffb32f7b11e4f1e3eb309930a343a1ac2d9e653ca",
+   "patch_row165A": {"id": "row165A-cover-control-furniture", "row": "165A", "decision": "C188 F113-3, F113-4", "summary": "HTML_BLOCKS_CSS: control block and signature block width 100%; 3 mm after each control value; signature columns 4 mm apart with one signature line each (holder background line, --st-sign-rule); HALAMAN NUMPAGES span shows --st-pages-total (set by the PDF print). Status copied -> patched", "before_sha256": "9e226d416ebb6a2942c48939e3169f77e423ee57791110010f90cfcc80ce4f89", "after_sha256": "4550a575db62b044688b6ebffb32f7b11e4f1e3eb309930a343a1ac2d9e653ca", "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/138_row165A_diffs/engine_html_blocks_classes.ts.diff", "diff_sha256": "8495ce3c161bba79a7be02f430a79fede9e2116b2b1a90ded35c6ef9fe2891bb"}
   },
   {
    "path": "src/lib/studio/engine/html/blocks/common.ts",
@@ -3472,17 +3504,19 @@
   },
   {
    "path": "src/lib/studio/engine/html/blocks/text.ts",
-   "status": "copied",
-   "bytes": 22142,
+   "status": "patched",
+   "bytes": 23001,
    "source_sha256": "cc460857f803f4ded0661a47395413dd33192c108e1232b17e189620b472d70d",
-   "sha256": "cc460857f803f4ded0661a47395413dd33192c108e1232b17e189620b472d70d"
+   "sha256": "6be32a76f4bde18a44a30775a9c94872c235b9c17bd8b2f627fb13829f01055f",
+   "patch_row165B": {"id": "row165B-marks-glyphs-rule", "row": "165B", "decision": "C188 F113-1 (CP-29, Manual Rev A ID p.38 Tabel 7.1)", "summary": "railHtml: a rail mark glyph without a template glyphRun gets the symbol face plus marks.<m>.colour (railGlyphFallbackRun), the DOCX glyphRunProps rule; before it inherited the rail colour #6B7783 for every mark", "before_sha256": "cc460857f803f4ded0661a47395413dd33192c108e1232b17e189620b472d70d", "after_sha256": "6be32a76f4bde18a44a30775a9c94872c235b9c17bd8b2f627fb13829f01055f", "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/135_row165B_diffs/engine_html_blocks_text.ts.diff", "diff_sha256": "cb61764470ca9d2dcd269a517a4d93d8cc6e1f5c1891af0433f9defcf95c0fdf"}
   },
   {
    "path": "src/lib/studio/engine/html/blocks/wrapper.ts",
    "status": "patched",
-   "bytes": 42531,
+   "bytes": 45385,
    "source_sha256": "793de237b5e8af7d546dc3da3fcd02cb2f375a8ff71551a7c2097bcdb824ae99",
-   "sha256": "7fc086c8d564cb30bdc152ac050e067cd6e40664c24a9dadb74ec3e7c819fcde",
+   "sha256": "b14b21af8011d0a65d409f7d3389893a279478b3a71b90c09d2f20b34ed9c649",
+   "patch_row165A": {"id": "row165A-cover-control-furniture", "row": "165A", "decision": "C189 F56-1, C188 F113-3, F113-4", "summary": "cover: template cover.addressLine when the cover data has none (= DOCX); auto control block prints HALAMAN as a NUMPAGES field span; control block and signature block get the DOCX grids as % colgroups (shareColgroup); signature table --st-sign-rule (color.wrapper.rule); classification field re-flow from the shared helper; default method statement from the layers", "before_sha256": "7fc086c8d564cb30bdc152ac050e067cd6e40664c24a9dadb74ec3e7c819fcde", "after_sha256": "b14b21af8011d0a65d409f7d3389893a279478b3a71b90c09d2f20b34ed9c649", "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/138_row165A_diffs/engine_html_blocks_wrapper.ts.diff", "diff_sha256": "75a8ef4809e6fb76026c793c8e1c3561b14df555e391bdefdfe955f49177b84b"},
    "patch_row122c": {
     "id": "row122c-html-cover-title-leading",
     "row": "122c",
@@ -4917,9 +4951,10 @@
   {
    "path": "src/lib/studio/services/render/pdf.ts",
    "status": "added",
-   "bytes": 5674,
+   "bytes": 9546,
    "source_sha256": null,
-   "sha256": "173ad228ae9448047fcc63bc3cb2a1cbfff93870c7a2b7642d08bf499739f49a",
+   "sha256": "d9c39df0e341a7c0cc0f7ad0e80f0f171f04c338e8f9804802ab6bcada96de87",
+   "patch_row165A": {"id": "row165A-cover-control-furniture", "row": "165A", "decision": "C188 F113-3, F113-6", "summary": "printHtmlToPdf fills sheet totals after pagination in one bridge session: numbered pass (units before Bab 1 hidden) -> N for the register; final print with N and an estimated T for HALAMAN (--st-pages-total), reprinted once only if the page count differs; HTML without markers prints once unchanged; session timeout x3 when totals are needed. NEW exports sheetTotalPlan, withSheetTotals", "before_sha256": "173ad228ae9448047fcc63bc3cb2a1cbfff93870c7a2b7642d08bf499739f49a", "after_sha256": "d9c39df0e341a7c0cc0f7ad0e80f0f171f04c338e8f9804802ab6bcada96de87", "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/138_row165A_diffs/services_render_pdf.ts.diff", "diff_sha256": "55da4aae82e33219f3ba0593698433d22b1baf46a0f7850d80774665e9774789"},
    "note": "NEW Swarm file of row 32 (no clone original): printHtmlToPdf prints Studio's HTML through the render bridge pdf op via engine/browser/runtime.ts withSandboxedPage (studio spec §4, D-15 reversed); countPdfPages; error mapping to PDF_ENGINE_UNAVAILABLE / PDF_CONVERT_FAILED"
   },
   {
@@ -5226,9 +5261,10 @@
   {
    "path": "src/lib/studio/services/skeleton/repository.ts",
    "status": "patched",
-   "bytes": 17628,
+   "bytes": 17985,
    "source_sha256": "9e15abd2dd2529bf69be6be6bc5d159b2f396eed5f6984e4022e5593d014f663",
-   "sha256": "d5a6a8c3d801c907f304b43ed21ac7fe16a38da4e2c25c8b71f45df69c2ce5a7",
+   "sha256": "af9e39ad0821d11e9b5432e6e66a9ac370e41441f0ceccae75910d0f683b43de",
+   "patch_row165D": {"id": "row165D-face-names", "row": "165D", "decision": "C188 F113-11 (CP-19)", "summary": "resolveSlotsForVersion: the returned template layers and per-slot params/roleFormats (a Map) pass canonicalizeFaceNames, so the DOCX slot templates (assemble/index.ts slotTemplate) carry 'IBM Plex Sans Condensed'", "before_sha256": "d5a6a8c3d801c907f304b43ed21ac7fe16a38da4e2c25c8b71f45df69c2ce5a7", "after_sha256": "af9e39ad0821d11e9b5432e6e66a9ac370e41441f0ceccae75910d0f683b43de", "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/137_row165D_diffs/services_skeleton_repository.ts.diff", "diff_sha256": "b86b6c4a54b1309522bef2459f271ebae3c2394aa2e08c468ef8131e355d65f4"},
    "patch": {
     "id": "row66-skeleton-repository",
     "row": 66,
@@ -5257,9 +5293,10 @@
   {
    "path": "src/lib/studio/services/storage/files.ts",
    "status": "patched",
-   "bytes": 23383,
+   "bytes": 23519,
    "source_sha256": "966dde07d441de4763f115c2c53a9d2f5f4e567339cc3adda5d5e2d65927490c",
-   "sha256": "e5bdaa3d9320e5724f08b7841c8aa29e18f21333eca2a68a383b7e11a90edc6a",
+   "sha256": "37af0afe8874704d0f79c5fa4a7ae9ff55494af3efd88941413ba249beb6a0ce",
+   "patch_row165D": {"id": "row165D-delivered-name", "row": "165D", "decision": "C189 F56-2 (CP-17)", "summary": "candidateNames: collision suffix separated by a space (<stem> <sha8>.<ext>, then sha16, sha64) instead of '_', so the delivered DATUM name keeps zero underscores; rule of row 43a otherwise unchanged", "before_sha256": "e5bdaa3d9320e5724f08b7841c8aa29e18f21333eca2a68a383b7e11a90edc6a", "after_sha256": "37af0afe8874704d0f79c5fa4a7ae9ff55494af3efd88941413ba249beb6a0ce", "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/137_row165D_diffs/services_storage_files.ts.diff", "diff_sha256": "6ce37cff71622ddf7a6ca45eed2ec40600c1c37208d899763b00a40d96c1b397"},
    "patch_row43a": {
     "id": "row43a-outputs-append",
     "row": "43a",
@@ -5603,6 +5640,15 @@
    }
   },
   {
+   "path": "src/lib/studio/services/templates/face-names.ts",
+   "status": "added",
+   "bytes": 2916,
+   "source_sha256": null,
+   "sha256": "02fa9cf8b0284a030e527377166ae410dd66db0bc9c411679750b5a79bdd8e1a",
+   "added_by": "165D",
+   "note": "NEW Swarm file of row 165D (C188 F113-11, CP-19): canonicalFaceName / canonicalizeFaceNames (exact 'IBM Plex Sans Cond' -> 'IBM Plex Sans Condensed'; objects, arrays and Maps walked, class instances left as they are). Used by templates/index.ts resolvedFromVersion and skeleton/repository.ts resolveSlotsForVersion. Copy: implementation/137_row165D_diffs/services_templates_face-names.ts.new"
+  },
+  {
    "path": "src/lib/studio/services/templates/form-lock.ts",
    "status": "added",
    "bytes": 26060,
@@ -5637,9 +5683,10 @@
   {
    "path": "src/lib/studio/services/templates/index.ts",
    "status": "replaced",
-   "bytes": 36372,
+   "bytes": 36787,
    "source_sha256": "ecb1be24fefdfd2ecdb4c067245b4d98c0cf03cd5d6f849b31ef8493c717f4d9",
-   "sha256": "c11d04353d053f2036b05771d5afe247e3cd1d7c9b325a8939db494b131919a8",
+   "sha256": "fb8b7da96db10b8cb55adc368917058e9732f63ff00974d5524ca941565a9905",
+   "patch_row165D": {"id": "row165D-face-names", "row": "165D", "decision": "C188 F113-11 (CP-19)", "summary": "resolvedFromVersion: resolvedParams and roleFormats pass canonicalizeFaceNames (face-names.ts: exact 'IBM Plex Sans Cond' -> 'IBM Plex Sans Condensed') after the params sha check; stored definitions unchanged", "before_sha256": "c11d04353d053f2036b05771d5afe247e3cd1d7c9b325a8939db494b131919a8", "after_sha256": "fb8b7da96db10b8cb55adc368917058e9732f63ff00974d5524ca941565a9905", "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/137_row165D_diffs/services_templates_index.ts.diff", "diff_sha256": "806d0d531286a8ac72cdb0cdb37cf323d743987505d33824884bc91b8914127e"},
    "patch_row110e": {
     "id": "row110e-builtin-edition-logo",
     "row": "110e",
@@ -5771,6 +5818,11 @@
   "163b",
   "151c",
   "143b",
-  "143a"
+  "143a",
+  "165B",
+  "165C",
+  "165D",
+  "165A",
+  "165E"
  ]
 }

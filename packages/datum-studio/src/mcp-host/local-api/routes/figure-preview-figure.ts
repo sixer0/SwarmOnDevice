@@ -25,6 +25,8 @@ import { templateForDoc } from "@/lib/studio/services/render/common";
 import { ArtifactSpecReader, chartSvg, diagramApparatusOptions, diagramSpecForBlock } from "@/lib/studio/services/render/figures";
 import { capacityMessage, figureBytesIssues, figureCapacityIssuesFor, type CapacityIssue } from "@/lib/studio/services/render/figure-limits";
 import { renderVegaFigure, vegaCodeOf } from "@/lib/studio/services/render/vega-figure";
+import { figureFileName, inlineText } from "@/lib/studio/services/render/naming";
+import { rasterizeSvg } from "@/lib/studio/engine/browser";
 
 export const FIGURE_TYPES: ReadonlySet<string> = new Set(["chart", "diagram"]);
 /** Batas isu yang dikembalikan (hasil kecil; jumlah penuh di `issueCount`). */
@@ -100,6 +102,13 @@ export interface FigurePreview {
    */
   rendered: { code: string | null; orientation: "horizontal" | "vertical" | null; shape: string; items: number; maxLabelChars: number } | null;
   svg?: string;
+  /**
+   * Row 165C (F56-3): set when the figure was drawn stand-alone (`standalone: true`): the figure number and title
+   * the SVG prints, and the DATUM figure file name stem (`Gambar <n> <Judul>`, naming.ts figureFileName).
+   */
+  standalone?: { id: string; title: string; fileName: { svg: string; png: string } };
+  /** Row 165C (F56-3): base64 PNG (300 dpi) of the stand-alone figure, only with `png: true`. */
+  png?: string;
 }
 
 type Rec = Record<string, unknown>;
@@ -258,8 +267,40 @@ function renderedSummary(spec: StudioChartV1, tpl: ResolvedTemplate, svg: string
   return { code, orientation: orientationOf(code), ...d };
 }
 
+/** Row 165C (F56-3): figure number of a block label (`Gambar 4.1` / `Figure 4.1` -> `4.1`), null when it has none. */
+export function figureNumberOf(label: string | null | undefined): string | null {
+  const m = typeof label === "string" ? /(\d+(?:\.\d+)+)\s*$/.exec(label.trim()) : null;
+  return m ? m[1] : null;
+}
+
+/**
+ * Swarm patch (row 165C, F56-3; decision C189): the stand-alone figure of the original Studio (case 04:
+ * `studio.diagram/v1` with `apparatus: "figure"`, render_cli). A document diagram block is drawn with apparatus
+ * "page" (its page prints caption, KUNCI and SUMBER); stand-alone, the SVG carries them itself (engine figure branch,
+ * build/svg.ts): `apparatus: "figure"`, `id` = the figure number (the engine adds the GAMBAR/FIGURE word), `title` =
+ * the block caption, the key drawn in the SVG (`keyRowOnPage` dropped). The v2 block schema still forbids
+ * `apparatus`/`id`/`title` in a block (forbidden.ts DF-37): they are derived here, never sent by the agent.
+ */
+export function standaloneDiagramSpec(spec: StudioDiagramV1, block: NormBlock & { pid?: string }): StudioDiagramV1 {
+  const c = isRec(block.content) ? block.content : {};
+  const id = figureNumberOf(block.artifactLabel) ?? figureNumberOf(typeof spec.id === "string" ? spec.id : null);
+  if (id === null) fail("SCHEMA_INVALID", "Gambar mandiri butuh nomor gambar (blok tanpa label Gambar n.m)", [{ pointer: "/standalone", keyword: "required", message: "figure number" }]);
+  const cap = inlineText(c.caption as Parameters<typeof inlineText>[0]).trim();
+  const title = cap || (typeof spec.title === "string" ? spec.title.trim() : "");
+  const out: StudioDiagramV1 & { keyRowOnPage?: boolean } = { ...spec, apparatus: "figure", id: id as string, title: /[.!?]$/.test(title) ? title : `${title}.` };
+  delete out.keyRowOnPage;
+  return out;
+}
+
 /** Render figur terselesaikan (sinkron, CPU); galat mesin (StudioEngineError) diteruskan ke pemanggil. */
-export async function renderResolved(f: ResolvedFigure, tpl: ResolvedTemplate, o: { inline: boolean; withSvg: boolean; lang?: ChartLang }): Promise<FigurePreview> {
+export async function renderResolved(
+  f: ResolvedFigure,
+  tpl: ResolvedTemplate,
+  o: { inline: boolean; withSvg: boolean; lang?: ChartLang; standalone?: boolean; png?: boolean },
+): Promise<FigurePreview> {
+  // Row 165C (F56-3): stand-alone apparatus is a diagram mode (charts print their own apparatus already).
+  if (o.standalone === true && f.type !== "diagram") fail("BLOCK_TYPE_NOT_ADMITTED", `Gambar mandiri hanya untuk diagram; blok ini ${f.type}`, { type: f.type });
+  const solo = o.standalone === true && f.type === "diagram" ? standaloneDiagramSpec(f.spec, f.block) : null;
   const { block } = f;
   let r: SvgResult;
   let code: string | null;
@@ -279,7 +320,7 @@ export async function renderResolved(f: ResolvedFigure, tpl: ResolvedTemplate, o
     rendered = renderedSummary(f.spec, tpl, r.svg);
   } else {
     // I-2 (C74): the in-SVG key in the document language (ID: KUNCI, PENUH / PUTUS-PUTUS / ...), as buildFigures does.
-    r = await buildDiagramSvgAuto(f.spec, { release: false, grid: figureGrid(tpl.params), ...(o.lang ? diagramApparatusOptions(o.lang) : {}) });
+    r = await buildDiagramSvgAuto(solo ?? f.spec, { release: false, grid: figureGrid(tpl.params), ...(o.lang ? diagramApparatusOptions(o.lang) : {}) });
     code = typeof f.spec.family === "string" ? f.spec.family : null;
   }
   const issues = issuesOf(r);
@@ -298,7 +339,18 @@ export async function renderResolved(f: ResolvedFigure, tpl: ResolvedTemplate, o
     data,
     rendered,
     ...(o.withSvg ? { svg: r.svg } : {}),
+    ...(solo !== null ? { standalone: standaloneInfo(solo, block.artifactLabel ?? null) } : {}),
+    // Row 165C (F56-3): PNG through the render bridge (same raster as the document figures: 300 dpi).
+    ...(solo !== null && o.png === true ? { png: Buffer.from(await rasterizeSvg(r.svg, { widthMm: r.widthMm, heightMm: r.heightMm, dpi: 300, tpl })).toString("base64") } : {}),
   };
+}
+
+/** Row 165C (F56-3): number, title and DATUM file names (`Gambar 4.1 <Judul>.svg`, p.11-12) of a stand-alone figure. */
+function standaloneInfo(spec: StudioDiagramV1, label: string | null): NonNullable<FigurePreview["standalone"]> {
+  const id = String(spec.id);
+  const word = label !== null && /^\s*\D+?\s+\d/.test(label) ? label.trim().replace(/\s+\d[\d.]*$/, "") : "Gambar";
+  const title = String(spec.title);
+  return { id, title, fileName: { svg: figureFileName(`${word} ${id}`, title, 1, "svg"), png: figureFileName(`${word} ${id}`, title, 1, "png") } };
 }
 
 /**

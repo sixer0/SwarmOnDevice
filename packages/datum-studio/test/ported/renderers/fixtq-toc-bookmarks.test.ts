@@ -51,7 +51,9 @@ async function render(snap: NormDocSnapshot, tpl: ResolvedTemplate, slots: Map<s
 const paragraphsXml = (xml: string) => xml.match(/<w:p[ >][\s\S]*?<\/w:p>/g) ?? [];
 const textOf = (p: string) => (p.match(/<w:t[^>]*>[^<]*<\/w:t>/g) ?? []).map((t) => t.replace(/<[^>]+>/g, '')).join('');
 const pageRefs = (xml: string) => [...xml.matchAll(/<w:instrText xml:space="preserve"> PAGEREF (\S+) \\h <\/w:instrText>/g)].map((m) => m[1]);
-const bookmarks = (xml: string) => [...xml.matchAll(/<w:bookmarkStart w:id="(\d+)" w:name="([^"]+)"\/>/g)].map((m) => ({ id: m[1], name: m[2] }));
+// Wave 165 row 165A (C188 F113-6, consequence edit): the register's sheet-zero bookmark `_StSheet0` (not a TOC target) is left out.
+const SHEET_ZERO = '<w:bookmarkStart w:id="900000" w:name="_StSheet0"/><w:bookmarkEnd w:id="900000"/>';
+const bookmarks = (xml: string) => [...xml.replace(SHEET_ZERO, '').matchAll(/<w:bookmarkStart w:id="(\d+)" w:name="([^"]+)"\/>/g)].map((m) => ({ id: m[1], name: m[2] }));
 
 /**
  * Setiap PAGEREF (urutan baris TOC) menunjuk penanda yang ada tepat sekali, di paragraf
@@ -60,7 +62,7 @@ const bookmarks = (xml: string) => [...xml.matchAll(/<w:bookmarkStart w:id="(\d+
 function assertRefsHitTitles(xml: string, titles: readonly string[]) {
   const refs = pageRefs(xml);
   const starts = bookmarks(xml);
-  const ends = [...xml.matchAll(/<w:bookmarkEnd w:id="(\d+)"\/>/g)].map((m) => m[1]);
+  const ends = [...xml.replace(SHEET_ZERO, '').matchAll(/<w:bookmarkEnd w:id="(\d+)"\/>/g)].map((m) => m[1]);
   expect(refs).toHaveLength(titles.length);
   expect([...starts.map((s) => s.name)].sort()).toEqual([...refs].sort());
   expect(new Set(starts.map((s) => s.id)).size).toBe(starts.length);

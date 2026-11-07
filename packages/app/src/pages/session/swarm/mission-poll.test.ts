@@ -298,6 +298,56 @@ describe("mission poller", () => {
   })
 })
 
+// Row 165E (C192): the mission poll registers the deliverables found in the project as the directory's Studio outputs;
+// the file tab renders a DATUM-named .html only when its path is registered.
+describe("row 165E: registered Studio outputs", () => {
+  test("a deliverable found in docs/<mission>/ under its DATUM name is registered for that directory only", async () => {
+    const { registeredStudioOutputs, resetStudioOutputRegistry } = await import("../studio-output-registry")
+    const { isStudioOutputPath } = await import("../file-preview-policy")
+    resetStudioOutputRegistry()
+    const HTML = "Laporan Kerja 012-GSP-KT-XI-2026 RevA.html"
+    const OTHER = "Laporan 2026-11-02.html"
+    const source: MissionSource = {
+      list: async () => ({ ok: true, data: { items: [item("m-run", "running")] } }),
+      get: async (input) => ({
+        ok: true,
+        data: {
+          ...getWire(input.mission),
+          deliverables: [
+            {
+              documentId: "d1",
+              title: "Laporan Kerja",
+              docKey: null,
+              docRev: "A",
+              outputs: [
+                { fileId: "f1", format: "HTML", role: "PRIMARY", finalFileName: "012-GSP-KT-XI-2026_rev1_20261107T194129Z_293ba138.html", fileName: HTML, verified: true },
+              ],
+            },
+          ],
+        },
+      }),
+    }
+    const poller = createMissionPoller({
+      source,
+      directory: () => "/repo",
+      lang: () => "en",
+      listFiles: async () => [HTML, OTHER],
+      onState: () => {},
+      timers: fakeTimers().timers,
+    })
+    poller.setMode("live")
+    await flush()
+    const registered = registeredStudioOutputs("/repo")
+    expect([...registered]).toEqual([`docs/m-run/${HTML}`])
+    expect(isStudioOutputPath(`docs/m-run/${HTML}`, registered)).toBe(true)
+    // The user's own file next to it, DATUM-shaped but no deliverable: not registered, stays code view.
+    expect(isStudioOutputPath(`docs/m-run/${OTHER}`, registered)).toBe(false)
+    expect(isStudioOutputPath(`docs/m-run/${HTML}`, registeredStudioOutputs("/other"))).toBe(false)
+    poller.dispose()
+    resetStudioOutputRegistry()
+  })
+})
+
 describe("createMissionControl", () => {
   test("absent platform field: not available, nothing polls", () => {
     expect(missionSourceOf({})).toBeUndefined()

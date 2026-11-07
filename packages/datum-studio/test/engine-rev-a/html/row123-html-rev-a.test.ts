@@ -70,11 +70,15 @@ describe("CP-14 issue stamp U+2014 and the classification letter (ID p.1, p.37 T
 });
 
 describe("CP-15 classification line under the document number (DT-28c ID p.14)", () => {
-  test("number cell: line break, `Klasifikasi : ` and TERBATAS bold seal", async () => {
+  // Wave 165 row 165A (C189 F56-1): the classification is its own Klasifikasi field under the number, no longer a
+  // second line in the number cell (consequence edit; was: `<br>` + "Klasifikasi : TERBATAS" inside the cell).
+  test("number cell holds the number only; Klasifikasi field with TERBATAS bold seal", async () => {
     const r = await renderHtml();
-    const cell = /<td[^>]*data-role="cover\.controlValue"[^>]*>012\/GSP\/KT\/XI\/2026[\s\S]*?<\/td>/.exec(r.unit("cover"))?.[0] ?? "";
-    expect(cell).toContain("<br>");
-    expect(textOf(cell)).toBe("012/GSP/KT/XI/2026\nKlasifikasi : TERBATAS");
+    const numberCell = /<td[^>]*data-role="cover\.controlValue"[^>]*>012\/GSP\/KT\/XI\/2026[\s\S]*?<\/td>/.exec(r.unit("cover"))?.[0] ?? "";
+    expect(numberCell).not.toContain("<br>");
+    expect(textOf(numberCell)).toBe("012/GSP/KT/XI/2026");
+    const cell = /<th[^>]*>Klasifikasi<\/th><td[^>]*>[\s\S]*?<\/td>/.exec(r.unit("cover"))?.[0] ?? "";
+    expect(textOf(cell)).toBe("KlasifikasiTERBATAS");
     const level = /<span[^>]*>TERBATAS<\/span>/.exec(cell)?.[0] ?? "";
     expect(level).toMatch(/\bst-b\b/);
     expect(styleOf(level)).toContain("color:#6E1420");
@@ -83,7 +87,9 @@ describe("CP-15 classification line under the document number (DT-28c ID p.14)",
 
 describe("CP-05 control block fields from shared helpers (ID p.47 butir 10)", () => {
   const FIELDS = ["NOMOR DOKUMEN", "REVISI", "PENYUSUN", "KUSTODIAN", "DITUJUKAN KEPADA", "HALAMAN", "DATUM GEODETIK", "VERIFIKASI"];
-  test("auto block prints DATUM GEODETIK (R-83) and VERIFIKASI (chain summary); HALAMAN is not invented in HTML", async () => {
+  // Wave 165 row 165A (C188 F113-3): HALAMAN is now printed as a NUMPAGES field span that the PDF print fills (no
+  // count invented in the HTML itself); consequence edit of the old "not.toContain(Halaman)" pin.
+  test("auto block prints DATUM GEODETIK (R-83) and VERIFIKASI (chain summary); HALAMAN is an empty page-count field in HTML", async () => {
     const doc = clone(loadFixture());
     delete (doc.front!.cover!.data as { control?: unknown }).control;
     const r = await renderHtml(doc, {
@@ -96,7 +102,8 @@ describe("CP-05 control block fields from shared helpers (ID p.47 butir 10)", ()
     for (const label of ["Nomor dokumen", "Revisi", "Penyusun", "Kustodian", "Ditujukan kepada", "Datum geodetik", "Verifikasi"]) expect(t).toContain(label);
     expect(t).toContain("SRGI2013");
     expect(t).toContain("V2 · lulus");
-    expect(t).not.toContain("Halaman");
+    expect(t).toContain("Halaman");
+    expect(block).toMatch(/Halaman<\/th><td[^>]*><span class="st-field"[^>]*data-field="NUMPAGES"><\/span><\/td>/);
   });
 });
 

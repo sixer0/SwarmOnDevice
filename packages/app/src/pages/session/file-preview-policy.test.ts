@@ -9,10 +9,13 @@ import {
   createPdfObjectUrl,
   htmlTextFromContent,
   isPreviewPathAllowed,
+  fileNameOf,
+  isStudioOutputName,
   isStudioOutputPath,
   pdfBytesFromContent,
   PREVIEW_HTML_CSP,
   PREVIEW_HTML_SANDBOX,
+  STUDIO_DATUM_NAME_PATTERN,
   STUDIO_FINAL_NAME_PATTERN,
   previewKindFromPath,
   stripCssUrls,
@@ -265,5 +268,103 @@ describe("row 112b: Studio output recognition (C51 file name)", () => {
     const vendored = /export const FINAL_FILENAME_PATTERN =\s*"((?:[^"\\]|\\.)*)"/.exec(env)?.[1]
     expect(vendored).toBeDefined()
     expect(JSON.parse(`"${vendored}"`)).toBe(STUDIO_FINAL_NAME_PATTERN)
+  })
+})
+
+// Row 165D (F56-2, CP-17): Studio delivers outputs under the DATUM title name; the file tab recognises it, and the
+// path policy stays one safe segment (no traversal, no separators, no underscore, allowed extensions only).
+describe("row 165D: delivered DATUM title names are Studio outputs", () => {
+  // Row 165E (C192): a DATUM name is a Studio output only when the path is a registered deliverable.
+  const DATUM_PATHS = [
+    "docs/misi-a/Pemantauan Iklim Ruang Simpan Arsip Statis Gedung B 012-GSP-KT-XI-2026 RevA.docx",
+    "docs/misi-a/Pemantauan Iklim Ruang Simpan Arsip Statis Gedung B 012-GSP-KT-XI-2026 RevA.html",
+    "Lembar Bukti Pemantauan Iklim Ruang Simpan Gedung B 013-GSP-KT-XI-2026 RevA.pdf",
+    "docs/misi-a/Nota uji gerbang verifikasi row 143c 2026-11-08.html",
+    "Gambar 4.1 Arsitektur sistem pemantauan iklim ruang simpan arsip.svg",
+    "Fiksur Konvensi Angka B-FIX 015-GSP-KT-XI-2026 RevA 1a2b3c4d.pdf",
+  ]
+  test("DATUM names (number + Rev, ISO date, figure, collision suffix) match when the path is registered", () => {
+    const registered = new Set(DATUM_PATHS)
+    for (const path of DATUM_PATHS)
+      expect({ path, studio: isStudioOutputPath(path, registered) }).toEqual({ path, studio: true })
+    for (const path of DATUM_PATHS) expect(isStudioOutputName(fileNameOf(path))).toBe(true)
+  })
+
+  test("unsafe or non-DATUM names do not match", () => {
+    for (const path of [
+      "docs/misi-a/Laporan_akhir 012-GSP-KT-XI-2026 RevA.html",
+      "docs/misi-a/.hidden 012-GSP-KT-XI-2026 RevA.html",
+      "docs/misi-a/ spasi 012-GSP-KT-XI-2026 RevA.html",
+      "docs/misi-a/Laporan 012-GSP-KT-XI-2026 RevA.exe",
+      "docs/misi-a/Laporan 012-GSP-KT-XI-2026.html",
+      "docs/misi-a/Laporan‮ 012-GSP-KT-XI-2026 RevA.html",
+      "docs/misi-a/report.html",
+      "index.html",
+    ])
+      expect({ path, studio: isStudioOutputPath(path) }).toEqual({ path, studio: false })
+  })
+
+  test("the DATUM pattern is a verbatim copy of Studio's DATUM_FILENAME_PATTERN", () => {
+    const env = readFileSync(
+      new URL("../../../../datum-studio/vendor/src/lib/studio/contract/env.ts", import.meta.url).pathname,
+      "utf8",
+    )
+    const vendored = /export const DATUM_FILENAME_PATTERN =\s*"((?:[^"\\]|\\.)*)"/.exec(env)?.[1]
+    expect(vendored).toBeDefined()
+    expect(JSON.parse(`"${vendored}"`)).toBe(STUDIO_DATUM_NAME_PATTERN)
+  })
+})
+
+// Row 165E (decision C192, security narrowing): the file tab renders a title-named .html only when it is a registered
+// Studio output (a deliverable of the session's mission found in the project), never by the name pattern alone.
+describe("row 165E: a DATUM-named file is a Studio output only when registered", () => {
+  test("an ordinary user .html named like a DATUM output stays code view (not a Studio output)", () => {
+    for (const path of [
+      "Laporan 2026-11-02.html",
+      "docs/catatan/Laporan 2026-11-02.html",
+      "docs/misi-a/Pemantauan Iklim Ruang Simpan Arsip Statis Gedung B 012-GSP-KT-XI-2026 RevA.html",
+      "Gambar 1 Denah kantor.svg",
+    ]) {
+      expect({ path, studio: isStudioOutputPath(path) }).toEqual({ path, studio: false })
+      expect({ path, studio: isStudioOutputPath(path, new Set(["docs/misi-a/lain 2026-11-02.html"])) }).toEqual({
+        path,
+        studio: false,
+      })
+    }
+  })
+
+  test("registration is per exact path: the same name in another folder is not registered", () => {
+    const registered = new Set(["docs/misi-a/Laporan 2026-11-02.html"])
+    expect(isStudioOutputPath("docs/misi-a/Laporan 2026-11-02.html", registered)).toBe(true)
+    expect(isStudioOutputPath("Laporan 2026-11-02.html", registered)).toBe(false)
+    expect(isStudioOutputPath("docs/misi-b/Laporan 2026-11-02.html", registered)).toBe(false)
+  })
+
+  test("a registered path that is not a DATUM/Studio name never counts (registration cannot widen the rule)", () => {
+    const registered = new Set(["index.html", "docs/misi-a/Laporan_akhir 2026-11-02.html"])
+    expect(isStudioOutputPath("index.html", registered)).toBe(false)
+    expect(isStudioOutputPath("docs/misi-a/Laporan_akhir 2026-11-02.html", registered)).toBe(false)
+  })
+
+  test("the C51 store name still decides by name alone, registered or not", () => {
+    const path = "docs/misi-a/GSP-LAP-001_rev3_20261107T101500Z_0a1b2c3d.html"
+    expect(isStudioOutputPath(path)).toBe(true)
+    expect(isStudioOutputPath(path, new Set())).toBe(true)
+  })
+
+  test("the registry is keyed by directory and fed from the deliverables' project paths", async () => {
+    const { registerStudioOutputs, registeredStudioOutputs, resetStudioOutputRegistry } = await import(
+      "./studio-output-registry"
+    )
+    resetStudioOutputRegistry()
+    const path = "docs/misi-a/Laporan 2026-11-02.html"
+    expect(isStudioOutputPath(path, registeredStudioOutputs("/proj/a"))).toBe(false)
+    registerStudioOutputs("/proj/a", [path, null, undefined, ""])
+    expect(isStudioOutputPath(path, registeredStudioOutputs("/proj/a"))).toBe(true)
+    expect(isStudioOutputPath(path, registeredStudioOutputs("/proj/b"))).toBe(false)
+    expect(isStudioOutputPath(path, registeredStudioOutputs(undefined))).toBe(false)
+    registerStudioOutputs(undefined, ["docs/x/Laporan 2026-11-02.html"])
+    expect(registeredStudioOutputs("/proj/a").size).toBe(1)
+    resetStudioOutputRegistry()
   })
 })

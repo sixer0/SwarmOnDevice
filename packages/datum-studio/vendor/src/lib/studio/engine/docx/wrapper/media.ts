@@ -19,6 +19,7 @@ import type { AssetRef, DocxFragment, Hex, RenderContext } from "../../../contra
 import { StudioEngineError } from "../../../contract/errors";
 import { assertStudioAssetPath, getStudioEnv, isPathInside, studioAssetsRoot } from "../../../contract/env";
 import { docAssetBytes } from "../../bind";
+import { datumRuleLeadMm } from "../../front/texts";
 import { decorativeDocPrXml, type DecorativeKind } from "../blocks/media";
 
 export type { DecorativeKind };
@@ -293,6 +294,8 @@ export function loadDatumRule(
   widthMm: number,
   color: Hex,
   assetKey?: string,
+  /** Row 165B (F113-8): lead length of a generated rule (`datumRuleUnitLeadMm`); absent = `device.datumRule.frontSegmentMm`. */
+  leadMm?: number,
 ): { img: LoadedImage; widthMm: number; heightMm: number } {
   const keys = assetKey ? [assetKey] : [`rule${Math.round(widthMm)}`, `datumRule${Math.round(widthMm)}`];
   for (const key of keys) {
@@ -310,9 +313,22 @@ export function loadDatumRule(
     widthMm,
     color,
     pitchMm: pNum(p, "grid.latticeXMm") ?? 10.6667,
-    frontSegmentMm: pNum(p, "device.datumRule.frontSegmentMm") ?? 9,
+    frontSegmentMm: leadMm ?? pNum(p, "device.datumRule.frontSegmentMm") ?? 9,
   });
   return { img: fromBytes(g.png), widthMm: g.widthMm, heightMm: g.heightMm };
+}
+
+/**
+ * Row 165B (C188 F113-8, CP-23, ID p.53 DT-13f; DATUM tokens `datum_rule_progress_gauge` fill = page / pages): lead
+ * of the Datum Rule placed in unit `unitKey`, the same estimate the HTML/PDF shell writes (`withDatumRuleLeads`,
+ * html/base/shell.ts): sheet = the unit's 1-based position in `snapshot.units`, sheets = the unit count. Before, every
+ * DOCX rule carried the fixed `device.datumRule.frontSegmentMm` (9 mm) lead. Unknown unit = undefined (fixed lead kept).
+ */
+export function datumRuleUnitLeadMm(ctx: RenderContext, unitKey: string | undefined, widthMm: number): number | undefined {
+  const units = ctx.snapshot?.units ?? [];
+  const idx = unitKey === undefined ? -1 : units.findIndex((u) => u.key === unitKey);
+  if (idx < 0) return undefined;
+  return datumRuleLeadMm(widthMm, idx + 1, units.length);
 }
 
 // ── wp:inline ────────────────────────────────────────────────────────────

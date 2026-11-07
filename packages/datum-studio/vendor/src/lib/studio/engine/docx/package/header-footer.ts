@@ -465,8 +465,11 @@ function registerBody(
     const para = `<w:p>${pPrXml({ ...REGISTER_PARA, jc: last ? "right" : "left" })}${hfRunsXml(runs, REGISTER_LABEL_RUN, p)}</w:p>`;
     return { widthTw: grid[i], paragraphsXml: para, borders, marginsTw: { top: 90, left: registerCellLeftTw(i), bottom: 79, right: 141 } };
   });
-  const line = paramBool(p, PARAM_CLASSIFICATION_LINE) === true ? classificationLineXml(ctx, unit, grid, explicitCells, pStyle, warned) : "";
-  return simpleTableXml(grid, [cells]) + line + `<w:p>${pPrXml(FOOTER_TAIL_FORMAT, pStyle)}</w:p>`;
+  // Wave 165 row 165A for row 165D (C188 F113-12; file request 165D -> 165A): the R-76 line is no longer printed in
+  // the foot. Its place is under the number in the cover control block (F56-1); a NOTA has no cover and keeps its
+  // classification in the head (right) and the register's last cell (DT-28c). The param stays accepted
+  // (`classificationLineXml` is kept for a later caller; before: appended here when R-76 was true).
+  return simpleTableXml(grid, [cells]) + `<w:p>${pPrXml(FOOTER_TAIL_FORMAT, pStyle)}</w:p>`;
 }
 
 function cellParagraphs(c: Cell, ctx: RenderContext): string {
@@ -618,6 +621,46 @@ export interface SectionPackage {
 }
 
 /**
+ * Wave 165 row 165A (C188 F113-6): bookmark at the end of the last unit before Bab 1 (its section-break paragraph,
+ * `docx/assemble/index.ts`). The wrapper sections are not renumbered, so `PAGEREF _StSheet0` = the number of sheets
+ * before Bab 1 (cover, control sheet, contents), and `NUMPAGES - PAGEREF _StSheet0` = the numbered sheets.
+ */
+export const SHEET_ZERO_BOOKMARK = { id: 900000, name: "_StSheet0" } as const;
+
+export function sheetZeroBookmarkXml(): string {
+  return `<w:bookmarkStart w:id="${SHEET_ZERO_BOOKMARK.id}" w:name="${SHEET_ZERO_BOOKMARK.name}"/><w:bookmarkEnd w:id="${SHEET_ZERO_BOOKMARK.id}"/>`;
+}
+
+/** True when the unit at `index` is the last unit before the first chapter of a document numbered from Bab 1. */
+export function isSheetZeroUnit(ctx: RenderContext, units: readonly NormUnit[], index: number): boolean {
+  const firstChapter = units.findIndex((u) => u.kind === "chapter");
+  return firstChapter > 0 && index === firstChapter - 1 && sheetNumberingFromChapter1(ctx.tpl.params, ctx.snapshot.doc.meta.language === "EN" ? "EN" : "ID");
+}
+
+const NUMPAGES_SIMPLE_RE = /<w:fldSimple w:instr=" NUMPAGES "><w:r>(<w:rPr>[\s\S]*?<\/w:rPr>|)<w:t>([^<]*)<\/w:t><\/w:r><\/w:fldSimple>/g;
+
+/**
+ * Wave 165 row 165A (F113-6): every simple NUMPAGES field of a register footer becomes
+ * `{ = { NUMPAGES } - { PAGEREF _StSheet0 } }` (complex fields, same run format, outer cached result kept). Before: the
+ * plain NUMPAGES = document total (LEMBAR 1 DARI 7 on case 01 with three unnumbered sheets).
+ */
+export function withNumberedSheetTotal(footerXml: string): string {
+  return footerXml.replace(NUMPAGES_SIMPLE_RE, (_m, rPr: string, cached: string) => {
+    const r = (inner: string) => `<w:r>${rPr}${inner}</w:r>`;
+    const instr = (t: string) => r(`<w:instrText xml:space="preserve">${t}</w:instrText>`);
+    const ch = (t: "begin" | "separate" | "end") => r(`<w:fldChar w:fldCharType="${t}"/>`);
+    return (
+      ch("begin") + instr(" = ") +
+      // Nested fields carry no cached text, so a reader of the cached cell text still sees "LEMBAR n DARI N" only.
+      ch("begin") + instr(" NUMPAGES ") + ch("end") +
+      instr(" - ") +
+      ch("begin") + instr(` PAGEREF ${SHEET_ZERO_BOOKMARK.name} `) + ch("end") +
+      ch("separate") + r(`<w:t>${cached}</w:t>`) + ch("end")
+    );
+  });
+}
+
+/**
  * Satu seksi per unit ternormalisasi (KS-06, R-11): pasangan header/footer
  * `word/header{n}.xml`/`word/footer{n}.xml` (n = 1..jumlah unit), relasi
  * `rId{first+2(n-1)}` dan `rId{first+2(n-1)+1}`, plus sectPr. BM = 29 unit.
@@ -664,7 +707,11 @@ export function buildSectionPackage(ctx: RenderContext, opts: BuildSectionPackag
     const hdrTail = marker?.placement === "header" ? draftMarkerParagraphXml(marker.text, uctx, "hdr") : "";
     const ftrTail = marker?.placement === "footer" ? draftMarkerParagraphXml(marker.text, uctx, "ftr") : "";
     const hdr = headerFooterXml(setup.header, uctx, unit, "hdr", hdrTail, warned);
-    const ftr = headerFooterXml(setup.footer, uctx, unit, "ftr", ftrTail, warned);
+    const ftr0 = headerFooterXml(setup.footer, uctx, unit, "ftr", ftrTail, warned);
+    // Wave 165 row 165A (C188 F113-6): with sheets numbered from Bab 1, "DARI N" = NUMPAGES minus the sheets before
+    // Bab 1 (= PDF numbered pass), as a Word formula over the NUMPAGES field (DT-13g keeps the field).
+    const restart = firstChapter > 0 && sheetNumberingFromChapter1(uctx.tpl.params, uctx.snapshot.doc.meta.language === "EN" ? "EN" : "ID");
+    const ftr = restart && i >= firstChapter ? withNumberedSheetTotal(ftr0) : ftr0;
     for (const f of [...facesInXml(hdr), ...facesInXml(ftr)]) faces.add(f);
     parts.push(
       { path: headerPath, data: hdr, contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml" },

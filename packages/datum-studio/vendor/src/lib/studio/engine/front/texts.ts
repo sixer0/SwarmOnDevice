@@ -385,11 +385,11 @@ const CLASSIFICATION_FIELD_LABELS: ReadonlySet<string> = new Set(Object.values(F
 const inlineText = (i: Inline | undefined): string => (!i ? "" : "text" in i ? i.text : i.runs.map((r) => ("t" in r ? r.t : "")).join(""));
 
 /**
- * Row 122 (C40 FIX CP-15, DT-28c ID p.14 "Tulis klasifikasi kapital di baris tersendiri di bawah nomor", EN p.14):
- * the cover control block gets the line `Klasifikasi : TERBATAS` / `Classification: RESTRICTED` on its own line
- * directly under the document number, inside the number's value cell, so the 4 x 2 block keeps its eight fields
- * (ID p.47). Label in the value run, level bold seal (DT-28d, `color.wrapper.seal`). Unchanged when the block has
- * no number field, already carries a classification field, or the document has no classification.
+ * Row 122 (C40 FIX CP-15, DT-28c ID p.14 "Tulis klasifikasi kapital di baris tersendiri di bawah nomor", EN p.14),
+ * shape changed by wave 165 row 165A (C189 F56-1): the cover control block gets its own field
+ * `Klasifikasi` | `TERBATAS` (`Classification` | `RESTRICTED`) directly under the document number (same column, next
+ * row); the number's value cell holds the number only. Level bold seal (DT-28d, `color.wrapper.seal`). Unchanged
+ * when the block has no number field, already carries a classification field, or the document has no classification.
  * Contract `Inline` cells, so DOCX and HTML (row 123) call the same helper.
  */
 export function controlRowsWithClassificationLine(rows: ReadonlyArray<readonly [Inline, Inline, Inline, Inline]>, meta: DocMeta, params: ParamMap, lang: WrapperLang = wrapperLangOf(meta)): Array<[Inline, Inline, Inline, Inline]> {
@@ -399,21 +399,38 @@ export function controlRowsWithClassificationLine(rows: ReadonlyArray<readonly [
   const isClass = (c: Inline | undefined) => CLASSIFICATION_FIELD_LABELS.has(inlineText(c).trim().toLowerCase());
   const isNumber = (c: Inline | undefined) => NUMBER_FIELD_LABEL.test(inlineText(c).trim());
   if (out.some((r) => isClass(r[0]) || isClass(r[2]))) return out;
-  const value = classificationMarkText(level);
-  const full = classificationLineText(level, lang);
-  const label = full.slice(0, full.length - value.length);
-  const seal = pStr(params, "color.wrapper.seal") ?? "6E1420";
+  // Wave 165 row 165A (C189 F56-1, CR-2/NU-02; DT-28c ID p.14 "di baris tersendiri di bawah nomor"; Gambar 8.2 ID
+  // p.47 prints KLASIFIKASI as its own label/value row of the identity block): the classification is its own
+  // label/value field directly under "Nomor dokumen", never a second line inside the number's value cell (the
+  // scorer reads the whole cell, gateway_check/04b_row56g_followup_facts.md Q2). The pairs are re-flowed two per
+  // row in reading order with the new pair two places after the number, i.e. in the same column one row down.
+  // Before (row 122): `012/GSP/KT/XI/2026` + w:br + `Klasifikasi : TERBATAS` in one cell.
+  const pairs: Array<[Inline, Inline]> = [];
   for (const r of out) {
     for (const i of [0, 2] as const) {
-      if (!isNumber(r[i])) continue;
-      const cell = r[i + 1];
-      if (!cell) continue;
-      const base: Run[] = "text" in cell ? [{ t: cell.text }] : cell.runs;
-      r[i + 1] = { runs: [...base, { br: "line" }, { t: label }, { t: value, b: true, color: seal }] };
-      return out;
+      const l = r[i];
+      const v = r[i + 1];
+      if (inlineText(l).trim() === "" && inlineText(v).trim() === "" && !hasFieldRun(v)) continue;
+      pairs.push([l ?? { text: "" }, v ?? { text: "" }]);
     }
   }
-  return out;
+  const at = pairs.findIndex((p) => isNumber(p[0]));
+  if (at < 0) return out;
+  const seal = pStr(params, "color.wrapper.seal") ?? "6E1420";
+  const field: [Inline, Inline] = [{ text: FRONT_PAYLOAD_LABELS.classification[lang] }, { runs: [{ t: classificationMarkText(level), b: true, color: seal }] }];
+  pairs.splice(Math.min(at + 2, pairs.length), 0, field);
+  const empty: Inline = { text: "" };
+  const reflowed: Array<[Inline, Inline, Inline, Inline]> = [];
+  for (let i = 0; i < pairs.length; i += 2) {
+    const right = pairs[i + 1] ?? [empty, empty];
+    reflowed.push([pairs[i][0], pairs[i][1], right[0], right[1]]);
+  }
+  return reflowed;
+}
+
+/** A value cell that holds a field run (HALAMAN = NUMPAGES) is not empty even without text. */
+function hasFieldRun(c: Inline | undefined): boolean {
+  return !!c && "runs" in c && Array.isArray(c.runs) && c.runs.some((r) => "field" in r);
 }
 
 /**
@@ -466,6 +483,29 @@ export function controlSheetTemplateData(params: ParamMap): ControlSheetTemplate
     distribution,
     signatures: roles.map((role, i) => ({ role, holder: holders[i] ?? "" })),
   };
+}
+
+const LAYER_COUNT_WORDS: Readonly<Record<WrapperLang, readonly string[]>> = {
+  ID: ["nol", "satu", "dua", "tiga", "empat", "lima"],
+  EN: ["zero", "one", "two", "three", "four", "five"],
+};
+
+/**
+ * Wave 165 row 165A (C188 F113-4; ID p.48 "Lembar kendali menyusul sampul dan memuat riwayat revisi, rantai verifikasi
+ * tiga lapis, pernyataan metode, distribusi terkendali, dan tiga kolom tanda tangan", EN p.49): the method statement
+ * of a TERBIT/SERAH control sheet when neither the document nor the template (R-81) gives one. Built only from the
+ * template verification layers (P4K-02 id + method), so no method or result is invented; no layers = undefined
+ * (no paragraph, as before). DOCX `withControlSheetTemplateData` and HTML `withControlSheetTemplateData` call it.
+ */
+export function defaultMethodStatementText(layers: ReadonlyArray<{ id: string; method: string }>, lang: WrapperLang): string | undefined {
+  const named = layers.filter((l) => l.id.trim() !== "");
+  if (named.length === 0) return undefined;
+  const lower = (s: string) => (s.length > 1 && s[1] !== s[1].toUpperCase() ? s[0].toLowerCase() + s.slice(1) : s);
+  const list = named.map((l) => (l.method.trim() !== "" ? `${l.id} ${lower(l.method.trim())}` : l.id)).join("; ");
+  const n = LAYER_COUNT_WORDS[lang][named.length] ?? String(named.length);
+  return lang === "EN"
+    ? `This document is checked through a ${n}-layer verification chain: ${list}. The object and result of each layer are recorded in the verification chain table.`
+    : `Dokumen ini diperiksa melalui rantai verifikasi ${n} lapis: ${list}. Objek dan hasil setiap lapis tercatat pada tabel rantai verifikasi.`;
 }
 
 /** Nilai PENYUSUN sampul: unit templat (C27) bila diisi, selain itu `meta.author`. Tanda tangan dan riwayat revisi tetap `meta.author`. */

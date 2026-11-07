@@ -129,6 +129,13 @@ export {
   shapeSvg,
   svgText,
   svgTextLines,
+  // Row 165C (F113-9, F113-10): vector hatch lines and the half-stroke inset of edge nodes.
+  HATCH_PITCH_MM,
+  HATCH_STROKE_MM,
+  hatchLinesSvg,
+  insetForStroke,
+  nodeHatchAngle,
+  type NodeSvgOptions,
 } from "./svg";
 export { diagramColourValues, svgColourValues } from "./colour";
 export {
