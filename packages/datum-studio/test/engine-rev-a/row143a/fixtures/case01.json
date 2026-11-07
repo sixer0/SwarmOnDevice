@@ -1,0 +1,1057 @@
+{
+  "$schema": "studio.doc/v2",
+  "agentId": "uji-kesetaraan",
+  "template": {
+    "slug": "datum-kanonik"
+  },
+  "docKey": "laporan-uji-kasus-01",
+  "meta": {
+    "title": "Pemantauan Iklim Ruang Simpan Arsip Statis Gedung B",
+    "docNumber": "012/GSP/KT/XI/2026",
+    "rev": "A",
+    "typeCode": "KT",
+    "tier": "TERBIT",
+    "classification": "TERBATAS",
+    "language": "ID",
+    "author": "Divisi Engineering",
+    "issueDate": "2026-11-06"
+  },
+  "sections": {
+    "cover": {
+      "type": "cover",
+      "tagline": {
+        "text": "Kajian Teknis · Laporan Baseline Engineering"
+      },
+      "titleLines": [
+        {
+          "text": "Pemantauan Iklim Ruang Simpan"
+        },
+        {
+          "text": "Arsip Statis Gedung B"
+        }
+      ],
+      "standfirst": {
+        "text": "Baseline engineering terverifikasi untuk 48 titik sensor pada 1.920,0 m² ruang simpan, Balai Konservasi Arsip Kota Arunika."
+      },
+      "scopeLine": {
+        "text": "Dasar daftar kuantitas dan harga · rencana pemasangan · dokumen pengadaan"
+      },
+      "addressLine": {
+        "text": "Divisi Engineering · dokumen uji sintetis, seluruh nama, tempat dan angka fiktif"
+      },
+      "control": [
+        [
+          {
+            "text": "Nomor dokumen"
+          },
+          {
+            "text": "012/GSP/KT/XI/2026"
+          },
+          {
+            "text": "Revisi"
+          },
+          {
+            "text": "A · 6 November 2026"
+          }
+        ],
+        [
+          {
+            "text": "Penyusun"
+          },
+          {
+            "text": "Divisi Engineering"
+          },
+          {
+            "text": "Kustodian"
+          },
+          {
+            "text": "ENG-UJI-01"
+          }
+        ],
+        [
+          {
+            "text": "Ditujukan kepada"
+          },
+          {
+            "text": "Kepala Balai Konservasi Arsip Kota Arunika"
+          },
+          {
+            "text": "Halaman"
+          },
+          {
+            "text": "6"
+          }
+        ],
+        [
+          {
+            "text": "Tingkat"
+          },
+          {
+            "text": "TERBIT"
+          },
+          {
+            "text": "Verifikasi"
+          },
+          {
+            "text": "V2 · lulus"
+          }
+        ]
+      ],
+      "colophon": {
+        "left": {
+          "text": "PT GEMILANG SATRIA PERKASA · DIVISI ENGINEERING"
+        },
+        "right": {
+          "text": "// 20261106 ID A · TERBITAN 1"
+        }
+      }
+    },
+    "controlSheet": {
+      "type": "controlSheet",
+      "revisionHistory": [
+        {
+          "rev": "A",
+          "date": "2026-11-06",
+          "what": "Terbitan 1",
+          "by": "Divisi Engineering"
+        }
+      ],
+      "verificationChain": [
+        {
+          "layer": "V2",
+          "role": "Verifikasi",
+          "name": "lulus"
+        }
+      ]
+    },
+    "content": {
+      "type": "chapter",
+      "chapters": [
+        {
+          "key": "3",
+          "title": {
+            "text": "Dasar Data Ruang Simpan"
+          },
+          "sections": [
+            {
+              "title": {
+                "text": "Objek pemantauan dan sumber datanya"
+              },
+              "blocks": [
+                {
+                  "type": "paragraph",
+                  "text": "Objek pemantauan adalah empat ruang simpan arsip statis di lantai dasar Gedung B dengan luas lantai total 1.920,0 m². Luas setiap ruang diukur ulang dengan pengukur jarak laser pada survei 12 sampai 14 Oktober 2026 dan dicocokkan dengan gambar denah terbangun, sehingga jumlah titik sensor pada laporan ini tidak bergantung pada denah lama yang belum diperbarui.",
+                  "rail": [
+                    {
+                      "kind": "mark",
+                      "mark": "TERUKUR"
+                    },
+                    {
+                      "kind": "source",
+                      "text": "SRV 12 sampai 14·X·2026"
+                    },
+                    {
+                      "kind": "source",
+                      "text": "DENAH GB-01 sampai GB-04"
+                    },
+                    {
+                      "kind": "source",
+                      "text": "KEANDALAN [A1]"
+                    },
+                    {
+                      "kind": "note",
+                      "text": "Register ruang lengkap pada Tabel 3.1."
+                    }
+                  ]
+                },
+                {
+                  "type": "paragraph",
+                  "text": "Jumlah titik diturunkan dari satu aturan: satu sensor untuk setiap 40,0 m² luas lantai. Aturan ini mengikat seluruh kuantitas berikutnya. Jumlah titik menentukan panjang kabel, panjang kabel menentukan pembagian bus, dan jumlah perangkat menentukan beban catu daya pada Bab 5.",
+                  "rail": [
+                    {
+                      "kind": "mark",
+                      "mark": "DITURUNKAN"
+                    },
+                    {
+                      "kind": "source",
+                      "text": "REQ-MON-02"
+                    },
+                    {
+                      "kind": "source",
+                      "text": "REV A"
+                    },
+                    {
+                      "kind": "note",
+                      "text": "Kepadatan titik ditetapkan pada Rev A."
+                    }
+                  ]
+                },
+                {
+                  "type": "table",
+                  "caption": {
+                    "text": "Register luas lantai dan titik sensor per ruang simpan, Gedung B, per survei 12 sampai 14 Oktober 2026."
+                  },
+                  "columns": [
+                    {
+                      "role": "id"
+                    },
+                    {
+                      "role": "text"
+                    },
+                    {
+                      "role": "numeral"
+                    },
+                    {
+                      "role": "unit"
+                    },
+                    {
+                      "role": "numeral"
+                    },
+                    {
+                      "role": "numeral"
+                    }
+                  ],
+                  "rows": [
+                    {
+                      "kind": "header",
+                      "cells": [
+                        {
+                          "text": "Ruang"
+                        },
+                        {
+                          "text": "Fungsi ruang"
+                        },
+                        {
+                          "text": "Luas lantai"
+                        },
+                        {
+                          "text": "Satuan"
+                        },
+                        {
+                          "text": "Luas per titik"
+                        },
+                        {
+                          "text": "Titik sensor"
+                        }
+                      ]
+                    },
+                    {
+                      "kind": "body",
+                      "cells": [
+                        {
+                          "text": "R1"
+                        },
+                        {
+                          "text": "Arsip kertas berjilid"
+                        },
+                        {
+                          "text": "520,0"
+                        },
+                        {
+                          "text": "m²"
+                        },
+                        {
+                          "text": "40,0"
+                        },
+                        {
+                          "text": "13"
+                        }
+                      ]
+                    },
+                    {
+                      "kind": "body",
+                      "cells": [
+                        {
+                          "text": "R2"
+                        },
+                        {
+                          "text": "Arsip kertas lepas"
+                        },
+                        {
+                          "text": "480,0"
+                        },
+                        {
+                          "text": "m²"
+                        },
+                        {
+                          "text": "40,0"
+                        },
+                        {
+                          "text": "12"
+                        }
+                      ]
+                    },
+                    {
+                      "kind": "body",
+                      "cells": [
+                        {
+                          "text": "R3"
+                        },
+                        {
+                          "text": "Peta dan gambar teknik"
+                        },
+                        {
+                          "text": "440,0"
+                        },
+                        {
+                          "text": "m²"
+                        },
+                        {
+                          "text": "40,0"
+                        },
+                        {
+                          "text": "11"
+                        }
+                      ]
+                    },
+                    {
+                      "kind": "body",
+                      "cells": [
+                        {
+                          "text": "R4"
+                        },
+                        {
+                          "text": "Arsip foto dan film"
+                        },
+                        {
+                          "text": "480,0"
+                        },
+                        {
+                          "text": "m²"
+                        },
+                        {
+                          "text": "40,0"
+                        },
+                        {
+                          "text": "12"
+                        }
+                      ]
+                    },
+                    {
+                      "kind": "total",
+                      "cells": [
+                        {
+                          "text": "Jumlah titik sensor, empat ruang, pada 1.920,0 m² luas lantai",
+                          "gridSpan": 2
+                        },
+                        {
+                          "text": ""
+                        },
+                        {
+                          "text": ""
+                        },
+                        {
+                          "text": ""
+                        },
+                        {
+                          "text": "48"
+                        }
+                      ]
+                    }
+                  ],
+                  "source": {
+                    "text": "Survei pengukuran 12 sampai 14 Oktober 2026 · denah terbangun GB-01 sampai GB-04.     PROVENANS  luas [TERUKUR, keandalan A1] · jumlah titik [DITURUNKAN, 1 titik per 40,0 m²].",
+                    "provenance": [
+                      "TERUKUR",
+                      "DITURUNKAN"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "key": "4",
+          "title": {
+            "text": "Arsitektur dan Kuantitas Sistem"
+          },
+          "sections": [
+            {
+              "title": {
+                "text": "Susunan sistem pemantauan"
+              },
+              "blocks": [
+                {
+                  "type": "paragraph",
+                  "text": "Sensor di empat ruang dihubungkan dalam dua bus RS-485 ke dua gerbang data. Gerbang meneruskan pembacaan setiap menit melalui Ethernet ke satu server pemantauan, yang menyimpan rekaman ke arsip data iklim dan menampilkan peringatan ambang pada konsol operator. Server dan gerbang dicatu dari UPS daring di ruang server.",
+                  "rail": [
+                    {
+                      "kind": "mark",
+                      "mark": "PEMASOK"
+                    },
+                    {
+                      "kind": "source",
+                      "text": "LBR DATA PEMASOK"
+                    },
+                    {
+                      "kind": "source",
+                      "text": "KEANDALAN [B2]"
+                    },
+                    {
+                      "kind": "note",
+                      "text": "Daya perangkat diambil dari lembar data pemasok."
+                    }
+                  ]
+                },
+                {
+                  "type": "diagram",
+                  "spec": {
+                    "family": "layered",
+                    "classification": "TERBATAS",
+                    "sources": [
+                      "Kajian Teknis 012/GSP/KT/XI/2026 §4.1 · register ruang Rev A"
+                    ],
+                    "notes": [
+                      "jumlah titik [TERUKUR, keandalan A1] · daya perangkat [PEMASOK, keandalan B2]"
+                    ],
+                    "nodes": [
+                      {
+                        "id": "s1",
+                        "label": "Sensor R1 sampai R2",
+                        "sub": "25 titik · RS-485",
+                        "mark": "TERUKUR",
+                        "class": {
+                          "tier": 0
+                        }
+                      },
+                      {
+                        "id": "s2",
+                        "label": "Sensor R3 sampai R4",
+                        "sub": "23 titik · RS-485",
+                        "mark": "TERUKUR",
+                        "class": {
+                          "tier": 0
+                        }
+                      },
+                      {
+                        "id": "g1",
+                        "label": "Gerbang Data A",
+                        "sub": "32 kanal · PoE",
+                        "tag": "REQ-NET-01",
+                        "class": {
+                          "tier": 1
+                        }
+                      },
+                      {
+                        "id": "g2",
+                        "label": "Gerbang Data B",
+                        "sub": "32 kanal · PoE",
+                        "tag": "REQ-NET-01",
+                        "class": {
+                          "tier": 1
+                        }
+                      },
+                      {
+                        "id": "srv",
+                        "label": "Server Pemantauan",
+                        "sub": "1U · 2 × 960 GB",
+                        "tag": "REQ-MON-01",
+                        "class": {
+                          "tier": 2,
+                          "accent": true
+                        }
+                      },
+                      {
+                        "id": "db",
+                        "label": "Arsip Data Iklim",
+                        "sub": "retensi 5 tahun",
+                        "shape": "cylinder",
+                        "class": {
+                          "tier": 3
+                        }
+                      },
+                      {
+                        "id": "ups",
+                        "label": "UPS Daring",
+                        "sub": "1 kVA · 22,4 menit",
+                        "mark": "DITURUNKAN",
+                        "class": {
+                          "tier": 3
+                        }
+                      },
+                      {
+                        "id": "op",
+                        "label": "Konsol Operator",
+                        "sub": "ruang kendali",
+                        "mark": "PEMASOK",
+                        "class": {
+                          "tier": 3
+                        }
+                      }
+                    ],
+                    "edges": [
+                      {
+                        "from": "s1",
+                        "to": "g1",
+                        "kind": "data",
+                        "label": "RS-485 · 9,6 kbps"
+                      },
+                      {
+                        "from": "s2",
+                        "to": "g2",
+                        "kind": "data",
+                        "label": "RS-485 · 9,6 kbps"
+                      },
+                      {
+                        "from": "g1",
+                        "to": "srv",
+                        "kind": "data",
+                        "label": "Ethernet · 1 Gbps"
+                      },
+                      {
+                        "from": "g2",
+                        "to": "srv",
+                        "kind": "data",
+                        "label": "Ethernet · 1 Gbps"
+                      },
+                      {
+                        "from": "srv",
+                        "to": "db",
+                        "kind": "sync",
+                        "label": "rekaman 1 menit"
+                      },
+                      {
+                        "from": "ups",
+                        "to": "srv",
+                        "kind": "control",
+                        "label": "230 V · 492,6 W"
+                      },
+                      {
+                        "from": "srv",
+                        "to": "op",
+                        "kind": "data",
+                        "label": "peringatan ambang"
+                      }
+                    ],
+                    "legend": [
+                      "data = aliran data sensor",
+                      "control = catu daya",
+                      "sync = perekaman",
+                      "DITURUNKAN = nilai turunan",
+                      "TERUKUR = nilai terukur",
+                      "PEMASOK = data pemasok"
+                    ]
+                  },
+                  "caption": {
+                    "text": "Arsitektur sistem pemantauan iklim ruang simpan arsip."
+                  },
+                  "source": {
+                    "text": "Kajian Teknis 012/GSP/KT/XI/2026 §4.1 · register ruang Rev A · PROVENANS jumlah titik [TERUKUR, keandalan A1] · daya perangkat [PEMASOK, keandalan B2]",
+                    "provenance": [
+                      "TERUKUR",
+                      "PEMASOK"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "title": {
+                "text": "Kuantitas perangkat dan kabel"
+              },
+              "blocks": [
+                {
+                  "type": "table",
+                  "caption": {
+                    "text": "Daftar kuantitas kelompok A dan B, sistem pemantauan iklim Gedung B, per register ruang Rev A, 6 November 2026."
+                  },
+                  "columns": [
+                    {
+                      "role": "id"
+                    },
+                    {
+                      "role": "text"
+                    },
+                    {
+                      "role": "numeral"
+                    },
+                    {
+                      "role": "unit"
+                    },
+                    {
+                      "role": "numeral"
+                    },
+                    {
+                      "role": "numeral"
+                    }
+                  ],
+                  "rows": [
+                    {
+                      "kind": "header",
+                      "cells": [
+                        {
+                          "text": "No"
+                        },
+                        {
+                          "text": "Uraian pekerjaan"
+                        },
+                        {
+                          "text": "Volume"
+                        },
+                        {
+                          "text": "Satuan"
+                        },
+                        {
+                          "text": "Harga satuan"
+                        },
+                        {
+                          "text": "Jumlah"
+                        }
+                      ]
+                    },
+                    {
+                      "kind": "group",
+                      "cells": [
+                        {
+                          "text": "A · Perangkat pemantauan",
+                          "gridSpan": 2
+                        },
+                        {
+                          "text": ""
+                        },
+                        {
+                          "text": ""
+                        },
+                        {
+                          "text": ""
+                        },
+                        {
+                          "text": ""
+                        }
+                      ]
+                    },
+                    {
+                      "kind": "body",
+                      "cells": [
+                        {
+                          "text": "1"
+                        },
+                        {
+                          "text": "Sensor suhu dan kelembapan ruang, antarmuka RS-485, akurasi suhu ± 0,2 °C"
+                        },
+                        {
+                          "text": "48"
+                        },
+                        {
+                          "text": "unit"
+                        },
+                        {
+                          "text": "2.350.000"
+                        },
+                        {
+                          "text": "112.800.000"
+                        }
+                      ]
+                    },
+                    {
+                      "kind": "body",
+                      "cells": [
+                        {
+                          "text": "2"
+                        },
+                        {
+                          "text": "Gerbang data sensor 32 kanal, catu PoE"
+                        },
+                        {
+                          "text": "2"
+                        },
+                        {
+                          "text": "unit"
+                        },
+                        {
+                          "text": "9.400.000"
+                        },
+                        {
+                          "text": "18.800.000"
+                        }
+                      ]
+                    },
+                    {
+                      "kind": "body",
+                      "cells": [
+                        {
+                          "text": "3"
+                        },
+                        {
+                          "text": "Sakelar akses PoE 8 port, terkelola"
+                        },
+                        {
+                          "text": "1"
+                        },
+                        {
+                          "text": "unit"
+                        },
+                        {
+                          "text": "7.250.000"
+                        },
+                        {
+                          "text": "7.250.000"
+                        }
+                      ]
+                    },
+                    {
+                      "kind": "body",
+                      "cells": [
+                        {
+                          "text": "4"
+                        },
+                        {
+                          "text": "Server pemantauan 1U, 2 × SSD 960 GB"
+                        },
+                        {
+                          "text": "1"
+                        },
+                        {
+                          "text": "unit"
+                        },
+                        {
+                          "text": "48.500.000"
+                        },
+                        {
+                          "text": "48.500.000"
+                        }
+                      ]
+                    },
+                    {
+                      "kind": "group",
+                      "cells": [
+                        {
+                          "text": "B · Kabel dan catu daya",
+                          "gridSpan": 2
+                        },
+                        {
+                          "text": ""
+                        },
+                        {
+                          "text": ""
+                        },
+                        {
+                          "text": ""
+                        },
+                        {
+                          "text": ""
+                        }
+                      ]
+                    },
+                    {
+                      "kind": "body",
+                      "cells": [
+                        {
+                          "text": "5"
+                        },
+                        {
+                          "text": "Kabel UTP Cat 6 termasuk konduit PVC 20 mm, terpasang"
+                        },
+                        {
+                          "text": "1.848,0"
+                        },
+                        {
+                          "text": "m"
+                        },
+                        {
+                          "text": "26.488"
+                        },
+                        {
+                          "text": "48.949.824"
+                        }
+                      ]
+                    },
+                    {
+                      "kind": "body",
+                      "cells": [
+                        {
+                          "text": "6"
+                        },
+                        {
+                          "text": "UPS daring 1 kVA, baterai 2 × 12 V 9 Ah"
+                        },
+                        {
+                          "text": "1"
+                        },
+                        {
+                          "text": "unit"
+                        },
+                        {
+                          "text": "9.750.000"
+                        },
+                        {
+                          "text": "9.750.000"
+                        }
+                      ]
+                    },
+                    {
+                      "kind": "total",
+                      "cells": [
+                        {
+                          "text": "Subtotal kelompok A + B, sebelum PPN",
+                          "gridSpan": 2
+                        },
+                        {
+                          "text": ""
+                        },
+                        {
+                          "text": ""
+                        },
+                        {
+                          "text": ""
+                        },
+                        {
+                          "text": "246.049.824"
+                        }
+                      ]
+                    }
+                  ],
+                  "source": {
+                    "text": "Register ruang Rev A · Tabel 3.1 · AHS-01 workbook 013/GSP/RAB/XI/2026, disusun menurut Permen PUPR No. 8 Tahun 2023.     PROVENANS  volume [DITURUNKAN] · harga satuan [PEMASOK, 3 kutipan, median diambil, keandalan B2].     PPN 11 % diperhitungkan pada lembar REKAPITULASI, tidak pada harga satuan. Notasi ± pada akurasi sensor menyatakan toleransi pabrikan.",
+                    "provenance": [
+                      "DITURUNKAN",
+                      "PEMASOK"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "key": "5",
+          "title": {
+            "text": "Beban Catu Daya dan Asumsi"
+          },
+          "sections": [
+            {
+              "title": {
+                "text": "Beban puncak dan kapasitas UPS"
+              },
+              "blocks": [
+                {
+                  "type": "paragraph",
+                  "text": "Beban puncak dihitung untuk seluruh perangkat aktif serentak, karena pemantauan iklim berjalan terus tanpa jadwal mati. Faktor keserempakan tidak diterapkan. Konsol operator dicatu dari jaringan gedung dan tidak dihitung pada UPS.",
+                  "rail": [
+                    {
+                      "kind": "mark",
+                      "mark": "DITURUNKAN"
+                    },
+                    {
+                      "kind": "source",
+                      "text": "REQ-PWR-01"
+                    },
+                    {
+                      "kind": "note",
+                      "text": "Faktor keserempakan sengaja tidak diterapkan."
+                    }
+                  ]
+                },
+                {
+                  "type": "derivation",
+                  "title": {
+                    "text": "Turunan D-5.1 · Beban puncak dan otonomi UPS"
+                  },
+                  "lines": [
+                    {
+                      "label": {
+                        "text": "Sensor ruang              48 × 1,2 W   =    57,6  W   [PEMASOK B2]"
+                      }
+                    },
+                    {
+                      "label": {
+                        "text": "Gerbang data               2 × 15,0 W  =    30,0  W   [PEMASOK B2]"
+                      }
+                    },
+                    {
+                      "label": {
+                        "text": "Sakelar akses PoE          1 × 85,0 W  =    85,0  W   [PEMASOK B2]"
+                      }
+                    },
+                    {
+                      "label": {
+                        "text": "Server pemantauan          1 × 320,0 W =   320,0  W   [PEMASOK B2]"
+                      }
+                    },
+                    {
+                      "label": {
+                        "text": "                                         ─────────"
+                      }
+                    },
+                    {
+                      "label": {
+                        "text": "Beban puncak                                492,6  W"
+                      }
+                    },
+                    {
+                      "label": {
+                        "text": "Daya semu   492,6 ÷ cos φ 0,90          =   547,3  VA"
+                      }
+                    },
+                    {
+                      "label": {
+                        "text": "Dengan cadangan 1,25                    =   684,2  VA  →  pilih 1 kVA"
+                      }
+                    },
+                    {
+                      "label": {
+                        "text": "Energi baterai   2 × 12 V × 9 Ah        =   216,0  Wh"
+                      }
+                    }
+                  ],
+                  "closing": {
+                    "text": "Konsumsi perangkat diambil dari lembar data pemasok pada tegangan nominal; belum ada pengukuran lapangan. Bila otonomi turun di bawah 15 menit, rekaman iklim selama padam jaringan terputus dan baterai harus ditambah satu pasang."
+                  },
+                  "result": {
+                    "label": {
+                      "text": "Otonomi   216,0 × 0,85 ÷ 492,6 × 60     ="
+                    },
+                    "expr": "energi_baterai * 0.85 / beban_puncak * 60",
+                    "registerKey": "otonomi"
+                  }
+                },
+                {
+                  "type": "paragraph",
+                  "role": "subheading",
+                  "text": "Register asumsi yang mengikat pasal ini"
+                },
+                {
+                  "type": "table",
+                  "caption": {
+                    "text": "Asumsi yang mengikat perhitungan beban dan kabel, per 6 November 2026."
+                  },
+                  "columns": [
+                    {
+                      "role": "id"
+                    },
+                    {
+                      "role": "text"
+                    },
+                    {
+                      "role": "text"
+                    },
+                    {
+                      "role": "text"
+                    }
+                  ],
+                  "rows": [
+                    {
+                      "kind": "header",
+                      "cells": [
+                        {
+                          "text": "ID"
+                        },
+                        {
+                          "text": "Asumsi"
+                        },
+                        {
+                          "text": "Dampak bila salah"
+                        },
+                        {
+                          "text": "Verifikasi"
+                        }
+                      ]
+                    },
+                    {
+                      "kind": "body",
+                      "cells": [
+                        {
+                          "text": "ASM-PWR-01"
+                        },
+                        {
+                          "text": "cos φ beban terpasang 0,90"
+                        },
+                        {
+                          "text": "Daya semu naik ≈ 6 % pada 0,85"
+                        },
+                        {
+                          "text": "Pengukuran saat uji terima"
+                        }
+                      ]
+                    },
+                    {
+                      "kind": "body",
+                      "cells": [
+                        {
+                          "text": "ASM-PWR-02"
+                        },
+                        {
+                          "text": "Tegangan jaringan gedung (230 ± 10) V"
+                        },
+                        {
+                          "text": "UPS lebih sering beralih ke baterai"
+                        },
+                        {
+                          "text": "Perekaman 7 hari"
+                        }
+                      ]
+                    },
+                    {
+                      "kind": "body",
+                      "cells": [
+                        {
+                          "text": "ASM-KBL-01"
+                        },
+                        {
+                          "text": "Panjang rata-rata kabel 38,5 m per titik"
+                        },
+                        {
+                          "text": "Bus A melewati batas 1.200 m bila naik 25 %"
+                        },
+                        {
+                          "text": "Pengukuran jalur saat pemasangan"
+                        }
+                      ]
+                    }
+                  ],
+                  "source": {
+                    "text": "Lembar data pemasok (3 kutipan) · register ruang Rev A · Turunan D-5.1.     PROVENANS  asumsi [ASUMSI, ASM-PWR-01, ASM-PWR-02, ASM-KBL-01].     Notasi ± menyatakan toleransi rancangan, bukan ketidakpastian pengukuran.",
+                    "provenance": [
+                      "PEMASOK",
+                      "ASUMSI"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "signature": {
+      "type": "signatureBlock",
+      "roles": [
+        {
+          "role": {
+            "text": "Penyusun"
+          },
+          "holder": {
+            "text": "Divisi Engineering"
+          },
+          "date": {
+            "text": "2026-11-06"
+          }
+        }
+      ]
+    }
+  },
+  "register": {
+    "energi_baterai": {
+      "v": 216.0,
+      "dec": 1,
+      "unit": "Wh",
+      "mark": "DITURUNKAN",
+      "src": "D-5.1: 2 × 12 V × 9 Ah"
+    },
+    "beban_puncak": {
+      "v": 492.6,
+      "dec": 1,
+      "unit": "W",
+      "mark": "DITURUNKAN",
+      "src": "D-5.1: jumlah beban lembar data pemasok"
+    },
+    "otonomi": {
+      "v": 22.4,
+      "dec": 1,
+      "unit": "menit",
+      "mark": "DITURUNKAN",
+      "src": "D-5.1"
+    }
+  }
+}

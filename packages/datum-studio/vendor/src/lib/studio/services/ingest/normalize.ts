@@ -43,6 +43,7 @@ import {
   type ValidationIssue,
 } from "../../contract";
 import { isObject, joinPointer, plainText, sha256Hex, stableStringify } from "./util";
+import { derivationTitleId, inlineText } from "../../engine/bind";
 
 const TABLE_TYPES: ReadonlySet<string> = new Set<string>(TABLE_BLOCK_TYPES);
 const FIGURE_TYPES: ReadonlySet<string> = new Set<string>(FIGURE_BLOCK_TYPES);
@@ -278,7 +279,9 @@ export function normalizeDocument(input: StudioDocV1, opts: NormalizeOptions = {
       else if (item.type === "derivation") {
         counters.d += 1;
         const explicit = (item as { id?: unknown }).id;
-        label = `Turunan ${typeof explicit === "string" && DERIVATION_ID_RE.test(explicit) ? explicit : `D-${chap}.${counters.d}`}`;
+        // Swarm row 143a (C177 F143-1 (c)): explicit `id`, then the title's own label (Manual Rev A ID p.40), then D-C.n.
+        const titled = derivationTitleId(inlineText((item as { title?: Parameters<typeof inlineText>[0] }).title));
+        label = `Turunan ${typeof explicit === "string" && DERIVATION_ID_RE.test(explicit) ? explicit : (titled ?? `D-${chap}.${counters.d}`)}`;
       }
       if (label !== undefined) numbering[id] = label;
       push({ blockId: id, address: `${chap}.${sectionNo}.${p}`, artifactLabel: label, unitKey, type: item.type, content: item }, ptr);

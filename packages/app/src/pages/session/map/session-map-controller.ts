@@ -30,7 +30,8 @@ export function createSessionMap(input: {
 }) {
   const [store, setStore] = persisted(
     Persist.global("session-map"),
-    createStore({ open: false, seen: {} as Record<string, number> }),
+    // `wide` (row 133b, C175): the user widened the Activity pane for mission control; remembered across launches.
+    createStore({ open: false, seen: {} as Record<string, number>, wide: false }),
   )
   const model = createMemo(() =>
     buildSessionMap({
@@ -163,6 +164,8 @@ export function createSessionMap(input: {
     opened: () => store.open,
     open: () => setStore("open", true),
     close: () => setStore("open", false),
+    wide: () => store.wide === true,
+    setWide: (wide: boolean) => setStore("wide", wide),
     dismissFresh: () => setSince(undefined),
     setFilter: (filter: MapFilter) => setView({ filter, selected: undefined }),
     select: (id: string | undefined) => setView("selected", id),

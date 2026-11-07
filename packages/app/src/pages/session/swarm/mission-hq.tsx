@@ -35,6 +35,23 @@ export type MissionHQProps = {
 
 const MONO = "ui-monospace, SFMono-Regular, Menlo, monospace"
 
+// Beacon pill geometry (row 133b): dot centre and text start from the pill's left edge, mono font size and advance.
+// SF Mono / Menlo advance is 0.6 em; 0.62 em leaves a margin for the fallback monospace face.
+const BEACON_DOT = 14
+const BEACON_TEXT = 26
+const BEACON_PAD = 12
+const BEACON_FONT = 11
+const BEACON_ADVANCE = BEACON_FONT * 0.62
+
+/** Pill width sized to the beacon text; text longer than `max` allows is cut with an ellipsis. */
+export function beaconPill(text: string, max: number): { text: string; w: number } {
+  const chars = Array.from(text)
+  const widthOf = (n: number) => Math.ceil(BEACON_TEXT + n * BEACON_ADVANCE + BEACON_PAD)
+  if (widthOf(chars.length) <= max) return { text, w: widthOf(chars.length) }
+  const fit = Math.max(1, Math.floor((max - BEACON_TEXT - BEACON_PAD) / BEACON_ADVANCE) - 1)
+  return { text: `${chars.slice(0, fit).join("").trimEnd()}…`, w: widthOf(fit + 1) }
+}
+
 // Static CSS only (no mission text). Motion is off under prefers-reduced-motion (§6 item 41, V6:94).
 const CSS = `
 .hq-root{position:relative;width:100%;color:var(--hq-ink);background:radial-gradient(120% 90% at 50% 52%,var(--hq-stage-2),var(--hq-stage) 70%);border-radius:12px;overflow:hidden}
@@ -373,24 +390,31 @@ export function MissionHQ(props: MissionHQProps) {
     )
   }
 
-  const Beacon = (p: { x: number; y: number; w: number; dot: number; text: string }) => (
-    <g
-      class="hq-beacon"
-      role="button"
-      tabindex={0}
-      aria-label={language.t("session.mission.decision.open", { id: props.mission.decision!.id })}
-      data-hq-beacon={props.mission.decision!.id}
-      onClick={() => props.onOpenDecision?.()}
-      onKeyDown={keyActivate(() => props.onOpenDecision?.())}
-    >
-      <rect x={p.x} y={p.y - 12} width={p.w} height={24} rx={12} fill={v("--hq-card")} stroke={v("--hq-review")} stroke-width={1.4} />
-      <circle class="hq-ping" cx={p.dot} cy={p.y} r={6} fill="none" stroke={v("--hq-review")} />
-      <circle cx={p.dot} cy={p.y} r={4} fill={v("--hq-review")} />
-      <text x={p.dot + 12} y={p.y + 4} font-family={MONO} font-size="11" fill={v("--hq-ink")}>
-        {p.text}
-      </text>
-    </g>
-  )
+  // Row 133b (C175, row 144 O-1): the pill is sized to its text; `anchor` is the pill's left edge ("start"), centre
+  // ("middle") or right edge ("end"), and text longer than `max` is cut with an ellipsis (full text stays in aria-label).
+  const Beacon = (p: { x: number; y: number; anchor: "start" | "middle" | "end"; max: number; text: string }) => {
+    const pill = () => beaconPill(p.text, p.max)
+    const left = () => (p.anchor === "start" ? p.x : p.anchor === "middle" ? p.x - pill().w / 2 : p.x - pill().w)
+    return (
+      <g
+        class="hq-beacon"
+        role="button"
+        tabindex={0}
+        aria-label={language.t("session.mission.decision.open", { id: props.mission.decision!.id })}
+        data-hq-beacon={props.mission.decision!.id}
+        data-hq-beacon-w={pill().w}
+        onClick={() => props.onOpenDecision?.()}
+        onKeyDown={keyActivate(() => props.onOpenDecision?.())}
+      >
+        <rect x={left()} y={p.y - 12} width={pill().w} height={24} rx={12} fill={v("--hq-card")} stroke={v("--hq-review")} stroke-width={1.4} />
+        <circle class="hq-ping" cx={left() + BEACON_DOT} cy={p.y} r={6} fill="none" stroke={v("--hq-review")} />
+        <circle cx={left() + BEACON_DOT} cy={p.y} r={4} fill={v("--hq-review")} />
+        <text x={left() + BEACON_TEXT} y={p.y + 4} font-family={MONO} font-size={String(BEACON_FONT)} fill={v("--hq-ink")}>
+          {pill().text}
+        </text>
+      </g>
+    )
+  }
 
   const Radial = (p: { s: RadialScene }) => {
     const { cx, cy, hy } = p.s
@@ -483,7 +507,7 @@ export function MissionHQ(props: MissionHQProps) {
             {(d) => (
               <>
                 <line x1={cx} y1={hy - 78} x2={cx} y2={hy - 68} stroke={v("--hq-review")} stroke-dasharray="2 4" />
-                <Beacon x={cx - 66} y={hy - 90} w={132} dot={cx - 50} text={language.t("session.mission.decision.beacon", { id: d().id })} />
+                <Beacon x={cx} y={hy - 90} anchor="middle" max={220} text={language.t("session.mission.decision.beacon", { id: d().id })} />
               </>
             )}
           </Show>
@@ -550,7 +574,10 @@ export function MissionHQ(props: MissionHQProps) {
             {`${progress().done}/${progress().total}`}
           </text>
           <Show when={props.mission.decision}>
-            {(d) => <Beacon x={W - 128} y={46} w={106} dot={W - 114} text={language.t("session.mission.decision.beacon", { id: d().id })} />}
+            {(d) => (
+              // right edge where the old 106 px pill ended; it may grow left up to the "3/7" count (ends near x 220)
+              <Beacon x={W - 22} y={46} anchor="end" max={W - 22 - 228} text={language.t("session.mission.decision.beacon", { id: d().id })} />
+            )}
           </Show>
         </g>
         <g data-hq-rooms="">

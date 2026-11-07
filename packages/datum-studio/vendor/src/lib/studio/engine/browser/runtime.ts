@@ -25,7 +25,7 @@
  * (fail closed with BROWSER_UNAVAILABLE): HTML screenshots (`previewHtml`; previews open in the
  * Swarm file tabs, spec §8) and print-media emulation.
  */
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
@@ -520,6 +520,26 @@ export interface HtmlPageImages {
   approximate?: string | null;
 }
 
+function withSep(p: string): string {
+  return p.endsWith(path.sep) ? p : p + path.sep;
+}
+
+/** realpath of the deepest existing ancestor plus the not-yet-existing remainder; never throws. */
+function realpathBestEffort(p: string): string {
+  let head = p;
+  const tail: string[] = [];
+  for (;;) {
+    try {
+      return tail.length === 0 ? realpathSync(head) : path.join(realpathSync(head), ...tail);
+    } catch {
+      const parent = path.dirname(head);
+      if (parent === head) return p;
+      tail.unshift(path.basename(head));
+      head = parent;
+    }
+  }
+}
+
 /**
  * Swarm patch (row 151b, decision C130 GAP-1, output verification spec §11): page images of a stored HTML
  * render through the bridge `pagePng` op (print media emulated, page size from CSS @page, default 150 dpi,
@@ -561,11 +581,13 @@ export async function rasterizeHtmlPages(o: {
     };
     // Swarm row 151c: present only when the bridge says its page images approximate the printed pages.
     if (typeof r.approximate === "string" && r.approximate.length > 0) out.approximate = r.approximate.slice(0, 200);
-    const prefix = o.dstDir.endsWith(path.sep) ? o.dstDir : o.dstDir + path.sep;
+    // Swarm row 143b (C177, F143-2): the bridge replies resolved paths (checkOutputPath realpaths the parent), so
+    // compare resolved paths; a part that does not exist yet is kept as is (best effort).
+    const prefix = withSep(realpathBestEffort(o.dstDir));
     const sane =
       Number.isInteger(out.pageCount) &&
       out.pageCount >= 1 &&
-      pages.every((p) => Number.isInteger(p.n) && p.n >= 1 && p.n <= out.pageCount && p.png.startsWith(prefix) && /^[0-9a-f]{64}$/.test(p.sha256));
+      pages.every((p) => Number.isInteger(p.n) && p.n >= 1 && p.n <= out.pageCount && realpathBestEffort(p.png).startsWith(prefix) && /^[0-9a-f]{64}$/.test(p.sha256));
     if (!sane) {
       logBrowser("error", `${op}: render bridge reply is malformed`, { op, code: "BROWSER_UNAVAILABLE" });
       throw new StudioBrowserError("RENDER_FAILED", op, "Render bridge page images reply is malformed (see engine/browser log)");

@@ -1207,6 +1207,17 @@ export function SessionMapPanel(props: {
   ])
   const showingAgents = () => props.map.view.filter === "agents"
   const showingDecisions = () => props.map.view.filter === "decisions"
+  // Row 133b (C175): the expand toggle in mission control's header widens THIS pane (no new panel). The remembered
+  // choice only applies while mission control is on screen; every other view keeps the 372 px pane.
+  const missionShown = () => showingAgents() && (props.missions?.control.state.options.length ?? 0) > 0
+  const wide = () => props.map.wide() && missionShown()
+  const missionMount = createMemo(
+    () =>
+      props.missions && {
+        ...props.missions,
+        expand: { wide: props.map.wide, toggle: () => props.map.setWide(!props.map.wide()) },
+      },
+  )
   createEffect(
     on(showingDecisions, (showing) => {
       if (showing) decisions.refresh()
@@ -1449,7 +1460,13 @@ export function SessionMapPanel(props: {
       id="session-map-panel"
       data-component="session-map"
       aria-label={language.t("session.activity.title")}
-      class="absolute inset-y-0 right-0 z-[70] flex h-full w-[min(372px,100%)] shrink-0 flex-col gap-2 border-l border-v2-border-border-base bg-v2-background-bg-base pt-2 shadow-[var(--v2-elevation-raised)] @[900px]:static @[900px]:w-[372px] @[900px]:shadow-none"
+      data-activity-wide={wide() ? "" : undefined}
+      class="absolute inset-y-0 right-0 z-[70] flex h-full shrink-0 flex-col gap-2 border-l border-v2-border-border-base bg-v2-background-bg-base pt-2 shadow-[var(--v2-elevation-raised)] @[900px]:static @[900px]:shadow-none"
+      classList={{
+        "w-[min(372px,100%)] @[900px]:w-[372px]": !wide(),
+        // Wide: at most 1100 px and 70 % of the window, and the chat keeps at least 280 px beside the pane.
+        "w-[min(1100px,100%)] @[900px]:w-[min(1100px,70vw,calc(100%-280px))]": wide(),
+      }}
       onKeyDown={onPanelKey}
     >
       <div class="flex h-8 shrink-0 items-center gap-2 pl-3 pr-1.5">
@@ -1497,7 +1514,7 @@ export function SessionMapPanel(props: {
         when={!showingAgents() && !showingDecisions()}
         fallback={
           showingAgents() ? (
-            <SwarmAgents swarm={props.swarm} missions={props.missions} />
+            <SwarmAgents swarm={props.swarm} missions={missionMount()} />
           ) : (
             <DecisionList decisions={decisions} directory={props.directory} />
           )

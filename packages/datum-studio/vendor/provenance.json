@@ -37,15 +37,16 @@
   "row162b": "2026-11-07: C153 wiring of row 162. engine/diagram/build/route.ts (2-line activeElkRoutes seam) and services/render/figures.ts (await buildDiagramSvgAuto) re-patched (files[].patch_row162b, diff_base = previous after_sha256). Diffs in implementation/114b_row162b_diffs/. Counts block left as found (+113 and +57 bytes, no status change)",
   "row163": "2026-11-07: U24 C (Vega-Lite/Vega chart family V-01..V-08; C126, C131, C134; security verification/18_row160 §4 C1-C9, C11). NEW engine/chart/family-v/{guard,index,input,sandbox,specs,svg,theme}.ts (status added; sandbox.ts is the only parse/View call: interpreter + deny-all loader); registry/charts.ts copied -> patched (patch row163-vega-chart-registry, additive VEGA_CHART_REGISTRY). Diffs and copies in implementation/115_row163_diffs/. Counts: files +7, copied -1, patched +1, added +7, bytes +90777",
   "I-3": "2026-11-08: C164 L8. engine/chart/family-v/index.ts (added by 163) edited: aliasLabels + PROTO_ALIAS so the data value '__proto__' is an ordinary label in V-02/V-03 (files[].patch_i3); bytes 9693 -> 10762, counts.bytes +1069 (9651545). Test test/engine-rev-a/chart-vega/i3-proto-labels.test.ts",
-  "row163b": "2026-11-08: C155 wiring of row 163 (Vega family on the agent render path). NEW services/render/vega-figure.ts (status added); contract/schema/v2/common.schema.ts, contract/types/chart.ts, contract/types/v2/doc.ts, services/compose/blocks.ts copied -> patched (patch row163b-*); services/render/figures.ts and engine/chart/family-v/input.ts re-patched (files[].patch_row163b). Diffs in implementation/122_row163b_diffs/. `counts` RECOMPUTED from files[] (601 = 466 copied + 100 patched + 12 replaced + 23 added; bytes = sum of files[].bytes, which also takes in 6861 bytes of earlier drift the block had not counted: 9633845 + 9770 (this row) + 6861 = 9650476); every entry checked against disk: 0 sha/bytes mismatches, 0 missing"
+  "row163b": "2026-11-08: C155 wiring of row 163 (Vega family on the agent render path). NEW services/render/vega-figure.ts (status added); contract/schema/v2/common.schema.ts, contract/types/chart.ts, contract/types/v2/doc.ts, services/compose/blocks.ts copied -> patched (patch row163b-*); services/render/figures.ts and engine/chart/family-v/input.ts re-patched (files[].patch_row163b). Diffs in implementation/122_row163b_diffs/. `counts` RECOMPUTED from files[] (601 = 466 copied + 100 patched + 12 replaced + 23 added; bytes = sum of files[].bytes, which also takes in 6861 bytes of earlier drift the block had not counted: 9633845 + 9770 (this row) + 6861 = 9650476); every entry checked against disk: 0 sha/bytes mismatches, 0 missing",
+  "row143a": "2026-11-08: C177 F143-1 engine faults. NEW engine/table-fit.ts (status added); engine/bind/derivation.ts, engine/bind/index.ts, engine/docx/assemble/numbering.ts, services/compose/snapshot.ts, services/ingest/normalize.ts copied -> patched (patch row143a-engine-faults); engine/docx/figures/derivation.ts, engine/html/tables/table.ts, engine/docx/tables/render.ts, engine/figure-capacity.ts re-patched (files[].patch_row143a). Diffs in implementation/132_row143a_diffs/. `counts` RECOMPUTED from files[] (602 = 459 copied + 107 patched + 12 replaced + 24 added; bytes = sum of files[].bytes = 9668789); the block before this row said copied 466 / patched 100 while files[] held 464 / 102 (earlier drift, not this row); every entry checked against disk after this row: 0 sha/bytes mismatches, 0 missing"
  },
  "counts": {
-  "files": 601,
-  "copied": 466,
-  "patched": 100,
+  "files": 602,
+  "copied": 459,
+  "patched": 107,
   "replaced": 12,
-  "added": 23,
-  "bytes": 9651545
+  "added": 24,
+  "bytes": 9668789
  },
  "files": [
   {
@@ -1121,10 +1122,11 @@
   },
   {
    "path": "src/lib/studio/engine/bind/derivation.ts",
-   "status": "copied",
-   "bytes": 9719,
+   "status": "patched",
+   "bytes": 12775,
    "source_sha256": "f84d57a8e98a6470f31852c8e6793b682fbfc7219eb6dddccc9af946da476d60",
-   "sha256": "f84d57a8e98a6470f31852c8e6793b682fbfc7219eb6dddccc9af946da476d60"
+   "sha256": "d3abeb982f575501c813430379b68da24b055069cc5651f72c8e4b78a7584188",
+   "patch": {"id": "row143a-engine-faults", "row": "143a", "decision": "C177 F143-1 (a)+(c) (verification/16_row143_app_studio_1_2_1.md section 6)", "summary": "monoLine never cuts the label: a label within 54 gives the Python line byte for byte; a longer one wraps (wrapMonoCp, lines joined by \\n; label-only lines use the full 54+18 line first; the value stays right-aligned on the last line); padEndCp pads only. NEW derivationTitleId: the label a derivation title starts with (Turunan|Derivation <id>, Manual Rev A ID p.40 form 7.5a and engine form D-4.2/F-1.1)", "before_sha256": "f84d57a8e98a6470f31852c8e6793b682fbfc7219eb6dddccc9af946da476d60", "after_sha256": "d3abeb982f575501c813430379b68da24b055069cc5651f72c8e4b78a7584188", "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/132_row143a_diffs/engine_bind_derivation.ts.diff", "diff_sha256": "4523ee977cc7130216071272b68865c05258f420c2d7f3815002cbbac051e31c"}
   },
   {
    "path": "src/lib/studio/engine/bind/format.ts",
@@ -1135,10 +1137,11 @@
   },
   {
    "path": "src/lib/studio/engine/bind/index.ts",
-   "status": "copied",
-   "bytes": 1374,
+   "status": "patched",
+   "bytes": 1409,
    "source_sha256": "f43ea751861ae357e43ebc9946c2dc383e73dcdbbd8cddb74c510adf11e17de3",
-   "sha256": "f43ea751861ae357e43ebc9946c2dc383e73dcdbbd8cddb74c510adf11e17de3"
+   "sha256": "60c8ac5cb633fa06be9d6f548c2358f30728f7fdc01727949e626d6650d246ef",
+   "patch": {"id": "row143a-engine-faults", "row": "143a", "decision": "C177 F143-1 (a)+(c) (verification/16_row143_app_studio_1_2_1.md section 6)", "summary": "exports derivationTitleId and wrapMonoCp", "before_sha256": "f43ea751861ae357e43ebc9946c2dc383e73dcdbbd8cddb74c510adf11e17de3", "after_sha256": "60c8ac5cb633fa06be9d6f548c2358f30728f7fdc01727949e626d6650d246ef", "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/132_row143a_diffs/engine_bind_index.ts.diff", "diff_sha256": "d9d5575b035efac96e576ec53549790941d61378fd21cb1155366bc1a5279a2b"}
   },
   {
    "path": "src/lib/studio/engine/bind/register.ts",
@@ -1206,9 +1209,18 @@
   {
    "path": "src/lib/studio/engine/browser/runtime.ts",
    "status": "replaced",
-   "bytes": 28577,
+   "bytes": 29363,
    "source_sha256": "d05569cbe8d96addc63b84fac773b1f107b48dc0949cb949c54a8111986c310a",
-   "sha256": "77610a3f17afbb5792cc98cbf9fd3d68bf3024900f400c61be077f141a6350a0",
+   "sha256": "6b7a7e7485b8eec68cfa7db0ceedf8338d5f097d25f39f40990e8f41ff8fb4b7",
+   "patch_row143b": {
+    "id": "row143b-symlink-page-images",
+    "row": "143b",
+    "decision": "C177, F143-2 (verification/16_row143_app_studio_1_2_1.md section 7)",
+    "summary": "rasterizeHtmlPages compares realpaths (best effort for parts that do not exist yet) of dstDir and each reply png, so a store path containing a symlink no longer fails the reply sanity check; new helpers withSep, realpathBestEffort; realpathSync import",
+    "diff_base": "patch_row151c.after_sha256",
+    "before_sha256": "77610a3f17afbb5792cc98cbf9fd3d68bf3024900f400c61be077f141a6350a0",
+    "after_sha256": "6b7a7e7485b8eec68cfa7db0ceedf8338d5f097d25f39f40990e8f41ff8fb4b7"
+   },
    "patch_row151c": {
     "id": "row151c-page-images-approximate",
     "row": "151c",
@@ -2564,10 +2576,11 @@
   },
   {
    "path": "src/lib/studio/engine/docx/assemble/numbering.ts",
-   "status": "copied",
-   "bytes": 5478,
+   "status": "patched",
+   "bytes": 5750,
    "source_sha256": "5e7c59b1c47e6384b70a18008b8985703fa19d3f5363202b7cca6991cc7eea07",
-   "sha256": "5e7c59b1c47e6384b70a18008b8985703fa19d3f5363202b7cca6991cc7eea07"
+   "sha256": "0bce3d8764dca2f493d18656a01d24902ea8ded586af2a09a7a89f9811232a9f",
+   "patch": {"id": "row143a-engine-faults", "row": "143a", "decision": "C177 F143-1 (c) (verification/16_row143_app_studio_1_2_1.md section 6)", "summary": "explicitDerivationId: falls back to the title label, so the computed label equals the snapshot label (no NUMBERING_MISMATCH)", "before_sha256": "5e7c59b1c47e6384b70a18008b8985703fa19d3f5363202b7cca6991cc7eea07", "after_sha256": "0bce3d8764dca2f493d18656a01d24902ea8ded586af2a09a7a89f9811232a9f", "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/132_row143a_diffs/engine_docx_assemble_numbering.ts.diff", "diff_sha256": "1324a0689a9127d58b12b20ec1f99b7bcd79f5a807ac04b3dda0aef6ee6fb5dc"}
   },
   {
    "path": "src/lib/studio/engine/docx/assemble/units.ts",
@@ -2721,9 +2734,10 @@
   {
    "path": "src/lib/studio/engine/docx/figures/derivation.ts",
    "status": "patched",
-   "bytes": 15581,
+   "bytes": 16067,
    "source_sha256": "b2890488aa99bbdacaa8ec115c42290e81c2503bb08306ce747aced0541102d3",
-   "sha256": "ae32dcea68223f37e8916ee6fa232fecd5533e2bf745da7431b9bea00687a61a",
+   "sha256": "6b84ba5c695358a0c23b0bb54cf9a3fead4ea2d28f9b13823050f4b11aa5f336",
+   "patch_row143a": {"id": "row143a-engine-faults", "row": "143a", "decision": "C177 F143-1 (a) (verification/16_row143_app_studio_1_2_1.md section 6)", "summary": "monoLines: a wrapped mono row prints as one paragraph with <w:br/> per continuation (monoRunsXml); single-line rows byte-identical", "before_sha256": "ae32dcea68223f37e8916ee6fa232fecd5533e2bf745da7431b9bea00687a61a", "after_sha256": "6b84ba5c695358a0c23b0bb54cf9a3fead4ea2d28f9b13823050f4b11aa5f336", "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/132_row143a_diffs/engine_docx_figures_derivation.ts.diff", "diff_sha256": "1d1dcf396de92cf1f7fbb8fa0da6c4eb226f594d9be11b0074b83dd03575f113"},
    "patch": {
     "id": "row122-cp30-derivation-label",
     "row": 122,
@@ -3016,9 +3030,10 @@
   {
    "path": "src/lib/studio/engine/docx/tables/render.ts",
    "status": "patched",
-   "bytes": 34119,
+   "bytes": 34415,
    "source_sha256": "7a5d80a40ee98f4048f7dbc1e1969a577518d9656ddefa85d973643e17980173",
-   "sha256": "5ace630a86dd415e1ef13d6e0fa80d57b98bd6fa3608caec32966c0921a12679",
+   "sha256": "7ec332350c76e04544203f176c93d3b359670a8bd73dd6f23afe7a28d58ef1b1",
+   "patch_row143a": {"id": "row143a-engine-faults", "row": "143a", "decision": "C177 F143-1 (b) (verification/16_row143_app_studio_1_2_1.md section 6)", "summary": "renderTableBlock: same full-span refusal as HTML (assertTableFits) before building the table XML", "before_sha256": "5ace630a86dd415e1ef13d6e0fa80d57b98bd6fa3608caec32966c0921a12679", "after_sha256": "7ec332350c76e04544203f176c93d3b359670a8bd73dd6f23afe7a28d58ef1b1", "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/132_row143a_diffs/engine_docx_tables_render.ts.diff", "diff_sha256": "4f43d41ec215f3685b60c24ad8ee7ad422b646b0cd166c513f44d7898a7d01a7"},
    "patch": {
     "id": "row122-cp28-cp51-tables",
     "row": 122,
@@ -3147,11 +3162,21 @@
   {
    "path": "src/lib/studio/engine/figure-capacity.ts",
    "status": "added",
-   "bytes": 3852,
+   "bytes": 4439,
    "source_sha256": null,
-   "sha256": "8e7bdf3466a29bc42396698a942386839bd36900abc404efc4842cce022ebf4f",
+   "sha256": "704a2669f8cade03417c08e4c65567a1b92b64fe2232a3b56df82944a2307d8a",
+   "patch_row143a": {"id": "row143a-engine-faults", "row": "143a", "decision": "C177 F143-1 (b) (verification/16_row143_app_studio_1_2_1.md section 6)", "summary": "FigureOverCapacityDetails.figure += \"table\"; NEW TableOverCapacity (StudioEngineError, code FIGURE_OVER_CAPACITY, no contract enum change)", "before_sha256": "8e7bdf3466a29bc42396698a942386839bd36900abc404efc4842cce022ebf4f", "after_sha256": "704a2669f8cade03417c08e4c65567a1b92b64fe2232a3b56df82944a2307d8a", "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/132_row143a_diffs/engine_figure-capacity.ts.diff", "diff_sha256": "df926d8f96f20ec91be8880f9a35b049fdaf9f77161eebb53bc461f137da7630"},
    "added_by": "158",
    "note": "NEW Swarm file of row 158 (U24 B; no clone original): FIGURE_OVER_CAPACITY, FigureOverCapacityDetails {checkId, figure, family, quantity, unit, limit, measured, suggestion, pointer?}, overCapacityMessage (engine text + '; batas: ...; saran: ...'), DiagramOverCapacity (extends DiagramDefect, code FIGURE_OVER_CAPACITY), ChartOverCapacity (StudioEngineError), isFigureOverCapacity. Used by engine/diagram/build/capacity.ts, engine/diagram/core/estimate.ts, engine/chart/core/render.ts. Copy: implementation/112_row158_diffs/engine__figure-capacity.ts.new"
+  },
+  {
+   "path": "src/lib/studio/engine/table-fit.ts",
+   "status": "added",
+   "bytes": 6737,
+   "source_sha256": null,
+   "sha256": "6f83370593c9eb50a530cb903a57327a2bb8b977fb9366bc8eb8072595f7b349",
+   "added_by": "143a",
+   "note": "NEW Swarm file of row 143a (C177 F143-1 (b), Manual Rev A ID p.51 DT-10a; no clone original): tableMinWidthMm (lower bound of a table's width from its unbreakable content: single-column numeral/id cells in Plex Mono 0.6 em, unit/header cells 0.42 em, longest word elsewhere, 2.5 mm gaps), tableSpanLimitMm (largest grid.allowedFigureWidthsMm, 166 mm on A4), assertTableFits (throws TableOverCapacity, code FIGURE_OVER_CAPACITY, figure table, checkId DT-10a). Used by engine/html/tables/table.ts and engine/docx/tables/render.ts. Copy: implementation/132_row143a_diffs/engine_table-fit.ts.new"
   },
   {
    "path": "src/lib/studio/engine/front/alt-text.ts",
@@ -3587,9 +3612,10 @@
   {
    "path": "src/lib/studio/engine/html/tables/table.ts",
    "status": "patched",
-   "bytes": 19821,
+   "bytes": 20485,
    "source_sha256": "f4b73634cd3dc4373cf727a7e7a0c9b89bec02ab53bcd2457a98141f38b2a519",
-   "sha256": "3d90f7a92f728b23cf8e6ba455a3b6d67c230f9df23d54c3c4b1033553ebe78e",
+   "sha256": "03883b0e8774e8db20ec4d696ddd1ab35f28e111aedc28d6841e00e23f59e06a",
+   "patch_row143a": {"id": "row143a-engine-faults", "row": "143a", "decision": "C177 F143-1 (b) (verification/16_row143_app_studio_1_2_1.md section 6)", "summary": "cellHtml: white-space:pre only for single-column (gridSpan 1) numeral/unit/id cells, so a spanning total/band label wraps (case 01 Table 3.1 was 176.9 mm > 166 mm); renderTableBlock refuses a table whose unbreakable content cannot fit (assertTableFits, FIGURE_OVER_CAPACITY figure table, DT-10a)", "before_sha256": "3d90f7a92f728b23cf8e6ba455a3b6d67c230f9df23d54c3c4b1033553ebe78e", "after_sha256": "03883b0e8774e8db20ec4d696ddd1ab35f28e111aedc28d6841e00e23f59e06a", "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/132_row143a_diffs/engine_html_tables_table.ts.diff", "diff_sha256": "40b67e7e78c036da7187b820a712d5d9cd78cda0fdce3abc258b27bbec1c52cd"},
    "patch": {
     "id": "row123-html-table",
     "row": 123,
@@ -4303,10 +4329,11 @@
   },
   {
    "path": "src/lib/studio/services/compose/snapshot.ts",
-   "status": "copied",
-   "bytes": 28786,
+   "status": "patched",
+   "bytes": 29214,
    "source_sha256": "7a6bbbdcba991c35b1bb55b98885551bd3bd2f4ed877d4af7fed1de418df58bd",
-   "sha256": "7a6bbbdcba991c35b1bb55b98885551bd3bd2f4ed877d4af7fed1de418df58bd"
+   "sha256": "7ba645109a4d1e32c123835c22da0a030873b5c793d87f080b13a6ec75381187",
+   "patch": {"id": "row143a-engine-faults", "row": "143a", "decision": "C177 F143-1 (c) (verification/16_row143_app_studio_1_2_1.md section 6)", "summary": "v2 derivation label: Turunan <title label> when the title starts with its own label (derivationTitleId), else D-C.n (counter still advances)", "before_sha256": "7a6bbbdcba991c35b1bb55b98885551bd3bd2f4ed877d4af7fed1de418df58bd", "after_sha256": "7ba645109a4d1e32c123835c22da0a030873b5c793d87f080b13a6ec75381187", "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/132_row143a_diffs/services_compose_snapshot.ts.diff", "diff_sha256": "b99596dedb2ea4e83f6ab4cee83961058d14fd444b448fcc36189ebfc919cc7d"}
   },
   {
    "path": "src/lib/studio/services/compose/structure.ts",
@@ -4632,10 +4659,11 @@
   },
   {
    "path": "src/lib/studio/services/ingest/normalize.ts",
-   "status": "copied",
-   "bytes": 15608,
+   "status": "patched",
+   "bytes": 15926,
    "source_sha256": "497aae1f2a3dbc8b6c8631b056997ca122d7bdc4d4c987de734ac673a54f18a8",
-   "sha256": "497aae1f2a3dbc8b6c8631b056997ca122d7bdc4d4c987de734ac673a54f18a8"
+   "sha256": "d943d367b1bf6a6d389cbae48af0fa52b30cbfbf0b4ad6f3bedb365c2c123893",
+   "patch": {"id": "row143a-engine-faults", "row": "143a", "decision": "C177 F143-1 (c) (verification/16_row143_app_studio_1_2_1.md section 6)", "summary": "v1 derivation label: explicit id, then the title label, then D-C.n", "before_sha256": "497aae1f2a3dbc8b6c8631b056997ca122d7bdc4d4c987de734ac673a54f18a8", "after_sha256": "d943d367b1bf6a6d389cbae48af0fa52b30cbfbf0b4ad6f3bedb365c2c123893", "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/132_row143a_diffs/services_ingest_normalize.ts.diff", "diff_sha256": "af1859135064fd9200b8862f03d53c403db39d070eeb3ff1edb9deb939116f8e"}
   },
   {
    "path": "src/lib/studio/services/ingest/repository.ts",
@@ -5741,6 +5769,8 @@
   "163",
   "162b",
   "163b",
-  "151c"
+  "151c",
+  "143b",
+  "143a"
  ]
 }

@@ -35,6 +35,7 @@ import type {
 import { apparatusReserveTw } from "../../docx/blocks/rail";
 import { baselineSnapTw } from "../../docx/blocks/rhythm";
 import { mmToTw } from "../../tokens";
+import { assertTableFits } from "../../table-fit";
 import { scaleRun } from "../../tokens/roles";
 import { artifactLabel, captionHtml, sourceInner, sourceParagraphCss, sourceParagraphHtml } from "./apparatus";
 import { attr, escText } from "./escape";
@@ -177,7 +178,10 @@ function cellHtml(env: TableEnv, cell: Cell, colIdx: number, pos: CellPos, rowsp
     if (col?.role !== "numeral" && col?.role !== "id" && col?.role !== "unit") run.faceRole = "condensed";
   }
   const align = gs === 1 ? colAlign(col) : pos.kind === "group" ? "left" : colAlign(col);
-  const nowrap = col?.role === "numeral" || col?.role === "unit" || col?.role === "id";
+  // Swarm row 143a (C177 F143-1 (b)): only a single-column numeral / unit / id cell stays on one line. A cell that
+  // spans columns (a total or band label such as "Jumlah titik sensor, empat ruang, ...") wraps like text; kept on one
+  // line it pushed case 01 Table 3.1 to 176.9 mm, past the 166 mm span, and the page clipped the last column.
+  const nowrap = gs === 1 && (col?.role === "numeral" || col?.role === "unit" || col?.role === "id");
 
   // Isi sel.
   let paras = cellParagraphs(cell);
@@ -451,5 +455,7 @@ export function renderTableBlock(block: NormBlock, ctx: RenderContext): string {
     });
     return `<div class="st-table st-invalid"${attr("data-address", block.address ?? undefined)}></div>`;
   }
+  // Swarm row 143a (C177 F143-1 (b), DT-10a): refuse a table whose unbreakable content cannot fit the full span.
+  assertTableFits(t, ctx.tpl.params, { label: block.artifactLabel ?? ctx.snapshot?.numbering?.[block.blockId], address: block.address });
   return tableHtml(t, ctx, { depth: 0, block });
 }

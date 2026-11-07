@@ -24,7 +24,8 @@ export const FIGURE_OVER_CAPACITY = "FIGURE_OVER_CAPACITY" as const;
 export interface FigureOverCapacityDetails {
   /** Engine check that measured the overflow (DATUM-33, DATUM-37-lebar, CAPACITY-LABELS, ...). */
   checkId: string;
-  figure: "diagram" | "chart";
+  /** "table": Swarm row 143a (C177 F143-1 (b)), a table wider than the full span (DT-10a), engine/table-fit.ts. */
+  figure: "diagram" | "chart" | "table";
   /** Diagram family or chart code. */
   family: string;
   /** What was measured, in words (e.g. "kolom graph", "tinggi gambar"). */
@@ -68,7 +69,16 @@ export class ChartOverCapacity extends StudioEngineError {
   }
 }
 
-/** True for a row-158 refusal (either figure type). */
+/** Table refusal (Swarm row 143a, C177 F143-1 (b)): a `StudioEngineError` with code FIGURE_OVER_CAPACITY. */
+export class TableOverCapacity extends StudioEngineError {
+  declare readonly details: FigureOverCapacityDetails;
+
+  constructor(base: string, d: Omit<FigureOverCapacityDetails, "figure">) {
+    super(FIGURE_OVER_CAPACITY, overCapacityMessage(base, d), { ...d, figure: "table" } satisfies FigureOverCapacityDetails);
+  }
+}
+
+/** True for a row-158 refusal (any figure type, and row 143a's table refusal). */
 export function isFigureOverCapacity(e: unknown): e is StudioEngineError & { details: FigureOverCapacityDetails } {
   return e instanceof StudioEngineError && e.code === FIGURE_OVER_CAPACITY;
 }

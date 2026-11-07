@@ -7,7 +7,7 @@ import { join } from "path"
 // Why this file exists: the exemption is a deliberate, bounded weakening of a completeness invariant
 // (branch B of the 2026-10-21 decision in
 // `docs/2026-10-19_opencode_swarm_rebrand/decisions/decisions.md`). Its safety depends entirely on
-// staying bounded — two hundred and six entries as of row 128 of docs/2026-11-06_swarm_1_2_0_datum_installer (fifty-seven more for mission control, `session.mission.*`, decision C127 (3), EN and ID only), one hundred and forty-nine entries as of row 112 of docs/2026-11-06_swarm_1_2_0_datum_installer (five more for the document preview inside the existing file tab, decision U12, studio spec §8.2), one hundred and forty-four entries as of row 34b of docs/2026-11-06_swarm_1_2_0_datum_installer (seven more for the native Install DATUM Studio for Claude menu item and dialogs, decisions C63/C64), one hundred and thirty-seven entries as of row 54 of docs/2026-11-02_swarm_system_patch_updates (twenty-five more for the native Update from File and Undo Last Update menu items and dialogs, register BN-30..BN-54), one hundred and twelve entries as of decision P12 (two more for the 1.1.1 healing loop F3: the not-bypassed hint and its palette command), one hundred and ten as of decision P6 (forty-two more for 1.1.1: consent dialog, Decisions view, session switcher) of docs/2026-11-03_swarm_1_1_1_patch, sixty-eight as of decision C121 (Install Command Line Tool), sixty-one as of row 162 (U11 archive row), sixty as of row 246 (U14 fix pass, C80 and C82), fifty-four as of row 228 (register U14, gate G-U14), forty-four as of row 159 (register U11, gate G-U11) of the 2026-11-01 Knowledge Library
+// staying bounded — two hundred and eight entries as of row 133b of docs/2026-11-06_swarm_1_2_0_datum_installer (two more for the mission control expand toggle, `session.mission.expand`/`collapse`, decision C175, EN and ID only), two hundred and six entries as of row 128 of docs/2026-11-06_swarm_1_2_0_datum_installer (fifty-seven more for mission control, `session.mission.*`, decision C127 (3), EN and ID only), one hundred and forty-nine entries as of row 112 of docs/2026-11-06_swarm_1_2_0_datum_installer (five more for the document preview inside the existing file tab, decision U12, studio spec §8.2), one hundred and forty-four entries as of row 34b of docs/2026-11-06_swarm_1_2_0_datum_installer (seven more for the native Install DATUM Studio for Claude menu item and dialogs, decisions C63/C64), one hundred and thirty-seven entries as of row 54 of docs/2026-11-02_swarm_system_patch_updates (twenty-five more for the native Update from File and Undo Last Update menu items and dialogs, register BN-30..BN-54), one hundred and twelve entries as of decision P12 (two more for the 1.1.1 healing loop F3: the not-bypassed hint and its palette command), one hundred and ten as of decision P6 (forty-two more for 1.1.1: consent dialog, Decisions view, session switcher) of docs/2026-11-03_swarm_1_1_1_patch, sixty-eight as of decision C121 (Install Command Line Tool), sixty-one as of row 162 (U11 archive row), sixty as of row 246 (U14 fix pass, C80 and C82), fifty-four as of row 228 (register U14, gate G-U14), forty-four as of row 159 (register U11, gate G-U11) of the 2026-11-01 Knowledge Library
 // task, up from thirty-six since its decision C62 of the 2026-11-01 Knowledge Library task removed one,
 // thirty-seven as of its row 77, up from thirty-six
 // at its decision C18, twelve at its decision C2, ten at blueprint-11 row 249 (session 6), nine at row 204 and the original three.
@@ -228,6 +228,8 @@ const APPROVED_EXEMPT_KEYS = [
   "session.mission.deliverable.open",
   "session.mission.prompt.answer",
   "session.mission.prompt.instruction",
+  "session.mission.expand",
+  "session.mission.collapse",
 ]
 
 function arrayLiteral(name: string) {
@@ -245,10 +247,10 @@ function arrayLiteral(name: string) {
 describe("i18n parity exemption guard", () => {
   const exemptKeys = arrayLiteral("UNTRANSLATED_KEY_PRESENCE_EXEMPTION")
 
-  test("the exemption holds exactly the two-hundred-and-six approved keys and nothing else", () => {
+  test("the exemption holds exactly the two-hundred-and-eight approved keys and nothing else", () => {
     expect([...exemptKeys].sort()).toEqual([...APPROVED_EXEMPT_KEYS].sort())
-    expect(exemptKeys.length).toBe(206)
-    expect(new Set(exemptKeys).size).toBe(206)
+    expect(exemptKeys.length).toBe(208)
+    expect(new Set(exemptKeys).size).toBe(208)
   })
 
   test("every exemption entry is a literal dotted key, never a wildcard or pattern", () => {
@@ -488,6 +490,8 @@ describe("i18n parity exemption guard", () => {
           "session.mission.deliverable.open",
           "session.mission.prompt.answer",
           "session.mission.prompt.instruction",
+          "session.mission.expand",
+          "session.mission.collapse",
         ],
       },
       {

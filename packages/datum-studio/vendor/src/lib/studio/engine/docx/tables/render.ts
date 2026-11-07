@@ -64,6 +64,7 @@ import { APPARATUS_TEXT, apparatusLabelRunText, apparatusLabelWords, artifactLab
 import { mmToTw, mmWidthsToTw, solveWidthsImpl, twToMm } from "./widths";
 import { type ParaAdjust, apparatusParaAdjust } from "../blocks/apparatus";
 import { baselineSnapTw, rowWrappedTw, snapUpTw } from "../blocks/rhythm";
+import { assertTableFits } from "../../table-fit";
 
 /** Python `_NUM_RE` datum_docx.py: kolom angka bila >= 70 % sel badan cocok. */
 const NUM_RE = /^[\d.,%±\s-]+\s*(%|x|mm|m|kVA|kW|Hz)?$/;
@@ -685,6 +686,8 @@ export function renderTableBlock(block: NormBlock, ctx: RenderContext): DocxFrag
   const env: Env = { tpl, ctx, address: block.address, depth: 0, ...(unitKind ? { unitKind } : {}) };
   const content = block.content as TableFamilyBlock;
   const label = block.artifactLabel ?? ctx.snapshot?.numbering?.[block.blockId];
+  // Swarm row 143a (C177 F143-1 (b), DT-10a): same full-span refusal as the HTML renderer.
+  if (content && Array.isArray(content.columns) && Array.isArray(content.rows)) assertTableFits(content, tpl.params, { label, address: block.address });
   const xml = tableXmlParts(content, env, { artifactLabel: label }).join("");
   return { xml, facesUsed: facesInXml(xml) };
 }

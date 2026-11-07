@@ -1105,6 +1105,8 @@ export const dict = {
   "session.mission.deliverable.open": "Buka {{name}}",
   "session.mission.prompt.answer": "Kendali misi: {{request}} dijawab dengan opsi {{option}} (dicatat sebagai {{decision}}) di misi {{mission}}. Baca dengan studio_mission_get lalu lanjutkan.",
   "session.mission.prompt.instruction": "Instruksi kendali misi untuk misi {{mission}}: {{text}}",
+  "session.mission.expand": "Lebarkan kendali misi",
+  "session.mission.collapse": "Sempitkan kendali misi",
   "command.session.map.problem.next": "Ke masalah berikutnya",
   "command.session.map.problem.previous": "Ke masalah sebelumnya",
   "session.activity.title": "Aktivitas",

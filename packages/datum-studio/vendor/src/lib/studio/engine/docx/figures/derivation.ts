@@ -188,6 +188,18 @@ function nestedTableXml(b: DerivationBuild, d: DerivationBlock, ctx: RenderConte
 
 // ── monoLines ────────────────────────────────────────────────────────────
 
+/**
+ * Swarm row 143a (C177 F143-1): a mono row that wraps (`monoLine` joins its lines with "\n") prints as one paragraph
+ * with a line break per continuation; a single-line row is one run, byte for byte as before.
+ */
+function monoRunsXml(mono: string, run: RunProps, p: RenderContext["tpl"]["params"]): string {
+  if (!mono.includes("\n")) return textRun(mono, run, p);
+  return mono
+    .split("\n")
+    .map((part) => textRun(part, run, p))
+    .join("<w:r><w:br/></w:r>");
+}
+
 function monoLinesXml(b: DerivationBuild, d: DerivationBlock, ctx: RenderContext, r: Roles): string {
   const p = ctx.tpl.params;
   const amber = tokenColor(ctx.tpl, "signal");
@@ -207,7 +219,7 @@ function monoLinesXml(b: DerivationBuild, d: DerivationBlock, ctx: RenderContext
     const mono = row.kind === "verdict" && row.tag ? row.mono.slice(0, row.mono.length - row.tag.length).trimEnd() : row.mono;
     xml += paragraphXml(
       mergePara(r.expr.para, rule, keep),
-      textRun(mono, exprRun, p) + (row.mark ? textRun(" ", exprRun, p) + glyphXml(row.mark, ctx, r, exprRun) : "") + verdictTagXml(row, exprRun, ctx),
+      monoRunsXml(mono, exprRun, p) + (row.mark ? textRun(" ", exprRun, p) + glyphXml(row.mark, ctx, r, exprRun) : "") + verdictTagXml(row, exprRun, ctx),
     );
   }
   xml += paragraphXml(

@@ -37,7 +37,7 @@ mock.module("@/context/language", () => ({
   }),
 }))
 
-const { MissionHQ } = await import(new URL("./mission-hq.tsx", import.meta.url).pathname)
+const { MissionHQ, beaconPill } = await import(new URL("./mission-hq.tsx", import.meta.url).pathname)
 
 let dispose = () => {}
 afterEach(() => {
@@ -177,6 +177,38 @@ describe("MissionHQ", () => {
     expect(all(root, "[data-hq-room]").length).toBe(6)
     expect(text(root, "[data-hq-room-name]")).toBe("IDENTIFIKASI")
     expect(root.querySelector("[data-hq-beacon]")?.textContent).toBe("D-07 · keputusan")
+  })
+
+  // Row 133b (row 144 O-1): "D-1 · decision" ran past the right edge of its fixed 106 px pill. The pill is now sized to
+  // the text: at Menlo's real advance (0.6 em of 11 px) the text plus its 26 px lead and 8 px pad fits inside the rect,
+  // the rect stays in the viewBox, and in lanes it stays clear of the "n/m" count (which ends near x 220).
+  test("beacon text fits its pill (EN and ID, lanes and radial); an over-long label is ellipsized", () => {
+    for (const [dict, lang] of [[en, "en"], [id, "id"]] as const) {
+      for (const width of [420, 1280]) {
+        table = dict
+        const root = mount(fixtureMission("feature-release", { decision: true }, lang), width)
+        const beacon = root.querySelector("[data-hq-beacon]")!
+        const rect = beacon.querySelector("rect")!
+        const label = beacon.querySelector("text")!
+        const x = Number(rect.getAttribute("x"))
+        const w = Number(rect.getAttribute("width"))
+        const tx = Number(label.getAttribute("x"))
+        const chars = Array.from(label.textContent ?? "").length
+        expect(label.textContent).toBe(dict["session.mission.decision.beacon"].replace("{{id}}", "D-07"))
+        expect(tx + chars * 11 * 0.6 + 8).toBeLessThanOrEqual(x + w)
+        const view = Number(root.querySelector("svg")!.getAttribute("viewBox")!.split(" ")[2])
+        expect(x).toBeGreaterThanOrEqual(0)
+        expect(x + w).toBeLessThanOrEqual(view)
+        if (root.dataset.missionHq === "lanes") expect(x).toBeGreaterThanOrEqual(228)
+        dispose()
+        document.body.innerHTML = ""
+      }
+    }
+    const long = beaconPill("D-1234567890 · keputusan panjang", 150)
+    expect(long.w).toBeLessThanOrEqual(150)
+    expect(long.text.endsWith("…")).toBe(true)
+    expect(26 + Array.from(long.text).length * 11 * 0.6 + 8).toBeLessThanOrEqual(long.w)
+    expect(beaconPill("D-1 · decision", 150)).toEqual({ text: "D-1 · decision", w: 134 })
   })
 
   test("mission text is rendered as text, never markup; reduced motion stops the animations", () => {

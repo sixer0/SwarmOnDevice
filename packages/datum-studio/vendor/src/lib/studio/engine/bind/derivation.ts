@@ -55,9 +55,10 @@ export interface ResultCheck {
   tol: number;
 }
 
+/** Pad to `w` code points; never cuts (Swarm row 143a, C177 F143-1). */
 function padEndCp(s: string, w: number): string {
-  const cps = Array.from(s).slice(0, w);
-  return cps.join("") + " ".repeat(Math.max(0, w - cps.length));
+  const n = Array.from(s).length;
+  return s + " ".repeat(Math.max(0, w - n));
 }
 
 function padStartCp(s: string, w: number): string {
@@ -65,9 +66,70 @@ function padStartCp(s: string, w: number): string {
   return " ".repeat(Math.max(0, w - n)) + s;
 }
 
-/** Python `f'{uraian:<{w}.{w}s}{s:>18s}'`. */
+/**
+ * Swarm row 143a (C177 F143-1): wrap `s` into lines of at most `w` code points. A line breaks at the last space that
+ * keeps it within `w` (that space run becomes the line break); a word longer than `w` is split at `w`. Only the
+ * whitespace at a break is consumed: every other character is kept, in order.
+ */
+export function wrapMonoCp(s: string, w: number): string[] {
+  const out: string[] = [];
+  let rest = Array.from(s);
+  while (rest.length > w) {
+    let cut = -1;
+    for (let i = w; i > 0; i--) {
+      if (rest[i] === " ") {
+        cut = i;
+        break;
+      }
+    }
+    let head = cut > 0 ? rest.slice(0, cut) : rest.slice(0, w);
+    let tail = cut > 0 ? rest.slice(cut) : rest.slice(w);
+    while (head.length > 0 && head[head.length - 1] === " ") head = head.slice(0, -1);
+    while (tail.length > 0 && tail[0] === " ") tail = tail.slice(1);
+    if (head.length === 0) {
+      // Only spaces before the break point: hard split instead of an empty line.
+      head = rest.slice(0, w);
+      tail = rest.slice(w);
+    }
+    out.push(head.join(""));
+    rest = tail;
+  }
+  out.push(rest.join(""));
+  return out;
+}
+
+/**
+ * Python `f'{uraian:<{w}.{w}s}{s:>18s}'`, except that the label is never cut (Swarm row 143a, C177 F143-1; Manual
+ * Rev A ID p.40, Gambar 7.3: a derivation line that does not fit continues on the next line). A label within `width`
+ * gives the Python line byte for byte. A longer label wraps: with a value, the label wraps at `width` and the value
+ * stays right-aligned on its last line; without a value (the whole line is the label) it uses the full line,
+ * `width` + 18, before wrapping. Wrapped lines are joined with "\n"; the renderers print each as its own line.
+ */
 export function monoLine(label: string, value: string, width = DERIVATION_DEFAULT_WIDTH): string {
-  return padEndCp(label, width) + padStartCp(value, DERIVATION_VALUE_WIDTH);
+  if (Array.from(label).length <= width) return padEndCp(label, width) + padStartCp(value, DERIVATION_VALUE_WIDTH);
+  if (value === "") {
+    const lines = wrapMonoCp(label, width + DERIVATION_VALUE_WIDTH);
+    lines[lines.length - 1] = padEndCp(lines[lines.length - 1], width + DERIVATION_VALUE_WIDTH);
+    return lines.join("\n");
+  }
+  const lines = wrapMonoCp(label, width);
+  lines[lines.length - 1] = padEndCp(lines[lines.length - 1], width) + padStartCp(value, DERIVATION_VALUE_WIDTH);
+  return lines.join("\n");
+}
+
+/**
+ * Swarm row 143a (C177 F143-1 (c); Manual Rev A ID p.40 "ID-nya berbentuk Turunan <bab>.<urut><huruf>", e.g.
+ * "Turunan 7.5a" named in the prose and the register): the label a derivation title starts with ("Turunan D-4.2 ·
+ * Panjang kabel", "Turunan 7.5a · ...", "Derivation F-1.1: ...") is the author's handle for that derivation; text and
+ * register entries cite it. Returns that id, or undefined when the title carries no such label.
+ */
+const TITLE_ID_RE = /^\s*(\S+)\s+((?:[A-Z]{1,2}-)?(?:[1-9][0-9]*|[A-Z])(?:\.[1-9][0-9]*)+[a-z]?)(?![\w.])/;
+export function derivationTitleId(title: string | undefined): string | undefined {
+  if (!title) return undefined;
+  const m = TITLE_ID_RE.exec(title);
+  if (!m) return undefined;
+  const words = new Set(Object.values(APPARATUS_TEXT.derivation).map((w) => w.toLowerCase()));
+  return words.has(m[1].toLowerCase()) ? m[2] : undefined;
 }
 
 function registerValues(reg: RegisterApi): Record<string, number> {

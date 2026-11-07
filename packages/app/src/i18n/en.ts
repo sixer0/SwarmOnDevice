@@ -944,6 +944,8 @@ export const dict = {
   "session.mission.deliverable.open": "Open {{name}}",
   "session.mission.prompt.answer": "Mission control: {{request}} answered with option {{option}} (recorded as {{decision}}) in mission {{mission}}. Read it with studio_mission_get and continue.",
   "session.mission.prompt.instruction": "Mission control instruction for mission {{mission}}: {{text}}",
+  "session.mission.expand": "Widen mission control",
+  "session.mission.collapse": "Narrow mission control",
   "command.session.map.problem.next": "Go to next problem",
   "command.session.map.problem.previous": "Go to previous problem",
   "session.activity.title": "Activity",

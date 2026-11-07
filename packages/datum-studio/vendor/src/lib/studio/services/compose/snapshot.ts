@@ -52,6 +52,7 @@ import {
 } from "../../contract";
 import { compareChapterKeys, expectedChapterKeys as expectedChapterKeysOf, slotStateOf } from "../completeness";
 import { plainText } from "../ingest/util";
+import { derivationTitleId, inlineText } from "../../engine/bind";
 import { mapBlock, type BlockCtx } from "./blocks";
 import { composeContextOf, type ComposedSnapshotV2 } from "./context";
 import { projectContractRecord, resolveContractKind } from "./contract-record";
@@ -331,7 +332,12 @@ export function composeV2(input: ComposeInput): ComposeResult {
         const hasCaption = (b as { caption?: unknown }).caption !== undefined;
         if (TABLE_TYPES.has(b.type) && hasCaption) label = `Tabel ${lk}.${++counters.t}`;
         else if (FIGURE_TYPES.has(b.type) && hasCaption) label = `Gambar ${lk}.${++counters.g}`;
-        else if (b.type === "derivation") label = `Turunan D-${lk}.${++counters.d}`;
+        else if (b.type === "derivation") {
+          // Swarm row 143a (C177 F143-1 (c), Manual Rev A ID p.40): a title that starts with its own label
+          // ("Turunan D-4.2 · ...") keeps it; the register and the prose cite that label. Unlabelled: D-C.n.
+          const n = ++counters.d;
+          label = `Turunan ${derivationTitleId(inlineText((b as { title?: Parameters<typeof inlineText>[0] }).title)) ?? `D-${lk}.${n}`}`;
+        }
         if (label !== undefined) e.numbering[pid] = label;
         const internal: Block = mapBlock(b, pid, { ...bctx, artifactLabel: label });
         out.push(internal);

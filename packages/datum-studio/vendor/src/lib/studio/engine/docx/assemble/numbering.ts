@@ -17,6 +17,7 @@
 import type { NormBlock, NormUnit } from "../../../contract";
 import { FIGURE_BLOCK_TYPES, TABLE_BLOCK_TYPES } from "../../../contract/enums";
 import { kickerSuppressed } from "../../front/texts";
+import { derivationTitleId, inlineText } from "../../bind";
 
 const TABLE_TYPES: ReadonlySet<string> = new Set<string>(TABLE_BLOCK_TYPES);
 const FIGURE_TYPES: ReadonlySet<string> = new Set<string>(FIGURE_BLOCK_TYPES);
@@ -50,7 +51,9 @@ function hasCaption(content: unknown): boolean {
 function explicitDerivationId(content: unknown): string | undefined {
   if (content === null || typeof content !== "object") return undefined;
   const id = (content as { id?: unknown }).id;
-  return typeof id === "string" && DERIVATION_ID_RE.test(id) ? id : undefined;
+  if (typeof id === "string" && DERIVATION_ID_RE.test(id)) return id;
+  // Swarm row 143a (C177 F143-1 (c), Manual Rev A ID p.40): the title's own label, as compose/normalize assign it.
+  return derivationTitleId(inlineText((content as { title?: Parameters<typeof inlineText>[0] }).title));
 }
 
 function toLetter(n: number): string {

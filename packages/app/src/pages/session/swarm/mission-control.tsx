@@ -5,6 +5,8 @@
 // The section is one fixed box capped below a screen (60vh, at most 720 px; row 136 M6) so the existing Agents view stays
 // visible under it; the stage and the cards scroll inside it. Mission text is rendered as text only (§12).
 import { useLanguage } from "@/context/language"
+import { Icon as IconV2 } from "@opencode-ai/ui/v2/icon"
+import { IconButtonV2 } from "@opencode-ai/ui/v2/icon-button-v2"
 import { createEffect, createSignal, For, on, onCleanup, Show } from "solid-js"
 import { dockItems, missionEyebrow, missionLayoutOf, showSelector } from "./mission-control-layout"
 import { MissionCommand } from "./mission-command"
@@ -24,6 +26,23 @@ export type MissionControlMount = {
   prompt: (text: string) => Promise<unknown>
   /** `(p) => tabs().open(file.tab(p))` */
   openFile?: (path: string) => void
+  /**
+   * Row 133b (C175): the header toggle that widens the existing Activity pane (session-map-view.tsx) so the radial HQ
+   * (stage >= 540 px) and the sidebar (>= 761 px) can show. `wide` is the remembered choice; absent = no toggle.
+   */
+  expand?: { wide: () => boolean; toggle: () => void }
+}
+
+// Row 133b (C175): the widened Activity pane, as session-map-view.tsx sets it in a container of 900 px or more:
+// `@[900px]:w-[min(1100px,70vw,calc(100%-280px))]` (the 372 px pane otherwise). The section is 17 px narrower than
+// the pane (2 x 8 px margin + 1 px border; row 144 measured 355 in 372). The stage sits beside the 300 px sidebar
+// (8 px gap) at 761 px or more, and takes the whole width in sheet mode.
+export const WIDE_PANE = { max: 1100, window: 0.7, chat: 280, inset: 17 } as const
+export function widePaneWidth(windowWidth: number, containerWidth: number) {
+  return Math.min(WIDE_PANE.max, Math.floor(windowWidth * WIDE_PANE.window), containerWidth - WIDE_PANE.chat)
+}
+export function missionStageWidth(sectionWidth: number) {
+  return missionLayoutOf(sectionWidth) === "sidebar" ? sectionWidth - 300 - 8 : sectionWidth
 }
 
 const FAINT = "text-v2-text-text-faint [font-weight:440]"
@@ -132,6 +151,21 @@ export function MissionControl(props: MissionControlMount & { width?: number }) 
               </For>
             </select>
           </Show>
+          <Show when={props.expand}>
+            {(expand) => (
+              <IconButtonV2
+                type="button"
+                variant="ghost-muted"
+                size="small"
+                data-mission-expand={expand().wide() ? "wide" : "narrow"}
+                aria-pressed={expand().wide()}
+                aria-label={t(expand().wide() ? "session.mission.collapse" : "session.mission.expand")}
+                title={t(expand().wide() ? "session.mission.collapse" : "session.mission.expand")}
+                onClick={() => expand().toggle()}
+                icon={<IconV2 name={expand().wide() ? "collapse" : "expand"} class="rotate-90" />}
+              />
+            )}
+          </Show>
         </header>
 
         <Show when={state.readFailed}>
@@ -153,6 +187,7 @@ export function MissionControl(props: MissionControlMount & { width?: number }) 
               <div data-mission-stage class="h-full min-h-0 overflow-y-auto" onClick={onStageClick}>
                 <MissionHQ
                   mission={mission()}
+                  width={props.width === undefined ? undefined : missionStageWidth(props.width)}
                   selected={row()}
                   onSelectAgent={selectAgent}
                   onOpenDecision={() => setSheet(true)}

@@ -38,7 +38,14 @@ mock.module("@/context/language", () => ({
   }),
 }))
 
-const { MissionControl } = await import(new URL("./mission-control.tsx", import.meta.url).pathname)
+// Row 133b: a web platform so the real session-map controller persists to the test DOM's localStorage.
+const realPlatform = await import("@/context/platform")
+mock.module("@/context/platform", () => ({ ...realPlatform, usePlatform: () => ({ platform: "web" }) }))
+
+const { MissionControl, widePaneWidth, missionStageWidth, WIDE_PANE } = await import(
+  new URL("./mission-control.tsx", import.meta.url).pathname
+)
+const { createSessionMap } = await import(new URL("../map/session-map-controller.ts", import.meta.url).pathname)
 const { SwarmAgents } = await import(new URL("./swarm-view.tsx", import.meta.url).pathname)
 const { createMissionControl } = await import(new URL("./mission-poll.ts", import.meta.url).pathname)
 
@@ -64,7 +71,40 @@ function secondMission(): MissionGetWire {
     ],
   }
 }
-const WIRES: Record<string, () => MissionGetWire> = { "m-doc-1": fixture, "m-debug-2": secondMission }
+// Row 133b: a four-phase document mission (the radial HQ needs 4 or 5 phases, mission-hq-scene.ts hqMode).
+function fourPhases(): MissionGetWire {
+  const wire = fixture()
+  const phase = (id: string, en: string, order: number, rows: string[]) => ({
+    id,
+    name: { id: en, en },
+    order,
+    rows,
+    counts: {} as never,
+  })
+  const at: Record<string, string> = { "1": "brief", "2": "review", "3": "draft", "4": "publish" }
+  return {
+    ...wire,
+    mission: {
+      ...wire.mission,
+      id: "m-doc-4p",
+      rows: wire.mission.rows.map((row) => ({ ...row, phase: at[row.id] ?? row.phase })),
+    },
+    derived: {
+      ...wire.derived,
+      phases: [
+        phase("brief", "Brief", 1, ["1"]),
+        phase("draft", "Draft", 2, ["3"]),
+        phase("review", "Review", 3, ["2"]),
+        phase("publish", "Publish", 4, ["4"]),
+      ],
+    },
+  }
+}
+const WIRES: Record<string, () => MissionGetWire> = {
+  "m-doc-1": fixture,
+  "m-debug-2": secondMission,
+  "m-doc-4p": fourPhases,
+}
 const item = (wire: MissionGetWire, updatedAt = "t1"): MissionListItemWire => ({
   id: wire.mission.id,
   title: wire.mission.title,
@@ -109,7 +149,13 @@ async function until(check: () => boolean, ms = 3000) {
   }
 }
 
-type MountOptions = { width: number; ids?: string[]; source?: unknown; watching?: boolean }
+type MountOptions = {
+  width: number
+  ids?: string[]
+  source?: unknown
+  watching?: boolean
+  expand?: { wide: () => boolean; toggle: () => void }
+}
 async function mount(options: MountOptions) {
   const source = options.source === undefined ? fakeSource(options.ids ?? ["m-doc-1"]) : options.source
   const host = document.createElement("div")
@@ -122,7 +168,13 @@ async function mount(options: MountOptions) {
       watching: () => options.watching ?? true,
       mapOpen: () => true,
     })
-    return createComponent(MissionControl, { control, writer, prompt: async () => {}, width: options.width })
+    return createComponent(MissionControl, {
+      control,
+      writer,
+      prompt: async () => {},
+      width: options.width,
+      expand: options.expand,
+    })
   }, host)
   return { host, source: source as ReturnType<typeof fakeSource> | null }
 }
@@ -262,5 +314,129 @@ describe("SwarmAgents mount line", () => {
     dispose = render(() => createComponent(SwarmAgents, { swarm }), plain)
     expect(q('[data-component="session-swarm"]')).not.toBeNull()
     expect(q("[data-mission-control]")).toBeNull()
+  })
+})
+
+// Row 133b (C175, row 144 O-2): the Activity pane was fixed at 372 px, so mission control was always 355 px wide and
+// only lanes + sheet were reachable. The header toggle widens that same pane; the choice is remembered.
+describe("row 133b: expand toggle widens the existing Activity pane", () => {
+  test("the toggle is in the header, labelled, pressed state follows the remembered choice, and it toggles", async () => {
+    const { createSignal } = await import("solid-js")
+    let toggles = 0
+    let setWide: (v: boolean) => void = () => {}
+    const host = document.createElement("div")
+    document.body.append(host)
+    dispose = render(() => {
+      const [wide, set] = createSignal(false)
+      setWide = set
+      const control = createMissionControl({
+        source: fakeSource(["m-doc-1"]),
+        directory: () => "/repo",
+        lang: () => "en",
+        watching: () => true,
+        mapOpen: () => true,
+      })
+      return createComponent(MissionControl, {
+        control,
+        writer,
+        prompt: async () => {},
+        width: 355,
+        expand: {
+          wide,
+          toggle: () => {
+            toggles++
+            set(!wide())
+          },
+        },
+      })
+    }, host)
+    await until(() => !!q("[data-mission-hq]"))
+    const button = () => q("[data-mission-expand]")!
+    expect(button().closest("header")).not.toBeNull()
+    expect(button().dataset.missionExpand).toBe("narrow")
+    expect(button().getAttribute("aria-pressed")).toBe("false")
+    expect(button().getAttribute("aria-label")).toBe("Widen mission control")
+    click(button())
+    expect(toggles).toBe(1)
+    expect(button().dataset.missionExpand).toBe("wide")
+    expect(button().getAttribute("aria-pressed")).toBe("true")
+    expect(button().getAttribute("aria-label")).toBe("Narrow mission control")
+    click(button())
+    expect(toggles).toBe(2)
+    expect(button().dataset.missionExpand).toBe("narrow")
+    setWide(true)
+    expect(button().dataset.missionExpand).toBe("wide")
+  })
+
+  test("no toggle without the expand prop (the pane cannot be widened there)", async () => {
+    await mount({ width: 355 })
+    await until(() => !!q("[data-mission-hq]"))
+    expect(q("[data-mission-expand]")).toBeNull()
+  })
+
+  test("the remembered choice persists through the real session-map store and collapses back", async () => {
+    const { createRoot } = await import("solid-js")
+    const stub = {
+      sessionID: () => undefined,
+      messages: () => [],
+      parts: () => [],
+      revertMessageID: () => undefined,
+      historyMore: () => false,
+      historyLoading: () => false,
+      loadOlder: async () => {},
+      reveal: () => {},
+      visibleTurn: () => undefined,
+    }
+    const open = () =>
+      createRoot((done) => {
+        const map = createSessionMap(stub)
+        return { map, done }
+      })
+    const first = open()
+    expect(first.map.wide()).toBe(false)
+    first.map.setWide(true)
+    expect(first.map.wide()).toBe(true)
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    first.done()
+    const second = open() // a new controller = a new launch reading the same storage
+    expect(second.map.wide()).toBe(true)
+    second.map.setWide(false)
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    second.done()
+    const third = open()
+    expect(third.map.wide()).toBe(false)
+    third.done()
+  })
+
+  test("at 1280 px the widened pane shows the radial HQ and the sidebar; the 372 px pane shows lanes + sheet", async () => {
+    // Row 144 measured the 1280 px window: session panel ~1265 px, Activity pane 372 px, mission section 355 px.
+    const pane = widePaneWidth(1280, 1265)
+    expect(pane).toBe(896) // 70 % of the window wins over 1100 px and over panel - 280 px (985)
+    const section = pane - WIDE_PANE.inset
+    expect(section).toBeGreaterThanOrEqual(761)
+    expect(missionStageWidth(section)).toBeGreaterThanOrEqual(540)
+
+    await mount({ width: section, ids: ["m-doc-4p"] })
+    await until(() => !!q("[data-mission-hq]"))
+    expect(q("[data-mission-control]")!.dataset.missionLayout).toBe("sidebar")
+    expect(q("[data-mission-hq]")!.dataset.missionHq).toBe("radial")
+    expect(q("[data-mission-side]")!.hasAttribute("inert")).toBe(false)
+    expect(q("[data-mission-dock]")).toBeNull()
+    dispose()
+    document.body.innerHTML = ""
+
+    await mount({ width: 372 - WIDE_PANE.inset, ids: ["m-doc-4p"] })
+    await until(() => !!q("[data-mission-hq]"))
+    expect(q("[data-mission-control]")!.dataset.missionLayout).toBe("sheet")
+    expect(q("[data-mission-hq]")!.dataset.missionHq).toBe("lanes")
+  })
+
+  test("the Activity pane's CSS carries the same rule as widePaneWidth, only while mission control is shown", async () => {
+    const view = await Bun.file(new URL("../map/session-map-view.tsx", import.meta.url).pathname).text()
+    const { max, window, chat } = WIDE_PANE
+    expect(view).toContain(`@[900px]:w-[min(${max}px,${window * 100}vw,calc(100%-${chat}px))]": wide()`)
+    expect(view).toContain(`"w-[min(372px,100%)] @[900px]:w-[372px]": !wide()`)
+    expect(view).toContain("const wide = () => props.map.wide() && missionShown()")
+    expect(view).toContain("<SwarmAgents swarm={props.swarm} missions={missionMount()} />")
   })
 })

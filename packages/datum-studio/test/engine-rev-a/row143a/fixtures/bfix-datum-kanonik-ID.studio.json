@@ -1,0 +1,159 @@
+{
+  "$schema": "studio.doc/v2",
+  "agentId": "uji-kesetaraan",
+  "template": {
+    "slug": "datum-kanonik"
+  },
+  "docKey": "bfix-datum-kanonik-id",
+  "meta": {
+    "title": "Fiksur Konvensi Angka B-FIX",
+    "docNumber": "015/GSP/KT/XI/2026",
+    "rev": "A",
+    "typeCode": "KT",
+    "tier": "TERBIT",
+    "classification": "TERBATAS",
+    "language": "ID",
+    "author": "Divisi Engineering",
+    "issueDate": "2026-11-06"
+  },
+  "sections": {
+    "controlSheet": {
+      "type": "controlSheet",
+      "revisionHistory": [
+        {
+          "rev": "A",
+          "date": "2026-11-06",
+          "what": "Terbitan 1",
+          "by": "Divisi Engineering"
+        }
+      ],
+      "verificationChain": [
+        {
+          "layer": "V2",
+          "role": "Verifikasi",
+          "name": "lulus"
+        }
+      ]
+    },
+    "signature": {
+      "type": "signatureBlock",
+      "roles": [
+        {
+          "role": {
+            "text": "Penyusun"
+          },
+          "holder": {
+            "text": "Divisi Engineering"
+          },
+          "date": {
+            "text": "2026-11-06"
+          }
+        }
+      ]
+    },
+    "content": {
+      "type": "chapter",
+      "chapters": [
+        {
+          "key": "1",
+          "title": {
+            "text": "Fiksur konvensi angka"
+          },
+          "sections": [
+            {
+              "title": {
+                "text": "Nilai terikat register"
+              },
+              "blocks": [
+                {
+                  "type": "paragraph",
+                  "text": "Bab ini memuat empat nilai register yang ditampilkan lewat pengikatan register pada blok turunan."
+                },
+                {
+                  "type": "derivation",
+                  "title": {
+                    "text": "Turunan F-1.1 · Nilai fiksur"
+                  },
+                  "lines": [
+                    {
+                      "label": {
+                        "text": "Desimal"
+                      },
+                      "value": {
+                        "registerKey": "fx.decimal"
+                      }
+                    },
+                    {
+                      "label": {
+                        "text": "Uang"
+                      },
+                      "value": {
+                        "registerKey": "fx.money"
+                      }
+                    },
+                    {
+                      "label": {
+                        "text": "Persen"
+                      },
+                      "value": {
+                        "registerKey": "fx.pct"
+                      }
+                    },
+                    {
+                      "label": {
+                        "text": "Kecil"
+                      },
+                      "value": {
+                        "registerKey": "fx.small"
+                      }
+                    }
+                  ],
+                  "closing": {
+                    "text": "Nilai fiksur hanya untuk uji konvensi angka."
+                  },
+                  "result": {
+                    "label": {
+                      "text": "Persen ="
+                    },
+                    "expr": "25",
+                    "registerKey": "fx.pct"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "register": {
+    "fx.decimal": {
+      "v": 1250000.5,
+      "dec": 1,
+      "unit": "-",
+      "mark": "ASUMSI",
+      "src": "Fiksur B-FIX, clone research/32 bagian 10"
+    },
+    "fx.money": {
+      "v": 1385946000,
+      "dec": 0,
+      "unit": "Rp",
+      "mark": "ASUMSI",
+      "src": "Fiksur B-FIX, clone research/32 bagian 10"
+    },
+    "fx.pct": {
+      "v": 25,
+      "dec": 0,
+      "unit": "%",
+      "mark": "ASUMSI",
+      "src": "Fiksur B-FIX, clone research/32 bagian 10"
+    },
+    "fx.small": {
+      "v": 0.5,
+      "dec": 1,
+      "unit": "-",
+      "mark": "ASUMSI",
+      "src": "Fiksur B-FIX, clone research/32 bagian 10"
+    }
+  }
+}
