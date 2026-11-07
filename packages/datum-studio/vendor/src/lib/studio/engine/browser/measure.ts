@@ -210,6 +210,8 @@ export const MEASURE_SCRIPT = String.raw`(function (o) {
     var pl = parseFloat(cs.paddingLeft) || 0, pr2 = parseFloat(cs.paddingRight) || 0;
     var tb = box(el, bcr(el));
     tb.kind = 'text'; tb.tag = tagLc(el); tb.label = label(el);
+    // Swarm row 165K (C199): kind of the enclosing Studio unit (data-unit), so DATUM-15 can leave front matter out.
+    var un = up(el, '[data-unit]'); if (un) tb.unit = String(attr(un, 'data-unit') || '').slice(0, 40);
     tb.fontSizePt = Math.round(parseFloat(cs.fontSize) * 0.75 * 100) / 100;
     tb.measureMm = mm(clientW(el) - pl - pr2);
     tb.lineCount = lines.length; tb.charCount = text.length;

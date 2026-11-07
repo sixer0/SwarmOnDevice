@@ -38,7 +38,9 @@ beforeAll(async () => {
 });
 
 describe('IMPL-W5 D2: kaki halaman DOCX mengikuti nomor tampilan dan revisi dokumen', () => {
-  it('blok kendali sampul + riwayat revisi Rev 1 -> kaki halaman "GSP-UD1-NL-001" dan "REV 1", bukan nomor server / REV A', async () => {
+  // Swarm row 165J consequence edit (C197 F165H-4, one number source): the foot (and the cover control block) print the
+  // document's own number meta.docNumber; the cover display number no longer wins. The revision rule is unchanged.
+  it('blok kendali sampul + riwayat revisi Rev 1 -> kaki halaman meta.docNumber (row 165J) dan "REV 1", bukan REV A', async () => {
     const d = e1();
     d.meta.docNumber = '047/GSP/KT/X/2026';
     d.meta.rev = 'A';
@@ -48,8 +50,8 @@ describe('IMPL-W5 D2: kaki halaman DOCX mengikuti nomor tampilan dan revisi doku
       { rev: 'Rev 1', date: '2026-11-04', what: 'Sesuai revisi.md', by: 'Tim' },
     ];
     const f = await footers(compose(d), BENCH);
-    expect(f).toContain('GSP-UD1-NL-001');
-    expect(f).not.toContain('047/GSP/KT/X/2026');
+    expect(f).toContain('047/GSP/KT/X/2026');
+    expect(f).not.toContain('GSP-UD1-NL-001');
     expect(f).toMatch(/REV 1\b/);
     expect(f).not.toMatch(/REV A\b/);
   });

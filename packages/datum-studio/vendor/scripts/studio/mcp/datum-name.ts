@@ -12,7 +12,7 @@
  */
 import path from "node:path";
 
-import { DATUM_FILENAME_PATTERN } from "../../../src/lib/studio/contract/env";
+import { DATUM_FILENAME_PATTERN, DATUM_NAME_UNSAFE_CHARS } from "../../../src/lib/studio/contract/env";
 
 const DATUM_NAME = new RegExp(DATUM_FILENAME_PATTERN);
 
@@ -21,6 +21,8 @@ export function safeDatumName(name: unknown): name is string {
   if (typeof name !== "string" || name.length === 0 || name.length > 255) return false;
   if (name.normalize("NFC") !== name) return false;
   if (name.includes("/") || name.includes("\\") || name.includes("\0") || name === "." || name === "..") return false;
+  // Row 165I (C196, L2): control, bidi, zero-width and separator characters are rejected, not stripped (env.ts).
+  if (DATUM_NAME_UNSAFE_CHARS.test(name)) return false;
   return DATUM_NAME.test(name);
 }
 

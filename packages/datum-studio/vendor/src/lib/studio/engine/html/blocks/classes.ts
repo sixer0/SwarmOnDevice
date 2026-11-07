@@ -152,6 +152,14 @@ export const HTML_BLOCKS_CSS = [
   `.${C.controlBlock},.${C.signature}{width:100%}`,
   `.${C.controlValue}{padding-right:3mm}`,
   `.${C.signature} th,.${C.signature} td{padding-right:4mm;text-align:left;vertical-align:top}`,
-  `.${C.signatureHolder}{background:linear-gradient(var(--st-sign-rule,#C4BEB4),var(--st-sign-rule,#C4BEB4)) left top/calc(100% - 4mm) 0.22mm no-repeat;padding-top:1.4mm}`,
+  // Row 165J (F165H-3, CP-47): the signature line is a CSS border on a block before the holder text, not a gradient
+  // background (Chromium printed the gradient into the PDF as a 145 x 2 px raster image). The td keeps its 4 mm right
+  // padding, so the line is the column width minus 4 mm (51 mm at the 55 mm pitch), drawn as a vector rule.
+  `.${C.signatureHolder}::before{content:"";display:block;border-top:0.22mm solid var(--st-sign-rule,#C4BEB4);margin-bottom:1.4mm}`,
+  // Row 165J (F165H-1, DATUM-15): the control-sheet method statement is a body paragraph (st-p) and is set at the
+  // body text measure `--col` (128 mm on the canonical grid), as chapter prose, not across the 166 mm span. The
+  // second selector outranks the K2 rail rule (html/base/shell.ts RAIL_K2_CSS, max-width:none, specificity 0,4,1),
+  // which the reserve rule re-narrows for interior units only (case 05 measured 136 mm without it).
+  `.${C.methodStatement},body.st-doc .st-unit.st-unit-controlSheet .${C.paragraph}.${C.methodStatement}{max-width:var(--col)}`,
   `.${C.controlBlock} .${C.field}[data-field="NUMPAGES"]:empty::before{content:var(--st-pages-total,"\\2007")}`,
 ].join("\n");

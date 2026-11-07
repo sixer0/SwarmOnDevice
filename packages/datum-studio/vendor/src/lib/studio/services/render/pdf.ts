@@ -19,7 +19,10 @@
  */
 import { StudioEngineError } from "../../contract/errors";
 import { STUDIO_CHROMIUM_TIMEOUT_MS } from "../../contract/env";
+import { randomBytes } from "node:crypto";
+
 import { StudioBrowserError, withSandboxedPage } from "../../engine/browser/runtime";
+import { PAGES_STYLE_OPEN, SHEET_TOTAL_MARK } from "../../engine/html/base/shell";
 
 /** Bridge input cap for a `src` file (desktop/src/main/datum-render/protocol.ts:11, MAX_INPUT_BYTES). */
 export const PDF_BRIDGE_MAX_HTML_BYTES = 16 * 1024 * 1024;
@@ -62,19 +65,93 @@ export function countPdfPages(pdf: Uint8Array): number {
 const NUMBERED_PASS_OFF = '<style data-studio="pdf-numbered-pass" media="not all">';
 const NUMBERED_PASS_ON = '<style data-studio="pdf-numbered-pass" media="all">';
 /** engine/html/base/shell.ts SHEET_TOTAL_MARK around the register `counter(pages)`. */
-const SHEET_TOTAL_RE = /\/\*st-N\*\/counter\(pages\)\/\*\/st-N\*\//g;
+const SHEET_TOTAL_SLOT = `${SHEET_TOTAL_MARK.open}counter(pages)${SHEET_TOTAL_MARK.close}`;
 /** engine/html/blocks/classes.ts: the HALAMAN NUMPAGES span of a cover control value reads `--st-pages-total`. */
 const PAGES_FIELD_RE = /<td class="st-control-value[^"]*"[^>]*><span class="st-field[^"]*"[^>]*data-field="NUMPAGES"/;
 
-/** Which totals the HTML asks for: `pages` (a HALAMAN field) and `numbered` (register N from Bab 1). */
-export function sheetTotalPlan(html: string): { pages: boolean; numbered: boolean } {
-  return { pages: PAGES_FIELD_RE.test(html), numbered: html.includes(NUMBERED_PASS_OFF) && html.includes("/*st-N*/counter(pages)/*/st-N*/") };
+/**
+ * Row 165I (C196, verification/24 M1): the sheet-total substitution touches Studio's own furniture CSS only.
+ * (1) Scope: the first `<style data-studio="pages">` block of the head (shell.ts PAGES_STYLE_OPEN). Document text
+ *     cannot open a `<style>` element (`<` is escaped everywhere), so the first one is Studio's.
+ * (2) Lexing: inside that block a slot counts only OUTSIDE a CSS string or comment; register text (title, number)
+ *     sits in quoted CSS strings (fonts.ts cssString), so a marker typed into a title is not a slot.
+ * (3) Nonce: each print arms the slots with a fresh 128-bit random token (`/*st-N:<hex>*\/`); the final substitution
+ *     replaces only that token form. Text written before the print cannot carry the token.
+ * The marker in the HTML deliverable stays the static, inert CSS comment (buildHtmlShell stays deterministic).
+ */
+function pagesBlock(html: string): { start: number; end: number } | undefined {
+  const head = html.indexOf("</head>");
+  const at = html.indexOf(PAGES_STYLE_OPEN);
+  if (at < 0 || (head >= 0 && at > head)) return undefined;
+  const start = at + PAGES_STYLE_OPEN.length;
+  const end = html.indexOf("</style>", start);
+  return end < 0 ? undefined : { start, end };
 }
 
-/** The HTML of the final print: register N = `numbered`, HALAMAN = `total` (CSS strings; no markup is added to the body). */
-export function withSheetTotals(html: string, total: number, numbered: number): string {
-  const out = numbered > 0 ? html.replace(SHEET_TOTAL_RE, `"${numbered}"`) : html;
-  const style = `<style data-studio="pdf-sheet-totals">:root{--st-pages-total:"${total}"}</style>\n`;
+/** Offsets of `slot` in `css` that are outside CSS strings and outside other comments. */
+function slotOffsets(css: string, slot: string): number[] {
+  const out: number[] = [];
+  let i = 0;
+  while (i < css.length) {
+    const c = css[i];
+    if (c === '"' || c === "'") {
+      i++;
+      while (i < css.length && css[i] !== c) i += css[i] === "\\" ? 2 : 1;
+      i++;
+    } else if (css.startsWith(slot, i)) {
+      out.push(i);
+      i += slot.length;
+    } else if (css.startsWith("/*", i)) {
+      const close = css.indexOf("*/", i + 2);
+      i = close < 0 ? css.length : close + 2;
+    } else i++;
+  }
+  return out;
+}
+
+/** Replace the lexed `slot` occurrences of the Studio pages block with `by`; the rest of the HTML is untouched. */
+function replaceSlots(html: string, slot: string, by: string): { html: string; count: number } {
+  const b = pagesBlock(html);
+  if (!b) return { html, count: 0 };
+  const css = html.slice(b.start, b.end);
+  const at = slotOffsets(css, slot);
+  if (at.length === 0) return { html, count: 0 };
+  let next = "";
+  let from = 0;
+  for (const o of at) {
+    next += css.slice(from, o) + by;
+    from = o + slot.length;
+  }
+  next += css.slice(from);
+  return { html: html.slice(0, b.start) + next + html.slice(b.end), count: at.length };
+}
+
+const tokenSlot = (token: string) => `/*st-N:${token}*/counter(pages)/*/st-N:${token}*/`;
+
+/** Arm the Studio sheet-total slots of one print with a fresh random token (see above). */
+export function armSheetTotals(html: string): { html: string; token: string; slots: number } {
+  const token = randomBytes(16).toString("hex");
+  const r = replaceSlots(html, SHEET_TOTAL_SLOT, tokenSlot(token));
+  return { html: r.html, token, slots: r.count };
+}
+
+/** Which totals the HTML asks for: `pages` (a HALAMAN field) and `numbered` (register N from Bab 1). */
+export function sheetTotalPlan(html: string): { pages: boolean; numbered: boolean } {
+  const b = pagesBlock(html);
+  const slots = b ? slotOffsets(html.slice(b.start, b.end), SHEET_TOTAL_SLOT).length : 0;
+  return { pages: PAGES_FIELD_RE.test(html), numbered: html.includes(NUMBERED_PASS_OFF) && slots > 0 };
+}
+
+/**
+ * The HTML of the final print: register N = `numbered`, HALAMAN = `total` (CSS strings; no markup is added to the body).
+ * With `token` (armSheetTotals) only the armed slots are replaced; without, the static slots, lexed and in the
+ * Studio pages block only.
+ */
+export function withSheetTotals(html: string, total: number, numbered: number, token?: string): string {
+  const n = Math.max(0, Math.trunc(numbered));
+  const t = Math.max(0, Math.trunc(total));
+  const out = n > 0 ? replaceSlots(html, token === undefined ? SHEET_TOTAL_SLOT : tokenSlot(token), `"${n}"`).html : html;
+  const style = `<style data-studio="pdf-sheet-totals">:root{--st-pages-total:"${t}"}</style>\n`;
   const at = out.indexOf("</head>");
   return at < 0 ? out : `${out.slice(0, at)}${style}${out.slice(at)}`;
 }
@@ -136,12 +213,14 @@ export async function printHtmlToPdf(html: string, opts: HtmlPdfOptions): Promis
       // breaks, so a wrong estimate costs exactly one reprint. Typical TERBIT document: 2 prints (was 1); a document
       // with neither marker prints once, byte-for-byte as before.
       if (!plan.pages && !plan.numbered) return print(html);
-      const numbered = plan.numbered ? pdfPagesOf(await print(html.replace(NUMBERED_PASS_OFF, NUMBERED_PASS_ON))) : 0;
+      // Row 165I (M1): slots armed with a per-print random token; only those, in the Studio pages block, are filled.
+      const armed = armSheetTotals(html);
+      const numbered = plan.numbered ? pdfPagesOf(await print(armed.html.replace(NUMBERED_PASS_OFF, NUMBERED_PASS_ON))) : 0;
       const guess = plan.numbered ? numbered + numberedPassHiddenUnits(html) : unitCount(html);
-      const final = await print(withSheetTotals(html, guess, numbered));
+      const final = await print(withSheetTotals(armed.html, guess, numbered, armed.token));
       const total = pdfPagesOf(final);
       if (!plan.pages || total === guess || total < 1) return final;
-      return print(withSheetTotals(html, total, numbered));
+      return print(withSheetTotals(armed.html, total, numbered, armed.token));
     });
   } catch (err) {
     if (err instanceof StudioBrowserError && (err.reason === "LAUNCH_FAILED" || err.reason === "SANDBOX_UNAVAILABLE")) {

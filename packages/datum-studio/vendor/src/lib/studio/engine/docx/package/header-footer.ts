@@ -344,7 +344,9 @@ function registerDefaultCells(ctx: RenderContext): Run[][] {
       case "org":
         return org;
       case "nomor":
-        return displayDocNumber(ctx) ?? meta.docNumber ?? "";
+        // Row 165J (C197 F165H-4): the document's own number first, as the HTML/PDF foot and the cover control block
+        // (front/texts.ts controlRowsWithDocNumber); the cover display number only when meta has none (was: cover first).
+        return meta.docNumber?.trim() || displayDocNumber(ctx) || "";
       case "rev":
         return displayRev(ctx) ?? meta.rev;
       case "tanggal":

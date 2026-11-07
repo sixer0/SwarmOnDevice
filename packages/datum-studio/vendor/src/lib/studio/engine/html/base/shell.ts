@@ -158,6 +158,12 @@ export function withSheetRestart(tpl: ResolvedTemplate, meta: DocMeta, units: re
 
 /** Wave 165 row 165A (F113-6): marker around the register "N" that the PDF print replaces with the numbered-sheet total. */
 export const SHEET_TOTAL_MARK = { open: "/*st-N*/", close: "/*/st-N*/" } as const;
+/**
+ * Row 165I (C196, verification/24 M1): opening tag of the Studio-owned page-furniture `<style>` (the only block that
+ * carries SHEET_TOTAL_MARK). services/render/pdf.ts substitutes the sheet total only inside this block, and only
+ * outside CSS strings, so document text (escaped into attributes, text nodes or quoted CSS strings) stays inert.
+ */
+export const PAGES_STYLE_OPEN = '<style data-studio="pages">';
 
 /**
  * Wave 165 row 165A (C188 F113-6, ID p.48 numbering from Bab 1): Chromium's `counter(pages)` is the document total
@@ -488,7 +494,7 @@ export function buildHtmlShell(i: HtmlShellInput): string {
     `<html lang="${en ? "en" : "id"}"><head>${metaTags}<title>${esc(title)}</title>\n` +
     `<style data-studio="fonts">\n${i.fontsCss}\n</style>\n` +
     `<style data-studio="tokens">\n${buildTokenCss(tpl)}</style>\n` +
-    `<style data-studio="pages">\n${pageFurnitureCss(tpl, meta, units, sheets)}${k2 ? `\n${RAIL_K2_CSS}` : ""}${reserve ? `\n${RAIL_RESERVE_CSS}` : ""}\n</style>\n` +
+    `${PAGES_STYLE_OPEN}\n${pageFurnitureCss(tpl, meta, units, sheets)}${k2 ? `\n${RAIL_K2_CSS}` : ""}${reserve ? `\n${RAIL_RESERVE_CSS}` : ""}\n</style>\n` +
     numberedPassStyle(units) +
     `</head>\n<body class="${flags.join(" ")}" data-rail-mode="${rail}">${label}\n${body}\n</body></html>\n`
   );

@@ -17,7 +17,7 @@
  */
 import crypto from "node:crypto";
 import path from "node:path";
-import { PID_PATTERN, studioRoutePath } from "../../../src/lib/studio/contract/env";
+import { DATUM_NAME_UNSAFE_CHARS, PID_PATTERN, studioRoutePath } from "../../../src/lib/studio/contract/env";
 import { datumSafeName } from "../../../src/lib/studio/services/render/naming";
 import { ADOPT, adoptedWarning, BASE_REV, bodyAgentId, CHANGE, checkOwnership, completenessBrief, existingData, rememberRevision, requireBasis, withWarnings, type ExistingDoc, type Ownership } from "./doc-tools";
 import { assertFileWriteEnabled, McpToolError, prepareDownloadDir, resolveDownloadDir, writeFileGuarded } from "./safety";
@@ -82,6 +82,9 @@ export function standaloneFileName(f: Rec, ext: "svg" | "png", fallback: string)
   const sa = isRecord(f.standalone) ? f.standalone : {};
   const names = isRecord(sa.fileName) ? sa.fileName : {};
   const raw = typeof names[ext] === "string" ? (names[ext] as string) : "";
+  // Row 165I (C196, L1): a name with control, bidi, zero-width or separator characters is rejected as a whole (the
+  // token-safe store name is used), not stripped: env.ts DATUM_NAME_UNSAFE_CHARS, same rule as safeDatumName.
+  if (DATUM_NAME_UNSAFE_CHARS.test(raw) || raw.normalize("NFC") !== raw) return fallback;
   const stem = raw.toLowerCase().endsWith(`.${ext}`) ? raw.slice(0, -(ext.length + 1)) : raw;
   // DATUM rule first (drops separators and control characters), then no leading dot or space (no hidden file).
   const safe = datumSafeName(stem, ext, "").replace(/^[.\s]+/, "");

@@ -393,7 +393,7 @@ const inlineText = (i: Inline | undefined): string => (!i ? "" : "text" in i ? i
  * Contract `Inline` cells, so DOCX and HTML (row 123) call the same helper.
  */
 export function controlRowsWithClassificationLine(rows: ReadonlyArray<readonly [Inline, Inline, Inline, Inline]>, meta: DocMeta, params: ParamMap, lang: WrapperLang = wrapperLangOf(meta)): Array<[Inline, Inline, Inline, Inline]> {
-  const out = rows.map((r) => [...r] as [Inline, Inline, Inline, Inline]);
+  const out = controlRowsWithDocNumber(rows, meta);
   const level = meta.classification?.trim() ?? "";
   if (level === "") return out;
   const isClass = (c: Inline | undefined) => CLASSIFICATION_FIELD_LABELS.has(inlineText(c).trim().toLowerCase());
@@ -426,6 +426,29 @@ export function controlRowsWithClassificationLine(rows: ReadonlyArray<readonly [
     reflowed.push([pairs[i][0], pairs[i][1], right[0], right[1]]);
   }
   return reflowed;
+}
+
+/**
+ * Row 165J (C197 F165H-4): one source for the document number. The cover control block, the DOCX register foot and the
+ * HTML/PDF register foot all print the document's own number `meta.docNumber`. A cover written with another number
+ * (case 06: slot text 012/... under meta 016/...) had the DOCX foot follow the cover (D-557 display number) and the PDF
+ * foot follow meta, so the two deliverables of one document carried two numbers. The value cell of the number field is
+ * set to `meta.docNumber` (first text run's format kept). Unchanged when meta has no number or the block has no number
+ * field.
+ */
+export function controlRowsWithDocNumber(rows: ReadonlyArray<readonly [Inline, Inline, Inline, Inline]>, meta: DocMeta): Array<[Inline, Inline, Inline, Inline]> {
+  const out = rows.map((r) => [...r] as [Inline, Inline, Inline, Inline]);
+  const no = meta.docNumber?.trim() ?? "";
+  if (no === "") return out;
+  for (const r of out) {
+    for (const i of [0, 2] as const) {
+      if (!NUMBER_FIELD_LABEL.test(inlineText(r[i]).trim()) || inlineText(r[i + 1]).trim() === no) continue;
+      const v = r[i + 1];
+      const first = v && "runs" in v ? v.runs.find((x) => "t" in x) : undefined;
+      r[i + 1] = first ? { runs: [{ ...first, t: no }] } : { text: no };
+    }
+  }
+  return out;
 }
 
 /** A value cell that holds a field run (HALAMAN = NUMPAGES) is not empty even without text. */

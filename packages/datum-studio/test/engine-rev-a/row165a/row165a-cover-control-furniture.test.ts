@@ -114,7 +114,8 @@ describe("F113-4 signature block and method statement", () => {
     expect(Math.max(...w) - Math.min(...w)).toBeLessThan(1)
     expect(sig).toMatch(/style="--st-sign-rule:#[0-9A-F]{6}"/)
     expect((sig.match(/class="st-signature-holder/g) ?? []).length).toBe(3)
-    expect(html01).toContain(".st-signature-holder{background:linear-gradient(var(--st-sign-rule")
+    // Wave 165 row 165J consequence edit (F165H-3): the line is a CSS border on ::before (vector), no longer a gradient.
+    expect(html01).toContain(".st-signature-holder::before{content:\"\";display:block;border-top:0.22mm solid var(--st-sign-rule")
   })
   test("method statement paragraph between the verification chain and the signatures (HTML and DOCX)", () => {
     for (const [html, xml] of [[html01, doc01], [html05, doc05]] as const) {

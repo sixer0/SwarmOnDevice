@@ -184,9 +184,19 @@ export const FINAL_FILENAME_PATTERN =
  * optional store collision suffix ` <sha8|sha16|sha64>` (storage/files.ts candidateNames). One path segment: no
  * `/`, `\`, `<>:"|?*`, control or bidi characters, no `_`, no leading space or dot, at most 255 characters.
  * The app copies this string verbatim (packages/app/src/pages/session/file-preview-policy.ts; a test pins it).
+ * Row 165I (C196, verification/24 L2): also refused are C1 controls U+0080-009F, ALM U+061C, zero-width U+200B-200D,
+ * LRM/RLM U+200E/F, LS/PS U+2028/2029, WJ U+2060 and BOM U+FEFF (same set as DATUM_NAME_UNSAFE_CHARS).
  */
 export const DATUM_FILENAME_PATTERN =
-  "^(?=[^\\u0000-\\u001f]{1,255}$)(?![ .])(?:(?:[^\\u0000-\\u001f\\u007f<>:\"/\\\\|?*_\\u200e\\u200f\\u202a-\\u202e\\u2066-\\u2069]+ )?(?:[0-9A-Za-z][0-9A-Za-z.-]* Rev[0-9A-Za-z]{1,8}|[0-9]{4}-[0-9]{2}-[0-9]{2})|(?:Gambar|Figure) [0-9A-Za-z]+(?:\\.[0-9A-Za-z]+)* [^\\u0000-\\u001f\\u007f<>:\"/\\\\|?*_\\u200e\\u200f\\u202a-\\u202e\\u2066-\\u2069]+)(?: (?:[0-9a-f]{8}|[0-9a-f]{16}|[0-9a-f]{64}))?\\.(docx|pdf|html|svg|png)$";
+  "^(?=[^\\u0000-\\u001f]{1,255}$)(?![ .])(?:(?:[^\\u0000-\\u001f\\u007f<>:\"/\\\\|?*_\\u0080-\\u009f\\u061c\\u200b-\\u200f\\u2028\\u2029\\u202a-\\u202e\\u2060\\u2066-\\u2069\\ufeff]+ )?(?:[0-9A-Za-z][0-9A-Za-z.-]* Rev[0-9A-Za-z]{1,8}|[0-9]{4}-[0-9]{2}-[0-9]{2})|(?:Gambar|Figure) [0-9A-Za-z]+(?:\\.[0-9A-Za-z]+)* [^\\u0000-\\u001f\\u007f<>:\"/\\\\|?*_\\u0080-\\u009f\\u061c\\u200b-\\u200f\\u2028\\u2029\\u202a-\\u202e\\u2060\\u2066-\\u2069\\ufeff]+)(?: (?:[0-9a-f]{8}|[0-9a-f]{16}|[0-9a-f]{64}))?\\.(docx|pdf|html|svg|png)$";
+/**
+ * Row 165I (C196, verification/24 L1/L2): characters a delivered or saved file name must never carry: C0/DEL/C1
+ * controls, bidi embeddings/overrides/isolates and marks (U+202A-202E, U+2066-2069, U+200E/F, U+061C), zero-width
+ * (U+200B-200D, U+2060, U+FEFF) and line/paragraph separators (U+2028/2029). A name carrying one is REJECTED (the caller
+ * falls back to its safe store or token name), never stripped: stripping would silently produce a different name
+ * than the one the store recorded, and could itself join text into a misleading name.
+ */
+export const DATUM_NAME_UNSAFE_CHARS = /[\u0000-\u001f\u007f-\u009f\u061c\u200b-\u200f\u2028\u2029\u202a-\u202e\u2060\u2066-\u2069\ufeff]/;
 /** C52 — panjang maks `docNumberSafe` (FN-02). */
 export const FINAL_DOC_NUMBER_MAX = 80;
 /** C53 — awalan nama final berkas artefak (FN-03). */

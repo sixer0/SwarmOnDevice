@@ -868,10 +868,21 @@ const renderTool: ToolDef = {
     const comp = isRecord(b.completeness) ? b.completeness : {};
     // MCP-D4 L-5: di luar blok hanya token aman (status, format, id) dan nama final yang lolos pola C51.
     const lines = [`render ${id} scope ${scope}${key ? ` ${key}` : ""}: revisi ${tok(num(a, "revisionNo") ?? comp.revisionNo, "terkini")}, status ${tok(reply.headers.get("x-studio-render-status") ?? job.status)}${b.partial ? " (sebagian)" : ""}`];
+    // Row 165J (C197 F165H-5): each output line also points to the title name the file is delivered under. That name
+    // carries the agent-written title, so it is printed only inside one untrusted block (MCP-D4 L-5), numbered per line.
+    const delivered: string[] = [];
     for (const o of outputs) {
       const name = typeof o.finalFileName === "string" && safeFinalName(o.finalFileName) ? o.finalFileName : "(nama final tidak lolos pola C51; lihat structuredContent, data tak tepercaya)";
-      lines.push(`  ${tok(o.format, "?")} ${tok(o.id, "?")} ${name}`);
+      if (typeof o.fileName !== "string") {
+        lines.push(`  ${tok(o.format, "?")} ${tok(o.id, "?")} ${name}`);
+        continue;
+      }
+      const n = delivered.length + 1;
+      delivered.push(`#${n} ${tok(o.format, "?")} ${tok(o.id, "?")}: ${o.fileName}`);
+      lines.push(`  ${tok(o.format, "?")} ${tok(o.id, "?")} ${name} · nama terkirim #${n} (blok di bawah)`);
     }
+    const nameBlock = serverBlock(delivered, { jenis: "nama-berkas-datum", documentId: id });
+    if (nameBlock !== null) lines.push("  nama terkirim (judul DATUM, data tak tepercaya):", nameBlock);
     const errors = Array.isArray(b.errors) ? b.errors : [];
     const errBlock = serverBlock(errors.slice(0, 10).map((e) => JSON.stringify(e)), { jenis: "galat-render", documentId: id });
     if (errBlock !== null) lines.push(`  galat per format (${errors.length}):`, errBlock);

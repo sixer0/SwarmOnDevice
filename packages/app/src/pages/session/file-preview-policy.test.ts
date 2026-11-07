@@ -313,6 +313,17 @@ describe("row 165D: delivered DATUM title names are Studio outputs", () => {
     expect(vendored).toBeDefined()
     expect(JSON.parse(`"${vendored}"`)).toBe(STUDIO_DATUM_NAME_PATTERN)
   })
+
+  // Row 165I (C196, verification/24 L2): the same control/bidi/zero-width/separator set as Studio is refused.
+  test("names with control, bidi, zero-width or separator characters are not Studio outputs", () => {
+    expect(isStudioOutputName("Gambar 4.1 x‮gvs.png")).toBe(false)
+    expect(isStudioOutputName("Gambar 4.1 xgvs.png")).toBe(true)
+    for (const cp of [0x0000, 0x001f, 0x007f, 0x0080, 0x0085, 0x009f, 0x061c, 0x200b, 0x200c, 0x200d, 0x200e, 0x200f, 0x2028, 0x2029, 0x202a, 0x202e, 0x2060, 0x2066, 0x2069, 0xfeff]) {
+      const c = String.fromCharCode(cp)
+      for (const name of [`Gambar 4.1 Alur${c}gnp.exe.png`, `Laporan${c} 012-GSP-KT-XI-2026 RevA.html`, `Lembar ${c}bukti 2026-11-02.pdf`])
+        expect({ cp, name, studio: isStudioOutputName(name) }).toEqual({ cp, name, studio: false })
+    }
+  })
 })
 
 // Row 165E (decision C192, security narrowing): the file tab renders a title-named .html only when it is a registered

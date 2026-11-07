@@ -67,9 +67,11 @@ describe("F113-6 register DARI N = numbered sheets; F113-3 HALAMAN = printed pag
     expect(printed[2]).toContain(`:root{--st-pages-total:"${units.length + 1}"}`)
   })
   test("withSheetTotals replaces every marked counter(pages) and adds the page total", () => {
-    const h = `<html><head></head><body><style>@page x{@bottom-center{content:counter(page) " DARI " /*st-N*/counter(pages)/*/st-N*/}}</style></body></html>`
+    // Row 165I (M1): the slot is filled only inside Studio's own pages block (shell.ts PAGES_STYLE_OPEN) of the head.
+    const h = `<html><head><style data-studio="pages">@page x{@bottom-center{content:counter(page) " DARI " /*st-N*/counter(pages)/*/st-N*/}}</style></head><body></body></html>`
     expect(withSheetTotals(h, 7, 4)).toContain(`counter(page) " DARI " "4"`)
     expect(withSheetTotals(h, 7, 4)).toContain(`:root{--st-pages-total:"7"}</style>\n</head>`)
+    expect(withSheetTotals(h.replace('<style data-studio="pages">', "<style>"), 7, 4)).toContain("/*st-N*/counter(pages)/*/st-N*/")
   })
   test("an HTML without either marker prints once, unchanged", async () => {
     const h = `<!DOCTYPE html><html><head></head><body><section class="st-unit" data-unit-key="a"></section></body></html>`

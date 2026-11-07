@@ -150,6 +150,8 @@ interface El extends BaseEl {
   lineCount?: number;
   charCount?: number;
   charsPerLine?: number;
+  /** Swarm row 165K: `data-unit` kind of the enclosing Studio unit (measure.ts). */
+  unit?: string;
 }
 
 interface Input {
@@ -274,11 +276,17 @@ function median(v: number[]): number {
   return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
 }
 
+/** Swarm row 165K (C199 ruling 2): front-matter units (cover, control sheet, contents) are not running body text. */
+const DATUM15_FRONT_UNITS: ReadonlySet<string> = new Set(["cover", "controlSheet", "toc"]);
+
 function check15(c: Ctx): LintIssue[] {
   const id = "DATUM-15";
   const [lo, hi] = c.lim.measureChars;
   const texts = c.els.filter(
-    (e) => e.kind === "text" && isNum(e.charsPerLine) && isNum(e.lineCount) && e.lineCount >= 2 && isNum(e.measureMm) && e.measureMm > 0,
+    (e) =>
+      e.kind === "text" &&
+      !(e.unit !== undefined && DATUM15_FRONT_UNITS.has(e.unit)) &&
+      isNum(e.charsPerLine) && isNum(e.lineCount) && e.lineCount >= 2 && isNum(e.measureMm) && e.measureMm > 0,
   );
   if (!texts.length && !c.els.some((e) => e.kind === "page" || e.kind === "document")) return [issue(id, "NOT_RUN", noMetricsReason(c))];
   const bodyLabelled = texts.filter((e) => e.label === "st-p");
@@ -292,7 +300,7 @@ function check15(c: Ctx): LintIssue[] {
   // Kolom sempit (sel tabel, rel) disisihkan terhadap lebar ukur median.
   const med = cand.length ? median(cand.map((e) => e.measureMm as number)) : 0;
   cand = cand.filter((e) => (e.measureMm as number) >= 0.6 * med);
-  if (!cand.length) return [issue(id, "NOT_RUN", "tidak ada paragraf badan multi-baris terukur (kelas st-p atau tag p)")];
+  if (!cand.length) return [issue(id, "NOT_RUN", "tidak ada paragraf badan multi-baris terukur (kelas st-p atau tag p; sampul, lembar kendali dan daftar isi tidak dihitung)")];
   let sum = 0;
   let lines = 0;
   for (const e of cand) {

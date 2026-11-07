@@ -12,7 +12,7 @@
  */
 import type { DiagramEdgeKind, FaceRole, ProvenanceMark } from "../../../contract";
 import { symbolBody } from "../../symbols";
-import { tspanLines } from "../../chart/core/textfit";
+import { measure, tspanLines } from "../../chart/core/textfit";
 import { diagramFitActive } from "../fit/state";
 import { nodeTextLayout, type TextBlockLayout } from "../fit/text";
 import { type PyNumber, pyLen, pyNum, pyStr, pyStrNum } from "./pyfmt";
@@ -380,6 +380,87 @@ export function insetForStroke<T extends Pick<SheetNode, "x" | "y" | "w" | "h">>
   return { ...nd, x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
 }
 
+// ---------------------------------------------------------------- row 165J
+/** Row 165J (F165H-2): paper margin around a text line on a hatched node (mm): beside the glyphs and above/below. */
+export const TEXT_GROUND_PAD_X_MM = 0.5;
+export const TEXT_GROUND_PAD_Y_MM = 0.3;
+/** Row 165J: cap height and descender of IBM Plex (em) the ground covers; the line box (1.025/0.275 em) is not needed. */
+const GROUND_ASCENT_EM = 0.78;
+const GROUND_DESCENT_EM = 0.24;
+
+interface GroundLine {
+  x: number;
+  y: number;
+  s: string;
+  role: string;
+  anchor: "start" | "middle" | "end";
+  face?: "struct" | "data";
+  sizePt?: number;
+}
+
+/**
+ * Swarm patch (row 165J, F165H-2; C191 ruling 1, verification/25 §5.3): on a hatched node the hatch (ink400, 0.3 mm)
+ * ran through the node texts, and the sub-label and the requirement tag ARE ink400, so they were hard to read at print
+ * size. Every text line of a hatched node (label, sub-label, tag, mark glyph) gets a `<rect>` in the paper colour
+ * behind it: the glyph width (`measure`, the fit metric of the condensed face; mono for the mark glyph) plus
+ * `TEXT_GROUND_PAD_X_MM`, from the cap height to the descender plus `TEXT_GROUND_PAD_Y_MM`. Each rect is cut to the
+ * inside of the drawn outline (half a stroke in), and a non-box node clips the rects with its own outline clip, so no
+ * ground reaches outside the node. Colours: paper only (already the figure ground), so CP-43 / DATUM-25 count no new
+ * colour. Rects, not a paint-order stroke halo: Word's SVG renderer does not honour paint-order, and a paper stroke
+ * painted over the glyphs would erode them. Returns "" when the node has no text.
+ */
+export function nodeTextGroundSvg(
+  nd: SheetNode,
+  g: Pick<SheetNode, "x" | "y" | "w" | "h">,
+  fit: ReturnType<typeof nodeTextLayout>,
+  clipId: string | null,
+): string {
+  const n = nd.spec;
+  const cx = nd.x + nd.w / 2.0;
+  const cy = nd.y + nd.h / 2.0;
+  const capMm = pt2mm(role("caption").size);
+  const lines: GroundLine[] = [];
+  const block = (b: TextBlockLayout, roleName: string) => b.lines.forEach((s, i) => lines.push({ x: b.x, y: b.y + i * b.lineMm, s, role: roleName, anchor: "middle" }));
+  if (fit) {
+    block(fit.label, "caption");
+    if (fit.sub) block(fit.sub, "source_line");
+    else if (n.sub) lines.push({ x: cx, y: cy + capMm, s: pyStr(n.sub), role: "source_line", anchor: "middle" });
+  } else {
+    lines.push({ x: cx, y: cy, s: pyStr(n.label), role: "caption", anchor: "middle" });
+    if (n.sub) lines.push({ x: cx, y: cy + capMm, s: pyStr(n.sub), role: "source_line", anchor: "middle" });
+  }
+  if (n.mark) {
+    const glyph = MARKS[n.mark] ?? "";
+    lines.push({ x: nd.x + nd.w - pt2mm(1.5), y: nd.y + capMm, s: glyph, role: "register_block", anchor: "end", face: "data" });
+  }
+  if (n.tag) lines.push({ x: nd.x + pt2mm(1.5), y: nd.y + capMm, s: pyStr(n.tag), role: "table_header", anchor: "start" });
+  const half = STROKE_PRIMARY / 2;
+  const bx0 = g.x + half;
+  const by0 = g.y + half;
+  const bx1 = g.x + g.w - half;
+  const by1 = g.y + g.h - half;
+  const rects: string[] = [];
+  for (const ln of lines) {
+    if (!ln.s.trim()) continue;
+    const r = role(ln.role);
+    const pt = ln.sizePt ?? r.size;
+    const sizeMm = pt2mm(pt);
+    const upper = !!r.upper;
+    const trackMm = r.track_em ? sizeMm * r.track_em : 0;
+    const w = measure(ln.s, pt, ln.face ?? "struct", { bold: (r.weight ?? 400) >= 600, trackMm, caps: upper });
+    const lx = ln.anchor === "middle" ? ln.x - w / 2 : ln.anchor === "end" ? ln.x - w : ln.x;
+    const x0 = Math.max(bx0, lx - TEXT_GROUND_PAD_X_MM);
+    const x1 = Math.min(bx1, lx + w + TEXT_GROUND_PAD_X_MM);
+    const y0 = Math.max(by0, ln.y - GROUND_ASCENT_EM * sizeMm - TEXT_GROUND_PAD_Y_MM);
+    const y1 = Math.min(by1, ln.y + GROUND_DESCENT_EM * sizeMm + TEXT_GROUND_PAD_Y_MM);
+    if (x1 - x0 < 0.05 || y1 - y0 < 0.05) continue;
+    rects.push(`<rect x="${r2(x0)}" y="${r2(y0)}" width="${r2(x1 - x0)}" height="${r2(y1 - y0)}" fill="${PAPER}"/>`);
+  }
+  if (!rects.length) return "";
+  const clip = clipId !== null ? ` clip-path="url(#${escAttr(clipId)})"` : "";
+  return `<g data-text-ground="1"${clip}>${rects.join("")}</g>`;
+}
+
 /** Row 165C: options of `nodeSvg` (sheet size for the half-stroke inset of F113-9). */
 export interface NodeSvgOptions extends SvgMarkOptions {
   canvas?: { widthMm: number; heightMm: number };
@@ -392,21 +473,27 @@ export function nodeSvg(nd: SheetNode, opts: NodeSvgOptions = {}): string[] {
   const g = insetForStroke(nd, canvas, STROKE_PRIMARY);
   const angle = (n.shape ?? "box") === "bus" ? null : nodeHatchAngle(nd);
   const out: string[] = [];
-  if (angle !== null) {
-    const shape = n.shape ?? "box";
-    const clipShape = BOX_SHAPES.has(shape) ? null : clipShapeSvg(shape, g.x, g.y, g.w, g.h);
-    const clipId = `datum-hatch-clip-${opts.index ?? escAttr(nd.id).replace(/[^A-Za-z0-9_-]/g, "_")}`;
-    const hatch = hatchLinesSvg(g.x, g.y, g.w, g.h, angle, clipShape !== null ? { id: clipId, shape: clipShape } : undefined);
-    if (hatch) out.push(hatch);
-  }
-  out.push(shapeSvg(g, nodeStrokeToken(nd), "none", { ...markOpts, strokeW: STROKE_PRIMARY }));
-  const sym = nodeSymbolSvg(nd); // row 124 (CP-45): specified symbol, drawn before the texts
-  if (sym) out.push(sym);
   const cx = nd.x + nd.w / 2.0;
   const cy = nd.y + nd.h / 2.0;
   const capMm = pt2mm(role("caption").size);
   // FIG-02b: hanya saat fit dan hanya bila label tidak muat satu baris (atau rel bus).
   const fit = diagramFitActive() ? nodeTextLayout(nd) : null;
+  if (angle !== null) {
+    const shape = n.shape ?? "box";
+    const clipShape = BOX_SHAPES.has(shape) ? null : clipShapeSvg(shape, g.x, g.y, g.w, g.h);
+    const clipId = `datum-hatch-clip-${opts.index ?? escAttr(nd.id).replace(/[^A-Za-z0-9_-]/g, "_")}`;
+    const hatch = hatchLinesSvg(g.x, g.y, g.w, g.h, angle, clipShape !== null ? { id: clipId, shape: clipShape } : undefined);
+    if (hatch) {
+      out.push(hatch);
+      // Row 165J (F165H-2): a paper ground behind every text line of a hatched node, so no hatch line runs through
+      // a glyph (the sub-label and the ID were the hatch colour, ink400). Drawn after the hatch and before the outline.
+      const ground = nodeTextGroundSvg(nd, g, fit, clipShape !== null ? clipId : null);
+      if (ground) out.push(ground);
+    }
+  }
+  out.push(shapeSvg(g, nodeStrokeToken(nd), "none", { ...markOpts, strokeW: STROKE_PRIMARY }));
+  const sym = nodeSymbolSvg(nd); // row 124 (CP-45): specified symbol, drawn before the texts
+  if (sym) out.push(sym);
   if (fit) {
     out.push(svgTextLines(fit.label, { role: "caption", colourToken: "ink900" }));
     if (fit.sub) out.push(svgTextLines(fit.sub, { role: "source_line" }));
