@@ -112,6 +112,9 @@ const COPYRIGHT = "Copyright (c) 2025 opencode (MIT). Swarm modifications Copyri
 // package.json carry the same number as the release.
 export const SWARM_RELEASE = "1.2.0"
 
+// osx-sign tests each regex against the absolute path of every file it would sign (MacTargetHelper.js:52-70, :90-98).
+export const DATUM_RUNTIME_SIGN_IGNORE = "\\.app/Contents/Resources/datum-runtime/"
+
 const getBase = (appId: string): Configuration => ({
   artifactName: "swarm-desktop-${os}-${arch}.${ext}",
   copyright: COPYRIGHT,
@@ -231,6 +234,10 @@ const getBase = (appId: string): Configuration => ({
     // fallback stays unused unless that verify fails. disable-library-validation is kept in
     // entitlements.plist precisely because hardened runtime + ad-hoc needs it (builder M10 warning).
     identity: "-",
+    // Row 52a (C111): the DATUM runtime stage signs its 35 Mach-O itself with the same ad-hoc, runtime and inherit
+    // entitlements call (stage-datum-runtime.ts step 7b), so this pass leaves Res/datum-runtime alone. Its bytes then
+    // equal runtime-manifest.json; the app's seal still covers every file there, and the strict deep verify checks them.
+    signIgnore: [DATUM_RUNTIME_SIGN_IGNORE],
     notarize: false,
     target: ["dmg", "zip"],
     // bundleShortVersion stays unset on purpose (U4): electron-builder takes it from package.json

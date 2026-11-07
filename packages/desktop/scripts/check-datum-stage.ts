@@ -4,7 +4,7 @@
 //
 //   bun scripts/check-datum-stage.ts stage [--desktop DIR]                   beforePack / prebuild: the sources
 //   bun scripts/check-datum-stage.ts verify <resourcesDir> [--desktop DIR]   afterPack: the copies in Resources
-//   bun scripts/check-datum-stage.ts verify --app <Swarm.app> [--desktop DIR] after signing (Mach-O by codesign)
+//   bun scripts/check-datum-stage.ts verify --app <Swarm.app> [--desktop DIR] after signing (+ Mach-O by codesign)
 //
 // The three folders:
 //   skill copy  datum/datum-house-style -> Res/datum-house-style: path set and sha256 equal datum/PROVENANCE.md
@@ -187,8 +187,10 @@ async function checkRuntimeEntry(dir: string, entry: RuntimeEntry, signed: boole
   if (mode !== entry.mode) problems.push(`mode ${entry.path} ${mode} != ${entry.mode}`)
   const isMacho = await isMachO(abs)
   if (isMacho !== (entry.kind === "macho")) problems.push(`kind ${entry.path}: listed ${entry.kind}, file is ${isMacho ? "Mach-O" : "data"}`)
-  // Packaging §2.4 rule 5: the final signing pass rewrites every Mach-O, so after signing it is checked by codesign.
-  if (signed && entry.kind === "macho") return [...problems, ...(await checkSigned(abs, entry.path))]
+  // Row 52a (C111, replaces packaging §2.4 rule 5): the stage signs its Mach-O and electron-builder skips datum-runtime
+  // (mac.signIgnore), so a Mach-O keeps its manifest size and sha256 in the app too; after signing codesign is checked
+  // as well.
+  if (signed && entry.kind === "macho") problems.push(...(await checkSigned(abs, entry.path)))
   if (st.size !== entry.size) problems.push(`size ${entry.path} ${st.size} != ${entry.size}`)
   else if ((await sha256File(abs)) !== entry.sha256) problems.push(`sha256 ${entry.path}`)
   return problems
@@ -200,8 +202,31 @@ async function checkSigned(abs: string, rel: string) {
   const entitlements = await $`/usr/bin/codesign -d --entitlements - --xml ${abs}`.nothrow().quiet()
   const problems: string[] = []
   if (info.exitCode !== 0 || !flags.includes("runtime")) problems.push(`codesign ${rel}: no hardened runtime signature`)
-  if (!`${entitlements.stdout}`.includes(DLV)) problems.push(`codesign ${rel}: entitlements lack disable-library-validation`)
+  // Entitlements belong to the executable that loads the libraries (python3.14): codesign stores none in a .so/.dylib
+  // (Electron's own libEGL.dylib has none either; packaging spec §2.3), so only an executable must carry the key.
+  if ((await machoFileType(abs)) === MH_EXECUTE && !`${entitlements.stdout}`.includes(DLV))
+    problems.push(`codesign ${rel}: entitlements lack disable-library-validation`)
   return problems
+}
+
+const MH_EXECUTE = 2
+/** The Mach-O header's filetype (2 executable, 6 dylib, 8 bundle), of the first slice for a universal file. */
+export async function machoFileType(file: string) {
+  const fh = await fs.open(file, "r")
+  try {
+    const head = Buffer.alloc(32)
+    await fh.read(head, 0, 32, 0)
+    const magic = head.readUInt32BE(0)
+    if (magic === 0xcafebabe) {
+      // fat_header + first fat_arch, big-endian: the slice starts at its offset field.
+      const slice = Buffer.alloc(16)
+      await fh.read(slice, 0, 16, head.readUInt32BE(16))
+      return slice.readUInt32LE(0) === 0xfeedfacf || slice.readUInt32LE(0) === 0xfeedface ? slice.readUInt32LE(12) : slice.readUInt32BE(12)
+    }
+    return magic === 0xcffaedfe || magic === 0xcefaedfe ? head.readUInt32LE(12) : head.readUInt32BE(12)
+  } finally {
+    await fh.close()
+  }
 }
 
 async function checkPth(dir: string, pth: { path?: string; line?: string } | undefined, listed: Map<string, RuntimeEntry>, resources?: string) {

@@ -3,8 +3,12 @@
 // Built from the pinned python-build-standalone tarball and hash-pinned wheels, cached in tools/build/datum_runtime_cache
 // so a second run needs no network. Adds the datum-render-shim wheel (row 106), bin/datum-python (-I -B), bin/rsvg-convert,
 // the datum-house-style.pth, prunes (spec §1.3 + packaging §2.4 rule 4 + probe F4/F5), thins lxml to arm64 and writes
-// runtime-manifest.json. Never writes .pyc: every staged-python call runs -I -B (probe F1). Signs nothing (packaging §2.4
-// rule 1: electron-builder signs Resources inside-out). The stage folder is replaced only when every check passes.
+// runtime-manifest.json. Never writes .pyc: every staged-python call runs -I -B (probe F1). The stage folder is replaced
+// only when every check passes.
+// Signing (row 52a, C111; replaces packaging §2.4 rule 1): the stage signs its 35 Mach-O itself, ad hoc, with the
+// hardened runtime and the app's inherit entitlements (the same codesign call osx-sign makes), BEFORE the smoke test and
+// the manifest. electron-builder skips Res/datum-runtime (mac.signIgnore, electron-builder.config.ts), so the shipped
+// bytes equal the manifest's size and sha256 for every file, Mach-O included, and the smoke test runs the signed state.
 //
 //   bun scripts/stage-datum-runtime.ts [--out DIR] [--cache DIR] [--offline]
 import { $ } from "bun"
@@ -55,6 +59,12 @@ const SITE = `python/${PY_LIB}/site-packages`
 // Res/datum-runtime/python/lib/python3.14/site-packages -> 5 levels up is Res (runtime spec §1.6, probe F2/F3).
 export const PTH = { name: "datum-house-style.pth", line: "../../../../../datum-house-style/scripts" }
 export const MACHO_EXPECTED = 35 // research/09 §7, packaging §2.4 rule 3, recipe DATUM_MACHO
+// Row 52a: the plist electron-builder gives every nested path (mac.entitlementsInherit); the config test pins the pair.
+export const ENTITLEMENTS = path.join(DESKTOP, "resources", "entitlements.plist")
+// osx-sign's per-file call (OS/sign.js:174, :229-266) with an explicit --timestamp=none: an ad-hoc signature carries no
+// timestamp, so this keeps the stage offline and deterministic.
+export const codesignArgs = (file: string) =>
+  ["--sign", "-", "--force", "--timestamp=none", "--options", "runtime", "--entitlements", ENTITLEMENTS, file]
 // After the prune only these stay in python/bin and python/lib (allow-list; everything else there is removed).
 const KEEP_BIN = ["python", "python3", "python3.14"]
 const KEEP_LIB = ["python3.14"]
@@ -173,7 +183,7 @@ async function isMachO(file: string) {
 async function main() {
   const args = parseArgs(process.argv.slice(2))
   if (process.platform !== "darwin" || process.arch !== "arm64") fail(`host ${process.platform}/${process.arch}, need darwin/arm64`)
-  for (const p of [path.join(SKILL, "SKILL.md"), path.join(SHIM, "build_wheel.py"), path.join(SHIM, "bin", "rsvg-convert")])
+  for (const p of [path.join(SKILL, "SKILL.md"), path.join(SHIM, "build_wheel.py"), path.join(SHIM, "bin", "rsvg-convert"), ENTITLEMENTS])
     if (!(await exists(p))) fail(`missing input ${path.relative(DESKTOP, p)}`)
 
   // 1. Inputs from the cache (fetch + verify if missing).
@@ -293,6 +303,24 @@ async function main() {
       thinned.push(`${SITE}/lxml/${rel}`)
     }
 
+    // 7b. Sign every Mach-O regular file (row 52a), deepest first as osx-sign does, then verify each strictly. codesign
+    //     stores the entitlements only in the one executable (python3.14); for a .so/.dylib it keeps none, as for
+    //     Electron's own libraries, and python's disable-library-validation is what lets it load them.
+    const signed: string[] = []
+    for (const rel of await walk(rt)) {
+      const st = await fs.lstat(path.join(rt, rel))
+      if (st.isFile() && (await isMachO(path.join(rt, rel)))) signed.push(rel)
+    }
+    signed.sort((a, b) => b.split("/").length - a.split("/").length || a.localeCompare(b))
+    for (const rel of signed) {
+      const f = path.join(rt, rel)
+      const r = await $`/usr/bin/codesign ${codesignArgs(f)}`.nothrow().quiet()
+      if (r.exitCode !== 0) fail(`codesign ${rel} exit ${r.exitCode}: ${r.stderr.toString().trim()}`)
+      const v = await $`/usr/bin/codesign --verify --strict ${f}`.nothrow().quiet()
+      if (v.exitCode !== 0) fail(`codesign --verify ${rel} exit ${v.exitCode}: ${v.stderr.toString().trim()}`)
+    }
+    console.log(`DATUM_RUNTIME_STAGE signed ${signed.length} Mach-O (ad hoc, runtime, ${path.relative(DESKTOP, ENTITLEMENTS)})`)
+
     // 8. Launcher, render shim, .pth.
     await fs.mkdir(path.join(rt, "bin"), { recursive: true })
     await fs.writeFile(path.join(rt, "bin", "datum-python"), LAUNCHER, { mode: 0o755 })
@@ -356,6 +384,8 @@ async function main() {
       launcher: "bin/datum-python",
       pth: { path: `${SITE}/${PTH.name}`, line: PTH.line },
       skillSha: await sha256File(path.join(SKILL, "SKILL.md")),
+      // Row 52a: Mach-O sizes and sha256 below are the signed bytes that ship (electron-builder skips this folder).
+      signing: { identity: "-", options: "runtime", entitlementsSha256: await sha256File(ENTITLEMENTS) },
       pruned,
       thinned,
       counts: { files: files.filter((f) => f.kind !== "symlink").length, macho: macho.length, symlinks: files.filter((f) => f.kind === "symlink").length, bytes },

@@ -8,8 +8,8 @@ import { createHash } from "node:crypto"
 import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
-import { checkResources, checkStage, parseProvenance, PROVENANCE, RUNTIME_MANIFEST, RUNTIME_STAGE, SKILL_SOURCE } from "./check-datum-stage"
-import { MACHO_EXPECTED, PTH } from "./stage-datum-runtime"
+import { checkResources, checkStage, machoFileType, parseProvenance, PROVENANCE, RUNTIME_MANIFEST, RUNTIME_STAGE, SKILL_SOURCE } from "./check-datum-stage"
+import { codesignArgs, MACHO_EXPECTED, PTH } from "./stage-datum-runtime"
 import { stageDatumStudio } from "./stage-datum-studio"
 import { STUDIO_STAGE_FOLDER, STUDIO_STAGE_MANIFEST } from "../src/main/datum-studio-host/layout"
 
@@ -65,12 +65,12 @@ async function writeRuntime() {
   await writeRuntimeManifest()
 }
 
-async function writeRuntimeManifest(edit: (manifest: Record<string, any>) => void = () => {}) {
+async function writeRuntimeManifest(edit: (manifest: Record<string, any>) => void = () => {}, dir = runtime) {
   const files: Record<string, unknown>[] = []
   let bytes = 0
-  for (const rel of await walkFiles(runtime)) {
+  for (const rel of await walkFiles(dir)) {
     if (rel === RUNTIME_MANIFEST) continue
-    const abs = path.join(runtime, rel)
+    const abs = path.join(dir, rel)
     const st = await fs.lstat(abs)
     const mode = (st.mode & 0o777).toString(8)
     if (st.isSymbolicLink()) {
@@ -98,7 +98,7 @@ async function writeRuntimeManifest(edit: (manifest: Record<string, any>) => voi
     files,
   }
   edit(manifest)
-  await fs.writeFile(path.join(runtime, RUNTIME_MANIFEST), `${JSON.stringify(manifest, null, 1)}\n`)
+  await fs.writeFile(path.join(dir, RUNTIME_MANIFEST), `${JSON.stringify(manifest, null, 1)}\n`)
 }
 
 beforeAll(async () => {
@@ -277,29 +277,52 @@ test("verify checks the copies in Resources, including the .pth target, and fail
   expect(problemsOf(noTarget, "datum-runtime")).toEqual(["pth target datum-house-style/scripts missing"])
 })
 
-test("verify --app checks signed Mach-O by codesign (hardened runtime and entitlements) instead of sha256", async () => {
+// Row 52a (C111): the stage signs its Mach-O (codesignArgs) before writing the manifest and electron-builder skips
+// datum-runtime, so after signing a Mach-O is checked by sha256 AND by codesign. A real library (Electron's libEGL.dylib,
+// when the electron package is installed) stands in for one .so: codesign keeps no entitlements in a library, so only
+// the executable must carry disable-library-validation.
+const ELECTRON_DYLIB = path.join(DESKTOP, "node_modules/electron/dist/Electron.app/Contents/Frameworks/Electron Framework.framework/Libraries/libEGL.dylib")
+
+test("machoFileType reads the header filetype of thin and universal files", async () => {
+  expect(await machoFileType("/usr/bin/true")).toBe(2)
+  if (await fs.lstat(ELECTRON_DYLIB).catch(() => null)) expect(await machoFileType(ELECTRON_DYLIB)).toBe(6)
+})
+
+test("verify --app checks signed Mach-O by sha256 and codesign; only the executable needs disable-library-validation", async () => {
   const app = path.join(root, "Swarm.app")
   const resources = path.join(app, "Contents", "Resources")
+  const rt = path.join(resources, "datum-runtime")
   await fs.mkdir(resources, { recursive: true })
   await $`/bin/cp -Rp ${skill} ${path.join(resources, "datum-house-style")}`.quiet()
-  await $`/bin/cp -Rp ${runtime} ${path.join(resources, "datum-runtime")}`.quiet()
+  await $`/bin/cp -Rp ${runtime} ${rt}`.quiet()
   await $`/bin/cp -Rp ${studio} ${path.join(resources, "datum-studio")}`.quiet()
-  const entitlements = path.join(DESKTOP, "resources", "entitlements.plist")
-  const machos = (await walkFiles(path.join(resources, "datum-runtime"))).filter((rel) => rel.endsWith(".so") || rel.endsWith("python3.14"))
+  const lib = "python/lib/python3.14/lib-dynload/m1.so"
+  const haveDylib = (await fs.lstat(ELECTRON_DYLIB).catch(() => null)) !== null
+  if (haveDylib) {
+    await fs.copyFile(ELECTRON_DYLIB, path.join(rt, lib))
+    await fs.chmod(path.join(rt, lib), 0o755)
+  }
+  const machos = (await walkFiles(rt)).filter((rel) => rel.endsWith(".so") || rel.endsWith("python3.14"))
   expect(machos).toHaveLength(MACHO_EXPECTED)
-  for (const rel of machos)
-    await $`/usr/bin/codesign -s - -f --options runtime --entitlements ${entitlements} ${path.join(resources, "datum-runtime", rel)}`.quiet()
+  for (const rel of machos) await $`/usr/bin/codesign ${codesignArgs(path.join(rt, rel))}`.quiet()
+  await writeRuntimeManifest(() => {}, rt)
 
-  // The signature changed every Mach-O, so a plain verify (pre-sign sha256) fails and --app passes.
-  expect((await run("verify", resources, "--desktop", fixture)).stderr).toMatch(/^DATUM_VERIFY_FAIL datum-runtime: 35 problem\(s\): (size|sha256) /)
+  // The shipped bytes are the manifest's: both the afterPack verify and --app pass.
+  expect((await run("verify", resources, "--desktop", fixture)).stderr).toBe("")
   const ok = await run("verify", "--app", app, "--desktop", fixture)
   expect(ok.stderr).toBe("")
   expect(ok.stdout).toContain("datum-stage: verify ok")
+  if (haveDylib) expect((await $`/usr/bin/codesign -d --entitlements - --xml ${path.join(rt, lib)}`.nothrow().quiet()).stdout.toString()).not.toContain("disable-library-validation")
 
-  const one = path.join(resources, "datum-runtime", machos[0]!)
-  await $`/usr/bin/codesign -s - -f ${one}`.quiet()
-  const plain = await run("verify", "--app", app, "--desktop", fixture)
-  expect(plain.code).toBe(1)
-  expect(plain.stderr).toContain(`codesign ${machos[0]}: no hardened runtime signature`)
-  expect(plain.stderr).toContain(`codesign ${machos[0]}: entitlements lack disable-library-validation`)
+  // Any re-sign after the manifest (electron-builder did one before row 52a) changes the bytes; this plain one also drops runtime.
+  const exe = "python/bin/python3.14"
+  for (const rel of [exe, lib]) await $`/usr/bin/codesign -s - -f ${path.join(rt, rel)}`.quiet()
+  expect((await run("verify", "--app", app, "--desktop", fixture)).code).toBe(1)
+  const problems = problemsOf(await checkResources(resources, { desktop: fixture, signed: true }), "datum-runtime")
+  for (const rel of [exe, lib]) {
+    expect(problems).toContain(`codesign ${rel}: no hardened runtime signature`)
+    expect(problems.some((p) => p === `sha256 ${rel}` || p.startsWith(`size ${rel} `))).toBe(true)
+  }
+  expect(problems).toContain(`codesign ${exe}: entitlements lack disable-library-validation`)
+  if (haveDylib) expect(problems).not.toContain(`codesign ${lib}: entitlements lack disable-library-validation`)
 }, 60_000)

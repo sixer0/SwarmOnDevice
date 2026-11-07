@@ -5,7 +5,7 @@ import { createRequire } from "node:module"
 import os from "node:os"
 import path from "node:path"
 import type { Configuration } from "electron-builder"
-import { composeHooks, datumHooks, libraryHooks, SWARM_RELEASE } from "./electron-builder.config"
+import { composeHooks, DATUM_RUNTIME_SIGN_IGNORE, datumHooks, libraryHooks, SWARM_RELEASE } from "./electron-builder.config"
 import { LIBRARY_FOLDER, STAGE } from "./scripts/stage-library"
 import { STUDIO_STAGE_FOLDER, STUDIO_STAGE_MANIFEST } from "./src/main/datum-studio-host/layout"
 
@@ -125,6 +125,17 @@ for (const channel of channels) {
     // ROW 55 signing route (X-8/IS-D2): the builder's integrated ad-hoc identity, chosen over
     // an afterPack codesign because afterPack runs before the fuse flip and would be invalidated.
     expect(config.mac?.identity).toBe("-")
+    // Row 52a (C111): the builder's pass skips only Res/datum-runtime, which its stage signs with the same plist.
+    expect(config.mac?.signIgnore).toEqual([DATUM_RUNTIME_SIGN_IGNORE])
+    const ignore = new RegExp(DATUM_RUNTIME_SIGN_IGNORE)
+    const res = "/x/mac-arm64/Swarm.app/Contents/Resources"
+    expect(ignore.test(`${res}/datum-runtime/python/bin/python3.14`)).toBe(true)
+    expect(ignore.test(`${res}/datum-runtime/python/lib/python3.14/site-packages/lxml/etree.cpython-314-darwin.so`)).toBe(true)
+    for (const kept of [`${res}/swarm-cli/swarm`, `${res}/rg`, `${res}/datum-studio/server/x.js`, "/x/Swarm.app/Contents/MacOS/Swarm", "/x/Swarm.app"])
+      expect(ignore.test(kept)).toBe(false)
+    const runtimeStage = await import("./scripts/stage-datum-runtime")
+    expect(path.resolve(import.meta.dir, config.mac!.entitlementsInherit!)).toBe(runtimeStage.ENTITLEMENTS)
+    expect(runtimeStage.codesignArgs("f")).toEqual(["--sign", "-", "--force", "--timestamp=none", "--options", "runtime", "--entitlements", runtimeStage.ENTITLEMENTS, "f"])
 
     // AD-19 additions beyond the 01b list:
     expect(config.dmg?.title).toBe("${productName} ${version}")
