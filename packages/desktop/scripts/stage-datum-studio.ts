@@ -31,6 +31,7 @@ import * as fs from "node:fs/promises"
 import { builtinModules } from "node:module"
 import * as path from "node:path"
 import { STUDIO_ASSETS_REL, STUDIO_STAGE_FOLDER, STUDIO_STAGE_MANIFEST } from "../src/main/datum-studio-host/layout"
+import { RELEASE } from "./stage-datum-runtime"
 
 const DESKTOP = path.resolve(import.meta.dir, "..")
 const PKG = path.resolve(DESKTOP, "..", "datum-studio")
@@ -263,7 +264,7 @@ export async function stageDatumStudio(opts: { out?: string; sources?: StageSour
     const manifest: StudioManifest = {
       schema: 1,
       name: "datum-studio",
-      version: "1.2.0",
+      version: RELEASE,
       provenanceCommit: plan.provenanceCommit,
       assetsRel: STUDIO_ASSETS_REL,
       counts: {

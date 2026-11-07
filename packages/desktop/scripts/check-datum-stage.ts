@@ -23,7 +23,7 @@ import { createReadStream } from "node:fs"
 import fs from "node:fs/promises"
 import path from "node:path"
 import { STUDIO_STAGE_FOLDER } from "../src/main/datum-studio-host/layout"
-import { MACHO_EXPECTED, PTH } from "./stage-datum-runtime"
+import { MACHO_EXPECTED, PTH, RELEASE } from "./stage-datum-runtime"
 import { verifyStudioStage } from "./stage-datum-studio"
 
 export const DESKTOP = path.resolve(import.meta.dir, "..")
@@ -137,8 +137,8 @@ export async function checkRuntime(
       return null
     })
   if (!manifest) return { folder, problems, summary: "" }
-  if (manifest.schema !== 1 || manifest.name !== "datum-runtime" || manifest.version !== "1.2.0" || !Array.isArray(manifest.files))
-    return { folder, problems: [...problems, "manifest header invalid (schema 1, datum-runtime, 1.2.0, files[])"], summary: "" }
+  if (manifest.schema !== 1 || manifest.name !== "datum-runtime" || manifest.version !== RELEASE || !Array.isArray(manifest.files))
+    return { folder, problems: [...problems, `manifest header invalid (schema 1, datum-runtime, ${RELEASE}, files[])`], summary: "" }
 
   const files = manifest.files as RuntimeEntry[]
   const listed = new Map(files.map((entry) => [entry.path, entry]))

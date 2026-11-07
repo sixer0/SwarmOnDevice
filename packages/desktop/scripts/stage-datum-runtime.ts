@@ -13,7 +13,7 @@
 //   bun scripts/stage-datum-runtime.ts [--out DIR] [--cache DIR] [--offline]
 import { $ } from "bun"
 import { createHash } from "node:crypto"
-import { createReadStream } from "node:fs"
+import { createReadStream, readFileSync } from "node:fs"
 import * as fs from "node:fs/promises"
 import * as path from "node:path"
 
@@ -58,7 +58,9 @@ const PY_LIB = "lib/python3.14"
 const SITE = `python/${PY_LIB}/site-packages`
 // Res/datum-runtime/python/lib/python3.14/site-packages -> 5 levels up is Res (runtime spec §1.6, probe F2/F3).
 export const PTH = { name: "datum-house-style.pth", line: "../../../../../datum-house-style/scripts" }
-export const MACHO_EXPECTED = 35 // research/09 §7, packaging §2.4 rule 3, recipe DATUM_MACHO
+// Row 141a (C171): the runtime manifest release follows packages/desktop/package.json `version` (stage, check and test all read this).
+export const RELEASE: string = JSON.parse(readFileSync(path.join(import.meta.dir, "..", "package.json"), "utf8")).version
+export const MACHO_EXPECTED = 35// research/09 §7, packaging §2.4 rule 3, recipe DATUM_MACHO
 // Row 52a: the plist electron-builder gives every nested path (mac.entitlementsInherit); the config test pins the pair.
 export const ENTITLEMENTS = path.join(DESKTOP, "resources", "entitlements.plist")
 // osx-sign's per-file call (OS/sign.js:174, :229-266) with an explicit --timestamp=none: an ad-hoc signature carries no
@@ -378,7 +380,7 @@ async function main() {
     const manifest = {
       schema: 1,
       name: "datum-runtime",
-      version: "1.2.0",
+      version: RELEASE,
       python: { version: PYTHON.version, release: PYTHON.release, asset: PYTHON.file, sha256: PYTHON.sha256 },
       wheels: [...WHEELS.map(({ name, version, file, sha256 }) => ({ name, version, file, sha256 })), { ...SHIM_WHEEL }],
       launcher: "bin/datum-python",

@@ -9,13 +9,20 @@ import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { checkResources, checkStage, machoFileType, parseProvenance, PROVENANCE, RUNTIME_MANIFEST, RUNTIME_STAGE, SKILL_SOURCE } from "./check-datum-stage"
-import { codesignArgs, MACHO_EXPECTED, PTH } from "./stage-datum-runtime"
+import { codesignArgs, MACHO_EXPECTED, PTH, RELEASE } from "./stage-datum-runtime"
 import { stageDatumStudio } from "./stage-datum-studio"
 import { STUDIO_STAGE_FOLDER, STUDIO_STAGE_MANIFEST } from "../src/main/datum-studio-host/layout"
 
 const DESKTOP = path.resolve(import.meta.dir, "..")
 const SCRIPT = path.join(import.meta.dir, "check-datum-stage.ts")
 const PTH_PATH = `python/lib/python3.14/site-packages/${PTH.name}`
+
+// Row 141a (C171): the manifest release is package.json's version (the line stage-datum-runtime writes is `version: RELEASE`).
+test("runtime manifest release follows packages/desktop/package.json", async () => {
+  const pkg = JSON.parse(await fs.readFile(path.join(DESKTOP, "package.json"), "utf8")).version
+  expect(RELEASE).toBe(pkg)
+  expect(RELEASE).toMatch(/^\d+\.\d+\.\d+/)
+})
 const root = await fs.mkdtemp(path.join(os.tmpdir(), "check-datum-stage-"))
 const fixture = path.join(root, "desktop")
 const runtime = path.join(fixture, RUNTIME_STAGE)
@@ -85,7 +92,7 @@ async function writeRuntimeManifest(edit: (manifest: Record<string, any>) => voi
   const manifest: Record<string, any> = {
     schema: 1,
     name: "datum-runtime",
-    version: "1.2.0",
+    version: JSON.parse(await fs.readFile(path.join(DESKTOP, "package.json"), "utf8")).version,
     launcher: "bin/datum-python",
     pth: { path: PTH_PATH, line: PTH.line },
     skillSha: sha(await fs.readFile(path.join(skill, "SKILL.md"))),
