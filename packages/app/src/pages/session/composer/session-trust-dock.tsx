@@ -53,9 +53,9 @@ export function SessionTrustDock() {
             </div>
           }
           footer={
-            <>
-              <div class="min-w-0 text-12-regular text-text-weak">{status()?.directory}</div>
-              <div data-slot="permission-footer-actions">
+            <div class="flex w-full min-w-0 flex-wrap items-center justify-end gap-x-3 gap-y-2">
+              <div class="min-w-0 grow basis-48 break-all text-12-regular text-text-weak">{status()?.directory}</div>
+              <div data-slot="permission-footer-actions" class="min-w-0 flex-wrap justify-end gap-y-2">
                 <Button
                   variant="ghost"
                   size="normal"
@@ -75,7 +75,7 @@ export function SessionTrustDock() {
                   {language.t("session.trust.trust")}
                 </Button>
               </div>
-            </>
+            </div>
           }
         >
           <div data-slot="permission-row">

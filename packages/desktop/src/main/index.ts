@@ -50,6 +50,7 @@ import { migrate } from "./migrate"
 import { cleanupStoreFiles } from "./store-cleanup"
 import { startBackgroundCli } from "./background-cli"
 import { nativeT, setNativeTranslations } from "./native-translations"
+import { aboutPanelOptions } from "./about-panel"
 import { appServerFilePath, appStateHome, removeAppServerFile, writeAppServerFile } from "./app-server-file"
 import { cliLauncherPath, createCliInstaller, createDatumStudioInstaller, datumStudioLauncherPath } from "./cli-install"
 import { createExecFileRunner, createPatchFlowGuard, patchApplierPath, runPatchStatus } from "./patch-common"
@@ -74,11 +75,11 @@ const APP_IDS: Record<string, string> = {
   beta: "id.co.gsp.swarm.desktop.beta",
   prod: "id.co.gsp.swarm.desktop",
 }
-// Legal credit lines fixed verbatim by research/03c_licence_notice_plan.md 4.3/7.3
-// (C2 with <HOLDER> = working publisher text, decision 2); not i18n copy.
-const ABOUT_COPYRIGHT = "Copyright (c) 2025 opencode (MIT). Swarm modifications Copyright (c) 2026 PT GSP."
-const ABOUT_CREDITS =
-  "Swarm is an independent derivative of OpenCode (https://github.com/anomalyco/opencode), used under the MIT License. It is not built by the OpenCode team and is not affiliated with, endorsed by, or sponsored by OpenCode, its maintainers, or Anomaly Innovations Inc."
+// Row 175 (user 2026-11-08): About shows name, version and the build commit date only. The MIT/OpenCode
+// notices keep shipping as Resources/LICENSE, NOTICE, THIRD_PARTY_LICENSES.txt (electron-builder.config.ts).
+const BUILD_DATE: string | undefined = import.meta.env.SWARM_BUILD_DATE
+const setAboutPanel = (locale: string) =>
+  app.setAboutPanelOptions(aboutPanelOptions({ name: app.getName(), version: app.getVersion(), buildDate: BUILD_DATE, locale }))
 const TEST_ONBOARDING = process.env.OPENCODE_TEST_ONBOARDING === "1"
 const SIDECAR_VERSION = process.env.OPENCODE_SIDECAR_V2 === "1" ? "v2" : "v1"
 const jsCallStackFeature = "DocumentPolicyIncludeJSCallStacksInCrashReports"
@@ -145,7 +146,7 @@ const main = Effect.gen(function* () {
   const onboardingTestRoot = prepareOnboardingTestRoot(process.env)
   app.setName(app.isPackaged ? APP_NAMES[CHANNEL] : "Swarm Dev")
   app.setAppUserModelId(appId)
-  app.setAboutPanelOptions({ copyright: ABOUT_COPYRIGHT, credits: ABOUT_CREDITS })
+  setAboutPanel("id")
   app.setPath(
     "userData",
     onboardingTestRoot ? join(onboardingTestRoot, "desktop") : join(app.getPath("appData"), appId),
@@ -394,7 +395,10 @@ const main = Effect.gen(function* () {
     exportDebugLogs: () => exportDebugLogs(),
     recordFatalRendererError: (error) => writeLog("renderer", "fatal renderer error", { ...error }, "error"),
     setNativeTranslations: (bundle) => {
-      if (setNativeTranslations(bundle)) createMenu(menuDeps)
+      if (setNativeTranslations(bundle)) {
+        createMenu(menuDeps)
+        setAboutPanel(bundle.locale)
+      }
     },
     missionControl: () => datumStudio.missions(),
   })

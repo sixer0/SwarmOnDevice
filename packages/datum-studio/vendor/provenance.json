@@ -47,15 +47,16 @@
   "row165J": "2026-11-08: C197 fixes of verification/25 (F165H-1..5). engine/html/blocks/classes.ts, engine/diagram/core/svg.ts, engine/front/texts.ts, engine/docx/package/header-footer.ts, scripts/studio/mcp/tools.ts re-patched (files[].patch_row165J, before = previous sha256; statuses unchanged). Diffs in implementation/142_row165J_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9714638 + 7746 (classes.ts +878, svg.ts +4556, texts.ts +1282, header-footer.ts +249, tools.ts +781) = 9722384. patch_rows += 165J",
   "row165K": "2026-11-08: C199 ruling 2 (DATUM-15 scope). engine/browser/measure.ts (text blocks carry the enclosing data-unit kind) and engine/lint/render/index.ts (DATUM-15 leaves cover, controlSheet and toc units out) re-patched (files[].patch_row165K, before = previous sha256; statuses unchanged). Diffs in implementation/143_row165K_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9722384 + 668 (measure.ts +221, index.ts +447) = 9723052. patch_rows += 165K",
   "row165P": "2026-11-08: C205 (manual furniture: CP-01/04/05 control block and lembar kicker, CP-05 HALAMAN, CP-08/11/12/13 PDF and DOCX furniture, CP-23 DOCX lead 9 mm, CP-29 DOCX derivation mark, CP-28/48 stand-alone figure apparatus, CP-36 derivation expression). 15 vendor files re-patched (files[].patch_row165P, before = previous sha256): engine/front/texts.ts, html/blocks/wrapper.ts, html/blocks/classes.ts, html/base/shell.ts, html/tables/derivation.ts, docx/wrapper/pages.ts, docx/wrapper/render.ts, docx/wrapper/media.ts, docx/blocks/structure.ts, docx/package/header-footer.ts, docx/figures/derivation.ts, diagram/build/svg.ts, diagram/build/index.ts (copied -> patched), diagram/elk/index.ts (added), services/render/pdf.ts (added). Diffs in implementation/146_row165P_diffs/. counts by delta: copied 452 - 1 = 451, patched 114 + 1 = 115; bytes 9725039 + 32500 = 9757539. patch_rows += 165P.",
-  "row165O": "2026-11-08: C203 F165N-2 (DATUM-15 not applicable). engine/lint/render/index.ts re-patched (files[].patch_row165O, before = previous sha256; status unchanged). Diff in implementation/145_row165O_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9723052 + 565 (index.ts +565) = 9723617. patch_rows += 165O. Addendum C204 items 3 and 4: engine/front/texts.ts, engine/html/blocks/wrapper.ts, engine/html/blocks/classes.ts, engine/docx/wrapper/render.ts, engine/docx/wrapper/pages.ts (control block back to 4 x 2, classification line in the number cell) and engine/diagram/core/svg.ts (explicit fill none on hatch and stroke-only lines) re-patched (files[].patch_row165O; statuses unchanged, all already patched). bytes 9723617 + 1422 (texts.ts -36, wrapper.ts +492, classes.ts +151, render.ts +317, pages.ts +30, svg.ts +468) = 9725039"
+  "row165O": "2026-11-08: C203 F165N-2 (DATUM-15 not applicable). engine/lint/render/index.ts re-patched (files[].patch_row165O, before = previous sha256; status unchanged). Diff in implementation/145_row165O_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9723052 + 565 (index.ts +565) = 9723617. patch_rows += 165O. Addendum C204 items 3 and 4: engine/front/texts.ts, engine/html/blocks/wrapper.ts, engine/html/blocks/classes.ts, engine/docx/wrapper/render.ts, engine/docx/wrapper/pages.ts (control block back to 4 x 2, classification line in the number cell) and engine/diagram/core/svg.ts (explicit fill none on hatch and stroke-only lines) re-patched (files[].patch_row165O; statuses unchanged, all already patched). bytes 9723617 + 1422 (texts.ts -36, wrapper.ts +492, classes.ts +151, render.ts +317, pages.ts +30, svg.ts +468) = 9725039",
+  "row174": "2026-11-08: C218 F146b-6 (diagram block refusal). src/lib/studio/contract/schema/v2/forbidden.ts copied -> patched (classifySchemaV2Errors names the exclusive fields of a oneOf passed by several branches: spec|artifactId, data|panels|artifactId, text|runs, documentId|docNumber); scripts/studio/mcp/resources.ts re-patched (guide: diagram block shape, spec ATAU artifactId). Diffs in implementation/155_row174_diffs/. counts by delta: copied 451 -> 450, patched 115 -> 116; bytes 9757539 + 1830 (forbidden.ts) + 341 (resources.ts) = 9759710. patch_rows += 174"
  },
  "counts": {
   "files": 604,
-  "copied": 451,
-  "patched": 115,
+  "copied": 450,
+  "patched": 116,
   "replaced": 12,
   "added": 26,
-  "bytes": 9757539
+  "bytes": 9759710
  },
  "files": [
   {
@@ -242,9 +243,10 @@
   {
    "path": "scripts/studio/mcp/resources.ts",
    "status": "patched",
-   "bytes": 11438,
+   "bytes": 11779,
    "source_sha256": "1baf1d948b975ea5f44a5d249ba7a138259bccc4b2b460b12c5bc89db390c193",
-   "sha256": "624e36068d5f281ee8c059058704709080ec24eb6d60f8d5fa080c482178c9e2",
+   "sha256": "f7622a362f6e3d3a56138dcfb8bf82b445275ffe0fb8de343e728ad72609d126",
+   "patch_row174": {"id": "row174-f146b6", "row": "174", "decision": "C218 F146b-6", "summary": "guide text: three strings after the FIG-03b lines: diagram block shape, spec ATAU artifactId (not both), schema pointer", "before_sha256": "624e36068d5f281ee8c059058704709080ec24eb6d60f8d5fa080c482178c9e2", "after_sha256": "f7622a362f6e3d3a56138dcfb8bf82b445275ffe0fb8de343e728ad72609d126", "diff": "implementation/155_row174_diffs/scripts_studio_mcp_resources.ts.diff"},
    "patch_row165E": {"id": "row165E-integration", "row": "165E", "decision": "C191 ruling 4 (row 165C file request)", "summary": "guide text: one line (two strings) after the FIG-03b studio_figure_preview lines documenting the stand-alone figure (standalone: true, downloadDir[, png: true]) -> Gambar <n> <Judul>.svg/.png with caption, KUNCI, SUMBER", "before_sha256": "1baf1d948b975ea5f44a5d249ba7a138259bccc4b2b460b12c5bc89db390c193", "after_sha256": "624e36068d5f281ee8c059058704709080ec24eb6d60f8d5fa080c482178c9e2", "diff": "implementation/139_row165E_diffs/scripts_studio_mcp_resources.ts.diff"}
   },
   {
@@ -932,10 +934,11 @@
   },
   {
    "path": "src/lib/studio/contract/schema/v2/forbidden.ts",
-   "status": "copied",
-   "bytes": 33929,
+   "status": "patched",
+   "bytes": 35759,
    "source_sha256": "e6b4380b4f4d9d9f6eff357dc9caa131be88a67af8925c9c388be0970ff9fd32",
-   "sha256": "e6b4380b4f4d9d9f6eff357dc9caa131be88a67af8925c9c388be0970ff9fd32"
+   "sha256": "acab6d6fd1a9281619306bbba7a85ca6300401fb62313ad8459f308816d3f310",
+   "patch_row174": {"id": "row174-f146b6", "row": "174", "decision": "C218 F146b-6", "summary": "classifySchemaV2Errors: a oneOf with params.passingSchemas >= 2 over a known exclusive field set names the fields given (EXCLUSIVE_FIELD_SETS, exclusiveClash) instead of the bare ajv message", "before_sha256": "e6b4380b4f4d9d9f6eff357dc9caa131be88a67af8925c9c388be0970ff9fd32", "after_sha256": "acab6d6fd1a9281619306bbba7a85ca6300401fb62313ad8459f308816d3f310", "diff": "implementation/155_row174_diffs/forbidden.ts.diff"}
   },
   {
    "path": "src/lib/studio/contract/schema/v2/skeleton.schema.ts",
@@ -5867,6 +5870,7 @@
   "165J",
   "165K",
   "165O",
-  "165P"
+  "165P",
+  "174"
  ]
 }

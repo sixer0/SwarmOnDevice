@@ -1,6 +1,7 @@
 import { sentryVitePlugin } from "@sentry/vite-plugin"
 import { defineConfig } from "electron-vite"
 import appPlugin from "@opencode-ai/app/vite"
+import { execFileSync } from "node:child_process"
 import { readFileSync } from "node:fs"
 import * as fs from "node:fs/promises"
 import path from "node:path"
@@ -29,6 +30,13 @@ const channel = (() => {
   return "dev"
 })()
 
+// Row 175: the About panel's "last update" date = commit date of the build commit (reproducible, not run time).
+const buildDate = (() => {
+  const out = execFileSync("git", ["log", "-1", "--format=%cs"], { encoding: "utf8" }).trim()
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(out)) throw new Error(`SWARM_BUILD_DATE: unexpected git output ${JSON.stringify(out)}`)
+  return out
+})()
+
 const nodePtyPkg = `@lydell/node-pty-${process.platform}-${process.arch}`
 
 const sentry =
@@ -52,6 +60,7 @@ export default defineConfig({
   main: {
     define: {
       "import.meta.env.OPENCODE_CHANNEL": JSON.stringify(channel),
+      "import.meta.env.SWARM_BUILD_DATE": JSON.stringify(buildDate),
     },
     build: {
       rollupOptions: {

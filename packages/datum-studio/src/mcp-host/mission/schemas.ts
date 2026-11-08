@@ -65,6 +65,14 @@ const rowPatch: Schema = {
     note: { type: "string", maxLength: 4000 },
     acquire: { type: "array", maxItems: 16, items: { type: "string", maxLength: 80 }, description: "Shared-resource locks to take (one holder across all missions, §5.4)." },
     release: { type: "array", maxItems: 16, items: { type: "string", maxLength: 80 } },
+    retire: {
+      type: "array",
+      minItems: 1,
+      maxItems: 16,
+      uniqueItems: true,
+      items: { type: "string", minLength: 1, maxLength: 64 },
+      description: "Document ids linked to this row (docKey row-<id>-<name>) that it no longer delivers, e.g. an abandoned draft; archived, so the done gate and Deliverables judge only the current ones. Needs note; one live deliverable must stay.",
+    },
     checkpoint,
   },
 }

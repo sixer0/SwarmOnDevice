@@ -373,3 +373,41 @@ describe("row 165D: the file tab opens the DATUM-named deliverable", () => {
     expect(openablePath("docs/m/report.pdf")).toBeNull()
   })
 })
+
+// Row 173 (F146b-2): row 146b linked two Studio documents to row 2 (docKey row-2-laporan, an abandoned first build
+// left Unverified, and row-2-kajian, verified at rev 17). The panel must show the row's verified latest document,
+// not the abandoned draft, and one line per row.
+describe("row 173: one deliverable per row, the verified latest one", () => {
+  const out = (fileId: string, verified: boolean) => ({ fileId, format: "DOCX" as const, role: "PRIMARY" as const, finalFileName: `${fileId}.docx`, verified })
+  const abandoned = { documentId: "cedk3", title: "Kajian (first build)", docKey: "row-2-laporan", docRev: "Rev A", revisionNo: 15, updatedAt: "2026-11-08T04:56:53Z", verified: false, final: false, outputs: [out("old", false)] }
+  const verified = { documentId: "cb1mw", title: "Kajian", docKey: "row-2-kajian", docRev: "Rev A", revisionNo: 17, updatedAt: "2026-11-08T05:04:15Z", verified: true, final: true, outputs: [out("new", true)] }
+
+  test("the verified document is the row's deliverable, whatever the host order", () => {
+    for (const order of [[abandoned, verified], [verified, abandoned]]) {
+      const get = fixture("document")
+      get.deliverables = [...order, get.deliverables![0]]
+      const vm = buildMission(get, "en")
+      const row2 = vm.deliverables.filter((d) => d.rowId === "2")
+      expect(row2.map((d) => d.documentId)).toEqual(["cb1mw"])
+      expect(row2[0]).toMatchObject({ verified: true })
+      expect(vm.deliverables.map((d) => d.documentId)).toContain("doc-a")
+      expect(vm.agents["2"]?.deliverableId).toBe("cb1mw")
+    }
+  })
+
+  test("no verified document: the newest one stands for the row", () => {
+    const get = fixture("document")
+    const newer = { ...verified, verified: false, final: false, outputs: [out("new", false)] }
+    get.deliverables = [abandoned, newer]
+    expect(buildMission(get, "en").deliverables.map((d) => d.documentId)).toEqual(["cb1mw"])
+  })
+
+  test("documents without a row link are all kept", () => {
+    const get = fixture("document")
+    get.deliverables = [
+      { documentId: "x", title: "x", docKey: "loose-1", docRev: "Rev A", outputs: [] },
+      { documentId: "y", title: "y", docKey: null, docRev: "Rev A", outputs: [] },
+    ]
+    expect(buildMission(get, "en").deliverables.map((d) => d.documentId)).toEqual(["x", "y"])
+  })
+})

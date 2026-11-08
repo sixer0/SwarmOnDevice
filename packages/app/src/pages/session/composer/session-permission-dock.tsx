@@ -8,6 +8,14 @@ import { useLanguage } from "@/context/language"
 import { formatUsd, spendLimitDetail } from "@/components/session/session-spend"
 import { permissionRisk, permissionWhat, shownPatterns } from "@/pages/home/agent-board-model"
 
+// Row 173 (F146b-4): the dock footer (session-ui) is one nowrap flex row, so in a narrow session pane the buttons kept
+// their width and squeezed the "No answer by ..." hint into a one-word column under the Deny button. The footer now holds
+// one full-width row that wraps: the hint takes the free width (at least 12rem), the buttons move below it and wrap
+// among themselves when the pane is narrower than they are.
+const FOOTER_ROW = "flex w-full min-w-0 flex-wrap items-center justify-end gap-x-3 gap-y-2"
+const FOOTER_HINT = "min-w-0 grow basis-48 text-12-regular text-text-weak"
+const FOOTER_ACTIONS = "min-w-0 flex-wrap justify-end gap-y-2"
+
 export const clockTime = (at: number) =>
   new Date(at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
 
@@ -44,9 +52,8 @@ export function SessionPermissionDock(props: {
             </div>
           }
           footer={
-            <>
-              <div />
-              <div data-slot="permission-footer-actions">
+            <div class={FOOTER_ROW} data-permission-footer-row>
+              <div data-slot="permission-footer-actions" class={FOOTER_ACTIONS}>
                 <Button
                   variant="ghost"
                   size="normal"
@@ -64,7 +71,7 @@ export function SessionPermissionDock(props: {
                   {language.t("session.spend.continue", { amount: money(detail().next) })}
                 </Button>
               </div>
-            </>
+            </div>
           }
         >
           <div data-slot="permission-row">
@@ -104,13 +111,15 @@ function RegularPermission(props: {
         </div>
       }
       footer={
-        <>
-          <div class="min-w-0 text-12-regular text-text-weak">
-            <Show when={props.request.movesOnAt}>
-              {(at) => language.t("session.movesOn.hint", { time: clockTime(at()) })}
-            </Show>
-          </div>
-          <div data-slot="permission-footer-actions">
+        <div class={FOOTER_ROW} data-permission-footer-row>
+          <Show when={props.request.movesOnAt}>
+            {(at) => (
+              <div class={FOOTER_HINT} data-permission-footer-hint>
+                {language.t("session.movesOn.hint", { time: clockTime(at()) })}
+              </div>
+            )}
+          </Show>
+          <div data-slot="permission-footer-actions" class={FOOTER_ACTIONS}>
             <Button variant="ghost" size="normal" onClick={() => props.onDecide("reject")} disabled={props.responding}>
               {language.t("ui.permission.deny")}
             </Button>
@@ -128,7 +137,7 @@ function RegularPermission(props: {
               {language.t("ui.permission.allowOnce")}
             </Button>
           </div>
-        </>
+        </div>
       }
     >
       <Show when={toolDescription()}>

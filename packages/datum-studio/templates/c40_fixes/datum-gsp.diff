@@ -1,6 +1,6 @@
 --- seed-export/datum-gsp.json
 +++ templates/datum-gsp.json
-@@ -207,5 +207,22 @@
+@@ -207,5 +207,23 @@
          }
        }
      ]
@@ -20,6 +20,7 @@
 +    "cover.title.maxWidthMm": 150,
 +    "controlSheet.subtitle.enabled": true,
 +    "controlSheet.signatures.fillRoles": true,
-+    "controlSheet.columns.form": "manual"
++    "controlSheet.columns.form": "manual",
++    "render.rail.reserveColumn": true
    }
  }

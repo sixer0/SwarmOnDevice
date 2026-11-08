@@ -78,6 +78,8 @@ export const STORE_ERROR_CODES = [
   "VERIFY_STATE_INVALID",
   "VERIFY_REPORT_TOO_LARGE",
   "OUTPUT_UNVERIFIED",
+  // row 174 (C218 F146b-3): studio_mission_update_row `retire` refused (not a live deliverable of the row, or none would stay).
+  "DELIVERABLE_NOT_RETIRABLE",
 ] as const
 
 export type StoreErrorCode = (typeof STORE_ERROR_CODES)[number]

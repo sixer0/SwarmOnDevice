@@ -40,13 +40,23 @@ export type MissionControlState = {
   listed: boolean
 }
 
-/** live = Agents view visible (3 s, list + get); discover = map open, other filter (15 s, list only); stopped. */
-export type PollMode = "live" | "discover" | "stopped"
+/**
+ * live = Agents view visible (3 s, list + get); background = Agents view open in a hidden window (15 s, list + get;
+ * row 173, F146b-1); discover = map open, other filter (15 s, list only); stopped.
+ */
+export type PollMode = "live" | "background" | "discover" | "stopped"
 
 export const LIVE_MS = 3000
 export const SLOW_LIVE_MS = 5000
 export const SLOW_TICK_MS = 500
 export const DISCOVER_MS = 15000
+/** Row 173 (F146b-1): hidden window, Agents view open. Keeps the view current for when the user looks again. */
+export const BACKGROUND_MS = 15000
+/**
+ * Row 173 (F146b-1): a source call that has not answered by now counts as a failed read, so one hung call can never
+ * leave `inFlight` set and stop the poll for good. Main's own host timeout is 5 s; this guards the IPC hop itself.
+ */
+export const READ_TIMEOUT_MS = 20000
 export const BACKOFF_MS = [3000, 6000, 12000, 30000]
 
 type Timers = {
@@ -92,6 +102,24 @@ export function createMissionPoller(input: {
     input.onState(state)
   }
 
+  const reading = () => mode === "live" || mode === "background"
+  /** One source call under READ_TIMEOUT_MS; a rejection or a timeout is `undefined` (a failed read). */
+  const within = <T,>(work: () => Promise<T>) =>
+    new Promise<T | undefined>((resolve) => {
+      const timer = timers.setTimeout(() => resolve(undefined), READ_TIMEOUT_MS)
+      const settle = (value: T | undefined) => {
+        timers.clearTimeout(timer)
+        resolve(value)
+      }
+      let call: Promise<T>
+      try {
+        call = work()
+      } catch (error) {
+        call = Promise.reject(error)
+      }
+      call.then(settle, () => settle(undefined))
+    })
+
   const fail = () => {
     failures++
     emit({ readFailed: true })
@@ -100,6 +128,7 @@ export function createMissionPoller(input: {
   const delay = () => {
     if (failures > 0) return BACKOFF_MS[Math.min(failures - 1, BACKOFF_MS.length - 1)]
     if (mode === "live") return slow ? SLOW_LIVE_MS : LIVE_MS
+    if (mode === "background") return BACKGROUND_MS
     return DISCOVER_MS
   }
 
@@ -142,7 +171,7 @@ export function createMissionPoller(input: {
       seen = { directory }
       emit(emptyMissionState())
     }
-    const listed = await input.source.list({ directory }).catch(() => undefined)
+    const listed = await within(() => input.source.list({ directory }))
     if (current() === "stopped" || disposed || directory !== input.directory()) return
     if (!listed || !listed.ok) return fail()
     const items = listed.data.items
@@ -156,7 +185,7 @@ export function createMissionPoller(input: {
       emit({ options, selected: undefined, mission: null, readFailed: false })
       return
     }
-    if (mode !== "live") {
+    if (!reading()) {
       failures = 0
       emit({ options, selected, readFailed: false })
       return
@@ -171,15 +200,16 @@ export function createMissionPoller(input: {
     // Row 136 M2: after every await, a read that no longer matches what the user sees is dropped (no emit). A changed
     // selection set `force` through refresh(), so the next tick reads the new choice at once.
     const chosen = state.selected
-    const stale = () => disposed || current() !== "live" || directory !== input.directory() || state.selected !== chosen
-    const got = await input.source.get({ mission: selected }).catch(() => undefined)
+    const stale = () => disposed || !reading() || directory !== input.directory() || state.selected !== chosen
+    const got = await within(() => input.source.get({ mission: selected }))
     if (stale()) return
     if (!got || !got.ok) {
       emit({ options, selected })
       return fail()
     }
-    const present = input.listFiles
-      ? new Set(await input.listFiles(`docs/${selected}`).catch(() => [] as string[]))
+    const listFiles = input.listFiles
+    const present = listFiles
+      ? new Set((await within(() => listFiles(`docs/${selected}`))) ?? [])
       : new Set<string>()
     if (stale()) return
     failures = 0
@@ -233,7 +263,9 @@ export function createMissionPoller(input: {
 
 /** §4.2: which poll runs, from what the user can see. */
 export function pollModeOf(view: { docVisible: boolean; watching: boolean; mapOpen: boolean }): PollMode {
-  if (!view.docVisible) return "stopped"
+  // Row 173 (F146b-1): a hidden window (display off, screen locked, another window on top) no longer freezes the
+  // Agents view at its last state; it reads at the slow cadence and at once when the window is visible again.
+  if (!view.docVisible) return view.watching ? "background" : "stopped"
   if (view.watching) return "live"
   if (view.mapOpen) return "discover"
   return "stopped"
@@ -277,6 +309,15 @@ export function createMissionControl(input: {
   if (typeof document !== "undefined") {
     document.addEventListener("visibilitychange", apply)
     onCleanup(() => document.removeEventListener("visibilitychange", apply))
+  }
+  // Row 173: a window that comes back without a visibilitychange (focus / bfcache) re-applies the mode too.
+  if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+    window.addEventListener("focus", apply)
+    window.addEventListener("pageshow", apply)
+    onCleanup(() => {
+      window.removeEventListener("focus", apply)
+      window.removeEventListener("pageshow", apply)
+    })
   }
   onCleanup(() => poller.dispose())
 

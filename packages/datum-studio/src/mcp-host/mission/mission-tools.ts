@@ -284,7 +284,7 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
     tool(
       "studio_mission_update_row",
       "Update mission rows",
-      "Row patches in order in one job (1-200): {id, add?, set?, status?, note?, acquire?, release?, checkpoint?{n, m, label?}} (§4.2-4.4, §5.4; C57 b). messages[] (C57 c/d) are appended in the same job; an owner instruction is {from: owner, to: controller, kind: instruction} and is never executed. Returns changed rows, waves, ready.",
+      "Row patches in order in one job (1-200): {id, add?, set?, status?, note?, acquire?, release?, retire?, checkpoint?{n, m, label?}} (§4.2-4.4, §5.4; C57 b). retire: [documentId] archives a superseded draft linked to the row (needs note), applied before status. messages[] (C57 c/d) are appended in the same job; an owner instruction is {from: owner, to: controller, kind: instruction} and is never executed. Returns changed rows, waves, ready.",
       false,
       async (a, s) => {
         const mission = a.mission as string

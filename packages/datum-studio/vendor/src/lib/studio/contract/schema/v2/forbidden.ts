@@ -459,6 +459,34 @@ export function locateSchemaV2Object(rootId: SchemaV2RootId, data: unknown, inst
   return loc;
 }
 
+/**
+ * Swarm patch (row 174, C218 F146b-6). Mutually exclusive field sets of the v2 schemas (common.schema.ts: DiagramV2
+ * `xorRequired("spec", "artifactId")`, ChartV2 data | panels | artifactId, inline text | runs, document ref
+ * documentId | docNumber). ajv reports a oneOf passed by several branches only as "must match exactly one schema in
+ * oneOf" (params.passingSchemas), which names no field; run 146b's agent was refused 20 times on that.
+ */
+const EXCLUSIVE_FIELD_SETS: readonly (readonly string[])[] = [
+  ["spec", "artifactId"],
+  ["data", "panels", "artifactId"],
+  ["text", "runs"],
+  ["documentId", "docNumber"],
+];
+
+function exclusiveClash(data: unknown, e: AjvErrorLike): string | null {
+  const p = e.params as Record<string, unknown>;
+  if (e.keyword !== "oneOf" || !Array.isArray(p.passingSchemas) || p.passingSchemas.length < 2) return null;
+  const node = valueAt(data, e.instancePath);
+  if (!isRecord(node)) return null;
+  for (const set of EXCLUSIVE_FIELD_SETS) {
+    const given = set.filter((k) => node[k] !== undefined);
+    if (given.length < 2) continue;
+    const list = set.map((k) => `"${k}"`).join(" | ");
+    const hint = set[0] === "spec" ? ' (diagram: "spec" = gambar baru dari spesifikasi; "artifactId" = artefak yang sudah tersimpan)' : "";
+    return `kirim tepat satu dari ${list}, bukan beberapa: diberikan ${given.map((k) => `"${k}"`).join(" dan ")}${hint}`;
+  }
+  return null;
+}
+
 function valueAt(data: unknown, pointer: string): unknown {
   let node = data;
   for (const seg of pointerSegments(pointer)) {
@@ -734,6 +762,13 @@ export function classifySchemaV2Errors(
     const contractIssues = classifyContractError(rootId, data, e, prefix);
     if (contractIssues !== null) {
       for (const issue of contractIssues) push(issue);
+      continue;
+    }
+    // Swarm patch (row 174, C218 F146b-6): a oneOf that MORE than one branch passed is an exclusive-fields clash
+    // (xorRequired / chart data|panels|artifactId); name the fields given instead of ajv's bare oneOf message.
+    const clash = exclusiveClash(data, e);
+    if (clash !== null) {
+      push({ pointer: prefix + e.instancePath, keyword: e.keyword, message: clash });
       continue;
     }
     push({ pointer: prefix + e.instancePath, keyword: e.keyword, message: genericMessage(e) });

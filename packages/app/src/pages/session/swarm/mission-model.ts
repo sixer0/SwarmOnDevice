@@ -68,6 +68,9 @@ export type DeliverableWire = {
   docKey: string | null
   rowId?: string
   docRev: string
+  /** Row 173: the current revision number and the document's last change (host G1 sends both; absent from tests). */
+  revisionNo?: number
+  updatedAt?: string
   /** Row 136b (C151, M5): computed by the host from the store's one rule; absent (older host) = false. */
   verified?: boolean
   /** Row 136b: spec output verification §7.2 Final, the same rule as the row done gate; absent = false. */
@@ -314,6 +317,33 @@ function deliverableVM(
   }
 }
 
+/**
+ * Row 173 (F146b-2): one deliverable per linked row. A row can hold several Studio documents (a first build the agent
+ * abandoned, then a new document under another docKey); the row's deliverable is its verified document, else its newest
+ * (updatedAt, then revisionNo, then the host order, which is newest first). Documents without a row link all stay.
+ * The host's verified/final values are used as sent (row 136b), never re-derived.
+ */
+export function rowDeliverables(wires: DeliverableWire[]): DeliverableWire[] {
+  const rowOf = (w: DeliverableWire) => w.rowId ?? rowIdOfKey(w.docKey)
+  const better = (a: DeliverableWire, b: DeliverableWire) => {
+    if ((a.verified === true) !== (b.verified === true)) return a.verified === true
+    const at = timeOf(a.updatedAt) - timeOf(b.updatedAt)
+    if (at !== 0) return at > 0
+    return (a.revisionNo ?? 0) > (b.revisionNo ?? 0)
+  }
+  const chosen = new Map<string, DeliverableWire>()
+  for (const w of wires) {
+    const id = rowOf(w)
+    if (!id) continue
+    const held = chosen.get(id)
+    if (!held || better(w, held)) chosen.set(id, w)
+  }
+  return wires.filter((w) => {
+    const id = rowOf(w)
+    return !id || chosen.get(id) === w
+  })
+}
+
 function timeOf(value: string | undefined) {
   const ms = value ? Date.parse(value) : NaN
   return Number.isFinite(ms) ? ms : 0
@@ -333,7 +363,7 @@ export function buildMission(get: MissionGetWire, lang: "en" | "id", present: Se
   const phaseDefs = [...derived.phases].sort((a, b) => a.order - b.order)
   const phaseFamilyById = new Map(phaseDefs.map((p, i) => [p.id, phaseFamily(p.id, i + 1, phaseDefs.length)]))
 
-  const deliverables = (get.deliverables ?? []).map((d) => deliverableVM(d, mission.id, rows, present))
+  const deliverables = rowDeliverables(get.deliverables ?? []).map((d) => deliverableVM(d, mission.id, rows, present))
 
   const agents: Record<string, MissionAgentVM> = {}
   for (const row of shown) {

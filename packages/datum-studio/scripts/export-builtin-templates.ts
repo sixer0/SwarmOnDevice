@@ -679,6 +679,12 @@ for (const b of built.values()) {
 }
 // datum-gsp: cover and control-sheet defaults (case 06 X; B-O through these recorded diffs, C40/C23).
 coverAndSheetFixes(built.get("datum-gsp")!);
+// Row 174 (C218 F146b-5): datum-gsp reserves the rail column like the Rev A family (SHARED_LAYER above). Without it, in
+// rail mode K2 a paragraph with no rail chip is set at the full 165,9 mm (RAIL_K2_CSS max-width:none, html/base/shell.ts)
+// and DATUM-15 fails (run 146b; 91,4 characters per line measured in the real bridge, test/row174 e2e).
+fixDecision = "C218 (row 174)";
+setLayer(built.get("datum-gsp")!, "render.rail.reserveColumn", true, "F146b-5", "ID:2705-2711; EN:2764 (seed-doc-type-templates.ts:69)", "rail column reserved on interior pages, body paragraphs at the text column (DATUM-15)");
+fixDecision = undefined;
 
 // ── Row 110d (C61, C69, C72): Rev A control block and control-sheet data on every shipped template ──
 //

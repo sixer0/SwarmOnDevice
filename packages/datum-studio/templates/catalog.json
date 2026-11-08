@@ -192,8 +192,8 @@
     {
       "slug": "datum-gsp",
       "file": "datum-gsp.json",
-      "sha256": "8793a377ab51cd5ecbb8bbe99249cadd1d7c11737d2d5668a8ee86719dafc1a6",
-      "bytes": 5625,
+      "sha256": "d326a2649aa62beab6349cabb2dcc085e8e6253c3718926d7fcd90600b55894a",
+      "bytes": 5664,
       "name": "DATUM GSP (profil Manual DATUM 2.6.0)",
       "description": "Dokumen resmi GSP mengikuti Manual DATUM 2.6.0; semua pemeriksaan standar berlaku.",
       "kind": "DOCUMENT",
@@ -213,7 +213,7 @@
         "references",
         "appendices"
       ],
-      "c40Fixes": 6,
+      "c40Fixes": 7,
       "seedRef": "seed-studio.ts:851-868 ensureSkeletonVersion (SR-36)",
       "sources": [
         {

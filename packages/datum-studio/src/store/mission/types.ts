@@ -315,6 +315,8 @@ export interface RowPatch {
   note?: string
   acquire?: string[]
   release?: string[]
+  /** Row 174 (C218 F146b-3): ids of documents linked to this row (docKey row-<R>-<name>) to retire (archive); needs `note`. */
+  retire?: string[]
 }
 
 export interface MissionListFilter {

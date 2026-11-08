@@ -5,6 +5,8 @@ import {
   BACKOFF_MS,
   DISCOVER_MS,
   LIVE_MS,
+  BACKGROUND_MS,
+  READ_TIMEOUT_MS,
   createMissionControl,
   createMissionPoller,
   missionSourceOf,
@@ -281,6 +283,59 @@ describe("mission poller", () => {
     poller.dispose()
   })
 
+  // Row 173 (F146b-1): in row 146b the window went hidden at ~04:41 (display off after the idle timeout, pmset log)
+  // while the Agents view stayed open; the poll stopped and the view kept 17 %, 1/6 to the end of the mission.
+  test("row 173: a hidden window with the Agents view open keeps reading (list + get), every 15 s", async () => {
+    let updatedAt = "t1"
+    const { clock, fake, poller, last } = setup(() => [item("m", "running", updatedAt)])
+    poller.setMode(pollModeOf({ docVisible: true, watching: true, mapOpen: true }))
+    await flush()
+    expect(fake.calls).toEqual(["list:/repo", "get:m"])
+    poller.setMode(pollModeOf({ docVisible: false, watching: true, mapOpen: true }))
+    expect(clock.pending()).toEqual([BACKGROUND_MS])
+    updatedAt = "t2"
+    await clock.advance(BACKGROUND_MS)
+    expect(fake.calls.slice(-2)).toEqual(["list:/repo", "get:m"])
+    expect(last().mission?.id).toBe("m")
+    // Back in view: read at once, then the 3 s cadence.
+    poller.setMode(pollModeOf({ docVisible: true, watching: true, mapOpen: true }))
+    await flush()
+    expect(fake.calls.slice(-1)).toEqual(["list:/repo"])
+    expect(clock.pending()).toEqual([LIVE_MS])
+    poller.dispose()
+  })
+
+  test("row 173: a read that never answers does not stop the poll (timeout, back-off, recovery)", async () => {
+    let hang = true
+    const calls: string[] = []
+    const source: MissionSource = {
+      list: (input) => {
+        calls.push(`list:${input.directory}`)
+        if (hang) return new Promise(() => {})
+        return Promise.resolve({ ok: true as const, data: { items: [item("m", "running")] } })
+      },
+      get: async (input) => {
+        calls.push(`get:${input.mission}`)
+        return { ok: true as const, data: getWire(input.mission) }
+      },
+    }
+    const clock = fakeTimers()
+    const states: MissionControlState[] = []
+    const poller = createMissionPoller({ source, directory: () => "/repo", lang: () => "en", onState: (s) => states.push(s), timers: clock.timers })
+    poller.setMode("live")
+    await flush()
+    expect(calls).toEqual(["list:/repo"])
+    await clock.advance(READ_TIMEOUT_MS)
+    expect(states.at(-1)?.readFailed).toBe(true)
+    hang = false
+    await clock.advance(clock.pending()[0])
+    expect(calls.slice(-2)).toEqual(["list:/repo", "get:m"])
+    expect(states.at(-1)?.readFailed).toBe(false)
+    expect(states.at(-1)?.mission?.id).toBe("m")
+    expect(clock.pending()).toEqual([LIVE_MS])
+    poller.dispose()
+  })
+
   test("mode drops from live during a get: the late reply is not shown", async () => {
     const fake = gated(() => [item("a", "running")])
     const clock = fakeTimers()
@@ -368,10 +423,11 @@ describe("createMissionControl", () => {
 
   // createEffect does not run under the unit-test Solid build (probe in the row report), so the
   // reactive wiring is a one-line call of pollModeOf; the poller itself is tested above.
-  test("pollModeOf: live only while the Agents view is visible", () => {
+  test("pollModeOf: live while the Agents view is visible; background while it is open in a hidden window", () => {
     expect(pollModeOf({ docVisible: true, watching: true, mapOpen: true })).toBe("live")
     expect(pollModeOf({ docVisible: true, watching: false, mapOpen: true })).toBe("discover")
     expect(pollModeOf({ docVisible: true, watching: false, mapOpen: false })).toBe("stopped")
-    expect(pollModeOf({ docVisible: false, watching: true, mapOpen: true })).toBe("stopped")
+    expect(pollModeOf({ docVisible: false, watching: true, mapOpen: true })).toBe("background")
+    expect(pollModeOf({ docVisible: false, watching: false, mapOpen: true })).toBe("stopped")
   })
 })

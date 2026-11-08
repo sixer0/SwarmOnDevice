@@ -43,7 +43,7 @@ import type {
   RowStatus,
   SessionLink,
 } from "./types.ts"
-import { rowDeliverablesNotFinal } from "./output-gate.ts"
+import { ROW_DELIVERABLE_KEY, rowDeliverablesNotFinal } from "./output-gate.ts"
 import { assertActor, assertCheckpoint, assertDecisionAnswer, assertDecisionRequest, assertMessage, assertMissionSchema } from "./validate.ts"
 
 export interface MissionReader {
@@ -504,10 +504,12 @@ export class MissionStore {
     const type = this.getType(m.type_id, m.type_version, tx)!
     const changed: string[] = []
     for (const p of patches) {
-      const keys = Object.keys(p ?? {}).filter((k) => !["id", "add", "set", "status", "note", "acquire", "release"].includes(k))
+      const keys = Object.keys(p ?? {}).filter((k) => !["id", "add", "set", "status", "note", "acquire", "release", "retire"].includes(k))
       if (keys.length > 0) throw err("SCHEMA_INVALID", "unknown patch fields", { row: p?.id, fields: keys })
       if (p.add) this.addRow(tx, m, type, p, args.decision, actor)
       if (p.set) this.setRow(tx, m, type, p.id, p.set, args.decision, actor)
+      // Row 174 (C218 F146b-3): retire before the status move, so `{retire, status: "done"}` is judged without the draft.
+      if (p.retire !== undefined) this.retireDeliverables(tx, m, p.id, p.retire, p.note, actor)
       if (p.status) this.transitionRow(tx, m, p.id, p.status, { note: p.note, decision: args.decision, actor, cause: "update_row" })
       else if (p.note !== undefined && !p.add) this.setNote(tx, m, p.id, p.note, actor)
       for (const res of p.acquire ?? []) this.acquireLock(tx, m, p.id, res, actor)
@@ -573,6 +575,45 @@ export class MissionStore {
       this.assertNoCycle(tx, m.id)
     }
     this.event(tx, { mission: m.id, verb: "row-change", actor, row: rowId, decision: d, detail: { fields: Object.keys(set) } })
+  }
+
+  /**
+   * Row 174 (C218 F146b-3): retire (archive) deliverables linked to `rowId` that the row no longer delivers, e.g. an
+   * abandoned old draft superseded by another document of the same row. Archived documents leave the done gate and the
+   * Deliverables read (both read `archived = 0`, spec output verification §7.1). Not an escape from the gate: every id
+   * must be a live deliverable bound to this row (docKey row-<R>-<name>), the patch needs a note (the reason), and at
+   * least one live deliverable must stay bound to the row, which the gate then judges as before (UNKNOWN never passes).
+   */
+  private retireDeliverables(tx: StoreTx, m: MissionDbRow, rowId: string, ids: unknown, note: string | undefined, actor: string): void {
+    this.rowDb(tx, m.id, rowId)
+    if (!Array.isArray(ids) || ids.length < 1 || ids.length > 16 || ids.some((x) => typeof x !== "string" || x.length < 1 || x.length > 64)) {
+      throw err("SCHEMA_INVALID", "retire must list 1-16 document ids", { row: rowId, field: "retire" })
+    }
+    if (typeof note !== "string" || note.length < 1) throw err("SCHEMA_INVALID", "retire needs a note (why the documents are no longer this row's deliverables)", { row: rowId, field: "note" })
+    const docs = new Map(
+      tx
+        .all<{ id: string; mission_doc_key: string | null; archived: number; contract_kind: string | null }>(
+          "SELECT id, mission_doc_key, archived, contract_kind FROM document WHERE mission_folder = ?",
+          [m.id],
+        )
+        .map((d) => [d.id, d]),
+    )
+    const live = (d: { mission_doc_key: string | null; archived: number; contract_kind: string | null }) =>
+      d.archived === 0 && d.contract_kind !== WORK_REPORT_CONTRACT_KIND && ROW_DELIVERABLE_KEY.exec(d.mission_doc_key ?? "")?.[1] === rowId
+    const refuse = (documentId: string, reason: string, message: string) => err("DELIVERABLE_NOT_RETIRABLE", message, { mission: m.id, row: rowId, documentId, reason })
+    const unique = [...new Set(ids as string[])]
+    for (const id of unique) {
+      const d = docs.get(id)
+      if (!d) throw refuse(id, "NOT_IN_MISSION", `document ${id} is not a document of mission ${m.id}`)
+      if (d.archived !== 0) throw refuse(id, "ALREADY_RETIRED", `document ${id} is already retired`)
+      if (!live(d)) throw refuse(id, "NOT_BOUND_TO_ROW", `document ${id} (docKey ${d.mission_doc_key ?? "-"}) is not a deliverable of row ${rowId} (docKey row-${rowId}-<name>)`)
+    }
+    const remaining = [...docs.values()].filter((d) => live(d) && !unique.includes(d.id))
+    if (remaining.length === 0) {
+      throw refuse(unique[0]!, "NO_CURRENT_DELIVERABLE", `retiring would leave row ${rowId} without a deliverable; keep the document that holds the row's current work`)
+    }
+    for (const id of unique) tx.run("UPDATE document SET archived = 1, time_updated = ? WHERE id = ?", [tx.now, id])
+    this.event(tx, { mission: m.id, verb: "row-change", actor, row: rowId, detail: { fields: ["retire"], retired: unique.map((id) => ({ documentId: id, docKey: docs.get(id)!.mission_doc_key })), keeps: remaining.map((d) => d.id) } })
   }
 
   private setNote(tx: StoreTx, m: MissionDbRow, rowId: string, note: string, actor: string): void {
