@@ -6,9 +6,11 @@
  * Exception, row 166 (user finding 2026-11-08, before 1.2.0 shipped): $defs/Model tiers are the GSP AI tiers
  * thinker | worker | worker-fast | inherit (reason required below thinker), edited in place with the id kept and the
  * sha updated; store migration 0005 moves stored rows (opus -> thinker, sonnet -> worker).
+ * Exception, row 188 (decision L47): $defs/Decision gains the optional `autonomous: true` (only with by: controller),
+ * the honest record of an autonomous self-approval (L19); edited in place, id kept, sha updated; migration 0006.
  */
 export const MISSION_SCHEMA_V1_ID = "studio.mission/v1"
-export const MISSION_SCHEMA_V1_SHA256 = "02e27723814943e7578f4327e3e31f3536d37b3a309a1f28cbd6e9378307edcd"
+export const MISSION_SCHEMA_V1_SHA256 = "d809de4111b3e38487cd4e8d5cc4e9e4680b16c01601b28eaaa959932be61ed6"
 
 export const MISSION_SCHEMA_V1: Record<string, unknown> = {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -576,9 +578,31 @@ export const MISSION_SCHEMA_V1: Record<string, unknown> = {
           "items": {
             "$ref": "#/$defs/DecisionId"
           }
+        },
+        "autonomous": {
+          "const": true
         }
       },
       "allOf": [
+        {
+          "if": {
+            "properties": {
+              "autonomous": {
+                "const": true
+              }
+            },
+            "required": [
+              "autonomous"
+            ]
+          },
+          "then": {
+            "properties": {
+              "by": {
+                "const": "controller"
+              }
+            }
+          }
+        },
         {
           "if": {
             "properties": {

@@ -16,7 +16,7 @@ import { createStudioMcpServer } from "../../vendor/scripts/studio/mcp/server"
 import { executeTool, McpSession, newCallId, TOOLS, type ToolDef } from "../../vendor/scripts/studio/mcp/tools"
 import { MISSION_GUIDE_NAME, MISSION_GUIDE_URI, missionGuideText } from "./mission/mission-guide.ts"
 import { DIAGRAM_GUIDE_NAME, DIAGRAM_GUIDE_URI, diagramGuideText } from "./diagram-guide.ts"
-import { HOST_DROPPED_TOOLS, HOST_EXTRA_TOOLSETS, HOST_KEPT_TOOLS, type HostRememberedBasis, type HostToolExtension, type HostToolNext, type HostToolSession } from "./tool-table.ts"
+import { HOST_DROPPED_TOOLS, HOST_EXTRA_TOOLSETS, HOST_KEPT_TOOLS, sessionForCall, type HostRememberedBasis, type HostToolExtension, type HostToolNext, type HostToolSession } from "./tool-table.ts"
 
 export interface HostServerDeps {
   /** Session config (vendored loadConfig shape). `toolsets` = the host's active toolsets. */
@@ -118,11 +118,12 @@ export function createHostMcpServer(deps: HostServerDeps): Server {
   server.setRequestHandler(CallToolRequestSchema, async (req): Promise<CallToolResult> => {
     const name = req.params.name
     const args = (req.params.arguments ?? {}) as Record<string, unknown>
+    const callSession = sessionForCall(deps.session, req.params._meta) // row 188: the caller's session, when it says it
     const ext = active.extensions.find((e) => e.name === name)
     if (ext) {
       const t0 = Date.now()
       try {
-        const out = await ext.call(args, deps.session)
+        const out = await ext.call(args, callSession)
         emit({ level: out.isError ? "error" : "info", event: "tool_call", tool: name, ok: out.isError !== true, durationMs: Date.now() - t0 })
         return out
       } catch (e) {
@@ -147,7 +148,7 @@ export function createHostMcpServer(deps: HostServerDeps): Server {
             },
           },
         })
-        out = await wrapper.call(args, deps.session, next)
+        out = await wrapper.call(args, callSession, next)
       } catch (e) {
         if (e instanceof McpError) throw e
         const err = e instanceof Error ? e : new Error(String(e))

@@ -57,6 +57,10 @@ export const Info = Schema.Struct({
     description:
       "Enable or disable the bundled knowledge library. Only read from the global config; a project config cannot turn it on. Defaults to true.",
   }),
+  claude_compat: Schema.optional(Schema.Boolean).annotate({
+    description:
+      "Also read Claude Code files: ~/.claude/CLAUDE.md, project CLAUDE.md and the skills in ~/.claude/skills and project .claude/skills. Only read from the global config; a project config cannot turn it on. Defaults to false.",
+  }),
   plugin: Schema.optional(Schema.mutable(Schema.Array(ConfigPluginV1.Spec))),
   share: Schema.optional(Schema.Literals(["manual", "auto", "disabled"])).annotate({
     description:

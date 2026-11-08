@@ -108,19 +108,93 @@ export function actorOf(args: Record<string, unknown>, s: HostToolSession): stri
   return ACTOR_RE.test(s.agentId) ? s.agentId : undefined
 }
 
-/** Session link with the client locked to the MCP session's agent (row 31 D2). */
+/** Row 188: the session refs the store accepts (studio.mission/v1 $defs/SessionLink). */
+const SWARM_REF_RE = /^ses_[0-9a-f]{12}[0-9A-Za-z]{14}$/
+const ANY_REF_RE = /^[A-Za-z0-9_.:-]{1,128}$/
+const LINK_CLIENTS = new Set<string>(["swarm", "claude"])
+
+export function validSessionRef(client: string, ref: unknown): ref is string {
+  return typeof ref === "string" && ANY_REF_RE.test(ref) && (client !== "swarm" || SWARM_REF_RE.test(ref))
+}
+
+/** Row 188: the calling session's own ref, when the client said it and the store would accept it. */
+export function callerRef(s: HostToolSession): string | undefined {
+  return LINK_CLIENTS.has(s.agentId) && validSessionRef(s.agentId, s.callerSession) ? s.callerSession : undefined
+}
+
+/** Row 188: notes about a session link the host filled, replaced or skipped, per call (keyed by the argument object). */
+const sessionNotes = new WeakMap<object, string[]>()
+function note(args: object, text: string): void {
+  sessionNotes.set(args, [...(sessionNotes.get(args) ?? []), text])
+}
+export function sessionNotesOf(args: object): string[] {
+  return sessionNotes.get(args) ?? []
+}
+
+/**
+ * Session link with the client locked to the MCP session's agent (row 31 D2).
+ * Row 188 (L47): the agent never has to invent a session id. Omitted -> the calling session (when the client said it,
+ * see HostToolSession.callerSession), else no link. A ref the store would refuse is never a refusal: it is replaced by
+ * the calling session, or the link is skipped, and the call says so (sessionNotesOf).
+ */
 export function sessionOf(args: Record<string, unknown>, s: HostToolSession): SessionLink | undefined {
-  const raw = args.session as { client?: string; ref: string; role?: SessionLink["role"] } | undefined
-  if (!raw) return undefined
+  const raw = args.session as { client?: string; ref?: unknown; role?: SessionLink["role"] } | undefined
+  const known = callerRef(s)
+  if (!raw || typeof raw !== "object") return known ? { client: s.agentId as SessionLink["client"], ref: known } : undefined
   const client = raw.client ?? s.agentId
   if (client !== s.agentId) throw new MissionToolError("AGENT_ID_LOCKED", `session.client is locked to this MCP session's agent "${s.agentId}"`, { client: raw.client, agent: s.agentId })
-  return { client: client as SessionLink["client"], ref: raw.ref, ...(raw.role ? { role: raw.role } : {}) }
+  const role = raw.role ? { role: raw.role } : {}
+  if (validSessionRef(client, raw.ref)) return { client: client as SessionLink["client"], ref: raw.ref, ...role }
+  if (known) {
+    note(args, `session.ref is not a ${client} session id; linked the calling session ${known} instead (omit session; Swarm fills it)`)
+    return { client: client as SessionLink["client"], ref: known, ...role }
+  }
+  note(args, `session.ref is not a ${client} session id and the calling session is unknown; no session was linked (omit session; Swarm fills it)`)
+  return undefined
+}
+
+/**
+ * Row 188: session links inside a create's MissionDoc (`mission.sessions`) get the same rule: an entry of this agent
+ * with a ref the store would refuse becomes the calling session (or is dropped); an invalid entry of another client
+ * is dropped. Each change is noted. Entries that are not objects are left for the schema check.
+ */
+export function normalizeDocSessions(args: Record<string, unknown>, s: HostToolSession): void {
+  const m = args.mission as Record<string, unknown> | undefined
+  if (!m || typeof m !== "object" || !Array.isArray(m.sessions)) return
+  const known = callerRef(s)
+  const out: unknown[] = []
+  for (const e of m.sessions as unknown[]) {
+    if (!e || typeof e !== "object" || Array.isArray(e)) {
+      out.push(e)
+      continue
+    }
+    const link = e as Record<string, unknown>
+    const client = typeof link.client === "string" ? link.client : s.agentId
+    if (!LINK_CLIENTS.has(client) || validSessionRef(client, link.ref)) {
+      out.push(e)
+      continue
+    }
+    if (client === s.agentId && known) {
+      note(args, `mission.sessions: ref is not a ${client} session id; the calling session ${known} is linked instead`)
+      out.push({ ...link, client, ref: known })
+    } else note(args, `mission.sessions: ref is not a ${client} session id; that entry was dropped (omit sessions; Swarm links the calling session)`)
+  }
+  m.sessions = out
+}
+
+/**
+ * Row 197 (S194-01): a self-approval (`autonomous: true`) is allowed only when Swarm itself says its autonomous mode
+ * setting is on for the calling session (`_meta["studio/autonomous"]`, see sessionForCall). Never for another client:
+ * the mode is Swarm's. Text the model read (a repo file, a page, a prompt) cannot turn it on.
+ */
+export function autonomousModeOf(s: HostToolSession): boolean {
+  return s.agentId === "swarm" && s.autonomousMode === true
 }
 
 export function writeOptions(args: Record<string, unknown>, s: HostToolSession): MissionWriteOptions {
   const actor = actorOf(args, s)
   const session = sessionOf(args, s)
-  return { ...(actor ? { actor } : {}), ...(session ? { session } : {}) }
+  return { ...(actor ? { actor } : {}), ...(session ? { session } : {}), autonomousMode: autonomousModeOf(s) }
 }
 
 function str(a: Record<string, unknown>, k: string): string | undefined {
@@ -172,10 +246,20 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
       const a = structuredClone(args ?? {}) as Record<string, unknown>
       try {
         parseObjectArg(name, a)
+        if (name === "studio_mission_create") normalizeDocSessions(a, session)
+        // Row 188: a session ref the store would refuse is handled by sessionOf (replaced or skipped), not refused here.
+        const sess = a.session as Record<string, unknown> | undefined
+        if (name !== "studio_mission_list" && sess && typeof sess === "object" && !validSessionRef(typeof sess.client === "string" ? sess.client : session.agentId, sess.ref)) {
+          sessionOf(a, session) // notes the replacement or the skip
+          const known = callerRef(session)
+          if (known) a.session = { ...sess, ref: known }
+          else delete a.session
+        }
         validateArgs(name, a)
         const out = await run(a, session)
         if (!readOnly) opts.log("info", `datum-studio-host.mission.${name}`, "mission write", { mission: typeof a.mission === "string" ? a.mission : (a.mission as { id?: unknown } | undefined)?.id, agent: session.agentId, dryRun: a.dryRun === true })
-        return okResult(name, out.text, out.data)
+        const notes = sessionNotesOf(a)
+        return notes.length > 0 ? okResult(name, `${out.text}\n${notes.join("\n")}`, { ...out.data, sessionNotes: notes }) : okResult(name, out.text, out.data)
       } catch (e) {
         if (e instanceof McpToolError) return errorResult(name, new MissionToolError(e.code, e.message, (e as { details?: Record<string, unknown> }).details ?? {}), opts.log)
         return errorResult(name, e, opts.log, { mission: typeof a.mission === "string" ? a.mission : undefined, agent: session.agentId })
@@ -273,11 +357,15 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
     tool(
       "studio_mission_approve",
       "Approve a mission",
-      "draft -> approved with a decision recorded by: user (§2.3); refused without rows (MISSION_EMPTY) or with a controller decision (APPROVAL_NEEDS_USER_DECISION). Writes a status snapshot.",
+      "draft -> approved with a decision recorded by: user (§2.3), or, only while Swarm's autonomous mode setting is on (the person turns it on), by: controller with autonomous: true (shown as self-approved (autonomous); refused AUTONOMOUS_MODE_OFF otherwise); other controller decisions are refused (APPROVAL_NEEDS_USER_DECISION), as is a mission without rows (MISSION_EMPTY). Writes a status snapshot.",
       false,
       async (a, s) => {
-        const r = await write(dry(a), (tx) => M.approve(tx, a.mission as string, a.decision as string, writeOptions(a, s)))
-        return { text: `mission ${r.id} approved under ${String(a.decision)} at ${r.approvedAt}${dryNote(a)}`, data: { ...r, dryRun: dry(a) } }
+        const r = await write(dry(a), (tx) => {
+          const out = M.approve(tx, a.mission as string, a.decision as string, writeOptions(a, s))
+          return { ...out, approval: M.get(a.mission as string, tx)?.derived.approval }
+        })
+        const how = r.approval?.autonomous ? " (self-approved (autonomous), decision by controller)" : ""
+        return { text: `mission ${r.id} approved under ${String(a.decision)} at ${r.approvedAt}${how}${dryNote(a)}`, data: { ...r, dryRun: dry(a) } }
       },
     ),
     tool(
@@ -329,7 +417,7 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
     tool(
       "studio_mission_record_decision",
       "Record a decision",
-      "Append a decision {id U<n>|C<n>, by user|controller, date, text, rows?, supersedes?} (§5.2); append-only (DECISION_ID_TAKEN). A correction is a new decision with supersedes.",
+      "Append a decision {id U<n>|C<n>, by user|controller, date, text, rows?, supersedes?, autonomous?} (§5.2); append-only (DECISION_ID_TAKEN). A correction is a new decision with supersedes. autonomous: true (by: controller only) records a self-approval, allowed only while Swarm's autonomous mode setting is on (the person turns it on; else AUTONOMOUS_MODE_OFF); never record by: user for the user.",
       false,
       async (a, s) => {
         const r = await write(dry(a), (tx) => M.recordDecision(tx, a.mission as string, a.decision as never, writeOptions(a, s)))

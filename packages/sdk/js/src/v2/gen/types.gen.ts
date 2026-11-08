@@ -2224,6 +2224,7 @@ export type Config = {
   }
   snapshot?: boolean
   knowledge_library?: boolean
+  claude_compat?: boolean
   plugin?: Array<
     | string
     | [

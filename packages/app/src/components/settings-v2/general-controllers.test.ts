@@ -658,15 +658,86 @@ describe("settings v2 controllers", () => {
       expect(controller.pending()).toBe(false)
     })
 
-    test("is the fifth and last row of the advanced section", async () => {
+    // Rewritten by row 192 (spec 191 §2.2): the library row stays the fifth; the Claude Code compatibility switch
+    // now sits right after it as the sixth and last row (was: "is the fifth and last row of the advanced section").
+    test("is the fifth row of the advanced section, followed only by the Claude Code compatibility row", async () => {
       const source = await Bun.file(new URL("./general.tsx", import.meta.url)).text()
       const section = source.slice(
         source.indexOf("const AdvancedSection"),
         source.indexOf("const NotificationsSection"),
       )
-      expect(section.match(/<SettingsRowV2\b/g)?.length).toBe(5)
-      expect(section.indexOf("settings.general.row.knowledgeLibrary.title")).toBeGreaterThan(
-        section.lastIndexOf("<SettingsRowV2"),
+      const rows = [...section.matchAll(/<SettingsRowV2\b/g)].map((m) => m.index!)
+      expect(rows.length).toBe(6)
+      const library = section.indexOf("settings.general.row.knowledgeLibrary.title")
+      const compat = section.indexOf("settings.general.row.claudeCompat.title")
+      expect(library).toBeGreaterThan(rows[4])
+      expect(library).toBeLessThan(rows[5])
+      expect(compat).toBeGreaterThan(rows[5])
+    })
+  })
+
+  // SW-14 (spec 191 §2.2, row 192): one switch for the global claude_compat; unset means off.
+  describe("Claude Code compatibility toggle", () => {
+    const toggle = (initial: boolean | undefined, update: (value: boolean) => Promise<unknown>) => {
+      const state = { value: initial, failed: 0, writes: [] as (boolean | undefined)[] }
+      const controller = createRoot(() =>
+        createKnowledgeLibraryToggle({
+          value: () => state.value,
+          write: (value) => {
+            state.value = value
+            state.writes.push(value)
+          },
+          update,
+          failed: () => state.failed++,
+          unset: false,
+        }),
+      )
+      return { state, controller }
+    }
+
+    test("reads an unset value as off and only true as on", () => {
+      const update = () => Promise.resolve()
+      expect(toggle(undefined, update).controller.enabled()).toBe(false)
+      expect(toggle(false, update).controller.enabled()).toBe(false)
+      expect(toggle(true, update).controller.enabled()).toBe(true)
+    })
+
+    test("turning it on writes claude_compat true, and a failure restores the unset value", async () => {
+      const sent: boolean[] = []
+      const ok = toggle(undefined, (value) => {
+        sent.push(value)
+        return Promise.resolve()
+      })
+      await ok.controller.set(true)
+      expect(sent).toEqual([true])
+      expect(ok.state.value).toBe(true)
+      expect(ok.controller.enabled()).toBe(true)
+
+      const bad = toggle(undefined, () => Promise.reject(new Error("offline")))
+      await bad.controller.set(true)
+      expect(bad.state.writes).toEqual([true, undefined])
+      expect(bad.controller.enabled()).toBe(false)
+      expect(bad.state.failed).toBe(1)
+    })
+
+    test("the controller reads and writes the global claude_compat key, not a project one", async () => {
+      const source = await Bun.file(new URL("./general-controllers.ts", import.meta.url)).text()
+      const body = source.slice(source.indexOf("export function createClaudeCompatController"))
+      const fn = body.slice(0, body.indexOf("\n}\n") + 3)
+      expect(fn).toContain("serverSync().data.config.claude_compat")
+      expect(fn).toContain('serverSync().set("config", "claude_compat", value)')
+      expect(fn).toContain("serverSync().updateConfig({ claude_compat: value })")
+      expect(fn).toContain("unset: false")
+    })
+
+    test("EN and ID strings are present", () => {
+      expect(en["settings.general.row.claudeCompat.title"]).toBe("Claude Code compatibility")
+      expect(en["settings.general.row.claudeCompat.description"]).toBe(
+        "Read CLAUDE.md files and Claude Code skills from ~/.claude and project .claude folders.",
+      )
+      expect(id["settings.general.row.claudeCompat.title"]).toBe("Kompatibilitas Claude Code")
+      expect(id["settings.general.row.claudeCompat.description"]).toBe(
+        "Baca file CLAUDE.md dan skill Claude Code dari folder ~/.claude dan .claude di proyek.",
       )
     })
   })

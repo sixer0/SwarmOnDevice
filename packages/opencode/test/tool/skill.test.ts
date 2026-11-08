@@ -254,6 +254,26 @@ describe("tool.skill built-in output", () => {
     }),
   )
 
+  // Row 189 (L47): the built-in mission-control skill loads by name with its full text and no folder.
+  withoutRipgrep.instance("mission-control loads by name as a built-in", () =>
+    Effect.gen(function* () {
+      const dir = (yield* TestInstance).directory
+      yield* pinHome(dir)
+      const requests: Array<readonly string[]> = []
+      const tool = yield* skillTool
+      const result = yield* tool.execute(
+        { name: "mission-control" },
+        { ...baseCtx, ask: (req) => Effect.sync(() => void requests.push(req.patterns)) },
+      )
+      expect(requests).toEqual([["mission-control"]])
+      expect(result.output).toContain(`<skill_content name="mission-control">`)
+      expect(result.output).toContain(Skill.MISSION_CONTROL_SKILL_CONTENT.trim().split("\n")[0])
+      expect(result.output).toContain("studio_mission_create")
+      expect(result.output).not.toContain("Base directory")
+      expect(result.metadata.dir).toBeUndefined()
+    }),
+  )
+
   withoutRipgrep.instance("the injected ripgrep does reach a disk skill", () =>
     Effect.gen(function* () {
       const dir = (yield* TestInstance).directory

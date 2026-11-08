@@ -135,8 +135,16 @@ const pluralCategories = new Map(
 //     C175 of the same task (EN and ID only), row 133b.
 //   - three more for the Mission Control empty and unavailable states (`session.mission.empty`, `emptyHint`,
 //     `unavailable`), row 180 of the same task (EN and ID only).
+//   - two more for the Mission Control not-started and paused status line (`session.mission.line.notStarted`,
+//     `session.mission.line.paused`), row 190 (decision L48) of docs/2026-11-05_swarm_linux_installer_patcher
+//     (EN and ID only).
+//   - two more for the Claude Code compatibility switch in Settings (`settings.general.row.claudeCompat.title`,
+//     `.description`), row 192 (decision L49, spec 191 §2.2) of the same task (EN and ID only).
+//   - two more for the Mission Control approved-not-started line and the self-approved (autonomous) label
+//     (`session.mission.line.approvedNotStarted`, `session.mission.approval.autonomous`), row 197 (decision L57,
+//     security finding S194-03) of the same task (EN and ID only).
 // Widening this list is a decision, not drift: `parity-exemption-guard.test.ts` fails the suite on any
-// two-hundred-and-twelfth entry, on any non-literal/wildcard, and if `en` or `id` ever stops carrying an exempt key.
+// two-hundred-and-eighteenth entry, on any non-literal/wildcard, and if `en` or `id` ever stops carrying an exempt key.
 const UNTRANSLATED_KEY_PRESENCE_EXEMPTION: readonly string[] = [
   "command.project.openNumber",
   "settings.tab.servers",
@@ -349,6 +357,12 @@ const UNTRANSLATED_KEY_PRESENCE_EXEMPTION: readonly string[] = [
   "session.mission.empty",
   "session.mission.emptyHint",
   "session.mission.unavailable",
+  "session.mission.line.notStarted",
+  "session.mission.line.paused",
+  "settings.general.row.claudeCompat.title",
+  "settings.general.row.claudeCompat.description",
+  "session.mission.line.approvedNotStarted",
+  "session.mission.approval.autonomous",
 ]
 // Locales the exemption never applies to. `en` is every domain's source, and `id` is the second
 // maintained locale: it already carries every exempt key, so it stays fully enforced like the rest.

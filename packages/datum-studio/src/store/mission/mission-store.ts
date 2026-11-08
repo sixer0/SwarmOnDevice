@@ -146,6 +146,11 @@ function err(code: ConstructorParameters<typeof StoreError>[0], message: string,
   return new StoreError(code, message, details)
 }
 
+/** Row 197 (S194-01): a self-approval while Swarm's autonomous mode is off (the person turns it on, never the agent). */
+function autonomousModeOff(mission: string, decision: string): StoreError {
+  return err("AUTONOMOUS_MODE_OFF", "autonomous: true needs Swarm's autonomous mode setting to be on for this session (the person turns it on); it is off", { mission, decision })
+}
+
 /**
  * Pin the builtin mission types at store open (spec §3.1 rule 4): a pinned (id, version) is immutable; a pinned
  * version found with a different sha256 is logged as MISSION_TYPE_CHANGED and not overwritten.
@@ -254,8 +259,8 @@ export class MissionStore {
     return { rows, deps }
   }
 
-  private hasDecision(q: MissionReader, mission: string, decision: string): { by: string } | undefined {
-    return q.get<{ by: string }>("SELECT by FROM mission_decision WHERE mission_id = ? AND decision_id = ?", [mission, decision])
+  private hasDecision(q: MissionReader, mission: string, decision: string): { by: string; autonomous: number | null } | undefined {
+    return q.get<{ by: string; autonomous: number | null }>("SELECT by, autonomous FROM mission_decision WHERE mission_id = ? AND decision_id = ?", [mission, decision])
   }
 
   private requireDecision(q: MissionReader, mission: string, decision: string | undefined, why: string): string {
@@ -333,7 +338,7 @@ export class MissionStore {
       [input.id, input.title, type.id, type.version, input.owner, input.project.dir, input.project.swarmProjectId ?? null, tx.now, tx.now],
     )
     this.event(tx, { mission: input.id, verb: "create", actor, to: "draft", detail: { type: type.id, version: type.version, rows: rows.length } })
-    for (const d of input.decisions ?? []) this.insertDecision(tx, input.id, d, actor)
+    for (const d of input.decisions ?? []) this.insertDecision(tx, input.id, d, actor, opts)
     this.insertRows(tx, input.id, type, rows, null, actor)
     for (const f of input.findings ?? []) this.upsertFinding(tx, input.id, f, actor)
     for (const s of input.sessions ?? []) this.upsertSession(tx, input.id, s, actor)
@@ -430,9 +435,14 @@ export class MissionStore {
     if (!decision) throw err("DECISION_REQUIRED", "approval needs the id of a user decision", { mission })
     const d = this.hasDecision(tx, mission, decision)
     if (!d) throw err("DECISION_UNKNOWN", "decision is not recorded in this mission", { mission, decision })
-    if (d.by !== "user") throw err("APPROVAL_NEEDS_USER_DECISION", "the approval decision must be recorded by: user", { mission, decision, by: d.by })
+    // Row 188 (L47, L19): a controller decision passes only when it is marked autonomous; it stays by: controller.
+    const autonomous = d.by === "controller" && Number(d.autonomous) === 1
+    if (autonomous && opts?.autonomousMode === false) throw autonomousModeOff(mission, decision)
+    if (d.by !== "user" && !autonomous) {
+      throw err("APPROVAL_NEEDS_USER_DECISION", "the approval decision must be recorded by: user, or by: controller with autonomous: true when Swarm's autonomous mode is on", { mission, decision, by: d.by, autonomous: false })
+    }
     tx.run("UPDATE mission SET status = 'approved', approval_decision_id = ?, time_approved = ?, time_updated = ? WHERE id = ?", [decision, tx.now, tx.now, mission])
-    this.event(tx, { mission, verb: "approve", actor, from: "draft", to: "approved", decision })
+    this.event(tx, { mission, verb: "approve", actor, from: "draft", to: "approved", decision, detail: { by: d.by, autonomous } })
     const snapshotId = this.writeSnapshot(tx, mission, "approve")
     this.afterWrite(tx, mission, opts)
     return { id: mission, status: "approved", approvedAt: iso(tx.now)!, snapshotId }
@@ -713,16 +723,17 @@ export class MissionStore {
   recordDecision(tx: StoreTx, mission: string, decision: MissionDecision, opts?: MissionWriteOptions): { id: string } {
     const actor = this.actorOf(opts)
     this.openMission(tx, mission)
-    this.insertDecision(tx, mission, decision, actor)
+    this.insertDecision(tx, mission, decision, actor, opts)
     this.afterWrite(tx, mission, opts)
     return { id: decision.id }
   }
 
-  private insertDecision(tx: StoreTx, mission: string, d: MissionDecision, actor: string): void {
+  private insertDecision(tx: StoreTx, mission: string, d: MissionDecision, actor: string, opts?: MissionWriteOptions): void {
     assertMissionSchema("Decision", d, `decision ${String(d?.id)}`)
+    if (d.autonomous === true && opts?.autonomousMode === false) throw autonomousModeOff(mission, d.id)
     if (this.hasDecision(tx, mission, d.id)) throw err("DECISION_ID_TAKEN", "decision id exists", { mission, decision: d.id })
     for (const s of d.supersedes ?? []) if (!this.hasDecision(tx, mission, s)) throw err("DECISION_UNKNOWN", "superseded decision is not recorded", { mission, decision: d.id, supersedes: s })
-    tx.run("INSERT INTO mission_decision (mission_id, decision_id, by, date, text, rows, supersedes, time_created) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", [
+    tx.run("INSERT INTO mission_decision (mission_id, decision_id, by, date, text, rows, supersedes, autonomous, time_created) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", [
       mission,
       d.id,
       d.by,
@@ -730,9 +741,10 @@ export class MissionStore {
       d.text,
       d.rows ? JSON.stringify(d.rows) : null,
       d.supersedes ? JSON.stringify(d.supersedes) : null,
+      d.autonomous === true ? 1 : null,
       tx.now,
     ])
-    this.event(tx, { mission, verb: "decision", actor, decision: d.id })
+    this.event(tx, { mission, verb: "decision", actor, decision: d.id, ...(d.autonomous === true ? { detail: { by: d.by, autonomous: true } } : {}) })
   }
 
   /** studio_mission_record_finding: upsert by id; a change of status or severity is an event. */
@@ -1212,6 +1224,14 @@ export class MissionStore {
       progress: { done: counts.done, total: g.rows.length - counts.dropped },
       checkpoints,
     }
+    // Row 188 (L47): who approved; an autonomous controller approval is labelled so Mission Control shows it apart.
+    // Row 197 (S194-02): the label says what the record says. The store cannot tell Mission Control from an agent that
+    // records by: user, so it never claims "by user" as a fact, only that the decision is recorded by: user.
+    const approvedBy = m.approval_decision_id ? decisions.find((d) => d.id === m.approval_decision_id) : undefined
+    if (approvedBy) {
+      const autonomous = approvedBy.by === "controller" && approvedBy.autonomous === true
+      derived.approval = { decision: approvedBy.id, by: approvedBy.by, autonomous, label: autonomous ? "self-approved (autonomous)" : "approved (decision by: user)" }
+    }
     return { mission: doc, derived }
   }
 
@@ -1308,7 +1328,15 @@ function isReportStatus(s: unknown): s is ReportStatus {
 function decisionOf(d: Row): MissionDecision {
   const rows = parseJson<string[]>(d.rows)
   const supersedes = parseJson<string[]>(d.supersedes)
-  return { id: d.decision_id as string, by: d.by as MissionDecision["by"], date: d.date as string, text: d.text as string, ...(rows ? { rows } : {}), ...(supersedes ? { supersedes } : {}) }
+  return {
+    id: d.decision_id as string,
+    by: d.by as MissionDecision["by"],
+    date: d.date as string,
+    text: d.text as string,
+    ...(rows ? { rows } : {}),
+    ...(supersedes ? { supersedes } : {}),
+    ...(Number(d.autonomous) === 1 ? { autonomous: true as const } : {}),
+  }
 }
 
 function findingOf(f: Row): MissionFinding {

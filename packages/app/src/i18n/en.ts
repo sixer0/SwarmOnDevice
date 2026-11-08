@@ -898,6 +898,11 @@ export const dict = {
   "session.mission.empty": "No missions yet.",
   "session.mission.emptyHint": "Ask Swarm to start a mission for multi-step work, e.g. 'start a document mission …'.",
   "session.mission.unavailable": "Mission Control unavailable: Studio is not running.",
+  "session.mission.line.notStarted":
+    "Mission not approved yet - steps have not started. Answer decisions here, or ask Swarm to continue.",
+  "session.mission.line.approvedNotStarted": "Mission approved - steps have not started yet. Ask Swarm to continue.",
+  "session.mission.approval.autonomous": "Self-approved (autonomous): Swarm approved this mission itself in autonomous mode.",
+  "session.mission.line.paused": "Mission paused - steps are on hold. Answer decisions here, or ask Swarm to resume.",
   "session.mission.type.research": "Research",
   "session.mission.type.debug": "Debug",
   "session.mission.type.featureRelease": "Feature / release",
@@ -1314,6 +1319,9 @@ export const dict = {
   "settings.general.row.knowledgeLibrary.title": "Knowledge Library",
   "settings.general.row.knowledgeLibrary.description":
     "General edition, source commit {{commit}}. Changes only when the app is rebuilt and is not checked against its source. What agents read is sent to the model in use, and goes along with the session history if you switch models; provider retention is not checked. Turning this off does not erase existing history.",
+  "settings.general.row.claudeCompat.title": "Claude Code compatibility",
+  "settings.general.row.claudeCompat.description":
+    "Read CLAUDE.md files and Claude Code skills from ~/.claude and project .claude folders.",
   "settings.general.row.autonomous.title": "Autonomous mode",
   "settings.general.row.autonomous.description":
     "Routine steps go ahead without asking: a one-off model call decides them for you and each decision is listed in Activity. Anything outward, hard to undo, outside this folder or touching secrets waits there while other work continues. Spending limits and repeated calls still stop for you, and what your rules deny stays denied. Applies to this session and its subagents, or to new sessions in this folder. Without Git almost everything waits. Tests, builds and commands like git commit (which run the repo's hooks) run with your account. Swarm can't limit what the code inside them does.",

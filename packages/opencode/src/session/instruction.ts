@@ -15,6 +15,10 @@ import { LibraryRoot } from "@/skill/library-root"
 import { Reach } from "@/tool/reach"
 import type { MessageV2 } from "./message-v2"
 import type { MessageID } from "./schema"
+import SWARM_RULES from "./prompt/swarm-rules.txt"
+
+/** Swarm's built-in rules (spec 191 §1.3, L49): always entry 0 of `system()`, for every agent, before any file. */
+export const PROMPT_SWARM_RULES: string = SWARM_RULES
 
 function extract(messages: SessionV1.WithParts[]) {
   const paths = new Set<string>()
@@ -67,13 +71,26 @@ const layer: Layer.Layer<
     const global = yield* Global.Service
     const flags = yield* RuntimeFlags.Service
     const http = HttpClient.filterStatusOk(withTransientReadRetry(yield* HttpClient.HttpClient))
-    const globalFiles = [
+    // Spec 191 §1.2 (L49): Swarm's own files first. CLAUDE.md is read only when the person turned `claude_compat` on in
+    // the GLOBAL config (a project config cannot), and the SWARM_/OPENCODE_DISABLE_CLAUDE_CODE* flags still force it off.
+    // Read per call, not at layer build: a changed global config takes effect without a restart.
+    const claudeCompat = Effect.fnUntraced(function* () {
+      if (flags.disableClaudeCodePrompt) return false
+      // getGlobal dies on a broken config; unreadable means off (same fallback as the knowledge library).
+      return yield* cfg.getGlobal().pipe(
+        Effect.map((item) => item.claude_compat === true),
+        Effect.catchDefect(() => Effect.succeed(false)),
+      )
+    })
+    const globalFiles = (compat: boolean) => [
+      path.join(global.config, "SWARM.md"),
       path.join(global.config, "AGENTS.md"),
-      ...(!flags.disableClaudeCodePrompt ? [path.join(global.home, ".claude", "CLAUDE.md")] : []),
+      ...(compat ? [path.join(global.home, ".claude", "CLAUDE.md")] : []),
     ]
-    const instructionFiles = [
+    const instructionFiles = (compat: boolean) => [
+      "SWARM.md",
       "AGENTS.md",
-      ...(!flags.disableClaudeCodePrompt ? ["CLAUDE.md"] : []),
+      ...(compat ? ["CLAUDE.md"] : []),
       "CONTEXT.md", // deprecated
     ]
 
@@ -121,17 +138,18 @@ const layer: Layer.Layer<
       const config = yield* cfg.get()
       const ctx = yield* InstanceState.context
       const paths = new Set<string>()
+      const compat = yield* claudeCompat()
 
-      for (const file of globalFiles) {
+      for (const file of globalFiles(compat)) {
         if (!inLibrary(file) && (yield* fs.existsSafe(file))) {
           paths.add(path.resolve(file))
           break
         }
       }
 
-      // The first project-level match wins so we don't stack AGENTS.md/CLAUDE.md from every ancestor.
+      // The first project-level name wins (SWARM.md, then AGENTS.md, ...) so we don't stack files from every ancestor.
       if (!Flag.OPENCODE_DISABLE_PROJECT_CONFIG) {
-        for (const file of instructionFiles) {
+        for (const file of instructionFiles(compat)) {
           const matches = (yield* fs
             .findUp(file, ctx.directory, ctx.worktree)
             .pipe(Effect.catch(() => Effect.succeed([])))).filter((item) => !inLibrary(item))
@@ -173,13 +191,14 @@ const layer: Layer.Layer<
       const remote = yield* Effect.forEach(urls, fetch, { concurrency: 4 })
 
       return [
+        PROMPT_SWARM_RULES,
         ...Array.from(paths).flatMap((item, i) => (files[i] ? [`Instructions from: ${item}\n${files[i]}`] : [])),
         ...urls.flatMap((item, i) => (remote[i] ? [`Instructions from: ${item}\n${remote[i]}`] : [])),
       ]
     })
 
     const find = Effect.fn("Instruction.find")(function* (dir: string) {
-      for (const file of instructionFiles) {
+      for (const file of instructionFiles(yield* claudeCompat())) {
         const filepath = path.resolve(path.join(dir, file))
         if (yield* fs.existsSafe(filepath)) return filepath
       }

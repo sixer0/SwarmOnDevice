@@ -5,7 +5,7 @@ import path from "path"
 import { parse } from "jsonc-parser"
 import { Schema } from "effect"
 import { ConfigMarkdown } from "../config/markdown"
-import { Flag } from "../flag/flag"
+import { Flag, truthy } from "../flag/flag"
 import { programSetting } from "./git-config"
 import { Global } from "../global"
 import { Glob } from "../util/glob"
@@ -434,6 +434,23 @@ function gitSetting(root: string) {
   return text === undefined ? undefined : programSetting(text)
 }
 
+/**
+ * Spec 191 §2.2 (L49): whether the person turned `claude_compat` on in their GLOBAL config (config.json, swarm.json,
+ * swarm.jsonc in the order Swarm merges them; a project file never counts). The SWARM_/OPENCODE_DISABLE_CLAUDE_CODE and
+ * _SKILLS flags force it off. Read fresh, so the trust prompt names `.claude` skills only when they would load.
+ */
+export function claudeCompatSkills() {
+  if (truthy("OPENCODE_DISABLE_CLAUDE_CODE") || truthy("OPENCODE_DISABLE_CLAUDE_CODE_SKILLS")) return false
+  let on: unknown = undefined
+  for (const name of ["config.json", "swarm.json", "swarm.jsonc"]) {
+    const text = read(path.join(Global.Path.config, name))
+    if (text === undefined) continue
+    const data = parse(text, [], { allowTrailingComma: true })
+    if (data !== null && typeof data === "object" && "claude_compat" in data) on = data.claude_compat
+  }
+  return on === true
+}
+
 /** Everything at project level that would run code or loosen a rule, read fresh from disk, in plain words. */
 export function scan(directory: string): Item[] {
   if (Flag.OPENCODE_DISABLE_PROJECT_CONFIG) return []
@@ -449,7 +466,7 @@ export function scan(directory: string): Item[] {
             ...folderItems(folder),
           ]
         : []),
-      ...[".claude", ".agents"].flatMap((name) =>
+      ...(claudeCompatSkills() ? [".claude", ".agents"] : [".agents"]).flatMap((name) =>
         isUserLevel(path.join(level, name)) ? [] : skillItems(path.join(level, name, "skills/**/SKILL.md")),
       ),
     ]

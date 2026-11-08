@@ -34,7 +34,7 @@ import { RunLease } from "@/session/run-lease"
 import { SessionResume } from "@/session/resume"
 import { Global } from "@opencode-ai/core/global"
 import { ProjectTrust } from "@opencode-ai/core/project/trust"
-import { mkdirSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs"
 import { SessionMessageTable } from "@opencode-ai/core/session/sql"
 import { LLM } from "../../src/session/llm"
 import { MessageV2 } from "../../src/session/message-v2"
@@ -656,9 +656,40 @@ it.instance(
       expect(system.slice(end + "</gsp_workflow>".length, routing).trim()).toBe("")
       expect(system.slice(system.indexOf("</agent_routing>") + "</agent_routing>".length, auto).trim()).toBe("")
       expect(system).toContain("- planner: intent, blueprint, analysis or spec; no code changes.")
-      expect(system).toContain('Call the skill tool with name "master-controller"')
+      // Row 192 (spec 191 §4, SW-10): the block names the built-in swarm-workflow even with a ~/.claude master-controller
+      // on disk (homeWorkflowSkill), and that copy is not even listed by default (was: 'name "master-controller"').
+      expect(system).toContain('Call the skill tool with name "swarm-workflow"')
+      expect(system).not.toContain("master-controller")
       expect(system.split("<agent_routing>")).toHaveLength(2)
       expect(system.split("<auto_workflow>")).toHaveLength(2)
+      // SW-05/SW-15: Swarm's built-in rules are in the prefix exactly once.
+      expect(system.split("<swarm_rules>")).toHaveLength(2)
+    }),
+  15_000,
+)
+
+// SW-15 (row 192, spec 191 §1.3): the built-in rules reach every agent's prompt, a subagent's too.
+for (const agent of ["general", "coder", "planner"])
+  it.instance(
+    `${agent}'s system carries the built-in swarm_rules`,
+    () =>
+      Effect.gen(function* () {
+        const system = yield* delegationRun(agent)
+        expect(system).toContain(Instruction.PROMPT_SWARM_RULES.trim())
+        expect(system.split("<swarm_rules>")).toHaveLength(2)
+      }),
+    15_000,
+  )
+
+// SW-06 (row 192, spec 191 §1.2): an instance start and a session turn never create ~/.config/swarm/SWARM.md.
+it.instance(
+  "a session turn without SWARM.md leaves none behind in the global config folder",
+  () =>
+    Effect.gen(function* () {
+      const file = path.join(Global.Path.config, "SWARM.md")
+      expect(existsSync(file)).toBe(false)
+      yield* delegationRun("build")
+      expect(existsSync(file)).toBe(false)
     }),
   15_000,
 )

@@ -46,10 +46,37 @@ already-loaded config until then.
 | Global commands               | `~/.config/swarm/command(s)/<name>.md`                                                                     |
 | Project skills                | `.swarm/skill(s)/<name>/SKILL.md`                                                                          |
 | Global skills                 | `~/.config/swarm/skill(s)/<name>/SKILL.md`                                                                 |
-| External skills (auto-loaded) | `~/.claude/skills/<name>/SKILL.md`, `~/.agents/skills/<name>/SKILL.md`                                     |
+| External skills (auto-loaded) | `~/.agents/skills/<name>/SKILL.md`, `.agents/skills/<name>/SKILL.md`; `.claude/skills` only with `claude_compat` |
+| Global instructions           | `~/.config/swarm/SWARM.md` (fallback `~/.config/swarm/AGENTS.md`)                                         |
+| Project instructions          | `SWARM.md`, else `AGENTS.md` (Swarm walks up from the cwd to the worktree root)                            |
 
 Configs from each scope are deep-merged. Project overrides global. Unknown
 top-level keys in `swarm.json` are rejected with `ConfigInvalidError`.
+
+## Instructions and Claude Code compatibility
+
+Every agent gets Swarm's built-in rules first. Then, in this order:
+
+1. Global: `~/.config/swarm/SWARM.md`, else `~/.config/swarm/AGENTS.md`. The
+   user writes this file; Swarm never creates or edits it.
+2. Project: the first name found from the cwd up to the worktree root, in the
+   order `SWARM.md`, `AGENTS.md`, `CONTEXT.md`. A nested `SWARM.md` or
+   `AGENTS.md` is attached when the agent reads a file in that folder.
+3. `instructions` paths and URLs from `swarm.json`.
+
+Later text may add to or narrow the built-in rules; it never lifts Swarm's
+permission prompts or safety rules.
+
+Swarm does not read Claude Code files by default: `~/.claude/CLAUDE.md`,
+project `CLAUDE.md`, `~/.claude/skills` and project `.claude/skills` are
+ignored. To read them again, set `"claude_compat": true` in the GLOBAL config
+(Settings > General > Claude Code compatibility in the app). A project
+`swarm.json` cannot turn it on. With it on, `~/.claude/CLAUDE.md` comes after
+the global SWARM.md/AGENTS.md (used only when neither exists) and project
+`CLAUDE.md` after `AGENTS.md`. `SWARM_DISABLE_CLAUDE_CODE=1` (and the `_PROMPT`
+/ `_SKILLS` variants) still force them off. Multi-step work follows the
+built-in `swarm-workflow` skill either way; `master-controller` from
+`~/.claude/skills` loads only when the user asks for it.
 
 ## swarm.json
 
@@ -437,9 +464,10 @@ each, and when both are set the `SWARM_` value wins.
   final local-scope merge.
 - `SWARM_DISABLE_DEFAULT_PLUGINS=1`: skip default plugins.
 - `SWARM_PURE=1`: skip external plugins entirely.
-- `SWARM_DISABLE_EXTERNAL_SKILLS=1`,
-  `SWARM_DISABLE_CLAUDE_CODE_SKILLS=1`: skip the external skill scans under
-  `~/.claude/` and `~/.agents/`.
+- `SWARM_DISABLE_EXTERNAL_SKILLS=1`: skip the external skill scans under
+  `.claude/` and `.agents/`. `SWARM_DISABLE_CLAUDE_CODE_SKILLS=1` and
+  `SWARM_DISABLE_CLAUDE_CODE_PROMPT=1` (both: `SWARM_DISABLE_CLAUDE_CODE=1`)
+  keep the `.claude` skills and `CLAUDE.md` off even with `claude_compat` on.
 
 Path-valued variables (`SWARM_CONFIG`, `SWARM_CONFIG_DIR`, `SWARM_TUI_CONFIG`,
 `SWARM_DB`, `SWARM_AUTH_CONTENT`, `SWARM_PLUGIN_META_FILE`) are dropped when

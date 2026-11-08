@@ -355,14 +355,95 @@ describe("agents, commands and skills that carry permissions or shell", () => {
     expect(found.skills).not.toContain("evil3")
     expect(ProjectTrust.status(tmp.path).state).toBe("ask")
   })
-  test("trusted: all of them load", async () => {
+  // Rewritten by row 192 (spec 191 §2.2, L49): .claude skills load only with claude_compat in the global config, so
+  // the trusted case checks both settings (was one test expecting evil3 from .claude/skills unconditionally).
+  test("trusted: all of them load, and the .claude skill stays out while claude_compat is off", async () => {
     await using tmp = await tmpdir({ git: true, init })
     ProjectTrust.trust(tmp.path)
     const found = await load(tmp.path)
     expect(found.agents).toEqual(expect.arrayContaining(["evil", "evil2", "plain"]))
-    expect(found.commands).toEqual(expect.arrayContaining(["evil", "plain", "evil3"]))
-    expect(found.skills).toEqual(expect.arrayContaining(["evil", "evil3", "plain"]))
+    expect(found.commands).toEqual(expect.arrayContaining(["evil", "plain"]))
+    expect(found.commands).not.toContain("evil3")
+    expect(found.skills).toEqual(expect.arrayContaining(["evil", "plain"]))
+    expect(found.skills).not.toContain("evil3")
   })
+  test("trusted with claude_compat on in the global config: the .claude skill loads too", async () => {
+    await withGlobalCompat(async () => {
+      await using tmp = await tmpdir({ git: true, init })
+      ProjectTrust.trust(tmp.path)
+      const found = await load(tmp.path)
+      expect(found.commands).toEqual(expect.arrayContaining(["evil", "plain", "evil3"]))
+      expect(found.skills).toEqual(expect.arrayContaining(["evil", "evil3", "plain"]))
+    })
+  })
+})
+
+// Row 192 (spec 191 §2.2): global claude_compat for one test, restored afterwards.
+async function withGlobalCompat(run: () => Promise<void>) {
+  const file = path.join(Global.Path.config, "swarm.json")
+  const prev = await fs.readFile(file, "utf8").catch(() => undefined)
+  await Bun.write(file, JSON.stringify({ claude_compat: true }))
+  await AppRuntime.runPromise(Config.Service.use((config) => config.invalidate()))
+  try {
+    await run()
+  } finally {
+    if (prev === undefined) await fs.rm(file, { force: true })
+    else await Bun.write(file, prev)
+    await AppRuntime.runPromise(Config.Service.use((config) => config.invalidate()))
+  }
+}
+
+// SW-01/SW-02/SW-03/SW-04 (trust part): the trust question names .claude skills only when they would load.
+describe("trust listing of .claude skills (row 192, spec 191 §2.2)", () => {
+  const init = async (dir: string) => {
+    await Bun.write(path.join(dir, ".claude/skills/y/SKILL.md"), "---\nname: y\ndescription: d\n---\nRun !`touch y`")
+    await Bun.write(path.join(dir, ".agents/skills/z/SKILL.md"), "---\nname: z\ndescription: d\n---\nRun !`touch z`")
+  }
+  const sources = (dir: string) => ProjectTrust.scan(dir).map((item) => item.source)
+  const hasClaude = (dir: string) => sources(dir).some((item) => item.includes(`${path.sep}.claude${path.sep}`))
+  const hasAgents = (dir: string) => sources(dir).some((item) => item.includes(`${path.sep}.agents${path.sep}`))
+
+  test("default: no .claude skill in the listing, .agents unchanged", async () => {
+    await using tmp = await tmpdir({ git: true, init })
+    expect(ProjectTrust.claudeCompatSkills()).toBe(false)
+    expect(hasClaude(tmp.path)).toBe(false)
+    expect(hasAgents(tmp.path)).toBe(true)
+  })
+
+  test("global claude_compat on: the .claude skill is listed", async () => {
+    await withGlobalCompat(async () => {
+      await using tmp = await tmpdir({ git: true, init })
+      expect(ProjectTrust.claudeCompatSkills()).toBe(true)
+      expect(hasClaude(tmp.path)).toBe(true)
+    })
+  })
+
+  test("a project swarm.json with claude_compat true does not list it (SW-03)", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      init: async (dir) => {
+        await init(dir)
+        await Bun.write(path.join(dir, "swarm.json"), JSON.stringify({ claude_compat: true }))
+      },
+    })
+    expect(hasClaude(tmp.path)).toBe(false)
+  })
+
+  for (const flag of ["OPENCODE_DISABLE_CLAUDE_CODE", "OPENCODE_DISABLE_CLAUDE_CODE_SKILLS"])
+    test(`${flag}=1 keeps it out even with the setting on (SW-04)`, async () => {
+      const before = process.env[flag]
+      process.env[flag] = "1"
+      try {
+        await withGlobalCompat(async () => {
+          await using tmp = await tmpdir({ git: true, init })
+          expect(ProjectTrust.claudeCompatSkills()).toBe(false)
+          expect(hasClaude(tmp.path)).toBe(false)
+        })
+      } finally {
+        if (before === undefined) delete process.env[flag]
+        else process.env[flag] = before
+      }
+    })
 })
 
 describe("TUI plugins", () => {

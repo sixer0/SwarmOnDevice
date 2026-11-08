@@ -13,7 +13,14 @@ import { MissionCommand } from "./mission-command"
 import type { MissionWriter } from "./mission-command-model"
 import { MissionDeliverables } from "./mission-deliverables"
 import { MissionHQ } from "./mission-hq"
+import { missionStatusLine } from "./mission-model"
 import type { createMissionControl } from "./mission-poll"
+
+const STATUS_LINE_KEY = {
+  notStarted: "session.mission.line.notStarted",
+  approvedNotStarted: "session.mission.line.approvedNotStarted",
+  paused: "session.mission.line.paused",
+} as const
 
 export type MissionControlHandle = ReturnType<typeof createMissionControl>
 
@@ -200,6 +207,22 @@ export function MissionControl(props: MissionControlMount & { width?: number }) 
             <div data-mission-read-failed role="status" class="shrink-0 text-v2-state-fg-warning [font-weight:440]">
               {t("session.mission.readFailed")}
             </div>
+          </Show>
+
+          {/* Row 190 (L48): one compact line, not a panel, when the selected mission is not moving. */}
+          <Show when={state.mission && missionStatusLine(state.mission)}>
+            {(line) => (
+              <p data-mission-status-line={line()} role="status" class={`shrink-0 text-12-regular ${FAINT}`}>
+                {t(STATUS_LINE_KEY[line()])}
+              </p>
+            )}
+          </Show>
+
+          {/* Row 197 (S194-03): the agent approved its own mission in autonomous mode; the person should see that. */}
+          <Show when={state.mission?.selfApproved}>
+            <p data-mission-self-approved role="status" class="shrink-0 text-12-regular text-v2-state-fg-warning">
+              {t("session.mission.approval.autonomous")}
+            </p>
           </Show>
 
           <Show when={state.mission}>

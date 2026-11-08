@@ -24259,6 +24259,9 @@
           "knowledge_library": {
             "type": "boolean"
           },
+          "claude_compat": {
+            "type": "boolean"
+          },
           "plugin": {
             "type": "array",
             "items": {

@@ -100,8 +100,39 @@ function fourPhases(): MissionGetWire {
     },
   }
 }
+// Row 190 (L48): a draft mission with no open decision (the live case: never approved, work done elsewhere).
+function draftMission(): MissionGetWire {
+  const wire = fixture()
+  return { ...wire, mission: { ...wire.mission, id: "m-draft-3", title: "Draft kajian", status: "draft" }, requests: [] }
+}
+function pausedMission(): MissionGetWire {
+  const wire = fixture()
+  return { ...wire, mission: { ...wire.mission, id: "m-paused-4", title: "Paused kajian", status: "paused" }, requests: [] }
+}
+// Row 197 (S194-03): approved, not started; one approved by a user decision, one self-approved in autonomous mode.
+function approvedMission(): MissionGetWire {
+  const wire = fixture()
+  return {
+    ...wire,
+    mission: { ...wire.mission, id: "m-approved-5", title: "Approved kajian", status: "approved" },
+    derived: { ...wire.derived, approval: { decision: "U1", by: "user", autonomous: false, label: "approved (decision by: user)" } },
+    requests: [],
+  }
+}
+function selfApprovedMission(): MissionGetWire {
+  const wire = fixture()
+  return {
+    ...wire,
+    mission: { ...wire.mission, id: "m-self-6", title: "Self-approved kajian", status: "running" },
+    derived: { ...wire.derived, approval: { decision: "C1", by: "controller", autonomous: true, label: "self-approved (autonomous)" } },
+  }
+}
 const WIRES: Record<string, () => MissionGetWire> = {
+  "m-approved-5": approvedMission,
+  "m-self-6": selfApprovedMission,
   "m-doc-1": fixture,
+  "m-draft-3": draftMission,
+  "m-paused-4": pausedMission,
   "m-debug-2": secondMission,
   "m-doc-4p": fourPhases,
 }
@@ -320,6 +351,75 @@ describe("MissionControl mount", () => {
     expect(q("[data-mission-empty]")).toBeNull()
     expect(q("[data-mission-unavailable]")).toBeNull()
     expect(q("[data-mission-control]")).toBeNull()
+  })
+})
+
+describe("row 190 (L48): status line for a mission that is not moving", () => {
+  test("draft mission without a decision: the compact not-started line shows under the header", async () => {
+    await mount({ width: 1280, ids: ["m-draft-3"] })
+    await until(() => !!q("[data-mission-hq]"))
+    const line = q("[data-mission-status-line]")!
+    expect(line.dataset.missionStatusLine).toBe("notStarted")
+    expect(line.getAttribute("role")).toBe("status")
+    expect(line.textContent).toBe(en["session.mission.line.notStarted"])
+    expect(line.tagName).toBe("P") // one line, not a panel
+  })
+  test("running mission: no line", async () => {
+    await mount({ width: 1280, ids: ["m-doc-1"] })
+    await until(() => !!q("[data-mission-hq]"))
+    expect(q("[data-mission-status-line]")).toBeNull()
+  })
+  test("paused mission without a decision: the paused line", async () => {
+    await mount({ width: 420, ids: ["m-paused-4"] })
+    await until(() => !!q("[data-mission-hq]"))
+    expect(q("[data-mission-status-line]")!.textContent).toBe(en["session.mission.line.paused"])
+  })
+  test("paused mission with an open decision: the decision stays the focus, no line", async () => {
+    await mount({ width: 1280, ids: ["m-debug-2"] })
+    await until(() => !!q("[data-mission-hq]"))
+    expect(q("[data-mission-decision]")).not.toBeNull()
+    expect(q("[data-mission-status-line]")).toBeNull()
+  })
+  test("switching between a running and a draft mission shows and removes the line", async () => {
+    await mount({ width: 1280, ids: ["m-doc-1", "m-draft-3"] })
+    await until(() => q("[data-mission-title]")?.textContent === "Kajian DATUM") // running is picked first
+    expect(q("[data-mission-status-line]")).toBeNull()
+    const select = q("[data-mission-select]") as HTMLSelectElement
+    select.value = "m-draft-3"
+    select.dispatchEvent(new Event("change", { bubbles: true }))
+    await until(() => q("[data-mission-status-line]")?.dataset.missionStatusLine === "notStarted")
+    select.value = "m-doc-1"
+    select.dispatchEvent(new Event("change", { bubbles: true }))
+    await until(() => q("[data-mission-status-line]") === null)
+  })
+})
+
+describe("row 197 (S194-03): approved vs draft, and the self-approved (autonomous) label", () => {
+  test("approved, not started: its own line, never 'not approved'", async () => {
+    await mount({ width: 1280, ids: ["m-approved-5"] })
+    await until(() => !!q("[data-mission-hq]"))
+    const line = q("[data-mission-status-line]")!
+    expect(line.dataset.missionStatusLine).toBe("approvedNotStarted")
+    expect(line.textContent).toBe(en["session.mission.line.approvedNotStarted"])
+    expect(line.textContent).not.toBe(en["session.mission.line.notStarted"])
+    // a user decision: no self-approved label
+    expect(q("[data-mission-self-approved]")).toBeNull()
+  })
+  test("draft keeps the not-approved line", async () => {
+    await mount({ width: 1280, ids: ["m-draft-3"] })
+    await until(() => !!q("[data-mission-hq]"))
+    expect(q("[data-mission-status-line]")!.dataset.missionStatusLine).toBe("notStarted")
+    expect(q("[data-mission-self-approved]")).toBeNull()
+  })
+  test("a self-approved mission shows the label (warning style), also while running", async () => {
+    await mount({ width: 1280, ids: ["m-self-6"] })
+    await until(() => !!q("[data-mission-hq]"))
+    const label = q("[data-mission-self-approved]")!
+    expect(label.textContent).toBe(en["session.mission.approval.autonomous"])
+    expect(label.textContent).toContain("Self-approved (autonomous)")
+    expect(label.getAttribute("role")).toBe("status")
+    expect(label.className).toContain("text-v2-state-fg-warning")
+    expect(q("[data-mission-status-line]")).toBeNull() // running: no status line
   })
 })
 

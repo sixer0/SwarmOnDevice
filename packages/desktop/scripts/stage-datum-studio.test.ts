@@ -19,6 +19,7 @@ import {
   ELK_NOTICE,
   ELK_PACKAGE_JSON,
   LAUNCHER,
+  PANDUAN,
   sha256,
   StageFail,
   stageDatumStudio,
@@ -79,6 +80,9 @@ describe("row 36: stage and verify", () => {
     expect((await fs.stat(path.join(STAGED, BRIDGE))).mode & 0o777).toBe(0o644)
     expect(readFileSync(path.join(STAGED, BRIDGE), "utf8").startsWith("// @bun")).toBe(true)
     expect(byPath.get("CLAUDE_SETUP.md")!.sha256).toBe(CLAUDE_SETUP_SHA)
+    // L50 (row 192): the Mission Control how-to sits beside CLAUDE_SETUP.md, verbatim from packages/desktop/datum, 0644.
+    expect(byPath.get(PANDUAN)!.sha256).toBe(sha256(readFileSync(path.join(import.meta.dir, "..", "datum", PANDUAN))))
+    expect((await fs.stat(path.join(STAGED, PANDUAN))).mode & 0o777).toBe(0o644)
     expect(byPath.get(`${STUDIO_ASSETS_REL}/logo/gsp-seal.png`)!.sha256).toBe(SEAL)
     expect(byPath.get(`${STUDIO_ASSETS_REL}/logo/gsp-tinta.png`)!.sha256).toBe(TINTA)
     expect(manifest.files.filter((f) => f.path.startsWith(`${STUDIO_ASSETS_REL}/logo/`)).length).toBe(6)

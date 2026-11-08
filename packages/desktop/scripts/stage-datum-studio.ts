@@ -6,6 +6,7 @@
 //   datum-studio-launcher.cmd             win32-x64 instead: scripts/datum-studio-launcher.cmd, mode 0644 (row 170, R6.5)
 //   server/datum-studio-bridge.js         `bun build scripts/datum-studio-bridge.ts --target=bun`, 0644 (row 34)
 //   CLAUDE_SETUP.md                       packages/datum-studio/CLAUDE_SETUP.md, verbatim (row 35)
+//   PANDUAN_MISSION_CONTROL.md            packages/desktop/datum/PANDUAN_MISSION_CONTROL.md, verbatim (L50, row 192)
 //   templates/                            catalog.json + the files it lists (rows 110/110d/110e; sha checked)
 //   src/lib/studio/assets/                Studio assets (fonts without renamed/ (C31, U9.7), logos, base, manifest.json)
 //   docs/STUDIO-AGENT-GUIDE.md            read by path at run time (packaging A.1)
@@ -73,6 +74,8 @@ export const ELK_NOTICE_TEXT = [
 export const ELK_PACKAGE_JSON_TEXT = `${JSON.stringify({ type: "commonjs" })}\n`
 const EXEC_MODE = "755"
 const DATA_MODE = "644"
+/** L50 (row 192): the Mission Control how-to staged next to CLAUDE_SETUP.md. */
+export const PANDUAN = "PANDUAN_MISSION_CONTROL.md"
 /** Register R2.1 build targets; R2.2: SWARM_BUILD_TARGET unset (or empty) = darwin-arm64. */
 export const STUDIO_TARGETS = ["darwin-arm64", "linux-x64", "win32-x64"] as const
 export type StudioTarget = (typeof STUDIO_TARGETS)[number]
@@ -174,6 +177,8 @@ export async function planStage(src: StageSources = DEFAULT_SOURCES, target: Stu
   const launcher = studioLauncher(target)
   copies.push({ from: path.join(src.desktop, "scripts", launcher.source), to: launcher.to, mode: launcher.mode })
   copies.push({ from: path.join(src.pkg, "CLAUDE_SETUP.md"), to: "CLAUDE_SETUP.md", mode: DATA_MODE })
+  // L50 (row 192): the Indonesian Mission Control how-to rides beside CLAUDE_SETUP.md in Resources/datum-studio.
+  copies.push({ from: path.join(src.desktop, "datum", PANDUAN), to: PANDUAN, mode: DATA_MODE })
 
   // Templates: catalog.json and exactly the files it lists (c40_fixes/ is build-time evidence of row 110d, never read).
   const tdir = path.join(src.pkg, "templates")
@@ -376,6 +381,7 @@ export async function verifyStudioStage(dir: string, opts: { skillFonts?: string
   if (server.length !== 1 || server[0] !== BRIDGE) problems.push(`server/ must hold only the bridge, has: ${server.join(", ")}`)
   for (const need of [
     "CLAUDE_SETUP.md",
+    PANDUAN,
     "templates/catalog.json",
     `${STUDIO_ASSETS_REL}/manifest.json`,
     `${STUDIO_ASSETS_REL}/base/default.docx`,

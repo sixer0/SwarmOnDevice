@@ -70,6 +70,7 @@ function model(extra: Partial<MissionVM> = {}): MissionVM {
     feed: [],
     deliverables: [],
     finalCount: 0,
+    selfApproved: false,
     ...extra,
   }
 }

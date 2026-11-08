@@ -21,6 +21,8 @@ import { LibraryRoot } from "./library-root"
 import { DatumRoot } from "./datum-root"
 import { isRecord } from "@/util/record"
 import { escapeHtml } from "@/util/html"
+import MISSION_CONTROL_SKILL_BODY from "./mission-control.md" with { type: "text" }
+import SWARM_WORKFLOW_SKILL_BODY from "./swarm-workflow.md" with { type: "text" }
 
 const CLAUDE_EXTERNAL_DIR = ".claude"
 const AGENTS_EXTERNAL_DIR = ".agents"
@@ -94,6 +96,28 @@ const DATUM_NO_APP =
   "DATUM is available only in sessions run by the Swarm desktop app. Tell the user and continue without it. Do not look for a copy on disk."
 const DATUM_FAILED =
   "DATUM's bundled copy is missing or failed a check. Tell the user and continue without it. Do not look for a copy on disk."
+
+// Built-in entry for Mission Control (row 189, L47): the exact studio_mission_* call sequence, so an agent creates,
+// approves and runs a mission without refusals. It ships inside the binary on every platform and does not depend on the
+// user's ~/.claude. The name is reserved like DATUM's, so the text always matches the tools of this build.
+export const MISSION_CONTROL_SKILL_NAME = "mission-control"
+export const MISSION_CONTROL_SKILL_DESCRIPTION =
+  "Mission Control: the exact studio_mission_* calls to create, approve, run and close a mission without refusals, with valid JSON examples, agents and tiers per row, the autonomous self-approval path and how to fix each refusal code. Load it before creating a mission, for any orchestrated or multi-step work (after swarm-workflow's plan or alone)."
+export const MISSION_CONTROL_SKILL_CONTENT: string = MISSION_CONTROL_SKILL_BODY
+
+// Built-in entry for Swarm's own workflow (row 192, spec 191 §3, L49): restate, plan, approval, Mission Control rows,
+// delegation to Swarm agents, verification, close. It replaces the user's ~/.claude master-controller as the workflow
+// <auto_workflow> loads, ships in the binary on every platform, and is reserved, so no disk copy can stand in for it.
+export const SWARM_WORKFLOW_SKILL_NAME = "swarm-workflow"
+export const SWARM_WORKFLOW_SKILL_DESCRIPTION =
+  "Swarm's workflow for multi-step work: restate, plan, approval (the person, or honest self-approval in autonomous mode), Mission Control rows, delegation to Swarm agents, verification with the Studio gate, close. Load it first for any orchestrated or multi-step request."
+export const SWARM_WORKFLOW_SKILL_CONTENT: string = SWARM_WORKFLOW_SKILL_BODY
+const RESERVED_SKILL_NAMES = new Set([
+  KNOWLEDGE_LIBRARY_SKILL_NAME,
+  DATUM_SKILL_NAME,
+  MISSION_CONTROL_SKILL_NAME,
+  SWARM_WORKFLOW_SKILL_NAME,
+])
 
 export const Info = Schema.Struct({
   name: Schema.String,
@@ -193,7 +217,7 @@ const add = Effect.fnUntraced(function* (
   if (!md) return
 
   if (!isSkillFrontmatter(md.data)) return
-  if (md.data.name === KNOWLEDGE_LIBRARY_SKILL_NAME || md.data.name === DATUM_SKILL_NAME) {
+  if (RESERVED_SKILL_NAMES.has(md.data.name)) {
     yield* Effect.logWarning("reserved skill name ignored", { name: md.data.name, skill: match })
     return
   }
@@ -368,7 +392,7 @@ const discoverSkills = Effect.fnUntraced(function* (
   fsys: FSUtil.Interface,
   global: Global.Interface,
   disableExternalSkills: boolean,
-  disableClaudeCodeSkills: boolean,
+  claudeCompat: boolean,
   directory: string,
   worktree: string,
 ) {
@@ -376,7 +400,8 @@ const discoverSkills = Effect.fnUntraced(function* (
 
   const externalDirs: string[] = []
   if (!disableExternalSkills) {
-    if (!disableClaudeCodeSkills) externalDirs.push(CLAUDE_EXTERNAL_DIR)
+    // Spec 191 §2.2 (L49): ~/.claude and project .claude skills only when the person turned claude_compat on.
+    if (claudeCompat) externalDirs.push(CLAUDE_EXTERNAL_DIR)
     externalDirs.push(AGENTS_EXTERNAL_DIR)
 
     for (const dir of externalDirs) {
@@ -451,13 +476,23 @@ const layer = Layer.effect(
     const flags = yield* RuntimeFlags.Service
     const discovered = yield* InstanceState.make(
       Effect.fn("Skill.discovery")(function* (ctx) {
+        // Global config only (a project cannot turn it on); the env flags still force it off. A global config change
+        // disposes every instance (handlers/global.ts), so this runs again without a restart.
+        const claudeCompat =
+          !flags.disableClaudeCodeSkills &&
+          (yield* config.getGlobal().pipe(
+            Effect.map((item) => item.claude_compat === true),
+            Effect.catchDefect(() =>
+              Effect.logWarning("global config unreadable, Claude Code skills stay off").pipe(Effect.as(false)),
+            ),
+          ))
         return yield* discoverSkills(
           config,
           discovery,
           fsys,
           global,
           flags.disableExternalSkills,
-          flags.disableClaudeCodeSkills,
+          claudeCompat,
           ctx.directory,
           ctx.worktree,
         )
@@ -476,6 +511,18 @@ const layer = Layer.effect(
         }
         yield* loadSkills(s, yield* InstanceState.get(discovered), events, ProjectTrust.isTrusted(ctx.directory))
         yield* registerDatum(s)
+        s.skills[MISSION_CONTROL_SKILL_NAME] = {
+          name: MISSION_CONTROL_SKILL_NAME,
+          description: MISSION_CONTROL_SKILL_DESCRIPTION,
+          location: "<built-in>",
+          content: MISSION_CONTROL_SKILL_CONTENT,
+        }
+        s.skills[SWARM_WORKFLOW_SKILL_NAME] = {
+          name: SWARM_WORKFLOW_SKILL_NAME,
+          description: SWARM_WORKFLOW_SKILL_DESCRIPTION,
+          location: "<built-in>",
+          content: SWARM_WORKFLOW_SKILL_CONTENT,
+        }
         const library = LibraryRoot.current()
         if (library.kind !== "available") return s
         // getGlobal dies on a broken config. A user who may have switched the library off must not get it back that way.

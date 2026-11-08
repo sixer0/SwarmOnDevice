@@ -22,6 +22,7 @@ export { MIGRATION_0003_ID } from "./migrations/0003_datum_mission.ts"
 // row 149: output verification state (U24, C130); API on SqliteStudioStore
 export { MIGRATION_0004_ID, MIGRATION_0004_SQL, MIGRATION_0004_SPEC_SHA256 } from "./migrations/0004_datum_output_verification.ts"
 export { MIGRATION_0005_ID, MIGRATION_0005_SQL, MISSION_MODEL_TIERS } from "./migrations/0005_datum_mission_gsp_tiers.ts"
+export { MIGRATION_0006_ID, MIGRATION_0006_SQL } from "./migrations/0006_datum_mission_autonomous_decision.ts"
 
 let current: SqliteStudioStore | null = null
 

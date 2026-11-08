@@ -84,6 +84,19 @@ export const MISSION_GUIDE_EXAMPLE = {
   ],
 } as const
 
+/**
+ * Row 188 (L47): the lifecycle in 6 lines (the order the store enforces; skill mission-control has the full sequence).
+ * Omit `session` on every call: Swarm links the calling session.
+ */
+export const MISSION_LIFECYCLE = [
+  "Lifecycle 1/6 create: studio_mission_create {mission, dryRun: true}, fix what it names, then the same call without dryRun (draft). Omit `session` on every call: Swarm fills it. Skill: mission-control.",
+  "Lifecycle 2/6 approval: studio_mission_request_decision and wait for the user's answer; only while Swarm's autonomous mode setting is on (the person turns it on) studio_mission_record_decision {by: controller, autonomous: true} then studio_mission_approve. Never record by: user yourself.",
+  "Lifecycle 3/6 set_status running: studio_mission_set_status {to: running}; no row starts before approval (MISSION_NOT_APPROVED).",
+  "Lifecycle 4/6 update_row per step: studio_mission_update_row {rows: [{id, status: running}]} when a step starts, done or blocked (with note) when it ends.",
+  "Lifecycle 5/6 gate: a row is done only with verified outputs (OUTPUT_UNVERIFIED otherwise) or a note naming the check and its result file.",
+  "Lifecycle 6/6 done: every row done or dropped, then studio_mission_set_status {to: done}.",
+] as const
+
 function exampleJson(): string {
   const { rows, ...head } = MISSION_GUIDE_EXAMPLE
   const h = JSON.stringify(head)
@@ -97,6 +110,8 @@ export function missionGuideText(): string {
     "# studio_mission_create: the `mission` argument (studio.mission/v1 MissionDoc)",
     "",
     "Send `mission` as a JSON object (not a string). The host sets $schema, typeVersion (newest) and status (draft). Test with dryRun: true first.",
+    "",
+    ...MISSION_LIFECYCLE,
     "",
     `- mission, required: ${list(f.missionRequired)}. project: {${list(f.projectRequired)}} (absolute path: the session's working directory or a folder inside it; when project.dir is left out the host sets the session's working directory). Optional: decisions, findings, sessions.`,
     `- id: YYYY-MM-DD_slug (lowercase a-z 0-9 _ -), e.g. ${MISSION_GUIDE_EXAMPLE.id}.`,

@@ -15,6 +15,7 @@ import { LayoutRetirementNotice, LayoutTransitionToggle } from "./interface-tran
 import {
   createAppearanceSettingsController,
   createKnowledgeLibraryController,
+  createClaudeCompatController,
   createShellOptions,
   createShellSettingsController,
   createSoundSettingsController,
@@ -255,6 +256,7 @@ export const SettingsGeneralV2: Component = () => {
   const appearance = createAppearanceSettingsController()
   const sounds = createSoundSettingsController()
   const knowledgeLibrary = createKnowledgeLibraryController()
+  const claudeCompat = createClaudeCompatController()
   const desktop = createMemo(() => platform.platform === "desktop")
 
   const [pinchZoom, { mutate: setPinchZoom }] = createResource(
@@ -424,6 +426,19 @@ export const SettingsGeneralV2: Component = () => {
             </SettingsRowV2>
           )}
         </Show>
+
+        <SettingsRowV2
+          title={language.t("settings.general.row.claudeCompat.title")}
+          description={language.t("settings.general.row.claudeCompat.description")}
+        >
+          <div data-action="settings-claude-compat">
+            <Switch
+              checked={claudeCompat.enabled()}
+              disabled={claudeCompat.pending()}
+              onChange={(checked) => void claudeCompat.set(checked)}
+            />
+          </div>
+        </SettingsRowV2>
       </SettingsListV2>
     </div>
   )

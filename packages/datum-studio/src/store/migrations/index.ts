@@ -6,6 +6,7 @@ import { MIGRATION_0002_ID, MIGRATION_0002_SQL } from "./0002_datum_template_gua
 import { MIGRATION_0003_ID, MIGRATION_0003_SQL } from "./0003_datum_mission.ts"
 import { MIGRATION_0004_ID, MIGRATION_0004_SQL } from "./0004_datum_output_verification.ts"
 import { MIGRATION_0005_ID, MIGRATION_0005_SQL } from "./0005_datum_mission_gsp_tiers.ts"
+import { MIGRATION_0006_ID, MIGRATION_0006_SQL } from "./0006_datum_mission_autonomous_decision.ts"
 
 /**
  * Store migrations (spec §3.1: own runner, journal table shaped like core's
@@ -29,6 +30,8 @@ export const MIGRATIONS: readonly Migration[] = [
   { seq: 4, id: MIGRATION_0004_ID, sql: MIGRATION_0004_SQL },
   // row 166: mission_row model tiers become the GSP AI tiers (thinker/worker/worker-fast/inherit); table rebuild
   { seq: 5, id: MIGRATION_0005_ID, sql: MIGRATION_0005_SQL, foreignKeysOff: true },
+  // row 188 (L47): mission_decision.autonomous marks an autonomous self-approval by the controller (L19), additive only
+  { seq: 6, id: MIGRATION_0006_ID, sql: MIGRATION_0006_SQL },
 ]
 
 /**
@@ -37,6 +40,7 @@ export const MIGRATIONS: readonly Migration[] = [
  * 0003: taken by row 119a (`20261107000000_datum_mission`, see MIGRATIONS).
  * 0004: taken by row 149 (`20261107120000_datum_output_verification`, see MIGRATIONS).
  * 0005: taken by row 166 (`20261108000000_datum_mission_gsp_tiers`, see MIGRATIONS).
+ * 0006: taken by row 188 (`20261108120000_datum_mission_autonomous_decision`, see MIGRATIONS).
  * Nothing is reserved now.
  */
 export const RESERVED_MIGRATIONS: Readonly<Record<number, string>> = {}

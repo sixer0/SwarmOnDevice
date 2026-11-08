@@ -1059,6 +1059,11 @@ export const dict = {
   "session.mission.empty": "Belum ada misi.",
   "session.mission.emptyHint": "Minta Swarm memulai misi untuk tugas multi-langkah, mis. 'buat misi dokumen …'.",
   "session.mission.unavailable": "Mission Control tidak tersedia: Studio belum berjalan.",
+  "session.mission.line.notStarted":
+    "Misi belum disetujui - langkah belum dimulai. Jawab keputusan di sini, atau minta Swarm melanjutkan.",
+  "session.mission.line.approvedNotStarted": "Misi sudah disetujui - langkah belum dimulai. Minta Swarm melanjutkan.",
+  "session.mission.approval.autonomous": "Disetujui sendiri (otonom): Swarm menyetujui misi ini sendiri dalam mode otonom.",
+  "session.mission.line.paused": "Misi dijeda - langkah ditahan. Jawab keputusan di sini, atau minta Swarm melanjutkan.",
   "session.mission.type.research": "Riset",
   "session.mission.type.debug": "Debug",
   "session.mission.type.featureRelease": "Fitur / rilis",
@@ -1474,6 +1479,9 @@ export const dict = {
   "settings.general.row.knowledgeLibrary.title": "Knowledge Library",
   "settings.general.row.knowledgeLibrary.description":
     "Edisi umum, commit sumber {{commit}}. Hanya berubah saat aplikasi dibangun ulang dan tidak diperiksa terhadap sumber. Isi yang dibaca agen dikirim ke model yang sedang dipakai dan ikut riwayat sesi bila model diganti; retensi penyedia tidak diperiksa. Mematikan tidak menghapus riwayat yang sudah ada.",
+  "settings.general.row.claudeCompat.title": "Kompatibilitas Claude Code",
+  "settings.general.row.claudeCompat.description":
+    "Baca file CLAUDE.md dan skill Claude Code dari folder ~/.claude dan .claude di proyek.",
   "settings.general.row.autonomous.title": "Mode otonom",
   "settings.general.row.autonomous.description":
     "Langkah rutin berjalan tanpa bertanya: satu panggilan model memutuskannya untuk Anda dan setiap putusan tercatat di Aktivitas. Yang keluar dari mesin, sulit dibatalkan, di luar folder ini, atau menyentuh rahasia menunggu di sana sementara pekerjaan lain berlanjut. Batas biaya dan panggilan berulang tetap berhenti untuk Anda, dan yang ditolak aturan Anda tetap ditolak. Berlaku untuk sesi ini beserta subagennya, atau untuk sesi baru di folder ini. Tanpa Git hampir semuanya menunggu. Test, build, dan perintah seperti git commit (yang menjalankan hook repo) berjalan dengan akun Anda. Aplikasi tidak dapat membatasi apa yang dilakukan kode di dalamnya.",

@@ -39,7 +39,29 @@ export function defs(client: Client, timeout?: number) {
   return listTools(client, timeout ?? DEFAULT_TIMEOUT).pipe(Effect.catch(() => Effect.void))
 }
 
-export function convertTool(mcpTool: MCPToolDef, client: Client, timeout?: number): Tool {
+/** Row 188/192 (L51): the `_meta` key datum-studio reads to link a mission write to the calling Swarm session. */
+export const CALLER_SESSION_META = "studio/callerSession"
+
+/** The `_meta` a datum-studio tool call carries: the calling session, so missions link without the agent naming it. */
+export function callerSessionMeta(sessionID: string): Record<string, unknown> {
+  return { [CALLER_SESSION_META]: sessionID }
+}
+
+/**
+ * Row 197 (S194-01): the `_meta` key that tells datum-studio Swarm's autonomous mode setting is on for the calling
+ * session (the person turns it on). Only Swarm's own code sets it, per call; the model writes `arguments`, never `_meta`.
+ */
+export const AUTONOMOUS_META = "studio/autonomous"
+
+/** The `_meta` of one call: fixed, or read when the call is made (so a mode switched off holds from the next call). */
+export type CallMeta = Record<string, unknown> | (() => Promise<Record<string, unknown> | undefined>)
+
+export function convertTool(
+  mcpTool: MCPToolDef,
+  client: Client,
+  timeout?: number,
+  meta?: CallMeta,
+): Tool {
   const inputSchema: JSONSchema7 = {
     ...(mcpTool.inputSchema as JSONSchema7),
     type: "object",
@@ -51,10 +73,13 @@ export function convertTool(mcpTool: MCPToolDef, client: Client, timeout?: numbe
     description: mcpTool.description ?? "",
     inputSchema: jsonSchema(inputSchema),
     execute: async (args: unknown, options) => {
+      const callMeta = typeof meta === "function" ? await meta() : meta
       const result = await client.callTool(
         {
           name: mcpTool.name,
           arguments: (args || {}) as Record<string, unknown>,
+          // The SDK merges its progress token into this object (protocol.js request), so both reach the server.
+          ...(callMeta ? { _meta: { ...callMeta } } : {}),
         },
         CallToolResultSchema,
         {

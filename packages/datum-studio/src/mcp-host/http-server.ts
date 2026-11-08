@@ -26,6 +26,8 @@ import { secretEquals } from "../../vendor/src/lib/studio/contract/auth"
 export const MCP_PATH = "/mcp"
 export const CALLER_CWD_HEADER = "x-studio-caller-cwd"
 export const AGENT_HEADER = "x-studio-agent"
+/** Row 188 (L47): optional; the caller's own session ref (Swarm `ses_...`), linked to mission writes that omit `session`. */
+export const CALLER_SESSION_HEADER = "x-studio-caller-session"
 export const MAX_SESSIONS = 64
 const AGENT_RE = /^[A-Za-z0-9_.-]{1,40}$/
 const LOOPBACK = new Set(["127.0.0.1", "::ffff:127.0.0.1"])
@@ -49,7 +51,7 @@ export interface EndpointOptions {
   port: number
   token: string
   /** Build the session's server for (agent, raw caller-cwd header); throw SessionRefused to refuse. */
-  openSession(i: { sessionId: string; agentId: string; callerCwd: string | null }): Promise<SessionHandle> | SessionHandle
+  openSession(i: { sessionId: string; agentId: string; callerCwd: string | null; callerSession?: string | null }): Promise<SessionHandle> | SessionHandle
   log: (rec: Record<string, unknown>) => void
 }
 
@@ -163,7 +165,8 @@ export function startEndpoint(opts: EndpointOptions): Promise<Endpoint> {
     const sessionId = randomUUID()
     let sessionHandle: SessionHandle
     try {
-      sessionHandle = await opts.openSession({ sessionId, agentId, callerCwd: typeof cwdRaw === "string" ? cwdRaw : null })
+      const callerSessionRaw = req.headers[CALLER_SESSION_HEADER]
+      sessionHandle = await opts.openSession({ sessionId, agentId, callerCwd: typeof cwdRaw === "string" ? cwdRaw : null, callerSession: typeof callerSessionRaw === "string" ? callerSessionRaw : null })
     } catch (e) {
       const st = e instanceof SessionRefused ? e.status : 500
       const msg = e instanceof SessionRefused ? e.message : "DATUM Studio could not open the session"

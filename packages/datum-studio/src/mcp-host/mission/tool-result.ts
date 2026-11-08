@@ -10,6 +10,7 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js"
 import { isStoreError } from "../../store/index.ts"
 import { MISSION_GUIDE_URI } from "./mission-guide.ts"
+import { MISSION_SKILL, nextCall } from "./next-call.ts"
 
 export type MissionLog = (level: "info" | "warn" | "error", source: string, message: string, context?: Record<string, unknown>) => void
 
@@ -52,10 +53,12 @@ function compactDetails(tool: string, code: string, details: Record<string, unkn
 
 export function refusal(tool: string, code: string, message: string, rawDetails: Record<string, unknown> = {}): CallToolResult {
   const details = compactDetails(tool, code, rawDetails)
-  const error = { code, message, details }
+  // Row 188 (L47): every refusal ends with the next correct call and the skill that holds the sequence.
+  const next = nextCall(code)
+  const error = { code, message, details, next, skill: MISSION_SKILL }
   return {
-    content: [{ type: "text", text: `ditolak ${code}: ${message}\nrincian: ${JSON.stringify(details).slice(0, 4000)}` }],
-    structuredContent: { ok: false, tool, code, error },
+    content: [{ type: "text", text: `ditolak ${code}: ${message}\nrincian: ${JSON.stringify(details).slice(0, 4000)}\nnext: ${next}` }],
+    structuredContent: { ok: false, tool, code, error, next },
     isError: true,
   }
 }

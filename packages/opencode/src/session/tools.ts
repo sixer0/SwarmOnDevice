@@ -9,7 +9,9 @@ import { Provider } from "@/provider/provider"
 import { ProviderTransform } from "@/provider/transform"
 import { MCP } from "@/mcp"
 import { McpCatalog } from "@/mcp/catalog"
+import { DatumStudioMcp } from "@/mcp/datum-studio"
 import { Permission } from "@/permission"
+import { Autonomy } from "@/permission/autonomy"
 import { Tool } from "@/tool/tool"
 import { ToolJsonSchema } from "@/tool/json-schema"
 import { ToolRegistry } from "@/tool/registry"
@@ -18,11 +20,11 @@ import { Truncate } from "@/tool/truncate"
 import { Plugin } from "@/plugin"
 import type { TaskPromptOps } from "@/tool/task"
 import { type Tool as AITool, tool, jsonSchema, type ToolExecutionOptions, asSchema } from "ai"
-import { Effect } from "effect"
+import { Effect, Option } from "effect"
 import { MessageV2 } from "./message-v2"
 import { Session } from "./session"
 import { SessionProcessor } from "./processor"
-import { PartID } from "./schema"
+import { PartID, type SessionID } from "./schema"
 import { EffectBridge } from "@/effect/bridge"
 import { ProviderV2 } from "@opencode-ai/core/provider"
 import { ModelV2 } from "@opencode-ai/core/model"
@@ -95,6 +97,9 @@ export const resolve = Effect.fn("SessionTools.resolve")(function* (input: {
   const truncate = yield* Truncate.Service
   const flags = yield* RuntimeFlags.Service
   const trust = { canUndo: input.canUndo ?? false, library: input.library }
+  // Row 197 (S194-01): optional, as in tool.ts, so a resolve without them (unit tests) reads the mode as off.
+  const autonomy = Option.getOrUndefined(yield* Effect.serviceOption(Autonomy.Service))
+  const sessions = Option.getOrUndefined(yield* Effect.serviceOption(Session.Service))
 
   const context = (args: Record<string, unknown>, options: ToolExecutionOptions): Tool.Context => ({
     sessionID: input.session.id,
@@ -452,8 +457,35 @@ export const resolve = Effect.fn("SessionTools.resolve")(function* (input: {
 
   if (flags.experimentalCodeMode) return tools
 
+  // Row 197 (S194-01): Swarm's autonomous mode for this session, by its root as the gate reads it (tool.ts planLimits).
+  // Anything that cannot be read counts as off.
+  const autonomousOn: Effect.Effect<boolean> = Effect.gen(function* () {
+    if (!autonomy || !sessions) return false
+    const rootOf = (id: SessionID, depth: number): Effect.Effect<{ id: SessionID; directory?: string }> =>
+      depth > 50
+        ? Effect.succeed({ id })
+        : sessions.get(id).pipe(
+            Effect.flatMap((session) => (session.parentID ? rootOf(session.parentID, depth + 1) : Effect.succeed(session))),
+            Effect.catchCause(() => Effect.succeed({ id })),
+          )
+    const root = input.session.parentID ? yield* rootOf(input.session.parentID, 0) : input.session
+    const directory = root.directory ?? (yield* InstanceState.directory)
+    return yield* autonomy.isOn({ root: root.id, directory })
+  }).pipe(Effect.catchCause(() => Effect.succeed(false)))
+
   for (const [key, entry] of Object.entries(yield* mcp.tools())) {
-    const item = McpCatalog.convertTool(entry.def, entry.client, entry.timeout)
+    // L51: the built-in datum-studio server (global origin only, never a project's look-alike entry) gets the calling
+    // session in _meta, so a mission it writes links to this session without the agent inventing an id.
+    // Row 197 (S194-01): and, read at each call, whether Swarm's autonomous mode setting is on for this session's root
+    // (the person turns it on). Only then may the agent self-approve a mission; the model cannot set `_meta`.
+    const studio: McpCatalog.CallMeta | undefined =
+      entry.source?.server === DatumStudioMcp.DATUM_STUDIO_MCP && entry.source.origin === "global"
+        ? async () => ({
+            ...McpCatalog.callerSessionMeta(input.session.id),
+            ...((await run.promise(autonomousOn)) ? { [McpCatalog.AUTONOMOUS_META]: true } : {}),
+          })
+        : undefined
+    const item = McpCatalog.convertTool(entry.def, entry.client, entry.timeout, studio)
     const execute = item.execute
     if (!execute) continue
 

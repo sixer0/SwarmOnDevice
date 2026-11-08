@@ -60,6 +60,45 @@ export interface HostToolSession {
   agentId: string
   /** The session's file root (spec §9.4); the only folder a tool may write under. */
   fileRoot: string
+  /**
+   * Row 188 (L47): the caller's own session ref (e.g. the Swarm `ses_...` id), when the client says it: per call in
+   * `params._meta["studio/callerSession"]`, else at initialize in the `X-Studio-Caller-Session` header. Mission writes
+   * link it when the agent omits `session`, so an agent never has to invent a session id. Unknown = undefined.
+   */
+  callerSession?: string
+  /**
+   * Row 197 (S194-01): `true` only when this call's `params._meta["studio/autonomous"]` is `true`. Swarm sets it from
+   * its own autonomous mode setting (the person turns it on); the model controls `arguments` only, never `_meta`. Never
+   * taken from the initialize header: it is judged per call, so a mode switched off holds from the next call.
+   */
+  autonomousMode?: true
+}
+
+/** Row 188: `_meta` key of a tools/call that names the caller's session. */
+export const CALLER_SESSION_META = "studio/callerSession"
+const CALLER_SESSION_RE = /^[A-Za-z0-9_.:-]{1,128}$/
+
+/** Row 197 (S194-01): `_meta` key of a tools/call that says Swarm's autonomous mode is on for the calling session. */
+export const AUTONOMOUS_META = "studio/autonomous"
+
+/**
+ * The session of one call: a well-formed `_meta` caller session wins over the one given at initialize. The autonomous
+ * mark comes from this call's `_meta` only (exactly `true`); a base session never carries it into another call.
+ */
+export function sessionForCall(base: HostToolSession, meta: unknown): HostToolSession {
+  const m = meta !== null && typeof meta === "object" ? (meta as Record<string, unknown>) : {}
+  const { autonomousMode: _drop, ...rest } = base
+  const raw = m[CALLER_SESSION_META]
+  return {
+    ...rest,
+    ...(typeof raw === "string" && CALLER_SESSION_RE.test(raw) ? { callerSession: raw } : {}),
+    ...(m[AUTONOMOUS_META] === true ? { autonomousMode: true as const } : {}),
+  }
+}
+
+/** A header value that may be used as a caller session (anything else is ignored, never refused). */
+export function callerSessionOf(raw: unknown): string | undefined {
+  return typeof raw === "string" && CALLER_SESSION_RE.test(raw) ? raw : undefined
 }
 
 /**

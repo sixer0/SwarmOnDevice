@@ -261,12 +261,14 @@ export function createKnowledgeLibraryToggle(input: {
   write: (value: boolean | undefined) => void
   update: (value: boolean) => Promise<unknown>
   failed: () => void
+  /** What an unset key means. The library is on unless set false (default true); claude_compat is off unless set true. */
+  unset?: boolean
 }) {
   const [pending, setPending] = createSignal(false)
 
   return {
-    // Unset means on: only an explicit false turns the library off.
-    enabled: () => input.value() !== false,
+    // Unset means `unset` (on for the library): only an explicit value overrides it.
+    enabled: () => input.value() ?? input.unset ?? true,
     pending,
     set: async (checked: boolean) => {
       if (pending()) return
@@ -305,6 +307,21 @@ export function createKnowledgeLibraryController() {
       failed: () => showToast({ title: language.t("common.requestFailed") }),
     }),
   }
+}
+
+/** Spec 191 §2.2 (row 192, L49): the global `claude_compat` switch. Off unless set true; written to the global config
+ *  only, which disposes every instance, so it takes effect from the next message without a restart. */
+export function createClaudeCompatController() {
+  const language = useLanguage()
+  const serverSync = useServerSync()
+
+  return createKnowledgeLibraryToggle({
+    value: () => serverSync().data.config.claude_compat,
+    write: (value) => serverSync().set("config", "claude_compat", value),
+    update: (value) => serverSync().updateConfig({ claude_compat: value }),
+    failed: () => showToast({ title: language.t("common.requestFailed") }),
+    unset: false,
+  })
 }
 
 export function createAppearanceSettingsController() {

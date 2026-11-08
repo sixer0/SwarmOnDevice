@@ -19,6 +19,7 @@ import PROMPT_VERIFIER from "./prompt/verifier.txt"
 import PROMPT_DATA_COLLECTOR from "./prompt/data-collector.txt"
 import PROMPT_DOCUMENT_WRITER from "./prompt/document-writer.txt"
 import { Permission } from "@/permission"
+import { DATUM_STUDIO_MCP } from "@/mcp/datum-studio"
 import { mergeDeep, pipe, sortBy, values } from "remeda"
 import { Global } from "@opencode-ai/core/global"
 import path from "path"
@@ -35,6 +36,9 @@ import { LocationServiceMap, locationServiceMapLayer } from "@opencode-ai/core/l
 import { Reference } from "@opencode-ai/core/reference"
 import { Location } from "@opencode-ai/core/location"
 import { PluginV2 } from "@opencode-ai/core/plugin"
+
+/** Row 198 (D1): the Studio tool that records the person's answer to a mission decision, as it reaches the model. */
+export const ANSWER_DECISION_TOOL = `${DATUM_STUDIO_MCP}_studio_mission_answer_decision`
 
 export const Info = Schema.Struct({
   name: Schema.String,
@@ -153,13 +157,20 @@ const layer = Layer.effect(
               "swarm-web_*": "deny",
               webfetch: "deny",
               websearch: "deny",
-              // A child cannot run the controller workflow (it cannot delegate), so it may not load it (spec 161 C5).
-              skill: { "master-controller": "deny" },
+              // A child cannot run the controller workflow (it cannot delegate), so it may not load it (spec 161 C5,
+              // spec 191 §3.1: Swarm's own swarm-workflow and a claude_compat master-controller alike).
+              skill: { "master-controller": "deny", "swarm-workflow": "deny" },
               ...extra,
             } as Parameters<typeof Permission.fromConfig>[0],
             { shipped: true },
           )
         const markdownOnly = { edit: { "*": "deny", "*.md": "ask" }, bash: "deny" }
+        // Row 198 (decision L61, checklist D1, S194-02 / S186-03): answering a mission decision is the person's answer.
+        // Mission Control answers it through the desktop bridge (window.api.missions -> mission-client.ts, straight to the
+        // Studio host), never through an agent's tools, so no agent may call the Studio tool. Merged into every agent
+        // last, after `user` and after `agent.<name>.permission` (see the loop below), so neither a person's config nor
+        // a standing "always" reopens it (S163-01: an agent's own deny is final). A deny on "*" also hides the tool.
+        const personOnly = Permission.fromConfig({ [ANSWER_DECISION_TOOL]: "deny" }, { shipped: true })
 
         const agents: Record<string, Info> = {
           build: {
@@ -367,6 +378,8 @@ const layer = Layer.effect(
           item.options = mergeDeep(item.options, value.options ?? {})
           item.permission = Permission.merge(item.permission, Permission.fromConfig(value.permission ?? {}))
         }
+
+        for (const name in agents) agents[name].permission = Permission.merge(agents[name].permission, personOnly)
 
         // Ensure Truncate.GLOB is allowed unless explicitly configured
         for (const name in agents) {

@@ -29,7 +29,7 @@ import { LOCAL_ROUTES } from "./local-api/routes.ts"
 import { createHostMcpServer } from "./mcp-server.ts"
 import { missionHostExtension } from "./mission/index.ts"
 import { templateHostExtension } from "./templates/index.ts"
-import { assertExtensions, type HostToolExtension } from "./tool-table.ts"
+import { assertExtensions, callerSessionOf, type HostToolExtension } from "./tool-table.ts"
 
 /** I-2 (C72): the template service and guard log, next to the store's own log (<store>/logs/datum-studio-store.jsonl). */
 export const TEMPLATES_LOG_FILE = "datum-studio-templates.jsonl"
@@ -129,7 +129,7 @@ export async function startStudioHostServer(opts: StudioHostServerOptions): Prom
     port: opts.port,
     token: opts.token,
     log: (rec) => write((rec.level as HostLogLevel) ?? "info", "datum-studio-host.http", String(rec.event ?? "event"), rec),
-    openSession: ({ sessionId, agentId, callerCwd }) => {
+    openSession: ({ sessionId, agentId, callerCwd, callerSession }) => {
       let root: string
       try {
         root = resolveSessionRoot(callerCwd, facts)
@@ -150,7 +150,7 @@ export async function startStudioHostServer(opts: StudioHostServerOptions): Prom
         root,
       )
       const api = createLocalStudioApi({ baseUrl: config.baseUrl, secret, agentId, routes: LOCAL_ROUTES })
-      const server = createHostMcpServer({ config, fetchImpl: api.fetch, session: { sessionId, agentId, fileRoot: root }, extensions, repoRoot: REPO_ROOT, log: lineLog })
+      const server = createHostMcpServer({ config, fetchImpl: api.fetch, session: { sessionId, agentId, fileRoot: root, ...(callerSessionOf(callerSession) ? { callerSession: callerSessionOf(callerSession) } : {}) }, extensions, repoRoot: REPO_ROOT, log: lineLog })
       let closed = false
       return {
         server,

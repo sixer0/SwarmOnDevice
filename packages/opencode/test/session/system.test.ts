@@ -381,14 +381,18 @@ describe("session.system", () => {
   })
 
   // SA-21 to SA-23 (spec 161 §13, D11).
+  // Rewritten by row 192 (spec 191 §4, L49, SW-10): the block now loads Swarm's built-in swarm-workflow. The former
+  // master-controller cases (user-level copy triggers, project copy does not) become: only the built-in entry
+  // triggers; a user-level or project master-controller alone gives nothing.
   describe("auto workflow block", () => {
     const auto = SystemPrompt.PROMPT_AUTO_WORKFLOW
+    const builtin = [{ name: "swarm-workflow", location: "<built-in>" }]
     const userLevel = path.join(Global.Path.home, ".claude", "skills", "master-controller", "SKILL.md")
-    const mine = [{ name: "master-controller", location: userLevel }]
 
-    test("build with a user-level master-controller gets the file", () => {
-      expect(SystemPrompt.autoWorkflow("build", mine)).toEqual([auto])
-      expect(SystemPrompt.autoWorkflow("build", [...skills, ...mine])).toEqual([auto])
+    test("build with the built-in swarm-workflow gets the file", () => {
+      expect(SystemPrompt.AUTO_WORKFLOW_SKILL).toBe("swarm-workflow")
+      expect(SystemPrompt.autoWorkflow("build", builtin)).toEqual([auto])
+      expect(SystemPrompt.autoWorkflow("build", [...skills, ...builtin])).toEqual([auto])
     })
 
     test("every other agent gets nothing", () => {
@@ -404,31 +408,48 @@ describe("session.system", () => {
         "title",
         "Build",
       ])
-        expect(SystemPrompt.autoWorkflow(name, mine)).toEqual([])
+        expect(SystemPrompt.autoWorkflow(name, builtin)).toEqual([])
     })
 
-    test("no master-controller, a skill denied or task disabled gives nothing", () => {
+    test("no swarm-workflow, a skill denied or task disabled gives nothing", () => {
       expect(SystemPrompt.autoWorkflow("build", skills)).toEqual([])
       expect(SystemPrompt.autoWorkflow("build", [])).toEqual([])
-      expect(SystemPrompt.autoWorkflow("build", mine, false)).toEqual([])
-      expect(SystemPrompt.autoWorkflow("build", [{ name: "Master-Controller", location: userLevel }])).toEqual([])
+      expect(SystemPrompt.autoWorkflow("build", builtin, false)).toEqual([])
+      expect(SystemPrompt.autoWorkflow("build", [{ name: "Swarm-Workflow", location: "<built-in>" }])).toEqual([])
     })
 
-    test("a project-level copy gives nothing (R9)", () => {
+    test("a user-level master-controller alone gives nothing, and no disk copy of swarm-workflow triggers it (R9)", () => {
+      expect(SystemPrompt.autoWorkflow("build", [{ name: "master-controller", location: userLevel }])).toEqual([])
       expect(
         SystemPrompt.autoWorkflow("build", [
           { name: "master-controller", location: "/work/repo/.claude/skills/master-controller/SKILL.md" },
+        ]),
+      ).toEqual([])
+      expect(
+        SystemPrompt.autoWorkflow("build", [
+          { name: "swarm-workflow", location: path.join(Global.Path.config, "skills", "swarm-workflow", "SKILL.md") },
+        ]),
+      ).toEqual([])
+      expect(
+        SystemPrompt.autoWorkflow("build", [
+          { name: "swarm-workflow", location: "/work/repo/.swarm/skills/swarm-workflow/SKILL.md" },
         ]),
       ).toEqual([])
     })
 
     test("the file fits its budget, carries the L19 rule and no private text", () => {
       expect(auto.trimEnd().split("\n").length).toBeLessThanOrEqual(12)
-      // Row 182 (L36): budget raised from 1280 to 1800 B for the Mission Control / Studio duties.
+      // Row 182 (L36): budget raised from 1280 to 1800 B; row 189 moved the mission duties into the mission-control skill.
       expect(Buffer.byteLength(auto)).toBeLessThanOrEqual(1800)
+      // Spec 191 §4: 1627 B as specified.
+      expect(Buffer.byteLength(auto)).toBe(1627)
       expect(auto.startsWith("<auto_workflow>\n")).toBe(true)
       expect(auto.trimEnd().endsWith("</auto_workflow>")).toBe(true)
-      expect(auto).toContain('Call the skill tool with name "master-controller" before any other tool')
+      expect(auto).toContain('Call the skill tool with name "swarm-workflow" before any other tool')
+      expect(auto).not.toContain("master-controller")
+      expect(auto).not.toMatch(/Agent\(|Skill\(|subagent_type/)
+      expect(auto).toContain("Delegate steps with the task tool to the agents in agent_routing")
+      expect(auto).toContain("There is no model argument: Swarm sets tiers.")
       expect(auto).toContain("apply gsp_workflow step 3 and record the decision with studio_mission_record_decision")
       expect(auto).toContain("Swarm's permission prompts and safety rules stay in force")
       // Row 185 (S186-03, L42): the agent never answers a decision itself; a self-approval is its own record.
@@ -438,28 +459,23 @@ describe("session.system", () => {
       expect(auto).not.toMatch(/alugra|iris|gsp-budi|\/Users\/|ses_[0-9a-f]|100\.102\./i)
     })
 
-    // Row 182 (L36): the rendered block carries the Mission Control and Studio duties.
-    test("the rendered block carries the mission duties", () => {
-      const [block] = SystemPrompt.autoWorkflow("build", mine)
+    // Row 182 (L36) duties, row 189 (L47): the block points to the built-in skill mission-control, which carries
+    // the mission calls, the row reports and the Studio duties (pinned in test/skill/mission-control-skill.test.ts).
+    test("the rendered block points to the mission-control skill", () => {
+      const [block] = SystemPrompt.autoWorkflow("build", builtin)
       expect(block).toBe(auto)
       const flat = block.replace(/\s+/g, " ")
-      for (const duty of [
-        "After plan approval, read studio://skema/mission and call studio_mission_create without project.dir",
-        "defaults to the session directory",
-        "one row per plan step with its specialist's agent and tier",
-        "studio_mission_update_row",
-        "Mark each row's start, finish or block",
-        "coder too, reports on its row",
-        "studio_mission_request_decision and record_decision",
-        "Make documents in Studio",
-        "a row is done only when its Studio verification gate passes",
-        "its note names the check run and its existing result file",
-        "Retire superseded drafts; never drop a row to pass a gate",
-      ])
-        expect(flat).toContain(duty)
-      // The mission is created after approval, inside the workflow; never with a project.dir of its own choosing.
-      expect(flat.indexOf("After plan approval")).toBeGreaterThan(flat.indexOf('name "master-controller"'))
+      expect(flat).toContain("load the skill mission-control before creating a mission and follow it")
+      // L48: no work outside an unapproved mission, and an honest close.
+      expect(flat).toContain("Once a mission exists, no step work while it is unapproved")
+      expect(flat).toContain("if approval is refused, stop and tell the person; never finish the job outside the mission")
+      expect(flat).toContain("every row done or dropped with a note")
+      expect(flat).toContain("studio_mission_request_decision and record_decision")
+      // The pointer comes after the workflow skill; no project.dir of the agent's own choosing.
+      expect(flat.indexOf("load the skill mission-control")).toBeGreaterThan(flat.indexOf('name "swarm-workflow"'))
       expect(flat).not.toMatch(/project\.dir\s*[:=]/)
+      // The long duty lines moved into the skill and are not repeated here.
+      expect(flat).not.toContain("After plan approval, read studio://skema/mission")
     })
   })
 

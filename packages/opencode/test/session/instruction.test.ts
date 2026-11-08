@@ -34,17 +34,29 @@ const it = testEffect(
 
 const configLayer = Layer.succeed(Config.Service, TestConfig.make())
 
-const instructionLayer = (global: Partial<Global.Interface>, flags: Partial<RuntimeFlags.Info> = {}) =>
+const instructionLayer = (
+  global: Partial<Global.Interface>,
+  flags: Partial<RuntimeFlags.Info> = {},
+  config: Layer.Layer<Config.Service> = configLayer,
+) =>
   AppNodeBuilder.build(Instruction.node, [
-    [Config.node, configLayer],
+    [Config.node, config],
     [Global.node, Global.layerWith(global)],
     [RuntimeFlags.node, RuntimeFlags.layer(flags)],
   ])
 
 const provideInstruction =
-  (global: Partial<Global.Interface>, flags?: Partial<RuntimeFlags.Info>) =>
+  (global: Partial<Global.Interface>, flags?: Partial<RuntimeFlags.Info>, config?: Layer.Layer<Config.Service>) =>
   <A, E, R>(self: Effect.Effect<A, E, R>) =>
-    self.pipe(Effect.provide(instructionLayer(global, flags)))
+    self.pipe(Effect.provide(instructionLayer(global, flags, config)))
+
+/** Row 192: a Config whose GLOBAL part is `global` and whose merged (project) part is `merged`. */
+const compatConfig = (global: Record<string, unknown>, merged: Record<string, unknown> = {}) =>
+  Layer.succeed(
+    Config.Service,
+    TestConfig.make({ getGlobal: () => Effect.succeed(global as never), get: () => Effect.succeed(merged as never) }),
+  )
+const RULES = Instruction.PROMPT_SWARM_RULES
 
 const write = (filepath: string, content: string) =>
   Effect.gen(function* () {
@@ -231,8 +243,11 @@ describe("Instruction.resolve", () => {
   test.todo("fetches remote instructions from config URLs via HttpClient", () => {})
 })
 
+// Rewritten by row 192 (spec 191 §1, SW-05): system() now opens with Swarm's built-in rules, so the first test expects
+// them as entry 0 (was: exactly the two files); the CLAUDE.md test now covers both the default (off) and the env flag
+// forcing it off with claude_compat on (was: only the env flag).
 describe("Instruction.system", () => {
-  it.live("loads both project and global AGENTS.md when both exist", () =>
+  it.live("loads both project and global AGENTS.md when both exist, after the built-in rules", () =>
     Effect.gen(function* () {
       const globalTmp = yield* tmpWithFiles({ "AGENTS.md": "# Global Instructions" })
       const projectTmp = yield* tmpWithFiles({ "AGENTS.md": "# Project Instructions" })
@@ -244,30 +259,35 @@ describe("Instruction.system", () => {
         expect(paths.has(path.join(globalTmp, "AGENTS.md"))).toBe(true)
 
         const rules = yield* svc.system()
-        expect(rules).toHaveLength(2)
-        expect(rules[0]).toBe(`Instructions from: ${path.join(globalTmp, "AGENTS.md")}\n# Global Instructions`)
-        expect(rules[1]).toBe(`Instructions from: ${path.join(projectTmp, "AGENTS.md")}\n# Project Instructions`)
+        expect(rules).toHaveLength(3)
+        expect(rules[0]).toBe(RULES)
+        expect(rules[1]).toBe(`Instructions from: ${path.join(globalTmp, "AGENTS.md")}\n# Global Instructions`)
+        expect(rules[2]).toBe(`Instructions from: ${path.join(projectTmp, "AGENTS.md")}\n# Project Instructions`)
       }).pipe(provideInstance(projectTmp), provideInstruction({ home: globalTmp, config: globalTmp }))
     }),
   )
 
-  it.live("skips project and global CLAUDE.md when Claude Code prompt is disabled", () =>
-    Effect.gen(function* () {
-      const globalTmp = yield* tmpWithFiles({ ".claude/CLAUDE.md": "# Global Claude" })
-      const projectTmp = yield* tmpWithFiles({ "CLAUDE.md": "# Project Claude" })
+  for (const [name, flags, global] of [
+    ["by default", {}, {}],
+    ["with the Claude Code prompt disabled, even with claude_compat on", { disableClaudeCodePrompt: true }, { claude_compat: true }],
+  ] as const)
+    it.live(`skips project and global CLAUDE.md ${name}`, () =>
+      Effect.gen(function* () {
+        const globalTmp = yield* tmpWithFiles({ ".claude/CLAUDE.md": "# Global Claude" })
+        const projectTmp = yield* tmpWithFiles({ "CLAUDE.md": "# Project Claude" })
 
-      yield* Effect.gen(function* () {
-        const svc = yield* Instruction.Service
-        const paths = yield* svc.systemPaths()
-        expect(paths.has(path.join(globalTmp, ".claude", "CLAUDE.md"))).toBe(false)
-        expect(paths.has(path.join(projectTmp, "CLAUDE.md"))).toBe(false)
-        expect(yield* svc.system()).toEqual([])
-      }).pipe(
-        provideInstance(projectTmp),
-        provideInstruction({ home: globalTmp, config: globalTmp }, { disableClaudeCodePrompt: true }),
-      )
-    }),
-  )
+        yield* Effect.gen(function* () {
+          const svc = yield* Instruction.Service
+          const paths = yield* svc.systemPaths()
+          expect(paths.has(path.join(globalTmp, ".claude", "CLAUDE.md"))).toBe(false)
+          expect(paths.has(path.join(projectTmp, "CLAUDE.md"))).toBe(false)
+          expect(yield* svc.system()).toEqual([RULES])
+        }).pipe(
+          provideInstance(projectTmp),
+          provideInstruction({ home: globalTmp, config: globalTmp }, flags, compatConfig(global)),
+        )
+      }),
+    )
 })
 
 describe("Instruction.systemPaths global config", () => {

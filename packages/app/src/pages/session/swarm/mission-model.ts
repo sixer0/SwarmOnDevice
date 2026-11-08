@@ -83,6 +83,8 @@ export type MissionDerivedWire = {
   waves: Array<{ wave: number; rows: string[] }>
   progress: { done: number; total: number }
   checkpoints: Record<string, { n: number; m: number }>
+  /** Row 188/197: who approved, as the host computed it (absent before approval or from an older host). */
+  approval?: { decision: string; by: string; autonomous: boolean; label: string }
 }
 
 export type MissionGetWire = {
@@ -175,6 +177,8 @@ export type MissionVM = {
   feed: MissionFeedLine[]
   deliverables: MissionDeliverableVM[]
   finalCount: number
+  /** Row 197 (S194-03): true when the agent approved its own mission in Swarm's autonomous mode (host derived.approval). */
+  selfApproved: boolean
 }
 
 // ── Tables (§5.3, §5.4)
@@ -484,6 +488,8 @@ export function buildMission(get: MissionGetWire, lang: "en" | "id", present: Se
     feed,
     deliverables,
     finalCount: deliverables.filter((d) => d.status === "final").length,
+    // Taken as sent; the host's DB CHECK keeps autonomous to by: controller.
+    selfApproved: derived.approval?.autonomous === true && mission.status !== "draft",
   }
 }
 
@@ -494,4 +500,20 @@ export function blockingSummary(model: MissionVM): string[] {
     if (a.status === "blocked") return [`${a.rowId} ${a.title} (${a.heldBy.join(", ")})`]
     return []
   })
+}
+
+/**
+ * Row 190 (decision L48): the one compact status line Mission Control shows under its header when the selected mission
+ * is not moving. A draft or approved-but-not-running mission showed only "0%", which read as broken; a paused one gets
+ * a similar line. An open decision request keeps the decision card the focus, so no line then. Progress math unchanged.
+ * Row 197 (S194-03): "notStarted" is a draft (not approved); an approved mission that has not started gets its own line,
+ * so the line never says "not approved" about an approved mission.
+ */
+export type MissionStatusLine = "notStarted" | "approvedNotStarted" | "paused"
+export function missionStatusLine(model: Pick<MissionVM, "status" | "openDecisions">): MissionStatusLine | null {
+  if (model.openDecisions > 0) return null
+  if (model.status === "draft") return "notStarted"
+  if (model.status === "approved") return "approvedNotStarted"
+  if (model.status === "paused") return "paused"
+  return null
 }

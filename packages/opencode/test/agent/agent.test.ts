@@ -906,6 +906,9 @@ it.instance("specialist permissions bind over the baseline", () =>
       expect(at(agent, "websearch", "*")).toBe("deny")
       // Spec 161 C5: a child cannot run the controller workflow, so it may not load it; other skills stay allowed.
       expect(at(agent, "skill", "master-controller")).toBe("deny")
+      // SW-11 (row 192, spec 191 §3.1): nor Swarm's own workflow.
+      expect(at(agent, "skill", "swarm-workflow")).toBe("deny")
+      expect(at(agent, "skill", "mission-control")).toBe("allow")
       expect(at(agent, "skill", "datum-house-style")).toBe("allow")
     }
     for (const name of ["coder", "document-writer"]) expect(at(yield* get(name), "edit", "src/a.ts")).toBe("ask")
@@ -981,4 +984,39 @@ it.instance(
       expect(at(plan, "task", "general")).toBe("allow")
     }),
   { config: { permission: { task: { "*": "allow" } } } },
+)
+
+// Row 198 (decision L61, checklist D1): answering a mission decision is the person's answer. No agent may call the Studio
+// tool; Mission Control answers through the desktop bridge (desktop mission-client.ts), not through agent tools.
+const ANSWER = "datum-studio_studio_mission_answer_decision"
+
+it.instance(
+  "row 198: every agent is denied studio_mission_answer_decision, over a person's allow and agent config",
+  () =>
+    Effect.gen(function* () {
+      expect(Agent.ANSWER_DECISION_TOOL).toBe(ANSWER)
+      const agents = yield* load((svc) => svc.list())
+      expect(agents.map((a) => a.name)).toContain("my_custom_agent")
+      for (const agent of agents) {
+        expect(at(agent, ANSWER, "*")).toBe("deny")
+        // A deny on "*" also takes the tool out of the model's tool list.
+        expect(Permission.disabled([ANSWER], agent.permission).has(ANSWER)).toBe(true)
+      }
+      // The other mission tools stay where the person's config puts them (allowed here) for the working agents.
+      for (const name of ["build", "general", "coder"]) {
+        const agent = yield* load((svc) => svc.get(name))
+        expect(at(agent, "datum-studio_studio_mission_get", "*")).toBe("allow")
+        expect(Permission.disabled(["datum-studio_studio_mission_get"], agent!.permission).size).toBe(0)
+      }
+    }),
+  {
+    config: {
+      permission: { "*": "allow", "datum-studio_*": "allow", [ANSWER]: "allow" },
+      agent: {
+        build: { permission: { [ANSWER]: "allow" } },
+        general: { permission: { "*": "allow" } },
+        my_custom_agent: { description: "custom", permission: { [ANSWER]: "allow" } },
+      },
+    },
+  },
 )

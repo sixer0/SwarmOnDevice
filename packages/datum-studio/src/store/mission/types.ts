@@ -131,6 +131,16 @@ export interface MissionDecision {
   text: string
   rows?: string[]
   supersedes?: string[]
+  /** Row 188 (L47, L19): a controller decision taken in autonomous mode; only with by: controller. */
+  autonomous?: true
+}
+
+/** Row 188: who approved the mission; `label` is what Mission Control shows. */
+export interface MissionApproval {
+  decision: string
+  by: MissionDecision["by"]
+  autonomous: boolean
+  label: "approved (decision by: user)" | "self-approved (autonomous)"
 }
 
 export const FINDING_SEVERITIES = ["critical", "high", "medium", "low", "info"] as const
@@ -229,6 +239,8 @@ export interface MissionDerived {
   progress: { done: number; total: number }
   /** C57 (b): the latest checkpoint per row (agent bar). */
   checkpoints: Record<string, RowCheckpoint>
+  /** Row 188: present once the mission is approved. */
+  approval?: MissionApproval
 }
 
 // ── C57 entities (not part of studio.mission/v1; validated in code, spec §6.1 change rule) ──────────
@@ -305,6 +317,12 @@ export interface MissionEventRecord {
 export interface MissionWriteOptions {
   actor?: string
   session?: SessionLink
+  /**
+   * Row 197 (S194-01): whether the caller's own runtime says autonomous mode is on (Swarm sets it in the tool call's
+   * `_meta`; the model cannot). `false` refuses an `autonomous: true` decision and an approval under one
+   * (AUTONOMOUS_MODE_OFF). `undefined` = the caller is trusted code (store tests, migrations), not checked here.
+   */
+  autonomousMode?: boolean
 }
 
 export interface RowPatch {

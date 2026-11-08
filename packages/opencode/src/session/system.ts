@@ -27,7 +27,6 @@ import { Reference } from "@opencode-ai/core/reference"
 import { MCP } from "@/mcp"
 import { PermissionV1 } from "@opencode-ai/core/v1/permission"
 import { InstalledTools } from "./installed-tools"
-import { ProjectTrust } from "@opencode-ai/core/project/trust"
 
 /** One fixed line per component (U14 register, identification/04_structured_u14.md section 3). Only these strings
  *  reach the prompt: the state file decides which lines appear, never what they say. */
@@ -147,13 +146,13 @@ export function routing(
   return [[...ROUTING_HEAD, ...lines, "</agent_routing>"].join("\n")]
 }
 
-/** The workflow skill the auto rule loads (spec 161 §13, L17). */
-export const AUTO_WORKFLOW_SKILL = "master-controller"
+/** The workflow skill the auto rule loads: Swarm's own built-in (spec 191 §4, L49; was the user's master-controller). */
+export const AUTO_WORKFLOW_SKILL = "swarm-workflow"
 
-/** The `<auto_workflow>` block for `agentName`, or nothing (spec 161 D11, SA-21 to SA-23). Only for build, only while
- *  the agent may start subagents, and only when `skills` (the agent's available list) holds a `master-controller` that
- *  lives at user level. A project copy never triggers it: a cloned repository must not choose the workflow that is
- *  followed unasked (R9). */
+/** The `<auto_workflow>` block for `agentName`, or nothing (spec 161 D11, SA-21 to SA-23; spec 191 §4). Only for build,
+ *  only while the agent may start subagents, and only when `skills` (the agent's available list) holds the built-in
+ *  `swarm-workflow`. The name is reserved, so a disk copy (user or project) is never listed under it and can never
+ *  choose the workflow that is followed unasked (R9); a skill denied to the agent is not in its list. */
 export function autoWorkflow(
   agentName: string,
   skills: readonly { name: string; location: string }[],
@@ -161,7 +160,7 @@ export function autoWorkflow(
 ): string[] {
   if (agentName !== ROUTING_AGENT || !canTask) return []
   const found = skills.find((item) => item.name === AUTO_WORKFLOW_SKILL)
-  if (!found || !ProjectTrust.isUserLevel(found.location)) return []
+  if (!found || found.location !== "<built-in>") return []
   return [PROMPT_AUTO_WORKFLOW]
 }
 

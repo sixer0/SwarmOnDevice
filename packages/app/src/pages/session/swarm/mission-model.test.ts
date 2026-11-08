@@ -4,6 +4,7 @@ import {
   blockingSummary,
   buildMission,
   missionOptions,
+  missionStatusLine,
   phaseFamily,
   pickSelected,
   rowIdOfKey,
@@ -409,5 +410,43 @@ describe("row 173: one deliverable per row, the verified latest one", () => {
       { documentId: "y", title: "y", docKey: null, docRev: "Rev A", outputs: [] },
     ]
     expect(buildMission(get, "en").deliverables.map((d) => d.documentId)).toEqual(["x", "y"])
+  })
+})
+
+// Row 190 (decision L48): a draft mission whose agent worked elsewhere showed only "0%"; a compact line now says why.
+describe("row 190: mission status line", () => {
+  test("draft shows not-started (not approved), approved-but-not-running its own line; running, done, cancelled none", () => {
+    expect(missionStatusLine({ status: "draft", openDecisions: 0 })).toBe("notStarted")
+    // Row 197 (S194-03): an approved mission is never called "not approved".
+    expect(missionStatusLine({ status: "approved", openDecisions: 0 })).toBe("approvedNotStarted")
+    expect(missionStatusLine({ status: "running", openDecisions: 0 })).toBeNull()
+    expect(missionStatusLine({ status: "done", openDecisions: 0 })).toBeNull()
+    expect(missionStatusLine({ status: "cancelled", openDecisions: 0 })).toBeNull()
+  })
+  test("paused shows the paused line", () => {
+    expect(missionStatusLine({ status: "paused", openDecisions: 0 })).toBe("paused")
+  })
+  test("an open decision keeps the decision card the focus: no line", () => {
+    expect(missionStatusLine({ status: "draft", openDecisions: 1 })).toBeNull()
+    expect(missionStatusLine({ status: "paused", openDecisions: 2 })).toBeNull()
+  })
+  test("the line does not touch progress: a built draft mission keeps its progress numbers", () => {
+    const wire = fixture("document")
+    const model = buildMission({ ...wire, mission: { ...wire.mission, status: "draft" }, requests: [] }, "en")
+    expect(model.progress).toEqual(buildMission(wire, "en").progress)
+    expect(missionStatusLine(model)).toBe("notStarted")
+  })
+})
+
+describe("row 197 (S194-03): self-approved (autonomous) from the host's derived.approval", () => {
+  test("autonomous approval -> selfApproved; user approval, no approval, or a draft -> not", () => {
+    const wire = fixture("document")
+    const self = { decision: "C1", by: "controller", autonomous: true, label: "self-approved (autonomous)" }
+    const user = { decision: "U1", by: "user", autonomous: false, label: "approved (decision by: user)" }
+    expect(buildMission({ ...wire, derived: { ...wire.derived, approval: self } }, "en").selfApproved).toBe(true)
+    expect(buildMission({ ...wire, derived: { ...wire.derived, approval: user } }, "en").selfApproved).toBe(false)
+    expect(buildMission(wire, "en").selfApproved).toBe(false)
+    const draft = { ...wire, mission: { ...wire.mission, status: "draft" as const }, derived: { ...wire.derived, approval: self } }
+    expect(buildMission(draft, "en").selfApproved).toBe(false)
   })
 })

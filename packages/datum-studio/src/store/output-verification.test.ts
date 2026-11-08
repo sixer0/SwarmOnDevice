@@ -40,6 +40,7 @@ const ID_0001 = "20261106000000_datum_studio_init"
 const ID_0002 = "20261106120000_datum_template_guard"
 const ID_0003 = "20261107000000_datum_mission"
 const ID_0004 = "20261107120000_datum_output_verification"
+const ID_0006 = "20261108120000_datum_mission_autonomous_decision" // row 188: autonomous decision mark
 const ID_0005 = "20261108000000_datum_mission_gsp_tiers" // row 166
 const logs: StoreLogEntry[] = []
 const opened: SqliteStudioStore[] = []
@@ -198,8 +199,8 @@ describe("migration 0004", () => {
   test("0004 is the spec §5 DDL byte for byte, listed after 0003; table, CHECKs and 2 indexes exist, no trigger", () => {
     expect(sha256Hex(MIGRATION_0004_SQL)).toBe(MIGRATION_0004_SPEC_SHA256)
     expect(MIGRATION_0004_ID).toBe(ID_0004)
-    expect(MIGRATIONS.map((m) => `${m.seq}:${m.id}`)).toEqual([`1:${ID_0001}`, `2:${ID_0002}`, `3:${ID_0003}`, `4:${ID_0004}`, `5:${ID_0005}`])
-    expect(latestSchemaId()).toBe(ID_0005)
+    expect(MIGRATIONS.map((m) => `${m.seq}:${m.id}`)).toEqual([`1:${ID_0001}`, `2:${ID_0002}`, `3:${ID_0003}`, `4:${ID_0004}`, `5:${ID_0005}`, `6:${ID_0006}`])
+    expect(latestSchemaId()).toBe(ID_0006)
     for (const c of ["VERIFY_SHA_MISMATCH", "VERIFY_STATE_INVALID", "VERIFY_REPORT_TOO_LARGE", "OUTPUT_UNVERIFIED"] as const) expect(STORE_ERROR_CODES as readonly string[]).toContain(c)
     expect(OUTPUT_VERIFICATION_REPORT_MAX_BYTES).toBe(262_144)
     const db = openSqlite(join(RUN, "main", "datum-studio.sqlite"), { readonly: true })
@@ -211,7 +212,7 @@ describe("migration 0004", () => {
       const idx = db.all<{ name: string }>("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'output_verification' AND name NOT LIKE 'sqlite_%' ORDER BY name").map((r) => r.name)
       expect(idx).toEqual(["output_verification_revision_idx", "output_verification_state_idx"])
       expect(db.all("SELECT name FROM sqlite_master WHERE type = 'trigger' AND tbl_name = 'output_verification'")).toEqual([])
-      expect(db.get<{ value: string }>("SELECT value FROM store_meta WHERE key = 'schema_version'")!.value).toBe(ID_0005)
+      expect(db.get<{ value: string }>("SELECT value FROM store_meta WHERE key = 'schema_version'")!.value).toBe(ID_0006)
       console.log(`[row149] runtime=${RUNTIME} driver=${db.driver} sqlite=${db.get<{ v: string }>("select sqlite_version() v")!.v} migration0004 sha=${MIGRATION_0004_SPEC_SHA256}`)
     } finally {
       db.close()
@@ -254,12 +255,12 @@ describe("migration 0004", () => {
     console.log(`[row149] 0003 -> 0004 counts after  ${JSON.stringify(after)}`)
     // the only delta outside the mission tables pinned at open: journal rows 0004 and 0005 (row 166)
     const strip = (c: Record<string, number>) => Object.fromEntries(Object.entries(c).filter(([k]) => !k.startsWith("mission")))
-    expect({ ...strip(after), migration: after.migration! - 2 }).toEqual(strip(before))
+    expect({ ...strip(after), migration: after.migration! - 3 }) // row 188: + 0006.toEqual(strip(before))
     expect(contentSha(file)).toBe(shaBefore)
     const r = openSqlite(file, { readonly: true })
     try {
-      expect(r.all<{ id: string }>("SELECT id FROM migration ORDER BY id").map((x) => x.id)).toEqual([ID_0001, ID_0002, ID_0003, ID_0004, ID_0005])
-      expect(r.get<{ value: string }>("SELECT value FROM store_meta WHERE key = 'schema_version'")!.value).toBe(ID_0005)
+      expect(r.all<{ id: string }>("SELECT id FROM migration ORDER BY id").map((x) => x.id)).toEqual([ID_0001, ID_0002, ID_0003, ID_0004, ID_0005, ID_0006])
+      expect(r.get<{ value: string }>("SELECT value FROM store_meta WHERE key = 'schema_version'")!.value).toBe(ID_0006)
       expect(r.get<{ value: string }>("SELECT value FROM store_meta WHERE key = 'created_by_release'")!.value).toBe("1.2.1-pre149")
       expect(Number(r.get<{ n: number }>("SELECT count(*) AS n FROM output_verification")!.n)).toBe(0)
       expect(r.get<{ integrity_check: string }>("PRAGMA integrity_check")!.integrity_check).toBe("ok")
@@ -273,7 +274,7 @@ describe("migration 0004", () => {
     expect(row.state).toBe("verified")
     await again.close()
     const j = openSqlite(file, { readonly: true })
-    expect(Number(j.get<{ n: number }>("SELECT count(*) AS n FROM migration")!.n)).toBe(5)
+    expect(Number(j.get<{ n: number }>("SELECT count(*) AS n FROM migration")!.n)).toBe(6)
     j.close()
   })
 })

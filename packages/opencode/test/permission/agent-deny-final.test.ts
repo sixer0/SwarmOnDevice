@@ -175,4 +175,21 @@ describe("S163-01: an agent's own deny is final over a standing always", () => {
       expect(yield* verdict(make("bash", ["make"], denied))).toBe("denied")
     }),
   )
+
+  // Row 198 (decision L61, checklist D1): the person's answer to a mission decision is never an agent's tool call.
+  it.instance("row 198: build, general and coder cannot answer a mission decision after an always", () =>
+    Effect.gen(function* () {
+      const tool = Agent.ANSWER_DECISION_TOOL
+      // A standing always on the Studio tool, given where a ruleset asks (always: ["*"], as for every MCP tool).
+      const asks: PermissionV1.Ruleset = [{ permission: tool, pattern: "*", action: "ask" }]
+      yield* answerAlways(make(tool, ["*"], asks))
+      expect(yield* verdict(make(tool, ["*"], asks))).toBe("allowed")
+      for (const name of ["build", "general", "coder", "plan", "planner", "verifier", "explore"])
+        expect(yield* verdict(make(tool, ["*"], yield* rules(name)))).toBe("denied")
+      // The other mission tools keep the usual path: the always given on them still works for build.
+      const get = "datum-studio_studio_mission_get"
+      yield* answerAlways(make(get, ["*"], yield* rules("build")))
+      expect(yield* verdict(make(get, ["*"], yield* rules("build")))).toBe("allowed")
+    }),
+  )
 })

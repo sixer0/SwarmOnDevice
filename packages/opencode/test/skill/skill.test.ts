@@ -79,6 +79,23 @@ const withHome = <A, E, R>(home: string, self: Effect.Effect<A, E, R>) =>
       }),
   )
 
+// Row 192 (spec 191 §2.2, L49): .claude skills load only with claude_compat in the GLOBAL config. The tests that cover
+// that path turn it on through the global swarm.json (restored afterwards); each test builds its own Config layer, and
+// the global config is read lazily at the first skill call, so the file is in place before it is read.
+const withClaudeCompat = <A, E, R>(self: Effect.Effect<A, E, R>) =>
+  Effect.acquireUseRelease(
+    Effect.promise(async () => {
+      const file = path.join(Global.Path.config, "swarm.json")
+      const prev = await fs.readFile(file, "utf8").catch(() => undefined)
+      await fs.mkdir(path.dirname(file), { recursive: true })
+      await Bun.write(file, JSON.stringify({ claude_compat: true }))
+      return { file, prev }
+    }),
+    () => self,
+    ({ file, prev }) =>
+      Effect.promise(() => (prev === undefined ? fs.rm(file, { force: true }) : Bun.write(file, prev).then(() => {}))),
+  )
+
 describe("skill", () => {
   it.effect("formats verbose locations as XML-safe filesystem paths", () =>
     Effect.sync(() => {
@@ -258,8 +275,8 @@ Instructions here.
     ),
   )
 
-  it.live("discovers skills from .claude/skills/ directory", () =>
-    provideTmpdirInstance(
+  it.live("discovers skills from .claude/skills/ directory (claude_compat on)", () =>
+    withClaudeCompat(provideTmpdirInstance(
       (dir) =>
         Effect.gen(function* () {
           yield* Effect.promise(() =>
@@ -283,11 +300,11 @@ description: A skill in the .claude/skills directory.
           expect(item!.location).toContain(path.join(".claude", "skills", "claude-skill", "SKILL.md"))
         }),
       { git: true },
-    ),
+    )),
   )
 
-  it.live("discovers global skills from ~/.claude/skills/ directory", () =>
-    Effect.gen(function* () {
+  it.live("discovers global skills from ~/.claude/skills/ directory (claude_compat on)", () =>
+    withClaudeCompat(Effect.gen(function* () {
       const tmp = yield* Effect.acquireRelease(
         Effect.promise(() => tmpdir({ git: true })),
         (tmp) => Effect.promise(() => tmp[Symbol.asyncDispose]()),
@@ -307,7 +324,7 @@ description: A skill in the .claude/skills directory.
           }).pipe(provideInstance(tmp.path))
         }),
       )
-    }),
+    })),
   )
 
   it.live("returns empty array when no skills exist", () =>
@@ -420,8 +437,8 @@ This skill is loaded from the global home directory.
     }),
   )
 
-  it.live("discovers skills from both .claude/skills/ and .agents/skills/", () =>
-    provideTmpdirInstance(
+  it.live("discovers skills from both .claude/skills/ and .agents/skills/ (claude_compat on)", () =>
+    withClaudeCompat(provideTmpdirInstance(
       (dir) =>
         Effect.gen(function* () {
           yield* Effect.promise(() =>
@@ -456,11 +473,11 @@ description: A skill in the .agents/skills directory.
           expect(list.find((x) => x.name === "agent-skill")).toBeDefined()
         }),
       { git: true },
-    ),
+    )),
   )
 
-  itWithoutClaudeCodeSkills.live("skips Claude Code skills when disabled", () =>
-    provideTmpdirInstance(
+  itWithoutClaudeCodeSkills.live("skips Claude Code skills when disabled, even with claude_compat on (SW-04)", () =>
+    withClaudeCompat(provideTmpdirInstance(
       (dir) =>
         Effect.gen(function* () {
           yield* Effect.promise(() =>
@@ -493,7 +510,7 @@ description: A skill in the .agents/skills directory.
           expect(list.map((s) => s.name)).toEqual(["agent-skill"])
         }),
       { git: true },
-    ),
+    )),
   )
 
   itWithoutExternalSkills.live("skips external skill directories when disabled", () =>
@@ -543,8 +560,8 @@ description: A skill in the .swarm/skill directory.
     ),
   )
 
-  it.live("properly resolves directories that skills live in", () =>
-    provideTmpdirInstance(
+  it.live("properly resolves directories that skills live in (claude_compat on)", () =>
+    withClaudeCompat(provideTmpdirInstance(
       (dir) =>
         Effect.gen(function* () {
           yield* Effect.promise(() =>
@@ -596,7 +613,7 @@ description: A skill in the .swarm/skills directory.
           expect((yield* skill.dirs()).length).toBe(4)
         }),
       { git: true },
-    ),
+    )),
   )
 })
 
@@ -701,7 +718,37 @@ describe("user-level skill names", () => {
       (tmp) => Effect.promise(() => tmp[Symbol.asyncDispose]()),
     )
 
-  homeIt.live("a project copy does not shadow the user's skill, and the auto rule still applies", () =>
+  // Rewritten by row 192 (spec 191 §4, L49): the auto rule now names the built-in swarm-workflow, so a user or project
+  // master-controller never decides it. The R9 shadowing rule for user-level names stays (with claude_compat on).
+  homeIt.live("with claude_compat on, a project copy does not shadow the user's master-controller; the auto rule is swarm-workflow's", () =>
+    Effect.gen(function* () {
+      const project = yield* scoped()
+      yield* clearHome
+      yield* withHome(
+        fixedHome,
+        withClaudeCompat(
+          Effect.gen(function* () {
+            yield* writeSkill(fixedHome, "# Home workflow")
+            yield* writeSkill(project.path, "# Project imitation")
+            yield* Effect.gen(function* () {
+              const skill = yield* Skill.Service
+              const found = yield* skill.require("master-controller")
+              expect(found.content).toContain("# Home workflow")
+              expect(ProjectTrust.isUserLevel(found.location)).toBe(true)
+              const all = (yield* skill.all()).filter((item) => item.name === "master-controller")
+              expect(all).toHaveLength(1)
+              expect(SystemPrompt.autoWorkflow("build", yield* skill.available())).toEqual([
+                SystemPrompt.PROMPT_AUTO_WORKFLOW,
+              ])
+              expect(SystemPrompt.PROMPT_AUTO_WORKFLOW).not.toContain("master-controller")
+            }).pipe(provideInstance(project.path))
+          }),
+        ),
+      )
+    }),
+  )
+
+  homeIt.live("by default ~/.claude and project .claude master-controller are not listed; the auto rule still applies", () =>
     Effect.gen(function* () {
       const project = yield* scoped()
       yield* clearHome
@@ -709,14 +756,11 @@ describe("user-level skill names", () => {
         fixedHome,
         Effect.gen(function* () {
           yield* writeSkill(fixedHome, "# Home workflow")
-          yield* writeSkill(project.path, "# Project imitation")
+          yield* writeSkill(project.path, "# Project only")
           yield* Effect.gen(function* () {
             const skill = yield* Skill.Service
-            const found = yield* skill.require("master-controller")
-            expect(found.content).toContain("# Home workflow")
-            expect(ProjectTrust.isUserLevel(found.location)).toBe(true)
-            const all = (yield* skill.all()).filter((item) => item.name === "master-controller")
-            expect(all).toHaveLength(1)
+            expect(yield* skill.get("master-controller")).toBeUndefined()
+            expect((yield* skill.get("swarm-workflow"))?.location).toBe("<built-in>")
             expect(SystemPrompt.autoWorkflow("build", yield* skill.available())).toEqual([
               SystemPrompt.PROMPT_AUTO_WORKFLOW,
             ])
@@ -726,38 +770,24 @@ describe("user-level skill names", () => {
     }),
   )
 
-  homeIt.live("a project skill alone keeps its name but never triggers the auto rule", () =>
+  homeItWithoutClaudeCodeSkills.live("with Claude Code skills disabled by env, claude_compat on still lists no master-controller", () =>
     Effect.gen(function* () {
       const project = yield* scoped()
       yield* clearHome
       yield* withHome(
         fixedHome,
-        Effect.gen(function* () {
-          yield* writeSkill(project.path, "# Project only")
-          yield* Effect.gen(function* () {
-            const skill = yield* Skill.Service
-            expect((yield* skill.require("master-controller")).content).toContain("# Project only")
-            expect(SystemPrompt.autoWorkflow("build", yield* skill.available())).toEqual([])
-          }).pipe(provideInstance(project.path))
-        }),
-      )
-    }),
-  )
-
-  homeItWithoutClaudeCodeSkills.live("with Claude Code skills disabled there is no auto rule", () =>
-    Effect.gen(function* () {
-      const project = yield* scoped()
-      yield* clearHome
-      yield* withHome(
-        fixedHome,
-        Effect.gen(function* () {
-          yield* writeSkill(fixedHome, "# Home workflow")
-          yield* Effect.gen(function* () {
-            const skill = yield* Skill.Service
-            expect(yield* skill.get("master-controller")).toBeUndefined()
-            expect(SystemPrompt.autoWorkflow("build", yield* skill.available())).toEqual([])
-          }).pipe(provideInstance(project.path))
-        }),
+        withClaudeCompat(
+          Effect.gen(function* () {
+            yield* writeSkill(fixedHome, "# Home workflow")
+            yield* Effect.gen(function* () {
+              const skill = yield* Skill.Service
+              expect(yield* skill.get("master-controller")).toBeUndefined()
+              expect(SystemPrompt.autoWorkflow("build", yield* skill.available())).toEqual([
+                SystemPrompt.PROMPT_AUTO_WORKFLOW,
+              ])
+            }).pipe(provideInstance(project.path))
+          }),
+        ),
       )
     }),
   )
@@ -965,9 +995,11 @@ describe("knowledge-library registration", () => {
               posedRoot = status
               ProjectTrust.assumeTrustedForTests(trusted)
               const logs: string[] = []
+              // Row 192: .claude is scanned only with claude_compat on, so that source runs with it on.
+              const compat = source === ".claude/skills" ? withClaudeCompat : <A, E2, R2>(x: Effect.Effect<A, E2, R2>) => x
               return captureLogs(
                 logs,
-                provideTmpdirInstance((dir) =>
+                compat(provideTmpdirInstance((dir) =>
                   Effect.gen(function* () {
                     yield* writeDiskSkill(dir, source, NAME, body)
                     yield* writeDiskSkill(dir, source, "neighbour", body)
@@ -982,7 +1014,7 @@ describe("knowledge-library registration", () => {
                       expect((yield* skill.get("neighbour"))?.description).toBeDefined()
                     expect(logs.filter((line) => line.includes("reserved skill name ignored")).length).toBe(1)
                   }),
-                ),
+                )),
               )
             },
           )
@@ -991,8 +1023,8 @@ describe("knowledge-library registration", () => {
     }
   }
 
-  it.live("a user-level imitation and a configured path are discarded too", () =>
-    Effect.gen(function* () {
+  it.live("a user-level imitation (claude_compat on) and a configured path are discarded too", () =>
+    withClaudeCompat(Effect.gen(function* () {
       const tmp = yield* tmpdirScoped({ config: { skills: { paths: ["extra"] } } })
       // The layer read the home folder before this body ran, so this is the pinned one and not a fresh temp folder.
       const userLevel = path.join(process.env.OPENCODE_TEST_HOME!, ".claude")
@@ -1009,7 +1041,7 @@ describe("knowledge-library registration", () => {
           expect(logs.filter((line) => line.includes("duplicate skill name"))).toEqual([])
         }).pipe(provideInstance(tmp)),
       )
-    }),
+    })),
   )
 
   const ripgrepMustNotRun = Layer.mock(Ripgrep.Service, {
@@ -1113,7 +1145,7 @@ describe("knowledge-library when it cannot answer", () => {
     "Knowledge Library is not available in this session. It is available only in sessions run by the Swarm desktop app. Tell the user and continue without it. Do not look for a copy on disk."
   const FAILED_TEXT =
     "Knowledge Library could not be opened in this app because its copy is missing or failed a check. Tell the user and continue without it. Do not look for a copy on disk."
-  const NOT_FOUND_TEXT = `Skill "${NAME}" not found. Available skills: customize-swarm`
+  const NOT_FOUND_TEXT = `Skill "${NAME}" not found. Available skills: customize-swarm, mission-control, swarm-workflow`
   const UNUSABLE_ROOT = "/synthetic/!`Resources`/knowledge-library"
 
   const itCall = testEffect(
@@ -1216,7 +1248,7 @@ describe("knowledge-library when it cannot answer", () => {
       return provideTmpdirInstance(() =>
         Effect.gen(function* () {
           expect(failureText(yield* callTool("no-such-skill"))).toBe(
-            'Skill "no-such-skill" not found. Available skills: customize-swarm',
+            'Skill "no-such-skill" not found. Available skills: customize-swarm, mission-control, swarm-workflow',
           )
         }),
       )
