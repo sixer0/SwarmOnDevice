@@ -17,6 +17,7 @@
 import { CHART_INTENT_LIMITS, CHART_INTENT_ORIENTATIONS, CHART_INTENT_SORTS, TABLE_BLOCK_TYPES } from "../../enums";
 import type { ValidationIssue } from "../../types/api";
 import { FIGURE_TEXT_CHECK_ID, FIGURE_TEXT_KEYWORD } from "./figure-text";
+import { DIAGRAM_GUIDE_URI, absoluteSchemaPath, additionalPropertyHint, discriminatorValues, isDiagramPath, objectTypeHint } from "./refusal-hints";
 
 /** C29 — DF-01..DF-52: nama tidak sah di objek mana pun dalam SID01-SID03. */
 export const DISPLAY_FIELDS_GLOBAL = [
@@ -225,6 +226,8 @@ export interface AjvErrorLike {
   keyword: string;
   params: object;
   message?: string;
+  /** ajv schema path (row 178: refusal hints are read from the schema node it names). */
+  schemaPath?: string;
 }
 
 /** Id skema v2 yang dipetakan pemeta ini. */
@@ -474,6 +477,7 @@ const EXCLUSIVE_FIELD_SETS: readonly (readonly string[])[] = [
 
 function exclusiveClash(data: unknown, e: AjvErrorLike): string | null {
   const p = e.params as Record<string, unknown>;
+  if (e.keyword === "oneOf" && !Array.isArray(p.passingSchemas)) return noBranchClash(data, e);
   if (e.keyword !== "oneOf" || !Array.isArray(p.passingSchemas) || p.passingSchemas.length < 2) return null;
   const node = valueAt(data, e.instancePath);
   if (!isRecord(node)) return null;
@@ -485,6 +489,19 @@ function exclusiveClash(data: unknown, e: AjvErrorLike): string | null {
     return `kirim tepat satu dari ${list}, bukan beberapa: diberikan ${given.map((k) => `"${k}"`).join(" dan ")}${hint}`;
   }
   return null;
+}
+
+/**
+ * Swarm patch (row 178): a figure block's oneOf that NO branch passed because none of its exclusive fields was given
+ * (diagram without spec/artifactId, chart without data/panels/artifactId) names the fields to send.
+ */
+function noBranchClash(data: unknown, e: AjvErrorLike): string | null {
+  const node = valueAt(data, e.instancePath);
+  if (!isRecord(node)) return null;
+  const set = node.type === "diagram" ? EXCLUSIVE_FIELD_SETS[0] : node.type === "chart" ? EXCLUSIVE_FIELD_SETS[1] : null;
+  if (set === null || set.some((k) => node[k] !== undefined)) return null;
+  const guide = node.type === "diagram" ? `; guide: ${DIAGRAM_GUIDE_URI}` : "";
+  return `kirim tepat satu dari ${set.map((k) => `"${k}"`).join(" | ")}: tidak ada yang diberikan${node.type === "diagram" ? ' ("spec" = gambar baru {family, nodes, edges?}; "artifactId" = artefak tersimpan)' : ""}${guide}`;
 }
 
 function valueAt(data: unknown, pointer: string): unknown {
@@ -521,13 +538,26 @@ const GLOBAL_DF: ReadonlySet<string> = new Set<string>(DISPLAY_FIELDS_GLOBAL);
 
 function genericMessage(e: AjvErrorLike): string {
   const p = e.params as Record<string, unknown>;
+  // Swarm patch (row 178): name the fix, read from the schema node of `schemaPath` (refusal-hints.ts), and point a
+  // diagram refusal to the diagram guide resource.
+  const sp = e.schemaPath ?? "";
+  const guide = sp !== "" && isDiagramPath(sp) ? `; guide: ${DIAGRAM_GUIDE_URI}` : "";
+  const hinted = (base: string, hint: string): string => `${base}${hint ? `; ${hint}` : ""}${guide}`;
   if (e.keyword === "additionalProperties" && typeof p.additionalProperty === "string") {
-    return `${e.message ?? "additionalProperties"}: "${p.additionalProperty}"`;
+    return hinted(`${e.message ?? "additionalProperties"}: "${p.additionalProperty}"`, sp ? additionalPropertyHint(sp, p.additionalProperty) : "");
   }
   if (e.keyword === "enum" && Array.isArray(p.allowedValues)) {
-    return `${e.message ?? "enum"}: ${p.allowedValues.map((v) => JSON.stringify(v)).join(", ")}`;
+    return hinted(`${e.message ?? "enum"}: ${p.allowedValues.map((v) => JSON.stringify(v)).join(", ")}`, "");
   }
-  return e.message ?? e.keyword;
+  if (e.keyword === "type" && p.type === "object" && sp) {
+    const shape = objectTypeHint(sp);
+    return hinted(`${e.message ?? "type"}${shape ? ` ${shape}` : ""}`, "");
+  }
+  if (e.keyword === "discriminator" && typeof p.tag === "string" && sp) {
+    const values = discriminatorValues(sp, p.tag);
+    return hinted(e.message ?? e.keyword, values.length > 0 ? `${p.tag}: ${values.join(", ")}` : "");
+  }
+  return hinted(e.message ?? e.keyword, "");
 }
 
 // ── Delta DC-05: checkId kontrak + chart.custom (register 05 §5.4, CH-01..CH-05) ──
@@ -741,6 +771,10 @@ export function classifySchemaV2Errors(
       }
       if (GLOBAL_DF.has(field) || displayByLocation(field, loc)) {
         push({ pointer, keyword: e.keyword, checkId: "DISPLAY_FIELD", message: DISPLAY_FIELD_MESSAGE });
+        // Swarm patch (row 178): inside a diagram, a second issue at the same pointer names the allowed fields of that
+        // object and the guide (the DISPLAY_FIELD message itself stays the contract text).
+        const dsp = absoluteSchemaPath(e.schemaPath, locateSchemaV2Object(rootId, data, e.instancePath));
+        if (dsp !== "" && isDiagramPath(dsp)) push({ pointer, keyword: e.keyword, message: `${additionalPropertyHint(dsp, field)}; guide: ${DIAGRAM_GUIDE_URI}` });
         continue;
       }
     } else if (e.keyword === "discriminator" && p.tag === "type" && displayValue("type", p.tagValue, "BlockV2")) {
@@ -771,7 +805,11 @@ export function classifySchemaV2Errors(
       push({ pointer: prefix + e.instancePath, keyword: e.keyword, message: clash });
       continue;
     }
-    push({ pointer: prefix + e.instancePath, keyword: e.keyword, message: genericMessage(e) });
+    // Swarm patch (row 178): the `required` halves of a figure block's spec|artifactId (data|panels|artifactId) oneOf
+    // repeat what noBranchClash says; drop them when that message is given.
+    if (e.keyword === "required" && /\/oneOf\/\d+\/required$/.test(e.schemaPath ?? "") && noBranchClash(data, { ...e, keyword: "oneOf", params: {} }) !== null) continue;
+    const sp = absoluteSchemaPath(e.schemaPath, locateSchemaV2Object(rootId, data, e.instancePath));
+    push({ pointer: prefix + e.instancePath, keyword: e.keyword, message: genericMessage({ ...e, schemaPath: sp }) });
   }
   return out;
 }

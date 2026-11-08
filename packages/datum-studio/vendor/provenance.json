@@ -48,15 +48,16 @@
   "row165K": "2026-11-08: C199 ruling 2 (DATUM-15 scope). engine/browser/measure.ts (text blocks carry the enclosing data-unit kind) and engine/lint/render/index.ts (DATUM-15 leaves cover, controlSheet and toc units out) re-patched (files[].patch_row165K, before = previous sha256; statuses unchanged). Diffs in implementation/143_row165K_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9722384 + 668 (measure.ts +221, index.ts +447) = 9723052. patch_rows += 165K",
   "row165P": "2026-11-08: C205 (manual furniture: CP-01/04/05 control block and lembar kicker, CP-05 HALAMAN, CP-08/11/12/13 PDF and DOCX furniture, CP-23 DOCX lead 9 mm, CP-29 DOCX derivation mark, CP-28/48 stand-alone figure apparatus, CP-36 derivation expression). 15 vendor files re-patched (files[].patch_row165P, before = previous sha256): engine/front/texts.ts, html/blocks/wrapper.ts, html/blocks/classes.ts, html/base/shell.ts, html/tables/derivation.ts, docx/wrapper/pages.ts, docx/wrapper/render.ts, docx/wrapper/media.ts, docx/blocks/structure.ts, docx/package/header-footer.ts, docx/figures/derivation.ts, diagram/build/svg.ts, diagram/build/index.ts (copied -> patched), diagram/elk/index.ts (added), services/render/pdf.ts (added). Diffs in implementation/146_row165P_diffs/. counts by delta: copied 452 - 1 = 451, patched 114 + 1 = 115; bytes 9725039 + 32500 = 9757539. patch_rows += 165P.",
   "row165O": "2026-11-08: C203 F165N-2 (DATUM-15 not applicable). engine/lint/render/index.ts re-patched (files[].patch_row165O, before = previous sha256; status unchanged). Diff in implementation/145_row165O_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9723052 + 565 (index.ts +565) = 9723617. patch_rows += 165O. Addendum C204 items 3 and 4: engine/front/texts.ts, engine/html/blocks/wrapper.ts, engine/html/blocks/classes.ts, engine/docx/wrapper/render.ts, engine/docx/wrapper/pages.ts (control block back to 4 x 2, classification line in the number cell) and engine/diagram/core/svg.ts (explicit fill none on hatch and stroke-only lines) re-patched (files[].patch_row165O; statuses unchanged, all already patched). bytes 9723617 + 1422 (texts.ts -36, wrapper.ts +492, classes.ts +151, render.ts +317, pages.ts +30, svg.ts +468) = 9725039",
-  "row174": "2026-11-08: C218 F146b-6 (diagram block refusal). src/lib/studio/contract/schema/v2/forbidden.ts copied -> patched (classifySchemaV2Errors names the exclusive fields of a oneOf passed by several branches: spec|artifactId, data|panels|artifactId, text|runs, documentId|docNumber); scripts/studio/mcp/resources.ts re-patched (guide: diagram block shape, spec ATAU artifactId). Diffs in implementation/155_row174_diffs/. counts by delta: copied 451 -> 450, patched 115 -> 116; bytes 9757539 + 1830 (forbidden.ts) + 341 (resources.ts) = 9759710. patch_rows += 174"
+  "row174": "2026-11-08: C218 F146b-6 (diagram block refusal). src/lib/studio/contract/schema/v2/forbidden.ts copied -> patched (classifySchemaV2Errors names the exclusive fields of a oneOf passed by several branches: spec|artifactId, data|panels|artifactId, text|runs, documentId|docNumber); scripts/studio/mcp/resources.ts re-patched (guide: diagram block shape, spec ATAU artifactId). Diffs in implementation/155_row174_diffs/. counts by delta: copied 451 -> 450, patched 115 -> 116; bytes 9757539 + 1830 (forbidden.ts) + 341 (resources.ts) = 9759710. patch_rows += 174",
+  "row178": "2026-11-08: row 178 (diagram refusals name the fix). forbidden.ts re-patched (files[].patch_row178, before = row 174 sha256) + NEW contract/schema/v2/refusal-hints.ts (status added). Diff and new file in implementation/157_row178_diffs/. counts: files 604 -> 605, added 26 -> 27; bytes 9759710 + 3106 (forbidden.ts) + 8545 (refusal-hints.ts) = 9771361"
  },
  "counts": {
-  "files": 604,
+  "files": 605,
   "copied": 450,
   "patched": 116,
   "replaced": 12,
-  "added": 26,
-  "bytes": 9759710
+  "added": 27,
+  "bytes": 9771361
  },
  "files": [
   {
@@ -935,10 +936,19 @@
   {
    "path": "src/lib/studio/contract/schema/v2/forbidden.ts",
    "status": "patched",
-   "bytes": 35759,
+   "bytes": 38865,
    "source_sha256": "e6b4380b4f4d9d9f6eff357dc9caa131be88a67af8925c9c388be0970ff9fd32",
-   "sha256": "acab6d6fd1a9281619306bbba7a85ca6300401fb62313ad8459f308816d3f310",
-   "patch_row174": {"id": "row174-f146b6", "row": "174", "decision": "C218 F146b-6", "summary": "classifySchemaV2Errors: a oneOf with params.passingSchemas >= 2 over a known exclusive field set names the fields given (EXCLUSIVE_FIELD_SETS, exclusiveClash) instead of the bare ajv message", "before_sha256": "e6b4380b4f4d9d9f6eff357dc9caa131be88a67af8925c9c388be0970ff9fd32", "after_sha256": "acab6d6fd1a9281619306bbba7a85ca6300401fb62313ad8459f308816d3f310", "diff": "implementation/155_row174_diffs/forbidden.ts.diff"}
+   "sha256": "6759fb91bbfa57d18260704f530d37589f5736ec4f5e146ca2db41cbacddd36c",
+   "patch_row174": {"id": "row174-f146b6", "row": "174", "decision": "C218 F146b-6", "summary": "classifySchemaV2Errors: a oneOf with params.passingSchemas >= 2 over a known exclusive field set names the fields given (EXCLUSIVE_FIELD_SETS, exclusiveClash) instead of the bare ajv message", "before_sha256": "e6b4380b4f4d9d9f6eff357dc9caa131be88a67af8925c9c388be0970ff9fd32", "after_sha256": "acab6d6fd1a9281619306bbba7a85ca6300401fb62313ad8459f308816d3f310", "diff": "implementation/155_row174_diffs/forbidden.ts.diff"},
+   "patch_row178": {"id": "row178-diagram-refusals", "row": "178", "decision": "row 178 (gateway_check/16 diagram refusals)", "summary": "classifySchemaV2Errors: genericMessage names the allowed property names / object fields / block types read from the schema node of ajv schemaPath (refusal-hints.ts), where a misplaced field belongs, a natural alias (edge color -> kind), and the diagram guide studio://skema/diagram for diagram paths; a diagram/chart oneOf with none of spec|artifactId (data|panels|artifactId) names them and drops the repeated required halves; a DISPLAY_FIELD in a diagram gets a second issue with the allowed fields (DISPLAY_FIELD message unchanged). Schema unchanged.", "before_sha256": "acab6d6fd1a9281619306bbba7a85ca6300401fb62313ad8459f308816d3f310", "after_sha256": "6759fb91bbfa57d18260704f530d37589f5736ec4f5e146ca2db41cbacddd36c", "diff": "implementation/157_row178_diffs/forbidden.ts.diff"}
+  },
+  {
+   "path": "src/lib/studio/contract/schema/v2/refusal-hints.ts",
+   "status": "added",
+   "bytes": 8545,
+   "source_sha256": null,
+   "sha256": "557747abcf25ff915261d8ca3cd19b561b62875cbc84ae238d22eec88b93a0ec",
+   "note": "NEW Swarm file of row 178 (no clone original): refusal hints read from the v2/v1 schemas (allowed property names, object fields, discriminator values, misplaced-field and alias hints) and DIAGRAM_GUIDE_URI; used by forbidden.ts classifySchemaV2Errors and src/mcp-host/diagram-guide.ts"
   },
   {
    "path": "src/lib/studio/contract/schema/v2/skeleton.schema.ts",
@@ -5871,6 +5881,7 @@
   "165K",
   "165O",
   "165P",
-  "174"
+  "174",
+  "178"
  ]
 }
