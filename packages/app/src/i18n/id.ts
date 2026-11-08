@@ -843,6 +843,8 @@ export const dict = {
   "notification.permission.title": "Izin diperlukan",
   "session.permission.alwaysNamed": "Izinkan selalu: {{scope}}",
   "session.permission.alwaysRepeats": "Izinkan selalu: Doom Loop",
+  "session.permission.mcpTool": "Jalankan alat {{tool}} dari {{server}}",
+  "session.permission.named": "Gunakan {{name}}",
   "notification.permission.description": "{{sessionTitle}} di {{projectName}} memerlukan izin",
   "notification.autonomy.blocked": "{{sessionTitle}} membutuhkan Anda. Putusan menunggu: {{count}}",
   "notification.question.title": "Pertanyaan",

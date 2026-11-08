@@ -703,6 +703,8 @@ export const dict = {
   "notification.permission.title": "ހުއްދަ ބޭނުންވެއެވެ",
   "session.permission.alwaysNamed": "އަބަދުވެސް ހުއްދަ ދޭށެވެ: {{scope}}",
   "session.permission.alwaysRepeats": "އަބަދުވެސް ހުއްދަ ދޭށެވެ: ޑޫމް ލޫޕް އެވެ",
+  "session.permission.mcpTool": "Run the tool {{tool}} from {{server}}",
+  "session.permission.named": "Use {{name}}",
   "notification.permission.description": "{{sessionTitle}} އިން {{projectName}} އަށް ހުއްދަ ބޭނުންވެއެވެ",
   "notification.question.title": "ސުވާލު",
   "notification.question.description": "{{sessionTitle}} އިން {{projectName}} ގައި ސުވާލެއް އެބައޮތެވެ",

@@ -583,6 +583,8 @@ export const dict = {
   "notification.permission.title": "Berechtigung erforderlich",
   "session.permission.alwaysNamed": "Immer erlauben: {{scope}}",
   "session.permission.alwaysRepeats": "Immer erlauben: Doom Loop",
+  "session.permission.mcpTool": "Run the tool {{tool}} from {{server}}",
+  "session.permission.named": "Use {{name}}",
   "notification.permission.description": "{{sessionTitle}} in {{projectName}} benötigt Berechtigung",
   "notification.question.title": "Frage",
   "notification.question.description": "{{sessionTitle}} in {{projectName}} hat eine Frage",

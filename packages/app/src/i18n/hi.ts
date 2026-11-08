@@ -709,6 +709,8 @@ export const dict = {
   "notification.permission.title": "अनुमति आवश्यक है",
   "session.permission.alwaysNamed": "हमेशा अनुमति दें: {{scope}}",
   "session.permission.alwaysRepeats": "हमेशा अनुमति दें: Doom Loop",
+  "session.permission.mcpTool": "Run the tool {{tool}} from {{server}}",
+  "session.permission.named": "Use {{name}}",
   "notification.permission.description": "{{projectName}} में {{sessionTitle}} को अनुमति की आवश्यकता है",
   "notification.question.title": "प्रश्न",
   "notification.question.description": "{{projectName}} में {{sessionTitle}} का एक प्रश्न है",

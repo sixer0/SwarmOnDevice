@@ -6,7 +6,7 @@ import { DockPrompt } from "@opencode-ai/session-ui/dock-prompt"
 import { Icon } from "@opencode-ai/ui/icon"
 import { useLanguage } from "@/context/language"
 import { formatUsd, spendLimitDetail } from "@/components/session/session-spend"
-import { permissionRisk } from "@/pages/home/agent-board-model"
+import { permissionRisk, permissionWhat, shownPatterns } from "@/pages/home/agent-board-model"
 
 export const clockTime = (at: number) =>
   new Date(at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
@@ -20,13 +20,11 @@ export function SessionPermissionDock(props: {
   const spend = () => spendLimitDetail(props.request)
   const money = (value: number) => formatUsd(value, language.intl())
 
+  // Always says what is asked (row 171): a risk note when the call cannot be undone, else the tool in plain words.
   const toolDescription = () => {
     const risk = permissionRisk(props.request)
     if (risk) return language.t(risk)
-    const key = `settings.permissions.tool.${props.request.permission}.description`
-    const value = language.t(key as Parameters<typeof language.t>[0])
-    if (value === key) return ""
-    return value
+    return permissionWhat(props.request, language.t)
   }
 
   return (
@@ -140,11 +138,12 @@ function RegularPermission(props: {
         </div>
       </Show>
 
-      <Show when={props.request.patterns.length > 0}>
+      {/* A lone `*` (every MCP tool call) says nothing a person can read, so only real patterns are shown. */}
+      <Show when={shownPatterns(props.request.patterns).length > 0}>
         <div data-slot="permission-row">
           <span data-slot="permission-spacer" aria-hidden="true" />
           <div data-slot="permission-patterns">
-            <For each={props.request.patterns}>
+            <For each={shownPatterns(props.request.patterns)}>
               {(pattern) => <code class="text-12-regular text-text-base break-all">{pattern}</code>}
             </For>
           </div>

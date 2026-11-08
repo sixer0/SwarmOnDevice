@@ -6,7 +6,10 @@ import {
   agentSnapshotWrites,
   buildAgentBoard,
   inlineQuestion,
+  mcpToolOf,
   permissionDetail,
+  permissionWhat,
+  shownPatterns,
   type AgentBoardInput,
 } from "./agent-board-model"
 
@@ -182,6 +185,38 @@ describe("row details", () => {
   test("a permission shows its literal command, falling back to what it touches", () => {
     expect(permissionDetail(permission("p", "s", { metadata: { command: "rm -rf build" } }))).toBe("rm -rf build")
     expect(permissionDetail(permission("p", "s", { patterns: ["a.ts", "b.ts"] }))).toBe("a.ts\nb.ts")
+  })
+
+  // Row 171: an MCP tool call asked with only "*" used to show a lone "*" and no words.
+  const t = ((key: string, params?: Record<string, string>) =>
+    ({
+      "session.permission.mcpTool": `Run the tool ${params?.tool} from ${params?.server}`,
+      "session.permission.named": `Use ${params?.name}`,
+      "settings.permissions.tool.bash.description": "Run shell commands",
+    })[key] ?? key) as (key: never, params?: Record<string, string>) => string
+  const mcp = permission("p", "s", {
+    permission: "datum-studio_studio_mission_create",
+    patterns: ["*"],
+    metadata: { mcp: { server: "datum-studio", transport: "local", origin: "global" } },
+  })
+
+  test("an MCP tool call names the tool and its server, never a lone *", () => {
+    expect(mcpToolOf(mcp)).toEqual({ server: "datum-studio", tool: "studio_mission_create" })
+    expect(permissionWhat(mcp, t)).toBe("Run the tool studio_mission_create from datum-studio")
+    expect(permissionDetail(mcp, t)).toBe("Run the tool studio_mission_create from datum-studio")
+    expect(permissionDetail(mcp)).toBe("")
+    // A server name with characters the tool key sanitises still strips cleanly.
+    const dotted = permission("p", "s", { permission: "my_srv_do_it", metadata: { mcp: { server: "my.srv" } } })
+    expect(mcpToolOf(dotted)).toEqual({ server: "my.srv", tool: "do_it" })
+  })
+
+  test("other permissions keep their description, or their readable name", () => {
+    expect(permissionWhat(permission("p", "s"), t)).toBe("Run shell commands")
+    expect(permissionWhat(permission("p", "s", { permission: "code_mode", patterns: ["*"] }), t)).toBe("Use code mode")
+    expect(mcpToolOf(permission("p", "s", { metadata: { mcp: { origin: "project" } } }))).toBeUndefined()
+    expect(shownPatterns(["*"])).toEqual([])
+    expect(shownPatterns(["src/*", "*", "a.ts"])).toEqual(["src/*", "a.ts"])
+    expect(permissionDetail(permission("p", "s", { patterns: ["src/a.ts"] }), t)).toBe("src/a.ts")
   })
 
   test("only one single-select question with options can be answered inline", () => {

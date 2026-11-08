@@ -698,6 +698,8 @@ export const dict = {
   "notification.permission.title": "Απαιτείται άδεια",
   "session.permission.alwaysNamed": "Να επιτρέπεται πάντα: {{scope}}",
   "session.permission.alwaysRepeats": "Να επιτρέπεται πάντα: Doom Loop",
+  "session.permission.mcpTool": "Run the tool {{tool}} from {{server}}",
+  "session.permission.named": "Use {{name}}",
   "notification.permission.description": "{{sessionTitle}} στο {{projectName}} χρειάζεται άδεια",
   "notification.question.title": "Ερώτηση",
   "notification.question.description": "{{sessionTitle}} στο {{projectName}} έχει μια ερώτηση",

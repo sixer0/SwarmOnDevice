@@ -596,6 +596,8 @@ export const dict = {
   "notification.permission.title": "Lupa vaaditaan",
   "session.permission.alwaysNamed": "Salli aina: {{scope}}",
   "session.permission.alwaysRepeats": "Salli aina: Doom Loop",
+  "session.permission.mcpTool": "Run the tool {{tool}} from {{server}}",
+  "session.permission.named": "Use {{name}}",
   "notification.permission.description": "Istunto {{sessionTitle}} projektissa {{projectName}} tarvitsee luvan",
   "notification.question.title": "Kysymys",
   "notification.question.description": "Istunto {{sessionTitle}} projektissa {{projectName}} esittää kysymyksen",

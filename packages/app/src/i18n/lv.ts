@@ -692,6 +692,8 @@ export const dict = {
   "notification.permission.title": "Nepieciešama atļauja",
   "session.permission.alwaysNamed": "Atļaut vienmēr: {{scope}}",
   "session.permission.alwaysRepeats": "Atļaut vienmēr: Doom Loop",
+  "session.permission.mcpTool": "Run the tool {{tool}} from {{server}}",
+  "session.permission.named": "Use {{name}}",
   "notification.permission.description": "{{sessionTitle}} projektā {{projectName}} nepieciešama atļauja",
   "notification.question.title": "Jautājums",
   "notification.question.description": "{{sessionTitle}} projektā {{projectName}} ir jautājums",

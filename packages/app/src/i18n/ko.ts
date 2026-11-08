@@ -488,6 +488,8 @@ export const dict = {
   "notification.permission.title": "권한 필요",
   "session.permission.alwaysNamed": "항상 허용: {{scope}}",
   "session.permission.alwaysRepeats": "항상 허용: 무한 반복",
+  "session.permission.mcpTool": "Run the tool {{tool}} from {{server}}",
+  "session.permission.named": "Use {{name}}",
   "notification.permission.description": "{{projectName}}의 {{sessionTitle}}에서 권한이 필요합니다",
   "notification.question.title": "질문",
   "notification.question.description": "{{projectName}}의 {{sessionTitle}}에서 질문이 있습니다",

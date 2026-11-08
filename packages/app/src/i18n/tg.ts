@@ -694,6 +694,8 @@ export const dict = {
   "notification.permission.title": "Иҷозат талаб карда мешавад",
   "session.permission.alwaysNamed": "Ҳамеша иҷозат диҳед: {{scope}}",
   "session.permission.alwaysRepeats": "Ҳамеша иҷозат диҳед: Doom Loop",
+  "session.permission.mcpTool": "Run the tool {{tool}} from {{server}}",
+  "session.permission.named": "Use {{name}}",
   "notification.permission.description": "{{sessionTitle}} дар {{projectName}} ичозат лозим аст",
   "notification.question.title": "Савол",
   "notification.question.description": "{{sessionTitle}} дар {{projectName}} савол дорад",

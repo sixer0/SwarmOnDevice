@@ -703,6 +703,8 @@ export const dict = {
   "notification.permission.title": "Behörighet krävs",
   "session.permission.alwaysNamed": "Tillåt alltid: {{scope}}",
   "session.permission.alwaysRepeats": "Tillåt alltid: Doom Loop",
+  "session.permission.mcpTool": "Run the tool {{tool}} from {{server}}",
+  "session.permission.named": "Use {{name}}",
   "notification.permission.description": "{{sessionTitle}} i {{projectName}} behöver behörighet",
   "notification.question.title": "Fråga",
   "notification.question.description": "{{sessionTitle}} i {{projectName}} har en fråga",

@@ -695,6 +695,8 @@ export const dict = {
   "notification.permission.title": "Kërkohet leje",
   "session.permission.alwaysNamed": "Lejo gjithmonë: {{scope}}",
   "session.permission.alwaysRepeats": "Lejo gjithmonë: Doom Loop",
+  "session.permission.mcpTool": "Run the tool {{tool}} from {{server}}",
+  "session.permission.named": "Use {{name}}",
   "notification.permission.description": "{{sessionTitle}} në {{projectName}} ka nevojë për leje",
   "notification.question.title": "Pyetje",
   "notification.question.description": "{{sessionTitle}} në {{projectName}} ka një pyetje",

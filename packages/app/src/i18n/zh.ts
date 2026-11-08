@@ -738,6 +738,8 @@ export const dict = {
   "notification.permission.title": "需要权限",
   "session.permission.alwaysNamed": "始终允许: {{scope}}",
   "session.permission.alwaysRepeats": "始终允许: 死循环",
+  "session.permission.mcpTool": "Run the tool {{tool}} from {{server}}",
+  "session.permission.named": "Use {{name}}",
   "notification.permission.description": "{{sessionTitle}}（{{projectName}}）需要权限",
   "notification.question.title": "问题",
   "notification.question.description": "{{sessionTitle}}（{{projectName}}）有一个问题",

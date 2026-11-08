@@ -693,6 +693,8 @@ export const dict = {
   "notification.permission.title": "Potrebno je dovoljenje",
   "session.permission.alwaysNamed": "Dovoli vedno: {{scope}}",
   "session.permission.alwaysRepeats": "Dovoli vedno: Doom Loop",
+  "session.permission.mcpTool": "Run the tool {{tool}} from {{server}}",
+  "session.permission.named": "Use {{name}}",
   "notification.permission.description": "{{sessionTitle}} v {{projectName}} potrebuje dovoljenje",
   "notification.question.title": "vprašanje",
   "notification.question.description": "{{sessionTitle}} v {{projectName}} ima vprašanje",

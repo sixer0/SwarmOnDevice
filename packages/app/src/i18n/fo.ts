@@ -692,6 +692,8 @@ export const dict = {
   "notification.permission.title": "Loyvi krevst",
   "session.permission.alwaysNamed": "Loyva altíð: {{scope}}",
   "session.permission.alwaysRepeats": "Loyva altíð: Doom lykkja",
+  "session.permission.mcpTool": "Run the tool {{tool}} from {{server}}",
+  "session.permission.named": "Use {{name}}",
   "notification.permission.description": "{{sessionTitle}} í {{projectName}} hevur brúk fyri loyvi",
   "notification.question.title": "Spurningur",
   "notification.question.description": "{{sessionTitle}} í {{projectName}} hevur ein spurning",

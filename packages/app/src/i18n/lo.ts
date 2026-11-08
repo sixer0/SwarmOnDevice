@@ -688,6 +688,8 @@ export const dict = {
   "notification.permission.title": "ຕ້ອງມີການອະນຸຍາດ",
   "session.permission.alwaysNamed": "ອະນຸຍາດສະເໝີ: {{scope}}",
   "session.permission.alwaysRepeats": "ອະນຸຍາດສະເໝີ: Doom Loop",
+  "session.permission.mcpTool": "Run the tool {{tool}} from {{server}}",
+  "session.permission.named": "Use {{name}}",
   "notification.permission.description": "{{sessionTitle}} ໃນ {{projectName}} ຕ້ອງການການອະນຸຍາດ",
   "notification.question.title": "ຄໍາຖາມ",
   "notification.question.description": "{{sessionTitle}} ໃນ {{projectName}} ມີຄໍາຖາມ",

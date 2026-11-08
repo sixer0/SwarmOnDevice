@@ -692,6 +692,8 @@ export const dict = {
   "notification.permission.title": "Rugsat gerek",
   "session.permission.alwaysNamed": "Elmydama rugsat beriň: {{scope}}",
   "session.permission.alwaysRepeats": "Elmydama rugsat beriň: Doom aýlawy",
+  "session.permission.mcpTool": "Run the tool {{tool}} from {{server}}",
+  "session.permission.named": "Use {{name}}",
   "notification.permission.description": "{{projectName}} taslamasyndaky {{sessionTitle}} rugsat talap edýär",
   "notification.question.title": "Sorag",
   "notification.question.description": "{{projectName}} taslamasyndaky {{sessionTitle}} sessiýasynyň soragy bar",

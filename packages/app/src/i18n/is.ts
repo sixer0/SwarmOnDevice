@@ -695,6 +695,8 @@ export const dict = {
   "notification.permission.title": "Leyfi krafist",
   "session.permission.alwaysNamed": "Leyfðu alltaf: {{scope}}",
   "session.permission.alwaysRepeats": "Leyfðu alltaf: Doom Loop",
+  "session.permission.mcpTool": "Run the tool {{tool}} from {{server}}",
+  "session.permission.named": "Use {{name}}",
   "notification.permission.description": "{{sessionTitle}} í {{projectName}} þarf leyfi",
   "notification.question.title": "Spurning",
   "notification.question.description": "{{sessionTitle}} í {{projectName}} hefur spurningu",

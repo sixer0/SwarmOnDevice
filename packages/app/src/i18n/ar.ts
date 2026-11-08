@@ -684,6 +684,8 @@ export const dict = {
   "notification.permission.title": "مطلوب إذن",
   "session.permission.alwaysNamed": "السماح دائمًا: {{scope}}",
   "session.permission.alwaysRepeats": "السماح دائمًا: حلقة مفرغة",
+  "session.permission.mcpTool": "Run the tool {{tool}} from {{server}}",
+  "session.permission.named": "Use {{name}}",
   "notification.permission.description": "{{sessionTitle}} في {{projectName}} يحتاج إلى إذن",
   "notification.question.title": "سؤال",
   "notification.question.description": "{{sessionTitle}} في {{projectName}} لديه سؤال",

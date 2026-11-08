@@ -621,6 +621,8 @@ export const dict = {
   "notification.permission.title": "Tilladelse påkrævet",
   "session.permission.alwaysNamed": "Tillad altid: {{scope}}",
   "session.permission.alwaysRepeats": "Tillad altid: Doom Loop",
+  "session.permission.mcpTool": "Run the tool {{tool}} from {{server}}",
+  "session.permission.named": "Use {{name}}",
   "notification.permission.description": "{{sessionTitle}} i {{projectName}} kræver tilladelse",
   "notification.question.title": "Spørgsmål",
   "notification.question.description": "{{sessionTitle}} i {{projectName}} har et spørgsmål",

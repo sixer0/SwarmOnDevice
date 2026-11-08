@@ -127,11 +127,48 @@ export function buildAgentBoard(input: AgentBoardInput): AgentBoard {
   }
 }
 
-/** What a permission row shows: the literal command when the tool has one, otherwise what it wants to touch. */
-export function permissionDetail(request: PermissionRequest) {
+// Any of the app's `language.t`. Typed loosely so this model file needs no language context.
+type Translate = (key: never, params?: Record<string, string>) => string
+
+/**
+ * The server and the tool's own name when the request is a call of an MCP tool. The server sends the tool key
+ * (`<server>_<tool>`, both sanitised as packages/opencode/src/mcp/catalog.ts `toolName` does) as `permission` and the
+ * server in `metadata.mcp.server`; the key alone does not say where the server name ends.
+ */
+export function mcpToolOf(request: Pick<PermissionRequest, "permission" | "metadata">) {
+  const mcp = request.metadata?.mcp
+  const server = mcp && typeof mcp === "object" ? (mcp as { server?: unknown }).server : undefined
+  if (typeof server !== "string" || !server) return
+  const prefix = server.replace(/[^a-zA-Z0-9_-]/g, "_") + "_"
+  const tool = request.permission.startsWith(prefix) ? request.permission.slice(prefix.length) : request.permission
+  return { server, tool: tool || request.permission }
+}
+
+/** The patterns worth reading. A `*` only says "any call" and reads as a stray symbol, so it is never shown. */
+export function shownPatterns(patterns: readonly string[]) {
+  return patterns.filter((pattern) => pattern.trim() !== "*")
+}
+
+/** What the request asks for in plain words: the MCP tool and its server, the permission's description, or its name. */
+export function permissionWhat(request: Pick<PermissionRequest, "permission" | "metadata">, t: Translate) {
+  const mcp = mcpToolOf(request)
+  if (mcp) return t("session.permission.mcpTool" as never, { tool: mcp.tool, server: mcp.server })
+  const key = `settings.permissions.tool.${request.permission}.description`
+  const value = t(key as never)
+  if (value && value !== key) return value
+  return t("session.permission.named" as never, { name: request.permission.replaceAll("_", " ") })
+}
+
+/**
+ * What a permission row shows: the literal command when the tool has one, otherwise what it wants to touch. With `t`,
+ * a request that names nothing to touch (only `*`, as every MCP tool call does) says what it asks for instead.
+ */
+export function permissionDetail(request: PermissionRequest, t?: Translate) {
   const command = request.metadata?.command
   if (typeof command === "string" && command) return command
-  return request.patterns.join("\n")
+  const patterns = shownPatterns(request.patterns).join("\n")
+  if (patterns || !t) return patterns
+  return permissionWhat(request, t)
 }
 
 /** Why this request is the rare one worth reading: Undo cannot take it back. */

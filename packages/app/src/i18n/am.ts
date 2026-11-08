@@ -679,6 +679,8 @@ export const dict = {
   "notification.permission.title": "ፈቃድ ያስፈልጋል",
   "session.permission.alwaysNamed": "ሁልጊዜ ፍቀድ: {{scope}}",
   "session.permission.alwaysRepeats": "ሁልጊዜ ፍቀድ: Doom Loop",
+  "session.permission.mcpTool": "Run the tool {{tool}} from {{server}}",
+  "session.permission.named": "Use {{name}}",
   "notification.permission.description": "{{sessionTitle}} በ{{projectName}} ውስጥ ፈቃድ ያስፈልገዋል",
   "notification.question.title": "ጥያቄ",
   "notification.question.description": "{{sessionTitle}} በ{{projectName}} ውስጥ ጥያቄ አለው",

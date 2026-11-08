@@ -697,6 +697,8 @@ export const dict = {
   "notification.permission.title": "Зөвшөөрөл шаардлагатай",
   "session.permission.alwaysNamed": "Үргэлж зөвшөөрөх: {{scope}}",
   "session.permission.alwaysRepeats": "Үргэлж зөвшөөрөх: Doom Loop",
+  "session.permission.mcpTool": "Run the tool {{tool}} from {{server}}",
+  "session.permission.named": "Use {{name}}",
   "notification.permission.description": "{{projectName}} дахь {{sessionTitle}} зөвшөөрөл шаардлагатай",
   "notification.question.title": "Асуулт",
   "notification.question.description": "{{projectName}} дэх {{sessionTitle}} асуулт байна",

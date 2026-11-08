@@ -195,7 +195,7 @@ function NeedRow(props: { board: AgentBoardController; need: AgentBoardNeed }) {
               {(() => {
                 const spend = spendLimitDetail(item.request)
                 if (spend) return language.t("session.spend.summary", { spent: formatUsd(spend.spent, language.intl()) })
-                return permissionDetail(item.request)
+                return permissionDetail(item.request, language.t)
               })()}
             </pre>
           </>

@@ -694,6 +694,8 @@ export const dict = {
   "notification.permission.title": "Потребна е дозвола",
   "session.permission.alwaysNamed": "Дозволете секогаш: {{scope}}",
   "session.permission.alwaysRepeats": "Дозволете секогаш: Doom Loop",
+  "session.permission.mcpTool": "Run the tool {{tool}} from {{server}}",
+  "session.permission.named": "Use {{name}}",
   "notification.permission.description": "На {{sessionTitle}} во {{projectName}} му треба дозвола",
   "notification.question.title": "Прашање",
   "notification.question.description": "{{sessionTitle}} во {{projectName}} има прашање",

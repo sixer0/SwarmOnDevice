@@ -763,6 +763,8 @@ export const dict = {
   "notification.permission.title": "Потрібен дозвіл",
   "session.permission.alwaysNamed": "Дозволяти завжди: {{scope}}",
   "session.permission.alwaysRepeats": "Дозволяти завжди: Цикл приреченості",
+  "session.permission.mcpTool": "Run the tool {{tool}} from {{server}}",
+  "session.permission.named": "Use {{name}}",
   "notification.permission.description": "{{sessionTitle}} у {{projectName}} потребує дозволу",
   "notification.question.title": "Запитання",
   "notification.question.description": "{{sessionTitle}} у {{projectName}} має запитання",

@@ -699,6 +699,8 @@ export const dict = {
   "notification.permission.title": "ခွင့်ပြုချက် လိုအပ်သည်။",
   "session.permission.alwaysNamed": "အမြဲခွင့်ပြုပါ။: {{scope}}",
   "session.permission.alwaysRepeats": "အမြဲခွင့်ပြုပါ။: Doom Loop",
+  "session.permission.mcpTool": "Run the tool {{tool}} from {{server}}",
+  "session.permission.named": "Use {{name}}",
   "notification.permission.description": "{{sessionTitle}} တွင် {{projectName}} ခွင့်ပြုချက် လိုအပ်သည်။",
   "notification.question.title": "မေးခွန်း",
   "notification.question.description": "{{sessionTitle}} {{projectName}} တွင် မေးခွန်းတစ်ခုရှိသည်။",

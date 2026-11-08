@@ -690,6 +690,8 @@ export const dict = {
   "notification.permission.title": "Vyžaduje sa povolenie",
   "session.permission.alwaysNamed": "Vždy povoliť: {{scope}}",
   "session.permission.alwaysRepeats": "Vždy povoliť: Doom Loop",
+  "session.permission.mcpTool": "Run the tool {{tool}} from {{server}}",
+  "session.permission.named": "Use {{name}}",
   "notification.permission.description": "{{sessionTitle}} v {{projectName}} vyžaduje povolenie",
   "notification.question.title": "Otázka",
   "notification.question.description": "{{sessionTitle}} v {{projectName}} má otázku",

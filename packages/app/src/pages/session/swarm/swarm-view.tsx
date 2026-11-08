@@ -69,7 +69,7 @@ function useLaneLine(swarm: SwarmController) {
     if (lane.status === "needs") {
       if (lane.permission)
         return language.t("session.swarm.lane.needs", {
-          detail: permissionDetail(lane.permission).split("\n")[0] ?? "",
+          detail: permissionDetail(lane.permission, language.t).split("\n")[0] ?? "",
         })
       return lane.question?.questions[0]?.question ?? language.t("notification.question.title")
     }
@@ -162,7 +162,7 @@ function LaneDetail(props: { swarm: SwarmController; lane: SwarmLane }) {
               {(risk) => <div class="pb-1 text-v2-state-fg-warning [font-weight:440]">{language.t(risk)}</div>}
             </Show>
             <pre class="max-h-24 overflow-auto whitespace-pre-wrap break-all font-mono text-[12px] leading-[18px] text-v2-text-text-base select-text">
-              {permissionDetail(request)}
+              {permissionDetail(request, language.t)}
             </pre>
             <div class="mt-2 flex flex-wrap justify-end gap-1.5">
               {/* A moved-on prompt (autonomous mode) keeps the button it had: only when the tool named a rule. */}

@@ -38,8 +38,8 @@ export function SessionMovedOnDock(props: {
                 }
               >
                 {(request) => (
-                  <code class="min-w-0 flex-1 truncate text-12-regular text-text-base" title={permissionDetail(request)}>
-                    {permissionDetail(request)}
+                  <code class="min-w-0 flex-1 truncate text-12-regular text-text-base" title={permissionDetail(request, language.t)}>
+                    {permissionDetail(request, language.t)}
                   </code>
                 )}
               </Show>

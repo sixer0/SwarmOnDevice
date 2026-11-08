@@ -689,6 +689,8 @@ export const dict: Record<string, string> = {
   "notification.permission.title": "අවසරය අවශ්‍යයි",
   "session.permission.alwaysNamed": "සෑම විටම ඉඩ දෙන්න: {{scope}}",
   "session.permission.alwaysRepeats": "සෑම විටම ඉඩ දෙන්න: Doom Loop",
+  "session.permission.mcpTool": "Run the tool {{tool}} from {{server}}",
+  "session.permission.named": "Use {{name}}",
   "notification.permission.description": "{{projectName}} හි {{sessionTitle}} හට අවසර අවශ්‍යයි",
   "notification.question.title": "ප්රශ්නය",
   "notification.question.description": "{{projectName}} හි {{sessionTitle}} හට ප්‍රශ්නයක් ඇත",

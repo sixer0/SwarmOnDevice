@@ -690,6 +690,8 @@ export const dict = {
   "notification.permission.title": "Kebenaran diperlukan",
   "session.permission.alwaysNamed": "Benarkan sentiasa: {{scope}}",
   "session.permission.alwaysRepeats": "Benarkan sentiasa: Gelung Doom",
+  "session.permission.mcpTool": "Run the tool {{tool}} from {{server}}",
+  "session.permission.named": "Use {{name}}",
   "notification.permission.description": "{{sessionTitle}} dalam {{projectName}} memerlukan kebenaran",
   "notification.question.title": "Soalan",
   "notification.question.description": "{{sessionTitle}} dalam {{projectName}} mempunyai soalan",

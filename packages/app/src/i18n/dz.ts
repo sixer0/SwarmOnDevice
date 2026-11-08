@@ -704,6 +704,8 @@ export const dict: Record<string, string> = {
   "notification.permission.title": "གནང་བ་དགོཔ།",
   "session.permission.alwaysNamed": "ཨ་རྟག་ར་གནང་བཅུག།: {{scope}}",
   "session.permission.alwaysRepeats": "ཨ་རྟག་ར་གནང་བཅུག།: Doom Loop།",
+  "session.permission.mcpTool": "Run the tool {{tool}} from {{server}}",
+  "session.permission.named": "Use {{name}}",
   "notification.permission.description": "{{sessionTitle}}ནང་ {{projectName}}ལུ་གནང་བ་དགོཔ་ཨིན།",
   "notification.question.title": "དྲི་བ",
   "notification.question.description": "{{sessionTitle}} ནང་{{projectName}}ནང་དྲི་བ་ཅིག་ཡོད།",

@@ -690,6 +690,8 @@ export const dict: Record<string, string> = {
   "notification.permission.title": "অনুমতি প্রয়োজন",
   "session.permission.alwaysNamed": "সর্বদা অনুমতি দিন: {{scope}}",
   "session.permission.alwaysRepeats": "সর্বদা অনুমতি দিন: Doom Loop",
+  "session.permission.mcpTool": "Run the tool {{tool}} from {{server}}",
+  "session.permission.named": "Use {{name}}",
   "notification.permission.description": "{{projectName}}-এ {{sessionTitle}} অনুমতি প্রয়োজন",
   "notification.question.title": "প্রশ্ন",
   "notification.question.description": "{{projectName}}-এ {{sessionTitle}} একটি প্রশ্ন আছে",

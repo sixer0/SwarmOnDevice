@@ -33,6 +33,7 @@ import type { SwarmController } from "../swarm/swarm-controller"
 import { SwarmAgents } from "../swarm/swarm-view"
 import type { MissionControlMount } from "../swarm/mission-control"
 import { offersAgentsView } from "../swarm/mission-control-layout"
+import { shownPatterns } from "@/pages/home/agent-board-model"
 import type { SessionMapController } from "./session-map-controller"
 import {
   archiveCount,
@@ -346,7 +347,7 @@ const whatOf = (permission: string) =>
 
 // A file by its path in the project; anything else by its first line, cut short. Text only, as the agent wrote it.
 const subjectOf = (entry: DecisionEntry) => {
-  const first = entry.patterns[0]
+  const first = shownPatterns(entry.patterns)[0]
   if (!first) return
   if (FILE_PERMISSIONS.includes(entry.permission)) return relativePath(first, entry.directory)
   const line = first.split("\n")[0] ?? ""
@@ -482,7 +483,7 @@ export function DecisionRow(props: {
       <Show when={open()}>
         <div data-decision-details class="flex min-w-0 flex-col gap-1">
           <span class="text-v2-text-text-faint [font-weight:440]">{props.entry.permission}</span>
-          <For each={props.entry.patterns}>
+          <For each={shownPatterns(props.entry.patterns)}>
             {(pattern) => (
               <span
                 data-decision-pattern
@@ -499,7 +500,7 @@ export function DecisionRow(props: {
             {(next) => (
               <span data-decision-follows class="flex min-w-0 flex-col">
                 <span class="text-v2-text-text-faint [font-weight:440]">{next.permission}</span>
-                <For each={next.patterns}>
+                <For each={shownPatterns(next.patterns)}>
                   {(pattern) => (
                     <span class="min-w-0 whitespace-pre-wrap break-all font-mono text-[12px] text-v2-text-text-base">
                       {pattern}

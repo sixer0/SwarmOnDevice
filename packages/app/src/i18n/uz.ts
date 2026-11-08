@@ -695,6 +695,8 @@ export const dict = {
   "notification.permission.title": "Ruxsat talab qilinadi",
   "session.permission.alwaysNamed": "Har doim ruxsat bering: {{scope}}",
   "session.permission.alwaysRepeats": "Har doim ruxsat bering: Doom Loop",
+  "session.permission.mcpTool": "Run the tool {{tool}} from {{server}}",
+  "session.permission.named": "Use {{name}}",
   "notification.permission.description": "{{sessionTitle}} uchun {{projectName}} uchun ruxsat kerak",
   "notification.question.title": "Savol",
   "notification.question.description": "{{projectName}} da {{sessionTitle}} savol bor",

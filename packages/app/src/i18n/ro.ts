@@ -692,6 +692,8 @@ export const dict = {
   "notification.permission.title": "Permisiune necesară",
   "session.permission.alwaysNamed": "Permite mereu: {{scope}}",
   "session.permission.alwaysRepeats": "Permite mereu: Doom Loop",
+  "session.permission.mcpTool": "Run the tool {{tool}} from {{server}}",
+  "session.permission.named": "Use {{name}}",
   "notification.permission.description": "{{sessionTitle}} din {{projectName}} are nevoie de permisiune",
   "notification.question.title": "Întrebare",
   "notification.question.description": "{{sessionTitle}} din {{projectName}} are o întrebare",

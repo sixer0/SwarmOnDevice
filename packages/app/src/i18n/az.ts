@@ -706,6 +706,8 @@ export const dict = {
   "notification.permission.title": "İcazə tələb olunur",
   "session.permission.alwaysNamed": "Həmişə icazə ver: {{scope}}",
   "session.permission.alwaysRepeats": "Həmişə icazə ver: Sonsuz dövr",
+  "session.permission.mcpTool": "Run the tool {{tool}} from {{server}}",
+  "session.permission.named": "Use {{name}}",
   "notification.permission.description": "{{projectName}} layihəsində {{sessionTitle}} icazə tələb edir",
   "notification.question.title": "Sual",
   "notification.question.description": "{{projectName}} layihəsində {{sessionTitle}} sualı var",
