@@ -38,6 +38,11 @@ export type MissionControlState = {
    * reason to drop the remembered Agents filter (session.tsx).
    */
   listed: boolean
+  /**
+   * Row 180: the last list answered HOST_UNAVAILABLE (main's mission-ipc.ts: DATUM Studio is not running). Mission
+   * control shows one muted line for it instead of nothing; any answered list clears it.
+   */
+  unavailable: boolean
 }
 
 /**
@@ -72,7 +77,7 @@ const realTimers: Timers = {
 }
 
 export function emptyMissionState(): MissionControlState {
-  return { options: [], selected: undefined, mission: null, readFailed: false, listed: false }
+  return { options: [], selected: undefined, mission: null, readFailed: false, listed: false, unavailable: false }
 }
 
 export function createMissionPoller(input: {
@@ -173,7 +178,11 @@ export function createMissionPoller(input: {
     }
     const listed = await within(() => input.source.list({ directory }))
     if (current() === "stopped" || disposed || directory !== input.directory()) return
-    if (!listed || !listed.ok) return fail()
+    if (!listed || !listed.ok) {
+      emit({ unavailable: listed?.code === "HOST_UNAVAILABLE" })
+      return fail()
+    }
+    if (state.unavailable) emit({ unavailable: false })
     const items = listed.data.items
     const selected = pickSelected(items, state.selected)
     const options = missionOptions(items)

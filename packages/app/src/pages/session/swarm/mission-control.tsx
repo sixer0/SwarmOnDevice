@@ -7,7 +7,7 @@
 import { useLanguage } from "@/context/language"
 import { Icon as IconV2 } from "@opencode-ai/ui/v2/icon"
 import { IconButtonV2 } from "@opencode-ai/ui/v2/icon-button-v2"
-import { createEffect, createSignal, For, on, onCleanup, Show } from "solid-js"
+import { createEffect, createSignal, For, Match, on, onCleanup, Show, Switch } from "solid-js"
 import { dockItems, missionEyebrow, missionLayoutOf, showSelector } from "./mission-control-layout"
 import { MissionCommand } from "./mission-command"
 import type { MissionWriter } from "./mission-command-model"
@@ -69,6 +69,11 @@ export function MissionControl(props: MissionControlMount & { width?: number }) 
   createEffect(on(sheetMode, (narrow) => !narrow && setSheet(false), { defer: true }))
 
   const shown = () => props.control.available && state.options.length > 0
+  // Row 180: with the bridge present but no mission, a compact card says so (no HQ) instead of hiding the section; the
+  // running poll swaps in the full view when the first mission is listed. Studio not running (list answered
+  // HOST_UNAVAILABLE) is one muted line. Without the bridge (web build) nothing shows, as before.
+  const unavailable = () => props.control.available && state.options.length === 0 && state.unavailable
+  const empty = () => props.control.available && state.options.length === 0 && state.listed && !state.unavailable
 
   const observe = (el: HTMLElement) => {
     if (props.width !== undefined || typeof ResizeObserver === "undefined") return
@@ -94,170 +99,199 @@ export function MissionControl(props: MissionControlMount & { width?: number }) 
   }
 
   return (
-    <Show when={shown()}>
-      <section
-        ref={observe}
-        data-mission-control
-        data-mission-layout={layout()}
-        data-mission-sheet={sheetMode() ? (sheet() ? "open" : "closed") : undefined}
-        aria-label={t("session.mission.title")}
-        class="relative mx-2 flex h-[60vh] max-h-[720px] min-h-[320px] shrink-0 flex-col gap-2 overflow-hidden"
-      >
-        <header class="flex shrink-0 items-start gap-2">
-          <div class="min-w-0 flex-1">
-            <Show when={state.mission}>
-              {(mission) => (
-                <>
-                  <div data-mission-eyebrow class={`truncate text-11-regular uppercase ${FAINT}`}>
-                    {missionEyebrow(mission(), t)}
-                  </div>
-                  <h2 data-mission-title class="truncate text-v2-text-text-base [font-weight:530]">
-                    {mission().title}
-                  </h2>
-                </>
+    <Switch>
+      <Match when={unavailable()}>
+        <p data-mission-unavailable role="status" class={`mx-2 shrink-0 text-12-regular ${FAINT}`}>
+          {t("session.mission.unavailable")}
+        </p>
+      </Match>
+      <Match when={empty()}>
+        <section
+          data-mission-empty
+          aria-label={t("session.mission.title")}
+          class="mx-2 flex shrink-0 flex-col gap-0.5 rounded-[8px] px-2 py-1.5 [box-shadow:inset_0_0_0_1px_var(--v2-border-border-strong)]"
+        >
+          <h2 data-mission-title class="truncate text-v2-text-text-base [font-weight:530]">
+            {t("session.mission.title")}
+          </h2>
+          <p data-mission-empty-line class="text-v2-text-text-base [font-weight:440]">
+            {t("session.mission.empty")}
+          </p>
+          <p data-mission-empty-hint class={`text-12-regular ${FAINT}`}>
+            {t("session.mission.emptyHint")}
+          </p>
+        </section>
+      </Match>
+      <Match when={shown()}>
+        <section
+          ref={observe}
+          data-mission-control
+          data-mission-layout={layout()}
+          data-mission-sheet={sheetMode() ? (sheet() ? "open" : "closed") : undefined}
+          aria-label={t("session.mission.title")}
+          class="relative mx-2 flex h-[60vh] max-h-[720px] min-h-[320px] shrink-0 flex-col gap-2 overflow-hidden"
+        >
+          <header class="flex shrink-0 items-start gap-2">
+            <div class="min-w-0 flex-1">
+              <Show when={state.mission}>
+                {(mission) => (
+                  <>
+                    <div data-mission-eyebrow class={`truncate text-11-regular uppercase ${FAINT}`}>
+                      {missionEyebrow(mission(), t)}
+                    </div>
+                    <h2 data-mission-title class="truncate text-v2-text-text-base [font-weight:530]">
+                      {mission().title}
+                    </h2>
+                  </>
+                )}
+              </Show>
+            </div>
+            <Show when={!sheetMode() && (state.mission?.waves.length ?? 0) > 0}>
+              <div data-mission-waves class={`flex shrink-0 items-baseline gap-2 tabular-nums ${FAINT}`}>
+                <For each={state.mission?.waves ?? []}>
+                  {(wave) => (
+                    <span
+                      data-mission-wave={wave.wave}
+                      classList={{
+                        "text-v2-state-fg-success": wave.tone === "done",
+                        "text-v2-state-fg-warning": wave.tone === "issue",
+                      }}
+                    >
+                      W{wave.wave} {wave.done}/{wave.total}
+                    </span>
+                  )}
+                </For>
+              </div>
+            </Show>
+            <Show when={showSelector(state.options)}>
+              <select
+                data-mission-select
+                aria-label={t("session.mission.select")}
+                class="max-w-[45%] shrink-0 truncate rounded-[6px] bg-v2-background-bg-base px-1.5 py-1 text-v2-text-text-base [box-shadow:inset_0_0_0_1px_var(--v2-border-border-strong)]"
+                onChange={(event) => props.control.select(event.currentTarget.value)}
+              >
+                <For each={state.options}>
+                  {(option) => (
+                    <option value={option.id} selected={option.id === state.selected}>
+                      {option.title}
+                    </option>
+                  )}
+                </For>
+              </select>
+            </Show>
+            <Show when={props.expand}>
+              {(expand) => (
+                <IconButtonV2
+                  type="button"
+                  variant="ghost-muted"
+                  size="small"
+                  data-mission-expand={expand().wide() ? "wide" : "narrow"}
+                  aria-pressed={expand().wide()}
+                  aria-label={t(expand().wide() ? "session.mission.collapse" : "session.mission.expand")}
+                  title={t(expand().wide() ? "session.mission.collapse" : "session.mission.expand")}
+                  onClick={() => expand().toggle()}
+                  icon={<IconV2 name={expand().wide() ? "collapse" : "expand"} class="rotate-90" />}
+                />
               )}
             </Show>
-          </div>
-          <Show when={!sheetMode() && (state.mission?.waves.length ?? 0) > 0}>
-            <div data-mission-waves class={`flex shrink-0 items-baseline gap-2 tabular-nums ${FAINT}`}>
-              <For each={state.mission?.waves ?? []}>
-                {(wave) => (
-                  <span
-                    data-mission-wave={wave.wave}
-                    classList={{
-                      "text-v2-state-fg-success": wave.tone === "done",
-                      "text-v2-state-fg-warning": wave.tone === "issue",
-                    }}
-                  >
-                    W{wave.wave} {wave.done}/{wave.total}
-                  </span>
-                )}
-              </For>
+          </header>
+
+          <Show when={state.readFailed}>
+            <div data-mission-read-failed role="status" class="shrink-0 text-v2-state-fg-warning [font-weight:440]">
+              {t("session.mission.readFailed")}
             </div>
           </Show>
-          <Show when={showSelector(state.options)}>
-            <select
-              data-mission-select
-              aria-label={t("session.mission.select")}
-              class="max-w-[45%] shrink-0 truncate rounded-[6px] bg-v2-background-bg-base px-1.5 py-1 text-v2-text-text-base [box-shadow:inset_0_0_0_1px_var(--v2-border-border-strong)]"
-              onChange={(event) => props.control.select(event.currentTarget.value)}
-            >
-              <For each={state.options}>
-                {(option) => (
-                  <option value={option.id} selected={option.id === state.selected}>
-                    {option.title}
-                  </option>
-                )}
-              </For>
-            </select>
-          </Show>
-          <Show when={props.expand}>
-            {(expand) => (
-              <IconButtonV2
-                type="button"
-                variant="ghost-muted"
-                size="small"
-                data-mission-expand={expand().wide() ? "wide" : "narrow"}
-                aria-pressed={expand().wide()}
-                aria-label={t(expand().wide() ? "session.mission.collapse" : "session.mission.expand")}
-                title={t(expand().wide() ? "session.mission.collapse" : "session.mission.expand")}
-                onClick={() => expand().toggle()}
-                icon={<IconV2 name={expand().wide() ? "collapse" : "expand"} class="rotate-90" />}
-              />
-            )}
-          </Show>
-        </header>
 
-        <Show when={state.readFailed}>
-          <div data-mission-read-failed role="status" class="shrink-0 text-v2-state-fg-warning [font-weight:440]">
-            {t("session.mission.readFailed")}
-          </div>
-        </Show>
-
-        <Show when={state.mission}>
-          {(mission) => (
-            <div
-              data-mission-main
-              class={
-                sheetMode()
-                  ? "relative min-h-0 flex-1 overflow-hidden"
-                  : "grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_300px] gap-2 overflow-hidden"
-              }
-            >
-              <div data-mission-stage class="h-full min-h-0 overflow-y-auto" onClick={onStageClick}>
-                <MissionHQ
-                  mission={mission()}
-                  width={props.width === undefined ? undefined : missionStageWidth(props.width)}
-                  selected={row()}
-                  onSelectAgent={selectAgent}
-                  onOpenDecision={() => setSheet(true)}
-                />
-              </div>
-
-              <Show when={sheetMode()}>
-                <div data-mission-dock class="absolute right-2 bottom-2 z-[4] flex gap-1.5">
-                  <Show when={dockItems(mission()).decisions > 0}>
-                    <button type="button" data-mission-dock-item="decisions" class={DOCK_BUTTON} onClick={() => setSheet(true)}>
-                      {t("session.mission.dock.decisions", { count: dockItems(mission()).decisions })}
-                    </button>
-                  </Show>
-                  <Show when={dockItems(mission()).files}>
-                    {(files) => (
-                      <button type="button" data-mission-dock-item="files" class={DOCK_BUTTON} onClick={showFiles}>
-                        {t("session.mission.dock.files", { final: files().final, total: files().total })}
-                      </button>
-                    )}
-                  </Show>
-                  <button
-                    type="button"
-                    data-mission-dock-item="command"
-                    aria-expanded={sheet()}
-                    class={DOCK_BUTTON}
-                    onClick={() => setSheet((open) => !open)}
-                  >
-                    {t("session.mission.command")}
-                  </button>
-                </div>
-              </Show>
-
-              <aside
-                data-mission-side
-                inert={sheetMode() && !sheet() ? true : undefined}
+          <Show when={state.mission}>
+            {(mission) => (
+              <div
+                data-mission-main
                 class={
                   sheetMode()
-                    ? "absolute inset-x-0 bottom-0 z-[5] flex max-h-[72%] flex-col gap-3 overflow-y-auto rounded-t-[14px] bg-v2-background-bg-base p-2 transition-transform duration-[250ms] [box-shadow:0_-12px_30px_rgba(0,0,0,.35)] motion-reduce:transition-none"
-                    : "flex min-h-0 flex-col gap-3 overflow-y-auto"
+                    ? "relative min-h-0 flex-1 overflow-hidden"
+                    : "grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_300px] gap-2 overflow-hidden"
                 }
-                classList={{ "translate-y-[105%]": sheetMode() && !sheet() }}
               >
-                <Show when={props.writer}>
-                  {(writer) => (
-                    <MissionCommand
-                      model={mission()}
-                      writer={writer()}
-                      refresh={() => props.control.refresh()}
-                      prompt={props.prompt}
-                      selected={row()}
-                    />
-                  )}
-                </Show>
-                <div
-                  ref={(el) => {
-                    deliverables = el
-                  }}
-                >
-                  <MissionDeliverables
+                <div data-mission-stage class="h-full min-h-0 overflow-y-auto" onClick={onStageClick}>
+                  <MissionHQ
                     mission={mission()}
+                    width={props.width === undefined ? undefined : missionStageWidth(props.width)}
                     selected={row()}
                     onSelectAgent={selectAgent}
-                    openFile={props.openFile}
+                    onOpenDecision={() => setSheet(true)}
                   />
                 </div>
-              </aside>
-            </div>
-          )}
-        </Show>
-      </section>
-    </Show>
+
+                <Show when={sheetMode()}>
+                  <div data-mission-dock class="absolute right-2 bottom-2 z-[4] flex gap-1.5">
+                    <Show when={dockItems(mission()).decisions > 0}>
+                      <button
+                        type="button"
+                        data-mission-dock-item="decisions"
+                        class={DOCK_BUTTON}
+                        onClick={() => setSheet(true)}
+                      >
+                        {t("session.mission.dock.decisions", { count: dockItems(mission()).decisions })}
+                      </button>
+                    </Show>
+                    <Show when={dockItems(mission()).files}>
+                      {(files) => (
+                        <button type="button" data-mission-dock-item="files" class={DOCK_BUTTON} onClick={showFiles}>
+                          {t("session.mission.dock.files", { final: files().final, total: files().total })}
+                        </button>
+                      )}
+                    </Show>
+                    <button
+                      type="button"
+                      data-mission-dock-item="command"
+                      aria-expanded={sheet()}
+                      class={DOCK_BUTTON}
+                      onClick={() => setSheet((open) => !open)}
+                    >
+                      {t("session.mission.command")}
+                    </button>
+                  </div>
+                </Show>
+
+                <aside
+                  data-mission-side
+                  inert={sheetMode() && !sheet() ? true : undefined}
+                  class={
+                    sheetMode()
+                      ? "absolute inset-x-0 bottom-0 z-[5] flex max-h-[72%] flex-col gap-3 overflow-y-auto rounded-t-[14px] bg-v2-background-bg-base p-2 transition-transform duration-[250ms] [box-shadow:0_-12px_30px_rgba(0,0,0,.35)] motion-reduce:transition-none"
+                      : "flex min-h-0 flex-col gap-3 overflow-y-auto"
+                  }
+                  classList={{ "translate-y-[105%]": sheetMode() && !sheet() }}
+                >
+                  <Show when={props.writer}>
+                    {(writer) => (
+                      <MissionCommand
+                        model={mission()}
+                        writer={writer()}
+                        refresh={() => props.control.refresh()}
+                        prompt={props.prompt}
+                        selected={row()}
+                      />
+                    )}
+                  </Show>
+                  <div
+                    ref={(el) => {
+                      deliverables = el
+                    }}
+                  >
+                    <MissionDeliverables
+                      mission={mission()}
+                      selected={row()}
+                      onSelectAgent={selectAgent}
+                      openFile={props.openFile}
+                    />
+                  </div>
+                </aside>
+              </div>
+            )}
+          </Show>
+        </section>
+      </Match>
+    </Switch>
   )
 }

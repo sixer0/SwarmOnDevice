@@ -76,7 +76,7 @@ describe("mission control shell rules", () => {
   })
 })
 
-test("mount renders with a fake source, switches missions, toggles the sheet, and stays absent without missions", async () => {
+test("mount renders with a fake source, switches missions, toggles the sheet, and shows the empty or unavailable state without missions", async () => {
   const run = Bun.spawn(
     [
       process.execPath,
@@ -91,5 +91,5 @@ test("mount renders with a fake source, switches missions, toggles the sheet, an
   const [output, code] = await Promise.all([new Response(run.stderr).text(), run.exited])
   if (code !== 0) throw new Error(output)
   expect(output).toContain(" 0 fail")
-  expect(output).toContain(" 13 pass") // row 136a: +2 M6 tests; row 133b: +5 expand toggle tests
+  expect(output).toContain(" 16 pass") // row 136a: +2 M6 tests; row 133b: +5 expand toggle tests; row 180: +3 empty/unavailable
 }, 60_000)

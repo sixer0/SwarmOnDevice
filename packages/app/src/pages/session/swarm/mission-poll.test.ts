@@ -135,6 +135,7 @@ describe("mission poller", () => {
     poller.setMode("live")
     await flush()
     expect(last().readFailed).toBe(true)
+    expect(last().unavailable).toBe(true) // row 180: HOST_UNAVAILABLE = Studio is not running
     const seen: number[] = []
     for (let i = 0; i < 5; i++) {
       seen.push(clock.pending()[0])
@@ -145,6 +146,7 @@ describe("mission poller", () => {
     await clock.advance(clock.pending()[0])
     expect(last().readFailed).toBe(false)
     expect(last().mission?.id).toBe("m")
+    expect(last().unavailable).toBe(false)
     expect(clock.pending()).toEqual([LIVE_MS])
   })
 
@@ -153,7 +155,14 @@ describe("mission poller", () => {
     poller.setMode("live")
     await flush()
     expect(fake.calls).toEqual(["list:/repo"])
-    expect(last()).toEqual({ options: [], selected: undefined, mission: null, readFailed: false, listed: true })
+    expect(last()).toEqual({
+      options: [],
+      selected: undefined,
+      mission: null,
+      readFailed: false,
+      listed: true,
+      unavailable: false,
+    })
   })
 
   test("row 136 L1: listed is false until the first list answers, and comes with the options", async () => {

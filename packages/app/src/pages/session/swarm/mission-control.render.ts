@@ -270,15 +270,55 @@ describe("MissionControl mount", () => {
     expect(q("[data-mission-decision]")).not.toBeNull()
   })
 
-  test("absent without window.api.missions, and absent when the project has no mission", async () => {
+  test("absent without window.api.missions (web build): no section, no empty card, no line", async () => {
     await mount({ width: 1280, source: null })
     await new Promise((resolve) => setTimeout(resolve, 50))
     expect(q("[data-mission-control]")).toBeNull()
-    dispose()
-    document.body.innerHTML = ""
-    const { source } = await mount({ width: 1280, ids: [] })
-    await until(() => source!.calls.length > 0)
-    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(q("[data-mission-empty]")).toBeNull()
+    expect(q("[data-mission-unavailable]")).toBeNull()
+  })
+
+  test("row 180: no mission yet shows the compact empty card, replaced by the full view when a mission arrives", async () => {
+    const ids: string[] = []
+    const source = fakeSource(ids)
+    await mount({ width: 1280, source })
+    await until(() => !!q("[data-mission-empty]"))
+    expect(q("[data-mission-control]")).toBeNull()
+    expect(q("[data-mission-hq]")).toBeNull()
+    expect(q("[data-mission-title]")!.textContent).toBe(en["session.mission.title"])
+    expect(q("[data-mission-empty-line]")!.textContent).toBe("No missions yet.")
+    expect(q("[data-mission-empty-hint]")!.textContent).toBe(en["session.mission.emptyHint"])
+    // the first mission appears; the running poll (3 s live) swaps in the full view
+    ids.push("m-doc-1")
+    await until(() => !!q("[data-mission-hq]"), 6000)
+    expect(q("[data-mission-control]")).not.toBeNull()
+    expect(q("[data-mission-empty]")).toBeNull()
+    expect(q("[data-mission-title]")!.textContent).toBe("Kajian DATUM")
+  }, 10_000)
+
+  test("row 180: Studio not running (HOST_UNAVAILABLE) shows one muted line, not the card", async () => {
+    const source = {
+      calls: [] as string[],
+      list: async () => ({ ok: false as const, code: "HOST_UNAVAILABLE", message: "DATUM Studio is not running" }),
+      get: async () => ({ ok: false as const, code: "HOST_UNAVAILABLE", message: "DATUM Studio is not running" }),
+    }
+    await mount({ width: 1280, source })
+    await until(() => !!q("[data-mission-unavailable]"))
+    expect(q("[data-mission-unavailable]")!.textContent).toBe("Mission Control unavailable: Studio is not running.")
+    expect(q("[data-mission-empty]")).toBeNull()
+    expect(q("[data-mission-control]")).toBeNull()
+  })
+
+  test("row 180: another read failure with no mission known keeps the section hidden (unknown, not empty)", async () => {
+    const source = {
+      calls: [] as string[],
+      list: async () => ({ ok: false as const, code: "TIMEOUT", message: "slow" }),
+      get: async () => ({ ok: false as const, code: "TIMEOUT", message: "slow" }),
+    }
+    await mount({ width: 1280, source })
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(q("[data-mission-empty]")).toBeNull()
+    expect(q("[data-mission-unavailable]")).toBeNull()
     expect(q("[data-mission-control]")).toBeNull()
   })
 })

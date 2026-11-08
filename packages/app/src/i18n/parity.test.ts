@@ -133,8 +133,10 @@ const pluralCategories = new Map(
 //     row 128.
 //   - two more for the mission control expand toggle (`session.mission.expand`, `session.mission.collapse`), decision
 //     C175 of the same task (EN and ID only), row 133b.
+//   - three more for the Mission Control empty and unavailable states (`session.mission.empty`, `emptyHint`,
+//     `unavailable`), row 180 of the same task (EN and ID only).
 // Widening this list is a decision, not drift: `parity-exemption-guard.test.ts` fails the suite on any
-// two-hundred-and-ninth entry, on any non-literal/wildcard, and if `en` or `id` ever stops carrying an exempt key.
+// two-hundred-and-twelfth entry, on any non-literal/wildcard, and if `en` or `id` ever stops carrying an exempt key.
 const UNTRANSLATED_KEY_PRESENCE_EXEMPTION: readonly string[] = [
   "command.project.openNumber",
   "settings.tab.servers",
@@ -344,6 +346,9 @@ const UNTRANSLATED_KEY_PRESENCE_EXEMPTION: readonly string[] = [
   "session.mission.prompt.instruction",
   "session.mission.expand",
   "session.mission.collapse",
+  "session.mission.empty",
+  "session.mission.emptyHint",
+  "session.mission.unavailable",
 ]
 // Locales the exemption never applies to. `en` is every domain's source, and `id` is the second
 // maintained locale: it already carries every exempt key, so it stays fully enforced like the rest.
