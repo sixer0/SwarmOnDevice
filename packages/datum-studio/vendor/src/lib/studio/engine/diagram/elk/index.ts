@@ -21,7 +21,7 @@
  *  does not fit is refused, not squeezed (U24 B).
  */
 import type { StudioDiagramV1 } from "../../../contract";
-import { buildDiagramSvg, type DiagramBuildOptions, type DiagramSvgResult } from "../build";
+import { buildDiagramSvgRaw, withCaptionAbove, type DiagramBuildOptions, type DiagramSvgResult } from "../build";
 import type { DiagramGeometryIssue } from "../build/autofit";
 import { lintDiagramGeometry, type DiagramGeomLint } from "../fit/lint";
 import { ELK_FAMILIES, ElkUnavailable, elkLayoutPlan, elkRefusal } from "./adapter";
@@ -81,7 +81,18 @@ export async function buildDiagramSvgAuto(
   deps: AutoBuildDeps = {},
   onDecision?: (d: ElkDecision) => void,
 ): Promise<DiagramSvgResult> {
-  const build = deps.build ?? buildDiagramSvg;
+  // Swarm row 165P (C205, CP-28/48): the layouts are linted and compared on the sheet as drawn (caption at the foot,
+  // `buildDiagramSvgRaw`); the pick then gets its caption above the drawing (`withCaptionAbove`, idempotent).
+  return withCaptionAbove(await buildDiagramSvgAutoRaw(s, opts, deps, onDecision));
+}
+
+async function buildDiagramSvgAutoRaw(
+  s: StudioDiagramV1,
+  opts: DiagramBuildOptions,
+  deps: AutoBuildDeps,
+  onDecision?: (d: ElkDecision) => void,
+): Promise<DiagramSvgResult> {
+  const build = deps.build ?? buildDiagramSvgRaw;
   const decide = (d: ElkDecision) => {
     onDecision?.(d);
     return d;

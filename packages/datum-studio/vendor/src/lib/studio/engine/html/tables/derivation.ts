@@ -23,6 +23,7 @@ import { paraHtml } from "./inline";
 import { renderVerbatimDerivation } from "./reproduction";
 import { color, css, labels, n, pNum, pStr, role, ruleCss, runCss } from "./style";
 import { APPARATUS_TEXT, derivationLabelText, verdictTagText, wrapperLangOf } from "../../front/texts";
+import { fmt, numberLanguageOf } from "../../bind/format";
 
 /** Tag vonis tampilan berbahasa dokumen (S13/F-2); dokumen ID apa adanya. */
 function tagText(tag: string, ctx: RenderContext): string {
@@ -68,6 +69,27 @@ function monoLinesHtml(b: DerivationBuild, ctx: RenderContext): string {
   return `<div class="st-derivation-mono" style="${escText(style)}">${lines.join("")}</div>`;
 }
 
+/**
+ * Swarm row 165P (C205, CP-36; ID p.82 DT-42c "Teks untuk pembaca ... tidak menyebut ... markup", research/14 CP-36
+ * search token `_`): the `= <expr>` line of a nested derivation result printed the engine's arithmetic over register
+ * KEYS (case 06: `= energi_baterai * 0.85 / beban_puncak * 60`). The keys are internal ids, and a register entry has no
+ * label (contract RegisterEntry: v, dec, unit, mark, src), so each key prints as its register value in the document's
+ * number form (`register.format`, the value the reader sees elsewhere), number literals in the same form, and the
+ * operators as the material writes them (× ÷ −). The arithmetic itself (checked by `buildDerivationBlock`) is unchanged.
+ */
+function exprReaderText(expr: string, ctx: RenderContext): string {
+  const reg = ctx.register;
+  const keys = reg ? [...reg.keys()].sort((a, b) => b.length - a.length) : [];
+  const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const keyAlt = keys.length > 0 ? `(?<![\\w.])(?:${keys.map(esc).join("|")})(?![\\w.])|` : "";
+  const lang = numberLanguageOf(ctx.snapshot?.doc?.meta?.language);
+  return expr.replace(new RegExp(`${keyAlt}\\d+(?:\\.\\d+)?|\\*\\*|//|[*/-]`, "g"), (t) => {
+    if (reg && keys.includes(t)) return reg.format(t);
+    if (/^\d/.test(t)) return fmt(Number(t), t.split(".")[1]?.length ?? 0, lang);
+    return t === "*" ? "×" : t === "/" ? "÷" : t === "-" ? "−" : t;
+  });
+}
+
 function paraLineHeight(lineTw: number | undefined): string | undefined {
   return lineTw ? `line-height:${n(lineTw / 20)}pt` : undefined;
 }
@@ -90,7 +112,7 @@ function nestedTableHtml(b: DerivationBuild, ctx: RenderContext): string {
     }
     const weight = r.kind === "result" ? "font-weight:600" : undefined;
     const label = paraHtml(escText(r.label), exprRf.para, css(runCss(exprRun, p), weight));
-    const expr = r.expr ? paraHtml(escText(`= ${r.expr}`), exprRf.para, css(runCss(exprRun, p), `color:${color(ctx.tpl, "ink400", "ink400")}`)) : "";
+    const expr = r.expr ? paraHtml(escText(`= ${exprReaderText(r.expr, ctx)}`), exprRf.para, css(runCss(exprRun, p), `color:${color(ctx.tpl, "ink400", "ink400")}`)) : "";
     const value = paraHtml(escText(r.value ?? ""), valRf.para, css(runCss(valRun, p), "text-align:right", "white-space:pre", weight));
     const third =
       r.kind === "verdict" && r.tag

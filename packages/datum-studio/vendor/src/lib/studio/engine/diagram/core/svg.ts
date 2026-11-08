@@ -189,12 +189,13 @@ export function shapeSvg(
       return `<circle cx="${r2(x + w / 2)}" cy="${r2(y + h / 2)}" r="${r2(Math.min(w, h) / 2)}" ${common}/>`;
     case "bus":
       // P3: rel berat, garis tebal penuh lebar (Python tidak memberi data-node).
-      return `<line x1="${r2(x)}" y1="${r2(y + h / 2)}" x2="${r2(x + w)}" y2="${r2(y + h / 2)}" stroke="${col}" stroke-width="${r2(STROKE_PRIMARY * 3)}"${markAttrs("node", opts)}/>`;
+      // Swarm row 165O (C204 item 4): stroke-only line with an explicit fill="none" (no default black fill).
+      return `<line x1="${r2(x)}" y1="${r2(y + h / 2)}" x2="${r2(x + w)}" y2="${r2(y + h / 2)}" fill="none" stroke="${col}" stroke-width="${r2(STROKE_PRIMARY * 3)}"${markAttrs("node", opts)}/>`;
     case "doubled":
       return (
         `<rect x="${r2(x)}" y="${r2(y)}" width="${r2(w)}" height="${r2(h)}" ${common}/>` +
         `<rect x="${r2(x + 1.2)}" y="${r2(y + 1.2)}" width="${r2(w - 2.4)}" height="${r2(h - 2.4)}" fill="none" stroke="${col}" stroke-width="${r2(STROKE_HAIR)}"/>` +
-        `<line x1="${r2(x + 1.2)}" y1="${r2(y + h / 2)}" x2="${r2(x + w - 1.2)}" y2="${r2(y + h / 2)}" stroke="${col}" stroke-width="${r2(STROKE_HAIR)}"/>`
+        `<line x1="${r2(x + 1.2)}" y1="${r2(y + h / 2)}" x2="${r2(x + w - 1.2)}" y2="${r2(y + h / 2)}" fill="none" stroke="${col}" stroke-width="${r2(STROKE_HAIR)}"/>`
       );
     case "shadowed": {
       const off = snap(LATTICE_Y / 2, 0.1);
@@ -325,7 +326,9 @@ export function hatchLinesSvg(x: number, y: number, w: number, h: number, angle:
     lines.push(`<line x1="${r2(px + t0 * dx)}" y1="${r2(py + t0 * dy)}" x2="${r2(px + t1 * dx)}" y2="${r2(py + t1 * dy)}"/>`);
   }
   if (!lines.length) return "";
-  const g = `stroke="${colourOf("ink400")}" stroke-width="${pyStrNum(HATCH_STROKE_MM)}" data-hatch="${angle}"`;
+  // Swarm row 165O (C204 item 4, F-Y3): explicit fill="none". Without it the group's lines inherit the SVG default fill
+  // (black) and Chromium writes a #000000 fill colour into the PDF figure page, although a line has no area.
+  const g = `fill="none" stroke="${colourOf("ink400")}" stroke-width="${pyStrNum(HATCH_STROKE_MM)}" data-hatch="${angle}"`;
   if (!clip) return `<g ${g}>${lines.join("")}</g>`;
   return `<clipPath id="${escAttr(clip.id)}">${clip.shape}</clipPath><g ${g} clip-path="url(#${escAttr(clip.id)})">${lines.join("")}</g>`;
 }
@@ -621,7 +624,8 @@ export function lineSvg(
   dash?: string | null,
 ): string {
   const d = dash ? ` stroke-dasharray="${dash}"` : "";
-  return `<line x1="${pyNum(x1, 2)}" y1="${pyNum(y1, 2)}" x2="${pyNum(x2, 2)}" y2="${pyNum(y2, 2)}" stroke="${colourOf(colourToken)}" stroke-width="${r2(strokeW)}"${d}/>`;
+  // Swarm row 165O (C204 item 4): explicit fill="none" on a stroke-only line.
+  return `<line x1="${pyNum(x1, 2)}" y1="${pyNum(y1, 2)}" x2="${pyNum(x2, 2)}" y2="${pyNum(y2, 2)}" fill="none" stroke="${colourOf(colourToken)}" stroke-width="${r2(strokeW)}"${d}/>`;
 }
 
 /** Lompatan silang pada lintasan horizontal (r = 0,9 mm). */

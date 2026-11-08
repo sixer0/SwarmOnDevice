@@ -72,7 +72,8 @@ describe("F56-3: stand-alone render of a document diagram block", () => {
     expect(r.svg).not.toContain("DATUM-APPARATUS-REQUIRED");
     const t = textsOf(r.svg);
     expect(t).toContain("GAMBAR 4.1  Arsitektur sistem pemantauan iklim ruang simpan arsip.");
-    expect(t).toContain("SUMBER  Kajian Teknis 012/GSP/KT/XI/2026 §4.1 · register ruang Rev A");
+    // Row 165P consequence edit (C205, CP-28/48): SUMBER ends with the PROVENANS part of the block's marks.
+    expect(t).toContain("SUMBER  Kajian Teknis 012/GSP/KT/XI/2026 §4.1 · register ruang Rev A    PROVENANS  ■\u00a0TERUKUR · ◇\u00a0PEMASOK");
     expect(t.some((x) => x.startsWith("KUNCI  PENUH = ALIRAN DATA SENSOR"))).toBe(true);
     expect(r.standalone).toEqual({
       id: "4.1",

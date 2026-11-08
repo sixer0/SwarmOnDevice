@@ -300,7 +300,14 @@ function check15(c: Ctx): LintIssue[] {
   // Kolom sempit (sel tabel, rel) disisihkan terhadap lebar ukur median.
   const med = cand.length ? median(cand.map((e) => e.measureMm as number)) : 0;
   cand = cand.filter((e) => (e.measureMm as number) >= 0.6 * med);
-  if (!cand.length) return [issue(id, "NOT_RUN", "tidak ada paragraf badan multi-baris terukur (kelas st-p atau tag p; sampul, lembar kendali dan daftar isi tidak dihitung)")];
+  // Swarm row 165O (C203 F165N-2): the layout WAS measured (page/document elements present) but the document has no
+  // multi-line interior body paragraph. The check does not apply: REPORT "tidak berlaku" (the lint's existing
+  // not-applicable form, cf. C-INFO-OPENER language/checks.ts:227), not NOT_RUN, so the gate's LINT_PARTIAL
+  // (static-checks.ts, NOT_RUN only) is not raised by an absence. NOT_RUN stays for a failed or truncated measure.
+  if (!cand.length) {
+    const why = "tidak ada paragraf badan multi-baris terukur (kelas st-p atau tag p; sampul, lembar kendali dan daftar isi tidak dihitung)";
+    return [c.truncated ? issue(id, "NOT_RUN", `${TRUNC_NOTE}; ${why}`) : issue(id, "REPORT", `tidak berlaku: ${why}`)];
+  }
   let sum = 0;
   let lines = 0;
   for (const e of cand) {

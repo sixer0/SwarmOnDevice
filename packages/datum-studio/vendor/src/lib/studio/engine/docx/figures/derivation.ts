@@ -32,7 +32,8 @@ import { BindDefect, buildDerivationBlock, isVerbatimReproduction, type Derivati
 import { mmToTw } from "../../tokens";
 import { facesInXml, simpleTableXml } from "../package/xml";
 import { DERIVATION_TITLE_SEPARATOR, FIGURE_LABELS, defaultGlyphRun, figureRole, markGlyph, mergePara, mergeRun, tokenColor } from "./defaults";
-import { derivationLabelText, verdictTagText, wrapperLangOf } from "../../front/texts";
+import { derivationLabelText, provenanceMarkLabelText, verdictTagText, wrapperLangOf } from "../../front/texts";
+import { markGlyphRun } from "../tables/style";
 import { FIGURES_MODULE, failRender } from "./log";
 import { inlineRunsXml, paragraphXml, textRun } from "./ooxml";
 
@@ -125,8 +126,18 @@ function roles(ctx: RenderContext): Roles {
 
 function glyphXml(mark: ProvenanceMark | undefined, ctx: RenderContext, r: Roles, base: RunProps): string {
   if (!mark) return "";
-  const props = mergeRun(base, defaultGlyphRun(ctx.tpl), r.value.glyphRun?.[mark]);
-  return textRun(markGlyph(ctx.tpl.params, mark), props, ctx.tpl.params);
+  // Swarm row 165P (C205, CP-29; ID p.38-39 Tabel 7.1 "■ TERUKUR, ◈ DITURUNKAN, ◇ PEMASOK, △ ASUMSI", each in its
+  // Table 7.1 colour, research/14 CP-29 "glyph + label from Table 7.1 ... in its Table 7.1 colour"): the glyph takes its
+  // mark colour (`marks.<m>.colour`, ◈ = signal #B45309; before: ink900 #101418) and is followed by a no-break space and
+  // the mark label in the line's run, Cond capitals, as the HTML/PDF prints it (html/tables/derivation.ts `markTag` ->
+  // apparatus.ts `provenanceHtml`: DejaVu ◈ #B45309, then "DITURUNKAN" IBM Plex Sans Condensed uppercase).
+  const markColour = markGlyphRun(ctx.tpl, mark, undefined).color;
+  const props = mergeRun(base, defaultGlyphRun(ctx.tpl), markColour ? { color: markColour } : undefined, r.value.glyphRun?.[mark]);
+  const labelProps = mergeRun(base, { faceRole: "condensed", caps: true });
+  return (
+    textRun(markGlyph(ctx.tpl.params, mark), props, ctx.tpl.params) +
+    textRun(` ${provenanceMarkLabelText(mark, wrapperLangOf(ctx.snapshot?.doc?.meta))}`, labelProps, ctx.tpl.params)
+  );
 }
 
 /** Run vonis: MEMENUHI berwarna verd, TIDAK MEMENUHI berwarna alert. */

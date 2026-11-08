@@ -202,9 +202,12 @@ function htmlRules(html: string): Array<{ widthMm: number; leadMm: number }> {
   return out
 }
 
-describe("row 165B F113-8: DOCX Datum Rule lead grows with the sheet as the PDF lead", () => {
+// Row 165P consequence edit (C205, controller correction of F113-8; research/14 CP-23 "Lead segment 9 mm in a DOCX,
+// growing with the page number in a PDF"): the DOCX lead is a fixed 9 mm on every rule again (213 px at 600 dpi =
+// 9.017 mm, the nearest whole pixel); the HTML/PDF lead still grows with the sheet (row 165B, unchanged).
+describe("row 165B F113-8 as corrected by row 165P: DOCX lead fixed 9 mm, HTML/PDF lead grows", () => {
   for (const name of CASES) {
-    test(`${name}: DOCX leads equal the HTML/PDF leads rule by rule`, async () => {
+    test(`${name}: every DOCX Datum Rule lead is 9.0 mm (one 600 dpi pixel)`, async () => {
       const { html, docx } = await render(name)
       const d = docxRules(docx)
       const h = htmlRules(html)
@@ -212,15 +215,13 @@ describe("row 165B F113-8: DOCX Datum Rule lead grows with the sheet as the PDF 
       expect(d.length).toBe(h.length)
       d.forEach((r, i) => {
         expect(Math.abs(r.widthMm - h[i].widthMm)).toBeLessThan(0.1)
-        // one 600 dpi pixel is 0.042 mm; the tick at a pitch multiple may join the lead (5 px = 0.21 mm)
-        expect(Math.abs(r.leadMm - h[i].leadMm)).toBeLessThan(0.3)
+        expect(Math.abs(r.leadMm - 9.0)).toBeLessThan(1 / PX_PER_MM)
       })
     })
 
-    test(`${name}: chapter leads are not one fixed length and grow monotonically`, async () => {
-      const { docx } = await render(name)
-      const d = docxRules(docx)
-      const fractions = d.map((r) => r.leadMm / r.widthMm)
+    test(`${name}: the HTML/PDF leads still grow monotonically (row 165B)`, async () => {
+      const { html } = await render(name)
+      const fractions = htmlRules(html).map((r) => r.leadMm / r.widthMm)
       for (let i = 1; i < fractions.length; i++) expect(fractions[i]).toBeGreaterThan(fractions[i - 1])
       expect(fractions[fractions.length - 1]).toBeGreaterThan(0.99)
     })

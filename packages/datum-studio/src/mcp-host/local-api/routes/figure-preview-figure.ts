@@ -20,6 +20,8 @@ import { applyChartIntent, orientationTarget } from "@/lib/studio/engine/chart/c
 import { figureGrid } from "@/lib/studio/engine/chart/core/guards";
 import type { ChartLang } from "@/lib/studio/engine/chart/core/lang";
 import { buildDiagramSvgAuto } from "@/lib/studio/engine/diagram/elk";
+import type { DiagramBuildOptions } from "@/lib/studio/engine/diagram/build";
+import { APPARATUS_TEXT, provenanceMarkLabelText } from "@/lib/studio/engine/front/texts";
 import { glyphSet, mapBlock, storedComposeContext } from "@/lib/studio/services/compose";
 import { templateForDoc } from "@/lib/studio/services/render/common";
 import { ArtifactSpecReader, chartSvg, diagramApparatusOptions, diagramSpecForBlock } from "@/lib/studio/services/render/figures";
@@ -292,6 +294,25 @@ export function standaloneDiagramSpec(spec: StudioDiagramV1, block: NormBlock & 
   return out;
 }
 
+const PROVENANCE_MARK_ORDER = ["TERUKUR", "DITURUNKAN", "PEMASOK", "ASUMSI"] as const
+
+/**
+ * Swarm row 165P (C205, CP-28/48; research/14 CP-48 "SOURCE with provenance, node marks rendered with glyph and label"):
+ * the marks of the stand-alone figure's PROVENANS part. The block's own SUMBER marks (`source.provenance`, what the page
+ * apparatus prints, html/tables/apparatus.ts `sourceInner`) when it has any, else the marks its nodes carry, in the
+ * Table 7.1 order. Labels in the document language (`provenanceMarkLabelText`); none = undefined (SUMBER as before).
+ */
+export function standaloneProvenance(spec: StudioDiagramV1, block: NormBlock, lang: ChartLang | undefined): DiagramBuildOptions["provenance"] {
+  const c = isRec(block.content) ? block.content : {}
+  const src = isRec(c.source) && Array.isArray(c.source.provenance) ? c.source.provenance : []
+  const nodeMarks = (Array.isArray(spec.nodes) ? spec.nodes : []).map((n) => (isRec(n) ? n.mark : undefined))
+  const given = (src.length > 0 ? src : nodeMarks).filter((m): m is (typeof PROVENANCE_MARK_ORDER)[number] => PROVENANCE_MARK_ORDER.includes(m as never))
+  const marks = PROVENANCE_MARK_ORDER.filter((m) => given.includes(m))
+  if (marks.length === 0) return undefined
+  const wl = lang === "EN" ? "EN" : "ID"
+  return { label: APPARATUS_TEXT.provenance[wl].toUpperCase(), marks: marks.map((mark) => ({ mark, text: provenanceMarkLabelText(mark, wl) })) }
+}
+
 /** Render figur terselesaikan (sinkron, CPU); galat mesin (StudioEngineError) diteruskan ke pemanggil. */
 export async function renderResolved(
   f: ResolvedFigure,
@@ -320,7 +341,9 @@ export async function renderResolved(
     rendered = renderedSummary(f.spec, tpl, r.svg);
   } else {
     // I-2 (C74): the in-SVG key in the document language (ID: KUNCI, PENUH / PUTUS-PUTUS / ...), as buildFigures does.
-    r = await buildDiagramSvgAuto(solo ?? f.spec, { release: false, grid: figureGrid(tpl.params), ...(o.lang ? diagramApparatusOptions(o.lang) : {}) });
+    // Swarm row 165P (C205, CP-28/48): a stand-alone figure prints SUMBER with its PROVENANS part, as the page does.
+    const provenance = solo ? standaloneProvenance(solo, f.block, o.lang) : undefined;
+    r = await buildDiagramSvgAuto(solo ?? f.spec, { release: false, grid: figureGrid(tpl.params), ...(o.lang ? diagramApparatusOptions(o.lang) : {}), ...(provenance ? { provenance } : {}) });
     code = typeof f.spec.family === "string" ? f.spec.family : null;
   }
   const issues = issuesOf(r);

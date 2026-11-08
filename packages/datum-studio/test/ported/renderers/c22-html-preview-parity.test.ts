@@ -392,7 +392,11 @@ describe('C22 konfirmasi CL-02 T/S + CV-15: blok kendali sampul auto di HTML', (
     it(`${lang}: baris ${LABELS[lang].k} TERBATAS di bawah nomor (baris 2); ${LABELS[lang].p} = unit penyusun`, async () => {
       const h = await htmlComposed({ ...FIELDS, 'cover.controlBlock.preparerUnit': UNIT[lang] }, lang);
       const rows = coverControlRows(h);
-      expect(rows[1].slice(0, 2)).toEqual([LABELS[lang].k, 'TERBATAS']);
+      // Row 165P consequence edit (C205, CP-05 the manual's eight fields; DT-28c the level on its own line under the
+      // number): a written KLASIFIKASI field prints as the line under the number in the number cell, TIER/BAHASA drop.
+      expect(rows.length).toBe(4);
+      expect(rows[0][1]).toMatch(new RegExp(`${LABELS[lang].k}${lang === 'ID' ? ' : ' : ': '}TERBATAS$`));
+      expect(rows.flatMap((r) => [r[0], r[2]])).not.toContain(LABELS[lang].k);
       const flat = rows.flatMap((r) => [[r[0], r[1]], [r[2], r[3]]]);
       expect(flat).toContainEqual([LABELS[lang].p, UNIT[lang]]);
     });
@@ -400,11 +404,15 @@ describe('C22 konfirmasi CL-02 T/S + CV-15: blok kendali sampul auto di HTML', (
 
   // Wave 165 row 165A (C189 F56-1, consequence edit): without a KLASIFIKASI field in the list the engine adds its own
   // Klasifikasi field under the number (was: a second line inside the number cell, so no 'Klasifikasi' cell).
-  it('bawaan (daftar medan registri, tanpa unit): medan Klasifikasi di bawah nomor, penyusun = meta.author; absen = kosong byte-identik', async () => {
+  // Row 165O consequence edit (C204 item 3, CP-05 4 x 2): the classification is a line under the number inside the
+  // number cell again (its own block line), no Klasifikasi field.
+  it('bawaan (daftar medan registri, tanpa unit): baris Klasifikasi di sel nomor di bawah nomor, penyusun = meta.author; absen = kosong byte-identik', async () => {
     const absent = await htmlComposed({}, 'ID');
     const rows = coverControlRows(absent);
-    expect(rows[1].slice(0, 2)).toEqual(['Klasifikasi', 'TERBATAS']);
-    expect(rows.flat().filter((c) => c === 'Klasifikasi')).toHaveLength(1);
+    expect(rows[0][0]).toBe('Nomor dokumen');
+    expect(rows[0][1]).toMatch(/^\S+\s*Klasifikasi : TERBATAS$/);
+    expect(absent).toMatch(/<\/div><div class="st-control-line">Klasifikasi : <span[^>]*>TERBATAS<\/span><\/div>/);
+    expect(rows.flat().filter((c) => c === 'Klasifikasi')).toHaveLength(0);
     expect(rows.flat()).not.toContain(UNIT.ID);
     expect(sha256(await htmlComposed({ 'cover.controlBlock.preparerUnit': '' }, 'ID'))).toBe(sha256(absent));
   });

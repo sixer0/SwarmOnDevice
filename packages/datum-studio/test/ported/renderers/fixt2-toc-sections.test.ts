@@ -159,7 +159,9 @@ describe('daftar isi per section + lampiran (DOCX)', () => {
     toc.content = { ...(toc.content as object), entries: [{ level: 'chapter', label: { text: 'Bab 1' }, title: { text: 'Lingkup Survei' }, page: '5' }] } as never;
     const a = await render(snap, BENCH);
     expect(withoutSheetZero(a.xml)).not.toContain('w:bookmarkStart');
-    expect(a.xml).not.toContain('PAGEREF');
+    // Row 165P consequence edit (C205, CP-05): the cover HALAMAN field is the register's formula `= NUMPAGES - PAGEREF
+    // _StSheet0` (sheet count N); no other PAGEREF (no TOC marker) may appear.
+    expect(a.xml.replaceAll(' PAGEREF _StSheet0 ', '')).not.toContain('PAGEREF');
     const none = composeDoc('static');
     none.blocks = none.blocks.filter((b) => b.type !== 'toc');
     const b = await render(none, BENCH);

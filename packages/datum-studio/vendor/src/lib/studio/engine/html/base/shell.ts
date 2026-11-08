@@ -150,10 +150,11 @@ const BODY_UNIT_KINDS = new Set(["chapter", "appendix"]);
 export function withSheetRestart(tpl: ResolvedTemplate, meta: DocMeta, units: readonly ShellUnit[]): ShellUnit[] {
   const first = units.findIndex((u) => BODY_UNIT_KINDS.has(u.kind));
   if (first <= 0 || !sheetNumberingFromChapter1(tpl.params, wrapperLangOf(meta))) return [...units];
-  // Wave 165 row 165A (F113-7): the register of an interior unit before Bab 1 (contents) stays, without its sheet cell.
-  return units.map((u, i) =>
-    i < first ? (!u.wrapper && u.footer === "registerBlock" ? { ...u, beforeSheetOne: true, sheetless: true } : { ...u, footer: "none", beforeSheetOne: true }) : u,
-  );
+  // Swarm row 165P (C205, controller correction of F113-7; research/14 CP-11, ID p.48 "Sampul, lembar kendali, dan
+  // pembatas tidak bernomor", CP-11 pass test "Wrapper pages carry no Register Block"): every unit before Bab 1, the
+  // contents included, prints no register (row 165A's sheetless contents register is withdrawn; = DOCX, whose contents
+  // section never had one). The numbered-sheet count N is unchanged (the units stay hidden in the numbered pass).
+  return units.map((u, i) => (i < first ? { ...u, footer: "none", beforeSheetOne: true } : u));
 }
 
 /** Wave 165 row 165A (F113-6): marker around the register "N" that the PDF print replaces with the numbered-sheet total. */
@@ -262,12 +263,102 @@ function registerBoxes(tpl: ResolvedTemplate, meta: DocMeta, markTotal = false):
   return out;
 }
 
-function boxDecl(box: Box, content: string | undefined, styles: Record<"top" | "bottom" | "class", string>, pre = false): string {
+function boxDecl(box: Box, content: string | undefined, styles: Record<"top" | "bottom" | "class", string>, pre = false, own?: string): string {
   if (content === undefined) return `@${box}{content:none}`;
   const base = box.startsWith("top") ? styles.top : styles.bottom;
+  // Swarm row 165P: a box with its own declarations (`own`, the register layers) replaces the generic class colour and
+  // alignment; the declarations come last, so they win.
+  if (own !== undefined) return `@${box}{content:${content};${base}${own}}`;
   const extra = box === "top-right" || box === "bottom-right" ? styles.class : "";
   const align = box.endsWith("left") ? "left" : box.endsWith("right") ? "right" : "center";
   return `@${box}{content:${content};${base}${extra}${pre ? "white-space:pre;" : ""}text-align:${align}}`;
+}
+
+/**
+ * Swarm row 165P: distance from the top of the running-head text to its rule (the manual's own PDF p.47: head text top
+ * 13.2 mm, rule 16.3 mm).
+ */
+const HEAD_RULE_BELOW_TEXT_MM = 3.1;
+
+/** Swarm row 165P: counter style that prints a page number as no-break spaces of the same digit count. */
+export const BLANK_COUNTER_STYLE = "st-blank";
+const NBSP = " ";
+
+/**
+ * Swarm row 165P (C205, CP-13; ID p.53 DT-13g and Gambar 8.7, specimen register of every manual page "GSP · **XXX/…** ·
+ * REV **A** · 02-XI-2026 · LEMBAR **47** DARI 98", ID: "number and sheet number bold ink900"): a page-margin box of
+ * Chromium prints its whole content in one style, so one box cannot hold a bold number between regular words. With the
+ * register in a monospace face (IBM Plex Mono: every glyph the same advance) the register line is printed as two
+ * left-aligned layers of the full text-column width that overlap exactly, column for column:
+ * - `regular`: every regular part (labels, separators, date, the N total) in the register run style; each bold part is
+ *   replaced by as many no-break spaces as it has characters (the page number by `counter(page, st-blank)`);
+ * - `bold`: the bold fields (`device.registerBlock.bold`, P4S-14: nomor, rev, n) in ink900 600 at their columns, every
+ *   other character a no-break space.
+ * No character is printed twice, so the PDF text layer holds each word once at its place. The middle cell (LEMBAR n DARI
+ * N) starts at the column that centres it on the line, as the centre box placed it before. The classification cell is
+ * the right box, as before. `undefined` = the register face is not monospace (the single-box form stays).
+ */
+function registerLayers(
+  tpl: ResolvedTemplate,
+  meta: DocMeta,
+  markTotal: boolean,
+  cols: number,
+): { regular: string; bold: string; right: string | undefined } | undefined {
+  const parts = registerCellParts(tpl, meta.language);
+  if (parts.length === 0) return undefined;
+  const last = parts.length - 1;
+  const centerIdx = parts.findIndex((c, i) => i !== last && c.some((x) => "field" in x && x.field === "n"));
+  const reg: string[] = [];
+  const bold: string[] = [];
+  let col = 0;
+  const blank = (n: number): string => cssString(NBSP.repeat(Math.max(0, n)));
+  const put = (text: string, isBold: boolean) => {
+    const n = Array.from(text).length;
+    (isBold ? bold : reg).push(cssString(text));
+    (isBold ? reg : bold).push(blank(n));
+    col += n;
+  };
+  const cellOut = (cell: (typeof parts)[number]) => {
+    for (const part of cell) {
+      if ("text" in part) put(part.text, false);
+      else if (part.field === "n") {
+        reg.push(part.bold ? `counter(page, ${BLANK_COUNTER_STYLE})` : "counter(page)");
+        bold.push(part.bold ? "counter(page)" : `counter(page, ${BLANK_COUNTER_STYLE})`);
+        col += 1;
+      } else if (part.field === "N") {
+        // The total ends the middle cell; a bold N is printed in both layers (the PDF print fills the marked slot).
+        const slot = markTotal ? `${SHEET_TOTAL_MARK.open}counter(pages)${SHEET_TOTAL_MARK.close}` : "counter(pages)";
+        reg.push(slot);
+        if (part.bold) bold.push(slot);
+        col += 2;
+      } else put(registerFieldValue(meta, part.field, tpl), part.bold === true);
+    }
+  };
+  const left = parts.filter((_, i) => i !== last && i !== centerIdx);
+  left.forEach((cell, i) => {
+    if (i > 0) put(NBSP.repeat(2), false);
+    cellOut(cell);
+  });
+  if (centerIdx >= 0) {
+    const width = parts[centerIdx].reduce((a, x) => a + ("text" in x ? Array.from(x.text).length : x.field === "n" ? 1 : x.field === "N" ? 2 : Array.from(registerFieldValue(meta, x.field, tpl)).length), 0);
+    const start = Math.max(col + 2, Math.round((cols - width) / 2));
+    put(NBSP.repeat(start - col), false);
+    cellOut(parts[centerIdx]);
+  }
+  const right = cellsText(tpl, meta, parts[last], markTotal);
+  return { regular: reg.join(" "), bold: bold.join(" "), right: last === centerIdx ? undefined : right };
+}
+
+/** CSS content of one register cell (single-box form). */
+function cellsText(tpl: ResolvedTemplate, meta: DocMeta, cell: ReturnType<typeof registerCellParts>[number], markTotal: boolean): string {
+  return cell
+    .map((part) => {
+      if ("text" in part) return cssString(part.text);
+      if (part.field === "n") return "counter(page)";
+      if (part.field === "N") return markTotal ? `${SHEET_TOTAL_MARK.open}counter(pages)${SHEET_TOTAL_MARK.close}` : "counter(pages)";
+      return cssString(registerFieldValue(meta, part.field, tpl));
+    })
+    .join(" ");
 }
 
 /** R-76 (CL-02 NOTA): baris klasifikasi di bawah nomor dokumen; absen/false = tanpa baris. */
@@ -344,23 +435,74 @@ export function pageFurnitureCss(tpl: ResolvedTemplate, meta: DocMeta, units: re
       `font-weight:${rh.weight};letter-spacing:${r4(track)}em;text-transform:${rh.upper ? "uppercase" : "none"};` +
       `color:${rh.colour ?? colour(tpl, "ink400", "6B7783")};`,
     // Register: kotak 8,5 mm (RL) yang tepi bawahnya `--ftr` dari tepi bawah lembar.
+    // Swarm row 165P: the 8.5 mm box is the margin box itself (margin-top + margin-bottom), so its top and bottom borders
+    // are the register rules; the text sits 1.55 mm under the top edge, as before (padding-top was margin + 1.55 mm).
     bottom:
-      `vertical-align:top;padding-top:${mm(Math.max(0, g.bottom - g.footerMm - 8.5) + 1.55)};font-family:${fontStack(tpl, rb.role)};` +
+      `vertical-align:top;margin-top:${mm(Math.max(0, g.bottom - g.footerMm - 8.5))};padding-top:${mm(1.55)};margin-bottom:${mm(g.footerMm)};` +
+      `font-family:${fontStack(tpl, rb.role)};` +
       `font-size:${pt(rb.sizePt ?? 6.2)};font-weight:${rb.weight};letter-spacing:.02em;color:${rb.colour ?? colour(tpl, "ink400", "6B7783")};`,
     class: `color:${classInk};font-weight:600;`,
   };
+  // Swarm row 165P (C205, CP-08/CP-12/CP-13; ID p.46 Gambar 8.1, p.49 Tabel 8.1, p.53 DT-13g, research/14 CP-12 "rule
+  // seal 0.26 mm", CP-13 "Top rule seal 0.35 mm, bottom ink200 0.20 mm"; measured on the manual's own PDF p.47: head
+  // rule #6E1420 0.75 pt under the head text, register top rule #6E1420 1.0 pt, bottom rule #C3CBD1 0.6 pt): the PDF
+  // prints the running-head rule under the head line and the register's top and bottom rules, as borders of the page
+  // margin boxes. Every head box of a unit with a running head is present (empty = ""), so the rule spans the column.
+  // Limit (row 165P probe v4/v5): Chromium paints a box border in whole CSS pixels (0.2646 mm), so all three rules print
+  // 0.2646 mm (head 0.26 as asked; register top 0.35 -> nearest 1 px; bottom 0.20 -> the 1 px minimum). A margin box
+  // takes no child element, and an SVG background there was scaled with the box and added a page raster (v5).
+  const seal = colour(tpl, "color.wrapper.seal", "6E1420");
+  const ink200 = colour(tpl, "ink200", "C3CBD1");
+  // R-72 / R-73 (GF-22) colour overrides apply to the printed rules as to the screen furniture below.
+  const headRuleColour = ruleColourOverride(tpl, P_RUNNING_HEAD_RULE);
+  const regTopColour = ruleColourOverride(tpl, P_REGISTER_TOP_RULE);
+  const headRuleCss = `border-bottom:${mm(0.26)} solid ${headRuleColour ? `#${headRuleColour}` : seal};margin-bottom:${mm(Math.max(0, g.top - g.headerMm - HEAD_RULE_BELOW_TEXT_MM))};`;
+  styles.top += headRuleCss;
+  const regRules = (visible: boolean) =>
+    `border-top:${mm(0.35)} solid ${visible ? (regTopColour ? `#${regTopColour}` : seal) : "transparent"};border-bottom:${mm(0.2)} solid ${visible ? ink200 : "transparent"};`;
   const docRh = runningHeadText(tpl, meta);
   const line = classificationLine(tpl, meta);
-  const reg = registerBoxes(tpl, meta, units.some((u) => u.beforeSheetOne));
+  const markTotal = units.some((u) => u.beforeSheetOne);
+  const columnMm = g.pageW - g.inner - g.outer;
+  const regPt = rb.sizePt ?? 6.2;
+  // IBM Plex Mono advance 0.6 em + letter-spacing 0.02 em per character.
+  const cols = Math.floor((columnMm * 72) / 25.4 / (regPt * 0.62));
+  const layers = rb.role === "mono" && !line ? registerLayers(tpl, meta, markTotal, cols) : undefined;
+  const reg: Partial<Record<Box, string>> = layers
+    ? { "bottom-left": layers.regular, "bottom-center": layers.bold, ...(layers.right !== undefined ? { "bottom-right": layers.right } : {}) }
+    : registerBoxes(tpl, meta, markTotal);
+  if (!layers && reg["bottom-center"] === undefined && Object.keys(reg).length > 0) reg["bottom-center"] = '""';
+  const layerWidth = `width:${mm(columnMm)};white-space:pre;`;
+  const regOwn: Partial<Record<Box, string>> = layers
+    ? {
+        "bottom-left": `${layerWidth}${regRules(true)}text-align:left;`,
+        "bottom-center": `${layerWidth}${regRules(false)}color:${colour(tpl, "ink900", "101418")};font-weight:600;text-align:left;`,
+        "bottom-right": `${layerWidth}${regRules(false)}${styles.class}text-align:right;`,
+      }
+    : {
+        "bottom-left": `${regRules(true)}text-align:left;`,
+        "bottom-center": `${regRules(true)}text-align:center;`,
+        "bottom-right": `${regRules(true)}${styles.class}text-align:right;`,
+      };
   // CL-02 NOTA (cetak): baris kedua di kotak margin yang memuat nomor.
   if (line && reg[line.box] !== undefined) reg[line.box] = `${reg[line.box]} "\\A" ${cssString(line.label + line.value)}`;
   const headBoxes = (t: RunningHeadText): Partial<Record<Box, string>> => ({
-    "top-left": t.left ? cssString(t.left) : undefined,
-    "top-center": t.center ? cssString(t.center) : undefined,
-    "top-right": t.right ? cssString(t.right) : undefined,
+    "top-left": t.left ? cssString(t.left) : '""',
+    "top-center": t.center ? cssString(t.center) : '""',
+    "top-right": t.right ? cssString(t.right) : '""',
   });
   const pageRule = (name: string, head: Partial<Record<Box, string>>, foot: Partial<Record<Box, string>>, bg: string, extra = "") =>
-    `@page${name ? ` ${name}` : ""}{background:${bg};${extra}` + BOXES.map((b) => boxDecl(b, head[b] ?? foot[b], styles, line !== undefined && foot === reg && b === line.box)).join("") + `}`;
+    `@page${name ? ` ${name}` : ""}{background:${bg};${extra}` +
+    BOXES.map((b) =>
+      boxDecl(
+        b,
+        head[b] ?? foot[b],
+        styles,
+        line !== undefined && foot === reg && b === line.box,
+        foot === reg && foot[b] !== undefined ? (line !== undefined && b === line.box ? `${regOwn[b] ?? ""}white-space:pre;` : regOwn[b]) : undefined,
+      ),
+    ).join("") +
+    `}`;
 
   const interiorBg = colour(tpl, "color.interior.paper", "FCFCFB");
   const wrapperBg = colour(tpl, "color.wrapper.paper", "FBFAF7");
@@ -368,6 +510,8 @@ export function pageFurnitureCss(tpl: ResolvedTemplate, meta: DocMeta, units: re
   const registerOn = p[P.registerEnabled] !== false;
   const out: string[] = [
     `:root{--st-sheets:${cssString(String(sheets))};--class-ink:${classInk}}`,
+    // Swarm row 165P: the page number as no-break spaces of the same digit count (register layers).
+    ...(layers ? [`@counter-style ${BLANK_COUNTER_STYLE}{system:numeric;symbols:${Array.from({ length: 10 }, () => cssString(NBSP)).join(" ")}}`] : []),
     // Halaman bawaan (isi di luar unit): mode seksi interior templat.
     pageRule("", docModes.header === "runningHead" ? headBoxes(docRh) : {}, registerOn && docModes.footer === "registerBlock" ? reg : {}, interiorBg),
     `@page st-sheet{background:${interiorBg};${BOXES.map((b) => `@${b}{content:none}`).join("")}}`,
@@ -375,8 +519,8 @@ export function pageFurnitureCss(tpl: ResolvedTemplate, meta: DocMeta, units: re
   for (const u of units) {
     const name = `st-u-${u.index}`;
     const head = u.header === "runningHead" ? headBoxes({ ...docRh, center: u.center }) : {};
-    // Wave 165 row 165A (F113-7): a sheetless unit (contents before Bab 1) prints the register without the sheet cell.
-    const foot = u.footer === "registerBlock" ? (u.sheetless ? { ...reg, "bottom-center": undefined } : reg) : {};
+    // Swarm row 165P (C205): no unit is sheetless any more (withSheetRestart drops the register before Bab 1).
+    const foot = u.footer === "registerBlock" ? reg : {};
     // Row 123 (CP-11): `counter-set:page 0` on every page of the units before Bab 1, so the first Bab 1 page counts 1
     // (Chromium 1234 probe p6: a counter-set on a named page holds on each of its pages and the count continues after).
     out.push(pageRule(name, head, foot, u.wrapper ? wrapperBg : interiorBg, u.beforeSheetOne ? "counter-set:page 0;" : ""));

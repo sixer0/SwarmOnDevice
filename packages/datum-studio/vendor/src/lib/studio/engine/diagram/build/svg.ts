@@ -48,6 +48,8 @@ import {
   tokenFloorChecks,
   TRACK,
   colourOf,
+  MARKS,
+  MARK_COLOUR_TOKENS,
   type DiagramGrid,
   resolveDiagramGrid,
   type SheetNode,
@@ -123,6 +125,14 @@ export interface DiagramBuildOptions {
    * rows as written (output unchanged).
    */
   keyRowText?: (row: string) => string;
+  /**
+   * Swarm row 165P (C205, CP-28/48; ID p.41 DT-15 "baris SUMBER yang diakhiri PROVENANS untuk tabel data", p.57): the
+   * PROVENANS part an `apparatus: "figure"` SVG prints after its SUMBER text, as the page apparatus does
+   * (html/tables/apparatus.ts `sourceInner`: label, then glyph + label per mark joined by " · "). `label` = the
+   * document-language word (PROVENANS / PROVENANCE), `marks` = the figure's marks with their label text. Absent or no
+   * mark = SUMBER as before.
+   */
+  provenance?: { label: string; marks: ReadonlyArray<{ mark: keyof typeof MARKS; text: string }> };
 }
 
 /** Row 124 (CP-28/48): default caption label word (manual Rev A ID edition, DT-15). */
@@ -287,6 +297,58 @@ function sourcesOf(s: StudioDiagramV1): string[] {
   return Array.isArray(src) ? src.map(String) : [String(src)];
 }
 
+// ------------------------------------------------------------------ Swarm row 165P: figure apparatus order
+/** Swarm row 165P: attribute on each caption line of an `apparatus: "figure"` SVG (moved by `withCaptionAbove`). */
+export const CAPTION_MARK_ATTR = 'data-st-caption="1"';
+
+/**
+ * Swarm row 165P (C205, CP-29/CP-48): in a SUMBER line that ends with the PROVENANS part, the label is set SemiBold and
+ * each mark glyph in its Table 7.1 colour (`MARK_COLOUR_TOKENS`, the node glyph colours: ◈ signal), as the page prints
+ * them; the text stays one `<text>` element (the fit lint reads its tspans).
+ */
+function provenanceTspans(el: string, prov: NonNullable<DiagramBuildOptions["provenance"]>): string {
+  const label = escText(prov.label);
+  const at = el.indexOf(label, el.indexOf(">") + 1);
+  if (at < 0) return el;
+  let tail = el.slice(at + label.length);
+  for (const m of prov.marks) {
+    const g = MARKS[m.mark];
+    tail = tail.split(g).join(`<tspan fill="${colourOf(MARK_COLOUR_TOKENS[m.mark] ?? "signal")}">${g}</tspan>`);
+  }
+  return `${el.slice(0, at)}<tspan font-weight="600">${label}</tspan>${tail}`;
+}
+
+/**
+ * Swarm row 165P (C205, CP-28/48; ID p.41 DT-15 "Caption satu kalimat ... di atas gambar", research/14 CP-28 "A
+ * one-sentence caption ... above the figure"; the page apparatus prints it above, html/tables/figure.ts): an
+ * `apparatus: "figure"` SVG prints its caption ABOVE the drawing. `buildOnce` draws the caption as the lowest foot line
+ * (lint, DATUM-29/30 and every size check run on that sheet, unchanged); this moves it: the caption lines go to the top
+ * band (one lattice line each), and everything after the paper rect is drawn one band lower in a `translate` group. The
+ * band the caption left at the foot takes the shift exactly, so the sheet height is unchanged. Idempotent; an SVG
+ * without marked caption lines (apparatus page) is returned as is.
+ */
+export function withCaptionAbove(r: DiagramSvgResult): DiagramSvgResult {
+  if (r.report.apparatus !== "figure" || !r.svg.includes(CAPTION_MARK_ATTR)) return r;
+  const caps: string[] = [];
+  const body = r.svg.replace(new RegExp(`<text ${CAPTION_MARK_ATTR} [\\s\\S]*?</text>\\n?`, "g"), (m) => {
+    caps.push(m.trimEnd());
+    return "";
+  });
+  const paper = paperRectSvg(r.widthMm, r.heightMm);
+  const paperAt = body.indexOf(paper);
+  const paperEnd = paperAt < 0 ? -1 : paperAt + paper.length - 2;
+  const close = body.lastIndexOf("</svg>");
+  if (paperEnd < 0 || close < 0 || caps.length === 0) return r;
+  const band = caps.length * LATTICE_Y;
+  // Baseline of caption line i: 0.8 lattice line into its band (the caption 7.6 pt ascends ~2.7 mm, so the first line
+  // clears the sheet top; the drawing below starts one band lower than before).
+  const moved = caps.map((c, i) => c.replace(CAPTION_MARK_ATTR, "data-caption-above=\"1\"").replace(/ y="[^"]*"/, ` y="${pyNum((i + 0.8) * LATTICE_Y, 2)}"`));
+  const head = body.slice(0, paperEnd + 2);
+  const rest = body.slice(paperEnd + 2, close).replace(/^\n/, "");
+  const svg = `${head}\n${moved.join("\n")}\n<g transform="translate(0 ${pyNum(band, 3)})">\n${rest}</g>\n${body.slice(close)}`;
+  return { ...r, svg };
+}
+
 // ------------------------------------------------------------------ rakit
 /**
  * Rakit diagram (FIG-02b): render apa adanya; bila lint geometri menemukan cacat, rakit ulang
@@ -372,7 +434,10 @@ function buildOnce(s: StudioDiagramV1, opts: DiagramBuildOptions, deps: DiagramB
   // Row 124 (CP-28/48): the caption starts with the bold label "GAMBAR n.m" (DT-15 ID p.41).
   const capLabel = `${opts.figureLabel ?? DEFAULT_FIGURE_LABEL} ${s.id}`;
   const captionText = `${capLabel}  ${s.title}`;
-  const sourceText = "SUMBER  " + sourcesOf(s).join("; ");
+  // Swarm row 165P (C205, CP-28/48): the figure's PROVENANS part after its SUMBER text (page apparatus form).
+  const prov = (s.apparatus ?? "page") === "figure" && opts.provenance && opts.provenance.marks.length > 0 ? opts.provenance : undefined;
+  const provText = prov ? `    ${prov.label}  ${prov.marks.map((m) => `${MARKS[m.mark]} ${m.text}`).join(" · ")}` : "";
+  const sourceText = "SUMBER  " + sourcesOf(s).join("; ") + provText;
   const capLines = (s.apparatus ?? "page") === "figure" ? footLines(captionText, "caption", W) : [captionText];
   const srcLines = (s.apparatus ?? "page") === "figure" ? footLines(sourceText, "source_line", W) : [sourceText];
   const footExtra = capLines.length - 1 + srcLines.length - 1;
@@ -498,16 +563,20 @@ function buildOnce(s: StudioDiagramV1, opts: DiagramBuildOptions, deps: DiagramB
   if (apparatus === "figure") {
     for (let i = capLines.length - 1; i >= 0; i--) {
       const capOpts = { role: "caption", colourToken: "ink700", anchor: "start" } as const;
-      sheet.add(i === 0 ? captionSvg(pyInt(0), foot, capLines[i], capLabel, capOpts) : svgText(pyInt(0), foot, capLines[i], capOpts));
+      // Swarm row 165P: caption lines are marked so `withCaptionAbove` can move them above the drawing.
+      const el = i === 0 ? captionSvg(pyInt(0), foot, capLines[i], capLabel, capOpts) : svgText(pyInt(0), foot, capLines[i], capOpts);
+      sheet.add(el.replace(/^<text /, `<text ${CAPTION_MARK_ATTR} `));
       foot -= LATTICE_Y;
     }
-    if (hasLegend) {
-      sheet.add(keyLine(foot));
-      foot -= LATTICE_Y * keyTexts.length;
-    }
+    // Swarm row 165P (C205, CP-28/48): the page apparatus order under the drawing, KUNCI then SUMBER/PROVENANS
+    // (html/tables/figure.ts "Caption di atas, baris KUNCI lalu SUMBER/PROVENANS di bawah"): SUMBER is the lowest line
+    // once the caption has moved above the drawing (`withCaptionAbove`); before, SUMBER sat above the key.
     srcLines.forEach((line, i) => {
-      sheet.add(svgText(pyInt(0), foot - (srcLines.length - 1 - i) * LATTICE_Y, line, { role: "source_line", colourToken: "ink400", anchor: "start" }));
+      const el = svgText(pyInt(0), foot - (srcLines.length - 1 - i) * LATTICE_Y, line, { role: "source_line", colourToken: "ink400", anchor: "start" });
+      sheet.add(prov ? provenanceTspans(el, prov) : el);
     });
+    foot -= LATTICE_Y * srcLines.length;
+    if (hasLegend) sheet.add(keyLine(foot));
   } else if (hasLegend) {
     sheet.add(keyLine(foot));
   }

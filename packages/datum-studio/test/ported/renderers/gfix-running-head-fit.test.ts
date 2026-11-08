@@ -173,9 +173,14 @@ describe('G-FIX: kepala halaman DOCX bawaan muat satu baris', () => {
     // row49a ADAPT (C104 H1, Rev A DT-28d): the classification run is now seal 6E1420 (was ink900 101418); the only
     // `<w:color>` element with 6E1420 in this header is that run (borders carry w:color as an attribute), so mapping it
     // back must give the pre-G-FIX bytes: G-FIX still leaves a fitting head untouched.
+    // Row 165P consequence edit (C205, CP-08/CP-12): the head rule is now seal w:sz 6 (was ink200 C3CBD1 w:sz 5); the
+    // border is mapped back as well, so the text bytes are still compared with the pre-G-FIX output.
     const preH1 = (xml: string): string => {
       expect(xml).toContain('<w:color w:val="6E1420"/>');
-      return xml.replaceAll('<w:color w:val="6E1420"/>', '<w:color w:val="101418"/>');
+      expect(xml).toContain('<w:bottom w:val="single" w:sz="6" w:space="1" w:color="6E1420"/>');
+      return xml
+        .replaceAll('<w:color w:val="6E1420"/>', '<w:color w:val="101418"/>')
+        .replace('<w:bottom w:val="single" w:sz="6" w:space="1" w:color="6E1420"/>', '<w:bottom w:val="single" w:sz="5" w:space="1" w:color="C3CBD1"/>');
     };
     expect(sha(preH1(headerXml(tpl, { lang: 'ID', title: 'Kajian Keamanan Aset Pelabuhan', chapter: 'Bab 6. Desain Keamanan' })))).toBe(
       '5e2c6f8e9861bef6aaf754f1a1e82b9892ce01b33b37d6962c5247efc18616e7',

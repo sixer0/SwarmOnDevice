@@ -49,6 +49,8 @@ import {
   CONTROL_FIELD_SHEETS_FIELD,
   controlBlockRowsText,
   controlRowsWithClassificationLine,
+  coverKickerText,
+  type ControlFieldExtras,
   controlSheetTemplateData,
   defaultMethodStatementText,
   normalizedIssueStampText,
@@ -181,9 +183,18 @@ export function autoControlBlock(b: WrapperBuilder): ControlBlock | undefined {
   return rows ? { type: "controlBlock", rows: rows.map((r) => [cell(r[0]), cell(r[1]), cell(r[2]), cell(r[3])]) } : undefined;
 }
 
-/** Row 122 (CP-15), shape wave 165 row 165A (F56-1): medan "Klasifikasi" sendiri tepat di bawah nomor dokumen (helper bersama `front/texts.ts`). */
+/** Row 122 (CP-15), shape row 165O (C204 item 3): baris "Klasifikasi : <K>" tersendiri di sel nomor, tepat di bawah nomor; kisi 4 x 2 tetap (helper bersama `front/texts.ts`). */
 function withClassificationLine(b: WrapperBuilder, cb: ControlBlock): ControlBlock {
-  return { ...cb, rows: controlRowsWithClassificationLine(cb.rows, b.ctx.snapshot.doc.meta, b.params, b.lang) };
+  // Swarm row 165P (C205, CP-05): the manual's eight fields, with the engine's values for HALAMAN (NUMPAGES field) and
+  // VERIFIKASI (control-sheet chain), as `autoControlBlock` gives them.
+  return { ...cb, rows: controlRowsWithClassificationLine(cb.rows, b.ctx.snapshot.doc.meta, b.params, b.lang, controlExtras(b)) };
+}
+
+/** Swarm row 165P (C205): engine values of the control fields that are not in meta (shared by auto and written blocks). */
+function controlExtras(b: WrapperBuilder): ControlFieldExtras {
+  const cs = b.ctx.snapshot.doc.front?.controlSheet?.data as ControlSheetData | undefined;
+  const verification = verificationSummaryText(cs?.verificationChain);
+  return { sheets: CONTROL_FIELD_SHEETS_FIELD, ...(verification ? { verification } : {}) };
 }
 
 /** Row 122 (CP-14): kolofon yang kanannya cap terbit diturunkan ulang dari meta (pemisah U+2014, huruf klasifikasi). */
@@ -245,7 +256,9 @@ export function autoCoverItems(b: WrapperBuilder, data: CoverData | undefined, o
         if (rulePlaced(b, "sampul")) items.push({ type: "device", device: "datumRule" });
         break;
       case "kicker jenis dokumen": {
-        const k = data?.kicker ?? strInline(pStr(p, "cover.kicker.text"));
+        // Swarm row 165P (C205, CP-04, C40 lembar cover): no written kicker and no template text = the document type of
+        // the type code (ID p.15 Tabel 3.1, `coverKickerText`), as the HTML cover.
+        const k = data?.kicker ?? strInline(coverKickerText(meta, p));
         if (hasText(k)) items.push(paraItem("kicker", k));
         break;
       }

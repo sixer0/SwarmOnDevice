@@ -346,6 +346,34 @@ export function verificationSummaryText(table: { rows?: ReadonlyArray<{ kind?: s
 const CONTROL_FIELDS_DEFAULT: readonly string[] = registryDefault("cover.controlBlock.fields", isStringList, "daftar string");
 
 /**
+ * Swarm row 165P (C205, CP-05): the eight control-block fields of Manual Rev A ID p.47 butir 10 ("Blok kendali 4 × 2
+ * di bawah garis 0,45 mm") and the sentence under the list ("Blok kendali memuat nomor dokumen, revisi, penyusun,
+ * kustodian, ditujukan kepada, halaman, datum geodetik, dan verifikasi"; EN p.49 "number, revision, preparer,
+ * custodian, addressee, sheets, geodetic datum and verification"), in that order: 4 rows x 2 pairs.
+ */
+export const MANUAL_CONTROL_FIELDS: readonly string[] = [
+  "NOMOR DOKUMEN",
+  "REVISI",
+  "PENYUSUN",
+  "KUSTODIAN",
+  "DITUJUKAN KEPADA",
+  "HALAMAN",
+  "DATUM GEODETIK",
+  "VERIFIKASI",
+];
+
+/**
+ * Swarm row 165P (C205): control fields a written cover block may carry that the manual's eight do not hold. The
+ * manual puts the tier on the task card (ID p.10 DT-02 "Kartu tugas menyebut tier") and in the control-sheet identity
+ * of Gambar 8.2 (ID p.47, "TIER SERAH"), not in the cover block; the classification is a line under the number (ID
+ * p.14 DT-28c, `controlRowsWithClassificationLine`). TINGKAT is the Indonesian word a writer uses for the tier.
+ * DASAR and BAHASA are the registry default's own fields (`COVER_CONTROL_FIELDS`), not the manual's eight.
+ */
+const NON_MANUAL_CONTROL_LABELS: ReadonlySet<string> = new Set(
+  ["TIER", "DASAR", "BAHASA"].flatMap((k) => Object.values(CONTROL_FIELD_LABELS[k] ?? {}).map((s) => s.toLowerCase())).concat(["tingkat"]),
+);
+
+/**
  * Nilai medan BAHASA blok kendali sampul: bahasa dokumen ditulis dalam bahasa pembungkus `lang`.
  * G-FIX1 (D-606) LB-07: dokumen EN berbahasa pembungkus EN = "English (UK)" (manual EN:18, EN:883);
  * nilai lain tetap seperti sebelumnya (dokumen ID byte-identik).
@@ -386,46 +414,58 @@ const inlineText = (i: Inline | undefined): string => (!i ? "" : "text" in i ? i
 
 /**
  * Row 122 (C40 FIX CP-15, DT-28c ID p.14 "Tulis klasifikasi kapital di baris tersendiri di bawah nomor", EN p.14),
- * shape changed by wave 165 row 165A (C189 F56-1): the cover control block gets its own field
- * `Klasifikasi` | `TERBATAS` (`Classification` | `RESTRICTED`) directly under the document number (same column, next
- * row); the number's value cell holds the number only. Level bold seal (DT-28d, `color.wrapper.seal`). Unchanged
+ * shape changed by wave 165 row 165A (C189 F56-1: own field row) and back by row 165O (C204 item 3): the line
+ * `Klasifikasi : TERBATAS` (`Classification: RESTRICTED`) is its own line inside the number's value cell, directly
+ * under the number; the 4 x 2 grid keeps its rows. Level bold seal (DT-28d, `color.wrapper.seal`). Unchanged
  * when the block has no number field, already carries a classification field, or the document has no classification.
  * Contract `Inline` cells, so DOCX and HTML (row 123) call the same helper.
  */
-export function controlRowsWithClassificationLine(rows: ReadonlyArray<readonly [Inline, Inline, Inline, Inline]>, meta: DocMeta, params: ParamMap, lang: WrapperLang = wrapperLangOf(meta)): Array<[Inline, Inline, Inline, Inline]> {
-  const out = controlRowsWithDocNumber(rows, meta);
+export function controlRowsWithClassificationLine(
+  rows: ReadonlyArray<readonly [Inline, Inline, Inline, Inline]>,
+  meta: DocMeta,
+  params: ParamMap,
+  lang: WrapperLang = wrapperLangOf(meta),
+  extras?: ControlFieldExtras,
+): Array<[Inline, Inline, Inline, Inline]> {
+  // Swarm row 165P (C205): the manual's eight fields first (`controlRowsManualFields`), when the caller passes the
+  // engine's field values (`extras`; HTML and DOCX cover writers). Without extras the rows are taken as given.
+  const out = controlRowsWithDocNumber(extras ? controlRowsManualFields(rows, meta, params, lang, extras) : rows, meta);
   const level = meta.classification?.trim() ?? "";
   if (level === "") return out;
   const isClass = (c: Inline | undefined) => CLASSIFICATION_FIELD_LABELS.has(inlineText(c).trim().toLowerCase());
   const isNumber = (c: Inline | undefined) => NUMBER_FIELD_LABEL.test(inlineText(c).trim());
   if (out.some((r) => isClass(r[0]) || isClass(r[2]))) return out;
-  // Wave 165 row 165A (C189 F56-1, CR-2/NU-02; DT-28c ID p.14 "di baris tersendiri di bawah nomor"; Gambar 8.2 ID
-  // p.47 prints KLASIFIKASI as its own label/value row of the identity block): the classification is its own
-  // label/value field directly under "Nomor dokumen", never a second line inside the number's value cell (the
-  // scorer reads the whole cell, gateway_check/04b_row56g_followup_facts.md Q2). The pairs are re-flowed two per
-  // row in reading order with the new pair two places after the number, i.e. in the same column one row down.
-  // Before (row 122): `012/GSP/KT/XI/2026` + w:br + `Klasifikasi : TERBATAS` in one cell.
-  const pairs: Array<[Inline, Inline]> = [];
+  // Swarm row 165O (C204 item 3; CP-05 "4 x 2 block", research/14:55; DT-28c ID p.14 "di baris tersendiri di bawah
+  // nomor"): back to the manual's 4 x 2 grid. The 165A field ROW (pairs re-flowed, case 01 five rows, scorer CV-12
+  // "5 baris (> 4)") is withdrawn. The classification is its own LINE inside the number's value cell, directly under
+  // the number: the cell's first line is the number only, then a `br` run, then `Klasifikasi : TERBATAS` (level bold
+  // seal). The control-block writers print each `br`-separated line of a cell as its own paragraph (DOCX `w:p`,
+  // docx/wrapper/render.ts controlBlockXml) or block line (HTML `div.st-control-line`, html/blocks/wrapper.ts), not a
+  // soft line break. The scorer's CR-2/NU-02 read the whole cell: recorded scorer limitation (DEVIATION-SCORER, C204).
+  const value = classificationMarkText(level);
+  const full = classificationLineText(level, lang);
+  const seal = pStr(params, "color.wrapper.seal") ?? "6E1420";
   for (const r of out) {
     for (const i of [0, 2] as const) {
-      const l = r[i];
-      const v = r[i + 1];
-      if (inlineText(l).trim() === "" && inlineText(v).trim() === "" && !hasFieldRun(v)) continue;
-      pairs.push([l ?? { text: "" }, v ?? { text: "" }]);
+      const cell = r[i + 1];
+      if (!isNumber(r[i]) || !cell) continue;
+      const base: Run[] = "text" in cell ? [{ t: cell.text }] : cell.runs;
+      r[i + 1] = { runs: [...base, { br: "line" }, { t: full.slice(0, full.length - value.length) }, { t: value, b: true, color: seal }] };
+      return out;
     }
   }
-  const at = pairs.findIndex((p) => isNumber(p[0]));
-  if (at < 0) return out;
-  const seal = pStr(params, "color.wrapper.seal") ?? "6E1420";
-  const field: [Inline, Inline] = [{ text: FRONT_PAYLOAD_LABELS.classification[lang] }, { runs: [{ t: classificationMarkText(level), b: true, color: seal }] }];
-  pairs.splice(Math.min(at + 2, pairs.length), 0, field);
-  const empty: Inline = { text: "" };
-  const reflowed: Array<[Inline, Inline, Inline, Inline]> = [];
-  for (let i = 0; i < pairs.length; i += 2) {
-    const right = pairs[i + 1] ?? [empty, empty];
-    reflowed.push([pairs[i][0], pairs[i][1], right[0], right[1]]);
+  return out;
+}
+
+/** Row 165O (C204 item 3): the lines of a control-block cell, split at its `br` runs (each line its own paragraph). */
+export function controlCellLines(cell: Inline): Inline[] {
+  if (!("runs" in cell) || !cell.runs.some((r) => "br" in r)) return [cell];
+  const lines: Run[][] = [[]];
+  for (const r of cell.runs) {
+    if ("br" in r) lines.push([]);
+    else lines[lines.length - 1].push(r);
   }
-  return reflowed;
+  return lines.map((runs) => ({ runs }));
 }
 
 /**
@@ -451,10 +491,6 @@ export function controlRowsWithDocNumber(rows: ReadonlyArray<readonly [Inline, I
   return out;
 }
 
-/** A value cell that holds a field run (HALAMAN = NUMPAGES) is not empty even without text. */
-function hasFieldRun(c: Inline | undefined): boolean {
-  return !!c && "runs" in c && Array.isArray(c.runs) && c.runs.some((r) => "field" in r);
-}
 
 /**
  * Row 122 (C40 FIX CP-30, DT-24 ID p.40): label of a derivation block = `<Turunan|Derivation> <id> · <title>`, the
@@ -542,7 +578,39 @@ function coverPreparerText(meta: DocMeta, params: ParamMap): string {
  * dipadatkan dengan sel kosong. undefined = tidak ada medan berisi.
  */
 export function controlBlockRowsText(meta: DocMeta, params: ParamMap, lang: WrapperLang, extras: ControlFieldExtras = {}): Array<[string, string, string, string]> | undefined {
-  const values: Record<string, string | undefined> = {
+  const values = controlFieldValues(meta, params, lang, extras);
+  const pairs: Array<[string, string]> = [];
+  const fields = pStrList(params, "cover.controlBlock.fields", CONTROL_FIELDS_DEFAULT);
+  // The always-print rule below holds for a template whose list is the manual's block (every built-in template lists
+  // the eight); another list (the registry default TIER/DASAR/BAHASA set) keeps the old rule, so its rows do not
+  // interleave empty manual cells with its own fields.
+  const manualBlock = MANUAL_CONTROL_FIELDS.every((f) => fields.includes(f));
+  for (const f of fields) {
+    const v = values[f];
+    const label = CONTROL_FIELD_LABELS[f];
+    if (!label) continue;
+    // Swarm row 165P (C205, CP-05; ID p.47 "Blok kendali memuat nomor dokumen, revisi, penyusun, kustodian, ditujukan
+    // kepada, halaman, datum geodetik, dan verifikasi"): a field of the manual's eight is always printed. A value the
+    // document does not give stays an empty cell, the manual's form for a cell without a value (ID p.19 TB-09 "sel
+    // yang tidak berlaku dibiarkan kosong"); nothing is invented. Other fields keep the old rule (empty = skipped).
+    if (!v || v.trim() === "") {
+      if (manualBlock && MANUAL_CONTROL_FIELDS.includes(f)) pairs.push([label[lang], ""]);
+      continue;
+    }
+    pairs.push([label[lang], v]);
+  }
+  if (pairs.every(([, v]) => v === "")) return undefined;
+  const rows: Array<[string, string, string, string]> = [];
+  for (let i = 0; i < pairs.length; i += 2) {
+    const right = pairs[i + 1] ?? ["", ""];
+    rows.push([pairs[i][0], pairs[i][1], right[0], right[1]]);
+  }
+  return rows;
+}
+
+/** Field values of a cover control block, by field key (`controlBlockRowsText`, `controlRowsManualFields`). */
+function controlFieldValues(meta: DocMeta, params: ParamMap, lang: WrapperLang, extras: ControlFieldExtras = {}): Record<string, string | undefined> {
+  return {
     // Row 122 (CP-05): absent extras = undefined = skipped (callers that pass nothing print what they printed before).
     HALAMAN: extras.sheets,
     "DATUM GEODETIK": extras.geodeticDatum ?? coverGeodeticDatum(params),
@@ -558,20 +626,95 @@ export function controlBlockRowsText(meta: DocMeta, params: ParamMap, lang: Wrap
     // C15 (CL-02 T/S, research/38 §3.3): hanya tercetak bila templat mendaftar KLASIFIKASI (bukan bawaan, C-6).
     KLASIFIKASI: meta.classification ? classificationMarkText(meta.classification) : undefined,
   };
-  const pairs: Array<[string, string]> = [];
-  for (const f of pStrList(params, "cover.controlBlock.fields", CONTROL_FIELDS_DEFAULT)) {
-    const v = values[f];
-    const label = CONTROL_FIELD_LABELS[f];
-    if (!label || !v || v.trim() === "") continue;
-    pairs.push([label[lang], v]);
+}
+
+const lowerTrim = (i: Inline | undefined): string => inlineText(i).trim().toLowerCase();
+
+/**
+ * Swarm row 165P (C205, CP-01/CP-05, C40 lembar cover): a control block WRITTEN by the document (auto `data.control`
+ * or an explicit body block) is laid out as the manual's eight fields, 4 x 2, in the manual's order:
+ * - a field the block carries keeps its label cell and value (the writer's words); the number follows meta afterwards
+ *   (`controlRowsWithDocNumber`);
+ * - HALAMAN is the engine's sheet count (`extras.sheets`, a NUMPAGES field the DOCX and PDF fill), never a typed
+ *   number: the count is known only after pagination (the case 01 material typed "6" for a 7-page PDF);
+ * - a field the block lacks takes the engine's value (`controlFieldValues`: template datum, control-sheet verification,
+ *   meta), else an empty cell (ID p.19 TB-09 "sel yang tidak berlaku dibiarkan kosong");
+ * - TIER/TINGKAT, DASAR, BAHASA and a KLASIFIKASI field are dropped (`NON_MANUAL_CONTROL_LABELS`; the classification
+ *   prints as the line under the number).
+ * A block with a label this table does not know is left as written (no content is dropped that the manual does not
+ * place elsewhere). Returns the rows unchanged when nothing would change.
+ */
+export function controlRowsManualFields(
+  rows: ReadonlyArray<readonly [Inline, Inline, Inline, Inline]>,
+  meta: DocMeta,
+  params: ParamMap,
+  lang: WrapperLang = wrapperLangOf(meta),
+  extras: ControlFieldExtras = {},
+  /** false = a missing field stays an empty cell (no engine value); FIDELITY builds its expectation this way. */
+  fill = true,
+): Array<[Inline, Inline, Inline, Inline]> {
+  const copy = rows.map((r) => [...r] as [Inline, Inline, Inline, Inline]);
+  const keyOf = new Map<string, string>();
+  for (const [k, l] of Object.entries(CONTROL_FIELD_LABELS)) for (const t of Object.values(l)) keyOf.set(t.toLowerCase(), k);
+  const given = new Map<string, [Inline, Inline]>();
+  for (const r of rows) {
+    for (const i of [0, 2] as const) {
+      const label = lowerTrim(r[i]);
+      if (label === "" && lowerTrim(r[i + 1]) === "") continue;
+      if (NON_MANUAL_CONTROL_LABELS.has(label) || CLASSIFICATION_FIELD_LABELS.has(label)) continue;
+      const key = NUMBER_FIELD_LABEL.test(label) ? "NOMOR DOKUMEN" : keyOf.get(label);
+      if (!key || !MANUAL_CONTROL_FIELDS.includes(key)) return copy;
+      if (!given.has(key)) given.set(key, [r[i], r[i + 1]]);
+    }
   }
-  if (pairs.length === 0) return undefined;
-  const rows: Array<[string, string, string, string]> = [];
-  for (let i = 0; i < pairs.length; i += 2) {
-    const right = pairs[i + 1] ?? ["", ""];
-    rows.push([pairs[i][0], pairs[i][1], right[0], right[1]]);
-  }
-  return rows;
+  if (given.size === 0) return copy;
+  const auto: Record<string, string | undefined> = fill ? controlFieldValues(meta, params, lang, extras) : {};
+  const cells: Array<[Inline, Inline]> = MANUAL_CONTROL_FIELDS.map((key) => {
+    const label: Inline = given.get(key)?.[0] ?? { text: CONTROL_FIELD_LABELS[key][lang] };
+    if (key === "HALAMAN" && extras.sheets !== undefined) {
+      return [label, extras.sheets === CONTROL_FIELD_SHEETS_FIELD ? { runs: [{ field: "NUMPAGES" }] } : { text: extras.sheets }];
+    }
+    const own = given.get(key)?.[1];
+    if (own && inlineText(own).trim() !== "") return [label, own];
+    const v = auto[key];
+    return [label, { text: v && v.trim() !== "" && v !== CONTROL_FIELD_SHEETS_FIELD ? v : "" }];
+  });
+  const out: Array<[Inline, Inline, Inline, Inline]> = [];
+  for (let i = 0; i < cells.length; i += 2) out.push([cells[i][0], cells[i][1], cells[i + 1][0], cells[i + 1][1]]);
+  return out;
+}
+
+/**
+ * Swarm row 165P (C205, CP-04: "Kicker 7.4 pt Cond seal capitals, naming the document type of the type code"; C40
+ * lembar cover): the document types of the ARSIP closed list, Manual Rev A ID p.15 Tabel 3.1 ("Daftar tertutup ARSIP
+ * memberi kode jenis dokumen"), verbatim. The EN edition prints no such table, so an EN document gets no fallback.
+ */
+export const TYPE_CODE_KICKER_ID: Readonly<Record<string, string>> = {
+  PT: "Proposal teknis",
+  KT: "Kajian dan analisis teknis",
+  RAB: "RAB atau BoQ",
+  SPH: "Surat penawaran harga",
+  SP: "Surat, termasuk surat pengantar",
+  BA: "Berita acara",
+  NDA: "Perjanjian kerahasiaan",
+  DEK: "Presentasi",
+  LAP: "Laporan kegiatan",
+  MAT: "Matriks atau register",
+  STD: "Standar atau SOP",
+  NOT: "Nota internal",
+  MOD: "Model yang diserahkan",
+  VER: "Verifikasi data, uji, atau forensik",
+};
+
+/**
+ * Swarm row 165P (C205): cover kicker text when the cover data gives none: the template's `cover.kicker.text`, else the
+ * type code's document type (ID documents, `TYPE_CODE_KICKER_ID`), else undefined (no kicker, as before).
+ */
+export function coverKickerText(meta: DocMeta, params: ParamMap): string | undefined {
+  const t = pStr(params, "cover.kicker.text");
+  if (t !== undefined && t.trim() !== "") return t;
+  if (wrapperLangOf(meta) !== "ID") return undefined;
+  return TYPE_CODE_KICKER_ID[(meta.typeCode ?? "").trim().toUpperCase()];
 }
 
 /** Nama entitas bawaan kolofon bila `org.entityName` absen. */

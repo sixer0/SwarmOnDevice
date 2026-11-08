@@ -82,7 +82,12 @@ function runningHeadFormat(textW: number, p: RenderContext["tpl"]["params"]): Pa
     lineTw: 180,
     lineRule: "exact",
     tabs: [{ posTw: textW, val: "right" }],
-    borders: { bottom: { val: "single", sz: 5, space: 1, color: normalizeHex(p[PARAM_RUNNING_HEAD_RULE]) ?? INK200 } },
+    // Swarm row 165P (C205, CP-08/CP-12; research/14 CP-12 "rule seal 0.26 mm", CP-08 head rule in seal RGB 110, 20,
+    // 32; ID p.49 Tabel 8.1, the manual's own PDF p.47 head rule #6E1420 0.75 pt): seal (`color.wrapper.seal`), w:sz 6 =
+    // 0.75 pt = 0.26 mm. Before: ink200 #C3CBD1, w:sz 5 (0.22 mm). R-72 still overrides the colour.
+    // R-72 overrides only with a value other than its registry default (the HTML shell's `ruleColourOverride` rule; a
+    // profile carries every key's default, which used to print ink200 here).
+    borders: { bottom: { val: "single", sz: 6, space: 1, color: runningHeadRuleOverride(p) ?? normalizeHex(p[PARAM_CLASSIFICATION_COLOUR]) ?? SEAL } },
   };
 }
 
@@ -456,7 +461,12 @@ function registerBody(
   const n = cellRuns.length;
   const textW = textWidthTw(setup);
   const grid = n === REGISTER_COLS_TW.length ? scaleCols(REGISTER_COLS_TW, textW) : scaleCols(new Array<number>(n).fill(1), textW);
-  const topRule = normalizeHex(p[PARAM_REGISTER_TOP_RULE]) ?? INK900;
+  // Swarm row 165P (C205, CP-08/CP-13; research/14 CP-13 "Top rule seal 0.35 mm, bottom ink200 0.20 mm"; the manual's
+  // own PDF p.47 register top rule #6E1420 1.0 pt): seal (`color.wrapper.seal`), w:sz 8 = 1 pt = 0.35 mm. Before: ink900
+  // #101418. The bottom rule stays ink200 w:sz 5 (0.22 mm, the nearest Word eighth-point above 0.20 mm). R-73 overrides.
+  const topSet = normalizeHex(p[PARAM_REGISTER_TOP_RULE]);
+  const topOverride = topSet !== undefined && topSet !== normalizeHex(PARAMS_BY_KEY.get(PARAM_REGISTER_TOP_RULE)?.default) ? topSet : undefined;
+  const topRule = topOverride ?? normalizeHex(p[PARAM_CLASSIFICATION_COLOUR]) ?? SEAL;
   const cells: SimpleCell[] = cellRuns.map((runs, i) => {
     const last = i === n - 1;
     const borders: Omit<Borders, "insideH" | "insideV"> = {

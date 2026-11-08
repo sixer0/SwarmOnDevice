@@ -159,7 +159,9 @@ export function datumRulePng(s: DatumRuleSpec): { png: Uint8Array; widthMm: numb
     rgba[i + 3] = 255;
   };
   for (let y = 0; y <= 5; y++) for (let x = 0; x < w; x++) set(x, y);
-  if (front > 0) for (let y = 6; y <= 18; y++) for (let x = 0; x <= front; x++) set(x, y);
+  // Swarm row 165P (C205, CP-23 "Lead segment 9 mm in a DOCX"): the lead is `front` pixels long (x 0 .. front-1), the
+  // nearest whole-pixel length at 600 dpi (9 mm = 213 px = 9.017 mm). Before, x <= front drew one pixel more (214 px).
+  if (front > 0) for (let y = 6; y <= 18; y++) for (let x = 0; x < front; x++) set(x, y);
   for (let x0 = 0; x0 < w; x0 += pitch) for (let y = 0; y <= 32; y++) for (let x = x0; x <= x0 + 4; x++) set(x, y);
   // Tinggi terpasang mengikuti rasio piksel (BM: 166 -> 2,413167 mm; 128 -> 2,412694 mm).
   return { png: encodePngRgba(w, h, rgba, DATUM_RULE_DPI), widthMm: s.widthMm, heightMm: (s.widthMm * h) / w };

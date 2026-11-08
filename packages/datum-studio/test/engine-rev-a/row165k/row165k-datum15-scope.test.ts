@@ -66,7 +66,10 @@ describe("row165K DATUM-15 scope: interior units only", () => {
       { unit: "controlSheet", cpl: 80.5, lines: 3, address: "F:controlSheet/3" },
       { unit: "toc", cpl: 120, lines: 6 },
     ])
-    expect(r.status).toBe("NOT_RUN")
+    // Row 165O consequence edit (C203 F165N-2): a measured layout without an interior paragraph is REPORT "tidak
+    // berlaku" (not applicable), no longer NOT_RUN; NOT_RUN is kept for a failed or truncated measure.
+    expect(r.status).toBe("REPORT")
+    expect(r.detail).toStartWith("tidak berlaku: ")
     expect(r.detail).toContain("sampul, lembar kendali dan daftar isi tidak dihitung")
   })
 

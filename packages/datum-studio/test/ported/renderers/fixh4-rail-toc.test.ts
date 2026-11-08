@@ -186,7 +186,9 @@ describe('daftar isi bernomor halaman', () => {
     toc.content = { ...(toc.content as object), entries: [{ level: 'chapter', label: { text: 'Bab 1' }, title: { text: 'Lingkup Survei' }, page: '5' }] } as never;
     const { xml } = await render(snap, TOC1());
     expect(withoutSheetZero(xml)).not.toContain('w:bookmarkStart');
-    expect(xml).not.toContain('PAGEREF');
+    // Row 165P consequence edit (C205, CP-05): the cover HALAMAN field is the register's formula `= NUMPAGES - PAGEREF
+    // _StSheet0` (sheet count N); no other PAGEREF (no TOC marker) may appear.
+    expect(xml.replaceAll(' PAGEREF _StSheet0 ', '')).not.toContain('PAGEREF');
     expect(paragraphsXml(xml).map(textOf)).toContain('5');
   }, 60_000);
 

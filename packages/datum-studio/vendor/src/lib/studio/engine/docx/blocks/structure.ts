@@ -20,7 +20,7 @@ import type { BlockEnv } from "./env";
 import { createHash } from "node:crypto";
 import { chapterKickerText, kickerSuppressed } from "../../front/texts";
 import { palette } from "../wrapper/formats";
-import { datumRulePng, datumRuleUnitLeadMm } from "../wrapper/media";
+import { datumRulePng } from "../wrapper/media";
 import { bookmarkWrap, chapterTocTarget, chapterTocTargetOf, sectionTocTarget, type TocTarget } from "../wrapper/toc-refs";
 import { imageHeightMm, inlineDrawingRun, loadImageAsset, type LoadedImage } from "./media";
 import { mergePara } from "./props";
@@ -84,8 +84,10 @@ function generatedDatumRule(env: BlockEnv, widthMm: number): { img: LoadedImage;
       widthMm,
       color: palette(p).interiorInk,
       pitchMm: env.num("grid.latticeXMm") ?? 10.6667,
-      // Row 165B (F113-8): the lead grows with the sheet as the HTML/PDF lead (one PNG per chapter, not one fixed 9 mm).
-      frontSegmentMm: datumRuleUnitLeadMm(env.ctx, env.block.unitKey, widthMm) ?? env.num("device.datumRule.frontSegmentMm") ?? 9,
+      // Swarm row 165P (C205, CP-23; ID p.53 DT-13f, research/14 CP-23 "Lead segment 9 mm in a DOCX, growing with the
+      // page number in a PDF"): the DOCX lead is the fixed `device.datumRule.frontSegmentMm` (9 mm) again on every
+      // rule; row 165B's growth (`datumRuleUnitLeadMm`) stays for the HTML/PDF only.
+      frontSegmentMm: env.num("device.datumRule.frontSegmentMm") ?? 9,
     });
     const sha = createHash("sha256").update(g.png).digest("hex");
     const dv = new DataView(g.png.buffer, g.png.byteOffset, g.png.byteLength);

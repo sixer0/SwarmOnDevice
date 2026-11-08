@@ -50,21 +50,25 @@ describe("F113-6 register DARI N = numbered sheets; F113-3 HALAMAN = printed pag
     const final = printed[1]
     expect(final).not.toContain("/*st-N*/counter(pages)")
     expect(final).toContain('media="not all"')
-    expect(final).toMatch(new RegExp(`@bottom-center\\{content:"LEMBAR[^"]*" counter\\(page\\) "[^"]*DARI[^"]*" "${N}";`)) // literal N in the register box
-    expect(final).toContain(`:root{--st-pages-total:"${T}"}`)
+    // Row 165P consequence edits (C205): the register is two overlapping layers (number and n bold ink900), N stays a
+    // literal in the regular layer; HALAMAN = the register's N (CP-05 sheet count from Bab 1), not the page total T.
+    expect(final).toMatch(new RegExp(`@bottom-left\\{content:[^}]*"LEMBAR[^"]*" counter\\(page, st-blank\\) "[^"]*DARI[^"]*" "${N}";`))
+    expect(final).toContain(`:root{--st-pages-total:"${N}"}`)
     expect(N).toBeLessThan(T)
   })
-  test("case 05, contents running over two sheets: the page-total estimate is wrong once, one reprint with the true T", async () => {
+  // Row 165P consequence edit (C205): HALAMAN = N is known after the numbered pass, so a contents unit that runs over two
+  // sheets needs no reprint any more: still two prints, HALAMAN = N (the contents sheets are not counted).
+  test("case 05, contents running over two sheets: two prints, HALAMAN = N, no reprint", async () => {
     const html = await K.renderHtml(K.compose(K.loadCase("case05.json")))
     const units = [...html.matchAll(/<section class="st-unit[^"]*"[^>]*data-unit="([^"]+)"/g)].map((m) => m[1])
     twoSheetKey = "F:toc"
     printed.length = 0
     const r = await printHtmlToPdf(html, { jobId: "row165a-05-toc2" })
     twoSheetKey = undefined
-    expect(printed).toHaveLength(3)
+    expect(printed).toHaveLength(2)
     expect(r.pageCount).toBe(units.length + 1)
-    expect(printed[1]).toContain(`:root{--st-pages-total:"${units.length}"}`)
-    expect(printed[2]).toContain(`:root{--st-pages-total:"${units.length + 1}"}`)
+    const N = units.length - units.findIndex((k) => k === "chapter" || k === "appendix")
+    expect(printed[1]).toContain(`:root{--st-pages-total:"${N}"}`)
   })
   test("withSheetTotals replaces every marked counter(pages) and adds the page total", () => {
     // Row 165I (M1): the slot is filled only inside Studio's own pages block (shell.ts PAGES_STYLE_OPEN) of the head.

@@ -144,9 +144,11 @@ describe('M1 (2): blok kendali sampul klien MCP dengan pasangan "Klasifikasi" hu
   });
 
   it('DOCX dan HTML: blok kendali sampul memuat "Klasifikasi" lalu "TERBATAS"; tanpa "Terbatas" tampak', () => {
-    expect(o.body).toMatch(/Klasifikasi\|TERBATAS/);
+    // Row 165P consequence edit (C205, CP-05/CP-15): the written Klasifikasi pair becomes the line under the number
+    // ("Klasifikasi : " then the level run), as the engine prints it on every cover.
+    expect(o.body).toMatch(/Klasifikasi :? ?\|TERBATAS/);
     expect(o.body).not.toMatch(/Terbatas/);
-    expect(o.html).toMatch(/Klasifikasi<\/[a-z]+>(?:<[^>]+>)*TERBATAS/);
+    expect(o.html).toMatch(/Klasifikasi : (?:<[^>]+>)*TERBATAS/);
     expect(visibleHtml(o.html)).not.toMatch(/Terbatas/);
   });
 });

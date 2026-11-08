@@ -107,7 +107,9 @@ describe("row 158: over-capacity charts are refused with limit, measured and sug
 
 describe("row 158: at-capacity figures render unchanged (sha256 before the patch)", () => {
   const BEFORE: Record<keyof typeof AT_CAPACITY, string> = {
-    swimlane6: "6d9b0b5f257a9f7088a77c6479ad279a3bf1003daccbabc6c3927fb9da7255cc",
+    // Row 165O consequence edit (C204 item 4, C23 recorded diff): the 4 lane lines (lineSvg) now carry fill="none";
+    // removing that attribute gives the before bytes exactly. Before: 6d9b0b5f257a9f70...
+    swimlane6: "2da10275ebe1460c7e27bc0e9b4baa93d12563f44e8e66b7aeb1f46580d08eb6",
     // Row 165C (F113-9, C23 recorded diff): node g0 sits on the sheet edge, its outline is now drawn half a stroke
     // inside (x 0.0 -> 0.23, width 21.33 -> 21.1); the only changed line. Before: 28b63edf50ac499f...
     graph5: "cd9dc8569bbc20b823e05237d6db7a19acc90feda9f89f83321ec840ed232695",

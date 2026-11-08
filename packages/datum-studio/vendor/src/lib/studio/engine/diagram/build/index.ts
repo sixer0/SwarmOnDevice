@@ -13,11 +13,11 @@ import { DIAGRAM_LAYOUTS } from "../../../contract/dispatch";
 import { Sheet, validateSpec } from "../core";
 import { placeDiagram } from "./place";
 import { crossingHops, routePlaced, type HoppedEdge } from "./route";
-import { buildDiagramSvgWith, routeFor, type DiagramBuildDeps, type DiagramBuildOptions, type DiagramSvgResult } from "./svg";
+import { buildDiagramSvgWith, routeFor, withCaptionAbove, type DiagramBuildDeps, type DiagramBuildOptions, type DiagramSvgResult } from "./svg";
 
 export { placeDiagram, type Placement } from "./place";
 export { type HoppedEdge } from "./route";
-export { buildDiagramSvgWith, routeFor, type DiagramBuildDeps, type DiagramBuildOptions, type DiagramBuildReport, type DiagramSvgResult } from "./svg";
+export { buildDiagramSvgWith, routeFor, withCaptionAbove, CAPTION_MARK_ATTR, type DiagramBuildDeps, type DiagramBuildOptions, type DiagramBuildReport, type DiagramSvgResult } from "./svg";
 
 const DEFAULT_DEPS: DiagramBuildDeps = {
   validate: (s, o) => validateSpec(s, o),
@@ -50,5 +50,14 @@ export function addCrossingHops(paths: readonly RoutedEdge[]): HoppedEdge[] {
 
 /** Memakai DIAGRAM_LAYOUTS dari contract/dispatch (D01); gerbang release labels_verified. */
 export function buildDiagramSvg(s: StudioDiagramV1, opts: DiagramBuildOptions): DiagramSvgResult {
+  // Swarm row 165P (C205, CP-28/48): an apparatus-figure SVG prints its caption above the drawing (`withCaptionAbove`).
+  return withCaptionAbove(buildDiagramSvgWith(s, opts, DEFAULT_DEPS));
+}
+
+/**
+ * Swarm row 165P: the sheet as `buildOnce` draws it (caption as the lowest foot line), for callers that lint the
+ * geometry before choosing a layout (elk/index.ts `buildDiagramSvgAuto`, which moves the caption of its pick itself).
+ */
+export function buildDiagramSvgRaw(s: StudioDiagramV1, opts: DiagramBuildOptions): DiagramSvgResult {
   return buildDiagramSvgWith(s, opts, DEFAULT_DEPS);
 }

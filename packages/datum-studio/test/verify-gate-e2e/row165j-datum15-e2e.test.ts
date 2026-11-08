@@ -58,8 +58,11 @@ e2e("F165H-1: DATUM-15 on case 05 and B-FIX (real Chromium measure)", () => {
   test("B-FIX: DATUM-15 does not count the control-sheet method statement (row 165K)", async () => {
     const r = await measure("bfix-datum-kanonik-ID.studio.json")
     expect((r.method as { unit?: string } | undefined)?.unit).toBe("controlSheet")
-    // B-FIX has no multi-line interior body paragraph, so the check is NOT_RUN with its reason (never PASS, KT-13).
-    expect(r.d15?.status).toBe("NOT_RUN")
+    // B-FIX has no multi-line interior body paragraph. Row 165O consequence edit (C203 F165N-2): the check is REPORT
+    // "tidak berlaku" with its reason (not applicable: never PASS, KT-13; and no longer NOT_RUN, which made the gate's
+    // LINT UNKNOWN at TERBIT/SERAH by itself).
+    expect(r.d15?.status).toBe("REPORT")
+    expect(r.d15?.detail ?? "").toStartWith("tidak berlaku: ")
     expect(r.d15?.detail ?? "").toContain("sampul, lembar kendali dan daftar isi tidak dihitung")
     expect(r.d15?.detail ?? "").not.toContain("F:controlSheet")
   }, 120_000)

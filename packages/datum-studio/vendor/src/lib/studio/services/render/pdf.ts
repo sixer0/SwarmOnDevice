@@ -216,6 +216,11 @@ export async function printHtmlToPdf(html: string, opts: HtmlPdfOptions): Promis
       // Row 165I (M1): slots armed with a per-print random token; only those, in the Studio pages block, are filled.
       const armed = armSheetTotals(html);
       const numbered = plan.numbered ? pdfPagesOf(await print(armed.html.replace(NUMBERED_PASS_OFF, NUMBERED_PASS_ON))) : 0;
+      // Swarm row 165P (C205, CP-05 HALAMAN = the register's sheet count N, ID p.48 "Penomoran lembar dimulai dari
+      // halaman pertama Bab 1"; = DOCX `{ = NUMPAGES - PAGEREF _StSheet0 }` on the cover, docx/wrapper/render.ts): a
+      // document numbered from Bab 1 prints N as its HALAMAN value, known after the numbered pass, so the final print
+      // needs no check. Otherwise (sheets from the cover) HALAMAN stays the printed page count, estimated and checked.
+      if (plan.numbered && numbered > 0) return print(withSheetTotals(armed.html, numbered, numbered, armed.token));
       const guess = plan.numbered ? numbered + numberedPassHiddenUnits(html) : unitCount(html);
       const final = await print(withSheetTotals(armed.html, guess, numbered, armed.token));
       const total = pdfPagesOf(final);

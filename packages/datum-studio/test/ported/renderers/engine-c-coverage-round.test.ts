@@ -71,16 +71,18 @@ function registerCellBorders(o: Out): { top: string; bottom: string }[] {
 
 // ── C14 / GF-22: warna garis kepala halaman (R-72) dan garis atas register (R-73) ─────────
 
+// Row 165P consequence edit (C205, CP-08/CP-12/CP-13): the DOCX defaults are now seal for the running-head rule (w:sz 6
+// = 0.26 mm) and the register top rule (w:sz 8); a registry-default R-72/R-73 value counts as absent (= HTML shell).
 describe('C14 GF-22: warna garis kepala halaman dan garis atas blok register', () => {
-  it.each(['ID', 'EN'] as const)('%s bawaan: kepala C3CBD1 sz 5, register atas 101418 sz 8 (keluaran sekarang)', async (lang) => {
+  it.each(['ID', 'EN'] as const)('%s bawaan (row 165P, C205 CP-08/12/13): kepala seal 6E1420 sz 6, register atas seal 6E1420 sz 8', async (lang) => {
     const o = await render('doc_terbit_report', lang, base);
     const heads = runningHeadBottomBorders(o);
     expect(heads.length).toBeGreaterThan(0);
-    for (const b of heads) expect(b).toBe('w:val="single" w:sz="5" w:space="1" w:color="C3CBD1"');
+    for (const b of heads) expect(b).toBe('w:val="single" w:sz="6" w:space="1" w:color="6E1420"');
     const cells = registerCellBorders(o);
     expect(cells.length).toBeGreaterThan(0);
     for (const c of cells) {
-      expect(c.top).toBe('w:val="single" w:sz="8" w:space="0" w:color="101418"');
+      expect(c.top).toBe('w:val="single" w:sz="8" w:space="0" w:color="6E1420"');
       expect(c.bottom).toBe('w:val="single" w:sz="5" w:space="0" w:color="C3CBD1"');
     }
   });
@@ -89,7 +91,7 @@ describe('C14 GF-22: warna garis kepala halaman dan garis atas blok register', (
     const o = await render('doc_terbit_report', lang, tplWith({ 'runningHead.ruleColour': '6E1420', 'device.registerBlock.topRuleColour': '6E1420' }));
     const heads = runningHeadBottomBorders(o);
     expect(heads.length).toBeGreaterThan(0);
-    for (const b of heads) expect(b).toBe('w:val="single" w:sz="5" w:space="1" w:color="6E1420"');
+    for (const b of heads) expect(b).toBe('w:val="single" w:sz="6" w:space="1" w:color="6E1420"');
     const cells = registerCellBorders(o);
     expect(cells.length).toBeGreaterThan(0);
     for (const c of cells) {
@@ -102,16 +104,16 @@ describe('C14 GF-22: warna garis kepala halaman dan garis atas blok register', (
 
   it('kedua param independen: hanya garis kepala, atau hanya garis register', async () => {
     const onlyHead = await render('doc_terbit_report', 'ID', tplWith({ 'runningHead.ruleColour': '6E1420' }));
-    expect(new Set(runningHeadBottomBorders(onlyHead))).toEqual(new Set(['w:val="single" w:sz="5" w:space="1" w:color="6E1420"']));
-    expect(new Set(registerCellBorders(onlyHead).map((c) => c.top))).toEqual(new Set(['w:val="single" w:sz="8" w:space="0" w:color="101418"']));
+    expect(new Set(runningHeadBottomBorders(onlyHead))).toEqual(new Set(['w:val="single" w:sz="6" w:space="1" w:color="6E1420"']));
+    expect(new Set(registerCellBorders(onlyHead).map((c) => c.top))).toEqual(new Set(['w:val="single" w:sz="8" w:space="0" w:color="6E1420"']));
     const onlyReg = await render('doc_terbit_report', 'ID', tplWith({ 'device.registerBlock.topRuleColour': '6E1420' }));
-    expect(new Set(runningHeadBottomBorders(onlyReg))).toEqual(new Set(['w:val="single" w:sz="5" w:space="1" w:color="C3CBD1"']));
+    expect(new Set(runningHeadBottomBorders(onlyReg))).toEqual(new Set(['w:val="single" w:sz="6" w:space="1" w:color="6E1420"']));
     expect(new Set(registerCellBorders(onlyReg).map((c) => c.top))).toEqual(new Set(['w:val="single" w:sz="8" w:space="0" w:color="6E1420"']));
   });
 
   it('hex dikanonikkan ("#6e1420" -> 6E1420); nilai tidak sah = bawaan', async () => {
     const lower = await render('doc_terbit_report', 'ID', tplWith({ 'runningHead.ruleColour': '#6e1420', 'device.registerBlock.topRuleColour': '#6e1420' }));
-    expect(new Set(runningHeadBottomBorders(lower))).toEqual(new Set(['w:val="single" w:sz="5" w:space="1" w:color="6E1420"']));
+    expect(new Set(runningHeadBottomBorders(lower))).toEqual(new Set(['w:val="single" w:sz="6" w:space="1" w:color="6E1420"']));
     const bad = await render('doc_terbit_report', 'ID', tplWith({ 'runningHead.ruleColour': 'merah', 'device.registerBlock.topRuleColour': 42 }));
     const def = await render('doc_terbit_report', 'ID', base);
     expect(sha256(bad.bytes)).toBe(sha256(def.bytes));

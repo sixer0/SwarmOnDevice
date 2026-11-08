@@ -45,15 +45,17 @@
   "row165E": "2026-11-08: wave 165 integration (C191 ruling 4, C192, C193 ruling 4). scripts/studio/mcp/resources.ts copied -> patched (guide line); scripts/studio/mcp/figure-tools.ts and engine/docx/wrapper/render.ts re-patched (files[].patch_row165E, before = previous sha256). Diffs in implementation/139_row165E_diffs/. `counts` RECOMPUTED from files[] after wave 165: before {files 602, copied 456, patched 110, replaced 12, added 24, bytes 9671390} -> after {files 604 = 452 copied + 114 patched + 12 replaced + 26 added, bytes = sum of files[].bytes = 9708981}; every entry checked against disk after this row: 0 sha/bytes mismatches, 0 missing. patch_rows += 165A (present in files[] but missing from the list), 165E",
   "row165I": "2026-11-08: C196 security fixes of verification/24 (M1, L1, L2). services/render/pdf.ts, engine/html/base/shell.ts, contract/env.ts, scripts/studio/mcp/datum-name.ts, scripts/studio/mcp/figure-tools.ts re-patched (files[].patch_row165I, before = previous sha256; statuses unchanged). Diffs in implementation/141_row165I_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9708981 + 5657 (pdf.ts +3688, shell.ts +409, env.ts +1023, datum-name.ts +195, figure-tools.ts +342) = 9714638. patch_rows += 165I",
   "row165J": "2026-11-08: C197 fixes of verification/25 (F165H-1..5). engine/html/blocks/classes.ts, engine/diagram/core/svg.ts, engine/front/texts.ts, engine/docx/package/header-footer.ts, scripts/studio/mcp/tools.ts re-patched (files[].patch_row165J, before = previous sha256; statuses unchanged). Diffs in implementation/142_row165J_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9714638 + 7746 (classes.ts +878, svg.ts +4556, texts.ts +1282, header-footer.ts +249, tools.ts +781) = 9722384. patch_rows += 165J",
-  "row165K": "2026-11-08: C199 ruling 2 (DATUM-15 scope). engine/browser/measure.ts (text blocks carry the enclosing data-unit kind) and engine/lint/render/index.ts (DATUM-15 leaves cover, controlSheet and toc units out) re-patched (files[].patch_row165K, before = previous sha256; statuses unchanged). Diffs in implementation/143_row165K_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9722384 + 668 (measure.ts +221, index.ts +447) = 9723052. patch_rows += 165K"
+  "row165K": "2026-11-08: C199 ruling 2 (DATUM-15 scope). engine/browser/measure.ts (text blocks carry the enclosing data-unit kind) and engine/lint/render/index.ts (DATUM-15 leaves cover, controlSheet and toc units out) re-patched (files[].patch_row165K, before = previous sha256; statuses unchanged). Diffs in implementation/143_row165K_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9722384 + 668 (measure.ts +221, index.ts +447) = 9723052. patch_rows += 165K",
+  "row165P": "2026-11-08: C205 (manual furniture: CP-01/04/05 control block and lembar kicker, CP-05 HALAMAN, CP-08/11/12/13 PDF and DOCX furniture, CP-23 DOCX lead 9 mm, CP-29 DOCX derivation mark, CP-28/48 stand-alone figure apparatus, CP-36 derivation expression). 15 vendor files re-patched (files[].patch_row165P, before = previous sha256): engine/front/texts.ts, html/blocks/wrapper.ts, html/blocks/classes.ts, html/base/shell.ts, html/tables/derivation.ts, docx/wrapper/pages.ts, docx/wrapper/render.ts, docx/wrapper/media.ts, docx/blocks/structure.ts, docx/package/header-footer.ts, docx/figures/derivation.ts, diagram/build/svg.ts, diagram/build/index.ts (copied -> patched), diagram/elk/index.ts (added), services/render/pdf.ts (added). Diffs in implementation/146_row165P_diffs/. counts by delta: copied 452 - 1 = 451, patched 114 + 1 = 115; bytes 9725039 + 32500 = 9757539. patch_rows += 165P.",
+  "row165O": "2026-11-08: C203 F165N-2 (DATUM-15 not applicable). engine/lint/render/index.ts re-patched (files[].patch_row165O, before = previous sha256; status unchanged). Diff in implementation/145_row165O_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9723052 + 565 (index.ts +565) = 9723617. patch_rows += 165O. Addendum C204 items 3 and 4: engine/front/texts.ts, engine/html/blocks/wrapper.ts, engine/html/blocks/classes.ts, engine/docx/wrapper/render.ts, engine/docx/wrapper/pages.ts (control block back to 4 x 2, classification line in the number cell) and engine/diagram/core/svg.ts (explicit fill none on hatch and stroke-only lines) re-patched (files[].patch_row165O; statuses unchanged, all already patched). bytes 9723617 + 1422 (texts.ts -36, wrapper.ts +492, classes.ts +151, render.ts +317, pages.ts +30, svg.ts +468) = 9725039"
  },
  "counts": {
   "files": 604,
-  "copied": 452,
-  "patched": 114,
+  "copied": 451,
+  "patched": 115,
   "replaced": 12,
   "added": 26,
-  "bytes": 9723052
+  "bytes": 9757539
  },
  "files": [
   {
@@ -2127,10 +2129,11 @@
   },
   {
    "path": "src/lib/studio/engine/diagram/build/index.ts",
-   "status": "copied",
-   "bytes": 2635,
+   "status": "patched",
+   "bytes": 3228,
    "source_sha256": "1c2653fc4d726d2837b8a782cdfb29174bbb8964dfe17cd2672ece58f12087e5",
-   "sha256": "1c2653fc4d726d2837b8a782cdfb29174bbb8964dfe17cd2672ece58f12087e5"
+   "sha256": "711f139f57e568454fc1104c693c66252c944cc124ca131c68a0dc1d0f69698e",
+   "patch_row165P": {"id": "row165P-manual-furniture", "row": "165P", "decision": "C205 CP-28/48", "summary": "buildDiagramSvg applies withCaptionAbove; NEW buildDiagramSvgRaw; exports withCaptionAbove, CAPTION_MARK_ATTR", "before_sha256": "1c2653fc4d726d2837b8a782cdfb29174bbb8964dfe17cd2672ece58f12087e5", "after_sha256": "711f139f57e568454fc1104c693c66252c944cc124ca131c68a0dc1d0f69698e", "diff": "implementation/146_row165P_diffs/engine_diagram_build_index.ts.diff"}
   },
   {
    "path": "src/lib/studio/engine/diagram/build/lanesroute.ts",
@@ -2184,9 +2187,10 @@
   {
    "path": "src/lib/studio/engine/diagram/build/svg.ts",
    "status": "patched",
-   "bytes": 26039,
+   "bytes": 30795,
    "source_sha256": "a9ab8856426161f4b087bb26315fdd57c534ba81ee3e9d8117eb271d683c4ea0",
-   "sha256": "0feb88508fbedb07c813e0cc4c5bcc65b4647f5bf5d18ccd33fc43041f4392b7",
+   "sha256": "54cd9688005a3cd3b5594adfb897acaff8e5b06cf362d647318c1c148e766395",
+   "patch_row165P": {"id": "row165P-manual-furniture", "row": "165P", "decision": "C205 CP-28/48", "summary": "DiagramBuildOptions.provenance (SUMBER + PROVENANS part with coloured glyphs); caption lines marked, NEW withCaptionAbove moves them above the drawing; foot order KUNCI then SUMBER", "before_sha256": "0feb88508fbedb07c813e0cc4c5bcc65b4647f5bf5d18ccd33fc43041f4392b7", "after_sha256": "54cd9688005a3cd3b5594adfb897acaff8e5b06cf362d647318c1c148e766395", "diff": "implementation/146_row165P_diffs/engine_diagram_build_svg.ts.diff"},
    "patch_row165C": {"id": "row165C-figure-engine", "row": "165C", "decision": "C188 F113-9 (CP-37), F113-10 (CP-47)", "summary": "buildOnce: no hatch <pattern> defined (diagramDefs hatch45/hatch135 false; hatches are vector lines from nodeSvg); nodeSvg gets the sheet size (canvas W x H) for the half-stroke edge inset", "before_sha256": "d00ed096ae2ee9775dac86045c845ca532b89833c469df1f9889c1af434ba100", "after_sha256": "0feb88508fbedb07c813e0cc4c5bcc65b4647f5bf5d18ccd33fc43041f4392b7", "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/136_row165C_diffs/engine_diagram_build_svg.ts.diff", "diff_sha256": "b0eb988881e88aef2e4615a4ae468d623d9292de9cc04a839b681a797f20f8f9"},
    "patch_row124b": {
     "id": "row124b-diagram-build-svg-key-text",
@@ -2339,9 +2343,10 @@
   {
    "path": "src/lib/studio/engine/diagram/core/svg.ts",
    "status": "patched",
-   "bytes": 31384,
+   "bytes": 31852,
    "source_sha256": "6c1846b3c5b2966476dbe1fff3fe44283daea1c70eb7bf12d5b3fbece817c741",
-   "sha256": "f21973d1db9792f1c4656724b1946fc4aac9ba6323d80a2bc96361fe83f82163",
+   "sha256": "30483840831c8a73f182096a0134265636056784ed27360cbe02cf832af46247",
+   "patch_row165O": {"id": "row165O-figure-explicit-fill", "row": "165O", "decision": "C204 item 4 (F-Y3)", "summary": "hatch line group and the stroke-only lines (bus node, doubled-node mid line, lineSvg) carry fill=\"none\"; no figure element falls back to the SVG default black fill (Chromium wrote #000000 fill operators on the figure page)", "before_sha256": "f21973d1db9792f1c4656724b1946fc4aac9ba6323d80a2bc96361fe83f82163", "after_sha256": "30483840831c8a73f182096a0134265636056784ed27360cbe02cf832af46247", "diff": "implementation/145_row165O_diffs/engine_diagram_core_svg.ts.diff"},
    "patch_row165J": {"id": "row165J-recheck-fixes", "row": "165J", "decision": "C197 F165H-2", "summary": "NEW nodeTextGroundSvg: on a hatched node every text line (label, sub-label, tag, mark glyph) gets a paper rect behind it (measured glyph width + 0.5 mm, cap height to descender + 0.3 mm), cut to the inside of the drawn outline and clipped by the outline clip of a non-box node; drawn after the hatch, before the outline; paper only (no new colour); un-hatched nodes byte-identical", "before_sha256": "f660dcc9a86582c6721142e5f4c682551b5d9abb8536ed2700c06bcf85a7e7e8", "after_sha256": "f21973d1db9792f1c4656724b1946fc4aac9ba6323d80a2bc96361fe83f82163", "diff": "implementation/142_row165J_diffs/engine_diagram_core_svg.ts.diff"},
    "patch_row165C": {"id": "row165C-figure-engine", "row": "165C", "decision": "C188 F113-9 (CP-37), F113-10 (CP-47)", "summary": "nodeSvg: hatch drawn as vector lines (hatchLinesSvg: pattern geometry x cos a + y sin a = 1.6 k, cut to the box, clipPath for non-box shapes, 0.3 mm ink400) under an unfilled outline instead of fill url(#datum-hatch..); outline inset by half a stroke on the sheet edge (insetForStroke, canvas option); NEW exports HATCH_PITCH_MM, HATCH_STROKE_MM, nodeHatchAngle, NodeSvgOptions", "before_sha256": "89290c4b734e6775d94f09b11347a3286cb54052591ff18a5d56eb5037ac0d45", "after_sha256": "f660dcc9a86582c6721142e5f4c682551b5d9abb8536ed2700c06bcf85a7e7e8", "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/136_row165C_diffs/engine_diagram_core_svg.ts.diff", "diff_sha256": "e238d1ca42d0ce33e2f9168e9406a74d420ee9536c3466678d09dbe8f5afbb5d"},
    "patch": {
@@ -2381,9 +2386,10 @@
   {
    "path": "src/lib/studio/engine/diagram/elk/index.ts",
    "status": "added",
-   "bytes": 7170,
+   "bytes": 7695,
    "source_sha256": null,
-   "sha256": "18c9a304afb34032f32225b99b3c0a9a72672bf9415461192499328c9f92d65b",
+   "sha256": "e37b131787e30da3a22bb252f43023727e0155f830511a5814e179d8ac82551a",
+   "patch_row165P": {"id": "row165P-manual-furniture", "row": "165P", "decision": "C205 CP-28/48", "summary": "layouts compared on the raw sheet (buildDiagramSvgRaw); the pick gets withCaptionAbove", "before_sha256": "18c9a304afb34032f32225b99b3c0a9a72672bf9415461192499328c9f92d65b", "after_sha256": "e37b131787e30da3a22bb252f43023727e0155f830511a5814e179d8ac82551a", "diff": "implementation/146_row165P_diffs/engine_diagram_elk_index.ts.diff"},
    "added_by": "162",
    "note": "NEW Swarm file of row 162: selection rule R1-R4 and async buildDiagramSvgAuto (original first; ELK only on route defects or DATUM-32, kept only when better). Copy: implementation/114_row162_diffs/engine__diagram__elk__index.ts.new"
   },
@@ -2730,9 +2736,10 @@
   {
    "path": "src/lib/studio/engine/docx/blocks/structure.ts",
    "status": "patched",
-   "bytes": 9304,
+   "bytes": 9422,
    "source_sha256": "713bb1b43246bc097fc4341208f82170ce4ff9befa3bb7aae8dcd3bcd71bb7a1",
-   "sha256": "c4dbab772ea72f35df490a32a38021d67f0e3236ad76daaa095b44b380b33b05",
+   "sha256": "02152d721d6f33a99dae2a6cdbd0ece49fe9b4b4b458912541e55931081164a9",
+   "patch_row165P": {"id": "row165P-manual-furniture", "row": "165P", "decision": "C205 CP-23", "summary": "chapter Datum Rule lead fixed device.datumRule.frontSegmentMm (165B growth reverted for DOCX)", "before_sha256": "c4dbab772ea72f35df490a32a38021d67f0e3236ad76daaa095b44b380b33b05", "after_sha256": "02152d721d6f33a99dae2a6cdbd0ece49fe9b4b4b458912541e55931081164a9", "diff": "implementation/146_row165P_diffs/engine_docx_blocks_structure.ts.diff"},
    "patch_row165B": {"id": "row165B-marks-glyphs-rule", "row": "165B", "decision": "C188 F113-8 (CP-23, Manual Rev A ID p.53 DT-13f)", "summary": "generatedDatumRule: chapter Datum Rule lead = datumRuleUnitLeadMm (width x unit position / unit count, as the HTML/PDF withDatumRuleLeads) instead of the fixed device.datumRule.frontSegmentMm", "before_sha256": "713bb1b43246bc097fc4341208f82170ce4ff9befa3bb7aae8dcd3bcd71bb7a1", "after_sha256": "c4dbab772ea72f35df490a32a38021d67f0e3236ad76daaa095b44b380b33b05", "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/135_row165B_diffs/engine_docx_blocks_structure.ts.diff", "diff_sha256": "53286cd039f043e25f99dfbd7f214262018abfed4aa807d5eb0749a3d7610a4a"}
   },
   {
@@ -2766,9 +2773,10 @@
   {
    "path": "src/lib/studio/engine/docx/figures/derivation.ts",
    "status": "patched",
-   "bytes": 16067,
+   "bytes": 17060,
    "source_sha256": "b2890488aa99bbdacaa8ec115c42290e81c2503bb08306ce747aced0541102d3",
-   "sha256": "6b84ba5c695358a0c23b0bb54cf9a3fead4ea2d28f9b13823050f4b11aa5f336",
+   "sha256": "2bf89aa35d46b03b561f3547ea3ef416558dc55747d3b14b099212a38af158c7",
+   "patch_row165P": {"id": "row165P-manual-furniture", "row": "165P", "decision": "C205 CP-29", "summary": "derivation mark glyph in its mark colour followed by a no-break space and the mark label (Cond caps), as the HTML/PDF", "before_sha256": "6b84ba5c695358a0c23b0bb54cf9a3fead4ea2d28f9b13823050f4b11aa5f336", "after_sha256": "2bf89aa35d46b03b561f3547ea3ef416558dc55747d3b14b099212a38af158c7", "diff": "implementation/146_row165P_diffs/engine_docx_figures_derivation.ts.diff"},
    "patch_row143a": {"id": "row143a-engine-faults", "row": "143a", "decision": "C177 F143-1 (a) (verification/16_row143_app_studio_1_2_1.md section 6)", "summary": "monoLines: a wrapped mono row prints as one paragraph with <w:br/> per continuation (monoRunsXml); single-line rows byte-identical", "before_sha256": "ae32dcea68223f37e8916ee6fa232fecd5533e2bf745da7431b9bea00687a61a", "after_sha256": "6b84ba5c695358a0c23b0bb54cf9a3fead4ea2d28f9b13823050f4b11aa5f336", "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/132_row143a_diffs/engine_docx_figures_derivation.ts.diff", "diff_sha256": "1d1dcf396de92cf1f7fbb8fa0da6c4eb226f594d9be11b0074b83dd03575f113"},
    "patch": {
     "id": "row122-cp30-derivation-label",
@@ -2945,9 +2953,10 @@
   {
    "path": "src/lib/studio/engine/docx/package/header-footer.ts",
    "status": "patched",
-   "bytes": 36411,
+   "bytes": 37565,
    "source_sha256": "08883ba9a62436bfd211a5ef24d251217399f6a9cf61b82fb4d94a99d8b75387",
-   "sha256": "5c36bace2bed11af5389a184cbc4eaa67a85a7652292ce1b7e3a42ef5edded35",
+   "sha256": "c87138f7cb2aaf5ff3b5488e4bbbb2882c7d37af396f554d9777e27ce7381750",
+   "patch_row165P": {"id": "row165P-manual-furniture", "row": "165P", "decision": "C205 CP-08/12/13", "summary": "running-head rule seal w:sz 6, register top rule seal (R-72/R-73 registry defaults count as absent)", "before_sha256": "5c36bace2bed11af5389a184cbc4eaa67a85a7652292ce1b7e3a42ef5edded35", "after_sha256": "c87138f7cb2aaf5ff3b5488e4bbbb2882c7d37af396f554d9777e27ce7381750", "diff": "implementation/146_row165P_diffs/engine_docx_package_header-footer.ts.diff"},
    "patch_row165J": {"id": "row165J-recheck-fixes", "row": "165J", "decision": "C197 F165H-4", "summary": "register {nomor}: meta.docNumber first (as the HTML/PDF foot), the cover display number only when meta has none (was cover first, D-557)", "before_sha256": "578a35f5791ed2b692f85ece09b929fa14ba0a6447c1f127b625d597b1b285ba", "after_sha256": "5c36bace2bed11af5389a184cbc4eaa67a85a7652292ce1b7e3a42ef5edded35", "diff": "implementation/142_row165J_diffs/engine_docx_package_header-footer.ts.diff"},
    "patch_row165A": {"id": "row165A-cover-control-furniture", "row": "165A", "decision": "C188 F113-6, F113-12 (file request of 165D)", "summary": "register footers of the chapter units of a document numbered from Bab 1: NUMPAGES -> { = { NUMPAGES } - { PAGEREF _StSheet0 } } (withNumberedSheetTotal; nested fields without cached text, outer cached value kept); NEW SHEET_ZERO_BOOKMARK, sheetZeroBookmarkXml, isSheetZeroUnit; registerBody no longer appends the R-76 classification line (classificationLineXml kept, unused)", "before_sha256": "816f5c58f1ec57b153b165e77191d7190aebb1aecc3ff0de18b1d6652a6b9928", "after_sha256": "578a35f5791ed2b692f85ece09b929fa14ba0a6447c1f127b625d597b1b285ba", "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/138_row165A_diffs/engine_docx_package_header-footer.ts.diff", "diff_sha256": "fcf102639454255d1f0e50e3cadd973b8d887602e529dc4f85167237ebcc2109"},
    "patch_row49a": {
@@ -3142,9 +3151,10 @@
   {
    "path": "src/lib/studio/engine/docx/wrapper/media.ts",
    "status": "patched",
-   "bytes": 16690,
+   "bytes": 16928,
    "source_sha256": "fc7bf35c02723d421754a92d31b1e781064e05121c793af1967b47dde941a016",
-   "sha256": "6f223edd6d362bc1fe88c3198feb40eb70e4908e649039b4b907169823ec87ba",
+   "sha256": "a7374642cfd82d36a888fdcc8e1d34c5855e32550883ce114b9b635069cbe188",
+   "patch_row165P": {"id": "row165P-manual-furniture", "row": "165P", "decision": "C205 CP-23", "summary": "generated rule lead is front px long (x < front): 9 mm = 213 px = 9.017 mm", "before_sha256": "6f223edd6d362bc1fe88c3198feb40eb70e4908e649039b4b907169823ec87ba", "after_sha256": "a7374642cfd82d36a888fdcc8e1d34c5855e32550883ce114b9b635069cbe188", "diff": "implementation/146_row165P_diffs/engine_docx_wrapper_media.ts.diff"},
    "patch_row165B": {"id": "row165B-marks-glyphs-rule", "row": "165B", "decision": "C188 F113-8 (CP-23, Manual Rev A ID p.53 DT-13f)", "summary": "loadDatumRule: optional leadMm for a generated rule; NEW datumRuleUnitLeadMm(ctx, unitKey, widthMm) = datumRuleLeadMm(width, unit position, unit count), the HTML/PDF estimate", "before_sha256": "14cc5af7401e14b6bf79131948d12dddc687c149d62953b744acfe5032e6693c", "after_sha256": "6f223edd6d362bc1fe88c3198feb40eb70e4908e649039b4b907169823ec87ba", "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/135_row165B_diffs/engine_docx_wrapper_media.ts.diff", "diff_sha256": "78ef36027a95811bc699cbeca9b73e8cd2b7c561809279638f4defb8abe50ae1"},
    "patch": {
     "id": "row107-M4M3",
@@ -3159,9 +3169,11 @@
   {
    "path": "src/lib/studio/engine/docx/wrapper/pages.ts",
    "status": "patched",
-   "bytes": 35616,
+   "bytes": 36549,
    "source_sha256": "c87ef17540b87d95034c5625f080afc903c9b30dd4010238f8d256bacfc814dd",
-   "sha256": "155464725dd96629aeca5708fdd099bea9ed68c656fb130e2e9ca7ba1131f02b",
+   "sha256": "363132fe09b74c1e5503c5e4a14c31348df6242c5d65cd76eae4d9738faeca0c",
+   "patch_row165P": {"id": "row165P-manual-furniture", "row": "165P", "decision": "C205 CP-04/05", "summary": "written control blocks get the eight fields (controlExtras); cover kicker falls back to coverKickerText", "before_sha256": "1ffbdc089049bfd96bce6420d404acd69ccdc0104c5761381974d6528e1b3242", "after_sha256": "363132fe09b74c1e5503c5e4a14c31348df6242c5d65cd76eae4d9738faeca0c", "diff": "implementation/146_row165P_diffs/engine_docx_wrapper_pages.ts.diff"},
+   "patch_row165O": {"id": "row165O-control-4x2", "row": "165O", "decision": "C204 item 3", "summary": "comment only: withClassificationLine describes the classification line inside the number cell, 4 x 2 grid kept", "before_sha256": "155464725dd96629aeca5708fdd099bea9ed68c656fb130e2e9ca7ba1131f02b", "after_sha256": "1ffbdc089049bfd96bce6420d404acd69ccdc0104c5761381974d6528e1b3242", "diff": "implementation/145_row165O_diffs/engine_docx_wrapper_pages.ts.diff"},
    "patch_row165A": {"id": "row165A-cover-control-furniture", "row": "165A", "decision": "C189 F56-1, C188 F113-4", "summary": "withControlSheetTemplateData: method statement = R-81 or defaultMethodStatementText(layers); withClassificationLine comment for the new field shape (helper in front/texts.ts)", "before_sha256": "d32ff40f60f2426c6d7649c14d6903b700c8dab05086509fa0081b9a432e6b5a", "after_sha256": "155464725dd96629aeca5708fdd099bea9ed68c656fb130e2e9ca7ba1131f02b", "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/138_row165A_diffs/engine_docx_wrapper_pages.ts.diff", "diff_sha256": "03fc6705fdaf096a103acd82a6e5059098e761d17516589b394640dc9614970a"},
    "patch": {
     "id": "row122-front-matter",
@@ -3177,9 +3189,11 @@
   {
    "path": "src/lib/studio/engine/docx/wrapper/render.ts",
    "status": "patched",
-   "bytes": 29600,
+   "bytes": 31732,
    "source_sha256": "33b3220d8828068c1d146bc97425efbd6be4e17b17ee67c9b1474d896d0f5972",
-   "sha256": "9fb3e2d9630514f57913c42e5d53fd8fdfd5db6453e6a5359c106740fef3213b",
+   "sha256": "adbd9e9d2468ddc97cbf31852982a5f852e16c101e5c011bc175e082fed3b658",
+   "patch_row165P": {"id": "row165P-manual-furniture", "row": "165P", "decision": "C205 CP-05/CP-23", "summary": "HALAMAN cell = register formula { = NUMPAGES - PAGEREF _StSheet0 } when sheets count from Bab 1, empty cached result; wrapper Datum Rule lead fixed (no datumRuleUnitLeadMm)", "before_sha256": "ed8c3429feb441927d7eca925e08e714d468393af434301d96b3097654123245", "after_sha256": "adbd9e9d2468ddc97cbf31852982a5f852e16c101e5c011bc175e082fed3b658", "diff": "implementation/146_row165P_diffs/engine_docx_wrapper_render.ts.diff"},
+   "patch_row165O": {"id": "row165O-control-4x2", "row": "165O", "decision": "C204 item 3", "summary": "controlBlockXml writes each br-separated line of a control cell as its own w:p (number, then 'Klasifikasi : TERBATAS'); one-line cells unchanged", "before_sha256": "9fb3e2d9630514f57913c42e5d53fd8fdfd5db6453e6a5359c106740fef3213b", "after_sha256": "ed8c3429feb441927d7eca925e08e714d468393af434301d96b3097654123245", "diff": "implementation/145_row165O_diffs/engine_docx_wrapper_render.ts.diff"},
    "patch_row165E": {"id": "row165E-integration", "row": "165E", "decision": "C193 ruling 4 (F113-4 DOCX half)", "summary": "signatureXml: the signature line is the holder paragraph's top border (w:pBdr/w:top, sz 5, color.wrapper.rule) instead of a cell top border, so each of the three columns has its own line with the rightPad gap", "before_sha256": "c5fcf65bbff07b21b00d6384a79c97121cd854d444b84a8b5a1c24dbd84047d1", "after_sha256": "9fb3e2d9630514f57913c42e5d53fd8fdfd5db6453e6a5359c106740fef3213b", "diff": "implementation/139_row165E_diffs/engine_docx_wrapper_render.ts.diff"},
    "patch_row165B": {"id": "row165B-marks-glyphs-rule", "row": "165B", "decision": "C188 F113-8 (CP-23, Manual Rev A ID p.53 DT-13f)", "summary": "datumRuleParagraphXml: cover/divider/appendix Datum Rule passes datumRuleUnitLeadMm to loadDatumRule (lead grows with the sheet as the HTML/PDF)", "before_sha256": "33b3220d8828068c1d146bc97425efbd6be4e17b17ee67c9b1474d896d0f5972", "after_sha256": "c5fcf65bbff07b21b00d6384a79c97121cd854d444b84a8b5a1c24dbd84047d1", "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/135_row165B_diffs/engine_docx_wrapper_render.ts.diff", "diff_sha256": "c416d3e45d453f709c9fb98d87804b423ebecc30e43c60995412bdd9afcf2afc"}
   },
@@ -3247,9 +3261,11 @@
   {
    "path": "src/lib/studio/engine/front/texts.ts",
    "status": "patched",
-   "bytes": 50174,
+   "bytes": 57979,
    "source_sha256": "c09b8b9bc95acb2524925974c68871fb9f9e4e8098a0bc9ef89f8c9b0c8c1b15",
-   "sha256": "a29dae84408f34b4767009e3d70da20de1110beac7bff38cfc7747826243cbd0",
+   "sha256": "d67dbe9f3bf6c336cc6be19f52079358b1de23e4979548a5c7095c6609c7f85b",
+   "patch_row165P": {"id": "row165P-manual-furniture", "row": "165P", "decision": "C205 CP-01/04/05", "summary": "MANUAL_CONTROL_FIELDS (the eight fields of ID p.47) always printed when the template lists them (empty value = empty cell); controlFieldValues split out; NEW controlRowsManualFields lays a written block out as the eight fields (TIER/TINGKAT, DASAR, BAHASA, Klasifikasi field dropped; HALAMAN = engine NUMPAGES field); controlRowsWithClassificationLine takes optional extras; NEW TYPE_CODE_KICKER_ID (ID p.15 Tabel 3.1) and coverKickerText", "before_sha256": "f9b74eeb3aabfeeb0cbeff08c61f8e0a080791e4a85c74fa6df6ae1ccdafbb4e", "after_sha256": "d67dbe9f3bf6c336cc6be19f52079358b1de23e4979548a5c7095c6609c7f85b", "diff": "implementation/146_row165P_diffs/engine_front_texts.ts.diff"},
+   "patch_row165O": {"id": "row165O-control-4x2", "row": "165O", "decision": "C204 item 3", "summary": "controlRowsWithClassificationLine back to the 4 x 2 grid: 'Klasifikasi : TERBATAS' (level bold seal) is a br-separated line inside the number cell under the number (165A field row withdrawn); NEW controlCellLines splits a cell at its br runs for the writers; hasFieldRun removed (no caller)", "before_sha256": "a29dae84408f34b4767009e3d70da20de1110beac7bff38cfc7747826243cbd0", "after_sha256": "f9b74eeb3aabfeeb0cbeff08c61f8e0a080791e4a85c74fa6df6ae1ccdafbb4e", "diff": "implementation/145_row165O_diffs/engine_front_texts.ts.diff"},
    "patch_row165J": {"id": "row165J-recheck-fixes", "row": "165J", "decision": "C197 F165H-4", "summary": "NEW controlRowsWithDocNumber: the value of the cover control block's number field is set to meta.docNumber (first text run format kept); called first in controlRowsWithClassificationLine, so DOCX and HTML covers print the same number as both register feet", "before_sha256": "ef706b3a7d75ed00cd62dcb178ffea3f0a5fb2e798ded6f23eef82fbaa6fcd27", "after_sha256": "a29dae84408f34b4767009e3d70da20de1110beac7bff38cfc7747826243cbd0", "diff": "implementation/142_row165J_diffs/engine_front_texts.ts.diff"},
    "patch_row165A": {"id": "row165A-cover-control-furniture", "row": "165A", "decision": "C189 F56-1, C188 F113-4", "summary": "controlRowsWithClassificationLine: Klasifikasi as its own label/value field directly under Nomor dokumen (pairs re-flowed two per row), no second line in the number cell; NEW defaultMethodStatementText (method statement built from the template verification layers when neither document nor R-81 gives one)", "before_sha256": "9be4567e6d67d3c60e39a18a08dd9a161ee6b8ba30769adc007387ea11a99d75", "after_sha256": "ef706b3a7d75ed00cd62dcb178ffea3f0a5fb2e798ded6f23eef82fbaa6fcd27", "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/138_row165A_diffs/engine_front_texts.ts.diff", "diff_sha256": "081b84fdc22db575062eb0f745e63a983ef7483208add4cae71c3d4ec7b8e2b7"},
    "patch_row123": {
@@ -3404,9 +3420,10 @@
   {
    "path": "src/lib/studio/engine/html/base/shell.ts",
    "status": "patched",
-   "bytes": 28691,
+   "bytes": 37485,
    "source_sha256": "d8db482134a88bf83875de4cc9fbb83ff3aa0f2792bce6e182a2e42766542dda",
-   "sha256": "39cd64a4f0699e56845461a6271b97a0a829711046731cafb0274ff2e78d12da",
+   "sha256": "9705c86f2b68939b9158efb028c2ea053e299f1a129c9427ee6e6cea9eb69467",
+   "patch_row165P": {"id": "row165P-manual-furniture", "row": "165P", "decision": "C205 CP-08/11/12/13", "summary": "no register before Bab 1 (contents included); running-head rule seal and register top seal / bottom ink200 rules as margin-box borders; register printed as two overlapping monospace layers (number and n bold ink900), NEW st-blank counter style", "before_sha256": "39cd64a4f0699e56845461a6271b97a0a829711046731cafb0274ff2e78d12da", "after_sha256": "9705c86f2b68939b9158efb028c2ea053e299f1a129c9427ee6e6cea9eb69467", "diff": "implementation/146_row165P_diffs/engine_html_base_shell.ts.diff"},
    "patch_row165I": {"id": "row165I-security", "row": "165I", "decision": "C196 (verification/24 M1)", "summary": "NEW export PAGES_STYLE_OPEN (the Studio pages <style> opening tag, used by buildHtmlShell and by pdf.ts to scope the sheet-total substitution); HTML output byte-identical", "before_sha256": "19949f880e623ae76055e5f9ede07958d3c7de65bf635a8a46ec24fbf204ad66", "after_sha256": "39cd64a4f0699e56845461a6271b97a0a829711046731cafb0274ff2e78d12da", "diff": "implementation/141_row165I_diffs/src_lib_studio_engine_html_base_shell.ts.diff"},
    "patch_row165A": {"id": "row165A-cover-control-furniture", "row": "165A", "decision": "C188 F113-6, F113-7, F113-12 (file request of 165D)", "summary": "withSheetRestart keeps the register of an interior unit before Bab 1 (contents) without its sheet cell (sheetless); register N marked /*st-N*/counter(pages)/*/st-N*/ when numbering starts at Bab 1; NEW numberedPassStyle (inert media=\"not all\" style hiding the units before Bab 1, switched on by the PDF numbered pass) and SHEET_TOTAL_MARK; classificationLine retired (no R-76 line in the foot, FOOT_CLASSIFICATION_LINE_RETIRED)", "before_sha256": "6c9232dc44cbc209247905e561bd75f0f4427554ffee3972d9422a201a43f544", "after_sha256": "19949f880e623ae76055e5f9ede07958d3c7de65bf635a8a46ec24fbf204ad66", "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/138_row165A_diffs/engine_html_base_shell.ts.diff", "diff_sha256": "b2a1f2853fa71211d0e8134a6f1aba541bc5c3df4eedece906e71225dae177dc"},
    "patch": {
@@ -3423,9 +3440,11 @@
   {
    "path": "src/lib/studio/engine/html/blocks/classes.ts",
    "status": "patched",
-   "bytes": 7246,
+   "bytes": 8178,
    "source_sha256": "9e226d416ebb6a2942c48939e3169f77e423ee57791110010f90cfcc80ce4f89",
-   "sha256": "b476d7c38bbfe7a23d38c88d57386efc8abf60efee8d3159245b3a28d9be28d7",
+   "sha256": "9bd440f084362cb5b7ec01275d8e3696b3aa2295fef355160a5fc358cbc040ed",
+   "patch_row165P": {"id": "row165P-manual-furniture", "row": "165P", "decision": "C205 CP-01/05", "summary": "control labels text-align left; NEW class st-control-rule", "before_sha256": "95d9aa47b42d59351f181ec5fd9f144b61e8876d35b8d6b7f08a14b9dd088a53", "after_sha256": "9bd440f084362cb5b7ec01275d8e3696b3aa2295fef355160a5fc358cbc040ed", "diff": "implementation/146_row165P_diffs/engine_html_blocks_classes.ts.diff"},
+   "patch_row165O": {"id": "row165O-control-4x2", "row": "165O", "decision": "C204 item 3", "summary": "NEW class key controlLine = st-control-line (one block line of a multi-line control cell)", "before_sha256": "b476d7c38bbfe7a23d38c88d57386efc8abf60efee8d3159245b3a28d9be28d7", "after_sha256": "95d9aa47b42d59351f181ec5fd9f144b61e8876d35b8d6b7f08a14b9dd088a53", "diff": "implementation/145_row165O_diffs/engine_html_blocks_classes.ts.diff"},
    "patch_row165J": {"id": "row165J-recheck-fixes", "row": "165J", "decision": "C197 F165H-1, F165H-3", "summary": "HTML_BLOCKS_CSS: signature line as border-top 0.22mm on .st-signature-holder::before (vector) instead of a linear-gradient background (printed as raster); .st-method max-width var(--col) (selector outranks the K2 rail max-width:none rule)", "before_sha256": "4550a575db62b044688b6ebffb32f7b11e4f1e3eb309930a343a1ac2d9e653ca", "after_sha256": "b476d7c38bbfe7a23d38c88d57386efc8abf60efee8d3159245b3a28d9be28d7", "diff": "implementation/142_row165J_diffs/engine_html_blocks_classes.ts.diff"},
    "patch_row165A": {"id": "row165A-cover-control-furniture", "row": "165A", "decision": "C188 F113-3, F113-4", "summary": "HTML_BLOCKS_CSS: control block and signature block width 100%; 3 mm after each control value; signature columns 4 mm apart with one signature line each (holder background line, --st-sign-rule); HALAMAN NUMPAGES span shows --st-pages-total (set by the PDF print). Status copied -> patched", "before_sha256": "9e226d416ebb6a2942c48939e3169f77e423ee57791110010f90cfcc80ce4f89", "after_sha256": "4550a575db62b044688b6ebffb32f7b11e4f1e3eb309930a343a1ac2d9e653ca", "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/138_row165A_diffs/engine_html_blocks_classes.ts.diff", "diff_sha256": "8495ce3c161bba79a7be02f430a79fede9e2116b2b1a90ded35c6ef9fe2891bb"}
   },
@@ -3526,9 +3545,11 @@
   {
    "path": "src/lib/studio/engine/html/blocks/wrapper.ts",
    "status": "patched",
-   "bytes": 45385,
+   "bytes": 47751,
    "source_sha256": "793de237b5e8af7d546dc3da3fcd02cb2f375a8ff71551a7c2097bcdb824ae99",
-   "sha256": "b14b21af8011d0a65d409f7d3389893a279478b3a71b90c09d2f20b34ed9c649",
+   "sha256": "c3017d6d60a3a4cc537f16f7a67753a04dae7a35758afa6b2a0b908b76bdeae0",
+   "patch_row165P": {"id": "row165P-manual-furniture", "row": "165P", "decision": "C205 CP-01/04/05", "summary": "control block preceded by a 0.45 mm inline-SVG rule in the wrapper ink; written blocks get the eight fields with the engine HALAMAN/VERIFIKASI extras; cover kicker falls back to the type-code document type", "before_sha256": "589b67a87c9607c8af947f5561715d6fa03ce74cb806cc3038474f4fa06d2945", "after_sha256": "c3017d6d60a3a4cc537f16f7a67753a04dae7a35758afa6b2a0b908b76bdeae0", "diff": "implementation/146_row165P_diffs/engine_html_blocks_wrapper.ts.diff"},
+   "patch_row165O": {"id": "row165O-control-4x2", "row": "165O", "decision": "C204 item 3", "summary": "controlBlockHtml prints each br-separated line of a control cell as div.st-control-line (number, then 'Klasifikasi : TERBATAS'); one-line cells unchanged; comment of withClassificationLine updated", "before_sha256": "b14b21af8011d0a65d409f7d3389893a279478b3a71b90c09d2f20b34ed9c649", "after_sha256": "589b67a87c9607c8af947f5561715d6fa03ce74cb806cc3038474f4fa06d2945", "diff": "implementation/145_row165O_diffs/engine_html_blocks_wrapper.ts.diff"},
    "patch_row165A": {"id": "row165A-cover-control-furniture", "row": "165A", "decision": "C189 F56-1, C188 F113-3, F113-4", "summary": "cover: template cover.addressLine when the cover data has none (= DOCX); auto control block prints HALAMAN as a NUMPAGES field span; control block and signature block get the DOCX grids as % colgroups (shareColgroup); signature table --st-sign-rule (color.wrapper.rule); classification field re-flow from the shared helper; default method statement from the layers", "before_sha256": "7fc086c8d564cb30bdc152ac050e067cd6e40664c24a9dadb74ec3e7c819fcde", "after_sha256": "b14b21af8011d0a65d409f7d3389893a279478b3a71b90c09d2f20b34ed9c649", "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/138_row165A_diffs/engine_html_blocks_wrapper.ts.diff", "diff_sha256": "75a8ef4809e6fb76026c793c8e1c3561b14df555e391bdefdfe955f49177b84b"},
    "patch_row122c": {
     "id": "row122c-html-cover-title-leading",
@@ -3572,9 +3593,10 @@
   {
    "path": "src/lib/studio/engine/html/tables/derivation.ts",
    "status": "patched",
-   "bytes": 9899,
+   "bytes": 11424,
    "source_sha256": "ecf3df31e62015a949d7d663b80eb8966d23d243c4d11e23df182040c116659d",
-   "sha256": "650ef873b69261ecec4f437f0e7ebb83103ba1be02816b0f918387cc87fc9c15",
+   "sha256": "050eeb318ed05ece938515f7fcfb4670cb82b06c3019c6096d8a060bced572c6",
+   "patch_row165P": {"id": "row165P-manual-furniture", "row": "165P", "decision": "C205 CP-36", "summary": "nestedTable \"= expr\" line prints register values instead of register keys (exprReaderText)", "before_sha256": "650ef873b69261ecec4f437f0e7ebb83103ba1be02816b0f918387cc87fc9c15", "after_sha256": "050eeb318ed05ece938515f7fcfb4670cb82b06c3019c6096d8a060bced572c6", "diff": "implementation/146_row165P_diffs/engine_html_tables_derivation.ts.diff"},
    "patch": {
     "id": "row123-html-derivation",
     "row": 123,
@@ -3736,9 +3758,10 @@
   {
    "path": "src/lib/studio/engine/lint/render/index.ts",
    "status": "patched",
-   "bytes": 27570,
+   "bytes": 28135,
    "source_sha256": "fabb8d4a27700eac78b9947a7cd80216cec440b23d0519f45f1af1ebf9b75e4c",
-   "sha256": "cd12ea19fc1e4f00afbe2f84eea8598dfd2f70f67f01f794d2d73d6107e73e7a",
+   "sha256": "92932b8d11e560042e5d1b0b23b82a140b3309c9cc231aa0926eea45ea3d90e1",
+   "patch_row165O": {"id": "row165O-datum15-not-applicable", "row": "165O", "decision": "C203 (F165N-2)", "summary": "DATUM-15 on a measured layout with no multi-line interior body paragraph is REPORT 'tidak berlaku: ...' (the lint's existing not-applicable form, as C-INFO-OPENER) instead of NOT_RUN, so the Studio gate's LINT_PARTIAL (NOT_RUN only) is not raised by an absence; NOT_RUN kept for no layout metrics and for a truncated measure", "before_sha256": "cd12ea19fc1e4f00afbe2f84eea8598dfd2f70f67f01f794d2d73d6107e73e7a", "after_sha256": "92932b8d11e560042e5d1b0b23b82a140b3309c9cc231aa0926eea45ea3d90e1", "diff": "implementation/145_row165O_diffs/engine_lint_render_index.ts.diff"},
    "patch_row165K": {"id": "row165K-datum15-scope", "row": "165K", "decision": "C199 ruling 2", "summary": "DATUM-15 counts only interior units' running body text: text elements whose unit is cover, controlSheet or toc are left out before the body-font and measure filters; unit-less text (non-Studio HTML) and chapter/section/appendix/partDivider/signatureBlock units still count; NOT_RUN reason names the front matter left out", "before_sha256": "bc18aea50760ecfb75c1676b85eae2330c62dd7fc7636caa2e3ffbc03addebb8", "after_sha256": "cd12ea19fc1e4f00afbe2f84eea8598dfd2f70f67f01f794d2d73d6107e73e7a", "diff": "implementation/143_row165K_diffs/engine_lint_render_index.ts.diff"},
    "patch": {
     "id": "row124-revA-lint-render-index",
@@ -4965,9 +4988,10 @@
   {
    "path": "src/lib/studio/services/render/pdf.ts",
    "status": "added",
-   "bytes": 13234,
+   "bytes": 13824,
    "source_sha256": null,
-   "sha256": "2eb000a1f64208e3f2d331bdf66afbdc675d0a73e772aef797e41f9729a2fd2a",
+   "sha256": "c8615a6674350ce1061d47c59ab91ceb7753b248389ca50e63b70bf84dd8358f",
+   "patch_row165P": {"id": "row165P-manual-furniture", "row": "165P", "decision": "C205 CP-05", "summary": "a document numbered from Bab 1 fills HALAMAN with the register N after the numbered pass (two prints, no T check)", "before_sha256": "2eb000a1f64208e3f2d331bdf66afbdc675d0a73e772aef797e41f9729a2fd2a", "after_sha256": "c8615a6674350ce1061d47c59ab91ceb7753b248389ca50e63b70bf84dd8358f", "diff": "implementation/146_row165P_diffs/services_render_pdf.ts.diff"},
    "patch_row165I": {"id": "row165I-security", "row": "165I", "decision": "C196 (verification/24 M1)", "summary": "sheet-total substitution scoped to Studio's own pages <style> block, lexed (slots outside CSS strings/comments only) and armed per print with a 128-bit crypto-random token (armSheetTotals); document text carrying the old or token marker stays inert; withSheetTotals gains an optional token; NEW export armSheetTotals", "before_sha256": "d9c39df0e341a7c0cc0f7ad0e80f0f171f04c338e8f9804802ab6bcada96de87", "after_sha256": "2eb000a1f64208e3f2d331bdf66afbdc675d0a73e772aef797e41f9729a2fd2a", "diff": "implementation/141_row165I_diffs/src_lib_studio_services_render_pdf.ts.diff"},
    "patch_row165A": {"id": "row165A-cover-control-furniture", "row": "165A", "decision": "C188 F113-3, F113-6", "summary": "printHtmlToPdf fills sheet totals after pagination in one bridge session: numbered pass (units before Bab 1 hidden) -> N for the register; final print with N and an estimated T for HALAMAN (--st-pages-total), reprinted once only if the page count differs; HTML without markers prints once unchanged; session timeout x3 when totals are needed. NEW exports sheetTotalPlan, withSheetTotals", "before_sha256": "173ad228ae9448047fcc63bc3cb2a1cbfff93870c7a2b7642d08bf499739f49a", "after_sha256": "d9c39df0e341a7c0cc0f7ad0e80f0f171f04c338e8f9804802ab6bcada96de87", "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/138_row165A_diffs/services_render_pdf.ts.diff", "diff_sha256": "55da4aae82e33219f3ba0593698433d22b1baf46a0f7850d80774665e9774789"},
    "note": "NEW Swarm file of row 32 (no clone original): printHtmlToPdf prints Studio's HTML through the render bridge pdf op via engine/browser/runtime.ts withSandboxedPage (studio spec §4, D-15 reversed); countPdfPages; error mapping to PDF_ENGINE_UNAVAILABLE / PDF_CONVERT_FAILED"
@@ -5841,6 +5865,8 @@
   "165E",
   "165I",
   "165J",
-  "165K"
+  "165K",
+  "165O",
+  "165P"
  ]
 }

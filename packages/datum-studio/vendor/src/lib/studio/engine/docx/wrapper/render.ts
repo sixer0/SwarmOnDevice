@@ -32,10 +32,11 @@ import type {
 } from "../../../contract";
 import { PROVENANCE_GLYPHS, TABLE_BLOCK_TYPES } from "../../../contract/enums";
 import { StudioEngineError } from "../../../contract/errors";
-import { FRONT_PAYLOAD_LABELS, issueStampTextOf, sealBandTextsOf, spineTextOf } from "../../front/texts";
+import { controlCellLines, FRONT_PAYLOAD_LABELS, issueStampTextOf, sealBandTextsOf, spineTextOf } from "../../front/texts";
 import { docxBlocks } from "../blocks";
 import { docxFigures } from "../figures";
-import { resolveUnitSetup } from "../package/section";
+import { resolveUnitSetup, sheetNumberingFromChapter1 } from "../package/section";
+import { withNumberedSheetTotal } from "../package/header-footer";
 import {
   mergePara,
   mergeRun,
@@ -53,7 +54,6 @@ import {
   DEFAULT_LOGO_WIDTH_MM,
   inlineImageRunXml,
   loadDatumRule,
-  datumRuleUnitLeadMm,
   loadLogo,
   mediaName,
   mediaRelId,
@@ -434,8 +434,9 @@ export function datumRuleParagraphXml(b: WrapperBuilder, d: Partial<DeviceBlock>
   const c = palette(b.params);
   const interior = b.unit === "appendix";
   const widthMm = d.widthMm ?? datumRuleWidthMm(b, interior);
-  // Row 165B (F113-8): lead = width x sheet / sheets, as the HTML/PDF shell (`withDatumRuleLeads`).
-  const rule = loadDatumRule(b.ctx, widthMm, interior ? c.interiorInk : c.ink, d.asset, datumRuleUnitLeadMm(b.ctx, b.block.unitKey, widthMm));
+  // Swarm row 165P (C205, CP-23 "Lead segment 9 mm in a DOCX, growing with the page number in a PDF"; ID p.53 DT-13f):
+  // the DOCX lead is the fixed `device.datumRule.frontSegmentMm` again (row 165B's growth stays in the HTML/PDF only).
+  const rule = loadDatumRule(b.ctx, widthMm, interior ? c.interiorInk : c.ink, d.asset);
   const heightMm = d.heightMm ?? rule.heightMm;
   return paragraphXml(paraOf(b.ctx, datumRuleRoleFor(b.unit), d.format), b.imageRun(rule.img, rule.widthMm, heightMm, "datumRule"));
 }
@@ -479,11 +480,21 @@ export function deviceXml(b: WrapperBuilder, d: DeviceBlock): void {
 // ── Blok kendali, kolofon, tanda tangan ──────────────────────────────────
 
 /** Blok kendali sampul T002 (KT-03/KT-04, TCP-03/04): 4 sel per baris. */
+/** Swarm row 165P: empty cached result of the NUMPAGES field(s) in one control cell (simple or complex field form). */
+function blankFieldCache(xml: string): string {
+  return xml
+    .replace(/(<w:fldSimple w:instr=" NUMPAGES "><w:r>(?:<w:rPr>[\s\S]*?<\/w:rPr>)?)<w:t>[^<]*<\/w:t>/g, "$1<w:t></w:t>")
+    .replace(/(<w:fldChar w:fldCharType="separate"\/><\/w:r><w:r>(?:<w:rPr>[\s\S]*?<\/w:rPr>)?)<w:t>[^<]*<\/w:t>/g, "$1<w:t></w:t>");
+}
+
 export function controlBlockXml(b: WrapperBuilder, cb: ControlBlock): void {
   const label = roleFormat(b.ctx, "cover.controlLabel");
   const value = roleFormat(b.ctx, "cover.controlValue");
   const c = palette(b.params);
   const grid = cb.colsTw && cb.colsTw.length === 4 ? cb.colsTw.map((w) => Math.round(w)) : scaleCols([1814, 3175, 1474, 2948], b.textWidthTw());
+  const units = b.ctx.snapshot?.units ?? [];
+  const numberedFromChapter1 =
+    units.findIndex((u) => u.kind === "chapter") > 0 && sheetNumberingFromChapter1(b.params, b.ctx.snapshot?.doc?.meta?.language === "EN" ? "EN" : "ID");
   const rows: WRow[] = cb.rows.map((row, ri) =>
     ({
       cells: row.map((inline, ci) => {
@@ -491,7 +502,19 @@ export function controlBlockXml(b: WrapperBuilder, cb: ControlBlock): void {
         const fmt = cellFmt({}, rf.cell);
         // TCP-03: baris pertama bergaris atas tinta 0,44 mm.
         if (ri === 0 && !fmt.borders?.top) fmt.borders = { ...fmt.borders, top: { val: "single", sz: 10, color: c.ink, space: 0 } };
-        return { widthTw: grid[ci], ...fmt, paragraphsXml: paragraphXml(rf.para, runsXml(inlineRuns(inline), rf.run ?? {}, b.params)) };
+        // Row 165O (C204 item 3): each `br`-separated line of a cell is its own `w:p` (the classification line under
+        // the number, DT-28c "baris tersendiri"); a one-line cell gives the same single paragraph as before.
+        const xml = controlCellLines(inline).map((l) => paragraphXml(rf.para, runsXml(inlineRuns(l), rf.run ?? {}, b.params))).join("");
+        // Swarm row 165P (C205, CP-05/CP-13): HALAMAN = the sheet count N of the register "LEMBAR n DARI N" (ID p.48
+        // "Penomoran lembar dimulai dari halaman pertama Bab 1"), so the cover NUMPAGES field takes the register's own
+        // formula `{ = { NUMPAGES } - { PAGEREF _StSheet0 } }` when the document numbers its sheets from Bab 1 (the
+        // PDF prints the same N, services/render/pdf.ts). Word computes it on open (settings updateFields).
+        // The field's cached result is left empty: the count is known only after Word paginates (updateFields), and a
+        // cached placeholder ("1", the renderer's default) read as a sheet count by any static reader (row 113 read
+        // "Halaman 1"). Empty = the manual's cell without a value (ID p.19 TB-09), as the HTML before the PDF fills it.
+        const counted = numberedFromChapter1 ? withNumberedSheetTotal(xml) : xml;
+        const paragraphsXml = xml.includes(" NUMPAGES ") ? blankFieldCache(counted) : counted;
+        return { widthTw: grid[ci], ...fmt, paragraphsXml };
       }),
     }),
   );

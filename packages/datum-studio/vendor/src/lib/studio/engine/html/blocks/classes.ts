@@ -78,6 +78,10 @@ export const HTML_BLOCK_CLASSES = {
   controlBlock: "st-control",
   controlLabel: "st-control-label",
   controlValue: "st-control-value",
+  /** Row 165O (C204 item 3): one line of a multi-line control-block cell (number, then the classification line). */
+  controlLine: "st-control-line",
+  /** Swarm row 165P (C205, CP-05): the 0.45 mm rule above the cover control block. */
+  controlRule: "st-control-rule",
   colophon: "st-colophon",
   colophonLeft: "st-colophon-left",
   colophonRight: "st-colophon-right",
@@ -162,4 +166,11 @@ export const HTML_BLOCKS_CSS = [
   // which the reserve rule re-narrows for interior units only (case 05 measured 136 mm without it).
   `.${C.methodStatement},body.st-doc .st-unit.st-unit-controlSheet .${C.paragraph}.${C.methodStatement}{max-width:var(--col)}`,
   `.${C.controlBlock} .${C.field}[data-field="NUMPAGES"]:empty::before{content:var(--st-pages-total,"\\2007")}`,
+  // Swarm row 165P (C205, CP-01, ID p.47 DT-14 "Tumpukan di tengah adalah tanda templat", UJI "Semua unsur sampul rata
+  // kiri pada 24 mm"; Gambar 8.2 and the specimen cover p.1 range the labels left): a label is a `th`, which a browser
+  // centres by default; it is set flush left, as the DOCX label paragraph. CP-05 (ID p.47 butir 10 "Blok kendali 4 × 2
+  // di bawah garis 0,45 mm"): the rule above the block is an inline SVG right before the table (wrapper.ts
+  // `controlBlockHtml`; = DOCX `controlBlockXml` first-row top border, w:sz 10 = 0.44 mm).
+  `.${C.controlLabel}{text-align:left}`,
+  `.${C.controlRule}{display:block;width:100%;margin:0}`,
 ].join("\n");

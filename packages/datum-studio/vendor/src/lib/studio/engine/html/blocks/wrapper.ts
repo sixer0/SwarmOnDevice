@@ -46,6 +46,7 @@ import {
   // Row 123 (C40 FIX CP-04/05/06/09/14/15): shared Rev A helpers (row 122 for DOCX, additive row 123 ones).
   COVER_KICKER_REV_A,
   completedVerificationChainTable,
+  controlCellLines,
   controlRowsWithClassificationLine,
   controlSheetDistributionHeads,
   controlSheetTemplateData,
@@ -56,6 +57,8 @@ import {
   // Wave 165 row 165A (C188 F113-3/F113-4): HALAMAN field marker and the method statement built from the layers.
   CONTROL_FIELD_SHEETS_FIELD,
   defaultMethodStatementText,
+  // Swarm row 165P (C205): kicker from the type code when nothing else gives one.
+  coverKickerText,
 } from "../../front/texts";
 import { DEFAULT_LOGO_WIDTH_MM } from "../../docx/wrapper/media";
 import { railK2ReserveOf } from "../../docx/blocks/rail";
@@ -153,6 +156,9 @@ function shareColgroup(grid: readonly number[]): string {
   return `<colgroup>${grid.map((w) => `<col${attr("style", `width:${num(Math.round((w / total) * 1e6) / 1e4)}%`)}>`).join("")}</colgroup>`;
 }
 
+/** Swarm row 165P (C205, CP-05): thickness of the rule above the cover control block (ID p.47 butir 10). */
+const CONTROL_RULE_MM = 0.45;
+
 function controlBlockHtml(ctx: RenderContext, cb: ControlBlock, address: string | null): string {
   if (!Array.isArray(cb.rows)) return "";
   const cols = Array.isArray(cb.colsTw) ? cb.colsTw.map((w) => finite(w, 0, 31680)) : [];
@@ -165,11 +171,24 @@ function controlBlockHtml(ctx: RenderContext, cb: ControlBlock, address: string 
       const cells = row.slice(0, 4).map((cellInline, i) => {
         const label = i % 2 === 0;
         const role: RoleKey = label ? "cover.controlLabel" : "cover.controlValue";
-        return el(ctx, label ? "th" : "td", { classes: [label ? C.controlLabel : C.controlValue], role, attrs: label ? [["scope", "row"]] : [] }, inlineHtml(cellInline));
+        // Row 165O (C204 item 3): a cell with several lines (number, then `Klasifikasi : TERBATAS`) prints each line as
+        // its own block line, as the DOCX prints each as its own paragraph; a one-line cell is unchanged.
+        const lines = isObj(cellInline) ? controlCellLines(cellInline as Inline) : [cellInline];
+        const body = lines.length > 1 ? lines.map((l) => `<div class="${C.controlLine}">${inlineHtml(l)}</div>`).join("") : inlineHtml(cellInline);
+        return el(ctx, label ? "th" : "td", { classes: [label ? C.controlLabel : C.controlValue], role, attrs: label ? [["scope", "row"]] : [] }, body);
       });
       return `<tr>${cells.join("")}</tr>`;
     });
-  return `<table class="${C.controlBlock}"${attr("data-address", address ?? undefined)}>${colgroup}<tbody>${rows.join("")}</tbody></table>`;
+  // Swarm row 165P (C205, CP-05; ID p.47 butir 10 "Blok kendali 4 × 2 di bawah garis 0,45 mm"): the rule above the
+  // block, 0.45 mm in the wrapper ink (= DOCX `controlBlockXml` first-row top border, `palette().ink`). It is a vector
+  // rect in an inline SVG, because Chromium paints a CSS border or background in whole CSS pixels (0.2646 mm: a 0.45 mm
+  // border printed 0.53 mm, row 165P probe v4); an SVG shape keeps its size.
+  const ink = paramStr(ctx, "color.wrapper.ink", "14110F").replace(/^#/, "");
+  const fill = /^[0-9A-Fa-f]{6}$/.test(ink) ? `#${ink.toUpperCase()}` : "#14110F";
+  const rule =
+    `<svg class="${C.controlRule}" aria-hidden="true" width="100%" height="${CONTROL_RULE_MM}mm" viewBox="0 0 166 ${CONTROL_RULE_MM}" preserveAspectRatio="none">` +
+    `<rect x="0" y="0" width="166" height="${CONTROL_RULE_MM}" fill="${fill}"/></svg>`;
+  return `${rule}<table class="${C.controlBlock}"${attr("data-address", address ?? undefined)}>${colgroup}<tbody>${rows.join("")}</tbody></table>`;
 }
 
 function colophonHtml(ctx: RenderContext, c: Colophon, address: string | null): string {
@@ -320,9 +339,13 @@ function withClassificationLine(ctx: RenderContext, cb: ControlBlock): ControlBl
   if (!meta || !Array.isArray(cb.rows)) return cb;
   const given = cb.rows.filter(Array.isArray);
   const rows = given.map((r) => [r[0], r[1], r[2], r[3]] as [Inline, Inline, Inline, Inline]);
-  // Wave 165 row 165A (F56-1): the helper re-flows the pairs with the Klasifikasi field under the number, so the rows
-  // are four cells each (= DOCX); an unchanged block keeps its own rows and cell counts.
-  const out = controlRowsWithClassificationLine(rows, meta, ctx.tpl?.params ?? {}, language(ctx));
+  // Row 165O (C204 item 3): the helper adds the classification line inside the number cell (no extra row); a changed
+  // block is passed as four cells per row (= DOCX); an unchanged block keeps its own rows and cell counts.
+  // Swarm row 165P (C205, CP-05): the manual's eight fields with the engine's HALAMAN (NUMPAGES span) and VERIFIKASI
+  // values, the same extras the auto block uses (= DOCX `withClassificationLine`).
+  const cs = ctx.snapshot?.doc?.front?.controlSheet?.data as ControlSheetData | undefined;
+  const verification = verificationSummaryText(cs?.verificationChain);
+  const out = controlRowsWithClassificationLine(rows, meta, ctx.tpl?.params ?? {}, language(ctx), { sheets: CONTROL_FIELD_SHEETS_FIELD, ...(verification ? { verification } : {}) });
   const changed = out.length !== given.length || out.some((r, i) => r.some((c, j) => c !== rows[i]?.[j]));
   return changed ? { ...cb, rows: out as ControlBlock["rows"] } : cb;
 }
@@ -416,7 +439,10 @@ function coverAuto(block: NormBlock, ctx: RenderContext, data: Partial<CoverData
         if (!datumRulePlaced(ctx.tpl?.params ?? {}, "sampul")) return "";
         return datumRuleHtml(ctx, "wrapper.datumRule", requiredParamMm(ctx, block, WRAPPER_DATUM_RULE_KEYS, "lebar Datum Rule pembungkus"));
       case "kicker jenis dokumen": {
-        const text = paramStr(ctx, "cover.kicker.text", "");
+        // Swarm row 165P (C205, CP-04, C40 lembar cover): no written kicker and no template text = the document type
+        // of the type code (ID p.15 Tabel 3.1, `coverKickerText`), as the DOCX cover.
+        const meta = ctx.snapshot?.doc?.meta;
+        const text = meta ? (coverKickerText(meta, ctx.tpl?.params ?? {}) ?? "") : paramStr(ctx, "cover.kicker.text", "");
         const k = hasInline(data.kicker) ? inlineHtml(data.kicker) : escapeHtml(text);
         return k ? el(ctx, "p", { classes: [C.paragraph, C.coverKicker], role: "wrapper.kicker", run: coverKickerRun(ctx) }, k) : "";
       }

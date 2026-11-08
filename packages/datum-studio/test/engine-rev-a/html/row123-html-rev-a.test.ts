@@ -72,13 +72,16 @@ describe("CP-14 issue stamp U+2014 and the classification letter (ID p.1, p.37 T
 describe("CP-15 classification line under the document number (DT-28c ID p.14)", () => {
   // Wave 165 row 165A (C189 F56-1): the classification is its own Klasifikasi field under the number, no longer a
   // second line in the number cell (consequence edit; was: `<br>` + "Klasifikasi : TERBATAS" inside the cell).
-  test("number cell holds the number only; Klasifikasi field with TERBATAS bold seal", async () => {
+  // Row 165O consequence edit (C204 item 3, CP-05 4 x 2): the number cell holds two block lines, the number only, then
+  // "Klasifikasi : TERBATAS" (no <br>, no Klasifikasi field).
+  test("number cell: the number line, then the 'Klasifikasi : TERBATAS' line (TERBATAS bold seal)", async () => {
     const r = await renderHtml();
-    const numberCell = /<td[^>]*data-role="cover\.controlValue"[^>]*>012\/GSP\/KT\/XI\/2026[\s\S]*?<\/td>/.exec(r.unit("cover"))?.[0] ?? "";
+    const numberCell = /<td[^>]*data-role="cover\.controlValue"[^>]*><div class="st-control-line">012\/GSP\/KT\/XI\/2026[\s\S]*?<\/td>/.exec(r.unit("cover"))?.[0] ?? "";
     expect(numberCell).not.toContain("<br>");
-    expect(textOf(numberCell)).toBe("012/GSP/KT/XI/2026");
-    const cell = /<th[^>]*>Klasifikasi<\/th><td[^>]*>[\s\S]*?<\/td>/.exec(r.unit("cover"))?.[0] ?? "";
-    expect(textOf(cell)).toBe("KlasifikasiTERBATAS");
+    const lines = [...numberCell.matchAll(/<div class="st-control-line">([\s\S]*?)<\/div>/g)].map((m) => textOf(m[1]))
+    expect(lines).toEqual(["012/GSP/KT/XI/2026", "Klasifikasi : TERBATAS"]);
+    expect(r.unit("cover")).not.toMatch(/<th[^>]*>Klasifikasi<\/th>/);
+    const cell = numberCell;
     const level = /<span[^>]*>TERBATAS<\/span>/.exec(cell)?.[0] ?? "";
     expect(level).toMatch(/\bst-b\b/);
     expect(styleOf(level)).toContain("color:#6E1420");

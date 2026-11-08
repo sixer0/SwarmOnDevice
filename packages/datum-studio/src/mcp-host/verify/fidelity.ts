@@ -38,10 +38,10 @@
  * No browser, no network, no model: pure functions over bytes.
  */
 import { strFromU8, unzipSync } from "fflate"
-import { apparatusLabelRunText, keyLineText } from "../../../vendor/src/lib/studio/engine/front/texts"
+import { apparatusLabelRunText, CONTROL_FIELD_SHEETS_FIELD, controlRowsManualFields, controlRowsWithDocNumber, keyLineText } from "../../../vendor/src/lib/studio/engine/front/texts"
 import { parseMdLiteHtml } from "../../../vendor/src/lib/studio/engine/html/blocks/inline"
 import { blockRowsFromSnapshot } from "../../../vendor/src/lib/studio/services/revisions/rows"
-import type { NormDocSnapshot } from "../../../vendor/src/lib/studio/contract"
+import type { DocMeta, Inline, NormDocSnapshot } from "../../../vendor/src/lib/studio/contract"
 import {
   VERIFY_FINDINGS_CAP,
   type VerifyBasis,
@@ -162,6 +162,12 @@ export interface FidelityExpectation {
   /** `doc.meta.language` of the snapshot ("ID" | "EN"; anything else makes number comparison UNKNOWN). */
   language: string
   blocks: FidelityBlock[]
+  /**
+   * Row 165O (C203 F165N-1): `doc.meta.docNumber` of the snapshot. The engine prints it in the cover control block's
+   * number cell (front/texts.ts controlRowsWithDocNumber, row 165J); the cover's expected text follows the same rule.
+   * Absent or empty: the cover's own number cell is expected, as before.
+   */
+  docNumber?: string
 }
 
 /** Expected content of a revision: its snapshot's addressed blocks in ordinal order (A-1 resolution, see header). */
@@ -172,6 +178,7 @@ export function fidelityExpectationFromSnapshot(snapshot: unknown): FidelityExpe
   const language = (s?.doc?.meta as { language?: unknown } | undefined)?.language
   return {
     language: typeof language === "string" ? language : "",
+    docNumber: typeof s?.doc?.meta?.docNumber === "string" ? s.doc.meta.docNumber : undefined,
     blocks: rows.map((r) => ({ blockId: r.blockId, address: r.address, type: r.type, content: r.content, artifactLabel: r.artifactLabel, ordinal: r.ordinal })),
   }
 }
@@ -340,10 +347,48 @@ interface ExpectedBlock {
   sourceForms: string[]
 }
 
-function expectBlock(b: FidelityBlock, language: string): ExpectedBlock {
+/** A cover control block (`{ type: "controlBlock", rows }`), auto (`data.control`) or in an explicit body. */
+function isControlBlock(v: unknown): v is { type: "controlBlock"; rows: unknown[] } {
+  return !!v && typeof v === "object" && (v as { type?: unknown }).type === "controlBlock" && Array.isArray((v as { rows?: unknown }).rows)
+}
+
+/**
+ * Row 165O (C203 F165N-1): the cover's expected content after the engine's document-number rule. Since row 165J the
+ * engine sets the number cell of the cover control block to `meta.docNumber` (`controlRowsWithDocNumber`, called by
+ * `controlRowsWithClassificationLine` for the auto `data.control` and for explicit-body control blocks, DOCX
+ * docx/wrapper/pages.ts:186 + :302, HTML html/blocks/wrapper.ts:325). The same helper is applied here, so a cover slot
+ * number that differs from meta is expected as meta (what the engine prints by design), and an output whose number
+ * differs from meta is still NUMBER_CHANGED. Only the cover is touched (the only place the engine applies the rule).
+ */
+export function coverContentWithDocNumber(content: unknown, docNumber: string | undefined, language = "ID"): unknown {
+  const no = docNumber?.trim() ?? ""
+  if (!content || typeof content !== "object") return content
+  const meta = { docNumber: no } as DocMeta
+  const lang = language === "EN" ? "EN" : "ID"
+  // Swarm row 165P (C205, CP-05): the engine lays a written control block out as the manual's eight fields
+  // (front/texts.ts controlRowsManualFields: TIER/TINGKAT, DASAR, BAHASA and a Klasifikasi field dropped, HALAMAN =
+  // the engine's NUMPAGES field). The expectation follows the same helper, without engine-filled values (`fill`
+  // false: a field the block lacks is an empty cell, so nothing the engine adds becomes expected text).
+  const fix = (cb: { type: "controlBlock"; rows: unknown[] }) => {
+    const rows = cb.rows.filter(Array.isArray).map((r) => [r[0], r[1], r[2], r[3]] as [Inline, Inline, Inline, Inline])
+    if (rows.length !== cb.rows.length) return cb
+    const laid = controlRowsManualFields(rows, meta, {}, lang, { sheets: CONTROL_FIELD_SHEETS_FIELD }, false)
+    return { ...cb, rows: no === "" ? laid : controlRowsWithDocNumber(laid, meta) }
+  }
+  const c = content as { data?: unknown; body?: unknown }
+  let out = content as Record<string, unknown>
+  if (c.data && typeof c.data === "object" && isControlBlock((c.data as { control?: unknown }).control)) {
+    out = { ...out, data: { ...(c.data as Record<string, unknown>), control: fix((c.data as { control: { type: "controlBlock"; rows: unknown[] } }).control) } }
+  }
+  if (Array.isArray(c.body)) out = { ...out, body: c.body.map((it) => (isControlBlock(it) ? fix(it) : it)) }
+  return out
+}
+
+function expectBlock(b: FidelityBlock, language: string, docNumber?: string): ExpectedBlock {
   const isTable = TABLE_TYPES.has(b.type)
   const segments: Segment[] = []
-  collectSegments(b.content, segments, isTable, language, null, typeof b.address === "string" && b.address.startsWith("F:"))
+  const content = b.address === "F:cover" ? coverContentWithDocNumber(b.content, docNumber, language) : b.content
+  collectSegments(content, segments, isTable, language, null, typeof b.address === "string" && b.address.startsWith("F:"))
   const sourceSegs: Segment[] = []
   if (isTable && b.content && typeof b.content === "object") collectSegments((b.content as { source?: unknown }).source, sourceSegs, false, language, "source")
   return { block: b, segments, table: isTable ? expectedTable(b.content, language) : null, sourceForms: sourceSegs.flatMap((x) => x.forms) }
@@ -758,7 +803,7 @@ export function checkHtmlFidelity(html: string, expected: FidelityExpectation, b
   })
   const col = new Collector()
   for (const b of expected.blocks) {
-    const eb = expectBlock(b, expected.language)
+    const eb = expectBlock(b, expected.language, expected.docNumber)
     col.stats.blocks++
     // Located by `data-block` / `data-block-id`; blocks whose renderer writes only `data-address` (slot entries,
     // html/assemble/slots.ts:204-206, :228; the address wrapper index.ts:148-153) by their address.
@@ -928,7 +973,7 @@ export function checkDocxFidelity(bytes: Uint8Array, expected: FidelityExpectati
   let cursor = 0
   let tableIdx = 0
   for (const b of expected.blocks) {
-    const eb = expectBlock(b, expected.language)
+    const eb = expectBlock(b, expected.language, expected.docNumber)
     col.stats.blocks++
     const all: Segment[] = [...eb.segments]
     if (eb.table) for (const line of eb.table.rows) for (const cell of line) if (cell && !cell.covered) all.push(...cell.segments)

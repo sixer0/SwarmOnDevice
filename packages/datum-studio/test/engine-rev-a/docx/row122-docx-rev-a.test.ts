@@ -53,15 +53,18 @@ describe("CP-14 issue stamp: U+2014 and the classification letter (ID p.1, p.37 
 describe("CP-15 classification line under the number (DT-28c ID p.14)", () => {
   // Wave 165 row 165A (C189 F56-1): own Klasifikasi field under the number (consequence edit; was: w:br +
   // "Klasifikasi : " + TERBATAS inside the number cell).
-  test("number cell holds the number only; a Klasifikasi field carries TERBATAS bold seal", async () => {
+  // Row 165O consequence edit (C204 item 3, CP-05 4 x 2): the number's first paragraph holds the number only; the next
+  // paragraph of the same cell is "Klasifikasi : TERBATAS" (own w:p, no w:br); no Klasifikasi field.
+  test("number cell: the number, then 'Klasifikasi : TERBATAS' as its own paragraph (TERBATAS bold seal)", async () => {
     const r = await renderDocx();
     const control = coverTables(r.doc).find((t) => textOf(t).includes("Nomor dokumen"))!;
-    const cellP = paragraphs(control).find((p) => textOf(p).startsWith("012/GSP/KT/XI/2026"))!;
-    expect(cellP).toBeDefined();
-    expect(cellP).not.toContain("<w:br/>");
-    expect(textOf(cellP)).toBe("012/GSP/KT/XI/2026");
-    expect(paragraphs(control).some((p) => textOf(p) === "Klasifikasi")).toBe(true);
-    const valueP = paragraphs(control).find((p) => textOf(p) === "TERBATAS")!;
+    const ps = paragraphs(control);
+    const nAt = ps.findIndex((p) => textOf(p) === "012/GSP/KT/XI/2026");
+    expect(nAt).toBeGreaterThanOrEqual(0);
+    expect(ps[nAt]).not.toContain("<w:br/>");
+    expect(textOf(ps[nAt + 1])).toBe("Klasifikasi : TERBATAS");
+    expect(ps.some((p) => textOf(p) === "Klasifikasi")).toBe(false);
+    const valueP = ps[nAt + 1];
     const level = runs(valueP).find((x) => x.text === "TERBATAS")!;
     expect(level.rPr).toContain("<w:b/>");
     expect(level.rPr).toContain('w:val="6E1420"');
@@ -90,7 +93,8 @@ describe("CP-05 eight control fields from template data (ID p.47 butir 10)", () 
     const control = coverTables(r.doc).find((t) => textOf(t).includes("Nomor dokumen"))!;
     const rows = control.match(/<w:tr[\s>]/g) ?? [];
     // Wave 165 row 165A (F56-1): eight fields plus the Klasifikasi field = 9 pairs = 5 rows (consequence edit; was 4).
-    expect(rows.length).toBe(5);
+    // Row 165O consequence edit (C204 item 3): back to the 4 x 2 grid, 4 rows (classification line in the number cell).
+    expect(rows.length).toBe(4);
     const t = textOf(control);
     for (const label of ["Nomor dokumen", "Revisi", "Penyusun", "Kustodian", "Ditujukan kepada", "Halaman", "Datum geodetik", "Verifikasi"]) expect(t).toContain(label);
     expect(t).toContain("Divisi Engineering PT GSP");
