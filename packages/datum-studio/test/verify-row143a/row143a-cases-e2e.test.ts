@@ -147,7 +147,7 @@ beforeAll(async () => {
       requestInit: { headers: { authorization: `Bearer ${TOKEN}`, "x-studio-agent": "swarm", "x-studio-caller-cwd": encodeURIComponent(PROJECT) } },
     }),
   )
-  const row = { id: "1", phase: "implementation", kind: "implementation", title: "Row 1", agent: "coder-execution", model: { tier: "opus" }, deps: [], size: "S", status: "pending", output: "implementation/1.md", verification: "tests pass", review: "gate" }
+  const row = { id: "1", phase: "implementation", kind: "implementation", title: "Row 1", agent: "coder-execution", model: { tier: "thinker" }, deps: [], size: "S", status: "pending", output: "implementation/1.md", verification: "tests pass", review: "gate" }
   const cr = await call("studio_mission_create", { mission: { id: M, title: "Row 143a cases", type: "feature-release", owner: "master-controller", project: { dir: PROJECT }, rows: [row], decisions: [{ id: "U1", by: "user", date: "2026-11-08", text: "go" }] } })
   expect(ok(cr)).toBe(true)
   expect(ok(await call("studio_mission_approve", { mission: M, decision: "U1" }))).toBe(true)

@@ -166,7 +166,7 @@ describe("schema and open", () => {
       // row 64: 0002 adds columns + an index only, so the table and trigger lists above are unchanged
       // row 119a: 0003 adds only mission_* tables and triggers (asserted in mission-store.test.ts), filtered out above
       // row 149: 0004 adds only output_verification + 2 indexes, no trigger (asserted in output-verification.test.ts), filtered out above
-      expect(db.all<{ id: string }>("SELECT id FROM migration ORDER BY id").map((r) => r.id)).toEqual(["20261106000000_datum_studio_init", "20261106120000_datum_template_guard", "20261107000000_datum_mission", "20261107120000_datum_output_verification"])
+      expect(db.all<{ id: string }>("SELECT id FROM migration ORDER BY id").map((r) => r.id)).toEqual(["20261106000000_datum_studio_init", "20261106120000_datum_template_guard", "20261107000000_datum_mission", "20261107120000_datum_output_verification", "20261108000000_datum_mission_gsp_tiers"])
       const meta = Object.fromEntries(db.all<{ key: string; value: string }>("SELECT key, value FROM store_meta").map((r) => [r.key, r.value]))
       expect(meta.schema_version).toBe(latestSchemaId())
       expect(meta.created_by_release).toBe(RELEASE)
@@ -185,11 +185,11 @@ describe("schema and open", () => {
     const again = new SqliteStudioStore()
     await again.open(join(RUN, "main"), { release: RELEASE })
     const db = openSqlite(join(RUN, "main", "datum-studio.sqlite"), { readonly: true })
-    expect(Number(db.get<{ n: number }>("SELECT count(*) AS n FROM migration")!.n)).toBe(4)
+    expect(Number(db.get<{ n: number }>("SELECT count(*) AS n FROM migration")!.n)).toBe(5)
     db.close()
     await again.close()
     await store.open(join(RUN, "main"), { release: RELEASE, log: (e) => logs.push(e), agentClock: clock })
-    expect(MIGRATIONS.map((m) => m.seq)).toEqual([1, 2, 3, 4])
+    expect(MIGRATIONS.map((m) => m.seq)).toEqual([1, 2, 3, 4, 5])
     expect(Object.keys(RESERVED_MIGRATIONS)).toEqual([])
   })
 

@@ -93,7 +93,7 @@ async function counts() {
 }
 
 function row(id: string, phase: string, kind: string, deps: string[] = []) {
-  return { id, phase, kind, title: `Row ${id}`, agent: "coder-execution", model: { tier: "opus" }, deps, size: "S", status: "pending", output: `implementation/${id}.md`, verification: "tests pass", review: "gate" }
+  return { id, phase, kind, title: `Row ${id}`, agent: "coder-execution", model: { tier: "thinker" }, deps, size: "S", status: "pending", output: `implementation/${id}.md`, verification: "tests pass", review: "gate" }
 }
 
 const SECTIONS = [

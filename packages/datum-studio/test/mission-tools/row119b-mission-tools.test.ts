@@ -127,7 +127,7 @@ async function sql<T = S>(q: string, p: unknown[] = []): Promise<T[]> {
 }
 
 function row(id: string, phase: string, kind: string, deps: string[] = [], over: S = {}) {
-  return { id, phase, kind, title: `Row ${id}`, agent: "coder-execution", model: { tier: "opus" }, deps, size: "S", status: "pending", output: `implementation/${id}.md`, verification: "tests pass", review: "gate", ...over }
+  return { id, phase, kind, title: `Row ${id}`, agent: "coder-execution", model: { tier: "thinker" }, deps, size: "S", status: "pending", output: `implementation/${id}.md`, verification: "tests pass", review: "gate", ...over }
 }
 
 function report(o: { mission?: string | null; docKey?: string | null; status?: string; taskRef?: string | null; owner?: string; title?: string }): string {

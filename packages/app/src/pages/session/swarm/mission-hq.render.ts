@@ -262,3 +262,244 @@ describe("MissionHQ", () => {
     expect(root.style.getPropertyValue("--hq-done")).toContain("--v2-state-fg-success")
   })
 })
+
+// ── Row 167 (user finding 2026-11-08, "layoutnya ada yang berbenturan"; "benturan saat decision muncul"): zero overlap
+// between agents, labels, room pills, domes/platforms, the HQ deck, connectors and the decision beacon, in radial and
+// lanes, for 1..6 agents in any one room of every mission type, with and without an open decision. Boxes are read from
+// the rendered DOM (hit rects, label text, pill transforms, beacon rect) plus the pure layout the view draws from.
+type Pt = [number, number]
+type Shape = { name: string; pts: Pt[] }
+const { layoutRadial, BOT_HALF_W: BHW, LABEL_ADVANCE: ADV } = await import(new URL("./mission-hq.tsx", import.meta.url).pathname)
+const { radialScene } = await import("./mission-hq-scene")
+const num = (el: Element | null, a: string) => Number(el?.getAttribute(a) ?? NaN)
+const rectPts = (x: number, y: number, w: number, h: number): Pt[] => [[x, y], [x + w, y], [x + w, y + h], [x, y + h]]
+const ellPts = (cx: number, cy: number, rx: number, ry: number, from = 0, to = Math.PI * 2, k = 48): Pt[] =>
+  Array.from({ length: k + 1 }, (_, i) => {
+    const a = from + ((to - from) * i) / k
+    return [cx + Math.cos(a) * rx, cy + Math.sin(a) * ry] as Pt
+  })
+/** Raised tier (Tier): top ellipse and the same ellipse h lower, as one convex outline. */
+const tierPts = (cx: number, cy: number, rx: number, ry: number, h: number): Pt[] => [
+  ...ellPts(cx, cy, rx, ry, Math.PI, Math.PI * 2, 24),
+  ...ellPts(cx, cy + h, rx, ry, 0, Math.PI, 24),
+]
+/** Separating-axis test for convex outlines (a segment is a 2-point outline); touching within `eps` is no overlap. */
+function overlap(a: Pt[], b: Pt[], eps = 0.5) {
+  for (const poly of [a, b]) {
+    for (let i = 0; i < poly.length; i++) {
+      const p = poly[i]
+      const q = poly[(i + 1) % poly.length]
+      const nx = q[1] - p[1]
+      const ny = p[0] - q[0]
+      const len = Math.hypot(nx, ny)
+      if (len < 1e-9) continue
+      const proj = (s: Pt[]) => s.map(([x, y]) => (x * nx + y * ny) / len)
+      const pa = proj(a)
+      const pb = proj(b)
+      if (Math.max(...pa) <= Math.min(...pb) + eps || Math.max(...pb) <= Math.min(...pa) + eps) return false
+    }
+  }
+  return true
+}
+const insideEllipse = ([x, y]: Pt, cx: number, cy: number, rx: number, ry: number) => ((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2 <= 1
+const textBox = (el: Element, name: string): Shape => {
+  const fs = num(el, "font-size")
+  const w = Array.from(el.textContent ?? "").length * fs * ADV
+  const x = num(el, "x")
+  const left = el.getAttribute("text-anchor") === "middle" ? x - w / 2 : el.getAttribute("text-anchor") === "end" ? x - w : x
+  return { name, pts: rectPts(left, num(el, "y") - fs * 0.85, w, fs * 1.1) }
+}
+const translateOf = (el: Element) => {
+  const m = /translate\(([-\d.e]+)[ ,]+([-\d.e]+)\)/.exec(el.getAttribute("transform") ?? "")!
+  return [Number(m[1]), Number(m[2])] as Pt
+}
+function pairs(groups: Shape[][], label: string) {
+  const hits: string[] = []
+  for (let i = 0; i < groups.length; i++)
+    for (let j = i; j < groups.length; j++)
+      for (let a = 0; a < groups[i].length; a++)
+        for (let b = i === j ? a + 1 : 0; b < groups[j].length; b++)
+          if (overlap(groups[i][a].pts, groups[j][b].pts)) hits.push(`${label}: ${groups[i][a].name} x ${groups[j][b].name}`)
+  return hits
+}
+const cross = (as: Shape[], bs: Shape[], label: string) =>
+  as.flatMap((a) => bs.filter((b) => overlap(a.pts, b.pts)).map((b) => `${label}: ${a.name} x ${b.name}`))
+
+const LONG = ["Laporan teknis lengkap", "Gambar arsitektur sistem", "RAB XLSX", "Verifikasi dokumen akhir", "Simpan hasil", "Baca perintah kerja"]
+/** The fixture with `n` agents (long titles, mixed statuses, one with a deliverable) in the phase at `index`. */
+function crowd(type: string, index: number, n: number, decision: boolean): MissionVM {
+  const m = model(type, { decision })
+  const phase = m.phases[index]
+  const base = Object.values(m.agents)[0]
+  const statuses = ["running", "review", "issue", "blocked", "done", "waiting"] as const
+  phase.rows = Array.from({ length: n }, (_, k) => `c${k + 1}`)
+  for (const [k, id] of phase.rows.entries())
+    m.agents[id] = { ...base, rowId: id, title: LONG[k % LONG.length], phase: phase.id, status: statuses[k % 6], family: phase.family }
+  return m
+}
+
+function radialShapes(root: Element, m: MissionVM) {
+  const laid = layoutRadial(radialScene(m))
+  const { cx, cy, hy } = laid
+  const deck: Shape[] = [
+    { name: "deck tier", pts: tierPts(cx, cy + 14, 190, 58, 12) },
+    { name: "ring", pts: ellPts(cx, hy, 67, 67) },
+    ...all(root, "[data-hq-deck] [data-hq-you-label],[data-hq-deck] [data-hq-swarm-label]").map((el) => textBox(el, "deck label")),
+    // "HQ · COMMAND DECK": 17 mono characters at 9.5 (0.6 em) plus .32 em letter spacing, centred
+    { name: "HQ deck title", pts: rectPts(cx - (17 * 9.5 * 0.92) / 2, cy + 82 - 9, 17 * 9.5 * 0.92, 12) },
+  ]
+  const beacon: Shape[] = []
+  const pill = root.querySelector("[data-hq-beacon] rect")
+  if (pill) {
+    beacon.push({ name: "beacon", pts: rectPts(num(pill, "x"), num(pill, "y"), num(pill, "width"), num(pill, "height")) })
+    const line = root.querySelector("[data-hq-beacon-line]")!
+    beacon.push({ name: "beacon line", pts: [[num(line, "x1"), num(line, "y1")], [num(line, "x2"), num(line, "y2")]] })
+  }
+  const rooms = laid.rooms.map((room: (typeof laid.rooms)[number]) => {
+    const el = root.querySelector(`[data-hq-room="${room.phase.id}"]`)!
+    const sign = el.querySelector("[data-hq-room-name]")!.parentElement!
+    const [sx, sy] = translateOf(sign)
+    const sr = sign.querySelector("rect")!
+    const items: Shape[] = [
+      { name: `${room.phase.id} pill`, pts: rectPts(sx + num(sr, "x"), sy + num(sr, "y"), num(sr, "width"), num(sr, "height")) },
+    ]
+    for (const a of all(el, "[data-hq-agent]")) {
+      const id = a.getAttribute("data-hq-agent")
+      const hit = a.querySelector("[data-hq-hit]")!
+      items.push({ name: `${room.phase.id}/${id} agent`, pts: rectPts(num(hit, "x"), num(hit, "y"), num(hit, "width"), num(hit, "height")) })
+      const label = a.querySelector("[data-hq-label]")!
+      items.push({ ...textBox(label, `${room.phase.id}/${id} label`) })
+      const bar = a.querySelector("[data-hq-checkpoint]")!.previousElementSibling!
+      items.push({ name: `${room.phase.id}/${id} bar`, pts: rectPts(num(bar, "x"), num(bar, "y"), num(bar, "width"), 3) })
+    }
+    const shell: Shape[] = [
+      { name: `${room.phase.id} dome`, pts: ellPts(room.x, room.py, room.rx - 10, room.py - room.ty + 4, Math.PI, Math.PI * 2, 32) },
+      { name: `${room.phase.id} platform`, pts: tierPts(room.x, room.py, room.rx, room.ry, 10) },
+    ]
+    const c = room.conduit
+    return { room, items, shell, conduit: { name: `${room.phase.id} conduit`, pts: [[c.x1, c.y1], [c.x2, c.y2]] as Pt[] } }
+  })
+  return { laid, deck, beacon, rooms }
+}
+
+describe("MissionHQ geometry (row 167): nothing collides", () => {
+  for (const type of Object.keys(TYPE_PHASES)) {
+    for (const decision of [false, true]) {
+      test(`${type}, decision ${decision ? "open" : "closed"}: radial, 1..6 agents in any room`, () => {
+        const hits: string[] = []
+        for (let index = 0; index < TYPE_PHASES[type].length; index++) {
+          for (const n of [1, 2, 3, 4, 5, 6]) {
+            const m = crowd(type, index, n, decision)
+            const root = mount(m, 1280)
+            expect(root.dataset.missionHq).toBe("radial")
+            const { deck, beacon, rooms } = radialShapes(root, m)
+            const tag = `${type}#${index}x${n}`
+            // inside a room: no agent, label, bar or pill touches another
+            for (const r of rooms) hits.push(...pairs([r.items], tag))
+            // agents stand on their platform (feet inside the platform's top ellipse)
+            for (const r of rooms)
+              for (const a of r.room.agents)
+                if (!insideEllipse([a.x, a.y], r.room.x, r.room.py, r.room.rx, r.room.ry)) hits.push(`${tag}: ${a.rowId} off platform`)
+            // agents and labels stay inside the dome's span (the dome stays clear of other rooms below)
+            for (const r of rooms)
+              for (const it of r.items)
+                for (const [x] of it.pts)
+                  if (Math.abs(x - r.room.x) > r.room.rx + 0.5) hits.push(`${tag}: ${it.name} outside its room`)
+            // rooms against rooms, the deck and the beacon
+            for (let i = 0; i < rooms.length; i++)
+              for (let j = i + 1; j < rooms.length; j++)
+                hits.push(...cross([...rooms[i].items, ...rooms[i].shell], [...rooms[j].items, ...rooms[j].shell], tag))
+            for (const r of rooms) hits.push(...cross([...r.items, ...r.shell], [...deck, ...beacon], tag))
+            // connectors only meet their own room and the deck
+            for (const r of rooms)
+              for (const o of rooms)
+                if (o !== r) hits.push(...cross([r.conduit], [...o.items, ...o.shell], tag))
+            for (const r of rooms) hits.push(...cross([r.conduit], [deck[1], ...deck.slice(2), ...beacon], tag))
+            // the beacon clears the ring with a visible gap
+            if (beacon.length) {
+              const ring = { name: "ring+20 gap", pts: ellPts(radialScene(m).cx, radialScene(m).hy, 67 + 20, 67 + 20) }
+              hits.push(...cross([beacon[0]], [ring], tag))
+            }
+            dispose()
+            document.body.innerHTML = ""
+          }
+        }
+        expect(hits).toEqual([])
+      })
+
+      test(`${type}, decision ${decision ? "open" : "closed"}: lanes, 1..6 agents in any lane`, () => {
+        const hits: string[] = []
+        for (let index = 0; index < TYPE_PHASES[type].length; index++) {
+          for (const n of [1, 2, 3, 4, 5, 6]) {
+            const m = crowd(type, index, n, decision)
+            const root = mount(m, 420)
+            expect(root.dataset.missionHq).toBe("lanes")
+            const tag = `${type}#${index}x${n} lanes`
+            const deckRect = root.querySelector("[data-hq-deck] [data-hq-rim] rect")!
+            const deckBox = rectPts(num(deckRect, "x"), num(deckRect, "y"), num(deckRect, "width"), num(deckRect, "height"))
+            const deckTexts = all(root, "[data-hq-deck] text").filter((el) => !el.closest("[data-hq-beacon]")).map((el, k) => textBox(el, `deck text ${k}`))
+            const pill = root.querySelector("[data-hq-beacon] rect")
+            const beacon = pill ? [{ name: "beacon", pts: rectPts(num(pill, "x"), num(pill, "y"), num(pill, "width"), num(pill, "height")) }] : []
+            hits.push(...cross(beacon, deckTexts, tag))
+            const lanes = all(root, "[data-hq-room]").map((lane) => {
+              const r = lane.querySelector("rect")!
+              const box = rectPts(num(r, "x"), num(r, "y"), num(r, "width"), num(r, "height"))
+              const texts = all(lane, "[data-hq-room-name],[data-hq-room-count]").map((el) => textBox(el, `${lane.getAttribute("data-hq-room")} text`))
+              const bots = all(lane, "[data-hq-agent]").map((a) => {
+                const hit = a.querySelector("[data-hq-hit]")!
+                return { name: `${a.getAttribute("data-hq-agent")} agent`, pts: rectPts(num(hit, "x"), num(hit, "y"), num(hit, "width"), num(hit, "height")) }
+              })
+              for (const b of bots)
+                for (const [x, y] of b.pts)
+                  if (x < num(r, "x") || x > num(r, "x") + num(r, "width") || y < num(r, "y") || y > num(r, "y") + num(r, "height"))
+                    hits.push(`${tag}: ${b.name} outside its lane`)
+              return { name: lane.getAttribute("data-hq-room")!, box, items: [...texts, ...bots] }
+            })
+            for (const l of lanes) hits.push(...pairs([l.items], tag))
+            for (let i = 0; i < lanes.length; i++) {
+              if (overlap(lanes[i].box, deckBox)) hits.push(`${tag}: lane ${lanes[i].name} x deck`)
+              for (let j = i + 1; j < lanes.length; j++) if (overlap(lanes[i].box, lanes[j].box)) hits.push(`${tag}: lane ${lanes[i].name} x ${lanes[j].name}`)
+            }
+            dispose()
+            document.body.innerHTML = ""
+          }
+        }
+        expect(hits).toEqual([])
+      })
+    }
+  }
+
+  test("a 3-agent room: one row on the platform, labels cut to their slot, never wider than the agent spacing", () => {
+    const root = mount(crowd("document", 1, 3, true), 1280)
+    const room = root.querySelector('[data-hq-room="draft"]')!
+    const ys = all(room, "[data-hq-hit]").map((el) => num(el, "y"))
+    expect(new Set(ys).size).toBe(1)
+    const labels = all(room, "[data-hq-label]").map((el) => el.textContent)
+    expect(labels).toEqual(["Laporan tek…", "Gambar arsi…", "RAB XLSX"])
+    void BHW
+  })
+
+  test("the deck orbit does not rotate (a spinning ellipse sweeps across the ring, beacon and rooms)", () => {
+    const root = mount(model("document", { decision: true }), 1280)
+    const orbit = root.querySelector("[data-hq-orbit]")!
+    expect(orbit.getAttribute("class")).toBe("hq-orbit-dash")
+  })
+})
+
+// Row 167: the decision card wraps its question, plan line and option consequences inside the card (a real-browser
+// check at 880 and 1083 px measured no element past the card's right edge; here the classes that make it so).
+describe("decision card text (row 167)", () => {
+  test("no hard clip: nothing truncates or refuses to wrap, options span the card", async () => {
+    const { MissionCommand } = await import(new URL("./mission-command.tsx", import.meta.url).pathname)
+    const m = model("document", { decision: true })
+    m.decision = { ...m.decision!, question: "Apakah rencana kerja enam baris misi ini disetujui?", context: "Rencana: 6 baris (brief, 3 draft, review, publish)" }
+    const host = document.createElement("div")
+    document.body.append(host)
+    dispose = render(() => createComponent(MissionCommand, { model: m, writer: {} as never, refresh: () => {}, prompt: async () => {} }), host)
+    const card = host.querySelector("[data-mission-decision]")!
+    expect(card.querySelectorAll(".truncate,.whitespace-nowrap,.text-ellipsis").length).toBe(0)
+    for (const sel of ["[data-mission-question]", "[data-mission-context]", "[data-mission-consequence]"])
+      for (const el of all(card, sel)) expect(el.className).toContain("[overflow-wrap:anywhere]")
+    for (const b of all(card, "[data-mission-option]")) expect(b.className).toMatch(/\bw-full\b.*\bmin-w-0\b/)
+  })
+})

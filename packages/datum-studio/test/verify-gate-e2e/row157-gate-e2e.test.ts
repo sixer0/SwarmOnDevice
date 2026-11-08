@@ -160,7 +160,7 @@ const code = (r: S) => (r.ok === false ? r.code ?? r.error?.code : "OK")
 const setRow = (id: string, status: string, extra: Record<string, unknown> = {}) => call("studio_mission_update_row", { mission: M, rows: [{ id, status, ...extra }] })
 const ROW_IDS = Array.from({ length: 14 }, (_, i) => String(i + 1))
 function row(id: string) {
-  return { id, phase: "implementation", kind: "implementation", title: `Row ${id}`, agent: "coder-execution", model: { tier: "opus" }, deps: [], size: "S", status: "pending", output: `implementation/${id}.md`, verification: "tests pass", review: "gate" }
+  return { id, phase: "implementation", kind: "implementation", title: `Row ${id}`, agent: "coder-execution", model: { tier: "thinker" }, deps: [], size: "S", status: "pending", output: `implementation/${id}.md`, verification: "tests pass", review: "gate" }
 }
 async function toReview(id: string) {
   expect(code(await setRow(id, "running"))).toBe("OK")

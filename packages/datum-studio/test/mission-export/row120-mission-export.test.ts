@@ -141,6 +141,8 @@ const bp = HAVE_TASK ? readBlueprint(path.join(TASK, "identification", "02_struc
 const dec = HAVE_TASK ? readDecisions(path.join(TASK, "decisions", "decisions.md")) : (undefined as unknown as ReturnType<typeof readDecisions>)
 const handById = new Map<string, HandRow>(HAVE_TASK ? bp.rows.map((r) => [r.id, r]) : [])
 const handText = (lineNo: number) => readFileSync(path.join(TASK, "identification", "02_structured.md"), "utf8").split("\n")[lineNo - 1]!
+/** Row 166: the store keeps GSP AI tiers, so the expected profile line has the hand-written Model cell's opus/sonnet as thinker/worker. */
+const gspTiers = (line: string) => line.replace(/^(\| [^|]* \| [^|]* \| [^|]* \| [SM-] \| )(opus|sonnet)\b/, (_m, head: string, tier: string) => head + (tier === "opus" ? "thinker" : "worker"))
 
 /** Row decisions of the addenda (§10.1, §4.4): 117 by C34, 118-121 by U19, 122-124 by C40. */
 const ROW_DECISION: Record<string, string> = { "117": "C34", "118": "U19", "119": "U19", "120": "U19", "121": "U19", "122": "C40", "123": "C40", "124": "C40" }
@@ -262,7 +264,7 @@ describe.skipIf(!HAVE_TASK)("row 120: slice mission (9 rows + dropped 38, 5 deci
     const genBp = tableAfter(md, BLUEPRINT_HEADER)
     const genPf = tableAfter(md, PROFILE_HEADER)
     const handBp = [handText(bp.headerLines.bp[0]!), handText(bp.headerLines.bp[0]! + 1), ...SLICE_ROWS.map((id) => handById.get(id)!.bpLine.line)]
-    const handPf = [handText(bp.headerLines.profile[0]!), handText(bp.headerLines.profile[0]! + 1), ...SLICE_ROWS.map((id) => handById.get(id)!.profileLine!.line)]
+    const handPf = [handText(bp.headerLines.profile[0]!), handText(bp.headerLines.profile[0]! + 1), ...SLICE_ROWS.map((id) => gspTiers(handById.get(id)!.profileLine!.line))]
     const d1 = diff("slice_blueprint", handBp, genBp)
     const d2 = diff("slice_profile", handPf, genPf)
     quote("slice blueprint diff (hand lines " + SLICE_ROWS.map((id) => handById.get(id)!.bpLine.lineNo).join(",") + ")", d1.equal ? "EQUAL (diff exit 0)" : d1.text)
@@ -466,10 +468,10 @@ describe("row 120: this task's whole blueprint and decisions as one mission (§1
     const gen = tableAfter(blueprint, PROFILE_HEADER).slice(2)
     const genById = new Map(gen.map((l) => [lineId(l), l]))
     const withLine = bp.rows.filter((r) => r.profileLine)
-    const differ = withLine.filter((r) => genById.get(r.id) !== r.profileLine!.line).map((r) => r.id)
+    const differ = withLine.filter((r) => genById.get(r.id) !== gspTiers(r.profileLine!.line)).map((r) => r.id)
     const d = diff(
       "full_profile",
-      withLine.map((r) => r.profileLine!.line),
+      withLine.map((r) => gspTiers(r.profileLine!.line)),
       withLine.map((r) => genById.get(r.id)!),
     )
     quote(`full profile: ${withLine.length - differ.length} of ${withLine.length} table lines byte-equal; differ`, differ)

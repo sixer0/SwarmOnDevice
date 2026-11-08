@@ -114,7 +114,7 @@ function proseProfiles(line: string, lineNo: number): Array<{ id: string; src: P
   const p8 = /(?:^Profile: |\. )([1-9][0-9]{0,3}[a-z]?) \| ([^|]+?) \| ([^|]+?) \| ([SM-]) \| ([^|]+?) \| ([^|]+?) \| ([^|]+?) \| (gate|none)(?=\.|$)/g
   for (const m of line.matchAll(p8)) out.push({ id: m[1]!, src: { own: m[2]!, deps: m[3]!, size: m[4]!, model: m[5]!, resources: m[6]!, checks: m[7]!, review: m[8]!, form: "prose8", lineNo } })
   if (out.length > 0) return out
-  const p4 = /(?:^Profile: |\. )([1-9][0-9]{0,3}[a-z]?) ([^|]+?) \| ([^|]+?) \| ([SM-]) \| ((?:opus|sonnet|inherit)(?: \([^)]*\))?)(?=\.|$)/g
+  const p4 = /(?:^Profile: |\. )([1-9][0-9]{0,3}[a-z]?) ([^|]+?) \| ([^|]+?) \| ([SM-]) \| ((?:opus|sonnet|thinker|worker-fast|worker|inherit)(?: \([^)]*\))?)(?=\.|$)/g
   for (const m of line.matchAll(p4)) out.push({ id: m[1]!, src: { own: m[2]!, deps: m[3]!, size: m[4]!, model: m[5]!, resources: "-", checks: "-", review: "gate", form: "prose4", lineNo } })
   return out
 }
@@ -148,8 +148,10 @@ export function toMissionRow(r: HandRow, notes: ImportNote[]): Record<string, un
       if (ids.join(",") !== rawDeps.join(",")) notes.push({ row: r.id, note: `profile deps ${ids.join(",")} != table deps ${rawDeps.join(",") || "-"} (profile used)` })
     } else if (p.deps !== "-") notes.push({ row: r.id, note: `profile deps not parseable ("${p.deps}"), table deps used as B` })
     size = p.size === "S" || p.size === "M" ? p.size : null
-    const mm = /^(opus|sonnet|inherit)(?: \((.+)\))?$/.exec(p.model)
-    if (mm) model = { tier: mm[1]!, ...(mm[2] ? { reason: mm[2] } : {}) }
+    // Row 166: the hand-written blueprint writes Claude Code tiers; the store keeps the GSP AI tiers (opus -> thinker, sonnet -> worker).
+    const mm = /^(opus|sonnet|thinker|worker-fast|worker|inherit)(?: \((.+)\))?$/.exec(p.model)
+    const gsp: Record<string, string> = { opus: "thinker", sonnet: "worker" }
+    if (mm) model = { tier: gsp[mm[1]!] ?? mm[1]!, ...(mm[2] ? { reason: mm[2] } : {}) }
     else notes.push({ row: r.id, note: `model "${p.model}" -> inherit` })
     if (p.own !== "-") ownership = { text: p.own }
     resources = p.resources === "-" ? [] : p.resources.split(/, (?![^()]*\))/)
@@ -207,7 +209,7 @@ export function droppedRow(id: string): Record<string, unknown> {
     kind: "fix",
     title: "Fix Studio toward Claude's v1.7 lint (U8, F18-1)",
     agent: "coder-execution",
-    model: { tier: "opus" },
+    model: { tier: "thinker" },
     deps: [],
     size: null,
     status: "dropped",

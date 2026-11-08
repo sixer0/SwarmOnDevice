@@ -94,7 +94,7 @@ async function counts() {
 }
 
 function row(id: string, phase: string, kind: string, deps: string[] = []) {
-  return { id, phase, kind, title: `Row ${id}`, agent: "coder-execution", model: { tier: "opus" }, deps, size: "S", status: "pending", output: `implementation/${id}.md`, verification: "tests pass", review: "gate" }
+  return { id, phase, kind, title: `Row ${id}`, agent: "coder-execution", model: { tier: "thinker" }, deps, size: "S", status: "pending", output: `implementation/${id}.md`, verification: "tests pass", review: "gate" }
 }
 const rowStatus = async (mission: string, id: string) => (await call(swarm, "studio_mission_get", { mission, include: ["rows"] })).mission.rows.find((r: S) => r.id === id)?.status
 const linkAt = (mission: string, docKey: string) =>

@@ -166,7 +166,7 @@ async function call(name: string, args: Record<string, unknown>): Promise<S> {
 const code = (r: S) => (r.ok === false ? r.code : "OK")
 const setRow = (id: string, status: string) => call("studio_mission_update_row", { mission: M, rows: [{ id, status }] })
 function row(id: string) {
-  return { id, phase: "implementation", kind: "implementation", title: `Row ${id}`, agent: "coder-execution", model: { tier: "opus" }, deps: [], size: "S", status: "pending", output: `implementation/${id}.md`, verification: "tests pass", review: "gate" }
+  return { id, phase: "implementation", kind: "implementation", title: `Row ${id}`, agent: "coder-execution", model: { tier: "thinker" }, deps: [], size: "S", status: "pending", output: `implementation/${id}.md`, verification: "tests pass", review: "gate" }
 }
 async function toReview(id: string) {
   expect(code(await setRow(id, "running"))).toBe("OK")

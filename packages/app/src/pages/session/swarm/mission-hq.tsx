@@ -8,7 +8,6 @@ import { useLanguage } from "@/context/language"
 import { createMemo, createSignal, createUniqueId, For, onCleanup, onMount, Show, type JSX } from "solid-js"
 import type { MissionAgentStatus, MissionAgentVM, MissionFamily, MissionTool, MissionVM } from "./mission-model"
 import {
-  agentLabel,
   checkpointFill,
   cssVar as v,
   DELIVERABLE_COLOR,
@@ -20,6 +19,7 @@ import {
   STATUS_ORDER,
   type AgentSpot,
   type LanesScene,
+  type RadialRoom,
   type RadialScene,
 } from "./mission-hq-scene"
 
@@ -52,6 +52,125 @@ export function beaconPill(text: string, max: number): { text: string; w: number
   return { text: `${chars.slice(0, fit).join("").trimEnd()}…`, w: widthOf(fit + 1) }
 }
 
+// Row 167 (user finding 2026-11-08, "layoutnya ada yang berbenturan"): the scene's rooms put a 3-agent room into two
+// lines of 2 that float in the dome above the platform with labels crammed side by side, and the decision beacon sat on
+// the ring's ticks. The room interior and the beacon are re-laid here, pure, so the geometry test checks exactly what
+// is drawn: agents stand ON the platform (one row up to 3; 4+ in a staggered back/front pair of rows, scaled down),
+// every label is cut to the width its slot allows, and the sign pill sits above everything in the room.
+// (To be moved into mission-hq-scene.ts when that file is free; see delegation_progress/file_requests.md row 167.)
+
+/** Robot extents in robot units (Bot: tool box to x 33, doc marker to x -32, lamp cone top y -108, ring y 13). */
+export const BOT_HALF_W = 34
+export const BOT_TOP = 108
+export const BOT_BOTTOM = 13
+/** Width estimate per character of the label's sans face (proportional fonts average ~0.5 em; 0.6 em is a margin). */
+export const LABEL_ADVANCE = 0.6
+const LABEL_H = 20 // text (13) + gap + checkpoint bar (3)
+
+export type HqBox = { x: number; y: number; w: number; h: number }
+/** Label slot: text baseline at y, max width w, checkpoint bar at barY. */
+export type HqLabel = { x: number; y: number; fs: number; w: number; chars: number; barY: number; barW: number }
+export type HqSpot = AgentSpot & { label: HqLabel }
+export type HqRoom = Omit<RadialRoom, "agents"> & { agents: HqSpot[] }
+export type HqRadial = Omit<RadialScene, "rooms"> & {
+  rooms: HqRoom[]
+  beacon: { x: number; y: number; lineTop: number; lineBottom: number }
+}
+
+/** Title cut to `chars` characters, ellipsis included (§5.4 keeps 12 + "…" at most). */
+export function fitLabel(title: string, chars: number) {
+  const list = Array.from(title)
+  const max = Math.max(2, Math.min(13, chars))
+  return list.length > max ? list.slice(0, max - 1).join("") + "…" : title
+}
+
+export const botBox = (a: AgentSpot): HqBox => ({
+  x: a.x - BOT_HALF_W * a.s,
+  y: a.y - BOT_TOP * a.s,
+  w: 2 * BOT_HALF_W * a.s,
+  h: (BOT_TOP + BOT_BOTTOM) * a.s,
+})
+export const labelBox = (l: HqLabel): HqBox => ({ x: l.x - l.w / 2, y: l.y - 11, w: l.w, h: l.barY + 3 - (l.y - 11) })
+
+function slot(x: number, top: number, fs: number, w: number): HqLabel {
+  // top = upper edge of the label block: text (baseline top + 11), then the bar 4 below the baseline
+  const y = top + 11
+  return { x, y, fs, w, chars: Math.floor(w / (fs * LABEL_ADVANCE)), barY: y + 4, barW: Math.min(52, w) }
+}
+
+/** One room: agents on the platform, labels in slots, pill above the room. Keeps the scene's centre x and floor. */
+export function layoutRoom(room: RadialRoom, cx: number, cy: number): HqRoom {
+  const x0 = room.x
+  const py = room.py
+  const n = room.agents.length
+  let agents: HqSpot[]
+  let rx: number
+  let ry: number
+  let top: number // highest point of the room's content
+  if (n <= 3) {
+    const s = 0.8
+    const dx = n === 3 ? 96 : 104 // n <= 2 keeps the §5.4 cut (12 + "…"); 3 in a row cut to 11 + "…"
+    const fs = n === 1 ? 12.5 : 12
+    const w = n === 1 ? 104 : dx - 8
+    const feet = py - 4
+    agents = room.agents.map((a, j) => {
+      const x = x0 + (j - (n - 1) / 2) * dx
+      return { rowId: a.rowId, x, y: feet, s, label: slot(x, feet + BOT_BOTTOM * s + 3, fs, w) }
+    })
+    rx = Math.max(105, ((n - 1) * dx) / 2 + Math.max(BOT_HALF_W * s, w / 2) + 16)
+    ry = 30
+    top = feet - BOT_TOP * s
+  } else {
+    // staggered rows: neighbours alternate back/front, so bots never overlap even when their x distance (h) is small;
+    // back labels sit above the back robots, front labels below the front robots, each 2h wide.
+    const h = Math.min(46, (2 * (150 - 38)) / (n - 1))
+    const s = Math.min(0.62, (h - 3) / (2 * BOT_HALF_W))
+    const fs = 11
+    const w = 2 * h - 6
+    const back = py - 16
+    const front = py + 6
+    agents = room.agents.map((a, j) => {
+      const x = x0 + (j - (n - 1) / 2) * h
+      const isBack = j % 2 === 1
+      const y = isBack ? back : front
+      const label = isBack ? slot(x, y - BOT_TOP * s - 4 - LABEL_H, fs, w) : slot(x, y + BOT_BOTTOM * s + 3, fs, w)
+      return { rowId: a.rowId, x, y, s, label }
+    })
+    rx = Math.max(105, ((n - 1) * h) / 2 + Math.max(BOT_HALF_W * s, w / 2) + 16)
+    ry = 34
+    top = n > 1 ? back - BOT_TOP * s - 4 - LABEL_H : front - BOT_TOP * s
+  }
+  const ty = top - 6 - 13
+  const vx = x0 - cx
+  const vy = py - (cy + 14)
+  const t = 1 / Math.hypot(vx / 192, vy / 60)
+  return {
+    ...room,
+    rx,
+    ry,
+    ty,
+    dome: `M${x0 - rx + 10} ${py} A${rx - 10} ${py - ty + 4} 0 0 1 ${x0 + rx - 10} ${py}`,
+    // a room straight below the deck: start under the "HQ · COMMAND DECK" title (baseline cy + 82), not through it
+    conduit: { x1: cx + vx * t, y1: Math.abs(vx) < 90 ? Math.max(cy + 14 + vy * t, cy + 90) : cy + 14 + vy * t, x2: x0 - vx * 0.18, y2: py - vy * 0.12 },
+    agents,
+  }
+}
+
+/** Lanes: robots 6 lower so the lamp cone clears the lane's name and count line (they still end inside the lane). */
+export function layoutLanes(scene: LanesScene): LanesScene {
+  return { ...scene, lanes: scene.lanes.map((lane) => ({ ...lane, agents: lane.agents.map((a) => ({ ...a, y: a.y + 6 })) })) }
+}
+
+/** The radial scene with the rooms re-laid and the decision beacon lifted clear of the ring (ring orbit top hy - 67). */
+export function layoutRadial(scene: RadialScene): HqRadial {
+  const y = scene.hy - 122
+  return {
+    ...scene,
+    rooms: scene.rooms.map((room) => layoutRoom(room, scene.cx, scene.cy)),
+    beacon: { x: scene.cx, y, lineTop: y + 12, lineBottom: scene.hy - 69 },
+  }
+}
+
 // Static CSS only (no mission text). Motion is off under prefers-reduced-motion (§6 item 41, V6:94).
 const CSS = `
 .hq-root{position:relative;width:100%;color:var(--hq-ink);background:radial-gradient(120% 90% at 50% 52%,var(--hq-stage-2),var(--hq-stage) 70%);border-radius:12px;overflow:hidden}
@@ -73,8 +192,10 @@ const CSS = `
 .hq-running .hq-cone{animation:hq-flick 2.6s ease-in-out infinite}
 .hq-flow{stroke-dasharray:2 9;animation:hq-flow 1.5s linear infinite}
 .hq-orbit{transform-box:fill-box;transform-origin:center;animation:hq-spin 40s linear infinite}
+@keyframes hq-orbit-dash{to{stroke-dashoffset:-120}}
+.hq-orbit-dash{animation:hq-orbit-dash 12s linear infinite}
 .hq-ping{animation:hq-ping 1.6s ease-out infinite}
-@media (prefers-reduced-motion:reduce){.hq-running .hq-bob,.hq-running .hq-cone,.hq-flow,.hq-orbit,.hq-ping{animation:none}}
+@media (prefers-reduced-motion:reduce){.hq-running .hq-bob,.hq-running .hq-cone,.hq-flow,.hq-orbit,.hq-orbit-dash,.hq-ping{animation:none}}
 `
 
 const TOOL: Record<MissionTool, string> = {
@@ -287,6 +408,9 @@ function Defs(props: { id: string }) {
   )
 }
 
+const rectOf = (b: HqBox) => ({ x: b.x, y: b.y, width: b.w, height: b.h })
+const botRect = (a: AgentSpot) => rectOf(botBox(a))
+
 function keyActivate(fn: () => void) {
   return (e: KeyboardEvent) => {
     if (e.key !== "Enter" && e.key !== " ") return
@@ -333,7 +457,7 @@ export function MissionHQ(props: MissionHQProps) {
   const progress = () => props.mission.progress
 
   /** One agent: robot, document marker, hit area, optional label and checkpoint bar (V6:268-281). */
-  const Agent = (p: { rowId: string; x: number; y: number; s: number; label: boolean }) => {
+  const Agent = (p: { rowId: string; x: number; y: number; s: number; label?: HqLabel }) => {
     const agent = (): MissionAgentVM | undefined => props.mission.agents[p.rowId]
     const deliverable = () => {
       const id = agent()?.deliverableId
@@ -363,29 +487,34 @@ export function MissionHQ(props: MissionHQProps) {
                 </g>
               )}
             </Show>
-            <rect x={p.x - 46 * p.s} y={p.y - 108 * p.s} width={92 * p.s} height={108 * p.s + 40} fill="transparent" />
+            <rect {...botRect(p)} fill="transparent" data-hq-hit="" />
+            <Show when={p.label}>{(l) => <rect {...rectOf(labelBox(l()))} fill="transparent" />}</Show>
             <Show when={p.label}>
-              <text
-                x={p.x}
-                y={p.y + 26 * p.s + 8}
-                text-anchor="middle"
-                font-size={p.s < 0.75 ? "11.5" : "12.5"}
-                font-weight="500"
-                fill={v(props.selected === p.rowId ? "--hq-ink" : "--hq-ink-2")}
-                data-hq-label=""
-              >
-                {agentLabel(a().title)}
-              </text>
-              <rect x={p.x - 26} y={p.y + 26 * p.s + 15} width={52} height={3} rx={1.5} fill={v("--hq-line")} />
-              <rect
-                x={p.x - 26}
-                y={p.y + 26 * p.s + 15}
-                width={52 * checkpointFill(a())}
-                height={3}
-                rx={1.5}
-                fill={v(STATUS_COLOR[a().status])}
-                data-hq-checkpoint={a().checkpoint ? `${a().checkpoint!.n}/${a().checkpoint!.m}` : ""}
-              />
+              {(l) => (
+                <>
+                  <text
+                    x={l().x}
+                    y={l().y}
+                    text-anchor="middle"
+                    font-size={String(l().fs)}
+                    font-weight="500"
+                    fill={v(props.selected === p.rowId ? "--hq-ink" : "--hq-ink-2")}
+                    data-hq-label=""
+                  >
+                    {fitLabel(a().title, l().chars)}
+                  </text>
+                  <rect x={l().x - l().barW / 2} y={l().barY} width={l().barW} height={3} rx={1.5} fill={v("--hq-line")} />
+                  <rect
+                    x={l().x - l().barW / 2}
+                    y={l().barY}
+                    width={l().barW * checkpointFill(a())}
+                    height={3}
+                    rx={1.5}
+                    fill={v(STATUS_COLOR[a().status])}
+                    data-hq-checkpoint={a().checkpoint ? `${a().checkpoint!.n}/${a().checkpoint!.m}` : ""}
+                  />
+                </>
+              )}
             </Show>
           </g>
         )}
@@ -421,7 +550,8 @@ export function MissionHQ(props: MissionHQProps) {
 
   const Radial = (p: { s: RadialScene }) => {
     const { cx, cy, hy } = p.s
-    const rooms = keyedIds(() => p.s.rooms, (room) => room.phase.id)
+    const laid = createMemo(() => layoutRadial(p.s))
+    const rooms = keyedIds(() => laid().rooms, (room) => room.phase.id)
     return (
       <>
         <g data-hq-floor="">
@@ -431,7 +561,7 @@ export function MissionHQ(props: MissionHQProps) {
             )}
           </For>
           <For each={p.s.spokes}>{(l) => <line {...l} stroke={v("--hq-line-2")} stroke-opacity={0.18} />}</For>
-          <For each={p.s.rooms}>
+          <For each={laid().rooms}>
             {(room) => (
               <>
                 <line {...room.conduit} stroke={v("--hq-line")} stroke-width={7} stroke-linecap="round" stroke-opacity={0.8} />
@@ -449,7 +579,7 @@ export function MissionHQ(props: MissionHQProps) {
         </g>
         <g data-hq-deck="">
           <ellipse cx={cx} cy={cy - 50} rx={260} ry={200} fill={url("hqHalo")} />
-          <ellipse class="hq-orbit" cx={cx} cy={cy + 14} rx={218} ry={72} fill="none" stroke={v("--hq-glow")} stroke-opacity={0.55} stroke-dasharray="3 9" />
+          <ellipse class="hq-orbit-dash" data-hq-orbit="" cx={cx} cy={cy + 14} rx={218} ry={72} fill="none" stroke={v("--hq-glow")} stroke-opacity={0.55} stroke-dasharray="3 9" />
           <Tier url={url} x={cx} y={cy + 14} rx={190} ry={58} h={12} rim={v("--hq-line-2")} />
           <Tier url={url} x={cx} y={cy + 2} rx={150} ry={45} h={10} rim={v("--hq-line-2")} />
           <g data-hq-rim={open() ? "review" : "glow"}>
@@ -509,8 +639,8 @@ export function MissionHQ(props: MissionHQProps) {
           <Show when={props.mission.decision}>
             {(d) => (
               <>
-                <line x1={cx} y1={hy - 78} x2={cx} y2={hy - 68} stroke={v("--hq-review")} stroke-dasharray="2 4" />
-                <Beacon x={cx} y={hy - 90} anchor="middle" max={220} text={language.t("session.mission.decision.beacon", { id: d().id })} />
+                <line x1={laid().beacon.x} y1={laid().beacon.lineTop} x2={laid().beacon.x} y2={laid().beacon.lineBottom} stroke={v("--hq-review")} stroke-dasharray="2 4" data-hq-beacon-line="" />
+                <Beacon x={laid().beacon.x} y={laid().beacon.y} anchor="middle" max={220} text={language.t("session.mission.decision.beacon", { id: d().id })} />
               </>
             )}
           </Show>
@@ -542,7 +672,7 @@ export function MissionHQ(props: MissionHQProps) {
                         </text>
                       </g>
                       <SpotsOf agents={room().agents}>
-                        {(spot) => <Agent rowId={spot().rowId} x={spot().x} y={spot().y} s={spot().s} label />}
+                        {(spot) => <Agent rowId={spot().rowId} x={spot().x} y={spot().y} s={spot().s} label={(spot() as HqSpot).label} />}
                       </SpotsOf>
                     </g>
                   )
@@ -557,7 +687,7 @@ export function MissionHQ(props: MissionHQProps) {
 
   const Lanes = (p: { s: LanesScene }) => {
     const W = p.s.width
-    const lanes = keyedIds(() => p.s.lanes, (lane) => lane.phase.id)
+    const lanes = keyedIds(() => layoutLanes(p.s).lanes, (lane) => lane.phase.id)
     return (
       <>
         <g data-hq-deck="">
@@ -603,7 +733,7 @@ export function MissionHQ(props: MissionHQProps) {
                         {`${lane().phase.done}/${lane().phase.total}`}
                       </text>
                       <SpotsOf agents={lane().agents}>
-                        {(spot) => <Agent rowId={spot().rowId} x={spot().x} y={spot().y} s={spot().s} label={false} />}
+                        {(spot) => <Agent rowId={spot().rowId} x={spot().x} y={spot().y} s={spot().s} />}
                       </SpotsOf>
                     </g>
                   )

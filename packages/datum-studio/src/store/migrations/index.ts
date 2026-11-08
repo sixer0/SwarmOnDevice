@@ -5,6 +5,7 @@ import { MIGRATION_0001_SQL } from "./0001_datum_studio_init.ts"
 import { MIGRATION_0002_ID, MIGRATION_0002_SQL } from "./0002_datum_template_guard.ts"
 import { MIGRATION_0003_ID, MIGRATION_0003_SQL } from "./0003_datum_mission.ts"
 import { MIGRATION_0004_ID, MIGRATION_0004_SQL } from "./0004_datum_output_verification.ts"
+import { MIGRATION_0005_ID, MIGRATION_0005_SQL } from "./0005_datum_mission_gsp_tiers.ts"
 
 /**
  * Store migrations (spec §3.1: own runner, journal table shaped like core's
@@ -14,6 +15,8 @@ export interface Migration {
   seq: number
   id: string
   sql: string
+  /** Table rebuild: run with foreign keys off (set before BEGIN), `PRAGMA foreign_key_check` must be empty before COMMIT. */
+  foreignKeysOff?: boolean
 }
 
 export const MIGRATIONS: readonly Migration[] = [
@@ -24,6 +27,8 @@ export const MIGRATIONS: readonly Migration[] = [
   { seq: 3, id: MIGRATION_0003_ID, sql: MIGRATION_0003_SQL },
   // row 149: output verification state (U24, C130; masterplan/01_specs_output_verification.md §5), additive only
   { seq: 4, id: MIGRATION_0004_ID, sql: MIGRATION_0004_SQL },
+  // row 166: mission_row model tiers become the GSP AI tiers (thinker/worker/worker-fast/inherit); table rebuild
+  { seq: 5, id: MIGRATION_0005_ID, sql: MIGRATION_0005_SQL, foreignKeysOff: true },
 ]
 
 /**
@@ -31,6 +36,7 @@ export const MIGRATIONS: readonly Migration[] = [
  * 0002: taken by row 64 (`20261106120000_datum_template_guard`, see MIGRATIONS).
  * 0003: taken by row 119a (`20261107000000_datum_mission`, see MIGRATIONS).
  * 0004: taken by row 149 (`20261107120000_datum_output_verification`, see MIGRATIONS).
+ * 0005: taken by row 166 (`20261108000000_datum_mission_gsp_tiers`, see MIGRATIONS).
  * Nothing is reserved now.
  */
 export const RESERVED_MIGRATIONS: Readonly<Record<number, string>> = {}
@@ -54,9 +60,16 @@ export function applyMigrations(db: SqliteDb, opts: { release: string; now: () =
   const applied: string[] = []
   for (const m of list) {
     if (done.has(m.id)) continue
+    // PRAGMA foreign_keys is a no-op inside a transaction, so it is switched before BEGIN and restored after.
+    const fkWasOn = m.foreignKeysOff ? db.get<{ foreign_keys: number }>("PRAGMA foreign_keys")?.foreign_keys === 1 : false
+    if (m.foreignKeysOff) db.exec("PRAGMA foreign_keys = OFF")
     db.exec("BEGIN IMMEDIATE")
     try {
       db.exec(m.sql)
+      if (m.foreignKeysOff) {
+        const broken = db.all("PRAGMA foreign_key_check")
+        if (broken.length > 0) throw new StoreError("STORE_MIGRATION_FAILED", `migration ${m.id} left broken foreign keys`, { id: m.id, broken: broken.slice(0, 20) })
+      }
       const now = opts.now()
       db.run("INSERT INTO migration (id, time_completed) VALUES (?, ?)", [m.id, now])
       if (m.seq === 1) {
@@ -73,6 +86,8 @@ export function applyMigrations(db: SqliteDb, opts: { release: string; now: () =
         // already rolled back by SQLite
       }
       throw new StoreError("STORE_MIGRATION_FAILED", `migration ${m.id} failed`, { id: m.id }, e)
+    } finally {
+      if (fkWasOn) db.exec("PRAGMA foreign_keys = ON")
     }
   }
   return applied

@@ -18,6 +18,8 @@ import type { MissionDoc, MissionWriteOptions, NewMissionMessage, RowPatch, Sess
 import type { HostToolExtension, HostToolSession } from "../tool-table.ts"
 import { ACTOR_PATTERN, EXPORT_FILES, MISSION_TOOL_NAMES, MISSION_TOOL_SCHEMAS, type ExportFile, type GetInclude } from "./schemas.ts"
 import { errorResult, MissionToolError, okResult, type MissionLog } from "./tool-result.ts"
+import { describeAjvError } from "../../store/mission/validate.ts"
+import { MISSION_GUIDE_URI } from "./mission-guide.ts"
 import { readActivityAt, readDeliverables, readMessagesTail, type OutputVerificationSource } from "./deliverables.ts"
 
 /** The part of SqliteStudioStore the mission tools use (row 126/155: + the G4 source, row 149's listOutputVerifications, see deliverables.ts). */
@@ -53,7 +55,32 @@ class DryRunRollback extends StoreError {
 }
 
 function argIssues(errors: ErrorObject[] | null | undefined): Array<{ pointer: string; keyword: string; message: string }> {
-  return (errors ?? []).slice(0, 50).map((e) => ({ pointer: e.instancePath || "/", keyword: e.keyword, message: e.message ?? "invalid" }))
+  return (errors ?? []).slice(0, 50).map((e) => ({ pointer: e.instancePath || "/", keyword: e.keyword, message: describeAjvError(e) }))
+}
+
+/** Row 169: the object argument of each tool that an agent may send as a JSON string (row 146 run, call 21). */
+const OBJECT_ARGS: Record<string, string> = {
+  studio_mission_create: "mission",
+  studio_mission_record_decision: "decision",
+  studio_mission_record_finding: "finding",
+  studio_mission_request_decision: "request",
+}
+
+/** A JSON-object string in an object argument is parsed; any other string is refused saying it must be an object. */
+export function parseObjectArg(tool: string, args: Record<string, unknown>): void {
+  const key = OBJECT_ARGS[tool]
+  const raw = key ? args[key] : undefined
+  if (typeof raw !== "string") return
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(raw)
+  } catch {
+    parsed = undefined
+  }
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new MissionToolError("SCHEMA_INVALID", `${key} must be a JSON object, not a string`, { def: `${tool} input`, issues: [{ pointer: `/${key}`, keyword: "type", message: "must be a JSON object (send the object itself)" }] })
+  }
+  args[key] = parsed
 }
 
 export function validateArgs(tool: string, args: Record<string, unknown>): void {
@@ -130,6 +157,7 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
     async call(args, session): Promise<CallToolResult> {
       const a = structuredClone(args ?? {}) as Record<string, unknown>
       try {
+        parseObjectArg(name, a)
         validateArgs(name, a)
         const out = await run(a, session)
         if (!readOnly) opts.log("info", `datum-studio-host.mission.${name}`, "mission write", { mission: typeof a.mission === "string" ? a.mission : (a.mission as { id?: unknown } | undefined)?.id, agent: session.agentId, dryRun: a.dryRun === true })
@@ -148,7 +176,7 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
     tool(
       "studio_mission_create",
       "Create a mission",
-      "Create a draft mission (studio.mission/v1 MissionDoc, status draft, no host fields): type, rows (pending or dropped), decisions, findings, sessions. Checks schema, type, phases, kinds, dependencies, B cycles and decision references. Returns id, status, rows, waves.",
+      `Create a draft mission (studio.mission/v1 MissionDoc, status draft, no host fields): type, rows (pending or dropped), decisions, findings, sessions. Checks schema, type, phases, kinds, dependencies, B cycles and decision references. Returns id, status, rows, waves. Shape, enums and an example: resource ${MISSION_GUIDE_URI}; row model.tier: thinker | worker | worker-fast | inherit.`,
       false,
       async (a, s) => {
         const input = a.mission as Parameters<MissionStore["create"]>[1]

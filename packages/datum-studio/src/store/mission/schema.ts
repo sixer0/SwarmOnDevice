@@ -3,9 +3,12 @@
  * /private/tmp/claude-501/row118/schema/studio.mission.v1.schema.json (spec masterplan/01_specs_mission_contract.md
  * §6.1, Appendix A). Canonical sha256 (keys sorted, no whitespace) is MISSION_SCHEMA_V1_SHA256; the test checks it.
  * Do not edit: any change is a new schema id (studio.mission/v2), spec §6.1 change rule.
+ * Exception, row 166 (user finding 2026-11-08, before 1.2.0 shipped): $defs/Model tiers are the GSP AI tiers
+ * thinker | worker | worker-fast | inherit (reason required below thinker), edited in place with the id kept and the
+ * sha updated; store migration 0005 moves stored rows (opus -> thinker, sonnet -> worker).
  */
 export const MISSION_SCHEMA_V1_ID = "studio.mission/v1"
-export const MISSION_SCHEMA_V1_SHA256 = "47841b7c865894f471753f0a6aab873c65b025a9e8936dec5b1498e347cefa65"
+export const MISSION_SCHEMA_V1_SHA256 = "02e27723814943e7578f4327e3e31f3536d37b3a309a1f28cbd6e9378307edcd"
 
 export const MISSION_SCHEMA_V1: Record<string, unknown> = {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -280,8 +283,9 @@ export const MISSION_SCHEMA_V1: Record<string, unknown> = {
       "properties": {
         "tier": {
           "enum": [
-            "opus",
-            "sonnet",
+            "thinker",
+            "worker",
+            "worker-fast",
             "inherit"
           ]
         },
@@ -292,7 +296,10 @@ export const MISSION_SCHEMA_V1: Record<string, unknown> = {
       "if": {
         "properties": {
           "tier": {
-            "const": "sonnet"
+            "enum": [
+              "worker",
+              "worker-fast"
+            ]
           }
         }
       },

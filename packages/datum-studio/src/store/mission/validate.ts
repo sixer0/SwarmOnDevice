@@ -44,8 +44,29 @@ export interface SchemaIssue {
   message: string
 }
 
+const DEP_PATTERN = "^[1-9][0-9]{0,3}[a-z]?:[BC]$"
+
+/**
+ * One ajv error as a message that says what is expected (rows 166, 169): enum lists the allowed values, const the
+ * value, additionalProperties the unknown name, the deps pattern its "N:B" / "N:C" form. required ("must have
+ * required property 'x'") and type ("must be object") already name it. Shared with the tool argument check.
+ */
+export function describeAjvError(e: ErrorObject): string {
+  const p = e.params as Record<string, unknown>
+  const base = e.message ?? e.keyword
+  if (e.keyword === "enum" && Array.isArray(p.allowedValues)) return `${base}: ${p.allowedValues.map((v) => String(v)).join(", ")}`
+  if (e.keyword === "const") return `must be ${JSON.stringify(p.allowedValue)}`
+  if (e.keyword === "additionalProperties" && typeof p.additionalProperty === "string") return `${base}: "${p.additionalProperty}"`
+  if (e.keyword === "pattern" && p.pattern === DEP_PATTERN) return `must be "<row id>:B" (build dependency) or "<row id>:C" (contract dependency), e.g. "1:B"`
+  return base
+}
+
 function issuesOf(errors: ErrorObject[] | null | undefined): SchemaIssue[] {
-  return (errors ?? []).slice(0, MAX_MISSION_SCHEMA_ISSUES).map((e) => ({ path: e.instancePath || "/", keyword: e.keyword, message: e.message ?? e.keyword }))
+  // An `if` error only repeats the `then` failure next to it (e.g. Model.reason required); drop it.
+  return (errors ?? [])
+    .filter((e) => e.keyword !== "if")
+    .slice(0, MAX_MISSION_SCHEMA_ISSUES)
+    .map((e) => ({ path: e.instancePath || "/", keyword: e.keyword, message: describeAjvError(e) }))
 }
 
 /** Validate `value` against one `$defs` entry (or the root `oneOf`); returns the issues, empty when valid. */

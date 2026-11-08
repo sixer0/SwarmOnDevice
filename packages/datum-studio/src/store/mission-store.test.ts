@@ -34,6 +34,7 @@ const ID_0001 = "20261106000000_datum_studio_init"
 const ID_0002 = "20261106120000_datum_template_guard"
 const ID_0003 = "20261107000000_datum_mission"
 const ID_0004 = "20261107120000_datum_output_verification" // row 149: 0004 follows 0003
+const ID_0005 = "20261108000000_datum_mission_gsp_tiers" // row 166: GSP AI model tiers
 const logs: StoreLogEntry[] = []
 const opened: SqliteStudioStore[] = []
 let tick = 1_800_000_000_000
@@ -74,7 +75,7 @@ const SES_A = "ses_0123456789abAbCdEfGhIjKlMn"
 const SES_B = "ses_fedcba987654ZyXwVuTsRqPoNm"
 
 function row(id: string, phase: string, kind: MissionRowInput["kind"], over: Partial<MissionRowInput> = {}): MissionRowInput {
-  return { id, phase, kind, title: `Row ${id} ${kind}`, agent: "coder-execution", model: { tier: "opus" }, deps: [], size: "S", status: "pending", output: `implementation/${id}.md`, verification: "tests pass", ...over }
+  return { id, phase, kind, title: `Row ${id} ${kind}`, agent: "coder-execution", model: { tier: "thinker" }, deps: [], size: "S", status: "pending", output: `implementation/${id}.md`, verification: "tests pass", ...over }
 }
 
 function mission(id: string, type: string, rows: MissionRowInput[], over: Partial<NewMission> = {}): NewMission {
@@ -95,8 +96,8 @@ describe("migration 0003 and the contract files", () => {
     expect(sha256Hex(MIGRATION_0003_SPEC_SQL)).toBe(MIGRATION_0003_SPEC_SHA256)
     expect(sha256Hex(canonicalJson(MISSION_SCHEMA_V1))).toBe(MISSION_SCHEMA_V1_SHA256)
     expect(sha256Hex(canonicalJson(BUILTIN_MISSION_TYPES))).toBe(BUILTIN_MISSION_TYPES_SHA256)
-    expect(MIGRATIONS.map((m) => m.id)).toEqual([ID_0001, ID_0002, ID_0003, ID_0004])
-    expect(latestSchemaId()).toBe(ID_0004)
+    expect(MIGRATIONS.map((m) => m.id)).toEqual([ID_0001, ID_0002, ID_0003, ID_0004, ID_0005])
+    expect(latestSchemaId()).toBe(ID_0005)
     for (const t of BUILTIN_MISSION_TYPES) expect(checkMissionSchema("root", t)).toEqual([])
     const db = openSqlite(join(RUN, "main", "datum-studio.sqlite"), { readonly: true })
     try {
@@ -121,7 +122,7 @@ describe("migration 0003 and the contract files", () => {
       ])
       const pinned = db.all<{ id: string; version: number; n: number }>("SELECT t.id, t.version, (SELECT count(*) FROM mission_type_phase p WHERE p.type_id = t.id AND p.type_version = t.version) AS n FROM mission_type t ORDER BY t.id")
       expect(pinned.map((p) => `${p.id}@${p.version}:${p.n}`)).toEqual(["debug@1:4", "document@1:4", "feature-release@1:5", "research@1:4"])
-      expect(db.get<{ value: string }>("SELECT value FROM store_meta WHERE key = 'schema_version'")!.value).toBe(ID_0004)
+      expect(db.get<{ value: string }>("SELECT value FROM store_meta WHERE key = 'schema_version'")!.value).toBe(ID_0005)
       console.log(`[row119a] runtime=${isBun ? "bun" : "node " + process.versions.node + " electron " + (process.versions.electron ?? "-")} driver=${db.driver} sqlite=${db.get<{ v: string }>("select sqlite_version() v")!.v} tables=${tables.length}`)
     } finally {
       db.close()
@@ -187,7 +188,7 @@ describe("mission types and phases (U20)", () => {
     try {
       await store.transaction(async (t) => {
         t.run(
-          "INSERT INTO mission_row (mission_id, row_id, phase_id, kind, title, agent, model_tier, size, output, verification, ord, time_created, time_updated) VALUES ('2026-11-07_type-research', '9', 'research', 'implementation', 't', 'a', 'opus', 'S', 'o', 'v', 9, 1, 1)",
+          "INSERT INTO mission_row (mission_id, row_id, phase_id, kind, title, agent, model_tier, size, output, verification, ord, time_created, time_updated) VALUES ('2026-11-07_type-research', '9', 'research', 'implementation', 't', 'a', 'thinker', 'S', 'o', 'v', 9, 1, 1)",
         )
       })
     } catch (e) {
@@ -478,7 +479,8 @@ describe("findings, locks, reports and malformed records", () => {
 
   test("malformed records are refused with the §6 code", async () => {
     await refused("row size L", tx((t) => M.create(t, mission("2026-11-07_bad-size", "debug", [row("1", "reproduce", "reproduce", { size: "L" as never })]))), "SCHEMA_INVALID")
-    await refused("sonnet without reason", tx((t) => M.create(t, mission("2026-11-07_bad-model", "debug", [row("1", "reproduce", "reproduce", { model: { tier: "sonnet" } })]))), "SCHEMA_INVALID")
+    await refused("worker without reason", tx((t) => M.create(t, mission("2026-11-07_bad-model", "debug", [row("1", "reproduce", "reproduce", { model: { tier: "worker" } })]))), "SCHEMA_INVALID")
+    await refused("worker-fast without reason", tx((t) => M.create(t, mission("2026-11-07_bad-model2", "debug", [row("1", "reproduce", "reproduce", { model: { tier: "worker-fast" } })]))), "SCHEMA_INVALID")
     await refused("dep without kind", tx((t) => M.create(t, mission("2026-11-07_bad-dep", "debug", [row("1", "reproduce", "reproduce", { deps: ["2"] })]))), "SCHEMA_INVALID")
     await refused("mission id with a space", tx((t) => M.create(t, mission("swarm 1.2.0", "debug", []))), "SCHEMA_INVALID")
     await refused("U decision by the controller", tx((t) => M.recordDecision(t, RS, { id: "U5", by: "controller", date: "2026-11-07", text: "x" })), "SCHEMA_INVALID")
@@ -582,12 +584,12 @@ describe("migration 0003 on an existing 0002 store", () => {
     const after = counts(file)
     console.log(`[row119a] 0002 -> 0003 counts before ${JSON.stringify(before)}`)
     console.log(`[row119a] 0002 -> 0003 counts after  ${JSON.stringify(after)}`)
-    expect({ ...after, migration: after.migration! - 2 }).toEqual(before) // row 149: + 0004
+    expect({ ...after, migration: after.migration! - 3 }).toEqual(before) // row 149: + 0004, row 166: + 0005
     expect(contentSha(file)).toBe(shaBefore)
     const r = openSqlite(file, { readonly: true })
     try {
-      expect(r.all<{ id: string }>("SELECT id FROM migration ORDER BY id").map((x) => x.id)).toEqual([ID_0001, ID_0002, ID_0003, ID_0004])
-      expect(r.get<{ value: string }>("SELECT value FROM store_meta WHERE key = 'schema_version'")!.value).toBe(ID_0004)
+      expect(r.all<{ id: string }>("SELECT id FROM migration ORDER BY id").map((x) => x.id)).toEqual([ID_0001, ID_0002, ID_0003, ID_0004, ID_0005])
+      expect(r.get<{ value: string }>("SELECT value FROM store_meta WHERE key = 'schema_version'")!.value).toBe(ID_0005)
       expect(r.get<{ value: string }>("SELECT value FROM store_meta WHERE key = 'created_by_release'")!.value).toBe("1.2.0-pre119")
       expect(Number(r.get<{ n: number }>("SELECT count(*) AS n FROM mission_type")!.n)).toBe(4)
       expect(Number(r.get<{ n: number }>("SELECT count(*) AS n FROM mission")!.n)).toBe(0)
@@ -599,7 +601,7 @@ describe("migration 0003 on an existing 0002 store", () => {
     const again = await openStore("upgrade")
     expect(again.missions.listTypes().length).toBe(4)
     await again.close()
-    expect(counts(file).migration).toBe(4) // row 149: + 0004
+    expect(counts(file).migration).toBe(5) // row 149: + 0004, row 166: + 0005
   })
 })
 

@@ -60,15 +60,15 @@ export function MissionCommand(props: {
   }
 
   return (
-    <div data-mission-command class="flex flex-col gap-2">
+    <div data-mission-command class="flex min-w-0 flex-col gap-2">
       <Show
         when={props.model.decision}
         fallback={
           <Show when={props.model.answered}>
             {(answered) => (
-              <section data-mission-answered class="flex flex-col gap-1 rounded-[8px] bg-v2-overlay-simple-overlay-hover p-2">
+              <section data-mission-answered class="flex min-w-0 flex-col gap-1 rounded-[8px] bg-v2-overlay-simple-overlay-hover p-2">
                 <div class="flex items-baseline justify-between gap-2">
-                  <h2 class="min-w-0 truncate text-v2-text-text-base [font-weight:500]">{answered().question}</h2>
+                  <h2 class="min-w-0 [overflow-wrap:anywhere] text-v2-text-text-base [font-weight:500]">{answered().question}</h2>
                   <span class="shrink-0 text-v2-text-text-faint">{answered().id}</span>
                 </div>
                 <div class="text-v2-text-text-muted">
@@ -85,14 +85,14 @@ export function MissionCommand(props: {
         {(decision) => (
           <section
             data-mission-decision
-            class="flex flex-col gap-1.5 rounded-[8px] p-2 [box-shadow:inset_0_0_0_1px_var(--v2-border-border-strong)]"
+            class="flex min-w-0 flex-col gap-1.5 rounded-[8px] p-2 [box-shadow:inset_0_0_0_1px_var(--v2-border-border-strong)]"
           >
             <div class="flex items-baseline justify-between gap-2">
-              <h2 class="min-w-0 text-v2-text-text-base [font-weight:500]">{decision().question}</h2>
+              <h2 data-mission-question class="min-w-0 [overflow-wrap:anywhere] text-v2-text-text-base [font-weight:500]">{decision().question}</h2>
               <span class="shrink-0 text-v2-text-text-faint">{decision().id}</span>
             </div>
             <Show when={decision().context}>
-              {(context) => <p class="truncate text-v2-text-text-muted">{context()}</p>}
+              {(context) => <p data-mission-context class="min-w-0 [overflow-wrap:anywhere] text-v2-text-text-muted">{context()}</p>}
             </Show>
             <For each={options()}>
               {(option) => (
@@ -101,10 +101,10 @@ export function MissionCommand(props: {
                   data-mission-option={option.id}
                   data-recommended={option.tag ? "" : undefined}
                   disabled={answerLocked()}
-                  class="flex flex-col items-start gap-0.5 rounded-[6px] bg-v2-overlay-simple-overlay-hover px-2 py-1.5 text-left disabled:opacity-60"
+                  class="flex w-full min-w-0 flex-col items-stretch gap-0.5 rounded-[6px] bg-v2-overlay-simple-overlay-hover px-2 py-1.5 text-left disabled:opacity-60"
                   onClick={() => void command.answer(props.model.id, decision(), option.id)}
                 >
-                  <span class="flex items-center gap-1.5 text-v2-text-text-base [font-weight:500]">
+                  <span class="flex min-w-0 flex-wrap items-center gap-1.5 [overflow-wrap:anywhere] text-v2-text-text-base [font-weight:500]">
                     {option.label}
                     <Show when={option.tag}>
                       {(tag) => (
@@ -114,7 +114,7 @@ export function MissionCommand(props: {
                       )}
                     </Show>
                   </span>
-                  <span class="truncate text-v2-text-text-muted">{option.consequence}</span>
+                  <span data-mission-consequence class="min-w-0 [overflow-wrap:anywhere] text-v2-text-text-muted">{option.consequence}</span>
                 </button>
               )}
             </For>

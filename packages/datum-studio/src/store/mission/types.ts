@@ -69,7 +69,8 @@ export interface MissionProject {
 }
 
 export interface RowModel {
-  tier: "opus" | "sonnet" | "inherit"
+  /** GSP AI tiers of the bundled provider (row 166): thinker, worker, worker-fast; inherit = the session's model. Recorded only. */
+  tier: "thinker" | "worker" | "worker-fast" | "inherit"
   reason?: string
 }
 

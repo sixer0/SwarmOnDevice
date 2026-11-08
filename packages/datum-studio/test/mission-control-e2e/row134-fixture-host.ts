@@ -100,7 +100,7 @@ async function call(name: string, args: Record<string, unknown>): Promise<S> {
 }
 
 type RowSpec = { id: string; phase: string; kind: string; title: string; agent: string }
-const rowDoc = (r: RowSpec) => ({ ...r, model: { tier: "opus" }, deps: [], size: "S", status: "pending", output: `implementation/${r.id}.md`, verification: "tests pass", review: "gate" })
+const rowDoc = (r: RowSpec) => ({ ...r, model: { tier: "thinker" }, deps: [], size: "S", status: "pending", output: `implementation/${r.id}.md`, verification: "tests pass", review: "gate" })
 
 async function patch(mission: string, rows: Array<Record<string, unknown>>) {
   for (const r of rows) await call("studio_mission_update_row", { mission, rows: [r] })

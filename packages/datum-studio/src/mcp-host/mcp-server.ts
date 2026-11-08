@@ -8,12 +8,13 @@
  * `globalThis.fetch` default left on this path (server.ts:79 is only reached when fetchImpl is absent).
  */
 import type { Server } from "@modelcontextprotocol/sdk/server/index.js"
-import { CallToolRequestSchema, ErrorCode, ListToolsRequestSchema, McpError, type CallToolResult } from "@modelcontextprotocol/sdk/types.js"
+import { CallToolRequestSchema, ErrorCode, ListResourcesRequestSchema, ListToolsRequestSchema, McpError, ReadResourceRequestSchema, type CallToolResult } from "@modelcontextprotocol/sdk/types.js"
 import type { HttpFetch } from "../../vendor/scripts/studio/_http-client"
 import { TOOLSETS, type StudioMcpConfig, type Toolset } from "../../vendor/scripts/studio/mcp/config"
 import { McpToolError, REAL_NODE_FS, redactSecret, type NodeFs } from "../../vendor/scripts/studio/mcp/safety"
 import { createStudioMcpServer } from "../../vendor/scripts/studio/mcp/server"
 import { executeTool, McpSession, newCallId, TOOLS, type ToolDef } from "../../vendor/scripts/studio/mcp/tools"
+import { MISSION_GUIDE_NAME, MISSION_GUIDE_URI, missionGuideText } from "./mission/mission-guide.ts"
 import { HOST_DROPPED_TOOLS, HOST_EXTRA_TOOLSETS, HOST_KEPT_TOOLS, type HostRememberedBasis, type HostToolExtension, type HostToolNext, type HostToolSession } from "./tool-table.ts"
 
 export interface HostServerDeps {
@@ -74,6 +75,26 @@ export function createHostMcpServer(deps: HostServerDeps): Server {
   const toolDeps = { config: execConfig, fetchImpl: deps.fetchImpl, nfs: deps.nfs ?? REAL_NODE_FS, session: new McpSession(), ...(deps.now ? { now: deps.now } : {}) }
   const emit = (rec: Record<string, unknown>) =>
     deps.log(redactSecret(JSON.stringify({ ts: new Date().toISOString(), source: "datum-studio-host.mcp", sessionId: deps.session.sessionId, agentId: deps.session.agentId, ...rec }), secret))
+
+  // Row 169: the MissionDoc guide resource, listed and readable while studio_mission_create is active. The vendored
+  // resources/list and resources/read handlers stay as they are (vendor files unchanged): they are taken from the
+  // SDK's handler map and called for every other uri.
+  if (active.extensions.some((e) => e.name === "studio_mission_create")) {
+    type Handler = (req: unknown, extra: unknown) => Promise<Record<string, unknown>>
+    const handlers = (server as unknown as { _requestHandlers?: Map<string, Handler> })._requestHandlers
+    const vendoredList = handlers?.get("resources/list")
+    const vendoredRead = handlers?.get("resources/read")
+    if (!vendoredList || !vendoredRead) throw new Error("vendored MCP resource handlers are missing")
+    const guide = { uri: MISSION_GUIDE_URI, name: MISSION_GUIDE_NAME, title: "MissionDoc shape for studio_mission_create", description: "Required fields, kind/size/tier enums, deps N:B / N:C, mission types and a minimal valid example.", mimeType: "text/markdown" }
+    server.setRequestHandler(ListResourcesRequestSchema, async (req, extra) => {
+      const base = await vendoredList(req, extra)
+      return { ...base, resources: [...((base.resources as unknown[]) ?? []), guide] }
+    })
+    server.setRequestHandler(ReadResourceRequestSchema, async (req, extra) => {
+      if (req.params.uri === MISSION_GUIDE_URI) return { contents: [{ uri: MISSION_GUIDE_URI, mimeType: "text/markdown", text: missionGuideText() }] }
+      return (await vendoredRead(req, extra)) as { contents: Array<{ uri: string; text: string }> }
+    })
+  }
 
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
     tools: [

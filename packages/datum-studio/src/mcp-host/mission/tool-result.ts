@@ -9,6 +9,7 @@
  */
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js"
 import { isStoreError } from "../../store/index.ts"
+import { MISSION_GUIDE_URI } from "./mission-guide.ts"
 
 export type MissionLog = (level: "info" | "warn" | "error", source: string, message: string, context?: Record<string, unknown>) => void
 
@@ -35,7 +36,22 @@ export function okResult(tool: string, text: string, data: Record<string, unknow
   return { content: [{ type: "text", text }], structuredContent: { ok: true, tool, ...data } }
 }
 
-export function refusal(tool: string, code: string, message: string, details: Record<string, unknown> = {}): CallToolResult {
+/** Row 169: at most this many schema issues go back to the agent (the rest is counted in `issuesTotal`). */
+export const MAX_REFUSAL_ISSUES = 10
+
+function compactDetails(tool: string, code: string, details: Record<string, unknown>): Record<string, unknown> {
+  if (code !== "SCHEMA_INVALID") return details
+  const out = { ...details }
+  if (Array.isArray(details.issues) && details.issues.length > MAX_REFUSAL_ISSUES) {
+    out.issues = details.issues.slice(0, MAX_REFUSAL_ISSUES)
+    out.issuesTotal = details.issues.length
+  }
+  if (tool === "studio_mission_create") out.guide = MISSION_GUIDE_URI
+  return out
+}
+
+export function refusal(tool: string, code: string, message: string, rawDetails: Record<string, unknown> = {}): CallToolResult {
+  const details = compactDetails(tool, code, rawDetails)
   const error = { code, message, details }
   return {
     content: [{ type: "text", text: `ditolak ${code}: ${message}\nrincian: ${JSON.stringify(details).slice(0, 4000)}` }],

@@ -29,7 +29,7 @@ beforeAll(async () => {
       type: "feature-release",
       owner: "master-controller",
       project: { dir: rig.project },
-      rows: [{ id: "1", phase: "implementation", kind: "implementation", title: "Row 1", agent: "coder-execution", model: { tier: "opus" }, deps: [], size: "S", status: "pending", output: "implementation/1.md", verification: "tests pass", review: "gate" }],
+      rows: [{ id: "1", phase: "implementation", kind: "implementation", title: "Row 1", agent: "coder-execution", model: { tier: "thinker" }, deps: [], size: "S", status: "pending", output: "implementation/1.md", verification: "tests pass", review: "gate" }],
       decisions: [{ id: "U1", by: "user", date: "2026-11-08", text: "go" }],
     },
   })

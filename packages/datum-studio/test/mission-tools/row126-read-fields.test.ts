@@ -74,7 +74,7 @@ const code = (r: S) => (r.ok === false ? r.code : "OK")
 const sql = <T = S>(q: string, p: unknown[] = []) => bridge.withStudioTx(async (tx) => tx.all(q, p as never) as T[])
 
 function row(id: string, phase: string, kind: string, deps: string[] = []) {
-  return { id, phase, kind, title: `Row ${id}`, agent: "coder-execution", model: { tier: "opus" }, deps, size: "S", status: "pending", output: `implementation/${id}.md`, verification: "tests pass", review: "gate" }
+  return { id, phase, kind, title: `Row ${id}`, agent: "coder-execution", model: { tier: "thinker" }, deps, size: "S", status: "pending", output: `implementation/${id}.md`, verification: "tests pass", review: "gate" }
 }
 
 /** A valid work report (same shape as the row 119b test). */
