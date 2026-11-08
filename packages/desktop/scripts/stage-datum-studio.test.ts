@@ -20,10 +20,14 @@ import {
   ELK_PACKAGE_JSON,
   LAUNCHER,
   sha256,
+  StageFail,
   stageDatumStudio,
+  studioLauncher,
+  studioTarget,
   SZ3_LIMIT_KB,
   verifyStudioStage,
   type StudioManifest,
+  type StudioTarget,
 } from "./stage-datum-studio"
 
 const SCRIPT = path.join(import.meta.dir, "stage-datum-studio.ts")
@@ -311,4 +315,58 @@ describe("row 36 / C79: built-in render against the staged Res/datum-studio", ()
     const log = await fs.readFile(TPL_LOG, "utf8").catch(() => "")
     expect(log.includes("PATH_OUTSIDE_ROOT")).toBe(false)
   }, 120_000)
+})
+
+describe("row 170: launcher staged by target (R2.2, R6.5)", () => {
+  const CMD = `${LAUNCHER}.cmd`
+  const staged: Partial<Record<StudioTarget, { dir: string; manifest: StudioManifest }>> = {}
+  beforeAll(async () => {
+    for (const target of ["linux-x64", "win32-x64"] as const) {
+      const dir = path.join(WORK, "targets", target)
+      const r = await stageDatumStudio({ out: dir, target })
+      staged[target] = { dir, manifest: r.manifest }
+    }
+  }, 240_000)
+  /** The darwin manifest's file list without the launcher entries (the target-independent part of the stage). */
+  const rest = (m: StudioManifest) => m.files.filter((f) => f.path !== LAUNCHER && f.path !== CMD)
+
+  test("SWARM_BUILD_TARGET: unset or empty = darwin-arm64; the R2.1 ids pass; anything else fails", () => {
+    expect(studioTarget({})).toBe("darwin-arm64")
+    expect(studioTarget({ SWARM_BUILD_TARGET: "" })).toBe("darwin-arm64")
+    for (const t of ["darwin-arm64", "linux-x64", "win32-x64"] as const) expect(studioTarget({ SWARM_BUILD_TARGET: t })).toBe(t)
+    for (const bad of ["linux", "win32", "darwin-x64", "linux-arm64"]) expect(() => studioTarget({ SWARM_BUILD_TARGET: bad })).toThrow(StageFail)
+    expect(studioLauncher("darwin-arm64")).toEqual(studioLauncher("linux-x64"))
+    expect(studioLauncher("darwin-arm64")).toEqual({ source: "datum-studio-launcher.sh", to: LAUNCHER, mode: "755", other: CMD })
+    expect(studioLauncher("win32-x64")).toEqual({ source: "datum-studio-launcher.cmd", to: CMD, mode: "644", other: LAUNCHER })
+  })
+
+  test("linux-x64: the sh launcher at 0755, no .cmd; the whole stage equals the darwin stage file for file", async () => {
+    const { dir, manifest: m } = staged["linux-x64"]!
+    expect((await verifyStudioStage(dir, { target: "linux-x64" })).problems).toEqual([])
+    expect((await fs.stat(path.join(dir, LAUNCHER))).mode & 0o777).toBe(0o755)
+    expect(await fs.stat(path.join(dir, CMD)).catch(() => null)).toBeNull()
+    expect(m.files).toEqual(manifest.files)
+  })
+
+  test("win32-x64: datum-studio-launcher.cmd at 0644 (no exec bit), CRLF bytes of the row 169 source, no sh launcher", async () => {
+    const { dir, manifest: m } = staged["win32-x64"]!
+    expect((await verifyStudioStage(dir, { target: "win32-x64" })).problems).toEqual([])
+    expect((await fs.stat(path.join(dir, CMD))).mode & 0o777).toBe(0o644)
+    expect(await fs.stat(path.join(dir, LAUNCHER)).catch(() => null)).toBeNull()
+    const src = readFileSync(path.join(import.meta.dir, "datum-studio-launcher.cmd"))
+    const entry = m.files.find((f) => f.path === CMD)!
+    expect(entry).toEqual({ path: CMD, size: src.length, sha256: sha256(src), mode: "644" })
+    expect(readFileSync(path.join(dir, CMD), "utf8").includes("\r\n")).toBe(true)
+    expect(rest(m)).toEqual(rest(manifest))
+  })
+
+  test("verify by target: a win32 stage fails the darwin/linux check and the reverse; a .cmd with x fails win32", async () => {
+    const win = staged["win32-x64"]!.dir
+    expect((await verifyStudioStage(win, { target: "darwin-arm64" })).problems).toEqual([`${LAUNCHER} must be mode 0755`, `${CMD} must not be staged for this target`])
+    expect((await verifyStudioStage(STAGED, { target: "win32-x64" })).problems).toEqual([`${CMD} must be mode 0644 (no exec bit)`, `${LAUNCHER} must not be staged for this target`])
+    const exec = path.join(WORK, "tamper", "win-exec")
+    await fs.cp(win, exec, { recursive: true })
+    await fs.chmod(path.join(exec, CMD), 0o755)
+    expect((await verifyStudioStage(exec, { target: "win32-x64" })).problems).toEqual([`mode ${CMD} 755 != 644`])
+  })
 })

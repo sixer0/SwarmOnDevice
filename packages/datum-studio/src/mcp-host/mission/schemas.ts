@@ -114,6 +114,8 @@ export const MISSION_TOOL_SCHEMAS: Record<string, Schema> = {
     status: { type: "array", uniqueItems: true, items: { type: "string", enum: ["draft", "approved", "running", "paused", "done", "cancelled"] } },
     type: { type: "string", maxLength: 64 },
     projectDir: { type: "string", maxLength: 4096 },
+    // Row 183 (L36): session refs of this MCP session's client; their linked missions are listed too (union with projectDir).
+    sessions: { type: "array", maxItems: 50, uniqueItems: true, items: { type: "string", minLength: 1, maxLength: 128 }, description: "Also list the missions linked to any of these sessions of this agent's client (union with projectDir)." },
     q: { type: "string", minLength: 1, maxLength: 500 },
     take: { type: "integer", minimum: 1, maximum: 200, default: 50 },
     cursor: { type: "string", maxLength: 512 },

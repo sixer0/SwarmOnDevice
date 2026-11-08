@@ -324,6 +324,8 @@ export interface MissionListFilter {
   status?: MissionStatus[]
   type?: string
   projectDir?: string
+  /** Row 183 (L36): also list the missions linked to any of these sessions (a UNION with projectDir, not an AND). */
+  linkedSessions?: { client: SessionClient; refs: string[] }
   q?: string
   take?: number
   cursor?: string

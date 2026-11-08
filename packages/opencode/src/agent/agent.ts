@@ -14,6 +14,10 @@ import PROMPT_COMPACTION from "./prompt/compaction.txt"
 import PROMPT_EXPLORE from "./prompt/explore.txt"
 import PROMPT_SUMMARY from "./prompt/summary.txt"
 import PROMPT_TITLE from "./prompt/title.txt"
+import PROMPT_PLANNER from "./prompt/planner.txt"
+import PROMPT_VERIFIER from "./prompt/verifier.txt"
+import PROMPT_DATA_COLLECTOR from "./prompt/data-collector.txt"
+import PROMPT_DOCUMENT_WRITER from "./prompt/document-writer.txt"
 import { Permission } from "@/permission"
 import { mergeDeep, pipe, sortBy, values } from "remeda"
 import { Global } from "@opencode-ai/core/global"
@@ -137,6 +141,26 @@ const layer = Layer.effect(
 
         const user = Permission.fromConfig(cfg.permission ?? {})
 
+        // Spec 161 D4 (1.2.2): the specialists' rules are merged AFTER `user`, because the shipped baseline in `user`
+        // starts with "*": "ask" and evaluate() takes the last match (F1). They hold targeted denies only, never a
+        // catch-all, so the baseline's bash gates (sudo deny, curl/python ask, ...) stay in force (F2). A person can
+        // still loosen one specialist through `agent.<name>.permission`, which merges after this (see the loop below).
+        const specialist = (extra: Record<string, unknown> = {}) =>
+          Permission.fromConfig(
+            {
+              todowrite: "deny",
+              task: "deny",
+              "swarm-web_*": "deny",
+              webfetch: "deny",
+              websearch: "deny",
+              // A child cannot run the controller workflow (it cannot delegate), so it may not load it (spec 161 C5).
+              skill: { "master-controller": "deny" },
+              ...extra,
+            } as Parameters<typeof Permission.fromConfig>[0],
+            { shipped: true },
+          )
+        const markdownOnly = { edit: { "*": "deny", "*.md": "ask" }, bash: "deny" }
+
         const agents: Record<string, Info> = {
           build: {
             name: "build",
@@ -175,13 +199,17 @@ const layer = Layer.effect(
                 },
               }, { shipped: true }),
               user,
+              // Spec 161 D10: plan is read-only, so it may never hand work to an editing subagent. Placed after `user`
+              // so it binds over the baseline (F1). The `general` deny above keeps its old place, so the tested user
+              // escape hatch (`permission.task.general: allow`) still works.
+              Permission.fromConfig({ task: { coder: "deny", "document-writer": "deny" } }, { shipped: true }),
             ),
             mode: "primary",
             native: true,
           },
           general: {
             name: "general",
-            description: `General-purpose agent for researching complex questions and executing multi-step tasks. Use this agent to execute multiple units of work in parallel.`,
+            description: `Fallback agent for multi-step work that no other agent in this list fits. Prefer the agent whose description matches the work. Use general to run several unrelated units of work in parallel.`,
             permission: Permission.merge(
               defaults,
               Permission.fromConfig({
@@ -212,6 +240,53 @@ const layer = Layer.effect(
             ),
             description: `Fast agent specialized for exploring codebases. Use this when you need to quickly find files by patterns (eg. "src/components/**/*.tsx"), search code for keywords (eg. "API endpoints"), or answer questions about the codebase (eg. "how do API endpoints work?"). When calling this agent, specify the desired thoroughness level: "quick" for basic searches, "medium" for moderate exploration, or "very thorough" for comprehensive analysis across multiple locations and naming conventions.`,
             prompt: PROMPT_EXPLORE,
+            options: {},
+            mode: "subagent",
+            native: true,
+          },
+          // Spec 161 (1.2.2): specialist subagents. Descriptions per spec section 5, with the row 163 wording
+          // (decision L21): "no web tools", and the verifier "does not use edit tools" (its shell still asks).
+          coder: {
+            name: "coder",
+            description: `Implements code and config changes: a specified build row, a bug fix, a refactor, or tests to write and make pass. Edits files, runs the project's checks, and reports the files changed and the check results. No web tools. Use when the work changes code. Also the role called coder-execution, database-specialist, git-specialist or docker-specialist in workflow texts.`,
+            // No prompt (D3): it keeps the provider prompt and the gsp_workflow block that `general` runs on today.
+            permission: Permission.merge(defaults, user, specialist()),
+            options: {},
+            mode: "subagent",
+            native: true,
+          },
+          planner: {
+            name: "planner",
+            description: `Plans and analyses without changing code: states the intent, writes a blueprint or spec, or analyses collected findings and recommends. Reads the project and may write Markdown documents only. No shell and no web tools. Use for intent, blueprint, analysis and spec steps. Also the role called request-translator, task-architect, data-analyst, pm-analyst or pm-planner in workflow texts.`,
+            prompt: PROMPT_PLANNER,
+            permission: Permission.merge(defaults, user, specialist(markdownOnly)),
+            options: {},
+            mode: "subagent",
+            native: true,
+          },
+          verifier: {
+            name: "verifier",
+            description: `Checks finished work against its criteria and reports pass or fail with evidence: runs tests and checks, reviews a diff, a test report or the security of a change. Does not use edit tools; its shell commands still ask. No web tools. Use after implementation and before a gate or a report. Also the role called verifier, senior-code-reviewer, security-review or pm-verifier, and test-expert when tests are run rather than written.`,
+            prompt: PROMPT_VERIFIER,
+            permission: Permission.merge(defaults, user, specialist({ edit: "deny" })),
+            options: {},
+            mode: "subagent",
+            native: true,
+          },
+          "data-collector": {
+            name: "data-collector",
+            description: `Reads and digests material the person already has: project files, notes, PDF, DOCX and XLSX documents, earlier reports. Returns facts with their source paths and may write a Markdown collection file. No shell and no web tools. Use for read-and-summarise jobs, inventories and extractions. Also the role called data-collector or document-reader. For code search use explore; for the public web use researcher.`,
+            prompt: PROMPT_DATA_COLLECTOR,
+            permission: Permission.merge(defaults, user, specialist(markdownOnly)),
+            options: {},
+            mode: "subagent",
+            native: true,
+          },
+          "document-writer": {
+            name: "document-writer",
+            description: `Produces finished documents for a reader in the GSP house style: DOCX, PDF, HTML, XLSX and PPTX, through the datum-house-style skill and the datum-studio tools, and runs the house-style checks before it reports. No web tools. Use when the deliverable is a document rather than code. Also the role called document-writer, pm-writer, document-converter or document-translator.`,
+            prompt: PROMPT_DOCUMENT_WRITER,
+            permission: Permission.merge(defaults, user, specialist()),
             options: {},
             mode: "subagent",
             native: true,

@@ -60,6 +60,16 @@ if [ "${1:-}" = run ] && [ -n "${XDG_STATE_HOME:-}" ] && [ -f "$server" ]; then
         exec "$cli" run --attach "$url" --dir "$PWD" "$@"
         ;;
     esac
+    # Linux (R4.10, DP-3): the PID counts when /proc/<pid>/exe is the app executable two levels above this launcher,
+    # a full-path match (comm= is cut to 15 characters). Not reached on macOS, which has no /proc.
+    if [ -e "/proc/$pid/exe" ] && [ "$(/usr/bin/readlink "/proc/$pid/exe" 2>/dev/null)" = "$(/usr/bin/readlink -f "$dir/../..")/id.co.gsp.swarm.desktop" ]; then
+      shift
+      SWARM_SERVER_USERNAME=$user
+      SWARM_SERVER_PASSWORD=$pass
+      export SWARM_SERVER_USERNAME SWARM_SERVER_PASSWORD
+      if [ "$hasdir" = yes ]; then exec "$cli" run --attach "$url" "$@"; fi
+      exec "$cli" run --attach "$url" --dir "$PWD" "$@"
+    fi
   fi
 fi
 exec "$cli" "$@"

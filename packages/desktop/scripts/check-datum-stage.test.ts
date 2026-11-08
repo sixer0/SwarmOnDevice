@@ -9,6 +9,7 @@ import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { checkResources, checkStage, machoFileType, parseProvenance, PROVENANCE, RUNTIME_MANIFEST, RUNTIME_STAGE, SKILL_SOURCE } from "./check-datum-stage"
+import { checkRuntime, elfExpected, nativeOf, TARGET_RUNTIME, targetFromEnv, type Target } from "./check-datum-stage"
 import { codesignArgs, MACHO_EXPECTED, PTH, RELEASE } from "./stage-datum-runtime"
 import { stageDatumStudio } from "./stage-datum-studio"
 import { STUDIO_STAGE_FOLDER, STUDIO_STAGE_MANIFEST } from "../src/main/datum-studio-host/layout"
@@ -332,4 +333,254 @@ test("verify --app checks signed Mach-O by sha256 and codesign; only the executa
   }
   expect(problems).toContain(`codesign ${exe}: entitlements lack disable-library-validation`)
   if (haveDylib) expect(problems).not.toContain(`codesign ${lib}: entitlements lack disable-library-validation`)
+}, 60_000)
+
+// Row 124 (linux/windows installer task; spec 113 §3 S4, spec 114 §5.1/§7, LP-11): the same gate for the targets
+// linux-x64 (kind elf) and win32-x64 (kind pe), picked by SWARM_BUILD_TARGET. The darwin cases above are unchanged.
+// The native files are synthetic headers (the check reads headers only); each target gets its own desktop copy.
+const N = 4
+const elfHeader = (machine = 0x3e) => {
+  const b = Buffer.alloc(64)
+  b.writeUInt32BE(0x7f454c46, 0)
+  b[4] = 2 // 64-bit
+  b[5] = 1 // little-endian
+  b[6] = 1
+  b.writeUInt16LE(3, 16) // ET_DYN
+  b.writeUInt16LE(machine, 18)
+  return b
+}
+const peHeader = (machine = 0x8664) => {
+  const b = Buffer.alloc(256)
+  b.write("MZ", 0, "latin1")
+  b.writeUInt32LE(0x80, 0x3c)
+  b.write("PE\0\0", 0x80, "latin1")
+  b.writeUInt16LE(machine, 0x84)
+  return b
+}
+const WIN_PTH = { path: `python/Lib/site-packages/${PTH.name}`, line: "../../../../datum-house-style/scripts" }
+
+async function writeTargetRuntime(dir: string, target: "linux-x64" | "win32-x64") {
+  const put = async (rel: string, bytes: string | Uint8Array, mode: number) => {
+    await fs.mkdir(path.dirname(path.join(dir, rel)), { recursive: true })
+    await fs.writeFile(path.join(dir, rel), bytes)
+    await fs.chmod(path.join(dir, rel), mode)
+  }
+  if (target === "linux-x64") {
+    await put("bin/datum-python", "#!/bin/sh\nexec python3 -I -B \"$@\"\n", 0o755)
+    await put("python/bin/python3.14", elfHeader(), 0o755)
+    for (let i = 1; i < N; i++) await put(`python/lib/python3.14/lib-dynload/m${i}.so`, elfHeader(), 0o755)
+    await put("python/lib/python3.14/os.py", "# stdlib\n", 0o644)
+    await put(PTH_PATH, `${PTH.line}\n`, 0o644)
+    await fs.symlink("python3.14", path.join(dir, "python/bin/python3"))
+  } else {
+    await put("bin/datum-python.cmd", "@echo off\r\nsetlocal DisableDelayedExpansion\r\n", 0o644)
+    await put("python/python.exe", peHeader(), 0o644)
+    for (let i = 1; i < N; i++) await put(`python/DLLs/m${i}.pyd`, peHeader(), 0o644)
+    await put("python/Lib/os.py", "# stdlib\n", 0o644)
+    await put(WIN_PTH.path, `${WIN_PTH.line}\n`, 0o644)
+  }
+  await writeTargetManifest(dir, target)
+}
+
+async function writeTargetManifest(dir: string, target: "linux-x64" | "win32-x64", edit: (m: Record<string, any>) => void = () => {}) {
+  const native = target === "linux-x64" ? "elf" : "pe"
+  const files: Record<string, any>[] = []
+  let bytes = 0
+  for (const rel of await walkFiles(dir)) {
+    if (rel === RUNTIME_MANIFEST) continue
+    const abs = path.join(dir, rel)
+    const st = await fs.lstat(abs)
+    const mode = (st.mode & 0o777).toString(8)
+    if (st.isSymbolicLink()) {
+      files.push({ path: rel, kind: "symlink", mode, target: await fs.readlink(abs) })
+      continue
+    }
+    const data = await fs.readFile(abs)
+    bytes += st.size
+    const isNative = native === "elf" ? data.readUInt32BE(0) === 0x7f454c46 : data[0] === 0x4d && data[1] === 0x5a
+    files.push({ path: rel, kind: isNative ? native : "data", mode, size: st.size, sha256: sha(data) })
+  }
+  const manifest: Record<string, any> = {
+    schema: 1,
+    name: "datum-runtime",
+    version: RELEASE,
+    launcher: target === "linux-x64" ? "bin/datum-python" : "bin/datum-python.cmd",
+    pth: target === "linux-x64" ? { path: PTH_PATH, line: PTH.line } : WIN_PTH,
+    skillSha: sha(await fs.readFile(path.join(skill, "SKILL.md"))),
+    counts: {
+      files: files.filter((f) => f.kind !== "symlink").length,
+      [native]: files.filter((f) => f.kind === native).length,
+      symlinks: files.filter((f) => f.kind === "symlink").length,
+      bytes,
+    },
+    files,
+  }
+  edit(manifest)
+  await fs.writeFile(path.join(dir, RUNTIME_MANIFEST), `${JSON.stringify(manifest, null, 1)}\n`)
+}
+
+async function targetDesktop(target: "linux-x64" | "win32-x64") {
+  const desktop = path.join(root, `desktop-${target}`)
+  if (!(await fs.lstat(desktop).catch(() => null))) {
+    await $`/bin/cp -Rp ${fixture} ${desktop}`.quiet()
+    await fs.rm(path.join(desktop, RUNTIME_STAGE), { recursive: true })
+    await writeTargetRuntime(path.join(desktop, RUNTIME_STAGE), target)
+  }
+  return desktop
+}
+const runAs = async (target: string, ...args: string[]) => {
+  const result = await $`${process.execPath} ${SCRIPT} ${args}`.env({ ...process.env, SWARM_BUILD_TARGET: target }).nothrow().quiet()
+  return { code: result.exitCode, stdout: result.stdout.toString(), stderr: result.stderr.toString() }
+}
+const runtimeOf = (desktop: string, target: Target, extra: { elfExpected?: number } = {}) =>
+  checkRuntime(RUNTIME_STAGE, path.join(desktop, RUNTIME_STAGE), { skillMd: path.join(skill, "SKILL.md"), target, ...extra })
+
+test("row 124: SWARM_BUILD_TARGET unset or empty is darwin-arm64; only the R2.1 ids are targets", () => {
+  expect(targetFromEnv({})).toBe("darwin-arm64")
+  expect(targetFromEnv({ SWARM_BUILD_TARGET: "" })).toBe("darwin-arm64")
+  expect(targetFromEnv({ SWARM_BUILD_TARGET: "linux-x64" })).toBe("linux-x64")
+  expect(targetFromEnv({ SWARM_BUILD_TARGET: "win32-x64" })).toBe("win32-x64")
+  expect(targetFromEnv({ SWARM_BUILD_TARGET: "linux-arm64" })).toBeNull()
+  expect(TARGET_RUNTIME["darwin-arm64"]).toEqual({ kind: "macho", label: "Mach-O", launcher: "bin/datum-python", launcherMode: "755", pth: PTH })
+})
+
+test("row 124: nativeOf reads Mach-O, ELF and PE headers and their x86-64 machine", async () => {
+  const dir = path.join(root, "headers")
+  await fs.mkdir(dir, { recursive: true })
+  const at = async (name: string, bytes: string | Uint8Array) => {
+    await fs.writeFile(path.join(dir, name), bytes)
+    return nativeOf(path.join(dir, name))
+  }
+  expect(await nativeOf("/usr/bin/true")).toEqual({ kind: "macho", x64: false })
+  expect(await at("elf", elfHeader())).toEqual({ kind: "elf", x64: true })
+  expect(await at("elf-arm", elfHeader(0xb7))).toEqual({ kind: "elf", x64: false })
+  expect(await at("pe", peHeader())).toEqual({ kind: "pe", x64: true })
+  expect(await at("pe-arm", peHeader(0xaa64))).toEqual({ kind: "pe", x64: false })
+  expect(await at("mz-only", Buffer.concat([Buffer.from("MZ"), Buffer.alloc(200)]))).toBeNull()
+  expect(await at("text", "#!/bin/sh\n")).toBeNull()
+  expect(await at("empty", "")).toBeNull()
+})
+
+test("row 124: linux-x64 accepts kind elf with its own count, no codesign, launcher bin/datum-python mode 755", async () => {
+  const desktop = await targetDesktop("linux-x64")
+  const dir = path.join(desktop, RUNTIME_STAGE)
+  const manifest = path.join(dir, RUNTIME_MANIFEST)
+  const good = await runtimeOf(desktop, "linux-x64", { elfExpected: N })
+  expect(good.problems).toEqual([])
+  expect(good.summary).toBe(`files=${N + 3} elf=${N} symlinks=1 bytes=${good.summary.match(/bytes=(\d+)/)![1]}`)
+  expect((await runtimeOf(desktop, "linux-x64", { elfExpected: N + 1 })).problems).toEqual([`ELF-1: ${N} elf entries, expected ${N + 1}`])
+  if (elfExpected() === undefined)
+    expect((await runtimeOf(desktop, "linux-x64")).problems).toEqual(["ELF-1: ELF_EXPECTED is not set (stage-datum-runtime.ts, row 122)"])
+  // The darwin gate does not take an ELF runtime.
+  expect((await runtimeOf(desktop, "darwin-arm64")).problems).toContain(`MACHO-1: 0 macho entries, expected ${MACHO_EXPECTED}`)
+
+  const so = path.join(dir, "python/lib/python3.14/lib-dynload/m1.so")
+  const arm = await withChange(so, () => fs.writeFile(so, elfHeader(0xb7)), async () => {
+    await writeTargetManifest(dir, "linux-x64")
+    return runtimeOf(desktop, "linux-x64", { elfExpected: N })
+  })
+  expect(arm.problems).toEqual(["arch python/lib/python3.14/lib-dynload/m1.so: ELF is not x86-64"])
+  const macho = await withChange(so, () => fs.copyFile("/usr/bin/true", so), async () => {
+    await writeTargetManifest(dir, "linux-x64")
+    return runtimeOf(desktop, "linux-x64", { elfExpected: N - 1 })
+  })
+  expect(macho.problems).toEqual(["Mach-O python/lib/python3.14/lib-dynload/m1.so (target linux-x64)"])
+  await writeTargetManifest(dir, "linux-x64")
+
+  const asData = await withChange(manifest, () => writeTargetManifest(dir, "linux-x64", (m) => {
+    m.files.find((f: { path: string }) => f.path.endsWith("m1.so")).kind = "data"
+    m.counts.elf = N - 1
+  }), () => runtimeOf(desktop, "linux-x64", { elfExpected: N - 1 }))
+  expect(asData.problems).toEqual(["kind python/lib/python3.14/lib-dynload/m1.so: listed data, file is ELF"])
+  const foreign = await withChange(manifest, () => writeTargetManifest(dir, "linux-x64", (m) => {
+    m.files.find((f: { path: string }) => f.path.endsWith("m1.so")).kind = "macho"
+    m.counts.elf = N - 1
+  }), () => runtimeOf(desktop, "linux-x64", { elfExpected: N - 1 }))
+  expect(foreign.problems).toEqual([
+    "kind python/lib/python3.14/lib-dynload/m1.so: macho is not a linux-x64 kind",
+    "kind python/lib/python3.14/lib-dynload/m1.so: listed macho, file is ELF",
+  ])
+  const launcher = path.join(dir, "bin/datum-python")
+  const mode644 = await withChange(launcher, () => fs.chmod(launcher, 0o644), async () => {
+    await writeTargetManifest(dir, "linux-x64")
+    return runtimeOf(desktop, "linux-x64", { elfExpected: N })
+  })
+  expect(mode644.problems).toEqual(["launcher bin/datum-python must be a listed data file, mode 755"])
+  await writeTargetManifest(dir, "linux-x64")
+  expect((await runtimeOf(desktop, "linux-x64", { elfExpected: N })).problems).toEqual([])
+})
+
+test("row 124: win32-x64 accepts kind pe counted by counts.pe, launcher bin/datum-python.cmd without mode, 4-level .pth", async () => {
+  const desktop = await targetDesktop("win32-x64")
+  const dir = path.join(desktop, RUNTIME_STAGE)
+  const manifest = path.join(dir, RUNTIME_MANIFEST)
+  const good = await runtimeOf(desktop, "win32-x64")
+  expect(good.problems).toEqual([])
+  expect(good.summary).toMatch(new RegExp(`^files=${N + 3} pe=${N} symlinks=0 bytes=\\d+$`))
+
+  const edited = (edit: (m: Record<string, any>) => void) =>
+    withChange(manifest, () => writeTargetManifest(dir, "win32-x64", edit), () => runtimeOf(desktop, "win32-x64"))
+  expect((await edited((m) => (m.counts.pe = N + 1))).problems).toEqual([expect.stringMatching(/^counts .* disagree with files\[\] \(files 7, pe 4, symlinks 0, bytes \d+\)$/)])
+  expect((await edited((m) => (m.launcher = "bin/datum-python"))).problems).toEqual(["launcher bin/datum-python must be a listed data file"])
+  expect((await edited((m) => (m.pth = { path: PTH_PATH, line: PTH.line }))).problems).toEqual([
+    `pth ${JSON.stringify({ path: PTH_PATH, line: PTH.line })} != ${WIN_PTH.path} "${WIN_PTH.line}"`,
+  ])
+  const noPe = await edited((m) => {
+    for (const f of m.files) if (f.kind === "pe") f.kind = "data"
+    m.counts.pe = 0
+  })
+  expect(noPe.problems[0]).toBe("PE-1: 0 pe entries")
+  expect(noPe.problems).toContain("kind python/python.exe: listed data, file is PE")
+
+  // In Resources the 4-level line reaches datum-house-style/scripts.
+  const resources = path.join(root, "verify-win32", "resources")
+  await fs.mkdir(resources, { recursive: true })
+  await $`/bin/cp -Rp ${path.join(desktop, SKILL_SOURCE)} ${path.join(resources, "datum-house-style")}`.quiet()
+  await $`/bin/cp -Rp ${dir} ${path.join(resources, "datum-runtime")}`.quiet()
+  await $`/bin/cp -Rp ${path.join(desktop, STUDIO_STAGE_FOLDER)} ${path.join(resources, "datum-studio")}`.quiet()
+  const reports = await checkResources(resources, { desktop, target: "win32-x64" })
+  expect(reports.map((r) => r.problems)).toEqual([[], [], []])
+})
+
+test("row 124: the skill copy holds no native binary of the linux or windows target", async () => {
+  for (const [target, bytes, label] of [["linux-x64", elfHeader(), "ELF"], ["win32-x64", peHeader(), "PE"]] as const) {
+    const desktop = await targetDesktop(target)
+    const planted = path.join(desktop, SKILL_SOURCE, "scripts", "planted.bin")
+    const reports = await withChange(planted, () => fs.writeFile(planted, bytes), () => checkStage(desktop, { target }))
+    expect(problemsOf(reports, SKILL_SOURCE)).toEqual(["unlisted file scripts/planted.bin", `${label} scripts/planted.bin (packaging §2.4 rule 2)`])
+    // The darwin gate keeps its Mach-O-only rule for the same tree.
+    const darwin = await withChange(planted, () => fs.writeFile(planted, bytes), () => checkStage(desktop))
+    expect(problemsOf(darwin, SKILL_SOURCE)).toEqual(["unlisted file scripts/planted.bin"])
+  }
+})
+
+test("row 124: the CLI reads SWARM_BUILD_TARGET; unknown targets and --app off darwin are usage errors", async () => {
+  const win = await targetDesktop("win32-x64")
+  const winStage = await runAs("win32-x64", "stage", "--desktop", win)
+  // The Studio folder follows the same variable in verifyStudioStage (row 170, not this row): only the skill and
+  // runtime lines are this row's, so a Studio-only failure is tolerated here and the two others must be absent.
+  const lines = winStage.stderr.split("\n").filter(Boolean)
+  expect(lines.filter((line) => !line.startsWith(`DATUM_STAGE_FAIL ${STUDIO_STAGE_FOLDER}: `))).toEqual([])
+  if (lines.length === 0) {
+    expect(winStage.stdout).toContain(`${RUNTIME_STAGE} files=${N + 3} pe=${N} symlinks=0`)
+    expect(winStage.stdout.match(/^datum-stage: stage ok$/gm)).toHaveLength(1)
+  } else expect(winStage.code).toBe(1)
+
+  const linux = await targetDesktop("linux-x64")
+  const linuxStage = await runAs("linux-x64", "stage", "--desktop", linux)
+  const linuxLines = linuxStage.stderr.split("\n").filter((line) => line && !line.startsWith(`DATUM_STAGE_FAIL ${STUDIO_STAGE_FOLDER}: `))
+  if (elfExpected() === N) expect(linuxLines).toEqual([])
+  else {
+    expect(linuxStage.code).toBe(1)
+    expect(linuxLines).toEqual([expect.stringMatching(/^DATUM_STAGE_FAIL \.datum-runtime-stage: 1 problem\(s\): ELF-1: /)])
+    expect(linuxStage.stderr).not.toContain(root)
+  }
+  // The darwin fixture fails under the linux target (its Mach-O are not ELF): the target is really read.
+  expect((await runAs("linux-x64", "stage", "--desktop", fixture)).code).toBe(1)
+  expect((await runAs("", "stage", "--desktop", fixture)).code).toBe(0)
+
+  const bogus = await runAs("linux-arm64", "stage", "--desktop", fixture)
+  expect(bogus.code).toBe(2)
+  expect(bogus.stderr).toBe("DATUM_STAGE_FAIL SWARM_BUILD_TARGET must be one of darwin-arm64, linux-x64, win32-x64 or unset\n")
+  expect((await runAs("linux-x64", "verify", "--app", path.join(root, "Swarm.app"), "--desktop", linux)).code).toBe(2)
 }, 60_000)

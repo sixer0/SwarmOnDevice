@@ -2,10 +2,12 @@
 // Prebuild gate for the swarm-cli slot (C120), the twin of check-setup-stage.ts: electron-builder only logs a missing
 // extraResources source, so without this a build could ship a menu item whose command is absent or older than the app.
 // It never compiles; staging stays the manual `bun ./scripts/stage-cli.ts`.
+import { $ } from "bun"
 import { lstat, readFile, readdir } from "node:fs/promises"
 import { join, relative, resolve } from "node:path"
 import { BUNDLED_PROVIDER } from "../src/main/bundled-provider"
-import { CLI_FILES } from "./stage-cli"
+import { buildTarget, type BuildTarget } from "./prebuild-target"
+import { CLI_TARGETS } from "./stage-cli"
 
 export const CLI_STAGE_DIR = resolve(import.meta.dir, "..", "resources", "swarm-cli")
 // The engine the CLI binary compiles in; a source edited after staging means the staged binary is not this checkout.
@@ -14,7 +16,17 @@ export const CLI_SOURCE_DIRS = ["opencode/src", "core/src", "tui/src"].map((dir)
 )
 
 // Every problem found, so one run names all of them. An empty list means the slot is complete and current.
-export async function checkCliStage(input: { stage: string; sources: string[]; launcher: string }) {
+// Row 121: `target` (default darwin-arm64, the check as before) picks the slot files of CLI_TARGETS; `launcher` is the
+// source the staged launcher must equal (scripts/swarm-launcher.sh, or swarm-launcher.cmd for win32-x64).
+export async function checkCliStage(input: {
+  stage: string
+  sources: string[]
+  launcher: string
+  target?: BuildTarget
+}) {
+  const target = input.target ?? "darwin-arm64"
+  const CLI_FILES = CLI_TARGETS[target].files
+  const [binaryName, launcherName] = [CLI_FILES[0]!.name, CLI_FILES[1]!.name]
   const problems: string[] = []
   const names = await readdir(input.stage).catch(() => undefined)
   if (!names) return [`${input.stage} is missing (run bun ./scripts/stage-cli.ts)`]
@@ -32,14 +44,22 @@ export async function checkCliStage(input: { stage: string; sources: string[]; l
   if (problems.length > 0) return problems
 
   const [launcher, source, provider] = await Promise.all([
-    readFile(join(input.stage, "swarm-launcher"), "utf8"),
+    readFile(join(input.stage, launcherName), "utf8"),
     readFile(input.launcher, "utf8"),
     readFile(join(input.stage, "bundled-provider.json"), "utf8"),
   ])
-  if (launcher !== source) problems.push("staged swarm-launcher differs from scripts/swarm-launcher.sh")
+  if (launcher !== source)
+    problems.push(`staged ${launcherName} differs from scripts/${CLI_TARGETS[target].launcherSource}`)
   if (provider !== JSON.stringify(BUNDLED_PROVIDER)) problems.push("staged bundled-provider.json differs from BUNDLED_PROVIDER")
 
-  const built = stats[CLI_FILES.findIndex((file) => file.name === "swarm")]!.mtimeMs
+  // A cross build cannot run its binary here, so its kind is checked instead (a darwin slot is not checked, as before).
+  if (target !== "darwin-arm64") {
+    const kind = (await $`/usr/bin/file -b ${join(input.stage, binaryName)}`.quiet().nothrow().text()).trim()
+    if (!kind.startsWith(CLI_TARGETS[target].kind))
+      problems.push(`${binaryName} is "${kind}", expected ${CLI_TARGETS[target].kind}`)
+  }
+
+  const built = stats[CLI_FILES.findIndex((file) => file.name === binaryName)]!.mtimeMs
   const newer = (await Promise.all(input.sources.map((dir) => newerThan(dir, built)))).flat()
   if (newer.length > 0)
     problems.push(
@@ -65,10 +85,12 @@ async function newerThan(dir: string, mtimeMs: number): Promise<string[]> {
 }
 
 if (import.meta.main) {
+  const target = buildTarget()
   const problems = await checkCliStage({
     stage: CLI_STAGE_DIR,
     sources: CLI_SOURCE_DIRS,
-    launcher: join(import.meta.dir, "swarm-launcher.sh"),
+    launcher: join(import.meta.dir, CLI_TARGETS[target].launcherSource),
+    target,
   })
   if (problems.length > 0) {
     problems.forEach((problem) => console.error(`CLI_STAGE_CHECK_FAIL ${problem}`))

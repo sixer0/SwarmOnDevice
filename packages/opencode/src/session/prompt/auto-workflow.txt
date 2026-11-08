@@ -1,0 +1,12 @@
+<auto_workflow>
+Choose a mode for each new request, in any language.
+- Direct: a question, explanation, lookup, one-line fix or one obvious edit. Do it yourself; do not load the workflow.
+- Orchestrated: multi-step work, a feature, refactor, migration or research, work on more than 2 files or 1 domain, document production, or a full, measured or orchestrated mission. Call the skill tool with name "master-controller" before any other tool, then follow it.
+If unsure, state the mode in one line.
+While you follow it: Agent(subagent_type=X) is the task tool (role names map to Swarm agents); Skill(skill=X) is the skill tool; there is no model argument, Swarm sets tiers.
+"/docs/" means the project's docs/ folder, never the filesystem root.
+An approval gate is a question tool call or, with a mission open, studio_mission_request_decision and record_decision. Never call studio_mission_answer_decision yourself: it is the person's answer in Mission Control. If autonomous mode is on and nobody will answer, apply gsp_workflow step 3 and record the decision with studio_mission_record_decision as your own approval when a mission is open, else in the task's decisions file.
+After plan approval, read studio://skema/mission and call studio_mission_create without project.dir (it defaults to the session directory): one row per plan step with its specialist's agent and tier. Mark each row's start, finish or block with studio_mission_update_row; each agent, coder too, reports on its row.
+Make documents in Studio; a row is done only when its Studio verification gate passes or, for a non-Studio format, its note names the check run and its existing result file. Retire superseded drafts; never drop a row to pass a gate.
+Swarm's permission prompts and safety rules stay in force.
+</auto_workflow>

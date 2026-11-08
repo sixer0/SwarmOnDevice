@@ -39,12 +39,16 @@ export const MISSION_GET_INCLUDE = ["rows", "decisions", "requests", "messages",
 export const MISSION_MESSAGES_TAIL = 20
 export const INSTRUCTION_MAX_CHARS = 2000
 export const DIRECTORY_MAX_CHARS = 4096
+/** Row 183 (L36): the current session and its subagent sessions, at most this many ids per list. */
+export const MISSION_LIST_SESSIONS_MAX = 50
 
 // §3.3 patterns (store/mission/validate.ts:66-69, MC:54).
 export const MISSION_ID_RE = /^\d{4}-\d{2}-\d{2}[_-][a-z0-9][a-z0-9_-]{0,80}$/
 export const REQUEST_ID_RE = /^D-[0-9]{1,5}$/
 export const OPTION_ID_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$/
 export const ROW_ID_RE = /^[1-9][0-9]{0,3}[a-z]?$/
+/** Row 183: an opencode session id (packages/opencode/src/id/id.ts: "ses_" + 12 hex + 14 base62). */
+export const SESSION_ID_RE = /^ses_[A-Za-z0-9]{1,64}$/
 const CONTROL_RE = /[\u0000-\u001f]/
 const TEXT_CONTROL_RE = /[\u0000-\u001f\u007f-\u009f]/
 const USER_DECISION_RE = /^U([0-9]{1,6})$/
@@ -80,14 +84,20 @@ function plain(input: unknown, keys: readonly string[], optional: readonly strin
 
 const isString = (v: unknown): v is string => typeof v === "string"
 
-export function parseListInput(input: unknown): Parsed<{ directory: string }> {
-  const r = plain(input, ["directory"])
-  if (!r) return bad("list takes {directory}")
+// Row 185 (S186-02, L42): shape validation only. The directory and session ids are the renderer's choice; main does
+// not check that they are the window's own session, so the mission-ipc.ts scope is a consistency check, not isolation.
+export function parseListInput(input: unknown): Parsed<{ directory: string; sessions?: string[] }> {
+  const r = plain(input, ["directory"], ["sessions"])
+  if (!r) return bad("list takes {directory, sessions?}")
   const d = r.directory
   if (!isString(d) || d.length < 1 || d.length > DIRECTORY_MAX_CHARS) return bad("directory must be 1-4096 characters")
   if (CONTROL_RE.test(d)) return bad("directory has control characters")
   if (!isAbsolute(d)) return bad("directory must be absolute")
-  return { ok: true, value: { directory: d } }
+  if (r.sessions === undefined) return { ok: true, value: { directory: d } }
+  // Row 183 (L36): the session ids whose linked missions are listed too.
+  if (!Array.isArray(r.sessions) || r.sessions.length > MISSION_LIST_SESSIONS_MAX) return bad(`sessions must be an array of at most ${MISSION_LIST_SESSIONS_MAX} ids`)
+  if (!r.sessions.every((id) => isString(id) && SESSION_ID_RE.test(id))) return bad("session id is not valid")
+  return { ok: true, value: { directory: d, sessions: [...new Set(r.sessions as string[])] } }
 }
 
 function missionOf(r: Record<string, unknown>): string | null {
@@ -375,7 +385,8 @@ export function createMissionControlClient(opts: MissionControlClientOptions): M
   async function list(input: unknown): Promise<MissionControlResult<{ items: MissionListItemWire[] }>> {
     const p = parseListInput(input)
     if (!p.ok) return p
-    const r = await callTool("studio_mission_list", { projectDir: p.value.directory, status: [...MISSION_LIST_STATUSES], take: MISSION_LIST_TAKE })
+    const sessions = p.value.sessions?.length ? { sessions: p.value.sessions } : {}
+    const r = await callTool("studio_mission_list", { projectDir: p.value.directory, status: [...MISSION_LIST_STATUSES], take: MISSION_LIST_TAKE, ...sessions })
     if (!r.ok) return r
     return { ok: true, data: { items: Array.isArray(r.data.items) ? (r.data.items as MissionListItemWire[]) : [] } }
   }

@@ -1193,7 +1193,11 @@ const layer = Layer.effect(
       const standingRules = remembered.length > 0 ? [...approved, ...remembered] : approved
 
       for (const pattern of request.patterns) {
-        const rule = evaluate(request.permission, pattern, ruleset, noAlways ? [] : standingRules)
+        // 1.2.2 (S163-01): a deny from the call's own ruleset (the agent's rules, with the session's) is final. A standing
+        // "always" was given for a call that asked, under whichever agent asked it; it never reopens what another agent,
+        // or a later mode such as plan, denies. Only when the ruleset does not deny do the standing grants come in.
+        const own = evaluate(request.permission, pattern, ruleset)
+        const rule = own.action === "deny" ? own : evaluate(request.permission, pattern, ruleset, noAlways ? [] : standingRules)
         // Not the pattern: for a shell call it is the command, and that can hold a secret typed into its arguments.
         yield* Effect.logInfo("evaluated", { permission: request.permission, action: rule.action })
         if (rule.action === "deny") {

@@ -88,6 +88,20 @@ export function validateArgs(tool: string, args: Record<string, unknown>): void 
   if (v && !v(args)) throw new MissionToolError("SCHEMA_INVALID", "arguments do not match the tool input schema", { def: `${tool} input`, issues: argIssues(v.errors) })
 }
 
+/**
+ * Row 181 (L32): a mission sent without project.dir gets the calling session's directory (the session's file root,
+ * the caller's working directory), so Mission Control, which lists by the session directory, shows it. Only an absent
+ * project or a project object without `dir` is filled; any other value is left for the schema check.
+ */
+export function defaultProjectDir(mission: unknown, fileRoot: string): void {
+  if (mission === null || typeof mission !== "object" || Array.isArray(mission) || !fileRoot) return
+  const m = mission as Record<string, unknown>
+  if (m.project === undefined) m.project = { dir: fileRoot }
+  else if (m.project !== null && typeof m.project === "object" && !Array.isArray(m.project) && (m.project as Record<string, unknown>).dir === undefined) {
+    m.project = { dir: fileRoot, ...(m.project as Record<string, unknown>) }
+  }
+}
+
 /** Declared actor (L2): the argument, else the session's agent. */
 export function actorOf(args: Record<string, unknown>, s: HostToolSession): string | undefined {
   if (typeof args.actor === "string") return args.actor
@@ -179,6 +193,7 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
       `Create a draft mission (studio.mission/v1 MissionDoc, status draft, no host fields): type, rows (pending or dropped), decisions, findings, sessions. Checks schema, type, phases, kinds, dependencies, B cycles and decision references. Returns id, status, rows, waves. Shape, enums and an example: resource ${MISSION_GUIDE_URI}; row model.tier: thinker | worker | worker-fast | inherit.`,
       false,
       async (a, s) => {
+        defaultProjectDir(a.mission, s.fileRoot)
         const input = a.mission as Parameters<MissionStore["create"]>[1]
         const r = await write(dry(a), (tx) => M.create(tx, input, writeOptions(a, s)))
         return { text: `mission ${r.id} created as ${r.status}: ${r.rows} rows, ${r.waves.length} waves${dryNote(a)}`, data: { ...r, issues: [], dryRun: dry(a) } }
@@ -232,7 +247,7 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
     tool(
       "studio_mission_list",
       "List missions",
-      "Session overview: missions filtered by session (several missions per session), status, type, projectDir or text q (mission_fts); newest first with a keyset cursor (take <= 200, default 50). Each item has activityAt: the newest change of the mission, its documents, outputs or output verification.",
+      "Session overview: missions filtered by session (several missions per session), status, type, projectDir (that directory or a folder inside it; with sessions[]: plus the missions linked to any of those sessions of this agent) or text q (mission_fts); newest first with a keyset cursor (take <= 200, default 50). Each item has activityAt: the newest change of the mission, its documents, outputs or output verification.",
       true,
       async (a, s) => {
         // A read: the session is only a filter (another client's overview may be read; client defaults to this agent).
@@ -242,6 +257,8 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
           ...(Array.isArray(a.status) ? { status: a.status as never } : {}),
           ...(str(a, "type") ? { type: str(a, "type") } : {}),
           ...(str(a, "projectDir") ? { projectDir: str(a, "projectDir") } : {}),
+          // Row 183 (L36): sessions are refs of this agent's client; their missions are added to the projectDir list.
+          ...(Array.isArray(a.sessions) && a.sessions.length > 0 ? { linkedSessions: { client: s.agentId as SessionLink["client"], refs: a.sessions as string[] } } : {}),
           ...(str(a, "q") ? { q: str(a, "q") } : {}),
           take: typeof a.take === "number" ? a.take : 50,
           ...(str(a, "cursor") ? { cursor: str(a, "cursor") } : {}),

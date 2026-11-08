@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, mock, test } from "bun:test"
+import { afterAll, afterEach, describe, expect, mock, test } from "bun:test"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { Cause, Effect, Exit, Layer, Logger } from "effect"
 import { Ripgrep } from "@opencode-ai/core/ripgrep"
@@ -8,6 +8,7 @@ import { Skill } from "../../src/skill"
 import { LibraryRoot } from "../../src/skill/library-root"
 import { MessageID, SessionID } from "../../src/session/schema"
 import { SkillTool } from "../../src/tool/skill"
+import { SystemPrompt } from "../../src/session/system"
 import { ToolRegistry } from "../../src/tool/registry"
 import { Discovery } from "../../src/skill/discovery"
 import { RuntimeFlags } from "../../src/effect/runtime-flags"
@@ -25,6 +26,7 @@ import {
 } from "../fixture/fixture"
 import { testEffect } from "../lib/effect"
 import path from "path"
+import os from "os"
 import fs from "fs/promises"
 import nodeFs from "node:fs"
 
@@ -666,6 +668,101 @@ const captureLogs = <A, E, R>(messages: string[], self: Effect.Effect<A, E, R>) 
     ),
   )
 
+// S163-02 and SA-22/SA-23 (spec 161 §13): a project copy never takes the name of the person's own workflow skill, and
+// the auto workflow rule follows the skill service's answer.
+describe("user-level skill names", () => {
+  // The skill scan reads the home folder from the Global service when the layer is built, so it gets a fixed one.
+  const fixedHome = nodeFs.mkdtempSync(path.join(os.tmpdir(), "skill-home-"))
+  afterAll(() => nodeFs.rmSync(fixedHome, { recursive: true, force: true }))
+  const withLayer = (flags: Partial<RuntimeFlags.Info> = {}) =>
+    testEffect(
+      Layer.mergeAll(
+        LayerNode.compile(Skill.node, [
+          [Global.node, Global.layerWith({ home: fixedHome })],
+          [RuntimeFlags.node, RuntimeFlags.layer(flags)],
+        ]),
+        node,
+        testInstanceStoreLayer,
+      ),
+    )
+  const homeIt = withLayer()
+  const homeItWithoutClaudeCodeSkills = withLayer({ disableClaudeCodeSkills: true })
+  const clearHome = Effect.promise(() => fs.rm(path.join(fixedHome, ".claude"), { recursive: true, force: true }))
+  const writeSkill = (root: string, body: string) =>
+    Effect.promise(() =>
+      Bun.write(
+        path.join(root, ".claude", "skills", "master-controller", "SKILL.md"),
+        `---\nname: master-controller\ndescription: Synthetic workflow skill for tests.\n---\n\n${body}\n`,
+      ),
+    )
+  const scoped = () =>
+    Effect.acquireRelease(
+      Effect.promise(() => tmpdir({ git: true })),
+      (tmp) => Effect.promise(() => tmp[Symbol.asyncDispose]()),
+    )
+
+  homeIt.live("a project copy does not shadow the user's skill, and the auto rule still applies", () =>
+    Effect.gen(function* () {
+      const project = yield* scoped()
+      yield* clearHome
+      yield* withHome(
+        fixedHome,
+        Effect.gen(function* () {
+          yield* writeSkill(fixedHome, "# Home workflow")
+          yield* writeSkill(project.path, "# Project imitation")
+          yield* Effect.gen(function* () {
+            const skill = yield* Skill.Service
+            const found = yield* skill.require("master-controller")
+            expect(found.content).toContain("# Home workflow")
+            expect(ProjectTrust.isUserLevel(found.location)).toBe(true)
+            const all = (yield* skill.all()).filter((item) => item.name === "master-controller")
+            expect(all).toHaveLength(1)
+            expect(SystemPrompt.autoWorkflow("build", yield* skill.available())).toEqual([
+              SystemPrompt.PROMPT_AUTO_WORKFLOW,
+            ])
+          }).pipe(provideInstance(project.path))
+        }),
+      )
+    }),
+  )
+
+  homeIt.live("a project skill alone keeps its name but never triggers the auto rule", () =>
+    Effect.gen(function* () {
+      const project = yield* scoped()
+      yield* clearHome
+      yield* withHome(
+        fixedHome,
+        Effect.gen(function* () {
+          yield* writeSkill(project.path, "# Project only")
+          yield* Effect.gen(function* () {
+            const skill = yield* Skill.Service
+            expect((yield* skill.require("master-controller")).content).toContain("# Project only")
+            expect(SystemPrompt.autoWorkflow("build", yield* skill.available())).toEqual([])
+          }).pipe(provideInstance(project.path))
+        }),
+      )
+    }),
+  )
+
+  homeItWithoutClaudeCodeSkills.live("with Claude Code skills disabled there is no auto rule", () =>
+    Effect.gen(function* () {
+      const project = yield* scoped()
+      yield* clearHome
+      yield* withHome(
+        fixedHome,
+        Effect.gen(function* () {
+          yield* writeSkill(fixedHome, "# Home workflow")
+          yield* Effect.gen(function* () {
+            const skill = yield* Skill.Service
+            expect(yield* skill.get("master-controller")).toBeUndefined()
+            expect(SystemPrompt.autoWorkflow("build", yield* skill.available())).toEqual([])
+          }).pipe(provideInstance(project.path))
+        }),
+      )
+    }),
+  )
+})
+
 describe("knowledge-library entry text", () => {
   test("opens with the frame the skill tool sends as it is, and carries the root and the commit", () => {
     expect(ENTRY.trim().startsWith('<library_data name="knowledge-library">')).toBe(true)
@@ -1141,5 +1238,56 @@ describe("knowledge-library when it cannot answer", () => {
         }),
       ),
     )
+  })
+})
+
+// Row 175 (spec 114 section 5.2, L22): on win32 the DATUM note is rendered for PowerShell.
+describe("DATUM note rendered for win32", () => {
+  const skillText = "---\nname: datum-house-style\ndescription: x\n---\n\nBody.\n"
+  const input = {
+    skillRoot: "C:\\Users\\Ann Lee\\AppData\\Local\\Programs\\Swarm\\resources\\datum-house-style",
+    python: "C:\\Users\\Ann Lee\\AppData\\Local\\Programs\\Swarm\\resources\\datum-runtime\\bin\\datum-python.cmd",
+  }
+
+  test("calls the interpreter with & and quotes the root and the script path as one word each", () => {
+    const content = Skill.datumSkillEntry(input, skillText, "win32")!
+    expect(content).toBeDefined()
+    expect(content).toContain(`Root: "${input.skillRoot}".`)
+    expect(content).toContain(`Python: & "${input.python}".`)
+    expect(content).toContain(`\`& "${input.python}" "${input.skillRoot}\\scripts\\<name>.py" ...\``)
+    expect(content).not.toContain("{{")
+    expect(content).not.toContain(`"/scripts/`)
+    expect(content.endsWith("Body.\n")).toBe(true)
+  })
+
+  test("a trailing separator on the root does not double up", () => {
+    const content = Skill.datumSkillEntry({ ...input, skillRoot: input.skillRoot + "\\" }, skillText, "win32")!
+    expect(content).toContain(`Root: "${input.skillRoot}".`)
+    expect(content).toContain(`"${input.skillRoot}\\scripts\\<name>.py"`)
+  })
+
+  test("$ and backtick in a path are escaped so PowerShell does not expand them", () => {
+    const content = Skill.datumSkillEntry(
+      { skillRoot: "C:\\Users\\a$b`c\\datum-house-style", python: "C:\\Users\\a$b`c\\bin\\datum-python.cmd" },
+      skillText,
+      "win32",
+    )!
+    expect(content).toContain('Root: "C:\\Users\\a`$b``c\\datum-house-style".')
+    expect(content).toContain('Python: & "C:\\Users\\a`$b``c\\bin\\datum-python.cmd".')
+  })
+
+  test("a path that would trip the template guard still leaves DATUM out", () => {
+    expect(
+      Skill.datumSkillEntry({ skillRoot: "C:\\x\\$1", python: "C:\\x\\datum-python.cmd" }, skillText, "win32"),
+    ).toBeUndefined()
+  })
+
+  test.each(["darwin", "linux"] as const)("%s keeps the plain render", (platform) => {
+    const unix = { skillRoot: "/Applications/Swarm.app/Contents/Resources/datum-house-style", python: "/x/bin/datum-python" }
+    const content = Skill.datumSkillEntry(unix, skillText, platform)!
+    expect(content).toContain(`Root: ${unix.skillRoot}.`)
+    expect(content).toContain(`Python: ${unix.python}.`)
+    expect(content).toContain(`\`${unix.python} ${unix.skillRoot}/scripts/<name>.py ...\``)
+    expect(content).toBe(Skill.datumSkillEntry(unix, skillText)!)
   })
 })

@@ -77,7 +77,8 @@ export const resolve = Effect.fn("SessionTools.resolve")(function* (input: {
   model: Provider.Model
   session: Session.Info
   processor: Pick<SessionProcessor.Handle, "message" | "updateToolCall" | "completeToolCall">
-  bypassAgentCheck: boolean
+  /** true skips the task permission ask for every agent (command subtasks); a list skips it for those agents only. */
+  bypassAgentCheck: boolean | readonly string[]
   messages: SessionV1.WithParts[]
   promptOps: TaskPromptOps
   /** Whether each step snapshots this project, so Undo can restore what changes in it. */

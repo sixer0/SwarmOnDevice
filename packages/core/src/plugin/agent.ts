@@ -151,7 +151,7 @@ export const Plugin = define({
 
       draft.update(AgentV2.ID.make("general"), (item) => {
         item.description =
-          "General-purpose agent for researching complex questions and executing multi-step tasks. Use this agent to execute multiple units of work in parallel."
+          "Fallback agent for multi-step work that no other agent in this list fits. Prefer the agent whose description matches the work. Use general to run several unrelated units of work in parallel."
         item.mode = "subagent"
         item.permissions.push(...PermissionV2.merge(defaults, [{ action: "todowrite", resource: "*", effect: "deny" }]))
       })

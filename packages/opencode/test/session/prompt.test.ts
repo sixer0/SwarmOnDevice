@@ -598,6 +598,83 @@ withMcpInstructions.instance(
   15_000,
 )
 
+// SA-10 and SA-24 (spec 161 D8, D12): for build the routing and auto workflow blocks follow <gsp_workflow> directly, in
+// the frozen system prefix; another agent gets neither. Row 164's agents are config fixtures with the spec's names.
+const specialistAgents = {
+  coder: { mode: "subagent" as const, description: "Implements code." },
+  planner: { mode: "subagent" as const, description: "Plans." },
+  verifier: { mode: "subagent" as const, description: "Checks." },
+  "data-collector": { mode: "subagent" as const, description: "Reads." },
+  "document-writer": { mode: "subagent" as const, description: "Writes documents." },
+}
+const homeWorkflowSkill = Effect.acquireRelease(
+  Effect.sync(() => {
+    const dir = path.join(Global.Path.home, ".claude", "skills", "master-controller")
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(
+      path.join(dir, "SKILL.md"),
+      "---\nname: master-controller\ndescription: Synthetic workflow skill for tests.\n---\n\n# Synthetic\n",
+    )
+    return dir
+  }),
+  (dir) => Effect.sync(() => rmSync(dir, { recursive: true, force: true })),
+)
+const systemOf = (body: unknown) =>
+  ((body as { messages?: { role: string; content: unknown }[] }).messages ?? [])
+    .filter((message) => message.role === "system")
+    .map((message) => (typeof message.content === "string" ? message.content : JSON.stringify(message.content)))
+    .join("\n")
+const delegationRun = (agent: string) =>
+  Effect.gen(function* () {
+    yield* homeWorkflowSkill
+    const { llm } = yield* useServerConfig((url) => ({ ...providerCfg(url), agent: specialistAgents }))
+    const prompt = yield* SessionPrompt.Service
+    const sessions = yield* Session.Service
+    const chat = yield* sessions.create({
+      title: "Pinned",
+      permission: [{ permission: "*", pattern: "*", action: "allow" }],
+    })
+    yield* llm.hang
+    const msg = yield* user(chat.id, "hello")
+    if (agent !== "build") yield* sessions.updateMessage({ ...msg, agent } as never)
+    const fiber = yield* prompt.loop({ sessionID: chat.id }).pipe(Effect.forkChild)
+    yield* awaitWithTimeout(llm.wait(1), "timed out waiting for the request", "10 seconds")
+    const system = systemOf((yield* llm.hits)[0]?.body)
+    yield* Fiber.interrupt(fiber)
+    return system
+  })
+
+it.instance(
+  "build's system has gsp_workflow, then agent_routing, then auto_workflow",
+  () =>
+    Effect.gen(function* () {
+      const system = yield* delegationRun("build")
+      const end = system.indexOf("</gsp_workflow>")
+      const routing = system.indexOf("<agent_routing>")
+      const auto = system.indexOf("<auto_workflow>")
+      expect(end).toBeGreaterThan(-1)
+      expect(system.slice(end + "</gsp_workflow>".length, routing).trim()).toBe("")
+      expect(system.slice(system.indexOf("</agent_routing>") + "</agent_routing>".length, auto).trim()).toBe("")
+      expect(system).toContain("- planner: intent, blueprint, analysis or spec; no code changes.")
+      expect(system).toContain('Call the skill tool with name "master-controller"')
+      expect(system.split("<agent_routing>")).toHaveLength(2)
+      expect(system.split("<auto_workflow>")).toHaveLength(2)
+    }),
+  15_000,
+)
+
+it.instance(
+  "general's system has neither block",
+  () =>
+    Effect.gen(function* () {
+      const system = yield* delegationRun("general")
+      expect(system).toContain("</gsp_workflow>")
+      expect(system).not.toContain("<agent_routing>")
+      expect(system).not.toContain("<auto_workflow>")
+    }),
+  15_000,
+)
+
 it.instance("legacy prompt emits message events without session.next events", () =>
   Effect.gen(function* () {
     const events = yield* EventV2Bridge.Service

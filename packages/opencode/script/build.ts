@@ -134,6 +134,18 @@ const targets = singleFlag
     })
   : allTargets
 
+// `--target <platform>-<arch>` (desktop cross stage, packages/desktop/scripts/stage-cli.ts): only that native target,
+// no baseline and no musl variant, e.g. `--target linux-x64` builds swarm-linux-x64. Without it nothing changes.
+const targetIndex = process.argv.indexOf("--target")
+const targetFlag = targetIndex === -1 ? undefined : process.argv[targetIndex + 1]
+if (targetFlag !== undefined) {
+  const picked = allTargets.filter(
+    (item) => `${item.os}-${item.arch}` === targetFlag && item.avx2 !== false && item.abi === undefined,
+  )
+  if (picked.length !== 1) throw new Error(`--target ${targetFlag} matches no build target`)
+  targets.splice(0, targets.length, ...picked)
+}
+
 await $`rm -rf dist`
 
 const binaries: Record<string, string> = {}

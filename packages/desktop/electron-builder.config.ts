@@ -110,10 +110,73 @@ const COPYRIGHT = "Copyright (c) 2025 opencode (MIT). Swarm modifications Copyri
 // Swarm release number (SP-BC 4.1, S6, G1c). It fills only Info.plist SwarmRelease, which the
 // swarm-patch applier reads with plutil. Since 1.2.0 (U4) CFBundleShortVersionString and
 // package.json carry the same number as the release.
-export const SWARM_RELEASE = "1.2.1"
+export const SWARM_RELEASE = "1.2.2"
 
 // osx-sign tests each regex against the absolute path of every file it would sign (MacTargetHelper.js:52-70, :90-98).
 export const DATUM_RUNTIME_SIGN_IGNORE = "\\.app/Contents/Resources/datum-runtime/"
+
+// Row 126 (register R2.1/R2.2): the package target. Unset or empty means darwin-arm64, and then every key below
+// resolves exactly as before (spec 113 LP-2, spec 114 WP-MAC-0). Same rule as scripts/prebuild-target.ts, kept inline
+// because the builder loads this config on node. The hooks' bun children inherit the variable (execFile, no env).
+export const BUILD_TARGETS = ["darwin-arm64", "linux-x64", "win32-x64"] as const
+export type BuildTarget = (typeof BUILD_TARGETS)[number]
+
+export function buildTarget(env: Record<string, string | undefined> = process.env): BuildTarget {
+  const raw = env.SWARM_BUILD_TARGET
+  if (raw === undefined || raw === "") return "darwin-arm64"
+  const hit = BUILD_TARGETS.find((id) => id === raw)
+  if (!hit) throw new Error(`SWARM_BUILD_TARGET must be one of ${BUILD_TARGETS.join(", ")} (got ${JSON.stringify(raw)})`)
+  return hit
+}
+
+const target = buildTarget()
+const isMac = target === "darwin-arm64"
+
+// deb control values (register R7.4, R7.5, R7.7). Homepage also fills the NSIS HelpLink/URLInfoAbout (R7.19);
+// it rides in extraMetadata only off darwin, so the macOS asar package.json stays as it was (LP-5).
+export const HOMEPAGE = "https://www.gemilangsatriaperkasa.co.id/"
+export const DEB_PACKAGE = "swarm-desktop"
+export const DEB_MAINTAINER = "PT Gemilang Satria Perkasa <gemilangsatriaperkasa.eng@gmail.com>"
+// The builder's 9 defaults plus libgbm1 and libasound2; deb.depends replaces the default list (FpmTarget.js:185-199).
+export const DEB_DEPENDS = [
+  "libgtk-3-0",
+  "libnotify4",
+  "libnss3",
+  "libxss1",
+  "libxtst6",
+  "xdg-utils",
+  "libatspi2.0-0",
+  "libuuid1",
+  "libsecret-1-0",
+  "libgbm1",
+  "libasound2",
+]
+// NSIS 3.12 unified bundle with an arm64 makensis (register R7.11).
+export const NSIS_TOOLSET = "1.2.1"
+
+// Notices, CLI, library and DATUM slots shared by every target (spec 113 §5.1, spec 114 §6).
+const notices = [
+  { from: "../../LICENSE", to: "LICENSE" },
+  { from: "../../NOTICE", to: "NOTICE" },
+  { from: "../../THIRD_PARTY_LICENSES.txt", to: "THIRD_PARTY_LICENSES.txt" },
+]
+const datumResources = [
+  { from: "datum/datum-house-style", to: "datum-house-style", filter: ["**/*", "!**/__pycache__{,/**}", "!**/*.pyc"] },
+  { from: ".datum-runtime-stage", to: "datum-runtime", filter: ["**/*", "!**/__pycache__{,/**}", "!**/*.pyc"] },
+  { from: ".datum-studio-stage", to: "datum-studio" },
+]
+
+// Linux and Windows: no swarm-patch, swarm-setup or native/ (Mach-O, darwin only, R5.11), and their own rg (R5.1, R5.2).
+// The builder concatenates top-level and platform extraResources (fileMatcher.js:250-253), so the list is chosen here.
+const portableResources = (target: Exclude<BuildTarget, "darwin-arm64">) => [
+  ...notices,
+  target === "linux-x64"
+    ? { from: "resources/rg-linux-x64/rg", to: "rg" }
+    : { from: "resources/rg-win32-x64/rg.exe", to: "rg.exe" },
+  { from: "resources/swarm-cli", to: "swarm-cli" },
+  { from: ".library-stage", to: "knowledge-library" },
+  ...datumResources,
+]
 
 const getBase = (appId: string): Configuration => ({
   artifactName: "swarm-desktop-${os}-${arch}.${ext}",
@@ -132,6 +195,7 @@ const getBase = (appId: string): Configuration => ({
   // https://www.electron.build/docs/linux/
   extraMetadata: {
     desktopName: `${appId}.desktop`,
+    ...(isMac ? {} : { homepage: HOMEPAGE }),
   },
   // A11 asar trimming (01b 3.6): platform assets the macOS bundle must not ship
   // inside app.asar, source maps (IS-ND-3), and the staged rg binary, which
@@ -148,6 +212,9 @@ const getBase = (appId: string): Configuration => ({
     "!resources/icons/icon.ico",
     "!out/**/*.map",
     "!resources/rg",
+    // Linux and Windows rg slots (row 125, register R5.1) stay out of every asar, the macOS one included.
+    "!resources/rg-linux-x64{,/**/*}",
+    "!resources/rg-win32-x64{,/**/*}",
     // The patch applier and its trust anchor ride outside the asar (C3 RK-01: the folder and its contents).
     "!resources/swarm-patch{,/**/*}",
     // The setup runner and its tools.lock.json ride outside the asar too (row 223).
@@ -155,7 +222,8 @@ const getBase = (appId: string): Configuration => ({
     // The swarm command rides outside the asar too (C120).
     "!resources/swarm-cli{,/**/*}",
   ],
-  extraResources: [
+  // macOS keeps this list as it was; Linux and Windows get portableResources (no dev CLI entry: those builds are prod, R1.7).
+  extraResources: !isMac ? portableResources(target) : [
     ...(channel === "dev"
       ? [
           {
@@ -241,7 +309,7 @@ const getBase = (appId: string): Configuration => ({
     notarize: false,
     target: ["dmg", "zip"],
     // bundleShortVersion stays unset on purpose (U4): electron-builder takes it from package.json
-    // (1.2.1, equal to the release); this custom key carries the release for swarm-patch.
+    // (1.2.2, equal to the release); this custom key carries the release for swarm-patch.
     extendInfo: {
       SwarmRelease: SWARM_RELEASE,
     },
@@ -259,7 +327,8 @@ const getBase = (appId: string): Configuration => ({
     signtoolOptions: {
       sign: signWindows,
     },
-    target: ["nsis"],
+    // Row 126 (R7.10): the host default is arm64, so the Windows package names x64 itself.
+    target: target === "win32-x64" ? [{ target: "nsis", arch: ["x64"] }] : ["nsis"],
     verifyUpdateCodeSignature: false,
   },
   nsis: {
@@ -267,7 +336,10 @@ const getBase = (appId: string): Configuration => ({
     perMachine: false,
     installerIcon: `resources/icons/icon.ico`,
     installerHeaderIcon: `resources/icons/icon.ico`,
+    // Seeds the per-user folder %LOCALAPPDATA%\Programs\Swarm once in preInit (R7.13, spec 114 §4.2, file from row 180).
+    ...(target === "win32-x64" ? { include: "nsis/installer.nsh" } : {}),
   },
+  ...(target === "win32-x64" ? { toolsets: { nsis: NSIS_TOOLSET } } : {}),
   linux: {
     icon: `resources/icons`,
     category: "Development",
@@ -279,9 +351,13 @@ const getBase = (appId: string): Configuration => ({
         StartupWMClass: appId,
       },
     },
-    target: ["AppImage", "deb", "rpm"],
+    // Row 126 (R7.8): deb only off darwin; the macOS-resolved config keeps the old list.
+    target: isMac ? ["AppImage", "deb", "rpm"] : ["deb"],
   },
 })
+
+// deb control keys off darwin (R7.4, R7.7); the macOS-resolved deb blocks stay as they were.
+const debControl = isMac ? {} : { maintainer: DEB_MAINTAINER, depends: DEB_DEPENDS }
 
 function getConfig() {
   const appId = APP_IDS[channel]
@@ -293,7 +369,7 @@ function getConfig() {
         ...base,
         appId,
         productName: "Swarm Dev",
-        deb: { fpm: [metainfoFpm(appId)] },
+        deb: { ...debControl, fpm: [metainfoFpm(appId)] },
         rpm: { packageName: "swarm-dev", fpm: [metainfoFpm(appId)] },
       }
     }
@@ -303,7 +379,7 @@ function getConfig() {
         appId,
         productName: "Swarm Beta",
         protocols: { name: "Swarm Beta", schemes: ["swarm"] },
-        deb: { fpm: [metainfoFpm(appId)] },
+        deb: { ...debControl, fpm: [metainfoFpm(appId)] },
         rpm: { packageName: "swarm-beta", fpm: [metainfoFpm(appId)] },
       }
     }
@@ -313,7 +389,8 @@ function getConfig() {
         appId,
         productName: "Swarm",
         protocols: { name: "Swarm", schemes: ["swarm"] },
-        deb: { fpm: [metainfoFpm(appId), legacyDesktopEntryFpm] },
+        // R7.1: without packageName the deb would be named after the product, "Swarm", which Debian rejects.
+        deb: { ...(isMac ? {} : { packageName: DEB_PACKAGE }), ...debControl, fpm: [metainfoFpm(appId), legacyDesktopEntryFpm] },
         rpm: { packageName: "swarm", fpm: [metainfoFpm(appId), legacyDesktopEntryFpm] },
       }
     }

@@ -161,6 +161,9 @@ for (const channel of channels) {
       "!resources/icons/icon.ico",
       "!out/**/*.map",
       "!resources/rg",
+      // Row 125/126: the Linux and Windows rg slots never enter an asar, the macOS one included.
+      "!resources/rg-linux-x64{,/**/*}",
+      "!resources/rg-win32-x64{,/**/*}",
     ]) {
       expect(config.files).toContain(exclusion)
     }
@@ -652,11 +655,19 @@ test("a DATUM folder the builder skipped fails afterPack, the library staging st
 
 test("prebuild runs the darwin stage gates in the documented order, the DATUM gate last (row 45)", async () => {
   const source = await Bun.file(path.join(import.meta.dir, "scripts", "prebuild.ts")).text()
-  const gates = [...source.matchAll(/^if \(process\.platform === "darwin"\) await \$`bun \.\/scripts\/([^`]+)`$/gm)].map(
-    (match) => match[1],
+  // Row 120 moved the gates from a host check to the build target (prebuild-target.ts); row 126 follows the new form.
+  const gates = [...source.matchAll(/^if \(checks\.(setup|cli|datum)\) await \$`bun \.\/scripts\/([^`]+)`$/gm)].map(
+    (match) => [match[1], match[2]],
   )
 
-  expect(gates).toEqual(["check-setup-stage.ts", "check-cli-stage.ts", "check-datum-stage.ts stage"])
+  expect(gates).toEqual([
+    ["setup", "check-setup-stage.ts"],
+    ["cli", "check-cli-stage.ts"],
+    ["datum", "check-datum-stage.ts stage"],
+  ])
+  // A darwin build (target unset) still runs all three.
+  const { buildTarget, prebuildChecks } = await import("./scripts/prebuild-target")
+  expect(prebuildChecks(buildTarget({}))).toEqual({ setup: true, cli: true, datum: true })
   // All gates come before the server build, so a missing stage fails the build before any heavy step.
   expect(source.indexOf("check-datum-stage.ts stage")).toBeLessThan(source.indexOf("build-node.ts"))
 })
@@ -697,8 +708,8 @@ test("electron-vite builds the datum-studio-host entry and resolves its host mod
 for (const channel of channels) {
   test(`carries the swarm-patch release and slot for ${channel.channel} (SP-BC)`, async () => {
     const config = await importConfig(`swarm-patch=${channel.channel}`, channel.channel)
-    expect(SWARM_RELEASE).toBe("1.2.1")
-    expect(config.mac?.extendInfo).toEqual({ SwarmRelease: "1.2.1" })
+    expect(SWARM_RELEASE).toBe("1.2.2")
+    expect(config.mac?.extendInfo).toEqual({ SwarmRelease: "1.2.2" })
     expect(config.mac).not.toHaveProperty("bundleShortVersion")
     expect(config.mac).not.toHaveProperty("bundleVersion")
     expect(config.files).toContain("!resources/swarm-patch{,/**/*}")
@@ -734,8 +745,158 @@ for (const channel of channels) {
   })
 }
 
-test("package.json version equals the release 1.2.1 (U4)", async () => {
+test("package.json version equals the release 1.2.2 (U4)", async () => {
   const pkg = await Bun.file(path.join(import.meta.dir, "package.json")).json()
-  expect(pkg.version).toBe("1.2.1")
+  expect(pkg.version).toBe("1.2.2")
   expect(pkg.version).toBe(SWARM_RELEASE)
+})
+
+// Row 126 (spec 113 §5, LP-1..LP-5; spec 114 §4.1, §6, WP-MAC-0): the package target selects the platform keys.
+async function importTarget(query: string, target: string | undefined, channel = "prod") {
+  const previous = process.env.SWARM_BUILD_TARGET
+  if (target === undefined) delete process.env.SWARM_BUILD_TARGET
+  else process.env.SWARM_BUILD_TARGET = target
+  try {
+    return await importConfig(`target=${query}`, channel)
+  } finally {
+    if (previous === undefined) delete process.env.SWARM_BUILD_TARGET
+    else process.env.SWARM_BUILD_TARGET = previous
+  }
+}
+
+// The darwin-resolved values of every key row 126 touches, as they were at BASE_122 (1e3f62187c); the files list
+// differs from BASE_122 only by the two rg slot negations (spec 113 §5.2, LP-2).
+const DARWIN_FILES = [
+  "out/**/*",
+  "resources/**/*",
+  "!resources/opencode-cli*",
+  "!resources/*.metainfo.xml",
+  "!resources/linux{,/**/*}",
+  "!resources/icons/{android,ios}{,/**/*}",
+  "!resources/icons/Square*",
+  "!resources/icons/StoreLogo.png",
+  "!resources/icons/icon.ico",
+  "!out/**/*.map",
+  "!resources/rg",
+  "!resources/rg-linux-x64{,/**/*}",
+  "!resources/rg-win32-x64{,/**/*}",
+  "!resources/swarm-patch{,/**/*}",
+  "!resources/swarm-setup{,/**/*}",
+  "!resources/swarm-cli{,/**/*}",
+]
+const DARWIN_RESOURCES = [
+  { from: "../../LICENSE", to: "LICENSE" },
+  { from: "../../NOTICE", to: "NOTICE" },
+  { from: "../../THIRD_PARTY_LICENSES.txt", to: "THIRD_PARTY_LICENSES.txt" },
+  { from: "resources/rg", to: "rg" },
+  { from: "resources/swarm-patch", to: "swarm-patch" },
+  { from: "resources/swarm-setup", to: "swarm-setup" },
+  { from: "resources/swarm-cli", to: "swarm-cli" },
+  { from: ".library-stage", to: "knowledge-library" },
+  ...DATUM_SLOTS,
+  {
+    from: "native/",
+    to: "native/",
+    filter: ["index.js", "index.d.ts", "build/Release/mac_window.node", "swift-build/**"],
+  },
+]
+const NSIS_BASE = {
+  oneClick: true,
+  perMachine: false,
+  installerIcon: "resources/icons/icon.ico",
+  installerHeaderIcon: "resources/icons/icon.ico",
+}
+
+for (const [label, target] of [
+  ["unset", undefined],
+  ["empty", ""],
+  ["darwin-arm64", "darwin-arm64"],
+] as const) {
+  test(`darwin config is unchanged when SWARM_BUILD_TARGET is ${label} (row 126, LP-2, WP-MAC-0)`, async () => {
+    const config = await importTarget(`darwin-${label}`, target)
+    const fpm = config.deb?.fpm
+
+    expect(config.files).toEqual(DARWIN_FILES)
+    expect(config.extraResources).toEqual(DARWIN_RESOURCES)
+    expect(config.extraMetadata).toEqual({ desktopName: "id.co.gsp.swarm.desktop.desktop" })
+    expect(config.linux?.target).toEqual(["AppImage", "deb", "rpm"])
+    expect(config.deb).toEqual({ fpm })
+    expect(config.rpm?.packageName).toBe("swarm")
+    expect(config.win?.target).toEqual(["nsis"])
+    expect(config.nsis).toEqual(NSIS_BASE)
+    expect(config).not.toHaveProperty("toolsets")
+    expect(config.mac?.target).toEqual(["dmg", "zip"])
+  })
+}
+
+const PORTABLE_TO = "LICENSE,NOTICE,THIRD_PARTY_LICENSES.txt,RG,swarm-cli,knowledge-library,datum-house-style,datum-runtime,datum-studio"
+
+for (const [target, rg] of [
+  ["linux-x64", { from: "resources/rg-linux-x64/rg", to: "rg" }],
+  ["win32-x64", { from: "resources/rg-win32-x64/rg.exe", to: "rg.exe" }],
+] as const) {
+  test(`${target} ships its own rg and no macOS-only slot (row 126, LP-3, spec 114 §6)`, async () => {
+    const config = await importTarget(target, target)
+    const resources = config.extraResources as { from: string; to: string }[]
+
+    expect(resources.map((entry) => entry.to).join(",")).toBe(PORTABLE_TO.replace("RG", rg.to))
+    expect(resources).toContainEqual(rg)
+    for (const slot of DATUM_SLOTS) expect(resources).toContainEqual(slot)
+    for (const gone of ["resources/rg", "resources/swarm-patch", "resources/swarm-setup", "native/", "resources/"])
+      expect(resources.map((entry) => entry.from)).not.toContain(gone)
+    // The asar exclusions are the same on every target.
+    expect(config.files).toEqual(DARWIN_FILES)
+    expect(config.extraMetadata).toEqual({
+      desktopName: "id.co.gsp.swarm.desktop.desktop",
+      homepage: "https://www.gemilangsatriaperkasa.co.id/",
+    })
+    expect(config.beforePack).toBeFunction()
+    expect(config.afterPack).toBeFunction()
+  })
+}
+
+test("linux-x64 packs a deb only, with the register control values (row 126, LP-4, R7.1/R7.4/R7.7)", async () => {
+  const config = await importTarget("linux-deb", "linux-x64")
+
+  expect(config.linux?.target).toEqual(["deb"])
+  expect(config.deb?.packageName).toBe("swarm-desktop")
+  expect(config.deb?.maintainer).toBe("PT Gemilang Satria Perkasa <gemilangsatriaperkasa.eng@gmail.com>")
+  expect(config.deb?.depends).toEqual([
+    "libgtk-3-0",
+    "libnotify4",
+    "libnss3",
+    "libxss1",
+    "libxtst6",
+    "xdg-utils",
+    "libatspi2.0-0",
+    "libuuid1",
+    "libsecret-1-0",
+    "libgbm1",
+    "libasound2",
+  ])
+  // Legacy desktop entry kept (D-L4) and the rest of the linux block unchanged.
+  expect(config.deb?.fpm?.some((entry) => entry.endsWith("=/usr/share/applications/opencode-desktop.desktop"))).toBe(true)
+  expect(config.linux?.executableName).toBe("id.co.gsp.swarm.desktop")
+  expect(config.linux?.desktop?.entry?.StartupWMClass).toBe("id.co.gsp.swarm.desktop")
+  expect(config).not.toHaveProperty("toolsets")
+  expect(config.nsis).toEqual(NSIS_BASE)
+})
+
+test("win32-x64 packs an x64 per-user NSIS with the include and the 1.2.1 toolset (row 126, spec 114 §4.1)", async () => {
+  const config = await importTarget("win-nsis", "win32-x64")
+
+  expect(config.win?.target).toEqual([{ target: "nsis", arch: ["x64"] }])
+  expect(config.nsis).toEqual({ ...NSIS_BASE, include: "nsis/installer.nsh" })
+  expect(config.toolsets).toEqual({ nsis: "1.2.1" })
+  expect(await Bun.file(path.join(import.meta.dir, "nsis", "installer.nsh")).exists()).toBe(true)
+  // The include sits outside resources/, so no files pattern packs it into the asar.
+  for (const pattern of (config.files as string[]).filter((entry) => !entry.startsWith("!")))
+    expect(new Bun.Glob(pattern).match("nsis/installer.nsh")).toBe(false)
+})
+
+test("an unknown SWARM_BUILD_TARGET stops the config load (row 126, R2.1)", async () => {
+  await expect(importTarget("bogus", "linux-arm64")).rejects.toThrow("SWARM_BUILD_TARGET must be one of")
+  const { buildTarget } = await import("./electron-builder.config")
+  expect(buildTarget({})).toBe("darwin-arm64")
+  expect(buildTarget({ SWARM_BUILD_TARGET: "win32-x64" })).toBe("win32-x64")
 })

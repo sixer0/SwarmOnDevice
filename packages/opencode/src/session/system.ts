@@ -15,6 +15,7 @@ import PROMPT_META from "./prompt/meta.txt"
 import PROMPT_CODEX from "./prompt/codex.txt"
 import PROMPT_TRINITY from "./prompt/trinity.txt"
 import PROMPT_GSP_WORKFLOW from "./prompt/gsp-workflow.txt"
+import PROMPT_AUTO_WORKFLOW from "./prompt/auto-workflow.txt"
 import type { Provider } from "@/provider/provider"
 import type { Agent } from "@/agent/agent"
 import { Permission } from "@/permission"
@@ -26,6 +27,7 @@ import { Reference } from "@opencode-ai/core/reference"
 import { MCP } from "@/mcp"
 import { PermissionV1 } from "@opencode-ai/core/v1/permission"
 import { InstalledTools } from "./installed-tools"
+import { ProjectTrust } from "@opencode-ai/core/project/trust"
 
 /** One fixed line per component (U14 register, identification/04_structured_u14.md section 3). Only these strings
  *  reach the prompt: the state file decides which lines appear, never what they say. */
@@ -95,15 +97,75 @@ export function provider(model: Provider.Model) {
 }
 
 /** Agents that get the GSP workflow and language rule (specs S0.1, S4.2). The gate is the agent name, not the model,
- *  so every model gets the block; `plan` and the hidden agents (`explore`, `compaction`, `title`, `summary`) do not. */
-export const GSP_WORKFLOW_AGENTS: ReadonlySet<string> = new Set(["build", "general"])
+ *  so every model gets the block; `plan` and the hidden agents (`explore`, `compaction`, `title`, `summary`) do not.
+ *  `coder` keeps the exact prompt stack `general` has, since it takes over most of general's work (spec 161 D3). */
+export const GSP_WORKFLOW_AGENTS: ReadonlySet<string> = new Set(["build", "coder", "general"])
 
 /** The `<gsp_workflow>` block for `agentName`, or nothing (specs S4.2-S4.5, S5.1). */
 export function workflow(agentName: string): string[] {
   return GSP_WORKFLOW_AGENTS.has(agentName) ? [PROMPT_GSP_WORKFLOW] : []
 }
 
-export { PROMPT_GSP_WORKFLOW }
+/** The only agent whose prompt carries the routing and auto workflow blocks: the main thread (spec 161 §7, D11.1). */
+const ROUTING_AGENT = "build"
+
+/** One fixed line per shipped subagent, in this order (spec 161 §7, D7). The registry decides which lines appear,
+ *  never what they say, so no user or project agent text reaches the system prompt. */
+const ROUTING_LINES: readonly { name: string; text: string; mcp?: string }[] = [
+  { name: "planner", text: "- planner: intent, blueprint, analysis or spec; no code changes." },
+  { name: "coder", text: "- coder: implement, fix or refactor code and make its checks pass." },
+  { name: "verifier", text: "- verifier: check finished work against its criteria, review, run tests; never edits." },
+  { name: "data-collector", text: "- data-collector: read and digest the person's own files and documents." },
+  { name: "document-writer", text: "- document-writer: DOCX, PDF, XLSX or PPTX deliverables in the house style." },
+  { name: "explore", text: "- explore: find files and code in this codebase." },
+  // researcher only has the swarm-web tools, so it is useless without that server (spec 161 F3, D7).
+  { name: "researcher", text: "- researcher: search and read the public web.", mcp: InstalledTools.SWARM_WEB_MCP },
+]
+
+const ROUTING_HEAD = [
+  "<agent_routing>",
+  "Delegate a step with the task tool when it needs its own context. Choose the agent by the kind of work; use general only when no agent below fits.",
+]
+
+/** The `<agent_routing>` block for `agentName`, or nothing (spec 161 §7, SA-08). A line appears only when its agent is
+ *  registered, not primary, not hidden, `canTask` lets the caller start it (the test describeTask uses) and, for
+ *  researcher, its MCP server is connected. Fewer than 2 lines give nothing. */
+export function routing(
+  agentName: string,
+  agents: readonly { name: string; mode: string; hidden?: boolean }[],
+  canTask: (name: string) => boolean,
+  connectedMcp: readonly string[],
+): string[] {
+  if (agentName !== ROUTING_AGENT) return []
+  const lines = ROUTING_LINES.filter((line) => {
+    const item = agents.find((agent) => agent.name === line.name)
+    if (!item || item.mode === "primary" || item.hidden) return false
+    if (line.mcp !== undefined && !connectedMcp.includes(line.mcp)) return false
+    return canTask(line.name)
+  }).map((line) => line.text)
+  if (lines.length < 2) return []
+  return [[...ROUTING_HEAD, ...lines, "</agent_routing>"].join("\n")]
+}
+
+/** The workflow skill the auto rule loads (spec 161 §13, L17). */
+export const AUTO_WORKFLOW_SKILL = "master-controller"
+
+/** The `<auto_workflow>` block for `agentName`, or nothing (spec 161 D11, SA-21 to SA-23). Only for build, only while
+ *  the agent may start subagents, and only when `skills` (the agent's available list) holds a `master-controller` that
+ *  lives at user level. A project copy never triggers it: a cloned repository must not choose the workflow that is
+ *  followed unasked (R9). */
+export function autoWorkflow(
+  agentName: string,
+  skills: readonly { name: string; location: string }[],
+  canTask = true,
+): string[] {
+  if (agentName !== ROUTING_AGENT || !canTask) return []
+  const found = skills.find((item) => item.name === AUTO_WORKFLOW_SKILL)
+  if (!found || !ProjectTrust.isUserLevel(found.location)) return []
+  return [PROMPT_AUTO_WORKFLOW]
+}
+
+export { PROMPT_GSP_WORKFLOW, PROMPT_AUTO_WORKFLOW }
 
 export interface Interface {
   readonly environment: (model: Provider.Model) => Effect.Effect<string[]>

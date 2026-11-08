@@ -148,6 +148,25 @@ const layer = Layer.effect(
     const image = yield* Image.Service
     const spawner = yield* ChildProcessSpawner.ChildProcessSpawner
     const scope = yield* Scope.Scope
+
+    /** The `<agent_routing>` and `<auto_workflow>` blocks for `agent` (spec 161 §7, §13). Empty for every agent but
+     *  build. Read once per person message, inside the frozen system prefix. */
+    const delegationBlocks = Effect.fn("SessionPrompt.delegationBlocks")(function* (agent: Agent.Info) {
+      if (agent.name !== "build") return [] as string[]
+      const canTask = (name: string) => Permission.evaluate("task", name, agent.permission).action !== "deny"
+      const connected = Object.entries(yield* mcp.status())
+        .filter(([, entry]) => entry.status === "connected")
+        .map(([key]) => key)
+      const available = Permission.disabled(["skill"], agent.permission).has("skill")
+        ? []
+        : yield* skill.available(agent)
+      const taskOn = !Permission.disabled(["task"], agent.permission).has("task")
+      return [
+        ...SystemPrompt.routing(agent.name, yield* agents.list(), canTask, connected),
+        ...SystemPrompt.autoWorkflow(agent.name, available, taskOn),
+      ]
+    })
+
     const instruction = yield* Instruction.Service
     const memory = yield* Memory.Service
     const state = yield* SessionRunState.Service
@@ -1305,7 +1324,8 @@ const layer = Layer.effect(
 
           const outcome: "break" | "continue" = yield* Effect.gen(function* () {
             const lastUserMsg = msgs.findLast((m) => m.info.role === "user")
-            const bypassAgentCheck = lastUserMsg?.parts.some((p) => p.type === "agent") ?? false
+            // An @-mention approves starting that agent only, not every task call of the turn (S163-03).
+            const bypassAgentCheck = (lastUserMsg?.parts ?? []).flatMap((p) => (p.type === "agent" ? [p.name] : []))
             const promptOps = yield* ops()
 
             const tools = yield* SessionTools.resolve({
@@ -1347,16 +1367,19 @@ const layer = Layer.effect(
             // turn: a note remembered or an AGENTS.md edited mid-run takes effect at the person's next message.
             const systemKey = `${lastUser.id}:${agent.name}:${model.providerID}/${model.id}`
             if (frozenSystem?.key !== systemKey) {
-              const [skills, env, instructions, remembered, mcpInstructions] = yield* Effect.all([
+              const [skills, env, instructions, remembered, mcpInstructions, delegation] = yield* Effect.all([
                 sys.skills(agent),
                 sys.environment(model),
                 instruction.system().pipe(Effect.orDie),
                 memory.prompt(model),
                 sys.mcp(agent, session.permission),
+                delegationBlocks(agent),
               ])
               frozenSystem = {
                 key: systemKey,
                 parts: [
+                  // First, so they land right after <gsp_workflow> (request.ts): routing, then auto workflow (spec 161 D8, D12).
+                  ...delegation,
                   ...env,
                   ...instructions,
                   ...(remembered ? [remembered] : []),

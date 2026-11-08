@@ -799,3 +799,186 @@ it.instance(
     },
   },
 )
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Row 164 (1.2.2, spec 161 SA-01 to SA-07): the five specialist subagents.
+
+const SPECIALISTS = ["coder", "planner", "verifier", "data-collector", "document-writer"] as const
+const PROMPT_DIR = path.join(import.meta.dir, "../../src/agent/prompt")
+const LANGUAGE_PREFIX = "Language: reply in the language the person writes in."
+const at = (agent: Agent.Info | undefined, permission: string, pattern: string) =>
+  Permission.evaluate(permission, pattern, agent!.permission).action
+
+it.instance("specialist subagents are native subagents", () =>
+  Effect.gen(function* () {
+    const names = (yield* load((svc) => svc.list())).map((a) => a.name)
+    for (const name of [...SPECIALISTS, "build", "plan", "general", "explore", "researcher"]) expect(names).toContain(name)
+    for (const name of SPECIALISTS) {
+      const agent = yield* load((svc) => svc.get(name))
+      expect(agent?.mode).toBe("subagent")
+      expect(agent?.native).toBe(true)
+      expect(agent?.hidden).toBeUndefined()
+    }
+  }),
+)
+
+it.instance("specialist descriptions", () =>
+  Effect.gen(function* () {
+    const expected: Record<string, string> = {
+      coder: `Implements code and config changes: a specified build row, a bug fix, a refactor, or tests to write and make pass. Edits files, runs the project's checks, and reports the files changed and the check results. No web tools. Use when the work changes code. Also the role called coder-execution, database-specialist, git-specialist or docker-specialist in workflow texts.`,
+      planner: `Plans and analyses without changing code: states the intent, writes a blueprint or spec, or analyses collected findings and recommends. Reads the project and may write Markdown documents only. No shell and no web tools. Use for intent, blueprint, analysis and spec steps. Also the role called request-translator, task-architect, data-analyst, pm-analyst or pm-planner in workflow texts.`,
+      verifier: `Checks finished work against its criteria and reports pass or fail with evidence: runs tests and checks, reviews a diff, a test report or the security of a change. Does not use edit tools; its shell commands still ask. No web tools. Use after implementation and before a gate or a report. Also the role called verifier, senior-code-reviewer, security-review or pm-verifier, and test-expert when tests are run rather than written.`,
+      "data-collector": `Reads and digests material the person already has: project files, notes, PDF, DOCX and XLSX documents, earlier reports. Returns facts with their source paths and may write a Markdown collection file. No shell and no web tools. Use for read-and-summarise jobs, inventories and extractions. Also the role called data-collector or document-reader. For code search use explore; for the public web use researcher.`,
+      "document-writer": `Produces finished documents for a reader in the GSP house style: DOCX, PDF, HTML, XLSX and PPTX, through the datum-house-style skill and the datum-studio tools, and runs the house-style checks before it reports. No web tools. Use when the deliverable is a document rather than code. Also the role called document-writer, pm-writer, document-converter or document-translator.`,
+    }
+    for (const name of SPECIALISTS) {
+      const description = (yield* load((svc) => svc.get(name)))?.description
+      expect(description).toBe(expected[name])
+      expect(description).toContain("Use ")
+      expect(description?.toLowerCase()).toContain("no web tools") // decision L21 (S163-05)
+    }
+    expect((yield* load((svc) => svc.get("verifier")))?.description).toContain("Does not use edit tools") // L21 (S163-06)
+    const general = (yield* load((svc) => svc.get("general")))?.description
+    expect(general).toBe(
+      "Fallback agent for multi-step work that no other agent in this list fits. Prefer the agent whose description matches the work. Use general to run several unrelated units of work in parallel.",
+    )
+    expect(general?.startsWith("Fallback")).toBe(true)
+  }),
+)
+
+it.instance("specialist prompts", () =>
+  Effect.gen(function* () {
+    expect((yield* load((svc) => svc.get("coder")))?.prompt).toBeUndefined()
+    for (const name of ["planner", "verifier", "data-collector", "document-writer"]) {
+      const file = yield* Effect.promise(() => Bun.file(path.join(PROMPT_DIR, `${name}.txt`)).text())
+      expect((yield* load((svc) => svc.get(name)))?.prompt).toBe(file)
+      expect(Buffer.byteLength(file)).toBeLessThanOrEqual(1600)
+      // Row 182 (L36): at most 2 mission lines; each reports against its row and never marks unverified work done.
+      const mission = file.split("\n").filter((line) => line.includes("mission"))
+      expect(mission.length).toBeGreaterThanOrEqual(1)
+      expect(mission.length).toBeLessThanOrEqual(2)
+      expect(mission.join(" ")).toContain("When a mission is open, report")
+      expect(mission.join(" ")).toContain("against your row with studio_mission_update_row")
+      expect(mission.join(" ")).toContain("never mark a row done on an unverified output")
+      if (name === "document-writer") {
+        expect(mission.join(" ")).toContain("Produce through Studio")
+        expect(mission.join(" ")).toContain("studio_file_verify")
+      }
+      const last = file.trimEnd().split("\n").at(-1)!
+      expect(last.startsWith(LANGUAGE_PREFIX)).toBe(true)
+      // SA-15: no private text in a shipped prompt.
+      expect(file).not.toMatch(/alugra|iris|gsp-budi|\/Users\/|ses_[0-9a-f]|100\.102\./i)
+    }
+    // The paragraph is gsp-workflow.txt's, verbatim.
+    const workflow = yield* Effect.promise(() =>
+      Bun.file(path.join(import.meta.dir, "../../src/session/prompt/gsp-workflow.txt")).text(),
+    )
+    const paragraph = workflow.split("\n").find((line) => line.startsWith(LANGUAGE_PREFIX))!
+    for (const name of ["planner", "verifier", "data-collector", "document-writer"]) {
+      const file = yield* Effect.promise(() => Bun.file(path.join(PROMPT_DIR, `${name}.txt`)).text())
+      expect(file.trimEnd().endsWith(paragraph)).toBe(true)
+    }
+  }),
+)
+
+it.instance("specialist permissions bind over the baseline", () =>
+  Effect.gen(function* () {
+    const get = (name: string) => load((svc) => svc.get(name))
+    const verifier = yield* get("verifier")
+    expect(at(verifier, "edit", "src/a.ts")).toBe("deny")
+    const hidden = Permission.disabled(["edit", "write", "apply_patch", "bash", "read"], verifier!.permission)
+    expect([...hidden].sort()).toEqual(["apply_patch", "edit", "write"])
+    for (const name of ["planner", "data-collector"]) {
+      const agent = yield* get(name)
+      expect(at(agent, "edit", "src/a.ts")).toBe("deny")
+      expect(at(agent, "edit", "docs/x.md")).toBe("ask")
+      expect(at(agent, "bash", "ls")).toBe("deny")
+      expect(Permission.disabled(["bash"], agent!.permission).has("bash")).toBe(true)
+      // Markdown lane: the edit tools stay visible, because their last rule is not a "*" deny.
+      expect(Permission.disabled(["edit", "write"], agent!.permission).size).toBe(0)
+    }
+    for (const name of SPECIALISTS) {
+      const agent = yield* get(name)
+      expect(at(agent, "task", "general")).toBe("deny")
+      expect(at(agent, "todowrite", "*")).toBe("deny")
+      expect(at(agent, "swarm-web_fetch", "*")).toBe("deny")
+      expect(at(agent, "webfetch", "*")).toBe("deny")
+      expect(at(agent, "websearch", "*")).toBe("deny")
+      // Spec 161 C5: a child cannot run the controller workflow, so it may not load it; other skills stay allowed.
+      expect(at(agent, "skill", "master-controller")).toBe("deny")
+      expect(at(agent, "skill", "datum-house-style")).toBe("allow")
+    }
+    for (const name of ["coder", "document-writer"]) expect(at(yield* get(name), "edit", "src/a.ts")).toBe("ask")
+    expect(at(yield* get("document-writer"), "datum-studio_studio_render", "*")).toBe("ask")
+  }),
+)
+
+it.instance("baseline bash gates survive", () =>
+  Effect.gen(function* () {
+    for (const name of ["coder", "verifier", "document-writer"]) {
+      const agent = yield* load((svc) => svc.get(name))
+      expect(at(agent, "bash", "sudo ls")).toBe("deny")
+      expect(at(agent, "bash", "curl x")).toBe("ask")
+      expect(at(agent, "bash", "python3 x")).toBe("ask")
+      expect(at(agent, "bash", "ls")).not.toBe("allow")
+    }
+  }),
+)
+
+it.instance(
+  "user file overrides a built-in subagent",
+  () =>
+    Effect.gen(function* () {
+      const verifier = yield* load((svc) => svc.get("verifier"))
+      expect(verifier?.prompt).toBe("X")
+      expect(verifier?.native).toBe(true)
+      expect(verifier?.mode).toBe("subagent")
+      expect(at(verifier, "edit", "src/a.ts")).toBe("allow")
+      expect(yield* load((svc) => svc.get("coder"))).toBeUndefined()
+      expect((yield* load((svc) => svc.list())).map((a) => a.name)).not.toContain("coder")
+    }),
+  {
+    config: {
+      agent: {
+        verifier: { prompt: "X", permission: { edit: "allow" } },
+        coder: { disable: true },
+      },
+    },
+  },
+)
+
+it.instance(
+  "a global permission does not loosen a specialist",
+  () =>
+    Effect.gen(function* () {
+      expect(at(yield* load((svc) => svc.get("verifier")), "edit", "src/a.ts")).toBe("deny")
+      expect(at(yield* load((svc) => svc.get("planner")), "edit", "src/a.ts")).toBe("deny")
+      expect(at(yield* load((svc) => svc.get("build")), "edit", "src/a.ts")).toBe("allow")
+    }),
+  { config: { permission: { edit: "allow" } } },
+)
+
+it.instance("plan cannot hand edits to a subagent", () =>
+  Effect.gen(function* () {
+    const plan = yield* load((svc) => svc.get("plan"))
+    expect(at(plan, "task", "coder")).toBe("deny")
+    expect(at(plan, "task", "document-writer")).toBe("deny")
+    expect(at(plan, "task", "explore")).toBe("ask")
+    expect(at(plan, "task", "planner")).toBe("ask")
+    // build is unchanged: it may still hand work to the editing specialists (with the usual ask).
+    const build = yield* load((svc) => svc.get("build"))
+    expect(at(build, "task", "coder")).toBe("ask")
+  }),
+)
+
+it.instance(
+  "plan's coder deny binds over a global task allow",
+  () =>
+    Effect.gen(function* () {
+      const plan = yield* load((svc) => svc.get("plan"))
+      expect(at(plan, "task", "coder")).toBe("deny")
+      expect(at(plan, "task", "document-writer")).toBe("deny")
+      expect(at(plan, "task", "general")).toBe("allow")
+    }),
+  { config: { permission: { task: { "*": "allow" } } } },
+)

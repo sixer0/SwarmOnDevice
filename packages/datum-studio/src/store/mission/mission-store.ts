@@ -6,6 +6,8 @@
  * the query_only reader (committed data only). Refusals are StoreError with the §6.2 code and a `details` object.
  * The MCP tools (studio_mission_*, report semantics) are row 119b; they call this API one job per call.
  */
+import { homedir } from "node:os"
+import { posix } from "node:path"
 import { StoreError } from "../errors.ts"
 import { translateFtsQuery } from "../fts-query.ts"
 import { canonicalJson, newId, sha256Hex } from "../ids.ts"
@@ -1224,16 +1226,23 @@ export class MissionStore {
     }
     const cur = f.cursor ? decodeMissionCursor(f.cursor) : null
     if (f.cursor && !cur) throw err("SCHEMA_INVALID", "cursor is malformed", { cursor: f.cursor })
+    const scope = f.projectDir !== undefined ? projectDirScope(f.projectDir) : null
+    // Row 183 (L36): linkedSessions widens the projectDir rule to a UNION with the missions linked to those sessions
+    // (the current session and its subagents). An empty refs list is no filter.
+    const linked = f.linkedSessions && f.linkedSessions.refs.length > 0 ? f.linkedSessions : null
     const rows = q.all<MissionDbRow>(
       `SELECT m.* FROM mission m
         WHERE (?1 IS NULL OR EXISTS (SELECT 1 FROM mission_session s WHERE s.mission_id = m.id AND s.client = ?1 AND s.session_ref = ?2))
           AND (?3 IS NULL OR m.status IN (SELECT value FROM json_each(?3)))
           AND (?4 IS NULL OR m.type_id = ?4)
-          AND (?5 IS NULL OR m.project_dir = ?5)
+          AND ((?5 IS NULL AND ?12 IS NULL)
+               OR (?5 IS NOT NULL AND (m.project_dir = ?5 OR m.project_dir = ?10
+                   OR (?11 IS NOT NULL AND substr(m.project_dir, 1, length(?11)) = ?11 AND instr(m.project_dir || '/', '/../') = 0 AND instr(m.project_dir || '/', '/./') = 0)))
+               OR (?12 IS NOT NULL AND EXISTS (SELECT 1 FROM mission_session l WHERE l.mission_id = m.id AND l.client = ?12 AND l.session_ref IN (SELECT value FROM json_each(?13)))))
           AND (?6 IS NULL OR m.id IN (SELECT mission_id FROM mission_fts WHERE mission_fts MATCH ?6))
           AND (?7 IS NULL OR m.time_updated < ?7 OR (m.time_updated = ?7 AND m.id < ?8))
         ORDER BY m.time_updated DESC, m.id DESC LIMIT ?9`,
-      [f.session?.client ?? null, f.session?.ref ?? null, f.status ? JSON.stringify(f.status) : null, f.type ?? null, f.projectDir ?? null, match, cur?.t ?? null, cur?.id ?? null, take + 1],
+      [f.session?.client ?? null, f.session?.ref ?? null, f.status ? JSON.stringify(f.status) : null, f.type ?? null, f.projectDir ?? null, match, cur?.t ?? null, cur?.id ?? null, take + 1, scope?.exact ?? null, scope?.prefix ?? null, linked?.client ?? null, linked ? JSON.stringify(linked.refs) : null],
     )
     const page = rows.slice(0, take)
     const items = page.map((m) => this.listItem(q, m, match))
@@ -1330,6 +1339,32 @@ function decisionRequestOf(r: Row): DecisionRequest {
     ...(r.time_closed !== null && r.time_closed !== undefined ? { closedAt: iso(r.time_closed as number)! } : {}),
     ...(r.status === "answered" ? { answer: { option: r.answer_option as string, by: r.answered_by as "user" | "controller", decision: r.answer_decision_id as string } } : {}),
   }
+}
+
+/**
+ * Row 181 (L32): a projectDir filter lists missions whose project dir is the directory itself or a folder inside it
+ * (an agent may store a subfolder of the session directory). `exact` is the normalised directory (no trailing slash,
+ * no '.' or '..' segments); `prefix` adds the separator boundary, so '/a/b' never matches '/a/bc'. The list query
+ * refuses a prefix match for a stored dir with '.' or '..' segments ('/a/b/../../etc' is not inside '/a/b').
+ * Project dirs are POSIX absolute (migration 0003 CHECK: leading '/').
+ * Row 185 (S186-01, L42): the subfolder (prefix) rule needs a narrow folder. For '/', the home folder or a folder
+ * directly in it ('~/Documents'), or a folder fewer than PROJECT_PREFIX_MIN_SEGMENTS segments deep, `prefix` is null
+ * and only the exact folder matches, so a session opened on a broad folder does not list every project below it.
+ * Desktop mirrors this rule in mission-ipc.ts withinDirectory (the window access check).
+ */
+export const PROJECT_PREFIX_MIN_SEGMENTS = 4
+
+export function projectDirScope(dir: string, home: string = homedir()): { exact: string; prefix: string | null } {
+  const exact = posix.resolve("/", dir)
+  return { exact, prefix: broadProjectDir(exact, home) ? null : `${exact}/` }
+}
+
+/** S186-01: '/', the home folder, a direct child of it ('~/Documents'), or fewer than 4 segments deep. */
+function broadProjectDir(exact: string, home: string): boolean {
+  if (exact === "/" || exact.split("/").filter(Boolean).length < PROJECT_PREFIX_MIN_SEGMENTS) return true
+  if (!home.startsWith("/")) return false
+  const h = posix.resolve("/", home)
+  return exact === h || posix.dirname(exact) === h
 }
 
 export function encodeMissionCursor(c: { t: number; id: string }): string {

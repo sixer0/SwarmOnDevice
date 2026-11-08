@@ -16,7 +16,16 @@ const SKILL_TEXT = fs.readFileSync(REPO_SKILL, "utf8")
 const SKILL_SHA = crypto.createHash("sha256").update(fs.readFileSync(REPO_SKILL)).digest("hex")
 const SKILL_BODY = SKILL_TEXT.slice(SKILL_TEXT.indexOf("\n---\n", 4) + 5).replace(/^\n+/, "")
 
-type Layout = { skill?: boolean; runtime?: boolean; sha?: string; pythonMode?: number; library?: boolean; asar?: boolean }
+type Layout = {
+  skill?: boolean
+  runtime?: boolean
+  sha?: string
+  pythonMode?: number
+  library?: boolean
+  asar?: boolean
+  // Row 173: the Windows launcher name (bin/datum-python.cmd) instead of bin/datum-python.
+  launcher?: string
+}
 
 // <base>/X.app/Contents/Resources with the bundled skill, its runtime and optionally the Knowledge Library.
 function bundle(base: string, opts: Layout = {}) {
@@ -40,8 +49,9 @@ function bundle(base: string, opts: Layout = {}) {
 
 function runtime(dir: string, opts: Layout) {
   fs.mkdirSync(path.join(dir, "bin"), { recursive: true })
-  fs.writeFileSync(path.join(dir, "bin", "datum-python"), "#!/bin/sh\nexit 0\n")
-  fs.chmodSync(path.join(dir, "bin", "datum-python"), opts.pythonMode ?? 0o755)
+  const launcher = opts.launcher ?? "datum-python"
+  fs.writeFileSync(path.join(dir, "bin", launcher), "#!/bin/sh\nexit 0\n")
+  fs.chmodSync(path.join(dir, "bin", launcher), opts.pythonMode ?? 0o755)
   fs.writeFileSync(path.join(dir, "runtime-manifest.json"), JSON.stringify({ skillSha: opts.sha ?? SKILL_SHA }))
 }
 
@@ -136,6 +146,78 @@ describe("DatumRoot.resolve", () => {
     expect(
       DatumRoot.resolve({ type: "utility", resourcesPath: resources, entry: path.join(desktop, "sidecar.js") }),
     ).toEqual({ kind: "failed", code: "missing" })
+  })
+})
+
+// Row 173 (spec 114 section 5.2, register R6.3): on win32 the launcher is bin\datum-python.cmd and NTFS has no exec bit,
+// so a regular non-symlink file is enough. The platform is injected; the darwin cases above pass none.
+describe("DatumRoot.resolve on win32", () => {
+  const win32 = "win32" as const
+
+  test("a packaged bundle resolves datum-python.cmd without an exec bit", async () => {
+    await using tmp = await tmpdir()
+    const resources = bundle(tmp.path, { asar: true, launcher: "datum-python.cmd", pythonMode: 0o644 })
+    expect(DatumRoot.resolve({ type: "utility", resourcesPath: resources, platform: win32 })).toEqual({
+      kind: "available",
+      skillRoot: path.join(real(resources), "datum-house-style"),
+      python: path.join(real(resources), "datum-runtime", "bin", "datum-python.cmd"),
+    })
+  })
+
+  test("the sh launcher alone is not a Windows launcher", async () => {
+    await using tmp = await tmpdir()
+    const resources = bundle(tmp.path, { asar: true })
+    expect(DatumRoot.resolve({ type: "utility", resourcesPath: resources, platform: win32 })).toEqual({
+      kind: "failed",
+      code: "missing",
+    })
+  })
+
+  test("darwin and linux still ignore datum-python.cmd", async () => {
+    await using tmp = await tmpdir()
+    const resources = bundle(tmp.path, { asar: true, launcher: "datum-python.cmd" })
+    for (const platform of ["darwin", "linux"] as const)
+      expect(DatumRoot.resolve({ type: "utility", resourcesPath: resources, platform })).toEqual({
+        kind: "failed",
+        code: "missing",
+      })
+  })
+
+  test("a symlinked datum-python.cmd is refused", async () => {
+    await using tmp = await tmpdir()
+    const resources = bundle(tmp.path, { asar: true, launcher: "datum-python.cmd" })
+    const bin = path.join(resources, "datum-runtime", "bin")
+    fs.renameSync(path.join(bin, "datum-python.cmd"), path.join(tmp.path, "elsewhere.cmd"))
+    fs.symlinkSync(path.join(tmp.path, "elsewhere.cmd"), path.join(bin, "datum-python.cmd"))
+    expect(DatumRoot.resolve({ type: "utility", resourcesPath: resources, platform: win32 })).toEqual({
+      kind: "failed",
+      code: "python",
+    })
+  })
+
+  test("a folder named datum-python.cmd is refused", async () => {
+    await using tmp = await tmpdir()
+    const resources = bundle(tmp.path, { asar: true, launcher: "datum-python" })
+    fs.mkdirSync(path.join(resources, "datum-runtime", "bin", "datum-python.cmd"))
+    expect(DatumRoot.resolve({ type: "utility", resourcesPath: resources, platform: win32 })).toEqual({
+      kind: "failed",
+      code: "python",
+    })
+  })
+
+  test("the manifest check still runs before the launcher", async () => {
+    await using tmp = await tmpdir()
+    const resources = bundle(tmp.path, { asar: true, launcher: "datum-python.cmd", sha: "0".repeat(64) })
+    expect(DatumRoot.resolve({ type: "utility", resourcesPath: resources, platform: win32 })).toEqual({
+      kind: "failed",
+      code: "manifest",
+    })
+  })
+
+  test("outside the utility process win32 is still no-app", () => {
+    expect(DatumRoot.resolve({ type: "browser", resourcesPath: "C:\\Swarm\\resources", platform: win32 })).toEqual({
+      kind: "no-app",
+    })
   })
 })
 

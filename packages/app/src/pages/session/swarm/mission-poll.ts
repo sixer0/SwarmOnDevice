@@ -17,7 +17,8 @@ export type MissionControlResult<T> = { ok: true; data: T } | { ok: false; code:
 
 /** The read half of `MissionControlPlatform` (§3.2). Writes are row 131's. */
 export type MissionSource = {
-  list(input: { directory: string }): Promise<MissionControlResult<{ items: MissionListItemWire[] }>>
+  /** Row 183 (L36): sessions = the current session and its run's (subagent) sessions; their linked missions are listed too. */
+  list(input: { directory: string; sessions?: string[] }): Promise<MissionControlResult<{ items: MissionListItemWire[] }>>
   get(input: { mission: string }): Promise<MissionControlResult<MissionGetWire>>
 }
 
@@ -26,6 +27,24 @@ export function missionSourceOf(platform: object): MissionSource | undefined {
   const missions = (platform as { missions?: Partial<MissionSource> }).missions
   if (!missions || typeof missions.list !== "function" || typeof missions.get !== "function") return
   return missions as MissionSource
+}
+
+/** Row 183: main's limit (desktop mission-client.ts MISSION_LIST_SESSIONS_MAX) and its session id check. */
+export const MISSION_SESSIONS_MAX = 50
+const SESSION_ID_RE = /^ses_[A-Za-z0-9]{1,64}$/
+
+/**
+ * Row 183 (L36): the session ids a mission list takes: the current session first, then the sessions of its run (the
+ * Agents view's tree: root and subagents, already in the session store), deduplicated, valid ids only, at most
+ * MISSION_SESSIONS_MAX. A plain array: it crosses structured clone in the preload.
+ */
+export function missionSessionsOf(current: string | undefined, run: readonly string[]): string[] {
+  const out: string[] = []
+  for (const id of [current, ...run]) {
+    if (out.length >= MISSION_SESSIONS_MAX) break
+    if (typeof id === "string" && SESSION_ID_RE.test(id) && !out.includes(id)) out.push(id)
+  }
+  return out
 }
 
 export type MissionControlState = {
@@ -83,6 +102,8 @@ export function emptyMissionState(): MissionControlState {
 export function createMissionPoller(input: {
   source: MissionSource
   directory: () => string | undefined
+  /** Row 183: read per list, never fetched here (the session store already holds the run's sessions) */
+  sessions?: () => readonly string[] | undefined
   lang: () => "en" | "id"
   /** names of the files in `docs/<mission>` of the session (§7.3); called once per `get` change */
   listFiles?: (path: string) => Promise<string[]>
@@ -176,7 +197,8 @@ export function createMissionPoller(input: {
       seen = { directory }
       emit(emptyMissionState())
     }
-    const listed = await within(() => input.source.list({ directory }))
+    const sessions = [...(input.sessions?.() ?? [])].slice(0, MISSION_SESSIONS_MAX)
+    const listed = await within(() => input.source.list(sessions.length > 0 ? { directory, sessions } : { directory }))
     if (current() === "stopped" || disposed || directory !== input.directory()) return
     if (!listed || !listed.ok) {
       emit({ unavailable: listed?.code === "HOST_UNAVAILABLE" })
@@ -284,6 +306,8 @@ export function pollModeOf(view: { docVisible: boolean; watching: boolean; mapOp
 export function createMissionControl(input: {
   source: MissionSource | undefined
   directory: Accessor<string | undefined>
+  /** Row 183: the current session and its run's sessions (missionSessionsOf) */
+  sessions?: Accessor<readonly string[] | undefined>
   lang: Accessor<"en" | "id">
   /** the Agents view of the session map is shown */
   watching: Accessor<boolean>
@@ -298,6 +322,7 @@ export function createMissionControl(input: {
   const poller = createMissionPoller({
     source,
     directory: input.directory,
+    sessions: input.sessions,
     lang: input.lang,
     listFiles: input.listFiles,
     onState: (next) => setState(reconcile(next)),

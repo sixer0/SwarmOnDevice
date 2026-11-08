@@ -27,6 +27,7 @@ import { initializationData } from "./initialization"
 import { DesktopFirstLaunchOnboarding } from "./onboarding"
 import { resetZoom, setPinchZoomEnabled, webviewZoom, zoomIn, zoomOut } from "./webview-zoom"
 import { windowFullscreen } from "./window-fullscreen"
+import { setupToolsFor } from "./setup-tools-gate"
 import { availableStartupServer, readyWslConnections } from "./wsl/connections"
 import "./styles.css"
 import { Splash } from "@opencode-ai/ui/logo"
@@ -287,7 +288,8 @@ const createPlatform = (windowState: DesktopWindowState): Platform => {
     wslServers: wslServersApi,
 
     // Assigned without a cast, so tsgo checks the preload's SetupToolsAPI against the app's SetupToolsPlatform.
-    setupTools: window.api.setupTools,
+    // Row 128: macOS only (swarm-setup is not shipped on Linux/Windows); setup-tools-gate.ts.
+    setupTools: setupToolsFor(os, window.api.setupTools),
     // Row 133: mission control (row 127 bridge). Assigned without a cast so tsgo checks the preload against the app type.
     missions: window.api.missions,
 

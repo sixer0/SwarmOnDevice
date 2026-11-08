@@ -12,11 +12,13 @@ import type { SessionPrompt } from "../session/prompt"
 import { Config } from "@/config/config"
 import { ModelsDev } from "@opencode-ai/core/models-dev"
 import { ModelV2 } from "@opencode-ai/core/model"
-import { Effect, Exit, Schema, Scope } from "effect"
+import { Effect, Exit, Option, Schema, Scope } from "effect"
 import { EffectBridge } from "@/effect/bridge"
 import { RuntimeFlags } from "@/effect/runtime-flags"
 import { Database } from "@opencode-ai/core/database/database"
 import { SUBAGENT_STOPPED } from "@/permission/autonomy-texts"
+import { MCP } from "@/mcp"
+import { RoleAlias } from "../agent/role-alias"
 
 export interface TaskPromptOps {
   cancel(sessionID: SessionID): Effect.Effect<void>
@@ -130,6 +132,8 @@ export const TaskTool = Tool.define(
     const scope = yield* Scope.Scope
     const flags = yield* RuntimeFlags.Service
     const database = yield* Database.Service
+    // Optional: only to know whether swarm-web is connected for the researcher alias. Without it that alias runs as general.
+    const mcp = Option.getOrUndefined(yield* Effect.serviceOption(MCP.Service))
 
     const run = Effect.fn("TaskTool.execute")(function* (
       params: Schema.Schema.Type<typeof Parameters>,
@@ -158,24 +162,56 @@ export const TaskTool = Tool.define(
         )
       }
 
-      if (!ctx.extra?.bypassAgentCheck) {
+      // Resolve the requested name first, so the ask below is about the agent that will really run: an alias can
+      // never start what its target may not (spec 161 D13, SA-18).
+      const raw = params.subagent_type
+      const registered = new Map((yield* agent.list()).map((item) => [item.name, item]))
+      const connected = Object.entries(mcp ? yield* mcp.status() : {})
+        .filter(([, entry]) => entry.status === "connected")
+        .map(([key]) => key)
+      const resolved = RoleAlias.resolveRole(raw, (name) => registered.get(name), connected)
+      if (resolved.type === "unknown") {
+        return yield* Effect.fail(new Error(`Unknown agent type: ${raw} is not a valid agent type`))
+      }
+      if (resolved.type === "unavailable") {
+        // An alias whose target the person disabled must not run as another agent with the same rights (S163-07).
+        return yield* Effect.fail(
+          new Error(
+            `The role "${RoleAlias.echoName(raw) ?? "requested"}" runs as the agent "${resolved.target}", which is disabled or not available. Choose another agent.`,
+          ),
+        )
+      }
+      const next = yield* agent.get(resolved.name)
+      if (!next) {
+        return yield* Effect.fail(new Error(`Unknown agent type: ${raw} is not a valid agent type`))
+      }
+
+      // `true` (a command's subtask) skips the ask for any agent; a list (agents the person @-mentioned) only for those
+      // agents, so a mention never opens the way to an agent the current mode denies (S163-03).
+      const bypass = ctx.extra?.bypassAgentCheck
+      if (!(bypass === true || (Array.isArray(bypass) && bypass.includes(next.name)))) {
         yield* ctx.ask({
           permission: id,
-          patterns: [params.subagent_type],
+          patterns: [next.name],
           always: ["*"],
           // Starting one changes nothing by itself. Each call it makes is checked on its own.
           harmless: ctx.trust ? true : undefined,
           metadata: {
             description: params.description,
-            subagent_type: params.subagent_type,
+            subagent_type: next.name,
+            requested: raw,
           },
         })
       }
-
-      const next = yield* agent.get(params.subagent_type)
-      if (!next) {
-        return yield* Effect.fail(new Error(`Unknown agent type: ${params.subagent_type} is not a valid agent type`))
-      }
+      const note = resolved.type === "fallback" ? RoleAlias.fallbackNote(raw, next.name) : undefined
+      const role =
+        resolved.type === "fallback"
+          ? RoleAlias.FALLBACK_ROLE_LINE
+          : resolved.type === "alias"
+            ? resolved.role
+            : undefined
+      const prefix = role === undefined ? "" : RoleAlias.rolePrefix(raw, next.name, role)
+      const withNote = (text: string) => (note === undefined ? text : `${note}\n\n${text}`)
 
       const session = params.task_id
         ? yield* sessions.get(SessionID.make(params.task_id)).pipe(Effect.catchCause(() => Effect.succeed(undefined)))
@@ -239,6 +275,7 @@ export const TaskTool = Tool.define(
         parentSessionId: ctx.sessionID,
         sessionId: nextSession.id,
         model,
+        ...(next.name === raw ? {} : { requested: raw, agent: next.name }),
         ...(runInBackground ? { background: true } : {}),
       }
 
@@ -251,7 +288,7 @@ export const TaskTool = Tool.define(
       if (!ops) return yield* Effect.fail(new Error("TaskTool requires promptOps in ctx.extra"))
 
       const runTask = Effect.fn("TaskTool.runTask")(function* () {
-        const parts = yield* ops.resolvePromptParts(params.prompt)
+        const parts = yield* ops.resolvePromptParts(prefix + params.prompt)
         const result = yield* ops.prompt({
           messageID: MessageID.ascending(),
           sessionID: nextSession.id,
@@ -352,7 +389,7 @@ export const TaskTool = Tool.define(
             sessionID: nextSession.id,
             state: "running",
             summary: "Background task started",
-            text: BACKGROUND_STARTED,
+            text: withNote(BACKGROUND_STARTED),
           }),
         }
       }
@@ -385,7 +422,11 @@ export const TaskTool = Tool.define(
             return {
               title: params.description,
               metadata,
-              output: renderTaskOutput({ sessionID: nextSession.id, state: "completed", text: result?.output ?? "" }),
+              output: renderTaskOutput({
+                sessionID: nextSession.id,
+                state: "completed",
+                text: withNote(result?.output ?? ""),
+              }),
             }
           }),
         (_, exit) =>

@@ -228,6 +228,169 @@ describe("DatumStudioMcp.resolve", () => {
   })
 })
 
+// Row 174 (L15, register R6.5, spec 114 §5.4): the win32 rules, judged on this Mac through an in-memory Windows disk.
+// Keys are Windows paths; `real` maps a path to what realpath returns (a junction or symlink elsewhere).
+type WinNode = { kind: "dir" | "file" | "link"; mode?: number }
+function winDisk(nodes: Record<string, WinNode>, real: Record<string, string> = {}) {
+  const calls: string[] = []
+  const disk: DatumStudioMcp.Disk = {
+    lstat: (file) => {
+      calls.push(file)
+      const node = nodes[file]
+      if (!node) throw Object.assign(new Error(`ENOENT ${file}`), { code: "ENOENT" })
+      return {
+        isDirectory: () => node.kind === "dir",
+        isFile: () => node.kind === "file",
+        isSymbolicLink: () => node.kind === "link",
+        mode: node.mode ?? 0o666,
+      }
+    },
+    realpath: (file) => {
+      calls.push(file)
+      return real[file] ?? file
+    },
+  }
+  return { disk, calls }
+}
+
+const WIN_RES = "C:\\Users\\u\\AppData\\Local\\Programs\\Swarm\\resources"
+const WIN_CMD = `${WIN_RES}\\datum-studio\\datum-studio-launcher.cmd`
+function winPackaged(launcher: WinNode | false = { kind: "file" }) {
+  const nodes: Record<string, WinNode> = {
+    [WIN_RES]: { kind: "dir" },
+    [`${WIN_RES}\\app.asar`]: { kind: "file" },
+    [`${WIN_RES}\\datum-studio`]: { kind: "dir" },
+    // The sh launcher of macOS/Linux is never the Windows entry.
+    [`${WIN_RES}\\datum-studio\\datum-studio-launcher`]: { kind: "file", mode: 0o755 },
+  }
+  if (launcher) nodes[WIN_CMD] = launcher
+  return nodes
+}
+
+describe("DatumStudioMcp.resolve on win32 (row 174)", () => {
+  test("packaged app: <Resources>\\datum-studio\\datum-studio-launcher.cmd, spec §9.3 shape", () => {
+    const { disk } = winDisk(winPackaged())
+    const status = DatumStudioMcp.resolve({ type: "utility", resourcesPath: WIN_RES, disk, platform: "win32" })
+    expect(status).toEqual({ kind: "available", launcher: WIN_CMD })
+    expect(DatumStudioMcp.builtin(status)).toEqual({
+      "datum-studio": { type: "local", command: [WIN_CMD], environment: { STUDIO_AGENT_ID: "swarm" } },
+    })
+  })
+
+  test("no exec bit is needed for the .cmd", () => {
+    const { disk } = winDisk(winPackaged({ kind: "file", mode: 0o644 }))
+    expect(DatumStudioMcp.resolve({ type: "utility", resourcesPath: WIN_RES, disk, platform: "win32" })).toEqual({
+      kind: "available",
+      launcher: WIN_CMD,
+    })
+  })
+
+  test("only the sh launcher present: no entry (missing)", () => {
+    const { disk } = winDisk(winPackaged(false))
+    const status = DatumStudioMcp.resolve({ type: "utility", resourcesPath: WIN_RES, disk, platform: "win32" })
+    expect(status).toEqual({ kind: "failed", code: "missing" })
+    expect(DatumStudioMcp.builtin(status)).toEqual({})
+  })
+
+  test("a symlinked .cmd or a Studio folder that resolves elsewhere is refused", () => {
+    expect(
+      DatumStudioMcp.resolve({
+        type: "utility",
+        resourcesPath: WIN_RES,
+        disk: winDisk(winPackaged({ kind: "link" })).disk,
+        platform: "win32",
+      }),
+    ).toEqual({ kind: "failed", code: "symlink" })
+    const junction = winDisk(winPackaged(), { [`${WIN_RES}\\datum-studio`]: "D:\\elsewhere\\datum-studio" })
+    expect(
+      DatumStudioMcp.resolve({ type: "utility", resourcesPath: WIN_RES, disk: junction.disk, platform: "win32" }),
+    ).toEqual({
+      kind: "failed",
+      code: "symlink",
+    })
+  })
+
+  test.each([
+    ["relative", "resources"],
+    ["drive-relative root (takes the working directory's drive)", "\\Swarm\\resources"],
+    ["drive without a root (relative to that drive's working directory)", "C:Swarm\\resources"],
+    ["a POSIX path", "/Applications/Swarm.app/Contents/Resources"],
+  ])("%s resourcesPath never names the launcher, no disk call", (_name, resourcesPath) => {
+    const { disk, calls } = winDisk(winPackaged())
+    expect(DatumStudioMcp.resolve({ type: "utility", resourcesPath, disk, platform: "win32" })).toEqual({
+      kind: "failed",
+      code: "missing",
+    })
+    expect(calls).toEqual([])
+  })
+
+  test("a UNC Resources is absolute", () => {
+    const unc = "\\\\server\\share\\Swarm\\resources"
+    const nodes: Record<string, WinNode> = {
+      [unc]: { kind: "dir" },
+      [`${unc}\\app.asar`]: { kind: "file" },
+      [`${unc}\\datum-studio`]: { kind: "dir" },
+      [`${unc}\\datum-studio\\datum-studio-launcher.cmd`]: { kind: "file" },
+    }
+    expect(
+      DatumStudioMcp.resolve({ type: "utility", resourcesPath: unc, disk: winDisk(nodes).disk, platform: "win32" }),
+    ).toEqual({
+      kind: "available",
+      launcher: `${unc}\\datum-studio\\datum-studio-launcher.cmd`,
+    })
+  })
+
+  test("unpackaged Electron: <desktop>\\.datum-studio-stage\\datum-studio-launcher.cmd from the entry script only", () => {
+    const electronRes = "C:\\src\\node_modules\\electron\\dist\\resources"
+    const desktop = "C:\\src\\swarm\\packages\\desktop"
+    const entry = `${desktop}\\out\\main\\sidecar.js`
+    const nodes: Record<string, WinNode> = {
+      [electronRes]: { kind: "dir" },
+      [desktop]: { kind: "dir" },
+      [`${desktop}\\.datum-studio-stage`]: { kind: "dir" },
+      [`${desktop}\\.datum-studio-stage\\datum-studio-launcher.cmd`]: { kind: "file" },
+    }
+    const { disk } = winDisk(nodes)
+    expect(
+      DatumStudioMcp.resolve({ type: "utility", resourcesPath: electronRes, entry, disk, platform: "win32" }),
+    ).toEqual({
+      kind: "available",
+      launcher: `${desktop}\\.datum-studio-stage\\datum-studio-launcher.cmd`,
+    })
+    for (const other of ["out\\main\\sidecar.js", "\\src\\desktop\\out\\main\\sidecar.js", "C:\\elsewhere\\cli.js"])
+      expect(
+        DatumStudioMcp.resolve({ type: "utility", resourcesPath: electronRes, entry: other, disk, platform: "win32" }),
+      ).toEqual({
+        kind: "failed",
+        code: "missing",
+      })
+  })
+
+  test("outside the utility process: no-app with no disk call", () => {
+    const { disk, calls } = winDisk(winPackaged())
+    expect(DatumStudioMcp.resolve({ type: undefined, resourcesPath: WIN_RES, disk, platform: "win32" })).toEqual({
+      kind: "no-app",
+    })
+    expect(calls).toEqual([])
+  })
+})
+
+describe("DatumStudioMcp.resolve: non-win32 platforms keep the macOS rules (row 174)", () => {
+  test.each(["darwin", "linux"])("%s gives the same answers as the default", async (platform) => {
+    await using tmp = await tmpdir()
+    for (const opts of [{}, { launcher: false as const }, { mode: 0o644 }]) {
+      const res = resources(path.join(tmp.path, `${platform}-${Object.keys(opts).join("-") || "ok"}`), opts)
+      expect(DatumStudioMcp.resolve({ type: "utility", resourcesPath: res, platform })).toEqual(
+        DatumStudioMcp.resolve({ type: "utility", resourcesPath: res }),
+      )
+    }
+    expect(DatumStudioMcp.resolve({ type: "utility", resourcesPath: "Contents/Resources", platform })).toEqual({
+      kind: "failed",
+      code: "missing",
+    })
+  })
+})
+
 describe("datum-studio in the resolved config of the app", () => {
   test("listed as a built-in entry with no user config file written", async () => {
     await using tmp = await tmpdir()

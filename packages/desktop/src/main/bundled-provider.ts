@@ -22,7 +22,16 @@ export const BUNDLED_PROVIDER = {
     api: "http://100.102.23.27:11400/v1",
     models: { thinker: model("thinker"), worker: model("worker"), "worker-fast": model("worker-fast") },
   },
-  subagents: { general: "worker", explore: "worker-fast" },
+  // Model tier per subagent (spec 161, SA-11): planning and review on thinker, gathering on worker-fast, the rest on worker.
+  subagents: {
+    general: "worker",
+    explore: "worker-fast",
+    coder: "worker",
+    planner: "thinker",
+    verifier: "thinker",
+    "data-collector": "worker-fast",
+    "document-writer": "worker",
+  },
 }
 
 export const BUNDLED_PROVIDER_ENV = { SWARM_BUNDLED_PROVIDER: JSON.stringify(BUNDLED_PROVIDER) }

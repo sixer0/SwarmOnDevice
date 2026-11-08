@@ -2,7 +2,8 @@
 // Stages Resources/datum-studio for DATUM Studio (1.2.0 row 36; packaging spec §3.1 and appendix A, Studio spec §9).
 // Output: packages/desktop/.datum-studio-stage (gitignored; electron-builder maps it to Res/datum-studio, row 45).
 //
-//   datum-studio-launcher                 scripts/datum-studio-launcher.sh, mode 0755 (row 34)
+//   datum-studio-launcher                 scripts/datum-studio-launcher.sh, mode 0755 (row 34); darwin-arm64 and linux-x64
+//   datum-studio-launcher.cmd             win32-x64 instead: scripts/datum-studio-launcher.cmd, mode 0644 (row 170, R6.5)
 //   server/datum-studio-bridge.js         `bun build scripts/datum-studio-bridge.ts --target=bun`, 0644 (row 34)
 //   CLAUDE_SETUP.md                       packages/datum-studio/CLAUDE_SETUP.md, verbatim (row 35)
 //   templates/                            catalog.json + the files it lists (rows 110/110d/110e; sha checked)
@@ -25,6 +26,8 @@
 //   bun scripts/stage-datum-studio.ts [--out DIR]             stage (atomic replace), then verify
 //   bun scripts/stage-datum-studio.ts --verify [--out DIR]    verify only (re-checks every sha256 of the manifest)
 // Prints DATUM_STUDIO_STAGE_OK <dir> on success; DATUM_STUDIO_STAGE_FAIL <reason> and exit 1 otherwise.
+// Target (row 170, register R2.1/R2.2): env SWARM_BUILD_TARGET = darwin-arm64 | linux-x64 | win32-x64; unset = darwin-arm64,
+// whose stage stays byte-identical. Only the launcher differs by target (studioLauncher).
 import { $ } from "bun"
 import { createHash } from "node:crypto"
 import * as fs from "node:fs/promises"
@@ -70,6 +73,9 @@ export const ELK_NOTICE_TEXT = [
 export const ELK_PACKAGE_JSON_TEXT = `${JSON.stringify({ type: "commonjs" })}\n`
 const EXEC_MODE = "755"
 const DATA_MODE = "644"
+/** Register R2.1 build targets; R2.2: SWARM_BUILD_TARGET unset (or empty) = darwin-arm64. */
+export const STUDIO_TARGETS = ["darwin-arm64", "linux-x64", "win32-x64"] as const
+export type StudioTarget = (typeof STUDIO_TARGETS)[number]
 
 export type ManifestFile = { path: string; size: number; sha256: string; mode: string }
 export type StudioManifest = {
@@ -118,6 +124,19 @@ async function isMachO(file: string) {
   }
 }
 
+export function studioTarget(env: Record<string, string | undefined> = process.env): StudioTarget {
+  const t = env.SWARM_BUILD_TARGET
+  if (t === undefined || t === "") return "darwin-arm64"
+  if (!(STUDIO_TARGETS as readonly string[]).includes(t)) fail(`SWARM_BUILD_TARGET ${t} is not one of ${STUDIO_TARGETS.join(", ")}`)
+  return t as StudioTarget
+}
+
+/** R6.5 (row 170): the sh launcher (0755) on darwin and linux, the .cmd launcher (row 169, 0644, no exec bit) on win32. */
+export function studioLauncher(target: StudioTarget) {
+  if (target === "win32-x64") return { source: "datum-studio-launcher.cmd", to: `${LAUNCHER}.cmd`, mode: DATA_MODE, other: LAUNCHER }
+  return { source: "datum-studio-launcher.sh", to: LAUNCHER, mode: EXEC_MODE, other: `${LAUNCHER}.cmd` }
+}
+
 /** C31 / U9.7 (SZ-3a): no file of the renamed Plex set. */
 const isRenamed = (rel: string) => rel.split("/").some((seg) => seg.toLowerCase() === "renamed")
 
@@ -149,10 +168,11 @@ async function elkCopies(src: StageSources): Promise<Copy[]> {
 }
 
 /** The file list (source -> stage path) from the repo; checks the template catalog and the asset manifest on the way. */
-export async function planStage(src: StageSources = DEFAULT_SOURCES) {
+export async function planStage(src: StageSources = DEFAULT_SOURCES, target: StudioTarget = studioTarget()) {
   const copies: Copy[] = []
   const notes: string[] = []
-  copies.push({ from: path.join(src.desktop, "scripts", "datum-studio-launcher.sh"), to: LAUNCHER, mode: EXEC_MODE })
+  const launcher = studioLauncher(target)
+  copies.push({ from: path.join(src.desktop, "scripts", launcher.source), to: launcher.to, mode: launcher.mode })
   copies.push({ from: path.join(src.pkg, "CLAUDE_SETUP.md"), to: "CLAUDE_SETUP.md", mode: DATA_MODE })
 
   // Templates: catalog.json and exactly the files it lists (c40_fixes/ is build-time evidence of row 110d, never read).
@@ -234,10 +254,11 @@ export async function buildBridge(src: StageSources, outFile: string) {
 }
 
 /** Builds the stage in a temp folder beside `out` and renames it into place only after verify passes. */
-export async function stageDatumStudio(opts: { out?: string; sources?: StageSources; skillFonts?: string } = {}) {
+export async function stageDatumStudio(opts: { out?: string; sources?: StageSources; skillFonts?: string; target?: StudioTarget } = {}) {
   const out = path.resolve(opts.out ?? STAGE)
   const src = opts.sources ?? DEFAULT_SOURCES
-  const plan = await planStage(src)
+  const target = opts.target ?? studioTarget()
+  const plan = await planStage(src, target)
   await fs.mkdir(path.dirname(out), { recursive: true })
   const work = await fs.mkdtemp(path.join(path.dirname(out), `${path.basename(out)}.tmp-`))
   try {
@@ -276,7 +297,7 @@ export async function stageDatumStudio(opts: { out?: string; sources?: StageSour
       files,
     }
     await fs.writeFile(path.join(work, STUDIO_STAGE_MANIFEST), `${JSON.stringify(manifest, null, 1)}\n`, { mode: 0o644 })
-    const report = await verifyStudioStage(work, { skillFonts: opts.skillFonts })
+    const report = await verifyStudioStage(work, { skillFonts: opts.skillFonts, target })
     if (report.problems.length) fail(`fresh stage fails verify: ${report.problems.join("; ")}`)
     await fs.rm(out, { recursive: true, force: true })
     await fs.rename(work, out)
@@ -301,10 +322,10 @@ export type VerifyReport = {
 /**
  * Re-checks a staged (or copied, e.g. Res/datum-studio) folder against its studio-manifest.json: every file listed,
  * nothing unlisted, sha256/size/mode equal, no symlink, plus the packaging gates SZ-3, SZ-3a/b/c, MACHO-1 (0), the
- * launcher 0755, a server/ with only the bridge, and the 16 Plex pairs equal to the skill copy (A.4) when given.
+ * launcher by target (sh 0755, or .cmd 0644 on win32, row 170), a server/ with only the bridge, and the 16 Plex pairs equal to the skill copy (A.4) when given.
  * Returns every problem found (empty = ok); row 45's check-datum-stage can call it for stage and verify.
  */
-export async function verifyStudioStage(dir: string, opts: { skillFonts?: string | null } = {}): Promise<VerifyReport> {
+export async function verifyStudioStage(dir: string, opts: { skillFonts?: string | null; target?: StudioTarget } = {}): Promise<VerifyReport> {
   const problems: string[] = []
   const report: VerifyReport = { problems, files: 0, bytes: 0, duKb: 0, ttf: 0, renamed: 0, ts: 0, macho: 0, plexPairs: 0 }
   let manifest: StudioManifest
@@ -347,7 +368,10 @@ export async function verifyStudioStage(dir: string, opts: { skillFonts?: string
   if (report.ttf !== TTF_EXPECTED) problems.push(`SZ-3b: ${report.ttf} ttf, expected ${TTF_EXPECTED}`)
   if (report.ts) problems.push(`SZ-3c: ${report.ts} .ts/.tsx file(s)`)
   if (report.macho) problems.push(`MACHO-1: ${report.macho} Mach-O file(s) in datum-studio`)
-  if (listed.get(LAUNCHER)?.mode !== EXEC_MODE) problems.push(`${LAUNCHER} must be mode 0755`)
+  const launcher = studioLauncher(opts.target ?? studioTarget())
+  if (launcher.mode === EXEC_MODE && listed.get(LAUNCHER)?.mode !== EXEC_MODE) problems.push(`${LAUNCHER} must be mode 0755`)
+  if (launcher.mode === DATA_MODE && listed.get(launcher.to)?.mode !== DATA_MODE) problems.push(`${launcher.to} must be mode 0644 (no exec bit)`)
+  if (listed.has(launcher.other)) problems.push(`${launcher.other} must not be staged for this target`)
   const server = all.filter((p) => p.startsWith("server/"))
   if (server.length !== 1 || server[0] !== BRIDGE) problems.push(`server/ must hold only the bridge, has: ${server.join(", ")}`)
   for (const need of [

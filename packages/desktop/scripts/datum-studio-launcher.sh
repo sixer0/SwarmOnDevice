@@ -30,6 +30,11 @@ is_swarm() {
   case "$(/bin/ps -p "$1" -o comm= 2>/dev/null)" in
     */Contents/MacOS/Swarm) return 0 ;;
   esac
+  # Linux (R4.10, DP-3): /proc/<pid>/exe must be the app executable two levels above this launcher (full path, not
+  # comm=). Not reached on macOS, which has no /proc.
+  if [ -e "/proc/$1/exe" ] && [ "$(/usr/bin/readlink "/proc/$1/exe" 2>/dev/null)" = "$(/usr/bin/readlink -f "$dir/../..")/id.co.gsp.swarm.desktop" ]; then
+    return 0
+  fi
   return 1
 }
 

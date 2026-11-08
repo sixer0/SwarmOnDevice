@@ -103,7 +103,8 @@ export type MissionGetWire = {
   deliverables: DeliverableWire[] // G1
 }
 export type MissionControlPlatform = {
-  list(input: { directory: string }): Promise<MissionControlResult<{ items: MissionListItemWire[] }>>
+  /** Row 183 (L36): sessions = the current session and its subagent sessions (their linked missions are listed too). */
+  list(input: { directory: string; sessions?: string[] }): Promise<MissionControlResult<{ items: MissionListItemWire[] }>>
   get(input: { mission: string }): Promise<MissionControlResult<MissionGetWire>>
   answer(input: {
     mission: string

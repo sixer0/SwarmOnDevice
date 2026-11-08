@@ -25,6 +25,9 @@ import { disposeAllInstances } from "../fixture/fixture"
 import { testEffect } from "../lib/effect"
 import { ProviderV2 } from "@opencode-ai/core/provider"
 import { ModelV2 } from "@opencode-ai/core/model"
+import { Permission } from "@/permission"
+import { PermissionV1 } from "@opencode-ai/core/v1/permission"
+import { RoleAlias } from "../../src/agent/role-alias"
 
 afterEach(async () => {
   await disposeAllInstances()
@@ -486,6 +489,7 @@ describe("tool.task", () => {
         metadata: {
           description: "inspect bug",
           subagent_type: "general",
+          requested: "general",
         },
         // Sent to the permission layer in every mode. Only an entry autonomous mode held ever publishes it.
         call: {
@@ -1268,6 +1272,281 @@ describe("tool.task", () => {
       Effect.gen(function* () {
         expect(String((yield* run("general"))?.model?.modelID)).toBe("thinker")
       }),
+    )
+  })
+
+  // Spec 161 §13.3 (D13, D14), SA-17 to SA-20, and S163-03, S163-04, S163-07. Row 164's agents are fixtures here with
+  // the spec's names, so these cases hold before and after it lands.
+  describe("role aliases", () => {
+    const specialists = {
+      coder: { mode: "subagent" as const, description: "Implements code." },
+      planner: { mode: "subagent" as const, description: "Plans." },
+      verifier: { mode: "subagent" as const, description: "Checks." },
+      "data-collector": { mode: "subagent" as const, description: "Reads." },
+      "document-writer": { mode: "subagent" as const, description: "Writes documents." },
+    }
+    const withAgents = { config: { agent: specialists } }
+    type Call = { seen?: SessionPrompt.PromptInput; asks: { patterns: string[]; metadata: Record<string, unknown> }[] }
+    const call = (
+      subagent_type: string,
+      opts: { extra?: Record<string, unknown>; deny?: PermissionV1.Ruleset; args?: Record<string, unknown> } = {},
+      parent = ref,
+    ) =>
+      Effect.gen(function* () {
+        const { chat, assistant } = yield* seed("Pinned", parent)
+        const def = yield* (yield* TaskTool).init()
+        const out: Call = { asks: [] }
+        const result = yield* def
+          .execute({ description: "inspect bug", prompt: "look", subagent_type, ...opts.args } as never, {
+            sessionID: chat.id,
+            messageID: assistant.id,
+            agent: "build",
+            abort: new AbortController().signal,
+            extra: { promptOps: stubOps({ onPrompt: (input) => (out.seen = input) }), ...opts.extra },
+            messages: [],
+            metadata: () => Effect.void,
+            ask: (input) =>
+              Effect.gen(function* () {
+                out.asks.push({ patterns: [...input.patterns], metadata: { ...input.metadata } })
+                // The parent agent's rules decide, as the permission service would (plan's D10 denies).
+                if (
+                  opts.deny &&
+                  input.patterns.some((pattern) => Permission.evaluate("task", pattern, opts.deny!).action === "deny")
+                )
+                  return yield* Effect.die(new Error(`denied: ${input.patterns.join(",")}`))
+              }),
+          })
+          .pipe(Effect.exit)
+        return { ...out, result }
+      })
+    const firstText = (input?: SessionPrompt.PromptInput) => {
+      const part = input?.parts[0]
+      return part?.type === "text" ? part.text : ""
+    }
+    const output = (exit: Exit.Exit<{ output: string }, unknown>) => (Exit.isSuccess(exit) ? exit.value.output : "")
+    const failure = (exit: Exit.Exit<unknown, unknown>) => (Exit.isFailure(exit) ? Cause.pretty(exit.cause) : "")
+
+    it.instance(
+      "role aliases resolve to Swarm agents",
+      () =>
+        Effect.gen(function* () {
+          for (const [name, target] of Object.entries(RoleAlias.ROLE_ALIASES)) {
+            const expected = target === "researcher" ? "general" : target
+            const { seen, result } = yield* call(name)
+            expect([name, Exit.isSuccess(result)]).toEqual([name, true])
+            expect([name, seen?.agent]).toEqual([name, expected])
+          }
+          expect((yield* call("Explore")).seen?.agent).toBe("explore")
+          expect((yield* call("TASK-ARCHITECT")).seen?.agent).toBe("planner")
+          const session = yield* Session.Service
+          const child = (yield* call("task-architect")).seen!
+          expect((yield* session.get(child.sessionID)).title).toBe("inspect bug (@planner subagent)")
+        }),
+      withAgents,
+    )
+
+    it.instance("the register covers every role name the workflow uses, with short fixed lines only", () =>
+      Effect.gen(function* () {
+        const roles = [
+          "request-translator",
+          "task-architect",
+          "data-analyst",
+          "document-analyst",
+          "pm-analyst",
+          "pm-planner",
+          "image-prompt-specialist",
+          "explore",
+          "data-collector",
+          "document-reader",
+          "image-analyst",
+          "coder-execution",
+          "database-specialist",
+          "git-specialist",
+          "docker-specialist",
+          "design-system-specialist",
+          "document-writer",
+          "pm-writer",
+          "document-converter",
+          "document-translator",
+          "verifier",
+          "senior-code-reviewer",
+          "security-review",
+          "pm-verifier",
+          "document-reviewer",
+          "test-expert",
+          "vendor-crawler-specialist",
+          "image-specialist",
+          "general-purpose",
+        ]
+        expect(Object.keys(RoleAlias.ROLE_ALIASES).toSorted()).toEqual(roles.toSorted())
+        for (const line of Object.values(RoleAlias.ROLE_LINES)) expect(Buffer.byteLength(line)).toBeLessThanOrEqual(160)
+        // Names and text only (SA-18): every value of both maps is a string, no rules, models or prompts.
+        for (const value of [...Object.values(RoleAlias.ROLE_ALIASES), ...Object.values(RoleAlias.ROLE_LINES)])
+          expect(typeof value).toBe("string")
+        expect(Object.values(RoleAlias.ROLE_LINES).join("\n")).not.toMatch(
+          /alugra|iris|gsp-budi|\/Users\/|ses_[0-9a-f]|100\.102\./i,
+        )
+      }),
+    )
+
+    it.instance("researcher alias needs swarm-web, otherwise general", () =>
+      Effect.gen(function* () {
+        const get = (name: string) =>
+          ["researcher", "general"].includes(name) ? { name, mode: "subagent" } : undefined
+        expect(RoleAlias.resolveRole("vendor-crawler-specialist", get, ["swarm-web"])).toMatchObject({
+          type: "alias",
+          name: "researcher",
+        })
+        expect(RoleAlias.resolveRole("vendor-crawler-specialist", get, [])).toMatchObject({
+          type: "alias",
+          name: "general",
+        })
+      }),
+    )
+
+    it.instance(
+      "an exact registered name wins over the alias",
+      () =>
+        Effect.gen(function* () {
+          const { seen } = yield* call("task-architect")
+          expect(seen?.agent).toBe("task-architect")
+          expect(firstText(seen)).toBe("look")
+        }),
+      { config: { agent: { ...specialists, "task-architect": { mode: "subagent", description: "Mine." } } } },
+    )
+
+    it.instance(
+      "the bundled tier follows the resolved agent",
+      () =>
+        Effect.acquireUseRelease(
+          Effect.sync(() => {
+            process.env[ModelsDev.BUNDLED_ENV] = JSON.stringify({
+              provider: { id: "shipped-ai", name: "Shipped", env: [], models: {} },
+              subagents: { general: "worker", explore: "worker-fast", coder: "worker", planner: "thinker" },
+            })
+          }),
+          () =>
+            Effect.gen(function* () {
+              const shipped = { providerID: ProviderV2.ID.make("shipped-ai"), modelID: ModelV2.ID.make("thinker") }
+              expect(String((yield* call("task-architect", {}, shipped)).seen?.model?.modelID)).toBe("thinker")
+              expect(String((yield* call("coder-execution", {}, shipped)).seen?.model?.modelID)).toBe("worker")
+            }),
+          () => Effect.sync(() => delete process.env[ModelsDev.BUNDLED_ENV]),
+        ),
+      withAgents,
+    )
+
+    it.instance(
+      "alias permission uses the resolved agent",
+      () =>
+        Effect.gen(function* () {
+          const ok = yield* call("coder-execution")
+          expect(ok.asks).toEqual([
+            {
+              patterns: ["coder"],
+              metadata: { description: "inspect bug", subagent_type: "coder", requested: "coder-execution" },
+            },
+          ])
+          // plan's binding denies (spec 161 D10) hold for every alias of the target, and never fall back to general.
+          const plan = Permission.fromConfig({ task: { coder: "deny", "document-writer": "deny" } })
+          for (const name of ["coder", "coder-execution", "git-specialist", "pm-writer", "document-writer"]) {
+            const denied = yield* call(name, { deny: plan })
+            expect([name, Exit.isFailure(denied.result)]).toEqual([name, true])
+            expect([name, denied.seen]).toEqual([name, undefined])
+          }
+          expect(Exit.isSuccess((yield* call("task-architect", { deny: plan })).result)).toBe(true)
+        }),
+      withAgents,
+    )
+
+    it.instance(
+      "an agent mention lets only that agent skip the ask",
+      () =>
+        Effect.gen(function* () {
+          const plan = Permission.fromConfig({ task: { coder: "deny" } })
+          const mentioned = yield* call("explore", { extra: { bypassAgentCheck: ["explore"] }, deny: plan })
+          expect(mentioned.asks).toEqual([])
+          expect(Exit.isSuccess(mentioned.result)).toBe(true)
+          // S163-03: "@explore" in plan mode must not open the way to coder.
+          const other = yield* call("coder", { extra: { bypassAgentCheck: ["explore"] }, deny: plan })
+          expect(other.asks.map((ask) => ask.patterns)).toEqual([["coder"]])
+          expect(Exit.isFailure(other.result)).toBe(true)
+          expect((yield* call("coder-execution", { extra: { bypassAgentCheck: [] }, deny: plan })).seen).toBeUndefined()
+          // A command's subtask (true) still skips it, as before.
+          expect((yield* call("coder", { extra: { bypassAgentCheck: true } })).asks).toEqual([])
+        }),
+      withAgents,
+    )
+
+    it.instance(
+      "an alias whose target is disabled is an error, not general",
+      () =>
+        Effect.gen(function* () {
+          const { result, seen, asks } = yield* call("coder-execution")
+          expect(Exit.isFailure(result)).toBe(true)
+          expect(failure(result)).toContain('runs as the agent "coder", which is disabled or not available')
+          expect(seen).toBeUndefined()
+          expect(asks).toEqual([])
+          // An unknown name still falls back.
+          expect((yield* call("foo-bar")).seen?.agent).toBe("general")
+        }),
+      { config: { agent: { ...specialists, coder: { disable: true } } } },
+    )
+
+    it.instance(
+      "unknown subagent_type runs as general with a note",
+      () =>
+        Effect.gen(function* () {
+          const named = yield* call("foo-bar")
+          expect(named.seen?.agent).toBe("general")
+          expect(output(named.result as never)).toContain('No agent named "foo-bar"; ran as general.')
+          for (const raw of ["<script>alert(1)</script>", "x".repeat(60), '"><x']) {
+            const hidden = yield* call(raw)
+            expect(hidden.seen?.agent).toBe("general")
+            expect(output(hidden.result as never)).toContain("No agent matches the requested name; ran as general.")
+            expect(output(hidden.result as never)).not.toContain(raw)
+          }
+        }),
+      withAgents,
+    )
+
+    it.instance(
+      "unknown subagent_type fails only when general is gone",
+      () =>
+        Effect.gen(function* () {
+          const { result } = yield* call("foo-bar")
+          expect(failure(result)).toContain("Unknown agent type: foo-bar is not a valid agent type")
+        }),
+      { config: { agent: { ...specialists, general: { disable: true } } } },
+    )
+
+    it.instance(
+      "requested role prefix",
+      () =>
+        Effect.gen(function* () {
+          const architect = firstText((yield* call("task-architect")).seen)
+          expect(
+            architect.startsWith(
+              `<requested_role name="task-architect" agent="planner">\n${RoleAlias.ROLE_LINES["task-architect"]}\n</requested_role>\n\nlook`,
+            ),
+          ).toBe(true)
+          for (const exact of ["planner", "explore", "Explore", "general-purpose"])
+            expect([exact, firstText((yield* call(exact)).seen)]).toEqual([exact, "look"])
+          // S163-04: the fallback prefix never carries an unsafe requested name.
+          for (const raw of ['"><x', "y".repeat(60), "a b"]) {
+            const text = firstText((yield* call(raw)).seen)
+            expect(text.startsWith('<requested_role name="unnamed" agent="general">')).toBe(true)
+            expect(text).not.toContain(raw)
+          }
+          expect(
+            firstText((yield* call("foo-bar")).seen).startsWith('<requested_role name="foo-bar" agent="general">'),
+          ).toBe(true)
+          // A model argument written for another tool is dropped, and the call still runs (spec 161 C2).
+          const extraKey = yield* call("coder-execution", { args: { model: "sonnet" } })
+          expect(Exit.isSuccess(extraKey.result)).toBe(true)
+          expect(extraKey.seen?.agent).toBe("coder")
+        }),
+      withAgents,
     )
   })
 })

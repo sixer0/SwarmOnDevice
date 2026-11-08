@@ -1,7 +1,7 @@
 import type { BrowserWindow, MessageBoxOptions, MessageBoxReturnValue } from "electron"
 import { constants } from "node:fs"
 import { access, chmod, mkdir, readFile, rename, writeFile } from "node:fs/promises"
-import { dirname, join } from "node:path"
+import { dirname, join, win32 } from "node:path"
 
 // Install Command Line Tool (C120/C121). `swarm` in the user's ~/.local/bin is a two-line wrapper around the launcher
 // inside this app bundle, so the command always runs this app's own engine at this app's version, with the state
@@ -9,8 +9,19 @@ import { dirname, join } from "node:path"
 // replaced.
 export const CLI_WRAPPER_MARKER = "# swarm command, written by Swarm.app (Install Command Line Tool)"
 
-export function cliLauncherPath(resourcesPath: string) {
-  return join(resourcesPath, "swarm-cli", "swarm-launcher")
+// Bundled file names per platform (register R5.5, R6.1, R6.5; row 127). darwin and linux ship the same sh launchers and
+// the bare `swarm` binary; win32 ships `.cmd` launchers and `swarm.exe`, joined with win32 separators.
+// `platform` defaults to the running OS, so the macOS call sites and their results are unchanged.
+function bundledName(name: string, platform: NodeJS.Platform, winExt: ".cmd" | ".exe") {
+  return platform === "win32" ? `${name}${winExt}` : name
+}
+
+function joinFor(platform: NodeJS.Platform) {
+  return platform === "win32" ? win32.join : join
+}
+
+export function cliLauncherPath(resourcesPath: string, platform: NodeJS.Platform = process.platform) {
+  return joinFor(platform)(resourcesPath, "swarm-cli", bundledName("swarm-launcher", platform, ".cmd"))
 }
 
 export function cliWrapperText(input: { launcher: string; stateHome: string }) {
@@ -62,12 +73,13 @@ export const DATUM_STUDIO_COMMAND = "datum-studio"
 export const DATUM_STUDIO_WRAPPER_MARKER =
   "# datum-studio command, written by Swarm.app (Install DATUM Studio for Claude)"
 
-export function datumStudioLauncherPath(resourcesPath: string) {
-  return join(resourcesPath, "datum-studio", "datum-studio-launcher")
+export function datumStudioLauncherPath(resourcesPath: string, platform: NodeJS.Platform = process.platform) {
+  return joinFor(platform)(resourcesPath, "datum-studio", bundledName("datum-studio-launcher", platform, ".cmd"))
 }
 
-/** `<Res>/swarm-cli/swarm`, the bundled Bun binary the bridge runs on with BUN_BE_BUN=1 (Studio spec §9.2). */
-export function datumStudioRuntimePath(launcher: string) {
+/** `<Res>/swarm-cli/swarm` (`swarm.exe` on win32), the bundled Bun binary the bridge runs on with BUN_BE_BUN=1 (Studio spec §9.2). */
+export function datumStudioRuntimePath(launcher: string, platform: NodeJS.Platform = process.platform) {
+  if (platform === "win32") return win32.join(win32.dirname(win32.dirname(launcher)), "swarm-cli", "swarm.exe")
   return join(dirname(dirname(launcher)), "swarm-cli", "swarm")
 }
 
@@ -99,7 +111,12 @@ export async function installDatumStudioWrapper(input: { launcher: string; state
   })
 }
 
-export function onPath(dir: string, pathEnv: string | undefined) {
+export function onPath(dir: string, pathEnv: string | undefined, platform: NodeJS.Platform = process.platform) {
+  // win32 (row 127, [102 R4]): PATH is `;`-separated, either slash may end an entry, and names compare case-insensitively.
+  if (platform === "win32") {
+    const norm = (value: string) => value.replace(/[\\/]+$/, "").toLowerCase()
+    return (pathEnv ?? "").split(";").some((entry) => norm(entry) === norm(dir))
+  }
   return (pathEnv ?? "").split(":").some((entry) => entry.replace(/\/+$/, "") === dir.replace(/\/+$/, ""))
 }
 

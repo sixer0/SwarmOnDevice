@@ -16,6 +16,11 @@
 // The entry is injected into the global layer (config.ts loadGlobal) below every config file, so it reaches every
 // session without a file being written, the user's own `mcp["datum-studio"]` (for example `{ "enabled": false }`) wins,
 // and the server is treated like the user's own config (mcp/index.ts sourceOf origin "global").
+//
+// Windows (row 174, L15, register R6.5, spec 114 §5.4): the launcher is `datum-studio-launcher.cmd`, which cmd.exe runs
+// (the MCP stdio transport spawns through cross-spawn), so there is no exec bit to test; paths are judged with Windows
+// separators. This file never splits PATH, so it has no PATH separator to change. Every other platform keeps the
+// rules above.
 import fs from "node:fs"
 import path from "node:path"
 import type { ConfigMCPV1 } from "@opencode-ai/core/v1/config/mcp"
@@ -37,6 +42,29 @@ const loaded = {
   type: Reflect.get(process, "type"),
   resourcesPath: Reflect.get(process, "resourcesPath"),
   entry: process.argv[1],
+  platform: process.platform,
+}
+
+/** The per-platform rules. Anything but win32 gets exactly the macOS rules (the `path` module of this host). */
+interface Host {
+  path: typeof path
+  launcher: string
+  execBit: boolean
+  /** Absolute on its own: on win32 a drive (`C:\`) or UNC root, never `\x` that takes the working directory's drive. */
+  absolute(file: string): boolean
+}
+
+const WIN_ABSOLUTE = /^(?:[A-Za-z]:[\\/]|[\\/]{2}[^\\/])/
+
+function host(platform: unknown): Host {
+  if (platform === "win32")
+    return {
+      path: path.win32,
+      launcher: `${LAUNCHER}.cmd`,
+      execBit: false,
+      absolute: (file) => WIN_ABSOLUTE.test(file),
+    }
+  return { path, launcher: LAUNCHER, execBit: true, absolute: (file) => path.isAbsolute(file) }
 }
 
 export type FailureCode = "missing" | "symlink" | "not_executable"
@@ -72,40 +100,48 @@ function exists(disk: Disk, file: string) {
 }
 
 /** A real directory named `name` directly under `base`, reached without any symlink on the last step. */
-function folder(disk: Disk, base: string, name: string) {
-  const entry = disk.lstat(path.join(base, name))
+function folder(disk: Disk, h: Host, base: string, name: string) {
+  const entry = disk.lstat(h.path.join(base, name))
   if (entry.isSymbolicLink()) throw new Failure("symlink")
   if (!entry.isDirectory()) throw new Failure("missing")
-  const root = disk.realpath(path.join(base, name))
-  if (root !== path.join(disk.realpath(base), name)) throw new Failure("symlink")
+  const root = disk.realpath(h.path.join(base, name))
+  if (root !== h.path.join(disk.realpath(base), name)) throw new Failure("symlink")
   return root
 }
 
-function studioFolder(resourcesPath: string, entry: unknown, disk: Disk) {
+function studioFolder(resourcesPath: string, entry: unknown, disk: Disk, h: Host) {
   // A packaged app, or any Resources that carries the Studio folder, is judged on its own copy only.
-  if (exists(disk, path.join(resourcesPath, PACKAGED_MARKER)) || exists(disk, path.join(resourcesPath, RES_FOLDER)))
-    return folder(disk, resourcesPath, RES_FOLDER)
-  if (typeof entry !== "string" || !path.isAbsolute(entry) || !DEV_ENTRY.test(entry)) throw new Failure("missing")
-  const desktop = path.dirname(path.dirname(path.dirname(entry)))
-  return folder(disk, desktop, DEV_STAGE_FOLDER)
+  if (exists(disk, h.path.join(resourcesPath, PACKAGED_MARKER)) || exists(disk, h.path.join(resourcesPath, RES_FOLDER)))
+    return folder(disk, h, resourcesPath, RES_FOLDER)
+  if (typeof entry !== "string" || !h.absolute(entry) || !DEV_ENTRY.test(entry)) throw new Failure("missing")
+  const desktop = h.path.dirname(h.path.dirname(h.path.dirname(entry)))
+  return folder(disk, h, desktop, DEV_STAGE_FOLDER)
 }
 
-function inspect(resourcesPath: string, entry: unknown, disk: Disk): Status {
-  const launcher = path.join(studioFolder(resourcesPath, entry, disk), LAUNCHER)
+function inspect(resourcesPath: string, entry: unknown, disk: Disk, h: Host): Status {
+  const launcher = h.path.join(studioFolder(resourcesPath, entry, disk, h), h.launcher)
   const stat = disk.lstat(launcher)
   if (stat.isSymbolicLink()) throw new Failure("symlink")
   if (!stat.isFile()) throw new Failure("missing")
-  if ((stat.mode & 0o111) === 0) throw new Failure("not_executable")
+  // A `.cmd` has no exec bit: cmd.exe runs it by its extension.
+  if (h.execBit && (stat.mode & 0o111) === 0) throw new Failure("not_executable")
   return { kind: "available", launcher }
 }
 
 /** Decides from its arguments alone. Outside the app's utility process it does not touch the disk at all. */
-export function resolve(input: { type: unknown; resourcesPath: unknown; entry?: unknown; disk?: Disk }): Status {
+export function resolve(input: {
+  type: unknown
+  resourcesPath: unknown
+  entry?: unknown
+  disk?: Disk
+  platform?: unknown
+}): Status {
   if (input.type !== "utility" || typeof input.resourcesPath !== "string") return { kind: "no-app" }
+  const h = host(input.platform ?? process.platform)
   // A relative value would be measured from the working directory, which must never name the launcher.
-  if (!path.isAbsolute(input.resourcesPath)) return { kind: "failed", code: "missing" }
+  if (!h.absolute(input.resourcesPath)) return { kind: "failed", code: "missing" }
   try {
-    return inspect(input.resourcesPath, input.entry, input.disk ?? realDisk)
+    return inspect(input.resourcesPath, input.entry, input.disk ?? realDisk, h)
   } catch (error) {
     return { kind: "failed", code: error instanceof Failure ? error.code : "missing" }
   }

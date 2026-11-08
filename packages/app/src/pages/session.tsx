@@ -104,7 +104,7 @@ import { stepReference, type MapChapter, type MapStep } from "@/pages/session/ma
 import { SessionMapPanel } from "@/pages/session/map/session-map-view"
 import { createReviewBrief } from "@/pages/session/review/review-brief-controller"
 import { createSwarm } from "@/pages/session/swarm/swarm-controller"
-import { createMissionControl, missionSourceOf } from "@/pages/session/swarm/mission-poll"
+import { createMissionControl, missionSessionsOf, missionSourceOf } from "@/pages/session/swarm/mission-poll"
 import { missionWriterOf } from "@/pages/session/swarm/mission-command-model"
 import { agentsFilterFallsBack } from "@/pages/session/swarm/mission-control-layout"
 import type { MissionControlMount } from "@/pages/session/swarm/mission-control"
@@ -1201,6 +1201,9 @@ export default function Page() {
   const missionControl = createMissionControl({
     source: missionSourceOf(platform),
     directory: () => sdk().directory,
+    // Row 183 (L36): also the missions linked to this session or a subagent of its run (no extra fetch: the Agents
+    // view's discovery already put the run's sessions in the store).
+    sessions: () => missionSessionsOf(params.id, swarm.laneIDs()),
     lang: () => (language.locale() === "id" ? "id" : "en"),
     watching: () => sessionMap.opened() && sessionMap.view.filter === "agents",
     mapOpen: () => sessionMap.opened(),

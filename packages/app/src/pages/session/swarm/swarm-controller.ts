@@ -360,6 +360,8 @@ export function createSwarm(input: {
     model,
     pulse,
     rootID,
+    /** Row 183: the run's session ids (root and subagents) known to the session store; mission control lists by them. */
+    laneIDs,
     selectedLane,
     canTell,
     allow,

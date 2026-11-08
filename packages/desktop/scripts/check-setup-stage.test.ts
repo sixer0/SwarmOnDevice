@@ -3,6 +3,7 @@ import { chmodSync, mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } 
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { checkSetupStage } from "./check-setup-stage"
+import { buildTarget, prebuildChecks } from "./prebuild-target"
 import { FILES } from "./stage-setup"
 
 // Senior 3 / C82 (c): the prebuild gate against fixture folders. Nothing here compiles or touches resources/.
@@ -86,8 +87,13 @@ describe("prebuild swarm-setup check", () => {
     expect(await checkSetupStage({ stage, setup })).toEqual(["packages/setup changed after staging: src/steps/node.ts"])
   })
 
-  test("prebuild runs the check on macOS before the build", async () => {
+  test("prebuild runs the check for a macOS build before the build", async () => {
+    // Row 120 / row 185: the gate follows SWARM_BUILD_TARGET (unset = darwin-arm64), not the host.
     const prebuild = await Bun.file(new URL("./prebuild.ts", import.meta.url)).text()
-    expect(prebuild).toContain('if (process.platform === "darwin") await $`bun ./scripts/check-setup-stage.ts`')
+    expect(prebuild).toContain("const checks = prebuildChecks(buildTarget())")
+    expect(prebuild).toContain("if (checks.setup) await $`bun ./scripts/check-setup-stage.ts`")
+    expect(prebuild.indexOf("check-setup-stage.ts")).toBeLessThan(prebuild.indexOf("bun script/build-node.ts"))
+    expect(prebuildChecks(buildTarget({})).setup).toBe(true)
+    expect(prebuildChecks(buildTarget({ SWARM_BUILD_TARGET: "darwin-arm64" })).setup).toBe(true)
   })
 })

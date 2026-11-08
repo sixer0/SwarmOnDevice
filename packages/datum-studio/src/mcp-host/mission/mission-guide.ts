@@ -98,7 +98,7 @@ export function missionGuideText(): string {
     "",
     "Send `mission` as a JSON object (not a string). The host sets $schema, typeVersion (newest) and status (draft). Test with dryRun: true first.",
     "",
-    `- mission, required: ${list(f.missionRequired)}. project: {${list(f.projectRequired)}} (absolute path). Optional: decisions, findings, sessions.`,
+    `- mission, required: ${list(f.missionRequired)}. project: {${list(f.projectRequired)}} (absolute path: the session's working directory or a folder inside it; when project.dir is left out the host sets the session's working directory). Optional: decisions, findings, sessions.`,
     `- id: YYYY-MM-DD_slug (lowercase a-z 0-9 _ -), e.g. ${MISSION_GUIDE_EXAMPLE.id}.`,
     `- row, required: ${list(f.rowRequired)}. Optional: ${list(f.rowOptional)}.`,
     `- row id: "1", "2", "2a"; status on create: pending or dropped (all: ${list(f.rowStatus)}).`,

@@ -199,7 +199,19 @@ const add = Effect.fnUntraced(function* (
   }
   if (!trusted && !ProjectTrust.isUserLevel(match) && !ProjectTrust.isTextSkill(md.content)) return
 
-  if (state.skills[md.data.name]) {
+  const existing = state.skills[md.data.name]
+  // A user-level skill keeps its name: a project copy of the same name (a cloned repository's
+  // .claude/skills/master-controller, say) never replaces it in the listing or in `require()` (S163-02, spec 161 R9).
+  if (existing && ProjectTrust.isUserLevel(existing.location) && !ProjectTrust.isUserLevel(match)) {
+    yield* Effect.logWarning("project skill shadowing a user skill ignored", {
+      name: md.data.name,
+      existing: existing.location,
+      duplicate: match,
+    })
+    return
+  }
+
+  if (existing) {
     yield* Effect.logWarning("duplicate skill name", {
       name: md.data.name,
       existing: state.skills[md.data.name].location,
@@ -234,14 +246,40 @@ function skillBody(text: string) {
   return match ? text.slice(match[0].length).replace(/^(?:\r?\n)+/, "") : undefined
 }
 
+/** A path as one double-quoted PowerShell word: backtick, `$` and `"` are escaped so nothing in it expands. */
+function powershellQuoted(value: string) {
+  return `"${value.replace(/[`$"]/g, (char) => "`" + char)}"`
+}
+
+/**
+ * The note with the paths filled in for Windows, where the agent shell is PowerShell and a user name can hold a space
+ * (spec 114 section 5.2): the interpreter is called with `& "<path>"`, the root is quoted, and the script path is one
+ * quoted word, because PowerShell would split `"<root>"/scripts/x.py` into two arguments.
+ */
+function datumNoteWin32(input: { skillRoot: string; python: string }) {
+  const root = input.skillRoot.replace(/[\\/]+$/, "")
+  return DATUM_SKILL_NOTE.replaceAll("{{DATUM_ROOT}}/scripts/<name>.py", () =>
+    powershellQuoted(`${root}\\scripts\\<name>.py`),
+  )
+    .replaceAll("{{DATUM_ROOT}}", () => powershellQuoted(root))
+    .replaceAll("{{DATUM_PYTHON}}", () => `& ${powershellQuoted(input.python)}`)
+}
+
 /** DATUM's entry text: the Swarm note with the paths filled in, then the SKILL.md body. Nothing when a guard fails. */
-export function datumSkillEntry(input: { skillRoot: string; python: string }, skillText: string) {
+export function datumSkillEntry(
+  input: { skillRoot: string; python: string },
+  skillText: string,
+  platform: NodeJS.Platform = process.platform,
+) {
   const body = skillBody(skillText)
   if (body === undefined) return undefined
-  const note = DATUM_SKILL_NOTE.replaceAll("{{DATUM_ROOT}}", () => input.skillRoot).replaceAll(
-    "{{DATUM_PYTHON}}",
-    () => input.python,
-  )
+  const note =
+    platform === "win32"
+      ? datumNoteWin32(input)
+      : DATUM_SKILL_NOTE.replaceAll("{{DATUM_ROOT}}", () => input.skillRoot).replaceAll(
+          "{{DATUM_PYTHON}}",
+          () => input.python,
+        )
   const content = `${note}\n\n${body}`
   if (Buffer.byteLength(content) > DATUM_SKILL_MAX_BYTES) return undefined
   if (content.includes("!`") || /\$(?:\d|ARGUMENTS)/.test(content)) return undefined

@@ -72,7 +72,12 @@ const api: ElectronAPI = {
   },
   // Mission control (row 127): one plain object argument each; main validates it and holds the host token.
   missions: {
-    list: (input) => ipcRenderer.invoke(MISSION_CONTROL_IPC.list, { directory: input?.directory }),
+    list: (input) =>
+      ipcRenderer.invoke(MISSION_CONTROL_IPC.list, {
+        directory: input?.directory,
+        // A plain copy: a renderer store proxy cannot cross structured clone; main validates the content.
+        ...(input?.sessions === undefined ? {} : { sessions: Array.isArray(input.sessions) ? [...input.sessions] : input.sessions }),
+      }),
     get: (input) => ipcRenderer.invoke(MISSION_CONTROL_IPC.get, { mission: input?.mission }),
     answer: (input) =>
       ipcRenderer.invoke(MISSION_CONTROL_IPC.answer, {

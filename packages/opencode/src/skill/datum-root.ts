@@ -19,6 +19,9 @@ const PACKAGED_MARKER = "app.asar"
 const SKILL_FILE = "SKILL.md"
 const MANIFEST = "runtime-manifest.json"
 const PYTHON = path.join("bin", "datum-python")
+// Windows ships a batch launcher instead (spec 114 section 5.2, register R6.3); NTFS has no exec bit, so a regular
+// non-symlink file is enough there.
+const PYTHON_WIN32 = path.join("bin", "datum-python.cmd")
 // <desktop>/out/main/<entry>.js; the entry file name is whatever the bundler emitted.
 const DEV_ENTRY = /[\\/]out[\\/]main[\\/][^\\/]+\.js$/
 
@@ -99,7 +102,7 @@ function skillSha(disk: Disk, manifest: string) {
   }
 }
 
-function inspect(resourcesPath: string, entry: unknown, disk: Disk): Status {
+function inspect(resourcesPath: string, entry: unknown, disk: Disk, win32: boolean): Status {
   const where = layout(resourcesPath, entry, disk)
   const skillRoot = folder(disk, where.skillBase, SKILL_FOLDER)
   const runtimeRoot = folder(disk, where.runtimeBase, where.runtimeName)
@@ -107,18 +110,30 @@ function inspect(resourcesPath: string, entry: unknown, disk: Disk): Status {
   regularFile(disk, skillFile, "missing")
   const digest = crypto.createHash("sha256").update(disk.readFile(skillFile)).digest("hex")
   if (skillSha(disk, path.join(runtimeRoot, MANIFEST)) !== digest) throw new Failure("manifest")
+  if (win32) {
+    const python = path.join(runtimeRoot, PYTHON_WIN32)
+    regularFile(disk, python, "python")
+    return { kind: "available", skillRoot, python }
+  }
   const python = path.join(runtimeRoot, PYTHON)
   if ((regularFile(disk, python, "python").mode & 0o111) === 0) throw new Failure("python")
   return { kind: "available", skillRoot, python }
 }
 
 /** Decides from its arguments alone. Outside the app's utility process it does not touch the disk at all. */
-export function resolve(input: { type: unknown; resourcesPath: unknown; entry?: unknown; disk?: Disk }): Status {
+export function resolve(input: {
+  type: unknown
+  resourcesPath: unknown
+  entry?: unknown
+  disk?: Disk
+  platform?: NodeJS.Platform
+}): Status {
   if (input.type !== "utility" || typeof input.resourcesPath !== "string") return { kind: "no-app" }
   // A relative value would be measured from the working directory, which must never name a root.
   if (!path.isAbsolute(input.resourcesPath)) return { kind: "failed", code: "missing" }
+  const win32 = (input.platform ?? process.platform) === "win32"
   try {
-    return inspect(input.resourcesPath, input.entry, input.disk ?? realDisk)
+    return inspect(input.resourcesPath, input.entry, input.disk ?? realDisk, win32)
   } catch (error) {
     return { kind: "failed", code: error instanceof Failure ? error.code : "missing" }
   }
