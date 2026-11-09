@@ -23,6 +23,7 @@
  */
 import { studioRoutePath } from "../../../src/lib/studio/contract/env";
 import { normalizeControlSheetKeys } from "../../../src/lib/studio/contract/schema/v2/verification-entry";
+import { summarizeLint, type LintSummary } from "../../../src/lib/studio/registry/lint-explain";
 import type { SubmitPlanItem } from "../studio-report";
 import { MAX_INPUT_BYTES } from "./config";
 import { McpToolError } from "./safety";
@@ -881,6 +882,20 @@ const structureTool: ToolDef = {
 
 // ── studio_document_status (R15 + ringkasan R05) ────────────────────────
 
+/** Swarm row 206: lint lines for the status block (server text: inside the untrusted block only). */
+function lintLines(l: LintSummary): string[] {
+  const head = `lint: ${l.verdict}${l.tier ? ` tier ${l.tier}` : ""}; ran ${l.ran ? "ya" : "tidak"}${l.counts ? `; PASS ${l.counts.PASS}, FAIL ${l.counts.FAIL}, REPORT ${l.counts.REPORT}, NOT_RUN ${l.counts.NOT_RUN}` : ""}${l.reason ? `; ${l.reason}` : ""}`;
+  const out = [head];
+  const explained = new Set<string>();
+  for (const f of l.findings) {
+    out.push(`- ${f.code} ${f.status}${f.address ? ` @ ${f.address}` : ""}: ${f.message}`);
+    if (f.rule && !explained.has(f.code)) out.push(`  aturan: ${f.rule}`);
+    explained.add(f.code);
+  }
+  if (l.findingsTotal > l.findings.length) out.push(`- (+${l.findingsTotal - l.findings.length} temuan lain; detail=true)`);
+  return out;
+}
+
 const statusTool: ToolDef = {
   name: "studio_document_status",
   description: `Status dokumen: kelengkapan (R15: slot wajib, bab hadir/kurang, langkah berikut, boleh render penuh) + ringkasan lint dan berkas terakhir (R05). detail=true: penuh. ${DATA_NOT_INSTRUCTIONS}`,
@@ -896,13 +911,17 @@ const statusTool: ToolDef = {
     const b = isRecord(r05.body) ? r05.body : {};
     const detail = bool(a, "detail");
     const sum = compactSummary(b);
+    const lintSum = detail ? summarizeLint(b.lint, { max: 100, withNotRun: true }) : summarizeLint(b.lint, { max: 5, messageMax: 200 });
     const doc = isRecord(sum.document) ? sum.document : {};
     const outputs = arr(sum.outputs);
     const comp = completenessBrief(c, detail);
     const data: Rec = {
       document: pick(doc, ["id", "docNumber", "title", "docKey", "missionFolder", "currentRevisionNo", "releaseStatus"]),
       completeness: comp,
-      lint: detail ? (b.lint ?? null) : (sum.lint ?? null),
+      // Swarm row 206 (1.2.3): tri-state lint (ran / verdict / findings with codes, messages, rule explanations);
+      // detail lists every FAIL and NOT_RUN item and keeps the full report in lintReport.
+      lint: lintSum,
+      ...(detail ? { lintReport: b.lint ?? null } : {}),
       outputs: detail ? outputs : cap(outputs, 5).map((o) => pick(o, ["id", "format", "scope", "draft", "finalFileName", "sha256"])),
       ...(detail ? {} : { outputCount: outputs.length, detail: false }),
     };
@@ -911,14 +930,16 @@ const statusTool: ToolDef = {
     const lines = [
       `dokumen ${id} ${tok(doc.docNumber)}: revisi terkini ${tok(doc.currentRevisionNo)}; ${completenessLine(brief)} (status dokumen nyata)`,
       `  slot: ${Array.isArray(brief?.slots) ? (brief.slots as unknown[]).map((k) => tok(k, "?")).join(" ") : "-"} (* = wajib)`,
-      isRecord(sum.lint) ? "  lint: ada (ringkasan di blok status di bawah)" : "  lint: belum ada (belum dirender)",
+      lintSum.ran
+        ? `  lint: ${lintSum.verdict} (dijalankan; ${lintSum.findingsTotal} temuan${lintSum.findingsTotal > lintSum.findings.length ? `, ${lintSum.findings.length} tercantum; detail=true untuk semua` : ""}; rincian di blok status di bawah)`
+        : `  lint: NOT_RUN (tidak dijalankan${b.lint === null || b.lint === undefined ? "; belum dirender" : "; rincian di blok status di bawah"})`,
     ];
     const steps = brief && Array.isArray(brief.nextSteps) ? (brief.nextSteps as unknown[]).map(String) : [];
     lines.push(
       untrustedBlock(
         [
           `judul: ${String(doc.title ?? "")}`,
-          ...(isRecord(sum.lint) ? [`lint: ${JSON.stringify(sum.lint)}`] : []),
+          ...lintLines(lintSum),
           ...cap(outputs, 5).map((o) => `berkas ${String(o.id)} ${String(o.format ?? "")} ${String(o.finalFileName ?? "")}`),
           ...steps.map((s) => `- ${s}`),
         ].join("\n"),

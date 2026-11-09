@@ -271,7 +271,9 @@ describe('C1/P-2: hasil ringkas bawaan, detail=true untuk bentuk penuh', () => {
     expect(compact.bytes * 4).toBeLessThan(detail.bytes);
     const s = await call('studio_document_get', { documentId: DOC, view: 'summary' });
     const sd = await call('studio_document_get', { documentId: DOC, view: 'summary', detail: true });
-    expect(s.data.lint).toEqual({ verdict: 'PASS', findings: 50 });
+    // Swarm row 206 (1.2.3): tri-state lint summary (ran/verdict/findings with codes and messages), capped at 5 in the compact form.
+    expect(s.data.lint).toMatchObject({ ran: true, verdict: 'PASS', findingsTotal: 50 });
+    expect(s.data.lint.findings).toHaveLength(5);
     expect(s.data.outputs[0].relPath).toBeUndefined();
     expect(sd.data.lint.findings).toHaveLength(50);
     expect(s.bytes * 3).toBeLessThan(sd.bytes);

@@ -522,7 +522,10 @@ Full text: `references/06-lint.md`.
   never a pass. Work every deliverable through this loop, every time:
   1. **Render.** Call `studio_render` with the formats the reader needs, and add `pdf` for a
      client document. Studio adds the HTML it measures; keep it.
-  2. **Read the report.** Read every FAIL and UNKNOWN line: check, page, address, detail.
+  2. **Read the report.** Read every FAIL and UNKNOWN line: check, page, address, detail. The
+     text lists them per unverified output in a fenced block, one line per check: `check`,
+     `verdict`, `page`, `address`, `measured`, `expected`, `rule`, `message`. A LINT line names
+     the lint rule and what it inspects; `studio_document_status` shows the same lint findings.
   3. **Look at the pages.** Open every page image the report lists under `pages[].png`. When
      it lists none, open the PDF or HTML output and look at every page. Look for what the
      checks cannot see: wrong emphasis, awkward breaks, a figure that says the wrong thing.

@@ -167,7 +167,8 @@ describe("row 150: LINT", () => {
     const c = checkLint({ format: "HTML", lintReport: report("TERBIT", [...GOOD_TERBIT, issue("DATUM-37", "FAIL", "3.2"), issue("D01", "FAIL", "5.1")]), lintVerdict: "FAIL", tier: "TERBIT" })
     expect(c.status).toBe("FAIL")
     // D01 is SERAH-only (V/registry/lint.ts): not applicable at TERBIT, so not listed.
-    expect(c.findings).toEqual([{ code: "LINT_FAIL", page: null, address: "3.2", label: null, detail: "DATUM-37" }])
+    // Row 206 (1.2.3, AC-4): the check id is the label; the detail is "<id>: <engine message>" (the id alone when none).
+    expect(c.findings).toEqual([{ code: "LINT_FAIL", page: null, address: "3.2", label: "DATUM-37", detail: "DATUM-37: DATUM-37 FAIL" }])
   })
   it("the tier decides through releaseFor: a SERAH-only failure does not fail a TERBIT document", () => {
     const c = checkLint({ format: "DOCX", lintReport: report("TERBIT", [...GOOD_TERBIT, issue("D01", "FAIL")]), lintVerdict: "PASS", tier: "TERBIT" })
@@ -187,7 +188,7 @@ describe("row 150: LINT", () => {
   })
   it("a FAIL outranks the NOT_RUN parts; parsed objects are read like stored JSON text", () => {
     const parsed = JSON.parse(report("TERBIT", [issue("DATUM-37", "NOT_RUN"), issue("C-27", "FAIL")])) as unknown
-    expect(checkLint({ format: "SVG", lintReport: parsed, lintVerdict: "FAIL", tier: "TERBIT" })).toMatchObject({ status: "FAIL", findings: [{ code: "LINT_FAIL", detail: "C-27" }] })
+    expect(checkLint({ format: "SVG", lintReport: parsed, lintVerdict: "FAIL", tier: "TERBIT" })).toMatchObject({ status: "FAIL", findings: [{ code: "LINT_FAIL", label: "C-27", detail: "C-27: C-27 FAIL" }] })
   })
   it("findings are capped at VERIFY_FINDINGS_CAP with the rest counted in `truncated`", () => {
     const many = Array.from({ length: 60 }, (_, k) => issue("DATUM-17", "FAIL", `9.${k}`))

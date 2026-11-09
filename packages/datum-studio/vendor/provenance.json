@@ -50,15 +50,16 @@
   "row165O": "2026-11-08: C203 F165N-2 (DATUM-15 not applicable). engine/lint/render/index.ts re-patched (files[].patch_row165O, before = previous sha256; status unchanged). Diff in implementation/145_row165O_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9723052 + 565 (index.ts +565) = 9723617. patch_rows += 165O. Addendum C204 items 3 and 4: engine/front/texts.ts, engine/html/blocks/wrapper.ts, engine/html/blocks/classes.ts, engine/docx/wrapper/render.ts, engine/docx/wrapper/pages.ts (control block back to 4 x 2, classification line in the number cell) and engine/diagram/core/svg.ts (explicit fill none on hatch and stroke-only lines) re-patched (files[].patch_row165O; statuses unchanged, all already patched). bytes 9723617 + 1422 (texts.ts -36, wrapper.ts +492, classes.ts +151, render.ts +317, pages.ts +30, svg.ts +468) = 9725039",
   "row174": "2026-11-08: C218 F146b-6 (diagram block refusal). src/lib/studio/contract/schema/v2/forbidden.ts copied -> patched (classifySchemaV2Errors names the exclusive fields of a oneOf passed by several branches: spec|artifactId, data|panels|artifactId, text|runs, documentId|docNumber); scripts/studio/mcp/resources.ts re-patched (guide: diagram block shape, spec ATAU artifactId). Diffs in implementation/155_row174_diffs/. counts by delta: copied 451 -> 450, patched 115 -> 116; bytes 9757539 + 1830 (forbidden.ts) + 341 (resources.ts) = 9759710. patch_rows += 174",
   "row178": "2026-11-08: row 178 (diagram refusals name the fix). forbidden.ts re-patched (files[].patch_row178, before = row 174 sha256) + NEW contract/schema/v2/refusal-hints.ts (status added). Diff and new file in implementation/157_row178_diffs/. counts: files 604 -> 605, added 26 -> 27; bytes 9759710 + 3106 (forbidden.ts) + 8545 (refusal-hints.ts) = 9771361",
-  "row207": "2026-11-09: 1.2.3 patch HB-2 (verificationChain columns print and are editable). 7 vendor files re-patched (files[].patch_row207, before = previous sha256): docs/STUDIO-AGENT-GUIDE.md, scripts/studio/mcp/doc-tools.ts, scripts/studio/mcp/resources.ts, scripts/studio/mcp/write-client-edit.ts, src/lib/studio/contract/schema/v2/common.schema.ts, src/lib/studio/contract/types/v2/slot.ts, src/lib/studio/services/compose/front.ts; 4 of them copied -> patched. NEW contract/schema/v2/verification-entry.ts (status added). Diffs in docs/2026-11-09_swarm_1_2_3_patch/implementation/207_row207_diffs/. counts by delta: files 605 -> 606, added 27 -> 28, copied 450 -> 446, patched 116 -> 120; bytes 9771361 + 6442 (re-patched) + 5177 (verification-entry.ts) = 9782980. patch_rows += 207"
+  "row207": "2026-11-09: 1.2.3 patch HB-2 (verificationChain columns print and are editable). 7 vendor files re-patched (files[].patch_row207, before = previous sha256): docs/STUDIO-AGENT-GUIDE.md, scripts/studio/mcp/doc-tools.ts, scripts/studio/mcp/resources.ts, scripts/studio/mcp/write-client-edit.ts, src/lib/studio/contract/schema/v2/common.schema.ts, src/lib/studio/contract/types/v2/slot.ts, src/lib/studio/services/compose/front.ts; 4 of them copied -> patched. NEW contract/schema/v2/verification-entry.ts (status added). Diffs in docs/2026-11-09_swarm_1_2_3_patch/implementation/207_row207_diffs/. counts by delta: files 605 -> 606, added 27 -> 28, copied 450 -> 446, patched 116 -> 120; bytes 9771361 + 6442 (re-patched) + 5177 (verification-entry.ts) = 9782980. patch_rows += 207",
+  "row206": "2026-11-09: 1.2.3 patch row 206 (verification details reach the client; lint tri-state; DATUM-37 parity with OVERLAP_CLIP). 5 vendor files re-patched (files[].patch_row206, before = previous sha256; all already patched): scripts/studio/mcp/doc-tools.ts, scripts/studio/mcp/tool-kit.ts, src/lib/studio/engine/browser/index.ts, src/lib/studio/engine/browser/measure.ts, src/lib/studio/engine/lint/render/index.ts. NEW src/lib/studio/registry/lint-explain.ts (status added). Diffs and new file in docs/2026-11-09_swarm_1_2_3_patch/implementation/206_row206_diffs/. counts by delta: files 606 -> 607, added 28 -> 29, copied/patched/replaced unchanged; bytes 9782980 +4525 (re-patched) + 10060 (lint-explain.ts) = 9797565. patch_rows += 206"
  },
  "counts": {
-  "files": 606,
+  "files": 607,
   "copied": 446,
   "patched": 120,
   "replaced": 12,
-  "added": 28,
-  "bytes": 9782980
+  "added": 29,
+  "bytes": 9797565
  },
  "files": [
   {
@@ -202,9 +203,9 @@
   {
    "path": "scripts/studio/mcp/doc-tools.ts",
    "status": "patched",
-   "bytes": 63312,
+   "bytes": 64855,
    "source_sha256": "af47f4e9a923028b33ead625d6b22d9c7a308e5d430cf1bde5f09a9e32fc7df8",
-   "sha256": "87c6085dbede8491588d8a8ba122ffd75669d61d483db5ddb8b0c028c0111a75",
+   "sha256": "f391cbe330fbef5d319b2398b5d75ea431d176f2bcaffcef2ff43585bd65ce2d",
    "patch_row69c": {
     "id": "row69c-chapter-import-archived-code",
     "row": "69c",
@@ -216,7 +217,8 @@
     "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/70_row69c_diffs/doc-tools.ts.diff",
     "diff_sha256": "b764d91f9b2ded73ba2a6a5181b1912e706c9fb9eb187305be3bdfd0dc0b019d"
    },
-   "patch_row207": {"id": "row207-hb2-verification-chain", "row": "207", "decision": "1.2.3 patch HB-2", "summary": "studio_slot_fill maps verificationChain printed column names to canonical keys before sending (ARG_MAPPED warning, also on dryRun)", "before_sha256": "66cac0dc6f52d67a7612668a7a9fa0018f511ca5d3da30f17822ec0ba75c6c3b", "after_sha256": "87c6085dbede8491588d8a8ba122ffd75669d61d483db5ddb8b0c028c0111a75", "diff": "docs/2026-11-09_swarm_1_2_3_patch/implementation/207_row207_diffs/doc-tools.ts.diff"}
+   "patch_row207": {"id": "row207-hb2-verification-chain", "row": "207", "decision": "1.2.3 patch HB-2", "summary": "studio_slot_fill maps verificationChain printed column names to canonical keys before sending (ARG_MAPPED warning, also on dryRun)", "before_sha256": "66cac0dc6f52d67a7612668a7a9fa0018f511ca5d3da30f17822ec0ba75c6c3b", "after_sha256": "87c6085dbede8491588d8a8ba122ffd75669d61d483db5ddb8b0c028c0111a75", "diff": "docs/2026-11-09_swarm_1_2_3_patch/implementation/207_row207_diffs/doc-tools.ts.diff"},
+   "patch_row206": {"id": "row206-findings-lint-tristate", "row": "206", "decision": "1.2.3 patch P3 (row 206)", "summary": "studio_document_status: lint is the tri-state summary (ran/verdict/findings with code, address, message, rule explanation); text line lint: <VERDICT> or NOT_RUN, status block lists each finding with its rule once; detail lists FAIL + NOT_RUN and keeps lintReport", "before_sha256": "87c6085dbede8491588d8a8ba122ffd75669d61d483db5ddb8b0c028c0111a75", "after_sha256": "f391cbe330fbef5d319b2398b5d75ea431d176f2bcaffcef2ff43585bd65ce2d", "diff": "docs/2026-11-09_swarm_1_2_3_patch/implementation/206_row206_diffs/scripts_studio_mcp_doc-tools.ts.diff"}
   },
   {
    "path": "scripts/studio/mcp/figure-tools.ts",
@@ -289,9 +291,9 @@
   {
    "path": "scripts/studio/mcp/tool-kit.ts",
    "status": "patched",
-   "bytes": 24813,
+   "bytes": 24824,
    "source_sha256": "25435916568dbd4df59e5fe4fd9a21dbe1b2b477e38fab302bfa16e88afec36b",
-   "sha256": "a80cd9faabfad505752dfa9dbb683c1acf221038b60c384b1b1a6e79eb4a8db8",
+   "sha256": "01b088ee9ce003b442ae97083684eaab9b67501d2450cb29e74c104c46e2e113",
    "patch_row69c": {
     "id": "row69c-archived-issue-code",
     "row": "69c",
@@ -302,7 +304,8 @@
     "after_sha256": "a80cd9faabfad505752dfa9dbb683c1acf221038b60c384b1b1a6e79eb4a8db8",
     "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/70_row69c_diffs/tool-kit.ts.diff",
     "diff_sha256": "d9cea5c23cda0c4336982cd28efc9df41123643116cb9731950261adac96e42f"
-   }
+   },
+   "patch_row206": {"id": "row206-findings-lint-tristate", "row": "206", "decision": "1.2.3 patch P3 (row 206)", "summary": "compactSummary lint = summarizeLint(b.lint) (registry/lint-explain.ts); the engine LintReport no longer picks to {} (read as clean)", "before_sha256": "a80cd9faabfad505752dfa9dbb683c1acf221038b60c384b1b1a6e79eb4a8db8", "after_sha256": "01b088ee9ce003b442ae97083684eaab9b67501d2450cb29e74c104c46e2e113", "diff": "docs/2026-11-09_swarm_1_2_3_patch/implementation/206_row206_diffs/scripts_studio_mcp_tool-kit.ts.diff"}
   },
   {
    "path": "scripts/studio/mcp/tools.ts",
@@ -1215,9 +1218,9 @@
   {
    "path": "src/lib/studio/engine/browser/index.ts",
    "status": "patched",
-   "bytes": 22155,
+   "bytes": 22354,
    "source_sha256": "c9518a269f2985a6449b9c11bf98a1ac48c17e247e9535360be29633cbe9d6b1",
-   "sha256": "3382369818bb414acf4e8a6da8a76b30b580eb2fa0195f32e16f23a22879864f",
+   "sha256": "d1e93e43f825183dd56bc5efabf4d75118a8e92164b8c149b51c57835babaf8e",
    "patch": {
     "id": "row122-cp47-raster-width",
     "row": 122,
@@ -1227,14 +1230,15 @@
     "after_sha256": "3382369818bb414acf4e8a6da8a76b30b580eb2fa0195f32e16f23a22879864f",
     "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/51_row122_diffs/engine_browser_index.ts.diff",
     "diff_sha256": "1a3bda12c83ca8e58060f05001a157db685e0d6087ce3457aff9f69de75620ab"
-   }
+   },
+   "patch_row206": {"id": "row206-findings-lint-tristate", "row": "206", "decision": "1.2.3 patch P3 (row 206)", "summary": "MeasuredElement += layoutWidthPx, viewportPx, sheetWidthMm (flow document element)", "before_sha256": "3382369818bb414acf4e8a6da8a76b30b580eb2fa0195f32e16f23a22879864f", "after_sha256": "d1e93e43f825183dd56bc5efabf4d75118a8e92164b8c149b51c57835babaf8e", "diff": "docs/2026-11-09_swarm_1_2_3_patch/implementation/206_row206_diffs/src_lib_studio_engine_browser_index.ts.diff"}
   },
   {
    "path": "src/lib/studio/engine/browser/measure.ts",
    "status": "patched",
-   "bytes": 15264,
+   "bytes": 15718,
    "source_sha256": "705b768cb644cc023c78e786f4665cf6f7a1571556a99d3d91a839a0587606fb",
-   "sha256": "72c9a823758ccce13c817862384b768dd7f38b5537bcea22942836e502d111dd",
+   "sha256": "7470cf4e00ceeb447352a8a74cec52397a9164a7e954825820ae97c58f126e72",
    "patch_row165K": {"id": "row165K-datum15-scope", "row": "165K", "decision": "C199 ruling 2", "summary": "MEASURE_SCRIPT: each text element also carries `unit` = the data-unit kind of the nearest [data-unit] ancestor (max 40 chars); nothing else changed. The bridge allow-list (desktop start.ts) imports MEASURE_SCRIPT, so it follows; an installed app needs a rebuild to carry it", "before_sha256": "0a1c722f1e148bdb2a5a93ac38eb469ce1e43800b28c3bfc14dca55321f337de", "after_sha256": "72c9a823758ccce13c817862384b768dd7f38b5537bcea22942836e502d111dd", "diff": "implementation/143_row165K_diffs/engine_browser_measure.ts.diff"},
    "patch_row151c": {
     "id": "row151c-measure-stable-refs",
@@ -1246,7 +1250,8 @@
     "after_sha256": "0a1c722f1e148bdb2a5a93ac38eb469ce1e43800b28c3bfc14dca55321f337de",
     "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/123_row151c_diffs/vendor_browser_measure.ts.diff",
     "diff_sha256": "a5147dea5428134fcf7a856f2c09ed6f1add7e2d770382fe8a3f10c99ca52028"
-   }
+   },
+   "patch_row206": {"id": "row206-findings-lint-tristate", "row": "206", "decision": "1.2.3 patch P3 (row 206)", "summary": "flow document element records layoutWidthPx (documentElement.clientWidth), viewportPx (innerWidth), sheetWidthMm", "before_sha256": "72c9a823758ccce13c817862384b768dd7f38b5537bcea22942836e502d111dd", "after_sha256": "7470cf4e00ceeb447352a8a74cec52397a9164a7e954825820ae97c58f126e72", "diff": "docs/2026-11-09_swarm_1_2_3_patch/implementation/206_row206_diffs/src_lib_studio_engine_browser_measure.ts.diff"}
   },
   {
    "path": "src/lib/studio/engine/browser/png.ts",
@@ -3786,9 +3791,9 @@
   {
    "path": "src/lib/studio/engine/lint/render/index.ts",
    "status": "patched",
-   "bytes": 28135,
+   "bytes": 30453,
    "source_sha256": "fabb8d4a27700eac78b9947a7cd80216cec440b23d0519f45f1af1ebf9b75e4c",
-   "sha256": "92932b8d11e560042e5d1b0b23b82a140b3309c9cc231aa0926eea45ea3d90e1",
+   "sha256": "586634ccbef78165ca50ae1d7b8a15860e61471efa28310d1590d2dea8754661",
    "patch_row165O": {"id": "row165O-datum15-not-applicable", "row": "165O", "decision": "C203 (F165N-2)", "summary": "DATUM-15 on a measured layout with no multi-line interior body paragraph is REPORT 'tidak berlaku: ...' (the lint's existing not-applicable form, as C-INFO-OPENER) instead of NOT_RUN, so the Studio gate's LINT_PARTIAL (NOT_RUN only) is not raised by an absence; NOT_RUN kept for no layout metrics and for a truncated measure", "before_sha256": "cd12ea19fc1e4f00afbe2f84eea8598dfd2f70f67f01f794d2d73d6107e73e7a", "after_sha256": "92932b8d11e560042e5d1b0b23b82a140b3309c9cc231aa0926eea45ea3d90e1", "diff": "implementation/145_row165O_diffs/engine_lint_render_index.ts.diff"},
    "patch_row165K": {"id": "row165K-datum15-scope", "row": "165K", "decision": "C199 ruling 2", "summary": "DATUM-15 counts only interior units' running body text: text elements whose unit is cover, controlSheet or toc are left out before the body-font and measure filters; unit-less text (non-Studio HTML) and chapter/section/appendix/partDivider/signatureBlock units still count; NOT_RUN reason names the front matter left out", "before_sha256": "bc18aea50760ecfb75c1676b85eae2330c62dd7fc7636caa2e3ffbc03addebb8", "after_sha256": "cd12ea19fc1e4f00afbe2f84eea8598dfd2f70f67f01f794d2d73d6107e73e7a", "diff": "implementation/143_row165K_diffs/engine_lint_render_index.ts.diff"},
    "patch": {
@@ -3800,7 +3805,8 @@
     "after_sha256": "bc18aea50760ecfb75c1676b85eae2330c62dd7fc7636caa2e3ffbc03addebb8",
     "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/53_row124_diffs/lint__render__index.ts.diff",
     "diff_sha256": "7c13c40a2242af124f1f421496b95e681f2494eb6d66a78e0659552f8914b2b3"
-   }
+   },
+   "patch_row206": {"id": "row206-findings-lint-tristate", "row": "206", "decision": "1.2.3 patch P3 (row 206)", "summary": "DATUM-37: flow layout narrower than the sheet (flowLayoutShortfallPx, host rule) -> right-edge overflows within the missing width not judged, NOT_RUN FLOW_LAYOUT_UNMEASURABLE (never PASS); larger overflows FAIL; exports flowLayoutShortfallPx, FLOW_LAYOUT_UNMEASURABLE_NOTE", "before_sha256": "92932b8d11e560042e5d1b0b23b82a140b3309c9cc231aa0926eea45ea3d90e1", "after_sha256": "586634ccbef78165ca50ae1d7b8a15860e61471efa28310d1590d2dea8754661", "diff": "docs/2026-11-09_swarm_1_2_3_patch/implementation/206_row206_diffs/src_lib_studio_engine_lint_render_index.ts.diff"}
   },
   {
    "path": "src/lib/studio/engine/lint/render/svg.ts",
@@ -4254,6 +4260,14 @@
    "bytes": 22470,
    "source_sha256": "47affb9324e304cd93398f7c239dc330134c4499e963746d09f14c77f5296b9c",
    "sha256": "47affb9324e304cd93398f7c239dc330134c4499e963746d09f14c77f5296b9c"
+  },
+  {
+   "path": "src/lib/studio/registry/lint-explain.ts",
+   "status": "added",
+   "bytes": 10060,
+   "source_sha256": null,
+   "sha256": "3de3bcbb48767170085d0c82bd1146c113ba4ab0077047a7c0704ba66b35e3b8",
+   "note": "NEW Swarm file of row 206 (no clone original): lintRuleExplanation (registry entry + what D16/D17/D18/D19, SLOT_CONTENT_MISSING, CONTENT_CHAPTER_GAP and the render checks DATUM-14/15/25/28/32/33/37 inspect) and summarizeLint (tri-state lint summary: ran, verdict, findings); used by tool-kit compactSummary, studio_document_status and the host verification client entries"
   },
   {
    "path": "src/lib/studio/registry/sections.ts",
@@ -5899,6 +5913,7 @@
   "165P",
   "174",
   "178",
-  "207"
+  "207",
+  "206"
  ]
 }

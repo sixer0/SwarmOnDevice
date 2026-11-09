@@ -30,6 +30,7 @@ import type { MissionLog } from "../mission/tool-result.ts"
 import type { HostToolExtension, HostToolNext, HostToolSession } from "../tool-table.ts"
 import type { VerifyFormat } from "./static-checks.ts"
 import type { OutputVerificationReport, VerifiedOutput } from "./types.ts"
+import { clientEntries, clientFindingsBlock } from "./client-findings.ts"
 import { allUnknownOutput, isVerifyFormat, outputState, verifyOutputs, type VerifyOptions, type VerifyOutputFile } from "./verify-outputs.ts"
 
 export const RENDER_VERIFY_TOOL = "studio_render"
@@ -123,7 +124,14 @@ export function verificationLines(r: OutputVerificationReport, pageImages: { mad
     const why = pageImages.reason && /^[A-Za-z0-9 _.,:()-]{1,120}$/.test(pageImages.reason) ? pageImages.reason : "not made"
     lines.push(`  pages: none imaged (${why}); open the PDF or HTML output and look at every page`)
   }
-  if (r.overall !== "verified") lines.push("  next: read structuredContent.verification, look at the pages, fix the source, render again (DATUM skill §15)")
+  // Row 206 (1.2.3, AC-2): the checks of every unverified output, in the text (short MCP clients never see
+  // structuredContent). One fenced block; document-derived parts stay inside it (MCP-D4).
+  const block = clientFindingsBlock(
+    r.outputs.filter((v) => v.state !== "verified").map((v) => ({ format: v.format, outputId: SAFE.test(v.outputId) ? v.outputId : null, ...clientEntries(v.checks) })),
+    { documentId: SAFE.test(r.documentId) ? r.documentId : "" },
+  )
+  if (block) lines.push("  checks (per unverified output: check, verdict, page, address, measured, expected, rule, message):", block)
+  if (r.overall !== "verified") lines.push("  next: fix the source at the page/address of each check above, look at the pages, render again (DATUM skill §15); full report: structuredContent.verification")
   return lines
 }
 

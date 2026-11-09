@@ -38,8 +38,8 @@ afterEach(() => {
 })
 
 describe("setup tools offer", () => {
-  test("is pending in 1.2.2 when it was never offered", () => {
-    expect(onboarding.SWARM_RELEASE).toBe("1.2.2")
+  test("is pending in 1.2.3 when it was never offered", () => {
+    expect(onboarding.SWARM_RELEASE).toBe("1.2.3")
     expect(onboarding.isSetupToolsOfferPending(home)).toBe(true)
   })
 
@@ -51,7 +51,7 @@ describe("setup tools offer", () => {
 
   test("is not pending once offered in this release, even with nothing installed", () => {
     onboarding.markSetupToolsOffered()
-    expect(values.get(SETUP_TOOLS_OFFERED_RELEASE)).toBe("1.2.2")
+    expect(values.get(SETUP_TOOLS_OFFERED_RELEASE)).toBe("1.2.3")
     expect(onboarding.isSetupToolsOfferPending(home)).toBe(false)
   })
 

@@ -9,6 +9,7 @@
  */
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js"
 import { isStoreError } from "../../store/index.ts"
+import { outputGateFindings } from "../verify/client-findings.ts"
 import { MISSION_GUIDE_URI } from "./mission-guide.ts"
 import { MISSION_SKILL, nextCall } from "./next-call.ts"
 
@@ -52,12 +53,22 @@ function compactDetails(tool: string, code: string, details: Record<string, unkn
 }
 
 export function refusal(tool: string, code: string, message: string, rawDetails: Record<string, unknown> = {}): CallToolResult {
-  const details = compactDetails(tool, code, rawDetails)
+  let details = compactDetails(tool, code, rawDetails)
+  // Row 206 (1.2.3): OUTPUT_UNVERIFIED names, per unverified output, the checks that failed or could not be measured
+  // ({check, verdict, page, address, measured, expected, rule, message}) in the text, fenced as untrusted document text.
+  let block = ""
+  let brief: unknown = details
+  if (code === "OUTPUT_UNVERIFIED") {
+    const g = outputGateFindings(details)
+    details = g.details
+    block = g.block
+    brief = { ...details, deliverables: (Array.isArray(details.deliverables) ? details.deliverables : []).map((d: Record<string, unknown>) => ({ ...d, outputs: (Array.isArray(d.outputs) ? d.outputs : []).map(({ checks: _c, ...o }: Record<string, unknown>) => o) })) }
+  }
   // Row 188 (L47): every refusal ends with the next correct call and the skill that holds the sequence.
   const next = nextCall(code)
   const error = { code, message, details, next, skill: MISSION_SKILL }
   return {
-    content: [{ type: "text", text: `ditolak ${code}: ${message}\nrincian: ${JSON.stringify(details).slice(0, 4000)}\nnext: ${next}` }],
+    content: [{ type: "text", text: `ditolak ${code}: ${message}\nrincian: ${JSON.stringify(brief).slice(0, 4000)}${block ? `\nperiksa (per keluaran belum terverifikasi):\n${block}` : ""}\nnext: ${next}` }],
     structuredContent: { ok: false, tool, code, error, next },
     isError: true,
   }

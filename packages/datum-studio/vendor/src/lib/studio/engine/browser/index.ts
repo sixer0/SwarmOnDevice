@@ -92,6 +92,10 @@ export interface MeasuredElement extends LayoutElement {
   maxLineWidthMm?: number;
   naturalWidthPx?: number;
   naturalHeightPx?: number;
+  /** Swarm row 206: `document` element of a flow layout: documentElement.clientWidth, innerWidth (px CSS) and the sheet. */
+  layoutWidthPx?: number;
+  viewportPx?: number;
+  sheetWidthMm?: number;
 }
 
 export interface MeasuredLayout extends LayoutMetrics {

@@ -38,7 +38,7 @@ import {
   type MeasureOptions,
 } from "../../../vendor/src/lib/studio/engine/browser/index"
 import { bridgeCall, ensureBrowser, withLock } from "../../../vendor/src/lib/studio/engine/browser/runtime"
-import { lintRenderedWith, RENDER_LINT_DEFAULTS, type RenderLintLimits } from "../../../vendor/src/lib/studio/engine/lint/render/index"
+import { FLOW_LAYOUT_UNMEASURABLE_NOTE, lintRenderedWith, RENDER_LINT_DEFAULTS, type RenderLintLimits } from "../../../vendor/src/lib/studio/engine/lint/render/index"
 import { StudioEngineError } from "../../../vendor/src/lib/studio/contract/errors"
 import { clip, stripNonMarkup } from "./html-scan.ts"
 import { notApplicableCheck, type LayoutInput, type VerifyFormat } from "./static-checks.ts"
@@ -246,6 +246,9 @@ export function measureFindings(
     }
     // check37's flow-document case: the document is wider than the sheet with no single element named.
     if (over.length === 0) findings.push(finding("OVERFLOW_RIGHT", { detail: "flow document is wider than the sheet (DATUM-37)" }))
+  } else if (d37.some((i) => i.status === "NOT_RUN" && typeof i.detail === "string" && i.detail.startsWith(FLOW_LAYOUT_UNMEASURABLE_NOTE))) {
+    // Row 206 (1.2.3, P3): the vendored DATUM-37 itself says the flow layout was narrower than the sheet.
+    unknown = "FLOW_LAYOUT_UNMEASURABLE"
   } else if (d37.length === 0 || d37.every((i) => i.status === "NOT_RUN")) {
     unknown = metrics.truncated === true ? "MEASURE_TRUNCATED" : "VERIFY_INTERNAL"
   }

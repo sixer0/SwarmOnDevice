@@ -185,10 +185,21 @@ export function checkLint(i: LintCheckInput): VerifyCheck {
   const tier = tierName as Tier
   const release = releaseFor(report.checks, tier)
   if (release === "FAIL") {
+    // Row 206 (1.2.3, AC-4): every failing lint check is a finding with its check id (label), where it is (address,
+    // else the JSON pointer) and the engine message (document-derived parts untrusted, cut by `finding`).
     for (const c of report.checks) {
-      if (c.status === "FAIL" && appliesAtTier(c, tier)) b.fail(finding("LINT_FAIL", { address: c.address ?? null, detail: c.checkId }))
+      if (c.status === "FAIL" && appliesAtTier(c, tier)) {
+        const msg = typeof c.detail === "string" && c.detail.trim() !== "" ? `${c.checkId}: ${c.detail}` : c.checkId
+        b.fail(finding("LINT_FAIL", { address: c.address ?? c.pointer ?? null, label: c.checkId, detail: msg }))
+      }
     }
-    return b.build()
+    // A FAIL release always has an applicable FAIL check (releaseFor); should none be listed, LINT is not a
+    // finding-less FAIL but UNKNOWN (never verified, never a LINT without findings).
+    const built = b.build()
+    if (built.status === "FAIL") return built
+    const u = new CheckBuilder("LINT", "revision-lint")
+    u.unknownBecause("LINT_PARTIAL")
+    return u.build()
   }
   if (release === "NOT_RUN" || i.lintVerdict === "PENDING" || i.lintVerdict === "NOT_RUN" || i.lintVerdict === null) {
     b.unknownBecause("LINT_NOT_RUN")

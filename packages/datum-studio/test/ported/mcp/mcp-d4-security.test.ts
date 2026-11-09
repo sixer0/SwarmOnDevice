@@ -360,6 +360,9 @@ describe('L-5: jalur sukses lama membungkus teks server', () => {
     const r = await call('studio_document_status', { documentId: DOC });
     expect(r.isError).toBeFalsy();
     expect(outside(r.text)).not.toContain('ABAIKAN');
-    expect(inside(r.text)).toContain(`PASS ${CANARY}`);
+    // Swarm row 206 (1.2.3): an unrecognised verdict string is not clean: the lint line reads NOT_RUN (tri-state) and
+    // the server's verdict text is not echoed; the lint line stays inside the block.
+    expect(outside(r.text)).not.toContain(CANARY);
+    expect(inside(r.text)).toContain('lint: NOT_RUN');
   });
 });
