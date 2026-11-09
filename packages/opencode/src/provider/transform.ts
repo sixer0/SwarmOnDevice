@@ -4,6 +4,8 @@ import type { JSONSchema7 } from "@ai-sdk/provider"
 import type * as Provider from "./provider"
 import type * as ModelsDev from "@opencode-ai/core/models-dev"
 import { iife } from "@/util/iife"
+import { pdfTextForModel } from "@/util/pdf-text"
+import { createHash } from "node:crypto"
 
 type Modality = NonNullable<ModelsDev.Model["modalities"]>["input"][number]
 
@@ -406,6 +408,32 @@ function applyCaching(msgs: ModelMessage[], model: Provider.Model): ModelMessage
   return msgs
 }
 
+/** The bytes of a file part's data when they are inline (data URL, base64 text or bytes); undefined for a remote URL. */
+function fileBytes(data: unknown): Uint8Array | undefined {
+  if (data instanceof Uint8Array) return data
+  if (data instanceof ArrayBuffer) return new Uint8Array(data)
+  if (typeof data !== "string") return undefined
+  if (data.startsWith("data:")) {
+    const comma = data.indexOf(",")
+    if (comma === -1 || !data.slice(0, comma).endsWith(";base64")) return undefined
+    return Buffer.from(data.slice(comma + 1), "base64")
+  }
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(data)) return undefined
+  return Buffer.from(data, "base64")
+}
+
+// The whole history is transformed on every step, so the same PDF would be parsed again each time.
+const pdfTextMemo = new Map<string, string>()
+function pdfTextCached(bytes: Uint8Array, filename: string | undefined, images: boolean) {
+  const key = `${images ? 1 : 0}:${filename ?? ""}:${bytes.byteLength}:${createHash("sha1").update(bytes).digest("hex")}`
+  const hit = pdfTextMemo.get(key)
+  if (hit !== undefined) return hit
+  const text = pdfTextForModel(bytes, { filename, images })
+  pdfTextMemo.set(key, text)
+  if (pdfTextMemo.size > 16) pdfTextMemo.delete(pdfTextMemo.keys().next().value!)
+  return text
+}
+
 function unsupportedParts(msgs: ModelMessage[], model: Provider.Model): ModelMessage[] {
   return msgs.map((msg) => {
     if (msg.role !== "user" || !Array.isArray(msg.content)) return msg
@@ -432,6 +460,12 @@ function unsupportedParts(msgs: ModelMessage[], model: Provider.Model): ModelMes
       const modality = mimeToModality(mime)
       if (!modality) return part
       if (model.capabilities.input[modality]) return part
+
+      // Row 203: a model without PDF input (GSP AI: text and image) gets the PDF's extracted text, not a refusal.
+      if (modality === "pdf" && part.type === "file") {
+        const bytes = fileBytes(part.data)
+        if (bytes) return { type: "text" as const, text: pdfTextCached(bytes, filename, model.capabilities.input.image) }
+      }
 
       const name = filename ? `"${filename}"` : modality
       return {

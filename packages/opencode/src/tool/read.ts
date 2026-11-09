@@ -10,6 +10,7 @@ import { assertExternalDirectoryEffect, libraryRead } from "./external-directory
 import { LibraryRoot } from "@/skill/library-root"
 import { Instruction } from "../session/instruction"
 import { isPdfAttachment, sniffAttachmentMime } from "@/util/media"
+import { pdfTextForModel } from "@/util/pdf-text"
 import { Secrets } from "./secrets"
 import { Reach } from "./reach"
 import { FileSeen } from "./file-seen"
@@ -322,6 +323,25 @@ export const ReadTool = Tool.define<
 
       const mime = sniffAttachmentMime(sample, FSUtil.mimeType(filepath))
       const isImage = SUPPORTED_IMAGE_MIMES.has(mime)
+
+      // Row 203: a model without PDF input (GSP AI declares text and image only) gets the extracted text with page
+      // markers and a note of what was done, instead of an attachment it would refuse. Models with PDF input keep
+      // the native attachment below; so does a read without a model in its context (it is converted later, in
+      // ProviderTransform, if the model turns out to lack PDF input).
+      const model = ctx.extra?.model as { capabilities?: { input?: { pdf?: boolean; image?: boolean } } } | undefined
+      if (isPdfAttachment(mime) && model?.capabilities?.input && !model.capabilities.input.pdf) {
+        const bytes = yield* fs.readFile(filepath)
+        const text = pdfTextForModel(bytes, { filename: path.basename(filepath), images: !!model.capabilities.input.image })
+        return {
+          title,
+          output: [`<path>${filepath}</path>`, `<type>pdf</type>`, `<content>`, text, `</content>`].join("\n"),
+          metadata: {
+            preview: text.slice(0, 2000),
+            truncated: false,
+            loaded: loaded.map((item) => item.filepath),
+          },
+        }
+      }
 
       if (isImage || isPdfAttachment(mime)) {
         const bytes = yield* fs.readFile(filepath)

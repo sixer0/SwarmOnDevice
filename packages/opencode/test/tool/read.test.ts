@@ -31,6 +31,7 @@ import {
   tmpdirScoped,
 } from "../fixture/fixture"
 import { testEffect } from "../lib/effect"
+import { simplePdf } from "../fixture/pdf"
 
 const FIXTURES_DIR = path.join(import.meta.dir, "fixtures")
 
@@ -898,4 +899,51 @@ describe("library frame", () => {
       ),
     )
   })
+})
+
+// Row 203: the GSP AI models take text and images but no PDF files.
+describe("tool.read PDF", () => {
+  const withModel = (input: { pdf: boolean; image: boolean }) => ({
+    ...ctx,
+    extra: { model: { capabilities: { input: { text: true, audio: false, video: false, ...input } } } },
+  })
+
+  it.live("gives a model without PDF input the extracted text with page markers, no attachment", () =>
+    Effect.gen(function* () {
+      const dir = yield* tmpdirScoped()
+      const file = path.join(dir, "brief.pdf")
+      yield* put(file, simplePdf([["Ringkasan", "Anggaran"], ["Lampiran"]], { compress: true }))
+
+      const result = yield* exec(dir, { filePath: file }, withModel({ pdf: false, image: true }))
+      expect(result.attachments).toBeUndefined()
+      expect(result.output).toContain("<type>pdf</type>")
+      expect(result.output).toContain('[PDF "brief.pdf": this model does not take PDF files, so Swarm extracted the text')
+      expect(result.output).toContain("No page images were added")
+      expect(result.output).toContain("--- Page 1 of 2 ---\nRingkasan\nAnggaran")
+      expect(result.output).toContain("--- Page 2 of 2 ---\nLampiran")
+    }),
+  )
+
+  it.live("keeps the native PDF attachment for a model that takes PDF files", () =>
+    Effect.gen(function* () {
+      const dir = yield* tmpdirScoped()
+      const file = path.join(dir, "brief.pdf")
+      yield* put(file, simplePdf([["Ringkasan"]]))
+
+      const result = yield* exec(dir, { filePath: file }, withModel({ pdf: true, image: true }))
+      expect(result.output).toBe("PDF read successfully")
+      expect(result.attachments?.[0].mime).toBe("application/pdf")
+    }),
+  )
+
+  it.live("keeps the attachment when no model is in the context (converted later by the provider transform)", () =>
+    Effect.gen(function* () {
+      const dir = yield* tmpdirScoped()
+      const file = path.join(dir, "brief.pdf")
+      yield* put(file, simplePdf([["Ringkasan"]]))
+
+      const result = yield* exec(dir, { filePath: file })
+      expect(result.attachments?.[0].mime).toBe("application/pdf")
+    }),
+  )
 })
