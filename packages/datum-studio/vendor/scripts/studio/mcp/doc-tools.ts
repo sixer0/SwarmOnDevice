@@ -22,6 +22,7 @@
  * `studio_report_submit` (blok ke dokumen yang bukan laporan kerja milik pemanggil ditolak sebelum kiriman).
  */
 import { studioRoutePath } from "../../../src/lib/studio/contract/env";
+import { normalizeControlSheetKeys } from "../../../src/lib/studio/contract/schema/v2/verification-entry";
 import type { SubmitPlanItem } from "../studio-report";
 import { MAX_INPUT_BYTES } from "./config";
 import { McpToolError } from "./safety";
@@ -758,6 +759,11 @@ const slotFillTool: ToolDef = {
     // F-3: slot selalu menarget dokumen yang ada -> basis eksplisit atau diingat sesi (dry-run bebas).
     const basis = dryRun ? null : requireBasis(num(a, "baseRevisionNo"), ctx, documentId, null);
     const base = basis?.baseRevisionNo ?? num(a, "baseRevisionNo");
+    // Row 207 (HB-2): verificationChain printed column names (Lapis/Metode/Objek/Hasil, any case) -> canonical keys;
+    // unknown keys are left for the server, which refuses them with the accepted keys (0 writes).
+    const keyMap = normalizeControlSheetKeys(a.payload);
+    const mappedWarning: ToolWarning | null =
+      keyMap.mapped.length > 0 ? { code: "ARG_MAPPED", message: `verificationChain: nama kolom dipetakan ke kunci: ${keyMap.mapped.slice(0, 12).join("; ")}` } : null;
     const body: Rec = {
       $schema: "studio.slot/v2",
       ...bodyAgentId(a, ctx),
@@ -768,11 +774,11 @@ const slotFillTool: ToolDef = {
       ...(isRecord(a.change) ? { change: a.change } : {}),
     };
     requireBodyBytes(body, "payload");
-    if (dryRun) return dryRunOutput(ctx, `slot ${String(str(a, "slot"))}`, body, bool(a, "detail"));
+    if (dryRun) return withWarnings(await dryRunOutput(ctx, `slot ${String(str(a, "slot"))}`, body, bool(a, "detail")), mappedWarning);
     const reply = await http(ctx, "POST", studioRoutePath("R13"), "POST /api/studio/slots", { json: body });
     const b = isRecord(reply.body) ? reply.body : {};
     const rebasedWarning = rememberResult(ctx, b, "studio_slot_fill", base);
-    return withWarnings(submitOutput(`isi slot ${String(str(a, "slot"))}`, b, bool(a, "detail"), basis?.remembered === true ? { basisFromSession: basis.baseRevisionNo } : {}, basis?.line ? [basis.line] : []), rebasedWarning);
+    return withWarnings(submitOutput(`isi slot ${String(str(a, "slot"))}`, b, bool(a, "detail"), basis?.remembered === true ? { basisFromSession: basis.baseRevisionNo } : {}, basis?.line ? [basis.line] : []), rebasedWarning, mappedWarning);
   },
 };
 

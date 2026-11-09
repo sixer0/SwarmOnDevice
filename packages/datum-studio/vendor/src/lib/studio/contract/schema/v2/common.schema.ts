@@ -690,11 +690,13 @@ export const commonV2Schema = {
       { rev: { type: "string", minLength: 1, maxLength: 16 }, date: isoDate, what: longText, by: str },
       ["rev", "date", "what", "by"],
     ),
-    VerificationEntryV2: obj({ layer: { type: "string", minLength: 1, maxLength: 16 }, role: str, name: str, date: isoDate }, [
-      "layer",
-      "role",
-      "name",
-    ]),
+    // Row 207 (HB-2): + method/object/result (printed METODE/OBJEK/HASIL); layer + at least one other key
+    // (documented role/name, or the printed columns). Aliases are mapped before validation (verification-entry.ts).
+    VerificationEntryV2: obj(
+      { layer: { type: "string", minLength: 1, maxLength: 16 }, method: longText, object: longText, result: longText, role: str, name: str, date: isoDate },
+      ["layer"],
+      { minProperties: 2 },
+    ),
     DistributionEntryV2: obj({ copy: { type: "string", minLength: 1, maxLength: 16 }, holder: str }, ["copy", "holder"]),
     ControlSheetPayloadV2: obj(
       {

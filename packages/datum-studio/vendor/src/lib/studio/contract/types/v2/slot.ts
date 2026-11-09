@@ -32,11 +32,14 @@ export interface RevisionEntryV2 {
   by: string;
 }
 
-/** T2-36 */
+/** T2-36. Row 207 (HB-2): method/object/result = printed METODE/OBJEK/HASIL; role/name optional (layer + one more). */
 export interface VerificationEntryV2 {
   layer: string;
-  role: string;
-  name: string;
+  method?: string;
+  object?: string;
+  result?: string;
+  role?: string;
+  name?: string;
   date?: string;
 }
 

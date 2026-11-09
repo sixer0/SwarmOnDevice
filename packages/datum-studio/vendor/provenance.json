@@ -49,15 +49,16 @@
   "row165P": "2026-11-08: C205 (manual furniture: CP-01/04/05 control block and lembar kicker, CP-05 HALAMAN, CP-08/11/12/13 PDF and DOCX furniture, CP-23 DOCX lead 9 mm, CP-29 DOCX derivation mark, CP-28/48 stand-alone figure apparatus, CP-36 derivation expression). 15 vendor files re-patched (files[].patch_row165P, before = previous sha256): engine/front/texts.ts, html/blocks/wrapper.ts, html/blocks/classes.ts, html/base/shell.ts, html/tables/derivation.ts, docx/wrapper/pages.ts, docx/wrapper/render.ts, docx/wrapper/media.ts, docx/blocks/structure.ts, docx/package/header-footer.ts, docx/figures/derivation.ts, diagram/build/svg.ts, diagram/build/index.ts (copied -> patched), diagram/elk/index.ts (added), services/render/pdf.ts (added). Diffs in implementation/146_row165P_diffs/. counts by delta: copied 452 - 1 = 451, patched 114 + 1 = 115; bytes 9725039 + 32500 = 9757539. patch_rows += 165P.",
   "row165O": "2026-11-08: C203 F165N-2 (DATUM-15 not applicable). engine/lint/render/index.ts re-patched (files[].patch_row165O, before = previous sha256; status unchanged). Diff in implementation/145_row165O_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9723052 + 565 (index.ts +565) = 9723617. patch_rows += 165O. Addendum C204 items 3 and 4: engine/front/texts.ts, engine/html/blocks/wrapper.ts, engine/html/blocks/classes.ts, engine/docx/wrapper/render.ts, engine/docx/wrapper/pages.ts (control block back to 4 x 2, classification line in the number cell) and engine/diagram/core/svg.ts (explicit fill none on hatch and stroke-only lines) re-patched (files[].patch_row165O; statuses unchanged, all already patched). bytes 9723617 + 1422 (texts.ts -36, wrapper.ts +492, classes.ts +151, render.ts +317, pages.ts +30, svg.ts +468) = 9725039",
   "row174": "2026-11-08: C218 F146b-6 (diagram block refusal). src/lib/studio/contract/schema/v2/forbidden.ts copied -> patched (classifySchemaV2Errors names the exclusive fields of a oneOf passed by several branches: spec|artifactId, data|panels|artifactId, text|runs, documentId|docNumber); scripts/studio/mcp/resources.ts re-patched (guide: diagram block shape, spec ATAU artifactId). Diffs in implementation/155_row174_diffs/. counts by delta: copied 451 -> 450, patched 115 -> 116; bytes 9757539 + 1830 (forbidden.ts) + 341 (resources.ts) = 9759710. patch_rows += 174",
-  "row178": "2026-11-08: row 178 (diagram refusals name the fix). forbidden.ts re-patched (files[].patch_row178, before = row 174 sha256) + NEW contract/schema/v2/refusal-hints.ts (status added). Diff and new file in implementation/157_row178_diffs/. counts: files 604 -> 605, added 26 -> 27; bytes 9759710 + 3106 (forbidden.ts) + 8545 (refusal-hints.ts) = 9771361"
+  "row178": "2026-11-08: row 178 (diagram refusals name the fix). forbidden.ts re-patched (files[].patch_row178, before = row 174 sha256) + NEW contract/schema/v2/refusal-hints.ts (status added). Diff and new file in implementation/157_row178_diffs/. counts: files 604 -> 605, added 26 -> 27; bytes 9759710 + 3106 (forbidden.ts) + 8545 (refusal-hints.ts) = 9771361",
+  "row207": "2026-11-09: 1.2.3 patch HB-2 (verificationChain columns print and are editable). 7 vendor files re-patched (files[].patch_row207, before = previous sha256): docs/STUDIO-AGENT-GUIDE.md, scripts/studio/mcp/doc-tools.ts, scripts/studio/mcp/resources.ts, scripts/studio/mcp/write-client-edit.ts, src/lib/studio/contract/schema/v2/common.schema.ts, src/lib/studio/contract/types/v2/slot.ts, src/lib/studio/services/compose/front.ts; 4 of them copied -> patched. NEW contract/schema/v2/verification-entry.ts (status added). Diffs in docs/2026-11-09_swarm_1_2_3_patch/implementation/207_row207_diffs/. counts by delta: files 605 -> 606, added 27 -> 28, copied 450 -> 446, patched 116 -> 120; bytes 9771361 + 6442 (re-patched) + 5177 (verification-entry.ts) = 9782980. patch_rows += 207"
  },
  "counts": {
-  "files": 605,
-  "copied": 450,
-  "patched": 116,
+  "files": 606,
+  "copied": 446,
+  "patched": 120,
   "replaced": 12,
-  "added": 27,
-  "bytes": 9771361
+  "added": 28,
+  "bytes": 9782980
  },
  "files": [
   {
@@ -85,10 +86,11 @@
   },
   {
    "path": "docs/STUDIO-AGENT-GUIDE.md",
-   "status": "copied",
-   "bytes": 173611,
+   "status": "patched",
+   "bytes": 174455,
    "source_sha256": "b5429f89523246431aacbfc37749d22c0cf062bbf3f634c4bc269db295e783bb",
-   "sha256": "b5429f89523246431aacbfc37749d22c0cf062bbf3f634c4bc269db295e783bb"
+   "sha256": "0b1fddbd63d0120baad9fd5d4088620c561d5bfd19a5607343521319e4f57389",
+   "patch_row207": {"id": "row207-hb2-verification-chain", "row": "207", "decision": "1.2.3 patch HB-2", "summary": "§5.4 controlSheet example uses layer/method/object/result; paragraph on accepted keys, alias mapping, refusal, role/name print mapping and studio_edit cell addressing", "before_sha256": "b5429f89523246431aacbfc37749d22c0cf062bbf3f634c4bc269db295e783bb", "after_sha256": "0b1fddbd63d0120baad9fd5d4088620c561d5bfd19a5607343521319e4f57389", "diff": "docs/2026-11-09_swarm_1_2_3_patch/implementation/207_row207_diffs/STUDIO-AGENT-GUIDE.md.diff"}
   },
   {
    "path": "prisma/seed-derived-presets.ts",
@@ -200,9 +202,9 @@
   {
    "path": "scripts/studio/mcp/doc-tools.ts",
    "status": "patched",
-   "bytes": 62668,
+   "bytes": 63312,
    "source_sha256": "af47f4e9a923028b33ead625d6b22d9c7a308e5d430cf1bde5f09a9e32fc7df8",
-   "sha256": "66cac0dc6f52d67a7612668a7a9fa0018f511ca5d3da30f17822ec0ba75c6c3b",
+   "sha256": "87c6085dbede8491588d8a8ba122ffd75669d61d483db5ddb8b0c028c0111a75",
    "patch_row69c": {
     "id": "row69c-chapter-import-archived-code",
     "row": "69c",
@@ -213,7 +215,8 @@
     "after_sha256": "66cac0dc6f52d67a7612668a7a9fa0018f511ca5d3da30f17822ec0ba75c6c3b",
     "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/70_row69c_diffs/doc-tools.ts.diff",
     "diff_sha256": "b764d91f9b2ded73ba2a6a5181b1912e706c9fb9eb187305be3bdfd0dc0b019d"
-   }
+   },
+   "patch_row207": {"id": "row207-hb2-verification-chain", "row": "207", "decision": "1.2.3 patch HB-2", "summary": "studio_slot_fill maps verificationChain printed column names to canonical keys before sending (ARG_MAPPED warning, also on dryRun)", "before_sha256": "66cac0dc6f52d67a7612668a7a9fa0018f511ca5d3da30f17822ec0ba75c6c3b", "after_sha256": "87c6085dbede8491588d8a8ba122ffd75669d61d483db5ddb8b0c028c0111a75", "diff": "docs/2026-11-09_swarm_1_2_3_patch/implementation/207_row207_diffs/doc-tools.ts.diff"}
   },
   {
    "path": "scripts/studio/mcp/figure-tools.ts",
@@ -244,11 +247,12 @@
   {
    "path": "scripts/studio/mcp/resources.ts",
    "status": "patched",
-   "bytes": 11779,
+   "bytes": 12270,
    "source_sha256": "1baf1d948b975ea5f44a5d249ba7a138259bccc4b2b460b12c5bc89db390c193",
-   "sha256": "f7622a362f6e3d3a56138dcfb8bf82b445275ffe0fb8de343e728ad72609d126",
+   "sha256": "86dcaab241475f0507bcb0dcfd61390cce85234dc5b27cdd1a3c09fe5dcf4913",
    "patch_row174": {"id": "row174-f146b6", "row": "174", "decision": "C218 F146b-6", "summary": "guide text: three strings after the FIG-03b lines: diagram block shape, spec ATAU artifactId (not both), schema pointer", "before_sha256": "624e36068d5f281ee8c059058704709080ec24eb6d60f8d5fa080c482178c9e2", "after_sha256": "f7622a362f6e3d3a56138dcfb8bf82b445275ffe0fb8de343e728ad72609d126", "diff": "implementation/155_row174_diffs/scripts_studio_mcp_resources.ts.diff"},
-   "patch_row165E": {"id": "row165E-integration", "row": "165E", "decision": "C191 ruling 4 (row 165C file request)", "summary": "guide text: one line (two strings) after the FIG-03b studio_figure_preview lines documenting the stand-alone figure (standalone: true, downloadDir[, png: true]) -> Gambar <n> <Judul>.svg/.png with caption, KUNCI, SUMBER", "before_sha256": "1baf1d948b975ea5f44a5d249ba7a138259bccc4b2b460b12c5bc89db390c193", "after_sha256": "624e36068d5f281ee8c059058704709080ec24eb6d60f8d5fa080c482178c9e2", "diff": "implementation/139_row165E_diffs/scripts_studio_mcp_resources.ts.diff"}
+   "patch_row165E": {"id": "row165E-integration", "row": "165E", "decision": "C191 ruling 4 (row 165C file request)", "summary": "guide text: one line (two strings) after the FIG-03b studio_figure_preview lines documenting the stand-alone figure (standalone: true, downloadDir[, png: true]) -> Gambar <n> <Judul>.svg/.png with caption, KUNCI, SUMBER", "before_sha256": "1baf1d948b975ea5f44a5d249ba7a138259bccc4b2b460b12c5bc89db390c193", "after_sha256": "624e36068d5f281ee8c059058704709080ec24eb6d60f8d5fa080c482178c9e2", "diff": "implementation/139_row165E_diffs/scripts_studio_mcp_resources.ts.diff"},
+   "patch_row207": {"id": "row207-hb2-verification-chain", "row": "207", "decision": "1.2.3 patch HB-2", "summary": "recipe text: verificationChain [{ layer, method, object, result }], accepted keys, mapping, studio_edit cell example", "before_sha256": "f7622a362f6e3d3a56138dcfb8bf82b445275ffe0fb8de343e728ad72609d126", "after_sha256": "86dcaab241475f0507bcb0dcfd61390cce85234dc5b27cdd1a3c09fe5dcf4913", "diff": "docs/2026-11-09_swarm_1_2_3_patch/implementation/207_row207_diffs/resources.ts.diff"}
   },
   {
    "path": "scripts/studio/mcp/safety.ts",
@@ -321,10 +325,11 @@
   },
   {
    "path": "scripts/studio/mcp/write-client-edit.ts",
-   "status": "copied",
-   "bytes": 25452,
+   "status": "patched",
+   "bytes": 28346,
    "source_sha256": "8ff5a3e35022494e6d11dedb46a5b867a277250b083822aae425010cf05ceacd",
-   "sha256": "8ff5a3e35022494e6d11dedb46a5b867a277250b083822aae425010cf05ceacd"
+   "sha256": "87e5099ad1cdf381611198eda53154d0c2c956723d4ed050f48f893cda4fe44a",
+   "patch_row207": {"id": "row207-hb2-verification-chain", "row": "207", "decision": "1.2.3 patch HB-2", "summary": "control-sheet entry lists (revisionHistory, verificationChain, distribution) become cell units with column names (ID/EN heads + key); empty columns addressable; slot TableV2 cells via shared tableUnits; remap matches column", "before_sha256": "8ff5a3e35022494e6d11dedb46a5b867a277250b083822aae425010cf05ceacd", "after_sha256": "87e5099ad1cdf381611198eda53154d0c2c956723d4ed050f48f893cda4fe44a", "diff": "docs/2026-11-09_swarm_1_2_3_patch/implementation/207_row207_diffs/write-client-edit.ts.diff"}
   },
   {
    "path": "scripts/studio/mcp/write-client-run.ts",
@@ -914,10 +919,11 @@
   {
    "path": "src/lib/studio/contract/schema/v2/common.schema.ts",
    "status": "patched",
-   "bytes": 33098,
+   "bytes": 33382,
    "source_sha256": "49f4c3c9f35bcf2969bd1f5db852b995fa2e8119366addc25c20c7768432049e",
-   "sha256": "d4ffaa0ae3b2f1680a5bdec76e680f122628823db188c6f44954ddbec820d50c",
-   "patch": {"id": "row163b-v2-chart-vega", "row": "163b", "decision": "C155 (Vega chart family on the agent render path)", "summary": "additive: ChartV2.code enum += V-01..V-08 (VEGA_CHART_CODES_V2), ChartV2.options (closed: weekStart/offset/max/form) allowed only on V codes and the DF codes vegaChartFor maps (VEGA_ALIAS_CHART_CODES_V2, allOf rule), ChartDataV2 shapes days + hierarchy. Rev A codes, shapes and rules unchanged", "before_sha256": "49f4c3c9f35bcf2969bd1f5db852b995fa2e8119366addc25c20c7768432049e", "after_sha256": "d4ffaa0ae3b2f1680a5bdec76e680f122628823db188c6f44954ddbec820d50c", "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/122_row163b_diffs/contract_schema_v2_common.schema.ts.diff", "diff_sha256": "6aec9051c5fdbcb902029186ccc79b07ecec5a00ee504152817cfb98475ad6bd"}
+   "sha256": "50e5e3e6e06a6cd66aa484757cb53c99962113c5c7c35f617f6d6176b9ea6366",
+   "patch": {"id": "row163b-v2-chart-vega", "row": "163b", "decision": "C155 (Vega chart family on the agent render path)", "summary": "additive: ChartV2.code enum += V-01..V-08 (VEGA_CHART_CODES_V2), ChartV2.options (closed: weekStart/offset/max/form) allowed only on V codes and the DF codes vegaChartFor maps (VEGA_ALIAS_CHART_CODES_V2, allOf rule), ChartDataV2 shapes days + hierarchy. Rev A codes, shapes and rules unchanged", "before_sha256": "49f4c3c9f35bcf2969bd1f5db852b995fa2e8119366addc25c20c7768432049e", "after_sha256": "d4ffaa0ae3b2f1680a5bdec76e680f122628823db188c6f44954ddbec820d50c", "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/122_row163b_diffs/contract_schema_v2_common.schema.ts.diff", "diff_sha256": "6aec9051c5fdbcb902029186ccc79b07ecec5a00ee504152817cfb98475ad6bd"},
+   "patch_row207": {"id": "row207-hb2-verification-chain", "row": "207", "decision": "1.2.3 patch HB-2", "summary": "VerificationEntryV2 + method/object/result (longText); required [layer] + minProperties 2 (role/name optional)", "before_sha256": "d4ffaa0ae3b2f1680a5bdec76e680f122628823db188c6f44954ddbec820d50c", "after_sha256": "50e5e3e6e06a6cd66aa484757cb53c99962113c5c7c35f617f6d6176b9ea6366", "diff": "docs/2026-11-09_swarm_1_2_3_patch/implementation/207_row207_diffs/common.schema.ts.diff"}
   },
   {
    "path": "src/lib/studio/contract/schema/v2/doc.schema.ts",
@@ -949,6 +955,14 @@
    "source_sha256": null,
    "sha256": "557747abcf25ff915261d8ca3cd19b561b62875cbc84ae238d22eec88b93a0ec",
    "note": "NEW Swarm file of row 178 (no clone original): refusal hints read from the v2/v1 schemas (allowed property names, object fields, discriminator values, misplaced-field and alias hints) and DIAGRAM_GUIDE_URI; used by forbidden.ts classifySchemaV2Errors and src/mcp-host/diagram-guide.ts"
+  },
+  {
+   "path": "src/lib/studio/contract/schema/v2/verification-entry.ts",
+   "status": "added",
+   "bytes": 5177,
+   "source_sha256": null,
+   "sha256": "ed92f0495ba8408f33944df13cf249c2feda8958af718893d742a6527f7c3f47",
+   "note": "NEW Swarm file of row 207 (no clone original): verificationChain entry keys, printed-column aliases, normalizeControlSheetKeys (map in place / refuse unknown keys listing the accepted keys); used by R04, R08 dry run, R13 and studio_slot_fill"
   },
   {
    "path": "src/lib/studio/contract/schema/v2/skeleton.schema.ts",
@@ -1104,10 +1118,11 @@
   },
   {
    "path": "src/lib/studio/contract/types/v2/slot.ts",
-   "status": "copied",
-   "bytes": 3956,
+   "status": "patched",
+   "bytes": 4122,
    "source_sha256": "94ae71f174d01ae85084369760f551fb5fa0e31792e1f02e9c1d18c2d23eb744",
-   "sha256": "94ae71f174d01ae85084369760f551fb5fa0e31792e1f02e9c1d18c2d23eb744"
+   "sha256": "ffdd8ea0a1e5aa8c11a4932e87dab405ecb57c16800d0782997f7c832e608e3f",
+   "patch_row207": {"id": "row207-hb2-verification-chain", "row": "207", "decision": "1.2.3 patch HB-2", "summary": "VerificationEntryV2 + method/object/result; role/name optional", "before_sha256": "94ae71f174d01ae85084369760f551fb5fa0e31792e1f02e9c1d18c2d23eb744", "after_sha256": "ffdd8ea0a1e5aa8c11a4932e87dab405ecb57c16800d0782997f7c832e608e3f", "diff": "docs/2026-11-09_swarm_1_2_3_patch/implementation/207_row207_diffs/slot.ts.diff"}
   },
   {
    "path": "src/lib/studio/contract/types/v2/template.ts",
@@ -4364,10 +4379,11 @@
   },
   {
    "path": "src/lib/studio/services/compose/front.ts",
-   "status": "copied",
-   "bytes": 10698,
+   "status": "patched",
+   "bytes": 11817,
    "source_sha256": "0fb38a69957058c5a542ec45a31155669e2629f44eca90e607bfd1b72e97a078",
-   "sha256": "0fb38a69957058c5a542ec45a31155669e2629f44eca90e607bfd1b72e97a078"
+   "sha256": "097e022e19a2d58181571bfa2fe6f40b1ac11f679ba917c35ecffaf0c66e3349",
+   "patch_row207": {"id": "row207-hb2-verification-chain", "row": "207", "decision": "1.2.3 patch HB-2", "summary": "verificationChain manual columns print method/object/result (role -> METODE, name · date -> HASIL when absent); machine form uses the manual columns when entries carry method/object/result (manualVerificationRow)", "before_sha256": "0fb38a69957058c5a542ec45a31155669e2629f44eca90e607bfd1b72e97a078", "after_sha256": "097e022e19a2d58181571bfa2fe6f40b1ac11f679ba917c35ecffaf0c66e3349", "diff": "docs/2026-11-09_swarm_1_2_3_patch/implementation/207_row207_diffs/front.ts.diff"}
   },
   {
    "path": "src/lib/studio/services/compose/hash.ts",
@@ -5882,6 +5898,7 @@
   "165O",
   "165P",
   "174",
-  "178"
+  "178",
+  "207"
  ]
 }

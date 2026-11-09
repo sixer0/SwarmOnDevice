@@ -79,6 +79,51 @@ const inlineUnit = (scope: Scope, kind: JUnit["kind"], h: Rec, extra: Partial<JU
 
 const FRONT_SKIP = new Set(["type", "id", "layer", "copy"]);
 
+/**
+ * Row 207 (HB-2): columns of the control-sheet entry lists, addressable by `{ cell: { row, column } }`. Per list: the
+ * row key (not editable, as before: FRONT_SKIP) and the entry keys in print order with their column name. The column
+ * name carries the printed heads (ID / EN, manual and machine form) and the key, so `Metode`, `Method` and `method`
+ * all address the same cell (findCell: same or contained column, case folded). A cell with no value is still
+ * addressable (filling it writes the key; `verification-entry.ts` holds the accepted keys).
+ */
+const CONTROL_TABLE_COLUMNS: Readonly<Record<string, { key: string; columns: ReadonlyArray<readonly [string, string]> }>> = {
+  revisionHistory: { key: "rev", columns: [["rev", "Rev (rev)"], ["date", "Tanggal / Date (date)"], ["what", "Uraian / Perubahan / Change (what)"], ["by", "Oleh / Penyusun / Prepared by (by)"]] },
+  verificationChain: {
+    key: "layer",
+    columns: [["method", "Metode / Method (method)"], ["object", "Objek / Object (object)"], ["result", "Hasil / Result (result)"], ["role", "Peran / Role (role)"], ["name", "Nama / Name (name)"], ["date", "Tanggal / Date (date)"]],
+  },
+  distribution: { key: "copy", columns: [["holder", "Pemegang / Holder (holder)"]] },
+};
+
+/** Cells of a control-sheet entry list (row 207). Empty cells are set by writing the key; "" removes an optional key. */
+function controlListUnits(scope: Scope, section: string, list: string, entries: unknown[], out: JUnit[]): void {
+  const spec = CONTROL_TABLE_COLUMNS[list];
+  for (const e of entries) {
+    if (!isObj(e)) continue;
+    const str = (k: string) => (typeof e[k] === "string" ? (e[k] as string) : "");
+    const rowCells = [str(spec.key), ...spec.columns.map(([k]) => str(k))];
+    for (const [k, column] of spec.columns) {
+      if (e[k] !== undefined && typeof e[k] !== "string") continue;
+      out.push({
+        scope,
+        kind: "cell",
+        section,
+        rowCells,
+        column,
+        headerRow: false,
+        node: e,
+        get: () => str(k),
+        set: (s) => {
+          if (s === "" && list === "verificationChain" && k !== "layer") delete e[k];
+          else e[k] = s;
+        },
+        remove: null,
+        after: null,
+      });
+    }
+  }
+}
+
 /** Teks slot depan: setiap InlineV2 dan medan string entri (rev, date, what, by, role, name, holder). */
 function slotUnits(slot: string, payload: unknown, out: JUnit[]): void {
   const scope: Scope = { kind: "slot", slot };
@@ -89,12 +134,27 @@ function slotUnits(slot: string, payload: unknown, out: JUnit[]): void {
       out.push(inlineUnit(scope, "field", v, { section: slot }));
       return;
     }
+    // Row 207: a table (TableV2 form of a control-sheet list) -> cells with their header column, as chapter tables.
+    if (Array.isArray(v.rows)) return tableUnits(scope, v, out, slot, null);
     for (const [k, x] of Object.entries(v)) {
-      if (typeof x === "string" && !FRONT_SKIP.has(k)) out.push({ scope, kind: "field", section: slot, get: () => v[k] as string, set: (s) => (v[k] = s), remove: null, after: null });
+      if (slot === "controlSheet" && Array.isArray(x) && CONTROL_TABLE_COLUMNS[k] !== undefined) controlListUnits(scope, slot, k, x, out);
+      else if (typeof x === "string" && !FRONT_SKIP.has(k)) out.push({ scope, kind: "field", section: slot, get: () => v[k] as string, set: (s) => (v[k] = s), remove: null, after: null });
       else walk(x);
     }
   };
   walk(payload);
+}
+
+/** Cells of a table block with the header column of each cell (chapter tables; row 207: slot tables too). */
+function tableUnits(scope: Scope, b: Rec, out: JUnit[], section: string, after: JUnit["after"]): void {
+  const rows = (b.rows as unknown[]).filter(isObj);
+  const cellsOf = (r: Rec) => (Array.isArray(r.cells) ? (r.cells as Rec[]) : []);
+  const head = rows.find((r) => r.kind === "header") ?? rows[0];
+  const header = head !== undefined ? cellsOf(head).map(inlineText) : [];
+  for (const r of rows) {
+    const rowCells = cellsOf(r).map(inlineText);
+    cellsOf(r).forEach((c, ci) => out.push(inlineUnit(scope, "cell", c, { section, rowCells, column: header[ci] ?? "", headerRow: r === head, after })));
+  }
 }
 
 const META_EDITABLE = ["title", "author", "classification", "audience", "custodian", "subject", "basis"];
@@ -107,16 +167,7 @@ function blockUnits(key: string, list: Rec[], out: JUnit[], section: string): vo
     else if (b.type === "list" && Array.isArray(b.items)) {
       const items = b.items as Rec[];
       items.forEach((it) => out.push(inlineUnit(scope, "item", it, { section, remove: () => items.splice(items.indexOf(it), 1), after })));
-    } else if (Array.isArray(b.rows)) {
-      const rows = (b.rows as Rec[]).filter(isObj);
-      const cellsOf = (r: Rec) => (Array.isArray(r.cells) ? (r.cells as Rec[]) : []);
-      const head = rows.find((r) => r.kind === "header") ?? rows[0];
-      const header = head !== undefined ? cellsOf(head).map(inlineText) : [];
-      for (const r of rows) {
-        const rowCells = cellsOf(r).map(inlineText);
-        cellsOf(r).forEach((c, ci) => out.push(inlineUnit(scope, "cell", c, { section, rowCells, column: header[ci] ?? "", headerRow: r === head, after })));
-      }
-    }
+    } else if (Array.isArray(b.rows)) tableUnits(scope, b, out, section, after);
     if (isObj(b.caption)) out.push(inlineUnit(scope, "caption", b.caption, { section, after }));
     if (isObj(b.source)) out.push(inlineUnit(scope, "source", b.source, { section, after }));
   });
@@ -283,7 +334,7 @@ export function applyClientEdits(content: Rec, edits: readonly ClientEditOp[], w
   };
   const remap = (su: JUnit): JUnit | null => {
     const live = su.node !== undefined ? twin.get(su.node) : undefined;
-    return live === undefined ? null : (clientUnits(content).find((u) => u.node === live && u.kind === su.kind) ?? null);
+    return live === undefined ? null : (clientUnits(content).find((u) => u.node === live && u.kind === su.kind && u.column === su.column) ?? null); // row 207: control-list cells share their entry node
   };
   const secOf = (target: string, label: string): ClientSec =>
     resolve(

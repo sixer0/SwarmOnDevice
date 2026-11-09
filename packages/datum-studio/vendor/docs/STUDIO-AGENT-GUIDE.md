@@ -789,13 +789,21 @@ R08 (`POST /api/studio/validate`) menerapkan aturan yang sama: payload lama meng
     "type": "controlSheet",
     "revisionHistory": [{ "rev": "A", "date": "2026-10-23", "what": "Terbit pertama", "by": "Tim Survei" }],
     "verificationChain": [
-      { "layer": "1", "role": "Penyusun", "name": "A. Pratama" },
-      { "layer": "2", "role": "Pemeriksa", "name": "B. Santoso" } ],
+      { "layer": "V1", "method": "Baca baris per baris", "object": "Bab 1-3", "result": "Sesuai, 2 koreksi" },
+      { "layer": "V2", "method": "Eksekusi ulang", "object": "Lampiran B", "result": "Lulus", "role": "Pemeriksa", "name": "B. Santoso" } ],
     "methodStatement": { "text": "Pengukuran langsung di lapangan; metode rinci di Bab 3." },
     "distribution": [{ "copy": "1", "holder": "Manajer Proyek" }]
   }
 }
 ```
+
+Rantai verifikasi dicetak dengan kolom LAPIS | METODE | OBJEK | HASIL (EN: Layer | Method | Object | Result).
+Kunci entri: `layer` (wajib) dan sedikitnya satu dari `method`, `object`, `result`, `role`, `name`, `date`.
+Nama kolom cetak (`Lapis`, `Metode`, `Objek`, `Hasil`, `Peran`, `Nama`, `Tanggal`, huruf besar/kecil bebas) diterima
+dan dipetakan ke kunci itu; kunci lain ditolak `400 SCHEMA_INVALID` dengan daftar kunci yang diterima. Entri yang hanya
+berisi `role`/`name` dicetak METODE = `role`, HASIL = `name` (dan `date`). Sel tabel lembar kendali dapat disunting
+lewat `studio_edit` `{ "cell": { "section": "controlSheet", "row": "V1", "column": "Metode" }, "value": "..." }`;
+kolom yang masih kosong pun dapat diisi.
 
 Tanda Tangan (penempatan di Lembar Kendali diatur templat):
 

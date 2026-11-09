@@ -64,7 +64,8 @@ describe('C10 bentuk manual (opt-in)', () => {
     ]);
     expect(texts(d.verificationChain)).toEqual([
       ['Lapis', 'Metode', 'Objek', 'Hasil'],
-      ['1', '', '', ''],
+      // Row 207 (HB-2): documented role/name mapped onto the printed columns (was ['1', '', '', ''] = the defect).
+      ['1', 'Penyusun', '', 'A. Pratama'],
     ]);
     expect(texts(d.distribution)).toEqual([
       ['Salinan', 'Pemegang', 'Media', 'Kembali'],
