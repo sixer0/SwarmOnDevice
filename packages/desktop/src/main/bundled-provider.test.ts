@@ -49,3 +49,16 @@ describe("bundled provider", () => {
     expect(Object.values(BUNDLED_PROVIDER.provider.models).every((model) => !("cost" in model))).toBe(true)
   })
 })
+
+import { describe as describeVision, expect as expectVision, test as testVision } from "bun:test"
+import { BUNDLED_PROVIDER as VISION_PROVIDER } from "./bundled-provider"
+
+describeVision("GSP AI vision (2026-11-09)", () => {
+  testVision("thinker, worker and worker-fast accept images", () => {
+    for (const id of ["thinker", "worker", "worker-fast"] as const) {
+      const m = VISION_PROVIDER.provider.models[id]
+      expectVision(m.attachment).toBe(true)
+      expectVision(m.modalities.input).toEqual(["text", "image"])
+    }
+  })
+})

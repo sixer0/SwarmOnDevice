@@ -4,13 +4,14 @@ const model = (id: string) => ({
   id,
   name: id,
   release_date: "",
-  attachment: false,
+  // GSP AI thinker, worker and worker-fast accept images (user 2026-11-09), so vision tools and image attachments are offered.
+  attachment: true,
   reasoning: false,
   temperature: false,
   tool_call: true,
   // Zero means undeclared: the server is asked for its window (provider/model-window.ts). No cost means never a spend limit.
   limit: { context: 0, output: 0 },
-  modalities: { input: ["text"], output: ["text"] },
+  modalities: { input: ["text", "image"], output: ["text"] },
 })
 
 export const BUNDLED_PROVIDER = {
