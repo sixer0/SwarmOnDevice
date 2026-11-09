@@ -95,6 +95,12 @@ async function inWindow<T>(kind: WindowKind, width: number, height: number, html
     // Page script never runs, also in the check window where V8 stays on for Runtime.evaluate.
     await dbg.sendCommand("Emulation.setScriptExecutionDisabled", { value: true })
     await dbg.sendCommand("Emulation.setDeviceMetricsOverride", { width, height, deviceScaleFactor, mobile: false })
+    // Row 205 (1.2.3, HB-1): no scrollbar takes layout width. With a mouse attached and macOS "Show scroll bars:
+    // automatic" (or "always") Chromium reserves a classic 15 px scrollbar in this window, so the layout viewport is
+    // 779 px instead of the 794 px A4 sheet: every Studio flow document then measured `.st-unit` (210 mm wide in
+    // screen media) 3.89 mm past the right edge (OVERLAP_CLIP and DATUM-37), and flow page images were cut 15 px
+    // narrow. Playwright's headless Chromium, which the vendored engine was written against, hides scrollbars too.
+    await dbg.sendCommand("Emulation.setScrollbarsHidden", { hidden: true })
     const tree = (await dbg.sendCommand("Page.getFrameTree")) as { frameTree: { frame: { id: string } } }
     await dbg.sendCommand("Page.setDocumentContent", { frameId: tree.frameTree.frame.id, html })
     try {

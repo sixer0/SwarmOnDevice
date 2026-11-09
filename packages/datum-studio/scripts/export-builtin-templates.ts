@@ -685,6 +685,12 @@ coverAndSheetFixes(built.get("datum-gsp")!);
 fixDecision = "C218 (row 174)";
 setLayer(built.get("datum-gsp")!, "render.rail.reserveColumn", true, "F146b-5", "ID:2705-2711; EN:2764 (seed-doc-type-templates.ts:69)", "rail column reserved on interior pages, body paragraphs at the text column (DATUM-15)");
 fixDecision = undefined;
+// Row 205 (1.2.3, HB-1 AC-1): datum-kanonik had the same K2 gap as datum-gsp before C218: its own template preview
+// (studio_template_preview lint true) failed DATUM-15 at 88,0 characters per line (median measure 165,9 mm, real
+// bridge, test/datum-render-electron/row205-flow-viewport.test.ts in packages/desktop). Same fix as C218.
+fixDecision = "C218 (row 174), extended by row 205 (1.2.3)";
+setLayer(built.get("datum-kanonik")!, "render.rail.reserveColumn", true, "HB-1 AC-1", "ID:2705-2711; EN:2764 (seed-doc-type-templates.ts:69)", "rail column reserved on interior pages, body paragraphs at the text column (DATUM-15)");
+fixDecision = undefined;
 
 // ── Row 110d (C61, C69, C72): Rev A control block and control-sheet data on every shipped template ──
 //

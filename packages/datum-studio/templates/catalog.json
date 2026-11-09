@@ -118,8 +118,8 @@
     {
       "slug": "datum-kanonik",
       "file": "datum-kanonik.json",
-      "sha256": "cf2e37f8da2a6625a8e547a2bc57bd6cb1b2b732ec8860b96467ac2d8a914c21",
-      "bytes": 5914,
+      "sha256": "d24fb1b7c36e6410f3372aca3f32935f1ef59f89b99b3cf43cffb3657c435784",
+      "bytes": 5953,
       "name": "DATUM Kanonik",
       "description": "Profil kanonik DATUM: nilai bawaan registri parameter (tanpa override).",
       "kind": "DOCUMENT",
@@ -139,7 +139,7 @@
         "references",
         "appendices"
       ],
-      "c40Fixes": 8,
+      "c40Fixes": 9,
       "seedRef": "seed-studio.ts:851-868 ensureSkeletonVersion (SR-36)",
       "sources": [
         {

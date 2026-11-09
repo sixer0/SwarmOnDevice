@@ -16,6 +16,12 @@
  * RENDER_QUEUE_FULL -> QUEUE_FULL, RENDER_TIMEOUT -> TIMEOUT), was truncated (MEASURE_TRUNCATED) or could not read the
  * @page margins (MARGINS_UNREADABLE); else PASS. A FAIL outranks an UNKNOWN (row 150 rule): a definite defect is
  * reported even when the other script could not run. UNKNOWN never counts as a pass.
+ * Row 205 (1.2.3, HB-1): the bridge hides scrollbars (electron-renderer.ts) so the layout viewport is the sheet width.
+ * The overlap script also reports the layout viewport (`viewportPx`, `layoutWidthPx`); in a flow document laid out
+ * narrower than the sheet, the measure's right-edge overflows are judged against a width the PDF never uses: those
+ * explained by the missing width are dropped and the check is UNKNOWN FLOW_LAYOUT_UNMEASURABLE (never PASS); a larger
+ * overflow still FAILs. Flow findings carry page null by limit L-1 (the screen measure has no printed page boundaries),
+ * and their detail says so.
  * Row 151c (C161 L1): an overlap answer with 0 ink boxes for a document that has ink (host-side read of the HTML,
  * or the measured text) is UNKNOWN VERIFY_INTERNAL, never PASS; the script's `{ untrusted }` answer is not the
  * result shape and is UNKNOWN VERIFY_INTERNAL too.
@@ -73,6 +79,9 @@ export interface OverlapScriptResult {
   scanned: number
   findingsTotal: number
   findings: OverlapScriptFinding[]
+  /** Row 205: window.innerWidth and documentElement.clientWidth in CSS px; null when an older script text answered. */
+  viewportPx: number | null
+  layoutWidthPx: number | null
 }
 
 /** The checkPage request the host sends for `swarm.verify.overlap` (bridge protocol.ts:25). */
@@ -182,13 +191,22 @@ class Builder {
   }
 }
 
+/** Row 205: why a finding has no page / address, appended to its detail (AC-2: never a silent null). */
+export const FLOW_PAGE_NULL_NOTE = "page null by limit L-1: flow layout, the screen measure has no printed page boundaries"
+export const ADDRESS_NULL_NOTE = "address null: no data-address on the element or its ancestors"
+
 function finding(code: string, f: { page?: number | null; address?: string | null; label?: string | null; detail: string; amount?: number }): VerifyFinding {
+  const page = typeof f.page === "number" && Number.isInteger(f.page) && f.page > 0 ? f.page : null
+  const address = clip(f.address ?? null)
+  const notes = [page === null ? FLOW_PAGE_NULL_NOTE : null, address === null ? ADDRESS_NULL_NOTE : null].filter(Boolean)
+  // The engine text is kept whole; only the document-derived part (label, address) was cut by clip.
+  const detail = notes.length ? `${f.detail}; ${notes.join("; ")}` : f.detail
   const out: VerifyFinding = {
     code,
-    page: typeof f.page === "number" && Number.isInteger(f.page) && f.page > 0 ? f.page : null,
-    address: clip(f.address ?? null),
+    page,
+    address,
     label: clip(f.label ?? null),
-    detail: clip(f.detail) ?? "",
+    detail: detail.length > 400 ? `${detail.slice(0, 399)}…` : detail,
   }
   if (typeof f.amount === "number" && Number.isFinite(f.amount)) out.amount = Number(f.amount.toFixed(2))
   return out
@@ -296,6 +314,8 @@ export function parseOverlapResult(v: unknown): OverlapScriptResult | null {
     scanned: num(r.scanned) ? r.scanned : 0,
     findingsTotal: num(r.findingsTotal) ? r.findingsTotal : findings.length,
     findings,
+    viewportPx: num(r.viewportPx) && r.viewportPx > 0 ? r.viewportPx : null,
+    layoutWidthPx: num(r.layoutWidthPx) && r.layoutWidthPx > 0 ? r.layoutWidthPx : null,
   }
 }
 
@@ -319,6 +339,27 @@ export function overlapFindings(r: OverlapScriptResult): { findings: VerifyFindi
   )
   const unknown: VerifyUnknownReason | null = r.truncated ? "MEASURE_TRUNCATED" : r.marginsUnreadable ? "MARGINS_UNREADABLE" : null
   return { findings, unknown, unlisted: Math.max(0, r.findingsTotal - r.findings.length) }
+}
+
+// ── row 205 (1.2.3, HB-1): the layout viewport of a flow document ─────────
+
+/**
+ * CSS px of sheet width the layout did not get, for a flow document: the viewport is not the sheet the host asked for,
+ * or a classic scrollbar took part of it. 0 = measurable (or a paged document: page limits are the page boxes, not the
+ * viewport); null = unknown (older script answer without the viewport fields).
+ */
+export function flowWidthShortfallPx(r: OverlapScriptResult, sheetViewportPx: number): number | null {
+  if (r.paged) return 0
+  if (r.viewportPx === null || r.layoutWidthPx === null) return null
+  const short = Math.max(sheetViewportPx - r.layoutWidthPx, Math.abs(r.viewportPx - sheetViewportPx))
+  return short > 1 ? short : 0
+}
+
+/** A measure finding that only the narrow layout explains: flow (no page), right edge, within the missing width. */
+export function explainedByNarrowLayout(f: VerifyFinding, shortfallPx: number): boolean {
+  if (f.code !== "OVERFLOW_RIGHT" || f.page !== null) return false
+  if (typeof f.amount !== "number") return true // the whole-document DATUM-37 case: wider than a narrowed viewport
+  return f.amount <= shortfallPx / PX_PER_MM + 0.5
 }
 
 // ── row 151c (C161 L1): host-side plausibility ──────────────────────────
@@ -368,13 +409,15 @@ export async function runOverlapClip(input: OverlapClipInput, deps: OverlapClipD
 
   let layout: LayoutInput
   let measured: MeasuredElement[] | null = null
+  // Held until the overlap script has said whether the flow layout had the sheet width (row 205).
+  let measuredFindings: VerifyFinding[] = []
   try {
     const m = await measure(html, { pageWidthMm, pageHeightMm })
     bridgeJobs += m.pageCountSource === "print" ? 2 : 1
     measured = Array.isArray(m.elements) ? m.elements : null
     layout = { metrics: { pageCount: m.pageCount, paged: m.paged, pageCountSource: m.pageCountSource, truncated: m.truncated, elements: m.elements } }
     const part = measureFindings(m, input.limits ?? RENDER_LINT_DEFAULTS, html)
-    part.findings.forEach((f) => b.add(f))
+    measuredFindings = part.findings
     if (part.unknown) b.unknown(part.unknown)
   } catch (e) {
     bridgeJobs += 1
@@ -399,6 +442,13 @@ export async function runOverlapClip(input: OverlapClipInput, deps: OverlapClipD
   } catch (e) {
     b.unknown(unknownReasonFor(e))
   }
+
+  const shortfall = overlap ? flowWidthShortfallPx(overlap, Math.ceil(pageWidthMm * PX_PER_MM)) : 0
+  if (shortfall) {
+    measuredFindings = measuredFindings.filter((f) => !explainedByNarrowLayout(f, shortfall))
+    b.unknown("FLOW_LAYOUT_UNMEASURABLE")
+  }
+  measuredFindings.forEach((f) => b.add(f))
 
   return { check: b.build(), layout, overlap, bridgeJobs }
 }

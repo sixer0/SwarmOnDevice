@@ -11,6 +11,9 @@ export type VerifyUnknownReason =
   | "BRIDGE_UNAVAILABLE" | "QUEUE_FULL" | "TIMEOUT" | "BUDGET_EXCEEDED" | "MEASURE_TRUNCATED"
   | "LINT_NOT_RUN" | "LINT_PARTIAL" | "SOURCE_MISSING" | "PARSE_FAILED" | "NO_GEOMETRY_LINT"
   | "MARGINS_UNREADABLE" | "NUMBER_UNPARSED" | "VERIFY_INTERNAL"
+  // Row 205 (1.2.3, HB-1): a flow document laid out narrower than the sheet (e.g. a classic scrollbar took layout width),
+  // so a right-edge overflow cannot be judged against the sheet the PDF uses. Blocks `verified` like every UNKNOWN.
+  | "FLOW_LAYOUT_UNMEASURABLE"
 /** Where a check was measured: on the file itself, the revision's stored lint, or the same render job's HTML/SVG (§3.7). */
 export type VerifyBasis = "self" | "revision-lint" | "revision-store" | "same-job-html" | "same-job-svg"
 
