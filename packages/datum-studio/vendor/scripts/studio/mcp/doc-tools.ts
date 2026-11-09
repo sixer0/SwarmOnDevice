@@ -946,7 +946,8 @@ const statusTool: ToolDef = {
         { jenis: "status-dokumen", documentId: id },
       ),
     );
-    return { text: lines.join("\n"), data: { ...(neutralizeDeep(data) as Rec), ...untrustedFields(["document.title", "completeness.nextSteps", "completeness.message", "lint", "outputs"]) } };
+    // Swarm row 210 (security review 209 I-2): detail-mode lintReport (engine messages) is listed as untrusted too.
+    return { text: lines.join("\n"), data: { ...(neutralizeDeep(data) as Rec), ...untrustedFields(["document.title", "completeness.nextSteps", "completeness.message", "lint", "outputs", ...(detail ? ["lintReport"] : [])]) } };
   },
 };
 

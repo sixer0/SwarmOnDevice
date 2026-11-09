@@ -16,7 +16,7 @@
  * Document-derived parts (address, label, engine messages that quote labels or text) are untrusted: the text form
  * is one fenced block made by the vendor's `untrustedBlock` (MCP-D4), as every other server text.
  */
-import { untrustedBlock } from "../../../vendor/scripts/studio/mcp/tool-kit"
+import { tok, untrustedBlock } from "../../../vendor/scripts/studio/mcp/tool-kit"
 import { getLintDef } from "../../../vendor/src/lib/studio/registry/lint"
 import { lintRuleExplanation } from "../../../vendor/src/lib/studio/registry/lint-explain"
 import type { VerifyCheck, VerifyCheckId, VerifyFinding } from "./types.ts"
@@ -24,6 +24,20 @@ import type { VerifyCheck, VerifyCheckId, VerifyFinding } from "./types.ts"
 export const FAIL_PER_CHECK = 4
 export const ENTRIES_PER_OUTPUT = 12
 const MESSAGE_MAX = 300
+/**
+ * Row 210 (security review 209 M-1): total size of the fenced block body, measured as printed (NFKC, every "<" or
+ * look-alike counted as its 4-character escape). A refusal over 20 deliverables x N outputs stays bounded; the entries
+ * not printed are counted in one closing `(+N more check entries in structuredContent)` line, never silent.
+ */
+export const CLIENT_FINDINGS_BLOCK_MAX = 16_000
+/** The "<" look-alikes the vendor block escape turns into `&lt;` (tool-kit.ts LT_LIKE), for the printed-size estimate. */
+const LT_LIKE = /[<＜﹤〈〈⟨❬❮‹˂]/g
+const printedSize = (line: string): number => {
+  const n = line.normalize("NFKC")
+  return n.length + 3 * (n.match(LT_LIKE)?.length ?? 0) + 1
+}
+/** Row 210 (L-2): head-line ids are safe tokens or "?"; a format made of several words is checked word by word. */
+const safeWords = (s: string): string => s.split(" ").map((w) => tok(w, "?")).join(" ")
 
 export interface ClientCheckEntry {
   check: VerifyCheckId | string
@@ -150,21 +164,39 @@ export interface ClientOutputChecks {
   more: number
 }
 
-/** The fenced text block: per output a head line and one JSON object per entry. Empty string when nothing to say. */
+/**
+ * The fenced text block: per output a head line and one JSON object per entry. Empty string when nothing to say.
+ * Row 210: the body is capped at CLIENT_FINDINGS_BLOCK_MAX (printed size); the rest is counted in a final line.
+ */
 export function clientFindingsBlock(outputs: readonly ClientOutputChecks[], attrs: Record<string, string> = {}): string {
   const body: string[] = []
+  let size = 0
+  let notShown = 0
   // Concise: a long rule explanation is printed once per block; later entries of the same rule point back to it.
   const explained = new Set<string>()
   for (const o of outputs) {
     if (o.entries.length === 0) continue
-    body.push(`${o.format} ${o.outputId ?? "-"}: ${o.entries.length} check entr${o.entries.length === 1 ? "y" : "ies"}${o.more > 0 ? ` (+${o.more} more findings in structuredContent)` : ""}`)
+    const head = `${safeWords(o.format)} ${o.outputId === null ? "-" : tok(o.outputId, "?")}: ${o.entries.length} check entr${o.entries.length === 1 ? "y" : "ies"}${o.more > 0 ? ` (+${o.more} more findings in structuredContent)` : ""}`
+    if (notShown > 0 || size + printedSize(head) > CLIENT_FINDINGS_BLOCK_MAX) {
+      notShown += o.entries.length
+      continue
+    }
+    body.push(head)
+    size += printedSize(head)
     for (const e of o.entries) {
       const long = e.rule.length > 100
       const rule = long && explained.has(e.rule) ? `${e.rule.split(" ")[0]} (rule explained above)` : e.rule
+      const line = JSON.stringify({ ...e, rule })
+      if (notShown > 0 || size + printedSize(line) > CLIENT_FINDINGS_BLOCK_MAX) {
+        notShown++
+        continue
+      }
       if (long) explained.add(e.rule)
-      body.push(JSON.stringify({ ...e, rule }))
+      body.push(line)
+      size += printedSize(line)
     }
   }
+  if (notShown > 0) body.push(`(+${notShown} more check entries in structuredContent)`)
   return body.length ? untrustedBlock(body.join("\n"), { jenis: "verifikasi-temuan", ...attrs }) : ""
 }
 
@@ -198,7 +230,8 @@ export function outputGateFindings(details: Record<string, unknown>): { details:
       outputs: outs.map((o) => {
         if (!Array.isArray(o.checks)) return o
         const { entries, more } = clientEntries(o.checks as CheckLike[])
-        blocks.push({ format: `${typeof d.docKey === "string" ? d.docKey : "-"} ${typeof o.format === "string" ? o.format : "-"}`, outputId: typeof o.outputId === "string" ? o.outputId : null, entries, more })
+        // Row 210 (L-2): docKey and format are safe tokens or "?" (outputId too, in clientFindingsBlock).
+        blocks.push({ format: `${typeof d.docKey === "string" ? tok(d.docKey, "?") : "-"} ${typeof o.format === "string" ? tok(o.format, "?") : "-"}`, outputId: typeof o.outputId === "string" ? o.outputId : null, entries, more })
         return { ...o, checks: entries, ...(more > 0 ? { more } : {}) }
       }),
     }

@@ -51,7 +51,8 @@
   "row174": "2026-11-08: C218 F146b-6 (diagram block refusal). src/lib/studio/contract/schema/v2/forbidden.ts copied -> patched (classifySchemaV2Errors names the exclusive fields of a oneOf passed by several branches: spec|artifactId, data|panels|artifactId, text|runs, documentId|docNumber); scripts/studio/mcp/resources.ts re-patched (guide: diagram block shape, spec ATAU artifactId). Diffs in implementation/155_row174_diffs/. counts by delta: copied 451 -> 450, patched 115 -> 116; bytes 9757539 + 1830 (forbidden.ts) + 341 (resources.ts) = 9759710. patch_rows += 174",
   "row178": "2026-11-08: row 178 (diagram refusals name the fix). forbidden.ts re-patched (files[].patch_row178, before = row 174 sha256) + NEW contract/schema/v2/refusal-hints.ts (status added). Diff and new file in implementation/157_row178_diffs/. counts: files 604 -> 605, added 26 -> 27; bytes 9759710 + 3106 (forbidden.ts) + 8545 (refusal-hints.ts) = 9771361",
   "row207": "2026-11-09: 1.2.3 patch HB-2 (verificationChain columns print and are editable). 7 vendor files re-patched (files[].patch_row207, before = previous sha256): docs/STUDIO-AGENT-GUIDE.md, scripts/studio/mcp/doc-tools.ts, scripts/studio/mcp/resources.ts, scripts/studio/mcp/write-client-edit.ts, src/lib/studio/contract/schema/v2/common.schema.ts, src/lib/studio/contract/types/v2/slot.ts, src/lib/studio/services/compose/front.ts; 4 of them copied -> patched. NEW contract/schema/v2/verification-entry.ts (status added). Diffs in docs/2026-11-09_swarm_1_2_3_patch/implementation/207_row207_diffs/. counts by delta: files 605 -> 606, added 27 -> 28, copied 450 -> 446, patched 116 -> 120; bytes 9771361 + 6442 (re-patched) + 5177 (verification-entry.ts) = 9782980. patch_rows += 207",
-  "row206": "2026-11-09: 1.2.3 patch row 206 (verification details reach the client; lint tri-state; DATUM-37 parity with OVERLAP_CLIP). 5 vendor files re-patched (files[].patch_row206, before = previous sha256; all already patched): scripts/studio/mcp/doc-tools.ts, scripts/studio/mcp/tool-kit.ts, src/lib/studio/engine/browser/index.ts, src/lib/studio/engine/browser/measure.ts, src/lib/studio/engine/lint/render/index.ts. NEW src/lib/studio/registry/lint-explain.ts (status added). Diffs and new file in docs/2026-11-09_swarm_1_2_3_patch/implementation/206_row206_diffs/. counts by delta: files 606 -> 607, added 28 -> 29, copied/patched/replaced unchanged; bytes 9782980 +4525 (re-patched) + 10060 (lint-explain.ts) = 9797565. patch_rows += 206"
+  "row206": "2026-11-09: 1.2.3 patch row 206 (verification details reach the client; lint tri-state; DATUM-37 parity with OVERLAP_CLIP). 5 vendor files re-patched (files[].patch_row206, before = previous sha256; all already patched): scripts/studio/mcp/doc-tools.ts, scripts/studio/mcp/tool-kit.ts, src/lib/studio/engine/browser/index.ts, src/lib/studio/engine/browser/measure.ts, src/lib/studio/engine/lint/render/index.ts. NEW src/lib/studio/registry/lint-explain.ts (status added). Diffs and new file in docs/2026-11-09_swarm_1_2_3_patch/implementation/206_row206_diffs/. counts by delta: files 606 -> 607, added 28 -> 29, copied/patched/replaced unchanged; bytes 9782980 +4525 (re-patched) + 10060 (lint-explain.ts) = 9797565. patch_rows += 206",
+  "row210": "2026-11-09: 1.2.3 patch P5 row 210 (security review 209 fixes L-1, L-3, I-2). 4 vendor files re-patched (files[].patch_row210, before = previous sha256; statuses unchanged): scripts/studio/mcp/doc-tools.ts (+152), scripts/studio/mcp/write-client-edit.ts (+183), src/lib/studio/contract/schema/v2/verification-entry.ts (+249), src/lib/studio/registry/lint-explain.ts (+155). Diffs in docs/2026-11-09_swarm_1_2_3_patch/implementation/210_row210_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9797565 + 739 = 9798304. patch_rows += 210"
  },
  "counts": {
   "files": 607,
@@ -59,7 +60,7 @@
   "patched": 120,
   "replaced": 12,
   "added": 29,
-  "bytes": 9797565
+  "bytes": 9798304
  },
  "files": [
   {
@@ -203,9 +204,9 @@
   {
    "path": "scripts/studio/mcp/doc-tools.ts",
    "status": "patched",
-   "bytes": 64855,
+   "bytes": 65007,
    "source_sha256": "af47f4e9a923028b33ead625d6b22d9c7a308e5d430cf1bde5f09a9e32fc7df8",
-   "sha256": "f391cbe330fbef5d319b2398b5d75ea431d176f2bcaffcef2ff43585bd65ce2d",
+   "sha256": "362c920ef42e49eeb455e5d7a41cf9a0a13aa7a51e8db15232100f453c25fa98",
    "patch_row69c": {
     "id": "row69c-chapter-import-archived-code",
     "row": "69c",
@@ -218,7 +219,8 @@
     "diff_sha256": "b764d91f9b2ded73ba2a6a5181b1912e706c9fb9eb187305be3bdfd0dc0b019d"
    },
    "patch_row207": {"id": "row207-hb2-verification-chain", "row": "207", "decision": "1.2.3 patch HB-2", "summary": "studio_slot_fill maps verificationChain printed column names to canonical keys before sending (ARG_MAPPED warning, also on dryRun)", "before_sha256": "66cac0dc6f52d67a7612668a7a9fa0018f511ca5d3da30f17822ec0ba75c6c3b", "after_sha256": "87c6085dbede8491588d8a8ba122ffd75669d61d483db5ddb8b0c028c0111a75", "diff": "docs/2026-11-09_swarm_1_2_3_patch/implementation/207_row207_diffs/doc-tools.ts.diff"},
-   "patch_row206": {"id": "row206-findings-lint-tristate", "row": "206", "decision": "1.2.3 patch P3 (row 206)", "summary": "studio_document_status: lint is the tri-state summary (ran/verdict/findings with code, address, message, rule explanation); text line lint: <VERDICT> or NOT_RUN, status block lists each finding with its rule once; detail lists FAIL + NOT_RUN and keeps lintReport", "before_sha256": "87c6085dbede8491588d8a8ba122ffd75669d61d483db5ddb8b0c028c0111a75", "after_sha256": "f391cbe330fbef5d319b2398b5d75ea431d176f2bcaffcef2ff43585bd65ce2d", "diff": "docs/2026-11-09_swarm_1_2_3_patch/implementation/206_row206_diffs/scripts_studio_mcp_doc-tools.ts.diff"}
+   "patch_row206": {"id": "row206-findings-lint-tristate", "row": "206", "decision": "1.2.3 patch P3 (row 206)", "summary": "studio_document_status: lint is the tri-state summary (ran/verdict/findings with code, address, message, rule explanation); text line lint: <VERDICT> or NOT_RUN, status block lists each finding with its rule once; detail lists FAIL + NOT_RUN and keeps lintReport", "before_sha256": "87c6085dbede8491588d8a8ba122ffd75669d61d483db5ddb8b0c028c0111a75", "after_sha256": "f391cbe330fbef5d319b2398b5d75ea431d176f2bcaffcef2ff43585bd65ce2d", "diff": "docs/2026-11-09_swarm_1_2_3_patch/implementation/206_row206_diffs/scripts_studio_mcp_doc-tools.ts.diff"},
+   "patch_row210": {"id": "row210-security-209", "row": "210", "decision": "1.2.3 patch P5 (row 210)", "summary": "studio_document_status detail: lintReport added to untrustedFields (security review 209 I-2)", "before_sha256": "f391cbe330fbef5d319b2398b5d75ea431d176f2bcaffcef2ff43585bd65ce2d", "after_sha256": "362c920ef42e49eeb455e5d7a41cf9a0a13aa7a51e8db15232100f453c25fa98", "diff": "docs/2026-11-09_swarm_1_2_3_patch/implementation/210_row210_diffs/scripts_studio_mcp_doc-tools.ts.diff", "diff_sha256": "81ef97f79ada2c2faf09e59b351092b156fc7594c6da00a63822757b9f81a1ef"}
   },
   {
    "path": "scripts/studio/mcp/figure-tools.ts",
@@ -329,10 +331,11 @@
   {
    "path": "scripts/studio/mcp/write-client-edit.ts",
    "status": "patched",
-   "bytes": 28346,
+   "bytes": 28529,
    "source_sha256": "8ff5a3e35022494e6d11dedb46a5b867a277250b083822aae425010cf05ceacd",
-   "sha256": "87e5099ad1cdf381611198eda53154d0c2c956723d4ed050f48f893cda4fe44a",
-   "patch_row207": {"id": "row207-hb2-verification-chain", "row": "207", "decision": "1.2.3 patch HB-2", "summary": "control-sheet entry lists (revisionHistory, verificationChain, distribution) become cell units with column names (ID/EN heads + key); empty columns addressable; slot TableV2 cells via shared tableUnits; remap matches column", "before_sha256": "8ff5a3e35022494e6d11dedb46a5b867a277250b083822aae425010cf05ceacd", "after_sha256": "87e5099ad1cdf381611198eda53154d0c2c956723d4ed050f48f893cda4fe44a", "diff": "docs/2026-11-09_swarm_1_2_3_patch/implementation/207_row207_diffs/write-client-edit.ts.diff"}
+   "sha256": "8d0293a6069330d2cc8d8b268104c7ceb010a4c79a5bff041214882e393c5414",
+   "patch_row207": {"id": "row207-hb2-verification-chain", "row": "207", "decision": "1.2.3 patch HB-2", "summary": "control-sheet entry lists (revisionHistory, verificationChain, distribution) become cell units with column names (ID/EN heads + key); empty columns addressable; slot TableV2 cells via shared tableUnits; remap matches column", "before_sha256": "8ff5a3e35022494e6d11dedb46a5b867a277250b083822aae425010cf05ceacd", "after_sha256": "87e5099ad1cdf381611198eda53154d0c2c956723d4ed050f48f893cda4fe44a", "diff": "docs/2026-11-09_swarm_1_2_3_patch/implementation/207_row207_diffs/write-client-edit.ts.diff"},
+   "patch_row210": {"id": "row210-security-209", "row": "210", "decision": "1.2.3 patch P5 (row 210)", "summary": "CONTROL_TABLE_COLUMNS looked up with Object.hasOwn (constructor/__proto__ lists are not control tables; security review 209 L-3)", "before_sha256": "87e5099ad1cdf381611198eda53154d0c2c956723d4ed050f48f893cda4fe44a", "after_sha256": "8d0293a6069330d2cc8d8b268104c7ceb010a4c79a5bff041214882e393c5414", "diff": "docs/2026-11-09_swarm_1_2_3_patch/implementation/210_row210_diffs/scripts_studio_mcp_write-client-edit.ts.diff", "diff_sha256": "501c78e99236f53b606cf34360688c4fdf871cc77317432a91e6f4197bda0d26"}
   },
   {
    "path": "scripts/studio/mcp/write-client-run.ts",
@@ -962,10 +965,11 @@
   {
    "path": "src/lib/studio/contract/schema/v2/verification-entry.ts",
    "status": "added",
-   "bytes": 5177,
+   "bytes": 5426,
    "source_sha256": null,
-   "sha256": "ed92f0495ba8408f33944df13cf249c2feda8958af718893d742a6527f7c3f47",
-   "note": "NEW Swarm file of row 207 (no clone original): verificationChain entry keys, printed-column aliases, normalizeControlSheetKeys (map in place / refuse unknown keys listing the accepted keys); used by R04, R08 dry run, R13 and studio_slot_fill"
+   "sha256": "daf716bb7005ed178e120ad719a6a525c3dbb8672615fe70ec80ee00ee176cb2",
+   "note": "NEW Swarm file of row 207 (no clone original): verificationChain entry keys, printed-column aliases, normalizeControlSheetKeys (map in place / refuse unknown keys listing the accepted keys); used by R04, R08 dry run, R13 and studio_slot_fill",
+   "patch_row210": {"id": "row210-security-209", "row": "210", "decision": "1.2.3 patch P5 (row 210)", "summary": "verificationEntryKey: alias lookup with Object.hasOwn, so __proto__/constructor/toString are refused (security review 209 L-1)", "before_sha256": "ed92f0495ba8408f33944df13cf249c2feda8958af718893d742a6527f7c3f47", "after_sha256": "daf716bb7005ed178e120ad719a6a525c3dbb8672615fe70ec80ee00ee176cb2", "diff": "docs/2026-11-09_swarm_1_2_3_patch/implementation/210_row210_diffs/src_lib_studio_contract_schema_v2_verification-entry.ts.diff", "diff_sha256": "5e28b08a5e40bce44593327ff02855d5422319651dbd43a398dbd80a30f4573f"}
   },
   {
    "path": "src/lib/studio/contract/schema/v2/skeleton.schema.ts",
@@ -4264,10 +4268,11 @@
   {
    "path": "src/lib/studio/registry/lint-explain.ts",
    "status": "added",
-   "bytes": 10060,
+   "bytes": 10215,
    "source_sha256": null,
-   "sha256": "3de3bcbb48767170085d0c82bd1146c113ba4ab0077047a7c0704ba66b35e3b8",
-   "note": "NEW Swarm file of row 206 (no clone original): lintRuleExplanation (registry entry + what D16/D17/D18/D19, SLOT_CONTENT_MISSING, CONTENT_CHAPTER_GAP and the render checks DATUM-14/15/25/28/32/33/37 inspect) and summarizeLint (tri-state lint summary: ran, verdict, findings); used by tool-kit compactSummary, studio_document_status and the host verification client entries"
+   "sha256": "83972a90af215fe4de100ddb770762e5a09a7b68a45fc8a4f71cc53e8e293dd5",
+   "note": "NEW Swarm file of row 206 (no clone original): lintRuleExplanation (registry entry + what D16/D17/D18/D19, SLOT_CONTENT_MISSING, CONTENT_CHAPTER_GAP and the render checks DATUM-14/15/25/28/32/33/37 inspect) and summarizeLint (tri-state lint summary: ran, verdict, findings); used by tool-kit compactSummary, studio_document_status and the host verification client entries",
+   "patch_row210": {"id": "row210-security-209", "row": "210", "decision": "1.2.3 patch P5 (row 210)", "summary": "lintRuleExplanation: INSPECTS looked up with Object.hasOwn (security review 209 L-3)", "before_sha256": "3de3bcbb48767170085d0c82bd1146c113ba4ab0077047a7c0704ba66b35e3b8", "after_sha256": "83972a90af215fe4de100ddb770762e5a09a7b68a45fc8a4f71cc53e8e293dd5", "diff": "docs/2026-11-09_swarm_1_2_3_patch/implementation/210_row210_diffs/src_lib_studio_registry_lint-explain.ts.diff", "diff_sha256": "7518c1eb3f32d07d024fb1a7be8677cc3319dcb8570294f50ad17207491bc73f"}
   },
   {
    "path": "src/lib/studio/registry/sections.ts",
@@ -5914,6 +5919,7 @@
   "174",
   "178",
   "207",
-  "206"
+  "206",
+  "210"
  ]
 }

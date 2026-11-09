@@ -97,6 +97,7 @@ const CONTROL_TABLE_COLUMNS: Readonly<Record<string, { key: string; columns: Rea
 
 /** Cells of a control-sheet entry list (row 207). Empty cells are set by writing the key; "" removes an optional key. */
 function controlListUnits(scope: Scope, section: string, list: string, entries: unknown[], out: JUnit[]): void {
+  if (!Object.hasOwn(CONTROL_TABLE_COLUMNS, list)) return;
   const spec = CONTROL_TABLE_COLUMNS[list];
   for (const e of entries) {
     if (!isObj(e)) continue;
@@ -137,7 +138,8 @@ function slotUnits(slot: string, payload: unknown, out: JUnit[]): void {
     // Row 207: a table (TableV2 form of a control-sheet list) -> cells with their header column, as chapter tables.
     if (Array.isArray(v.rows)) return tableUnits(scope, v, out, slot, null);
     for (const [k, x] of Object.entries(v)) {
-      if (slot === "controlSheet" && Array.isArray(x) && CONTROL_TABLE_COLUMNS[k] !== undefined) controlListUnits(scope, slot, k, x, out);
+      // Row 210 (security review 209 L-3): own keys only, so a list named constructor / __proto__ is not a control table.
+      if (slot === "controlSheet" && Array.isArray(x) && Object.hasOwn(CONTROL_TABLE_COLUMNS, k)) controlListUnits(scope, slot, k, x, out);
       else if (typeof x === "string" && !FRONT_SKIP.has(k)) out.push({ scope, kind: "field", section: slot, get: () => v[k] as string, set: (s) => (v[k] = s), remove: null, after: null });
       else walk(x);
     }

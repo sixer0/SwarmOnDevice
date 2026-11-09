@@ -32,7 +32,9 @@ const CANONICAL: ReadonlySet<string> = new Set(VERIFICATION_ENTRY_KEYS);
 export function verificationEntryKey(sent: string): VerificationEntryKey | null {
   const k = sent.trim().toLowerCase();
   if (CANONICAL.has(k)) return k as VerificationEntryKey;
-  return VERIFICATION_ENTRY_ALIASES[k] ?? null;
+  // Swarm row 210 (security review 209 L-1): own keys only, so inherited names (__proto__, constructor, toString) are
+  // refused like any unknown key instead of resolving to Object.prototype members.
+  return Object.hasOwn(VERIFICATION_ENTRY_ALIASES, k) ? VERIFICATION_ENTRY_ALIASES[k] : null;
 }
 
 /** The accepted-keys sentence used in refusals and in the guide. */

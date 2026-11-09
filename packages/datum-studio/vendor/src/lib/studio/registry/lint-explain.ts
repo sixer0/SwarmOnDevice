@@ -42,7 +42,8 @@ const INSPECTS: Readonly<Record<string, string>> = {
 /** Plain explanation of a lint rule (registry entry + what the check inspects); null for an id the registry does not know. */
 export function lintRuleExplanation(id: string): string | null {
   const def = getLintDef(id);
-  const inspects = INSPECTS[id];
+  // Swarm row 210 (security review 209 L-3): own keys only (no Object.prototype member for "constructor" etc.).
+  const inspects = Object.hasOwn(INSPECTS, id) ? INSPECTS[id] : undefined;
   if (!def && !inspects) return null;
   if (!def) return `${id}: ${inspects}`;
   return inspects ? `${id} "${def.title}" (${def.ruleRef}): ${inspects}` : `${id} "${def.title}" (limit: ${def.limit}; ${def.ruleRef}; tiers ${def.tiers.join("/")}).`;
