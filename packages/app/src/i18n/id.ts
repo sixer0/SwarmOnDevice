@@ -1190,6 +1190,7 @@ export const dict = {
   "session.map.decisions.category.by_main_agent": "Anda setuju agen utama yang memutuskan selama sesi ini",
   "session.map.decisions.category.delete_compound": "Penghapusan yang dicampur perintah lain",
   "session.map.decisions.category.credential_change": "Mengubah remote, kredensial, atau akun git",
+  "session.map.decisions.category.protected_path": "Tempat terlindungi (kunci, kredensial, atau folder sistem)",
   "session.map.decisions.category.script_flagged": "Skrip yang perlu diperiksa lebih dulu",
   "session.map.decisions.category.archived": "Dipindahkan ke arsip, bukan dihapus",
   "session.map.decisions.note.bypassOn": "Mode otonom menyala dengan persetujuan Anda: agen utama yang memutuskan",

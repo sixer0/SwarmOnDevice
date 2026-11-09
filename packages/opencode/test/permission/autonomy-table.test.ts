@@ -586,17 +586,19 @@ describe("U11 rule 1: beyond the folder only reads", () => {
     expect(AutonomyTable.classify(prompt(path.join(away.path, "a.md")))).toEqual(HELD("outside_folder"))
   })
 
-  test("a write out of the folder is refused with nobody asked, and an edit of `~/.zshrc` with it; a secret waits", async () => {
+  test("a write out of the folder: an ordinary file is class A (row 202), `~/.zshrc` is refused, a protected place too", async () => {
     const edits = { follows: [{ permission: "edit" }] }
     const zshrc = path.join(os.homedir(), ".zshrc")
+    const OUT_EDIT: Verdict = { class: "A", decidedBy: "gate", category: "outside_edit" }
     expect(AutonomyTable.classify(prompt(zshrc, {}, edits))).toEqual(REFUSED("outside_write"))
-    expect(AutonomyTable.classify(prompt("/tmp/a.ts", {}, edits))).toEqual(REFUSED("outside_write"))
-    expect(AutonomyTable.classify(prompt(path.join(os.homedir(), ".ssh/config"), {}, edits))).toEqual(HELD("secret_file"))
-    // The edit itself, should it get there: nothing can undo a file out of the folder either.
+    expect(AutonomyTable.classify(prompt("/tmp/a.ts", {}, edits))).toEqual(OUT_EDIT)
+    expect(AutonomyTable.classify(prompt(path.join(os.homedir(), ".ssh/config"), {}, edits))).toEqual(REFUSED("protected_path"))
+    // The edit itself: an ordinary file out of the folder runs; a file that changes later runs keeps rule 1.
     const outsideEdit = (file: string) =>
       request("edit", { patterns: [path.relative(dir, file)], metadata: { filepath: file }, editClass: "no_undo", canUndo: false })
+    expect(AutonomyTable.classify(outsideEdit("/tmp/a.ts"))).toEqual(OUT_EDIT)
     expect(AutonomyTable.classify(outsideEdit(zshrc))).toEqual(REFUSED("outside_write"))
-    expect(AutonomyTable.classify(outsideEdit(path.join(os.homedir(), ".ssh/config")))).toEqual(HELD("secret_file"))
+    expect(AutonomyTable.classify(outsideEdit(path.join(os.homedir(), ".ssh/config")))).toEqual(REFUSED("protected_path"))
   })
 
   test("from the shell: a look and a copy into the folder are class A, any other plain command out of it is refused", async () => {
@@ -1079,9 +1081,10 @@ describe("an edit nothing can undo", () => {
       ["Makefile", HELD("sensitive_file")],
       [".env", HELD("secret_file")],
       [".env.local", HELD("secret_file")],
-      ["edit-out/a.md", REFUSED("outside_write")],
-      ["edit-out.md", REFUSED("outside_write")],
-      ["../outside.md", REFUSED("outside_write")],
+      // Row 202: an ordinary file out of the folder, by a link in it or by `..`, is written in the mode.
+      ["edit-out/a.md", { class: "A", decidedBy: "gate", category: "outside_edit" }],
+      ["edit-out.md", { class: "A", decidedBy: "gate", category: "outside_edit" }],
+      ["../outside.md", { class: "A", decidedBy: "gate", category: "outside_edit" }],
       ["state-link", REFUSED("app_state")],
     ]
     for (const [name, verdict] of cases) expect([name, AutonomyTable.classify(unrecoverable(name))]).toEqual([name, verdict])
@@ -1824,7 +1827,7 @@ describe("U11 rule 2: a secret or sensitive file a person allowed", () => {
     }
   })
 
-  test("outside the folder an allowed path may be read, and writing it is still refused (rule 1)", () => {
+  test("outside the folder an allowed path may be read, and writing it still waits for a person (row 202)", () => {
     const away = fs.mkdtempSync(path.join(os.tmpdir(), "rule2-outside-"))
     try {
       const key = path.join(away, ".env")
@@ -1835,7 +1838,8 @@ describe("U11 rule 2: a secret or sensitive file a person allowed", () => {
       expect(AutonomyTable.classify(look(given))).toEqual(allowed(`outside:${key}`))
       expect(AutonomyTable.classify(look({}))).toEqual(HELD("secret_file"))
       const write = { follows: [{ permission: "edit" }], metadata: { filepath: key } }
-      expect(AutonomyTable.classify(look({ ...write, ...given }))).toEqual(REFUSED("outside_write"))
+      // A consent is about reading it; a secret is never written without a person, consent or not.
+      expect(AutonomyTable.classify(look({ ...write, ...given }))).toEqual(HELD("secret_file"))
       expect(AutonomyTable.classify(look(write))).toEqual(HELD("secret_file"))
       // A search that opens hidden files is not a look the consent was about.
       expect(AutonomyTable.classify(look({ metadata: { filepath: key, readOnly: true, hidden: true }, ...given }))).toEqual(

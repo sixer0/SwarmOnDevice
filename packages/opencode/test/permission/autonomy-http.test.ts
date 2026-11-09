@@ -122,9 +122,10 @@ const shell: Tool.Def = {
         yield* ctx.ask({
           permission: "external_directory",
           patterns: ["/tmp/*"],
-          metadata: { filepath: "/tmp/a.ts", parentDir: "/tmp" },
+          // Row 202: a file that changes later runs, which stays class X out of the folder (an ordinary one is written).
+          metadata: { filepath: "/tmp/.zshrc", parentDir: "/tmp" },
           always: [],
-          follows: [{ permission: "edit", patterns: ["/tmp/a.ts"] }],
+          follows: [{ permission: "edit", patterns: ["/tmp/.zshrc"] }],
           call: { tool: "bash", args },
         })
       order.push("ran")
@@ -166,9 +167,10 @@ const reader: Tool.Def = {
         yield* ctx.ask({
           permission: "external_directory",
           patterns: ["/tmp/*"],
-          metadata: { filepath: "/tmp/a.ts", parentDir: "/tmp" },
+          // Row 202: a file that changes later runs, which stays class X out of the folder (an ordinary one is written).
+          metadata: { filepath: "/tmp/.zshrc", parentDir: "/tmp" },
           always: [],
-          follows: [{ permission: "edit", patterns: ["/tmp/a.ts"] }],
+          follows: [{ permission: "edit", patterns: ["/tmp/.zshrc"] }],
           call: { tool: "read", args },
         })
       if (!readThenWrites) yield* ctx.ask(readPrompt(args))

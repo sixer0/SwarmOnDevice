@@ -1439,6 +1439,67 @@ function onlyLookPieces(command: string) {
     })
 }
 
+const OUTSIDE_EDIT: Verdict = { class: "A", decidedBy: "gate", category: "outside_edit" }
+
+/** The home folders a protected place may be spelled under: the one Swarm reads (pinned in tests) and the system's. */
+function homes() {
+  return [...new Set([Global.Path.home, homedir()])]
+}
+
+/** The protected roots for a read or a write, each also by its real path (`/etc` is `/private/etc` on macOS). */
+function protectedRoots(mode: "read" | "write") {
+  const secrets = [
+    ...homes().flatMap((home) => BypassLists.PROTECTED_HOME.map((place) => path.join(home, place))),
+    ...BypassLists.PROTECTED_APP_FILES.map((file) => path.join(Global.Path.data, file)),
+  ]
+  const system = mode === "write" ? [...BypassLists.PROTECTED_SYSTEM, ...appBundle()] : []
+  return [...new Set([...secrets, ...system].flatMap((root) => [root, Reach.real(root) ?? root]))]
+}
+
+/**
+ * The installed app this server runs from: the `.app` bundle around it on macOS, or the folder above `resources` of a
+ * packaged Linux or Windows install. Nothing for a server started from a checkout (`bun`).
+ */
+function appBundle(): string[] {
+  const exec = process.execPath
+  const mac = exec.match(/^(.*?\.app)(\/|$)/)
+  if (mac) return [mac[1]!]
+  const packaged = exec.split(path.sep).indexOf("resources")
+  return packaged > 0 ? [exec.split(path.sep).slice(0, packaged).join(path.sep) || path.sep] : []
+}
+
+/**
+ * Row 202: whether a file tool's target outside the project is a place autonomous mode never opens: a secret place or
+ * Swarm's credential files for any use, and the system's folders or the app itself for a write. Judged by the path as
+ * given and by where it really lands, so a link out of `~/Documents` into `~/.ssh` is the place it leads to.
+ */
+export function protectedOutside(file: string, mode: "read" | "write") {
+  const places = [path.normalize(file), Reach.real(file)].filter((place) => place !== undefined)
+  // A place that cannot be worked out (a link loop) is the worst case.
+  if (places.length < 2) return true
+  const roots = protectedRoots(mode)
+  return places.some((place) => roots.some((root) => within(root, place)))
+}
+
+/**
+ * Row 202: the edit of files that all lie outside the project, with the mode on. Class A (`outside_edit`) when none is a
+ * protected place, a secret, a file that changes later runs, or the bundled library; a protected place is refused. Any
+ * other case is left to the rules after this (undefined), so nothing inside the project is judged differently.
+ */
+function classifyOutsideEdit(input: Input): Verdict | undefined {
+  if (input.permission !== "edit") return undefined
+  // Only the write and edit tools' own prompt, which names the file by its absolute path beside the pattern. A prompt
+  // that names its files only by patterns (a whole patch) keeps the rules after this.
+  if (typeof input.metadata.filepath !== "string" || !path.isAbsolute(input.metadata.filepath)) return undefined
+  const targets = editTargets(input)
+  if (targets.length === 0 || targets.some((file) => Reach.inside(file, input.instance))) return undefined
+  if (targets.some((file) => protectedOutside(file, "write"))) return refused("protected_path")
+  if (nearLibrary(targets)) return undefined
+  if (input.editClass === "secret" || input.editClass === "sensitive") return undefined
+  if (targets.some((file) => Reach.secret(file) || !Reach.readable(file) || Reach.sensitive(file, input.instance))) return undefined
+  return OUTSIDE_EDIT
+}
+
 /**
  * U11 rule 1, for the prompt a tool raises before it reaches beyond the folder. A read is class A when what it names is
  * readable, a copy into the folder too, and a write is refused with nobody asked. A secret stays a person's call.
@@ -1463,12 +1524,15 @@ function classifyOutside(input: Input): Verdict {
   const filepath = input.metadata.filepath
   if (typeof filepath !== "string" || !path.isAbsolute(filepath) || nearLibrary([filepath])) return held("outside_folder")
   const writes = input.follows?.some((prompt) => prompt.permission === "edit") === true
-  // Rule 2 lets a person allow touching a file out there; rule 1 still lets nothing be written there.
-  if (writes && consentFor(input, [filepath])) return refused("outside_write")
+  // Row 202: a secret or system place is never opened, with the person's consent to the bypass or without it.
+  if (protectedOutside(filepath, writes ? "write" : "read")) return refused("protected_path")
   const looks = input.metadata.readOnly === true && input.metadata.hidden !== true
   if (!Reach.readable(filepath) && looks) return classifyConsented(input, [filepath], "secret_file")
   if (!Reach.readable(filepath) || (writes && Reach.secret(filepath))) return held("secret_file")
-  if (writes) return refused("outside_write")
+  // Row 202 (2026-11-09): the person turned the mode on and with it agreed that a file tool may write outside the project.
+  // The edit that follows is judged on its own (`classifyOutsideEdit`). A file that changes later runs (a shell's rc file,
+  // a manifest, a tool's config) is refused as before, so the folder prompt and its edit agree.
+  if (writes) return Reach.sensitive(filepath, input.instance) ? refused("outside_write") : OUTSIDE_EDIT
   if (input.metadata.readOnly !== true) return held("outside_folder")
   // A search that opens every file under a folder, hidden ones too, would show a `.zshrc` or a token file no name marks.
   if (input.metadata.hidden === true) return held("outside_folder")
@@ -1844,6 +1908,9 @@ export function classifyBase(input: Input, checkClass: CheckClass = CHECK_CLASS)
 
   // A label only ever raises a class. Nothing below may read its absence as safe. A push is the one way out the shell labels
   // that rule 3 can let through; a force push is labelled "irreversible" and is held as that.
+  // Row 202: a file tool's write outside the project, which `classifyOutside` let through for its folder prompt.
+  const outsideEdit = classifyOutsideEdit(input)
+  if (outsideEdit) return outsideEdit
   if (input.metadata.risk === "remote" && input.permission === "bash") return classifyPush(input)
   if (input.metadata.risk) return held(riskCategory(input.metadata.risk))
   if (input.harmless) return QUIET
@@ -1852,7 +1919,10 @@ export function classifyBase(input: Input, checkClass: CheckClass = CHECK_CLASS)
   if (input.permission === "external_directory") {
     const verdict = classifyOutside(input)
     // A copy into the folder is a write there, which the plan agent does not do (rule 8), and neither is a copy away.
-    return input.plan === true && (verdict.category === "outside_copy" || verdict.via === "outward") ? refused("plan_mode") : verdict
+    return input.plan === true &&
+      (verdict.category === "outside_copy" || verdict.category === "outside_edit" || verdict.via === "outward")
+      ? refused("plan_mode")
+      : verdict
   }
   if (input.permission === "webfetch" || input.permission === "websearch") return classifyFetch(input)
   if (input.permission === "read") return classifyConsented(input, editTargets(input), "secret_file")

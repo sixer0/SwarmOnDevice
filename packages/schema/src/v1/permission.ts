@@ -99,6 +99,8 @@ export const DeferredCategory = Schema.Literals([
   "outside_write",
   "delete_compound",
   "credential_change",
+  // X (row 202): a secret or system place outside the project, refused with or without the consented bypass
+  "protected_path",
   // X under the 1.1.1 consented bypass
   "irreversible",
   "admin_rights",
@@ -109,6 +111,8 @@ export type DeferredCategory = typeof DeferredCategory.Type
 export const AllowedCategory = Schema.Literals([
   "outside_read",
   "outside_copy",
+  // row 202: a file tool's write outside the project, under autonomous mode
+  "outside_edit",
   "mcp_tool",
   "consented",
   "archived",

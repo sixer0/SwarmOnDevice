@@ -330,6 +330,8 @@ const heldAs = (category: AutonomyTable.HeldCategory) => ({ outcome: "held", lin
 const refusedAs = (category: AutonomyTable.HeldCategory) => ({ outcome: "refused", lines: [["X", category]], asked: 0 })
 const QUIET = { outcome: "passed", lines: [], asked: 0 }
 const RAN_ON_RECORD = (category: AutonomyTable.AllowedCategory) => ({ outcome: "passed", lines: [["A", category]], asked: 0 })
+/** Row 202: a file tool's write out of the folder in the mode: its folder prompt and its edit, both class A, nobody asked. */
+const WRITTEN_OUTSIDE = { outcome: "passed", lines: [["A", "outside_edit"], ["A", "outside_edit"]], asked: 0 }
 // What `session/tools.ts` sends for a tool of an MCP server (row 105).
 const mcpSource = (origin: string, transport = "local") => ({ server: "graft", transport, origin })
 const mcpTool = (sessionID: SessionID, permission: string, mcp: Record<string, unknown>) =>
@@ -453,6 +455,8 @@ it.instance(
       const test = yield* TestInstance
       const file = (name: string) => path.join(test.directory, name)
       const outside = path.join(outsideFolder(), "a.txt")
+      // `link-out` leads to /tmp: a name of this run's own, removed below.
+      const linkedOut = `row202-${process.pid}-three.ts`
 
       yield* expectOnFreshRoots([
         // C58: an ordinary edit in the mode leaves its class A line, with no decider.
@@ -466,8 +470,8 @@ it.instance(
         ["3 no Undo, a secret", ({ root }) => write(root, file(".env.local"), { canUndo: false }), heldAs("secret_file")],
         ["3 no Undo, a link to a secret", ({ root }) => write(root, file("quiet-name"), { canUndo: false }), heldAs("secret_file")],
         ["3 no Undo, a link to .git", ({ root }) => write(root, file("notes"), { canUndo: false }), heldAs("secret_file")],
-        ["3 no Undo, a link out", ({ root }) => write(root, file("link-out/three.ts"), { canUndo: false }), refusedAs("outside_write")],
-        ["3 no Undo, outside", ({ root }) => write(root, path.join(outsideFolder(), "three.ts"), { canUndo: false }), refusedAs("outside_write")],
+        ["3 no Undo, a link out", ({ root }) => write(root, file(`link-out/${linkedOut}`), { canUndo: false }), WRITTEN_OUTSIDE],
+        ["3 no Undo, outside", ({ root }) => write(root, path.join(outsideFolder(), "three.ts"), { canUndo: false }), WRITTEN_OUTSIDE],
         ["4 out of the snapshot", ({ root }) => write(root, file("ignored/a.ts")), heldAs("not_reversible")],
         ["5 sensitive", ({ root }) => write(root, file("package.json")), heldAs("sensitive_file")],
         ["5 a link to something sensitive", ({ root }) => write(root, file("notes")), heldAs("sensitive_file")],
@@ -478,7 +482,7 @@ it.instance(
           heldAs("secret_file"),
         ],
         ["6 secret by command", ({ root }) => command(root, "bun test .env"), heldAs("secret_file")],
-        ["7 outside the folder", ({ root }) => write(root, outside), refusedAs("outside_write")],
+        ["7 outside the folder", ({ root }) => write(root, outside), WRITTEN_OUTSIDE],
       ])
 
       expect(existsSync(file("src/one.ts"))).toBe(true)
@@ -488,12 +492,14 @@ it.instance(
       expect(existsSync(file(".github/workflows/x.yml"))).toBe(false)
       expect(existsSync(file(".git/hooks/pre-commit"))).toBe(false)
       expect(readFileSync(file(".env.local"), "utf8")).toBe("A=1\n")
-      expect(existsSync("/tmp/three.ts")).toBe(false)
+      // Row 202: an ordinary file beyond the folder is written in the mode, through a link as well.
+      expect(existsSync(path.join("/tmp", linkedOut))).toBe(true)
+      rmSync(path.join("/tmp", linkedOut), { force: true })
       expect(existsSync(file("ignored/a.ts"))).toBe(false)
       expect(existsSync(file(".env"))).toBe(false)
       expect(readFileSync(file("package.json"), "utf8")).toBe("{}\n")
       expect(readFileSync(file(".git/config"), "utf8")).not.toContain("written")
-      expect(existsSync(outside)).toBe(false)
+      expect(existsSync(outside)).toBe(true)
     }),
   project,
   60_000,
@@ -998,7 +1004,7 @@ it.instance(
         [edit(".husky/pre-commit"), heldAs("sensitive_file")],
         [patch(".swarm/agents/x.md"), heldAs("sensitive_file")],
         [write(root.id, file(".env"), { canUndo }), heldAs("secret_file")],
-        [write(root.id, path.join(outsideFolder(), "d.ts"), { canUndo }), refusedAs("outside_write")],
+        [write(root.id, path.join(outsideFolder(), "d.ts"), { canUndo }), WRITTEN_OUTSIDE],
       ] as const
       for (const [attempt, expected] of tried) expect(yield* judged(root.id, attempt)).toEqual(expected)
       // C97 F2: a shell file operation in the folder runs on record without Undo too; a program still runs only where
@@ -1112,7 +1118,7 @@ it.instance(
       expect((yield* judged(root.id, command(root.id, `cp ${source} src/a.ts`))).lines.map((line) => line[0])).not.toContain("A")
       expect(yield* judged(root.id, command(root.id, `cp src/a.ts ${source}`))).toEqual(refusedAs("outside_write"))
       expect(yield* judged(root.id, write(root.id, zshrc))).toEqual(refusedAs("outside_write"))
-      expect(yield* judged(root.id, write(root.id, path.join(os.homedir(), ".ssh/config")))).toEqual(heldAs("secret_file"))
+      expect(yield* judged(root.id, write(root.id, path.join(os.homedir(), ".ssh/config")))).toEqual(refusedAs("protected_path"))
       expect(readFileSync(source, "utf8")).toBe("outside\n")
       expect(existsSync(path.join(test.directory, "src/notes.md"))).toBe(false)
       expect(stub.calls).toEqual([])
@@ -1500,8 +1506,9 @@ describe("row 201 boundaries", () => {
         const target = (name: string) => path.join(away, name)
 
         yield* expectOnFreshRoots([
-          ["write tool, straight", ({ root }) => write(root, target("direct.txt")), refusedAs("outside_write")],
-          ["write tool, through a link in the folder", ({ root }) => write(root, path.join(test.directory, "link-away/linked.txt")), refusedAs("outside_write")],
+          // Row 202: the file tools may write out of the folder in the mode; the shell still may not.
+          ["write tool, straight", ({ root }) => write(root, target("direct.txt")), WRITTEN_OUTSIDE],
+          ["write tool, through a link in the folder", ({ root }) => write(root, path.join(test.directory, "link-away/linked.txt")), WRITTEN_OUTSIDE],
           ["shell, straight", ({ root }) => command(root, `touch ${target("touched.txt")}`, RUN), refusedAs("outside_write")],
           // Row 274: the shell's parse names the file the redirect writes, and the link takes it beyond the folder: refused.
           ["shell, through the link", ({ root }) => command(root, "printf x > link-away/printed.txt", RUN), refusedAs("outside_write")],
@@ -1509,7 +1516,7 @@ describe("row 201 boundaries", () => {
           ["inline node, absolute path", ({ root }) => command(root, `node -e 'require("fs").writeFileSync("${target("inline.js.txt")}","")'`, RUN), heldAs("script_flagged")],
         ])
 
-        expect(["direct.txt", "linked.txt", "touched.txt", "printed.txt", "inline.py.txt", "inline.js.txt"].filter((name) => existsSync(target(name)))).toEqual([])
+        expect(["direct.txt", "linked.txt", "touched.txt", "printed.txt", "inline.py.txt", "inline.js.txt"].filter((name) => existsSync(target(name)))).toEqual(["direct.txt", "linked.txt"])
         expect(stub.calls).toEqual([])
       }),
     project,

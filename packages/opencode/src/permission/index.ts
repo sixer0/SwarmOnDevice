@@ -319,6 +319,7 @@ const NEVER_OPENED_X: ReadonlySet<string> = new Set([
   "admin_rights",
   "delete_compound",
   "outside_write",
+  "protected_path",
   "credential_change",
   "plan_mode",
   "app_state",

@@ -4,6 +4,10 @@
 export const OUTSIDE_WRITE_TEXT =
   "This call did not run. Autonomous mode only reads outside the project folder. Copy the file into the project first (read it, then write the copy inside the project) and change the copy. The original stays as it is."
 
+/** Row 202: a file tool's read or write of a protected place outside the project (X `protected_path`). */
+export const PROTECTED_PATH_TEXT =
+  "This call did not run. Autonomous mode never reads or writes a protected place outside the project: keys and credentials (such as ~/.ssh, ~/.gnupg, ~/.aws, a keychain or Swarm's auth.json), the system's folders or the Swarm app. Do not try to get the same effect another way. Carry on with everything that does not depend on it, and list it in your final message so the person can do it themselves."
+
 export const DELETE_COMPOUND_TEXT =
   "This call did not run. In autonomous mode a deletion must be a command of its own (rm, rmdir, unlink or git rm with paths only), so Swarm can move the paths to the archive instead."
 
@@ -61,6 +65,7 @@ export const ARCHIVE_REDIRECT: ReadonlySet<string> = new Set(["not_reversible", 
 export const REFUSED_TEXT: Readonly<
   Record<
     | "outside_write"
+    | "protected_path"
     | "delete_compound"
     | "credential_change"
     | "irreversible"
@@ -72,6 +77,7 @@ export const REFUSED_TEXT: Readonly<
   >
 > = {
   outside_write: OUTSIDE_WRITE_TEXT,
+  protected_path: PROTECTED_PATH_TEXT,
   delete_compound: DELETE_COMPOUND_TEXT,
   credential_change: CREDENTIAL_CHANGE_TEXT,
   irreversible: IRREVERSIBLE_ARCHIVE_TEXT,

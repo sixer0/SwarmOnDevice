@@ -1089,11 +1089,9 @@ flows.instance("AU-22: an edit outside the project is one decision too, for writ
     const one = outsideFolder()
     const two = outsideFolder()
 
-    // An ordinary write out of the folder is refused with nobody asked, and the agent is told to copy it in (U11 rule 1).
-    const plain = yield* failure(write(root.id, path.join(one, "a.txt"), "written"))
-    expect(plain).toBeInstanceOf(PermissionV1.DeniedError)
-    expect((plain as Error).message).toContain("The original stays as it is")
-    expect(existsSync(path.join(one, "a.txt"))).toBe(false)
+    // Row 202: an ordinary write out of the folder runs in the mode, with nobody asked (it was refused before).
+    yield* write(root.id, path.join(one, "a.txt"), "written")
+    expect(readFileSync(path.join(one, "a.txt"), "utf8")).toBe("written")
     expect(yield* list).toEqual([])
 
     // A secret out there is a person's call, and that answer is one decision.

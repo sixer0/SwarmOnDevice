@@ -128,9 +128,10 @@ describe("S1.13 the overlay, rule by rule (P8)", () => {
       metadata: { filepath: "/tmp/a.ts" },
       follows: [{ permission: "edit" }],
     })
-    expect(AutonomyTable.classify(outside)).toEqual(REFUSED("outside_write"))
-    // 1.1.3 (matrix row 23, spec section 3 rule 2): it no longer waits; it runs, recorded as outside_write_held.
-    expect(consented(outside)).toEqual(OPENED("outside_write_held"))
+    // Row 202: a file tool's write outside the project is class A in the mode, with consent or without.
+    const edited: Verdict = { class: "A", decidedBy: "gate", category: "outside_edit" }
+    expect(AutonomyTable.classify(outside)).toEqual(edited)
+    expect(consented(outside)).toEqual(edited)
     const zshrc = request("edit", {
       patterns: [path.relative(dir, path.join(os.homedir(), ".zshrc"))],
       metadata: { filepath: path.join(os.homedir(), ".zshrc") },

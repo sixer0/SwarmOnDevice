@@ -301,6 +301,8 @@ const CATEGORY_LABEL = {
   by_main_agent: "session.map.decisions.category.by_main_agent",
   delete_compound: "session.map.decisions.category.delete_compound",
   credential_change: "session.map.decisions.category.credential_change",
+  protected_path: "session.map.decisions.category.protected_path",
+  outside_edit: "session.map.decisions.category.outside_write_held",
   script_flagged: "session.map.decisions.category.script_flagged",
   script_unreadable: "session.map.decisions.category.script_flagged",
   archived: "session.map.decisions.category.archived",

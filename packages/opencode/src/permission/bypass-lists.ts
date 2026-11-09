@@ -303,6 +303,31 @@ export const harmlessAssignment = (word: string) => {
 /** Folders a program may be spelled from by its full path (`/usr/bin/make`); anywhere else it is not the recognised one. */
 export const SYSTEM_BIN: readonly string[] = ["/bin", "/usr/bin", "/usr/local/bin", "/opt/homebrew/bin"]
 
+/**
+ * Row 202: places outside the project that autonomous mode never opens through a file tool, however the person set the
+ * mode. With the mode on, a file tool may read and write elsewhere outside the project without asking; these stay
+ * refused (`protected_path`). `Reach.readable` (`HOLDS_SECRETS`) and `Secrets.secretFile` already name secret folders and
+ * files by name anywhere; this list adds what they do not name: places under the home folder that hold keys or tokens
+ * under ordinary names (a keychain, `gh`'s token file, the patch signing key), Swarm's own credential files, and the
+ * system's folders. Relative entries are under the home folder. Read and write: never opened.
+ */
+export const PROTECTED_HOME: readonly string[] = [
+  ".ssh", ".gnupg", ".aws", ".azure", ".kube", ".docker", ".netrc", ".git-credentials", ".password-store", ".pgpass",
+  ".swarm-patch-key", ".config/gh", ".config/gcloud", ".config/op", ".local/share/keyrings", "Library/Keychains",
+  "Library/Cookies",
+]
+/** Row 202: Swarm's own credential files, under its data folder (`Global.Path.data`). Read and write: never opened. */
+export const PROTECTED_APP_FILES: readonly string[] = ["auth.json", "mcp-auth.json"]
+/**
+ * Row 202: the system's own folders. Never written through a file tool in autonomous mode. A read keeps the verdict it
+ * had before row 202 (an ordinary readable file there, such as a header under `/usr/include`, is a look). `/private/var`
+ * is not here as a whole: the temporary folder lives under `/private/var/folders`.
+ */
+export const PROTECTED_SYSTEM: readonly string[] = [
+  "/System", "/usr", "/bin", "/sbin", "/etc", "/private/etc", "/var/db", "/private/var/db", "/Library", "/boot", "/root",
+  "/proc", "/sys", "/dev", "/Applications/Swarm.app",
+]
+
 const optionName = (word: string) => word.split("=")[0]!
 const isOption = (word: string) => word.startsWith("-") && word !== "-"
 const shortWord = (word: string) => /^-[^-]/.test(word)

@@ -1029,6 +1029,7 @@ export const dict = {
   "session.map.decisions.category.by_main_agent": "You agreed that the main agent decides during this run",
   "session.map.decisions.category.delete_compound": "A deletion mixed with other commands",
   "session.map.decisions.category.credential_change": "Changes a remote, a credential or a git account",
+  "session.map.decisions.category.protected_path": "Protected place (keys, credentials or system folders)",
   "session.map.decisions.category.script_flagged": "A script that needs a closer look",
   "session.map.decisions.category.archived": "Moved to the archive instead of deleted",
   "session.map.decisions.note.bypassOn": "Autonomous mode on with your consent: the main agent decides",

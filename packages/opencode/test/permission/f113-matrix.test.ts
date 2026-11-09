@@ -31,6 +31,7 @@ import {
   IRREVERSIBLE_ARCHIVE_TEXT,
   MAIN_AGENT_UNAVAILABLE_TEXT,
   OUTSIDE_WRITE_TEXT,
+  PROTECTED_PATH_TEXT,
   SPEND_STOPPED_TEXT,
   UNJUDGED_TEXT,
   mainAgentDeclined,
@@ -691,6 +692,8 @@ const NEVER_OPENED: Readonly<Record<string, readonly [string, Section]>> = {
   admin_rights: [ADMIN_CONSENTED, "F"],
   credential_change: [CREDENTIAL_CONSENTED, "F"],
   outside_write: [OUTSIDE_WRITE_TEXT, "F"],
+  // Row 202: a secret or system place outside the project, refused with or without consent.
+  protected_path: [PROTECTED_PATH_TEXT, "F"],
   plan_mode: [REFUSED_BY_MODE_TEXT, "F"],
   app_state: [REFUSED_BY_MODE_TEXT, "F"],
 }

@@ -282,6 +282,15 @@ const looked = (...permissions: string[]) => ({
   asked: 0,
 })
 const refusedAs = (category: string) => ({ outcome: "refused", lines: [["external_directory", "X", category]], asked: 0 })
+/** Row 202: a write tool out of the folder (not the library) runs in the mode: its folder prompt and its edit, class A. */
+const WRITTEN_OUTSIDE = {
+  outcome: "passed",
+  lines: [
+    ["external_directory", "A", "outside_edit"],
+    ["edit", "A", "outside_edit"],
+  ],
+  asked: 0,
+}
 type Seen = { outcome: string; lines: (string | undefined)[][]; asked: number }
 const SILENT = { outcome: "passed", lines: [], asked: 0 }
 const QUIET_READ = { outcome: "passed", lines: [], added: 0, asked: 0 }
@@ -385,25 +394,41 @@ it.instance("XF-01: with a decider that says allow, no tool gets past the folder
       [
         "write",
         (root) => use("write", { filePath: `${far}/new.md`, content: "x\n" }, root, { library }),
-        refusedAs("outside_write"),
+        WRITTEN_OUTSIDE,
+      ],
+      // Row 202: a whole patch may delete or move, so its edit still waits for a person; it runs before the edit below
+      // changes the text it names.
+      [
+        "apply_patch",
+        (root) =>
+          use(
+            "apply_patch",
+            { patchText: `*** Begin Patch\n*** Update File: ${far}/f.md\n@@\n-alpha far away\n+changed\n*** End Patch` },
+            root,
+            { library },
+          ),
+        {
+          outcome: "held",
+          lines: [
+            ["external_directory", "A", "outside_edit"],
+            ["edit", "D", "not_reversible"],
+          ],
+          asked: 0,
+        },
       ],
       [
         "edit",
         (root) => use("edit", { filePath: `${far}/f.md`, oldString: "alpha", newString: "x" }, root, { library }),
-        refusedAs("outside_write"),
-      ],
-      [
-        "apply_patch",
-        (root) => use("apply_patch", { patchText: PATCH(`${far}/f.md`) }, root, { library }),
-        refusedAs("outside_write"),
+        WRITTEN_OUTSIDE,
       ],
       ["lsp", (root) => use("lsp", { operation: "hover", filePath: `${far}/a.ts`, line: 1, character: 1 }, root, { library })],
       ["bash", (root) => shell(`cat ${far}/f.md`, root, { library }), looked("external_directory", "bash")],
       ["bash in that folder", (root) => shell("ls", root, { library, workdir: far }), looked("external_directory", "bash")],
     ])
     expect(stub.calls).toEqual([])
-    expect(readFileSync(path.join(far, "f.md"), "utf8")).toBe("alpha far away\n")
-    expect(existsSync(path.join(far, "new.md"))).toBe(false)
+    // Row 202: the write and edit tools changed the ordinary files out of the folder; the held patch changed nothing.
+    expect(readFileSync(path.join(far, "f.md"), "utf8")).toBe("x far away\n")
+    expect(readFileSync(path.join(far, "new.md"), "utf8")).toBe("x\n")
   }),
 )
 
@@ -444,8 +469,11 @@ it.instance("XF-01: the request itself, whatever folder it names and however it 
           ids.root,
           ask(ids.root, [`${env.far}/for-edit/*`], { follows: [{ permission: "edit", patterns: ["x"] }] }),
         )
-        // A write out of the folder is refused with nobody asked (U11 rule 1), and leaves no entry.
-        expect([label, edit]).toEqual([label, refusedAs("outside_write")])
+        // Row 202: a write out of the folder (not the library) is class A in the mode, and leaves no entry.
+        expect([label, edit]).toEqual([
+          label,
+          { outcome: "passed", lines: [["external_directory", "A", "outside_edit"]], asked: 0 },
+        ])
         const entries = yield* heldFor([ids.root, ids.child])
         expect(entries.map((entry) => entry.always)).toEqual([[], []])
       }),
