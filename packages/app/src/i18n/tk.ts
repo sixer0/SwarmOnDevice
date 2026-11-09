@@ -1426,4 +1426,5 @@ export const dict = {
   "session.movedOn.answer": "Jogap ber",
   "home.agents.movedOn": "Munsuz dowam etdi · {{time}}",
   "home.setup.attention": "Sazlamaňyzyň bir bölegi ünsi talap edýär.",
+  "session.map.decisions.category.protected_path": "Goragly ýer (açarlar, giriş maglumatlary ýa-da ulgam bukjalary)",
 }

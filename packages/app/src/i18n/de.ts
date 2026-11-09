@@ -1458,4 +1458,5 @@ export const dict = {
   "session.movedOn.answer": "Antworten",
   "home.agents.movedOn": "Ohne dies weitergemacht · {{time}}",
   "home.setup.attention": "Ein Teil deiner Einrichtung braucht Aufmerksamkeit.",
+  "session.map.decisions.category.protected_path": "Geschützter Ort (Schlüssel, Zugangsdaten oder Systemordner)",
 } satisfies Partial<Record<Keys, string>>

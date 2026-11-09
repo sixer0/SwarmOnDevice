@@ -1420,4 +1420,5 @@ export const dict: Record<string, string> = {
   "session.movedOn.answer": "පිළිතුරු දෙන්න",
   "home.agents.movedOn": "මෙය නොමැතිව ඉදිරියට ගියේය · {{time}}",
   "home.setup.attention": "ඔබගේ පිහිටුවීමේ කොටසකට අවධානය අවශ්‍යයි.",
+  "session.map.decisions.category.protected_path": "ආරක්ෂිත ස්ථානය (යතුරු, අක්තපත්‍ර හෝ පද්ධති ෆෝල්ඩර)",
 }

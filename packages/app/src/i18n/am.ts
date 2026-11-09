@@ -1397,4 +1397,5 @@ export const dict = {
   "session.movedOn.answer": "መልስ",
   "home.agents.movedOn": "ያለዚህ ቀጥሏል · {{time}}",
   "home.setup.attention": "የማዋቀርዎ ክፍል ትኩረት ይፈልጋል።",
+  "session.map.decisions.category.protected_path": "የተጠበቀ ቦታ (ቁልፎች፣ የመግቢያ ምስክርነቶች ወይም የሥርዓት አቃፊዎች)",
 }

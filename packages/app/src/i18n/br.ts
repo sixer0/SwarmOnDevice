@@ -1455,4 +1455,5 @@ export const dict = {
   "session.movedOn.answer": "Responder",
   "home.agents.movedOn": "Continuou sem isso · {{time}}",
   "home.setup.attention": "Ul lodenn eus ho staliadur he deus ezhomm evezh.",
+  "session.map.decisions.category.protected_path": "Lec'h gwarezet (alc'hwezioù, titouroù kennaskañ pe teuliadoù reizhiad)",
 }

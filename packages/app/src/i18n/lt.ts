@@ -1440,4 +1440,5 @@ export const dict = {
   "session.movedOn.answer": "Atsakyti",
   "home.agents.movedOn": "Tęsė be šito · {{time}}",
   "home.setup.attention": "Dalį jūsų sąrankos reikia peržiūrėti.",
+  "session.map.decisions.category.protected_path": "Apsaugota vieta (raktai, prisijungimo duomenys arba sistemos aplankai)",
 }

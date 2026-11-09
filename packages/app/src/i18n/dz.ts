@@ -1448,4 +1448,5 @@ export const dict: Record<string, string> = {
   "session.movedOn.answer": "ལན་འདེབས།",
   "home.agents.movedOn": "འདི་མེད་པར་འཕྲོ་མཐུད་འབད་ཡི། · {{time}}",
   "home.setup.attention": "ཁྱོད་ཀྱི་གཞི་སྒྲིག་གི་ཆ་ཤས་ཅིག་ལུ་དོ་སྣང་དགོ།",
+  "session.map.decisions.category.protected_path": "ཉེན་སྲུང་ཡོད་པའི་ས་གནས། (ལྡེ་མིག་ ངོ་སྤྲོད་ཡིག་ཆ་ ཡང་ན་ རིམ་ལུགས་ཀྱི་སྣོད་འཛིན།)",
 }

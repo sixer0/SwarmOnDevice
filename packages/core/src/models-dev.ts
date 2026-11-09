@@ -144,8 +144,36 @@ const Bundled = Schema.Struct({
   subagents: Schema.optional(Schema.Record(Schema.String, Schema.String)),
 })
 
-export const bundled = () =>
-  Option.getOrUndefined(Schema.decodeUnknownOption(Schema.fromJsonString(Bundled))(process.env[BUNDLED_ENV] ?? ""))
+// A shipped model may leave out `name` (it is then its key) and `release_date` (then ""). The Windows launcher reads the
+// payload as one `set /p` line of at most 1000 bytes (spec 114 section 5.3), and three models spelling both out no
+// longer fit once they declare image input. Anything else is decoded exactly as before.
+const withModelDefaults = (raw: unknown): unknown => {
+  if (typeof raw !== "object" || raw === null) return raw
+  const provider = (raw as { provider?: unknown }).provider
+  if (typeof provider !== "object" || provider === null) return raw
+  const models = (provider as { models?: unknown }).models
+  if (typeof models !== "object" || models === null || Array.isArray(models)) return raw
+  const filled = Object.fromEntries(
+    Object.entries(models).map(([key, model]) => [
+      key,
+      typeof model === "object" && model !== null && !Array.isArray(model)
+        ? { name: key, release_date: "", ...model }
+        : model,
+    ]),
+  )
+  return { ...raw, provider: { ...provider, models: filled } }
+}
+
+export const bundled = () => {
+  const text = process.env[BUNDLED_ENV] ?? ""
+  let raw: unknown
+  try {
+    raw = JSON.parse(text)
+  } catch {
+    return undefined
+  }
+  return Option.getOrUndefined(Schema.decodeUnknownOption(Bundled)(withModelDefaults(raw)))
+}
 
 export interface Interface {
   readonly get: () => Effect.Effect<Record<string, Provider>>

@@ -1416,4 +1416,5 @@ export const dict = {
   "session.movedOn.answer": "ຕອບ",
   "home.agents.movedOn": "ດຳເນີນຕໍ່ໂດຍບໍ່ມີສິ່ງນີ້ · {{time}}",
   "home.setup.attention": "ບາງສ່ວນຂອງການຕັ້ງຄ່າຂອງທ່ານຕ້ອງການຄວາມສົນໃຈ.",
+  "session.map.decisions.category.protected_path": "ບ່ອນທີ່ຖືກປົກປ້ອງ (ກະແຈ, ຂໍ້ມູນເຂົ້າສູ່ລະບົບ ຫຼື ໂຟນເດີລະບົບ)",
 }

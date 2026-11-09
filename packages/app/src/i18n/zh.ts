@@ -1503,4 +1503,5 @@ export const dict = {
   "session.movedOn.answer": "回答",
   "home.agents.movedOn": "已跳过此项继续 · {{time}}",
   "home.setup.attention": "你的部分设置需要处理。",
+  "session.map.decisions.category.protected_path": "受保护的位置（密钥、凭据或系统文件夹）",
 } satisfies Partial<Record<Keys, string>>

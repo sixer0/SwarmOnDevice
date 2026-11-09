@@ -1,9 +1,9 @@
 // The provider this app ships with, handed to the server it starts. It holds no key: the existing connect flow asks for
 // one and stores it in auth.json, and until then the provider is only offered. Lowest layer of all, see ModelsDev.bundled.
+// `name` (= the key) and `release_date` ("") are left to the server's defaults (ModelsDev.bundled), so the payload stays
+// within the 1000 bytes the Windows launcher's `set /p` reads (spec 114 section 5.3).
 const model = (id: string) => ({
   id,
-  name: id,
-  release_date: "",
   // GSP AI thinker, worker and worker-fast accept images (user 2026-11-09), so vision tools and image attachments are offered.
   attachment: true,
   reasoning: false,

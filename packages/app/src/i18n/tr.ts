@@ -1534,4 +1534,5 @@ export const dict = {
   "session.movedOn.answer": "Yanıtla",
   "home.agents.movedOn": "Bu olmadan devam etti · {{time}}",
   "home.setup.attention": "Kurulumunuzun bir bölümü ilgi gerektiriyor.",
+  "session.map.decisions.category.protected_path": "Korumalı konum (anahtarlar, kimlik bilgileri veya sistem klasörleri)",
 } satisfies Partial<Record<Keys, string>>

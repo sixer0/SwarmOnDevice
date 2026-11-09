@@ -1444,4 +1444,5 @@ export const dict = {
   "session.movedOn.answer": "إجابة",
   "home.agents.movedOn": "تابع من دون هذا · {{time}}",
   "home.setup.attention": "جزء من إعدادك يحتاج إلى انتباهك.",
+  "session.map.decisions.category.protected_path": "مكان محمي (مفاتيح أو بيانات اعتماد أو مجلدات النظام)",
 }

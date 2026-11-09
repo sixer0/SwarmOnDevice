@@ -1436,4 +1436,5 @@ export const dict = {
   "session.movedOn.answer": "Хариулах",
   "home.agents.movedOn": "Үүнгүйгээр үргэлжилсэн · {{time}}",
   "home.setup.attention": "Таны тохиргооны нэг хэсэгт анхаарал шаардлагатай.",
+  "session.map.decisions.category.protected_path": "Хамгаалагдсан байршил (түлхүүр, нэвтрэх мэдээлэл эсвэл системийн хавтас)",
 }

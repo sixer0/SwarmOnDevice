@@ -1445,4 +1445,5 @@ export const dict = {
   "session.movedOn.answer": "Antwoorden",
   "home.agents.movedOn": "Hier zonder doorgegaan · {{time}}",
   "home.setup.attention": "Een deel van je installatie vraagt om aandacht.",
+  "session.map.decisions.category.protected_path": "Beschermde locatie (sleutels, inloggegevens of systeemmappen)",
 }

@@ -1439,4 +1439,5 @@ export const dict = {
   "session.movedOn.answer": "Javob berish",
   "home.agents.movedOn": "Bunsiz davom etdi · {{time}}",
   "home.setup.attention": "Sozlamangizning bir qismi e'tibor talab qiladi.",
+  "session.map.decisions.category.protected_path": "Himoyalangan joy (kalitlar, kirish ma'lumotlari yoki tizim jildlari)",
 }

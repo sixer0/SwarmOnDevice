@@ -1433,4 +1433,5 @@ export const dict = {
   "session.movedOn.answer": "Պատասխանել",
   "home.agents.movedOn": "Շարունակեց առանց սրա · {{time}}",
   "home.setup.attention": "Ձեր կարգավորման մի մասը ուշադրություն է պահանջում։",
+  "session.map.decisions.category.protected_path": "Պաշտպանված վայր (բանալիներ, մուտքի տվյալներ կամ համակարգային թղթապանակներ)",
 }

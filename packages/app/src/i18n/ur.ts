@@ -1437,4 +1437,5 @@ export const dict = {
   "session.movedOn.answer": "جواب دیں",
   "home.agents.movedOn": "اس کے بغیر جاری رکھا · {{time}}",
   "home.setup.attention": "آپ کے سیٹ اپ کے ایک حصے پر توجہ درکار ہے۔",
+  "session.map.decisions.category.protected_path": "محفوظ جگہ (کلیدیں، اسناد یا سسٹم فولڈرز)",
 }

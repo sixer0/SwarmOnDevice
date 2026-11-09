@@ -1430,4 +1430,5 @@ export const dict = {
   "session.movedOn.answer": "Përgjigju",
   "home.agents.movedOn": "Vazhdoi pa këtë · {{time}}",
   "home.setup.attention": "Një pjesë e konfigurimit tuaj kërkon vëmendje.",
+  "session.map.decisions.category.protected_path": "Vend i mbrojtur (çelësa, kredenciale ose dosje sistemi)",
 }

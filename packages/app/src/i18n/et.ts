@@ -1419,4 +1419,5 @@ export const dict = {
   "session.movedOn.answer": "Vasta",
   "home.agents.movedOn": "Jätkas ilma selleta · {{time}}",
   "home.setup.attention": "Osa teie seadistusest vajab tähelepanu.",
+  "session.map.decisions.category.protected_path": "Kaitstud koht (võtmed, sisselogimisandmed või süsteemikaustad)",
 }

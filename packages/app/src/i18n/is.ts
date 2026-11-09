@@ -1425,4 +1425,5 @@ export const dict = {
   "session.movedOn.answer": "Svara",
   "home.agents.movedOn": "Hélt áfram án þessa · {{time}}",
   "home.setup.attention": "Hluti af uppsetningunni þinni þarfnast athygli.",
+  "session.map.decisions.category.protected_path": "Varinn staður (lyklar, innskráningarupplýsingar eða kerfismöppur)",
 }

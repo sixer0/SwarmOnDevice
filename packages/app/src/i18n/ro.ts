@@ -1430,4 +1430,5 @@ export const dict = {
   "session.movedOn.answer": "Răspunde",
   "home.agents.movedOn": "A continuat fără asta · {{time}}",
   "home.setup.attention": "O parte din configurarea ta necesită atenție.",
+  "session.map.decisions.category.protected_path": "Loc protejat (chei, date de autentificare sau foldere de sistem)",
 }

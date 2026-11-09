@@ -1540,4 +1540,5 @@ export const dict = {
   "session.movedOn.answer": "Відповісти",
   "home.agents.movedOn": "Продовжив без цього · {{time}}",
   "home.setup.attention": "Частина налаштування потребує уваги.",
+  "session.map.decisions.category.protected_path": "Захищене місце (ключі, облікові дані або системні папки)",
 }

@@ -1424,4 +1424,5 @@ export const dict = {
   "session.movedOn.answer": "პასუხი",
   "home.agents.movedOn": "გააგრძელა ამის გარეშე · {{time}}",
   "home.setup.attention": "თქვენი დაყენების ნაწილს ყურადღება სჭირდება.",
+  "session.map.decisions.category.protected_path": "დაცული ადგილი (გასაღებები, ავტორიზაციის მონაცემები ან სისტემური საქაღალდეები)",
 }

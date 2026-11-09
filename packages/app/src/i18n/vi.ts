@@ -1443,4 +1443,5 @@ export const dict = {
   "session.movedOn.answer": "Trả lời",
   "home.agents.movedOn": "Đã tiếp tục mà không có điều này · {{time}}",
   "home.setup.attention": "Một phần thiết lập của bạn cần được chú ý.",
+  "session.map.decisions.category.protected_path": "Vị trí được bảo vệ (khóa, thông tin xác thực hoặc thư mục hệ thống)",
 }

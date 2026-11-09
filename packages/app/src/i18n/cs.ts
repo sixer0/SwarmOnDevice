@@ -1430,4 +1430,5 @@ export const dict = {
   "session.movedOn.answer": "Odpovědět",
   "home.agents.movedOn": "Pokračoval bez toho · {{time}}",
   "home.setup.attention": "Část vašeho nastavení vyžaduje pozornost.",
+  "session.map.decisions.category.protected_path": "Chráněné místo (klíče, přihlašovací údaje nebo systémové složky)",
 }

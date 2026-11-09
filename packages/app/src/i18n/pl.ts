@@ -1458,4 +1458,5 @@ export const dict = {
   "session.movedOn.answer": "Odpowiedz",
   "home.agents.movedOn": "Kontynuował bez tego · {{time}}",
   "home.setup.attention": "Część konfiguracji wymaga uwagi.",
+  "session.map.decisions.category.protected_path": "Chronione miejsce (klucze, dane logowania lub foldery systemowe)",
 }

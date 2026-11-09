@@ -1444,4 +1444,5 @@ export const dict = {
   "session.movedOn.answer": "ဖြေရန်",
   "home.agents.movedOn": "ဤအရာမပါဘဲ ဆက်လုပ်ခဲ့သည် · {{time}}",
   "home.setup.attention": "သင့်တပ်ဆင်မှု၏ အစိတ်အပိုင်းတစ်ခုကို အာရုံစိုက်ရန် လိုအပ်သည်။",
+  "session.map.decisions.category.protected_path": "ကာကွယ်ထားသော နေရာ (သော့များ၊ အထောက်အထားများ သို့မဟုတ် စနစ်ဖိုင်တွဲများ)",
 }

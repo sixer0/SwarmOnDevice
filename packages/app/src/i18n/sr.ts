@@ -1429,4 +1429,5 @@ export const dict = {
   "session.movedOn.answer": "Одговори",
   "home.agents.movedOn": "Наставио је без овога · {{time}}",
   "home.setup.attention": "Део вашег подешавања захтева пажњу.",
+  "session.map.decisions.category.protected_path": "Заштићено место (кључеви, акредитиви или системске фасцикле)",
 }

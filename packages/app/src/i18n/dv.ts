@@ -1445,4 +1445,5 @@ export const dict = {
   "session.movedOn.answer": "ޖަވާބުދޭ",
   "home.agents.movedOn": "މިއާ ނުލައި ކުރިއަށްދިޔައީ · {{time}}",
   "home.setup.attention": "ތިޔަބޭފުޅާގެ ސެޓަޕްގެ ބައެއްގެ މައްޗަށް ސަމާލުކަން ބޭނުންވެއެވެ.",
+  "session.map.decisions.category.protected_path": "ރައްކާތެރިކުރެވިފައިވާ ތަނެއް (ކީތައް، ކްރެޑެންޝަލްތައް ނުވަތަ ސިސްޓަމް ފޯލްޑަރުތައް)",
 }

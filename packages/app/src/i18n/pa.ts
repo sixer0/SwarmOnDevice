@@ -1435,4 +1435,5 @@ export const dict = {
   "session.movedOn.answer": "ਜਵਾਬ ਦਿਓ",
   "home.agents.movedOn": "ਇਸ ਤੋਂ ਬਿਨਾਂ ਜਾਰੀ ਰੱਖਿਆ · {{time}}",
   "home.setup.attention": "ਤੁਹਾਡੇ ਸੈੱਟਅੱਪ ਦੇ ਇੱਕ ਹਿੱਸੇ ਵੱਲ ਧਿਆਨ ਦੇਣ ਦੀ ਲੋੜ ਹੈ।",
+  "session.map.decisions.category.protected_path": "ਸੁਰੱਖਿਅਤ ਥਾਂ (ਕੁੰਜੀਆਂ, ਪ੍ਰਮਾਣ-ਪੱਤਰ ਜਾਂ ਸਿਸਟਮ ਫੋਲਡਰ)",
 }

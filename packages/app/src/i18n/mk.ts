@@ -1433,4 +1433,5 @@ export const dict = {
   "session.movedOn.answer": "Одговори",
   "home.agents.movedOn": "Продолжи без ова · {{time}}",
   "home.setup.attention": "Дел од вашето поставување бара внимание.",
+  "session.map.decisions.category.protected_path": "Заштитено место (клучеви, акредитиви или системски папки)",
 }

@@ -1440,4 +1440,5 @@ export const dict = {
   "session.movedOn.answer": "Cavabla",
   "home.agents.movedOn": "Bunsuz davam etdi · {{time}}",
   "home.setup.attention": "Quraşdırmanızın bir hissəsi diqqət tələb edir.",
+  "session.map.decisions.category.protected_path": "Qorunan yer (açarlar, giriş məlumatları və ya sistem qovluqları)",
 }

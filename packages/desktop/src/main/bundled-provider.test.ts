@@ -62,3 +62,47 @@ describeVision("GSP AI vision (2026-11-09)", () => {
     }
   })
 })
+
+describe("row 208: the payload fits the Windows launcher and still decodes whole", () => {
+  test("within the 1000 bytes set /p reads, and the server fills name and release_date", () => {
+    const json = BUNDLED_PROVIDER_ENV[ModelsDev.BUNDLED_ENV]
+    expect(Buffer.byteLength(json)).toBeLessThanOrEqual(1000)
+    const decoded = withEnv(json, ModelsDev.bundled)
+    for (const id of ["thinker", "worker", "worker-fast"]) {
+      const m = decoded?.provider.models[id]
+      expect(m?.id).toBe(id)
+      expect(m?.name).toBe(id)
+      expect(m?.release_date).toBe("")
+      expect(m?.attachment).toBe(true)
+      expect(m?.modalities?.input).toEqual(["text", "image"])
+    }
+  })
+
+  test("an explicit name or release_date still wins, and a broken payload is still refused", () => {
+    const explicit = JSON.stringify({
+      provider: {
+        id: "p",
+        name: "P",
+        env: [],
+        models: {
+          a: {
+            id: "a",
+            name: "Shown A",
+            release_date: "2026-01-01",
+            attachment: false,
+            reasoning: false,
+            temperature: false,
+            tool_call: true,
+            limit: { context: 0, output: 0 },
+          },
+        },
+      },
+    })
+    const decoded = withEnv(explicit, ModelsDev.bundled)
+    expect(decoded?.provider.models.a?.name).toBe("Shown A")
+    expect(decoded?.provider.models.a?.release_date).toBe("2026-01-01")
+    expect(withEnv("{not json", ModelsDev.bundled)).toBeUndefined()
+    expect(withEnv("", ModelsDev.bundled)).toBeUndefined()
+    expect(withEnv(JSON.stringify({ provider: { id: "p", models: {} } }), ModelsDev.bundled)).toBeUndefined()
+  })
+})

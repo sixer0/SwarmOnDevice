@@ -1442,4 +1442,5 @@ export const dict = {
   "session.movedOn.answer": "답변",
   "home.agents.movedOn": "이것 없이 계속했습니다 · {{time}}",
   "home.setup.attention": "설정의 일부에 확인이 필요합니다.",
+  "session.map.decisions.category.protected_path": "보호된 위치(키, 자격 증명 또는 시스템 폴더)",
 }

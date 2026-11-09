@@ -1440,4 +1440,5 @@ export const dict = {
   "session.movedOn.answer": "Respon",
   "home.agents.movedOn": "Ha continuat sense això · {{time}}",
   "home.setup.attention": "Part de la vostra configuració requereix atenció.",
+  "session.map.decisions.category.protected_path": "Lloc protegit (claus, credencials o carpetes del sistema)",
 }

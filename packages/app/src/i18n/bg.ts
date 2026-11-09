@@ -1438,4 +1438,5 @@ export const dict = {
   "session.movedOn.answer": "Отговори",
   "home.agents.movedOn": "Продължи без това · {{time}}",
   "home.setup.attention": "Част от настройката ви изисква внимание.",
+  "session.map.decisions.category.protected_path": "Защитено място (ключове, идентификационни данни или системни папки)",
 }

@@ -1428,4 +1428,5 @@ export const dict = {
   "session.movedOn.answer": "Atbildēt",
   "home.agents.movedOn": "Turpināja bez šī · {{time}}",
   "home.setup.attention": "Daļai jūsu iestatījumu jāpievērš uzmanība.",
+  "session.map.decisions.category.protected_path": "Aizsargāta vieta (atslēgas, pieteikšanās dati vai sistēmas mapes)",
 }

@@ -1522,4 +1522,5 @@ export const dict = {
   "session.movedOn.answer": "Svar",
   "home.agents.movedOn": "Fortsatte uden dette · {{time}}",
   "home.setup.attention": "En del af din opsætning kræver opmærksomhed.",
+  "session.map.decisions.category.protected_path": "Beskyttet sted (nøgler, loginoplysninger eller systemmapper)",
 }

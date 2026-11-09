@@ -1438,4 +1438,5 @@ export const dict = {
   "session.movedOn.answer": "Válasz",
   "home.agents.movedOn": "Enélkül folytatta · {{time}}",
   "home.setup.attention": "A beállítás egy része figyelmet igényel.",
+  "session.map.decisions.category.protected_path": "Védett hely (kulcsok, hitelesítő adatok vagy rendszermappák)",
 }

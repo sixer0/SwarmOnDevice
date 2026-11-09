@@ -1441,4 +1441,5 @@ export const dict = {
   "session.movedOn.answer": "Απάντηση",
   "home.agents.movedOn": "Συνέχισε χωρίς αυτό · {{time}}",
   "home.setup.attention": "Μέρος της ρύθμισής σας χρειάζεται προσοχή.",
+  "session.map.decisions.category.protected_path": "Προστατευμένη θέση (κλειδιά, διαπιστευτήρια ή φάκελοι συστήματος)",
 }

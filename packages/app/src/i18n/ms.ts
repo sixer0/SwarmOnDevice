@@ -1425,4 +1425,5 @@ export const dict = {
   "session.movedOn.answer": "Jawab",
   "home.agents.movedOn": "Diteruskan tanpa ini · {{time}}",
   "home.setup.attention": "Sebahagian persediaan anda memerlukan perhatian.",
+  "session.map.decisions.category.protected_path": "Lokasi dilindungi (kunci, bukti kelayakan atau folder sistem)",
 }

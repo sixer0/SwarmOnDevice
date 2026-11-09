@@ -1425,4 +1425,5 @@ export const dict: Record<string, string> = {
   "session.movedOn.answer": "जवाफ दिनुहोस्",
   "home.agents.movedOn": "यो बिना अगाडि बढ्यो · {{time}}",
   "home.setup.attention": "तपाईंको सेटअपको एक भागमा ध्यान दिनु आवश्यक छ।",
+  "session.map.decisions.category.protected_path": "सुरक्षित स्थान (कुञ्जीहरू, प्रमाणहरू वा प्रणाली फोल्डरहरू)",
 }

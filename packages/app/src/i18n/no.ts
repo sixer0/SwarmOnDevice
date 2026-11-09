@@ -1541,4 +1541,5 @@ export const dict = {
   "session.movedOn.answer": "Svar",
   "home.agents.movedOn": "Fortsatte uten dette · {{time}}",
   "home.setup.attention": "En del av oppsettet ditt trenger oppmerksomhet.",
+  "session.map.decisions.category.protected_path": "Beskyttet sted (nøkler, påloggingsinformasjon eller systemmapper)",
 } satisfies Partial<Record<Keys, string>>

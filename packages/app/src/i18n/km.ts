@@ -1419,4 +1419,5 @@ export const dict = {
   "session.movedOn.answer": "ឆ្លើយ",
   "home.agents.movedOn": "បានបន្តដោយគ្មានវា · {{time}}",
   "home.setup.attention": "ផ្នែកមួយនៃការរៀបចំរបស់អ្នកត្រូវការការយកចិត្តទុកដាក់។",
+  "session.map.decisions.category.protected_path": "ទីតាំងដែលត្រូវបានការពារ (កូនសោ ព័ត៌មានផ្ទៀងផ្ទាត់ ឬថតប្រព័ន្ធ)",
 }

@@ -1444,4 +1444,5 @@ export const dict = {
   "session.movedOn.answer": "回答",
   "home.agents.movedOn": "これなしで続行しました · {{time}}",
   "home.setup.attention": "セットアップの一部に確認が必要です。",
+  "session.map.decisions.category.protected_path": "保護された場所（キー、認証情報、またはシステムフォルダー）",
 }

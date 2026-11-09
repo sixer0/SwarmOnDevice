@@ -1434,4 +1434,5 @@ export const dict = {
   "session.movedOn.answer": "Svara",
   "home.agents.movedOn": "Fortsatte utan detta · {{time}}",
   "home.setup.attention": "En del av din konfiguration behöver uppmärksamhet.",
+  "session.map.decisions.category.protected_path": "Skyddad plats (nycklar, inloggningsuppgifter eller systemmappar)",
 }

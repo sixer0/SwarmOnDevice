@@ -1512,4 +1512,5 @@ export const dict = {
   "session.movedOn.answer": "ตอบ",
   "home.agents.movedOn": "ทำต่อโดยไม่มีสิ่งนี้ · {{time}}",
   "home.setup.attention": "การตั้งค่าบางส่วนของคุณต้องได้รับการตรวจสอบ",
+  "session.map.decisions.category.protected_path": "ตำแหน่งที่ได้รับการป้องกัน (คีย์ ข้อมูลรับรอง หรือโฟลเดอร์ระบบ)",
 }
