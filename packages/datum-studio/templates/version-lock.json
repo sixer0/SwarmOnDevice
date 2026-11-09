@@ -1,0 +1,166 @@
+{
+  "$schema": "datum-studio.builtin-version-lock/v1",
+  "note": "Every (versionNo, content) each builtin template ever shipped; append-only, never edited by hand except to add history. Content = definitionSha256 (what StudioStore.pinBuiltinVersion compares) + payloadSha256 (the folded version payload). retired = that versionNo shipped with more than one content and is never used again. Rule and tools: scripts/builtin-version-lock.ts; guard: test/row213/row213-version-lock.test.ts (row 213, 1.2.4, P15).",
+  "templates": {
+    "datum-kanonik-preset": [
+      {
+        "versionNo": 1,
+        "definitionSha256": "b7d066c2258cd16a2cb63c5f24b23946b3ec8be10b8e434b82febb896ee81f37",
+        "payloadSha256": "f65e1a42f52d0cf22ebd43f6e5d9505d201e115963abe48d34a26fc10cc798a4",
+        "release": "1.2.0"
+      }
+    ],
+    "datum-kanonik": [
+      {
+        "versionNo": 1,
+        "definitionSha256": "fb80533eb02cecd890abe13108593695f399999edbaf277faf8c512da2bcecb3",
+        "payloadSha256": "36851acc679173e06de818ff6d679f1ae52a478945a1489f1792de76baa012a0",
+        "release": "1.2.0",
+        "retired": true,
+        "note": "shipped by 1.2.0, 1.2.1 and 1.2.2 (1eb98be8e2, acaf31e217, 9bf7bf2838)"
+      },
+      {
+        "versionNo": 1,
+        "definitionSha256": "8b13355aa9ba902328a28e210c12cd60acf4c6145609008eba58c107a761d0e9",
+        "payloadSha256": "c08a83082e5dac5dcfb5172cd4ac66079a5161d88bdfa0e526a87262b6c3d657",
+        "release": "1.2.3",
+        "retired": true,
+        "note": "row 205 (80bfb47844, render.rail.reserveColumn) shipped by 1.2.3 without a version bump: TEMPLATE_VERSION_CONFLICT on stores pinned by 1.2.0-1.2.2"
+      },
+      {
+        "versionNo": 2,
+        "definitionSha256": "8b13355aa9ba902328a28e210c12cd60acf4c6145609008eba58c107a761d0e9",
+        "payloadSha256": "c08a83082e5dac5dcfb5172cd4ac66079a5161d88bdfa0e526a87262b6c3d657",
+        "release": "1.2.4"
+      }
+    ],
+    "datum-gsp-preset": [
+      {
+        "versionNo": 1,
+        "definitionSha256": "e9cfda9d4587b005f2e4d85c3e30e70380fa85c16f1f2b411de309cd8c833fdb",
+        "payloadSha256": "093dc92563ecf14ecbe2e31ed9b20088b66d02743cce49fe91f3c552c6be9cdc",
+        "release": "1.2.0"
+      }
+    ],
+    "datum-gsp": [
+      {
+        "versionNo": 1,
+        "definitionSha256": "99feafa1e8ea4acb0011ffadcb0a94ab3fba406522555a3ca84cda6e2de429ee",
+        "payloadSha256": "07413f087b84d0d45ea4d4ebc1d348b8adde5b759a023be6a5e356a437fb45f7",
+        "release": "1.2.0",
+        "retired": true,
+        "note": "shipped by 1.2.0 and 1.2.1 (1eb98be8e2, acaf31e217)"
+      },
+      {
+        "versionNo": 1,
+        "definitionSha256": "0e20a80497db2bc664b65c942335bc84c6cd4b6f87d5d03731b04fa63533fd62",
+        "payloadSha256": "f63a49a280ba95ed77e87b1c1bb21d84eb6cb6ba458766434c40ce18cebcaa1e",
+        "release": "1.2.2",
+        "retired": true,
+        "note": "row 174 (0c5a9bb8ef, render.rail.reserveColumn) shipped by 1.2.2 and 1.2.3 without a version bump: TEMPLATE_VERSION_CONFLICT on stores pinned by 1.2.0/1.2.1"
+      },
+      {
+        "versionNo": 2,
+        "definitionSha256": "0e20a80497db2bc664b65c942335bc84c6cd4b6f87d5d03731b04fa63533fd62",
+        "payloadSha256": "f63a49a280ba95ed77e87b1c1bb21d84eb6cb6ba458766434c40ce18cebcaa1e",
+        "release": "1.2.4"
+      }
+    ],
+    "datum-gsp-rev-a-preset": [
+      {
+        "versionNo": 1,
+        "definitionSha256": "6d1b94327a1826c82c632f14def0ea09e9e088f61380fc8e38279a4cce355bda",
+        "payloadSha256": "428c2cf10bbabb6148888d5f0cbe8af2c103eed0fb0c5c27b9e1fec39ce0f760",
+        "release": "1.2.0"
+      }
+    ],
+    "laporan-kerja-agen": [
+      {
+        "versionNo": 1,
+        "definitionSha256": "691bf6e5ae051f4ff4506c7a165b3d43d305b7dc15a8528a15bd9bd7c3afd0d2",
+        "payloadSha256": "f40307eab7f62b5d22d2f70295ae1106c089195ca54478a5132477287cf800b7",
+        "release": "1.2.0"
+      }
+    ],
+    "datum-proposal-teknis": [
+      {
+        "versionNo": 1,
+        "definitionSha256": "a5f53f995b7893bae971c09e75c7a79bf62a412917950c7faef528fa21059fd8",
+        "payloadSha256": "9b53a37f21871c33b586cb87ad627ff5df71ce54bf674d0bf0a8aa7cca34f2c6",
+        "release": "1.2.0"
+      }
+    ],
+    "datum-proposal-teknis-en": [
+      {
+        "versionNo": 1,
+        "definitionSha256": "20071d472ab2b1d4b8e6815f2ff7f52532678bf597f04506aff1788023413e66",
+        "payloadSha256": "dcea1930f23bee5ec87d50e13544f67b5053357f1ec1a79ea84c67ad95f2438b",
+        "release": "1.2.0"
+      }
+    ],
+    "datum-laporan": [
+      {
+        "versionNo": 1,
+        "definitionSha256": "51c31dcc874c0ed5e1326a53fb4430cf0d46e1db73f58483feebcb603f44c723",
+        "payloadSha256": "841119714eb13506c09004938a419d9a9cb0c7f1d47d00e5d735c7376ef251a6",
+        "release": "1.2.0"
+      }
+    ],
+    "datum-laporan-en": [
+      {
+        "versionNo": 1,
+        "definitionSha256": "347f4f1e00a34a996f8b9ba11bdac3693054328a7162ebd789c98591c6b211b6",
+        "payloadSha256": "b681727e67d9a78cc275b55f410ece6af7b4770c47246f0319d6ef0e1c6c6185",
+        "release": "1.2.0"
+      }
+    ],
+    "datum-laporan-verifikasi": [
+      {
+        "versionNo": 1,
+        "definitionSha256": "41283a294af4eab22f5929221a52b762b7ecaf436f6710df2da710af17e84ceb",
+        "payloadSha256": "eda5b3af881d871ac08068e9f24a2e64cbb9d6ef9aca6b9febe4d60169260107",
+        "release": "1.2.0"
+      }
+    ],
+    "datum-laporan-verifikasi-en": [
+      {
+        "versionNo": 1,
+        "definitionSha256": "5179287e9414e366cdade71cc2b0de32e0c95a9d86d231d955916a4c2f27359c",
+        "payloadSha256": "4f1790edccc1d1c19b3d9bd723afd5c01aa428e5f244892e9388f8b03a09078a",
+        "release": "1.2.0"
+      }
+    ],
+    "datum-standar": [
+      {
+        "versionNo": 1,
+        "definitionSha256": "4deef218a710e781c41666a308be1bf43cabe45020d2c9fb39677c26ab4f039f",
+        "payloadSha256": "69ed68db884857060d697702e8125d5a0f0e6c644d92f7fd79e15a238b801890",
+        "release": "1.2.0"
+      }
+    ],
+    "datum-standar-en": [
+      {
+        "versionNo": 1,
+        "definitionSha256": "f5992a9a7b9daa9f54b77dc1bb7d10fe07d5f302c25fdf63f79714be8c3d0eda",
+        "payloadSha256": "676843030e2da6590179856c20a2253c446efda7ba746ce2b38781df79303804",
+        "release": "1.2.0"
+      }
+    ],
+    "datum-nota": [
+      {
+        "versionNo": 1,
+        "definitionSha256": "66f0b33a6b01d96943d53b65a77f826b416fe060c7c2600281aeb33dc8ec1a60",
+        "payloadSha256": "dabc376277ef227b17df79e0e934661d20089e396b774711dbac1f67ca6c1e65",
+        "release": "1.2.0"
+      }
+    ],
+    "datum-nota-en": [
+      {
+        "versionNo": 1,
+        "definitionSha256": "e926557efaca4da58819cda54f6f361395a5a045f5922decd44aa0d3e1aa6f0e",
+        "payloadSha256": "db0eb7a6d8ceb380b5756d6efd7c6c031621ebc2aa3838cb95cb2674ad0c3ca7",
+        "release": "1.2.0"
+      }
+    ]
+  }
+}

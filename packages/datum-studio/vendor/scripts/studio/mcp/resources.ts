@@ -95,7 +95,7 @@ export const MCP_DOC_RECIPE = [
   "  { cell: { section: \"controlSheet\", row: \"V1\", column: \"Metode\" }, value } (kolom kosong pun dapat diisi).",
   "- signature: `{ type: \"signatureBlock\", roles: [{ role: { text }, holder: { text }, date?: { text } }] }`",
   "- references: `{ type: \"sourceRegister\", entries: [{ id, citation: { text }, kind, accessed? }] }`",
-  "- cover (opsional; otomatis dari meta): `{ type: \"cover\", standfirst?, scopeLine?, colophon?: { left, right }, identityString? }`",
+  "- cover (opsional; otomatis dari meta): `{ type: \"cover\", standfirst?, scopeLine?, colophon?: { left: { text }, right: { text } } (kedua sisi wajib, objek teks bukan string), identityString? }`",
   "  (nilai teks berbentuk `{ text }`). Skema penuh: studio_registry { kind: \"schema\", schemaId: \"common/v2\" }.",
   "",
   "Revisi dan konflik: kiriman bab/slot lewat MCP ke dokumen yang SUDAH ADA wajib baseRevisionNo (revisi yang Anda baca,",

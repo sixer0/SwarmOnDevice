@@ -52,7 +52,8 @@
   "row178": "2026-11-08: row 178 (diagram refusals name the fix). forbidden.ts re-patched (files[].patch_row178, before = row 174 sha256) + NEW contract/schema/v2/refusal-hints.ts (status added). Diff and new file in implementation/157_row178_diffs/. counts: files 604 -> 605, added 26 -> 27; bytes 9759710 + 3106 (forbidden.ts) + 8545 (refusal-hints.ts) = 9771361",
   "row207": "2026-11-09: 1.2.3 patch HB-2 (verificationChain columns print and are editable). 7 vendor files re-patched (files[].patch_row207, before = previous sha256): docs/STUDIO-AGENT-GUIDE.md, scripts/studio/mcp/doc-tools.ts, scripts/studio/mcp/resources.ts, scripts/studio/mcp/write-client-edit.ts, src/lib/studio/contract/schema/v2/common.schema.ts, src/lib/studio/contract/types/v2/slot.ts, src/lib/studio/services/compose/front.ts; 4 of them copied -> patched. NEW contract/schema/v2/verification-entry.ts (status added). Diffs in docs/2026-11-09_swarm_1_2_3_patch/implementation/207_row207_diffs/. counts by delta: files 605 -> 606, added 27 -> 28, copied 450 -> 446, patched 116 -> 120; bytes 9771361 + 6442 (re-patched) + 5177 (verification-entry.ts) = 9782980. patch_rows += 207",
   "row206": "2026-11-09: 1.2.3 patch row 206 (verification details reach the client; lint tri-state; DATUM-37 parity with OVERLAP_CLIP). 5 vendor files re-patched (files[].patch_row206, before = previous sha256; all already patched): scripts/studio/mcp/doc-tools.ts, scripts/studio/mcp/tool-kit.ts, src/lib/studio/engine/browser/index.ts, src/lib/studio/engine/browser/measure.ts, src/lib/studio/engine/lint/render/index.ts. NEW src/lib/studio/registry/lint-explain.ts (status added). Diffs and new file in docs/2026-11-09_swarm_1_2_3_patch/implementation/206_row206_diffs/. counts by delta: files 606 -> 607, added 28 -> 29, copied/patched/replaced unchanged; bytes 9782980 +4525 (re-patched) + 10060 (lint-explain.ts) = 9797565. patch_rows += 206",
-  "row210": "2026-11-09: 1.2.3 patch P5 row 210 (security review 209 fixes L-1, L-3, I-2). 4 vendor files re-patched (files[].patch_row210, before = previous sha256; statuses unchanged): scripts/studio/mcp/doc-tools.ts (+152), scripts/studio/mcp/write-client-edit.ts (+183), src/lib/studio/contract/schema/v2/verification-entry.ts (+249), src/lib/studio/registry/lint-explain.ts (+155). Diffs in docs/2026-11-09_swarm_1_2_3_patch/implementation/210_row210_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9797565 + 739 = 9798304. patch_rows += 210"
+  "row210": "2026-11-09: 1.2.3 patch P5 row 210 (security review 209 fixes L-1, L-3, I-2). 4 vendor files re-patched (files[].patch_row210, before = previous sha256; statuses unchanged): scripts/studio/mcp/doc-tools.ts (+152), scripts/studio/mcp/write-client-edit.ts (+183), src/lib/studio/contract/schema/v2/verification-entry.ts (+249), src/lib/studio/registry/lint-explain.ts (+155). Diffs in docs/2026-11-09_swarm_1_2_3_patch/implementation/210_row210_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9797565 + 739 = 9798304. patch_rows += 210",
+  "row213": "2026-11-09: 1.2.4 patch P15 row 213 (cover colophon shape for agents). 2 vendor files re-patched (files[].patch_row213, before = previous sha256; statuses unchanged): docs/STUDIO-AGENT-GUIDE.md (+703: colophon shape in the 5.4 cover table, minimal valid cover payload with colophon after the 5.7 D16 table), scripts/studio/mcp/resources.ts (+64: colophon shape on the cover line). Diffs in docs/2026-11-09_swarm_1_2_3_patch/implementation/213_row213_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9798304 + 767 = 9799071. patch_rows += 213"
  },
  "counts": {
   "files": 607,
@@ -60,7 +61,7 @@
   "patched": 120,
   "replaced": 12,
   "added": 29,
-  "bytes": 9798304
+  "bytes": 9799071
  },
  "files": [
   {
@@ -89,10 +90,11 @@
   {
    "path": "docs/STUDIO-AGENT-GUIDE.md",
    "status": "patched",
-   "bytes": 174455,
+   "bytes": 175158,
    "source_sha256": "b5429f89523246431aacbfc37749d22c0cf062bbf3f634c4bc269db295e783bb",
-   "sha256": "0b1fddbd63d0120baad9fd5d4088620c561d5bfd19a5607343521319e4f57389",
-   "patch_row207": {"id": "row207-hb2-verification-chain", "row": "207", "decision": "1.2.3 patch HB-2", "summary": "§5.4 controlSheet example uses layer/method/object/result; paragraph on accepted keys, alias mapping, refusal, role/name print mapping and studio_edit cell addressing", "before_sha256": "b5429f89523246431aacbfc37749d22c0cf062bbf3f634c4bc269db295e783bb", "after_sha256": "0b1fddbd63d0120baad9fd5d4088620c561d5bfd19a5607343521319e4f57389", "diff": "docs/2026-11-09_swarm_1_2_3_patch/implementation/207_row207_diffs/STUDIO-AGENT-GUIDE.md.diff"}
+   "sha256": "4aead3d2032d5add430cc73433f18a88ef17a97ea102dafd0acb8a0895ff35e6",
+   "patch_row207": {"id": "row207-hb2-verification-chain", "row": "207", "decision": "1.2.3 patch HB-2", "summary": "§5.4 controlSheet example uses layer/method/object/result; paragraph on accepted keys, alias mapping, refusal, role/name print mapping and studio_edit cell addressing", "before_sha256": "b5429f89523246431aacbfc37749d22c0cf062bbf3f634c4bc269db295e783bb", "after_sha256": "0b1fddbd63d0120baad9fd5d4088620c561d5bfd19a5607343521319e4f57389", "diff": "docs/2026-11-09_swarm_1_2_3_patch/implementation/207_row207_diffs/STUDIO-AGENT-GUIDE.md.diff"},
+   "patch_row213": {"id": "row213-cover-colophon", "row": "213", "decision": "1.2.4 patch P15", "summary": "§5.4 cover table: colophon shape { left: { text }, right: { text } } (both sides required, text objects); §5.7 after the D16/D17/D18 table: minimal valid cover payload with colophon (studio:validate studio.slot/v2)", "before_sha256": "0b1fddbd63d0120baad9fd5d4088620c561d5bfd19a5607343521319e4f57389", "after_sha256": "4aead3d2032d5add430cc73433f18a88ef17a97ea102dafd0acb8a0895ff35e6", "diff": "docs/2026-11-09_swarm_1_2_3_patch/implementation/213_row213_diffs/STUDIO-AGENT-GUIDE.md.diff"}
   },
   {
    "path": "prisma/seed-derived-presets.ts",
@@ -251,12 +253,13 @@
   {
    "path": "scripts/studio/mcp/resources.ts",
    "status": "patched",
-   "bytes": 12270,
+   "bytes": 12334,
    "source_sha256": "1baf1d948b975ea5f44a5d249ba7a138259bccc4b2b460b12c5bc89db390c193",
-   "sha256": "86dcaab241475f0507bcb0dcfd61390cce85234dc5b27cdd1a3c09fe5dcf4913",
+   "sha256": "c02e11304447e615afb65a877e5068a6657d06981f2338a54a581b2fdc165b50",
    "patch_row174": {"id": "row174-f146b6", "row": "174", "decision": "C218 F146b-6", "summary": "guide text: three strings after the FIG-03b lines: diagram block shape, spec ATAU artifactId (not both), schema pointer", "before_sha256": "624e36068d5f281ee8c059058704709080ec24eb6d60f8d5fa080c482178c9e2", "after_sha256": "f7622a362f6e3d3a56138dcfb8bf82b445275ffe0fb8de343e728ad72609d126", "diff": "implementation/155_row174_diffs/scripts_studio_mcp_resources.ts.diff"},
    "patch_row165E": {"id": "row165E-integration", "row": "165E", "decision": "C191 ruling 4 (row 165C file request)", "summary": "guide text: one line (two strings) after the FIG-03b studio_figure_preview lines documenting the stand-alone figure (standalone: true, downloadDir[, png: true]) -> Gambar <n> <Judul>.svg/.png with caption, KUNCI, SUMBER", "before_sha256": "1baf1d948b975ea5f44a5d249ba7a138259bccc4b2b460b12c5bc89db390c193", "after_sha256": "624e36068d5f281ee8c059058704709080ec24eb6d60f8d5fa080c482178c9e2", "diff": "implementation/139_row165E_diffs/scripts_studio_mcp_resources.ts.diff"},
-   "patch_row207": {"id": "row207-hb2-verification-chain", "row": "207", "decision": "1.2.3 patch HB-2", "summary": "recipe text: verificationChain [{ layer, method, object, result }], accepted keys, mapping, studio_edit cell example", "before_sha256": "f7622a362f6e3d3a56138dcfb8bf82b445275ffe0fb8de343e728ad72609d126", "after_sha256": "86dcaab241475f0507bcb0dcfd61390cce85234dc5b27cdd1a3c09fe5dcf4913", "diff": "docs/2026-11-09_swarm_1_2_3_patch/implementation/207_row207_diffs/resources.ts.diff"}
+   "patch_row207": {"id": "row207-hb2-verification-chain", "row": "207", "decision": "1.2.3 patch HB-2", "summary": "recipe text: verificationChain [{ layer, method, object, result }], accepted keys, mapping, studio_edit cell example", "before_sha256": "f7622a362f6e3d3a56138dcfb8bf82b445275ffe0fb8de343e728ad72609d126", "after_sha256": "86dcaab241475f0507bcb0dcfd61390cce85234dc5b27cdd1a3c09fe5dcf4913", "diff": "docs/2026-11-09_swarm_1_2_3_patch/implementation/207_row207_diffs/resources.ts.diff"},
+   "patch_row213": {"id": "row213-cover-colophon", "row": "213", "decision": "1.2.4 patch P15", "summary": "guide text: cover line names the colophon shape { left: { text }, right: { text } } (both sides required, not strings)", "before_sha256": "86dcaab241475f0507bcb0dcfd61390cce85234dc5b27cdd1a3c09fe5dcf4913", "after_sha256": "c02e11304447e615afb65a877e5068a6657d06981f2338a54a581b2fdc165b50", "diff": "docs/2026-11-09_swarm_1_2_3_patch/implementation/213_row213_diffs/resources.ts.diff"}
   },
   {
    "path": "scripts/studio/mcp/safety.ts",
@@ -5920,6 +5923,7 @@
   "178",
   "207",
   "206",
-  "210"
+  "210",
+  "213"
  ]
 }

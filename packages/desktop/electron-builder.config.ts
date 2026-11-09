@@ -110,7 +110,7 @@ const COPYRIGHT = "Copyright (c) 2025 opencode (MIT). Swarm modifications Copyri
 // Swarm release number (SP-BC 4.1, S6, G1c). It fills only Info.plist SwarmRelease, which the
 // swarm-patch applier reads with plutil. Since 1.2.0 (U4) CFBundleShortVersionString and
 // package.json carry the same number as the release.
-export const SWARM_RELEASE = "1.2.3"
+export const SWARM_RELEASE = "1.2.4"
 
 // osx-sign tests each regex against the absolute path of every file it would sign (MacTargetHelper.js:52-70, :90-98).
 export const DATUM_RUNTIME_SIGN_IGNORE = "\\.app/Contents/Resources/datum-runtime/"
@@ -309,7 +309,7 @@ const getBase = (appId: string): Configuration => ({
     notarize: false,
     target: ["dmg", "zip"],
     // bundleShortVersion stays unset on purpose (U4): electron-builder takes it from package.json
-    // (1.2.3, equal to the release); this custom key carries the release for swarm-patch.
+    // (1.2.4, equal to the release); this custom key carries the release for swarm-patch.
     extendInfo: {
       SwarmRelease: SWARM_RELEASE,
     },

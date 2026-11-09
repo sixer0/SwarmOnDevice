@@ -862,7 +862,7 @@ Bentuk payload sampul (`CoverPayloadV2`; semua medan opsional kecuali `type`):
 | `titleLines` | 1..4 baris judul (bawaan: `meta.title`) |
 | `standfirst`, `scopeLine`, `addressLine` | paragraf pengantar, baris cakupan, baris alamat |
 | `control` | baris blok kendali, tiap baris tepat 4 sel teks |
-| `colophon` | `{ left, right }` teks kolofon; mengaktifkan perangkat cap terbit dan kolofon (gerbang D16) |
+| `colophon` | `{ "left": { "text": "..." }, "right": { "text": "..." } }`: kedua sisi wajib, masing-masing objek teks (bukan string); mengaktifkan perangkat cap terbit dan kolofon (gerbang D16) |
 | `identityString` | kalimat identitas dokumen (memenuhi gerbang D17) |
 
 Skema lengkap setiap payload ada di registri: `GET /api/studio/registry?kind=schema&schemaId=common/v2`
@@ -1030,6 +1030,24 @@ Ketiga cek ini menilai status rilis (mode report: tidak menahan kiriman maupun b
 | D16 | section/perangkat wajib tier menurut `sectionPlan` templat | slot wajib dinilai lewat kelengkapan; perangkat halaman (kepala berjalan, blok register, pita segel, string punggung, Datum Rule) dipasang templat; cap terbit dan kolofon (`issueStampColophon`) butuh `colophon` di payload `cover`; rel bukti (`evidenceRail`, wajib di SERAH profil kanonik) butuh minimal satu baris `rail` |
 | D17 | blok identitas halaman pertama | `identityString` di payload `cover`, ATAU paragraf `role: "identity"` di halaman depan atau bab pertama |
 | D18 | paragraf penutup dengan aksi dan penerima | paragraf `role: "closingAction"` di bab mana pun |
+
+Contoh minimal payload `cover` yang memenuhi `issueStampColophon` (D16). `colophon` wajib berisi
+`left` dan `right`, masing-masing objek `{ "text": "..." }`; string polos atau sisi yang hilang
+ditolak `SCHEMA_INVALID`. Medan sampul lain boleh tidak dikirim (otomatis dari `meta`):
+
+<!-- studio:validate studio.slot/v2 -->
+```json
+{
+  "$schema": "studio.slot/v2",
+  "agentId": "gsp-analis-03",
+  "target": { "documentId": "cmw1doc8k2p4x7q9z3" },
+  "slot": "cover",
+  "payload": {
+    "type": "cover",
+    "colophon": { "left": { "text": "Tim Survei GSP" }, "right": { "text": "Terbitan A, 2026-10-23" } }
+  }
+}
+```
 
 D16 menilai `evidenceRail` NOT_APPLICABLE beralasan (tidak dihitung hadir maupun wajib) HANYA bila
 `device.evidenceRail.enabled = false` berasal dari lapis yang dikendalikan ADMIN: preset gaya,

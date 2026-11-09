@@ -55,6 +55,8 @@ import { parseTemplateV2, splitBySurface, assertTemplateLayerKeys, templateLayer
 import { loadResolvedTemplateV2File, readTemplateProfileFile } from "../vendor/src/lib/studio/services/templates/import";
 import { templateRestriction } from "../vendor/src/lib/studio/services/templates/access";
 import { setTemplatesLogSink, type TemplatesLogEntry } from "../vendor/src/lib/studio/services/templates/log";
+// Row 213 (1.2.4, P15): the catalog versionNo of each shipped builtin comes from templates/version-lock.json.
+import { readLock, versionFor } from "./builtin-version-lock";
 
 // ── Paths and provenance ────────────────────────────────────────────────────
 
@@ -804,9 +806,16 @@ for (const slug of SHIPPED) {
   }
 }
 
+// Row 213 (1.2.4, P15): a store pins each builtin as (slug, versionNo) with its definition sha and refuses a
+// different definition under a pinned number (TEMPLATE_VERSION_CONFLICT). The shipped catalog therefore carries
+// versionNo from the lock (builtin-version-lock.ts versioning rule): the newest live lock entry when the definition
+// is the same, the next number when it changed. Fixtures (never pinned by a release) keep the default 1.
+const versionLock = readLock();
+const definitionShaOf = (text: string): string => createHash("sha256").update(stableStringify(parseTemplateV2(JSON.parse(text), ""))).digest("hex");
 const entryOf = (slug: string) => {
     const b = built.get(slug)!;
     const r = report.find((x) => x.slug === slug)!;
+    const shipped = SHIPPED.includes(slug);
     return {
       slug,
       file: `${slug}.json`,
@@ -815,6 +824,7 @@ const entryOf = (slug: string) => {
       name: b.name,
       description: b.description,
       kind: b.kind,
+      ...(shipped ? { versionNo: versionFor(versionLock, slug, definitionShaOf(r.text as string)) } : {}),
       isPreset: b.isPreset,
       contractKind: b.contractKind,
       preset: b.definition.preset?.slug ?? null,
