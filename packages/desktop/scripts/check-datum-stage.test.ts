@@ -161,7 +161,7 @@ test("the real PROVENANCE.md lists every file of the skill copy, with the runtim
   const parsed = parseProvenance(await fs.readFile(path.join(DESKTOP, PROVENANCE), "utf8"))
   expect(parsed.problems).toEqual([])
   expect([...parsed.files.keys()].sort()).toEqual(await walkFiles(path.join(DESKTOP, SKILL_SOURCE)))
-  expect(parsed.files.get("SKILL.md")).toBe("0270ab8118b109bd9d5fc7218fe7f84a4b93e25b532d41e496771265a055c895")
+  expect(parsed.files.get("SKILL.md")).toBe("619885f7d948b6910d3ea24c1bfcfc423a575f27756bc4e11bb3ca75ba5562fc")
 })
 
 test("stage passes on a good tree, prints the token once and writes nothing", async () => {
