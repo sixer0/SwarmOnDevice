@@ -7,8 +7,6 @@ with a terminal UI, plus a macOS desktop app. It runs against model providers yo
 configure yourself. The shipped defaults carry no account, no update server, and
 no telemetry endpoint.
 
-Swarm is an independent derivative of OpenCode (https://github.com/anomalyco/opencode), used under the MIT License. It is not built by the OpenCode team and is not affiliated with, endorsed by, or sponsored by OpenCode, its maintainers, or Anomaly Innovations Inc.
-
 ## What ships
 
 | Item                | Value                                                                                                                                                                                                                           |
