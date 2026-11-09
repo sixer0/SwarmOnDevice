@@ -141,7 +141,6 @@ function LaneDetail(props: { swarm: SwarmController; lane: SwarmLane }) {
   const language = useLanguage()
   const busy = () => !!props.swarm.view.pending[props.lane.id]
   const question = createMemo(() => (props.lane.question ? inlineQuestion(props.lane.question) : undefined))
-  const problems = createMemo(() => props.lane.model.problems.slice(-3).toReversed())
   const latest = createMemo(() =>
     props.lane.model.steps
       .filter((step) => !step.problem)
@@ -300,12 +299,6 @@ function LaneDetail(props: { swarm: SwarmController; lane: SwarmLane }) {
         </div>
       </Show>
 
-      <Show when={problems().length > 0}>
-        <div class="-mx-1.5 min-w-0">
-          <div class={`px-1.5 ${FAINT}`}>{language.t("session.swarm.steps.problems")}</div>
-          <Index each={problems()}>{(step) => <StepRow swarm={props.swarm} lane={props.lane} step={step()} />}</Index>
-        </div>
-      </Show>
       <Show when={latest().length > 0}>
         <div class="-mx-1.5 min-w-0">
           <div class={`px-1.5 ${FAINT}`}>{language.t("session.swarm.steps.latest")}</div>
