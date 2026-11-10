@@ -8,6 +8,12 @@
         "definitionSha256": "b7d066c2258cd16a2cb63c5f24b23946b3ec8be10b8e434b82febb896ee81f37",
         "payloadSha256": "f65e1a42f52d0cf22ebd43f6e5d9505d201e115963abe48d34a26fc10cc798a4",
         "release": "1.2.0"
+      },
+      {
+        "versionNo": 2,
+        "definitionSha256": "b7d066c2258cd16a2cb63c5f24b23946b3ec8be10b8e434b82febb896ee81f37",
+        "payloadSha256": "7d45303560ebfa1823fd140522f7c4c5580afe93db46a549a26fe1e8a0735b75",
+        "release": "1.2.5"
       }
     ],
     "datum-kanonik": [
@@ -32,6 +38,12 @@
         "definitionSha256": "8b13355aa9ba902328a28e210c12cd60acf4c6145609008eba58c107a761d0e9",
         "payloadSha256": "c08a83082e5dac5dcfb5172cd4ac66079a5161d88bdfa0e526a87262b6c3d657",
         "release": "1.2.4"
+      },
+      {
+        "versionNo": 3,
+        "definitionSha256": "8b13355aa9ba902328a28e210c12cd60acf4c6145609008eba58c107a761d0e9",
+        "payloadSha256": "222b8745caf7e70e8db8694815b14b3be24b5cdd0f74ba9802e408433a90853f",
+        "release": "1.2.5"
       }
     ],
     "datum-gsp-preset": [
@@ -40,6 +52,12 @@
         "definitionSha256": "e9cfda9d4587b005f2e4d85c3e30e70380fa85c16f1f2b411de309cd8c833fdb",
         "payloadSha256": "093dc92563ecf14ecbe2e31ed9b20088b66d02743cce49fe91f3c552c6be9cdc",
         "release": "1.2.0"
+      },
+      {
+        "versionNo": 2,
+        "definitionSha256": "e9cfda9d4587b005f2e4d85c3e30e70380fa85c16f1f2b411de309cd8c833fdb",
+        "payloadSha256": "184f630dc1852e8abd704c07d31a5c85e907d63dea530109b8e619021fd45407",
+        "release": "1.2.5"
       }
     ],
     "datum-gsp": [
@@ -64,6 +82,12 @@
         "definitionSha256": "0e20a80497db2bc664b65c942335bc84c6cd4b6f87d5d03731b04fa63533fd62",
         "payloadSha256": "f63a49a280ba95ed77e87b1c1bb21d84eb6cb6ba458766434c40ce18cebcaa1e",
         "release": "1.2.4"
+      },
+      {
+        "versionNo": 3,
+        "definitionSha256": "0e20a80497db2bc664b65c942335bc84c6cd4b6f87d5d03731b04fa63533fd62",
+        "payloadSha256": "7a52ccd5751d9ae8ee54bceb691c3cb0dedfa92abbf21a0e16bb02bd3ab36c88",
+        "release": "1.2.5"
       }
     ],
     "datum-gsp-rev-a-preset": [
@@ -72,6 +96,12 @@
         "definitionSha256": "6d1b94327a1826c82c632f14def0ea09e9e088f61380fc8e38279a4cce355bda",
         "payloadSha256": "428c2cf10bbabb6148888d5f0cbe8af2c103eed0fb0c5c27b9e1fec39ce0f760",
         "release": "1.2.0"
+      },
+      {
+        "versionNo": 2,
+        "definitionSha256": "6d1b94327a1826c82c632f14def0ea09e9e088f61380fc8e38279a4cce355bda",
+        "payloadSha256": "eaef5b744afe5caafc5b3860175999e4c8108d3e27678bf978f19c6fa21930a3",
+        "release": "1.2.5"
       }
     ],
     "laporan-kerja-agen": [
@@ -80,6 +110,12 @@
         "definitionSha256": "691bf6e5ae051f4ff4506c7a165b3d43d305b7dc15a8528a15bd9bd7c3afd0d2",
         "payloadSha256": "f40307eab7f62b5d22d2f70295ae1106c089195ca54478a5132477287cf800b7",
         "release": "1.2.0"
+      },
+      {
+        "versionNo": 2,
+        "definitionSha256": "691bf6e5ae051f4ff4506c7a165b3d43d305b7dc15a8528a15bd9bd7c3afd0d2",
+        "payloadSha256": "ceed3778fe92fa7ea2eace48236d0232c281c73a4a2edcf1aa43fc4f44795a30",
+        "release": "1.2.5"
       }
     ],
     "datum-proposal-teknis": [
@@ -88,6 +124,12 @@
         "definitionSha256": "a5f53f995b7893bae971c09e75c7a79bf62a412917950c7faef528fa21059fd8",
         "payloadSha256": "9b53a37f21871c33b586cb87ad627ff5df71ce54bf674d0bf0a8aa7cca34f2c6",
         "release": "1.2.0"
+      },
+      {
+        "versionNo": 2,
+        "definitionSha256": "a5f53f995b7893bae971c09e75c7a79bf62a412917950c7faef528fa21059fd8",
+        "payloadSha256": "058700154c6f2dc90943d3bbde2f3f5448bf038e9aec96700ed04fb2f266d13b",
+        "release": "1.2.5"
       }
     ],
     "datum-proposal-teknis-en": [
@@ -96,6 +138,12 @@
         "definitionSha256": "20071d472ab2b1d4b8e6815f2ff7f52532678bf597f04506aff1788023413e66",
         "payloadSha256": "dcea1930f23bee5ec87d50e13544f67b5053357f1ec1a79ea84c67ad95f2438b",
         "release": "1.2.0"
+      },
+      {
+        "versionNo": 2,
+        "definitionSha256": "20071d472ab2b1d4b8e6815f2ff7f52532678bf597f04506aff1788023413e66",
+        "payloadSha256": "74c62618a972d22195ee61b194353ca10e9a847c5c2ed1ba540b81cfe767a64f",
+        "release": "1.2.5"
       }
     ],
     "datum-laporan": [
@@ -104,6 +152,12 @@
         "definitionSha256": "51c31dcc874c0ed5e1326a53fb4430cf0d46e1db73f58483feebcb603f44c723",
         "payloadSha256": "841119714eb13506c09004938a419d9a9cb0c7f1d47d00e5d735c7376ef251a6",
         "release": "1.2.0"
+      },
+      {
+        "versionNo": 2,
+        "definitionSha256": "51c31dcc874c0ed5e1326a53fb4430cf0d46e1db73f58483feebcb603f44c723",
+        "payloadSha256": "b8d811ad63425476e296736954ae516b0ed8f37334777d2993cef736acaa6c57",
+        "release": "1.2.5"
       }
     ],
     "datum-laporan-en": [
@@ -112,6 +166,12 @@
         "definitionSha256": "347f4f1e00a34a996f8b9ba11bdac3693054328a7162ebd789c98591c6b211b6",
         "payloadSha256": "b681727e67d9a78cc275b55f410ece6af7b4770c47246f0319d6ef0e1c6c6185",
         "release": "1.2.0"
+      },
+      {
+        "versionNo": 2,
+        "definitionSha256": "347f4f1e00a34a996f8b9ba11bdac3693054328a7162ebd789c98591c6b211b6",
+        "payloadSha256": "e47d88f76b652370f0e48cc7b37e0bb83dfc30f6d0d714d0157fdc5e4da92495",
+        "release": "1.2.5"
       }
     ],
     "datum-laporan-verifikasi": [
@@ -120,6 +180,12 @@
         "definitionSha256": "41283a294af4eab22f5929221a52b762b7ecaf436f6710df2da710af17e84ceb",
         "payloadSha256": "eda5b3af881d871ac08068e9f24a2e64cbb9d6ef9aca6b9febe4d60169260107",
         "release": "1.2.0"
+      },
+      {
+        "versionNo": 2,
+        "definitionSha256": "41283a294af4eab22f5929221a52b762b7ecaf436f6710df2da710af17e84ceb",
+        "payloadSha256": "021305add3379a6a126e3c9f63960081f02da0b9487af832e9df5bfb7a03b8b8",
+        "release": "1.2.5"
       }
     ],
     "datum-laporan-verifikasi-en": [
@@ -128,6 +194,12 @@
         "definitionSha256": "5179287e9414e366cdade71cc2b0de32e0c95a9d86d231d955916a4c2f27359c",
         "payloadSha256": "4f1790edccc1d1c19b3d9bd723afd5c01aa428e5f244892e9388f8b03a09078a",
         "release": "1.2.0"
+      },
+      {
+        "versionNo": 2,
+        "definitionSha256": "5179287e9414e366cdade71cc2b0de32e0c95a9d86d231d955916a4c2f27359c",
+        "payloadSha256": "b904e059841eefe58b96f60d158853578556972fa34e8c8ba1ccf7c613638bb9",
+        "release": "1.2.5"
       }
     ],
     "datum-standar": [
@@ -136,6 +208,12 @@
         "definitionSha256": "4deef218a710e781c41666a308be1bf43cabe45020d2c9fb39677c26ab4f039f",
         "payloadSha256": "69ed68db884857060d697702e8125d5a0f0e6c644d92f7fd79e15a238b801890",
         "release": "1.2.0"
+      },
+      {
+        "versionNo": 2,
+        "definitionSha256": "4deef218a710e781c41666a308be1bf43cabe45020d2c9fb39677c26ab4f039f",
+        "payloadSha256": "dfceab8fe877616795a4c512a43f1dbd11bee1f8da51e7d40f05bcdef2982cfa",
+        "release": "1.2.5"
       }
     ],
     "datum-standar-en": [
@@ -144,6 +222,12 @@
         "definitionSha256": "f5992a9a7b9daa9f54b77dc1bb7d10fe07d5f302c25fdf63f79714be8c3d0eda",
         "payloadSha256": "676843030e2da6590179856c20a2253c446efda7ba746ce2b38781df79303804",
         "release": "1.2.0"
+      },
+      {
+        "versionNo": 2,
+        "definitionSha256": "f5992a9a7b9daa9f54b77dc1bb7d10fe07d5f302c25fdf63f79714be8c3d0eda",
+        "payloadSha256": "6e7ec8bc2f2c674e0fbb25079a6c5ad8b0a3d9580f541a931912ba23f3a77aea",
+        "release": "1.2.5"
       }
     ],
     "datum-nota": [
@@ -152,6 +236,12 @@
         "definitionSha256": "66f0b33a6b01d96943d53b65a77f826b416fe060c7c2600281aeb33dc8ec1a60",
         "payloadSha256": "dabc376277ef227b17df79e0e934661d20089e396b774711dbac1f67ca6c1e65",
         "release": "1.2.0"
+      },
+      {
+        "versionNo": 2,
+        "definitionSha256": "66f0b33a6b01d96943d53b65a77f826b416fe060c7c2600281aeb33dc8ec1a60",
+        "payloadSha256": "7f100ff15a44729731214e644554006778040dbc4ff21dc43f733f29be1bc966",
+        "release": "1.2.5"
       }
     ],
     "datum-nota-en": [
@@ -160,6 +250,12 @@
         "definitionSha256": "e926557efaca4da58819cda54f6f361395a5a045f5922decd44aa0d3e1aa6f0e",
         "payloadSha256": "db0eb7a6d8ceb380b5756d6efd7c6c031621ebc2aa3838cb95cb2674ad0c3ca7",
         "release": "1.2.0"
+      },
+      {
+        "versionNo": 2,
+        "definitionSha256": "e926557efaca4da58819cda54f6f361395a5a045f5922decd44aa0d3e1aa6f0e",
+        "payloadSha256": "3bed5d07077052882fa2b748ca09bd600891d058db930315f6adc5db728cdaef",
+        "release": "1.2.5"
       }
     ]
   }

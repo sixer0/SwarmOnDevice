@@ -53,15 +53,16 @@
   "row207": "2026-11-09: 1.2.3 patch HB-2 (verificationChain columns print and are editable). 7 vendor files re-patched (files[].patch_row207, before = previous sha256): docs/STUDIO-AGENT-GUIDE.md, scripts/studio/mcp/doc-tools.ts, scripts/studio/mcp/resources.ts, scripts/studio/mcp/write-client-edit.ts, src/lib/studio/contract/schema/v2/common.schema.ts, src/lib/studio/contract/types/v2/slot.ts, src/lib/studio/services/compose/front.ts; 4 of them copied -> patched. NEW contract/schema/v2/verification-entry.ts (status added). Diffs in docs/2026-11-09_swarm_1_2_3_patch/implementation/207_row207_diffs/. counts by delta: files 605 -> 606, added 27 -> 28, copied 450 -> 446, patched 116 -> 120; bytes 9771361 + 6442 (re-patched) + 5177 (verification-entry.ts) = 9782980. patch_rows += 207",
   "row206": "2026-11-09: 1.2.3 patch row 206 (verification details reach the client; lint tri-state; DATUM-37 parity with OVERLAP_CLIP). 5 vendor files re-patched (files[].patch_row206, before = previous sha256; all already patched): scripts/studio/mcp/doc-tools.ts, scripts/studio/mcp/tool-kit.ts, src/lib/studio/engine/browser/index.ts, src/lib/studio/engine/browser/measure.ts, src/lib/studio/engine/lint/render/index.ts. NEW src/lib/studio/registry/lint-explain.ts (status added). Diffs and new file in docs/2026-11-09_swarm_1_2_3_patch/implementation/206_row206_diffs/. counts by delta: files 606 -> 607, added 28 -> 29, copied/patched/replaced unchanged; bytes 9782980 +4525 (re-patched) + 10060 (lint-explain.ts) = 9797565. patch_rows += 206",
   "row210": "2026-11-09: 1.2.3 patch P5 row 210 (security review 209 fixes L-1, L-3, I-2). 4 vendor files re-patched (files[].patch_row210, before = previous sha256; statuses unchanged): scripts/studio/mcp/doc-tools.ts (+152), scripts/studio/mcp/write-client-edit.ts (+183), src/lib/studio/contract/schema/v2/verification-entry.ts (+249), src/lib/studio/registry/lint-explain.ts (+155). Diffs in docs/2026-11-09_swarm_1_2_3_patch/implementation/210_row210_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9797565 + 739 = 9798304. patch_rows += 210",
-  "row213": "2026-11-09: 1.2.4 patch P15 row 213 (cover colophon shape for agents). 2 vendor files re-patched (files[].patch_row213, before = previous sha256; statuses unchanged): docs/STUDIO-AGENT-GUIDE.md (+703: colophon shape in the 5.4 cover table, minimal valid cover payload with colophon after the 5.7 D16 table), scripts/studio/mcp/resources.ts (+64: colophon shape on the cover line). Diffs in docs/2026-11-09_swarm_1_2_3_patch/implementation/213_row213_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9798304 + 767 = 9799071. patch_rows += 213"
+  "row213": "2026-11-09: 1.2.4 patch P15 row 213 (cover colophon shape for agents). 2 vendor files re-patched (files[].patch_row213, before = previous sha256; statuses unchanged): docs/STUDIO-AGENT-GUIDE.md (+703: colophon shape in the 5.4 cover table, minimal valid cover payload with colophon after the 5.7 D16 table), scripts/studio/mcp/resources.ts (+64: colophon shape on the cover line). Diffs in docs/2026-11-09_swarm_1_2_3_patch/implementation/213_row213_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9798304 + 767 = 9799071. patch_rows += 213",
+  "row215": "2026-11-10: 1.2.5 row 215 (C-27 removed entirely, user decision). 7 vendor files re-patched (files[].patch_row215, before = previous sha256): engine/lint/language/{checks,index,prose}.ts, params/{governance-language,index}.ts, registry/lint.ts, services/templates/sample-render.ts; 5 of them copied -> patched. Diffs in docs/2026-11-09_swarm_1_2_3_patch/implementation/215_row215_diffs/. counts by delta: files/replaced/added unchanged, copied 446 -> 441, patched 120 -> 125; bytes 9799071 -1155 = 9797916. patch_rows += 215"
  },
  "counts": {
   "files": 607,
-  "copied": 446,
-  "patched": 120,
+  "copied": 441,
+  "patched": 125,
   "replaced": 12,
   "added": 29,
-  "bytes": 9799071
+  "bytes": 9797916
  },
  "files": [
   {
@@ -3738,17 +3739,19 @@
   },
   {
    "path": "src/lib/studio/engine/lint/language/checks.ts",
-   "status": "copied",
-   "bytes": 12587,
+   "status": "patched",
+   "bytes": 11814,
    "source_sha256": "539df4d27a553d657fff96971f57e8c22324a2599b127d722527ce151e8ded24",
-   "sha256": "539df4d27a553d657fff96971f57e8c22324a2599b127d722527ce151e8ded24"
+   "sha256": "343860fe2b8a9c62c64638333410af5afec3760d9a3e338d681223ad9142fab0",
+   "patch_row215": {"id": "row215-remove-c27", "row": "215", "decision": "1.2.5 user: Hapus C-27 seluruhnya", "summary": "C-27 (Kata per kalimat, P11-27 threshold.wordsPerSentenceAvg) removed: scanner, registry entry, param, counts and comments", "before_sha256": "539df4d27a553d657fff96971f57e8c22324a2599b127d722527ce151e8ded24", "after_sha256": "343860fe2b8a9c62c64638333410af5afec3760d9a3e338d681223ad9142fab0", "diff": "docs/2026-11-09_swarm_1_2_3_patch/implementation/215_row215_diffs/src_lib_studio_engine_lint_language_checks.ts.diff"}
   },
   {
    "path": "src/lib/studio/engine/lint/language/index.ts",
-   "status": "copied",
+   "status": "patched",
    "bytes": 2941,
    "source_sha256": "a17648597795bcf32a0356c1d809147e38c02c4ebafb1c0ed53bb49c19f624f4",
-   "sha256": "a17648597795bcf32a0356c1d809147e38c02c4ebafb1c0ed53bb49c19f624f4"
+   "sha256": "ecf28ee085e7c310a73bdad04346abc0c1cd8ccf4e9c5a8f570b91a489ca9fc7",
+   "patch_row215": {"id": "row215-remove-c27", "row": "215", "decision": "1.2.5 user: Hapus C-27 seluruhnya", "summary": "C-27 (Kata per kalimat, P11-27 threshold.wordsPerSentenceAvg) removed: scanner, registry entry, param, counts and comments", "before_sha256": "a17648597795bcf32a0356c1d809147e38c02c4ebafb1c0ed53bb49c19f624f4", "after_sha256": "ecf28ee085e7c310a73bdad04346abc0c1cd8ccf4e9c5a8f570b91a489ca9fc7", "diff": "docs/2026-11-09_swarm_1_2_3_patch/implementation/215_row215_diffs/src_lib_studio_engine_lint_language_index.ts.diff"}
   },
   {
    "path": "src/lib/studio/engine/lint/language/params.ts",
@@ -3759,10 +3762,11 @@
   },
   {
    "path": "src/lib/studio/engine/lint/language/prose.ts",
-   "status": "copied",
-   "bytes": 3765,
+   "status": "patched",
+   "bytes": 3759,
    "source_sha256": "9990ae8875e08c742e07ddb42be0e1651e633351628c867b8817fa8f5b2f396d",
-   "sha256": "9990ae8875e08c742e07ddb42be0e1651e633351628c867b8817fa8f5b2f396d"
+   "sha256": "985500d5ff99b062b33c33edd742ce8e9de6c30ab8e6c9c67a0bb975f1979dc3",
+   "patch_row215": {"id": "row215-remove-c27", "row": "215", "decision": "1.2.5 user: Hapus C-27 seluruhnya", "summary": "C-27 (Kata per kalimat, P11-27 threshold.wordsPerSentenceAvg) removed: scanner, registry entry, param, counts and comments", "before_sha256": "9990ae8875e08c742e07ddb42be0e1651e633351628c867b8817fa8f5b2f396d", "after_sha256": "985500d5ff99b062b33c33edd742ce8e9de6c30ab8e6c9c67a0bb975f1979dc3", "diff": "docs/2026-11-09_swarm_1_2_3_patch/implementation/215_row215_diffs/src_lib_studio_engine_lint_language_prose.ts.diff"}
   },
   {
    "path": "src/lib/studio/engine/lint/language/tokenize.ts",
@@ -4159,17 +4163,18 @@
   },
   {
    "path": "src/lib/studio/params/governance-language.ts",
-   "status": "copied",
-   "bytes": 33174,
+   "status": "patched",
+   "bytes": 32918,
    "source_sha256": "32b8ffcc60c243e3693ab2471994a55e334ba2ed01c81312caf907c751ac8776",
-   "sha256": "32b8ffcc60c243e3693ab2471994a55e334ba2ed01c81312caf907c751ac8776"
+   "sha256": "5ff014e6f10da91da2d92e3b022a97e9f974b629bb26f1f5c3879b69ef57f34f",
+   "patch_row215": {"id": "row215-remove-c27", "row": "215", "decision": "1.2.5 user: Hapus C-27 seluruhnya", "summary": "C-27 (Kata per kalimat, P11-27 threshold.wordsPerSentenceAvg) removed: scanner, registry entry, param, counts and comments", "before_sha256": "32b8ffcc60c243e3693ab2471994a55e334ba2ed01c81312caf907c751ac8776", "after_sha256": "5ff014e6f10da91da2d92e3b022a97e9f974b629bb26f1f5c3879b69ef57f34f", "diff": "docs/2026-11-09_swarm_1_2_3_patch/implementation/215_row215_diffs/src_lib_studio_params_governance-language.ts.diff"}
   },
   {
    "path": "src/lib/studio/params/index.ts",
    "status": "patched",
    "bytes": 2823,
    "source_sha256": "cd9e82ab0ee440c7992494a7554dddc1dae30ba4f5125a8a59d919373db2e0b9",
-   "sha256": "5bead7214b3b50f44c700c0f3dd58d5bc0fcfe3ea5a807400529d78a77ee3541",
+   "sha256": "5f49befa3cbdd6ab582a07598d272e6a90658ee197ca263d506196a943277a96",
    "patch": {
     "id": "row122-params-r81-r83",
     "row": 122,
@@ -4179,7 +4184,8 @@
     "after_sha256": "5bead7214b3b50f44c700c0f3dd58d5bc0fcfe3ea5a807400529d78a77ee3541",
     "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/51_row122_diffs/params_index.ts.diff",
     "diff_sha256": "bfd2a9437005233b3127b90583a65ce71c3c876dc89ce5255c9ae4bf3e933679"
-   }
+   },
+   "patch_row215": {"id": "row215-remove-c27", "row": "215", "decision": "1.2.5 user: Hapus C-27 seluruhnya", "summary": "C-27 (Kata per kalimat, P11-27 threshold.wordsPerSentenceAvg) removed: scanner, registry entry, param, counts and comments", "before_sha256": "5bead7214b3b50f44c700c0f3dd58d5bc0fcfe3ea5a807400529d78a77ee3541", "after_sha256": "5f49befa3cbdd6ab582a07598d272e6a90658ee197ca263d506196a943277a96", "diff": "docs/2026-11-09_swarm_1_2_3_patch/implementation/215_row215_diffs/src_lib_studio_params_index.ts.diff"}
   },
   {
    "path": "src/lib/studio/params/page.ts",
@@ -4263,10 +4269,11 @@
   },
   {
    "path": "src/lib/studio/registry/lint.ts",
-   "status": "copied",
-   "bytes": 22470,
+   "status": "patched",
+   "bytes": 22315,
    "source_sha256": "47affb9324e304cd93398f7c239dc330134c4499e963746d09f14c77f5296b9c",
-   "sha256": "47affb9324e304cd93398f7c239dc330134c4499e963746d09f14c77f5296b9c"
+   "sha256": "6cb39b2615e5692b3db1d36d29b83f15ebbf5d09e1b404dc5077d26680bc80b6",
+   "patch_row215": {"id": "row215-remove-c27", "row": "215", "decision": "1.2.5 user: Hapus C-27 seluruhnya", "summary": "C-27 (Kata per kalimat, P11-27 threshold.wordsPerSentenceAvg) removed: scanner, registry entry, param, counts and comments", "before_sha256": "47affb9324e304cd93398f7c239dc330134c4499e963746d09f14c77f5296b9c", "after_sha256": "6cb39b2615e5692b3db1d36d29b83f15ebbf5d09e1b404dc5077d26680bc80b6", "diff": "docs/2026-11-09_swarm_1_2_3_patch/implementation/215_row215_diffs/src_lib_studio_registry_lint.ts.diff"}
   },
   {
    "path": "src/lib/studio/registry/lint-explain.ts",
@@ -5844,9 +5851,9 @@
   {
    "path": "src/lib/studio/services/templates/sample-render.ts",
    "status": "added",
-   "bytes": 14104,
+   "bytes": 14139,
    "source_sha256": null,
-   "sha256": "00a48a60603c7af311231b996cf85672904d85352986fde74c54bb463b1bc744",
+   "sha256": "27e3e93b01f93782b908d81d7971c33963df6c813f494b0f10b3f46df9adce01",
    "patch_row110e": {
     "id": "row110e-candidate-edition-assets",
     "row": "110e",
@@ -5857,7 +5864,8 @@
     "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/64_row110e_diffs/templates_sample-render.ts.diff",
     "diff_sha256": "964775e9bbe4f97160461677cc743c2150cd733d3aefb1ae7b7f9cf9b540e42c"
    },
-   "note": "NEW Swarm file of row 67 (no clone original): the Swarm sample (sampleDocumentV2 + U.3 additions: captioned 5x4 data table with unit column and SUMBER, provenance-marked paragraph, identity and closingAction paragraphs) and the render sides (ingest dry run with template + skeleton, renderSnapshot)"
+   "note": "NEW Swarm file of row 67 (no clone original): the Swarm sample (sampleDocumentV2 + U.3 additions: captioned 5x4 data table with unit column and SUMBER, provenance-marked paragraph, identity and closingAction paragraphs) and the render sides (ingest dry run with template + skeleton, renderSnapshot)",
+   "patch_row215": {"id": "row215-remove-c27", "row": "215", "decision": "1.2.5 user: Hapus C-27 seluruhnya", "summary": "C-27 (Kata per kalimat, P11-27 threshold.wordsPerSentenceAvg) removed: scanner, registry entry, param, counts and comments", "before_sha256": "00a48a60603c7af311231b996cf85672904d85352986fde74c54bb463b1bc744", "after_sha256": "27e3e93b01f93782b908d81d7971c33963df6c813f494b0f10b3f46df9adce01", "diff": "docs/2026-11-09_swarm_1_2_3_patch/implementation/215_row215_diffs/src_lib_studio_services_templates_sample-render.ts.diff"}
   },
   {
    "path": "src/lib/studio/services/templates/service.ts",

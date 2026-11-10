@@ -1,6 +1,6 @@
 /**
  * Parameter tata kelola, tier, penamaan, bahasa, kanal, gerbang, lampiran (S04, 01_specs.md §5.1).
- * 115 ParamDef, `origin: "catalog"`: P1 4, P3 24, P11-14 44, P15 31, P16 8, PA-PD 4.
+ * 114 ParamDef, `origin: "catalog"`: P1 4, P3 24, P11-14 43, P15 31, P16 8, PA-PD 4.
  * Sumber: research/01_manual_parameter_catalog.md §3.1, §3.2, §3.9-3.12. Nilai [REK] diganti dari
  * research/04_manual_docx_tables.md (D-09): Tabel 14.2/14.3 (T119, T120), Tabel 15.1 (T127),
  * Tabel 16.1 (T133). Konflik: K-09 (em dash) memakai 0 (D-22 KT-06); sisanya usulan katalog (KT-10).
@@ -199,8 +199,6 @@ const P11: ParamDef[] = [
     { classNote: "DIAGNOSIS; kalimat dengan >= 4 koma" }),
   pL("P11-26", "threshold.semicolonsPer1000Words.max", "Plafon titik-koma per 1.000 kata", "number", 5.4, "K", "C-26, SG-L3-09", "L3676, L3102; research/04 T119",
     { classNote: "DIAGNOSIS" }),
-  pL("P11-27", "threshold.wordsPerSentenceAvg", "Koridor rata-rata kata per kalimat", "range", [18, 32], "K", "SG-L6-02, C-27", "L3680, L3549-3552; research/04 T119",
-    { range: { min: 18, max: 32, step: 1 }, classNote: "DIAGNOSIS; kanal K2 panjang" }),
   pL("P11-28", "threshold.distinctOpenerRatio.min", "Lantai rasio pembuka kalimat berbeda", "number", 0.2, "K", "SG-L6-09", "L3684-3685; research/04 T119",
     { classNote: "DIAGNOSIS; dokumen > 2.000 kalimat, INFO" }),
   pL("P11-29", "threshold.decisionVerbArtifactSubject.max", "Plafon verba keputusan berpelaku artefak (per 1.000 kata)", "number", 2, "K", "SG-L6-10, C-28", "L3687-3688, L3606-3607; research/04 T119",
@@ -415,4 +413,4 @@ const PAPD: ParamDef[] = [
 export const PARAMS_GOVERNANCE_LANGUAGE: readonly ParamDef[] = [...P1, ...P3, ...P11, ...P15, ...P16, ...PAPD];
 
 /** Hitungan target katalog; isi larik wajib sama dengan angka ini setelah S04. */
-export const PARAMS_GOVERNANCE_LANGUAGE_COUNT = 115;
+export const PARAMS_GOVERNANCE_LANGUAGE_COUNT = 114;

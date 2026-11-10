@@ -1,7 +1,7 @@
 /**
- * Sembilan pemindai bahasa grup C yang definisinya ada di manual (D-34):
- * C-20, C-26b, C-26c, C-27, C-31, C-34, C-INFO-OPENER, C-SG-L2-09, C-SG-L2-04.
- * Ambang dibaca dari parameter (P11-11, P11-12, P11-13, P11-16, P11-25..P11-28,
+ * Delapan pemindai bahasa grup C yang definisinya ada di manual (D-34):
+ * C-20, C-26b, C-26c, C-31, C-34, C-INFO-OPENER, C-SG-L2-09, C-SG-L2-04.
+ * Ambang dibaca dari parameter (P11-11, P11-12, P11-13, P11-16, P11-25, P11-26, P11-28,
  * P11-32; research/04 T119 Tabel 14.2, label DIAGNOSIS), tidak di-hardcode.
  * Konstanta di berkas ini hanya definisi aturan (bentuk sapaan terlarang,
  * glif provenans, cakupan INFO > 2.000 kalimat), masing-masing bersumber.
@@ -13,7 +13,7 @@ import type { LintIssue } from "../../../contract";
 import { PROVENANCE_GLYPHS, PROVENANCE_MARKS } from "../../../contract/enums";
 import type { ParamMap } from "../../../contract";
 import { fmtFixed, numberConvention } from "../../bind/format";
-import { numberParam, rangeParam, stringParam } from "./params";
+import { numberParam, stringParam } from "./params";
 import type { Layers, TextUnit } from "./prose";
 import { countSemicolons, countSentenceCommas, countWords, opener, splitSentences, wholeWordRe } from "./tokenize";
 
@@ -169,25 +169,6 @@ const c26c: Scanner = (ctx) => {
   ];
 };
 
-// ── C-27 Kata per kalimat ──────────────────────────────────────────────────
-
-const c27: Scanner = (ctx) => {
-  const key = "threshold.wordsPerSentenceAvg";
-  const [lo, hi] = rangeParam(ctx.params, key);
-  const n = ctx.sentences.length;
-  if (n === 0) return noSentences("C-27");
-  const total = ctx.sentences.reduce((a, s) => a + countWords(s.text), 0);
-  const avg = total / n;
-  const fail = avg < lo || avg > hi;
-  return [
-    {
-      checkId: "C-27",
-      status: fail ? "FAIL" : "PASS",
-      detail: `rata-rata ${fmt(avg, 1)} kata per kalimat (${total} kata, ${n} kalimat); koridor ${lo}-${hi} (${key}; ${DIAG})`,
-    },
-  ];
-};
-
 // ── C-31 Densitas tanda provenans sebaris ─────────────────────────────────
 
 const GLYPHS = Object.values(PROVENANCE_GLYPHS);
@@ -265,7 +246,6 @@ export const LANGUAGE_SCANNERS: Readonly<Record<string, Scanner>> = {
   "C-20": c20,
   "C-26b": c26b,
   "C-26c": c26c,
-  "C-27": c27,
   "C-31": c31,
   "C-34": c34,
   "C-INFO-OPENER": cInfoOpener,

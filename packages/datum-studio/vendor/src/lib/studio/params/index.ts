@@ -1,6 +1,6 @@
 /**
  * Agregat parameter (01_specs.md §12.1 T34; SR-05 penulis tunggal pin hitungan).
- * Katalog 722 = 115 + 134 + 91 + 111 + 135 + 136 (chart: 87 katalog + 12 mesin +
+ * Katalog 721 = 114 + 134 + 91 + 111 + 135 + 136 (chart: 87 katalog + 12 mesin +
  * 37 petunjuk tergambar galeri: 31 IP-41c + 3 axis P-13/P-14/S-01 FIX-A + 3 axis S-02/S-03/S-04
  * FIX-A2, registry/charts.ts), semua `origin: "catalog"`.
  * Parameter kontrak (`origin: "contract"`) dihitung terpisah (D-24 butir 1): renderer
@@ -31,7 +31,7 @@ export * from "./page";
 export * from "./render";
 export * from "./structure";
 
-export const CATALOG_PARAM_COUNT = 722;
+export const CATALOG_PARAM_COUNT = 721;
 export const RENDER_PARAM_COUNT = 62;
 export const STRUCTURE_PARAM_COUNT = 21;
 export const ALL_PARAM_COUNT = CATALOG_PARAM_COUNT + RENDER_PARAM_COUNT + STRUCTURE_PARAM_COUNT;

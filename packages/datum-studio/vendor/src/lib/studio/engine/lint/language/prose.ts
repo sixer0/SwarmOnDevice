@@ -3,7 +3,7 @@
  *
  * Lapisan:
  *  - `prose`: paragraf berperan prosa (`PROSE_ROLES`; tanpa `role` = body) dan
- *    paragraf badan `aside`. Dipakai metrik kalimat (C-26b, C-26c, C-27,
+ *    paragraf badan `aside`. Dipakai metrik kalimat (C-26b, C-26c,
  *    C-31, C-INFO-OPENER) dan plafon kata per paragraf (C-SG-L2-09).
  *  - `narrative`: semua paragraf (peran apa pun), butir daftar, label dan badan
  *    `aside`. Dipakai pemindai sapaan dan rujukan pembaca (C-20, C-34).

@@ -60,7 +60,7 @@ const EXPECTED_COUNTS: Record<ParamCategoryId, [number, number, number, number]>
   'diagram-simbol': [1, 29, 71, 101],
   'bukti-angka': [1, 12, 53, 66],
   'penomoran-klasifikasi': [4, 11, 25, 40],
-  bahasa: [1, 0, 45, 46],
+  bahasa: [1, 0, 44, 45],
   'lint-pemeriksaan': [0, 0, 26, 26],
   'renderer-ekspor': [0, 2, 48, 50],
   lainnya: [0, 0, 0, 0],
@@ -117,7 +117,7 @@ describe('U02 tabel kategori', () => {
 describe('U02 categoryOf terhadap registri hidup', () => {
   // row42 ADAPT A2 (C40, row 122): R-81..R-83 appended; 802 -> 805 keys.
   it('registri = 802 kunci; setiap kunci tepat satu kategori; Lainnya kosong', () => {
-    expect(ALL_PARAMS.length).toBe(805);
+    expect(ALL_PARAMS.length).toBe(804); // 805 before 1.2.5 (P11-27 removed with C-27)
     const m = byCategory();
     const lainnya = (m.get('lainnya') ?? []).map((d) => `${d.id} ${d.key} (${d.group})`);
     expect(lainnya).toEqual([]);
@@ -140,7 +140,7 @@ describe('U02 categoryOf terhadap registri hidup', () => {
     );
     expect(actual).toEqual(EXPECTED_COUNTS);
     const surf = (s: string) => ALL_PARAMS.filter((d) => d.surface === s).length;
-    expect([surf('essential'), surf('advanced'), surf('derived'), surf('internal')]).toEqual([21, 383, 72, 329]);
+    expect([surf('essential'), surf('advanced'), surf('derived'), surf('internal')]).toEqual([21, 383, 72, 328]);
   });
 
   it('hanya membaca group dan key (chapter/namespace/surface diabaikan)', () => {
@@ -237,7 +237,7 @@ describe('U02 groupByCategory', () => {
     const rev = groupByCategory([...ALL_PARAMS].reverse());
     expect(rev.map((c) => c.category.id)).toEqual(g.map((c) => c.category.id));
     expect(rev.map((c) => c.subgroups.map((s) => s.key))).toEqual(g.map((c) => c.subgroups.map((s) => s.key)));
-    expect(g.reduce((n, c) => n + c.total, 0)).toBe(805); // row42 ADAPT A2 (C40, row 122)
+    expect(g.reduce((n, c) => n + c.total, 0)).toBe(804); // 805 -> 804 in 1.2.5 (C-27 removed); row42 ADAPT A2 (C40, row 122)
   });
 
   it('permukaan lanjutan menyembunyikan kategori kosong (Bahasa, Lint)', () => {
@@ -317,7 +317,7 @@ describe('U02 groupByCategory', () => {
     });
     // C06: naming +1, render +2 (nota, ruleIndex); Ekspor render +1 (docx.pageBackground).
     expect(sub('penomoran-klasifikasi')).toEqual({ doc: 9, artifact: 4, classification: 8, naming: 9, numbering: 1, chapter: 1, appendix: 1, toc: 1, render: 6 });
-    expect(sub('bahasa')).toEqual({ doc: 11, prose: 4, sentence: 1, paragraph: 1, list: 1, letter: 12, lexicon: 3, glossary: 1, normativeQuote: 1, threshold: 11 });
+    expect(sub('bahasa')).toEqual({ doc: 11, prose: 4, sentence: 1, paragraph: 1, list: 1, letter: 12, lexicon: 3, glossary: 1, normativeQuote: 1, threshold: 10 });
     expect(sub('lint-pemeriksaan')).toEqual({ gate: 8, lint: 1, artifact: 2, jury: 6, checklist: 1, photocopy: 1, compliance: 3, rules: 1, governance: 3 });
     expect(sub('renderer-ekspor')).toEqual({ render: 15, artifact: 2, ingest: 1, slot: 1, workbook: 18, brief: 13 });
   });

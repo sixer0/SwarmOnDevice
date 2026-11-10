@@ -1,9 +1,9 @@
 /**
  * Modul engine/lint/language (I37, 01_specs.md §8.2; S47): pemindai bahasa grup C.
  *
- * Kontrak: `lintLanguage(s, params)` mengembalikan LintIssue untuk ke-19 butir
+ * Kontrak: `lintLanguage(s, params)` mengembalikan LintIssue untuk ke-18 butir
  * C registri (`module: "language"`), setiap butir minimal satu isu:
- *  - 9 butir terimplementasi (D-34): PASS/FAIL (REPORT untuk C-INFO-OPENER),
+ *  - 8 butir terimplementasi (D-34): PASS/FAIL (REPORT untuk C-INFO-OPENER),
  *    butir per blok boleh menghasilkan beberapa FAIL beralamat;
  *  - 10 butir ber-`notRunReason` (KT-13, G-07): NOT_RUN dengan alasan registri
  *    yang menyebut alat induk `lint_mutu.py`/`scan_ai_footprint.py`;

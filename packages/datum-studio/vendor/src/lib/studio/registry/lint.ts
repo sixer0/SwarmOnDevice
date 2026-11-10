@@ -270,14 +270,6 @@ const ROWS_C: readonly RowC[] = [
     undefined,
   ],
   [
-    "C-27",
-    "Kata per kalimat",
-    "rata-rata 18-32 (kanal K2 panjang)",
-    "SG-L6-02",
-    "threshold.wordsPerSentenceAvg",
-    undefined,
-  ],
-  [
     "C-28",
     "Subjek keputusan",
     "maks. 2 per 1.000 kata (laporan, proposal)",

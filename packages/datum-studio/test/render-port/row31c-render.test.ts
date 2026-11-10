@@ -340,7 +340,7 @@ describe("row 31c: R17 over the real host server, store and render bridge", () =
     expect(jobRow.scope_kind).toBe("DOCUMENT")
     const rel = q<{ release_status: string }>("SELECT release_status FROM revision WHERE id = ?", [jobRow.revision_id])[0]
     expect(["PASS", "FAIL"]).toContain(rel.release_status)
-    expect(pinnedOf(job.id)?.versionNo).toBe(1)
+    expect(pinnedOf(job.id)?.versionNo).toBe(2) // every built-in is v2 since 1.2.5 (C-27 removed; was v1)
     evidence.render = { jobId: job.id, status: job.status, outputs: stored.map((s) => ({ format: s.format, sha256: s.sha256, relPath: s.relPath })), releaseStatus: rel.release_status, pdfJobs: pdfJobs.length }
   })
 

@@ -47,6 +47,9 @@ describe('S11 doc.typeCode NDA', () => {
     // holds with that one value set back to its pre-H1 default, so no other registry default moved.
     expect(pre['color.classificationInk']).toEqual({ SR: 'seal', R: 'seal', T: 'seal', B: 'seal' });
     pre['color.classificationInk'] = { SR: 'alert', R: 'alert', T: 'ink900', B: 'ink900' };
-    expect(sha256Hex(stableStringify(pre))).toBe('dcb7166bc12ab7d6c34906b376a7da6d7562f0d8c1d70ea81a3fd4b396a5dfd9');
+    expect(sha256Hex(stableStringify(pre))).toBe('5103fa80dc00787ab8e5fe338d0c3a7620de35136bd0bd95a620765a76e558ce');
+    // 1.2.5: C-27 removed, so P11-27 (threshold.wordsPerSentenceAvg [18, 32]) left the registry and the pin moved; with that one key
+    // put back the previous pin is reproduced, so nothing else moved.
+    expect(sha256Hex(stableStringify({ ...pre, 'threshold.wordsPerSentenceAvg': [18, 32] }))).toBe('dcb7166bc12ab7d6c34906b376a7da6d7562f0d8c1d70ea81a3fd4b396a5dfd9');
   });
 });

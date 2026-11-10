@@ -38,7 +38,7 @@ const FORMATS: VerifyFormat[] = ["HTML", "PDF", "DOCX", "SVG", "PNG"]
 const issue = (checkId: string, status: LintIssue["status"], address?: string): LintIssue => ({ checkId, status, detail: `${checkId} ${status}`, ...(address ? { address } : {}) })
 /** A stored lint report as revision.ts:136-143 writes it (JSON text in `revision.lint_report`). */
 const report = (tier: string, checks: LintIssue[]): string => JSON.stringify({ tier, checks, releaseStatus: "PASS", banner: "" })
-const GOOD_TERBIT = [issue("DATUM-37", "PASS"), issue("DATUM-33", "PASS"), issue("DATUM-14", "PASS"), issue("C-27", "PASS")]
+const GOOD_TERBIT = [issue("DATUM-37", "PASS"), issue("DATUM-33", "PASS"), issue("DATUM-14", "PASS"), issue("C-26b", "PASS")]
 
 /** Minimal PDF text with a page tree root of `n` pages (what countPdfPages reads, V/services/render/pdf.ts:50). */
 const pdfOf = (n: number): Uint8Array =>
@@ -183,12 +183,12 @@ describe("row 150: LINT", () => {
     expect(checkLint({ format: "PDF", lintReport: "{not json", lintVerdict: "PASS", tier: "TERBIT" })).toMatchObject({ status: "UNKNOWN", reason: "LINT_NOT_RUN" })
   })
   it("UNKNOWN LINT_PARTIAL: an applicable render check NOT_RUN (HTML not measured, F2) is never a pass", () => {
-    const checks = [issue("DATUM-37", "NOT_RUN"), issue("DATUM-33", "PASS"), issue("C-27", "PASS")]
+    const checks = [issue("DATUM-37", "NOT_RUN"), issue("DATUM-33", "PASS"), issue("C-26b", "PASS")]
     expect(checkLint({ format: "PDF", lintReport: report("TERBIT", checks), lintVerdict: "PASS", tier: "TERBIT" })).toMatchObject({ status: "UNKNOWN", reason: "LINT_PARTIAL", findings: [] })
   })
   it("a FAIL outranks the NOT_RUN parts; parsed objects are read like stored JSON text", () => {
-    const parsed = JSON.parse(report("TERBIT", [issue("DATUM-37", "NOT_RUN"), issue("C-27", "FAIL")])) as unknown
-    expect(checkLint({ format: "SVG", lintReport: parsed, lintVerdict: "FAIL", tier: "TERBIT" })).toMatchObject({ status: "FAIL", findings: [{ code: "LINT_FAIL", label: "C-27", detail: "C-27: C-27 FAIL" }] })
+    const parsed = JSON.parse(report("TERBIT", [issue("DATUM-37", "NOT_RUN"), issue("C-26b", "FAIL")])) as unknown
+    expect(checkLint({ format: "SVG", lintReport: parsed, lintVerdict: "FAIL", tier: "TERBIT" })).toMatchObject({ status: "FAIL", findings: [{ code: "LINT_FAIL", label: "C-26b", detail: "C-26b: C-26b FAIL" }] })
   })
   it("findings are capped at VERIFY_FINDINGS_CAP with the rest counted in `truncated`", () => {
     const many = Array.from({ length: 60 }, (_, k) => issue("DATUM-17", "FAIL", `9.${k}`))

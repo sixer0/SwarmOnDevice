@@ -7,7 +7,7 @@
  *   additions of U.3: a captioned data table of 5 columns by 4 body rows with a unit column, a SUMBER
  *   line and a numeric body; a paragraph with a provenance mark and a value with its unit; the
  *   identity paragraph (D17) and the closing-action paragraph (D18). Without them lint DATUM-09/10
- *   never fire, and Studio's plain sample fails D17, D18 and C-27 on every builtin (row 67 report).
+ *   never fire, and Studio's plain sample fails D17 and D18 on every builtin (and failed the now-removed C-27, 1.2.5) (row 67 report).
  * - Row 65 L3: the sample is cloned per render (`structuredClone`), so the reference and the
  *   candidate never share objects, and its sha256 is recorded in the guard report.
  * - A render side = a frozen `ResolvedTemplate` + its skeleton. The sample goes through Studio's

@@ -34,7 +34,7 @@ const PROJECT = path.join(HOME, "project-143a")
 if (E2E) for (const d of [HOME, RES, PROJECT]) mkdirSync(d, { recursive: true })
 
 /** C142: the content LINT codes the row 55c/143 case documents correctly fail at TERBIT. */
-const C142_LINT = new Set(["D09", "P1-labels_verified", "D16", "D17", "D18", "DATUM-17", "C-27"])
+const C142_LINT = new Set(["D09", "P1-labels_verified", "D16", "D17", "D18", "DATUM-17"])
 
 const ENV_KEYS = ["STUDIO_WORKSPACE_ROOT", "STUDIO_ASSETS_ROOT", "STUDIO_VENDOR_ROOT", "STUDIO_MCP_FILE_ROOTS", "INTERNAL_API_SECRET", "DATUM_RENDER_SOCKET", "DATUM_RENDER_TOKEN", "STUDIO_VERIFY_BUDGET_MS"] as const
 const savedEnv = Object.fromEntries(ENV_KEYS.map((k) => [k, process.env[k]]))

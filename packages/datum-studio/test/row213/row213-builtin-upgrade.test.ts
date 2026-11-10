@@ -98,22 +98,24 @@ afterAll(() => {
 
 /** Upgrade the store at `root` to the current templates; every built-in pins, the changed ones at v2, and all render. */
 async function upgradeAndRender(root: string, before: Pin[]) {
-  const { store, error } = await openAs(root, "1.2.4", TEMPLATES)
+  const { store, error } = await openAs(root, "1.2.5", TEMPLATES)
   try {
     expect(codeOf(error) ?? null).toBeNull()
     const after = await pins(store)
     // Nothing pinned earlier is rewritten or dropped (documents keep their version).
     for (const p of before) expect(after).toContainEqual(p)
-    for (const slug of CHANGED) {
-      const latest = after.filter((p) => p.slug === slug).at(-1)!
-      expect(latest.version_no).toBe(2)
-      expect(latest.definition_sha256).toBe(templates.builtinTemplate(slug)!.definitionSha256)
+    const catalog = JSON.parse(await Bun.file(path.join(TEMPLATES, "catalog.json")).text()) as { templates: Array<{ slug: string; isPreset: boolean; contractKind: string | null; versionNo: number }> }
+    // 1.2.5 (C-27 removed) bumped every built-in: v2, and v3 for the two that had already moved in 1.2.2/1.2.3.
+    for (const e of catalog.templates) {
+      const latest = after.filter((p) => p.slug === e.slug).at(-1)!
+      expect({ slug: e.slug, v: latest.version_no }).toEqual({ slug: e.slug, v: CHANGED.includes(e.slug) ? 3 : 2 })
+      expect(e.versionNo).toBe(latest.version_no)
+      expect(latest.definition_sha256).toBe(templates.builtinTemplate(e.slug)!.definitionSha256)
     }
-    const catalog = JSON.parse(await Bun.file(path.join(TEMPLATES, "catalog.json")).text()) as { templates: Array<{ slug: string; isPreset: boolean; contractKind: string | null }> }
     for (const e of catalog.templates.filter((t) => !t.isPreset)) {
       const r = await renderBuiltin(e.slug, e.contractKind !== null)
       expect({ slug: e.slug, valid: r.valid, status: r.status }).toEqual({ slug: e.slug, valid: true, status: "SUCCEEDED" })
-      if (CHANGED.includes(e.slug)) expect(r.versionNo).toBe(2)
+      expect(r.versionNo).toBe(e.versionNo)
     }
     return after
   } finally {
@@ -122,7 +124,7 @@ async function upgradeAndRender(root: string, before: Pin[]) {
 }
 
 describe("row 213: built-in template upgrade across releases", () => {
-  test("the user's state: pinned by 1.2.2, refused by 1.2.3 (whole pin rolled back), recovered by 1.2.4 with no manual step", async () => {
+  test("the user's state: pinned by 1.2.2, refused by 1.2.3 (whole pin rolled back), recovered by 1.2.5 with no manual step", async () => {
     const root = path.join(WORK, "user", "datum-studio")
     const s122 = await openAs(root, "1.2.2", releaseTemplates("1.2.2"))
     expect(codeOf(s122.error) ?? null).toBeNull()
@@ -139,7 +141,7 @@ describe("row 213: built-in template upgrade across releases", () => {
     await closeHostStore(s123.store)
 
     await upgradeAndRender(root, before)
-    const again = await openHostStore(root, { release: "1.2.4", logFile: path.join(WORK, "logs", "store-user-2.jsonl") })
+    const again = await openHostStore(root, { release: "1.2.5", logFile: path.join(WORK, "logs", "store-user-2.jsonl") })
     try {
       const old = await again.transaction(async (tx) => tx.get<{ version_no: number }>("SELECT version_no FROM template_version WHERE id = ?", [docVersion]))
       expect(old?.version_no).toBe(1)
