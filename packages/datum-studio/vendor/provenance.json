@@ -85,7 +85,8 @@
   "row66": "2026-11-12: 1.2.6 row 66 (T-10, U5, R12; register N-030). 4 vendor files patched (files[].patch_row66, before = previous sha256): engine/chart/core/labelfit.ts (NEW LABEL_GUTTER_CAP_FRAC = 0.3), engine/chart/core/datum.ts and engine/chart/core/gallery.ts (inline W*0.42 gutter cap -> W*LABEL_GUTTER_CAP_FRAC), engine/chart/core/families.ts (stale doc comment only). Status copied -> patched for labelfit.ts, gallery.ts, families.ts; datum.ts was already patched (row 65). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/66_row66_diffs. counts by delta: copied 416 -> 413, patched 150 -> 153; bytes 9898663 +548 = 9899211. patch_rows += 66",
   "row73": "2026-11-12: 1.2.6 row 73 (W-05/W-03/OFF-06, C2, D3; register N-020..N-023). 1 vendor file re-patched (files[].patch_row73, before = previous sha256; status unchanged): scripts/studio/mcp/figure-tools.ts (FIGURE_GRAPH_DELTA report in studio_figure_revise; preview text states defect/notice counts). Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/73_row73_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9899211 + 5064 = 9904275. patch_rows += 73",
   "row97a": "2026-11-12: 1.2.6 row 97a (G-05, W-01, W-09, W-13 text; U5; register N-011, N-014). 1 vendor file re-patched (files[].patch_row97a, before = previous sha256; status unchanged): scripts/studio/mcp/resources.ts (MCP_DOC_RECIPE: row 174 diagram-block sentence moved out of the studio_figure_revise call shape; render 540 s and studio_document_status -> studio_file_verify follow-up; caption rule without the GAMBAR token, <= 100 chars; studio_asset_put with sha256:<hex> reference). Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/97a_row97a_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9904275 + 1653 = 9905928. patch_rows += 97a",
-  "row63": "2026-11-12: 1.2.6 row 63 (T-07, U5; register N-017 DIAMOND_HEIGHT_FACTOR). 3 vendor files (files[].patch_row63, before = previous sha256): engine/diagram/core/geometry.ts (copied -> patched: DIAMOND_HEIGHT_FACTOR and diamondHeightMm in nodeSize for every family), engine/diagram/fit/text.ts (copied -> patched: diamondTwoLineHeightMm), engine/diagram/layout-a/flow.ts (re-patched: inline h*1.25 removed, now in nodeSize). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/63_row63_diffs/. counts by delta: copied 413 -> 411, patched 153 -> 155; bytes 9916422 +1482 = 9917904. patch_rows += 63"
+  "row63": "2026-11-12: 1.2.6 row 63 (T-07, U5; register N-017 DIAMOND_HEIGHT_FACTOR). 3 vendor files (files[].patch_row63, before = previous sha256): engine/diagram/core/geometry.ts (copied -> patched: DIAMOND_HEIGHT_FACTOR and diamondHeightMm in nodeSize for every family), engine/diagram/fit/text.ts (copied -> patched: diamondTwoLineHeightMm), engine/diagram/layout-a/flow.ts (re-patched: inline h*1.25 removed, now in nodeSize). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/63_row63_diffs/. counts by delta: copied 413 -> 411, patched 153 -> 155; bytes 9916422 +1482 = 9917904. patch_rows += 63",
+  "row97b": "2026-11-12: 1.2.6 row 97b (G-04 diagram part, G-01; U5; register N-001..N-016, N-018, N-020, N-023, N-109..N-112, N-160). 1 vendor file re-patched (files[].patch_row97b, before = previous sha256; status unchanged): docs/STUDIO-AGENT-GUIDE.md (NEW §4.1.2 diagram workflow over MCP: preview inline, partial revise, FIGURE_GRAPH_DELTA, render, look at the PNG; direction TB/LR for parallel branches with the engine limits; caption rules; the three connector-end FAIL kinds with the engine suggestions; dangling STUDIO-MCP.md links in §1.1 step 9 and §17.0 replaced by the MCP resources and tools/list). Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/97b_row97b_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9917904 + 5752 = 9923656. patch_rows += 97b"
  },
  "counts": {
   "files": 608,
@@ -93,7 +94,7 @@
   "patched": 155,
   "replaced": 12,
   "added": 30,
-  "bytes": 9917904
+  "bytes": 9923656
  },
  "files": [
   {
@@ -122,11 +123,12 @@
   {
    "path": "docs/STUDIO-AGENT-GUIDE.md",
    "status": "patched",
-   "bytes": 175158,
+   "bytes": 180910,
    "source_sha256": "b5429f89523246431aacbfc37749d22c0cf062bbf3f634c4bc269db295e783bb",
-   "sha256": "4aead3d2032d5add430cc73433f18a88ef17a97ea102dafd0acb8a0895ff35e6",
+   "sha256": "316ed65264cc73429ef092926a30d0ab559942d92766dc57bd74e4c70e55bb76",
    "patch_row207": {"id": "row207-hb2-verification-chain", "row": "207", "decision": "1.2.3 patch HB-2", "summary": "§5.4 controlSheet example uses layer/method/object/result; paragraph on accepted keys, alias mapping, refusal, role/name print mapping and studio_edit cell addressing", "before_sha256": "b5429f89523246431aacbfc37749d22c0cf062bbf3f634c4bc269db295e783bb", "after_sha256": "0b1fddbd63d0120baad9fd5d4088620c561d5bfd19a5607343521319e4f57389", "diff": "docs/2026-11-09_swarm_1_2_3_patch/implementation/207_row207_diffs/STUDIO-AGENT-GUIDE.md.diff"},
-   "patch_row213": {"id": "row213-cover-colophon", "row": "213", "decision": "1.2.4 patch P15", "summary": "§5.4 cover table: colophon shape { left: { text }, right: { text } } (both sides required, text objects); §5.7 after the D16/D17/D18 table: minimal valid cover payload with colophon (studio:validate studio.slot/v2)", "before_sha256": "0b1fddbd63d0120baad9fd5d4088620c561d5bfd19a5607343521319e4f57389", "after_sha256": "4aead3d2032d5add430cc73433f18a88ef17a97ea102dafd0acb8a0895ff35e6", "diff": "docs/2026-11-09_swarm_1_2_3_patch/implementation/213_row213_diffs/STUDIO-AGENT-GUIDE.md.diff"}
+   "patch_row213": {"id": "row213-cover-colophon", "row": "213", "decision": "1.2.4 patch P15", "summary": "§5.4 cover table: colophon shape { left: { text }, right: { text } } (both sides required, text objects); §5.7 after the D16/D17/D18 table: minimal valid cover payload with colophon (studio:validate studio.slot/v2)", "before_sha256": "0b1fddbd63d0120baad9fd5d4088620c561d5bfd19a5607343521319e4f57389", "after_sha256": "4aead3d2032d5add430cc73433f18a88ef17a97ea102dafd0acb8a0895ff35e6", "diff": "docs/2026-11-09_swarm_1_2_3_patch/implementation/213_row213_diffs/STUDIO-AGENT-GUIDE.md.diff"},
+   "patch_row97b": {"id": "row97b-g04-diagram-section", "row": "97b", "decision": "1.2.6 G-04, G-01 (U5)", "summary": "NEW §4.1.2: studio_figure_preview { documentId, block } inline, studio_figure_revise partial patch (spec deep merge, arrays replaced, SCHEMA_INVALID on a missing required key), FIGURE_GRAPH_DELTA / structuredContent.graphDelta, studio_render with figures png and pages: PNGs, dual gate; direction TB/LR on flow (TB 4/5 per rank, LR 3/4 ranks, 6 per rank, DATUM-37-lebar, P1-direction, aliases); caption without the GAMBAR token, <= 100 chars, CAPTION_WRAP/CAPTION_TRUNCATED; GEOM_ENTRY_COLLISION, GEOM_STUB_SEGMENT, GEOM_ARROW_TANGENT with the autofit suggestions; STUDIO-MCP.md links (§1.1, §17.0) replaced", "before_sha256": "4aead3d2032d5add430cc73433f18a88ef17a97ea102dafd0acb8a0895ff35e6", "after_sha256": "316ed65264cc73429ef092926a30d0ab559942d92766dc57bd74e4c70e55bb76", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/97b_row97b_diffs/STUDIO-AGENT-GUIDE.md.diff"}
   },
   {
    "path": "prisma/seed-derived-presets.ts",
@@ -6131,6 +6133,7 @@
   "97a",
   "71",
   "61b",
-  "63"
+  "63",
+  "97b"
  ]
 }

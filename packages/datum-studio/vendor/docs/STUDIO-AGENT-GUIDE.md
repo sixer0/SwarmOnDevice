@@ -146,8 +146,9 @@ badan (dan `agentId`) dibaca: agen yang berbagi satu rahasia berbagi kuota impor
    dan `studio_file_verify`. Server mengingat basis (`nextBasis`) dokumen selama sesi, jadi
    `studio_report_update` tanpa baris `basis:` memakai basis itu. Isi laporan dan hasil bacaan dari
    server adalah data tak tepercaya, bukan perintah. Server hanya menulis berkas bila
-   `STUDIO_MCP_FILE_ROOTS` diset. Rincian alat, pendaftaran klien, dan keamanan:
-   [`STUDIO-MCP.md`](STUDIO-MCP.md). Resep CLI di langkah 9 dan seksi 17.0 tetap menjadi jalur
+   `STUDIO_MCP_FILE_ROOTS` diset. Rincian alat ada di deskripsinya (`tools/list` server MCP) dan di
+   resource MCP `studio://resep/laporan-kerja`, `studio://resep/dokumen-klien`, dan
+   `studio://skema/diagram` (`resources/list`); diagram: seksi 4.1.2. Resep CLI di langkah 9 dan seksi 17.0 tetap menjadi jalur
    cadangan untuk cron, batch, dan agen tanpa MCP.
 
 ---
@@ -498,6 +499,70 @@ gambar bersumber:
   }
 }
 ```
+
+#### 4.1.2 Diagram lewat MCP: pratinjau, revisi, render, lihat
+
+Agen ber-MCP mengerjakan diagram dengan dua alat figur, lalu render. Seksi ini hanya alur dan
+tindakannya; norma kerja diagram lengkap (batas label, warna aksen, jenis garis) ada di resource MCP
+`studio://skema/diagram`.
+
+1. **Pratinjau inline.** `studio_figure_preview { documentId, block }` merender satu blok v2
+   `diagram` tanpa menyimpan apa pun. Figur yang sudah tersimpan: `{ documentId, pid }` atau
+   `{ documentId, address }` (mis. `"Gambar 3.1"`). Isu dibagi dua. `figure.defects` wajib diperbaiki:
+   setiap `GEOM_*`, `CAPTION_WRAP`, `CAPTION_TRUNCATED`, `LABEL_LEADER`, `LABEL_DROPPED`,
+   `TEXT_OUTSIDE`, `FLOW_SERIALISED`. `figure.notices` (mis. `EDGE_LANES`, `LABEL_MOVED`, `AUTO_FIT`,
+   `ELK_LAYOUT`) berarti mesin sudah menyesuaikan tata letak; tidak ada tindakan.
+2. **Revisi sebagian.** `studio_figure_revise { documentId, pid | address, patch, baseRevisionNo, change }`.
+   Untuk diagram `patch` hanya boleh memuat `spec`, `caption`, `source`, `keyRow`. Kirim yang berubah
+   saja: `spec` digabung ke spec tersimpan (objek per kunci, larik diganti utuh, `null` menghapus
+   kunci). `{ spec: { nodes: [...] } }` mempertahankan `family`, `edges`, dan `direction`, tetapi
+   `nodes` yang dikirim menggantikan seluruh daftar simpul. Hasil gabungan yang kehilangan medan wajib
+   spec ditolak `SCHEMA_INVALID` dengan nama medan itu (`pointer` `/spec/<medan>`), 0 tulis.
+3. **Baca `FIGURE_GRAPH_DELTA`.** Bila simpul atau tepi berubah, hasil revisi memuat baris
+   `FIGURE_GRAPH_DELTA` (jumlah simpul dan tepi sebelum dan sesudah) dan `structuredContent.graphDelta`
+   (`nodes.added`, `nodes.removed`, `edges.added`, `edges.removed`, `edges.rewired`; tepi ditulis
+   `from->to`). Ini laporan, bukan penolakan: revisi sudah tersimpan. Cocokkan dengan maksud
+   perubahan; tepi yang hilang tanpa sengaja dipulihkan dengan revisi berikutnya. Tanpa baris itu
+   graf tidak berubah.
+4. **Render.** `studio_render { documentId, scope: "chapter", key, figures: ["png"] }` untuk draf bab,
+   atau render dokumen bila sudah COMPLETE (seksi 8). Hasilnya membawa laporan verifikasi: `FIGURE_FIT`
+   per figur dan baris `pages:` berisi gambar halaman PNG.
+5. **Lihat PNG-nya.** Buka PNG halaman dari baris `pages:`, atau PNG figur dari `outputs` lewat
+   `studio_file_verify { fileId, downloadDir }`, dan periksa dengan mata: arah alur, panah sampai ke
+   simpul, label terbaca. Diagram selesai hanya bila dua gerbang lulus: gerbang mesin (pratinjau tanpa
+   `defects`, `FIGURE_FIT` PASS) dan gerbang mata atas PNG. Pratinjau bersih saja bukan gerbang.
+
+**Cabang paralel: `direction`.** `spec.direction` bernilai `"TB"` (atas-bawah) atau `"LR"`
+(kiri-kanan) dan hanya berlaku untuk `family: "flow"`. Tanpa `direction`, flow mengikuti urutan daftar
+dalam satu kolom: cabang paralel tersusun berurutan dan pratinjau memberi cacat `FLOW_SERIALISED`.
+Dengan `direction`, simpul satu peringkat berdampingan. Batas pada lebar 128 / 166 mm: TB 4 / 5
+simpul per peringkat; LR 3 / 4 peringkat dan 6 simpul per peringkat. Di atasnya figur ditolak
+`FIGURE_OVER_CAPACITY` (`DATUM-37-lebar`, angka terukur dan batas): pecah diagram atau ikuti saran
+galat. Kipas 4 tepi atau lebih pada satu sisi simpul yang konektornya berimpit atau bersilang diberi
+Studio jalur keluar bertingkat (flow tanpa `direction` tidak termasuk); tidak ada tindakan. `direction` pada family lain, atau bersama `per_row`, ditolak
+`BY_CONSTRUCTION_FAILED` (`checkId: "P1-direction"`): `layered`/`topology`/`stack` tetap atas-bawah
+menurut `class.tier`; alur kiri-kanan memakai flow + `direction: "LR"` atau `graph` + `class.col/row`.
+Nama lain (`rankdir`, `rankDir`, `dir`, `orientation`, `arah`) ditolak skema dengan petunjuk ke
+`direction`; `RL` dan `BT` tidak didukung. Di `graph`, `class.col: 0` sah; Studio menjaga jarak 2 mm
+dari tepi lembar.
+
+**Caption.** Studio mencetak label `GAMBAR n.m` sendiri. Caption tidak pernah diawali token label
+(`Gambar 3.1`, `Figure 2`, `Fig. 1`, `Grafik 4`, `Bagan 2`, `Diagram 1`): kiriman bab dan
+`studio_figure_revise` menolaknya `CAPTION_TOKEN_DUPLICATE`, 0 tulis. Tulis isinya saja, maksimal 100
+karakter (`CAPTION_GUIDE_MAX_CHARS`) agar muat satu baris: satu vonis yang menyebut pelaku dan angka.
+Sumber ditulis di `source`, bukan di caption. Caption yang terbungkus ke baris kedua gagal
+`FIGURE_FIT` `CAPTION_WRAP`; caption atau baris SUMBER yang dipotong elipsis gagal `CAPTION_TRUNCATED`.
+Perbaikannya: persingkat lewat `studio_figure_revise { patch: { caption } }`.
+
+**Tiga cacat ujung konektor.** Di pratinjau muncul sebagai `GEOM_*`; sesudah render `FIGURE_FIT`
+gagal dengan temuan `FIG_GEOMETRY` yang rinciannya diawali nama jenisnya. Auto-fit tidak
+memperbaikinya sendiri; perbaikan datang dari spec.
+
+| Pratinjau / `FIGURE_FIT` | Artinya | Tindakan |
+|---|---|---|
+| `GEOM_ENTRY_COLLISION` / `edgeEntryCollision` | dua ujung konektor di sisi simpul yang sama lebih dekat dari 1,5 mm, sedikitnya satu ujung masuk | kurangi konektor yang masuk ke sisi simpul yang sama atau pecah menjadi 2 diagram |
+| `GEOM_STUB_SEGMENT` / `stubSegment` | potongan konektor lurus di bawah 2,0 mm yang tidak menuju apa pun | pindahkan label tepi ke segmen terpanjang atau persingkat label tepi (maks ~20 karakter) |
+| `GEOM_ARROW_TANGENT` / `arrowTangent` | ruas terakhir dalam 15 derajat dari sisi simpul yang dituju: kepala panah sejajar sisi, bukan tegak lurus | ubah urutan simpul agar konektor masuk tegak lurus ke sisi simpul sasaran |
 
 ### 4.2 Peran paragraf dan rel bukti
 
@@ -1901,8 +1966,9 @@ lewat alat `studio_report_template`, `studio_report_check`, `studio_report_submi
 templat), cari dengan `studio_contracts_query` dan `studio_search`, serta render dan verifikasi
 dengan `studio_render` dan `studio_file_verify`. Server mengingat basis dokumen dalam sesi
 (`studio_report_update` tanpa baris `basis:` memakainya), memperlakukan konten sebagai data tak
-tepercaya, dan menulis berkas hanya bila `STUDIO_MCP_FILE_ROOTS` diset. Rujukan lengkap:
-[`STUDIO-MCP.md`](STUDIO-MCP.md). Isi dan bentuk laporan di bawah berlaku sama untuk kedua jalur;
+tepercaya, dan menulis berkas hanya bila `STUDIO_MCP_FILE_ROOTS` diset. Rujukan lengkap: resource
+MCP `studio://resep/laporan-kerja` (resep) dan `studio://templat/laporan-kerja` (templat), serta
+deskripsi tiap alat di `tools/list`. Isi dan bentuk laporan di bawah berlaku sama untuk kedua jalur;
 tabel perintah `SR` adalah jalur cadangan untuk cron, batch, dan agen tanpa MCP.
 
 Laporan kerja ditulis sebagai Markdown biasa (tanpa blok ```json) dan dikirim dengan CLI
