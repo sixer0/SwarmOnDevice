@@ -33,6 +33,7 @@ import type { ActionCheckpoint } from "../../src/tool/checkpoint"
 import * as ShellModule from "../../src/tool/shell"
 import { EditTool } from "../../src/tool/edit"
 import { WriteTool } from "../../src/tool/write"
+import { ApplyPatchTool } from "../../src/tool/apply_patch"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { SessionProjector } from "@opencode-ai/core/session/projector"
 import { EventV2Bridge } from "../../src/event-v2-bridge"
@@ -480,6 +481,24 @@ describe("U6 checkpoint: what no checkpoint holds, or cannot be made", () => {
       expect(lines.some((line) => line.outcome === "checkpointed")).toBe(false)
     }),
   )
+
+  // 1.2.6 FX-14 (F-3, C24): the copy was made but its `checkpointed` audit line could not be written. Without that line
+  // the revert route cannot vouch for the copy, so the call does not run: `checkpointFailedText("audit")`, bytes unchanged.
+  posixOnly("CK-12c (F-3): a checkpoint whose audit line cannot be recorded stops the shell call; the bytes are unchanged", () =>
+    Effect.gen(function* () {
+      const dir = yield* tmpdirScoped()
+      const notes = path.join(dir, "notes.txt")
+      fs.writeFileSync(notes, "old\n")
+      const real = checkpointSeam.create
+      checkpointSeam.create = (input) => real({ ...input, record: () => Promise.reject(new Error("audit down")) })
+      const { result, lines } = yield* runShell(dir, "echo new > notes.txt", { canUndo: false }).pipe(
+        Effect.ensuring(Effect.sync(() => (checkpointSeam.create = real))),
+      )
+      expect(output(result)).toBe(checkpointFailedText("audit"))
+      expect(fs.readFileSync(notes, "utf8")).toBe("old\n")
+      expect(lines).toEqual([expect.objectContaining({ outcome: "not_run", by: "system:checkpoint_failed" })])
+    }),
+  )
 })
 
 describe("U6 checkpoint: I-U and outward keep their 1.2.5 verdicts", () => {
@@ -660,6 +679,38 @@ describe("U6 checkpoint through the real gate and audit", () => {
       fs.rmSync(modeFolder, { recursive: true, force: true })
     }),
   )
+
+  // 1.2.6 FX-14 (F-3, C24): the same for the file tools. The copy exists, its audit line does not, so the write stops.
+  for (const tool of ["edit", "write", "apply_patch"] as const)
+    full.instance(`CK-12d (F-3): under the ${tool} tool a checkpoint whose audit line cannot be recorded refuses the write`, () =>
+      Effect.gen(function* () {
+        const test = yield* TestInstance
+        const file = path.join(test.directory, "a.md")
+        fs.writeFileSync(file, "old text\n")
+        const { root, autonomy } = yield* start
+        const ctx = yield* context(root.id, false)
+        const run: Effect.Effect<Tool.ExecuteResult> =
+          tool === "edit"
+            ? (yield* (yield* EditTool).init()).execute({ filePath: file, oldString: "old", newString: "new" }, ctx)
+            : tool === "write"
+              ? (yield* (yield* WriteTool).init()).execute({ filePath: file, content: "new text\n" }, ctx)
+              : (yield* (yield* ApplyPatchTool).init()).execute(
+                  { patchText: "*** Begin Patch\n*** Update File: a.md\n@@\n-old text\n+new text\n*** End Patch" },
+                  ctx,
+                )
+        const real = checkpointSeam.create
+        checkpointSeam.create = (input) => real({ ...input, record: () => Promise.reject(new Error("audit down")) })
+        const exit = yield* run.pipe(Effect.exit, Effect.ensuring(Effect.sync(() => (checkpointSeam.create = real))))
+        expect(failure(exit)).toBe(checkpointFailedText("audit"))
+        expect(fs.readFileSync(file, "utf8")).toBe("old text\n")
+        const lines = yield* audit(autonomy, root.id)
+        expect(lines.filter((line) => line.type === "outcome" && line.outcome === "not_run")).toEqual([
+          expect.objectContaining({ by: "system:checkpoint_failed", requestID: ctx.callID }),
+        ])
+        expect(lines.some((line) => line.outcome === "checkpointed")).toBe(false)
+        fs.rmSync(modeFolder, { recursive: true, force: true })
+      }),
+    )
 
   full.instance("CK-7: the write tool's outside_edit of an existing file outside the project is copied under _outside first", () =>
     Effect.gen(function* () {

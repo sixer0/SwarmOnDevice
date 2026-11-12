@@ -91,6 +91,8 @@ const CHECKPOINT_FAILED_REASON = {
   git: "the Git state it changes could not be recorded",
   mismatch: "a copy did not match its original",
   failed: "the copy could not be written",
+  // 1.2.6 FX-14 (F-3): the copy was made, but the audit line that lets the person revert it could not be written.
+  audit: "the checkpoint could not be recorded in the audit log, so the person could not revert it",
 } as const
 
 export type CheckpointFailedReason = keyof typeof CHECKPOINT_FAILED_REASON

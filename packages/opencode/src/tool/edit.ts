@@ -109,7 +109,8 @@ export const checkpointSeam: { create: typeof ActionCheckpoint.create } = { crea
  * checkpoint of `input`'s targets (and refs) with the `checkpointed` audit line, and returns the text for the agent. A
  * checkpoint that cannot be made, a rejected call included (counted as `failed`), writes the `not_run` audit line
  * (`Autonomy.recordCheckpointFailed`) and returns `{ ok: false, stop }` with the `checkpointFailedText` for the reason:
- * the caller then does not run the call. A checkpoint whose audit line could not be written is logged, never thrown.
+ * the caller then does not run the call. A checkpoint whose audit line could not be written stops the call the same way,
+ * with the `audit` reason (FX-14, F-3), and is logged, never thrown.
  */
 export const saveCheckpointOrStop = Effect.fn("ActionCheckpoint.saveOrStop")(function* (
   on: { readonly where: Autonomy.Where; readonly autonomy: Pick<Autonomy.Interface, "record"> },
@@ -124,7 +125,13 @@ export const saveCheckpointOrStop = Effect.fn("ActionCheckpoint.saveOrStop")(fun
     yield* Autonomy.recordCheckpointFailed(on, input.requestID)
     return { ok: false as const, stop: checkpointFailedText(result.reason) }
   }
-  if (!result.recorded) yield* Effect.logError("could not record a checkpoint", { checkpoint: result.id })
+  // 1.2.6 FX-14 (F-3): a checkpoint without its `checkpointed` audit line cannot be reverted (the revert route vouches for
+  // the copy with that line's manifest sha), so the call does not run. The copy stays on disk for a restore by hand.
+  if (!result.recorded) {
+    yield* Effect.logError("could not record a checkpoint", { checkpoint: result.id })
+    yield* Autonomy.recordCheckpointFailed(on, input.requestID)
+    return { ok: false as const, stop: checkpointFailedText("audit") }
+  }
   return { ok: true as const, text: ActionCheckpoint.savedText(result.manifest.entries.length, result.id, result.manifest.refs?.length ?? 0) }
 })
 
