@@ -156,12 +156,17 @@ export const AGENT_BASELINE = {
 
 // experimental.mcp_timeout: 01f §12 proposed shipping it once row 96 verifies the key
 // exists in this version. Verified: ConfigV1.Info declares `mcp_timeout:
-// Schema.optional(PositiveInt)` at packages/core/src/v1/config/config.ts:182 inside
-// `experimental` (:169), and mcp/index.ts reads cfg.experimental?.mcp_timeout globally.
-// Effect: a dead swarm-web server costs the bounded timeout, not a stalled session
-// (01f §5.2 failure-mode note).
+// Schema.optional(PositiveInt)` inside `experimental` in packages/core/src/v1/config/config.ts:
+//   config.ts:199 mcp_timeout
+//   config.ts:186 experimental
+// and mcp/index.ts reads cfg.experimental?.mcp_timeout globally.
+// 1.2.6 CFG-02 (decision U1): 600000, above the 540000 studio_render call limit, so a
+// long render is not cut by the MCP request timeout. A server entry with its own
+// `timeout` (the installer writes 30000) keeps it; a user's experimental.mcp_timeout
+// overrides this baseline through the config merge. A dead swarm-web server then costs
+// the bounded per-server timeout of its own entry, not a stalled session (01f §5.2).
 export const SWARM_PERMISSION_BASELINE = {
   permission: PERMISSION_BASELINE,
   agent: AGENT_BASELINE,
-  experimental: { mcp_timeout: 30000 },
+  experimental: { mcp_timeout: 600000 },
 } as const

@@ -24,7 +24,7 @@ import { SWARM_PERMISSION_BASELINE } from "./swarm-permission-baseline"
 // REFERENCE whenever the target lacks that key (test/permission/baseline.test.ts pins
 // it), and config.ts seeds with mergeDeep({}, {...BASELINE_CONFIG}) — so one shared
 // literal would let any in-place write on a resolved config corrupt the shipped
-// constants for every later instance. The top-level spread at config.ts:318 invokes
+// constants for every later instance. The top-level spread at opencode config.ts:340 invokes
 // each getter once per load, so every instance owns its copy. Same defensive posture
 // as the disabled_providers array copy at that call site. The payload is pure JSON
 // data, hence the JSON round-trip clone (no structuredClone availability question).
