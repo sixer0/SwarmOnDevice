@@ -114,7 +114,11 @@ describe("S1.13 the overlay, rule by rule (P8)", () => {
     expect(consented(await sh("git reset --hard"))).toEqual(REFUSED("irreversible"))
     expect(consented(await sh("git push --force origin main", {}, { risk: "irreversible" }))).toEqual(REFUSED("irreversible"))
     expect(consented(await sh("git stash drop", {}, { risk: "irreversible" }))).toEqual(REFUSED("irreversible"))
-    expect(consented(await sh("psql -c 'drop table users'", {}, { risk: "irreversible" }))).toEqual(REFUSED("irreversible"))
+    // 1.2.6 row 37b (P-01b, INTENT per 01b 10.2): a database is I-N, which no checkpoint holds: refused with that reason.
+    expect(consented(await sh("psql -c 'drop table users'", {}, { risk: "irreversible" }))).toEqual({
+      ...REFUSED("checkpoint_failed"),
+      reason: "not_files",
+    })
     expect(consented(await sh("sudo ls"))).toEqual(REFUSED("admin_rights"))
     expect(consented(await sh("doas make install"))).toEqual(REFUSED("admin_rights"))
     // The same calls without consent are 1.1.0's: held for a person.

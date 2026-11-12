@@ -36,6 +36,7 @@ import { InstanceState } from "@/effect/instance-state"
 import type { SessionID } from "@/session/schema"
 import { Secrets } from "@/tool/secrets"
 import type { Archive } from "@/tool/archive"
+import type { ActionCheckpoint } from "@/tool/checkpoint"
 import { ConsentScan } from "./consent-scan"
 import { MissionWindow } from "./mission-window"
 import { OutwardKnown } from "./outward-known"
@@ -232,13 +233,30 @@ const Outcome = Schema.Struct({
   ...Chained,
   type: Schema.Literal("outcome"),
   requestID: Schema.String,
-  outcome: Schema.Literals(["ran", "failed", "not_run", "approved_later", "rejected_later", "abandoned", "undone", "archived"]),
+  outcome: Schema.Literals([
+    "ran",
+    "failed",
+    "not_run",
+    "approved_later",
+    "rejected_later",
+    "abandoned",
+    "undone",
+    "archived",
+    // 1.2.6 row 37b (N-074): a checkpoint was saved before the call ran, as `ActionCheckpoint.CheckpointedLine` names it.
+    "checkpointed",
+  ]),
   exit: Schema.optional(Schema.Finite),
   by: Schema.optional(DecidedBy),
   // Only on `archived`, as `Archive.ArchivedLine` in `tool/archive.ts` names them. Paths are relative to the session folder.
   archive: Schema.optional(Schema.String),
   moved: Schema.optional(Schema.Array(Schema.Struct({ from: Schema.String, to: Schema.String }))),
   bytes: Schema.optional(Schema.Int),
+  // Only on `checkpointed` (tool/checkpoint.ts): the id, how many entries and refs it holds, and the sha256 of its
+  // manifest, which a revert must present (SEC-07). No path, so no home folder reaches the audit.
+  checkpoint: Schema.optional(Schema.String.check(Schema.isPattern(/^\d{8}-\d{6}-\d{1,4}$/))),
+  entries: Schema.optional(Schema.Int),
+  refs: Schema.optional(Schema.Int),
+  manifestSha256: Schema.optional(Schema.String.check(Schema.isPattern(/^[0-9a-f]{64}$/))),
 })
 const Marker = Schema.Struct({
   ...Chained,
@@ -424,6 +442,29 @@ export const afterCheck = <Class extends string>(value: Class, check: Check) =>
 export const archiveRecorder = (record: Interface["record"], where: Where) => (line: Archive.ArchivedLine) =>
   Effect.runPromise(record(where.root, { ...line, directory: where.directory }))
 
+/**
+ * 1.2.6 row 37b: the recorder `ActionCheckpoint.create` takes, on the root's own chain, as `archiveRecorder` is for the
+ * archive. The line is written after the manifest exists and before the call runs.
+ */
+export const checkpointRecorder = (record: Interface["record"], where: Where) => (line: ActionCheckpoint.CheckpointedLine) =>
+  Effect.runPromise(record(where.root, { ...line, directory: where.directory }))
+
+/**
+ * 1.2.6 row 37b: where the mode is on for this session's root, with its service, for a tool that saves a checkpoint before
+ * it writes (edit, write). Undefined when the mode is off or the services are not there; nothing changes then.
+ */
+export const activeFor = Effect.fnUntraced(function* (
+  sessions: Parameters<typeof placeOf>[0] | undefined,
+  sessionID: SessionID,
+) {
+  const autonomy = yield* Effect.serviceOption(Service)
+  if (Option.isNone(autonomy) || sessions === undefined) return undefined
+  const place = yield* placeOf(sessions, sessionID)
+  const where = { root: place.root.id, directory: place.directory }
+  if (!(yield* autonomy.value.isOn(where).pipe(Effect.catchCause(() => Effect.succeed(false))))) return undefined
+  return { where, autonomy: autonomy.value }
+})
+
 const folder = () => path.join(Global.Path.state, "autonomy")
 const filePath = (file: StateFile) =>
   file === MODE_FILE ? path.join(folder(), MODE_FILE) : path.join(Global.Path.state, TRUST_FILE)
@@ -531,6 +572,11 @@ function auditFields(root: string, entry: AuditEntry) {
         to: ProjectTrust.printable(hide(item.to, entry.directory ?? "", MAX_MOVED_PATH), MAX_MOVED_PATH),
       })),
       bytes: entry.bytes,
+      // 1.2.6 row 37b: only on `checkpointed`. The schema checks the id's and the sha's shape; counts are numbers.
+      checkpoint: entry.checkpoint,
+      entries: entry.entries,
+      refs: entry.refs,
+      manifestSha256: entry.manifestSha256,
     }
   if (entry.type === "marker")
     return {

@@ -541,6 +541,10 @@ export function render(facts: Facts) {
   const archived = outcomes
     .filter((line) => line.outcome === "archived")
     .flatMap((line) => (line.moved ?? []).map((item) => `\`${hide(item.from)}\` -> \`${hide(item.to)}\``))
+  // 1.2.6 row 37b (N-080, 01b section 9.7): each checkpoint saved before a call ran, by its id, which a revert names.
+  const checkpointed = outcomes
+    .filter((line) => line.outcome === "checkpointed" && line.checkpoint !== undefined)
+    .map((line) => `\`${hide(line.checkpoint!)}\` (${line.entries ?? 0} file(s), ${line.refs ?? 0} ref(s))`)
   // 1.1.3: a class X line is either redirected to the archive method or refused (spec section 2, Rd and F). Each names its
   // category and, when the consent changed it, the category it had before (`bypassed`).
   const labelOf = (category: string | undefined) => (category ? (labels[category] ?? category) : texts.none)
@@ -663,6 +667,8 @@ export function render(facts: Facts) {
       list(facts.files.map((item) => `\`${hide(item.file)}\` (+${item.additions}, -${item.deletions})`)),
     ),
     ...section(texts.archived, list(archived)),
+    // Only when a checkpoint was made, so a run without one reads as before (keep-UI-simple).
+    ...(checkpointed.length > 0 ? section(texts.checkpointed, list(checkpointed)) : []),
     ...section(texts.redirected, list(redirected)),
     ...section(texts.refused, list(refused)),
     ...section(texts.waiting, list(facts.open.map((line) => `${call(line)} (${hide(line.agent)})`))),

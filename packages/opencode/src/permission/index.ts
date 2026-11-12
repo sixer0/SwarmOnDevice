@@ -24,6 +24,7 @@ import {
   REFUSED_TEXT,
   SPEND_STOPPED_TEXT,
   UNJUDGED_TEXT,
+  checkpointFailedText,
   consentedRefusalText,
   mainAgentDeclined,
   subagentStoppedMessage,
@@ -379,17 +380,20 @@ const stoppedByMode = (input: PermissionV1.AskInput) => {
  * 1.1.3 (T6): the class X answer while the person's consent to the bypass applies. Same error classes as 1.1.0; the text is
  * `consentedRefusalText`, which adds the continue suffix to credential_change and admin_rights.
  */
-export const refusedUnderConsent = (category: string | undefined) => {
-  const text = consentedRefusalText(category)
+export const refusedUnderConsent = (category: string | undefined, reason?: string) => {
+  // 1.2.6 row 37b: a checkpoint that could not be made names why, from the closed list (never command text).
+  const text = category === "checkpoint_failed" ? checkpointFailedText(reason) : consentedRefusalText(category)
   if (text === undefined) return new RefusedByModeError({ ruleset: [] })
   const error = new RefusedWithTextError({ ruleset: [] })
   error.text = text
   return error
 }
 
-export const refusedByMode = (category: string | undefined) => {
+export const refusedByMode = (category: string | undefined, reason?: string) => {
   const text =
-    category !== undefined && Object.hasOwn(REFUSED_TEXT, category)
+    category === "checkpoint_failed"
+      ? checkpointFailedText(reason)
+      : category !== undefined && Object.hasOwn(REFUSED_TEXT, category)
       ? REFUSED_TEXT[category as keyof typeof REFUSED_TEXT]
       : undefined
   if (text === undefined) return new RefusedByModeError({ ruleset: [] })
@@ -800,13 +804,25 @@ const layer = Layer.effect(
           bypassed: opened,
           consent: bypass !== undefined,
         })
-      const table: Answer = !forged
+      const believed: Answer = !forged
         ? judgedTable
         : NEVER_OPENED_X.has(opened)
           ? { class: "X", decidedBy: "gate", category: opened as AutonomyTable.Verdict["category"] }
           : hardFlag !== undefined && bypass !== undefined
             ? { class: "X", decidedBy: "gate", category: hardFlag === "sudo" ? "admin_rights" : "delete_compound", bypassed: "script_flagged" }
             : held(isHeldCategory(opened) ? opened : "not_routine")
+      // 1.2.6 row 37b (P-01b): `checkpointed` is believed only when the shell said it checkpoints first
+      // (`metadata.checkpointTargets`). Otherwise nothing would save what the call changes, so it is what it was before U6.
+      const unsaved =
+        believed.class === "A" &&
+        believed.category === "checkpointed" &&
+        !Array.isArray((input.metadata as Record<string, unknown> | undefined)?.checkpointTargets)
+      if (unsaved) yield* Effect.logError("a checkpointed verdict without the shell's checkpoint", { requestID, permission: input.permission })
+      const table: Answer = !unsaved
+        ? believed
+        : bypass !== undefined
+          ? { class: "X", decidedBy: "gate", category: "not_reversible" }
+          : held("not_reversible")
       // An "always" on what the mode lets anyway answers nothing: an ordinary edit is on record as the gate's, not a person's.
       const answered =
         (followed || standing) &&
@@ -1041,7 +1057,7 @@ const layer = Layer.effect(
             })
             .pipe(Effect.catchCause((cause) => Effect.logError("could not send a notice", { root: root.id, cause })))
         }
-        return { class: verdict.class, decision, category, stopped, consented: bypass !== undefined }
+        return { class: verdict.class, decision, category, stopped, consented: bypass !== undefined, reason: verdict.reason }
       }
       // Nothing runs without a person unless the decision to let it is on record. Refusing or holding needs no such line.
       // Class A grants nothing critical, so its line is a record and not a condition: a failed write is logged and it runs
@@ -1069,7 +1085,7 @@ const layer = Layer.effect(
             ? MAIN_AGENT_UNAVAILABLE_TEXT
             : mainAgentDeclined(decided?.reason || "no reason given.")
           : undefined
-      return { class: verdict.class, decision, category, into, refusal, consented: bypass !== undefined }
+      return { class: verdict.class, decision, category, into, refusal, consented: bypass !== undefined, reason: verdict.reason }
     })
 
     /**
@@ -1372,8 +1388,8 @@ const layer = Layer.effect(
       })
       // 1.1.3: the gate's answer as the agent reads it. Under consent a refusal uses the consented texts, and anything that
       // would still wait is refused at once with `UNJUDGED_TEXT`: no DeferredError on the consented path.
-      const refusedBy = (gated: { category?: string; consented?: boolean }) =>
-        gated.consented ? refusedUnderConsent(gated.category) : refusedByMode(gated.category)
+      const refusedBy = (gated: { category?: string; consented?: boolean; reason?: string }) =>
+        gated.consented ? refusedUnderConsent(gated.category, gated.reason) : refusedByMode(gated.category, gated.reason)
       const heldOrRefused = Effect.fnUntraced(function* (gated: {
         category?: string
         into?: PermissionV1.ID

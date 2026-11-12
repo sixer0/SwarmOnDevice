@@ -31,7 +31,10 @@ import { withoutServerCredentials } from "@/util/server-credentials"
 import { Autonomy } from "@/permission/autonomy"
 import { Session } from "@/session/session"
 import { Archive } from "./archive"
-import { DELETE_COMPOUND_TEXT, SCRIPT_CHANGED_TEXT } from "@/permission/autonomy-texts"
+import { DELETE_COMPOUND_TEXT, SCRIPT_CHANGED_TEXT, checkpointFailedText } from "@/permission/autonomy-texts"
+import { AutonomyTable } from "@/permission/autonomy-table"
+import { ActionCheckpoint } from "./checkpoint"
+import { execFile } from "node:child_process"
 import { ScriptScreen } from "@/permission/script-screen"
 import { DeletionWords, type Deletion } from "./deletion"
 import { BypassLists } from "@/permission/bypass-lists"
@@ -987,6 +990,70 @@ const WITHHELD_TRANSFORMED = (name: string) =>
 const WITHHELD_WHOLE = (name: string) =>
   `[hidden:${name}]\nThis file holds credentials, so its contents are kept from you. Programs you run can still use it.`
 
+/** Git's output in `cwd`, or undefined when it fails. No shell; the words are git's own. */
+function gitIn(cwd: string, args: string[]) {
+  return new Promise<string | undefined>((resolve) =>
+    execFile("git", args, { cwd, maxBuffer: 64 * 1024 * 1024, env: { ...process.env, GIT_OPTIONAL_LOCKS: "0" } }, (error, stdout) =>
+      resolve(error ? undefined : stdout),
+    ),
+  )
+}
+
+/**
+ * 1.2.6 row 37b (P-01b): `git clean` with the session's `.swarm` folder left out, when it lies under where the command
+ * cleans, so a clean never removes the checkpoint made for it (or the archive). Only for a `git clean` the autonomy table
+ * read word by word (`checkpointPlan`), whose words are plain. Undefined: nothing to leave out.
+ */
+function cleanSparing(words: readonly string[], cwd: string, directory: string) {
+  const swarm = path.join(directory, ".swarm")
+  const rel = path.relative(cwd, swarm)
+  if (rel.startsWith("..") || path.isAbsolute(rel)) return undefined
+  const separator = words.indexOf("--")
+  const flags = separator < 0 ? words.filter((word) => word.startsWith("-")) : words.slice(0, separator)
+  const named = separator < 0 ? words.filter((word) => !word.startsWith("-")) : words.slice(separator + 1)
+  return [...flags, "--", ...(named.length > 0 ? named : ["."]), `:(exclude)${rel.split(path.sep).join("/")}`]
+}
+
+/**
+ * 1.2.6 row 37b: what an I-G checkpoint holds besides the ref names the table read, worked out right before the command
+ * runs: the tracked files a hard reset discards, the files a `git clean` removes (its own dry run, with the same words),
+ * the branch HEAD names and every local branch and tag of a history rewrite. Undefined when git could not say.
+ */
+async function gitCheckpoint(plan: Extract<AutonomyTable.CheckpointPlan, { kind: "git" }>, cwd: string, directory: string) {
+  const targets: string[] = [...plan.targets]
+  const refs: string[] = [...plan.refs]
+  if (plan.changed) {
+    const out = await gitIn(cwd, ["diff", "--name-only", "--relative", "-z", "HEAD"])
+    if (out === undefined) return undefined
+    targets.push(...out.split("\0").filter(Boolean).map((file) => path.resolve(cwd, file)))
+  }
+  if (plan.clean) {
+    const words = cleanSparing(plan.clean, cwd, directory) ?? [...plan.clean]
+    const out = await gitIn(cwd, ["clean", "-n", ...words])
+    if (out === undefined) return undefined
+    for (const line of out.split("\n")) {
+      const found = /^Would remove (.+)$/.exec(line)
+      if (found) targets.push(path.resolve(cwd, found[1]!.replace(/\/$/, "")))
+    }
+  }
+  if (plan.branch) {
+    const head = (await gitIn(cwd, ["symbolic-ref", "-q", "HEAD"]))?.trim()
+    if (head) refs.push(head)
+  }
+  if (plan.all) {
+    const out = await gitIn(cwd, ["for-each-ref", "--format=%(refname)", "refs/heads", "refs/tags"])
+    if (out === undefined) return undefined
+    refs.push(...out.split("\n").filter(Boolean))
+  }
+  return { targets: [...new Set(targets)], refs: [...new Set(refs)] }
+}
+
+/**
+ * 1.2.6 row 37b: where the shell makes its checkpoints. A test seam (CK-9 cap, CK-12 and T-INV-4 failure); production
+ * always calls `ActionCheckpoint.create`. A create that throws counts as a checkpoint that could not be made.
+ */
+export const checkpointSeam: { create: typeof ActionCheckpoint.create } = { create: (input) => ActionCheckpoint.create(input) }
+
 // Every call asks, unless a rule a person wrote says otherwise. How the text parses never lowers that: the parse only names
 // the patterns, labels the prompt and withholds "Allow always", which is offered for one plain command and answers only that.
 const ask = Effect.fn("ShellTool.ask")(function* (
@@ -998,6 +1065,7 @@ const ask = Effect.fn("ShellTool.ask")(function* (
     scripts?: Map<string, string | undefined>
     archive?: boolean
     archiveTargets?: string[]
+    checkpointTargets?: readonly string[]
     steps?: ShellReading
   },
   always: string | undefined,
@@ -1049,6 +1117,9 @@ const ask = Effect.fn("ShellTool.ask")(function* (
       // C97 F2, set in autonomous mode only: the files a plain `cp` or `mv` would replace, which this shell moves to the
       // archive right before it runs. The table lets a replacing copy or move through as `archived` only with them listed.
       ...(input.archiveTargets && input.archiveTargets.length > 0 ? { archiveTargets: input.archiveTargets } : {}),
+      // 1.2.6 row 37b (N-143), set in autonomous mode only: what this shell saves in a checkpoint right before the command
+      // runs (`checkpointPlan`). The table lets an action nothing could undo through as `checkpointed` only with them listed.
+      ...(input.checkpointTargets ? { checkpointTargets: [...input.checkpointTargets] } : {}),
       // Row 274, set in autonomous mode only: the commands this text runs, read from its parse (`decompose`). The table
       // judges them one by one only where the whole text would otherwise be held as not routine.
       ...(input.steps ? { steps: input.steps } : {}),
@@ -1406,6 +1477,70 @@ export const ShellTool = Tool.define(
       return { text: result.moved.length > 0 ? Archive.movedText(result.moved.length, result.id) : "" }
     })
 
+    /**
+     * 1.2.6 row 37b (P-01b, U6; 01b section 3.3 rule 3). With the mode on, an action nothing could undo runs only after a
+     * checkpoint of what it changes exists: the gate allowed it, `ActionCheckpoint.create` saves the targets (and refs) and
+     * writes the `checkpointed` audit line, and only then does the command run. A checkpoint that cannot be made stops the
+     * command with `CHECKPOINT_FAILED_TEXT` and its reason: nothing runs, nothing changes.
+     */
+    const checkpoint = Effect.fn("ShellTool.checkpoint")(function* (
+      plan: Exclude<AutonomyTable.CheckpointPlan, { kind: "not_files" }>,
+      command: string,
+      cwd: string,
+      ctx: Tool.Context,
+    ) {
+      const on = yield* modeOn(ctx)
+      if (!on) return
+      const requestID = ctx.callID || ctx.messageID
+      const stop = (reason: string | undefined) =>
+        Effect.gen(function* () {
+          yield* on.autonomy
+            .record(on.where.root, {
+              type: "outcome",
+              directory: on.where.directory,
+              requestID,
+              outcome: "not_run",
+              by: "system:checkpoint_failed",
+            })
+            .pipe(Effect.catch((error) => Effect.logError("could not record a failed checkpoint", { error: error.message })))
+          const text = checkpointFailedText(reason)
+          return {
+            stopped: {
+              title: command,
+              metadata: { output: preview(text), exit: 1 as number | null, truncated: false, outputPath: undefined as string | undefined },
+              output: text,
+            },
+          }
+        })
+      const found =
+        plan.kind === "git"
+          ? yield* Effect.promise(() => gitCheckpoint(plan, cwd, on.place.directory))
+          : { targets: [...plan.targets], refs: [] as string[] }
+      if (!found) return yield* stop("git")
+      const result = yield* Effect.promise(() =>
+        checkpointSeam
+          .create({
+            directory: on.place.directory,
+            cwd,
+            targets: found.targets,
+            refs: found.refs,
+            sessionID: ctx.sessionID,
+            requestID,
+            command,
+            record: Autonomy.checkpointRecorder(on.autonomy.record, on.where),
+          })
+          .catch((): ActionCheckpoint.CreateResult => ({ ok: false, reason: "failed", message: "" })),
+      )
+      if (!result.ok) return yield* stop(result.reason)
+      if (!result.recorded) yield* Effect.logError("could not record a checkpoint", { checkpoint: result.id })
+      const clean = plan.kind === "git" && plan.clean ? cleanSparing(plan.clean, cwd, on.place.directory) : undefined
+      return {
+        text: ActionCheckpoint.savedText(result.manifest.entries.length, result.id, result.manifest.refs?.length ?? 0),
+        // The clean the plan read, run with the session's `.swarm` left out (`cleanSparing`).
+        command: clean ? ["git", "clean", ...clean].map((word) => (/^[\w./@%+,:=-]+$/.test(word) ? word : `'${word}'`)).join(" ") : undefined,
+      }
+    })
+
     const shellEnv = Effect.fn("ShellTool.shellEnv")(function* (ctx: Tool.Context, cwd: string) {
       const extra = yield* plugin.trigger(
         "shell.env",
@@ -1658,6 +1793,21 @@ export const ShellTool = Tool.define(
                   const found = posix ? deletion(tree.rootNode) : undefined
                   const copy = on ? copyMove(tree.rootNode) : undefined
                   const archiveTargets = copy ? yield* Effect.promise(() => replacedBy(copy, cwd)) : undefined
+                  const steps = on ? decompose(tree.rootNode, cwd) : undefined
+                  // 1.2.6 row 37b: never both archived and checkpointed (01b section 3.3 rule 5). The folder's trust is the
+                  // gate's to judge; the shell only says what it would save.
+                  const plan =
+                    on && typeof found !== "object" && !(archiveTargets && archiveTargets.length > 0)
+                      ? AutonomyTable.checkpointPlan({
+                          command: params.command,
+                          steps,
+                          cwd,
+                          instance: instanceCtx,
+                          canUndo: ctx.trust?.canUndo ?? false,
+                          folder: "trusted",
+                        })
+                      : undefined
+                  const saving = plan && plan.kind !== "not_files" ? plan : undefined
                   yield* ask(
                     ctx,
                     scan,
@@ -1668,11 +1818,12 @@ export const ShellTool = Tool.define(
                       scripts,
                       archive: Boolean(on) && typeof found === "object",
                       archiveTargets,
-                      steps: on ? decompose(tree.rootNode, cwd) : undefined,
+                      checkpointTargets: saving?.targets,
+                      steps,
                     },
                     posix ? Reach.alwaysFor(params.command, cwd, instanceCtx) : undefined,
                   )
-                  return { ...scan, deletion: found, scripts, copy }
+                  return { ...scan, deletion: found, scripts, copy, saving }
                 }),
               )
               scanned.secretFiles.forEach(Secrets.learnFile)
@@ -1689,10 +1840,13 @@ export const ShellTool = Tool.define(
               }
               const kept = scanned.copy ? yield* archiveReplaced(scanned.copy, params.command, cwd, ctx) : undefined
               if (kept?.stopped) return kept.stopped
+              // 1.2.6 row 37b: the checkpoint exists before anything of the command runs, or the command does not run.
+              const saved = scanned.saving ? yield* checkpoint(scanned.saving, params.command, cwd, ctx) : undefined
+              if (saved && "stopped" in saved) return saved.stopped
               const result = yield* run(
                 {
                   shell,
-                  command: params.command,
+                  command: saved?.command ?? params.command,
                   cwd,
                   env,
                   timeout,
@@ -1701,7 +1855,8 @@ export const ShellTool = Tool.define(
                 },
                 ctx,
               )
-              return kept?.text ? { ...result, output: `${kept.text}\n${result.output}` } : result
+              const told = [kept?.text, saved?.text].filter(Boolean).join("\n")
+              return told ? { ...result, output: `${told}\n${result.output}` } : result
             }),
         }
       })

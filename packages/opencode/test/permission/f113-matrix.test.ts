@@ -34,6 +34,7 @@ import {
   PROTECTED_PATH_TEXT,
   SPEND_STOPPED_TEXT,
   UNJUDGED_TEXT,
+  checkpointFailedText,
   mainAgentDeclined,
   subagentStoppedMessage,
 } from "../../src/permission/autonomy-texts"
@@ -572,24 +573,26 @@ describe("1.1.3 matrix rows 24-39: destructive classes", () => {
         yield* refusedBoth(`row 33 ${command}`, bash(command), answered(IRREVERSIBLE_ARCHIVE_TEXT, "X", "irreversible", "Rd"))
     }),
   )
-  it.instance("row 34 SQL or migrate wipe, dropdb: archive redirect / Rd", () =>
+  // 1.2.6 row 37b (P-01b, INTENT per 01g 3.6): a database or a device is I-N, which no checkpoint of files can hold, so it
+  // is refused `checkpoint_failed` with its reason (section F). A migrate wipe run through a package runner stays.
+  it.instance("row 34 SQL or migrate wipe, dropdb: checkpoint_failed / F; a runner's migrate wipe: archive redirect / Rd", () =>
     Effect.gen(function* () {
-      for (const command of ["psql -c 'DROP TABLE users'", "dropdb app", "bunx prisma migrate reset --force"])
-        yield* refusedBoth(`row 34 ${command}`, bash(command), answered(IRREVERSIBLE_ARCHIVE_TEXT, "X", "irreversible", "Rd"))
+      for (const command of ["psql -c 'DROP TABLE users'", "dropdb app"])
+        yield* refusedBoth(`row 34 ${command}`, bash(command), answered(checkpointFailedText("not_files"), "X", "checkpoint_failed", "F"))
+      yield* refusedBoth(
+        "row 34 bunx prisma migrate reset --force",
+        bash("bunx prisma migrate reset --force"),
+        answered(IRREVERSIBLE_ARCHIVE_TEXT, "X", "irreversible", "Rd"),
+      )
     }),
   )
-  it.instance("row 35 disk or host wipe: archive redirect / Rd", () =>
+  // 1.2.6 row 37b (INTENT per 01g 3.6): a disk wipe is I-N (`checkpoint_failed`, section F); host control and a file
+  // shred with Undo on keep the remote-or-host text.
+  it.instance("row 35 disk wipe: checkpoint_failed / F; host control and shred: archive redirect / Rd", () =>
     Effect.gen(function* () {
-      for (const command of [
-        "dd if=/dev/zero of=x.img",
-        "mkfs.ext4 /dev/disk9",
-        "shred src/a.ts",
-        "wipefs -a /dev/disk9",
-        "diskutil eraseDisk APFS X disk9",
-        "shutdown -h now",
-        "reboot",
-        "halt",
-      ])
+      for (const command of ["dd if=/dev/zero of=x.img", "mkfs.ext4 /dev/disk9", "wipefs -a /dev/disk9", "diskutil eraseDisk APFS X disk9"])
+        yield* refusedBoth(`row 35 ${command}`, bash(command), answered(checkpointFailedText("not_files"), "X", "checkpoint_failed", "F"))
+      for (const command of ["shred src/a.ts", "shutdown -h now", "reboot", "halt"])
         yield* refusedBoth(`row 35 ${command}`, bash(command), answered(IRREVERSIBLE_ARCHIVE_TEXT, "X", "irreversible", "Rd"))
     }),
   )
