@@ -7,13 +7,25 @@ import { Icon as LegacyIcon } from "@opencode-ai/ui/icon"
 import { IconButtonV2 } from "@opencode-ai/ui/v2/icon-button-v2"
 import { Switch } from "@opencode-ai/ui/v2/switch-v2"
 import { TextInputV2 } from "@opencode-ai/ui/v2/text-input-v2"
-import type { MemoryItem, MemoryRefusal, MemoryResult } from "@opencode-ai/sdk/v2/client"
+import type { MemoryItem, MemoryRef, MemoryRefusal, MemoryResult } from "@opencode-ai/sdk/v2/client"
 import { createEffect, createResource, createSignal, For, onCleanup, Show } from "solid-js"
 import { useLanguage } from "@/context/language"
 import { useSDK } from "@/context/sdk"
 import { showToast } from "@/utils/toast"
 
 const MAX_RETRIES = 3
+
+/**
+ * The server's note limits (opencode memory.ts MAX_TEXT, MAX_BODY, MAX_REFS). Neither the schema nor the SDK
+ * exports them, so this is the app's one copy; the refusal texts take their number from here.
+ */
+const MEMORY_LIMITS = { text: 2000, body: 10000, refs: 10 } as const
+
+/** A reference as the user reads it: `path:line`, `path`, `symbol` or `symbol (path)`. Never the file's content. */
+function memoryRefLabel(ref: MemoryRef) {
+  if ("symbol" in ref) return ref.path ? `${ref.symbol} (${ref.path})` : ref.symbol
+  return ref.line ? `${ref.path}:${ref.line}` : ref.path
+}
 
 function createProjectMemory() {
   const sdk = useSDK()
@@ -86,10 +98,10 @@ export function DialogProjectMemory() {
   const refused: Record<MemoryRefusal, string> = {
     empty: "",
     secret: language.t("memory.refused.secret"),
-    long: language.t("memory.refused.long"),
+    long: language.t("memory.refused.long", { max: MEMORY_LIMITS.text }),
     full: language.t("memory.refused.full"),
-    body_long: language.t("memory.refused.bodyLong"),
-    too_many_refs: language.t("memory.refused.tooManyRefs"),
+    body_long: language.t("memory.refused.bodyLong", { max: MEMORY_LIMITS.body }),
+    too_many_refs: language.t("memory.refused.tooManyRefs", { max: MEMORY_LIMITS.refs }),
   }
 
   /** Runs a change and reports why it did not take, in place. Returns whether it did. */
@@ -219,6 +231,11 @@ function MemoryRow(props: {
     if (text.trim() === props.item.text) return setEditing(false)
     if (await props.onText(text)) setEditing(false)
   }
+  const hook = () => (
+    <For each={props.item.text.split("`")}>
+      {(piece, index) => (index() % 2 ? <code class="font-mono text-[12px]">{piece}</code> : piece)}
+    </For>
+  )
   return (
     <li
       data-memory-item={props.item.id}
@@ -228,11 +245,31 @@ function MemoryRow(props: {
         <Show
           when={editing()}
           fallback={
-            <div class="break-words text-[13px] leading-5 text-v2-text-text-base">
-              <For each={props.item.text.split("`")}>
-                {(piece, index) => (index() % 2 ? <code class="font-mono text-[12px]">{piece}</code> : piece)}
-              </For>
-            </div>
+            <Show
+              when={props.item.body || props.item.refs?.length}
+              fallback={<div class="break-words text-[13px] leading-5 text-v2-text-text-base">{hook()}</div>}
+            >
+              {/* Body and refs are what a model may receive on recall: shown read-only, collapsed under the hook. */}
+              <details class="min-w-0 text-[13px] leading-5 text-v2-text-text-base">
+                <summary class="cursor-pointer break-words">{hook()}</summary>
+                <div class="mt-1 flex flex-col gap-1 text-[12px] leading-[18px] text-v2-text-text-faint">
+                  <Show when={props.item.body}>
+                    {(body) => (
+                      <p data-memory-body class="whitespace-pre-wrap break-words">
+                        {body()}
+                      </p>
+                    )}
+                  </Show>
+                  <For each={props.item.refs ?? []}>
+                    {(ref) => (
+                      <code data-memory-ref class="break-all font-mono">
+                        {memoryRefLabel(ref)}
+                      </code>
+                    )}
+                  </For>
+                </div>
+              </details>
+            </Show>
           }
         >
           <TextInputV2
