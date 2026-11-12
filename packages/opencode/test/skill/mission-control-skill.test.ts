@@ -178,31 +178,36 @@ describe("mission-control built-in skill", () => {
     expect(TEXT).toContain('| researcher | inherit, reason "runs on the session model" |')
   })
 
+  // 1.2.6 row 100 (G-03, INTENT): every call after create is a one-line `tool {json}` example, autonomous sits at the top
+  // level (MC-02), and the row examples include the checkpoint/messages and the per-patch decision (MC-03) shapes.
   test("the decision request, autonomous decision and row patch examples validate", async () => {
     const { validate, schemas } = await studio()
-    const examples = jsonExamples() as S[]
-    const request = examples.find((e) => e.request)!
+    const inline = inlineExamples()
+    const examples = inline.map((i) => i.args)
+    const request = inline.find((i) => i.tool === "studio_mission_request_decision")!.args
     expect(topLevel(schemas.MISSION_TOOL_SCHEMAS.studio_mission_request_decision, request)).toEqual({ unknown: [], missing: [] })
     expect(() => validate.assertDecisionRequest(request.request)).not.toThrow()
 
-    const decision = examples.find((e) => e.decision && typeof e.decision === "object")!
+    const decision = inline.find((i) => i.tool === "studio_mission_record_decision" && i.args.autonomous === true)!.args
     expect(topLevel(schemas.MISSION_TOOL_SCHEMAS.studio_mission_record_decision, decision)).toEqual({ unknown: [], missing: [] })
-    expect(decision.decision).toMatchObject({ by: "controller", autonomous: true })
-    expect(validate.checkMissionSchema("Decision", decision.decision)).toEqual([])
+    expect(decision.decision).toMatchObject({ by: "controller" })
+    expect(validate.checkMissionSchema("Decision", { ...decision.decision, autonomous: true })).toEqual([])
 
     const rowSchema = schemas.MISSION_TOOL_SCHEMAS.studio_mission_update_row
     const patchSchema = rowSchema.properties.rows.items
-    const updates = examples.filter((e) => Array.isArray(e.rows) && !e.dryRun)
-    expect(updates.length).toBeGreaterThanOrEqual(4)
+    const updates = inline.filter((i) => i.tool === "studio_mission_update_row").map((i) => i.args)
+    expect(updates.length).toBeGreaterThanOrEqual(6)
     for (const u of updates) {
       expect(topLevel(rowSchema, u)).toEqual({ unknown: [], missing: [] })
       for (const p of u.rows) {
         expect(topLevel(patchSchema, p)).toEqual({ unknown: [], missing: [] })
         if (p.status) expect(patchSchema.properties.status.enum).toContain(p.status)
-        if (p.status === "blocked" || p.retire) expect(typeof p.note).toBe("string")
+        if (p.status === "blocked" || p.status === "dropped" || p.status === "done" || p.retire) expect(typeof p.note).toBe("string")
+        if (p.add) expect(validate.checkMissionSchema("Row", p.add)).toEqual([])
       }
     }
-    expect(updates.flatMap((u) => u.rows.map((p: S) => p.status)).filter(Boolean)).toEqual(["running", "done", "blocked"])
+    expect(updates.flatMap((u) => u.rows.map((p: S) => p.status)).filter(Boolean)).toEqual(["running", "done", "blocked", "dropped"])
+    expect(examples.some((e) => e.dryRun)).toBe(false)
   })
 
   test("the inline examples name valid arguments", async () => {
@@ -213,7 +218,7 @@ describe("mission-control built-in skill", () => {
     )
     for (const { tool, args } of inline) {
       expect(topLevel(schemas.MISSION_TOOL_SCHEMAS[tool], args)).toEqual({ unknown: [], missing: [] })
-      if (tool === "studio_mission_set_status") expect(["running", "done"]).toContain(args.to)
+      if (tool === "studio_mission_set_status") expect(["running", "paused", "done"]).toContain(args.to)
       if (tool === "studio_mission_approve") expect(args.decision).toMatch(/^[UC][1-9][0-9]{0,3}$/)
     }
   })
@@ -236,7 +241,8 @@ describe("mission-control built-in skill", () => {
     expect(flat).not.toContain("the person said this session runs autonomously")
     expect(flat).toMatch(/- AUTONOMOUS_MODE_OFF: [^\n]{40,}/)
     expect(flat).toContain("Ask the person in Mission Control with studio_mission_request_decision and wait.")
-    expect(flat).toContain('"by":"controller","autonomous":true')
+    // 1.2.6 row 100 (MC-02, INTENT): autonomous is shown at the top level of record_decision.
+    expect(flat).toContain('"by":"controller","date":"2026-11-08","text":"Self-approved (autonomous): plan of 3 rows."},"autonomous":true}')
     expect(flat).toContain("Leave out project.dir and session: Swarm fills both from your session. Never invent a session id.")
   })
 
@@ -244,7 +250,8 @@ describe("mission-control built-in skill", () => {
   test("it carries the row and Studio duties", () => {
     for (const duty of [
       "one row per plan step",
-      "the agent doing it (coder too) reports on its row with studio_mission_update_row",
+      // 1.2.6 row 100 (S-02, INTENT): a subagent's update_row asks the person, so the controller writes the row.
+      "the controller writes row status and messages from the agent's returned report",
       "Make documents in Studio",
       "A row is done only when its Studio verification gate passes",
       "the done note names the check that was run and its existing result file",
