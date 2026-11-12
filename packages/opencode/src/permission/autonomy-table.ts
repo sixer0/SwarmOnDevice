@@ -3,7 +3,7 @@
 // allow list because a list of what to refuse let through every way of spelling `git push` that was tried.
 import { execFileSync } from "node:child_process"
 import fs from "node:fs"
-import { devNull, homedir } from "node:os"
+import { devNull, homedir, networkInterfaces } from "node:os"
 import path from "node:path"
 import { Global } from "@opencode-ai/core/global"
 import { needsPerson } from "@opencode-ai/core/permission/needs-person"
@@ -17,6 +17,7 @@ import { BypassLists } from "./bypass-lists"
 import { BypassScreen } from "./bypass-screen"
 import { containsPath, type InstanceContext } from "../project/instance-context"
 import { LibraryRoot } from "../skill/library-root"
+import { SelfAddress } from "../server/self-address"
 import { GitGuard } from "../tool/git-guard"
 import { Reach } from "../tool/reach"
 import type { ShellPlace } from "../tool/shell"
@@ -791,6 +792,47 @@ function inAppStateSpelled(file: string, instance: InstanceContext) {
   const target = Reach.real(file) ?? file
   if (ownCheckout(target, instance)) return false
   return appStateRoots().some((root) => within(root, file) || within(root, target))
+}
+
+// Hosts that are this computer, whatever the listener's own name. `0` and `0.0.0.0` connect to it on macOS and Linux.
+const LOOPBACK_NAME = /^(?:localhost|ip6-localhost|ip6-loopback|[\w.-]+\.localhost|127(?:\.\d{1,3}){3}|0|0\.0\.0\.0|::|::1|::ffff:127(?:\.\d{1,3}){3}|0:0:0:0:0:0:0:1)$/i
+const WILDCARD = new Set(["0.0.0.0", "::", ""])
+
+/** Whether a host names this computer as Swarm's own listener at `listener` can be reached there. */
+function ownHost(host: string, listener: SelfAddress.Address) {
+  const name = host.replace(/^\[|\]$/g, "").toLowerCase()
+  const bound = listener.hostname.replace(/^\[|\]$/g, "").toLowerCase()
+  if (name === "" || LOOPBACK_NAME.test(name) || name === bound) return true
+  if (!WILDCARD.has(bound)) return false
+  // Bound on every interface: this computer's own addresses reach it too.
+  return Object.values(networkInterfaces()).some((list) => list?.some((item) => item.address.toLowerCase() === name))
+}
+
+/**
+ * 1.2.6 FX-14 (F-1, decision C24): a shell or fetch call that talks to Swarm's own running server, the listener this
+ * process opened (`SelfAddress`). With the password from `app-server.env` such a call could answer the agent's own
+ * prompts or change its mode, past every hold. Only that host and port: every other local port runs as C19c decided.
+ * Read from the call's words: `host:port` (a URL or not), `/dev/tcp/host/port`, `host port` for a loopback name, and
+ * httpie's bare `:port`.
+ */
+export function callsOwnServer(input: Input) {
+  const listeners = SelfAddress.list()
+  if (listeners.length === 0) return false
+  const texts = [input.metadata.command, input.metadata.url].filter((text): text is string => typeof text === "string")
+  if (texts.length === 0) return false
+  return listeners.some((listener) =>
+    texts.some((raw) => {
+      const text = raw.replace(/['"\\]/g, "")
+      const port = String(listener.port)
+      const at = String.raw`0*${port}(?!\d)`
+      // `host:port`, in a URL or bare; `[v6]:port`; `/dev/tcp/host/port` (bash's own sockets).
+      const named = new RegExp(String.raw`(\[[0-9A-Fa-f:.]*\]|[\w.-]+):${at}|/dev/(?:tcp|udp)/([^/\s]+)/${at}`, "g")
+      for (const match of text.matchAll(named)) if (ownHost(match[1] ?? match[2]!, listener)) return true
+      // httpie and xh read a bare `:port` as localhost; `nc 127.0.0.1 port` names the host and the port apart.
+      if (new RegExp(String.raw`(?:^|\s):${at}`).test(text)) return true
+      return new RegExp(String.raw`(?:^|\s)(?:localhost|127(?:\.\d{1,3}){3}|::1|\[::1\])\s+${at}`, "i").test(text)
+    }),
+  )
 }
 
 function editTargets(input: Input) {
@@ -2344,6 +2386,7 @@ export function classifyBase(input: Input, checkClass: CheckClass = CHECK_CLASS)
   const planFile = planEdit && isPlanFile(input)
   if (planEdit && !planFile) return refused("plan_mode")
   if (!planFile && writesAppState(input)) return refused("app_state")
+  if (callsOwnServer(input)) return refused("app_state")
 
   if (input.rule === "user_catch_all") return held("asks_every_time")
   if (planFile) return { class: "A", decidedBy: "gate" }
