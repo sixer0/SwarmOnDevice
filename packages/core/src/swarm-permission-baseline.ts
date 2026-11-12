@@ -107,8 +107,51 @@ export const RESEARCHER_AGENT = {
   },
 } as const satisfies { description: string; mode: "subagent"; permission: Record<string, Action> }
 
+// S-02 (1.2.6 row 56b, register N-100): the datum-studio tools the planner and
+// document-writer subagents may call without a prompt. A subagent cannot answer an
+// "ask" (nobody watches its session), so before this list a Studio call from them
+// stopped on an unanswerable prompt. Composed tool names are
+// sanitize("datum-studio") + "_" + tool (mcp/catalog.ts); the server name is spelled
+// out here because this module imports nothing (DATUM_STUDIO_MCP lives in opencode).
+// Deliberately absent:
+// - studio_mission_answer_decision: the person's answer only; agent.ts merges a final
+//   deny on it into every agent (ANSWER_DECISION_TOOL, row 198 / E-37).
+// - studio_asset_put: main agent only (decision C7; a subagent references a sha the
+//   main agent uploaded).
+// - every other write tool (document_create, slot_fill, render, write, edit,
+//   report_*, mission writes) keeps the baseline "ask".
+// studio_file_verify is kept per C9: its only file effect is the optional downloadDir,
+// which vendor mcp/safety.ts resolveAllowedPath confines to STUDIO_MCP_FILE_ROOTS, and
+// the host sets that to the one session root (mcp-host/start.ts:147, file-root.ts).
+// Binding the list to the built-in datum-studio server only (SEC-13) is row 56's.
+export const STUDIO_SUBAGENT_TOOLS = [
+  "datum-studio_studio_figure_preview",
+  "datum-studio_studio_figure_revise",
+  "datum-studio_studio_document_get",
+  "datum-studio_studio_document_status",
+  "datum-studio_studio_document_structure",
+  "datum-studio_studio_search",
+  "datum-studio_studio_contracts_query",
+  "datum-studio_studio_templates_list",
+  "datum-studio_studio_template_get",
+  "datum-studio_studio_registry",
+  "datum-studio_studio_file_verify",
+  "datum-studio_studio_mission_get",
+  "datum-studio_studio_mission_list",
+] as const satisfies readonly string[]
+
+// Only targeted allows, never a "*": agent.ts merges config agent.<name>.permission
+// after the specialist() denies and the baseline "*": "ask", so these keys win by
+// findLast while everything else keeps its existing decision.
+const studioSubagentPermission = Object.fromEntries(STUDIO_SUBAGENT_TOOLS.map((tool) => [tool, "allow"])) as Record<
+  (typeof STUDIO_SUBAGENT_TOOLS)[number],
+  "allow"
+>
+
 export const AGENT_BASELINE = {
   researcher: RESEARCHER_AGENT,
+  planner: { permission: studioSubagentPermission },
+  "document-writer": { permission: studioSubagentPermission },
 } as const
 
 // experimental.mcp_timeout: 01f §12 proposed shipping it once row 96 verifies the key
