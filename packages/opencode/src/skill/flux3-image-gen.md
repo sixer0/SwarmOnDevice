@@ -114,4 +114,4 @@ Never install, start, stop or reconfigure the FLUX service or its model. Do not 
 
 To register the service on another machine, propose the `flux3` entry for `tool-health.json` in your final message, after a healthy probe, and let the person add it. Leave its revive command out when you do not know how the service was started.
 
-In autonomous mode, local `curl` calls may be held or refused. If a call is refused, treat the service as not available and continue without images.
+In autonomous mode a call to a local FLUX address (127.0.0.1 or localhost) runs at once; it is not held. If a call is refused, treat the service as not available and continue without images.

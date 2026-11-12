@@ -68,6 +68,13 @@ describe("1.2.6 row 106 flux3-image-gen built-in skill text", () => {
     expect(TEXT).toContain("do not edit `~/.config/swarm/tool-health.json`")
   })
 
+  // Fix row FX-10 (gate 04 F2, decision C19c): under autonomous consent a loopback call runs at once; no hold.
+  test("F2/C19c: a local call runs under autonomous consent; a refused call means not available", () => {
+    expect(TEXT).not.toMatch(/may be held|are held/)
+    expect(TEXT).toContain("In autonomous mode a call to a local FLUX address (127.0.0.1 or localhost) runs at once; it is not held.")
+    expect(TEXT).toContain("If a call is refused, treat the service as not available and continue without images.")
+  })
+
   test("built-in shape: a top heading, no frontmatter, a reasonable size", () => {
     expect(TEXT.startsWith("# ")).toBe(true)
     expect(Buffer.byteLength(TEXT)).toBeLessThan(12_000)
