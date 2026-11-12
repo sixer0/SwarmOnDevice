@@ -99,7 +99,8 @@
   "rowFX7b": "2026-11-13: 1.2.6 row FX-7 item b (C19f). 3 vendor files re-patched (files[].patch_rowFX7b): engine/docx/figures/store.ts (ABORTING_CODES removed; isJobAbort option decides the whole-job abort), services/render/figures.ts (isJobAbort = job.aborted; dead bridge tried once per job; raster job error names the figure; aborted job rethrows its own RENDER_TIMEOUT once), engine/docx/assemble/index.ts (marker does not hide a good fallback entry). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/fx7_diffs/. counts by delta: bytes 9956227 -> 9958171; status unchanged. patch_rows += FX-7b",
   "rowFX10": "2026-11-13: 1.2.6 fix row FX-10 (review wave F guides; C19a, gate 04 F6/F8/F12). 3 vendor files re-patched (files[].patch_rowFX10, before = previous sha256; statuses unchanged): docs/STUDIO-AGENT-GUIDE.md, scripts/studio/mcp/resources.ts, scripts/studio/mcp/figure-tools.ts. Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/fx10_diffs/. counts by delta: bytes 9958171 -> 9958945; files/copied/patched/replaced/added unchanged. patch_rows += FX-10",
   "rowFX7c": "2026-11-13: 1.2.6 row FX-7 item c (M2 S3). 2 vendor files re-patched (files[].patch_rowFX7c): engine/diagram/elk/plan.ts (clampTierXs shared clamp; elkTierXs optional window), engine/diagram/layout-a/flow.ts (underPredecessors uses clampTierXs; ranked TB ELK branch passes the T-02 inset window). Layered/topology callers unchanged (full-width window). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/fx7_diffs/. counts by delta: bytes 9958945 -> 9960240; status unchanged. patch_rows += FX-7c",
-  "rowFX7d": "2026-11-13: 1.2.6 row FX-7 item d (M2 S6). 2 vendor files re-patched (files[].patch_rowFX7d): engine/lint/structure/context.ts (findingsAll bounded: LINT_FINDINGS_STORED_MAX 2000 entries, LINT_FINDING_DETAIL_MAX 300 chars, findingsTotal/findingsNotStored marker), scripts/studio/mcp/doc-tools.ts (findingsPage.truncated + text, lintFindingsTruncation; detail lintReport carries findingsAllCount instead of findingsAll). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/fx7_diffs/. counts by delta: bytes 9960240 -> 9962719; status unchanged. patch_rows += FX-7d"
+  "rowFX7d": "2026-11-13: 1.2.6 row FX-7 item d (M2 S6). 2 vendor files re-patched (files[].patch_rowFX7d): engine/lint/structure/context.ts (findingsAll bounded: LINT_FINDINGS_STORED_MAX 2000 entries, LINT_FINDING_DETAIL_MAX 300 chars, findingsTotal/findingsNotStored marker), scripts/studio/mcp/doc-tools.ts (findingsPage.truncated + text, lintFindingsTruncation; detail lintReport carries findingsAllCount instead of findingsAll). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/fx7_diffs/. counts by delta: bytes 9960240 -> 9962719; status unchanged. patch_rows += FX-7d",
+  "rowFX7f": "2026-11-13: 1.2.6 row FX-7 item f (M3 N1). 1 vendor file re-patched (files[].patch_rowFX7f): engine/chart/core/gallery.ts threshold-branch inline 0.4 named THRESHOLD_GUTTER_CAP_FRAC with the reason it differs from LABEL_GUTTER_CAP_FRAC (T-10 scoped to bar); output byte-identical (92 parity renders: only the pre-existing g04 row-63 delta). Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/fx7_diffs/. counts by delta: bytes 9962719 -> 9963136; status unchanged. patch_rows += FX-7f"
  },
  "counts": {
   "files": 608,
@@ -107,7 +108,7 @@
   "patched": 156,
   "replaced": 12,
   "added": 30,
-  "bytes": 9962719
+  "bytes": 9963136
  },
  "files": [
   {
@@ -1542,10 +1543,11 @@
   {
    "path": "src/lib/studio/engine/chart/core/gallery.ts",
    "status": "patched",
-   "bytes": 9725,
+   "bytes": 10142,
    "source_sha256": "125962ccf45794d5b8aad744a29c66a2c343290fda5ff3a7a420675b29728165",
-   "sha256": "277f28c7c2ce6c248e951f6aefc4de4198ec83febedd5f4c8a47cee99843f71a",
-   "patch_row66": {"id": "row66-t10-label-gutter", "row": "66", "decision": "1.2.6 patch T-10 label gutter cap 0.30 W (U5, R12; register N-030)", "summary": "bar family x00 clamp and gutterPlan capMm W*0.42 -> W*LABEL_GUTTER_CAP_FRAC (0.30); threshold W*0.4 unchanged (not in T-10 scope)", "diff_base": "sha256 before this row", "before_sha256": "125962ccf45794d5b8aad744a29c66a2c343290fda5ff3a7a420675b29728165", "after_sha256": "277f28c7c2ce6c248e951f6aefc4de4198ec83febedd5f4c8a47cee99843f71a", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/66_row66_diffs/src_lib_studio_engine_chart_core_gallery.ts.diff", "diff_sha256": "6c648e4e1015ab77b8c4f9247fd3f5dd6f34dd57a19226f516a318891859104f"}
+   "sha256": "a1498256aef2845989655edb4dc9ef7e8bf8fbabbba0689f75f6c2d8b6ef209c",
+   "patch_row66": {"id": "row66-t10-label-gutter", "row": "66", "decision": "1.2.6 patch T-10 label gutter cap 0.30 W (U5, R12; register N-030)", "summary": "bar family x00 clamp and gutterPlan capMm W*0.42 -> W*LABEL_GUTTER_CAP_FRAC (0.30); threshold W*0.4 unchanged (not in T-10 scope)", "diff_base": "sha256 before this row", "before_sha256": "125962ccf45794d5b8aad744a29c66a2c343290fda5ff3a7a420675b29728165", "after_sha256": "277f28c7c2ce6c248e951f6aefc4de4198ec83febedd5f4c8a47cee99843f71a", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/66_row66_diffs/src_lib_studio_engine_chart_core_gallery.ts.diff", "diff_sha256": "6c648e4e1015ab77b8c4f9247fd3f5dd6f34dd57a19226f516a318891859104f"},
+   "patch_rowFX7f": {"id": "fx-7f-n1-gutter-cap", "row": "FX-7f", "decision": "1.2.6 review wave F, M3 N1 (chart gutter cap named; behaviour unchanged)", "summary": "inline W * 0.4 of the threshold branch (2 places) -> unexported THRESHOLD_GUTTER_CAP_FRAC = 0.4 with a comment: T-10 (LABEL_GUTTER_CAP_FRAC 0.30) was scoped to the bar family, the threshold branch keeps its 1.2.5 cap. Byte-identical", "before_sha256": "277f28c7c2ce6c248e951f6aefc4de4198ec83febedd5f4c8a47cee99843f71a", "after_sha256": "a1498256aef2845989655edb4dc9ef7e8bf8fbabbba0689f75f6c2d8b6ef209c", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/fx7_diffs/FX-7f_src_lib_studio_engine_chart_core_gallery.ts.diff", "diff_sha256": "b26af56813508e3687d04116623298c592db570deb27235ff38a3344a52b83d5"}
   },
   {
    "path": "src/lib/studio/engine/chart/core/geometry.ts",
@@ -6187,6 +6189,7 @@
   "FX-7b",
   "FX-10",
   "FX-7c",
-  "FX-7d"
+  "FX-7d",
+  "FX-7f"
  ]
 }

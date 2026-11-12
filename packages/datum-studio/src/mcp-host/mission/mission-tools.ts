@@ -413,7 +413,13 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
           return { ...out, decisions: { count: ids.length, ids } }
         })
         const reg = "decisions" in r && r.decisions ? `; decisions ${r.decisions.count}: ${r.decisions.ids.join(", ") || "-"}` : ""
-        if (r.unchanged) return { text: `mission ${r.id}: already ${r.to}, unchanged (no event, no snapshot)${reg}${dryNote(a)}`, data: { ...r, dryRun: dry(a) } }
+        if (r.unchanged) {
+          // 1.2.6 FX-7 (M3 N2): a no-op move writes nothing, so a note / decision / supersededBy given with it is not
+          // recorded; say so instead of dropping it silently.
+          const dropped = (["note", "decision", "supersededBy"] as const).filter((k) => str(a, k))
+          const lost = dropped.length > 0 ? `; ${dropped.join(", ")} not recorded (use studio_mission_update_row note or studio_mission_record_decision)` : ""
+          return { text: `mission ${r.id}: already ${r.to}, unchanged (no event, no snapshot)${lost}${reg}${dryNote(a)}`, data: { ...r, dryRun: dry(a) } }
+        }
         return { text: `mission ${r.id}: ${r.from} -> ${r.to}${reg}${dryNote(a)}`, data: { ...r, dryRun: dry(a) } }
       },
     ),

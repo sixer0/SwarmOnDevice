@@ -24,6 +24,13 @@ import { axisDomain, decimalsFor, linearScale, niceDomain } from "./scale";
 import { SvgDoc, textWidthMm, midBaseline } from "./svg";
 import { measure } from "./textfit";
 
+/**
+ * Swarm 1.2.6 (FX-7, M3 N1): label gutter cap of the gallery THRESHOLD (horizontal bars against a limit) branch, as a
+ * fraction of W. Deliberately not LABEL_GUTTER_CAP_FRAC (0.30, T-10 row 66): T-10 was scoped to the bar family, so
+ * the threshold branch keeps its 1.2.5 cap of 0.4 W and its output stays byte-identical.
+ */
+const THRESHOLD_GUTTER_CAP_FRAC = 0.4;
+
 const LBL_PT = 6.4;
 const VAL_PT = 6.4;
 const TICK_PT = 6.0;
@@ -112,11 +119,11 @@ export function renderGallery(spec: StudioChartV1, canvas: ChartCanvas, tpl: Res
     const top = 4.4;
     const base = H - footBand - 4.6;
     const labelW = Math.max(...pts.map((p) => measure(p.label, LBL_PT)));
-    const x00 = Math.min(Math.max(labelW + 1.6, 6), W * 0.4);
+    const x00 = Math.min(Math.max(labelW + 1.6, 6), W * THRESHOLD_GUTTER_CAP_FRAC);
     const gp = gutterPlan(
       pts.map((p) => p.label),
       { pt: LBL_PT },
-      { currentMm: x00, capMm: W * 0.4, padMm: 1.6, pitchMm: (base - top) / pts.length },
+      { currentMm: x00, capMm: W * THRESHOLD_GUTTER_CAP_FRAC, padMm: 1.6, pitchMm: (base - top) / pts.length },
     );
     const x0 = gp ? Math.max(x00, gp.gutterMm) : x00;
     // Talang kanan: label nilai batang yang melewati batas duduk di luar ujung batang.
