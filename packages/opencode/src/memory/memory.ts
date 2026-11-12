@@ -35,11 +35,6 @@ export const MAX_REFS = 10
 export const CONSOLIDATE_AT = 1000
 /** Estimated tokens for the whole `<project_memory>` block (U18). Used by the prompt loader. */
 export const LOAD_BUDGET_TOKENS = 8000
-/**
- * @deprecated N-085 retired in 1.2.6: the store has no entry cap and nothing is evicted. Kept only so the `remember`
- * tool's `full` text (owned by row 41c) still compiles until that row removes it. Not used by the store.
- */
-export const MAX_ITEMS = 40
 
 const CONSOLIDATE_STEP = 100
 const VERSION = 2
@@ -67,8 +62,21 @@ export interface Interface {
   readonly update: (id: string, input: { text?: string; deviceOnly?: boolean }) => Effect.Effect<Result>
   readonly remove: (id: string) => Effect.Effect<boolean>
   readonly setEnabled: (enabled: boolean) => Effect.Effect<Info>
-  /** The text for this model's system prompt. Notes kept on this device are left out for a model that is not. */
-  readonly prompt: (model: Provider.Model) => Effect.Effect<string | undefined>
+  /**
+   * The text for this model's system prompt: the best-ranked notes within LOAD_BUDGET_TOKENS. Notes kept on this device
+   * are left out for a model that is not. With `focus`, the ranking follows the session's first message and folder,
+   * fixed at the session's first call, and the block stays byte-identical while the store is unchanged (prompt cache).
+   */
+  readonly prompt: (
+    model: Provider.Model,
+    focus?: { sessionID: string; query: string; directory: string },
+  ) => Effect.Effect<string | undefined>
+  /**
+   * A note id (hook, body, references checked now) or words to search for. The same eligibility as the prompt: nothing
+   * while memory is off, no device-only note for a model off this device, no note that looks like a secret. Writes
+   * nothing. Undefined when memory is off.
+   */
+  readonly recall: (input: { query: string; model?: Provider.Model }) => Effect.Effect<string | undefined>
   readonly onDevice: (model: Provider.Model) => Effect.Effect<boolean>
   /** Watches what the shell tool ran and turns "that failed to start, this worked" into a note. */
   readonly observeCommand: (input: {
@@ -90,6 +98,8 @@ export const layer = Layer.effect(
     const provider = yield* Provider.Service
     // Only the failures of runs in progress, so restarting forgets a half-finished observation and nothing else.
     const failures = new Map<string, Map<string, Failure>>()
+    // Per session: the focus fixed at its first prompt, and the last block with the store state it was built from.
+    const sessions = new Map<string, { focus: MemoryLearn.Focus; key?: string; block?: string }>()
 
     const file = Effect.fnUntraced(function* () {
       const ctx = yield* InstanceState.context
@@ -273,12 +283,49 @@ export const layer = Layer.effect(
         yield* publish(undefined)
         return info
       }),
-      prompt: Effect.fn("ProjectMemory.prompt")(function* (model) {
+      prompt: Effect.fn("ProjectMemory.prompt")(function* (model, focus) {
         if (disabled()) return undefined
         const store = yield* read(yield* file())
         if (!store.enabled) return undefined
         const local = yield* onDevice(model)
-        return MemoryLearn.promptBlock(store.items.filter((item) => local || !item.deviceOnly))
+        const items = store.items.filter((item) => local || !item.deviceOnly)
+        if (!focus) return MemoryLearn.promptBlock(items, { budget: LOAD_BUDGET_TOKENS })
+        if (sessions.size > 256) sessions.clear()
+        const base = yield* root()
+        const relative = path.relative(base, path.resolve(base, focus.directory))
+        const session = sessions.get(focus.sessionID) ?? {
+          focus: {
+            sessionID: focus.sessionID,
+            query: focus.query,
+            directory: relative.startsWith("..") || path.isAbsolute(relative) ? "" : relative,
+          },
+        }
+        // Recency moves with the clock, so the block is reused while the store is unchanged rather than re-ranked.
+        const key = createHash("sha256")
+          .update(JSON.stringify([local, items]))
+          .digest("hex")
+        if (session.key === key) return session.block
+        const block = MemoryLearn.promptBlock(items, { budget: LOAD_BUDGET_TOKENS, focus: session.focus })
+        sessions.set(focus.sessionID, { focus: session.focus, key, block })
+        return block
+      }),
+      recall: Effect.fn("ProjectMemory.recall")(function* (input) {
+        if (disabled()) return undefined
+        const store = yield* read(yield* file())
+        if (!store.enabled) return undefined
+        const local = input.model ? yield* onDevice(input.model) : false
+        const items = store.items.filter(
+          (item) =>
+            (local || !item.deviceOnly) &&
+            !MemoryLearn.looksSecret(item.text) &&
+            !(item.body && MemoryLearn.looksSecret(item.body)),
+        )
+        const query = input.query.trim()
+        const found = items.find((item) => item.id === query)
+        if (!found) return MemoryLearn.recallSearch(items, query)
+        const resolve = refResolver(yield* root())
+        const refs = yield* Effect.promise(() => Promise.all((found.refs ?? []).map(resolve)))
+        return MemoryLearn.recallNote(found, refs)
       }),
       onDevice,
       observeCommand: Effect.fn("ProjectMemory.observeCommand")(function* (input) {

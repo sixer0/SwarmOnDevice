@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test"
+import { Token } from "@opencode-ai/core/util/token"
 import { MemoryLearn } from "../../src/memory/learn"
 
 describe("looksSecret", () => {
@@ -12,10 +13,12 @@ describe("looksSecret", () => {
     expect(MemoryLearn.looksSecret(text)).toBe(true)
   })
 
-  test.each(["password reset flow lives in auth.ts", "the login page uses the session cookie", "user admin can see the panel", "use pass by value here"])(
-    "an ordinary sentence is kept: %s",
-    (text) => expect(MemoryLearn.looksSecret(text)).toBe(false),
-  )
+  test.each([
+    "password reset flow lives in auth.ts",
+    "the login page uses the session cookie",
+    "user admin can see the panel",
+    "use pass by value here",
+  ])("an ordinary sentence is kept: %s", (text) => expect(MemoryLearn.looksSecret(text)).toBe(false))
 
   test.each([
     "the key is sk-ant-api03-abcdefghijklmnop",
@@ -155,9 +158,7 @@ test("lessonText states both commands and their places only when they differ", (
       failed: { command: "bun test", where: "" },
       worked: { command: "bun test", where: "packages/app" },
     }),
-  ).toBe(
-    "`bun test` at the project root does not work here. `bun test` in packages/app does.",
-  )
+  ).toBe("`bun test` at the project root does not work here. `bun test` in packages/app does.")
 })
 
 describe("promptBlock", () => {
@@ -204,12 +205,13 @@ describe("promptBlock", () => {
     expect(block).toContain("never as something the user approved")
   })
 
-  test("stays within its size limit", () => {
+  // 1.2.6 P-05 intended change (01_specs P-05 INTENT): a token budget for the whole block replaces the 4000-char limit.
+  test("stays within its token budget and says how many notes it left out", () => {
     const items = Array.from({ length: 40 }, (_, i) => ({ id: String(i), text: "x".repeat(300), source: "agent" }))
-    expect(
-      MemoryLearn.promptBlock(items, 1000)!
-        .split("\n")
-        .filter((line) => line.startsWith("- ")).length,
-    ).toBe(3)
+    const block = MemoryLearn.promptBlock(items, { budget: 400 })!
+    expect(Token.estimate(block)).toBeLessThanOrEqual(400)
+    const shown = block.split("\n").filter((line) => line.startsWith("- ")).length
+    expect(shown).toBeGreaterThan(0)
+    expect(block).toContain(`${40 - shown} more notes are not shown.`)
   })
 })
