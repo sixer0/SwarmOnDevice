@@ -20,6 +20,7 @@ import { tok, untrustedBlock } from "../../../vendor/scripts/studio/mcp/tool-kit
 import { getLintDef } from "../../../vendor/src/lib/studio/registry/lint"
 import { lintRuleExplanation } from "../../../vendor/src/lib/studio/registry/lint-explain"
 import type { VerifyCheck, VerifyCheckId, VerifyFinding } from "./types.ts"
+import { overlapCoverageText } from "./overlap-clip.ts"
 
 export const FAIL_PER_CHECK = 4
 export const ENTRIES_PER_OUTPUT = 12
@@ -127,10 +128,10 @@ function findingEntry(c: CheckLike, f: VerifyFinding): ClientCheckEntry {
 }
 
 /** The parts of a check this module reads (a fresh VerifyCheck or a stored refusal check). */
-export type CheckLike = Pick<VerifyCheck, "id" | "status" | "reason" | "findings"> & { truncated?: number }
+export type CheckLike = Pick<VerifyCheck, "id" | "status" | "reason" | "findings"> & { truncated?: number; coverage?: unknown }
 
 /** Entries for one output's checks; `more` = FAIL findings not listed (cap), counted, never silent. */
-export function clientEntries(checks: readonly CheckLike[]): { entries: ClientCheckEntry[]; more: number } {
+export function clientEntries(checks: readonly CheckLike[]): { entries: ClientCheckEntry[]; more: number; coverage: string | null } {
   const unknown: ClientCheckEntry[] = []
   const failing: ClientCheckEntry[] = []
   let more = 0
@@ -154,7 +155,9 @@ export function clientEntries(checks: readonly CheckLike[]): { entries: ClientCh
   more += failing.length - keep.length
   const order = new Map(failing.map((e, i) => [e, i]))
   keep.sort((a, b) => order.get(a)! - order.get(b)!)
-  return { entries: [...keep, ...unknown], more }
+  // 1.2.6 INT-1 (row 30, T-13 / N-032): the OVERLAP_CLIP coverage text ("diukur m/n halaman") of this output, if any.
+  const overlap = checks.find((c) => c.id === "OVERLAP_CLIP")
+  return { entries: [...keep, ...unknown], more, coverage: overlap ? overlapCoverageText(overlap) : null }
 }
 
 export interface ClientOutputChecks {
@@ -162,6 +165,8 @@ export interface ClientOutputChecks {
   outputId: string | null
   entries: ClientCheckEntry[]
   more: number
+  /** 1.2.6 INT-1: OVERLAP_CLIP coverage text (overlapCoverageText), printed on the output's head line. */
+  coverage?: string | null
 }
 
 /**
@@ -176,7 +181,7 @@ export function clientFindingsBlock(outputs: readonly ClientOutputChecks[], attr
   const explained = new Set<string>()
   for (const o of outputs) {
     if (o.entries.length === 0) continue
-    const head = `${safeWords(o.format)} ${o.outputId === null ? "-" : tok(o.outputId, "?")}: ${o.entries.length} check entr${o.entries.length === 1 ? "y" : "ies"}${o.more > 0 ? ` (+${o.more} more findings in structuredContent)` : ""}`
+    const head = `${safeWords(o.format)} ${o.outputId === null ? "-" : tok(o.outputId, "?")}: ${o.entries.length} check entr${o.entries.length === 1 ? "y" : "ies"}${o.more > 0 ? ` (+${o.more} more findings in structuredContent)` : ""}${o.coverage ? `; OVERLAP_CLIP ${o.coverage}` : ""}`
     if (notShown > 0 || size + printedSize(head) > CLIENT_FINDINGS_BLOCK_MAX) {
       notShown += o.entries.length
       continue
@@ -229,10 +234,10 @@ export function outputGateFindings(details: Record<string, unknown>): { details:
       ...d,
       outputs: outs.map((o) => {
         if (!Array.isArray(o.checks)) return o
-        const { entries, more } = clientEntries(o.checks as CheckLike[])
+        const { entries, more, coverage } = clientEntries(o.checks as CheckLike[])
         // Row 210 (L-2): docKey and format are safe tokens or "?" (outputId too, in clientFindingsBlock).
-        blocks.push({ format: `${typeof d.docKey === "string" ? tok(d.docKey, "?") : "-"} ${typeof o.format === "string" ? tok(o.format, "?") : "-"}`, outputId: typeof o.outputId === "string" ? o.outputId : null, entries, more })
-        return { ...o, checks: entries, ...(more > 0 ? { more } : {}) }
+        blocks.push({ format: `${typeof d.docKey === "string" ? tok(d.docKey, "?") : "-"} ${typeof o.format === "string" ? tok(o.format, "?") : "-"}`, outputId: typeof o.outputId === "string" ? o.outputId : null, entries, more, coverage })
+        return { ...o, checks: entries, ...(more > 0 ? { more } : {}), ...(coverage ? { coverage } : {}) }
       }),
     }
   })

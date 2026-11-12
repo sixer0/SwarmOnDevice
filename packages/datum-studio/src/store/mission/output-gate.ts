@@ -48,10 +48,20 @@ export interface OutputGateCheck {
   reason: string | null
   findings: Array<{ code: string; page: number | null; address: string | null; label: string | null; detail: string; amount?: number }>
   truncated: number
+  /** 1.2.6 INT-1: OVERLAP_CLIP page coverage of the stored check (N-032), kept only when well-formed. */
+  coverage?: { measuredPages: number; totalPages: number }
 }
 
 /** Findings kept per check in a refusal (the rest is counted in `truncated`). */
 export const OUTPUT_GATE_FINDINGS_MAX = 8
+
+/** 1.2.6 INT-1: a stored OVERLAP_CLIP coverage {measuredPages, totalPages} (integers, 0 <= m <= n), else nothing. */
+function coverageOf(v: unknown): { coverage?: { measuredPages: number; totalPages: number } } {
+  if (!v || typeof v !== "object") return {}
+  const { measuredPages: m, totalPages: n } = v as Record<string, unknown>
+  const ok = (x: unknown): x is number => typeof x === "number" && Number.isInteger(x) && x >= 0
+  return ok(m) && ok(n) && m <= n ? { coverage: { measuredPages: m, totalPages: n } } : {}
+}
 
 /** The FAIL / UNKNOWN checks of a stored report (JSON text); [] when the report cannot be read. */
 export function notPassingChecks(report: unknown): OutputGateCheck[] {
@@ -77,6 +87,7 @@ export function notPassingChecks(report: unknown): OutputGateCheck[] {
       reason: typeof k.reason === "string" ? k.reason : null,
       findings: all.slice(0, OUTPUT_GATE_FINDINGS_MAX),
       truncated: Math.max(0, all.length - OUTPUT_GATE_FINDINGS_MAX) + (typeof k.truncated === "number" ? k.truncated : 0),
+      ...coverageOf(k.coverage),
     })
   }
   return out
