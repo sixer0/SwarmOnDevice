@@ -260,6 +260,17 @@ function preview(text: string) {
   return "...\n\n" + text.slice(-MAX_METADATA_LENGTH)
 }
 
+/** 1.2.6 FX-1 (gate M1 S7): the one result for a command the shell stopped before it ran (exit 1, `text` as output). */
+function stoppedResult(command: string, text: string) {
+  return {
+    stopped: {
+      title: command,
+      metadata: { output: preview(text), exit: 1 as number | null, truncated: false, outputPath: undefined as string | undefined },
+      output: text,
+    },
+  }
+}
+
 function tail(text: string, maxLines: number, maxBytes: number) {
   const lines = text.split("\n")
   if (lines.length <= maxLines && Buffer.byteLength(text, "utf-8") <= maxBytes) {
@@ -1454,23 +1465,9 @@ export const ShellTool = Tool.define(
     ) {
       const on = yield* modeOn(ctx)
       if (!on) return
-      const stopped = (text: string) => ({
-        stopped: {
-          title: command,
-          metadata: { output: preview(text), exit: 1 as number | null, truncated: false, outputPath: undefined as string | undefined },
-          output: text,
-        },
-      })
+      const stopped = (text: string) => stoppedResult(command, text)
       const notRun = Effect.fn("ShellTool.copyNotRun")(function* (reason: string | undefined) {
-        yield* on.autonomy
-          .record(on.where.root, {
-            type: "outcome",
-            directory: on.where.directory,
-            requestID: ctx.callID || ctx.messageID,
-            outcome: "not_run",
-            by: "system:checkpoint_failed",
-          })
-          .pipe(Effect.catch((error) => Effect.logError("could not record a copy that was not run", { error: error.message })))
+        yield* Autonomy.recordCheckpointFailed(on, ctx.callID || ctx.messageID)
         return stopped(checkpointFailedText(reason))
       })
       // 1.2.6 P-02 rule 4 (race): the targets the gate judged must still be the ones the program writes. A name that became a
@@ -1532,23 +1529,8 @@ export const ShellTool = Tool.define(
       const requestID = ctx.callID || ctx.messageID
       const stop = (reason: string | undefined) =>
         Effect.gen(function* () {
-          yield* on.autonomy
-            .record(on.where.root, {
-              type: "outcome",
-              directory: on.where.directory,
-              requestID,
-              outcome: "not_run",
-              by: "system:checkpoint_failed",
-            })
-            .pipe(Effect.catch((error) => Effect.logError("could not record a failed checkpoint", { error: error.message })))
-          const text = checkpointFailedText(reason)
-          return {
-            stopped: {
-              title: command,
-              metadata: { output: preview(text), exit: 1 as number | null, truncated: false, outputPath: undefined as string | undefined },
-              output: text,
-            },
-          }
+          yield* Autonomy.recordCheckpointFailed(on, requestID)
+          return stoppedResult(command, checkpointFailedText(reason))
         })
       const found =
         plan.kind === "git"

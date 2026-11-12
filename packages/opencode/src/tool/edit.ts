@@ -102,15 +102,7 @@ export const checkpointBefore = Effect.fn("EditTool.checkpointBefore")(function*
     }),
   )
   if (!result.ok) {
-    yield* on.autonomy
-      .record(on.where.root, {
-        type: "outcome",
-        directory: on.where.directory,
-        requestID,
-        outcome: "not_run",
-        by: "system:checkpoint_failed",
-      })
-      .pipe(Effect.catch((error) => Effect.logError("could not record a failed checkpoint", { error: error.message })))
+    yield* Autonomy.recordCheckpointFailed(on, requestID)
     throw new Error(checkpointFailedText(result.reason))
   }
   if (!result.recorded) yield* Effect.logError("could not record a checkpoint", { checkpoint: result.id })

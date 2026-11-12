@@ -450,6 +450,25 @@ export const checkpointRecorder = (record: Interface["record"], where: Where) =>
   Effect.runPromise(record(where.root, { ...line, directory: where.directory }))
 
 /**
+ * 1.2.6 FX-1 (gate M1 S7): the one audit line for a call that did not run because its checkpoint could not be made
+ * (edit, write, apply_patch and the shell). The call is refused whether or not the line is written; a line that could not
+ * be written is logged, never thrown, as for every other line the gate writes.
+ */
+export const recordCheckpointFailed = (
+  on: { readonly where: Where; readonly autonomy: Pick<Interface, "record"> },
+  requestID: string,
+) =>
+  on.autonomy
+    .record(on.where.root, {
+      type: "outcome",
+      directory: on.where.directory,
+      requestID,
+      outcome: "not_run",
+      by: "system:checkpoint_failed",
+    })
+    .pipe(Effect.catch((error) => Effect.logError("could not record a failed checkpoint", { error: error.message })))
+
+/**
  * 1.2.6 row 37b: where the mode is on for this session's root, with its service, for a tool that saves a checkpoint before
  * it writes (edit, write). Undefined when the mode is off or the services are not there; nothing changes then.
  */
