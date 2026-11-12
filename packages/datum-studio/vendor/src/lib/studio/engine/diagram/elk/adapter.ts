@@ -28,10 +28,18 @@ import { FIGURE_BOUNDS } from "../../../contract/schema/figure-bounds";
 import { DiagramDefect, LATTICE_Y, Sheet, resolveDiagramGrid, type DiagramGrid } from "../core";
 import { baselineStepMm, latticeOf, nodeSize } from "../layout-a/geometry";
 import { LAYERED_TIER_GAP_BASELINES, tierKey, tierWidthMm } from "../layout-a/layered";
+import { FLOW_LR_CORRIDOR_UNITS, FLOW_RANK_GAP_BASELINES, flowDirectionOf, flowRanks, rankedFlowSizes, type FlowDirection } from "../layout-a/flow";
 import { elkPlanKey, type ElkPlan } from "./plan";
 
 /** Diagram families whose layout ELK may compute (both use `layoutLayered`; `stack` keeps its order as meaning). */
 export const ELK_FAMILIES: ReadonlySet<string> = new Set(["layered", "topology"]);
+
+/**
+ * Swarm 1.2.6 row 46 (T-11, register N-111): ELK direction per Studio direction. The key is a
+ * schema-validated enum value (`flowDirectionOf`), never agent text (C10 intent, SEC-23).
+ * layered/topology always pass "TB", so their option map is unchanged.
+ */
+export const ELK_DIRECTION: Readonly<Record<FlowDirection, string>> = Object.freeze({ TB: "DOWN", LR: "RIGHT" });
 
 /** Wall-clock budget of one ELK layout (C8 proposal: 10 s). */
 export const ELK_TIME_BUDGET_MS = 10_000;
@@ -67,10 +75,10 @@ function elk(): InstanceType<typeof ELK> {
 }
 
 /** Fixed Studio layout options (C10, C12). Numbers are mm; nothing comes from the spec. */
-function layoutOptions(gapMm: number, layerGapMm: number): Record<string, string> {
+function layoutOptions(gapMm: number, layerGapMm: number, direction: FlowDirection = "TB"): Record<string, string> {
   return {
     "elk.algorithm": "layered",
-    "elk.direction": "DOWN",
+    "elk.direction": ELK_DIRECTION[direction] ?? ELK_DIRECTION.TB,
     "elk.edgeRouting": "ORTHOGONAL",
     "elk.randomSeed": "1",
     // one component: every tier stays one ELK layer even when part of the graph is disconnected
@@ -93,9 +101,13 @@ export interface ElkPlanOptions {
   grid?: DiagramGrid;
 }
 
-/** Can ELK lay this spec out at all (family and C8 bounds)? Reason when not. */
+/**
+ * Can ELK lay this spec out at all (family and C8 bounds)? Reason when not. Row 46 (T-11): a ranked
+ * flow (`flow` with `direction` "TB"/"LR") is eligible beside ELK_FAMILIES; a flow without
+ * `direction` keeps the family refusal.
+ */
 export function elkRefusal(s: StudioDiagramV1): string | null {
-  if (!ELK_FAMILIES.has(String(s.family))) return `family '${String(s.family)}' is not laid out by ELK`;
+  if (!ELK_FAMILIES.has(String(s.family)) && !flowDirectionOf(s)) return `family '${String(s.family)}' is not laid out by ELK`;
   const n = (s.nodes ?? []).length;
   const e = (s.edges ?? []).length;
   if (n > FIGURE_BOUNDS.diagramNodes) return `${n} nodes > ${FIGURE_BOUNDS.diagramNodes} (capacity bound)`;
@@ -122,6 +134,8 @@ export function elkGraphFor(s: StudioDiagramV1, o: ElkPlanOptions = {}): ElkInpu
   const grid = resolveDiagramGrid(o.grid);
   const W = Number(s.width_mm);
   const lat = latticeOf(new Sheet(W, undefined, grid.latticeXMm));
+  const dir = flowDirectionOf(s);
+  if (dir) return elkGraphForRankedFlow(s, W, lat, dir);
   const gap = lat.x;
   const layerGap = baselineStepMm(s.family === "layered" ? LAYERED_TIER_GAP_BASELINES : 2, lat);
 
@@ -177,6 +191,56 @@ export function elkGraphFor(s: StudioDiagramV1, o: ElkPlanOptions = {}): ElkInpu
 }
 
 /**
+ * Row 46 (T-11, 01e §4.5): the ELK graph of a ranked flow. Layers = Studio ranks (`flowRanks`),
+ * sizes = the ranked layout's own sizes (`rankedFlowSizes`), initial position along the main axis =
+ * the rank offset (interactive layering keeps the ranks). TB: layers top-down, nodes `lx` apart,
+ * ranks FLOW_RANK_GAP_BASELINES apart. LR: layers left to right FLOW_LR_CORRIDOR_UNITS lx apart,
+ * nodes 2 baselines apart. Intra-rank edges are left out; a back edge is given reversed.
+ */
+function elkGraphForRankedFlow(s: StudioDiagramV1, W: number, lat: ReturnType<typeof latticeOf>, dir: FlowDirection): ElkInput {
+  const fr = flowRanks(s);
+  const { ranks, rankOf, widths, heights } = rankedFlowSizes(s, lat, W, dir, fr);
+  const tb = dir === "TB";
+  const gap = tb ? lat.x : baselineStepMm(2, lat);
+  const layerGap = tb ? baselineStepMm(FLOW_RANK_GAP_BASELINES, lat) : FLOW_LR_CORRIDOR_UNITS * lat.x;
+  const tierIndex = new Map<string, number>();
+  const gid = new Map<string, string>();
+  const back = new Map<string, DiagramNode>();
+  const children: ElkNode[] = [];
+  let main = 0;
+  ranks.forEach((group, r) => {
+    tierIndex.set(String(r), r);
+    let cross = 0;
+    let extent = 0;
+    for (const n of group) {
+      const id = `n${gid.size}`;
+      gid.set(n.id, id);
+      back.set(id, n);
+      const w = widths[r];
+      const h = heights.get(n.id)!;
+      children.push(tb ? { id, x: cross, y: main, width: w, height: h } : { id, x: main, y: cross, width: w, height: h });
+      cross += (tb ? w : h) + gap;
+      extent = Math.max(extent, tb ? h : w);
+    }
+    main += extent + layerGap; // initial main-axis position only orders the layers (interactive layering)
+  });
+  const edges: ElkExtendedEdge[] = [];
+  const meta: Array<{ edge: number; reversed: boolean }> = [];
+  (s.edges ?? []).forEach((e, i) => {
+    const a = gid.get(e.from);
+    const b = gid.get(e.to);
+    const ra = rankOf.get(e.from);
+    const rb = rankOf.get(e.to);
+    if (!a || !b || ra === undefined || rb === undefined || ra === rb) return; // intra-rank: Studio routes it
+    const reversed = ra > rb;
+    edges.push({ id: `e${edges.length}`, sources: [reversed ? b : a], targets: [reversed ? a : b] });
+    meta.push({ edge: i, reversed });
+  });
+  const graph: ElkNode = { id: "root", layoutOptions: layoutOptions(gap, layerGap, dir), children, edges };
+  return { graph, W, tiers: ranks, tierIndex, back, meta };
+}
+
+/**
  * Compute the ELK plan for a layered/topology spec on the sheet the build will use (same width
  * and lattice). Rejects with `ElkUnavailable` (never an unhandled rejection) when ELK cannot help.
  */
@@ -196,6 +260,8 @@ export async function elkLayoutPlan(s: StudioDiagramV1, o: ElkPlanOptions = {}):
   if (ms > ELK_TIME_BUDGET_MS) throw new ElkUnavailable(`layout took ${ms} ms > ${ELK_TIME_BUDGET_MS} ms`);
 
   const placed = out.children ?? [];
+  // Row 46 (T-11): LR (ranked flow) has its cross axis on y; the TB frame shift and route import do not apply.
+  const lr = flowDirectionOf(s) === "LR";
   let minX = Infinity;
   let maxX = -Infinity;
   for (const c of placed) {
@@ -203,38 +269,40 @@ export async function elkLayoutPlan(s: StudioDiagramV1, o: ElkPlanOptions = {}):
     maxX = Math.max(maxX, (c.x ?? 0) + (c.width ?? 0));
   }
   if (!Number.isFinite(minX)) throw new ElkUnavailable("ELK returned no nodes");
-  const shift = (W - (maxX - minX)) / 2 - minX; // ELK frame centred on the sheet, as the original centres tiers
+  const shift = lr ? 0 : (W - (maxX - minX)) / 2 - minX; // ELK frame centred on the sheet, as the original centres tiers
 
   const cx: Record<string, number> = {};
   const box: ElkPlan["box"] = {};
   for (const c of placed) {
     const n = back.get(c.id);
     if (!n) continue;
-    cx[n.id] = (c.x ?? 0) + (c.width ?? 0) / 2 + shift;
+    cx[n.id] = lr ? (c.y ?? 0) + (c.height ?? 0) / 2 : (c.x ?? 0) + (c.width ?? 0) / 2 + shift; // cross-axis centre
     box[n.id] = { x: (c.x ?? 0) + shift, y: c.y ?? 0, w: c.width ?? 0, h: c.height ?? 0 };
   }
-  // Layers = tiers (interactive layering keeps them); order inside each tier by ELK x.
+  // Layers = tiers / ranks (interactive layering keeps them); order inside each by ELK x (TB) or y (LR).
   const order: Record<string, string[]> = {};
   const layers: string[][] = [];
   for (const [t, i] of tierIndex) {
     const ids = tiers[i].filter((n) => box[n.id]).map((n) => n.id);
-    ids.sort((p, q) => box[p].x - box[q].x);
+    ids.sort((p, q) => (lr ? box[p].y - box[q].y : box[p].x - box[q].x));
     order[t] = ids;
     layers.push(ids);
   }
-  // Interactive layering must have kept each tier in one ELK row; otherwise the plan is not used.
+  // Interactive layering must have kept each tier in one ELK row (TB) / column (LR); otherwise the plan is not used.
   for (const ids of layers) {
-    const ys = new Set(ids.map((id) => box[id].y.toFixed(3)));
+    const ys = new Set(ids.map((id) => (lr ? box[id].x : box[id].y).toFixed(3)));
     if (ys.size > 1) throw new ElkUnavailable("ELK split a tier over two layers");
   }
   const sections: ElkPlan["sections"] = [];
-  (out.edges ?? []).forEach((e, k) => {
+  // Row 46 (T-11, 01e §4.5): ELK route import stays TB-only; an LR plan has no sections, so
+  // `elkRoutesOnSheet` (sections.length !== edges.length) leaves routing to Studio's router.
+  if (!lr) (out.edges ?? []).forEach((e, k) => {
     const sec = (e as ElkExtendedEdge).sections?.[0];
     if (!sec) return;
     const pts: Array<[number, number]> = [sec.startPoint, ...(sec.bendPoints ?? []), sec.endPoint].map((p) => [p.x + shift, p.y]);
     sections.push({ edge: meta[k].edge, reversed: meta[k].reversed, points: meta[k].reversed ? pts.reverse() : pts });
   });
-  return { key: elkPlanKey(s), widthMm: W, order, cx, box, sections, layers };
+  return { key: elkPlanKey(s), widthMm: W, order, cx, box, sections, layers, ...(flowDirectionOf(s) ? { direction: flowDirectionOf(s) } : {}) };
 }
 
 /** ELK frame width of a plan's widest layer (mm), for reports. */

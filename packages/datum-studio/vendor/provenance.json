@@ -66,15 +66,16 @@
   "row77": "2026-11-12: 1.2.6 row 77 (M-07, U5; register N-037, N-038). 1 vendor file re-patched (files[].patch_row77, before = previous sha256; status unchanged): scripts/studio/mcp/tools.ts (studio_file_verify line FILE_VERIFIED(sha256) <64 hex>). Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/77_row77_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9829783 -> 9830004 (tools.ts 80786 -> 81007, +221). patch_rows += 77",
   "row48": "2026-11-12: 1.2.6 row 48 (T-11 refusals; register N-110; 01e §3.2, §6.1). 1 vendor file re-patched (files[].patch_row48, before = previous sha256; status unchanged, added): contract/schema/v2/refusal-hints.ts (aliases dir/rankdir/rankDir/orientation/arah -> direction, direction leaves the alias map, layout stays family, NEW DIRECTION_ALIAS_CLAUSE in the alias hint). P1-direction itself landed in row 45; by-construction.ts unchanged by row 48. Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/48_row48_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9830004 + 565 = 9830569. patch_rows += 48",
   "row78": "2026-11-12: 1.2.6 row 78 (M-08, U5; register N-042, N-043). 1 vendor file re-patched (files[].patch_row78, before = previous sha256; status unchanged): scripts/studio/mcp/doc-tools.ts (default studio_document_status text: status line, FAIL per kode, per output the full sha256 and file name for up to STATUS_OUTPUTS_LISTED outputs, within DOCUMENT_STATUS_TEXT_MAX_BYTES; lint details and outputs over the cap behind detail=true markers). Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/78_row78_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9830569 + 4344 = 9834913. patch_rows += 78",
-  "row77b": "2026-11-12: 1.2.6 row 77b (M-07 remainder of row 77, U5; register N-037..N-040). 2 vendor files patched (files[].patch_row77b, before = previous sha256): scripts/studio/mcp/write-tools.ts (status copied -> patched; work-report render line FILE_VERIFIED(sha256)/FILE_UNVERIFIED(sha256)) and scripts/studio/mcp/write-client-run.ts (status unchanged; client-document render line FILE_VERIFIED(sha256)/FILE_UNVERIFIED(sha256)). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/77b_row77b_diffs/. counts by delta: copied 430 -> 429, patched 136 -> 137, files/replaced/added unchanged; bytes 9834913 + 17 = 9834930. patch_rows += 77b"
+  "row77b": "2026-11-12: 1.2.6 row 77b (M-07 remainder of row 77, U5; register N-037..N-040). 2 vendor files patched (files[].patch_row77b, before = previous sha256): scripts/studio/mcp/write-tools.ts (status copied -> patched; work-report render line FILE_VERIFIED(sha256)/FILE_UNVERIFIED(sha256)) and scripts/studio/mcp/write-client-run.ts (status unchanged; client-document render line FILE_VERIFIED(sha256)/FILE_UNVERIFIED(sha256)). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/77b_row77b_diffs/. counts by delta: copied 430 -> 429, patched 136 -> 137, files/replaced/added unchanged; bytes 9834913 + 17 = 9834930. patch_rows += 77b",
+  "row46": "2026-11-12: 1.2.6 row 46 (T-11 ranked flow layout engine; register N-109, N-111, N-112, N-161..N-164; 01e §4.1-§4.2, §4.5, §5, §6.5-6.8; C7). 4 vendor files (files[].patch_row46, before = previous sha256): engine/diagram/layout-a/flow.ts (copied -> patched: ranked flow TB/LR, ranks from edges, lattice capacity refusals), engine/diagram/build/capacity.ts (re-patched: flow texts name direction, ranked-flow measure), engine/diagram/elk/adapter.ts and elk/plan.ts (added, re-patched: ELK_DIRECTION, ranked-flow ELK graph/plan, ElkPlan.direction, elkPlanKey with direction). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/46_row46_diffs/. counts by delta: copied 429 -> 428, patched 137 -> 138; bytes 9834930 + 21736 = 9856666. patch_rows += 46"
  },
  "counts": {
   "files": 608,
-  "copied": 429,
-  "patched": 137,
+  "copied": 428,
+  "patched": 138,
   "replaced": 12,
   "added": 30,
-  "bytes": 9834930
+  "bytes": 9856666
  },
  "files": [
   {
@@ -2194,9 +2195,10 @@
   {
    "path": "src/lib/studio/engine/diagram/build/capacity.ts",
    "status": "patched",
-   "bytes": 12056,
+   "bytes": 13271,
    "source_sha256": "ce41b46ce7c7418c379af22f50302c18bb80decc6fea3663cf121e61eb539588",
-   "sha256": "2bd070b2f6910f7af37ea0c372a0e9a12d76fcd97ae7404f01d0fdeb5fb16773",
+   "sha256": "95ab601bb64dce64373f19a439dac2ba7b038ae5f70f1bc9e0e6d7ce2a3ce075",
+   "patch_row46": {"id": "row46-t11-ranked-flow", "row": "46", "decision": "1.2.6 patch T-11 ranked layout (U5, D4=A, C7 S17-1..S17-5; register N-109, N-111, N-112, N-161..N-164; 01e §4.1-§4.2, §4.5, §5, §6.5-6.8)", "summary": "capacityAction: flow text names direction (ranked: per-rank/width/direction; legacy: direction TB/LR or per_row); DATUM-33 for flow gains the direction alternative; overCapacityOf: ranked-flow DATUM-37 branch measures nodes per rank / ranks via flowRankOverload", "diff_base": "sha256 before this row", "before_sha256": "2bd070b2f6910f7af37ea0c372a0e9a12d76fcd97ae7404f01d0fdeb5fb16773", "after_sha256": "95ab601bb64dce64373f19a439dac2ba7b038ae5f70f1bc9e0e6d7ce2a3ce075", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/46_row46_diffs/src_lib_studio_engine_diagram_build_capacity.ts.diff", "diff_sha256": "b797aeabfefcce87988d1b23a96172893e637384e1d0cbf299779c43e48ea8c1"},
    "patch_row59": {"id": "row59-t02-graph-inset", "row": "59", "decision": "1.2.6 patch T-02 (U5, R21 4.R1; register N-016)", "summary": "graph max columns counted inside W - 2 x GRAPH_EDGE_INSET_MM (capacityAction, graphColumns); measureFromMessage reads the T-02 inset refusal ('isi <mm> mm > batas <mm> mm') as measured/limit in mm", "diff_base": "patch.after_sha256 (row 158)", "before_sha256": "b1f8ba10220ec25a8f88ad6719081d364dd8edf6fad4befe0811bf811a5cd1a3", "after_sha256": "2bd070b2f6910f7af37ea0c372a0e9a12d76fcd97ae7404f01d0fdeb5fb16773", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/59_row59_diffs/src_lib_studio_engine_diagram_build_capacity.ts.diff", "diff_sha256": "c7eac947bc4b96c45b9ffaa223286b8e708b00430f109fe101c68f832f0d26f8"},
    "patch": {
     "id": "row158-diagram-over-capacity",
@@ -2475,9 +2477,10 @@
   {
    "path": "src/lib/studio/engine/diagram/elk/adapter.ts",
    "status": "added",
-   "bytes": 11448,
+   "bytes": 15318,
    "source_sha256": null,
-   "sha256": "35678d1b14d4ed95db3fda8ddf092c6c66ecaf21f6be5c0fe0854537cf1cd8bb",
+   "sha256": "a080c35a0f38e33522f09b53b1647aa7cc18762b7099d0dd573d91a4bc773c98",
+   "patch_row46": {"id": "row46-t11-ranked-flow", "row": "46", "decision": "1.2.6 patch T-11 ranked layout (U5, D4=A, C7 S17-1..S17-5; register N-109, N-111, N-112, N-161..N-164; 01e §4.1-§4.2, §4.5, §5, §6.5-6.8)", "summary": "NEW ELK_DIRECTION {TB: DOWN, LR: RIGHT} (N-111) replaces the hard-coded elk.direction DOWN (layered/topology pass TB, option map unchanged); elkRefusal: ranked flow eligible, flow without direction keeps the family refusal; elkGraphFor: ranked flow layers = flowRanks, sizes = rankedFlowSizes, main-axis initial positions; elkLayoutPlan: LR cross axis y (order by y, cx = y centre, no frame shift, one column per layer), no sections for LR (route import TB-only), plan.direction for ranked flow", "diff_base": "sha256 before this row", "before_sha256": "35678d1b14d4ed95db3fda8ddf092c6c66ecaf21f6be5c0fe0854537cf1cd8bb", "after_sha256": "a080c35a0f38e33522f09b53b1647aa7cc18762b7099d0dd573d91a4bc773c98", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/46_row46_diffs/src_lib_studio_engine_diagram_elk_adapter.ts.diff", "diff_sha256": "d0061053d1284d569885c9922225d7180bc1536752a6a2332f3b3320b2cbc6b0"},
    "added_by": "162",
    "note": "NEW Swarm file of row 162 (U24 C; no clone original): ELK graph (generated ids n<k>/e<k>, fixed options, Studio sizes), elkLayoutPlan (C8 bounds before layout, 10 s budget, L4 guard: `self` hidden only around the first `new ELK()`, globalThis.onmessage checked), ElkUnavailable. Imports elkjs/lib/elk.bundled.js (EPL-2.0 OR GPL-3.0-or-later, shipped unmodified as its own file, C126). Copy: implementation/114_row162_diffs/engine__diagram__elk__adapter.ts.new"
   },
@@ -2495,9 +2498,10 @@
   {
    "path": "src/lib/studio/engine/diagram/elk/plan.ts",
    "status": "added",
-   "bytes": 4438,
+   "bytes": 5161,
    "source_sha256": null,
-   "sha256": "a2e87a1409288fee984e15f05f33be85368fa01be7bf41755676e03878069b75",
+   "sha256": "0c68f8d9052907c9e523bcb0e3d0d4cff545225763ce4b6d2a34381b67ccda45",
+   "patch_row46": {"id": "row46-t11-ranked-flow", "row": "46", "decision": "1.2.6 patch T-11 ranked layout (U5, D4=A, C7 S17-1..S17-5; register N-109, N-111, N-112, N-161..N-164; 01e §4.1-§4.2, §4.5, §5, §6.5-6.8)", "summary": "ElkPlan.direction?: TB | LR (N-164; absent = TB, cx documented as cross-axis centre); elkPlanKey adds direction when the spec has one (spec without direction keeps the 1.2.5 key)", "diff_base": "sha256 before this row", "before_sha256": "a2e87a1409288fee984e15f05f33be85368fa01be7bf41755676e03878069b75", "after_sha256": "0c68f8d9052907c9e523bcb0e3d0d4cff545225763ce4b6d2a34381b67ccda45", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/46_row46_diffs/src_lib_studio_engine_diagram_elk_plan.ts.diff", "diff_sha256": "fc2aac00919b6188c0d8556ac0242ab475b68c456749211064f117e5f2373fd2"},
    "added_by": "162",
    "note": "NEW Swarm file of row 162: ElkPlan type, withElkPlan / elkPlanFor (active plan for one synchronous build), elkTierOrder, elkTierXs. No ELK import. Copy: implementation/114_row162_diffs/engine__diagram__elk__plan.ts.new"
   },
@@ -2576,10 +2580,11 @@
   },
   {
    "path": "src/lib/studio/engine/diagram/layout-a/flow.ts",
-   "status": "copied",
-   "bytes": 3498,
+   "status": "patched",
+   "bytes": 19426,
    "source_sha256": "90afeff371687137694305bba1d5cd595f80fb06f3bc3a79211001203e021b1a",
-   "sha256": "90afeff371687137694305bba1d5cd595f80fb06f3bc3a79211001203e021b1a"
+   "sha256": "241e74568c19bb66ee9ed28ae506af204e78c86805c39c46a011a6a3734e7633",
+   "patch_row46": {"id": "row46-t11-ranked-flow", "row": "46", "decision": "1.2.6 patch T-11 ranked layout (U5, D4=A, C7 S17-1..S17-5; register N-109, N-111, N-112, N-161..N-164; 01e §4.1-§4.2, §4.5, §5, §6.5-6.8)", "summary": "direction present (flowDirectionOf: flow + TB/LR) -> NEW ranked flow layout (layoutRankedFlow); absent -> legacy list layout unchanged (byte-identical, row 45 A15 goldens). NEW exports FLOW_RANK_NODE_MIN_UNITS 2, FLOW_RANK_GAP_BASELINES 4, FLOW_LR_CORRIDOR_UNITS 2, FLOW_LR_MAX_PARALLEL 6, flowRanks (DFS back edges, longest path, mean-predecessor order), flowTbCap/flowTbMaxPerRank/flowLrMaxRanks (lattice capacity inside the T-02 inset), flowRankOverload, rankedFlowSizes (shared with the ELK adapter); over-capacity refused before placement as DiagramOverCapacity DATUM-37-lebar; sheet.edgeInset unit rank (row 59 hook); ELK plan order (TB also x) when a plan for this spec is active", "diff_base": "sha256 before this row", "before_sha256": "90afeff371687137694305bba1d5cd595f80fb06f3bc3a79211001203e021b1a", "after_sha256": "241e74568c19bb66ee9ed28ae506af204e78c86805c39c46a011a6a3734e7633", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/46_row46_diffs/src_lib_studio_engine_diagram_layout-a_flow.ts.diff", "diff_sha256": "5867439cd7b5b766d838f16a4654d38956bc38257249c2cf714ba7db2e0ec261"}
   },
   {
    "path": "src/lib/studio/engine/diagram/layout-a/geometry.ts",
@@ -6019,6 +6024,7 @@
   "27b",
   "48",
   "78",
-  "77b"
+  "77b",
+  "46"
  ]
 }

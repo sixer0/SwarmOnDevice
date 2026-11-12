@@ -18,6 +18,7 @@ import { StudioEngineError } from "../../../contract/errors";
 import type { StudioDiagramV1 } from "../../../contract";
 import { DiagramDefect, LATTICE_X } from "../core";
 import { GRAPH_EDGE_INSET_MM } from "../core/sheet";
+import { flowDirectionOf, flowRankOverload, flowRanks } from "../layout-a/flow";
 import { DiagramOverCapacity, type FigureOverCapacityDetails } from "../../figure-capacity";
 import { lintDiagramGeometry, type DiagramGeomLint } from "../fit/lint";
 import { withDiagramFit, type DiagramFitState } from "../fit/state";
@@ -40,7 +41,15 @@ export function isCapacityReject(e: unknown, s: StudioDiagramV1): boolean {
 export function capacityAction(s: StudioDiagramV1, checkId: string): string | null {
   const W = Number(s.width_mm) || 166;
   const fam = String(s.family);
-  if (checkId.startsWith("DATUM-33")) return "kurangi simpul/pesan per gambar atau pecah menjadi 2 diagram";
+  if (checkId.startsWith("DATUM-33")) {
+    // Swarm 1.2.6 row 46 (T-11, 01e §6.8): a flow too tall gains the direction alternative.
+    if (fam === "flow") {
+      const dir = flowDirectionOf(s);
+      const alt = dir === "TB" ? 'direction "LR" (peringkat kiri-kanan)' : dir === "LR" ? 'direction "TB"' : 'direction "TB" (cabang paralel berdampingan)';
+      return `kurangi simpul per gambar, pakai ${alt}, atau pecah menjadi 2 diagram`;
+    }
+    return "kurangi simpul/pesan per gambar atau pecah menjadi 2 diagram";
+  }
   if (!checkId.startsWith("DATUM-37")) return null;
   if (fam === "graph") {
     const cols = [...new Set((s.nodes ?? []).map((n) => Number((n.class as Record<string, unknown> | undefined)?.col ?? 0)))].sort((a, b) => a - b);
@@ -52,7 +61,12 @@ export function capacityAction(s: StudioDiagramV1, checkId: string): string | nu
   }
   if (fam === "swimlane") return `kurangi simpul per lajur, bagi lajur, atau pecah menjadi 2 diagram (lebar ${W} mm)`;
   if (fam === "sld") return `maks 3 cabang per tingkat pada ${W} mm; pecah rel atau bagi menjadi dua gambar`;
-  if (fam === "flow") return "persingkat label keputusan (maks ~40 karakter) atau pakai per_row";
+  // Swarm 1.2.6 row 46 (T-11): the flow text names `direction` (ranked flow) beside per_row.
+  if (fam === "flow") {
+    return flowDirectionOf(s)
+      ? `kurangi simpul per peringkat, pakai width_mm 166, ganti direction, atau pecah menjadi 2 diagram (lebar ${W} mm)`
+      : 'persingkat label keputusan (maks ~40 karakter), pakai direction "TB"/"LR" (menata menurut konektor) atau per_row';
+  }
   return `persingkat label atau pecah menjadi 2 diagram (lebar ${W} mm)`;
 }
 
@@ -121,6 +135,13 @@ export function overCapacityOf(e: unknown, s: StudioDiagramV1, note?: string): D
   if (checkId.startsWith("DATUM-37") && fam === "graph") {
     const g = graphColumns(s);
     if (g.span > g.maxCols) m = { quantity: "kolom graph", unit: "kolom", measured: g.span, limit: g.maxCols };
+  } else if (checkId.startsWith("DATUM-37") && flowDirectionOf(s)) {
+    // Swarm 1.2.6 row 46 (T-11, 01e §6.5-6.7): ranked flow measured in nodes per rank / ranks.
+    const o = flowRankOverload(flowDirectionOf(s)!, flowRanks(s).ranks, Number(s.width_mm) || 166, LATTICE_X);
+    if (o) {
+      m = { quantity: o.quantity, unit: o.unit, measured: o.measured, limit: o.limit };
+      suggestion = o.suggestion;
+    }
   } else if (checkId.startsWith("DATUM-37") && fam === "swimlane") {
     const l = swimlaneLoad(s);
     m = { quantity: "simpul per baris lajur", unit: "simpul", measured: l.count, limit: l.perRow };

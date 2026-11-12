@@ -35,11 +35,24 @@ export interface ElkPlan {
   layers: string[][];
   /** false = positions only (Studio's router routes); absent/true = ELK routes when the route seam asks. */
   routes?: boolean;
+  /**
+   * Swarm 1.2.6 row 46 (T-11, register N-164): layout direction ELK ran in. "TB" (= absent, every
+   * layered/topology plan) or "LR" (ranked flow `direction: "LR"`). Layers are the Studio tiers or
+   * the ranked-flow ranks; `order` is sorted by ELK x (TB) or ELK y (LR) and `cx` is the CROSS-axis
+   * centre (x for TB, y for LR). An LR plan carries no edge sections (ELK route import is TB-only).
+   */
+  direction?: "TB" | "LR";
 }
 
-/** Spec identity: the same plan never applies to another spec or width. */
+/**
+ * Spec identity: the same plan never applies to another spec or width. Row 46 (T-11): a spec with
+ * `direction` adds it, so a TB plan never applies to an LR copy of the spec (a spec without
+ * `direction` keeps the 1.2.5 key).
+ */
 export function elkPlanKey(s: StudioDiagramV1): string {
-  return JSON.stringify([String(s.id), Number(s.width_mm), String(s.family), (s.nodes ?? []).map((n) => String(n.id))]);
+  const base = [String(s.id), Number(s.width_mm), String(s.family), (s.nodes ?? []).map((n) => String(n.id))];
+  const dir = (s as { direction?: unknown }).direction;
+  return JSON.stringify(dir === undefined ? base : [...base, String(dir)]);
 }
 
 let active: ElkPlan | undefined;
