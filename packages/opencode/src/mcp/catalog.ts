@@ -7,6 +7,8 @@ import {
 } from "@modelcontextprotocol/sdk/types.js"
 import { dynamicTool, jsonSchema, type JSONSchema7, type Tool } from "ai"
 import { Effect } from "effect"
+import { isDeepStrictEqual } from "node:util"
+import { DATUM_STUDIO_MCP } from "./datum-studio"
 
 const DEFAULT_TIMEOUT = 30_000
 const MAX_LIST_PAGES = 1_000
@@ -264,6 +266,48 @@ export function fetch<T extends { name: string }>(
 export const sanitize = (value: string) => value.replace(/[^a-zA-Z0-9_-]/g, "_")
 
 export const toolName = (clientName: string, name: string) => sanitize(clientName) + "_" + sanitize(name)
+
+/**
+ * SEC-13 (1.2.6 row 56a): whether a server name could compose the built-in DATUM Studio tool keys
+ * `datum-studio_<tool>` (which carry the subagent Studio allows, row 56): its sanitised name equals `datum-studio` or
+ * starts with `datum-studio_`. Compared case-insensitively, as permission keys match case-insensitively on win32.
+ */
+export function reservedServerName(name: string): boolean {
+  const sanitised = sanitize(name).toLowerCase()
+  return sanitised === DATUM_STUDIO_MCP || sanitised.startsWith(`${DATUM_STUDIO_MCP}_`)
+}
+
+/**
+ * SEC-13 (1.2.6 row 56a): the refusal message for a server that may not be loaded (`load`, config) or added at
+ * runtime (`add`, MCP.add), or undefined when it may. Any reserved name other than the `datum-studio` key itself is
+ * refused. The `datum-studio` key at load is the built-in or the user's own replacement (row 33: the user's entry
+ * wins; row 56 then drops the subagent allows). At `add` it is refused unless the entry is the built-in one
+ * (`builtin`, from DatumStudioMcp.builtin; `enabled` and `timeout` ignored), because row 56 decides the binding at
+ * agent setup and cannot see a later add.
+ */
+export function serverRefusal(
+  name: string,
+  entry: Readonly<Record<string, unknown>> | undefined,
+  builtin: Readonly<Record<string, unknown>> | undefined,
+  at: "load" | "add",
+): string | undefined {
+  if (!reservedServerName(name)) return undefined
+  if (name === DATUM_STUDIO_MCP) {
+    if (at === "load") return undefined
+    if (builtin !== undefined && entry !== undefined && isDeepStrictEqual(serverIdentity(entry), serverIdentity(builtin)))
+      return undefined
+  }
+  return (
+    `MCP server "${name}" refused: the name is reserved for Swarm's built-in DATUM Studio server ` +
+    `(a name that sanitises to "${DATUM_STUDIO_MCP}" or starts with "${DATUM_STUDIO_MCP}_" would share its tool names). ` +
+    `Rename the server.`
+  )
+}
+
+function serverIdentity(entry: Readonly<Record<string, unknown>>) {
+  const { enabled: _enabled, timeout: _timeout, ...rest } = entry
+  return rest
+}
 
 export function prompts(client: Client, timeout?: number) {
   if (!client.getServerCapabilities()?.prompts) return Promise.resolve([])

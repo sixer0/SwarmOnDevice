@@ -34,6 +34,7 @@ import { InstanceState } from "@/effect/instance-state"
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process"
 import { CrossSpawnSpawner } from "@opencode-ai/core/cross-spawn-spawner"
 import { McpCatalog } from "./catalog"
+import { DATUM_STUDIO_MCP, DatumStudioMcp } from "./datum-studio"
 import { McpEvent } from "@opencode-ai/schema/mcp-event"
 import { McpBrowser } from "./browser"
 
@@ -145,6 +146,16 @@ function sourceOf(
         ? "global"
         : "project",
   }
+}
+
+/** SEC-13 (1.2.6 row 56a): the built-in datum-studio entry of this process (undefined outside the app). */
+function builtinStudioEntry(): Readonly<Record<string, unknown>> | undefined {
+  return DatumStudioMcp.builtin(DatumStudioMcp.current())[DATUM_STUDIO_MCP]
+}
+
+/** SEC-13 (1.2.6 row 56a): the refusal for a server name, or undefined when it may load / be added. */
+function serverRefusal(name: string, mcp: ConfigMCPV1.Info, at: "load" | "add") {
+  return McpCatalog.serverRefusal(name, mcp as Readonly<Record<string, unknown>>, builtinStudioEntry(), at)
 }
 
 function remoteURL(value: string) {
@@ -421,6 +432,14 @@ const layer = Layer.effect(
           return DISABLED_RESULT
         }
 
+        // SEC-13 (1.2.6 row 56a): a name that could compose the built-in datum-studio tool keys never connects
+        // (load, connect, OAuth completion all come through here).
+        const refused = serverRefusal(key, mcp, "load")
+        if (refused) {
+          yield* Effect.logWarning("MCP server refused", { key })
+          return { status: { status: "failed", error: refused } } satisfies CreateResult
+        }
+
         const { client: mcpClient, status } =
           mcp.type === "remote"
             ? yield* connectRemote(key, mcp as ConfigMCPV1.Info & { type: "remote" })
@@ -686,6 +705,13 @@ const layer = Layer.effect(
 
     const add = Effect.fn("MCP.add")(function* (name: string, mcp: ConfigMCPV1.Info) {
       const s = yield* InstanceState.get(state)
+      // SEC-13 (1.2.6 row 56a): refused before anything is stored, so a loaded server under the same name (the
+      // built-in datum-studio) keeps its config, client and status; the refusal is reported in this response only.
+      const refused = serverRefusal(name, mcp, "add")
+      if (refused) {
+        yield* Effect.logWarning("MCP server refused at add", { name })
+        return { status: { ...s.status, [name]: { status: "failed", error: refused } satisfies Status } }
+      }
       s.config[name] = mcp
       yield* createAndStore(name, mcp)
       return { status: s.status }
@@ -853,6 +879,8 @@ const layer = Layer.effect(
 
     const startAuth = Effect.fn("MCP.startAuth")(function* (mcpName: string) {
       const mcpConfig = yield* requireMcpConfig(mcpName)
+      const refused = serverRefusal(mcpName, mcpConfig, "load")
+      if (refused) throw new Error(refused)
       if (mcpConfig.type !== "remote") throw new Error(`MCP server ${mcpName} is not a remote server`)
       if (mcpConfig.oauth === false) throw new Error(`MCP server ${mcpName} has OAuth explicitly disabled`)
       const url = remoteURL(mcpConfig.url)
