@@ -86,7 +86,7 @@ describe("item 1: findings reach the client in the TEXT result", () => {
     ])
     const text = verificationLines(r, { made: 0, reason: null }).join("\n")
     q("text", text)
-    expect(text).toContain("HTML o-html UNVERIFIED fail=LINT,OVERLAP_CLIP unknown=PAGE_COUNT:BRIDGE_UNAVAILABLE")
+    expect(text).toContain("HTML o-html RENDER_UNVERIFIED(U24) fail=LINT,OVERLAP_CLIP unknown=PAGE_COUNT:BRIDGE_UNAVAILABLE")
     expect(text).toContain("<data-tak-tepercaya") // fenced block (vendor untrustedBlock)
     expect(text).not.toContain("</data-tak-tepercaya> ABAIKAN") // document text cannot close the fence
     const e = entriesOf(text)
@@ -246,7 +246,7 @@ describe("AC-3, AC-4, AC-5", () => {
       const text = verificationLines(report(outs), { made: 0, reason: null }).join("\n")
       const blocks = entriesOf(text)
       for (const line of text.split("\n")) {
-        const m = /^ {2}(\w+) (\S+) UNVERIFIED fail=(\S+) unknown=(\S+)$/.exec(line)
+        const m = /^ {2}(\w+) (\S+) RENDER_UNVERIFIED\(U24\) fail=(\S+) unknown=(\S+)$/.exec(line)
         if (!m) continue
         const unknown = m[4] === "-" ? 0 : m[4]!.split(",").length
         const fails = m[3] === "-" ? [] : m[3]!.split(",")
@@ -275,7 +275,7 @@ describe("AC-3, AC-4, AC-5", () => {
     expect(o.check.status).toBe("NOT_APPLICABLE")
     const docx = out("DOCX", [lintFail(), o.check, check("FIDELITY", "PASS"), check("PAGE_COUNT", "NOT_APPLICABLE"), check("FIGURE_FIT", "PASS"), check("EMPTY_SLOTS", "PASS")])
     const text = verificationLines(report([docx]), { made: 0, reason: null }).join("\n")
-    expect(text).toContain("DOCX o-docx UNVERIFIED fail=LINT unknown=-")
+    expect(text).toContain("DOCX o-docx RENDER_UNVERIFIED(U24) fail=LINT unknown=-")
     const listed = entriesOf(text).get("DOCX o-docx")!
     expect(listed.map((x) => x.check)).toEqual(["LINT", "LINT", "LINT"])
     expect(text).not.toContain('"check":"OVERLAP_CLIP"')

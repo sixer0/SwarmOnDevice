@@ -993,7 +993,9 @@ const fileVerifyTool: ToolDef = {
     const savedLine = savedTo === null ? "" : viaDatum ? `  diunduh ke folder: ${dir} dengan nama DATUM (judul; nama di blok di bawah) (${bytes} B)` : `  diunduh ke: ${savedTo} (${bytes} B)`;
     const saved = savedTo !== null ? `${savedLine}${alreadyPresent ? " — sudah ada dengan isi sama, tidak ditulis ulang" : ""}${backup !== null ? `; cadangan berkas lama: ${backup}` : ""}${viaDatum ? `\n${untrustedBlock(String(datumName), { jenis: "nama-berkas-datum", fileId })}` : ""}` : "  tidak diunduh (berikan downloadDir untuk menyimpan)";
     const nameShown = nameOk ? finalFileName : finalFileName === "" ? "-" : "(tidak dicetak; lihat structuredContent.finalFileName, data tak tepercaya)";
-    const text = [`berkas ${fileId}: ${verified ? "TERVERIFIKASI" : "tidak terverifikasi"} (sha256 ${shaShown})`, `  nama final: ${nameShown} (${nameOk ? "lolos pola C51" : "TIDAK lolos pola C51"})`, saved].join("\n");
+    // Swarm 1.2.6 row 77 (M-07, N-037/N-038): the line names its check family (sha256 on disk, not the U24 page verdict)
+    // and prints the full sha (64 hex) or "-" when the header is not 64 hex.
+    const text = [`berkas ${fileId}: ${verified ? "FILE_VERIFIED(sha256)" : "FILE_UNVERIFIED(sha256)"} ${HEX64.test(sha) ? sha : "-"}`,`  nama final: ${nameShown} (${nameOk ? "lolos pola C51" : "TIDAK lolos pola C51"})`, saved].join("\n");
     const raw = { fileId, verified, sha256: sha || null, finalFileName: finalFileName || null, finalNameValid: nameOk, fileName: datumName, deliveredFileName: deliveredName, savedTo, bytes, ...(savedTo !== null ? { alreadyPresent, backup } : {}), correlationId: cid, downloadCorrelationId: downloadCid };
     const suspect = (finalFileName !== "" && !nameOk) || (sha !== "" && !HEX64.test(sha));
     const marked = [...(suspect ? ["finalFileName", "sha256"] : []), ...(datumName !== null ? ["fileName", "deliveredFileName", "savedTo"] : [])];

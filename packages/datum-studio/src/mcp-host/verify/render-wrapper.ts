@@ -105,7 +105,9 @@ function recordReport(r: OutputVerificationReport, v: VerifiedOutput): Record<st
 export function verificationLines(r: OutputVerificationReport, pageImages: { made: number; reason: string | null; note?: string | null }): string[] {
   const ok = r.outputs.filter((v) => v.state === "verified").length
   const tok = (s: string) => (SAFE.test(s) ? s : "?")
-  const lines = [`verification: ${r.overall === "verified" ? "VERIFIED" : "UNVERIFIED"} (${ok}/${r.outputs.length} outputs verified)`]
+  // 1.2.6 row 77 (M-07, N-039/N-040): the page verdict is labelled RENDER_VERIFIED(U24) / RENDER_UNVERIFIED(U24), never a
+  // bare VERIFIED, so it is not read as the file-level FILE_VERIFIED(sha256) check of studio_file_verify.
+  const lines = [`verification: ${r.overall === "verified" ? "RENDER_VERIFIED(U24)" : "RENDER_UNVERIFIED(U24)"} (${ok}/${r.outputs.length} outputs verified)`]
   // 1.2.6 row 30 (T-13, N-032): OVERLAP_CLIP coverage on its own line under the output line ("diukur m/n halaman"),
   // so the summary lines keep their shape; the UNKNOWN reason (MEASURE_TRUNCATED) stays in unknown= unchanged.
   const coverageLine = (v: VerifiedOutput) => {
@@ -115,11 +117,11 @@ export function verificationLines(r: OutputVerificationReport, pageImages: { mad
   }
   for (const v of r.outputs) {
     if (v.state === "verified") {
-      lines.push(`  ${v.format} ${tok(v.outputId)} VERIFIED`)
+      lines.push(`  ${v.format} ${tok(v.outputId)} RENDER_VERIFIED(U24)`)
     } else {
       const fail = v.checks.filter((c) => c.status === "FAIL").map((c) => c.id)
       const unknown = v.checks.filter((c) => c.status === "UNKNOWN").map((c) => `${c.id}:${c.reason ?? "?"}`)
-      lines.push(`  ${v.format} ${tok(v.outputId)} UNVERIFIED fail=${fail.join(",") || "-"} unknown=${unknown.join(",") || "-"}`)
+      lines.push(`  ${v.format} ${tok(v.outputId)} RENDER_UNVERIFIED(U24) fail=${fail.join(",") || "-"} unknown=${unknown.join(",") || "-"}`)
     }
     const cov = coverageLine(v)
     if (cov) lines.push(cov)
