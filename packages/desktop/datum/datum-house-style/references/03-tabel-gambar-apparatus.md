@@ -32,14 +32,20 @@ Header rows repeat across page breaks; rows do not split [v1.7, Rev A silent].
 
 ### 1.1 Caption above, SOURCE below, call in the text (DT-15, check 10, ID p.41 / EN p.43)
 
-- **Label in bold capitals with its number**, `TABEL 4.1` or `GAMBAR 9.4`, then the content
-  sentence, **with no middle dot** between them.
+- **Label printed by Studio.** Studio prints the label; the caption never starts with it; at most
+  100 characters. Studio numbers every table and figure and prints the bold capital label with its
+  number (`TABEL 4.1`, `GAMBAR 9.4`) itself. The caption text you write is the content sentence
+  only, one line, no middle dot. A figure caption that opens with the token is refused at submit
+  (400 `SCHEMA_INVALID` (`checkId` `CAPTION_TOKEN_DUPLICATE`)); a table caption that opens with it
+  prints the label twice.
 - **SOURCE line below the table**, opening `SUMBER` (EN `SOURCE`), ending with `PROVENANS` for a
   data table.
 - **Call every table in the prose**, or delete the table.
 - The caption says "per <date>" when the content has a validity date (ID p.41).
 
-Example from the manual (Tabel 7.3, ID p.42):
+Example from the manual (Tabel 7.3, ID p.42), as printed: Studio prints `TABEL 7.3`, the caption text
+is the sentence after it. The manual's sentence runs to two lines; in Studio keep it to one line of at
+most 100 characters.
 
 ```
 TABEL 7.3  Daftar kuantitas IDS perimeter Lanal bernilai Rp 3.793.000.000, per register
@@ -141,9 +147,11 @@ position or pattern (DT-34, ID p.57 / EN p.61).
 
 **Captions (9.5, ID p.57 / EN p.61).** A full sentence above the chart carrying the conclusion,
 the data date and the number basis (CH-05). The SOURCE line names the base document, date and
-provenance mark (DT-15). Chart numbers come from the register (DT-23). Right: "GAMBAR 5.3 Sektor
-B menyumbang 9 dari 23 gangguan sensor IDS, Januari sampai Juni 2026." Wrong: "Gambar 5.3 ·
-Gangguan per sektor." Prose mentions at most one chart number; the data may be tabled in an
+provenance mark (DT-15). Chart numbers come from the register (DT-23); Studio prints the label
+`GAMBAR 5.3` above the caption itself. Right (the caption text you write): "Sektor B menyumbang 9
+dari 23 gangguan sensor IDS, Januari sampai Juni 2026." Wrong: "Gambar 5.3 · Gangguan per
+sektor." It opens with the label, so the submit is refused (400 `SCHEMA_INVALID` (`checkId` `CAPTION_TOKEN_DUPLICATE`)),
+and it states no conclusion. Prose mentions at most one chart number; the data may be tabled in an
 annex (ID p.58).
 
 **Threshold and bullet (9.6, ID p.58 / EN p.61-62).** A limit (contract, regulation, standard,
@@ -322,7 +330,7 @@ is used (PK-06).
 |---|---|---|---|---|
 | 03-1 | §1 units "own column" always | Unit column when units differ by row; otherwise once in the head as "(m)"; check 9 accepts both | DT-17, ID p.41 / EN p.43 | CHANGED |
 | 03-2 | §1 zebra permitted above 12 rows in ink100, never in a printed BoQ | No zebra in `.docx` or a printed BoQ | DT-18, ID p.41 / EN p.43 | CHANGED |
-| 03-3 | §1 caption "TABEL 5.2   Daftar kuantitas ... (B1–B35)" | Bold capital label with number, then the sentence without a middle dot; every table called in the prose or deleted; SOURCE ends with PROVENANS | DT-15, ID p.41 / EN p.43 | CHANGED |
+| 03-3 | §1 caption "TABEL 5.2   Daftar kuantitas ... (B1–B35)" | Studio prints the bold capital label with number; the caption text carries no token, one line, at most 100 characters, no middle dot (§1.1); every table called in the prose or deleted; SOURCE ends with PROVENANS | DT-15, ID p.41 / EN p.43; Swarm 1.2.6 W-01 | CHANGED |
 | 03-4 | §1 spec tables: three columns, footnote markers resolved at the foot of the same page | Four columns (parameter, test condition, value, unit); no footnotes | DT-19, ID p.42 / EN p.44 | CHANGED |
 | 03-5 | §2 producer of record `datumchart.py`, families bar, column, threshold | Same engine for P-01, P-02, W-02, P-11; 53 other codes through a plot engine; in Swarm charts → datum-studio chart tools (D-C) | Table 9.8, ID p.61 / EN p.64 | CHANGED |
 | 03-6 | §2 figure grammar: one accent, direct labels, no title in plot, forbidden list | Kept and extended to the 15 coded chart rules, Table 9.1 count limits, Table 9.4 roles, threshold and bullet rules, catalogue exclusions, chart spec keys | CH-01 to CH-15, ID p.54-61 / EN p.57-64 | CHANGED (extended) |

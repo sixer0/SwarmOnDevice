@@ -175,8 +175,8 @@ that program syntax requires: Python modules, variables, placeholders (KD-06) an
 
 Build the file name from the same string as the caption or title (Figure 2.2, ID p.11 / EN p.11).
 A delivered file is named `<Judul> <nomor> Rev<X> rev<N>.<ext>`: `Rev<X>` is the letter revision
-of the document, ` rev<N>` is the numeric revision Studio stored for it (`... RevD rev255.pdf`,
-then `... RevD rev256.pdf`). Studio appends ` rev<N>` to every file it renders; keep it, never
+of the document, ` rev<N>` is the numeric revision Studio stored for it (`... RevD rev11.pdf`,
+then `... RevD rev12.pdf`). Studio appends ` rev<N>` to every file it renders; keep it, never
 strip or rename it.
 
 **Number (DT-04a, ID p.12 / EN p.12).** Take it from the Register Induk before building. If the
@@ -420,7 +420,8 @@ characters. Studio numbers each table and figure and prints the bold capital lab
 caption text you write carries no `Gambar`, `GAMBAR`, `Tabel` or `Figure` token with a number. It
 is one line: a verdict that names the actor and the number (`Kontraktor menanggung 62 % biaya
 kabel`), no middle dot. A figure caption that opens with the token is refused at submit
-(`CAPTION_TOKEN_DUPLICATE`); one that wraps to a second line fails the gate (`CAPTION_WRAP`).
+(400 `SCHEMA_INVALID` (`checkId` `CAPTION_TOKEN_DUPLICATE`): match the `checkId`, not the error
+code); one that wraps to a second line fails the gate (`CAPTION_WRAP`).
 SOURCE line below, separate from the caption, ending in PROVENANS; every table called in the
 prose. Spec tables: parameter, test condition, value, unit; no footnotes (DT-19). Emphasis: the
 ruled side note, ink900 0.35 mm above, ink200 0.20 mm below, no fill; never a filled box with a

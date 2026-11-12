@@ -183,7 +183,8 @@ a vertical one, the horizontal hops; a run that would cross an unrelated box det
   capital label itself, so the caption text carries no `Gambar`, `GAMBAR` or `Figure` token with
   a number. It is one line: a verdict that names the actor and the number (`Kontraktor menanggung
   62 % biaya kabel`), no middle dot. A caption that opens with the token is refused at submit
-  (`CAPTION_TOKEN_DUPLICATE`); one that wraps to a second line fails the gate (`CAPTION_WRAP`).
+  (400 `SCHEMA_INVALID` (`checkId` `CAPTION_TOKEN_DUPLICATE`): match the `checkId`, not the error
+  code); one that wraps to a second line fails the gate (`CAPTION_WRAP`).
 - **SOURCE line below**, opening `SUMBER`, naming the document and article the drawing was built
   from (`sources[]`), plus `PROVENANS` for any load-bearing quantity in it.
 - A topology taken from a vendor carries the Admiralty digraph on that claim (DT-25).

@@ -9,12 +9,14 @@ import path from "node:path"
 const DESKTOP = path.resolve(import.meta.dir, "..")
 const SKILL = path.join(DESKTOP, "datum/datum-house-style/SKILL.md")
 const REF08 = path.join(DESKTOP, "datum/datum-house-style/references/08-skema-diagram.md")
+const REF03 = path.join(DESKTOP, "datum/datum-house-style/references/03-tabel-gambar-apparatus.md")
 const STUDIO = path.resolve(DESKTOP, "../datum-studio/vendor/src/lib/studio/contract")
 
 const read = (p: string) => fs.readFile(p, "utf8")
 const flat = (s: string) => s.replace(/\s+/g, " ")
 
 const RULE = "Studio prints the label; the caption never starts with it; at most 100 characters."
+const REFUSAL = "400 `SCHEMA_INVALID` (`checkId` `CAPTION_TOKEN_DUPLICATE`)"
 
 // Caption examples that teach writing the label token: a backticked `GAMBAR n.m` / `TABEL n.m` followed by
 // "then the/one sentence", or a code span whose caption text opens with the token.
@@ -47,6 +49,8 @@ for (const [name, file] of [
     expect(text).toContain("CAPTION_WRAP")
     expect(text).toMatch(/It is one line: a verdict that names the actor and the number/)
     expect(text).toMatch(/SOURCE line below/)
+    // Fix row FX-10 (gate 04 F8): the refusal is 400 SCHEMA_INVALID; CAPTION_TOKEN_DUPLICATE is its checkId.
+    expect(text).toContain(REFUSAL)
   })
 
   test(`${name}: no example teaches a caption that starts with the label token`, async () => {
@@ -77,4 +81,26 @@ test("SKILL.md: delivered file name rule is `<Judul> <nomor> Rev<X> rev<N>` and 
   expect(examples.length).toBeGreaterThan(0)
   for (const n of examples) expect(n).toMatch(re)
   expect("Rencana Anggaran Biaya 008-GSP-RAB-VIII-2026 RevD rev256.pdf").toMatch(re)
+})
+
+// Fix row FX-10 (gate 04 F5): references/03 taught table and chart captions that open with the label token
+// (§1.1 "`TABEL 4.1` or `GAMBAR 9.4`, then the content sentence"; §9.5 Right: "GAMBAR 5.3 Sektor B ..."). A chart
+// caption written that way is refused at submit; a table caption prints the label twice (Studio numbers tables).
+test("references/03: Studio prints the label; no example teaches the token; the right chart caption fits", async () => {
+  const text = flat(await read(REF03))
+  expect(text).toContain(RULE)
+  expect(text).toContain(REFUSAL)
+  for (const re of TEACHES_TOKEN) expect(text).not.toMatch(re)
+  expect(text).not.toMatch(/Right:? \(?[^"]{0,60}"(?:GAMBAR|Gambar|TABEL|Tabel)\s*\d/)
+  const right = text.match(/Right \(the caption text you write\): "([^"]+)"/)?.[1]
+  expect(right).toBeDefined()
+  expect(right!.length).toBeLessThanOrEqual(await captionMax())
+  expect(right).not.toMatch(/^\s*(gambar|figure|fig\.|grafik|bagan|diagram|tabel)\s*[A-Z]?\d/i)
+})
+
+// Fix row FX-10 (gate 04 F11): the file-name example uses neutral revision numbers, not a project's.
+test("SKILL.md: the rev<N> example numbers are neutral", async () => {
+  const text = flat(await read(SKILL))
+  expect(text).not.toMatch(/\brev2\d\d\b/)
+  expect(text).toMatch(/`\.\.\. RevD rev11\.pdf`, then `\.\.\. RevD rev12\.pdf`/)
 })
