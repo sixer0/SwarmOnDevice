@@ -1,6 +1,6 @@
 import { Effect, Fiber, Option, Stream } from "effect"
 import os from "os"
-import { createWriteStream } from "node:fs"
+import { createWriteStream, readdirSync } from "node:fs"
 import fsp from "node:fs/promises"
 import * as Tool from "./tool"
 import path from "path"
@@ -35,6 +35,7 @@ import { DELETE_COMPOUND_TEXT, SCRIPT_CHANGED_TEXT } from "@/permission/autonomy
 import { ScriptScreen } from "@/permission/script-screen"
 import { DeletionWords, type Deletion } from "./deletion"
 import { BypassLists } from "@/permission/bypass-lists"
+import { Global } from "@opencode-ai/core/global"
 
 export { Parameters } from "./shell/prompt"
 export { SCRIPT_CHANGED_TEXT } from "@/permission/autonomy-texts"
@@ -95,8 +96,13 @@ type Scan = {
   risk?: Risk.Risk
   /** Secret files the command names, so what it prints from them can be recognised. */
   secretFiles: Set<string>
-  /** Set when it reshapes one of them, because a secret cut into pieces or re-encoded can no longer be recognised. */
+  /**
+   * The whole output shown in place of what it prints, when it shows a secret file in a form a search for the value would
+   * not find (row 36b, SEC-01), or prints any of a whole secret file or a protected place (SEC-01, SEC-03).
+   */
   withheld?: string
+  /** Row 36b (SEC-03, SEC-20): a protected read (a secret file, `env`, `printenv`): the written-assignment rules apply. */
+  masked?: boolean
 }
 
 type Chunk = {
@@ -929,6 +935,58 @@ function reshapes(tokens: string[]) {
 
 const WORD_BREAK = /[\s'"|;&<>()=,:]+/
 
+/**
+ * Row 36b (SEC-01): programs whose output is the bytes of the file as they are, line by line, so the scrubber finds every
+ * value it knows in it. Anything else that reads a secret file has its output withheld, because a value cut into pieces,
+ * reversed or re-encoded can no longer be recognised. Masking is an accidental-exposure control: a counting oracle such as
+ * `grep -c '^KEY=a' .env` cannot be masked (SR-01 item 5).
+ */
+const METADATA_VIEWERS = new Set([
+  "ls", "stat", "wc", "file", "du", "cksum", "md5", "md5sum", "shasum", "sha1sum", "sha224sum", "sha256sum", "sha384sum",
+  "sha512sum", "b2sum", "test", "[", "true", "false", "pwd", "cd",
+])
+const VERBATIM_VIEWERS = new Set([...METADATA_VIEWERS, "cat", "head", "tail", "grep", "egrep", "fgrep", "rg", "diff", "cmp", "nl", "sort", "uniq", "echo"])
+const programOf = (tokens: string[]) => (tokens[0] ? path.basename(tokens[0]) : "")
+
+function verbatim(tokens: string[]) {
+  const name = programOf(tokens)
+  const args = tokens.slice(1)
+  if (!VERBATIM_VIEWERS.has(name)) return false
+  const has = (pattern: RegExp) => args.some((arg) => pattern.test(arg))
+  if (name === "head" || name === "tail") return !has(/^(-[a-zA-Z0-9]*c|--bytes)/)
+  if (name === "grep" || name === "egrep" || name === "fgrep" || name === "rg") {
+    if (has(/^(-[a-zA-Z]*o|--only-matching|--replace|--colou?r(=(always|auto))?$)/)) return false
+    return !(name === "rg" && has(/^-[a-zA-Z]*r/))
+  }
+  if (name === "diff") return !has(/^(-[a-zA-Z]*[yW]|--side-by-side|--width)/)
+  if (name === "cmp") return !has(/^(-[a-zA-Z]*[lb]|--verbose|--print-bytes)/)
+  return true
+}
+
+/** The load of a file into the shell (`source .env`, `--env-file .env`): it runs things with the values, it shows nothing. */
+const LOADERS = new Set(["source", "."])
+
+/** A word with a glob in its last part, as the files it names in one folder (bounded), so `rev .en?` names `.env`. */
+function globbed(file: string) {
+  const base = path.basename(file)
+  if (!/[*?[]/.test(base) || /[*?[]/.test(path.dirname(file))) return []
+  try {
+    // `[...]` stays a class; a malformed one throws, and then nothing is named by it.
+    const pattern = new RegExp("^" + base.replace(/[.+^${}()|\\]/g, "\\$&").replaceAll("*", ".*").replaceAll("?", ".") + "$")
+    return readdirSync(path.dirname(file))
+      .slice(0, 2000)
+      .filter((name) => pattern.test(name))
+      .map((name) => path.join(path.dirname(file), name))
+  } catch {
+    return []
+  }
+}
+
+const WITHHELD_TRANSFORMED = (name: string) =>
+  `[hidden:${name} (transformed output of a credential file)]\nthe command ran; its output is withheld because it would show a credential in another form. Shell output withheld: programs you run can still read the file. Do not try to get the same values another way.`
+const WITHHELD_WHOLE = (name: string) =>
+  `[hidden:${name}]\nThis file holds credentials, so its contents are kept from you. Programs you run can still use it.`
+
 // Every call asks, unless a rule a person wrote says otherwise. How the text parses never lowers that: the parse only names
 // the patterns, labels the prompt and withholds "Allow always", which is offered for one plain command and answers only that.
 const ask = Effect.fn("ShellTool.ask")(function* (
@@ -1133,8 +1191,30 @@ export const ShellTool = Tool.define(
         return unknown
       })
 
-      const named = new Set(redirects.reads.filter(Secrets.secretFile).map(absolute))
+      // Row 36b (SEC-01, SEC-03): what a secret file or a protected place shows is judged by its name and where it lands,
+      // so a link `notes.txt` to `.env` and a glob `.en?` count, and Swarm's own credential files and the key folders in
+      // the home folder are whole-secret for output (reads of them run without asking now, U12).
+      const places = BypassLists.protectedOutputPlaces([Global.Path.home, os.homedir()], Global.Path.data)
+      const kinds = new Map<string, "whole" | "lines">()
+      const kindOf = (word: string) => {
+        const file = absolute(word)
+        for (const name of [file, ...globbed(file)]) {
+          const kind = Secrets.outputKind(name, places)
+          if (kind) kinds.set(name, kind)
+          if (kind) return { file: name, kind }
+        }
+        return undefined
+      }
+      const named = new Set<string>()
+      const read = new Set<string>()
+      for (const word of redirects.reads) {
+        const found = kindOf(word)
+        if (found) named.add(found.file), read.add(found.file)
+      }
       let reshaped = false
+      let transformed = false
+      let content = false
+      let printed: string | undefined
       for (const node of commands(root)) {
         const command = parts(node)
         const tokens = command.map((item) => item.text)
@@ -1142,8 +1222,20 @@ export const ShellTool = Tool.define(
         if (!ps) {
           const plain = tokens.map(unquote)
           reshaped = reshaped || reshapes(plain)
-          for (const word of plain.slice(1).flatMap((token) => token.split(WORD_BREAK)))
-            if (word && Secrets.secretFile(word)) named.add(absolute(word))
+          transformed = transformed || !verbatim(plain)
+          content = content || !METADATA_VIEWERS.has(programOf(plain))
+          const program = programOf(plain)
+          if (program === "env" || program === "printenv") scan.masked = true
+          if (program === "printenv")
+            printed = printed ?? plain.slice(1).find((name) => !name.startsWith("-") && Secrets.secretPair(name, "x"))
+          const loads = LOADERS.has(program)
+          for (const word of plain.slice(1).flatMap((token) => token.split(WORD_BREAK))) {
+            const found = word ? kindOf(word) : undefined
+            if (!found) continue
+            named.add(found.file)
+            // `docker run --env-file .env` and `source .env` load the values; what they then print is scrubbed as before.
+            if (!loads && !plain.some((arg) => arg === "--env-file" || arg.startsWith("--env-file="))) read.add(found.file)
+          }
         }
 
         if (cmd && (FILES.has(cmd) || (shellKind === "cmd" && CMD_FILES.has(cmd)))) {
@@ -1171,8 +1263,16 @@ export const ShellTool = Tool.define(
         const whole = root.text.trim()
         if (whole) scan.patterns.add(whole)
       }
-      scan.secretFiles = named
-      if (reshaped && named.size > 0) scan.withheld = path.relative(instance.worktree, [...named][0]!)
+      scan.secretFiles = new Set([...named].filter((file) => kinds.get(file) === "lines"))
+      const whole = [...read].find((file) => kinds.get(file) === "whole")
+      // A whole secret file or a protected place: only programs that print nothing of it (`ls`, `wc`, a checksum) show
+      // their output, as the read tool shows none of it (SEC-01 item 3, SEC-03 item 1).
+      if (whole && content) scan.withheld = WITHHELD_WHOLE(path.basename(whole))
+      // A secret file read by anything but a verbatim viewer (SEC-01 item 2), or loaded and then reshaped (1.2.5).
+      else if ((read.size > 0 && transformed) || (reshaped && named.size > 0))
+        scan.withheld = WITHHELD_TRANSFORMED(path.basename([...read, ...named][0]!))
+      else if (printed) scan.withheld = `[hidden:${printed}]`
+      if (read.size > 0) scan.masked = true
 
       return scan
     })
@@ -1323,6 +1423,7 @@ export const ShellTool = Tool.define(
         env: NodeJS.ProcessEnv
         timeout: number
         withheld?: string
+        masked?: boolean
       },
       ctx: Tool.Context,
     ) {
@@ -1366,6 +1467,8 @@ export const ShellTool = Tool.define(
       })
 
       const root = (yield* InstanceState.context).worktree
+      // Row 36b (SEC-03, SEC-20): a protected read's output, wherever it is shown or saved, gets the assignment rules too.
+      const mask = (text: string) => (input.masked ? Secrets.scrubAssigned(text) : text)
       yield* ctx.metadata({
         metadata: {
           output: "",
@@ -1411,11 +1514,11 @@ export const ShellTool = Tool.define(
               last = preview(last + chunk)
 
               if (file) {
-                sink?.write(chunk)
+                sink?.write(mask(chunk))
               } else {
                 full += chunk
                 if (Buffer.byteLength(full, "utf-8") > limits.maxBytes) {
-                  return trunc.write(full).pipe(
+                  return trunc.write(mask(full)).pipe(
                     Effect.andThen((next) =>
                       Effect.sync(() => {
                         file = next
@@ -1426,7 +1529,7 @@ export const ShellTool = Tool.define(
                     Effect.andThen(
                       ctx.metadata({
                         metadata: {
-                          output: Secrets.scrub(last, root),
+                          output: mask(Secrets.scrub(last, root)),
                         },
                       }),
                     ),
@@ -1437,7 +1540,7 @@ export const ShellTool = Tool.define(
               // Shown and stored while the command runs, before the final result gets its own pass.
               return ctx.metadata({
                 metadata: {
-                  output: Secrets.scrub(last, root),
+                  output: mask(Secrets.scrub(last, root)),
                 },
               })
             }),
@@ -1488,7 +1591,7 @@ export const ShellTool = Tool.define(
       // Saving a large output to a file along the way is not a cut: what matters is whether the agent sees all of it.
       cut = dropped || whole.cut
       // What was hidden stays one read away, so nothing the agent might need is gone.
-      if (!file && (cut || condensed.hidden > 0)) file = yield* trunc.write(raw)
+      if (!file && (cut || condensed.hidden > 0)) file = yield* trunc.write(mask(raw))
 
       let output = whole.text || "(no output)"
       if (cut) {
@@ -1497,8 +1600,8 @@ export const ShellTool = Tool.define(
         const end = tail(condensed.text, limits.maxLines, limits.maxBytes - HEAD_BYTES).text
         output = `${opening ? opening + "\n\n" : ""}...output truncated...\n\nFull output saved to: ${file}\n\n${end}`
       }
-      if (input.withheld)
-        output = `[hidden: output withheld. This command reshapes ${input.withheld}, a file that holds secrets, so the values in its output could not be recognised and hidden. Programs you run can still read the file. Do not try to get the same values another way.]`
+      output = mask(output)
+      if (input.withheld) output = input.withheld
       if (!cut && condensed.hidden > 0) output += `\n\n(${condensed.hidden} similar lines hidden. Full output saved to: ${file})`
 
       if (meta.length > 0) {
@@ -1507,7 +1610,7 @@ export const ShellTool = Tool.define(
       return {
         title: input.command,
         metadata: {
-          output: last || preview(output),
+          output: mask(last) || preview(output),
           exit: code,
           truncated: cut,
           ...(file && (cut || condensed.hidden > 0) ? { outputPath: file } : {}),
@@ -1594,6 +1697,7 @@ export const ShellTool = Tool.define(
                   env,
                   timeout,
                   withheld: scanned.withheld,
+                  masked: scanned.masked,
                 },
                 ctx,
               )
