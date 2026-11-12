@@ -88,8 +88,8 @@ export type MissionDerivedWire = {
   /** Row 88 (1.2.6 MC-09, host row 87): rows added (and dropped) after approval; absent from an older host. */
   drift?: {
     count: number
-    rows: Array<{ row: string; timeCreated: number; decision: string | null }>
-    dropped: Array<{ row: string; timeDropped: number; decision: string | null }>
+    rows: Array<{ row: string; timeCreated: string; decision: string | null }>
+    dropped: Array<{ row: string; timeDropped: string; decision: string | null }>
   }
 }
 

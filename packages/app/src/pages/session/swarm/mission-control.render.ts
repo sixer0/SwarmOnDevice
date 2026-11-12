@@ -139,10 +139,10 @@ function driftMission(): MissionGetWire {
       drift: {
         count: 2,
         rows: [
-          { row: "5", timeCreated: 2, decision: "U2" },
-          { row: "6", timeCreated: 3, decision: "U3" },
+          { row: "5", timeCreated: "2", decision: "U2" },
+          { row: "6", timeCreated: "3", decision: "U3" },
         ],
-        dropped: [{ row: "2", timeDropped: 4, decision: "U4" }],
+        dropped: [{ row: "2", timeDropped: "4", decision: "U4" }],
       },
     },
   }
@@ -152,7 +152,7 @@ function droppedOnlyMission(): MissionGetWire {
   return {
     ...wire,
     mission: { ...wire.mission, id: "m-dropped-8", title: "Dropped kajian" },
-    derived: { ...wire.derived, drift: { count: 0, rows: [], dropped: [{ row: "2", timeDropped: 4, decision: "U4" }] } },
+    derived: { ...wire.derived, drift: { count: 0, rows: [], dropped: [{ row: "2", timeDropped: "4", decision: "U4" }] } },
   }
 }
 const WIRES: Record<string, () => MissionGetWire> = {
