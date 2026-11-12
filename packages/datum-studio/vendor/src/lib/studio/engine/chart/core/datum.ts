@@ -30,17 +30,16 @@ export const DC_BAR_THICK_MM = 4.4;
 export const DC_BAR_PAD_MM = 6;
 
 /**
- * FIX-H8 (D-322, uji Hermes E): tinggi badan minimum terbaca keluarga batang (bar/threshold),
+ * T-09 (1.2.6 U14, membalik D-322/FIX-H8): AMBANG badan terbaca keluarga batang (bar/threshold),
  * = tinggi plot panel bawaan Manual 000 Gambar 8.1 (`PANEL_DEFAULT_PLOT_MM` composite.ts; tidak
- * diimpor agar tidak membentuk siklus impor, kesamaan dijaga uji unit). DC `tinggi()` tidak
- * berbatas bawah: 2 batang = 20,4 mm pada lebar 128 mm (pita tipis). Hanya berlaku bila
- * `n * 7,2 + 6 < 32`, yaitu n <= 3 kategori; n >= 4 tetap rumus DC persis (paritas Python).
+ * diimpor agar tidak membentuk siklus impor, kesamaan dijaga uji unit). Geometri tetap jujur
+ * (DC `tinggi()`: badan = n * 7,2 + 6 mm, batang 4,4 mm, panjang sebanding data, nol = nol);
+ * badan di bawah ambang ini (n <= 3 kategori) hanya DILAPORKAN sebagai REPORT `BAR_SUBMIN`,
+ * badan tidak dinaikkan dan batang tidak ditebalkan.
  */
 export const BAR_MIN_BODY_MM = 32;
-/** Batas tebal batang saat pita diperbesar: 2 x token DC (n = 1 tidak menjadi blok raksasa). */
-export const BAR_MAX_THICK_MM = 2 * DC_BAR_THICK_MM;
 
-/** Geometri baris batang: jarak antarbaris + tebal + geser ke tengah slot; `scaled` = aturan FIX-H8 aktif. */
+/** Geometri baris batang: jarak antarbaris + tebal + geser ke tengah slot. `scaled` selalu false sejak 1.2.6 (U14); dipertahankan demi stabilitas tipe. */
 export interface BarRows {
   pitch: number;
   thick: number;
@@ -48,17 +47,13 @@ export interface BarRows {
   scaled: boolean;
 }
 
-/** Geometri DC tetap (tanpa aturan tinggi minimum). */
+/** Geometri DC tetap. */
 export const DC_BAR_ROWS: Readonly<BarRows> = Object.freeze({ pitch: DC_BAR_PITCH_MM, thick: DC_BAR_THICK_MM, inset: 0, scaled: false });
 
-/** Geometri baris batang menurut jumlah kategori (DC persis bila n * 7,2 + 6 >= tinggi minimum). */
+/** Geometri baris batang: DC persis untuk setiap jumlah kategori (U14; `n` dipertahankan demi stabilitas API). */
 export function barRows(n: number): BarRows {
-  const dcBody = n * DC_BAR_PITCH_MM + DC_BAR_PAD_MM;
-  if (n <= 0 || dcBody >= BAR_MIN_BODY_MM) return { ...DC_BAR_ROWS };
-  const pitch = (BAR_MIN_BODY_MM - DC_BAR_PAD_MM) / n;
-  const prop = (pitch * DC_BAR_THICK_MM) / DC_BAR_PITCH_MM;
-  const thick = Math.min(prop, BAR_MAX_THICK_MM);
-  return { pitch, thick, inset: (prop - thick) / 2, scaled: true };
+  void n;
+  return { ...DC_BAR_ROWS };
 }
 
 /** Taksiran tinggi DC `tinggi()` (DC:76-92) tanpa batas bawah, mm (gaya gallery memakai ini). */
@@ -72,15 +67,11 @@ export function dcHeightMm(spec: StudioChartV1, family: "bar" | "column" | "thre
 }
 
 /**
- * Tinggi kanvas gaya datum, mm: DC `tinggi()`, kecuali keluarga batang dengan n <= 3 kategori
- * yang badannya dinaikkan ke `BAR_MIN_BODY_MM` (FIX-H8). Kolom tidak berubah (badan tetap 46 mm).
+ * Tinggi kanvas gaya datum, mm: DC `tinggi()` persis untuk semua keluarga (U14: badan batang
+ * tidak lagi dinaikkan ke `BAR_MIN_BODY_MM`; badan di bawahnya dilaporkan `BAR_SUBMIN`).
  */
 export function datumHeightMm(spec: StudioChartV1, family: "bar" | "column" | "threshold"): number {
-  const dc = dcHeightMm(spec, family);
-  if (family === "column") return dc;
-  const n = spec.data?.shape === "categorical" ? spec.data.points.length : 0;
-  const rows = barRows(n);
-  return rows.scaled ? dc - (n * 7.2 + 6) + BAR_MIN_BODY_MM : dc;
+  return dcHeightMm(spec, family);
 }
 
 /** `puncak` DC:139-140: maks |nilai| (dan |limit| bila limit bukan 0/None) x 1,14, atau 1. */
@@ -116,10 +107,8 @@ export function renderDatum(spec: StudioChartV1, canvas: ChartCanvas, tpl: Resol
   const series = spec.unit ? spec.unit : "nilai";
 
   if (prep.family === "bar" || prep.family === "threshold") {
-    // FIX-H8: pita diperbesar hanya bila kanvas memang disediakan untuknya (tinggi gaya datum);
-    // panel/kanvas lebih pendek tetap memakai geometri DC tetap (tanpa luapan).
-    const rowsMin = barRows(pts.length);
-    const rows = rowsMin.scaled && H + 1e-9 >= datumHeightMm(spec, prep.family) ? rowsMin : DC_BAR_ROWS;
+    // T-09 (U14): geometri DC jujur untuk setiap n; tidak ada pita diperbesar.
+    const rows = DC_BAR_ROWS;
     // FIG-02a P1-5: talang terukur + bungkus hanya saat fit aktif dan label melewati 22 mm DC.
     const gp = gutterPlan(
       pts.map((p) => p.label),
@@ -132,13 +121,15 @@ export function renderDatum(spec: StudioChartV1, canvas: ChartCanvas, tpl: Resol
     let y = 3;
     const tb = rows.thick;
     const jarak = rows.pitch;
-    // Garis dasar label: DC `y + tb * 0,78`; pada pita diperbesar = tengah batang + selisih DC yang sama.
-    const baseline = (top: number): number => (rows.scaled ? top + tb / 2 + DC_BAR_THICK_MM * (0.78 - 0.5) : top + tb * 0.78);
-    if (rows.scaled) {
+    // Garis dasar label: DC `y + tb * 0,78`.
+    const baseline = (top: number): number => top + tb * 0.78;
+    // T-09 (U14, register N-025): badan jujur di bawah ambang hanya dilaporkan; geometri tidak diubah.
+    const badan = pts.length * DC_BAR_PITCH_MM + DC_BAR_PAD_MM;
+    if (pts.length > 0 && badan < BAR_MIN_BODY_MM) {
       issues.push({
-        checkId: "BAR_MIN_HEIGHT",
+        checkId: "BAR_SUBMIN",
         status: "REPORT",
-        detail: `${pts.length} kategori: badan batang dinaikkan ke ${BAR_MIN_BODY_MM} mm (jarak ${jarak.toFixed(2)} mm, tebal ${tb.toFixed(2)} mm); DC ${(pts.length * DC_BAR_PITCH_MM + DC_BAR_PAD_MM).toFixed(1)} mm`,
+        detail: `${pts.length} kategori: badan batang ${badan.toFixed(1)} mm di bawah ambang terbaca ${BAR_MIN_BODY_MM} mm; geometri tetap jujur (tidak dinaikkan)`,
       });
     }
     pts.forEach((x, i) => {

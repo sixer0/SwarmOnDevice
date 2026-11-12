@@ -73,15 +73,16 @@
   "row69": "2026-11-12: 1.2.6 row 69 (T-16, U5; register E-17, E-18). 1 vendor file re-patched (files[].patch_row69, before = previous sha256; status unchanged): scripts/studio/mcp/figure-tools.ts (mergeFigurePatch deep-merges spec: objects merge, arrays replace, null removes; a spec patch leaving a diagram.schema required key missing is SCHEMA_INVALID naming the key, before any write). Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/69_row69_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9858273 + 1702 = 9859975. patch_rows += 69",
   "row72": "2026-11-12: 1.2.6 row 72 (T-18/W-10, U5; register N-113, N-114, N-115). 7 vendor files (files[].patch_row72, before = previous sha256): params/figure.ts (copied -> patched, 36089 -> 36997); params/index.ts (re-patched, 2823 -> 2913); registry/lint.ts (re-patched, 22315 -> 22696); registry/slots.ts (copied -> patched, 14214 -> 14403); registry/essentials.ts (re-patched, 20208 -> 20355); engine/lint/structure/checks-d.ts (copied -> patched, 42932 -> 44798); components/studio/template-editor/param-categories.ts (copied -> patched, 18761 -> 18908). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/72_row72_diffs/. counts by delta: copied 426 -> 422, patched 140 -> 144, files/replaced/added unchanged; bytes 9861623 + 3728 = 9865351. patch_rows += 72",
   "row60": "2026-11-12: 1.2.6 row 60 (T-04, U3; register E-11 LABEL_LEADER, no new name). 1 vendor file patched (files[].patch_row60, before = previous sha256): engine/diagram/fit/labels.ts (copied -> patched, 12694 -> 14653: onPath falls back to NEW scanPath, a 0.5 mm slide along each segment longest first, only when every fixed spot t = 1/2, 1/4, 3/4 collides; leader/number only when no collision-free on-path spot exists). Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/60_row60_diffs/. counts by delta: copied 422 -> 421, patched 144 -> 145, files/replaced/added unchanged; bytes 9865351 + 1959 = 9867310. patch_rows += 60",
-  "row49": "2026-11-12: 1.2.6 row 49 (T-14, U5, C2; register N-033..N-035, E-16). 2 vendor files (files[].patch_row49, before = previous sha256): scripts/studio/mcp/doc-tools.ts (re-patched: studio_document_status `findings` paging with chapter filter, findingsPage, LINT_FINDINGS_PAGE_MAX 500) and engine/lint/structure/context.ts (copied -> patched: summary row past the 100 cap carries findingsAll with chapter keys). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/49_row49_diffs/. counts by delta: copied 421 -> 420, patched 145 -> 146, files/replaced/added unchanged; bytes 9867310 + 6119 = 9873429. patch_rows += 49"
+  "row49": "2026-11-12: 1.2.6 row 49 (T-14, U5, C2; register N-033..N-035, E-16). 2 vendor files (files[].patch_row49, before = previous sha256): scripts/studio/mcp/doc-tools.ts (re-patched: studio_document_status `findings` paging with chapter filter, findingsPage, LINT_FINDINGS_PAGE_MAX 500) and engine/lint/structure/context.ts (copied -> patched: summary row past the 100 cap carries findingsAll with chapter keys). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/49_row49_diffs/. counts by delta: copied 421 -> 420, patched 145 -> 146, files/replaced/added unchanged; bytes 9867310 + 6119 = 9873429. patch_rows += 49",
+  "row65": "2026-11-12: 1.2.6 row 65 (T-09, U14 reverses D-322; register N-025..N-029). 2 vendor files patched (files[].patch_row65, before = previous sha256; status copied -> patched): engine/chart/core/datum.ts (honest DC bar geometry for every n, BAR_MIN_BODY_MM is a threshold, REPORT BAR_SUBMIN below it; BAR_MAX_THICK_MM and BAR_MIN_HEIGHT retired; BarRows.scaled always false) and engine/chart/core/index.ts (BAR_MAX_THICK_MM export removed). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/65_row65_diffs. counts by delta: copied 420 -> 418, patched 146 -> 148; bytes 9873429 -814 = 9872615. patch_rows += 65"
  },
  "counts": {
   "files": 608,
-  "copied": 420,
-  "patched": 146,
+  "copied": 418,
+  "patched": 148,
   "replaced": 12,
   "added": 30,
-  "bytes": 9873429
+  "bytes": 9872615
  },
  "files": [
   {
@@ -1472,10 +1473,11 @@
   },
   {
    "path": "src/lib/studio/engine/chart/core/datum.ts",
-   "status": "copied",
-   "bytes": 11550,
+   "status": "patched",
+   "bytes": 10754,
    "source_sha256": "9a0a9a5e74849b590218e71737dd6a514b2ad92a833cfbb8f273042936d69340",
-   "sha256": "9a0a9a5e74849b590218e71737dd6a514b2ad92a833cfbb8f273042936d69340"
+   "sha256": "6a79f21056cd1b523a60ca4d1075ac31feba0e4f5c04b65ef6e72b7752ccef67",
+   "patch_row65": {"id": "row65-t09-honest-bars", "row": "65", "decision": "1.2.6 patch T-09 honest bar geometry (U14 reverses D-322; register N-025..N-029)", "summary": "BAR_MIN_BODY_MM (32) is now a threshold only; barRows returns DC geometry for every n (scaled always false); datumHeightMm = dcHeightMm; renderDatum uses DC_BAR_ROWS and emits one REPORT BAR_SUBMIN (body mm and threshold) when n*7.2+6 < 32 instead of raising the body; BAR_MAX_THICK_MM and BAR_MIN_HEIGHT retired", "diff_base": "sha256 before this row", "before_sha256": "9a0a9a5e74849b590218e71737dd6a514b2ad92a833cfbb8f273042936d69340", "after_sha256": "6a79f21056cd1b523a60ca4d1075ac31feba0e4f5c04b65ef6e72b7752ccef67", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/65_row65_diffs/src_lib_studio_engine_chart_core_datum.ts.diff", "diff_sha256": "8b839bcdf04457cdf9093ca5af95ba5c4b59efd0227502ad72f44c2f9f96d2f9"}
   },
   {
    "path": "src/lib/studio/engine/chart/core/families.ts",
@@ -1521,10 +1523,11 @@
   },
   {
    "path": "src/lib/studio/engine/chart/core/index.ts",
-   "status": "copied",
-   "bytes": 3425,
+   "status": "patched",
+   "bytes": 3407,
    "source_sha256": "228741d0ce2bc8adfbd5d5be00a663d6b171a50b467eda45fd4bd2b2b7c24c67",
-   "sha256": "228741d0ce2bc8adfbd5d5be00a663d6b171a50b467eda45fd4bd2b2b7c24c67"
+   "sha256": "d9435e7989b2ca4200d32901a1fe673914d75c3908cbf9003365300acbd2bee3",
+   "patch_row65": {"id": "row65-t09-honest-bars", "row": "65", "decision": "1.2.6 patch T-09 honest bar geometry (U14 reverses D-322; register N-025..N-029)", "summary": "BAR_MAX_THICK_MM export removed (retired, N-028)", "diff_base": "sha256 before this row", "before_sha256": "228741d0ce2bc8adfbd5d5be00a663d6b171a50b467eda45fd4bd2b2b7c24c67", "after_sha256": "d9435e7989b2ca4200d32901a1fe673914d75c3908cbf9003365300acbd2bee3", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/65_row65_diffs/src_lib_studio_engine_chart_core_index.ts.diff", "diff_sha256": "1c055bc5017316822d3aa85dd811a560b459d654248643340eb04cd149219470"}
   },
   {
    "path": "src/lib/studio/engine/chart/core/intent.ts",
@@ -6083,6 +6086,7 @@
   "76",
   "72",
   "60",
-  "49"
+  "49",
+  "65"
  ]
 }
