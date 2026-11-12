@@ -114,6 +114,12 @@ export const SUBAGENT_STOPPED = "Stopped by autonomous mode:"
  */
 export const SUBAGENT_NO_RESULT = "Subagent returned no result:"
 
+/**
+ * 1.2.6 S-03b (register N-105): a task call named `expected_outputs` and at least one of those paths is absent after the
+ * run. Followed by the absent paths; the calling controller marks its mission row `blocked` with this note.
+ */
+export const SUBAGENT_OUTPUT_MISSING = "Promised output missing:"
+
 /** The stop for a repeating call (`doom_loop`) to `tool`. */
 export function subagentStoppedMessage(tool: string) {
   return `${SUBAGENT_STOPPED} repeated calls to \`${tool}\`.`

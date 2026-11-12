@@ -16,7 +16,10 @@ import { Effect, Exit, Option, Schema, Scope } from "effect"
 import { EffectBridge } from "@/effect/bridge"
 import { RuntimeFlags } from "@/effect/runtime-flags"
 import { Database } from "@opencode-ai/core/database/database"
-import { SUBAGENT_NO_RESULT, SUBAGENT_STOPPED } from "@/permission/autonomy-texts"
+import { SUBAGENT_NO_RESULT, SUBAGENT_OUTPUT_MISSING, SUBAGENT_STOPPED } from "@/permission/autonomy-texts"
+import { InstanceState } from "@/effect/instance-state"
+import { existsSync } from "node:fs"
+import * as path from "path"
 import { MCP } from "@/mcp"
 import { RoleAlias } from "../agent/role-alias"
 
@@ -54,6 +57,10 @@ const BaseParameterFields = {
       "This should only be set if you mean to resume a previous task (you can pass a prior task_id and the task will continue the same subagent session as before instead of creating a fresh one)",
   }),
   command: Schema.optional(Schema.String).annotate({ description: "The command that triggered this task" }),
+  expected_outputs: Schema.optional(Schema.Array(Schema.String)).annotate({
+    description:
+      "Paths the subagent must produce (absolute, or relative to the session directory). After the run, any path that does not exist makes the task return SUBAGENT_OUTPUT_MISSING naming it.",
+  }),
 }
 
 const BaseParameters = Schema.Struct(BaseParameterFields)
@@ -85,7 +92,26 @@ export function renderTaskOutput(input: {
 
 // How autonomous mode words a subagent run it stopped (`autonomy-texts.ts`, which the permission service writes it with),
 // so the task call can tell the stop from a failure.
-export { SUBAGENT_NO_RESULT, SUBAGENT_STOPPED, subagentStoppedMessage } from "@/permission/autonomy-texts"
+export {
+  SUBAGENT_NO_RESULT,
+  SUBAGENT_OUTPUT_MISSING,
+  SUBAGENT_STOPPED,
+  subagentStoppedMessage,
+} from "@/permission/autonomy-texts"
+
+/** S-03b: the `expected_outputs` paths that do not exist, resolved against `root`. Existence only; content is never read. */
+export function missingOutputs(root: string, paths: readonly string[] | undefined) {
+  return (paths ?? []).filter((item) => !existsSync(path.isAbsolute(item) ? item : path.resolve(root, item)))
+}
+
+/** The task result when promised outputs are absent: SUBAGENT_OUTPUT_MISSING, the paths, the task_id and the answer. */
+export function subagentOutputMissingText(sessionID: SessionID, missing: readonly string[], answer?: string) {
+  return [
+    `${SUBAGENT_OUTPUT_MISSING} ${missing.join(", ")} (task_id: ${sessionID})`,
+    "The subagent finished but these promised paths do not exist. Do not treat this task as done: mark its row blocked with this note, or pass this task_id to continue it.",
+    answer ? `What the subagent answered:\n${answer}` : "The subagent left no answer.",
+  ].join("\n\n")
+}
 
 /** S-03a: why a subagent run ended without an answer (register N-102). */
 export type NoResultReason = "length" | "tool-calls" | "no-text" | "unfinished"
@@ -314,6 +340,8 @@ export const TaskTool = Tool.define(
 
       const ops = ctx.extra?.promptOps as TaskPromptOps
       if (!ops) return yield* Effect.fail(new Error("TaskTool requires promptOps in ctx.extra"))
+      // S-03b: captured here, so a background run checks `expected_outputs` against the same session directory.
+      const root = (yield* InstanceState.context).directory
 
       const runTask = Effect.fn("TaskTool.runTask")(function* () {
         const parts = yield* ops.resolvePromptParts(prefix + params.prompt)
@@ -333,6 +361,9 @@ export const TaskTool = Tool.define(
         if (outcome.type === "empty") return yield* Effect.fail(new Error(outcome.text))
         if (outcome.type === "unfinished")
           return yield* Effect.fail(new Error(subagentNoResultText(nextSession.id, "unfinished")))
+        const missing = missingOutputs(root, params.expected_outputs)
+        if (missing.length > 0)
+          return yield* Effect.fail(new Error(subagentOutputMissingText(nextSession.id, missing, outcome.text)))
         return outcome.text
       })
 
