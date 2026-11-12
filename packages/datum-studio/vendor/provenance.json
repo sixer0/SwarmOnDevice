@@ -62,7 +62,7 @@
   "patched": 125,
   "replaced": 12,
   "added": 29,
-  "bytes": 9797916
+  "bytes": 9799785
  },
  "files": [
   {
@@ -793,9 +793,10 @@
   {
    "path": "src/lib/studio/contract/env.ts",
    "status": "patched",
-   "bytes": 19069,
+   "bytes": 19533,
    "source_sha256": "73232eea6c3db8f8e94ce88fef574c03f29155440a390c5947b16d55427913a2",
-   "sha256": "57def9b7d8b38238e1cb1af835454bb646a9b3f66ea6772800d889e038951e69",
+   "sha256": "b2611cd23541e43ef47299a107ab906666fd1312db1525fe7d807418c6e636ef",
+   "patch_row55a": {"id": "row55a-m04-raster-limit", "row": "55a", "decision": "1.2.6 patch M-04 (U5; register N-045, N-046)", "summary": "additive: RASTER_TIMEOUT_MAX_MS = 120000 and RASTER_TIMEOUT_PER_LABEL_MS = 250 beside STUDIO_CHROMIUM_TIMEOUT_MS", "before_sha256": "57def9b7d8b38238e1cb1af835454bb646a9b3f66ea6772800d889e038951e69", "after_sha256": "b2611cd23541e43ef47299a107ab906666fd1312db1525fe7d807418c6e636ef", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/55a_row55a_diffs/src_lib_studio_contract_env.ts.diff", "diff_sha256": "1c86055bdbeb023b8bc9ad5063ff849e38269d1305d68bc8b77c497d4ff3f683"},
    "patch_row165I": {"id": "row165I-security", "row": "165I", "decision": "C196 (verification/24 L2)", "summary": "DATUM_FILENAME_PATTERN also refuses C1 U+0080-009F, ALM U+061C, U+200B-200D, U+2028/2029, U+2060, U+FEFF (app copy changed identically, pin test passes); NEW DATUM_NAME_UNSAFE_CHARS (reject set used by safeDatumName and standaloneFileName)", "before_sha256": "e6e9099068dd8bf3d1ff64bfe340820dc173ea45c450ad57110cfa477cb50744", "after_sha256": "57def9b7d8b38238e1cb1af835454bb646a9b3f66ea6772800d889e038951e69", "diff": "implementation/141_row165I_diffs/src_lib_studio_contract_env.ts.diff"},
    "patch_row165D": {"id": "row165D-delivered-name", "row": "165D", "decision": "C189 F56-2 (CP-17)", "summary": "additive: DATUM_FILENAME_PATTERN (the delivered DATUM title name: <Judul> <nomor> Rev<X> / <Judul> <YYYY-MM-DD> / Gambar <C.n> <Judul>, optional ' <sha8|16|64>' collision suffix, one safe segment, no '_'); the app copies it verbatim (file-preview-policy.ts, pinned by a test)", "before_sha256": "bda08348adaadb55195bcb85ebb1fa57c7b57ca7b5574240b85085041e5f188d", "after_sha256": "e6e9099068dd8bf3d1ff64bfe340820dc173ea45c450ad57110cfa477cb50744", "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/137_row165D_diffs/contract_env.ts.diff", "diff_sha256": "ebde370faf48724aa233f8618ddae96289c94436f525ec573fff6a4fed715742"},
    "patch_row29": {
@@ -1226,9 +1227,10 @@
   {
    "path": "src/lib/studio/engine/browser/index.ts",
    "status": "patched",
-   "bytes": 22354,
+   "bytes": 22834,
    "source_sha256": "c9518a269f2985a6449b9c11bf98a1ac48c17e247e9535360be29633cbe9d6b1",
-   "sha256": "d1e93e43f825183dd56bc5efabf4d75118a8e92164b8c149b51c57835babaf8e",
+   "sha256": "32738ebabd64dc6fe4225c4a5a75c8e20d9b4f66e93518b7ff35f09e9cff795e",
+   "patch_row55a": {"id": "row55a-m04-raster-limit", "row": "55a", "decision": "1.2.6 patch M-04 (U5; register N-045, N-046)", "summary": "rasterizeSvg passes the adaptive limit min(RASTER_TIMEOUT_MAX_MS, STUDIO_CHROMIUM_TIMEOUT_MS + <text> elements x RASTER_TIMEOUT_PER_LABEL_MS) to withSandboxedPage (was the fixed 30000 default)", "before_sha256": "d1e93e43f825183dd56bc5efabf4d75118a8e92164b8c149b51c57835babaf8e", "after_sha256": "32738ebabd64dc6fe4225c4a5a75c8e20d9b4f66e93518b7ff35f09e9cff795e", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/55a_row55a_diffs/src_lib_studio_engine_browser_index.ts.diff", "diff_sha256": "355ee3b15a0be1f0ea9f497227b24a644a8312078218decee3ea496ac5b87e6e"},
    "patch": {
     "id": "row122-cp47-raster-width",
     "row": 122,
@@ -1278,9 +1280,10 @@
   {
    "path": "src/lib/studio/engine/browser/runtime.ts",
    "status": "replaced",
-   "bytes": 29363,
+   "bytes": 30288,
    "source_sha256": "d05569cbe8d96addc63b84fac773b1f107b48dc0949cb949c54a8111986c310a",
-   "sha256": "6b7a7e7485b8eec68cfa7db0ceedf8338d5f097d25f39f40990e8f41ff8fb4b7",
+   "sha256": "bce820ed77036a5470771d7c20d087cbf159cb8c16ced346b5dee5c871b35c7f",
+   "patch_row55a": {"id": "row55a-m04-raster-limit", "row": "55a", "decision": "1.2.6 patch M-04 (U5; register N-047, N-048, 01d F4)", "summary": "BridgeTransport takes optional { timeoutMs } (NEW type BridgeTransportOptions); NEW BRIDGE_READ_MARGIN_MS = 45000; socketTransport read timeout = (timeoutMs ?? STUDIO_CHROMIUM_TIMEOUT_MS) + BRIDGE_READ_MARGIN_MS (was STUDIO_CHROMIUM_TIMEOUT_MS * 2); bridgeCall(op, req, timeoutMs?) passes it; BridgePage png/checkPage/pdf pass opts.timeoutMs; BROWSER_QUEUE_WAIT_MS_DEFAULT = 2 * RASTER_TIMEOUT_MAX_MS = 240000 (was 4 * 30000; env STUDIO_CHROMIUM_QUEUE_WAIT_MS kept)", "diff_base": "patch_row143b.after_sha256", "before_sha256": "6b7a7e7485b8eec68cfa7db0ceedf8338d5f097d25f39f40990e8f41ff8fb4b7", "after_sha256": "bce820ed77036a5470771d7c20d087cbf159cb8c16ced346b5dee5c871b35c7f", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/55a_row55a_diffs/src_lib_studio_engine_browser_runtime.ts.diff", "diff_sha256": "a26c5d0ee0522a52dfc754d64ea402948383c300ea82c88a0911a8ad986bbbfe"},
    "patch_row143b": {
     "id": "row143b-symlink-page-images",
     "row": "143b",
@@ -5932,6 +5935,7 @@
   "207",
   "206",
   "210",
-  "213"
+  "213",
+  "55a"
  ]
 }

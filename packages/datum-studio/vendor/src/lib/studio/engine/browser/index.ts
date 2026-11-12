@@ -18,7 +18,7 @@
  */
 import type { BrowserHandle, LayoutMetrics, ResolvedTemplate } from "../../contract";
 import { StudioEngineError } from "../../contract/errors";
-import { getStudioEnv } from "../../contract/env";
+import { getStudioEnv, RASTER_TIMEOUT_MAX_MS, RASTER_TIMEOUT_PER_LABEL_MS, STUDIO_CHROMIUM_TIMEOUT_MS } from "../../contract/env";
 import {
   DOC_SIZE_SCRIPT,
   FONTS_READY_SCRIPT,
@@ -265,7 +265,11 @@ export async function rasterizeSvg(svg: string, i: { widthMm: number; heightMm: 
     `body>svg{width:${geo.cssW}px;height:${geo.cssH}px}` +
     `</style></head><body>${inline}</body></html>`;
 
-  const png = await withSandboxedPage(op, { viewport: geo.viewport, deviceScaleFactor: geo.scale }, async ({ page }) => {
+  // Swarm 1.2.6 M-04 (N-045, N-046): a figure with many labels may take longer than one page op in the bridge
+  // (cold fonts, text shaping); the limit grows per <text> element up to RASTER_TIMEOUT_MAX_MS.
+  const labels = inline.match(/<text[\s>/]/gi)?.length ?? 0;
+  const timeoutMs = Math.min(RASTER_TIMEOUT_MAX_MS, STUDIO_CHROMIUM_TIMEOUT_MS + labels * RASTER_TIMEOUT_PER_LABEL_MS);
+  const png = await withSandboxedPage(op, { viewport: geo.viewport, deviceScaleFactor: geo.scale, timeoutMs }, async ({ page }) => {
     await page.setContent(html, { waitUntil: "load" });
     await page.evaluate(FONTS_READY_SCRIPT);
     if (fonts.families.length > 0) {

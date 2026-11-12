@@ -34,6 +34,16 @@ export const STUDIO_CHROMIUM_BRIDGE_LABEL = "electron:datum-render-bridge";
 // ── Konstanta ────────────────────────────────────────────────────────────
 /** C07 — per operasi halaman. */
 export const STUDIO_CHROMIUM_TIMEOUT_MS = 30000;
+/**
+ * Swarm 1.2.6 M-04 (N-045): upper bound of the adaptive `rasterizeSvg` limit. Must stay below the
+ * Electron bridge `JOB_TIMEOUT_MS` (150000; timeout ladder I-3).
+ */
+export const RASTER_TIMEOUT_MAX_MS = 120000;
+/**
+ * Swarm 1.2.6 M-04 (N-046): extra time per SVG text element. `rasterizeSvg` limit =
+ * min(RASTER_TIMEOUT_MAX_MS, STUDIO_CHROMIUM_TIMEOUT_MS + text elements x RASTER_TIMEOUT_PER_LABEL_MS).
+ */
+export const RASTER_TIMEOUT_PER_LABEL_MS = 250;
 /** C08 */
 export const STUDIO_RENDER_JOB_TIMEOUT_MS = 600000;
 /** C09 — 5 MiB. */

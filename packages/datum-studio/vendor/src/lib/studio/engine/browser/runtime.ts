@@ -31,7 +31,7 @@ import os from "node:os";
 import path from "node:path";
 
 import type { RenderLogEntry } from "../../contract/engine";
-import { STUDIO_CHROMIUM_TIMEOUT_MS } from "../../contract/env";
+import { RASTER_TIMEOUT_MAX_MS, STUDIO_CHROMIUM_TIMEOUT_MS } from "../../contract/env";
 import type { StudioErrorCode } from "../../contract/enums";
 import { StudioEngineError } from "../../contract/errors";
 import { FONTS_READY_SCRIPT, MEASURE_SCRIPT } from "./measure";
@@ -73,8 +73,21 @@ const MAX_REPLY_BYTES = 32 * 1024 * 1024;
 export type BridgeOp = "hello" | "png" | "pdf" | "checkPage" | "pagePng";
 export type BridgeRequest = { op: BridgeOp } & Record<string, unknown>;
 export type BridgeReply = ({ ok: true } & Record<string, unknown>) | { ok: false; code?: string; message?: string; error?: string };
+/**
+ * Options of one transport call. Swarm 1.2.6 M-04: `timeoutMs` is the host-side limit of the page
+ * operation the request belongs to (default STUDIO_CHROMIUM_TIMEOUT_MS).
+ */
+export interface BridgeTransportOptions {
+  timeoutMs?: number;
+}
 /** One request -> one reply. The token is added by the transport, never by callers. */
-export type BridgeTransport = (req: BridgeRequest) => Promise<BridgeReply>;
+export type BridgeTransport = (req: BridgeRequest, opts?: BridgeTransportOptions) => Promise<BridgeReply>;
+
+/**
+ * Swarm 1.2.6 M-04 (N-047): the socket read waits for the op limit plus this margin, so the
+ * host-side op timer (or the bridge's own RENDER_TIMEOUT reply) decides, not the socket read.
+ */
+export const BRIDGE_READ_MARGIN_MS = 45000;
 
 /** What the bridge reports at the handshake (row 24 dispatch.ts EngineInfo + hello extras). */
 export interface BridgeInfo {
@@ -103,7 +116,8 @@ class BridgeTransportError extends Error {
 }
 
 /** Default transport: one connection per request over the bridge Unix socket (row 24 socket-server.ts). */
-export const socketTransport: BridgeTransport = (req) => {
+export const socketTransport: BridgeTransport = (req, opts) => {
+  const readTimeoutMs = (opts?.timeoutMs ?? STUDIO_CHROMIUM_TIMEOUT_MS) + BRIDGE_READ_MARGIN_MS;
   const socketPath = process.env[RENDER_SOCKET_ENV]?.trim() ?? "";
   const token = process.env[RENDER_TOKEN_ENV]?.trim() ?? "";
   if (socketPath === "" || token === "" || !path.isAbsolute(socketPath)) {
@@ -121,7 +135,7 @@ export const socketTransport: BridgeTransport = (req) => {
       else resolve(reply!);
     };
     const sock = net.createConnection({ path: socketPath });
-    sock.setTimeout(STUDIO_CHROMIUM_TIMEOUT_MS * 2, () => done(new BridgeTransportError("protocol", "render bridge did not answer in time")));
+    sock.setTimeout(readTimeoutMs, () => done(new BridgeTransportError("protocol", "render bridge did not answer in time")));
     sock.on("error", (e) => done(new BridgeTransportError("connect", `render bridge socket error: ${(e as NodeJS.ErrnoException).code ?? e.message}`)));
     sock.on("connect", () => sock.write(`${JSON.stringify({ ...req, token })}\n`));
     sock.on("data", (b: Buffer) => {
@@ -207,12 +221,12 @@ export function logBrowser(level: RenderLogEntry["level"], message: string, extr
 const INPUT_CODES = new Set(["BAD_REQUEST", "PATH_REFUSED", "INPUT_TOO_LARGE", "SVG_INVALID", "LINE_TOO_LONG"]);
 
 /** Send one op to the bridge; map transport failures and bridge error codes to Studio errors. */
-export async function bridgeCall(op: string, req: BridgeRequest): Promise<Record<string, unknown>> {
+export async function bridgeCall(op: string, req: BridgeRequest, timeoutMs?: number): Promise<Record<string, unknown>> {
   const s = state();
   const transport = s.transport ?? socketTransport;
   let reply: BridgeReply;
   try {
-    reply = await transport(req);
+    reply = await transport(req, timeoutMs === undefined ? undefined : { timeoutMs });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     logBrowser("error", `render bridge ${req.op} failed: ${msg}`, { op, code: "BROWSER_UNAVAILABLE" });
@@ -304,7 +318,8 @@ export async function ensureBrowser(): Promise<Browser> {
 
 // ── Bounded queue (verbatim from the original, FIX-8, S87 M-03) ──────────
 export const BROWSER_MAX_QUEUED_DEFAULT = 16;
-export const BROWSER_QUEUE_WAIT_MS_DEFAULT = 4 * STUDIO_CHROMIUM_TIMEOUT_MS;
+/** Swarm 1.2.6 M-04 (N-048, 01d F4): 240000 = 2 x RASTER_TIMEOUT_MAX_MS, at least the bridge JOB_TIMEOUT_MS (ladder I-5); env STUDIO_CHROMIUM_QUEUE_WAIT_MS kept. */
+export const BROWSER_QUEUE_WAIT_MS_DEFAULT = 2 * RASTER_TIMEOUT_MAX_MS;
 export const BROWSER_QUEUE_RETRY_AFTER_SEC_DEFAULT = 30;
 
 function envInt(name: string, fallback: number, min: number): number {
@@ -459,7 +474,7 @@ export class BridgePage {
         arg,
         viewportWidth: width,
         viewportHeight: height,
-      });
+      }, this.opts.timeoutMs);
       return r.result;
     }
     throw new StudioBrowserError("RENDER_FAILED", this.op, "page script is not available through the render bridge");
@@ -478,7 +493,7 @@ export class BridgePage {
     const dst = this.file("figure.png");
     writeFileSync(src, svgWithFontCss(page.svg, page.fontCss), { mode: 0o600 });
     rmSync(dst, { force: true });
-    await bridgeCall(this.op, { op: "png", src, dst, width, height });
+    await bridgeCall(this.op, { op: "png", src, dst, width, height }, this.opts.timeoutMs);
     return readFileSync(dst);
   }
 
@@ -494,7 +509,7 @@ export class BridgePage {
       widthMm: mmOf(o.width, 210),
       heightMm: mmOf(o.height, 297),
       preferCSSPageSize: o.preferCSSPageSize ?? true,
-    });
+    }, this.opts.timeoutMs);
     return readFileSync(dst);
   }
 }
