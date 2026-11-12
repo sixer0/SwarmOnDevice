@@ -177,6 +177,26 @@ describe("row 38c (P-01c): one Revert action on the checkpoints, in the existing
     expect(revertButtons(view.host).map((b) => b.textContent?.trim())).toEqual([REVERT, REVERT])
   })
 
+  test("FX-13: only the newest 20 checkpoints are listed, then one plain 'N more' line", () => {
+    // Written oldest first, so the audit order and the time order agree; the newest is ck_25.
+    const view = mount(Array.from({ length: 25 }, (_, i) => checkpointed(`ck_${i + 1}`)))
+    const group = view.host.querySelector<HTMLElement>("[data-decision-checkpoints]")!
+    expect(group.textContent).toContain(dict["session.autonomy.checkpoint.title"].replace("{{count}}", "25"))
+    const ids = [...group.querySelectorAll<HTMLElement>("[data-checkpoint]")].map((el) => el.dataset.checkpoint)
+    expect(ids).toEqual(Array.from({ length: 20 }, (_, i) => `ck_${25 - i}`))
+    expect(revertButtons(view.host)).toHaveLength(20)
+    const more = group.querySelector<HTMLElement>("[data-checkpoint-more]")!
+    expect(more).not.toBeNull()
+    expect(more.textContent).toContain("5 more")
+    expect(group.lastElementChild).toBe(more)
+  })
+
+  test("FX-13: 20 checkpoints or fewer: all listed, no 'more' line", () => {
+    const view = mount(Array.from({ length: 20 }, (_, i) => checkpointed(`ck_${i + 1}`)))
+    expect(view.host.querySelectorAll("[data-checkpoint]")).toHaveLength(20)
+    expect(view.host.querySelector("[data-checkpoint-more]")).toBeNull()
+  })
+
   test("Revert asks first: nothing is sent until the confirmation, Cancel sends nothing", () => {
     const view = mount([checkpointed("ck_one")])
     revertButtons(view.host)[0]!.click()

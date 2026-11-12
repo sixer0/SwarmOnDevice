@@ -985,6 +985,8 @@ function createDecisions(rootID: () => string | undefined) {
   }
 }
 
+const CHECKPOINTS_SHOWN = 20
+
 // What waits on the person: the consent list, the archive, then the held entries, oldest first.
 function DecisionWaiting(props: {
   entries: readonly DecisionEntry[]
@@ -997,6 +999,8 @@ function DecisionWaiting(props: {
   const consent = () => props.decisions.consent()
   const archive = () => props.decisions.archive()
   const checkpoints = createMemo(() => checkpointsOf(props.decisions.store.state?.lines ?? []))
+  // FX-13: the newest 20 by time are listed; the rest are counted on one plain line.
+  const shownCheckpoints = createMemo(() => [...checkpoints()].sort((a, b) => b.at - a.at).slice(0, CHECKPOINTS_SHOWN))
   return (
     <section data-decision-group="waiting" class="flex flex-col">
       <Show when={consent()}>
@@ -1031,7 +1035,7 @@ function DecisionWaiting(props: {
           <span class="text-v2-text-text-base [font-weight:440]">
             {language.t("session.autonomy.checkpoint.title", { count: checkpoints().length })}
           </span>
-          <For each={checkpoints()}>
+          <For each={shownCheckpoints()}>
             {(item) => {
               const result = () => props.decisions.checkpointResult(item.id)
               const reverted = () => {
@@ -1086,6 +1090,11 @@ function DecisionWaiting(props: {
               )
             }}
           </For>
+          <Show when={checkpoints().length > CHECKPOINTS_SHOWN}>
+            <span data-checkpoint-more class="text-v2-text-text-faint [font-weight:440]">
+              {language.t("common.moreCountSuffix", { count: checkpoints().length - CHECKPOINTS_SHOWN }).trim()}
+            </span>
+          </Show>
         </div>
       </Show>
       <Show
