@@ -19,6 +19,7 @@ import {
   checkLint,
   checkPageCount,
   DIAGRAM_FAIL_KINDS,
+  FIGURE_FIT_FAIL_NOTES,
   isApplicable,
   runStaticChecks,
   VERIFY_CHECK_ORDER,
@@ -281,6 +282,9 @@ describe("row 150: FIGURE_FIT", () => {
   })
   it("diagram edgeCross / edgeCollinear are report-only; the other six kinds fail (spec §3.5)", () => {
     expect([...DIAGRAM_FAIL_KINDS].sort()).toEqual(["edgeThroughNode", "lineThroughText", "textExceedsNode", "textOutside", "textOverNode", "textOverlap"])
+  })
+  it("engine fit notes CAPTION_WRAP / CAPTION_TRUNCATED fail FIGURE_FIT (1.2.6 row 28, T-01 INTENT, N-015)", () => {
+    expect([...FIGURE_FIT_FAIL_NOTES].sort()).toEqual(["CAPTION_TRUNCATED", "CAPTION_WRAP"])
   })
   it("UNKNOWN: no same-job HTML / SVG, layout not measured, unknown figure kind, unparsable SVG", () => {
     expect(checkFigureFit({ format: "PDF", html: null, layout: paged(1, []) })).toMatchObject({ status: "UNKNOWN", reason: "SOURCE_MISSING" })
