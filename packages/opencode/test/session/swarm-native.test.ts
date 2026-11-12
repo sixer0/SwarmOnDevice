@@ -311,7 +311,8 @@ describe("SW-08, SW-09: the built-in swarm-workflow skill", () => {
     // Row 198 (L61, B2 + B5): general's tier "session model" -> "worker" (-7 B) and the Activity -> Agents line (+90 B).
     // Row 102 (1.2.6, W-07/W-04/W-11/W-02): +902 B to 10170 for four working-norm bullets (sections 0, 2, 6).
     // Row 103 (1.2.6, W-06/W-08/W-18): +829 B to 10999 (one bullet in section 2, line 100 rewritten plus one bullet in section 5).
-    expect(Buffer.byteLength(WORKFLOW)).toBe(10999)
+    // Fix row FX-10 (1.2.6, C19a): +158 B to 11157, section 6 states the shared figure-gate sentence.
+    expect(Buffer.byteLength(WORKFLOW)).toBe(11157)
   })
 })
 

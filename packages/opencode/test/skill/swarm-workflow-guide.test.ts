@@ -38,9 +38,11 @@ describe("1.2.6 row 102 working norms in swarm-workflow.md", () => {
 
   test("W-02: section 6 sets the dual gate, machine checks and an eye check, before a figure is done", () => {
     const text = section(6)
-    expect(text).toContain("- Figures and other visual output pass two gates:")
+    // FX-10 (C19a): the figure-gate sentence shared with the Studio guides; other visual output keeps two gates.
+    expect(text).toContain("- Figure gate: machine gate = the inline preview (the standalone preview is not the gate); a figure is done only after the machine gate AND an eye check of the rendered PNG.")
+    expect(text).toContain("Other visual output passes the same two gates:")
     expect(text).toContain("an eye check of the rendered image")
-    expect(text).toContain("a clean preview alone is not the gate")
+    expect(text).toContain("a clean preview alone is not done")
   })
 
   test("the norms stay generic: no project document, helper script or outside tool names", () => {

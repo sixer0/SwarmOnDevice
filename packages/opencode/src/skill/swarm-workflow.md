@@ -105,7 +105,7 @@ Return: status complete, blocked or needs-review; files created or changed; the 
 
 - A verifier row checks the whole result against the plan's checks, runs the tests and pastes their output.
 - Documents: a row is done only when its Studio verification gate passes (studio_report_check, then studio_report_submit). For a format Studio does not make, the done note names the check run and its result file.
-- Figures and other visual output pass two gates: the machine checks (preview, lint, render report) and an eye check of the rendered image (look at the PNG, or send it to a verifier as blind judge). Either gate alone is not done; a clean preview alone is not the gate.
+- Figure gate: machine gate = the inline preview (the standalone preview is not the gate); a figure is done only after the machine gate AND an eye check of the rendered PNG. Other visual output passes the same two gates: the machine checks (lint, render report) and an eye check of the rendered image (look at the PNG, or send it to a verifier as blind judge). Either gate alone is not done; a clean preview alone is not done.
 - When a check fails, fix the cause through the row's agent and run it again, at most 3 times per check (gsp_workflow step 7). Then report what still fails as a blocker.
 - Never mark a row done, or say a check passed, without output from this session.
 

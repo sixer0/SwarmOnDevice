@@ -530,8 +530,10 @@ tindakannya; norma kerja diagram lengkap (batas label, warna aksen, jenis garis)
    per figur dan baris `pages:` berisi gambar halaman PNG.
 5. **Lihat PNG-nya.** Buka PNG halaman dari baris `pages:`, atau PNG figur dari `outputs` lewat
    `studio_file_verify { fileId, downloadDir }`, dan periksa dengan mata: arah alur, panah sampai ke
-   simpul, label terbaca. Diagram selesai hanya bila dua gerbang lulus: gerbang mesin (pratinjau tanpa
-   `defects`, `FIGURE_FIT` PASS) dan gerbang mata atas PNG. Pratinjau bersih saja bukan gerbang.
+   simpul, label terbaca. Gerbang figur: gerbang mesin = pratinjau inline (pratinjau mandiri bukan
+   gerbang); figur selesai hanya setelah gerbang mesin DAN gerbang mata atas PNG hasil render. Gerbang
+   mesin lulus bila pratinjau inline tanpa `defects` (sesudah render: `FIGURE_FIT` PASS). Pratinjau
+   bersih saja belum selesai.
 
 **Cabang paralel: `direction`.** `spec.direction` bernilai `"TB"` (atas-bawah) atau `"LR"`
 (kiri-kanan) dan hanya berlaku untuk `family: "flow"`. Tanpa `direction`, flow mengikuti urutan daftar
@@ -549,7 +551,8 @@ dari tepi lembar.
 
 **Caption.** Studio mencetak label `GAMBAR n.m` sendiri. Caption tidak pernah diawali token label
 (`Gambar 3.1`, `Figure 2`, `Fig. 1`, `Grafik 4`, `Bagan 2`, `Diagram 1`): kiriman bab dan
-`studio_figure_revise` menolaknya `CAPTION_TOKEN_DUPLICATE`, 0 tulis. Tulis isinya saja, maksimal 100
+`studio_figure_revise` menolaknya 400 `SCHEMA_INVALID` (`checkId` `CAPTION_TOKEN_DUPLICATE`), 0 tulis;
+cocokkan `checkId`, bukan kode galatnya. Tulis isinya saja, maksimal 100
 karakter (`CAPTION_GUIDE_MAX_CHARS`) agar muat satu baris: satu vonis yang menyebut pelaku dan angka.
 Sumber ditulis di `source`, bukan di caption. Caption yang terbungkus ke baris kedua gagal
 `FIGURE_FIT` `CAPTION_WRAP`; caption atau baris SUMBER yang dipotong elipsis gagal `CAPTION_TRUNCATED`.
@@ -1522,7 +1525,9 @@ mengulang studio_render`. Render bisa tetap selesai di server. Lakukan berurutan
 1. `studio_document_status { documentId }` dan bandingkan daftar berkas dengan daftar sebelum render.
    Tiap baris berkas memuat vonis halaman yang tersimpan: `RENDER_VERIFIED(U24)` atau
    `RENDER_UNVERIFIED(U24) fail=… unknown=…` (dengan baris `OVERLAP_CLIP … diukur m/n halaman`), atau
-   `RENDER_VERIFY_PENDING` bila belum ada vonis tersimpan untuk berkas itu.
+   `RENDER_VERIFY_PENDING` bila belum ada vonis tersimpan untuk berkas itu. Bentuk
+   `RENDER_UNVERIFIED(U24) STALE fail=… unknown=…` berarti vonis tersimpan dibuat untuk byte lain:
+   berkas itu belum punya vonis halaman sendiri, jadi bukan lulus.
 2. Ada berkas baru: `studio_file_verify { fileId }` untuk setiap id berkas itu (sha256).
 3. Tidak ada berkas baru: ulangi `studio_render` satu kali.
 
@@ -1554,7 +1559,8 @@ itu `UNKNOWN:MEASURE_TRUNCATED`, dan berkasnya `RENDER_UNVERIFIED(U24)`.
 Dalam laporan, tulis label yang dimaksud, jangan "terverifikasi" saja. Gerbang selesai baris misi
 (`OUTPUT_UNVERIFIED`) membaca vonis halaman.
 
-Untuk figur, gerbangnya pratinjau inline (seksi 4.1.2). Pratinjau mandiri
+Gerbang figur: gerbang mesin = pratinjau inline (pratinjau mandiri bukan gerbang); figur selesai hanya
+setelah gerbang mesin DAN gerbang mata atas PNG hasil render. Langkahnya di seksi 4.1.2. Pratinjau mandiri
 `studio_figure_preview { documentId, pid, standalone: true, downloadDir, png: true }` memeriksa figur
 sendirian (caption, KUNCI, dan SUMBER di dalam gambar) dengan batas angka figur. Pratinjau mandiri
 tidak menggantikan pratinjau inline atau pemeriksaan halaman.

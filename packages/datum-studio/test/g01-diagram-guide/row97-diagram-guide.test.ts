@@ -16,9 +16,9 @@ const K = { cap: 100, inset: 2, fan: 4, tb128: 4, tb166: 5, lrPar: 6, lr128: 3, 
 
 describe("row 97: diagram resource norms (G-01)", () => {
   const NORMS: Array<[string, string]> = [
-    ["W-02 dual gate", "the preview alone is not the gate"],
+    ["W-02 dual gate (FX-10, C19a)", "Figure gate: machine gate = the inline preview (the standalone preview is not the gate)"],
     ["W-01 caption", `Studio prints the label; the caption never starts with it; at most ${K.cap} characters`],
-    ["labels 18/32 + sub", "edge label at most 18 characters, node label at most 32; a second detail goes in `sub`"],
+    ["labels ~20/~40 + sub (FX-10, C19b: the engine hints)", "edge label at most ~20 characters, node label at most ~40; a second detail goes in `sub`"],
     ["one accent", "One accent per drawing"],
     ["line kinds with glyphs", "At most 3 edge kinds when any node has a mark (4 without; DATUM-25)"],
     ["col 0 + inset", `\`col: 0\` is valid; Studio keeps a ${K.inset} mm inset from the sheet edge`],
@@ -29,13 +29,15 @@ describe("row 97: diagram resource norms (G-01)", () => {
   ]
   for (const [name, pin] of NORMS) test(`${name} appears exactly once`, () => expect(count(pin)).toBe(1))
 
-  test("W-02: machine checks and an eye check of the PNG (or a blind judge); notices are not defects", () => {
-    expect(count("machine checks and an eye check of the PNG (or a blind judge)")).toBe(1)
-    expect(t).toContain("Defects (every FAIL and GEOM_*) must reach zero; notices are information")
+  // FX-10 (C19a, F9): one gate sentence shared with the five other gate texts; the defect list is figure.defects.
+  test("W-02: machine gate and an eye check of the rendered PNG; notices are not defects", () => {
+    expect(count("a figure is done only after the machine gate AND an eye check of the rendered PNG")).toBe(1)
+    expect(t).toMatch(/Defects \(figure\.defects: any FAIL, GEOM_\*, [^)]*\) must reach zero; notices are information/)
   })
 
-  test("W-14: the chapter-width preview is the gate; standalone checks the figure alone", () => {
-    expect(count("`standalone: true` checks the figure alone and is not the gate; gate on the chapter-width preview")).toBe(1)
+  // FX-10 (C19a): the standalone rule now lives in the shared gate sentence.
+  test("W-14: the inline preview is the machine gate; standalone is not the gate", () => {
+    expect(count("machine gate = the inline preview (the standalone preview is not the gate)")).toBe(1)
   })
 
   test("T-11 guide line: direction, capacities from the flow constants, legacy flow and FLOW_SERIALISED", () => {

@@ -31,8 +31,9 @@ describe("row 97b: the diagram section exists and the workflow runs in order", (
     const steps = ["**Pratinjau inline.**", "**Revisi sebagian.**", "**Baca `FIGURE_GRAPH_DELTA`.**", "**Render.**", "**Lihat PNG-nya.**"].map((s) => flat.indexOf(s))
     expect(steps.every((i) => i >= 0)).toBe(true)
     expect([...steps].sort((a, b) => a - b)).toEqual(steps)
-    expect(flat).toContain("dua gerbang lulus")
-    expect(flat).toContain("Pratinjau bersih saja bukan gerbang")
+    // FX-10 (C19a): the shared figure-gate sentence; a clean preview alone is not done.
+    expect(flat).toContain("figur selesai hanya setelah gerbang mesin DAN gerbang mata atas PNG hasil render")
+    expect(flat).toContain("Pratinjau bersih saja belum selesai")
   })
 })
 

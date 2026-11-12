@@ -139,7 +139,7 @@ function svgFileName(id: string, b: Rec, f: Rec): string {
 const figurePreviewTool: ToolDef = {
   name: "studio_figure_preview",
   description:
-    "Pratinjau satu chart/diagram tanpa render dokumen: ukuran + isu tata letak bersaran. Sasaran pid/address atau block v2 (dry-run). SVG: downloadDir atau includeSvg. Gerbang = pratinjau inline. standalone: hanya figur sendiri (caption, KUNCI, SUMBER), batas numerik; png: +PNG.",
+    "Pratinjau satu chart/diagram tanpa render: ukuran, isu bersaran. Sasaran pid/address/block v2 (dry-run). SVG: downloadDir/includeSvg (terpotong). Gerbang figur: gerbang mesin = pratinjau inline (pratinjau mandiri bukan gerbang); figur selesai hanya setelah gerbang mesin DAN gerbang mata atas PNG hasil render. standalone: figur sendiri + KUNCI/SUMBER, batas angka; png: +PNG.",
   inputSchema: obj(
     {
       documentId: S.documentId,
@@ -147,7 +147,7 @@ const figurePreviewTool: ToolDef = {
       address: ADDRESS,
       block: { type: "object", description: "chart/diagram" },
       rev: S.rev,
-      includeSvg: { type: "boolean", description: "SVG terpotong." },
+      includeSvg: { type: "boolean" },
       // Row 165E (C192, tools/list < 30 KB): the meaning of standalone/png lives in the tool description and the guide.
       standalone: { type: "boolean" },
       png: { type: "boolean" },
@@ -386,7 +386,7 @@ function graphDeltaLines(id: string, d: FigureGraphDelta): string[] {
 const figureReviseTool: ToolDef = {
   name: "studio_figure_revise",
   description:
-    "Ubah konten satu figur v2 tanpa kirim ulang bab, lalu pratinjau. patch parsial: data, caption, unit, labelShort, topN, orientation, sort...; spec digabung; null = hapus. Simpul/tepi berubah -> FIGURE_GRAPH_DELTA. Wajib change + baseRevisionNo (atau basis sesi).",
+    "Ubah konten satu figur v2 tanpa kirim ulang bab, lalu pratinjau. patch parsial: data, caption, unit, labelShort, sort...; spec digabung; null = hapus. Simpul/tepi berubah -> FIGURE_GRAPH_DELTA. Wajib change + baseRevisionNo (atau basis sesi).",
   inputSchema: obj(
     {
       documentId: S.documentId,
@@ -395,7 +395,7 @@ const figureReviseTool: ToolDef = {
       patch: { type: "object", minProperties: 1, description: "diagram: spec/caption/source/keyRow" },
       baseRevisionNo: BASE_REV,
       change: CHANGE,
-      preview: { type: "boolean", description: "Bawaan true." },
+      preview: { type: "boolean", default: true },
       adoptExisting: { ...ADOPT, description: "Dokumen agentId lain (eksplisit)." },
       agentId: S.agentId,
     },

@@ -17,7 +17,8 @@ describe("INT-1 item 7: dokumen-klien recipe G-05 remainder", () => {
 
   test("standalone preview caveat: the inline preview is the figure gate", () => {
     expect(flat).toMatch(/[Pp]ratinjau mandiri[^.]*tidak menggantikan[^.]*pratinjau inline/)
-    expect(flat).toMatch(/gerbang figur[^.]*pratinjau inline/)
+    // FX-10 (C19a): the shared figure-gate sentence (was "gerbang figur tetap pratinjau inline").
+    expect(flat).toMatch(/Gerbang figur: gerbang mesin = pratinjau inline \(pratinjau mandiri bukan gerbang\)/)
   })
 
   test("figure quota: D22, figure.quota.exceptionReason through the template owner", () => {

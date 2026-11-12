@@ -38,8 +38,10 @@ describe('row 99 G-06: tool descriptions', () => {
 
   it('studio_figure_preview: the inline preview is the gate; standalone checks the figure alone (W-14)', () => {
     const t = d('studio_figure_preview');
-    expect(t).toContain('Gerbang = pratinjau inline');
-    expect(t).toContain('standalone: hanya figur sendiri');
+    // FX-10 (C19a): the shared figure-gate sentence replaces 'Gerbang = pratinjau inline'.
+    expect(t).toContain('gerbang mesin = pratinjau inline (pratinjau mandiri bukan gerbang)');
+    expect(t).toContain('gerbang mesin DAN gerbang mata atas PNG hasil render');
+    expect(t).toContain('standalone: figur sendiri');
   });
 
   it('studio_document_status: findings paging (T-14)', () => {
