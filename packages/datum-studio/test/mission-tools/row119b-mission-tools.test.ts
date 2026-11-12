@@ -484,7 +484,8 @@ describe("row 119b: export seam (row 120 renderer)", () => {
       expect(readFileSync(path.join(PROJECT, "docs", M1, "decisions.md"), "utf8")).toBe(`# decisions of ${M1}\n`)
       expect(code(await call(c, "studio_mission_export", { mission: M1, write: true }))).toBe("FILE_EXISTS")
       expect((await call(c, "studio_mission_export", { mission: M1, files: ["decisions"], write: true, overwrite: true })).ok).toBe(true)
-      expect(readdirSync(path.join(PROJECT, "docs", M1)).some((n) => n.startsWith("decisions.md.bak-"))).toBe(true)
+      // 1.2.6 row 89 (T-17, INTENT dirname only): the backup sits in <dir>/.bak/, not beside the file.
+      expect(readdirSync(path.join(PROJECT, "docs", M1, ".bak")).some((n) => n.startsWith("decisions.md.bak-"))).toBe(true)
     } finally {
       await c.close().catch(() => undefined)
     }

@@ -331,7 +331,8 @@ describe.skipIf(!HAVE_TASK)("row 120: slice mission (9 rows + dropped 38, 5 deci
     expect(code(again)).toBe("FILE_EXISTS")
     const over = await ok(swarm, "studio_mission_export", { mission: SLICE, files: ["status"], write: true, overwrite: true })
     expect(over.files.length).toBe(1)
-    expect(readdirSync(path.join(PROJECT, "docs", SLICE)).some((n) => n.startsWith("status_tasks.md.bak-"))).toBe(true)
+    // 1.2.6 row 89 (T-17, INTENT dirname only): the backup sits in <dir>/.bak/, not beside the file.
+    expect(readdirSync(path.join(PROJECT, "docs", SLICE, ".bak")).some((n) => n.startsWith("status_tasks.md.bak-"))).toBe(true)
     const before = readdirSync(path.join(PROJECT, "docs", SLICE)).length
     const preview = await ok(swarm, "studio_mission_export", { mission: SLICE, files: ["decisions"] })
     expect(preview.written).toBe(false)
