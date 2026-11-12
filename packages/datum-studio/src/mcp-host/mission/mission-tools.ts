@@ -12,7 +12,7 @@ import Ajv, { type ErrorObject, type ValidateFunction } from "ajv"
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js"
 import { createHash } from "node:crypto"
 import path from "node:path"
-import { prepareDownloadDir, REAL_NODE_FS, McpToolError, writeFileGuarded, type NodeFs } from "../../../vendor/scripts/studio/mcp/safety"
+import { BACKUP_DIR_NAME, prepareDownloadDir, REAL_NODE_FS, McpToolError, writeFileGuarded, type NodeFs } from "../../../vendor/scripts/studio/mcp/safety"
 import { StoreError, type MissionStore, type StoreTx } from "../../store/index.ts"
 import type { MissionDoc, MissionWriteOptions, NewMissionMessage, RowPatch, SessionLink } from "../../store/mission/types.ts"
 import { ROW_RUNNING_DONE_RULE, type RowPatchJobResult } from "../../store/mission/mission-store.ts"
@@ -473,7 +473,7 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
     tool(
       "studio_mission_export",
       "Export a mission to /docs",
-      "Render the §9 Markdown files of a mission (blueprint rows, status, decisions, delegation trail). write: true writes them under <session root>/docs/<mission>/ only; an existing file is refused (FILE_EXISTS) unless overwrite (a backup copy is made first in that folder's .bak/ subfolder, never beside the file; each file returns backupResidue, the backups of that file now kept there).",
+      `Render the §9 Markdown files of a mission (blueprint rows, status, decisions, delegation trail). write: true writes them under <session root>/docs/<mission>/ only; an existing file is refused (FILE_EXISTS) unless overwrite (a backup copy is made first in that folder's ${BACKUP_DIR_NAME}/ subfolder, never beside the file; each file returns backupResidue, the backups of that file now kept there).`,
       false,
       async (a, s) => {
         const mission = a.mission as string
@@ -494,7 +494,7 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
           const roots = [s.fileRoot]
           if (a.overwrite !== true) {
             const taken = out.filter((f) => nfs.exists(f.abs)).map((f) => f.path)
-            if (taken.length > 0) throw new MissionToolError("FILE_EXISTS", "export files exist; nothing written (overwrite: true makes a backup copy first in .bak/)", { files: taken })
+            if (taken.length > 0) throw new MissionToolError("FILE_EXISTS", `export files exist; nothing written (overwrite: true makes a backup copy first in ${BACKUP_DIR_NAME}/)`, { files: taken })
           }
           for (const f of out) prepareDownloadDir(path.dirname(f.abs), roots, nfs)
           for (const f of out) {
@@ -505,7 +505,7 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
         }
         const listed = out.map(({ path: p, bytes, sha256, markdown }) => ({ path: p, bytes, sha256, markdown, ...(backups.get(p) ?? {}) }))
         const residue = [...backups.values()].reduce((n, b) => n + b.backupResidue, 0)
-        const bakNote = a.write === true && a.overwrite === true ? `; backups in .bak/, backupResidue ${residue}` : ""
+        const bakNote = a.write === true && a.overwrite === true ? `; backups in ${BACKUP_DIR_NAME}/, backupResidue ${residue}` : ""
         return { text: `${listed.length} files${a.write === true ? ` written under ${base}` : " (not written)"}: ${listed.map((f) => f.path).join(", ")}${bakNote}`, data: { files: listed, written: a.write === true } }
       },
     ),
