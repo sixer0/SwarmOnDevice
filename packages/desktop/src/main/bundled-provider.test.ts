@@ -106,3 +106,35 @@ describe("row 208: the payload fits the Windows launcher and still decodes whole
     expect(withEnv(JSON.stringify({ provider: { id: "p", models: {} } }), ModelsDev.bundled)).toBeUndefined()
   })
 })
+
+// 1.2.6 row 32 (CFG-01, CFG-05; U1, U2). Literals on purpose, not imported from MODEL_LIMITS.
+const U1_LIMITS = {
+  thinker: { context: 784000, output: 120000 },
+  worker: { context: 512000, output: 90000 },
+  "worker-fast": { context: 512000, output: 60000 },
+} as const
+
+describe("row 32: per-model limits ship with the bundled provider (CFG-01)", () => {
+  test("T1a: each model declares the U1 window", () => {
+    for (const id of ["thinker", "worker", "worker-fast"] as const) {
+      expect(BUNDLED_PROVIDER.provider.models[id].limit).toEqual(U1_LIMITS[id])
+    }
+  })
+
+  test("T1b: the limits survive the server decode and the payload stays within the Windows budget", () => {
+    const json = BUNDLED_PROVIDER_ENV[ModelsDev.BUNDLED_ENV]
+    expect(Buffer.byteLength(json)).toBeLessThanOrEqual(1000)
+    expect(/^[\x20-\x7e]*$/.test(json)).toBe(true)
+    expect(json).not.toContain("\n")
+    const decoded = withEnv(json, ModelsDev.bundled)
+    for (const id of ["thinker", "worker", "worker-fast"] as const) {
+      expect(decoded?.provider.models[id]?.limit).toEqual(U1_LIMITS[id])
+    }
+  })
+})
+
+describe("row 32: the U2 provider URL is shipped unchanged (CFG-05)", () => {
+  test("T5 CHAR-U2: api pin", () => {
+    expect(BUNDLED_PROVIDER.provider.api).toBe("http://100.102.23.27:11400/v1")
+  })
+})
