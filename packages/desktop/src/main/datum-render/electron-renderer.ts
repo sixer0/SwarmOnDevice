@@ -22,7 +22,9 @@ import { isAllowedRendererUrl } from "./paths"
 import { MM_PER_INCH, RENDER_PARTITION, renderWebPreferences, type WindowKind } from "./pages"
 import type { BridgeLog } from "./socket-server"
 
-export const JOB_TIMEOUT_MS = 60_000
+// Row 55 (1.2.6, M-04, N-049): 150 s, above the longest adaptive raster op (RASTER_TIMEOUT_MAX_MS 120 s) and
+// below that op's socket read (120 s + BRIDGE_READ_MARGIN_MS 45 s): ladder I-3, timeout-ladder.test.ts.
+export const JOB_TIMEOUT_MS = 150_000
 const SETTLE_MS = 250
 const FONTS_READY = "document.fonts.ready.then(function () { return document.fonts.size; })"
 
