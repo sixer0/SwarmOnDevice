@@ -85,6 +85,10 @@ export interface NodeFs {
   mkdirp(p: string, mode?: number): void;
   /** Swarm 1.2.6 row 70 (T-17): nama langsung di dalam folder; untuk `backupResidue`. Opsional bagi fs tiruan lama. */
   readdir?(p: string): string[];
+  /** Swarm 1.2.6 row 71 (T-17 retensi): jenis entri TANPA mengikuti tautan. Opsional; tanpa ini retensi dilewati. */
+  lstat?(p: string): { isFile: boolean; isSymbolicLink: boolean };
+  /** Swarm 1.2.6 row 71 (T-17 retensi): hapus satu berkas (tautan tidak pernah diberikan ke sini). Opsional. */
+  unlink?(p: string): void;
 }
 
 export const REAL_NODE_FS: NodeFs = {
@@ -109,6 +113,11 @@ export const REAL_NODE_FS: NodeFs = {
   copyFileExclusive: (src, dest) => fs.copyFileSync(src, dest, fs.constants.COPYFILE_EXCL),
   mkdirp: (p, mode) => void fs.mkdirSync(p, mode === undefined ? { recursive: true } : { recursive: true, mode }),
   readdir: (p) => fs.readdirSync(p),
+  lstat: (p) => {
+    const s = fs.lstatSync(p);
+    return { isFile: s.isFile(), isSymbolicLink: s.isSymbolicLink() };
+  },
+  unlink: (p) => fs.unlinkSync(p),
 };
 
 const isWin = process.platform === "win32";
@@ -271,6 +280,64 @@ export interface GuardedWriteResult {
   backup: string | null;
   /** Swarm 1.2.6 row 70 (T-17, N-057): jumlah cadangan berkas ini yang kini ada di `<folder>/.bak/`. */
   backupResidue: number;
+  /** Swarm 1.2.6 row 71 (T-17): jumlah cadangan lama berkas ini yang dihapus retensi ({@link BACKUP_KEEP}) pada tulis ini. */
+  backupRemoved: number;
+}
+
+/** Swarm 1.2.6 row 71 (T-17, N-056): hanya 5 cadangan terbaru per berkas yang disimpan di `<folder>/.bak/`. */
+export const BACKUP_KEEP = 5;
+
+/** row 71: indeks awal (0 = tanpa sufiks) untuk cadangan `<nama>.bak-<stamp>`: satu sesudah sufiks tertinggi yang ada. */
+function nextBackupIndex(bakDir: string, name: string, stamp: string, nfs: NodeFs): number {
+  if (!nfs.readdir || !nfs.exists(bakDir)) return 0;
+  const prefix = `${name}.bak-${stamp}`;
+  let max = 0;
+  for (const n of nfs.readdir(bakDir)) {
+    if (n === prefix) max = Math.max(max, 1);
+    else if (n.startsWith(`${prefix}-`) && /^\d+$/.test(n.slice(prefix.length + 1))) max = Math.max(max, Number(n.slice(prefix.length + 1)));
+  }
+  return max;
+}
+
+/**
+ * T-17 retensi: sesudah cadangan `keepPath` dibuat dan berkas ditulis, hapus cadangan `<nama>.bak-<waktu>[-n]`
+ * milik `target` SAJA yang lebih lama dari {@link BACKUP_KEEP} terbaru. Urutan: cap waktu, lalu sufiks `-n`
+ * secara numerik (tanpa sufiks = 1). Hanya berkas biasa yang dihapus (lstat; tautan tidak diikuti dan tidak
+ * dihapus, tidak dihitung). `keepPath` tidak pernah dihapus. Gagal hapus tidak menggagalkan tulis (dicatat di
+ * `log`). fs tanpa `readdir`/`lstat`/`unlink` -> 0.
+ */
+function pruneBackups(bakDir: string, target: string, keepPath: string, nfs: NodeFs, log?: string[]): number {
+  if (!nfs.readdir || !nfs.lstat || !nfs.unlink) return 0;
+  const base = path.basename(target).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const re = new RegExp(`^${base}\\.bak-(\\d{8}T\\d{6}Z)(?:-(\\d+))?$`);
+  const items: { p: string; stamp: string; n: number }[] = [];
+  for (const name of nfs.readdir(bakDir)) {
+    const m = re.exec(name);
+    if (!m) continue;
+    const p = path.join(bakDir, name);
+    let st: { isFile: boolean; isSymbolicLink: boolean };
+    try {
+      st = nfs.lstat(p);
+    } catch {
+      continue;
+    }
+    if (st.isSymbolicLink || !st.isFile) continue;
+    items.push({ p, stamp: m[1], n: m[2] === undefined ? 1 : Number(m[2]) });
+  }
+  items.sort((a, b) => (a.stamp < b.stamp ? -1 : a.stamp > b.stamp ? 1 : a.n - b.n));
+  const old = items.filter((it) => it.p !== keepPath);
+  const excess = items.length - BACKUP_KEEP;
+  let removed = 0;
+  for (const it of old.slice(0, Math.max(0, excess))) {
+    try {
+      nfs.unlink(it.p);
+      removed++;
+      log?.push(`hapus cadangan lama ${it.p} (retensi ${BACKUP_KEEP})`);
+    } catch (e) {
+      log?.push(`peringatan: gagal hapus cadangan lama ${it.p}: ${errMsg(e)}`);
+    }
+  }
+  return removed;
 }
 
 /**
@@ -306,7 +373,7 @@ export function writeFileGuarded(
   const existsNow = nfs.exists(target);
   // T-17: cadangan di `<folder>/.bak/` (N-055); nama dasar `<nama>.bak-<waktu>` tetap (E-22).
   const bakDir = path.join(path.dirname(target), BACKUP_DIR_NAME);
-  if (existsNow && o.isSame && o.isSame(nfs.readFile(target))) return { written: target, backup: null, backupResidue: countBackupResidue(bakDir, target, nfs, false), unchanged: true };
+  if (existsNow && o.isSame && o.isSame(nfs.readFile(target))) return { written: target, backup: null, backupResidue: countBackupResidue(bakDir, target, nfs, false), backupRemoved: 0, unchanged: true };
   if (existsNow && !o.overwrite) {
     throw new McpToolError("OUT_EXISTS", `${target} sudah ada; tidak ditimpa. Pakai nama berkas baru, atau overwrite: true (cadangan ${BACKUP_DIR_NAME}/<nama>.bak-<waktu> dibuat otomatis lebih dulu)`);
   }
@@ -325,7 +392,10 @@ export function writeFileGuarded(
     }
     const stamp = backupStamp(o.now());
     const name = path.basename(target);
-    for (let i = 0; i < 100 && backup === null; i++) {
+    // row 71 (T-17 retensi): sufiks `-n` dimulai sesudah sufiks tertinggi yang ada untuk cap waktu ini, sehingga nama
+    // yang dibebaskan retensi tidak dipakai ulang dan urutan nama tetap urutan pembuatan.
+    const first = nextBackupIndex(bakDir, name, stamp, nfs);
+    for (let i = first; i < first + 100 && backup === null; i++) {
       const cand = path.join(bakDir, `${name}.bak-${stamp}${i === 0 ? "" : `-${i + 1}`}`);
       try {
         nfs.copyFileExclusive(target, cand);
@@ -342,7 +412,8 @@ export function writeFileGuarded(
     } catch (e) {
       throw new McpToolError("OUT_UNWRITABLE", `tidak dapat menulis ${target}: ${errMsg(e)} (cadangan ${backup} tetap ada)`);
     }
-    return { written: target, backup, backupResidue: countBackupResidue(bakDir, target, nfs, true), unchanged: false };
+    const backupRemoved = pruneBackups(bakDir, target, backup, nfs, o.log);
+    return { written: target, backup, backupResidue: countBackupResidue(bakDir, target, nfs, true), backupRemoved, unchanged: false };
   }
   o.log?.push(`tulis ${target}`);
   try {
@@ -351,7 +422,7 @@ export function writeFileGuarded(
     if (isErrno(e) && e.code === "EEXIST") throw new McpToolError("OUT_EXISTS", `${target} muncul saat akan ditulis; tidak ditimpa`);
     throw new McpToolError("OUT_UNWRITABLE", `tidak dapat menulis ${target}: ${errMsg(e)}`);
   }
-  return { written: target, backup: null, backupResidue: countBackupResidue(bakDir, target, nfs, false), unchanged: false };
+  return { written: target, backup: null, backupResidue: countBackupResidue(bakDir, target, nfs, false), backupRemoved: 0, unchanged: false };
 }
 
 function isErrno(e: unknown): e is { code: unknown } {
