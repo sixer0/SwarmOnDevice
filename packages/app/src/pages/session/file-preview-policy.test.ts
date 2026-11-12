@@ -282,12 +282,21 @@ describe("row 165D: delivered DATUM title names are Studio outputs", () => {
     "docs/misi-a/Nota uji gerbang verifikasi row 143c 2026-11-08.html",
     "Gambar 4.1 Arsitektur sistem pemantauan iklim ruang simpan arsip.svg",
     "Fiksur Konvensi Angka B-FIX 015-GSP-KT-XI-2026 RevA 1a2b3c4d.pdf",
+    // Row 75a (M-05, U15): numeric revision after the letter revision, with and without the collision suffix.
+    "docs/misi-a/Lembar Bukti Pemantauan Iklim 013-GSP-KT-XI-2026 RevD rev256.pdf",
+    "Lembar Bukti Pemantauan Iklim 013-GSP-KT-XI-2026 RevD rev0.html",
+    "Lembar Bukti Pemantauan Iklim 013-GSP-KT-XI-2026 RevD rev999999 1a2b3c4d.docx",
   ]
   test("DATUM names (number + Rev, ISO date, figure, collision suffix) match when the path is registered", () => {
     const registered = new Set(DATUM_PATHS)
     for (const path of DATUM_PATHS)
       expect({ path, studio: isStudioOutputPath(path, registered) }).toEqual({ path, studio: true })
     for (const path of DATUM_PATHS) expect(isStudioOutputName(fileNameOf(path))).toBe(true)
+  })
+
+  test("row 75a: rev<N> is accepted only as 0 or a 1-6 digit number without leading zero (same as Studio)", () => {
+    for (const bad of ["RevD rev01", "RevD rev1000000", "RevD rev", "RevD revX","RevD rev1 rev2"])
+      expect({ bad, ok: isStudioOutputName(`Lembar 013-GSP-KT-XI-2026 ${bad}.pdf`) }).toEqual({ bad, ok: false })
   })
 
   test("unsafe or non-DATUM names do not match", () => {
