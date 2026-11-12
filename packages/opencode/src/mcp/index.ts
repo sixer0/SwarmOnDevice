@@ -10,7 +10,6 @@ import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js"
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { UnauthorizedError } from "@modelcontextprotocol/sdk/client/auth.js"
 import {
-  ErrorCode,
   ListRootsRequestSchema,
   type LoggingMessageNotification,
   McpError,
@@ -51,9 +50,13 @@ const DEFAULT_TIMEOUT = 30_000
 export const BUILTIN_MCP_RECONNECT_ATTEMPTS = 1
 
 /** M-02: the SDK's error for a call whose transport closed (pending: ConnectionClosed; sent after close: "Not connected"). */
-function isClosedError(error: unknown) {
-  if (error instanceof McpError) return error.code === ErrorCode.ConnectionClosed
-  return error instanceof Error && error.message === "Not connected"
+/**
+ * C19e (1.2.6 row FX-3): true only when the request never left this client. The SDK rejects with a plain
+ * "Not connected" before it writes anything (no transport, or a stdio transport without a process). A call that ends
+ * with McpError ConnectionClosed was pending, so the old bridge may already have delivered it to the host.
+ */
+function neverSent(error: unknown) {
+  return error instanceof Error && !(error instanceof McpError) && error.message === "Not connected"
 }
 const CLIENT_OPTIONS = {
   capabilities: {
@@ -590,9 +593,12 @@ const layer = Layer.effect(
     const retrying = new WeakMap<MCPClient, MCPClient>()
 
     /**
-     * M-02: the built-in server's client as tools hold it. A call that fails because the bridge closed waits for the
-     * reconnect and runs once more on the new client; any other error, an aborted call or no new client is the
-     * original failure. A call answered by the current client restores the reconnect budget.
+     * M-02: the built-in server's client as tools hold it. A call that was never sent because the bridge had closed
+     * waits for the reconnect and runs once on the new client. A call already sent when the bridge closed returns its
+     * "Connection closed" error and is not repeated (C19e): it may have run on the host, and studio_render or a mission
+     * write must not run twice; the agent checks the state (e.g. studio_document_status) instead. Any other error, an
+     * aborted call or no new client is the original failure. A call answered by the current client restores the
+     * reconnect budget.
      */
     function retryOnce(s: State, name: string, client: MCPClient): MCPClient {
       const known = retrying.get(client)
@@ -610,7 +616,7 @@ const layer = Layer.effect(
               answered(target)
               return result
             } catch (error) {
-              if (!isClosedError(error)) throw error
+              if (!neverSent(error)) throw error
               args[2]?.signal?.throwIfAborted()
               const next = await (s.reconnecting[name] ?? Promise.resolve(s.clients[name]))
               if (!next || next === target || s.status[name]?.status !== "connected") throw error

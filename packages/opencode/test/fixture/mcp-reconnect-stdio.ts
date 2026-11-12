@@ -11,11 +11,7 @@ const countFile = process.env.MCP_RECONNECT_COUNT_FILE
 if (!countFile) throw new Error("MCP_RECONNECT_COUNT_FILE is required")
 const generation = (fs.existsSync(countFile) ? Number(fs.readFileSync(countFile, "utf8")) || 0 : 0) + 1
 fs.writeFileSync(countFile, String(generation))
-const dies = (process.env.MCP_RECONNECT_DIE_GENS ?? "")
-  .split(",")
-  .filter(Boolean)
-  .map(Number)
-  .includes(generation)
+const dies = (process.env.MCP_RECONNECT_DIE_GENS ?? "").split(",").filter(Boolean).map(Number).includes(generation)
 
 const server = new Server({ name: "mcp-reconnect-stdio", version: "1.0.0" }, { capabilities: { tools: {} } })
 
@@ -28,7 +24,12 @@ server.setRequestHandler(ListToolsRequestSchema, () =>
   }),
 )
 
+// C19e (1.2.6 row FX-3): optional log of every call this process received, one `<generation>:<tool>` line each, so a
+// test can prove a call was (or was not) delivered to a later generation.
+const callsFile = process.env.MCP_RECONNECT_CALLS_FILE
+
 server.setRequestHandler(CallToolRequestSchema, (request) => {
+  if (callsFile) fs.appendFileSync(callsFile, `${generation}:${request.params.name}\n`)
   if (request.params.name === "quit") {
     setTimeout(() => process.exit(3), 50)
     return Promise.resolve({ content: [{ type: "text", text: `bye ${generation}` }] })
