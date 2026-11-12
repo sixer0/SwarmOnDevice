@@ -959,6 +959,16 @@ export type Pty = {
 
 export type MemorySource = "user" | "agent" | "learned"
 
+export type MemoryRef =
+  | {
+      path: string
+      line?: number
+    }
+  | {
+      symbol: string
+      path?: string
+    }
+
 export type MemoryItem = {
   id: string
   text: string
@@ -971,6 +981,9 @@ export type MemoryItem = {
   sessionID?: string
   failed?: string
   worked?: string
+  body?: string
+  refs?: Array<MemoryRef>
+  untrusted?: boolean
 }
 
 export type Todo = {
@@ -2969,7 +2982,7 @@ export type MemoryInfo = {
   items: Array<MemoryItem>
 }
 
-export type MemoryRefusal = "empty" | "long" | "secret" | "full"
+export type MemoryRefusal = "empty" | "long" | "secret" | "full" | "body_long" | "too_many_refs"
 
 export type MemoryResult = {
   item?: MemoryItem
@@ -3374,6 +3387,9 @@ export type MemoryItem1 = {
   sessionID?: string
   failed?: string
   worked?: string
+  body?: string
+  refs?: Array<MemoryRef>
+  untrusted?: boolean
 }
 
 export type SessionStatus2 = {
