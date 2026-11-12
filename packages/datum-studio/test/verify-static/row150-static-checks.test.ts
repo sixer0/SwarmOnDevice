@@ -280,8 +280,9 @@ describe("row 150: FIGURE_FIT", () => {
     expect(c.status).toBe("FAIL")
     expect(c.findings).toEqual([{ code: "FIG_TOO_TALL", page: 2, address: "4.1", label: "Gambar 4.1", detail: "DATUM-33", amount: 300 }])
   })
-  it("diagram edgeCross / edgeCollinear are report-only; the other six kinds fail (spec §3.5)", () => {
-    expect([...DIAGRAM_FAIL_KINDS].sort()).toEqual(["edgeThroughNode", "lineThroughText", "textExceedsNode", "textOutside", "textOverNode", "textOverlap"])
+  // 1.2.6 row 26 (T-03 INTENT, N-007): the three connector-end kinds join the fail set, 6 -> 9.
+  it("diagram edgeCross / edgeCollinear are report-only; the other nine kinds fail (spec §3.5, T-03)", () => {
+    expect([...DIAGRAM_FAIL_KINDS].sort()).toEqual(["arrowTangent", "edgeEntryCollision", "edgeThroughNode", "lineThroughText", "stubSegment", "textExceedsNode", "textOutside", "textOverNode", "textOverlap"])
   })
   it("engine fit notes CAPTION_WRAP / CAPTION_TRUNCATED fail FIGURE_FIT (1.2.6 row 28, T-01 INTENT, N-015)", () => {
     expect([...FIGURE_FIT_FAIL_NOTES].sort()).toEqual(["CAPTION_TRUNCATED", "CAPTION_WRAP"])

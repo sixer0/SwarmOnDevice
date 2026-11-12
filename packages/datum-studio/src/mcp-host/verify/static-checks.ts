@@ -300,7 +300,11 @@ export function checkPageCount(i: PageCountInput): PageCountResult {
 
 // ── FIGURE_FIT (§3.5) ────────────────────────────────────────────────────
 
-/** Diagram defect kinds that fail the check; `edgeCross` / `edgeCollinear` are report-only (CP-41 routing, U21). */
+/**
+ * Diagram defect kinds that fail the check; `edgeCross` / `edgeCollinear` are report-only (CP-41 routing, U21).
+ * Swarm 1.2.6 row 26 (T-03, register N-007): the connector-end kinds `edgeEntryCollision`, `stubSegment`,
+ * `arrowTangent` (row 25, N-001/N-003/N-005) fail too (6 -> 9).
+ */
 export const DIAGRAM_FAIL_KINDS: ReadonlySet<DiagramDefectKind> = new Set([
   "textOverlap",
   "textOutside",
@@ -308,6 +312,9 @@ export const DIAGRAM_FAIL_KINDS: ReadonlySet<DiagramDefectKind> = new Set([
   "lineThroughText",
   "textOverNode",
   "edgeThroughNode",
+  "edgeEntryCollision",
+  "stubSegment",
+  "arrowTangent",
 ])
 
 /**
