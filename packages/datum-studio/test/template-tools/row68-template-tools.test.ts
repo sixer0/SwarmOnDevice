@@ -169,10 +169,12 @@ describe("row 68: tool list (row 63 as amended by row 79)", () => {
     // assumed. The five template tools are one block, in register order, right after the kept tools.
     const extra = names.slice(mod.HOST_KEPT_TOOLS.length)
     const missions = extra.filter((n) => n.startsWith("studio_mission_"))
-    expect(extra.filter((n) => !n.startsWith("studio_mission_"))).toEqual(TEMPLATE_TOOLS)
+    // W-13 / row 50c (1.2.6): the host built-in studio_asset_put follows the extensions; excluded from the template block.
+    const assets = extra.filter((n) => n === "studio_asset_put")
+    expect(extra.filter((n) => !n.startsWith("studio_mission_") && n !== "studio_asset_put")).toEqual(TEMPLATE_TOOLS)
     expect(extra.slice(0, 5)).toEqual(TEMPLATE_TOOLS)
     expect(ext.TEMPLATE_TOOL_NAMES).toEqual(TEMPLATE_TOOLS as never)
-    expect(names.length).toBe(23 + 5 + missions.length)
+    expect(names.length).toBe(23 + 5 + missions.length + assets.length)
     const pv = list.tools.find((t) => t.name === "studio_template_preview")!.inputSchema as unknown as { properties: { formats: { items: { enum: string[] }; maxItems: number; default: string[] } } }
     expect(pv.properties.formats.items.enum).toEqual(["docx", "html", "pdf"])
     expect(pv.properties.formats.maxItems).toBe(3)

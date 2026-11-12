@@ -146,11 +146,11 @@ afterAll(async () => {
 })
 
 describe("row 119c: the wrappers and the report-kind rule", () => {
-  test("default host: 39 tools, studio_document_create / studio_write keep their slot and carry the row 119c guard", async () => {
+  test("default host: 40 tools, studio_document_create / studio_write keep their slot and carry the row 119c guard", async () => {
     const tools = (await swarm.listTools()).tools
     const names = tools.map((t) => t.name)
     quote("tool count", names.length)
-    expect(names.length).toBe(39)
+    expect(names.length).toBe(40) // W-13 / row 50c: +studio_asset_put
     expect(names.indexOf("studio_document_create")).toBe(3)
     expect(names.indexOf("studio_write")).toBe(16)
     for (const n of ["studio_document_create", "studio_write"]) {

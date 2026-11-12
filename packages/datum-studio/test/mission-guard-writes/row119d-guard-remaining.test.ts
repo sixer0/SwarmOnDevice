@@ -158,12 +158,12 @@ afterAll(async () => {
 })
 
 describe("row 119d: wrappers and the public flag", () => {
-  test("default host: 39 tools; the three create-path tools keep their slot and carry the row 119d guard", async () => {
+  test("default host: 40 tools; the three create-path tools keep their slot and carry the row 119d guard", async () => {
     const tools = (await swarm.listTools()).tools
     const names = tools.map((t) => t.name)
     const { GUARDED_CREATE_TOOLS } = await import("../../src/mcp-host/mission/index.ts")
     quote("tool count + slots", { count: names.length, slots: Object.fromEntries(GUARDED_CREATE_TOOLS.map((n) => [n, names.indexOf(n)])) })
-    expect(names.length).toBe(39)
+    expect(names.length).toBe(40) // W-13 / row 50c: +studio_asset_put
     for (const n of GUARDED_CREATE_TOOLS) {
       const t = tools.find((x) => x.name === n)!
       expect(t.description).toContain("row 119d")
