@@ -19,6 +19,7 @@ import crypto from "node:crypto";
 import path from "node:path";
 import { DATUM_NAME_UNSAFE_CHARS, PID_PATTERN, studioRoutePath } from "../../../src/lib/studio/contract/env";
 import { datumSafeName } from "../../../src/lib/studio/services/render/naming";
+import { diagramSchema } from "../../../src/lib/studio/contract/schema/diagram.schema";
 import { ADOPT, adoptedWarning, BASE_REV, bodyAgentId, CHANGE, checkOwnership, completenessBrief, existingData, rememberRevision, requireBasis, withWarnings, type ExistingDoc, type Ownership } from "./doc-tools";
 import { assertFileWriteEnabled, McpToolError, prepareDownloadDir, resolveDownloadDir, writeFileGuarded } from "./safety";
 import {
@@ -254,14 +255,44 @@ async function figureOwnership(a: Args, ctx: ToolContext, id: string): Promise<O
   });
 }
 
-/** Gabung `patch` ke isi blok v2: `null` = hapus medan; caption/source/keyRow berupa string -> `{ text }`. */
+const PROTO_KEYS: ReadonlySet<string> = new Set(["__proto__", "constructor", "prototype"]);
+
+/**
+ * Swarm 1.2.6 row 69 (T-16, register E-17): deep merge of a `spec` patch. Plain objects merge key by key, arrays and
+ * scalars replace, `null` removes the key; prototype keys are never copied. Neither input is mutated.
+ */
+function deepMergeSpec(base: Rec, patch: Rec): Rec {
+  const out: Rec = { ...base };
+  for (const [k, v] of Object.entries(patch)) {
+    if (PROTO_KEYS.has(k)) continue;
+    if (v === null) delete out[k];
+    else if (isRecord(v)) out[k] = deepMergeSpec(isRecord(out[k]) ? out[k] : {}, v);
+    else out[k] = v;
+  }
+  return out;
+}
+
+/**
+ * Gabung `patch` ke isi blok v2: `null` = hapus medan; caption/source/keyRow berupa string -> `{ text }`.
+ * Swarm 1.2.6 row 69 (T-16): `spec` is deep-merged into the stored spec (objects merge, arrays replace, `null` removes),
+ * so a nodes-only or edges-only patch keeps family, edges, title and the rest. A spec patch that leaves a required
+ * diagram key (diagram.schema.ts `required`) missing is refused SCHEMA_INVALID naming the key, before any write.
+ */
 export function mergeFigurePatch(content: Rec, patch: Rec): Rec {
   const out: Rec = { ...content };
   for (const [k, v] of Object.entries(patch)) {
     // Swarm patch (row 107, row 11 L5): prototype keys are never copied (as write-normalize.ts:255).
-    if (k === "__proto__" || k === "constructor" || k === "prototype") continue;
+    if (PROTO_KEYS.has(k)) continue;
     if (v === null) delete out[k];
+    else if (k === "spec" && isRecord(v)) out[k] = deepMergeSpec(isRecord(out[k]) ? out[k] : {}, v);
     else out[k] = INLINE_TEXT_KEYS.has(k) && typeof v === "string" ? { text: v } : v;
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, "spec")) {
+    const spec = isRecord(out.spec) ? out.spec : null;
+    const missing = spec === null ? ["spec"] : (diagramSchema.required as readonly string[]).filter((r) => !Object.prototype.hasOwnProperty.call(spec, r));
+    if (missing.length > 0) {
+      throw new McpToolError("SCHEMA_INVALID", `spec hasil gabungan kehilangan medan wajib: ${missing.join(", ")}; kirim nilai medan itu atau jangan hapus (null) medan itu. Tidak ada yang dikirim`, { pointer: `/spec/${missing[0]}` });
+    }
   }
   return out;
 }
