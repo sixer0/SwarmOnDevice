@@ -2,7 +2,7 @@
 // The real Electron engine (byte-equal rasters, network and script canaries) is the later smoke row.
 import { afterAll, beforeAll, describe, expect, test } from "bun:test"
 import { createHash } from "node:crypto"
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, statSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs"
 import { createConnection } from "node:net"
 import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
@@ -10,6 +10,8 @@ import type { EngineInfo, PageEngine } from "./dispatch"
 import { startRenderBridge, type RenderBridge } from "./index"
 import { renderWebPreferences } from "./pages"
 import { extractRenderPyCheckScript, sha256 } from "./scripts"
+import { createHostEnv } from "../datum-studio-host/lifecycle"
+import { socketTransport } from "../../../../datum-studio/vendor/src/lib/studio/engine/browser/runtime"
 
 const DESKTOP = resolve(import.meta.dir, "../../..")
 const FONTS = join(DESKTOP, "datum/datum-house-style/assets/fonts")
@@ -341,5 +343,96 @@ describe("render bridge over the socket", () => {
   test("MEASURE_SCRIPT came from the vendored Studio engine (not the fixture)", () => {
     expect(studioMeasureScript()).toBeDefined()
     expect(MEASURE.startsWith("(function (o) {")).toBe(true)
+  })
+})
+
+// 1.2.6 row 93 (TH-04, DP-1; spec 01c 11.7): same-endpoint restart. Consumers read the pair per request, so after a
+// restart with `reuse` the old env keeps working without a respawn or an env refresh.
+describe("row 93: render bridge restart on the same endpoint (01c 11.7)", () => {
+  const start = (reuse?: { token: string; socketPath: string }) =>
+    startRenderBridge({
+      fontsDir: FONTS,
+      log: () => {},
+      policy: { roots: [work], deny: [], maxInputBytes: 1024 },
+      engine: fakeEngine,
+      baseDir: work,
+      reuse,
+    })
+  const hello = (env: RenderBridge["env"]) => call(env.DATUM_RENDER_SOCKET, [{ op: "hello", token: env.DATUM_RENDER_TOKEN, id: 1 }])
+
+  test("1: a restart with reuse keeps DATUM_RENDER_SOCKET and DATUM_RENDER_TOKEN byte-identical", async () => {
+    const first = await start()
+    const before = Buffer.from(JSON.stringify(first.env))
+    await first.close()
+    const second = await start({ token: first.env.DATUM_RENDER_TOKEN, socketPath: first.env.DATUM_RENDER_SOCKET })
+    try {
+      expect(Buffer.from(JSON.stringify(second.env)).equals(before)).toBe(true)
+      const [res] = await hello(first.env)
+      expect(res.ok).toBe(true)
+    } finally {
+      await second.close()
+    }
+  })
+
+  test("2: socket folder deleted, then restart: folder 0700, socket 0600, hello with the old token succeeds", async () => {
+    const first = await start()
+    const dir = join(first.env.DATUM_RENDER_SOCKET, "..")
+    rmSync(dir, { recursive: true, force: true })
+    expect(existsSync(dir)).toBe(false)
+    await first.close()
+    const second = await start({ token: first.env.DATUM_RENDER_TOKEN, socketPath: first.env.DATUM_RENDER_SOCKET })
+    try {
+      expect(statSync(dir).mode & 0o777).toBe(0o700)
+      expect(statSync(first.env.DATUM_RENDER_SOCKET).mode & 0o777).toBe(0o600)
+      const [res] = await hello(first.env)
+      expect(res).toMatchObject({ id: 1, ok: true })
+      const [wrong] = await call(first.env.DATUM_RENDER_SOCKET, [{ op: "hello", token: "0".repeat(64), id: 2 }])
+      expect(wrong).toMatchObject({ ok: false, code: "UNAUTHORIZED" })
+    } finally {
+      await second.close()
+    }
+  })
+
+  test("3: the host env object from start is untouched; socketTransport with the old env succeeds after the restart", async () => {
+    const first = await start()
+    const hostEnv = createHostEnv({
+      baseEnv: { HOME: "/h" },
+      renderEnv: first.env,
+      layout: { assetsRoot: "/a", vendorRoot: "/v" } as never,
+      storeRoot: "/s",
+    })
+    const frozen = JSON.stringify(hostEnv)
+    rmSync(join(first.env.DATUM_RENDER_SOCKET, ".."), { recursive: true, force: true })
+    await first.close()
+    const second = await start({ token: first.env.DATUM_RENDER_TOKEN, socketPath: first.env.DATUM_RENDER_SOCKET })
+    const saved = { s: process.env.DATUM_RENDER_SOCKET, t: process.env.DATUM_RENDER_TOKEN }
+    try {
+      expect(JSON.stringify(hostEnv)).toBe(frozen)
+      process.env.DATUM_RENDER_SOCKET = hostEnv.DATUM_RENDER_SOCKET
+      process.env.DATUM_RENDER_TOKEN = hostEnv.DATUM_RENDER_TOKEN
+      const reply = await socketTransport({ op: "hello" } as never, { timeoutMs: 2000 })
+      expect(reply.ok).toBe(true)
+    } finally {
+      if (saved.s === undefined) delete process.env.DATUM_RENDER_SOCKET
+      else process.env.DATUM_RENDER_SOCKET = saved.s
+      if (saved.t === undefined) delete process.env.DATUM_RENDER_TOKEN
+      else process.env.DATUM_RENDER_TOKEN = saved.t
+      await second.close()
+    }
+  })
+
+  test("close of a server whose folder was already deleted resolves (the revive closes the old server first)", async () => {
+    const first = await start()
+    rmSync(join(first.env.DATUM_RENDER_SOCKET, ".."), { recursive: true, force: true })
+    await first.close()
+    expect(existsSync(join(first.env.DATUM_RENDER_SOCKET, ".."))).toBe(false)
+  })
+
+  test("a regular file at the socket path is refused, never deleted", async () => {
+    const dir = mkdtempSync(join(work, "swarm-datum-"))
+    const socketPath = join(dir, "render.sock")
+    writeFileSync(socketPath, "not a socket")
+    await expect(start({ token: "a".repeat(64), socketPath })).rejects.toThrow(/not a socket/)
+    expect(readFileSync(socketPath, "utf8")).toBe("not a socket")
   })
 })

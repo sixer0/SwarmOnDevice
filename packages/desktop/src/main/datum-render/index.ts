@@ -34,6 +34,12 @@ export type RenderBridgeOptions = {
   /** Test seam: a page engine other than Electron's. */
   engine?: PageEngine
   baseDir?: string
+  /**
+   * 1.2.6 row 93 (TH-04, DP-1, N-184), internal: restart on the SAME endpoint. The server listens on `socketPath`
+   * (folder recreated 0700 if missing, socket 0600) and keeps `token`, so the host and the sidecar, which read the
+   * pair per request, keep working without a respawn or an env refresh. The caller closes the old bridge first.
+   */
+  reuse?: { token: string; socketPath: string }
 }
 
 export type RenderBridge = {
@@ -65,9 +71,15 @@ export async function startRenderBridge(opts: RenderBridgeOptions): Promise<Rend
   const policy = opts.policy ?? defaultPolicy(opts.home, [], opts.storeRoot ? studioStoreGrants(opts.storeRoot) : [])
   const engine =
     opts.engine ?? (await import("./electron-renderer")).createElectronEngine(new Set(fonts.files), opts.log)
-  const token = randomBytes(32).toString("hex")
+  const token = opts.reuse?.token ?? randomBytes(32).toString("hex")
   const dispatch = createDispatcher({ engine, policy, fonts: () => fonts, scripts })
-  const server: SocketServerHandle = await startSocketServer({ token, dispatch, log: opts.log, baseDir: opts.baseDir })
+  const server: SocketServerHandle = await startSocketServer({
+    token,
+    dispatch,
+    log: opts.log,
+    baseDir: opts.baseDir,
+    socketPath: opts.reuse?.socketPath,
+  })
   return {
     env: { DATUM_RENDER_SOCKET: server.socketPath, DATUM_RENDER_TOKEN: token },
     close: () => server.close(),
