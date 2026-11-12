@@ -132,7 +132,8 @@ describe("tool.checkpoint", () => {
     // SEC-24
     expect(ActionCheckpoint.savedText(1, ID)).toContain(`.swarm/checkpoint/${ID}`)
     expect(ActionCheckpoint.savedText(1, ID)).toBe(
-      `Swarm saved checkpoint ${ID} of 1 file(s) in .swarm/checkpoint/${ID} before this ran; the person can revert it.`,
+      // 1.2.6 FX-2 (gate M1 S8), intended change: no emptying route exists, so the line says the person removes it by hand.
+      `Swarm saved checkpoint ${ID} of 1 file(s) in .swarm/checkpoint/${ID} before this ran; the person can revert it. The checkpoint stays until the person removes it by hand.`,
     )
     // SEC-19: refs kept alive are named.
     expect(ActionCheckpoint.savedText(0, ID, 2)).toContain(`refs/swarm-checkpoint/${ID}`)

@@ -173,10 +173,14 @@ export interface Listed {
   readonly mode: Manifest["mode"]
 }
 
-/** The line an agent reads after the action ran (SEC-24 names the folder; SEC-19 names the kept refs). */
+/**
+ * The line an agent reads after the action ran (SEC-24 names the folder; SEC-19 names the kept refs). 1.2.6 has no route
+ * that empties checkpoints (OQ-6, gate M1 S8), so the text promises none: the folder stays until the person removes it.
+ */
 export const savedText = (count: number, id: string, refs = 0) =>
   `Swarm saved checkpoint ${id} of ${count} file(s) in ${path.posix.join(".swarm", "checkpoint", id)} before this ran; the person can revert it.` +
-  (refs > 0 ? ` Old commits stay under ${KEEP_ALIVE_PREFIX}/${id} until the person empties the checkpoint.` : "")
+  (refs > 0 ? ` Old commits stay under ${KEEP_ALIVE_PREFIX}/${id} as long as the checkpoint does.` : "") +
+  " The checkpoint stays until the person removes it by hand."
 
 /** Saves every target (and ref) into a new checkpoint, or saves nothing and says why. */
 export async function create(input: CreateInput): Promise<CreateResult> {
@@ -667,7 +671,7 @@ async function claim(area: string, prefix: string) {
   return undefined
 }
 
-// Only a checkpoint folder this call made and never finished is removed; a finished one is the person's to empty.
+// Only a checkpoint folder this call made and never finished is removed; a finished one is the person's to remove.
 async function discard(dir: string) {
   await fs.rm(dir, { recursive: true, force: true }).catch(() => undefined)
 }
@@ -736,7 +740,7 @@ const posix = (rel: string) => rel.split(path.sep).join(path.posix.sep)
 const MESSAGES: Record<Failure, string> = {
   folder: "Swarm could not read the session's folder to save a checkpoint in.",
   outside: "A target is outside the project folder, so Swarm cannot save a checkpoint of it.",
-  checkpoint: "The checkpoint folder is the person's to empty, not the agent's.",
+  checkpoint: "The checkpoint folder is the person's to remove by hand, not the agent's.",
   checkpoint_link: "The checkpoint folder (.swarm/checkpoint) is a link or not a folder, so nothing was saved in it.",
   unreadable: "A target could not be read, so Swarm could not save a checkpoint of it.",
   too_large: "The files are too large to save as a checkpoint.",
