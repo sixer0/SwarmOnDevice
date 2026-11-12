@@ -26,6 +26,13 @@ export const WIRE_VERB = "wire"
  *  not here. */
 export const APPLY_VERB = "apply"
 
+/** Row 92a (1.2.6, OFF-04, register N-153): start ONE already-installed component that is merely
+ *  stopped — `runtime` (the colima VM), `searxng` or `firecrawl` (their existing containers). It is
+ *  the start-only twin of `apply`: colima start without sizing flags and `compose start`, never `up`,
+ *  `create`, `pull` or `--force-recreate`; no state transition, no tools.lock.json write, no consent
+ *  token. The id set and refusals live in estate/start.ts; like wire/apply it stays out of VERBS. */
+export const START_VERB = "start"
+
 /** Row 221b (G-U14 Q2): `--consent-mode app` says the desktop app collected the ticks, so consent.log
  *  records `mode: app` instead of `mode: non-interactive`. It is NOT an acceptance channel: it is
  *  valid only on `install --non-interactive` with at least one --terms-token, and the token gate in
@@ -33,7 +40,7 @@ export const APPLY_VERB = "apply"
 export const CONSENT_MODE_FLAG = "--consent-mode"
 export const CONSENT_MODE_APP = "app"
 
-export type Verb = "install" | "status" | "remove" | "wire" | "apply" | "help"
+export type Verb = "install" | "status" | "remove" | "wire" | "apply" | "start" | "help"
 
 export interface ParsedCommand {
   verb: Verb
@@ -101,7 +108,12 @@ export function parseArgs(argv: readonly string[]): ParseResult {
     // Positional token: either the verb or a component id.
     if (
       verb === undefined &&
-      (t === VERBS.INSTALL || t === VERBS.STATUS || t === VERBS.REMOVE || t === WIRE_VERB || t === APPLY_VERB)
+      (t === VERBS.INSTALL ||
+        t === VERBS.STATUS ||
+        t === VERBS.REMOVE ||
+        t === WIRE_VERB ||
+        t === APPLY_VERB ||
+        t === START_VERB)
     ) {
       verb = t
       continue

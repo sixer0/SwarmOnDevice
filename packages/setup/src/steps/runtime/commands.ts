@@ -206,6 +206,15 @@ export function colimaStartArgv(colimaPath: string, cpu: number, memoryGiB: numb
   return argv
 }
 
+/** Row 92a (1.2.6, OFF-04 / N-153): the START-ONLY colima argv for `swarm-setup start`. It
+ *  deliberately carries NO sizing flags (no --cpus/--memory/--disk/--vm-type): the profile
+ *  already exists (the caller refuses RUNTIME_PROFILE_MISSING otherwise), so colima reuses the
+ *  sizing it was created with and a start can never resize, re-type or create a VM.
+ *  `--activate=false` keeps the user's current docker context untouched (P-5), as above. */
+export function colimaStartOnlyArgv(colimaPath: string): string[] {
+  return [colimaPath, "start", "--profile", COLIMA_PROFILE, "--activate=false"]
+}
+
 /** 01e §7.2's stated disk (the value its memory math reasons on), pinned explicitly. */
 export const DISK_GIB_CONTRACT = 60
 
