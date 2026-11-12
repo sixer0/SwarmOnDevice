@@ -16,7 +16,7 @@ import { Effect, Exit, Option, Schema, Scope } from "effect"
 import { EffectBridge } from "@/effect/bridge"
 import { RuntimeFlags } from "@/effect/runtime-flags"
 import { Database } from "@opencode-ai/core/database/database"
-import { SUBAGENT_STOPPED } from "@/permission/autonomy-texts"
+import { SUBAGENT_NO_RESULT, SUBAGENT_STOPPED } from "@/permission/autonomy-texts"
 import { MCP } from "@/mcp"
 import { RoleAlias } from "../agent/role-alias"
 
@@ -85,7 +85,26 @@ export function renderTaskOutput(input: {
 
 // How autonomous mode words a subagent run it stopped (`autonomy-texts.ts`, which the permission service writes it with),
 // so the task call can tell the stop from a failure.
-export { SUBAGENT_STOPPED, subagentStoppedMessage } from "@/permission/autonomy-texts"
+export { SUBAGENT_NO_RESULT, SUBAGENT_STOPPED, subagentStoppedMessage } from "@/permission/autonomy-texts"
+
+/** S-03a: why a subagent run ended without an answer (register N-102). */
+export type NoResultReason = "length" | "tool-calls" | "no-text" | "unfinished"
+
+const NO_RESULT_WHY: Record<NoResultReason, string> = {
+  length: "it hit the output token limit before writing an answer.",
+  "tool-calls": "its last step was a tool call and it never wrote a final answer.",
+  "no-text": "it finished without writing any text.",
+  unfinished: "its run ended before it finished.",
+}
+
+/** The task result for a subagent run with no answer: SUBAGENT_NO_RESULT, the reason and the task_id, never "". */
+export function subagentNoResultText(sessionID: SessionID, reason: NoResultReason, partial?: string) {
+  return [
+    `${SUBAGENT_NO_RESULT} ${reason} (task_id: ${sessionID}): ${NO_RESULT_WHY[reason]}`,
+    "Do not treat this task as done. Check what it was meant to produce, then pass this task_id to continue it or carry on another way.",
+    partial ? `What the subagent had so far:\n${partial}` : "The subagent left no partial result.",
+  ].join("\n\n")
+}
 
 /** What a subagent's last message amounts to as a task result. Also read when a restart lost the waiting task call. */
 export function taskOutcome(sessionID: SessionID, result: SessionV1.WithParts) {
@@ -115,11 +134,20 @@ export function taskOutcome(sessionID: SessionID, result: SessionV1.WithParts) {
     }
   }
   if (message) return { type: "failed" as const, message: `Subagent failed (task_id: ${sessionID}): ${message}` }
-  return {
-    type: "completed" as const,
-    text: result.parts.findLast((item) => item.type === "text")?.text ?? "",
-    finished: !!result.info.finish && !["tool-calls", "unknown"].includes(result.info.finish),
-  }
+  const last = result.parts.findLast((item) => item.type === "text" && item.text.trim() !== "")
+  const text = last?.type === "text" ? last.text : undefined
+  const finish = result.info.finish
+  const finished = !!finish && !["tool-calls", "unknown"].includes(finish)
+  if (finished && text !== undefined) return { type: "completed" as const, text }
+  // S-03a: no answer, or a run that stopped mid-way. The parent gets the reason, never an empty completed result.
+  const reason: NoResultReason = !finished
+    ? finish === "tool-calls"
+      ? "tool-calls"
+      : "unfinished"
+    : finish === "length"
+      ? "length"
+      : "no-text"
+  return { type: "empty" as const, reason, text: subagentNoResultText(sessionID, reason, text) }
 }
 
 export const TaskTool = Tool.define(
@@ -302,7 +330,10 @@ export const TaskTool = Tool.define(
         })
         const outcome = taskOutcome(nextSession.id, result)
         if (outcome.type === "failed") return yield* Effect.fail(new Error(outcome.message))
-        return outcome.type === "unfinished" ? "" : outcome.text
+        if (outcome.type === "empty") return yield* Effect.fail(new Error(outcome.text))
+        if (outcome.type === "unfinished")
+          return yield* Effect.fail(new Error(subagentNoResultText(nextSession.id, "unfinished")))
+        return outcome.text
       })
 
       const inject = Effect.fn("TaskTool.injectBackgroundResult")(function* (

@@ -108,6 +108,12 @@ export const SCRIPT_CHANGED_TEXT =
  */
 export const SUBAGENT_STOPPED = "Stopped by autonomous mode:"
 
+/**
+ * 1.2.6 S-03a (register N-103): a subagent run that ended without an answer. Followed by the reason (`length`,
+ * `tool-calls`, `no-text`, `unfinished`) and the task_id; the task call reports it instead of an empty result.
+ */
+export const SUBAGENT_NO_RESULT = "Subagent returned no result:"
+
 /** The stop for a repeating call (`doom_loop`) to `tool`. */
 export function subagentStoppedMessage(tool: string) {
   return `${SUBAGENT_STOPPED} repeated calls to \`${tool}\`.`
