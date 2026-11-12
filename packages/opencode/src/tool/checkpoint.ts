@@ -13,6 +13,7 @@
 // through a link: a `.swarm` or checkpoint folder that is a link is refused, and a link target is copied as the link.
 import { createHash, randomBytes } from "node:crypto"
 import { execFile } from "node:child_process"
+import { createReadStream } from "node:fs"
 import fs from "node:fs/promises"
 import path from "node:path"
 import { Archive } from "./archive"
@@ -598,9 +599,19 @@ async function hashOf(file: string): Promise<{ sha256: string; bytes: number; li
     return { sha256: sha256(Buffer.from(link)), bytes: stat.size, link: true }
   }
   if (!stat.isFile()) return undefined
-  const data = await fs.readFile(file).catch(() => undefined)
-  if (!data) return undefined
-  return { sha256: sha256(data), bytes: data.length, link: false }
+  return streamHash(file).catch(() => undefined)
+}
+
+// Streamed in chunks (gate M1 S2): a file up to CHECKPOINT_MAX_BYTES never sits whole in memory.
+async function streamHash(file: string) {
+  const hash = createHash("sha256")
+  const sizes: number[] = []
+  for await (const chunk of createReadStream(file)) {
+    const data = chunk as Buffer
+    hash.update(data)
+    sizes.push(data.length)
+  }
+  return { sha256: hash.digest("hex"), bytes: sizes.reduce((sum, size) => sum + size, 0), link: false }
 }
 
 const sha256 = (data: Buffer | Uint8Array | string) => createHash("sha256").update(data).digest("hex")
