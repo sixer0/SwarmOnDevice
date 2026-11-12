@@ -65,23 +65,27 @@ export function lock(filePath: string) {
  * after a checkpoint of that file exists. The gate already allowed the write, and its verdict is unchanged; the audit gets
  * a `checkpointed` line before the write. A checkpoint that cannot be made stops the write, and the file stays as it was.
  * Returns the line for the agent, or undefined when no checkpoint was due.
+ *
+ * Several files (apply_patch, FX-1 / gate M1 B1) go into one checkpoint, before the first of them is written: each file
+ * is due by the same rule, and files that do not exist (a new file) are left out.
  */
 export const checkpointBefore = Effect.fn("EditTool.checkpointBefore")(function* (
   ctx: Tool.Context,
   instance: InstanceContext,
-  filePath: string,
+  filePaths: string | readonly string[],
   tool: string,
 ) {
-  const outside = !Reach.inside(filePath, instance)
-  if (ctx.trust?.canUndo === true && !outside) return undefined
-  const isFile = (() => {
+  const isFile = (file: string) => {
     try {
-      return statSync(filePath).isFile()
+      return statSync(file).isFile()
     } catch {
       return false
     }
-  })()
-  if (!isFile) return undefined
+  }
+  const due = [...new Set(typeof filePaths === "string" ? [filePaths] : filePaths)]
+    .map((file) => ({ file, outside: !Reach.inside(file, instance) }))
+    .filter((item) => (ctx.trust?.canUndo !== true || item.outside) && isFile(item.file))
+  if (due.length === 0) return undefined
   const sessions = yield* Effect.serviceOption(Session.Service)
   const on = yield* Autonomy.activeFor(Option.getOrUndefined(sessions), ctx.sessionID)
   if (!on) return undefined
@@ -89,11 +93,11 @@ export const checkpointBefore = Effect.fn("EditTool.checkpointBefore")(function*
   const result = yield* Effect.promise(() =>
     ActionCheckpoint.create({
       directory: on.where.directory,
-      targets: [filePath],
-      allowOutside: outside,
+      targets: due.map((item) => item.file),
+      allowOutside: due.some((item) => item.outside),
       sessionID: ctx.sessionID,
       requestID,
-      command: `${tool} ${path.basename(filePath)}`,
+      command: `${tool} ${due.map((item) => path.basename(item.file)).join(" ")}`,
       record: Autonomy.checkpointRecorder(on.autonomy.record, on.where),
     }),
   )

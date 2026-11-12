@@ -8,7 +8,7 @@ import { Patch } from "../patch"
 import { createTwoFilesPatch, diffLines } from "diff"
 import { assertExternalDirectoryEffect } from "./external-directory"
 import { Reach } from "./reach"
-import { lock, trimDiff } from "./edit"
+import { checkpointBefore, lock, trimDiff } from "./edit"
 import { FileSeen } from "./file-seen"
 import { Secrets } from "./secrets"
 import { LSP } from "@/lsp/lsp"
@@ -300,6 +300,7 @@ export const ApplyPatchTool = Tool.define(
           : undefined
       const archived: Archive.Moved[] = []
       const archiveIDs: string[] = []
+      let saved: string | undefined
 
       // Apply the changes
       const updates: Array<{ file: string; event: "add" | "change" | "unlink" }> = []
@@ -334,6 +335,19 @@ export const ApplyPatchTool = Tool.define(
           if (text === undefined) return yield* Effect.fail(redo(change.filePath))
           planned.push({ change, text })
         }
+
+        // 1.2.6 FX-1 (gate M1 B1, C19g; U6, P-01b): as edit and write, an existing file no Undo covers is checkpointed
+        // before it is overwritten or removed: an update, a move's source and an existing target, an add onto a file, and a
+        // deletion the archive does not take. One checkpoint for the patch, before its first write; when it cannot be made
+        // the patch stops with `checkpointFailedText` and nothing is written.
+        saved = yield* checkpointBefore(
+          ctx,
+          instance,
+          planned.flatMap(({ change }) =>
+            change.type === "delete" && archiving ? [] : [change.filePath, ...(change.movePath ? [change.movePath] : [])],
+          ),
+          "apply_patch",
+        )
 
         const written: string[] = []
         for (const { change, text } of planned) {
@@ -428,7 +442,7 @@ export const ApplyPatchTool = Tool.define(
         const target = change.movePath ?? change.filePath
         return `M ${path.relative(instance.worktree, target).replaceAll("\\", "/")}`
       })
-      let output = `Success. Updated the following files:\n${summaryLines.join("\n")}`
+      let output = `${saved ? `${saved}\n` : ""}Success. Updated the following files:\n${summaryLines.join("\n")}`
       if (archived.length) output += `\n\n${Archive.movedText(archived.length, archiveIDs.join(", "))}`
 
       for (const change of fileChanges) {
