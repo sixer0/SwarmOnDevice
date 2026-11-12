@@ -112,7 +112,8 @@ export const RESEARCHER_AGENT = {
 // "ask" (nobody watches its session), so before this list a Studio call from them
 // stopped on an unanswerable prompt. Composed tool names are
 // sanitize("datum-studio") + "_" + tool (mcp/catalog.ts); the server name is spelled
-// out here because this module imports nothing (DATUM_STUDIO_MCP lives in opencode).
+// out here because this module imports nothing (DATUM_STUDIO_MCP lives in the
+// agent-runtime package, packages/opencode/src).
 // Deliberately absent:
 // - studio_mission_answer_decision: the person's answer only; agent.ts merges a final
 //   deny on it into every agent (ANSWER_DECISION_TOOL, row 198 / E-37).
