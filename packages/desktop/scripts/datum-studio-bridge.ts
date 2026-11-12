@@ -14,12 +14,19 @@
  * the app, row 111). It lives only in this process's memory and the Authorization header. It is never printed, logged,
  * put in argv or the environment, and no error text that could hold it is echoed.
  *
+ * Reconnect (row 54b, M-02 / SEC-14): when the endpoint stops answering (a request fails to connect, or the session
+ * stream ends) the bridge re-reads the descriptor once (`BRIDGE_RECONNECT_ATTEMPTS`). A descriptor that is a link, not a
+ * regular file, not 0600 or not owned by this user is refused `DESCRIPTOR_UNSAFE`; a non-loopback URL is refused. If the
+ * descriptor names a new endpoint, the bridge replays the client's `initialize` there (its answer is not echoed), sends
+ * `notifications/initialized`, reopens the session stream and retries the failed request once. The change is logged with
+ * the new port and PID only. An unchanged descriptor, or a second change, ends the bridge as before (exit 3).
+ *
  * Exit codes: 0 stdin closed; 3 Swarm not running / endpoint gone / token rejected (prints START_SWARM_MESSAGE, spec
  * §9.5); 4 misconfigured bundle or environment.
  * Logging: one JSON record per line on stderr (timestamp, level, source, code, message, context). The MCP client keeps a
  * server's stderr in its own log (Claude Code's MCP log, Swarm's sidecar log), which is the durable copy.
  */
-import { readFileSync, statSync } from "node:fs"
+import { closeSync, constants, fstatSync, lstatSync, openSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 
 const START_SWARM_MESSAGE =
@@ -31,9 +38,12 @@ const MAX_DESCRIPTOR_BYTES = 4096
 const AGENT_RE = /^[A-Za-z0-9_.-]{1,40}$/
 const TOKEN_RE = /^[A-Za-z0-9._~+/-]{32,512}$/
 const SOURCE = "datum-studio-bridge"
+/** Row 54b (M-02, register N-051): how many times one bridge process follows a changed descriptor. */
+export const BRIDGE_RECONNECT_ATTEMPTS = 1
 
 type Json = Record<string, unknown>
 type Endpoint = { url: string; token: string; pid: string }
+type Sink = (message: unknown) => void
 
 class Fatal extends Error {
   constructor(
@@ -52,23 +62,45 @@ function log(level: "info" | "warn" | "error", code: string, message: string, co
   )
 }
 
-function readEndpoint(state: string): Endpoint {
-  const path = join(state, "swarm", DESCRIPTOR_FILE)
-  let stat
+const LINKED = () =>
+  new Fatal(EXIT_NOT_RUNNING, "DESCRIPTOR_UNSAFE", "the DATUM Studio descriptor is a link, not the file Swarm wrote")
+
+/** The descriptor's text, read without following a link (SEC-14): lstat first, then open O_NOFOLLOW and fstat the fd. */
+function readDescriptor(path: string) {
+  let link
   try {
-    stat = statSync(path)
+    link = lstatSync(path)
   } catch {
     throw new Fatal(EXIT_NOT_RUNNING, "HOST_NOT_RUNNING", "no DATUM Studio descriptor")
   }
-  if (!stat.isFile() || stat.size > MAX_DESCRIPTOR_BYTES)
-    throw new Fatal(EXIT_NOT_RUNNING, "DESCRIPTOR_INVALID", "the DATUM Studio descriptor is not a small regular file")
-  // The token is a secret of this user: a descriptor others could read (or write) is not trusted.
-  if ((stat.mode & 0o077) !== 0 || (typeof process.getuid === "function" && stat.uid !== process.getuid()))
-    throw new Fatal(EXIT_NOT_RUNNING, "DESCRIPTOR_UNSAFE", "the DATUM Studio descriptor is not private to this user", {
-      mode: (stat.mode & 0o777).toString(8),
-    })
+  if (link.isSymbolicLink()) throw LINKED()
+  let fd: number
+  try {
+    fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK)
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ELOOP") throw LINKED()
+    throw new Fatal(EXIT_NOT_RUNNING, "HOST_NOT_RUNNING", "no DATUM Studio descriptor")
+  }
+  try {
+    const stat = fstatSync(fd)
+    // Swapped between lstat and open: not the file that was checked.
+    if (stat.ino !== link.ino || stat.dev !== link.dev) throw LINKED()
+    if (!stat.isFile() || stat.size > MAX_DESCRIPTOR_BYTES)
+      throw new Fatal(EXIT_NOT_RUNNING, "DESCRIPTOR_INVALID", "the DATUM Studio descriptor is not a small regular file")
+    // The token is a secret of this user: a descriptor others could read (or write) is not trusted.
+    if ((stat.mode & 0o077) !== 0 || (typeof process.getuid === "function" && stat.uid !== process.getuid()))
+      throw new Fatal(EXIT_NOT_RUNNING, "DESCRIPTOR_UNSAFE", "the DATUM Studio descriptor is not private to this user", {
+        mode: (stat.mode & 0o777).toString(8),
+      })
+    return readFileSync(fd, "utf8")
+  } finally {
+    closeSync(fd)
+  }
+}
+
+function readEndpoint(state: string): Endpoint {
   const fields: Record<string, string> = {}
-  for (const line of readFileSync(path, "utf8").split("\n")) {
+  for (const line of readDescriptor(join(state, "swarm", DESCRIPTOR_FILE)).split("\n")) {
     const at = line.indexOf("=")
     if (at > 0) fields[line.slice(0, at)] = line.slice(at + 1).replace(/\r$/, "")
   }
@@ -98,9 +130,15 @@ class Bridge {
   private getStream = false
   private closing = false
   private readonly inflight = new Set<Promise<void>>()
+  /** Row 54b: the client's initialize, replayed on a new endpoint; the generation counts endpoint swaps. */
+  private initMessage: Json | undefined
+  private generation = 0
+  private reconnects = 0
+  private reconnecting: Promise<void> | undefined
 
   constructor(
-    private readonly endpoint: Endpoint,
+    private endpoint: Endpoint,
+    private readonly state: string,
     private readonly agent: string,
     private readonly callerCwd: string,
   ) {}
@@ -117,12 +155,15 @@ class Bridge {
     return headers
   }
 
-  private emit(message: unknown) {
-    const record = message as Json
-    // The protocol version the server chose rides on every later request (streamable-HTTP transport rule).
-    const result = record?.result as Json | undefined
+  /** The protocol version the server chose rides on every later request (streamable-HTTP transport rule). */
+  private noteProtocol(message: unknown) {
+    const result = (message as Json)?.result as Json | undefined
     if (result && typeof result.protocolVersion === "string" && result.serverInfo !== undefined)
       this.protocolVersion = result.protocolVersion
+  }
+
+  private emit(message: unknown) {
+    this.noteProtocol(message)
     process.stdout.write(JSON.stringify(message) + "\n")
   }
 
@@ -133,6 +174,7 @@ class Bridge {
   /** One message from stdin. Requests before the initialize answer wait for it (they need the session id). */
   handle(message: Json) {
     const isInit = message.method === "initialize"
+    if (isInit) this.initMessage = message
     const run = async () => {
       if (!isInit && this.initialized) await this.initialized.catch(() => undefined)
       await this.post(message)
@@ -156,12 +198,71 @@ class Bridge {
     }
   }
 
-  private async post(message: Json) {
+  /** A connection failure on the current endpoint: follow a changed descriptor once (row 54b). */
+  private reconnect(cause: Fatal, generation: number): Promise<void> {
+    // Another request already moved to a newer endpoint (or is doing so): just retry there.
+    if (generation !== this.generation) return this.reconnecting ?? Promise.resolve()
+    if (this.closing || this.reconnects >= BRIDGE_RECONNECT_ATTEMPTS) return Promise.reject(cause)
+    this.reconnects += 1
+    this.reconnecting = this.switchEndpoint(cause)
+    return this.reconnecting
+  }
+
+  private async switchEndpoint(cause: Fatal) {
+    const next = readEndpoint(this.state)
+    if (next.url === this.endpoint.url && next.token === this.endpoint.token && next.pid === this.endpoint.pid) throw cause
+    log("warn", "BRIDGE_RECONNECT", "the DATUM Studio endpoint changed; reconnecting once", {
+      port: new URL(next.url).port,
+      pid: next.pid,
+    })
+    this.endpoint = next
+    this.generation += 1
+    this.sessionId = undefined
+    this.protocolVersion = undefined
+    this.getStream = false
+    if (!this.initMessage) return
+    // Re-open the session on the new host with the client's own initialize; its answer stays inside the bridge.
+    const init = this.initMessage
     const response = await this.fetch({
       method: "POST",
       headers: this.headers({ "content-type": "application/json", accept: "application/json, text/event-stream" }),
-      body: JSON.stringify(message),
+      body: JSON.stringify(init),
     })
+    this.checkFatal(response.status)
+    if (!response.ok) {
+      await response.body?.cancel()
+      throw new Fatal(EXIT_NOT_RUNNING, "RECONNECT_FAILED", "the new DATUM Studio endpoint refused the session", {
+        status: response.status,
+      })
+    }
+    const sid = response.headers.get("mcp-session-id")
+    if (sid) this.sessionId = sid
+    await this.forward(response, (message) => this.noteProtocol(message))
+    const ready = await this.fetch({
+      method: "POST",
+      headers: this.headers({ "content-type": "application/json", accept: "application/json, text/event-stream" }),
+      body: JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }),
+    })
+    this.checkFatal(ready.status)
+    await ready.body?.cancel()
+    void this.openGetStream()
+  }
+
+  private async post(message: Json, retried = false): Promise<void> {
+    if (this.reconnecting) await this.reconnecting.catch(() => undefined)
+    const generation = this.generation
+    let response: Response
+    try {
+      response = await this.fetch({
+        method: "POST",
+        headers: this.headers({ "content-type": "application/json", accept: "application/json, text/event-stream" }),
+        body: JSON.stringify(message),
+      })
+    } catch (error) {
+      if (retried || !(error instanceof Fatal) || error.code !== "HOST_UNREACHABLE") throw error
+      await this.reconnect(error, generation)
+      return this.post(message, true)
+    }
     this.checkFatal(response.status)
     if (message.method === "initialize" && response.ok) {
       const sid = response.headers.get("mcp-session-id")
@@ -200,20 +301,20 @@ class Bridge {
       throw new Fatal(EXIT_NOT_RUNNING, "SESSION_GONE", "the DATUM Studio session ended on the Swarm side")
   }
 
-  private async forward(response: Response) {
+  private async forward(response: Response, sink: Sink = (message) => this.emit(message)) {
     const type = response.headers.get("content-type") ?? ""
     if (type.includes("text/event-stream")) {
-      await this.readEvents(response)
+      await this.readEvents(response, sink)
       return
     }
     const text = await response.text()
     if (text.trim() === "") return
     const body = JSON.parse(text) as unknown
-    for (const item of Array.isArray(body) ? body : [body]) this.emit(item)
+    for (const item of Array.isArray(body) ? body : [body]) sink(item)
   }
 
   /** Server-sent events: each `message` event's data is one JSON-RPC message. */
-  private async readEvents(response: Response) {
+  private async readEvents(response: Response, sink: Sink = (message) => this.emit(message)) {
     if (!response.body) return
     const decoder = new TextDecoder()
     let buffer = ""
@@ -222,7 +323,7 @@ class Bridge {
     const dispatch = () => {
       if (data.length > 0 && event === "message") {
         try {
-          this.emit(JSON.parse(data.join("\n")))
+          sink(JSON.parse(data.join("\n")))
         } catch {
           log("warn", "SSE_PARSE", "an event from the DATUM Studio endpoint was not JSON")
         }
@@ -251,6 +352,8 @@ class Bridge {
   private async openGetStream() {
     if (this.getStream || !this.sessionId) return
     this.getStream = true
+    const generation = this.generation
+    let cause = new Fatal(EXIT_NOT_RUNNING, "HOST_GONE", "the DATUM Studio endpoint closed the session stream")
     try {
       const response = await this.fetch({ method: "GET", headers: this.headers({ accept: "text/event-stream" }) })
       if (response.status === 405 || !response.ok) {
@@ -261,10 +364,12 @@ class Bridge {
       await this.readEvents(response)
     } catch (error) {
       if (this.closing) return
-      if (error instanceof Fatal) return this.fail(error)
+      if (error instanceof Fatal && error.code !== "HOST_UNREACHABLE") return this.fail(error)
+      if (error instanceof Fatal) cause = error
     }
-    if (!this.closing)
-      this.fail(new Fatal(EXIT_NOT_RUNNING, "HOST_GONE", "the DATUM Studio endpoint closed the session stream"))
+    if (this.closing || generation !== this.generation) return
+    // Swarm restarted: follow the new descriptor once (row 54b), otherwise end as before (spec §9.5).
+    await this.reconnect(cause, generation).catch((error: unknown) => this.fail(error))
   }
 
   fail(error: unknown) {
@@ -314,7 +419,7 @@ function main() {
     if (error instanceof Fatal) exit(error)
     throw error
   }
-  const bridge = new Bridge(endpoint, agent, callerCwd)
+  const bridge = new Bridge(endpoint, state, agent, callerCwd)
   log("info", "BRIDGE_START", "bridge started", { agent, pid: endpoint.pid })
 
   let pending = ""
