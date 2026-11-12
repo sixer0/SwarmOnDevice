@@ -6,12 +6,12 @@ import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSyn
 import { tmpdir } from "node:os"
 import { basename, join } from "node:path"
 import { PassThrough } from "node:stream"
-import { createSetupRunner, SETUP_START_IDS as RUNNER_START_IDS } from "../setup-runner"
+import { createSetupRunner, SETUP_START_IDS } from "../setup-runner"
 import type { ProbeResult } from "./probe"
 import { createToolHealthRegistry, TOOL_HEALTH_SHIPPED_IDS } from "./registry"
-import { createToolHealth, SETUP_START_IDS, type ToolHealthDeps } from "./startup"
+import { createToolHealth, type ToolHealthDeps } from "./startup"
 import { readToolHealthState, toolHealthDir } from "./state"
-import { reviveWebComponent, WEB_REVIVE_IDS, type WebReviveRunner } from "./web-revive"
+import { reviveWebComponent, type WebReviveRunner } from "./web-revive"
 
 const HELP_START = "Usage:\n  swarm-setup start <runtime|searxng|firecrawl>  start an installed, stopped component\n"
 const HELP_OLD = "Usage:\n  swarm-setup install [component...] consent-first install\n  swarm-setup apply <stack>  re-render\n"
@@ -149,13 +149,14 @@ describe("TH-03 never installs (01c 11.5)", () => {
     for (const id of ["runtime", "searxng", "firecrawl", "render-bridge"]) expect(state[id]?.lastStatus).toBe("revived")
   })
 
+  // FX-12 (C23 SF1, intended test change): the adapter and tool-health no longer export a list of their own; the
+  // runner's SETUP_START_IDS is the one list, and the shipped compose-start entries must match it.
   test("1b: one id list for the runner, tool-health and the adapter", () => {
     expect([...SETUP_START_IDS]).toEqual(["runtime", "searxng", "firecrawl"])
-    expect([...WEB_REVIVE_IDS]).toEqual([...RUNNER_START_IDS])
     const compose = createToolHealthRegistry({ home: "/h", platform: "darwin", isPackaged: false, appPath: "/a" })
       .filter((c) => c.revive && "builtin" in c.revive && c.revive.builtin === "compose-start")
       .map((c) => c.id)
-    expect(compose).toEqual([...WEB_REVIVE_IDS])
+    expect(compose).toEqual([...SETUP_START_IDS])
   })
 
   test("2: no install/apply/remove/wire/up/pull/--force-recreate literal in tool-health sources", () => {

@@ -33,10 +33,8 @@ import {
 import { ensureToolHealthDir, readToolHealthState, scrubDetail, scrubOutput, writeToolHealthState, type ToolHealthState } from "./state"
 import { PROBE_BODY_MAX_BYTES, type ResolvedToolHealthComponent, type ToolHealthContext } from "./types"
 import { resolveToolHealthRegistry, userRegistryIssueMessage } from "./user-registry"
-import { reviveWebComponent, WEB_REVIVE_IDS, type WebReviveRunner } from "./web-revive"
+import { reviveWebComponent, type WebReviveRunner } from "./web-revive"
 
-/** The only ids a `compose-start` revive may pass to `swarm-setup start` (N-153). Row 92b: one list, web-revive.ts. */
-export const SETUP_START_IDS = WEB_REVIVE_IDS
 /** Setup states that count as installed for `installedWhen.setupComponent` (01c 6.2). */
 export const INSTALLED_SETUP_STATES: ReadonlySet<string> = new Set(["healthy", "configured", "installed"])
 /** Environment of a user revive argv (01c 3.3). PATH is fixed; the rest are copied from the parent when present. */
