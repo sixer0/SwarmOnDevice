@@ -95,6 +95,7 @@ const desktop = [
 
 export const dict = {
   ...Object.fromEntries(DESKTOP_NATIVE_KEYS.slice(0, desktop.length).map((key, index) => [key, desktop[index]])),
+  "desktop.menu.recheckTools": "Eszközök újraellenőrzése",
   "command.category.suggested": "Javasolt",
   "command.category.view": "Nézet",
   "command.category.project": "Projekt",
@@ -1413,7 +1414,10 @@ export const dict = {
   "memory.privacy": "Ezen az eszközön marad, soha nem kerül a tárolóba. A modell ezeket a jegyzeteket csak a vele futtatott munkamenet részeként látja.",
   "memory.off": "Kikapcsolva. A munkamenetek nem kapnak jegyzeteket, és semmi új nem tanulódik. A jegyzeteid megmaradnak.",
   "memory.refused.secret": "Ez jelszónak vagy kulcsnak tűnik, ezért nem lett mentve.",
-  "memory.refused.long": "A jegyzet legyen 400 karakternél rövidebb.",
+  "memory.refused.long":
+    "A jegyzet legyen {{max}} karakternél rövidebb. A hosszabb részleteket tedd egy fájlba, és kérd meg az ügynököt, hogy hivatkozzon rá.",
+  "memory.refused.bodyLong": "A jegyzet törzse legyen {{max}} karakternél rövidebb, vagy inkább hivatkozz egy fájlra.",
+  "memory.refused.tooManyRefs": "Egy jegyzet legfeljebb {{max}} fájlra vagy szimbólumra hivatkozhat.",
   "memory.refused.full": "A memória megtelt. Előbb törölj egy jegyzetet.",
   "memory.error": "A projektmemória betöltése nem sikerült.",
   "memory.retry": "Újra",
@@ -1438,4 +1442,5 @@ export const dict = {
   "session.movedOn.answer": "Válasz",
   "home.agents.movedOn": "Enélkül folytatta · {{time}}",
   "home.setup.attention": "A beállítás egy része figyelmet igényel.",
+  "session.map.decisions.category.protected_path": "Védett hely (kulcsok, hitelesítő adatok vagy rendszermappák)",
 }

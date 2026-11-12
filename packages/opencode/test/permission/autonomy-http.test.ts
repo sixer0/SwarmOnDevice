@@ -139,18 +139,22 @@ writeFileSync(path.join(away, ".aws/config"), "region = synthetic-1\n")
 const secret = path.join(away, ".aws/config")
 
 /** The first of the two prompts the real read tool asks for a file beyond the folder (`read.ts`, `external-directory.ts`). */
+// 1.2.6 row 36 (U12, INTENT beyond the 01b 10.1 grep list): a proven read (`readOnly`) of the secret now runs as
+// protected_read, so the two prompts of the C97 F3 call are ones that still wait: a folder prompt that does not prove a
+// read, and an edit of the secret.
 const outsidePrompt = (args: unknown) => ({
   permission: "external_directory",
   patterns: [path.join(away, ".aws/*")],
-  metadata: { filepath: secret, parentDir: path.join(away, ".aws"), readOnly: true },
+  metadata: { filepath: secret, parentDir: path.join(away, ".aws") },
   always: [],
   call: { tool: "read", args },
 })
 /** Its second prompt, which the entry the person approved never showed. The real tool names it relative to the worktree. */
 const readPrompt = (args: unknown) => ({
-  permission: "read",
+  permission: "edit",
   patterns: [secret],
   metadata: {},
+  editClass: "secret" as const,
   always: [],
   call: { tool: "read", args },
 })
@@ -440,7 +444,7 @@ it.instance("C97 F3 over HTTP: one approval of a merged read runs each of its ca
     expect(granted.map((line) => [line.permission, line.decidedBy, line.decision])).toEqual(
       READS.flatMap(() => [
         ["external_directory", "person", "allow"],
-        ["read", "person", "allow"],
+        ["edit", "person", "allow"],
       ]),
     )
     expect(lines.filter((line) => line.type === "outcome" && line.outcome === "ran")).toHaveLength(3)

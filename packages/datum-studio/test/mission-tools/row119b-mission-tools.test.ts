@@ -39,7 +39,7 @@ globalThis.fetch = (async () => {
   throw new Error("row119b test: globalThis.fetch must not be called by the host")
 }) as unknown as typeof fetch
 
-/** 23 kept (row 31, U19) + 5 template tools (row 68, default since I-2) + 11 mission tools (C71). Exact names and order: 39. */
+/** 23 kept (row 31, U19) + 5 template tools (row 68, default since I-2) + 11 mission tools (C71). Exact names and order: 39 + studio_asset_put (row 50c, W-13) = 40. */
 const EXPECTED_TOOLS = [
   "studio_registry",
   "studio_templates_list",
@@ -81,6 +81,8 @@ const EXPECTED_TOOLS = [
   "studio_mission_export",
   "studio_mission_request_decision",
   "studio_mission_answer_decision",
+  // Row 50c (1.2.6, W-13): host built-in, last
+  "studio_asset_put",
 ]
 
 const M1 = "2026-11-07_m119b-feature"
@@ -203,12 +205,12 @@ afterAll(async () => {
 })
 
 describe("row 119b: tool list and the wrapper seam", () => {
-  test("tools/list = the exact 39 names in order (23 kept + 5 template + 11 mission); wrappers keep their slot", async () => {
+  test("tools/list = the exact 40 names in order (23 kept + 5 template + 11 mission + studio_asset_put); wrappers keep their slot", async () => {
     const tools = (await swarm.listTools()).tools
     const names = tools.map((t) => t.name)
     quote("tool count", names.length)
     expect(names).toEqual(EXPECTED_TOOLS)
-    expect(names.length).toBe(39)
+    expect(names.length).toBe(40) // W-13 / row 50c: +studio_asset_put
     const props = (n: string) => Object.keys((tools.find((t) => t.name === n)!.inputSchema as S).properties ?? {})
     expect(props("studio_report_template")).toContain("row")
     expect(props("studio_report_check")).toContain("row")
@@ -482,7 +484,8 @@ describe("row 119b: export seam (row 120 renderer)", () => {
       expect(readFileSync(path.join(PROJECT, "docs", M1, "decisions.md"), "utf8")).toBe(`# decisions of ${M1}\n`)
       expect(code(await call(c, "studio_mission_export", { mission: M1, write: true }))).toBe("FILE_EXISTS")
       expect((await call(c, "studio_mission_export", { mission: M1, files: ["decisions"], write: true, overwrite: true })).ok).toBe(true)
-      expect(readdirSync(path.join(PROJECT, "docs", M1)).some((n) => n.startsWith("decisions.md.bak-"))).toBe(true)
+      // 1.2.6 row 89 (T-17, INTENT dirname only): the backup sits in <dir>/.bak/, not beside the file.
+      expect(readdirSync(path.join(PROJECT, "docs", M1, ".bak")).some((n) => n.startsWith("decisions.md.bak-"))).toBe(true)
     } finally {
       await c.close().catch(() => undefined)
     }

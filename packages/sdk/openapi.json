@@ -1442,6 +1442,14 @@
             "required": true
           },
           {
+            "name": "x-swarm-desktop-nonce",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          },
+          {
             "name": "directory",
             "in": "query",
             "schema": {
@@ -1517,7 +1525,7 @@
             }
           }
         },
-        "description": "A person deletes for good the archive entries they were shown, named by id. Only a server with a password takes this, and an agent's shell is never given it. Nothing outside the archive is deleted, and the emptying is recorded before anything goes.",
+        "description": "A person deletes for good the archive entries they were shown, named by id. Only a server with a password and the desktop app's per-launch nonce takes this; an agent's shell is given neither. Nothing outside the archive is deleted, and the emptying is recorded before anything goes.",
         "summary": "Empty a session's archive",
         "requestBody": {
           "content": {
@@ -1542,6 +1550,122 @@
           {
             "lang": "js",
             "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.autonomy.archiveEmpty({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/session/{sessionID}/autonomy/checkpoint/{checkpointID}/revert": {
+      "post": {
+        "tags": ["autonomy"],
+        "operationId": "autonomy.checkpointRevert",
+        "parameters": [
+          {
+            "name": "sessionID",
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "pattern": "^ses"
+            },
+            "required": true
+          },
+          {
+            "name": "checkpointID",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "name": "x-swarm-desktop-nonce",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          },
+          {
+            "name": "directory",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          },
+          {
+            "name": "workspace",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The checkpoint put back, and the checkpoint saved just before",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutonomyCheckpointRevert"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "BadRequest | InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/effect_HttpApiError_BadRequest"
+                    },
+                    {
+                      "$ref": "#/components/schemas/InvalidRequestError"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "AutonomyNoPasswordError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutonomyNoPasswordError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "AutonomyWriteError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutonomyWriteError"
+                }
+              }
+            }
+          }
+        },
+        "description": "A person puts back the files and Git refs a checkpoint saved before an action ran. The current bytes are saved as a new checkpoint first, so the revert can be undone. Only a server with a password and the desktop app's per-launch nonce takes this; an agent's shell is given neither. The manifest must match the one recorded when the checkpoint was made, and every restored file is checked by sha256.",
+        "summary": "Revert a checkpoint",
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.autonomy.checkpointRevert({\n  ...\n})"
           }
         ]
       }
@@ -20212,6 +20336,37 @@
         "type": "string",
         "enum": ["user", "agent", "learned"]
       },
+      "MemoryRef": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string"
+              },
+              "line": {
+                "type": "integer",
+                "minimum": 1
+              }
+            },
+            "required": ["path"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "symbol": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              }
+            },
+            "required": ["symbol"],
+            "additionalProperties": false
+          }
+        ]
+      },
       "MemoryItem": {
         "type": "object",
         "properties": {
@@ -20259,6 +20414,18 @@
           },
           "worked": {
             "type": "string"
+          },
+          "body": {
+            "type": "string"
+          },
+          "refs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MemoryRef"
+            }
+          },
+          "untrusted": {
+            "type": "boolean"
           }
         },
         "required": ["id", "text", "source", "deviceOnly", "time"],
@@ -24770,6 +24937,7 @@
                   "protected_path",
                   "irreversible",
                   "admin_rights",
+                  "checkpoint_failed",
                   "outside_read",
                   "outside_copy",
                   "outside_edit",
@@ -24777,7 +24945,9 @@
                   "consented",
                   "archived",
                   "script",
-                  "by_main_agent"
+                  "by_main_agent",
+                  "protected_read",
+                  "checkpointed"
                 ]
               },
               "bypassed": {
@@ -24815,6 +24985,7 @@
                   "protected_path",
                   "irreversible",
                   "admin_rights",
+                  "checkpoint_failed",
                   "outside_read",
                   "outside_copy",
                   "outside_edit",
@@ -24822,7 +24993,9 @@
                   "consented",
                   "archived",
                   "script",
-                  "by_main_agent"
+                  "by_main_agent",
+                  "protected_read",
+                  "checkpointed"
                 ]
               },
               "via": {
@@ -24965,7 +25138,8 @@
                   "rejected_later",
                   "abandoned",
                   "undone",
-                  "archived"
+                  "archived",
+                  "checkpointed"
                 ]
               },
               "exit": {
@@ -24996,6 +25170,20 @@
               },
               "bytes": {
                 "type": "integer"
+              },
+              "checkpoint": {
+                "type": "string",
+                "pattern": "^\\d{8}-\\d{6}-\\d{1,4}$"
+              },
+              "entries": {
+                "type": "integer"
+              },
+              "refs": {
+                "type": "integer"
+              },
+              "manifestSha256": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
               }
             },
             "required": ["v", "seq", "prev", "at", "type", "requestID", "outcome"],
@@ -25307,6 +25495,30 @@
           }
         },
         "required": ["rootID", "entries", "bytes", "unsafe"],
+        "additionalProperties": false
+      },
+      "AutonomyCheckpointRevert": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "restored": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "preRevert": {
+            "type": "string",
+            "description": "The checkpoint of the files as they were just before this revert, so the revert can be undone"
+          },
+          "verified": {
+            "type": "boolean",
+            "enum": [true]
+          }
+        },
+        "required": ["id", "restored", "preRevert", "verified"],
         "additionalProperties": false
       },
       "Model": {
@@ -26365,7 +26577,7 @@
       },
       "MemoryRefusal": {
         "type": "string",
-        "enum": ["empty", "long", "secret", "full"]
+        "enum": ["empty", "long", "secret", "full", "body_long", "too_many_refs"]
       },
       "MemoryResult": {
         "type": "object",
@@ -27579,6 +27791,18 @@
           },
           "worked": {
             "type": "string"
+          },
+          "body": {
+            "type": "string"
+          },
+          "refs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MemoryRef"
+            }
+          },
+          "untrusted": {
+            "type": "boolean"
           }
         },
         "required": ["id", "text", "source", "deviceOnly", "time"],

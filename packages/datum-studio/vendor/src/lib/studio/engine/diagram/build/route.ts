@@ -14,6 +14,8 @@ import { DiagramDefect, LATTICE_Y, polylineD, snap, type Sheet, type SheetNode }
 import { diagramFitNote, diagramFitRoute } from "../fit/state";
 import { nudgeRoutes } from "./lanesroute";
 import { activeElkRoutes } from "../elk/routes";
+import { edgeConflicts, ENTRY_COLLISION_MM } from "../fit/lint";
+import { flowDirectionOf, flowRanks } from "../layout-a/flow";
 
 type Pt = readonly [number, number];
 type Side = "bottom" | "top" | "right" | "left";
@@ -286,13 +288,142 @@ function cornerRoute(p: Pt, sa: Side, q: Pt, sb: Side, stub: number): Pt[] {
   return [p, pa, corner, pb, q];
 }
 
+/** N-018 (T-08, 01e §8): members on one node side at which fan-out (or fan-in) sub-ranking applies. */
+export const FANOUT_SPLIT_MIN = 4;
+/** 01e §8.4: distance between two turn levels (sub-ranks) of one fan group. */
+const FAN_LEVEL_STEP = LATTICE_Y / 2.0;
+
+interface FanGroup {
+  node: string;
+  side: Side;
+  /** true = fan-out (the node is `from`), false = fan-in (the node is `to`). */
+  out: boolean;
+  /** Edge indices in the anchor slot order of that side (`grouped`). */
+  members: number[];
+}
+
+/**
+ * 01e §8.1: fan groups = edges sharing one node side whose other ends lie across the corridor (side pair
+ * bottom/top or right/left, the far anchor beyond the near one). Fan-out groups first, then fan-in (§8.7),
+ * each in `grouped` order; bus nodes keep their own tap rule (E-17) and never form a group.
+ */
+function fanGroups(
+  edges: readonly DiagramEdge[],
+  sides: readonly SidePair[],
+  grouped: ReadonlyMap<string, DiagramEdge[]>,
+): FanGroup[] {
+  const outs: FanGroup[] = [];
+  const ins: FanGroup[] = [];
+  for (const [k, g] of grouped) {
+    if (g.length < FANOUT_SPLIT_MIN) continue;
+    const [side, node] = k.split("\u0000") as [Side, string];
+    for (const out of [true, false]) {
+      const members: number[] = [];
+      for (const e of g) {
+        const i = edges.indexOf(e);
+        if (i < 0 || e.from === e.to) continue;
+        const [sa, sb] = sides[i];
+        if (out ? e.from === node && sa === side && sb === OPP[side] : e.to === node && sb === side && sa === OPP[side]) members.push(i);
+      }
+      if (members.length >= FANOUT_SPLIT_MIN) (out ? outs : ins).push({ node, side, out, members });
+    }
+  }
+  return [...outs, ...ins];
+}
+
+/** Collinear + crossing pairs among the routes of `idx` (lint `edgeConflicts`, E-13). */
+function conflictsOf(routes: readonly Pt[][], idx: readonly number[]): number {
+  const c = edgeConflicts(idx.map((i) => routes[i]));
+  return c.collinear + c.cross;
+}
+
+/**
+ * 01e §8.2-8.5, §8.7: new raw routes for one fan group, or null when the turn levels find no room.
+ * Members are ordered by the cross coordinate of their far end's centre; a member whose far centre lies
+ * inside the node side span (inset >= ENTRY_COLLISION_MM) exits there when no other member exits within
+ * ENTRY_COLLISION_MM; the others keep the fanned slot of their sorted position. Bending members turn on
+ * staggered levels: per direction the largest cross distance turns first, next to the node's stub end,
+ * each further one FAN_LEVEL_STEP on, never past the far stub. Far ends keep their anchors.
+ */
+function fanRaw(
+  sheet: Sheet,
+  edges: readonly DiagramEdge[],
+  sides: readonly SidePair[],
+  grouped: ReadonlyMap<string, DiagramEdge[]>,
+  gk: (id: string, side: Side) => string,
+  nodeId: string,
+  side: Side,
+  out: boolean,
+  members: readonly number[],
+  raw: readonly Pt[][],
+  stub: number,
+): Pt[][] | null {
+  const node = nodeOf(sheet, nodeId);
+  if (node.spec.shape === "bus") return null;
+  const vert = side === "bottom" || side === "top";
+  const sgn = side === "bottom" || side === "right" ? 1 : -1; // outward from the node side
+  const cross = (p: Pt) => (vert ? p[0] : p[1]);
+  const lvl = (p: Pt) => (vert ? p[1] : p[0]);
+  const pt = (c: number, l: number): Pt => (vert ? [c, l] : [l, c]);
+  const far = (i: number) => nodeOf(sheet, out ? edges[i].to : edges[i].from);
+  if (members.some((i) => far(i).spec.shape === "bus")) return null;
+  const farCentre = (i: number) => (vert ? far(i).x + far(i).w / 2.0 : far(i).y + far(i).h / 2.0);
+  const farAnchor = (i: number): Pt => {
+    const e = edges[i];
+    const fs = out ? sides[i][1] : sides[i][0];
+    const g = grouped.get(gk(out ? e.to : e.from, fs))!;
+    return anchor(far(i), fs, indexOfEdge(g, e), g.length);
+  };
+  const order = members.map((i, k) => ({ i, k })).sort((a, b) => farCentre(a.i) - farCentre(b.i) || a.k - b.k).map((m) => m.i);
+  const n = order.length;
+  const exit = new Map<number, number>(order.map((i, k) => [i, cross(anchor(node, side, k, n))]));
+  const lo = (vert ? node.x : node.y) + ENTRY_COLLISION_MM;
+  const hi = (vert ? node.x + node.w : node.y + node.h) - ENTRY_COLLISION_MM;
+  for (const i of order) {
+    const c = farCentre(i);
+    if (c < lo || c > hi) continue;
+    if (order.some((j) => j !== i && Math.abs(exit.get(j)! - c) < ENTRY_COLLISION_MM)) continue;
+    exit.set(i, c);
+  }
+  const nearStub = lvl(anchor(node, side, 0, n)) + sgn * stub;
+  const bends = (dirn: number) =>
+    order
+      .filter((i) => Math.sign(cross(farAnchor(i)) - exit.get(i)!) === dirn && Math.abs(cross(farAnchor(i)) - exit.get(i)!) > 1e-6)
+      .sort((a, b) => Math.abs(cross(farAnchor(b)) - exit.get(b)!) - Math.abs(cross(farAnchor(a)) - exit.get(a)!) || order.indexOf(a) - order.indexOf(b));
+  const level = new Map<number, number>();
+  for (const dirn of [-1, 1]) bends(dirn).forEach((i, k) => level.set(i, nearStub + sgn * k * FAN_LEVEL_STEP));
+  const next = raw.map((r) => [...r]);
+  for (const i of order) {
+    const q = farAnchor(i);
+    const farStub = lvl(q) - sgn * stub;
+    const L = level.get(i) ?? nearStub;
+    if (sgn * (farStub - L) < -1e-6 || sgn * (farStub - nearStub) < -1e-6) return null; // §8.5 no room
+    const p = pt(exit.get(i)!, lvl(anchor(node, side, 0, n)));
+    const chain: Pt[] = [p, pt(cross(p), nearStub), pt(cross(p), L), pt(cross(q), L), pt(cross(q), farStub), q];
+    const dedup = chain.filter((c, k) => k === 0 || Math.abs(c[0] - chain[k - 1][0]) > 1e-9 || Math.abs(c[1] - chain[k - 1][1]) > 1e-9);
+    next[i] = out ? dedup : dedup.reverse();
+  }
+  return next;
+}
+
 /** The original `route_edges` body; `over` = side pair per edge index chosen by row 124 (CP-41). */
 function routeWithSides(s: StudioDiagramV1, sheet: Sheet, over: ReadonlyMap<number, SidePair>): RoutedEdge[] {
   const edges = s.edges ?? [];
   const nodes = [...sheet.nodes.values()];
+  // 1.2.6 row 64 (01e §4.2, routed by row 46): a forward edge of a ranked flow (rank(from) < rank(to))
+  // has fixed sides, bottom -> top in TB and right -> left in LR. `sideOf` would turn the outer edges of a
+  // wide TB rank (|dx| > |dy|) to right/left. Back and intra-rank edges keep `sideOf`; a flow without
+  // `direction` (legacy) is untouched.
+  const dir = flowDirectionOf(s as StudioDiagramV1 & { direction?: unknown });
+  const rankOf = dir ? flowRanks(s).rankOf : undefined;
   const sidesOf = (e: DiagramEdge, i: number): SidePair => {
     const o = over.get(i);
     if (o) return o;
+    if (rankOf) {
+      const ra = rankOf.get(e.from);
+      const rb = rankOf.get(e.to);
+      if (ra !== undefined && rb !== undefined && ra < rb) return dir === "LR" ? ["right", "left"] : ["bottom", "top"];
+    }
     const sa = sideOf(nodeOf(sheet, e.from), nodeOf(sheet, e.to));
     return [sa, OPP[sa]];
   };
@@ -350,19 +481,60 @@ function routeWithSides(s: StudioDiagramV1, sheet: Sheet, over: ReadonlyMap<numb
     raw.push(pts);
   });
   const out: RoutedEdge[] = [];
-  let routes = edges.map((e, i) => {
-    const pts = raw[i];
-    if (!laneFix) return detour(pts, [e.from, e.to], nodes, sheet.widthMm, sheet.colMm);
-    // FIG-02b2: detur mulai dari ujung stub agar konektor keluar tegak lurus sisi simpul
-    // (bukan menyusuri garis tepi simpul) dan segmen dalamnya dapat dipisah jalurnya.
-    const inner = detour(pts.slice(1, -1), [e.from, e.to], nodes, sheet.widthMm, sheet.colMm);
-    return [pts[0], ...inner, pts[pts.length - 1]];
-  });
-  if (laneFix) {
-    const n = nudgeRoutes(routes, edges.map((e) => [e.from, e.to] as const), nodes, sheet.widthMm);
-    routes = n.paths;
-    if (n.moved) diagramFitNote("EDGE_LANES", `${n.moved} segmen konektor berimpit dipindah ke jalur sendiri`, "kurangi konektor yang berbagi kanal bila jalur terlalu rapat");
+  const finish = (rawPts: readonly Pt[][]): { routes: Pt[][]; moved: number } => {
+    let routes = edges.map((e, i) => {
+      const pts = rawPts[i];
+      if (!laneFix) return detour(pts, [e.from, e.to], nodes, sheet.widthMm, sheet.colMm);
+      // FIG-02b2: detur mulai dari ujung stub agar konektor keluar tegak lurus sisi simpul
+      // (bukan menyusuri garis tepi simpul) dan segmen dalamnya dapat dipisah jalurnya.
+      const inner = detour(pts.slice(1, -1), [e.from, e.to], nodes, sheet.widthMm, sheet.colMm);
+      return [pts[0], ...inner, pts[pts.length - 1]];
+    });
+    let moved = 0;
+    if (laneFix) {
+      const n = nudgeRoutes(routes, edges.map((e) => [e.from, e.to] as const), nodes, sheet.widthMm);
+      routes = n.paths;
+      moved = n.moved;
+    }
+    return { routes, moved };
+  };
+  let { routes, moved } = finish(raw);
+  // 1.2.6 row 64 (T-08, 01e §8): fan groups whose members conflict get sorted slots, distinct exits and
+  // staggered turn levels; kept per group only if the group's conflicts strictly drop and the figure's
+  // do not rise. A figure without a conflicting fan group never enters the loop body (byte-identical).
+  // A flow without `direction` (legacy serial layout) is frozen at its 1.2.5 bytes (01e A15): no T-08.
+  const sides = edges.map((e, i) => sidesOf(e, i));
+  const fanned = new Set<number>();
+  let fanKept = 0;
+  const legacyFlow = s.family === "flow" && !dir;
+  for (const g of legacyFlow ? [] : fanGroups(edges, sides, grouped)) {
+    const members = g.members.filter((i) => !fanned.has(i));
+    if (members.length < FANOUT_SPLIT_MIN) continue;
+    const before = conflictsOf(routes, members);
+    if (before === 0) continue;
+    const alt = fanRaw(sheet, edges, sides, grouped, gk, g.node, g.side, g.out, members, raw, stub);
+    if (!alt) continue; // no room for the turn levels: the group keeps its routes (§8.5)
+    let trial: { routes: Pt[][]; moved: number };
+    try {
+      trial = finish(alt);
+    } catch {
+      continue; // a detour fails (DATUM-32) with the new routes: keep the original
+    }
+    const ok =
+      conflictsOf(trial.routes, members) < before &&
+      conflictsOf(trial.routes, edges.map((_, i) => i)) <= conflictsOf(routes, edges.map((_, i) => i)) &&
+      members.every((i) => !throughEnds(trial.routes[i], nodeOf(sheet, edges[i].from), nodeOf(sheet, edges[i].to)));
+    if (!ok) continue;
+    for (const i of members) {
+      raw[i] = alt[i];
+      fanned.add(i);
+    }
+    routes = trial.routes;
+    moved = trial.moved;
+    fanKept += members.length;
   }
+  if (laneFix && moved) diagramFitNote("EDGE_LANES", `${moved} segmen konektor berimpit dipindah ke jalur sendiri`, "kurangi konektor yang berbagi kanal bila jalur terlalu rapat");
+  if (fanKept) diagramFitNote("EDGE_LANES", `${fanKept} konektor kipas diberi titik keluar dan tingkat belok sendiri`, "kurangi cabang dari satu sisi simpul bila kipas terlalu rapat");
   edges.forEach((e, i) => {
     const pts = routes[i];
     out.push({ from: e.from, to: e.to, kind: e.kind, label: e.label, points: pts, d: polylineD(pts) });

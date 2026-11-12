@@ -38,14 +38,14 @@ export const STUDIO_FINAL_NAME_PATTERN =
 const STUDIO_FINAL_NAME = new RegExp(STUDIO_FINAL_NAME_PATTERN)
 
 /**
- * Row 165D (F56-2, CP-17): the DATUM title name Studio now delivers outputs under (`<Judul> <nomor> Rev<X>.<ext>`,
+ * Row 165D (F56-2, CP-17): the DATUM title name Studio now delivers outputs under (`<Judul> <nomor> Rev<X>.<ext>` or, since 1.2.6 (M-05, U15), `<Judul> <nomor> Rev<X> rev<N>.<ext>`,
  * `<Judul> <YYYY-MM-DD>.<ext>`, `Gambar <C.n> <Judul>.<ext>`, optional ` <sha8>` collision suffix; no `_`), copied
  * verbatim from packages/datum-studio/vendor/src/lib/studio/contract/env.ts `DATUM_FILENAME_PATTERN` (a unit test pins
  * the copy). One path segment only: separators, control/bidi characters and a leading dot or space never match.
  * Row 165I (C196, L2): C1 controls, ALM, zero-width, LS/PS, WJ and BOM never match either (same rule as Studio).
  */
 export const STUDIO_DATUM_NAME_PATTERN =
-  "^(?=[^\\u0000-\\u001f]{1,255}$)(?![ .])(?:(?:[^\\u0000-\\u001f\\u007f<>:\"/\\\\|?*_\\u0080-\\u009f\\u061c\\u200b-\\u200f\\u2028\\u2029\\u202a-\\u202e\\u2060\\u2066-\\u2069\\ufeff]+ )?(?:[0-9A-Za-z][0-9A-Za-z.-]* Rev[0-9A-Za-z]{1,8}|[0-9]{4}-[0-9]{2}-[0-9]{2})|(?:Gambar|Figure) [0-9A-Za-z]+(?:\\.[0-9A-Za-z]+)* [^\\u0000-\\u001f\\u007f<>:\"/\\\\|?*_\\u0080-\\u009f\\u061c\\u200b-\\u200f\\u2028\\u2029\\u202a-\\u202e\\u2060\\u2066-\\u2069\\ufeff]+)(?: (?:[0-9a-f]{8}|[0-9a-f]{16}|[0-9a-f]{64}))?\\.(docx|pdf|html|svg|png)$"
+  "^(?=[^\\u0000-\\u001f]{1,255}$)(?![ .])(?:(?:[^\\u0000-\\u001f\\u007f<>:\"/\\\\|?*_\\u0080-\\u009f\\u061c\\u200b-\\u200f\\u2028\\u2029\\u202a-\\u202e\\u2060\\u2066-\\u2069\\ufeff]+ )?(?:[0-9A-Za-z][0-9A-Za-z.-]* Rev[0-9A-Za-z]{1,8}(?: rev(?:0|[1-9][0-9]{0,5}))?|[0-9]{4}-[0-9]{2}-[0-9]{2})|(?:Gambar|Figure) [0-9A-Za-z]+(?:\\.[0-9A-Za-z]+)* [^\\u0000-\\u001f\\u007f<>:\"/\\\\|?*_\\u0080-\\u009f\\u061c\\u200b-\\u200f\\u2028\\u2029\\u202a-\\u202e\\u2060\\u2066-\\u2069\\ufeff]+)(?: (?:[0-9a-f]{8}|[0-9a-f]{16}|[0-9a-f]{64}))?\\.(docx|pdf|html|svg|png)$"
 const STUDIO_DATUM_NAME = new RegExp(STUDIO_DATUM_NAME_PATTERN)
 
 /** Row 165D: a Studio output file name, final (C51) or delivered DATUM title name. */

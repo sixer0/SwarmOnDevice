@@ -1,7 +1,7 @@
 {
   "$schema": "datum-studio.c40-template-fixes/v1",
   "decision": "C40 (decisions/decisions.md): template defaults owned by row 110; fixes with a `decision` field were made by row 110d (C61, C69, C72)",
-  "count": 40,
+  "count": 41,
   "fixes": [
     {
       "cp": "CP-07",
@@ -269,6 +269,16 @@
       "after": true,
       "note": "rail column reserved on interior pages, body paragraphs at the text column (DATUM-15)",
       "decision": "C218 (row 174)"
+    },
+    {
+      "cp": "HB-1 AC-1",
+      "manual": "ID:2705-2711; EN:2764 (seed-doc-type-templates.ts:69)",
+      "slug": "datum-kanonik",
+      "pointer": "/advanced/render.rail.reserveColumn",
+      "before": false,
+      "after": true,
+      "note": "rail column reserved on interior pages, body paragraphs at the text column (DATUM-15)",
+      "decision": "C218 (row 174), extended by row 205 (1.2.3)"
     },
     {
       "cp": "CP-05, CP-15",

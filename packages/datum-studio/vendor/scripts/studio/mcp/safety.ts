@@ -11,7 +11,7 @@
  *   SMB ke host luar), lalu realpath leluhur terdalam yang ada harus tetap di dalam akar (symlink/junction);
  * - {@link writeFileGuarded}: tulis berkas hanya ke path yang lolos validasi ulang tepat sebelum tulis;
  *   berkas yang ada TIDAK PERNAH ditimpa kecuali `overwrite: true`, dan saat itu cadangan
- *   `<nama>.bak-<waktu>` dibuat lebih dulu (M-1); nama berkas/folder instruksi agen ditolak;
+ *   `.bak/<nama>.bak-<waktu>` dibuat lebih dulu (M-1; 1.2.6 T-17); nama berkas/folder instruksi agen ditolak;
  * - {@link virtualFs}: `FsLike` untuk `studio-report` yang membaca laporan dari memori dan MENOLAK
  *   setiap tulis kecuali satu tujuan yang diizinkan eksplisit (refresh `write`/`outPath`).
  */
@@ -81,7 +81,14 @@ export interface NodeFs {
   writeFileAtomic(p: string, data: Uint8Array): void;
   /** Salin eksklusif (gagal EEXIST bila tujuan ada); untuk cadangan. */
   copyFileExclusive(src: string, dest: string): void;
-  mkdirp(p: string): void;
+  /** Swarm 1.2.6 row 70 (T-17): `mode` hanya untuk folder yang baru dibuat (`.bak/` 0700). */
+  mkdirp(p: string, mode?: number): void;
+  /** Swarm 1.2.6 row 70 (T-17): nama langsung di dalam folder; untuk `backupResidue`. Opsional bagi fs tiruan lama. */
+  readdir?(p: string): string[];
+  /** Swarm 1.2.6 row 71 (T-17 retensi): jenis entri TANPA mengikuti tautan. Opsional; tanpa ini retensi dilewati. */
+  lstat?(p: string): { isFile: boolean; isSymbolicLink: boolean };
+  /** Swarm 1.2.6 row 71 (T-17 retensi): hapus satu berkas (tautan tidak pernah diberikan ke sini). Opsional. */
+  unlink?(p: string): void;
 }
 
 export const REAL_NODE_FS: NodeFs = {
@@ -104,7 +111,13 @@ export const REAL_NODE_FS: NodeFs = {
     }
   },
   copyFileExclusive: (src, dest) => fs.copyFileSync(src, dest, fs.constants.COPYFILE_EXCL),
-  mkdirp: (p) => void fs.mkdirSync(p, { recursive: true }),
+  mkdirp: (p, mode) => void fs.mkdirSync(p, mode === undefined ? { recursive: true } : { recursive: true, mode }),
+  readdir: (p) => fs.readdirSync(p),
+  lstat: (p) => {
+    const s = fs.lstatSync(p);
+    return { isFile: s.isFile(), isSymbolicLink: s.isSymbolicLink() };
+  },
+  unlink: (p) => fs.unlinkSync(p),
 };
 
 const isWin = process.platform === "win32";
@@ -169,29 +182,43 @@ function assertNotProtected(resolved: string, isDir = false): void {
   }
 }
 
-export type PathPurpose = "read-report" | "write-report" | "write-dir";
+// Swarm patch (1.2.6 row 50b, W-13 N-167): fourth purpose `read-asset` (PNG/JPEG upload by path).
+export type PathPurpose = "read-report" | "write-report" | "write-dir" | "read-asset";
 
 const REPORT_EXT = new Set([".md", ".markdown", ".txt"]);
+const ASSET_EXT = new Set([".png", ".jpg", ".jpeg"]);
 
 /**
  * Validasi path dari argumen alat. Urutan: leksikal ({@link checkPathLexical}) -> di dalam akar secara
  * leksikal -> (tulis) bukan berkas instruksi -> BARU fs: realpath harus tetap di dalam akar.
  * `read-report`: berkas ada, ekstensi .md/.markdown/.txt, ukuran <= `maxBytes`. `write-report`:
  * ekstensi .md/.markdown, folder induk ada. `write-dir`: folder (boleh belum ada).
+ * `read-asset` (row 50b): ekstensi .png/.jpg/.jpeg, berkas biasa, ukuran <= `maxBytes` dari stat SEBELUM
+ * dibaca (`ASSET_TOO_LARGE`); mengembalikan path NYATA (symlink terselesaikan) agar pembaca membuka
+ * berkas yang sama dengan yang diperiksa (01f §3.3 R7). Jenis isi tetap diputuskan dekoder, bukan ekstensi.
  */
 export function resolveAllowedPath(raw: string, roots: readonly string[], purpose: PathPurpose, nfs: NodeFs, maxBytes = Infinity): string {
   const resolved = checkPathLexical(raw);
   const outside = () => new McpToolError("PATH_OUTSIDE_ROOTS", `path ${resolved} di luar akar yang diizinkan (STUDIO_MCP_FILE_ROOTS: ${roots.join(path.delimiter)})`);
   if (!roots.some((r) => isInside(resolved, path.resolve(r)))) throw outside();
-  if (purpose !== "read-report") assertNotProtected(resolved, purpose === "write-dir");
+  const reads = purpose === "read-report" || purpose === "read-asset";
+  if (!reads) assertNotProtected(resolved, purpose === "write-dir");
   const ext = path.extname(resolved).toLowerCase();
   if (purpose === "read-report" && !REPORT_EXT.has(ext)) throw new McpToolError("PATH_INVALID", `hanya berkas .md, .markdown, atau .txt yang dapat dibaca (diberikan "${path.basename(resolved)}")`);
+  if (purpose === "read-asset" && !ASSET_EXT.has(ext)) throw new McpToolError("PATH_INVALID", `hanya berkas .png, .jpg, atau .jpeg yang dapat diunggah (diberikan "${path.basename(resolved)}")`);
   if (purpose === "write-report" && ext !== ".md" && ext !== ".markdown") throw new McpToolError("PATH_INVALID", `tujuan tulis laporan harus berekstensi .md (diberikan "${path.basename(resolved)}")`);
   // Sejak titik ini fs boleh disentuh: path lokal di dalam akar secara leksikal.
   const real = realpathDeep(resolved, nfs);
   const realRoots = roots.map((r) => (nfs.exists(r) ? nfs.realpath(r) : r));
   if (!realRoots.some((r) => isInside(real, r))) throw outside();
-  if (purpose !== "read-report") assertNotProtected(real, purpose === "write-dir");
+  if (!reads) assertNotProtected(real, purpose === "write-dir");
+  if (purpose === "read-asset") {
+    if (!nfs.exists(real)) throw new McpToolError("FILE_UNREADABLE", `berkas ${resolved} tidak ada`);
+    const st = nfs.stat(real);
+    if (!st.isFile) throw new McpToolError("FILE_UNREADABLE", `${resolved} bukan berkas biasa`);
+    if (st.size > maxBytes) throw new McpToolError("ASSET_TOO_LARGE", `berkas ${resolved} ${st.size} B melebihi batas ${maxBytes} B`, { httpStatus: 413 });
+    return real;
+  }
   if (purpose === "read-report") {
     if (!nfs.exists(resolved)) throw new McpToolError("FILE_UNREADABLE", `berkas ${resolved} tidak ada`);
     const st = nfs.stat(resolved);
@@ -244,10 +271,85 @@ export function backupStamp(ms: number): string {
   return new Date(ms).toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
 }
 
+/** Swarm 1.2.6 row 70 (T-17, N-055): cadangan `overwrite` masuk `<folder>/.bak/`, tidak di samping berkasnya. */
+export const BACKUP_DIR_NAME = ".bak";
+
 export interface GuardedWriteResult {
   written: string;
-  /** Cadangan berkas lama (hanya bila berkas sudah ada dan `overwrite: true`). */
+  /** Cadangan berkas lama (hanya bila berkas sudah ada dan `overwrite: true`), di `<folder>/.bak/`. */
   backup: string | null;
+  /** Swarm 1.2.6 row 70 (T-17, N-057): jumlah cadangan berkas ini yang kini ada di `<folder>/.bak/`. */
+  backupResidue: number;
+  /** Swarm 1.2.6 row 71 (T-17): jumlah cadangan lama berkas ini yang dihapus retensi ({@link BACKUP_KEEP}) pada tulis ini. */
+  backupRemoved: number;
+}
+
+/** Swarm 1.2.6 row 71 (T-17, N-056): hanya 5 cadangan terbaru per berkas yang disimpan di `<folder>/.bak/`. */
+export const BACKUP_KEEP = 5;
+
+/** row 71: indeks awal (0 = tanpa sufiks) untuk cadangan `<nama>.bak-<stamp>`: satu sesudah sufiks tertinggi yang ada. */
+function nextBackupIndex(bakDir: string, name: string, stamp: string, nfs: NodeFs): number {
+  if (!nfs.readdir || !nfs.exists(bakDir)) return 0;
+  const prefix = `${name}.bak-${stamp}`;
+  let max = 0;
+  for (const n of nfs.readdir(bakDir)) {
+    if (n === prefix) max = Math.max(max, 1);
+    else if (n.startsWith(`${prefix}-`) && /^\d+$/.test(n.slice(prefix.length + 1))) max = Math.max(max, Number(n.slice(prefix.length + 1)));
+  }
+  return max;
+}
+
+/**
+ * T-17 retensi: sesudah cadangan `keepPath` dibuat dan berkas ditulis, hapus cadangan `<nama>.bak-<waktu>[-n]`
+ * milik `target` SAJA yang lebih lama dari {@link BACKUP_KEEP} terbaru. Urutan: cap waktu, lalu sufiks `-n`
+ * secara numerik (tanpa sufiks = 1). Hanya berkas biasa yang dihapus (lstat; tautan tidak diikuti dan tidak
+ * dihapus, tidak dihitung). `keepPath` tidak pernah dihapus. Gagal hapus tidak menggagalkan tulis (dicatat di
+ * `log`). fs tanpa `readdir`/`lstat`/`unlink` -> 0.
+ */
+function pruneBackups(bakDir: string, target: string, keepPath: string, nfs: NodeFs, log?: string[]): number {
+  if (!nfs.readdir || !nfs.lstat || !nfs.unlink) return 0;
+  const base = path.basename(target).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const re = new RegExp(`^${base}\\.bak-(\\d{8}T\\d{6}Z)(?:-(\\d+))?$`);
+  const items: { p: string; stamp: string; n: number }[] = [];
+  for (const name of nfs.readdir(bakDir)) {
+    const m = re.exec(name);
+    if (!m) continue;
+    const p = path.join(bakDir, name);
+    let st: { isFile: boolean; isSymbolicLink: boolean };
+    try {
+      st = nfs.lstat(p);
+    } catch {
+      continue;
+    }
+    if (st.isSymbolicLink || !st.isFile) continue;
+    items.push({ p, stamp: m[1], n: m[2] === undefined ? 1 : Number(m[2]) });
+  }
+  items.sort((a, b) => (a.stamp < b.stamp ? -1 : a.stamp > b.stamp ? 1 : a.n - b.n));
+  const old = items.filter((it) => it.p !== keepPath);
+  const excess = items.length - BACKUP_KEEP;
+  let removed = 0;
+  for (const it of old.slice(0, Math.max(0, excess))) {
+    try {
+      nfs.unlink(it.p);
+      removed++;
+      log?.push(`hapus cadangan lama ${it.p} (retensi ${BACKUP_KEEP})`);
+    } catch (e) {
+      log?.push(`peringatan: gagal hapus cadangan lama ${it.p}: ${errMsg(e)}`);
+    }
+  }
+  return removed;
+}
+
+/**
+ * T-17: jumlah cadangan `<nama>.bak-<waktu>[-n]` milik `target` di `bakDir`. fs tanpa `readdir` (tiruan lama):
+ * hanya cadangan yang baru dibuat yang diketahui (1 bila ada, selain itu 0).
+ */
+function countBackupResidue(bakDir: string, target: string, nfs: NodeFs, made: boolean): number {
+  if (!nfs.readdir) return made ? 1 : 0;
+  if (!nfs.exists(bakDir)) return 0;
+  const base = path.basename(target).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const re = new RegExp(`^${base}\\.bak-\\d{8}T\\d{6}Z(-\\d+)?$`);
+  return nfs.readdir(bakDir).filter((n) => re.test(n)).length;
 }
 
 /**
@@ -269,15 +371,32 @@ export function writeFileGuarded(
     assertNotProtected(target);
   }
   const existsNow = nfs.exists(target);
-  if (existsNow && o.isSame && o.isSame(nfs.readFile(target))) return { written: target, backup: null, unchanged: true };
+  // T-17: cadangan di `<folder>/.bak/` (N-055); nama dasar `<nama>.bak-<waktu>` tetap (E-22).
+  const bakDir = path.join(path.dirname(target), BACKUP_DIR_NAME);
+  if (existsNow && o.isSame && o.isSame(nfs.readFile(target))) return { written: target, backup: null, backupResidue: countBackupResidue(bakDir, target, nfs, false), backupRemoved: 0, unchanged: true };
   if (existsNow && !o.overwrite) {
-    throw new McpToolError("OUT_EXISTS", `${target} sudah ada; tidak ditimpa. Pakai nama berkas baru, atau overwrite: true (cadangan <nama>.bak-<waktu> dibuat otomatis lebih dulu)`);
+    throw new McpToolError("OUT_EXISTS", `${target} sudah ada; tidak ditimpa. Pakai nama berkas baru, atau overwrite: true (cadangan ${BACKUP_DIR_NAME}/<nama>.bak-<waktu> dibuat otomatis lebih dulu)`);
   }
   let backup: string | null = null;
   if (existsNow) {
+    // `.bak` harus folder di dalam akar (bukan berkas, bukan tautan keluar akar), diperiksa sebelum dan sesudah dibuat
+    // (0700), dan sebelum berkas sasaran disentuh.
+    resolveAllowedPath(bakDir, o.roots, "write-dir", nfs);
+    if (!nfs.exists(bakDir)) {
+      try {
+        nfs.mkdirp(bakDir, 0o700);
+      } catch (e) {
+        throw new McpToolError("OUT_UNWRITABLE", `tidak dapat membuat folder cadangan ${bakDir}: ${errMsg(e)}; berkas tidak ditimpa`);
+      }
+      resolveAllowedPath(bakDir, o.roots, "write-dir", nfs);
+    }
     const stamp = backupStamp(o.now());
-    for (let i = 0; i < 100 && backup === null; i++) {
-      const cand = `${target}.bak-${stamp}${i === 0 ? "" : `-${i + 1}`}`;
+    const name = path.basename(target);
+    // row 71 (T-17 retensi): sufiks `-n` dimulai sesudah sufiks tertinggi yang ada untuk cap waktu ini, sehingga nama
+    // yang dibebaskan retensi tidak dipakai ulang dan urutan nama tetap urutan pembuatan.
+    const first = nextBackupIndex(bakDir, name, stamp, nfs);
+    for (let i = first; i < first + 100 && backup === null; i++) {
+      const cand = path.join(bakDir, `${name}.bak-${stamp}${i === 0 ? "" : `-${i + 1}`}`);
       try {
         nfs.copyFileExclusive(target, cand);
         backup = cand;
@@ -293,7 +412,8 @@ export function writeFileGuarded(
     } catch (e) {
       throw new McpToolError("OUT_UNWRITABLE", `tidak dapat menulis ${target}: ${errMsg(e)} (cadangan ${backup} tetap ada)`);
     }
-    return { written: target, backup, unchanged: false };
+    const backupRemoved = pruneBackups(bakDir, target, backup, nfs, o.log);
+    return { written: target, backup, backupResidue: countBackupResidue(bakDir, target, nfs, true), backupRemoved, unchanged: false };
   }
   o.log?.push(`tulis ${target}`);
   try {
@@ -302,7 +422,7 @@ export function writeFileGuarded(
     if (isErrno(e) && e.code === "EEXIST") throw new McpToolError("OUT_EXISTS", `${target} muncul saat akan ditulis; tidak ditimpa`);
     throw new McpToolError("OUT_UNWRITABLE", `tidak dapat menulis ${target}: ${errMsg(e)}`);
   }
-  return { written: target, backup: null, unchanged: false };
+  return { written: target, backup: null, backupResidue: countBackupResidue(bakDir, target, nfs, false), backupRemoved: 0, unchanged: false };
 }
 
 function isErrno(e: unknown): e is { code: unknown } {

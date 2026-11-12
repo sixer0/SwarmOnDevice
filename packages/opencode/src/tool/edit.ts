@@ -4,7 +4,8 @@
 // https://github.com/cline/cline/blob/main/evals/diff-edits/diff-apply/diff-06-26-25.ts
 
 import * as path from "path"
-import { Effect, Schema, Semaphore } from "effect"
+import { statSync } from "node:fs"
+import { Effect, Option, Schema, Semaphore } from "effect"
 import * as Tool from "./tool"
 import { FileSeen } from "./file-seen"
 import { Secrets } from "./secrets"
@@ -21,6 +22,11 @@ import { assertExternalDirectoryEffect } from "./external-directory"
 import { Reach } from "./reach"
 import { FSUtil } from "@opencode-ai/core/fs-util"
 import * as Bom from "@/util/bom"
+import { Autonomy } from "@/permission/autonomy"
+import { checkpointFailedText } from "@/permission/autonomy-texts"
+import type { InstanceContext } from "@/project/instance-context"
+import { Session } from "@/session/session"
+import { ActionCheckpoint } from "./checkpoint"
 
 function normalizeLineEndings(text: string): string {
   return text.replaceAll("\r\n", "\n")
@@ -52,6 +58,82 @@ export function lock(filePath: string) {
   locks.set(resolvedFilePath, next)
   return next
 }
+
+/**
+ * 1.2.6 row 37b (P-01b, U6; spec 01b section 3.3 rule 4). With autonomous mode on, a file tool's write of an existing file
+ * no Undo snapshot covers (Undo is off here, or the file is outside the project, a file tool's `outside_edit`) runs only
+ * after a checkpoint of that file exists. The gate already allowed the write, and its verdict is unchanged; the audit gets
+ * a `checkpointed` line before the write. A checkpoint that cannot be made stops the write, and the file stays as it was.
+ * Returns the line for the agent, or undefined when no checkpoint was due.
+ *
+ * Several files (apply_patch, FX-1 / gate M1 B1) go into one checkpoint, before the first of them is written: each file
+ * is due by the same rule, and files that do not exist (a new file) are left out.
+ */
+export const checkpointBefore = Effect.fn("EditTool.checkpointBefore")(function* (
+  ctx: Tool.Context,
+  instance: InstanceContext,
+  filePaths: string | readonly string[],
+  tool: string,
+) {
+  const isFile = (file: string) => {
+    try {
+      return statSync(file).isFile()
+    } catch {
+      return false
+    }
+  }
+  const due = [...new Set(typeof filePaths === "string" ? [filePaths] : filePaths)]
+    .map((file) => ({ file, outside: !Reach.inside(file, instance) }))
+    .filter((item) => (ctx.trust?.canUndo !== true || item.outside) && isFile(item.file))
+  if (due.length === 0) return undefined
+  const sessions = yield* Effect.serviceOption(Session.Service)
+  const on = yield* Autonomy.activeFor(Option.getOrUndefined(sessions), ctx.sessionID)
+  if (!on) return undefined
+  const saved = yield* saveCheckpointOrStop(on, {
+    directory: on.where.directory,
+    targets: due.map((item) => item.file),
+    allowOutside: due.some((item) => item.outside),
+    sessionID: ctx.sessionID,
+    requestID: ctx.callID || ctx.messageID,
+    command: `${tool} ${due.map((item) => path.basename(item.file)).join(" ")}`,
+  })
+  if (!saved.ok) throw new Error(saved.stop)
+  return saved.text
+})
+
+/** Test seam for the one checkpoint call of every tool (edit, write, apply_patch, shell); shell.ts re-exports it. */
+export const checkpointSeam: { create: typeof ActionCheckpoint.create } = { create: (input) => ActionCheckpoint.create(input) }
+
+/**
+ * 1.2.6 FX-12 (C23 SF3): the one save-or-stop sequence of the edit, write and apply_patch tools and the shell. It saves a
+ * checkpoint of `input`'s targets (and refs) with the `checkpointed` audit line, and returns the text for the agent. A
+ * checkpoint that cannot be made, a rejected call included (counted as `failed`), writes the `not_run` audit line
+ * (`Autonomy.recordCheckpointFailed`) and returns `{ ok: false, stop }` with the `checkpointFailedText` for the reason:
+ * the caller then does not run the call. A checkpoint whose audit line could not be written stops the call the same way,
+ * with the `audit` reason (FX-14, F-3), and is logged, never thrown.
+ */
+export const saveCheckpointOrStop = Effect.fn("ActionCheckpoint.saveOrStop")(function* (
+  on: { readonly where: Autonomy.Where; readonly autonomy: Pick<Autonomy.Interface, "record"> },
+  input: Omit<ActionCheckpoint.CreateInput, "record" | "requestID"> & { readonly requestID: string },
+) {
+  const result = yield* Effect.promise(() =>
+    checkpointSeam
+      .create({ ...input, record: Autonomy.checkpointRecorder(on.autonomy.record, on.where) })
+      .catch((): ActionCheckpoint.CreateResult => ({ ok: false, reason: "failed", message: "" })),
+  )
+  if (!result.ok) {
+    yield* Autonomy.recordCheckpointFailed(on, input.requestID)
+    return { ok: false as const, stop: checkpointFailedText(result.reason) }
+  }
+  // 1.2.6 FX-14 (F-3): a checkpoint without its `checkpointed` audit line cannot be reverted (the revert route vouches for
+  // the copy with that line's manifest sha), so the call does not run. The copy stays on disk for a restore by hand.
+  if (!result.recorded) {
+    yield* Effect.logError("could not record a checkpoint", { checkpoint: result.id })
+    yield* Autonomy.recordCheckpointFailed(on, input.requestID)
+    return { ok: false as const, stop: checkpointFailedText("audit") }
+  }
+  return { ok: true as const, text: ActionCheckpoint.savedText(result.manifest.entries.length, result.id, result.manifest.refs?.length ?? 0) }
+})
 
 export const Parameters = Schema.Struct({
   filePath: Schema.String.annotate({ description: "The absolute path to the file to modify" }),
@@ -99,6 +181,7 @@ export const EditTool = Tool.define(
           let diff = ""
           let contentOld = ""
           let contentNew = ""
+          let saved: string | undefined
           yield* lock(filePath).withPermits(1)(
             Effect.gen(function* () {
               if (params.oldString === "") {
@@ -185,6 +268,7 @@ export const EditTool = Tool.define(
                 editClass: trust.editClass,
               })
 
+              saved = yield* checkpointBefore(ctx, instance, filePath, "edit")
               yield* afs.writeWithDirs(filePath, Bom.join(contentNew, desiredBom))
               if (yield* format.file(filePath)) {
                 contentNew = yield* Bom.syncFile(afs, filePath, desiredBom)
@@ -227,7 +311,7 @@ export const EditTool = Tool.define(
             },
           })
 
-          let output = "Edit applied successfully."
+          let output = saved ? `${saved}\nEdit applied successfully.` : "Edit applied successfully."
           yield* lsp.touchFile(filePath, "document")
           const diagnostics = yield* lsp.diagnostics()
           const normalizedFilePath = FSUtil.normalizePath(filePath)

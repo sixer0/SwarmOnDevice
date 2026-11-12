@@ -295,6 +295,8 @@ const SUBGROUP_LABELS: Readonly<Record<ParamCategoryId, ReadonlyArray<readonly [
     ["chart.kind", "Pengaturan per jenis chart"],
     ["caption", "Caption chart"],
     ["image", "Ukuran dan resolusi gambar"],
+    // Swarm 1.2.6 row 72 (T-18/W-10): figure.quota.* (kuota gambar per dokumen, alasan pengecualian).
+    ["figure", "Kuota gambar per dokumen"],
   ],
   "diagram-simbol": [
     ["diagram", "Diagram"],

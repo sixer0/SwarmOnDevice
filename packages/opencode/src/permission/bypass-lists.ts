@@ -319,6 +319,17 @@ export const PROTECTED_HOME: readonly string[] = [
 /** Row 202: Swarm's own credential files, under its data folder (`Global.Path.data`). Read and write: never opened. */
 export const PROTECTED_APP_FILES: readonly string[] = ["auth.json", "mcp-auth.json"]
 /**
+ * Row 36b (SEC-03): the protected places a read now opens without asking (U12), as absolute paths under each home folder
+ * given and Swarm's data folder. What a read prints from any of them is withheld whole (`Secrets.outputKind`); the
+ * verdicts that open them are not built from this.
+ */
+export const protectedOutputPlaces = (homes: readonly string[], data: string): string[] => [
+  ...new Set([
+    ...homes.flatMap((home) => PROTECTED_HOME.map((place) => path.join(home, place))),
+    ...PROTECTED_APP_FILES.map((file) => path.join(data, file)),
+  ]),
+]
+/**
  * Row 202: the system's own folders. Never written through a file tool in autonomous mode. A read keeps the verdict it
  * had before row 202 (an ordinary readable file there, such as a header under `/usr/include`, is a look). `/private/var`
  * is not here as a whole: the temporary folder lives under `/private/var/folders`.

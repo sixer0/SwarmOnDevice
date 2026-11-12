@@ -7,6 +7,7 @@ export const dict = {
   "desktop.menu.window": "Pəncərə",
   "desktop.menu.help": "Kömək",
   "desktop.menu.checkForUpdates": "Yeniləmələri yoxla...",
+  "desktop.menu.recheckTools": "Alətləri yenidən yoxla",
   "desktop.menu.settings": "Tənzimləmələr",
   "desktop.menu.reloadWebview": "Webview-u yenidən yüklə",
   "desktop.menu.restart": "Yenidən başlat",
@@ -1415,7 +1416,10 @@ export const dict = {
   "memory.privacy": "Bu cihazda saxlanılır, heç vaxt repozitoriyada deyil. Model bu qeydləri yalnız onunla apardığınız sessiyanın bir hissəsi kimi görür.",
   "memory.off": "Söndürülüb. Sessiyalar qeyd almır və yeni heç nə öyrənilmir. Qeydləriniz saxlanılır.",
   "memory.refused.secret": "Bu parol və ya açara bənzəyir, ona görə saxlanılmadı.",
-  "memory.refused.long": "Qeydi 400 simvoldan qısa saxlayın.",
+  "memory.refused.long":
+    "Qeydi {{max}} simvoldan qısa saxlayın. Daha uzun təfərrüatı fayla yazın və agentdən onu əlaqələndirməsini istəyin.",
+  "memory.refused.bodyLong": "Qeydin mətnini {{max}} simvoldan qısa saxlayın və ya əvəzində fayl əlaqələndirin.",
+  "memory.refused.tooManyRefs": "Bir qeyd ən çox {{max}} fayl və ya simvolla əlaqələndirilə bilər.",
   "memory.refused.full": "Yaddaş doludur. Əvvəlcə bir qeydi silin.",
   "memory.error": "Layihə yaddaşı yüklənmədi.",
   "memory.retry": "Yenidən cəhd et",
@@ -1440,4 +1444,5 @@ export const dict = {
   "session.movedOn.answer": "Cavabla",
   "home.agents.movedOn": "Bunsuz davam etdi · {{time}}",
   "home.setup.attention": "Quraşdırmanızın bir hissəsi diqqət tələb edir.",
+  "session.map.decisions.category.protected_path": "Qorunan yer (açarlar, giriş məlumatları və ya sistem qovluqları)",
 }

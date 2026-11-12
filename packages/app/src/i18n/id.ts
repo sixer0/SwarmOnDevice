@@ -7,6 +7,7 @@ export const dict = {
   "desktop.menu.window": "Jendela",
   "desktop.menu.help": "Bantuan",
   "desktop.menu.checkForUpdates": "Periksa pembaruan...",
+  "desktop.menu.recheckTools": "Periksa ulang alat",
   "desktop.menu.settings": "Pengaturan",
   "desktop.menu.reloadWebview": "Muat ulang tampilan web",
   "desktop.menu.restart": "Mulai ulang",
@@ -739,12 +740,13 @@ export const dict = {
   "dialog.autonomyBypass.intro":
     "Selama mode ini menyala, tidak ada yang menunggu Anda. Persetujuan di-*bypass* dan agen utama yang memutuskan, untuk Anda dan untuk subagennya. Setiap tindakan dijalankan, atau agen langsung menerima jawaban yang memberi tahu apa yang harus dilakukan sebagai gantinya, sehingga pekerjaan tidak pernah berhenti untuk bertanya kepada Anda. Tes, *build*, dan instalasi menjalankan kode proyek dan kode paketnya apa adanya, dan Swarm tidak memeriksa apa yang dilakukan kode itu. Setiap putusan dicatat di Aktivitas, termasuk tindakan yang tidak dijalankan.",
   "dialog.autonomyBypass.archive":
-    "Berkas dan folder yang dihapus Swarm dipindahkan ke arsip. Penghapusan atau penimpaan yang tidak bisa dipindahkan Swarm ke arsip tidak dijalankan: agen langsung diminta mengarsipkan lebih dulu, dengan menghapus melalui perintah tersendiri atau dengan menyalin berkas sebelum menimpanya.",
+    "Berkas dan folder yang dihapus Swarm dipindahkan ke arsip. Tindakan lokal yang tidak bisa dibatalkan, misalnya git reset --hard, git clean, atau menghapus *branch*, dijalankan setelah Swarm menyimpan titik pemulihan (*checkpoint*) berkas dan *ref* Git yang diubahnya, dan Anda dapat memulihkan titik itu nanti. Penghapusan atau penimpaan yang tidak bisa diarsipkan maupun dibuatkan titik pemulihan oleh Swarm tidak dijalankan: agen langsung diminta menyebut jalurnya dalam perintah biasa, atau menyalin berkas sebelum menimpanya.",
   "dialog.autonomyBypass.refused":
-    "Tindakan yang tidak bisa dibatalkan tidak dijalankan, misalnya git reset --hard, git clean, *force push*, menulis ulang riwayat, menghapus tabel basis data, dan menghapus isi disk. Agen langsung diminta mengarsipkan atau membuat *snapshot* lebih dulu dan memakai cara yang bisa dibatalkan. Hak admin (sudo) dan perubahan kredensial dilewati: agen diminta melanjutkan tanpa langkah itu, karena sudo memerlukan kata sandi Anda dan tidak bisa berjalan tanpa diawasi.",
+    "Tindakan di luar berkas komputer ini tidak dijalankan, karena tidak ada titik pemulihan yang bisa membatalkannya: *force push*, penghapusan di *remote* atau *cloud*, serta mematikan atau memulai ulang mesin. Tindakan lokal yang tidak bisa dicakup titik pemulihan, misalnya menghapus tabel basis data, mengosongkan penyimpanan data, atau menghapus isi disk, juga tidak dijalankan. Agen langsung diminta bertanya kepada Anda melalui putusan atau mencantumkan langkah itu di pesan akhirnya. Hak admin (sudo) dan perubahan kredensial dilewati: agen diminta melanjutkan tanpa langkah itu, karena sudo memerlukan kata sandi Anda dan tidak bisa berjalan tanpa diawasi.",
   "dialog.autonomyBypass.waits":
     "Semua tindakan lain berjalan tanpa bertanya, termasuk permintaan jaringan ke situs mana pun, *upload* berkas dari komputer Anda, pengiriman *token* dan kunci (juga dari variabel lingkungan), git push tanpa *force*, *deploy* dan *publish*, menulis di luar folder proyek, layanan sistem, menghentikan proses yang tidak dijalankan sesi ini, menyunting berkas konfigurasi alat dan kompiler, serta perintah atau *script* yang tidak dikenali Swarm. Anda tidak ditanya tentang semua itu, jadi bacalah laporannya saat mode dimatikan.",
-  "dialog.autonomyBypass.secrets": "Berkas rahasia boleh dibaca, tetapi nilainya disembunyikan di laporan.",
+  "dialog.autonomyBypass.secrets":
+    "Berkas rahasia dan berkas yang dilindungi boleh dibaca. Nilainya tetap disembunyikan sebagai [hidden:NAME] dari agen, laporan, dan ekspor.",
   "dialog.autonomyBypass.report":
     "Saat mode dimatikan, laporan dikirim. Laporan itu memuat apa yang dikerjakan, apa yang diputuskan, apa yang dialihkan ke metode arsip, dan apa yang ditolak, serta mendaftar setiap pengiriman dan tujuannya. Berkas laporan yang dibuat ikut dilampirkan.",
   "dialog.autonomyBypass.scope":
@@ -1064,6 +1066,7 @@ export const dict = {
   "session.mission.line.approvedNotStarted": "Misi sudah disetujui - langkah belum dimulai. Minta Swarm melanjutkan.",
   "session.mission.approval.autonomous": "Disetujui sendiri (otonom): Swarm menyetujui misi ini sendiri dalam mode otonom.",
   "session.mission.line.paused": "Misi dijeda - langkah ditahan. Jawab keputusan di sini, atau minta Swarm melanjutkan.",
+  "session.mission.line.drift": "{{count}} langkah ditambahkan setelah persetujuan.",
   "session.mission.type.research": "Riset",
   "session.mission.type.debug": "Debug",
   "session.mission.type.featureRelease": "Fitur / rilis",
@@ -1150,6 +1153,10 @@ export const dict = {
   "session.autonomy.archive.confirm": "Hapus berkas yang diarsipkan secara permanen? Tindakan ini tidak dapat dibatalkan.",
   "session.autonomy.archive.unsafe":
     "Folder arsip berupa tautan atau bukan folder, jadi Aplikasi tidak membacanya atau mengosongkannya.",
+  "session.autonomy.checkpoint.title": "Disimpan sebagai titik pemulihan sebelum dijalankan: {{count}}",
+  "session.autonomy.checkpoint.revert": "Pulihkan",
+  "session.autonomy.checkpoint.confirm":
+    "Kembalikan berkas yang disimpan? Swarm menyimpan berkas saat ini lebih dulu, jadi langkah ini bisa diurungkan.",
   "session.map.decisions.group.waiting": "Menunggu Anda",
   "session.map.decisions.group.decided": "Sudah diputuskan",
   "session.map.decisions.group.limited": "Ditolak atau dibatasi",
@@ -1731,7 +1738,10 @@ export const dict = {
   "memory.privacy": "Disimpan di perangkat ini, tidak pernah di repositori. Model hanya melihat catatan ini sebagai bagian dari sesi yang Anda jalankan dengannya.",
   "memory.off": "Nonaktif. Sesi tidak mendapat catatan dan tidak ada yang baru dipelajari. Catatan Anda tetap disimpan.",
   "memory.refused.secret": "Ini tampak seperti kata sandi atau kunci, jadi tidak disimpan.",
-  "memory.refused.long": "Jaga catatan di bawah 400 karakter.",
+  "memory.refused.long":
+    "Jaga catatan di bawah {{max}} karakter. Simpan detail yang lebih panjang di berkas dan minta agen menautkannya.",
+  "memory.refused.bodyLong": "Jaga isi catatan di bawah {{max}} karakter, atau tautkan berkas sebagai gantinya.",
+  "memory.refused.tooManyRefs": "Satu catatan dapat menautkan paling banyak {{max}} berkas atau simbol.",
   "memory.refused.full": "Memori penuh. Hapus satu catatan terlebih dahulu.",
   "memory.error": "Tidak dapat memuat memori proyek.",
   "memory.retry": "Coba lagi",

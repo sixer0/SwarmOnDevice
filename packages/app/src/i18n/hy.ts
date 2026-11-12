@@ -7,6 +7,7 @@ export const dict = {
   "desktop.menu.window": "Պատուհան",
   "desktop.menu.help": "Օգնություն",
   "desktop.menu.checkForUpdates": "Ստուգեք թարմացումների համար...",
+  "desktop.menu.recheckTools": "Կրկին ստուգել գործիքները",
   "desktop.menu.settings": "Կարգավորումներ",
   "desktop.menu.reloadWebview": "Վերբեռնել Webview",
   "desktop.menu.restart": "Վերագործարկեք",
@@ -1408,7 +1409,10 @@ export const dict = {
   "memory.privacy": "Պահվում է այս սարքում, երբեք՝ պահոցում։ Մոդելը տեսնում է այս նշումները միայն իր հետ գործարկված սեսիայի շրջանակում։",
   "memory.off": "Անջատված է։ Սեսիաները նշումներ չեն ստանում և նոր բան չի սովորվում։ Ձեր նշումները պահպանվում են։",
   "memory.refused.secret": "Սա նման է գաղտնաբառի կամ բանալու, ուստի չպահվեց։",
-  "memory.refused.long": "Նշումը պահեք 400 նիշից պակաս։",
+  "memory.refused.long":
+    "Նշումը պահեք {{max}} նիշից պակաս։ Ավելի երկար մանրամասները դրեք ֆայլում և խնդրեք գործակալին կապել այն։",
+  "memory.refused.bodyLong": "Նշման հիմնական տեքստը պահեք {{max}} նիշից պակաս, կամ փոխարենը կապեք ֆայլ։",
+  "memory.refused.tooManyRefs": "Նշումը կարող է կապել առավելագույնը {{max}} ֆայլ կամ սիմվոլ։",
   "memory.refused.full": "Հիշողությունը լի է։ Նախ ջնջեք մի նշում։",
   "memory.error": "Չհաջողվեց բեռնել նախագծի հիշողությունը։",
   "memory.retry": "Կրկնել",
@@ -1433,4 +1437,5 @@ export const dict = {
   "session.movedOn.answer": "Պատասխանել",
   "home.agents.movedOn": "Շարունակեց առանց սրա · {{time}}",
   "home.setup.attention": "Ձեր կարգավորման մի մասը ուշադրություն է պահանջում։",
+  "session.map.decisions.category.protected_path": "Պաշտպանված վայր (բանալիներ, մուտքի տվյալներ կամ համակարգային թղթապանակներ)",
 }

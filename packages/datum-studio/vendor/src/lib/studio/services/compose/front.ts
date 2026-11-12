@@ -141,11 +141,14 @@ export function controlSheetFront(payload: ControlSheetPayloadV2 | undefined, sl
     ctx,
   );
   if (rh) data.revisionHistory = rh;
+  // Row 207 (HB-2): the manual columns (LAPIS/METODE/OBJEK/HASIL) print method/object/result; also in the machine
+  // form when any entry carries them (they were dropped before). Machine form without them = unchanged.
   const vc = listOrTable<VerificationEntryV2>(
     p.verificationChain,
-    manual
-      ? (rows) => manualTable("verification", lang, rows.map((r) => [r.layer, "", "", ""]))
-      : (rows) => textTable(controlSheetColumnHeads("verification", lang), rows.map((r) => [r.layer, r.role, r.name, r.date ?? ""]), ["id", "text", "text", "text"]),
+    (rows) =>
+      manual || rows.some(hasManualVerificationKeys)
+        ? manualTable("verification", lang, rows.map(manualVerificationRow))
+        : textTable(controlSheetColumnHeads("verification", lang), rows.map((r) => [r.layer, r.role ?? "", r.name ?? "", r.date ?? ""]), ["id", "text", "text", "text"]),
     ctx,
   );
   if (vc) data.verificationChain = vc;
@@ -162,6 +165,19 @@ export function controlSheetFront(payload: ControlSheetPayloadV2 | undefined, sl
 }
 
 type ManualColumn = keyof typeof CONTROL_SHEET_COLUMN_LABELS;
+
+const hasManualVerificationKeys = (r: VerificationEntryV2): boolean => [r.method, r.object, r.result].some((v) => typeof v === "string" && v.trim() !== "");
+
+/**
+ * Row 207 (HB-2): one verification entry in the manual columns LAPIS, METODE, OBJEK, HASIL. METODE = method, OBJEK =
+ * object, HASIL = result. The documented sign-off keys are mapped onto the same columns so nothing the agent sent is
+ * dropped: METODE = role when method is absent, HASIL = name (and date, "name · date") when result is absent. No
+ * value is invented: a column with no source stays empty.
+ */
+export function manualVerificationRow(r: VerificationEntryV2): string[] {
+  const signOff = [r.name, r.date].filter((v): v is string => typeof v === "string" && v.trim() !== "").join(" · ");
+  return [r.layer, r.method ?? r.role ?? "", r.object ?? "", r.result ?? signOff];
+}
 
 /**
  * C10 (CS-11, register research/38 §3.2): pengenal kolom bentuk manual = bawaan registri

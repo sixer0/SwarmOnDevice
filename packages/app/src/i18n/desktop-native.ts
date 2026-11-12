@@ -369,6 +369,10 @@ export const DESKTOP_NATIVE_ENGLISH = {
     "Swarm, the swarm command or the tools installer was still running, so nothing was changed. Close them and try again.",
   "desktop.patch.result.recover.detail":
     "The update stopped partway. Run this command in Terminal to finish it:\n{{command}}",
+  // Re-check Tools (1.2.6 row 109, SEC-05/UX-03): the person-side trigger for manual tool revives.
+  // Placed after every positionally mapped key (hr, hu, is and lt map the first 90 by position and carry this
+  // one as a named key) and before the DATUM block, which datum-studio-strings.test.ts pins as the tail.
+  "desktop.menu.recheckTools": "Re-check Tools",
   // Install DATUM Studio for Claude (1.2.0 rows 34/34b). Appended for the same positional reason as above.
   "desktop.menu.installDatumStudio": "Install DATUM Studio for Claude...",
   "desktop.datumStudio.confirm.message": "Install the datum-studio command for Claude?",

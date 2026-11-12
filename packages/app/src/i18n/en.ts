@@ -580,12 +580,13 @@ export const dict = {
   "dialog.autonomyBypass.intro":
     "While this mode is on, nothing waits for you. Approvals are bypassed and the main agent decides, for you and for its subagents. Every action either runs, or the agent gets an immediate answer that tells it what to do instead, so the work never stops to ask you. Tests, builds and installs run the project's code and its packages' code as written, and Swarm does not check what that code does. Every decision is recorded in Activity, including the actions that did not run.",
   "dialog.autonomyBypass.archive":
-    "Files and folders that Swarm deletes are moved to the archive. A deletion or a replacement that Swarm cannot move to the archive does not run: the agent is told at once to archive first, by deleting with a command of its own or by copying the file before it replaces it.",
+    "Files and folders that Swarm deletes are moved to the archive. Local actions that cannot be undone, such as git reset --hard, git clean or deleting a branch, run after Swarm saves a checkpoint of the files and Git refs they change, and you can revert that checkpoint later. A deletion or a replacement that Swarm can neither archive nor checkpoint does not run: the agent is told at once to name the paths in plain commands, or to copy the file before it replaces it.",
   "dialog.autonomyBypass.refused":
-    "Actions that nothing can undo do not run, such as git reset --hard, git clean, force push, rewriting history, dropping database tables and wiping disks. The agent is told at once to archive or take a snapshot first and to use a way that can be undone. Admin rights (sudo) and credential changes are skipped: the agent is told to carry on without that step, because sudo needs your password and cannot run unattended.",
+    "Actions outside this computer's files do not run, because no checkpoint can undo them: a force push, a remote or cloud deletion, and shutting down or restarting the machine. Local actions that a checkpoint cannot cover, such as dropping database tables, flushing a data store or wiping a disk, do not run either. The agent is told at once to ask you through a decision or to list the step in its final message. Admin rights (sudo) and credential changes are skipped: the agent is told to carry on without that step, because sudo needs your password and cannot run unattended.",
   "dialog.autonomyBypass.waits":
     "Every other action runs without asking, including network requests to any site, uploads of files from your computer, sending tokens and keys (also from environment variables), git push without force, deploying and publishing, writes outside the project folder, system services, stopping processes this session did not start, edits to tool and compiler config files, and commands or scripts Swarm does not recognise. You are not asked about any of these, so read the report when the mode is turned off.",
-  "dialog.autonomyBypass.secrets": "Secret files may be read, but their values are hidden in the report.",
+  "dialog.autonomyBypass.secrets":
+    "Secret and protected files may be read. Their values stay hidden as [hidden:NAME] from the agent, the report and exports.",
   "dialog.autonomyBypass.report":
     "When the mode is turned off, a report is posted. It says what was done, what was decided, what was redirected to the archive method and what was refused, and it lists every send and its destination. Any report files are attached.",
   "dialog.autonomyBypass.scope":
@@ -903,6 +904,7 @@ export const dict = {
   "session.mission.line.approvedNotStarted": "Mission approved - steps have not started yet. Ask Swarm to continue.",
   "session.mission.approval.autonomous": "Self-approved (autonomous): Swarm approved this mission itself in autonomous mode.",
   "session.mission.line.paused": "Mission paused - steps are on hold. Answer decisions here, or ask Swarm to resume.",
+  "session.mission.line.drift": "{{count}} steps added after approval.",
   "session.mission.type.research": "Research",
   "session.mission.type.debug": "Debug",
   "session.mission.type.featureRelease": "Feature / release",
@@ -989,6 +991,10 @@ export const dict = {
   "session.autonomy.archive.confirm": "Delete the archived files for good? This cannot be undone.",
   "session.autonomy.archive.unsafe":
     "The archive folder is a link or not a folder, so Swarm does not read or empty it.",
+  "session.autonomy.checkpoint.title": "Saved as a checkpoint before it ran: {{count}}",
+  "session.autonomy.checkpoint.revert": "Revert",
+  "session.autonomy.checkpoint.confirm":
+    "Put the saved files back? Swarm first saves the current files, so this can be undone.",
   "session.map.decisions.group.waiting": "Waiting for you",
   "session.map.decisions.group.decided": "Decided",
   "session.map.decisions.group.limited": "Refused or limited",
@@ -1573,7 +1579,10 @@ export const dict = {
     "Kept on this device, never in the repository. A model sees these notes only as part of a session you run with it.",
   "memory.off": "Off. Sessions get no notes and nothing new is learned. Your notes are kept.",
   "memory.refused.secret": "That looks like a password or key, so it was not saved.",
-  "memory.refused.long": "Keep a note under 400 characters.",
+  "memory.refused.long":
+    "Keep the note under {{max}} characters. Put longer detail in a file and ask the agent to link it.",
+  "memory.refused.bodyLong": "Keep the note body under {{max}} characters, or link a file instead.",
+  "memory.refused.tooManyRefs": "A note can link at most {{max}} files or symbols.",
   "memory.refused.full": "Memory is full. Delete a note first.",
   "memory.error": "Could not load project memory.",
   "memory.retry": "Retry",

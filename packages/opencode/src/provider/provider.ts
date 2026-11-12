@@ -35,6 +35,7 @@ import { ModelWindow } from "./model-window"
 import { ModelStatus } from "./model-status"
 import { RuntimeFlags } from "@/effect/runtime-flags"
 import { ProviderError } from "./error"
+import { ProviderRoute } from "./route-check"
 
 const OPENAI_HEADER_TIMEOUT_DEFAULT = 300_000
 
@@ -1993,6 +1994,8 @@ const layer = Layer.effect(
         if (existing) return existing
 
         options["fetch"] = timeoutFetch(options)
+        // SEC-08: the shipped provider's plain-HTTP requests warn when the route is not Tailscale; they still go.
+        if (model.providerID === ModelsDev.bundled()?.provider.id) options["fetch"] = ProviderRoute.guard(options["fetch"])
         delete options["chunkTimeout"]
         delete options["headerTimeout"]
 

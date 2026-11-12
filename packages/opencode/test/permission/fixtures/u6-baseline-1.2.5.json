@@ -1,0 +1,1154 @@
+{
+  "commit": "e363918a69",
+  "recorded": {
+    "admin sudo": {
+      "base": {
+        "class": "D",
+        "decidedBy": "gate",
+        "category": "not_routine"
+      },
+      "consent": {
+        "class": "X",
+        "decidedBy": "gate",
+        "category": "admin_rights"
+      }
+    },
+    "admin doas": {
+      "base": {
+        "class": "D",
+        "decidedBy": "gate",
+        "category": "not_routine"
+      },
+      "consent": {
+        "class": "X",
+        "decidedBy": "gate",
+        "category": "admin_rights"
+      }
+    },
+    "credential remote add": {
+      "base": {
+        "class": "X",
+        "decidedBy": "gate",
+        "category": "credential_change"
+      },
+      "consent": {
+        "class": "X",
+        "decidedBy": "gate",
+        "category": "credential_change"
+      }
+    },
+    "credential helper": {
+      "base": {
+        "class": "X",
+        "decidedBy": "gate",
+        "category": "credential_change"
+      },
+      "consent": {
+        "class": "X",
+        "decidedBy": "gate",
+        "category": "credential_change"
+      }
+    },
+    "outside write tee": {
+      "base": {
+        "class": "X",
+        "decidedBy": "gate",
+        "category": "outside_write"
+      },
+      "consent": {
+        "class": "A",
+        "decidedBy": "agent",
+        "category": "by_main_agent",
+        "bypassed": "outside_write_held"
+      }
+    },
+    "sensitive edit": {
+      "base": {
+        "class": "D",
+        "decidedBy": "gate",
+        "category": "sensitive_file"
+      },
+      "consent": {
+        "class": "A",
+        "decidedBy": "agent",
+        "category": "by_main_agent",
+        "bypassed": "sensitive_file"
+      }
+    },
+    "sensitive shell write, no git": {
+      "base": {
+        "class": "D",
+        "decidedBy": "gate",
+        "category": "sensitive_file"
+      },
+      "consent": {
+        "class": "X",
+        "decidedBy": "gate",
+        "category": "not_reversible",
+        "bypassed": "sensitive_file"
+      }
+    },
+    "secret edit": {
+      "base": {
+        "class": "D",
+        "decidedBy": "gate",
+        "category": "secret_file"
+      },
+      "consent": {
+        "class": "A",
+        "decidedBy": "agent",
+        "category": "by_main_agent",
+        "bypassed": "secret_file"
+      }
+    },
+    "secret shell write, no git": {
+      "base": {
+        "class": "D",
+        "decidedBy": "gate",
+        "category": "secret_file"
+      },
+      "consent": {
+        "class": "X",
+        "decidedBy": "gate",
+        "category": "not_reversible",
+        "bypassed": "secret_file"
+      }
+    },
+    "folder not trusted": {
+      "base": {
+        "class": "D",
+        "decidedBy": "gate",
+        "category": "folder_not_trusted"
+      },
+      "consent": {
+        "class": "A",
+        "decidedBy": "agent",
+        "category": "by_main_agent",
+        "bypassed": "folder_not_trusted"
+      }
+    },
+    "plan edits source": {
+      "base": {
+        "class": "X",
+        "decidedBy": "gate",
+        "category": "plan_mode"
+      },
+      "consent": {
+        "class": "X",
+        "decidedBy": "gate",
+        "category": "plan_mode"
+      }
+    },
+    "plan runs a check": {
+      "base": {
+        "class": "X",
+        "decidedBy": "gate",
+        "category": "plan_mode"
+      },
+      "consent": {
+        "class": "X",
+        "decidedBy": "gate",
+        "category": "plan_mode"
+      }
+    },
+    "stops Swarm": {
+      "base": {
+        "class": "D",
+        "decidedBy": "gate",
+        "category": "not_routine"
+      },
+      "consent": {
+        "class": "X",
+        "decidedBy": "gate",
+        "category": "process_not_own",
+        "bypassed": "process_not_own"
+      }
+    },
+    "deletion beside another command": {
+      "base": {
+        "class": "X",
+        "decidedBy": "gate",
+        "category": "delete_compound"
+      },
+      "consent": {
+        "class": "X",
+        "decidedBy": "gate",
+        "category": "delete_compound"
+      }
+    },
+    "a person's ask-every-time": {
+      "base": {
+        "class": "D",
+        "decidedBy": "gate",
+        "category": "asks_every_time"
+      },
+      "consent": {
+        "class": "A",
+        "decidedBy": "agent",
+        "category": "by_main_agent",
+        "bypassed": "asks_every_time"
+      }
+    },
+    "a person's deny": {
+      "base": {
+        "class": "X"
+      },
+      "consent": {
+        "class": "X"
+      }
+    },
+    "program run": {
+      "base": {
+        "class": "D",
+        "decidedBy": "gate",
+        "category": "not_routine"
+      },
+      "consent": {
+        "class": "A",
+        "decidedBy": "agent",
+        "category": "by_main_agent",
+        "bypassed": "not_routine"
+      }
+    },
+    "project script inline": {
+      "base": {
+        "class": "P",
+        "decidedBy": "agent",
+        "category": "script",
+        "screen": {
+          "bytes": 8,
+          "lines": 1,
+          "sha256": "d287bb7f9d15abdc5b6e98536263815744b6ef21c8f3c839fc434ca70d8efe99",
+          "flags": []
+        }
+      },
+      "consent": {
+        "class": "A",
+        "decidedBy": "agent",
+        "category": "by_main_agent",
+        "bypassed": "script"
+      }
+    },
+    "delete by find": {
+      "base": {
+        "class": "D",
+        "decidedBy": "gate",
+        "category": "not_routine"
+      },
+      "consent": {
+        "class": "X",
+        "decidedBy": "gate",
+        "category": "delete_compound"
+      }
+    },
+    "shell text deletes": {
+      "base": {
+        "class": "D",
+        "decidedBy": "gate",
+        "category": "not_routine"
+      },
+      "consent": {
+        "class": "X",
+        "decidedBy": "gate",
+        "category": "not_reversible",
+        "bypassed": "unreadable_command"
+      }
+    },
+    "system service": {
+      "base": {
+        "class": "D",
+        "decidedBy": "gate",
+        "category": "not_routine"
+      },
+      "consent": {
+        "class": "A",
+        "decidedBy": "agent",
+        "category": "by_main_agent",
+        "bypassed": "system_service"
+      }
+    },
+    "host shutdown": {
+      "base": {
+        "class": "D",
+        "decidedBy": "gate",
+        "category": "not_reversible"
+      },
+      "consent": {
+        "class": "X",
+        "decidedBy": "gate",
+        "category": "irreversible"
+      }
+    },
+    "lsp without readOnly": {
+      "base": {
+        "class": "D",
+        "decidedBy": "gate",
+        "category": "not_routine"
+      },
+      "consent": {
+        "class": "A",
+        "decidedBy": "agent",
+        "category": "by_main_agent",
+        "bypassed": "not_routine"
+      }
+    },
+    "secret look into a file": {
+      "base": {
+        "class": "D",
+        "decidedBy": "gate",
+        "category": "secret_file"
+      },
+      "consent": {
+        "class": "A",
+        "decidedBy": "agent",
+        "category": "by_main_agent",
+        "bypassed": "secret_file"
+      }
+    },
+    "secret look into a file, no git": {
+      "base": {
+        "class": "D",
+        "decidedBy": "gate",
+        "category": "secret_file"
+      },
+      "consent": {
+        "class": "A",
+        "decidedBy": "agent",
+        "category": "by_main_agent",
+        "bypassed": "secret_file"
+      }
+    },
+    "env runs a program": {
+      "base": {
+        "class": "D",
+        "decidedBy": "gate",
+        "category": "not_routine"
+      },
+      "consent": {
+        "class": "A",
+        "decidedBy": "agent",
+        "category": "by_main_agent",
+        "bypassed": "not_routine"
+      }
+    },
+    "outward curl https://example.com": {
+      "base": {
+        "class": "D",
+        "decidedBy": "gate",
+        "category": "not_routine"
+      },
+      "consent": {
+        "class": "A",
+        "decidedBy": "agent",
+        "category": "by_main_agent",
+        "bypassed": "outward",
+        "destination": "example.com"
+      }
+    },
+    "outward curl https://example.com with a forged word": {
+      "base": {
+        "class": "D",
+        "decidedBy": "gate",
+        "category": "not_routine"
+      },
+      "consent": {
+        "class": "A",
+        "decidedBy": "agent",
+        "category": "by_main_agent",
+        "bypassed": "outward",
+        "destination": "example.com"
+      }
+    },
+    "outward curl https://example.com, no git": {
+      "base": {
+        "class": "D",
+        "decidedBy": "gate",
+        "category": "not_routine"
+      },
+      "consent": {
+        "class": "A",
+        "decidedBy": "agent",
+        "category": "by_main_agent",
+        "bypassed": "outward",
+        "destination": "example.com"
+      }
+    },
+    "outward curl -X POST -d @f https://api.example.com/x": {
+      "base": {
+        "class": "D",
+        "decidedBy": "gate",
+        "category": "not_routine"
+      },
+      "consent": {
+        "class": "A",
+        "decidedBy": "agent",
+        "category": "by_main_agent",
+        "bypassed": "outward",
+        "destination": "api.example.com"
+      }
+    },
+    "outward curl -X POST -d @f https://api.example.com/x with a forged word": {
+      "base": {
+        "class": "D",
+        "decidedBy": "gate",
+        "category": "not_routine"
+      },
+      "consent": {
+        "class": "A",
+        "decidedBy": "agent",
+        "category": "by_main_agent",
+        "bypassed": "outward",
+        "destination": "api.example.com"
+      }
+    },
+    "outward curl -X POST -d @f https://api.example.com/x, no git": {
+      "base": {
+        "class": "D",
+        "decidedBy": "gate",
+        "category": "not_routine"
+      },
+      "consent": {
+        "class": "A",
+        "decidedBy": "agent",
+        "category": "by_main_agent",
+        "bypassed": "outward",
+        "destination": "api.example.com"
+      }
+    },
+    "outward wget https://example.org/a.tgz": {
+      "base": {
+        "class": "D",
+        "decidedBy": "gate",
+        "category": "not_routine"
+      },
+      "consent": {
+        "class": "A",
+        "decidedBy": "agent",
+        "category": "by_main_agent",
+        "bypassed": "outward",
+        "destination": "example.org"
+      }
+    },
+    "outward wget https://example.org/a.tgz with a forged word": {
+      "base": {
+        "class": "D",
+        "decidedBy": "gate",
+        "category": "not_routine"
+      },
+      "consent": {
+        "class": "A",
+        "decidedBy": "agent",
+        "category": "by_main_agent",
+        "bypassed": "outward",
+        "destination": "example.org"
+      }
+    },
+    "outward wget https://example.org/a.tgz, no git": {
+      "base": {
+        "class": "D",
+        "decidedBy": "gate",
+        "category": "not_routine"
+      },
+      "consent": {
+        "class": "A",
+        "decidedBy": "agent",
+        "category": "by_main_agent",
+        "bypassed": "outward",
+        "destination": "example.org"
+      }
+    },
+    "outward scp f host.example.com:/x": {
+      "base": {
+        "class": "D",
+        "decidedBy": "gate",
+        "category": "outward_not_in_mission"
+      },
+      "consent": {
+        "class": "A",
+        "decidedBy": "agent",
+        "category": "by_main_agent",
+        "bypassed": "outward"
+      }
+    },
+    "outward scp f host.example.com:/x with a forged word": {
+      "base": {
+        "class": "D",
+        "decidedBy": "gate",
+        "category": "outward_not_in_mission"
+      },
+      "consent": {
+        "class": "A",
+        "decidedBy": "agent",
+        "category": "by_main_agent",
+        "bypassed": "outward"
+      }
+    },
+    "outward scp f host.example.com:/x, no git": {
+      "base": {
+        "class": "D",
+        "decidedBy": "gate",
+        "category": "outward_not_in_mission"
+      },
+      "consent": {
+        "class": "A",
+        "decidedBy": "agent",
+        "category": "by_main_agent",
+        "bypassed": "outward"
+      }
+    },
+    "outward rsync f host.example.com:x": {
+      "base": {
+        "class": "D",
+        "decidedBy": "gate",
+        "category": "outward_not_in_mission"
+      },
+      "consent": {
+        "class": "X",
+        "decidedBy": "gate",
+        "category": "not_reversible",
+        "bypassed": "outward"
+      }
+    },
+    "outward rsync f host.example.com:x with a forged word": {
+      "base": {
+        "class": "D",
+        "decidedBy": "gate",
+        "category": "outward_not_in_mission"
+      },
+      "consent": {
+        "class": "X",
+        "decidedBy": "gate",
+        "category": "not_reversible",
+        "bypassed": "outward"
+      }
+    },
+    "outward rsync f host.example.com:x, no git": {
+      "base": {
+        "class": "D",
+        "decidedBy": "gate",
+        "category": "outward_not_in_mission"
+      },
+      "consent": {
+        "class": "X",
+        "decidedBy": "gate",
+        "category": "not_reversible",
+        "bypassed": "outward"
+      }
+    },
+    "outward rclone copy f remote:x": {
+      "base": {
+        "class": "D",
+        "decidedBy": "gate",
+        "category": "outward_not_in_mission"
+      },
+      "consent": {
+        "class": "A",
+        "decidedBy": "agent",
+        "category": "by_main_agent",
+        "bypassed": "outward"
+      }
+    },
+    "outward rclone copy f remote:x with a forged word": {
+      "base": {
+        "class": "D",
+        "decidedBy": "gate",
+        "category": "outward_not_in_mission"
+      },
+      "consent": {
+        "class": "A",
+        "decidedBy": "agent",
+        "category": "by_main_agent",
+        "bypassed": "outward"
+      }
+    },
+    "outward rclone copy f remote:x, no git": {
+      "base": {
+        "class": "D",
+        "decidedBy": "gate",
+        "category": "outward_not_in_mission"
+      },
+      "consent": {
+        "class": "A",
+        "decidedBy": "agent",
+        "category": "by_main_agent",
+        "bypassed": "outward"
+      }
+    },
+    "outward git push origin main": {
+      "base": {
+        "class": "D",
+        "decidedBy": "gate",
+        "category": "outward_not_in_mission"
+      },
+      "consent": {
+        "class": "A",
+        "decidedBy": "agent",
+        "category": "by_main_agent",
+        "bypassed": "outward",
+        "destination": "origin"
+      }
+    },
+    "outward git push origin main with a forged word": {
+      "base": {
+        "class": "D",
+        "decidedBy": "gate",
+        "category": "outward_not_in_mission"
+      },
+      "consent": {
+        "class": "A",
+        "decidedBy": "agent",
+        "category": "by_main_agent",
+        "bypassed": "outward",
+        "destination": "origin"
+      }
+    },
+    "outward git push origin main, no git": {
+      "base": {
+        "class": "D",
+        "decidedBy": "gate",
+        "category": "outward_not_in_mission"
+      },
+      "consent": {
+        "class": "A",
+        "decidedBy": "agent",
+        "category": "by_main_agent",
+        "bypassed": "outward",
+        "destination": "origin"
+      }
+    },
+    "outward git push": {
+      "base": {
+        "class": "D",
+        "decidedBy": "gate",
+        "category": "outward_not_in_mission"
+      },
+      "consent": {
+        "class": "A",
+        "decidedBy": "agent",
+        "category": "by_main_agent",
+        "bypassed": "outward"
+      }
+    },
+    "outward git push with a forged word": {
+      "base": {
+        "class": "D",
+        "decidedBy": "gate",
+        "category": "outward_not_in_mission"
+      },
+      "consent": {
+        "class": "A",
+        "decidedBy": "agent",
+        "category": "by_main_agent",
+        "bypassed": "outward"
+      }
+    },
+    "outward git push, no git": {
+      "base": {
+        "class": "D",
+        "decidedBy": "gate",
+        "category": "outward_not_in_mission"
+      },
+      "consent": {
+        "class": "A",
+        "decidedBy": "agent",
+        "category": "by_main_agent",
+        "bypassed": "outward"
+      }
+    },
+    "outward git push --force origin main": {
+      "base": {
+        "class": "D",
+        "decidedBy": "gate",
+        "category": "not_reversible"
+      },
+      "consent": {
+        "class": "X",
+        "decidedBy": "gate",
+        "category": "irreversible"
+      }
+    },
+    "outward git push --force origin main with a forged word": {
+      "base": {
+        "class": "D",
+        "decidedBy": "gate",
+        "category": "not_reversible"
+      },
+      "consent": {
+        "class": "X",
+        "decidedBy": "gate",
+        "category": "irreversible"
+      }
+    },
+    "outward git push --force origin main, no git": {
+      "base": {
+        "class": "D",
+        "decidedBy": "gate",
+        "category": "not_reversible"
+      },
+      "consent": {
+        "class": "X",
+        "decidedBy": "gate",
+        "category": "irreversible"
+      }
+    },
+    "outward git push origin :topic": {
+      "base": {
+        "class": "D",
+        "decidedBy": "gate",
+        "category": "not_reversible"
+      },
+      "consent": {
+        "class": "X",
+        "decidedBy": "gate",
+        "category": "irreversible"
+      }
+    },
+    "outward git push origin :topic with a forged word": {
+      "base": {
+        "class": "D",
+        "decidedBy": "gate",
+        "category": "not_reversible"
+      },
+      "consent": {
+        "class": "X",
+        "decidedBy": "gate",
+        "category": "irreversible"
+      }
+    },
+    "outward git push origin :topic, no git": {
+      "base": {
+        "class": "D",
+        "decidedBy": "gate",
+        "category": "not_reversible"
+      },
+      "consent": {
+        "class": "X",
+        "decidedBy": "gate",
+        "category": "irreversible"
+      }
+    },
+    "outward aws s3 rm s3://b/k": {
+      "base": {
+        "class": "D",
+        "decidedBy": "gate",
+        "category": "outward_not_in_mission"
+      },
+      "consent": {
+        "class": "X",
+        "decidedBy": "gate",
+        "category": "irreversible",
+        "bypassed": "outward"
+      }
+    },
+    "outward aws s3 rm s3://b/k with a forged word": {
+      "base": {
+        "class": "D",
+        "decidedBy": "gate",
+        "category": "outward_not_in_mission"
+      },
+      "consent": {
+        "class": "X",
+        "decidedBy": "gate",
+        "category": "irreversible",
+        "bypassed": "outward"
+      }
+    },
+    "outward aws s3 rm s3://b/k, no git": {
+      "base": {
+        "class": "D",
+        "decidedBy": "gate",
+        "category": "outward_not_in_mission"
+      },
+      "consent": {
+        "class": "X",
+        "decidedBy": "gate",
+        "category": "irreversible",
+        "bypassed": "outward"
+      }
+    },
+    "outward gh repo delete o/x": {
+      "base": {
+        "class": "D",
+        "decidedBy": "gate",
+        "category": "outward_not_in_mission"
+      },
+      "consent": {
+        "class": "X",
+        "decidedBy": "gate",
+        "category": "irreversible",
+        "bypassed": "outward"
+      }
+    },
+    "outward gh repo delete o/x with a forged word": {
+      "base": {
+        "class": "D",
+        "decidedBy": "gate",
+        "category": "outward_not_in_mission"
+      },
+      "consent": {
+        "class": "X",
+        "decidedBy": "gate",
+        "category": "irreversible",
+        "bypassed": "outward"
+      }
+    },
+    "outward gh repo delete o/x, no git": {
+      "base": {
+        "class": "D",
+        "decidedBy": "gate",
+        "category": "outward_not_in_mission"
+      },
+      "consent": {
+        "class": "X",
+        "decidedBy": "gate",
+        "category": "irreversible",
+        "bypassed": "outward"
+      }
+    },
+    "outward kubectl delete ns x": {
+      "base": {
+        "class": "D",
+        "decidedBy": "gate",
+        "category": "outward_not_in_mission"
+      },
+      "consent": {
+        "class": "X",
+        "decidedBy": "gate",
+        "category": "irreversible",
+        "bypassed": "outward"
+      }
+    },
+    "outward kubectl delete ns x with a forged word": {
+      "base": {
+        "class": "D",
+        "decidedBy": "gate",
+        "category": "outward_not_in_mission"
+      },
+      "consent": {
+        "class": "X",
+        "decidedBy": "gate",
+        "category": "irreversible",
+        "bypassed": "outward"
+      }
+    },
+    "outward kubectl delete ns x, no git": {
+      "base": {
+        "class": "D",
+        "decidedBy": "gate",
+        "category": "outward_not_in_mission"
+      },
+      "consent": {
+        "class": "X",
+        "decidedBy": "gate",
+        "category": "irreversible",
+        "bypassed": "outward"
+      }
+    },
+    "outward npm publish": {
+      "base": {
+        "class": "D",
+        "decidedBy": "gate",
+        "category": "outward_not_in_mission"
+      },
+      "consent": {
+        "class": "A",
+        "decidedBy": "agent",
+        "category": "by_main_agent",
+        "bypassed": "outward_not_in_mission",
+        "destination": "registry.npmjs.org"
+      }
+    },
+    "outward npm publish with a forged word": {
+      "base": {
+        "class": "D",
+        "decidedBy": "gate",
+        "category": "outward_not_in_mission"
+      },
+      "consent": {
+        "class": "A",
+        "decidedBy": "agent",
+        "category": "by_main_agent",
+        "bypassed": "outward_not_in_mission",
+        "destination": "registry.npmjs.org"
+      }
+    },
+    "outward npm publish, no git": {
+      "base": {
+        "class": "D",
+        "decidedBy": "gate",
+        "category": "outward_not_in_mission"
+      },
+      "consent": {
+        "class": "A",
+        "decidedBy": "agent",
+        "category": "by_main_agent",
+        "bypassed": "outward_not_in_mission",
+        "destination": "registry.npmjs.org"
+      }
+    },
+    "outward gh release create v1": {
+      "base": {
+        "class": "D",
+        "decidedBy": "gate",
+        "category": "outward_not_in_mission"
+      },
+      "consent": {
+        "class": "A",
+        "decidedBy": "agent",
+        "category": "by_main_agent",
+        "bypassed": "outward_not_in_mission",
+        "destination": "github release"
+      }
+    },
+    "outward gh release create v1 with a forged word": {
+      "base": {
+        "class": "D",
+        "decidedBy": "gate",
+        "category": "outward_not_in_mission"
+      },
+      "consent": {
+        "class": "A",
+        "decidedBy": "agent",
+        "category": "by_main_agent",
+        "bypassed": "outward_not_in_mission",
+        "destination": "github release"
+      }
+    },
+    "outward gh release create v1, no git": {
+      "base": {
+        "class": "D",
+        "decidedBy": "gate",
+        "category": "outward_not_in_mission"
+      },
+      "consent": {
+        "class": "A",
+        "decidedBy": "agent",
+        "category": "by_main_agent",
+        "bypassed": "outward_not_in_mission",
+        "destination": "github release"
+      }
+    },
+    "outward vercel deploy --prod": {
+      "base": {
+        "class": "D",
+        "decidedBy": "gate",
+        "category": "outward_not_in_mission"
+      },
+      "consent": {
+        "class": "A",
+        "decidedBy": "agent",
+        "category": "by_main_agent",
+        "bypassed": "outward_not_in_mission",
+        "destination": "vercel"
+      }
+    },
+    "outward vercel deploy --prod with a forged word": {
+      "base": {
+        "class": "D",
+        "decidedBy": "gate",
+        "category": "outward_not_in_mission"
+      },
+      "consent": {
+        "class": "A",
+        "decidedBy": "agent",
+        "category": "by_main_agent",
+        "bypassed": "outward_not_in_mission",
+        "destination": "vercel"
+      }
+    },
+    "outward vercel deploy --prod, no git": {
+      "base": {
+        "class": "D",
+        "decidedBy": "gate",
+        "category": "outward_not_in_mission"
+      },
+      "consent": {
+        "class": "A",
+        "decidedBy": "agent",
+        "category": "by_main_agent",
+        "bypassed": "outward_not_in_mission",
+        "destination": "vercel"
+      }
+    },
+    "outward terraform destroy": {
+      "base": {
+        "class": "D",
+        "decidedBy": "gate",
+        "category": "outward_not_in_mission"
+      },
+      "consent": {
+        "class": "X",
+        "decidedBy": "gate",
+        "category": "irreversible",
+        "bypassed": "outward"
+      }
+    },
+    "outward terraform destroy with a forged word": {
+      "base": {
+        "class": "D",
+        "decidedBy": "gate",
+        "category": "outward_not_in_mission"
+      },
+      "consent": {
+        "class": "X",
+        "decidedBy": "gate",
+        "category": "irreversible",
+        "bypassed": "outward"
+      }
+    },
+    "outward terraform destroy, no git": {
+      "base": {
+        "class": "D",
+        "decidedBy": "gate",
+        "category": "outward_not_in_mission"
+      },
+      "consent": {
+        "class": "X",
+        "decidedBy": "gate",
+        "category": "irreversible",
+        "bypassed": "outward"
+      }
+    },
+    "outward webfetch": {
+      "base": {
+        "class": "D",
+        "decidedBy": "gate",
+        "category": "outward_not_in_mission"
+      },
+      "consent": {
+        "class": "A",
+        "decidedBy": "agent",
+        "category": "by_main_agent",
+        "bypassed": "outward_not_in_mission",
+        "destination": "example.com"
+      }
+    },
+    "look ls": {
+      "base": {
+        "class": "A",
+        "decidedBy": "gate"
+      },
+      "consent": {
+        "class": "A",
+        "decidedBy": "gate"
+      }
+    },
+    "look cat": {
+      "base": {
+        "class": "A",
+        "decidedBy": "gate"
+      },
+      "consent": {
+        "class": "A",
+        "decidedBy": "gate"
+      }
+    },
+    "git status": {
+      "base": {
+        "class": "D",
+        "decidedBy": "gate",
+        "category": "not_routine"
+      },
+      "consent": {
+        "class": "A",
+        "decidedBy": "agent",
+        "category": "by_main_agent",
+        "bypassed": "not_routine"
+      }
+    },
+    "make a folder": {
+      "base": {
+        "class": "A",
+        "decidedBy": "gate",
+        "category": "file-op"
+      },
+      "consent": {
+        "class": "A",
+        "decidedBy": "gate",
+        "category": "file-op"
+      }
+    },
+    "touch": {
+      "base": {
+        "class": "A",
+        "decidedBy": "gate",
+        "category": "file-op"
+      },
+      "consent": {
+        "class": "A",
+        "decidedBy": "gate",
+        "category": "file-op"
+      }
+    },
+    "copy to a new name": {
+      "base": {
+        "class": "A",
+        "decidedBy": "gate",
+        "category": "file-op"
+      },
+      "consent": {
+        "class": "A",
+        "decidedBy": "gate",
+        "category": "file-op"
+      }
+    },
+    "ordinary edit": {
+      "base": {
+        "class": "A"
+      },
+      "consent": {
+        "class": "A"
+      }
+    },
+    "edit with no undo": {
+      "base": {
+        "class": "X",
+        "decidedBy": "gate",
+        "category": "outside_write"
+      },
+      "consent": {
+        "class": "A",
+        "decidedBy": "agent",
+        "category": "by_main_agent",
+        "bypassed": "outside_write_held"
+      }
+    },
+    "new file by redirect, no git": {
+      "base": {
+        "class": "A",
+        "decidedBy": "gate",
+        "category": "file-op"
+      },
+      "consent": {
+        "class": "A",
+        "decidedBy": "gate",
+        "category": "file-op"
+      }
+    },
+    "append, no git": {
+      "base": {
+        "class": "A",
+        "decidedBy": "gate",
+        "category": "file-op"
+      },
+      "consent": {
+        "class": "A",
+        "decidedBy": "gate",
+        "category": "file-op"
+      }
+    },
+    "read tool": {
+      "base": {
+        "class": "D",
+        "decidedBy": "gate",
+        "category": "secret_file"
+      },
+      "consent": {
+        "class": "A",
+        "decidedBy": "agent",
+        "category": "by_main_agent",
+        "bypassed": "secret_file"
+      }
+    }
+  }
+}

@@ -37,7 +37,22 @@ function withD242(c: BadCase): BadCase {
   return { ...c, spec };
 }
 
-const CASES = badCases().map(withD242);
+const DATUM32_CASE = 'DATUM-32 konektor menembus kotak tak terkait dan detur gagal';
+
+/**
+ * Swarm 1.2.6 row 59 (T-02, controller ruling, C9): at 128 mm the HS wall node is 128 mm wide, wider than
+ * the 2 mm edge inset allows (128 - 2 x 2 = 124 mm), so it is now refused DATUM-37-lebar before routing
+ * (asserted separately below). Every wall that fits the inset at 128 mm (<= 11 lx = 117.33 mm, centred,
+ * 5.33 mm per side) leaves a detour, so the case keeps testing DATUM-32 at 166 mm: the same wall is
+ * 160 mm (15 lx, inside 166 - 4 = 162 mm, 3 mm per side) and the connector a->b still cannot detour.
+ * bad_cases.json stays byte-identical to HS.
+ */
+function withT02(c: BadCase): BadCase {
+  if (c.name !== DATUM32_CASE) return c;
+  return { ...c, spec: { ...(clone(c.spec) as Record<string, unknown>), width_mm: 166 } };
+}
+
+const CASES = badCases().map(withD242).map(withT02);
 
 /** checkId yang diharapkan per kasus (urutan fixture); tahap = spek (validateSpec) atau build. */
 const EXPECTED: Record<string, { checkId: string; stage: 'spec' | 'build' }> = {
@@ -170,4 +185,16 @@ describe('bad_cases Garis A: tahap validasi spek (validateSpec / assertValidSpec
       expect(assertValidSpec(clone(c.spec) as unknown as StudioDiagramV1, { release: true })).toHaveLength(14);
     });
   }
+});
+
+describe('bad_cases Garis A: T-02 inset tepi 2 mm (Swarm 1.2.6 row 59, C9)', () => {
+  it('dinding HS 128 mm pada lembar 128 mm ditolak DATUM-37-lebar dengan kolom dan batas 124 mm', () => {
+    const hs = badCases().find((c) => c.name === DATUM32_CASE)!;
+    expect((hs.spec as Record<string, unknown>).width_mm).toBe(128);
+    const e = catchErr(() => buildDiagramSvg(clone(hs.spec) as unknown as StudioDiagramV1, { release: true }));
+    expect(e.code).toBe('FIGURE_OVER_CAPACITY');
+    expect(checkIdOf(e)).toBe('DATUM-37-lebar');
+    expect(e.message).toContain('kolom graph 0 melewati inset tepi 2 mm');
+    expect(e.details).toMatchObject({ unit: 'mm', measured: 128, limit: 124 });
+  });
 });

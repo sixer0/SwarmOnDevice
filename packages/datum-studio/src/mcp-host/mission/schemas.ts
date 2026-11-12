@@ -74,6 +74,8 @@ const rowPatch: Schema = {
       description: "Document ids linked to this row (docKey row-<id>-<name>) that it no longer delivers, e.g. an abandoned draft; archived, so the done gate and Deliverables judge only the current ones. Needs note; one live deliverable must stay.",
     },
     checkpoint,
+    // Row 81 (1.2.6, MC-03): a per-patch decision, so one call can add several rows each with its own decision.
+    decision: { type: "string", pattern: DECISION_ID_PATTERN, description: "This patch's decision; overrides the call-level decision for this patch only." },
   },
 }
 
@@ -135,7 +137,7 @@ export const MISSION_TOOL_SCHEMAS: Record<string, Schema> = {
   studio_mission_update_row: {
     ...obj({
       mission: missionId,
-      rows: { type: "array", minItems: 1, maxItems: 200, items: rowPatch, description: "1-200 row patches applied in order in one job." },
+      rows: { type: "array", minItems: 1, maxItems: 200, items: rowPatch, description: "1-200 row patches applied in order in one job; each patch applies or is refused on its own (results)." },
       messages: { type: "array", minItems: 1, maxItems: 50, items: message, description: "C57 (c)/(d): messages appended after the row patches, in the same job." },
       decision: { type: "string", pattern: DECISION_ID_PATTERN },
       ...writeCommon,
@@ -147,7 +149,8 @@ export const MISSION_TOOL_SCHEMAS: Record<string, Schema> = {
       { properties: { messages: { type: "array" } }, required: ["messages"] },
     ],
   },
-  studio_mission_record_decision: obj({ mission: missionId, decision: { type: "object", description: "studio.mission/v1#/$defs/Decision {id, by, date, text, rows?, supersedes?}; append-only." }, ...writeCommon }, [
+  // Row 80 (1.2.6, MC-02): `autonomous` is also accepted at the top level and stored as decision.autonomous.
+  studio_mission_record_decision: obj({ mission: missionId, decision: { type: "object", description: "studio.mission/v1#/$defs/Decision {id, by, date, text, rows?, supersedes?, autonomous?}; append-only." }, autonomous: { type: "boolean", description: "Same as decision.autonomous (stored there); if both are given they must be equal (SCHEMA_INVALID /decision/autonomous otherwise)." }, ...writeCommon }, [
     "mission",
     "decision",
   ]),

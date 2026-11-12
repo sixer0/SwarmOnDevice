@@ -9,6 +9,8 @@
  */
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js"
 import { isStoreError } from "../../store/index.ts"
+import { neutralizeDeep, tok, untrustedFields } from "../../../vendor/scripts/studio/mcp/tool-kit"
+import { outputGateFindings } from "../verify/client-findings.ts"
 import { MISSION_GUIDE_URI } from "./mission-guide.ts"
 import { MISSION_SKILL, nextCall } from "./next-call.ts"
 
@@ -51,14 +53,36 @@ function compactDetails(tool: string, code: string, details: Record<string, unkn
   return out
 }
 
+/** Row 210 (I-1): every string of the OUTPUT_UNVERIFIED `rincian` summary (ids, codes) is a safe token or "?". */
+function safeBrief(v: unknown): unknown {
+  if (typeof v === "string") return tok(v, "?")
+  if (Array.isArray(v)) return v.map(safeBrief)
+  if (v !== null && typeof v === "object") return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, safeBrief(x)]))
+  return v
+}
+
 export function refusal(tool: string, code: string, message: string, rawDetails: Record<string, unknown> = {}): CallToolResult {
-  const details = compactDetails(tool, code, rawDetails)
+  let details = compactDetails(tool, code, rawDetails)
+  // Row 206 (1.2.3): OUTPUT_UNVERIFIED names, per unverified output, the checks that failed or could not be measured
+  // ({check, verdict, page, address, measured, expected, rule, message}) in the text, fenced as untrusted document text.
+  let block = ""
+  let brief: unknown = details
+  let untrusted: Record<string, unknown> = {}
+  if (code === "OUTPUT_UNVERIFIED") {
+    const g = outputGateFindings(details)
+    block = g.block
+    brief = safeBrief({ ...g.details, deliverables: (Array.isArray(g.details.deliverables) ? g.details.deliverables : []).map((d: Record<string, unknown>) => ({ ...d, outputs: (Array.isArray(d.outputs) ? d.outputs : []).map(({ checks: _c, ...o }: Record<string, unknown>) => o) })) })
+    // Row 210 (security review 209 M-2, MCP-D4): the check entries quote document text (address, label, engine
+    // messages); structuredContent carries them neutralised and marked untrusted, as render-wrapper and doc-tools do.
+    details = neutralizeDeep(g.details) as Record<string, unknown>
+    untrusted = untrustedFields(["error.details.deliverables.outputs.checks"])
+  }
   // Row 188 (L47): every refusal ends with the next correct call and the skill that holds the sequence.
   const next = nextCall(code)
   const error = { code, message, details, next, skill: MISSION_SKILL }
   return {
-    content: [{ type: "text", text: `ditolak ${code}: ${message}\nrincian: ${JSON.stringify(details).slice(0, 4000)}\nnext: ${next}` }],
-    structuredContent: { ok: false, tool, code, error, next },
+    content: [{ type: "text", text: `ditolak ${code}: ${message}\nrincian: ${JSON.stringify(brief).slice(0, 4000)}${block ? `\nperiksa (per keluaran RENDER_UNVERIFIED(U24)):\n${block}` : ""}\nnext: ${next}` }],
+    structuredContent: { ok: false, tool, code, error, next, ...untrusted },
     isError: true,
   }
 }

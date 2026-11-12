@@ -22,6 +22,8 @@
  * `studio_report_submit` (blok ke dokumen yang bukan laporan kerja milik pemanggil ditolak sebelum kiriman).
  */
 import { studioRoutePath } from "../../../src/lib/studio/contract/env";
+import { normalizeControlSheetKeys } from "../../../src/lib/studio/contract/schema/v2/verification-entry";
+import { summarizeLint, type LintSummary } from "../../../src/lib/studio/registry/lint-explain";
 import type { SubmitPlanItem } from "../studio-report";
 import { MAX_INPUT_BYTES } from "./config";
 import { McpToolError } from "./safety";
@@ -30,6 +32,7 @@ import {
   bool,
   compactSummary,
   DATA_NOT_INSTRUCTIONS,
+  HEX64,
   http,
   isRecord,
   loadSource,
@@ -61,7 +64,7 @@ import {
 const SLUG = { type: "string", pattern: "^[a-z0-9][a-z0-9-]{0,63}$" } as const;
 const SLOT_KEY = S.slot;
 const CHAPTER_KEY = S.chapter;
-export const ADOPT = { type: "boolean", description: "Lanjutkan dokumen misi+docKey yang dibuat agentId lain (eksplisit)." } as const;
+export const ADOPT = { type: "boolean", description: "Dokumen agentId lain (eksplisit)." } as const;
 /** Route importer Markdown (di luar registri R01-R23 kontrak; L-3: satu konstanta, bukan literal berulang). */
 const IMPORT_ROUTE = "/api/studio/import/markdown";
 const TEXT = (max: number) => ({ type: "string", minLength: 1, maxLength: max }) as const;
@@ -361,11 +364,11 @@ async function dryRunOutput(ctx: ToolContext, label: string, body: Rec, detail: 
 
 const templatesListTool: ToolDef = {
   name: "studio_templates_list",
-  description: `Daftar templat dokumen (R01): slug, versi, tier bawaan, deskripsi. Preset gaya dan arsip disembunyikan bawaan. ${DATA_NOT_INSTRUCTIONS}`,
+  description: `Daftar templat dokumen (R01): slug, versi, tier bawaan, deskripsi. Preset dan arsip tersembunyi bawaan. ${DATA_NOT_INSTRUCTIONS}`,
   inputSchema: obj({
     includePresets: { type: "boolean", default: false },
     includeArchived: { type: "boolean", default: false },
-    withTier: { type: "boolean", default: true, description: "Baca tier bawaan per templat (R02)." },
+    withTier: { type: "boolean", default: true },
   }),
   annotations: { title: "Daftar templat (R01)", ...READ },
   toolsets: ["documents"],
@@ -493,7 +496,7 @@ const templateGetTool: ToolDef = {
 const documentCreateTool: ToolDef = {
   name: "studio_document_create",
   description:
-    "Buat dokumen klien berkerangka (R04) dari templat untuk misi + docKey. Idempoten untuk agentId yang sama (unchanged). Misi+docKey yang sudah dibuat agentId lain -> DOCUMENT_OWNED_BY_OTHER kecuali adoptExisting=true. Hasil: documentId, docNumber, kelengkapan.",
+    "Buat dokumen klien berkerangka (R04) dari templat untuk misi + docKey; idempoten untuk agentId sama (unchanged). Milik agentId lain -> DOCUMENT_OWNED_BY_OTHER kecuali adoptExisting=true. Hasil: documentId, docNumber, kelengkapan.",
   inputSchema: obj(
     {
       template: SLUG,
@@ -554,7 +557,7 @@ const documentCreateTool: ToolDef = {
 const importTool: ToolDef = {
   name: "studio_chapter_import_markdown",
   description:
-    "Satu bab Markdown -> studio.chapter/v2 (importer md/v1) + dry-run R08; kirim R12 hanya bila submit=true dan sah. Target: documentId, atau mission+docKey (+template+docTitle bila belum ada). Dokumen yang sudah ada: submit wajib baseRevisionNo (atau basis diingat sesi), selain itu BASIS_MISSING.",
+    "Satu bab Markdown -> studio.chapter/v2 (importer md/v1) + dry-run R08; kirim R12 hanya bila submit=true dan sah. Target: documentId, atau mission+docKey (+template+docTitle bila belum ada). Dokumen ada: submit wajib baseRevisionNo atau basis sesi, selain itu BASIS_MISSING.",
   inputSchema: obj(
     {
       markdown: S.markdown,
@@ -567,8 +570,8 @@ const importTool: ToolDef = {
       template: SLUG,
       docTitle: TEXT(300),
       slot: { ...SLOT_KEY, description: "Bawaan content." },
-      submit: { type: "boolean", description: "Kirim R12 bila sah; bawaan hanya periksa." },
-      baseRevisionNo: { ...BASE_REV, description: "Wajib untuk dokumen yang sudah ada, kecuali basis diingat sesi." },
+      submit: { type: "boolean" },
+      baseRevisionNo: BASE_REV,
       change: CHANGE,
       adoptExisting: ADOPT,
       agentId: S.agentId,
@@ -692,7 +695,7 @@ function withBodyAgent(body: Rec, a: Args, ctx: ToolContext): Rec {
 const chapterSubmitTool: ToolDef = {
   name: "studio_chapter_submit",
   description:
-    "Kirim satu bab JSON studio.chapter/v2 langsung ke R12 (kasus lanjut; Markdown: studio_chapter_import_markdown). Dokumen yang sudah ada: submission.baseRevisionNo wajib (atau basis diingat sesi). dryRun=true = uji R08 tanpa simpan.",
+    "Kirim satu bab JSON studio.chapter/v2 langsung ke R12 (kasus lanjut; Markdown: studio_chapter_import_markdown). Dokumen ada: submission.baseRevisionNo wajib (atau basis sesi). dryRun=true = uji R08.",
   inputSchema: obj(
     {
       submission: { ...PASS_OBJECT(["$schema", "target", "chapter"], { $schema: { const: "studio.chapter/v2" }, target: { type: "object" }, chapter: { type: "object" } }), description: "Badan studio.chapter/v2 utuh." },
@@ -736,13 +739,13 @@ const chapterSubmitTool: ToolDef = {
 const slotFillTool: ToolDef = {
   name: "studio_slot_fill",
   description:
-    "Isi satu slot tak berulang (R13): controlSheet, signature (type signatureBlock), references (sourceRegister), cover (opsional), dll. payload.type = jenis slot (lihat studio_template_get). Wajib baseRevisionNo (atau basis diingat sesi). dryRun=true = uji R08.",
+    "Isi satu slot tak berulang (R13): controlSheet, signature (type signatureBlock), references (sourceRegister), cover (opsional), dll. payload.type = jenis slot (lihat studio_template_get). Wajib baseRevisionNo (atau basis sesi), selain itu BASIS_MISSING.",
   inputSchema: obj(
     {
       documentId: S.documentId,
       slot: SLOT_KEY,
       payload: { ...PASS_OBJECT(["type"], { type: { type: "string", minLength: 1, maxLength: 40 } }), description: "Isi slot; skema: studio_registry kind=schema schemaId=common/v2." },
-      baseRevisionNo: { ...BASE_REV, description: "Revisi yang Anda baca; kosong = basis diingat sesi, selain itu BASIS_MISSING." },
+      baseRevisionNo: BASE_REV,
       change: CHANGE,
       dryRun: DRY_RUN,
       agentId: S.agentId,
@@ -758,6 +761,11 @@ const slotFillTool: ToolDef = {
     // F-3: slot selalu menarget dokumen yang ada -> basis eksplisit atau diingat sesi (dry-run bebas).
     const basis = dryRun ? null : requireBasis(num(a, "baseRevisionNo"), ctx, documentId, null);
     const base = basis?.baseRevisionNo ?? num(a, "baseRevisionNo");
+    // Row 207 (HB-2): verificationChain printed column names (Lapis/Metode/Objek/Hasil, any case) -> canonical keys;
+    // unknown keys are left for the server, which refuses them with the accepted keys (0 writes).
+    const keyMap = normalizeControlSheetKeys(a.payload);
+    const mappedWarning: ToolWarning | null =
+      keyMap.mapped.length > 0 ? { code: "ARG_MAPPED", message: `verificationChain: nama kolom dipetakan ke kunci: ${keyMap.mapped.slice(0, 12).join("; ")}` } : null;
     const body: Rec = {
       $schema: "studio.slot/v2",
       ...bodyAgentId(a, ctx),
@@ -768,11 +776,11 @@ const slotFillTool: ToolDef = {
       ...(isRecord(a.change) ? { change: a.change } : {}),
     };
     requireBodyBytes(body, "payload");
-    if (dryRun) return dryRunOutput(ctx, `slot ${String(str(a, "slot"))}`, body, bool(a, "detail"));
+    if (dryRun) return withWarnings(await dryRunOutput(ctx, `slot ${String(str(a, "slot"))}`, body, bool(a, "detail")), mappedWarning);
     const reply = await http(ctx, "POST", studioRoutePath("R13"), "POST /api/studio/slots", { json: body });
     const b = isRecord(reply.body) ? reply.body : {};
     const rebasedWarning = rememberResult(ctx, b, "studio_slot_fill", base);
-    return withWarnings(submitOutput(`isi slot ${String(str(a, "slot"))}`, b, bool(a, "detail"), basis?.remembered === true ? { basisFromSession: basis.baseRevisionNo } : {}, basis?.line ? [basis.line] : []), rebasedWarning);
+    return withWarnings(submitOutput(`isi slot ${String(str(a, "slot"))}`, b, bool(a, "detail"), basis?.remembered === true ? { basisFromSession: basis.baseRevisionNo } : {}, basis?.line ? [basis.line] : []), rebasedWarning, mappedWarning);
   },
 };
 
@@ -875,10 +883,156 @@ const structureTool: ToolDef = {
 
 // ── studio_document_status (R15 + ringkasan R05) ────────────────────────
 
+/** Swarm row 206: lint lines for the status block (server text: inside the untrusted block only). */
+function lintLines(l: LintSummary): string[] {
+  const head = `lint: ${l.verdict}${l.tier ? ` tier ${l.tier}` : ""}; ran ${l.ran ? "ya" : "tidak"}${l.counts ? `; PASS ${l.counts.PASS}, FAIL ${l.counts.FAIL}, REPORT ${l.counts.REPORT}, NOT_RUN ${l.counts.NOT_RUN}` : ""}${l.reason ? `; ${l.reason}` : ""}`;
+  const out = [head];
+  const explained = new Set<string>();
+  for (const f of l.findings) {
+    out.push(`- ${f.code} ${f.status}${f.address ? ` @ ${f.address}` : ""}: ${f.message}`);
+    if (f.rule && !explained.has(f.code)) out.push(`  aturan: ${f.rule}`);
+    explained.add(f.code);
+  }
+  if (l.findingsTotal > l.findings.length) out.push(`- (+${l.findingsTotal - l.findings.length} temuan lain; detail=true)`);
+  return out;
+}
+
+// Swarm patch (1.2.6 row 78, M-08): the default (non-detail) status text carries the gate fields the model needs —
+// status, the full sha256 of every listed output, the FAIL count per check code and the output file list — within
+// DOCUMENT_STATUS_TEXT_MAX_BYTES (register N-042). Up to STATUS_OUTPUTS_LISTED (N-043) outputs replace cap(outputs, 5).
+// When the cap is near, long lint details (finding lines, rule explanations) go first, then outputs from the end, each
+// with a "detail=true" marker; a listed sha is never shortened.
+export const DOCUMENT_STATUS_TEXT_MAX_BYTES = 8192;
+export const STATUS_OUTPUTS_LISTED = 50;
+
+/** FAIL count per check code of the revision lint (engine `checks[]` or older `findings[]`), most frequent first. */
+function failCountsByCode(lint: unknown): Array<[string, number]> {
+  if (!isRecord(lint)) return [];
+  const m = new Map<string, number>();
+  const add = (code: unknown) => {
+    const k = tok(code, "?");
+    m.set(k, (m.get(k) ?? 0) + 1);
+  };
+  if (Array.isArray(lint.checks)) {
+    for (const c of lint.checks) if (isRecord(c) && c.status === "FAIL") add(c.checkId);
+  } else {
+    const raw = Array.isArray(lint.findings) ? lint.findings : Array.isArray(lint.issues) ? lint.issues : [];
+    const v = typeof lint.verdict === "string" ? lint.verdict : typeof lint.status === "string" ? lint.status : null;
+    for (const f of raw) if (isRecord(f) && String(f.status ?? v) === "FAIL") add(f.checkId ?? f.rule ?? f.code);
+  }
+  return [...m.entries()].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+}
+
+// Swarm patch (1.2.6 row 78b, C16): the stored U24 page verdict per output (server R05 `outputs[].renderVerification`,
+// written by studio_render's verification), so a status read after a render timeout shows it. Labels as studio_render
+// prints them: RENDER_VERIFIED(U24) / RENDER_UNVERIFIED(U24) fail=… unknown=… (+ STALE when the record is for other
+// bytes), the OVERLAP_CLIP coverage on its own line; no record (or a server without the field) -> RENDER_VERIFY_PENDING.
+export const RENDER_VERIFY_PENDING = "RENDER_VERIFY_PENDING";
+function renderVerdictText(v: unknown): string {
+  if (!isRecord(v) || (v.state !== "verified" && v.state !== "unverified")) return RENDER_VERIFY_PENDING;
+  const list = (x: unknown) => (Array.isArray(x) ? x.map((s) => tok(s, "?")).join(",") : "") || "-";
+  const head = v.state === "verified" ? "RENDER_VERIFIED(U24)" : `RENDER_UNVERIFIED(U24)${v.reason === "STALE" ? " STALE" : ""} fail=${list(v.fail)} unknown=${list(v.unknown)}`;
+  const c = isRecord(v.overlapClip) ? v.overlapClip : null;
+  return c ? `${head}\n    OVERLAP_CLIP ${tok(c.status)}${c.status === "UNKNOWN" ? `:${tok(c.reason, "?")}` : ""} diukur ${tok(c.measuredPages)}/${tok(c.totalPages)} halaman` : head;
+}
+
+/** One output line (inside the status block): safe tokens, the full sha (64 hex or "-"), the page verdict, then the file name (server text). */
+function statusOutputLine(o: Record<string, unknown>, verdict: unknown): string {
+  const scope = isRecord(o.scope) ? `${tok(o.scope.kind)}${typeof o.scope.key === "string" ? `:${tok(o.scope.key)}` : ""}` : tok(o.scope);
+  const sha = typeof o.sha256 === "string" && HEX64.test(o.sha256) ? o.sha256 : "-";
+  const name = String(o.finalFileName ?? o.fileName ?? "").replace(/[\r\n\t]+/g, " ").slice(0, 160);
+  const [head, cov] = renderVerdictText(verdict).split("\n");
+  return `berkas ${tok(o.id)} ${tok(o.format)} ${scope} lint ${tok(o.lintVerdict)}${o.draft === true ? " draf" : ""} sha256 ${sha} ${head} ${name}${cov ? `\n${cov}` : ""}`;
+}
+
+// Swarm patch (1.2.6 row 49, T-14): `findings` (register N-033) pages the full finding list of one lint check of the
+// revision; result `findingsPage` (N-034) plus `findings` (the page). Page size at most LINT_FINDINGS_PAGE_MAX (N-035).
+// The engine summary cap (E-16, 100 itemised per check) stays: past it the summary row carries `findingsAll`
+// (E/lint/structure/context.ts); otherwise the check's own FAIL/REPORT rows are the list.
+export const LINT_FINDINGS_PAGE_MAX = 500;
+const LINT_FINDINGS_PAGE_DEFAULT = 100;
+
+export interface LintFindingEntry {
+  /** `<checkId>#<index>`: stable for one revision lint, independent of the chapter filter. */
+  id: string;
+  index: number;
+  checkId: string;
+  status: string;
+  chapter: string | null;
+  address: string | null;
+  pointer: string | null;
+  detail: string;
+}
+
+/** Chapter key from a body address `<key>.<section>.<n>` when the entry carries none. */
+const chapterOfAddress = (a: string | null): string | null => /^([1-9][0-9]{0,2}|[A-Z])\.\d/.exec(a ?? "")?.[1] ?? null;
+
+/** Full ordered finding list (FAIL/REPORT) of one check from a revision lint record (engine `checks[]` or older `findings[]`). */
+export function lintFindingsOf(lint: unknown, checkId: string): LintFindingEntry[] {
+  if (!isRecord(lint)) return [];
+  const engine = Array.isArray(lint.checks);
+  const rows = (engine ? (lint.checks as unknown[]) : Array.isArray(lint.findings) ? lint.findings : Array.isArray(lint.issues) ? lint.issues : []).filter(isRecord);
+  const mine = rows.filter((r) => String(r.checkId ?? r.rule ?? r.code ?? "") === checkId);
+  const carrier = mine.find((r) => Array.isArray(r.findingsAll));
+  const src = carrier ? (carrier.findingsAll as unknown[]).filter(isRecord) : engine ? mine.filter((r) => r.status === "FAIL" || r.status === "REPORT") : mine;
+  return src.map((r, index) => {
+    const address = typeof r.address === "string" && r.address !== "" ? r.address : null;
+    return {
+      id: `${checkId}#${index}`,
+      index,
+      checkId,
+      status: String(r.status ?? "FAIL"),
+      chapter: typeof r.chapter === "string" && r.chapter !== "" ? r.chapter : chapterOfAddress(address),
+      address,
+      pointer: typeof r.pointer === "string" && r.pointer !== "" ? r.pointer : null,
+      detail: String(r.detail ?? r.message ?? ""),
+    };
+  });
+}
+
+/**
+ * FX-7 (M2 S6): truncation marker of one check's stored list (E/lint/structure/context.ts LINT_FINDINGS_STORED_MAX):
+ * the real total and how many findings were not stored; null when the stored list is complete.
+ */
+export function lintFindingsTruncation(lint: unknown, checkId: string): { total: number; notStored: number } | null {
+  if (!isRecord(lint) || !Array.isArray(lint.checks)) return null;
+  const row = (lint.checks as unknown[]).filter(isRecord).find((r) => String(r.checkId ?? "") === checkId && Array.isArray(r.findingsAll));
+  const total = row?.findingsTotal;
+  const notStored = row?.findingsNotStored;
+  return typeof total === "number" && typeof notStored === "number" && notStored > 0 ? { total, notStored } : null;
+}
+
+/** FX-7 (M2 S6): detail-mode lintReport without the stored finding lists (count only; page them with `findings`). */
+function lintReportOf(lint: unknown): unknown {
+  if (!isRecord(lint) || !Array.isArray(lint.checks)) return lint ?? null;
+  return {
+    ...lint,
+    checks: (lint.checks as unknown[]).map((r) => {
+      if (!isRecord(r) || !Array.isArray(r.findingsAll)) return r;
+      const { findingsAll, ...rest } = r;
+      return { ...rest, findingsAllCount: (findingsAll as unknown[]).length };
+    }),
+  };
+}
+
+// Compact on purpose: tools/list budget (mcp-doc-tools.test.ts, < 30 500 B); defaults (offset 0, limit 100) in run().
+const FINDINGS_PARAM = {
+  ...obj(
+    {
+      checkId: { type: "string", maxLength: 64 },
+      chapter: { type: "string", maxLength: 32 },
+      offset: { type: "integer", minimum: 0 },
+      limit: { type: "integer", minimum: 1, maximum: LINT_FINDINGS_PAGE_MAX },
+    },
+    ["checkId"],
+  ),
+  description: "chapter persis.",
+};
+
 const statusTool: ToolDef = {
   name: "studio_document_status",
-  description: `Status dokumen: kelengkapan (R15: slot wajib, bab hadir/kurang, langkah berikut, boleh render penuh) + ringkasan lint dan berkas terakhir (R05). detail=true: penuh. ${DATA_NOT_INSTRUCTIONS}`,
-  inputSchema: obj({ documentId: S.documentId, rev: { ...S.rev, description: "Bawaan terkini." }, detail: S.detail }, ["documentId"]),
+  description: `Status dokumen: kelengkapan (R15: slot wajib, bab, langkah berikut, boleh render penuh), lint, berkas terakhir (R05). detail=true: penuh. findings {checkId}: semua temuan 1 cek, per halaman (nextOffset). ${DATA_NOT_INSTRUCTIONS}`,
+  inputSchema: obj({ documentId: S.documentId, rev: { ...S.rev, description: "Bawaan terkini." }, detail: S.detail, findings: FINDINGS_PARAM }, ["documentId"]),
   annotations: { title: "Status dokumen (R15)", ...READ },
   toolsets: ["documents"],
   async run(a, ctx) {
@@ -890,14 +1044,18 @@ const statusTool: ToolDef = {
     const b = isRecord(r05.body) ? r05.body : {};
     const detail = bool(a, "detail");
     const sum = compactSummary(b);
+    const lintSum = detail ? summarizeLint(b.lint, { max: 100, withNotRun: true }) : summarizeLint(b.lint, { max: 5, messageMax: 200 });
     const doc = isRecord(sum.document) ? sum.document : {};
     const outputs = arr(sum.outputs);
     const comp = completenessBrief(c, detail);
     const data: Rec = {
       document: pick(doc, ["id", "docNumber", "title", "docKey", "missionFolder", "currentRevisionNo", "releaseStatus"]),
       completeness: comp,
-      lint: detail ? (b.lint ?? null) : (sum.lint ?? null),
-      outputs: detail ? outputs : cap(outputs, 5).map((o) => pick(o, ["id", "format", "scope", "draft", "finalFileName", "sha256"])),
+      // Swarm row 206 (1.2.3): tri-state lint (ran / verdict / findings with codes, messages, rule explanations);
+      // detail lists every FAIL and NOT_RUN item and keeps the full report in lintReport.
+      lint: lintSum,
+      ...(detail ? { lintReport: lintReportOf(b.lint) } : {}),
+      outputs: detail ? outputs : cap(outputs, STATUS_OUTPUTS_LISTED).map((o) => pick(o, ["id", "format", "scope", "draft", "finalFileName", "sha256"])),
       ...(detail ? {} : { outputCount: outputs.length, detail: false }),
     };
     const brief = completenessBrief(c);
@@ -905,21 +1063,86 @@ const statusTool: ToolDef = {
     const lines = [
       `dokumen ${id} ${tok(doc.docNumber)}: revisi terkini ${tok(doc.currentRevisionNo)}; ${completenessLine(brief)} (status dokumen nyata)`,
       `  slot: ${Array.isArray(brief?.slots) ? (brief.slots as unknown[]).map((k) => tok(k, "?")).join(" ") : "-"} (* = wajib)`,
-      isRecord(sum.lint) ? "  lint: ada (ringkasan di blok status di bawah)" : "  lint: belum ada (belum dirender)",
+      lintSum.ran
+        ? `  lint: ${lintSum.verdict} (dijalankan; ${lintSum.findingsTotal} temuan${lintSum.findingsTotal > lintSum.findings.length ? `, ${lintSum.findings.length} tercantum; detail=true untuk semua` : ""}; rincian di blok status di bawah)`
+        : `  lint: NOT_RUN (tidak dijalankan${b.lint === null || b.lint === undefined ? "; belum dirender" : "; rincian di blok status di bawah"})`,
     ];
     const steps = brief && Array.isArray(brief.nextSteps) ? (brief.nextSteps as unknown[]).map(String) : [];
+    // Swarm patch (1.2.6 row 78, M-08): status, FAIL count per code (safe tokens, outside the block), then per output
+    // the full sha and the file name inside the block; non-detail text stays within DOCUMENT_STATUS_TEXT_MAX_BYTES.
+    const fails = failCountsByCode(b.lint);
     lines.push(
-      untrustedBlock(
-        [
-          `judul: ${String(doc.title ?? "")}`,
-          ...(isRecord(sum.lint) ? [`lint: ${JSON.stringify(sum.lint)}`] : []),
-          ...cap(outputs, 5).map((o) => `berkas ${String(o.id)} ${String(o.format ?? "")} ${String(o.finalFileName ?? "")}`),
-          ...steps.map((s) => `- ${s}`),
-        ].join("\n"),
-        { jenis: "status-dokumen", documentId: id },
-      ),
+      `  status: rilis ${tok(doc.releaseStatus)}; lint ${lintSum.verdict}; ${outputs.length} berkas`,
+      `  FAIL per kode: ${fails.length === 0 ? "-" : fails.slice(0, 40).map(([k, n]) => `${k}=${n}`).join(", ")}${fails.length > 40 ? ` (+${fails.length - 40} kode lain; detail=true)` : ""}`,
     );
-    return { text: lines.join("\n"), data: { ...(neutralizeDeep(data) as Rec), ...untrustedFields(["document.title", "completeness.nextSteps", "completeness.message", "lint", "outputs"]) } };
+    const listed = cap(outputs, STATUS_OUTPUTS_LISTED);
+    const verdicts = new Map(arr(b.outputs).filter(isRecord).map((o) => [o.id, o.renderVerification] as const));
+    const lintFull = lintLines(lintSum);
+    const lintVariants = detail
+      ? [lintFull]
+      : [
+          lintFull,
+          lintFull.filter((l) => !l.startsWith("  aturan: ")),
+          [lintFull[0] as string, ...(lintSum.findingsTotal > 0 ? [`- (${lintSum.findingsTotal} temuan; rincian dengan detail=true)`] : [])],
+        ];
+    const render = (lint: string[], n: number, withSteps: boolean, titleMax: number): string =>
+      [
+        ...lines,
+        untrustedBlock(
+          [
+            `judul: ${String(doc.title ?? "").slice(0, titleMax)}`,
+            ...lint,
+            ...listed.slice(0, n).map((o) => statusOutputLine(o, verdicts.get(o.id))),
+            ...(outputs.length > n ? [`- (+${outputs.length - n} berkas lain; detail=true)`] : []),
+            ...(withSteps ? steps.map((s) => `- ${s}`) : steps.length > 0 ? [`- (${steps.length} langkah berikut; detail=true)`] : []),
+          ].join("\n"),
+          { jenis: "status-dokumen", documentId: id },
+        ),
+      ].join("\n");
+    // Room for the correlationIds line executeTool appends to the text.
+    const budget = DOCUMENT_STATUS_TEXT_MAX_BYTES - Buffer.byteLength(`\ncorrelationIds: ${ctx.cids.join(", ")} (${ctx.cids.length} cid)`, "utf8") - 16;
+    const fits = (t: string) => detail || Buffer.byteLength(t, "utf8") <= budget;
+    let text = render(lintFull, listed.length, true, 2000);
+    if (!fits(text)) {
+      const last = lintVariants[lintVariants.length - 1] as string[];
+      const found = lintVariants.map((v) => render(v, listed.length, true, 2000)).find(fits);
+      if (found !== undefined) text = found;
+      else {
+        let n = listed.length;
+        text = render(last, n, true, 200);
+        while (!fits(text) && n > 0) text = render(last, --n, true, 200);
+        if (!fits(text)) text = render(last, n, false, 80);
+      }
+    }
+    // Swarm patch (1.2.6 row 49, T-14): the requested findings page follows the status text in its own untrusted block
+    // (explicitly asked for, so it is not cut by the default text budget).
+    const fq = isRecord(a.findings) ? a.findings : null;
+    if (fq !== null) {
+      const checkId = String(fq.checkId ?? "");
+      const chapter = typeof fq.chapter === "string" ? fq.chapter : null;
+      const offset = typeof fq.offset === "number" ? fq.offset : 0;
+      const limit = typeof fq.limit === "number" ? fq.limit : LINT_FINDINGS_PAGE_DEFAULT;
+      if (!Number.isInteger(offset) || offset < 0 || !Number.isInteger(limit) || limit < 1 || limit > LINT_FINDINGS_PAGE_MAX) {
+        throw new McpToolError("INVALID_ARGUMENT", `findings: offset bilangan bulat >= 0, limit 1..${LINT_FINDINGS_PAGE_MAX}`);
+      }
+      const list = lintFindingsOf(b.lint, checkId).filter((f) => chapter === null || f.chapter === chapter);
+      const page = list.slice(offset, offset + limit);
+      const next = offset + page.length < list.length ? offset + page.length : null;
+      const cut = lintFindingsTruncation(b.lint, checkId);
+      data.findingsPage = { checkId, chapter, total: list.length, offset, returned: page.length, nextOffset: next };
+      if (cut) (data.findingsPage as Rec).truncated = cut; // FX-7 (M2 S6): only when the stored list was cut
+      data.findings = page;
+      text += `\n  temuan ${tok(checkId)}${chapter !== null ? ` bab ${tok(chapter)}` : ""}: ${list.length} total; offset ${offset}; ${page.length} dikembalikan; nextOffset ${next ?? "null"}${cut ? `; cek menemukan ${cut.total}, ${cut.notStored} tidak disimpan (plafon simpan)` : ""}\n`;
+      text += untrustedBlock(
+        [
+          `temuan ${checkId} ${list.length}`,
+          ...page.map((f) => `- ${f.id} ${f.status}${f.chapter !== null ? ` bab ${f.chapter}` : ""}${f.address !== null ? ` @ ${f.address}` : ""}: ${f.detail.replace(/[\r\n\t]+/g, " ").slice(0, 300)}`),
+        ].join("\n"),
+        { jenis: "temuan-lint", documentId: id },
+      );
+    }
+    // Swarm row 210 (security review 209 I-2): detail-mode lintReport (engine messages) is listed as untrusted too.
+    return { text, data: { ...(neutralizeDeep(data) as Rec), ...untrustedFields(["document.title", "completeness.nextSteps", "completeness.message", "lint", "outputs", ...(detail ? ["lintReport"] : []), ...(fq !== null ? ["findings"] : [])]) } };
   },
 };
 

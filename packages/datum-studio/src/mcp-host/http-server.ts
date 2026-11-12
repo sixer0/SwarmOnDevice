@@ -28,6 +28,13 @@ export const CALLER_CWD_HEADER = "x-studio-caller-cwd"
 export const AGENT_HEADER = "x-studio-agent"
 /** Row 188 (L47): optional; the caller's own session ref (Swarm `ses_...`), linked to mission writes that omit `session`. */
 export const CALLER_SESSION_HEADER = "x-studio-caller-session"
+/**
+ * Row FX-4 (1.2.6, review M2 S2): the endpoint's node:http limits, explicit. The host runs in an Electron
+ * utilityProcess (Node runtime), not Bun.serve. 0 = no limit: a silent `tools/call` (studio_render R17, 540 s) is
+ * never cut by the server; `requestTimeout` 0 and socket `timeout` 0 hold it past 600 s (probe: 545 s with the client
+ * idle cut removed). `headersTimeout` only bounds the arrival of the request headers.
+ */
+export const HOST_HTTP_TIMEOUTS = { requestTimeout: 0, headersTimeout: 30_000, timeout: 0 } as const
 export const MAX_SESSIONS = 64
 const AGENT_RE = /^[A-Za-z0-9_.-]{1,40}$/
 const LOOPBACK = new Set(["127.0.0.1", "::ffff:127.0.0.1"])
@@ -199,8 +206,9 @@ export function startEndpoint(opts: EndpointOptions): Promise<Endpoint> {
       else res.end()
     })
   })
-  http.requestTimeout = 0
-  http.headersTimeout = 30_000
+  http.requestTimeout = HOST_HTTP_TIMEOUTS.requestTimeout
+  http.headersTimeout = HOST_HTTP_TIMEOUTS.headersTimeout
+  http.timeout = HOST_HTTP_TIMEOUTS.timeout
 
   return new Promise((resolve, reject) => {
     http.once("error", reject)

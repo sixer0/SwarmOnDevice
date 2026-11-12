@@ -299,7 +299,13 @@ export async function assembleDocxDetailed(ctx: RenderContext, opts: AssembleDoc
       fixedDate: ctx.fixedDate,
     });
     const fallback = ctx.figures;
-    figures = { get: (label) => prepared.get(label) ?? fallback?.get(label) };
+    // Swarm 1.2.6 (FX-7, M3 N4): a FIGURE_PREPARE_FAILED marker does not hide a good fallback entry.
+    figures = {
+      get: (label) => {
+        const p = prepared.get(label);
+        return (p as { failed?: unknown } | undefined)?.failed ? (fallback?.get(label) ?? p) : (p ?? fallback?.get(label));
+      },
+    };
   }
   const rctx: RenderContext = { ...ctx, snapshot, figures };
   const tplCache = new Map<string, ResolvedTemplate>();

@@ -12,6 +12,10 @@
  * - G3 messages tail: the newest N messages of a mission in ascending seq (the store's `listMessages` returns the oldest).
  * - G4: verification times for G2 through `outputVerification` below (row 155: awaits row 149's store read). Per-output
  *   `verified` in G1 is the one rule's state (row 136b), not this seam.
+ * - 1.2.6 row 86 (MC-08, N-065): G1 also lists the documents linked to the mission in `mission_document` (migration
+ *   0007: a work report of the mission named the revision as its `output`) when another mission owns them, with the
+ *   newest linked revision (not the owner's current one), `linked: true` and `ownerMission`. Owned documents keep
+ *   their current revision and come first; G2 counts the newest link time.
  */
 import { DATUM_FILENAME_PATTERN } from "../../../vendor/src/lib/studio/contract/env"
 import { finalFileNameOfRow } from "../../../vendor/src/lib/studio/services/storage/files"
@@ -85,6 +89,10 @@ export type DeliverableWire = {
   /** Row 136b: spec output verification §7.2 Final (the row done gate's rule): >= 1 PRIMARY, all verified, a verified PRIMARY PDF/HTML. */
   final: boolean
   outputs: DeliverableOutputWire[]
+  /** Row 86 (MC-08): present (true) only on a document another mission owns, listed through `mission_document`. */
+  linked?: true
+  /** Row 86 (MC-08): the owning mission (`document.mission_folder`, null = none) of a linked document. */
+  ownerMission?: string | null
 }
 
 /** Spec §7.1 row link: `row-<rowId>-<slug>` (a row id has no hyphen, so the parse is unambiguous). */
@@ -102,21 +110,37 @@ type R = Record<string, unknown>
  * the output set and every verified/final value come from `revisionOutputState` (row 136b).
  */
 export function readDeliverables(q: MissionReader, mission: string, rowIds: ReadonlySet<string>): DeliverableWire[] {
-  const docs = q.all<R>(
+  const owned = q.all<R>(
     `SELECT d.id, d.doc_number, d.title, d.mission_doc_key, d.time_updated, r.id AS revision_id, r.revision_no, r.doc_rev
        FROM document d JOIN revision r ON r.document_id = d.id AND r.revision_no = d.current_revision_no
       WHERE d.mission_folder = ? AND d.archived = 0 AND (d.contract_kind IS NULL OR d.contract_kind <> ?)
       ORDER BY d.time_updated DESC, d.id`,
     [mission, WORK_REPORT_CONTRACT_KIND],
   )
+  // Row 86 (MC-08): documents another mission owns, linked to this one (newest linked revision per document).
+  const linked = q.all<R>(
+    `SELECT d.id, d.doc_number, d.title, d.mission_doc_key, d.mission_folder, d.time_updated, r.id AS revision_id, r.revision_no, r.doc_rev,
+            (SELECT l2.row_id FROM mission_document l2 WHERE l2.mission_id = l.mission_id AND l2.document_id = l.document_id AND l2.revision_no = l.revision_no) AS link_row
+       FROM (SELECT mission_id, document_id, max(revision_no) AS revision_no, max(time_linked) AS time_linked
+               FROM mission_document WHERE mission_id = ? GROUP BY mission_id, document_id) l
+       JOIN document d ON d.id = l.document_id
+       JOIN revision r ON r.document_id = d.id AND r.revision_no = l.revision_no
+      WHERE (d.mission_folder IS NULL OR d.mission_folder <> ?) AND d.archived = 0 AND (d.contract_kind IS NULL OR d.contract_kind <> ?)
+      ORDER BY l.time_linked DESC, d.id`,
+    [mission, mission, WORK_REPORT_CONTRACT_KIND],
+  )
+  const docs: R[] = [...owned, ...linked.map((d): R => ({ ...d, linked: true }))]
   return docs.map((d) => {
     const state = revisionOutputState(q, String(d.id), String(d.revision_id))
     const ids = state.outputs.map((o) => o.outputId)
     const files = ids.length === 0 ? [] : q.all<R>(`SELECT * FROM output_file WHERE id IN (${ids.map(() => "?").join(", ")}) ORDER BY time_created DESC, rowid DESC`, ids)
     const verifiedIds = new Set(state.outputs.filter((o) => o.state === "verified").map((o) => o.outputId))
     const docKey = (d.mission_doc_key as string | null) ?? null
-    const m = docKey ? ROW_KEY.exec(docKey) : null
-    const rowId = m && rowIds.has(m[1]!) ? m[1] : undefined
+    const isLinked = d.linked === true
+    // An owned document's row comes from its docKey; a linked one's from the report row that linked it.
+    const m = !isLinked && docKey ? ROW_KEY.exec(docKey) : null
+    const linkRow = isLinked && typeof d.link_row === "string" ? d.link_row : null
+    const rowId = m && rowIds.has(m[1]!) ? m[1] : linkRow !== null && rowIds.has(linkRow) ? linkRow : undefined
     const outputs = files
       .map((f) => {
         const row = { ...outputFileOf(f), document: { docNumber: String(d.doc_number) }, revision: { revisionNo: Number(d.revision_no) } }
@@ -146,6 +170,7 @@ export function readDeliverables(q: MissionReader, mission: string, rowIds: Read
       verified: state.verified,
       final: state.final,
       outputs,
+      ...(isLinked ? { linked: true as const, ownerMission: (d.mission_folder as string | null) ?? null } : {}),
     }
   })
 }
@@ -171,6 +196,8 @@ export async function readActivityAt(q: StoreTx, source: OutputVerificationSourc
     bump(String(r.m), r.du)
     bump(String(r.m), r.oc)
   }
+  // Row 86 (MC-08): a link to a document another mission owns is activity of the linking mission.
+  for (const r of q.all<R>(`SELECT mission_id AS m, max(time_linked) AS t FROM mission_document WHERE mission_id IN (${marks}) GROUP BY mission_id`, missionIds)) bump(String(r.m), r.t)
   const files = q.all<R>(
     `SELECT d.mission_folder AS m, o.id, o.sha256 FROM document d JOIN output_file o ON o.document_id = d.id
       WHERE d.mission_folder IN (${marks})`,

@@ -95,6 +95,7 @@ const desktop = [
 
 export const dict = {
   ...Object.fromEntries(DESKTOP_NATIVE_KEYS.slice(0, desktop.length).map((key, index) => [key, desktop[index]])),
+  "desktop.menu.recheckTools": "Ponovno provjeri alate",
   "command.category.suggested": "Predloženo",
   "command.category.view": "Prikaz",
   "command.category.project": "Projekt",
@@ -1411,7 +1412,10 @@ export const dict = {
   "memory.privacy": "Čuva se na ovom uređaju, nikada u repozitoriju. Model vidi ove bilješke samo kao dio sesije koju s njim pokrenete.",
   "memory.off": "Isključeno. Sesije ne dobivaju bilješke i ništa se novo ne uči. Vaše bilješke su sačuvane.",
   "memory.refused.secret": "Ovo izgleda kao lozinka ili ključ, pa nije spremljeno.",
-  "memory.refused.long": "Bilješka mora imati manje od 400 znakova.",
+  "memory.refused.long":
+    "Bilješka mora imati manje od {{max}} znakova. Dulje pojedinosti stavite u datoteku i zamolite agenta da je poveže.",
+  "memory.refused.bodyLong": "Tijelo bilješke mora imati manje od {{max}} znakova, ili umjesto toga povežite datoteku.",
+  "memory.refused.tooManyRefs": "Bilješka može povezati najviše {{max}} datoteka ili simbola.",
   "memory.refused.full": "Memorija je puna. Prvo obrišite bilješku.",
   "memory.error": "Memorija projekta nije se mogla učitati.",
   "memory.retry": "Pokušaj ponovno",
@@ -1436,4 +1440,5 @@ export const dict = {
   "session.movedOn.answer": "Odgovori",
   "home.agents.movedOn": "Nastavio je bez ovoga · {{time}}",
   "home.setup.attention": "Dio vašeg postavljanja zahtijeva pažnju.",
+  "session.map.decisions.category.protected_path": "Zaštićeno mjesto (ključevi, vjerodajnice ili sistemske mape)",
 }

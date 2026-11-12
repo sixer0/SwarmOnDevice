@@ -12,6 +12,7 @@ import { UnauthorizedError } from "@modelcontextprotocol/sdk/client/auth.js"
 import {
   ListRootsRequestSchema,
   type LoggingMessageNotification,
+  McpError,
   LoggingMessageNotificationSchema,
   type Tool as MCPToolDef,
   ToolListChangedNotificationSchema,
@@ -34,10 +35,29 @@ import { InstanceState } from "@/effect/instance-state"
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process"
 import { CrossSpawnSpawner } from "@opencode-ai/core/cross-spawn-spawner"
 import { McpCatalog } from "./catalog"
+import { DATUM_STUDIO_MCP, DatumStudioMcp } from "./datum-studio"
 import { McpEvent } from "@opencode-ai/schema/mcp-event"
 import { McpBrowser } from "./browser"
 
 const DEFAULT_TIMEOUT = 30_000
+
+/**
+ * M-02 (1.2.6 row 54c, register N-052): when the built-in datum-studio server's stdio bridge ends (it exits 3 after a
+ * host restart or descriptor change it could not follow), opencode starts it again this many times and retries the
+ * call that was pending once. The budget comes back only after the new bridge has answered a call, so a bridge that
+ * keeps ending is never restarted in a loop. Other servers are unchanged (failed "Connection closed").
+ */
+export const BUILTIN_MCP_RECONNECT_ATTEMPTS = 1
+
+/** M-02: the SDK's error for a call whose transport closed (pending: ConnectionClosed; sent after close: "Not connected"). */
+/**
+ * C19e (1.2.6 row FX-3): true only when the request never left this client. The SDK rejects with a plain
+ * "Not connected" before it writes anything (no transport, or a stdio transport without a process). A call that ends
+ * with McpError ConnectionClosed was pending, so the old bridge may already have delivered it to the host.
+ */
+function neverSent(error: unknown) {
+  return error instanceof Error && !(error instanceof McpError) && error.message === "Not connected"
+}
 const CLIENT_OPTIONS = {
   capabilities: {
     // https://github.com/anomalyco/opencode/issues/11948
@@ -147,6 +167,16 @@ function sourceOf(
   }
 }
 
+/** SEC-13 (1.2.6 row 56a): the built-in datum-studio entry of this process (undefined outside the app). */
+function builtinStudioEntry(): Readonly<Record<string, unknown>> | undefined {
+  return DatumStudioMcp.builtin(DatumStudioMcp.current())[DATUM_STUDIO_MCP]
+}
+
+/** SEC-13 (1.2.6 row 56a): the refusal for a server name, or undefined when it may load / be added. */
+function serverRefusal(name: string, mcp: ConfigMCPV1.Info, at: "load" | "add") {
+  return McpCatalog.serverRefusal(name, mcp as Readonly<Record<string, unknown>>, builtinStudioEntry(), at)
+}
+
 function remoteURL(value: string) {
   if (URL.canParse(value)) return new URL(value)
 }
@@ -172,6 +202,10 @@ interface State {
   clients: Record<string, MCPClient>
   defs: Record<string, MCPToolDef[]>
   instructions: Record<string, string>
+  /** M-02: automatic reconnects of the built-in server since its bridge last answered a call. */
+  reconnects: Record<string, number>
+  /** M-02: the reconnect in flight, which a pending call waits for before its one retry. */
+  reconnecting: Record<string, Promise<MCPClient | undefined> | undefined>
 }
 
 export interface ServerInstructions {
@@ -421,6 +455,14 @@ const layer = Layer.effect(
           return DISABLED_RESULT
         }
 
+        // SEC-13 (1.2.6 row 56a): a name that could compose the built-in datum-studio tool keys never connects
+        // (load, connect, OAuth completion all come through here).
+        const refused = serverRefusal(key, mcp, "load")
+        if (refused) {
+          yield* Effect.logWarning("MCP server refused", { key })
+          return { status: { status: "failed", error: refused } } satisfies CreateResult
+        }
+
         const { client: mcpClient, status } =
           mcp.type === "remote"
             ? yield* connectRemote(key, mcp as ConfigMCPV1.Info & { type: "remote" })
@@ -498,6 +540,18 @@ const layer = Layer.effect(
             Effect.ignore,
           ),
         )
+        // M-02 (1.2.6 row 54c): only the built-in server, and only within its budget. Registered before the SDK
+        // rejects the pending calls (Protocol._onclose calls onclose first), so those calls find it.
+        if (name !== DATUM_STUDIO_MCP || s.reconnecting[name]) return
+        if ((s.reconnects[name] ?? 0) >= BUILTIN_MCP_RECONNECT_ATTEMPTS) return
+        s.reconnects[name] = (s.reconnects[name] ?? 0) + 1
+        const pending = bridge
+          .promise(reconnect(s, name).pipe(Effect.catchCause(() => Effect.succeed(undefined))))
+          .catch(() => undefined)
+          .finally(() => {
+            if (s.reconnecting[name] === pending) delete s.reconnecting[name]
+          })
+        s.reconnecting[name] = pending
       }
 
       client.setNotificationHandler(LoggingMessageNotificationSchema, (notification) =>
@@ -515,6 +569,66 @@ const layer = Layer.effect(
         s.defs[name] = listed
         await bridge.promise(events.publish(ToolsChanged, { server: name }).pipe(Effect.ignore))
       })
+    }
+
+    /** M-02: start the server again from its config; stores the new client unless something else took the slot. */
+    const reconnect = Effect.fnUntraced(function* (s: State, name: string) {
+      const cfg = yield* cfgSvc.get()
+      const mcp = s.config[name] ?? cfg.mcp?.[name]
+      if (!mcp || !isMcpConfigured(mcp) || mcp.enabled === false) return undefined
+      yield* Effect.logWarning("MCP reconnect", { server: name })
+      const result = yield* create(name, mcp)
+      // A disconnect, connect or add while this ran owns the slot now.
+      const untouched = s.clients[name] === undefined && s.status[name]?.status === "failed"
+      if (!result.mcpClient || !untouched) {
+        if (result.mcpClient) yield* Effect.tryPromise(() => result.mcpClient!.close()).pipe(Effect.ignore)
+        else if (untouched) s.status[name] = result.status
+        return s.clients[name]
+      }
+      yield* storeClient(s, name, result.mcpClient, result.defs!, result.instructions, mcp.timeout)
+      yield* events.publish(ToolsChanged, { server: name }).pipe(Effect.ignore)
+      return result.mcpClient
+    })
+
+    const retrying = new WeakMap<MCPClient, MCPClient>()
+
+    /**
+     * M-02: the built-in server's client as tools hold it. A call that was never sent because the bridge had closed
+     * waits for the reconnect and runs once on the new client. A call already sent when the bridge closed returns its
+     * "Connection closed" error and is not repeated (C19e): it may have run on the host, and studio_render or a mission
+     * write must not run twice; the agent checks the state (e.g. studio_document_status) instead. Any other error, an
+     * aborted call or no new client is the original failure. A call answered by the current client restores the
+     * reconnect budget.
+     */
+    function retryOnce(s: State, name: string, client: MCPClient): MCPClient {
+      const known = retrying.get(client)
+      if (known) return known
+      const answered = (by: MCPClient) => {
+        if (s.clients[name] === by) delete s.reconnects[name]
+      }
+      const proxy = new Proxy(client, {
+        get(target, prop) {
+          const value = Reflect.get(target, prop, target)
+          if (prop !== "callTool") return typeof value === "function" ? value.bind(target) : value
+          return async (...args: Parameters<MCPClient["callTool"]>) => {
+            try {
+              const result = await target.callTool(...args)
+              answered(target)
+              return result
+            } catch (error) {
+              if (!neverSent(error)) throw error
+              args[2]?.signal?.throwIfAborted()
+              const next = await (s.reconnecting[name] ?? Promise.resolve(s.clients[name]))
+              if (!next || next === target || s.status[name]?.status !== "connected") throw error
+              const result = await next.callTool(...args)
+              answered(next)
+              return result
+            }
+          }
+        },
+      })
+      retrying.set(client, proxy)
+      return proxy
     }
 
     function serverLog(name: string, params: LoggingMessageNotification["params"]) {
@@ -546,6 +660,8 @@ const layer = Layer.effect(
           clients: {},
           defs: {},
           instructions: {},
+          reconnects: {},
+          reconnecting: {},
         }
 
         yield* Effect.forEach(
@@ -675,6 +791,7 @@ const layer = Layer.effect(
       const result = yield* create(name, mcp)
 
       s.status[name] = result.status
+      delete s.reconnects[name]
       if (!result.mcpClient) {
         yield* closeClient(s, name)
         delete s.clients[name]
@@ -686,6 +803,13 @@ const layer = Layer.effect(
 
     const add = Effect.fn("MCP.add")(function* (name: string, mcp: ConfigMCPV1.Info) {
       const s = yield* InstanceState.get(state)
+      // SEC-13 (1.2.6 row 56a): refused before anything is stored, so a loaded server under the same name (the
+      // built-in datum-studio) keeps its config, client and status; the refusal is reported in this response only.
+      const refused = serverRefusal(name, mcp, "add")
+      if (refused) {
+        yield* Effect.logWarning("MCP server refused at add", { name })
+        return { status: { ...s.status, [name]: { status: "failed", error: refused } satisfies Status } }
+      }
       s.config[name] = mcp
       yield* createAndStore(name, mcp)
       return { status: s.status }
@@ -729,7 +853,9 @@ const layer = Layer.effect(
         const timeout = requestTimeout(s, clientName, mcpConfig, defaultTimeout)
         const source = sourceOf(clientName, s.config[clientName], mcpConfig, global[clientName])
         for (const def of listed) {
-          result[McpCatalog.toolName(clientName, def.name)] = { def, client, timeout, source }
+          // M-02 (1.2.6 row 54c): the built-in server's calls survive one bridge restart.
+          const held = clientName === DATUM_STUDIO_MCP ? retryOnce(s, clientName, client) : client
+          result[McpCatalog.toolName(clientName, def.name)] = { def, client: held, timeout, source }
         }
       }
       return result
@@ -853,6 +979,8 @@ const layer = Layer.effect(
 
     const startAuth = Effect.fn("MCP.startAuth")(function* (mcpName: string) {
       const mcpConfig = yield* requireMcpConfig(mcpName)
+      const refused = serverRefusal(mcpName, mcpConfig, "load")
+      if (refused) throw new Error(refused)
       if (mcpConfig.type !== "remote") throw new Error(`MCP server ${mcpName} is not a remote server`)
       if (mcpConfig.oauth === false) throw new Error(`MCP server ${mcpName} has OAuth explicitly disabled`)
       const url = remoteURL(mcpConfig.url)

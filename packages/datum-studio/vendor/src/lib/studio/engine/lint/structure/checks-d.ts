@@ -1,5 +1,5 @@
 /**
- * Grup D lint struktur dan aparatus (D01-D21; research/01 §6.2, registry
+ * Grup D lint struktur dan aparatus (D01-D22; research/01 §6.2, registry
  * ROWS_D). Audit angka memakai engine/bind (S12): `auditText`,
  * `auditRetired`, `checkResult` (turunan dihitung ulang lewat parser aman).
  */
@@ -762,6 +762,37 @@ function d21(ctx: StructCtx): CheckOutcome {
   return findings(f, `${used} kalimat berpita ICD 203; tidak dicampur keyakinan (sebagian: kosakata di luar pita dinilai manusia)`);
 }
 
+// ── D22 kuota gambar per dokumen (Swarm 1.2.6 row 72; T-18/W-10) ─────────────
+
+/** Kunci parameter kuota (register N-113) dan alasan pengecualian (N-114). */
+const FIGURE_QUOTA_KEY = "figure.quota.maxPerDocument";
+const FIGURE_QUOTA_REASON_KEY = "figure.quota.exceptionReason";
+/** Jenis blok yang dihitung kuota (N-113: chart, diagram, image). */
+const QUOTA_FIGURE_TYPES: ReadonlySet<string> = new Set(["chart", "diagram", "image"]);
+const QUOTA_REASON_MAX_CHARS = 500;
+
+/**
+ * D22 Kuota gambar per dokumen. Tanpa kuota (null, bawaan) -> PASS. Jumlah gambar di atas kuota -> satu FAIL
+ * pada gambar pertama yang melampaui; bila `figure.quota.exceptionReason` terisi, temuan itu menjadi REPORT
+ * yang mencetak alasannya (pengecualian tercatat, bukan kegagalan).
+ */
+function d22(ctx: StructCtx): CheckOutcome {
+  const raw = ctx.params[FIGURE_QUOTA_KEY];
+  const figs = ctx.walk.items.filter((i) => QUOTA_FIGURE_TYPES.has(i.block.type));
+  const n = figs.length;
+  if (typeof raw !== "number" || !Number.isFinite(raw)) return findings([], `${n} gambar; tanpa kuota (${FIGURE_QUOTA_KEY} = null)`);
+  const max = Math.max(0, Math.floor(raw));
+  if (n <= max) return findings([], `${n} gambar (kuota ${max} per dokumen)`);
+  const reasonRaw = ctx.params[FIGURE_QUOTA_REASON_KEY];
+  const reason = typeof reasonRaw === "string" ? reasonRaw.trim().slice(0, QUOTA_REASON_MAX_CHARS) : "";
+  const first = figs[max];
+  const base = `${n} gambar melebihi kuota ${max} per dokumen (${FIGURE_QUOTA_KEY}; T-18)`;
+  const f: Finding = reason
+    ? { pointer: first?.pointer, status: "REPORT", detail: `${base}; pengecualian tercatat (${FIGURE_QUOTA_REASON_KEY}): "${reason}"` }
+    : { pointer: first?.pointer, detail: `${base}; kurangi gambar atau catat alasan pada ${FIGURE_QUOTA_REASON_KEY}` };
+  return findings([f], base);
+}
+
 /** CheckId temuan rujukan basi (§4.2 butir 4; di luar registri, selalu REPORT). */
 export const STALE_XREF_CHECK_ID = "STRUCT-XREF";
 
@@ -802,4 +833,5 @@ export const STRUCTURE_D_CHECKS: Readonly<Record<string, (ctx: StructCtx) => Che
   D19: d19,
   D20: d20,
   D21: d21,
+  D22: d22,
 };

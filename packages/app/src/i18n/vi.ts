@@ -7,6 +7,7 @@ export const dict = {
   "desktop.menu.window": "Cửa sổ",
   "desktop.menu.help": "Trợ giúp",
   "desktop.menu.checkForUpdates": "Kiểm tra bản cập nhật...",
+  "desktop.menu.recheckTools": "Kiểm tra lại công cụ",
   "desktop.menu.settings": "Cài đặt",
   "desktop.menu.reloadWebview": "Tải lại Webview",
   "desktop.menu.restart": "Khởi động lại",
@@ -1418,7 +1419,10 @@ export const dict = {
   "memory.privacy": "Được lưu trên thiết bị này, không bao giờ trong kho mã. Mô hình chỉ thấy các ghi chú này như một phần của phiên bạn chạy cùng nó.",
   "memory.off": "Đã tắt. Các phiên không nhận ghi chú và không học thêm gì mới. Ghi chú của bạn vẫn được giữ.",
   "memory.refused.secret": "Có vẻ đây là mật khẩu hoặc khóa nên chưa được lưu.",
-  "memory.refused.long": "Giữ ghi chú dưới 400 ký tự.",
+  "memory.refused.long":
+    "Giữ ghi chú dưới {{max}} ký tự. Đặt chi tiết dài hơn vào một tệp và yêu cầu agent liên kết tệp đó.",
+  "memory.refused.bodyLong": "Giữ nội dung ghi chú dưới {{max}} ký tự, hoặc liên kết một tệp thay thế.",
+  "memory.refused.tooManyRefs": "Một ghi chú có thể liên kết tối đa {{max}} tệp hoặc ký hiệu.",
   "memory.refused.full": "Bộ nhớ đã đầy. Hãy xóa một ghi chú trước.",
   "memory.error": "Không thể tải bộ nhớ dự án.",
   "memory.retry": "Thử lại",
@@ -1443,4 +1447,5 @@ export const dict = {
   "session.movedOn.answer": "Trả lời",
   "home.agents.movedOn": "Đã tiếp tục mà không có điều này · {{time}}",
   "home.setup.attention": "Một phần thiết lập của bạn cần được chú ý.",
+  "session.map.decisions.category.protected_path": "Vị trí được bảo vệ (khóa, thông tin xác thực hoặc thư mục hệ thống)",
 }

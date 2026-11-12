@@ -5,6 +5,7 @@ import type { Details } from "electron"
 import { getLogger } from "./logging"
 import { getUserShell, loadShellEnv } from "./shell-env"
 import { createSidecarEnv, type RenderEnv } from "./sidecar-env"
+import { buildStartMessage } from "./sidecar-start"
 import { getStore } from "./store"
 import { DEFAULT_SERVER_URL_KEY } from "./store-keys"
 
@@ -25,6 +26,8 @@ type SpawnLocalServerOptions = {
   userDataPath: string
   /** The DATUM render bridge pair for this launch (row 33); absent when the bridge did not start. */
   renderEnv?: RenderEnv
+  /** This launch's desktop nonce (row 38b, SEC-06): sent only in the sidecar's start message, never in its env. */
+  desktopNonce?: string
   onStdout?: (message: string) => void
   onStderr?: (message: string) => void
   onExit?: (code: number) => void
@@ -132,13 +135,15 @@ export async function spawnLocalServer(
     child.on("message", onMessage)
     child.on("exit", onExit)
     refreshTimeout()
-    child.postMessage({
-      type: "start",
-      hostname,
-      port,
-      password,
-      userDataPath: options.userDataPath,
-    })
+    child.postMessage(
+      buildStartMessage({
+        hostname,
+        port,
+        password,
+        userDataPath: options.userDataPath,
+        desktopNonce: options.desktopNonce,
+      }),
+    )
   }).catch((error) => {
     if (!exited) child.kill()
     throw error

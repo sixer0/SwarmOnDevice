@@ -31,6 +31,7 @@ import {
   SPEND_STOPPED_TEXT,
   SUBAGENT_STOPPED,
   UNJUDGED_TEXT,
+  checkpointFailedText,
   consentedRefusalText,
 } from "../../src/permission/autonomy-texts"
 import { ScriptReader } from "../../src/permission/script-reader"
@@ -56,6 +57,9 @@ const REGISTER_TEXTS: ReadonlySet<string> = new Set([
   GENERAL_REFUSAL,
   MAIN_AGENT_UNAVAILABLE_TEXT,
   SPEND_STOPPED_TEXT,
+  // 1.2.6 row 37b (P-01b, INTENT per 01b 10.2): `CHECKPOINT_FAILED_TEXT` with its reason from the closed list (I-N: a
+  // database, a service's data or a device).
+  checkpointFailedText("not_files"),
 ])
 const DECLINED = /^This call did not run\. The main agent declined it: .* Carry on without it, and list it in your final message\.$/s
 const allowedText = (text: string) => REGISTER_TEXTS.has(text) || DECLINED.test(text) || text.startsWith(SUBAGENT_STOPPED)

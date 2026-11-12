@@ -63,7 +63,7 @@ export {
   type CoreFamily,
   type CorePrep,
 } from "./prepare";
-export { BAR_MAX_THICK_MM, BAR_MIN_BODY_MM, DC_BAR_ROWS, barRows, datumHeightMm, dcHeightMm } from "./datum";
+export { BAR_MIN_BODY_MM, DC_BAR_ROWS, barRows, datumHeightMm, dcHeightMm } from "./datum";
 export type { BarRows } from "./datum";
 export {
   FIGURE_APPARATUS_BAND_MM,

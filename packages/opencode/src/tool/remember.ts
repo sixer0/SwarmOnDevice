@@ -1,22 +1,39 @@
+import path from "node:path"
 import { Effect, Schema } from "effect"
+import { ProjectMemory } from "@opencode-ai/schema/project-memory"
 import * as Tool from "./tool"
 import DESCRIPTION from "./remember.txt"
 import { Memory } from "@/memory/memory"
+import { InstanceState } from "@/effect/instance-state"
 import type { Provider } from "@/provider/provider"
+import { OutwardConsent } from "@/permission/outward-consent"
 
 export const Parameters = Schema.Struct({
-  text: Schema.optional(Schema.String).annotate({ description: "The note to keep" }),
+  text: Schema.optional(Schema.String).annotate({
+    description: `The note line, at most ${Memory.MAX_TEXT} characters: one self-contained sentence or a few`,
+  }),
+  body: Schema.optional(Schema.String).annotate({
+    description: `Detail kept with the note, at most ${Memory.MAX_BODY} characters, line breaks kept. Never put in the prompt; read back with recall. Only with text`,
+  }),
+  refs: Schema.optional(Schema.Array(ProjectMemory.MemoryRef)).annotate({
+    description: `Files ({path, line?}) or graft symbols ({symbol, path?}) the note points at, at most ${Memory.MAX_REFS}. Linked, never copied: checked at recall. Only with text`,
+  }),
   forget: Schema.optional(Schema.String).annotate({ description: "The id of a note to remove" }),
+  recall: Schema.optional(Schema.String).annotate({
+    description: "A note id to read its body and check its links, or words to search the notes. Writes nothing",
+  }),
 })
 
-type Metadata = { id?: string; refused?: string; deviceOnly?: boolean }
+type Metadata = { id?: string; refused?: string; deviceOnly?: boolean; untrusted?: boolean; recall?: string }
 
-const REFUSED = {
+// The limit and the next step, never a cut (U11, C6). `full` is never emitted any more: the store has no entry cap.
+export const REFUSED = {
   empty: "Nothing to remember: the note was empty.",
-  long: `Not saved: keep a note under ${Memory.MAX_TEXT} characters.`,
+  long: `Not saved: the note line is over ${Memory.MAX_TEXT} characters. Keep the line short, put the detail in body (up to ${Memory.MAX_BODY} characters), or link the file that holds it in refs.`,
+  body_long: `Not saved: the body is over ${Memory.MAX_BODY} characters. Do not shorten the facts: keep them in a file and link it in refs (path, path:line or a graft symbol).`,
+  too_many_refs: `Not saved: a note links at most ${Memory.MAX_REFS} files or symbols. Split it into notes by topic, or link the folder or index file that lists the rest.`,
   secret: "Not saved: this looks like a password, key or token. Credentials are never kept in memory.",
-  full: `Not saved: memory holds ${Memory.MAX_ITEMS} notes already. Remove one first.`,
-}
+} satisfies Record<Exclude<ProjectMemory.Refusal, "full">, string>
 
 export const RememberTool = Tool.define<typeof Parameters, Metadata, Memory.Service>(
   "remember",
@@ -39,23 +56,128 @@ export const RememberTool = Tool.define<typeof Parameters, Metadata, Memory.Serv
             }
           }
 
-          // A note taken while talking to an on-device model stays with on-device models until the user says otherwise.
           const model = ctx.extra?.model as Provider.Model | undefined
+          if (params.recall !== undefined) {
+            const output = yield* memory.recall({ query: params.recall, model })
+            return {
+              title: `Recalled ${params.recall.slice(0, 60)}`,
+              output: output ?? "Project memory is off: there is nothing to recall.",
+              metadata: { recall: params.recall },
+            }
+          }
+
+          // A note taken while talking to an on-device model stays with on-device models until the user says otherwise.
           const deviceOnly = model ? yield* memory.onDevice(model) : false
+          const instance = yield* InstanceState.context
           const result = yield* memory.add({
             text: params.text ?? "",
             source: "agent",
             deviceOnly,
             sessionID: ctx.sessionID,
+            body: params.body,
+            refs: params.refs,
+            untrusted: readUntrustedInput(ctx.messages, {
+              root: instance.worktree === "/" ? instance.directory : instance.worktree,
+              directory: instance.directory,
+            }),
           })
           if (result.refused)
-            return { title: "Not saved", output: REFUSED[result.refused], metadata: { refused: result.refused } }
+            return {
+              title: "Not saved",
+              output: result.refused === "full" ? "Not saved." : REFUSED[result.refused],
+              metadata: { refused: result.refused },
+            }
           return {
-            title: result.item?.text ?? "",
+            // Display only: the stored line is never cut.
+            title: (result.item?.text ?? "").slice(0, 80),
             output: `Saved as note ${result.item?.id}. The user can see and edit it.`,
-            metadata: { id: result.item?.id, deviceOnly: result.item?.deviceOnly },
+            metadata: { id: result.item?.id, deviceOnly: result.item?.deviceOnly, untrusted: result.item?.untrusted },
           }
         }),
     } satisfies Tool.DefWithoutID<typeof Parameters, Metadata>
   }),
 )
+
+// Built-in tools that bring in nothing from outside this machine's project. Everything else counts as outside input:
+// webfetch, websearch, code mode (`execute`, which calls MCP), every MCP tool (Studio included) and plugin tools.
+const LOCAL_TOOLS = new Set([
+  "invalid",
+  "question",
+  "bash",
+  "read",
+  "glob",
+  "grep",
+  "git",
+  "edit",
+  "write",
+  "task",
+  "todowrite",
+  "remember",
+  "skill",
+  "apply_patch",
+  "lsp",
+  "plan_exit",
+])
+// The parameter that names what a reading tool read; outside the worktree it is outside input too.
+const PATH_PARAMETER: Record<string, string> = { read: "filePath", glob: "path", grep: "path" }
+
+// Programs put in front of the one that runs (`sudo curl ...`); skipped when looking for the program of a step.
+const WRAPPERS = new Set(["sudo", "doas", "env", "command", "builtin", "exec", "time", "nohup", "nice", "xargs"])
+
+const loopback = (hostname: string) => {
+  const host = hostname.toLowerCase().replace(/^\[|\]$/g, "").replace(/\.$/, "")
+  return (
+    host === "localhost" ||
+    host.endsWith(".localhost") ||
+    host === "::1" ||
+    host === "0.0.0.0" ||
+    /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host)
+  )
+}
+
+/**
+ * 1.2.6 FX-5/6 (M1 S5, SEC-09): whether a shell command fetches web content: a step whose program is a request tool
+ * (curl, wget, httpie, xh; OutwardConsent.REQUEST_TOOLS) and whose destination is not loopback. URLs are read as
+ * OutwardConsent reads them; with a `scheme://` word only those count, otherwise every word that reads as a host.
+ * A fetch whose destination cannot be read (`curl "$URL"`, a config file) is not proven local, so it counts.
+ */
+export function shellFetchesWeb(command: string) {
+  return command.split(/&&|\|\||[;|&\n()`]/).some((step) => {
+    const words = step
+      .split(/[\s<>]+/)
+      .map((word) => word.replace(/^['"]+|['"]+$/g, ""))
+      .filter(Boolean)
+    let at = 0
+    while (at < words.length && (/^[A-Za-z_][A-Za-z0-9_]*=/.test(words[at]!) || WRAPPERS.has(words[at]!))) at++
+    const program = words[at]
+    if (!program || !OutwardConsent.REQUEST_TOOLS.has(path.basename(program))) return false
+    const args = words.slice(at + 1).filter((word) => !word.startsWith("-"))
+    const schemed = args.filter((word) => /^[a-z][a-z0-9+.-]*:\/\//i.test(word))
+    const urls = (schemed.length ? schemed : args).flatMap((word) => OutwardConsent.urlOf(word) ?? [])
+    if (!urls.length) return true
+    return urls.some((url) => !loopback(url.hostname))
+  })
+}
+
+/**
+ * SEC-09: whether this session already consumed web, MCP or Studio data or files outside the worktree before the note
+ * was written. Web content fetched through the shell counts too (1.2.6 M1 S5, `shellFetchesWeb`). Such a note is kept (U11 cuts nothing) but carries `untrusted`, its label says so and it ranks lower.
+ */
+export function readUntrustedInput(messages: Tool.Context["messages"], where: { root: string; directory: string }) {
+  return messages.some((message) =>
+    message.parts.some((part) => {
+      if (part.type !== "tool" || part.state.status !== "completed") return false
+      if (!LOCAL_TOOLS.has(part.tool)) return true
+      // The shell counts as local unless the call fetched web content (curl/wget and the like to a non-loopback URL).
+      if (part.tool === "bash") {
+        const command = part.state.input.command
+        return typeof command === "string" && shellFetchesWeb(command)
+      }
+      const key = PATH_PARAMETER[part.tool]
+      const value = key ? part.state.input[key] : undefined
+      if (typeof value !== "string" || !value) return false
+      const relative = path.relative(where.root, path.resolve(where.directory, value))
+      return relative.startsWith("..") || path.isAbsolute(relative)
+    }),
+  )
+}

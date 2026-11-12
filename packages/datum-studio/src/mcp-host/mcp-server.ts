@@ -16,6 +16,8 @@ import { createStudioMcpServer } from "../../vendor/scripts/studio/mcp/server"
 import { executeTool, McpSession, newCallId, TOOLS, type ToolDef } from "../../vendor/scripts/studio/mcp/tools"
 import { MISSION_GUIDE_NAME, MISSION_GUIDE_URI, missionGuideText } from "./mission/mission-guide.ts"
 import { DIAGRAM_GUIDE_NAME, DIAGRAM_GUIDE_URI, diagramGuideText } from "./diagram-guide.ts"
+import { ASSET_TOOL_NAME, assetHostExtension } from "./asset-tool.ts"
+import { FIGURE_LOCK_TOOL, FIGURE_LOCKED, FIGURE_LOCKS, withFigureLock, type FigureLockRegistry } from "./figure-lock.ts"
 import { HOST_DROPPED_TOOLS, HOST_EXTRA_TOOLSETS, HOST_KEPT_TOOLS, sessionForCall, type HostRememberedBasis, type HostToolExtension, type HostToolNext, type HostToolSession } from "./tool-table.ts"
 
 export interface HostServerDeps {
@@ -28,6 +30,8 @@ export interface HostServerDeps {
   log: (line: string) => void
   nfs?: NodeFs
   now?: () => number
+  /** Row 57 (S-02): per-figure lock registry for studio_figure_revise; default = the process-wide one. */
+  figureLocks?: FigureLockRegistry
 }
 
 export interface ListedTool {
@@ -72,7 +76,10 @@ export function createHostMcpServer(deps: HostServerDeps): Server {
   // `documents`-only selection although spec §5.1 moved it to `documents`).
   const execConfig: StudioMcpConfig = { ...config, toolsets: [...TOOLSETS] }
   const server = createStudioMcpServer({ config, fetchImpl: deps.fetchImpl, repoRoot: deps.repoRoot, log: deps.log, ...(deps.nfs ? { nfs: deps.nfs } : {}), ...(deps.now ? { now: deps.now } : {}) })
-  const active = activeHostTools(config.toolsets, deps.extensions)
+  // Row 50c (1.2.6, W-13 N-106): `studio_asset_put` is a host built-in (toolset `write`), listed after the given
+  // extensions; a caller that registers its own extension of that name keeps it (no name twice).
+  const extensions = deps.extensions.some((e) => e.name === ASSET_TOOL_NAME) ? deps.extensions : [...deps.extensions, assetHostExtension()]
+  const active = activeHostTools(config.toolsets, extensions)
   const toolDeps = { config: execConfig, fetchImpl: deps.fetchImpl, nfs: deps.nfs ?? REAL_NODE_FS, session: new McpSession(), ...(deps.now ? { now: deps.now } : {}) }
   const emit = (rec: Record<string, unknown>) =>
     deps.log(redactSecret(JSON.stringify({ ts: new Date().toISOString(), source: "datum-studio-host.mcp", sessionId: deps.session.sessionId, agentId: deps.session.agentId, ...rec }), secret))
@@ -133,6 +140,18 @@ export function createHostMcpServer(deps: HostServerDeps): Server {
       }
     }
     if (!active.vendored.some((t) => t.name === name)) throw new McpError(ErrorCode.InvalidParams, `alat tidak dikenal: ${name}`)
+    // Row 57 (S-02, N-024): one figure_revise per {documentId, pid} at a time, across sessions; released in finally.
+    if (name === FIGURE_LOCK_TOOL) {
+      const holder = { sessionId: deps.session.sessionId, agentId: deps.session.agentId, since: Date.now() }
+      return withFigureLock(deps.figureLocks ?? FIGURE_LOCKS, args, holder, newCallId, () => runKept(name, args, callSession), (k, by) =>
+        emit({ level: "warn", event: "tool_call", tool: name, ok: false, code: FIGURE_LOCKED, documentId: k.documentId, [k.by]: k.figure, heldBySession: by.sessionId, heldForMs: Date.now() - by.since }),
+      )
+    }
+    return runKept(name, args, callSession)
+  })
+
+  /** A kept vendored tool: through its wrapper when one is registered (row 119b), else unwrapped. */
+  async function runKept(name: string, args: Record<string, unknown>, callSession: HostToolSession): Promise<CallToolResult> {
     const wrapper = active.wrappers.get(name)
     if (wrapper) {
       // Row 119b: the wrapper decides; `next` is the unwrapped vendored call below (same logging, same envelope).
@@ -159,7 +178,7 @@ export function createHostMcpServer(deps: HostServerDeps): Server {
       return out
     }
     return runVendored(name, args)
-  })
+  }
 
   async function runVendored(name: string, args: Record<string, unknown>): Promise<CallToolResult> {
     const callId = newCallId()

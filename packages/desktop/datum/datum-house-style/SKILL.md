@@ -171,9 +171,13 @@ that program syntax requires: Python modules, variables, placeholders (KD-06) an
 | Workbook sheet | capitals, hyphen, max 31 characters | `HITUNG-KABEL` | `HITUNG_KABEL` |
 | Table and figure ID | word, space, number | `Tabel 4.1` | `Tabel_4.1`, `g2` |
 | Engineering identifier | hyphen | `REQ-FO-05` | `REQ_FO_05` |
-| Document file | title, number with hyphens, revision | `Rencana Anggaran Biaya 008-GSP-RAB-VIII-2026 RevA.xlsx` (ID p.71) | `RAB_final_v2.xlsx` |
+| Document file | `<Judul> <nomor> Rev<X> rev<N>`: title, number with hyphens, letter revision, numeric revision | `Rencana Anggaran Biaya 008-GSP-RAB-VIII-2026 RevA rev12.pdf` (ID p.71; ` rev<N>` per U15) | `RAB_final_v2.xlsx` |
 
 Build the file name from the same string as the caption or title (Figure 2.2, ID p.11 / EN p.11).
+A delivered file is named `<Judul> <nomor> Rev<X> rev<N>.<ext>`: `Rev<X>` is the letter revision
+of the document, ` rev<N>` is the numeric revision Studio stored for it (`... RevD rev11.pdf`,
+then `... RevD rev12.pdf`). Studio appends ` rev<N>` to every file it renders; keep it, never
+strip or rename it.
 
 **Number (DT-04a, ID p.12 / EN p.12).** Take it from the Register Induk before building. If the
 register is out of reach, use `XXX/GSP/<KODE>/<BULAN>/<TAHUN>` in the document and its hyphen
@@ -411,8 +415,14 @@ Full grammar: `references/03-tabel-gambar-apparatus.md`.
 **Tables (DT-16 to DT-20, ID p.41-43 / EN p.43-45):** horizontal rules only, in three weights;
 no vertical rules, no coloured head (workbook sheet heads excepted); a Unit column when units
 differ by row, or the unit once in the head as "(m)"; numerals Mono, right-aligned; no zebra in
-`.docx`; caption label in bold capitals with its number (`TABEL 4.1`, `GAMBAR 9.4`), then the
-sentence with no middle dot; SOURCE line below, ending in PROVENANS; every table called in the
+`.docx`; caption above. Studio prints the label; the caption never starts with it; at most 100
+characters. Studio numbers each table and figure and prints the bold capital label itself; the
+caption text you write carries no `Gambar`, `GAMBAR`, `Tabel` or `Figure` token with a number. It
+is one line: a verdict that names the actor and the number (`Kontraktor menanggung 62 % biaya
+kabel`), no middle dot. A figure caption that opens with the token is refused at submit
+(400 `SCHEMA_INVALID` (`checkId` `CAPTION_TOKEN_DUPLICATE`): match the `checkId`, not the error
+code); one that wraps to a second line fails the gate (`CAPTION_WRAP`).
+SOURCE line below, separate from the caption, ending in PROVENANS; every table called in the
 prose. Spec tables: parameter, test condition, value, unit; no footnotes (DT-19). Emphasis: the
 ruled side note, ink900 0.35 mm above, ink200 0.20 mm below, no fill; never a filled box with a
 left bar (DT-20, check 2).
@@ -522,7 +532,10 @@ Full text: `references/06-lint.md`.
   never a pass. Work every deliverable through this loop, every time:
   1. **Render.** Call `studio_render` with the formats the reader needs, and add `pdf` for a
      client document. Studio adds the HTML it measures; keep it.
-  2. **Read the report.** Read every FAIL and UNKNOWN line: check, page, address, detail.
+  2. **Read the report.** Read every FAIL and UNKNOWN line: check, page, address, detail. The
+     text lists them per unverified output in a fenced block, one line per check: `check`,
+     `verdict`, `page`, `address`, `measured`, `expected`, `rule`, `message`. A LINT line names
+     the lint rule and what it inspects; `studio_document_status` shows the same lint findings.
   3. **Look at the pages.** Open every page image the report lists under `pages[].png`. When
      it lists none, open the PDF or HTML output and look at every page. Look for what the
      checks cannot see: wrong emphasis, awkward breaks, a figure that says the wrong thing.

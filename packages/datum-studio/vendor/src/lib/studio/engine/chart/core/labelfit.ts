@@ -42,6 +42,14 @@ export interface GutterPlan {
 /** IMPL-W5 D1: ruang kosong minimum di kiri label kategori terlebar (mm). */
 export const LABEL_EDGE_MM = 0.4;
 
+/**
+ * T-10 (1.2.6, register N-030): batas talang label kiri sebagai pecahan lebar plot W
+ * (0,30 W = 38,4 mm pada 128 mm), menggantikan literal 0,42 di datum.ts dan gallery.ts.
+ * Label yang lebih lebar dibungkus atau dipotong elipsis dengan teks lengkap di `<title>`;
+ * `labelShort` (maksud chart) dipakai di talang bila diberikan.
+ */
+export const LABEL_GUTTER_CAP_FRAC = 0.3;
+
 export function gutterPlan(
   labels: readonly string[],
   font: FitFont,

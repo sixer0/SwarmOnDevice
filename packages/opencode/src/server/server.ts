@@ -7,6 +7,7 @@ import { HttpRouter, HttpServer } from "effect/unstable/http"
 import { OpenApi } from "effect/unstable/httpapi"
 import { createServer } from "node:http"
 import { MDNS } from "./mdns"
+import { SelfAddress } from "./self-address"
 import { HttpApiApp } from "./routes/instance/httpapi/server"
 import { disposeMiddleware } from "./routes/instance/httpapi/lifecycle"
 import { WebSocketTracker } from "./routes/instance/httpapi/websocket-tracker"
@@ -87,12 +88,16 @@ const listenEffect: (opts: ListenOptions) => Effect.Effect<EffectListener, unkno
     const listenerUrl = makeURL(opts.hostname, address.port)
     const unpublishMdns = yield* setupMdns(opts, address.port, state.scope)
     url = listenerUrl
+    // 1.2.6 FX-14 (F-1): the autonomy table refuses an agent's call to this address (X app_state).
+    const self = { hostname: opts.hostname, port: address.port }
+    SelfAddress.add(self)
+    const stop = yield* makeStop(state, unpublishMdns, listenerUrl)
 
     return {
       hostname: opts.hostname,
       port: address.port,
       url: listenerUrl,
-      stop: yield* makeStop(state, unpublishMdns, listenerUrl),
+      stop: (close?: boolean) => stop(close).pipe(Effect.ensuring(Effect.sync(() => SelfAddress.remove(self)))),
     }
   },
 )

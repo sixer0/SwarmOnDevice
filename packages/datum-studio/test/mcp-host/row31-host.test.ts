@@ -85,7 +85,9 @@ const MISSION_TOOLS = [
   "studio_mission_request_decision",
   "studio_mission_answer_decision",
 ]
-const HOST_TOOLS = [...EXPECTED_TOOLS, ...TEMPLATE_TOOLS, ...MISSION_TOOLS]
+// Row 50c (1.2.6, W-13 N-106, INTENT 39 -> 40): mcp-server.ts adds the host built-in studio_asset_put after the extensions.
+const ASSET_TOOLS = ["studio_asset_put"]
+const HOST_TOOLS = [...EXPECTED_TOOLS, ...TEMPLATE_TOOLS, ...MISSION_TOOLS, ...ASSET_TOOLS]
 
 let mod: StudioHostModule & typeof import("../../src/mcp-host/index.ts")
 let store: Awaited<ReturnType<StudioHostModule["openHostStore"]>>
@@ -259,12 +261,12 @@ describe("row 31: per-session file root (spec §9.4)", () => {
 })
 
 describe("row 31: tool list = studio spec §5 as amended by U19", () => {
-  test("exactly the 39 names (23 kept + 5 template + 11 mission), in order; studio_draft_check absent and not callable", async () => {
+  test("exactly the 40 names (23 kept + 5 template + 11 mission + studio_asset_put), in order; studio_draft_check absent and not callable", async () => {
     const c = await client(PROJECT)
     try {
       const names = (await c.listTools()).tools.map((t) => t.name)
       expect(names).toEqual(HOST_TOOLS)
-      expect(names.length).toBe(39)
+      expect(names.length).toBe(40)
       expect([...mod.HOST_KEPT_TOOLS] as string[]).toEqual(EXPECTED_TOOLS)
       expect(names).not.toContain("studio_draft_check")
       await expect(c.callTool({ name: "studio_draft_check", arguments: { markdown: "x" } })).rejects.toThrow()
@@ -288,7 +290,7 @@ describe("row 31: tool list = studio spec §5 as amended by U19", () => {
     try {
       const names = (await c.listTools()).tools.map((t) => t.name)
       // I-2: the caller's studio_mission_get replaces the default mission group (no name registered twice).
-      expect(names).toEqual([...EXPECTED_TOOLS, ...TEMPLATE_TOOLS, "studio_mission_get"])
+      expect(names).toEqual([...EXPECTED_TOOLS, ...TEMPLATE_TOOLS, "studio_mission_get", ...ASSET_TOOLS])
       const r = await c.callTool({ name: "studio_mission_get", arguments: {} })
       expect((r.content as Array<{ text: string }>)[0].text).toBe(`swarm:${PROJECT}`)
     } finally {

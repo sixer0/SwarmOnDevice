@@ -14,6 +14,8 @@ export interface Texts {
   readonly outward: string
   readonly files: string
   readonly archived: string
+  /** 1.2.6 row 37b (N-080): the checkpoints saved before a call nothing could undo ran, by id. */
+  readonly checkpointed: string
   /** 1.1.3: the class X calls answered with the archive method (`AutonomyTexts.ARCHIVE_REDIRECT`), not plain refusals. */
   readonly redirected: string
   readonly refused: string
@@ -97,6 +99,7 @@ export const TEXTS: Record<Autonomy.ReportLanguage, Texts> = {
     outward: "Sent outside the computer",
     files: "Files changed",
     archived: "Moved to the archive",
+    checkpointed: "Checkpointed",
     redirected: "Redirected to the archive method",
     refused: "Refused",
     waiting: "Still waiting for you",
@@ -165,6 +168,7 @@ export const TEXTS: Record<Autonomy.ReportLanguage, Texts> = {
     outward: "Dikirim ke luar komputer",
     files: "*File* yang berubah",
     archived: "Dipindahkan ke arsip",
+    checkpointed: "Disimpan sebagai checkpoint",
     redirected: "Dialihkan ke metode arsip",
     refused: "Ditolak",
     waiting: "Masih menunggu Anda",
@@ -241,6 +245,8 @@ export const CATEGORY: Record<Autonomy.ReportLanguage, Readonly<Record<string, s
     script_flagged: "A script that needs a closer look",
     archived: "Moved to the archive instead of deleted",
     not_reversible: "Deletes or replaces something Swarm could not archive first",
+    checkpointed: "Swarm saved a checkpoint first, then it ran",
+    checkpoint_failed: "Swarm could not save a checkpoint first, so it did not run",
   },
   id: {
     irreversible: "Tidak bisa dibatalkan, jadi tidak pernah dijalankan",
@@ -255,6 +261,8 @@ export const CATEGORY: Record<Autonomy.ReportLanguage, Readonly<Record<string, s
     script_flagged: "Skrip yang perlu diperiksa lebih dulu",
     archived: "Dipindahkan ke arsip, bukan dihapus",
     not_reversible: "Menghapus atau mengganti sesuatu yang tidak bisa diarsipkan Swarm lebih dulu",
+    checkpointed: "Swarm menyimpan checkpoint dulu, lalu menjalankannya",
+    checkpoint_failed: "Swarm tidak bisa menyimpan checkpoint dulu, jadi tidak dijalankan",
   },
 }
 

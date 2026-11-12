@@ -31,6 +31,8 @@ import * as r16 from "./routes/r16-paragraph.ts"
 // Row 31c: R17 and figure preview over the vendored services/render (Prisma cut).
 import * as r17 from "./routes/r17-render.ts"
 import * as figurePreview from "./routes/figure-preview.ts"
+// Row 50b (W-13): R18 asset upload / lookup (documented route, never ported before 1.2.6).
+import * as r18 from "./routes/r18-assets.ts"
 
 /** Route importer Markdown and figure preview: outside the R01-R23 table (doc-tools.ts:65, figure-tools.ts:58). */
 export const IMPORT_MARKDOWN_ROUTE = "/api/studio/import/markdown"
@@ -72,6 +74,7 @@ export const LOCAL_ROUTES: readonly RouteDef[] = [
   { id: "R15", pattern: STUDIO_ROUTES.R15, methods: { GET: next(r15.GET as NextHandler) } },
   { id: "R16", pattern: STUDIO_ROUTES.R16, methods: { GET: next(r16.GET as NextHandler), PATCH: next(r16.PATCH as NextHandler) } },
   { id: "R17", pattern: STUDIO_ROUTES.R17, methods: { POST: next(r17.POST as NextHandler) } },
+  { id: "R18", pattern: STUDIO_ROUTES.R18, methods: { GET: r18.GET, POST: r18.POST } },
   { id: "R20", pattern: STUDIO_ROUTES.R20, methods: { GET: next(r20.GET as NextHandler) } },
   { id: "R21", pattern: STUDIO_ROUTES.R21, methods: { GET: plain(r21.GET) } },
   { id: "R22", pattern: STUDIO_ROUTES.R22, methods: { GET: plain(r22.GET) } },

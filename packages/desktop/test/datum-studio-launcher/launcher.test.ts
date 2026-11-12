@@ -14,6 +14,7 @@ import {
   readdirSync,
   readFileSync,
   realpathSync,
+  renameSync,
   rmSync,
   statSync,
   symlinkSync,
@@ -431,4 +432,106 @@ describe("datum-studio launcher: bounded wait for the descriptor (row 34b)", () 
     host.child.kill("SIGTERM")
     clean()
   }, 40_000)
+})
+
+// Row 54b (M-02, SEC-14 / C8): after a Swarm restart the endpoint moves. On a connection failure the bridge re-reads the
+// descriptor (lstat: a link is refused DESCRIPTOR_UNSAFE; loopback URL only), reconnects exactly once
+// (BRIDGE_RECONNECT_ATTEMPTS = 1), re-initialises the session on the new host and retries the failed request once.
+describe("datum-studio bridge: reconnect once after a descriptor change (row 54b)", () => {
+  const LIST = ["studio_registry", "studio_templates_list", "studio_document_create"]
+  const descriptor = () => studioDescriptorPath(STATE)
+  const clean = () => {
+    rmSync(descriptor(), { force: true })
+    rmSync(descriptor() + ".real", { force: true })
+  }
+  const killed = (h: Awaited<ReturnType<typeof startHost>>) =>
+    new Promise<void>((resolve) => {
+      h.child.on("exit", () => resolve())
+      h.child.kill("SIGKILL")
+    })
+  const toolNames = (m: Record<string, unknown>) => ((m.result as { tools: { name: string }[] }).tools ?? []).map((t) => t.name)
+
+  test("connection failure: the new descriptor is read, the session re-initialised and the request retried, once", async () => {
+    clean()
+    const a = await startHost("fake-host.ts", { FAKE_MODE: "no-get" })
+    const c = client()
+    expect(await listTools(c)).toEqual(LIST)
+    // Swarm restarts: the new host writes its own descriptor (new port, new token, new PID), the old one is gone.
+    const b = await startHost("fake-host.ts", {})
+    await killed(a)
+    // Before row 54b the bridge exited 3 (HOST_UNREACHABLE) here instead of answering.
+    const again = await Promise.race([c.request(3, "tools/list"), c.exited.then((code) => ({ exited: code }))])
+    expect(again).not.toHaveProperty("exited")
+    expect(toolNames(again as Record<string, unknown>)).toEqual(LIST)
+    expect(c.child.exitCode).toBe(null)
+    const onB = b.records()
+    // POSTs in order (the reopened GET stream may land anywhere between them).
+    expect(onB.filter((r) => r.method === "POST").map((r) => r.rpc)).toEqual(["initialize", "notifications/initialized", "tools/list"])
+    for (const r of onB) expect(r.status).toBe(0)
+    expect(onB.find((r) => r.rpc === "tools/list")!.protocol).toBe("2025-06-18")
+    // The replayed initialize answer is not echoed: the client saw exactly one answer per id.
+    const ids = c.out().split("\n").filter(Boolean).map((l) => JSON.parse(l).id)
+    expect(ids).toEqual([1, 2, 3])
+    const reconnect = c
+      .err()
+      .split("\n")
+      .filter((l) => l.startsWith("{"))
+      .map((l) => JSON.parse(l))
+      .filter((r) => r.code === "BRIDGE_RECONNECT")
+    expect(reconnect.length).toBe(1)
+    expect(Object.keys(reconnect[0].context).sort()).toEqual(["pid", "port"])
+    expect(reconnect[0].context.port).toBe(String(b.port))
+    // Exactly once: a second endpoint change ends the bridge with exit 3; the third host receives nothing.
+    for (let i = 0; i < 50 && !b.records().some((r) => r.method === "GET"); i++) await Bun.sleep(20)
+    const third = await startHost("fake-host.ts", {})
+    await killed(b)
+    expect(await c.exited).toBe(3)
+    expect(c.err().split("\n")).toContain(MESSAGE)
+    expect(third.records()).toEqual([])
+    noSecret(a.token, c.out(), c.err())
+    noSecret(b.token, c.out(), c.err())
+    noSecret(third.token, c.out(), c.err())
+    third.child.kill("SIGTERM")
+    clean()
+  }, 30_000)
+
+  test("a symlinked descriptor is refused DESCRIPTOR_UNSAFE on reconnect; nothing is sent to its endpoint", async () => {
+    clean()
+    const a = await startHost("fake-host.ts", { FAKE_MODE: "no-get" })
+    const c = client()
+    expect(await listTools(c)).toEqual(LIST)
+    const b = await startHost("fake-host.ts", {})
+    // The new descriptor (0600, this user) is replaced by a link to it.
+    renameSync(descriptor(), descriptor() + ".real")
+    symlinkSync(descriptor() + ".real", descriptor())
+    await killed(a)
+    c.send({ jsonrpc: "2.0", id: 3, method: "tools/list", params: {} })
+    expect(await c.exited).toBe(3)
+    expect(c.err().split("\n")).toContain(MESSAGE)
+    expect(codes(c.err())).toContain("DESCRIPTOR_UNSAFE")
+    expect(b.records()).toEqual([])
+    noSecret(b.token, c.out(), c.err())
+    b.child.kill("SIGTERM")
+    clean()
+  }, 30_000)
+
+  test("a non-loopback URL in the new descriptor is refused on reconnect", async () => {
+    clean()
+    const a = await startHost("fake-host.ts", { FAKE_MODE: "no-get" })
+    const c = client()
+    expect(await listTools(c)).toEqual(LIST)
+    const other = "e".repeat(64)
+    await writeStudioDescriptor(descriptor(), { url: "http://192.0.2.10:8080/mcp", token: other, pid: process.pid })
+    await killed(a)
+    const t0 = Date.now()
+    c.send({ jsonrpc: "2.0", id: 3, method: "tools/list", params: {} })
+    expect(await c.exited).toBe(3)
+    expect(Date.now() - t0).toBeLessThan(5_000)
+    expect(c.err().split("\n")).toContain(MESSAGE)
+    const seen = codes(c.err())
+    expect(seen).toContain("DESCRIPTOR_INVALID")
+    expect(seen).not.toContain("BRIDGE_RECONNECT")
+    noSecret(other, c.out(), c.err())
+    clean()
+  }, 30_000)
 })

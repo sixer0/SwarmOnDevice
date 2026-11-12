@@ -7,6 +7,7 @@ export const dict = {
   "desktop.menu.window": "Okno",
   "desktop.menu.help": "pomoč",
   "desktop.menu.checkForUpdates": "Preverite posodobitve ...",
+  "desktop.menu.recheckTools": "Znova preveri orodja",
   "desktop.menu.settings": "nastavitve",
   "desktop.menu.reloadWebview": "Ponovno naloži Webview",
   "desktop.menu.restart": "Znova zaženite",
@@ -1406,7 +1407,10 @@ export const dict = {
   "memory.privacy": "Shranjeno na tej napravi, nikoli v repozitoriju. Model vidi te zapiske le kot del seje, ki jo izvajate z njim.",
   "memory.off": "Izklopljeno. Seje ne prejmejo zapiskov in nič novega se ne nauči. Vaši zapiski so ohranjeni.",
   "memory.refused.secret": "To je videti kot geslo ali ključ, zato ni bilo shranjeno.",
-  "memory.refused.long": "Zapisek naj bo krajši od 400 znakov.",
+  "memory.refused.long":
+    "Zapisek naj bo krajši od {{max}} znakov. Daljše podrobnosti shranite v datoteko in prosite agenta, naj jo poveže.",
+  "memory.refused.bodyLong": "Besedilo zapiska naj bo krajše od {{max}} znakov, ali pa namesto tega povežite datoteko.",
+  "memory.refused.tooManyRefs": "Zapisek lahko poveže največ {{max}} datotek ali simbolov.",
   "memory.refused.full": "Spomin je poln. Najprej izbrišite zapisek.",
   "memory.error": "Spomina projekta ni bilo mogoče naložiti.",
   "memory.retry": "Poskusi znova",
@@ -1431,4 +1435,5 @@ export const dict = {
   "session.movedOn.answer": "Odgovori",
   "home.agents.movedOn": "Nadaljeval je brez tega · {{time}}",
   "home.setup.attention": "Del vaše nastavitve zahteva pozornost.",
+  "session.map.decisions.category.protected_path": "Zaščiteno mesto (ključi, poverilnice ali sistemske mape)",
 }

@@ -23,7 +23,7 @@ import {
 } from "../../../src/lib/studio/services/draft/md-report";
 import { partsOf, partsOfValues, remapExtraChapters, ReportError, runReport, safeFinalName, sameContent, type CliArgs, type CliIo, type ReportResult } from "../studio-report";
 import { MAX_INPUT_BYTES } from "./config";
-import { checkOwnership, findMissionDoc, guardReportSubmit, requesterOf, type ExistingDoc } from "./doc-tools";
+import { CHANGE, checkOwnership, findMissionDoc, guardReportSubmit, requesterOf, type ExistingDoc } from "./doc-tools";
 import { McpToolError, virtualFs } from "./safety";
 import { bool, http, isRecord, neutralizeDeep, obj, plainAgentId, requireSecret, S, str, tok, untrustedBlock, untrustedFields, VIRTUAL_FILE, type Args, type ToolContext, type ToolDef, type ToolOutput, type ToolWarning } from "./tool-kit";
 import { buildWorkReport, isRefsHeading, recordMetaFields, wibStamp, workReportChapters, type SectionInput } from "./write-content";
@@ -84,12 +84,34 @@ const TEMPLATE = { type: "string", pattern: "^(latest|[a-z0-9][a-z0-9-]{0,63})$"
 
 // ── Bersama ─────────────────────────────────────────────────────────────
 
-function reportIo(ctx: ToolContext, bytes: Buffer, beforeSubmit?: CliIo["beforeSubmit"]): CliIo {
+/** Studio write routes that take `change` (R12 chapter, R13 slot): the report CLI sends no change of its own. */
+const CHANGE_ROUTES = new Set([studioRoutePath("R12"), studioRoutePath("R13")]);
+
+/**
+ * 1.2.6 M-06 (E-19): the caller's `change` on a studio_edit of a work report reaches the revision history. The report
+ * CLI builds its own R12/R13 bodies without `change` (server fills an automatic one), so the agent's change is added to
+ * each such JSON body that has none. Other routes and bodies are passed through unchanged.
+ */
+function withChange(fetchImpl: ToolContext["fetch"], change: Record<string, unknown>): ToolContext["fetch"] {
+  return (url, init) => {
+    if (init.method !== "POST" || typeof init.body !== "string" || !CHANGE_ROUTES.has(new URL(url).pathname)) return fetchImpl(url, init);
+    let body: unknown;
+    try {
+      body = JSON.parse(init.body);
+    } catch {
+      return fetchImpl(url, init);
+    }
+    if (!isRecord(body) || body.change !== undefined) return fetchImpl(url, init);
+    return fetchImpl(url, { ...init, body: JSON.stringify({ ...body, change }) });
+  };
+}
+
+function reportIo(ctx: ToolContext, bytes: Buffer, beforeSubmit?: CliIo["beforeSubmit"], change?: Record<string, unknown>): CliIo {
   return {
     stdout: () => undefined,
     stderr: () => undefined,
     env: { INTERNAL_API_SECRET: requireSecret(ctx) },
-    fetchImpl: ctx.fetch,
+    fetchImpl: change !== undefined ? withChange(ctx.fetch, change) : ctx.fetch,
     fs: virtualFs(new Map([[VIRTUAL_FILE, bytes]]), {}, ctx.fsLog),
     ...(ctx.deps.now ? { now: ctx.deps.now } : {}),
     ...(beforeSubmit ? { beforeSubmit } : {}),
@@ -141,7 +163,7 @@ function resultOutput(tool: string, r: ReportResult, warnings: ToolWarning[], ex
   const lines = [
     `${tool}: laporan kerja ${tok(r.docNumber)} (documentId ${tok(r.documentId)}) rev ${tok(r.revisionNo)} ${state}; bagian terkirim ${sent}`,
     `kelengkapan: ${tok(r.completeness.status)}${r.completeness.missingRequired.length > 0 ? ` (kurang ${r.completeness.missingRequired.length})` : ""}`,
-    render ? `berkas: ${tok(render.fileId)} ${render.format} sha256 ${render.sha256.slice(0, 16)} ${render.verified ? "terverifikasi" : "BELUM terverifikasi"}` : `berkas: tidak dirender (${r.completeness.status === "COMPLETE" ? "-" : "belum lengkap"})`,
+    render ? `berkas: ${tok(render.fileId)} ${render.format} sha256 ${render.sha256.slice(0, 16)} ${render.verified ? "FILE_VERIFIED(sha256)" : "FILE_UNVERIFIED(sha256)"}` : `berkas: tidak dirender (${r.completeness.status === "COMPLETE" ? "-" : "belum lengkap"})`,
     ...nextSteps.map((s) => `lanjut: ${s}`),
   ];
   return {
@@ -693,7 +715,7 @@ async function editWorkReport(a: Args, ctx: ToolContext, doc: ExistingDoc, agent
   // Basis = revisi yang baru dibaca: bagian yang diubah pihak lain sesudahnya -> BASE_CONFLICT (0 tulis).
   let r: ReportResult;
   try {
-    r = await runReport(args, reportIo(ctx, Buffer.from(md, "utf8")));
+    r = await runReport(args, reportIo(ctx, Buffer.from(md, "utf8"), undefined, isRecord(a.change) ? a.change : undefined));
   } catch (e) {
     // I-5 (review 13): galat lokal runReport (tanpa jawaban server) memuat teks Markdown = isi dokumen -> blok rincian.
     if (e instanceof ReportError && e.info.httpStatus === undefined && e.info.correlationId === undefined) {
@@ -758,8 +780,8 @@ function withNotApplied(out: ToolOutput): ToolOutput {
 const editTool: ToolDef = {
   name: "studio_edit",
   description:
-    "Sunting seperti patch tanpa basis. find = frasa >= 3 kata; {cell:{row,column},value}; {after,insert}; {section,append} mis. {section:\"Bukti\",append:[\"Teks.\",{list:[\"a\"]}]}; {section,addRow} mis. {section:\"Rincian kerja\",addRow:[\"\",\"Uji X\",\"done\"]}; {pid,at,replace}; {figure,chart}; meta. Alamat gagal -> notApplied, sisanya disimpan. ReportedAt laporan = jam server. Argumen harus objek JSON, bukan string berisi JSON.",
-  inputSchema: obj({ documentId: S.documentId, mission: S.mission, docKey: S.docKey, edits: EDITS, meta: META_EDIT, agentId: S.agentId, adoptExisting: { type: "boolean", description: "Sunting dokumen buatan agentId lain (eksplisit)." }, detail: DETAIL }, []),
+    "Sunting seperti patch tanpa basis. find = frasa >= 3 kata, juga caption/sumber figur; {cell:{row,column},value}; {after,insert}; {section,append} mis. {section:\"Bukti\",append:[\"Teks.\"]}; {section,addRow:[\"\",\"Uji X\",\"done\"]}; {pid,at,replace}; {figure,chart}; meta; change {what,why,impact} masuk riwayat revisi. Alamat gagal -> notApplied, sisanya disimpan. ReportedAt laporan = jam server. Argumen harus objek JSON, bukan string berisi JSON.",
+  inputSchema: obj({ documentId: S.documentId, mission: S.mission, docKey: S.docKey, edits: EDITS, meta: META_EDIT, change: CHANGE, agentId: S.agentId, adoptExisting: { type: "boolean", description: "Sunting dokumen buatan agentId lain (eksplisit)." }, detail: DETAIL }, []),
   annotations: { title: "Sunting teks dokumen", readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
   toolsets: ["write"],
   prepare: normalizeEditArgs,

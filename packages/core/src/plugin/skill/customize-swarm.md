@@ -163,7 +163,7 @@ Every field is optional.
 
   "experimental": {
     "primary_tools": ["edit"],
-    "mcp_timeout": 30000
+    "mcp_timeout": 600000
   },
 
   "tool_output": { "max_lines": 200, "max_bytes": 8192 },

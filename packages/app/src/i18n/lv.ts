@@ -7,6 +7,7 @@ export const dict = {
   "desktop.menu.window": "Logs",
   "desktop.menu.help": "Palīdzība",
   "desktop.menu.checkForUpdates": "Pārbaudīt atjauninājumus...",
+  "desktop.menu.recheckTools": "Pārbaudīt rīkus vēlreiz",
   "desktop.menu.settings": "Iestatījumi",
   "desktop.menu.reloadWebview": "Pārlādēt tīmekļa skatu",
   "desktop.menu.restart": "Restartēt",
@@ -1403,7 +1404,11 @@ export const dict = {
   "memory.privacy": "Tiek glabāta šajā ierīcē, nekad repozitorijā. Modelis šīs piezīmes redz tikai kā daļu no sesijas, ko ar to palaižat.",
   "memory.off": "Izslēgta. Sesijas nesaņem piezīmes un nekas jauns netiek apgūts. Jūsu piezīmes tiek saglabātas.",
   "memory.refused.secret": "Tas izskatās pēc paroles vai atslēgas, tāpēc netika saglabāts.",
-  "memory.refused.long": "Piezīmei jābūt īsākai par 400 rakstzīmēm.",
+  "memory.refused.long":
+    "Piezīmei jābūt īsākai par {{max}} rakstzīmēm. Garāku informāciju ievietojiet failā un palūdziet aģentam to piesaistīt.",
+  "memory.refused.bodyLong":
+    "Piezīmes pamattekstam jābūt īsākam par {{max}} rakstzīmēm, vai tā vietā piesaistiet failu.",
+  "memory.refused.tooManyRefs": "Piezīme var piesaistīt ne vairāk kā {{max}} failus vai simbolus.",
   "memory.refused.full": "Atmiņa ir pilna. Vispirms dzēsiet piezīmi.",
   "memory.error": "Neizdevās ielādēt projekta atmiņu.",
   "memory.retry": "Mēģināt vēlreiz",
@@ -1428,4 +1433,5 @@ export const dict = {
   "session.movedOn.answer": "Atbildēt",
   "home.agents.movedOn": "Turpināja bez šī · {{time}}",
   "home.setup.attention": "Daļai jūsu iestatījumu jāpievērš uzmanība.",
+  "session.map.decisions.category.protected_path": "Aizsargāta vieta (atslēgas, pieteikšanās dati vai sistēmas mapes)",
 }

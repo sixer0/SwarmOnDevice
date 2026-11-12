@@ -1,0 +1,173 @@
+{
+  "note": "Swarm 1.2.6 row 24 anonymised and synthetic acceptance fixtures (01g section 4, flows F1-F7). Source mapping is kept outside the repo.",
+  "fixtures": [
+    {
+      "file": "t03_k1.svg",
+      "flow": "F1",
+      "item": "T-03",
+      "role": "defect",
+      "kind": "svg"
+    },
+    {
+      "file": "t03_k2.svg",
+      "flow": "F1",
+      "item": "T-03",
+      "role": "defect",
+      "kind": "svg"
+    },
+    {
+      "file": "t03_k3.svg",
+      "flow": "F1",
+      "item": "T-03",
+      "role": "defect",
+      "kind": "svg"
+    },
+    {
+      "file": "t03_k4.svg",
+      "flow": "F1",
+      "item": "T-03",
+      "role": "defect",
+      "kind": "svg"
+    },
+    {
+      "file": "t03_k5.svg",
+      "flow": "F1",
+      "item": "T-03",
+      "role": "defect",
+      "kind": "svg"
+    },
+    {
+      "file": "t03_k6.svg",
+      "flow": "F1",
+      "item": "T-03",
+      "role": "defect",
+      "kind": "svg"
+    },
+    {
+      "file": "t03_k7.svg",
+      "flow": "F1",
+      "item": "T-03",
+      "role": "defect",
+      "kind": "svg"
+    },
+    {
+      "file": "t03_n1.svg",
+      "flow": "F1",
+      "item": "T-03",
+      "role": "negative-control",
+      "kind": "svg"
+    },
+    {
+      "file": "t03_n2.svg",
+      "flow": "F1",
+      "item": "T-03",
+      "role": "negative-control-synthetic",
+      "kind": "svg"
+    },
+    {
+      "file": "t01_k1.json",
+      "flow": "F2",
+      "item": "T-01",
+      "role": "defect",
+      "kind": "naskah"
+    },
+    {
+      "file": "t01_k2.json",
+      "flow": "F2",
+      "item": "T-01",
+      "role": "defect",
+      "kind": "naskah"
+    },
+    {
+      "file": "t01_k3.json",
+      "flow": "F2",
+      "item": "T-01",
+      "role": "defect",
+      "kind": "naskah"
+    },
+    {
+      "file": "t01_k4.json",
+      "flow": "F2",
+      "item": "T-01",
+      "role": "defect",
+      "kind": "naskah"
+    },
+    {
+      "file": "t01_k5.json",
+      "flow": "F2",
+      "item": "T-01",
+      "role": "defect",
+      "kind": "naskah"
+    },
+    {
+      "file": "t01_k6.json",
+      "flow": "F2",
+      "item": "T-01",
+      "role": "defect",
+      "kind": "naskah"
+    },
+    {
+      "file": "t13_k1.ts",
+      "flow": "F3",
+      "item": "T-13",
+      "role": "synthetic-generator",
+      "kind": "ts"
+    },
+    {
+      "file": "t11_k1.json",
+      "flow": "F4",
+      "item": "T-11",
+      "role": "defect",
+      "kind": "spec"
+    },
+    {
+      "file": "t11_k1.dot",
+      "flow": "F4",
+      "item": "T-11",
+      "role": "graphviz-twin",
+      "kind": "dot"
+    },
+    {
+      "file": "t14_k1.ts",
+      "flow": "F5",
+      "item": "T-14",
+      "role": "synthetic-generator",
+      "kind": "ts"
+    },
+    {
+      "file": "w13_k1.png",
+      "flow": "F6",
+      "item": "W-13",
+      "role": "synthetic",
+      "kind": "png"
+    },
+    {
+      "file": "w13_png.ts",
+      "flow": "F6",
+      "item": "W-13",
+      "role": "synthetic-generator",
+      "kind": "ts"
+    },
+    {
+      "file": "p01_home.ts",
+      "flow": "F7",
+      "item": "P-01",
+      "role": "synthetic",
+      "kind": "ts"
+    },
+    {
+      "file": "filler.ts",
+      "flow": "-",
+      "item": "-",
+      "role": "shared-filler",
+      "kind": "ts"
+    },
+    {
+      "file": "anon_guard.test.ts",
+      "flow": "-",
+      "item": "-",
+      "role": "guard-g2-g3",
+      "kind": "ts"
+    }
+  ]
+}

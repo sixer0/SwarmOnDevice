@@ -215,6 +215,9 @@ export const PARAM_SCOPE: ScopeRuleTable = {
     "appendix.kicker.pattern": "section:appendix",
     // FIX-TL (D-351/D-352): kedalaman daftar isi, cakupan sama dengan kenop render.toc.* (prefiks di bawah).
     "toc.levels": "section:toc",
+    // Swarm 1.2.6 row 72 (T-18/W-10): kuota gambar berlaku per dokumen, bukan per section chart (grup P7).
+    "figure.quota.maxPerDocument": DOC,
+    "figure.quota.exceptionReason": DOC,
   },
   groups: {
     P1: DOC,

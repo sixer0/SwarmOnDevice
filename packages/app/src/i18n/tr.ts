@@ -11,6 +11,7 @@ export const dict = {
   "desktop.menu.window": "Pencere",
   "desktop.menu.help": "Yardım",
   "desktop.menu.checkForUpdates": "Güncellemeleri kontrol et...",
+  "desktop.menu.recheckTools": "Araçları yeniden denetle",
   "desktop.menu.settings": "Ayarlar",
   "desktop.menu.reloadWebview": "Web görünümünü yeniden yükle",
   "desktop.menu.restart": "Yeniden başlat",
@@ -1509,7 +1510,10 @@ export const dict = {
   "memory.privacy": "Bu cihazda tutulur, asla depoda tutulmaz. Bir model bu notları yalnızca onunla çalıştırdığınız bir oturumun parçası olarak görür.",
   "memory.off": "Kapalı. Oturumlar not almaz ve yeni bir şey öğrenilmez. Notlarınız korunur.",
   "memory.refused.secret": "Bu bir parola veya anahtara benziyor, bu yüzden kaydedilmedi.",
-  "memory.refused.long": "Notu 400 karakterin altında tutun.",
+  "memory.refused.long":
+    "Notu {{max}} karakterin altında tutun. Daha uzun ayrıntıları bir dosyaya koyun ve ajandan bunu bağlamasını isteyin.",
+  "memory.refused.bodyLong": "Not gövdesini {{max}} karakterin altında tutun veya bunun yerine bir dosya bağlayın.",
+  "memory.refused.tooManyRefs": "Bir not en fazla {{max}} dosya veya sembol bağlayabilir.",
   "memory.refused.full": "Bellek dolu. Önce bir notu silin.",
   "memory.error": "Proje belleği yüklenemedi.",
   "memory.retry": "Yeniden dene",
@@ -1534,4 +1538,5 @@ export const dict = {
   "session.movedOn.answer": "Yanıtla",
   "home.agents.movedOn": "Bu olmadan devam etti · {{time}}",
   "home.setup.attention": "Kurulumunuzun bir bölümü ilgi gerektiriyor.",
+  "session.map.decisions.category.protected_path": "Korumalı konum (anahtarlar, kimlik bilgileri veya sistem klasörleri)",
 } satisfies Partial<Record<Keys, string>>

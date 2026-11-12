@@ -7,6 +7,7 @@ export const dict = {
   "desktop.menu.window": "Aken",
   "desktop.menu.help": "Abi",
   "desktop.menu.checkForUpdates": "Otsige värskendusi...",
+  "desktop.menu.recheckTools": "Kontrolli tööriistu uuesti",
   "desktop.menu.settings": "Seaded",
   "desktop.menu.reloadWebview": "Laadige Webview uuesti",
   "desktop.menu.restart": "Taaskäivitage",
@@ -1394,7 +1395,10 @@ export const dict = {
   "memory.privacy": "Hoitakse sellel seadmel, mitte kunagi hoidlas. Mudel näeb neid märkmeid ainult osana seansist, mida sellega käitad.",
   "memory.off": "Väljas. Seansid ei saa märkmeid ja midagi uut ei õpita. Sinu märkmed säilivad.",
   "memory.refused.secret": "See näeb välja nagu parool või võti, seega ei salvestatud seda.",
-  "memory.refused.long": "Hoia märge alla 400 tähemärgi.",
+  "memory.refused.long":
+    "Hoia märge alla {{max}} tähemärgi. Pane pikemad üksikasjad faili ja palu agendil see linkida.",
+  "memory.refused.bodyLong": "Hoia märkme sisu alla {{max}} tähemärgi või lingi selle asemel fail.",
+  "memory.refused.tooManyRefs": "Märge saab linkida kuni {{max}} faili või sümbolit.",
   "memory.refused.full": "Mälu on täis. Kustuta esmalt märge.",
   "memory.error": "Projekti mälu laadimine ebaõnnestus.",
   "memory.retry": "Proovi uuesti",
@@ -1419,4 +1423,5 @@ export const dict = {
   "session.movedOn.answer": "Vasta",
   "home.agents.movedOn": "Jätkas ilma selleta · {{time}}",
   "home.setup.attention": "Osa teie seadistusest vajab tähelepanu.",
+  "session.map.decisions.category.protected_path": "Kaitstud koht (võtmed, sisselogimisandmed või süsteemikaustad)",
 }

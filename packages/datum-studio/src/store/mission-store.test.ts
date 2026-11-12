@@ -35,6 +35,7 @@ const ID_0002 = "20261106120000_datum_template_guard"
 const ID_0003 = "20261107000000_datum_mission"
 const ID_0004 = "20261107120000_datum_output_verification" // row 149: 0004 follows 0003
 const ID_0006 = "20261108120000_datum_mission_autonomous_decision" // row 188: autonomous decision mark
+const ID_0007 = "20261112000000_datum_mission_document_link" // 1.2.6 row 86: mission_document link
 const ID_0005 = "20261108000000_datum_mission_gsp_tiers" // row 166: GSP AI model tiers
 const logs: StoreLogEntry[] = []
 const opened: SqliteStudioStore[] = []
@@ -97,8 +98,8 @@ describe("migration 0003 and the contract files", () => {
     expect(sha256Hex(MIGRATION_0003_SPEC_SQL)).toBe(MIGRATION_0003_SPEC_SHA256)
     expect(sha256Hex(canonicalJson(MISSION_SCHEMA_V1))).toBe(MISSION_SCHEMA_V1_SHA256)
     expect(sha256Hex(canonicalJson(BUILTIN_MISSION_TYPES))).toBe(BUILTIN_MISSION_TYPES_SHA256)
-    expect(MIGRATIONS.map((m) => m.id)).toEqual([ID_0001, ID_0002, ID_0003, ID_0004, ID_0005, ID_0006])
-    expect(latestSchemaId()).toBe(ID_0006)
+    expect(MIGRATIONS.map((m) => m.id)).toEqual([ID_0001, ID_0002, ID_0003, ID_0004, ID_0005, ID_0006, ID_0007])
+    expect(latestSchemaId()).toBe(ID_0007)
     for (const t of BUILTIN_MISSION_TYPES) expect(checkMissionSchema("root", t)).toEqual([])
     const db = openSqlite(join(RUN, "main", "datum-studio.sqlite"), { readonly: true })
     try {
@@ -107,6 +108,7 @@ describe("migration 0003 and the contract files", () => {
         "mission",
         "mission_decision",
         "mission_decision_request",
+        "mission_document",
         "mission_event",
         "mission_finding",
         "mission_fts",
@@ -123,7 +125,7 @@ describe("migration 0003 and the contract files", () => {
       ])
       const pinned = db.all<{ id: string; version: number; n: number }>("SELECT t.id, t.version, (SELECT count(*) FROM mission_type_phase p WHERE p.type_id = t.id AND p.type_version = t.version) AS n FROM mission_type t ORDER BY t.id")
       expect(pinned.map((p) => `${p.id}@${p.version}:${p.n}`)).toEqual(["debug@1:4", "document@1:4", "feature-release@1:5", "research@1:4"])
-      expect(db.get<{ value: string }>("SELECT value FROM store_meta WHERE key = 'schema_version'")!.value).toBe(ID_0006)
+      expect(db.get<{ value: string }>("SELECT value FROM store_meta WHERE key = 'schema_version'")!.value).toBe(ID_0007)
       console.log(`[row119a] runtime=${isBun ? "bun" : "node " + process.versions.node + " electron " + (process.versions.electron ?? "-")} driver=${db.driver} sqlite=${db.get<{ v: string }>("select sqlite_version() v")!.v} tables=${tables.length}`)
     } finally {
       db.close()
@@ -585,12 +587,12 @@ describe("migration 0003 on an existing 0002 store", () => {
     const after = counts(file)
     console.log(`[row119a] 0002 -> 0003 counts before ${JSON.stringify(before)}`)
     console.log(`[row119a] 0002 -> 0003 counts after  ${JSON.stringify(after)}`)
-    expect({ ...after, migration: after.migration! - 4 }).toEqual(before) // row 149: + 0004, row 166: + 0005, row 188: + 0006
+    expect({ ...after, migration: after.migration! - 5 }).toEqual(before) // row 149: + 0004, row 166: + 0005, row 188: + 0006, 1.2.6 row 86: + 0007
     expect(contentSha(file)).toBe(shaBefore)
     const r = openSqlite(file, { readonly: true })
     try {
-      expect(r.all<{ id: string }>("SELECT id FROM migration ORDER BY id").map((x) => x.id)).toEqual([ID_0001, ID_0002, ID_0003, ID_0004, ID_0005, ID_0006])
-      expect(r.get<{ value: string }>("SELECT value FROM store_meta WHERE key = 'schema_version'")!.value).toBe(ID_0006)
+      expect(r.all<{ id: string }>("SELECT id FROM migration ORDER BY id").map((x) => x.id)).toEqual([ID_0001, ID_0002, ID_0003, ID_0004, ID_0005, ID_0006, ID_0007])
+      expect(r.get<{ value: string }>("SELECT value FROM store_meta WHERE key = 'schema_version'")!.value).toBe(ID_0007)
       expect(r.get<{ value: string }>("SELECT value FROM store_meta WHERE key = 'created_by_release'")!.value).toBe("1.2.0-pre119")
       expect(Number(r.get<{ n: number }>("SELECT count(*) AS n FROM mission_type")!.n)).toBe(4)
       expect(Number(r.get<{ n: number }>("SELECT count(*) AS n FROM mission")!.n)).toBe(0)
@@ -602,7 +604,7 @@ describe("migration 0003 on an existing 0002 store", () => {
     const again = await openStore("upgrade")
     expect(again.missions.listTypes().length).toBe(4)
     await again.close()
-    expect(counts(file).migration).toBe(6) // row 149: + 0004, row 166: + 0005, row 188: + 0006
+    expect(counts(file).migration).toBe(7) // row 149: + 0004, row 166: + 0005, row 188: + 0006, 1.2.6 row 86: + 0007
   })
 })
 

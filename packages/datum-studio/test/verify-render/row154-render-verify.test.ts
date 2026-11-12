@@ -302,8 +302,8 @@ describe("row 154: good render", () => {
     expect(existsSync(html.pages[0].png)).toBe(true)
     // text lines (safe tokens only)
     quote("text tail", r._text.split("\n").slice(-4))
-    expect(r._text).toContain(`verification: VERIFIED (2/2 outputs verified)`)
-    expect(r._text).toContain(`HTML ${html.outputId} VERIFIED`)
+    expect(r._text).toContain(`verification: RENDER_VERIFIED(U24) (2/2 outputs verified)`)
+    expect(r._text).toContain(`HTML ${html.outputId} RENDER_VERIFIED(U24)`)
     expect(r._text).toContain(`pages: ${html.pages[0].png}`)
     expect(r._text).not.toContain("next:")
     expect(r.untrustedFields).toContain("verification.outputs[].checks[].findings")
@@ -340,6 +340,8 @@ describe("row 154: good render", () => {
     }
     expect(v.overall).toBe("unverified")
     expect(r._text).toContain("unknown=OVERLAP_CLIP:BRIDGE_UNAVAILABLE")
+    // Row 206 (AC-3): one UNKNOWN entry per unknown check of each output, in the text.
+    expect(r._text.match(/"check":"OVERLAP_CLIP","verdict":"UNKNOWN"[^\n]*"rule":"BRIDGE_UNAVAILABLE"/g)?.length).toBe(2)
     // identical bytes re-used the output rows: the newest verification wins (D-7), attempt 2
     for (const o of v.outputs as S[]) {
       const rec = await store.getOutputVerification(o.outputId)
@@ -368,8 +370,12 @@ describe("row 154: broken renders (spec §9 B-cases)", () => {
     expect(checkOf(v, "DOCX", "OVERLAP_CLIP").status).toBe("NOT_APPLICABLE")
     expect(v.overall).toBe("unverified")
     expect(v.layoutWitness).toBe(false)
-    expect(r._text).toMatch(/PDF \S+ UNVERIFIED fail=OVERLAP_CLIP unknown=-/)
-    expect(r._text).toContain("next: read structuredContent.verification")
+    expect(r._text).toMatch(/PDF \S+ RENDER_UNVERIFIED\(U24\) fail=OVERLAP_CLIP unknown=-/)
+    // Row 206 (1.2.3, AC-2): the checks reach the client in the text, fenced, with page and address.
+    expect(r._text).toContain("next: fix the source at the page/address of each check above")
+    expect(r._text).toContain('"check":"OVERLAP_CLIP","verdict":"FAIL","page":1,"address":"1.1","measured":"469.5 mm2 overlap","expected":"0 mm2 overlap"')
+    expect(r._text).toContain('<data-tak-tepercaya sumber="studio" jenis="verifikasi-temuan"')
+    expect(r._text).not.toMatch(/DOCX \S+: \d+ check entr/) // DOCX verified, OVERLAP_CLIP not applicable (AC-5)
     // page 1 has a finding: it is imaged first
     const html = (v.outputs as S[]).find((o) => o.format === "HTML")!
     expect(html.pages.find((p: S) => p.n === 1)).toMatchObject({ findings: 1 })
@@ -382,6 +388,11 @@ describe("row 154: broken renders (spec §9 B-cases)", () => {
     quote("row 2 done, B1", { code: code(refused), outputs: refused.error?.details?.deliverables?.[0]?.outputs })
     expect(code(refused)).toBe("OUTPUT_UNVERIFIED")
     expect((refused.error.details.deliverables[0].outputs as S[]).some((o) => o.reason === "CHECK_FAILED")).toBe(true)
+    // Row 206 (1.2.3): the refusal names the failing check of each unverified output, in details and in the text.
+    const failed = (refused.error.details.deliverables[0].outputs as S[]).find((o) => o.reason === "CHECK_FAILED")!
+    quote("row 2 done, B1 checks", failed.checks)
+    expect(failed.checks[0]).toMatchObject({ check: "OVERLAP_CLIP", verdict: "FAIL", page: 1, address: overlapAddress })
+    expect(refused._text).toContain(`"check":"OVERLAP_CLIP","verdict":"FAIL","page":1,"address":"${overlapAddress}"`)
     const g = await call("studio_mission_get", { mission: M, include: ["deliverables"] })
     const outs = (g.deliverables as S[]).find((d) => d.documentId === docBroken)!.outputs as S[]
     quote("deliverables B1", outs.map((o) => ({ format: o.format, verified: o.verified })))

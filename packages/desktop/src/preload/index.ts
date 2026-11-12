@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer, webUtils } from "electron"
 import type { ElectronAPI, SetupToolsState, WslServersEvent } from "./types"
 import { SETUP_TOOLS_IPC } from "./setup-tools-channels"
 import { MISSION_CONTROL_IPC } from "./mission-control-channels"
+import { DESKTOP_NONCE_IPC } from "./desktop-nonce-channel"
 import type { UpdaterState } from "@opencode-ai/app/updater"
 
 const updaterCallbacks = new Set<(state: UpdaterState) => void>()
@@ -169,6 +170,8 @@ const api: ElectronAPI = {
   setForceFocus: (enabled) => ipcRenderer.invoke("set-force-focus", enabled),
   recordFatalRendererError: (error) => ipcRenderer.invoke("record-fatal-renderer-error", error),
   setNativeTranslations: (bundle) => ipcRenderer.invoke("set-native-translations", bundle),
+  // Row 38b (SEC-06): this launch's desktop nonce for the `x-swarm-desktop-nonce` header; null when none is held.
+  desktopNonce: () => ipcRenderer.invoke(DESKTOP_NONCE_IPC),
 }
 
 contextBridge.exposeInMainWorld("api", api)

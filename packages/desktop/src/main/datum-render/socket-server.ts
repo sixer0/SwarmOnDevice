@@ -2,12 +2,18 @@
 //
 // <os.tmpdir()>/swarm-datum-<random>/render.sock, folder 0700, socket 0600. Every request line
 // carries the per-launch token; it is compared in constant time and never logged.
+//
+// 1.2.6 row 93 (TH-04, DP-1): `socketPath` restarts the server on a known endpoint (same path, same token from the
+// caller). The folder is recreated 0700 when it is missing; an existing folder must be a real directory owned by this
+// user; a stale socket file is unlinked (any other file type is refused, never deleted). Close removes only this
+// server's own socket file (same inode) and the folder when empty, so a late close of an old server never removes the
+// socket of the server that replaced it.
 
 import { createHash, timingSafeEqual } from "node:crypto"
-import { chmodSync, mkdtempSync, rmSync } from "node:fs"
+import { chmodSync, lstatSync, mkdirSync, mkdtempSync, rmdirSync, statSync, unlinkSync } from "node:fs"
 import { createServer, type Server, type Socket } from "node:net"
 import { tmpdir } from "node:os"
-import { join } from "node:path"
+import { basename, dirname, isAbsolute, join } from "node:path"
 import { BridgeError, errorResponse, MAX_LINE_BYTES, parseLine } from "./protocol"
 
 export type BridgeLog = (level: "error" | "warn" | "info", source: string, message: string, context?: Record<string, unknown>) => void
@@ -17,6 +23,8 @@ export type SocketServerOptions = {
   dispatch: (body: unknown) => Promise<Record<string, unknown>>
   log: BridgeLog
   baseDir?: string
+  /** Row 93: listen on this exact path (a same-endpoint restart) instead of a new temp folder. */
+  socketPath?: string
   maxConnections?: number
   maxLineBytes?: number
 }
@@ -31,10 +39,52 @@ export function tokenMatches(given: string, expected: string) {
   return timingSafeEqual(digest(given), digest(expected)) && given.length === expected.length
 }
 
-export async function startSocketServer(opts: SocketServerOptions): Promise<SocketServerHandle> {
-  const dir = mkdtempSync(join(opts.baseDir ?? tmpdir(), "swarm-datum-"))
+function errno(error: unknown) {
+  return (error as NodeJS.ErrnoException | undefined)?.code
+}
+
+class SocketPathError extends Error {
+  readonly code = "BRIDGE_SOCKET_UNSAFE"
+}
+
+/** Row 93: make `socketPath` listenable again: folder 0700 owned by this user, no stale socket file. */
+export function prepareSocketPath(socketPath: string) {
+  if (!isAbsolute(socketPath) || basename(socketPath) !== "render.sock") throw new SocketPathError("socket path must be an absolute .../render.sock")
+  const dir = dirname(socketPath)
+  let st: ReturnType<typeof lstatSync> | undefined
+  try {
+    st = lstatSync(dir)
+  } catch (error) {
+    if (errno(error) !== "ENOENT") throw error
+  }
+  if (!st) mkdirSync(dir, { mode: 0o700 })
+  else {
+    if (!st.isDirectory() || st.isSymbolicLink()) throw new SocketPathError("socket folder is not a directory")
+    const uid = process.getuid?.()
+    if (uid !== undefined && st.uid !== uid) throw new SocketPathError("socket folder belongs to another user")
+  }
   chmodSync(dir, 0o700)
-  const socketPath = join(dir, "render.sock")
+  let file: ReturnType<typeof lstatSync> | undefined
+  try {
+    file = lstatSync(socketPath)
+  } catch (error) {
+    if (errno(error) !== "ENOENT") throw error
+  }
+  if (file) {
+    if (!file.isSocket()) throw new SocketPathError("socket path holds a file that is not a socket")
+    unlinkSync(socketPath)
+  }
+  return dir
+}
+
+export async function startSocketServer(opts: SocketServerOptions): Promise<SocketServerHandle> {
+  let dir: string
+  if (opts.socketPath) dir = prepareSocketPath(opts.socketPath)
+  else {
+    dir = mkdtempSync(join(opts.baseDir ?? tmpdir(), "swarm-datum-"))
+    chmodSync(dir, 0o700)
+  }
+  const socketPath = opts.socketPath ?? join(dir, "render.sock")
   const maxLine = opts.maxLineBytes ?? MAX_LINE_BYTES
   let seq = 0
   const open = new Set<Socket>()
@@ -98,6 +148,7 @@ export async function startSocketServer(opts: SocketServerOptions): Promise<Sock
     })
   })
   chmodSync(socketPath, 0o600)
+  const own = statSync(socketPath)
   server.on("error", (error) => opts.log("error", "datum-render.socket", "server error", { cause: error.message, stack: error.stack }))
   opts.log("info", "datum-render.socket", "render bridge listening", { socketPath })
 
@@ -108,7 +159,14 @@ export async function startSocketServer(opts: SocketServerOptions): Promise<Sock
       new Promise<void>((resolve) => {
         for (const s of open) s.destroy()
         server.close(() => {
-          rmSync(dir, { recursive: true, force: true })
+          // Only this server's socket file; the folder only when it is empty (a successor may already listen there).
+          try {
+            const now = lstatSync(socketPath)
+            if (now.ino === own.ino && now.dev === own.dev) unlinkSync(socketPath)
+          } catch {}
+          try {
+            rmdirSync(dir)
+          } catch {}
           resolve()
         })
       }),

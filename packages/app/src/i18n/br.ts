@@ -7,6 +7,7 @@ export const dict = {
   "desktop.menu.window": "Janela",
   "desktop.menu.help": "Ajuda",
   "desktop.menu.checkForUpdates": "Verificar atualizações...",
+  "desktop.menu.recheckTools": "Verificar ferramentas novamente",
   "desktop.menu.settings": "Configurações",
   "desktop.menu.reloadWebview": "Recarregar WebView",
   "desktop.menu.restart": "Reiniciar",
@@ -1430,7 +1431,10 @@ export const dict = {
   "memory.privacy": "Mantida neste dispositivo, nunca no repositório. Um modelo vê estas notas apenas como parte de uma sessão que você executa com ele.",
   "memory.off": "Desativada. As sessões não recebem notas e nada novo é aprendido. Suas notas são mantidas.",
   "memory.refused.secret": "Isso parece uma senha ou chave, então não foi salvo.",
-  "memory.refused.long": "Mantenha a nota abaixo de 400 caracteres.",
+  "memory.refused.long":
+    "Mantenha a nota abaixo de {{max}} caracteres. Coloque detalhes mais longos em um arquivo e peça ao agente para vinculá-lo.",
+  "memory.refused.bodyLong": "Mantenha o corpo da nota abaixo de {{max}} caracteres ou vincule um arquivo.",
+  "memory.refused.tooManyRefs": "Uma nota pode vincular no máximo {{max}} arquivos ou símbolos.",
   "memory.refused.full": "A memória está cheia. Exclua uma nota primeiro.",
   "memory.error": "Não foi possível carregar a memória do projeto.",
   "memory.retry": "Tentar novamente",
@@ -1455,4 +1459,5 @@ export const dict = {
   "session.movedOn.answer": "Responder",
   "home.agents.movedOn": "Continuou sem isso · {{time}}",
   "home.setup.attention": "Ul lodenn eus ho staliadur he deus ezhomm evezh.",
+  "session.map.decisions.category.protected_path": "Lec'h gwarezet (alc'hwezioù, titouroù kennaskañ pe teuliadoù reizhiad)",
 }

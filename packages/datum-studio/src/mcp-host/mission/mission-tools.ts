@@ -12,13 +12,14 @@ import Ajv, { type ErrorObject, type ValidateFunction } from "ajv"
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js"
 import { createHash } from "node:crypto"
 import path from "node:path"
-import { prepareDownloadDir, REAL_NODE_FS, McpToolError, writeFileGuarded, type NodeFs } from "../../../vendor/scripts/studio/mcp/safety"
+import { BACKUP_DIR_NAME, prepareDownloadDir, REAL_NODE_FS, McpToolError, writeFileGuarded, type NodeFs } from "../../../vendor/scripts/studio/mcp/safety"
 import { StoreError, type MissionStore, type StoreTx } from "../../store/index.ts"
 import type { MissionDoc, MissionWriteOptions, NewMissionMessage, RowPatch, SessionLink } from "../../store/mission/types.ts"
+import { ROW_RUNNING_DONE_RULE, type RowPatchJobResult } from "../../store/mission/mission-store.ts"
 import type { HostToolExtension, HostToolSession } from "../tool-table.ts"
 import { ACTOR_PATTERN, EXPORT_FILES, MISSION_TOOL_NAMES, MISSION_TOOL_SCHEMAS, type ExportFile, type GetInclude } from "./schemas.ts"
 import { errorResult, MissionToolError, okResult, type MissionLog } from "./tool-result.ts"
-import { describeAjvError } from "../../store/mission/validate.ts"
+import { checkMissionSchema, describeAjvError } from "../../store/mission/validate.ts"
 import { MISSION_GUIDE_URI } from "./mission-guide.ts"
 import { readActivityAt, readDeliverables, readMessagesTail, type OutputVerificationSource } from "./deliverables.ts"
 
@@ -81,6 +82,23 @@ export function parseObjectArg(tool: string, args: Record<string, unknown>): voi
     throw new MissionToolError("SCHEMA_INVALID", `${key} must be a JSON object, not a string`, { def: `${tool} input`, issues: [{ pointer: `/${key}`, keyword: "type", message: "must be a JSON object (send the object itself)" }] })
   }
   args[key] = parsed
+}
+
+/**
+ * Row 80 (1.2.6, MC-02): record_decision takes `autonomous` inside `decision` or at the top level; both store
+ * decision.autonomous. Different values are refused SCHEMA_INVALID at /decision/autonomous. The record is checked
+ * against $defs/Decision here so its issues name the argument pointer (/decision/...), not the record-relative path.
+ * The autonomous-mode gate stays in the store (AUTONOMOUS_MODE_OFF, P-04).
+ */
+export function decisionWithAutonomous(args: Record<string, unknown>): Record<string, unknown> {
+  const tool = "studio_mission_record_decision"
+  const d = { ...(args.decision as Record<string, unknown>) }
+  if (args.autonomous !== undefined && d.autonomous !== undefined && d.autonomous !== args.autonomous)
+    throw new MissionToolError("SCHEMA_INVALID", "autonomous is given twice with different values", { def: `${tool} input`, issues: [{ pointer: "/decision/autonomous", keyword: "const", message: `must equal the top-level autonomous (${String(args.autonomous)}); send it once` }] })
+  if (args.autonomous !== undefined) d.autonomous = args.autonomous
+  const issues = checkMissionSchema("Decision", d)
+  if (issues.length > 0) throw new MissionToolError("SCHEMA_INVALID", "decision does not match studio.mission/v1#/$defs/Decision", { def: "Decision", issues: issues.map((i) => ({ pointer: `/decision${i.path === "/" ? "" : i.path}`, keyword: i.keyword, message: i.message })) })
+  return d
 }
 
 export function validateArgs(tool: string, args: Record<string, unknown>): void {
@@ -286,7 +304,7 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
     tool(
       "studio_mission_get",
       "Read a mission",
-      "Read one mission: the stored MissionDoc plus derived {phases (only the mission type's phases, U20), waves, ready, counts, progress, checkpoints}. include: rows, decisions, findings, locks, reports, events, snapshots, requests, checkpoints, messages, deliverables (the mission's Studio documents with the current revision's outputs: finalFileName, sha256, verified). messagesTail: N = the newest N messages.",
+      "Read one mission: the stored MissionDoc plus derived {phases (only the mission type's phases, U20), waves, ready, counts, progress, checkpoints, drift (rows added after approval with the decision id that justified each: {count, rows: [{row, timeCreated, decision}], dropped: [{row, timeDropped, decision}]}; empty when none)}. include: rows, decisions, findings, locks, reports, events, snapshots, requests, checkpoints, messages, deliverables (the mission's Studio documents with the current revision's outputs: finalFileName, sha256, verified). messagesTail: N = the newest N messages.",
       true,
       async (a) => {
         const id = a.mission as string
@@ -324,6 +342,13 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
           `mission ${id} (${got.mission.type} v${got.mission.typeVersion}): ${got.mission.status}${got.mission.supersededBy ? `, superseded by ${got.mission.supersededBy}` : ""}`,
           `  progress ${d.progress.done}/${d.progress.total} rows done; ready: ${d.ready.join(", ") || "-"}`,
           ...d.phases.map((p) => `  ${p.order}. ${p.id}: ${p.rows.join(", ") || "-"}`),
+          // 1.2.6 row 87 (MC-09): one drift line, only when rows were added or dropped after approval.
+          ...(d.drift.count > 0 || d.drift.dropped.length > 0
+            ? [
+                `  drift: ${d.drift.count} row${d.drift.count === 1 ? "" : "s"} added after approval (${d.drift.rows.map((r) => `${r.row} by ${r.decision ?? "-"}`).join(", ") || "-"})` +
+                  (d.drift.dropped.length > 0 ? `; dropped: ${d.drift.dropped.map((r) => `${r.row} by ${r.decision ?? "-"}`).join(", ")}` : ""),
+              ]
+            : []),
         ].join("\n")
         return { text, data: { mission, derived: d, ...extra } }
       },
@@ -371,25 +396,37 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
     tool(
       "studio_mission_set_status",
       "Change mission status",
-      "Mission status (§2.2): running, paused, done (all rows done or dropped) or cancelled (needs decision; optional supersededBy). done and cancelled are terminal; closing releases locks and withdraws open decision requests.",
+      "Mission status (§2.2): running, paused, done (all rows done or dropped) or cancelled (needs decision; optional supersededBy). done and cancelled are terminal; closing releases locks and withdraws open decision requests. Setting the current status again returns unchanged: true and writes nothing. done returns the decision register decisions {count, ids} (the store holds them; studio_mission_export renders decisions.md); closing is not refused for a missing export.",
       false,
       async (a, s) => {
-        const r = await write(dry(a), (tx) =>
-          M.setStatus(
+        const r = await write(dry(a), (tx) => {
+          const out = M.setStatus(
             tx,
             a.mission as string,
             a.to as never,
             { ...(str(a, "decision") ? { decision: str(a, "decision") } : {}), ...(str(a, "supersededBy") ? { supersededBy: str(a, "supersededBy") } : {}), ...(str(a, "note") ? { note: str(a, "note") } : {}) },
             writeOptions(a, s),
-          ),
-        )
-        return { text: `mission ${r.id}: ${r.from} -> ${r.to}${dryNote(a)}`, data: { ...r, dryRun: dry(a) } }
+          )
+          // 1.2.6 row 89 (W-16 option A, N-068): done returns the store's decision register; no new refusal path.
+          if (out.to !== "done") return out
+          const ids = (M.get(a.mission as string, tx)?.mission.decisions ?? []).map((d) => d.id)
+          return { ...out, decisions: { count: ids.length, ids } }
+        })
+        const reg = "decisions" in r && r.decisions ? `; decisions ${r.decisions.count}: ${r.decisions.ids.join(", ") || "-"}` : ""
+        if (r.unchanged) {
+          // 1.2.6 FX-7 (M3 N2): a no-op move writes nothing, so a note / decision / supersededBy given with it is not
+          // recorded; say so instead of dropping it silently.
+          const dropped = (["note", "decision", "supersededBy"] as const).filter((k) => str(a, k))
+          const lost = dropped.length > 0 ? `; ${dropped.join(", ")} not recorded (use studio_mission_update_row note or studio_mission_record_decision)` : ""
+          return { text: `mission ${r.id}: already ${r.to}, unchanged (no event, no snapshot)${lost}${reg}${dryNote(a)}`, data: { ...r, dryRun: dry(a) } }
+        }
+        return { text: `mission ${r.id}: ${r.from} -> ${r.to}${reg}${dryNote(a)}`, data: { ...r, dryRun: dry(a) } }
       },
     ),
     tool(
       "studio_mission_update_row",
       "Update mission rows",
-      "Row patches in order in one job (1-200): {id, add?, set?, status?, note?, acquire?, release?, retire?, checkpoint?{n, m, label?}} (§4.2-4.4, §5.4; C57 b). retire: [documentId] archives a superseded draft linked to the row (needs note), applied before status. messages[] (C57 c/d) are appended in the same job; an owner instruction is {from: owner, to: controller, kind: instruction} and is never executed. Returns changed rows, waves, ready.",
+      `Row patches in order in one job (1-200): {id, add?, set?, status?, note?, decision?, acquire?, release?, retire?, checkpoint?{n, m, label?}} (§4.2-4.4, §5.4; C57 b). Status: ${ROW_RUNNING_DONE_RULE} (SCHEMA_INVALID field note otherwise); blocked and dropped need a note; done still passes the output gate (OUTPUT_UNVERIFIED). Each patch applies on its own: valid patches apply, a refused patch is rolled back alone and reported in results [{id, ok, code?, message?, noteSaved?}]; if no patch applies the call fails with the first code. A status refused for DEP_NOT_DONE still stores the patch's note (noteSaved: true). retire: [documentId] archives a superseded draft linked to the row (needs note), applied before status. messages[] (C57 c/d) are appended in the same job; an owner instruction is {from: owner, to: controller, kind: instruction} and is never executed. Returns changed rows, results, waves, ready.`,
       false,
       async (a, s) => {
         const mission = a.mission as string
@@ -397,20 +434,24 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
         const patches = (Array.isArray(a.rows) ? a.rows : []) as Array<RowPatch & { checkpoint?: { n: number; m: number; label?: string } }>
         const messages = (Array.isArray(a.messages) ? a.messages : []) as NewMissionMessage[]
         const r = await write(dry(a), (tx) => {
-          let out: { changed: string[]; waves: Array<{ wave: number; rows: string[] }>; ready: string[] } = { changed: [], waves: [], ready: [] }
-          const rowPatches = patches.map(({ checkpoint: _c, ...p }) => p).filter((p) => Object.keys(p).length > 1)
+          let out: RowPatchJobResult = { changed: [], results: [], waves: [], ready: [] }
+          const stripped = patches.map(({ checkpoint: _c, ...p }) => p)
+          const rowPatches = stripped.filter((p) => Object.keys(p).length > 1)
           if (rowPatches.length > 0) out = M.updateRows(tx, mission, rowPatches, str(a, "decision") ? { decision: str(a, "decision") } : {}, o)
-          const checkpoints = patches.filter((p) => p.checkpoint).map((p) => ({ row: p.id, ...M.recordCheckpoint(tx, mission, p.id, p.checkpoint!, o) }))
+          // Row 85 (MC-07): a refused patch's checkpoint is not recorded (results align with rowPatches by index).
+          const refusedPatch = new Set(rowPatches.filter((_p, i) => out.results[i]?.ok === false))
+          const checkpoints = patches.filter((p, i) => p.checkpoint && !refusedPatch.has(stripped[i])).map((p) => ({ row: p.id, ...M.recordCheckpoint(tx, mission, p.id, p.checkpoint!, o) }))
           const posted = messages.map((m) =>
             m.from === "owner" && m.to === "controller" && m.kind === "instruction" ? M.ownerInstruction(tx, mission, m.text, m.row ? { row: m.row } : {}, o) : M.postMessage(tx, mission, { ...m, ...(o.actor ? { actor: o.actor } : {}) }, o),
           )
           if (rowPatches.length === 0) {
             const g = M.get(mission, tx)!
-            out = { changed: [], waves: g.derived.waves, ready: g.derived.ready }
+            out = { changed: [], results: [], waves: g.derived.waves, ready: g.derived.ready }
           }
           return { ...out, checkpoints, messages: posted }
         })
-        const text = `mission ${mission}: rows changed ${r.changed.join(", ") || "-"}; checkpoints ${r.checkpoints.length}; messages ${r.messages.length}; ready ${r.ready.join(", ") || "-"}${dryNote(a)}`
+        const refused = r.results.filter((x) => !x.ok).map((x) => `${x.id} ${x.code}${x.noteSaved ? " (note saved)" : ""}`)
+        const text = `mission ${mission}: rows changed ${r.changed.join(", ") || "-"}${refused.length > 0 ? `; refused ${refused.join(", ")}` : ""}; checkpoints ${r.checkpoints.length}; messages ${r.messages.length}; ready ${r.ready.join(", ") || "-"}${dryNote(a)}`
         return { text, data: { ...r, dryRun: dry(a) } }
       },
     ),
@@ -420,7 +461,8 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
       "Append a decision {id U<n>|C<n>, by user|controller, date, text, rows?, supersedes?, autonomous?} (§5.2); append-only (DECISION_ID_TAKEN). A correction is a new decision with supersedes. autonomous: true (by: controller only) records a self-approval, allowed only while Swarm's autonomous mode setting is on (the person turns it on; else AUTONOMOUS_MODE_OFF); never record by: user for the user.",
       false,
       async (a, s) => {
-        const r = await write(dry(a), (tx) => M.recordDecision(tx, a.mission as string, a.decision as never, writeOptions(a, s)))
+        const decision = decisionWithAutonomous(a)
+        const r = await write(dry(a), (tx) => M.recordDecision(tx, a.mission as string, decision as never, writeOptions(a, s)))
         return { text: `decision ${r.id} recorded in ${String(a.mission)}${dryNote(a)}`, data: { ...r, dryRun: dry(a) } }
       },
     ),
@@ -437,7 +479,7 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
     tool(
       "studio_mission_export",
       "Export a mission to /docs",
-      "Render the §9 Markdown files of a mission (blueprint rows, status, decisions, delegation trail). write: true writes them under <session root>/docs/<mission>/ only; an existing file is refused (FILE_EXISTS) unless overwrite (a .bak copy is made first).",
+      `Render the §9 Markdown files of a mission (blueprint rows, status, decisions, delegation trail). write: true writes them under <session root>/docs/<mission>/ only; an existing file is refused (FILE_EXISTS) unless overwrite (a backup copy is made first in that folder's ${BACKUP_DIR_NAME}/ subfolder, never beside the file; each file returns backupResidue, the backups of that file now kept there).`,
       false,
       async (a, s) => {
         const mission = a.mission as string
@@ -453,17 +495,24 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
           const sha256 = createHash("sha256").update(bytes).digest("hex")
           return { path: path.join("docs", mission, rel), abs: path.join(base, rel), bytes: bytes.length, sha256, markdown: f.markdown, data: bytes }
         })
+        const backups = new Map<string, { backup: string | null; backupResidue: number }>()
         if (a.write === true) {
           const roots = [s.fileRoot]
           if (a.overwrite !== true) {
             const taken = out.filter((f) => nfs.exists(f.abs)).map((f) => f.path)
-            if (taken.length > 0) throw new MissionToolError("FILE_EXISTS", "export files exist; nothing written (overwrite: true makes a .bak copy first)", { files: taken })
+            if (taken.length > 0) throw new MissionToolError("FILE_EXISTS", `export files exist; nothing written (overwrite: true makes a backup copy first in ${BACKUP_DIR_NAME}/)`, { files: taken })
           }
           for (const f of out) prepareDownloadDir(path.dirname(f.abs), roots, nfs)
-          for (const f of out) writeFileGuarded(f.abs, f.data, { roots, purpose: "write-report", overwrite: a.overwrite === true, nfs, now })
+          for (const f of out) {
+            // 1.2.6 row 89 (T-17 mission hunk, N-055/N-057): the guarded write keeps backups in <dir>/.bak/.
+            const w = writeFileGuarded(f.abs, f.data, { roots, purpose: "write-report", overwrite: a.overwrite === true, nfs, now })
+            backups.set(f.path, { backup: w.backup ? path.relative(s.fileRoot, w.backup).split(path.sep).join("/") : null, backupResidue: w.backupResidue })
+          }
         }
-        const listed = out.map(({ path: p, bytes, sha256, markdown }) => ({ path: p, bytes, sha256, markdown }))
-        return { text: `${listed.length} files${a.write === true ? ` written under ${base}` : " (not written)"}: ${listed.map((f) => f.path).join(", ")}`, data: { files: listed, written: a.write === true } }
+        const listed = out.map(({ path: p, bytes, sha256, markdown }) => ({ path: p, bytes, sha256, markdown, ...(backups.get(p) ?? {}) }))
+        const residue = [...backups.values()].reduce((n, b) => n + b.backupResidue, 0)
+        const bakNote = a.write === true && a.overwrite === true ? `; backups in ${BACKUP_DIR_NAME}/, backupResidue ${residue}` : ""
+        return { text: `${listed.length} files${a.write === true ? ` written under ${base}` : " (not written)"}: ${listed.map((f) => f.path).join(", ")}${bakNote}`, data: { files: listed, written: a.write === true } }
       },
     ),
     tool(

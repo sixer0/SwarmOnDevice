@@ -2,7 +2,9 @@ import { test, expect, describe, afterEach, beforeEach, spyOn } from "bun:test"
 import { ConfigV1 } from "@opencode-ai/core/v1/config/config"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { httpClient } from "@opencode-ai/core/effect/app-node-platform"
-import { Cause, Effect, Exit, Layer, Logger, Option } from "effect"
+import { Cause, Effect, Exit, Layer, Logger, Option, Schema } from "effect"
+import { Flag } from "@opencode-ai/core/flag/flag"
+import { BASELINE_CONFIG } from "@opencode-ai/core/swarm-defaults"
 import { NamedError } from "@opencode-ai/core/util/error"
 import { FetchHttpClient, HttpClient, HttpClientResponse } from "effect/unstable/http"
 import { Config } from "@/config/config"
@@ -2341,3 +2343,202 @@ it.effect("the baseline's catch-all still counts as shipped when no source write
     }),
   ),
 )
+
+// 1.2.6 row 31b, CFG-02 T2b (01d_spec_config.md §7): the shipped experimental.mcp_timeout
+// is 600000 (milliseconds) and sits below the user's global file, so a user value wins.
+describe("CFG-02 T2b experimental.mcp_timeout merge", () => {
+  const resolved = (config?: object) =>
+    Effect.gen(function* () {
+      const project = yield* tmpdirScoped()
+      return yield* withGlobalConfig({ config, name: "swarm.jsonc" }, () =>
+        withInstanceDir(project, Config.use.get()),
+      )
+    })
+
+  it.effect("no user value resolves to the shipped 600000", () =>
+    Effect.gen(function* () {
+      expect((yield* resolved()).experimental?.mcp_timeout).toBe(600000)
+    }),
+  )
+
+  it.effect("a user swarm.jsonc value of 45000 wins over the shipped value", () =>
+    Effect.gen(function* () {
+      expect((yield* resolved({ experimental: { mcp_timeout: 45000 } })).experimental?.mcp_timeout).toBe(45000)
+    }),
+  )
+})
+
+// 1.2.6 row 33, CFG-03 T3b/T3d (01d_spec_config.md §7, U17): the shipped compaction block
+// {auto: true, max_context: 0} sits below the user's global file and merges key by key;
+// OPENCODE_DISABLE_AUTOCOMPACT still forces auto off over the shipped true.
+describe("CFG-03 T3b compaction merge", () => {
+  const resolved = (config?: object) =>
+    Effect.gen(function* () {
+      const project = yield* tmpdirScoped()
+      return yield* withGlobalConfig({ config, name: "swarm.jsonc" }, () =>
+        withInstanceDir(project, Config.use.get()),
+      )
+    })
+
+  it.effect("no user value resolves to the shipped block", () =>
+    Effect.gen(function* () {
+      expect((yield* resolved()).compaction).toEqual({ auto: true, max_context: 0 })
+    }),
+  )
+
+  it.effect("a user auto:false keeps the shipped max_context", () =>
+    Effect.gen(function* () {
+      expect((yield* resolved({ compaction: { auto: false } })).compaction).toEqual({ auto: false, max_context: 0 })
+    }),
+  )
+
+  it.effect("a user max_context wins and keeps the shipped auto", () =>
+    Effect.gen(function* () {
+      expect((yield* resolved({ compaction: { max_context: 150000 } })).compaction).toEqual({
+        auto: true,
+        max_context: 150000,
+      })
+    }),
+  )
+
+  test("ConfigV1.Info decodes the shipped block", () => {
+    const shipped = BASELINE_CONFIG.compaction
+    expect(Schema.decodeUnknownSync(ConfigV1.Info)({ compaction: shipped }).compaction).toEqual(shipped)
+  })
+
+  it.effect("T3d OPENCODE_DISABLE_AUTOCOMPACT resolves auto:false over the shipped true", () =>
+    Effect.acquireUseRelease(
+      Effect.sync(() => {
+        const previous = Flag.OPENCODE_DISABLE_AUTOCOMPACT
+        ;(Flag as { OPENCODE_DISABLE_AUTOCOMPACT: boolean }).OPENCODE_DISABLE_AUTOCOMPACT = true
+        return previous
+      }),
+      () =>
+        Effect.gen(function* () {
+          expect((yield* resolved()).compaction).toEqual({ auto: false, max_context: 0 })
+        }),
+      (previous) =>
+        Effect.sync(() => {
+          ;(Flag as { OPENCODE_DISABLE_AUTOCOMPACT: boolean }).OPENCODE_DISABLE_AUTOCOMPACT = previous
+        }),
+    ),
+  )
+})
+
+// 1.2.6 row 34, CFG-04 T4a-T4c (01d_spec_config.md §3.1, §7; U1, C2): every shipped default
+// sits UNDER the user's global swarm.jsonc key by key, loading never writes the user file,
+// updateGlobal writes only the patch (no baseline key), and arrays follow the merge rule
+// (instructions union in layer order; every other array is replaced whole by a later layer).
+describe("CFG-04 merge-under: shipped defaults sit under the user's swarm.jsonc", () => {
+  const sha256 = (text: string) => new Bun.CryptoHasher("sha256").update(text).digest("hex")
+  // Anonymised copy of the user's file shape (U1): provider limits, mcp_timeout, compaction,
+  // an absolute instructions path. autoupdate/share/disabled_providers differ from the
+  // shipped values on purpose so a baseline win would be visible.
+  const userShape = (rules: string) => ({
+    $schema: "https://opencode.ai/config.json",
+    provider: {
+      "gsp-ai-tail": {
+        models: {
+          thinker: { limit: { context: 784000, output: 120000 } },
+          worker: { limit: { context: 512000, output: 90000 } },
+          "worker-fast": { limit: { context: 512000, output: 60000 } },
+        },
+      },
+    },
+    experimental: { mcp_timeout: 600000 },
+    compaction: { auto: true, max_context: 0 },
+    instructions: [rules],
+    autoupdate: true,
+    share: "manual",
+    disabled_providers: ["example-only"],
+  })
+  const userText = (config: object) => `// anonymised user swarm.jsonc (row 34 T4a)\n${JSON.stringify(config, null, 2)}\n`
+
+  it.effect("T4a every resolved value equals the file's, instructions exactly, file sha256 unchanged", () =>
+    Effect.gen(function* () {
+      const dir = yield* tmpdirScoped()
+      const project = yield* tmpdirScoped()
+      const file = path.join(dir, "swarm.jsonc")
+      const config = userShape(path.join(dir, "rules.md"))
+      const text = userText(config)
+      yield* FSUtil.use.writeWithDirs(file, text)
+      const before = sha256(yield* FSUtil.use.readFileString(file))
+      const resolved = yield* withGlobalConfigDir(dir, withInstanceDir(project, Config.use.get()))
+      const { $schema: _schema, ...values } = config
+      for (const [key, value] of Object.entries(values)) {
+        expect({ key, value: (resolved as Record<string, unknown>)[key] }).toEqual({ key, value })
+      }
+      expect(resolved.instructions).toEqual([path.join(dir, "rules.md")])
+      expect(sha256(yield* FSUtil.use.readFileString(file))).toBe(before)
+    }),
+  )
+
+  it.effect("T4b updateGlobal on swarm.jsonc writes only the patch, no baseline key", () =>
+    Effect.gen(function* () {
+      const dir = yield* tmpdirScoped()
+      const project = yield* tmpdirScoped()
+      const file = path.join(dir, "swarm.jsonc")
+      yield* FSUtil.use.writeWithDirs(file, JSON.stringify(schemaConfig({ model: "test/model" }), null, 2))
+      const written = yield* withGlobalConfigDir(
+        dir,
+        Effect.gen(function* () {
+          // Resolve once first so the baseline is live in the loaded state before the write.
+          yield* withInstanceDir(project, Config.use.get())
+          yield* Config.use.updateGlobal({ shell: "bash" })
+          return yield* FSUtil.use.readFileString(file)
+        }),
+      )
+      const parsed = ConfigParse.jsonc(written, file) as Record<string, unknown>
+      expect(Object.keys(parsed).sort()).toEqual(["$schema", "model", "shell"])
+      for (const key of Object.keys(BASELINE_CONFIG)) expect(written).not.toContain(`"${key}"`)
+      expect(written).not.toContain("mcp_timeout")
+      expect(written).not.toContain("max_context")
+    }),
+  )
+
+  it.effect("T4b updateGlobal on swarm.json writes only the patch, no baseline key", () =>
+    withGlobalConfig({ config: { model: "test/model" } }, ({ dir }) =>
+      Effect.gen(function* () {
+        const project = yield* tmpdirScoped()
+        yield* withInstanceDir(project, Config.use.get())
+        yield* Config.use.updateGlobal({ shell: "bash" })
+        const parsed = (yield* FSUtil.use.readJson(path.join(dir, "swarm.json"))) as Record<string, unknown>
+        expect(Object.keys(parsed).sort()).toEqual(["$schema", "model", "shell"])
+      }),
+    ),
+  )
+
+  it.effect("T4c global and project instructions union in layer order without duplicates", () =>
+    withConfigTree(
+      {
+        global: { instructions: ["/abs/g.md"] },
+        project: { instructions: ["docs/p.md", "/abs/g.md"] },
+      },
+      Effect.gen(function* () {
+        expect((yield* Config.use.get()).instructions).toEqual(["/abs/g.md", "docs/p.md"])
+      }),
+    ),
+  )
+
+  it.effect("T4c a later layer's disabled_providers replaces the shipped array whole", () =>
+    withConfigTree(
+      {
+        global: { disabled_providers: ["example-only"] },
+      },
+      Effect.gen(function* () {
+        expect((yield* Config.use.get()).disabled_providers).toEqual(["example-only"])
+      }),
+    ),
+  )
+
+  it.effect("T4c a project disabled_providers replaces the shipped array whole", () =>
+    withConfigTree(
+      {
+        project: { disabled_providers: ["project-only"] },
+      },
+      Effect.gen(function* () {
+        expect((yield* Config.use.get()).disabled_providers).toEqual(["project-only"])
+      }),
+    ),
+  )
+})

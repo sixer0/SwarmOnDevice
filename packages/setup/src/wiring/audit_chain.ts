@@ -38,7 +38,7 @@ import { ensureParent, expandTilde, setupRoot } from "../paths.ts"
 import type { AuditRecord } from "../mcpproxy/audit.ts"
 
 /** Discriminator for the three event classes folded into one format. */
-export type ChainKind = "mcp_call" | "policy_active" | "tool_launch"
+export type ChainKind = "mcp_call" | "policy_active" | "tool_launch" | "setup_verb"
 
 /** Shared leading fields present on EVERY chain line, in this order. `decision` is kind-scoped:
  *  allowed|denied|error for mcp_call, active for policy_active, launched|refused for tool_launch. */
@@ -97,7 +97,18 @@ export interface ToolLaunchEvent extends ChainEnvelope, ChainTail {
   readonly mustBeUnsetOk: boolean
 }
 
-export type ChainEvent = McpCallEvent | PolicyActiveEvent | ToolLaunchEvent
+/** Row 92a (1.2.6, N-153): one line per `swarm-setup start` invocation. `outcome` is the RESULT token
+ *  (OK, FAILED or one of the four START refusals); `commands` are the argv lines actually run, in order,
+ *  so a reader can prove the verb never ran up/create/pull. decision: started | refused | failed. */
+export interface SetupVerbEvent extends ChainEnvelope, ChainTail {
+  readonly kind: "setup_verb"
+  readonly verb: "start"
+  readonly component: string
+  readonly outcome: string
+  readonly commands: readonly string[]
+}
+
+export type ChainEvent = McpCallEvent | PolicyActiveEvent | ToolLaunchEvent | SetupVerbEvent
 
 export interface ChainOptions {
   /** Destination override; default = $SWARM_SETUP_AUDIT_LOG else ~/.swarm/setup/audit.jsonl. */
@@ -151,6 +162,11 @@ export function formatChainLine(ev: ChainEvent): string {
     line.policyPath = ev.policyPath
     line.forbidden = ev.forbidden
     line.count = ev.count
+  } else if (ev.kind === "setup_verb") {
+    line.verb = ev.verb
+    line.component = ev.component
+    line.outcome = ev.outcome
+    line.commands = ev.commands
   } else {
     line.tool = ev.tool
     line.argv = ev.argv

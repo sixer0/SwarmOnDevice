@@ -7,6 +7,7 @@ export const dict = {
   "desktop.menu.window": "ونڈو",
   "desktop.menu.help": "مدد",
   "desktop.menu.checkForUpdates": "اپ ڈیٹاں دی پڑتال کرو...",
+  "desktop.menu.recheckTools": "ٹولز دوبارہ چیک کرو",
   "desktop.menu.settings": "ترتیبات",
   "desktop.menu.reloadWebview": "Webview دوبارہ لوڈ کرو",
   "desktop.menu.restart": "دوبارہ شروع کرو",
@@ -1410,7 +1411,10 @@ export const dict = {
   "memory.privacy": "اس ڈیوائس تے رکھی جاندی اے، ریپوزیٹری وچ کدی نہیں۔ ماڈل ایہہ نوٹ صرف اوس سیشن دے حصے دے طور تے ویکھدا اے جو تسیں اوس نال چلاؤ۔",
   "memory.off": "بند۔ سیشنز نوں کوئی نوٹ نہیں ملدے تے کجھ نواں نہیں سکھیا جاندا۔ تہاڈے نوٹ رکھے گئے نیں۔",
   "memory.refused.secret": "ایہہ پاس ورڈ یا کنجی ورگا لگدا اے، اس لئی محفوظ نہیں کیتا گیا۔",
-  "memory.refused.long": "نوٹ 400 حرفاں توں گھٹ رکھو۔",
+  "memory.refused.long":
+    "نوٹ {{max}} حرفاں توں گھٹ رکھو۔ لمے ویروے کسے فائل وچ رکھو تے ایجنٹ نوں اوہنوں جوڑن لئی آکھو۔",
+  "memory.refused.bodyLong": "نوٹ دی لکھت {{max}} حرفاں توں گھٹ رکھو، یاں ایہدی تھاں کوئی فائل جوڑو۔",
+  "memory.refused.tooManyRefs": "اک نوٹ ودھ توں ودھ {{max}} فائلاں یاں نشان جوڑ سکدا اے۔",
   "memory.refused.full": "میموری بھری اے۔ پہلاں کوئی نوٹ مٹاؤ۔",
   "memory.error": "پراجیکٹ میموری لوڈ نہیں ہو سکی۔",
   "memory.retry": "دوبارہ کوشش کرو",
@@ -1435,4 +1439,5 @@ export const dict = {
   "session.movedOn.answer": "ਜਵਾਬ ਦਿਓ",
   "home.agents.movedOn": "ਇਸ ਤੋਂ ਬਿਨਾਂ ਜਾਰੀ ਰੱਖਿਆ · {{time}}",
   "home.setup.attention": "ਤੁਹਾਡੇ ਸੈੱਟਅੱਪ ਦੇ ਇੱਕ ਹਿੱਸੇ ਵੱਲ ਧਿਆਨ ਦੇਣ ਦੀ ਲੋੜ ਹੈ।",
+  "session.map.decisions.category.protected_path": "ਸੁਰੱਖਿਅਤ ਥਾਂ (ਕੁੰਜੀਆਂ, ਪ੍ਰਮਾਣ-ਪੱਤਰ ਜਾਂ ਸਿਸਟਮ ਫੋਲਡਰ)",
 }

@@ -28,6 +28,7 @@ import { RuntimeFlags } from "@/effect/runtime-flags"
 import { InstanceStore } from "@/project/instance-store"
 import { Autonomy } from "@/permission/autonomy"
 import { Session } from "@/session/session"
+import * as AutonomyTexts from "@/permission/autonomy-texts"
 
 const shellLayer = Layer.mergeAll(
   LayerNode.compile(
@@ -1538,8 +1539,9 @@ describe("tool.shell archive in autonomous mode", () => {
           const tool = yield* archiveTool(true, [])
           for (const command of ["rm a.txt && echo ran", "rm *.log", "echo x | xargs rm", "rm $FILE", "sudo rm a.txt"]) {
             const result = yield* tool.execute({ command }, ctx)
+            // 1.2.6 row 39 (P-01d, INTENT): DELETE_COMPOUND_TEXT also names the checkpoint way.
             expect(result.output).toBe(
-              "This call did not run. In autonomous mode a deletion must be a command of its own (rm, rmdir, unlink or git rm with paths only), so Swarm can move the paths to the archive instead.",
+              "This call did not run. In autonomous mode a deletion must be a command of its own (rm, rmdir, unlink or git rm with paths only) so Swarm can move the paths to the archive, or a plain command that names its files so Swarm can checkpoint them first.",
             )
           }
           expect(yield* exists(path.join(tmp, "a.txt"))).toBe(true)
@@ -1783,6 +1785,151 @@ describe("tool.shell archive in autonomous mode", () => {
           expect(yield* text(path.join(tmp, "docs/b.md"))).toBe("old\n")
           expect(yield* text(path.join(away, "n.md"))).toBe("away\n")
           expect(yield* exists(path.join(tmp, "docs/m.md"))).toBe(false)
+        }),
+      )
+    }),
+  )
+
+  // 1.2.6 row 35 (P-02, 01b 3.2 and 9.2). The gate is the consented table (`noWait`), as in autonomous mode with consent.
+  const consentGated = (asked: Record<string, unknown>[], meanwhile: () => void = () => {}) =>
+    Effect.gen(function* () {
+      const instance = yield* InstanceState.context
+      return {
+        ...ctx,
+        ask: (req: Omit<PermissionV1.Request, "id" | "sessionID" | "tool">) =>
+          Effect.suspend(() => {
+            asked.push(req.metadata)
+            if (req.permission !== "bash") return Effect.void
+            const verdict = AutonomyTable.classify({
+              permission: req.permission,
+              patterns: req.patterns,
+              metadata: req.metadata,
+              instance,
+              cwd: String(req.metadata.workdir),
+              canUndo: true,
+              folder: "clean",
+              bypass: { caller: "root" },
+            })
+            asked.push({ verdict })
+            if (verdict.class !== "A") return Effect.die(new Error(`held ${verdict.class} ${verdict.category}`))
+            // P2-8: what happens between the gate and the run.
+            meanwhile()
+            return Effect.void
+          }),
+      } as Tool.Context
+    })
+  // Read through the module so this file still loads where the text does not exist yet (the red run at 1.2.5).
+  const checkpointFailedText = (reason: string | undefined): string =>
+    (AutonomyTexts as { checkpointFailedText?: (reason: string | undefined) => string }).checkpointFailedText?.(reason) ?? "CHECKPOINT_FAILED_TEXT"
+  const verdictsOf = (asked: Record<string, unknown>[]) =>
+    asked.filter((item) => "verdict" in item).map((item) => item.verdict as { class: string; decidedBy?: string; category?: string })
+
+  posixOnly("P-02 P2-1: a consented `cp -a` to a new name after `mkdir -p ab2` runs, and the file is copied", () =>
+    Effect.gen(function* () {
+      const tmp = yield* tmpdirScoped({ git: true })
+      yield* write(path.join(tmp, "assets/P1.png"), "png\n")
+      yield* runIn(
+        tmp,
+        Effect.gen(function* () {
+          for (const command of ["mkdir -p ab2", "cp -a assets/P1.png ab2/P1-X.png", 'cp -n assets/P1.png "ab2/P1 X.png"']) {
+            const asked: Record<string, unknown>[] = []
+            const result = yield* (yield* archiveTool(true, [])).execute({ command }, yield* consentGated(asked))
+            expect([command, verdictsOf(asked).map((verdict) => verdict.class)]).toEqual([command, ["A"]])
+            expect([command, result.metadata.exit]).toEqual([command, 0])
+          }
+          expect(yield* text(path.join(tmp, "ab2/P1-X.png"))).toBe("png\n")
+          expect(yield* text(path.join(tmp, "ab2/P1 X.png"))).toBe("png\n")
+          expect(yield* exists(path.join(tmp, ".swarm"))).toBe(false)
+        }),
+      )
+    }),
+  )
+
+  posixOnly("P-02 P2-8: a target that appears between the gate and the run is archived before the copy", () =>
+    Effect.gen(function* () {
+      const tmp = yield* tmpdirScoped({ git: true })
+      yield* write(path.join(tmp, "docs/a.md"), "new\n")
+      const lines: unknown[] = []
+      yield* runIn(
+        tmp,
+        Effect.gen(function* () {
+          const asked: Record<string, unknown>[] = []
+          const late = path.join(tmp, "docs/late.md")
+          const gate = yield* consentGated(asked, () => require("fs").writeFileSync(late, "late\n"))
+          const result = yield* (yield* archiveTool(true, lines)).execute({ command: "cp docs/a.md docs/late.md" }, gate)
+          expect(verdictsOf(asked)).toEqual([{ class: "A", decidedBy: "gate", category: "file-op" }])
+          expect(result.metadata.exit).toBe(0)
+          const id = result.output.match(/\.swarm\/archive\/(\S+) instead/)?.[1]
+          expect(id).toBeDefined()
+          expect(yield* text(late)).toBe("new\n")
+          expect(yield* text(path.join(tmp, ".swarm", "archive", id!, "docs/late.md"))).toBe("late\n")
+        }),
+      )
+    }),
+  )
+
+  posixOnly("P-02 P2-8: a late target the archive cannot take is kept as a checkpoint copy before the copy", () =>
+    Effect.gen(function* () {
+      const tmp = yield* tmpdirScoped({ git: true })
+      const elsewhere = yield* tmpdirScoped()
+      yield* write(path.join(tmp, "docs/a.md"), "new\n")
+      // The archive refuses a `.swarm/archive` that is a link; the checkpoint folder beside it is fine.
+      yield* Effect.promise(() => mkdir(path.join(tmp, ".swarm"), { recursive: true }))
+      yield* Effect.promise(() => symlink(elsewhere, path.join(tmp, ".swarm", "archive")))
+      const lines: unknown[] = []
+      yield* runIn(
+        tmp,
+        Effect.gen(function* () {
+          const asked: Record<string, unknown>[] = []
+          const late = path.join(tmp, "docs/late.md")
+          const gate = yield* consentGated(asked, () => require("fs").writeFileSync(late, "late\n"))
+          const result = yield* (yield* archiveTool(true, lines)).execute({ command: "cp docs/a.md docs/late.md" }, gate)
+          expect(result.metadata.exit).toBe(0)
+          const id = result.output.match(/\.swarm\/checkpoint\/([^\s/]+)/)?.[1]
+          expect(id).toBeDefined()
+          expect(yield* text(late)).toBe("new\n")
+          expect(yield* text(path.join(tmp, ".swarm", "checkpoint", id!, "docs/late.md"))).toBe("late\n")
+          expect(lines).toContainEqual(expect.objectContaining({ type: "outcome", outcome: "checkpointed" }))
+        }),
+      )
+    }),
+  )
+
+  posixOnly("P-02 P2-8: when neither archive nor checkpoint can keep a late target, the copy does not run", () =>
+    Effect.gen(function* () {
+      const tmp = yield* tmpdirScoped({ git: true })
+      const elsewhere = yield* tmpdirScoped()
+      yield* write(path.join(tmp, "docs/a.md"), "new\n")
+      yield* Effect.promise(() => symlink(elsewhere, path.join(tmp, ".swarm")))
+      yield* runIn(
+        tmp,
+        Effect.gen(function* () {
+          const asked: Record<string, unknown>[] = []
+          const late = path.join(tmp, "docs/late.md")
+          const gate = yield* consentGated(asked, () => require("fs").writeFileSync(late, "late\n"))
+          const result = yield* (yield* archiveTool(true, [])).execute({ command: "cp docs/a.md docs/late.md" }, gate)
+          expect(result.metadata.exit).toBe(1)
+          expect(result.output).toStartWith(checkpointFailedText(undefined).slice(0, 40))
+          expect(yield* text(late)).toBe("late\n")
+        }),
+      )
+    }),
+  )
+
+  posixOnly("P-02 P2-8: a new name that became a folder since the gate is not copied into", () =>
+    Effect.gen(function* () {
+      const tmp = yield* tmpdirScoped({ git: true })
+      yield* write(path.join(tmp, "docs/a.md"), "new\n")
+      yield* runIn(
+        tmp,
+        Effect.gen(function* () {
+          const asked: Record<string, unknown>[] = []
+          const late = path.join(tmp, "docs/late.md")
+          const gate = yield* consentGated(asked, () => require("fs").mkdirSync(late))
+          const result = yield* (yield* archiveTool(true, [])).execute({ command: "cp docs/a.md docs/late.md" }, gate)
+          expect(result.metadata.exit).toBe(1)
+          expect(result.output).toBe(checkpointFailedText(undefined))
+          expect(yield* exists(path.join(late, "a.md"))).toBe(false)
         }),
       )
     }),

@@ -7,6 +7,7 @@ export const dict = {
   "desktop.menu.window": "Venster",
   "desktop.menu.help": "Help",
   "desktop.menu.checkForUpdates": "Controleren op updates...",
+  "desktop.menu.recheckTools": "Hulpmiddelen opnieuw controleren",
   "desktop.menu.settings": "Instellingen",
   "desktop.menu.reloadWebview": "Webweergave opnieuw laden",
   "desktop.menu.restart": "Opnieuw opstarten",
@@ -1420,7 +1421,11 @@ export const dict = {
   "memory.privacy": "Bewaard op dit apparaat, nooit in de repository. Een model ziet deze notities alleen als onderdeel van een sessie die je ermee uitvoert.",
   "memory.off": "Uit. Sessies krijgen geen notities en er wordt niets nieuws geleerd. Je notities blijven bewaard.",
   "memory.refused.secret": "Dit lijkt op een wachtwoord of sleutel en is daarom niet opgeslagen.",
-  "memory.refused.long": "Houd een notitie onder de 400 tekens.",
+  "memory.refused.long":
+    "Houd een notitie onder de {{max}} tekens. Zet langere details in een bestand en vraag de agent om het te koppelen.",
+  "memory.refused.bodyLong":
+    "Houd de tekst van de notitie onder de {{max}} tekens, of koppel in plaats daarvan een bestand.",
+  "memory.refused.tooManyRefs": "Een notitie kan maximaal {{max}} bestanden of symbolen koppelen.",
   "memory.refused.full": "Het geheugen is vol. Verwijder eerst een notitie.",
   "memory.error": "Kan het projectgeheugen niet laden.",
   "memory.retry": "Opnieuw proberen",
@@ -1445,4 +1450,5 @@ export const dict = {
   "session.movedOn.answer": "Antwoorden",
   "home.agents.movedOn": "Hier zonder doorgegaan · {{time}}",
   "home.setup.attention": "Een deel van je installatie vraagt om aandacht.",
+  "session.map.decisions.category.protected_path": "Beschermde locatie (sleutels, inloggegevens of systeemmappen)",
 }

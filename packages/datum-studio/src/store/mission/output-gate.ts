@@ -33,6 +33,64 @@ export interface OutputGateOutput {
   format: string | null
   state: "unverified"
   reason: OutputGateReason
+  /**
+   * Row 206 (1.2.3): for CHECK_FAILED / CHECK_UNKNOWN, the FAIL and UNKNOWN checks of the stored verification report
+   * (output_verification.report), findings capped at OUTPUT_GATE_FINDINGS_MAX each. The mission refusal turns them
+   * into client entries (mcp-host/verify/client-findings.ts). Findings are document-derived: untrusted.
+   */
+  checks?: OutputGateCheck[]
+}
+
+/** A not-passing check of a stored report, as stored (VerifyCheck subset; the store does not import the host types). */
+export interface OutputGateCheck {
+  id: string
+  status: "FAIL" | "UNKNOWN"
+  reason: string | null
+  findings: Array<{ code: string; page: number | null; address: string | null; label: string | null; detail: string; amount?: number }>
+  truncated: number
+  /** 1.2.6 INT-1: OVERLAP_CLIP page coverage of the stored check (N-032), kept only when well-formed. */
+  coverage?: { measuredPages: number; totalPages: number }
+}
+
+/** Findings kept per check in a refusal (the rest is counted in `truncated`). */
+export const OUTPUT_GATE_FINDINGS_MAX = 8
+
+/** 1.2.6 INT-1: a stored OVERLAP_CLIP coverage {measuredPages, totalPages} (integers, 0 <= m <= n), else nothing. */
+function coverageOf(v: unknown): { coverage?: { measuredPages: number; totalPages: number } } {
+  if (!v || typeof v !== "object") return {}
+  const { measuredPages: m, totalPages: n } = v as Record<string, unknown>
+  const ok = (x: unknown): x is number => typeof x === "number" && Number.isInteger(x) && x >= 0
+  return ok(m) && ok(n) && m <= n ? { coverage: { measuredPages: m, totalPages: n } } : {}
+}
+
+/** The FAIL / UNKNOWN checks of a stored report (JSON text); [] when the report cannot be read. */
+export function notPassingChecks(report: unknown): OutputGateCheck[] {
+  let r: unknown = report
+  if (typeof r === "string") {
+    try {
+      r = JSON.parse(r)
+    } catch {
+      return []
+    }
+  }
+  const checks = r && typeof r === "object" ? (r as { checks?: unknown }).checks : null
+  if (!Array.isArray(checks)) return []
+  const out: OutputGateCheck[] = []
+  for (const c of checks) {
+    if (!c || typeof c !== "object") continue
+    const k = c as Record<string, unknown>
+    if ((k.status !== "FAIL" && k.status !== "UNKNOWN") || typeof k.id !== "string") continue
+    const all = Array.isArray(k.findings) ? (k.findings as OutputGateCheck["findings"]).filter((f) => f && typeof f === "object" && typeof f.code === "string") : []
+    out.push({
+      id: k.id,
+      status: k.status,
+      reason: typeof k.reason === "string" ? k.reason : null,
+      findings: all.slice(0, OUTPUT_GATE_FINDINGS_MAX),
+      truncated: Math.max(0, all.length - OUTPUT_GATE_FINDINGS_MAX) + (typeof k.truncated === "number" ? k.truncated : 0),
+      ...coverageOf(k.coverage),
+    })
+  }
+  return out
 }
 
 export interface OutputGateDeliverable {
@@ -126,7 +184,15 @@ export function rowDeliverablesNotFinal(q: MissionReader, mission: string, rowId
     const outputs: OutputGateOutput[] = []
     if (state.reasons.includes("NOT_RENDERED")) outputs.push({ outputId: null, format: null, state: "unverified", reason: "NOT_RENDERED" })
     else if (state.reasons.includes("NO_LAYOUT_WITNESS")) outputs.push({ outputId: null, format: null, state: "unverified", reason: "NO_LAYOUT_WITNESS" })
-    for (const o of state.outputs) if (o.reason) outputs.push({ outputId: o.outputId, format: o.format, state: "unverified", reason: o.reason })
+    for (const o of state.outputs) {
+      if (!o.reason) continue
+      const entry: OutputGateOutput = { outputId: o.outputId, format: o.format, state: "unverified", reason: o.reason }
+      if (o.reason === "CHECK_FAILED" || o.reason === "CHECK_UNKNOWN") {
+        const rec = q.get<{ report: string }>("SELECT report FROM output_verification WHERE output_file_id = ?", [o.outputId])
+        entry.checks = notPassingChecks(rec?.report ?? null)
+      }
+      outputs.push(entry)
+    }
     notFinal.push({ documentId: d.id, docKey: d.mission_doc_key, revisionNo: Number(d.revision_no), final: false, outputs })
   }
   return { total: notFinal.length, deliverables: notFinal.slice(0, OUTPUT_GATE_LIST_MAX) }

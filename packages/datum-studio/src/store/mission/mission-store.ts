@@ -22,6 +22,7 @@ import type {
   MissionDecision,
   MissionDerived,
   MissionDoc,
+  MissionDrift,
   MissionEventRecord,
   MissionFinding,
   MissionListFilter,
@@ -73,15 +74,21 @@ export const MISSION_TRANSITIONS: Readonly<Record<MissionStatus, readonly Missio
   cancelled: [],
 }
 
-/** §4.2 row transitions. */
+/**
+ * §4.2 row transitions. 1.2.6 row 79 (MC-01, U5 alternative A): running -> done is allowed directly, but only with a
+ * note (the check and its result; ROW_RUNNING_DONE_RULE); the done gate (OUTPUT_UNVERIFIED) still applies.
+ */
 export const ROW_TRANSITIONS: Readonly<Record<RowStatus, readonly RowStatus[]>> = {
   pending: ["running", "blocked", "dropped"],
-  running: ["needs-review", "blocked"],
+  running: ["needs-review", "blocked", "done"],
   "needs-review": ["done", "blocked", "running"],
   blocked: ["running", "dropped"],
   done: ["running"],
   dropped: [],
 }
+
+/** Row 79 (MC-01): the one wording of the running -> done rule, shared by the refusal, the next-call hint and the update_row description. */
+export const ROW_RUNNING_DONE_RULE = "running -> done needs a note (the check and its result); needs-review is optional"
 
 /** §4.4: fields whose change after approval needs a decision. */
 const STRUCTURAL_FIELDS = ["phase", "kind", "deps", "agent", "title", "output", "verification", "ownership", "size", "model"] as const
@@ -145,6 +152,27 @@ interface RowDbRow {
 function err(code: ConstructorParameters<typeof StoreError>[0], message: string, details?: Record<string, unknown>): StoreError {
   return new StoreError(code, message, details)
 }
+
+/** Row 85 (1.2.6, MC-07, register N-061): one entry per row patch of a studio_mission_update_row job. */
+export interface RowPatchResult {
+  id: string
+  ok: boolean
+  code?: string
+  message?: string
+  /** Row 82b (MC-04): true when the patch was refused for DEP_NOT_DONE but its note was stored. */
+  noteSaved?: boolean
+}
+
+/** What updateRows returns: applied rows, the per-patch results, and the derived waves / ready rows after the job. */
+export interface RowPatchJobResult {
+  changed: string[]
+  results: RowPatchResult[]
+  waves: Array<{ wave: number; rows: string[] }>
+  ready: string[]
+}
+
+/** Row 85: the savepoint name each row patch runs under (one at a time, released before the next patch). */
+const ROW_PATCH_SAVEPOINT = "mission_row_patch"
 
 /** Row 197 (S194-01): a self-approval while Swarm's autonomous mode is off (the person turns it on, never the agent). */
 function autonomousModeOff(mission: string, decision: string): StoreError {
@@ -455,10 +483,13 @@ export class MissionStore {
     to: MissionStatus,
     args: { decision?: string; supersededBy?: string; note?: string } = {},
     opts?: MissionWriteOptions,
-  ): { id: string; from: MissionStatus; to: MissionStatus; snapshotId: string } {
+  ): { id: string; from: MissionStatus; to: MissionStatus; snapshotId?: string; unchanged?: true } {
     const actor = this.actorOf(opts)
     const m = this.openMission(tx, mission)
     const from = m.status
+    // 1.2.6 row 84 (MC-06, U5 alternative A): a move to the current status is a no-op, not a refusal. Nothing is
+    // written: no status update, no event, no snapshot. approved stays reachable only through approve().
+    if (to === from && to !== "approved") return { id: mission, from, to, unchanged: true }
     const allowed = MISSION_TRANSITIONS[from]
     if (to === "approved" || !allowed.includes(to)) throw err("STATUS_TRANSITION", `mission ${from} -> ${to} is not allowed`, { from, to, allowed, ...(to === "approved" ? { via: "approve" } : {}) })
     if (args.supersededBy !== undefined && to !== "cancelled") throw err("SUPERSEDE_TARGET", "supersededBy is allowed only with cancelled", { mission, supersededBy: args.supersededBy })
@@ -508,29 +539,84 @@ export class MissionStore {
 
   // ── rows ──────────────────────────────────────────────────────────────────
 
-  /** studio_mission_update_row (§8.3): 1-200 patches applied in order, all in this job. */
-  updateRows(tx: StoreTx, mission: string, patches: readonly RowPatch[], args: { decision?: string } = {}, opts?: MissionWriteOptions): { changed: string[]; waves: Array<{ wave: number; rows: string[] }>; ready: string[] } {
+  /**
+   * studio_mission_update_row (§8.3): 1-200 patches applied in order in this job.
+   * Row 85 (1.2.6, MC-07, N-061): each patch runs under its own SAVEPOINT. A patch refused with a StoreError is rolled
+   * back alone and reported in `results` ({id, ok: false, code, message}); the other patches stay applied. A job in
+   * which no patch applies (and no note was kept, row 82b) throws the first patch's error unchanged. Row 82b (MC-04): a
+   * patch whose status move is refused for DEP_NOT_DONE still stores its note ({..., noteSaved: true}). Any other error is a
+   * fault, not a refusal, and still fails the whole job.
+   */
+  updateRows(tx: StoreTx, mission: string, patches: readonly RowPatch[], args: { decision?: string } = {}, opts?: MissionWriteOptions): RowPatchJobResult {
     const actor = this.actorOf(opts)
     if (!Array.isArray(patches) || patches.length < 1 || patches.length > MISSION_PATCH_MAX) throw err("SCHEMA_INVALID", `1-${MISSION_PATCH_MAX} row patches`, { count: Array.isArray(patches) ? patches.length : null })
     const m = this.openMission(tx, mission)
     const type = this.getType(m.type_id, m.type_version, tx)!
     const changed: string[] = []
+    const results: RowPatchResult[] = []
+    let firstRefusal: StoreError | undefined
+    let notesKept = 0
     for (const p of patches) {
-      const keys = Object.keys(p ?? {}).filter((k) => !["id", "add", "set", "status", "note", "acquire", "release", "retire"].includes(k))
-      if (keys.length > 0) throw err("SCHEMA_INVALID", "unknown patch fields", { row: p?.id, fields: keys })
-      if (p.add) this.addRow(tx, m, type, p, args.decision, actor)
-      if (p.set) this.setRow(tx, m, type, p.id, p.set, args.decision, actor)
-      // Row 174 (C218 F146b-3): retire before the status move, so `{retire, status: "done"}` is judged without the draft.
-      if (p.retire !== undefined) this.retireDeliverables(tx, m, p.id, p.retire, p.note, actor)
-      if (p.status) this.transitionRow(tx, m, p.id, p.status, { note: p.note, decision: args.decision, actor, cause: "update_row" })
-      else if (p.note !== undefined && !p.add) this.setNote(tx, m, p.id, p.note, actor)
-      for (const res of p.acquire ?? []) this.acquireLock(tx, m, p.id, res, actor)
-      for (const res of p.release ?? []) this.releaseLock(tx, m, p.id, res, actor)
+      tx.run(`SAVEPOINT ${ROW_PATCH_SAVEPOINT}`)
+      try {
+        this.applyRowPatch(tx, m, type, p, args.decision, actor)
+        tx.run(`RELEASE SAVEPOINT ${ROW_PATCH_SAVEPOINT}`)
+      } catch (e) {
+        tx.run(`ROLLBACK TO SAVEPOINT ${ROW_PATCH_SAVEPOINT}`)
+        tx.run(`RELEASE SAVEPOINT ${ROW_PATCH_SAVEPOINT}`)
+        if (!(e instanceof StoreError)) throw e
+        // transitionRow may have flipped the in-memory mission status (autoRun); re-read it after the rollback.
+        m.status = this.openMission(tx, mission).status
+        firstRefusal ??= e
+        const refusal: RowPatchResult = { id: String(p?.id), ok: false, code: e.code, message: e.message.slice(e.code.length + 2) }
+        // Row 82b (1.2.6, MC-04): notes are never gated by dependencies. A status move refused for DEP_NOT_DONE (only
+        // this code) still stores the patch's note; the rest of the patch stays rolled back.
+        if (e.code === "DEP_NOT_DONE" && p.status && p.note !== undefined && this.keepNote(tx, m, p.id, p.note, actor)) {
+          refusal.noteSaved = true
+          notesKept++
+        }
+        results.push(refusal)
+        continue
+      }
       changed.push(p.id)
+      results.push({ id: p.id, ok: true })
     }
+    if (changed.length === 0 && notesKept === 0 && firstRefusal) throw firstRefusal
     this.afterWrite(tx, mission, opts)
     const g = this.graph(tx, mission)
-    return { changed, waves: computeWaves(g.rows, g.deps), ready: readyRows(g.rows, g.deps, new Set(this.requestBlocks(tx, mission).keys())) }
+    return { changed, results, waves: computeWaves(g.rows, g.deps), ready: readyRows(g.rows, g.deps, new Set(this.requestBlocks(tx, mission).keys())) }
+  }
+
+  /** Row 82b (MC-04): store a refused patch's note under its own savepoint; false when the note itself is refused. */
+  private keepNote(tx: StoreTx, m: MissionDbRow, rowId: string, note: string, actor: string): boolean {
+    tx.run(`SAVEPOINT ${ROW_PATCH_SAVEPOINT}`)
+    try {
+      this.setNote(tx, m, rowId, note, actor)
+      tx.run(`RELEASE SAVEPOINT ${ROW_PATCH_SAVEPOINT}`)
+      return true
+    } catch (e) {
+      tx.run(`ROLLBACK TO SAVEPOINT ${ROW_PATCH_SAVEPOINT}`)
+      tx.run(`RELEASE SAVEPOINT ${ROW_PATCH_SAVEPOINT}`)
+      if (!(e instanceof StoreError)) throw e
+      return false
+    }
+  }
+
+  /** One row patch (row 85 split it out of updateRows so each patch can run under its own savepoint). */
+  private applyRowPatch(tx: StoreTx, m: MissionDbRow, type: MissionTypeDoc, p: RowPatch, callDecision: string | undefined, actor: string): void {
+    const keys = Object.keys(p ?? {}).filter((k) => !["id", "add", "set", "status", "note", "acquire", "release", "retire", "decision"].includes(k))
+    if (keys.length > 0) throw err("SCHEMA_INVALID", "unknown patch fields", { row: p?.id, fields: keys })
+    // Row 81 (1.2.6, MC-03): a patch-level decision overrides the call-level one for this patch only.
+    if (p.decision !== undefined && typeof p.decision !== "string") throw err("SCHEMA_INVALID", "patch decision must be a decision id", { row: p.id, fields: ["decision"] })
+    const decision = p.decision ?? callDecision
+    if (p.add) this.addRow(tx, m, type, p, decision, actor)
+    if (p.set) this.setRow(tx, m, type, p.id, p.set, decision, actor)
+    // Row 174 (C218 F146b-3): retire before the status move, so `{retire, status: "done"}` is judged without the draft.
+    if (p.retire !== undefined) this.retireDeliverables(tx, m, p.id, p.retire, p.note, actor)
+    if (p.status) this.transitionRow(tx, m, p.id, p.status, { note: p.note, decision, actor, cause: "update_row" })
+    else if (p.note !== undefined && !p.add) this.setNote(tx, m, p.id, p.note, actor)
+    for (const res of p.acquire ?? []) this.acquireLock(tx, m, p.id, res, actor)
+    for (const res of p.release ?? []) this.releaseLock(tx, m, p.id, res, actor)
   }
 
   private addRow(tx: StoreTx, m: MissionDbRow, type: MissionTypeDoc, p: RowPatch, decision: string | undefined, actor: string): void {
@@ -644,6 +730,7 @@ export class MissionStore {
     const allowed = ROW_TRANSITIONS[from]
     if (!allowed.includes(to)) throw err("STATUS_TRANSITION", `row ${rowId} ${from} -> ${to} is not allowed`, { row: rowId, from, to, allowed })
     const noteOk = (n: string | undefined) => typeof n === "string" && n.length >= 1 && n.length <= 4000 && !/[\u0000-\u001f]/.test(n)
+    if (from === "running" && to === "done" && !noteOk(a.note)) throw err("SCHEMA_INVALID", ROW_RUNNING_DONE_RULE, { row: rowId, field: "note", from, to })
     if ((to === "blocked" || to === "dropped") && !noteOk(a.note)) throw err("SCHEMA_INVALID", `${to} needs a note (the ${to === "blocked" ? "blocker" : "reason"})`, { row: rowId, field: "note" })
     if (a.note !== undefined && !noteOk(a.note)) throw err("SCHEMA_INVALID", "note must be a cell: 1-4000 characters, no control characters", { row: rowId })
     // Row 155 (spec output verification §7.3; C129, C130): done only when every deliverable bound to the row
@@ -1161,6 +1248,29 @@ export class MissionStore {
     }
   }
 
+  /**
+   * 1.2.6 row 87 (MC-09, N-066): rows added (`row-add`) and dropped (`row-status` to dropped) after the approve event,
+   * each with the decision id its event carries. Ordered by event seq, not time, so a change in the approving
+   * millisecond is still placed correctly; a draft mission (no approve event) has an empty drift.
+   */
+  private driftOf(q: MissionReader, mission: string): MissionDrift {
+    const drift: MissionDrift = { count: 0, rows: [], dropped: [] }
+    const approved = q.get<{ s: number | null }>("SELECT min(seq) AS s FROM mission_event WHERE mission_id = ? AND verb = 'approve'", [mission])?.s
+    if (approved === null || approved === undefined) return drift
+    const events = q.all<{ row_id: string; verb: string; decision_id: string | null; time_created: number }>(
+      `SELECT row_id, verb, decision_id, time_created FROM mission_event
+        WHERE mission_id = ? AND seq > ? AND row_id IS NOT NULL AND (verb = 'row-add' OR (verb = 'row-status' AND to_status = 'dropped'))
+        ORDER BY seq`,
+      [mission, approved],
+    )
+    for (const e of events) {
+      if (e.verb === "row-add") drift.rows.push({ row: e.row_id, timeCreated: iso(e.time_created)!, decision: e.decision_id ?? null })
+      else drift.dropped.push({ row: e.row_id, timeDropped: iso(e.time_created)!, decision: e.decision_id ?? null })
+    }
+    drift.count = drift.rows.length
+    return drift
+  }
+
   /** studio_mission_get (§8.3): the stored MissionDoc plus derived phases (the type's only), waves, ready, counts. */
   get(mission: string, tx?: MissionReader): { mission: MissionDoc; derived: MissionDerived } | null {
     const q = this.r(tx)
@@ -1223,6 +1333,7 @@ export class MissionStore {
       counts,
       progress: { done: counts.done, total: g.rows.length - counts.dropped },
       checkpoints,
+      drift: this.driftOf(q, mission),
     }
     // Row 188 (L47): who approved; an autonomous controller approval is labelled so Mission Control shows it apart.
     // Row 197 (S194-02): the label says what the record says. The store cannot tell Mission Control from an agent that

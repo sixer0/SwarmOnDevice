@@ -36,7 +36,11 @@
  * Row 151c (C161 L1): every DOM member is read through its prototype (stable references), so named elements cannot
  *   shadow document.body / querySelectorAll / createRange or a form's members; if the document's body is not an
  *   HTMLBodyElement the script returns { untrusted } (host: UNKNOWN VERIFY_INTERNAL).
- * Returns { paged, pageCount, truncated, marginsUnreadable, contentHeightMm, boxes, scanned, findingsTotal, findings[] }.
+ * - Row 205 (1.2.3, HB-1): the layout viewport as laid out: `viewportPx` (window.innerWidth, the sheet width the host
+ *   asked for) and `layoutWidthPx` (documentElement.clientWidth, what is left after a classic scrollbar). The host reads
+ *   a flow document as unmeasurable when the two differ (UNKNOWN FLOW_LAYOUT_UNMEASURABLE, overlap-clip.ts).
+ * Returns { paged, pageCount, truncated, marginsUnreadable, contentHeightMm, boxes, scanned, findingsTotal, findings[],
+ *   viewportPx, layoutWidthPx }.
  */
 
 export const OVERLAP_SCRIPT_NAME = "swarm.verify.overlap"
@@ -256,7 +260,9 @@ export const OVERLAP_SCRIPT = String.raw`(function (o) {
     boxes: boxes,
     scanned: scanned,
     findingsTotal: findingsTotal,
-    findings: findings
+    findings: findings,
+    viewportPx: Number(window.innerWidth) || 0,
+    layoutWidthPx: getter(EP, 'clientWidth')(docEl)
   };
 })`
 

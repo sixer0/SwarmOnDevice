@@ -203,6 +203,8 @@ const DIAGRAM_SPEC_V2 = obj(
     legend: DIAGRAM_V1_PROPS.legend,
     notes: DIAGRAM_V1_PROPS.notes,
     per_row: DIAGRAM_V1_PROPS.per_row,
+    // Swarm 1.2.6 row 45 (T-11, N-109): same enum as v1.
+    direction: DIAGRAM_V1_PROPS.direction,
   },
   ["family", "nodes"],
 );
@@ -690,11 +692,13 @@ export const commonV2Schema = {
       { rev: { type: "string", minLength: 1, maxLength: 16 }, date: isoDate, what: longText, by: str },
       ["rev", "date", "what", "by"],
     ),
-    VerificationEntryV2: obj({ layer: { type: "string", minLength: 1, maxLength: 16 }, role: str, name: str, date: isoDate }, [
-      "layer",
-      "role",
-      "name",
-    ]),
+    // Row 207 (HB-2): + method/object/result (printed METODE/OBJEK/HASIL); layer + at least one other key
+    // (documented role/name, or the printed columns). Aliases are mapped before validation (verification-entry.ts).
+    VerificationEntryV2: obj(
+      { layer: { type: "string", minLength: 1, maxLength: 16 }, method: longText, object: longText, result: longText, role: str, name: str, date: isoDate },
+      ["layer"],
+      { minProperties: 2 },
+    ),
     DistributionEntryV2: obj({ copy: { type: "string", minLength: 1, maxLength: 16 }, holder: str }, ["copy", "holder"]),
     ControlSheetPayloadV2: obj(
       {

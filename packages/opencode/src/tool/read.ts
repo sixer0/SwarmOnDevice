@@ -12,6 +12,9 @@ import { Instruction } from "../session/instruction"
 import { isPdfAttachment, sniffAttachmentMime } from "@/util/media"
 import { pdfTextForModel } from "@/util/pdf-text"
 import { Secrets } from "./secrets"
+import { Global } from "@opencode-ai/core/global"
+import { BypassLists } from "@/permission/bypass-lists"
+import { homedir } from "os"
 import { Reach } from "./reach"
 import { FileSeen } from "./file-seen"
 
@@ -368,9 +371,12 @@ export const ReadTool = Tool.define<
         return yield* Effect.fail(new Error(`Cannot read binary file: ${filepath}`))
       }
 
-      // A link called notes.txt that points at .env is still .env.
+      // A link called notes.txt that points at .env is still .env. Row 36b (SEC-03): a protected place (a key folder in the
+      // home folder, Swarm's own auth.json and mcp-auth.json) is read without asking now (U12), so it is whole-secret here.
       const landed = Reach.real(filepath) ?? filepath
-      if (Secrets.wholeSecretFile(filepath) || Secrets.wholeSecretFile(landed)) {
+      const places = BypassLists.protectedOutputPlaces([Global.Path.home, homedir()], Global.Path.data)
+      const kind = Secrets.outputKind(filepath, places) ?? Secrets.outputKind(landed, places)
+      if (kind === "whole") {
         const hidden = `This file holds credentials, so its contents are kept from you. Programs you run can still use it.`
         return {
           title,
@@ -379,17 +385,20 @@ export const ReadTool = Tool.define<
         }
       }
 
-      const secret = Secrets.secretFile(filepath) || Secrets.secretFile(landed)
+      const secret = kind === "lines"
       if (Number(stat.size) <= 1024 * 1024) {
         const whole = yield* fs.readFileString(filepath).pipe(Effect.catch(() => Effect.succeed(undefined)))
         if (whole !== undefined) {
           FileSeen.record(ctx.sessionID, filepath, whole)
-          if (secret) Secrets.learn(whole)
+          if (secret) Secrets.learn(whole, path.basename(landed))
         }
       }
 
       const file = yield* lines(filepath, { limit: params.limit ?? DEFAULT_READ_LIMIT, offset: params.offset || 1 })
-      if (secret) file.raw = file.raw.map(Secrets.maskLine)
+      // Row 36b (SEC-03): a protected read (a secret file, a history, a file in a folder that holds secrets) also gets the
+      // written-assignment rules, so a value need not be known to be hidden.
+      if (secret) file.raw = file.raw.map((line) => Secrets.maskOutputLine(line))
+      else if (!readable) file.raw = file.raw.map((line) => Secrets.scrubAssigned(line))
       if (file.count < file.offset && !(file.count === 0 && file.offset === 1)) {
         return yield* Effect.fail(
           new Error(`Offset ${file.offset} is out of range for this file (${file.count} lines)`),

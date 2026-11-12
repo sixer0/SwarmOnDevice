@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="128.0mm" height="128.587mm" viewBox="0 0 128.0 128.587" version="1.1">
+
+<defs>
+<marker id="head-accent" markerWidth="4" markerHeight="4" refX="3.4" refY="1.6" orient="auto"><path d="M0,0 L3.6,1.6 L0,3.2 Z" fill="#B45309"/></marker>
+<marker id="head-alert" markerWidth="4" markerHeight="4" refX="3.4" refY="1.6" orient="auto"><path d="M0,0 L3.6,1.6 L0,3.2" fill="none" stroke="#9B1C1C" stroke-width="0.35"/></marker>
+<marker id="head-control" markerWidth="4" markerHeight="4" refX="3.4" refY="1.6" orient="auto"><path d="M0,0 L3.6,1.6 L0,3.2" fill="none" stroke="#2B3640" stroke-width="0.35"/></marker>
+<marker id="head-data" markerWidth="4" markerHeight="4" refX="3.4" refY="1.6" orient="auto"><path d="M0,0 L3.6,1.6 L0,3.2 Z" fill="#101418"/></marker>
+</defs>
+<rect x="0" y="0" width="128.0" height="128.587" fill="#FCFCFB"/>
+<text data-caption-above="1" x="0" y="3.81" font-family="IBM Plex Sans Condensed" font-size="2.681" font-weight="400" fill="#2B3640" text-anchor="start">charlie; bravoxxxx victor india, november xxx tango yankee zulu.</text>
+<text data-caption-above="1" x="0" y="8.57" font-family="IBM Plex Sans Condensed" font-size="2.681" font-weight="400" fill="#2B3640" text-anchor="start"><tspan font-weight="600">SIERRA 8.8</tspan> India oscar kilo tango victor charlie xray</text>
+<g transform="translate(0 9.525)">
+<path d="M 37.33 14.29 L 37.33 19.05 L 37.33 23.81 L 37.33 23.81 L 37.33 23.81 L 37.33 28.57" fill="none" stroke="#2B3640" stroke-width="0.45" stroke-dasharray="3.2,1.6" marker-end="url(#head-control)" data-mark="link" data-series="control" data-index="0"/>
+<path d="M 53.33 33.34 L 58.1 33.34 L 64.0 33.34 L 64.0 33.34 L 59.24 33.34 L 64.0 33.34" fill="none" stroke="#9B1C1C" stroke-width="0.45" stroke-dasharray="7.1,1.6" marker-end="url(#head-alert)" data-mark="link" data-series="alert" data-index="1"/>
+<path d="M 37.33 38.1 L 37.33 42.86 L 37.33 42.86 L 37.33 42.86 L 37.33 47.62 L 37.33 52.39" fill="none" stroke="#2B3640" stroke-width="0.45" stroke-dasharray="3.2,1.6" marker-end="url(#head-control)" data-mark="link" data-series="control" data-index="2"/>
+<path d="M 53.33 55.56 L 58.1 55.56 L 64.0 55.56 L 64.0 57.15 L 59.24 57.15 L 64.0 57.15" fill="none" stroke="#B45309" stroke-width="0.72" marker-end="url(#head-accent)" data-mark="link" data-series="accent" data-index="3"/>
+<path d="M 53.33 58.74 L 58.1 58.74 L 64.0 58.74 L 64.0 80.96 L 59.24 80.96 L 64.0 80.96" fill="none" stroke="#101418" stroke-width="0.45" marker-end="url(#head-data)" data-mark="link" data-series="data" data-index="4"/>
+<path d="M 80.0 85.72 L 80.0 90.49 L 80.0 90.49 L 80.0 90.49 L 80.0 95.25 L 80.0 100.01" fill="none" stroke="#101418" stroke-width="0.45" marker-end="url(#head-data)" data-mark="link" data-series="data" data-index="5"/>
+<rect x="29.04" y="15.04" width="16.59" height="3.54" fill="#FCFCFB"/>
+<text x="37.33" y="17.44" font-family="IBM Plex Mono" font-size="2.081" font-weight="400" fill="#2B3640" text-anchor="middle">XXX NOVEMBER</text>
+<rect x="59.0" y="30.52" width="4.1" height="3.54" fill="#FCFCFB"/>
+<text x="61.05" y="32.91" font-family="IBM Plex Mono" font-size="2.081" font-weight="400" fill="#9B1C1C" text-anchor="middle">XX</text>
+<rect x="33.41" y="47.19" width="7.84" height="3.54" fill="#FCFCFB"/>
+<text x="37.33" y="49.58" font-family="IBM Plex Mono" font-size="2.081" font-weight="400" fill="#2B3640" text-anchor="middle">TANGO</text>
+<rect x="59.0" y="52.75" width="4.1" height="3.54" fill="#FCFCFB"/>
+<text x="61.05" y="55.14" font-family="IBM Plex Mono" font-size="2.081" font-weight="400" fill="#B45309" text-anchor="middle">XX</text>
+<rect x="60.08" y="67.03" width="7.84" height="3.54" fill="#FCFCFB"/>
+<text x="64.0" y="69.43" font-family="IBM Plex Mono" font-size="2.081" font-weight="400" fill="#101418" text-anchor="middle">DELTA</text>
+<rect x="73.58" y="86.48" width="12.84" height="3.54" fill="#FCFCFB"/>
+<text x="80.0" y="88.87" font-family="IBM Plex Mono" font-size="2.081" font-weight="400" fill="#101418" text-anchor="middle">XRAYXXXXX</text>
+<rect x="21.33" y="4.76" width="32.0" height="9.52" data-node="n1" fill="none" stroke="#2B3640" stroke-width="0.45" data-mark="node" data-index="0"/>
+<text x="37.33" y="9.52" font-family="IBM Plex Sans Condensed" font-size="2.681" font-weight="400" fill="#101418" text-anchor="middle">quebec oscar november</text>
+<polygon points="37.33,28.57 53.33,33.34 37.33,38.1 21.33,33.34" data-node="n2" fill="none" stroke="#2B3640" stroke-width="0.45" data-mark="node" data-index="1"/>
+<text x="37.33" y="33.34" font-family="IBM Plex Sans Condensed" font-size="2.681" font-weight="400" fill="#101418" text-anchor="middle">november echo?</text>
+<rect x="64.0" y="28.57" width="32.0" height="9.52" data-node="n3" fill="none" stroke="#2B3640" stroke-width="0.45" data-mark="node" data-index="2"/>
+<text x="80.0" y="33.34" font-family="IBM Plex Sans Condensed" font-size="2.681" font-weight="400" fill="#101418" text-anchor="middle">delta X8-NOVEMBER-XXX</text>
+<polygon points="37.33,52.39 53.33,57.15 37.33,61.91 21.33,57.15" data-node="n4" fill="none" stroke="#2B3640" stroke-width="0.45" data-mark="node" data-index="3"/>
+<text x="37.33" y="56.55" font-family="IBM Plex Sans Condensed" font-size="2.681" font-weight="400" fill="#101418" text-anchor="middle"><tspan x="37.33" dy="0">uniform</tspan><tspan x="37.33" dy="3.217">whiskey?</tspan></text>
+<rect x="64.0" y="52.39" width="32.0" height="9.52" data-node="n5" fill="none" stroke="#2B3640" stroke-width="0.45" data-mark="node" data-index="4"/>
+<text x="80.0" y="57.15" font-family="IBM Plex Sans Condensed" font-size="2.681" font-weight="400" fill="#101418" text-anchor="middle">zulu alfa hotel</text>
+<rect x="64.0" y="76.2" width="32.0" height="9.52" data-node="n6" fill="none" stroke="#2B3640" stroke-width="0.45" data-mark="node" data-index="5"/>
+<text x="80.0" y="80.96" font-family="IBM Plex Sans Condensed" font-size="2.681" font-weight="400" fill="#101418" text-anchor="middle">india xx november</text>
+<rect x="64.0" y="100.01" width="32.0" height="9.52" data-node="n7" fill="none" stroke="#2B3640" stroke-width="0.45" data-mark="node" data-index="6"/>
+<text x="80.0" y="104.77" font-family="IBM Plex Sans Condensed" font-size="2.681" font-weight="400" fill="#101418" text-anchor="middle">tango victor delta</text>
+<text x="0" y="114.3" font-family="IBM Plex Sans Condensed" font-size="2.328" font-weight="400" fill="#6B7783" text-anchor="start">QUEBEC  Sierra echo romeo tango xxx xxx xxx india X8-NOVEMBER-XXX golf Delta 8.8; golfhotel §8 xxx §8 oscar Foxtrot victor X8</text>
+</g>
+</svg>

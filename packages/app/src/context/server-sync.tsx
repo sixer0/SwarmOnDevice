@@ -58,6 +58,7 @@ import type {
   SessionActiveOutput,
 } from "@opencode-ai/client/promise"
 import { toggleMcp } from "./global-sync/mcp"
+import { providerRouteToast } from "./global-sync/provider-route-toast"
 import { createServerSession, type ServerSession } from "./server-session"
 
 type GlobalStore = {
@@ -542,6 +543,11 @@ export function createServerSyncContextInner(serverSDK: ServerSDK) {
     }
     homeSessions.refresh(event.type)
     if (eventType === "integration.connection.updated") void refreshProviders()
+    // 1.2.6 INT-1 (row 34a, SEC-08): the server's PROVIDER_ROUTE_UNVERIFIED notice uses the existing toast.
+    if (eventType === "tui.toast.show") {
+      const toast = providerRouteToast(event as { type: string; properties?: unknown })
+      if (toast) showToast(toast)
+    }
 
     if (directory === "global") {
       if (eventType === "server.connected" && activeSessionsQuery.data === undefined && !activeSessionsQuery.isFetching)

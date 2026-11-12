@@ -1,0 +1,76 @@
+{
+  "id": "fx-t01-6",
+  "nomor": "6.1",
+  "jenis": "diagram",
+  "family": "flow",
+  "arah": "LR",
+  "labels_verified": true,
+  "title": "Charlie delta xxx xxx november mike tango xray uniform whiskey india oscar 888 november tango.",
+  "caption": "Gambar 6.1 Victor papa november: india xxx echo tango sierra xxx hotel whiskey xray xxx xxx, quebec xxx victor xxx juliett hotelindia xray bravo alfa juliett xxx novemberxxxx charlie Sierra papa xray 8 Whiskey 8888, xxx oscar november kilo xrayyankee delta papa india oscar romeo 888 november bravo.x",
+  "data": {
+    "nodes": [
+      {
+        "id": "n1",
+        "label": "xxx xxx india oscar romeo victor",
+        "class": {}
+      },
+      {
+        "id": "n2",
+        "label": "yankee echo hotel kilo juliett",
+        "class": {}
+      },
+      {
+        "id": "n3",
+        "label": "uniform Sierra xray 8 Foxtrot 8888",
+        "class": {}
+      },
+      {
+        "id": "n4",
+        "label": "uniformxx xx victor november",
+        "class": {}
+      },
+      {
+        "id": "n5",
+        "label": "foxtrot xxx uniform whiskey",
+        "class": {}
+      },
+      {
+        "id": "n6",
+        "label": "india oscar 888 november tango",
+        "class": {}
+      }
+    ],
+    "edges": [
+      {
+        "from": "n1",
+        "to": "n2",
+        "kind": "control",
+        "label": "november hotelindia"
+      },
+      {
+        "from": "n1",
+        "to": "n4",
+        "kind": "control",
+        "label": "indiaxxxx juliettxx oscar"
+      },
+      {
+        "from": "n2",
+        "to": "n5",
+        "kind": "control",
+        "label": "november alfa bravo"
+      },
+      {
+        "from": "n3",
+        "to": "n5",
+        "kind": "alert",
+        "label": "delta xxx india romeosierrax"
+      },
+      {
+        "from": "n5",
+        "to": "n6",
+        "kind": "control",
+        "label": "papa tango"
+      }
+    ]
+  }
+}

@@ -9,6 +9,7 @@
  */
 import { MISSION_SCHEMA_V1 } from "../../store/mission/schema.ts"
 import { BUILTIN_MISSION_TYPES } from "../../store/mission/builtin-types.ts"
+import { MISSION_TRANSITIONS, ROW_RUNNING_DONE_RULE, ROW_TRANSITIONS } from "../../store/mission/mission-store.ts"
 
 export const MISSION_GUIDE_URI = "studio://skema/mission"
 export const MISSION_GUIDE_NAME = "skema-mission"
@@ -84,18 +85,38 @@ export const MISSION_GUIDE_EXAMPLE = {
   ],
 } as const
 
+/** The approval shape for autonomous mode (MC-02, row 80: top-level `autonomous`, stored as decision.autonomous). Shared with next-call.ts. */
+export const AUTONOMOUS_DECISION_SHAPE = "studio_mission_record_decision {decision: {id: C<n>, by: controller, date, text}, autonomous: true}"
+
+/** What one update_row job returns per patch (MC-07 row 85, MC-04 row 82b: RowPatchResult). Shared with next-call.ts. */
+export const ROW_PATCH_RESULT_SHAPE = "results[] {id, ok, code?, message?, noteSaved?}"
+
 /**
  * Row 188 (L47): the lifecycle in 6 lines (the order the store enforces; skill mission-control has the full sequence).
- * Omit `session` on every call: Swarm links the calling session.
+ * Omit `session` on every call: Swarm links the calling session. 1.2.6 row 100a (G-03): every line states the fixed
+ * store behaviour (MC-01..MC-09); the running -> done wording is the store's ROW_RUNNING_DONE_RULE, never retyped.
  */
 export const MISSION_LIFECYCLE = [
   "Lifecycle 1/6 create: studio_mission_create {mission, dryRun: true}, fix what it names, then the same call without dryRun (draft). Omit `session` on every call: Swarm fills it. Skill: mission-control.",
-  "Lifecycle 2/6 approval: studio_mission_request_decision and wait for the user's answer; only while Swarm's autonomous mode setting is on (the person turns it on) studio_mission_record_decision {by: controller, autonomous: true} then studio_mission_approve. Never record by: user yourself.",
-  "Lifecycle 3/6 set_status running: studio_mission_set_status {to: running}; no row starts before approval (MISSION_NOT_APPROVED).",
-  "Lifecycle 4/6 update_row per step: studio_mission_update_row {rows: [{id, status: running}]} when a step starts, done or blocked (with note) when it ends.",
-  "Lifecycle 5/6 gate: a row is done only with verified outputs (OUTPUT_UNVERIFIED otherwise) or a note naming the check and its result file.",
-  "Lifecycle 6/6 done: every row done or dropped, then studio_mission_set_status {to: done}.",
+  `Lifecycle 2/6 approval: studio_mission_request_decision and wait for the user's answer; only while Swarm's autonomous mode setting is on (the person turns it on) ${AUTONOMOUS_DECISION_SHAPE} (top-level autonomous, or decision.autonomous; both stored the same) then studio_mission_approve {mission, decision: C<n>}. Never record by: user yourself.`,
+  "Lifecycle 3/6 set_status running: studio_mission_set_status {to: running}; no row starts before approval (MISSION_NOT_APPROVED). Setting the status a mission already has returns unchanged: true and writes nothing, so a repeated call is safe.",
+  `Lifecycle 4/6 update_row per step: studio_mission_update_row {rows: [{id, status: running}]} when a step starts; when it ends set done or blocked, each with a note (${ROW_RUNNING_DONE_RULE}). Each patch applies or is refused on its own: the call can succeed while a patch failed, so read ${ROW_PATCH_RESULT_SHAPE}. rows[].decision gives one patch its own decision (it overrides the call-level decision). Notes are never gated by dependencies: send a note as its own patch; a status refused DEP_NOT_DONE in a patch that also carries a note still stores the note (noteSaved: true). Phase and kind must match the matrix in the guide (KIND_NOT_ALLOWED, PHASE_UNKNOWN otherwise).`,
+  "Lifecycle 5/6 gate: a row is done only with verified outputs (OUTPUT_UNVERIFIED otherwise) or a note naming the check and its result file. Rows added or dropped after approval need a decision and show in studio_mission_get derived.drift (each with its decision id).",
+  "Lifecycle 6/6 done: every row done or dropped (MISSION_ROWS_OPEN otherwise), then one studio_mission_set_status {to: done}.",
 ] as const
+
+const arrows = (moves: Readonly<Record<string, readonly string[]>>) =>
+  Object.entries(moves)
+    .map(([from, to]) => `${from} -> ${to.length ? to.join(" | ") : "(none)"}`)
+    .join("; ")
+
+/** Row 100a: the status moves the store allows, printed from ROW_TRANSITIONS and MISSION_TRANSITIONS (never typed here). */
+export function statusMoveLines(): string[] {
+  return [
+    `Row status moves: ${arrows(ROW_TRANSITIONS)}.`,
+    `Mission status moves: ${arrows(MISSION_TRANSITIONS)}.`,
+  ]
+}
 
 function exampleJson(): string {
   const { rows, ...head } = MISSION_GUIDE_EXAMPLE
@@ -113,6 +134,9 @@ export function missionGuideText(): string {
     "",
     ...MISSION_LIFECYCLE,
     "",
+    ...statusMoveLines(),
+    "(approved is reached only through studio_mission_approve.)",
+    "",
     `- mission, required: ${list(f.missionRequired)}. project: {${list(f.projectRequired)}} (absolute path: the session's working directory or a folder inside it; when project.dir is left out the host sets the session's working directory). Optional: decisions, findings, sessions.`,
     `- id: YYYY-MM-DD_slug (lowercase a-z 0-9 _ -), e.g. ${MISSION_GUIDE_EXAMPLE.id}.`,
     `- row, required: ${list(f.rowRequired)}. Optional: ${list(f.rowOptional)}.`,
@@ -128,6 +152,7 @@ export function missionGuideText(): string {
     "Deliverables and done (row 174, C218):",
     "- A row marked done delivers Studio outputs the done gate verified (docKey row-<id>-<name>, OUTPUT_UNVERIFIED otherwise). For a format Studio does not make (e.g. XLSX), the row note names the check that was run and its result file, and that file must exist.",
     "- A draft linked to the row that the row no longer delivers: studio_mission_update_row rows: [{id, retire: [documentId], note}] (one live deliverable must stay); never drop the row to get past the gate.",
+    "- studio_mission_get {include: [deliverables]} also lists documents another mission owns that a work report of this mission named as an output (linked: true, ownerMission).",
     "",
     "Minimal valid example:",
     "```json",

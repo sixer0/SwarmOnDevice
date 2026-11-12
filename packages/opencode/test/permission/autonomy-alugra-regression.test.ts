@@ -596,7 +596,10 @@ describe("alugra: the in-folder reads and writes beyond the 29", () => {
       90_000,
     )
 
-  gate.instance("23: a path past what the audit keeps is still judged, so an outside secret at the end is held", () =>
+  // 1.2.6 row 36 (U12, INTENT beyond the 01b 10.1 grep list, same reason): `wc -l` only looks, so with the outside secret
+  // at the end it runs as protected_read (was held D). The path past what the audit keeps is still judged: the class is A
+  // because every path, the last included, was read as a look.
+  gate.instance("23: a path past what the audit keeps is still judged, so an outside secret at the end is read as protected_read", () =>
     Effect.gen(function* () {
       const test = yield* TestInstance
       const { root, ctx } = yield* family(false, "Count the synthetic server files")
@@ -604,8 +607,9 @@ describe("alugra: the in-folder reads and writes beyond the 29", () => {
       const command = `wc -l ${SERVER_FILES.map((file) => path.join(test.directory, file)).join(" ")} ${awsConfig()}`
       expect(command.length).toBeGreaterThan(300)
       const one = yield* replay(root, shell.execute({ command }, ctx.sub2))
-      expect(one.result).toBe("held")
-      expect(finalClass(one.lines)).toBe("D")
+      expect(one.result).toBe("ran")
+      expect(finalClass(one.lines)).toBe("A")
+      expect(one.lines.some((line) => line.category === "protected_read")).toBe(true)
       report("23 control", one.lines.map((line) => [line.class, line.category, line.patternsTruncated]))
     }),
     { init: layout },
@@ -615,7 +619,7 @@ describe("alugra: the in-folder reads and writes beyond the 29", () => {
 describe("alugra T3 and C84: one entry for the same pattern, one approval, and the calls run again", () => {
   for (const folder of FOLDERS)
     gate.instance(
-      `${folder.name}: five reads of a secret beyond the folder, by the root and a subagent, are one entry; approving it runs all five once through the real read tool`,
+      `${folder.name}: five reads of a secret beyond the folder, by the root and a subagent, run at once as protected_read through the real read tool (1.2.6)`,
       () =>
         Effect.gen(function* () {
           sent.length = 0
@@ -631,54 +635,22 @@ describe("alugra T3 and C84: one entry for the same pattern, one approval, and t
             ["root", { filePath: awsConfig(), limit: 1 }],
             ["root", { filePath: awsConfig(), offset: 1, limit: 1 }],
           ]
-          const held: string[] = []
-          for (const [who, args] of READS) held.push(yield* attempt(reading.execute(args as never, ctx[who])))
-          expect(held).toEqual(Array(5).fill("held"))
-          const before = yield* decisions(root)
-          report(`${folder.git ? "git" : "nogit"} T3 lines`, before.map((line) => [line.permission, line.class, line.category, line.via]))
-          expect(before.every((line) => line.class === "D")).toBe(true)
-
-          const entries = (yield* permission.list()).filter((item) => [root, ...subs].includes(item.sessionID))
-          expect(entries).toHaveLength(1)
-          const entry = entries[0]!
-          // The entry shows every call, as the tool sent it: the exact calls a person approves are the ones rebuilt below.
-          expect(entry.metadata.version).toBe(5)
-          expect(entry.metadata.calls).toEqual(READS.map(([, args]) => ({ tool: "read", args })))
-          expect((yield* autonomy.openDecisions()).filter((line) => line.rootID === root)).toHaveLength(1)
-
-          // The person approves once, for the list at the version they saw; the server runs each call once (E1). What it
-          // leaves waiting is approved again, up to three rounds, to count how many approvals the five reads take.
-          const rounds: { approved: number; ran: number; failed: number; waiting: [string, readonly string[], number][] }[] = []
-          let next: typeof entry | undefined = entry
-          while (next && rounds.length < 3) {
-            const outcomesBefore = (yield* autonomy.readAudit(root)).lines.filter((line) => line.type === "outcome").length
-            const answered = yield* permission.reply({ requestID: next.id, reply: "once", version: (next.metadata.version as number | undefined) ?? 1 })
-            expect(answered).toBeDefined()
-            yield* (yield* lateAnswers).permission(answered!)
-            const outcomes = (yield* autonomy.readAudit(root)).lines.flatMap((line) => (line.type === "outcome" ? [line.outcome] : [])).slice(outcomesBefore)
-            const left = (yield* permission.list()).filter((item) => [root, ...subs].includes(item.sessionID))
-            rounds.push({
-              approved: rounds.length + 1,
-              ran: outcomes.filter((outcome) => outcome === "ran").length,
-              failed: outcomes.filter((outcome) => outcome === "failed").length,
-              waiting: left.map((item) => [item.permission, item.patterns, ((item.metadata.calls as unknown[] | undefined) ?? []).length]),
-            })
-            next = rounds.at(-1)!.ran === 5 ? undefined : left[0]
-          }
-          report(`${folder.git ? "git" : "nogit"} C84 rounds`, rounds)
-          report(`${folder.git ? "git" : "nogit"} C84 sent`, sent.map((item) => item.text.slice(0, 400)))
-          report(`${folder.git ? "git" : "nogit"} C84 lines after`, (yield* decisions(root)).slice(before.length).map((line) => [line.permission, line.class, line.category, line.decision, line.via]))
+          // 1.2.6 row 36 (U12, INTENT beyond the 01b 10.1 grep list): the alugra complaint, settled the other way. The five
+          // reads of the secret beyond the folder run at once as protected_read, with nobody asked and nothing left waiting,
+          // so there is no entry to approve. The E3 dedupe of one entry is covered in autonomy.test.ts with a held write.
+          const ran: string[] = []
+          for (const [who, args] of READS) ran.push(yield* attempt(reading.execute(args as never, ctx[who])))
+          expect(ran).toEqual(Array(5).fill("ran"))
+          const lines = yield* decisions(root)
+          report(`${folder.git ? "git" : "nogit"} T3 lines`, lines.map((line) => [line.permission, line.class, line.category, line.via]))
+          expect(lines.every((line) => line.class === "A")).toBe(true)
+          expect(lines.some((line) => line.category === "protected_read")).toBe(true)
+          expect((yield* permission.list()).filter((item) => [root, ...subs].includes(item.sessionID))).toEqual([])
+          expect((yield* autonomy.openDecisions()).filter((line) => line.rootID === root)).toEqual([])
           expect(counted.calls).toBe(0)
-          // U11 E1 and E3: one approval, five calls run, the output reaches the root, nothing left waiting.
-          expect(rounds[0]).toEqual({ approved: 1, ran: 5, failed: 0, waiting: [] })
-          expect(sent[0]!.sessionID).toBe(root)
-          expect(sent[0]!.text.split("Swarm ran it once for you").length - 1).toBe(5)
-          expect(sent[0]!.text).toContain(AWS_MARK)
           const waiting = yield* waitingFor(root, [root, ...subs])
           expect([waiting.held.length, waiting.questions.length, waiting.open.length]).toEqual([0, 0, 0])
-
-          // A sixth call after the click was not on the list the person saw: it does not pass on that approval.
-          expect(yield* attempt(reading.execute({ filePath: awsConfig(), offset: 2, limit: 1 } as never, ctx.root))).toBe("held")
+          expect(sent).toEqual([])
         }),
       { git: folder.git, init: layout },
       90_000,
@@ -691,7 +663,10 @@ describe("alugra T3 and C84: one entry for the same pattern, one approval, and t
       const permission = yield* Permission.Service
       const autonomy = yield* Autonomy.Service
       const shell = yield* (yield* ShellTool).init()
-      const command = `cat ${awsConfig()}`
+      // 1.2.6 row 36 (U12, INTENT beyond the 01b 10.1 grep list): a plain `cat` of the secret now passes the gate as
+      // protected_read, so the held vehicle is the same look in a list (`;`), which still waits.
+      expect(yield* attempt(shell.execute({ command: `cat ${awsConfig()}` }, ctx.root))).toBe("ran")
+      const command = `cat ${awsConfig()}; true`
       // The replay context stops a command past the gate, so it never runs here: only the server's rerun runs it.
       expect(yield* attempt(shell.execute({ command }, ctx.root))).toBe("held")
       const entry = (yield* permission.list()).filter((item) => [root, ...subs].includes(item.sessionID))
@@ -753,8 +728,9 @@ describe("C95: a command on a file a person allowed", () => {
             yield* replay(root.id, reading.execute({ filePath: path.join(test.directory, ".env") }, ctx)),
             yield* replay(root.id, writing.execute({ filePath: path.join(test.directory, ".env"), content: "API_URL=synthetic-fixed\n" }, ctx)),
           ]
+          // 1.2.6 row 36 (U12): the read runs as protected_read, not via the consent; the write still uses the consent.
           expect(tools.map((one) => [one.result, finalClass(one.lines), one.lines[0]?.via])).toEqual([
-            ["ran", "A", "consent"],
+            ["ran", "A", undefined],
             ["ran", "A", "consent"],
           ])
 
@@ -787,7 +763,9 @@ describe("C95: a command on a file a person allowed", () => {
 // - `set -a && source .env && set +a` and `source .env && bun test`: more than one command; D `secret_file`.
 // - `cp .env .env.backup`: writes a copy of the secret; D `secret_file` (C97 F4 covers looks only).
 // - `diff .env .env.example`: `diff` is not one of the looks C97 F4 names; D `secret_file`.
-const C95_WAITS = { nogit: 6, git: 4 }
+// 1.2.6 row 36 (U12, INTENT): `cat`, `head`, `grep`, `wc` and now `diff` of the file are A `protected_read` whatever the
+// consent says, so `diff` no longer waits: nogit 6 -> 5, git 4 -> 3.
+const C95_WAITS = { nogit: 5, git: 3 }
 
 // C87 (row 122c): the older session route does not hand a rejection to `late.rejected`. Row 122c showed one held entry
 // clears. Here it is the alugra shape: one entry standing for five calls of the root and a subagent, rejected through
@@ -850,11 +828,13 @@ describe("C87: a rejection through the session route", () => {
           const { root, subs, ctx } = yield* family(false, "Look at the synthetic prototype")
           const permission = yield* Permission.Service
           const autonomy = yield* Autonomy.Service
-          const reading = yield* (yield* ReadTool).init()
+          // 1.2.6 row 36 (U12, INTENT beyond the 01b 10.1 grep list): reads of the secret now run, so the entry of five calls
+          // is made of writes of it, which still wait (secret_file).
+          const writing = yield* (yield* WriteTool).init()
           const who: Who[] = ["root", "root", "sub1", "root", "root"]
           const results: string[] = []
           for (const [index, one] of who.entries())
-            results.push(yield* attempt(reading.execute({ filePath: awsConfig(), offset: index + 1 } as never, ctx[one])))
+            results.push(yield* attempt(writing.execute({ filePath: awsConfig(), content: `region = changed-${index + 1}\n` } as never, ctx[one])))
           expect(results).toEqual(Array(5).fill("held"))
           const entries = (yield* permission.list()).filter((item) => [root, ...subs].includes(item.sessionID))
           expect(entries).toHaveLength(1)
@@ -875,8 +855,9 @@ describe("C87: a rejection through the session route", () => {
           expect(outcomes).toEqual([["rejected_later", "person"]])
           expect(routeSent).toEqual([])
           expect(counted.calls).toBe(0)
-          // And the rejection allows nothing: the same read again is held anew.
-          expect(yield* attempt(reading.execute({ filePath: awsConfig(), offset: 1 } as never, ctx.root))).toBe("held")
+          // And the rejection allows nothing: the same write again is held anew, and the file is as it was.
+          expect(yield* attempt(writing.execute({ filePath: awsConfig(), content: "region = changed-1\n" } as never, ctx.root))).toBe("held")
+          expect(fs.readFileSync(awsConfig(), "utf8")).toContain(AWS_MARK)
         }),
       { init: layout },
       60_000,

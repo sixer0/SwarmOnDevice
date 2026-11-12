@@ -456,7 +456,9 @@ describe('studio_document_structure (R14) dan studio_document_status (R15 + R05)
     const { call } = await connect({ fetch: m.f, env });
     const r = await call('studio_document_status', { documentId: DOC });
     expect(r.data.completeness).toMatchObject({ status: 'COMPLETE', fullRenderAllowed: true, missingRequired: [] });
-    expect(r.data.lint).toEqual({ verdict: 'PASS', findings: 40 });
+    // Swarm row 206 (1.2.3): tri-state lint summary; compact lists 5 findings with code and message, counts all.
+    expect(r.data.lint).toMatchObject({ ran: true, verdict: 'PASS', findingsTotal: 40 });
+    expect(r.data.lint.findings[0]).toMatchObject({ code: 'R0', message: 'x'.repeat(80) });
     expect(r.data.outputs[0]).toEqual({ id: 'f1', format: 'DOCX', finalFileName: '005-GSP_rev6_x.docx', sha256: 'c'.repeat(64) });
     expect(JSON.stringify(r.data)).not.toContain('rahasia/path');
     expect(r.text).toContain('kelengkapan COMPLETE');

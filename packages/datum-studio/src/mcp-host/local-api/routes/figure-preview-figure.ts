@@ -61,6 +61,50 @@ export interface PreviewIssue {
 export const INFO_CODES: ReadonlySet<string> = new Set(["DATUM-36", "FIGURE_LIMITS_DEFAULT", "PARAM_ALIAS", "AUTO_FIT", "INTENT_APPLIED", "CAPACITY_ADAPT", "VEGA_ENGINE"]);
 
 /**
+ * Swarm 1.2.6 row 73 (W-03, register N-020): class of a preview issue. A notice = the engine already adapted the
+ * layout (lanes, moved labels, auto fit, ELK); a defect = something the agent must fix (caption wrap, leader lines,
+ * text outside, every `GEOM_*`, a serialised legacy flow). Codes not listed: `GEOM_*` and any FAIL are defects,
+ * `INFO_CODES` are notices, anything else is a defect (seen, not hidden). See {@link previewIssueClass}.
+ */
+export const PREVIEW_ISSUE_CLASS: Readonly<Record<string, "notice" | "defect">> = {
+  EDGE_LANES: "notice",
+  LABEL_MOVED: "notice",
+  AUTO_FIT: "notice",
+  VALUE_LABEL_MOVED: "notice",
+  ELK_LAYOUT: "notice",
+  AUTO_ORIENT: "notice",
+  AXIS_TICK_THIN: "notice",
+  AXIS_LABEL_WRAP: "notice",
+  AXIS_LABEL_ROTATE: "notice",
+  AXIS_WIDENED: "notice",
+  LEGEND_WRAP: "notice",
+  RADIAL_LABEL_MOVED: "notice",
+  CONTOUR_LABEL_MOVED: "notice",
+  VENN_LABEL_WRAP: "notice",
+  LABEL_HALO: "notice",
+  CAPTION_WRAP: "defect",
+  CAPTION_TRUNCATED: "defect",
+  LABEL_LEADER: "defect",
+  LABEL_DROPPED: "defect",
+  TEXT_OUTSIDE: "defect",
+  FLOW_SERIALISED: "defect",
+};
+
+/** Row 73 (W-03): class of one issue: FAIL and `GEOM_*` are always defects; then the table; then INFO_CODES -> notice. */
+export function previewIssueClass(checkId: string, status?: string): "notice" | "defect" {
+  if (status === "FAIL" || checkId.startsWith("GEOM_")) return "defect";
+  return PREVIEW_ISSUE_CLASS[checkId] ?? (INFO_CODES.has(checkId) ? "notice" : "defect");
+}
+
+/** Row 73 (W-03, N-021/N-022): the issue list split into notices and defects (order kept). */
+export function splitPreviewIssues<T extends { checkId: string; status: string }>(issues: readonly T[]): { notices: T[]; defects: T[] } {
+  const notices: T[] = [];
+  const defects: T[] = [];
+  for (const i of issues) (previewIssueClass(i.checkId, i.status) === "notice" ? notices : defects).push(i);
+  return { notices, defects };
+}
+
+/**
  * Saran baku untuk catatan tata letak yang tidak membawa `suggest` dari mesin (medan maksud D-482: `orientation`,
  * `sort`, `topN` + `otherLabel`, `labelShort`). Teks milik Studio, bukan isi dokumen.
  */
@@ -92,6 +136,10 @@ export interface FigurePreview {
   inline: boolean;
   size: { widthMm: number; heightMm: number; svgBytes: number };
   issues: PreviewIssue[];
+  /** Row 73 (W-03, N-021): issues of class notice (engine adapted; no action needed), capped like `issues`. */
+  notices: PreviewIssue[];
+  /** Row 73 (W-03, N-022): issues of class defect (fix before delivery), capped like `issues`. */
+  defects: PreviewIssue[];
   issueCount: number;
   /** Isu tanpa catatan informatif (`info: false`). */
   layoutIssueCount: number;
@@ -347,6 +395,7 @@ export async function renderResolved(
     code = typeof f.spec.family === "string" ? f.spec.family : null;
   }
   const issues = issuesOf(r);
+  const split = splitPreviewIssues(issues);
   return {
     type: block.type as FigurePreview["type"],
     code,
@@ -356,6 +405,8 @@ export async function renderResolved(
     inline: o.inline,
     size: { widthMm: r.widthMm, heightMm: r.heightMm, svgBytes: Buffer.byteLength(r.svg, "utf8") },
     issues: issues.slice(0, PREVIEW_ISSUE_CAP),
+    notices: split.notices.slice(0, PREVIEW_ISSUE_CAP),
+    defects: split.defects.slice(0, PREVIEW_ISSUE_CAP),
     issueCount: issues.length,
     layoutIssueCount: issues.filter((i) => !i.info).length,
     checksRun: r.report.checksRun.length,

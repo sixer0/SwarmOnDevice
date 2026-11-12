@@ -149,7 +149,7 @@ export async function startStudioHostServer(opts: StudioHostServerOptions): Prom
         },
         root,
       )
-      const api = createLocalStudioApi({ baseUrl: config.baseUrl, secret, agentId, routes: LOCAL_ROUTES })
+      const api = createLocalStudioApi({ baseUrl: config.baseUrl, secret, agentId, routes: LOCAL_ROUTES, fileRoot: root })
       const server = createHostMcpServer({ config, fetchImpl: api.fetch, session: { sessionId, agentId, fileRoot: root, ...(callerSessionOf(callerSession) ? { callerSession: callerSessionOf(callerSession) } : {}) }, extensions, repoRoot: REPO_ROOT, log: lineLog })
       let closed = false
       return {

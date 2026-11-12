@@ -42,11 +42,18 @@ describe('S11 doc.typeCode NDA', () => {
     expect(p.paramsSha256).toBe(sha256Hex(stableStringify(p.resolvedParams)));
     const R122 = ['controlSheet.methodStatement.text', 'controlSheet.distribution.defaults', 'cover.controlBlock.geodeticDatum'];
     for (const k of R122) expect(k in p.resolvedParams, k).toBe(true);
-    const pre = Object.fromEntries(Object.entries(p.resolvedParams).filter(([k]) => !R122.includes(k)));
+    // T-18 / row 72 (1.2.6): figure.quota.maxPerDocument (P7-37) and figure.quota.exceptionReason (P7-38) are new registry
+    // params with defaults; excluded the same way as R-81..R-83 so the pin holds.
+    const R72 = ['figure.quota.maxPerDocument', 'figure.quota.exceptionReason'];
+    for (const k of R72) expect(k in p.resolvedParams, k).toBe(true);
+    const pre = Object.fromEntries(Object.entries(p.resolvedParams).filter(([k]) => !R122.includes(k) && !R72.includes(k)));
     // row49a ADAPT (C104 H1, Rev A DT-28d): P4C-35 color.classificationInk default is now seal at every level; the pin
     // holds with that one value set back to its pre-H1 default, so no other registry default moved.
     expect(pre['color.classificationInk']).toEqual({ SR: 'seal', R: 'seal', T: 'seal', B: 'seal' });
     pre['color.classificationInk'] = { SR: 'alert', R: 'alert', T: 'ink900', B: 'ink900' };
-    expect(sha256Hex(stableStringify(pre))).toBe('dcb7166bc12ab7d6c34906b376a7da6d7562f0d8c1d70ea81a3fd4b396a5dfd9');
+    expect(sha256Hex(stableStringify(pre))).toBe('5103fa80dc00787ab8e5fe338d0c3a7620de35136bd0bd95a620765a76e558ce');
+    // 1.2.5: C-27 removed, so P11-27 (threshold.wordsPerSentenceAvg [18, 32]) left the registry and the pin moved; with that one key
+    // put back the previous pin is reproduced, so nothing else moved.
+    expect(sha256Hex(stableStringify({ ...pre, 'threshold.wordsPerSentenceAvg': [18, 32] }))).toBe('dcb7166bc12ab7d6c34906b376a7da6d7562f0d8c1d70ea81a3fd4b396a5dfd9');
   });
 });

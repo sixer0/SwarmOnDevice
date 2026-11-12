@@ -7,6 +7,7 @@ export const dict = {
   "desktop.menu.window": "Окно",
   "desktop.menu.help": "Справка",
   "desktop.menu.checkForUpdates": "Проверить наличие обновлений...",
+  "desktop.menu.recheckTools": "Перепроверить инструменты",
   "desktop.menu.settings": "Настройки",
   "desktop.menu.reloadWebview": "Перезагрузить веб-представление",
   "desktop.menu.restart": "Перезапустить",
@@ -1511,7 +1512,10 @@ export const dict = {
   "memory.privacy": "Хранится на этом устройстве, никогда в репозитории. Модель видит эти заметки только как часть сессии, которую вы запускаете с ней.",
   "memory.off": "Выключено. Сессии не получают заметок, и ничего нового не запоминается. Ваши заметки сохраняются.",
   "memory.refused.secret": "Похоже на пароль или ключ, поэтому не сохранено.",
-  "memory.refused.long": "Заметка должна быть короче 400 символов.",
+  "memory.refused.long":
+    "Заметка должна быть короче {{max}} символов. Поместите подробности в файл и попросите агента сослаться на него.",
+  "memory.refused.bodyLong": "Текст заметки должен быть короче {{max}} символов, или вместо этого сошлитесь на файл.",
+  "memory.refused.tooManyRefs": "Заметка может ссылаться не более чем на {{max}} файлов или символов.",
   "memory.refused.full": "Память заполнена. Сначала удалите заметку.",
   "memory.error": "Не удалось загрузить память проекта.",
   "memory.retry": "Повторить",
@@ -1536,4 +1540,5 @@ export const dict = {
   "session.movedOn.answer": "Ответить",
   "home.agents.movedOn": "Продолжил без этого · {{time}}",
   "home.setup.attention": "Часть настройки требует внимания.",
+  "session.map.decisions.category.protected_path": "Защищённое место (ключи, учётные данные или системные папки)",
 }

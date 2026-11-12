@@ -25,6 +25,7 @@ import type { ChartLang } from "../../engine/chart/core/lang";
 import { APPARATUS_TEXT, keyLineText, wrapperLangOf, type WrapperLang } from "../../engine/front/texts";
 import { type DiagramBuildOptions } from "../../engine/diagram/build";
 import { buildDiagramSvgAuto } from "../../engine/diagram/elk";
+import { rasterizeSvg, StudioBrowserError } from "../../engine/browser";
 import { prepareFigureStore, type FigureSvgSheet, type PreparedFigureStore } from "../../engine/docx/figures";
 import { symbolSheetSvg, type SymbolSheetOptions } from "../../engine/symbols";
 import { db } from "./db";
@@ -186,7 +187,12 @@ export function diagramApparatusOptions(lang: WrapperLang): Pick<DiagramBuildOpt
 /**
  * Bangun FigureStore untuk satu revisi. Galat per figur dicatat sebagai galat
  * job (figur dilewati; renderer DOCX/HTML melaporkan figur yang hilang).
- * Galat rasterisasi (browser) dilempar ke pemanggil.
+ * Swarm 1.2.6 (row 68, T-15): galat SVG dan rasterisasi satu figur dicatat sebagai galat job (job PARTIAL), dan
+ * `prepareFigureStore` menyimpan penanda FIGURE_PREPARE_FAILED untuk figur itu (`failureFor`, atau galat raster yang
+ * dilempar ulang): DOCX mencetak placeholder berpenanda, HTML placeholder, verifikasi UNVERIFIED.
+ * FX-7 (C19f): seluruh job berhenti hanya bila job itu sendiri sudah dihentikan (`job.aborted`, batas waktu job);
+ * RENDER_TIMEOUT satu operasi browser (figur lambat) hanya menjadi penanda figur itu. Jembatan render yang mati
+ * (handshake gagal: LAUNCH_FAILED / SANDBOX_UNAVAILABLE) dicoba sekali per job; figur berikutnya langsung ditandai.
  */
 export async function buildFigures(i: {
   snapshot: NormDocSnapshot;
@@ -199,8 +205,12 @@ export async function buildFigures(i: {
   const extra: LintIssue[] = [];
   const releaseTier = i.tier === "TERBIT" || i.tier === "SERAH";
 
+  const failures = new Map<string, { message: string; causeCode?: string }>();
+  // FX-7 (M3 N5): label of the figure being prepared (prepareFigureStore is sequential), named in raster job errors.
+  let current = "";
   const svgFor = async (block: NormBlock): Promise<FigureSvgSheet | readonly FigureSvgSheet[] | undefined> => {
     i.job.checkAborted("figures");
+    current = block.artifactLabel ?? i.snapshot.numbering[block.blockId] ?? block.blockId;
     const c = isRecord(block.content) ? block.content : {};
     const address = block.address ?? undefined;
     try {
@@ -247,12 +257,42 @@ export async function buildFigures(i: {
       const code = err instanceof StudioEngineError ? err.code : "RENDER_FAILED";
       const label = block.artifactLabel ?? i.snapshot.numbering[block.blockId] ?? block.blockId;
       i.job.addError(code, `figure ${label}${address ? ` (${address})` : ""} failed: ${err instanceof Error ? err.message : String(err)}`, undefined, err);
+      // Swarm 1.2.6 (row 68, T-15): remembered so `prepareFigureStore` records the FIGURE_PREPARE_FAILED marker
+      // (`failureFor`) and the DOCX prints a marked placeholder for this figure instead of aborting; the job stays
+      // PARTIAL through the error above.
+      failures.set(block.blockId, { message: `figure ${label} failed: ${err instanceof Error ? err.message : String(err)}`, causeCode: code });
       return undefined;
+    }
+  };
+
+  // T-15 (row 68): a raster failure of one figure is recorded as a job error (PARTIAL) and rethrown to the store.
+  // FX-7 (C19f): after a render bridge handshake failure the remaining figures are not tried again in this job (a
+  // dead bridge cost one handshake per figure); each is still a named job error and a FIGURE_PREPARE_FAILED marker.
+  // Once the job itself is aborted the failure is rethrown without a figure error (the abort is reported once).
+  let bridgeDown: StudioBrowserError | undefined;
+  const rasterize: NonNullable<Parameters<typeof prepareFigureStore>[1]["rasterize"]> = async (svg, o) => {
+    try {
+      if (bridgeDown) {
+        throw new StudioBrowserError(bridgeDown.reason, bridgeDown.op, `render bridge unavailable earlier in this job; figure not retried (${bridgeDown.message})`);
+      }
+      return await rasterizeSvg(svg, o);
+    } catch (err) {
+      if (i.job.aborted) {
+        i.job.checkAborted("figures"); // the job's own RENDER_TIMEOUT, not the late figure error
+        throw err;
+      }
+      if (!bridgeDown && err instanceof StudioBrowserError && (err.reason === "LAUNCH_FAILED" || err.reason === "SANDBOX_UNAVAILABLE")) bridgeDown = err;
+      const code = err instanceof StudioEngineError ? err.code : "RENDER_FAILED";
+      i.job.addError(code, `figure ${current} raster failed: ${err instanceof Error ? err.message : String(err)}`, undefined, err);
+      throw err;
     }
   };
 
   const store = await prepareFigureStore(i.snapshot, {
     svgFor,
+    failureFor: (block) => failures.get(block.blockId),
+    isJobAbort: () => i.job.aborted,
+    rasterize,
     tpl: i.tpl,
     log: i.job.log.renderLog,
     fixedDate: i.snapshot.doc.meta.issueDate,

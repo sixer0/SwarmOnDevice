@@ -7,6 +7,7 @@ export const dict = {
   "desktop.menu.window": "ფანჯარა",
   "desktop.menu.help": "დახმარება",
   "desktop.menu.checkForUpdates": "შეამოწმეთ განახლებები...",
+  "desktop.menu.recheckTools": "ხელსაწყოების ხელახლა შემოწმება",
   "desktop.menu.settings": "პარამეტრები",
   "desktop.menu.reloadWebview": "გადატვირთვა Webview",
   "desktop.menu.restart": "გადატვირთვა",
@@ -1399,7 +1400,10 @@ export const dict = {
   "memory.privacy": "ინახება ამ მოწყობილობაზე და არასოდეს რეპოზიტორიაში. მოდელი ამ ჩანაწერებს ხედავს მხოლოდ მასთან გაშვებული სესიის ფარგლებში.",
   "memory.off": "გამორთულია. სესიები ჩანაწერებს არ იღებენ და არაფერი ახალი არ ისწავლება. თქვენი ჩანაწერები ინახება.",
   "memory.refused.secret": "ეს პაროლს ან გასაღებს ჰგავს, ამიტომ არ შეინახა.",
-  "memory.refused.long": "ჩანაწერი 400 სიმბოლოზე მოკლე უნდა იყოს.",
+  "memory.refused.long":
+    "ჩანაწერი {{max}} სიმბოლოზე მოკლე უნდა იყოს. უფრო გრძელი დეტალები ფაილში ჩაწერეთ და სთხოვეთ აგენტს, დაუკავშიროს იგი.",
+  "memory.refused.bodyLong": "ჩანაწერის ტექსტი {{max}} სიმბოლოზე მოკლე უნდა იყოს, ან ნაცვლად ამისა დაუკავშირეთ ფაილი.",
+  "memory.refused.tooManyRefs": "ჩანაწერს შეუძლია დაუკავშირდეს მაქსიმუმ {{max}} ფაილს ან სიმბოლოს.",
   "memory.refused.full": "მეხსიერება სავსეა. ჯერ წაშალეთ ჩანაწერი.",
   "memory.error": "პროექტის მეხსიერების ჩატვირთვა ვერ მოხერხდა.",
   "memory.retry": "ხელახლა ცდა",
@@ -1424,4 +1428,5 @@ export const dict = {
   "session.movedOn.answer": "პასუხი",
   "home.agents.movedOn": "გააგრძელა ამის გარეშე · {{time}}",
   "home.setup.attention": "თქვენი დაყენების ნაწილს ყურადღება სჭირდება.",
+  "session.map.decisions.category.protected_path": "დაცული ადგილი (გასაღებები, ავტორიზაციის მონაცემები ან სისტემური საქაღალდეები)",
 }

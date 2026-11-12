@@ -1267,6 +1267,7 @@ export const dict = {
   "desktop.menu.window": "Fenster",
   "desktop.menu.help": "Hilfe",
   "desktop.menu.checkForUpdates": "Nach Updates suchen…",
+  "desktop.menu.recheckTools": "Tools erneut prüfen",
   "desktop.menu.settings": "Einstellungen",
   "desktop.menu.reloadWebview": "Webview neu laden",
   "desktop.menu.restart": "Neu starten",
@@ -1433,7 +1434,10 @@ export const dict = {
   "memory.privacy": "Wird auf diesem Gerät gespeichert, nie im Repository. Ein Modell sieht diese Notizen nur als Teil einer Sitzung, die du mit ihm ausführst.",
   "memory.off": "Aus. Sitzungen erhalten keine Notizen und es wird nichts Neues gelernt. Deine Notizen bleiben erhalten.",
   "memory.refused.secret": "Das sieht nach einem Passwort oder Schlüssel aus und wurde deshalb nicht gespeichert.",
-  "memory.refused.long": "Eine Notiz darf höchstens 400 Zeichen lang sein.",
+  "memory.refused.long":
+    "Eine Notiz darf höchstens {{max}} Zeichen lang sein. Lege längere Details in einer Datei ab und bitte den Agenten, sie zu verknüpfen.",
+  "memory.refused.bodyLong": "Der Notiztext darf höchstens {{max}} Zeichen lang sein. Verknüpfe sonst eine Datei.",
+  "memory.refused.tooManyRefs": "Eine Notiz kann höchstens {{max}} Dateien oder Symbole verknüpfen.",
   "memory.refused.full": "Das Gedächtnis ist voll. Lösche zuerst eine Notiz.",
   "memory.error": "Das Projektgedächtnis konnte nicht geladen werden.",
   "memory.retry": "Erneut versuchen",
@@ -1458,4 +1462,5 @@ export const dict = {
   "session.movedOn.answer": "Antworten",
   "home.agents.movedOn": "Ohne dies weitergemacht · {{time}}",
   "home.setup.attention": "Ein Teil deiner Einrichtung braucht Aufmerksamkeit.",
+  "session.map.decisions.category.protected_path": "Geschützter Ort (Schlüssel, Zugangsdaten oder Systemordner)",
 } satisfies Partial<Record<Keys, string>>

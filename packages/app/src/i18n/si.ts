@@ -7,6 +7,7 @@ export const dict: Record<string, string> = {
   "desktop.menu.window": "කවුළුව",
   "desktop.menu.help": "උදව්",
   "desktop.menu.checkForUpdates": "යාවත්කාලීන සඳහා පරීක්ෂා කරන්න...",
+  "desktop.menu.recheckTools": "මෙවලම් නැවත පරීක්ෂා කරන්න",
   "desktop.menu.settings": "සැකසීම්",
   "desktop.menu.reloadWebview": "Webview නැවත පූරණය කරන්න",
   "desktop.menu.restart": "යළි අරඹන්න",
@@ -1395,7 +1396,10 @@ export const dict: Record<string, string> = {
   "memory.privacy": "මෙම උපාංගයේ තබා ගනී, කිසි විටෙකත් ගබඩාවේ නොවේ. ආකෘතියකට මෙම සටහන් පෙනෙන්නේ ඔබ එය සමඟ ධාවනය කරන සැසියක කොටසක් ලෙස පමණි.",
   "memory.off": "අක්‍රියයි. සැසිවලට සටහන් නොලැබේ, අලුත් දෙයක් ඉගෙනගන්නේ නැත. ඔබේ සටහන් තබා ඇත.",
   "memory.refused.secret": "මෙය මුරපදයක් හෝ යතුරක් මෙන් පෙනේ, එබැවින් සුරකින ලදී නැත.",
-  "memory.refused.long": "සටහනක් අක්ෂර 400 ට අඩුවෙන් තබන්න.",
+  "memory.refused.long":
+    "සටහනක් අක්ෂර {{max}} ට අඩුවෙන් තබන්න. දිගු විස්තර ගොනුවක තබා එය සම්බන්ධ කරන ලෙස නියෝජිතයාගෙන් ඉල්ලන්න.",
+  "memory.refused.bodyLong": "සටහනේ අන්තර්ගතය අක්ෂර {{max}} ට අඩුවෙන් තබන්න, නැතහොත් ඒ වෙනුවට ගොනුවක් සම්බන්ධ කරන්න.",
+  "memory.refused.tooManyRefs": "එක් සටහනකට උපරිම වශයෙන් ගොනු හෝ සංකේත {{max}} ක් සම්බන්ධ කළ හැක.",
   "memory.refused.full": "මතකය පිරී ඇත. මුලින් සටහනක් මකන්න.",
   "memory.error": "ව්‍යාපෘති මතකය පූරණය කළ නොහැකි විය.",
   "memory.retry": "නැවත උත්සාහ කරන්න",
@@ -1420,4 +1424,5 @@ export const dict: Record<string, string> = {
   "session.movedOn.answer": "පිළිතුරු දෙන්න",
   "home.agents.movedOn": "මෙය නොමැතිව ඉදිරියට ගියේය · {{time}}",
   "home.setup.attention": "ඔබගේ පිහිටුවීමේ කොටසකට අවධානය අවශ්‍යයි.",
+  "session.map.decisions.category.protected_path": "ආරක්ෂිත ස්ථානය (යතුරු, අක්තපත්‍ර හෝ පද්ධති ෆෝල්ඩර)",
 }

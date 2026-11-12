@@ -156,7 +156,8 @@ describe("F165N-2 DATUM-15 not applicable is REPORT, not NOT_RUN", () => {
     expect(r.status).toBe("FAIL")
     const l = lintWith(r)
     expect(l.status).toBe("FAIL")
-    expect(l.findings.some((f) => f.code === "LINT_FAIL" && f.detail === "DATUM-15")).toBe(true)
+    // Row 206 (1.2.3): label = check id, detail = "<id>: <engine message>".
+    expect(l.findings.some((f) => f.code === "LINT_FAIL" && f.label === "DATUM-15" && f.detail.startsWith("DATUM-15: rata-rata 92.3"))).toBe(true)
   })
 
   test("interior paragraph within 66-80 -> PASS; LINT PASS", () => {

@@ -40,7 +40,7 @@ describe('lintStructure: cakupan dan tier', () => {
   // SR-42 (D-178): SR-18 menambah 3 cek bermodul structure (LD-01..LD-03), 45 -> 48.
   it('semua entri registri bermodul structure terimplementasi (48, D-178)', () => {
     expect(structureCoverageGaps()).toEqual([]);
-    expect(STRUCTURE_LINT_DEFS).toHaveLength(48);
+    expect(STRUCTURE_LINT_DEFS).toHaveLength(49); // + D22 kuota gambar (Swarm 1.2.6 row 72, T-18): 48 -> 49
   });
 
   it('hanya cek yang berlaku untuk tier yang dijalankan: NOTA hanya 4 cek struktur v2, D01-D03/D07 hanya SERAH', () => {
@@ -113,8 +113,8 @@ describe('penegakan struktur per profil templat', () => {
 describe('lintLanguage: NOT_RUN jujur (KT-13)', () => {
   const snapWith = (text: string, language: 'ID' | 'EN' = 'ID') => snapshotOf(makeDoc({ language, blocks: [{ type: 'paragraph', text }] }));
 
-  it('19 butir; 10 tanpa implementasi -> NOT_RUN dengan notRunReason registri persis, tidak pernah PASS', () => {
-    expect(LANGUAGE_LINT_DEFS).toHaveLength(19);
+  it('18 butir (19 sebelum C-27 dihapus, 1.2.5); 10 tanpa implementasi -> NOT_RUN dengan notRunReason registri persis, tidak pernah PASS', () => {
+    expect(LANGUAGE_LINT_DEFS).toHaveLength(18);
     const out = lintLanguage(snapWith('Kalimat netral pertama. Kalimat netral kedua.'), KAN.params);
     const unimpl = LANGUAGE_LINT_DEFS.filter((d) => !isLintImplemented(d));
     expect(unimpl).toHaveLength(10);
@@ -138,11 +138,9 @@ describe('lintLanguage: NOT_RUN jujur (KT-13)', () => {
     const out = lintLanguage(snapWith('Satu kalimat, dua koma, tiga koma, empat koma, lima.'), {
       ...KAN.params,
       'threshold.chainedSentencesPercent.max': 'dua puluh',
-      'threshold.wordsPerSentenceAvg': [32, 18],
     });
     expect(statuses(out, 'C-26b')).toEqual(['NOT_RUN']);
     expect(out.find((i) => i.checkId === 'C-26b')?.detail).toContain('threshold.chainedSentencesPercent.max');
-    expect(statuses(out, 'C-27')).toEqual(['NOT_RUN']);
   });
 
   it('C-34: "kamu" dalam narasi -> FAIL; C-SG-L2-09: paragraf > 150 kata -> FAIL', () => {

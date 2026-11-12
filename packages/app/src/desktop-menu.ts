@@ -8,6 +8,7 @@ export type DesktopMenuAction =
   | "app.undoLastUpdate"
   | "app.installCli"
   | "app.installDatumStudio"
+  | "app.recheckTools"
   | "app.relaunch"
   | "edit.undo"
   | "edit.redo"
@@ -95,6 +96,8 @@ export const DESKTOP_MENU: DesktopMenu[] = [
       { type: "item", labelKey: "desktop.menu.settings", command: "settings.open", accelerator: { macos: "Cmd+," } },
       { type: "item", labelKey: "desktop.menu.installCli", action: "app.installCli" },
       { type: "item", labelKey: "desktop.menu.installDatumStudio", action: "app.installDatumStudio" },
+      // SEC-05 / C9 (1.2.6 row 91): the person trigger of the tool-health re-check (may revive consent "manual" tools).
+      { type: "item", labelKey: "desktop.menu.recheckTools", action: "app.recheckTools" },
       { type: "item", labelKey: "desktop.menu.reloadWebview", action: "view.reload" },
       { type: "item", labelKey: "desktop.menu.restart", action: "app.relaunch" },
       { type: "item", labelKey: "desktop.menu.exportLogs", command: "logs.export" },

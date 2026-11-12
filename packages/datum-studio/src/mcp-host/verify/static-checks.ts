@@ -25,6 +25,7 @@ import {
 } from "../../../vendor/src/lib/studio/engine/lint/render/index"
 import { lintDiagramGeometry, type DiagramDefectKind } from "../../../vendor/src/lib/studio/engine/diagram/fit/lint"
 import { CHART_LINT_OPTIONS, lintChartGeometry } from "../../../vendor/src/lib/studio/engine/chart/core/geometry"
+import { CAPTION_GUIDE_MAX_CHARS } from "../../../vendor/src/lib/studio/contract/schema/figure-bounds"
 import {
   clip,
   DocxParseError,
@@ -185,10 +186,21 @@ export function checkLint(i: LintCheckInput): VerifyCheck {
   const tier = tierName as Tier
   const release = releaseFor(report.checks, tier)
   if (release === "FAIL") {
+    // Row 206 (1.2.3, AC-4): every failing lint check is a finding with its check id (label), where it is (address,
+    // else the JSON pointer) and the engine message (document-derived parts untrusted, cut by `finding`).
     for (const c of report.checks) {
-      if (c.status === "FAIL" && appliesAtTier(c, tier)) b.fail(finding("LINT_FAIL", { address: c.address ?? null, detail: c.checkId }))
+      if (c.status === "FAIL" && appliesAtTier(c, tier)) {
+        const msg = typeof c.detail === "string" && c.detail.trim() !== "" ? `${c.checkId}: ${c.detail}` : c.checkId
+        b.fail(finding("LINT_FAIL", { address: c.address ?? c.pointer ?? null, label: c.checkId, detail: msg }))
+      }
     }
-    return b.build()
+    // A FAIL release always has an applicable FAIL check (releaseFor); should none be listed, LINT is not a
+    // finding-less FAIL but UNKNOWN (never verified, never a LINT without findings).
+    const built = b.build()
+    if (built.status === "FAIL") return built
+    const u = new CheckBuilder("LINT", "revision-lint")
+    u.unknownBecause("LINT_PARTIAL")
+    return u.build()
   }
   if (release === "NOT_RUN" || i.lintVerdict === "PENDING" || i.lintVerdict === "NOT_RUN" || i.lintVerdict === null) {
     b.unknownBecause("LINT_NOT_RUN")
@@ -288,7 +300,11 @@ export function checkPageCount(i: PageCountInput): PageCountResult {
 
 // ── FIGURE_FIT (§3.5) ────────────────────────────────────────────────────
 
-/** Diagram defect kinds that fail the check; `edgeCross` / `edgeCollinear` are report-only (CP-41 routing, U21). */
+/**
+ * Diagram defect kinds that fail the check; `edgeCross` / `edgeCollinear` are report-only (CP-41 routing, U21).
+ * Swarm 1.2.6 row 26 (T-03, register N-007): the connector-end kinds `edgeEntryCollision`, `stubSegment`,
+ * `arrowTangent` (row 25, N-001/N-003/N-005) fail too (6 -> 9).
+ */
 export const DIAGRAM_FAIL_KINDS: ReadonlySet<DiagramDefectKind> = new Set([
   "textOverlap",
   "textOutside",
@@ -296,7 +312,53 @@ export const DIAGRAM_FAIL_KINDS: ReadonlySet<DiagramDefectKind> = new Set([
   "lineThroughText",
   "textOverNode",
   "edgeThroughNode",
+  "edgeEntryCollision",
+  "stubSegment",
+  "arrowTangent",
 ])
+
+/**
+ * Swarm 1.2.6 row 28 (T-01, register N-015, U3): engine fit notes that FAIL FIGURE_FIT (they were info only).
+ * The check sees the output SVG, not the engine report, so both are read back from the apparatus caption the engine
+ * drew inside the SVG (apparatus "figure"; a page-apparatus caption is HTML and is never wrapped by the engine):
+ * more than one caption line = CAPTION_WRAP, a caption or SUMBER line cut with an ellipsis = CAPTION_TRUNCATED.
+ */
+export const FIGURE_FIT_FAIL_NOTES: ReadonlySet<string> = new Set(["CAPTION_WRAP", "CAPTION_TRUNCATED"])
+
+const ELLIPSIS = "…"
+/** Diagram / symbol sheet caption lines: `CAPTION_MARK_ATTR` before `withCaptionAbove`, `data-caption-above` after. */
+const DIAGRAM_CAPTION_LINE = /<text\b[^>]*\bdata-(?:st-caption|caption-above)="1"[^>]*>([\s\S]*?)<\/text>/g
+/** Chart apparatus (apparatus.ts `figureApparatus`): the caption `<text>` directly before the SUMBER `<text>`. */
+const CHART_APPARATUS = /<text\b[^>]*>((?:(?!<\/text>)[\s\S])*)<\/text>\s*<text\b[^>]*>((?:<tspan\b[^>]*>)?SUMBER\b(?:(?!<\/text>)[\s\S])*)<\/text>/
+
+const plainText = (s: string) => s.replace(/<[^>]*>/g, "")
+
+function captionLinesOf(kind: string, svg: string): { lines: number; truncated: boolean } | null {
+  if (kind === "diagram" || kind === "symbolSheet") {
+    const lines = [...svg.matchAll(DIAGRAM_CAPTION_LINE)].map((m) => plainText(m[1]))
+    return lines.length ? { lines: lines.length, truncated: lines.some((l) => l.trimEnd().endsWith(ELLIPSIS)) } : null
+  }
+  if (kind === "chart") {
+    const m = CHART_APPARATUS.exec(svg)
+    if (!m) return null
+    const tspans = m[1].match(/<tspan\b[^>]*\bdy="/g)?.length ?? 0
+    return { lines: Math.max(1, tspans), truncated: plainText(m[1]).includes(ELLIPSIS) || plainText(m[2]).includes(ELLIPSIS) }
+  }
+  return null
+}
+
+/** FIGURE_FIT_FAIL_NOTES as findings; the detail cites the caption guide limit (N-014), never the caption text. */
+function captionFitOf(f: FigureSvg, b: CheckBuilder): void {
+  const c = captionLinesOf(f.kind, f.svg)
+  if (!c) return
+  const limit = `maks ${CAPTION_GUIDE_MAX_CHARS} karakter (CAPTION_GUIDE_MAX_CHARS) agar muat satu baris`
+  if (c.lines > 1) {
+    b.fail(finding("CAPTION_WRAP", { address: f.address, label: f.label, detail: `caption ${c.lines} baris: persingkat caption, ${limit}`, amount: c.lines }))
+  }
+  if (c.truncated) {
+    b.fail(finding("CAPTION_TRUNCATED", { address: f.address, label: f.label, detail: `caption/SUMBER dipotong elipsis: persingkat, ${limit}` }))
+  }
+}
 
 export interface FigureFitInput {
   format: VerifyFormat
@@ -322,6 +384,7 @@ interface FigureSvg {
 
 function geometryOf(f: FigureSvg, b: CheckBuilder): void {
   try {
+    captionFitOf(f, b) // row 28 (T-01): FIGURE_FIT_FAIL_NOTES
     // Spec §3.5 test (row 150, "symbolSheet decision"): row 150c (C144 A) fixed the overlapping sheet text and taught
     // lintDiagramGeometry to read cell labels in translate-only `<g data-symbol>` cells, so engine symbol sheets
     // lint clean and a symbol sheet gets the same measured verdict as a diagram.

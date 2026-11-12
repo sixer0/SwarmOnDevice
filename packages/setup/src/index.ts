@@ -32,13 +32,16 @@ import { GENERATED_MODULES_BY_ID } from "./steps.gen.ts"
 import type { StepContext, StepResult } from "./steps/_template/index.ts"
 import { firecrawlPlan, searxngPlan, type DockerRunner, type ReadinessProbe } from "./stacklib.ts"
 import { applyEstate, type ApplyReport } from "./estate/apply.ts"
+import { runStart, STARTABLE_COMPONENTS } from "./estate/start.ts"
+import { brewBin, spawnRunner } from "./steps/runtime/commands.ts"
 import { homeDir } from "./paths.ts"
 import { makeRealDockerRunner } from "./dockerRunner.real.ts"
 import { makeReadinessProbe } from "./readinessProbe.ts"
 import { COMPONENT_IDS, PROGRAM_NAME, STATES, type ComponentId } from "./constants.ts"
 import { OUTCOME, EXIT_OK, EXIT_FAIL, exitCodeFor, messageFor, type OutcomeToken } from "./outcomes.ts"
 
-function usageText(lockVersion?: string): string {
+/** Exported for start_verb.test.ts (row 92a): the desktop feature-detects `start` from this text. */
+export function usageText(lockVersion?: string): string {
   const title = `${PROGRAM_NAME} — consent-first pre-install for optional Swarm tools (macOS arm64, unprivileged)`
   // Row 106: the banner states the ONE version this program can substantiate — the .version
   // field of the tools.lock.json it just loaded (PC-LBL-03 source). The CLI product version
@@ -58,6 +61,8 @@ function usageText(lockVersion?: string): string {
     `  ${PROGRAM_NAME} wire                   re-wire ~/.config/swarm for components already recorded healthy`,
     `  ${PROGRAM_NAME} apply <stack>          re-render and recreate ONE stack (searxng | firecrawl) from the`,
     `                                   stored lane values and a fresh DNS-pin produce; restarts work in flight`,
+    `  ${PROGRAM_NAME} start <runtime|searxng|firecrawl>  start an installed, stopped component (colima start,`,
+    `                                   compose start); never creates, pulls, recreates or installs`,
     "",
     "Flags:",
     "  --non-interactive                MDM mode; names NO default — pass an explicit component list,",
@@ -705,6 +710,33 @@ function printApplyReport(report: ApplyReport): void {
   }
 }
 
+/** Row 92a (1.2.6, OFF-04 / N-153) — the start-only verb. One component per call, no --dry-run (it
+ *  would have to fake colima's answer) and no consent. runStart takes the setup lock itself (row
+ *  92a-fix, C13) and refuses with REFUSED_CONCURRENCY while another swarm-setup holds it.
+ *  Binaries resolve exactly like the runtime step's remove path: the brew prefix that holds colima. */
+function cmdStart(cmd: ParsedCommand): OutcomeToken {
+  if (cmd.components.length !== 1) {
+    console.error(`${PROGRAM_NAME}: start takes exactly one component — ${STARTABLE_COMPONENTS.join(" | ")}`)
+    return OUTCOME.FAILED
+  }
+  if (cmd.dryRun || cmd.nonInteractive || Object.keys(cmd.tokens).length > 0) {
+    console.error(`${PROGRAM_NAME}: start takes no flags (it installs nothing and asks no consent)`)
+    return OUTCOME.FAILED
+  }
+  const prefix = ["/opt/homebrew", "/usr/local"].find((p) => existsSync(brewBin("colima", p))) ?? "/opt/homebrew"
+  const report = runStart({
+    component: cmd.components[0] as string,
+    runner: spawnRunner(),
+    colimaPath: brewBin("colima", prefix),
+    dockerPath: resolveDockerBinary() ?? brewBin("docker", prefix),
+  })
+  const line = `start ${report.component}: ${report.token} — ${report.message}`
+  if (report.ok) console.log(line)
+  else console.error(line)
+  for (const c of report.commands) console.log(`  $ ${c}`)
+  return report.token
+}
+
 function cmdRemove(cmd: ParsedCommand): OutcomeToken {
   const lock = acquireLock()
   if (!lock.ok) {
@@ -804,6 +836,10 @@ export async function main(argv: readonly string[]): Promise<void> {
       // Row 246: async because the DNS-pin refresh awaits the host resolver and the health gate polls
       // the recreated containers; both are inherent to applying a change to a live estate.
       token = await cmdApply(cmd)
+      break
+    case "start":
+      // Row 92a: synchronous — the runner is synchronous and the runtime wait is a bounded poll.
+      token = cmdStart(cmd)
       break
   }
 

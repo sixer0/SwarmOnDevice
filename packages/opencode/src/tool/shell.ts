@@ -1,6 +1,6 @@
 import { Effect, Fiber, Option, Stream } from "effect"
 import os from "os"
-import { createWriteStream } from "node:fs"
+import { createWriteStream, readdirSync } from "node:fs"
 import fsp from "node:fs/promises"
 import * as Tool from "./tool"
 import path from "path"
@@ -31,10 +31,14 @@ import { withoutServerCredentials } from "@/util/server-credentials"
 import { Autonomy } from "@/permission/autonomy"
 import { Session } from "@/session/session"
 import { Archive } from "./archive"
-import { DELETE_COMPOUND_TEXT, SCRIPT_CHANGED_TEXT } from "@/permission/autonomy-texts"
+import { DELETE_COMPOUND_TEXT, SCRIPT_CHANGED_TEXT, checkpointFailedText } from "@/permission/autonomy-texts"
+import { AutonomyTable } from "@/permission/autonomy-table"
+import { ActionCheckpoint } from "./checkpoint"
+import { saveCheckpointOrStop } from "./edit"
 import { ScriptScreen } from "@/permission/script-screen"
 import { DeletionWords, type Deletion } from "./deletion"
 import { BypassLists } from "@/permission/bypass-lists"
+import { Global } from "@opencode-ai/core/global"
 
 export { Parameters } from "./shell/prompt"
 export { SCRIPT_CHANGED_TEXT } from "@/permission/autonomy-texts"
@@ -95,8 +99,13 @@ type Scan = {
   risk?: Risk.Risk
   /** Secret files the command names, so what it prints from them can be recognised. */
   secretFiles: Set<string>
-  /** Set when it reshapes one of them, because a secret cut into pieces or re-encoded can no longer be recognised. */
+  /**
+   * The whole output shown in place of what it prints, when it shows a secret file in a form a search for the value would
+   * not find (row 36b, SEC-01), or prints any of a whole secret file or a protected place (SEC-01, SEC-03).
+   */
   withheld?: string
+  /** Row 36b (SEC-03, SEC-20): a protected read (a secret file, `env`, `printenv`): the written-assignment rules apply. */
+  masked?: boolean
 }
 
 type Chunk = {
@@ -252,6 +261,17 @@ function preview(text: string) {
   return "...\n\n" + text.slice(-MAX_METADATA_LENGTH)
 }
 
+/** 1.2.6 FX-1 (gate M1 S7): the one result for a command the shell stopped before it ran (exit 1, `text` as output). */
+function stoppedResult(command: string, text: string) {
+  return {
+    stopped: {
+      title: command,
+      metadata: { output: preview(text), exit: 1 as number | null, truncated: false, outputPath: undefined as string | undefined },
+      output: text,
+    },
+  }
+}
+
 function tail(text: string, maxLines: number, maxBytes: number) {
   const lines = text.split("\n")
   if (lines.length <= maxLines && Buffer.byteLength(text, "utf-8") <= maxBytes) {
@@ -391,12 +411,18 @@ function copyMove(root: Node) {
   return Risk.copyMove(command.map((item) => unquote(item.text)))
 }
 
-/** The files a copy or a move would replace now, folders left out: the program refuses those and replaces nothing. */
+/** 1.2.6 P-02: a plain copy or move as the gate saw it: the targets the program would write, and those to be archived. */
+type CopyAtGate = { targets: string[] | undefined; archived: readonly string[] }
+
+/**
+ * The files a copy or a move would replace now, folders left out: the program refuses those and replaces nothing. None for
+ * `-n` (1.2.6 P-02, `Risk.replacing`).
+ */
 async function replacedBy(item: Risk.CopyMove, cwd: string) {
-  const targets = Risk.copyTargets(item, cwd)
-  if (!targets) return []
+  const replacing = Risk.replacing(item, cwd)
+  if (!replacing) return []
   const found = await Promise.all(
-    Risk.replaced(targets).map(async (file) => ((await fsp.stat(file).catch(() => undefined))?.isDirectory() ? [] : [file])),
+    replacing.map(async (file) => ((await fsp.stat(file).catch(() => undefined))?.isDirectory() ? [] : [file])),
   )
   return found.flat()
 }
@@ -929,6 +955,117 @@ function reshapes(tokens: string[]) {
 
 const WORD_BREAK = /[\s'"|;&<>()=,:]+/
 
+/**
+ * Row 36b (SEC-01): programs whose output is the bytes of the file as they are, line by line, so the scrubber finds every
+ * value it knows in it. Anything else that reads a secret file has its output withheld, because a value cut into pieces,
+ * reversed or re-encoded can no longer be recognised. Masking is an accidental-exposure control: a counting oracle such as
+ * `grep -c '^KEY=a' .env` cannot be masked (SR-01 item 5).
+ */
+const METADATA_VIEWERS = new Set([
+  "ls", "stat", "wc", "file", "du", "cksum", "md5", "md5sum", "shasum", "sha1sum", "sha224sum", "sha256sum", "sha384sum",
+  "sha512sum", "b2sum", "test", "[", "true", "false", "pwd", "cd",
+])
+const VERBATIM_VIEWERS = new Set([...METADATA_VIEWERS, "cat", "head", "tail", "grep", "egrep", "fgrep", "rg", "diff", "cmp", "nl", "sort", "uniq", "echo"])
+const programOf = (tokens: string[]) => (tokens[0] ? path.basename(tokens[0]) : "")
+
+function verbatim(tokens: string[]) {
+  const name = programOf(tokens)
+  const args = tokens.slice(1)
+  if (!VERBATIM_VIEWERS.has(name)) return false
+  const has = (pattern: RegExp) => args.some((arg) => pattern.test(arg))
+  if (name === "head" || name === "tail") return !has(/^(-[a-zA-Z0-9]*c|--bytes)/)
+  if (name === "grep" || name === "egrep" || name === "fgrep" || name === "rg") {
+    if (has(/^(-[a-zA-Z]*o|--only-matching|--replace|--colou?r(=(always|auto))?$)/)) return false
+    return !(name === "rg" && has(/^-[a-zA-Z]*r/))
+  }
+  if (name === "diff") return !has(/^(-[a-zA-Z]*[yW]|--side-by-side|--width)/)
+  if (name === "cmp") return !has(/^(-[a-zA-Z]*[lb]|--verbose|--print-bytes)/)
+  return true
+}
+
+/** The load of a file into the shell (`source .env`, `--env-file .env`): it runs things with the values, it shows nothing. */
+const LOADERS = new Set(["source", "."])
+
+/** A word with a glob in its last part, as the files it names in one folder (bounded), so `rev .en?` names `.env`. */
+function globbed(file: string) {
+  const base = path.basename(file)
+  if (!/[*?[]/.test(base) || /[*?[]/.test(path.dirname(file))) return []
+  try {
+    // `[...]` stays a class; a malformed one throws, and then nothing is named by it.
+    const pattern = new RegExp("^" + base.replace(/[.+^${}()|\\]/g, "\\$&").replaceAll("*", ".*").replaceAll("?", ".") + "$")
+    return readdirSync(path.dirname(file))
+      .slice(0, 2000)
+      .filter((name) => pattern.test(name))
+      .map((name) => path.join(path.dirname(file), name))
+  } catch {
+    return []
+  }
+}
+
+const WITHHELD_TRANSFORMED = (name: string) =>
+  `[hidden:${name} (transformed output of a credential file)]\nthe command ran; its output is withheld because it would show a credential in another form. Shell output withheld: programs you run can still read the file. Do not try to get the same values another way.`
+const WITHHELD_WHOLE = (name: string) =>
+  `[hidden:${name}]\nThis file holds credentials, so its contents are kept from you. Programs you run can still use it.`
+
+/** Git's output in `cwd`, or undefined when it fails or times out: the checkpoint module's runner (FX-1, gate M1 S3). */
+const gitIn = (cwd: string, args: string[]) => ActionCheckpoint.runGit(cwd, args, { maxBuffer: 64 * 1024 * 1024 })
+
+/**
+ * 1.2.6 row 37b (P-01b): `git clean` with the session's `.swarm` folder left out, when it lies under where the command
+ * cleans, so a clean never removes the checkpoint made for it (or the archive). Only for a `git clean` the autonomy table
+ * read word by word (`checkpointPlan`), whose words are plain. Undefined: nothing to leave out.
+ */
+function cleanSparing(words: readonly string[], cwd: string, directory: string) {
+  const swarm = path.join(directory, ".swarm")
+  const rel = path.relative(cwd, swarm)
+  if (rel.startsWith("..") || path.isAbsolute(rel)) return undefined
+  const separator = words.indexOf("--")
+  const flags = separator < 0 ? words.filter((word) => word.startsWith("-")) : words.slice(0, separator)
+  const named = separator < 0 ? words.filter((word) => !word.startsWith("-")) : words.slice(separator + 1)
+  return [...flags, "--", ...(named.length > 0 ? named : ["."]), `:(exclude)${rel.split(path.sep).join("/")}`]
+}
+
+/**
+ * 1.2.6 row 37b: what an I-G checkpoint holds besides the ref names the table read, worked out right before the command
+ * runs: the tracked files a hard reset discards, the files a `git clean` removes (its own dry run, with the same words),
+ * the branch HEAD names and every local branch and tag of a history rewrite. Undefined when git could not say.
+ */
+async function gitCheckpoint(plan: Extract<AutonomyTable.CheckpointPlan, { kind: "git" }>, cwd: string, directory: string) {
+  const targets: string[] = [...plan.targets]
+  const refs: string[] = [...plan.refs]
+  if (plan.changed) {
+    const out = await gitIn(cwd, ["diff", "--name-only", "--relative", "-z", "HEAD"])
+    if (out === undefined) return undefined
+    targets.push(...out.split("\0").filter(Boolean).map((file) => path.resolve(cwd, file)))
+  }
+  if (plan.clean) {
+    const words = cleanSparing(plan.clean, cwd, directory) ?? [...plan.clean]
+    const out = await gitIn(cwd, ["clean", "-n", ...words])
+    if (out === undefined) return undefined
+    for (const line of out.split("\n")) {
+      const found = /^Would remove (.+)$/.exec(line)
+      if (found) targets.push(path.resolve(cwd, found[1]!.replace(/\/$/, "")))
+    }
+  }
+  if (plan.branch) {
+    const head = (await gitIn(cwd, ["symbolic-ref", "-q", "HEAD"]))?.trim()
+    if (head) refs.push(head)
+  }
+  if (plan.all) {
+    const out = await gitIn(cwd, ["for-each-ref", "--format=%(refname)", "refs/heads", "refs/tags"])
+    if (out === undefined) return undefined
+    refs.push(...out.split("\n").filter(Boolean))
+  }
+  return { targets: [...new Set(targets)], refs: [...new Set(refs)] }
+}
+
+/**
+ * 1.2.6 row 37b: where the shell makes its checkpoints. A test seam (CK-9 cap, CK-12 and T-INV-4 failure); production
+ * always calls `ActionCheckpoint.create`. A create that throws counts as a checkpoint that could not be made. Since FX-12
+ * the one seam lives in edit.ts beside the shared `saveCheckpointOrStop`, and is re-exported here for the shell's tests.
+ */
+export { checkpointSeam } from "./edit"
+
 // Every call asks, unless a rule a person wrote says otherwise. How the text parses never lowers that: the parse only names
 // the patterns, labels the prompt and withholds "Allow always", which is offered for one plain command and answers only that.
 const ask = Effect.fn("ShellTool.ask")(function* (
@@ -940,6 +1077,7 @@ const ask = Effect.fn("ShellTool.ask")(function* (
     scripts?: Map<string, string | undefined>
     archive?: boolean
     archiveTargets?: string[]
+    checkpointTargets?: readonly string[]
     steps?: ShellReading
   },
   always: string | undefined,
@@ -991,6 +1129,9 @@ const ask = Effect.fn("ShellTool.ask")(function* (
       // C97 F2, set in autonomous mode only: the files a plain `cp` or `mv` would replace, which this shell moves to the
       // archive right before it runs. The table lets a replacing copy or move through as `archived` only with them listed.
       ...(input.archiveTargets && input.archiveTargets.length > 0 ? { archiveTargets: input.archiveTargets } : {}),
+      // 1.2.6 row 37b (N-143), set in autonomous mode only: what this shell saves in a checkpoint right before the command
+      // runs (`checkpointPlan`). The table lets an action nothing could undo through as `checkpointed` only with them listed.
+      ...(input.checkpointTargets ? { checkpointTargets: [...input.checkpointTargets] } : {}),
       // Row 274, set in autonomous mode only: the commands this text runs, read from its parse (`decompose`). The table
       // judges them one by one only where the whole text would otherwise be held as not routine.
       ...(input.steps ? { steps: input.steps } : {}),
@@ -1133,8 +1274,30 @@ export const ShellTool = Tool.define(
         return unknown
       })
 
-      const named = new Set(redirects.reads.filter(Secrets.secretFile).map(absolute))
+      // Row 36b (SEC-01, SEC-03): what a secret file or a protected place shows is judged by its name and where it lands,
+      // so a link `notes.txt` to `.env` and a glob `.en?` count, and Swarm's own credential files and the key folders in
+      // the home folder are whole-secret for output (reads of them run without asking now, U12).
+      const places = BypassLists.protectedOutputPlaces([Global.Path.home, os.homedir()], Global.Path.data)
+      const kinds = new Map<string, "whole" | "lines">()
+      const kindOf = (word: string) => {
+        const file = absolute(word)
+        for (const name of [file, ...globbed(file)]) {
+          const kind = Secrets.outputKind(name, places)
+          if (kind) kinds.set(name, kind)
+          if (kind) return { file: name, kind }
+        }
+        return undefined
+      }
+      const named = new Set<string>()
+      const read = new Set<string>()
+      for (const word of redirects.reads) {
+        const found = kindOf(word)
+        if (found) named.add(found.file), read.add(found.file)
+      }
       let reshaped = false
+      let transformed = false
+      let content = false
+      let printed: string | undefined
       for (const node of commands(root)) {
         const command = parts(node)
         const tokens = command.map((item) => item.text)
@@ -1142,8 +1305,20 @@ export const ShellTool = Tool.define(
         if (!ps) {
           const plain = tokens.map(unquote)
           reshaped = reshaped || reshapes(plain)
-          for (const word of plain.slice(1).flatMap((token) => token.split(WORD_BREAK)))
-            if (word && Secrets.secretFile(word)) named.add(absolute(word))
+          transformed = transformed || !verbatim(plain)
+          content = content || !METADATA_VIEWERS.has(programOf(plain))
+          const program = programOf(plain)
+          if (program === "env" || program === "printenv") scan.masked = true
+          if (program === "printenv")
+            printed = printed ?? plain.slice(1).find((name) => !name.startsWith("-") && Secrets.secretPair(name, "x"))
+          const loads = LOADERS.has(program)
+          for (const word of plain.slice(1).flatMap((token) => token.split(WORD_BREAK))) {
+            const found = word ? kindOf(word) : undefined
+            if (!found) continue
+            named.add(found.file)
+            // `docker run --env-file .env` and `source .env` load the values; what they then print is scrubbed as before.
+            if (!loads && !plain.some((arg) => arg === "--env-file" || arg.startsWith("--env-file="))) read.add(found.file)
+          }
         }
 
         if (cmd && (FILES.has(cmd) || (shellKind === "cmd" && CMD_FILES.has(cmd)))) {
@@ -1171,8 +1346,16 @@ export const ShellTool = Tool.define(
         const whole = root.text.trim()
         if (whole) scan.patterns.add(whole)
       }
-      scan.secretFiles = named
-      if (reshaped && named.size > 0) scan.withheld = path.relative(instance.worktree, [...named][0]!)
+      scan.secretFiles = new Set([...named].filter((file) => kinds.get(file) === "lines"))
+      const whole = [...read].find((file) => kinds.get(file) === "whole")
+      // A whole secret file or a protected place: only programs that print nothing of it (`ls`, `wc`, a checksum) show
+      // their output, as the read tool shows none of it (SEC-01 item 3, SEC-03 item 1).
+      if (whole && content) scan.withheld = WITHHELD_WHOLE(path.basename(whole))
+      // A secret file read by anything but a verbatim viewer (SEC-01 item 2), or loaded and then reshaped (1.2.5).
+      else if ((read.size > 0 && transformed) || (reshaped && named.size > 0))
+        scan.withheld = WITHHELD_TRANSFORMED(path.basename([...read, ...named][0]!))
+      else if (printed) scan.withheld = `[hidden:${printed}]`
+      if (read.size > 0) scan.masked = true
 
       return scan
     })
@@ -1280,9 +1463,20 @@ export const ShellTool = Tool.define(
       command: string,
       cwd: string,
       ctx: Tool.Context,
+      gate: CopyAtGate,
     ) {
       const on = yield* modeOn(ctx)
       if (!on) return
+      const stopped = (text: string) => stoppedResult(command, text)
+      const notRun = Effect.fn("ShellTool.copyNotRun")(function* (reason: string | undefined) {
+        yield* Autonomy.recordCheckpointFailed(on, ctx.callID || ctx.messageID)
+        return stopped(checkpointFailedText(reason))
+      })
+      // 1.2.6 P-02 rule 4 (race): the targets the gate judged must still be the ones the program writes. A name that became a
+      // folder since would send the copy somewhere nobody judged, so it does not run.
+      const now = Risk.copyTargets(item, cwd)
+      if (gate.targets && (!now || now.length !== gate.targets.length || now.some((file, index) => file !== gate.targets![index])))
+        return yield* notRun(undefined)
       const paths = yield* Effect.promise(() => replacedBy(item, cwd))
       if (paths.length === 0) return
       const result = yield* Effect.promise(() =>
@@ -1294,16 +1488,66 @@ export const ShellTool = Tool.define(
           record: Autonomy.archiveRecorder(on.autonomy.record, on.where),
         }),
       )
-      if (!result.ok)
-        return {
-          stopped: {
-            title: command,
-            metadata: { output: preview(result.message), exit: 1 as number | null, truncated: false, outputPath: undefined as string | undefined },
-            output: result.message,
-          },
-        }
+      if (!result.ok) {
+        // A target the gate saw as missing appeared since and could not be archived: it is kept as a checkpoint copy
+        // instead (C4), or the copy does not run (01b 3.2 rule 4). One the gate saw keeps the archive's answer.
+        if (paths.every((file) => gate.archived.includes(file))) return stopped(result.message)
+        const saved = yield* saveCheckpointOrStop(on, {
+          directory: on.place.directory,
+          cwd,
+          targets: paths,
+          refs: [],
+          sessionID: ctx.sessionID,
+          requestID: ctx.callID || ctx.messageID,
+          command,
+        })
+        return saved.ok ? { text: saved.text } : stopped(saved.stop)
+      }
       if (!result.recorded) yield* Effect.logError("could not record an archived replacement", { archive: result.id })
       return { text: result.moved.length > 0 ? Archive.movedText(result.moved.length, result.id) : "" }
+    })
+
+    /**
+     * 1.2.6 row 37b (P-01b, U6; 01b section 3.3 rule 3). With the mode on, an action nothing could undo runs only after a
+     * checkpoint of what it changes exists: the gate allowed it, `ActionCheckpoint.create` saves the targets (and refs) and
+     * writes the `checkpointed` audit line, and only then does the command run. A checkpoint that cannot be made stops the
+     * command with `CHECKPOINT_FAILED_TEXT` and its reason: nothing runs, nothing changes.
+     */
+    const checkpoint = Effect.fn("ShellTool.checkpoint")(function* (
+      plan: Extract<AutonomyTable.CheckpointPlan, { kind: "files" | "git" }>,
+      command: string,
+      cwd: string,
+      ctx: Tool.Context,
+    ) {
+      const on = yield* modeOn(ctx)
+      if (!on) return
+      const requestID = ctx.callID || ctx.messageID
+      const stop = (reason: string | undefined) =>
+        Effect.gen(function* () {
+          yield* Autonomy.recordCheckpointFailed(on, requestID)
+          return stoppedResult(command, checkpointFailedText(reason))
+        })
+      const found =
+        plan.kind === "git"
+          ? yield* Effect.promise(() => gitCheckpoint(plan, cwd, on.place.directory))
+          : { targets: [...plan.targets], refs: [] as string[] }
+      if (!found) return yield* stop("git")
+      const saved = yield* saveCheckpointOrStop(on, {
+        directory: on.place.directory,
+        cwd,
+        targets: found.targets,
+        refs: found.refs,
+        sessionID: ctx.sessionID,
+        requestID,
+        command,
+      })
+      if (!saved.ok) return stoppedResult(command, saved.stop)
+      const clean = plan.kind === "git" && plan.clean ? cleanSparing(plan.clean, cwd, on.place.directory) : undefined
+      return {
+        text: saved.text,
+        // The clean the plan read, run with the session's `.swarm` left out (`cleanSparing`).
+        command: clean ? ["git", "clean", ...clean].map((word) => (/^[\w./@%+,:=-]+$/.test(word) ? word : `'${word}'`)).join(" ") : undefined,
+      }
     })
 
     const shellEnv = Effect.fn("ShellTool.shellEnv")(function* (ctx: Tool.Context, cwd: string) {
@@ -1323,6 +1567,7 @@ export const ShellTool = Tool.define(
         env: NodeJS.ProcessEnv
         timeout: number
         withheld?: string
+        masked?: boolean
       },
       ctx: Tool.Context,
     ) {
@@ -1366,6 +1611,8 @@ export const ShellTool = Tool.define(
       })
 
       const root = (yield* InstanceState.context).worktree
+      // Row 36b (SEC-03, SEC-20): a protected read's output, wherever it is shown or saved, gets the assignment rules too.
+      const mask = (text: string) => (input.masked ? Secrets.scrubAssigned(text) : text)
       yield* ctx.metadata({
         metadata: {
           output: "",
@@ -1411,11 +1658,11 @@ export const ShellTool = Tool.define(
               last = preview(last + chunk)
 
               if (file) {
-                sink?.write(chunk)
+                sink?.write(mask(chunk))
               } else {
                 full += chunk
                 if (Buffer.byteLength(full, "utf-8") > limits.maxBytes) {
-                  return trunc.write(full).pipe(
+                  return trunc.write(mask(full)).pipe(
                     Effect.andThen((next) =>
                       Effect.sync(() => {
                         file = next
@@ -1426,7 +1673,7 @@ export const ShellTool = Tool.define(
                     Effect.andThen(
                       ctx.metadata({
                         metadata: {
-                          output: Secrets.scrub(last, root),
+                          output: mask(Secrets.scrub(last, root)),
                         },
                       }),
                     ),
@@ -1437,7 +1684,7 @@ export const ShellTool = Tool.define(
               // Shown and stored while the command runs, before the final result gets its own pass.
               return ctx.metadata({
                 metadata: {
-                  output: Secrets.scrub(last, root),
+                  output: mask(Secrets.scrub(last, root)),
                 },
               })
             }),
@@ -1488,7 +1735,7 @@ export const ShellTool = Tool.define(
       // Saving a large output to a file along the way is not a cut: what matters is whether the agent sees all of it.
       cut = dropped || whole.cut
       // What was hidden stays one read away, so nothing the agent might need is gone.
-      if (!file && (cut || condensed.hidden > 0)) file = yield* trunc.write(raw)
+      if (!file && (cut || condensed.hidden > 0)) file = yield* trunc.write(mask(raw))
 
       let output = whole.text || "(no output)"
       if (cut) {
@@ -1497,8 +1744,8 @@ export const ShellTool = Tool.define(
         const end = tail(condensed.text, limits.maxLines, limits.maxBytes - HEAD_BYTES).text
         output = `${opening ? opening + "\n\n" : ""}...output truncated...\n\nFull output saved to: ${file}\n\n${end}`
       }
-      if (input.withheld)
-        output = `[hidden: output withheld. This command reshapes ${input.withheld}, a file that holds secrets, so the values in its output could not be recognised and hidden. Programs you run can still read the file. Do not try to get the same values another way.]`
+      output = mask(output)
+      if (input.withheld) output = input.withheld
       if (!cut && condensed.hidden > 0) output += `\n\n(${condensed.hidden} similar lines hidden. Full output saved to: ${file})`
 
       if (meta.length > 0) {
@@ -1507,7 +1754,7 @@ export const ShellTool = Tool.define(
       return {
         title: input.command,
         metadata: {
-          output: last || preview(output),
+          output: mask(last) || preview(output),
           exit: code,
           truncated: cut,
           ...(file && (cut || condensed.hidden > 0) ? { outputPath: file } : {}),
@@ -1555,6 +1802,25 @@ export const ShellTool = Tool.define(
                   const found = posix ? deletion(tree.rootNode) : undefined
                   const copy = on ? copyMove(tree.rootNode) : undefined
                   const archiveTargets = copy ? yield* Effect.promise(() => replacedBy(copy, cwd)) : undefined
+                  // 1.2.6 P-02 rule 4: what the gate judges, looked at again right before the copy runs.
+                  const copyGate: CopyAtGate | undefined = copy
+                    ? { targets: Risk.copyTargets(copy, cwd), archived: archiveTargets ?? [] }
+                    : undefined
+                  const steps = on ? decompose(tree.rootNode, cwd) : undefined
+                  // 1.2.6 row 37b: never both archived and checkpointed (01b section 3.3 rule 5). The folder's trust is the
+                  // gate's to judge; the shell only says what it would save.
+                  const plan =
+                    on && typeof found !== "object" && !(archiveTargets && archiveTargets.length > 0)
+                      ? AutonomyTable.checkpointPlan({
+                          command: params.command,
+                          steps,
+                          cwd,
+                          instance: instanceCtx,
+                          canUndo: ctx.trust?.canUndo ?? false,
+                          folder: "trusted",
+                        })
+                      : undefined
+                  const saving = plan && (plan.kind === "files" || plan.kind === "git") ? plan : undefined
                   yield* ask(
                     ctx,
                     scan,
@@ -1565,11 +1831,12 @@ export const ShellTool = Tool.define(
                       scripts,
                       archive: Boolean(on) && typeof found === "object",
                       archiveTargets,
-                      steps: on ? decompose(tree.rootNode, cwd) : undefined,
+                      checkpointTargets: saving?.targets,
+                      steps,
                     },
                     posix ? Reach.alwaysFor(params.command, cwd, instanceCtx) : undefined,
                   )
-                  return { ...scan, deletion: found, scripts, copy }
+                  return { ...scan, deletion: found, scripts, copy, copyGate, saving }
                 }),
               )
               scanned.secretFiles.forEach(Secrets.learnFile)
@@ -1584,20 +1851,28 @@ export const ShellTool = Tool.define(
                 const changed = yield* scriptChanged(scanned.scripts, cwd, instanceCtx, ctx)
                 if (changed) return { ...changed, title: params.command }
               }
-              const kept = scanned.copy ? yield* archiveReplaced(scanned.copy, params.command, cwd, ctx) : undefined
-              if (kept?.stopped) return kept.stopped
+              const kept =
+                scanned.copy && scanned.copyGate
+                  ? yield* archiveReplaced(scanned.copy, params.command, cwd, ctx, scanned.copyGate)
+                  : undefined
+              if (kept && "stopped" in kept) return kept.stopped
+              // 1.2.6 row 37b: the checkpoint exists before anything of the command runs, or the command does not run.
+              const saved = scanned.saving ? yield* checkpoint(scanned.saving, params.command, cwd, ctx) : undefined
+              if (saved && "stopped" in saved) return saved.stopped
               const result = yield* run(
                 {
                   shell,
-                  command: params.command,
+                  command: saved?.command ?? params.command,
                   cwd,
                   env,
                   timeout,
                   withheld: scanned.withheld,
+                  masked: scanned.masked,
                 },
                 ctx,
               )
-              return kept?.text ? { ...result, output: `${kept.text}\n${result.output}` } : result
+              const told = [kept && "text" in kept ? kept.text : undefined, saved?.text].filter(Boolean).join("\n")
+              return told ? { ...result, output: `${told}\n${result.output}` } : result
             }),
         }
       })

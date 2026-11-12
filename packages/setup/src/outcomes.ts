@@ -33,6 +33,12 @@ export const OUTCOME = {
   // through exitCodeFor's default arm, with no edit to the exit mapping.
   REFUSED_NO_SELECTION: "REFUSED_NO_SELECTION",
   REFUSED_LOCK_MALFORMED: "REFUSED_LOCK_MALFORMED", // fail-closed lock loader (P-1)
+  // Row 92a (1.2.6, N-154..N-157): the four refusals of the start-only verb `swarm-setup start`.
+  // Refusal class => exit 1 through exitCodeFor's default arm. The desktop reads them off the RESULT line.
+  START_NOT_INSTALLED: "START_NOT_INSTALLED", // N-154
+  START_UNKNOWN_COMPONENT: "START_UNKNOWN_COMPONENT", // N-155
+  START_CONTAINERS_MISSING: "START_CONTAINERS_MISSING", // N-156
+  RUNTIME_PROFILE_MISSING: "RUNTIME_PROFILE_MISSING", // N-157
 } as const
 
 export type OutcomeToken = (typeof OUTCOME)[keyof typeof OUTCOME]
@@ -80,5 +86,13 @@ export function messageFor(token: OutcomeToken): string {
       return "refused: --non-interactive named no component; nothing was selected, consented, downloaded or written (name one or more of the candidate ids listed above)"
     case OUTCOME.REFUSED_LOCK_MALFORMED:
       return "refused: tools.lock.json failed validation (fail-closed)"
+    case OUTCOME.START_NOT_INSTALLED:
+      return "refused: start only starts a component recorded healthy; nothing was run (install it first)"
+    case OUTCOME.START_UNKNOWN_COMPONENT:
+      return "refused: start accepts only runtime, searxng or firecrawl"
+    case OUTCOME.START_CONTAINERS_MISSING:
+      return "refused: the stack has no containers to start; start never creates them (repair: swarm-setup apply <stack>)"
+    case OUTCOME.RUNTIME_PROFILE_MISSING:
+      return "refused: colima profile swarm does not exist; start never creates a VM (repair: swarm-setup install runtime)"
   }
 }

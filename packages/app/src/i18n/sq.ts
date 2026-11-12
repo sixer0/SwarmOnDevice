@@ -7,6 +7,7 @@ export const dict = {
   "desktop.menu.window": "Dritare",
   "desktop.menu.help": "Ndihmë",
   "desktop.menu.checkForUpdates": "Kontrollo për përditësime...",
+  "desktop.menu.recheckTools": "Rikontrollo mjetet",
   "desktop.menu.settings": "Cilësimet",
   "desktop.menu.reloadWebview": "Rifresko pamjen e internetit",
   "desktop.menu.restart": "Rinis",
@@ -1405,7 +1406,10 @@ export const dict = {
   "memory.privacy": "Ruhet në këtë pajisje, kurrë në depo. Një model i sheh këto shënime vetëm si pjesë e një seance që ti ekzekuton me të.",
   "memory.off": "Joaktive. Seancat nuk marrin shënime dhe nuk mësohet asgjë e re. Shënimet e tua ruhen.",
   "memory.refused.secret": "Kjo duket si fjalëkalim ose çelës, prandaj nuk u ruajt.",
-  "memory.refused.long": "Mbaje shënimin nën 400 karaktere.",
+  "memory.refused.long":
+    "Mbaje shënimin nën {{max}} karaktere. Vendosi detajet më të gjata në një skedar dhe kërkoji agjentit ta lidhë.",
+  "memory.refused.bodyLong": "Mbaje trupin e shënimit nën {{max}} karaktere, ose lidh një skedar në vend të tij.",
+  "memory.refused.tooManyRefs": "Një shënim mund të lidhë deri në {{max}} skedarë ose simbole.",
   "memory.refused.full": "Kujtesa është plot. Fshi fillimisht një shënim.",
   "memory.error": "Kujtesa e projektit nuk u ngarkua.",
   "memory.retry": "Provo përsëri",
@@ -1430,4 +1434,5 @@ export const dict = {
   "session.movedOn.answer": "Përgjigju",
   "home.agents.movedOn": "Vazhdoi pa këtë · {{time}}",
   "home.setup.attention": "Një pjesë e konfigurimit tuaj kërkon vëmendje.",
+  "session.map.decisions.category.protected_path": "Vend i mbrojtur (çelësa, kredenciale ose dosje sistemi)",
 }

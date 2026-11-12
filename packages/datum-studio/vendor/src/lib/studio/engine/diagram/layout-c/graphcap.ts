@@ -8,11 +8,15 @@
 import type { DiagramBox, DiagramNode, LayoutResult, StudioDiagramV1 } from "../../../contract";
 import { diagramFitAllows, diagramFitNote } from "../fit/state";
 import { grownHeight, planNodeText } from "../fit/text";
+import { GRAPH_EDGE_INSET_MM } from "../core/sheet";
 import { type Lattice, baselineStepMm, classGet, diagramDefect, nodeSize, pyInt, sheetHeight, snap, snapFloor } from "./geometry";
 
-/** Kolom graph terbanyak yang muat pada lebar `W` dengan simpul 2 kisi dan celah 1 kisi. */
+/**
+ * Kolom graph terbanyak yang muat pada lebar `W` dengan simpul 2 kisi dan celah 1 kisi.
+ * Swarm 1.2.6 row 59 (T-02): di dalam inset tepi `GRAPH_EDGE_INSET_MM` di kedua sisi.
+ */
 export function graphMaxCols(L: Pick<Lattice, "x" | "W">): number {
-  return Math.max(1, Math.floor((L.W - L.x * 2) / (L.x * 3) + 1e-9) + 1);
+  return Math.max(1, Math.floor((L.W - 2 * GRAPH_EDGE_INSET_MM - L.x * 2) / (L.x * 3) + 1e-9) + 1);
 }
 
 /** Kolom agen bersambung (tanpa kolom kosong di antaranya)? */
@@ -27,7 +31,8 @@ export function layoutGraphCapacity(s: StudioDiagramV1, L: Lattice, padUnits: nu
   const k = cols.length;
   let w = 0;
   for (const cand of [L.x * 3, L.x * 2]) {
-    if ((k - 1) * (cand + L.x) + cand <= L.W + 1e-6) {
+    // Row 59 (T-02): the compacted block must leave the 2 mm edge inset on both sides.
+    if ((k - 1) * (cand + L.x) + cand <= L.W - 2 * GRAPH_EDGE_INSET_MM + 1e-6) {
       w = cand;
       break;
     }

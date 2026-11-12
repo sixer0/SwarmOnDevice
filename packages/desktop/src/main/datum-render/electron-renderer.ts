@@ -22,7 +22,9 @@ import { isAllowedRendererUrl } from "./paths"
 import { MM_PER_INCH, RENDER_PARTITION, renderWebPreferences, type WindowKind } from "./pages"
 import type { BridgeLog } from "./socket-server"
 
-export const JOB_TIMEOUT_MS = 60_000
+// Row 55 (1.2.6, M-04, N-049): 150 s, above the longest adaptive raster op (RASTER_TIMEOUT_MAX_MS 120 s) and
+// below that op's socket read (120 s + BRIDGE_READ_MARGIN_MS 45 s): ladder I-3, timeout-ladder.test.ts.
+export const JOB_TIMEOUT_MS = 150_000
 const SETTLE_MS = 250
 const FONTS_READY = "document.fonts.ready.then(function () { return document.fonts.size; })"
 
@@ -95,6 +97,12 @@ async function inWindow<T>(kind: WindowKind, width: number, height: number, html
     // Page script never runs, also in the check window where V8 stays on for Runtime.evaluate.
     await dbg.sendCommand("Emulation.setScriptExecutionDisabled", { value: true })
     await dbg.sendCommand("Emulation.setDeviceMetricsOverride", { width, height, deviceScaleFactor, mobile: false })
+    // Row 205 (1.2.3, HB-1): no scrollbar takes layout width. With a mouse attached and macOS "Show scroll bars:
+    // automatic" (or "always") Chromium reserves a classic 15 px scrollbar in this window, so the layout viewport is
+    // 779 px instead of the 794 px A4 sheet: every Studio flow document then measured `.st-unit` (210 mm wide in
+    // screen media) 3.89 mm past the right edge (OVERLAP_CLIP and DATUM-37), and flow page images were cut 15 px
+    // narrow. Playwright's headless Chromium, which the vendored engine was written against, hides scrollbars too.
+    await dbg.sendCommand("Emulation.setScrollbarsHidden", { hidden: true })
     const tree = (await dbg.sendCommand("Page.getFrameTree")) as { frameTree: { frame: { id: string } } }
     await dbg.sendCommand("Page.setDocumentContent", { frameId: tree.frameTree.frame.id, html })
     try {

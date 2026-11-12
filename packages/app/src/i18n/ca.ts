@@ -7,6 +7,7 @@ export const dict = {
   "desktop.menu.window": "Finestra",
   "desktop.menu.help": "Ajuda",
   "desktop.menu.checkForUpdates": "Comproveu si hi ha actualitzacions...",
+  "desktop.menu.recheckTools": "Torna a comprovar les eines",
   "desktop.menu.settings": "Configuració",
   "desktop.menu.reloadWebview": "Torna a carregar Webview",
   "desktop.menu.restart": "Reinicieu",
@@ -1415,7 +1416,10 @@ export const dict = {
   "memory.privacy": "Es guarda en aquest dispositiu, mai al repositori. Un model només veu aquestes notes com a part d'una sessió que executes amb ell.",
   "memory.off": "Desactivada. Les sessions no reben notes i no s'aprèn res de nou. Les teves notes es conserven.",
   "memory.refused.secret": "Això sembla una contrasenya o una clau, així que no s'ha desat.",
-  "memory.refused.long": "Mantén la nota per sota dels 400 caràcters.",
+  "memory.refused.long":
+    "Mantén la nota per sota dels {{max}} caràcters. Posa els detalls més llargs en un fitxer i demana a l'agent que l'enllaci.",
+  "memory.refused.bodyLong": "Mantén el cos de la nota per sota dels {{max}} caràcters, o enllaça un fitxer.",
+  "memory.refused.tooManyRefs": "Una nota pot enllaçar com a màxim {{max}} fitxers o símbols.",
   "memory.refused.full": "La memòria és plena. Esborra primer una nota.",
   "memory.error": "No s'ha pogut carregar la memòria del projecte.",
   "memory.retry": "Torna-ho a provar",
@@ -1440,4 +1444,5 @@ export const dict = {
   "session.movedOn.answer": "Respon",
   "home.agents.movedOn": "Ha continuat sense això · {{time}}",
   "home.setup.attention": "Part de la vostra configuració requereix atenció.",
+  "session.map.decisions.category.protected_path": "Lloc protegit (claus, credencials o carpetes del sistema)",
 }

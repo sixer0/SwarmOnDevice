@@ -2,7 +2,8 @@
 // in packages/datum-studio/src/mcp-host/http-server.ts). It is started through a symlink named
 // `<fixture>/Fake.app/Contents/MacOS/Swarm`, so the launcher's PID check (`ps -o comm=`) sees a running Swarm.
 // It writes the descriptor with the app's own writer (row 111 descriptor.ts) and records what each request carried,
-// except the token, to FAKE_RECORD (JSON lines). FAKE_MODE: ok | wrong-token | unsafe-mode.
+// except the token, to FAKE_RECORD (JSON lines). FAKE_MODE: ok | wrong-token | unsafe-mode | no-get (row 54b: no
+// standalone GET stream, 405, so a connection failure is first seen on a request).
 import { randomBytes, timingSafeEqual } from "node:crypto"
 import { appendFileSync, chmodSync } from "node:fs"
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http"
@@ -65,6 +66,7 @@ const server = createServer(async (req, res) => {
   }
   if (req.method === "GET") {
     record(entry)
+    if (mode === "no-get") return deny(res, 405)
     if (req.headers["mcp-session-id"] !== SESSION) return deny(res, 404)
     // The standalone stream stays open until this process ends (that is how the bridge sees Swarm quit).
     res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache" })

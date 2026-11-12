@@ -25,7 +25,7 @@ import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 // Row 96 acceptance suite for the shipped permission baseline
 // (masterplan/01f_tool_wiring_spec.md §4.2/§5.1). Every assertion drives the REAL
 // matcher and merge code — Permission.fromConfig/evaluate/merge/disabled, the real
-// Wildcard.match, and the same remeda mergeDeep that config.ts:41-43 uses for config
+// Wildcard.match, and the same remeda mergeDeep that config.ts:41-44 uses for config
 // merging — never a re-implementation of the rule engine. T-W7-7 assertions A-G are
 // mirrored by name; T-W7-8 (ask-vs-hide asymmetry) is row 96's per §11. The CLI legs
 // (T-W7-6, T-W7-7-D, r94 validator hookup) live in baseline.proofs.sh beside this file.
@@ -93,15 +93,43 @@ const mergedNative = Permission.merge(upstreamDefaults, baselineRuleset)
 // --- shipped shape --------------------------------------------------------------
 
 test("baseline - composes into BASELINE_CONFIG (the FR-DEF-04 merge slot)", () => {
-  // config.ts:317-320 seeds loadInstanceState with BASELINE_CONFIG; structural
+  // config.ts:336-340 seeds loadInstanceState with BASELINE_CONFIG; structural
   // equality here is the proof that row 96's entries ride that exact slot with zero
   // config.ts edits. The payload arrives through fresh-copy getters (measured remeda
   // assigns absent source keys by reference), so two reads are distinct objects.
   expect(BASELINE_CONFIG.permission).toEqual(PERMISSION_BASELINE)
   expect(BASELINE_CONFIG.agent).toEqual(AGENT_BASELINE)
   expect(BASELINE_CONFIG.experimental).toEqual(SWARM_PERMISSION_BASELINE.experimental)
-  expect(BASELINE_CONFIG.experimental.mcp_timeout).toBe(30000)
+  expect(BASELINE_CONFIG.experimental.mcp_timeout).toBe(600000)
   expect(BASELINE_CONFIG.permission).not.toBe(BASELINE_CONFIG.permission)
+})
+
+// CFG-02 / 01d T2d: every `config.ts:<n>` reference in the baseline comments names a
+// key of CORE v1/config/config.ts; line n must contain it (the refs went stale once).
+test("baseline - config.ts line references point at their keys", async () => {
+  const baselineSrc = await Bun.file(
+    new URL("../../../core/src/swarm-permission-baseline.ts", import.meta.url),
+  ).text()
+  const configLines = (
+    await Bun.file(new URL("../../../core/src/v1/config/config.ts", import.meta.url)).text()
+  ).split("\n")
+  // References are written `config.ts:<n> <key>` so the key follows its line number.
+  const refs = [...baselineSrc.matchAll(/config\.ts:(\d+) (mcp_timeout|experimental)\b/g)]
+  expect(refs.map((m) => m[2]).sort()).toEqual(["experimental", "mcp_timeout"])
+  for (const [, n, key] of refs) expect(configLines[Number(n) - 1]).toContain(key)
+  // no reference without a named key
+  expect(baselineSrc.match(/config\.ts:\d+/g)?.length).toBe(refs.length)
+})
+
+// CFG-03 / 01d T3a (U17): compaction ships as exactly {auto: true, max_context: 0}, through a
+// getter, so every read is a fresh object and an in-place write never reaches the next read.
+test("baseline - compaction ships {auto: true, max_context: 0} as a fresh copy per read", () => {
+  const compaction = BASELINE_CONFIG.compaction
+  expect(compaction).toEqual({ auto: true, max_context: 0 })
+  expect(BASELINE_CONFIG.compaction).not.toBe(compaction)
+  compaction.auto = false
+  compaction.max_context = 123
+  expect(BASELINE_CONFIG.compaction).toEqual({ auto: true, max_context: 0 })
 })
 
 test("baseline - key order is normative (catch-all first, per-server gates last)", () => {
@@ -253,8 +281,8 @@ type MergedConfig = {
 }
 
 test("merge slot - user config overrides the baseline through the same mergeDeep config.ts uses", () => {
-  // config.ts:317-320 seeds with the spread copy of BASELINE_CONFIG, then every file
-  // source arrives through mergeConfig = mergeDeep (config.ts:41-43). Reproduce that
+  // config.ts:336-340 seeds with the spread copy of BASELINE_CONFIG, then every file
+  // source arrives through mergeConfig = mergeDeep (config.ts:41-44). Reproduce that
   // exact pair of calls, then feed the merged permission block to the real fromConfig.
   const seed = mergeDeep(
     {} as MergedConfig,
@@ -395,3 +423,18 @@ it.instance(
     }),
   { git: true },
 )
+
+// 1.2.6 row 34, CFG-06 T6a (01d_spec_config.md §7, C2): the shipped baseline carries no
+// `instructions` key, no gsp-core-rules reference and no absolute /Users/ path. JSON.stringify
+// invokes every getter, so permission/agent/experimental/compaction are covered too.
+test("CFG-06 T6a BASELINE_CONFIG ships no instructions, gsp-core-rules or /Users/ path", () => {
+  expect("instructions" in BASELINE_CONFIG).toBe(false)
+  const text = JSON.stringify(BASELINE_CONFIG)
+  expect(text).not.toContain("instructions")
+  expect(text).not.toContain("gsp-core-rules")
+  expect(text).not.toContain("/Users/")
+  const permission = JSON.stringify(SWARM_PERMISSION_BASELINE)
+  expect(permission).not.toContain("instructions")
+  expect(permission).not.toContain("gsp-core-rules")
+  expect(permission).not.toContain("/Users/")
+})

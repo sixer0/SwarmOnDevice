@@ -67,6 +67,7 @@ import {
 import { SLOT_KIND_BY_TYPE } from "@/lib/studio/registry/slots";
 import { getStudioCaller } from "../shims";
 import { ingestDocument } from "@/lib/studio/services/ingest";
+import { normalizeControlSheetKeys } from "@/lib/studio/contract/schema/v2/verification-entry";
 import { resolveExistingDocTarget, splitDocV2Targeting, type DocV2Targeting } from "@/lib/studio/services/submit";
 import { apiLog, checkRenderRate, isRecord, json, readJsonBody, reject, reqCtx, withQuotaHeaders, type ReqCtx } from "@/lib/studio/http";
 import { S55_BODY_OPTIONS, bodyAgentId, failFrom, toDocumentSummary, toRevisionSummary } from "../route-kit";
@@ -267,7 +268,9 @@ async function postV2(body: Record<string, unknown>, req: NextRequest, ctx: ReqC
   // (belum memuat keduanya) lalu diteruskan EKSPLISIT lewat `IngestOptions.submitTargeting`
   // (IP-64, SR-55 M1). `render` di badan ditolak skema (D-247, checkId RENDER_FIELD).
   const split = splitDocV2Targeting(body as unknown as StudioDocV2);
-  const issues = [...validateV2("studio.doc/v2", split.body), ...targetingIssues(split.targeting)];
+  // Row 207 (HB-2): verificationChain entry keys mapped / unknown keys refused, as R13.
+  const keyIssues = normalizeControlSheetKeys(split.body).issues;
+  const issues = [...(keyIssues.length > 0 ? keyIssues : validateV2("studio.doc/v2", split.body)), ...targetingIssues(split.targeting)];
   if (issues.length > 0) throw v2SchemaError("studio.doc/v2", issues);
   const doc = split.body;
   // Target tepat satu cara (400 DOC_TARGET_AMBIGUOUS) sebelum kerja berat; layanan tetap pemegang aturan penuh.

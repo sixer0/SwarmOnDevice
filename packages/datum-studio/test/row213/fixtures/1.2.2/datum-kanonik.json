@@ -1,0 +1,242 @@
+{
+  "$schema": "studio.template/v2",
+  "preset": {
+    "slug": "datum-kanonik-preset"
+  },
+  "essentials": {
+    "page.size": "A4",
+    "page.orientation": "portrait",
+    "grid.marginDensity": "standard",
+    "color.interior.signal": "B45309",
+    "type.scale.body.size": 9.5,
+    "doc.language": "ID",
+    "classification.level": "Terbatas",
+    "layout.railMode": "auto"
+  },
+  "advanced": {
+    "color.wrapper.cream": "F4F5F6",
+    "cover.controlBlock.fields": [
+      "NOMOR DOKUMEN",
+      "REVISI",
+      "PENYUSUN",
+      "KUSTODIAN",
+      "DITUJUKAN KEPADA",
+      "HALAMAN",
+      "DATUM GEODETIK",
+      "VERIFIKASI"
+    ],
+    "cover.controlBlock.preparerUnit": "Divisi Engineering PT GSP",
+    "cover.title.maxWidthMm": 150,
+    "controlSheet.subtitle.enabled": true,
+    "controlSheet.signatures.fillRoles": true,
+    "controlSheet.columns.form": "manual"
+  },
+  "roleFormats": {
+    "wrapper.kicker": {
+      "run": {
+        "faceRole": "condensed",
+        "szHalfPt": 15,
+        "color": "6E1420",
+        "b": true,
+        "i": false,
+        "caps": true,
+        "spacingTw": 30
+      }
+    }
+  },
+  "skeleton": {
+    "slots": [
+      {
+        "slotKey": "cover",
+        "sectionType": "cover",
+        "label": "Sampul",
+        "position": 1,
+        "required": true,
+        "positionLocked": true,
+        "repeatable": false,
+        "contentMode": "MIXED",
+        "tiers": [
+          "TERBIT",
+          "SERAH"
+        ],
+        "admits": [],
+        "essentials": {
+          "cover.elementOrder": [
+            "pita segel",
+            "logo",
+            "baris alamat di atas garis rambut",
+            "ruang putih",
+            "Datum Rule 166 mm",
+            "kicker jenis dokumen",
+            "judul",
+            "standfirst",
+            "baris cakupan",
+            "blok kendali",
+            "kolofon",
+            "string punggung"
+          ],
+          "device.sealBand.enabled": true,
+          "device.spine.enabled": true,
+          "cover.kicker.text": ""
+        }
+      },
+      {
+        "slotKey": "controlSheet",
+        "sectionType": "controlSheet",
+        "label": "Lembar Kendali",
+        "position": 2,
+        "required": true,
+        "positionLocked": false,
+        "repeatable": false,
+        "contentMode": "INPUT",
+        "tiers": [
+          "TERBIT",
+          "SERAH"
+        ],
+        "admits": [],
+        "essentials": {
+          "device.sealBand.enabled": true
+        }
+      },
+      {
+        "slotKey": "signature",
+        "sectionType": "signatureBlock",
+        "label": "Tanda Tangan",
+        "position": 3,
+        "required": true,
+        "positionLocked": false,
+        "repeatable": false,
+        "contentMode": "INPUT",
+        "tiers": [
+          "TERBIT",
+          "SERAH"
+        ],
+        "admits": [],
+        "essentials": {
+          "slot.placement": "inControlSheet"
+        }
+      },
+      {
+        "slotKey": "toc",
+        "sectionType": "toc",
+        "label": "Daftar Isi",
+        "position": 4,
+        "required": true,
+        "positionLocked": false,
+        "repeatable": false,
+        "contentMode": "AUTO",
+        "tiers": [
+          "TERBIT",
+          "SERAH"
+        ],
+        "admits": [],
+        "essentials": {
+          "render.toc.mode": "field",
+          "device.sealBand.enabled": true
+        }
+      },
+      {
+        "slotKey": "content",
+        "sectionType": "chapter",
+        "label": "Isi",
+        "position": 5,
+        "required": true,
+        "positionLocked": false,
+        "repeatable": true,
+        "minItems": 1,
+        "contentMode": "INPUT",
+        "tiers": [],
+        "admits": [
+          "paragraph",
+          "list",
+          "aside",
+          "monoBlock",
+          "assumptionInline",
+          "table",
+          "specTable",
+          "registerTable",
+          "exampleWrongRight",
+          "ruleTable",
+          "checklist",
+          "glossary",
+          "sourceRegister",
+          "ruleIndex",
+          "referenceScale",
+          "financialTable",
+          "derivation",
+          "chart",
+          "diagram",
+          "image",
+          "symbolSheet"
+        ],
+        "essentials": {
+          "chapter.kicker.pattern": "BAB {n}",
+          "device.datumRule.enabled": true,
+          "table.widthClass": "text",
+          "chart.widthClass": "text",
+          "diagram.widthClass": "text"
+        }
+      },
+      {
+        "slotKey": "references",
+        "sectionType": "sourceRegister",
+        "label": "Referensi",
+        "position": 6,
+        "required": false,
+        "positionLocked": false,
+        "repeatable": false,
+        "contentMode": "INPUT",
+        "tiers": [],
+        "admits": [],
+        "essentials": {
+          "sourceRegister.columns": [
+            "DOKUMEN",
+            "VERSI/TANGGAL",
+            "BAHASA/HALAMAN",
+            "KLASIFIKASI",
+            "DIPAKAI DI"
+          ]
+        }
+      },
+      {
+        "slotKey": "appendices",
+        "sectionType": "appendix",
+        "label": "Lampiran",
+        "position": 7,
+        "required": false,
+        "positionLocked": true,
+        "repeatable": true,
+        "contentMode": "INPUT",
+        "tiers": [],
+        "admits": [
+          "paragraph",
+          "list",
+          "aside",
+          "monoBlock",
+          "assumptionInline",
+          "table",
+          "specTable",
+          "registerTable",
+          "exampleWrongRight",
+          "ruleTable",
+          "checklist",
+          "glossary",
+          "sourceRegister",
+          "ruleIndex",
+          "referenceScale",
+          "financialTable",
+          "derivation",
+          "chart",
+          "diagram",
+          "image",
+          "symbolSheet"
+        ],
+        "essentials": {
+          "appendix.kicker.pattern": null,
+          "page.orientation": "portrait",
+          "device.datumRule.enabled": true
+        }
+      }
+    ]
+  }
+}

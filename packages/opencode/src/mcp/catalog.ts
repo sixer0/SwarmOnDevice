@@ -7,6 +7,8 @@ import {
 } from "@modelcontextprotocol/sdk/types.js"
 import { dynamicTool, jsonSchema, type JSONSchema7, type Tool } from "ai"
 import { Effect } from "effect"
+import { isDeepStrictEqual } from "node:util"
+import { DATUM_STUDIO_MCP } from "./datum-studio"
 
 const DEFAULT_TIMEOUT = 30_000
 const MAX_LIST_PAGES = 1_000
@@ -56,6 +58,119 @@ export const AUTONOMOUS_META = "studio/autonomous"
 /** The `_meta` of one call: fixed, or read when the call is made (so a mode switched off holds from the next call). */
 export type CallMeta = Record<string, unknown> | (() => Promise<Record<string, unknown> | undefined>)
 
+/** SEC-21: settle with the signal's reason as soon as it aborts, whichever comes first. */
+function abortable<T>(work: Promise<T>, signal: AbortSignal | undefined): Promise<T> {
+  if (!signal) return work
+  signal.throwIfAborted()
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(signal.reason)
+    signal.addEventListener("abort", onAbort, { once: true })
+    work.then(
+      (value) => {
+        signal.removeEventListener("abort", onAbort)
+        resolve(value)
+      },
+      (error) => {
+        signal.removeEventListener("abort", onAbort)
+        reject(error)
+      },
+    )
+  })
+}
+
+/** N-041 (M-03, U5): the most bytes of structuredContent gate fields appended as text when `content` is present. */
+export const STRUCTURED_CONTENT_TEXT_MAX_BYTES = 16384
+
+// Gate fields: identity, status/verification, digests, counts, check codes and file names. Everything else
+// (prose, labels, page detail, payloads) stays in structuredContent only.
+const GATE_KEY =
+  /^(id|outputId|documentId|fileId|jobId|code|format|role|scope|status|state|overall|verified|valid|partial|truncated|revisionNo|sha|sha256|fileName|finalFileName|savedTo|path|correlationIds?)$|Status$|Sha256$|Count$|Verified$|^fail/
+// A value under a path the server lists in `untrustedFields` is shown only when it is a plain token (no prose).
+const SAFE_TOKEN = /^[\w.\-:/@+=#]{1,200}$/
+const UNTRUSTED_OMITTED = "(untrusted, omitted)"
+const MAX_STRING = 256
+const MAX_DEPTH = 12
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+}
+
+function projectGate(value: unknown, key: string, path: string, untrusted: string[], depth: number): unknown {
+  if (depth > MAX_DEPTH) return undefined
+  if (Array.isArray(value)) {
+    const items = value.map((v) => projectGate(v, key, `${path}[]`, untrusted, depth + 1)).filter((v) => v !== undefined)
+    return items.length > 0 ? items : undefined
+  }
+  if (isRecord(value)) {
+    const entries = Object.entries(value).flatMap(([k, v]) => {
+      if (k === "untrustedFields") return []
+      const projected = projectGate(v, k, path ? `${path}.${k}` : k, untrusted, depth + 1)
+      return projected === undefined ? [] : [[k, projected] as const]
+    })
+    return entries.length > 0 ? Object.fromEntries(entries) : undefined
+  }
+  if (!GATE_KEY.test(key)) return undefined
+  if (typeof value !== "string") return typeof value === "function" || value === undefined ? undefined : value
+  if (untrusted.some((u) => path === u || path.startsWith(`${u}.`) || path.startsWith(`${u}[`)))
+    return SAFE_TOKEN.test(value) ? value : UNTRUSTED_OMITTED
+  return value.length > MAX_STRING ? `${value.slice(0, MAX_STRING)}…` : value
+}
+
+/** FAIL tallies: per failed check (`id`/`code` of an object with status FAIL) and per finding code inside it. */
+function failTally(root: unknown) {
+  const perCheck = new Map<string, number>()
+  const perFinding = new Map<string, number>()
+  let notListed = 0
+  const bump = (map: Map<string, number>, k: unknown) => {
+    if (typeof k === "string" && SAFE_TOKEN.test(k)) map.set(k, (map.get(k) ?? 0) + 1)
+  }
+  const walk = (value: unknown, depth: number): void => {
+    if (depth > MAX_DEPTH) return
+    if (Array.isArray(value)) return value.forEach((v) => walk(v, depth + 1))
+    if (!isRecord(value)) return
+    if (value.status === "FAIL") {
+      bump(perCheck, value.id ?? value.code)
+      if (Array.isArray(value.findings)) for (const f of value.findings) if (isRecord(f)) bump(perFinding, f.code)
+      if (typeof value.truncated === "number" && value.truncated > 0) notListed += value.truncated
+    }
+    for (const v of Object.values(value)) walk(v, depth + 1)
+  }
+  walk(root, 0)
+  const list = (map: Map<string, number>) => [...map].map(([k, n]) => `${k}=${n}`).join(", ")
+  return [
+    ...(perCheck.size > 0 ? [`FAIL per check: ${list(perCheck)}`] : []),
+    ...(perFinding.size > 0 || notListed > 0
+      ? [`FAIL findings per code: ${list(perFinding)}${notListed > 0 ? ` (+${notListed} not listed)` : ""}`]
+      : []),
+  ]
+}
+
+/**
+ * M-03 (1.2.6 row 74, U5): a compact text projection of the gate fields in `structuredContent` (status and
+ * verification per output, full sha256, FAIL counts per code, file list), at most STRUCTURED_CONTENT_TEXT_MAX_BYTES.
+ * Undefined when the structured content carries no gate field.
+ */
+export function structuredGateText(structuredContent: unknown): string | undefined {
+  if (!isRecord(structuredContent)) return undefined
+  const untrusted = Array.isArray(structuredContent.untrustedFields)
+    ? structuredContent.untrustedFields.filter((u): u is string => typeof u === "string")
+    : []
+  const projection = projectGate(structuredContent, "", "", untrusted, 0)
+  const tally = failTally(structuredContent)
+  if (projection === undefined && tally.length === 0) return undefined
+  const text = [
+    "structuredContent gate fields (compact; full data stays in structuredContent):",
+    ...tally,
+    ...(projection === undefined ? [] : [JSON.stringify(projection)]),
+  ].join("\n")
+  const encoded = new TextEncoder().encode(text)
+  if (encoded.length <= STRUCTURED_CONTENT_TEXT_MAX_BYTES) return text
+  const budget = STRUCTURED_CONTENT_TEXT_MAX_BYTES - 96 // room for the marker
+  const head = new TextDecoder().decode(encoded.slice(0, budget)).replace(/�+$/, "")
+  const shown = new TextEncoder().encode(head).length
+  return `${head}\n… (truncated: ${shown} of ${encoded.length} bytes shown; full data in structuredContent)`
+}
+
 export function convertTool(
   mcpTool: MCPToolDef,
   client: Client,
@@ -73,7 +188,12 @@ export function convertTool(
     description: mcpTool.description ?? "",
     inputSchema: jsonSchema(inputSchema),
     execute: async (args: unknown, options) => {
-      const callMeta = typeof meta === "function" ? await meta() : meta
+      // SEC-21 (1.2.6 row 53b): the session's abort ends the whole call, including the `_meta` lookup that runs
+      // before the transport request; `signal` below then cancels the request itself (the SDK sends
+      // notifications/cancelled), so a hung server cannot hold the call for the full `timeout`.
+      const signal = options.abortSignal
+      signal?.throwIfAborted()
+      const callMeta = typeof meta === "function" ? await abortable(meta(), signal) : meta
       const result = await client.callTool(
         {
           name: mcpTool.name,
@@ -84,7 +204,7 @@ export function convertTool(
         CallToolResultSchema,
         {
           resetTimeoutOnProgress: true,
-          signal: options.abortSignal,
+          signal,
           timeout,
           // The MCP SDK only sends a progress token when this hook is present, enabling timeout resets.
           onprogress: () => {},
@@ -97,8 +217,12 @@ export function convertTool(
             .filter((text) => text.trim())
             .join("\n\n") || "MCP tool returned an error",
         )
-      if (result.content.length > 0 || result.structuredContent === undefined || result.structuredContent === null)
-        return result
+      if (result.structuredContent === undefined || result.structuredContent === null) return result
+      if (result.content.length > 0) {
+        // M-03 (1.2.6 row 74): the text alone hides gate fields carried only in structuredContent.
+        const gate = structuredGateText(result.structuredContent)
+        return gate === undefined ? result : { ...result, content: [...result.content, { type: "text" as const, text: gate }] }
+      }
       return {
         ...result,
         content: [{ type: "text" as const, text: JSON.stringify(result.structuredContent) }],
@@ -142,6 +266,53 @@ export function fetch<T extends { name: string }>(
 export const sanitize = (value: string) => value.replace(/[^a-zA-Z0-9_-]/g, "_")
 
 export const toolName = (clientName: string, name: string) => sanitize(clientName) + "_" + sanitize(name)
+
+/**
+ * SEC-13 (1.2.6 row 56a): whether a server name could compose the built-in DATUM Studio tool keys
+ * `datum-studio_<tool>` (which carry the subagent Studio allows, row 56): its sanitised name equals `datum-studio` or
+ * starts with `datum-studio_`. Compared case-insensitively, as permission keys match case-insensitively on win32.
+ * The one SEC-13 rule: the subagent binding (agent/subagent-permissions.ts studioToolsBound) uses it too (gate M2 S4).
+ */
+export function reservedServerName(name: string): boolean {
+  const sanitised = sanitize(name).toLowerCase()
+  return sanitised === DATUM_STUDIO_MCP || sanitised.startsWith(`${DATUM_STUDIO_MCP}_`)
+}
+
+/**
+ * SEC-13 (1.2.6 row 56a): the refusal message for a server that may not be loaded (`load`, config) or added at
+ * runtime (`add`, MCP.add), or undefined when it may. Any reserved name other than the `datum-studio` key itself is
+ * refused. The `datum-studio` key at load is the built-in or the user's own replacement (row 33: the user's entry
+ * wins; row 56 then drops the subagent allows). At `add` it is refused unless the entry is the built-in one
+ * (`builtin`, from DatumStudioMcp.builtin; `enabled` and `timeout` ignored), because row 56 decides the binding at
+ * agent setup and cannot see a later add.
+ */
+export function serverRefusal(
+  name: string,
+  entry: Readonly<Record<string, unknown>> | undefined,
+  builtin: Readonly<Record<string, unknown>> | undefined,
+  at: "load" | "add",
+): string | undefined {
+  if (!reservedServerName(name)) return undefined
+  if (name === DATUM_STUDIO_MCP) {
+    if (at === "load") return undefined
+    if (builtin !== undefined && entry !== undefined && isDeepStrictEqual(serverIdentity(entry), serverIdentity(builtin)))
+      return undefined
+  }
+  return (
+    `MCP server "${name}" refused: the name is reserved for Swarm's built-in DATUM Studio server ` +
+    `(a name that sanitises to "${DATUM_STUDIO_MCP}" or starts with "${DATUM_STUDIO_MCP}_" would share its tool names). ` +
+    `Rename the server.`
+  )
+}
+
+/**
+ * SEC-13: the part of a server entry that decides which program answers; `enabled` and `timeout` are left out. Shared
+ * with the subagent binding (agent/subagent-permissions.ts studioToolsBound, gate M2 S4) so both compare the same way.
+ */
+export function serverIdentity(entry: Readonly<Record<string, unknown>>) {
+  const { enabled: _enabled, timeout: _timeout, ...rest } = entry
+  return rest
+}
 
 export function prompts(client: Client, timeout?: number) {
   if (!client.getServerCapabilities()?.prompts) return Promise.resolve([])

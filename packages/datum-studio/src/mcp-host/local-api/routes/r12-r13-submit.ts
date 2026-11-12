@@ -35,6 +35,7 @@ import { getStudioCaller } from "../shims";
 import type { StudioCaller } from "@/lib/studio/contract/auth";
 import { SLOT_KINDS } from "@/lib/studio/registry/slots";
 import { studioValidator } from "@/lib/studio/services/ingest/validate";
+import { normalizeControlSheetKeys } from "@/lib/studio/contract/schema/v2/verification-entry";
 import { submitChapter, submitSlot } from "@/lib/studio/services/submit";
 import { apiLog, checkRenderRate, isRecord, json, readJsonBody, reject, reqCtx, withQuotaHeaders, type ReqCtx } from "@/lib/studio/http";
 import { S55_BODY_OPTIONS, bodyAgentId, failFrom } from "../route-kit";
@@ -161,6 +162,12 @@ async function submitBody(req: NextRequest, kind: SubmitKind, ctx: ReqCtx): Prom
       }
     }
 
+    // Row 207 (HB-2): verificationChain entry keys -> canonical (printed column names mapped); unknown keys refused
+    // with the accepted keys. Before the schema, so a mapped submission validates as canonical.
+    const keyIssues = kind === "slot" ? normalizeControlSheetKeys(sub).issues : [];
+    if (keyIssues.length > 0) {
+      return reject(ctx, "SCHEMA_INVALID", schemaInvalidMessage(keyIssues, `Kiriman tidak sesuai ${schemaId}; perbaiki medan yang disebut di details.`), keyIssues);
+    }
     const issues = schemaIssues(kind, sub);
     if (issues.length > 0) {
       return reject(ctx, "SCHEMA_INVALID", schemaInvalidMessage(issues, `Kiriman tidak sesuai ${schemaId}; perbaiki medan yang disebut di details.`), issues);

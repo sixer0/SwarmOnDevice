@@ -64,6 +64,61 @@ const fileKind = (file: string) => {
 export const secretFile = (file: string) => fileKind(file) !== undefined
 export const wholeSecretFile = (file: string) => fileKind(file) === "whole"
 
+// Row 36b (SEC-03): a shell's history keeps `export KEY=...` lines. It is masked line by line like a .env file, for what
+// is shown only: `secretFile` (and so `Reach.secret` and every verdict built on it) does not change.
+const HISTORY_FILE = /^(\.[\w-]*_?history|fish_history)$/
+
+const caseFolds = process.platform === "darwin" || process.platform === "win32"
+const fold = (file: string) => {
+  const name = path.normalize(file.replaceAll("\\", "/")).normalize("NFC")
+  return caseFolds ? name.toLowerCase() : name
+}
+
+/** Where a path really lands: its own real path, or its folder's plus its name when it does not exist. Plain node only. */
+function landing(file: string) {
+  try {
+    return fs.realpathSync.native(file)
+  } catch {
+    try {
+      return path.join(fs.realpathSync.native(path.dirname(file)), path.basename(file))
+    } catch {
+      return undefined
+    }
+  }
+}
+
+/** Whether a path, by its name or by where it lands, is one of these places or inside one. */
+const placeRoots = new Map<string, { at: number; roots: string[] }>()
+function rootsOf(places: readonly string[]) {
+  const key = places.join("\0")
+  const hit = placeRoots.get(key)
+  if (hit && Date.now() - hit.at < FRESH_MS) return hit.roots
+  const roots = [...new Set(places.flatMap((place) => [place, landing(place) ?? place]).map(fold))]
+  if (placeRoots.size > 16) placeRoots.clear()
+  placeRoots.set(key, { at: Date.now(), roots })
+  return roots
+}
+
+export function underPlaces(file: string, places: readonly string[]) {
+  if (places.length === 0 || !path.isAbsolute(file)) return false
+  const roots = rootsOf(places)
+  const names = [file, landing(file)].filter((name): name is string => name !== undefined).map(fold)
+  return names.some((name) => roots.some((root) => name === root || name.startsWith(root.endsWith("/") ? root : root + "/")))
+}
+
+/**
+ * Row 36b (SEC-01, SEC-03): how a file's contents may be shown to the model, judged by its name and by where it lands.
+ * "whole": nothing of it is shown (a whole secret file, or anything in a protected place: `places` is the caller's list of
+ * protected home folders and Swarm's own credential files, which reads now open without asking, U12). "lines": shown with
+ * secret values masked (a .env-style file or a shell history). For output only; no verdict reads this.
+ */
+export function outputKind(file: string, places: readonly string[] = []): "whole" | "lines" | undefined {
+  const names = [file, landing(file)].filter((name): name is string => name !== undefined)
+  if (names.some((name) => fileKind(name) === "whole") || underPlaces(file, places)) return "whole"
+  if (names.some((name) => fileKind(name) !== undefined || HISTORY_FILE.test(path.basename(name)))) return "lines"
+  return undefined
+}
+
 const PAIR = /^(\s*(?:export\s+)?)([A-Za-z_./:@-][A-Za-z0-9_./:@-]*)(\s*=\s*)(.*)$/
 
 function unquoted(value: string) {
@@ -99,11 +154,22 @@ function fileValues(file: string, text: string) {
     const fields = line.split(":")
     if (base === ".pgpass" && fields.length === 5) out.push(["pgpass", fields[4].trim()])
   }
+  // Row 36b: `: 1699999999:0;export FOO_TOKEN=...` in a history file, which `pairs` does not read as a line of its own.
+  if (HISTORY_FILE.test(base)) out.push(...assignedValues(text))
   return out
 }
 
 /** One line of a .env-style file, with a secret value replaced. */
 export function maskLine(line: string) {
+  return maskPair(line)
+}
+
+/** Row 36b (SEC-03): one line of a secret file or a history as shown: `maskLine`, then the written-assignment rules. */
+export function maskOutputLine(line: string) {
+  return scrubAssigned(maskPair(line))
+}
+
+function maskPair(line: string) {
   const match = line.match(PAIR)
   if (!match || line.trimStart().startsWith("#")) return line
   const value = unquoted(match[4])
@@ -222,17 +288,38 @@ const tokenLike = (text: string) => /\d/.test(text) || (text.length >= 8 && mixe
  */
 export function scrubText(text: string) {
   const known = [...learned.entries()].reduce((out, [value, name]) => out.replaceAll(value, `[hidden:${name}]`), text)
-  return SHAPES.reduce((out, [shape, mask]) => out.replace(shape, mask), known)
-    .replace(ASSIGNED, (whole, start: string, exported: string, name: string, equals: string, value: string) => {
-      const inner = unquoted(value)
-      if (!secretPair(name, inner) || PLACEHOLDER.test(inner)) return whole
-      const written = value !== inner || name === name.toUpperCase() || tokenLike(inner) || PLAIN_SECRET_NAME.test(name)
-      return written ? `${start}${exported}${name}${equals}[hidden:${name}]` : whole
-    })
+  return scrubAssigned(SHAPES.reduce((out, [shape, mask]) => out.replace(shape, mask), known))
+}
+
+/** A value written out under a secret-sounding name, as `scrubText` judges it. */
+const writtenSecret = (name: string, value: string, inner: string) =>
+  secretPair(name, inner) &&
+  !PLACEHOLDER.test(inner) &&
+  (value !== inner || name === name.toUpperCase() || tokenLike(inner) || PLAIN_SECRET_NAME.test(name))
+
+/**
+ * The `ASSIGNED`, `SPOKEN` and `LONG_TOKEN` rules of `scrubText` on their own. Row 36b (SEC-03, SEC-20): also applied to
+ * what a protected read prints (a secret file, a history, `env`/`printenv`), where a value need not be known to be hidden.
+ */
+export function scrubAssigned(text: string) {
+  return text
+    .replace(ASSIGNED, (whole, start: string, exported: string, name: string, equals: string, value: string) =>
+      writtenSecret(name, value, unquoted(value)) ? `${start}${exported}${name}${equals}[hidden:${name}]` : whole,
+    )
     .replace(SPOKEN, (whole, name: string, between: string, _quote: string, value: string) =>
       tokenLike(value) && !PLACEHOLDER.test(value) ? `${name}${between}[hidden:${name}]` : whole,
     )
     .replace(LONG_TOKEN, (token) => (mixedCase(token) && /\d/.test(token) ? "[hidden:token]" : token))
+}
+
+/** The written-out secret assignments in a text, so a history file's values can be recognised elsewhere. */
+function assignedValues(text: string) {
+  const out: [string, string][] = []
+  for (const match of text.matchAll(ASSIGNED)) {
+    const inner = unquoted(match[5]!)
+    if (writtenSecret(match[3]!, match[5]!, inner)) out.push([match[3]!, urlPassword(inner) ?? inner])
+  }
+  return out
 }
 
 function scrubValue<T>(value: T, root: string, depth: number): T {

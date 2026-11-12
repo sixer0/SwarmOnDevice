@@ -11,7 +11,7 @@ import { Watcher } from "@opencode-ai/core/filesystem/watcher"
 import { Format } from "../format"
 import { FSUtil } from "@opencode-ai/core/fs-util"
 import { InstanceState } from "@/effect/instance-state"
-import { followedByEdit, lock, trimDiff } from "./edit"
+import { checkpointBefore, followedByEdit, lock, trimDiff } from "./edit"
 import { FileSeen } from "./file-seen"
 import { Secrets } from "./secrets"
 import { assertExternalDirectoryEffect } from "./external-directory"
@@ -75,11 +75,14 @@ export const WriteTool = Tool.define(
           })
 
           // Two agents may be here at once, and an answer to the prompt above may have taken a while.
+          let saved: string | undefined
           const merged = yield* lock(filepath).withPermits(1)(
             Effect.gen(function* () {
               const current = (yield* fs.existsSafe(filepath)) ? (yield* Bom.readFile(fs, filepath)).text : undefined
               const decision = FileSeen.decide({ session: ctx.sessionID, file: filepath, label, current, next: contentNew })
               if ("refused" in decision) throw new Error(Secrets.scrub(decision.refused, instance.worktree))
+              // 1.2.6 row 37b (U6): an existing file no Undo covers is checkpointed first, or not written.
+              saved = yield* checkpointBefore(ctx, instance, filepath, "write")
               yield* fs.writeWithDirs(filepath, Bom.join(decision.text, desiredBom))
               const final = (yield* format.file(filepath)) ? yield* Bom.syncFile(fs, filepath, desiredBom) : decision.text
               FileSeen.wrote(ctx.sessionID, filepath, final)
@@ -92,7 +95,7 @@ export const WriteTool = Tool.define(
             event: exists ? "change" : "add",
           })
 
-          let output = "Wrote file successfully."
+          let output = saved ? `${saved}\nWrote file successfully.` : "Wrote file successfully."
           if (merged) output += ` ${FileSeen.MERGED_NOTE}`
           yield* lsp.touchFile(filepath, "document")
           const diagnostics = yield* lsp.diagnostics()

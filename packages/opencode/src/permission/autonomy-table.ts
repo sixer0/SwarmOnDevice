@@ -3,7 +3,7 @@
 // allow list because a list of what to refuse let through every way of spelling `git push` that was tried.
 import { execFileSync } from "node:child_process"
 import fs from "node:fs"
-import { devNull, homedir } from "node:os"
+import { devNull, homedir, networkInterfaces } from "node:os"
 import path from "node:path"
 import { Global } from "@opencode-ai/core/global"
 import { needsPerson } from "@opencode-ai/core/permission/needs-person"
@@ -17,6 +17,7 @@ import { BypassLists } from "./bypass-lists"
 import { BypassScreen } from "./bypass-screen"
 import { containsPath, type InstanceContext } from "../project/instance-context"
 import { LibraryRoot } from "../skill/library-root"
+import { SelfAddress } from "../server/self-address"
 import { GitGuard } from "../tool/git-guard"
 import { Reach } from "../tool/reach"
 import type { ShellPlace } from "../tool/shell"
@@ -24,6 +25,7 @@ import { Risk } from "../tool/risk"
 import { DeletionWords, type Deletion } from "../tool/deletion"
 import { Secrets } from "../tool/secrets"
 import { findProgram } from "../util/find-program"
+import type { CheckpointFailedReason } from "./autonomy-texts"
 
 export type Class = "A" | "P" | "D" | "B" | "X"
 export type CheckClass = Extract<Class, "P" | "D">
@@ -68,6 +70,11 @@ export type Verdict = {
   screen?: { bytes: number; lines: number; sha256: string; flags: readonly ScriptScreen.Flag[] }
   /** 1.1.1 (S1.12): the category the call had before the consented bypass let it run. Present only on an overlay A. */
   bypassed?: AllowedCategory | HeldCategory
+  /**
+   * 1.2.6 row 37b (P-01b): on an X `checkpoint_failed`, why no checkpoint could be made, from the closed list of
+   * `checkpointFailedText` (autonomy-texts.ts). Never command text.
+   */
+  reason?: CheckpointFailedReason
 }
 
 /**
@@ -759,7 +766,73 @@ function inAppState(file: string, instance: InstanceContext) {
 
 function mentionsAppState(command: string, instance: InstanceContext) {
   const spelled = ownCheckout(instance.worktree, instance) ? command.replaceAll(instance.worktree, "") : command
-  return spelled.includes("trust.json") || appStateRoots().some((root) => spelled.includes(root))
+  if (spelled.includes("trust.json") || appStateRoots().some((root) => spelled.includes(root))) return true
+  // 1.2.6 FX-14 (F-1, F-2): `~/…`, `$HOME/…` and `${HOME}/…` name the same places as the absolute spelling, so they are
+  // judged as it is (C8). Each such word is read as the shell would, under each home a place may be spelled in.
+  return homeSpelled(command).some((file) => inAppStateSpelled(file, instance))
+}
+
+// Breaks a command into words the way a path ends: blanks, redirects, pipes, separators, `=` of an option or assignment.
+const PATH_BREAK = /[\s<>|;&()`=,]+/
+const HOME_WORD = /^(?:~|\$HOME\b|\$\{HOME\})(?=\/|$)/
+
+/** The places a command names with a home spelling (`~`, `$HOME`, `${HOME}`), resolved under every home Swarm knows. */
+function homeSpelled(command: string) {
+  const words = command.replace(/['"]/g, "").split(PATH_BREAK)
+  return words.flatMap((word) => {
+    const match = HOME_WORD.exec(word)
+    if (!match) return []
+    const rest = word.slice(match[0].length)
+    return homes().map((home) => path.resolve(home, `.${rest}`))
+  })
+}
+
+/** `inAppState` for a place spelled by hand: one that cannot be resolved is judged by its spelling. */
+function inAppStateSpelled(file: string, instance: InstanceContext) {
+  const target = Reach.real(file) ?? file
+  if (ownCheckout(target, instance)) return false
+  return appStateRoots().some((root) => within(root, file) || within(root, target))
+}
+
+// Hosts that are this computer, whatever the listener's own name. `0` and `0.0.0.0` connect to it on macOS and Linux.
+const LOOPBACK_NAME = /^(?:localhost|ip6-localhost|ip6-loopback|[\w.-]+\.localhost|127(?:\.\d{1,3}){3}|0|0\.0\.0\.0|::|::1|::ffff:127(?:\.\d{1,3}){3}|0:0:0:0:0:0:0:1)$/i
+const WILDCARD = new Set(["0.0.0.0", "::", ""])
+
+/** Whether a host names this computer as Swarm's own listener at `listener` can be reached there. */
+function ownHost(host: string, listener: SelfAddress.Address) {
+  const name = host.replace(/^\[|\]$/g, "").toLowerCase()
+  const bound = listener.hostname.replace(/^\[|\]$/g, "").toLowerCase()
+  if (name === "" || LOOPBACK_NAME.test(name) || name === bound) return true
+  if (!WILDCARD.has(bound)) return false
+  // Bound on every interface: this computer's own addresses reach it too.
+  return Object.values(networkInterfaces()).some((list) => list?.some((item) => item.address.toLowerCase() === name))
+}
+
+/**
+ * 1.2.6 FX-14 (F-1, decision C24): a shell or fetch call that talks to Swarm's own running server, the listener this
+ * process opened (`SelfAddress`). With the password from `app-server.env` such a call could answer the agent's own
+ * prompts or change its mode, past every hold. Only that host and port: every other local port runs as C19c decided.
+ * Read from the call's words: `host:port` (a URL or not), `/dev/tcp/host/port`, `host port` for a loopback name, and
+ * httpie's bare `:port`.
+ */
+export function callsOwnServer(input: Input) {
+  const listeners = SelfAddress.list()
+  if (listeners.length === 0) return false
+  const texts = [input.metadata.command, input.metadata.url].filter((text): text is string => typeof text === "string")
+  if (texts.length === 0) return false
+  return listeners.some((listener) =>
+    texts.some((raw) => {
+      const text = raw.replace(/['"\\]/g, "")
+      const port = String(listener.port)
+      const at = String.raw`0*${port}(?!\d)`
+      // `host:port`, in a URL or bare; `[v6]:port`; `/dev/tcp/host/port` (bash's own sockets).
+      const named = new RegExp(String.raw`(\[[0-9A-Fa-f:.]*\]|[\w.-]+):${at}|/dev/(?:tcp|udp)/([^/\s]+)/${at}`, "g")
+      for (const match of text.matchAll(named)) if (ownHost(match[1] ?? match[2]!, listener)) return true
+      // httpie and xh read a bare `:port` as localhost; `nc 127.0.0.1 port` names the host and the port apart.
+      if (new RegExp(String.raw`(?:^|\s):${at}`).test(text)) return true
+      return new RegExp(String.raw`(?:^|\s)(?:localhost|127(?:\.\d{1,3}){3}|::1|\[::1\])\s+${at}`, "i").test(text)
+    }),
+  )
 }
 
 function editTargets(input: Input) {
@@ -1004,7 +1077,14 @@ function classifySteps(input: Input, checkClass: CheckClass, reading: Reading): 
     for (const cwd of step.cwds) {
       // Each step goes through every rule a request does, credential changes and the app's state included. What the
       // shell said about the whole text (it moves a plain deletion, it archives what a copy replaces) is not about a step.
-      const metadata = { ...input.metadata, command, steps: undefined, archive: undefined, archiveTargets: undefined }
+      const metadata = {
+        ...input.metadata,
+        command,
+        steps: undefined,
+        archive: undefined,
+        archiveTargets: undefined,
+        checkpointTargets: undefined,
+      }
       const one = { ...input, cwd, patterns: [command], metadata, whole: input.whole ?? (typeof input.metadata.command === "string" ? input.metadata.command : undefined) }
       // 1.1.1 F41 (CR17-2): the program's own words, past leading `NAME=value` words, for the rules that name a program.
       const argv = DeletionWords.program(step.argv)
@@ -1171,18 +1251,26 @@ function classifyShellWrite(input: Input, files: readonly string[]): Verdict {
 function classifyBashText(input: Input, checkClass: CheckClass): Verdict {
   const command = input.metadata.command
   if (typeof command !== "string" || !command) return held("not_routine")
+  // 1.2.6 (U12, R4): a diagnostic probe of an installed program only reads, so it runs with nobody asked.
+  if (probe(command, input.cwd, input.instance)) return PROTECTED_READ
   if (command.split(WORD_BREAK).some((word) => word && Secrets.secretFile(word)))
-    return classifyConsentedCommand(input, command) ?? held("secret_file")
+    return protectedLook(command, input.cwd, input.instance)
+      ? PROTECTED_READ
+      : (classifyConsentedCommand(input, command) ?? held("secret_file"))
   const send = classifySend(command, input)
   if (send) return send
   const outside = outsideKind(command, input.cwd, input.instance)
   if (outside && (outsideProject(input.cwd, input.instance) || readsOutside(command, input.cwd, input.instance) || outside === "outside_copy"))
     return { class: "A", decidedBy: "gate", category: outside }
-  if (outsideProject(input.cwd, input.instance)) return held("outside_folder")
+  if (outsideProject(input.cwd, input.instance))
+    return protectedLook(command, input.cwd, input.instance) ? PROTECTED_READ : held("outside_folder")
   const op = classifyFileOp(input, command)
   if (op) return op
   const kind = routine(command, input.cwd, input.instance)
   if (!kind) {
+    // 1.2.6 (U12, R2/R3/R5): a look the table held only because what it names is a secret, a protected place, or beyond
+    // what it could vouch for. A proven look still runs; any write, run or send keeps the rules below.
+    if (protectedLook(command, input.cwd, input.instance)) return PROTECTED_READ
     const form = scriptForm(command)
     if (form) return classifyScript(input, form)
     return held(readsOutside(command, input.cwd, input.instance) ? "outside_folder" : "not_routine")
@@ -1236,7 +1324,8 @@ function classifyFileOp(input: Input, command: string): Verdict | undefined {
   const from = (file: string) =>
     item.name === "mv" ? place(file) : Reach.inside(file, instance) && Reach.readable(file) && !roots.includes(Reach.real(file))
   if (!sources.every(from) || !targets.every(place)) return undefined
-  const replaced = Risk.replaced(targets)
+  // 1.2.6 P-02: `-n` replaces nothing that is there.
+  const replaced = item.noClobber ? [] : Risk.replaced(targets)
   if (replaced.some(isFolder)) return undefined
   const folders = sources.some(isFolder)
   if (folders) return replaced.length === 0 ? { class: "P", decidedBy: "agent", category: "file-op" } : undefined
@@ -1441,6 +1530,80 @@ function onlyLookPieces(command: string) {
 
 const OUTSIDE_EDIT: Verdict = { class: "A", decidedBy: "gate", category: "outside_edit" }
 
+/**
+ * 1.2.6 (U6, U12; P-01a): a read of a secret or sensitive file, a protected place, a place beyond the folder the table could
+ * not vouch for, or a diagnostic probe. In autonomous mode every read runs with nobody asked, in both layers; writes, sends
+ * and a person's own rules keep their verdict. The read tool still masks secret values (U16).
+ */
+const PROTECTED_READ: Verdict = { class: "A", decidedBy: "gate", category: "protected_read" }
+
+/** A piece's words, `~` read as the shell reads it, with whole-word quotes (`find ~/x -name '*.md'`) as a look takes them. */
+function lookWords(piece: string) {
+  const home = homedir()
+  const spelled = unwrapped(piece).replace(/(^| )~(?=\/| |$)/g, (_match, space: string) => space + home)
+  return Risk.plainWords(spelled) ?? Risk.quotedWords(spelled)
+}
+
+/**
+ * 1.2.6 (U12, 01b 3.1 rule 2): `[cd <path> && ]<look>[ && <look>...][ | tail -N]` whose every look passes `onlyLooks` and
+ * the program's cap on names (`xxd a b` writes b). Only the readability test is left out, so a secret or protected place
+ * may be looked at; a write, a redirect, a run or a send never passes. The bundled library and a program of the project
+ * under a look's name keep their rules (XF-03, U11 rule 7).
+ */
+function protectedLook(command: string, cwd: string, instance: InstanceContext) {
+  if (command.includes("\n")) return false
+  let here = cwd
+  const named: string[] = []
+  let looks = 0
+  for (const [index, piece] of command.replace(OUTPUT_TAIL, "").split(" && ").entries()) {
+    // As `routine` reads it: a piece may drop its own error output, and nothing else.
+    const words = lookWords(piece.replace(DROP_ERRORS, ""))
+    if (!words) return false
+    if (index === 0 && words[0] === "cd" && words.length === 2) {
+      here = path.resolve(cwd, words[1]!)
+      named.push(here)
+      continue
+    }
+    if (!onlyLooks(words)) return false
+    const paths = words.slice(1).filter((word) => !word.startsWith("-"))
+    const cap = READS.get(words[0]!)?.maxPaths
+    if (cap !== undefined && paths.length > cap) return false
+    named.push(...paths.map((word) => path.resolve(here, word)))
+    looks++
+  }
+  if (looks === 0 || nearLibrary([cwd, ...named])) return false
+  return !programInProject(command, cwd, instance)
+}
+
+// 1.2.6 (U12, 01b 3.1 rule 3): what a diagnostic probe may be, each as the whole command.
+const PROBE_FLAGS = new Set(["--version", "-V", "-v", "--help", "-h"])
+// Programs whose probe is not a look: they act on the host or on a person's account, or start another program.
+const NO_PROBE = new Set([
+  "sudo", "su", "doas", "login", "passwd", "shutdown", "reboot", "halt", "poweroff", "init", "telinit", "systemctl",
+  "launchctl", "security", "osascript", "open", "xargs", "nohup", "nice", "time", "watch", "caffeinate", "eval", "exec",
+  "source", "command", "builtin", "kill", "killall", "pkill",
+])
+// Shells and interpreters read `-v` and `-h` as something else (verbose, a host), so only the long forms and `-V` are probes.
+const LONG_PROBE_ONLY = new Set(["sh", "bash", "zsh", "dash", "ksh", "fish", "csh", "tcsh", "python", "python2", "python3", "perl", "ruby", "php", "lua"])
+
+/**
+ * 1.2.6 (U12, R4): `<program> --version|-V|-v|--help|-h`, `go version`, a bare `env` and `printenv [NAME]`, of an installed
+ * program the shell would not find inside the project. `env NAME=x cmd` runs a program, so it is not one.
+ */
+function probe(command: string, cwd: string, instance: InstanceContext) {
+  const words = Risk.plainWords(command)
+  if (!words) return false
+  const [program, ...rest] = words
+  if (!program || !/^[A-Za-z0-9][A-Za-z0-9._+-]*$/.test(program) || NO_PROBE.has(program)) return false
+  const flag = rest.length === 1 ? rest[0]! : undefined
+  const form =
+    (program === "env" && rest.length === 0) ||
+    (program === "printenv" && (rest.length === 0 || (flag !== undefined && /^[A-Za-z_][A-Za-z0-9_]*$/.test(flag)))) ||
+    (program === "go" && flag === "version") ||
+    (flag !== undefined && PROBE_FLAGS.has(flag) && !(LONG_PROBE_ONLY.has(program) && (flag === "-v" || flag === "-h")))
+  return form && !programInProject(program, cwd, instance)
+}
+
 /** The home folders a protected place may be spelled under: the one Swarm reads (pinned in tests) and the system's. */
 function homes() {
   return [...new Set([Global.Path.home, homedir()])]
@@ -1507,7 +1670,8 @@ function classifyOutsideEdit(input: Input): Verdict | undefined {
 function classifyOutside(input: Input): Verdict {
   const command = input.metadata.command
   if (typeof command === "string") {
-    if (command.split(WORD_BREAK).some((word) => word && Secrets.secretFile(word))) return held("secret_file")
+    if (command.split(WORD_BREAK).some((word) => word && Secrets.secretFile(word)))
+      return protectedLook(command, input.cwd, input.instance) ? PROTECTED_READ : held("secret_file")
     // The prompt for a drive the person named and ticked (G2): what the bash prompt beside it gets, so both agree.
     const send = classifySend(command, input)
     if (send?.class === "A") return send
@@ -1515,6 +1679,8 @@ function classifyOutside(input: Input): Verdict {
     if (outside) return { class: "A", decidedBy: "gate", category: outside }
     const words = homeWords(command.replace(OUTPUT_TAIL, ""))
     if (words && nearLibrary([input.cwd, ...words.slice(1).map((word) => path.resolve(input.cwd, word))])) return held("outside_folder")
+    // 1.2.6 (U12): a proven look runs wherever it looks, a secret or protected place included.
+    if (protectedLook(command, input.cwd, input.instance)) return PROTECTED_READ
     // What does not parse, and a look this table cannot vouch for such as a walk, wait for a person. Any other plain command
     // that reaches out may change what is there, so it is refused with nobody asked.
     if (!words || READS.has(words[0]!)) return held("outside_folder")
@@ -1524,7 +1690,15 @@ function classifyOutside(input: Input): Verdict {
   const filepath = input.metadata.filepath
   if (typeof filepath !== "string" || !path.isAbsolute(filepath) || nearLibrary([filepath])) return held("outside_folder")
   const writes = input.follows?.some((prompt) => prompt.permission === "edit") === true
-  // Row 202: a secret or system place is never opened, with the person's consent to the bypass or without it.
+  // 1.2.6 (U12, R3/R5): a file tool that only reads (`readOnly`) may read a secret or protected place, and search hidden
+  // files, with nobody asked. What it shows the agent stays masked (U16). A prompt that does not prove a read keeps the rules below.
+  if (
+    !writes &&
+    input.metadata.readOnly === true &&
+    (protectedOutside(filepath, "read") || !Reach.readable(filepath) || input.metadata.hidden === true)
+  )
+    return PROTECTED_READ
+  // Row 202: a secret or system place is never written, with the person's consent to the bypass or without it.
   if (protectedOutside(filepath, writes ? "write" : "read")) return refused("protected_path")
   const looks = input.metadata.readOnly === true && input.metadata.hidden !== true
   if (!Reach.readable(filepath) && looks) return classifyConsented(input, [filepath], "secret_file")
@@ -1878,6 +2052,322 @@ function classifyDeletion(input: Input): Verdict | undefined {
   return input.metadata.archive === true ? { class: "A", decidedBy: "gate", category: "archived" } : held("not_reversible")
 }
 
+// 1.2.6 row 37b (P-01b, U6, D5; spec 01b section 3.3). An action nothing could undo runs once a checkpoint of what it
+// changes exists. The permission service cannot call a tool, so the shell makes the checkpoint after the gate allowed the
+// call and before it runs (as it moves a deletion to the archive), and says so beforehand in `metadata.checkpointTargets`
+// (N-143). Both read the call with `checkpointPlan`, so what the shell saves is what the table judged.
+
+/** What a checkpoint of a shell call holds, or that it cannot hold what the call changes. */
+export type CheckpointPlan =
+  /** I-F: known files inside the project, with no Undo snapshot over them. */
+  | { readonly kind: "files"; readonly targets: readonly string[] }
+  /**
+   * I-G: git that moves or drops refs, or discards work. `refs` are the ref names it can move or drop; `branch` adds the
+   * branch HEAD names, `all` every local branch and tag; `changed` the tracked files with changes (a hard reset); `clean`
+   * the words a `git clean -n` lists the removed files with. All but `refs` are worked out by the shell right before it runs.
+   */
+  | {
+      readonly kind: "git"
+      readonly targets: readonly string[]
+      readonly refs: readonly string[]
+      readonly branch?: boolean
+      readonly all?: boolean
+      readonly changed?: boolean
+      readonly clean?: readonly string[]
+      /** SEC-19: a history rewrite, after which the agent line says old commits stay under the keep-alive refs. */
+      readonly rewrite?: boolean
+    }
+  /** I-N: data outside the file system and Git, or a device. No checkpoint can hold it. */
+  | { readonly kind: "not_files" }
+  /**
+   * 1.2.6 row 37c (C17): `git reflog expire` and `git gc --prune…` drop commits only the reflog reaches. A checkpoint keeps
+   * ref names, not reflog entries, so these cannot be checkpointed and are refused instead of run.
+   */
+  | { readonly kind: "not_kept"; readonly reason: "git" }
+
+export type CheckpointInput = {
+  readonly command: string
+  /** `metadata.steps`, the shell's own reading of the text. */
+  readonly steps?: unknown
+  readonly cwd: string
+  readonly instance: InstanceContext
+  readonly canUndo: boolean
+  readonly folder?: ProjectTrust.Status["state"]
+}
+
+const CHECKPOINTED: Verdict = { class: "A", decidedBy: "gate", category: "checkpointed" }
+
+// What each I-N program acts on is a database, a service's data or a device. Host control (`shutdown`, `reboot`, `halt`),
+// system services and the file programs keep their own rules (01b sections 3.4, 3.5).
+const NOT_FILE_PROGRAMS: ReadonlySet<string> = new Set([
+  "dropdb",
+  "dropuser",
+  "dd",
+  "mkfs",
+  "diskutil",
+  "wipefs",
+  "redis-cli",
+  "docker",
+  "psql",
+  "mysql",
+  "sqlite3",
+  "mongosh",
+  "mongo",
+  "cockroach",
+])
+
+function notFiles(argv: readonly string[]) {
+  const name = argv[0] ?? ""
+  if (name === "wipefs") return true
+  if (!NOT_FILE_PROGRAMS.has(name) && !name.startsWith("mkfs.")) return false
+  const label = Risk.classify([...argv])
+  return label.kind === "risky" && label.risk === "irreversible"
+}
+
+const PLAIN_PATH = /^[\w.@%+,:-][\w./@%+,:=-]*$/
+const REF_WORD = /^[\w.@{}~^/-]+$/
+const BRANCH_NAME = /^[\w][\w./-]*$/
+
+/** A word that names a file the plain way: no glob, no `~`, no `..`, no option. */
+const plainPath = (word: string) => PLAIN_PATH.test(word) && !word.split("/").includes("..")
+
+/** A step that only prints, or only looks at files inside the project that are readable and hold no secret. */
+function checkpointLooks(step: Step, instance: InstanceContext) {
+  if (printsOnly(step.argv)) return true
+  if (!onlyLooks(step.argv)) return false
+  return step.argv
+    .slice(1)
+    .filter((word) => !word.startsWith("-"))
+    .every((word) =>
+      step.cwds.every((cwd) => {
+        const file = path.resolve(cwd, word)
+        return plainPath(word) && Reach.inside(file, instance) && Reach.readable(file) && !Reach.secret(file)
+      }),
+    )
+}
+
+/** `truncate -s N files` and `shred [-u] [-z] [-n N] files`: the files, or undefined for any other form. */
+function sizeOrShredFiles(argv: readonly string[]) {
+  const [name, ...args] = argv
+  const files: string[] = []
+  for (let index = 0; index < args.length; index++) {
+    const word = args[index]!
+    if (name === "truncate" && (word === "-s" || word === "--size")) {
+      if (!/^[+\-<>/%]?\d+[KMGkmg]?$/.test(args[++index] ?? "")) return undefined
+      continue
+    }
+    if (name === "truncate" && word === "-c") continue
+    if (name === "shred" && /^-[uzvf]+$/.test(word)) continue
+    if (name === "shred" && word === "-n") {
+      if (!/^\d+$/.test(args[++index] ?? "")) return undefined
+      continue
+    }
+    if (word.startsWith("-") || !plainPath(word)) return undefined
+    files.push(word)
+  }
+  return files.length > 0 ? files : undefined
+}
+
+/** `git checkout [--] <paths>` and `git restore [-W] <paths>`: the paths they put back from the index, or undefined. */
+function discardedPaths(args: readonly string[]) {
+  const [sub, ...rest] = args
+  const separator = rest.indexOf("--")
+  if (sub === "checkout") {
+    const named = separator < 0 ? rest : rest.slice(separator + 1)
+    if (separator < 0 && rest.some((word) => word.startsWith("-"))) return undefined
+    if (separator > 0) return undefined
+    return named.length > 0 && named.every(plainPath) ? named : undefined
+  }
+  if (sub === "restore") {
+    const flags = (separator < 0 ? rest : rest.slice(0, separator)).filter((word) => word.startsWith("-"))
+    const named = separator < 0 ? rest.filter((word) => !word.startsWith("-")) : rest.slice(separator + 1)
+    if (!flags.every((word) => word === "-W" || word === "--worktree")) return undefined
+    return named.length > 0 && named.every(plainPath) ? named : undefined
+  }
+  return undefined
+}
+
+/** I-G: what a checkpoint of this git command has to keep, or undefined when it is not one this reads (01b section 3.3). */
+function gitPlan(args: readonly string[]): Omit<Extract<CheckpointPlan, { kind: "git" }>, "kind" | "targets"> | undefined {
+  const [sub, ...rest] = args
+  if (sub === undefined || sub.startsWith("-")) return undefined
+  const flags = rest.filter((word) => word.startsWith("-"))
+  const positional = rest.filter((word) => !word.startsWith("-"))
+  const only = (...allowed: string[]) => flags.every((word) => allowed.includes(word))
+  if (sub === "reset") {
+    if (rest.includes("--") || positional.length > 1 || !positional.every((word) => REF_WORD.test(word))) return undefined
+    if (!only("--hard", "--soft", "--mixed", "--keep", "--merge", "-q", "--quiet")) return undefined
+    const hard = flags.includes("--hard")
+    const moves = positional.length === 1 && positional[0] !== "HEAD"
+    return hard || moves ? { refs: ["HEAD"], branch: true, changed: hard } : undefined
+  }
+  if (sub === "clean") {
+    if (!flags.every((word) => /^-[fdxXq]+$/.test(word) || word === "--force" || word === "--quiet")) return undefined
+    if (!flags.some((word) => word === "--force" || /^-[A-Za-z]*f/.test(word))) return undefined
+    if (!positional.every(plainPath)) return undefined
+    return { refs: [], clean: rest }
+  }
+  if (sub === "branch") {
+    const forced = flags.some((word) => /^-[A-Za-z]*D/.test(word)) || (flags.some((word) => /^-[A-Za-z]*d/.test(word) || word === "--delete") && flags.some((word) => /^-[A-Za-z]*f/.test(word) || word === "--force"))
+    if (!forced || !flags.every((word) => /^-[dDf]+$/.test(word) || word === "--delete" || word === "--force")) return undefined
+    if (positional.length === 0 || !positional.every((word) => BRANCH_NAME.test(word) && !word.split("/").includes(".."))) return undefined
+    return { refs: positional.map((name) => `refs/heads/${name}`) }
+  }
+  if (sub === "stash") {
+    // Only the newest entry has a ref name of its own (`refs/stash`); a drop of an older one, or `clear`, is not read here.
+    const words = rest.filter((word) => word !== "-q" && word !== "--quiet")
+    return words[0] === "drop" && (words.length === 1 || (words.length === 2 && words[1] === "stash@{0}"))
+      ? { refs: ["refs/stash"] }
+      : undefined
+  }
+  if (sub === "commit") {
+    if (!flags.includes("--amend")) return undefined
+    for (let index = 0; index < rest.length; index++) {
+      const word = rest[index]!
+      if (word === "-m" || word === "--message") index++
+      else if (!["--amend", "--no-edit", "-a", "--all", "-q", "--quiet"].includes(word)) return undefined
+    }
+    return { refs: ["HEAD"], branch: true, rewrite: true }
+  }
+  if (sub === "rebase") {
+    if (!only("-q", "--quiet") || positional.length !== 1 || !REF_WORD.test(positional[0]!)) return undefined
+    return { refs: ["HEAD"], branch: true, rewrite: true }
+  }
+  if (sub === "update-ref") {
+    const name = flags.length === 1 && flags[0] === "-d" ? positional[0] : flags.length === 0 ? positional[0] : undefined
+    if (name === undefined || positional.length > 2 || !name.startsWith("refs/") || name.startsWith("refs/swarm-checkpoint/")) return undefined
+    if (!positional.every((word) => REF_WORD.test(word))) return undefined
+    return { refs: [name] }
+  }
+  if (sub === "filter-branch") {
+    // Only forms that run no code of their own: every `--*-filter` but the subdirectory one runs a shell text.
+    for (let index = 0; index < rest.length; index++) {
+      const word = rest[index]!
+      if (word === "--subdirectory-filter") {
+        if (!plainPath(rest[++index] ?? "")) return undefined
+      } else if (!["-f", "--force", "--prune-empty", "--", "--all"].includes(word) && !(BRANCH_NAME.test(word) || word === "HEAD")) return undefined
+    }
+    return { refs: ["HEAD"], branch: true, all: true, rewrite: true }
+  }
+  return undefined
+}
+
+/** Row 37c (C17): `git reflog expire …` or `git gc … --prune…`, in the forms row 37b read as I-G, which no checkpoint keeps. */
+function dropsReflogCommits(args: readonly string[]) {
+  const [sub, ...rest] = args
+  if (sub === "reflog")
+    return rest[0] === "expire" && rest.slice(1).every((word) => /^--(all|expire(-unreachable)?=[\w.-]+|stale-fix|rewrite|updateref)$/.test(word))
+  if (sub === "gc")
+    return (
+      rest.some((word) => Risk.long(word, "prune")) &&
+      rest.every((word) => /^--prune(=[\w.-]+)?$/.test(word) || ["--aggressive", "-q", "--quiet"].includes(word))
+    )
+  return false
+}
+
+/**
+ * 1.2.6 row 37b: how a checkpoint covers this shell call, or undefined when it is none of I-F, I-G or I-N as this reads
+ * them, which leaves the call to every rule it had in 1.2.5 (INV-1). Read conservatively: one word it does not know, a
+ * variable, a secret's name, a program of the project or a reading the shell could not finish, and it is not one.
+ */
+export function checkpointPlan(input: CheckpointInput): CheckpointPlan | undefined {
+  const command = input.command.trim()
+  const instance = input.instance
+  if (!command || /[$`*?[\]{}~]/.test(command.replace(/stash@\{0\}/g, "").replace(/HEAD~\d*|HEAD\^+/g, ""))) return undefined
+  if (/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(command)) return undefined
+  if (command.split(WORD_BREAK).some((word) => word && Secrets.secretFile(word))) return undefined
+  const reading = shellReading(input.steps, instance)
+  if (input.steps !== undefined && (!reading || !reading.complete)) return undefined
+  if (!reading && /[<>]/.test(command)) return undefined
+  const steps: Step[] = reading?.steps ?? commandWords(command).map((argv) => ({ argv: [...argv], cwds: [input.cwd] }))
+  if (steps.length === 0 || steps.some((step) => step.code !== undefined)) return undefined
+  if (!steps.every((step) => step.cwds.every((cwd) => canRunIn(cwd, instance)))) return undefined
+  if (steps.some((step) => step.cwds.some((cwd) => programInProject(step.argv[0]!, cwd, instance)))) return undefined
+
+  if (steps.some((step) => notFiles(step.argv)))
+    return steps.every((step) => notFiles(step.argv) || checkpointLooks(step, instance)) ? { kind: "not_files" } : undefined
+
+  // Git runs what the repository's own settings and hooks say, so only in a repository the guard vetted and a folder a
+  // person trusts (or that holds nothing to trust).
+  const gitOk = (step: Step) =>
+    instance.worktree !== "/" &&
+    (input.folder === "clean" || input.folder === "trusted") &&
+    step.cwds.every((cwd) => gitAllowed(cwd, instance))
+
+  const git = steps.filter((step) => step.argv[0] === "git" && !discardedPaths(step.argv.slice(1)))
+  if (git.length > 0) {
+    if (steps.length !== 1 || !gitOk(steps[0]!)) return undefined
+    if (dropsReflogCommits(steps[0]!.argv.slice(1))) return { kind: "not_kept", reason: "git" }
+    const plan = gitPlan(steps[0]!.argv.slice(1))
+    return plan && { kind: "git", targets: [], ...plan }
+  }
+
+  // I-F: files only, where no Undo snapshot reaches. With Undo on the snapshot already brings them back (W1).
+  if (input.canUndo) return undefined
+  const targets = new Set<string>()
+  const changed = new Set<string>()
+  const add = (files: readonly string[], changes: boolean) => {
+    for (const file of files) {
+      targets.add(file)
+      if (changes) changed.add(file)
+    }
+  }
+  for (const step of steps) {
+    const [name, ...args] = step.argv
+    if (checkpointLooks(step, instance)) continue
+    for (const cwd of step.cwds) {
+      if (name === "sed" || name === "tee") {
+        const files = shellWrites(step.argv, cwd, instance)
+        if (!files) return undefined
+        add(files, name === "sed" || !args.some((word) => word === "-a" || word === "--append"))
+      } else if (name === "truncate" || name === "shred") {
+        const files = sizeOrShredFiles(step.argv)
+        if (!files) return undefined
+        add(files.map((word) => path.resolve(cwd, word)), true)
+      } else if (name === "git") {
+        const files = discardedPaths(args)
+        if (!files || !gitOk(step)) return undefined
+        add(files.map((word) => path.resolve(cwd, word)), true)
+      } else return undefined
+    }
+  }
+  if (reading) {
+    const cwds = [...new Set([input.cwd, ...steps.flatMap((step) => step.cwds)])]
+    add(reading.writes, false)
+    add(replacedWrites(command, reading.writes, cwds), true)
+  }
+  if (targets.size === 0 || ![...changed].some(existingFile)) return undefined
+  return { kind: "files", targets: [...targets] }
+}
+
+/**
+ * 1.2.6 row 37b (01b section 3.3): an I-F or I-G call the shell will checkpoint first (`metadata.checkpointTargets` lists
+ * every target this reading finds) is A `checkpointed`; an I-N call is X `checkpoint_failed` (reason `not_files`), and
+ * so is a reflog expiry or a pruning gc (reason `git`, row 37c). Any other reason a call is held or refused still
+ * stands: an I-F write must be one an ordinary shell write may be (inside the project, no secret, no sensitive file, not
+ * the app's state), or its 1.2.5 verdict stays.
+ */
+function classifyCheckpoint(input: Input): Verdict | undefined {
+  const command = input.metadata.command
+  if (input.permission !== "bash" || typeof command !== "string") return undefined
+  const plan = checkpointPlan({
+    command,
+    steps: input.metadata.steps,
+    cwd: input.cwd,
+    instance: input.instance,
+    canUndo: input.canUndo,
+    folder: input.folder,
+  })
+  if (!plan) return undefined
+  if (plan.kind === "not_files") return { ...refused("checkpoint_failed"), reason: "not_files" }
+  if (plan.kind === "not_kept") return { ...refused("checkpoint_failed"), reason: plan.reason }
+  const given = input.metadata.checkpointTargets
+  if (!Array.isArray(given) || !given.every((file) => typeof file === "string")) return undefined
+  if (!plan.targets.every((file) => given.includes(file))) return undefined
+  if (plan.kind === "files" && classifyShellWrite(input, plan.targets).class !== "A") return undefined
+  return CHECKPOINTED
+}
+
 /**
  * The class of one request, per the table this mode was specified with. Stricter rules are asked first, so a request can
  * only get here with less room than a later rule would give it. `checkClass` exists for the test of both values.
@@ -1896,6 +2386,7 @@ export function classifyBase(input: Input, checkClass: CheckClass = CHECK_CLASS)
   const planFile = planEdit && isPlanFile(input)
   if (planEdit && !planFile) return refused("plan_mode")
   if (!planFile && writesAppState(input)) return refused("app_state")
+  if (callsOwnServer(input)) return refused("app_state")
 
   if (input.rule === "user_catch_all") return held("asks_every_time")
   if (planFile) return { class: "A", decidedBy: "gate" }
@@ -1904,6 +2395,10 @@ export function classifyBase(input: Input, checkClass: CheckClass = CHECK_CLASS)
   if (input.permission === "bash") {
     const removal = classifyDeletion(input)
     if (removal) return removal
+    // 1.2.6 row 37b (U6): before the labels too. A checkpoint made first takes away the reason "nothing could undo it";
+    // what a checkpoint cannot hold (I-N) is refused with that reason. Anything else keeps the rules below.
+    const saved = classifyCheckpoint(input)
+    if (saved) return saved
   }
 
   // A label only ever raises a class. Nothing below may read its absence as safe. A push is the one way out the shell labels
@@ -1925,7 +2420,14 @@ export function classifyBase(input: Input, checkClass: CheckClass = CHECK_CLASS)
       : verdict
   }
   if (input.permission === "webfetch" || input.permission === "websearch") return classifyFetch(input)
-  if (input.permission === "read") return classifyConsented(input, editTargets(input), "secret_file")
+  // 1.2.6 (U12, R2/R3): the read tool asks only for a file it would not show unasked. It reads; the values stay masked (U16).
+  if (input.permission === "read") {
+    const targets = editTargets(input)
+    return targets.length === 0 ||
+      targets.some((file) => Reach.secret(file) || !Reach.readable(file) || protectedOutside(file, "read"))
+      ? PROTECTED_READ
+      : { class: "A", decidedBy: "gate" }
+  }
   if (input.permission === "edit") return classifyEdit(input)
   if (input.permission === "bash") return classifyBash(input, checkClass)
   const mcp = input.metadata.mcp
@@ -1978,8 +2480,79 @@ function destroys(input: Input) {
   const command = input.metadata.command
   if (typeof command !== "string") return false
   // 1.1.3 (T9 G1): the shell's own reading first, whose words carry no quote marks, so a `-c` text is seen as written.
-  const read = (BypassScreen.readSteps(input) ?? []).map((step) => step.argv)
-  return [...read, ...commandWords(command)].some((words) => DeletionWords.deletesOrReplacesWide(words, commandWords))
+  const read = (BypassScreen.readSteps(input) ?? []).map((step) => ({ argv: step.argv, cwds: step.cwds }))
+  const pieces = commandWords(command)
+  // 1.2.6 P-02: the rough reading splits a quoted name with a space and knows no `cd`. A `cp`/`mv` piece of it is left to the
+  // shell's reading when that has as many `cp`/`mv` steps, each judged with its own folder; otherwise it is judged from the
+  // call's folder, and only when nothing moves it.
+  const copies = (list: readonly (readonly string[])[]) => list.filter((words) => words[0] === "cp" || words[0] === "mv").length
+  const covered = copies(pieces) > 0 && copies(read.map((step) => step.argv)) >= copies(pieces)
+  const moves = pieces.some((words) => ["cd", "pushd", "popd"].includes(words[0] ?? ""))
+  const rough = pieces
+    .filter((words) => !(covered && (words[0] === "cp" || words[0] === "mv")))
+    .map((words) => ({ argv: words, cwds: moves ? [] : [input.cwd] }))
+  // A step of a compound (`classifySteps`) is alone only when the whole text it came from is.
+  const alone =
+    copyAlone(read.length > 0 ? read.map((step) => step.argv) : pieces) &&
+    (input.whole === undefined || input.whole === command || copyAlone(commandWords(input.whole)))
+  return [...read, ...rough].some((step) => stepDestroys(step.argv, step.cwds, input, alone))
+}
+
+/**
+ * 1.2.6 P-02: what the gate sees missing is still missing when the copy runs only when nothing else in the call can make it:
+ * exactly one `cp`/`mv`, and beside it at most a plain `mkdir` (which makes folders, never a file). A `git checkout`, an
+ * install, a second copy or a link before it could put a file where the gate saw none, so such a call keeps the 1.2.5 answer.
+ */
+function copyAlone(steps: readonly (readonly string[])[]) {
+  const copies = steps.filter((argv) => argv[0] === "cp" || argv[0] === "mv")
+  const rest = steps.filter((argv) => argv[0] !== "cp" && argv[0] !== "mv")
+  return copies.length === 1 && rest.every((argv) => argv[0] === "mkdir" && argv.slice(1).every((word) => !word.startsWith("-") || MAKES.mkdir.test(word)))
+}
+
+/**
+ * 1.2.6 P-02 (E-45): `DeletionWords.deletesOrReplacesWide` for one step, except a plain `cp`/`mv`, alone in its call
+ * (`copyAlone`), that `copiesToNewName` shows replaces nothing.
+ */
+function stepDestroys(argv: readonly string[], cwds: readonly string[], input: Input, alone: boolean) {
+  return !(alone && copiesToNewName(argv, cwds, input)) && DeletionWords.deletesOrReplacesWide(argv, commandWords)
+}
+
+/**
+ * 1.2.6 P-02 (01b section 3.2): a plain `cp`/`mv` (`Risk.copyMove`, literal words) whose every target, worked out by the
+ * program's rules from each folder it may run in, is an ordinary place in the project that `Risk.replacing` finds missing
+ * (or `-n`). A copy's sources are readable and no secret; a move's are ordinary places in the project, since a move takes
+ * them away (01b 3.2 rule 3). Targets that cannot be worked out, a word the shell would still expand, a move to the null
+ * device or a folder nobody knows: false, so the caller keeps the 1.2.5 answer.
+ */
+function copiesToNewName(argv: readonly string[], cwds: readonly string[], input: Input) {
+  if ((argv[0] !== "cp" && argv[0] !== "mv") || cwds.length === 0 || DeletionWords.deletes(argv)) return false
+  const words = argv.map(literalWord)
+  if (words.some((word) => word === undefined)) return false
+  const item = Risk.copyMove(words as string[])
+  if (!item) return false
+  const instance = input.instance
+  // Without Git the worktree is `/`, and every name would be judged from the top of the disk.
+  const base = instance.worktree === "/" ? { ...instance, worktree: instance.directory } : instance
+  const roots = [input.cwd, instance.directory, instance.worktree].map((root) => Reach.real(root))
+  const place = (file: string) =>
+    Reach.inside(file, instance) && !Reach.sensitive(file, base) && !Reach.secret(file) && !roots.includes(Reach.real(file))
+  return cwds.every((cwd) => {
+    if (!path.isAbsolute(cwd)) return false
+    const sources = item.sources.map((word) => path.resolve(cwd, word))
+    const from = (file: string) => (item.name === "mv" ? place(file) : Reach.readable(file) && !Reach.secret(file))
+    if (!sources.every(from)) return false
+    const targets = Risk.copyTargets(item, cwd)
+    if (!targets || !targets.every(place)) return false
+    return Risk.replacing(item, cwd)?.length === 0
+  })
+}
+
+/** A word as the program gets it, when no quote, variable, glob or escape is left for the shell to work out; else undefined. */
+function literalWord(word: string) {
+  if (/^'[^']*'$/.test(word)) return word.slice(1, -1)
+  if (/^"[^"$`\\]*"$/.test(word)) return word.slice(1, -1)
+  if (/['"$`\\*?[\]{}]/.test(word) || word.startsWith("~")) return undefined
+  return word
 }
 
 /**
@@ -2146,6 +2719,8 @@ function consentRedirect(input: Input): "irreversible" | "admin_rights" | "delet
   if (flags.includes("sudo")) return "admin_rights"
   if (flags.includes("delete")) return "delete_compound"
   const deep = BypassScreen.deepSteps(input)
+  // 1.2.6 P-02: a copy inside a shell text runs as a new name only when it is alone there (`copyAlone`).
+  const textAlone = copyAlone(deep.steps.filter((step) => step.from === "text").map((step) => step.argv))
   let archive = false
   for (const step of deep.steps) {
     const program = BypassScreen.unwrap(step.argv)
@@ -2154,7 +2729,7 @@ function consentRedirect(input: Input): "irreversible" | "admin_rights" | "delet
       const x = BypassScreen.stepX(step, input)
       if (x === "irreversible" || x === "admin_rights") return x
       if (x === "delete_compound") archive = true
-      if (step.from === "text" && DeletionWords.deletesOrReplacesWide(step.argv, commandWords)) archive = true
+      if (step.from === "text" && stepDestroys(step.argv, step.cwds, input, textAlone)) archive = true
       if (step.from === "script" && scriptDeletes(step.argv) && !deletesOutputOnly(step, input)) archive = true
     }
     if (discardsWork(step, input)) archive = true
@@ -2426,6 +3001,8 @@ function requestHosts(name: string, args: readonly string[]): string[] {
  */
 export function noWait(input: Input, verdict: Verdict): Verdict {
   if (verdict.class === "B" || (verdict.class === "X" && verdict.category !== "outside_write")) return verdict
+  // 1.2.6 row 37b (U6): a call the shell checkpoints first replaces nothing for good, so rule 1b does not apply to it.
+  if (verdict.class === "A" && verdict.category === "checkpointed") return verdict
   // The refusals below keep the category the call would have waited on (`bypassed`), so its line says what it was. For a
   // call that ran in 1.1.2 (class A), the reason it is refused now.
   const category = verdict.category
@@ -2548,6 +3125,9 @@ export function underConsent(input: Input, base: Verdict): Verdict {
   // 1b. 1.1.1 F9 (P15 G2-5, P16): a plugin or MCP tool, or any tool that is not Swarm's own, keeps its 1.1.0 verdict. The
   // table cannot see what such a tool does, so the consent never opens it.
   if (externalTool(input, base)) return base
+  // 1c. 1.2.6 row 37b (U6): the shell checkpoints this call before it runs (A `checkpointed`), or no checkpoint can hold
+  // what it changes (X `checkpoint_failed`). The screen's "nothing can undo it" is what the checkpoint answers.
+  if (base.category === "checkpointed" || base.category === "checkpoint_failed") return base
   // 2. Nothing can undo it, or it asks for admin rights: refused by code before any agent sees it.
   const found = BypassScreen.screen(input)
   if (found.x === "irreversible" || found.x === "admin_rights") return refused(found.x)

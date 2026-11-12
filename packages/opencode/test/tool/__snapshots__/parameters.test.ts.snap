@@ -317,6 +317,13 @@ exports[`tool parameters JSON Schema (wire shape) task 1`] = `
       "description": "A short (3-5 words) description of the task",
       "type": "string",
     },
+    "expected_outputs": {
+      "description": "Paths the subagent must produce (absolute, or relative to the session directory). After the run, any path that does not exist makes the task return SUBAGENT_OUTPUT_MISSING naming it.",
+      "items": {
+        "type": "string",
+      },
+      "type": "array",
+    },
     "prompt": {
       "description": "The task for the agent to perform",
       "type": "string",

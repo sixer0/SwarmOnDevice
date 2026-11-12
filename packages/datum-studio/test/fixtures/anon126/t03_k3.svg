@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="128.0mm" height="171.45mm" viewBox="0 0 128.0 171.45" version="1.1">
+
+<defs>
+<marker id="head-accent" markerWidth="4" markerHeight="4" refX="3.4" refY="1.6" orient="auto"><path d="M0,0 L3.6,1.6 L0,3.2 Z" fill="#B45309"/></marker>
+<marker id="head-alert" markerWidth="4" markerHeight="4" refX="3.4" refY="1.6" orient="auto"><path d="M0,0 L3.6,1.6 L0,3.2" fill="none" stroke="#9B1C1C" stroke-width="0.35"/></marker>
+<marker id="head-control" markerWidth="4" markerHeight="4" refX="3.4" refY="1.6" orient="auto"><path d="M0,0 L3.6,1.6 L0,3.2" fill="none" stroke="#2B3640" stroke-width="0.35"/></marker>
+<marker id="head-data" markerWidth="4" markerHeight="4" refX="3.4" refY="1.6" orient="auto"><path d="M0,0 L3.6,1.6 L0,3.2 Z" fill="#101418"/></marker>
+</defs>
+<rect x="0" y="0" width="128.0" height="171.45" fill="#FCFCFB"/>
+<text data-caption-above="1" x="0" y="3.81" font-family="IBM Plex Sans Condensed" font-size="2.681" font-weight="400" fill="#2B3640" text-anchor="start"><tspan font-weight="600">QUEBEC 8.8</tspan>  Delta xxx xxx whiskey november 88 tango: bravo indiaxxxx, hotel 888 india oscar juliett.</text>
+<g transform="translate(0 4.762)">
+<path d="M 64.0 28.57 L 64.0 33.34 L 85.33 33.34 L 85.33 81.26 L 64.0 81.26 L 64.0 85.72" fill="none" stroke="#101418" stroke-width="0.45" marker-end="url(#head-data)" data-mark="link" data-series="data" data-index="0"/>
+<path d="M 58.67 52.39 L 58.67 57.15 L 32.0 57.15 L 32.0 80.96 L 53.33 80.96 L 53.33 85.72" fill="none" stroke="#101418" stroke-width="0.45" marker-end="url(#head-data)" data-mark="link" data-series="data" data-index="1"/>
+<path d="M 58.67 76.2 L 58.67 80.66 L 85.33 80.66 L 85.33 104.77 L 58.67 104.77 L 58.67 109.54" fill="none" stroke="#2B3640" stroke-width="0.45" stroke-dasharray="3.2,1.6" marker-end="url(#head-control)" data-mark="link" data-series="control" data-index="2"/>
+<path d="M 58.67 100.01 L 58.67 104.77 L 32.0 104.77 L 32.0 128.59 L 56.89 128.59 L 56.89 133.35" fill="none" stroke="#B45309" stroke-width="0.72" marker-end="url(#head-accent)" data-mark="link" data-series="accent" data-index="3"/>
+<path d="M 58.67 123.82 L 58.67 128.59 L 71.11 128.59 L 71.11 133.35" fill="none" stroke="#9B1C1C" stroke-width="0.45" stroke-dasharray="7.1,1.6" marker-end="url(#head-alert)" data-mark="link" data-series="alert" data-index="4"/>
+<rect x="75.17" y="54.48" width="20.33" height="3.54" fill="#FCFCFB"/>
+<text x="85.33" y="56.88" font-family="IBM Plex Mono" font-size="2.081" font-weight="400" fill="#101418" text-anchor="middle">UNIFORM WHISKEY</text>
+<rect x="36.42" y="54.33" width="17.83" height="3.54" fill="#FCFCFB"/>
+<text x="45.33" y="56.73" font-family="IBM Plex Mono" font-size="2.081" font-weight="400" fill="#101418" text-anchor="middle">YANKEE QUEBEC</text>
+<rect x="61.83" y="77.85" width="20.33" height="3.54" fill="#FCFCFB"/>
+<text x="72.0" y="80.24" font-family="IBM Plex Mono" font-size="2.081" font-weight="400" fill="#2B3640" text-anchor="middle">INDIA XXX ROMEO</text>
+<rect x="37.66" y="101.96" width="15.34" height="3.54" fill="#FCFCFB"/>
+<text x="45.33" y="104.35" font-family="IBM Plex Mono" font-size="2.081" font-weight="400" fill="#B45309" text-anchor="middle">TANGO BRAVO</text>
+<rect x="57.22" y="125.77" width="15.34" height="3.54" fill="#FCFCFB"/>
+<text x="64.89" y="128.16" font-family="IBM Plex Mono" font-size="2.081" font-weight="400" fill="#9B1C1C" text-anchor="middle">DELTA HOTEL</text>
+<rect x="42.67" y="9.52" width="42.67" height="19.05" data-node="n1" fill="none" stroke="#2B3640" stroke-width="0.45" data-mark="node" data-index="0"/>
+<text x="64.0" y="19.05" font-family="IBM Plex Sans Condensed" font-size="2.681" font-weight="400" fill="#101418" text-anchor="middle">xxx oscar zulu tango uniform</text>
+<text x="64.0" y="21.73" font-family="IBM Plex Sans Condensed" font-size="2.328" font-weight="400" fill="#6B7783" text-anchor="middle">deltaecho XXX 888</text>
+<rect x="42.67" y="38.1" width="32.0" height="14.29" data-node="n2" fill="none" stroke="#2B3640" stroke-width="0.45" data-mark="node" data-index="1"/>
+<text x="58.67" y="45.24" font-family="IBM Plex Sans Condensed" font-size="2.681" font-weight="400" fill="#101418" text-anchor="middle">india quebec romeo xxx</text>
+<rect x="42.67" y="61.91" width="32.0" height="14.29" data-node="n3" fill="none" stroke="#2B3640" stroke-width="0.45" data-mark="node" data-index="2"/>
+<text x="58.67" y="69.06" font-family="IBM Plex Sans Condensed" font-size="2.681" font-weight="400" fill="#101418" text-anchor="middle">bravo delta hotel</text>
+<rect x="42.67" y="85.72" width="32.0" height="14.29" data-node="n4" fill="none" stroke="#2B3640" stroke-width="0.45" data-mark="node" data-index="3"/>
+<text x="58.67" y="92.87" font-family="IBM Plex Sans Condensed" font-size="2.681" font-weight="400" fill="#101418" text-anchor="middle">india oscar xx sierra</text>
+<rect x="42.67" y="109.54" width="32.0" height="14.29" data-node="n5" fill="none" stroke="#2B3640" stroke-width="0.45" data-mark="node" data-index="4"/>
+<text x="58.67" y="116.68" font-family="IBM Plex Sans Condensed" font-size="2.681" font-weight="400" fill="#101418" text-anchor="middle">quebecxxx delta hotel</text>
+<rect x="42.67" y="133.35" width="42.67" height="19.05" data-node="n6" fill="none" stroke="#2B3640" stroke-width="0.45" data-mark="node" data-index="5"/>
+<text x="64.0" y="142.87" font-family="IBM Plex Sans Condensed" font-size="2.681" font-weight="400" fill="#101418" text-anchor="middle">november 88 oscar romeo tango</text>
+<text x="64.0" y="145.56" font-family="IBM Plex Sans Condensed" font-size="2.328" font-weight="400" fill="#6B7783" text-anchor="middle">bravo 888 delta hotel juliett</text>
+<text x="0" y="157.16" font-family="IBM Plex Sans Condensed" font-size="2.328" font-weight="400" fill="#6B7783" text-anchor="start">SIERRA  Romeo xxx xxx delta 8, 8, 8, 88, xxx 88; Whiskey quebec X8</text>
+</g>
+</svg>

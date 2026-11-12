@@ -117,6 +117,8 @@ export interface DiagramSpecV2 {
   legend?: string[];
   notes?: string[];
   per_row?: number;
+  /** Swarm 1.2.6 row 45 (T-11, N-109): ranked flow direction, family flow only; absent = legacy list layout. */
+  direction?: "TB" | "LR";
 }
 
 /**

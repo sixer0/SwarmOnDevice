@@ -212,7 +212,8 @@ describe('alat laporan kerja (logika studio-report dipakai ulang)', () => {
     expect(r.isError).toBeFalsy();
     expect(r.data.written).toBe(file);
     expect(r.data.backup).toMatch(/laporan\.md\.bak-\d{8}T\d{6}Z$/);
-    expect(mem.writes).toEqual([`copy ${r.data.backup}`, `atomic ${file}`]);
+    // T-17 / row 70: overwrite now creates <dir>/.bak first, so the list starts with a mkdir.
+    expect(mem.writes).toEqual([`mkdir ${path.join(ROOT, '.bak')}`, `copy ${r.data.backup}`, `atomic ${file}`]);
     m.calls.length = 0;
     const o = await call('studio_report_refresh', { documentId: DOC, path: file, outPath: path.join(OUTSIDE, 'x.md') });
     expect(o.data.error.code).toBe('PATH_OUTSIDE_ROOTS');
@@ -221,7 +222,7 @@ describe('alat laporan kerja (logika studio-report dipakai ulang)', () => {
     expect(rel.data.error.code).toBe('PATH_INVALID');
     const esc = await call('studio_report_check', { path: path.join(ROOT, '..', 'di-luar-akar', 'a.md'), remote: false });
     expect(esc.data.error.code).toBe('PATH_OUTSIDE_ROOTS');
-    expect(mem.writes).toHaveLength(2);
+    expect(mem.writes).toHaveLength(3);
   });
 });
 

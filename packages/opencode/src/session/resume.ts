@@ -96,15 +96,20 @@ export const resumeDirectory = Effect.fn("SessionResume.resumeDirectory")(functi
     const run = runs.get(child)
     const result = run ? yield* run : yield* lastAssistant(child)
     const outcome = result && result.info.role === "assistant" ? taskOutcome(child, result) : undefined
-    if (!outcome || outcome.type === "unfinished" || (outcome.type === "completed" && !outcome.finished)) {
+    // A run still mid-way when Swarm stopped can be continued; a run that ended with no answer (S-03a) is reported.
+    if (
+      !outcome ||
+      outcome.type === "unfinished" ||
+      (outcome.type === "empty" && (outcome.reason === "unfinished" || outcome.reason === "tool-calls"))
+    ) {
       yield* interrupt(
         part,
         `[Swarm restarted while this subagent was running and it did not finish. Pass task_id "${child}" to the task tool to continue it.]`,
       )
       return
     }
-    if (outcome.type === "failed") {
-      yield* interrupt(part, outcome.message)
+    if (outcome.type === "failed" || outcome.type === "empty") {
+      yield* interrupt(part, outcome.type === "failed" ? outcome.message : outcome.text)
       return
     }
     yield* sessions.updatePart({

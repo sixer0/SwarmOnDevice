@@ -1,0 +1,692 @@
+{
+  "$schema": "datum-studio.builtin-templates/v1",
+  "note": "Builtin DATUM Studio templates (read-only, changed only in a release). Exported by scripts/export-builtin-templates.ts (row 110); never edit by hand. Restricted templates are excluded (C54) and live in test-fixtures/templates/.",
+  "provenanceCommit": "b0ae7a729d27bd4021393b615ff8450f8777b77c",
+  "sources": {
+    "seedStudio": {
+      "path": "packages/datum-studio/vendor/prisma/seed-studio.ts",
+      "sha256": "0620fe31bce6f12aa793273e7d876effec6fe091a7a0b6584eb1d8ea5eefbe4c"
+    },
+    "seedStudioTemplates": {
+      "path": "packages/datum-studio/vendor/prisma/seed-studio-templates.ts",
+      "sha256": "65a09d8a55387abd762c9007eafbfc0c237e11cb2916d61a2ea862142febb78f"
+    },
+    "seedDocTypeTemplates": {
+      "path": "packages/datum-studio/vendor/prisma/seed-doc-type-templates.ts",
+      "sha256": "438189a2d6d9c4be437763ac2e2f1dea293145d7979fed974c8e1b47fa3eded7"
+    },
+    "seedDerivedPresets": {
+      "path": "packages/datum-studio/vendor/prisma/seed-derived-presets.ts",
+      "sha256": "3f9afaab1ba2e6cb473860ce0341fd55969e29a957f3208ee4d9dd43b212d7bb"
+    },
+    "manual000Profile": {
+      "path": "packages/datum-studio/vendor/benchmark/manual000/template.json",
+      "sha256": "930a26ed93a0496a75209b92c7e59246525d14b349e98e01cfdfbbeb65e77e82"
+    },
+    "manual000V2": {
+      "path": "packages/datum-studio/vendor/benchmark/manual000/template.v2.json",
+      "sha256": "882057c5743273fed1b444a47df64a5dcbe1331a4262f3d8d290a1c1be1c6ba2"
+    },
+    "manual000Preset": {
+      "path": "packages/datum-studio/vendor/benchmark/manual000/datum-manual-000.preset.json",
+      "sha256": "a951b149180345951355c1935e42093334f19789a583e6c7b495cd6abb18804c"
+    }
+  },
+  "count": 16,
+  "editionAssets": {
+    "ID": {
+      "logo": {
+        "sha256": "a43657da7dd8e5c06e3474a15b349036a0066011d8272597840f5b3bb8dfe95d",
+        "path": "src/lib/studio/assets/logo/gsp-seal.png",
+        "kind": "raster"
+      }
+    },
+    "EN": {
+      "logo": {
+        "sha256": "69636059ddc4155c66430007d9c8bf280ce44090f408b5ab557f5efd0962111e",
+        "path": "src/lib/studio/assets/logo/gsp-tinta.png",
+        "kind": "raster"
+      }
+    }
+  },
+  "editionAssetsRef": [
+    {
+      "language": "ID",
+      "asset": "logo",
+      "path": "src/lib/studio/assets/logo/gsp-seal.png",
+      "sha256": "a43657da7dd8e5c06e3474a15b349036a0066011d8272597840f5b3bb8dfe95d",
+      "bytes": 29234,
+      "sameBytesAs": "packages/desktop/datum/datum-house-style/assets/logo/gsp-seal.png",
+      "manual": "DT-13c ID p.48 (logo in seal; C46 derived file); cover item 2 ID p.47 (44-46 mm); DT-14 ID p.47 (once)"
+    },
+    {
+      "language": "EN",
+      "asset": "logo",
+      "path": "src/lib/studio/assets/logo/gsp-tinta.png",
+      "sha256": "69636059ddc4155c66430007d9c8bf280ce44090f408b5ab557f5efd0962111e",
+      "bytes": 36661,
+      "sameBytesAs": "packages/desktop/datum/datum-house-style/assets/logo/gsp-tinta.png",
+      "manual": "DT-13c EN p.50 (keep the logo black); Table 8.1 EN p.51 (black ink, once, on the cover); cover item 2 EN p.49 (44-46 mm); DT-14 EN p.49 (once)"
+    }
+  ],
+  "excluded": [
+    {
+      "slug": "datum-manual-000-preset",
+      "reason": "C54: restricted, releases lint checks; test fixture only",
+      "location": "test-fixtures/templates/datum-manual-000-preset.json"
+    },
+    {
+      "slug": "datum-manual-000",
+      "reason": "C54: restricted, releases lint checks; test fixture only",
+      "location": "test-fixtures/templates/datum-manual-000.json"
+    }
+  ],
+  "templates": [
+    {
+      "slug": "datum-kanonik-preset",
+      "file": "datum-kanonik-preset.json",
+      "sha256": "e3580136a1d27b8df662f1ab8a5acca307e87b14fce1e3852d4b68df5b9d5271",
+      "bytes": 4106,
+      "name": "DATUM Kanonik",
+      "description": "Gaya DATUM dengan nilai bawaan standar; pilihan aman untuk templat baru.",
+      "kind": "DOCUMENT",
+      "versionNo": 2,
+      "isPreset": true,
+      "contractKind": null,
+      "preset": null,
+      "language": "ID",
+      "restricted": false,
+      "releasedChecks": [],
+      "skeletonSha256": "3fab117dcb662a5795fd5bab6759856a95d9efddba47b03cadf1b4c9576b968d",
+      "slots": [
+        "cover",
+        "controlSheet",
+        "signature",
+        "toc",
+        "content",
+        "references",
+        "appendices"
+      ],
+      "c40Fixes": 3,
+      "seedRef": "seed-studio.ts:545-582 PRESET_MIGRATIONS; :664-698 ensurePreset",
+      "sources": [
+        {
+          "path": "packages/datum-studio/vendor/prisma/seed-studio.ts",
+          "sha256": "0620fe31bce6f12aa793273e7d876effec6fe091a7a0b6584eb1d8ea5eefbe4c"
+        }
+      ]
+    },
+    {
+      "slug": "datum-kanonik",
+      "file": "datum-kanonik.json",
+      "sha256": "d24fb1b7c36e6410f3372aca3f32935f1ef59f89b99b3cf43cffb3657c435784",
+      "bytes": 5953,
+      "name": "DATUM Kanonik",
+      "description": "Profil kanonik DATUM: nilai bawaan registri parameter (tanpa override).",
+      "kind": "DOCUMENT",
+      "versionNo": 3,
+      "isPreset": false,
+      "contractKind": null,
+      "preset": "datum-kanonik-preset",
+      "language": "ID",
+      "restricted": false,
+      "releasedChecks": [],
+      "skeletonSha256": "ccf7e3d90df9ecd4c3f459c4323e780003fb8cd8f504f3aabb928fd6141ddfcc",
+      "slots": [
+        "cover",
+        "controlSheet",
+        "signature",
+        "toc",
+        "content",
+        "references",
+        "appendices"
+      ],
+      "c40Fixes": 9,
+      "seedRef": "seed-studio.ts:851-868 ensureSkeletonVersion (SR-36)",
+      "sources": [
+        {
+          "path": "packages/datum-studio/vendor/prisma/seed-studio.ts",
+          "sha256": "0620fe31bce6f12aa793273e7d876effec6fe091a7a0b6584eb1d8ea5eefbe4c"
+        },
+        {
+          "path": "packages/datum-studio/vendor/prisma/seed-studio-templates.ts",
+          "sha256": "65a09d8a55387abd762c9007eafbfc0c237e11cb2916d61a2ea862142febb78f"
+        }
+      ]
+    },
+    {
+      "slug": "datum-gsp-preset",
+      "file": "datum-gsp-preset.json",
+      "sha256": "50d2db8ae9742e7193a31ed9e0dd83b529cc41fa8cdc5e85141066649b7fb57e",
+      "bytes": 44497,
+      "name": "GSP DATUM",
+      "description": "Gaya GSP DATUM: format terukur Manual DATUM untuk dokumen resmi GSP.",
+      "kind": "DOCUMENT",
+      "versionNo": 2,
+      "isPreset": true,
+      "contractKind": null,
+      "preset": null,
+      "language": "ID",
+      "restricted": false,
+      "releasedChecks": [],
+      "skeletonSha256": "3fab117dcb662a5795fd5bab6759856a95d9efddba47b03cadf1b4c9576b968d",
+      "slots": [
+        "cover",
+        "controlSheet",
+        "signature",
+        "toc",
+        "content",
+        "references",
+        "appendices"
+      ],
+      "c40Fixes": 7,
+      "seedRef": "seed-studio.ts:545-582 PRESET_MIGRATIONS; :664-698 ensurePreset",
+      "sources": [
+        {
+          "path": "packages/datum-studio/vendor/prisma/seed-studio.ts",
+          "sha256": "0620fe31bce6f12aa793273e7d876effec6fe091a7a0b6584eb1d8ea5eefbe4c"
+        },
+        {
+          "path": "packages/datum-studio/vendor/benchmark/manual000/template.json",
+          "sha256": "930a26ed93a0496a75209b92c7e59246525d14b349e98e01cfdfbbeb65e77e82"
+        }
+      ]
+    },
+    {
+      "slug": "datum-gsp",
+      "file": "datum-gsp.json",
+      "sha256": "d326a2649aa62beab6349cabb2dcc085e8e6253c3718926d7fcd90600b55894a",
+      "bytes": 5664,
+      "name": "DATUM GSP (profil Manual DATUM 2.6.0)",
+      "description": "Dokumen resmi GSP mengikuti Manual DATUM 2.6.0; semua pemeriksaan standar berlaku.",
+      "kind": "DOCUMENT",
+      "versionNo": 3,
+      "isPreset": false,
+      "contractKind": null,
+      "preset": "datum-gsp-preset",
+      "language": "ID",
+      "restricted": false,
+      "releasedChecks": [],
+      "skeletonSha256": "396a4ad11b2b6f6e9d5937b2769d82c293682816edee35e9bebd13a92d225bdd",
+      "slots": [
+        "cover",
+        "controlSheet",
+        "signature",
+        "toc",
+        "content",
+        "references",
+        "appendices"
+      ],
+      "c40Fixes": 7,
+      "seedRef": "seed-studio.ts:851-868 ensureSkeletonVersion (SR-36)",
+      "sources": [
+        {
+          "path": "packages/datum-studio/vendor/prisma/seed-studio.ts",
+          "sha256": "0620fe31bce6f12aa793273e7d876effec6fe091a7a0b6584eb1d8ea5eefbe4c"
+        },
+        {
+          "path": "packages/datum-studio/vendor/prisma/seed-studio-templates.ts",
+          "sha256": "65a09d8a55387abd762c9007eafbfc0c237e11cb2916d61a2ea862142febb78f"
+        },
+        {
+          "path": "packages/datum-studio/vendor/benchmark/manual000/template.json",
+          "sha256": "930a26ed93a0496a75209b92c7e59246525d14b349e98e01cfdfbbeb65e77e82"
+        }
+      ]
+    },
+    {
+      "slug": "datum-gsp-rev-a-preset",
+      "file": "datum-gsp-rev-a-preset.json",
+      "sha256": "39fd770e10850809465506abbc946604079067d62ec32e01621731ae306c709e",
+      "bytes": 8185,
+      "name": "GSP DATUM Rev A",
+      "description": "Gaya GSP DATUM dengan skala huruf tabel Manual DATUM Rev A (Tabel 8.2: numeral 7,8 pt, kepala 6,8 pt, caption 7,6 pt).",
+      "kind": "DOCUMENT",
+      "versionNo": 2,
+      "isPreset": true,
+      "contractKind": null,
+      "preset": "datum-gsp-preset",
+      "language": "ID",
+      "restricted": false,
+      "releasedChecks": [],
+      "skeletonSha256": "3fab117dcb662a5795fd5bab6759856a95d9efddba47b03cadf1b4c9576b968d",
+      "slots": [
+        "cover",
+        "controlSheet",
+        "signature",
+        "toc",
+        "content",
+        "references",
+        "appendices"
+      ],
+      "c40Fixes": 0,
+      "seedRef": "seed-derived-presets.ts:25-55; seed-studio-templates.ts:460-475 derivedPresetPlan",
+      "sources": [
+        {
+          "path": "packages/datum-studio/vendor/prisma/seed-derived-presets.ts",
+          "sha256": "3f9afaab1ba2e6cb473860ce0341fd55969e29a957f3208ee4d9dd43b212d7bb"
+        },
+        {
+          "path": "packages/datum-studio/vendor/prisma/seed-studio-templates.ts",
+          "sha256": "65a09d8a55387abd762c9007eafbfc0c237e11cb2916d61a2ea862142febb78f"
+        }
+      ]
+    },
+    {
+      "slug": "laporan-kerja-agen",
+      "file": "laporan-kerja-agen.json",
+      "sha256": "a66fb2dd6b19da9e86ebf22f3090288ef5e8378f0a7fec59a9541c32f11fd326",
+      "bytes": 2584,
+      "name": "Laporan Kerja Agen",
+      "description": "Laporan kerja tiap agen: catatan laporan, isi laporan (bab 1-5), dan referensi.",
+      "kind": "DOCUMENT",
+      "versionNo": 2,
+      "isPreset": false,
+      "contractKind": "agentWorkReport",
+      "preset": "datum-gsp-preset",
+      "language": "ID",
+      "restricted": false,
+      "releasedChecks": [],
+      "skeletonSha256": "0355fcea7c765d14d9dc88c5d064493005098ee6a3244ed27e3eba215bd2635f",
+      "slots": [
+        "record",
+        "content",
+        "references"
+      ],
+      "c40Fixes": 0,
+      "seedRef": "seed-studio.ts:1103-1163 CONTRACT_TEMPLATES / contractDerivedSpec",
+      "sources": [
+        {
+          "path": "packages/datum-studio/vendor/prisma/seed-studio.ts",
+          "sha256": "0620fe31bce6f12aa793273e7d876effec6fe091a7a0b6584eb1d8ea5eefbe4c"
+        },
+        {
+          "path": "packages/datum-studio/vendor/prisma/seed-studio-templates.ts",
+          "sha256": "65a09d8a55387abd762c9007eafbfc0c237e11cb2916d61a2ea862142febb78f"
+        }
+      ]
+    },
+    {
+      "slug": "datum-proposal-teknis",
+      "file": "datum-proposal-teknis.json",
+      "sha256": "b6a56a49721cfdb06091c045dd028f7d8d3dcdb8d77bdca2acc96fb85aec39ba",
+      "bytes": 6345,
+      "name": "Proposal Teknis (DATUM Rev A)",
+      "description": "Dokumen Proposal Teknis GSP mengikuti Manual DATUM Rev A (kode PT, tier bawaan SERAH).",
+      "kind": "DOCUMENT",
+      "versionNo": 2,
+      "isPreset": false,
+      "contractKind": null,
+      "preset": "datum-gsp-rev-a-preset",
+      "language": "ID",
+      "restricted": false,
+      "releasedChecks": [],
+      "skeletonSha256": "96659cbc77831cf3027156d0080b33969dccd797e037f11cfe9f3094caf4eb45",
+      "slots": [
+        "cover",
+        "controlSheet",
+        "signature",
+        "toc",
+        "content",
+        "references",
+        "appendices"
+      ],
+      "c40Fixes": 1,
+      "seedRef": "seed-doc-type-templates.ts:212-236 composeSpec",
+      "sources": [
+        {
+          "path": "packages/datum-studio/vendor/prisma/seed-doc-type-templates.ts",
+          "sha256": "438189a2d6d9c4be437763ac2e2f1dea293145d7979fed974c8e1b47fa3eded7"
+        },
+        {
+          "path": "packages/datum-studio/vendor/prisma/seed-studio-templates.ts",
+          "sha256": "65a09d8a55387abd762c9007eafbfc0c237e11cb2916d61a2ea862142febb78f"
+        }
+      ]
+    },
+    {
+      "slug": "datum-proposal-teknis-en",
+      "file": "datum-proposal-teknis-en.json",
+      "sha256": "0c8458ce09f3ff1833eca32a990eae46b65acf0fa35648fbbb18e268519bf9bd",
+      "bytes": 6577,
+      "name": "Technical Proposal (DATUM Rev A, EN)",
+      "description": "GSP Technical Proposal following the DATUM Manual Rev A (type code PT, default tier SERAH).",
+      "kind": "DOCUMENT",
+      "versionNo": 2,
+      "isPreset": false,
+      "contractKind": null,
+      "preset": "datum-gsp-rev-a-preset",
+      "language": "EN",
+      "restricted": false,
+      "releasedChecks": [],
+      "skeletonSha256": "d91a3e5340ba5dee85a44f5eb914e52ad67f07080696a9b06e6a83ed4d74028d",
+      "slots": [
+        "cover",
+        "controlSheet",
+        "signature",
+        "toc",
+        "content",
+        "references",
+        "appendices"
+      ],
+      "c40Fixes": 2,
+      "seedRef": "seed-doc-type-templates.ts:212-236 composeSpec",
+      "sources": [
+        {
+          "path": "packages/datum-studio/vendor/prisma/seed-doc-type-templates.ts",
+          "sha256": "438189a2d6d9c4be437763ac2e2f1dea293145d7979fed974c8e1b47fa3eded7"
+        },
+        {
+          "path": "packages/datum-studio/vendor/prisma/seed-studio-templates.ts",
+          "sha256": "65a09d8a55387abd762c9007eafbfc0c237e11cb2916d61a2ea862142febb78f"
+        }
+      ]
+    },
+    {
+      "slug": "datum-laporan",
+      "file": "datum-laporan.json",
+      "sha256": "b008e8ccbea2c13045223b23b0535033e1c8ddc6cd6a4e05c92a495bb667861c",
+      "bytes": 6339,
+      "name": "Laporan (DATUM Rev A)",
+      "description": "Dokumen Laporan GSP mengikuti Manual DATUM Rev A (kode LAP, tier bawaan TERBIT).",
+      "kind": "DOCUMENT",
+      "versionNo": 2,
+      "isPreset": false,
+      "contractKind": null,
+      "preset": "datum-gsp-rev-a-preset",
+      "language": "ID",
+      "restricted": false,
+      "releasedChecks": [],
+      "skeletonSha256": "aade22d848f482a943131eba8d0eb388358f8955fd398e21c1600695c4ae1e10",
+      "slots": [
+        "cover",
+        "controlSheet",
+        "signature",
+        "toc",
+        "content",
+        "references",
+        "appendices"
+      ],
+      "c40Fixes": 1,
+      "seedRef": "seed-doc-type-templates.ts:212-236 composeSpec",
+      "sources": [
+        {
+          "path": "packages/datum-studio/vendor/prisma/seed-doc-type-templates.ts",
+          "sha256": "438189a2d6d9c4be437763ac2e2f1dea293145d7979fed974c8e1b47fa3eded7"
+        },
+        {
+          "path": "packages/datum-studio/vendor/prisma/seed-studio-templates.ts",
+          "sha256": "65a09d8a55387abd762c9007eafbfc0c237e11cb2916d61a2ea862142febb78f"
+        }
+      ]
+    },
+    {
+      "slug": "datum-laporan-en",
+      "file": "datum-laporan-en.json",
+      "sha256": "a07307c6eb069647dcd651fe00bd83a8521b6a76161bb43985fd53b551f3cde7",
+      "bytes": 6567,
+      "name": "Report (DATUM Rev A, EN)",
+      "description": "GSP Report following the DATUM Manual Rev A (type code LAP, default tier TERBIT).",
+      "kind": "DOCUMENT",
+      "versionNo": 2,
+      "isPreset": false,
+      "contractKind": null,
+      "preset": "datum-gsp-rev-a-preset",
+      "language": "EN",
+      "restricted": false,
+      "releasedChecks": [],
+      "skeletonSha256": "996e87e02c483025a5fc6094812c4b8b48c78776d65414bfcbf190aad7621053",
+      "slots": [
+        "cover",
+        "controlSheet",
+        "signature",
+        "toc",
+        "content",
+        "references",
+        "appendices"
+      ],
+      "c40Fixes": 2,
+      "seedRef": "seed-doc-type-templates.ts:212-236 composeSpec",
+      "sources": [
+        {
+          "path": "packages/datum-studio/vendor/prisma/seed-doc-type-templates.ts",
+          "sha256": "438189a2d6d9c4be437763ac2e2f1dea293145d7979fed974c8e1b47fa3eded7"
+        },
+        {
+          "path": "packages/datum-studio/vendor/prisma/seed-studio-templates.ts",
+          "sha256": "65a09d8a55387abd762c9007eafbfc0c237e11cb2916d61a2ea862142febb78f"
+        }
+      ]
+    },
+    {
+      "slug": "datum-laporan-verifikasi",
+      "file": "datum-laporan-verifikasi.json",
+      "sha256": "e81114f22df6bf32cf30fedbb2e178c3789204ef92afb23f8340eb885f64027a",
+      "bytes": 6350,
+      "name": "Laporan Verifikasi dan Uji (DATUM Rev A)",
+      "description": "Dokumen Laporan Verifikasi dan Uji GSP mengikuti Manual DATUM Rev A (kode VER, tier bawaan TERBIT).",
+      "kind": "DOCUMENT",
+      "versionNo": 2,
+      "isPreset": false,
+      "contractKind": null,
+      "preset": "datum-gsp-rev-a-preset",
+      "language": "ID",
+      "restricted": false,
+      "releasedChecks": [],
+      "skeletonSha256": "51b4f5a57a4050d2e743793629f2b9390ad6f8a0c59fcab8326221c800ed2b40",
+      "slots": [
+        "cover",
+        "controlSheet",
+        "signature",
+        "toc",
+        "content",
+        "references",
+        "appendices"
+      ],
+      "c40Fixes": 1,
+      "seedRef": "seed-doc-type-templates.ts:212-236 composeSpec",
+      "sources": [
+        {
+          "path": "packages/datum-studio/vendor/prisma/seed-doc-type-templates.ts",
+          "sha256": "438189a2d6d9c4be437763ac2e2f1dea293145d7979fed974c8e1b47fa3eded7"
+        },
+        {
+          "path": "packages/datum-studio/vendor/prisma/seed-studio-templates.ts",
+          "sha256": "65a09d8a55387abd762c9007eafbfc0c237e11cb2916d61a2ea862142febb78f"
+        }
+      ]
+    },
+    {
+      "slug": "datum-laporan-verifikasi-en",
+      "file": "datum-laporan-verifikasi-en.json",
+      "sha256": "722ca9dae334b55050d1c7efe1c49fddbf6876c934690cca2efbb9cb0fb94ea3",
+      "bytes": 6580,
+      "name": "Verification and Test Report (DATUM Rev A, EN)",
+      "description": "GSP Verification and Test Report following the DATUM Manual Rev A (type code VER, default tier TERBIT).",
+      "kind": "DOCUMENT",
+      "versionNo": 2,
+      "isPreset": false,
+      "contractKind": null,
+      "preset": "datum-gsp-rev-a-preset",
+      "language": "EN",
+      "restricted": false,
+      "releasedChecks": [],
+      "skeletonSha256": "dd907fd14f3af16abfc6f38a6b3034523a9c190083df124759f3057d05367c1f",
+      "slots": [
+        "cover",
+        "controlSheet",
+        "signature",
+        "toc",
+        "content",
+        "references",
+        "appendices"
+      ],
+      "c40Fixes": 2,
+      "seedRef": "seed-doc-type-templates.ts:212-236 composeSpec",
+      "sources": [
+        {
+          "path": "packages/datum-studio/vendor/prisma/seed-doc-type-templates.ts",
+          "sha256": "438189a2d6d9c4be437763ac2e2f1dea293145d7979fed974c8e1b47fa3eded7"
+        },
+        {
+          "path": "packages/datum-studio/vendor/prisma/seed-studio-templates.ts",
+          "sha256": "65a09d8a55387abd762c9007eafbfc0c237e11cb2916d61a2ea862142febb78f"
+        }
+      ]
+    },
+    {
+      "slug": "datum-standar",
+      "file": "datum-standar.json",
+      "sha256": "e00e0842c8179e596884c68690104b4d0ee34d7b803e42bb150ab9b9e3331dea",
+      "bytes": 6711,
+      "name": "Standar (DATUM Rev A)",
+      "description": "Dokumen Standar GSP mengikuti Manual DATUM Rev A (kode STD, tier bawaan TERBIT).",
+      "kind": "DOCUMENT",
+      "versionNo": 2,
+      "isPreset": false,
+      "contractKind": null,
+      "preset": "datum-gsp-rev-a-preset",
+      "language": "ID",
+      "restricted": false,
+      "releasedChecks": [],
+      "skeletonSha256": "f2ca94bc03aeba73f0724b645b9c1c7808d22f536218379cee0b92acc1e3f93b",
+      "slots": [
+        "cover",
+        "controlSheet",
+        "signature",
+        "toc",
+        "content",
+        "references",
+        "ruleIndex",
+        "appendices"
+      ],
+      "c40Fixes": 1,
+      "seedRef": "seed-doc-type-templates.ts:212-236 composeSpec",
+      "sources": [
+        {
+          "path": "packages/datum-studio/vendor/prisma/seed-doc-type-templates.ts",
+          "sha256": "438189a2d6d9c4be437763ac2e2f1dea293145d7979fed974c8e1b47fa3eded7"
+        },
+        {
+          "path": "packages/datum-studio/vendor/prisma/seed-studio-templates.ts",
+          "sha256": "65a09d8a55387abd762c9007eafbfc0c237e11cb2916d61a2ea862142febb78f"
+        }
+      ]
+    },
+    {
+      "slug": "datum-standar-en",
+      "file": "datum-standar-en.json",
+      "sha256": "186aaa252ad802056b925855c29f66056874b3e0b696a0e702e314ee87f589b7",
+      "bytes": 6938,
+      "name": "Standard (DATUM Rev A, EN)",
+      "description": "GSP Standard following the DATUM Manual Rev A (type code STD, default tier TERBIT).",
+      "kind": "DOCUMENT",
+      "versionNo": 2,
+      "isPreset": false,
+      "contractKind": null,
+      "preset": "datum-gsp-rev-a-preset",
+      "language": "EN",
+      "restricted": false,
+      "releasedChecks": [],
+      "skeletonSha256": "497202a413a832105c3201b2a1fa076bd83772575b8e8e81e630ca77e1a5258a",
+      "slots": [
+        "cover",
+        "controlSheet",
+        "signature",
+        "toc",
+        "content",
+        "references",
+        "ruleIndex",
+        "appendices"
+      ],
+      "c40Fixes": 2,
+      "seedRef": "seed-doc-type-templates.ts:212-236 composeSpec",
+      "sources": [
+        {
+          "path": "packages/datum-studio/vendor/prisma/seed-doc-type-templates.ts",
+          "sha256": "438189a2d6d9c4be437763ac2e2f1dea293145d7979fed974c8e1b47fa3eded7"
+        },
+        {
+          "path": "packages/datum-studio/vendor/prisma/seed-studio-templates.ts",
+          "sha256": "65a09d8a55387abd762c9007eafbfc0c237e11cb2916d61a2ea862142febb78f"
+        }
+      ]
+    },
+    {
+      "slug": "datum-nota",
+      "file": "datum-nota.json",
+      "sha256": "ff956e124e5697d50d98d187f8c25eafe6f9b923f31bde6c0c34232fb504479c",
+      "bytes": 6430,
+      "name": "Nota Internal (DATUM Rev A)",
+      "description": "Dokumen Nota Internal GSP mengikuti Manual DATUM Rev A (kode NOT, tier bawaan NOTA).",
+      "kind": "DOCUMENT",
+      "versionNo": 2,
+      "isPreset": false,
+      "contractKind": null,
+      "preset": "datum-gsp-rev-a-preset",
+      "language": "ID",
+      "restricted": false,
+      "releasedChecks": [],
+      "skeletonSha256": "88ada4ebd20f9f39e917084f4d332eeea980a253d2849c6bce5f5e8ee987fd68",
+      "slots": [
+        "cover",
+        "controlSheet",
+        "signature",
+        "toc",
+        "content",
+        "references",
+        "appendices"
+      ],
+      "c40Fixes": 1,
+      "seedRef": "seed-doc-type-templates.ts:212-236 composeSpec",
+      "sources": [
+        {
+          "path": "packages/datum-studio/vendor/prisma/seed-doc-type-templates.ts",
+          "sha256": "438189a2d6d9c4be437763ac2e2f1dea293145d7979fed974c8e1b47fa3eded7"
+        },
+        {
+          "path": "packages/datum-studio/vendor/prisma/seed-studio-templates.ts",
+          "sha256": "65a09d8a55387abd762c9007eafbfc0c237e11cb2916d61a2ea862142febb78f"
+        }
+      ]
+    },
+    {
+      "slug": "datum-nota-en",
+      "file": "datum-nota-en.json",
+      "sha256": "08db948ae9552d4999c18c9f5b3036fd5a8e387bae3a4e513f2e3044953a8842",
+      "bytes": 6659,
+      "name": "Internal Note (DATUM Rev A, EN)",
+      "description": "GSP Internal Note following the DATUM Manual Rev A (type code NOT, default tier NOTA).",
+      "kind": "DOCUMENT",
+      "versionNo": 2,
+      "isPreset": false,
+      "contractKind": null,
+      "preset": "datum-gsp-rev-a-preset",
+      "language": "EN",
+      "restricted": false,
+      "releasedChecks": [],
+      "skeletonSha256": "c279486c07f35357eefd8bf2b6594dfc4912bd7dea679b23c1c612e4bdefee77",
+      "slots": [
+        "cover",
+        "controlSheet",
+        "signature",
+        "toc",
+        "content",
+        "references",
+        "appendices"
+      ],
+      "c40Fixes": 2,
+      "seedRef": "seed-doc-type-templates.ts:212-236 composeSpec",
+      "sources": [
+        {
+          "path": "packages/datum-studio/vendor/prisma/seed-doc-type-templates.ts",
+          "sha256": "438189a2d6d9c4be437763ac2e2f1dea293145d7979fed974c8e1b47fa3eded7"
+        },
+        {
+          "path": "packages/datum-studio/vendor/prisma/seed-studio-templates.ts",
+          "sha256": "65a09d8a55387abd762c9007eafbfc0c237e11cb2916d61a2ea862142febb78f"
+        }
+      ]
+    }
+  ]
+}

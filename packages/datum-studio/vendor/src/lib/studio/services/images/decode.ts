@@ -4,11 +4,17 @@
  * penjagaan: ukuran sebelum dekode -> dekode base64 ketat -> ukuran byte ->
  * sniff magic bytes (PNG/JPEG saja; SVG mentah dan format lain ditolak) ->
  * header (dimensi, tanpa dekompresi) -> batas piksel -> sha256.
+ *
+ * Swarm patch (1.2.6 row 50a, W-13): SEC-12 batas piksel dicek dari dimensi
+ * header (`peekRasterDims`) SEBELUM validasi struktur penuh dan pemindaian
+ * metadata; SEC-10 hasil rinci membawa `metadata {gps, exifTags, pngTextKeys}`
+ * (`readImageMetadata`, hanya laporan, byte tidak diubah).
  */
 import { STUDIO_MAX_ASSET_BYTES } from "../../contract/env";
 import { StudioEngineError } from "../../contract/errors";
 import { sha256Hex, storageLog } from "../storage";
-import { sniffRaster, type RasterHeader, type RasterMime } from "./sniff";
+import { readImageMetadata, type ImageMetadata } from "./metadata";
+import { peekRasterDims, sniffRaster, type RasterHeader, type RasterMime } from "./sniff";
 
 /** Sisi terpanjang yang diterima (piksel). Gambar figur 300 dpi A3 penuh = 4961 px. */
 export const IMAGE_MAX_SIDE_PX = 20000;
@@ -29,12 +35,28 @@ export interface DecodedImage {
 
 export interface DecodedImageDetail extends DecodedImage {
   header: RasterHeader;
+  /** SEC-10 (row 50a): metadata tertanam yang ikut ke DOCX/HTML apa adanya. */
+  metadata: ImageMetadata;
 }
 
 function reject(code: "SCHEMA_INVALID" | "ASSET_TOO_LARGE" | "ASSET_TYPE_UNSUPPORTED", message: string, details: Record<string, unknown>): never {
   // Galat masukan (4xx) dicatat warn tanpa isi berkas: hanya kode, alasan, angka.
   storageLog({ level: "warn", message: `image rejected: ${message}`, code: `IMAGE_${code}`, context: { module: IMAGE_SOURCE, ...details } });
   throw new StudioEngineError(code, message, details);
+}
+
+/** SEC-12 (row 50a): satu aturan batas piksel untuk tahap header dan tahap struktur. */
+function assertPixelLimits(widthPx: number, heightPx: number, stage: "header" | "parsed"): void {
+  if (widthPx > IMAGE_MAX_SIDE_PX || heightPx > IMAGE_MAX_SIDE_PX || widthPx * heightPx > IMAGE_MAX_PIXELS) {
+    reject("ASSET_TOO_LARGE", `image ${widthPx}x${heightPx} px exceeds pixel limits`, {
+      reason: "pixel_limit",
+      stage,
+      widthPx,
+      heightPx,
+      maxSidePx: IMAGE_MAX_SIDE_PX,
+      maxPixels: IMAGE_MAX_PIXELS,
+    });
+  }
 }
 
 const DATA_URI_RE = /^data:([a-z0-9.+-]+\/[a-z0-9.+-]+)((?:;[a-z0-9.+-]+=[^;,]*)*);base64,/i;
@@ -95,6 +117,10 @@ export function decodeImageDetailed(input: { base64?: string; bytes?: Uint8Array
     reject("ASSET_TOO_LARGE", `asset exceeds ${STUDIO_MAX_ASSET_BYTES} bytes`, { reason: "bytes_too_large", bytes: bytes.byteLength, limitBytes: STUDIO_MAX_ASSET_BYTES });
   }
 
+  // SEC-12: dimensi yang dinyatakan header ditolak sebelum parse penuh dan pemindaian metadata.
+  const declared = peekRasterDims(bytes);
+  if (declared) assertPixelLimits(declared.widthPx, declared.heightPx, "header");
+
   const sniff = sniffRaster(bytes);
   if (!sniff.ok) {
     const corrupt = sniff.kind === "png" || sniff.kind === "jpeg";
@@ -105,16 +131,9 @@ export function decodeImageDetailed(input: { base64?: string; bytes?: Uint8Array
     );
   }
   const h = sniff.header;
-  if (h.widthPx > IMAGE_MAX_SIDE_PX || h.heightPx > IMAGE_MAX_SIDE_PX || h.widthPx * h.heightPx > IMAGE_MAX_PIXELS) {
-    reject("ASSET_TOO_LARGE", `image ${h.widthPx}x${h.heightPx} px exceeds pixel limits`, {
-      reason: "pixel_limit",
-      widthPx: h.widthPx,
-      heightPx: h.heightPx,
-      maxSidePx: IMAGE_MAX_SIDE_PX,
-      maxPixels: IMAGE_MAX_PIXELS,
-    });
-  }
-  return { mime: h.mime, widthPx: h.widthPx, heightPx: h.heightPx, bytes, sha256: sha256Hex(bytes), header: h };
+  assertPixelLimits(h.widthPx, h.heightPx, "parsed");
+  const metadata = readImageMetadata(bytes, h.mime);
+  return { mime: h.mime, widthPx: h.widthPx, heightPx: h.heightPx, bytes, sha256: sha256Hex(bytes), header: h, metadata };
 }
 
 /**

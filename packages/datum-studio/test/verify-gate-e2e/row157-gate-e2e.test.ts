@@ -309,7 +309,7 @@ e2e("row 157: good render on the real bridge", () => {
     }
     expect(v.overall).toBe("verified")
     expect(v.layoutWitness).toBe(true)
-    expect(r._text).toContain("verification: VERIFIED (2/2 outputs verified)")
+    expect(r._text).toContain("verification: RENDER_VERIFIED(U24) (2/2 outputs verified)")
 
     // Page images: real PNGs made by real Electron (pagePng), one per printed page (<= 12), same files for HTML and PDF.
     const html = outOf(v, "HTML")

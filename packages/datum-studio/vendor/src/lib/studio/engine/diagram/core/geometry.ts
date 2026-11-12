@@ -20,6 +20,7 @@ import type { DiagramNode, DiagramSheet } from "../../../contract";
 import { StudioEngineError } from "../../../contract/errors";
 import { pyRound0, pyStr } from "./pyfmt";
 import { DIAGRAM_TOKENS, estTextPt, pt2mm, role, snap, snapCeil, snapFloor } from "./tokens";
+import { diamondTwoLineHeightMm } from "../fit/text";
 
 export { pyRound0, pt2mm, snap, snapCeil, snapFloor, estTextPt };
 
@@ -164,8 +165,26 @@ export function nodeSize(
   let units = 1 + padUnits;
   if (pyTruthy(nodeGet(n, "sub", undefined))) units += 1;
   if (pyTruthy(nodeGet(n, "tag", undefined))) units += 1;
-  const h = textUnitsHeightMm(units, L);
+  let h = textUnitsHeightMm(units, L);
+  if (n.shape === "diamond") h = diamondHeightMm(n, h, L);
   return [w, h];
+}
+
+/**
+ * Swarm 1.2.6 row 63 (T-07, register N-017): a diamond is DIAMOND_HEIGHT_FACTOR taller than the box of the
+ * same text (the literal `h * 1.25` that only the flow layouts applied), for every family through `nodeSize`.
+ */
+export const DIAMOND_HEIGHT_FACTOR = 1.25;
+
+/**
+ * Diamond height from the box height `h`: max(snap(h x DIAMOND_HEIGHT_FACTOR), the lattice-locked height in
+ * which a two-line label lies inside the diamond). Without the second term a graph diamond (pad 1, 9.5 mm)
+ * stays 9.5 mm because snap(11.9 mm) rounds half-even down to 2 baselines.
+ */
+export function diamondHeightMm(n: DiagramNode, h: number, L: Pick<Lattice, "y">): number {
+  const scaled = snap(h * DIAMOND_HEIGHT_FACTOR, L.y);
+  const twoLines = snapCeil(diamondTwoLineHeightMm(n), L.y);
+  return Math.max(h, scaled, twoLines);
 }
 
 /**

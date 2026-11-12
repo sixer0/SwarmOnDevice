@@ -1,6 +1,7 @@
 import { isOverPriceTarget, priceTarget } from "../../src/session/overflow"
 import { afterEach, describe, expect, mock, test } from "bun:test"
 import { ConfigV1 } from "@opencode-ai/core/v1/config/config"
+import { BASELINE_CONFIG } from "@opencode-ai/core/swarm-defaults"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
 import { Database } from "@opencode-ai/core/database/database"
 import { EventV2Bridge } from "@/event-v2-bridge"
@@ -657,6 +658,16 @@ describe("session.compaction price target", () => {
     expect(priceTarget({ cfg: { compaction: { max_context: 500_000 } }, model })).toBe(480_000)
     expect(priceTarget({ cfg: { compaction: { max_context: 0 } }, model })).toBeUndefined()
     expect(isOverPriceTarget({ cfg: { compaction: { auto: false } }, model, tokens: usage(900_000) })).toBe(false)
+  })
+
+  // CFG-03 / 01d T3e (U17): what the shipped compaction block does. max_context: 0 turns the
+  // price target off, so a paid 1M model and an undeclared (context 0) model both run to the
+  // full window. These pins flip if the shipped block ever drops max_context.
+  test("the shipped baseline compaction block turns the price target off", () => {
+    const cfg = { compaction: BASELINE_CONFIG.compaction } as ConfigV1.Info
+    expect(cfg.compaction).toEqual({ auto: true, max_context: 0 })
+    expect(priceTarget({ cfg, model: createModel({ ...big, cost: priced }) })).toBeUndefined()
+    expect(priceTarget({ cfg, model: createModel({ context: 0, output: 0 }) })).toBeUndefined()
   })
 })
 

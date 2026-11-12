@@ -150,12 +150,12 @@ describe("row 67: sample and registry facts", () => {
       expect(lint.tier).toBe("TERBIT");
       expect(lint.releaseStatus).toBe("PASS");
       expect(n.FAIL).toBe(0);
-      // Studio's plain sample (no Swarm additions) fails D17, D18 and C-27 on the same template: the additions are needed.
+      // Studio's plain sample (no Swarm additions) fails D17 and D18 on the same template: the additions are needed.
       const plain = (await import("../../vendor/src/components/studio/template-preview/sample-document-v2")).sampleDocumentV2({ slug, tier: "TERBIT", slots: side.skeleton.skeleton.slots, language: "ID" });
       const out0 = await sampleMod.renderSample(side, plain, { tier: "TERBIT", formats: ["DOCX", "HTML"], timeoutMs: 60_000, correlationId: `a1-plain-${slug}` });
       const fails0 = [...new Set(out0.render!.lint!.checks.filter((c) => c.status === "FAIL").map((c) => c.checkId))].sort();
       console.log(`row67: A1 ${slug} Studio plain sample FAIL ids: ${fails0.join(" ")}`);
-      expect(fails0).toEqual(["C-27", "D17", "D18"]);
+      expect(fails0).toEqual(["D17", "D18"]);
     }
   });
 
@@ -169,8 +169,8 @@ describe("row 67: sample and registry facts", () => {
       expect(c.S3).toBe(4);
       expect(c.S4).toBe(16);
     }
-    expect(count).toBe(103);
-    expect(registry.LINT_GROUP_COUNTS.C).toBe(19);
+    expect(count).toBe(103); // 103 before 1.2.5 (C-27 removed) -> 102; 1.2.6 row 72 adds D22 (T-18 figure quota) -> 103
+    expect(registry.LINT_GROUP_COUNTS.C).toBe(18); // 19 before 1.2.5
   });
 
   test("U.5: skillSha = sha of the shipped lint closure; every closure entry of vendor/provenance.json matches the file on disk", () => {

@@ -24,7 +24,7 @@ changes are written into the spec, never into the SVG (ID p.62).
 | Key | Mandatory content |
 |---|---|
 | `family` | one of the nine families (§2) |
-| `id`, `title` | chapter-prefixed number and a one-sentence caption |
+| `id`, `title` | chapter-prefixed number and a one-line caption without the label token (§7) |
 | `classification` | per the recipient's scheme (Chapter 3; `references/01`) |
 | `nodes[]` | id, label, class, `sub` quantity, provenance `mark`, requirement `tag` |
 | `edges[]` | `from`, `to`, `kind`, `label`: all four mandatory |
@@ -178,8 +178,13 @@ a vertical one, the horizontal hops; a run that would cross an unrelated box det
 
 ## 7 · Apparatus: the same as every figure (DT-15, ID p.41 / EN p.43)
 
-- **Caption above**: label in bold capitals with its number, `GAMBAR 4.1`, then one sentence, no
-  middle dot. Figure numbers are chapter-prefixed (Table 10.1 `id`).
+- **Caption above**: Studio prints the label; the caption never starts with it; at most 100
+  characters. Studio numbers the figure (chapter-prefixed, Table 10.1 `id`) and prints the bold
+  capital label itself, so the caption text carries no `Gambar`, `GAMBAR` or `Figure` token with
+  a number. It is one line: a verdict that names the actor and the number (`Kontraktor menanggung
+  62 % biaya kabel`), no middle dot. A caption that opens with the token is refused at submit
+  (400 `SCHEMA_INVALID` (`checkId` `CAPTION_TOKEN_DUPLICATE`): match the `checkId`, not the error
+  code); one that wraps to a second line fails the gate (`CAPTION_WRAP`).
 - **SOURCE line below**, opening `SUMBER`, naming the document and article the drawing was built
   from (`sources[]`), plus `PROVENANS` for any load-bearing quantity in it.
 - A topology taken from a vendor carries the Admiralty digraph on that claim (DT-25).
@@ -262,7 +267,7 @@ and the kajian? would a hostile reviewer read any line as asserting something no
 | 08-8 | §4 `cylinder` for stored data | Cylinders not used; long flows split in two | E-30, ID p.82 / EN p.85 | REMOVED |
 | 08-9 | §5 edge pattern table | Same six kinds, now with ISO 128-2 codes (Table 10.4) | ID p.67-68 / EN p.69-70 | KEPT (codes added) |
 | 08-10 | §6 "five colour values maximum, as everywhere else" | ≤ 5 hex besides the ground in a figure; page ≤ 2 meaning colours; no blue | DT-06, ID p.48, p.57, p.68 / EN p.50, p.70 | CHANGED |
-| 08-11 | §7 caption "GAMBAR 4.1 in condensed 600 uppercase, then one sentence ending in a full stop" | Bold capital label with number, sentence without middle dot | DT-15, ID p.41 / EN p.43 | CHANGED (wording) |
+| 08-11 | §7 caption "GAMBAR 4.1 in condensed 600 uppercase, then one sentence ending in a full stop" | Studio prints the bold capital label with number; the caption text carries no token, one line, at most 100 characters, no middle dot (§7) | DT-15, ID p.41 / EN p.43; Swarm 1.2.6 W-01 | CHANGED (wording) |
 | 08-12 | §8 edge annotations 6.2 pt Mono | Connector labels 6.2 pt Cond | Table A.2, ID p.90 / EN p.91 | CHANGED |
 | 08-13 | §8 minimum type 5.5 pt, no exemption | Reduced page or slide sample exemption | DT-11d, ID p.68 / EN p.70 | CHANGED |
 | 08-14 | §9 `.pptx` at 200 dpi; `figure()` helper in `datum_docx.py` | Studio PNG; 300 dpi per DT-36 test [Interpretation]; `datum_docx.py` not the Swarm route | DT-36, ID p.63 / EN p.66; D-C | CHANGED |

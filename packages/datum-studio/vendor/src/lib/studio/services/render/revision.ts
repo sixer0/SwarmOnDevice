@@ -121,7 +121,7 @@ async function runRevisionJob(
     job,
     tier: rev.document.tier as StudioTier,
     formats: fmts,
-    naming: { docNumber: rev.document.docNumber, rev: rev.docRev },
+    naming: { docNumber: rev.document.docNumber, rev: rev.docRev, revisionNo: rev.revisionNo }, // row 75 (M-05): ` rev<N>`
     registerLog: false, // createRenderJob sudah mendaftarkan log job
     assetLookup: async (sha) => {
       const row = await findAssetBySha(sha);

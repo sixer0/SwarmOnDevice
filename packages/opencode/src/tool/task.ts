@@ -16,7 +16,10 @@ import { Effect, Exit, Option, Schema, Scope } from "effect"
 import { EffectBridge } from "@/effect/bridge"
 import { RuntimeFlags } from "@/effect/runtime-flags"
 import { Database } from "@opencode-ai/core/database/database"
-import { SUBAGENT_STOPPED } from "@/permission/autonomy-texts"
+import { SUBAGENT_NO_RESULT, SUBAGENT_OUTPUT_MISSING, SUBAGENT_STOPPED } from "@/permission/autonomy-texts"
+import { InstanceState } from "@/effect/instance-state"
+import { existsSync } from "node:fs"
+import * as path from "path"
 import { MCP } from "@/mcp"
 import { RoleAlias } from "../agent/role-alias"
 
@@ -54,6 +57,10 @@ const BaseParameterFields = {
       "This should only be set if you mean to resume a previous task (you can pass a prior task_id and the task will continue the same subagent session as before instead of creating a fresh one)",
   }),
   command: Schema.optional(Schema.String).annotate({ description: "The command that triggered this task" }),
+  expected_outputs: Schema.optional(Schema.Array(Schema.String)).annotate({
+    description:
+      "Paths the subagent must produce (absolute, or relative to the session directory). After the run, any path that does not exist makes the task return SUBAGENT_OUTPUT_MISSING naming it.",
+  }),
 }
 
 const BaseParameters = Schema.Struct(BaseParameterFields)
@@ -85,7 +92,45 @@ export function renderTaskOutput(input: {
 
 // How autonomous mode words a subagent run it stopped (`autonomy-texts.ts`, which the permission service writes it with),
 // so the task call can tell the stop from a failure.
-export { SUBAGENT_STOPPED, subagentStoppedMessage } from "@/permission/autonomy-texts"
+export {
+  SUBAGENT_NO_RESULT,
+  SUBAGENT_OUTPUT_MISSING,
+  SUBAGENT_STOPPED,
+  subagentStoppedMessage,
+} from "@/permission/autonomy-texts"
+
+/** S-03b: the `expected_outputs` paths that do not exist, resolved against `root`. Existence only; content is never read. */
+export function missingOutputs(root: string, paths: readonly string[] | undefined) {
+  return (paths ?? []).filter((item) => !existsSync(path.isAbsolute(item) ? item : path.resolve(root, item)))
+}
+
+/** The task result when promised outputs are absent: SUBAGENT_OUTPUT_MISSING, the paths, the task_id and the answer. */
+export function subagentOutputMissingText(sessionID: SessionID, missing: readonly string[], answer?: string) {
+  return [
+    `${SUBAGENT_OUTPUT_MISSING} ${missing.join(", ")} (task_id: ${sessionID})`,
+    "The subagent finished but these promised paths do not exist. Do not treat this task as done: mark its row blocked with this note, or pass this task_id to continue it.",
+    answer ? `What the subagent answered:\n${answer}` : "The subagent left no answer.",
+  ].join("\n\n")
+}
+
+/** S-03a: why a subagent run ended without an answer (register N-102). */
+export type NoResultReason = "length" | "tool-calls" | "no-text" | "unfinished"
+
+const NO_RESULT_WHY: Record<NoResultReason, string> = {
+  length: "it hit the output token limit before writing an answer.",
+  "tool-calls": "its last step was a tool call and it never wrote a final answer.",
+  "no-text": "it finished without writing any text.",
+  unfinished: "its run ended before it finished.",
+}
+
+/** The task result for a subagent run with no answer: SUBAGENT_NO_RESULT, the reason and the task_id, never "". */
+export function subagentNoResultText(sessionID: SessionID, reason: NoResultReason, partial?: string) {
+  return [
+    `${SUBAGENT_NO_RESULT} ${reason} (task_id: ${sessionID}): ${NO_RESULT_WHY[reason]}`,
+    "Do not treat this task as done. Check what it was meant to produce, then pass this task_id to continue it or carry on another way.",
+    partial ? `What the subagent had so far:\n${partial}` : "The subagent left no partial result.",
+  ].join("\n\n")
+}
 
 /** What a subagent's last message amounts to as a task result. Also read when a restart lost the waiting task call. */
 export function taskOutcome(sessionID: SessionID, result: SessionV1.WithParts) {
@@ -115,11 +160,20 @@ export function taskOutcome(sessionID: SessionID, result: SessionV1.WithParts) {
     }
   }
   if (message) return { type: "failed" as const, message: `Subagent failed (task_id: ${sessionID}): ${message}` }
-  return {
-    type: "completed" as const,
-    text: result.parts.findLast((item) => item.type === "text")?.text ?? "",
-    finished: !!result.info.finish && !["tool-calls", "unknown"].includes(result.info.finish),
-  }
+  const last = result.parts.findLast((item) => item.type === "text" && item.text.trim() !== "")
+  const text = last?.type === "text" ? last.text : undefined
+  const finish = result.info.finish
+  const finished = !!finish && !["tool-calls", "unknown"].includes(finish)
+  if (finished && text !== undefined) return { type: "completed" as const, text }
+  // S-03a: no answer, or a run that stopped mid-way. The parent gets the reason, never an empty completed result.
+  const reason: NoResultReason = !finished
+    ? finish === "tool-calls"
+      ? "tool-calls"
+      : "unfinished"
+    : finish === "length"
+      ? "length"
+      : "no-text"
+  return { type: "empty" as const, reason, text: subagentNoResultText(sessionID, reason, text) }
 }
 
 export const TaskTool = Tool.define(
@@ -286,6 +340,8 @@ export const TaskTool = Tool.define(
 
       const ops = ctx.extra?.promptOps as TaskPromptOps
       if (!ops) return yield* Effect.fail(new Error("TaskTool requires promptOps in ctx.extra"))
+      // S-03b: captured here, so a background run checks `expected_outputs` against the same session directory.
+      const root = (yield* InstanceState.context).directory
 
       const runTask = Effect.fn("TaskTool.runTask")(function* () {
         const parts = yield* ops.resolvePromptParts(prefix + params.prompt)
@@ -302,7 +358,13 @@ export const TaskTool = Tool.define(
         })
         const outcome = taskOutcome(nextSession.id, result)
         if (outcome.type === "failed") return yield* Effect.fail(new Error(outcome.message))
-        return outcome.type === "unfinished" ? "" : outcome.text
+        if (outcome.type === "empty") return yield* Effect.fail(new Error(outcome.text))
+        if (outcome.type === "unfinished")
+          return yield* Effect.fail(new Error(subagentNoResultText(nextSession.id, "unfinished")))
+        const missing = missingOutputs(root, params.expected_outputs)
+        if (missing.length > 0)
+          return yield* Effect.fail(new Error(subagentOutputMissingText(nextSession.id, missing, outcome.text)))
+        return outcome.text
       })
 
       const inject = Effect.fn("TaskTool.injectBackgroundResult")(function* (

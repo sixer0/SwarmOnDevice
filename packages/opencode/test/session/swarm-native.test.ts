@@ -309,7 +309,10 @@ describe("SW-08, SW-09: the built-in swarm-workflow skill", () => {
     // Spec 191 §3.2 measured size, raised by row 195 (L55) from 7197 to 9101 B (+1904) for section 0 Resources.
     // Row 197 (L57, S194-01): +84 B to 9185 for "Swarm's autonomous mode setting (the person turns it on)".
     // Row 198 (L61, B2 + B5): general's tier "session model" -> "worker" (-7 B) and the Activity -> Agents line (+90 B).
-    expect(Buffer.byteLength(WORKFLOW)).toBe(9268)
+    // Row 102 (1.2.6, W-07/W-04/W-11/W-02): +902 B to 10170 for four working-norm bullets (sections 0, 2, 6).
+    // Row 103 (1.2.6, W-06/W-08/W-18): +829 B to 10999 (one bullet in section 2, line 100 rewritten plus one bullet in section 5).
+    // Fix row FX-10 (1.2.6, C19a): +158 B to 11157, section 6 states the shared figure-gate sentence.
+    expect(Buffer.byteLength(WORKFLOW)).toBe(11157)
   })
 })
 
@@ -341,11 +344,13 @@ describe("SW-10, SW-12, SW-15", () => {
     expect(resolved).toMatchObject({ type: "alias", name: "planner" })
   })
 
-  test("SW-15 built-in rules: <= 2100 B, no emoji, no Claude tool names, the spec's text", () => {
+  test("SW-15 built-in rules: <= 2300 B, no emoji, no Claude tool names, the spec's text", () => {
     // Row 195 (L55) raised the cap from 1500 to 2100 B (+600) for the three resource lines (1461 -> 2043 B).
-    expect(Buffer.byteLength(RULES)).toBeLessThanOrEqual(2100)
+    // Row 102a (1.2.6, W-15/W-17) raised the cap from 2100 to 2300 B (+200).
+    expect(Buffer.byteLength(RULES)).toBeLessThanOrEqual(2300)
     // Row 197 (L57, S194-01): 2043 -> 2060 B for "Swarm's autonomous mode setting (the person turns it on)"; cap kept.
-    expect(Buffer.byteLength(RULES)).toBe(2060)
+    // Row 102a (1.2.6, W-15/W-17): 2060 -> 2213 B for the metric corpus/filter rule and the bulk-write rule.
+    expect(Buffer.byteLength(RULES)).toBe(2213)
     expect(RULES).not.toMatch(/\p{Extended_Pictographic}/u)
     expect(RULES).not.toMatch(/Agent\(|Skill\(|subagent_type|CLAUDE|\.claude|master-controller|\/docs/)
     expect(RULES.startsWith("<swarm_rules>\n")).toBe(true)

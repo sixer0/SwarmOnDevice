@@ -96,7 +96,6 @@ const CONSENTED: Record<string, readonly [Verdict, string | undefined]> = {
   "bun run scripts/x.ts": [RUNS("not_routine"), undefined],
   "uv run tool.py": [RUNS("not_routine"), undefined],
   "node -r ./hook.js app.js": [RUNS("not_routine"), undefined],
-  "node --version": [RUNS("not_routine"), undefined],
   "git -c core.editor=vim commit -m x": [RUNS("not_routine"), undefined],
   "env GIT_EDITOR=vim git commit -m x": [RUNS("not_routine"), undefined],
   "git frob": [RUNS("not_routine"), undefined],
@@ -215,7 +214,9 @@ describe("F1b rule 3b: an interpreter or launcher with inline code or an unscree
 
   test("near miss: a module, a package script; F7: `node` and a screened inline script are not on the allowlist", async () => {
     await opens(["python3 -m pytest", "bun run build", "npm run build"])
-    await keeps(["node --version"])
+    // 1.2.6 row 36 (U12 R4, INTENT beyond the 01b 10.1 grep list): `node --version` is a diagnostic probe, class A
+    // protected_read in both layers, so it left the kept list (and the matrix above).
+    expect(AutonomyTable.classify(await sh("node --version"))).toMatchObject({ class: "A", category: "protected_read" })
     // Screened inline code with no flag is the decider's P `script` in 1.1.0, and keeps that under consent.
     const screened = await sh(`node -e "console.log(1)"`)
     expect(AutonomyTable.classify(screened)).toMatchObject({ class: "P", category: "script" })

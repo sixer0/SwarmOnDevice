@@ -74,6 +74,23 @@ const allowsToAsks = (ruleset: PermissionV1.Ruleset) =>
       : rule,
   )
 
+/**
+ * Ends `effect` (interrupting it) when the session's abort signal fires, failing with the signal's reason. An already
+ * aborted signal ends it at once. Without a signal the effect runs as it is.
+ */
+const untilAborted = <A, E, R>(effect: Effect.Effect<A, E, R>, signal: AbortSignal | undefined) =>
+  signal === undefined
+    ? effect
+    : Effect.raceFirst(
+        effect,
+        Effect.callback<never, unknown>((resume) => {
+          const stop = () => resume(Effect.fail(signal.reason ?? new Error("aborted")))
+          if (signal.aborted) return stop()
+          signal.addEventListener("abort", stop, { once: true })
+          return Effect.sync(() => signal.removeEventListener("abort", stop))
+        }).pipe(Effect.orDie),
+      )
+
 export const resolve = Effect.fn("SessionTools.resolve")(function* (input: {
   agent: Agent.Info
   model: Provider.Model
@@ -504,13 +521,17 @@ export const resolve = Effect.fn("SessionTools.resolve")(function* (input: {
           const result: Awaited<ReturnType<NonNullable<typeof execute>>> = yield* Effect.gen(function* () {
             // Rule 5 reads server, transport and origin from here; a tool without a known source counts as project.
             const mcp: MCP.Source | { origin: "project" } = entry.source ?? { origin: "project" }
-            yield* ctx.ask({
-              permission: key,
-              metadata: { mcp },
-              patterns: ["*"],
-              always: ["*"],
-              call: { tool: key, args },
-            })
+            // SEC-21 remainder (1.2.6 row 40): a stopped session ends the wait for an answer too, and the call never runs.
+            yield* untilAborted(
+              ctx.ask({
+                permission: key,
+                metadata: { mcp },
+                patterns: ["*"],
+                always: ["*"],
+                call: { tool: key, args },
+              }),
+              opts.abortSignal,
+            )
             return yield* Effect.promise(() => execute(args, opts))
           }).pipe(
             Effect.withSpan("Tool.execute", {

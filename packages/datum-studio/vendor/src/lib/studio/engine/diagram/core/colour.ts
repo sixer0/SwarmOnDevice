@@ -126,39 +126,67 @@ export function svgColourValues(svg: string): string[] {
  * (figure: caption ink700 + SUMBER ink400; KUNCI ink400 bila ada legenda).
  */
 export function diagramColourValues(spec: StudioDiagramV1, sheet: Sheet): string[] {
-  const used = new Set<string>();
+  return [...diagramColourSources(spec, sheet).keys()].sort();
+}
+
+/**
+ * Swarm 1.2.6 row 62 (T-06, register E-10): the same token model as `diagramColourValues`, keyed by
+ * hex value, with the spec sources that print each value (`edge.kind <kind>`, `mark <MARK>`,
+ * `class.accent`, `simbol <id>`, ...). Insertion order of the sources follows the emission order.
+ * Paper is removed. `diagramColourValues` is the sorted key list of this map.
+ */
+export function diagramColourSources(spec: StudioDiagramV1, sheet: Sheet): Map<string, string[]> {
+  const out = new Map<string, string[]>();
+  const addHex = (h: string, src: string): void => {
+    const k = h.toUpperCase();
+    const list = out.get(k);
+    if (!list) out.set(k, [src]);
+    else if (!list.includes(src)) list.push(src);
+  };
+  const add = (token: string, src: string): void => addHex(colourOf(token), src);
   if (sheet.lanes.length > 0) {
-    used.add("ink200");
-    used.add("ink400");
+    add("ink200", "garis lajur");
+    add("ink400", "nama lajur");
   }
-  if (sheet.lifelines.length > 0) used.add("ink200");
-  if ((spec.zones ?? []).length > 0) used.add("ink400");
-  for (const e of spec.edges ?? []) used.add(EDGE_KINDS[e.kind].colour);
+  if (sheet.lifelines.length > 0) add("ink200", "garis kehidupan");
+  if ((spec.zones ?? []).length > 0) add("ink400", "zona");
+  for (const e of spec.edges ?? []) add(EDGE_KINDS[e.kind].colour, `edge.kind ${e.kind}`);
   for (const nd of sheet.nodes.values()) {
     const n = nd.spec;
-    used.add(nodeStrokeToken(nd));
+    add(nodeStrokeToken(nd), "garis simpul");
     const c = n.class ?? {};
-    if (c.accent || c.secondary) used.add("ink400"); // pola arsiran 45/135
-    if ((n.shape ?? "box") === "shadowed") used.add("ink200");
-    used.add("ink900");
-    if (n.sub) used.add(role("source_line").colour ?? INK_TEXT);
-    if (n.mark) used.add(MARK_COLOUR_TOKENS[n.mark] ?? "signal"); // row 124 (CP-29): Tabel 7.1
-    if (n.tag) used.add("ink400");
+    if (c.accent) add("ink400", "arsiran class.accent"); // pola arsiran 45/135
+    if (c.secondary) add("ink400", "arsiran class.secondary");
+    if ((n.shape ?? "box") === "shadowed") add("ink200", "bayangan shadowed");
+    add("ink900", "label simpul");
+    if (n.sub) add(role("source_line").colour ?? INK_TEXT, "sub simpul");
+    if (n.mark) add(MARK_COLOUR_TOKENS[n.mark] ?? "signal", `mark ${n.mark}`); // row 124 (CP-29): Tabel 7.1
+    if (n.tag) add("ink400", "tag simpul");
   }
   const hasLegend = drawsSvgKeyRow(spec); // D-288: KEY SVG hanya bila halaman tidak mencetak KUNCI
   if ((spec.apparatus ?? "page") === "figure") {
-    used.add("ink700");
-    used.add("ink400");
+    add("ink700", "caption");
+    add("ink400", "SUMBER");
   }
-  if (hasLegend) used.add("ink400");
-  const hex = new Set<string>();
-  for (const t of used) hex.add(colourOf(t).toUpperCase());
+  if (hasLegend) add("ink400", "KUNCI");
   // Row 124 (CP-45): colours of the library symbols drawn on nodes (fill/stroke literals of the cell).
   for (const nd of sheet.nodes.values()) {
     const sid = nodeSymbolId(nd.spec);
     if (!sid) continue;
-    for (const m of symbolBody(sid).markup.matchAll(/(?:fill|stroke)="(#[0-9A-Fa-f]{6})"/g)) hex.add(m[1].toUpperCase());
+    for (const m of symbolBody(sid).markup.matchAll(/(?:fill|stroke)="(#[0-9A-Fa-f]{6})"/g)) addHex(m[1], `simbol ${sid}`);
   }
-  hex.delete(PAPER.toUpperCase());
-  return [...hex].sort();
+  out.delete(PAPER.toUpperCase());
+  return out;
+}
+
+/**
+ * Swarm 1.2.6 row 62 (T-06): the DATUM-25 detail — every counted value with its sources and the
+ * remaining allowance, e.g. `dihitung 6: #0F1A24 (edge.kind data, label simpul), ... — sisa −1`.
+ * `values` is the authoritative count (the SVG for build, the token model for estimate); a value the
+ * source model does not know is labelled `lain di SVG`. A negative remainder uses U+2212.
+ */
+export function colourCountDetail(values: readonly string[], sources: ReadonlyMap<string, readonly string[]>, limit: number): string {
+  const items = values.map((v) => `${v} (${(sources.get(v.toUpperCase()) ?? []).join(", ") || "lain di SVG"})`);
+  const rest = limit - values.length;
+  return `dihitung ${values.length}: ${items.join(", ")} — sisa ${rest < 0 ? `\u2212${-rest}` : String(rest)}`;
 }

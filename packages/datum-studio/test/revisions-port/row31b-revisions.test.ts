@@ -205,7 +205,8 @@ describe("row 31b: R14 / R16 over the real host server and store", () => {
     await step("reorder", { op: "reorder", order: [order[0], order[2], order[1], ...order.slice(3)] })
     // Moving the locked last slot (appendices) is refused by the compose rule (422), nothing written.
     await step("reorderLocked", { op: "reorder", order: [order[order.length - 1], ...order.slice(0, -1)] })
-    await step("templateVersion", { op: "templateVersion", versionNo: 1 })
+    // Row 213 (1.2.4): datum-gsp ships as v2, so a fresh store pins v2 only; the document already uses it.
+    await step("templateVersion", { op: "templateVersion", versionNo: 4 })
     await step("renumberChapters", { op: "renumberChapters", map: { "1": "9" } })
     // Every op reached the service: either a new revision or a service rule code, never the old 501.
     expect(Object.values(out).some((v) => v.includes("ROUTE_NOT_AVAILABLE") || v === "undefined")).toBe(false)
@@ -214,7 +215,7 @@ describe("row 31b: R14 / R16 over the real host server and store", () => {
     expect(out.reorderSame).toBe("SCHEMA_INVALID")
     expect(out.reorder).toMatch(/^rev \d+$/)
     expect(out.reorderLocked).toBe("SLOT_POSITION_LOCKED")
-    // datum-gsp has one pinned version: moving to version 1 is "no change" (400), not an error of the port.
+    // datum-gsp has one pinned version (v4, 1.2.6; v3 in 1.2.5): moving to it is "no change" (400), not an error of the port.
     expect(out.templateVersion).toBe("SCHEMA_INVALID")
     if (optional) {
       expect(out.omitSlot).toMatch(/^rev \d+$/)

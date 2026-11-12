@@ -125,7 +125,10 @@ export const MEASURE_SCRIPT = String.raw`(function (o) {
     });
   } else {
     var de = docEl;
-    push({ kind: 'document', xMm: 0, yMm: 0, widthMm: mm(scrollW(de)), heightMm: mm(scrollH(de)), colors: colourSetFor(docBody), overflow: scrollW(de) > clientW(de) + 1 });
+    // Swarm row 206 (1.2.3, P3): the flow layout width as laid out (layoutWidthPx = documentElement.clientWidth, what a
+    // classic scrollbar leaves), the viewport (innerWidth) and the sheet; DATUM-37 says NOT_RUN when the layout is
+    // narrower than the sheet, as the host's OVERLAP_CLIP says UNKNOWN FLOW_LAYOUT_UNMEASURABLE (overlap-clip.ts).
+    push({ kind: 'document', xMm: 0, yMm: 0, widthMm: mm(scrollW(de)), heightMm: mm(scrollH(de)), colors: colourSetFor(docBody), overflow: scrollW(de) > clientW(de) + 1, layoutWidthPx: clientW(de), viewportPx: Number(window.innerWidth) || 0, sheetWidthMm: o.pageWidthMm });
   }
 
   // 2. Luapan lembar (DATUM-37, pola check_page RL): terburuk per halaman+label+sumbu.

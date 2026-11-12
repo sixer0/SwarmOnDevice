@@ -1,6 +1,6 @@
 --- seed-export/datum-kanonik.json
 +++ templates/datum-kanonik.json
-@@ -13,6 +13,37 @@
+@@ -13,6 +13,38 @@
      "classification.level": "Terbatas",
      "layout.railMode": "auto"
    },
@@ -20,7 +20,8 @@
 +    "cover.title.maxWidthMm": 150,
 +    "controlSheet.subtitle.enabled": true,
 +    "controlSheet.signatures.fillRoles": true,
-+    "controlSheet.columns.form": "manual"
++    "controlSheet.columns.form": "manual",
++    "render.rail.reserveColumn": true
 +  },
 +  "roleFormats": {
 +    "wrapper.kicker": {

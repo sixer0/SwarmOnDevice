@@ -26,6 +26,7 @@ import {
   type ValidationIssue,
 } from "@/lib/studio/contract";
 import { StudioEngineError } from "@/lib/studio/contract/errors";
+import { normalizeControlSheetKeys } from "@/lib/studio/contract/schema/v2/verification-entry";
 import { ingestDocument, type IngestResultV2 } from "@/lib/studio/services/ingest";
 import { dryRunChapter, dryRunSlot, type SubmitDryRunResult } from "@/lib/studio/services/submit";
 import { validateRoleFormats } from "@/lib/studio/services/templates";
@@ -218,7 +219,9 @@ export async function validateV2Submission(
   draftRaw?: unknown,
 ): Promise<ValidateBody> {
   if (draftRaw !== undefined && schemaId !== "studio.doc/v2") return draftTemplateMisplaced();
-  const schemaIssues = validateV2(schemaId, spec, prefix);
+  // Row 207 (HB-2): same verificationChain key mapping / refusal as the R13 route, so the dry run agrees with the write.
+  const keyIssues = normalizeControlSheetKeys(spec, prefix).issues;
+  const schemaIssues = keyIssues.length > 0 ? keyIssues : validateV2(schemaId, spec, prefix);
   if (schemaIssues.length > 0) {
     apiLog({
       ...ctx,

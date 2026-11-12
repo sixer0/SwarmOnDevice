@@ -15,6 +15,7 @@ import type { InstanceContext } from "../../src/project/instance-context"
 import { readDeletion, SCRIPT_CHANGED_TEXT } from "../../src/tool/shell"
 import { SUBAGENT_STOPPED, subagentStoppedMessage } from "../../src/tool/task"
 import { tmpdir } from "../fixture/fixture"
+import { CREDENTIAL_CHANGE, DELETE_COMPOUND } from "./consented-literals"
 
 let fixture: Awaited<ReturnType<typeof tmpdir>>
 let dir: string
@@ -145,12 +146,9 @@ describe("M3: the register's texts have one source", () => {
     expect(AutonomyTexts.OUTSIDE_WRITE_TEXT).toBe(
       "This call did not run. Autonomous mode only reads outside the project folder. Copy the file into the project first (read it, then write the copy inside the project) and change the copy. The original stays as it is.",
     )
-    expect(AutonomyTexts.DELETE_COMPOUND_TEXT).toBe(
-      "This call did not run. In autonomous mode a deletion must be a command of its own (rm, rmdir, unlink or git rm with paths only), so Swarm can move the paths to the archive instead.",
-    )
-    expect(AutonomyTexts.CREDENTIAL_CHANGE_TEXT).toBe(
-      "This call did not run. Autonomous mode never adds or changes a remote, a credential or a git account.",
-    )
+    // 1.2.6 row 39 (P-01d, INTENT): both name the way on now; the words are pinned in consented-literals.ts.
+    expect(AutonomyTexts.DELETE_COMPOUND_TEXT).toBe(DELETE_COMPOUND)
+    expect(AutonomyTexts.CREDENTIAL_CHANGE_TEXT).toBe(CREDENTIAL_CHANGE.replace(" Continue the task without this step.", ""))
     expect(AutonomyTexts.SCRIPT_CHANGED_TEXT).toBe(
       "This call did not run. A script it runs changed after autonomous mode checked it, so what would run is not what was checked. Run the command again to have the script checked as it is now.",
     )
@@ -165,8 +163,9 @@ describe("M3: the register's texts have one source", () => {
     expect(subagentStoppedMessage).toBe(AutonomyTexts.subagentStoppedMessage)
     for (const [category, text] of Object.entries(AutonomyTexts.REFUSED_TEXT))
       expect([category, Permission.refusedByMode(category).message]).toEqual([category, text])
-    // Any other X, and a name only an object's prototype has, gets the general refusal.
-    for (const category of ["plan_mode", "app_state", "toString", undefined])
+    // An X with no category, and a name only an object's prototype has, gets the general refusal. 1.2.6 row 39 (P-01d,
+    // INTENT): plan_mode and app_state have their own texts now (REFUSED_TEXT, checked by the loop above).
+    for (const category of ["toString", "hasOwnProperty", undefined])
       expect(Permission.refusedByMode(category).message).toStartWith(
         "This call did not run. Autonomous mode never allows",
       )
@@ -191,7 +190,9 @@ describe("M4, M6: the register's names", () => {
     // The register's 21 held and 6 allowed names, as the review counted them, plus the 1.1.1 bypass register (S0.2):
     // six held (irreversible, admin_rights, outside_write_held, system_service, process_not_own, unreadable_command)
     // and one allowed (by_main_agent). Row 202: one held (protected_path) and one allowed (outside_edit).
-    expect(PermissionV1.DeferredCategory.literals).toHaveLength(28)
-    expect(PermissionV1.AllowedCategory.literals).toHaveLength(8)
+    // 1.2.6 row 36 (U6, U12; register N-073..N-075, INTENT 01g 3.6 :193): one held (checkpoint_failed) and two allowed
+    // (protected_read, checkpointed).
+    expect(PermissionV1.DeferredCategory.literals).toHaveLength(29)
+    expect(PermissionV1.AllowedCategory.literals).toHaveLength(10)
   })
 })

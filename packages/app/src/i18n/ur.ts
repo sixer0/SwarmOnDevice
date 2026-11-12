@@ -7,6 +7,7 @@ export const dict = {
   "desktop.menu.window": "ونڈو",
   "desktop.menu.help": "مدد",
   "desktop.menu.checkForUpdates": "اپ ڈیٹس کی جانچ کریں...",
+  "desktop.menu.recheckTools": "ٹولز دوبارہ چیک کریں",
   "desktop.menu.settings": "ترتیبات",
   "desktop.menu.reloadWebview": "ویب ویو دوبارہ لوڈ کریں",
   "desktop.menu.restart": "دوبارہ شروع کریں",
@@ -1412,7 +1413,10 @@ export const dict = {
   "memory.privacy": "اس آلے پر رکھی جاتی ہے، ریپوزٹری میں کبھی نہیں۔ ماڈل یہ نوٹ صرف اس سیشن کے حصے کے طور پر دیکھتا ہے جو آپ اس کے ساتھ چلاتے ہیں۔",
   "memory.off": "بند۔ سیشنز کو کوئی نوٹ نہیں ملتے اور کچھ نیا نہیں سیکھا جاتا۔ آپ کے نوٹ محفوظ ہیں۔",
   "memory.refused.secret": "یہ پاس ورڈ یا کلید جیسا لگتا ہے، اس لیے محفوظ نہیں کیا گیا۔",
-  "memory.refused.long": "نوٹ کو 400 حروف سے کم رکھیں۔",
+  "memory.refused.long":
+    "نوٹ کو {{max}} حروف سے کم رکھیں۔ لمبی تفصیل کسی فائل میں رکھیں اور ایجنٹ سے اسے لنک کرنے کو کہیں۔",
+  "memory.refused.bodyLong": "نوٹ کا متن {{max}} حروف سے کم رکھیں، یا اس کے بجائے کوئی فائل لنک کریں۔",
+  "memory.refused.tooManyRefs": "ایک نوٹ زیادہ سے زیادہ {{max}} فائلیں یا علامتیں لنک کر سکتا ہے۔",
   "memory.refused.full": "میموری بھر گئی ہے۔ پہلے کوئی نوٹ حذف کریں۔",
   "memory.error": "پروجیکٹ میموری لوڈ نہیں ہو سکی۔",
   "memory.retry": "دوبارہ کوشش کریں",
@@ -1437,4 +1441,5 @@ export const dict = {
   "session.movedOn.answer": "جواب دیں",
   "home.agents.movedOn": "اس کے بغیر جاری رکھا · {{time}}",
   "home.setup.attention": "آپ کے سیٹ اپ کے ایک حصے پر توجہ درکار ہے۔",
+  "session.map.decisions.category.protected_path": "محفوظ جگہ (کلیدیں، اسناد یا سسٹم فولڈرز)",
 }

@@ -11,7 +11,8 @@ import { check03, isQuantityPlusMinus, joinSegments } from '@/lib/studio/engine/
 import { lintStructure } from '@/lib/studio/engine/lint/structure';
 import { isNumericDataTable, isPureNumberCell } from '@/lib/studio/engine/lint/structure/checks-a';
 import { isWrongRightTable } from '@/lib/studio/engine/lint/structure/checks-d';
-import { lintLanguage } from '@/lib/studio/engine/lint/language';
+import { LANGUAGE_LINT_DEFS, lintLanguage } from '@/lib/studio/engine/lint/language';
+import { ALL_PARAMS } from '@/lib/studio/params';
 import { splitSentences } from '@/lib/studio/engine/lint/language/tokenize';
 import type { StudioDocV1, TableBlock } from '@/lib/studio/contract';
 import { canonicalTemplate, makeDoc, snapshotOf, statuses } from './fixtures';
@@ -140,7 +141,7 @@ describe('D05: tabel contoh salah/benar berjenis table tidak diaudit sebagai pro
   });
 });
 
-describe('C-27: penanda butir sebaris dan singkatan ref. bukan batas kalimat', () => {
+describe('Segmentasi kalimat: penanda butir sebaris dan singkatan ref. bukan batas kalimat', () => {
   it('enumerasi "1. ... 2. ..." menghasilkan kalimat butir, bukan kalimat satu kata', () => {
     expect(splitSentences('1. Setiap klaim menyebut kelas asalnya. 2. Setiap batasan ditutup instruksi.')).toEqual([
       '1. Setiap klaim menyebut kelas asalnya.',
@@ -156,15 +157,14 @@ describe('C-27: penanda butir sebaris dan singkatan ref. bukan batas kalimat', (
     expect(splitSentences('Edisi ini mengalahkan tabel edisi DATUM ref. 09 yang lebih lama.')).toHaveLength(1);
   });
 
-  it('rata-rata kata per kalimat: penanda butir tidak lagi menurunkan rata-rata', () => {
-    const text = '1. Setiap klaim beban keputusan menyebut kelas asalnya di badan teks dengan jelas sekali hari ini. 2. Setiap batasan dan ketidakpastian ditutup jalan keluar atau instruksi yang dapat dijalankan.';
-    const detail = lintLanguage(snapshotOf(makeDoc({ blocks: [{ type: 'paragraph', text }] })), KAN.params).find((i) => i.checkId === 'C-27')?.detail ?? '';
-    expect(detail).toContain('2 kalimat');
-  });
-
-  it('prosa yang memang pendek tetap FAIL koridor 18-32', () => {
-    const out = lintLanguage(snapshotOf(makeDoc({ blocks: [{ type: 'paragraph', text: 'Panel diuji. Hasil dicatat. Laporan dikirim.' }] })), KAN.params);
-    expect(statuses(out, 'C-27')).toEqual(['FAIL']);
+  it('C-27 dihapus (1.2.5): prosa berkalimat pendek tidak menghasilkan isu C-27, dan butirnya tidak ada', () => {
+    const text = 'Panel diuji. Hasil dicatat. Laporan dikirim.';
+    const out = lintLanguage(snapshotOf(makeDoc({ blocks: [{ type: 'paragraph', text }] })), KAN.params);
+    expect(out.some((i) => i.checkId === 'C-27')).toBe(false);
+    expect(out.some((i) => /wordsPerSentenceAvg/.test(i.detail))).toBe(false);
+    expect(Object.keys(KAN.params)).not.toContain('threshold.wordsPerSentenceAvg');
+    expect(LANGUAGE_LINT_DEFS.some((d) => d.id === 'C-27')).toBe(false);
+    expect(ALL_PARAMS.some((d) => d.key === 'threshold.wordsPerSentenceAvg' || d.id === 'P11-27')).toBe(false);
   });
 });
 

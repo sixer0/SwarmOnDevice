@@ -121,7 +121,8 @@ describe("row 66: guard seam and copy", () => {
     expect(r.template.origin).toBe("user");
     expect(r.guard.verdict).toBe("pass");
     expect(r.changedKeys).toBe(0);
-    const pin = versionRow("datum-gsp", 1);
+    // Row 213 (1.2.4): datum-gsp ships as v2 (row 174 content under its own number); the copy equals the latest pin.
+    const pin = versionRow("datum-gsp", latestNo("datum-gsp"));
     const v1 = versionRow(COPY, 1);
     for (const col of ["definition", "definition_sha256", "overrides", "resolved_params", "params_sha256", "role_formats", "section_plan", "assets", "skeleton", "skeleton_sha256"]) {
       expect([col, v1[col]]).toEqual([col, pin[col]]);
@@ -132,7 +133,7 @@ describe("row 66: guard seam and copy", () => {
     expect(String(v1.created_by)).toBe("agent:row66-test");
     // The guard saw the source as reference, and the lint tier is TERBIT (U.1 step 4).
     const g = guardCalls.at(-1)!;
-    expect(g.reference).toEqual({ slug: "datum-gsp", versionNo: 1, versionId: String(pin.id) });
+    expect(g.reference).toEqual({ slug: "datum-gsp", versionNo: Number(pin.version_no), versionId: String(pin.id) });
     expect(g.lintTier).toBe("TERBIT");
     // Resolution: same params as the source, same preset layer (rows 109 loadTemplateLayers).
     const src = await templates.resolveTemplate("datum-gsp");

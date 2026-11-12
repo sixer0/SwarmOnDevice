@@ -34,10 +34,12 @@ import {
   PROTECTED_PATH_TEXT,
   SPEND_STOPPED_TEXT,
   UNJUDGED_TEXT,
+  checkpointFailedText,
   mainAgentDeclined,
   subagentStoppedMessage,
 } from "../../src/permission/autonomy-texts"
 import { ScriptReader } from "../../src/permission/script-reader"
+import { APP_STATE, PLAN_MODE } from "./consented-literals"
 import { InstanceBootstrap } from "../../src/project/bootstrap"
 import { InstanceStore } from "../../src/project/instance-store"
 import { MessageID, PartID, type SessionID } from "../../src/session/schema"
@@ -52,7 +54,11 @@ import { expectNoManifestAbove } from "./install-fixture"
 // The oracle's texts (spec section 1 and section 2 "Agent answer"; T6 for the suffix).
 // ---------------------------------------------------------------------------------------------------------------------
 
-/** `RefusedByModeError` (index.ts, spec rows 12-13): copied here on purpose, so a change of the text fails this test. */
+/**
+ * `RefusedByModeError` (index.ts): copied here on purpose, so a change of the text fails this test. 1.2.6 row 39 (P-01d,
+ * INTENT f113-matrix.test.ts:696 per 01g 3.6): rows 12-13 and the gate's NEVER_OPENED plan_mode/app_state now get their
+ * own texts (`PLAN_MODE`, `APP_STATE` in consented-literals.ts); this text is left for an X with no category.
+ */
 const REFUSED_BY_MODE_TEXT =
   "This call did not run. Autonomous mode never allows this kind of call, whoever is asked. Do not try to get the same effect another way. Carry on with everything that does not depend on it, and list what was refused in your final message."
 const CREDENTIAL_CONSENTED = `${CREDENTIAL_CHANGE_TEXT} ${CONSENT_CONTINUE_SUFFIX}`
@@ -423,8 +429,21 @@ describe("1.1.3 matrix rows 1-23: categories", () => {
   it.instance("row 4 sensitive_file: runs / M", () =>
     both("row 4", { permission: "edit", patterns: ["package.json"], metadata: { filepath: "package.json" }, editClass: "sensitive" }, runs("sensitive_file")),
   )
-  it.instance("row 5 secret_file: runs / M", () =>
-    both("row 5", { permission: "read", patterns: [".env"], metadata: { filepath: ".env" } }, runs("secret_file")),
+  // 1.2.6 row 36 (U12, INTENT 01b 10.1 :426-427): a read of .env is no longer opened by the consent; it runs at the gate as
+  // protected_read (row 5b). The secret_file row keeps its meaning through the write of the same file.
+  it.instance("row 5 secret_file (the write of .env): runs / M", () =>
+    both("row 5", { permission: "edit", patterns: [".env"], metadata: { filepath: ".env" }, editClass: "secret" }, runs("secret_file")),
+  )
+  it.instance("row 5b protected_read (the read of .env): runs at the gate, no section, the main agent is never asked", () =>
+    Effect.gen(function* () {
+      const test = yield* TestInstance
+      populate(test.directory)
+      const call: Call = { permission: "read", patterns: [".env"], metadata: { filepath: ".env" } }
+      const want: Want = { answer: "ran", line: { class: "A", category: "protected_read", decision: "allow" }, sections: [] }
+      yield* check("row 5b (root)", call, want)
+      yield* check("row 5b (subagent)", call, want, { caller: "subagent" })
+      expect(stub.calls).toEqual([])
+    }),
   )
   it.instance("row 6 external_tool (a tool that says nothing about itself): runs / M", () =>
     both("row 6", { permission: "graft_find_code", patterns: ["*"], metadata: {} }, runs("external_tool")),
@@ -436,11 +455,11 @@ describe("1.1.3 matrix rows 1-23: categories", () => {
   it.instance("row 11 folder_not_trusted (the folder state unreadable): runs / M", () =>
     both("row 11", bash("bun test"), runs("folder_not_trusted"), realTableWith({ folder: undefined })),
   )
-  it.instance("row 12 plan_mode: refused (unchanged), RefusedByModeError text / F", () =>
-    refusedBoth("row 12", { permission: "edit", patterns: ["src/a.ts"], metadata: { filepath: "src/a.ts" }, editClass: "ordinary", plan: true }, answered(REFUSED_BY_MODE_TEXT, "X", "plan_mode", "F")),
+  it.instance("row 12 plan_mode: refused (unchanged), its own text (1.2.6 row 39) / F", () =>
+    refusedBoth("row 12", { permission: "edit", patterns: ["src/a.ts"], metadata: { filepath: "src/a.ts" }, editClass: "ordinary", plan: true }, answered(PLAN_MODE, "X", "plan_mode", "F")),
   )
-  it.instance("row 13 app_state: refused (unchanged), RefusedByModeError text / F", () =>
-    refusedBoth("row 13", { permission: "edit", patterns: ["state"], metadata: { filepath: path.join(Global.Path.state, "autonomy", "x.json") } }, answered(REFUSED_BY_MODE_TEXT, "X", "app_state", "F")),
+  it.instance("row 13 app_state: refused (unchanged), its own text (1.2.6 row 39) / F", () =>
+    refusedBoth("row 13", { permission: "edit", patterns: ["state"], metadata: { filepath: path.join(Global.Path.state, "autonomy", "x.json") } }, answered(APP_STATE, "X", "app_state", "F")),
   )
   it.instance("row 14 asks_every_time (a person's \"*\": \"ask\"): runs / M", () =>
     both("row 14", bash("ls -la", {}, { catchAll: true }), runs("asks_every_time")),
@@ -554,24 +573,26 @@ describe("1.1.3 matrix rows 24-39: destructive classes", () => {
         yield* refusedBoth(`row 33 ${command}`, bash(command), answered(IRREVERSIBLE_ARCHIVE_TEXT, "X", "irreversible", "Rd"))
     }),
   )
-  it.instance("row 34 SQL or migrate wipe, dropdb: archive redirect / Rd", () =>
+  // 1.2.6 row 37b (P-01b, INTENT per 01g 3.6): a database or a device is I-N, which no checkpoint of files can hold, so it
+  // is refused `checkpoint_failed` with its reason (section F). A migrate wipe run through a package runner stays.
+  it.instance("row 34 SQL or migrate wipe, dropdb: checkpoint_failed / F; a runner's migrate wipe: archive redirect / Rd", () =>
     Effect.gen(function* () {
-      for (const command of ["psql -c 'DROP TABLE users'", "dropdb app", "bunx prisma migrate reset --force"])
-        yield* refusedBoth(`row 34 ${command}`, bash(command), answered(IRREVERSIBLE_ARCHIVE_TEXT, "X", "irreversible", "Rd"))
+      for (const command of ["psql -c 'DROP TABLE users'", "dropdb app"])
+        yield* refusedBoth(`row 34 ${command}`, bash(command), answered(checkpointFailedText("not_files"), "X", "checkpoint_failed", "F"))
+      yield* refusedBoth(
+        "row 34 bunx prisma migrate reset --force",
+        bash("bunx prisma migrate reset --force"),
+        answered(IRREVERSIBLE_ARCHIVE_TEXT, "X", "irreversible", "Rd"),
+      )
     }),
   )
-  it.instance("row 35 disk or host wipe: archive redirect / Rd", () =>
+  // 1.2.6 row 37b (INTENT per 01g 3.6): a disk wipe is I-N (`checkpoint_failed`, section F); host control and a file
+  // shred with Undo on keep the remote-or-host text.
+  it.instance("row 35 disk wipe: checkpoint_failed / F; host control and shred: archive redirect / Rd", () =>
     Effect.gen(function* () {
-      for (const command of [
-        "dd if=/dev/zero of=x.img",
-        "mkfs.ext4 /dev/disk9",
-        "shred src/a.ts",
-        "wipefs -a /dev/disk9",
-        "diskutil eraseDisk APFS X disk9",
-        "shutdown -h now",
-        "reboot",
-        "halt",
-      ])
+      for (const command of ["dd if=/dev/zero of=x.img", "mkfs.ext4 /dev/disk9", "wipefs -a /dev/disk9", "diskutil eraseDisk APFS X disk9"])
+        yield* refusedBoth(`row 35 ${command}`, bash(command), answered(checkpointFailedText("not_files"), "X", "checkpoint_failed", "F"))
+      for (const command of ["shred src/a.ts", "shutdown -h now", "reboot", "halt"])
         yield* refusedBoth(`row 35 ${command}`, bash(command), answered(IRREVERSIBLE_ARCHIVE_TEXT, "X", "irreversible", "Rd"))
     }),
   )
@@ -694,8 +715,9 @@ const NEVER_OPENED: Readonly<Record<string, readonly [string, Section]>> = {
   outside_write: [OUTSIDE_WRITE_TEXT, "F"],
   // Row 202: a secret or system place outside the project, refused with or without consent.
   protected_path: [PROTECTED_PATH_TEXT, "F"],
-  plan_mode: [REFUSED_BY_MODE_TEXT, "F"],
-  app_state: [REFUSED_BY_MODE_TEXT, "F"],
+  // 1.2.6 row 39 (P-01d, INTENT): their own texts, not the general refusal.
+  plan_mode: [PLAN_MODE, "F"],
+  app_state: [APP_STATE, "F"],
 }
 
 /**

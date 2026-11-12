@@ -11,24 +11,30 @@ Row 49b (C106, manual DT-28d) changed scripts/datum_docx.py (2 classification ru
 skillSha (sha256 of the bundled SKILL.md, the runtime-manifest field; row 117b, C46 ruling 5):
 
 ```
-0270ab8118b109bd9d5fc7218fe7f84a4b93e25b532d41e496771265a055c895  SKILL.md
+c65617be29c969260db2cd8f5ed73a410e125396201c1e93566b4181d54e424a  SKILL.md
 ```
 
 Row 156 (C130, decision U24) added the "Output verification" bullets to SKILL.md section 15 (verbatim from masterplan/01_specs_output_verification.md section 8); only SKILL.md changed, file counts are unchanged.
+
+Patch 1.2.3 row 206 added the per-check findings format to step 2 of the output loop in SKILL.md section 15 (4 lines); only SKILL.md changed.
+
+Patch 1.2.6 row 101 (item W-01, re-hashed by row 111 under G-02) changed the figure-caption rule in SKILL.md and references/08-skema-diagram.md: Studio prints the GAMBAR label, the caption never starts with it and stays within 100 characters. Only those two files changed; file counts are unchanged.
+
+Patch 1.2.6 fix row FX-10 (review wave F, gate 04 F5/F8/F11) changed SKILL.md (caption refusal named 400 SCHEMA_INVALID with checkId CAPTION_TOKEN_DUPLICATE; file-name example rev11/rev12 instead of a project's revision numbers), references/03-tabel-gambar-apparatus.md (§1.1 and §9.5: Studio prints the TABEL/GAMBAR label, the caption text never starts with it; 03-3 row updated) and references/08-skema-diagram.md (refusal code). Only those three files changed; file counts are unchanged.
 
 ## 1. Base files that differ from the row 4 inventory (16)
 
 | File | Old sha256 (row 4 / v1.7) | New sha256 | Row |
 |---|---|---|---|
-| SKILL.md | 1629b407fe68dc7a9cf96c41d7b1a9466ec71cf4ea6178e27c542698cf6add7b | 0270ab8118b109bd9d5fc7218fe7f84a4b93e25b532d41e496771265a055c895 | 117, 117b, 156 (C130, final) |
+| SKILL.md | 1629b407fe68dc7a9cf96c41d7b1a9466ec71cf4ea6178e27c542698cf6add7b | c65617be29c969260db2cd8f5ed73a410e125396201c1e93566b4181d54e424a | 117, 117b, 156 (C130), 1.2.3 row 206 (findings format), 1.2.6 row 101/111 (W-01 caption rule), 1.2.6 FX-10 (refusal code, neutral rev example; final) |
 | references/01-kepatuhan-klasifikasi.md | 7f6be78d442bd8c689fb141be3a0ab20afbdecf48ef638c60acd9e788bae58f9 | fe5fdcbc4dd42a38e4d481460b8b8b522b57dd13682a48b6cdfa63cff123b518 | 117 |
 | references/02-grid-tipografi.md | bf7f7dcea718860c6b9adaaad355340a99f076e3090f39decca0d0b2da3045a1 | 93a9a5575407125147566635148249b8340c23f29d76e622578d237296def62c | 117, 117b (final) |
-| references/03-tabel-gambar-apparatus.md | 069065cf5c97fb0935fc5d219b154fbd9fe6d571d56d2bae962ed70a24934f32 | 5401d711fa578065388bc07b291637a787c0e578bd5214afaee334e047e1c6ff | 117, 117b (final) |
+| references/03-tabel-gambar-apparatus.md | 069065cf5c97fb0935fc5d219b154fbd9fe6d571d56d2bae962ed70a24934f32 | e969bc92f0bae9c2ac0d743023b3830afe73115024b83fb637d86df270e4e5b4 | 117, 117b, 1.2.6 FX-10 (caption rule §1.1 and §9.5; final) |
 | references/04-workbook.md | 5355fe05974391c76dc45a38200c694946a0ce07ee35f16ac46ff3be6de9a73a | a2b05c89fb13c4ff2938e56f911a9aa614f699deeadb631c5687f60e105d5fd3 | 117 |
 | references/05-command-brief.md | 951a27ae7af5ee6520f76a9fada21ef2e0729e8893c658aa7749a52c314d9414 | ad789f2917208a68c4f25b672fba8880ad98c46d8107f671b29fa18dc43a8367 | 117, 117b (final) |
 | references/06-lint.md | 5f0f649772a1b864d56770d30efa4df0b3abd087cacb6ad0cc713a9b117ba7d8 | d9b796a31bd117331dde4d5817e8df5d022c1f5f4bb756724947cddfbf7f7319 | 117 |
 | references/07-ekosistem-routing.md | d475d43d1440f64d5d16ffd85a0cadd5ecf7dc0f9f5a241fef83c6f644c672ce | c39fd7e0336e05c89f99d6a25bda8b68b7006fdf8780405ce786e50925b252e5 | 117 |
-| references/08-skema-diagram.md | bf76d02217faded7c97947ff1643adcb5ab6e2fc26de282176d2aaeca5d7cdfa | 17bcbad42b0e0f429fd0d63b3ffd5ac2f5e75af65b4afa465b1dcfcd34c92cdd | 117 |
+| references/08-skema-diagram.md | bf76d02217faded7c97947ff1643adcb5ab6e2fc26de282176d2aaeca5d7cdfa | 315cbd389493eced2bdf5979f21d415e4b0cc990235268781c4342e79f99d020 | 117, 1.2.6 row 101/111 (W-01 caption rule), 1.2.6 FX-10 (refusal code; final) |
 | references/09-simbol-standar.md | ae943e0d9ff29a5a69ccbbe181db0e9ecd7a416f1230de4059a0ee7676e711e9 | e435789c79278f6712041737b5131f6abb9574ea563e4d01b3c2d69a7e0edef7 | 117 |
 | scripts/datum_diagram.py | be8155fe88c35275c7f6f9ac548f2cae3691b88c79157bca0459840df2366a92 | 5adba0cdb441a9ddec6ac1fb791589a96c2b214cb1e6f0b20c0b7ec1297062cf | 48a (C103) |
 | scripts/datum_docx.py | 9871d5fd565e291fb0abc3144878166976279a6a9ebe3ce87866c9ec70d60365 | d7dd62b2b013db01a48cdce8691be4a8568c517e0cf44136d4a4dd03deacdb17 | 49b (C106) |

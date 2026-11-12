@@ -1,7 +1,8 @@
 /**
  * Aktivasi tata letak otomatis diagram (FIG-02b, pola FIG-02a `chart/core/autofit.ts`).
  *
- * 1. Render pertama dilint (`fit/lint.ts`). Skor 0 -> dikembalikan apa adanya (byte-identik).
+ * 1. Render pertama dilint (`fit/lint.ts`). Skor 0 -> dikembalikan apa adanya (byte-identik); cacat T-03
+ *    (di luar skor) tetap dilaporkan di `report.geometry` (Swarm 1.2.6 row FX-11).
  * 2. Ada cacat -> rakit ulang di dalam `withDiagramFit`. Hasilnya dipakai hanya bila skor lint
  *    lebih kecil; selain itu (atau bila rakitan ulang gagal) render pertama dipertahankan.
  * 3. Temuan dan catatan pembantu masuk `report.geometry` sebagai REPORT dengan `suggest`
@@ -23,6 +24,9 @@ const CHECK: Record<DiagramDefectKind, string> = {
   edgeCross: "GEOM_EDGE_CROSS",
   edgeCollinear: "GEOM_EDGE_COLLINEAR",
   edgeThroughNode: "GEOM_EDGE_NODE",
+  edgeEntryCollision: "GEOM_ENTRY_COLLISION",
+  stubSegment: "GEOM_STUB_SEGMENT",
+  arrowTangent: "GEOM_ARROW_TANGENT",
 };
 
 const WHAT: Record<DiagramDefectKind, string> = {
@@ -34,6 +38,9 @@ const WHAT: Record<DiagramDefectKind, string> = {
   edgeCross: "persilangan konektor",
   edgeCollinear: "segmen konektor berimpit",
   edgeThroughNode: "konektor menembus simpul",
+  edgeEntryCollision: "ujung konektor bertemu di satu titik sisi simpul",
+  stubSegment: "potongan konektor pendek yang tidak menuju apa pun",
+  arrowTangent: "kepala panah sejajar sisi simpul, bukan tegak lurus",
 };
 
 const SUGGEST: Record<DiagramDefectKind, string> = {
@@ -45,6 +52,9 @@ const SUGGEST: Record<DiagramDefectKind, string> = {
   edgeCross: "ubah urutan simpul dalam tingkat/kolom agar konektor tidak bersilang, atau pecah menjadi 2 diagram",
   edgeCollinear: "kurangi konektor yang berbagi jalur atau pecah menjadi 2 diagram (maks ~12 simpul per tingkat 166 mm)",
   edgeThroughNode: "ubah urutan simpul agar konektor tidak melewati simpul lain",
+  edgeEntryCollision: "kurangi konektor yang masuk ke sisi simpul yang sama atau pecah menjadi 2 diagram",
+  stubSegment: "pindahkan label tepi ke segmen terpanjang atau persingkat label tepi (maks ~20 karakter)",
+  arrowTangent: "ubah urutan simpul agar konektor masuk tegak lurus ke sisi simpul sasaran",
 };
 
 /** Isu REPORT per jenis cacat tersisa, dengan contoh teks dan `suggest`. */
@@ -82,7 +92,13 @@ const ROUTE_KINDS: readonly DiagramDefectKind[] = ["edgeCross", "edgeCollinear",
 /** Pilih render pertama atau rakitan ulang fit (lihat kepala berkas). */
 export function autoFitDiagram(first: DiagramSvgResult, rerender: () => DiagramSvgResult): DiagramSvgResult {
   const g0 = lintDiagramGeometry(first.svg);
-  if (g0.score === 0) return first;
+  if (g0.score === 0) {
+    // Swarm 1.2.6 row FX-11 (C21, S-115-1): the T-03 kinds are not in `score` (no re-layout, row 25 U3), so a
+    // render whose only defects are T-03 kinds takes this path. SVG and decision stay as they are; the kinds are
+    // still reported (GEOM_* REPORT), so the figure preview lists what the FIGURE_FIT gate fails.
+    if (g0.defects.length === 0) return first;
+    return { ...first, report: { ...first.report, geometry: [...(first.report.geometry ?? []), ...diagramGeometryIssues(g0)] } };
+  }
   const tried: string[] = [];
   let best: { res: DiagramSvgResult; g: DiagramGeomLint; state: DiagramFitState; label: string } | undefined;
   // FIG-02b2: tiap kandidat dicoba dengan pembantu rute (urutan simpul, jalur, rute rak/sld; aktif

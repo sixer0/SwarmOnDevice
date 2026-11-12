@@ -12,7 +12,7 @@
  */
 import type { DiagramEdgeKind, FaceRole, ProvenanceMark } from "../../../contract";
 import { symbolBody } from "../../symbols";
-import { measure, tspanLines } from "../../chart/core/textfit";
+import { FONT_ASCENT_EM, FONT_DESCENT_EM, measure, tspanLines } from "../../chart/core/textfit";
 import { diagramFitActive } from "../fit/state";
 import { nodeTextLayout, type TextBlockLayout } from "../fit/text";
 import { type PyNumber, pyLen, pyNum, pyStr, pyStrNum } from "./pyfmt";
@@ -221,13 +221,192 @@ export const MARK_COLOUR_TOKENS: Readonly<Record<ProvenanceMark, string>> = {
   ASUMSI: "alert",
 };
 
+/**
+ * Swarm 1.2.6 row 61b (T-05 follow-up, finding F61-1): ink box of the provenance glyph for an anchor
+ * (text-anchor end x, baseline y), measured as the geometry lint measures text (Plex em box, 12 % shrink
+ * top and bottom), and the shortest distance from that box to an outline segment.
+ */
+const GLYPH_INK_SHRINK = 0.12; // = svgscan INK_SHRINK (geometry lint)
+type GlyphPt = readonly [number, number];
+
+function glyphInk(mark: ProvenanceMark | undefined): { w: number; asc: number; desc: number } {
+  const sizePt = role("register_block").size;
+  const sizeMm = pt2mm(sizePt);
+  const sh = (FONT_ASCENT_EM + FONT_DESCENT_EM) * sizeMm * GLYPH_INK_SHRINK;
+  const w = mark ? measure(MARKS[mark] ?? "", sizePt, "data") : 0;
+  return { w, asc: FONT_ASCENT_EM * sizeMm - sh, desc: FONT_DESCENT_EM * sizeMm - sh };
+}
+
+function pointSegDist(p: GlyphPt, a: GlyphPt, b: GlyphPt): number {
+  const dx = b[0] - a[0];
+  const dy = b[1] - a[1];
+  const L = dx * dx + dy * dy;
+  const t = L > 0 ? Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / L)) : 0;
+  return Math.hypot(p[0] - (a[0] + t * dx), p[1] - (a[1] + t * dy));
+}
+
+/** Distance from the axis-aligned box [x0, y0, x1, y1] to segment ab (0 when they touch). */
+function boxSegDist(b: readonly [number, number, number, number], a: GlyphPt, c: GlyphPt): number {
+  const inside = (p: GlyphPt) => p[0] >= b[0] && p[0] <= b[2] && p[1] >= b[1] && p[1] <= b[3];
+  if (inside(a) || inside(c)) return 0;
+  const corners: GlyphPt[] = [[b[0], b[1]], [b[2], b[1]], [b[2], b[3]], [b[0], b[3]]];
+  const cross = (p: GlyphPt, q: GlyphPt, r: GlyphPt) => (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0]);
+  let d = Infinity;
+  for (let i = 0; i < 4; i++) {
+    const p = corners[i];
+    const q = corners[(i + 1) % 4];
+    if (cross(p, q, a) * cross(p, q, c) < 0 && cross(a, c, p) * cross(a, c, q) < 0) return 0;
+    d = Math.min(d, pointSegDist(p, a, c), pointSegDist(a, p, q), pointSegDist(c, p, q));
+  }
+  return d;
+}
+
+/** Lower (front) half of the ellipse centred (cx, cy), radii rx, ry, as a polyline left to right. */
+function frontArc(cx: number, cy: number, rx: number, ry: number): GlyphPt[] {
+  const n = 48;
+  return Array.from({ length: n + 1 }, (_, i) => {
+    const t = Math.PI - (Math.PI * i) / n;
+    return [cx + rx * Math.cos(t), cy + ry * Math.sin(t)] as GlyphPt;
+  });
+}
+
+/**
+ * Swarm 1.2.6 row 61b (T-05 follow-up, finding F61-1, GEOM_TEXT_NODE): glyph anchor of a hexagon, cylinder,
+ * circle or bus node. The box anchor is kept whenever the glyph's ink already clears the outline (outline
+ * stroke half + 1.5 pt), so every output that was clean stays byte-identical; otherwise:
+ * - hexagon: inside, same baseline, moved left until the ink clears both right sides (perpendicular);
+ * - circle: inside, at the top right of the circle's own square (baseline = square top + caption size), moved
+ *   left until the ink's outer corners clear the rim; centred on the rim's centre line when the top is too tight;
+ * - cylinder: inside the body, at the right edge (box x), lowered until the ink clears the front rim of the top
+ *   ellipse; centred between the two rims when the body is too short for the full clearance;
+ * - bus: the rail is a line at mid-height, so the glyph rises until its ink clears the heavy rail.
+ */
+function curvedGlyphAnchor(
+  nd: Pick<SheetNode, "x" | "y" | "w" | "h" | "spec">,
+  shape: "hexagon" | "cylinder" | "circle" | "bus",
+  boxX: number,
+  boxY: number,
+  pad: number,
+  capMm: number,
+): { x: number; y: number } {
+  const { x, y, w, h } = nd;
+  if (!(w > 0 && h > 0)) return { x: boxX, y: boxY };
+  const ink = glyphInk(nd.spec.mark);
+  const half = (shape === "bus" ? STROKE_PRIMARY * 3 : STROKE_PRIMARY) / 2;
+  const need = pad + half;
+  const inkBox = (ax: number, ay: number) => [ax - ink.w, ay - ink.asc, ax, ay + ink.desc] as const;
+  const cx = x + w / 2;
+  const cy = y + h / 2;
+  const segs: [GlyphPt, GlyphPt][] = [];
+  const poly = (pts: GlyphPt[], closed: boolean) => {
+    for (let i = 0; i + 1 < pts.length; i++) segs.push([pts[i], pts[i + 1]]);
+    if (closed) segs.push([pts[pts.length - 1], pts[0]]);
+  };
+  const ry = h * 0.16; // as in shapeSvg
+  const r = Math.min(w, h) / 2;
+  const topRim = frontArc(cx, y + ry, w / 2, ry);
+  const botRim = frontArc(cx, y + h - ry, w / 2, ry);
+  if (shape === "hexagon") {
+    const k = w * 0.22;
+    poly([[x + k, y], [x + w - k, y], [x + w, cy], [x + w - k, y + h], [x + k, y + h], [x, cy]], true);
+  } else if (shape === "cylinder") {
+    poly(topRim, false);
+    poly(botRim, false);
+    segs.push([[x, y + ry], [x, y + h - ry]], [[x + w, y + ry], [x + w, y + h - ry]]);
+  } else if (shape === "bus") {
+    segs.push([[x, cy], [x + w, cy]]);
+  }
+  const clearance = (ax: number, ay: number) => {
+    const b = inkBox(ax, ay);
+    if (shape === "circle") {
+      const far = Math.max(...[[b[0], b[1]], [b[2], b[1]], [b[2], b[3]], [b[0], b[3]]].map(([px, py]) => Math.hypot(px - cx, py - cy)));
+      const near = Math.hypot(Math.max(b[0] - cx, 0, cx - b[2]), Math.max(b[1] - cy, 0, cy - b[3]));
+      return far <= r ? r - far : near >= r ? near - r : 0;
+    }
+    return Math.min(...segs.map(([a, c]) => boxSegDist(b, a, c)));
+  };
+  if (clearance(boxX, boxY) >= need) return { x: boxX, y: boxY };
+  if (shape === "bus") return { x: boxX, y: Math.min(boxY, cy - need - ink.desc) };
+  if (shape === "hexagon") {
+    const k = w * 0.22;
+    const off = (need * Math.hypot(h / 2, k)) / (h / 2);
+    const right = (yy: number) => x + w - (k * Math.abs(yy - cy)) / (h / 2) - off;
+    return { x: Math.min(boxX, right(boxY - ink.asc), right(boxY + ink.desc)), y: boxY };
+  }
+  if (shape === "circle") {
+    const rIn = r - need;
+    let ay = Math.max(boxY, cy - r + capMm);
+    let dy = Math.max(Math.abs(ay - ink.asc - cy), Math.abs(ay + ink.desc - cy));
+    if (dy > rIn) {
+      ay = cy + (ink.asc - ink.desc) / 2; // ink centred on the rim's centre line
+      dy = (ink.asc + ink.desc) / 2;
+    }
+    return { x: Math.min(boxX, cx + Math.sqrt(Math.max(0, rIn * rIn - dy * dy))), y: ay };
+  }
+  // cylinder: the ink top must clear every point of the top front rim by `need`, its bottom the bottom rim.
+  const x0 = boxX - ink.w;
+  const gap = (u: number) => Math.max(0, x0 - u, u - boxX);
+  let topMin = -Infinity;
+  for (const p of topRim) {
+    const dx = gap(p[0]);
+    if (dx < need) topMin = Math.max(topMin, p[1] + Math.sqrt(need * need - dx * dx));
+  }
+  let botMax = Infinity;
+  for (const p of botRim) {
+    const dx = gap(p[0]);
+    if (dx < need) botMax = Math.min(botMax, p[1] - Math.sqrt(need * need - dx * dx));
+  }
+  const lo = topMin + ink.asc;
+  const hi = botMax - ink.desc;
+  return { x: boxX, y: lo <= hi ? Math.max(boxY, lo) : (lo + hi) / 2 };
+}
+
+/**
+ * Swarm 1.2.6 row 61 (T-05, rev 183/184 GEOM_TEXT_NODE): anchor (text-anchor="end" x, baseline y) of the
+ * provenance glyph. Every shape keeps the box anchor (right edge - 1.5 pt, top + caption size), except the two
+ * shapes whose top-right corner is cut by a slanted side, where the glyph's ink touched the outline:
+ * - parallelogram: the glyph stays inside and moves left by the slant at the glyph's bottom, plus the 1.5 pt
+ *   clearance measured perpendicular to the slanted side;
+ * - diamond: the glyph stays in the top-right corner of the box, outside the outline, and rises (never drops)
+ *   until its bottom-left corner clears the upper-right side by the same perpendicular 1.5 pt.
+ */
+export function markGlyphAnchor(nd: Pick<SheetNode, "x" | "y" | "w" | "h" | "spec">): { x: number; y: number } {
+  const pad = pt2mm(1.5);
+  const capMm = pt2mm(role("caption").size);
+  const boxX = nd.x + nd.w - pad;
+  const boxY = nd.y + capMm;
+  const shape = nd.spec.shape;
+  if (shape === "hexagon" || shape === "cylinder" || shape === "circle" || shape === "bus") {
+    return curvedGlyphAnchor(nd, shape, boxX, boxY, pad, capMm);
+  }
+  if (shape !== "parallelogram" && shape !== "diamond") return { x: boxX, y: boxY };
+  const { x, y, w, h } = nd;
+  if (!(w > 0 && h > 0)) return { x: boxX, y: boxY };
+  const sizeMm = pt2mm(role("register_block").size);
+  const descMm = FONT_DESCENT_EM * sizeMm;
+  if (shape === "parallelogram") {
+    // right side: (x + w, y) -> (x + w - k, y + h), k as in shapeSvg
+    const k = w * 0.18;
+    const t = Math.min(1, (capMm + descMm) / h);
+    return { x: boxX - k * t - pad * (Math.hypot(h, k) / h - 1), y: boxY };
+  }
+  // diamond, upper-right side: (x + w/2, y) -> (x + w, y + h/2), slope h / w
+  const mk = nd.spec.mark;
+  const glyphW = mk ? measure(MARKS[mk] ?? "", role("register_block").size, "data") : 0;
+  const left = boxX - glyphW;
+  const sideY = y + (h * Math.max(0, left - (x + w / 2))) / w;
+  const bottom = sideY - (pad * Math.hypot(w, h)) / w;
+  return { x: boxX, y: Math.min(boxY, bottom - descMm) };
+}
+
 /** Glif asal (mono; pitfall warisan: jangan tukar wajah). Row 124: warna per tanda (Tabel 7.1). */
 export function markGlyphSvg(nd: SheetNode): string {
   const mk = nd.spec.mark;
   const glyph = mk ? MARKS[mk] : "";
   const fill = colourOf(mk ? (MARK_COLOUR_TOKENS[mk] ?? "signal") : "signal");
+  const at = markGlyphAnchor(nd);
   return (
-    `<text x="${r2(nd.x + nd.w - pt2mm(1.5))}" y="${r2(nd.y + pt2mm(role("caption").size))}" ` +
+    `<text x="${r2(at.x)}" y="${r2(at.y)}" ` +
     `font-family="${escAttr(FACES.mono)}" font-size="${pyNum(pt2mm(role("register_block").size), 3)}" ` +
     `fill="${fill}" text-anchor="end">${escText(glyph)}</text>`
   );
@@ -434,7 +613,8 @@ export function nodeTextGroundSvg(
   }
   if (n.mark) {
     const glyph = MARKS[n.mark] ?? "";
-    lines.push({ x: nd.x + nd.w - pt2mm(1.5), y: nd.y + capMm, s: glyph, role: "register_block", anchor: "end", face: "data" });
+    const at = markGlyphAnchor(nd);
+    lines.push({ x: at.x, y: at.y, s: glyph, role: "register_block", anchor: "end", face: "data" });
   }
   if (n.tag) lines.push({ x: nd.x + pt2mm(1.5), y: nd.y + capMm, s: pyStr(n.tag), role: "table_header", anchor: "start" });
   const half = STROKE_PRIMARY / 2;

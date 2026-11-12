@@ -7,6 +7,7 @@ export const dict = {
   "desktop.menu.window": "Прозор",
   "desktop.menu.help": "Помоћ",
   "desktop.menu.checkForUpdates": "Проверите да ли постоје ажурирања...",
+  "desktop.menu.recheckTools": "Поново провери алатке",
   "desktop.menu.settings": "Подешавања",
   "desktop.menu.reloadWebview": "Поново учитај Webview",
   "desktop.menu.restart": "Поново покрените",
@@ -1404,7 +1405,10 @@ export const dict = {
   "memory.privacy": "Чува се на овом уређају, никада у репозиторијуму. Модел види ове белешке само као део сесије коју са њим покренете.",
   "memory.off": "Искључено. Сесије не добијају белешке и ништа ново се не учи. Ваше белешке су сачуване.",
   "memory.refused.secret": "Ово личи на лозинку или кључ, па није сачувано.",
-  "memory.refused.long": "Белешка мора имати мање од 400 знакова.",
+  "memory.refused.long":
+    "Белешка мора имати мање од {{max}} знакова. Дуже детаље ставите у датотеку и замолите агента да је повеже.",
+  "memory.refused.bodyLong": "Текст белешке мора имати мање од {{max}} знакова, или уместо тога повежите датотеку.",
+  "memory.refused.tooManyRefs": "Белешка може да повеже највише {{max}} датотека или симбола.",
   "memory.refused.full": "Меморија је пуна. Прво обришите белешку.",
   "memory.error": "Меморија пројекта није могла да се учита.",
   "memory.retry": "Покушај поново",
@@ -1429,4 +1433,5 @@ export const dict = {
   "session.movedOn.answer": "Одговори",
   "home.agents.movedOn": "Наставио је без овога · {{time}}",
   "home.setup.attention": "Део вашег подешавања захтева пажњу.",
+  "session.map.decisions.category.protected_path": "Заштићено место (кључеви, акредитиви или системске фасцикле)",
 }

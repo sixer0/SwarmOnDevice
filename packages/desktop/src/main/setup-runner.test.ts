@@ -7,6 +7,7 @@ import { PassThrough } from "node:stream"
 import {
   SETUP_COMPONENT_IDS,
   SETUP_ENV_ALLOW,
+  SETUP_START_IDS,
   SETUP_OUTPUT_MAX_BYTES,
   SETUP_STATE_MAX_BYTES,
   SETUP_STATE_VALUES,
@@ -19,7 +20,9 @@ import {
   resolveSetupHome,
   setupChildEnv,
   setupDir,
+  startArgs,
   supportsAppConsentMode,
+  supportsStartVerb,
   tickedIds,
 } from "./setup-runner"
 
@@ -477,5 +480,116 @@ describe("senior 5: main's log parser and the dialog's parser read the same line
       dialog,
     )
     expect(app.resultLine(stdout)).toBe(`RESULT ${main.result}`)
+  })
+})
+
+// 1.2.6 row 92b (TH-03, 01c 4.7 / 11.5): the start-only revive verb on the shared runner. Red class B at e363918a69.
+describe("row 92b: start(id) runs only `swarm-setup start <id>`", () => {
+  const HELP_START = HELP + "Usage:\n  swarm-setup start <runtime|searxng|firecrawl>  start an installed, stopped component\n"
+
+  test("argv is exactly [start, id] after one --help, for each startable id; RESULT is parsed", async () => {
+    expect([...SETUP_START_IDS]).toEqual(["runtime", "searxng", "firecrawl"])
+    for (const id of SETUP_START_IDS) {
+      const spawn = fakeSpawn([{ stdout: "RESULT OK\n" }], HELP_START)
+      const result = await runner(spawn).runner.start(id)
+      expect(spawn.calls.map((c) => c.args)).toEqual([["--help"], ["start", id]])
+      expect(spawn.calls.every((c) => c.binary === "/bundle/swarm-setup/swarm-setup")).toBe(true)
+      expect(spawn.calls[1]!.options).toMatchObject({ shell: false, stdio: ["ignore", "pipe", "pipe"], cwd: home })
+      expect(result).toMatchObject({ kind: "ran", exitCode: 0, args: ["start", id], result: "OK" })
+      expect(startArgs(id)).toEqual(["start", id])
+    }
+  })
+
+  test("a refusal token is returned as the RESULT, with the exit code", async () => {
+    const spawn = fakeSpawn([{ stdout: "RESULT START_CONTAINERS_MISSING\n", code: 3 }], HELP_START)
+    expect(await runner(spawn).runner.start("searxng")).toMatchObject({ kind: "ran", exitCode: 3, result: "START_CONTAINERS_MISSING" })
+  })
+
+  test("an older binary without the start verb is refused no_start_verb and sees no other verb", async () => {
+    const spawn = fakeSpawn([{ stdout: "RESULT OK\n" }], HELP_APP)
+    expect(await runner(spawn).runner.start("runtime")).toEqual({ kind: "refused", reason: "no_start_verb" })
+    expect(spawn.calls.map((c) => c.args)).toEqual([["--help"]])
+  })
+
+  test("a failing --help refuses no_start_verb and runs nothing else", async () => {
+    // --help exits 2 (the help reply is replaced by a scripted failure); a start must not follow.
+    const failed = fakeSpawn([{ code: 2 }])
+    const calls: string[][] = []
+    const spawn = ((binary: string, args: string[], options: Record<string, unknown>) => {
+      calls.push(args)
+      return failed.spawn(binary, args[0] === "--help" ? ["help-fails"] : args, options as never)
+    }) as unknown as typeof failed.spawn
+    expect(await runner({ spawn, calls: [] }).runner.start("firecrawl")).toEqual({ kind: "refused", reason: "no_start_verb" })
+    expect(calls).toEqual([["--help"]])
+  })
+
+  test("an id outside the start set is refused without any spawn", async () => {
+    for (const id of ["node", "graft", "render-bridge", "install", "searxng --force-recreate"]) {
+      const spawn = fakeSpawn([], HELP_START)
+      const result = await runner(spawn).runner.start(id as (typeof SETUP_START_IDS)[number])
+      expect(result).toEqual({ kind: "refused", reason: "unknown_component", ids: [id] })
+      expect(spawn.calls).toEqual([])
+    }
+  })
+
+  test("start shares the one-run lock: busy during an install, and an install is busy during a start", async () => {
+    const spawn = fakeSpawn([{ stdout: "RESULT OK\n" }, { stdout: "RESULT OK\n" }], HELP_START)
+    const { runner: r } = runner(spawn)
+    const install = r.install(["node"])
+    expect(await r.start("searxng")).toEqual({ kind: "refused", reason: "busy" })
+    await install
+    const start = r.start("searxng")
+    expect(r.busy()).toBe(true)
+    expect(await r.install(["node"])).toEqual({ kind: "refused", reason: "busy" })
+    expect((await start).kind).toBe("ran")
+    expect(spawn.calls.filter((c) => c.args[0] === "start").map((c) => c.args)).toEqual([["start", "searxng"]])
+  })
+
+  test("uid 0 is refused before any spawn", async () => {
+    const spawn = fakeSpawn([], HELP_START)
+    expect(await runner(spawn, { getuid: () => 0 }).runner.start("runtime")).toEqual({ kind: "refused", reason: "root" })
+    expect(spawn.calls).toEqual([])
+  })
+
+  test("the usage text is read once per runner (install and start share it)", async () => {
+    const spawn = fakeSpawn([{ stdout: "RESULT OK\n" }, { stdout: "RESULT OK\n" }, { stdout: "RESULT OK\n" }], HELP_START)
+    const { runner: r } = runner(spawn)
+    await r.install(["node"])
+    await r.start("runtime")
+    await r.start("searxng")
+    expect(spawn.calls.filter((c) => c.args[0] === "--help")).toHaveLength(1)
+  })
+
+  test("drift: the id set and the usage line match packages/setup", async () => {
+    const start = await import("../../../setup/src/estate/start")
+    expect([...SETUP_START_IDS]).toEqual([...start.STARTABLE_COMPONENTS])
+    const setup = await import("../../../setup/src/index")
+    expect(supportsStartVerb(setup.usageText())).toBe(true)
+    expect(supportsStartVerb(setup.usageText("fixture"))).toBe(true)
+    expect(supportsStartVerb(HELP_APP)).toBe(false)
+  })
+
+  test("real process: a stand-in binary sees exactly `start <id>` with no terminal on stdin", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "setup-bundle-start-"))
+    try {
+      const report = join(dir, "report")
+      writeFileSync(
+        join(dir, "swarm-setup"),
+        [
+          "#!/bin/sh",
+          '[ "$1" = "--help" ] && { echo "Usage:"; echo "  swarm-setup start <runtime|searxng|firecrawl>  start"; exit 0; }',
+          `{ for a in "$@"; do printf '%s\\n' "$a"; done; if [ -t 0 ]; then echo tty; else echo notty; fi; } > "${report}"`,
+          'echo "RESULT RUNTIME_PROFILE_MISSING"',
+          "exit 1",
+        ].join("\n"),
+      )
+      chmodSync(join(dir, "swarm-setup"), 0o755)
+      const r = createSetupRunner({ dir, logger: quietLogger(), env: { PATH: "/usr/bin:/bin" }, accountHome: home, getuid: () => 501 })
+      const result = await r.start("runtime")
+      expect(result).toMatchObject({ kind: "ran", exitCode: 1, result: "RUNTIME_PROFILE_MISSING" })
+      expect(readFileSync(report, "utf8").trim().split("\n")).toEqual(["start", "runtime", "notty"])
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 })

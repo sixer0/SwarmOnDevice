@@ -16,6 +16,7 @@ import { NodeServices } from "@effect/platform-node"
 import { Cause, ConfigProvider, Effect, Exit, Fiber, Layer, Schema } from "effect"
 import { HttpClient, HttpClientRequest, HttpRouter, HttpServer } from "effect/unstable/http"
 import { loopbackServer } from "./loopback-server"
+import { APP_STATE, CREDENTIAL_CHANGE, DELETE_COMPOUND } from "./consented-literals"
 import { HttpApiBuilder } from "effect/unstable/httpapi"
 import { layerWebSocketConstructorGlobal } from "effect/unstable/socket/Socket"
 import { CrossSpawnSpawner } from "@opencode-ai/core/cross-spawn-spawner"
@@ -1031,7 +1032,9 @@ it.instance("class X speaks for itself, with no rule nobody wrote", () =>
       }),
     )
     expect(error).toBeInstanceOf(PermissionV1.DeniedError)
-    expect((error as PermissionV1.DeniedError).message).toBe(REFUSED_TEXT)
+    // 1.2.6 row 39 (P-01d, INTENT): app_state has its own text now; it still names no rule.
+    expect((error as PermissionV1.DeniedError).message).toBe(APP_STATE)
+    expect((error as PermissionV1.DeniedError).message).not.toContain("rule")
     expect(SessionProcessor.notRunMetadata(error)).toEqual({ notRun: "declined" })
   }),
 )
@@ -1062,7 +1065,12 @@ flows.instance(
       yield* shell(root.id, `cat ${path.join(outside, "note.txt")}`, test.directory)
       expect(yield* list).toEqual([])
       writeFileSync(path.join(outside, ".env"), "from outside\n")
-      const command = `cat ${path.join(outside, ".env")}`
+      // 1.2.6 row 36 (U12, INTENT 01b 10.1 :1060-1069): a plain look at the secret out there now runs as protected_read,
+      // with nothing held. The one-decision flow is kept with the same look in a list (`;`), which still waits.
+      const look = yield* shell(root.id, `cat ${path.join(outside, ".env")}`, test.directory)
+      expect(look.output).toContain("from outside")
+      expect(yield* list).toEqual([])
+      const command = `cat ${path.join(outside, ".env")}; true`
 
       const error = yield* failure(shell(root.id, command, test.directory))
       expect(error).toBeInstanceOf(PermissionV1.DeferredError)
@@ -1135,16 +1143,15 @@ test("each new class X category tells the agent what the register says", () => {
   expect(text("outside_write")).toBe(
     "This call did not run. Autonomous mode only reads outside the project folder. Copy the file into the project first (read it, then write the copy inside the project) and change the copy. The original stays as it is.",
   )
-  expect(text("delete_compound")).toBe(
-    "This call did not run. In autonomous mode a deletion must be a command of its own (rm, rmdir, unlink or git rm with paths only), so Swarm can move the paths to the archive instead.",
-  )
-  expect(text("credential_change")).toBe(
-    "This call did not run. Autonomous mode never adds or changes a remote, a credential or a git account.",
-  )
-  // A refusal is still a refusal of the call, not a stop of the run; other categories keep the general text.
+  // 1.2.6 row 39 (P-01d, INTENT): delete_compound and credential_change name the way on (consented-literals.ts).
+  expect(text("delete_compound")).toBe(DELETE_COMPOUND)
+  expect(text("credential_change")).toBe(CREDENTIAL_CHANGE.replace(" Continue the task without this step.", ""))
+  // A refusal is still a refusal of the call, not a stop of the run. 1.2.6 row 39 (INTENT): app_state has its own text;
+  // only an X with no category keeps the general one.
   expect(Permission.refusedByMode("credential_change")).toBeInstanceOf(PermissionV1.DeniedError)
   expect(Permission.refusedByMode("credential_change")).not.toBeInstanceOf(PermissionV1.RejectedError)
-  expect(text("app_state")).toBe(REFUSED_TEXT)
+  expect(text("app_state")).toBe(APP_STATE)
+  expect((Permission.refusedByMode(undefined) as PermissionV1.DeniedError).message).toBe(REFUSED_TEXT)
 })
 
 flows.instance("C24: an edit to the app's own state outside the project is refused, not held", () =>
@@ -1152,7 +1159,8 @@ flows.instance("C24: an edit to the app's own state outside the project is refus
     const { root } = yield* lineage
     const target = path.join(Global.Path.state, "row67-probe.txt")
     const error = yield* failure(write(root.id, target, "no"))
-    expect((error as PermissionV1.DeniedError).message).toBe(REFUSED_TEXT)
+    // 1.2.6 row 39 (P-01d, INTENT): the app-state text.
+    expect((error as PermissionV1.DeniedError).message).toBe(APP_STATE)
     expect(yield* list).toEqual([])
     expect(existsSync(target)).toBe(false)
     const [line] = yield* audit(root.id)
@@ -1193,7 +1201,8 @@ flows.instance("an answer to one prompt does not lift a refusal on what followed
     yield* approve(held[0]!.id)
 
     const error = yield* failure(patch(root.id, text))
-    expect((error as PermissionV1.DeniedError).message).toBe(REFUSED_TEXT)
+    // 1.2.6 row 39 (P-01d, INTENT): the app-state text.
+    expect((error as PermissionV1.DeniedError).message).toBe(APP_STATE)
     expect(existsSync(state)).toBe(false)
     expect(existsSync(path.join(outside, ".env"))).toBe(false)
     expect((yield* audit(root.id)).filter((line) => line.class === "X").length).toBe(1)
@@ -1430,15 +1439,18 @@ flows.instance("T-02: the same words joined differently, or in another folder, a
 // E3 (T3): what one family asks again under one permission and pattern is one entry, and one click
 
 /** A read of a secret out of the folder, as the read tool asks it: held for a person (U11 rule 1). */
+// 1.2.6 row 36 (U12, INTENT 01b 10.1 :1444-1473): a read of a secret out of the folder now runs (protected_read), so the
+// E3 dedupe is covered with a held write of the same file: the write tool's folder prompt, which still waits as secret_file.
 const secretRead = (sessionID: SessionID, filepath: string, offset: number) =>
   ({
     sessionID,
     permission: "external_directory",
     patterns: [path.join(path.dirname(filepath), "*")],
-    metadata: { filepath, parentDir: path.dirname(filepath), readOnly: true },
+    metadata: { filepath, parentDir: path.dirname(filepath) },
     always: [],
     ruleset: [],
-    call: { tool: "read", args: { filePath: filepath, offset } },
+    follows: [{ permission: "edit", patterns: [filepath] }],
+    call: { tool: "write", args: { filePath: filepath, content: `x${offset}` } },
   }) satisfies PermissionV1.AskInput
 
 it.instance("E3: five asks for one pattern by a root and its subagent are one entry, one click, and no more", () =>
@@ -1587,7 +1599,9 @@ flows.instance("F1: after a restart, an approval lets the agent's repeat through
     const test = yield* TestInstance
     const outside = outsideFolder()
     writeFileSync(path.join(outside, ".env"), "from outside\n")
-    const command = `cat ${path.join(outside, ".env")}`
+    // 1.2.6 row 36 (U12, INTENT beyond the 01b 10.1 grep list, same reason as :1060-1069): a plain look at the secret now
+    // runs as protected_read, so the held vehicle is the same look in a list (`;`), which still waits.
+    const command = `cat ${path.join(outside, ".env")}; true`
     expect(yield* failure(shell(root.id, command, test.directory))).toBeInstanceOf(PermissionV1.DeferredError)
 
     // The restart: the held call is gone, and the entry comes back from the file with nothing to run.
@@ -1621,7 +1635,7 @@ flows.instance("F1: after a restart, an approval lets the agent's repeat through
     // Nor another path under the same folder's pattern than the one asked about.
     const other = outsideFolder()
     writeFileSync(path.join(other, ".env"), "elsewhere\n")
-    expect(yield* failure(shell(root.id, `cat ${path.join(other, ".env")}`, test.directory))).toBeInstanceOf(
+    expect(yield* failure(shell(root.id, `cat ${path.join(other, ".env")}; true`, test.directory))).toBeInstanceOf(
       PermissionV1.DeferredError,
     )
   }),
@@ -1916,16 +1930,16 @@ it.instance("T-4: an ordinary skip is not trimmed once the root is in the mode",
     const sessions = yield* Session.Service
     const autonomy = yield* Autonomy.Service
     const root = yield* sessions.create({})
-    process.env.SWARM_UNATTENDED_AFTER_MS = "1"
-    yield* Effect.forEach(
-      Array.from({ length: Permission.MAX_SKIPPED }, (_, index) => `git pull origin branch-${index}`),
-      (command) => failure(ask(bash(root.id, command))),
+    // P-03 (row 40): once the family is away a new ask is queued at once, so the asks wait side by side before any went
+    // unanswered, and the mode is turned on while they wait. (Intended change per 01b 10.3, applied by row 36.)
+    process.env.SWARM_UNATTENDED_AFTER_MS = "300"
+    const fibers = yield* Effect.forEach(
+      Array.from({ length: Permission.MAX_SKIPPED + 1 }, (_, index) => `git pull origin branch-${index}`),
+      (command) => ask(bash(root.id, command)).pipe(Effect.exit, Effect.forkScoped),
     )
-    process.env.SWARM_UNATTENDED_AFTER_MS = "100"
-    const fiber = yield* ask(bash(root.id, "git pull origin last")).pipe(Effect.exit, Effect.forkScoped)
     yield* waitForPending(Permission.MAX_SKIPPED + 1)
     yield* autonomy.setMode({ scope: "session", root: root.id, on: true })
-    yield* Fiber.join(fiber)
+    for (const fiber of fibers) yield* Fiber.join(fiber)
     expect(yield* list).toHaveLength(Permission.MAX_SKIPPED + 1)
   }),
 )
@@ -2064,7 +2078,9 @@ flows.instance("AU-25: after a restart the prompt that follows is judged again, 
     const outside = outsideFolder()
     // A secret: a plain look out of the folder would run with nobody asked (U11 rule 1).
     writeFileSync(path.join(outside, ".env"), "from outside\n")
-    const command = `cat ${path.join(outside, ".env")}`
+    // 1.2.6 row 36 (U12, INTENT beyond the 01b 10.1 grep list, same reason as :1060-1069): a plain look at the secret now
+    // runs as protected_read, so the held vehicle is the same look in a list (`;`), which still waits.
+    const command = `cat ${path.join(outside, ".env")}; true`
     expect(yield* failure(shell(root.id, command, test.directory))).toBeInstanceOf(PermissionV1.DeferredError)
 
     yield* store.reload({ directory: test.directory })
@@ -2452,6 +2468,19 @@ const readOf = (sessionID: SessionID, filepath: string) =>
     ruleset: [],
   }) satisfies PermissionV1.AskInput
 
+// 1.2.6 row 36 (U12, INTENT beyond the 01b 10.1 grep list, same reason): a read of a secret now runs as protected_read,
+// so the row 251 consent-tick tests use an edit of the same secret, which a consent item still covers and which still waits.
+const editOf = (sessionID: SessionID, filepath: string) =>
+  ({
+    sessionID,
+    permission: "edit",
+    patterns: [filepath],
+    metadata: { filepath },
+    always: [],
+    ruleset: [],
+    editClass: "secret",
+  }) satisfies PermissionV1.AskInput
+
 it.instance(
   "row 124: an allowed file reaches the table, and the call it lets through is on record as via consent",
   () =>
@@ -2566,10 +2595,19 @@ it.instance(
         return Permission.Classify.defaultValue()(input)
       }
       const env = path.join(directory, ".env")
+      // 1.2.6 row 36 (U12, INTENT 01b 10.1 :2565-2578): the read runs as protected_read with or without a consent, so the
+      // assertion that the real table holds the secret again is made with an edit of the same file.
+      yield* ask(readOf(root.id, env)).pipe(Effect.provideService(Permission.Classify, real))
+      const read = (yield* calls(root.id)).at(-1)!
+      expect([read.class, read.category, read.via ?? null]).toEqual(["A", "protected_read", null])
       expect(
-        yield* failure(ask(readOf(root.id, env)).pipe(Effect.provideService(Permission.Classify, real))),
+        yield* failure(
+          ask({ ...readOf(root.id, env), permission: "edit", always: [], editClass: "secret" } as PermissionV1.AskInput).pipe(
+            Effect.provideService(Permission.Classify, real),
+          ),
+        ),
       ).toBeInstanceOf(PermissionV1.DeferredError)
-      expect(seen[0]!.consent?.files.size ?? 0).toBe(0)
+      expect(seen.at(-1)!.consent?.files.size ?? 0).toBe(0)
       const lines = yield* calls(root.id)
       expect([lines.at(-1)!.class, lines.at(-1)!.category, lines.at(-1)!.via ?? null]).toEqual([
         "D",
@@ -2741,18 +2779,18 @@ it.instance(
       const item = consent.items.find((entry) => entry.kind === "secret")!
 
       // Held by the real table: nobody has ticked the item yet.
-      expect(yield* failure(ask(readOf(root.id, env)))).toBeInstanceOf(PermissionV1.DeferredError)
-      expect(yield* failure(ask(readOf(child.id, env)))).toBeInstanceOf(PermissionV1.DeferredError)
+      expect(yield* failure(ask(editOf(root.id, env)))).toBeInstanceOf(PermissionV1.DeferredError)
+      expect(yield* failure(ask(editOf(child.id, env)))).toBeInstanceOf(PermissionV1.DeferredError)
       // A file made after the list was shown, which no item covers.
       const later = path.join(test.directory, ".env.other")
       writeFileSync(later, "TOKEN=later\n")
-      expect(yield* failure(ask(readOf(root.id, later)))).toBeInstanceOf(PermissionV1.DeferredError)
+      expect(yield* failure(ask(editOf(root.id, later)))).toBeInstanceOf(PermissionV1.DeferredError)
       expect((yield* list).map((entry) => entry.metadata.version)).toEqual([undefined, undefined])
 
       yield* autonomy.allowConsent({ root: root.id, hash: consent.hash, ids: [item.id] })
       // The person's tick is the answer: the same read passes, from the root and the subagent, and joins nothing.
-      yield* ask(readOf(child.id, env))
-      yield* ask(readOf(root.id, env))
+      yield* ask(editOf(child.id, env))
+      yield* ask(editOf(root.id, env))
       expect((yield* list).map((entry) => entry.metadata.version)).toEqual([undefined, undefined])
       expect(
         (yield* calls(root.id)).slice(-2).map((line) => [line.class, line.decision, line.via, line.consentID]),
@@ -2761,7 +2799,7 @@ it.instance(
         ["A", "allow", "consent", item.id],
       ])
       // What the tick does not cover is judged again and still held: on the entry it is already on, at the same version.
-      expect(yield* failure(ask(readOf(child.id, later)))).toBeInstanceOf(PermissionV1.DeferredError)
+      expect(yield* failure(ask(editOf(child.id, later)))).toBeInstanceOf(PermissionV1.DeferredError)
       expect((yield* list).map((entry) => entry.metadata.version)).toEqual([undefined, undefined])
       const last = (yield* calls(root.id)).at(-1)!
       expect([last.class, last.category, last.via, last.duplicateOf]).toEqual([
@@ -2771,7 +2809,7 @@ it.instance(
         (yield* list)[1]!.id,
       ])
       // Looked at again once per tick: the next repeat joins without the gate, as before.
-      expect(yield* failure(ask(readOf(root.id, later)))).toBeInstanceOf(PermissionV1.DeferredError)
+      expect(yield* failure(ask(editOf(root.id, later)))).toBeInstanceOf(PermissionV1.DeferredError)
       expect((yield* list).map((entry) => entry.metadata.version)).toEqual([undefined, undefined])
       expect(stub.calls).toEqual([])
     }),
@@ -2806,8 +2844,8 @@ flows.instance(
     Effect.gen(function* () {
       const autonomy = yield* Autonomy.Service
       const { root, child, env, consent, item } = yield* untickedRoot
-      expect(yield* failure(ask(readOf(root.id, env)))).toBeInstanceOf(PermissionV1.DeferredError)
-      expect(yield* failure(ask(readOf(child.id, env)))).toBeInstanceOf(PermissionV1.DeferredError)
+      expect(yield* failure(ask(editOf(root.id, env)))).toBeInstanceOf(PermissionV1.DeferredError)
+      expect(yield* failure(ask(editOf(child.id, env)))).toBeInstanceOf(PermissionV1.DeferredError)
       const [entry] = yield* list
       // Nothing ticked: nothing to close.
       expect(yield* ticked(root.id)).toEqual([])
@@ -2830,7 +2868,7 @@ flows.instance(
       // The caller acts on it as on a person's approval: the agent hears, and the read runs.
       yield* (yield* late).permission(answers[0]!)
       expect(sent.map((item) => [item.sessionID, item.lateAnswer])).toEqual([[root.id, true]])
-      yield* ask(readOf(root.id, env))
+      yield* ask(editOf(root.id, env))
       expect(yield* list).toEqual([])
       expect(stub.calls).toEqual([])
     }),
@@ -2927,6 +2965,26 @@ const reader: Tool.Def = {
       return { title: filePath, metadata: {}, output: `read ${filePath}` }
     }),
 }
+/** 1.2.6 row 36 (U12): the same for a write of a secret, which still waits for a person or a consent tick. */
+const writer: Tool.Def = {
+  id: "write",
+  description: "",
+  parameters: Schema.Unknown,
+  execute: (args, ctx) =>
+    Effect.gen(function* () {
+      const filePath = (args as { filePath: string }).filePath
+      yield* ctx.ask({
+        permission: "edit",
+        patterns: [filePath],
+        metadata: { filepath: filePath },
+        always: [],
+        editClass: "secret",
+        call: { tool: "write", args },
+      } as never)
+      ran.push(filePath)
+      return { title: filePath, metadata: {}, output: `wrote ${filePath}` }
+    }),
+}
 
 const tickRoute = HttpApiBuilder.layer(AutonomyApi).pipe(
   Layer.provide(autonomyHandlers as never),
@@ -2948,7 +3006,7 @@ const tickRoute = HttpApiBuilder.layer(AutonomyApi).pipe(
     ),
     Layer.succeed(
       ToolRegistry.Service,
-      ToolRegistry.Service.of({ all: () => Effect.succeed([reader]) } as unknown as ToolRegistry.Interface),
+      ToolRegistry.Service.of({ all: () => Effect.succeed([reader, writer]) } as unknown as ToolRegistry.Interface),
     ) as never,
     Layer.succeed(
       Agent.Service,
@@ -2972,9 +3030,10 @@ ticks.instance(
       const permission = yield* Permission.Service
       const { root, child, env, consent, item } = yield* untickedRoot
       const test = yield* TestInstance
+      // 1.2.6 row 36 (U12): the held call is a write of the secret (a read of it now runs as protected_read).
       const read = (sessionID: SessionID): PermissionV1.AskInput => ({
-        ...readOf(sessionID, env),
-        call: { tool: "read", args: { filePath: env } },
+        ...editOf(sessionID, env),
+        call: { tool: "write", args: { filePath: env, content: "TOKEN=fixed\n" } },
       })
       expect(yield* failure(ask(read(child.id)))).toBeInstanceOf(PermissionV1.DeferredError)
       const [entry] = yield* permission.list()
@@ -2994,7 +3053,7 @@ ticks.instance(
       while (sent.length === 0) yield* Effect.sleep("10 millis")
       expect(ran).toEqual([env])
       expect(sent).toMatchObject([{ sessionID: root.id, lateAnswer: true }])
-      expect(sent[0]!.text).toContain(`read ${env}`)
+      expect(sent[0]!.text).toContain(`wrote ${env}`)
       const lines = yield* audit(root.id)
       // The tick's own line, then the run on the grant that comes with an approval.
       expect(lines.slice(-2).map((line) => [line.via, line.decidedBy, line.decision])).toEqual([

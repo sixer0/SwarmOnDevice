@@ -26,6 +26,7 @@ import {
   snapFloor,
 } from "./geometry";
 import { diagramFitCapacity } from "../fit/state";
+import type { SheetEdgeInset } from "../core/sheet";
 import { contiguousCols, layoutGraphCapacity } from "./graphcap";
 
 /** Padanan `sheet.rowpack` Python (hanya diisi bila ada tumpuan basal). */
@@ -285,6 +286,12 @@ export const GRAPH_ROW_GAP_BASELINES = 3;
 
 export function layoutGraphDetail(s: StudioDiagramV1, sheet: DiagramSheet): GraphDetail {
   const L = latticeOf(sheet);
+  // Swarm 1.2.6 row 59 (T-02, N-016): the sheet keeps GRAPH_EDGE_INSET_MM to both canvas sides after
+  // the lattice snap (one translate of the whole graph) and names the column on an over-width refusal.
+  (sheet as DiagramSheet & { edgeInset?: SheetEdgeInset }).edgeInset = {
+    unit: "kolom",
+    groupOf: new Map(s.nodes.map((n) => [n.id, colOfNode(n)])),
+  };
   if (diagramFitCapacity()) {
     // FIG-02b2 P1-14: render pertama ditolak DATUM-37; kolom bersambung -> pitch dipadatkan.
     const cs = [...new Set(s.nodes.map(colOfNode))].sort((a, b) => a - b);
@@ -332,7 +339,7 @@ export function layoutGraphDetail(s: StudioDiagramV1, sheet: DiagramSheet): Grap
     const y = snap(L.top + r * rowPitch, L.y);
     if (adaptive && x + nw > L.W + 1e-6) {
       throw diagramDefect(
-        `DATUM-37: simpul ${n.id} keluar lebar lembar (${x.toFixed(1)}..${(x + nw).toFixed(1)} dari ${L.W.toFixed(1)} mm) ` +
+        `DATUM-37: simpul ${n.id} (kolom graph ${c}) keluar lebar lembar (${x.toFixed(1)}..${(x + nw).toFixed(1)} dari ${L.W.toFixed(1)} mm) ` +
           "setelah penempatan kolom (P8, layout_graph)",
         "DATUM-37",
       );

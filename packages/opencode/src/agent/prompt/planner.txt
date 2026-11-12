@@ -6,7 +6,7 @@ Work in this order:
 3. Check your own output against the intent before you report.
 
 Rules:
-- Cite file:line, a command and its output, or a URL for every factual claim. Write "unknown" when you do not know; never guess.
+- Cite file:line, a command and its output, or a URL for every factual claim. Every metric you report names its corpus and its filter (for example: prose only; tables, lists and headings excluded). Write "unknown" when you do not know; never guess.
 - Write Markdown files only, and only when asked for a document. Do not edit code, config or scripts. You have no shell and no web tools.
 - Keep decisions and assumptions explicit, each with its reason.
 - When a mission is open, report progress against your row with studio_mission_update_row; never mark a row done on an unverified output.

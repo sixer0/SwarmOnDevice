@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="128.0mm" height="138.112mm" viewBox="0 0 128.0 138.112" version="1.1">
+
+<defs>
+<marker id="head-accent" markerWidth="4" markerHeight="4" refX="3.4" refY="1.6" orient="auto"><path d="M0,0 L3.6,1.6 L0,3.2 Z" fill="#B45309"/></marker>
+<marker id="head-alert" markerWidth="4" markerHeight="4" refX="3.4" refY="1.6" orient="auto"><path d="M0,0 L3.6,1.6 L0,3.2" fill="none" stroke="#9B1C1C" stroke-width="0.35"/></marker>
+<marker id="head-data" markerWidth="4" markerHeight="4" refX="3.4" refY="1.6" orient="auto"><path d="M0,0 L3.6,1.6 L0,3.2 Z" fill="#101418"/></marker>
+</defs>
+<rect x="0" y="0" width="128.0" height="138.112" fill="#FCFCFB"/>
+<text data-caption-above="1" x="0" y="3.81" font-family="IBM Plex Sans Condensed" font-size="2.681" font-weight="400" fill="#2B3640" text-anchor="start"><tspan font-weight="600">QUEBEC 8.8</tspan>  Foxtrot victor deltaecho november mike papa bravo delta hotel: echo foxtrot juliett lima xxx charlie.</text>
+<g transform="translate(0 4.762)">
+<path d="M 64.0 28.57 L 64.0 33.34 L 64.0 33.34 L 64.0 33.34 L 64.0 33.34 L 64.0 38.1" fill="none" stroke="#B45309" stroke-width="0.72" marker-end="url(#head-accent)" data-mark="link" data-series="accent" data-index="0"/>
+<path d="M 64.0 57.15 L 64.0 61.91 L 64.0 61.91 L 58.67 61.91 L 58.67 61.91 L 58.67 66.67" fill="none" stroke="#101418" stroke-width="0.45" marker-end="url(#head-data)" data-mark="link" data-series="data" data-index="1"/>
+<path d="M 58.67 85.72 L 58.67 90.49 L 58.67 90.49 L 64.0 90.49 L 64.0 90.49 L 64.0 95.25" fill="none" stroke="#9B1C1C" stroke-width="0.45" stroke-dasharray="7.1,1.6" marker-end="url(#head-alert)" data-mark="link" data-series="alert" data-index="2"/>
+<rect x="56.21" y="32.9" width="15.59" height="3.54" fill="#FCFCFB"/>
+<text x="64.0" y="35.3" font-family="IBM Plex Mono" font-size="2.081" font-weight="400" fill="#B45309" text-anchor="middle">XRAY JULIETT</text>
+<rect x="55.29" y="59.1" width="12.09" height="3.54" fill="#FCFCFB"/>
+<text x="61.33" y="61.49" font-family="IBM Plex Mono" font-size="2.081" font-weight="400" fill="#101418" text-anchor="middle">8 UNIFORM</text>
+<rect x="54.71" y="87.67" width="13.26" height="3.54" fill="#FCFCFB"/>
+<text x="61.33" y="90.06" font-family="IBM Plex Mono" font-size="2.081" font-weight="400" fill="#9B1C1C" text-anchor="middle">ECHO TANGO</text>
+<rect x="42.67" y="9.52" width="42.67" height="19.05" data-node="n1" fill="none" stroke="#2B3640" stroke-width="0.45" data-mark="node" data-index="0"/>
+<text x="64.0" y="19.05" font-family="IBM Plex Sans Condensed" font-size="2.681" font-weight="400" fill="#101418" text-anchor="middle">kilo delta 888.888 xxx/x</text>
+<text x="64.0" y="21.73" font-family="IBM Plex Sans Condensed" font-size="2.328" font-weight="400" fill="#6B7783" text-anchor="middle">oscar victor</text>
+<text x="84.8" y="12.21" font-family="IBM Plex Mono" font-size="2.187" fill="#9B1C1C" text-anchor="end">△</text>
+<rect x="42.67" y="38.1" width="42.67" height="19.05" data-node="n2" fill="none" stroke="#2B3640" stroke-width="0.45" data-mark="node" data-index="1"/>
+<text x="64.0" y="47.62" font-family="IBM Plex Sans Condensed" font-size="2.681" font-weight="400" fill="#101418" text-anchor="middle">november charliexx X-8.8</text>
+<text x="64.0" y="50.31" font-family="IBM Plex Sans Condensed" font-size="2.328" font-weight="400" fill="#6B7783" text-anchor="middle">hotel foxtrotxx quebec</text>
+<text x="84.8" y="40.78" font-family="IBM Plex Mono" font-size="2.187" fill="#B45309" text-anchor="end">◈</text>
+<rect x="42.67" y="66.67" width="32.0" height="19.05" data-node="n3" fill="none" stroke="#2B3640" stroke-width="0.45" data-mark="node" data-index="2"/>
+<text x="58.67" y="76.2" font-family="IBM Plex Sans Condensed" font-size="2.681" font-weight="400" fill="#101418" text-anchor="middle">papa whiskey charlie</text>
+<text x="58.67" y="78.88" font-family="IBM Plex Sans Condensed" font-size="2.328" font-weight="400" fill="#6B7783" text-anchor="middle">foxtrot, juliett xxx, kilo</text>
+<text x="74.14" y="69.36" font-family="IBM Plex Mono" font-size="2.187" fill="#B45309" text-anchor="end">◈</text>
+<rect x="42.67" y="95.25" width="42.67" height="19.05" data-node="n4" fill="none" stroke="#2B3640" stroke-width="0.45" data-mark="node" data-index="3"/>
+<text x="64.0" y="104.77" font-family="IBM Plex Sans Condensed" font-size="2.681" font-weight="400" fill="#101418" text-anchor="middle">quebec sierra papa november</text>
+<text x="64.0" y="107.46" font-family="IBM Plex Sans Condensed" font-size="2.328" font-weight="400" fill="#6B7783" text-anchor="middle">hotel india echo yankee</text>
+<text x="84.8" y="97.93" font-family="IBM Plex Mono" font-size="2.187" fill="#B45309" text-anchor="end">◈</text>
+<text x="0" y="123.82" font-family="IBM Plex Sans Condensed" font-size="2.328" font-weight="400" fill="#6B7783" text-anchor="start">QUEBEC  Whiskey victor X8: november/88_888_zulu_alfa.xx xxx. 88; november XX-88    <tspan font-weight="600">HOTELXXXX</tspan>  <tspan fill="#B45309">◈</tspan> INDIAXXXXX · <tspan fill="#9B1C1C">△</tspan> SIERRA</text>
+<text x="0" y="119.06" font-family="IBM Plex Sans Condensed" font-size="2.399" font-weight="600" fill="#6B7783" text-anchor="start" letter-spacing="0.216">TANGO  YANKEE DELTA NOVEMBER  ·  OSCARPAPAX NOVEMBER MIKE TANGO XRAY</text>
+</g>
+</svg>

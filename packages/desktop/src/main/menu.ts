@@ -20,6 +20,8 @@ type Deps = {
   installCli: () => void
   // Install DATUM Studio for Claude (rows 34/34b). Optional so menu tests built before it keep their deps shape.
   installDatumStudio?: () => void
+  // "Re-check Tools" (1.2.6 row 91, SEC-05): person trigger of the tool-health regime. Optional for older test deps.
+  recheckTools?: () => void
   relaunch: () => void
   updateFromFile: () => void
   undoLastUpdate: () => void
@@ -66,6 +68,7 @@ function nativeItem(entry: DesktopMenuEntry, deps: Deps, patchEnabled: boolean):
         checkForUpdates: deps.checkForUpdates,
         installCli: deps.installCli,
         installDatumStudio: deps.installDatumStudio,
+        recheckTools: deps.recheckTools,
         relaunch: deps.relaunch,
         updateFromFile: deps.updateFromFile,
         undoLastUpdate: deps.undoLastUpdate,

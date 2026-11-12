@@ -5,6 +5,7 @@
  * alat dokumen klien (`doc-tools.ts`) memakai satu sumber tanpa impor melingkar; perilaku tidak berubah.
  */
 import { DOC_KEY_PATTERN } from "../../../src/lib/studio/contract/env";
+import { summarizeLint } from "../../../src/lib/studio/registry/lint-explain";
 import { firstPointer } from "../studio-report";
 import { httpFailureOf, studioRequest, StudioUnreachableError, type HttpFetch, type HttpReply, type StudioMethod } from "../_http-client";
 import { MAX_INPUT_BYTES, type StudioMcpConfig, type Toolset } from "./config";
@@ -394,16 +395,19 @@ export function serverBlock(lines: readonly string[], attrs: Record<string, stri
 }
 
 /** Satu panggilan HTTP langsung (alat baca); jawaban tidak sukses -> {@link McpToolError} (code + cid). */
-export async function http(ctx: ToolContext, method: StudioMethod, routePath: string, action: string, req: { json?: unknown; binary?: boolean } = {}): Promise<HttpReply> {
+// Swarm patch (1.2.6 row 53a, M-01): optional `timeoutMs` forwarded to studioRequest (only studio_render sets it,
+// STUDIO_RENDER_CALL_TIMEOUT_MS); without it the call keeps STUDIO_HTTP_TIMEOUT_MS. A timeout keeps code
+// REMOTE_UNREACHABLE and adds `timedOut: true` to the error extra so a tool can explain it.
+export async function http(ctx: ToolContext, method: StudioMethod, routePath: string, action: string, req: { json?: unknown; binary?: boolean; timeoutMs?: number } = {}): Promise<HttpReply> {
   const secret = requireSecret(ctx);
   let reply: HttpReply;
   try {
-    reply = await studioRequest({ baseUrl: ctx.deps.config.baseUrl, secret, fetchImpl: ctx.fetch, redirect: "manual" }, method, routePath, {
+    reply = await studioRequest({ baseUrl: ctx.deps.config.baseUrl, secret, fetchImpl: ctx.fetch, redirect: "manual", ...(req.timeoutMs !== undefined ? { timeoutMs: req.timeoutMs } : {}) }, method, routePath, {
       body: req.json !== undefined ? JSON.stringify(req.json) : undefined,
       binary: req.binary,
     });
   } catch (e) {
-    if (e instanceof StudioUnreachableError) throw new McpToolError(e.code, e.message, { step: action });
+    if (e instanceof StudioUnreachableError) throw new McpToolError(e.code, e.message, { step: action, ...(e.timedOut ? { timedOut: true } : {}) });
     throw e;
   }
   if (!reply.ok) {
@@ -460,16 +464,9 @@ export const pick = (o: unknown, keys: readonly string[]): Record<string, unknow
 /** C1/P-2: ringkasan R05 tanpa lint penuh (~12 KB) dan tanpa medan teknis; detail=true untuk badan penuh. */
 export function compactSummary(b: Record<string, unknown>): Record<string, unknown> {
   const outputs = Array.isArray(b.outputs) ? b.outputs.filter(isRecord) : [];
-  const lint = b.lint;
-  const lintSummary = isRecord(lint)
-    ? {
-        ...pick(lint, ["verdict", "status", "ok", "passed", "counts", "summary"]),
-        ...(Array.isArray(lint.findings) ? { findings: lint.findings.length } : {}),
-        ...(Array.isArray(lint.issues) ? { issues: lint.issues.length } : {}),
-      }
-    : Array.isArray(lint)
-      ? { entries: lint.length }
-      : null;
+  // Swarm row 206 (1.2.3): tri-state lint summary { ran, verdict, findings[] with code, message and the rule's
+  // explanation }. The engine's LintReport ({ tier, checks, releaseStatus }) used to pick to `{}`, which read as clean.
+  const lintSummary = "lint" in b ? summarizeLint(b.lint, { max: 5, messageMax: 200 }) : null;
   return {
     document: pick(b.document, ["id", "docNumber", "title", "docKey", "missionFolder", "currentRevisionNo", "completeness", "releaseStatus", "archived", "createdBy", "updatedAt"]),
     revision: pick(b.revision, ["revisionNo", "parentRevisionNo", "changeWhat", "changeWhy", "changeScope", "createdBy", "createdAt", "completeness"]),

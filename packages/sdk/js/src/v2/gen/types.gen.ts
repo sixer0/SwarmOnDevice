@@ -959,6 +959,16 @@ export type Pty = {
 
 export type MemorySource = "user" | "agent" | "learned"
 
+export type MemoryRef =
+  | {
+      path: string
+      line?: number
+    }
+  | {
+      symbol: string
+      path?: string
+    }
+
 export type MemoryItem = {
   id: string
   text: string
@@ -971,6 +981,9 @@ export type MemoryItem = {
   sessionID?: string
   failed?: string
   worked?: string
+  body?: string
+  refs?: Array<MemoryRef>
+  untrusted?: boolean
 }
 
 export type Todo = {
@@ -2419,6 +2432,7 @@ export type AutonomyAuditLine =
         | "protected_path"
         | "irreversible"
         | "admin_rights"
+        | "checkpoint_failed"
         | "outside_read"
         | "outside_copy"
         | "outside_edit"
@@ -2427,6 +2441,8 @@ export type AutonomyAuditLine =
         | "archived"
         | "script"
         | "by_main_agent"
+        | "protected_read"
+        | "checkpointed"
       bypassed?:
         | "check"
         | "file-op"
@@ -2460,6 +2476,7 @@ export type AutonomyAuditLine =
         | "protected_path"
         | "irreversible"
         | "admin_rights"
+        | "checkpoint_failed"
         | "outside_read"
         | "outside_copy"
         | "outside_edit"
@@ -2468,6 +2485,8 @@ export type AutonomyAuditLine =
         | "archived"
         | "script"
         | "by_main_agent"
+        | "protected_read"
+        | "checkpointed"
       via?: "grant" | "duplicate" | "consent" | "outward" | "user_request" | "main_agent" | "for_subagent"
       duplicateOf?: string
       consentID?: string
@@ -2498,7 +2517,16 @@ export type AutonomyAuditLine =
       at: number
       type: "outcome"
       requestID: string
-      outcome: "ran" | "failed" | "not_run" | "approved_later" | "rejected_later" | "abandoned" | "undone" | "archived"
+      outcome:
+        | "ran"
+        | "failed"
+        | "not_run"
+        | "approved_later"
+        | "rejected_later"
+        | "abandoned"
+        | "undone"
+        | "archived"
+        | "checkpointed"
       exit?: number
       by?: string
       archive?: string
@@ -2507,6 +2535,10 @@ export type AutonomyAuditLine =
         to: string
       }>
       bytes?: number
+      checkpoint?: string
+      entries?: number
+      refs?: number
+      manifestSha256?: string
     }
   | {
       v: 1
@@ -2605,6 +2637,16 @@ export type AutonomyArchive = {
   entries: Array<AutonomyArchiveEntry>
   bytes: number
   unsafe: boolean
+}
+
+export type AutonomyCheckpointRevert = {
+  id: string
+  restored: Array<string>
+  /**
+   * The checkpoint of the files as they were just before this revert, so the revert can be undone
+   */
+  preRevert: string
+  verified: true
 }
 
 export type Model = {
@@ -2969,7 +3011,7 @@ export type MemoryInfo = {
   items: Array<MemoryItem>
 }
 
-export type MemoryRefusal = "empty" | "long" | "secret" | "full"
+export type MemoryRefusal = "empty" | "long" | "secret" | "full" | "body_long" | "too_many_refs"
 
 export type MemoryResult = {
   item?: MemoryItem
@@ -3374,6 +3416,9 @@ export type MemoryItem1 = {
   sessionID?: string
   failed?: string
   worked?: string
+  body?: string
+  refs?: Array<MemoryRef>
+  untrusted?: boolean
 }
 
 export type SessionStatus2 = {
@@ -8457,6 +8502,9 @@ export type AutonomyArchiveEmptyData = {
   body?: {
     ids: Array<string>
   }
+  headers?: {
+    "x-swarm-desktop-nonce"?: string
+  }
   path: {
     sessionID: string
   }
@@ -8496,6 +8544,53 @@ export type AutonomyArchiveEmptyResponses = {
 }
 
 export type AutonomyArchiveEmptyResponse = AutonomyArchiveEmptyResponses[keyof AutonomyArchiveEmptyResponses]
+
+export type AutonomyCheckpointRevertData = {
+  body?: never
+  headers?: {
+    "x-swarm-desktop-nonce"?: string
+  }
+  path: {
+    sessionID: string
+    checkpointID: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/session/{sessionID}/autonomy/checkpoint/{checkpointID}/revert"
+}
+
+export type AutonomyCheckpointRevertErrors = {
+  /**
+   * BadRequest | InvalidRequestError
+   */
+  400: EffectHttpApiErrorBadRequest | InvalidRequestError
+  /**
+   * AutonomyNoPasswordError
+   */
+  403: AutonomyNoPasswordError
+  /**
+   * NotFoundError
+   */
+  404: NotFoundError
+  /**
+   * AutonomyWriteError
+   */
+  500: AutonomyWriteError
+}
+
+export type AutonomyCheckpointRevertError = AutonomyCheckpointRevertErrors[keyof AutonomyCheckpointRevertErrors]
+
+export type AutonomyCheckpointRevertResponses = {
+  /**
+   * The checkpoint put back, and the checkpoint saved just before
+   */
+  200: AutonomyCheckpointRevert
+}
+
+export type AutonomyCheckpointRevertResponse =
+  AutonomyCheckpointRevertResponses[keyof AutonomyCheckpointRevertResponses]
 
 export type ConfigGetData = {
   body?: never

@@ -152,6 +152,10 @@ interface El extends BaseEl {
   charsPerLine?: number;
   /** Swarm row 165K: `data-unit` kind of the enclosing Studio unit (measure.ts). */
   unit?: string;
+  /** Swarm row 206: flow `document` element: layout width and viewport (px CSS), sheet width (mm) (measure.ts). */
+  layoutWidthPx?: number;
+  viewportPx?: number;
+  sheetWidthMm?: number;
 }
 
 interface Input {
@@ -487,12 +491,38 @@ function check33(c: Ctx): LintIssue[] {
 
 // ── DATUM-37 lembar melewati A4 ──────────────────────────────────────────
 
+/** px CSS per mm (96 dpi), as measure.ts and the host overlap check. */
+const PX_PER_MM = 96 / 25.4;
+
+/**
+ * Swarm row 206 (1.2.3, P3): px of sheet width a flow layout did not get (a classic scrollbar, or a viewport that is
+ * not the sheet). Same rule as the host's `flowWidthShortfallPx` (mcp-host/verify/overlap-clip.ts): the larger of
+ * sheet - layout and |viewport - sheet|, counted only above 1 px. 0 = measurable, or no width fields (older measure).
+ */
+export function flowLayoutShortfallPx(doc: { layoutWidthPx?: number; viewportPx?: number; sheetWidthMm?: number } | undefined): number {
+  if (!doc || !isNum(doc.layoutWidthPx) || !isNum(doc.sheetWidthMm) || doc.layoutWidthPx <= 0 || doc.sheetWidthMm <= 0) return 0;
+  const sheet = Math.ceil(doc.sheetWidthMm * PX_PER_MM);
+  const view = isNum(doc.viewportPx) && doc.viewportPx > 0 ? Math.abs(doc.viewportPx - sheet) : 0;
+  const short = Math.max(sheet - doc.layoutWidthPx, view);
+  return short > 1 ? short : 0;
+}
+
+/** The DATUM-37 NOT_RUN reason of a narrowed flow layout; the host maps it to UNKNOWN FLOW_LAYOUT_UNMEASURABLE. */
+export const FLOW_LAYOUT_UNMEASURABLE_NOTE = "FLOW_LAYOUT_UNMEASURABLE";
+
 function check37(c: Ctx): LintIssue[] {
   const id = "DATUM-37";
   const pages = c.els.filter((e) => e.kind === "page");
   const docs = c.els.filter((e) => e.kind === "document");
-  const over = c.els.filter((e) => e.kind === "overflow" && isNum(e.overflowMm) && e.overflowMm > 0);
+  let over = c.els.filter((e) => e.kind === "overflow" && isNum(e.overflowMm) && e.overflowMm > 0);
   if (!pages.length && !docs.length && !over.length) return [issue(id, "NOT_RUN", noMetricsReason(c))];
+  // Swarm row 206: a flow page laid out narrower than the sheet. Right-edge overflows the missing width explains are
+  // not judged (the host's `explainedByNarrowLayout`: flow, right axis, <= shortfall + 0.5 mm); larger ones still FAIL;
+  // with none left the check is NOT_RUN, never PASS.
+  const shortfall = pages.length ? 0 : flowLayoutShortfallPx(docs[0]);
+  if (shortfall > 0) {
+    over = over.filter((e) => !(e.page === undefined && e.axis !== "bottom" && (e.overflowMm as number) <= shortfall / PX_PER_MM + 0.5));
+  }
   const fails = over
     .sort((a, b) => (b.overflowMm as number) - (a.overflowMm as number))
     .map((e) => {
@@ -500,10 +530,20 @@ function check37(c: Ctx): LintIssue[] {
       const sheet = e.page !== undefined ? `lembar ${e.page}` : "dokumen alir";
       return issue(id, "FAIL", `${sheet}: '${e.label ?? e.tag ?? "?"}' melewati batas ${axis} sebesar ${f1(e.overflowMm as number)} mm`, where(e));
     });
-  if (!fails.length && docs.some((d) => d.overflow === true)) {
+  if (!fails.length && !shortfall && docs.some((d) => d.overflow === true)) {
     fails.push(issue(id, "FAIL", "dokumen alir lebih lebar dari lembar (luapan horizontal)"));
   }
   if (fails.length) return capped(fails, c.lim.maxIssuesPerCheck);
+  if (shortfall > 0) {
+    const d = docs[0] as El;
+    return [
+      issue(
+        id,
+        "NOT_RUN",
+        `${FLOW_LAYOUT_UNMEASURABLE_NOTE}: dokumen alir ditata ${f1((d.layoutWidthPx as number) / PX_PER_MM)} mm, lebih sempit dari lembar ${f1(d.sheetWidthMm as number)} mm (selisih ${f1(shortfall / PX_PER_MM)} mm, mis. bilah gulir); luapan kanan dalam selisih itu tidak dapat dinilai`,
+      ),
+    ];
+  }
   if (c.truncated) return [issue(id, "NOT_RUN", `${TRUNC_NOTE}; tidak ada luapan pada elemen terukur`)];
   if (pages.length) return [issue(id, "PASS", `${pages.length} lembar; tidak ada isi yang melewati batas lembar (RL check_page)`)];
   return [issue(id, "PASS", "dokumen alir: tidak ada luapan horizontal; luapan bawah tidak berlaku (pemenggalan CSS, D-45)")];

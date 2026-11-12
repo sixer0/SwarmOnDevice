@@ -277,7 +277,7 @@ function figureFields(b: { caption: ChartBlock["caption"]; source: ChartBlock["s
 
 /** `StudioDiagramV1` → `DiagramSpecV2` (T2-27). */
 export function adaptDiagramSpec(s: StudioDiagramV1, p: string, rec: AdaptRecorder): DiagramSpecV2 {
-  rec.rest(s, ["$schema", "family", "classification", "labels_verified", "sources", "nodes", "edges", "zones", "legend", "notes", "per_row"], p);
+  rec.rest(s, ["$schema", "family", "classification", "labels_verified", "sources", "nodes", "edges", "zones", "legend", "notes", "per_row", "direction"], p);
   const out: DiagramSpecV2 = { family: s.family, nodes: s.nodes };
   if (s.classification !== undefined) out.classification = s.classification;
   if (s.labels_verified !== undefined) out.labels_verified = s.labels_verified;
@@ -287,6 +287,7 @@ export function adaptDiagramSpec(s: StudioDiagramV1, p: string, rec: AdaptRecord
   if (s.legend !== undefined) out.legend = s.legend;
   if (s.notes !== undefined) out.notes = s.notes;
   if (s.per_row !== undefined) out.per_row = s.per_row;
+  if (s.direction !== undefined) out.direction = s.direction; // Swarm 1.2.6 row 45 (T-11)
   return out;
 }
 

@@ -282,6 +282,12 @@ const looked = (...permissions: string[]) => ({
   asked: 0,
 })
 const refusedAs = (category: string) => ({ outcome: "refused", lines: [["external_directory", "X", category]], asked: 0 })
+/** 1.2.6 row 36 (U12): a read the table could not vouch for (a hidden search, a secret's name) runs on record as protected_read. */
+const readProtected = (...permissions: string[]) => ({
+  outcome: "passed",
+  lines: permissions.map((permission) => [permission, "A", "protected_read"]),
+  asked: 0,
+})
 /** Row 202: a write tool out of the folder (not the library) runs in the mode: its folder prompt and its edit, class A. */
 const WRITTEN_OUTSIDE = {
   outcome: "passed",
@@ -388,8 +394,9 @@ it.instance("XF-01: with a decider that says allow, no tool gets past the folder
     yield* everyHeld([
       ["read a file", (root) => use("read", { filePath: `${far}/f.md` }, root, { library }), looked("external_directory")],
       ["read a folder", (root) => use("read", { filePath: far }, root, { library }), looked("external_directory")],
-      // ripgrep opens hidden files, so a search out of the folder waits.
-      ["grep", (root) => use("grep", { pattern: "alpha", path: far }, root, { library })],
+      // ripgrep opens hidden files. 1.2.6 row 36 (U12 R5, INTENT beyond the 01b 10.1 grep list, same reason as :857-860):
+      // a search out of the folder only reads, so it runs as protected_read (was held outside_folder).
+      ["grep", (root) => use("grep", { pattern: "alpha", path: far }, root, { library }), readProtected("external_directory")],
       ["glob", (root) => use("glob", { pattern: "*.md", path: far }, root, { library }), looked("external_directory")],
       [
         "write",
@@ -553,10 +560,13 @@ it.instance("XF-02: the pass covers nothing but the copy", () =>
       ["a project link to the copy", read(`${test.directory}/lnk/a.md`)],
       ["grep above", grep(env.R)],
       ["glob above", glob(env.R)],
-      ["grep through the link out", grep(`${env.S}/link-out`)],
+      // 1.2.6 row 36 (U12 R5, same reason as XF-01 grep): a hidden search that lands out of the copy only reads, so it
+      // runs as protected_read; it is still no library pass (was held outside_folder).
+      ["grep through the link out", grep(`${env.S}/link-out`), readProtected("external_directory")],
       ["glob through the link out", glob(`${env.S}/link-out`), OUT],
       ["grep with dots", grep(`${env.S}/../knowledge-library`)],
-      ["a secret's name stays a secret", read(`${env.S}/x/.env`), "secret_file", "read"],
+      // 1.2.6 row 36 (U12, INTENT 01b 10.1 :559): a secret's name is read as protected_read (was held secret_file).
+      ["a secret's name is read as protected_read", read(`${env.S}/x/.env`), readProtected("read")],
     ])
     expect(stub.calls).toEqual([])
   }),
@@ -853,10 +863,11 @@ it.instance("XF-08: with the library off, or no library, a read of the same file
     expect(yield* attempts(denied)).toEqual(held)
 
     // With no library known the folder is any folder out of the project: a look runs on record (U11 rule 1), never with the
-    // decider, and a search that opens hidden files waits.
+    // decider. 1.2.6 row 36 (U12 R5, INTENT 01b 10.1 :857-860): a search that opens hidden files only reads, so it runs as
+    // protected_read (was held outside_folder). The library-off list above stays (INV-7).
     const outside = [
       { name: "read", ...looked("external_directory"), always: [] },
-      { name: "grep", ...heldAs("outside_folder"), always: [[] as readonly string[]] },
+      { name: "grep", ...readProtected("external_directory"), always: [] },
       { name: "glob", ...looked("external_directory"), always: [] },
     ]
     for (const none of [{ kind: "no-app" }, { kind: "failed", code: "missing" }] as const) {

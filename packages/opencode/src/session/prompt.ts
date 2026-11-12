@@ -1371,7 +1371,14 @@ const layer = Layer.effect(
                 sys.skills(agent),
                 sys.environment(model),
                 instruction.system().pipe(Effect.orDie),
-                memory.prompt(model),
+                // Ranked on the session's first message and folder, fixed for the session (prompt cache, P-05).
+                memory.prompt(model, {
+                  sessionID,
+                  query: (msgs.find((msg) => msg.info.role === "user")?.parts ?? [])
+                    .flatMap((part) => (part.type === "text" && !part.synthetic ? [part.text] : []))
+                    .join("\n"),
+                  directory: session.directory,
+                }),
                 sys.mcp(agent, session.permission),
                 delegationBlocks(agent),
               ])

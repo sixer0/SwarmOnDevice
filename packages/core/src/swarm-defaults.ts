@@ -24,7 +24,7 @@ import { SWARM_PERMISSION_BASELINE } from "./swarm-permission-baseline"
 // REFERENCE whenever the target lacks that key (test/permission/baseline.test.ts pins
 // it), and config.ts seeds with mergeDeep({}, {...BASELINE_CONFIG}) — so one shared
 // literal would let any in-place write on a resolved config corrupt the shipped
-// constants for every later instance. The top-level spread at config.ts:318 invokes
+// constants for every later instance. The top-level spread at opencode config.ts:340 invokes
 // each getter once per load, so every instance owns its copy. Same defensive posture
 // as the disabled_providers array copy at that call site. The payload is pure JSON
 // data, hence the JSON round-trip clone (no structuredClone availability question).
@@ -44,6 +44,14 @@ export const BASELINE_CONFIG = {
   },
   get experimental() {
     return cloneBaseline(SWARM_PERMISSION_BASELINE.experimental)
+  },
+  // CFG-03 (U17): compaction ships exactly as the user's own file sets it. auto:true equals
+  // the runtime default; max_context:0 turns the price target off (opencode
+  // session/overflow.ts priceTarget), so every model compacts only at its full window —
+  // paid and undeclared-window providers included (release note, SEC-22). A user value
+  // still wins key by key. Built fresh on each read, like the getters above.
+  get compaction(): { auto: boolean; max_context: number } {
+    return { auto: true, max_context: 0 }
   },
 }
 

@@ -7,6 +7,7 @@ export const dict = {
   "desktop.menu.window": "okno",
   "desktop.menu.help": "Pomoc",
   "desktop.menu.checkForUpdates": "Zkontrolovat aktualizace...",
+  "desktop.menu.recheckTools": "Znovu zkontrolovat nástroje",
   "desktop.menu.settings": "Nastavení",
   "desktop.menu.reloadWebview": "Znovu načíst Webview",
   "desktop.menu.restart": "Restartujte",
@@ -1405,7 +1406,10 @@ export const dict = {
   "memory.privacy": "Uloženo v tomto zařízení, nikdy v repozitáři. Model tyto poznámky vidí jen jako součást relace, kterou s ním spustíte.",
   "memory.off": "Vypnuto. Relace nedostávají žádné poznámky a nic nového se neučí. Vaše poznámky zůstávají.",
   "memory.refused.secret": "Vypadá to jako heslo nebo klíč, proto nebylo uloženo.",
-  "memory.refused.long": "Poznámka musí mít méně než 400 znaků.",
+  "memory.refused.long":
+    "Poznámka musí mít méně než {{max}} znaků. Delší podrobnosti dejte do souboru a požádejte agenta, aby jej propojil.",
+  "memory.refused.bodyLong": "Tělo poznámky musí mít méně než {{max}} znaků, nebo místo toho propojte soubor.",
+  "memory.refused.tooManyRefs": "Poznámka může odkazovat nejvýše na {{max}} souborů nebo symbolů.",
   "memory.refused.full": "Paměť je plná. Nejprve smažte poznámku.",
   "memory.error": "Paměť projektu se nepodařilo načíst.",
   "memory.retry": "Zkusit znovu",
@@ -1430,4 +1434,5 @@ export const dict = {
   "session.movedOn.answer": "Odpovědět",
   "home.agents.movedOn": "Pokračoval bez toho · {{time}}",
   "home.setup.attention": "Část vašeho nastavení vyžaduje pozornost.",
+  "session.map.decisions.category.protected_path": "Chráněné místo (klíče, přihlašovací údaje nebo systémové složky)",
 }

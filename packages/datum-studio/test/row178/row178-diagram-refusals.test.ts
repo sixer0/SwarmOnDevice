@@ -39,8 +39,10 @@ const CASES: Array<[string, string, number, unknown, string, string, string[]]> 
     'must NOT have additional properties: "notation"', ["allowed here: tier, lane, col, row, accent, secondary, external", GUIDE]],
   ["edge style alias (color/width/dash/pattern/type)", "b1,b3", 3, diag({ edges: [{ from: "a", to: "a", kind: "data", label: "", color: "red" }] }), "/block/spec/edges/0/color",
     'must NOT have additional properties: "width"', ["allowed here: from, to, kind, label", 'for "color" use "kind" (accent, alert, control, data, sync, verify)', GUIDE]],
+  // Swarm 1.2.6 row 48 (T-11, N-110, intended change listed in 01g): `direction` is a spec field now (row 45), so the
+  // allowed list ends with it and the alias `orientation` names `direction` (TB, LR) instead of `family`.
   ["spec field that is not a diagram field (title/orientation/direction/lang/id)", "a1,a3,b1,b3", 12, diag({ orientation: "LR" }), "/block/spec",
-    'must NOT have additional properties: "orientation"', ["allowed here: family, classification, labels_verified, sources, nodes, edges, zones, legend, notes, per_row", 'for "orientation" use "family" (layered,', GUIDE]],
+    'must NOT have additional properties: "orientation"', ["allowed here: family, classification, labels_verified, sources, nodes, edges, zones, legend, notes, per_row, direction", 'for "orientation" use "direction" (TB, LR)', GUIDE]],
   ["spec fields sent on the block (family/nodes/edges/labels_verified/classification)", "a1,a2,b1,b3", 6, { type: "diagram", caption: cap, source: src, family: "layered", spec: { family: "layered", nodes: [node()] } }, "/block",
     'must NOT have additional properties: "family"', ["allowed here: type, id, spec, artifactId, caption, source, keyRow", "spec.family", GUIDE]],
   ["display field in a diagram (width_mm/apparatus/layout/style)", "a1,a3,b1,b3", 12, diag({ width_mm: 128 }), "/block/spec/width_mm",
@@ -98,6 +100,67 @@ describe("row 178: each refusal class from the runs now names the fix", () => {
         if (target !== "caption") expect(props[obj]).toContain(target)
       }
     }
+  })
+})
+
+// Swarm 1.2.6 row 48 (T-11, 01e §3.2 + §6.1/6.3/6.4, A16/A17, register N-110/N-159). Red at e363918a69: the aliases
+// named `family`, `arah` had no alias, `direction` was itself an alias and no `P1-direction` refusal existed.
+const DIRECTION_ALIAS_CLAUSE = "direction berlaku untuk family flow; nilai rankdir TB/LR sama, RL/BT tidak didukung"
+describe("row 48 T-11: rankdir/arah and the other direction aliases name `direction`; P1-direction refusals", () => {
+  for (const alias of ["dir", "rankdir", "rankDir", "orientation", "arah"]) {
+    test(`alias "${alias}" on a flow spec: still refused (additionalProperties), hint names direction (TB, LR) and the flow-only clause`, () => {
+      const issues = issuesOf(diag({ family: "flow", [alias]: "LR" }))
+      const i = issues.find((x) => x.pointer === "/block/spec" && x.keyword === "additionalProperties")
+      expect(i).toBeDefined()
+      expect(i!.message).toContain(`must NOT have additional properties: "${alias}"`)
+      expect(i!.message).toContain(`for "${alias}" use "direction" (TB, LR)`)
+      expect(i!.message).toContain(DIRECTION_ALIAS_CLAUSE)
+      expect(i!.message).toContain(GUIDE)
+      expect(i!.message).not.toContain(`use "family"`)
+    })
+  }
+
+  test("alias map: direction aliases target direction, `direction` itself is no alias, `layout` stays family", () => {
+    expect(DIAGRAM_ALIASES.spec).toEqual({ title: "caption", name: "caption", dir: "direction", rankdir: "direction", rankDir: "direction", orientation: "direction", arah: "direction", layout: "family" })
+  })
+
+  test("`layout` still points to family, without the direction clause", () => {
+    const msg = at(issuesOf(diag({ layout: "LR" })), "/block/spec/layout", "allowed here") // layout is a display field: second issue
+    expect(msg).toContain('for "layout" use "family" (layered,')
+    expect(msg).not.toContain(DIRECTION_ALIAS_CLAUSE)
+  })
+
+  const v2block = (spec: Record<string, unknown>) => ({ type: "diagram", caption: cap, source: src, spec: { nodes: [node()], ...spec } })
+  // [family, direction-hint text that must appear]
+  const FAMILY_HINTS: Array<[string, string[]]> = [
+    ["layered", ["arah tingkat (class.tier) tetap atas-bawah", 'family flow + direction "LR"', "graph + class.col/row"]],
+    ["topology", ["arah tingkat (class.tier) tetap atas-bawah", 'family flow + direction "LR"']],
+    ["stack", ["arah tingkat (class.tier) tetap atas-bawah", 'family flow + direction "LR"']],
+    ["graph", ["kolom diatur class.col/row; hapus direction"]],
+    ["sequence", ["hapus direction"]],
+  ]
+  for (const [family, words] of FAMILY_HINTS) {
+    test(`P1-direction: family ${family} + direction -> refused at .../spec/direction with the ${family} hint`, async () => {
+      const byc = await import("../../vendor/src/lib/studio/services/ingest/by-construction")
+      expect(typeof (byc as any).diagramDirectionIssues).toBe("function")
+      const issues = (byc as any).diagramDirectionIssues({ blocks: [v2block({ family, direction: "TB" })] }, "") as Array<Issue & { checkId?: string }>
+      expect(issues.map((i) => [i.pointer, i.checkId])).toEqual([["/blocks/0/spec/direction", "P1-direction"]])
+      expect(issues[0].message).toContain(`direction hanya untuk family flow (family '${family}')`)
+      for (const w of words) expect(issues[0].message).toContain(w)
+      const e = (byc as any).byConstructionError(issues)
+      expect([e.code, e.httpStatus]).toEqual(["BY_CONSTRUCTION_FAILED", 422])
+    })
+  }
+
+  test("P1-direction: flow + per_row + direction -> refused at .../spec/per_row; flow + direction alone and legacy flow pass", async () => {
+    const byc = await import("../../vendor/src/lib/studio/services/ingest/by-construction")
+    expect(typeof (byc as any).diagramDirectionIssues).toBe("function")
+    const issues = (byc as any).diagramDirectionIssues(
+      { blocks: [v2block({ family: "flow", direction: "LR", per_row: 2 }), v2block({ family: "flow", direction: "TB" }), v2block({ family: "flow", per_row: 2 })] },
+      "",
+    ) as Array<Issue & { checkId?: string }>
+    expect(issues.map((i) => [i.pointer, i.checkId])).toEqual([["/blocks/0/spec/per_row", "P1-direction"]])
+    expect(issues[0].message).toContain("per_row membungkus urutan daftar, direction menata menurut konektor; pakai salah satu")
   })
 })
 

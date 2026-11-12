@@ -11,6 +11,7 @@ import { fileURLToPath } from "node:url"
 // measure.ts has no imports, so main does not pull the engine in; start.test.ts pins equality with STUDIO_BRIDGE_SCRIPTS.
 import { MEASURE_SCRIPT } from "../../../../datum-studio/vendor/src/lib/studio/engine/browser/measure"
 import { defaultFontsDir, startRenderBridge, type RenderBridge, type RenderBridgeOptions } from "../datum-render"
+import { probeRenderBridge, type RenderBridgeEndpoint } from "../tool-health/bridge"
 import { studioDescriptorPath } from "./descriptor"
 import { resolveStudioLayout, studioStoreRoot } from "./layout"
 import { startStudioHost, type ForkHost, type HostLog, type StudioHostHandle, type StudioHostStartOptions } from "./lifecycle"
@@ -56,6 +57,10 @@ async function electronFork(): Promise<ForkHost> {
 export function createDatumStudio(deps: DatumStudioDeps) {
   let state: DatumStudioState = { status: "idle" }
   let bridge: RenderBridge | undefined
+  // Row 93 (TH-04): the endpoint of the bridge that started in this launch. Kept after a failed revive so a later
+  // probe reports the socket as gone (revivable) rather than "never started". Held in main only, never logged.
+  let endpoint: RenderBridgeEndpoint | undefined
+  let reviving: Promise<void> | undefined
   let host: StudioHostHandle | undefined
   let starting: Promise<void> | undefined
   let stopping: Promise<void> | undefined
@@ -70,17 +75,39 @@ export function createDatumStudio(deps: DatumStudioDeps) {
   // Row 151c (C161 I1): one store root for the host and for the bridge's narrow store grants.
   const storeRoot = studioStoreRoot(deps.env, home)
 
+  const bridgeOptions = (): RenderBridgeOptions => ({
+    fontsDir: defaultFontsDir(deps.resourcesPath, deps.isPackaged, deps.appPath),
+    renderScriptPath: join(skillRoot, "scripts", "datum_render.py"),
+    extraScripts: STUDIO_BRIDGE_EXTRA_SCRIPTS,
+    log: deps.log,
+    home,
+    storeRoot,
+  })
+
+  /** Row 93 (TH-04, DP-1, N-184): close the old server, listen again on the same socket path with the same token. */
+  async function revive() {
+    await starting?.catch(() => {})
+    if (stopRequested) throw Object.assign(new Error("DATUM Studio is stopping"), { code: "BRIDGE_STOPPING" })
+    const pair = endpoint
+    if (!pair)
+      throw Object.assign(new Error("the render bridge did not start in this launch; quit and reopen Swarm"), { code: "BRIDGE_NOT_STARTED" })
+    const old = bridge
+    bridge = undefined
+    await old?.close().catch((error) => deps.log("warn", "datum-studio.bridge", "old render bridge close failed", errorContext(error)))
+    try {
+      bridge = await (deps.startBridge ?? startRenderBridge)({ ...bridgeOptions(), reuse: { token: pair.token, socketPath: pair.socketPath } })
+    } catch (error) {
+      deps.log("error", "datum-studio.bridge", "render bridge restart failed", errorContext(error))
+      throw error
+    }
+    deps.log("info", "datum-studio.bridge", "render bridge restarted on the same endpoint", { socketPath: pair.socketPath })
+  }
+
   async function run() {
     state = { status: "starting" }
     try {
-      bridge = await (deps.startBridge ?? startRenderBridge)({
-        fontsDir: defaultFontsDir(deps.resourcesPath, deps.isPackaged, deps.appPath),
-        renderScriptPath: join(skillRoot, "scripts", "datum_render.py"),
-        extraScripts: STUDIO_BRIDGE_EXTRA_SCRIPTS,
-        log: deps.log,
-        home,
-        storeRoot,
-      })
+      bridge = await (deps.startBridge ?? startRenderBridge)(bridgeOptions())
+      endpoint = { socketPath: bridge.env.DATUM_RENDER_SOCKET, token: bridge.env.DATUM_RENDER_TOKEN }
     } catch (error) {
       // Without the bridge the host still serves the store and templates; renders fail BROWSER_UNAVAILABLE.
       deps.log("error", "datum-studio.bridge", "render bridge failed to start", errorContext(error))
@@ -135,6 +162,21 @@ export function createDatumStudio(deps: DatumStudioDeps) {
       starting ??= run()
       return starting
     },
+    /**
+     * Row 93 (TH-04): tool-health's `process: render-bridge` probe. Waits for start(); `hello` on the socket; a bridge
+     * that is connected but does not answer in time is busy and healthy. The result never carries the token.
+     */
+    async probeBridge(timeoutMs: number) {
+      await starting?.catch(() => {})
+      return probeRenderBridge(endpoint, timeoutMs)
+    },
+    /** Row 93 (N-184): same-endpoint restart. Throws when the bridge never started, during stop, or when the restart fails. */
+    reviveBridge() {
+      reviving ??= revive().finally(() => {
+        reviving = undefined
+      })
+      return reviving
+    },
     /** Descriptor removal is synchronous inside host.stop(); the wait closes the server and releases the store lock. */
     stop() {
       stopRequested = true
@@ -142,6 +184,7 @@ export function createDatumStudio(deps: DatumStudioDeps) {
       stopping ??= (async () => {
         await starting?.catch(() => {})
         await host?.stop().catch((error) => deps.log("error", "datum-studio", "host stop failed", errorContext(error)))
+        await reviving?.catch(() => {})
         await bridge?.close().catch((error) => deps.log("error", "datum-studio.bridge", "bridge close failed", errorContext(error)))
         state = { status: "stopped" }
       })()

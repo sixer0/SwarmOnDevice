@@ -10,8 +10,10 @@ import { InstanceStore } from "../../src/project/instance-store"
 import { TestInstance, tmpdirScoped } from "../fixture/fixture"
 import { testEffect } from "../lib/effect"
 import { MessageID, SessionID } from "../../src/session/schema"
+import { Session } from "../../src/session/session"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
+import { SessionProjector } from "@opencode-ai/core/session/projector"
 
 const noopBootstrap = Layer.succeed(InstanceBootstrap.Service, InstanceBootstrap.Service.of({ run: Effect.void }))
 const env = AppNodeBuilder.build(
@@ -1281,7 +1283,9 @@ it.instance("a normal reply returns nothing, and denying one request leaves skip
       const sessionID = SessionID.make("session_away_cascade")
       yield* askBash(sessionID, "rm -rf dist").pipe(Effect.exit)
       process.env.SWARM_UNATTENDED_AFTER_MS = "60000"
-      const fiber = yield* askBash(sessionID, "rm -rf build").pipe(Effect.forkScoped)
+      // P-03 (row 40, intended change): the session's family is away now, so an ordinary second ask is queued at once.
+      // A request that still waits for a person keeps the live case: the repeated-call guard.
+      const fiber = yield* askBash(sessionID, "rm -rf build", "doom_loop").pipe(Effect.forkScoped)
       yield* waitForPending(2)
       const live = (yield* permission.list()).find((item) => !item.movedOnAt)
       expect(yield* permission.reply({ requestID: live!.id, reply: "reject" })).toBeUndefined()
@@ -1445,5 +1449,157 @@ it.instance("a session keeps only so many skipped requests, dropping the oldest"
       Effect.sync(() => {
         delete process.env.SWARM_UNATTENDED_AFTER_MS
       }),
+  ),
+)
+
+// P-03 (row 40, 01b §7, §9.5): once one ask of a session family (root and its subagents) went unanswered, later asks of
+// the family are queued at once, listed and answerable, and fail with an AwayError that starts with QUEUED_TEXT.
+const familyWait = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+  Effect.acquireUseRelease(
+    Effect.sync(() => {
+      process.env.SWARM_UNATTENDED_AFTER_MS = "500"
+    }),
+    () => effect,
+    () =>
+      Effect.sync(() => {
+        delete process.env.SWARM_UNATTENDED_AFTER_MS
+      }),
+  )
+
+/** Asks, and says how it ended and how long it took. */
+const timedAsk = (sessionID: SessionID, command: string, permission = "bash") =>
+  Effect.gen(function* () {
+    const started = Date.now()
+    const exit = yield* askBash(sessionID, command, permission).pipe(Effect.exit)
+    return { exit, took: Date.now() - started }
+  })
+
+const isAway = (exit: Exit.Exit<unknown, unknown>) =>
+  Exit.isFailure(exit) && Cause.squash(exit.cause) instanceof PermissionV1.AwayError
+
+// The same nodes, with the session store reachable from the test so a real root and child can be made.
+const itFamily = testEffect(
+  AppNodeBuilder.build(
+    LayerNode.group([
+      Permission.node,
+      Session.node,
+      SessionProjector.node,
+      EventV2Bridge.node,
+      CrossSpawnSpawner.node,
+      InstanceStore.node,
+    ]),
+    [[InstanceStore.bootstrapNode, noopBootstrap]],
+  ),
+)
+
+const family = Effect.gen(function* () {
+  const sessions = yield* Session.Service
+  const root = yield* sessions.create({})
+  const child = yield* sessions.create({ parentID: root.id })
+  return { root: root.id, child: child.id }
+})
+
+itFamily.instance("P-03 Q-1, Q-6: a second ask by the root of an away family is queued at once, listed and answerable", () =>
+  familyWait(
+    Effect.gen(function* () {
+      const permission = yield* Permission.Service
+      const { root } = yield* family
+      const first = yield* timedAsk(root, "rm -rf dist")
+      expect(isAway(first.exit)).toBe(true)
+      expect(first.took).toBeGreaterThanOrEqual(450)
+
+      const second = yield* timedAsk(root, "rm -rf build")
+      expect(isAway(second.exit)).toBe(true)
+      expect(second.took).toBeLessThan(50)
+      if (Exit.isFailure(second.exit)) {
+        const error = Cause.squash(second.exit.cause) as Error
+        expect(error.message.startsWith(PermissionV1.QUEUED_TEXT)).toBe(true)
+        expect(error.message).toContain("list what you skipped")
+      }
+      const queued = (yield* permission.list()).find((item) => item.patterns[0] === "rm -rf build")
+      expect(queued?.movedOnAt).toBeNumber()
+      expect(queued?.movesOnAt).toBeUndefined()
+      expect(yield* permission.list()).toHaveLength(2)
+      yield* rejectAll()
+    }),
+  ),
+)
+
+itFamily.instance("P-03 Q-2: a child session of an away family is queued at once", () =>
+  familyWait(
+    Effect.gen(function* () {
+      const permission = yield* Permission.Service
+      const { root, child } = yield* family
+      expect(isAway((yield* timedAsk(root, "rm -rf dist")).exit)).toBe(true)
+      const asked = yield* timedAsk(child, "rm -rf cache")
+      expect(isAway(asked.exit)).toBe(true)
+      expect(asked.took).toBeLessThan(50)
+      const queued = (yield* permission.list()).find((item) => item.sessionID === child)
+      expect(queued?.movedOnAt).toBeNumber()
+      yield* rejectAll()
+    }),
+  ),
+)
+
+itFamily.instance("P-03 Q-3: another family still waits its full time (per task, not global)", () =>
+  familyWait(
+    Effect.gen(function* () {
+      const one = yield* family
+      const other = yield* family
+      expect(isAway((yield* timedAsk(one.root, "rm -rf dist")).exit)).toBe(true)
+      const asked = yield* timedAsk(other.root, "rm -rf dist")
+      expect(isAway(asked.exit)).toBe(true)
+      expect(asked.took).toBeGreaterThanOrEqual(450)
+      yield* rejectAll()
+    }),
+  ),
+)
+
+itFamily.instance("P-03 Q-4, Q-5: a late allow lets exactly one matching call through, and the family's next ask waits again", () =>
+  familyWait(
+    Effect.gen(function* () {
+      const permission = yield* Permission.Service
+      const { root, child } = yield* family
+      yield* timedAsk(root, "rm -rf dist")
+      yield* timedAsk(child, "rm -rf build")
+      const queued = (yield* permission.list()).find((item) => item.patterns[0] === "rm -rf build")
+      const late = yield* permission.reply({ requestID: queued!.id, reply: "once" })
+      expect(late?.id).toBe(queued?.id)
+      yield* permission.grant(late!)
+      // Q-4: the repeat passes once, and only once.
+      yield* askBash(child, "rm -rf build")
+      // Q-5: the reply cleared the family's away state, so this ask waits the first-wait time again.
+      const fiber = yield* askBash(child, "rm -rf build").pipe(Effect.forkScoped)
+      const waiting = yield* Effect.gen(function* () {
+        while (true) {
+          const live = (yield* permission.list()).find((item) => item.patterns[0] === "rm -rf build")
+          if (live) return live
+          yield* Effect.sleep("5 millis")
+        }
+      })
+      expect(waiting.movedOnAt).toBeUndefined()
+      expect(waiting.movesOnAt! - Date.now()).toBeGreaterThan(400)
+      yield* rejectAll()
+      yield* Fiber.await(fiber)
+    }),
+  ),
+)
+
+itFamily.instance("P-03 Q-7: a request that needs a person still waits for good in an away family", () =>
+  familyWait(
+    Effect.gen(function* () {
+      const permission = yield* Permission.Service
+      const { root, child } = yield* family
+      expect(isAway((yield* timedAsk(root, "rm -rf dist")).exit)).toBe(true)
+      const fiber = yield* askBash(child, "bash", "doom_loop").pipe(Effect.forkScoped)
+      yield* waitForPending(2)
+      const waiting = (yield* permission.list()).find((item) => item.permission === "doom_loop")
+      expect(waiting?.movesOnAt).toBeUndefined()
+      expect(waiting?.movedOnAt).toBeUndefined()
+      yield* Effect.sleep("80 millis")
+      expect(fiber.pollUnsafe()).toBeUndefined()
+      yield* rejectAll()
+      yield* Fiber.await(fiber)
+    }),
   ),
 )

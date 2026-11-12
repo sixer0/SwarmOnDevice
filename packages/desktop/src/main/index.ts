@@ -15,6 +15,7 @@ import type { ServerReadyData } from "../preload/types"
 import { checkAppExists, resolveAppPath } from "./apps"
 import { CHANNEL } from "./constants"
 import { registerIpcHandlers, sendDeepLinks, sendMenuCommand } from "./ipc"
+import { createDesktopNonce } from "./desktop-nonce"
 import { forwardInitializationFailure } from "./initialization"
 import { exportDebugLogs, initCrashReporter, initLogging, startNetLog, write as writeLog } from "./logging"
 import { createMenu } from "./menu"
@@ -61,6 +62,7 @@ import { createPatchResultReader, HANDOFF_RESULT_FILE_NAME } from "./swarm-patch
 import { createDatumStudio } from "./datum-studio-host/start"
 import { startRenderBridge } from "./datum-render"
 import { createRenderEnvGate } from "./sidecar-env"
+import { createToolHealth } from "./tool-health/startup"
 
 // Row 33: longest the sidecar spawn waits for the render bridge (normally a socket listen, milliseconds).
 const SIDECAR_RENDER_ENV_WAIT_MS = 5_000
@@ -264,6 +266,11 @@ const main = Effect.gen(function* () {
   }
 
   const serverReady = Deferred.makeUnsafe<ServerReadyData, unknown>()
+  // Row 38b (SEC-06): one desktop nonce per launch, in memory only. It goes to the local sidecar in its start message
+  // and to the renderer over IPC (desktopNonce), never to env, disk or a log. Held for the renderer only once the
+  // local sidecar was started with it (not for the v2 background CLI).
+  const desktopNonce = createDesktopNonce()
+  let localDesktopNonce: string | undefined
 
   yield* Effect.promise(() => app.whenReady())
 
@@ -299,6 +306,24 @@ const main = Effect.gen(function* () {
   })
   void datumStudio.start()
   app.on("before-quit", (event) => datumStudio.holdQuit(event, () => app.quit()))
+  // U7 tool-health (1.2.6 row 91, TH-02): probes once per launch in the background; never awaited here, so window
+  // creation and the sidecar spawn are never delayed. Revives only installed AND previously healthy tools and never
+  // installs (D6). The setup runner is the IPC layer's one instance (assigned below), so a revive during a user install
+  // is refused SETUP_BUSY.
+  let ipcSetupRunner: ReturnType<typeof registerIpcHandlers>["setupRunner"] | undefined
+  const toolHealth = createToolHealth({
+    home: homedir(),
+    platform: process.platform,
+    isPackaged: app.isPackaged,
+    resourcesPath: process.resourcesPath,
+    appPath: app.getAppPath(),
+    appVersion: app.getVersion(),
+    setupRunner: () => ipcSetupRunner?.(),
+    datumStudio,
+    log: (level, message, context) => writeLog("tool-health", message, context, level),
+  })
+  void toolHealth.runStartup()
+  app.on("before-quit", () => toolHealth.stop())
   const updater = setupAutoUpdater(stopSidecars)
   // Update from File… / Undo Last Update (rows 56-59). One handoff launcher (row 57) and one M8 guard for both flows;
   // each flow is created once and run per click. The launcher calls `quit` itself once the wrapper has spawned (H4);
@@ -366,8 +391,10 @@ const main = Effect.gen(function* () {
     relaunch,
     updateFromFile: () => void updateFromFile().catch((error) => logger.error("update from file failed", error)),
     undoLastUpdate: () => void undoLastUpdate().catch((error) => logger.error("undo last update failed", error)),
+    // SEC-05 / C9: person trigger; may revive consent "manual" tools (an agent's recheck.json cannot).
+    recheckTools: () => void toolHealth.recheck().catch((error) => logger.error("tool-health re-check failed", error)),
   }
-  registerIpcHandlers({
+  const ipc = registerIpcHandlers({
     killSidecar: () => killSidecar(),
     relaunch,
     awaitInitialization: Effect.fnUntraced(
@@ -401,7 +428,9 @@ const main = Effect.gen(function* () {
       }
     },
     missionControl: () => datumStudio.missions(),
+    desktopNonce: () => localDesktopNonce,
   })
+  ipcSetupRunner = ipc.setupRunner
   registerWslIpcHandlers(wslServers)
   void updater.start()
   const updateTimer = setInterval(() => void updater.check(), 10 * 60 * 1000)
@@ -468,10 +497,12 @@ const main = Effect.gen(function* () {
     logger.log("spawning sidecar", { url })
     const renderEnv = yield* Effect.promise(() => sidecarRenderEnv.wait(SIDECAR_RENDER_ENV_WAIT_MS))
     if (!renderEnv) logger.warn("sidecar starts without the DATUM render bridge")
+    localDesktopNonce = desktopNonce
     const { listener, health } = yield* Effect.promise(() =>
       spawnLocalServer(hostname, port, password, {
         userDataPath: app.getPath("userData"),
         renderEnv,
+        desktopNonce: localDesktopNonce,
         onStdout: (message) => writeLog("server", "stdout", { message }),
         onStderr: (message) => writeLog("server", "stderr", { message }, "warn"),
         onExit: (code) => writeLog("utility", "sidecar exited", { code }, "warn"),

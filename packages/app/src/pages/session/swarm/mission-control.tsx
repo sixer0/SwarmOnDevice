@@ -13,7 +13,7 @@ import { MissionCommand } from "./mission-command"
 import type { MissionWriter } from "./mission-command-model"
 import { MissionDeliverables } from "./mission-deliverables"
 import { MissionHQ } from "./mission-hq"
-import { missionStatusLine } from "./mission-model"
+import { missionDriftLine, missionStatusLine } from "./mission-model"
 import type { createMissionControl } from "./mission-poll"
 
 const STATUS_LINE_KEY = {
@@ -214,6 +214,21 @@ export function MissionControl(props: MissionControlMount & { width?: number }) 
             {(line) => (
               <p data-mission-status-line={line()} role="status" class={`shrink-0 text-12-regular ${FAINT}`}>
                 {t(STATUS_LINE_KEY[line()])}
+              </p>
+            )}
+          </Show>
+
+          {/* Row 88 (1.2.6 MC-09): one drift line, not a panel, when steps were added after approval. Dropped rows only
+              ride along as a data attribute (no wording of their own). */}
+          <Show when={state.mission && missionDriftLine(state.mission)}>
+            {(drift) => (
+              <p
+                data-mission-drift-line={drift().count}
+                data-mission-drift-dropped={drift().dropped > 0 ? drift().dropped : undefined}
+                role="status"
+                class={`shrink-0 text-12-regular ${FAINT}`}
+              >
+                {t("session.mission.line.drift", { count: drift().count })}
               </p>
             )}
           </Show>

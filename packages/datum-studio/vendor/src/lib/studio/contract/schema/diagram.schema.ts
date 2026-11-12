@@ -99,6 +99,10 @@ export const diagramSchema = {
     legend: strList(B.diagramLegend),
     notes: strList(B.diagramNotes),
     per_row: { type: "integer", minimum: 1, maximum: 20 },
+    // Swarm 1.2.6 row 45 (T-11, N-109, SEC-23): ranked flow direction, flow only (`P1-direction` in validateSpec and the
+    // by-construction gate). Absent = legacy list layout. Enum only: any other value (RL, BT, "RL; x") is SCHEMA_INVALID
+    // before any layout or ELK option is built.
+    direction: { enum: ["TB", "LR"] },
     // Delta S03-d2 (D-89): opt-in multi-rel layout-c; aditif.
     sld: {
       type: "object",

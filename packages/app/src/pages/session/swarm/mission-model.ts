@@ -85,6 +85,12 @@ export type MissionDerivedWire = {
   checkpoints: Record<string, { n: number; m: number }>
   /** Row 188/197: who approved, as the host computed it (absent before approval or from an older host). */
   approval?: { decision: string; by: string; autonomous: boolean; label: string }
+  /** Row 88 (1.2.6 MC-09, host row 87): rows added (and dropped) after approval; absent from an older host. */
+  drift?: {
+    count: number
+    rows: Array<{ row: string; timeCreated: string; decision: string | null }>
+    dropped: Array<{ row: string; timeDropped: string; decision: string | null }>
+  }
 }
 
 export type MissionGetWire = {
@@ -179,6 +185,8 @@ export type MissionVM = {
   finalCount: number
   /** Row 197 (S194-03): true when the agent approved its own mission in Swarm's autonomous mode (host derived.approval). */
   selfApproved: boolean
+  /** Row 88 (MC-09): added/dropped row counts after approval, taken as the host sent them (absent = no drift known). */
+  drift?: { count: number; dropped: number }
 }
 
 // ── Tables (§5.3, §5.4)
@@ -490,6 +498,7 @@ export function buildMission(get: MissionGetWire, lang: "en" | "id", present: Se
     finalCount: deliverables.filter((d) => d.status === "final").length,
     // Taken as sent; the host's DB CHECK keeps autonomous to by: controller.
     selfApproved: derived.approval?.autonomous === true && mission.status !== "draft",
+    drift: { count: derived.drift?.count ?? 0, dropped: derived.drift?.dropped.length ?? 0 },
   }
 }
 
@@ -516,4 +525,15 @@ export function missionStatusLine(model: Pick<MissionVM, "status" | "openDecisio
   if (model.status === "approved") return "approvedNotStarted"
   if (model.status === "paused") return "paused"
   return null
+}
+
+/**
+ * Row 88 (1.2.6 MC-09, keep-UI-simple): the one drift line next to the status line, only when steps were added after
+ * approval (host `derived.drift.count`, which counts added rows only). Dropped rows ride along on the same line as a data
+ * attribute; they never show a line on their own. null = no line.
+ */
+export function missionDriftLine(model: Pick<MissionVM, "drift">): { count: number; dropped: number } | null {
+  const drift = model.drift
+  if (!drift || drift.count <= 0) return null
+  return { count: drift.count, dropped: drift.dropped }
 }

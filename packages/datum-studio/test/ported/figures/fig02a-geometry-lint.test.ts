@@ -9,6 +9,7 @@ import { withFit } from '@/lib/studio/engine/chart/core/fit';
 import { CHART_LINT_OPTIONS, GEOMETRY_CHECKS, geometryIssues, hintCtxFromSpec, lintChartGeometry, pathPolylines } from '@/lib/studio/engine/chart/core/geometry';
 import { PARITY_CHART_DIR, clone, readJson } from './_helpers';
 import { CLEAN_SVG_MANIFEST, type CleanSvgManifest, sha256 } from './_svgManifest';
+import { checkFigureFit } from '../../../src/mcp-host/verify/static-checks'; // Swarm 1.2.6 row 28 (T-01 INTENT)
 import { readdirSync } from 'node:fs';
 import path from 'node:path';
 
@@ -146,6 +147,10 @@ describe('renderChart: tata letak otomatis berpagar cacat (FIG-02a)', () => {
     delete spec.heightMm;
     const r = renderChart(clone(spec) as never);
     expect(r.report.issues.map((i) => i.checkId)).toContain('CAPTION_WRAP');
+    // Swarm 1.2.6 row 28 (T-01, INTENT per 01g): CAPTION_WRAP is no longer report-only; the output gate FAILS it, citing 100.
+    const gate = checkFigureFit({ format: 'SVG', svg: r.svg, figureKind: 'chart' });
+    expect(gate.status).toBe('FAIL');
+    expect(gate.findings.find((f) => f.code === 'CAPTION_WRAP')?.detail).toContain('100');
     expect(r.svg).toContain('<tspan');
     expect(lintChartGeometry(r.svg).counts.textOutside).toBe(0);
   });

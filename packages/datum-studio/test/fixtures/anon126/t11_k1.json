@@ -1,0 +1,117 @@
+{
+  "$schema": "studio.diagram/v1",
+  "family": "flow",
+  "id": "1.1",
+  "title": "Bravo bravoxxxxx XX-8888 uniform whiskey romeo november bravo zulu november echo oscar november novemberx.",
+  "classification": "BIASA",
+  "width_mm": 128,
+  "labels_verified": true,
+  "sources": [
+    "Alfa."
+  ],
+  "nodes": [
+    {
+      "id": "n1",
+      "label": "tango november XX-8888",
+      "class": {}
+    },
+    {
+      "id": "n2",
+      "label": "hotel tangoxxxxx",
+      "class": {}
+    },
+    {
+      "id": "n3",
+      "label": "november victorxxx",
+      "class": {}
+    },
+    {
+      "id": "n4",
+      "label": "november november",
+      "class": {}
+    },
+    {
+      "id": "n5",
+      "label": "victor xxx alfabravo",
+      "class": {}
+    },
+    {
+      "id": "n6",
+      "label": "sierra, romeo november",
+      "class": {}
+    },
+    {
+      "id": "n7",
+      "label": "bravo november november",
+      "class": {}
+    },
+    {
+      "id": "n8",
+      "label": "november indiaxxxx",
+      "class": {}
+    }
+  ],
+  "edges": [
+    {
+      "from": "n1",
+      "to": "n2",
+      "kind": "control",
+      "label": "Romeo 88"
+    },
+    {
+      "from": "n1",
+      "to": "n3",
+      "kind": "control",
+      "label": "Tango 88"
+    },
+    {
+      "from": "n1",
+      "to": "n4",
+      "kind": "control",
+      "label": "Bravo 88"
+    },
+    {
+      "from": "n1",
+      "to": "n5",
+      "kind": "control",
+      "label": "Delta 88 xxx 88"
+    },
+    {
+      "from": "n2",
+      "to": "n6",
+      "kind": "verify",
+      "label": "oscarpapa xxx quebec"
+    },
+    {
+      "from": "n3",
+      "to": "n6",
+      "kind": "verify",
+      "label": "whiskey xray foxtrot"
+    },
+    {
+      "from": "n4",
+      "to": "n7",
+      "kind": "verify",
+      "label": "november november"
+    },
+    {
+      "from": "n5",
+      "to": "n7",
+      "kind": "verify",
+      "label": "whiskeyxray, romeo november"
+    },
+    {
+      "from": "n6",
+      "to": "n8",
+      "kind": "verify",
+      "label": "bravo november yankee"
+    },
+    {
+      "from": "n7",
+      "to": "n8",
+      "kind": "verify",
+      "label": "quebec oscar echoxxxxx"
+    }
+  ],
+  "direction": "LR"
+}

@@ -58,6 +58,7 @@ import {
 import { diagramFitActive, diagramFitNote, diagramFitRoute } from "../fit/state";
 import { footLines } from "./footwrap";
 import { routeSequenceMessages, type SequenceLayout } from "../layout-b";
+import { flowSerialisedNote } from "../layout-a/flow";
 import { autoFitDiagram, type DiagramGeometryIssue } from "./autofit";
 import type { EdgeLabelPlan } from "../fit/labels";
 import { fitEdgeLabels, noteRows, planBands, shiftPlan, zoneGeom } from "./fitlabels";
@@ -66,6 +67,7 @@ import { reorderPlaced } from "./order";
 import { capacityRetry, isCapacityReject, withAction } from "./capacity";
 import { crossingHops, routePlaced, type HoppedEdge } from "./route";
 import { canonicalSymbolId } from "../../symbols";
+import { colourCountDetail, diagramColourSources } from "../core/colour"; // row 62 (T-06)
 
 /**
  * Laporan rakitan (HS `report`) di atas `SvgResult.report`.
@@ -257,11 +259,23 @@ function graphFit(s: StudioDiagramV1, sheet: Sheet, paths: readonly RoutedEdge[]
   return { paths: shifted, dy, contentBottom: snapCeil(maxY - dy - 1e-9, LATTICE_Y), pad };
 }
 
-/** D-290: cek otomatis, semua koordinat y yang dipancarkan berada di [0, H] (graph). */
-function assertInsideSheet(svg: string, H: number): void {
+/**
+ * Swarm 1.2.6 row 67 (T-12): tolerance of the D-290 sheet check. Coordinates are printed to at most 0.01 mm
+ * (`pyNum(v, 2)`; the paper rect to 0.001 mm), so a value on the sheet edge reads up to half that unit beyond the
+ * unrounded height H. The rev-198 stand-alone figure was refused for its own paper rect (height printed 100.013 against
+ * H 100.0125): a print rounding, not an element outside the sheet.
+ */
+const SHEET_EDGE_TOLERANCE_MM = 0.005 + 1e-6;
+
+/**
+ * D-290: cek otomatis, semua koordinat y yang dipancarkan berada di [0, H] (graph).
+ * Swarm 1.2.6 row 67 (T-12, register N-019): the refusal names the apparatus furniture height (caption, KUNCI and
+ * SUMBER lines, `furnitureMm`) apart from the sheet height, so the over-capacity details report it separately.
+ */
+function assertInsideSheet(svg: string, H: number, furnitureMm: number): void {
   const bad: string[] = [];
   const check = (v: number, what: string) => {
-    if (v < -1e-6 || v > H + 1e-6) bad.push(`${what}=${pyFixed(v, 3)}`);
+    if (v < -SHEET_EDGE_TOLERANCE_MM || v > H + SHEET_EDGE_TOLERANCE_MM) bad.push(`${what}=${pyFixed(v, 3)}`);
   };
   for (const m of svg.matchAll(/\s(y|y1|y2|cy)="(-?[\d.]+)"/g)) check(Number(m[2]), m[1]);
   for (const m of svg.matchAll(/<rect [^>]*?\sy="(-?[\d.]+)"[^>]*?\sheight="([\d.]+)"/g)) check(Number(m[1]) + Number(m[2]), "rect bawah");
@@ -270,7 +284,7 @@ function assertInsideSheet(svg: string, H: number): void {
     for (const q of m[1].matchAll(/[ML]\s*(-?[\d.]+)[\s,]+(-?[\d.]+)/g)) check(Number(q[2]), "path y");
   }
   if (bad.length) {
-    throw new DiagramDefect(`DATUM-37-tinggi: unsur keluar lembar graph (tinggi ${pyFixed(H, 3)} mm): ${bad.slice(0, 5).join(", ")} (P8, D-290)`, {
+    throw new DiagramDefect(`DATUM-37-tinggi: unsur keluar lembar graph (tinggi ${pyFixed(H, 3)} mm, kaki aparatus ${pyFixed(furnitureMm, 3)} mm): ${bad.slice(0, 5).join(", ")} (P8, D-290)`, {
       checkId: "DATUM-37-tinggi",
     });
   }
@@ -329,11 +343,14 @@ function provenanceTspans(el: string, prov: NonNullable<DiagramBuildOptions["pro
  */
 export function withCaptionAbove(r: DiagramSvgResult): DiagramSvgResult {
   if (r.report.apparatus !== "figure" || !r.svg.includes(CAPTION_MARK_ATTR)) return r;
-  const caps: string[] = [];
+  const found: Array<{ el: string; y: number }> = [];
   const body = r.svg.replace(new RegExp(`<text ${CAPTION_MARK_ATTR} [\\s\\S]*?</text>\\n?`, "g"), (m) => {
-    caps.push(m.trimEnd());
+    found.push({ el: m.trimEnd(), y: Number(/ y="(-?[\d.]+)"/.exec(m)?.[1] ?? 0) });
     return "";
   });
+  // Swarm 1.2.6 row 67 (BUG routed from row 28): `buildOnce` draws the caption lines bottom-up (last line first), so
+  // their emission order is reversed; the reading order is their order on the sheet (top line = the GAMBAR label line).
+  const caps = found.sort((a, b) => a.y - b.y).map((c) => c.el);
   const paper = paperRectSvg(r.widthMm, r.heightMm);
   const paperAt = body.indexOf(paper);
   const paperEnd = paperAt < 0 ? -1 : paperAt + paper.length - 2;
@@ -364,7 +381,11 @@ export function buildDiagramSvgWith(s: StudioDiagramV1, opts: DiagramBuildOption
     if (isCapacityReject(e, s)) return capacityRetry(s, e, () => buildOnce(s, opts, deps));
     throw withAction(e, s);
   }
-  return autoFitDiagram(first, () => buildOnce(s, opts, deps));
+  const out = autoFitDiagram(first, () => buildOnce(s, opts, deps));
+  // Swarm 1.2.6 row 47 (T-11, 01e §4.4, N-160): a legacy flow that serialises parallel branches
+  // gets one FLOW_SERIALISED REPORT line; layout and SVG bytes unchanged (U3).
+  const serial = flowSerialisedNote(s);
+  return serial ? { ...out, report: { ...out.report, geometry: [...(out.report.geometry ?? []), serial] } } : out;
 }
 
 function buildOnce(s: StudioDiagramV1, opts: DiagramBuildOptions, deps: DiagramBuildDeps): DiagramSvgResult {
@@ -445,6 +466,8 @@ function buildOnce(s: StudioDiagramV1, opts: DiagramBuildOptions, deps: DiagramB
     sheet.foot += footExtra * LATTICE_Y;
     diagramFitNote("CAPTION_WRAP", `caption ${capLines.length} baris, SUMBER ${srcLines.length} baris (dibungkus ke lebar ${W} mm)`, "persingkat judul gambar (maks ~100 karakter)");
   }
+  // Swarm 1.2.6 row 67 (T-12, N-019): apparatus furniture (caption, KUNCI, SUMBER lines), before edge-label notes.
+  const furnitureMm = sheet.foot;
   let H = fit ? fit.contentBottom + sheet.foot + fit.pad : sheet.height();
   let notes: ReturnType<typeof noteRows> | undefined;
   let notesY0 = 0;
@@ -463,7 +486,7 @@ function buildOnce(s: StudioDiagramV1, opts: DiagramBuildOptions, deps: DiagramB
     }
   }
   if (H > grid.maxHeightMm + 1e-6) {
-    throw new DiagramDefect(`DATUM-33: tinggi gambar ${pyFixed(H, 2)} mm melewati blok teks ${pyFixed(grid.maxHeightMm, 1)} mm (P8)`, {
+    throw new DiagramDefect(`DATUM-33: tinggi gambar ${pyFixed(H, 2)} mm melewati blok teks ${pyFixed(grid.maxHeightMm, 1)} mm (kaki aparatus ${pyFixed(furnitureMm, 2)} mm) (P8)`, {
       checkId: "DATUM-33",
     });
   }
@@ -582,7 +605,7 @@ function buildOnce(s: StudioDiagramV1, opts: DiagramBuildOptions, deps: DiagramB
   }
   if (fit) sheet.fixHeight(H); // akar SVG memakai tinggi lembar pas (D-290)
   const svg = sheet.toSvg();
-  if (fit) assertInsideSheet(svg, H);
+  if (fit) assertInsideSheet(svg, H, furnitureMm);
 
   // DATUM-25 dari SVG NYATA (IP-39b, S84 #2): semua fill/stroke tercetak di luar
   // <defs> + definisi yang dirujuk, kertas dibuang. DEVIASI SENGAJA dari Garis A,
@@ -591,7 +614,8 @@ function buildOnce(s: StudioDiagramV1, opts: DiagramBuildOptions, deps: DiagramB
   const used = svgColourValues(svg);
   if (used.length > LIMITS.max_colour_values) {
     throw new DiagramDefect(
-      `DATUM-25: ${used.length} nilai warna dalam satu gambar, maksimum ${LIMITS.max_colour_values} (temuan E-16: plafon ini nyata) (P5/P8)`,
+      // Swarm 1.2.6 row 62 (T-06): name each counted value, its sources and the remainder.
+      `DATUM-25: ${used.length} nilai warna dalam satu gambar, maksimum ${LIMITS.max_colour_values} (temuan E-16: plafon ini nyata) (P5/P8); ${colourCountDetail(used, diagramColourSources(s, sheet), LIMITS.max_colour_values)}`,
       { checkId: "DATUM-25" },
     );
   }

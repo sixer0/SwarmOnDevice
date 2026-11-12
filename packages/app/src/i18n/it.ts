@@ -1274,6 +1274,7 @@ export const dict = {
   "desktop.menu.window": "Finestra",
   "desktop.menu.help": "Aiuto",
   "desktop.menu.checkForUpdates": "Verifica aggiornamenti...",
+  "desktop.menu.recheckTools": "Ricontrolla strumenti",
   "desktop.menu.settings": "Impostazioni",
   "desktop.menu.reloadWebview": "Ricarica Webview",
   "desktop.menu.restart": "Riavvia",
@@ -1424,7 +1425,10 @@ export const dict = {
   "memory.privacy": "Conservata su questo dispositivo, mai nel repository. Un modello vede queste note solo come parte di una sessione che esegui con esso.",
   "memory.off": "Disattivata. Le sessioni non ricevono note e non si impara nulla di nuovo. Le tue note vengono conservate.",
   "memory.refused.secret": "Sembra una password o una chiave, quindi non è stato salvato.",
-  "memory.refused.long": "Mantieni la nota sotto i 400 caratteri.",
+  "memory.refused.long":
+    "Mantieni la nota sotto i {{max}} caratteri. Metti i dettagli più lunghi in un file e chiedi all'agente di collegarlo.",
+  "memory.refused.bodyLong": "Mantieni il corpo della nota sotto i {{max}} caratteri, oppure collega un file.",
+  "memory.refused.tooManyRefs": "Una nota può collegare al massimo {{max}} file o simboli.",
   "memory.refused.full": "La memoria è piena. Elimina prima una nota.",
   "memory.error": "Impossibile caricare la memoria del progetto.",
   "memory.retry": "Riprova",
@@ -1449,4 +1453,5 @@ export const dict = {
   "session.movedOn.answer": "Rispondi",
   "home.agents.movedOn": "Ha proseguito senza questo · {{time}}",
   "home.setup.attention": "Una parte della configurazione richiede attenzione.",
+  "session.map.decisions.category.protected_path": "Posizione protetta (chiavi, credenziali o cartelle di sistema)",
 }

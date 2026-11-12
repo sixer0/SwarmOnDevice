@@ -30,6 +30,8 @@ import type { MissionLog } from "../mission/tool-result.ts"
 import type { HostToolExtension, HostToolNext, HostToolSession } from "../tool-table.ts"
 import type { VerifyFormat } from "./static-checks.ts"
 import type { OutputVerificationReport, VerifiedOutput } from "./types.ts"
+import { clientEntries, clientFindingsBlock } from "./client-findings.ts"
+import { overlapCoverageText } from "./overlap-clip.ts"
 import { allUnknownOutput, isVerifyFormat, outputState, verifyOutputs, type VerifyOptions, type VerifyOutputFile } from "./verify-outputs.ts"
 
 export const RENDER_VERIFY_TOOL = "studio_render"
@@ -103,15 +105,26 @@ function recordReport(r: OutputVerificationReport, v: VerifiedOutput): Record<st
 export function verificationLines(r: OutputVerificationReport, pageImages: { made: number; reason: string | null; note?: string | null }): string[] {
   const ok = r.outputs.filter((v) => v.state === "verified").length
   const tok = (s: string) => (SAFE.test(s) ? s : "?")
-  const lines = [`verification: ${r.overall === "verified" ? "VERIFIED" : "UNVERIFIED"} (${ok}/${r.outputs.length} outputs verified)`]
+  // 1.2.6 row 77 (M-07, N-039/N-040): the page verdict is labelled RENDER_VERIFIED(U24) / RENDER_UNVERIFIED(U24), never a
+  // bare VERIFIED, so it is not read as the file-level FILE_VERIFIED(sha256) check of studio_file_verify.
+  const lines = [`verification: ${r.overall === "verified" ? "RENDER_VERIFIED(U24)" : "RENDER_UNVERIFIED(U24)"} (${ok}/${r.outputs.length} outputs verified)`]
+  // 1.2.6 row 30 (T-13, N-032): OVERLAP_CLIP coverage on its own line under the output line ("diukur m/n halaman"),
+  // so the summary lines keep their shape; the UNKNOWN reason (MEASURE_TRUNCATED) stays in unknown= unchanged.
+  const coverageLine = (v: VerifiedOutput) => {
+    const c = v.checks.find((x) => x.id === "OVERLAP_CLIP")
+    const text = c ? overlapCoverageText(c) : null
+    return text ? `    OVERLAP_CLIP ${c!.status}${c!.status === "UNKNOWN" ? `:${c!.reason ?? "?"}` : ""} ${text}` : null
+  }
   for (const v of r.outputs) {
     if (v.state === "verified") {
-      lines.push(`  ${v.format} ${tok(v.outputId)} VERIFIED`)
-      continue
+      lines.push(`  ${v.format} ${tok(v.outputId)} RENDER_VERIFIED(U24)`)
+    } else {
+      const fail = v.checks.filter((c) => c.status === "FAIL").map((c) => c.id)
+      const unknown = v.checks.filter((c) => c.status === "UNKNOWN").map((c) => `${c.id}:${c.reason ?? "?"}`)
+      lines.push(`  ${v.format} ${tok(v.outputId)} RENDER_UNVERIFIED(U24) fail=${fail.join(",") || "-"} unknown=${unknown.join(",") || "-"}`)
     }
-    const fail = v.checks.filter((c) => c.status === "FAIL").map((c) => c.id)
-    const unknown = v.checks.filter((c) => c.status === "UNKNOWN").map((c) => `${c.id}:${c.reason ?? "?"}`)
-    lines.push(`  ${v.format} ${tok(v.outputId)} UNVERIFIED fail=${fail.join(",") || "-"} unknown=${unknown.join(",") || "-"}`)
+    const cov = coverageLine(v)
+    if (cov) lines.push(cov)
   }
   if (r.scope === "DOCUMENT" && !r.layoutWitness) lines.push("  layout witness: none (a verified PDF or HTML of this revision is needed)")
   const pngs = [...new Set(r.outputs.flatMap((v) => v.pages.map((p) => p.png)).filter((p): p is string => typeof p === "string"))]
@@ -123,7 +136,14 @@ export function verificationLines(r: OutputVerificationReport, pageImages: { mad
     const why = pageImages.reason && /^[A-Za-z0-9 _.,:()-]{1,120}$/.test(pageImages.reason) ? pageImages.reason : "not made"
     lines.push(`  pages: none imaged (${why}); open the PDF or HTML output and look at every page`)
   }
-  if (r.overall !== "verified") lines.push("  next: read structuredContent.verification, look at the pages, fix the source, render again (DATUM skill §15)")
+  // Row 206 (1.2.3, AC-2): the checks of every unverified output, in the text (short MCP clients never see
+  // structuredContent). One fenced block; document-derived parts stay inside it (MCP-D4).
+  const block = clientFindingsBlock(
+    r.outputs.filter((v) => v.state !== "verified").map((v) => ({ format: v.format, outputId: SAFE.test(v.outputId) ? v.outputId : null, ...clientEntries(v.checks) })),
+    { documentId: SAFE.test(r.documentId) ? r.documentId : "" },
+  )
+  if (block) lines.push("  checks (per unverified output: check, verdict, page, address, measured, expected, rule, message):", block)
+  if (r.overall !== "verified") lines.push("  next: fix the source at the page/address of each check above, look at the pages, render again (DATUM skill §15); full report: structuredContent.verification")
   return lines
 }
 

@@ -1,0 +1,27 @@
+digraph g1 {
+  rankdir=TB; splines=ortho; dpi=300;
+  margin="0.18"; nodesep=0.45; ranksep=0.40; edgesep=0.10;
+  bgcolor="#FCFCFB"; fontname="IBM Plex Sans Condensed";
+  node [shape=box, style=plain, color="#2B3640", fontcolor="#14110F",
+        fontname="IBM Plex Sans Condensed", fontsize=8, penwidth=1.0, margin="0.12,0.06"];
+  edge [fontname="IBM Plex Sans Condensed", fontsize=6.5, fontcolor="#14110F",
+        arrowsize=0.7, penwidth=1.0, labeldistance=1.4];
+  "n1" [shape=box, label="bravo november XX-8888", penwidth=1.2];
+  "n2" [shape=box, label="india echoxxxxxx"];
+  "n3" [shape=box, label="november golfhotel"];
+  "n4" [shape=box, label="november november"];
+  "n5" [shape=box, label="sierra xxx limamikex"];
+  "n6" [shape=box, label="quebec, tango november", penwidth=1.2];
+  "n7" [shape=box, label="delta november november", penwidth=1.2];
+  "n8" [shape=box, label="november tangoxxxx", penwidth=1.2];
+  "n1" -> "n2" [label="Tango 88", color="#2B3640", style=dashed, penwidth=1];
+  "n1" -> "n3" [label="Bravo 88", color="#2B3640", style=dashed, penwidth=1];
+  "n1" -> "n4" [label="Delta 88", color="#2B3640", style=dashed, penwidth=1];
+  "n1" -> "n5" [label="Hotel 88 xxx 88", color="#2B3640", style=dashed, penwidth=1];
+  "n2" -> "n6" [label="zulualfax xxx yankee", color="#2F6F6B", style=solid, penwidth=1];
+  "n3" -> "n6" [label="uniform golf charlie", color="#2F6F6B", style=solid, penwidth=1];
+  "n4" -> "n7" [label="november november", color="#2F6F6B", style=solid, penwidth=1];
+  "n5" -> "n7" [label="hotelindiax, tango november", color="#2F6F6B", style=solid, penwidth=1];
+  "n6" -> "n8" [label="delta november victor", color="#2F6F6B", style=solid, penwidth=1];
+  "n7" -> "n8" [label="yankee romeo papaxxxxx", color="#2F6F6B", style=solid, penwidth=1];
+}
