@@ -77,7 +77,8 @@
   "row65": "2026-11-12: 1.2.6 row 65 (T-09, U14 reverses D-322; register N-025..N-029). 2 vendor files patched (files[].patch_row65, before = previous sha256; status copied -> patched): engine/chart/core/datum.ts (honest DC bar geometry for every n, BAR_MIN_BODY_MM is a threshold, REPORT BAR_SUBMIN below it; BAR_MAX_THICK_MM and BAR_MIN_HEIGHT retired; BarRows.scaled always false) and engine/chart/core/index.ts (BAR_MAX_THICK_MM export removed). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/65_row65_diffs. counts by delta: copied 420 -> 418, patched 146 -> 148; bytes 9873429 -814 = 9872615. patch_rows += 65",
   "row68": "2026-11-12: 1.2.6 row 68 (T-15, U3; register N-036 FIGURE_PREPARE_FAILED, E-15 FIGURE_PLACEHOLDER reused, no new verification code). 4 vendor files (files[].patch_row68, before = previous sha256): engine/docx/figures/store.ts (copied -> patched: a failing figure becomes a FIGURE_PREPARE_FAILED marker entry, assembly continues), engine/docx/figures/log.ts (copied -> patched: marker constant, type, reader), engine/docx/figures/figure.ts (re-patched: marked placeholder paragraph instead of a picture), services/render/figures.ts (re-patched: failureFor + rasterize wrapper, job stays PARTIAL). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/68_row68_diffs/. counts by delta: copied 418 -> 416, patched 148 -> 150, files/replaced/added unchanged; bytes 9872615 + 7156 = 9879771. patch_rows += 68",
   "row64": "2026-11-12: 1.2.6 row 64 (T-08 fan-out sub-ranking, N-018; 01e §8; ranked-flow forward sides 01e §4.2 routed by row 46). 1 vendor file re-patched (files[].patch_row64, before = previous sha256): engine/diagram/build/route.ts (status patched unchanged). counts.bytes by delta +8531",
-  "row47": "2026-11-12: 1.2.6 row 47 (T-11 acceptance; register N-160; 01e §4.3-§4.5; C7). 3 vendor files re-patched (files[].patch_row47, before = previous sha256; statuses unchanged): engine/diagram/layout-a/flow.ts (FLOW_SERIALISED note helper, TB placement under predecessors, label-corridor growth), engine/diagram/elk/index.ts (R1 gate admits ranked flow), engine/diagram/build/svg.ts (one FLOW_SERIALISED call site). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/47_row47_diffs/. counts.bytes by delta +5722. patch_rows += 47"
+  "row47": "2026-11-12: 1.2.6 row 47 (T-11 acceptance; register N-160; 01e §4.3-§4.5; C7). 3 vendor files re-patched (files[].patch_row47, before = previous sha256; statuses unchanged): engine/diagram/layout-a/flow.ts (FLOW_SERIALISED note helper, TB placement under predecessors, label-corridor growth), engine/diagram/elk/index.ts (R1 gate admits ranked flow), engine/diagram/build/svg.ts (one FLOW_SERIALISED call site). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/47_row47_diffs/. counts.bytes by delta +5722. patch_rows += 47",
+  "row61": "2026-11-12: 1.2.6 row 61 (T-05, U5; no new register name). 1 vendor file re-patched (files[].patch_row61, before = previous sha256; status unchanged): engine/diagram/core/svg.ts (provenance glyph inset by node shape: parallelogram inside, diamond outside the slanted side; box byte-identical). Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/61_row61_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9894024 + 1916 = 9895940. patch_rows += 61"
  },
  "counts": {
   "files": 608,
@@ -85,7 +86,7 @@
   "patched": 150,
   "replaced": 12,
   "added": 30,
-  "bytes": 9894024
+  "bytes": 9895940
  },
  "files": [
   {
@@ -2491,9 +2492,10 @@
   {
    "path": "src/lib/studio/engine/diagram/core/svg.ts",
    "status": "patched",
-   "bytes": 31852,
+   "bytes": 33768,
    "source_sha256": "6c1846b3c5b2966476dbe1fff3fe44283daea1c70eb7bf12d5b3fbece817c741",
-   "sha256": "30483840831c8a73f182096a0134265636056784ed27360cbe02cf832af46247",
+   "sha256": "bbbdd9bb5720a5b185aa98672ba3323c15240f463d3604202733643a655fea49",
+   "patch_row61": {"id": "row61-t05-glyph-inset", "row": "61", "decision": "1.2.6 patch T-05, U5 (01_specs T-05; rev 183/184 GEOM_TEXT_NODE)", "summary": "NEW export markGlyphAnchor: provenance glyph anchor by node shape; parallelogram glyph moves left by the slant at the glyph bottom plus the 1.5 pt clearance measured perpendicular to the side; diamond glyph stays in the box top-right corner outside the outline and rises (never drops) until it clears the upper-right side by 1.5 pt; markGlyphSvg and nodeTextGroundSvg use it; every other shape (box included) keeps the old anchor, byte-identical", "before_sha256": "30483840831c8a73f182096a0134265636056784ed27360cbe02cf832af46247", "after_sha256": "bbbdd9bb5720a5b185aa98672ba3323c15240f463d3604202733643a655fea49", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/61_row61_diffs/engine_diagram_core_svg.ts.diff", "diff_sha256": "83998f27449cb9116c89b5b42126cf977fe587fa958baa84186d4acd7df1e197"},
    "patch_row165O": {"id": "row165O-figure-explicit-fill", "row": "165O", "decision": "C204 item 4 (F-Y3)", "summary": "hatch line group and the stroke-only lines (bus node, doubled-node mid line, lineSvg) carry fill=\"none\"; no figure element falls back to the SVG default black fill (Chromium wrote #000000 fill operators on the figure page)", "before_sha256": "f21973d1db9792f1c4656724b1946fc4aac9ba6323d80a2bc96361fe83f82163", "after_sha256": "30483840831c8a73f182096a0134265636056784ed27360cbe02cf832af46247", "diff": "implementation/145_row165O_diffs/engine_diagram_core_svg.ts.diff"},
    "patch_row165J": {"id": "row165J-recheck-fixes", "row": "165J", "decision": "C197 F165H-2", "summary": "NEW nodeTextGroundSvg: on a hatched node every text line (label, sub-label, tag, mark glyph) gets a paper rect behind it (measured glyph width + 0.5 mm, cap height to descender + 0.3 mm), cut to the inside of the drawn outline and clipped by the outline clip of a non-box node; drawn after the hatch, before the outline; paper only (no new colour); un-hatched nodes byte-identical", "before_sha256": "f660dcc9a86582c6721142e5f4c682551b5d9abb8536ed2700c06bcf85a7e7e8", "after_sha256": "f21973d1db9792f1c4656724b1946fc4aac9ba6323d80a2bc96361fe83f82163", "diff": "implementation/142_row165J_diffs/engine_diagram_core_svg.ts.diff"},
    "patch_row165C": {"id": "row165C-figure-engine", "row": "165C", "decision": "C188 F113-9 (CP-37), F113-10 (CP-47)", "summary": "nodeSvg: hatch drawn as vector lines (hatchLinesSvg: pattern geometry x cos a + y sin a = 1.6 k, cut to the box, clipPath for non-box shapes, 0.3 mm ink400) under an unfilled outline instead of fill url(#datum-hatch..); outline inset by half a stroke on the sheet edge (insetForStroke, canvas option); NEW exports HATCH_PITCH_MM, HATCH_STROKE_MM, nodeHatchAngle, NodeSvgOptions", "before_sha256": "89290c4b734e6775d94f09b11347a3286cb54052591ff18a5d56eb5037ac0d45", "after_sha256": "f660dcc9a86582c6721142e5f4c682551b5d9abb8536ed2700c06bcf85a7e7e8", "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/136_row165C_diffs/engine_diagram_core_svg.ts.diff", "diff_sha256": "e238d1ca42d0ce33e2f9168e9406a74d420ee9536c3466678d09dbe8f5afbb5d"},
@@ -6101,6 +6103,7 @@
   "65",
   "68",
   "64",
-  "47"
+  "47",
+  "61"
  ]
 }

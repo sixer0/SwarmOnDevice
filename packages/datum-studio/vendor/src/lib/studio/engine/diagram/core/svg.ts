@@ -12,7 +12,7 @@
  */
 import type { DiagramEdgeKind, FaceRole, ProvenanceMark } from "../../../contract";
 import { symbolBody } from "../../symbols";
-import { measure, tspanLines } from "../../chart/core/textfit";
+import { FONT_DESCENT_EM, measure, tspanLines } from "../../chart/core/textfit";
 import { diagramFitActive } from "../fit/state";
 import { nodeTextLayout, type TextBlockLayout } from "../fit/text";
 import { type PyNumber, pyLen, pyNum, pyStr, pyStrNum } from "./pyfmt";
@@ -221,13 +221,49 @@ export const MARK_COLOUR_TOKENS: Readonly<Record<ProvenanceMark, string>> = {
   ASUMSI: "alert",
 };
 
+/**
+ * Swarm 1.2.6 row 61 (T-05, rev 183/184 GEOM_TEXT_NODE): anchor (text-anchor="end" x, baseline y) of the
+ * provenance glyph. Every shape keeps the box anchor (right edge - 1.5 pt, top + caption size), except the two
+ * shapes whose top-right corner is cut by a slanted side, where the glyph's ink touched the outline:
+ * - parallelogram: the glyph stays inside and moves left by the slant at the glyph's bottom, plus the 1.5 pt
+ *   clearance measured perpendicular to the slanted side;
+ * - diamond: the glyph stays in the top-right corner of the box, outside the outline, and rises (never drops)
+ *   until its bottom-left corner clears the upper-right side by the same perpendicular 1.5 pt.
+ */
+export function markGlyphAnchor(nd: Pick<SheetNode, "x" | "y" | "w" | "h" | "spec">): { x: number; y: number } {
+  const pad = pt2mm(1.5);
+  const capMm = pt2mm(role("caption").size);
+  const boxX = nd.x + nd.w - pad;
+  const boxY = nd.y + capMm;
+  const shape = nd.spec.shape;
+  if (shape !== "parallelogram" && shape !== "diamond") return { x: boxX, y: boxY };
+  const { x, y, w, h } = nd;
+  if (!(w > 0 && h > 0)) return { x: boxX, y: boxY };
+  const sizeMm = pt2mm(role("register_block").size);
+  const descMm = FONT_DESCENT_EM * sizeMm;
+  if (shape === "parallelogram") {
+    // right side: (x + w, y) -> (x + w - k, y + h), k as in shapeSvg
+    const k = w * 0.18;
+    const t = Math.min(1, (capMm + descMm) / h);
+    return { x: boxX - k * t - pad * (Math.hypot(h, k) / h - 1), y: boxY };
+  }
+  // diamond, upper-right side: (x + w/2, y) -> (x + w, y + h/2), slope h / w
+  const mk = nd.spec.mark;
+  const glyphW = mk ? measure(MARKS[mk] ?? "", role("register_block").size, "data") : 0;
+  const left = boxX - glyphW;
+  const sideY = y + (h * Math.max(0, left - (x + w / 2))) / w;
+  const bottom = sideY - (pad * Math.hypot(w, h)) / w;
+  return { x: boxX, y: Math.min(boxY, bottom - descMm) };
+}
+
 /** Glif asal (mono; pitfall warisan: jangan tukar wajah). Row 124: warna per tanda (Tabel 7.1). */
 export function markGlyphSvg(nd: SheetNode): string {
   const mk = nd.spec.mark;
   const glyph = mk ? MARKS[mk] : "";
   const fill = colourOf(mk ? (MARK_COLOUR_TOKENS[mk] ?? "signal") : "signal");
+  const at = markGlyphAnchor(nd);
   return (
-    `<text x="${r2(nd.x + nd.w - pt2mm(1.5))}" y="${r2(nd.y + pt2mm(role("caption").size))}" ` +
+    `<text x="${r2(at.x)}" y="${r2(at.y)}" ` +
     `font-family="${escAttr(FACES.mono)}" font-size="${pyNum(pt2mm(role("register_block").size), 3)}" ` +
     `fill="${fill}" text-anchor="end">${escText(glyph)}</text>`
   );
@@ -434,7 +470,8 @@ export function nodeTextGroundSvg(
   }
   if (n.mark) {
     const glyph = MARKS[n.mark] ?? "";
-    lines.push({ x: nd.x + nd.w - pt2mm(1.5), y: nd.y + capMm, s: glyph, role: "register_block", anchor: "end", face: "data" });
+    const at = markGlyphAnchor(nd);
+    lines.push({ x: at.x, y: at.y, s: glyph, role: "register_block", anchor: "end", face: "data" });
   }
   if (n.tag) lines.push({ x: nd.x + pt2mm(1.5), y: nd.y + capMm, s: pyStr(n.tag), role: "table_header", anchor: "start" });
   const half = STROKE_PRIMARY / 2;
