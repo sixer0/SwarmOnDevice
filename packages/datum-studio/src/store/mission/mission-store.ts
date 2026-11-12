@@ -152,6 +152,8 @@ export interface RowPatchResult {
   ok: boolean
   code?: string
   message?: string
+  /** Row 82b (MC-04): true when the patch was refused for DEP_NOT_DONE but its note was stored. */
+  noteSaved?: boolean
 }
 
 /** What updateRows returns: applied rows, the per-patch results, and the derived waves / ready rows after the job. */
@@ -531,7 +533,8 @@ export class MissionStore {
    * studio_mission_update_row (§8.3): 1-200 patches applied in order in this job.
    * Row 85 (1.2.6, MC-07, N-061): each patch runs under its own SAVEPOINT. A patch refused with a StoreError is rolled
    * back alone and reported in `results` ({id, ok: false, code, message}); the other patches stay applied. A job in
-   * which no patch applies throws the first patch's error unchanged. Any other error is a
+   * which no patch applies (and no note was kept, row 82b) throws the first patch's error unchanged. Row 82b (MC-04): a
+   * patch whose status move is refused for DEP_NOT_DONE still stores its note ({..., noteSaved: true}). Any other error is a
    * fault, not a refusal, and still fails the whole job.
    */
   updateRows(tx: StoreTx, mission: string, patches: readonly RowPatch[], args: { decision?: string } = {}, opts?: MissionWriteOptions): RowPatchJobResult {
@@ -542,6 +545,7 @@ export class MissionStore {
     const changed: string[] = []
     const results: RowPatchResult[] = []
     let firstRefusal: StoreError | undefined
+    let notesKept = 0
     for (const p of patches) {
       tx.run(`SAVEPOINT ${ROW_PATCH_SAVEPOINT}`)
       try {
@@ -554,16 +558,38 @@ export class MissionStore {
         // transitionRow may have flipped the in-memory mission status (autoRun); re-read it after the rollback.
         m.status = this.openMission(tx, mission).status
         firstRefusal ??= e
-        results.push({ id: String(p?.id), ok: false, code: e.code, message: e.message.slice(e.code.length + 2) })
+        const refusal: RowPatchResult = { id: String(p?.id), ok: false, code: e.code, message: e.message.slice(e.code.length + 2) }
+        // Row 82b (1.2.6, MC-04): notes are never gated by dependencies. A status move refused for DEP_NOT_DONE (only
+        // this code) still stores the patch's note; the rest of the patch stays rolled back.
+        if (e.code === "DEP_NOT_DONE" && p.status && p.note !== undefined && this.keepNote(tx, m, p.id, p.note, actor)) {
+          refusal.noteSaved = true
+          notesKept++
+        }
+        results.push(refusal)
         continue
       }
       changed.push(p.id)
       results.push({ id: p.id, ok: true })
     }
-    if (changed.length === 0 && firstRefusal) throw firstRefusal
+    if (changed.length === 0 && notesKept === 0 && firstRefusal) throw firstRefusal
     this.afterWrite(tx, mission, opts)
     const g = this.graph(tx, mission)
     return { changed, results, waves: computeWaves(g.rows, g.deps), ready: readyRows(g.rows, g.deps, new Set(this.requestBlocks(tx, mission).keys())) }
+  }
+
+  /** Row 82b (MC-04): store a refused patch's note under its own savepoint; false when the note itself is refused. */
+  private keepNote(tx: StoreTx, m: MissionDbRow, rowId: string, note: string, actor: string): boolean {
+    tx.run(`SAVEPOINT ${ROW_PATCH_SAVEPOINT}`)
+    try {
+      this.setNote(tx, m, rowId, note, actor)
+      tx.run(`RELEASE SAVEPOINT ${ROW_PATCH_SAVEPOINT}`)
+      return true
+    } catch (e) {
+      tx.run(`ROLLBACK TO SAVEPOINT ${ROW_PATCH_SAVEPOINT}`)
+      tx.run(`RELEASE SAVEPOINT ${ROW_PATCH_SAVEPOINT}`)
+      if (!(e instanceof StoreError)) throw e
+      return false
+    }
   }
 
   /** One row patch (row 85 split it out of updateRows so each patch can run under its own savepoint). */

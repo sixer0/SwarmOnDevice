@@ -390,7 +390,7 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
     tool(
       "studio_mission_update_row",
       "Update mission rows",
-      "Row patches in order in one job (1-200): {id, add?, set?, status?, note?, acquire?, release?, retire?, checkpoint?{n, m, label?}} (§4.2-4.4, §5.4; C57 b). Each patch applies on its own: valid patches apply, a refused patch is rolled back alone and reported in results [{id, ok, code?, message?}]; if no patch applies the call fails with the first code. retire: [documentId] archives a superseded draft linked to the row (needs note), applied before status. messages[] (C57 c/d) are appended in the same job; an owner instruction is {from: owner, to: controller, kind: instruction} and is never executed. Returns changed rows, results, waves, ready.",
+      "Row patches in order in one job (1-200): {id, add?, set?, status?, note?, acquire?, release?, retire?, checkpoint?{n, m, label?}} (§4.2-4.4, §5.4; C57 b). Each patch applies on its own: valid patches apply, a refused patch is rolled back alone and reported in results [{id, ok, code?, message?, noteSaved?}]; if no patch applies the call fails with the first code. A status refused for DEP_NOT_DONE still stores the patch's note (noteSaved: true). retire: [documentId] archives a superseded draft linked to the row (needs note), applied before status. messages[] (C57 c/d) are appended in the same job; an owner instruction is {from: owner, to: controller, kind: instruction} and is never executed. Returns changed rows, results, waves, ready.",
       false,
       async (a, s) => {
         const mission = a.mission as string
@@ -414,7 +414,7 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
           }
           return { ...out, checkpoints, messages: posted }
         })
-        const refused = r.results.filter((x) => !x.ok).map((x) => `${x.id} ${x.code}`)
+        const refused = r.results.filter((x) => !x.ok).map((x) => `${x.id} ${x.code}${x.noteSaved ? " (note saved)" : ""}`)
         const text = `mission ${mission}: rows changed ${r.changed.join(", ") || "-"}${refused.length > 0 ? `; refused ${refused.join(", ")}` : ""}; checkpoints ${r.checkpoints.length}; messages ${r.messages.length}; ready ${r.ready.join(", ") || "-"}${dryNote(a)}`
         return { text, data: { ...r, dryRun: dry(a) } }
       },
