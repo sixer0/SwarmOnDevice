@@ -33,24 +33,18 @@ import {
 import { ensureToolHealthDir, readToolHealthState, scrubDetail, scrubOutput, writeToolHealthState, type ToolHealthState } from "./state"
 import { PROBE_BODY_MAX_BYTES, type ResolvedToolHealthComponent, type ToolHealthContext } from "./types"
 import { resolveToolHealthRegistry, userRegistryIssueMessage } from "./user-registry"
+import { reviveWebComponent, WEB_REVIVE_IDS, type WebReviveRunner } from "./web-revive"
 
-/** The only ids a `compose-start` revive may pass to `swarm-setup start` (N-153). */
-export const SETUP_START_IDS = ["runtime", "searxng", "firecrawl"] as const
+/** The only ids a `compose-start` revive may pass to `swarm-setup start` (N-153). Row 92b: one list, web-revive.ts. */
+export const SETUP_START_IDS = WEB_REVIVE_IDS
 /** Setup states that count as installed for `installedWhen.setupComponent` (01c 6.2). */
 export const INSTALLED_SETUP_STATES: ReadonlySet<string> = new Set(["healthy", "configured", "installed"])
 /** Environment of a user revive argv (01c 3.3). PATH is fixed; the rest are copied from the parent when present. */
 export const REVIVE_ENV_PATH = "/usr/bin:/bin:/usr/sbin:/sbin"
 export const REVIVE_ENV_COPY = ["HOME", "USER", "LOGNAME", "LANG", "TMPDIR"] as const
-const SETUP_REFUSAL_CODES = ["START_NOT_INSTALLED", "RUNTIME_PROFILE_MISSING", "START_CONTAINERS_MISSING"] as const
 
-/** What tool-health needs from the shared setup runner (setup-runner.ts; `start` lands with rows 92a/92b). */
-export type ToolHealthSetupRunner = {
-  busy?: () => boolean
-  start?: (id: (typeof SETUP_START_IDS)[number]) => Promise<
-    | { kind: "ran"; exitCode: number | null; stdout: string; stderr: string }
-    | { kind: "refused"; reason: string; message?: string }
-  >
-}
+/** What tool-health needs from the shared setup runner (setup-runner.ts `start`, row 92b). */
+export type ToolHealthSetupRunner = WebReviveRunner
 
 /** What tool-health needs from createDatumStudio (start.ts). `probeBridge` / `reviveBridge` land with row 93. */
 export type ToolHealthDatumStudio = {
@@ -197,26 +191,9 @@ export function createToolHealth(deps: ToolHealthDeps): ToolHealth {
     })
   }
 
-  const setupStart = (id: string) => async (): Promise<ReviveOutcome> => {
-    if (!(SETUP_START_IDS as readonly string[]).includes(id))
-      return { ok: false, reason: "REVIVE_EXIT", detail: `${id} has no setup start` }
-    const runner = deps.setupRunner?.()
-    if (!runner?.start) return { ok: false, reason: "SETUP_NO_START_VERB", detail: "swarm-setup start is not available" }
-    if (runner.busy?.()) return { ok: false, reason: "SETUP_BUSY", detail: "swarm-setup is running" }
-    const result = await runner.start(id as (typeof SETUP_START_IDS)[number])
-    if (result.kind === "refused") {
-      if (result.reason === "busy") return { ok: false, reason: "SETUP_BUSY", detail: "swarm-setup is running" }
-      if (/start.?verb|no_start/i.test(result.reason)) return { ok: false, reason: "SETUP_NO_START_VERB", detail: result.reason }
-      return { ok: false, reason: "REVIVE_EXIT", detail: `swarm-setup start ${id} refused (${result.reason})` }
-    }
-    const text = `${result.stdout}\n${result.stderr}`
-    if (result.exitCode === 0) return { ok: true, detail: `swarm-setup start ${id} ok` }
-    log("warn", `swarm-setup start ${id} output`, { stdout: scrubOutput(result.stdout, secrets()), stderr: scrubOutput(result.stderr, secrets()) })
-    const code = SETUP_REFUSAL_CODES.find((c) => new RegExp(`\\b${c}\\b`).test(text))
-    if (code) return { ok: false, reason: code, detail: `swarm-setup start ${id}: ${code}` }
-    const first = scrubDetail(result.stderr || result.stdout, secrets()) || "no output"
-    return { ok: false, reason: "REVIVE_EXIT", detail: `exit ${result.exitCode}: ${first}` }
-  }
+  // Row 92b (TH-03): the web revive is the adapter in web-revive.ts; the only call it makes is runner.start(id).
+  const setupStart = (id: string) => (): Promise<ReviveOutcome> =>
+    reviveWebComponent(id, deps.setupRunner?.(), { log, secrets })
 
   const argvRevive = (c: ResolvedToolHealthComponent, argv: string[], fallbackArgv?: string[]) => async (): Promise<ReviveOutcome> => {
     const attempt = async (list: string[], which: string) => {

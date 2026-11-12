@@ -25,6 +25,10 @@ export const SETUP_OUTPUT_MAX_BYTES = 1024 * 1024
 // G-U14 Q2: recorded as `mode: app` in consent.log. Passed only when the bundled swarm-setup lists
 // the flag in its usage text, so an older binary never sees an unknown flag (it would refuse).
 export const SETUP_APP_MODE_ARGS = ["--consent-mode", "app"] as const
+// 1.2.6 row 92b (TH-03, N-153): the only ids `swarm-setup start` accepts, and the only verb tool-health may reach.
+// Same set as STARTABLE_COMPONENTS in packages/setup/src/estate/start.ts; setup-runner.test.ts fails if they drift.
+export const SETUP_START_IDS = ["runtime", "searxng", "firecrawl"] as const
+export const SETUP_START_VERB = "start"
 
 // Same values as STATES in packages/setup/src/constants.ts; setup-runner.test.ts fails if they drift.
 export const SETUP_STATE_VALUES: ReadonlySet<string> = new Set([
@@ -40,6 +44,7 @@ export const SETUP_STATE_VALUES: ReadonlySet<string> = new Set([
 ])
 
 export type SetupComponentId = (typeof SETUP_COMPONENT_IDS)[number]
+export type SetupStartId = (typeof SETUP_START_IDS)[number]
 export type SetupComponentStates = Partial<Record<SetupComponentId, string>>
 
 export type SetupStep = { id: SetupComponentId; token: string; message?: string }
@@ -61,7 +66,16 @@ export type SetupRun = {
 export type SetupRefusal = {
   kind: "refused"
   // `cancelled` comes from the IPC layer: the person pressed Cancel in main's native confirmation (C80 F1).
-  reason: "root" | "busy" | "cancelled" | "nothing_selected" | "unknown_component" | "lock_unreadable" | "spawn_failed"
+  // `no_start_verb` (row 92b): the bundled swarm-setup's usage text lists no `start` verb (an older binary).
+  reason:
+    | "root"
+    | "busy"
+    | "cancelled"
+    | "nothing_selected"
+    | "unknown_component"
+    | "lock_unreadable"
+    | "spawn_failed"
+    | "no_start_verb"
   message?: string
   ids?: string[]
 }
@@ -121,6 +135,20 @@ export function installArgs(ids: readonly SetupComponentId[], sha12: string, app
 
 export function supportsAppConsentMode(helpText: string) {
   return /^\s+--consent-mode app\b/m.test(helpText)
+}
+
+// Row 92b: start-only, one id, no flags. Nothing else is ever built for a revive (01c 4.7, 11.5).
+export function startArgs(id: SetupStartId) {
+  return [SETUP_START_VERB, id]
+}
+
+export function isSetupStartId(id: string): id is SetupStartId {
+  return (SETUP_START_IDS as readonly string[]).includes(id)
+}
+
+// Feature detection, same pattern as supportsAppConsentMode: the usage line `  swarm-setup start <...>`.
+export function supportsStartVerb(helpText: string) {
+  return /^\s+swarm-setup start </m.test(helpText)
 }
 
 // HOME comes from the account. Only inside OPENCODE_TEST_ONBOARDING=1 may an absolute
@@ -228,7 +256,7 @@ export function createSetupRunner(deps: SetupRunnerDeps) {
   const pollMs = deps.pollMs ?? SETUP_POLL_MS
   let running = false
   let current: { pid?: number; args: string[] } | undefined
-  let appMode: boolean | undefined
+  let help: Promise<string | undefined> | undefined
 
   function refuse(reason: SetupRefusal["reason"], extra: Omit<SetupRefusal, "kind" | "reason"> = {}): SetupRefusal {
     deps.logger.error("swarm-setup run refused", { reason, ...extra })
@@ -318,11 +346,15 @@ export function createSetupRunner(deps: SetupRunnerDeps) {
     }
   }
 
+  // The bundled binary's usage text, read once per runner (it cannot change while the app runs).
+  function helpText() {
+    help ??= exec(["--help"]).then((r) => (r.kind === "ran" && r.exitCode === 0 ? r.stdout : undefined))
+    return help
+  }
+
   async function probeAppMode() {
-    if (appMode !== undefined) return appMode
-    const help = await exec(["--help"])
-    appMode = help.kind === "ran" && help.exitCode === 0 && supportsAppConsentMode(help.stdout)
-    return appMode
+    const text = await helpText()
+    return text !== undefined && supportsAppConsentMode(text)
   }
 
   return {
@@ -348,6 +380,16 @@ export function createSetupRunner(deps: SetupRunnerDeps) {
           return refuse("lock_unreadable", { message: error instanceof Error ? error.message : String(error) })
         }
         return exec(installArgs(selection.ids, sha12, await probeAppMode()), onProgress)
+      }),
+    // Row 92b (TH-03): the tool-health web revive. Shares the one-run-at-a-time lock, so a revive during a
+    // person's install is refused `busy`. The verb is start-only (swarm-setup never installs, pulls or recreates
+    // on it); an older binary without it is refused `no_start_verb` and never sent another verb.
+    start: (id: SetupStartId) =>
+      exclusive(async () => {
+        if (!isSetupStartId(id)) return refuse("unknown_component", { ids: [String(id)] })
+        const text = await helpText()
+        if (text === undefined || !supportsStartVerb(text)) return refuse("no_start_verb")
+        return exec(startArgs(id))
       }),
   }
 }
