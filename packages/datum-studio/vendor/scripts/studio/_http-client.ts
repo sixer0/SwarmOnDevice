@@ -107,6 +107,34 @@ export class StudioUnreachableError extends Error {
   }
 }
 
+/**
+ * Swarm patch (1.2.6 row 54a, M-02, U5; register N-050): name shown for the in-process studio host instead of its
+ * routing origin (E-06 `LOCAL_API_BASE_URL` = `http://127.0.0.1:1`, MH/start.ts), which is not a server anyone can reach.
+ */
+export const IN_PROCESS_ENDPOINT_LABEL = "studio-host (in-process)";
+
+/** E-06 mirror (MH/start.ts `LOCAL_API_BASE_URL`); only used to replace it by {@link IN_PROCESS_ENDPOINT_LABEL} in error text. */
+const IN_PROCESS_BASE_URL = "http://127.0.0.1:1";
+
+/**
+ * Swarm patch (1.2.6 row 54a, M-02): REMOTE_UNREACHABLE text. Names the operation (method + route, query dropped), the
+ * endpoint (label for the in-process host), and on a timeout the limit constant that fired plus the follow-up: the
+ * handler is not cancelled by the abort, so the work may still finish (01d F3). Never the secret, never the placeholder.
+ */
+function unreachableMessage(baseUrl: string, method: StudioMethod, path: string, timeoutMs: number, timedOut: boolean, e: unknown): string {
+  const inProcess = baseUrl === IN_PROCESS_BASE_URL;
+  const endpoint = inProcess ? IN_PROCESS_ENDPOINT_LABEL : `server ${baseUrl}`;
+  const operation = `${method} ${path.split("?")[0]}`;
+  if (timedOut) {
+    const limit =
+      timeoutMs === STUDIO_RENDER_CALL_TIMEOUT_MS ? "STUDIO_RENDER_CALL_TIMEOUT_MS" : timeoutMs === STUDIO_HTTP_TIMEOUT_MS ? "STUDIO_HTTP_TIMEOUT_MS" : "timeoutMs";
+    return `${operation} ke ${endpoint} tidak menjawab dalam ${timeoutMs / 1000} detik (${limit}); permintaan mungkin masih diproses, cek studio_document_status sebelum mengulang`;
+  }
+  let why = e instanceof Error ? e.message : String(e);
+  if (inProcess) why = why.replace(/(?:http:\/\/)?127\.0\.0\.1:1(?!\d)/g, IN_PROCESS_ENDPOINT_LABEL);
+  return `${operation}: ${endpoint} tidak dapat dihubungi: ${why}`;
+}
+
 function isRecord(v: unknown): v is Record<string, unknown> {
   return v !== null && typeof v === "object" && !Array.isArray(v);
 }
@@ -149,8 +177,7 @@ export async function studioRequest(opts: StudioHttpOptions, method: StudioMetho
     res = await f(`${opts.baseUrl}${path}`, { method, headers, body: req.body, redirect: opts.redirect, signal: AbortSignal.timeout(timeoutMs) });
   } catch (e) {
     const timedOut = e instanceof Error && e.name === "TimeoutError";
-    const why = e instanceof Error ? (timedOut ? `tidak menjawab dalam ${timeoutMs / 1000} detik` : e.message) : String(e);
-    throw new StudioUnreachableError(`server ${opts.baseUrl} tidak dapat dihubungi: ${why}`, timedOut);
+    throw new StudioUnreachableError(unreachableMessage(opts.baseUrl, method, path, timeoutMs, timedOut, e), timedOut);
   }
   const ok = (req.okStatuses ?? [200, 201]).includes(res.status);
   let body: unknown = null;
