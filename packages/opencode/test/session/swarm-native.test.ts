@@ -309,7 +309,8 @@ describe("SW-08, SW-09: the built-in swarm-workflow skill", () => {
     // Spec 191 §3.2 measured size, raised by row 195 (L55) from 7197 to 9101 B (+1904) for section 0 Resources.
     // Row 197 (L57, S194-01): +84 B to 9185 for "Swarm's autonomous mode setting (the person turns it on)".
     // Row 198 (L61, B2 + B5): general's tier "session model" -> "worker" (-7 B) and the Activity -> Agents line (+90 B).
-    expect(Buffer.byteLength(WORKFLOW)).toBe(9268)
+    // Row 102 (1.2.6, W-07/W-04/W-11/W-02): +902 B to 10170 for four working-norm bullets (sections 0, 2, 6).
+    expect(Buffer.byteLength(WORKFLOW)).toBe(10170)
   })
 })
 

@@ -22,6 +22,7 @@ Agents. Delegate a step with the task tool. Pick the agent by the kind of work:
 - Only agents listed in agent_routing exist in this session.
 - Swarm sets each agent's tier (GSP AI); there is no model argument. Never route planning or verification to a lower-tier agent.
 - Never put the person's private files, code, credentials or personal data into a researcher query.
+- Before delegating, check the agent can do the step: it reads images when the step needs eyes on a picture, and it reaches the tools the step names (Studio, an MCP server, the shell). If not, pick another agent or record the gap as a blocker.
 
 Skills. Load one with the skill tool; the full list for this session is available_skills in your system prompt. Built in:
 - swarm-workflow: this workflow.
@@ -57,6 +58,8 @@ Write the blueprint to docs/<task>/plan.md as one table:
 - Research rows (explore, data-collector, researcher) come before the rows that change things.
 - The last rows are verification by verifier, never by the agent that did the work.
 - Say in one line which optional steps you skip for a small job and why.
+- Measure a tool before promising a shape: run the layout, format or feature on one small sample first and write in the plan what it produced. Promise only what the sample showed.
+- Declare every tool or command outside Swarm a row will run (a converter, renderer, interpreter, package manager) in that row, so the person approves it with the plan. Swarm's permission prompts still apply.
 
 ## 3. Approval
 
@@ -100,6 +103,7 @@ Return: status complete, blocked or needs-review; files created or changed; the 
 
 - A verifier row checks the whole result against the plan's checks, runs the tests and pastes their output.
 - Documents: a row is done only when its Studio verification gate passes (studio_report_check, then studio_report_submit). For a format Studio does not make, the done note names the check run and its result file.
+- Figures and other visual output pass two gates: the machine checks (preview, lint, render report) and an eye check of the rendered image (look at the PNG, or send it to a verifier as blind judge). Either gate alone is not done; a clean preview alone is not the gate.
 - When a check fails, fix the cause through the row's agent and run it again, at most 3 times per check (gsp_workflow step 7). Then report what still fails as a blocker.
 - Never mark a row done, or say a check passed, without output from this session.
 
