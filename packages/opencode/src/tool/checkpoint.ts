@@ -17,6 +17,7 @@ import fs from "node:fs/promises"
 import path from "node:path"
 import { Archive } from "./archive"
 import { Secrets } from "./secrets"
+import { withoutServerCredentials } from "@/util/server-credentials"
 
 export const CHECKPOINT_DIR = path.join(".swarm", "checkpoint")
 /** Logical bytes one checkpoint may copy (RA-2). Above it the action is refused `checkpoint_failed` (I-X). */
@@ -693,13 +694,33 @@ async function isGit(root: string) {
   return inside === "true"
 }
 
-/** Runs git without a shell; the trimmed stdout, or undefined when it failed or git is missing. */
-function gitOut(cwd: string, args: string[]) {
+const GIT_TIMEOUT_MS = 30_000
+
+/**
+ * The one git runner for checkpoints, here and in the shell's checkpoint planning (1.2.6 FX-1, gate M1 S3). No shell, a
+ * timeout, no optional locks, and the server's credentials kept out of git's env (as for every command the shell runs).
+ * Git's stdout as it is, or undefined when git failed, timed out or is missing.
+ */
+export function runGit(cwd: string, args: readonly string[], options: { maxBuffer?: number } = {}) {
   return new Promise<string | undefined>((resolve) => {
-    execFile("git", args, { cwd, timeout: 30_000, maxBuffer: 1024 * 1024, windowsHide: true }, (error, stdout) =>
-      resolve(error ? undefined : String(stdout).trim()),
+    execFile(
+      "git",
+      [...args],
+      {
+        cwd,
+        timeout: GIT_TIMEOUT_MS,
+        maxBuffer: options.maxBuffer ?? 1024 * 1024,
+        windowsHide: true,
+        env: withoutServerCredentials({ ...process.env, GIT_OPTIONAL_LOCKS: "0" }),
+      },
+      (error, stdout) => resolve(error ? undefined : String(stdout)),
     )
   })
+}
+
+/** `runGit`, trimmed. */
+async function gitOut(cwd: string, args: string[]) {
+  return (await runGit(cwd, args))?.trim()
 }
 
 function stamp(now: Date) {

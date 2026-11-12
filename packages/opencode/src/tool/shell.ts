@@ -34,7 +34,6 @@ import { Archive } from "./archive"
 import { DELETE_COMPOUND_TEXT, SCRIPT_CHANGED_TEXT, checkpointFailedText } from "@/permission/autonomy-texts"
 import { AutonomyTable } from "@/permission/autonomy-table"
 import { ActionCheckpoint } from "./checkpoint"
-import { execFile } from "node:child_process"
 import { ScriptScreen } from "@/permission/script-screen"
 import { DeletionWords, type Deletion } from "./deletion"
 import { BypassLists } from "@/permission/bypass-lists"
@@ -996,14 +995,8 @@ const WITHHELD_TRANSFORMED = (name: string) =>
 const WITHHELD_WHOLE = (name: string) =>
   `[hidden:${name}]\nThis file holds credentials, so its contents are kept from you. Programs you run can still use it.`
 
-/** Git's output in `cwd`, or undefined when it fails. No shell; the words are git's own. */
-function gitIn(cwd: string, args: string[]) {
-  return new Promise<string | undefined>((resolve) =>
-    execFile("git", args, { cwd, maxBuffer: 64 * 1024 * 1024, env: { ...process.env, GIT_OPTIONAL_LOCKS: "0" } }, (error, stdout) =>
-      resolve(error ? undefined : stdout),
-    ),
-  )
-}
+/** Git's output in `cwd`, or undefined when it fails or times out: the checkpoint module's runner (FX-1, gate M1 S3). */
+const gitIn = (cwd: string, args: string[]) => ActionCheckpoint.runGit(cwd, args, { maxBuffer: 64 * 1024 * 1024 })
 
 /**
  * 1.2.6 row 37b (P-01b): `git clean` with the session's `.swarm` folder left out, when it lies under where the command
