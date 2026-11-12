@@ -416,6 +416,20 @@ export interface OverlapCoverage {
 /** The OVERLAP_CLIP check with its N-032 coverage (absent only when nothing could be measured: no HTML, other format). */
 export type OverlapClipCheck = VerifyCheck & { coverage?: OverlapCoverage }
 
+/**
+ * 1.2.6 row 30 (T-13, N-032): the check text of OVERLAP_CLIP coverage, "diukur m/n halaman". Null when the check carries
+ * no well-formed coverage (NOT_APPLICABLE, SOURCE_MISSING, a stored report from before 1.2.6). It never replaces the
+ * UNKNOWN reason: pages left unmeasured keep MEASURE_TRUNCATED (E-14) beside this text.
+ */
+export function overlapCoverageText(check: Pick<VerifyCheck, "id"> & { coverage?: unknown }): string | null {
+  if (check.id !== "OVERLAP_CLIP") return null
+  const c = check.coverage as Partial<OverlapCoverage> | undefined
+  if (!c || typeof c !== "object") return null
+  const ok = (n: unknown): n is number => typeof n === "number" && Number.isInteger(n) && n >= 0
+  if (!ok(c.measuredPages) || !ok(c.totalPages) || c.measuredPages > c.totalPages) return null
+  return `diukur ${c.measuredPages}/${c.totalPages} halaman`
+}
+
 /** One top-level slice of a container's content: [start, end) in the HTML, and the element's inner range if it has one. */
 interface Seg {
   start: number

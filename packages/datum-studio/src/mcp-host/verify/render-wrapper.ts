@@ -31,6 +31,7 @@ import type { HostToolExtension, HostToolNext, HostToolSession } from "../tool-t
 import type { VerifyFormat } from "./static-checks.ts"
 import type { OutputVerificationReport, VerifiedOutput } from "./types.ts"
 import { clientEntries, clientFindingsBlock } from "./client-findings.ts"
+import { overlapCoverageText } from "./overlap-clip.ts"
 import { allUnknownOutput, isVerifyFormat, outputState, verifyOutputs, type VerifyOptions, type VerifyOutputFile } from "./verify-outputs.ts"
 
 export const RENDER_VERIFY_TOOL = "studio_render"
@@ -105,14 +106,23 @@ export function verificationLines(r: OutputVerificationReport, pageImages: { mad
   const ok = r.outputs.filter((v) => v.state === "verified").length
   const tok = (s: string) => (SAFE.test(s) ? s : "?")
   const lines = [`verification: ${r.overall === "verified" ? "VERIFIED" : "UNVERIFIED"} (${ok}/${r.outputs.length} outputs verified)`]
+  // 1.2.6 row 30 (T-13, N-032): OVERLAP_CLIP coverage on its own line under the output line ("diukur m/n halaman"),
+  // so the summary lines keep their shape; the UNKNOWN reason (MEASURE_TRUNCATED) stays in unknown= unchanged.
+  const coverageLine = (v: VerifiedOutput) => {
+    const c = v.checks.find((x) => x.id === "OVERLAP_CLIP")
+    const text = c ? overlapCoverageText(c) : null
+    return text ? `    OVERLAP_CLIP ${c!.status}${c!.status === "UNKNOWN" ? `:${c!.reason ?? "?"}` : ""} ${text}` : null
+  }
   for (const v of r.outputs) {
     if (v.state === "verified") {
       lines.push(`  ${v.format} ${tok(v.outputId)} VERIFIED`)
-      continue
+    } else {
+      const fail = v.checks.filter((c) => c.status === "FAIL").map((c) => c.id)
+      const unknown = v.checks.filter((c) => c.status === "UNKNOWN").map((c) => `${c.id}:${c.reason ?? "?"}`)
+      lines.push(`  ${v.format} ${tok(v.outputId)} UNVERIFIED fail=${fail.join(",") || "-"} unknown=${unknown.join(",") || "-"}`)
     }
-    const fail = v.checks.filter((c) => c.status === "FAIL").map((c) => c.id)
-    const unknown = v.checks.filter((c) => c.status === "UNKNOWN").map((c) => `${c.id}:${c.reason ?? "?"}`)
-    lines.push(`  ${v.format} ${tok(v.outputId)} UNVERIFIED fail=${fail.join(",") || "-"} unknown=${unknown.join(",") || "-"}`)
+    const cov = coverageLine(v)
+    if (cov) lines.push(cov)
   }
   if (r.scope === "DOCUMENT" && !r.layoutWitness) lines.push("  layout witness: none (a verified PDF or HTML of this revision is needed)")
   const pngs = [...new Set(r.outputs.flatMap((v) => v.pages.map((p) => p.png)).filter((p): p is string => typeof p === "string"))]
