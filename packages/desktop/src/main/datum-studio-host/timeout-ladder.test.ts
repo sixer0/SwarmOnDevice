@@ -4,16 +4,23 @@
 // named error into a client-side -32001 or a socket hang-up. Each invariant below compares the REAL
 // exported constants from their owning files (imported by relative path, as bundled-provider.test.ts does
 // for core). Namespace imports so a missing export fails its expect instead of crashing the file.
-import { describe, expect, mock, test } from "bun:test"
+import { describe, expect, test } from "bun:test"
+import { readFileSync } from "node:fs"
 import * as baseline from "../../../../core/src/swarm-permission-baseline"
 import * as httpClient from "../../../../datum-studio/vendor/scripts/studio/_http-client"
 import * as env from "../../../../datum-studio/vendor/src/lib/studio/contract/env"
 import * as runtime from "../../../../datum-studio/vendor/src/lib/studio/engine/browser/runtime"
 import * as lifecycle from "./lifecycle"
 
-// electron-renderer.ts imports BrowserWindow/session from "electron"; only its constant is read here.
-mock.module("electron", () => ({ BrowserWindow: class {}, session: {} }))
-const renderer = (await import("../datum-render/electron-renderer")) as Record<string, unknown>
+// electron-renderer.ts imports BrowserWindow/session from "electron". Importing it here needs an electron
+// mock, and bun keeps the first electron mock of the process: after onboarding.test.ts mocks electron as
+// { app } the import fails with "Export named 'session' not found" (S2 seal F3, row 55-fix). So the constant
+// is read from the owning file's source (the register's own `TIMEOUT_MS\s*=` locator), independent of order.
+const rendererSource = readFileSync(new URL("../datum-render/electron-renderer.ts", import.meta.url), "utf8")
+const jobTimeoutMatch = /^export const JOB_TIMEOUT_MS = ([\d_]+)\s*$/m.exec(rendererSource)
+const renderer: Record<string, unknown> = {
+  JOB_TIMEOUT_MS: jobTimeoutMatch ? Number(jobTimeoutMatch[1].replaceAll("_", "")) : undefined,
+}
 
 const mcpTimeout = (baseline.SWARM_PERMISSION_BASELINE as { experimental?: { mcp_timeout?: number } }).experimental?.mcp_timeout
 const h = httpClient as Record<string, unknown>
