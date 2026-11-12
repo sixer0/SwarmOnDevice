@@ -92,7 +92,7 @@ export const MISSION_LIFECYCLE = [
   "Lifecycle 1/6 create: studio_mission_create {mission, dryRun: true}, fix what it names, then the same call without dryRun (draft). Omit `session` on every call: Swarm fills it. Skill: mission-control.",
   "Lifecycle 2/6 approval: studio_mission_request_decision and wait for the user's answer; only while Swarm's autonomous mode setting is on (the person turns it on) studio_mission_record_decision {by: controller, autonomous: true} then studio_mission_approve. Never record by: user yourself.",
   "Lifecycle 3/6 set_status running: studio_mission_set_status {to: running}; no row starts before approval (MISSION_NOT_APPROVED).",
-  "Lifecycle 4/6 update_row per step: studio_mission_update_row {rows: [{id, status: running}]} when a step starts, done or blocked (with note) when it ends.",
+  "Lifecycle 4/6 update_row per step: studio_mission_update_row {rows: [{id, status: running}]} when a step starts; when it ends set done or blocked, each with a note (running -> done is allowed with a note; needs-review is optional). Phase and kind must match the matrix in the guide (KIND_NOT_ALLOWED, PHASE_UNKNOWN otherwise).",
   "Lifecycle 5/6 gate: a row is done only with verified outputs (OUTPUT_UNVERIFIED otherwise) or a note naming the check and its result file.",
   "Lifecycle 6/6 done: every row done or dropped, then studio_mission_set_status {to: done}.",
 ] as const

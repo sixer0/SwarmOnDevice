@@ -28,6 +28,8 @@ const NEXT: Record<string, string> = {
   MISSION_CLOSED: "the mission is done or cancelled: create a new mission with studio_mission_create (supersede if it replaces it)",
   MISSION_ROWS_OPEN: "finish or drop the open rows with studio_mission_update_row (done or dropped with note), then studio_mission_set_status {to: done}",
   STATUS_TRANSITION: "read the allowed targets in rincian.allowed; the lifecycle is create -> approve -> set_status running -> update_row per step -> gate -> set_status done",
+  KIND_NOT_ALLOWED: "the row's kind is not a kind of its phase for this mission type: use one of the kinds in rincian.allowed, or read the phase-kind matrix in the guide resource studio://skema/mission (section Mission types) and fix the row's phase or kind",
+  PHASE_UNKNOWN: "the row's phase is not a phase of this mission type: read the phase-kind matrix in the guide resource studio://skema/mission (section Mission types), use a phase of the mission's type (rincian.allowed when present) and a kind that phase allows",
   ROW_UNKNOWN: "read the row ids with studio_mission_get {include: [rows]}",
   ROW_CLOSED: "the row is done or dropped: add a new row with studio_mission_update_row {rows: [{id, add: {...}}]}",
   DEP_NOT_DONE: "finish the build (:B) dependency first; studio_mission_get shows ready rows in derived.ready",
