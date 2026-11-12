@@ -2,7 +2,7 @@
 // packages/datum-studio host server, streamable HTTP on 127.0.0.1, own bun process). Needs the command sandbox off
 // (binds an ephemeral port).
 //
-// Also C125: the host runs first with release "1.2.0", then with STUDIO_RELEASE (1.2.5) over the SAME store, as an
+// Also C125: the host runs first with release "1.2.0", then with STUDIO_RELEASE (1.2.6) over the SAME store, as an
 // upgraded app does; builtin templates must still pin and load (no TEMPLATE_BUILTIN_* line, same pinned versions).
 //
 // No model call: the fixture traps globalThis.fetch (FETCH_CALLED on stderr) and the four tools are store reads/writes.
@@ -256,9 +256,9 @@ describe("row 127: mission bridge against the real host", () => {
   })
 })
 
-describe("C125: STUDIO_RELEASE 1.2.5 over a 1.2.0 store", () => {
+describe("C125: STUDIO_RELEASE 1.2.6 over a 1.2.0 store", () => {
   test("STUDIO_RELEASE follows the app release", () => {
-    expect(STUDIO_RELEASE).toBe("1.2.5")
+    expect(STUDIO_RELEASE).toBe("1.2.6")
   })
 
   test("builtin templates still list and load; no TEMPLATE_BUILTIN_* line; pinned versions unchanged", async () => {
