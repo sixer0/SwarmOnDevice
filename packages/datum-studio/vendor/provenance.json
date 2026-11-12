@@ -86,7 +86,8 @@
   "row73": "2026-11-12: 1.2.6 row 73 (W-05/W-03/OFF-06, C2, D3; register N-020..N-023). 1 vendor file re-patched (files[].patch_row73, before = previous sha256; status unchanged): scripts/studio/mcp/figure-tools.ts (FIGURE_GRAPH_DELTA report in studio_figure_revise; preview text states defect/notice counts). Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/73_row73_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9899211 + 5064 = 9904275. patch_rows += 73",
   "row97a": "2026-11-12: 1.2.6 row 97a (G-05, W-01, W-09, W-13 text; U5; register N-011, N-014). 1 vendor file re-patched (files[].patch_row97a, before = previous sha256; status unchanged): scripts/studio/mcp/resources.ts (MCP_DOC_RECIPE: row 174 diagram-block sentence moved out of the studio_figure_revise call shape; render 540 s and studio_document_status -> studio_file_verify follow-up; caption rule without the GAMBAR token, <= 100 chars; studio_asset_put with sha256:<hex> reference). Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/97a_row97a_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9904275 + 1653 = 9905928. patch_rows += 97a",
   "row63": "2026-11-12: 1.2.6 row 63 (T-07, U5; register N-017 DIAMOND_HEIGHT_FACTOR). 3 vendor files (files[].patch_row63, before = previous sha256): engine/diagram/core/geometry.ts (copied -> patched: DIAMOND_HEIGHT_FACTOR and diamondHeightMm in nodeSize for every family), engine/diagram/fit/text.ts (copied -> patched: diamondTwoLineHeightMm), engine/diagram/layout-a/flow.ts (re-patched: inline h*1.25 removed, now in nodeSize). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/63_row63_diffs/. counts by delta: copied 413 -> 411, patched 153 -> 155; bytes 9916422 +1482 = 9917904. patch_rows += 63",
-  "row97b": "2026-11-12: 1.2.6 row 97b (G-04 diagram part, G-01; U5; register N-001..N-016, N-018, N-020, N-023, N-109..N-112, N-160). 1 vendor file re-patched (files[].patch_row97b, before = previous sha256; status unchanged): docs/STUDIO-AGENT-GUIDE.md (NEW §4.1.2 diagram workflow over MCP: preview inline, partial revise, FIGURE_GRAPH_DELTA, render, look at the PNG; direction TB/LR for parallel branches with the engine limits; caption rules; the three connector-end FAIL kinds with the engine suggestions; dangling STUDIO-MCP.md links in §1.1 step 9 and §17.0 replaced by the MCP resources and tools/list). Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/97b_row97b_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9917904 + 5752 = 9923656. patch_rows += 97b"
+  "row97b": "2026-11-12: 1.2.6 row 97b (G-04 diagram part, G-01; U5; register N-001..N-016, N-018, N-020, N-023, N-109..N-112, N-160). 1 vendor file re-patched (files[].patch_row97b, before = previous sha256; status unchanged): docs/STUDIO-AGENT-GUIDE.md (NEW §4.1.2 diagram workflow over MCP: preview inline, partial revise, FIGURE_GRAPH_DELTA, render, look at the PNG; direction TB/LR for parallel branches with the engine limits; caption rules; the three connector-end FAIL kinds with the engine suggestions; dangling STUDIO-MCP.md links in §1.1 step 9 and §17.0 replaced by the MCP resources and tools/list). Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/97b_row97b_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9917904 + 5752 = 9923656. patch_rows += 97b",
+  "row67": "2026-11-12: 1.2.6 row 67 (T-12, register N-019 furnitureMm, E-09; plus the caption-order BUG routed from row 28). 3 vendor files re-patched (files[].patch_row67, before = previous sha256; status unchanged): engine/diagram/build/capacity.ts (numeric DATUM-37-tinggi measure + furnitureMm), engine/diagram/build/svg.ts (sheet-edge tolerance, furniture in the height texts, caption order in withCaptionAbove), engine/figure-capacity.ts (furnitureMm field, no '?' in the text). Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/67_row67_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9923656 + 4293 = 9927949. patch_rows += 67"
  },
  "counts": {
   "files": 608,
@@ -94,7 +95,7 @@
   "patched": 155,
   "replaced": 12,
   "added": 30,
-  "bytes": 9923656
+  "bytes": 9927949
  },
  "files": [
   {
@@ -2260,9 +2261,9 @@
   {
    "path": "src/lib/studio/engine/diagram/build/capacity.ts",
    "status": "patched",
-   "bytes": 13271,
+   "bytes": 15219,
    "source_sha256": "ce41b46ce7c7418c379af22f50302c18bb80decc6fea3663cf121e61eb539588",
-   "sha256": "95ab601bb64dce64373f19a439dac2ba7b038ae5f70f1bc9e0e6d7ce2a3ce075",
+   "sha256": "0d90b4f355bd497f43b4ac85d2bee1db966331491801cd5f5ffdea6085e12930",
    "patch_row46": {"id": "row46-t11-ranked-flow", "row": "46", "decision": "1.2.6 patch T-11 ranked layout (U5, D4=A, C7 S17-1..S17-5; register N-109, N-111, N-112, N-161..N-164; 01e §4.1-§4.2, §4.5, §5, §6.5-6.8)", "summary": "capacityAction: flow text names direction (ranked: per-rank/width/direction; legacy: direction TB/LR or per_row); DATUM-33 for flow gains the direction alternative; overCapacityOf: ranked-flow DATUM-37 branch measures nodes per rank / ranks via flowRankOverload", "diff_base": "sha256 before this row", "before_sha256": "2bd070b2f6910f7af37ea0c372a0e9a12d76fcd97ae7404f01d0fdeb5fb16773", "after_sha256": "95ab601bb64dce64373f19a439dac2ba7b038ae5f70f1bc9e0e6d7ce2a3ce075", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/46_row46_diffs/src_lib_studio_engine_diagram_build_capacity.ts.diff", "diff_sha256": "b797aeabfefcce87988d1b23a96172893e637384e1d0cbf299779c43e48ea8c1"},
    "patch_row59": {"id": "row59-t02-graph-inset", "row": "59", "decision": "1.2.6 patch T-02 (U5, R21 4.R1; register N-016)", "summary": "graph max columns counted inside W - 2 x GRAPH_EDGE_INSET_MM (capacityAction, graphColumns); measureFromMessage reads the T-02 inset refusal ('isi <mm> mm > batas <mm> mm') as measured/limit in mm", "diff_base": "patch.after_sha256 (row 158)", "before_sha256": "b1f8ba10220ec25a8f88ad6719081d364dd8edf6fad4befe0811bf811a5cd1a3", "after_sha256": "2bd070b2f6910f7af37ea0c372a0e9a12d76fcd97ae7404f01d0fdeb5fb16773", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/59_row59_diffs/src_lib_studio_engine_diagram_build_capacity.ts.diff", "diff_sha256": "c7eac947bc4b96c45b9ffaa223286b8e708b00430f109fe101c68f832f0d26f8"},
    "patch": {
@@ -2274,7 +2275,8 @@
     "after_sha256": "b1f8ba10220ec25a8f88ad6719081d364dd8edf6fad4befe0811bf811a5cd1a3",
     "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/112_row158_diffs/engine__diagram__build__capacity.ts.diff",
     "diff_sha256": "e7bda0e70f824cb2c218c5b91691123c06cabe450db9197572e0d019f55c9613"
-   }
+   },
+   "patch_row67": {"id": "row67-t12-capacity-details", "row": "67", "decision": "1.2.6 patch T-12 (U5; register N-019 furnitureMm, E-09) + BUG routed from row 28 (caption order)", "summary": "overCapacityOf: height refusals (DATUM-33, DATUM-37-tinggi) measured in mm from their own message, never as columns/ranks/lane load; NEW measureSheetHeight reads 'unsur keluar lembar graph (tinggi H mm[, kaki aparatus F mm]): ...' as limit H and measured = H + overshoot below + above; furnitureMm (N-019) from the engine text or footReserveMm(spec); fallback quantity 'tinggi gambar' for height checks", "diff_base": "sha256 before this row", "before_sha256": "95ab601bb64dce64373f19a439dac2ba7b038ae5f70f1bc9e0e6d7ce2a3ce075", "after_sha256": "0d90b4f355bd497f43b4ac85d2bee1db966331491801cd5f5ffdea6085e12930", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/67_row67_diffs/src_lib_studio_engine_diagram_build_capacity.ts.diff", "diff_sha256": "857c6507bcf6fd8a349e8b3d231be269e3e13d9bb01917d966a4fa5e5543ce01"}
   },
   {
    "path": "src/lib/studio/engine/diagram/build/fitlabels.ts",
@@ -2351,9 +2353,9 @@
   {
    "path": "src/lib/studio/engine/diagram/build/svg.ts",
    "status": "patched",
-   "bytes": 31188,
+   "bytes": 32586,
    "source_sha256": "a9ab8856426161f4b087bb26315fdd57c534ba81ee3e9d8117eb271d683c4ea0",
-   "sha256": "705cd27942bc70178c48c554a2fc902047d7c3d3113b45955fc54bdb096e98b9",
+   "sha256": "21909e0766b454a12d08a40f7545161c9b704a4f8fdbbda1e8656cc0e3d71841",
    "patch_row165P": {"id": "row165P-manual-furniture", "row": "165P", "decision": "C205 CP-28/48", "summary": "DiagramBuildOptions.provenance (SUMBER + PROVENANS part with coloured glyphs); caption lines marked, NEW withCaptionAbove moves them above the drawing; foot order KUNCI then SUMBER", "before_sha256": "0feb88508fbedb07c813e0cc4c5bcc65b4647f5bf5d18ccd33fc43041f4392b7", "after_sha256": "54cd9688005a3cd3b5594adfb897acaff8e5b06cf362d647318c1c148e766395", "diff": "implementation/146_row165P_diffs/engine_diagram_build_svg.ts.diff"},
    "patch_row165C": {"id": "row165C-figure-engine", "row": "165C", "decision": "C188 F113-9 (CP-37), F113-10 (CP-47)", "summary": "buildOnce: no hatch <pattern> defined (diagramDefs hatch45/hatch135 false; hatches are vector lines from nodeSvg); nodeSvg gets the sheet size (canvas W x H) for the half-stroke edge inset", "before_sha256": "d00ed096ae2ee9775dac86045c845ca532b89833c469df1f9889c1af434ba100", "after_sha256": "0feb88508fbedb07c813e0cc4c5bcc65b4647f5bf5d18ccd33fc43041f4392b7", "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/136_row165C_diffs/engine_diagram_build_svg.ts.diff", "diff_sha256": "b0eb988881e88aef2e4615a4ae468d623d9292de9cc04a839b681a797f20f8f9"},
    "patch_row124b": {
@@ -2377,7 +2379,8 @@
     "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/53_row124_diffs/diagram__build__svg.ts.diff",
     "diff_sha256": "f3351707321c7fd364c15eeb335ee5b2c21b10024a836d1a070a57a09ce5a477"
    },
-   "patch_row47": {"id": "row47-t11-acceptance", "row": "47", "decision": "1.2.6 patch T-11 acceptance (U3, U5, D4=A, C7; register N-160; 01e §4.3-§4.5, §7.2 A2-A6, A9-A11, A13-A15)", "summary": "buildDiagramSvgWith: one call site appends flowSerialisedNote(s) to report.geometry after auto-fit (SVG bytes unchanged)", "diff_base": "sha256 before this row", "before_sha256": "54cd9688005a3cd3b5594adfb897acaff8e5b06cf362d647318c1c148e766395", "after_sha256": "705cd27942bc70178c48c554a2fc902047d7c3d3113b45955fc54bdb096e98b9", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/47_row47_diffs/src_lib_studio_engine_diagram_build_svg.ts.diff", "diff_sha256": "8fce8b969c13ccda8df1f96f0c08134f6391cbfaee9c417a27b1ab68c545eca9"}
+   "patch_row47": {"id": "row47-t11-acceptance", "row": "47", "decision": "1.2.6 patch T-11 acceptance (U3, U5, D4=A, C7; register N-160; 01e §4.3-§4.5, §7.2 A2-A6, A9-A11, A13-A15)", "summary": "buildDiagramSvgWith: one call site appends flowSerialisedNote(s) to report.geometry after auto-fit (SVG bytes unchanged)", "diff_base": "sha256 before this row", "before_sha256": "54cd9688005a3cd3b5594adfb897acaff8e5b06cf362d647318c1c148e766395", "after_sha256": "705cd27942bc70178c48c554a2fc902047d7c3d3113b45955fc54bdb096e98b9", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/47_row47_diffs/src_lib_studio_engine_diagram_build_svg.ts.diff", "diff_sha256": "8fce8b969c13ccda8df1f96f0c08134f6391cbfaee9c417a27b1ab68c545eca9"},
+   "patch_row67": {"id": "row67-t12-capacity-details", "row": "67", "decision": "1.2.6 patch T-12 (U5; register N-019 furnitureMm, E-09) + BUG routed from row 28 (caption order)", "summary": "assertInsideSheet tolerance SHEET_EDGE_TOLERANCE_MM = 0.005 mm (half the 0.01 mm print unit; the rev-198 stand-alone refusal was its own paper rect printed 100.013 against H 100.0125) and its DATUM-37-tinggi text names 'kaki aparatus F mm'; DATUM-33 text names the furniture height; withCaptionAbove orders the moved caption lines by their sheet y (buildOnce emits them bottom-up, so a wrapped caption read reversed)", "diff_base": "sha256 before this row", "before_sha256": "705cd27942bc70178c48c554a2fc902047d7c3d3113b45955fc54bdb096e98b9", "after_sha256": "21909e0766b454a12d08a40f7545161c9b704a4f8fdbbda1e8656cc0e3d71841", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/67_row67_diffs/src_lib_studio_engine_diagram_build_svg.ts.diff", "diff_sha256": "e9a6819591aefd87f202d1b98b5f020fbbffe3ff5702c5ed92271fcbbf8a4ae6"}
   },
   {
    "path": "src/lib/studio/engine/diagram/core/colour.ts",
@@ -3399,12 +3402,13 @@
   {
    "path": "src/lib/studio/engine/figure-capacity.ts",
    "status": "added",
-   "bytes": 4439,
+   "bytes": 5386,
    "source_sha256": null,
-   "sha256": "704a2669f8cade03417c08e4c65567a1b92b64fe2232a3b56df82944a2307d8a",
+   "sha256": "310688e3fffcaf7d6bf3e63e562f72fb7522291bbdc1ffd4c5e9db333a67998b",
    "patch_row143a": {"id": "row143a-engine-faults", "row": "143a", "decision": "C177 F143-1 (b) (verification/16_row143_app_studio_1_2_1.md section 6)", "summary": "FigureOverCapacityDetails.figure += \"table\"; NEW TableOverCapacity (StudioEngineError, code FIGURE_OVER_CAPACITY, no contract enum change)", "before_sha256": "8e7bdf3466a29bc42396698a942386839bd36900abc404efc4842cce022ebf4f", "after_sha256": "704a2669f8cade03417c08e4c65567a1b92b64fe2232a3b56df82944a2307d8a", "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/132_row143a_diffs/engine_figure-capacity.ts.diff", "diff_sha256": "df926d8f96f20ec91be8880f9a35b049fdaf9f77161eebb53bc461f137da7630"},
    "added_by": "158",
-   "note": "NEW Swarm file of row 158 (U24 B; no clone original): FIGURE_OVER_CAPACITY, FigureOverCapacityDetails {checkId, figure, family, quantity, unit, limit, measured, suggestion, pointer?}, overCapacityMessage (engine text + '; batas: ...; saran: ...'), DiagramOverCapacity (extends DiagramDefect, code FIGURE_OVER_CAPACITY), ChartOverCapacity (StudioEngineError), isFigureOverCapacity. Used by engine/diagram/build/capacity.ts, engine/diagram/core/estimate.ts, engine/chart/core/render.ts. Copy: implementation/112_row158_diffs/engine__figure-capacity.ts.new"
+   "note": "NEW Swarm file of row 158 (U24 B; no clone original): FIGURE_OVER_CAPACITY, FigureOverCapacityDetails {checkId, figure, family, quantity, unit, limit, measured, suggestion, pointer?}, overCapacityMessage (engine text + '; batas: ...; saran: ...'), DiagramOverCapacity (extends DiagramDefect, code FIGURE_OVER_CAPACITY), ChartOverCapacity (StudioEngineError), isFigureOverCapacity. Used by engine/diagram/build/capacity.ts, engine/diagram/core/estimate.ts, engine/chart/core/render.ts. Copy: implementation/112_row158_diffs/engine__figure-capacity.ts.new",
+   "patch_row67": {"id": "row67-t12-capacity-details", "row": "67", "decision": "1.2.6 patch T-12 (U5; register N-019 furnitureMm, E-09) + BUG routed from row 28 (caption order)", "summary": "FigureOverCapacityDetails.furnitureMm? (N-019); overCapacityMessage never prints '?': a number the engine did not report is left out ('<quantity> tidak terukur' when none), furniture printed as 'kaki aparatus (KUNCI/SUMBER) <f> mm'", "diff_base": "sha256 before this row", "before_sha256": "704a2669f8cade03417c08e4c65567a1b92b64fe2232a3b56df82944a2307d8a", "after_sha256": "310688e3fffcaf7d6bf3e63e562f72fb7522291bbdc1ffd4c5e9db333a67998b", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/67_row67_diffs/src_lib_studio_engine_figure-capacity.ts.diff", "diff_sha256": "f10f727acab32f890415fedfa283119723b92a83eaf24470ca84ef836823ed78"}
   },
   {
    "path": "src/lib/studio/engine/table-fit.ts",
@@ -6134,6 +6138,7 @@
   "71",
   "61b",
   "63",
-  "97b"
+  "97b",
+  "67"
  ]
 }

@@ -17,7 +17,7 @@
 import { StudioEngineError } from "../../../contract/errors";
 import type { StudioDiagramV1 } from "../../../contract";
 import { DiagramDefect, LATTICE_X } from "../core";
-import { GRAPH_EDGE_INSET_MM } from "../core/sheet";
+import { GRAPH_EDGE_INSET_MM, footReserveMm } from "../core/sheet";
 import { flowDirectionOf, flowRankOverload, flowRanks } from "../layout-a/flow";
 import { DiagramOverCapacity, type FigureOverCapacityDetails } from "../../figure-capacity";
 import { lintDiagramGeometry, type DiagramGeomLint } from "../fit/lint";
@@ -79,8 +79,30 @@ type Measure = Pick<FigureOverCapacityDetails, "quantity" | "unit" | "limit" | "
 
 const n1 = (v: string | undefined): number | null => (v === undefined || !Number.isFinite(Number(v)) ? null : Number(v));
 
+/**
+ * Swarm 1.2.6 row 67 (T-12): a `DATUM-37-tinggi` refusal (build/svg.ts `assertInsideSheet`): the sheet height is the
+ * limit, the height the drawn elements need (sheet height plus what reaches below it and above 0) is the measure.
+ * Both 1.2.5's text "(tinggi H mm)" and 1.2.6's "(tinggi H mm, kaki aparatus F mm)" are read.
+ */
+function measureSheetHeight(msg: string): Measure | null {
+  const t = /unsur keluar lembar \w+ \(tinggi ([\d.]+) mm(?:, kaki aparatus [\d.]+ mm)?\): ([^(]*)/.exec(msg);
+  const H = n1(t?.[1]);
+  if (!t || H === null) return null;
+  const vals = [...t[2].matchAll(/=(-?[\d.]+)/g)].map((m) => Number(m[1])).filter(Number.isFinite);
+  const below = Math.max(0, ...vals.map((v) => v - H));
+  const above = Math.max(0, ...vals.map((v) => -v));
+  return { quantity: "tinggi gambar (lembar)", unit: "mm", measured: Number((H + below + above).toFixed(3)), limit: H };
+}
+
+/** Swarm 1.2.6 row 67 (T-12, N-019): the furniture height the engine printed ("kaki aparatus F mm"), else null. */
+function furnitureFromMessage(msg: string): number | null {
+  return n1(/kaki aparatus ([\d.]+) mm/.exec(msg)?.[1]);
+}
+
 /** mm figures the engine already printed in its own DATUM-33/37 message (fallback measure). */
 function measureFromMessage(msg: string): Measure | null {
+  const sh = measureSheetHeight(msg);
+  if (sh) return sh;
   // Swarm 1.2.6 row 59 (T-02): content wider than W - 2 x GRAPH_EDGE_INSET_MM (column or rank named in the text).
   const i = /melewati inset tepi [\d.]+ mm: isi ([\d.]+) mm > batas ([\d.]+) mm/.exec(msg);
   if (i) return { quantity: "lebar isi gambar di dalam inset tepi", unit: "mm", measured: n1(i[1]), limit: n1(i[2]) };
@@ -132,7 +154,12 @@ export function overCapacityOf(e: unknown, s: StudioDiagramV1, note?: string): D
   const action = capacityAction(s, checkId) ?? "pecah menjadi 2 diagram";
   let m: Measure | null = null;
   let suggestion = action;
-  if (checkId.startsWith("DATUM-37") && fam === "graph") {
+  // Swarm 1.2.6 row 67 (T-12): a height refusal (DATUM-33, DATUM-37-tinggi) is measured in mm from its own message,
+  // never as graph columns / ranks / lane load (those are width measures).
+  const height = checkId.startsWith("DATUM-33") || checkId.startsWith("DATUM-37-tinggi");
+  if (height) {
+    m = measureFromMessage(e.message);
+  } else if (checkId.startsWith("DATUM-37") && fam === "graph") {
     const g = graphColumns(s);
     if (g.span > g.maxCols) m = { quantity: "kolom graph", unit: "kolom", measured: g.span, limit: g.maxCols };
   } else if (checkId.startsWith("DATUM-37") && flowDirectionOf(s)) {
@@ -147,11 +174,14 @@ export function overCapacityOf(e: unknown, s: StudioDiagramV1, note?: string): D
     m = { quantity: "simpul per baris lajur", unit: "simpul", measured: l.count, limit: l.perRow };
     suggestion = `${action}; lajur "${l.lane}" memuat ${l.count} simpul, maks ${l.perRow} per baris lajur pada ${l.width} mm (bungkus lajur hanya dipakai bila hasilnya bersih)`;
   }
-  m ??= measureFromMessage(e.message) ?? { quantity: checkId.startsWith("DATUM-33") ? "tinggi gambar" : "lebar gambar", unit: "mm", measured: null, limit: null };
+  m ??= measureFromMessage(e.message) ?? { quantity: height ? "tinggi gambar" : "lebar gambar", unit: "mm", measured: null, limit: null };
   if (checkId.startsWith("DATUM-33")) suggestion = `${action} (${(s.nodes ?? []).length} simpul, ${(s.edges ?? []).length} konektor dalam gambar ini)`;
+  if (checkId.startsWith("DATUM-37-tinggi")) suggestion = `${action}; atau kurangi baris kaki (caption, KUNCI, SUMBER)`;
+  // Swarm 1.2.6 row 67 (T-12, N-019): furniture apart from content, from the engine text or (1.2.5 text) the spec.
+  const furnitureMm = height ? (furnitureFromMessage(e.message) ?? footReserveMm(s, Number(s.width_mm) || 166)) : undefined;
   const pointer = e instanceof DiagramDefect ? e.pointer : undefined;
   const base = note ? `${e.message}; ${note}` : e.message;
-  return new DiagramOverCapacity(base, { checkId, family: fam, ...m, suggestion, ...(pointer ? { pointer } : {}) });
+  return new DiagramOverCapacity(base, { checkId, family: fam, ...m, suggestion, ...(pointer ? { pointer } : {}), ...(furnitureMm !== undefined ? { furnitureMm } : {}) });
 }
 
 /** Lempar ulang `e` dengan saran aksi (kelas, kode, checkId, pointer dipertahankan). */
