@@ -7,6 +7,7 @@ export const dict = {
   "desktop.menu.window": "Ventana",
   "desktop.menu.help": "Ayuda",
   "desktop.menu.checkForUpdates": "Buscar actualizaciones...",
+  "desktop.menu.recheckTools": "Volver a comprobar herramientas",
   "desktop.menu.settings": "Ajustes",
   "desktop.menu.reloadWebview": "Volver a cargar la vista web",
   "desktop.menu.restart": "Reiniciar",
@@ -1514,7 +1515,11 @@ export const dict = {
   "memory.privacy": "Se guarda en este dispositivo, nunca en el repositorio. Un modelo solo ve estas notas como parte de una sesión que ejecutas con él.",
   "memory.off": "Desactivada. Las sesiones no reciben notas y no se aprende nada nuevo. Tus notas se conservan.",
   "memory.refused.secret": "Parece una contraseña o una clave, por lo que no se guardó.",
-  "memory.refused.long": "Mantén la nota por debajo de 400 caracteres.",
+  "memory.refused.long":
+    "Mantén la nota por debajo de {{max}} caracteres. Pon los detalles más largos en un archivo y pide al agente que lo enlace.",
+  "memory.refused.bodyLong":
+    "Mantén el cuerpo de la nota por debajo de {{max}} caracteres, o enlaza un archivo en su lugar.",
+  "memory.refused.tooManyRefs": "Una nota puede enlazar como máximo {{max}} archivos o símbolos.",
   "memory.refused.full": "La memoria está llena. Elimina una nota primero.",
   "memory.error": "No se pudo cargar la memoria del proyecto.",
   "memory.retry": "Reintentar",

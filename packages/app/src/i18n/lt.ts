@@ -95,6 +95,7 @@ const desktop = [
 
 export const dict = {
   ...Object.fromEntries(DESKTOP_NATIVE_KEYS.slice(0, desktop.length).map((key, index) => [key, desktop[index]])),
+  "desktop.menu.recheckTools": "Iš naujo patikrinti įrankius",
   "command.category.suggested": "Siūloma",
   "command.category.view": "Rodinys",
   "command.category.project": "Projektas",
@@ -1415,7 +1416,11 @@ export const dict = {
   "memory.privacy": "Laikoma šiame įrenginyje, niekada saugykloje. Modelis šias pastabas mato tik kaip sesijos, kurią su juo vykdote, dalį.",
   "memory.off": "Išjungta. Sesijos negauna pastabų ir nieko naujo neišmokstama. Jūsų pastabos išsaugomos.",
   "memory.refused.secret": "Tai atrodo kaip slaptažodis ar raktas, todėl neišsaugota.",
-  "memory.refused.long": "Pastaba turi būti trumpesnė nei 400 simbolių.",
+  "memory.refused.long":
+    "Pastaba turi būti trumpesnė nei {{max}} simbolių. Ilgesnes detales įrašykite į failą ir paprašykite agento jį susieti.",
+  "memory.refused.bodyLong":
+    "Pastabos tekstas turi būti trumpesnis nei {{max}} simbolių, arba vietoj to susiekite failą.",
+  "memory.refused.tooManyRefs": "Pastaba gali susieti ne daugiau kaip {{max}} failų ar simbolių.",
   "memory.refused.full": "Atmintis pilna. Pirmiausia ištrinkite pastabą.",
   "memory.error": "Nepavyko įkelti projekto atminties.",
   "memory.retry": "Bandyti dar kartą",

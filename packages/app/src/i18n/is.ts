@@ -95,6 +95,7 @@ const desktop = [
 
 export const dict = {
   ...Object.fromEntries(DESKTOP_NATIVE_KEYS.slice(0, desktop.length).map((key, index) => [key, desktop[index]])),
+  "desktop.menu.recheckTools": "Athuga verkfæri aftur",
   "command.category.suggested": "Tillögur",
   "command.category.view": "Skoða",
   "command.category.project": "Verkefni",
@@ -1400,7 +1401,10 @@ export const dict = {
   "memory.privacy": "Geymt á þessu tæki, aldrei í hugbúnaðarsafninu. Líkan sér þessar athugasemdir aðeins sem hluta af lotu sem þú keyrir með því.",
   "memory.off": "Slökkt. Lotur fá engar athugasemdir og ekkert nýtt er lært. Athugasemdirnar þínar eru geymdar.",
   "memory.refused.secret": "Þetta lítur út eins og lykilorð eða lykill, svo það var ekki vistað.",
-  "memory.refused.long": "Hafðu athugasemd undir 400 stöfum.",
+  "memory.refused.long":
+    "Hafðu athugasemd undir {{max}} stöfum. Settu lengri lýsingu í skrá og biddu umboðsmanninn að tengja hana.",
+  "memory.refused.bodyLong": "Hafðu meginmál athugasemdar undir {{max}} stöfum, eða tengdu skrá í staðinn.",
+  "memory.refused.tooManyRefs": "Athugasemd getur tengt í mesta lagi {{max}} skrár eða tákn.",
   "memory.refused.full": "Minnið er fullt. Eyddu fyrst einni athugasemd.",
   "memory.error": "Ekki tókst að hlaða minni verkefnisins.",
   "memory.retry": "Reyna aftur",

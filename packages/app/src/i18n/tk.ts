@@ -7,6 +7,7 @@ export const dict = {
   "desktop.menu.window": "Penjire",
   "desktop.menu.help": "Kömek",
   "desktop.menu.checkForUpdates": "Täzelenmeleri barlaň ...",
+  "desktop.menu.recheckTools": "Gurallary täzeden barla",
   "desktop.menu.settings": "Sazlamalar",
   "desktop.menu.reloadWebview": "Web sahypasyny täzeden ýükläň",
   "desktop.menu.restart": "Gaýtadan açyň",
@@ -1401,7 +1402,11 @@ export const dict = {
   "memory.privacy": "Şu enjamda saklanýar, hiç haçan ammarda däl. Model bu bellikleri diňe siziň onuň bilen işlediýän sessiýaňyzyň bölegi hökmünde görýär.",
   "memory.off": "Öçük. Sessiýalar bellik almaýar we täze zat öwrenilmeýär. Belliklerińiz saklanýar.",
   "memory.refused.secret": "Bu parol ýa-da açar ýaly görünýär, şonuň üçin ýazdyrylmady.",
-  "memory.refused.long": "Bellemäni 400 belgiden az saklaň.",
+  "memory.refused.long":
+    "Bellemäni {{max}} belgiden az saklaň. Has uzyn jikme-jiklikleri faýla ýazyň we agentden ony baglanyşdyrmagy haýyş ediň.",
+  "memory.refused.bodyLong":
+    "Bellemäniň esasy tekstini {{max}} belgiden az saklaň ýa-da onuň ýerine faýl baglanyşdyryň.",
+  "memory.refused.tooManyRefs": "Bir bellik iň köp {{max}} faýl ýa-da nyşan bilen baglanyşyp biler.",
   "memory.refused.full": "Ýat doly. Ilki bir bellemäni pozuň.",
   "memory.error": "Taslama ýady ýüklenip bilinmedi.",
   "memory.retry": "Gaýtadan synanyşyň",
