@@ -19,14 +19,20 @@
 // state.json (the component, and for a stack also `runtime`, must be `healthy`, PC-ST-06), else
 // START_NOT_INSTALLED with nothing spawned. Writes: exactly ONE audit.jsonl line (kind setup_verb,
 // verb start) per invocation, plus setup.log lines on failure. It writes no state transition, never
-// touches tools.lock.json, takes no consent token (it downloads nothing) and takes no setup lock
-// (register N-153 "no lock"; it is idempotent and the desktop runner already serialises its calls).
+// touches tools.lock.json and takes no consent token (it downloads nothing).
+//
+// Lock (row 92a-fix, decision C13): after the id gate, start takes the SAME setup lockdir that
+// install / apply / remove take (lockdir.ts) and holds it for the whole run, so it can never start
+// containers while an `apply` is recreating them or a `remove` is removing them. A held lock refuses
+// with REFUSED_CONCURRENCY before state is read or any command is spawned. Register N-153 "no lock"
+// is read as "no tools.lock.json write", which still holds.
 //
 // Every command runs through the injected CommandRunner (commands.ts), so tests drive the whole
 // sequence with a scripted fake and the real CLI uses spawnRunner (argv array, env-stripped, no shell).
 
 import { COMPOSE_PROJECT, PROGRAM_NAME, STATES, type ComponentId } from "../constants.ts"
 import { OUTCOME, type OutcomeToken } from "../outcomes.ts"
+import { acquireLock, releaseLock } from "../lockdir.ts"
 import { readState } from "../state.ts"
 import { writeSetupLog } from "../setuplog.ts"
 import { firecrawlPlan, resolveDockerContextName, searxngPlan } from "../stacklib.ts"
@@ -95,7 +101,8 @@ function tail(r: ExecResult): string {
 }
 
 /** Run `swarm-setup start <component>`. Synchronous (the runner is synchronous); never throws for a
- *  refusal or a command failure — every outcome is a named token, and one audit line is appended. */
+ *  refusal or a command failure — every outcome is a named token, and one audit line is appended.
+ *  Holds the setup lock (lockdir.ts) from after the id gate to the end of the run (C13). */
 export function runStart(opts: StartOptions): StartReport {
   const commands: string[] = []
   const run = (argv: readonly string[]): ExecResult => {
@@ -114,7 +121,7 @@ export function runStart(opts: StartOptions): StartReport {
     }
     audit(report)
     if (!report.ok) {
-      log(code ? "warn" : "error", `start ${opts.component}: ${token} — ${message}`, { component: opts.component, commands: report.commands })
+      log(code || token === OUTCOME.REFUSED_CONCURRENCY ? "warn" : "error", `start ${opts.component}: ${token} — ${message}`, { component: opts.component, commands: report.commands })
     }
     return report
   }
@@ -125,6 +132,28 @@ export function runStart(opts: StartOptions): StartReport {
   }
   const id = opts.component
 
+  // 1b. Setup lock (C13): the same lockdir install/apply/remove take, held for the whole start.
+  const lock = acquireLock()
+  if (!lock.ok) {
+    return done(
+      OUTCOME.REFUSED_CONCURRENCY,
+      `another ${PROGRAM_NAME} is running (holder pid ${lock.holderPid}); nothing was started`,
+    )
+  }
+  try {
+    return startLocked(opts, id, run, done)
+  } finally {
+    releaseLock()
+  }
+}
+
+/** Steps 2-4 of runStart, run only while the setup lock is held. */
+function startLocked(
+  opts: StartOptions,
+  id: StartableComponent,
+  run: (argv: readonly string[]) => ExecResult,
+  done: (token: OutcomeToken, message: string) => StartReport,
+): StartReport {
   // 2. State precondition (read-only). The lock version is only readState's fallback for a missing
   //    file, which normalises to all-absent and therefore refuses below; tools.lock.json is not read.
   const st = readState("")
@@ -201,7 +230,7 @@ function audit(report: StartReport): void {
       ts: new Date().toISOString(),
       kind: "setup_verb",
       source: LOG_SOURCE,
-      decision: report.ok ? "started" : report.code ? "refused" : "failed",
+      decision: report.ok ? "started" : report.code || report.token === OUTCOME.REFUSED_CONCURRENCY ? "refused" : "failed",
       verb: "start",
       component: report.component,
       outcome: report.token,

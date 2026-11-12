@@ -711,7 +711,8 @@ function printApplyReport(report: ApplyReport): void {
 }
 
 /** Row 92a (1.2.6, OFF-04 / N-153) — the start-only verb. One component per call, no --dry-run (it
- *  would have to fake colima's answer), no setup lock and no consent (see estate/start.ts header).
+ *  would have to fake colima's answer) and no consent. runStart takes the setup lock itself (row
+ *  92a-fix, C13) and refuses with REFUSED_CONCURRENCY while another swarm-setup holds it.
  *  Binaries resolve exactly like the runtime step's remove path: the brew prefix that holds colima. */
 function cmdStart(cmd: ParsedCommand): OutcomeToken {
   if (cmd.components.length !== 1) {

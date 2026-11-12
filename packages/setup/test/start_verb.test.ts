@@ -11,16 +11,17 @@
 // Run TARGETED: cd packages/setup && bun test test/start_verb.test.ts   (with XDG_* unset)
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach, spyOn } from "bun:test"
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs"
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { isolateSourceLock } from "./lockPosture.ts"
 import { scriptedRunner } from "../src/steps/runtime/commands.ts"
 import { defaultState, writeState } from "../src/state.ts"
 import { STATES, type ComponentId } from "../src/constants.ts"
-import { resolveLockFile, stateFile } from "../src/paths.ts"
+import { lockDir, resolveLockFile, stateFile } from "../src/paths.ts"
 import { parseArgs } from "../src/cli.ts"
 import { main, usageText } from "../src/index.ts"
+import { OUTCOME } from "../src/outcomes.ts"
 import { runStart, START_CODES } from "../src/estate/start.ts"
 
 const REAL_HOME = process.env.HOME
@@ -291,5 +292,59 @@ describe("11.8 case 7 — the CLI surface lists start (the desktop feature-detec
       expect(p.cmd.verb).toBe("start")
       expect(p.cmd.components).toEqual(["searxng"])
     }
+  })
+})
+
+// Row 92a-fix (decision C13): start takes the SAME setup lockdir as install / apply / remove.
+describe("92a-fix — start holds the setup lock for the whole run", () => {
+  it("lock held by a live swarm-setup: REFUSED_CONCURRENCY, nothing spawned, state never read, holder's lock kept", () => {
+    seedState({ runtime: STATES.HEALTHY, searxng: STATES.HEALTHY })
+    mkdirSync(lockDir(), { recursive: true })
+    writeFileSync(join(lockDir(), "pid"), `${process.pid}\n`) // this test process is alive -> lock is held
+    const r = fake({ profile: "Stopped" })
+    const rep = start("searxng", r)
+    expect(rep.ok).toBe(false)
+    expect(rep.token).toBe(OUTCOME.REFUSED_CONCURRENCY)
+    expect(r.calls).toEqual([])
+    expect(existsSync(lockDir())).toBe(true) // the other holder's lock is not removed
+    const lines = auditLines()
+    expect(lines.length).toBe(1)
+    expect(lines[0]?.outcome).toBe(OUTCOME.REFUSED_CONCURRENCY)
+    expect(lines[0]?.decision).toBe("refused")
+    rmSync(lockDir(), { recursive: true, force: true })
+  })
+
+  it("normal start: the lock is held while commands run and released afterwards", () => {
+    seedState({ runtime: STATES.HEALTHY, searxng: STATES.HEALTHY })
+    const base = fake({ profile: "Stopped" })
+    const heldDuring: boolean[] = []
+    const r = {
+      ...base,
+      run: (argv: readonly string[]) => {
+        heldDuring.push(existsSync(lockDir()))
+        return base.run(argv)
+      },
+    }
+    const rep = start("searxng", r as never)
+    expect(rep.ok).toBe(true)
+    expect(heldDuring.length).toBeGreaterThan(0)
+    expect(heldDuring.every(Boolean)).toBe(true)
+    expect(existsSync(lockDir())).toBe(false)
+  })
+
+  it("a refusal after the lock (not installed) still releases it", () => {
+    seedState({ runtime: STATES.HEALTHY, searxng: STATES.ABSENT })
+    const rep = start("searxng", fake({}))
+    expect(rep.code).toBe(START_CODES.NOT_INSTALLED)
+    expect(existsSync(lockDir())).toBe(false)
+  })
+
+  it("a stale lock left by a dead process is cleared and start proceeds", () => {
+    seedState({ runtime: STATES.HEALTHY })
+    mkdirSync(lockDir(), { recursive: true })
+    writeFileSync(join(lockDir(), "pid"), "999999\n")
+    const rep = start("runtime", fake({ profile: "Running" }))
+    expect(rep.ok).toBe(true)
+    expect(existsSync(lockDir())).toBe(false)
   })
 })
