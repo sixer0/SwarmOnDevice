@@ -42,7 +42,11 @@ describe('S11 doc.typeCode NDA', () => {
     expect(p.paramsSha256).toBe(sha256Hex(stableStringify(p.resolvedParams)));
     const R122 = ['controlSheet.methodStatement.text', 'controlSheet.distribution.defaults', 'cover.controlBlock.geodeticDatum'];
     for (const k of R122) expect(k in p.resolvedParams, k).toBe(true);
-    const pre = Object.fromEntries(Object.entries(p.resolvedParams).filter(([k]) => !R122.includes(k)));
+    // T-18 / row 72 (1.2.6): figure.quota.maxPerDocument (P7-37) and figure.quota.exceptionReason (P7-38) are new registry
+    // params with defaults; excluded the same way as R-81..R-83 so the pin holds.
+    const R72 = ['figure.quota.maxPerDocument', 'figure.quota.exceptionReason'];
+    for (const k of R72) expect(k in p.resolvedParams, k).toBe(true);
+    const pre = Object.fromEntries(Object.entries(p.resolvedParams).filter(([k]) => !R122.includes(k) && !R72.includes(k)));
     // row49a ADAPT (C104 H1, Rev A DT-28d): P4C-35 color.classificationInk default is now seal at every level; the pin
     // holds with that one value set back to its pre-H1 default, so no other registry default moved.
     expect(pre['color.classificationInk']).toEqual({ SR: 'seal', R: 'seal', T: 'seal', B: 'seal' });
