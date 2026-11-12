@@ -73,15 +73,21 @@ export const MISSION_TRANSITIONS: Readonly<Record<MissionStatus, readonly Missio
   cancelled: [],
 }
 
-/** §4.2 row transitions. */
+/**
+ * §4.2 row transitions. 1.2.6 row 79 (MC-01, U5 alternative A): running -> done is allowed directly, but only with a
+ * note (the check and its result; ROW_RUNNING_DONE_RULE); the done gate (OUTPUT_UNVERIFIED) still applies.
+ */
 export const ROW_TRANSITIONS: Readonly<Record<RowStatus, readonly RowStatus[]>> = {
   pending: ["running", "blocked", "dropped"],
-  running: ["needs-review", "blocked"],
+  running: ["needs-review", "blocked", "done"],
   "needs-review": ["done", "blocked", "running"],
   blocked: ["running", "dropped"],
   done: ["running"],
   dropped: [],
 }
+
+/** Row 79 (MC-01): the one wording of the running -> done rule, shared by the refusal, the next-call hint and the update_row description. */
+export const ROW_RUNNING_DONE_RULE = "running -> done needs a note (the check and its result); needs-review is optional"
 
 /** §4.4: fields whose change after approval needs a decision. */
 const STRUCTURAL_FIELDS = ["phase", "kind", "deps", "agent", "title", "output", "verification", "ownership", "size", "model"] as const
@@ -717,6 +723,7 @@ export class MissionStore {
     const allowed = ROW_TRANSITIONS[from]
     if (!allowed.includes(to)) throw err("STATUS_TRANSITION", `row ${rowId} ${from} -> ${to} is not allowed`, { row: rowId, from, to, allowed })
     const noteOk = (n: string | undefined) => typeof n === "string" && n.length >= 1 && n.length <= 4000 && !/[\u0000-\u001f]/.test(n)
+    if (from === "running" && to === "done" && !noteOk(a.note)) throw err("SCHEMA_INVALID", ROW_RUNNING_DONE_RULE, { row: rowId, field: "note", from, to })
     if ((to === "blocked" || to === "dropped") && !noteOk(a.note)) throw err("SCHEMA_INVALID", `${to} needs a note (the ${to === "blocked" ? "blocker" : "reason"})`, { row: rowId, field: "note" })
     if (a.note !== undefined && !noteOk(a.note)) throw err("SCHEMA_INVALID", "note must be a cell: 1-4000 characters, no control characters", { row: rowId })
     // Row 155 (spec output verification §7.3; C129, C130): done only when every deliverable bound to the row

@@ -15,7 +15,7 @@ import path from "node:path"
 import { prepareDownloadDir, REAL_NODE_FS, McpToolError, writeFileGuarded, type NodeFs } from "../../../vendor/scripts/studio/mcp/safety"
 import { StoreError, type MissionStore, type StoreTx } from "../../store/index.ts"
 import type { MissionDoc, MissionWriteOptions, NewMissionMessage, RowPatch, SessionLink } from "../../store/mission/types.ts"
-import type { RowPatchJobResult } from "../../store/mission/mission-store.ts"
+import { ROW_RUNNING_DONE_RULE, type RowPatchJobResult } from "../../store/mission/mission-store.ts"
 import type { HostToolExtension, HostToolSession } from "../tool-table.ts"
 import { ACTOR_PATTERN, EXPORT_FILES, MISSION_TOOL_NAMES, MISSION_TOOL_SCHEMAS, type ExportFile, type GetInclude } from "./schemas.ts"
 import { errorResult, MissionToolError, okResult, type MissionLog } from "./tool-result.ts"
@@ -390,7 +390,7 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
     tool(
       "studio_mission_update_row",
       "Update mission rows",
-      "Row patches in order in one job (1-200): {id, add?, set?, status?, note?, acquire?, release?, retire?, checkpoint?{n, m, label?}} (§4.2-4.4, §5.4; C57 b). Each patch applies on its own: valid patches apply, a refused patch is rolled back alone and reported in results [{id, ok, code?, message?, noteSaved?}]; if no patch applies the call fails with the first code. A status refused for DEP_NOT_DONE still stores the patch's note (noteSaved: true). retire: [documentId] archives a superseded draft linked to the row (needs note), applied before status. messages[] (C57 c/d) are appended in the same job; an owner instruction is {from: owner, to: controller, kind: instruction} and is never executed. Returns changed rows, results, waves, ready.",
+      `Row patches in order in one job (1-200): {id, add?, set?, status?, note?, acquire?, release?, retire?, checkpoint?{n, m, label?}} (§4.2-4.4, §5.4; C57 b). Status: ${ROW_RUNNING_DONE_RULE} (SCHEMA_INVALID field note otherwise); blocked and dropped need a note; done still passes the output gate (OUTPUT_UNVERIFIED). Each patch applies on its own: valid patches apply, a refused patch is rolled back alone and reported in results [{id, ok, code?, message?, noteSaved?}]; if no patch applies the call fails with the first code. A status refused for DEP_NOT_DONE still stores the patch's note (noteSaved: true). retire: [documentId] archives a superseded draft linked to the row (needs note), applied before status. messages[] (C57 c/d) are appended in the same job; an owner instruction is {from: owner, to: controller, kind: instruction} and is never executed. Returns changed rows, results, waves, ready.`,
       false,
       async (a, s) => {
         const mission = a.mission as string
