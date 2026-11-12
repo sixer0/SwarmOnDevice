@@ -93,7 +93,7 @@ describe('katalog parameter: toc.levels (R-66)', () => {
     // row42 ADAPT A2 (C40, row 122): R-81..R-83 appended; renderer 59 -> 62, total 802 -> 805.
     expect(RENDER_PARAM_COUNT).toBe(62);
     expect(ALL_PARAMS).toHaveLength(ALL_PARAM_COUNT);
-    expect(ALL_PARAM_COUNT).toBe(804); // 805 before 1.2.5 (P11-27 removed with C-27)
+    expect(ALL_PARAM_COUNT).toBe(806); // 805 before 1.2.5 (P11-27 removed with C-27); 804 -> 806 in 1.2.6 row 72 (figure.quota.*)
   });
 
   it('cakupan: boleh di M11 slot toc, ditolak di slot bab', () => {

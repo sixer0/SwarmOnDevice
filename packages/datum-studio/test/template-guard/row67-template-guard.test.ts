@@ -169,7 +169,7 @@ describe("row 67: sample and registry facts", () => {
       expect(c.S3).toBe(4);
       expect(c.S4).toBe(16);
     }
-    expect(count).toBe(102); // 103 before 1.2.5 (C-27 removed)
+    expect(count).toBe(103); // 103 before 1.2.5 (C-27 removed) -> 102; 1.2.6 row 72 adds D22 (T-18 figure quota) -> 103
     expect(registry.LINT_GROUP_COUNTS.C).toBe(18); // 19 before 1.2.5
   });
 

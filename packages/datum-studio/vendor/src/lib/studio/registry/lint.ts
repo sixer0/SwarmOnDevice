@@ -3,6 +3,7 @@
  *
  * 103 LintDef = 87 otomatis (A 39 DATUM + B 4 guard + C 19 pemindai bahasa +
  * D 25 struktur: D01-D21 + LD-01..LD-04 lint rilis struktur v2) + 16
+ * (riwayat 1.2.5: C-27 dihapus -> 102; Swarm 1.2.6 row 72 menambah D22 kuota gambar -> 103, D 26)
  * pemeriksaan manusia (H01-H16).
  * Sumber isi: research/01_manual_parameter_catalog.md §5 (tier), §6.1-§6.3
  * (butir, batas, tahap, mode HQ). Acuan perilaku (read-only): datum_lint.py
@@ -420,6 +421,8 @@ const ROWS_D: readonly RowD[] = [
   ["D19", "Zona waktu pada setiap waktu", "0 waktu tanpa zona", "SG-L4-05", TERBIT_SERAH, false],
   ["D20", "Skala Admiralty dicetak sekali di lampiran bila dipakai", "1 kali", "DT-25", TERBIT_SERAH, false],
   ["D21", "Istilah ICD 203 dalam kosakata pita dan tidak dicampur keyakinan", "0 istilah di luar kosakata pita", "research/01 §6.2 D21", TERBIT_SERAH, true],
+  // Swarm 1.2.6 row 72 (T-18/W-10, register N-115): kuota gambar per dokumen; alasan tercatat -> REPORT, bukan FAIL.
+  ["D22", "Kuota gambar per dokumen", "≤ figure.quota.maxPerDocument kecuali alasan tercatat", "T-18, W-10", TERBIT_SERAH, false, "figure.quota.maxPerDocument"],
 ];
 
 /** Modul pemilik grup D (S46): audit angka/struktur di `structure`. */

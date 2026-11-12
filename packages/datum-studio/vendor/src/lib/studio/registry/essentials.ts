@@ -89,6 +89,8 @@ export const PARAM_SURFACE_LISTS: Readonly<Record<ParamSurface, readonly string[
     ...ids("P5-", 3, 4, 7, 8, 9, 12, 13, 24, 26, 27, 28, [30, 37], 41, 62),
     ...ids("P6-", 19, 30),
     ...ids("P7-", 5, [7, 12], 13, 16, 27, 32, 35, 36),
+    // Swarm 1.2.6 row 72 (T-18/W-10): kuota gambar dan alasan pengecualian, kenop penyusun templat seperti R-81..R-83.
+    ...ids("P7-", 37, 38),
     ...ids("P9-", [9, 31], 40, 44, 47, 48),
     ...ids("R-", 15, 16, 20, 21, 26, 27, 33, 34, 36),
     // Kunci kontrak baru.

@@ -191,11 +191,12 @@ describe('C06 R-67..R-80: kontrak registri = register research/38 §1.2', () => 
     expect(PARAMS_RENDER).toHaveLength(RENDER_PARAM_COUNT);
     // row42 ADAPT A2 (C40, row 122): renderer 59 -> 62, total 802 -> 805 (params/render.ts:439, params/index.ts:35).
     expect(RENDER_PARAM_COUNT).toBe(62);
-    expect(CATALOG_PARAM_COUNT).toBe(721);
+    // Swarm 1.2.6 row 72 (T-18/W-10): + P7-37/P7-38 figure.quota.*; katalog 721 -> 723, total 804 -> 806 (count pin by delta).
+    expect(CATALOG_PARAM_COUNT).toBe(723);
     expect(ALL_PARAMS).toHaveLength(ALL_PARAM_COUNT);
-    expect(ALL_PARAM_COUNT).toBe(804);
-    expect(new Set(ALL_PARAMS.map((d) => d.key)).size).toBe(804);
-    expect(new Set(ALL_PARAMS.map((d) => d.id)).size).toBe(804);
+    expect(ALL_PARAM_COUNT).toBe(806);
+    expect(new Set(ALL_PARAMS.map((d) => d.key)).size).toBe(806);
+    expect(new Set(ALL_PARAMS.map((d) => d.id)).size).toBe(806);
   });
 });
 

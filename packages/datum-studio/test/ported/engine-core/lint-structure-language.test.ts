@@ -40,7 +40,7 @@ describe('lintStructure: cakupan dan tier', () => {
   // SR-42 (D-178): SR-18 menambah 3 cek bermodul structure (LD-01..LD-03), 45 -> 48.
   it('semua entri registri bermodul structure terimplementasi (48, D-178)', () => {
     expect(structureCoverageGaps()).toEqual([]);
-    expect(STRUCTURE_LINT_DEFS).toHaveLength(48);
+    expect(STRUCTURE_LINT_DEFS).toHaveLength(49); // + D22 kuota gambar (Swarm 1.2.6 row 72, T-18): 48 -> 49
   });
 
   it('hanya cek yang berlaku untuk tier yang dijalankan: NOTA hanya 4 cek struktur v2, D01-D03/D07 hanya SERAH', () => {

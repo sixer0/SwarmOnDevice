@@ -56,7 +56,8 @@ const EXPECTED_COUNTS: Record<ParamCategoryId, [number, number, number, number]>
   'lembar-kendali': [1, 10, 1, 12],
   'kepala-kaki': [1, 14, 10, 25],
   tabel: [1, 15, 20, 36],
-  'gambar-chart': [1, 153, 27, 181],
+  // Swarm 1.2.6 row 72 (T-18/W-10): P7-37/P7-38 figure.quota.* advanced -> +2 advanced, +2 total (count pin by delta).
+  'gambar-chart': [1, 155, 27, 183],
   'diagram-simbol': [1, 29, 71, 101],
   'bukti-angka': [1, 12, 53, 66],
   'penomoran-klasifikasi': [4, 11, 25, 40],
@@ -117,7 +118,7 @@ describe('U02 tabel kategori', () => {
 describe('U02 categoryOf terhadap registri hidup', () => {
   // row42 ADAPT A2 (C40, row 122): R-81..R-83 appended; 802 -> 805 keys.
   it('registri = 802 kunci; setiap kunci tepat satu kategori; Lainnya kosong', () => {
-    expect(ALL_PARAMS.length).toBe(804); // 805 before 1.2.5 (P11-27 removed with C-27)
+    expect(ALL_PARAMS.length).toBe(806); // 805 before 1.2.5 (P11-27 removed with C-27); 806 in 1.2.6 (row 72 figure.quota.*)
     const m = byCategory();
     const lainnya = (m.get('lainnya') ?? []).map((d) => `${d.id} ${d.key} (${d.group})`);
     expect(lainnya).toEqual([]);
@@ -140,7 +141,7 @@ describe('U02 categoryOf terhadap registri hidup', () => {
     );
     expect(actual).toEqual(EXPECTED_COUNTS);
     const surf = (s: string) => ALL_PARAMS.filter((d) => d.surface === s).length;
-    expect([surf('essential'), surf('advanced'), surf('derived'), surf('internal')]).toEqual([21, 383, 72, 328]);
+    expect([surf('essential'), surf('advanced'), surf('derived'), surf('internal')]).toEqual([21, 385, 72, 328]); // advanced 383 -> 385: row 72 (1.2.6) figure.quota.*
   });
 
   it('hanya membaca group dan key (chapter/namespace/surface diabaikan)', () => {
@@ -237,7 +238,7 @@ describe('U02 groupByCategory', () => {
     const rev = groupByCategory([...ALL_PARAMS].reverse());
     expect(rev.map((c) => c.category.id)).toEqual(g.map((c) => c.category.id));
     expect(rev.map((c) => c.subgroups.map((s) => s.key))).toEqual(g.map((c) => c.subgroups.map((s) => s.key)));
-    expect(g.reduce((n, c) => n + c.total, 0)).toBe(804); // 805 -> 804 in 1.2.5 (C-27 removed); row42 ADAPT A2 (C40, row 122)
+    expect(g.reduce((n, c) => n + c.total, 0)).toBe(806); // 805 -> 804 in 1.2.5 (C-27 removed); 806 in 1.2.6 (row 72); row42 ADAPT A2 (C40, row 122)
   });
 
   it('permukaan lanjutan menyembunyikan kategori kosong (Bahasa, Lint)', () => {
@@ -246,7 +247,7 @@ describe('U02 groupByCategory', () => {
     expect(ids).not.toContain('bahasa');
     expect(ids).not.toContain('lint-pemeriksaan');
     expect(ids).not.toContain('lainnya');
-    expect(adv.reduce((n, c) => n + c.total, 0)).toBe(383); // row122c (C96 R42-D1): + R-81..R-83 advanced
+    expect(adv.reduce((n, c) => n + c.total, 0)).toBe(385); // row122c (C96 R42-D1): + R-81..R-83 advanced; + 2 row 72 (1.2.6) figure.quota.*
     expect(groupByCategory([])).toEqual([]);
   });
 
@@ -273,7 +274,7 @@ describe('U02 groupByCategory', () => {
     expect(subgroupKeyOf({ key: 'grid.textColumnMm' })).toBe('grid');
     const g = groupByCategory(ALL_PARAMS);
     const sub = (cat: ParamCategoryId) => Object.fromEntries(g.find((c) => c.category.id === cat)!.subgroups.map((s) => [s.key, s.defs.length]));
-    expect(sub('gambar-chart')).toEqual({ chart: 41, 'chart.kind': 136, caption: 1, image: 3 });
+    expect(sub('gambar-chart')).toEqual({ chart: 41, 'chart.kind': 136, caption: 1, image: 3, figure: 2 }); // figure: row 72 (1.2.6)
     expect(sub('tipografi')).toEqual({ type: 21, 'type.scale': 78, render: 5 });
     // Untuk semua kunci selain S1, subkelompok = namespace registri.
     for (const d of ALL_PARAMS as readonly ParamDef[]) {
@@ -327,6 +328,6 @@ describe('U02 groupByCategory', () => {
     const keys = (cat: ParamCategoryId) => g.find((c) => c.category.id === cat)!.subgroups.map((s) => s.key);
     expect(keys('halaman-grid')).toEqual(['page', 'grid', 'layout', 'device', 'chapter', 'rules', 'aside', 'slot', 'render']);
     expect(keys('kepala-kaki')).toEqual(['runningHead', 'wrapper', 'device', 'registerBlock', 'org', 'render']);
-    expect(keys('gambar-chart')).toEqual(['chart', 'chart.kind', 'caption', 'image']);
+    expect(keys('gambar-chart')).toEqual(['chart', 'chart.kind', 'caption', 'image', 'figure']); // figure: row 72 (1.2.6)
   });
 });

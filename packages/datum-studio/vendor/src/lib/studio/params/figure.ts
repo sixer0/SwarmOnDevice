@@ -1,6 +1,6 @@
 /**
- * Parameter figur global (S08, 01_specs.md §5.1 T05): chart global P7 (36), peta
- * rekomendasi P8 (2), diagram P9 (55), simbol P10 (42) = 135 ParamDef,
+ * Parameter figur global (S08, 01_specs.md §5.1 T05): chart global P7 (36 + 2 kuota
+ * gambar Swarm 1.2.6 row 72), peta rekomendasi P8 (2), diagram P9 (55), simbol P10 (42) = 137 ParamDef,
  * `origin: "catalog"`. Sumber: research/01_manual_parameter_catalog.md §3.6.1,
  * §3.6.3, §3.7, §3.8; nilai asli Tabel 7.5, 8.7, 8.8, 9.4, 10.1-10.7 dari
  * research/04_manual_docx_tables.md (D-09). 87 parameter khusus jenis chart
@@ -196,6 +196,16 @@ const P7: readonly ParamDef[] = [
   d("P7-36", "chart.minFontPt", "Ukuran huruf minimum chart", "pt", 5.5, "K", "lint 28", "L3999, SK80", {
     range: { min: 5.5, step: 0.5 },
     classNote: "pustakachart mengukur minimum 5,8",
+  }),
+  // Swarm 1.2.6 row 72 (T-18/W-10, register N-113, N-114): kuota gambar per dokumen (chart, diagram, image)
+  // dan alasan pengecualian tercatat; dinilai lint D22. Nama mengikuti cover.logo.maxOccurrencesPerDocument.
+  d("P7-37", "figure.quota.maxPerDocument", "Kuota gambar per dokumen (maks.)", "int", null, "K", "T-18, lint D22", "Swarm 1.2.6 T-18/W-10", {
+    range: { min: 0, step: 1 },
+    classNote: "K (kebijakan templat, parameter lint D22 terkunci U.1a); null = tanpa kuota; menghitung gambar chart, diagram dan image",
+  }),
+  d("P7-38", "figure.quota.exceptionReason", "Alasan pengecualian kuota gambar", "string", "", "B", "T-18, lint D22", "Swarm 1.2.6 T-18/W-10", {
+    pattern: "^[\\s\\S]{0,500}$",
+    classNote: "maks. 500 karakter; bila terisi, jumlah di atas kuota dilaporkan (REPORT) dengan alasan ini, bukan FAIL",
   }),
 ];
 
@@ -776,8 +786,8 @@ const P10: readonly ParamDef[] = [
   d("P10-42", "symbol.paidStandardsNotCopied", "Standar berbayar tidak disalin", "bool", true, "K", "SM-12", "L2682, L4720"),
 ];
 
-/** 135 parameter figur global: P7 36, P8 2, P9 55, P10 42. */
+/** 137 parameter figur global: P7 38 (36 + kuota gambar row 72), P8 2, P9 55, P10 42. */
 export const PARAMS_FIGURE: readonly ParamDef[] = [...P7, ...P8, ...P9, ...P10];
 
 /** Hitungan target katalog; isi larik wajib sama dengan angka ini. */
-export const PARAMS_FIGURE_COUNT = 135;
+export const PARAMS_FIGURE_COUNT = 137;

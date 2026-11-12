@@ -70,15 +70,16 @@
   "row46": "2026-11-12: 1.2.6 row 46 (T-11 ranked flow layout engine; register N-109, N-111, N-112, N-161..N-164; 01e §4.1-§4.2, §4.5, §5, §6.5-6.8; C7). 4 vendor files (files[].patch_row46, before = previous sha256): engine/diagram/layout-a/flow.ts (copied -> patched: ranked flow TB/LR, ranks from edges, lattice capacity refusals), engine/diagram/build/capacity.ts (re-patched: flow texts name direction, ranked-flow measure), engine/diagram/elk/adapter.ts and elk/plan.ts (added, re-patched: ELK_DIRECTION, ranked-flow ELK graph/plan, ElkPlan.direction, elkPlanKey with direction). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/46_row46_diffs/. counts by delta: copied 429 -> 428, patched 137 -> 138; bytes 9834930 + 21736 = 9856666. patch_rows += 46",
   "row75": "2026-11-12: 1.2.6 row 75 (M-05, U15; register N-053, N-054). 5 vendor files patched (files[].patch_row75, before = previous sha256): services/storage/paths.ts (copied -> patched: datumFileName adds ` rev<N>` after `Rev<X>`), contract/env.ts (DATUM_FILENAME_PATTERN accepts optional ` rev<N>`), services/render/pure/render.ts, services/render/revision.ts, services/render/scope.ts (naming.revisionNo plumbed so every service render passes the stored revision). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/75_row75_diffs/. counts by delta: copied 428 -> 427, patched 138 -> 139, files/replaced/added unchanged; bytes 9856666 + 1607 = 9858273. patch_rows += 75",
   "row76": "2026-11-12: 1.2.6 row 76 (M-06, U5; register E-19, E-20). 3 vendor files patched (files[].patch_row76, before = previous sha256): scripts/studio/mcp/write-normalize.ts (copied -> patched: studio_edit keeps `change`, no ARG_IGNORED), scripts/studio/mcp/write-tools.ts (status unchanged: studio_edit inputSchema change = CHANGE; work-report update adds the change to R12/R13 bodies), scripts/studio/mcp/write-client-run.ts (status unchanged: client-document edit sends the caller change instead of the automatic one). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/76_row76_diffs/. counts by delta: copied 427 -> 426, patched 139 -> 140, files/replaced/added unchanged; bytes 9859975 + 1648 (write-tools.ts +1276, write-client-run.ts +149, write-normalize.ts +223) = 9861623. patch_rows += 76",
-  "row69": "2026-11-12: 1.2.6 row 69 (T-16, U5; register E-17, E-18). 1 vendor file re-patched (files[].patch_row69, before = previous sha256; status unchanged): scripts/studio/mcp/figure-tools.ts (mergeFigurePatch deep-merges spec: objects merge, arrays replace, null removes; a spec patch leaving a diagram.schema required key missing is SCHEMA_INVALID naming the key, before any write). Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/69_row69_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9858273 + 1702 = 9859975. patch_rows += 69"
+  "row69": "2026-11-12: 1.2.6 row 69 (T-16, U5; register E-17, E-18). 1 vendor file re-patched (files[].patch_row69, before = previous sha256; status unchanged): scripts/studio/mcp/figure-tools.ts (mergeFigurePatch deep-merges spec: objects merge, arrays replace, null removes; a spec patch leaving a diagram.schema required key missing is SCHEMA_INVALID naming the key, before any write). Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/69_row69_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9858273 + 1702 = 9859975. patch_rows += 69",
+  "row72": "2026-11-12: 1.2.6 row 72 (T-18/W-10, U5; register N-113, N-114, N-115). 7 vendor files (files[].patch_row72, before = previous sha256): params/figure.ts (copied -> patched, 36089 -> 36997); params/index.ts (re-patched, 2823 -> 2913); registry/lint.ts (re-patched, 22315 -> 22696); registry/slots.ts (copied -> patched, 14214 -> 14403); registry/essentials.ts (re-patched, 20208 -> 20355); engine/lint/structure/checks-d.ts (copied -> patched, 42932 -> 44798); components/studio/template-editor/param-categories.ts (copied -> patched, 18761 -> 18908). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/72_row72_diffs/. counts by delta: copied 426 -> 422, patched 140 -> 144, files/replaced/added unchanged; bytes 9861623 + 3728 = 9865351. patch_rows += 72"
  },
  "counts": {
   "files": 608,
-  "copied": 426,
-  "patched": 140,
+  "copied": 422,
+  "patched": 144,
   "replaced": 12,
   "added": 30,
-  "bytes": 9861623
+  "bytes": 9865351
  },
  "files": [
   {
@@ -530,11 +531,12 @@
   },
   {
    "path": "src/components/studio/template-editor/param-categories.ts",
-   "status": "copied",
-   "bytes": 18761,
+   "status": "patched",
+   "bytes": 18908,
    "source_sha256": "7628ce42e8ca4e1e4fabad064f2f8a257ecd42687925d242fe6b95ca1403d98c",
-   "sha256": "7628ce42e8ca4e1e4fabad064f2f8a257ecd42687925d242fe6b95ca1403d98c",
-   "note": "row 66: 3ebe486 pure TS (templates spec §7.2), verbatim; categoryOf is the P6 lock vocabulary. Reviewed by row 65 (verification/08_template_prereview.md §4: GO verbatim)"
+   "sha256": "6aa7d50064fb1664569cafd0f002608938c2461e6920868f802ffb1881895df0",
+   "note": "row 66: 3ebe486 pure TS (templates spec §7.2), verbatim; categoryOf is the P6 lock vocabulary. Reviewed by row 65 (verification/08_template_prereview.md §4: GO verbatim)",
+   "patch_row72": {"id": "row72-t18-figure-quota", "row": "72", "decision": "1.2.6 patch T-18/W-10 (U5; register N-113, N-114, N-115)", "summary": "SUBGROUP_LABELS gambar-chart gains ['figure', 'Kuota gambar per dokumen'] (new namespace figure.quota.* gets a label instead of the raw key)", "diff_base": "sha256 before this row", "before_sha256": "7628ce42e8ca4e1e4fabad064f2f8a257ecd42687925d242fe6b95ca1403d98c", "after_sha256": "6aa7d50064fb1664569cafd0f002608938c2461e6920868f802ffb1881895df0", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/72_row72_diffs/src_components_studio_template-editor_param-categories.ts.diff", "diff_sha256": "8120075153495834e9cdb9091d6973739b9bc756ead83b3ff79fe1ad062954b0"}
   },
   {
    "path": "src/components/studio/template-editor/param-labels.ts",
@@ -3971,10 +3973,11 @@
   },
   {
    "path": "src/lib/studio/engine/lint/structure/checks-d.ts",
-   "status": "copied",
-   "bytes": 42932,
+   "status": "patched",
+   "bytes": 44798,
    "source_sha256": "7765ea3fbf7af3fd7d587302815c1b69de42f8f358cf5664295c5dcc10a5f11a",
-   "sha256": "7765ea3fbf7af3fd7d587302815c1b69de42f8f358cf5664295c5dcc10a5f11a"
+   "sha256": "0e2a7f248c67d4d802c262b86419979017c4ef972503222c3c03ae02703f62e0",
+   "patch_row72": {"id": "row72-t18-figure-quota", "row": "72", "decision": "1.2.6 patch T-18/W-10 (U5; register N-113, N-114, N-115)", "summary": "NEW check d22 (STRUCTURE_D_CHECKS.D22): counts chart, diagram and image blocks; quota null -> PASS; count > quota -> one FAIL at the first figure over quota naming count, quota and figure.quota.exceptionReason; with a recorded exceptionReason the finding is REPORT and prints the reason (<= 500 chars)", "diff_base": "sha256 before this row", "before_sha256": "7765ea3fbf7af3fd7d587302815c1b69de42f8f358cf5664295c5dcc10a5f11a", "after_sha256": "0e2a7f248c67d4d802c262b86419979017c4ef972503222c3c03ae02703f62e0", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/72_row72_diffs/src_lib_studio_engine_lint_structure_checks-d.ts.diff", "diff_sha256": "182061192960f01e493bf0be89770afedc45dac94ddf09365964c175d73ed178"}
   },
   {
    "path": "src/lib/studio/engine/lint/structure/checks-slots.ts",
@@ -4257,10 +4260,11 @@
   },
   {
    "path": "src/lib/studio/params/figure.ts",
-   "status": "copied",
-   "bytes": 36089,
+   "status": "patched",
+   "bytes": 36997,
    "source_sha256": "397a6f4e1cdabdd37d64e8c20e0ab293a495a5216e02e62c6913e86922659e5a",
-   "sha256": "397a6f4e1cdabdd37d64e8c20e0ab293a495a5216e02e62c6913e86922659e5a"
+   "sha256": "4cbcb1291725195f537655ed8c221bb1e387463fdff9d4827b93f88fca670886",
+   "patch_row72": {"id": "row72-t18-figure-quota", "row": "72", "decision": "1.2.6 patch T-18/W-10 (U5; register N-113, N-114, N-115)", "summary": "NEW P7-37 figure.quota.maxPerDocument (int, default null = no quota, class K, range min 0) and P7-38 figure.quota.exceptionReason (string <= 500 chars, default \"\", class B); PARAMS_FIGURE_COUNT 135 -> 137, header counts", "diff_base": "sha256 before this row", "before_sha256": "397a6f4e1cdabdd37d64e8c20e0ab293a495a5216e02e62c6913e86922659e5a", "after_sha256": "4cbcb1291725195f537655ed8c221bb1e387463fdff9d4827b93f88fca670886", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/72_row72_diffs/src_lib_studio_params_figure.ts.diff", "diff_sha256": "29206ba623f4c621436f8ce4b1a1dc5a7d94b69025befd034c2b3619a266fc5c"}
   },
   {
    "path": "src/lib/studio/params/governance-language.ts",
@@ -4273,9 +4277,9 @@
   {
    "path": "src/lib/studio/params/index.ts",
    "status": "patched",
-   "bytes": 2823,
+   "bytes": 2913,
    "source_sha256": "cd9e82ab0ee440c7992494a7554dddc1dae30ba4f5125a8a59d919373db2e0b9",
-   "sha256": "5f49befa3cbdd6ab582a07598d272e6a90658ee197ca263d506196a943277a96",
+   "sha256": "898471f2e7d02fa254064b54a5a125c108dc111ec64dfaa6ca01629c62329290",
    "patch": {
     "id": "row122-params-r81-r83",
     "row": 122,
@@ -4286,7 +4290,8 @@
     "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/51_row122_diffs/params_index.ts.diff",
     "diff_sha256": "bfd2a9437005233b3127b90583a65ce71c3c876dc89ce5255c9ae4bf3e933679"
    },
-   "patch_row215": {"id": "row215-remove-c27", "row": "215", "decision": "1.2.5 user: Hapus C-27 seluruhnya", "summary": "C-27 (Kata per kalimat, P11-27 threshold.wordsPerSentenceAvg) removed: scanner, registry entry, param, counts and comments", "before_sha256": "5bead7214b3b50f44c700c0f3dd58d5bc0fcfe3ea5a807400529d78a77ee3541", "after_sha256": "5f49befa3cbdd6ab582a07598d272e6a90658ee197ca263d506196a943277a96", "diff": "docs/2026-11-09_swarm_1_2_3_patch/implementation/215_row215_diffs/src_lib_studio_params_index.ts.diff"}
+   "patch_row215": {"id": "row215-remove-c27", "row": "215", "decision": "1.2.5 user: Hapus C-27 seluruhnya", "summary": "C-27 (Kata per kalimat, P11-27 threshold.wordsPerSentenceAvg) removed: scanner, registry entry, param, counts and comments", "before_sha256": "5bead7214b3b50f44c700c0f3dd58d5bc0fcfe3ea5a807400529d78a77ee3541", "after_sha256": "5f49befa3cbdd6ab582a07598d272e6a90658ee197ca263d506196a943277a96", "diff": "docs/2026-11-09_swarm_1_2_3_patch/implementation/215_row215_diffs/src_lib_studio_params_index.ts.diff"},
+   "patch_row72": {"id": "row72-t18-figure-quota", "row": "72", "decision": "1.2.6 patch T-18/W-10 (U5; register N-113, N-114, N-115)", "summary": "CATALOG_PARAM_COUNT 721 -> 723 (+ figure.quota.*), header count", "diff_base": "sha256 before this row", "before_sha256": "5f49befa3cbdd6ab582a07598d272e6a90658ee197ca263d506196a943277a96", "after_sha256": "898471f2e7d02fa254064b54a5a125c108dc111ec64dfaa6ca01629c62329290", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/72_row72_diffs/src_lib_studio_params_index.ts.diff", "diff_sha256": "b1b1e34cbc6ea32a9d5d87660135e68ff54ba5938de15adef2c5bafc773dca0f"}
   },
   {
    "path": "src/lib/studio/params/page.ts",
@@ -4347,9 +4352,9 @@
   {
    "path": "src/lib/studio/registry/essentials.ts",
    "status": "patched",
-   "bytes": 20208,
+   "bytes": 20355,
    "source_sha256": "9a8f886c88da370e1df7980888f9d462cff6ab5f2b235f5781d09a4d1f6cce29",
-   "sha256": "b99c8b890949e8bd72f0999a7f10d9bd164a0fcb93c6157f3e0997f4b84f0f59",
+   "sha256": "2272d5680289a263949ef78228e19e422d453cca57266e69950baff76ef8a927",
    "patch": {
     "id": "row122c-param-surface-r81-r83",
     "row": "122c",
@@ -4359,7 +4364,8 @@
     "after_sha256": "b99c8b890949e8bd72f0999a7f10d9bd164a0fcb93c6157f3e0997f4b84f0f59",
     "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/78_row122c_diffs/registry_essentials.ts.diff",
     "diff_sha256": "15ca377e8ddd8a78e815e2537314a8b65d8e700895377f1ab2340d01059ed8b7"
-   }
+   },
+   "patch_row72": {"id": "row72-t18-figure-quota", "row": "72", "decision": "1.2.6 patch T-18/W-10 (U5; register N-113, N-114, N-115)", "summary": "PARAM_SURFACE_LISTS.advanced gains ids(\"P7-\", 37, 38) (template-author knobs like R-81..R-83)", "diff_base": "sha256 before this row", "before_sha256": "b99c8b890949e8bd72f0999a7f10d9bd164a0fcb93c6157f3e0997f4b84f0f59", "after_sha256": "2272d5680289a263949ef78228e19e422d453cca57266e69950baff76ef8a927", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/72_row72_diffs/src_lib_studio_registry_essentials.ts.diff", "diff_sha256": "9e0675834fea89b9d2a1e1794da8e3366b720f26a19f5f1d857c8a769ea2b9ff"}
   },
   {
    "path": "src/lib/studio/registry/index.ts",
@@ -4371,10 +4377,11 @@
   {
    "path": "src/lib/studio/registry/lint.ts",
    "status": "patched",
-   "bytes": 22315,
+   "bytes": 22696,
    "source_sha256": "47affb9324e304cd93398f7c239dc330134c4499e963746d09f14c77f5296b9c",
-   "sha256": "6cb39b2615e5692b3db1d36d29b83f15ebbf5d09e1b404dc5077d26680bc80b6",
-   "patch_row215": {"id": "row215-remove-c27", "row": "215", "decision": "1.2.5 user: Hapus C-27 seluruhnya", "summary": "C-27 (Kata per kalimat, P11-27 threshold.wordsPerSentenceAvg) removed: scanner, registry entry, param, counts and comments", "before_sha256": "47affb9324e304cd93398f7c239dc330134c4499e963746d09f14c77f5296b9c", "after_sha256": "6cb39b2615e5692b3db1d36d29b83f15ebbf5d09e1b404dc5077d26680bc80b6", "diff": "docs/2026-11-09_swarm_1_2_3_patch/implementation/215_row215_diffs/src_lib_studio_registry_lint.ts.diff"}
+   "sha256": "cabb8efe35d26be4deee7951905659555235096b33bb22fb6d848c6a0b93fcbf",
+   "patch_row215": {"id": "row215-remove-c27", "row": "215", "decision": "1.2.5 user: Hapus C-27 seluruhnya", "summary": "C-27 (Kata per kalimat, P11-27 threshold.wordsPerSentenceAvg) removed: scanner, registry entry, param, counts and comments", "before_sha256": "47affb9324e304cd93398f7c239dc330134c4499e963746d09f14c77f5296b9c", "after_sha256": "6cb39b2615e5692b3db1d36d29b83f15ebbf5d09e1b404dc5077d26680bc80b6", "diff": "docs/2026-11-09_swarm_1_2_3_patch/implementation/215_row215_diffs/src_lib_studio_registry_lint.ts.diff"},
+   "patch_row72": {"id": "row72-t18-figure-quota", "row": "72", "decision": "1.2.6 patch T-18/W-10 (U5; register N-113, N-114, N-115)", "summary": "ROWS_D gains D22 'Kuota gambar per dokumen' (limit <= figure.quota.maxPerDocument kecuali alasan tercatat, TERBIT+SERAH, paramRef figure.quota.maxPerDocument); LINT_REGISTRY_COUNT 102 -> 103, group D 25 -> 26; header note", "diff_base": "sha256 before this row", "before_sha256": "6cb39b2615e5692b3db1d36d29b83f15ebbf5d09e1b404dc5077d26680bc80b6", "after_sha256": "cabb8efe35d26be4deee7951905659555235096b33bb22fb6d848c6a0b93fcbf", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/72_row72_diffs/src_lib_studio_registry_lint.ts.diff", "diff_sha256": "cd9aacb05fd0df447ac1b28e7897cd8f644d9afe2efe71512f02b47f98be1312"}
   },
   {
    "path": "src/lib/studio/registry/lint-explain.ts",
@@ -4394,10 +4401,11 @@
   },
   {
    "path": "src/lib/studio/registry/slots.ts",
-   "status": "copied",
-   "bytes": 14214,
+   "status": "patched",
+   "bytes": 14403,
    "source_sha256": "3a5ae7d9cf6172cc9d310dc7dcc1cb4a6a3b5b30e8ee46e709cbc9aaca9695a7",
-   "sha256": "3a5ae7d9cf6172cc9d310dc7dcc1cb4a6a3b5b30e8ee46e709cbc9aaca9695a7"
+   "sha256": "e321b96b49ff74d2b28a2a80b942ebc044545da0ec5b9c92502fb98f276e5a21",
+   "patch_row72": {"id": "row72-t18-figure-quota", "row": "72", "decision": "1.2.6 patch T-18/W-10 (U5; register N-113, N-114, N-115)", "summary": "PARAM_SCOPE.exact: figure.quota.maxPerDocument and figure.quota.exceptionReason -> document (group P7 would give section:chart)", "diff_base": "sha256 before this row", "before_sha256": "3a5ae7d9cf6172cc9d310dc7dcc1cb4a6a3b5b30e8ee46e709cbc9aaca9695a7", "after_sha256": "e321b96b49ff74d2b28a2a80b942ebc044545da0ec5b9c92502fb98f276e5a21", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/72_row72_diffs/src_lib_studio_registry_slots.ts.diff", "diff_sha256": "dfb89b331c4229cd999ac0e38427a9d6797d4c74f99cd925feca3f460c1db97f"}
   },
   {
    "path": "src/lib/studio/services/_swarm-store.ts",
@@ -6067,6 +6075,7 @@
   "46",
   "75",
   "69",
-  "76"
+  "76",
+  "72"
  ]
 }
