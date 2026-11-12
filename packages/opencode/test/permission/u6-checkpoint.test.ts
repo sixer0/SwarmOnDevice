@@ -350,12 +350,13 @@ describe("U6 checkpoint: I-G git in a repository", () => {
     }),
   )
 
-  // SEC-19 (CK-5 extended): after a history rewrite the agent is told where the old commits stay.
-  posixOnly("SEC-19: after `git filter-branch`, `git reflog expire` and `git gc --prune` the agent line names refs/swarm-checkpoint", () =>
+  // SEC-19 (CK-5 extended): after a history rewrite the agent is told where the old commits stay. `git reflog expire` and
+  // `git gc --prune` left this list in row 37c (C17): they are refused, see "37c" below.
+  posixOnly("SEC-19: after `git filter-branch` the agent line names refs/swarm-checkpoint", () =>
     Effect.gen(function* () {
       const dir = yield* tmpdirScoped({ git: true })
       const { head } = repository(dir)
-      for (const command of ["git filter-branch -f HEAD", "git reflog expire --expire=now --all", "git gc --prune=now"]) {
+      for (const command of ["git filter-branch -f HEAD"]) {
         const { result, asked } = yield* runShell(dir, command, { canUndo: true })
         expect({ command, verdict: asked[0]!.consent }).toEqual({ command, verdict: CHECKPOINTED })
         const id = idOf(output(result))!
@@ -366,7 +367,58 @@ describe("U6 checkpoint: I-G git in a repository", () => {
   )
 })
 
+/** Row 37c: the verdicts plain `git gc` had at 069d49682b (row 37b), pinned so the refusal stays limited to pruning. */
+const PLAIN_GC = {
+  consent: { class: "A", decidedBy: "agent", category: "by_main_agent", bypassed: "not_routine" },
+  base: { class: "D", decidedBy: "gate", category: "not_routine" },
+}
+
 describe("U6 checkpoint: what no checkpoint holds, or cannot be made", () => {
+  // 1.2.6 row 37c (C17): an expired reflog and a pruning gc drop commits only the reflog reaches. A checkpoint keeps ref
+  // names, not reflog entries, so these two cannot be checkpointed and are refused before anything runs.
+  posixOnly("37c (C17): `git reflog expire` and `git gc --prune…` are X `checkpoint_failed` with the git reason; nothing runs", () =>
+    Effect.gen(function* () {
+      const dir = yield* tmpdirScoped({ git: true })
+      repository(dir)
+      const reflog = git(dir, "reflog", "--all", "--format=%H")
+      const commands = [
+        "git reflog expire --expire=now --all",
+        "git reflog expire --all",
+        "git gc --prune=now",
+        "git gc --prune",
+        "git gc --aggressive --prune=now",
+        "git gc --prune=now --aggressive",
+      ]
+      for (const command of commands) {
+        for (const consent of [true, false]) {
+          const { result, asked, lines } = yield* runShell(dir, command, { canUndo: true, consent })
+          const verdict = (consent ? asked[0]!.consent : asked[0]!.base) as AutonomyTable.Verdict
+          expect({ command, consent, verdict }).toEqual({
+            command,
+            consent,
+            verdict: { class: "X", decidedBy: "gate", category: "checkpoint_failed", reason: "git" },
+          })
+          expect({ command, failure: failure(result) }).toEqual({ command, failure: checkpointFailedText("git") })
+          expect(lines).toEqual([])
+          expect((asked[0]!.metadata as Line).checkpointTargets).toBeUndefined()
+        }
+      }
+      expect(git(dir, "reflog", "--all", "--format=%H")).toBe(reflog)
+      expect(fs.existsSync(checkpointFolder(dir))).toBe(false)
+    }),
+  )
+
+  posixOnly("37c: plain `git gc` (no prune) keeps the verdict it had before row 37c", () =>
+    Effect.gen(function* () {
+      const dir = yield* tmpdirScoped({ git: true })
+      repository(dir)
+      for (const command of ["git gc", "git gc --aggressive", "git gc -q"]) {
+        const { asked } = yield* runShell(dir, command, { canUndo: true })
+        expect({ command, consent: asked[0]!.consent, base: asked[0]!.base }).toEqual({ command, ...PLAIN_GC })
+      }
+    }),
+  )
+
   posixOnly("CK-8 (I-N): `dropdb app`, `redis-cli flushall` and `dd` are X `checkpoint_failed` with the not-files reason; nothing runs", () =>
     Effect.gen(function* () {
       const dir = yield* tmpdirScoped()

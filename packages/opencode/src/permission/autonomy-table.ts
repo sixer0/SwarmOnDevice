@@ -2012,6 +2012,11 @@ export type CheckpointPlan =
     }
   /** I-N: data outside the file system and Git, or a device. No checkpoint can hold it. */
   | { readonly kind: "not_files" }
+  /**
+   * 1.2.6 row 37c (C17): `git reflog expire` and `git gc --prune…` drop commits only the reflog reaches. A checkpoint keeps
+   * ref names, not reflog entries, so these cannot be checkpointed and are refused instead of run.
+   */
+  | { readonly kind: "not_kept"; readonly reason: "git" }
 
 export type CheckpointInput = {
   readonly command: string
@@ -2177,17 +2182,20 @@ function gitPlan(args: readonly string[]): Omit<Extract<CheckpointPlan, { kind: 
     }
     return { refs: ["HEAD"], branch: true, all: true, rewrite: true }
   }
-  if (sub === "reflog") {
-    if (rest[0] !== "expire" || !rest.slice(1).every((word) => /^--(all|expire(-unreachable)?=[\w.-]+|stale-fix|rewrite|updateref)$/.test(word)))
-      return undefined
-    return { refs: ["HEAD"], branch: true, all: true, rewrite: true }
-  }
-  if (sub === "gc") {
-    if (!rest.some((word) => Risk.long(word, "prune"))) return undefined
-    if (!rest.every((word) => /^--prune(=[\w.-]+)?$/.test(word) || ["--aggressive", "-q", "--quiet"].includes(word))) return undefined
-    return { refs: ["HEAD"], branch: true, all: true, rewrite: true }
-  }
   return undefined
+}
+
+/** Row 37c (C17): `git reflog expire …` or `git gc … --prune…`, in the forms row 37b read as I-G, which no checkpoint keeps. */
+function dropsReflogCommits(args: readonly string[]) {
+  const [sub, ...rest] = args
+  if (sub === "reflog")
+    return rest[0] === "expire" && rest.slice(1).every((word) => /^--(all|expire(-unreachable)?=[\w.-]+|stale-fix|rewrite|updateref)$/.test(word))
+  if (sub === "gc")
+    return (
+      rest.some((word) => Risk.long(word, "prune")) &&
+      rest.every((word) => /^--prune(=[\w.-]+)?$/.test(word) || ["--aggressive", "-q", "--quiet"].includes(word))
+    )
+  return false
 }
 
 /**
@@ -2222,6 +2230,7 @@ export function checkpointPlan(input: CheckpointInput): CheckpointPlan | undefin
   const git = steps.filter((step) => step.argv[0] === "git" && !discardedPaths(step.argv.slice(1)))
   if (git.length > 0) {
     if (steps.length !== 1 || !gitOk(steps[0]!)) return undefined
+    if (dropsReflogCommits(steps[0]!.argv.slice(1))) return { kind: "not_kept", reason: "git" }
     const plan = gitPlan(steps[0]!.argv.slice(1))
     return plan && { kind: "git", targets: [], ...plan }
   }
@@ -2266,9 +2275,10 @@ export function checkpointPlan(input: CheckpointInput): CheckpointPlan | undefin
 
 /**
  * 1.2.6 row 37b (01b section 3.3): an I-F or I-G call the shell will checkpoint first (`metadata.checkpointTargets` lists
- * every target this reading finds) is A `checkpointed`; an I-N call is X `checkpoint_failed` (reason `not_files`). Any
- * other reason a call is held or refused still stands: an I-F write must be one an ordinary shell write may be (inside
- * the project, no secret, no sensitive file, not the app's state), or its 1.2.5 verdict stays.
+ * every target this reading finds) is A `checkpointed`; an I-N call is X `checkpoint_failed` (reason `not_files`), and
+ * so is a reflog expiry or a pruning gc (reason `git`, row 37c). Any other reason a call is held or refused still
+ * stands: an I-F write must be one an ordinary shell write may be (inside the project, no secret, no sensitive file, not
+ * the app's state), or its 1.2.5 verdict stays.
  */
 function classifyCheckpoint(input: Input): Verdict | undefined {
   const command = input.metadata.command
@@ -2283,6 +2293,7 @@ function classifyCheckpoint(input: Input): Verdict | undefined {
   })
   if (!plan) return undefined
   if (plan.kind === "not_files") return { ...refused("checkpoint_failed"), reason: "not_files" }
+  if (plan.kind === "not_kept") return { ...refused("checkpoint_failed"), reason: plan.reason }
   const given = input.metadata.checkpointTargets
   if (!Array.isArray(given) || !given.every((file) => typeof file === "string")) return undefined
   if (!plan.targets.every((file) => given.includes(file))) return undefined

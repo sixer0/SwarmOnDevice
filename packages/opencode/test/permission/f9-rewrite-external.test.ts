@@ -132,7 +132,14 @@ describe("F9 (G2-2): git forms that rewrite commits or refs are refused under co
   })
 
   test("expiring the reflog", async () => {
-    await refused(["git reflog expire --expire=now --all", "git reflog delete HEAD@{1}"])
+    await refused(["git reflog delete HEAD@{1}"])
+    // 1.2.6 row 37c (C17), intended change: a reflog expiry cannot be checkpointed, so in a vetted repository it is still
+    // refused in both layers, now as X `checkpoint_failed` with the git reason instead of X `irreversible`.
+    const input = await sh("git reflog expire --expire=now --all")
+    const notKept: AutonomyTable.Verdict = { class: "X", decidedBy: "gate", category: "checkpoint_failed", reason: "git" }
+    expect(consented(input)).toEqual(notKept)
+    expect(subagent(input)).toEqual(notKept)
+    expect(AutonomyTable.classify(input)).toEqual(notKept)
   })
 
   test("deleting or force-moving refs, branch deletes and forced branch moves", async () => {

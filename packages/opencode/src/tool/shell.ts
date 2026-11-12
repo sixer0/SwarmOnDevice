@@ -1529,7 +1529,7 @@ export const ShellTool = Tool.define(
      * command with `CHECKPOINT_FAILED_TEXT` and its reason: nothing runs, nothing changes.
      */
     const checkpoint = Effect.fn("ShellTool.checkpoint")(function* (
-      plan: Exclude<AutonomyTable.CheckpointPlan, { kind: "not_files" }>,
+      plan: Extract<AutonomyTable.CheckpointPlan, { kind: "files" | "git" }>,
       command: string,
       cwd: string,
       ctx: Tool.Context,
@@ -1856,7 +1856,7 @@ export const ShellTool = Tool.define(
                           folder: "trusted",
                         })
                       : undefined
-                  const saving = plan && plan.kind !== "not_files" ? plan : undefined
+                  const saving = plan && (plan.kind === "files" || plan.kind === "git") ? plan : undefined
                   yield* ask(
                     ctx,
                     scan,
