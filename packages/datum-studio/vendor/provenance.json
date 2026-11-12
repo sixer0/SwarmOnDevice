@@ -84,15 +84,16 @@
   "row61b": "2026-11-12: 1.2.6 row 61b (T-05 follow-up, finding F61-1; no new register name). 1 vendor file re-patched (files[].patch_row61b, before = previous sha256; status unchanged): engine/diagram/core/svg.ts (provenance glyph clear of the outline for hexagon, cylinder, circle and bus nodes; box, diamond, parallelogram unchanged). Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/61b_row61b_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9909489 + 6933 = 9916422. patch_rows += 61b",
   "row66": "2026-11-12: 1.2.6 row 66 (T-10, U5, R12; register N-030). 4 vendor files patched (files[].patch_row66, before = previous sha256): engine/chart/core/labelfit.ts (NEW LABEL_GUTTER_CAP_FRAC = 0.3), engine/chart/core/datum.ts and engine/chart/core/gallery.ts (inline W*0.42 gutter cap -> W*LABEL_GUTTER_CAP_FRAC), engine/chart/core/families.ts (stale doc comment only). Status copied -> patched for labelfit.ts, gallery.ts, families.ts; datum.ts was already patched (row 65). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/66_row66_diffs. counts by delta: copied 416 -> 413, patched 150 -> 153; bytes 9898663 +548 = 9899211. patch_rows += 66",
   "row73": "2026-11-12: 1.2.6 row 73 (W-05/W-03/OFF-06, C2, D3; register N-020..N-023). 1 vendor file re-patched (files[].patch_row73, before = previous sha256; status unchanged): scripts/studio/mcp/figure-tools.ts (FIGURE_GRAPH_DELTA report in studio_figure_revise; preview text states defect/notice counts). Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/73_row73_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9899211 + 5064 = 9904275. patch_rows += 73",
-  "row97a": "2026-11-12: 1.2.6 row 97a (G-05, W-01, W-09, W-13 text; U5; register N-011, N-014). 1 vendor file re-patched (files[].patch_row97a, before = previous sha256; status unchanged): scripts/studio/mcp/resources.ts (MCP_DOC_RECIPE: row 174 diagram-block sentence moved out of the studio_figure_revise call shape; render 540 s and studio_document_status -> studio_file_verify follow-up; caption rule without the GAMBAR token, <= 100 chars; studio_asset_put with sha256:<hex> reference). Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/97a_row97a_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9904275 + 1653 = 9905928. patch_rows += 97a"
+  "row97a": "2026-11-12: 1.2.6 row 97a (G-05, W-01, W-09, W-13 text; U5; register N-011, N-014). 1 vendor file re-patched (files[].patch_row97a, before = previous sha256; status unchanged): scripts/studio/mcp/resources.ts (MCP_DOC_RECIPE: row 174 diagram-block sentence moved out of the studio_figure_revise call shape; render 540 s and studio_document_status -> studio_file_verify follow-up; caption rule without the GAMBAR token, <= 100 chars; studio_asset_put with sha256:<hex> reference). Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/97a_row97a_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9904275 + 1653 = 9905928. patch_rows += 97a",
+  "row63": "2026-11-12: 1.2.6 row 63 (T-07, U5; register N-017 DIAMOND_HEIGHT_FACTOR). 3 vendor files (files[].patch_row63, before = previous sha256): engine/diagram/core/geometry.ts (copied -> patched: DIAMOND_HEIGHT_FACTOR and diamondHeightMm in nodeSize for every family), engine/diagram/fit/text.ts (copied -> patched: diamondTwoLineHeightMm), engine/diagram/layout-a/flow.ts (re-patched: inline h*1.25 removed, now in nodeSize). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/63_row63_diffs/. counts by delta: copied 413 -> 411, patched 153 -> 155; bytes 9916422 +1482 = 9917904. patch_rows += 63"
  },
  "counts": {
   "files": 608,
-  "copied": 413,
-  "patched": 153,
+  "copied": 411,
+  "patched": 155,
   "replaced": 12,
   "added": 30,
-  "bytes": 9916422
+  "bytes": 9917904
  },
  "files": [
   {
@@ -2430,10 +2431,11 @@
   },
   {
    "path": "src/lib/studio/engine/diagram/core/geometry.ts",
-   "status": "copied",
-   "bytes": 8092,
+   "status": "patched",
+   "bytes": 9026,
    "source_sha256": "cca019b727b9170784fa61ef3efd49fd53e709375a1a33dd1388de8918b0369a",
-   "sha256": "cca019b727b9170784fa61ef3efd49fd53e709375a1a33dd1388de8918b0369a"
+   "sha256": "9a39f00e22727c6587a6a14d02d8cf84a6b038a0068d81e6f766ce28731dac93",
+   "patch_row63": {"id": "row63-t07-diamond-height", "row": "63", "decision": "1.2.6 patch T-07, U5 (01_specs T-07; register N-017)", "summary": "NEW DIAMOND_HEIGHT_FACTOR = 1.25 (N-017) and diamondHeightMm; nodeSize gives a diamond max(box h, snap(h x 1.25), snapCeil(two-line height)) for every family", "before_sha256": "cca019b727b9170784fa61ef3efd49fd53e709375a1a33dd1388de8918b0369a", "after_sha256": "9a39f00e22727c6587a6a14d02d8cf84a6b038a0068d81e6f766ce28731dac93", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/63_row63_diffs/engine_diagram_core_geometry.ts.diff", "diff_sha256": "aee43fb38953982b6396b816d72f76661ebace3418563ddbc999b87516e68de4"}
   },
   {
    "path": "src/lib/studio/engine/diagram/core/grid.ts",
@@ -2641,17 +2643,19 @@
   },
   {
    "path": "src/lib/studio/engine/diagram/fit/text.ts",
-   "status": "copied",
-   "bytes": 9060,
+   "status": "patched",
+   "bytes": 9576,
    "source_sha256": "663f04e933ad7a1b1281337949753838cc3a0e445c8bce029fe5908add217f48",
-   "sha256": "663f04e933ad7a1b1281337949753838cc3a0e445c8bce029fe5908add217f48"
+   "sha256": "0a187d52d8e8f6b8ff03aac59c86c1748f55dc9db35a59c527ad2ead682ee9eb",
+   "patch_row63": {"id": "row63-t07-diamond-height", "row": "63", "decision": "1.2.6 patch T-07, U5 (01_specs T-07; register N-017)", "summary": "NEW export diamondTwoLineHeightMm: 2 x two-line text block (+ sub line, + tag), the height in which a two-line label lies inside a diamond", "before_sha256": "663f04e933ad7a1b1281337949753838cc3a0e445c8bce029fe5908add217f48", "after_sha256": "0a187d52d8e8f6b8ff03aac59c86c1748f55dc9db35a59c527ad2ead682ee9eb", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/63_row63_diffs/engine_diagram_fit_text.ts.diff", "diff_sha256": "21f1717ed327ada1fa962f5c1a3a05419379aa9f56b2e0f0152152c80abfb558"}
   },
   {
    "path": "src/lib/studio/engine/diagram/layout-a/flow.ts",
    "status": "patched",
-   "bytes": 24425,
+   "bytes": 24457,
    "source_sha256": "90afeff371687137694305bba1d5cd595f80fb06f3bc3a79211001203e021b1a",
-   "sha256": "9b270e5d010022769d90836b7a1c82a1221909a33f9ce9ddf696f3d55555ea40",
+   "sha256": "4a6c826d67d971b7382d44f78da98de66dd5bc867bf8801ddd731d3ee23d2a4c",
+   "patch_row63": {"id": "row63-t07-diamond-height", "row": "63", "decision": "1.2.6 patch T-07, U5 (01_specs T-07; register N-017)", "summary": "inline diamond h*1.25 removed from the per_row branch and ranked baseSize (nodeSize carries it; byte-identical there); legacy list flow diamonds now take the factor (INTENT dg_flow)", "before_sha256": "9b270e5d010022769d90836b7a1c82a1221909a33f9ce9ddf696f3d55555ea40", "after_sha256": "4a6c826d67d971b7382d44f78da98de66dd5bc867bf8801ddd731d3ee23d2a4c", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/63_row63_diffs/engine_diagram_layout-a_flow.ts.diff", "diff_sha256": "4a1da80da71d7402a4bba48a0281a4c7ce994f08e9ba781828748ed91437e268"},
    "patch_row46": {"id": "row46-t11-ranked-flow", "row": "46", "decision": "1.2.6 patch T-11 ranked layout (U5, D4=A, C7 S17-1..S17-5; register N-109, N-111, N-112, N-161..N-164; 01e §4.1-§4.2, §4.5, §5, §6.5-6.8)", "summary": "direction present (flowDirectionOf: flow + TB/LR) -> NEW ranked flow layout (layoutRankedFlow); absent -> legacy list layout unchanged (byte-identical, row 45 A15 goldens). NEW exports FLOW_RANK_NODE_MIN_UNITS 2, FLOW_RANK_GAP_BASELINES 4, FLOW_LR_CORRIDOR_UNITS 2, FLOW_LR_MAX_PARALLEL 6, flowRanks (DFS back edges, longest path, mean-predecessor order), flowTbCap/flowTbMaxPerRank/flowLrMaxRanks (lattice capacity inside the T-02 inset), flowRankOverload, rankedFlowSizes (shared with the ELK adapter); over-capacity refused before placement as DiagramOverCapacity DATUM-37-lebar; sheet.edgeInset unit rank (row 59 hook); ELK plan order (TB also x) when a plan for this spec is active", "diff_base": "sha256 before this row", "before_sha256": "90afeff371687137694305bba1d5cd595f80fb06f3bc3a79211001203e021b1a", "after_sha256": "241e74568c19bb66ee9ed28ae506af204e78c86805c39c46a011a6a3734e7633", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/46_row46_diffs/src_lib_studio_engine_diagram_layout-a_flow.ts.diff", "diff_sha256": "5867439cd7b5b766d838f16a4654d38956bc38257249c2cf714ba7db2e0ec261"},
    "patch_row47": {"id": "row47-t11-acceptance", "row": "47", "decision": "1.2.6 patch T-11 acceptance (U3, U5, D4=A, C7; register N-160; 01e §4.3-§4.5, §7.2 A2-A6, A9-A11, A13-A15)", "summary": "NEW FLOW_SERIALISED (N-160) + flowSerialisedNote (01e §4.4: legacy flow with a rank of >= 2 nodes, widest rank named, REPORT only); TB ranked flow: ranks r > 0 placed under their predecessors (underPredecessors, lattice window inside the T-02 inset, centred-row fallback) and the corridor above a rank grows by one baseline per extra edge-label row (corridorLabelRows, knockout widths at default places) so labels leave no GEOM_STUB_SEGMENT tick (01e §4.3 realised by placement)", "diff_base": "sha256 before this row", "before_sha256": "241e74568c19bb66ee9ed28ae506af204e78c86805c39c46a011a6a3734e7633", "after_sha256": "9b270e5d010022769d90836b7a1c82a1221909a33f9ce9ddf696f3d55555ea40", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/47_row47_diffs/src_lib_studio_engine_diagram_layout-a_flow.ts.diff", "diff_sha256": "ce3d2c8e6145595bb2ad59fd0c59cf80300b8d99ead69f199800f981340b20e3"}
   },
@@ -6126,6 +6130,7 @@
   "73",
   "97a",
   "71",
-  "61b"
+  "61b",
+  "63"
  ]
 }

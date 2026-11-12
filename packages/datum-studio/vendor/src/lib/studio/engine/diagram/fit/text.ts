@@ -96,6 +96,16 @@ function neededHeight(n: Pick<DiagramNode, "shape" | "tag">, labelLines: number,
 }
 
 /**
+ * Swarm 1.2.6 row 63 (T-07, N-017): height a diamond needs so a TWO-line label (plus its `sub` line and
+ * `tag`) lies inside the polygon. Text is wrapped to at most half the diamond width (`innerWidthMm`), and a
+ * centred block of height T whose lines are at most w/2 wide stays inside the diamond when h >= 2 T.
+ * Not lattice-locked (the caller snaps up).
+ */
+export function diamondTwoLineHeightMm(n: Pick<DiagramNode, "sub" | "tag">): number {
+  return blockMm(2, truthy(n.sub) ? 1 : 0) * 2 + tagH(n);
+}
+
+/**
  * Rencana teks simpul pada lebar `w` (tinggi `h` hanya untuk bentuk circle/stadium).
  * `maxLines` = batas baris label (bawaan 3; render memakai batas tinggi nyata simpul).
  */

@@ -42,8 +42,8 @@ export function layoutFlow(s: StudioDiagramV1, sheet: DiagramSheet): LayoutResul
       w = Math.max(w, lat.x * 3);
       const hs: number[] = [];
       for (const n of group) {
+        // Row 63 (T-07, N-017): the diamond height factor now lives in nodeSize (every family).
         let [, h] = nodeSize(n, lat, group);
-        if (n.shape === "diamond") h = snap(h * 1.25, lat.y);
         if (diagramFitActive()) {
           // FIG-02b P1-10: lebar baris sudah maksimum; bungkus label <= 3 baris, tinggi tumbuh.
           const plan = planNodeText(n, w, h);
@@ -331,13 +331,10 @@ function assertRankCapacity(dir: FlowDirection, ranks: readonly DiagramNode[][],
   });
 }
 
-/** Base node size of a ranked flow node (nodeSize; legacy diamond factors applied). */
+/** Base node size of a ranked flow node (nodeSize, which carries DIAMOND_HEIGHT_FACTOR since row 63; legacy ×1.6 width). */
 function baseSize(n: DiagramNode, lat: Lattice): [number, number] {
   let [w, h] = nodeSize(n, lat);
-  if (n.shape === "diamond") {
-    w = snap(w * 1.6, lat.x);
-    h = snap(h * 1.25, lat.y);
-  }
+  if (n.shape === "diamond") w = snap(w * 1.6, lat.x);
   return [w, h];
 }
 

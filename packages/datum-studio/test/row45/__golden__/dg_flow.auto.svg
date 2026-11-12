@@ -1,31 +1,31 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="128.0mm" height="109.537mm" viewBox="0 0 128.0 109.537" version="1.1">
+<svg xmlns="http://www.w3.org/2000/svg" width="128.0mm" height="114.3mm" viewBox="0 0 128.0 114.3" version="1.1">
 <!-- generator studio engine/diagram (port datum_diagram.py v2.0.0 Garis A, rebuild DHS-RB-04) | family=flow | token=tokens.json -->
 <!-- DATUM-APPARATUS-REQUIRED: caption, source dan baris kunci dicetak oleh halaman, bukan oleh SVG ini (P6, lint cek 36) -->
 <defs>
 <marker id="head-control" markerWidth="4" markerHeight="4" refX="3.4" refY="1.6" orient="auto"><path d="M0,0 L3.6,1.6 L0,3.2" fill="none" stroke="#2B3640" stroke-width="0.35"/></marker>
 <marker id="head-data" markerWidth="4" markerHeight="4" refX="3.4" refY="1.6" orient="auto"><path d="M0,0 L3.6,1.6 L0,3.2 Z" fill="#101418"/></marker>
 </defs>
-<rect x="0" y="0" width="128.0" height="109.537" fill="#FCFCFB"/>
+<rect x="0" y="0" width="128.0" height="114.3" fill="#FCFCFB"/>
 <path d="M 58.67 23.81 L 58.67 28.57 L 58.67 28.57 L 58.67 28.57 L 58.67 28.57 L 58.67 33.34" fill="none" stroke="#101418" stroke-width="0.45" marker-end="url(#head-data)" data-mark="link" data-series="data" data-index="0"/>
 <path d="M 53.33 47.62 L 53.33 52.39 L 53.33 52.39 L 60.44 52.39 L 60.44 52.39 L 60.44 57.15" fill="none" stroke="#101418" stroke-width="0.45" marker-end="url(#head-data)" data-mark="link" data-series="data" data-index="1"/>
-<path d="M 69.33 71.44 L 69.33 76.2 L 69.33 76.2 L 58.67 76.2 L 58.67 76.2 L 58.67 80.96" fill="none" stroke="#2B3640" stroke-width="0.45" stroke-dasharray="3.2,1.6" marker-end="url(#head-control)" data-mark="link" data-series="control" data-index="2"/>
+<path d="M 69.33 76.2 L 69.33 80.96 L 69.33 80.96 L 58.67 80.96 L 58.67 80.96 L 58.67 85.72" fill="none" stroke="#2B3640" stroke-width="0.45" stroke-dasharray="3.2,1.6" marker-end="url(#head-control)" data-mark="link" data-series="control" data-index="2"/>
 <path d="M 78.22 57.15 L 78.22 52.39 L 78.22 52.39 L 64.0 52.39 L 64.0 52.39 L 64.0 47.62" fill="none" stroke="#2B3640" stroke-width="0.45" stroke-dasharray="3.2,1.6" marker-end="url(#head-control)" data-mark="link" data-series="control" data-index="3"/>
 <rect x="54.74" y="24.57" width="7.84" height="3.54" fill="#FCFCFB"/>
 <text x="58.67" y="26.96" font-family="IBM Plex Mono" font-size="2.081" font-weight="400" fill="#101418" text-anchor="middle">TIKET</text>
 <rect x="52.97" y="49.57" width="7.84" height="3.54" fill="#FCFCFB"/>
 <text x="56.89" y="51.96" font-family="IBM Plex Mono" font-size="2.081" font-weight="400" fill="#101418" text-anchor="middle">NILAI</text>
-<rect x="52.58" y="73.38" width="22.83" height="3.54" fill="#FCFCFB"/>
-<text x="64.0" y="75.78" font-family="IBM Plex Mono" font-size="2.081" font-weight="400" fill="#2B3640" text-anchor="middle">YA, KIRIM TEKNISI</text>
+<rect x="52.58" y="78.15" width="22.83" height="3.54" fill="#FCFCFB"/>
+<text x="64.0" y="80.54" font-family="IBM Plex Mono" font-size="2.081" font-weight="400" fill="#2B3640" text-anchor="middle">YA, KIRIM TEKNISI</text>
 <rect x="62.0" y="49.57" width="25.33" height="3.54" fill="#FCFCFB"/>
 <text x="74.67" y="51.96" font-family="IBM Plex Mono" font-size="2.081" font-weight="400" fill="#2B3640" text-anchor="middle">TIDAK, PANTAU ULANG</text>
 <rect x="42.67" y="9.52" width="32.0" height="14.29" rx="7.14" ry="7.14" data-node="mulai" fill="none" stroke="#2B3640" stroke-width="0.45" data-mark="node" data-index="0"/>
 <text x="58.67" y="16.67" font-family="IBM Plex Sans Condensed" font-size="2.681" font-weight="400" fill="#101418" text-anchor="middle">Alarm diterima</text>
 <polygon points="48.43,33.34 74.67,33.34 68.91,47.62 42.67,47.62" data-node="baca" fill="none" stroke="#2B3640" stroke-width="0.45" data-mark="node" data-index="1"/>
 <text x="58.67" y="40.48" font-family="IBM Plex Sans Condensed" font-size="2.681" font-weight="400" fill="#101418" text-anchor="middle">Baca suhu terakhir</text>
-<polygon points="69.33,57.15 96.0,64.29 69.33,71.44 42.67,64.29" data-node="cek" fill="none" stroke="#2B3640" stroke-width="0.45" data-mark="node" data-index="2"/>
-<text x="69.33" y="64.29" font-family="IBM Plex Sans Condensed" font-size="2.681" font-weight="400" fill="#101418" text-anchor="middle">Di atas batas?</text>
-<rect x="42.67" y="80.96" width="32.0" height="14.29" rx="7.14" ry="7.14" data-node="selesai" fill="none" stroke="#2B3640" stroke-width="0.45" data-mark="node" data-index="3"/>
-<text x="58.67" y="88.11" font-family="IBM Plex Sans Condensed" font-size="2.681" font-weight="400" fill="#101418" text-anchor="middle">Laporan penutupan</text>
-<text x="0" y="100.01" font-family="IBM Plex Sans Condensed" font-size="2.399" font-weight="600" fill="#6B7783" text-anchor="start" letter-spacing="0.216">KEY  SOLID DATA  ·  DASHED KEPUTUSAN</text>
+<polygon points="69.33,57.15 96.0,66.67 69.33,76.2 42.67,66.67" data-node="cek" fill="none" stroke="#2B3640" stroke-width="0.45" data-mark="node" data-index="2"/>
+<text x="69.33" y="66.67" font-family="IBM Plex Sans Condensed" font-size="2.681" font-weight="400" fill="#101418" text-anchor="middle">Di atas batas?</text>
+<rect x="42.67" y="85.72" width="32.0" height="14.29" rx="7.14" ry="7.14" data-node="selesai" fill="none" stroke="#2B3640" stroke-width="0.45" data-mark="node" data-index="3"/>
+<text x="58.67" y="92.87" font-family="IBM Plex Sans Condensed" font-size="2.681" font-weight="400" fill="#101418" text-anchor="middle">Laporan penutupan</text>
+<text x="0" y="104.78" font-family="IBM Plex Sans Condensed" font-size="2.399" font-weight="600" fill="#6B7783" text-anchor="start" letter-spacing="0.216">KEY  SOLID DATA  ·  DASHED KEPUTUSAN</text>
 </svg>
