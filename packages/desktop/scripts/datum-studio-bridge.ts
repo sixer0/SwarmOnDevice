@@ -28,6 +28,7 @@
  */
 import { closeSync, constants, fstatSync, lstatSync, openSync, readFileSync } from "node:fs"
 import { join } from "node:path"
+import { BRIDGE_FETCH_OPTIONS } from "./datum-studio-bridge-transport"
 
 const START_SWARM_MESSAGE =
   "DATUM Studio runs inside the Swarm app. Start Swarm, then reconnect this MCP server (Claude Code: /mcp)."
@@ -190,7 +191,8 @@ class Bridge {
 
   private async fetch(init: { method: string; headers: Record<string, string>; body?: string }) {
     try {
-      return await fetch(this.endpoint.url, { ...init, redirect: "error" })
+      // FX-4 (S2): no Bun idle cut at 300 s; the slow-call bounds are the host's 540 s and the client's 600 s.
+      return await fetch(this.endpoint.url, { ...init, redirect: "error", ...BRIDGE_FETCH_OPTIONS } as RequestInit)
     } catch (error) {
       throw new Fatal(EXIT_NOT_RUNNING, "HOST_UNREACHABLE", "the DATUM Studio endpoint does not answer", {
         error: error instanceof Error ? error.name : "unknown",
