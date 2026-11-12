@@ -11,7 +11,7 @@
 // renamed, and its sha256 goes into the audit line. A revert must be given that sha and refuses when the manifest no
 // longer matches it. The checkpoint folders are 0700 and a copy of a secret file is 0600 (CK-13). Nothing is followed
 // through a link: a `.swarm` or checkpoint folder that is a link is refused, and a link target is copied as the link.
-import { createHash } from "node:crypto"
+import { createHash, randomBytes } from "node:crypto"
 import { execFile } from "node:child_process"
 import fs from "node:fs/promises"
 import path from "node:path"
@@ -303,10 +303,32 @@ export async function create(input: CreateInput): Promise<CreateResult> {
 /**
  * Puts a checkpoint back: first a new checkpoint of the current bytes of the same targets (so this can be undone), then
  * every entry and ref, then a sha check of every restored file. Person-only: the agent is never given a way to call it.
+ * Reverts in one folder run one after the other (gate M1 S4): two windows or two clicks never interleave their restores,
+ * and the second one's pre-revert checkpoint holds what the first one restored.
  */
 export async function revert(input: RevertInput): Promise<RevertResult> {
   const root = await fs.realpath(input.directory).catch(() => undefined)
   if (!root || !ID.test(input.id)) return fail("not_found")
+  return serial(root, () => revertIn(root, input))
+}
+
+// One queue per real folder path. Every session of a folder writes the same files, so the folder is the key.
+const queues = new Map<string, Promise<void>>()
+
+function serial<T>(key: string, run: () => Promise<T>) {
+  const result = (queues.get(key) ?? Promise.resolve()).then(run)
+  const tail = result.then(
+    () => undefined,
+    () => undefined,
+  )
+  queues.set(key, tail)
+  void tail.then(() => {
+    if (queues.get(key) === tail) queues.delete(key)
+  })
+  return result
+}
+
+async function revertIn(root: string, input: RevertInput): Promise<RevertResult> {
   const area = await folder(root)
   if (!area) return fail("not_found")
   const dir = path.join(area, input.id)
@@ -537,7 +559,7 @@ async function resolveTarget(root: string, manifest: Manifest, entry: Entry) {
 
 // Writes the copy back through a temporary name beside the target, so the target is either the old or the new bytes.
 async function putBack(copy: string, target: string, entry: Entry) {
-  const temp = `${target}.swarm-revert-${process.pid}.tmp`
+  const temp = `${target}.swarm-revert-${unique()}.tmp`
   await fs.mkdir(path.dirname(target), { recursive: true }).catch(() => undefined)
   const ok = await (async () => {
     if (entry.link) {
@@ -606,7 +628,7 @@ function parse(raw: Buffer): Manifest | undefined {
 // The manifest goes to a new temporary name, is synced, then renamed; the sha is of exactly the bytes on disk.
 async function writeManifest(dir: string, manifest: Manifest) {
   const text = JSON.stringify(manifest, null, 2) + "\n"
-  const temp = path.join(dir, `${MANIFEST}.${process.pid}.tmp`)
+  const temp = path.join(dir, `${MANIFEST}.${unique()}.tmp`)
   const ok = await (async () => {
     const handle = await fs.open(temp, "wx", SECRET_MODE)
     try {
@@ -641,7 +663,7 @@ async function prepare(root: string): Promise<Failure | undefined> {
   const stat = await fs.lstat(ignore).catch(() => undefined)
   if (stat && (stat.isSymbolicLink() || !stat.isFile())) return "checkpoint_link"
   if (stat && (await fs.readFile(ignore, "utf8").catch(() => undefined)) === IGNORE) return undefined
-  const temp = `${ignore}.${process.pid}.tmp`
+  const temp = `${ignore}.${unique()}.tmp`
   const written = await fs
     .writeFile(temp, IGNORE, { flag: "wx" })
     .then(() => fs.rename(temp, ignore))
@@ -736,6 +758,9 @@ function stamp(now: Date) {
 }
 
 const posix = (rel: string) => rel.split(path.sep).join(path.posix.sep)
+
+// A temporary-name suffix no other call can share (gate M1 S4): the pid alone collides within one process.
+const unique = () => `${process.pid}-${randomBytes(8).toString("hex")}`
 
 const MESSAGES: Record<Failure, string> = {
   folder: "Swarm could not read the session's folder to save a checkpoint in.",
