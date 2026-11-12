@@ -30,7 +30,9 @@ export const FIGURE_TEXT_CHECK_ID = "FIGURE_TEXT";
  */
 export const CAPTION_TOKEN_KEYWORD = "figureCaptionToken";
 export const CAPTION_TOKEN_DUPLICATE = "CAPTION_TOKEN_DUPLICATE";
-export const CAPTION_TOKEN_RE = /^\s*(gambar|figure|fig\.|grafik|bagan|diagram)\s+[A-Z]?\d+(?:[.\-]\d+)*\b/i;
+// 1.2.6 row 27b (C12): pemisah kata kunci-nomor nol atau lebih spasi ("Gambar1.1" juga ditolak); "Gambaran ..." lolos
+// karena sesudah kata kunci (dan spasi opsional) wajib ada angka.
+export const CAPTION_TOKEN_RE = /^\s*(gambar|figure|fig\.|grafik|bagan|diagram)\s*[A-Z]?\d+(?:[.\-]\d+)*\b/i;
 const CAPTION_TOKEN_BLOCKS: ReadonlySet<unknown> = new Set(["diagram", "chart", "image", "symbolSheet"]);
 
 /** Pesan penolakan: menyebut token yang ditemukan, aturannya, dan batas panjang caption (N-014). */

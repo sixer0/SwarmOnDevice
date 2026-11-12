@@ -19,7 +19,7 @@ const TEMPLATES = path.join(PKG, "templates")
 const FIX = path.join(PKG, "test", "fixtures", "anon126")
 const CHECK = "CAPTION_TOKEN_DUPLICATE"
 // Register N-013, restated (see the header): used only to build the token-free control caption.
-const TOKEN_RE = /^\s*(gambar|figure|fig\.|grafik|bagan|diagram)\s+[A-Z]?\d+(?:[.\-]\d+)*\b/i
+const TOKEN_RE = /^\s*(gambar|figure|fig\.|grafik|bagan|diagram)\s*[A-Z]?\d+(?:[.\-]\d+)*\b/i
 
 const NASKAH: Array<[string, NaskahBlock]> = [1, 2, 3, 4, 5, 6].map((i) => [`t01_k${i}`, JSON.parse(readFileSync(path.join(FIX, `t01_k${i}.json`), "utf8"))])
 const stripped = (c: string) => c.replace(TOKEN_RE, "").trim()
@@ -64,6 +64,22 @@ describe("T-01 validator: the six F2 fixtures (C 6/6)", () => {
   test("captions that only mention a figure, or a keyword without a number, are accepted", () => {
     for (const text of ["Topologi jaringan, lihat Gambar 1.1.", "Diagram alir pengadaan.", "Gambaran umum sistem 1.1.", "Grafik beban harian."]) {
       expect(tokenIssues(validateBlockV2({ type: "image", asset: "foto-1", caption: { text }, source: { text: "Uji." } }, "/block") as Issue[])).toEqual([])
+    }
+  })
+})
+
+// row 27b (C12, N-013 amended to \s*): the separator between keyword and number may be absent; a word that merely
+// starts with a keyword ("Gambaran", "Diagramnya") is not a token because a digit must follow.
+describe("T-01 row 27b: token without a space (C12)", () => {
+  const img = (text: string) => ({ type: "image", asset: "foto-1", caption: { text }, source: { text: "Uji." } })
+  test("no-space and mixed-case token captions are refused", () => {
+    for (const text of ["Gambar1.1 Topologi jaringan.", "GAMBAR 2-3 Denah ruang.", "Figure 4.1 Arsitektur.", "Gambar2.3. Denah.", "Fig.5 Alur.", "grafik7 Beban harian."]) {
+      expect(tokenIssues(validateBlockV2(img(text), "/block") as Issue[]).length).toBe(1)
+    }
+  })
+  test("words that only start with a keyword are accepted", () => {
+    for (const text of ["Gambaran umum sistem.", "Gambaran umum 1.1 sistem.", "Diagramnya memuat 3 lapis.", "Figurehead 2 tim."]) {
+      expect(tokenIssues(validateBlockV2(img(text), "/block") as Issue[])).toEqual([])
     }
   })
 })
