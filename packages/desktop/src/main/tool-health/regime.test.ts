@@ -296,3 +296,15 @@ describe("SEC-16 / SEC-15: detail and log are scrubbed", () => {
     expect(all).toContain("[hidden:")
   })
 })
+
+// 1.2.6 integration pass INT-1 item 4 (row 105 finding): the CONSENT_MANUAL text points the person to the
+// "Re-check Tools" menu item (the only person trigger, SEC-05), not to the agent (an agent re-check never revives it).
+describe("INT-1 item 4: CONSENT_MANUAL message names the Re-check Tools menu item", () => {
+  test("points to the menu, not to the agent", async () => {
+    const { toolHealthMessage } = await import("./regime")
+    const text = toolHealthMessage({ id: "m", label: "Tool m" }, "CONSENT_MANUAL", "")
+    expect(text).toContain('"Re-check Tools"')
+    expect(text).toContain("Swarm menu")
+    expect(text).not.toMatch(/ask the agent/i)
+  })
+})

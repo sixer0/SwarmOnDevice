@@ -87,7 +87,8 @@ export function toolHealthMessage(
     case "NEVER_HEALTHY":
       return `${label} is not running and has never been seen running, so Swarm did not start it. Start it once yourself; after that Swarm keeps it running.`
     case "CONSENT_MANUAL":
-      return `${label} is down. It is set to start only when you ask; ask the agent to "re-check ${label}".`
+      // 1.2.6 INT-1 (row 105): only a person trigger revives it (SEC-05), so point to the menu item, not the agent.
+      return `${label} is down. It is set to start only when you ask; choose "Re-check Tools" in the Swarm menu to start it.`
     case "REVIVE_LIMIT":
       return `${label} is down again after one restart in this session. Swarm will not keep restarting it; ask for a re-check or look at the log.`
     case "REQUIRES_DOWN":
