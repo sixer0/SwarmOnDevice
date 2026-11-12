@@ -88,6 +88,8 @@ export function DialogProjectMemory() {
     secret: language.t("memory.refused.secret"),
     long: language.t("memory.refused.long"),
     full: language.t("memory.refused.full"),
+    body_long: language.t("memory.refused.long"), // placeholder: row 109 owns final key
+    too_many_refs: language.t("memory.refused.long"), // placeholder: row 109 owns final key
   }
 
   /** Runs a change and reports why it did not take, in place. Returns whether it did. */

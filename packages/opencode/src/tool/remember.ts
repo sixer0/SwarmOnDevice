@@ -14,6 +14,8 @@ type Metadata = { id?: string; refused?: string; deviceOnly?: boolean }
 const REFUSED = {
   empty: "Nothing to remember: the note was empty.",
   long: `Not saved: keep a note under ${Memory.MAX_TEXT} characters.`,
+  body_long: "Not saved: the note body is over the limit; keep the details in a file and add a reference.",
+  too_many_refs: "Not saved: too many references; keep at most the allowed number.",
   secret: "Not saved: this looks like a password, key or token. Credentials are never kept in memory.",
   full: `Not saved: memory holds ${Memory.MAX_ITEMS} notes already. Remove one first.`,
 }
