@@ -8,6 +8,7 @@ import { IconButtonV2 } from "@opencode-ai/ui/v2/icon-button-v2"
 import { Switch } from "@opencode-ai/ui/v2/switch-v2"
 import { TextInputV2 } from "@opencode-ai/ui/v2/text-input-v2"
 import type { MemoryItem, MemoryRef, MemoryRefusal, MemoryResult } from "@opencode-ai/sdk/v2/client"
+import { ProjectMemory } from "@opencode-ai/schema/project-memory"
 import { createEffect, createResource, createSignal, For, onCleanup, Show } from "solid-js"
 import { useLanguage } from "@/context/language"
 import { useSDK } from "@/context/sdk"
@@ -16,10 +17,10 @@ import { showToast } from "@/utils/toast"
 const MAX_RETRIES = 3
 
 /**
- * The server's note limits (opencode memory.ts MAX_TEXT, MAX_BODY, MAX_REFS). Neither the schema nor the SDK
- * exports them, so this is the app's one copy; the refusal texts take their number from here.
+ * The server's note limits, from their one source in the schema (1.2.6 M1 S6): the same constant opencode's
+ * Memory.MAX_TEXT, MAX_BODY and MAX_REFS read. The refusal texts take their number from here.
  */
-const MEMORY_LIMITS = { text: 2000, body: 10000, refs: 10 } as const
+const MEMORY_LIMITS = ProjectMemory.LIMITS
 
 /** A reference as the user reads it: `path:line`, `path`, `symbol` or `symbol (path)`. Never the file's content. */
 function memoryRefLabel(ref: MemoryRef) {

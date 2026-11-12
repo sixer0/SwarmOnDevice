@@ -25,12 +25,13 @@ export const Event = ProjectMemory.Event
 
 export type MemoryRef = ProjectMemory.MemoryRef
 
+// The limits come from the schema (ProjectMemory.LIMITS, 1.2.6 M1 S6), which the app's memory view reads too.
 /** The note line (hook), always indexed and eligible for the prompt. A longer line is refused, never cut (U11). */
-export const MAX_TEXT = 2000
+export const MAX_TEXT = ProjectMemory.LIMITS.text
 /** The optional body: returned by recall, never put in the prompt. */
-export const MAX_BODY = 10000
+export const MAX_BODY = ProjectMemory.LIMITS.body
 /** References per note, counted after exact duplicates are removed. */
-export const MAX_REFS = 10
+export const MAX_REFS = ProjectMemory.LIMITS.refs
 /** Notes per store at which consolidation runs, then again after every further 100 (C6). Not a cap: nothing is refused. */
 export const CONSOLIDATE_AT = 1000
 /** Estimated tokens for the whole `<project_memory>` block (U18). Used by the prompt loader. */

@@ -50,6 +50,14 @@ export const Info = Schema.Struct({
 }).annotate({ identifier: "MemoryInfo" })
 export interface Info extends Schema.Schema.Type<typeof Info> {}
 
+/**
+ * The note limits (1.2.6 M1 S6: their one source). `text`: characters of the note line; `body`: characters of the detail
+ * kept with it; `refs`: files or symbols it links. Over a limit the note is refused, never cut (U11). The server
+ * (opencode Memory.MAX_*) and the app's memory view (refusal texts, `{{max}}` in every locale) both read these.
+ */
+export const LIMITS = { text: 2000, body: 10000, refs: 10 } as const
+export type Limits = typeof LIMITS
+
 export const Refusal = Schema.Literals(["empty", "long", "secret", "full", "body_long", "too_many_refs"]).annotate({ identifier: "MemoryRefusal" })
 export type Refusal = typeof Refusal.Type
 
