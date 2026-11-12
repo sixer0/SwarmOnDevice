@@ -112,7 +112,9 @@ describe("row 158: at-capacity figures render unchanged (sha256 before the patch
     swimlane6: "2da10275ebe1460c7e27bc0e9b4baa93d12563f44e8e66b7aeb1f46580d08eb6",
     // Row 165C (F113-9, C23 recorded diff): node g0 sits on the sheet edge, its outline is now drawn half a stroke
     // inside (x 0.0 -> 0.23, width 21.33 -> 21.1); the only changed line. Before: 28b63edf50ac499f...
-    graph5: "cd9dc8569bbc20b823e05237d6db7a19acc90feda9f89f83321ec840ed232695",
+    // Swarm 1.2.6 row 59 (T-02, N-016, controller ruling): the compacted block (x0 = 0) is translated inside the
+    // 2 mm edge inset (centred, lattice spacing kept). Before: cd9dc8569bbc20b8...
+    graph5: "d53b6de116c453f1d6bcb53cf3598d2d0e7588eba17c78b847976ec988b3a2d4",
     bars30: "4c083a8330ada122686d85bce992ef43590e83479b0261f0c01eca1bb956390f",
     columns12: "1060e9b9d8043480cde380c532614a7f5ec3331e64590f5e20217cc19f90a107",
     columns20: "319d26993d5eeb7011530be6bda27249035d55b5155bb3c7741c91e35f63a1f6",
