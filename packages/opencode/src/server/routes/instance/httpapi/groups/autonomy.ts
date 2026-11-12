@@ -1,4 +1,5 @@
 import { Autonomy } from "@/permission/autonomy"
+import { DesktopNonce } from "@/server/desktop-nonce"
 import { SessionID } from "@/session/schema"
 import { Schema } from "effect"
 import { HttpApi, HttpApiEndpoint, HttpApiError, HttpApiGroup, OpenApi } from "effect/unstable/httpapi"
@@ -17,6 +18,8 @@ export const AutonomyPaths = {
   consent: "/session/:sessionID/autonomy/consent",
   archive: "/session/:sessionID/autonomy/archive",
   archiveEmpty: "/session/:sessionID/autonomy/archive/empty",
+  // 1.2.6 row 38a (N-079): the person puts a checkpoint back.
+  checkpointRevert: "/session/:sessionID/autonomy/checkpoint/:checkpointID/revert",
 } as const
 
 export class ApiAutonomyWriteError extends Schema.ErrorClass<ApiAutonomyWriteError>("AutonomyWriteError")(
@@ -137,6 +140,23 @@ export const ArchiveEmptyPayload = Schema.Struct({
   ids: Schema.Array(Schema.String),
 })
 
+// 1.2.6 row 38a (SEC-06, N-147): the per-launch nonce only the desktop app holds. The password alone is readable by an
+// agent's shell, so the routes that delete or restore the person's files also need this.
+export const DesktopNonceHeaders = Schema.Struct({
+  [DesktopNonce.HEADER]: Schema.optional(Schema.String).annotate({
+    description: "The per-launch nonce the desktop app holds in memory; required with the server password",
+  }),
+})
+
+export const CheckpointRevertState = Schema.Struct({
+  id: Schema.String,
+  restored: Schema.Array(Schema.String),
+  preRevert: Schema.String.annotate({
+    description: "The checkpoint of the files as they were just before this revert, so the revert can be undone",
+  }),
+  verified: Schema.Literal(true),
+}).annotate({ identifier: "AutonomyCheckpointRevert" })
+
 export const AutonomyApi = HttpApi.make("autonomy")
   .add(
     HttpApiGroup.make("autonomy")
@@ -237,6 +257,7 @@ export const AutonomyApi = HttpApi.make("autonomy")
         HttpApiEndpoint.post("archiveEmpty", AutonomyPaths.archiveEmpty, {
           params: { sessionID: SessionID },
           query: WorkspaceRoutingQuery,
+          headers: DesktopNonceHeaders,
           payload: ArchiveEmptyPayload,
           success: described(ArchiveState, "The archive after emptying"),
           error: [HttpApiError.BadRequest, ApiNotFoundError, ApiAutonomyNoPasswordError, ApiAutonomyWriteError],
@@ -245,7 +266,21 @@ export const AutonomyApi = HttpApi.make("autonomy")
             identifier: "autonomy.archiveEmpty",
             summary: "Empty a session's archive",
             description:
-              "A person deletes for good the archive entries they were shown, named by id. Only a server with a password takes this, and an agent's shell is never given it. Nothing outside the archive is deleted, and the emptying is recorded before anything goes.",
+              "A person deletes for good the archive entries they were shown, named by id. Only a server with a password and the desktop app's per-launch nonce takes this; an agent's shell is given neither. Nothing outside the archive is deleted, and the emptying is recorded before anything goes.",
+          }),
+        ),
+        HttpApiEndpoint.post("checkpointRevert", AutonomyPaths.checkpointRevert, {
+          params: { sessionID: SessionID, checkpointID: Schema.String },
+          query: WorkspaceRoutingQuery,
+          headers: DesktopNonceHeaders,
+          success: described(CheckpointRevertState, "The checkpoint put back, and the checkpoint saved just before"),
+          error: [HttpApiError.BadRequest, ApiNotFoundError, ApiAutonomyNoPasswordError, ApiAutonomyWriteError],
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "autonomy.checkpointRevert",
+            summary: "Revert a checkpoint",
+            description:
+              "A person puts back the files and Git refs a checkpoint saved before an action ran. The current bytes are saved as a new checkpoint first, so the revert can be undone. Only a server with a password and the desktop app's per-launch nonce takes this; an agent's shell is given neither. The manifest must match the one recorded when the checkpoint was made, and every restored file is checked by sha256.",
           }),
         ),
       )

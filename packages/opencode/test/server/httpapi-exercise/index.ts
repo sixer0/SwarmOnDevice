@@ -683,6 +683,31 @@ const scenarios: Scenario[] = [
       body: { ids: "all" },
     }))
     .status(400),
+  // 1.2.6 row 38a (SEC-06): the revert route takes the password and the desktop nonce; a server with no password none.
+  http.protected
+    .post("/session/{sessionID}/autonomy/checkpoint/{checkpointID}/revert", "autonomy.checkpointRevert")
+    .seeded((ctx) => ctx.session({ title: "Autonomous root" }))
+    .probe({
+      path: route("/session/{sessionID}/autonomy/checkpoint/{checkpointID}/revert", {
+        sessionID: "ses_httpapi",
+        checkpointID: "20261112-090000-1",
+      }),
+    })
+    .at((ctx) => ({
+      path: route("/session/{sessionID}/autonomy/checkpoint/{checkpointID}/revert", {
+        sessionID: ctx.state.id,
+        checkpointID: "20261112-090000-1",
+      }),
+      headers: ctx.headers(),
+    }))
+    .json(
+      403,
+      (body) => {
+        object(body)
+        check(body.name === "AutonomyNoPasswordError", "a server with no password should revert nothing")
+      },
+      "status",
+    ),
   http.protected.get("/memory", "memory.get").json(200, object),
   http.protected
     .post("/memory", "memory.add")

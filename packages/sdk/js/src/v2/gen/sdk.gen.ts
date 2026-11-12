@@ -19,6 +19,8 @@ import type {
   AutonomyArchiveEmptyResponses,
   AutonomyArchiveErrors,
   AutonomyArchiveResponses,
+  AutonomyCheckpointRevertErrors,
+  AutonomyCheckpointRevertResponses,
   AutonomyConfirmErrors,
   AutonomyConfirmResponses,
   AutonomyConsentAllowErrors,
@@ -1820,10 +1822,11 @@ export class Autonomy extends HeyApiClient {
   /**
    * Empty a session's archive
    *
-   * A person deletes for good the archive entries they were shown, named by id. Only a server with a password takes this, and an agent's shell is never given it. Nothing outside the archive is deleted, and the emptying is recorded before anything goes.
+   * A person deletes for good the archive entries they were shown, named by id. Only a server with a password and the desktop app's per-launch nonce takes this; an agent's shell is given neither. Nothing outside the archive is deleted, and the emptying is recorded before anything goes.
    */
   public archiveEmpty<ThrowOnError extends boolean = false>(
     parameters: {
+      "x-swarm-desktop-nonce"?: string
       sessionID: string
       directory?: string
       workspace?: string
@@ -1836,6 +1839,7 @@ export class Autonomy extends HeyApiClient {
       [
         {
           args: [
+            { in: "headers", key: "x-swarm-desktop-nonce" },
             { in: "path", key: "sessionID" },
             { in: "query", key: "directory" },
             { in: "query", key: "workspace" },
@@ -1857,6 +1861,46 @@ export class Autonomy extends HeyApiClient {
         ...options?.headers,
         ...params.headers,
       },
+    })
+  }
+
+  /**
+   * Revert a checkpoint
+   *
+   * A person puts back the files and Git refs a checkpoint saved before an action ran. The current bytes are saved as a new checkpoint first, so the revert can be undone. Only a server with a password and the desktop app's per-launch nonce takes this; an agent's shell is given neither. The manifest must match the one recorded when the checkpoint was made, and every restored file is checked by sha256.
+   */
+  public checkpointRevert<ThrowOnError extends boolean = false>(
+    parameters: {
+      "x-swarm-desktop-nonce"?: string
+      sessionID: string
+      checkpointID: string
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "headers", key: "x-swarm-desktop-nonce" },
+            { in: "path", key: "sessionID" },
+            { in: "path", key: "checkpointID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      AutonomyCheckpointRevertResponses,
+      AutonomyCheckpointRevertErrors,
+      ThrowOnError
+    >({
+      url: "/session/{sessionID}/autonomy/checkpoint/{checkpointID}/revert",
+      ...options,
+      ...params,
     })
   }
 }

@@ -5,16 +5,20 @@ import { Permission } from "@/permission"
 import { Autonomy } from "@/permission/autonomy"
 import type { SessionID } from "@/session/schema"
 import { ServerAuth } from "@/server/auth"
+import { DesktopNonce } from "@/server/desktop-nonce"
 import { AutonomyReport } from "@/session/autonomy-report"
 import { LateAnswer } from "@/session/late-answer"
 import { Session } from "@/session/session"
 import { Archive } from "@/tool/archive"
+import { ActionCheckpoint } from "@/tool/checkpoint"
 import { Effect, Scope } from "effect"
 import { HttpApiBuilder } from "effect/unstable/httpapi"
 import { InstanceHttpApi } from "../api"
-import type { ApiNotFoundError } from "../errors"
+import { notFound, type ApiNotFoundError } from "../errors"
 import { ApiAutonomyConsentError, ApiAutonomyNoPasswordError, ApiAutonomyWriteError } from "../groups/autonomy"
 import * as SessionError from "./session-errors"
+
+type DesktopNonceHeaders = { readonly [DesktopNonce.HEADER]?: string | undefined }
 
 // A draft has no session yet, and no session is ever stored under this: only the folder can answer.
 const NO_SESSION = "" as SessionID
@@ -241,16 +245,30 @@ export const autonomyHandlers = HttpApiBuilder.group(InstanceHttpApi, "autonomy"
       return archiveState(root.id, yield* Effect.promise(() => archiveOf(directory)))
     })
 
+    // 1.2.6 row 38a (SEC-06): what tells the person at the app from anything else on the machine. The password is in a
+    // file an agent's shell can read, so the routes that delete or restore the person's files also need the nonce the
+    // desktop app holds in memory for this launch (N-147). A server not started by the app holds none and takes nobody.
+    const personAtApp = (headers: DesktopNonceHeaders, what: string) =>
+      Effect.gen(function* () {
+        if (!password)
+          return yield* new ApiAutonomyNoPasswordError({
+            name: "AutonomyNoPasswordError",
+            data: { message: `${what} needs a server password` },
+          })
+        if (!DesktopNonce.matches(headers[DesktopNonce.HEADER]))
+          return yield* new ApiAutonomyNoPasswordError({
+            name: "AutonomyNoPasswordError",
+            data: { message: `${what} is only taken from the Swarm desktop app` },
+          })
+      })
+
     const archiveEmpty = Effect.fn("AutonomyHttpApi.archiveEmpty")(function* (ctx: {
       params: { sessionID: SessionID }
+      headers: DesktopNonceHeaders
       payload: { ids: readonly string[] }
     }) {
       // As with consent: without a password any process on the machine, the agent's shell too, could empty it.
-      if (!password)
-        return yield* new ApiAutonomyNoPasswordError({
-          name: "AutonomyNoPasswordError",
-          data: { message: "Emptying the archive needs a server password" },
-        })
+      yield* personAtApp(ctx.headers, "Emptying the archive")
       const { root, directory } = yield* archiveFolder(ctx.params.sessionID)
       const before = yield* Effect.promise(() => archiveOf(directory))
       // Only what the person was shown: an entry moved in since they looked stays for the next time.
@@ -266,6 +284,58 @@ export const autonomyHandlers = HttpApiBuilder.group(InstanceHttpApi, "autonomy"
       return archiveState(root.id, yield* Effect.promise(() => archiveOf(directory)))
     })
 
+    // 1.2.6 row 38a (P-01c, N-079; SEC-06, SEC-07): the person puts a checkpoint back. Only a checkpoint the root's own
+    // record says was made is taken, and its manifest must hash to the sha that record wrote when it was made: the first
+    // line for that id, so a line appended later cannot vouch for a changed manifest. `ActionCheckpoint.revert` saves the
+    // current bytes first, checks every entry and ref name before git sees it, restores, and checks each file by sha256.
+    const checkpointRevert = Effect.fn("AutonomyHttpApi.checkpointRevert")(function* (ctx: {
+      params: { sessionID: SessionID; checkpointID: string }
+      headers: DesktopNonceHeaders
+    }) {
+      yield* personAtApp(ctx.headers, "Reverting a checkpoint")
+      const { root, directory } = yield* archiveFolder(ctx.params.sessionID)
+      const id = ctx.params.checkpointID
+      const read = yield* autonomy.readAudit(root.id)
+      const made = read.lines.find(
+        (line) => line.type === "outcome" && line.outcome === "checkpointed" && line.checkpoint === id,
+      )
+      const manifestSha256 = made?.type === "outcome" ? made.manifestSha256 : undefined
+      if (!manifestSha256) return yield* notFound("There is no such checkpoint for this session")
+      const failed = (message: string) => new ApiAutonomyWriteError({ name: "AutonomyWriteError", data: { message } })
+      const requestID = `revert_${id}`
+      // Every revert that reaches the files is on the record: which checkpoint, that a person asked, and how it ended.
+      const recordResult = (outcome: "undone" | "failed") =>
+        autonomy
+          .record(root.id, { type: "outcome", requestID, outcome, checkpoint: id, by: "person", directory })
+          .pipe(
+            Effect.catch((error) =>
+              Effect.logError("could not record a checkpoint revert", { root: root.id, checkpoint: id, error }),
+            ),
+          )
+      if (!read.intact) {
+        yield* recordResult("failed")
+        return yield* failed("The record of this session changed, so its checkpoint cannot be checked. Nothing was restored.")
+      }
+      const where = { root: root.id, directory }
+      const result = yield* Effect.promise(() =>
+        ActionCheckpoint.revert({
+          directory,
+          id,
+          manifestSha256,
+          sessionID: root.id,
+          requestID,
+          record: Autonomy.checkpointRecorder(autonomy.record, where),
+        }),
+      )
+      if (!result.ok) {
+        if (result.reason === "not_found") return yield* notFound(result.message)
+        yield* recordResult("failed")
+        return yield* failed(result.message)
+      }
+      yield* recordResult("undone")
+      return { id: result.id, restored: [...result.restored], preRevert: result.preRevert, verified: true as const }
+    })
+
     return handlers
       .handle("mode", folderMode)
       .handle("modeUpdate", modeUpdate)
@@ -275,5 +345,6 @@ export const autonomyHandlers = HttpApiBuilder.group(InstanceHttpApi, "autonomy"
       .handle("consentAllow", consentAllow)
       .handle("archive", archive)
       .handle("archiveEmpty", archiveEmpty)
+      .handle("checkpointRevert", checkpointRevert)
   }),
 )

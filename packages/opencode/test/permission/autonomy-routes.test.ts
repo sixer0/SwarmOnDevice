@@ -38,6 +38,7 @@ import { Autonomy } from "../../src/permission/autonomy"
 import { InstanceBootstrap } from "../../src/project/bootstrap"
 import { InstanceStore } from "../../src/project/instance-store"
 import { ServerAuth } from "../../src/server/auth"
+import { DesktopNonce } from "../../src/server/desktop-nonce"
 import { AutonomyApi } from "../../src/server/routes/instance/httpapi/groups/autonomy"
 import { EventApi } from "../../src/server/routes/instance/httpapi/groups/event"
 import { autonomyHandlers } from "../../src/server/routes/instance/httpapi/handlers/autonomy"
@@ -595,6 +596,11 @@ test("the generated client has the routes", () => {
 // Row 132: the person's route to the consent list. Its group is served here with a password the shell never sees.
 const PASSWORD = "consent-route-test-only"
 const AUTHORIZATION = `Basic ${Buffer.from(`opencode:${PASSWORD}`).toString("base64")}`
+// 1.2.6 row 38a (SEC-06, INTENT): emptying the archive also needs the desktop app's per-launch nonce. A person's request
+// here carries it with the password; RV-8 in test/server/autonomy-checkpoint-route.test.ts pins the refusal without it.
+const NONCE = "row152-nonce-0123456789abcdefghijklmnopq"
+beforeEach(() => DesktopNonce.set(NONCE))
+afterEach(() => DesktopNonce.set(undefined))
 
 const serveGroupWith = (password: string | undefined) =>
   HttpApiBuilder.layer(AutonomyApi).pipe(
@@ -646,7 +652,10 @@ const send = (
           : HttpClientRequest.post(url)
     const directed = base.pipe(HttpClientRequest.setHeader("x-opencode-directory", directory))
     const headed = options.authorized
-      ? directed.pipe(HttpClientRequest.setHeader("authorization", AUTHORIZATION))
+      ? directed.pipe(
+          HttpClientRequest.setHeader("authorization", AUTHORIZATION),
+          HttpClientRequest.setHeader(DesktopNonce.HEADER, NONCE),
+        )
       : directed
     const request = options.body === undefined ? headed : yield* HttpClientRequest.bodyJson(headed, options.body)
     return yield* HttpClient.execute(request)
