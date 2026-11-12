@@ -6,6 +6,7 @@ import DESCRIPTION from "./remember.txt"
 import { Memory } from "@/memory/memory"
 import { InstanceState } from "@/effect/instance-state"
 import type { Provider } from "@/provider/provider"
+import { OutwardConsent } from "@/permission/outward-consent"
 
 export const Parameters = Schema.Struct({
   text: Schema.optional(Schema.String).annotate({
@@ -120,15 +121,58 @@ const LOCAL_TOOLS = new Set([
 // The parameter that names what a reading tool read; outside the worktree it is outside input too.
 const PATH_PARAMETER: Record<string, string> = { read: "filePath", glob: "path", grep: "path" }
 
+// Programs put in front of the one that runs (`sudo curl ...`); skipped when looking for the program of a step.
+const WRAPPERS = new Set(["sudo", "doas", "env", "command", "builtin", "exec", "time", "nohup", "nice", "xargs"])
+
+const loopback = (hostname: string) => {
+  const host = hostname.toLowerCase().replace(/^\[|\]$/g, "").replace(/\.$/, "")
+  return (
+    host === "localhost" ||
+    host.endsWith(".localhost") ||
+    host === "::1" ||
+    host === "0.0.0.0" ||
+    /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host)
+  )
+}
+
+/**
+ * 1.2.6 FX-5/6 (M1 S5, SEC-09): whether a shell command fetches web content: a step whose program is a request tool
+ * (curl, wget, httpie, xh; OutwardConsent.REQUEST_TOOLS) and whose destination is not loopback. URLs are read as
+ * OutwardConsent reads them; with a `scheme://` word only those count, otherwise every word that reads as a host.
+ * A fetch whose destination cannot be read (`curl "$URL"`, a config file) is not proven local, so it counts.
+ */
+export function shellFetchesWeb(command: string) {
+  return command.split(/&&|\|\||[;|&\n()`]/).some((step) => {
+    const words = step
+      .split(/[\s<>]+/)
+      .map((word) => word.replace(/^['"]+|['"]+$/g, ""))
+      .filter(Boolean)
+    let at = 0
+    while (at < words.length && (/^[A-Za-z_][A-Za-z0-9_]*=/.test(words[at]!) || WRAPPERS.has(words[at]!))) at++
+    const program = words[at]
+    if (!program || !OutwardConsent.REQUEST_TOOLS.has(path.basename(program))) return false
+    const args = words.slice(at + 1).filter((word) => !word.startsWith("-"))
+    const schemed = args.filter((word) => /^[a-z][a-z0-9+.-]*:\/\//i.test(word))
+    const urls = (schemed.length ? schemed : args).flatMap((word) => OutwardConsent.urlOf(word) ?? [])
+    if (!urls.length) return true
+    return urls.some((url) => !loopback(url.hostname))
+  })
+}
+
 /**
  * SEC-09: whether this session already consumed web, MCP or Studio data or files outside the worktree before the note
- * was written. Such a note is kept (U11 cuts nothing) but carries `untrusted`, its label says so and it ranks lower.
+ * was written. Web content fetched through the shell counts too (1.2.6 M1 S5, `shellFetchesWeb`). Such a note is kept (U11 cuts nothing) but carries `untrusted`, its label says so and it ranks lower.
  */
 export function readUntrustedInput(messages: Tool.Context["messages"], where: { root: string; directory: string }) {
   return messages.some((message) =>
     message.parts.some((part) => {
       if (part.type !== "tool" || part.state.status !== "completed") return false
       if (!LOCAL_TOOLS.has(part.tool)) return true
+      // The shell counts as local unless the call fetched web content (curl/wget and the like to a non-loopback URL).
+      if (part.tool === "bash") {
+        const command = part.state.input.command
+        return typeof command === "string" && shellFetchesWeb(command)
+      }
       const key = PATH_PARAMETER[part.tool]
       const value = key ? part.state.input[key] : undefined
       if (typeof value !== "string" || !value) return false
