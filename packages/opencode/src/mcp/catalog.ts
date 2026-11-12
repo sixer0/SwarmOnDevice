@@ -56,6 +56,26 @@ export const AUTONOMOUS_META = "studio/autonomous"
 /** The `_meta` of one call: fixed, or read when the call is made (so a mode switched off holds from the next call). */
 export type CallMeta = Record<string, unknown> | (() => Promise<Record<string, unknown> | undefined>)
 
+/** SEC-21: settle with the signal's reason as soon as it aborts, whichever comes first. */
+function abortable<T>(work: Promise<T>, signal: AbortSignal | undefined): Promise<T> {
+  if (!signal) return work
+  signal.throwIfAborted()
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(signal.reason)
+    signal.addEventListener("abort", onAbort, { once: true })
+    work.then(
+      (value) => {
+        signal.removeEventListener("abort", onAbort)
+        resolve(value)
+      },
+      (error) => {
+        signal.removeEventListener("abort", onAbort)
+        reject(error)
+      },
+    )
+  })
+}
+
 export function convertTool(
   mcpTool: MCPToolDef,
   client: Client,
@@ -73,7 +93,12 @@ export function convertTool(
     description: mcpTool.description ?? "",
     inputSchema: jsonSchema(inputSchema),
     execute: async (args: unknown, options) => {
-      const callMeta = typeof meta === "function" ? await meta() : meta
+      // SEC-21 (1.2.6 row 53b): the session's abort ends the whole call, including the `_meta` lookup that runs
+      // before the transport request; `signal` below then cancels the request itself (the SDK sends
+      // notifications/cancelled), so a hung server cannot hold the call for the full `timeout`.
+      const signal = options.abortSignal
+      signal?.throwIfAborted()
+      const callMeta = typeof meta === "function" ? await abortable(meta(), signal) : meta
       const result = await client.callTool(
         {
           name: mcpTool.name,
@@ -84,7 +109,7 @@ export function convertTool(
         CallToolResultSchema,
         {
           resetTimeoutOnProgress: true,
-          signal: options.abortSignal,
+          signal,
           timeout,
           // The MCP SDK only sends a progress token when this hook is present, enabling timeout resets.
           onprogress: () => {},
