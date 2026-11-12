@@ -5,7 +5,7 @@
 //    calls), at the request schema and again in the engine (validateSpec P1-direction) for a spec that skipped it;
 //  - P1-direction: direction on another family, or with per_row, refused by validateSpec and the by-construction gate;
 //  - compose (v2 -> v1) and adapt-v1 (v1 -> v2) keep the field (allow-lists);
-//  - A15: a flow WITHOUT direction is byte-identical to 1.2.5 (golden SVGs captured at e363918a69).
+//  - A15: a flow WITHOUT direction is unchanged by the direction contract (T-04/T-07 intended flips; goldens first captured at e363918a69).
 // Layout behaviour of a ranked flow is row 46's; nothing here asserts a ranked layout.
 import { useStudioEnv } from "../ported/_env"
 useStudioEnv()
@@ -203,7 +203,7 @@ describe("row 45 copies: compose and adapt-v1 keep direction (A19)", () => {
   })
 })
 
-describe("row 45 A15: a flow without direction is byte-identical to 1.2.5 (golden at e363918a69)", () => {
+describe("row 45 A15: a flow without direction is unchanged by the direction contract (T-04/T-07 intended flips)", () => {
   const FIX = path.join(PKG, "test", "ported", "_fixtures", "tests", "parity", "fixtures", "diagram")
   const cases: Record<string, unknown> = { dg_flow: json(path.join(FIX, "dg_flow.json")), dg_flow_wrapped: json(path.join(FIX, "dg_flow_wrapped.json")), legacy_fanout_flow: LEGACY }
   for (const [name, spec] of Object.entries(cases)) {
