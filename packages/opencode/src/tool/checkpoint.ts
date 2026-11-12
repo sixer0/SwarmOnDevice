@@ -732,17 +732,21 @@ async function isGit(root: string) {
 }
 
 const GIT_TIMEOUT_MS = 30_000
+// `core.hooksPath` to the null device: git finds no hook there. Git for Windows reads `/dev/null` as well.
+const NO_HOOKS = ["-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false"] as const
 
 /**
  * The one git runner for checkpoints, here and in the shell's checkpoint planning (1.2.6 FX-1, gate M1 S3). No shell, a
  * timeout, no optional locks, and the server's credentials kept out of git's env (as for every command the shell runs).
+ * 1.2.6 FX-14 (F-5): the project's hooks and fsmonitor never run, so a hook an agent planted (`reference-transaction`
+ * at `update-ref`) does not run in the server when a person reverts.
  * Git's stdout as it is, or undefined when git failed, timed out or is missing.
  */
 export function runGit(cwd: string, args: readonly string[], options: { maxBuffer?: number } = {}) {
   return new Promise<string | undefined>((resolve) => {
     execFile(
       "git",
-      [...args],
+      [...NO_HOOKS, ...args],
       {
         cwd,
         timeout: GIT_TIMEOUT_MS,
