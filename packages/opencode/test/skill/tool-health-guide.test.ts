@@ -80,9 +80,31 @@ describe("1.2.6 row 105 tool-health built-in skill text", () => {
     expect(TEXT).toContain("The desktop app is the only place that starts tools")
   })
 
-  test("SEC-17: loopback curl probes are for interactive sessions only", () => {
-    expect(TEXT).toContain("interactive sessions only")
+  // Fix row FX-10 (gate 04 F1, decision C19c amends SEC-17): under autonomous consent a loopback request opens at
+  // once (outward-consent.ts rule 1, localHost), so the skill no longer says such probes are held.
+  test("SEC-17 as amended by C19c: a loopback probe runs at once under autonomous consent; no hold is claimed", () => {
+    expect(readFileSync(path.join(ROOT, "opencode", "src", "permission", "outward-consent.ts"), "utf8")).toContain(
+      "opens when every host it names is local",
+    )
+    expect(TEXT).toContain("A loopback `curl` probe is allowed in every mode")
+    expect(TEXT).toContain("under autonomous consent a request to 127.0.0.1 or localhost runs at once and is not held")
+    expect(TEXT).not.toMatch(/they are held|interactive sessions only/)
     expect(TEXT).toContain("never set a Host header")
+  })
+
+  // FX-10 F3: ~/.swarm/health is not a held autonomous write target; the text no longer gives that example.
+  test("F3: the recheck.json write is not said to be held in autonomous mode", () => {
+    expect(TEXT).not.toContain("for example in autonomous mode")
+    expect(TEXT).toContain("If the write is refused, do not try another way.")
+  })
+
+  // FX-10 F4: there is no Settings > Tools page; installs go through the Install tools command (Settings category).
+  test("F4: installs route to the Install tools command, never a Settings > Tools page", () => {
+    const en = readFileSync(path.join(ROOT, "app", "src", "i18n", "en.ts"), "utf8")
+    const cmd = /"command\.tools\.install": "([^"]+)"/.exec(en)![1]
+    const cat = /"command\.category\.settings": "([^"]+)"/.exec(en)![1]
+    expect(TEXT).not.toContain("Settings > Tools")
+    expect(TEXT.split(`**${cmd}** command (command palette, ${cat})`).length - 1).toBeGreaterThanOrEqual(4)
   })
 
   test("generic text: no machine path, no secret word, no install or start command", () => {

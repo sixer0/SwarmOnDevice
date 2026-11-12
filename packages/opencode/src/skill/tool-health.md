@@ -53,7 +53,7 @@ If the file or the `~/.swarm/health/` folder is missing, the desktop app has not
 |---|---|
 | `OK` | The tool is running |
 | `REVIVED` | It was down and has been started again |
-| `NOT_INSTALLED` | It is not installed. Swarm's own tools are set up from Settings > Tools |
+| `NOT_INSTALLED` | It is not installed. Swarm's own tools are installed with the **Install tools** command (command palette, Settings), or from the tools offer Swarm shows after an install or update |
 | `NEVER_HEALTHY` | It has never been seen running. Start it once yourself, and Swarm keeps it running after that |
 | `CONSENT_MANUAL` | It is down and set to start only when the person asks. Choose **Re-check Tools** in the Swarm app menu |
 | `REVIVE_LIMIT` | It went down again after one restart in this session. Swarm will not keep restarting it. Re-check once, or look at the Swarm log |
@@ -68,17 +68,17 @@ If the file or the `~/.swarm/health/` folder is missing, the desktop app has not
 | `BRIDGE_SOCKET_GONE`, `BRIDGE_BAD_REPLY` | The render bridge stopped answering. Swarm restarts it at the same address. If it stays down, quit and reopen Swarm |
 | `SETUP_BUSY` | Swarm's tool setup was running, so nothing was started. Re-check when the setup has finished |
 | `SETUP_NO_START_VERB` | This Swarm build's setup helper cannot start tools. Update Swarm |
-| `START_NOT_INSTALLED` | Swarm's setup does not record it as installed, so it was not started. See Settings > Tools |
+| `START_NOT_INSTALLED` | Swarm's setup does not record it as installed, so it was not started. The person installs it with the **Install tools** command (command palette, Settings) |
 | `RUNTIME_PROFILE_MISSING` | The runtime profile `swarm` does not exist. Starting it would create a new VM, which Swarm does not do on its own. Run the Tools setup |
-| `START_CONTAINERS_MISSING` | Its containers no longer exist. Swarm only starts existing containers. Rebuild them from Settings > Tools |
+| `START_CONTAINERS_MISSING` | Its containers no longer exist. Swarm only starts existing containers. The person rebuilds them through Swarm's tool setup, the **Install tools** command (command palette, Settings) |
 | `REVIVE_EXIT` | The start command failed (first line in `detail`) |
 | `REVIVE_TIMEOUT` | It was started but did not become healthy in time |
 
 These codes appear only in the Swarm log, never as a status. They are about the person's `tool-health.json` or a re-check request: `USER_REGISTRY_UNSAFE` (the file was ignored: it must belong to the person, must not be writable by others, and must be at most 64 KiB), `USER_REGISTRY_INVALID` (not valid JSON), `PROBE_URL_NOT_LOOPBACK`, `REVIVE_BUILTIN_IN_USER_FILE`, `SHIPPED_FIELD_LOCKED`, `ENTRY_INVALID` (one entry, or a re-check request, was ignored), `WATCHED_FILE_CHANGED` (a file the entry watches changed since it was registered; Swarm warned and still started it).
 
-## 3. Check a tool yourself (interactive sessions only)
+## 3. Check a tool yourself
 
-Loopback `curl` probes are for interactive sessions only. In autonomous mode they are held. Use `state.json` and a re-check instead.
+Read `state.json` first. A loopback `curl` probe is allowed in every mode: under autonomous consent a request to 127.0.0.1 or localhost runs at once and is not held; in an interactive session the person may be asked to allow it. If a probe is refused, treat the tool as not available and ask for a re-check (section 4) instead.
 
 ```
 curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:9021/
@@ -100,7 +100,7 @@ The request is used only when it follows these rules:
 - `ids` is a non-empty list of ids from section 1 or from the person's entries. One unknown or misspelt id makes the desktop ignore the whole request. Leave `ids` out to check every tool.
 - It is a plain file of at most 4 KiB, never a link.
 
-The write is outside the project, so the person may be asked to allow it. If the write is refused or held, for example in autonomous mode, do not try another way. Tell the person to choose **Re-check Tools** in the Swarm app menu.
+The write is outside the project, so the person may be asked to allow it. If the write is refused, do not try another way. Tell the person to choose **Re-check Tools** in the Swarm app menu.
 
 After the write:
 1. Note `updatedAt` in `state.json` before you write.
@@ -123,7 +123,7 @@ What a re-check does: it checks the named tools. It starts again only the `conse
 
 Name the tool by its label and id, give the status and reason in plain words, and say what they can do. Then continue the rest of the task. An optional tool that is down never stops the whole task. List what was skipped in your final message.
 
-Example: "Web search (SearXNG, `searxng`) is down. Swarm tried to start it and it did not come back in time (`revive_failed`, `REVIVE_TIMEOUT`). I continued without web search. To try again, choose Re-check Tools in the Swarm app menu. If it stays down, check Settings > Tools."
+Example: "Web search (SearXNG, `searxng`) is down. Swarm tried to start it and it did not come back in time (`revive_failed`, `REVIVE_TIMEOUT`). I continued without web search. To try again, choose Re-check Tools in the Swarm app menu. If it stays down, check it with the **Install tools** command (command palette, Settings)."
 
 ## 7. Changing or adding entries: propose, never write
 

@@ -82,8 +82,9 @@ export function toolHealthMessage(
       return `${label} is running.`
     case "REVIVED":
       return `${label} was down and has been started again (${extra.seconds ?? 0} s).`
+    // 1.2.6 FX-10 (gate 04 F4): there is no Settings > Tools page; the installer is the "Install tools" palette command.
     case "NOT_INSTALLED":
-      return `${label} is not installed, so Swarm did not start it. Swarm never installs tools on its own; install it from Settings > Tools if you need it.`
+      return `${label} is not installed, so Swarm did not start it. Swarm never installs tools on its own; if you need it, install it with the "Install tools" command (command palette, Settings).`
     case "NEVER_HEALTHY":
       return `${label} is not running and has never been seen running, so Swarm did not start it. Start it once yourself; after that Swarm keeps it running.`
     case "CONSENT_MANUAL":
@@ -110,7 +111,7 @@ export function toolHealthMessage(
     case "RUNTIME_PROFILE_MISSING":
       return 'The container runtime profile "swarm" does not exist. Starting it would create a new VM, which Swarm does not do on its own; run the Tools setup.'
     case "START_CONTAINERS_MISSING":
-      return `${label}'s containers no longer exist. Swarm only starts existing containers; to rebuild them run "swarm-setup apply ${component.id}" from Settings > Tools.`
+      return `${label}'s containers no longer exist. Swarm only starts existing containers; rebuild them with "swarm-setup apply ${component.id}" or open the "Install tools" command (command palette, Settings).`
     case "REVIVE_EXIT":
       return `Starting ${label} failed: ${detail}.`
     case "REVIVE_TIMEOUT":
