@@ -1358,6 +1358,8 @@ describe("C97: in the folder, quoted reads and shell file operations", () => {
         "mkdir -p out/deep", "mkdir out", "touch docs/new.md", "touch docs/notes.md", "touch out-file", "cp docs/notes.md docs/copy.md", "cp -p docs/notes.md docs/copy.md",
         "mv docs/notes.md docs/moved.md", 'cp "docs/my notes.md" "docs/your notes.md"', `cp ${path.join(folder.root, "docs/notes.md")} ${path.join(folder.root, "docs/abs.md")}`,
         "cp docs/notes.md src", "mv docs/kept.md src", "cp docs/notes.md docs/kept.md src", "cp src/a.ts src/b.ts",
+        // 1.2.6 row 35 (P-02, N-150, intended change): `-n` no longer leaves the reader; it never replaces.
+        "cp -n docs/notes.md docs/z.md",
       ])
         expect([folder.name, command, judge(command)]).toEqual([folder.name, command, FILE_OP])
       // A name that changes what later runs, and a folder copied or moved, go to the decider; nothing is lost either way.
@@ -1366,7 +1368,7 @@ describe("C97: in the folder, quoted reads and shell file operations", () => {
       // Not ordinary places, or not the folder: left to the stricter rules.
       for (const command of [
         "mkdir .github/workflows", "cp src/a.ts src/vite.config.ts", "mv src/a.ts conftest.py", "touch ../x.md", "touch .env", "cp src/a.ts .env.b", "cp .env src/env.md", "mv . x", "mv package.json docs/p.json", "cp docs/notes.md /tmp/x.md",
-        `mv ${path.join(away, "n.md")} docs/n.md`, `cp ${path.join(away, "n.md")} docs/kept.md`, "mkdir -m 777 x", "cp -t docs src/a.ts", "cp -n docs/notes.md docs/z.md", "mv -- a b",
+        `mv ${path.join(away, "n.md")} docs/n.md`, `cp ${path.join(away, "n.md")} docs/kept.md`, "mkdir -m 777 x", "cp -t docs src/a.ts", "mv -- a b",
         "mkdir out && cp docs/notes.md out/n.md", "cp docs/notes.md docs/z.md; curl x", "cp docs/notes.md docs/z.md > log", "cp docs/*.md out", "touch $(echo x)", "cp docs/notes.md docs/old",
       ])
         expect([folder.name, command, judge(command).class === "A"]).toEqual([folder.name, command, false])

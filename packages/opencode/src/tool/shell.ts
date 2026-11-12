@@ -400,12 +400,18 @@ function copyMove(root: Node) {
   return Risk.copyMove(command.map((item) => unquote(item.text)))
 }
 
-/** The files a copy or a move would replace now, folders left out: the program refuses those and replaces nothing. */
+/** 1.2.6 P-02: a plain copy or move as the gate saw it: the targets the program would write, and those to be archived. */
+type CopyAtGate = { targets: string[] | undefined; archived: readonly string[] }
+
+/**
+ * The files a copy or a move would replace now, folders left out: the program refuses those and replaces nothing. None for
+ * `-n` (1.2.6 P-02, `Risk.replacing`).
+ */
 async function replacedBy(item: Risk.CopyMove, cwd: string) {
-  const targets = Risk.copyTargets(item, cwd)
-  if (!targets) return []
+  const replacing = Risk.replacing(item, cwd)
+  if (!replacing) return []
   const found = await Promise.all(
-    Risk.replaced(targets).map(async (file) => ((await fsp.stat(file).catch(() => undefined))?.isDirectory() ? [] : [file])),
+    replacing.map(async (file) => ((await fsp.stat(file).catch(() => undefined))?.isDirectory() ? [] : [file])),
   )
   return found.flat()
 }
@@ -1451,9 +1457,34 @@ export const ShellTool = Tool.define(
       command: string,
       cwd: string,
       ctx: Tool.Context,
+      gate: CopyAtGate,
     ) {
       const on = yield* modeOn(ctx)
       if (!on) return
+      const stopped = (text: string) => ({
+        stopped: {
+          title: command,
+          metadata: { output: preview(text), exit: 1 as number | null, truncated: false, outputPath: undefined as string | undefined },
+          output: text,
+        },
+      })
+      const notRun = Effect.fn("ShellTool.copyNotRun")(function* (reason: string | undefined) {
+        yield* on.autonomy
+          .record(on.where.root, {
+            type: "outcome",
+            directory: on.where.directory,
+            requestID: ctx.callID || ctx.messageID,
+            outcome: "not_run",
+            by: "system:checkpoint_failed",
+          })
+          .pipe(Effect.catch((error) => Effect.logError("could not record a copy that was not run", { error: error.message })))
+        return stopped(checkpointFailedText(reason))
+      })
+      // 1.2.6 P-02 rule 4 (race): the targets the gate judged must still be the ones the program writes. A name that became a
+      // folder since would send the copy somewhere nobody judged, so it does not run.
+      const now = Risk.copyTargets(item, cwd)
+      if (gate.targets && (!now || now.length !== gate.targets.length || now.some((file, index) => file !== gate.targets![index])))
+        return yield* notRun(undefined)
       const paths = yield* Effect.promise(() => replacedBy(item, cwd))
       if (paths.length === 0) return
       const result = yield* Effect.promise(() =>
@@ -1465,14 +1496,28 @@ export const ShellTool = Tool.define(
           record: Autonomy.archiveRecorder(on.autonomy.record, on.where),
         }),
       )
-      if (!result.ok)
-        return {
-          stopped: {
-            title: command,
-            metadata: { output: preview(result.message), exit: 1 as number | null, truncated: false, outputPath: undefined as string | undefined },
-            output: result.message,
-          },
-        }
+      if (!result.ok) {
+        // A target the gate saw as missing appeared since and could not be archived: it is kept as a checkpoint copy
+        // instead (C4), or the copy does not run (01b 3.2 rule 4). One the gate saw keeps the archive's answer.
+        if (paths.every((file) => gate.archived.includes(file))) return stopped(result.message)
+        const saved = yield* Effect.promise(() =>
+          checkpointSeam
+            .create({
+              directory: on.place.directory,
+              cwd,
+              targets: paths,
+              refs: [],
+              sessionID: ctx.sessionID,
+              requestID: ctx.callID || ctx.messageID,
+              command,
+              record: Autonomy.checkpointRecorder(on.autonomy.record, on.where),
+            })
+            .catch((): ActionCheckpoint.CreateResult => ({ ok: false, reason: "failed", message: "" })),
+        )
+        if (!saved.ok) return yield* notRun(saved.reason)
+        if (!saved.recorded) yield* Effect.logError("could not record a checkpoint", { checkpoint: saved.id })
+        return { text: ActionCheckpoint.savedText(saved.manifest.entries.length, saved.id, 0) }
+      }
       if (!result.recorded) yield* Effect.logError("could not record an archived replacement", { archive: result.id })
       return { text: result.moved.length > 0 ? Archive.movedText(result.moved.length, result.id) : "" }
     })
@@ -1793,6 +1838,10 @@ export const ShellTool = Tool.define(
                   const found = posix ? deletion(tree.rootNode) : undefined
                   const copy = on ? copyMove(tree.rootNode) : undefined
                   const archiveTargets = copy ? yield* Effect.promise(() => replacedBy(copy, cwd)) : undefined
+                  // 1.2.6 P-02 rule 4: what the gate judges, looked at again right before the copy runs.
+                  const copyGate: CopyAtGate | undefined = copy
+                    ? { targets: Risk.copyTargets(copy, cwd), archived: archiveTargets ?? [] }
+                    : undefined
                   const steps = on ? decompose(tree.rootNode, cwd) : undefined
                   // 1.2.6 row 37b: never both archived and checkpointed (01b section 3.3 rule 5). The folder's trust is the
                   // gate's to judge; the shell only says what it would save.
@@ -1823,7 +1872,7 @@ export const ShellTool = Tool.define(
                     },
                     posix ? Reach.alwaysFor(params.command, cwd, instanceCtx) : undefined,
                   )
-                  return { ...scan, deletion: found, scripts, copy, saving }
+                  return { ...scan, deletion: found, scripts, copy, copyGate, saving }
                 }),
               )
               scanned.secretFiles.forEach(Secrets.learnFile)
@@ -1838,8 +1887,11 @@ export const ShellTool = Tool.define(
                 const changed = yield* scriptChanged(scanned.scripts, cwd, instanceCtx, ctx)
                 if (changed) return { ...changed, title: params.command }
               }
-              const kept = scanned.copy ? yield* archiveReplaced(scanned.copy, params.command, cwd, ctx) : undefined
-              if (kept?.stopped) return kept.stopped
+              const kept =
+                scanned.copy && scanned.copyGate
+                  ? yield* archiveReplaced(scanned.copy, params.command, cwd, ctx, scanned.copyGate)
+                  : undefined
+              if (kept && "stopped" in kept) return kept.stopped
               // 1.2.6 row 37b: the checkpoint exists before anything of the command runs, or the command does not run.
               const saved = scanned.saving ? yield* checkpoint(scanned.saving, params.command, cwd, ctx) : undefined
               if (saved && "stopped" in saved) return saved.stopped
@@ -1855,7 +1907,7 @@ export const ShellTool = Tool.define(
                 },
                 ctx,
               )
-              const told = [kept?.text, saved?.text].filter(Boolean).join("\n")
+              const told = [kept && "text" in kept ? kept.text : undefined, saved?.text].filter(Boolean).join("\n")
               return told ? { ...result, output: `${told}\n${result.output}` } : result
             }),
         }

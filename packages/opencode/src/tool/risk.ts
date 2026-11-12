@@ -218,12 +218,17 @@ export function quotedWords(command: string) {
   })
 }
 
-/** A plain `cp` or `mv`, as both the shell and the autonomy table read it (C97 F2). */
-export type CopyMove = { name: "cp" | "mv"; sources: string[]; dest: string }
+/**
+ * A plain `cp` or `mv`, as both the shell and the autonomy table read it (C97 F2). `noClobber`: `-n` with no `-f` beside it,
+ * so the program leaves a file that is there as it is (1.2.6 P-02).
+ */
+export type CopyMove = { name: "cp" | "mv"; sources: string[]; dest: string; noClobber: boolean }
 
-// Flags that change nothing about where the files land. `-n`, `-i`, `-t`, `--` and long options are not here, so the
-// targets worked out below are always the ones the program writes.
-const COPY_MOVE_FLAGS = { cp: /^-[prRfv]+$/, mv: /^-[fv]+$/ }
+// Flags that change nothing about where the files land (1.2.6 P-02, N-150: widened from `-[prRfv]` / `-[fv]`). `-a` copies
+// as `-pPR`, `-X` leaves out extended attributes, `-c` clones, `-L`/`-P`/`-H` say how a linked source is read, `-n` never
+// replaces. `-i`, `-t`, `-T`, `--` and long options are not here: they change or hide the target, so the targets worked out
+// below are always the ones the program writes.
+const COPY_MOVE_FLAGS = { cp: /^-[aprRfvnXcLPH]+$/, mv: /^-[fvn]+$/ }
 
 /** `cp`/`mv` with flags that do not move the target and two or more names, from unquoted words, or undefined. */
 export function copyMove(words: readonly string[]): CopyMove | undefined {
@@ -233,7 +238,20 @@ export function copyMove(words: readonly string[]): CopyMove | undefined {
   if (args.some((word) => word.startsWith("-") && !COPY_MOVE_FLAGS[name].test(word))) return undefined
   const names = args.filter((word) => !word.startsWith("-"))
   if (names.length < 2) return undefined
-  return { name, sources: names.slice(0, -1), dest: names.at(-1)! }
+  const flags = args.filter((word) => word.startsWith("-")).join("")
+  // Which of `-f` and `-n` wins differs between programs, so only `-n` alone is read as "never replaces".
+  return { name, sources: names.slice(0, -1), dest: names.at(-1)!, noClobber: flags.includes("n") && !flags.includes("f") }
+}
+
+/**
+ * 1.2.6 P-02 (E-45): the files a plain `cp`/`mv` would replace now, as the program picks its targets: none for `-n`, those
+ * of `copyTargets` that `replaced` finds there otherwise. Undefined when the targets cannot be worked out, which every
+ * caller takes as a replacement (the safe side).
+ */
+export function replacing(item: CopyMove, cwd: string): string[] | undefined {
+  const targets = copyTargets(item, cwd)
+  if (!targets) return undefined
+  return item.noClobber ? [] : replaced(targets)
 }
 
 /**

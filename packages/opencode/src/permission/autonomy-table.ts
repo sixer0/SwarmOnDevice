@@ -1257,7 +1257,8 @@ function classifyFileOp(input: Input, command: string): Verdict | undefined {
   const from = (file: string) =>
     item.name === "mv" ? place(file) : Reach.inside(file, instance) && Reach.readable(file) && !roots.includes(Reach.real(file))
   if (!sources.every(from) || !targets.every(place)) return undefined
-  const replaced = Risk.replaced(targets)
+  // 1.2.6 P-02: `-n` replaces nothing that is there.
+  const replaced = item.noClobber ? [] : Risk.replaced(targets)
   if (replaced.some(isFolder)) return undefined
   const folders = sources.some(isFolder)
   if (folders) return replaced.length === 0 ? { class: "P", decidedBy: "agent", category: "file-op" } : undefined
@@ -2400,8 +2401,79 @@ function destroys(input: Input) {
   const command = input.metadata.command
   if (typeof command !== "string") return false
   // 1.1.3 (T9 G1): the shell's own reading first, whose words carry no quote marks, so a `-c` text is seen as written.
-  const read = (BypassScreen.readSteps(input) ?? []).map((step) => step.argv)
-  return [...read, ...commandWords(command)].some((words) => DeletionWords.deletesOrReplacesWide(words, commandWords))
+  const read = (BypassScreen.readSteps(input) ?? []).map((step) => ({ argv: step.argv, cwds: step.cwds }))
+  const pieces = commandWords(command)
+  // 1.2.6 P-02: the rough reading splits a quoted name with a space and knows no `cd`. A `cp`/`mv` piece of it is left to the
+  // shell's reading when that has as many `cp`/`mv` steps, each judged with its own folder; otherwise it is judged from the
+  // call's folder, and only when nothing moves it.
+  const copies = (list: readonly (readonly string[])[]) => list.filter((words) => words[0] === "cp" || words[0] === "mv").length
+  const covered = copies(pieces) > 0 && copies(read.map((step) => step.argv)) >= copies(pieces)
+  const moves = pieces.some((words) => ["cd", "pushd", "popd"].includes(words[0] ?? ""))
+  const rough = pieces
+    .filter((words) => !(covered && (words[0] === "cp" || words[0] === "mv")))
+    .map((words) => ({ argv: words, cwds: moves ? [] : [input.cwd] }))
+  // A step of a compound (`classifySteps`) is alone only when the whole text it came from is.
+  const alone =
+    copyAlone(read.length > 0 ? read.map((step) => step.argv) : pieces) &&
+    (input.whole === undefined || input.whole === command || copyAlone(commandWords(input.whole)))
+  return [...read, ...rough].some((step) => stepDestroys(step.argv, step.cwds, input, alone))
+}
+
+/**
+ * 1.2.6 P-02: what the gate sees missing is still missing when the copy runs only when nothing else in the call can make it:
+ * exactly one `cp`/`mv`, and beside it at most a plain `mkdir` (which makes folders, never a file). A `git checkout`, an
+ * install, a second copy or a link before it could put a file where the gate saw none, so such a call keeps the 1.2.5 answer.
+ */
+function copyAlone(steps: readonly (readonly string[])[]) {
+  const copies = steps.filter((argv) => argv[0] === "cp" || argv[0] === "mv")
+  const rest = steps.filter((argv) => argv[0] !== "cp" && argv[0] !== "mv")
+  return copies.length === 1 && rest.every((argv) => argv[0] === "mkdir" && argv.slice(1).every((word) => !word.startsWith("-") || MAKES.mkdir.test(word)))
+}
+
+/**
+ * 1.2.6 P-02 (E-45): `DeletionWords.deletesOrReplacesWide` for one step, except a plain `cp`/`mv`, alone in its call
+ * (`copyAlone`), that `copiesToNewName` shows replaces nothing.
+ */
+function stepDestroys(argv: readonly string[], cwds: readonly string[], input: Input, alone: boolean) {
+  return !(alone && copiesToNewName(argv, cwds, input)) && DeletionWords.deletesOrReplacesWide(argv, commandWords)
+}
+
+/**
+ * 1.2.6 P-02 (01b section 3.2): a plain `cp`/`mv` (`Risk.copyMove`, literal words) whose every target, worked out by the
+ * program's rules from each folder it may run in, is an ordinary place in the project that `Risk.replacing` finds missing
+ * (or `-n`). A copy's sources are readable and no secret; a move's are ordinary places in the project, since a move takes
+ * them away (01b 3.2 rule 3). Targets that cannot be worked out, a word the shell would still expand, a move to the null
+ * device or a folder nobody knows: false, so the caller keeps the 1.2.5 answer.
+ */
+function copiesToNewName(argv: readonly string[], cwds: readonly string[], input: Input) {
+  if ((argv[0] !== "cp" && argv[0] !== "mv") || cwds.length === 0 || DeletionWords.deletes(argv)) return false
+  const words = argv.map(literalWord)
+  if (words.some((word) => word === undefined)) return false
+  const item = Risk.copyMove(words as string[])
+  if (!item) return false
+  const instance = input.instance
+  // Without Git the worktree is `/`, and every name would be judged from the top of the disk.
+  const base = instance.worktree === "/" ? { ...instance, worktree: instance.directory } : instance
+  const roots = [input.cwd, instance.directory, instance.worktree].map((root) => Reach.real(root))
+  const place = (file: string) =>
+    Reach.inside(file, instance) && !Reach.sensitive(file, base) && !Reach.secret(file) && !roots.includes(Reach.real(file))
+  return cwds.every((cwd) => {
+    if (!path.isAbsolute(cwd)) return false
+    const sources = item.sources.map((word) => path.resolve(cwd, word))
+    const from = (file: string) => (item.name === "mv" ? place(file) : Reach.readable(file) && !Reach.secret(file))
+    if (!sources.every(from)) return false
+    const targets = Risk.copyTargets(item, cwd)
+    if (!targets || !targets.every(place)) return false
+    return Risk.replacing(item, cwd)?.length === 0
+  })
+}
+
+/** A word as the program gets it, when no quote, variable, glob or escape is left for the shell to work out; else undefined. */
+function literalWord(word: string) {
+  if (/^'[^']*'$/.test(word)) return word.slice(1, -1)
+  if (/^"[^"$`\\]*"$/.test(word)) return word.slice(1, -1)
+  if (/['"$`\\*?[\]{}]/.test(word) || word.startsWith("~")) return undefined
+  return word
 }
 
 /**
@@ -2568,6 +2640,8 @@ function consentRedirect(input: Input): "irreversible" | "admin_rights" | "delet
   if (flags.includes("sudo")) return "admin_rights"
   if (flags.includes("delete")) return "delete_compound"
   const deep = BypassScreen.deepSteps(input)
+  // 1.2.6 P-02: a copy inside a shell text runs as a new name only when it is alone there (`copyAlone`).
+  const textAlone = copyAlone(deep.steps.filter((step) => step.from === "text").map((step) => step.argv))
   let archive = false
   for (const step of deep.steps) {
     const program = BypassScreen.unwrap(step.argv)
@@ -2576,7 +2650,7 @@ function consentRedirect(input: Input): "irreversible" | "admin_rights" | "delet
       const x = BypassScreen.stepX(step, input)
       if (x === "irreversible" || x === "admin_rights") return x
       if (x === "delete_compound") archive = true
-      if (step.from === "text" && DeletionWords.deletesOrReplacesWide(step.argv, commandWords)) archive = true
+      if (step.from === "text" && stepDestroys(step.argv, step.cwds, input, textAlone)) archive = true
       if (step.from === "script" && scriptDeletes(step.argv) && !deletesOutputOnly(step, input)) archive = true
     }
     if (discardsWork(step, input)) archive = true
