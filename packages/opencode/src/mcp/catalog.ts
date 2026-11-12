@@ -76,6 +76,99 @@ function abortable<T>(work: Promise<T>, signal: AbortSignal | undefined): Promis
   })
 }
 
+/** N-041 (M-03, U5): the most bytes of structuredContent gate fields appended as text when `content` is present. */
+export const STRUCTURED_CONTENT_TEXT_MAX_BYTES = 16384
+
+// Gate fields: identity, status/verification, digests, counts, check codes and file names. Everything else
+// (prose, labels, page detail, payloads) stays in structuredContent only.
+const GATE_KEY =
+  /^(id|outputId|documentId|fileId|jobId|code|format|role|scope|status|state|overall|verified|valid|partial|truncated|revisionNo|sha|sha256|fileName|finalFileName|savedTo|path|correlationIds?)$|Status$|Sha256$|Count$|Verified$|^fail/
+// A value under a path the server lists in `untrustedFields` is shown only when it is a plain token (no prose).
+const SAFE_TOKEN = /^[\w.\-:/@+=#]{1,200}$/
+const UNTRUSTED_OMITTED = "(untrusted, omitted)"
+const MAX_STRING = 256
+const MAX_DEPTH = 12
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+}
+
+function projectGate(value: unknown, key: string, path: string, untrusted: string[], depth: number): unknown {
+  if (depth > MAX_DEPTH) return undefined
+  if (Array.isArray(value)) {
+    const items = value.map((v) => projectGate(v, key, `${path}[]`, untrusted, depth + 1)).filter((v) => v !== undefined)
+    return items.length > 0 ? items : undefined
+  }
+  if (isRecord(value)) {
+    const entries = Object.entries(value).flatMap(([k, v]) => {
+      if (k === "untrustedFields") return []
+      const projected = projectGate(v, k, path ? `${path}.${k}` : k, untrusted, depth + 1)
+      return projected === undefined ? [] : [[k, projected] as const]
+    })
+    return entries.length > 0 ? Object.fromEntries(entries) : undefined
+  }
+  if (!GATE_KEY.test(key)) return undefined
+  if (typeof value !== "string") return typeof value === "function" || value === undefined ? undefined : value
+  if (untrusted.some((u) => path === u || path.startsWith(`${u}.`) || path.startsWith(`${u}[`)))
+    return SAFE_TOKEN.test(value) ? value : UNTRUSTED_OMITTED
+  return value.length > MAX_STRING ? `${value.slice(0, MAX_STRING)}…` : value
+}
+
+/** FAIL tallies: per failed check (`id`/`code` of an object with status FAIL) and per finding code inside it. */
+function failTally(root: unknown) {
+  const perCheck = new Map<string, number>()
+  const perFinding = new Map<string, number>()
+  let notListed = 0
+  const bump = (map: Map<string, number>, k: unknown) => {
+    if (typeof k === "string" && SAFE_TOKEN.test(k)) map.set(k, (map.get(k) ?? 0) + 1)
+  }
+  const walk = (value: unknown, depth: number): void => {
+    if (depth > MAX_DEPTH) return
+    if (Array.isArray(value)) return value.forEach((v) => walk(v, depth + 1))
+    if (!isRecord(value)) return
+    if (value.status === "FAIL") {
+      bump(perCheck, value.id ?? value.code)
+      if (Array.isArray(value.findings)) for (const f of value.findings) if (isRecord(f)) bump(perFinding, f.code)
+      if (typeof value.truncated === "number" && value.truncated > 0) notListed += value.truncated
+    }
+    for (const v of Object.values(value)) walk(v, depth + 1)
+  }
+  walk(root, 0)
+  const list = (map: Map<string, number>) => [...map].map(([k, n]) => `${k}=${n}`).join(", ")
+  return [
+    ...(perCheck.size > 0 ? [`FAIL per check: ${list(perCheck)}`] : []),
+    ...(perFinding.size > 0 || notListed > 0
+      ? [`FAIL findings per code: ${list(perFinding)}${notListed > 0 ? ` (+${notListed} not listed)` : ""}`]
+      : []),
+  ]
+}
+
+/**
+ * M-03 (1.2.6 row 74, U5): a compact text projection of the gate fields in `structuredContent` (status and
+ * verification per output, full sha256, FAIL counts per code, file list), at most STRUCTURED_CONTENT_TEXT_MAX_BYTES.
+ * Undefined when the structured content carries no gate field.
+ */
+export function structuredGateText(structuredContent: unknown): string | undefined {
+  if (!isRecord(structuredContent)) return undefined
+  const untrusted = Array.isArray(structuredContent.untrustedFields)
+    ? structuredContent.untrustedFields.filter((u): u is string => typeof u === "string")
+    : []
+  const projection = projectGate(structuredContent, "", "", untrusted, 0)
+  const tally = failTally(structuredContent)
+  if (projection === undefined && tally.length === 0) return undefined
+  const text = [
+    "structuredContent gate fields (compact; full data stays in structuredContent):",
+    ...tally,
+    ...(projection === undefined ? [] : [JSON.stringify(projection)]),
+  ].join("\n")
+  const encoded = new TextEncoder().encode(text)
+  if (encoded.length <= STRUCTURED_CONTENT_TEXT_MAX_BYTES) return text
+  const budget = STRUCTURED_CONTENT_TEXT_MAX_BYTES - 96 // room for the marker
+  const head = new TextDecoder().decode(encoded.slice(0, budget)).replace(/�+$/, "")
+  const shown = new TextEncoder().encode(head).length
+  return `${head}\n… (truncated: ${shown} of ${encoded.length} bytes shown; full data in structuredContent)`
+}
+
 export function convertTool(
   mcpTool: MCPToolDef,
   client: Client,
@@ -122,8 +215,12 @@ export function convertTool(
             .filter((text) => text.trim())
             .join("\n\n") || "MCP tool returned an error",
         )
-      if (result.content.length > 0 || result.structuredContent === undefined || result.structuredContent === null)
-        return result
+      if (result.structuredContent === undefined || result.structuredContent === null) return result
+      if (result.content.length > 0) {
+        // M-03 (1.2.6 row 74): the text alone hides gate fields carried only in structuredContent.
+        const gate = structuredGateText(result.structuredContent)
+        return gate === undefined ? result : { ...result, content: [...result.content, { type: "text" as const, text: gate }] }
+      }
       return {
         ...result,
         content: [{ type: "text" as const, text: JSON.stringify(result.structuredContent) }],
