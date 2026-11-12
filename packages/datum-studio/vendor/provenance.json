@@ -2157,10 +2157,11 @@
   },
   {
    "path": "src/lib/studio/engine/diagram/build/autofit.ts",
-   "status": "copied",
-   "bytes": 6590,
+   "status": "patched",
+   "bytes": 7231,
    "source_sha256": "e8181cb03a8dc05e23bf097df9514065fcbde0e2811b597e47dc1745352f3b9b",
-   "sha256": "e8181cb03a8dc05e23bf097df9514065fcbde0e2811b597e47dc1745352f3b9b"
+   "sha256": "9a4d68c40cd094725704ebdae85089dfefcde8f5df7a8f210051e86e4d62c51b",
+   "patch_row25": {"id": "row25-t03-geom-checks", "row": "25", "decision": "1.2.6 patch T-03 (U3, U5, D2; register N-001..N-010, N-166)", "summary": "CHECK/WHAT/SUGGEST gain GEOM_ENTRY_COLLISION, GEOM_STUB_SEGMENT, GEOM_ARROW_TANGENT. Copied -> patched", "diff_base": "sha256 before this row", "before_sha256": "e8181cb03a8dc05e23bf097df9514065fcbde0e2811b597e47dc1745352f3b9b", "after_sha256": "9a4d68c40cd094725704ebdae85089dfefcde8f5df7a8f210051e86e4d62c51b", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/25_row25_diffs/src_lib_studio_engine_diagram_build_autofit.ts.diff", "diff_sha256": "7704acd5172dd7e6e668312a5e0ae64463811ff5e5ba62ab43651cde1d0a66fe"}
   },
   {
    "path": "src/lib/studio/engine/diagram/build/capacity.ts",
@@ -2455,9 +2456,10 @@
   {
    "path": "src/lib/studio/engine/diagram/elk/index.ts",
    "status": "added",
-   "bytes": 7695,
+   "bytes": 7901,
    "source_sha256": null,
-   "sha256": "e37b131787e30da3a22bb252f43023727e0155f830511a5814e179d8ac82551a",
+   "sha256": "d5a2e0c455399d49b7bdd23583b4d14509215c7acd4ec792054f274ebc27f368",
+   "patch_row25": {"id": "row25-t03-geom-checks", "row": "25", "decision": "1.2.6 patch T-03 (U3, U5, D2; register N-001..N-010, N-166)", "summary": "ROUTE_DEFECT_KINDS gains edgeEntryCollision, stubSegment, arrowTangent (N-166) so ELK may cure them", "diff_base": "sha256 before this row", "before_sha256": "e37b131787e30da3a22bb252f43023727e0155f830511a5814e179d8ac82551a", "after_sha256": "d5a2e0c455399d49b7bdd23583b4d14509215c7acd4ec792054f274ebc27f368", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/25_row25_diffs/src_lib_studio_engine_diagram_elk_index.ts.diff", "diff_sha256": "62da4573d9afda4d968b8a4814946e9e8ae639fd91916f444bc1506ba4056bce"},
    "patch_row165P": {"id": "row165P-manual-furniture", "row": "165P", "decision": "C205 CP-28/48", "summary": "layouts compared on the raw sheet (buildDiagramSvgRaw); the pick gets withCaptionAbove", "before_sha256": "18c9a304afb34032f32225b99b3c0a9a72672bf9415461192499328c9f92d65b", "after_sha256": "e37b131787e30da3a22bb252f43023727e0155f830511a5814e179d8ac82551a", "diff": "implementation/146_row165P_diffs/engine_diagram_elk_index.ts.diff"},
    "added_by": "162",
    "note": "NEW Swarm file of row 162: selection rule R1-R4 and async buildDiagramSvgAuto (original first; ELK only on route defects or DATUM-32, kept only when better). Copy: implementation/114_row162_diffs/engine__diagram__elk__index.ts.new"
@@ -2497,9 +2499,10 @@
   {
    "path": "src/lib/studio/engine/diagram/fit/lint.ts",
    "status": "patched",
-   "bytes": 18858,
+   "bytes": 31362,
    "source_sha256": "2b169e21faaa4064307ab8fdcec45c0b7a0d4f9d2982ebc56094d3a704ebc3d8",
-   "sha256": "6b9d83313a49012bf14e0a3490fbf0a04ff76e737aeee7a1d180a65da6027472",
+   "sha256": "ebb8e0e8bccbff54276cef7f7fa52b41cf023882ff95c7ab04c82f555cbbbd75",
+   "patch_row25": {"id": "row25-t03-geom-checks", "row": "25", "decision": "1.2.6 patch T-03 (U3, U5, D2; register N-001..N-010, N-166)", "summary": "NEW kinds edgeEntryCollision, stubSegment, arrowTangent with ENTRY_COLLISION_MM 1.5, STUB_SEGMENT_MIN_MM 2.0, ARROW_TANGENT_TOL_DEG 15; scan records link order and label knockout bands; the three kinds are in counts/defects but not in score (auto-fit path of existing figures unchanged)", "diff_base": "sha256 before this row", "before_sha256": "6b9d83313a49012bf14e0a3490fbf0a04ff76e737aeee7a1d180a65da6027472", "after_sha256": "ebb8e0e8bccbff54276cef7f7fa52b41cf023882ff95c7ab04c82f555cbbbd75", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/25_row25_diffs/src_lib_studio_engine_diagram_fit_lint.ts.diff", "diff_sha256": "132d1c590767a1e7c4f34dfac935148643faea379a3ac1c40b6398574696c721"},
    "patch_row150c": {
     "id": "row150c-lint-symbol-cell-text",
     "row": "150c",

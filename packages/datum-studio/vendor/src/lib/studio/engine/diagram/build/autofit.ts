@@ -23,6 +23,9 @@ const CHECK: Record<DiagramDefectKind, string> = {
   edgeCross: "GEOM_EDGE_CROSS",
   edgeCollinear: "GEOM_EDGE_COLLINEAR",
   edgeThroughNode: "GEOM_EDGE_NODE",
+  edgeEntryCollision: "GEOM_ENTRY_COLLISION",
+  stubSegment: "GEOM_STUB_SEGMENT",
+  arrowTangent: "GEOM_ARROW_TANGENT",
 };
 
 const WHAT: Record<DiagramDefectKind, string> = {
@@ -34,6 +37,9 @@ const WHAT: Record<DiagramDefectKind, string> = {
   edgeCross: "persilangan konektor",
   edgeCollinear: "segmen konektor berimpit",
   edgeThroughNode: "konektor menembus simpul",
+  edgeEntryCollision: "ujung konektor bertemu di satu titik sisi simpul",
+  stubSegment: "potongan konektor pendek yang tidak menuju apa pun",
+  arrowTangent: "kepala panah sejajar sisi simpul, bukan tegak lurus",
 };
 
 const SUGGEST: Record<DiagramDefectKind, string> = {
@@ -45,6 +51,9 @@ const SUGGEST: Record<DiagramDefectKind, string> = {
   edgeCross: "ubah urutan simpul dalam tingkat/kolom agar konektor tidak bersilang, atau pecah menjadi 2 diagram",
   edgeCollinear: "kurangi konektor yang berbagi jalur atau pecah menjadi 2 diagram (maks ~12 simpul per tingkat 166 mm)",
   edgeThroughNode: "ubah urutan simpul agar konektor tidak melewati simpul lain",
+  edgeEntryCollision: "kurangi konektor yang masuk ke sisi simpul yang sama atau pecah menjadi 2 diagram",
+  stubSegment: "pindahkan label tepi ke segmen terpanjang atau persingkat label tepi (maks ~20 karakter)",
+  arrowTangent: "ubah urutan simpul agar konektor masuk tegak lurus ke sisi simpul sasaran",
 };
 
 /** Isu REPORT per jenis cacat tersisa, dengan contoh teks dan `suggest`. */

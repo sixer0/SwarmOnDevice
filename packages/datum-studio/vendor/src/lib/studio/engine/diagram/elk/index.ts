@@ -31,8 +31,19 @@ export { ELK_FAMILIES, ELK_TIME_BUDGET_MS, ElkUnavailable, elkLayoutPlan, elkPla
 export { activeElkRoutes, elkRoutesOnSheet } from "./routes";
 export { elkPlanFor, elkPlanKey, withElkPlan, type ElkPlan, type ElkRoute } from "./plan";
 
-/** Geometry-lint defect kinds that are routing defects (R2). */
-export const ROUTE_DEFECT_KINDS = ["edgeCross", "edgeThroughNode", "edgeCollinear", "lineThroughText"] as const;
+/**
+ * Geometry-lint defect kinds that are routing defects (R2). Swarm 1.2.6 T-03 (register N-166): the
+ * connector-end kinds join, so ELK may cure figures the FIGURE_FIT gate now fails for them.
+ */
+export const ROUTE_DEFECT_KINDS = [
+  "edgeCross",
+  "edgeThroughNode",
+  "edgeCollinear",
+  "lineThroughText",
+  "edgeEntryCollision",
+  "stubSegment",
+  "arrowTangent",
+] as const;
 
 export function routeDefects(g: DiagramGeomLint): number {
   return ROUTE_DEFECT_KINDS.reduce((sum, k) => sum + (g.counts[k] ?? 0), 0);

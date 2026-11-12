@@ -40,6 +40,7 @@ import {
   unescXml as unesc,
 } from "../../chart/core/svgscan";
 import { FONT_ASCENT_EM, FONT_DESCENT_EM, measure } from "../../chart/core/textfit";
+import { LATTICE_X } from "../core/tokens";
 
 export type { Box } from "../../chart/core/svgscan";
 
@@ -51,7 +52,10 @@ export type DiagramDefectKind =
   | "textExceedsNode"
   | "edgeCross"
   | "edgeCollinear"
-  | "edgeThroughNode";
+  | "edgeThroughNode"
+  | "edgeEntryCollision"
+  | "stubSegment"
+  | "arrowTangent";
 
 export const DIAGRAM_DEFECT_KINDS: readonly DiagramDefectKind[] = [
   "textOverlap",
@@ -62,7 +66,25 @@ export const DIAGRAM_DEFECT_KINDS: readonly DiagramDefectKind[] = [
   "edgeCross",
   "edgeCollinear",
   "edgeThroughNode",
+  "edgeEntryCollision",
+  "stubSegment",
+  "arrowTangent",
 ];
+
+/**
+ * Swarm 1.2.6 T-03 (register N-008..N-010). Thresholds of the three connector-end checks:
+ * - `ENTRY_COLLISION_MM`: two connector ends on the same node border closer than this (one of them an
+ *   entry, i.e. a polyline end) read as one point (`edgeEntryCollision`);
+ * - `STUB_SEGMENT_MIN_MM`: a visible straight connector piece shorter than this that is not anchored at
+ *   both ends (source border and arrowhead) reads as a stub leading nowhere (`stubSegment`);
+ * - `ARROW_TANGENT_TOL_DEG`: an arrowhead whose last piece is within this angle of the border it lands on
+ *   runs along the border instead of into it (`arrowTangent`).
+ */
+export const ENTRY_COLLISION_MM = 1.5;
+/** T-03 kinds: counted and failed by the gate, not part of `score` (see `DiagramGeomLint.score`). */
+const T03_KINDS: ReadonlySet<DiagramDefectKind> = new Set(["edgeEntryCollision", "stubSegment", "arrowTangent"]);
+export const STUB_SEGMENT_MIN_MM = 2.0;
+export const ARROW_TANGENT_TOL_DEG = 15;
 
 export interface DiagramGeomDefect {
   kind: DiagramDefectKind;
@@ -77,7 +99,11 @@ export interface DiagramGeomLint {
   heightMm: number;
   counts: Record<DiagramDefectKind, number>;
   defects: DiagramGeomDefect[];
-  /** Jumlah semua cacat (0 = bersih). */
+  /**
+   * Jumlah cacat tata letak (0 = bersih) yang dibandingkan auto-fit. T-03 (Swarm 1.2.6): the
+   * connector-end kinds (`T03_KINDS`) are in `counts` and `defects` (the FIGURE_FIT gate fails them)
+   * but not in `score`, so figures the engine builds today keep their auto-fit path byte for byte (U3).
+   */
   score: number;
 }
 
@@ -159,6 +185,10 @@ interface Scan {
   nodes: NodeShape[];
   links: Pt[][];
   linkHalf: number[];
+  /** T-03: document order of each link (a knockout band drawn later hides it). */
+  linkOrder: number[];
+  /** T-03: label knockout bands (paper rect right before a `<text>`) with their document order. */
+  bands: { box: Box; order: number }[];
 }
 
 function scan(svg: string): Scan {
@@ -170,6 +200,9 @@ function scan(svg: string): Scan {
   const nodes: NodeShape[] = [];
   const links: Pt[][] = [];
   const linkHalf: number[] = [];
+  const linkOrder: number[] = [];
+  const bands: { box: Box; order: number }[] = [];
+  let pendingBand: { box: Box; order: number } | null = null;
   let inDefs = 0;
   // Row 150c (C144 A): one frame per open <g> inside a `data-symbol` group. A group whose transform is
   // only translate(...) (symbol-sheet cell, symbols/index.ts, sheet-fit.ts) prints at 1:1, so its text
@@ -182,6 +215,8 @@ function scan(svg: string): Scan {
     if (k[1] !== undefined) {
       const knock = prevKnock;
       prevKnock = false;
+      if (knock && pendingBand && !inDefs && !symStack.length) bands.push(pendingBand);
+      pendingBand = null;
       if (inDefs) continue;
       const sym = symStack.length ? symStack[symStack.length - 1] : null;
       if (sym && !sym.read) continue; // row 124: text of a scaled node symbol badge is symbol geometry
@@ -269,6 +304,9 @@ function scan(svg: string): Scan {
       a.fill !== undefined &&
       a.fill !== "none" &&
       !(Number(a.x ?? 0) === 0 && Number(a.y ?? 0) === 0 && Math.abs(Number(a.width ?? 0) - W) < 1e-6);
+    pendingBand = prevKnock
+      ? { box: [Number(a.x ?? 0), Number(a.y ?? 0), Number(a.x ?? 0) + Number(a.width ?? 0), Number(a.y ?? 0) + Number(a.height ?? 0)], order: k.index }
+      : null;
     const mark = a["data-mark"];
     const nodeId = a["data-node"];
     if (mark === "link" && tag === "path") {
@@ -276,6 +314,7 @@ function scan(svg: string): Scan {
       if (pl.length && pl[0].length >= 2) {
         links.push(pl[0].map((p) => [p[0], p[1]] as Pt));
         linkHalf.push((Number(a["stroke-width"] ?? 0) || 0) / 2);
+        linkOrder.push(k.index);
       }
       continue;
     }
@@ -307,7 +346,7 @@ function scan(svg: string): Scan {
     if (!Number.isFinite(box[0])) continue;
     nodes.push({ id: nodeId ?? null, outline, circle, half, box });
   }
-  return { W, H, texts, nodes, links, linkHalf };
+  return { W, H, texts, nodes, links, linkHalf, linkOrder, bands };
 }
 
 function segX(a: Pt, b: Pt, c: Pt, d: Pt): Pt | null {
@@ -352,6 +391,234 @@ export function edgeConflicts(polys: ReadonlyArray<ReadonlyArray<Pt>>): { cross:
   return { cross, collinear };
 }
 
+// ── T-03 (Swarm 1.2.6): connector ends ─────────────────────────────────────
+
+/** Bend angle below which two consecutive polyline steps count as one straight piece (sampled curves). */
+const STRAIGHT_TURN_DEG = 20;
+/** A visible piece shorter than this is a sliver under a band edge, not a mark the reader sees. */
+const SLIVER_MM = 0.25;
+/** A connector end farther than this (plus half the node stroke) from every node outline is not on a border. */
+const ON_BORDER_MM = 0.6;
+
+/** Polyline without repeated points and with nearly straight steps merged (bends only). */
+function straightPieces(pl: readonly Pt[]): Pt[] {
+  const pts: Pt[] = [];
+  for (const p of pl) {
+    const q = pts[pts.length - 1];
+    if (!q || Math.hypot(p[0] - q[0], p[1] - q[1]) > 1e-6) pts.push(p);
+  }
+  if (pts.length < 3) return pts;
+  const out: Pt[] = [pts[0]];
+  for (let i = 1; i + 1 < pts.length; i++) {
+    const a = out[out.length - 1];
+    const b = pts[i];
+    const c = pts[i + 1];
+    const turn = Math.abs(angleDeg(b[0] - a[0], b[1] - a[1], c[0] - b[0], c[1] - b[1]));
+    if (turn >= STRAIGHT_TURN_DEG) out.push(b);
+  }
+  out.push(pts[pts.length - 1]);
+  return out;
+}
+
+/** Unsigned angle between two direction vectors, 0..180 degrees. */
+function angleDeg(ax: number, ay: number, bx: number, by: number): number {
+  const la = Math.hypot(ax, ay);
+  const lb = Math.hypot(bx, by);
+  if (la < 1e-9 || lb < 1e-9) return 0;
+  const c = Math.max(-1, Math.min(1, (ax * bx + ay * by) / (la * lb)));
+  return (Math.acos(c) * 180) / Math.PI;
+}
+
+/** Parameter interval [t0, t1] of segment a-b inside box b (Liang-Barsky), or null. */
+function clipT(a: Pt, b: Pt, box: Box): [number, number] | null {
+  let t0 = 0;
+  let t1 = 1;
+  const dx = b[0] - a[0];
+  const dy = b[1] - a[1];
+  const ps = [-dx, dx, -dy, dy];
+  const qs = [a[0] - box[0], box[2] - a[0], a[1] - box[1], box[3] - a[1]];
+  for (let i = 0; i < 4; i++) {
+    if (Math.abs(ps[i]) < 1e-12) {
+      if (qs[i] < 0) return null;
+      continue;
+    }
+    const r = qs[i] / ps[i];
+    if (ps[i] < 0) t0 = Math.max(t0, r);
+    else t1 = Math.min(t1, r);
+    if (t0 > t1) return null;
+  }
+  return t1 - t0 > 1e-9 ? [t0, t1] : null;
+}
+
+/** Visible sub-intervals of [0, 1] after removing the covered intervals. */
+function visibleT(covered: [number, number][]): [number, number][] {
+  const c = [...covered].sort((p, q) => p[0] - q[0]);
+  const out: [number, number][] = [];
+  let at = 0;
+  for (const [s, e] of c) {
+    if (s > at) out.push([at, s]);
+    at = Math.max(at, e);
+  }
+  if (at < 1) out.push([at, 1]);
+  return out;
+}
+
+/** Distance from p to the nearest outline of node n (circle: to its rim). */
+function borderDist(p: Pt, n: NodeShape): number {
+  if (n.circle) return Math.abs(Math.hypot(p[0] - n.circle.cx, p[1] - n.circle.cy) - n.circle.r);
+  let d = Infinity;
+  for (const pl of n.outline) for (let k = 0; k + 1 < pl.length; k++) d = Math.min(d, segDist(p, pl[k], pl[k + 1]));
+  return d;
+}
+
+/** Node whose border carries p (nearest within tolerance), or -1. */
+function borderNodeOf(p: Pt, nodes: readonly NodeShape[]): number {
+  let best = -1;
+  let bd = Infinity;
+  nodes.forEach((n, i) => {
+    if (p[0] < n.box[0] - 2 || p[0] > n.box[2] + 2 || p[1] < n.box[1] - 2 || p[1] > n.box[3] + 2) return;
+    const d = borderDist(p, n);
+    if (d <= n.half + ON_BORDER_MM && d < bd) {
+      bd = d;
+      best = i;
+    }
+  });
+  return best;
+}
+
+/**
+ * T-03 `edgeEntryCollision`: two connector ends on the border of the same node closer than
+ * `ENTRY_COLLISION_MM`, at least one of them an entry (polyline end). Two exits sharing one port
+ * (a fan-out) are not counted.
+ */
+function entryCollisions(links: ReadonlyArray<ReadonlyArray<Pt>>, nodes: readonly NodeShape[]): Array<{ a: number; b: number; node: number; gap: number }> {
+  const ends: { p: Pt; link: number; entry: boolean; node: number }[] = [];
+  links.forEach((pl, i) => {
+    if (pl.length < 2) return;
+    for (const [p, entry] of [[pl[pl.length - 1], true], [pl[0], false]] as const) {
+      const node = borderNodeOf(p, nodes);
+      if (node >= 0) ends.push({ p, link: i, entry, node });
+    }
+  });
+  const out: Array<{ a: number; b: number; node: number; gap: number }> = [];
+  for (let i = 0; i < ends.length; i++) {
+    for (let j = i + 1; j < ends.length; j++) {
+      const A = ends[i];
+      const B = ends[j];
+      if (A.link === B.link || A.node !== B.node || !(A.entry || B.entry)) continue;
+      const gap = Math.hypot(A.p[0] - B.p[0], A.p[1] - B.p[1]);
+      if (gap < ENTRY_COLLISION_MM) out.push({ a: A.link, b: B.link, node: A.node, gap });
+    }
+  }
+  return out;
+}
+
+/**
+ * T-03 `stubSegment`: short connector pieces that lead nowhere. The connector is cut into visible
+ * straight pieces (bends of the polyline and label knockout bands drawn over it end a piece). A piece
+ * is a stub when it is shorter than `STUB_SEGMENT_MIN_MM` and
+ *  (a) it is a jog: a polyline step between two bends;
+ *  (b) it floats: both of its ends are under label bands;
+ *  (c) it is a tick: one end on the source border or the arrowhead, the other under a band, and it is
+ *      shorter than half the threshold;
+ *  (d) it is detached: it leaves the source border into a band and the connector comes out of the band
+ *      turned or displaced sideways by more than half a lattice column (`LATTICE_X` / 2), so the reader cannot
+ *      join the two. A label sitting on a straight or half-column jog (the accepted rev 210 figure,
+ *      fixture t03_n1) is not a stub.
+ * Calibration (row 25): F1 fixtures t03_k1..k7 each give at least one stub; t03_n1/n2 give none.
+ */
+function stubSegments(
+  links: ReadonlyArray<ReadonlyArray<Pt>>,
+  bandsOver: ReadonlyArray<ReadonlyArray<Box>>,
+): Array<{ link: number; length: number }> {
+  type End = "src" | "head" | "bend" | "cut";
+  interface Piece { a: Pt; b: Pt; st: End; en: End; jog: boolean; len: number }
+  const out: Array<{ link: number; length: number }> = [];
+  links.forEach((raw, li) => {
+    const pl = straightPieces(raw);
+    const pieces: Piece[] = [];
+    for (let s = 0; s + 1 < pl.length; s++) {
+      const a = pl[s];
+      const b = pl[s + 1];
+      const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      if (len < 1e-9) continue;
+      const covered: [number, number][] = [];
+      for (const box of bandsOver[li] ?? []) {
+        const t = clipT(a, b, box);
+        if (t) covered.push(t);
+      }
+      const jog = s > 0 && s + 2 < pl.length;
+      for (const [t0, t1] of visibleT(covered)) {
+        const at = (t: number): Pt => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+        pieces.push({
+          a: at(t0),
+          b: at(t1),
+          st: t0 < 1e-9 ? (s === 0 ? "src" : "bend") : "cut",
+          en: t1 > 1 - 1e-9 ? (s + 2 === pl.length ? "head" : "bend") : "cut",
+          jog: jog && t0 < 1e-9 && t1 > 1 - 1e-9,
+          len: (t1 - t0) * len,
+        });
+      }
+    }
+    pieces.forEach((p, k) => {
+      if (p.len < SLIVER_MM || p.len >= STUB_SEGMENT_MIN_MM) return;
+      const anchored = (e: End) => e === "src" || e === "head";
+      let stub = p.jog || (p.st === "cut" && p.en === "cut");
+      if (!stub && ((anchored(p.st) && p.en === "cut") || (p.st === "cut" && anchored(p.en)))) stub = p.len < STUB_SEGMENT_MIN_MM / 2;
+      if (!stub && p.st === "src" && p.en === "cut" && k + 1 < pieces.length) {
+        const n = pieces[k + 1];
+        const ux = (p.b[0] - p.a[0]) / p.len;
+        const uy = (p.b[1] - p.a[1]) / p.len;
+        const turned = angleDeg(ux, uy, n.b[0] - n.a[0], n.b[1] - n.a[1]) >= STRAIGHT_TURN_DEG;
+        const side = Math.abs(ux * (n.a[1] - p.b[1]) - uy * (n.a[0] - p.b[0]));
+        stub = turned || side > LATTICE_X / 2 + 0.1;
+      }
+      if (stub) out.push({ link: li, length: p.len });
+    });
+  });
+  return out;
+}
+
+/**
+ * T-03 `arrowTangent`: a connector whose last straight piece lands on a node border within
+ * `ARROW_TANGENT_TOL_DEG` of that border's direction (it runs along the border, or into a corner
+ * along the next side, instead of meeting the border head-on).
+ */
+function arrowTangents(links: ReadonlyArray<ReadonlyArray<Pt>>, nodes: readonly NodeShape[]): Array<{ link: number; node: number; deg: number }> {
+  const out: Array<{ link: number; node: number; deg: number }> = [];
+  links.forEach((raw, li) => {
+    const pl = straightPieces(raw);
+    if (pl.length < 2) return;
+    const e = pl[pl.length - 1];
+    const p = pl[pl.length - 2];
+    const dx = e[0] - p[0];
+    const dy = e[1] - p[1];
+    const ni = borderNodeOf(e, nodes);
+    if (ni < 0) return;
+    const n = nodes[ni];
+    const tol = n.half + ON_BORDER_MM;
+    let worst = Infinity;
+    if (n.circle) {
+      // tangent of a circle at e is normal to the radius
+      worst = 90 - angleDeg(dx, dy, e[0] - n.circle.cx, e[1] - n.circle.cy);
+      worst = Math.abs(worst);
+    } else {
+      for (const ol of n.outline) {
+        for (let k = 0; k + 1 < ol.length; k++) {
+          if (segDist(e, ol[k], ol[k + 1]) > tol) continue;
+          const sx = ol[k + 1][0] - ol[k][0];
+          const sy = ol[k + 1][1] - ol[k][1];
+          if (Math.hypot(sx, sy) < 1e-9) continue;
+          const d = angleDeg(dx, dy, sx, sy);
+          worst = Math.min(worst, Math.min(d, 180 - d));
+        }
+      }
+    }
+    if (worst <= ARROW_TANGENT_TOL_DEG) out.push({ link: li, node: ni, deg: worst });
+  });
+  return out;
+}
+
 function emptyCounts(): Record<DiagramDefectKind, number> {
   return {
     textOverlap: 0,
@@ -362,12 +629,15 @@ function emptyCounts(): Record<DiagramDefectKind, number> {
     edgeCross: 0,
     edgeCollinear: 0,
     edgeThroughNode: 0,
+    edgeEntryCollision: 0,
+    stubSegment: 0,
+    arrowTangent: 0,
   };
 }
 
 /** Lint geometri SVG diagram (tanpa browser). `score` = jumlah semua cacat. */
 export function lintDiagramGeometry(svg: string): DiagramGeomLint {
-  const { W, H, texts, nodes, links, linkHalf } = scan(svg);
+  const { W, H, texts, nodes, links, linkHalf, linkOrder, bands } = scan(svg);
   const defects: DiagramGeomDefect[] = [];
   // teks-teks
   for (let i = 0; i < texts.length; i++) {
@@ -448,7 +718,19 @@ export function lintDiagramGeometry(svg: string): DiagramGeomLint {
       if (hit) defects.push({ kind: "edgeThroughNode", text: `konektor ${i}`, other: r.id ?? "" });
     }
   });
+  // T-03 (Swarm 1.2.6): connector ends
+  const nodeName = (i: number) => nodes[i]?.id ?? `simpul ${i}`;
+  for (const c of entryCollisions(links, nodes)) {
+    defects.push({ kind: "edgeEntryCollision", text: `konektor ${c.a}`, other: `konektor ${c.b} @ ${nodeName(c.node)}`, amount: Number(c.gap.toFixed(2)) });
+  }
+  const bandsOver = links.map((_, i) => bands.filter((b) => b.order > linkOrder[i]).map((b) => b.box));
+  for (const s of stubSegments(links, bandsOver)) {
+    defects.push({ kind: "stubSegment", text: `konektor ${s.link}`, amount: Number(s.length.toFixed(2)) });
+  }
+  for (const t of arrowTangents(links, nodes)) {
+    defects.push({ kind: "arrowTangent", text: `konektor ${t.link}`, other: nodeName(t.node), amount: Number(t.deg.toFixed(1)) });
+  }
   const counts = emptyCounts();
   for (const d of defects) counts[d.kind]++;
-  return { widthMm: W, heightMm: H, counts, defects, score: defects.length };
+  return { widthMm: W, heightMm: H, counts, defects, score: defects.filter((d) => !T03_KINDS.has(d.kind)).length };
 }
