@@ -74,15 +74,16 @@
   "row72": "2026-11-12: 1.2.6 row 72 (T-18/W-10, U5; register N-113, N-114, N-115). 7 vendor files (files[].patch_row72, before = previous sha256): params/figure.ts (copied -> patched, 36089 -> 36997); params/index.ts (re-patched, 2823 -> 2913); registry/lint.ts (re-patched, 22315 -> 22696); registry/slots.ts (copied -> patched, 14214 -> 14403); registry/essentials.ts (re-patched, 20208 -> 20355); engine/lint/structure/checks-d.ts (copied -> patched, 42932 -> 44798); components/studio/template-editor/param-categories.ts (copied -> patched, 18761 -> 18908). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/72_row72_diffs/. counts by delta: copied 426 -> 422, patched 140 -> 144, files/replaced/added unchanged; bytes 9861623 + 3728 = 9865351. patch_rows += 72",
   "row60": "2026-11-12: 1.2.6 row 60 (T-04, U3; register E-11 LABEL_LEADER, no new name). 1 vendor file patched (files[].patch_row60, before = previous sha256): engine/diagram/fit/labels.ts (copied -> patched, 12694 -> 14653: onPath falls back to NEW scanPath, a 0.5 mm slide along each segment longest first, only when every fixed spot t = 1/2, 1/4, 3/4 collides; leader/number only when no collision-free on-path spot exists). Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/60_row60_diffs/. counts by delta: copied 422 -> 421, patched 144 -> 145, files/replaced/added unchanged; bytes 9865351 + 1959 = 9867310. patch_rows += 60",
   "row49": "2026-11-12: 1.2.6 row 49 (T-14, U5, C2; register N-033..N-035, E-16). 2 vendor files (files[].patch_row49, before = previous sha256): scripts/studio/mcp/doc-tools.ts (re-patched: studio_document_status `findings` paging with chapter filter, findingsPage, LINT_FINDINGS_PAGE_MAX 500) and engine/lint/structure/context.ts (copied -> patched: summary row past the 100 cap carries findingsAll with chapter keys). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/49_row49_diffs/. counts by delta: copied 421 -> 420, patched 145 -> 146, files/replaced/added unchanged; bytes 9867310 + 6119 = 9873429. patch_rows += 49",
-  "row65": "2026-11-12: 1.2.6 row 65 (T-09, U14 reverses D-322; register N-025..N-029). 2 vendor files patched (files[].patch_row65, before = previous sha256; status copied -> patched): engine/chart/core/datum.ts (honest DC bar geometry for every n, BAR_MIN_BODY_MM is a threshold, REPORT BAR_SUBMIN below it; BAR_MAX_THICK_MM and BAR_MIN_HEIGHT retired; BarRows.scaled always false) and engine/chart/core/index.ts (BAR_MAX_THICK_MM export removed). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/65_row65_diffs. counts by delta: copied 420 -> 418, patched 146 -> 148; bytes 9873429 -814 = 9872615. patch_rows += 65"
+  "row65": "2026-11-12: 1.2.6 row 65 (T-09, U14 reverses D-322; register N-025..N-029). 2 vendor files patched (files[].patch_row65, before = previous sha256; status copied -> patched): engine/chart/core/datum.ts (honest DC bar geometry for every n, BAR_MIN_BODY_MM is a threshold, REPORT BAR_SUBMIN below it; BAR_MAX_THICK_MM and BAR_MIN_HEIGHT retired; BarRows.scaled always false) and engine/chart/core/index.ts (BAR_MAX_THICK_MM export removed). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/65_row65_diffs. counts by delta: copied 420 -> 418, patched 146 -> 148; bytes 9873429 -814 = 9872615. patch_rows += 65",
+  "row68": "2026-11-12: 1.2.6 row 68 (T-15, U3; register N-036 FIGURE_PREPARE_FAILED, E-15 FIGURE_PLACEHOLDER reused, no new verification code). 4 vendor files (files[].patch_row68, before = previous sha256): engine/docx/figures/store.ts (copied -> patched: a failing figure becomes a FIGURE_PREPARE_FAILED marker entry, assembly continues), engine/docx/figures/log.ts (copied -> patched: marker constant, type, reader), engine/docx/figures/figure.ts (re-patched: marked placeholder paragraph instead of a picture), services/render/figures.ts (re-patched: failureFor + rasterize wrapper, job stays PARTIAL). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/68_row68_diffs/. counts by delta: copied 418 -> 416, patched 148 -> 150, files/replaced/added unchanged; bytes 9872615 + 7156 = 9879771. patch_rows += 68"
  },
  "counts": {
   "files": 608,
-  "copied": 418,
-  "patched": 148,
+  "copied": 416,
+  "patched": 150,
   "replaced": 12,
   "added": 30,
-  "bytes": 9872615
+  "bytes": 9879771
  },
  "files": [
   {
@@ -2943,9 +2944,9 @@
   {
    "path": "src/lib/studio/engine/docx/figures/figure.ts",
    "status": "patched",
-   "bytes": 23348,
+   "bytes": 26143,
    "source_sha256": "162caf854d5a50a9f77894f5bea5ff34d5c52e17f7c0383d7892779326add516",
-   "sha256": "1e0c7670b3343386e4408078f305d31e6a0f93ac41d778984b3da08a486016b7",
+   "sha256": "da0677486707ba614d95aebaad7555f4f89adf2ffb09b642e27efff5c675c973",
    "patch": {
     "id": "row122-cp28-figure-caption-label",
     "row": 122,
@@ -2955,7 +2956,8 @@
     "after_sha256": "1e0c7670b3343386e4408078f305d31e6a0f93ac41d778984b3da08a486016b7",
     "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/51_row122_diffs/engine_docx_figures_figure.ts.diff",
     "diff_sha256": "ac69953d86cfafe83439f9bf09a720165ce40f585f46efe477bc39f7f88f03c9"
-   }
+   },
+   "patch_row68": {"id": "row68-t15-partial-docx", "row": "68", "decision": "1.2.6 patch T-15 (U3; register N-036 FIGURE_PREPARE_FAILED, E-15 FIGURE_PLACEHOLDER reused; row143a CHAR unchanged)", "summary": "renderFigure: a block whose first FigureStore entry carries the FIGURE_PREPARE_FAILED marker renders caption, a visible placeholder paragraph (dashed #B45309 border = the DOCX draft placeholder frame, italic text `FIGURE_PREPARE_FAILED: <label> gagal disiapkan (<cause>); grafik tidak dicetak` / EN equivalent), key row and source line, no media; a warn log names the figure. apparatusAdjust takes widths only. Missing-from-store without a marker still fails BY_CONSTRUCTION_FAILED as before", "before_sha256": "1e0c7670b3343386e4408078f305d31e6a0f93ac41d778984b3da08a486016b7", "after_sha256": "da0677486707ba614d95aebaad7555f4f89adf2ffb09b642e27efff5c675c973", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/68_row68_diffs/src_lib_studio_engine_docx_figures_figure.ts.diff", "diff_sha256": "6b47d6729f50cc63f60201ed41fff887b5191d8970d41254f1f6a88f238a32f6"}
   },
   {
    "path": "src/lib/studio/engine/docx/figures/index.ts",
@@ -2966,10 +2968,11 @@
   },
   {
    "path": "src/lib/studio/engine/docx/figures/log.ts",
-   "status": "copied",
-   "bytes": 1228,
+   "status": "patched",
+   "bytes": 2448,
    "source_sha256": "5847601d4fe10b74851583974467e926802dbd63b930267b3b708b4392bdb13f",
-   "sha256": "5847601d4fe10b74851583974467e926802dbd63b930267b3b708b4392bdb13f"
+   "sha256": "eac31b629a67ce3136bce51169b17108e9df1df23503e85ba4c3c82a2d4f4416",
+   "patch_row68": {"id": "row68-t15-partial-docx", "row": "68", "decision": "1.2.6 patch T-15 (U3; register N-036 FIGURE_PREPARE_FAILED, E-15 FIGURE_PLACEHOLDER reused; row143a CHAR unchanged)", "summary": "NEW FIGURE_PREPARE_FAILED constant, FigurePrepareFailure type and figurePrepareFailureOf(entry) structural reader (here so figure.ts and store.ts share it without an import cycle)", "before_sha256": "5847601d4fe10b74851583974467e926802dbd63b930267b3b708b4392bdb13f", "after_sha256": "eac31b629a67ce3136bce51169b17108e9df1df23503e85ba4c3c82a2d4f4416", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/68_row68_diffs/src_lib_studio_engine_docx_figures_log.ts.diff", "diff_sha256": "1c422c955053b39f2694cdadc81397e0666762da128e84bca9d4740c451f6d9a"}
   },
   {
    "path": "src/lib/studio/engine/docx/figures/media.ts",
@@ -2987,10 +2990,11 @@
   },
   {
    "path": "src/lib/studio/engine/docx/figures/store.ts",
-   "status": "copied",
-   "bytes": 4608,
+   "status": "patched",
+   "bytes": 6287,
    "source_sha256": "e49c175293178c18cf695f174edba21e2c5d6a142a27d6f3a8e8fd33ad6650fc",
-   "sha256": "e49c175293178c18cf695f174edba21e2c5d6a142a27d6f3a8e8fd33ad6650fc"
+   "sha256": "c7fc8778fb423545dd9dfa63c7dcd14f6cd2bd351fdf775b533b82926bf8a98c",
+   "patch_row68": {"id": "row68-t15-partial-docx", "row": "68", "decision": "1.2.6 patch T-15 (U3; register N-036 FIGURE_PREPARE_FAILED, E-15 FIGURE_PLACEHOLDER reused; row143a CHAR unchanged)", "summary": "prepareFigureStore no longer rethrows a per-figure failure: an svgFor or rasterize error (or a failure the caller reports through NEW option failureFor when svgFor returns undefined) stores a FIGURE_PREPARE_FAILED marker entry (no svg/png, `failed: {code, message, causeCode}`), logs it at error level with that code, and drops partial sheets of that figure; other figures stay intact. RENDER_TIMEOUT still rethrows. Re-exports FIGURE_PREPARE_FAILED, FigurePrepareFailure, figurePrepareFailureOf from ./log", "before_sha256": "e49c175293178c18cf695f174edba21e2c5d6a142a27d6f3a8e8fd33ad6650fc", "after_sha256": "c7fc8778fb423545dd9dfa63c7dcd14f6cd2bd351fdf775b533b82926bf8a98c", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/68_row68_diffs/src_lib_studio_engine_docx_figures_store.ts.diff", "diff_sha256": "9e2970492fcbdfd9e09ac3f03ce6394c578408780f044151e0c5bddd96b9dde7"}
   },
   {
    "path": "src/lib/studio/engine/docx/fonts/catalog.ts",
@@ -5075,9 +5079,9 @@
   {
    "path": "src/lib/studio/services/render/figures.ts",
    "status": "patched",
-   "bytes": 12164,
+   "bytes": 13626,
    "source_sha256": "58003ca9140dc752efaf2a6ef824763f8129763c966f4639008a22928218fc7c",
-   "sha256": "2907a709f92b103d7c0224817b33cf3b0e52a24c0705e06cabb48cb47d001b79",
+   "sha256": "8bb8ba33659217274b96fcc05c6692d2ea548b2708c3768af819c56c9ebffde9",
    "patch_row163b": {"id": "row163b-render-figures-vega", "row": "163b", "decision": "C155 (Vega chart family on the agent render path)", "summary": "chart branch of buildFigures: a spec whose kind vegaCodeOf maps (V-01..V-08, DF-01/02/03/07/09/13) goes through assertFigureCapacity then `await renderVegaFigure(...)` (vega-figure.ts); other charts unchanged. Applied on top of row162b", "diff_base": "patch_row162b.after_sha256", "before_sha256": "54159a43f080a4ee3210863f3cba23e54439e85e8d9b98c7cc027ba050db99db", "after_sha256": "2907a709f92b103d7c0224817b33cf3b0e52a24c0705e06cabb48cb47d001b79", "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/122_row163b_diffs/services_render_figures.ts.diff", "diff_sha256": "c5d26babac5fcd427e501a5e9c59c206c6e72ec52ed50d5dfe63916e8b6ee490"},
    "patch_row162b": {
     "id": "row162b-render-figures-elk-auto",
@@ -5110,7 +5114,8 @@
     "after_sha256": "40e7bfa5c6e6a26053581dc755d11e7507d3f2615a78d01e59425541ff7ff1d9",
     "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/37_row109_diffs/render_figures.ts.diff",
     "diff_sha256": "d5382a57541129cd35607d95c8a76f6362d79cf77a884600d37bc4c64fddf663"
-   }
+   },
+   "patch_row68": {"id": "row68-t15-partial-docx", "row": "68", "decision": "1.2.6 patch T-15 (U3; register N-036 FIGURE_PREPARE_FAILED, E-15 FIGURE_PLACEHOLDER reused; row143a CHAR unchanged)", "summary": "buildFigures: a figure whose SVG fails stays a job error (PARTIAL) and is now also reported to prepareFigureStore through failureFor (marker instead of a skipped key); NEW rasterize wrapper records a raster failure as a job error and rethrows it to the store (marker). svgFor contract unchanged (still returns undefined on failure)", "before_sha256": "2907a709f92b103d7c0224817b33cf3b0e52a24c0705e06cabb48cb47d001b79", "after_sha256": "8bb8ba33659217274b96fcc05c6692d2ea548b2708c3768af819c56c9ebffde9", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/68_row68_diffs/src_lib_studio_services_render_figures.ts.diff", "diff_sha256": "c24b01fa951164d5f29cdbdf49b646d59bcc6c8edc57e6800c7a333c0c53d7dd"}
   },
   {
    "path": "src/lib/studio/services/render/final-name.ts",
@@ -6087,6 +6092,7 @@
   "72",
   "60",
   "49",
-  "65"
+  "65",
+  "68"
  ]
 }

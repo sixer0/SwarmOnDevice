@@ -17,6 +17,7 @@
  * Media dideduplikasi menurut sha256 dengan nama part deterministik.
  */
 import type {
+  BorderSpec,
   Caption,
   ChartBlock,
   DiagramBlock,
@@ -49,7 +50,7 @@ import {
 } from "./defaults";
 import { type FigureAltInput, figureAltText, stripSourceLabel } from "../../front/alt-text";
 import { apparatusLabelRunText, artifactLabelText, provenanceMarkLabelText, type WrapperLang, wrapperLangOf } from "../../front/texts";
-import { failRender, warnRender } from "./log";
+import { FIGURE_PREPARE_FAILED, type FigurePrepareFailure, failRender, figurePrepareFailureOf, warnRender } from "./log";
 import { type FigureImage, type FigureMediaEntry, addMedia, figureImageFromBytes, figureMediaRelId, resolveRasterAsset } from "./media";
 import { DOCPR_ID_BASE, drawingParagraphXml, inlineRunsXml, paragraphXml, textRun } from "./ooxml";
 import { RASTER_DPI_FLOOR, classDerivedWidth, rasterPlacedWidthMm } from "../../tokens/raster-width";
@@ -336,6 +337,40 @@ function sheetsFromStore(block: NormBlock, fb: FigureBlock, ctx: RenderContext):
   return [];
 }
 
+/**
+ * Swarm 1.2.6 (row 68, T-15, register N-036): penanda FIGURE_PREPARE_FAILED dari `prepareFigureStore` untuk blok ini
+ * (kunci pertama yang ada di FigureStore menang, sama dengan `sheetsFromStore`). undefined = tidak ada penanda.
+ */
+function prepareFailureOf(block: NormBlock, ctx: RenderContext): FigurePrepareFailure | undefined {
+  for (const key of figureStoreKeys(block, ctx.snapshot.numbering)) {
+    const e = ctx.figures.get(key);
+    if (e) return figurePrepareFailureOf(e);
+  }
+  return undefined;
+}
+
+/** Bingkai placeholder: sama dengan penanda draf DOCX (`blocks/source-register.ts`, 0.5pt dashed #B45309). */
+const PREPARE_FAILED_SIDE: BorderSpec = { val: "dashed", sz: 4, color: "B45309", space: 4 };
+
+/**
+ * T-15: paragraf placeholder yang terlihat untuk figur yang gagal disiapkan, di tempat gambar. Teksnya memuat penanda
+ * `FIGURE_PREPARE_FAILED` dan label figur; bingkai putus-putus #B45309 membuat pemindai placeholder verifikasi DOCX
+ * (PLACEHOLDER_IN_OUTPUT) menolak keluaran ini sehingga tidak pernah hijau.
+ */
+function prepareFailedParagraphXml(block: NormBlock, fb: FigureBlock, ctx: RenderContext, label: string, format: ParaFormat | undefined, failure: FigurePrepareFailure): string {
+  const lang = langOf(ctx);
+  const name = artifactLabelText(label, lang) || `${fb.type} ${block.blockId}`;
+  const cause = failure.causeCode ? ` (${failure.causeCode})` : "";
+  const text =
+    lang === "ID"
+      ? `${FIGURE_PREPARE_FAILED}: ${name} gagal disiapkan${cause}; grafik tidak dicetak`
+      : `${FIGURE_PREPARE_FAILED}: ${name} could not be prepared${cause}; the graphic is not printed`;
+  const side = PREPARE_FAILED_SIDE;
+  const para: ParaFormat = { ...(format ?? {}), borders: { top: side, left: side, bottom: side, right: side } };
+  warnRender(ctx, FIGURE_PREPARE_FAILED, `figur ${name} dicetak sebagai placeholder: ${failure.message}`, block.address ?? undefined);
+  return paragraphXml(para, textRun(text, mergeRun(figureRole(ctx.tpl, "caption").run, { i: true, color: "B45309" }), ctx.tpl.params));
+}
+
 function figureSheets(block: NormBlock, fb: FigureBlock, ctx: RenderContext): Sheet[] {
   const fromStore = sheetsFromStore(block, fb, ctx);
   if (fromStore.length > 0) return fromStore;
@@ -429,7 +464,7 @@ function figureAltInput(fb: FigureBlock, ctx: RenderContext, label: string): Fig
  * figur bentang penuh tidak diubah; C19 (R-74) jarak dikunci ke garis dasar, leading caption/KUNCI/SUMBER tetap
  * (GF-21 (a), `snapApparatusPara`).
  */
-function apparatusAdjust(block: NormBlock, ctx: RenderContext, sheets: readonly Sheet[]): ParaAdjust | undefined {
+function apparatusAdjust(block: NormBlock, ctx: RenderContext, sheets: ReadonlyArray<Pick<Sheet, "widthMm">>): ParaAdjust | undefined {
   const p = ctx.tpl.params;
   const kind = ctx.snapshot.units.find((u) => u.key === block.unitKey)?.kind;
   const widthTw = Math.max(0, ...sheets.map((s) => mmToTw(s.widthMm)));
@@ -442,8 +477,19 @@ function renderFigure(type: FigureBlockType): DocxBlockRenderer {
     const role = figureRole(ctx.tpl, "figure.paragraph");
     const label = captionLabel(block, fb.caption, ctx);
     const media: FigureMediaEntry[] = [];
-    const sheets = figureSheets(block, fb, ctx);
     const paraFormat = mergePara(role.para, fb.format, fb.paragraphFormat);
+    // T-15 (row 68): figur yang gagal disiapkan -> caption, placeholder berpenanda, KUNCI, SUMBER; tanpa media.
+    const failure = prepareFailureOf(block, ctx);
+    if (failure) {
+      const adjust = apparatusAdjust(block, ctx, [{ widthMm: fb.widthMm }]);
+      const xml =
+        captionXml(block, fb.caption, ctx, fb.runDefaults, adjust) +
+        prepareFailedParagraphXml(block, fb, ctx, label, paraFormat, failure) +
+        keyRowXml(fb.keyRow, ctx, fb.runDefaults, adjust) +
+        sourceLineXml(fb.source, ctx, block.address ?? undefined, fb.runDefaults, adjust);
+      return { xml, media, facesUsed: facesInXml(xml) };
+    }
+    const sheets = figureSheets(block, fb, ctx);
     const altBase = figureAltInput(fb, ctx, label);
     const rhythmBase = baselineSnapTw((k) => ctx.tpl.params[k]);
 

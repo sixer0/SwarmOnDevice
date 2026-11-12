@@ -25,6 +25,7 @@ import type { ChartLang } from "../../engine/chart/core/lang";
 import { APPARATUS_TEXT, keyLineText, wrapperLangOf, type WrapperLang } from "../../engine/front/texts";
 import { type DiagramBuildOptions } from "../../engine/diagram/build";
 import { buildDiagramSvgAuto } from "../../engine/diagram/elk";
+import { rasterizeSvg } from "../../engine/browser";
 import { prepareFigureStore, type FigureSvgSheet, type PreparedFigureStore } from "../../engine/docx/figures";
 import { symbolSheetSvg, type SymbolSheetOptions } from "../../engine/symbols";
 import { db } from "./db";
@@ -186,7 +187,10 @@ export function diagramApparatusOptions(lang: WrapperLang): Pick<DiagramBuildOpt
 /**
  * Bangun FigureStore untuk satu revisi. Galat per figur dicatat sebagai galat
  * job (figur dilewati; renderer DOCX/HTML melaporkan figur yang hilang).
- * Galat rasterisasi (browser) dilempar ke pemanggil.
+ * Swarm 1.2.6 (row 68, T-15): galat SVG dan rasterisasi satu figur dicatat sebagai galat job (job PARTIAL), dan
+ * `prepareFigureStore` menyimpan penanda FIGURE_PREPARE_FAILED untuk figur itu (`failureFor`, atau galat raster yang
+ * dilempar ulang): DOCX mencetak placeholder berpenanda, HTML placeholder, verifikasi UNVERIFIED. RENDER_TIMEOUT
+ * tetap menghentikan job.
  */
 export async function buildFigures(i: {
   snapshot: NormDocSnapshot;
@@ -199,6 +203,7 @@ export async function buildFigures(i: {
   const extra: LintIssue[] = [];
   const releaseTier = i.tier === "TERBIT" || i.tier === "SERAH";
 
+  const failures = new Map<string, { message: string; causeCode?: string }>();
   const svgFor = async (block: NormBlock): Promise<FigureSvgSheet | readonly FigureSvgSheet[] | undefined> => {
     i.job.checkAborted("figures");
     const c = isRecord(block.content) ? block.content : {};
@@ -247,12 +252,29 @@ export async function buildFigures(i: {
       const code = err instanceof StudioEngineError ? err.code : "RENDER_FAILED";
       const label = block.artifactLabel ?? i.snapshot.numbering[block.blockId] ?? block.blockId;
       i.job.addError(code, `figure ${label}${address ? ` (${address})` : ""} failed: ${err instanceof Error ? err.message : String(err)}`, undefined, err);
+      // Swarm 1.2.6 (row 68, T-15): remembered so `prepareFigureStore` records the FIGURE_PREPARE_FAILED marker
+      // (`failureFor`) and the DOCX prints a marked placeholder for this figure instead of aborting; the job stays
+      // PARTIAL through the error above.
+      failures.set(block.blockId, { message: `figure ${label} failed: ${err instanceof Error ? err.message : String(err)}`, causeCode: code });
       return undefined;
+    }
+  };
+
+  // T-15 (row 68): a raster failure of one figure is recorded as a job error (PARTIAL) and rethrown to the store.
+  const rasterize: NonNullable<Parameters<typeof prepareFigureStore>[1]["rasterize"]> = async (svg, o) => {
+    try {
+      return await rasterizeSvg(svg, o);
+    } catch (err) {
+      const code = err instanceof StudioEngineError ? err.code : "RENDER_FAILED";
+      i.job.addError(code, `figure raster failed: ${err instanceof Error ? err.message : String(err)}`, undefined, err);
+      throw err;
     }
   };
 
   const store = await prepareFigureStore(i.snapshot, {
     svgFor,
+    failureFor: (block) => failures.get(block.blockId),
+    rasterize,
     tpl: i.tpl,
     log: i.job.log.renderLog,
     fixedDate: i.snapshot.doc.meta.issueDate,
