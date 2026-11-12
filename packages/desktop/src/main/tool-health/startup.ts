@@ -18,6 +18,7 @@ import { spawn as nodeSpawn } from "node:child_process"
 import { statSync } from "node:fs"
 import { isAbsolute } from "node:path"
 import { readSetupComponentStates } from "../setup-runner"
+import { changedWatchedFiles, watchedFileChangedMessage } from "./flux"
 import { runProbe, type ProbeResult } from "./probe"
 import { takeRecheckRequest, watchRecheck, type RecheckWatcher, type WatchFn } from "./recheck"
 import {
@@ -226,6 +227,15 @@ export function createToolHealth(deps: ToolHealthDeps): ToolHealth {
       log(run.code === 0 ? "info" : "warn", `${c.label}: revive ${which} finished`, { id: c.id, exitCode: run.code, error: run.error, stdout, stderr })
       return run
     }
+    // SEC-18 (row 94): a watched file whose hash changed since the entry was written gives one warning; the revive
+    // still runs (U21: warn, never block).
+    const changed = changedWatchedFiles(c.watch)
+    if (changed.length)
+      log("warn", watchedFileChangedMessage(c.label, changed), {
+        id: c.id,
+        reason: "WATCHED_FILE_CHANGED",
+        files: changed.map((x) => ({ path: x.path, expected: x.expected, actual: x.actual })),
+      })
     let run = await attempt(argv, "argv")
     if (run.code !== 0 && fallbackArgv) run = await attempt(fallbackArgv, "fallbackArgv")
     if (run.code === 0) return { ok: true, detail: "revive command ok" }
