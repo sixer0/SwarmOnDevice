@@ -32,7 +32,9 @@ export const CAPTION_TOKEN_KEYWORD = "figureCaptionToken";
 export const CAPTION_TOKEN_DUPLICATE = "CAPTION_TOKEN_DUPLICATE";
 // 1.2.6 row 27b (C12): pemisah kata kunci-nomor nol atau lebih spasi ("Gambar1.1" juga ditolak); "Gambaran ..." lolos
 // karena sesudah kata kunci (dan spasi opsional) wajib ada angka.
-export const CAPTION_TOKEN_RE = /^\s*(gambar|figure|fig\.|grafik|bagan|diagram)\s*[A-Z]?\d+(?:[.\-]\d+)*\b/i;
+// 1.2.6 FX-7 (C19d): nomor figur 1-3 digit (opsional .n / -n berulang); tahun 4 digit ("Grafik 2024 ...", "Diagram 2025
+// rencana") bukan token. `\b` sesudah nomor menolak digit ke-4 (tanpa backtrack ke 1-3 digit pertama).
+export const CAPTION_TOKEN_RE = /^\s*(gambar|figure|fig\.|grafik|bagan|diagram)\s*[A-Z]?\d{1,3}(?:[.\-]\d+)*\b/i;
 const CAPTION_TOKEN_BLOCKS: ReadonlySet<unknown> = new Set(["diagram", "chart", "image", "symbolSheet"]);
 
 /** Pesan penolakan: menyebut token yang ditemukan, aturannya, dan batas panjang caption (N-014). */

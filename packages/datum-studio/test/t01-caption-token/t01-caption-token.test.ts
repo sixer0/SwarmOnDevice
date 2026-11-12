@@ -19,7 +19,7 @@ const TEMPLATES = path.join(PKG, "templates")
 const FIX = path.join(PKG, "test", "fixtures", "anon126")
 const CHECK = "CAPTION_TOKEN_DUPLICATE"
 // Register N-013, restated (see the header): used only to build the token-free control caption.
-const TOKEN_RE = /^\s*(gambar|figure|fig\.|grafik|bagan|diagram)\s*[A-Z]?\d+(?:[.\-]\d+)*\b/i
+const TOKEN_RE = /^\s*(gambar|figure|fig\.|grafik|bagan|diagram)\s*[A-Z]?\d{1,3}(?:[.\-]\d+)*\b/i
 
 const NASKAH: Array<[string, NaskahBlock]> = [1, 2, 3, 4, 5, 6].map((i) => [`t01_k${i}`, JSON.parse(readFileSync(path.join(FIX, `t01_k${i}.json`), "utf8"))])
 const stripped = (c: string) => c.replace(TOKEN_RE, "").trim()
@@ -80,6 +80,22 @@ describe("T-01 row 27b: token without a space (C12)", () => {
   test("words that only start with a keyword are accepted", () => {
     for (const text of ["Gambaran umum sistem.", "Gambaran umum 1.1 sistem.", "Diagramnya memuat 3 lapis.", "Figurehead 2 tim."]) {
       expect(tokenIssues(validateBlockV2(img(text), "/block") as Issue[])).toEqual([])
+    }
+  })
+})
+
+// FX-7 (C19d, M1 S9): the figure number is 1-3 digits (optionally .n / -n); a 4-digit year after the keyword is
+// content, not a label token.
+describe("T-01 FX-7: year after the keyword is not a token (C19d)", () => {
+  const img = (text: string) => ({ type: "image", asset: "foto-1", caption: { text }, source: { text: "Uji." } })
+  test("captions that start with keyword + 4-digit year are accepted", () => {
+    for (const text of ["Grafik 2024 realisasi anggaran.", "Diagram 2025 rencana pengadaan.", "Gambar 2023-2024 tren.", "Figure 1999 baseline."]) {
+      expect([text, tokenIssues(validateBlockV2(img(text), "/block") as Issue[])]).toEqual([text, []])
+    }
+  })
+  test("1-3 digit figure numbers (with .n / -n) are still refused", () => {
+    for (const text of ["Gambar 1.1 Topologi.", "Gambar1.1 Topologi.", "Figure 12 Arsitektur.", "Grafik 123 Beban.", "Bagan 4-2 Alur."]) {
+      expect([text, tokenIssues(validateBlockV2(img(text), "/block") as Issue[]).length]).toEqual([text, 1])
     }
   })
 })

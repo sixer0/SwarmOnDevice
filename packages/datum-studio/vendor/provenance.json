@@ -94,7 +94,8 @@
   "row78b": "2026-11-12: 1.2.6 row 78b (C16, U24; follow-up of rows 78 and 98). 2 vendor files re-patched (files[].patch_row78b, before = previous sha256; status unchanged): scripts/studio/mcp/doc-tools.ts (status output line shows the stored U24 page verdict, RENDER_VERIFY_PENDING when none), docs/STUDIO-AGENT-GUIDE.md (§8.3 timeout procedure). Source of the verdict: non-vendor src/mcp-host/local-api/routes/r05-document.ts outputs[].renderVerification (output_verification). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/78b_row78b_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9940190 + 1497 + 316 = 9942003. patch_rows += \"78b\".",
   "rowINT1_item5": "2026-11-12: 1.2.6 row INT-1 (INT1_item5). DATUM-25 estimate refusal uses colourCountDetail like build/svg.ts (row 62). 1 vendor file re-patched (files[].patch_rowINT1_item5, before = previous sha256; status unchanged): src/lib/studio/engine/diagram/core/estimate.ts. Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/int1_diffs/src_lib_studio_engine_diagram_core_estimate.ts.diff. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9939912 + 278 = 9940190. patch_rows += \"INT-1\" (once).",
   "rowINT1_item7": "2026-11-12: 1.2.6 row INT-1 (INT1_item7). G-05 remainder added to the dokumen-klien recipe (three short sentences). 1 vendor file re-patched (files[].patch_rowINT1_item7, before = previous sha256; status unchanged): scripts/studio/mcp/resources.ts. Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/int1_diffs/scripts_studio_mcp_resources.ts.diff. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9942003 + 644 = 9942647. patch_rows += \"INT-1\" (once).",
-  "row111a": "2026-11-12: 1.2.6 row 111a (INV-E provenance audit). Every vendor file in git diff --name-only e363918a69..HEAD (70 files + this file) has an entry whose sha256/bytes equal the file at HEAD and a patch record; counts recomputed from files[] (were copied 411, patched 155, bytes 9942647; now copied 410, patched 156, bytes 9955998); duplicate deferred_patches.row66 keys merged; patch_rows += 25, 50b, 62, 77 (1.2.6 vendor rows that were missing). Report: docs/2026-11-12_swarm_1_2_6_patch/implementation/111a_provenance_audit.md"
+  "row111a": "2026-11-12: 1.2.6 row 111a (INV-E provenance audit). Every vendor file in git diff --name-only e363918a69..HEAD (70 files + this file) has an entry whose sha256/bytes equal the file at HEAD and a patch record; counts recomputed from files[] (were copied 411, patched 155, bytes 9942647; now copied 410, patched 156, bytes 9955998); duplicate deferred_patches.row66 keys merged; patch_rows += 25, 50b, 62, 77 (1.2.6 vendor rows that were missing). Report: docs/2026-11-12_swarm_1_2_6_patch/implementation/111a_provenance_audit.md",
+  "rowFX7a": "2026-11-13: 1.2.6 row FX-7 item a (C19d). 1 vendor file re-patched (files[].patch_rowFX7a): contract/schema/v2/figure-text.ts CAPTION_TOKEN_RE figure number 1-3 digits (\\d{1,3}); 4-digit years after the keyword are not a token. Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/fx7_diffs/. counts by delta: bytes 9955998 -> 9956227; status unchanged. patch_rows += FX-7a"
  },
  "counts": {
   "files": 608,
@@ -102,7 +103,7 @@
   "patched": 156,
   "replaced": 12,
   "added": 30,
-  "bytes": 9955998
+  "bytes": 9956227
  },
  "files": [
   {
@@ -1066,11 +1067,12 @@
   {
    "path": "src/lib/studio/contract/schema/v2/figure-text.ts",
    "status": "patched",
-   "bytes": 8058,
+   "bytes": 8287,
    "source_sha256": "7449c8b411cc3888ed7c311626bfed34b5c94bbfbb29603d3679419cf45da2bf",
-   "sha256": "d20c33a1397ef78f89906efb69b408f6e27ab12fd3da4425e601ce309865116d",
+   "sha256": "cbb9c41fb29e24c4ba50e61bfd11e666f6129b53b95daf43bd3b50d574ee3029",
    "patch_row27": {"id": "row27-t01-caption-token", "row": "27", "decision": "1.2.6 patch T-01 (U5; register N-011, N-012, N-013)", "summary": "additive: CAPTION_TOKEN_KEYWORD, CAPTION_TOKEN_DUPLICATE, CAPTION_TOKEN_RE, captionTokenMessage (names the token, the rule and CAPTION_GUIDE_MAX_CHARS 100); figureTextErrorsV2 adds a figureCaptionToken pseudo-error for a diagram/chart/image/symbolSheet block (inline or artifactId) whose plain caption matches CAPTION_TOKEN_RE, so every shared v2 validator (R04, R12/R13, R16) refuses it; render is not gated. Copied -> patched", "before_sha256": "7449c8b411cc3888ed7c311626bfed34b5c94bbfbb29603d3679419cf45da2bf", "after_sha256": "c3fe7b64b7e60e643a3be9137011fd9ac0552656e231ca2ff705803a7bf204bf", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/27_row27_diffs/src_lib_studio_contract_schema_v2_figure-text.ts.diff", "diff_sha256": "4e5b39b61b14fcedbf52dc0e6e1958bdd445ee2b330dd583656d752cb0155058"},
-   "patch_row27b": {"id": "row27b-t01-no-space", "row": "27b", "decision": "1.2.6 patch T-01 follow-up (C12; register N-013 amended to \\s*)", "summary": "CAPTION_TOKEN_RE separator between keyword and number is zero-or-more whitespace (\\s* instead of \\s+): Gambar1.1 / Fig.5 are refused too; a word merely starting with a keyword (Gambaran, Diagramnya) still passes because a digit must follow. Status unchanged", "before_sha256": "c3fe7b64b7e60e643a3be9137011fd9ac0552656e231ca2ff705803a7bf204bf", "after_sha256": "d20c33a1397ef78f89906efb69b408f6e27ab12fd3da4425e601ce309865116d", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/27b_row27b_diffs/src_lib_studio_contract_schema_v2_figure-text.ts.diff", "diff_sha256": "634dac0f980f1d99ac6d194f0fe1c6d081e20a80b1ffad95225be757b3974515"}
+   "patch_row27b": {"id": "row27b-t01-no-space", "row": "27b", "decision": "1.2.6 patch T-01 follow-up (C12; register N-013 amended to \\s*)", "summary": "CAPTION_TOKEN_RE separator between keyword and number is zero-or-more whitespace (\\s* instead of \\s+): Gambar1.1 / Fig.5 are refused too; a word merely starting with a keyword (Gambaran, Diagramnya) still passes because a digit must follow. Status unchanged", "before_sha256": "c3fe7b64b7e60e643a3be9137011fd9ac0552656e231ca2ff705803a7bf204bf", "after_sha256": "d20c33a1397ef78f89906efb69b408f6e27ab12fd3da4425e601ce309865116d", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/27b_row27b_diffs/src_lib_studio_contract_schema_v2_figure-text.ts.diff", "diff_sha256": "634dac0f980f1d99ac6d194f0fe1c6d081e20a80b1ffad95225be757b3974515"},
+   "patch_rowFX7a": {"id": "fx-7a-c19d-caption-year", "row": "FX-7a", "decision": "1.2.6 review wave F, C19d (M1 S9; register N-013 amendment requested)", "summary": "CAPTION_TOKEN_RE number part \\d+ -> \\d{1,3} (optionally .n/-n): 'Grafik 2024 ...', 'Diagram 2025 rencana' accepted; 'Gambar 1.1', 'Gambar1.1', 'Figure 12' still refused. Status unchanged", "before_sha256": "d20c33a1397ef78f89906efb69b408f6e27ab12fd3da4425e601ce309865116d", "after_sha256": "cbb9c41fb29e24c4ba50e61bfd11e666f6129b53b95daf43bd3b50d574ee3029", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/fx7_diffs/FX-7a_src_lib_studio_contract_schema_v2_figure-text.ts.diff", "diff_sha256": "81c391dc946217d2ee98eea627b1cc88fc1b65b219e42d470af458288dd7db3f"}
   },
   {
    "path": "src/lib/studio/contract/schema/v2/forbidden.ts",
@@ -6166,6 +6168,7 @@
   "25",
   "50b",
   "62",
-  "77"
+  "77",
+  "FX-7a"
  ]
 }
