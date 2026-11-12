@@ -271,6 +271,7 @@ export const toolName = (clientName: string, name: string) => sanitize(clientNam
  * SEC-13 (1.2.6 row 56a): whether a server name could compose the built-in DATUM Studio tool keys
  * `datum-studio_<tool>` (which carry the subagent Studio allows, row 56): its sanitised name equals `datum-studio` or
  * starts with `datum-studio_`. Compared case-insensitively, as permission keys match case-insensitively on win32.
+ * The one SEC-13 rule: the subagent binding (agent/subagent-permissions.ts studioToolsBound) uses it too (gate M2 S4).
  */
 export function reservedServerName(name: string): boolean {
   const sanitised = sanitize(name).toLowerCase()
@@ -304,7 +305,11 @@ export function serverRefusal(
   )
 }
 
-function serverIdentity(entry: Readonly<Record<string, unknown>>) {
+/**
+ * SEC-13: the part of a server entry that decides which program answers; `enabled` and `timeout` are left out. Shared
+ * with the subagent binding (agent/subagent-permissions.ts studioToolsBound, gate M2 S4) so both compare the same way.
+ */
+export function serverIdentity(entry: Readonly<Record<string, unknown>>) {
   const { enabled: _enabled, timeout: _timeout, ...rest } = entry
   return rest
 }

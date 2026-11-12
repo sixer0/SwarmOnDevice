@@ -7,6 +7,7 @@ import { PermissionV1 } from "@opencode-ai/core/v1/permission"
 import { Agent, ANSWER_DECISION_TOOL } from "../../src/agent/agent"
 import * as SubagentPermissions from "../../src/agent/subagent-permissions"
 import { DatumStudioMcp } from "../../src/mcp/datum-studio"
+import { McpCatalog } from "../../src/mcp/catalog"
 import { Permission } from "../../src/permission"
 import { disposeAllInstances, tmpdir } from "../fixture/fixture"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
@@ -104,7 +105,7 @@ describe("studioToolsBound", () => {
         {
           "datum-studio": BUILTIN,
           "datum-studio_studio": { type: "local", command: ["x"], enabled: false },
-          "datum_studio": { type: "local", command: ["x"] },
+          datum_studio: { type: "local", command: ["x"] },
           "datum-studios": { type: "local", command: ["x"] },
         },
         BUILTIN,
@@ -163,7 +164,8 @@ const PROBE_KEYS = [...STUDIO_SUBAGENT_TOOLS, ANSWER_DECISION_TOOL, "datum-studi
 function decisionsInApp(base: string, globalConfig?: unknown): { mcp: unknown; decisions: Decisions } {
   const res = resources(base)
   const xdg = path.join(base, "xdg")
-  for (const name of ["home", "config", "data", "state", "cache"]) fs.mkdirSync(path.join(xdg, name), { recursive: true })
+  for (const name of ["home", "config", "data", "state", "cache"])
+    fs.mkdirSync(path.join(xdg, name), { recursive: true })
   const project = path.join(base, "project")
   fs.mkdirSync(project)
   if (globalConfig !== undefined) {
@@ -232,55 +234,66 @@ function decisionsInApp(base: string, globalConfig?: unknown): { mcp: unknown; d
 }
 
 describe("in the app (built-in datum-studio present)", () => {
-  test(
-    "S-02: planner and document-writer call the 13 Studio tools without an ask; answer_decision deny; main agent unchanged",
-    async () => {
-      await using tmp = await tmpdir()
-      const { mcp, decisions } = decisionsInApp(tmp.path)
-      expect((mcp as Record<string, { command?: string[] }>)["datum-studio"]?.command?.[0]).toEndWith(
-        "datum-studio/datum-studio-launcher",
-      )
-      for (const name of SUBAGENTS) {
-        for (const tool of STUDIO_SUBAGENT_TOOLS) expect([name, tool, decisions[name][tool]]).toEqual([name, tool, "allow"])
-        expect(decisions[name][FIGURE_PREVIEW]).toBe("allow")
-        expect(decisions[name][ANSWER_DECISION_TOOL]).toBe("deny")
-        expect(decisions[name]["datum-studio_studio_render"]).toBe("ask")
-      }
-      // main agent: the baseline ask for every Studio key, answer_decision deny (as before row 56)
-      for (const tool of STUDIO_SUBAGENT_TOOLS) expect(decisions.build[tool]).toBe("ask")
-      expect(decisions.build[ANSWER_DECISION_TOOL]).toBe("deny")
-      // a specialist without the list keeps the ask
-      if (decisions["data-collector"]) expect(decisions["data-collector"][FIGURE_PREVIEW]).toBe("ask")
-    },
-    60_000,
-  )
+  test("S-02: planner and document-writer call the 13 Studio tools without an ask; answer_decision deny; main agent unchanged", async () => {
+    await using tmp = await tmpdir()
+    const { mcp, decisions } = decisionsInApp(tmp.path)
+    expect((mcp as Record<string, { command?: string[] }>)["datum-studio"]?.command?.[0]).toEndWith(
+      "datum-studio/datum-studio-launcher",
+    )
+    for (const name of SUBAGENTS) {
+      for (const tool of STUDIO_SUBAGENT_TOOLS)
+        expect([name, tool, decisions[name][tool]]).toEqual([name, tool, "allow"])
+      expect(decisions[name][FIGURE_PREVIEW]).toBe("allow")
+      expect(decisions[name][ANSWER_DECISION_TOOL]).toBe("deny")
+      expect(decisions[name]["datum-studio_studio_render"]).toBe("ask")
+    }
+    // main agent: the baseline ask for every Studio key, answer_decision deny (as before row 56)
+    for (const tool of STUDIO_SUBAGENT_TOOLS) expect(decisions.build[tool]).toBe("ask")
+    expect(decisions.build[ANSWER_DECISION_TOOL]).toBe("deny")
+    // a specialist without the list keeps the ask
+    if (decisions["data-collector"]) expect(decisions["data-collector"][FIGURE_PREVIEW]).toBe("ask")
+  }, 60_000)
 
-  test(
-    "SEC-13: the user's own global datum-studio entry (other command) replaces the built-in and gets ask",
-    async () => {
-      await using tmp = await tmpdir()
-      const { mcp, decisions } = decisionsInApp(tmp.path, {
-        mcp: { "datum-studio": { type: "local", command: ["/opt/user/datum-studio"] } },
-      })
-      expect((mcp as Record<string, { command?: string[] }>)["datum-studio"]?.command).toEqual(["/opt/user/datum-studio"])
-      for (const name of SUBAGENTS) {
-        for (const tool of STUDIO_SUBAGENT_TOOLS) expect([name, tool, decisions[name][tool]]).toEqual([name, tool, "ask"])
-        expect(decisions[name][ANSWER_DECISION_TOOL]).toBe("deny")
-      }
-      for (const tool of STUDIO_SUBAGENT_TOOLS) expect(decisions.build[tool]).toBe("ask")
-    },
-    60_000,
-  )
+  test("SEC-13: the user's own global datum-studio entry (other command) replaces the built-in and gets ask", async () => {
+    await using tmp = await tmpdir()
+    const { mcp, decisions } = decisionsInApp(tmp.path, {
+      mcp: { "datum-studio": { type: "local", command: ["/opt/user/datum-studio"] } },
+    })
+    expect((mcp as Record<string, { command?: string[] }>)["datum-studio"]?.command).toEqual(["/opt/user/datum-studio"])
+    for (const name of SUBAGENTS) {
+      for (const tool of STUDIO_SUBAGENT_TOOLS) expect([name, tool, decisions[name][tool]]).toEqual([name, tool, "ask"])
+      expect(decisions[name][ANSWER_DECISION_TOOL]).toBe("deny")
+    }
+    for (const tool of STUDIO_SUBAGENT_TOOLS) expect(decisions.build[tool]).toBe("ask")
+  }, 60_000)
 
-  test(
-    "SEC-13: a colliding user server (sanitised datum-studio_studio) next to the built-in gets no allow",
-    async () => {
-      await using tmp = await tmpdir()
-      const { decisions } = decisionsInApp(tmp.path, {
-        mcp: { "datum-studio.studio": { type: "local", command: ["/opt/user/look-alike"] } },
-      })
-      for (const name of SUBAGENTS) expect(decisions[name][FIGURE_PREVIEW]).toBe("ask")
-    },
-    60_000,
-  )
+  test("SEC-13: a colliding user server (sanitised datum-studio_studio) next to the built-in gets no allow", async () => {
+    await using tmp = await tmpdir()
+    const { decisions } = decisionsInApp(tmp.path, {
+      mcp: { "datum-studio.studio": { type: "local", command: ["/opt/user/look-alike"] } },
+    })
+    for (const name of SUBAGENTS) expect(decisions[name][FIGURE_PREVIEW]).toBe("ask")
+  }, 60_000)
+})
+
+// Gate M2 S4 (1.2.6 row FX-3): one SEC-13 reserved-name rule. The subagent binding (studioToolsBound) and the load/add
+// refusal (McpCatalog.serverRefusal) use the same case-insensitive sanitised compare, so a case variant of the
+// reserved name is treated the same in both: refused at load AND no Studio allow for subagents.
+describe("SEC-13 one reserved-name rule (case variants)", () => {
+  const variants = ["Datum-Studio_x", "DATUM-STUDIO", "Datum-Studio", "datum-studio_x", "DATUM-Studio.studio"]
+  for (const name of variants) {
+    test(`"${name}" is reserved in catalog and unbinds the subagent allows`, () => {
+      const extra = { type: "local", command: ["/opt/user/look-alike"] }
+      expect(McpCatalog.reservedServerName(name)).toBe(true)
+      expect(McpCatalog.serverRefusal(name, extra, BUILTIN, "load")).toBeString()
+      expect(studioToolsBound({ "datum-studio": BUILTIN, [name]: extra }, BUILTIN)).toBe(false)
+    })
+  }
+  test("names that only look alike are not reserved in either place", () => {
+    const extra = { type: "local", command: ["x"] }
+    for (const name of ["datum-studios", "my-datum-studio", "datum_studio"]) {
+      expect([name, McpCatalog.reservedServerName(name)]).toEqual([name, false])
+      expect([name, studioToolsBound({ "datum-studio": BUILTIN, [name]: extra }, BUILTIN)]).toEqual([name, true])
+    }
+  })
 })

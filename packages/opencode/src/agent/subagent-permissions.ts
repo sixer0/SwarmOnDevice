@@ -2,7 +2,7 @@ import { isDeepStrictEqual } from "node:util"
 import { PermissionV1 } from "@opencode-ai/core/v1/permission"
 import { STUDIO_SUBAGENT_TOOLS } from "@opencode-ai/core/swarm-permission-baseline"
 import { DATUM_STUDIO_MCP } from "@/mcp/datum-studio"
-import { sanitize } from "@/mcp/catalog"
+import { McpCatalog } from "@/mcp/catalog"
 import type { Agent } from "./agent"
 
 /**
@@ -39,7 +39,8 @@ export function deriveSubagentSessionPermission(input: {
  *   server under the same name; no built-in at all (terminal CLI, tests) means nothing can be bound;
  * - no other enabled server may have a sanitised name that equals `datum-studio` or starts with `datum-studio_`,
  *   because `<server>_<tool>` could then compose one of the same keys (e.g. server `datum-studio.studio`, tool
- *   `figure_preview`). Row 56a also refuses those at load.
+ *   `figure_preview`). Row 56a also refuses those at load. Both use McpCatalog.reservedServerName, which compares
+ *   case-insensitively (gate M2 S4), so `Datum-Studio_x` counts here exactly as it does at load.
  *
  * `enabled` and `timeout` do not change which program answers, so they are ignored in the comparison.
  */
@@ -51,14 +52,12 @@ export function studioToolsBound(
   const entries = mcp ?? {}
   const own = entries[DATUM_STUDIO_MCP]
   if (!isRecord(own) || own.enabled === false) return false
-  if (!isDeepStrictEqual(identity(own), identity(builtin))) return false
-  for (const [name, entry] of Object.entries(entries)) {
-    if (name === DATUM_STUDIO_MCP) continue
-    if (isRecord(entry) && entry.enabled === false) continue
-    const sanitised = sanitize(name)
-    if (sanitised === DATUM_STUDIO_MCP || sanitised.startsWith(`${DATUM_STUDIO_MCP}_`)) return false
-  }
-  return true
+  if (!isDeepStrictEqual(McpCatalog.serverIdentity(own), McpCatalog.serverIdentity(builtin))) return false
+  // Gate M2 S4: the same reserved-name rule as the load/add refusal (case-insensitive sanitised compare).
+  return !Object.entries(entries).some(
+    ([name, entry]) =>
+      name !== DATUM_STUDIO_MCP && !(isRecord(entry) && entry.enabled === false) && McpCatalog.reservedServerName(name),
+  )
 }
 
 const STUDIO_TOOL_KEYS: ReadonlySet<string> = new Set(STUDIO_SUBAGENT_TOOLS)
@@ -70,9 +69,4 @@ export function withoutStudioAllows(ruleset: PermissionV1.Ruleset): PermissionV1
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
-}
-
-function identity(entry: Readonly<Record<string, unknown>>) {
-  const { enabled: _enabled, timeout: _timeout, ...rest } = entry
-  return rest
 }
