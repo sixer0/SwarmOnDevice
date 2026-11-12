@@ -1129,7 +1129,8 @@ const statusTool: ToolDef = {
       const page = list.slice(offset, offset + limit);
       const next = offset + page.length < list.length ? offset + page.length : null;
       const cut = lintFindingsTruncation(b.lint, checkId);
-      data.findingsPage = { checkId, chapter, total: list.length, offset, returned: page.length, nextOffset: next, ...(cut ? { truncated: cut } : {}) };
+      data.findingsPage = { checkId, chapter, total: list.length, offset, returned: page.length, nextOffset: next };
+      if (cut) (data.findingsPage as Rec).truncated = cut; // FX-7 (M2 S6): only when the stored list was cut
       data.findings = page;
       text += `\n  temuan ${tok(checkId)}${chapter !== null ? ` bab ${tok(chapter)}` : ""}: ${list.length} total; offset ${offset}; ${page.length} dikembalikan; nextOffset ${next ?? "null"}${cut ? `; cek menemukan ${cut.total}, ${cut.notStored} tidak disimpan (plafon simpan)` : ""}\n`;
       text += untrustedBlock(
