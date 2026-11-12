@@ -765,7 +765,32 @@ function inAppState(file: string, instance: InstanceContext) {
 
 function mentionsAppState(command: string, instance: InstanceContext) {
   const spelled = ownCheckout(instance.worktree, instance) ? command.replaceAll(instance.worktree, "") : command
-  return spelled.includes("trust.json") || appStateRoots().some((root) => spelled.includes(root))
+  if (spelled.includes("trust.json") || appStateRoots().some((root) => spelled.includes(root))) return true
+  // 1.2.6 FX-14 (F-1, F-2): `~/…`, `$HOME/…` and `${HOME}/…` name the same places as the absolute spelling, so they are
+  // judged as it is (C8). Each such word is read as the shell would, under each home a place may be spelled in.
+  return homeSpelled(command).some((file) => inAppStateSpelled(file, instance))
+}
+
+// Breaks a command into words the way a path ends: blanks, redirects, pipes, separators, `=` of an option or assignment.
+const PATH_BREAK = /[\s<>|;&()`=,]+/
+const HOME_WORD = /^(?:~|\$HOME\b|\$\{HOME\})(?=\/|$)/
+
+/** The places a command names with a home spelling (`~`, `$HOME`, `${HOME}`), resolved under every home Swarm knows. */
+function homeSpelled(command: string) {
+  const words = command.replace(/['"]/g, "").split(PATH_BREAK)
+  return words.flatMap((word) => {
+    const match = HOME_WORD.exec(word)
+    if (!match) return []
+    const rest = word.slice(match[0].length)
+    return homes().map((home) => path.resolve(home, `.${rest}`))
+  })
+}
+
+/** `inAppState` for a place spelled by hand: one that cannot be resolved is judged by its spelling. */
+function inAppStateSpelled(file: string, instance: InstanceContext) {
+  const target = Reach.real(file) ?? file
+  if (ownCheckout(target, instance)) return false
+  return appStateRoots().some((root) => within(root, file) || within(root, target))
 }
 
 function editTargets(input: Input) {
