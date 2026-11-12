@@ -101,7 +101,8 @@
   "rowFX7c": "2026-11-13: 1.2.6 row FX-7 item c (M2 S3). 2 vendor files re-patched (files[].patch_rowFX7c): engine/diagram/elk/plan.ts (clampTierXs shared clamp; elkTierXs optional window), engine/diagram/layout-a/flow.ts (underPredecessors uses clampTierXs; ranked TB ELK branch passes the T-02 inset window). Layered/topology callers unchanged (full-width window). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/fx7_diffs/. counts by delta: bytes 9958945 -> 9960240; status unchanged. patch_rows += FX-7c",
   "rowFX7d": "2026-11-13: 1.2.6 row FX-7 item d (M2 S6). 2 vendor files re-patched (files[].patch_rowFX7d): engine/lint/structure/context.ts (findingsAll bounded: LINT_FINDINGS_STORED_MAX 2000 entries, LINT_FINDING_DETAIL_MAX 300 chars, findingsTotal/findingsNotStored marker), scripts/studio/mcp/doc-tools.ts (findingsPage.truncated + text, lintFindingsTruncation; detail lintReport carries findingsAllCount instead of findingsAll). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/fx7_diffs/. counts by delta: bytes 9960240 -> 9962719; status unchanged. patch_rows += FX-7d",
   "rowFX7f": "2026-11-13: 1.2.6 row FX-7 item f (M3 N1). 1 vendor file re-patched (files[].patch_rowFX7f): engine/chart/core/gallery.ts threshold-branch inline 0.4 named THRESHOLD_GUTTER_CAP_FRAC with the reason it differs from LABEL_GUTTER_CAP_FRAC (T-10 scoped to bar); output byte-identical (92 parity renders: only the pre-existing g04 row-63 delta). Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/fx7_diffs/. counts by delta: bytes 9962719 -> 9963136; status unchanged. patch_rows += FX-7f",
-  "rowFX7d2": "2026-11-13: 1.2.6 row FX-7 item d follow-up. scripts/studio/mcp/doc-tools.ts: findingsPage object literal restored to the guide shape { checkId, chapter, total, offset, returned, nextOffset }; truncated is assigned after it, only when the stored list was cut. Behaviour unchanged vs FX-7d. counts by delta: bytes 9963136 -> 9963210; status unchanged. patch_rows += FX-7d2"
+  "rowFX7d2": "2026-11-13: 1.2.6 row FX-7 item d follow-up. scripts/studio/mcp/doc-tools.ts: findingsPage object literal restored to the guide shape { checkId, chapter, total, offset, returned, nextOffset }; truncated is assigned after it, only when the stored list was cut. Behaviour unchanged vs FX-7d. counts by delta: bytes 9963136 -> 9963210; status unchanged. patch_rows += FX-7d2",
+  "rowFX11": "2026-11-13: 1.2.6 fix row FX-11 (C21, finding S-115-1). 1 vendor file re-patched (files[].patch_rowFX11, before = previous sha256; status unchanged): engine/diagram/build/autofit.ts (score-0 early return keeps SVG and decision, and reports the T-03 kinds outside the score as GEOM_* REPORT lines so the figure preview lists what FIGURE_FIT fails). Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/fx11_diffs/. counts by delta: bytes 9963210 -> 9963798; files/copied/patched/replaced/added unchanged. patch_rows += FX-11"
  },
  "counts": {
   "files": 608,
@@ -109,7 +110,7 @@
   "patched": 156,
   "replaced": 12,
   "added": 30,
-  "bytes": 9963210
+  "bytes": 9963798
  },
  "files": [
   {
@@ -2282,10 +2283,11 @@
   {
    "path": "src/lib/studio/engine/diagram/build/autofit.ts",
    "status": "patched",
-   "bytes": 7231,
+   "bytes": 7819,
    "source_sha256": "e8181cb03a8dc05e23bf097df9514065fcbde0e2811b597e47dc1745352f3b9b",
-   "sha256": "9a4d68c40cd094725704ebdae85089dfefcde8f5df7a8f210051e86e4d62c51b",
-   "patch_row25": {"id": "row25-t03-geom-checks", "row": "25", "decision": "1.2.6 patch T-03 (U3, U5, D2; register N-001..N-010, N-166)", "summary": "CHECK/WHAT/SUGGEST gain GEOM_ENTRY_COLLISION, GEOM_STUB_SEGMENT, GEOM_ARROW_TANGENT. Copied -> patched", "diff_base": "sha256 before this row", "before_sha256": "e8181cb03a8dc05e23bf097df9514065fcbde0e2811b597e47dc1745352f3b9b", "after_sha256": "9a4d68c40cd094725704ebdae85089dfefcde8f5df7a8f210051e86e4d62c51b", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/25_row25_diffs/src_lib_studio_engine_diagram_build_autofit.ts.diff", "diff_sha256": "7704acd5172dd7e6e668312a5e0ae64463811ff5e5ba62ab43651cde1d0a66fe"}
+   "sha256": "d687c169b1a8903632ecc60b9445c2b30c07ef41ba77bbeea25aa9c08dbe3e0a",
+   "patch_row25": {"id": "row25-t03-geom-checks", "row": "25", "decision": "1.2.6 patch T-03 (U3, U5, D2; register N-001..N-010, N-166)", "summary": "CHECK/WHAT/SUGGEST gain GEOM_ENTRY_COLLISION, GEOM_STUB_SEGMENT, GEOM_ARROW_TANGENT. Copied -> patched", "diff_base": "sha256 before this row", "before_sha256": "e8181cb03a8dc05e23bf097df9514065fcbde0e2811b597e47dc1745352f3b9b", "after_sha256": "9a4d68c40cd094725704ebdae85089dfefcde8f5df7a8f210051e86e4d62c51b", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/25_row25_diffs/src_lib_studio_engine_diagram_build_autofit.ts.diff", "diff_sha256": "7704acd5172dd7e6e668312a5e0ae64463811ff5e5ba62ab43651cde1d0a66fe"},
+   "patch_rowFX11": {"id": "fx-11-preview-gate-parity", "row": "FX-11", "decision": "1.2.6 C21 (finding S-115-1)", "summary": "autoFitDiagram score-0 early return: SVG and auto-fit decision unchanged (row 25 U3, no re-layout); when the lint has defects outside the score (T-03 kinds edgeEntryCollision/stubSegment/arrowTangent), report.geometry gains their GEOM_* REPORT lines (diagramGeometryIssues), so the figure preview's defects match the FIGURE_FIT fail kinds", "before_sha256": "9a4d68c40cd094725704ebdae85089dfefcde8f5df7a8f210051e86e4d62c51b", "after_sha256": "d687c169b1a8903632ecc60b9445c2b30c07ef41ba77bbeea25aa9c08dbe3e0a", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/fx11_diffs/FX-11_src_lib_studio_engine_diagram_build_autofit.ts.diff", "diff_sha256": "51cfc506df6dd956fedf77e854b3da06b02ee34bc0fab0d3a4dcb9e01264b686"}
   },
   {
    "path": "src/lib/studio/engine/diagram/build/capacity.ts",
@@ -6193,6 +6195,7 @@
   "FX-7c",
   "FX-7d",
   "FX-7f",
-  "FX-7d2"
+  "FX-7d2",
+  "FX-11"
  ]
 }

@@ -121,6 +121,10 @@ describe('P2-15 caption/SUMBER berbungkus', () => {
 
   it('render lint-bersih tidak membawa medan geometry (jalur lama utuh)', () => {
     const fx = parityDiagramSpecs().find((x) => x.file === 'dg_swimlane.json')!.spec as unknown as StudioDiagramV1;
-    expect(build(fx).report.geometry).toBeUndefined();
+    // Swarm 1.2.6 row FX-11 consequence edit (C21, S-115-1): lint score 0 keeps the old path (no AUTO_FIT, no
+    // re-layout); the T-03 kinds outside the score (this fixture has a stubSegment) are now reported, nothing else.
+    const r = build(fx);
+    expect(lintDiagramGeometry(r.svg).score).toBe(0);
+    expect(ids(r).filter((id) => !['GEOM_ENTRY_COLLISION', 'GEOM_STUB_SEGMENT', 'GEOM_ARROW_TANGENT'].includes(id))).toEqual([]);
   });
 });

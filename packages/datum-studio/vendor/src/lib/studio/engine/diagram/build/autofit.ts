@@ -1,7 +1,8 @@
 /**
  * Aktivasi tata letak otomatis diagram (FIG-02b, pola FIG-02a `chart/core/autofit.ts`).
  *
- * 1. Render pertama dilint (`fit/lint.ts`). Skor 0 -> dikembalikan apa adanya (byte-identik).
+ * 1. Render pertama dilint (`fit/lint.ts`). Skor 0 -> dikembalikan apa adanya (byte-identik); cacat T-03
+ *    (di luar skor) tetap dilaporkan di `report.geometry` (Swarm 1.2.6 row FX-11).
  * 2. Ada cacat -> rakit ulang di dalam `withDiagramFit`. Hasilnya dipakai hanya bila skor lint
  *    lebih kecil; selain itu (atau bila rakitan ulang gagal) render pertama dipertahankan.
  * 3. Temuan dan catatan pembantu masuk `report.geometry` sebagai REPORT dengan `suggest`
@@ -91,7 +92,13 @@ const ROUTE_KINDS: readonly DiagramDefectKind[] = ["edgeCross", "edgeCollinear",
 /** Pilih render pertama atau rakitan ulang fit (lihat kepala berkas). */
 export function autoFitDiagram(first: DiagramSvgResult, rerender: () => DiagramSvgResult): DiagramSvgResult {
   const g0 = lintDiagramGeometry(first.svg);
-  if (g0.score === 0) return first;
+  if (g0.score === 0) {
+    // Swarm 1.2.6 row FX-11 (C21, S-115-1): the T-03 kinds are not in `score` (no re-layout, row 25 U3), so a
+    // render whose only defects are T-03 kinds takes this path. SVG and decision stay as they are; the kinds are
+    // still reported (GEOM_* REPORT), so the figure preview lists what the FIGURE_FIT gate fails.
+    if (g0.defects.length === 0) return first;
+    return { ...first, report: { ...first.report, geometry: [...(first.report.geometry ?? []), ...diagramGeometryIssues(g0)] } };
+  }
   const tried: string[] = [];
   let best: { res: DiagramSvgResult; g: DiagramGeomLint; state: DiagramFitState; label: string } | undefined;
   // FIG-02b2: tiap kandidat dicoba dengan pembantu rute (urutan simpul, jalur, rute rak/sld; aktif
