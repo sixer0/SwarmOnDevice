@@ -127,7 +127,37 @@ function selfApprovedMission(): MissionGetWire {
     derived: { ...wire.derived, approval: { decision: "C1", by: "controller", autonomous: true, label: "self-approved (autonomous)" } },
   }
 }
+// Row 88 (1.2.6 MC-09): an approved mission that gained two steps after approval (one dropped), and one that only dropped a
+// step (count 0: no line).
+function driftMission(): MissionGetWire {
+  const wire = approvedMission()
+  return {
+    ...wire,
+    mission: { ...wire.mission, id: "m-drift-7", title: "Drifted kajian" },
+    derived: {
+      ...wire.derived,
+      drift: {
+        count: 2,
+        rows: [
+          { row: "5", timeCreated: 2, decision: "U2" },
+          { row: "6", timeCreated: 3, decision: "U3" },
+        ],
+        dropped: [{ row: "2", timeDropped: 4, decision: "U4" }],
+      },
+    },
+  }
+}
+function droppedOnlyMission(): MissionGetWire {
+  const wire = approvedMission()
+  return {
+    ...wire,
+    mission: { ...wire.mission, id: "m-dropped-8", title: "Dropped kajian" },
+    derived: { ...wire.derived, drift: { count: 0, rows: [], dropped: [{ row: "2", timeDropped: 4, decision: "U4" }] } },
+  }
+}
 const WIRES: Record<string, () => MissionGetWire> = {
+  "m-drift-7": driftMission,
+  "m-dropped-8": droppedOnlyMission,
   "m-approved-5": approvedMission,
   "m-self-6": selfApprovedMission,
   "m-doc-1": fixture,
@@ -420,6 +450,35 @@ describe("row 197 (S194-03): approved vs draft, and the self-approved (autonomou
     expect(label.getAttribute("role")).toBe("status")
     expect(label.className).toContain("text-v2-state-fg-warning")
     expect(q("[data-mission-status-line]")).toBeNull() // running: no status line
+  })
+})
+
+describe("row 88 (1.2.6 MC-09): one drift line when steps were added after approval", () => {
+  test("two steps added after approval: exactly one drift line next to the status line, dropped rows as an attribute", async () => {
+    await mount({ width: 1280, ids: ["m-drift-7"] })
+    await until(() => !!q("[data-mission-hq]"))
+    const lines = document.querySelectorAll<HTMLElement>("[data-mission-drift-line]")
+    expect(lines.length).toBe(1)
+    const line = lines[0]!
+    expect(line.dataset.missionDriftLine).toBe("2")
+    expect(line.dataset.missionDriftDropped).toBe("1")
+    expect(line.textContent).toBe(en["session.mission.line.drift"].replace("{{count}}", "2"))
+    expect(line.textContent).toBe("2 steps added after approval.")
+    expect(line.tagName).toBe("P") // one line, not a panel
+    expect(line.getAttribute("role")).toBe("status")
+    // next to the existing status line, inside the same section
+    const status = q("[data-mission-status-line]")!
+    expect(status.parentElement).toBe(line.parentElement)
+  })
+  test("no drift from the host (older host or nothing changed): no line", async () => {
+    await mount({ width: 1280, ids: ["m-approved-5"] })
+    await until(() => !!q("[data-mission-hq]"))
+    expect(q("[data-mission-drift-line]")).toBeNull()
+  })
+  test("only a dropped step (count 0): no line, also in the bottom sheet", async () => {
+    await mount({ width: 420, ids: ["m-dropped-8"] })
+    await until(() => !!q("[data-mission-hq]"))
+    expect(q("[data-mission-drift-line]")).toBeNull()
   })
 })
 
