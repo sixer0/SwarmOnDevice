@@ -1,7 +1,8 @@
 import { randomBytes, createHash } from "node:crypto"
+import { constants as fsConstants, createReadStream } from "node:fs"
 import fs from "node:fs/promises"
 import path from "node:path"
-import { Context, Effect, Layer, Schema } from "effect"
+import { Cause, Context, Effect, Layer, Schema } from "effect"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { Global } from "@opencode-ai/core/global"
 import { Flock } from "@opencode-ai/core/util/flock"
@@ -22,12 +23,31 @@ export const Result = ProjectMemory.Result
 export type Result = ProjectMemory.Result
 export const Event = ProjectMemory.Event
 
+export type MemoryRef = ProjectMemory.MemoryRef
+
+/** The note line (hook), always indexed and eligible for the prompt. A longer line is refused, never cut (U11). */
+export const MAX_TEXT = 2000
+/** The optional body: returned by recall, never put in the prompt. */
+export const MAX_BODY = 10000
+/** References per note, counted after exact duplicates are removed. */
+export const MAX_REFS = 10
+/** Notes per store at which consolidation runs, then again after every further 100 (C6). Not a cap: nothing is refused. */
+export const CONSOLIDATE_AT = 1000
+/** Estimated tokens for the whole `<project_memory>` block (U18). Used by the prompt loader. */
+export const LOAD_BUDGET_TOKENS = 8000
+/**
+ * @deprecated N-085 retired in 1.2.6: the store has no entry cap and nothing is evicted. Kept only so the `remember`
+ * tool's `full` text (owned by row 41c) still compiles until that row removes it. Not used by the store.
+ */
 export const MAX_ITEMS = 40
-export const MAX_TEXT = 400
+
+const CONSOLIDATE_STEP = 100
+const VERSION = 2
 
 const disabled = () => !!process.env.SWARM_DISABLE_MEMORY
 
-type Stored = { version: 1; enabled: boolean; items: Item[] }
+type Consolidated = { count: number; time: number }
+type Stored = { version: number; enabled: boolean; items: Item[]; consolidated?: Consolidated }
 type Failure = { command: string; where: string }
 
 export interface Interface {
@@ -37,6 +57,12 @@ export interface Interface {
     source: Item["source"]
     deviceOnly?: boolean
     sessionID?: string
+    /** Detail kept with the note, up to MAX_BODY characters, line breaks kept. */
+    body?: string
+    /** Files or graft symbols the note points at, up to MAX_REFS. Stored, never their content. */
+    refs?: readonly MemoryRef[]
+    /** The writing session had consumed web, MCP, Studio data or files outside the worktree (SEC-09). */
+    untrusted?: boolean
   }) => Effect.Effect<Result>
   readonly update: (id: string, input: { text?: string; deviceOnly?: boolean }) => Effect.Effect<Result>
   readonly remove: (id: string) => Effect.Effect<boolean>
@@ -77,28 +103,68 @@ export const layer = Layer.effect(
 
     const read = (target: string) => Effect.promise(() => readStore(target))
 
+    /** Where relative ref paths start: the worktree, or the folder itself for a project without git. */
+    const root = Effect.fnUntraced(function* () {
+      const ctx = yield* InstanceState.context
+      return ctx.worktree === "/" ? ctx.directory : ctx.worktree
+    })
+
     /** Serialised across processes: several Swarm processes can run agents on one project. */
     const change = <A>(target: string, fn: (store: Stored) => { store?: Stored; value: A }) =>
       Effect.promise(() =>
         Flock.withLock(`memory:${path.basename(target)}`, async () => {
-          const result = fn(await readStore(target))
-          if (result.store) await writeStore(target, result.store)
+          const before = await readStore(target)
+          const result = fn(before)
+          if (result.store) await writeStore(target, result.store, before.version)
           return result.value
         }),
       )
 
     const publish = (added?: Item) => events.publish(Event.Updated, { added })
 
+    /**
+     * Cleanup once a store is large (C6): merges duplicates and drops references whose target is gone. It never refuses
+     * anything and never fails the note that triggered it. Refs are checked outside the lock (I/O); the result is applied
+     * under the lock only to notes that are unchanged since they were read.
+     */
+    const consolidateRun = Effect.fnUntraced(function* (target: string) {
+      const store = yield* read(target)
+      if (!consolidationDue(store)) return
+      const resolver = refResolver(yield* root())
+      const stale = yield* Effect.promise(() => staleRefs(store.items, resolver))
+      const snapshot = new Map(store.items.map((item) => [item.id, JSON.stringify(item)]))
+      const changed = yield* change(target, (current) => {
+        if (!consolidationDue(current)) return { value: false }
+        const next = consolidate(current.items, { stale: (ref) => stale.has(refKey(ref)), snapshot })
+        return {
+          store: { ...current, items: next.items, consolidated: { count: next.items.length, time: Date.now() } },
+          value: next.changed,
+        }
+      })
+      if (changed) yield* publish(undefined)
+    })
+    const consolidateIfDue = (target: string) =>
+      consolidateRun(target).pipe(
+        Effect.catchCause((cause) =>
+          Effect.logError("memory consolidation failed", {
+            source: "ProjectMemory.consolidate",
+            store: path.basename(target),
+            cause: Cause.pretty(cause),
+          }),
+        ),
+      )
+
     const add: Interface["add"] = Effect.fn("ProjectMemory.add")(function* (input) {
       const text = input.text.replace(/\s+/g, " ").trim()
-      const refused = refusal(text)
+      const body = input.body?.trimEnd() || undefined
+      const base = yield* root()
+      const refs = uniqueRefs((input.refs ?? []).map((ref) => normaliseRef(ref, base)))
+      const refused = refusal({ text, body, refs })
       if (refused) return { refused }
       const target = yield* file()
       const result = yield* change(target, (store): { store?: Stored; value: { result: Result; fresh: boolean } } => {
         const same = store.items.find((item) => item.text.toLowerCase() === text.toLowerCase())
         if (same) return { value: { result: { item: same }, fresh: false } }
-        const room = makeRoom(store.items)
-        if (!room) return { value: { result: { refused: "full" }, fresh: false } }
         const item: Item = {
           id: randomBytes(3).toString("hex"),
           text,
@@ -106,10 +172,16 @@ export const layer = Layer.effect(
           deviceOnly: input.deviceOnly ?? false,
           time: Date.now(),
           ...(input.sessionID ? { sessionID: input.sessionID } : {}),
+          ...(body ? { body } : {}),
+          ...(refs.length ? { refs } : {}),
+          ...(input.untrusted ? { untrusted: true } : {}),
         }
-        return { store: { ...store, items: [...room, item] }, value: { result: { item }, fresh: true } }
+        return { store: { ...store, items: [...store.items, item] }, value: { result: { item }, fresh: true } }
       })
-      if (result.fresh) yield* publish(input.source === "user" ? undefined : result.result.item)
+      if (result.fresh) {
+        yield* publish(input.source === "user" ? undefined : result.result.item)
+        yield* consolidateIfDue(target)
+      }
       return result.result
     })
 
@@ -124,12 +196,13 @@ export const layer = Layer.effect(
       const added = yield* change(target, (store): { store?: Stored; value: Item | undefined } => {
         // A repeated lesson about the same failing command is the same lesson, whatever worked this time.
         if (store.items.some((existing) => existing.failed === item.failed)) return { value: undefined }
-        const room = makeRoom(store.items)
-        if (!room) return { value: undefined }
         const next: Item = { id: randomBytes(3).toString("hex"), source: "learned", time: Date.now(), ...item }
-        return { store: { ...store, items: [...room, next] }, value: next }
+        return { store: { ...store, items: [...store.items, next] }, value: next }
       })
-      if (added) yield* publish(added)
+      if (added) {
+        yield* publish(added)
+        yield* consolidateIfDue(target)
+      }
     })
 
     /** A lesson that stopped being true removes itself, so the list does not rot into wrong advice. */
@@ -157,16 +230,24 @@ export const layer = Layer.effect(
       add,
       update: Effect.fn("ProjectMemory.update")(function* (id, input) {
         const text = input.text === undefined ? undefined : input.text.replace(/\s+/g, " ").trim()
-        const refused = text === undefined ? undefined : refusal(text)
+        const refused = text === undefined ? undefined : refusal({ text })
         if (refused) return { refused }
         const target = yield* file()
         const item = yield* change(target, (store) => {
           const found = store.items.find((item) => item.id === id)
           if (!found) return { value: undefined }
-          // Rewritten by the user, it is their note now and no longer ties to a command the runtime may retract.
+          // Rewritten by the user, it is their note now and no longer ties to a command the runtime may retract. A body
+          // or refs an agent wrote stay agent-written, so their untrusted flag stays with them.
           const next: Item =
             text !== undefined && text !== found.text
-              ? { ...found, text, source: "user", failed: undefined, worked: undefined }
+              ? {
+                  ...found,
+                  text,
+                  source: "user",
+                  failed: undefined,
+                  worked: undefined,
+                  untrusted: found.body || found.refs?.length ? found.untrusted : undefined,
+                }
               : found
           const value = input.deviceOnly === undefined ? next : { ...next, deviceOnly: input.deviceOnly }
           return { store: { ...store, items: store.items.map((item) => (item.id === id ? value : item)) }, value }
@@ -239,38 +320,337 @@ export const layer = Layer.effect(
   }),
 )
 
-function refusal(text: string): ProjectMemory.Refusal | undefined {
-  if (!text) return "empty"
-  if (text.length > MAX_TEXT) return "long"
-  if (MemoryLearn.looksSecret(text)) return "secret"
+/**
+ * The one place the U11 limits live (01h §3.2). Order: empty, long, body_long, too_many_refs, secret. A note over a
+ * limit is refused whole: nothing is cut and nothing is stored. The limits are deliberately not schema `maxLength`s,
+ * which would give a generic validation error with no hint.
+ */
+function refusal(input: {
+  text: string
+  body?: string
+  refs?: readonly MemoryRef[]
+}): ProjectMemory.Refusal | undefined {
+  if (!input.text) return "empty"
+  if (input.text.length > MAX_TEXT) return "long"
+  if (input.body && input.body.length > MAX_BODY) return "body_long"
+  if (input.refs && input.refs.length > MAX_REFS) return "too_many_refs"
+  // L5 covers everything stored; looksSecret already includes the Secrets.scrubText shapes (SEC-09 item 4).
+  const strings = [input.text, input.body ?? "", ...(input.refs ?? []).flatMap(refStrings)]
+  if (strings.some((value) => value && MemoryLearn.looksSecret(value))) return "secret"
 }
 
-/** Room for one more, or undefined when full of notes somebody chose to keep: only learned lessons are evicted. */
-function makeRoom(items: readonly Item[]) {
-  if (items.length < MAX_ITEMS) return [...items]
-  const oldest = items.find((item) => item.source === "learned")
-  return oldest ? items.filter((item) => item !== oldest) : undefined
+const refStrings = (ref: MemoryRef) => ("symbol" in ref ? [ref.symbol, ref.path ?? ""] : [ref.path])
+
+/** A stable key for "the same reference": field order does not matter. */
+export function refKey(ref: MemoryRef) {
+  return "symbol" in ref ? `s\0${ref.symbol}\0${ref.path ?? ""}` : `p\0${ref.path}\0${ref.line ?? ""}`
 }
+
+function uniqueRefs(refs: readonly MemoryRef[]) {
+  const seen = new Set<string>()
+  return refs.filter((ref) => {
+    const key = refKey(ref)
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
+/** Absolute inside the root becomes root-relative, `..` is resolved, absolute outside the root stays absolute. */
+export function normaliseRef(ref: MemoryRef, root: string): MemoryRef {
+  const clean = (value: string) => {
+    if (!path.isAbsolute(value)) return path.normalize(value)
+    const resolved = path.resolve(value)
+    const relative = path.relative(root, resolved)
+    return relative && !relative.startsWith("..") && !path.isAbsolute(relative) ? relative : resolved
+  }
+  if ("symbol" in ref)
+    return ref.path === undefined ? { symbol: ref.symbol } : { symbol: ref.symbol, path: clean(ref.path) }
+  return ref.line === undefined ? { path: clean(ref.path) } : { path: clean(ref.path), line: ref.line }
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Reference resolution (01h §3.3, SEC-09 item 3). Reads metadata and counts lines; never returns file content.
+
+export type ResolvedRef = {
+  ref: MemoryRef
+  /** `path`, `path:line` or `<file>:L<a>` when the target was found. */
+  at?: string
+  /** Computed, never stored: true only when the target was checked and is gone. */
+  stale?: true
+  /** Why the target was not checked (no graft graph, not a regular file, too large, too slow). Never stale. */
+  unchecked?: string
+  /** Several graft matches: the first three. Not stale. */
+  ambiguous?: string[]
+}
+
+const REF_TIMEOUT_MS = 2000
+const REF_STREAM_CAP = 8 * 1024 * 1024
+const GRAFT_LINE = /^- (.+?) · /
+
+type GraftIndex = { cards: { card: string; file: string; names: Map<string, number> }[] }
+
+/** One resolver per recall or consolidation run: the graft cards are read once and shared by every ref. */
+export function refResolver(root: string) {
+  let graft: Promise<GraftIndex | undefined> | undefined
+  const index = () => (graft ??= loadGraft(path.join(root, "graft")))
+  const resolve = async (ref: MemoryRef): Promise<ResolvedRef> => {
+    if ("symbol" in ref) return resolveSymbol(ref, await index())
+    return resolvePath(ref, root)
+  }
+  return (ref: MemoryRef): Promise<ResolvedRef> =>
+    withTimeout(resolve(ref), REF_TIMEOUT_MS, { ref, unchecked: "took longer than 2 s" })
+}
+
+async function withTimeout<A>(work: Promise<A>, ms: number, fallback: A): Promise<A> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const late = new Promise<A>((resolve) => {
+    timer = setTimeout(() => resolve(fallback), ms)
+  })
+  return Promise.race([work.catch(() => fallback), late]).finally(() => clearTimeout(timer))
+}
+
+async function resolvePath(ref: { path: string; line?: number }, root: string): Promise<ResolvedRef> {
+  const full = path.isAbsolute(ref.path) ? ref.path : path.join(root, ref.path)
+  const stat = await fs.lstat(full).catch((error: NodeJS.ErrnoException) => error)
+  if (stat instanceof Error) {
+    if (stat.code === "ENOENT" || stat.code === "ENOTDIR") return { ref, stale: true }
+    return { ref, unchecked: "could not be read" }
+  }
+  if (ref.line === undefined) {
+    if (stat.isFile() || stat.isDirectory()) return { ref, at: ref.path }
+    return { ref, unchecked: "not a regular file" }
+  }
+  // FIFO, device, socket and symlink are never opened: a FIFO would block and /dev/zero never ends.
+  if (!stat.isFile()) return { ref, unchecked: "not a regular file" }
+  const lines = await countLines(full, ref.line)
+  if (lines === "capped") return { ref, unchecked: "file over 8 MiB before that line" }
+  return lines >= ref.line ? { ref, at: `${ref.path}:${ref.line}` } : { ref, stale: true }
+}
+
+/** Lines seen, stopping as soon as `want` is reached; "capped" past 8 MiB. Content is counted, never kept. */
+function countLines(file: string, want: number) {
+  return new Promise<number | "capped">((resolve, reject) => {
+    const stream = createReadStream(file, { highWaterMark: 64 * 1024 })
+    let lines = 0
+    let bytes = 0
+    let tail = false
+    stream.on("data", (chunk) => {
+      const buffer = chunk as Buffer
+      bytes += buffer.length
+      for (const byte of buffer) if (byte === 10) lines++
+      tail = buffer[buffer.length - 1] !== 10
+      if (lines >= want) {
+        stream.destroy()
+        resolve(lines)
+      } else if (bytes >= REF_STREAM_CAP) {
+        stream.destroy()
+        resolve("capped")
+      }
+    })
+    stream.on("end", () => resolve(lines + (tail ? 1 : 0)))
+    stream.on("error", reject)
+  })
+}
+
+async function loadGraft(dir: string): Promise<GraftIndex | undefined> {
+  const stat = await fs.stat(dir).catch(() => undefined)
+  if (!stat?.isDirectory()) return undefined
+  const entries = (await fs.readdir(dir, { recursive: true })).filter((entry) => entry.endsWith(".md"))
+  const cards = await Promise.all(
+    entries.map(async (entry) => {
+      const text = await fs.readFile(path.join(dir, entry), "utf8").catch(() => "")
+      const lines = text.split("\n")
+      const header = lines[0]?.startsWith("# ") ? lines[0].slice(2).trim() : entry.slice(0, -3)
+      const names = new Map<string, number>()
+      for (const line of lines) {
+        const match = GRAFT_LINE.exec(line)
+        if (!match) continue
+        const at = /· L(\d+)-L\d+/.exec(line)
+        if (!names.has(match[1]!)) names.set(match[1]!, at ? Number(at[1]) : 1)
+      }
+      return { card: entry.slice(0, -3), file: header, names }
+    }),
+  )
+  return { cards }
+}
+
+function resolveSymbol(ref: { symbol: string; path?: string }, graft: GraftIndex | undefined): ResolvedRef {
+  if (!graft) return { ref, unchecked: "not checked (no graft graph)" }
+  const parts = ref.symbol.split(".")
+  const name = parts[parts.length - 1]!
+  const qualifier = parts.length > 1 ? parts.slice(0, -1).join(".") : undefined
+  const narrowed = ref.path?.replace(/\.[^./]+$/, "")
+  const hits = graft.cards
+    .filter((card) => card.names.has(name))
+    .filter((card) => !ref.path || card.file === ref.path || card.card === narrowed)
+    .filter((card) => !qualifier || card.names.has(qualifier))
+    .map((card) => `${card.file}:L${card.names.get(name)}`)
+  if (hits.length === 0) return { ref, stale: true }
+  if (hits.length === 1) return { ref, at: hits[0] }
+  return { ref, ambiguous: hits.slice(0, 3) }
+}
+
+async function staleRefs(items: readonly Item[], resolve: (ref: MemoryRef) => Promise<ResolvedRef>) {
+  const refs = new Map<string, MemoryRef>()
+  for (const item of items) if (item.source !== "user") for (const ref of item.refs ?? []) refs.set(refKey(ref), ref)
+  const stale = new Set<string>()
+  const queue = [...refs.entries()]
+  // A few at a time: a store of 1000 notes can link many files.
+  await Promise.all(
+    Array.from({ length: 8 }, async () => {
+      for (let next = queue.shift(); next; next = queue.shift()) {
+        if ((await resolve(next[1])).stale) stale.add(next[0])
+      }
+    }),
+  )
+  return stale
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Consolidation (01h §6). Pure: what changes is decided from the notes alone, so it can be tested without a store.
+
+export function consolidationDue(store: { items: readonly unknown[]; consolidated?: Consolidated }) {
+  if (store.items.length < CONSOLIDATE_AT) return false
+  return !store.consolidated || store.items.length >= store.consolidated.count + CONSOLIDATE_STEP
+}
+
+const sourceRank = (source: string) => (source === "user" ? 0 : source === "agent" ? 1 : 2)
+const hookKey = (text: string) =>
+  text
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/[\s.,;:!?]+$/, "")
+
+export function consolidate(
+  items: readonly Item[],
+  options: {
+    /** True for a ref that was checked and is gone. */
+    stale: (ref: MemoryRef) => boolean
+    /** id -> JSON of each note as read before the refs were checked; a note that differs now is left alone. */
+    snapshot?: ReadonlyMap<string, string>
+  },
+): { items: Item[]; changed: boolean } {
+  const settled = (item: Item) => !options.snapshot || options.snapshot.get(item.id) === JSON.stringify(item)
+  const drop = new Set<string>()
+  const replace = new Map<string, Item>()
+
+  // Rule 2: one lesson per failing command, the newest.
+  const lessons = new Map<string, Item>()
+  for (const item of items) {
+    if (item.source !== "learned" || !item.failed || !settled(item)) continue
+    const kept = lessons.get(item.failed)
+    if (!kept) lessons.set(item.failed, item)
+    else if (item.time > kept.time) {
+      drop.add(kept.id)
+      lessons.set(item.failed, item)
+    } else drop.add(item.id)
+  }
+
+  // Rule 4: a user note only merges with an exact duplicate user note (hook, body and refs equal).
+  const userGroups = new Map<string, Item[]>()
+  for (const item of items) {
+    if (item.source !== "user" || !settled(item)) continue
+    const key = JSON.stringify([item.text, item.body ?? "", (item.refs ?? []).map(refKey)])
+    userGroups.set(key, [...(userGroups.get(key) ?? []), item])
+  }
+  for (const group of userGroups.values()) {
+    if (group.length < 2) continue
+    const [keeper, ...rest] = group.toSorted((a, b) => b.time - a.time)
+    for (const other of rest) drop.add(other.id)
+    const deviceOnly = group.some((item) => item.deviceOnly)
+    if (deviceOnly !== keeper!.deviceOnly) replace.set(keeper!.id, { ...keeper!, deviceOnly })
+  }
+
+  // Rule 1 and 3: agent and learned notes with the same hook merge; stale refs are dropped. Two notes with different
+  // bodies stay apart. Nothing fuzzy, nothing model-based.
+  const clusters = new Map<string, Item[]>()
+  for (const item of items) {
+    if (item.source === "user" || drop.has(item.id) || !settled(item)) continue
+    const key = hookKey(item.text)
+    clusters.set(key, [...(clusters.get(key) ?? []), item])
+  }
+  for (const group of clusters.values()) {
+    const ordered = group.toSorted((a, b) => sourceRank(a.source) - sourceRank(b.source) || b.time - a.time)
+    const merged: Item[] = []
+    for (const item of ordered) {
+      const index = merged.findIndex((keeper) => !keeper.body || !item.body || keeper.body === item.body)
+      if (index === -1) {
+        merged.push(item)
+        continue
+      }
+      const keeper = merged[index]!
+      drop.add(item.id)
+      const refs = uniqueRefs([...(keeper.refs ?? []), ...(item.refs ?? [])])
+      merged[index] = {
+        ...keeper,
+        ...(keeper.body || item.body ? { body: keeper.body ?? item.body } : {}),
+        ...(refs.length ? { refs } : {}),
+        deviceOnly: keeper.deviceOnly || item.deviceOnly,
+        ...(keeper.untrusted || item.untrusted ? { untrusted: true } : {}),
+      }
+    }
+    for (const note of merged) {
+      const refs = (note.refs ?? []).filter((ref) => !options.stale(ref)).slice(0, MAX_REFS)
+      const { refs: _old, ...rest } = note
+      const next: Item = refs.length ? { ...rest, refs } : rest
+      const original = items.find((item) => item.id === note.id)!
+      if (JSON.stringify(next) !== JSON.stringify(original)) replace.set(note.id, next)
+    }
+  }
+
+  if (drop.size === 0 && replace.size === 0) return { items: [...items], changed: false }
+  return {
+    items: items.filter((item) => !drop.has(item.id)).map((item) => replace.get(item.id) ?? item),
+    changed: true,
+  }
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Storage. Version 2 (1.2.6) adds body, refs, untrusted and consolidated; a version-1 file decodes unchanged. Before
+// the first version-2 write the version-1 file is copied once to `<key>.json.v1`, the rollback path (01h §7, §10).
 
 const decodeStore = Schema.decodeUnknownOption(
-  Schema.fromJsonString(Schema.Struct({ enabled: Schema.optional(Schema.Boolean), items: Schema.Array(Item) })),
+  Schema.fromJsonString(
+    Schema.Struct({
+      version: Schema.optional(Schema.Number),
+      enabled: Schema.optional(Schema.Boolean),
+      items: Schema.Array(Item),
+      consolidated: Schema.optional(Schema.Struct({ count: Schema.Number, time: Schema.Number })),
+    }),
+  ),
 )
 
 async function readStore(target: string): Promise<Stored> {
   const text = await fs.readFile(target, "utf8").catch(() => undefined)
-  if (text === undefined) return { version: 1, enabled: true, items: [] }
+  if (text === undefined) return { version: VERSION, enabled: true, items: [] }
   const parsed = decodeStore(text)
   if (parsed._tag === "Some")
-    return { version: 1, enabled: parsed.value.enabled !== false, items: [...parsed.value.items] }
+    return {
+      version: parsed.value.version ?? 1,
+      enabled: parsed.value.enabled !== false,
+      items: [...parsed.value.items],
+      ...(parsed.value.consolidated ? { consolidated: parsed.value.consolidated } : {}),
+    }
   // A file somebody edited badly must not be overwritten by the next note.
   await fs.copyFile(target, `${target}.unreadable`).catch(() => undefined)
-  return { version: 1, enabled: true, items: [] }
+  return { version: VERSION, enabled: true, items: [] }
 }
 
-async function writeStore(target: string, store: Stored) {
+async function writeStore(target: string, store: Stored, previous: number) {
   await fs.mkdir(path.dirname(target), { recursive: true, mode: 0o700 })
+  if (previous < VERSION) {
+    // Once only: an existing copy is the true pre-migration state and is never overwritten.
+    const backup = `${target}.v1`
+    const copied = await fs
+      .copyFile(target, backup, fsConstants.COPYFILE_EXCL)
+      .then(() => true)
+      .catch(() => false)
+    if (copied) await fs.chmod(backup, 0o600)
+  }
   const temporary = `${target}.${process.pid}.tmp`
-  await fs.writeFile(temporary, JSON.stringify(store, null, 2) + "\n", { mode: 0o600 })
+  await fs.writeFile(temporary, JSON.stringify({ ...store, version: VERSION }, null, 2) + "\n", { mode: 0o600 })
   await fs.rename(temporary, target)
 }
 

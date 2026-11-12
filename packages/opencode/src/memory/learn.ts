@@ -129,7 +129,10 @@ export function commandKey(input: { command: string; where: string }) {
  * Only what the agent ran and where. Why it failed is left out on purpose: that is a program's output, and a repository
  * can print anything, including advice to run its own script, which would then come back in every session.
  */
-export function lessonText(input: { failed: { command: string; where: string }; worked: { command: string; where: string } }) {
+export function lessonText(input: {
+  failed: { command: string; where: string }
+  worked: { command: string; where: string }
+}) {
   const at = (where: string) => (where ? ` in ${where}` : " at the project root")
   const samePlace = input.failed.where === input.worked.where
   return `\`${input.failed.command}\`${samePlace ? "" : at(input.failed.where)} does not work here. \`${input.worked.command}\`${samePlace ? "" : at(input.worked.where)} does.`
@@ -152,16 +155,16 @@ function noteText(item: { text: string; source: string; failed?: string; worked?
 
 /** What the model receives. Anything not listed by the memory panel is not in here. */
 export function promptBlock(
-  items: readonly { id: string; text: string; source: string; failed?: string; worked?: string }[],
+  items: readonly { id: string; text: string; source: string; failed?: string; worked?: string; untrusted?: boolean }[],
   limit = 4000,
 ) {
   const lines = items
     // Whatever slipped in under an older filter stays on disk for the user to see, and does not go to a model.
     .filter((item) => !looksSecret(item.text))
-    .toSorted((a, b) => rank(a.source) - rank(b.source))
+    .toSorted((a, b) => rank(a) - rank(b))
     .reduce<{ lines: string[]; left: number }>(
       (acc, item) => {
-        const line = `- [${item.id}] (${label(item.source)}) ${noteText(item)}`
+        const line = `- [${item.id}] (${label(item)}) ${noteText(item)}`
         if (line.length > acc.left) return acc
         return { lines: [...acc.lines, line], left: acc.left - line.length }
       },
@@ -176,7 +179,13 @@ export function promptBlock(
   ].join("\n")
 }
 
-const rank = (source: string) => (source === "user" ? 0 : source === "agent" ? 1 : 2)
-const label = (source: string) => (source === "user" ? "from the user" : source === "agent" ? "agent note" : "learned")
+// SEC-09: an agent note written after the session read web, MCP, Studio data or files outside the worktree ranks after
+// the agent notes without that flag and says where it came from. Nothing is cut (U11).
+const rank = (item: { source: string; untrusted?: boolean }) =>
+  item.source === "user" ? 0 : item.source === "agent" ? (item.untrusted ? 1.5 : 1) : 2
+const label = (item: { source: string; untrusted?: boolean }) =>
+  item.source === "user"
+    ? "from the user"
+    : (item.source === "agent" ? "agent note" : "learned") + (item.untrusted ? ", from untrusted input" : "")
 
 export * as MemoryLearn from "./learn"

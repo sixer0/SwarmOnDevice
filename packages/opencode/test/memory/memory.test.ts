@@ -127,9 +127,7 @@ describe("learning from commands", () => {
         yield* run(memory, "s", "ls", 0)
         yield* run(memory, "s", "bun test", 0, "12 pass")
         const items = (yield* memory.get()).items
-        expect(items.map((item) => item.text)).toEqual([
-          "`npm test` does not work here. `bun test` does.",
-        ])
+        expect(items.map((item) => item.text)).toEqual(["`npm test` does not work here. `bun test` does."])
         expect(items[0]?.source).toBe("learned")
       }),
     ),
@@ -188,20 +186,6 @@ describe("learning from commands", () => {
     ),
   )
 
-  it.live("learned notes give way when memory is full, chosen notes do not", () =>
-    provideTmpdirInstance(() =>
-      Effect.gen(function* () {
-        const memory = yield* Memory.Service
-        yield* run(memory, "a", "npm test", 1, "Missing script: test")
-        yield* run(memory, "a", "bun test", 0)
-        yield* Effect.forEach(Array.from({ length: Memory.MAX_ITEMS - 1 }), (_, i) =>
-          memory.add({ text: `note ${i}`, source: "user" }),
-        )
-        expect((yield* memory.add({ text: "one more", source: "user" })).item?.text).toBe("one more")
-        const items = (yield* memory.get()).items
-        expect(items.some((item) => item.source === "learned")).toBe(false)
-        expect((yield* memory.add({ text: "too many", source: "user" })).refused).toBe("full")
-      }),
-    ),
-  )
+  // 1.2.6 row 41b (P-05, intended change per 01h T6/T7): the 40-note cap and the eviction of learned notes are gone.
+  // Replaced by T6 and T7 in store-p05.test.ts.
 })
