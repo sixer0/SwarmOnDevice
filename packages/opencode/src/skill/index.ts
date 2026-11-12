@@ -23,6 +23,8 @@ import { isRecord } from "@/util/record"
 import { escapeHtml } from "@/util/html"
 import MISSION_CONTROL_SKILL_BODY from "./mission-control.md" with { type: "text" }
 import SWARM_WORKFLOW_SKILL_BODY from "./swarm-workflow.md" with { type: "text" }
+import TOOL_HEALTH_SKILL_BODY from "./tool-health.md" with { type: "text" }
+import FLUX3_IMAGE_GEN_SKILL_BODY from "./flux3-image-gen.md" with { type: "text" }
 
 const CLAUDE_EXTERNAL_DIR = ".claude"
 const AGENTS_EXTERNAL_DIR = ".agents"
@@ -112,11 +114,28 @@ export const SWARM_WORKFLOW_SKILL_NAME = "swarm-workflow"
 export const SWARM_WORKFLOW_SKILL_DESCRIPTION =
   "Swarm's workflow for multi-step work: restate, plan, approval (the person, or honest self-approval in autonomous mode), Mission Control rows, delegation to Swarm agents, verification with the Studio gate, close. Load it first for any orchestrated or multi-step request."
 export const SWARM_WORKFLOW_SKILL_CONTENT: string = SWARM_WORKFLOW_SKILL_BODY
+
+// Built-in entries shipped with 1.2.6 (OFF-03 row 105, OFF-02 row 106, registration row 106a): how to read Swarm's tool
+// health and ask for a re-check, and how to use a local FLUX 3 image service over HTTP. Both are reserved like
+// mission-control, so a disk copy of either name (an older ~/.config/swarm/skills/flux3-image-gen, say) is ignored with
+// the "reserved skill name ignored" warning and the bundled text is what loads.
+export const TOOL_HEALTH_SKILL_NAME = "tool-health"
+export const TOOL_HEALTH_SKILL_DESCRIPTION =
+  "Tool health: read what Swarm found about its local tools (web search, web fetch, container runtime, DATUM render bridge, diagram layout, registered tools such as a local image service), explain each reason, ask Swarm for a re-check, and tell the person. Load it when a task depends on a local tool that may be down, when a tool call fails with a connection error, or when the person asks whether Swarm's tools are running. It never installs anything."
+export const TOOL_HEALTH_SKILL_CONTENT: string = TOOL_HEALTH_SKILL_BODY
+
+export const FLUX3_IMAGE_GEN_SKILL_NAME = "flux3-image-gen"
+export const FLUX3_IMAGE_GEN_SKILL_DESCRIPTION =
+  "FLUX 3 image generation: make raster images (product shots, landscapes, characters, illustrations) with the person's local FLUX 3 service over its HTTP API, check its health first and degrade cleanly when it is down. Load it when a task needs a raster image made on this machine. Not for diagrams or charts: use Studio's figure tools for those."
+export const FLUX3_IMAGE_GEN_SKILL_CONTENT: string = FLUX3_IMAGE_GEN_SKILL_BODY
+
 const RESERVED_SKILL_NAMES = new Set([
   KNOWLEDGE_LIBRARY_SKILL_NAME,
   DATUM_SKILL_NAME,
   MISSION_CONTROL_SKILL_NAME,
   SWARM_WORKFLOW_SKILL_NAME,
+  TOOL_HEALTH_SKILL_NAME,
+  FLUX3_IMAGE_GEN_SKILL_NAME,
 ])
 
 export const Info = Schema.Struct({
@@ -522,6 +541,18 @@ const layer = Layer.effect(
           description: SWARM_WORKFLOW_SKILL_DESCRIPTION,
           location: "<built-in>",
           content: SWARM_WORKFLOW_SKILL_CONTENT,
+        }
+        s.skills[TOOL_HEALTH_SKILL_NAME] = {
+          name: TOOL_HEALTH_SKILL_NAME,
+          description: TOOL_HEALTH_SKILL_DESCRIPTION,
+          location: "<built-in>",
+          content: TOOL_HEALTH_SKILL_CONTENT,
+        }
+        s.skills[FLUX3_IMAGE_GEN_SKILL_NAME] = {
+          name: FLUX3_IMAGE_GEN_SKILL_NAME,
+          description: FLUX3_IMAGE_GEN_SKILL_DESCRIPTION,
+          location: "<built-in>",
+          content: FLUX3_IMAGE_GEN_SKILL_CONTENT,
         }
         const library = LibraryRoot.current()
         if (library.kind !== "available") return s
