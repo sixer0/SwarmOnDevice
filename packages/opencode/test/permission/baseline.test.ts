@@ -121,6 +121,17 @@ test("baseline - config.ts line references point at their keys", async () => {
   expect(baselineSrc.match(/config\.ts:\d+/g)?.length).toBe(refs.length)
 })
 
+// CFG-03 / 01d T3a (U17): compaction ships as exactly {auto: true, max_context: 0}, through a
+// getter, so every read is a fresh object and an in-place write never reaches the next read.
+test("baseline - compaction ships {auto: true, max_context: 0} as a fresh copy per read", () => {
+  const compaction = BASELINE_CONFIG.compaction
+  expect(compaction).toEqual({ auto: true, max_context: 0 })
+  expect(BASELINE_CONFIG.compaction).not.toBe(compaction)
+  compaction.auto = false
+  compaction.max_context = 123
+  expect(BASELINE_CONFIG.compaction).toEqual({ auto: true, max_context: 0 })
+})
+
 test("baseline - key order is normative (catch-all first, per-server gates last)", () => {
   const keys = Object.keys(PERMISSION_BASELINE)
   expect(keys[0]).toBe("*")

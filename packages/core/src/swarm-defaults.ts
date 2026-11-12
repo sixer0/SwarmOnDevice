@@ -45,6 +45,14 @@ export const BASELINE_CONFIG = {
   get experimental() {
     return cloneBaseline(SWARM_PERMISSION_BASELINE.experimental)
   },
+  // CFG-03 (U17): compaction ships exactly as the user's own file sets it. auto:true equals
+  // the runtime default; max_context:0 turns the price target off (opencode
+  // session/overflow.ts priceTarget), so every model compacts only at its full window —
+  // paid and undeclared-window providers included (release note, SEC-22). A user value
+  // still wins key by key. Built fresh on each read, like the getters above.
+  get compaction(): { auto: boolean; max_context: number } {
+    return { auto: true, max_context: 0 }
+  },
 }
 
 // Path and credential redirect guard G3 (FR-DEF-06). When one of these variables

@@ -2,7 +2,9 @@ import { test, expect, describe, afterEach, beforeEach, spyOn } from "bun:test"
 import { ConfigV1 } from "@opencode-ai/core/v1/config/config"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { httpClient } from "@opencode-ai/core/effect/app-node-platform"
-import { Cause, Effect, Exit, Layer, Logger, Option } from "effect"
+import { Cause, Effect, Exit, Layer, Logger, Option, Schema } from "effect"
+import { Flag } from "@opencode-ai/core/flag/flag"
+import { BASELINE_CONFIG } from "@opencode-ai/core/swarm-defaults"
 import { NamedError } from "@opencode-ai/core/util/error"
 import { FetchHttpClient, HttpClient, HttpClientResponse } from "effect/unstable/http"
 import { Config } from "@/config/config"
@@ -2363,5 +2365,62 @@ describe("CFG-02 T2b experimental.mcp_timeout merge", () => {
     Effect.gen(function* () {
       expect((yield* resolved({ experimental: { mcp_timeout: 45000 } })).experimental?.mcp_timeout).toBe(45000)
     }),
+  )
+})
+
+// 1.2.6 row 33, CFG-03 T3b/T3d (01d_spec_config.md §7, U17): the shipped compaction block
+// {auto: true, max_context: 0} sits below the user's global file and merges key by key;
+// OPENCODE_DISABLE_AUTOCOMPACT still forces auto off over the shipped true.
+describe("CFG-03 T3b compaction merge", () => {
+  const resolved = (config?: object) =>
+    Effect.gen(function* () {
+      const project = yield* tmpdirScoped()
+      return yield* withGlobalConfig({ config, name: "swarm.jsonc" }, () =>
+        withInstanceDir(project, Config.use.get()),
+      )
+    })
+
+  it.effect("no user value resolves to the shipped block", () =>
+    Effect.gen(function* () {
+      expect((yield* resolved()).compaction).toEqual({ auto: true, max_context: 0 })
+    }),
+  )
+
+  it.effect("a user auto:false keeps the shipped max_context", () =>
+    Effect.gen(function* () {
+      expect((yield* resolved({ compaction: { auto: false } })).compaction).toEqual({ auto: false, max_context: 0 })
+    }),
+  )
+
+  it.effect("a user max_context wins and keeps the shipped auto", () =>
+    Effect.gen(function* () {
+      expect((yield* resolved({ compaction: { max_context: 150000 } })).compaction).toEqual({
+        auto: true,
+        max_context: 150000,
+      })
+    }),
+  )
+
+  test("ConfigV1.Info decodes the shipped block", () => {
+    const shipped = BASELINE_CONFIG.compaction
+    expect(Schema.decodeUnknownSync(ConfigV1.Info)({ compaction: shipped }).compaction).toEqual(shipped)
+  })
+
+  it.effect("T3d OPENCODE_DISABLE_AUTOCOMPACT resolves auto:false over the shipped true", () =>
+    Effect.acquireUseRelease(
+      Effect.sync(() => {
+        const previous = Flag.OPENCODE_DISABLE_AUTOCOMPACT
+        ;(Flag as { OPENCODE_DISABLE_AUTOCOMPACT: boolean }).OPENCODE_DISABLE_AUTOCOMPACT = true
+        return previous
+      }),
+      () =>
+        Effect.gen(function* () {
+          expect((yield* resolved()).compaction).toEqual({ auto: false, max_context: 0 })
+        }),
+      (previous) =>
+        Effect.sync(() => {
+          ;(Flag as { OPENCODE_DISABLE_AUTOCOMPACT: boolean }).OPENCODE_DISABLE_AUTOCOMPACT = previous
+        }),
+    ),
   )
 })
