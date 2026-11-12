@@ -19,7 +19,9 @@ import PROMPT_VERIFIER from "./prompt/verifier.txt"
 import PROMPT_DATA_COLLECTOR from "./prompt/data-collector.txt"
 import PROMPT_DOCUMENT_WRITER from "./prompt/document-writer.txt"
 import { Permission } from "@/permission"
-import { DATUM_STUDIO_MCP } from "@/mcp/datum-studio"
+import { DATUM_STUDIO_MCP, DatumStudioMcp } from "@/mcp/datum-studio"
+import { AGENT_BASELINE, STUDIO_SUBAGENT_TOOLS } from "@opencode-ai/core/swarm-permission-baseline"
+import { studioToolsBound, withoutStudioAllows } from "./subagent-permissions"
 import { mergeDeep, pipe, sortBy, values } from "remeda"
 import { Global } from "@opencode-ai/core/global"
 import path from "path"
@@ -39,6 +41,11 @@ import { PluginV2 } from "@opencode-ai/core/plugin"
 
 /** Row 198 (D1): the Studio tool that records the person's answer to a mission decision, as it reaches the model. */
 export const ANSWER_DECISION_TOOL = `${DATUM_STUDIO_MCP}_studio_mission_answer_decision`
+
+/** S-02 (row 56): the agents whose shipped block carries the STUDIO_SUBAGENT_TOOLS allows (planner, document-writer). */
+const STUDIO_AGENTS = Object.entries(AGENT_BASELINE)
+  .filter(([, block]) => STUDIO_SUBAGENT_TOOLS.some((tool) => Object.hasOwn(block.permission, tool)))
+  .map(([name]) => name)
 
 export const Info = Schema.Struct({
   name: Schema.String,
@@ -378,6 +385,14 @@ const layer = Layer.effect(
           item.options = mergeDeep(item.options, value.options ?? {})
           item.permission = Permission.merge(item.permission, Permission.fromConfig(value.permission ?? {}))
         }
+
+        // S-02 / SEC-13 (1.2.6 row 56): the shipped STUDIO_SUBAGENT_TOOLS allows (AGENT_BASELINE, arriving through
+        // cfg.agent above) hold only while the `datum-studio` server in effect is the built-in entry and no other server
+        // can compose the same keys. Otherwise those allow rules are dropped from the agents that carry them, so a user
+        // server named (or sanitised to) datum-studio falls back to the ask (or deny) beneath. Other agents untouched.
+        if (!studioToolsBound(cfg.mcp, DatumStudioMcp.builtin(DatumStudioMcp.current())[DATUM_STUDIO_MCP]))
+          for (const name of STUDIO_AGENTS)
+            if (agents[name]) agents[name].permission = Permission.merge(withoutStudioAllows(agents[name].permission))
 
         for (const name in agents) agents[name].permission = Permission.merge(agents[name].permission, personOnly)
 
