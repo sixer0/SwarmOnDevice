@@ -6,9 +6,18 @@
  * Every field list and enum is read from the v2 block schema (common/v2 `$defs.DiagramV2` / `DiagramSpecV2`), never
  * typed here, so the guide cannot drift from what Studio validates; the row 178 test checks the enums against the
  * schema and validates and renders the example.
+ *
+ * Swarm 1.2.6 row 97 (G-01, W-01, W-02, W-14, T-11): the working norms, each stated once against the fixed tool. Every
+ * number comes from an engine constant (caption limit, edge inset, fan-out split, ranked-flow capacities). Pinned by
+ * test/g01-diagram-guide/row97-diagram-guide.test.ts.
  */
 import { commonV2Schema } from "@/lib/studio/contract/schema/v2/common.schema"
 import { DIAGRAM_GUIDE_URI } from "@/lib/studio/contract/schema/v2/refusal-hints"
+import { CAPTION_GUIDE_MAX_CHARS } from "@/lib/studio/contract/schema/figure-bounds"
+import { GRAPH_EDGE_INSET_MM } from "@/lib/studio/engine/diagram/core/sheet"
+import { LATTICE_X } from "@/lib/studio/engine/diagram/core/tokens"
+import { FLOW_LR_MAX_PARALLEL, flowLrMaxRanks, flowTbMaxPerRank } from "@/lib/studio/engine/diagram/layout-a/flow"
+import { FANOUT_SPLIT_MIN } from "@/lib/studio/engine/diagram/build/route"
 
 export { DIAGRAM_GUIDE_URI }
 export const DIAGRAM_GUIDE_NAME = "skema-diagram"
@@ -82,19 +91,34 @@ export const DIAGRAM_GUIDE_EXAMPLE = {
 
 export function diagramGuideText(): string {
   const f = diagramGuideFacts()
+  const lx = LATTICE_X
   const req = (all: string[], r: string[]) => all.map((k) => (r.includes(k) ? `${k}*` : k)).join(", ")
   return [
     "# Diagram block (type \"diagram\"): fields studio_figure_preview and chapters accept",
     "",
-    "`*` = required. Any other field is refused (SCHEMA_INVALID names the field and the allowed ones). Layout, size, colour and line style are set by the template, not the block.",
+    "`*` = required. Any other field is refused (SCHEMA_INVALID names it). Layout, size, colour and line style are set by the template, not the block.",
     "",
-    `- block: ${req(f.blockFields, f.blockRequired)}. Exactly one of spec (new drawing) or artifactId (stored artifact), not both. caption/source = {text} objects; the title is the caption.`,
+    `- block: ${req(f.blockFields, f.blockRequired)}. Exactly one of spec (new drawing) or artifactId (stored), not both. caption/source = {text} objects; the title is the caption.`,
     `- spec: ${req(f.specFields, f.specRequired)}. family: ${f.families.join(", ")}.`,
-    `- node: ${req(f.nodeFields, f.nodeRequired)}. shape: ${f.shapes.join(", ")}. mark: ${f.marks.join(", ")} (a provenance glyph; the render refuses it without a published key row, DATUM-34).`,
+    `- node: ${req(f.nodeFields, f.nodeRequired)}. shape: ${f.shapes.join(", ")}. mark: ${f.marks.join(", ")} (provenance glyph; refused without a published key row, DATUM-34).`,
     `- node.class (object, may be {}): ${f.classFields.join(", ")}. Placement (tier/lane/col/row) goes here, not on the node.`,
     `- edge: ${req(f.edgeFields, f.edgeRequired)}. kind: ${f.edgeKinds.join(", ")} (kind is the line style; there is no color/style/dash field).`,
     `- zone: ${req(f.zoneFields, f.zoneRequired)} (members = node ids).`,
     "- legend, notes, sources: arrays of strings.",
+    `- direction (flow only): "TB" or "LR"; ranks nodes by the edges, parallel branches side by side. Rank max: TB ${flowTbMaxPerRank(128, lx)} @128 mm, ${flowTbMaxPerRank(166, lx)} @166 mm; LR ${FLOW_LR_MAX_PARALLEL}. LR max ${flowLrMaxRanks(128, lx)} ranks @128 mm, ${flowLrMaxRanks(166, lx)} @166 mm. Without it: list order (per_row), FLOW_SERIALISED if branches serialise.`,
+    "",
+    "Norms:",
+    "- Gate = machine checks and an eye check of the PNG (or a blind judge); the preview alone is not the gate. Defects (every FAIL and GEOM_*) must reach zero; notices are information.",
+    "- `standalone: true` checks the figure alone and is not the gate; gate on the chapter-width preview.",
+    `- Caption: Studio prints the label; the caption never starts with it; at most ${CAPTION_GUIDE_MAX_CHARS} characters.`,
+    "- Labels: edge label at most 18 characters, node label at most 32; a second detail goes in `sub`.",
+    "- One accent per drawing.",
+    "- At most 3 edge kinds when any node has a mark (4 without; DATUM-25).",
+    `- \`col: 0\` is valid; Studio keeps a ${GRAPH_EDGE_INSET_MM} mm inset from the sheet edge.`,
+    `- Fan-out of ${FANOUT_SPLIT_MIN} or more edges is sub-ranked by Studio (not in flow without direction); over a rank max, split it.`,
+    "- Preview a shape before promising it.",
+    "- A/B: randomise which side each version is on before a judge sees them.",
+    "- After every revision read FIGURE_GRAPH_DELTA; an unplanned node/edge change is a defect.",
     "",
     "Minimal valid block:",
     "```json",
