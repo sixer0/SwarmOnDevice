@@ -64,7 +64,8 @@
   "row54a": "2026-11-12: 1.2.6 row 54a (M-02, U5; register N-050, E-06). 1 vendor file re-patched (files[].patch_row54a, before = previous sha256; status unchanged): scripts/studio/_http-client.ts (NEW export IN_PROCESS_ENDPOINT_LABEL; REMOTE_UNREACHABLE text names method + route (query dropped), the in-process label instead of http://127.0.0.1:1, on a timeout the limit constant STUDIO_RENDER_CALL_TIMEOUT_MS / STUDIO_HTTP_TIMEOUT_MS and the follow-up studio_document_status). Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/54a_row54a_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9828083 + 1700 = 9829783. patch_rows += 54a",
   "row27b": "2026-11-12: 1.2.6 row 27b (T-01 follow-up, C12; register N-013 amended to \\s*). 1 vendor file re-patched (files[].patch_row27b, before = previous sha256; status unchanged): contract/schema/v2/figure-text.ts (CAPTION_TOKEN_RE keyword-number separator \\s+ -> \\s*, comment). Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/27b_row27b_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9827897 + 186 = 9828083. patch_rows += 27b",
   "row77": "2026-11-12: 1.2.6 row 77 (M-07, U5; register N-037, N-038). 1 vendor file re-patched (files[].patch_row77, before = previous sha256; status unchanged): scripts/studio/mcp/tools.ts (studio_file_verify line FILE_VERIFIED(sha256) <64 hex>). Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/77_row77_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9829783 -> 9830004 (tools.ts 80786 -> 81007, +221). patch_rows += 77",
-  "row48": "2026-11-12: 1.2.6 row 48 (T-11 refusals; register N-110; 01e §3.2, §6.1). 1 vendor file re-patched (files[].patch_row48, before = previous sha256; status unchanged, added): contract/schema/v2/refusal-hints.ts (aliases dir/rankdir/rankDir/orientation/arah -> direction, direction leaves the alias map, layout stays family, NEW DIRECTION_ALIAS_CLAUSE in the alias hint). P1-direction itself landed in row 45; by-construction.ts unchanged by row 48. Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/48_row48_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9830004 + 565 = 9830569. patch_rows += 48"
+  "row48": "2026-11-12: 1.2.6 row 48 (T-11 refusals; register N-110; 01e §3.2, §6.1). 1 vendor file re-patched (files[].patch_row48, before = previous sha256; status unchanged, added): contract/schema/v2/refusal-hints.ts (aliases dir/rankdir/rankDir/orientation/arah -> direction, direction leaves the alias map, layout stays family, NEW DIRECTION_ALIAS_CLAUSE in the alias hint). P1-direction itself landed in row 45; by-construction.ts unchanged by row 48. Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/48_row48_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9830004 + 565 = 9830569. patch_rows += 48",
+  "row78": "2026-11-12: 1.2.6 row 78 (M-08, U5; register N-042, N-043). 1 vendor file re-patched (files[].patch_row78, before = previous sha256; status unchanged): scripts/studio/mcp/doc-tools.ts (default studio_document_status text: status line, FAIL per kode, per output the full sha256 and file name for up to STATUS_OUTPUTS_LISTED outputs, within DOCUMENT_STATUS_TEXT_MAX_BYTES; lint details and outputs over the cap behind detail=true markers). Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/78_row78_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9830569 + 4344 = 9834913. patch_rows += 78"
  },
  "counts": {
   "files": 608,
@@ -72,7 +73,7 @@
   "patched": 136,
   "replaced": 12,
   "added": 30,
-  "bytes": 9830569
+  "bytes": 9834913
  },
  "files": [
   {
@@ -219,9 +220,9 @@
   {
    "path": "scripts/studio/mcp/doc-tools.ts",
    "status": "patched",
-   "bytes": 65007,
+   "bytes": 69351,
    "source_sha256": "af47f4e9a923028b33ead625d6b22d9c7a308e5d430cf1bde5f09a9e32fc7df8",
-   "sha256": "362c920ef42e49eeb455e5d7a41cf9a0a13aa7a51e8db15232100f453c25fa98",
+   "sha256": "52be99ce2d84bf075e42a579a0921fd7898380478022631ebe64acc97792e5e2",
    "patch_row69c": {
     "id": "row69c-chapter-import-archived-code",
     "row": "69c",
@@ -236,6 +237,8 @@
    "patch_row207": {"id": "row207-hb2-verification-chain", "row": "207", "decision": "1.2.3 patch HB-2", "summary": "studio_slot_fill maps verificationChain printed column names to canonical keys before sending (ARG_MAPPED warning, also on dryRun)", "before_sha256": "66cac0dc6f52d67a7612668a7a9fa0018f511ca5d3da30f17822ec0ba75c6c3b", "after_sha256": "87c6085dbede8491588d8a8ba122ffd75669d61d483db5ddb8b0c028c0111a75", "diff": "docs/2026-11-09_swarm_1_2_3_patch/implementation/207_row207_diffs/doc-tools.ts.diff"},
    "patch_row206": {"id": "row206-findings-lint-tristate", "row": "206", "decision": "1.2.3 patch P3 (row 206)", "summary": "studio_document_status: lint is the tri-state summary (ran/verdict/findings with code, address, message, rule explanation); text line lint: <VERDICT> or NOT_RUN, status block lists each finding with its rule once; detail lists FAIL + NOT_RUN and keeps lintReport", "before_sha256": "87c6085dbede8491588d8a8ba122ffd75669d61d483db5ddb8b0c028c0111a75", "after_sha256": "f391cbe330fbef5d319b2398b5d75ea431d176f2bcaffcef2ff43585bd65ce2d", "diff": "docs/2026-11-09_swarm_1_2_3_patch/implementation/206_row206_diffs/scripts_studio_mcp_doc-tools.ts.diff"},
    "patch_row210": {"id": "row210-security-209", "row": "210", "decision": "1.2.3 patch P5 (row 210)", "summary": "studio_document_status detail: lintReport added to untrustedFields (security review 209 I-2)", "before_sha256": "f391cbe330fbef5d319b2398b5d75ea431d176f2bcaffcef2ff43585bd65ce2d", "after_sha256": "362c920ef42e49eeb455e5d7a41cf9a0a13aa7a51e8db15232100f453c25fa98", "diff": "docs/2026-11-09_swarm_1_2_3_patch/implementation/210_row210_diffs/scripts_studio_mcp_doc-tools.ts.diff", "diff_sha256": "81ef97f79ada2c2faf09e59b351092b156fc7594c6da00a63822757b9f81a1ef"}
+,
+   "patch_row78": {"id": "row78-m08-status-text", "row": "78", "decision": "1.2.6 patch M-08 (U5; register N-042, N-043)", "summary": "studio_document_status default text: '  status: rilis <releaseStatus>; lint <verdict>; <n> berkas' and '  FAIL per kode: <code>=<n>, ...' (safe tokens, outside the block); inside the status block one line per output 'berkas <id> <format> <scope> lint <lintVerdict> sha256 <64 hex> <file name>' for up to STATUS_OUTPUTS_LISTED (50) outputs instead of cap(outputs, 5) without sha; text within DOCUMENT_STATUS_TEXT_MAX_BYTES (8192) incl. the correlationIds line: rule explanations, then finding lines, then outputs from the end are dropped with detail=true markers; non-detail data.outputs capped at 50 (same keys); detail text unbudgeted; schema and description unchanged", "before_sha256": "362c920ef42e49eeb455e5d7a41cf9a0a13aa7a51e8db15232100f453c25fa98", "after_sha256": "52be99ce2d84bf075e42a579a0921fd7898380478022631ebe64acc97792e5e2", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/78_row78_diffs/scripts_studio_mcp_doc-tools.ts.diff", "diff_sha256": "223b3df54bcb5d69ae4357090cfe7165a89bc5435230374634f7bc8b1570f905"}
   },
   {
    "path": "scripts/studio/mcp/figure-tools.ts",
@@ -5993,6 +5996,7 @@
   "45",
   "54a",
   "27b",
-  "48"
+  "48",
+  "78"
  ]
 }

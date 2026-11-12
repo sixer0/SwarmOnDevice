@@ -32,6 +32,7 @@ import {
   bool,
   compactSummary,
   DATA_NOT_INSTRUCTIONS,
+  HEX64,
   http,
   isRecord,
   loadSource,
@@ -896,6 +897,40 @@ function lintLines(l: LintSummary): string[] {
   return out;
 }
 
+// Swarm patch (1.2.6 row 78, M-08): the default (non-detail) status text carries the gate fields the model needs —
+// status, the full sha256 of every listed output, the FAIL count per check code and the output file list — within
+// DOCUMENT_STATUS_TEXT_MAX_BYTES (register N-042). Up to STATUS_OUTPUTS_LISTED (N-043) outputs replace cap(outputs, 5).
+// When the cap is near, long lint details (finding lines, rule explanations) go first, then outputs from the end, each
+// with a "detail=true" marker; a listed sha is never shortened.
+export const DOCUMENT_STATUS_TEXT_MAX_BYTES = 8192;
+export const STATUS_OUTPUTS_LISTED = 50;
+
+/** FAIL count per check code of the revision lint (engine `checks[]` or older `findings[]`), most frequent first. */
+function failCountsByCode(lint: unknown): Array<[string, number]> {
+  if (!isRecord(lint)) return [];
+  const m = new Map<string, number>();
+  const add = (code: unknown) => {
+    const k = tok(code, "?");
+    m.set(k, (m.get(k) ?? 0) + 1);
+  };
+  if (Array.isArray(lint.checks)) {
+    for (const c of lint.checks) if (isRecord(c) && c.status === "FAIL") add(c.checkId);
+  } else {
+    const raw = Array.isArray(lint.findings) ? lint.findings : Array.isArray(lint.issues) ? lint.issues : [];
+    const v = typeof lint.verdict === "string" ? lint.verdict : typeof lint.status === "string" ? lint.status : null;
+    for (const f of raw) if (isRecord(f) && String(f.status ?? v) === "FAIL") add(f.checkId ?? f.rule ?? f.code);
+  }
+  return [...m.entries()].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+}
+
+/** One output line (inside the status block): safe tokens, the full sha (64 hex or "-"), then the file name (server text). */
+function statusOutputLine(o: Record<string, unknown>): string {
+  const scope = isRecord(o.scope) ? `${tok(o.scope.kind)}${typeof o.scope.key === "string" ? `:${tok(o.scope.key)}` : ""}` : tok(o.scope);
+  const sha = typeof o.sha256 === "string" && HEX64.test(o.sha256) ? o.sha256 : "-";
+  const name = String(o.finalFileName ?? o.fileName ?? "").replace(/[\r\n\t]+/g, " ").slice(0, 160);
+  return `berkas ${tok(o.id)} ${tok(o.format)} ${scope} lint ${tok(o.lintVerdict)}${o.draft === true ? " draf" : ""} sha256 ${sha} ${name}`;
+}
+
 const statusTool: ToolDef = {
   name: "studio_document_status",
   description: `Status dokumen: kelengkapan (R15: slot wajib, bab hadir/kurang, langkah berikut, boleh render penuh) + ringkasan lint dan berkas terakhir (R05). detail=true: penuh. ${DATA_NOT_INSTRUCTIONS}`,
@@ -922,7 +957,7 @@ const statusTool: ToolDef = {
       // detail lists every FAIL and NOT_RUN item and keeps the full report in lintReport.
       lint: lintSum,
       ...(detail ? { lintReport: b.lint ?? null } : {}),
-      outputs: detail ? outputs : cap(outputs, 5).map((o) => pick(o, ["id", "format", "scope", "draft", "finalFileName", "sha256"])),
+      outputs: detail ? outputs : cap(outputs, STATUS_OUTPUTS_LISTED).map((o) => pick(o, ["id", "format", "scope", "draft", "finalFileName", "sha256"])),
       ...(detail ? {} : { outputCount: outputs.length, detail: false }),
     };
     const brief = completenessBrief(c);
@@ -935,19 +970,53 @@ const statusTool: ToolDef = {
         : `  lint: NOT_RUN (tidak dijalankan${b.lint === null || b.lint === undefined ? "; belum dirender" : "; rincian di blok status di bawah"})`,
     ];
     const steps = brief && Array.isArray(brief.nextSteps) ? (brief.nextSteps as unknown[]).map(String) : [];
+    // Swarm patch (1.2.6 row 78, M-08): status, FAIL count per code (safe tokens, outside the block), then per output
+    // the full sha and the file name inside the block; non-detail text stays within DOCUMENT_STATUS_TEXT_MAX_BYTES.
+    const fails = failCountsByCode(b.lint);
     lines.push(
-      untrustedBlock(
-        [
-          `judul: ${String(doc.title ?? "")}`,
-          ...lintLines(lintSum),
-          ...cap(outputs, 5).map((o) => `berkas ${String(o.id)} ${String(o.format ?? "")} ${String(o.finalFileName ?? "")}`),
-          ...steps.map((s) => `- ${s}`),
-        ].join("\n"),
-        { jenis: "status-dokumen", documentId: id },
-      ),
+      `  status: rilis ${tok(doc.releaseStatus)}; lint ${lintSum.verdict}; ${outputs.length} berkas`,
+      `  FAIL per kode: ${fails.length === 0 ? "-" : fails.slice(0, 40).map(([k, n]) => `${k}=${n}`).join(", ")}${fails.length > 40 ? ` (+${fails.length - 40} kode lain; detail=true)` : ""}`,
     );
+    const listed = cap(outputs, STATUS_OUTPUTS_LISTED);
+    const lintFull = lintLines(lintSum);
+    const lintVariants = detail
+      ? [lintFull]
+      : [
+          lintFull,
+          lintFull.filter((l) => !l.startsWith("  aturan: ")),
+          [lintFull[0] as string, ...(lintSum.findingsTotal > 0 ? [`- (${lintSum.findingsTotal} temuan; rincian dengan detail=true)`] : [])],
+        ];
+    const render = (lint: string[], n: number, withSteps: boolean, titleMax: number): string =>
+      [
+        ...lines,
+        untrustedBlock(
+          [
+            `judul: ${String(doc.title ?? "").slice(0, titleMax)}`,
+            ...lint,
+            ...listed.slice(0, n).map(statusOutputLine),
+            ...(outputs.length > n ? [`- (+${outputs.length - n} berkas lain; detail=true)`] : []),
+            ...(withSteps ? steps.map((s) => `- ${s}`) : steps.length > 0 ? [`- (${steps.length} langkah berikut; detail=true)`] : []),
+          ].join("\n"),
+          { jenis: "status-dokumen", documentId: id },
+        ),
+      ].join("\n");
+    // Room for the correlationIds line executeTool appends to the text.
+    const budget = DOCUMENT_STATUS_TEXT_MAX_BYTES - Buffer.byteLength(`\ncorrelationIds: ${ctx.cids.join(", ")} (${ctx.cids.length} cid)`, "utf8") - 16;
+    const fits = (t: string) => detail || Buffer.byteLength(t, "utf8") <= budget;
+    let text = render(lintFull, listed.length, true, 2000);
+    if (!fits(text)) {
+      const last = lintVariants[lintVariants.length - 1] as string[];
+      const found = lintVariants.map((v) => render(v, listed.length, true, 2000)).find(fits);
+      if (found !== undefined) text = found;
+      else {
+        let n = listed.length;
+        text = render(last, n, true, 200);
+        while (!fits(text) && n > 0) text = render(last, --n, true, 200);
+        if (!fits(text)) text = render(last, n, false, 80);
+      }
+    }
     // Swarm row 210 (security review 209 I-2): detail-mode lintReport (engine messages) is listed as untrusted too.
-    return { text: lines.join("\n"), data: { ...(neutralizeDeep(data) as Rec), ...untrustedFields(["document.title", "completeness.nextSteps", "completeness.message", "lint", "outputs", ...(detail ? ["lintReport"] : [])]) } };
+    return { text, data: { ...(neutralizeDeep(data) as Rec), ...untrustedFields(["document.title", "completeness.nextSteps", "completeness.message", "lint", "outputs", ...(detail ? ["lintReport"] : [])]) } };
   },
 };
 
