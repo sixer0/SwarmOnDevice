@@ -8,7 +8,9 @@
  *    index.ts:544) and only DATUM-37 (check37 :475) decides the sheet overflow: FAIL items are reported as
  *    OVERFLOW_BOTTOM / OVERFLOW_RIGHT with page, address and mm from the same `overflow` elements check37 reads.
  *    Measure `clip` elements (measure.ts:169) are BOX_CLIP, `table` elements with `overflow: true` (:248)
- *    TABLE_OVERFLOW. `truncated` (:252) makes the check UNKNOWN (MEASURE_TRUNCATED).
+ *    TABLE_OVERFLOW. `truncated` (:252) makes the check UNKNOWN (MEASURE_TRUNCATED). 1.2.6 row 29 (T-13): a truncated
+ *    document is measured again in page batches (`MEASURE_BATCH_PAGES`); only pages left unmeasured keep
+ *    MEASURE_TRUNCATED, and the check carries `coverage` {measuredPages, totalPages} (N-032).
  * 2. `swarm.verify.overlap` (./overlap-script.ts) called directly with `bridgeCall("checkPage", ...)`
  *    (runtime.ts:209) inside `withLock` (runtime.ts:337) after the sandbox handshake (`ensureBrowser`).
  *
@@ -116,11 +118,12 @@ export interface OverlapClipInput {
 }
 
 export interface OverlapClipResult {
-  check: VerifyCheck
+  /** 1.2.6 row 29: carries `coverage` (N-032) whenever the HTML was measured. */
+  check: OverlapClipCheck
   /** Row 150 LayoutInput: the studio.measure metrics, or why there are none; null when there was no HTML. */
   layout: LayoutInput
   overlap: OverlapScriptResult | null
-  /** Bridge jobs spent: measure (1, +1 print job for a flow page count) and overlap (1). */
+  /** Bridge jobs spent: measure (1, +1 print job for a flow page count) and overlap (1), per batch when batched (row 29). */
   bridgeJobs: number
 }
 
@@ -391,9 +394,246 @@ export function implausibleOverlap(r: OverlapScriptResult, html: string, measure
 
 // ── the check ────────────────────────────────────────────────────────────
 
+
+// ── 1.2.6 row 29 (T-13, N-031): page batches for a document too large for one measure ─────
+
+/** N-031: pages per batch when one measure of the whole document was truncated. A truncated batch is split once more. */
+export const MEASURE_BATCH_PAGES = 20
+
+/**
+ * Wall-clock share of the verify budget (STUDIO_VERIFY_BUDGET_MS, default 120 s, verify-outputs.ts:53) the batches may
+ * spend: no new batch starts after it, and the pages not reached keep MEASURE_TRUNCATED. Keeps OVERLAP_CLIP inside the
+ * budget the caller races it against, so a long batch run never turns the whole check into BUDGET_EXCEEDED.
+ */
+const BATCH_TIME_SHARE_MS = 90_000
+
+/** N-032: how many of the document's pages were measured completely (both scripts, nothing truncated, no bridge error). */
+export interface OverlapCoverage {
+  measuredPages: number
+  totalPages: number
+}
+
+/** The OVERLAP_CLIP check with its N-032 coverage (absent only when nothing could be measured: no HTML, other format). */
+export type OverlapClipCheck = VerifyCheck & { coverage?: OverlapCoverage }
+
+/** One top-level slice of a container's content: [start, end) in the HTML, and the element's inner range if it has one. */
+interface Seg {
+  start: number
+  end: number
+  inner: { start: number; end: number } | null
+}
+
+/** One measure unit: html = head + pre + segments + post + tail (head and tail are the document around the container). */
+interface Batch {
+  pre: string
+  segs: Seg[]
+  post: string
+}
+
+const VOID_TAGS = new Set(["area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr"])
+const RAW_TAGS = new Set(["script", "style", "textarea", "title"])
+// Comments, CDATA, doctype/processing instructions, or one tag with quoted attribute values (a `>` inside quotes is no end).
+const TOKEN = /<!--[\s\S]*?-->|<!\[CDATA\[[\s\S]*?\]\]>|<[!?](?:[^>"']|"[^"]*"|'[^']*')*>|<(\/?)([a-zA-Z][a-zA-Z0-9:._-]*)((?:[^>"']|"[^"]*"|'[^']*')*)>/g
+
+/**
+ * The top-level elements of html[from, to) as contiguous slices (text between elements goes with the element after it;
+ * the last slice runs to `to`). null when the markup does not close cleanly inside the range: then the document is
+ * measured whole, as before. Not a general HTML parser: the engine writes well-formed markup (html-scan.ts note).
+ */
+function topSlices(html: string, from: number, to: number): Seg[] | null {
+  const els: Array<{ start: number; end: number; inner: { start: number; end: number } | null }> = []
+  const stack: Array<{ name: string; start: number; openEnd: number }> = []
+  const re = new RegExp(TOKEN.source, "g")
+  re.lastIndex = from
+  for (let m = re.exec(html); m && m.index < to; m = re.exec(html)) {
+    const name = m[2]?.toLowerCase()
+    if (!name) continue // comment, doctype, CDATA
+    const end = m.index + m[0].length
+    if (end > to) return null
+    if (m[1] === "/") {
+      const at = stack.map((e) => e.name).lastIndexOf(name)
+      if (at < 0) continue // a stray close tag closes nothing
+      const open = stack[at]
+      stack.length = at
+      if (at === 0) els.push({ start: open.start, end, inner: { start: open.openEnd, end: m.index } })
+      continue
+    }
+    if (RAW_TAGS.has(name)) {
+      const close = new RegExp(`</${name}\\s*>`, "ig")
+      close.lastIndex = end
+      const c = close.exec(html)
+      if (!c || c.index + c[0].length > to) return null
+      re.lastIndex = c.index + c[0].length
+      if (stack.length === 0) els.push({ start: m.index, end: re.lastIndex, inner: null })
+      continue
+    }
+    if (VOID_TAGS.has(name) || /\/\s*$/.test(m[3] ?? "")) {
+      if (stack.length === 0) els.push({ start: m.index, end, inner: null })
+      continue
+    }
+    stack.push({ name, start: m.index, openEnd: end })
+  }
+  if (stack.length > 0) return null
+  return els.map((e, i) => ({ start: i === 0 ? from : e.start, end: i + 1 < els.length ? els[i + 1].start : to, inner: e.inner }))
+}
+
+/**
+ * The document split into top-level slices of its `<body>` (descending through single wrappers such as one `<main>`),
+ * or null when it cannot be split into at least two (one element, no body, malformed markup).
+ * Studio flow units (`section.st-unit`) start on a new page by CSS (V/engine/html/assemble/index.ts:15-16), and fixed
+ * sheets are `.page` elements, so a slice boundary is a page boundary in the documents the engine writes.
+ */
+export function pageSlices(html: string): { head: string; tail: string; batch: Batch } | null {
+  const body = /<body\b(?:[^>"']|"[^"]*"|'[^']*')*>/i.exec(html)
+  if (!body) return null
+  let from = body.index + body[0].length
+  const close = html.toLowerCase().lastIndexOf("</body")
+  let to = close >= from ? close : html.length
+  for (let depth = 0; depth < 8; depth++) {
+    const segs = topSlices(html, from, to)
+    if (!segs || segs.length === 0) return null
+    if (segs.length >= 2) return { head: html.slice(0, from), tail: html.slice(to), batch: { pre: "", segs, post: "" } }
+    const only = segs[0]
+    if (!only.inner) return null
+    from = only.inner.start
+    to = only.inner.end
+  }
+  return null
+}
+
+/** The batch split once more: two halves of its slices, or of the one element's children when it holds one slice. */
+function splitBatch(html: string, b: Batch): Batch[] | null {
+  if (b.segs.length >= 2) {
+    const mid = cutPoints(b.segs, 2)[0]
+    return [
+      { pre: b.pre, segs: b.segs.slice(0, mid), post: b.post },
+      { pre: b.pre, segs: b.segs.slice(mid), post: b.post },
+    ]
+  }
+  const only = b.segs[0]
+  if (!only?.inner) return null
+  const kids = topSlices(html, only.inner.start, only.inner.end)
+  if (!kids || kids.length < 2) return null
+  const pre = b.pre + html.slice(only.start, only.inner.start)
+  const post = html.slice(only.inner.end, only.end) + b.post
+  const mid = cutPoints(kids, 2)[0]
+  return [
+    { pre, segs: kids.slice(0, mid), post },
+    { pre, segs: kids.slice(mid), post },
+  ]
+}
+
+/** Indices where `n` contiguous groups of about equal byte weight start (excluding 0); every group non-empty. */
+function cutPoints(segs: Seg[], n: number): number[] {
+  const total = segs.reduce((a, s) => a + (s.end - s.start), 0)
+  const cuts: number[] = []
+  let acc = 0
+  for (let i = 0; i < segs.length - 1 && cuts.length < n - 1; i++) {
+    acc += segs[i].end - segs[i].start
+    const left = segs.length - 1 - i // slices still after this one
+    const need = n - 1 - cuts.length // cuts still to place
+    if (acc >= (total * (cuts.length + 1)) / n || left <= need) cuts.push(i + 1)
+  }
+  return cuts
+}
+
+function batchHtml(html: string, head: string, tail: string, b: Batch): string {
+  return head + b.pre + b.segs.map((s) => html.slice(s.start, s.end)).join("") + b.post + tail
+}
+
+function batchBytes(b: Batch): number {
+  return b.segs.reduce((a, s) => a + (s.end - s.start), 0)
+}
+
+// ── one measured piece (the whole document, or one batch) ─────────────────
+
+interface PieceResult {
+  /** Findings with the piece's own page numbers (1 = its first page). */
+  findings: VerifyFinding[]
+  unlisted: number
+  unknowns: VerifyUnknownReason[]
+  /** MEASURE_TRUNCATED from either script: splitting the piece can help. */
+  truncated: boolean
+  /** Pages of the piece (measure, else overlap script), null when neither said. */
+  pages: number | null
+  /** Sheet pages (`.page`) to offset the next piece's paged findings by. */
+  sheetPages: number
+  metrics: MeasuredLayout | null
+  measureError: VerifyUnknownReason | null
+  overlap: OverlapScriptResult | null
+  bridgeJobs: number
+}
+
+async function measurePiece(
+  html: string,
+  input: OverlapClipInput,
+  measure: NonNullable<OverlapClipDeps["measure"]>,
+  checkPage: NonNullable<OverlapClipDeps["checkPage"]>,
+): Promise<PieceResult> {
+  const { pageWidthMm, pageHeightMm } = input
+  const out: PieceResult = { findings: [], unlisted: 0, unknowns: [], truncated: false, pages: null, sheetPages: 0, metrics: null, measureError: null, overlap: null, bridgeJobs: 0 }
+  let measured: MeasuredElement[] | null = null
+  // Held until the overlap script has said whether the flow layout had the sheet width (row 205).
+  let measuredFindings: VerifyFinding[] = []
+  try {
+    const m = await measure(html, { pageWidthMm, pageHeightMm })
+    out.bridgeJobs += m.pageCountSource === "print" ? 2 : 1
+    out.metrics = m
+    measured = Array.isArray(m.elements) ? m.elements : null
+    if (num(m.pageCount) && m.pageCount > 0) out.pages = m.pageCount
+    if (m.paged && num(m.pageCount)) out.sheetPages = m.pageCount
+    if (m.truncated === true) out.truncated = true
+    const part = measureFindings(m, input.limits ?? RENDER_LINT_DEFAULTS, html)
+    measuredFindings = part.findings
+    if (part.unknown) out.unknowns.push(part.unknown)
+  } catch (e) {
+    out.bridgeJobs += 1
+    out.measureError = unknownReasonFor(e)
+    out.unknowns.push(out.measureError)
+  }
+
+  try {
+    out.bridgeJobs += 1
+    const value = await checkPage(overlapCall(html, pageWidthMm, pageHeightMm, input.overlapArgs))
+    const overlap = parseOverlapResult(value)
+    out.overlap = overlap
+    if (!overlap) out.unknowns.push("VERIFY_INTERNAL")
+    else {
+      if (out.pages === null && overlap.pageCount > 0) out.pages = overlap.pageCount
+      if (!out.metrics && overlap.paged) out.sheetPages = overlap.pageCount
+      if (implausibleOverlap(overlap, html, measured)) out.unknowns.push("VERIFY_INTERNAL")
+      else {
+        const part = overlapFindings(overlap)
+        out.findings.push(...part.findings)
+        out.unlisted += part.unlisted
+        if (overlap.truncated) out.truncated = true
+        if (part.unknown) out.unknowns.push(part.unknown)
+      }
+    }
+  } catch (e) {
+    out.unknowns.push(unknownReasonFor(e))
+  }
+
+  const shortfall = out.overlap ? flowWidthShortfallPx(out.overlap, Math.ceil(pageWidthMm * PX_PER_MM)) : 0
+  if (shortfall) {
+    measuredFindings = measuredFindings.filter((f) => !explainedByNarrowLayout(f, shortfall))
+    out.unknowns.push("FLOW_LAYOUT_UNMEASURABLE")
+  }
+  out.findings.push(...measuredFindings)
+  return out
+}
+
+// ── the check ────────────────────────────────────────────────────────────
+
 /**
  * Run OVERLAP_CLIP for one output. DOCX/SVG/PNG are NOT_APPLICABLE (fixed matrix §3.7); a missing HTML is UNKNOWN
  * SOURCE_MISSING. Never throws: every failure is an UNKNOWN reason.
+ *
+ * 1.2.6 row 29 (T-13): the whole document is measured first (its layout feeds PAGE_COUNT and FIGURE_FIT unchanged).
+ * When either script was truncated and the document splits at page boundaries (`pageSlices`), it is measured again in
+ * batches of about MEASURE_BATCH_PAGES pages (N-031); a batch that still truncates is split once more, and the pages of
+ * a batch that cannot be measured completely keep MEASURE_TRUNCATED (E-14). The findings of all batches are merged
+ * (sheet page numbers offset to the document), and `coverage` (N-032) says how many pages were measured completely.
  */
 export async function runOverlapClip(input: OverlapClipInput, deps: OverlapClipDeps = {}): Promise<OverlapClipResult> {
   if (input.format !== "HTML" && input.format !== "PDF") {
@@ -404,54 +644,77 @@ export async function runOverlapClip(input: OverlapClipInput, deps: OverlapClipD
     b.unknown("SOURCE_MISSING")
     return { check: b.build(), layout: null, overlap: null, bridgeJobs: 0 }
   }
+  const t0 = performance.now()
   const html = input.html
-  const { pageWidthMm, pageHeightMm } = input
   const measure = deps.measure ?? ((h: string, o: MeasureOptions) => measureLayout(h, o))
   const checkPage = deps.checkPage ?? bridgeCheckPage
-  let bridgeJobs = 0
 
-  let layout: LayoutInput
-  let measured: MeasuredElement[] | null = null
-  // Held until the overlap script has said whether the flow layout had the sheet width (row 205).
-  let measuredFindings: VerifyFinding[] = []
-  try {
-    const m = await measure(html, { pageWidthMm, pageHeightMm })
-    bridgeJobs += m.pageCountSource === "print" ? 2 : 1
-    measured = Array.isArray(m.elements) ? m.elements : null
-    layout = { metrics: { pageCount: m.pageCount, paged: m.paged, pageCountSource: m.pageCountSource, truncated: m.truncated, elements: m.elements } }
-    const part = measureFindings(m, input.limits ?? RENDER_LINT_DEFAULTS, html)
-    measuredFindings = part.findings
-    if (part.unknown) b.unknown(part.unknown)
-  } catch (e) {
-    bridgeJobs += 1
-    const reason = unknownReasonFor(e)
-    layout = { unknown: reason }
-    b.unknown(reason)
+  const whole = await measurePiece(html, input, measure, checkPage)
+  let bridgeJobs = whole.bridgeJobs
+  const m = whole.metrics
+  const layout: LayoutInput = m
+    ? { metrics: { pageCount: m.pageCount, paged: m.paged, pageCountSource: m.pageCountSource, truncated: m.truncated, elements: m.elements } }
+    : { unknown: whole.measureError ?? "VERIFY_INTERNAL" }
+  const totalPages = whole.pages ?? 0
+  const slices = whole.truncated ? pageSlices(html) : null
+
+  if (!slices) {
+    whole.findings.forEach((f) => b.add(f))
+    b.uncounted(whole.unlisted)
+    whole.unknowns.forEach((r) => b.unknown(r))
+    const measuredPages = whole.unknowns.length === 0 ? totalPages : 0
+    return { check: withCoverage(b.build(), { measuredPages, totalPages }), layout, overlap: whole.overlap, bridgeJobs }
   }
 
-  let overlap: OverlapScriptResult | null = null
-  try {
-    bridgeJobs += 1
-    const value = await checkPage(overlapCall(html, pageWidthMm, pageHeightMm, input.overlapArgs))
-    overlap = parseOverlapResult(value)
-    if (!overlap) b.unknown("VERIFY_INTERNAL")
-    else if (implausibleOverlap(overlap, html, measured)) b.unknown("VERIFY_INTERNAL")
-    else {
-      const part = overlapFindings(overlap)
-      part.findings.forEach((f) => b.add(f))
-      b.uncounted(part.unlisted)
-      if (part.unknown) b.unknown(part.unknown)
+  // Batched run. The whole-document findings are dropped: the batches measure the same elements again in full.
+  const { head, tail } = slices
+  const n = Math.max(2, Math.min(slices.batch.segs.length, Math.ceil((totalPages || 2 * MEASURE_BATCH_PAGES) / MEASURE_BATCH_PAGES)))
+  const cuts = [0, ...cutPoints(slices.batch.segs, n), slices.batch.segs.length]
+  const queue: Array<{ batch: Batch; split: boolean }> = []
+  for (let i = 0; i + 1 < cuts.length; i++) queue.push({ batch: { pre: "", segs: slices.batch.segs.slice(cuts[i], cuts[i + 1]), post: "" }, split: false })
+
+  // Leaves in document order: measured or not, with their page count (estimated from bytes when unknown).
+  const leaves: Array<{ bytes: number; pages: number | null; complete: boolean }> = []
+  let sheetOffset = 0
+  while (queue.length > 0) {
+    const { batch, split } = queue.shift()!
+    if (performance.now() - t0 > BATCH_TIME_SHARE_MS) {
+      b.unknown("MEASURE_TRUNCATED")
+      leaves.push({ bytes: batchBytes(batch), pages: null, complete: false })
+      continue
     }
-  } catch (e) {
-    b.unknown(unknownReasonFor(e))
+    const r = await measurePiece(batchHtml(html, head, tail, batch), input, measure, checkPage)
+    bridgeJobs += r.bridgeJobs
+    if (r.truncated && !split) {
+      const halves = splitBatch(html, batch)
+      if (halves) {
+        queue.unshift(...halves.map((h) => ({ batch: h, split: true })))
+        continue
+      }
+    }
+    // A truncated piece's findings are still real defects (a FAIL outranks the UNKNOWN, row 150 rule).
+    for (const f of r.findings) b.add(f.page !== null && r.sheetPages > 0 ? { ...f, page: f.page + sheetOffset } : f)
+    b.uncounted(r.unlisted)
+    r.unknowns.forEach((u) => b.unknown(u))
+    sheetOffset += r.sheetPages
+    leaves.push({ bytes: batchBytes(batch), pages: r.pages, complete: r.unknowns.length === 0 })
   }
 
-  const shortfall = overlap ? flowWidthShortfallPx(overlap, Math.ceil(pageWidthMm * PX_PER_MM)) : 0
-  if (shortfall) {
-    measuredFindings = measuredFindings.filter((f) => !explainedByNarrowLayout(f, shortfall))
-    b.unknown("FLOW_LAYOUT_UNMEASURABLE")
-  }
-  measuredFindings.forEach((f) => b.add(f))
+  // Coverage in the whole document's pages: split batches may paginate a page more or less than the whole, so the
+  // measured share of the leaves' pages is scaled to the whole document's count (exact when they agree).
+  const bytesPerPage = (() => {
+    const known = leaves.filter((l) => l.pages !== null)
+    const p = known.reduce((a, l) => a + (l.pages as number), 0)
+    return p > 0 ? known.reduce((a, l) => a + l.bytes, 0) / p : 0
+  })()
+  const pagesOf = (l: (typeof leaves)[number]) => l.pages ?? (bytesPerPage > 0 ? l.bytes / bytesPerPage : 0)
+  const all = leaves.reduce((a, l) => a + pagesOf(l), 0)
+  const done = leaves.filter((l) => l.complete).reduce((a, l) => a + pagesOf(l), 0)
+  const total = totalPages || Math.round(all)
+  const measuredPages = all > 0 ? Math.min(total, done === all ? total : Math.floor((total * done) / all)) : 0
+  return { check: withCoverage(b.build(), { measuredPages, totalPages: total }), layout, overlap: whole.overlap, bridgeJobs }
+}
 
-  return { check: b.build(), layout, overlap, bridgeJobs }
+function withCoverage(check: VerifyCheck, coverage: OverlapCoverage): OverlapClipCheck {
+  return { ...check, coverage }
 }
