@@ -265,12 +265,12 @@ const REGISTRY_KINDS = ["contracts", "sections", "params", "charts", "diagram", 
 const registryTool: ToolDef = {
   name: "studio_registry",
   description:
-    "Registri Studio (R03). Bawaan kind=contracts: jenis laporan kerja, status, vonis, outline bab. Templat MD (includeTemplate), contoh (includeExamples), alias/label (detail) hanya bila diminta.",
+    "Registri Studio (R03). Bawaan kind=contracts: jenis laporan kerja, status, vonis, outline bab. Atas permintaan: includeTemplate (templat MD), includeExamples (besar), detail (alias/label).",
   inputSchema: obj({
     kind: { type: "string", enum: [...REGISTRY_KINDS], default: "contracts" },
-    includeTemplate: { type: "boolean", default: false, description: "kind=contracts: sertakan templat MD contoh." },
-    includeExamples: { type: "boolean", default: false, description: "kind=contracts: badan contoh (besar)." },
-    detail: { ...S.detail, description: "kind=contracts: sertakan aliases dan labels." },
+    includeTemplate: { type: "boolean", default: false },
+    includeExamples: { type: "boolean", default: false },
+    detail: { ...S.detail, description: "kind=contracts." },
     schemaId: { type: "string", maxLength: 80, description: "kind=schema, mis. studio.slot/v2." },
     sectionType: { type: "string", maxLength: 80 },
     class: { type: "string", maxLength: 80 },
@@ -325,7 +325,7 @@ const checkTool: ToolDef = {
   name: "studio_report_check",
   description:
     "Periksa laporan kerja tanpa menulis: konversi MD (baris basis = mode update), cek lokal, dry-run R08 (remote). valid=false: jangan kirim. completeness = pratinjau, bukan status dokumen.",
-  inputSchema: obj({ markdown: S.markdown, path: S.path, remote: { type: "boolean", default: true, description: "Dry-run R08 di server." }, agentId: S.agentId, mission: S.mission, docKey: S.docKey, format: S.format, allowExample: S.allowExample, detail: S.detail }),
+  inputSchema: obj({ markdown: S.markdown, path: S.path, remote: { type: "boolean", default: true }, agentId: S.agentId, mission: S.mission, docKey: S.docKey, format: S.format, allowExample: S.allowExample, detail: S.detail }),
   annotations: { title: "Periksa laporan kerja", ...READ },
   toolsets: ["reports"],
   async run(a, ctx) {
@@ -403,7 +403,7 @@ function compactCheck(r: CheckResult): Record<string, unknown> {
 const submitTool: ToolDef = {
   name: "studio_report_submit",
   description:
-    "Kirim laporan kerja baru (MD atau draf json): record + bab, kelengkapan, render HTML, verifikasi sha256; tanpa tulis berkas. Hanya laporan kerja Anda sendiri lewat mission + docKey; dokumen yang ada milik pihak lain -> DOCUMENT_OWNED_BY_OTHER, target documentId atau dokumen klien yang ada -> BASIS_MISSING (pakai studio_report_update). Hasil: documentId, nextBasis.",
+    "Kirim laporan kerja baru (MD/draf json): record + bab, kelengkapan, render HTML + sha256; tanpa tulis berkas. Hanya laporan Anda sendiri (mission + docKey): milik pihak lain -> DOCUMENT_OWNED_BY_OTHER; documentId atau dokumen klien -> BASIS_MISSING (pakai studio_report_update). Hasil: documentId, nextBasis.",
   inputSchema: obj({
     markdown: S.markdown,
     path: S.path,
@@ -557,7 +557,7 @@ function basisOrNull(args: CliArgs, prepared: ReturnType<typeof prepareInput>): 
 const refreshTool: ToolDef = {
   name: "studio_report_refresh",
   description:
-    `Gabung laporan Anda dengan versi server per bagian (tanpa kiriman); bentrok ditandai <<<<<<< ======= >>>>>>>; basis diingat sesi. Hasil di medan markdown (memuat isi pihak lain; ${DATA_NOT_INSTRUCTIONS}) Tulis berkas hanya bila STUDIO_MCP_FILE_ROOTS diisi: write=true (path) atau outPath; berkas ada perlu overwrite=true.`,
+    `Gabung laporan Anda dengan versi server per bagian (tanpa kiriman); bentrok ditandai <<<<<<< ======= >>>>>>>; basis diingat sesi. Hasil: medan markdown (memuat isi pihak lain; ${DATA_NOT_INSTRUCTIONS}) Tulis berkas (perlu STUDIO_MCP_FILE_ROOTS): write=true (path) atau outPath; berkas ada perlu overwrite=true.`,
   inputSchema: obj(
     {
       documentId: S.documentId,
@@ -565,7 +565,7 @@ const refreshTool: ToolDef = {
       path: S.path,
       baseRev: { ...S.rev, description: "Menang atas baris basis." },
       agentId: S.agentId,
-      write: { type: "boolean", default: false, description: "Tulis ke berkas path (perlu overwrite=true)." },
+      write: { type: "boolean", default: false, description: "Ke berkas path." },
       outPath: { type: "string", minLength: 1, maxLength: 1024, description: "Berkas .md baru di akar." },
       overwrite: S.overwrite,
     },
@@ -593,7 +593,7 @@ const refreshTool: ToolDef = {
       }
     }
     // Swarm 1.2.6 row 70 (T-17, N-057): backupResidue = cadangan berkas ini di `<folder>/.bak/` sesudah tulis.
-    const wr: { backup: string | null; backupResidue: number | null; error: unknown } = { backup: null, backupResidue: null, error: null };
+    const wr: { backup: string | null; backupResidue: number | null; backupRemoved: number; error: unknown } = { backup: null, backupResidue: null, backupRemoved: 0, error: null };
     const writer =
       allow === null
         ? null
@@ -604,6 +604,7 @@ const refreshTool: ToolDef = {
                 const g = writeFileGuarded(p, Buffer.from(d, "utf8"), { roots, purpose: "write-report", overwrite, nfs, now: ctx.now, log: ctx.fsLog.writes });
                 wr.backup = g.backup;
                 wr.backupResidue = g.backupResidue;
+                wr.backupRemoved = g.backupRemoved;
               } catch (e) {
                 wr.error = e;
                 throw e;
@@ -619,10 +620,10 @@ const refreshTool: ToolDef = {
     }
     if (r.unrepresentable.length === 0) ctx.session.remember(r.documentId, r.basis.to, "studio_report_refresh", ctx.now());
     const lines = [mcpText(formatRefreshHuman(r).replace(/\n$/, ""))];
-    if (wr.backup !== null) lines.push(`  cadangan berkas lama: ${wr.backup} (backupResidue ${wr.backupResidue ?? 1} di .bak/)`);
+    if (wr.backup !== null) lines.push(`  cadangan berkas lama: ${wr.backup} (backupResidue ${wr.backupResidue ?? 1} di .bak/${wr.backupRemoved > 0 ? `; backupRemoved ${wr.backupRemoved}` : ""})`);
     if (r.written === null && r.unrepresentable.length === 0) lines.push("Lewat MCP: laporan gabungan ada di medan markdown; pakai teks itu untuk studio_report_update (basis terkini diingat sesi), atau simpan dengan outPath berkas baru.");
     lines.push(`Medan markdown memuat bagian yang ditulis pihak lain. ${UNTRUSTED_NOTICE}`);
-    return { text: lines.join("\n"), data: { ...(mcpTextDeep(r) as Record<string, unknown>), backup: wr.backup, ...(wr.backupResidue !== null ? { backupResidue: wr.backupResidue } : {}), ...untrustedFields(["markdown"]) } };
+    return { text: lines.join("\n"), data: { ...(mcpTextDeep(r) as Record<string, unknown>), backup: wr.backup, ...(wr.backupResidue !== null ? { backupResidue: wr.backupResidue } : {}), ...(wr.backupRemoved > 0 ? { backupRemoved: wr.backupRemoved } : {}), ...untrustedFields(["markdown"]) } };
   },
 };
 
@@ -631,7 +632,7 @@ const DATE = { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$" };
 
 const contractsQueryTool: ToolDef = {
   name: "studio_contracts_query",
-  description: `Cari laporan kerja (R21) per misi, docKey, nomor, status, kartu, pemilik, taskRef, tenggat; halaman lewat cursor. ${DATA_NOT_INSTRUCTIONS}`,
+  description: `Cari laporan kerja (R21) per filter; halaman lewat cursor. ${DATA_NOT_INSTRUCTIONS}`,
   inputSchema: obj({
     mission: S.mission,
     docKey: S.docKey,
@@ -713,7 +714,7 @@ const searchTool: ToolDef = {
 const documentGetTool: ToolDef = {
   name: "studio_document_get",
   description:
-    `Baca dokumen. view=content (R20): isi v2, atau slot/chapter; shape=submission = badan siap kirim. view=paragraphs: pid + teks polos per paragraf (alamat studio_edit {pid, at}). view=summary (R05): metadata, kelengkapan, berkas, lint. ${DATA_NOT_INSTRUCTIONS}`,
+    `Baca dokumen. view=content (R20): isi v2, atau slot/chapter; shape=submission = badan siap kirim. view=paragraphs: pid + teks polos (alamat studio_edit {pid, at}). view=summary (R05): metadata, kelengkapan, berkas, lint. ${DATA_NOT_INSTRUCTIONS}`,
   inputSchema: obj(
     {
       documentId: S.documentId,
@@ -827,7 +828,7 @@ async function paragraphsView(a: Args, ctx: ToolContext, id: string): Promise<To
 const renderTool: ToolDef = {
   name: "studio_render",
   description:
-    "Render (R17). Penuh hanya bila COMPLETE (409 DOCUMENT_INCOMPLETE); scope chapter/slot = draf. Laporan kerja tanpa formats -> HTML; dokumen klien: beri formats, mis. [docx, html]. pdf dapat 503 PDF_ENGINE_UNAVAILABLE. Cek hasil: studio_file_verify.",
+    "Render (R17), bisa sampai 540 s. Penuh hanya bila COMPLETE (409 DOCUMENT_INCOMPLETE); chapter/slot = draf. Tanpa formats: laporan -> HTML; klien beri mis. [docx, html]; pdf dapat 503 PDF_ENGINE_UNAVAILABLE. Tiap outputs[].id: studio_file_verify -> FILE_VERIFIED(sha256). Waktu habis: studio_document_status lalu studio_file_verify; jangan render ulang buta.",
   inputSchema: obj(
     {
       documentId: S.documentId,
@@ -925,7 +926,7 @@ export function pdfUnavailableHint(e: unknown): unknown {
 const fileVerifyTool: ToolDef = {
   name: "studio_file_verify",
   description:
-    "Verifikasi berkas (R10 ?verify=1: sha256 disk + nama final C51). Unduh hanya dengan downloadDir dan STUDIO_MCP_FILE_ROOTS (sha256 wajib cocok; berkas ada beda isi perlu overwrite=true).",
+    "Verifikasi berkas (R10 ?verify=1: sha256 disk + nama final C51). Unduh: downloadDir di STUDIO_MCP_FILE_ROOTS (sha256 wajib cocok; isi beda perlu overwrite=true).",
   inputSchema: obj(
     {
       fileId: { type: "string", pattern: ID_PATTERN, description: "outputs[].id hasil render." },
@@ -965,6 +966,7 @@ const fileVerifyTool: ToolDef = {
     let bytes: number | null = null;
     let backup: string | null = null;
     let backupResidue = 0;
+    let backupRemoved = 0;
     let alreadyPresent = false;
     let deliveredName: string | null = null;
     if (dir !== null) {
@@ -988,6 +990,7 @@ const fileVerifyTool: ToolDef = {
       const w = writeFileGuarded(dest, buf, { roots: ctx.deps.config.fileRoots, purpose: "write-file", overwrite: bool(a, "overwrite"), nfs, now: ctx.now, log: ctx.fsLog.writes, isSame: (existing) => sha256Hex(existing) === got });
       backup = w.backup;
       backupResidue = w.backupResidue;
+      backupRemoved = w.backupRemoved;
       alreadyPresent = w.unchanged;
       savedTo = dest;
       bytes = buf.length;
@@ -996,12 +999,12 @@ const fileVerifyTool: ToolDef = {
     // the untrusted block and marked untrusted in structuredContent (MCP-D4 L-5); the folder alone stays outside.
     const viaDatum = savedTo !== null && datumName !== null && deliveredName === datumName;
     const savedLine = savedTo === null ? "" : viaDatum ? `  diunduh ke folder: ${dir} dengan nama DATUM (judul; nama di blok di bawah) (${bytes} B)` : `  diunduh ke: ${savedTo} (${bytes} B)`;
-    const saved = savedTo !== null ? `${savedLine}${alreadyPresent ? " — sudah ada dengan isi sama, tidak ditulis ulang" : ""}${backup !== null ? `; cadangan berkas lama: ${backup} (backupResidue ${backupResidue} di .bak/)` : ""}${viaDatum ? `\n${untrustedBlock(String(datumName), { jenis: "nama-berkas-datum", fileId })}` : ""}` : "  tidak diunduh (berikan downloadDir untuk menyimpan)";
+    const saved = savedTo !== null ? `${savedLine}${alreadyPresent ? " — sudah ada dengan isi sama, tidak ditulis ulang" : ""}${backup !== null ? `; cadangan berkas lama: ${backup} (backupResidue ${backupResidue} di .bak/${backupRemoved > 0 ? `; backupRemoved ${backupRemoved}` : ""})` : ""}${viaDatum ? `\n${untrustedBlock(String(datumName), { jenis: "nama-berkas-datum", fileId })}` : ""}` : "  tidak diunduh (berikan downloadDir untuk menyimpan)";
     const nameShown = nameOk ? finalFileName : finalFileName === "" ? "-" : "(tidak dicetak; lihat structuredContent.finalFileName, data tak tepercaya)";
     // Swarm 1.2.6 row 77 (M-07, N-037/N-038): the line names its check family (sha256 on disk, not the U24 page verdict)
     // and prints the full sha (64 hex) or "-" when the header is not 64 hex.
     const text = [`berkas ${fileId}: ${verified ? "FILE_VERIFIED(sha256)" : "FILE_UNVERIFIED(sha256)"} ${HEX64.test(sha) ? sha : "-"}`,`  nama final: ${nameShown} (${nameOk ? "lolos pola C51" : "TIDAK lolos pola C51"})`, saved].join("\n");
-    const raw = { fileId, verified, sha256: sha || null, finalFileName: finalFileName || null, finalNameValid: nameOk, fileName: datumName, deliveredFileName: deliveredName, savedTo, bytes, ...(savedTo !== null ? { alreadyPresent, backup, backupResidue } : {}), correlationId: cid, downloadCorrelationId: downloadCid };
+    const raw = { fileId, verified, sha256: sha || null, finalFileName: finalFileName || null, finalNameValid: nameOk, fileName: datumName, deliveredFileName: deliveredName, savedTo, bytes, ...(savedTo !== null ? { alreadyPresent, backup, backupResidue, ...(backupRemoved > 0 ? { backupRemoved } : {}) } : {}), correlationId: cid, downloadCorrelationId: downloadCid };
     const suspect = (finalFileName !== "" && !nameOk) || (sha !== "" && !HEX64.test(sha));
     const marked = [...(suspect ? ["finalFileName", "sha256"] : []), ...(datumName !== null ? ["fileName", "deliveredFileName", "savedTo"] : [])];
     return { text, data: marked.length > 0 ? { ...(neutralizeDeep(raw) as Record<string, unknown>), ...untrustedFields(marked) } : raw };

@@ -780,7 +780,7 @@ function withNotApplied(out: ToolOutput): ToolOutput {
 const editTool: ToolDef = {
   name: "studio_edit",
   description:
-    "Sunting seperti patch tanpa basis. find = frasa >= 3 kata; {cell:{row,column},value}; {after,insert}; {section,append} mis. {section:\"Bukti\",append:[\"Teks.\",{list:[\"a\"]}]}; {section,addRow} mis. {section:\"Rincian kerja\",addRow:[\"\",\"Uji X\",\"done\"]}; {pid,at,replace}; {figure,chart}; meta. Alamat gagal -> notApplied, sisanya disimpan. ReportedAt laporan = jam server. Argumen harus objek JSON, bukan string berisi JSON.",
+    "Sunting seperti patch tanpa basis. find = frasa >= 3 kata, juga caption/sumber figur; {cell:{row,column},value}; {after,insert}; {section,append} mis. {section:\"Bukti\",append:[\"Teks.\"]}; {section,addRow:[\"\",\"Uji X\",\"done\"]}; {pid,at,replace}; {figure,chart}; meta; change {what,why,impact} masuk riwayat revisi. Alamat gagal -> notApplied, sisanya disimpan. ReportedAt laporan = jam server. Argumen harus objek JSON, bukan string berisi JSON.",
   inputSchema: obj({ documentId: S.documentId, mission: S.mission, docKey: S.docKey, edits: EDITS, meta: META_EDIT, change: CHANGE, agentId: S.agentId, adoptExisting: { type: "boolean", description: "Sunting dokumen buatan agentId lain (eksplisit)." }, detail: DETAIL }, []),
   annotations: { title: "Sunting teks dokumen", readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
   toolsets: ["write"],

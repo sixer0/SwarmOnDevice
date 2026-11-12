@@ -87,7 +87,8 @@
   "row97a": "2026-11-12: 1.2.6 row 97a (G-05, W-01, W-09, W-13 text; U5; register N-011, N-014). 1 vendor file re-patched (files[].patch_row97a, before = previous sha256; status unchanged): scripts/studio/mcp/resources.ts (MCP_DOC_RECIPE: row 174 diagram-block sentence moved out of the studio_figure_revise call shape; render 540 s and studio_document_status -> studio_file_verify follow-up; caption rule without the GAMBAR token, <= 100 chars; studio_asset_put with sha256:<hex> reference). Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/97a_row97a_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9904275 + 1653 = 9905928. patch_rows += 97a",
   "row63": "2026-11-12: 1.2.6 row 63 (T-07, U5; register N-017 DIAMOND_HEIGHT_FACTOR). 3 vendor files (files[].patch_row63, before = previous sha256): engine/diagram/core/geometry.ts (copied -> patched: DIAMOND_HEIGHT_FACTOR and diamondHeightMm in nodeSize for every family), engine/diagram/fit/text.ts (copied -> patched: diamondTwoLineHeightMm), engine/diagram/layout-a/flow.ts (re-patched: inline h*1.25 removed, now in nodeSize). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/63_row63_diffs/. counts by delta: copied 413 -> 411, patched 153 -> 155; bytes 9916422 +1482 = 9917904. patch_rows += 63",
   "row97b": "2026-11-12: 1.2.6 row 97b (G-04 diagram part, G-01; U5; register N-001..N-016, N-018, N-020, N-023, N-109..N-112, N-160). 1 vendor file re-patched (files[].patch_row97b, before = previous sha256; status unchanged): docs/STUDIO-AGENT-GUIDE.md (NEW §4.1.2 diagram workflow over MCP: preview inline, partial revise, FIGURE_GRAPH_DELTA, render, look at the PNG; direction TB/LR for parallel branches with the engine limits; caption rules; the three connector-end FAIL kinds with the engine suggestions; dangling STUDIO-MCP.md links in §1.1 step 9 and §17.0 replaced by the MCP resources and tools/list). Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/97b_row97b_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9917904 + 5752 = 9923656. patch_rows += 97b",
-  "row67": "2026-11-12: 1.2.6 row 67 (T-12, register N-019 furnitureMm, E-09; plus the caption-order BUG routed from row 28). 3 vendor files re-patched (files[].patch_row67, before = previous sha256; status unchanged): engine/diagram/build/capacity.ts (numeric DATUM-37-tinggi measure + furnitureMm), engine/diagram/build/svg.ts (sheet-edge tolerance, furniture in the height texts, caption order in withCaptionAbove), engine/figure-capacity.ts (furnitureMm field, no '?' in the text). Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/67_row67_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9923656 + 4293 = 9927949. patch_rows += 67"
+  "row67": "2026-11-12: 1.2.6 row 67 (T-12, register N-019 furnitureMm, E-09; plus the caption-order BUG routed from row 28). 3 vendor files re-patched (files[].patch_row67, before = previous sha256; status unchanged): engine/diagram/build/capacity.ts (numeric DATUM-37-tinggi measure + furnitureMm), engine/diagram/build/svg.ts (sheet-edge tolerance, furniture in the height texts, caption order in withCaptionAbove), engine/figure-capacity.ts (furnitureMm field, no '?' in the text). Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/67_row67_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9923656 + 4293 = 9927949. patch_rows += 67",
+  "row99": "2026-11-12: 1.2.6 row 99 (G-06 with M-06, W-09, W-14, T-14, T-16; U5). 4 vendor files re-patched (files[].patch_row99, before = previous sha256; status unchanged): scripts/studio/mcp/tools.ts, doc-tools.ts, figure-tools.ts, write-tools.ts (tool descriptions; default tools/list reports,documents,query 30468 -> 29937 B; full 40-tool host list 73012 -> 72500 B; tools.ts also prints backupRemoved, controller add-on to row 71)"
  },
  "counts": {
   "files": 608,
@@ -95,7 +96,7 @@
   "patched": 155,
   "replaced": 12,
   "added": 30,
-  "bytes": 9927949
+  "bytes": 9927793
  },
  "files": [
   {
@@ -243,9 +244,10 @@
   {
    "path": "scripts/studio/mcp/doc-tools.ts",
    "status": "patched",
-   "bytes": 74004,
+   "bytes": 73590,
    "source_sha256": "af47f4e9a923028b33ead625d6b22d9c7a308e5d430cf1bde5f09a9e32fc7df8",
-   "sha256": "d22c77cb51becc10e100657904326fa9d8bed3b6a43846702ed08c7becafeead",
+   "sha256": "662ae158ac9979aa492ec2cda5a343484c52798e513f2c23e126523c5328bdf7",
+   "patch_row99": {"id": "row99-g06-tool-descriptions", "row": "99", "decision": "1.2.6 G-06 (U5; M-06, W-09, W-14, T-14, T-16)", "summary": "studio_document_status description names findings paging (T-14); trimmed texts of studio_templates_list, studio_document_create, studio_chapter_import_markdown, studio_chapter_submit, studio_slot_fill and the ADOPT, FINDINGS_PARAM, submit, withTier, baseRevisionNo param descriptions (tools/list budget); no schema type or behaviour change", "before_sha256": "d22c77cb51becc10e100657904326fa9d8bed3b6a43846702ed08c7becafeead", "after_sha256": "662ae158ac9979aa492ec2cda5a343484c52798e513f2c23e126523c5328bdf7", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/99_row99_diffs/scripts_studio_mcp_doc-tools.ts.diff", "diff_sha256": "7beef52dcefb976107687a2d989f12ee8a9a8f716e048bdaddc5616bd0d11af4"},
    "patch_row69c": {
     "id": "row69c-chapter-import-archived-code",
     "row": "69c",
@@ -267,9 +269,10 @@
   {
    "path": "scripts/studio/mcp/figure-tools.ts",
    "status": "patched",
-   "bytes": 29281,
+   "bytes": 29377,
    "source_sha256": "b7b2658186c53d9fe1f9dac50cc6eba76df2abfe815c232ee793e5d64dc5b463",
-   "sha256": "a944673b0380a400ed86001a7c4c1c69ed2a667d7e54f823cdde2e896c8b625d",
+   "sha256": "061ac38875a510df4d13fbe89e1c17b8a7f0c6f4a2437c88c94091fc3deb333e",
+   "patch_row99": {"id": "row99-g06-tool-descriptions", "row": "99", "decision": "1.2.6 G-06 (U5; M-06, W-09, W-14, T-14, T-16)", "summary": "studio_figure_preview: inline preview is the gate, standalone checks the figure alone with numeric limits (W-14); studio_figure_revise: partial patch, spec merged, FIGURE_GRAPH_DELTA (T-16, W-05); no schema or behaviour change", "before_sha256": "a944673b0380a400ed86001a7c4c1c69ed2a667d7e54f823cdde2e896c8b625d", "after_sha256": "061ac38875a510df4d13fbe89e1c17b8a7f0c6f4a2437c88c94091fc3deb333e", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/99_row99_diffs/scripts_studio_mcp_figure-tools.ts.diff", "diff_sha256": "219551823b36f2a96dfde092baf896525897aed67a6c4da6b8230602104960b2"},
    "patch_row73": {"id": "row73-w05-graph-delta", "row": "73", "decision": "1.2.6 patch W-05/W-03/OFF-06 (C2, D3; register N-020..N-023)", "summary": "studio_figure_revise: NEW export figureGraphDelta(before, after) compares node ids and edge keys (from->to; diagram spec.nodes/edges, chart graph data.nodes/links) of the stored and merged content; nodes/edges added, removed, rewired (removed+added sharing an endpoint) -> data.graphDelta {code FIGURE_GRAPH_DELTA} + head line 'FIGURE_GRAPH_DELTA: simpul a→b, tepi c→d' (ids only in the untrusted block, graphDelta in untrustedFields); a REPORT, never a refusal. previewLines: 'cacat N, catatan M' line when the server sends figure.defects/notices (W-03), fix hint keyed on defects; figure.notices/defects in untrustedFields. Generalised from the off-repo dotgen idea, no code copied. No description or schema change", "before_sha256": "ebffd9950aa05b2621e30fa1786eb7dbc23dce8136132a8bf2f98f0eba899219", "after_sha256": "a944673b0380a400ed86001a7c4c1c69ed2a667d7e54f823cdde2e896c8b625d", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/73_row73_diffs/scripts_studio_mcp_figure-tools.ts.diff", "diff_sha256": "893db54e38b4b284c6a0da921cfefbc391c52184efa1a7a11102dd176236d1e1"},
    "patch_row69": {"id": "row69-t16-partial-revise", "row": "69", "decision": "1.2.6 patch T-16 (U5; register E-17, E-18)", "summary": "mergeFigurePatch: spec is deep-merged into the stored spec (plain objects merge key by key, arrays and scalars replace, null removes, prototype keys skipped); when the patch carries spec, a merged spec missing a diagram.schema required key (or spec itself) is refused McpToolError SCHEMA_INVALID naming the key with pointer /spec/<key>, before any PATCH; caption/source/keyRow and chart keys unchanged; no description or schema change", "before_sha256": "188497f2b991b62c7fe48e69ec1f6d821f68b00f58103b8d672db74368113215", "after_sha256": "ebffd9950aa05b2621e30fa1786eb7dbc23dce8136132a8bf2f98f0eba899219", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/69_row69_diffs/scripts_studio_mcp_figure-tools.ts.diff", "diff_sha256": "a228e998fcaf11a9f741e54da2be016c05a8b20079dffc729fb297e5098011be"},
    "patch_row165I": {"id": "row165I-security", "row": "165I", "decision": "C196 (verification/24 L1)", "summary": "standaloneFileName: a server name with control, bidi, zero-width or separator characters (env.ts DATUM_NAME_UNSAFE_CHARS) or not NFC is rejected as a whole and the token-safe store name is used (reject, not strip)", "before_sha256": "e78ff8daeed4b7cd16305129ce4ed29d0180c1107e0f6c17de8e7f33d11c5e3b", "after_sha256": "188497f2b991b62c7fe48e69ec1f6d821f68b00f58103b8d672db74368113215", "diff": "implementation/141_row165I_diffs/scripts_studio_mcp_figure-tools.ts.diff"},
@@ -362,9 +365,10 @@
   {
    "path": "scripts/studio/mcp/tools.ts",
    "status": "patched",
-   "bytes": 81504,
+   "bytes": 81647,
    "source_sha256": "afe82e84205ea4167feb0d0afafc81bf7a168e25213ed5fbbfbfd19e5d71e154",
-   "sha256": "36155d016a82945be547c06800ea0df2b62178ad720128eb9a38f52d82815461",
+   "sha256": "0c8dd9c479b0e51b699513d79b4e2e088d82cf29459a34270a6ca12091785639",
+   "patch_row99": {"id": "row99-g06-tool-descriptions", "row": "99", "decision": "1.2.6 G-06 (U5; M-06, W-09, W-14, T-14, T-16)", "summary": "studio_render description: up to 540 s, on timeout studio_document_status then studio_file_verify, no blind re-render, FILE_VERIFIED(sha256) (W-09, M-07); trimmed texts of studio_registry, studio_report_submit, studio_report_refresh, studio_contracts_query, studio_document_get, studio_file_verify and 4 param descriptions (tools/list budget); studio_report_refresh/studio_file_verify print and return backupRemoved when > 0 (row 71 retention, controller add-on); no schema type or other behaviour change", "before_sha256": "36155d016a82945be547c06800ea0df2b62178ad720128eb9a38f52d82815461", "after_sha256": "0c8dd9c479b0e51b699513d79b4e2e088d82cf29459a34270a6ca12091785639", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/99_row99_diffs/scripts_studio_mcp_tools.ts.diff", "diff_sha256": "6a6790c93f194e8e22cc51f0a1de022876aa60756c804a227db10975ff688061"},
    "patch_row70": {"id": "row70-t17-bak-folder", "row": "70", "decision": "1.2.6 patch T-17 vendor part (U5; register N-055, N-057, E-22; P-8)", "summary": "studio_report_refresh and studio_file_verify carry backupResidue in structuredContent and print '(backupResidue N di .bak/)' after the backup path; OUT_EXISTS text names .bak/; schema and description unchanged", "before_sha256": "5aabf6be173897f9e3d9c9dfc39679c86dd784b057f6786a1fbec6b81719094f", "after_sha256": "36155d016a82945be547c06800ea0df2b62178ad720128eb9a38f52d82815461", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/70_row70_diffs/scripts_studio_mcp_tools.ts.diff", "diff_sha256": "6e4964a0e88032fa8add3434dc6f98645fee3dd988747471c235d98ed3c9f963"},
    "patch_row77": {"id": "row77-m07-file-verified-label", "row": "77", "decision": "1.2.6 patch M-07 (U5; register N-037, N-038)", "summary": "studio_file_verify text line names its check family: 'berkas <id>: FILE_VERIFIED(sha256) <64 hex>' (FILE_UNVERIFIED(sha256) otherwise; '-' when the sha header is not 64 hex) instead of 'TERVERIFIKASI (sha256 <16 hex>)'; error texts, schema, description and structuredContent unchanged", "before_sha256": "fdee7081ad0b179f4af4ab3fb729dd31306ad6929e32066b816a7f51cb89fd8d", "after_sha256": "5aabf6be173897f9e3d9c9dfc39679c86dd784b057f6786a1fbec6b81719094f", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/77_row77_diffs/scripts_studio_mcp_tools.ts.diff", "diff_sha256": "4291686c4d4a8a871f9b59f31dcce91d12dc08a3e8c2d52090c0dbba7a24cadc"},
    "patch_row74b": {"id": "row74b-m03-cidline", "row": "74b", "decision": "1.2.6 patch M-03 (U5; register cidLine, N-041)", "summary": "cidLine: more than 3 correlation ids now prints every cid plus the explicit count '(N cid)' instead of first, second, ... last; 0 and 1-3 cid lines unchanged; no schema, description or structuredContent change", "before_sha256": "814e9b5bcce83fe368890874aa8f1f256a1176d4a403429f74de73c44ef2c7f6", "after_sha256": "fdee7081ad0b179f4af4ab3fb729dd31306ad6929e32066b816a7f51cb89fd8d", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/74b_row74b_diffs/scripts_studio_mcp_tools.ts.diff", "diff_sha256": "71d9345ba300ae15d973dece52b18d073ce71e6bf40278b78091d891bf4ca4bc"},
@@ -498,9 +502,10 @@
   {
    "path": "scripts/studio/mcp/write-tools.ts",
    "status": "patched",
-   "bytes": 56550,
+   "bytes": 56569,
    "source_sha256": "0f7e2787cedd3522727213af4b02be81a54906a5b9634b18c89bcb7beb2f3148",
-   "sha256": "f3486cc67e329b3f4b5b98a590ed109fdfaab0753f2fd965d2444d176f7b4575",
+   "sha256": "7ab6e9d6ebe2da9350de28a1806de1850f7a3a869229af50d507e374560a7ac7",
+   "patch_row99": {"id": "row99-g06-tool-descriptions", "row": "99", "decision": "1.2.6 G-06 (U5; M-06, W-09, W-14, T-14, T-16)", "summary": "studio_edit description: find also reaches figure captions/sources, change {what,why,impact} goes to the revision history (M-06); addRow example shortened (<= 450 chars); no schema or behaviour change", "before_sha256": "f3486cc67e329b3f4b5b98a590ed109fdfaab0753f2fd965d2444d176f7b4575", "after_sha256": "7ab6e9d6ebe2da9350de28a1806de1850f7a3a869229af50d507e374560a7ac7", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/99_row99_diffs/scripts_studio_mcp_write-tools.ts.diff", "diff_sha256": "6fbb07a4e110c5107301bf7a452b4c8b37551cc6021d6dff08cbd71e38dac04a"},
    "patch_row77b": {
     "id": "row77b-m07-write-report-file-label",
     "row": "77b",
@@ -6139,6 +6144,7 @@
   "61b",
   "63",
   "97b",
-  "67"
+  "67",
+  "99"
  ]
 }

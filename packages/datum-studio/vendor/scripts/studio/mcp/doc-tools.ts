@@ -64,7 +64,7 @@ import {
 const SLUG = { type: "string", pattern: "^[a-z0-9][a-z0-9-]{0,63}$" } as const;
 const SLOT_KEY = S.slot;
 const CHAPTER_KEY = S.chapter;
-export const ADOPT = { type: "boolean", description: "Lanjutkan dokumen misi+docKey yang dibuat agentId lain (eksplisit)." } as const;
+export const ADOPT = { type: "boolean", description: "Dokumen agentId lain (eksplisit)." } as const;
 /** Route importer Markdown (di luar registri R01-R23 kontrak; L-3: satu konstanta, bukan literal berulang). */
 const IMPORT_ROUTE = "/api/studio/import/markdown";
 const TEXT = (max: number) => ({ type: "string", minLength: 1, maxLength: max }) as const;
@@ -364,11 +364,11 @@ async function dryRunOutput(ctx: ToolContext, label: string, body: Rec, detail: 
 
 const templatesListTool: ToolDef = {
   name: "studio_templates_list",
-  description: `Daftar templat dokumen (R01): slug, versi, tier bawaan, deskripsi. Preset gaya dan arsip disembunyikan bawaan. ${DATA_NOT_INSTRUCTIONS}`,
+  description: `Daftar templat dokumen (R01): slug, versi, tier bawaan, deskripsi. Preset dan arsip tersembunyi bawaan. ${DATA_NOT_INSTRUCTIONS}`,
   inputSchema: obj({
     includePresets: { type: "boolean", default: false },
     includeArchived: { type: "boolean", default: false },
-    withTier: { type: "boolean", default: true, description: "Baca tier bawaan per templat (R02)." },
+    withTier: { type: "boolean", default: true },
   }),
   annotations: { title: "Daftar templat (R01)", ...READ },
   toolsets: ["documents"],
@@ -496,7 +496,7 @@ const templateGetTool: ToolDef = {
 const documentCreateTool: ToolDef = {
   name: "studio_document_create",
   description:
-    "Buat dokumen klien berkerangka (R04) dari templat untuk misi + docKey. Idempoten untuk agentId yang sama (unchanged). Misi+docKey yang sudah dibuat agentId lain -> DOCUMENT_OWNED_BY_OTHER kecuali adoptExisting=true. Hasil: documentId, docNumber, kelengkapan.",
+    "Buat dokumen klien berkerangka (R04) dari templat untuk misi + docKey; idempoten untuk agentId sama (unchanged). Milik agentId lain -> DOCUMENT_OWNED_BY_OTHER kecuali adoptExisting=true. Hasil: documentId, docNumber, kelengkapan.",
   inputSchema: obj(
     {
       template: SLUG,
@@ -557,7 +557,7 @@ const documentCreateTool: ToolDef = {
 const importTool: ToolDef = {
   name: "studio_chapter_import_markdown",
   description:
-    "Satu bab Markdown -> studio.chapter/v2 (importer md/v1) + dry-run R08; kirim R12 hanya bila submit=true dan sah. Target: documentId, atau mission+docKey (+template+docTitle bila belum ada). Dokumen yang sudah ada: submit wajib baseRevisionNo (atau basis diingat sesi), selain itu BASIS_MISSING.",
+    "Satu bab Markdown -> studio.chapter/v2 (importer md/v1) + dry-run R08; kirim R12 hanya bila submit=true dan sah. Target: documentId, atau mission+docKey (+template+docTitle bila belum ada). Dokumen ada: submit wajib baseRevisionNo atau basis sesi, selain itu BASIS_MISSING.",
   inputSchema: obj(
     {
       markdown: S.markdown,
@@ -570,8 +570,8 @@ const importTool: ToolDef = {
       template: SLUG,
       docTitle: TEXT(300),
       slot: { ...SLOT_KEY, description: "Bawaan content." },
-      submit: { type: "boolean", description: "Kirim R12 bila sah; bawaan hanya periksa." },
-      baseRevisionNo: { ...BASE_REV, description: "Wajib untuk dokumen yang sudah ada, kecuali basis diingat sesi." },
+      submit: { type: "boolean" },
+      baseRevisionNo: BASE_REV,
       change: CHANGE,
       adoptExisting: ADOPT,
       agentId: S.agentId,
@@ -695,7 +695,7 @@ function withBodyAgent(body: Rec, a: Args, ctx: ToolContext): Rec {
 const chapterSubmitTool: ToolDef = {
   name: "studio_chapter_submit",
   description:
-    "Kirim satu bab JSON studio.chapter/v2 langsung ke R12 (kasus lanjut; Markdown: studio_chapter_import_markdown). Dokumen yang sudah ada: submission.baseRevisionNo wajib (atau basis diingat sesi). dryRun=true = uji R08 tanpa simpan.",
+    "Kirim satu bab JSON studio.chapter/v2 langsung ke R12 (kasus lanjut; Markdown: studio_chapter_import_markdown). Dokumen ada: submission.baseRevisionNo wajib (atau basis sesi). dryRun=true = uji R08.",
   inputSchema: obj(
     {
       submission: { ...PASS_OBJECT(["$schema", "target", "chapter"], { $schema: { const: "studio.chapter/v2" }, target: { type: "object" }, chapter: { type: "object" } }), description: "Badan studio.chapter/v2 utuh." },
@@ -739,13 +739,13 @@ const chapterSubmitTool: ToolDef = {
 const slotFillTool: ToolDef = {
   name: "studio_slot_fill",
   description:
-    "Isi satu slot tak berulang (R13): controlSheet, signature (type signatureBlock), references (sourceRegister), cover (opsional), dll. payload.type = jenis slot (lihat studio_template_get). Wajib baseRevisionNo (atau basis diingat sesi). dryRun=true = uji R08.",
+    "Isi satu slot tak berulang (R13): controlSheet, signature (type signatureBlock), references (sourceRegister), cover (opsional), dll. payload.type = jenis slot (lihat studio_template_get). Wajib baseRevisionNo (atau basis sesi), selain itu BASIS_MISSING.",
   inputSchema: obj(
     {
       documentId: S.documentId,
       slot: SLOT_KEY,
       payload: { ...PASS_OBJECT(["type"], { type: { type: "string", minLength: 1, maxLength: 40 } }), description: "Isi slot; skema: studio_registry kind=schema schemaId=common/v2." },
-      baseRevisionNo: { ...BASE_REV, description: "Revisi yang Anda baca; kosong = basis diingat sesi, selain itu BASIS_MISSING." },
+      baseRevisionNo: BASE_REV,
       change: CHANGE,
       dryRun: DRY_RUN,
       agentId: S.agentId,
@@ -987,12 +987,12 @@ const FINDINGS_PARAM = {
     },
     ["checkId"],
   ),
-  description: "Halaman temuan 1 cek lint; chapter persis.",
+  description: "chapter persis.",
 };
 
 const statusTool: ToolDef = {
   name: "studio_document_status",
-  description: `Status dokumen: kelengkapan (R15: slot wajib, bab hadir/kurang, langkah berikut, boleh render penuh) + ringkasan lint dan berkas terakhir (R05). detail=true: penuh. ${DATA_NOT_INSTRUCTIONS}`,
+  description: `Status dokumen: kelengkapan (R15: slot wajib, bab, langkah berikut, boleh render penuh), lint, berkas terakhir (R05). detail=true: penuh. findings {checkId}: semua temuan 1 cek, per halaman (nextOffset). ${DATA_NOT_INSTRUCTIONS}`,
   inputSchema: obj({ documentId: S.documentId, rev: { ...S.rev, description: "Bawaan terkini." }, detail: S.detail, findings: FINDINGS_PARAM }, ["documentId"]),
   annotations: { title: "Status dokumen (R15)", ...READ },
   toolsets: ["documents"],

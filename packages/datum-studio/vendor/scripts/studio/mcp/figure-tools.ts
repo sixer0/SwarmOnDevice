@@ -139,7 +139,7 @@ function svgFileName(id: string, b: Rec, f: Rec): string {
 const figurePreviewTool: ToolDef = {
   name: "studio_figure_preview",
   description:
-    "Pratinjau satu chart/diagram tanpa render dokumen: ukuran + isu tata letak bersaran. Sasaran pid/address atau block v2 (dry-run). SVG: downloadDir atau includeSvg. standalone: gambar mandiri (caption, KUNCI, SUMBER; Gambar n.m Judul); png: +PNG.",
+    "Pratinjau satu chart/diagram tanpa render dokumen: ukuran + isu tata letak bersaran. Sasaran pid/address atau block v2 (dry-run). SVG: downloadDir atau includeSvg. Gerbang = pratinjau inline. standalone: hanya figur sendiri (caption, KUNCI, SUMBER), batas numerik; png: +PNG.",
   inputSchema: obj(
     {
       documentId: S.documentId,
@@ -386,7 +386,7 @@ function graphDeltaLines(id: string, d: FigureGraphDelta): string[] {
 const figureReviseTool: ToolDef = {
   name: "studio_figure_revise",
   description:
-    "Ubah konten satu figur v2 tanpa kirim ulang bab, lalu pratinjau. patch: data, caption, unit, labelShort, topN, orientation, sort...; null = hapus. Wajib change + baseRevisionNo (atau basis sesi).",
+    "Ubah konten satu figur v2 tanpa kirim ulang bab, lalu pratinjau. patch parsial: data, caption, unit, labelShort, topN, orientation, sort...; spec digabung; null = hapus. Simpul/tepi berubah -> FIGURE_GRAPH_DELTA. Wajib change + baseRevisionNo (atau basis sesi).",
   inputSchema: obj(
     {
       documentId: S.documentId,
