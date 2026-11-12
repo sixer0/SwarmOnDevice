@@ -44,6 +44,7 @@ import { toOutputFileDto } from "@/lib/studio/services/storage";
 import { json, reject, reqCtx } from "@/lib/studio/http";
 import { failFrom, toDocumentSummary, toRevisionSummary } from "../route-kit";
 import { asCompletenessReport } from "@/app/api/studio/validate/_shared/v2-kit";
+import { inList, readWith } from "../../../store-bridge/index.ts";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -220,6 +221,63 @@ function buildSlots(rows: StructureRows, report: CompletenessReportV2 | null, co
   return out;
 }
 
+// ── Swarm 1.2.6 row 78b (C16): stored U24 page verdict per output ─────────
+// studio_render's wrapper (mcp-host/verify/render-wrapper.ts) writes one output_verification record per output it
+// made (row 149). R05 returns it per output as `renderVerification`, so studio_document_status can print the page
+// verdict after a render timeout (the render result itself never arrived). Same rule as store/mission/output-gate.ts
+// `reasonOf`: no record -> pending (NOT_CHECKED); record sha != file sha -> STALE; FAIL -> CHECK_FAILED;
+// UNKNOWN or a non-verified state -> CHECK_UNKNOWN; else verified. Check ids and reasons only (no finding text).
+
+export interface OutputRenderVerification {
+  state: "verified" | "unverified" | "pending";
+  reason: "NOT_CHECKED" | "STALE" | "CHECK_FAILED" | "CHECK_UNKNOWN" | null;
+  fail: string[];
+  /** `<checkId>:<reason>` */
+  unknown: string[];
+  overlapClip: { status: string; reason: string | null; measuredPages: number; totalPages: number } | null;
+  attempt: number | null;
+}
+
+const PENDING_VERIFICATION: OutputRenderVerification = { state: "pending", reason: "NOT_CHECKED", fail: [], unknown: [], overlapClip: null, attempt: null };
+const CHECK_ID = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$/;
+
+function renderVerificationOf(fileSha: string, rec: Record<string, unknown> | undefined): OutputRenderVerification {
+  if (!rec || typeof rec.output_sha256 !== "string") return PENDING_VERIFICATION;
+  let report: unknown = null;
+  try {
+    report = typeof rec.report === "string" ? JSON.parse(rec.report) : rec.report;
+  } catch {
+    report = null;
+  }
+  const checks = report && typeof report === "object" && Array.isArray((report as { checks?: unknown }).checks) ? ((report as { checks: unknown[] }).checks.filter((c) => c && typeof c === "object") as Record<string, unknown>[]) : [];
+  const id = (c: Record<string, unknown>) => (typeof c.id === "string" && CHECK_ID.test(c.id) ? c.id : "?");
+  const why = (c: Record<string, unknown>) => (typeof c.reason === "string" && CHECK_ID.test(c.reason) ? c.reason : "?");
+  const fail = checks.filter((c) => c.status === "FAIL").map(id);
+  const unknown = checks.filter((c) => c.status === "UNKNOWN").map((c) => `${id(c)}:${why(c)}`);
+  const ov = checks.find((c) => c.id === "OVERLAP_CLIP");
+  const cov = ov && ov.coverage && typeof ov.coverage === "object" ? (ov.coverage as Record<string, unknown>) : null;
+  const n = (v: unknown): v is number => typeof v === "number" && Number.isInteger(v) && v >= 0;
+  const overlapClip =
+    ov && cov && n(cov.measuredPages) && n(cov.totalPages) && cov.measuredPages <= cov.totalPages && typeof ov.status === "string" && CHECK_ID.test(ov.status)
+      ? { status: ov.status, reason: ov.status === "UNKNOWN" ? why(ov) : null, measuredPages: cov.measuredPages, totalPages: cov.totalPages }
+      : null;
+  const reason =
+    rec.output_sha256 !== fileSha ? "STALE" : Number(rec.fail_count) > 0 ? "CHECK_FAILED" : Number(rec.unknown_count) > 0 || rec.state !== "verified" ? "CHECK_UNKNOWN" : null;
+  return { state: reason === null ? "verified" : "unverified", reason, fail, unknown, overlapClip, attempt: rec.attempt == null ? null : Number(rec.attempt) };
+}
+
+/** The stored verification records of `ids` (one per output, PK output_file_id). */
+function verificationRecords(ids: readonly string[]): Promise<Map<string, Record<string, unknown>>> {
+  if (ids.length === 0) return Promise.resolve(new Map());
+  return readWith(undefined, (q) => {
+    const rows = q.all<Record<string, unknown>>(
+      `SELECT output_file_id, output_sha256, state, fail_count, unknown_count, report, attempt FROM output_verification WHERE output_file_id IN (${inList(ids)})`,
+      [...ids],
+    );
+    return new Map(rows.map((r) => [String(r.output_file_id), r]));
+  });
+}
+
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const denied = await requireSession(req);
   if (denied) return denied;
@@ -252,6 +310,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       : (((await revisionByNo(id, doc.currentRevisionNo))?.releaseStatus as StudioReleaseStatus | undefined) ?? null);
 
     const completeness = asCompletenessReport(rev.completenessReport);
+    const records = await verificationRecords(files.map((f) => f.id));
     return json(
       {
         document: { ...toDocumentSummary(doc, docRelease), docKey: doc.missionDocKey, completeness: doc.completeness as StudioCompleteness },
@@ -264,7 +323,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         tree: buildTree(blocks),
         slots: buildSlots(structure, completeness, doc.contractKind),
         completeness,
-        outputs: files.map(toOutputFileDto),
+        outputs: files.map((f) => ({ ...toOutputFileDto(f), renderVerification: renderVerificationOf(f.sha256, records.get(f.id)) })),
         lint: rev.lintReport ?? null,
       },
       200,

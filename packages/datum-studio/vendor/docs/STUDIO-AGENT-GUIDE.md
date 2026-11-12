@@ -1520,12 +1520,15 @@ formats: ["docx", "html"], figures: ["png"] }`.
 mengulang studio_render`. Render bisa tetap selesai di server. Lakukan berurutan:
 
 1. `studio_document_status { documentId }` dan bandingkan daftar berkas dengan daftar sebelum render.
-2. Ada berkas baru: `studio_file_verify { fileId }` untuk setiap id berkas itu.
+   Tiap baris berkas memuat vonis halaman yang tersimpan: `RENDER_VERIFIED(U24)` atau
+   `RENDER_UNVERIFIED(U24) fail=… unknown=…` (dengan baris `OVERLAP_CLIP … diukur m/n halaman`), atau
+   `RENDER_VERIFY_PENDING` bila belum ada vonis tersimpan untuk berkas itu.
+2. Ada berkas baru: `studio_file_verify { fileId }` untuk setiap id berkas itu (sha256).
 3. Tidak ada berkas baru: ulangi `studio_render` satu kali.
 
-Jangan mengulang `studio_render` secara buta. Vonis halaman `RENDER_VERIFIED(U24)` hanya dicetak di
-hasil `studio_render`. Berkas yang ditemukan lewat langkah 1 hanya mendapat `FILE_VERIFIED(sha256)`
-dari langkah 2.
+Jangan mengulang `studio_render` secara buta. Status menunjukkan vonis halaman (U24); `studio_file_verify`
+memberi `FILE_VERIFIED(sha256)` untuk sha berkas. Keduanya diperlukan. `RENDER_VERIFY_PENDING` bukan
+lulus: berkas itu belum punya vonis halaman.
 
 ### 8.4 Dua arti "terverifikasi"
 

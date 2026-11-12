@@ -92,6 +92,7 @@
   "row62": "2026-11-12: 1.2.6 row 62 (T-06, U5; register E-10 DATUM-25 message change only). 2 vendor files re-patched (files[].patch_row62, before = previous sha256; status unchanged): engine/diagram/core/colour.ts (NEW diagramColourSources: the diagramColourValues token model keyed by hex with its spec sources; diagramColourValues = its sorted keys, output unchanged; NEW colourCountDetail), engine/diagram/build/svg.ts (DATUM-25 refusal appends 'dihitung N: #hex (sources), ... \u2014 sisa R'; limit unchanged). Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/62_row62_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9927793 + 2015 = 9929808. patch_rows += 62",
   "row98": "2026-11-12: 1.2.6 row 98 (G-04 render/verify/lint/assets/quota parts, W-09, T-14, W-13, T-18; U5; register N-033..N-040, N-044, N-053, N-055..N-057, N-106, N-113, N-114). 1 vendor file re-patched (files[].patch_row98, before = previous sha256; status unchanged): docs/STUDIO-AGENT-GUIDE.md (NEW §8.3-§8.7 and §10.1, §1.1 pointer; §4.1.2 untouched). Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/98_row98_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9929808 + 9844 = 9939652. patch_rows += \"98\".",
   "rowINT1_item2": "2026-11-12: 1.2.6 row INT-1 (INT1_item2). Stale step-3 comment in services/render/pure/render.ts fixed (comment only, no behaviour change). 1 vendor file re-patched (files[].patch_rowINT1_item2, before = previous sha256; status unchanged): src/lib/studio/services/render/pure/render.ts. Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/int1_diffs/src_lib_studio_services_render_pure_render.ts.diff. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9939652 + 260 = 9939912. patch_rows += \"INT-1\" (once).",
+  "row78b": "2026-11-12: 1.2.6 row 78b (C16, U24; follow-up of rows 78 and 98). 2 vendor files re-patched (files[].patch_row78b, before = previous sha256; status unchanged): scripts/studio/mcp/doc-tools.ts (status output line shows the stored U24 page verdict, RENDER_VERIFY_PENDING when none), docs/STUDIO-AGENT-GUIDE.md (§8.3 timeout procedure). Source of the verdict: non-vendor src/mcp-host/local-api/routes/r05-document.ts outputs[].renderVerification (output_verification). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/78b_row78b_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9940190 + 1497 + 316 = 9942003. patch_rows += \"78b\".",
   "rowINT1_item5": "2026-11-12: 1.2.6 row INT-1 (INT1_item5). DATUM-25 estimate refusal uses colourCountDetail like build/svg.ts (row 62). 1 vendor file re-patched (files[].patch_rowINT1_item5, before = previous sha256; status unchanged): src/lib/studio/engine/diagram/core/estimate.ts. Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/int1_diffs/src_lib_studio_engine_diagram_core_estimate.ts.diff. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9939912 + 278 = 9940190. patch_rows += \"INT-1\" (once)."
  },
  "counts": {
@@ -100,7 +101,7 @@
   "patched": 155,
   "replaced": 12,
   "added": 30,
-  "bytes": 9940190
+  "bytes": 9942003
  },
  "files": [
   {
@@ -129,9 +130,10 @@
   {
    "path": "docs/STUDIO-AGENT-GUIDE.md",
    "status": "patched",
-   "bytes": 190754,
+   "bytes": 191070,
    "source_sha256": "b5429f89523246431aacbfc37749d22c0cf062bbf3f634c4bc269db295e783bb",
-   "sha256": "f21af643d4d10f843f68d6f7bc5fb005b573cb4347a934f46aa3a1d1a90a2a06",
+   "sha256": "c3f53c973bf9f6713143239861475bd0958933e310b9326ab51796f8a36ef19b",
+   "patch_row78b": {"id": "row78b-guide-timeout-verdict", "row": "78b", "decision": "1.2.6 C16 (U24)", "summary": "§8.3 render timeout procedure: studio_document_status shows the stored page verdict per output (RENDER_VERIFIED(U24) / RENDER_UNVERIFIED(U24) fail= unknown=, OVERLAP_CLIP line, RENDER_VERIFY_PENDING), then studio_file_verify for the sha; both needed; pending is not a pass", "before_sha256": "f21af643d4d10f843f68d6f7bc5fb005b573cb4347a934f46aa3a1d1a90a2a06", "after_sha256": "c3f53c973bf9f6713143239861475bd0958933e310b9326ab51796f8a36ef19b", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/78b_row78b_diffs/STUDIO-AGENT-GUIDE.md.diff", "diff_sha256": "1f93352ee17aac1a40dacf7c6297dfa55c9e2d2a04a497b0758e0874c9eb27ce"},
    "patch_row207": {"id": "row207-hb2-verification-chain", "row": "207", "decision": "1.2.3 patch HB-2", "summary": "§5.4 controlSheet example uses layer/method/object/result; paragraph on accepted keys, alias mapping, refusal, role/name print mapping and studio_edit cell addressing", "before_sha256": "b5429f89523246431aacbfc37749d22c0cf062bbf3f634c4bc269db295e783bb", "after_sha256": "0b1fddbd63d0120baad9fd5d4088620c561d5bfd19a5607343521319e4f57389", "diff": "docs/2026-11-09_swarm_1_2_3_patch/implementation/207_row207_diffs/STUDIO-AGENT-GUIDE.md.diff"},
    "patch_row213": {"id": "row213-cover-colophon", "row": "213", "decision": "1.2.4 patch P15", "summary": "§5.4 cover table: colophon shape { left: { text }, right: { text } } (both sides required, text objects); §5.7 after the D16/D17/D18 table: minimal valid cover payload with colophon (studio:validate studio.slot/v2)", "before_sha256": "0b1fddbd63d0120baad9fd5d4088620c561d5bfd19a5607343521319e4f57389", "after_sha256": "4aead3d2032d5add430cc73433f18a88ef17a97ea102dafd0acb8a0895ff35e6", "diff": "docs/2026-11-09_swarm_1_2_3_patch/implementation/213_row213_diffs/STUDIO-AGENT-GUIDE.md.diff"},
    "patch_row97b": {"id": "row97b-g04-diagram-section", "row": "97b", "decision": "1.2.6 G-04, G-01 (U5)", "summary": "NEW §4.1.2: studio_figure_preview { documentId, block } inline, studio_figure_revise partial patch (spec deep merge, arrays replaced, SCHEMA_INVALID on a missing required key), FIGURE_GRAPH_DELTA / structuredContent.graphDelta, studio_render with figures png and pages: PNGs, dual gate; direction TB/LR on flow (TB 4/5 per rank, LR 3/4 ranks, 6 per rank, DATUM-37-lebar, P1-direction, aliases); caption without the GAMBAR token, <= 100 chars, CAPTION_WRAP/CAPTION_TRUNCATED; GEOM_ENTRY_COLLISION, GEOM_STUB_SEGMENT, GEOM_ARROW_TANGENT with the autofit suggestions; STUDIO-MCP.md links (§1.1, §17.0) replaced", "before_sha256": "4aead3d2032d5add430cc73433f18a88ef17a97ea102dafd0acb8a0895ff35e6", "after_sha256": "316ed65264cc73429ef092926a30d0ab559942d92766dc57bd74e4c70e55bb76", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/97b_row97b_diffs/STUDIO-AGENT-GUIDE.md.diff"},
@@ -249,9 +251,10 @@
   {
    "path": "scripts/studio/mcp/doc-tools.ts",
    "status": "patched",
-   "bytes": 73590,
+   "bytes": 75087,
    "source_sha256": "af47f4e9a923028b33ead625d6b22d9c7a308e5d430cf1bde5f09a9e32fc7df8",
-   "sha256": "662ae158ac9979aa492ec2cda5a343484c52798e513f2c23e126523c5328bdf7",
+   "sha256": "70fea230599bbdb987270c3af5167e237f6804ff4db4fe4dc1a590c6b5ee0e47",
+   "patch_row78b": {"id": "row78b-status-render-verdict", "row": "78b", "decision": "1.2.6 C16 (U24)", "summary": "studio_document_status default text: each output line carries the stored U24 page verdict from R05 outputs[].renderVerification (RENDER_VERIFIED(U24) / RENDER_UNVERIFIED(U24) [STALE] fail= unknown=, OVERLAP_CLIP coverage line; RENDER_VERIFY_PENDING when absent), within DOCUMENT_STATUS_TEXT_MAX_BYTES; export RENDER_VERIFY_PENDING; description and schema unchanged", "before_sha256": "662ae158ac9979aa492ec2cda5a343484c52798e513f2c23e126523c5328bdf7", "after_sha256": "70fea230599bbdb987270c3af5167e237f6804ff4db4fe4dc1a590c6b5ee0e47", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/78b_row78b_diffs/scripts_studio_mcp_doc-tools.ts.diff", "diff_sha256": "c297a6ceb76078675001f1719163962137364578ae653754c290a06b34947eec"},
    "patch_row99": {"id": "row99-g06-tool-descriptions", "row": "99", "decision": "1.2.6 G-06 (U5; M-06, W-09, W-14, T-14, T-16)", "summary": "studio_document_status description names findings paging (T-14); trimmed texts of studio_templates_list, studio_document_create, studio_chapter_import_markdown, studio_chapter_submit, studio_slot_fill and the ADOPT, FINDINGS_PARAM, submit, withTier, baseRevisionNo param descriptions (tools/list budget); no schema type or behaviour change", "before_sha256": "d22c77cb51becc10e100657904326fa9d8bed3b6a43846702ed08c7becafeead", "after_sha256": "662ae158ac9979aa492ec2cda5a343484c52798e513f2c23e126523c5328bdf7", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/99_row99_diffs/scripts_studio_mcp_doc-tools.ts.diff", "diff_sha256": "7beef52dcefb976107687a2d989f12ee8a9a8f716e048bdaddc5616bd0d11af4"},
    "patch_row69c": {
     "id": "row69c-chapter-import-archived-code",
@@ -6156,6 +6159,7 @@
   "67",
   "99",
   "98",
-  "INT-1"
+  "INT-1",
+  "78b"
  ]
 }

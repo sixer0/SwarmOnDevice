@@ -923,12 +923,26 @@ function failCountsByCode(lint: unknown): Array<[string, number]> {
   return [...m.entries()].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
 }
 
-/** One output line (inside the status block): safe tokens, the full sha (64 hex or "-"), then the file name (server text). */
-function statusOutputLine(o: Record<string, unknown>): string {
+// Swarm patch (1.2.6 row 78b, C16): the stored U24 page verdict per output (server R05 `outputs[].renderVerification`,
+// written by studio_render's verification), so a status read after a render timeout shows it. Labels as studio_render
+// prints them: RENDER_VERIFIED(U24) / RENDER_UNVERIFIED(U24) fail=… unknown=… (+ STALE when the record is for other
+// bytes), the OVERLAP_CLIP coverage on its own line; no record (or a server without the field) -> RENDER_VERIFY_PENDING.
+export const RENDER_VERIFY_PENDING = "RENDER_VERIFY_PENDING";
+function renderVerdictText(v: unknown): string {
+  if (!isRecord(v) || (v.state !== "verified" && v.state !== "unverified")) return RENDER_VERIFY_PENDING;
+  const list = (x: unknown) => (Array.isArray(x) ? x.map((s) => tok(s, "?")).join(",") : "") || "-";
+  const head = v.state === "verified" ? "RENDER_VERIFIED(U24)" : `RENDER_UNVERIFIED(U24)${v.reason === "STALE" ? " STALE" : ""} fail=${list(v.fail)} unknown=${list(v.unknown)}`;
+  const c = isRecord(v.overlapClip) ? v.overlapClip : null;
+  return c ? `${head}\n    OVERLAP_CLIP ${tok(c.status)}${c.status === "UNKNOWN" ? `:${tok(c.reason, "?")}` : ""} diukur ${tok(c.measuredPages)}/${tok(c.totalPages)} halaman` : head;
+}
+
+/** One output line (inside the status block): safe tokens, the full sha (64 hex or "-"), the page verdict, then the file name (server text). */
+function statusOutputLine(o: Record<string, unknown>, verdict: unknown): string {
   const scope = isRecord(o.scope) ? `${tok(o.scope.kind)}${typeof o.scope.key === "string" ? `:${tok(o.scope.key)}` : ""}` : tok(o.scope);
   const sha = typeof o.sha256 === "string" && HEX64.test(o.sha256) ? o.sha256 : "-";
   const name = String(o.finalFileName ?? o.fileName ?? "").replace(/[\r\n\t]+/g, " ").slice(0, 160);
-  return `berkas ${tok(o.id)} ${tok(o.format)} ${scope} lint ${tok(o.lintVerdict)}${o.draft === true ? " draf" : ""} sha256 ${sha} ${name}`;
+  const [head, cov] = renderVerdictText(verdict).split("\n");
+  return `berkas ${tok(o.id)} ${tok(o.format)} ${scope} lint ${tok(o.lintVerdict)}${o.draft === true ? " draf" : ""} sha256 ${sha} ${head} ${name}${cov ? `\n${cov}` : ""}`;
 }
 
 // Swarm patch (1.2.6 row 49, T-14): `findings` (register N-033) pages the full finding list of one lint check of the
@@ -1037,6 +1051,7 @@ const statusTool: ToolDef = {
       `  FAIL per kode: ${fails.length === 0 ? "-" : fails.slice(0, 40).map(([k, n]) => `${k}=${n}`).join(", ")}${fails.length > 40 ? ` (+${fails.length - 40} kode lain; detail=true)` : ""}`,
     );
     const listed = cap(outputs, STATUS_OUTPUTS_LISTED);
+    const verdicts = new Map(arr(b.outputs).filter(isRecord).map((o) => [o.id, o.renderVerification] as const));
     const lintFull = lintLines(lintSum);
     const lintVariants = detail
       ? [lintFull]
@@ -1052,7 +1067,7 @@ const statusTool: ToolDef = {
           [
             `judul: ${String(doc.title ?? "").slice(0, titleMax)}`,
             ...lint,
-            ...listed.slice(0, n).map(statusOutputLine),
+            ...listed.slice(0, n).map((o) => statusOutputLine(o, verdicts.get(o.id))),
             ...(outputs.length > n ? [`- (+${outputs.length - n} berkas lain; detail=true)`] : []),
             ...(withSteps ? steps.map((s) => `- ${s}`) : steps.length > 0 ? [`- (${steps.length} langkah berikut; detail=true)`] : []),
           ].join("\n"),
