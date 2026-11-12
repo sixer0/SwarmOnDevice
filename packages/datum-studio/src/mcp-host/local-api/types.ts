@@ -13,6 +13,8 @@ export interface RouteContext {
   agentId: string
   /** The local caller of this session (spec §1.3: one fixed caller per MCP session). */
   caller: StudioCaller
+  /** Row 50b (W-13): the session file root (file-root.ts), the only root for R18 `path` reads; absent = path input refused. */
+  fileRoot?: string
 }
 
 export type RouteHandler = (req: Request, rc: RouteContext) => Promise<Response>

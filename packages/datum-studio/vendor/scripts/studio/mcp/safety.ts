@@ -169,29 +169,43 @@ function assertNotProtected(resolved: string, isDir = false): void {
   }
 }
 
-export type PathPurpose = "read-report" | "write-report" | "write-dir";
+// Swarm patch (1.2.6 row 50b, W-13 N-167): fourth purpose `read-asset` (PNG/JPEG upload by path).
+export type PathPurpose = "read-report" | "write-report" | "write-dir" | "read-asset";
 
 const REPORT_EXT = new Set([".md", ".markdown", ".txt"]);
+const ASSET_EXT = new Set([".png", ".jpg", ".jpeg"]);
 
 /**
  * Validasi path dari argumen alat. Urutan: leksikal ({@link checkPathLexical}) -> di dalam akar secara
  * leksikal -> (tulis) bukan berkas instruksi -> BARU fs: realpath harus tetap di dalam akar.
  * `read-report`: berkas ada, ekstensi .md/.markdown/.txt, ukuran <= `maxBytes`. `write-report`:
  * ekstensi .md/.markdown, folder induk ada. `write-dir`: folder (boleh belum ada).
+ * `read-asset` (row 50b): ekstensi .png/.jpg/.jpeg, berkas biasa, ukuran <= `maxBytes` dari stat SEBELUM
+ * dibaca (`ASSET_TOO_LARGE`); mengembalikan path NYATA (symlink terselesaikan) agar pembaca membuka
+ * berkas yang sama dengan yang diperiksa (01f §3.3 R7). Jenis isi tetap diputuskan dekoder, bukan ekstensi.
  */
 export function resolveAllowedPath(raw: string, roots: readonly string[], purpose: PathPurpose, nfs: NodeFs, maxBytes = Infinity): string {
   const resolved = checkPathLexical(raw);
   const outside = () => new McpToolError("PATH_OUTSIDE_ROOTS", `path ${resolved} di luar akar yang diizinkan (STUDIO_MCP_FILE_ROOTS: ${roots.join(path.delimiter)})`);
   if (!roots.some((r) => isInside(resolved, path.resolve(r)))) throw outside();
-  if (purpose !== "read-report") assertNotProtected(resolved, purpose === "write-dir");
+  const reads = purpose === "read-report" || purpose === "read-asset";
+  if (!reads) assertNotProtected(resolved, purpose === "write-dir");
   const ext = path.extname(resolved).toLowerCase();
   if (purpose === "read-report" && !REPORT_EXT.has(ext)) throw new McpToolError("PATH_INVALID", `hanya berkas .md, .markdown, atau .txt yang dapat dibaca (diberikan "${path.basename(resolved)}")`);
+  if (purpose === "read-asset" && !ASSET_EXT.has(ext)) throw new McpToolError("PATH_INVALID", `hanya berkas .png, .jpg, atau .jpeg yang dapat diunggah (diberikan "${path.basename(resolved)}")`);
   if (purpose === "write-report" && ext !== ".md" && ext !== ".markdown") throw new McpToolError("PATH_INVALID", `tujuan tulis laporan harus berekstensi .md (diberikan "${path.basename(resolved)}")`);
   // Sejak titik ini fs boleh disentuh: path lokal di dalam akar secara leksikal.
   const real = realpathDeep(resolved, nfs);
   const realRoots = roots.map((r) => (nfs.exists(r) ? nfs.realpath(r) : r));
   if (!realRoots.some((r) => isInside(real, r))) throw outside();
-  if (purpose !== "read-report") assertNotProtected(real, purpose === "write-dir");
+  if (!reads) assertNotProtected(real, purpose === "write-dir");
+  if (purpose === "read-asset") {
+    if (!nfs.exists(real)) throw new McpToolError("FILE_UNREADABLE", `berkas ${resolved} tidak ada`);
+    const st = nfs.stat(real);
+    if (!st.isFile) throw new McpToolError("FILE_UNREADABLE", `${resolved} bukan berkas biasa`);
+    if (st.size > maxBytes) throw new McpToolError("ASSET_TOO_LARGE", `berkas ${resolved} ${st.size} B melebihi batas ${maxBytes} B`, { httpStatus: 413 });
+    return real;
+  }
   if (purpose === "read-report") {
     if (!nfs.exists(resolved)) throw new McpToolError("FILE_UNREADABLE", `berkas ${resolved} tidak ada`);
     const st = nfs.stat(resolved);

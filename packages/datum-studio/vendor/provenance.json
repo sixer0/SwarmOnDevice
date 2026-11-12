@@ -56,6 +56,7 @@
   "row213": "2026-11-09: 1.2.4 patch P15 row 213 (cover colophon shape for agents). 2 vendor files re-patched (files[].patch_row213, before = previous sha256; statuses unchanged): docs/STUDIO-AGENT-GUIDE.md (+703: colophon shape in the 5.4 cover table, minimal valid cover payload with colophon after the 5.7 D16 table), scripts/studio/mcp/resources.ts (+64: colophon shape on the cover line). Diffs in docs/2026-11-09_swarm_1_2_3_patch/implementation/213_row213_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9798304 + 767 = 9799071. patch_rows += 213",
   "row215": "2026-11-10: 1.2.5 row 215 (C-27 removed entirely, user decision). 7 vendor files re-patched (files[].patch_row215, before = previous sha256): engine/lint/language/{checks,index,prose}.ts, params/{governance-language,index}.ts, registry/lint.ts, services/templates/sample-render.ts; 5 of them copied -> patched. Diffs in docs/2026-11-09_swarm_1_2_3_patch/implementation/215_row215_diffs/. counts by delta: files/replaced/added unchanged, copied 446 -> 441, patched 120 -> 125; bytes 9799071 -1155 = 9797916. patch_rows += 215",
   "row50a": "2026-11-12: 1.2.6 row 50a (W-13 image guard, C8: SEC-12 header-first pixel limit, SEC-10 metadata detection). 3 vendor files patched (files[].patch_row50a, before = previous sha256; copied -> patched): services/images/{decode,index,sniff}.ts. NEW services/images/metadata.ts (status added). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/50a_row50a_diffs/. counts by delta: files 607 -> 608, added 29 -> 30, copied 441 -> 438, patched 125 -> 128; bytes 9799785 + 994 + 201 + 1680 + 9284 = 9811944. patch_rows += 50a",
+  "row50b": "2026-11-12: 1.2.6 row 50b (W-13 route R18, register N-167). 1 vendor file re-patched (files[].patch_row50b, before = previous sha256; status unchanged): scripts/studio/mcp/safety.ts (+1154: PathPurpose \"read-asset\"). Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/50b_row50b_diffs/. counts by delta: bytes +1154",
   "row53a": "2026-11-12: 1.2.6 row 53a (M-01, U1; register N-044, 01d L1 + F3). 3 vendor files patched (files[].patch_row53a, before = previous sha256): scripts/studio/_http-client.ts (copied -> patched: STUDIO_RENDER_CALL_TIMEOUT_MS 540000, StudioUnreachableError.timedOut), scripts/studio/mcp/tool-kit.ts (http() optional timeoutMs forwarded to studioRequest, extra timedOut), scripts/studio/mcp/tools.ts (studio_render passes the render budget; renderTimeoutHint F3). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/53a_row53a_diffs/. counts by delta: files/replaced/added unchanged, copied 438 -> 437, patched 128 -> 129; bytes 9811944 + 766 + 447 + 1030 = 9814187. patch_rows += 53a"
  },
  "counts": {
@@ -64,7 +65,7 @@
   "patched": 131,
   "replaced": 12,
   "added": 30,
-  "bytes": 9818955
+  "bytes": 9820109
  },
  "files": [
   {
@@ -268,9 +269,10 @@
   {
    "path": "scripts/studio/mcp/safety.ts",
    "status": "patched",
-   "bytes": 17841,
+   "bytes": 18995,
    "source_sha256": "b04720fc51e015a6ba41ddb153d183306763971f423e00b9963842b1108a0d0a",
-   "sha256": "af9ff9336450deaf811797361fd73472fd120c57a9a68152d4c77c6d14834ee1",
+   "sha256": "fc36cb950e377822bf5270d9ceb11cb03f06b79d8285d6e062bcc76befc28474",
+   "patch_row50b": {"id": "row50b-w13-read-asset", "row": "50b", "decision": "1.2.6 W-13 (01f §3.3 R1-R7, register N-167; C6)", "summary": "PathPurpose += \"read-asset\": lexical + inside-root (lexical and realpath), ext .png/.jpg/.jpeg (PATH_INVALID), exists and regular file (FILE_UNREADABLE), stat size > maxBytes -> ASSET_TOO_LARGE before any read; returns the real path; protected-name check not applied to reads (R9); other purposes unchanged", "before_sha256": "af9ff9336450deaf811797361fd73472fd120c57a9a68152d4c77c6d14834ee1", "after_sha256": "fc36cb950e377822bf5270d9ceb11cb03f06b79d8285d6e062bcc76befc28474", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/50b_row50b_diffs/safety.ts.diff"},
    "patch": {
     "id": "row107-L6",
     "row": 107,

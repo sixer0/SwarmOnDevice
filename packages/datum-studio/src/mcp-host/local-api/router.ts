@@ -49,6 +49,8 @@ export interface LocalStudioApiOptions {
   /** The session agent id; every request runs as `localStudioCaller(agentId)`. */
   agentId: string
   routes: readonly RouteDef[]
+  /** Row 50b (W-13): the session file root, handed to handlers as `rc.fileRoot` (R18 `path` reads). */
+  fileRoot?: string
 }
 
 export interface LocalStudioApi {
@@ -130,7 +132,7 @@ export function createLocalStudioApi(opts: LocalStudioApiOptions): LocalStudioAp
     const req = new Request(target.toString(), { method, headers, ...(init.body !== undefined && method !== "GET" && method !== "HEAD" ? { body: init.body } : {}) })
     const run = (async () => {
       try {
-        return await handler(req, { params: hit.params, agentId: opts.agentId, caller })
+        return await handler(req, { params: hit.params, agentId: opts.agentId, caller, ...(opts.fileRoot ? { fileRoot: opts.fileRoot } : {}) })
       } catch (e) {
         const err = e instanceof Error ? e : new Error(String(e))
         apiLog({
