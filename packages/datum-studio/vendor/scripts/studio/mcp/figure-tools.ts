@@ -122,7 +122,10 @@ export function previewLines(id: string, b: Rec, label = "pratinjau figur"): str
     ...(n > Math.min(issues.length, ISSUE_LINES) ? [`... ${n - Math.min(issues.length, ISSUE_LINES)} isu lain (structuredContent.figure.issues, maks 40)`] : []),
   ];
   lines.push(serverBlock(body, { jenis: "isu-figur", documentId: id }) as string);
-  if (layout > 0) lines.push("  perbaiki: studio_figure_revise (patch data/caption/labelShort/topN/orientation/sort) lalu pratinjau lagi");
+  // Row 73 (W-03): the server splits issues into defects (fix) and notices (engine adapted, no action).
+  const defects = Array.isArray(f.defects) ? f.defects.length : null;
+  if (defects !== null && Array.isArray(f.notices)) lines.push(`  cacat ${defects}, catatan ${f.notices.length} (figure.defects / figure.notices)`);
+  if ((defects ?? layout) > 0) lines.push("  perbaiki: studio_figure_revise (patch data/caption/labelShort/topN/orientation/sort) lalu pratinjau lagi");
   return lines;
 }
 
@@ -193,7 +196,7 @@ const figurePreviewTool: ToolDef = {
     const f = isRecord(b.figure) ? b.figure : {};
     const svg = typeof f.svg === "string" ? f.svg : "";
     const extra: Rec = {};
-    const fields = ["figure.issues", "figure.label"];
+    const fields = ["figure.issues", "figure.notices", "figure.defects", "figure.label"];
     if (standalone) fields.push("figure.standalone");
     if (dir !== null) {
       if (svg === "") throw new McpToolError("SVG_UNAVAILABLE", "server tidak mengirim SVG; tidak ada yang disimpan");
@@ -297,6 +300,89 @@ export function mergeFigurePatch(content: Rec, patch: Rec): Rec {
   return out;
 }
 
+/** Swarm 1.2.6 row 73 (W-05, register N-023): node/edge delta of one figure revision. */
+export interface FigureGraphDelta {
+  code: "FIGURE_GRAPH_DELTA";
+  nodes: { before: number; after: number; added: string[]; removed: string[] };
+  edges: { before: number; after: number; added: string[]; removed: string[]; rewired: string[] };
+}
+
+/** Node ids and edge keys (`from->to`) of a figure's graph: diagram `spec.nodes/edges`, chart graph `data.nodes/links`. */
+function figureGraph(content: Rec): { nodes: string[]; edges: string[] } | null {
+  const data = isRecord(content.data) && content.data.shape === "graph" ? content.data : null;
+  const g = isRecord(content.spec) ? content.spec : data;
+  if (g === null) return null;
+  const list = (v: unknown) => (Array.isArray(v) ? v.filter(isRecord) : []);
+  const edgeList = g === data ? g.links : g.edges;
+  if (!Array.isArray(g.nodes) && !Array.isArray(edgeList)) return null;
+  return { nodes: list(g.nodes).map((n) => String(n.id ?? "")), edges: list(edgeList).map((e) => `${String(e.from ?? "")}->${String(e.to ?? "")}`) };
+}
+
+/** Multiset difference `a - b` (each occurrence counted once). */
+function minus(a: readonly string[], b: readonly string[]): string[] {
+  const left = new Map<string, number>();
+  for (const x of b) left.set(x, (left.get(x) ?? 0) + 1);
+  const out: string[] = [];
+  for (const x of a) {
+    const n = left.get(x) ?? 0;
+    if (n > 0) left.set(x, n - 1);
+    else out.push(x);
+  }
+  return out;
+}
+
+/**
+ * Swarm 1.2.6 row 73 (W-05/OFF-06): nodes and edges added, removed and rewired between the stored figure content and
+ * the merged content about to be written. An edge is keyed by its endpoints (`from->to`); a removed edge and an added
+ * edge sharing one endpoint are reported as one rewired edge (`a->b => a->c`). null when the figure has no graph or
+ * nothing changed. A REPORT for the agent, never a refusal: the write goes ahead either way.
+ */
+export function figureGraphDelta(before: Rec, after: Rec): FigureGraphDelta | null {
+  const b = figureGraph(before);
+  const a = figureGraph(after);
+  if (b === null && a === null) return null;
+  const gb = b ?? { nodes: [], edges: [] };
+  const ga = a ?? { nodes: [], edges: [] };
+  const edgesAdded = minus(ga.edges, gb.edges);
+  const edgesRemoved = minus(gb.edges, ga.edges);
+  const rewired: string[] = [];
+  for (let i = edgesRemoved.length - 1; i >= 0; i--) {
+    const [rf, rt] = edgesRemoved[i].split("->");
+    const j = edgesAdded.findIndex((x) => {
+      const [af, at] = x.split("->");
+      return af === rf || at === rt;
+    });
+    if (j < 0) continue;
+    rewired.unshift(`${edgesRemoved[i]} => ${edgesAdded[j]}`);
+    edgesRemoved.splice(i, 1);
+    edgesAdded.splice(j, 1);
+  }
+  const nodesAdded = minus(ga.nodes, gb.nodes);
+  const nodesRemoved = minus(gb.nodes, ga.nodes);
+  if (nodesAdded.length + nodesRemoved.length + edgesAdded.length + edgesRemoved.length + rewired.length === 0) return null;
+  return {
+    code: "FIGURE_GRAPH_DELTA",
+    nodes: { before: gb.nodes.length, after: ga.nodes.length, added: nodesAdded, removed: nodesRemoved },
+    edges: { before: gb.edges.length, after: ga.edges.length, added: edgesAdded, removed: edgesRemoved, rewired },
+  };
+}
+
+/** Row 73 (W-05): the safe head line (counts only) and the untrusted block (ids come from the stored content). */
+function graphDeltaLines(id: string, d: FigureGraphDelta): string[] {
+  const n = d.nodes;
+  const e = d.edges;
+  const head = `  FIGURE_GRAPH_DELTA: simpul ${n.before}→${n.after}, tepi ${e.before}→${e.after} (simpul +${n.added.length}/-${n.removed.length}; tepi +${e.added.length}/-${e.removed.length}, disambung ulang ${e.rewired.length}); periksa bahwa perubahan ini disengaja`;
+  const body = [
+    ...(n.added.length > 0 ? [`simpul ditambah: ${n.added.join(", ")}`] : []),
+    ...(n.removed.length > 0 ? [`simpul dihapus: ${n.removed.join(", ")}`] : []),
+    ...(e.added.length > 0 ? [`tepi ditambah: ${e.added.join(", ")}`] : []),
+    ...(e.removed.length > 0 ? [`tepi dihapus: ${e.removed.join(", ")}`] : []),
+    ...(e.rewired.length > 0 ? [`tepi disambung ulang: ${e.rewired.join(", ")}`] : []),
+  ];
+  const block = serverBlock(body, { jenis: "delta-graf", documentId: id });
+  return [head, ...(block !== null ? [block] : [])];
+}
+
 const figureReviseTool: ToolDef = {
   name: "studio_figure_revise",
   description:
@@ -344,7 +430,10 @@ const figureReviseTool: ToolDef = {
     const patch = isRecord(a.patch) ? a.patch : {};
     const bad = Object.keys(patch).filter((k) => !allowed.includes(k));
     if (bad.length > 0) throw new McpToolError("INVALID_ARGUMENT", `medan ${bad.join(", ")} tidak berlaku untuk ${String(g.type)} (boleh: ${allowed.join(", ")}); tidak ada yang dikirim`);
-    const block = mergeFigurePatch(isRecord(g.content) ? g.content : {}, patch);
+    const stored = isRecord(g.content) ? g.content : {};
+    const block = mergeFigurePatch(stored, patch);
+    // Row 73 (W-05): node/edge delta vs the base revision, reported after the write (never a refusal).
+    const graphDelta = figureGraphDelta(stored, block);
     const reply = await http(ctx, "PATCH", r16, "PATCH /api/studio/documents/{id}/paragraphs/{pid}", { json: { op: "replace", baseRevisionNo: base, block, change: a.change, ...agent } });
     const p = isRecord(reply.body) ? reply.body : {};
     const rev = isRecord(p.revision) ? p.revision : {};
@@ -353,6 +442,7 @@ const figureReviseTool: ToolDef = {
     const rebasedWarning = revNo !== null ? rememberRevision(ctx, id, revNo, { created: false, unchanged: p.unchanged === true, rebased: p.rebased === true, sentBase: base }, "studio_figure_revise") : null;
     const lines = [`revisi figur pid ${tok(newPid)}: dokumen ${tok(id)} rev ${tok(revNo)} (${tok(rev.changeScope)}) di atas basis ${base}${p.rebased === true ? ", rebased" : ""}`];
     if (basis.line !== null) lines.push(basis.line);
+    if (graphDelta !== null) lines.push(...graphDeltaLines(id, graphDelta));
     let previewWarning: ToolWarning | null = null;
     let fig: Rec | null = null;
     if (a.preview !== false && revNo !== null) {
@@ -374,10 +464,11 @@ const figureReviseTool: ToolDef = {
       rebased: p.rebased === true,
       ...(basis.remembered ? { basisFromSession: base } : {}),
       ...existingData(ownership.adopted ? ownership : null),
+      ...(graphDelta !== null ? { graphDelta } : {}),
       ...(fig !== null ? { figure: fig, issueCount: fig.issueCount ?? null, layoutIssueCount: fig.layoutIssueCount ?? null } : {}),
       completeness: completenessBrief(p.completeness),
     };
-    const out: ToolOutput = { text: lines.join("\n"), data: { ...(neutralizeDeep(data) as Rec), ...untrustedFields(["figure.issues", "figure.label", "figure.error", "completeness", "existing.createdBy"]) } };
+    const out: ToolOutput = { text: lines.join("\n"), data: { ...(neutralizeDeep(data) as Rec), ...untrustedFields(["figure.issues", "figure.notices", "figure.defects", "figure.label", "figure.error", "completeness", "existing.createdBy", ...(graphDelta !== null ? ["graphDelta"] : [])]) } };
     return withWarnings(out, adoptedWarning(ownership), rebasedWarning, previewWarning);
   },
 };

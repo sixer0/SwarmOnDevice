@@ -80,7 +80,8 @@
   "row47": "2026-11-12: 1.2.6 row 47 (T-11 acceptance; register N-160; 01e §4.3-§4.5; C7). 3 vendor files re-patched (files[].patch_row47, before = previous sha256; statuses unchanged): engine/diagram/layout-a/flow.ts (FLOW_SERIALISED note helper, TB placement under predecessors, label-corridor growth), engine/diagram/elk/index.ts (R1 gate admits ranked flow), engine/diagram/build/svg.ts (one FLOW_SERIALISED call site). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/47_row47_diffs/. counts.bytes by delta +5722. patch_rows += 47",
   "row70": "2026-11-12: 1.2.6 row 70 (T-17 vendor part, U5; register N-055 BACKUP_DIR_NAME, N-057 backupResidue, E-22). 2 vendor files re-patched (files[].patch_row70, before = previous sha256; status unchanged): scripts/studio/mcp/safety.ts (writeFileGuarded backups in <dir>/.bak/ created 0700, backupResidue) and scripts/studio/mcp/tools.ts (backupResidue in studio_report_refresh/studio_file_verify). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/70_row70_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9895940 + 2723 = 9898663 (safety.ts 18995 -> 21221, tools.ts 81007 -> 81504). patch_rows += 70",
   "row61": "2026-11-12: 1.2.6 row 61 (T-05, U5; no new register name). 1 vendor file re-patched (files[].patch_row61, before = previous sha256; status unchanged): engine/diagram/core/svg.ts (provenance glyph inset by node shape: parallelogram inside, diamond outside the slanted side; box byte-identical). Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/61_row61_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9894024 + 1916 = 9895940. patch_rows += 61",
-  "row66": "2026-11-12: 1.2.6 row 66 (T-10, U5, R12; register N-030). 4 vendor files patched (files[].patch_row66, before = previous sha256): engine/chart/core/labelfit.ts (NEW LABEL_GUTTER_CAP_FRAC = 0.3), engine/chart/core/datum.ts and engine/chart/core/gallery.ts (inline W*0.42 gutter cap -> W*LABEL_GUTTER_CAP_FRAC), engine/chart/core/families.ts (stale doc comment only). Status copied -> patched for labelfit.ts, gallery.ts, families.ts; datum.ts was already patched (row 65). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/66_row66_diffs. counts by delta: copied 416 -> 413, patched 150 -> 153; bytes 9898663 +548 = 9899211. patch_rows += 66"
+  "row66": "2026-11-12: 1.2.6 row 66 (T-10, U5, R12; register N-030). 4 vendor files patched (files[].patch_row66, before = previous sha256): engine/chart/core/labelfit.ts (NEW LABEL_GUTTER_CAP_FRAC = 0.3), engine/chart/core/datum.ts and engine/chart/core/gallery.ts (inline W*0.42 gutter cap -> W*LABEL_GUTTER_CAP_FRAC), engine/chart/core/families.ts (stale doc comment only). Status copied -> patched for labelfit.ts, gallery.ts, families.ts; datum.ts was already patched (row 65). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/66_row66_diffs. counts by delta: copied 416 -> 413, patched 150 -> 153; bytes 9898663 +548 = 9899211. patch_rows += 66",
+  "row73": "2026-11-12: 1.2.6 row 73 (W-05/W-03/OFF-06, C2, D3; register N-020..N-023). 1 vendor file re-patched (files[].patch_row73, before = previous sha256; status unchanged): scripts/studio/mcp/figure-tools.ts (FIGURE_GRAPH_DELTA report in studio_figure_revise; preview text states defect/notice counts). Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/73_row73_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9899211 + 5064 = 9904275. patch_rows += 73"
  },
  "counts": {
   "files": 608,
@@ -88,7 +89,7 @@
   "patched": 153,
   "replaced": 12,
   "added": 30,
-  "bytes": 9899211
+  "bytes": 9904275
  },
  "files": [
   {
@@ -259,9 +260,10 @@
   {
    "path": "scripts/studio/mcp/figure-tools.ts",
    "status": "patched",
-   "bytes": 24217,
+   "bytes": 29281,
    "source_sha256": "b7b2658186c53d9fe1f9dac50cc6eba76df2abfe815c232ee793e5d64dc5b463",
-   "sha256": "ebffd9950aa05b2621e30fa1786eb7dbc23dce8136132a8bf2f98f0eba899219",
+   "sha256": "a944673b0380a400ed86001a7c4c1c69ed2a667d7e54f823cdde2e896c8b625d",
+   "patch_row73": {"id": "row73-w05-graph-delta", "row": "73", "decision": "1.2.6 patch W-05/W-03/OFF-06 (C2, D3; register N-020..N-023)", "summary": "studio_figure_revise: NEW export figureGraphDelta(before, after) compares node ids and edge keys (from->to; diagram spec.nodes/edges, chart graph data.nodes/links) of the stored and merged content; nodes/edges added, removed, rewired (removed+added sharing an endpoint) -> data.graphDelta {code FIGURE_GRAPH_DELTA} + head line 'FIGURE_GRAPH_DELTA: simpul a→b, tepi c→d' (ids only in the untrusted block, graphDelta in untrustedFields); a REPORT, never a refusal. previewLines: 'cacat N, catatan M' line when the server sends figure.defects/notices (W-03), fix hint keyed on defects; figure.notices/defects in untrustedFields. Generalised from the off-repo dotgen idea, no code copied. No description or schema change", "before_sha256": "ebffd9950aa05b2621e30fa1786eb7dbc23dce8136132a8bf2f98f0eba899219", "after_sha256": "a944673b0380a400ed86001a7c4c1c69ed2a667d7e54f823cdde2e896c8b625d", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/73_row73_diffs/scripts_studio_mcp_figure-tools.ts.diff", "diff_sha256": "893db54e38b4b284c6a0da921cfefbc391c52184efa1a7a11102dd176236d1e1"},
    "patch_row69": {"id": "row69-t16-partial-revise", "row": "69", "decision": "1.2.6 patch T-16 (U5; register E-17, E-18)", "summary": "mergeFigurePatch: spec is deep-merged into the stored spec (plain objects merge key by key, arrays and scalars replace, null removes, prototype keys skipped); when the patch carries spec, a merged spec missing a diagram.schema required key (or spec itself) is refused McpToolError SCHEMA_INVALID naming the key with pointer /spec/<key>, before any PATCH; caption/source/keyRow and chart keys unchanged; no description or schema change", "before_sha256": "188497f2b991b62c7fe48e69ec1f6d821f68b00f58103b8d672db74368113215", "after_sha256": "ebffd9950aa05b2621e30fa1786eb7dbc23dce8136132a8bf2f98f0eba899219", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/69_row69_diffs/scripts_studio_mcp_figure-tools.ts.diff", "diff_sha256": "a228e998fcaf11a9f741e54da2be016c05a8b20079dffc729fb297e5098011be"},
    "patch_row165I": {"id": "row165I-security", "row": "165I", "decision": "C196 (verification/24 L1)", "summary": "standaloneFileName: a server name with control, bidi, zero-width or separator characters (env.ts DATUM_NAME_UNSAFE_CHARS) or not NFC is rejected as a whole and the token-safe store name is used (reject, not strip)", "before_sha256": "e78ff8daeed4b7cd16305129ce4ed29d0180c1107e0f6c17de8e7f33d11c5e3b", "after_sha256": "188497f2b991b62c7fe48e69ec1f6d821f68b00f58103b8d672db74368113215", "diff": "implementation/141_row165I_diffs/scripts_studio_mcp_figure-tools.ts.diff"},
    "patch_row165E": {"id": "row165E-integration", "row": "165E", "decision": "C192 (tools/list 30306 B > 30000 B budget)", "summary": "studio_figure_preview: the standalone/png property descriptions dropped and the tool description sentence shortened (meaning kept, no schema change); tools/list default set 30306 -> 30134 B", "before_sha256": "445d3dfd92b5f52ba7a982a5a7d5f1e9e245197e366cb8ba7cdf16f5a7ded98e", "after_sha256": "e78ff8daeed4b7cd16305129ce4ed29d0180c1107e0f6c17de8e7f33d11c5e3b", "diff": "implementation/139_row165E_diffs/scripts_studio_mcp_figure-tools.ts.diff"},
@@ -6114,6 +6116,7 @@
   "47",
   "61",
   "70",
-  "66"
+  "66",
+  "73"
  ]
 }
