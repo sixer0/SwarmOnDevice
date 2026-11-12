@@ -1171,18 +1171,26 @@ function classifyShellWrite(input: Input, files: readonly string[]): Verdict {
 function classifyBashText(input: Input, checkClass: CheckClass): Verdict {
   const command = input.metadata.command
   if (typeof command !== "string" || !command) return held("not_routine")
+  // 1.2.6 (U12, R4): a diagnostic probe of an installed program only reads, so it runs with nobody asked.
+  if (probe(command, input.cwd, input.instance)) return PROTECTED_READ
   if (command.split(WORD_BREAK).some((word) => word && Secrets.secretFile(word)))
-    return classifyConsentedCommand(input, command) ?? held("secret_file")
+    return protectedLook(command, input.cwd, input.instance)
+      ? PROTECTED_READ
+      : (classifyConsentedCommand(input, command) ?? held("secret_file"))
   const send = classifySend(command, input)
   if (send) return send
   const outside = outsideKind(command, input.cwd, input.instance)
   if (outside && (outsideProject(input.cwd, input.instance) || readsOutside(command, input.cwd, input.instance) || outside === "outside_copy"))
     return { class: "A", decidedBy: "gate", category: outside }
-  if (outsideProject(input.cwd, input.instance)) return held("outside_folder")
+  if (outsideProject(input.cwd, input.instance))
+    return protectedLook(command, input.cwd, input.instance) ? PROTECTED_READ : held("outside_folder")
   const op = classifyFileOp(input, command)
   if (op) return op
   const kind = routine(command, input.cwd, input.instance)
   if (!kind) {
+    // 1.2.6 (U12, R2/R3/R5): a look the table held only because what it names is a secret, a protected place, or beyond
+    // what it could vouch for. A proven look still runs; any write, run or send keeps the rules below.
+    if (protectedLook(command, input.cwd, input.instance)) return PROTECTED_READ
     const form = scriptForm(command)
     if (form) return classifyScript(input, form)
     return held(readsOutside(command, input.cwd, input.instance) ? "outside_folder" : "not_routine")
@@ -1441,6 +1449,80 @@ function onlyLookPieces(command: string) {
 
 const OUTSIDE_EDIT: Verdict = { class: "A", decidedBy: "gate", category: "outside_edit" }
 
+/**
+ * 1.2.6 (U6, U12; P-01a): a read of a secret or sensitive file, a protected place, a place beyond the folder the table could
+ * not vouch for, or a diagnostic probe. In autonomous mode every read runs with nobody asked, in both layers; writes, sends
+ * and a person's own rules keep their verdict. The read tool still masks secret values (U16).
+ */
+const PROTECTED_READ: Verdict = { class: "A", decidedBy: "gate", category: "protected_read" }
+
+/** A piece's words, `~` read as the shell reads it, with whole-word quotes (`find ~/x -name '*.md'`) as a look takes them. */
+function lookWords(piece: string) {
+  const home = homedir()
+  const spelled = unwrapped(piece).replace(/(^| )~(?=\/| |$)/g, (_match, space: string) => space + home)
+  return Risk.plainWords(spelled) ?? Risk.quotedWords(spelled)
+}
+
+/**
+ * 1.2.6 (U12, 01b 3.1 rule 2): `[cd <path> && ]<look>[ && <look>...][ | tail -N]` whose every look passes `onlyLooks` and
+ * the program's cap on names (`xxd a b` writes b). Only the readability test is left out, so a secret or protected place
+ * may be looked at; a write, a redirect, a run or a send never passes. The bundled library and a program of the project
+ * under a look's name keep their rules (XF-03, U11 rule 7).
+ */
+function protectedLook(command: string, cwd: string, instance: InstanceContext) {
+  if (command.includes("\n")) return false
+  let here = cwd
+  const named: string[] = []
+  let looks = 0
+  for (const [index, piece] of command.replace(OUTPUT_TAIL, "").split(" && ").entries()) {
+    // As `routine` reads it: a piece may drop its own error output, and nothing else.
+    const words = lookWords(piece.replace(DROP_ERRORS, ""))
+    if (!words) return false
+    if (index === 0 && words[0] === "cd" && words.length === 2) {
+      here = path.resolve(cwd, words[1]!)
+      named.push(here)
+      continue
+    }
+    if (!onlyLooks(words)) return false
+    const paths = words.slice(1).filter((word) => !word.startsWith("-"))
+    const cap = READS.get(words[0]!)?.maxPaths
+    if (cap !== undefined && paths.length > cap) return false
+    named.push(...paths.map((word) => path.resolve(here, word)))
+    looks++
+  }
+  if (looks === 0 || nearLibrary([cwd, ...named])) return false
+  return !programInProject(command, cwd, instance)
+}
+
+// 1.2.6 (U12, 01b 3.1 rule 3): what a diagnostic probe may be, each as the whole command.
+const PROBE_FLAGS = new Set(["--version", "-V", "-v", "--help", "-h"])
+// Programs whose probe is not a look: they act on the host or on a person's account, or start another program.
+const NO_PROBE = new Set([
+  "sudo", "su", "doas", "login", "passwd", "shutdown", "reboot", "halt", "poweroff", "init", "telinit", "systemctl",
+  "launchctl", "security", "osascript", "open", "xargs", "nohup", "nice", "time", "watch", "caffeinate", "eval", "exec",
+  "source", "command", "builtin", "kill", "killall", "pkill",
+])
+// Shells and interpreters read `-v` and `-h` as something else (verbose, a host), so only the long forms and `-V` are probes.
+const LONG_PROBE_ONLY = new Set(["sh", "bash", "zsh", "dash", "ksh", "fish", "csh", "tcsh", "python", "python2", "python3", "perl", "ruby", "php", "lua"])
+
+/**
+ * 1.2.6 (U12, R4): `<program> --version|-V|-v|--help|-h`, `go version`, a bare `env` and `printenv [NAME]`, of an installed
+ * program the shell would not find inside the project. `env NAME=x cmd` runs a program, so it is not one.
+ */
+function probe(command: string, cwd: string, instance: InstanceContext) {
+  const words = Risk.plainWords(command)
+  if (!words) return false
+  const [program, ...rest] = words
+  if (!program || !/^[A-Za-z0-9][A-Za-z0-9._+-]*$/.test(program) || NO_PROBE.has(program)) return false
+  const flag = rest.length === 1 ? rest[0]! : undefined
+  const form =
+    (program === "env" && rest.length === 0) ||
+    (program === "printenv" && (rest.length === 0 || (flag !== undefined && /^[A-Za-z_][A-Za-z0-9_]*$/.test(flag)))) ||
+    (program === "go" && flag === "version") ||
+    (flag !== undefined && PROBE_FLAGS.has(flag) && !(LONG_PROBE_ONLY.has(program) && (flag === "-v" || flag === "-h")))
+  return form && !programInProject(program, cwd, instance)
+}
+
 /** The home folders a protected place may be spelled under: the one Swarm reads (pinned in tests) and the system's. */
 function homes() {
   return [...new Set([Global.Path.home, homedir()])]
@@ -1507,7 +1589,8 @@ function classifyOutsideEdit(input: Input): Verdict | undefined {
 function classifyOutside(input: Input): Verdict {
   const command = input.metadata.command
   if (typeof command === "string") {
-    if (command.split(WORD_BREAK).some((word) => word && Secrets.secretFile(word))) return held("secret_file")
+    if (command.split(WORD_BREAK).some((word) => word && Secrets.secretFile(word)))
+      return protectedLook(command, input.cwd, input.instance) ? PROTECTED_READ : held("secret_file")
     // The prompt for a drive the person named and ticked (G2): what the bash prompt beside it gets, so both agree.
     const send = classifySend(command, input)
     if (send?.class === "A") return send
@@ -1515,6 +1598,8 @@ function classifyOutside(input: Input): Verdict {
     if (outside) return { class: "A", decidedBy: "gate", category: outside }
     const words = homeWords(command.replace(OUTPUT_TAIL, ""))
     if (words && nearLibrary([input.cwd, ...words.slice(1).map((word) => path.resolve(input.cwd, word))])) return held("outside_folder")
+    // 1.2.6 (U12): a proven look runs wherever it looks, a secret or protected place included.
+    if (protectedLook(command, input.cwd, input.instance)) return PROTECTED_READ
     // What does not parse, and a look this table cannot vouch for such as a walk, wait for a person. Any other plain command
     // that reaches out may change what is there, so it is refused with nobody asked.
     if (!words || READS.has(words[0]!)) return held("outside_folder")
@@ -1524,7 +1609,15 @@ function classifyOutside(input: Input): Verdict {
   const filepath = input.metadata.filepath
   if (typeof filepath !== "string" || !path.isAbsolute(filepath) || nearLibrary([filepath])) return held("outside_folder")
   const writes = input.follows?.some((prompt) => prompt.permission === "edit") === true
-  // Row 202: a secret or system place is never opened, with the person's consent to the bypass or without it.
+  // 1.2.6 (U12, R3/R5): a file tool that only reads (`readOnly`) may read a secret or protected place, and search hidden
+  // files, with nobody asked. What it shows the agent stays masked (U16). A prompt that does not prove a read keeps the rules below.
+  if (
+    !writes &&
+    input.metadata.readOnly === true &&
+    (protectedOutside(filepath, "read") || !Reach.readable(filepath) || input.metadata.hidden === true)
+  )
+    return PROTECTED_READ
+  // Row 202: a secret or system place is never written, with the person's consent to the bypass or without it.
   if (protectedOutside(filepath, writes ? "write" : "read")) return refused("protected_path")
   const looks = input.metadata.readOnly === true && input.metadata.hidden !== true
   if (!Reach.readable(filepath) && looks) return classifyConsented(input, [filepath], "secret_file")
@@ -1925,7 +2018,14 @@ export function classifyBase(input: Input, checkClass: CheckClass = CHECK_CLASS)
       : verdict
   }
   if (input.permission === "webfetch" || input.permission === "websearch") return classifyFetch(input)
-  if (input.permission === "read") return classifyConsented(input, editTargets(input), "secret_file")
+  // 1.2.6 (U12, R2/R3): the read tool asks only for a file it would not show unasked. It reads; the values stay masked (U16).
+  if (input.permission === "read") {
+    const targets = editTargets(input)
+    return targets.length === 0 ||
+      targets.some((file) => Reach.secret(file) || !Reach.readable(file) || protectedOutside(file, "read"))
+      ? PROTECTED_READ
+      : { class: "A", decidedBy: "gate" }
+  }
   if (input.permission === "edit") return classifyEdit(input)
   if (input.permission === "bash") return classifyBash(input, checkClass)
   const mcp = input.metadata.mcp

@@ -251,7 +251,9 @@ describe("tool.grep", () => {
         canUndo: true,
         folder: "trusted",
       })
-      expect(verdict).toEqual({ class: "D", decidedBy: "gate", category: "outside_folder" })
+      // 1.2.6 row 36 (U12 R5, INTENT 01b 10.1 :584 family): the search still says it opens hidden files, and the table
+      // now runs it as protected_read (was held outside_folder); what it shows stays masked (U16).
+      expect(verdict).toEqual({ class: "A", decidedBy: "gate", category: "protected_read" })
     }),
   )
 })

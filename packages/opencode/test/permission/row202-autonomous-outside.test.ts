@@ -1,6 +1,7 @@
 // Row 202 (2026-11-09): with autonomous mode on, a file tool may read and write folders outside the project without a
 // prompt; protected places (keys, credentials, Swarm's auth.json, system folders, the app) stay refused. With the mode off
 // nothing changes: the folder prompt is asked. A subagent follows its root's mode.
+// 1.2.6 row 36 (U12): reads of protected places run as protected_read; writes into them stay refused.
 import { afterEach, beforeEach, expect, test } from "bun:test"
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import os from "node:os"
@@ -199,19 +200,19 @@ it.instance("row 202: mode ON, a subagent follows its root's mode for a folder o
   }),
 )
 
-it.instance("row 202: mode ON still refuses ~/.ssh/id and Swarm's auth.json, read or write, with no prompt", () =>
+// 1.2.6 row 36 (U12, INTENT 01g 3.6 / 01b 10.1 :202-224): the reads of ~/.ssh/id and auth.json now run as protected_read;
+// the write of ~/.ssh/id is still refused with the protected_path text, and nothing waits.
+it.instance("row 202: mode ON reads ~/.ssh/id and Swarm's auth.json as protected_read, and still refuses writing them, with no prompt", () =>
   Effect.gen(function* () {
     const { root, child } = yield* rootInMode(true)
     const key = path.join(ssh, "id")
     const text = (Permission.refusedByMode("protected_path") as Error).message
     for (const session of [root.id, child.id]) {
-      const readKey = yield* failure(read(session, key))
-      expect(readKey).not.toBeInstanceOf(PermissionV1.DeferredError)
-      expect((readKey as Error).message).toBe(text)
+      yield* read(session, key).pipe(Effect.timeout("3 seconds"))
       const writeKey = yield* failure(write(session, key, "replaced\n"))
+      expect(writeKey).not.toBeInstanceOf(PermissionV1.DeferredError)
       expect((writeKey as Error).message).toBe(text)
-      const readAuth = yield* failure(read(session, authFile))
-      expect((readAuth as Error).message).toBe(text)
+      yield* read(session, authFile).pipe(Effect.timeout("3 seconds"))
     }
     // Writing Swarm's auth.json is refused as Swarm's own state (as before row 202), never run.
     expect(yield* failure(write(root.id, authFile, "{}\n"))).not.toBeInstanceOf(PermissionV1.DeferredError)
@@ -221,6 +222,8 @@ it.instance("row 202: mode ON still refuses ~/.ssh/id and Swarm's auth.json, rea
     const lines = yield* audit(root.id)
     expect(lines.filter((line) => line.category === "protected_path").every((line) => line.class === "X")).toBe(true)
     expect(lines.some((line) => line.category === "protected_path")).toBe(true)
+    expect(lines.filter((line) => line.category === "protected_read").every((line) => line.class === "A")).toBe(true)
+    expect(lines.some((line) => line.category === "protected_read")).toBe(true)
   }),
 )
 
@@ -257,12 +260,13 @@ const outsideAsk = (filepath: string, writes: boolean): AutonomyTable.Input =>
     ...(writes ? { follows: [{ permission: "edit", patterns: [filepath] }] } : {}),
   }) as unknown as AutonomyTable.Input
 
-test("row 202 table: system folders and the app are never written; secrets never read or written", () => {
+test("row 202 table: system folders and the app are never written; secrets never written, and read as protected_read (1.2.6)", () => {
   for (const file of ["/etc/hosts", "/usr/local/bin/tool", "/System/x", "/Library/x", "/Applications/Swarm.app/Contents/x"])
     expect(AutonomyTable.classify(outsideAsk(file, true))).toMatchObject({ class: "X", category: "protected_path" })
   for (const place of [".ssh/config", ".gnupg/x", ".aws/credentials", ".swarm-patch-key/gsp_patch", "Library/Keychains/login.keychain-db"]) {
     const file = path.join(home, place)
-    expect(AutonomyTable.classify(outsideAsk(file, false))).toMatchObject({ class: "X", category: "protected_path" })
+    // 1.2.6 row 36 (U12, INTENT 01g 3.6 :262-270): the read is class A protected_read (was X protected_path); the write stays X.
+    expect(AutonomyTable.classify(outsideAsk(file, false))).toMatchObject({ class: "A", category: "protected_read" })
     expect(AutonomyTable.classify(outsideAsk(file, true))).toMatchObject({ class: "X", category: "protected_path" })
   }
   // Under the consented bypass a protected place stays refused (1.1.3 opens only X `outside_write`).

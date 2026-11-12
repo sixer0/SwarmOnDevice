@@ -202,7 +202,10 @@ const DELETE_COMPOUND = new Set(["xargs rm < list", "bun test; rm -rf src", "rm 
 // U11 rule 1: a look beyond the folder at what the read tool would show is class A on record. Each of these stood in
 // READS_HELD under C58; a secret out there, a walk and a flag that does more stay below.
 const READS_OUTSIDE = ["cat ../x", "cat /etc/hosts", "ls ~", "cat ~/x", "cat link-out/x", "ls link-out"]
-const READS_HELD = ["head -5 ~/.ssh/id_rsa", "cat ~/.ssh/id_rsa", "ls ~/.aws", "rg foo ~", "find ~ -name x", "tree ~", "grep -r foo ~", "cat .env", "cat .env.local", "cat quiet-name", "cat notes", "cat .git/config", "ls .git/hooks", "cat .git/hooks/pre-commit", "find . -exec touch leak ;", "find . -execdir sh ;", "find . -ok rm ;", "find . -delete", "find . -fprint out", "rg --pre ./evil.ts foo", "rg -z foo", "rg --hidden foo", "rg -u foo", "rg -L foo", "rg --no-ignore foo", "grep -r foo .", "grep -R foo .", "tail -f src/a.ts", "tail -F src/a.ts", "tree -o out", "tree -R", "file -C", "wc --files0-from=list", "rtk find . -exec touch leak ;", "rtk cat .env", "rtk sh -c 'touch leak'", "cat src/a.ts > out", "cat src/a.ts | sh", "cat src/a.ts && curl x"]
+// 1.2.6 row 36 (U12, INTENT 01b 10.1 and beyond its grep list, same reason): a look at a secret, `.git`, a link to either, a
+// protected place or a walk out of the folder only reads, so it runs as protected_read; these left READS_HELD.
+const READS_PROTECTED = ["head -5 ~/.ssh/id_rsa", "cat ~/.ssh/id_rsa", "ls ~/.aws", "rg foo ~", "find ~ -name x", "tree ~", "cat .env", "cat .env.local", "cat quiet-name", "cat notes", "cat .git/config", "ls .git/hooks", "cat .git/hooks/pre-commit", "rtk cat .env"]
+const READS_HELD = ["grep -r foo ~", "find . -exec touch leak ;", "find . -execdir sh ;", "find . -ok rm ;", "find . -delete", "find . -fprint out", "rg --pre ./evil.ts foo", "rg -z foo", "rg --hidden foo", "rg -u foo", "rg -L foo", "rg --no-ignore foo", "grep -r foo .", "grep -R foo .", "tail -f src/a.ts", "tail -F src/a.ts", "tree -o out", "tree -R", "file -C", "wc --files0-from=list", "rtk find . -exec touch leak ;", "rtk sh -c 'touch leak'", "cat src/a.ts > out", "cat src/a.ts | sh", "cat src/a.ts && curl x"]
 
 const lineage = Effect.gen(function* () {
   const sessions = yield* Session.Service
@@ -431,8 +434,12 @@ it.instance(
             ? [text, "passed", "P", 1, 0]
             : LOOKS.has(text)
               ? [text, "passed", "A", 0, 0]
-              : text === "cat /etc/hosts"
+              : text === "cat /etc/hosts" || text === "cat ~/.ssh/id_rsa"
                 ? [text, "passed", "A,A", 0, 0]
+                // 1.2.6 row 36 (U12, INTENT beyond the 01b 10.1 grep list, same reason): a look at a secret or outside
+                // passes as protected_read on record, with no decider (was held D).
+                : text === "head -5 ~/.ssh/id_rsa" || text === 'tail -1 "/tmp/Zorvex Quillmark/a.md"' || text === "cat .env"
+                  ? [text, "passed", "A", 0, 0]
                 : text === "cp src/a.ts /tmp/x" || text === "tee /tmp/x"
                   ? [text, "refused", "X", 0, 0]
                   : [text, "held", "D", 0, 1],
@@ -440,8 +447,9 @@ it.instance(
       )
       expect(stub.calls.every((call) => call.permission === "bash")).toBe(true)
       expect(stub.calls).toHaveLength(33)
-      expect(seen.filter((row) => row[1] === "passed").length).toBe(43)
-      expect(seen.filter((row) => row[1] === "held").length).toBe(64)
+      // 1.2.6 row 36 (U12): four looks moved from held to passed (43 -> 47, 64 -> 60).
+      expect(seen.filter((row) => row[1] === "passed").length).toBe(47)
+      expect(seen.filter((row) => row[1] === "held").length).toBe(60)
       expect(seen.filter((row) => row[1] === "refused").length).toBe(5)
     }),
   project,
@@ -476,10 +484,11 @@ it.instance(
         ["5 sensitive", ({ root }) => write(root, file("package.json")), heldAs("sensitive_file")],
         ["5 a link to something sensitive", ({ root }) => write(root, file("notes")), heldAs("sensitive_file")],
         ["6 secret by edit", ({ root }) => write(root, file(".env")), heldAs("secret_file")],
+        // 1.2.6 row 36 (U12, INTENT 01b 10.1): a read of a secret runs as protected_read (was held secret_file).
         [
           "6 secret by read",
           ({ root }) => asked(root, { permission: "read", patterns: [".env"], metadata: { filepath: file(".env") } }),
-          heldAs("secret_file"),
+          RAN_ON_RECORD("protected_read"),
         ],
         ["6 secret by command", ({ root }) => command(root, "bun test .env"), heldAs("secret_file")],
         ["7 outside the folder", ({ root }) => write(root, outside), WRITTEN_OUTSIDE],
@@ -1056,6 +1065,15 @@ it.instance(
   () =>
     Effect.gen(function* () {
       yield* everyHeld(READS_HELD)
+      // 1.2.6 row 36 (U12): the looks that left READS_HELD run, on record as protected_read, with nothing waiting.
+      for (const text of READS_PROTECTED) {
+        const { root } = yield* lineage
+        const seen = yield* judged(root.id, command(root.id, text))
+        expect([text, seen.outcome, seen.asked, seen.lines.every((line) => line[0] === "A"), seen.lines.some((line) => line[1] === "protected_read")]).toEqual([
+          text, "passed", 0, true, true,
+        ])
+        expect([text, (yield* heldFor([root.id])).length]).toEqual([text, 0])
+      }
       expect(stub.calls).toEqual([])
     }),
   project,
@@ -1577,15 +1595,22 @@ describe("row 201 boundaries", () => {
         // Each probe uses a file of its own: a later call on a path already held joins that entry (C85), which would
         // hide what the table says of it.
         expect(env.files).toEqual([file(".env"), file(".env.local")])
-        expect(yield* judged(root, read(".env.local"))).toEqual(heldAs("secret_file"))
+        // 1.2.6 row 36 (U12, INTENT 01b 10.1 :1580-1588): reads run as protected_read whatever the list says, so the
+        // boundaries are probed with edits of the same files, which still need the item.
+        const edit = (name: string, metadata: Record<string, unknown> = {}) =>
+          asked(root, { permission: "edit", patterns: [file(name)], metadata: { filepath: file(name), ...metadata }, editClass: "secret" } as never)
+        expect(yield* judged(root, read(".env.local"))).toEqual(RAN_ON_RECORD("protected_read"))
+        expect(yield* judged(root, edit(".env.local"))).toEqual(heldAs("secret_file"))
         // A request that names the item itself, as if it had been given, is no different.
-        expect(yield* judged(root, read("quiet-name", { consentID: env.id, via: "consent" }))).toEqual(heldAs("secret_file"))
+        expect(yield* judged(root, edit("quiet-name", { consentID: env.id, via: "consent" }))).toEqual(heldAs("secret_file"))
 
         // The person allows the item. Then a file `.env*` would match is made, which nobody was shown.
         yield* autonomy.allowConsent({ root, hash: list!.hash, ids: [env.id] })
         writeFileSync(file(".env.later"), "TOKEN=later\n")
-        expect(yield* judged(root, read(".env"))).toEqual({ outcome: "passed", lines: [["A", "consented"]], asked: 0 })
-        expect(yield* judged(root, read(".env.later"))).toEqual(heldAs("secret_file"))
+        expect(yield* judged(root, edit(".env"))).toEqual({ outcome: "passed", lines: [["A", "consented"]], asked: 0 })
+        expect(yield* judged(root, read(".env"))).toEqual(RAN_ON_RECORD("protected_read"))
+        expect(yield* judged(root, read(".env.later"))).toEqual(RAN_ON_RECORD("protected_read"))
+        expect(yield* judged(root, edit(".env.later"))).toEqual(heldAs("secret_file"))
         expect(yield* judged(root, write(root, file(".env.made")))).toEqual(heldAs("secret_file"))
         expect(existsSync(file(".env.made"))).toBe(false)
         expect(stub.calls).toEqual([])
@@ -1807,7 +1832,9 @@ describe("row 201 boundaries", () => {
         const directory = (yield* sessions.get(root)).directory
 
         // Held as a secret; the person approves it, and the server runs it once and wakes the root with its output.
-        expect((yield* judged(root, command(root, "cat .env.notes"))).outcome).toBe("held")
+        // 1.2.6 row 36 (U12): `cat` of it alone is a read that runs (protected_read), so the held vehicle is the same look
+        // in a list (`;`), which the table does not prove to be a read and which still waits.
+        expect((yield* judged(root, command(root, "cat .env.notes; true"))).outcome).toBe("held")
         const [entry] = yield* heldFor([root])
         const answered = yield* permission.reply({ requestID: entry!.id, reply: "once" })
         const late = yield* lateAnswers

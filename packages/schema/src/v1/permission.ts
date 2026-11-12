@@ -99,11 +99,14 @@ export const DeferredCategory = Schema.Literals([
   "outside_write",
   "delete_compound",
   "credential_change",
-  // X (row 202): a secret or system place outside the project, refused with or without the consented bypass
+  // X (row 202): a write into a secret or system place outside the project, refused with or without the consented bypass.
+  // 1.2.6 (U12): a read of such a place is `protected_read` (class A) instead.
   "protected_path",
   // X under the 1.1.1 consented bypass
   "irreversible",
   "admin_rights",
+  // X (1.2.6, U6): an irreversible local action whose checkpoint could not be made, so it did not run
+  "checkpoint_failed",
 ]).annotate({ identifier: "PermissionDeferredCategory" })
 export type DeferredCategory = typeof DeferredCategory.Type
 
@@ -119,6 +122,11 @@ export const AllowedCategory = Schema.Literals([
   "script",
   // ran under the 1.1.1 consented bypass; the category it had before is kept in the audit line's \`bypassed\`
   "by_main_agent",
+  // 1.2.6 (U12): a read of a secret or sensitive file, a protected place, or a diagnostic probe, run with nobody asked.
+  // Values stay masked in what the agent sees (U16).
+  "protected_read",
+  // 1.2.6 (U6): an irreversible local action that ran after its checkpoint was made (also the audit outcome)
+  "checkpointed",
 ]).annotate({ identifier: "PermissionAllowedCategory" })
 export type AllowedCategory = typeof AllowedCategory.Type
 

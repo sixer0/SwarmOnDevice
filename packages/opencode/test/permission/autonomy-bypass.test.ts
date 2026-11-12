@@ -257,8 +257,9 @@ describe("S1.13 the overlay, rule by rule (P8)", () => {
     expect(consented(await sh("bun install", { canUndo: false }))).toEqual(OPENED("not_routine"))
     expect(consented(await sh("bun test", { folder: "ask" }))).toEqual(OPENED("folder_not_trusted"))
     expect(consented(await sh("bun test", { canUndo: false }))).toEqual(OPENED("no_undo"))
-    // S1.19: a secret is readable under consent; what would send it out is still held.
-    expect(consented(request("read", { patterns: [".env"] }))).toEqual(OPENED("secret_file"))
+    // S1.19: a secret is readable under consent; what would send it out is still held. 1.2.6 row 36 (U12, INTENT 01b 10.1
+    // :261): the read is no longer opened by the overlay, it is gate A protected_read in both layers (was OPENED secret_file).
+    expect(consented(request("read", { patterns: [".env"] }))).toEqual({ class: "A", decidedBy: "gate", category: "protected_read" })
     expect(consented(request("edit", { patterns: ["scripts/x.sh"], editClass: "not_ordinary" }))).toEqual(OPENED("edit-not-ordinary"))
     expect(consented(request("bash", { rule: "user_catch_all", metadata: { command: "tsc" } }))).toEqual(OPENED("asks_every_time"))
     // 1.1.1 F10b (P19): a make target keeps its 1.1.0 verdict; 1.1.3 (matrix row 14) runs that kept verdict.

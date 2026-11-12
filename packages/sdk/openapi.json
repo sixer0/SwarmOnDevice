@@ -20212,6 +20212,37 @@
         "type": "string",
         "enum": ["user", "agent", "learned"]
       },
+      "MemoryRef": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string"
+              },
+              "line": {
+                "type": "integer",
+                "minimum": 1
+              }
+            },
+            "required": ["path"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "symbol": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              }
+            },
+            "required": ["symbol"],
+            "additionalProperties": false
+          }
+        ]
+      },
       "MemoryItem": {
         "type": "object",
         "properties": {
@@ -20259,6 +20290,18 @@
           },
           "worked": {
             "type": "string"
+          },
+          "body": {
+            "type": "string"
+          },
+          "refs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MemoryRef"
+            }
+          },
+          "untrusted": {
+            "type": "boolean"
           }
         },
         "required": ["id", "text", "source", "deviceOnly", "time"],
@@ -24770,6 +24813,7 @@
                   "protected_path",
                   "irreversible",
                   "admin_rights",
+                  "checkpoint_failed",
                   "outside_read",
                   "outside_copy",
                   "outside_edit",
@@ -24777,7 +24821,9 @@
                   "consented",
                   "archived",
                   "script",
-                  "by_main_agent"
+                  "by_main_agent",
+                  "protected_read",
+                  "checkpointed"
                 ]
               },
               "bypassed": {
@@ -24815,6 +24861,7 @@
                   "protected_path",
                   "irreversible",
                   "admin_rights",
+                  "checkpoint_failed",
                   "outside_read",
                   "outside_copy",
                   "outside_edit",
@@ -24822,7 +24869,9 @@
                   "consented",
                   "archived",
                   "script",
-                  "by_main_agent"
+                  "by_main_agent",
+                  "protected_read",
+                  "checkpointed"
                 ]
               },
               "via": {
@@ -26365,7 +26414,7 @@
       },
       "MemoryRefusal": {
         "type": "string",
-        "enum": ["empty", "long", "secret", "full"]
+        "enum": ["empty", "long", "secret", "full", "body_long", "too_many_refs"]
       },
       "MemoryResult": {
         "type": "object",
@@ -27579,6 +27628,18 @@
           },
           "worked": {
             "type": "string"
+          },
+          "body": {
+            "type": "string"
+          },
+          "refs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MemoryRef"
+            }
+          },
+          "untrusted": {
+            "type": "boolean"
           }
         },
         "required": ["id", "text", "source", "deviceOnly", "time"],

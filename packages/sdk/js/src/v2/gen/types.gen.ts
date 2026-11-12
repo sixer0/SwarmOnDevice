@@ -2432,6 +2432,7 @@ export type AutonomyAuditLine =
         | "protected_path"
         | "irreversible"
         | "admin_rights"
+        | "checkpoint_failed"
         | "outside_read"
         | "outside_copy"
         | "outside_edit"
@@ -2440,6 +2441,8 @@ export type AutonomyAuditLine =
         | "archived"
         | "script"
         | "by_main_agent"
+        | "protected_read"
+        | "checkpointed"
       bypassed?:
         | "check"
         | "file-op"
@@ -2473,6 +2476,7 @@ export type AutonomyAuditLine =
         | "protected_path"
         | "irreversible"
         | "admin_rights"
+        | "checkpoint_failed"
         | "outside_read"
         | "outside_copy"
         | "outside_edit"
@@ -2481,6 +2485,8 @@ export type AutonomyAuditLine =
         | "archived"
         | "script"
         | "by_main_agent"
+        | "protected_read"
+        | "checkpointed"
       via?: "grant" | "duplicate" | "consent" | "outward" | "user_request" | "main_agent" | "for_subagent"
       duplicateOf?: string
       consentID?: string

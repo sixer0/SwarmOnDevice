@@ -191,7 +191,9 @@ describe("M4, M6: the register's names", () => {
     // The register's 21 held and 6 allowed names, as the review counted them, plus the 1.1.1 bypass register (S0.2):
     // six held (irreversible, admin_rights, outside_write_held, system_service, process_not_own, unreadable_command)
     // and one allowed (by_main_agent). Row 202: one held (protected_path) and one allowed (outside_edit).
-    expect(PermissionV1.DeferredCategory.literals).toHaveLength(28)
-    expect(PermissionV1.AllowedCategory.literals).toHaveLength(8)
+    // 1.2.6 row 36 (U6, U12; register N-073..N-075, INTENT 01g 3.6 :193): one held (checkpoint_failed) and two allowed
+    // (protected_read, checkpointed).
+    expect(PermissionV1.DeferredCategory.literals).toHaveLength(29)
+    expect(PermissionV1.AllowedCategory.literals).toHaveLength(10)
   })
 })

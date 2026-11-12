@@ -423,8 +423,21 @@ describe("1.1.3 matrix rows 1-23: categories", () => {
   it.instance("row 4 sensitive_file: runs / M", () =>
     both("row 4", { permission: "edit", patterns: ["package.json"], metadata: { filepath: "package.json" }, editClass: "sensitive" }, runs("sensitive_file")),
   )
-  it.instance("row 5 secret_file: runs / M", () =>
-    both("row 5", { permission: "read", patterns: [".env"], metadata: { filepath: ".env" } }, runs("secret_file")),
+  // 1.2.6 row 36 (U12, INTENT 01b 10.1 :426-427): a read of .env is no longer opened by the consent; it runs at the gate as
+  // protected_read (row 5b). The secret_file row keeps its meaning through the write of the same file.
+  it.instance("row 5 secret_file (the write of .env): runs / M", () =>
+    both("row 5", { permission: "edit", patterns: [".env"], metadata: { filepath: ".env" }, editClass: "secret" }, runs("secret_file")),
+  )
+  it.instance("row 5b protected_read (the read of .env): runs at the gate, no section, the main agent is never asked", () =>
+    Effect.gen(function* () {
+      const test = yield* TestInstance
+      populate(test.directory)
+      const call: Call = { permission: "read", patterns: [".env"], metadata: { filepath: ".env" } }
+      const want: Want = { answer: "ran", line: { class: "A", category: "protected_read", decision: "allow" }, sections: [] }
+      yield* check("row 5b (root)", call, want)
+      yield* check("row 5b (subagent)", call, want, { caller: "subagent" })
+      expect(stub.calls).toEqual([])
+    }),
   )
   it.instance("row 6 external_tool (a tool that says nothing about itself): runs / M", () =>
     both("row 6", { permission: "graft_find_code", patterns: ["*"], metadata: {} }, runs("external_tool")),
