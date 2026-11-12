@@ -304,7 +304,7 @@ async function runScopeJob(caller: StudioCaller, plan: ScopeRenderPlan): Promise
       scope: plan.scope,
       draft: plan.draft,
       ...(plan.slots ? { slots: plan.slots } : {}),
-      naming: { docNumber: plan.document.docNumber, rev: plan.revision.docRev },
+      naming: { docNumber: plan.document.docNumber, rev: plan.revision.docRev, revisionNo: plan.revision.revisionNo }, // row 75 (M-05): ` rev<N>`
       registerLog: false, // createRenderJob sudah mendaftarkan log job
       assetLookup: async (sha) => {
         const row = await findAssetBySha(sha);

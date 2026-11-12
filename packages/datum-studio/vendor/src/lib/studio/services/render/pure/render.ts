@@ -111,8 +111,11 @@ export interface PureRenderOptions {
    * Absen = tanpa pra-cek: jabat tangan bridge pada langkah PDF yang menolak (row 32).
    */
   readiness?: RenderEnvReadiness | (() => Promise<RenderEnvReadiness>);
-  /** Penamaan DATUM (bawaan dari `doc.meta`: title, docNumber, rev). */
-  naming?: { title?: string; docNumber?: string; rev?: string };
+  /**
+   * Penamaan DATUM (bawaan dari `doc.meta`: title, docNumber, rev). Row 75 (M-05, U15): `revisionNo` = the stored
+   * numeric revision; the service always passes it so the delivered name carries ` rev<N>`.
+   */
+  naming?: { title?: string; docNumber?: string; rev?: string; revisionNo?: number };
   /** Ukur tata letak HTML untuk lint render (bawaan true; butuh Chromium). */
   measureLayout?: boolean;
   /** Batas waktu job (bawaan STUDIO_RENDER_JOB_TIMEOUT_MS layanan). */
@@ -383,7 +386,7 @@ async function runPure(
       // C18 / TR-07: bentuk dari data templat (R-78 `naming.file.form`); absen = `<Judul> <nomor> Rev<X>`.
       const name = datumFileNameByForm(
         tpl.params[PARAM_NAMING_FILE_FORM],
-        { title: n.title ?? meta.title, docNumber: n.docNumber ?? meta.docNumber ?? "", rev: n.rev ?? meta.rev, issueDate: meta.issueDate },
+        { title: n.title ?? meta.title, docNumber: n.docNumber ?? meta.docNumber ?? "", rev: n.rev ?? meta.rev, issueDate: meta.issueDate, revisionNo: n.revisionNo },
         FORMAT_EXT[f],
       );
       return run.layout ? draftFileName(name, draftScopeSuffix(run.layout)) : name;

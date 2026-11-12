@@ -67,15 +67,16 @@
   "row48": "2026-11-12: 1.2.6 row 48 (T-11 refusals; register N-110; 01e §3.2, §6.1). 1 vendor file re-patched (files[].patch_row48, before = previous sha256; status unchanged, added): contract/schema/v2/refusal-hints.ts (aliases dir/rankdir/rankDir/orientation/arah -> direction, direction leaves the alias map, layout stays family, NEW DIRECTION_ALIAS_CLAUSE in the alias hint). P1-direction itself landed in row 45; by-construction.ts unchanged by row 48. Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/48_row48_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9830004 + 565 = 9830569. patch_rows += 48",
   "row78": "2026-11-12: 1.2.6 row 78 (M-08, U5; register N-042, N-043). 1 vendor file re-patched (files[].patch_row78, before = previous sha256; status unchanged): scripts/studio/mcp/doc-tools.ts (default studio_document_status text: status line, FAIL per kode, per output the full sha256 and file name for up to STATUS_OUTPUTS_LISTED outputs, within DOCUMENT_STATUS_TEXT_MAX_BYTES; lint details and outputs over the cap behind detail=true markers). Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/78_row78_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9830569 + 4344 = 9834913. patch_rows += 78",
   "row77b": "2026-11-12: 1.2.6 row 77b (M-07 remainder of row 77, U5; register N-037..N-040). 2 vendor files patched (files[].patch_row77b, before = previous sha256): scripts/studio/mcp/write-tools.ts (status copied -> patched; work-report render line FILE_VERIFIED(sha256)/FILE_UNVERIFIED(sha256)) and scripts/studio/mcp/write-client-run.ts (status unchanged; client-document render line FILE_VERIFIED(sha256)/FILE_UNVERIFIED(sha256)). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/77b_row77b_diffs/. counts by delta: copied 430 -> 429, patched 136 -> 137, files/replaced/added unchanged; bytes 9834913 + 17 = 9834930. patch_rows += 77b",
-  "row46": "2026-11-12: 1.2.6 row 46 (T-11 ranked flow layout engine; register N-109, N-111, N-112, N-161..N-164; 01e §4.1-§4.2, §4.5, §5, §6.5-6.8; C7). 4 vendor files (files[].patch_row46, before = previous sha256): engine/diagram/layout-a/flow.ts (copied -> patched: ranked flow TB/LR, ranks from edges, lattice capacity refusals), engine/diagram/build/capacity.ts (re-patched: flow texts name direction, ranked-flow measure), engine/diagram/elk/adapter.ts and elk/plan.ts (added, re-patched: ELK_DIRECTION, ranked-flow ELK graph/plan, ElkPlan.direction, elkPlanKey with direction). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/46_row46_diffs/. counts by delta: copied 429 -> 428, patched 137 -> 138; bytes 9834930 + 21736 = 9856666. patch_rows += 46"
+  "row46": "2026-11-12: 1.2.6 row 46 (T-11 ranked flow layout engine; register N-109, N-111, N-112, N-161..N-164; 01e §4.1-§4.2, §4.5, §5, §6.5-6.8; C7). 4 vendor files (files[].patch_row46, before = previous sha256): engine/diagram/layout-a/flow.ts (copied -> patched: ranked flow TB/LR, ranks from edges, lattice capacity refusals), engine/diagram/build/capacity.ts (re-patched: flow texts name direction, ranked-flow measure), engine/diagram/elk/adapter.ts and elk/plan.ts (added, re-patched: ELK_DIRECTION, ranked-flow ELK graph/plan, ElkPlan.direction, elkPlanKey with direction). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/46_row46_diffs/. counts by delta: copied 429 -> 428, patched 137 -> 138; bytes 9834930 + 21736 = 9856666. patch_rows += 46",
+  "row75": "2026-11-12: 1.2.6 row 75 (M-05, U15; register N-053, N-054). 5 vendor files patched (files[].patch_row75, before = previous sha256): services/storage/paths.ts (copied -> patched: datumFileName adds ` rev<N>` after `Rev<X>`), contract/env.ts (DATUM_FILENAME_PATTERN accepts optional ` rev<N>`), services/render/pure/render.ts, services/render/revision.ts, services/render/scope.ts (naming.revisionNo plumbed so every service render passes the stored revision). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/75_row75_diffs/. counts by delta: copied 428 -> 427, patched 138 -> 139, files/replaced/added unchanged; bytes 9856666 + 1607 = 9858273. patch_rows += 75"
  },
  "counts": {
   "files": 608,
-  "copied": 428,
-  "patched": 138,
+  "copied": 427,
+  "patched": 139,
   "replaced": 12,
   "added": 30,
-  "bytes": 9856666
+  "bytes": 9858273
  },
  "files": [
   {
@@ -835,9 +836,10 @@
   {
    "path": "src/lib/studio/contract/env.ts",
    "status": "patched",
-   "bytes": 19533,
+   "bytes": 19793,
    "source_sha256": "73232eea6c3db8f8e94ce88fef574c03f29155440a390c5947b16d55427913a2",
-   "sha256": "b2611cd23541e43ef47299a107ab906666fd1312db1525fe7d807418c6e636ef",
+   "sha256": "357ebe9a7a03d58c8b52daf9d17b86f51c3908b2933d21beb5710c8c0e337564",
+   "patch_row75": {"id": "row75-m05-rev-filename", "row": "75", "decision": "1.2.6 patch M-05 (U15; register N-053, N-054)", "summary": "DATUM_FILENAME_PATTERN accepts an optional ` rev(0|[1-9][0-9]{0,5})` after `Rev<X>` and before the optional sha suffix; names without it stay valid; comment", "before_sha256": "b2611cd23541e43ef47299a107ab906666fd1312db1525fe7d807418c6e636ef", "after_sha256": "357ebe9a7a03d58c8b52daf9d17b86f51c3908b2933d21beb5710c8c0e337564", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/75_row75_diffs/src_lib_studio_contract_env.ts.diff", "diff_sha256": "26ecebccaa108269f681502a1ed3bbcedf82769bfb471006f0b0cc463e60432e"},
    "patch_row55a": {"id": "row55a-m04-raster-limit", "row": "55a", "decision": "1.2.6 patch M-04 (U5; register N-045, N-046)", "summary": "additive: RASTER_TIMEOUT_MAX_MS = 120000 and RASTER_TIMEOUT_PER_LABEL_MS = 250 beside STUDIO_CHROMIUM_TIMEOUT_MS", "before_sha256": "57def9b7d8b38238e1cb1af835454bb646a9b3f66ea6772800d889e038951e69", "after_sha256": "b2611cd23541e43ef47299a107ab906666fd1312db1525fe7d807418c6e636ef", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/55a_row55a_diffs/src_lib_studio_contract_env.ts.diff", "diff_sha256": "1c86055bdbeb023b8bc9ad5063ff849e38269d1305d68bc8b77c497d4ff3f683"},
    "patch_row165I": {"id": "row165I-security", "row": "165I", "decision": "C196 (verification/24 L2)", "summary": "DATUM_FILENAME_PATTERN also refuses C1 U+0080-009F, ALM U+061C, U+200B-200D, U+2028/2029, U+2060, U+FEFF (app copy changed identically, pin test passes); NEW DATUM_NAME_UNSAFE_CHARS (reject set used by safeDatumName and standaloneFileName)", "before_sha256": "e6e9099068dd8bf3d1ff64bfe340820dc173ea45c450ad57110cfa477cb50744", "after_sha256": "57def9b7d8b38238e1cb1af835454bb646a9b3f66ea6772800d889e038951e69", "diff": "implementation/141_row165I_diffs/src_lib_studio_contract_env.ts.diff"},
    "patch_row165D": {"id": "row165D-delivered-name", "row": "165D", "decision": "C189 F56-2 (CP-17)", "summary": "additive: DATUM_FILENAME_PATTERN (the delivered DATUM title name: <Judul> <nomor> Rev<X> / <Judul> <YYYY-MM-DD> / Gambar <C.n> <Judul>, optional ' <sha8|16|64>' collision suffix, one safe segment, no '_'); the app copies it verbatim (file-preview-policy.ts, pinned by a test)", "before_sha256": "bda08348adaadb55195bcb85ebb1fa57c7b57ca7b5574240b85085041e5f188d", "after_sha256": "e6e9099068dd8bf3d1ff64bfe340820dc173ea45c450ad57110cfa477cb50744", "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/137_row165D_diffs/contract_env.ts.diff", "diff_sha256": "ebde370faf48724aa233f8618ddae96289c94436f525ec573fff6a4fed715742"},
@@ -5185,9 +5187,10 @@
   {
    "path": "src/lib/studio/services/render/pure/render.ts",
    "status": "patched",
-   "bytes": 22014,
+   "bytes": 22208,
    "source_sha256": "feea13ccc95478c3c222442f5a398381ea0c1748ff8239b751cdfac31ff8a8c3",
-   "sha256": "248bc75c48a351947dee21eb014686f45bbba86ad7676453b83af3801884764e",
+   "sha256": "89a5a1188eda4d12cff1881b23fd8f352603ed65365d2db7d2367f1e61f1a2f0",
+   "patch_row75": {"id": "row75-m05-rev-filename", "row": "75", "decision": "1.2.6 patch M-05 (U15; register N-053, N-054)", "summary": "PureRenderOptions.naming gains revisionNo; nameFor passes it to datumFileNameByForm", "before_sha256": "248bc75c48a351947dee21eb014686f45bbba86ad7676453b83af3801884764e", "after_sha256": "89a5a1188eda4d12cff1881b23fd8f352603ed65365d2db7d2367f1e61f1a2f0", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/75_row75_diffs/src_lib_studio_services_render_pure_render.ts.diff", "diff_sha256": "d5f5c482fb1852bab7dcbe9f268c72146accfa896b3c65051b0a38d86d61ef02"},
    "patch": {
     "id": "row32-pdf-from-html",
     "row": 32,
@@ -5217,9 +5220,10 @@
   {
    "path": "src/lib/studio/services/render/revision.ts",
    "status": "patched",
-   "bytes": 8065,
+   "bytes": 8121,
    "source_sha256": "4c2f0504dc26117d0d68f574ca083eeb92c65372f68bec12f131f44538eff701",
-   "sha256": "f68baa562372b271432c72368423c3bb751b1cd2626cc5b6c9848f56017c1caf",
+   "sha256": "eac191c1df4b7dfa8bcaf7ea9032318ac3637e8bbf714cf2949647503e6c5c7b",
+   "patch_row75": {"id": "row75-m05-rev-filename", "row": "75", "decision": "1.2.6 patch M-05 (U15; register N-053, N-054)", "summary": "renderSnapshot naming passes revisionNo: rev.revisionNo", "before_sha256": "f68baa562372b271432c72368423c3bb751b1cd2626cc5b6c9848f56017c1caf", "after_sha256": "eac191c1df4b7dfa8bcaf7ea9032318ac3637e8bbf714cf2949647503e6c5c7b", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/75_row75_diffs/src_lib_studio_services_render_revision.ts.diff", "diff_sha256": "37e4f5a18f92bfc09dad601c49d8e5e54a91d08f72b330d5233e3c26a0250d8f"},
    "patch": {
     "id": "row31c-render-revision",
     "row": "31c",
@@ -5234,9 +5238,10 @@
   {
    "path": "src/lib/studio/services/render/scope.ts",
    "status": "patched",
-   "bytes": 18436,
+   "bytes": 18502,
    "source_sha256": "182af9b3a482eced0d404a92110023c1b5ce24e8f87f8a7b54774037cde34bc7",
-   "sha256": "4642508043f8366e761d180dc27cb32f1eb46848535596e0e34edb8f8b3be1c0",
+   "sha256": "13033d480cadc5d1ca4e7abf0354eb0c5c1012488bcb32741d392240118c233d",
+   "patch_row75": {"id": "row75-m05-rev-filename", "row": "75", "decision": "1.2.6 patch M-05 (U15; register N-053, N-054)", "summary": "renderSnapshot naming passes revisionNo: plan.revision.revisionNo", "before_sha256": "4642508043f8366e761d180dc27cb32f1eb46848535596e0e34edb8f8b3be1c0", "after_sha256": "13033d480cadc5d1ca4e7abf0354eb0c5c1012488bcb32741d392240118c233d", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/75_row75_diffs/src_lib_studio_services_render_scope.ts.diff", "diff_sha256": "6a800d2020fb7b815f33183fa7d0aaa65b463acbe06e9ab76090079762289ce0"},
    "patch": {
     "id": "row31c-render-scope",
     "row": "31c",
@@ -5540,10 +5545,11 @@
   },
   {
    "path": "src/lib/studio/services/storage/paths.ts",
-   "status": "copied",
-   "bytes": 12480,
+   "status": "patched",
+   "bytes": 13511,
    "source_sha256": "486b32d48cf26235c36992416bcde93d65a37ff3e8d0866c31ae1943bce6b18b",
-   "sha256": "486b32d48cf26235c36992416bcde93d65a37ff3e8d0866c31ae1943bce6b18b"
+   "sha256": "9a27668c4688cbbdde745427ae40d44e5f7e1b3e6e31889d5c16152013232cc9",
+   "patch_row75": {"id": "row75-m05-rev-filename", "row": "75", "decision": "1.2.6 patch M-05 (U15; register N-053, N-054)", "summary": "datumFileName(title, docNumber, rev, ext, revisionNo?) gives `<Judul> <nomor> Rev<X> rev<N>.<ext>` when revisionNo is given (integer 0..999999, else INVALID field revisionNo); the title is clipped, never number or revisions; datumFileNameByForm passes i.revisionNo to the default form (date form unchanged)", "before_sha256": "486b32d48cf26235c36992416bcde93d65a37ff3e8d0866c31ae1943bce6b18b", "after_sha256": "9a27668c4688cbbdde745427ae40d44e5f7e1b3e6e31889d5c16152013232cc9", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/75_row75_diffs/src_lib_studio_services_storage_paths.ts.diff", "diff_sha256": "c35c87449dcd0cb7bfe99386b08e0370ab90f7184ae4c34c9365973f5ae0d744"}
   },
   {
    "path": "src/lib/studio/services/structure/contract.ts",
@@ -6025,6 +6031,7 @@
   "48",
   "78",
   "77b",
-  "46"
+  "46",
+  "75"
  ]
 }

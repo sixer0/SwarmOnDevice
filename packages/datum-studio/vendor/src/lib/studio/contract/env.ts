@@ -196,9 +196,11 @@ export const FINAL_FILENAME_PATTERN =
  * The app copies this string verbatim (packages/app/src/pages/session/file-preview-policy.ts; a test pins it).
  * Row 165I (C196, verification/24 L2): also refused are C1 controls U+0080-009F, ALM U+061C, zero-width U+200B-200D,
  * LRM/RLM U+200E/F, LS/PS U+2028/2029, WJ U+2060 and BOM U+FEFF (same set as DATUM_NAME_UNSAFE_CHARS).
+ * Swarm 1.2.6 row 75 (M-05, U15, N-054): `Rev<X>` may be followed by the numeric revision ` rev<N>` (same range as
+ * C51), e.g. `<Judul> 012-GSP-KT-XI-2026 RevD rev256.pdf`; names without it (delivered before 1.2.6) stay valid.
  */
 export const DATUM_FILENAME_PATTERN =
-  "^(?=[^\\u0000-\\u001f]{1,255}$)(?![ .])(?:(?:[^\\u0000-\\u001f\\u007f<>:\"/\\\\|?*_\\u0080-\\u009f\\u061c\\u200b-\\u200f\\u2028\\u2029\\u202a-\\u202e\\u2060\\u2066-\\u2069\\ufeff]+ )?(?:[0-9A-Za-z][0-9A-Za-z.-]* Rev[0-9A-Za-z]{1,8}|[0-9]{4}-[0-9]{2}-[0-9]{2})|(?:Gambar|Figure) [0-9A-Za-z]+(?:\\.[0-9A-Za-z]+)* [^\\u0000-\\u001f\\u007f<>:\"/\\\\|?*_\\u0080-\\u009f\\u061c\\u200b-\\u200f\\u2028\\u2029\\u202a-\\u202e\\u2060\\u2066-\\u2069\\ufeff]+)(?: (?:[0-9a-f]{8}|[0-9a-f]{16}|[0-9a-f]{64}))?\\.(docx|pdf|html|svg|png)$";
+  "^(?=[^\\u0000-\\u001f]{1,255}$)(?![ .])(?:(?:[^\\u0000-\\u001f\\u007f<>:\"/\\\\|?*_\\u0080-\\u009f\\u061c\\u200b-\\u200f\\u2028\\u2029\\u202a-\\u202e\\u2060\\u2066-\\u2069\\ufeff]+ )?(?:[0-9A-Za-z][0-9A-Za-z.-]* Rev[0-9A-Za-z]{1,8}(?: rev(?:0|[1-9][0-9]{0,5}))?|[0-9]{4}-[0-9]{2}-[0-9]{2})|(?:Gambar|Figure) [0-9A-Za-z]+(?:\\.[0-9A-Za-z]+)* [^\\u0000-\\u001f\\u007f<>:\"/\\\\|?*_\\u0080-\\u009f\\u061c\\u200b-\\u200f\\u2028\\u2029\\u202a-\\u202e\\u2060\\u2066-\\u2069\\ufeff]+)(?: (?:[0-9a-f]{8}|[0-9a-f]{16}|[0-9a-f]{64}))?\\.(docx|pdf|html|svg|png)$";
 /**
  * Row 165I (C196, verification/24 L1/L2): characters a delivered or saved file name must never carry: C0/DEL/C1
  * controls, bidi embeddings/overrides/isolates and marks (U+202A-202E, U+2066-2069, U+200E/F, U+061C), zero-width

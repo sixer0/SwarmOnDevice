@@ -191,17 +191,27 @@ export function fileNumber(docNumber: string): string {
 }
 
 /**
- * Nama berkas utama DATUM: `<Judul> <nomor-berkas> Rev<X>.<ext>`, maks 120
+ * Nama berkas utama DATUM: `<Judul> <nomor-berkas> Rev<X> rev<N>.<ext>`, maks 120
  * karakter sebelum ekstensi. Bila terlalu panjang, JUDUL yang dipotong agar
  * nomor dan revisi tetap utuh. Contoh:
- * `Manual Komprehensif DATUM GSP 000-GSP-STD-X-2026 RevA.docx`.
+ * `Manual Komprehensif DATUM GSP 000-GSP-STD-X-2026 RevA rev3.docx`.
+ *
+ * Swarm 1.2.6 row 75 (M-05, U15, register N-053): the numeric revision `rev<N>` is ALWAYS inserted after the letter
+ * revision by every production caller (render nameFor gets it from the stored revision), so two numeric revisions of
+ * one letter revision never share a delivered name (no OUT_EXISTS). `revisionNo` stays optional only for callers that
+ * have no stored revision (a pure render of a bare snapshot); they keep the pre-1.2.6 form, which
+ * DATUM_FILENAME_PATTERN still accepts (N-054).
  */
-export function datumFileName(title: string, docNumber: string, rev: string, ext: string): string {
+export function datumFileName(title: string, docNumber: string, rev: string, ext: string, revisionNo?: number): string {
   const e = normalizeExt(ext);
   const num = datumClean(fileNumber(docNumber));
   const r = datumClean(String(rev ?? "").replace(/^rev\s*/i, ""));
   if (!r) throw invalid("Invalid revision letter", { field: "rev" });
-  const suffix = `${num} Rev${r}`;
+  if (revisionNo !== undefined && !(Number.isInteger(revisionNo) && revisionNo >= 0 && revisionNo <= 999999)) {
+    // Same range as C51 `rev(0|[1-9][0-9]{0,5})`, so the name always passes DATUM_FILENAME_PATTERN.
+    throw invalid("Invalid revision number", { field: "revisionNo" });
+  }
+  const suffix = revisionNo === undefined ? `${num} Rev${r}` : `${num} Rev${r} rev${revisionNo}`;
   const t = datumClean(title);
   const room = DATUM_NAME_MAX - suffix.length - 1;
   const stem = t && room > 0 ? `${clip(t, room)} ${suffix}` : clip(suffix, DATUM_NAME_MAX);
@@ -230,10 +240,11 @@ export function datumDateFileName(title: string, isoDate: string, ext: string): 
 /** Bentuk nama berkas R-78: `judulTanggalIso` = judul + tanggal ISO; nilai lain/absen = `datumFileName` hari ini. */
 export function datumFileNameByForm(
   form: unknown,
-  i: { title: string; docNumber: string; rev: string; issueDate: string },
+  i: { title: string; docNumber: string; rev: string; issueDate: string; revisionNo?: number },
   ext: string,
 ): string {
-  return form === "judulTanggalIso" ? datumDateFileName(i.title, i.issueDate, ext) : datumFileName(i.title, i.docNumber, i.rev, ext);
+  // Row 75 (M-05): the default form carries ` rev<N>`; the date form (R-78 judulTanggalIso) is unchanged.
+  return form === "judulTanggalIso" ? datumDateFileName(i.title, i.issueDate, ext) : datumFileName(i.title, i.docNumber, i.rev, ext, i.revisionNo);
 }
 
 /** Nama berkas DATUM bebas (figur `Gambar C.n Judul`, label artefak). */
