@@ -81,7 +81,8 @@
   "row70": "2026-11-12: 1.2.6 row 70 (T-17 vendor part, U5; register N-055 BACKUP_DIR_NAME, N-057 backupResidue, E-22). 2 vendor files re-patched (files[].patch_row70, before = previous sha256; status unchanged): scripts/studio/mcp/safety.ts (writeFileGuarded backups in <dir>/.bak/ created 0700, backupResidue) and scripts/studio/mcp/tools.ts (backupResidue in studio_report_refresh/studio_file_verify). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/70_row70_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9895940 + 2723 = 9898663 (safety.ts 18995 -> 21221, tools.ts 81007 -> 81504). patch_rows += 70",
   "row61": "2026-11-12: 1.2.6 row 61 (T-05, U5; no new register name). 1 vendor file re-patched (files[].patch_row61, before = previous sha256; status unchanged): engine/diagram/core/svg.ts (provenance glyph inset by node shape: parallelogram inside, diamond outside the slanted side; box byte-identical). Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/61_row61_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9894024 + 1916 = 9895940. patch_rows += 61",
   "row66": "2026-11-12: 1.2.6 row 66 (T-10, U5, R12; register N-030). 4 vendor files patched (files[].patch_row66, before = previous sha256): engine/chart/core/labelfit.ts (NEW LABEL_GUTTER_CAP_FRAC = 0.3), engine/chart/core/datum.ts and engine/chart/core/gallery.ts (inline W*0.42 gutter cap -> W*LABEL_GUTTER_CAP_FRAC), engine/chart/core/families.ts (stale doc comment only). Status copied -> patched for labelfit.ts, gallery.ts, families.ts; datum.ts was already patched (row 65). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/66_row66_diffs. counts by delta: copied 416 -> 413, patched 150 -> 153; bytes 9898663 +548 = 9899211. patch_rows += 66",
-  "row73": "2026-11-12: 1.2.6 row 73 (W-05/W-03/OFF-06, C2, D3; register N-020..N-023). 1 vendor file re-patched (files[].patch_row73, before = previous sha256; status unchanged): scripts/studio/mcp/figure-tools.ts (FIGURE_GRAPH_DELTA report in studio_figure_revise; preview text states defect/notice counts). Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/73_row73_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9899211 + 5064 = 9904275. patch_rows += 73"
+  "row73": "2026-11-12: 1.2.6 row 73 (W-05/W-03/OFF-06, C2, D3; register N-020..N-023). 1 vendor file re-patched (files[].patch_row73, before = previous sha256; status unchanged): scripts/studio/mcp/figure-tools.ts (FIGURE_GRAPH_DELTA report in studio_figure_revise; preview text states defect/notice counts). Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/73_row73_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9899211 + 5064 = 9904275. patch_rows += 73",
+  "row97a": "2026-11-12: 1.2.6 row 97a (G-05, W-01, W-09, W-13 text; U5; register N-011, N-014). 1 vendor file re-patched (files[].patch_row97a, before = previous sha256; status unchanged): scripts/studio/mcp/resources.ts (MCP_DOC_RECIPE: row 174 diagram-block sentence moved out of the studio_figure_revise call shape; render 540 s and studio_document_status -> studio_file_verify follow-up; caption rule without the GAMBAR token, <= 100 chars; studio_asset_put with sha256:<hex> reference). Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/97a_row97a_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9904275 + 1653 = 9905928. patch_rows += 97a"
  },
  "counts": {
   "files": 608,
@@ -89,7 +90,7 @@
   "patched": 153,
   "replaced": 12,
   "added": 30,
-  "bytes": 9904275
+  "bytes": 9905928
  },
  "files": [
   {
@@ -288,9 +289,10 @@
   {
    "path": "scripts/studio/mcp/resources.ts",
    "status": "patched",
-   "bytes": 12334,
+   "bytes": 13987,
    "source_sha256": "1baf1d948b975ea5f44a5d249ba7a138259bccc4b2b460b12c5bc89db390c193",
-   "sha256": "c02e11304447e615afb65a877e5068a6657d06981f2338a54a581b2fdc165b50",
+   "sha256": "77c8ad7af97483644710972d83b289cdea89876ba490dcbd7d34b58eab14ff7b",
+   "patch_row97a": {"id": "row97a-g05-klien-recipe", "row": "97a", "decision": "1.2.6 G-05, W-01, W-09 (U5)", "summary": "recipe text: diagram-block sentence moved out of the studio_figure_revise { documentId, pid, patch, baseRevisionNo, change } sentence; render paragraph: 540 s budget, on -32001 / REMOTE_UNREACHABLE studio_document_status then studio_file_verify, never re-render blindly; caption rule (Studio prints GAMBAR n.m, no token, CAPTION_TOKEN_DUPLICATE, <= 100 chars, verdict with actor and number); external images via studio_asset_put, reference sha256:<hex>; typo memratinjau -> meratinjau", "before_sha256": "c02e11304447e615afb65a877e5068a6657d06981f2338a54a581b2fdc165b50", "after_sha256": "77c8ad7af97483644710972d83b289cdea89876ba490dcbd7d34b58eab14ff7b", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/97a_row97a_diffs/resources.ts.diff"},
    "patch_row174": {"id": "row174-f146b6", "row": "174", "decision": "C218 F146b-6", "summary": "guide text: three strings after the FIG-03b lines: diagram block shape, spec ATAU artifactId (not both), schema pointer", "before_sha256": "624e36068d5f281ee8c059058704709080ec24eb6d60f8d5fa080c482178c9e2", "after_sha256": "f7622a362f6e3d3a56138dcfb8bf82b445275ffe0fb8de343e728ad72609d126", "diff": "implementation/155_row174_diffs/scripts_studio_mcp_resources.ts.diff"},
    "patch_row165E": {"id": "row165E-integration", "row": "165E", "decision": "C191 ruling 4 (row 165C file request)", "summary": "guide text: one line (two strings) after the FIG-03b studio_figure_preview lines documenting the stand-alone figure (standalone: true, downloadDir[, png: true]) -> Gambar <n> <Judul>.svg/.png with caption, KUNCI, SUMBER", "before_sha256": "1baf1d948b975ea5f44a5d249ba7a138259bccc4b2b460b12c5bc89db390c193", "after_sha256": "624e36068d5f281ee8c059058704709080ec24eb6d60f8d5fa080c482178c9e2", "diff": "implementation/139_row165E_diffs/scripts_studio_mcp_resources.ts.diff"},
    "patch_row207": {"id": "row207-hb2-verification-chain", "row": "207", "decision": "1.2.3 patch HB-2", "summary": "recipe text: verificationChain [{ layer, method, object, result }], accepted keys, mapping, studio_edit cell example", "before_sha256": "f7622a362f6e3d3a56138dcfb8bf82b445275ffe0fb8de343e728ad72609d126", "after_sha256": "86dcaab241475f0507bcb0dcfd61390cce85234dc5b27cdd1a3c09fe5dcf4913", "diff": "docs/2026-11-09_swarm_1_2_3_patch/implementation/207_row207_diffs/resources.ts.diff"},
@@ -6117,6 +6119,7 @@
   "61",
   "70",
   "66",
-  "73"
+  "73",
+  "97a"
  ]
 }
