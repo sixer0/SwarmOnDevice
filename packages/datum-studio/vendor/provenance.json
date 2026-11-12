@@ -75,7 +75,8 @@
   "row60": "2026-11-12: 1.2.6 row 60 (T-04, U3; register E-11 LABEL_LEADER, no new name). 1 vendor file patched (files[].patch_row60, before = previous sha256): engine/diagram/fit/labels.ts (copied -> patched, 12694 -> 14653: onPath falls back to NEW scanPath, a 0.5 mm slide along each segment longest first, only when every fixed spot t = 1/2, 1/4, 3/4 collides; leader/number only when no collision-free on-path spot exists). Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/60_row60_diffs/. counts by delta: copied 422 -> 421, patched 144 -> 145, files/replaced/added unchanged; bytes 9865351 + 1959 = 9867310. patch_rows += 60",
   "row49": "2026-11-12: 1.2.6 row 49 (T-14, U5, C2; register N-033..N-035, E-16). 2 vendor files (files[].patch_row49, before = previous sha256): scripts/studio/mcp/doc-tools.ts (re-patched: studio_document_status `findings` paging with chapter filter, findingsPage, LINT_FINDINGS_PAGE_MAX 500) and engine/lint/structure/context.ts (copied -> patched: summary row past the 100 cap carries findingsAll with chapter keys). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/49_row49_diffs/. counts by delta: copied 421 -> 420, patched 145 -> 146, files/replaced/added unchanged; bytes 9867310 + 6119 = 9873429. patch_rows += 49",
   "row65": "2026-11-12: 1.2.6 row 65 (T-09, U14 reverses D-322; register N-025..N-029). 2 vendor files patched (files[].patch_row65, before = previous sha256; status copied -> patched): engine/chart/core/datum.ts (honest DC bar geometry for every n, BAR_MIN_BODY_MM is a threshold, REPORT BAR_SUBMIN below it; BAR_MAX_THICK_MM and BAR_MIN_HEIGHT retired; BarRows.scaled always false) and engine/chart/core/index.ts (BAR_MAX_THICK_MM export removed). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/65_row65_diffs. counts by delta: copied 420 -> 418, patched 146 -> 148; bytes 9873429 -814 = 9872615. patch_rows += 65",
-  "row68": "2026-11-12: 1.2.6 row 68 (T-15, U3; register N-036 FIGURE_PREPARE_FAILED, E-15 FIGURE_PLACEHOLDER reused, no new verification code). 4 vendor files (files[].patch_row68, before = previous sha256): engine/docx/figures/store.ts (copied -> patched: a failing figure becomes a FIGURE_PREPARE_FAILED marker entry, assembly continues), engine/docx/figures/log.ts (copied -> patched: marker constant, type, reader), engine/docx/figures/figure.ts (re-patched: marked placeholder paragraph instead of a picture), services/render/figures.ts (re-patched: failureFor + rasterize wrapper, job stays PARTIAL). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/68_row68_diffs/. counts by delta: copied 418 -> 416, patched 148 -> 150, files/replaced/added unchanged; bytes 9872615 + 7156 = 9879771. patch_rows += 68"
+  "row68": "2026-11-12: 1.2.6 row 68 (T-15, U3; register N-036 FIGURE_PREPARE_FAILED, E-15 FIGURE_PLACEHOLDER reused, no new verification code). 4 vendor files (files[].patch_row68, before = previous sha256): engine/docx/figures/store.ts (copied -> patched: a failing figure becomes a FIGURE_PREPARE_FAILED marker entry, assembly continues), engine/docx/figures/log.ts (copied -> patched: marker constant, type, reader), engine/docx/figures/figure.ts (re-patched: marked placeholder paragraph instead of a picture), services/render/figures.ts (re-patched: failureFor + rasterize wrapper, job stays PARTIAL). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/68_row68_diffs/. counts by delta: copied 418 -> 416, patched 148 -> 150, files/replaced/added unchanged; bytes 9872615 + 7156 = 9879771. patch_rows += 68",
+  "row64": "2026-11-12: 1.2.6 row 64 (T-08 fan-out sub-ranking, N-018; 01e §8; ranked-flow forward sides 01e §4.2 routed by row 46). 1 vendor file re-patched (files[].patch_row64, before = previous sha256): engine/diagram/build/route.ts (status patched unchanged). counts.bytes by delta +8531"
  },
  "counts": {
   "files": 608,
@@ -83,7 +84,7 @@
   "patched": 150,
   "replaced": 12,
   "added": 30,
-  "bytes": 9879771
+  "bytes": 9888302
  },
  "files": [
   {
@@ -2301,9 +2302,10 @@
   {
    "path": "src/lib/studio/engine/diagram/build/route.ts",
    "status": "patched",
-   "bytes": 18029,
+   "bytes": 26560,
    "source_sha256": "2189c545c59473987ba23d3dc64eeeaf9c336c0624c0e9029a34a29773ffa769",
-   "sha256": "1e5c034f041eafa18df9214a9fae0061bebfaf10fc0dcf3a80ebc467fc79bccd",
+   "sha256": "4d5ceb95f69cba02ca57c098cc2e2a22b3e05d5930eb70a0249e7e9a8251ec14",
+   "patch_row64": {"id": "row64-t08-fanout", "row": "64", "decision": "1.2.6 patch T-08 fan-out sub-ranking (U5; register N-018 FANOUT_SPLIT_MIN, E-13; 01e §8, A8, A21) + 01e §4.2 ranked-flow forward sides (request routed by row 46, 967face95b)", "summary": "routeWithSides: (1) a forward edge of a ranked flow (flowDirectionOf set, flowRanks rank(from) < rank(to)) gets fixed sides, TB bottom->top, LR right->left; back/intra-rank edges and legacy flow keep sideOf. (2) NEW export FANOUT_SPLIT_MIN 4: a fan group (>= 4 edges on one node side, other ends across the corridor; fan-out then fan-in) whose members conflict (edgeConflicts collinear+cross > 0) is re-routed with slots sorted by far centre, distinct exits (far centre inside the side span when no other exit lies within ENTRY_COLLISION_MM), staggered turn levels LATTICE_Y/2 outermost first; kept only if group conflicts strictly drop, figure conflicts do not rise and no member runs through its own boxes (EDGE_LANES note). Groups without conflicts and legacy flows (no direction, 01e A15) stay byte-identical", "diff_base": "sha256 before this row", "before_sha256": "1e5c034f041eafa18df9214a9fae0061bebfaf10fc0dcf3a80ebc467fc79bccd", "after_sha256": "4d5ceb95f69cba02ca57c098cc2e2a22b3e05d5930eb70a0249e7e9a8251ec14", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/64_row64_diffs/src_lib_studio_engine_diagram_build_route.ts.diff", "diff_sha256": "a3a2ece061d3affa09b39297bcea2ce097600b8e6eb5b695398252a336570a79"},
    "patch_row162b": {
     "id": "row162b-route-elk-seam",
     "row": "162b",
@@ -6093,6 +6095,7 @@
   "60",
   "49",
   "65",
-  "68"
+  "68",
+  "64"
  ]
 }
