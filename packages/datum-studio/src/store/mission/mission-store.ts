@@ -22,6 +22,7 @@ import type {
   MissionDecision,
   MissionDerived,
   MissionDoc,
+  MissionDrift,
   MissionEventRecord,
   MissionFinding,
   MissionListFilter,
@@ -1244,6 +1245,29 @@ export class MissionStore {
     }
   }
 
+  /**
+   * 1.2.6 row 87 (MC-09, N-066): rows added (`row-add`) and dropped (`row-status` to dropped) after the approve event,
+   * each with the decision id its event carries. Ordered by event seq, not time, so a change in the approving
+   * millisecond is still placed correctly; a draft mission (no approve event) has an empty drift.
+   */
+  private driftOf(q: MissionReader, mission: string): MissionDrift {
+    const drift: MissionDrift = { count: 0, rows: [], dropped: [] }
+    const approved = q.get<{ s: number | null }>("SELECT min(seq) AS s FROM mission_event WHERE mission_id = ? AND verb = 'approve'", [mission])?.s
+    if (approved === null || approved === undefined) return drift
+    const events = q.all<{ row_id: string; verb: string; decision_id: string | null; time_created: number }>(
+      `SELECT row_id, verb, decision_id, time_created FROM mission_event
+        WHERE mission_id = ? AND seq > ? AND row_id IS NOT NULL AND (verb = 'row-add' OR (verb = 'row-status' AND to_status = 'dropped'))
+        ORDER BY seq`,
+      [mission, approved],
+    )
+    for (const e of events) {
+      if (e.verb === "row-add") drift.rows.push({ row: e.row_id, timeCreated: iso(e.time_created)!, decision: e.decision_id ?? null })
+      else drift.dropped.push({ row: e.row_id, timeDropped: iso(e.time_created)!, decision: e.decision_id ?? null })
+    }
+    drift.count = drift.rows.length
+    return drift
+  }
+
   /** studio_mission_get (§8.3): the stored MissionDoc plus derived phases (the type's only), waves, ready, counts. */
   get(mission: string, tx?: MissionReader): { mission: MissionDoc; derived: MissionDerived } | null {
     const q = this.r(tx)
@@ -1306,6 +1330,7 @@ export class MissionStore {
       counts,
       progress: { done: counts.done, total: g.rows.length - counts.dropped },
       checkpoints,
+      drift: this.driftOf(q, mission),
     }
     // Row 188 (L47): who approved; an autonomous controller approval is labelled so Mission Control shows it apart.
     // Row 197 (S194-02): the label says what the record says. The store cannot tell Mission Control from an agent that

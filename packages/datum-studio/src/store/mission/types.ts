@@ -241,6 +241,19 @@ export interface MissionDerived {
   checkpoints: Record<string, RowCheckpoint>
   /** Row 188: present once the mission is approved. */
   approval?: MissionApproval
+  /** 1.2.6 row 87 (MC-09, N-066): rows added and dropped after approval, with the justifying decision ids. */
+  drift: MissionDrift
+}
+
+/**
+ * 1.2.6 row 87 (MC-09, register N-066): what changed in the row set after approval, read from mission_event after
+ * the approve event. `count` and `rows` are the rows added after approval (`count === rows.length`); `dropped` lists
+ * the rows moved to dropped after approval. Empty (`count: 0`) for a draft or an unchanged mission.
+ */
+export interface MissionDrift {
+  count: number
+  rows: Array<{ row: string; timeCreated: string; decision: string | null }>
+  dropped: Array<{ row: string; timeDropped: string; decision: string | null }>
 }
 
 // ── C57 entities (not part of studio.mission/v1; validated in code, spec §6.1 change rule) ──────────

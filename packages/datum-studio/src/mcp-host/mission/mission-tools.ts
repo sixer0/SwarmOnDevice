@@ -287,7 +287,7 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
     tool(
       "studio_mission_get",
       "Read a mission",
-      "Read one mission: the stored MissionDoc plus derived {phases (only the mission type's phases, U20), waves, ready, counts, progress, checkpoints}. include: rows, decisions, findings, locks, reports, events, snapshots, requests, checkpoints, messages, deliverables (the mission's Studio documents with the current revision's outputs: finalFileName, sha256, verified). messagesTail: N = the newest N messages.",
+      "Read one mission: the stored MissionDoc plus derived {phases (only the mission type's phases, U20), waves, ready, counts, progress, checkpoints, drift (rows added after approval with the decision id that justified each: {count, rows: [{row, timeCreated, decision}], dropped: [{row, timeDropped, decision}]}; empty when none)}. include: rows, decisions, findings, locks, reports, events, snapshots, requests, checkpoints, messages, deliverables (the mission's Studio documents with the current revision's outputs: finalFileName, sha256, verified). messagesTail: N = the newest N messages.",
       true,
       async (a) => {
         const id = a.mission as string
@@ -325,6 +325,13 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
           `mission ${id} (${got.mission.type} v${got.mission.typeVersion}): ${got.mission.status}${got.mission.supersededBy ? `, superseded by ${got.mission.supersededBy}` : ""}`,
           `  progress ${d.progress.done}/${d.progress.total} rows done; ready: ${d.ready.join(", ") || "-"}`,
           ...d.phases.map((p) => `  ${p.order}. ${p.id}: ${p.rows.join(", ") || "-"}`),
+          // 1.2.6 row 87 (MC-09): one drift line, only when rows were added or dropped after approval.
+          ...(d.drift.count > 0 || d.drift.dropped.length > 0
+            ? [
+                `  drift: ${d.drift.count} row${d.drift.count === 1 ? "" : "s"} added after approval (${d.drift.rows.map((r) => `${r.row} by ${r.decision ?? "-"}`).join(", ") || "-"})` +
+                  (d.drift.dropped.length > 0 ? `; dropped: ${d.drift.dropped.map((r) => `${r.row} by ${r.decision ?? "-"}`).join(", ")}` : ""),
+              ]
+            : []),
         ].join("\n")
         return { text, data: { mission, derived: d, ...extra } }
       },
