@@ -468,7 +468,8 @@ export async function editClient(a: Args, ctx: ToolContext, id: string, docNumbe
   if (JSON.stringify(content) === before) {
     return { text: `studio_edit: dokumen ${tok(id)} rev ${rev} tidak berubah; tidak ada yang ditulis`, data: { documentId: id, revisionNo: rev, state: "tidak berubah", edited: [], ...na }, ...(warnings.length > 0 ? { warnings } : {}) };
   }
-  const change = CHANGE("studio_edit: sunting teks/data");
+  // 1.2.6 M-06: the caller's `change` (studio_edit argument, schema-checked) goes to the revision history as given.
+  const change = isRecord(a.change) ? a.change : CHANGE("studio_edit: sunting teks/data");
   const sections = isRecord(content.sections) ? content.sections : {};
   const chapters = arr(isRecord(sections.content) ? sections.content.chapters : null);
   const chapterKeysTouched = new Set(touched.filter((s) => s.kind === "chapter").map((s) => (s as { key: string }).key));

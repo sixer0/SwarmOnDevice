@@ -69,15 +69,16 @@
   "row77b": "2026-11-12: 1.2.6 row 77b (M-07 remainder of row 77, U5; register N-037..N-040). 2 vendor files patched (files[].patch_row77b, before = previous sha256): scripts/studio/mcp/write-tools.ts (status copied -> patched; work-report render line FILE_VERIFIED(sha256)/FILE_UNVERIFIED(sha256)) and scripts/studio/mcp/write-client-run.ts (status unchanged; client-document render line FILE_VERIFIED(sha256)/FILE_UNVERIFIED(sha256)). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/77b_row77b_diffs/. counts by delta: copied 430 -> 429, patched 136 -> 137, files/replaced/added unchanged; bytes 9834913 + 17 = 9834930. patch_rows += 77b",
   "row46": "2026-11-12: 1.2.6 row 46 (T-11 ranked flow layout engine; register N-109, N-111, N-112, N-161..N-164; 01e §4.1-§4.2, §4.5, §5, §6.5-6.8; C7). 4 vendor files (files[].patch_row46, before = previous sha256): engine/diagram/layout-a/flow.ts (copied -> patched: ranked flow TB/LR, ranks from edges, lattice capacity refusals), engine/diagram/build/capacity.ts (re-patched: flow texts name direction, ranked-flow measure), engine/diagram/elk/adapter.ts and elk/plan.ts (added, re-patched: ELK_DIRECTION, ranked-flow ELK graph/plan, ElkPlan.direction, elkPlanKey with direction). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/46_row46_diffs/. counts by delta: copied 429 -> 428, patched 137 -> 138; bytes 9834930 + 21736 = 9856666. patch_rows += 46",
   "row75": "2026-11-12: 1.2.6 row 75 (M-05, U15; register N-053, N-054). 5 vendor files patched (files[].patch_row75, before = previous sha256): services/storage/paths.ts (copied -> patched: datumFileName adds ` rev<N>` after `Rev<X>`), contract/env.ts (DATUM_FILENAME_PATTERN accepts optional ` rev<N>`), services/render/pure/render.ts, services/render/revision.ts, services/render/scope.ts (naming.revisionNo plumbed so every service render passes the stored revision). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/75_row75_diffs/. counts by delta: copied 428 -> 427, patched 138 -> 139, files/replaced/added unchanged; bytes 9856666 + 1607 = 9858273. patch_rows += 75",
+  "row76": "2026-11-12: 1.2.6 row 76 (M-06, U5; register E-19, E-20). 3 vendor files patched (files[].patch_row76, before = previous sha256): scripts/studio/mcp/write-normalize.ts (copied -> patched: studio_edit keeps `change`, no ARG_IGNORED), scripts/studio/mcp/write-tools.ts (status unchanged: studio_edit inputSchema change = CHANGE; work-report update adds the change to R12/R13 bodies), scripts/studio/mcp/write-client-run.ts (status unchanged: client-document edit sends the caller change instead of the automatic one). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/76_row76_diffs/. counts by delta: copied 427 -> 426, patched 139 -> 140, files/replaced/added unchanged; bytes 9859975 + 1648 (write-tools.ts +1276, write-client-run.ts +149, write-normalize.ts +223) = 9861623. patch_rows += 76",
   "row69": "2026-11-12: 1.2.6 row 69 (T-16, U5; register E-17, E-18). 1 vendor file re-patched (files[].patch_row69, before = previous sha256; status unchanged): scripts/studio/mcp/figure-tools.ts (mergeFigurePatch deep-merges spec: objects merge, arrays replace, null removes; a spec patch leaving a diagram.schema required key missing is SCHEMA_INVALID naming the key, before any write). Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/69_row69_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9858273 + 1702 = 9859975. patch_rows += 69"
  },
  "counts": {
   "files": 608,
-  "copied": 427,
-  "patched": 139,
+  "copied": 426,
+  "patched": 140,
   "replaced": 12,
   "added": 30,
-  "bytes": 9859975
+  "bytes": 9861623
  },
  "files": [
   {
@@ -369,9 +370,9 @@
   {
    "path": "scripts/studio/mcp/write-client-run.ts",
    "status": "patched",
-   "bytes": 37525,
+   "bytes": 37674,
    "source_sha256": "4dd6e435a198099949e8edf86e3f8856629f4a52a245b9da458cb32b2108750b",
-   "sha256": "14c237e6d555e41e9e8882a4c6acd21d28a24636d55c99daa24192ae6d691579",
+   "sha256": "9854db23537884c016f105c7131217b8d1225ae370035a8ae8ee181821150389",
    "patch_row69c": {
     "id": "row69c-write-preflight-archived-code",
     "row": "69c",
@@ -392,6 +393,16 @@
     "after_sha256": "14c237e6d555e41e9e8882a4c6acd21d28a24636d55c99daa24192ae6d691579",
     "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/77b_row77b_diffs/scripts_studio_mcp_write-client-run.ts.diff",
     "diff_sha256": "c745da7baa3480142e86837c5b72dd1d464eb09a91ae18dc45514075e749ac82"
+   },
+   "patch_row76": {
+    "id": "row76-m06-edit-change-client",
+    "row": "76",
+    "decision": "1.2.6 patch M-06 (U5; register E-19, E-20)",
+    "summary": "editClient sends the caller's studio_edit `change` {what, why, impact} (schema-checked) on R12/R13/R14/R16 instead of the automatic 'studio_edit: sunting teks/data' change; without `change` unchanged; 1 comment + 1 changed line",
+    "before_sha256": "14c237e6d555e41e9e8882a4c6acd21d28a24636d55c99daa24192ae6d691579",
+    "after_sha256": "9854db23537884c016f105c7131217b8d1225ae370035a8ae8ee181821150389",
+    "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/76_row76_diffs/scripts_studio_mcp_write-client-run.ts.diff",
+    "diff_sha256": "db06dac8c07581d81deb831e8fb5a54d773d2f7e8894130019bc485c4c0c54ea"
    }
   },
   {
@@ -431,10 +442,20 @@
   },
   {
    "path": "scripts/studio/mcp/write-normalize.ts",
-   "status": "copied",
-   "bytes": 19212,
+   "status": "patched",
+   "bytes": 19435,
    "source_sha256": "a8d78c1203044d2237ae52f249af9de53dba782252e479cd6b18836fe586c0c0",
-   "sha256": "a8d78c1203044d2237ae52f249af9de53dba782252e479cd6b18836fe586c0c0"
+   "sha256": "9fa1cbf9383b76bfb418b809431c864d26f53ec8cb9acf4cf43303d96bdbf4dd",
+   "patch_row76": {
+    "id": "row76-m06-edit-change-normalize",
+    "row": "76",
+    "decision": "1.2.6 patch M-06 (U5; register E-19, E-20)",
+    "summary": "normalizeEditArgs keeps the top-level `change` argument (E-19) instead of pruning it with ARG_IGNORED (E-20); its shape is checked by the studio_edit schema; 2 comment lines + 1 changed line",
+    "before_sha256": "a8d78c1203044d2237ae52f249af9de53dba782252e479cd6b18836fe586c0c0",
+    "after_sha256": "9fa1cbf9383b76bfb418b809431c864d26f53ec8cb9acf4cf43303d96bdbf4dd",
+    "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/76_row76_diffs/scripts_studio_mcp_write-normalize.ts.diff",
+    "diff_sha256": "ca5298145f9c34a489ef61d1bbed2c819926d167dc685fb576a968fb82c98006"
+   }
   },
   {
    "path": "scripts/studio/mcp/write-parts.ts",
@@ -453,9 +474,9 @@
   {
    "path": "scripts/studio/mcp/write-tools.ts",
    "status": "patched",
-   "bytes": 55274,
+   "bytes": 56550,
    "source_sha256": "0f7e2787cedd3522727213af4b02be81a54906a5b9634b18c89bcb7beb2f3148",
-   "sha256": "3dc892d1657bd9822f929cea2586b3b18474e9cd5e8cbeed99e34a1a88a08316",
+   "sha256": "f3486cc67e329b3f4b5b98a590ed109fdfaab0753f2fd965d2444d176f7b4575",
    "patch_row77b": {
     "id": "row77b-m07-write-report-file-label",
     "row": "77b",
@@ -465,6 +486,16 @@
     "after_sha256": "3dc892d1657bd9822f929cea2586b3b18474e9cd5e8cbeed99e34a1a88a08316",
     "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/77b_row77b_diffs/scripts_studio_mcp_write-tools.ts.diff",
     "diff_sha256": "32d5e236d0cb18fc66fbaba33abb8f89f6a1daa07717136556a8592944703f8a"
+   },
+   "patch_row76": {
+    "id": "row76-m06-edit-change-tools",
+    "row": "76",
+    "decision": "1.2.6 patch M-06 (U5; register E-19, E-20)",
+    "summary": "studio_edit inputSchema gains change: CHANGE (doc-tools, same shape as studio_figure_revise); work-report edit passes the caller change to reportIo, whose fetch adds it to each R12/R13 JSON body that has no change (report CLI sends none); no description text change (row 99 owns it)",
+    "before_sha256": "3dc892d1657bd9822f929cea2586b3b18474e9cd5e8cbeed99e34a1a88a08316",
+    "after_sha256": "f3486cc67e329b3f4b5b98a590ed109fdfaab0753f2fd965d2444d176f7b4575",
+    "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/76_row76_diffs/scripts_studio_mcp_write-tools.ts.diff",
+    "diff_sha256": "872bdfe627b02867bca01e606a163ed19dbe3bb9920ea24026488c36ca5a6d9b"
    }
   },
   {
@@ -6035,6 +6066,7 @@
   "77b",
   "46",
   "75",
-  "69"
+  "69",
+  "76"
  ]
 }

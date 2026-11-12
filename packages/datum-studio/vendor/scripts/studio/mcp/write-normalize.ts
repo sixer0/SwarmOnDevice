@@ -354,6 +354,8 @@ export function normalizeEditArgs(a: Args): ToolWarning[] {
       return o;
     });
   }
-  prune(a, ["documentId", "mission", "docKey", "edits", "meta", "agentId", "adoptExisting", "detail"], n, "args");
+  // 1.2.6 M-06 (E-19, E-20): `change` {what, why, impact} kept (same name as studio_figure_revise) and recorded in the
+  // revision history; its shape is checked by the tool schema, not pruned with ARG_IGNORED.
+  prune(a, ["documentId", "mission", "docKey", "edits", "meta", "agentId", "adoptExisting", "detail", "change"], n, "args");
   return n.done();
 }
