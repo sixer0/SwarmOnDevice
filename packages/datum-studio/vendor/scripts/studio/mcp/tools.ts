@@ -29,7 +29,7 @@ import { studioRoutePath } from "../../../src/lib/studio/contract/env";
 import { checkDraftLimits, draftLimitMessage, extractDraft, sequentialCreateSources } from "../../../src/lib/studio/services/draft";
 import { stripToolKeys } from "../../../src/lib/studio/services/draft/md-report";
 import { checkDraftLocal, checkDraftRemote, DraftCheckUsageError, formatHuman as formatDraftHuman, withoutPayload } from "../draft-check";
-import { StudioUnreachableError, type HttpFetch } from "../_http-client";
+import { STUDIO_RENDER_CALL_TIMEOUT_MS, StudioUnreachableError, type HttpFetch } from "../_http-client";
 import {
   detectFormat,
   formatCheckHuman,
@@ -856,9 +856,10 @@ const renderTool: ToolDef = {
     const id = str(a, "documentId") as string;
     let reply;
     try {
-      reply = await http(ctx, "POST", studioRoutePath("R17", { id }), "POST /api/studio/documents/{id}/render", { json: body });
+      // Swarm patch (1.2.6 row 53a, M-01, U1): R17 gets its own budget, below the MCP ceiling (ladder I-1).
+      reply = await http(ctx, "POST", studioRoutePath("R17", { id }), "POST /api/studio/documents/{id}/render", { json: body, timeoutMs: STUDIO_RENDER_CALL_TIMEOUT_MS });
     } catch (e) {
-      throw pdfUnavailableHint(e);
+      throw renderTimeoutHint(pdfUnavailableHint(e), id);
     }
     const b = isRecord(reply.body) ? reply.body : {};
     // Swarm patch (row 165D, F56-2): `fileName` = the DATUM title name the file is delivered under (studio_file_verify);
@@ -890,6 +891,17 @@ const renderTool: ToolDef = {
     return { text: lines.join("\n"), data: { ...(neutralizeDeep(data) as Record<string, unknown>), ...untrustedFields(["errors", "job", "completeness", "failedFormats", "outputs[].finalFileName", "outputs[].fileName"]) } };
   },
 };
+
+/**
+ * Swarm patch (1.2.6 row 53a, M-01; 01d F3): the call budget (540 s) is below the render job limit, so a timed-out
+ * studio_render may still produce its files. The message says so and points to studio_document_status instead of
+ * implying a failure; code stays REMOTE_UNREACHABLE. The text is composed by MCP (document id only as a safe token).
+ */
+export function renderTimeoutHint(e: unknown, documentId: string): unknown {
+  if (!(e instanceof McpToolError) || e.code !== "REMOTE_UNREACHABLE" || (e.extra as Record<string, unknown>).timedOut !== true) return e;
+  e.message = `render ${tok(documentId)} (R17) tidak menjawab dalam ${STUDIO_RENDER_CALL_TIMEOUT_MS / 1000} detik (STUDIO_RENDER_CALL_TIMEOUT_MS); render mungkin masih selesai, cek studio_document_status sebelum mengulang studio_render`;
+  return e;
+}
 
 /**
  * MCP-D1: 503 PDF_ENGINE_UNAVAILABLE (gagal cepat preflight, tanpa job) -> pesan menyebut format pengganti dari

@@ -395,16 +395,19 @@ export function serverBlock(lines: readonly string[], attrs: Record<string, stri
 }
 
 /** Satu panggilan HTTP langsung (alat baca); jawaban tidak sukses -> {@link McpToolError} (code + cid). */
-export async function http(ctx: ToolContext, method: StudioMethod, routePath: string, action: string, req: { json?: unknown; binary?: boolean } = {}): Promise<HttpReply> {
+// Swarm patch (1.2.6 row 53a, M-01): optional `timeoutMs` forwarded to studioRequest (only studio_render sets it,
+// STUDIO_RENDER_CALL_TIMEOUT_MS); without it the call keeps STUDIO_HTTP_TIMEOUT_MS. A timeout keeps code
+// REMOTE_UNREACHABLE and adds `timedOut: true` to the error extra so a tool can explain it.
+export async function http(ctx: ToolContext, method: StudioMethod, routePath: string, action: string, req: { json?: unknown; binary?: boolean; timeoutMs?: number } = {}): Promise<HttpReply> {
   const secret = requireSecret(ctx);
   let reply: HttpReply;
   try {
-    reply = await studioRequest({ baseUrl: ctx.deps.config.baseUrl, secret, fetchImpl: ctx.fetch, redirect: "manual" }, method, routePath, {
+    reply = await studioRequest({ baseUrl: ctx.deps.config.baseUrl, secret, fetchImpl: ctx.fetch, redirect: "manual", ...(req.timeoutMs !== undefined ? { timeoutMs: req.timeoutMs } : {}) }, method, routePath, {
       body: req.json !== undefined ? JSON.stringify(req.json) : undefined,
       binary: req.binary,
     });
   } catch (e) {
-    if (e instanceof StudioUnreachableError) throw new McpToolError(e.code, e.message, { step: action });
+    if (e instanceof StudioUnreachableError) throw new McpToolError(e.code, e.message, { step: action, ...(e.timedOut ? { timedOut: true } : {}) });
     throw e;
   }
   if (!reply.ok) {

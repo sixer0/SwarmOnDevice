@@ -55,15 +55,16 @@
   "row210": "2026-11-09: 1.2.3 patch P5 row 210 (security review 209 fixes L-1, L-3, I-2). 4 vendor files re-patched (files[].patch_row210, before = previous sha256; statuses unchanged): scripts/studio/mcp/doc-tools.ts (+152), scripts/studio/mcp/write-client-edit.ts (+183), src/lib/studio/contract/schema/v2/verification-entry.ts (+249), src/lib/studio/registry/lint-explain.ts (+155). Diffs in docs/2026-11-09_swarm_1_2_3_patch/implementation/210_row210_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9797565 + 739 = 9798304. patch_rows += 210",
   "row213": "2026-11-09: 1.2.4 patch P15 row 213 (cover colophon shape for agents). 2 vendor files re-patched (files[].patch_row213, before = previous sha256; statuses unchanged): docs/STUDIO-AGENT-GUIDE.md (+703: colophon shape in the 5.4 cover table, minimal valid cover payload with colophon after the 5.7 D16 table), scripts/studio/mcp/resources.ts (+64: colophon shape on the cover line). Diffs in docs/2026-11-09_swarm_1_2_3_patch/implementation/213_row213_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9798304 + 767 = 9799071. patch_rows += 213",
   "row215": "2026-11-10: 1.2.5 row 215 (C-27 removed entirely, user decision). 7 vendor files re-patched (files[].patch_row215, before = previous sha256): engine/lint/language/{checks,index,prose}.ts, params/{governance-language,index}.ts, registry/lint.ts, services/templates/sample-render.ts; 5 of them copied -> patched. Diffs in docs/2026-11-09_swarm_1_2_3_patch/implementation/215_row215_diffs/. counts by delta: files/replaced/added unchanged, copied 446 -> 441, patched 120 -> 125; bytes 9799071 -1155 = 9797916. patch_rows += 215",
-  "row50a": "2026-11-12: 1.2.6 row 50a (W-13 image guard, C8: SEC-12 header-first pixel limit, SEC-10 metadata detection). 3 vendor files patched (files[].patch_row50a, before = previous sha256; copied -> patched): services/images/{decode,index,sniff}.ts. NEW services/images/metadata.ts (status added). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/50a_row50a_diffs/. counts by delta: files 607 -> 608, added 29 -> 30, copied 441 -> 438, patched 125 -> 128; bytes 9799785 + 994 + 201 + 1680 + 9284 = 9811944. patch_rows += 50a"
+  "row50a": "2026-11-12: 1.2.6 row 50a (W-13 image guard, C8: SEC-12 header-first pixel limit, SEC-10 metadata detection). 3 vendor files patched (files[].patch_row50a, before = previous sha256; copied -> patched): services/images/{decode,index,sniff}.ts. NEW services/images/metadata.ts (status added). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/50a_row50a_diffs/. counts by delta: files 607 -> 608, added 29 -> 30, copied 441 -> 438, patched 125 -> 128; bytes 9799785 + 994 + 201 + 1680 + 9284 = 9811944. patch_rows += 50a",
+  "row53a": "2026-11-12: 1.2.6 row 53a (M-01, U1; register N-044, 01d L1 + F3). 3 vendor files patched (files[].patch_row53a, before = previous sha256): scripts/studio/_http-client.ts (copied -> patched: STUDIO_RENDER_CALL_TIMEOUT_MS 540000, StudioUnreachableError.timedOut), scripts/studio/mcp/tool-kit.ts (http() optional timeoutMs forwarded to studioRequest, extra timedOut), scripts/studio/mcp/tools.ts (studio_render passes the render budget; renderTimeoutHint F3). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/53a_row53a_diffs/. counts by delta: files/replaced/added unchanged, copied 438 -> 437, patched 128 -> 129; bytes 9811944 + 766 + 447 + 1030 = 9814187. patch_rows += 53a"
  },
  "counts": {
   "files": 608,
-  "copied": 438,
-  "patched": 128,
+  "copied": 437,
+  "patched": 129,
   "replaced": 12,
   "added": 30,
-  "bytes": 9811944
+  "bytes": 9814187
  },
  "files": [
   {
@@ -135,10 +136,11 @@
   },
   {
    "path": "scripts/studio/_http-client.ts",
-   "status": "copied",
-   "bytes": 8104,
+   "status": "patched",
+   "bytes": 8870,
    "source_sha256": "6420403094aa5d2553e36ca56812796e42d249b94bea3bdafeb0dcf73a8d0fd7",
-   "sha256": "6420403094aa5d2553e36ca56812796e42d249b94bea3bdafeb0dcf73a8d0fd7"
+   "sha256": "87862bd919a71c4ef1a768361eaf3b6f21c0e4f94df21c590d7d3737359a8c6a",
+   "patch_row53a": {"id": "row53a-m01-render-timeout", "row": "53a", "decision": "1.2.6 patch M-01 (U1; register N-044; 01d L1, F3)", "summary": "additive: STUDIO_RENDER_CALL_TIMEOUT_MS = 540000 beside STUDIO_HTTP_TIMEOUT_MS; StudioUnreachableError gains readonly timedOut (constructor arg, default false), set by studioRequest when the AbortSignal timeout fires; message text unchanged", "before_sha256": "6420403094aa5d2553e36ca56812796e42d249b94bea3bdafeb0dcf73a8d0fd7", "after_sha256": "87862bd919a71c4ef1a768361eaf3b6f21c0e4f94df21c590d7d3737359a8c6a", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/53a_row53a_diffs/scripts_studio__http-client.ts.diff", "diff_sha256": "c2f474f7fe1bf13c3fea9d90181fd1e308f650c733fd2f6a8e03e94ca8f813ef"}
   },
   {
    "path": "scripts/studio/_repo-alias.ts",
@@ -298,9 +300,10 @@
   {
    "path": "scripts/studio/mcp/tool-kit.ts",
    "status": "patched",
-   "bytes": 24824,
+   "bytes": 25271,
    "source_sha256": "25435916568dbd4df59e5fe4fd9a21dbe1b2b477e38fab302bfa16e88afec36b",
-   "sha256": "01b088ee9ce003b442ae97083684eaab9b67501d2450cb29e74c104c46e2e113",
+   "sha256": "8b15acb5545aeb5a15c9ac1ca9c82d254fe43942f17861c47b83d64184c9907f",
+   "patch_row53a": {"id": "row53a-m01-render-timeout", "row": "53a", "decision": "1.2.6 patch M-01 (U1; register N-044; 01d L1)", "summary": "http() request gains optional timeoutMs, forwarded to studioRequest opts (absent = STUDIO_HTTP_TIMEOUT_MS); a timed-out StudioUnreachableError keeps code REMOTE_UNREACHABLE and adds extra.timedOut = true", "before_sha256": "01b088ee9ce003b442ae97083684eaab9b67501d2450cb29e74c104c46e2e113", "after_sha256": "8b15acb5545aeb5a15c9ac1ca9c82d254fe43942f17861c47b83d64184c9907f", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/53a_row53a_diffs/scripts_studio_mcp_tool-kit.ts.diff", "diff_sha256": "5cd208598120a1cc444a6cd2b6af5b8e2f90588eb019b67b7057350502ecc2ae"},
    "patch_row69c": {
     "id": "row69c-archived-issue-code",
     "row": "69c",
@@ -317,9 +320,10 @@
   {
    "path": "scripts/studio/mcp/tools.ts",
    "status": "patched",
-   "bytes": 79756,
+   "bytes": 80786,
    "source_sha256": "afe82e84205ea4167feb0d0afafc81bf7a168e25213ed5fbbfbfd19e5d71e154",
-   "sha256": "9867287d0d8a3670cb0f21f370c412d737cda63c5db5f4ed21fad1d6ec62b01c",
+   "sha256": "814e9b5bcce83fe368890874aa8f1f256a1176d4a403429f74de73c44ef2c7f6",
+   "patch_row53a": {"id": "row53a-m01-render-timeout", "row": "53a", "decision": "1.2.6 patch M-01 (U1; register N-044; 01d L1, F3)", "summary": "studio_render passes timeoutMs STUDIO_RENDER_CALL_TIMEOUT_MS to http() for R17; NEW export renderTimeoutHint: a timed-out render (REMOTE_UNREACHABLE, extra.timedOut) says the render may still finish and to check studio_document_status; tool description untouched (row 99)", "before_sha256": "9867287d0d8a3670cb0f21f370c412d737cda63c5db5f4ed21fad1d6ec62b01c", "after_sha256": "814e9b5bcce83fe368890874aa8f1f256a1176d4a403429f74de73c44ef2c7f6", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/53a_row53a_diffs/scripts_studio_mcp_tools.ts.diff", "diff_sha256": "4254623c8fc6eba7409526f2e3642e35295c077e81a6a4a9cd5cf0b0172020af"},
    "patch_row165J": {"id": "row165J-recheck-fixes", "row": "165J", "decision": "C197 F165H-5", "summary": "studio_render reply text: each output line with a safe DATUM name points to it ('nama terkirim #n'); the title names are printed only inside one untrusted block (jenis nama-berkas-datum); no schema, description or structuredContent change", "before_sha256": "cfd2373eb102cd5b679902c8656545bb9eeb17193f560ffd77ce1acf6ec1d28b", "after_sha256": "9867287d0d8a3670cb0f21f370c412d737cda63c5db5f4ed21fad1d6ec62b01c", "diff": "implementation/142_row165J_diffs/scripts_studio_mcp_tools.ts.diff"},
    "patch_row165D": {"id": "row165D-delivered-name", "row": "165D", "decision": "C189 F56-2 (CP-17)", "summary": "studio_file_verify: saves under the DATUM title name from R10 Content-Disposition when it is a safe DATUM segment (datum-name.ts deliveredDatumName/joinInside, DATUM_FILENAME_PATTERN), else under the C51 final name as before; HEAD vs GET DATUM name must agree (VERIFY_FAILED); the title is printed only in the untrusted block, data adds fileName/deliveredFileName (untrusted when present). studio_render: outputs[].fileName (safe DATUM name or null, untrusted field). No schema or description change; tool count unchanged", "before_sha256": "afe82e84205ea4167feb0d0afafc81bf7a168e25213ed5fbbfbfd19e5d71e154", "after_sha256": "cfd2373eb102cd5b679902c8656545bb9eeb17193f560ffd77ce1acf6ec1d28b", "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/137_row165D_diffs/scripts_studio_mcp_tools.ts.diff", "diff_sha256": "1a1ea19c74387f5606a7b08c8e96efc5df95c473b0f82fde5de6bdcbba87b92d"}
   },
@@ -5949,6 +5953,7 @@
   "210",
   "213",
   "55a",
-  "50a"
+  "50a",
+  "53a"
  ]
 }
