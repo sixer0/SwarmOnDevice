@@ -6,6 +6,8 @@
  *  R1. Only the families laid out by `layoutLayered` that carry no order meaning: `layered`,
  *      `topology` (`stack` keeps its author order; graph/flow/swimlane/sequence/sld/rack keep
  *      their own engines).
+ *      Swarm 1.2.6 (T-11): plus a ranked flow (`flow` with `direction`); a flow without
+ *      `direction` keeps its list layout and never reaches ELK.
  *  R2. The original layout is built first. When it builds and the geometry lint finds NO route
  *      defect (connector crossing, connector through a box, collinear connector segments,
  *      connector through text), that result is returned unchanged, byte for byte: ELK never runs,
@@ -26,6 +28,7 @@ import type { DiagramGeometryIssue } from "../build/autofit";
 import { lintDiagramGeometry, type DiagramGeomLint } from "../fit/lint";
 import { ELK_FAMILIES, ElkUnavailable, elkLayoutPlan, elkRefusal } from "./adapter";
 import { withElkPlan, type ElkPlan } from "./plan";
+import { flowDirectionOf } from "../layout-a/flow";
 
 export { ELK_FAMILIES, ELK_TIME_BUDGET_MS, ElkUnavailable, elkLayoutPlan, elkPlanWidth, elkRefusal } from "./adapter";
 export { activeElkRoutes, elkRoutesOnSheet } from "./routes";
@@ -108,7 +111,8 @@ async function buildDiagramSvgAutoRaw(
     onDecision?.(d);
     return d;
   };
-  if (!ELK_FAMILIES.has(String(s.family))) {
+  // Swarm 1.2.6 row 47 (T-11, 01e §4.5): a ranked flow (flow + direction) also goes through R2-R4.
+  if (!ELK_FAMILIES.has(String(s.family)) && !flowDirectionOf(s)) {
     decide({ used: false, reason: `R1: family ${String(s.family)}` });
     return build(s, opts);
   }

@@ -10,6 +10,7 @@ import { GRAPH_EDGE_INSET_MM, type SheetEdgeInset } from "../core/sheet";
 import { snapFloor } from "../core/tokens";
 import { elkPlanFor, elkTierOrder, elkTierXs } from "../elk/plan";
 import { diagramFitActive, diagramFitAllows, diagramFitNote } from "../fit/state";
+import { knockWidthMm } from "../fit/labels";
 import { fitTierWidth, grownHeight, planNodeText } from "../fit/text";
 import { baselineStepMm, latticeOf, nodeSize, pyFloorDiv, pyInt, pyStr, pyTruthy, sheetHeight, snap, type Lattice } from "./geometry";
 
@@ -206,6 +207,35 @@ export function flowRanks(s: Pick<StudioDiagramV1, "nodes" | "edges">): FlowRank
   const rankOf = new Map<string, number>();
   ranks.forEach((g, r) => g.forEach((n) => rankOf.set(n.id, r)));
   return { ranks, rankOf, back };
+}
+
+/** Register N-160: REPORT checkId of a legacy flow whose ranks would hold parallel branches. */
+export const FLOW_SERIALISED = "FLOW_SERIALISED";
+
+/**
+ * Swarm 1.2.6 row 47 (T-11, 01e §4.4, N-160, U3): the REPORT line of a legacy flow (family flow,
+ * no `direction`) whose edges give a rank with >= 2 nodes, i.e. parallel branches the list layout
+ * draws one after another in one column. Names the widest such rank (lowest index on ties). Never
+ * FAIL; the layout and the SVG bytes are unchanged (the build only appends this line to
+ * `report.geometry`). Undefined for any other spec.
+ */
+export function flowSerialisedNote(
+  s: Pick<StudioDiagramV1, "family" | "nodes" | "edges"> & { direction?: unknown },
+): { checkId: string; status: "REPORT"; detail: string; suggest: string } | undefined {
+  if (s.family !== "flow" || s.direction !== undefined) return undefined;
+  const { ranks } = flowRanks(s);
+  let r = -1;
+  ranks.forEach((g, i) => {
+    if (g.length >= 2 && (r < 0 || g.length > ranks[r].length)) r = i;
+  });
+  if (r < 0) return undefined;
+  const m = ranks[r].length;
+  return {
+    checkId: FLOW_SERIALISED,
+    status: "REPORT",
+    detail: `${m} cabang paralel (peringkat ${r}: ${m} simpul) disusun berurutan dalam satu kolom`,
+    suggest: 'tambahkan spec.direction "TB" (cabang berdampingan) atau "LR"; tanpa direction flow mengikuti urutan daftar',
+  };
 }
 
 /** Width the ranked flow may fill: the sheet minus the T-02 edge inset on both sides (N-016). */
@@ -406,6 +436,80 @@ function noteLines(n: DiagramNode, w: number, m: number): void {
  * layered family takes it); sizes, rank positions, snap and routing stay Studio's.
  * The sheet gets the T-02 edge inset request (row 59 hook, unit "rank").
  */
+/**
+ * Swarm 1.2.6 row 47 (T-11, 01e §4.3 jog removal, realised by placement): x of the nodes of one TB
+ * rank (r > 0) placed under their forward predecessors instead of a centred row. Each node aims its
+ * centre at the mean centre of its already placed predecessors (lattice-rounded, ties down), keeps
+ * the rank order and the `gap` between neighbours, and stays inside the lattice window
+ * [0, floor((W - 2 x inset) / lx) x lx] so the T-02 edge inset translate still fits. A one-to-one
+ * edge between equal-width centres then runs straight, and a join node sits centred under its
+ * branches, so no short horizontal jog is left for an edge label to cut into stubs
+ * (`GEOM_STUB_SEGMENT`). Falls back to the centred row (`x0`) when the window cannot hold it.
+ */
+function underPredecessors(
+  s: StudioDiagramV1,
+  group: readonly DiagramNode[],
+  w: number,
+  gap: number,
+  W: number,
+  lx: number,
+  placed: ReadonlyMap<string, DiagramBox>,
+  x0: number,
+): number[] {
+  const m = group.length;
+  const centred = group.map((_, i) => x0 + i * (w + gap));
+  const hi = Math.floor(usableWidth(W) / lx + 1e-9) * lx;
+  if (m * w + (m - 1) * gap > hi + 1e-6) return centred;
+  const xs = group.map((n, i) => {
+    const cs: number[] = [];
+    for (const e of s.edges ?? []) {
+      if (e.to !== n.id || e.from === n.id) continue;
+      const b = placed.get(e.from);
+      if (b) cs.push(b.x + b.w / 2);
+    }
+    if (!cs.length) return centred[i];
+    const want = cs.reduce((a, c) => a + c, 0) / cs.length - w / 2;
+    return Math.ceil(want / lx - 0.5 - 1e-9) * lx;
+  });
+  for (let i = 0; i < m; i++) xs[i] = Math.max(xs[i], 0, i ? xs[i - 1] + w + gap : 0);
+  for (let i = m - 1; i >= 0; i--) xs[i] = Math.min(xs[i], hi - w, i < m - 1 ? xs[i + 1] - w - gap : hi - w);
+  return xs[0] < -1e-6 ? centred : xs;
+}
+
+/**
+ * Swarm 1.2.6 row 47 (T-11, 01e §4.2/§4.3): rows of edge labels the TB corridor above rank `r`
+ * needs (>= 1). Each label of an edge rank r-1 -> r is taken at its default place, centred between
+ * the centres of its two boxes, as wide as its knockout band (`knockWidthMm`); labels are packed
+ * greedily into rows (left to right, first row where the band clears the previous one by 1 mm).
+ * The corridor keeps `FLOW_RANK_GAP_BASELINES` for one row and grows by one baseline per extra row,
+ * so crowded labels are not pushed onto a connector stub where they leave a tick that leads
+ * nowhere (`GEOM_STUB_SEGMENT`).
+ */
+function corridorLabelRows(
+  s: StudioDiagramV1,
+  rankOf: ReadonlyMap<string, number>,
+  r: number,
+  above: ReadonlyMap<string, DiagramBox>,
+  centres: ReadonlyMap<string, number>,
+): number {
+  const bands = (s.edges ?? [])
+    .filter((e) => rankOf.get(e.from) === r - 1 && centres.has(e.to) && above.has(e.from) && String(e.label ?? "").trim() !== "")
+    .map((e) => {
+      const a = above.get(e.from)!;
+      const c = (a.x + a.w / 2 + centres.get(e.to)!) / 2;
+      const kw = knockWidthMm(String(e.label));
+      return [c - kw / 2, c + kw / 2] as const;
+    })
+    .sort((p, q) => p[0] - q[0] || p[1] - q[1]);
+  const ends: number[] = [];
+  for (const [lo, hi] of bands) {
+    const row = ends.findIndex((end) => lo >= end + 1);
+    if (row < 0) ends.push(hi);
+    else ends[row] = hi;
+  }
+  return Math.max(1, ends.length);
+}
+
 function layoutRankedFlow(s: StudioDiagramV1, sheet: DiagramSheet, dir: FlowDirection): LayoutResult {
   const lat = latticeOf(sheet);
   const W = sheet.widthMm;
@@ -417,7 +521,6 @@ function layoutRankedFlow(s: StudioDiagramV1, sheet: DiagramSheet, dir: FlowDire
   const boxes = new Map<string, DiagramBox>();
   if (dir === "TB") {
     const gap = lat.x;
-    const step = baselineStepMm(FLOW_RANK_GAP_BASELINES, lat);
     let y = lat.top;
     ordered.forEach((group, r) => {
       const m = group.length;
@@ -425,9 +528,17 @@ function layoutRankedFlow(s: StudioDiagramV1, sheet: DiagramSheet, dir: FlowDire
       const h = heights.get(group[0].id)!;
       const total = m * w + (m - 1) * gap;
       const x0 = snapFloor((W - total) / 2, lat.x);
-      const xs = elk ? elkTierXs(elk, group, w, gap, W, lat.x) : undefined;
+      const xs = elk
+        ? elkTierXs(elk, group, w, gap, W, lat.x)
+        : r > 0
+          ? underPredecessors(s, group, w, gap, W, lat.x, boxes, x0)
+          : undefined;
+      if (r > 0) {
+        const placed = new Map(group.map((n, i) => [n.id, xs ? xs[i] + w / 2 : x0 + i * (w + gap) + w / 2]));
+        y += baselineStepMm(FLOW_RANK_GAP_BASELINES + corridorLabelRows(s, rankOf, r, boxes, placed) - 1, lat);
+      }
       group.forEach((n, i) => boxes.set(n.id, { x: xs ? xs[i] : x0 + i * (w + gap), y, w, h }));
-      y += h + step;
+      y += h;
     });
   } else {
     const corr = FLOW_LR_CORRIDOR_UNITS * lat.x;

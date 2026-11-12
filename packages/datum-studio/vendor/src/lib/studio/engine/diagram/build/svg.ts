@@ -58,6 +58,7 @@ import {
 import { diagramFitActive, diagramFitNote, diagramFitRoute } from "../fit/state";
 import { footLines } from "./footwrap";
 import { routeSequenceMessages, type SequenceLayout } from "../layout-b";
+import { flowSerialisedNote } from "../layout-a/flow";
 import { autoFitDiagram, type DiagramGeometryIssue } from "./autofit";
 import type { EdgeLabelPlan } from "../fit/labels";
 import { fitEdgeLabels, noteRows, planBands, shiftPlan, zoneGeom } from "./fitlabels";
@@ -364,7 +365,11 @@ export function buildDiagramSvgWith(s: StudioDiagramV1, opts: DiagramBuildOption
     if (isCapacityReject(e, s)) return capacityRetry(s, e, () => buildOnce(s, opts, deps));
     throw withAction(e, s);
   }
-  return autoFitDiagram(first, () => buildOnce(s, opts, deps));
+  const out = autoFitDiagram(first, () => buildOnce(s, opts, deps));
+  // Swarm 1.2.6 row 47 (T-11, 01e §4.4, N-160): a legacy flow that serialises parallel branches
+  // gets one FLOW_SERIALISED REPORT line; layout and SVG bytes unchanged (U3).
+  const serial = flowSerialisedNote(s);
+  return serial ? { ...out, report: { ...out.report, geometry: [...(out.report.geometry ?? []), serial] } } : out;
 }
 
 function buildOnce(s: StudioDiagramV1, opts: DiagramBuildOptions, deps: DiagramBuildDeps): DiagramSvgResult {

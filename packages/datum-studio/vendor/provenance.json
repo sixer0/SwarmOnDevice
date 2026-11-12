@@ -76,7 +76,8 @@
   "row49": "2026-11-12: 1.2.6 row 49 (T-14, U5, C2; register N-033..N-035, E-16). 2 vendor files (files[].patch_row49, before = previous sha256): scripts/studio/mcp/doc-tools.ts (re-patched: studio_document_status `findings` paging with chapter filter, findingsPage, LINT_FINDINGS_PAGE_MAX 500) and engine/lint/structure/context.ts (copied -> patched: summary row past the 100 cap carries findingsAll with chapter keys). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/49_row49_diffs/. counts by delta: copied 421 -> 420, patched 145 -> 146, files/replaced/added unchanged; bytes 9867310 + 6119 = 9873429. patch_rows += 49",
   "row65": "2026-11-12: 1.2.6 row 65 (T-09, U14 reverses D-322; register N-025..N-029). 2 vendor files patched (files[].patch_row65, before = previous sha256; status copied -> patched): engine/chart/core/datum.ts (honest DC bar geometry for every n, BAR_MIN_BODY_MM is a threshold, REPORT BAR_SUBMIN below it; BAR_MAX_THICK_MM and BAR_MIN_HEIGHT retired; BarRows.scaled always false) and engine/chart/core/index.ts (BAR_MAX_THICK_MM export removed). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/65_row65_diffs. counts by delta: copied 420 -> 418, patched 146 -> 148; bytes 9873429 -814 = 9872615. patch_rows += 65",
   "row68": "2026-11-12: 1.2.6 row 68 (T-15, U3; register N-036 FIGURE_PREPARE_FAILED, E-15 FIGURE_PLACEHOLDER reused, no new verification code). 4 vendor files (files[].patch_row68, before = previous sha256): engine/docx/figures/store.ts (copied -> patched: a failing figure becomes a FIGURE_PREPARE_FAILED marker entry, assembly continues), engine/docx/figures/log.ts (copied -> patched: marker constant, type, reader), engine/docx/figures/figure.ts (re-patched: marked placeholder paragraph instead of a picture), services/render/figures.ts (re-patched: failureFor + rasterize wrapper, job stays PARTIAL). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/68_row68_diffs/. counts by delta: copied 418 -> 416, patched 148 -> 150, files/replaced/added unchanged; bytes 9872615 + 7156 = 9879771. patch_rows += 68",
-  "row64": "2026-11-12: 1.2.6 row 64 (T-08 fan-out sub-ranking, N-018; 01e §8; ranked-flow forward sides 01e §4.2 routed by row 46). 1 vendor file re-patched (files[].patch_row64, before = previous sha256): engine/diagram/build/route.ts (status patched unchanged). counts.bytes by delta +8531"
+  "row64": "2026-11-12: 1.2.6 row 64 (T-08 fan-out sub-ranking, N-018; 01e §8; ranked-flow forward sides 01e §4.2 routed by row 46). 1 vendor file re-patched (files[].patch_row64, before = previous sha256): engine/diagram/build/route.ts (status patched unchanged). counts.bytes by delta +8531",
+  "row47": "2026-11-12: 1.2.6 row 47 (T-11 acceptance; register N-160; 01e §4.3-§4.5; C7). 3 vendor files re-patched (files[].patch_row47, before = previous sha256; statuses unchanged): engine/diagram/layout-a/flow.ts (FLOW_SERIALISED note helper, TB placement under predecessors, label-corridor growth), engine/diagram/elk/index.ts (R1 gate admits ranked flow), engine/diagram/build/svg.ts (one FLOW_SERIALISED call site). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/47_row47_diffs/. counts.bytes by delta +5722. patch_rows += 47"
  },
  "counts": {
   "files": 608,
@@ -84,7 +85,7 @@
   "patched": 150,
   "replaced": 12,
   "added": 30,
-  "bytes": 9888302
+  "bytes": 9894024
  },
  "files": [
   {
@@ -2331,9 +2332,9 @@
   {
    "path": "src/lib/studio/engine/diagram/build/svg.ts",
    "status": "patched",
-   "bytes": 30795,
+   "bytes": 31188,
    "source_sha256": "a9ab8856426161f4b087bb26315fdd57c534ba81ee3e9d8117eb271d683c4ea0",
-   "sha256": "54cd9688005a3cd3b5594adfb897acaff8e5b06cf362d647318c1c148e766395",
+   "sha256": "705cd27942bc70178c48c554a2fc902047d7c3d3113b45955fc54bdb096e98b9",
    "patch_row165P": {"id": "row165P-manual-furniture", "row": "165P", "decision": "C205 CP-28/48", "summary": "DiagramBuildOptions.provenance (SUMBER + PROVENANS part with coloured glyphs); caption lines marked, NEW withCaptionAbove moves them above the drawing; foot order KUNCI then SUMBER", "before_sha256": "0feb88508fbedb07c813e0cc4c5bcc65b4647f5bf5d18ccd33fc43041f4392b7", "after_sha256": "54cd9688005a3cd3b5594adfb897acaff8e5b06cf362d647318c1c148e766395", "diff": "implementation/146_row165P_diffs/engine_diagram_build_svg.ts.diff"},
    "patch_row165C": {"id": "row165C-figure-engine", "row": "165C", "decision": "C188 F113-9 (CP-37), F113-10 (CP-47)", "summary": "buildOnce: no hatch <pattern> defined (diagramDefs hatch45/hatch135 false; hatches are vector lines from nodeSvg); nodeSvg gets the sheet size (canvas W x H) for the half-stroke edge inset", "before_sha256": "d00ed096ae2ee9775dac86045c845ca532b89833c469df1f9889c1af434ba100", "after_sha256": "0feb88508fbedb07c813e0cc4c5bcc65b4647f5bf5d18ccd33fc43041f4392b7", "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/136_row165C_diffs/engine_diagram_build_svg.ts.diff", "diff_sha256": "b0eb988881e88aef2e4615a4ae468d623d9292de9cc04a839b681a797f20f8f9"},
    "patch_row124b": {
@@ -2356,7 +2357,8 @@
     "after_sha256": "a1c08c710a9fe7d746c2ed419263cdcaba4eb7a01bbaaadbffec9b13390e34e0",
     "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/53_row124_diffs/diagram__build__svg.ts.diff",
     "diff_sha256": "f3351707321c7fd364c15eeb335ee5b2c21b10024a836d1a070a57a09ce5a477"
-   }
+   },
+   "patch_row47": {"id": "row47-t11-acceptance", "row": "47", "decision": "1.2.6 patch T-11 acceptance (U3, U5, D4=A, C7; register N-160; 01e §4.3-§4.5, §7.2 A2-A6, A9-A11, A13-A15)", "summary": "buildDiagramSvgWith: one call site appends flowSerialisedNote(s) to report.geometry after auto-fit (SVG bytes unchanged)", "diff_base": "sha256 before this row", "before_sha256": "54cd9688005a3cd3b5594adfb897acaff8e5b06cf362d647318c1c148e766395", "after_sha256": "705cd27942bc70178c48c554a2fc902047d7c3d3113b45955fc54bdb096e98b9", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/47_row47_diffs/src_lib_studio_engine_diagram_build_svg.ts.diff", "diff_sha256": "8fce8b969c13ccda8df1f96f0c08134f6391cbfaee9c417a27b1ab68c545eca9"}
   },
   {
    "path": "src/lib/studio/engine/diagram/core/colour.ts",
@@ -2533,13 +2535,14 @@
   {
    "path": "src/lib/studio/engine/diagram/elk/index.ts",
    "status": "added",
-   "bytes": 7901,
+   "bytes": 8231,
    "source_sha256": null,
-   "sha256": "d5a2e0c455399d49b7bdd23583b4d14509215c7acd4ec792054f274ebc27f368",
+   "sha256": "6b2e2afb93912c707d7483165d9635f199551d131a12d53942aa4763ee900540",
    "patch_row25": {"id": "row25-t03-geom-checks", "row": "25", "decision": "1.2.6 patch T-03 (U3, U5, D2; register N-001..N-010, N-166)", "summary": "ROUTE_DEFECT_KINDS gains edgeEntryCollision, stubSegment, arrowTangent (N-166) so ELK may cure them", "diff_base": "sha256 before this row", "before_sha256": "e37b131787e30da3a22bb252f43023727e0155f830511a5814e179d8ac82551a", "after_sha256": "d5a2e0c455399d49b7bdd23583b4d14509215c7acd4ec792054f274ebc27f368", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/25_row25_diffs/src_lib_studio_engine_diagram_elk_index.ts.diff", "diff_sha256": "62da4573d9afda4d968b8a4814946e9e8ae639fd91916f444bc1506ba4056bce"},
    "patch_row165P": {"id": "row165P-manual-furniture", "row": "165P", "decision": "C205 CP-28/48", "summary": "layouts compared on the raw sheet (buildDiagramSvgRaw); the pick gets withCaptionAbove", "before_sha256": "18c9a304afb34032f32225b99b3c0a9a72672bf9415461192499328c9f92d65b", "after_sha256": "e37b131787e30da3a22bb252f43023727e0155f830511a5814e179d8ac82551a", "diff": "implementation/146_row165P_diffs/engine_diagram_elk_index.ts.diff"},
    "added_by": "162",
-   "note": "NEW Swarm file of row 162: selection rule R1-R4 and async buildDiagramSvgAuto (original first; ELK only on route defects or DATUM-32, kept only when better). Copy: implementation/114_row162_diffs/engine__diagram__elk__index.ts.new"
+   "note": "NEW Swarm file of row 162: selection rule R1-R4 and async buildDiagramSvgAuto (original first; ELK only on route defects or DATUM-32, kept only when better). Copy: implementation/114_row162_diffs/engine__diagram__elk__index.ts.new",
+   "patch_row47": {"id": "row47-t11-acceptance", "row": "47", "decision": "1.2.6 patch T-11 acceptance (U3, U5, D4=A, C7; register N-160; 01e §4.3-§4.5, §7.2 A2-A6, A9-A11, A13-A15)", "summary": "R1 gate of buildDiagramSvgAuto admits a ranked flow (flowDirectionOf); flow without direction keeps 'R1: family flow'", "diff_base": "sha256 before this row", "before_sha256": "d5a2e0c455399d49b7bdd23583b4d14509215c7acd4ec792054f274ebc27f368", "after_sha256": "6b2e2afb93912c707d7483165d9635f199551d131a12d53942aa4763ee900540", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/47_row47_diffs/src_lib_studio_engine_diagram_elk_index.ts.diff", "diff_sha256": "f9926340aa16d299fbdd47d759ddf48a955f8a771a9d4b376bec1ce0d50f3b9d"}
   },
   {
    "path": "src/lib/studio/engine/diagram/elk/plan.ts",
@@ -2628,10 +2631,11 @@
   {
    "path": "src/lib/studio/engine/diagram/layout-a/flow.ts",
    "status": "patched",
-   "bytes": 19426,
+   "bytes": 24425,
    "source_sha256": "90afeff371687137694305bba1d5cd595f80fb06f3bc3a79211001203e021b1a",
-   "sha256": "241e74568c19bb66ee9ed28ae506af204e78c86805c39c46a011a6a3734e7633",
-   "patch_row46": {"id": "row46-t11-ranked-flow", "row": "46", "decision": "1.2.6 patch T-11 ranked layout (U5, D4=A, C7 S17-1..S17-5; register N-109, N-111, N-112, N-161..N-164; 01e §4.1-§4.2, §4.5, §5, §6.5-6.8)", "summary": "direction present (flowDirectionOf: flow + TB/LR) -> NEW ranked flow layout (layoutRankedFlow); absent -> legacy list layout unchanged (byte-identical, row 45 A15 goldens). NEW exports FLOW_RANK_NODE_MIN_UNITS 2, FLOW_RANK_GAP_BASELINES 4, FLOW_LR_CORRIDOR_UNITS 2, FLOW_LR_MAX_PARALLEL 6, flowRanks (DFS back edges, longest path, mean-predecessor order), flowTbCap/flowTbMaxPerRank/flowLrMaxRanks (lattice capacity inside the T-02 inset), flowRankOverload, rankedFlowSizes (shared with the ELK adapter); over-capacity refused before placement as DiagramOverCapacity DATUM-37-lebar; sheet.edgeInset unit rank (row 59 hook); ELK plan order (TB also x) when a plan for this spec is active", "diff_base": "sha256 before this row", "before_sha256": "90afeff371687137694305bba1d5cd595f80fb06f3bc3a79211001203e021b1a", "after_sha256": "241e74568c19bb66ee9ed28ae506af204e78c86805c39c46a011a6a3734e7633", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/46_row46_diffs/src_lib_studio_engine_diagram_layout-a_flow.ts.diff", "diff_sha256": "5867439cd7b5b766d838f16a4654d38956bc38257249c2cf714ba7db2e0ec261"}
+   "sha256": "9b270e5d010022769d90836b7a1c82a1221909a33f9ce9ddf696f3d55555ea40",
+   "patch_row46": {"id": "row46-t11-ranked-flow", "row": "46", "decision": "1.2.6 patch T-11 ranked layout (U5, D4=A, C7 S17-1..S17-5; register N-109, N-111, N-112, N-161..N-164; 01e §4.1-§4.2, §4.5, §5, §6.5-6.8)", "summary": "direction present (flowDirectionOf: flow + TB/LR) -> NEW ranked flow layout (layoutRankedFlow); absent -> legacy list layout unchanged (byte-identical, row 45 A15 goldens). NEW exports FLOW_RANK_NODE_MIN_UNITS 2, FLOW_RANK_GAP_BASELINES 4, FLOW_LR_CORRIDOR_UNITS 2, FLOW_LR_MAX_PARALLEL 6, flowRanks (DFS back edges, longest path, mean-predecessor order), flowTbCap/flowTbMaxPerRank/flowLrMaxRanks (lattice capacity inside the T-02 inset), flowRankOverload, rankedFlowSizes (shared with the ELK adapter); over-capacity refused before placement as DiagramOverCapacity DATUM-37-lebar; sheet.edgeInset unit rank (row 59 hook); ELK plan order (TB also x) when a plan for this spec is active", "diff_base": "sha256 before this row", "before_sha256": "90afeff371687137694305bba1d5cd595f80fb06f3bc3a79211001203e021b1a", "after_sha256": "241e74568c19bb66ee9ed28ae506af204e78c86805c39c46a011a6a3734e7633", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/46_row46_diffs/src_lib_studio_engine_diagram_layout-a_flow.ts.diff", "diff_sha256": "5867439cd7b5b766d838f16a4654d38956bc38257249c2cf714ba7db2e0ec261"},
+   "patch_row47": {"id": "row47-t11-acceptance", "row": "47", "decision": "1.2.6 patch T-11 acceptance (U3, U5, D4=A, C7; register N-160; 01e §4.3-§4.5, §7.2 A2-A6, A9-A11, A13-A15)", "summary": "NEW FLOW_SERIALISED (N-160) + flowSerialisedNote (01e §4.4: legacy flow with a rank of >= 2 nodes, widest rank named, REPORT only); TB ranked flow: ranks r > 0 placed under their predecessors (underPredecessors, lattice window inside the T-02 inset, centred-row fallback) and the corridor above a rank grows by one baseline per extra edge-label row (corridorLabelRows, knockout widths at default places) so labels leave no GEOM_STUB_SEGMENT tick (01e §4.3 realised by placement)", "diff_base": "sha256 before this row", "before_sha256": "241e74568c19bb66ee9ed28ae506af204e78c86805c39c46a011a6a3734e7633", "after_sha256": "9b270e5d010022769d90836b7a1c82a1221909a33f9ce9ddf696f3d55555ea40", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/47_row47_diffs/src_lib_studio_engine_diagram_layout-a_flow.ts.diff", "diff_sha256": "ce3d2c8e6145595bb2ad59fd0c59cf80300b8d99ead69f199800f981340b20e3"}
   },
   {
    "path": "src/lib/studio/engine/diagram/layout-a/geometry.ts",
@@ -6096,6 +6100,7 @@
   "49",
   "65",
   "68",
-  "64"
+  "64",
+  "47"
  ]
 }
