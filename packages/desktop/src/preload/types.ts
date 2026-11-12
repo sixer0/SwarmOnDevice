@@ -202,4 +202,6 @@ export type ElectronAPI = {
   setForceFocus: (enabled: boolean) => Promise<void>
   recordFatalRendererError: (error: FatalRendererError) => Promise<void>
   setNativeTranslations: (bundle: DesktopNativeBundle) => Promise<void>
+  /** Row 38b (SEC-06): the per-launch nonce for revert / archive-empty (header `x-swarm-desktop-nonce`); null if none. */
+  desktopNonce: () => Promise<string | null>
 }

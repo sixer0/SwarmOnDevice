@@ -15,6 +15,7 @@ import type { ServerReadyData } from "../preload/types"
 import { checkAppExists, resolveAppPath } from "./apps"
 import { CHANNEL } from "./constants"
 import { registerIpcHandlers, sendDeepLinks, sendMenuCommand } from "./ipc"
+import { createDesktopNonce } from "./desktop-nonce"
 import { forwardInitializationFailure } from "./initialization"
 import { exportDebugLogs, initCrashReporter, initLogging, startNetLog, write as writeLog } from "./logging"
 import { createMenu } from "./menu"
@@ -265,6 +266,11 @@ const main = Effect.gen(function* () {
   }
 
   const serverReady = Deferred.makeUnsafe<ServerReadyData, unknown>()
+  // Row 38b (SEC-06): one desktop nonce per launch, in memory only. It goes to the local sidecar in its start message
+  // and to the renderer over IPC (desktopNonce), never to env, disk or a log. Held for the renderer only once the
+  // local sidecar was started with it (not for the v2 background CLI).
+  const desktopNonce = createDesktopNonce()
+  let localDesktopNonce: string | undefined
 
   yield* Effect.promise(() => app.whenReady())
 
@@ -422,6 +428,7 @@ const main = Effect.gen(function* () {
       }
     },
     missionControl: () => datumStudio.missions(),
+    desktopNonce: () => localDesktopNonce,
   })
   ipcSetupRunner = ipc.setupRunner
   registerWslIpcHandlers(wslServers)
@@ -490,10 +497,12 @@ const main = Effect.gen(function* () {
     logger.log("spawning sidecar", { url })
     const renderEnv = yield* Effect.promise(() => sidecarRenderEnv.wait(SIDECAR_RENDER_ENV_WAIT_MS))
     if (!renderEnv) logger.warn("sidecar starts without the DATUM render bridge")
+    localDesktopNonce = desktopNonce
     const { listener, health } = yield* Effect.promise(() =>
       spawnLocalServer(hostname, port, password, {
         userDataPath: app.getPath("userData"),
         renderEnv,
+        desktopNonce: localDesktopNonce,
         onStdout: (message) => writeLog("server", "stdout", { message }),
         onStderr: (message) => writeLog("server", "stderr", { message }, "warn"),
         onExit: (code) => writeLog("utility", "sidecar exited", { code }, "warn"),

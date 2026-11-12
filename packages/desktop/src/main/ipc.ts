@@ -31,6 +31,7 @@ import { isSetupToolsOfferPending, markSetupToolsOffered } from "./onboarding"
 import { createSetupRunner, setupDir, type SetupRunner } from "./setup-runner"
 import { createInstallConfirm, registerSetupToolsHandlers } from "./setup-tools-ipc"
 import { registerMissionControlHandlers } from "./datum-studio-host/mission-ipc"
+import { registerDesktopNonceHandler } from "./desktop-nonce"
 import type { MissionControlPlatform } from "../preload/types"
 
 const pickerFilters = (ext?: string[]) => {
@@ -62,6 +63,8 @@ type Deps = {
   setNativeTranslations: (bundle: DesktopNativeBundle) => void
   /** Row 127: the running DATUM Studio host's mission control client (index.ts: () => datumStudio.missions()). */
   missionControl?: () => MissionControlPlatform | undefined
+  /** Row 38b (SEC-06): this launch's desktop nonce when the local sidecar holds it (index.ts, memory only). */
+  desktopNonce?: () => string | undefined
 }
 
 export function registerIpcHandlers(deps: Deps) {
@@ -105,6 +108,13 @@ export function registerIpcHandlers(deps: Deps) {
     isRendererUrl,
     client: () => deps.missionControl?.(),
     log: (level, message, context) => getLogger()[level](message, { source: "mission-control", ...context }),
+  })
+  // Row 38b (SEC-06): the app's renderer reads the nonce for the revert and archive-empty calls; other senders get null.
+  registerDesktopNonceHandler({
+    ipcMain,
+    windowOf: (sender) => BrowserWindow.fromWebContents(sender),
+    isRendererUrl,
+    nonce: () => deps.desktopNonce?.(),
   })
   ipcMain.handle("kill-sidecar", () => deps.killSidecar())
   ipcMain.handle("await-initialization", () => deps.awaitInitialization())

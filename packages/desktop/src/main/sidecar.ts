@@ -1,6 +1,7 @@
 import * as http from "node:http"
 import * as tls from "node:tls"
 import { BUNDLED_PROVIDER_ENV } from "./bundled-provider"
+import { listenWithNonce, parseSidecarCommand, type StartCommand } from "./sidecar-start"
 
 type NodeHttpWithEnvProxy = typeof http & {
   setGlobalProxyFromEnv: () => void
@@ -10,17 +11,6 @@ type NodeTlsWithSystemCertificates = typeof tls & {
   getCACertificates: (type: "default" | "system") => string[]
   setDefaultCACertificates: (certificates: string[]) => void
 }
-
-type StartCommand = {
-  type: "start"
-  hostname: string
-  port: number
-  password: string
-  userDataPath: string
-}
-
-type StopCommand = { type: "stop" }
-type SidecarCommand = StartCommand | StopCommand
 
 type SidecarMessage =
   | { type: "ready" }
@@ -40,7 +30,7 @@ const parentPort = getParentPort()
 let listener: Listener | undefined
 
 parentPort.on("message", (event) => {
-  const command = parseCommand(event.data)
+  const command = parseSidecarCommand(event.data)
   if (!command) return
   if (command.type === "stop") {
     void stop()
@@ -55,16 +45,8 @@ async function start(command: StartCommand) {
     ensureLoopbackNoProxy()
     useSystemCertificates()
     useEnvProxy()
-    const { Server, RunLease } = await import("virtual:opencode-server")
-
-    RunLease.host()
-    listener = await Server.listen({
-      port: command.port,
-      hostname: command.hostname,
-      username: "opencode",
-      password: command.password,
-      cors: ["oc://renderer"],
-    })
+    // Row 38b (SEC-06): DesktopNonce.set with the start message's nonce runs before Server.listen (sidecar-start.ts).
+    listener = await listenWithNonce(command, await import("virtual:opencode-server"))
     parentPort.postMessage({ type: "ready" })
   } catch (error) {
     parentPort.postMessage({ type: "error", error: serializeError(error) })
@@ -127,24 +109,6 @@ function useEnvProxy() {
     ;(http as NodeHttpWithEnvProxy).setGlobalProxyFromEnv()
   } catch (error) {
     console.warn("failed to load proxy environment", error)
-  }
-}
-
-function parseCommand(value: unknown): SidecarCommand | undefined {
-  if (!value || typeof value !== "object") return
-  const command = value as Partial<StartCommand | StopCommand>
-  if (command.type === "stop") return { type: "stop" }
-  if (command.type !== "start") return
-  if (typeof command.hostname !== "string") return
-  if (typeof command.port !== "number") return
-  if (typeof command.password !== "string") return
-  if (typeof command.userDataPath !== "string") return
-  return {
-    type: "start",
-    hostname: command.hostname,
-    port: command.port,
-    password: command.password,
-    userDataPath: command.userDataPath,
   }
 }
 

@@ -11,6 +11,10 @@ declare module "virtual:opencode-server" {
     export const listen: typeof import("../../../opencode/dist/types/src/node").Server.listen
     export type Listener = import("../../../opencode/dist/types/src/node").Server.Listener
   }
+  // Row 38b (SEC-06): the per-launch desktop nonce, set by the sidecar before Server.listen.
+  export namespace DesktopNonce {
+    export const set: typeof import("../../../opencode/dist/types/src/node").DesktopNonce.set
+  }
   export namespace RunLease {
     export const host: typeof import("../../../opencode/dist/types/src/node").RunLease.host
   }
