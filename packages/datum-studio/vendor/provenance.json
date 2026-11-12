@@ -60,11 +60,11 @@
  },
  "counts": {
   "files": 608,
-  "copied": 437,
-  "patched": 129,
+  "copied": 435,
+  "patched": 131,
   "replaced": 12,
   "added": 30,
-  "bytes": 9814187
+  "bytes": 9818955
  },
  "files": [
   {
@@ -2148,9 +2148,10 @@
   {
    "path": "src/lib/studio/engine/diagram/build/capacity.ts",
    "status": "patched",
-   "bytes": 11559,
+   "bytes": 12056,
    "source_sha256": "ce41b46ce7c7418c379af22f50302c18bb80decc6fea3663cf121e61eb539588",
-   "sha256": "b1f8ba10220ec25a8f88ad6719081d364dd8edf6fad4befe0811bf811a5cd1a3",
+   "sha256": "2bd070b2f6910f7af37ea0c372a0e9a12d76fcd97ae7404f01d0fdeb5fb16773",
+   "patch_row59": {"id": "row59-t02-graph-inset", "row": "59", "decision": "1.2.6 patch T-02 (U5, R21 4.R1; register N-016)", "summary": "graph max columns counted inside W - 2 x GRAPH_EDGE_INSET_MM (capacityAction, graphColumns); measureFromMessage reads the T-02 inset refusal ('isi <mm> mm > batas <mm> mm') as measured/limit in mm", "diff_base": "patch.after_sha256 (row 158)", "before_sha256": "b1f8ba10220ec25a8f88ad6719081d364dd8edf6fad4befe0811bf811a5cd1a3", "after_sha256": "2bd070b2f6910f7af37ea0c372a0e9a12d76fcd97ae7404f01d0fdeb5fb16773", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/59_row59_diffs/src_lib_studio_engine_diagram_build_capacity.ts.diff", "diff_sha256": "c7eac947bc4b96c45b9ffaa223286b8e708b00430f109fe101c68f832f0d26f8"},
    "patch": {
     "id": "row158-diagram-over-capacity",
     "row": 158,
@@ -2357,9 +2358,10 @@
   {
    "path": "src/lib/studio/engine/diagram/core/sheet.ts",
    "status": "patched",
-   "bytes": 14808,
+   "bytes": 18356,
    "source_sha256": "236608382b3497f2fa991d09dd9ef4bdc5df2f0198d9288407866b13951783d5",
-   "sha256": "46e1859aa7b9558b18e2a3839ee03aa1aa25ef0945c027dc82ed14e78cfb17b1",
+   "sha256": "c3f3c8db70f9937efc0b8bb9d61d5e26b7809b9d0456b698727a9d9d60187967",
+   "patch_row59": {"id": "row59-t02-graph-inset", "row": "59", "decision": "1.2.6 patch T-02 (U5, R21 4.R1; register N-016)", "summary": "NEW GRAPH_EDGE_INSET_MM = 2, SheetEdgeInset {unit kolom|rank, groupOf}, Sheet.edgeInset; snapToLattice ends with applyEdgeInset: content inside 2..W-2 untouched, else one uniform translate centring it (lattice spacing kept; undone before a repeated snap); content wider than W - 4 refused DATUM-37-lebar naming the column/rank index, measured and limit mm. Sheets without edgeInset unchanged", "diff_base": "patch_row124b.after_sha256", "before_sha256": "46e1859aa7b9558b18e2a3839ee03aa1aa25ef0945c027dc82ed14e78cfb17b1", "after_sha256": "c3f3c8db70f9937efc0b8bb9d61d5e26b7809b9d0456b698727a9d9d60187967", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/59_row59_diffs/src_lib_studio_engine_diagram_core_sheet.ts.diff", "diff_sha256": "47d20f477d5d1d9760dd739bb21f1278249c20728aa698f29f4cfbba9664d736"},
    "patch_row124b": {
     "id": "row124b-diagram-core-sheet-key-text",
     "row": "124b",
@@ -2605,17 +2607,19 @@
   },
   {
    "path": "src/lib/studio/engine/diagram/layout-c/graph.ts",
-   "status": "copied",
-   "bytes": 12331,
+   "status": "patched",
+   "bytes": 12770,
    "source_sha256": "60b669014292c58c6f2f6571ccb51f98e3ad43eb2efc213083c64cc6fccd52ac",
-   "sha256": "60b669014292c58c6f2f6571ccb51f98e3ad43eb2efc213083c64cc6fccd52ac"
+   "sha256": "3d1965391add5aef75099f70cc40ca3cb9738e4cdd10212a52d7f5f5bb73a7f3",
+   "patch_row59": {"id": "row59-t02-graph-inset", "row": "59", "decision": "1.2.6 patch T-02 (U5, R21 4.R1; register N-016)", "summary": "layoutGraphDetail sets sheet.edgeInset {unit kolom, groupOf = class.col per node} (both the default and the capacity path); the per-node DATUM-37 width refusal names the column ('simpul <id> (kolom graph <c>)'). Copied -> patched", "before_sha256": "60b669014292c58c6f2f6571ccb51f98e3ad43eb2efc213083c64cc6fccd52ac", "after_sha256": "3d1965391add5aef75099f70cc40ca3cb9738e4cdd10212a52d7f5f5bb73a7f3", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/59_row59_diffs/src_lib_studio_engine_diagram_layout-c_graph.ts.diff", "diff_sha256": "d2aa250b4cd92ac01f22ca1c365868bc236738d54ec811b47dbecc8bc10ccf33"}
   },
   {
    "path": "src/lib/studio/engine/diagram/layout-c/graphcap.ts",
-   "status": "copied",
-   "bytes": 3151,
+   "status": "patched",
+   "bytes": 3435,
    "source_sha256": "b64c0949e1687078e4beb752066ee61d2f13816b99f1281cd0c84a1d51a6df8f",
-   "sha256": "b64c0949e1687078e4beb752066ee61d2f13816b99f1281cd0c84a1d51a6df8f"
+   "sha256": "d2f70b89339f2ddc9d8fbc724f79a038183cc3e41a95eaa9fb014c383e7c008d",
+   "patch_row59": {"id": "row59-t02-graph-inset", "row": "59", "decision": "1.2.6 patch T-02 (U5, R21 4.R1; register N-016)", "summary": "graphMaxCols and the compacted-pitch fit test use W - 2 x GRAPH_EDGE_INSET_MM (same maximum at 128/166 mm: 4/5 columns). Copied -> patched", "before_sha256": "b64c0949e1687078e4beb752066ee61d2f13816b99f1281cd0c84a1d51a6df8f", "after_sha256": "d2f70b89339f2ddc9d8fbc724f79a038183cc3e41a95eaa9fb014c383e7c008d", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/59_row59_diffs/src_lib_studio_engine_diagram_layout-c_graphcap.ts.diff", "diff_sha256": "e89034902379dfd6d3d53c5d58551ac4c63312812d6f2bdb4179b7fbac00f3d4"}
   },
   {
    "path": "src/lib/studio/engine/diagram/layout-c/index.ts",
@@ -5954,6 +5958,7 @@
   "213",
   "55a",
   "50a",
-  "53a"
+  "53a",
+  "59"
  ]
 }

@@ -38,6 +38,21 @@ export interface SheetLifeline {
   top: number;
 }
 
+/**
+ * Swarm 1.2.6 row 59 (register N-016): minimum distance (mm) between any node outline and each
+ * canvas side for `graph` (any `col`, 0 included) and ranked `flow`.
+ */
+export const GRAPH_EDGE_INSET_MM = 2;
+
+/**
+ * Row 59 (T-02): set by a layout on the sheet to ask for the edge inset after `snapToLattice`.
+ * `groupOf` maps a node id to the index named in a refusal: the graph `col` or the flow rank.
+ */
+export interface SheetEdgeInset {
+  unit: "kolom" | "rank";
+  groupOf: ReadonlyMap<string, number>;
+}
+
 export class Sheet implements DiagramSheet {
   /** Kisi horizontal (mm): `LATTICE_X` (A4) atau `grid.latticeXMm` turunan templat (D-245). */
   readonly colMm: number;
@@ -62,6 +77,10 @@ export class Sheet implements DiagramSheet {
   gutterW?: number;
   rackX?: number;
   rowpack?: { baseline_hits: number; rounds: number; strategy: string; pitch_mm: number };
+  /** Row 59 (T-02): edge inset request of the layout (graph, ranked flow); absent = no translate. */
+  edgeInset?: SheetEdgeInset;
+  /** Row 59: translate applied by the last `snapToLattice` (undone before a repeated snap). */
+  private insetDx = 0;
   private fixedHeight?: number;
   private readonly elements: string[] = [];
 
@@ -143,6 +162,11 @@ export class Sheet implements DiagramSheet {
    */
   snapToLattice(): "DATUM-37-lebar" {
     const lx = this.colMm;
+    // Swarm 1.2.6 row 59 (T-02): a repeated snap starts from the lattice positions, not the inset ones.
+    if (this.insetDx !== 0) {
+      for (const nd of this.nodes.values()) if (nd.spec.shape !== "bus") nd.x -= this.insetDx;
+      this.insetDx = 0;
+    }
     for (const nd of this.nodes.values()) {
       nd.x = snap(nd.x, lx);
       nd.y = snap(nd.y, LATTICE_Y);
@@ -159,7 +183,64 @@ export class Sheet implements DiagramSheet {
         );
       }
     }
+    this.applyEdgeInset();
     return "DATUM-37-lebar";
+  }
+
+  /**
+   * Swarm 1.2.6 row 59 (T-02, register N-016, 01_specs 4.R1): for a sheet whose layout set
+   * `edgeInset` (graph; ranked flow), every node outline keeps `GRAPH_EDGE_INSET_MM` to both canvas
+   * sides. Realised as ONE uniform translate of the whole placed content after the lattice snap
+   * (lattice spacing unchanged): content already inside the inset is left untouched (byte-identical),
+   * otherwise it is centred. Content wider than W - 2 x inset is refused `DATUM-37-lebar` naming the
+   * column (graph) or rank (flow) index with the measured width and the numeric limit.
+   */
+  private applyEdgeInset(): void {
+    const ei = this.edgeInset;
+    if (!ei) return;
+    const nodes = [...this.nodes.values()].filter((nd) => nd.spec.shape !== "bus");
+    if (nodes.length === 0) return;
+    const inset = GRAPH_EDGE_INSET_MM;
+    const W = this.widthMm;
+    const limit = W - 2 * inset;
+    let minX = Infinity;
+    let maxR = -Infinity;
+    let rightmost = nodes[0];
+    const extent = new Map<number, [number, number]>();
+    for (const nd of nodes) {
+      minX = Math.min(minX, nd.x);
+      if (nd.x + nd.w > maxR) {
+        maxR = nd.x + nd.w;
+        rightmost = nd;
+      }
+      const g = ei.groupOf.get(nd.id);
+      if (g === undefined) continue;
+      const e = extent.get(g);
+      extent.set(g, e ? [Math.min(e[0], nd.x), Math.max(e[1], nd.x + nd.w)] : [nd.x, nd.x + nd.w]);
+    }
+    const content = maxR - minX;
+    if (content > limit + 1e-6) {
+      // The group that alone is too wide (a crowded rank) is named first; else the group whose node
+      // reaches furthest right (the column that pushes the graph past the limit).
+      let idx = ei.groupOf.get(rightmost.id);
+      let widest = limit + 1e-6;
+      for (const [g, [a, b]] of extent) {
+        if (b - a > widest) {
+          widest = b - a;
+          idx = g;
+        }
+      }
+      const what = ei.unit === "kolom" ? "kolom graph" : "rank";
+      throw new DiagramDefect(
+        `DATUM-37: ${what} ${idx ?? "?"} melewati inset tepi ${inset} mm: isi ${pyFixed(content, 3)} mm > batas ${pyFixed(limit, 3)} mm ` +
+          `(lebar ${pyFixed(W, 1)} mm - 2 x ${inset} mm) — kurangi ${ei.unit === "kolom" ? "kolom" : "simpul per rank"} atau persempit label (P8, T-02)`,
+        { checkId: "DATUM-37-lebar" },
+      );
+    }
+    if (minX >= inset - 1e-6 && maxR <= W - inset + 1e-6) return;
+    const dx = (W - content) / 2 - minX;
+    for (const nd of nodes) nd.x += dx;
+    this.insetDx = dx;
   }
 
   /** Ringkasan kontrak `LayoutResult` dari keadaan lembar. */

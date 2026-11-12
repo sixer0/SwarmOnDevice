@@ -17,6 +17,7 @@
 import { StudioEngineError } from "../../../contract/errors";
 import type { StudioDiagramV1 } from "../../../contract";
 import { DiagramDefect, LATTICE_X } from "../core";
+import { GRAPH_EDGE_INSET_MM } from "../core/sheet";
 import { DiagramOverCapacity, type FigureOverCapacityDetails } from "../../figure-capacity";
 import { lintDiagramGeometry, type DiagramGeomLint } from "../fit/lint";
 import { withDiagramFit, type DiagramFitState } from "../fit/state";
@@ -44,7 +45,7 @@ export function capacityAction(s: StudioDiagramV1, checkId: string): string | nu
   if (fam === "graph") {
     const cols = [...new Set((s.nodes ?? []).map((n) => Number((n.class as Record<string, unknown> | undefined)?.col ?? 0)))].sort((a, b) => a - b);
     const gap = cols.some((c, i) => i > 0 && c !== cols[i - 1] + 1);
-    const maxCols = Math.floor((W - LATTICE_X * 2) / (LATTICE_X * 3) + 1e-9) + 1;
+    const maxCols = Math.floor((W - 2 * GRAPH_EDGE_INSET_MM - LATTICE_X * 2) / (LATTICE_X * 3) + 1e-9) + 1; // row 59: inside the T-02 inset
     return gap
       ? `rapatkan class.col (ada kolom kosong di antara kolom ${cols.join(", ")}); maks ${maxCols} kolom pada ${W} mm`
       : `maks ${maxCols} kolom pada ${W} mm; bagi menjadi dua gambar atau pakai layered`;
@@ -66,6 +67,9 @@ const n1 = (v: string | undefined): number | null => (v === undefined || !Number
 
 /** mm figures the engine already printed in its own DATUM-33/37 message (fallback measure). */
 function measureFromMessage(msg: string): Measure | null {
+  // Swarm 1.2.6 row 59 (T-02): content wider than W - 2 x GRAPH_EDGE_INSET_MM (column or rank named in the text).
+  const i = /melewati inset tepi [\d.]+ mm: isi ([\d.]+) mm > batas ([\d.]+) mm/.exec(msg);
+  if (i) return { quantity: "lebar isi gambar di dalam inset tepi", unit: "mm", measured: n1(i[1]), limit: n1(i[2]) };
   const h = /tinggi gambar ([\d.]+) mm melewati blok teks ([\d.]+) mm/.exec(msg);
   if (h) return { quantity: "tinggi gambar", unit: "mm", measured: n1(h[1]), limit: n1(h[2]) };
   const w = /\(([\d.]+)\.\.([\d.]+) dari ([\d.]+) mm\)/.exec(msg);
@@ -80,7 +84,7 @@ function graphColumns(s: StudioDiagramV1): { cols: number[]; span: number; maxCo
   const W = Number(s.width_mm) || 166;
   const cols = [...new Set((s.nodes ?? []).map((n) => Number((n.class as Record<string, unknown> | undefined)?.col ?? 0)))].sort((a, b) => a - b);
   const span = cols.length ? cols[cols.length - 1] - cols[0] + 1 : 0;
-  const maxCols = Math.floor((W - LATTICE_X * 2) / (LATTICE_X * 3) + 1e-9) + 1;
+  const maxCols = Math.floor((W - 2 * GRAPH_EDGE_INSET_MM - LATTICE_X * 2) / (LATTICE_X * 3) + 1e-9) + 1; // row 59: inside the T-02 inset
   return { cols, span, maxCols, width: W };
 }
 
