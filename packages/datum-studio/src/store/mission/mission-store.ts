@@ -603,9 +603,12 @@ export class MissionStore {
   }
 
   /** One row patch (row 85 split it out of updateRows so each patch can run under its own savepoint). */
-  private applyRowPatch(tx: StoreTx, m: MissionDbRow, type: MissionTypeDoc, p: RowPatch, decision: string | undefined, actor: string): void {
-    const keys = Object.keys(p ?? {}).filter((k) => !["id", "add", "set", "status", "note", "acquire", "release", "retire"].includes(k))
+  private applyRowPatch(tx: StoreTx, m: MissionDbRow, type: MissionTypeDoc, p: RowPatch, callDecision: string | undefined, actor: string): void {
+    const keys = Object.keys(p ?? {}).filter((k) => !["id", "add", "set", "status", "note", "acquire", "release", "retire", "decision"].includes(k))
     if (keys.length > 0) throw err("SCHEMA_INVALID", "unknown patch fields", { row: p?.id, fields: keys })
+    // Row 81 (1.2.6, MC-03): a patch-level decision overrides the call-level one for this patch only.
+    if (p.decision !== undefined && typeof p.decision !== "string") throw err("SCHEMA_INVALID", "patch decision must be a decision id", { row: p.id, fields: ["decision"] })
+    const decision = p.decision ?? callDecision
     if (p.add) this.addRow(tx, m, type, p, decision, actor)
     if (p.set) this.setRow(tx, m, type, p.id, p.set, decision, actor)
     // Row 174 (C218 F146b-3): retire before the status move, so `{retire, status: "done"}` is judged without the draft.

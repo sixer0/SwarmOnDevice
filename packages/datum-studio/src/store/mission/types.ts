@@ -348,6 +348,8 @@ export interface RowPatch {
   release?: string[]
   /** Row 174 (C218 F146b-3): ids of documents linked to this row (docKey row-<R>-<name>) to retire (archive); needs `note`. */
   retire?: string[]
+  /** Row 81 (1.2.6, MC-03): this patch's decision; overrides the call-level decision of updateRows for this patch only. */
+  decision?: string
 }
 
 export interface MissionListFilter {
