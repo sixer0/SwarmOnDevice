@@ -138,3 +138,15 @@ describe("row 32: the U2 provider URL is shipped unchanged (CFG-05)", () => {
     expect(BUNDLED_PROVIDER.provider.api).toBe("http://100.102.23.27:11400/v1")
   })
 })
+
+// 1.2.6 row 34, CFG-06 T6a (01d_spec_config.md §7, C2): the bundled provider payload and the
+// env value handed to the server carry no instructions, no gsp-core-rules and no /Users/ path.
+describe("CFG-06 T6a bundled provider ships no private content", () => {
+  test("no instructions, gsp-core-rules or /Users/ in BUNDLED_PROVIDER or its env payload", () => {
+    for (const text of [JSON.stringify(BUNDLED_PROVIDER), JSON.stringify(BUNDLED_PROVIDER_ENV)]) {
+      expect(text).not.toContain("instructions")
+      expect(text).not.toContain("gsp-core-rules")
+      expect(text).not.toContain("/Users/")
+    }
+  })
+})

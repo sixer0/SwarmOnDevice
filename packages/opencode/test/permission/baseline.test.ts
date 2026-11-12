@@ -423,3 +423,18 @@ it.instance(
     }),
   { git: true },
 )
+
+// 1.2.6 row 34, CFG-06 T6a (01d_spec_config.md §7, C2): the shipped baseline carries no
+// `instructions` key, no gsp-core-rules reference and no absolute /Users/ path. JSON.stringify
+// invokes every getter, so permission/agent/experimental/compaction are covered too.
+test("CFG-06 T6a BASELINE_CONFIG ships no instructions, gsp-core-rules or /Users/ path", () => {
+  expect("instructions" in BASELINE_CONFIG).toBe(false)
+  const text = JSON.stringify(BASELINE_CONFIG)
+  expect(text).not.toContain("instructions")
+  expect(text).not.toContain("gsp-core-rules")
+  expect(text).not.toContain("/Users/")
+  const permission = JSON.stringify(SWARM_PERMISSION_BASELINE)
+  expect(permission).not.toContain("instructions")
+  expect(permission).not.toContain("gsp-core-rules")
+  expect(permission).not.toContain("/Users/")
+})
