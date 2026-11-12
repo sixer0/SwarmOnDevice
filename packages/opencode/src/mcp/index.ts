@@ -10,8 +10,10 @@ import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js"
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { UnauthorizedError } from "@modelcontextprotocol/sdk/client/auth.js"
 import {
+  ErrorCode,
   ListRootsRequestSchema,
   type LoggingMessageNotification,
+  McpError,
   LoggingMessageNotificationSchema,
   type Tool as MCPToolDef,
   ToolListChangedNotificationSchema,
@@ -39,6 +41,20 @@ import { McpEvent } from "@opencode-ai/schema/mcp-event"
 import { McpBrowser } from "./browser"
 
 const DEFAULT_TIMEOUT = 30_000
+
+/**
+ * M-02 (1.2.6 row 54c, register N-052): when the built-in datum-studio server's stdio bridge ends (it exits 3 after a
+ * host restart or descriptor change it could not follow), opencode starts it again this many times and retries the
+ * call that was pending once. The budget comes back only after the new bridge has answered a call, so a bridge that
+ * keeps ending is never restarted in a loop. Other servers are unchanged (failed "Connection closed").
+ */
+export const BUILTIN_MCP_RECONNECT_ATTEMPTS = 1
+
+/** M-02: the SDK's error for a call whose transport closed (pending: ConnectionClosed; sent after close: "Not connected"). */
+function isClosedError(error: unknown) {
+  if (error instanceof McpError) return error.code === ErrorCode.ConnectionClosed
+  return error instanceof Error && error.message === "Not connected"
+}
 const CLIENT_OPTIONS = {
   capabilities: {
     // https://github.com/anomalyco/opencode/issues/11948
@@ -183,6 +199,10 @@ interface State {
   clients: Record<string, MCPClient>
   defs: Record<string, MCPToolDef[]>
   instructions: Record<string, string>
+  /** M-02: automatic reconnects of the built-in server since its bridge last answered a call. */
+  reconnects: Record<string, number>
+  /** M-02: the reconnect in flight, which a pending call waits for before its one retry. */
+  reconnecting: Record<string, Promise<MCPClient | undefined> | undefined>
 }
 
 export interface ServerInstructions {
@@ -517,6 +537,18 @@ const layer = Layer.effect(
             Effect.ignore,
           ),
         )
+        // M-02 (1.2.6 row 54c): only the built-in server, and only within its budget. Registered before the SDK
+        // rejects the pending calls (Protocol._onclose calls onclose first), so those calls find it.
+        if (name !== DATUM_STUDIO_MCP || s.reconnecting[name]) return
+        if ((s.reconnects[name] ?? 0) >= BUILTIN_MCP_RECONNECT_ATTEMPTS) return
+        s.reconnects[name] = (s.reconnects[name] ?? 0) + 1
+        const pending = bridge
+          .promise(reconnect(s, name).pipe(Effect.catchCause(() => Effect.succeed(undefined))))
+          .catch(() => undefined)
+          .finally(() => {
+            if (s.reconnecting[name] === pending) delete s.reconnecting[name]
+          })
+        s.reconnecting[name] = pending
       }
 
       client.setNotificationHandler(LoggingMessageNotificationSchema, (notification) =>
@@ -534,6 +566,63 @@ const layer = Layer.effect(
         s.defs[name] = listed
         await bridge.promise(events.publish(ToolsChanged, { server: name }).pipe(Effect.ignore))
       })
+    }
+
+    /** M-02: start the server again from its config; stores the new client unless something else took the slot. */
+    const reconnect = Effect.fnUntraced(function* (s: State, name: string) {
+      const cfg = yield* cfgSvc.get()
+      const mcp = s.config[name] ?? cfg.mcp?.[name]
+      if (!mcp || !isMcpConfigured(mcp) || mcp.enabled === false) return undefined
+      yield* Effect.logWarning("MCP reconnect", { server: name })
+      const result = yield* create(name, mcp)
+      // A disconnect, connect or add while this ran owns the slot now.
+      const untouched = s.clients[name] === undefined && s.status[name]?.status === "failed"
+      if (!result.mcpClient || !untouched) {
+        if (result.mcpClient) yield* Effect.tryPromise(() => result.mcpClient!.close()).pipe(Effect.ignore)
+        else if (untouched) s.status[name] = result.status
+        return s.clients[name]
+      }
+      yield* storeClient(s, name, result.mcpClient, result.defs!, result.instructions, mcp.timeout)
+      yield* events.publish(ToolsChanged, { server: name }).pipe(Effect.ignore)
+      return result.mcpClient
+    })
+
+    const retrying = new WeakMap<MCPClient, MCPClient>()
+
+    /**
+     * M-02: the built-in server's client as tools hold it. A call that fails because the bridge closed waits for the
+     * reconnect and runs once more on the new client; any other error, an aborted call or no new client is the
+     * original failure. A call answered by the current client restores the reconnect budget.
+     */
+    function retryOnce(s: State, name: string, client: MCPClient): MCPClient {
+      const known = retrying.get(client)
+      if (known) return known
+      const answered = (by: MCPClient) => {
+        if (s.clients[name] === by) delete s.reconnects[name]
+      }
+      const proxy = new Proxy(client, {
+        get(target, prop) {
+          const value = Reflect.get(target, prop, target)
+          if (prop !== "callTool") return typeof value === "function" ? value.bind(target) : value
+          return async (...args: Parameters<MCPClient["callTool"]>) => {
+            try {
+              const result = await target.callTool(...args)
+              answered(target)
+              return result
+            } catch (error) {
+              if (!isClosedError(error)) throw error
+              args[2]?.signal?.throwIfAborted()
+              const next = await (s.reconnecting[name] ?? Promise.resolve(s.clients[name]))
+              if (!next || next === target || s.status[name]?.status !== "connected") throw error
+              const result = await next.callTool(...args)
+              answered(next)
+              return result
+            }
+          }
+        },
+      })
+      retrying.set(client, proxy)
+      return proxy
     }
 
     function serverLog(name: string, params: LoggingMessageNotification["params"]) {
@@ -565,6 +654,8 @@ const layer = Layer.effect(
           clients: {},
           defs: {},
           instructions: {},
+          reconnects: {},
+          reconnecting: {},
         }
 
         yield* Effect.forEach(
@@ -694,6 +785,7 @@ const layer = Layer.effect(
       const result = yield* create(name, mcp)
 
       s.status[name] = result.status
+      delete s.reconnects[name]
       if (!result.mcpClient) {
         yield* closeClient(s, name)
         delete s.clients[name]
@@ -755,7 +847,9 @@ const layer = Layer.effect(
         const timeout = requestTimeout(s, clientName, mcpConfig, defaultTimeout)
         const source = sourceOf(clientName, s.config[clientName], mcpConfig, global[clientName])
         for (const def of listed) {
-          result[McpCatalog.toolName(clientName, def.name)] = { def, client, timeout, source }
+          // M-02 (1.2.6 row 54c): the built-in server's calls survive one bridge restart.
+          const held = clientName === DATUM_STUDIO_MCP ? retryOnce(s, clientName, client) : client
+          result[McpCatalog.toolName(clientName, def.name)] = { def, client: held, timeout, source }
         }
       }
       return result
