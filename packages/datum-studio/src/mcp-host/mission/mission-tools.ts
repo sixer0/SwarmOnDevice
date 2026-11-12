@@ -19,7 +19,7 @@ import { ROW_RUNNING_DONE_RULE, type RowPatchJobResult } from "../../store/missi
 import type { HostToolExtension, HostToolSession } from "../tool-table.ts"
 import { ACTOR_PATTERN, EXPORT_FILES, MISSION_TOOL_NAMES, MISSION_TOOL_SCHEMAS, type ExportFile, type GetInclude } from "./schemas.ts"
 import { errorResult, MissionToolError, okResult, type MissionLog } from "./tool-result.ts"
-import { describeAjvError } from "../../store/mission/validate.ts"
+import { checkMissionSchema, describeAjvError } from "../../store/mission/validate.ts"
 import { MISSION_GUIDE_URI } from "./mission-guide.ts"
 import { readActivityAt, readDeliverables, readMessagesTail, type OutputVerificationSource } from "./deliverables.ts"
 
@@ -82,6 +82,23 @@ export function parseObjectArg(tool: string, args: Record<string, unknown>): voi
     throw new MissionToolError("SCHEMA_INVALID", `${key} must be a JSON object, not a string`, { def: `${tool} input`, issues: [{ pointer: `/${key}`, keyword: "type", message: "must be a JSON object (send the object itself)" }] })
   }
   args[key] = parsed
+}
+
+/**
+ * Row 80 (1.2.6, MC-02): record_decision takes `autonomous` inside `decision` or at the top level; both store
+ * decision.autonomous. Different values are refused SCHEMA_INVALID at /decision/autonomous. The record is checked
+ * against $defs/Decision here so its issues name the argument pointer (/decision/...), not the record-relative path.
+ * The autonomous-mode gate stays in the store (AUTONOMOUS_MODE_OFF, P-04).
+ */
+export function decisionWithAutonomous(args: Record<string, unknown>): Record<string, unknown> {
+  const tool = "studio_mission_record_decision"
+  const d = { ...(args.decision as Record<string, unknown>) }
+  if (args.autonomous !== undefined && d.autonomous !== undefined && d.autonomous !== args.autonomous)
+    throw new MissionToolError("SCHEMA_INVALID", "autonomous is given twice with different values", { def: `${tool} input`, issues: [{ pointer: "/decision/autonomous", keyword: "const", message: `must equal the top-level autonomous (${String(args.autonomous)}); send it once` }] })
+  if (args.autonomous !== undefined) d.autonomous = args.autonomous
+  const issues = checkMissionSchema("Decision", d)
+  if (issues.length > 0) throw new MissionToolError("SCHEMA_INVALID", "decision does not match studio.mission/v1#/$defs/Decision", { def: "Decision", issues: issues.map((i) => ({ pointer: `/decision${i.path === "/" ? "" : i.path}`, keyword: i.keyword, message: i.message })) })
+  return d
 }
 
 export function validateArgs(tool: string, args: Record<string, unknown>): void {
@@ -433,7 +450,8 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
       "Append a decision {id U<n>|C<n>, by user|controller, date, text, rows?, supersedes?, autonomous?} (§5.2); append-only (DECISION_ID_TAKEN). A correction is a new decision with supersedes. autonomous: true (by: controller only) records a self-approval, allowed only while Swarm's autonomous mode setting is on (the person turns it on; else AUTONOMOUS_MODE_OFF); never record by: user for the user.",
       false,
       async (a, s) => {
-        const r = await write(dry(a), (tx) => M.recordDecision(tx, a.mission as string, a.decision as never, writeOptions(a, s)))
+        const decision = decisionWithAutonomous(a)
+        const r = await write(dry(a), (tx) => M.recordDecision(tx, a.mission as string, decision as never, writeOptions(a, s)))
         return { text: `decision ${r.id} recorded in ${String(a.mission)}${dryNote(a)}`, data: { ...r, dryRun: dry(a) } }
       },
     ),
