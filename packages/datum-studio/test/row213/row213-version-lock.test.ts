@@ -35,7 +35,7 @@ describe("row 213: built-in template version lock", () => {
     expect(checkVersionLock(readLock(), builtins)).toEqual([])
   })
 
-  test("the catalog versionNo follows the lock rule, every template is v2 after 1.2.5 (C-27 removal), the two changed in 1.2.2/1.2.3 are v3", async () => {
+  test("the catalog versionNo follows the lock rule, every template is v3 after 1.2.6 (row 72 figure-quota params in every folded payload), the two changed in 1.2.2/1.2.3 are v4", async () => {
     const lock = readLock()
     const catalog = JSON.parse(readFileSync(path.join(TEMPLATES, "catalog.json"), "utf8")) as { templates: Array<{ slug: string; versionNo?: number }> }
     const builtins = await shippedBuiltins(TEMPLATES)
@@ -43,14 +43,15 @@ describe("row 213: built-in template version lock", () => {
       const entry = catalog.templates.find((t) => t.slug === b.slug)!
       expect({ slug: b.slug, versionNo: entry.versionNo }).toEqual({ slug: b.slug, versionNo: versionFor(lock, b.slug, b.definitionSha256) })
     }
-    expect(Object.fromEntries(builtins.filter((b) => b.versionNo !== 2).map((b) => [b.slug, b.versionNo]))).toEqual({ "datum-kanonik": 3, "datum-gsp": 3 })
+    expect(Object.fromEntries(builtins.filter((b) => b.versionNo !== 3).map((b) => [b.slug, b.versionNo]))).toEqual({ "datum-kanonik": 4, "datum-gsp": 4 })
   })
 
-  test("the lock holds every definition 1.2.0, 1.2.1, 1.2.2, 1.2.3 and 1.2.4 shipped (history is complete)", async () => {
+  test("the lock holds every definition 1.2.0, 1.2.1, 1.2.2, 1.2.3, 1.2.4 and 1.2.5 shipped (history is complete)", async () => {
     const lock = readLock()
     // Definitions only: the folded payload depends on the vendored fold, which 1.2.5 changed (C-27 / P11-27 removed), so an
     // older release's payload can no longer be re-folded here; its locked payload sha was recorded when it was current.
-    for (const release of ["1.2.0", "1.2.2", "1.2.3", "1.2.4"]) {
+    // 1.2.6 changed the fold again (row 72: P7-37/P7-38 registry defaults), so 1.2.5 is checked the same way.
+    for (const release of ["1.2.0", "1.2.2", "1.2.3", "1.2.4", "1.2.5"]) {
       for (const b of await shippedBuiltins(releaseTemplates(release))) {
         const hit = lock.templates[b.slug].find((e) => e.definitionSha256 === b.definitionSha256)
         expect({ release, slug: b.slug, found: hit !== undefined }).toEqual({ release, slug: b.slug, found: true })
@@ -74,20 +75,20 @@ describe("row 213: built-in template version lock", () => {
     writeFileSync(catPath, `${JSON.stringify(cat, null, 2)}\n`)
     const problems = checkVersionLock(readLock(), await shippedBuiltins(dir))
     expect(problems).toHaveLength(1)
-    expect(problems[0]).toContain("datum-nota v2: definition changed without a version bump")
+    expect(problems[0]).toContain("datum-nota v3: definition changed without a version bump")
     // The export rule gives the edited definition the next number, which --write then records.
     const changed = (await shippedBuiltins(dir)).find((b) => b.slug === "datum-nota")!
-    expect(versionFor(readLock(), "datum-nota", changed.definitionSha256)).toBe(3)
+    expect(versionFor(readLock(), "datum-nota", changed.definitionSha256)).toBe(4)
   })
 
   test("a folded payload change under the same number fails; --write moves it to the next number", async () => {
     const builtins = await shippedBuiltins(TEMPLATES)
     const moved = builtins.map((b) => (b.slug === "datum-standar" ? { ...b, payloadSha256: "f".repeat(64) } : b))
-    expect(checkVersionLock(readLock(), moved)).toEqual([expect.stringContaining("datum-standar v2: folded payload changed without a version bump")])
+    expect(checkVersionLock(readLock(), moved)).toEqual([expect.stringContaining("datum-standar v3: folded payload changed without a version bump")])
     const lock = clone(readLock())
     const r = recordBuiltins(lock, moved, "test")
-    expect(r).toEqual({ added: ["datum-standar v3"], rerunExport: ["datum-standar"] })
-    expect(versionFor(lock, "datum-standar", builtins.find((b) => b.slug === "datum-standar")!.definitionSha256)).toBe(3)
+    expect(r).toEqual({ added: ["datum-standar v4"], rerunExport: ["datum-standar"] })
+    expect(versionFor(lock, "datum-standar", builtins.find((b) => b.slug === "datum-standar")!.definitionSha256)).toBe(4)
   })
 
   test("a retired number is never reused, and a lock that records two contents under one live number is refused", async () => {

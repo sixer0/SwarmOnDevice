@@ -105,7 +105,8 @@ describe("row 215: C-27 removal, built-in version bump", () => {
     await closeHostStore(unbumped.store)
 
     // Bumped 1.2.5: every built-in gets a new version with the new payload; the old versions stay as pinned.
-    const bumped = await openAs(root, "1.2.5", TEMPLATES)
+    // The 1.2.5 catalog (fixtures/1.2.5): 1.2.6 bumped every built-in once more (row 110), so the current catalog is +2.
+    const bumped = await openAs(root, "1.2.5", templatesDir("bumped", "1.2.5"))
     try {
       expect(codeOf(bumped.error) ?? null).toBeNull()
       const all = await rows(bumped.store)
