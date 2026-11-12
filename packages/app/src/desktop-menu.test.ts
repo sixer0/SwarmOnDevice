@@ -31,7 +31,8 @@ describe("desktop menu", () => {
     const start = actions.indexOf("app.checkForUpdates")
 
     expect(app?.platforms).toEqual(["macos"])
-    expect(items).toHaveLength(16)
+    // 1.2.6 row 91 (C9, SEC-05): +1 for "Re-check Tools" (16 -> 17).
+    expect(items).toHaveLength(17)
     expect(actions.slice(start, start + 3)).toEqual(["app.checkForUpdates", "app.updateFromFile", "app.undoLastUpdate"])
 
     const patch = items.filter((item) => item.type === "item" && item.enabled === "patch")
@@ -63,5 +64,18 @@ describe("desktop menu", () => {
       .flatMap((menu) => menu.items ?? [])
       .filter((item) => item.type === "item" && item.action === "app.installDatumStudio")
     expect(elsewhere).toHaveLength(0)
+  })
+
+  // SEC-05 / C9 (1.2.6 row 91): one "Re-check Tools" item, below Install DATUM Studio for Claude, macOS app menu only.
+  test("places Re-check Tools below Install DATUM Studio for Claude in the macOS app menu only", () => {
+    const app = DESKTOP_MENU.find((menu) => menu.id === "app")
+    const actions = (app?.items ?? []).flatMap((item) => (item.type === "item" && item.action ? [item.action] : []))
+    const at = actions.indexOf("app.installDatumStudio")
+    expect(actions.slice(at, at + 2)).toEqual(["app.installDatumStudio", "app.recheckTools"])
+    expect(app?.items).toContainEqual({ type: "item", labelKey: "desktop.menu.recheckTools", action: "app.recheckTools" })
+    const all = DESKTOP_MENU.flatMap((menu) => menu.items ?? []).filter(
+      (item) => item.type === "item" && item.action === "app.recheckTools",
+    )
+    expect(all).toHaveLength(1)
   })
 })

@@ -6,6 +6,7 @@ export type DesktopMenuActionHandlers = Partial<{
   checkForUpdates: () => void
   installCli: () => void
   installDatumStudio: () => void
+  recheckTools: () => void
   relaunch: () => void
   updateFromFile: () => void
   undoLastUpdate: () => void
@@ -25,6 +26,9 @@ export function runDesktopMenuAction(
       return
     case "app.installDatumStudio":
       handlers.installDatumStudio?.()
+      return
+    case "app.recheckTools":
+      handlers.recheckTools?.()
       return
     case "app.relaunch":
       handlers.relaunch?.()

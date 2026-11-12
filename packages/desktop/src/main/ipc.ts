@@ -74,19 +74,21 @@ export function registerIpcHandlers(deps: Deps) {
 
   let setupRunner: SetupRunner | undefined
   app.once("will-quit", () => setupRunner?.dispose())
+  // One runner per app (one swarm-setup at a time); 1.2.6 row 91: also handed to tool-health for `swarm-setup start`.
+  const runner = () =>
+    (setupRunner ??= createSetupRunner({
+      dir: setupDir({
+        packaged: app.isPackaged,
+        resourcesPath: process.resourcesPath,
+        devRoot: dirname(fileURLToPath(import.meta.url)),
+      }),
+      logger: getLogger(),
+    }))
   registerSetupToolsHandlers({
     ipcMain,
     windowOf: (sender) => BrowserWindow.fromWebContents(sender),
     isRendererUrl,
-    runner: () =>
-      (setupRunner ??= createSetupRunner({
-        dir: setupDir({
-          packaged: app.isPackaged,
-          resourcesPath: process.resourcesPath,
-          devRoot: dirname(fileURLToPath(import.meta.url)),
-        }),
-        logger: getLogger(),
-      })),
+    runner,
     confirmInstall: createInstallConfirm({
       windowOf: (sender) => BrowserWindow.fromWebContents(sender),
       showMessageBox: (win, options) => (win ? dialog.showMessageBox(win, options) : dialog.showMessageBox(options)),
@@ -339,6 +341,7 @@ export function registerIpcHandlers(deps: Deps) {
       relaunch: deps.relaunch,
     })
   })
+  return { setupRunner: runner }
 }
 
 export function sendMenuCommand(win: BrowserWindow, id: string) {
