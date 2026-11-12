@@ -11,6 +11,8 @@
  * 2. Sisanya, berurutan: kandidat di setiap segmen (terpanjang dulu; titik 1/2, 1/4, 3/4) diberi
  *    skor = luas irisan keras (simpul, rintangan, label lain, luar lembar) lalu jumlah konektor lain
  *    yang tertutup pita (lunak). Kandidat bebas irisan keras pertama dengan skor terkecil dipakai.
+ *    Bila ketiga titik tetap setiap segmen bertabrakan, label digeser sepanjang segmen (terpanjang
+ *    dulu, langkah 0,5 mm) ke posisi bebas terdekat titik tengah (Swarm 1.2.6 T-04).
  * 3. Tidak ada: label digeser menjauhi segmen dengan garis penunjuk (`leader`).
  * 4. Masih tidak ada: label bernomor; nomor di jalur, teks lengkap di baris catatan di atas kaki.
  *    Teks label tidak pernah dihapus atau dipotong (multiset teks DATA tetap, D-491).
@@ -177,7 +179,40 @@ function onPath(e: EdgeLabelInput, kw: number, W: number, sc: Scorer, self: numb
       if (best && best.hard <= HARD_EPS && best.soft === 0) return best;
     }
   }
-  return best;
+  if (best && best.hard <= HARD_EPS) return best;
+  // Swarm 1.2.6 T-04: the three fixed spots per segment can all sit under a node while the
+  // segment still has free room (e.g. an L path running just below a row of nodes). Before the
+  // caller falls back to a leader line or a number, slide the label along each segment (longest
+  // first) and take a collision-free spot: fewest covered connectors, then nearest the segment
+  // midpoint. Only reached when every fixed spot collides, so placements found above are unchanged.
+  return scanPath(e, kw, W, sc, self) ?? best;
+}
+
+/** T-04: collision-free spot anywhere on a segment, longest segment first (null = none). */
+function scanPath(e: EdgeLabelInput, kw: number, W: number, sc: Scorer, self: number): Cand | null {
+  const stepMm = 0.5;
+  let best: { c: Cand; d: number } | null = null;
+  for (const [a, b] of segOrder(e.points)) {
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    const n = Math.max(1, Math.ceil(len / stepMm));
+    let seg: { c: Cand; d: number } | null = null;
+    for (let k = 0; k <= n; k++) {
+      const t = k / n;
+      const px = a[0] + (b[0] - a[0]) * t;
+      const py = a[1] + (b[1] - a[1]) * t;
+      const x = Math.min(Math.max(px, kw / 2), Math.max(kw / 2, W - kw / 2));
+      const y = py - LABEL_LIFT_MM();
+      const box = knockBox(x, y, kw);
+      const hard = sc.hard(box, self);
+      if (hard > HARD_EPS) continue;
+      const c: Cand = { x, y, box, hard, soft: sc.soft(box, self) };
+      const d = Math.abs(t - 0.5) * len;
+      if (!seg || c.soft < seg.c.soft || (c.soft === seg.c.soft && d < seg.d - 1e-9)) seg = { c, d };
+    }
+    if (seg && seg.c.soft === 0) return seg.c;
+    if (seg && (!best || seg.c.soft < best.c.soft)) best = seg;
+  }
+  return best ? best.c : null;
 }
 
 /**

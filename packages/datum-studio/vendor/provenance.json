@@ -71,15 +71,16 @@
   "row75": "2026-11-12: 1.2.6 row 75 (M-05, U15; register N-053, N-054). 5 vendor files patched (files[].patch_row75, before = previous sha256): services/storage/paths.ts (copied -> patched: datumFileName adds ` rev<N>` after `Rev<X>`), contract/env.ts (DATUM_FILENAME_PATTERN accepts optional ` rev<N>`), services/render/pure/render.ts, services/render/revision.ts, services/render/scope.ts (naming.revisionNo plumbed so every service render passes the stored revision). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/75_row75_diffs/. counts by delta: copied 428 -> 427, patched 138 -> 139, files/replaced/added unchanged; bytes 9856666 + 1607 = 9858273. patch_rows += 75",
   "row76": "2026-11-12: 1.2.6 row 76 (M-06, U5; register E-19, E-20). 3 vendor files patched (files[].patch_row76, before = previous sha256): scripts/studio/mcp/write-normalize.ts (copied -> patched: studio_edit keeps `change`, no ARG_IGNORED), scripts/studio/mcp/write-tools.ts (status unchanged: studio_edit inputSchema change = CHANGE; work-report update adds the change to R12/R13 bodies), scripts/studio/mcp/write-client-run.ts (status unchanged: client-document edit sends the caller change instead of the automatic one). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/76_row76_diffs/. counts by delta: copied 427 -> 426, patched 139 -> 140, files/replaced/added unchanged; bytes 9859975 + 1648 (write-tools.ts +1276, write-client-run.ts +149, write-normalize.ts +223) = 9861623. patch_rows += 76",
   "row69": "2026-11-12: 1.2.6 row 69 (T-16, U5; register E-17, E-18). 1 vendor file re-patched (files[].patch_row69, before = previous sha256; status unchanged): scripts/studio/mcp/figure-tools.ts (mergeFigurePatch deep-merges spec: objects merge, arrays replace, null removes; a spec patch leaving a diagram.schema required key missing is SCHEMA_INVALID naming the key, before any write). Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/69_row69_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9858273 + 1702 = 9859975. patch_rows += 69",
-  "row72": "2026-11-12: 1.2.6 row 72 (T-18/W-10, U5; register N-113, N-114, N-115). 7 vendor files (files[].patch_row72, before = previous sha256): params/figure.ts (copied -> patched, 36089 -> 36997); params/index.ts (re-patched, 2823 -> 2913); registry/lint.ts (re-patched, 22315 -> 22696); registry/slots.ts (copied -> patched, 14214 -> 14403); registry/essentials.ts (re-patched, 20208 -> 20355); engine/lint/structure/checks-d.ts (copied -> patched, 42932 -> 44798); components/studio/template-editor/param-categories.ts (copied -> patched, 18761 -> 18908). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/72_row72_diffs/. counts by delta: copied 426 -> 422, patched 140 -> 144, files/replaced/added unchanged; bytes 9861623 + 3728 = 9865351. patch_rows += 72"
+  "row72": "2026-11-12: 1.2.6 row 72 (T-18/W-10, U5; register N-113, N-114, N-115). 7 vendor files (files[].patch_row72, before = previous sha256): params/figure.ts (copied -> patched, 36089 -> 36997); params/index.ts (re-patched, 2823 -> 2913); registry/lint.ts (re-patched, 22315 -> 22696); registry/slots.ts (copied -> patched, 14214 -> 14403); registry/essentials.ts (re-patched, 20208 -> 20355); engine/lint/structure/checks-d.ts (copied -> patched, 42932 -> 44798); components/studio/template-editor/param-categories.ts (copied -> patched, 18761 -> 18908). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/72_row72_diffs/. counts by delta: copied 426 -> 422, patched 140 -> 144, files/replaced/added unchanged; bytes 9861623 + 3728 = 9865351. patch_rows += 72",
+  "row60": "2026-11-12: 1.2.6 row 60 (T-04, U3; register E-11 LABEL_LEADER, no new name). 1 vendor file patched (files[].patch_row60, before = previous sha256): engine/diagram/fit/labels.ts (copied -> patched, 12694 -> 14653: onPath falls back to NEW scanPath, a 0.5 mm slide along each segment longest first, only when every fixed spot t = 1/2, 1/4, 3/4 collides; leader/number only when no collision-free on-path spot exists). Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/60_row60_diffs/. counts by delta: copied 422 -> 421, patched 144 -> 145, files/replaced/added unchanged; bytes 9865351 + 1959 = 9867310. patch_rows += 60"
  },
  "counts": {
   "files": 608,
-  "copied": 422,
-  "patched": 144,
+  "copied": 421,
+  "patched": 145,
   "replaced": 12,
   "added": 30,
-  "bytes": 9865351
+  "bytes": 9867310
  },
  "files": [
   {
@@ -2553,10 +2554,11 @@
   },
   {
    "path": "src/lib/studio/engine/diagram/fit/labels.ts",
-   "status": "copied",
-   "bytes": 12694,
+   "status": "patched",
+   "bytes": 14653,
    "source_sha256": "b9f4e67979a24d3247e1d60ef34f2f33aa53a8615e742609b4323115133ea38f",
-   "sha256": "b9f4e67979a24d3247e1d60ef34f2f33aa53a8615e742609b4323115133ea38f"
+   "sha256": "e24f81ac0d9aa5691f1c50816e2209d651259bb934d01d2c55210cc95aff41ad",
+   "patch_row60": {"id": "row60-t04-edge-labels", "row": "60", "decision": "1.2.6 patch T-04 edge labels on the longest segment (U3; register E-11 LABEL_LEADER, no new name; 01g §3.4 probe 1 CHAR, alternative L-path fixture FIX)", "summary": "onPath keeps its fixed spots (t = 1/2, 1/4, 3/4 per segment, longest first) and returns early as before; only when every fixed spot collides it now calls NEW scanPath: slide the knockout band along each segment (longest first, 0.5 mm steps), take a collision-free spot with the fewest covered connectors, nearest the segment midpoint; withLeader / numbered only when no such spot exists. Placements that found a free fixed spot are unchanged", "before_sha256": "b9f4e67979a24d3247e1d60ef34f2f33aa53a8615e742609b4323115133ea38f", "after_sha256": "e24f81ac0d9aa5691f1c50816e2209d651259bb934d01d2c55210cc95aff41ad", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/60_row60_diffs/src_lib_studio_engine_diagram_fit_labels.ts.diff", "diff_sha256": "8b794eb651ccb5aeb2121e14e179f6b552422c896866156e8214c62febe82bfc"}
   },
   {
    "path": "src/lib/studio/engine/diagram/fit/lanes.ts",
@@ -6076,6 +6078,7 @@
   "75",
   "69",
   "76",
-  "72"
+  "72",
+  "60"
  ]
 }
