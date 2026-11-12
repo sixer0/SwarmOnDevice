@@ -58,15 +58,16 @@
   "row50a": "2026-11-12: 1.2.6 row 50a (W-13 image guard, C8: SEC-12 header-first pixel limit, SEC-10 metadata detection). 3 vendor files patched (files[].patch_row50a, before = previous sha256; copied -> patched): services/images/{decode,index,sniff}.ts. NEW services/images/metadata.ts (status added). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/50a_row50a_diffs/. counts by delta: files 607 -> 608, added 29 -> 30, copied 441 -> 438, patched 125 -> 128; bytes 9799785 + 994 + 201 + 1680 + 9284 = 9811944. patch_rows += 50a",
   "row50b": "2026-11-12: 1.2.6 row 50b (W-13 route R18, register N-167). 1 vendor file re-patched (files[].patch_row50b, before = previous sha256; status unchanged): scripts/studio/mcp/safety.ts (+1154: PathPurpose \"read-asset\"). Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/50b_row50b_diffs/. counts by delta: bytes +1154",
   "row53a": "2026-11-12: 1.2.6 row 53a (M-01, U1; register N-044, 01d L1 + F3). 3 vendor files patched (files[].patch_row53a, before = previous sha256): scripts/studio/_http-client.ts (copied -> patched: STUDIO_RENDER_CALL_TIMEOUT_MS 540000, StudioUnreachableError.timedOut), scripts/studio/mcp/tool-kit.ts (http() optional timeoutMs forwarded to studioRequest, extra timedOut), scripts/studio/mcp/tools.ts (studio_render passes the render budget; renderTimeoutHint F3). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/53a_row53a_diffs/. counts by delta: files/replaced/added unchanged, copied 438 -> 437, patched 128 -> 129; bytes 9811944 + 766 + 447 + 1030 = 9814187. patch_rows += 53a",
-  "row74b": "2026-11-12: 1.2.6 row 74b (M-03, U5; register cidLine). 1 vendor file re-patched (files[].patch_row74b, before = previous sha256; status unchanged): scripts/studio/mcp/tools.ts (cidLine lists every cid plus an explicit count above 3). Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/74b_row74b_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes unchanged (tools.ts 80786 -> 80786, +0). patch_rows += 74b"
+  "row74b": "2026-11-12: 1.2.6 row 74b (M-03, U5; register cidLine). 1 vendor file re-patched (files[].patch_row74b, before = previous sha256; status unchanged): scripts/studio/mcp/tools.ts (cidLine lists every cid plus an explicit count above 3). Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/74b_row74b_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes unchanged (tools.ts 80786 -> 80786, +0). patch_rows += 74b",
+  "row27": "2026-11-12: 1.2.6 row 27 (T-01, U5; register N-011..N-014). 3 vendor files patched (files[].patch_row27, before = previous sha256): contract/schema/figure-bounds.ts (copied -> patched: CAPTION_GUIDE_MAX_CHARS = 100), contract/schema/v2/figure-text.ts (copied -> patched: CAPTION_TOKEN_DUPLICATE, CAPTION_TOKEN_KEYWORD, CAPTION_TOKEN_RE, captionTokenMessage; figureTextErrorsV2 flags token-led captions of diagram/chart/image/symbolSheet blocks), contract/schema/v2/forbidden.ts (re-patched: classifySchemaV2Errors maps figureCaptionToken to checkId CAPTION_TOKEN_DUPLICATE). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/27_row27_diffs/. counts by delta: files/replaced/added unchanged, copied 435 -> 433, patched 131 -> 133; bytes 9820109 + 384 + 1824 + 521 = 9822838. patch_rows += 27"
  },
  "counts": {
   "files": 608,
-  "copied": 435,
-  "patched": 131,
+  "copied": 433,
+  "patched": 133,
   "replaced": 12,
   "added": 30,
-  "bytes": 9820109
+  "bytes": 9822838
  },
  "files": [
   {
@@ -910,10 +911,11 @@
   },
   {
    "path": "src/lib/studio/contract/schema/figure-bounds.ts",
-   "status": "copied",
-   "bytes": 3609,
+   "status": "patched",
+   "bytes": 3993,
    "source_sha256": "6a529ef235ea5aa75abec0eee3c2e9d6042c79d26fde017fda81b202aa3c5880",
-   "sha256": "6a529ef235ea5aa75abec0eee3c2e9d6042c79d26fde017fda81b202aa3c5880"
+   "sha256": "52f4ed3bb525d9efa6a3e5a0799921f8fb0c52eadf833b8afee01224e90f1d65",
+   "patch_row27": {"id": "row27-t01-caption-token", "row": "27", "decision": "1.2.6 patch T-01 (U5; register N-014)", "summary": "additive: CAPTION_GUIDE_MAX_CHARS = 100 (one-line caption guide limit, cited by the CAPTION_TOKEN_DUPLICATE refusal and the row 28 CAPTION_WRAP FAIL); FIGURE_BOUNDS unchanged (diagramText.title stays 300, E-07). Copied -> patched", "before_sha256": "6a529ef235ea5aa75abec0eee3c2e9d6042c79d26fde017fda81b202aa3c5880", "after_sha256": "52f4ed3bb525d9efa6a3e5a0799921f8fb0c52eadf833b8afee01224e90f1d65", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/27_row27_diffs/src_lib_studio_contract_schema_figure-bounds.ts.diff", "diff_sha256": "1cd7382c88fdb161014b0140b270ae58442f96d326e7cabbb275ac6f795f8e47"}
   },
   {
    "path": "src/lib/studio/contract/schema/html.schema.ts",
@@ -954,17 +956,19 @@
   },
   {
    "path": "src/lib/studio/contract/schema/v2/figure-text.ts",
-   "status": "copied",
-   "bytes": 6048,
+   "status": "patched",
+   "bytes": 7872,
    "source_sha256": "7449c8b411cc3888ed7c311626bfed34b5c94bbfbb29603d3679419cf45da2bf",
-   "sha256": "7449c8b411cc3888ed7c311626bfed34b5c94bbfbb29603d3679419cf45da2bf"
+   "sha256": "c3fe7b64b7e60e643a3be9137011fd9ac0552656e231ca2ff705803a7bf204bf",
+   "patch_row27": {"id": "row27-t01-caption-token", "row": "27", "decision": "1.2.6 patch T-01 (U5; register N-011, N-012, N-013)", "summary": "additive: CAPTION_TOKEN_KEYWORD, CAPTION_TOKEN_DUPLICATE, CAPTION_TOKEN_RE, captionTokenMessage (names the token, the rule and CAPTION_GUIDE_MAX_CHARS 100); figureTextErrorsV2 adds a figureCaptionToken pseudo-error for a diagram/chart/image/symbolSheet block (inline or artifactId) whose plain caption matches CAPTION_TOKEN_RE, so every shared v2 validator (R04, R12/R13, R16) refuses it; render is not gated. Copied -> patched", "before_sha256": "7449c8b411cc3888ed7c311626bfed34b5c94bbfbb29603d3679419cf45da2bf", "after_sha256": "c3fe7b64b7e60e643a3be9137011fd9ac0552656e231ca2ff705803a7bf204bf", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/27_row27_diffs/src_lib_studio_contract_schema_v2_figure-text.ts.diff", "diff_sha256": "4e5b39b61b14fcedbf52dc0e6e1958bdd445ee2b330dd583656d752cb0155058"}
   },
   {
    "path": "src/lib/studio/contract/schema/v2/forbidden.ts",
    "status": "patched",
-   "bytes": 38865,
+   "bytes": 39386,
    "source_sha256": "e6b4380b4f4d9d9f6eff357dc9caa131be88a67af8925c9c388be0970ff9fd32",
-   "sha256": "6759fb91bbfa57d18260704f530d37589f5736ec4f5e146ca2db41cbacddd36c",
+   "sha256": "fe2ed84c5831ec5738ca266ab40c68d1ee6de3a5238637f57f2181b95ef0ca12",
+   "patch_row27": {"id": "row27-t01-caption-token", "row": "27", "decision": "1.2.6 patch T-01 (U5; register N-011)", "summary": "classifySchemaV2Errors maps the figureCaptionToken pseudo-error to an issue {keyword pattern, checkId CAPTION_TOKEN_DUPLICATE} with the figure-text message; doc comment lists it", "before_sha256": "6759fb91bbfa57d18260704f530d37589f5736ec4f5e146ca2db41cbacddd36c", "after_sha256": "fe2ed84c5831ec5738ca266ab40c68d1ee6de3a5238637f57f2181b95ef0ca12", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/27_row27_diffs/src_lib_studio_contract_schema_v2_forbidden.ts.diff", "diff_sha256": "80e30540d714f60994a040982e4e691a8d7c3110d0b939a6af90831b2592d14e"},
    "patch_row174": {"id": "row174-f146b6", "row": "174", "decision": "C218 F146b-6", "summary": "classifySchemaV2Errors: a oneOf with params.passingSchemas >= 2 over a known exclusive field set names the fields given (EXCLUSIVE_FIELD_SETS, exclusiveClash) instead of the bare ajv message", "before_sha256": "e6b4380b4f4d9d9f6eff357dc9caa131be88a67af8925c9c388be0970ff9fd32", "after_sha256": "acab6d6fd1a9281619306bbba7a85ca6300401fb62313ad8459f308816d3f310", "diff": "implementation/155_row174_diffs/forbidden.ts.diff"},
    "patch_row178": {"id": "row178-diagram-refusals", "row": "178", "decision": "row 178 (gateway_check/16 diagram refusals)", "summary": "classifySchemaV2Errors: genericMessage names the allowed property names / object fields / block types read from the schema node of ajv schemaPath (refusal-hints.ts), where a misplaced field belongs, a natural alias (edge color -> kind), and the diagram guide studio://skema/diagram for diagram paths; a diagram/chart oneOf with none of spec|artifactId (data|panels|artifactId) names them and drops the repeated required halves; a DISPLAY_FIELD in a diagram gets a second issue with the allowed fields (DISPLAY_FIELD message unchanged). Schema unchanged.", "before_sha256": "acab6d6fd1a9281619306bbba7a85ca6300401fb62313ad8459f308816d3f310", "after_sha256": "6759fb91bbfa57d18260704f530d37589f5736ec4f5e146ca2db41cbacddd36c", "diff": "implementation/157_row178_diffs/forbidden.ts.diff"}
   },
@@ -5964,6 +5968,7 @@
   "50a",
   "53a",
   "59",
-  "74b"
+  "74b",
+  "27"
  ]
 }

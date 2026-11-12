@@ -14,12 +14,36 @@
  * Dipanggil validator v2 bersama (`services/ingest/validate.ts` `studioValidator`/`validateV2Against`) SESUDAH ajv,
  * sehingga R04, R08, R12/R13, dan R16/R06/R14 menolaknya 400 `SCHEMA_INVALID` `checkId: "FIGURE_TEXT"`.
  */
-import { FIGURE_BOUNDS } from "../figure-bounds";
+import { CAPTION_GUIDE_MAX_CHARS, FIGURE_BOUNDS } from "../figure-bounds";
 import type { AjvErrorLike } from "./forbidden";
 
 /** Keyword galat semu yang dipetakan `classifySchemaV2Errors` ke `checkId: "FIGURE_TEXT"`. */
 export const FIGURE_TEXT_KEYWORD = "figureTextLength";
 export const FIGURE_TEXT_CHECK_ID = "FIGURE_TEXT";
+
+/**
+ * Swarm patch (1.2.6 row 27, T-01, register N-011..N-013): Studio mencetak label "GAMBAR n.m" sendiri, jadi caption
+ * yang diawali token label figur tercetak ganda ("GAMBAR 1.1 Gambar 1.1 ..."). Caption blok figur v2 (diagram,
+ * chart, image, symbolSheet; sebaris maupun rujukan `artifactId`) yang teks polosnya cocok `CAPTION_TOKEN_RE`
+ * ditolak saat kiriman (bab/slot/dokumen) dan saat tambal blok R16 (`studio_figure_revise`) lewat validator v2
+ * bersama, `checkId: "CAPTION_TOKEN_DUPLICATE"`. Render halaman tidak memeriksanya (dokumen tersimpan tetap terbit).
+ */
+export const CAPTION_TOKEN_KEYWORD = "figureCaptionToken";
+export const CAPTION_TOKEN_DUPLICATE = "CAPTION_TOKEN_DUPLICATE";
+export const CAPTION_TOKEN_RE = /^\s*(gambar|figure|fig\.|grafik|bagan|diagram)\s+[A-Z]?\d+(?:[.\-]\d+)*\b/i;
+const CAPTION_TOKEN_BLOCKS: ReadonlySet<unknown> = new Set(["diagram", "chart", "image", "symbolSheet"]);
+
+/** Pesan penolakan: menyebut token yang ditemukan, aturannya, dan batas panjang caption (N-014). */
+export function captionTokenMessage(token: string): string {
+  return `caption diawali token label "${token}": Studio mencetak label GAMBAR n.m sendiri; hapus token dari caption dan tulis isinya saja, maks ${CAPTION_GUIDE_MAX_CHARS} karakter agar muat satu baris (CAPTION_GUIDE_MAX_CHARS = ${CAPTION_GUIDE_MAX_CHARS})`;
+}
+
+function captionToken(out: AjvErrorLike[], block: Rec, at: string): void {
+  const m = CAPTION_TOKEN_RE.exec(figureInlinePlain(block.caption));
+  if (!m) return;
+  const token = m[0].trim();
+  out.push({ instancePath: `${at}/caption`, keyword: CAPTION_TOKEN_KEYWORD, params: { token, limit: CAPTION_GUIDE_MAX_CHARS }, message: captionTokenMessage(token) });
+}
 
 type Rec = Record<string, unknown>;
 const isRec = (v: unknown): v is Rec => typeof v === "object" && v !== null && !Array.isArray(v);
@@ -100,6 +124,7 @@ export function figureTextErrorsV2(data: unknown): AjvErrorLike[] {
       continue;
     }
     if (!isRec(v)) continue;
+    if (CAPTION_TOKEN_BLOCKS.has(v.type) && v.caption !== undefined) captionToken(out, v, p);
     const inline = v.artifactId === undefined;
     if (v.type === "diagram" && inline && isRec(v.spec)) {
       diagramText(out, v, v.spec, p, `${p}/spec`, "diagram");

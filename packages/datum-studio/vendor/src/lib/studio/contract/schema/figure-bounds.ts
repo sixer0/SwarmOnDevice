@@ -72,3 +72,10 @@ export const FIGURE_BOUNDS = {
   /** Ukuran serial JSON (UTF-8) satu spec / satu blok figur. */
   figureBytes: 1024 * 1024,
 } as const;
+
+/**
+ * Swarm patch (1.2.6 row 27, T-01, register N-014): panjang caption figur yang muat satu baris di bawah label
+ * "GAMBAR n.m" (karakter). Batas panduan, bukan batas skema: batas keras tetap `FIGURE_BOUNDS.diagramText.title`
+ * (300, E-07). Dipakai pesan penolakan `CAPTION_TOKEN_DUPLICATE` dan pesan FAIL `CAPTION_WRAP` (row 28).
+ */
+export const CAPTION_GUIDE_MAX_CHARS = 100;

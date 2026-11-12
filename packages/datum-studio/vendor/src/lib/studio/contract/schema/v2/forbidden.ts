@@ -16,7 +16,7 @@
  */
 import { CHART_INTENT_LIMITS, CHART_INTENT_ORIENTATIONS, CHART_INTENT_SORTS, TABLE_BLOCK_TYPES } from "../../enums";
 import type { ValidationIssue } from "../../types/api";
-import { FIGURE_TEXT_CHECK_ID, FIGURE_TEXT_KEYWORD } from "./figure-text";
+import { CAPTION_TOKEN_DUPLICATE, CAPTION_TOKEN_KEYWORD, FIGURE_TEXT_CHECK_ID, FIGURE_TEXT_KEYWORD } from "./figure-text";
 import { DIAGRAM_GUIDE_URI, absoluteSchemaPath, additionalPropertyHint, discriminatorValues, isDiagramPath, objectTypeHint } from "./refusal-hints";
 
 /** C29 — DF-01..DF-52: nama tidak sah di objek mana pun dalam SID01-SID03. */
@@ -730,6 +730,7 @@ function classifyContractError(rootId: SchemaV2RootId, data: unknown, e: AjvErro
  * - medan maksud chart FIG-03a (`orientation`, `sort`, `topN`, `otherLabel`, `labelShort`)
  *   -> `checkId: "CHART_INTENT"` dengan pointer medan yang salah;
  * - teks figur v2 di atas batas render (SEC-FIX3 N-5, keyword semu `figureTextLength`) -> `checkId: "FIGURE_TEXT"`;
+ * - caption figur v2 diawali token label (1.2.6 T-01, keyword semu `figureCaptionToken`) -> `checkId: "CAPTION_TOKEN_DUPLICATE"`;
  * - payload contractRecord dan chart.custom (register 05 §5.4) -> `CONTRACT_ENUM`,
  *   `CONTRACT_PATTERN`, `CONTRACT_DATE`, `CONTRACT_REF_TARGET`, `CHART_CUSTOM_FORM`;
  * - galat lain apa adanya tanpa `checkId`.
@@ -754,6 +755,11 @@ export function classifySchemaV2Errors(
     // SEC-FIX3 N-5: galat semu teks figur (validator v2 bersama, `figure-text.ts`) -> batas render saat kiriman.
     if (e.keyword === FIGURE_TEXT_KEYWORD) {
       push({ pointer: prefix + e.instancePath, keyword: "maxLength", checkId: FIGURE_TEXT_CHECK_ID, message: e.message ?? "teks figur terlalu panjang" });
+      continue;
+    }
+    // Swarm patch (1.2.6 row 27, T-01): caption figur diawali token label (galat semu `figureCaptionToken`).
+    if (e.keyword === CAPTION_TOKEN_KEYWORD) {
+      push({ pointer: prefix + e.instancePath, keyword: "pattern", checkId: CAPTION_TOKEN_DUPLICATE, message: e.message ?? "caption diawali token label figur" });
       continue;
     }
     if (e.keyword === "additionalProperties" && typeof p.additionalProperty === "string") {
