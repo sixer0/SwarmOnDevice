@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="128.0mm" height="80.962mm" viewBox="0 0 128.0 80.962" version="1.1">
+<!-- generator studio engine/diagram (port datum_diagram.py v2.0.0 Garis A, rebuild DHS-RB-04) | family=flow | token=tokens.json -->
+<!-- DATUM-APPARATUS-REQUIRED: caption, source dan baris kunci dicetak oleh halaman, bukan oleh SVG ini (P6, lint cek 36) -->
+<defs>
+<marker id="head-control" markerWidth="4" markerHeight="4" refX="3.4" refY="1.6" orient="auto"><path d="M0,0 L3.6,1.6 L0,3.2" fill="none" stroke="#2B3640" stroke-width="0.35"/></marker>
+</defs>
+<rect x="0" y="0" width="128.0" height="80.962" fill="#FCFCFB"/>
+<path d="M 42.67 13.1 L 47.43 13.1 L 42.67 13.1 L 42.67 16.67 L 48.57 16.67 L 53.33 16.67" fill="none" stroke="#2B3640" stroke-width="0.45" stroke-dasharray="3.2,1.6" marker-end="url(#head-control)" data-mark="link" data-series="control" data-index="0"/>
+<path d="M 42.67 16.67 L 42.67 33.34 L 96.0 33.34 L 96.0 16.67" fill="none" stroke="#2B3640" stroke-width="0.45" stroke-dasharray="3.2,1.6" marker-end="url(#head-control)" data-mark="link" data-series="control" data-index="1"/>
+<path d="M 26.67 23.81 L 26.67 28.57 L 26.67 28.57 L 26.67 28.57 L 26.67 28.57 L 26.67 33.34" fill="none" stroke="#2B3640" stroke-width="0.45" stroke-dasharray="3.2,1.6" marker-end="url(#head-control)" data-mark="link" data-series="control" data-index="2"/>
+<path d="M 42.67 20.24 L 47.43 20.24 L 42.67 20.24 L 42.67 38.1 L 48.57 38.1 L 53.33 38.1" fill="none" stroke="#2B3640" stroke-width="0.45" stroke-dasharray="3.2,1.6" marker-end="url(#head-control)" data-mark="link" data-series="control" data-index="3"/>
+<path d="M 85.33 16.67 L 90.1 16.67 L 85.33 16.67 L 85.33 40.48 L 91.24 40.48 L 96.0 40.48" fill="none" stroke="#2B3640" stroke-width="0.45" stroke-dasharray="3.2,1.6" marker-end="url(#head-control)" data-mark="link" data-series="control" data-index="4"/>
+<path d="M 112.0 23.81 L 112.0 28.57 L 112.0 28.57 L 112.0 28.57 L 112.0 28.57 L 112.0 33.34" fill="none" stroke="#2B3640" stroke-width="0.45" stroke-dasharray="3.2,1.6" marker-end="url(#head-control)" data-mark="link" data-series="control" data-index="5"/>
+<path d="M 26.67 47.62 L 26.67 52.39 L 26.67 52.39 L 26.67 52.39 L 26.67 52.39 L 26.67 57.15" fill="none" stroke="#2B3640" stroke-width="0.45" stroke-dasharray="3.2,1.6" marker-end="url(#head-control)" data-mark="link" data-series="control" data-index="6"/>
+<path d="M 53.33 42.86 L 48.57 42.86 L 53.33 42.86 L 53.33 61.91 L 58.1 61.91 L 53.33 61.91" fill="none" stroke="#2B3640" stroke-width="0.45" stroke-dasharray="3.2,1.6" marker-end="url(#head-control)" data-mark="link" data-series="control" data-index="7"/>
+<path d="M 112.0 47.62 L 112.0 52.39 L 112.0 52.39 L 90.67 52.39 L 90.67 52.39 L 90.67 57.15" fill="none" stroke="#2B3640" stroke-width="0.45" stroke-dasharray="3.2,1.6" marker-end="url(#head-control)" data-mark="link" data-series="control" data-index="8"/>
+<path d="M 53.33 66.67 L 58.1 66.67 L 64.0 66.67 L 64.0 64.29 L 59.24 64.29 L 64.0 64.29" fill="none" stroke="#2B3640" stroke-width="0.45" stroke-dasharray="3.2,1.6" marker-end="url(#head-control)" data-mark="link" data-series="control" data-index="9"/>
+<path d="M 84.43 33.34 A 0.9 0.9 0 0 1 86.23 33.34" fill="none" stroke="#2B3640" stroke-width="0.45"/>
+<rect x="42.49" y="13.85" width="6.26" height="3.54" fill="#FCFCFB"/>
+<text x="45.62" y="16.25" font-family="IBM Plex Mono" font-size="2.081" font-weight="400" fill="#2B3640" text-anchor="middle">SATU</text>
+<rect x="66.78" y="30.52" width="5.1" height="3.54" fill="#FCFCFB"/>
+<text x="69.33" y="32.91" font-family="IBM Plex Mono" font-size="2.081" font-weight="400" fill="#2B3640" text-anchor="middle">DUA</text>
+<rect x="23.54" y="23.38" width="6.26" height="3.54" fill="#FCFCFB"/>
+<text x="26.67" y="25.77" font-family="IBM Plex Mono" font-size="2.081" font-weight="400" fill="#2B3640" text-anchor="middle">TIGA</text>
+<rect x="38.95" y="26.35" width="7.43" height="3.54" fill="#FCFCFB"/>
+<text x="42.67" y="28.75" font-family="IBM Plex Mono" font-size="2.081" font-weight="400" fill="#2B3640" text-anchor="middle">EMPAT</text>
+<rect x="83.95" y="25.76" width="2.77" height="3.54" fill="#FCFCFB"/>
+<text x="85.33" y="28.15" font-family="IBM Plex Mono" font-size="2.081" font-weight="400" fill="#2B3640" text-anchor="middle">A</text>
+<rect x="110.62" y="23.38" width="2.77" height="3.54" fill="#FCFCFB"/>
+<text x="112.0" y="25.77" font-family="IBM Plex Mono" font-size="2.081" font-weight="400" fill="#2B3640" text-anchor="middle">B</text>
+<rect x="25.28" y="47.19" width="2.77" height="3.54" fill="#FCFCFB"/>
+<text x="26.67" y="49.58" font-family="IBM Plex Mono" font-size="2.081" font-weight="400" fill="#2B3640" text-anchor="middle">C</text>
+<rect x="51.95" y="49.57" width="2.77" height="3.54" fill="#FCFCFB"/>
+<text x="53.33" y="51.96" font-family="IBM Plex Mono" font-size="2.081" font-weight="400" fill="#2B3640" text-anchor="middle">D</text>
+<rect x="99.95" y="49.57" width="2.77" height="3.54" fill="#FCFCFB"/>
+<text x="101.33" y="51.96" font-family="IBM Plex Mono" font-size="2.081" font-weight="400" fill="#2B3640" text-anchor="middle">E</text>
+<rect x="59.67" y="63.86" width="2.77" height="3.54" fill="#FCFCFB"/>
+<text x="61.05" y="66.25" font-family="IBM Plex Mono" font-size="2.081" font-weight="400" fill="#2B3640" text-anchor="middle">F</text>
+<rect x="10.67" y="9.52" width="32.0" height="14.29" data-node="n1" fill="none" stroke="#2B3640" stroke-width="0.45" data-mark="node" data-index="0"/>
+<text x="26.67" y="16.67" font-family="IBM Plex Sans Condensed" font-size="2.681" font-weight="400" fill="#101418" text-anchor="middle">Masukan diterima</text>
+<rect x="53.33" y="9.52" width="32.0" height="14.29" data-node="n2" fill="none" stroke="#2B3640" stroke-width="0.45" data-mark="node" data-index="1"/>
+<text x="69.33" y="16.67" font-family="IBM Plex Sans Condensed" font-size="2.681" font-weight="400" fill="#101418" text-anchor="middle">Cabang pertama</text>
+<rect x="96.0" y="9.52" width="31.77" height="14.29" data-node="n3" fill="none" stroke="#2B3640" stroke-width="0.45" data-mark="node" data-index="2"/>
+<text x="112.0" y="16.67" font-family="IBM Plex Sans Condensed" font-size="2.681" font-weight="400" fill="#101418" text-anchor="middle">Cabang kedua</text>
+<rect x="10.67" y="33.34" width="32.0" height="14.29" data-node="n4" fill="none" stroke="#2B3640" stroke-width="0.45" data-mark="node" data-index="3"/>
+<text x="26.67" y="40.48" font-family="IBM Plex Sans Condensed" font-size="2.681" font-weight="400" fill="#101418" text-anchor="middle">Cabang ketiga</text>
+<rect x="53.33" y="33.34" width="32.0" height="14.29" data-node="n5" fill="none" stroke="#2B3640" stroke-width="0.45" data-mark="node" data-index="4"/>
+<text x="69.33" y="40.48" font-family="IBM Plex Sans Condensed" font-size="2.681" font-weight="400" fill="#101418" text-anchor="middle">Cabang keempat</text>
+<rect x="96.0" y="33.34" width="31.77" height="14.29" data-node="n6" fill="none" stroke="#2B3640" stroke-width="0.45" data-mark="node" data-index="5"/>
+<text x="112.0" y="40.48" font-family="IBM Plex Sans Condensed" font-size="2.681" font-weight="400" fill="#101418" text-anchor="middle">Gabungan awal</text>
+<rect x="0.23" y="57.15" width="53.1" height="14.29" data-node="n7" fill="none" stroke="#2B3640" stroke-width="0.45" data-mark="node" data-index="6"/>
+<text x="26.67" y="64.29" font-family="IBM Plex Sans Condensed" font-size="2.681" font-weight="400" fill="#101418" text-anchor="middle">Gabungan akhir</text>
+<rect x="64.0" y="57.15" width="53.33" height="14.29" data-node="n8" fill="none" stroke="#2B3640" stroke-width="0.45" data-mark="node" data-index="7"/>
+<text x="90.67" y="64.29" font-family="IBM Plex Sans Condensed" font-size="2.681" font-weight="400" fill="#101418" text-anchor="middle">Keluaran akhir</text>
+</svg>

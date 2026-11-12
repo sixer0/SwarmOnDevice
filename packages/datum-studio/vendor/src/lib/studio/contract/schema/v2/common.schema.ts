@@ -203,6 +203,8 @@ const DIAGRAM_SPEC_V2 = obj(
     legend: DIAGRAM_V1_PROPS.legend,
     notes: DIAGRAM_V1_PROPS.notes,
     per_row: DIAGRAM_V1_PROPS.per_row,
+    // Swarm 1.2.6 row 45 (T-11, N-109): same enum as v1.
+    direction: DIAGRAM_V1_PROPS.direction,
   },
   ["family", "nodes"],
 );

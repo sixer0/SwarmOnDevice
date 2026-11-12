@@ -67,6 +67,7 @@ import type { ContractKind } from "../../contract/enums";
 import { StudioEngineError } from "../../contract/errors";
 import type { ChartCustomFormV2, ContractRecordPayloadV2, SubmitWarningV2 } from "../../contract/types/v2/contract";
 import { allowedWidthsText, figureLimits, isAllowedWidth, type FigureLimits } from "../../engine/chart/core/guards";
+import { directionIssue } from "../../engine/diagram/core/spec";
 import { CHART_CUSTOM_FORM_IDS, resolveChartCustom } from "../../registry/charts";
 import { CONTRACT_KIND_DEFS, CONTRACT_RECORD_SECTION_TYPE, isContractKind } from "../../registry/contracts";
 import { checkContractRecord, resolveContractRefs, summarizeContractChecks, type ContractRefReader, type ResolvedContractRef } from "../contracts";
@@ -173,8 +174,10 @@ export function evaluateByConstruction(i: ByConstructionInput): ByConstructionRe
     }
   }
   const feasibility = renderFeasibilityBlockers(view, new Map(), i.snapshot.doc);
+  // Swarm 1.2.6 row 45 (T-11, N-159): `P1-direction` on the merged v2 content, before any build (integrity, like D03).
+  const direction = diagramDirectionIssues(i.snapshot.source, "");
   const contract = checkContractTargets(contractRecordTargets(i.snapshot, { contractKind: i.contractKind, contractPointer: i.contractPointer }));
-  return { lint: gate.lint, blocking: [...blocking, ...feasibility], downgraded: gate.downgraded, deferred, enforcement, contract };
+  return { lint: gate.lint, blocking: [...blocking, ...feasibility, ...direction], downgraded: gate.downgraded, deferred, enforcement, contract };
 }
 
 // ── Kontrak dokumen (DC-08) ─────────────────────────────────────────────
@@ -404,6 +407,36 @@ export function v1FigureSizeIssues(doc: unknown, params: ParamMap, ptr: string):
       }
     }
     for (const [k, v] of Object.entries(node)) if (!(figure && k === "spec")) visit(v, joinPointer(p, k));
+  };
+  visit(doc, ptr);
+  return issues;
+}
+
+/**
+ * Swarm 1.2.6 row 45 (T-11, N-159, 01e §6.3-6.4; D-271 pattern): every inline diagram block (`type: "diagram"`, a
+ * `spec` object, no `artifactId`) whose `direction` is set on a family other than `flow`, together with `per_row`, or
+ * with a value outside TB/LR gets one `P1-direction` issue with the same text as `validateSpec`
+ * (`directionIssue`). Pointer = `<ptr>/.../spec/direction` (or `/spec/per_row`). Pure, no I/O; the caller refuses
+ * 422 `BY_CONSTRUCTION_FAILED`. Specs without `direction` give nothing (legacy unchanged).
+ */
+export function diagramDirectionIssues(doc: unknown, ptr: string): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+  const visit = (node: unknown, p: string): void => {
+    if (Array.isArray(node)) {
+      node.forEach((x, i) => visit(x, joinPointer(p, i)));
+      return;
+    }
+    if (!isObject(node)) return;
+    const spec = node.spec;
+    const inline = node.type === "diagram" && isObject(spec) && !("artifactId" in spec);
+    if (inline) {
+      const d = directionIssue(spec);
+      if (d) {
+        const sp = joinPointer(p, "spec");
+        issues.push({ pointer: `${sp}${d.pointer}`, keyword: "byConstruction", message: `P1-direction: ${d.detail}`, checkId: "P1-direction" });
+      }
+    }
+    for (const [k, v] of Object.entries(node)) if (!(inline && k === "spec")) visit(v, joinPointer(p, k));
   };
   visit(doc, ptr);
   return issues;

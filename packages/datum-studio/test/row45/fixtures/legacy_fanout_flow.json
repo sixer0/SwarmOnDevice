@@ -1,0 +1,116 @@
+{
+  "$schema": "studio.diagram/v1",
+  "family": "flow",
+  "id": "1.1",
+  "title": "Alur uji bercabang empat tanpa arah.",
+  "classification": "BIASA",
+  "width_mm": 128,
+  "labels_verified": true,
+  "sources": [
+    "Uji baris 45."
+  ],
+  "nodes": [
+    {
+      "id": "n1",
+      "label": "Masukan diterima",
+      "class": {}
+    },
+    {
+      "id": "n2",
+      "label": "Cabang pertama",
+      "class": {}
+    },
+    {
+      "id": "n3",
+      "label": "Cabang kedua",
+      "class": {}
+    },
+    {
+      "id": "n4",
+      "label": "Cabang ketiga",
+      "class": {}
+    },
+    {
+      "id": "n5",
+      "label": "Cabang keempat",
+      "class": {}
+    },
+    {
+      "id": "n6",
+      "label": "Gabungan awal",
+      "class": {}
+    },
+    {
+      "id": "n7",
+      "label": "Gabungan akhir",
+      "class": {}
+    },
+    {
+      "id": "n8",
+      "label": "Keluaran akhir",
+      "class": {}
+    }
+  ],
+  "edges": [
+    {
+      "from": "n1",
+      "to": "n2",
+      "kind": "control",
+      "label": "satu"
+    },
+    {
+      "from": "n1",
+      "to": "n3",
+      "kind": "control",
+      "label": "dua"
+    },
+    {
+      "from": "n1",
+      "to": "n4",
+      "kind": "control",
+      "label": "tiga"
+    },
+    {
+      "from": "n1",
+      "to": "n5",
+      "kind": "control",
+      "label": "empat"
+    },
+    {
+      "from": "n2",
+      "to": "n6",
+      "kind": "control",
+      "label": "a"
+    },
+    {
+      "from": "n3",
+      "to": "n6",
+      "kind": "control",
+      "label": "b"
+    },
+    {
+      "from": "n4",
+      "to": "n7",
+      "kind": "control",
+      "label": "c"
+    },
+    {
+      "from": "n5",
+      "to": "n7",
+      "kind": "control",
+      "label": "d"
+    },
+    {
+      "from": "n6",
+      "to": "n8",
+      "kind": "control",
+      "label": "e"
+    },
+    {
+      "from": "n7",
+      "to": "n8",
+      "kind": "control",
+      "label": "f"
+    }
+  ]
+}

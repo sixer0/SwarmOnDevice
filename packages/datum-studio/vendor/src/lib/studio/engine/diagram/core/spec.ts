@@ -80,6 +80,7 @@ export const SPEC_CHECK_IDS = [
   "P1-width_mm",
   "P1-apparatus",
   "P1-sources",
+  "P1-direction",
   "P1-nodes+P3-shapes",
   "DATUM-35",
   "DATUM-24",
@@ -203,6 +204,39 @@ export interface ValidateSpecOptions {
   grid?: DiagramGrid;
 }
 
+/** Swarm 1.2.6 row 45 (T-11, N-109): values of the ranked flow `direction` (schema enum, mirrored here). */
+const DIRECTION_VALUES: ReadonlySet<unknown> = new Set(["TB", "LR"]);
+
+/**
+ * Swarm 1.2.6 row 45 (T-11, N-159, 01e §6.3-6.4): the `P1-direction` defect of a diagram spec, or null.
+ * One text for `validateSpec` (build/preview) and the by-construction gate at submit (D-271 pattern).
+ * `pointer` is relative to the spec. Absent `direction` = legacy flow = null (no change for stored figures).
+ * A value outside TB/LR is refused here too (defence in depth behind the schema enum, SEC-23), so a spec that
+ * bypassed the schema never reaches a layout or ELK option with it.
+ */
+export function directionIssue(spec: unknown): { detail: string; pointer: string } | null {
+  if (!isObj(spec) || !has(spec, "direction") || spec.direction === undefined) return null;
+  const v = spec.direction;
+  if (!DIRECTION_VALUES.has(v)) {
+    const shown = typeof v === "string" ? JSON.stringify(v.slice(0, 16)) : typeof v;
+    return { detail: `direction ${shown} harus "TB" atau "LR" (arah kanan-ke-kiri atau bawah-ke-atas tidak didukung)`, pointer: "/direction" };
+  }
+  const fam = typeof spec.family === "string" ? spec.family : pyStr(spec.family);
+  if (fam !== "flow") {
+    const hint =
+      fam === "layered" || fam === "topology" || fam === "stack"
+        ? `arah tingkat (class.tier) tetap atas-bawah; untuk alur kiri-kanan pakai family flow + direction "LR", atau graph + class.col/row`
+        : fam === "graph"
+          ? "kolom diatur class.col/row; hapus direction"
+          : "hapus direction";
+    return { detail: `direction hanya untuk family flow (family '${fam.slice(0, 32)}'); ${hint}`, pointer: "/direction" };
+  }
+  if (has(spec, "per_row") && spec.per_row !== undefined) {
+    return { detail: "per_row membungkus urutan daftar, direction menata menurut konektor; pakai salah satu", pointer: "/per_row" };
+  }
+  return null;
+}
+
 /**
  * Validasi penuh spek. Mengembalikan entri per cek (PASS) atau per pelanggaran
  * (FAIL, `detail` = pesan Python, `pointer` = JSON pointer medan).
@@ -277,6 +311,15 @@ export function validateSpec(s: StudioDiagramV1, opts: ValidateSpecOptions = {})
     fail("P1-sources", "sumber wajib: minimal satu dokumen+klausul (P1 sources[])", "/sources");
   }
   pass("P1-sources", mark);
+
+  // P1-direction (Swarm 1.2.6 row 45, T-11, N-159): flow only, never with per_row, value TB or LR. Runs (and is
+  // listed in `ran`) only when the spec carries `direction`, so a legacy spec keeps its 1.2.5 report unchanged.
+  if (has(spec, "direction")) {
+    mark = out.length;
+    const dir = directionIssue(spec);
+    if (dir) fail("P1-direction", dir.detail, dir.pointer);
+    pass("P1-direction", mark);
+  }
 
   // P1-nodes+P3-shapes
   mark = out.length;

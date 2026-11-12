@@ -282,6 +282,8 @@ export function diagramSpec(spec: DiagramSpecV2, title: string, sourceText: stri
   if (spec.legend) out.legend = spec.legend;
   if (spec.notes) out.notes = spec.notes;
   if (spec.per_row !== undefined) out.per_row = spec.per_row;
+  // Swarm 1.2.6 row 45 (T-11): allow-list copy, otherwise the field is dropped silently before the v1 build.
+  if (spec.direction !== undefined) out.direction = spec.direction;
   return out;
 }
 
