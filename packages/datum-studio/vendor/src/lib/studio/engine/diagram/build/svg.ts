@@ -67,6 +67,7 @@ import { reorderPlaced } from "./order";
 import { capacityRetry, isCapacityReject, withAction } from "./capacity";
 import { crossingHops, routePlaced, type HoppedEdge } from "./route";
 import { canonicalSymbolId } from "../../symbols";
+import { colourCountDetail, diagramColourSources } from "../core/colour"; // row 62 (T-06)
 
 /**
  * Laporan rakitan (HS `report`) di atas `SvgResult.report`.
@@ -613,7 +614,8 @@ function buildOnce(s: StudioDiagramV1, opts: DiagramBuildOptions, deps: DiagramB
   const used = svgColourValues(svg);
   if (used.length > LIMITS.max_colour_values) {
     throw new DiagramDefect(
-      `DATUM-25: ${used.length} nilai warna dalam satu gambar, maksimum ${LIMITS.max_colour_values} (temuan E-16: plafon ini nyata) (P5/P8)`,
+      // Swarm 1.2.6 row 62 (T-06): name each counted value, its sources and the remainder.
+      `DATUM-25: ${used.length} nilai warna dalam satu gambar, maksimum ${LIMITS.max_colour_values} (temuan E-16: plafon ini nyata) (P5/P8); ${colourCountDetail(used, diagramColourSources(s, sheet), LIMITS.max_colour_values)}`,
       { checkId: "DATUM-25" },
     );
   }
