@@ -38,6 +38,7 @@ import {
   subagentStoppedMessage,
 } from "../../src/permission/autonomy-texts"
 import { ScriptReader } from "../../src/permission/script-reader"
+import { APP_STATE, PLAN_MODE } from "./consented-literals"
 import { InstanceBootstrap } from "../../src/project/bootstrap"
 import { InstanceStore } from "../../src/project/instance-store"
 import { MessageID, PartID, type SessionID } from "../../src/session/schema"
@@ -52,7 +53,11 @@ import { expectNoManifestAbove } from "./install-fixture"
 // The oracle's texts (spec section 1 and section 2 "Agent answer"; T6 for the suffix).
 // ---------------------------------------------------------------------------------------------------------------------
 
-/** `RefusedByModeError` (index.ts, spec rows 12-13): copied here on purpose, so a change of the text fails this test. */
+/**
+ * `RefusedByModeError` (index.ts): copied here on purpose, so a change of the text fails this test. 1.2.6 row 39 (P-01d,
+ * INTENT f113-matrix.test.ts:696 per 01g 3.6): rows 12-13 and the gate's NEVER_OPENED plan_mode/app_state now get their
+ * own texts (`PLAN_MODE`, `APP_STATE` in consented-literals.ts); this text is left for an X with no category.
+ */
 const REFUSED_BY_MODE_TEXT =
   "This call did not run. Autonomous mode never allows this kind of call, whoever is asked. Do not try to get the same effect another way. Carry on with everything that does not depend on it, and list what was refused in your final message."
 const CREDENTIAL_CONSENTED = `${CREDENTIAL_CHANGE_TEXT} ${CONSENT_CONTINUE_SUFFIX}`
@@ -449,11 +454,11 @@ describe("1.1.3 matrix rows 1-23: categories", () => {
   it.instance("row 11 folder_not_trusted (the folder state unreadable): runs / M", () =>
     both("row 11", bash("bun test"), runs("folder_not_trusted"), realTableWith({ folder: undefined })),
   )
-  it.instance("row 12 plan_mode: refused (unchanged), RefusedByModeError text / F", () =>
-    refusedBoth("row 12", { permission: "edit", patterns: ["src/a.ts"], metadata: { filepath: "src/a.ts" }, editClass: "ordinary", plan: true }, answered(REFUSED_BY_MODE_TEXT, "X", "plan_mode", "F")),
+  it.instance("row 12 plan_mode: refused (unchanged), its own text (1.2.6 row 39) / F", () =>
+    refusedBoth("row 12", { permission: "edit", patterns: ["src/a.ts"], metadata: { filepath: "src/a.ts" }, editClass: "ordinary", plan: true }, answered(PLAN_MODE, "X", "plan_mode", "F")),
   )
-  it.instance("row 13 app_state: refused (unchanged), RefusedByModeError text / F", () =>
-    refusedBoth("row 13", { permission: "edit", patterns: ["state"], metadata: { filepath: path.join(Global.Path.state, "autonomy", "x.json") } }, answered(REFUSED_BY_MODE_TEXT, "X", "app_state", "F")),
+  it.instance("row 13 app_state: refused (unchanged), its own text (1.2.6 row 39) / F", () =>
+    refusedBoth("row 13", { permission: "edit", patterns: ["state"], metadata: { filepath: path.join(Global.Path.state, "autonomy", "x.json") } }, answered(APP_STATE, "X", "app_state", "F")),
   )
   it.instance("row 14 asks_every_time (a person's \"*\": \"ask\"): runs / M", () =>
     both("row 14", bash("ls -la", {}, { catchAll: true }), runs("asks_every_time")),
@@ -707,8 +712,9 @@ const NEVER_OPENED: Readonly<Record<string, readonly [string, Section]>> = {
   outside_write: [OUTSIDE_WRITE_TEXT, "F"],
   // Row 202: a secret or system place outside the project, refused with or without consent.
   protected_path: [PROTECTED_PATH_TEXT, "F"],
-  plan_mode: [REFUSED_BY_MODE_TEXT, "F"],
-  app_state: [REFUSED_BY_MODE_TEXT, "F"],
+  // 1.2.6 row 39 (P-01d, INTENT): their own texts, not the general refusal.
+  plan_mode: [PLAN_MODE, "F"],
+  app_state: [APP_STATE, "F"],
 }
 
 /**

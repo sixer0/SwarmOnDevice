@@ -162,7 +162,8 @@ it.instance("F6: class X is refused whatever \"always\" a person gave before, an
 
     const failure = failureOf(yield* settled(editCall(root.id, target, { agent: "plan" })))
     expect(failure).toBeInstanceOf(PermissionV1.DeniedError)
-    expect((failure as Error).message).toContain("Autonomous mode never allows")
+    // 1.2.6 row 39 (P-01d, INTENT): plan_mode is refused with its own text, which names the way on.
+    expect((failure as Error).message).toContain("The plan agent only reads and writes its plan file.")
     expect(stub.calls).toEqual([])
     expect((yield* decisions(root.id)).map((line) => [line.class, line.category, line.decision])).toEqual([
       ["X", "plan_mode", "reject"],

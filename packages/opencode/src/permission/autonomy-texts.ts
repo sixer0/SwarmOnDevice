@@ -4,15 +4,20 @@
 export const OUTSIDE_WRITE_TEXT =
   "This call did not run. Autonomous mode only reads outside the project folder. Copy the file into the project first (read it, then write the copy inside the project) and change the copy. The original stays as it is."
 
-/** Row 202: a file tool's read or write of a protected place outside the project (X `protected_path`). */
+/**
+ * Row 202: a file tool's write of a protected place outside the project (X `protected_path`). 1.2.6 (P-01d, U12): reads of
+ * such a place run as `protected_read`, so the text speaks of writes only and names the way on: a copy inside the project.
+ */
 export const PROTECTED_PATH_TEXT =
-  "This call did not run. Autonomous mode never reads or writes a protected place outside the project: keys and credentials (such as ~/.ssh, ~/.gnupg, ~/.aws, a keychain or Swarm's auth.json), the system's folders or the Swarm app. Do not try to get the same effect another way. Carry on with everything that does not depend on it, and list it in your final message so the person can do it themselves."
+  "This call did not run. Autonomous mode never writes to a protected place: keys and credentials (such as ~/.ssh, ~/.gnupg, ~/.aws, a keychain or Swarm's auth.json), the system's folders or the Swarm app. Reading them is allowed. To change such a file, write the new content to a file inside the project and list it in your final message so the person can put it in place."
 
+/** X `delete_compound`. 1.2.6 (P-01d): also names the checkpoint way, a plain command that names its files. */
 export const DELETE_COMPOUND_TEXT =
-  "This call did not run. In autonomous mode a deletion must be a command of its own (rm, rmdir, unlink or git rm with paths only), so Swarm can move the paths to the archive instead."
+  "This call did not run. In autonomous mode a deletion must be a command of its own (rm, rmdir, unlink or git rm with paths only) so Swarm can move the paths to the archive, or a plain command that names its files so Swarm can checkpoint them first."
 
+/** X `credential_change`. 1.2.6 (P-01d): names the way on, the person runs it from the final message. */
 export const CREDENTIAL_CHANGE_TEXT =
-  "This call did not run. Autonomous mode never adds or changes a remote, a credential or a git account."
+  "This call did not run. Autonomous mode never adds or changes a remote, a credential or a git account. List the remote or credential change in your final message, with the exact command, so the person can run it."
 
 /** 1.1.1 (S0.3): refused under the consented bypass, since nothing can undo it. 1.1.3: no longer given out (now
  * `IRREVERSIBLE_ARCHIVE_TEXT`); kept for review (T5). */
@@ -25,14 +30,19 @@ export const ADMIN_RIGHTS_TEXT =
 
 /**
  * 1.1.3 (T3): under consent, a deletion or replacement the shell will not move to the archive does not wait; the agent is
- * told at once how to archive first (X `not_reversible`).
+ * told at once how to archive first (X `not_reversible`). 1.2.6 (P-01d, U6): `not_reversible` is left for a real
+ * deletion or replacement whose files Swarm could not tell (I-U), so the text says why and how to name them.
  */
 export const ARCHIVE_FIRST_TEXT =
-  "This call did not run. In autonomous mode Swarm does not delete or replace anything it cannot move to the archive first. Archive first: delete with a command of its own (rm, rmdir, unlink or git rm with paths only, inside the project), which Swarm moves to .swarm/archive, or copy the file to a new name before you replace it. Then carry on, and list anything you could not do this way in your final message."
+  "This call did not run. In autonomous mode Swarm does not delete or replace anything it cannot save first, and Swarm could not tell which files this changes, so it could not save them first. Write it as plain commands that name the files (no -c text, no script, no find -delete); Swarm then archives or checkpoints them and runs it. A deletion as a command of its own (rm, rmdir, unlink or git rm with paths only, inside the project) is moved to .swarm/archive. Then carry on, and list anything you could not do this way in your final message."
 
-/** 1.1.3 (T3): under consent, an action nothing can undo is answered at once with the archive or snapshot way (X `irreversible`). */
+/**
+ * 1.1.3 (T3): under consent, an action nothing can undo is answered at once (X `irreversible`). 1.2.6 (P-01d, RA-5):
+ * `irreversible` means an action outside this computer's files (a remote or the host); local ones are checkpointed or
+ * refused `checkpoint_failed`. Nothing here can undo it, so the way on is the person.
+ */
 export const IRREVERSIBLE_ARCHIVE_TEXT =
-  "This call did not run. In autonomous mode Swarm never runs an action nothing can undo (such as git reset --hard, git clean, a force push, rewriting history, dropping a table or wiping a disk). Archive or snapshot first, then use a way that can be undone: delete files with a command of its own (rm, rmdir, unlink or git rm with paths only) so Swarm moves them to the archive, commit or create a branch before you change history, and copy a table or file before you replace it. Carry on with everything that does not depend on it, and list it in your final message."
+  "This call did not run. This acts outside this computer's files (a force push, a remote or cloud deletion, a shutdown), which no checkpoint can undo, so autonomous mode never runs it. Ask the person: open a decision with studio_mission_request_decision, or list it in your final message with the exact command so the person can run it. Carry on with everything that does not depend on it."
 
 /** 1.1.3: the gate's answer when a consented call could not be judged or recorded (X `not_routine`); nothing waits. */
 export const UNJUDGED_TEXT =
@@ -44,7 +54,53 @@ export const UNJUDGED_TEXT =
  * 1.1.0 holds it, so this text is never given there.
  */
 export const STOPS_SWARM_TEXT =
-  "This call did not run. In autonomous mode Swarm never stops its own app or server, since that would stop this run as well."
+  "This call did not run. In autonomous mode Swarm never stops its own app or server, since that would stop this run as well. Stop only processes this run started, by their process id, or leave it running and list it in your final message."
+
+/** 1.2.6 (P-01d): X `plan_mode`, a plan agent's change outside its plan file. Module-local (N-149). */
+const PLAN_MODE_TEXT =
+  "This call did not run. The plan agent only reads and writes its plan file. Put the change in the plan, or hand it to the build agent."
+
+/** 1.2.6 (P-01d, SEC-04): X `app_state`, an agent's write to Swarm's own state or settings (tool-health.json included). */
+const APP_STATE_TEXT =
+  "This call did not run. Autonomous mode never changes Swarm's own state or settings. Write what should change into your final message for the person."
+
+/** 1.2.6 (P-01d): X `folder_not_trusted`, an agent's ask to trust a folder. Module-local (N-149). */
+const FOLDER_NOT_TRUSTED_TEXT =
+  "This call did not run. Only the person can trust a folder. Carry on with reads and with work that runs nothing of this folder, and list it in your final message."
+
+/**
+ * 1.2.6 (P-01b/P-01d, N-075/N-076): X `checkpoint_failed`, an irreversible local action whose checkpoint could not be
+ * made. Without a reason; `checkpointFailedText` adds one from the closed list below, never command text (TX-4).
+ */
+export const CHECKPOINT_FAILED_TEXT =
+  "This call did not run. Swarm could not save a checkpoint of what it changes first, so it does not run it. Make your own copy inside the project (for example a dump file), or ask the person to run it, and list it in your final message."
+
+/**
+ * The closed reason list of `checkpointFailedText`: the failures of `ActionCheckpoint.create` (tool/checkpoint.ts,
+ * `Failure`, row 37a) plus `not_files` for data a file checkpoint cannot hold (a database, a service's data, a device: I-N).
+ * Each phrase is fixed text; nothing from the call reaches the agent through it.
+ */
+const CHECKPOINT_FAILED_REASON = {
+  not_files: "it changes a database, a service's data or a device, which a checkpoint of files cannot hold",
+  folder: "the project folder could not be read",
+  outside: "it changes a file outside the project",
+  checkpoint: "it changes Swarm's checkpoint folder itself",
+  checkpoint_link: "the checkpoint folder is a link or not what it should be",
+  unreadable: "a file it changes could not be read",
+  too_large: "the copy would be larger than 1 GiB",
+  git: "the Git state it changes could not be recorded",
+  mismatch: "a copy did not match its original",
+  failed: "the copy could not be written",
+} as const
+
+export type CheckpointFailedReason = keyof typeof CHECKPOINT_FAILED_REASON
+
+/** `CHECKPOINT_FAILED_TEXT` with the reason named. A reason outside the closed list is dropped, never echoed. */
+export function checkpointFailedText(reason: string | undefined): string {
+  if (reason === undefined || !Object.hasOwn(CHECKPOINT_FAILED_REASON, reason)) return CHECKPOINT_FAILED_TEXT
+  const phrase = CHECKPOINT_FAILED_REASON[reason as CheckpointFailedReason]
+  return CHECKPOINT_FAILED_TEXT.replace("what it changes first,", `what it changes first (${phrase}),`)
+}
 
 /**
  * 1.1.3 (T6): appended, after one space, to the refusal of `credential_change` and `admin_rights` on the consented path
@@ -61,6 +117,8 @@ export const ARCHIVE_REDIRECT: ReadonlySet<string> = new Set(["not_reversible", 
 /**
  * The class X categories whose refusal names its own way on; any other X gets the general refusal. 1.1.3: `not_reversible`,
  * `not_routine` and `process_not_own` are class X only under consent, and `irreversible` is refused only under consent (`underConsent`).
+ * 1.2.6 (P-01d): every X category a classifier can return has its text; only an X with no category (a person's `deny`
+ * rule, an agent's `autonomy_consent` ask) keeps the general refusal, which names no tool (INV-7).
  */
 export const REFUSED_TEXT: Readonly<
   Record<
@@ -72,7 +130,11 @@ export const REFUSED_TEXT: Readonly<
     | "admin_rights"
     | "not_reversible"
     | "not_routine"
-    | "process_not_own",
+    | "process_not_own"
+    | "plan_mode"
+    | "app_state"
+    | "folder_not_trusted"
+    | "checkpoint_failed",
     string
   >
 > = {
@@ -86,6 +148,10 @@ export const REFUSED_TEXT: Readonly<
   not_routine: UNJUDGED_TEXT,
   // 1.1.3 (T7 F4): class X only under consent (`noWait`); without consent `process_not_own` is a hold, never refused.
   process_not_own: STOPS_SWARM_TEXT,
+  plan_mode: PLAN_MODE_TEXT,
+  app_state: APP_STATE_TEXT,
+  folder_not_trusted: FOLDER_NOT_TRUSTED_TEXT,
+  checkpoint_failed: CHECKPOINT_FAILED_TEXT,
 }
 
 /**

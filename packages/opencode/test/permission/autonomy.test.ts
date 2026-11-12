@@ -16,6 +16,7 @@ import { NodeServices } from "@effect/platform-node"
 import { Cause, ConfigProvider, Effect, Exit, Fiber, Layer, Schema } from "effect"
 import { HttpClient, HttpClientRequest, HttpRouter, HttpServer } from "effect/unstable/http"
 import { loopbackServer } from "./loopback-server"
+import { APP_STATE, CREDENTIAL_CHANGE, DELETE_COMPOUND } from "./consented-literals"
 import { HttpApiBuilder } from "effect/unstable/httpapi"
 import { layerWebSocketConstructorGlobal } from "effect/unstable/socket/Socket"
 import { CrossSpawnSpawner } from "@opencode-ai/core/cross-spawn-spawner"
@@ -1031,7 +1032,9 @@ it.instance("class X speaks for itself, with no rule nobody wrote", () =>
       }),
     )
     expect(error).toBeInstanceOf(PermissionV1.DeniedError)
-    expect((error as PermissionV1.DeniedError).message).toBe(REFUSED_TEXT)
+    // 1.2.6 row 39 (P-01d, INTENT): app_state has its own text now; it still names no rule.
+    expect((error as PermissionV1.DeniedError).message).toBe(APP_STATE)
+    expect((error as PermissionV1.DeniedError).message).not.toContain("rule")
     expect(SessionProcessor.notRunMetadata(error)).toEqual({ notRun: "declined" })
   }),
 )
@@ -1140,16 +1143,15 @@ test("each new class X category tells the agent what the register says", () => {
   expect(text("outside_write")).toBe(
     "This call did not run. Autonomous mode only reads outside the project folder. Copy the file into the project first (read it, then write the copy inside the project) and change the copy. The original stays as it is.",
   )
-  expect(text("delete_compound")).toBe(
-    "This call did not run. In autonomous mode a deletion must be a command of its own (rm, rmdir, unlink or git rm with paths only), so Swarm can move the paths to the archive instead.",
-  )
-  expect(text("credential_change")).toBe(
-    "This call did not run. Autonomous mode never adds or changes a remote, a credential or a git account.",
-  )
-  // A refusal is still a refusal of the call, not a stop of the run; other categories keep the general text.
+  // 1.2.6 row 39 (P-01d, INTENT): delete_compound and credential_change name the way on (consented-literals.ts).
+  expect(text("delete_compound")).toBe(DELETE_COMPOUND)
+  expect(text("credential_change")).toBe(CREDENTIAL_CHANGE.replace(" Continue the task without this step.", ""))
+  // A refusal is still a refusal of the call, not a stop of the run. 1.2.6 row 39 (INTENT): app_state has its own text;
+  // only an X with no category keeps the general one.
   expect(Permission.refusedByMode("credential_change")).toBeInstanceOf(PermissionV1.DeniedError)
   expect(Permission.refusedByMode("credential_change")).not.toBeInstanceOf(PermissionV1.RejectedError)
-  expect(text("app_state")).toBe(REFUSED_TEXT)
+  expect(text("app_state")).toBe(APP_STATE)
+  expect((Permission.refusedByMode(undefined) as PermissionV1.DeniedError).message).toBe(REFUSED_TEXT)
 })
 
 flows.instance("C24: an edit to the app's own state outside the project is refused, not held", () =>
@@ -1157,7 +1159,8 @@ flows.instance("C24: an edit to the app's own state outside the project is refus
     const { root } = yield* lineage
     const target = path.join(Global.Path.state, "row67-probe.txt")
     const error = yield* failure(write(root.id, target, "no"))
-    expect((error as PermissionV1.DeniedError).message).toBe(REFUSED_TEXT)
+    // 1.2.6 row 39 (P-01d, INTENT): the app-state text.
+    expect((error as PermissionV1.DeniedError).message).toBe(APP_STATE)
     expect(yield* list).toEqual([])
     expect(existsSync(target)).toBe(false)
     const [line] = yield* audit(root.id)
@@ -1198,7 +1201,8 @@ flows.instance("an answer to one prompt does not lift a refusal on what followed
     yield* approve(held[0]!.id)
 
     const error = yield* failure(patch(root.id, text))
-    expect((error as PermissionV1.DeniedError).message).toBe(REFUSED_TEXT)
+    // 1.2.6 row 39 (P-01d, INTENT): the app-state text.
+    expect((error as PermissionV1.DeniedError).message).toBe(APP_STATE)
     expect(existsSync(state)).toBe(false)
     expect(existsSync(path.join(outside, ".env"))).toBe(false)
     expect((yield* audit(root.id)).filter((line) => line.class === "X").length).toBe(1)

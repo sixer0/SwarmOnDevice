@@ -1538,8 +1538,9 @@ describe("tool.shell archive in autonomous mode", () => {
           const tool = yield* archiveTool(true, [])
           for (const command of ["rm a.txt && echo ran", "rm *.log", "echo x | xargs rm", "rm $FILE", "sudo rm a.txt"]) {
             const result = yield* tool.execute({ command }, ctx)
+            // 1.2.6 row 39 (P-01d, INTENT): DELETE_COMPOUND_TEXT also names the checkpoint way.
             expect(result.output).toBe(
-              "This call did not run. In autonomous mode a deletion must be a command of its own (rm, rmdir, unlink or git rm with paths only), so Swarm can move the paths to the archive instead.",
+              "This call did not run. In autonomous mode a deletion must be a command of its own (rm, rmdir, unlink or git rm with paths only) so Swarm can move the paths to the archive, or a plain command that names its files so Swarm can checkpoint them first.",
             )
           }
           expect(yield* exists(path.join(tmp, "a.txt"))).toBe(true)
