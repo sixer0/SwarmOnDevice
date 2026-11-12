@@ -77,6 +77,18 @@ describe("row 100 W-08: one decision source", () => {
   })
 })
 
+// Fix row FX-10 (gate 04 F10): the structural fields that need a decision after approval are the store's own list
+// (mission-store.ts STRUCTURAL_FIELDS), ownership included.
+describe("FX-10 F10: structural fields after approval", () => {
+  test("the skill lists exactly STRUCTURAL_FIELDS, in the store's order", async () => {
+    const { readFileSync } = await import("node:fs")
+    const src = readFileSync(path.join(STUDIO, "store", "mission", "mission-store.ts"), "utf8")
+    const list = /const STRUCTURAL_FIELDS = \[([^\]]+)\] as const/.exec(src)![1].match(/"([a-z]+)"/g)!.map((s) => s.slice(1, -1))
+    expect(list).toContain("ownership")
+    expect(flat).toContain(`changing a structural field (${list.join(", ")})`)
+  })
+})
+
 describe("row 100 OFF-01: no off-repo skill name, dated build fact or project text", () => {
   test("grep finds none", () => {
     expect(TEXT).not.toMatch(/studio-mission-ops|swarm-tools-1\.19|measured \d{4}|datum-studio 1\.\d|since \*\*1\.\d|on this machine/i)
