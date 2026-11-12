@@ -1,0 +1,62 @@
+{
+  "id": "fx-t01-1",
+  "nomor": "1.1",
+  "jenis": "diagram",
+  "family": "flow",
+  "arah": "LR",
+  "labels_verified": true,
+  "title": "Quebec bravoxxxx november kilo lima romeo xxx hotelxxxx.",
+  "caption": "Gambar 1.1 Uniform sierra kilolimax november kilo lima bravo delta hotel: zulu oscar 888.888 xxx/x foxtrot lima uniform whiskey xray xxx juliett.",
+  "legend": [
+    "\u25b3 QUEBEC delta november",
+    "\u25c8 FOXTROTXXX november papa tango zulu"
+  ],
+  "data": {
+    "nodes": [
+      {
+        "id": "n1",
+        "label": "foxtrot: echo india 888.888 xxx/x, tango victor",
+        "class": {},
+        "mark": "ASUMSI"
+      },
+      {
+        "id": "n2",
+        "label": "november sierraxxx X-8.8",
+        "class": {},
+        "mark": "DITURUNKAN"
+      },
+      {
+        "id": "n3",
+        "label": "echo juliett uniform: whiskey victor, foxtrot xxx, zulu",
+        "class": {},
+        "mark": "DITURUNKAN"
+      },
+      {
+        "id": "n4",
+        "label": "victor yankee, golf, november: hotel india papa foxtrot victor",
+        "class": {},
+        "mark": "DITURUNKAN"
+      }
+    ],
+    "edges": [
+      {
+        "from": "n1",
+        "to": "n2",
+        "kind": "data",
+        "label": "alfa-whiskey charlie"
+      },
+      {
+        "from": "n2",
+        "to": "n3",
+        "kind": "data",
+        "label": "oscarpapax lima uniform"
+      },
+      {
+        "from": "n3",
+        "to": "n4",
+        "kind": "data",
+        "label": "papa bravo"
+      }
+    ]
+  }
+}

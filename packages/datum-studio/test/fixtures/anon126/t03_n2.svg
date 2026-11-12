@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="128.0mm" height="80.962mm" viewBox="0 0 128.0 80.962" version="1.1">
+<defs>
+<marker id="head-data" markerWidth="4" markerHeight="4" refX="3.4" refY="1.6" orient="auto"><path d="M0,0 L3.6,1.6 L0,3.2 Z" fill="#101418"/></marker>
+</defs>
+<rect x="0" y="0" width="128.0" height="80.962" fill="#FCFCFB"/>
+<path d="M 58.67 23.81 L 58.67 28.57 L 58.67 28.57 L 58.67 28.57 L 58.67 28.57 L 58.67 33.34" fill="none" stroke="#101418" stroke-width="0.45" marker-end="url(#head-data)" data-mark="link" data-series="data" data-index="0"/>
+<path d="M 58.67 47.62 L 58.67 52.39 L 58.67 52.39 L 58.67 52.39 L 58.67 52.39 L 58.67 57.15" fill="none" stroke="#101418" stroke-width="0.45" marker-end="url(#head-data)" data-mark="link" data-series="data" data-index="1"/>
+<rect x="54.95" y="23.38" width="7.43" height="3.54" fill="#FCFCFB"/>
+<text x="58.67" y="25.77" font-family="IBM Plex Mono" font-size="2.081" font-weight="400" fill="#101418" text-anchor="middle">OSCAR</text>
+<rect x="55.54" y="47.19" width="6.26" height="3.54" fill="#FCFCFB"/>
+<text x="58.67" y="49.58" font-family="IBM Plex Mono" font-size="2.081" font-weight="400" fill="#101418" text-anchor="middle">PAPA</text>
+<rect x="42.67" y="9.52" width="32.0" height="14.29" data-node="n1" fill="none" stroke="#2B3640" stroke-width="0.45" data-mark="node" data-index="0"/>
+<text x="58.67" y="16.67" font-family="IBM Plex Sans Condensed" font-size="2.681" font-weight="400" fill="#101418" text-anchor="middle">Golf hotel</text>
+<rect x="42.67" y="33.34" width="32.0" height="14.29" data-node="n2" fill="none" stroke="#2B3640" stroke-width="0.45" data-mark="node" data-index="1"/>
+<text x="58.67" y="40.48" font-family="IBM Plex Sans Condensed" font-size="2.681" font-weight="400" fill="#101418" text-anchor="middle">India kilo</text>
+<rect x="42.67" y="57.15" width="32.0" height="14.29" data-node="n3" fill="none" stroke="#2B3640" stroke-width="0.45" data-mark="node" data-index="2"/>
+<text x="58.67" y="64.29" font-family="IBM Plex Sans Condensed" font-size="2.681" font-weight="400" fill="#101418" text-anchor="middle">Lima mike</text>
+</svg>

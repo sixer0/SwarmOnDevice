@@ -1,0 +1,75 @@
+{
+  "id": "fx-t01-3",
+  "nomor": "3.1",
+  "jenis": "diagram",
+  "family": "layered",
+  "arah": "TB",
+  "labels_verified": true,
+  "title": "Alfa bravoxxxx golf kilo november xx victor bravo.",
+  "caption": "Gambar 3.1 Quebec alfa november oscar, juliett xxx bravo charlie foxtrot xx alfa november quebec xxx delta 88 xx india november foxtrot xxx quebec delta hotel yankee xx Uniform victor.",
+  "data": {
+    "nodes": [
+      {
+        "id": "n1",
+        "label": "Charlie quebec echo",
+        "class": {
+          "tier": 1
+        }
+      },
+      {
+        "id": "n2",
+        "label": "India xx lima november",
+        "class": {
+          "tier": 2
+        }
+      },
+      {
+        "id": "n3",
+        "label": "Bravo: uniform xx alfa",
+        "class": {
+          "tier": 3
+        }
+      },
+      {
+        "id": "n4",
+        "label": "Xxx 88 xx: uniform",
+        "class": {
+          "tier": 3
+        }
+      },
+      {
+        "id": "n5",
+        "label": "Sierra delta xx juliett",
+        "class": {
+          "tier": 4
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "n1",
+        "to": "n2",
+        "kind": "control",
+        "label": "sierra romeo echo"
+      },
+      {
+        "from": "n2",
+        "to": "n3",
+        "kind": "control",
+        "label": "quebec delta november"
+      },
+      {
+        "from": "n2",
+        "to": "n4",
+        "kind": "control",
+        "label": "whiskey papa november"
+      },
+      {
+        "from": "n4",
+        "to": "n5",
+        "kind": "control",
+        "label": "juliett yankee delta"
+      }
+    ]
+  }
+}

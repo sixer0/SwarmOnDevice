@@ -1,0 +1,80 @@
+{
+  "id": "fx-t01-5",
+  "nomor": "5.1",
+  "jenis": "diagram",
+  "family": "flow",
+  "arah": "LR",
+  "labels_verified": true,
+  "title": "Quebec echo hotel uniform lima sierra victor.",
+  "caption": "Gambar 5.1 Hotelxxxx 8 uniform whiskey kilolimaxxx: yankee mikexxxxxxx tango mike papaquebecx hotel, xxx sierraxxxx romeo tango sierra juliett yankee yankeexxx oscar xx juliett charliexx.",
+  "legend": [
+    "WHISKEY victor india mike sierra",
+    "INDIAXXXXX charlie foxtrot sierra xxx"
+  ],
+  "data": {
+    "nodes": [
+      {
+        "id": "n1",
+        "label": "kilo romeo foxtrot bravo yankee sierratango",
+        "class": {},
+        "mark": "TERUKUR"
+      },
+      {
+        "id": "n2",
+        "label": "sierra uniformxxxx november uniform xrayyankee november",
+        "class": {},
+        "mark": "TERUKUR"
+      },
+      {
+        "id": "n3",
+        "label": "foxtrot X-ZULU xxx X-XXX foxtrotgolf",
+        "class": {},
+        "mark": "DITURUNKAN"
+      },
+      {
+        "id": "n4",
+        "label": "november: hotelindiax papa juliettkilo tango",
+        "class": {},
+        "mark": "DITURUNKAN"
+      },
+      {
+        "id": "n5",
+        "label": "limamikexx november hotel oscarpapa oscar xx whiskey",
+        "class": {},
+        "mark": "DITURUNKAN"
+      }
+    ],
+    "edges": [
+      {
+        "from": "n1",
+        "to": "n3",
+        "kind": "control",
+        "label": "sierraxxxx delta"
+      },
+      {
+        "from": "n2",
+        "to": "n3",
+        "kind": "control",
+        "label": "november india victor"
+      },
+      {
+        "from": "n3",
+        "to": "n4",
+        "kind": "control",
+        "label": "november xxx zulualfabravo"
+      },
+      {
+        "from": "n3",
+        "to": "n5",
+        "kind": "alert",
+        "label": "uniform hotel xxx"
+      },
+      {
+        "from": "n4",
+        "to": "n5",
+        "kind": "control",
+        "label": "oscar victor xxx bravo"
+      }
+    ]
+  }
+}

@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="128.0mm" height="166.688mm" viewBox="0 0 128.0 166.688" version="1.1">
+
+<defs>
+<marker id="head-accent" markerWidth="4" markerHeight="4" refX="3.4" refY="1.6" orient="auto"><path d="M0,0 L3.6,1.6 L0,3.2 Z" fill="#B45309"/></marker>
+<marker id="head-alert" markerWidth="4" markerHeight="4" refX="3.4" refY="1.6" orient="auto"><path d="M0,0 L3.6,1.6 L0,3.2" fill="none" stroke="#9B1C1C" stroke-width="0.35"/></marker>
+<marker id="head-control" markerWidth="4" markerHeight="4" refX="3.4" refY="1.6" orient="auto"><path d="M0,0 L3.6,1.6 L0,3.2" fill="none" stroke="#2B3640" stroke-width="0.35"/></marker>
+<marker id="head-data" markerWidth="4" markerHeight="4" refX="3.4" refY="1.6" orient="auto"><path d="M0,0 L3.6,1.6 L0,3.2 Z" fill="#101418"/></marker>
+</defs>
+<rect x="0" y="0" width="128.0" height="166.688" fill="#FCFCFB"/>
+<text data-caption-above="1" x="0" y="3.81" font-family="IBM Plex Sans Condensed" font-size="2.681" font-weight="400" fill="#2B3640" text-anchor="start"><tspan font-weight="600">QUEBEC 88.8</tspan> Delta juliett india quebec sierra xxx yankee; quebec sierra charlie yankee romeo sierra oscarpapax.</text>
+<g transform="translate(0 4.762)">
+<path d="M 64.0 23.81 L 64.0 28.57 L 58.67 28.57 L 58.67 33.34" fill="none" stroke="#9B1C1C" stroke-width="0.45" stroke-dasharray="7.1,1.6" marker-end="url(#head-alert)" data-mark="link" data-series="alert" data-index="0"/>
+<path d="M 50.67 52.39 L 50.67 57.15 L 58.67 57.15 L 58.67 61.91" fill="none" stroke="#B45309" stroke-width="0.72" marker-end="url(#head-accent)" data-mark="link" data-series="accent" data-index="1"/>
+<path d="M 58.67 52.39 L 58.67 57.45 L 84.14 57.45 L 84.14 80.96 L 58.67 80.96 L 58.67 85.72" fill="none" stroke="#101418" stroke-width="0.45" marker-end="url(#head-data)" data-mark="link" data-series="data" data-index="2"/>
+<path d="M 66.67 52.39 L 66.67 56.85 L 86.52 56.85 L 86.52 104.77 L 64.0 104.77 L 64.0 109.54" fill="none" stroke="#101418" stroke-width="0.45" marker-end="url(#head-data)" data-mark="link" data-series="data" data-index="3"/>
+<path d="M 58.67 76.2 L 58.67 80.96 L 30.81 80.96 L 30.81 129.78 L 53.33 129.78 L 53.33 133.35" fill="none" stroke="#2B3640" stroke-width="0.45" stroke-dasharray="3.2,1.6" marker-end="url(#head-control)" data-mark="link" data-series="control" data-index="4"/>
+<path d="M 58.67 100.01 L 58.67 104.77 L 33.19 104.77 L 33.19 127.4 L 64.0 127.4 L 64.0 133.35" fill="none" stroke="#2B3640" stroke-width="0.45" stroke-dasharray="3.2,1.6" marker-end="url(#head-control)" data-mark="link" data-series="control" data-index="5"/>
+<rect x="53.04" y="25.76" width="16.59" height="3.54" fill="#FCFCFB"/>
+<text x="61.33" y="28.15" font-family="IBM Plex Mono" font-size="2.081" font-weight="400" fill="#9B1C1C" text-anchor="middle">PAPAQUEBECXX</text>
+<rect x="45.75" y="54.33" width="17.83" height="3.54" fill="#FCFCFB"/>
+<text x="54.67" y="56.73" font-family="IBM Plex Mono" font-size="2.081" font-weight="400" fill="#B45309" text-anchor="middle">QUEBEC ZULU 8</text>
+<rect x="62.49" y="78.15" width="17.83" height="3.54" fill="#FCFCFB"/>
+<text x="71.4" y="80.54" font-family="IBM Plex Mono" font-size="2.081" font-weight="400" fill="#101418" text-anchor="middle">VICTOR ECHO 8</text>
+<rect x="81.98" y="78.0" width="9.09" height="3.54" fill="#FCFCFB"/>
+<text x="86.52" y="80.39" font-family="IBM Plex Mono" font-size="2.081" font-weight="400" fill="#101418" text-anchor="middle">XXX X8</text>
+<rect x="21.89" y="102.55" width="17.83" height="3.54" fill="#FCFCFB"/>
+<text x="30.81" y="104.95" font-family="IBM Plex Mono" font-size="2.081" font-weight="400" fill="#2B3640" text-anchor="middle">JULIETT HOTEL</text>
+<rect x="42.18" y="124.58" width="12.84" height="3.54" fill="#FCFCFB"/>
+<text x="48.59" y="126.97" font-family="IBM Plex Mono" font-size="2.081" font-weight="400" fill="#2B3640" text-anchor="middle">XXX OSCAR</text>
+<rect x="42.67" y="9.52" width="42.67" height="14.29" data-node="n1" fill="none" stroke="#2B3640" stroke-width="0.45" data-mark="node" data-index="0"/>
+<text x="64.0" y="16.67" font-family="IBM Plex Sans Condensed" font-size="2.681" font-weight="400" fill="#101418" text-anchor="middle">romeo XXX bravo Golf 8888</text>
+<rect x="42.67" y="33.34" width="32.0" height="19.05" data-node="n2" fill="none" stroke="#2B3640" stroke-width="0.45" data-mark="node" data-index="1"/>
+<text x="58.67" y="42.86" font-family="IBM Plex Sans Condensed" font-size="2.681" font-weight="400" fill="#101418" text-anchor="middle">victor foxtrotgolf</text>
+<text x="58.67" y="45.54" font-family="IBM Plex Sans Condensed" font-size="2.328" font-weight="400" fill="#6B7783" text-anchor="middle">oscar hotelxxxx</text>
+<rect x="42.67" y="61.91" width="32.0" height="14.29" data-node="n3" fill="none" stroke="#2B3640" stroke-width="0.45" data-mark="node" data-index="2"/>
+<text x="58.67" y="69.06" font-family="IBM Plex Sans Condensed" font-size="2.681" font-weight="400" fill="#101418" text-anchor="middle">whiskey juliettkilo</text>
+<rect x="42.67" y="85.72" width="32.0" height="14.29" data-node="n4" fill="none" stroke="#2B3640" stroke-width="0.45" data-mark="node" data-index="3"/>
+<text x="58.67" y="92.87" font-family="IBM Plex Sans Condensed" font-size="2.681" font-weight="400" fill="#101418" text-anchor="middle">xxx limamikex india</text>
+<rect x="42.67" y="109.54" width="42.67" height="14.29" data-node="n5" fill="none" stroke="#2B3640" stroke-width="0.45" data-mark="node" data-index="4"/>
+<text x="64.0" y="116.68" font-family="IBM Plex Sans Condensed" font-size="2.681" font-weight="400" fill="#101418" text-anchor="middle">oscar quebec papaquebec</text>
+<rect x="42.67" y="133.35" width="32.0" height="14.29" data-node="n6" fill="none" stroke="#2B3640" stroke-width="0.45" data-mark="node" data-index="5"/>
+<text x="58.67" y="140.49" font-family="IBM Plex Sans Condensed" font-size="2.681" font-weight="400" fill="#101418" text-anchor="middle">victor yankee whiskey</text>
+<text x="0" y="152.4" font-family="IBM Plex Sans Condensed" font-size="2.328" font-weight="400" fill="#6B7783" text-anchor="start">SIERRA  Victor xxx xxx, bravo Victor zulualfaxxx juliett xxx Victor deltaechox bravo 8; Juliett victor X88 xxx X88</text>
+</g>
+</svg>
