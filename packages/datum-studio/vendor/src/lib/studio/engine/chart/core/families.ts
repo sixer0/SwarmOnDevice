@@ -45,9 +45,10 @@ export const chartCore: ChartRendererMap = {
 
 /**
  * Tinggi kanvas kode inti (mm). Gaya datum = `tinggi()` DC (spec.heightMm diabaikan
- * demi paritas CA, dilaporkan REPORT bila berbeda) dengan badan minimum keluarga batang
- * untuk n <= 3 kategori (FIX-H8, `datumHeightMm`); gaya gallery = spec.heightMm atau
- * taksiran DC tanpa batas bawah (tidak berubah).
+ * demi paritas CA, dilaporkan REPORT bila berbeda); sejak T-09 (1.2.6, U14) badan batang
+ * tetap jujur untuk setiap n (`datumHeightMm` = `dcHeightMm`, badan di bawah 32 mm hanya
+ * dilaporkan `BAR_SUBMIN`); gaya gallery = spec.heightMm atau taksiran DC tanpa batas bawah
+ * (tidak berubah).
  */
 export function coreHeightMm(spec: StudioChartV1, code: CoreCode): number {
   if ((spec.style ?? "datum") === "gallery") return spec.heightMm ?? dcHeightMm(spec, CORE_FAMILY[code]);

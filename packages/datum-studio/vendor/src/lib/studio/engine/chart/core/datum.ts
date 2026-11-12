@@ -19,7 +19,7 @@ import type { ChartCanvas, ResolvedTemplate, StudioChartV1, SvgResult } from "..
 import { fmt } from "../../bind";
 import { apparatusMarker, figureApparatus, figureCaptionTopMm, figureExtraMm, noteLine } from "./apparatus";
 import { fitActive } from "./fit";
-import { drawGutterLabel, gutterPlan } from "./labelfit";
+import { LABEL_GUTTER_CAP_FRAC, drawGutterLabel, gutterPlan } from "./labelfit";
 import type { CorePrep } from "./prepare";
 import { axisDomain } from "./scale";
 import { SvgDoc, dcPx, textWidthMm } from "./svg";
@@ -113,7 +113,7 @@ export function renderDatum(spec: StudioChartV1, canvas: ChartCanvas, tpl: Resol
     const gp = gutterPlan(
       pts.map((p) => p.label),
       { pt: 6.6, face: D },
-      { currentMm: 22, capMm: W * 0.42, padMm: 2.2, pitchMm: rows.pitch },
+      { currentMm: 22, capMm: W * LABEL_GUTTER_CAP_FRAC, padMm: 2.2, pitchMm: rows.pitch },
     );
     const kiri = gp ? Math.max(22, gp.gutterMm) : 22;
     const kanan = W - 24;

@@ -18,7 +18,7 @@
 import type { ChartCanvas, LintIssue, ResolvedTemplate, StudioChartV1, SvgResult } from "../../../contract";
 import { fmt, withUnit } from "../../bind";
 import { figureFootMm, apparatusMarker, figureApparatus, noteLine } from "./apparatus";
-import { drawGutterLabel, gutterPlan } from "./labelfit";
+import { LABEL_GUTTER_CAP_FRAC, drawGutterLabel, gutterPlan } from "./labelfit";
 import type { CorePrep } from "./prepare";
 import { axisDomain, decimalsFor, linearScale, niceDomain } from "./scale";
 import { SvgDoc, textWidthMm, midBaseline } from "./svg";
@@ -50,11 +50,11 @@ export function renderGallery(spec: StudioChartV1, canvas: ChartCanvas, tpl: Res
     const bottom = H - footBand - 0.8;
     // IMPL-W5 D1: label terlebar diukur dengan metrik glif nyata (bukan taksiran rerata em).
     const labelW = Math.max(...pts.map((p) => measure(p.label, LBL_PT)));
-    const x00 = Math.min(Math.max(labelW + 1.6, 6), W * 0.42);
+    const x00 = Math.min(Math.max(labelW + 1.6, 6), W * LABEL_GUTTER_CAP_FRAC);
     const gp = gutterPlan(
       pts.map((p) => p.label),
       { pt: LBL_PT },
-      { currentMm: x00, capMm: W * 0.42, padMm: 1.6, pitchMm: (bottom - top) / pts.length },
+      { currentMm: x00, capMm: W * LABEL_GUTTER_CAP_FRAC, padMm: 1.6, pitchMm: (bottom - top) / pts.length },
     );
     const x0 = gp ? Math.max(x00, gp.gutterMm) : x00;
     const valW = Math.max(...vals.map((v) => textWidthMm(v, VAL_PT, "data")));

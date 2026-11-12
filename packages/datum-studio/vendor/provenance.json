@@ -79,15 +79,16 @@
   "row64": "2026-11-12: 1.2.6 row 64 (T-08 fan-out sub-ranking, N-018; 01e §8; ranked-flow forward sides 01e §4.2 routed by row 46). 1 vendor file re-patched (files[].patch_row64, before = previous sha256): engine/diagram/build/route.ts (status patched unchanged). counts.bytes by delta +8531",
   "row47": "2026-11-12: 1.2.6 row 47 (T-11 acceptance; register N-160; 01e §4.3-§4.5; C7). 3 vendor files re-patched (files[].patch_row47, before = previous sha256; statuses unchanged): engine/diagram/layout-a/flow.ts (FLOW_SERIALISED note helper, TB placement under predecessors, label-corridor growth), engine/diagram/elk/index.ts (R1 gate admits ranked flow), engine/diagram/build/svg.ts (one FLOW_SERIALISED call site). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/47_row47_diffs/. counts.bytes by delta +5722. patch_rows += 47",
   "row70": "2026-11-12: 1.2.6 row 70 (T-17 vendor part, U5; register N-055 BACKUP_DIR_NAME, N-057 backupResidue, E-22). 2 vendor files re-patched (files[].patch_row70, before = previous sha256; status unchanged): scripts/studio/mcp/safety.ts (writeFileGuarded backups in <dir>/.bak/ created 0700, backupResidue) and scripts/studio/mcp/tools.ts (backupResidue in studio_report_refresh/studio_file_verify). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/70_row70_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9895940 + 2723 = 9898663 (safety.ts 18995 -> 21221, tools.ts 81007 -> 81504). patch_rows += 70",
-  "row61": "2026-11-12: 1.2.6 row 61 (T-05, U5; no new register name). 1 vendor file re-patched (files[].patch_row61, before = previous sha256; status unchanged): engine/diagram/core/svg.ts (provenance glyph inset by node shape: parallelogram inside, diamond outside the slanted side; box byte-identical). Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/61_row61_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9894024 + 1916 = 9895940. patch_rows += 61"
+  "row61": "2026-11-12: 1.2.6 row 61 (T-05, U5; no new register name). 1 vendor file re-patched (files[].patch_row61, before = previous sha256; status unchanged): engine/diagram/core/svg.ts (provenance glyph inset by node shape: parallelogram inside, diamond outside the slanted side; box byte-identical). Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/61_row61_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9894024 + 1916 = 9895940. patch_rows += 61",
+  "row66": "2026-11-12: 1.2.6 row 66 (T-10, U5, R12; register N-030). 4 vendor files patched (files[].patch_row66, before = previous sha256): engine/chart/core/labelfit.ts (NEW LABEL_GUTTER_CAP_FRAC = 0.3), engine/chart/core/datum.ts and engine/chart/core/gallery.ts (inline W*0.42 gutter cap -> W*LABEL_GUTTER_CAP_FRAC), engine/chart/core/families.ts (stale doc comment only). Status copied -> patched for labelfit.ts, gallery.ts, families.ts; datum.ts was already patched (row 65). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/66_row66_diffs. counts by delta: copied 416 -> 413, patched 150 -> 153; bytes 9898663 +548 = 9899211. patch_rows += 66"
  },
  "counts": {
   "files": 608,
-  "copied": 416,
-  "patched": 150,
+  "copied": 413,
+  "patched": 153,
   "replaced": 12,
   "added": 30,
-  "bytes": 9898663
+  "bytes": 9899211
  },
  "files": [
   {
@@ -1481,17 +1482,19 @@
   {
    "path": "src/lib/studio/engine/chart/core/datum.ts",
    "status": "patched",
-   "bytes": 10754,
+   "bytes": 10794,
    "source_sha256": "9a0a9a5e74849b590218e71737dd6a514b2ad92a833cfbb8f273042936d69340",
-   "sha256": "6a79f21056cd1b523a60ca4d1075ac31feba0e4f5c04b65ef6e72b7752ccef67",
-   "patch_row65": {"id": "row65-t09-honest-bars", "row": "65", "decision": "1.2.6 patch T-09 honest bar geometry (U14 reverses D-322; register N-025..N-029)", "summary": "BAR_MIN_BODY_MM (32) is now a threshold only; barRows returns DC geometry for every n (scaled always false); datumHeightMm = dcHeightMm; renderDatum uses DC_BAR_ROWS and emits one REPORT BAR_SUBMIN (body mm and threshold) when n*7.2+6 < 32 instead of raising the body; BAR_MAX_THICK_MM and BAR_MIN_HEIGHT retired", "diff_base": "sha256 before this row", "before_sha256": "9a0a9a5e74849b590218e71737dd6a514b2ad92a833cfbb8f273042936d69340", "after_sha256": "6a79f21056cd1b523a60ca4d1075ac31feba0e4f5c04b65ef6e72b7752ccef67", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/65_row65_diffs/src_lib_studio_engine_chart_core_datum.ts.diff", "diff_sha256": "8b839bcdf04457cdf9093ca5af95ba5c4b59efd0227502ad72f44c2f9f96d2f9"}
+   "sha256": "6553957ed81825a853d579e10d6c1888eac32ed06d239aa1fb63a0bc54279f2e",
+   "patch_row65": {"id": "row65-t09-honest-bars", "row": "65", "decision": "1.2.6 patch T-09 honest bar geometry (U14 reverses D-322; register N-025..N-029)", "summary": "BAR_MIN_BODY_MM (32) is now a threshold only; barRows returns DC geometry for every n (scaled always false); datumHeightMm = dcHeightMm; renderDatum uses DC_BAR_ROWS and emits one REPORT BAR_SUBMIN (body mm and threshold) when n*7.2+6 < 32 instead of raising the body; BAR_MAX_THICK_MM and BAR_MIN_HEIGHT retired", "diff_base": "sha256 before this row", "before_sha256": "9a0a9a5e74849b590218e71737dd6a514b2ad92a833cfbb8f273042936d69340", "after_sha256": "6a79f21056cd1b523a60ca4d1075ac31feba0e4f5c04b65ef6e72b7752ccef67", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/65_row65_diffs/src_lib_studio_engine_chart_core_datum.ts.diff", "diff_sha256": "8b839bcdf04457cdf9093ca5af95ba5c4b59efd0227502ad72f44c2f9f96d2f9"},
+   "patch_row66": {"id": "row66-t10-label-gutter", "row": "66", "decision": "1.2.6 patch T-10 label gutter cap 0.30 W (U5, R12; register N-030)", "summary": "bar/threshold gutterPlan capMm W*0.42 -> W*LABEL_GUTTER_CAP_FRAC (0.30)", "diff_base": "sha256 before this row", "before_sha256": "6a79f21056cd1b523a60ca4d1075ac31feba0e4f5c04b65ef6e72b7752ccef67", "after_sha256": "6553957ed81825a853d579e10d6c1888eac32ed06d239aa1fb63a0bc54279f2e", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/66_row66_diffs/src_lib_studio_engine_chart_core_datum.ts.diff", "diff_sha256": "6d397adada48a347c4d50870173ea355df28cb53360c69458dcd22f1a4cd1b5b"}
   },
   {
    "path": "src/lib/studio/engine/chart/core/families.ts",
-   "status": "copied",
-   "bytes": 2417,
+   "status": "patched",
+   "bytes": 2485,
    "source_sha256": "56cbda9f5ea857efe3a259a22ddf50a66df982b71fc45d4e3494db8b0887274a",
-   "sha256": "56cbda9f5ea857efe3a259a22ddf50a66df982b71fc45d4e3494db8b0887274a"
+   "sha256": "b2b1a54fe128d061afd73a52b7a3875c36d914871bf410c49b56443e3eca8a19",
+   "patch_row66": {"id": "row66-t10-label-gutter", "row": "66", "decision": "1.2.6 patch T-10 label gutter cap 0.30 W (U5, R12; register N-030)", "summary": "doc comment of coreHeightMm only: stale FIX-H8 minimum-body text replaced by the T-09 honest-geometry text (flagged by row 65); no code change", "diff_base": "sha256 before this row", "before_sha256": "56cbda9f5ea857efe3a259a22ddf50a66df982b71fc45d4e3494db8b0887274a", "after_sha256": "b2b1a54fe128d061afd73a52b7a3875c36d914871bf410c49b56443e3eca8a19", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/66_row66_diffs/src_lib_studio_engine_chart_core_families.ts.diff", "diff_sha256": "b1a4c42c26c7a8bf5a8c096df8de69270a6b6f6ca665fe6c110e3360b6b96fbf"}
   },
   {
    "path": "src/lib/studio/engine/chart/core/fit.ts",
@@ -1502,10 +1505,11 @@
   },
   {
    "path": "src/lib/studio/engine/chart/core/gallery.ts",
-   "status": "copied",
-   "bytes": 9668,
+   "status": "patched",
+   "bytes": 9725,
    "source_sha256": "125962ccf45794d5b8aad744a29c66a2c343290fda5ff3a7a420675b29728165",
-   "sha256": "125962ccf45794d5b8aad744a29c66a2c343290fda5ff3a7a420675b29728165"
+   "sha256": "277f28c7c2ce6c248e951f6aefc4de4198ec83febedd5f4c8a47cee99843f71a",
+   "patch_row66": {"id": "row66-t10-label-gutter", "row": "66", "decision": "1.2.6 patch T-10 label gutter cap 0.30 W (U5, R12; register N-030)", "summary": "bar family x00 clamp and gutterPlan capMm W*0.42 -> W*LABEL_GUTTER_CAP_FRAC (0.30); threshold W*0.4 unchanged (not in T-10 scope)", "diff_base": "sha256 before this row", "before_sha256": "125962ccf45794d5b8aad744a29c66a2c343290fda5ff3a7a420675b29728165", "after_sha256": "277f28c7c2ce6c248e951f6aefc4de4198ec83febedd5f4c8a47cee99843f71a", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/66_row66_diffs/src_lib_studio_engine_chart_core_gallery.ts.diff", "diff_sha256": "6c648e4e1015ab77b8c4f9247fd3f5dd6f34dd57a19226f516a318891859104f"}
   },
   {
    "path": "src/lib/studio/engine/chart/core/geometry.ts",
@@ -1545,10 +1549,11 @@
   },
   {
    "path": "src/lib/studio/engine/chart/core/labelfit.ts",
-   "status": "copied",
-   "bytes": 19204,
+   "status": "patched",
+   "bytes": 19587,
    "source_sha256": "213df6f0d0233abdd606e1241b289087a30b46e43135a311da9b52686dcda35b",
-   "sha256": "213df6f0d0233abdd606e1241b289087a30b46e43135a311da9b52686dcda35b"
+   "sha256": "6853d5dbfb973d9f7b2a5b26c35027711c6144e4f6fd04348f7641b44537a010",
+   "patch_row66": {"id": "row66-t10-label-gutter", "row": "66", "decision": "1.2.6 patch T-10 label gutter cap 0.30 W (U5, R12; register N-030)", "summary": "NEW export LABEL_GUTTER_CAP_FRAC = 0.3 (register N-030): left label gutter cap as a fraction of the plot width W (38.4 mm at 128 mm)", "diff_base": "sha256 before this row", "before_sha256": "213df6f0d0233abdd606e1241b289087a30b46e43135a311da9b52686dcda35b", "after_sha256": "6853d5dbfb973d9f7b2a5b26c35027711c6144e4f6fd04348f7641b44537a010", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/66_row66_diffs/src_lib_studio_engine_chart_core_labelfit.ts.diff", "diff_sha256": "bab189bfdae5002846b7328153d510cf73de901bbb8d95dcb009eab12a92612c"}
   },
   {
    "path": "src/lib/studio/engine/chart/core/lang.ts",
@@ -6108,6 +6113,7 @@
   "64",
   "47",
   "61",
-  "70"
+  "70",
+  "66"
  ]
 }
