@@ -347,7 +347,9 @@ async function runPure(
   const meta = snapshot.doc.meta;
   const fixedDate = meta.issueDate;
 
-  // 3. Figur (SVG -> PNG 300 dpi). Gagal raster = semua format dokumen gagal.
+  // 3. Figur (SVG -> PNG 300 dpi). Swarm 1.2.6 row 68 (T-15): satu figur yang gagal SVG/raster menjadi placeholder
+  //    FIGURE_PREPARE_FAILED + galat job (job PARTIAL, keluaran UNVERIFIED), figur lain utuh. Hanya kegagalan perakitan
+  //    figur seluruhnya (catch di bawah) atau RENDER_TIMEOUT yang menggagalkan semua format dokumen.
   job.checkAborted("figures");
   state.composites = countCompositeCharts(snapshot, opts.artifacts);
   if (state.composites > 0) {
