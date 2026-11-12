@@ -95,7 +95,8 @@
   "rowINT1_item5": "2026-11-12: 1.2.6 row INT-1 (INT1_item5). DATUM-25 estimate refusal uses colourCountDetail like build/svg.ts (row 62). 1 vendor file re-patched (files[].patch_rowINT1_item5, before = previous sha256; status unchanged): src/lib/studio/engine/diagram/core/estimate.ts. Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/int1_diffs/src_lib_studio_engine_diagram_core_estimate.ts.diff. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9939912 + 278 = 9940190. patch_rows += \"INT-1\" (once).",
   "rowINT1_item7": "2026-11-12: 1.2.6 row INT-1 (INT1_item7). G-05 remainder added to the dokumen-klien recipe (three short sentences). 1 vendor file re-patched (files[].patch_rowINT1_item7, before = previous sha256; status unchanged): scripts/studio/mcp/resources.ts. Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/int1_diffs/scripts_studio_mcp_resources.ts.diff. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9942003 + 644 = 9942647. patch_rows += \"INT-1\" (once).",
   "row111a": "2026-11-12: 1.2.6 row 111a (INV-E provenance audit). Every vendor file in git diff --name-only e363918a69..HEAD (70 files + this file) has an entry whose sha256/bytes equal the file at HEAD and a patch record; counts recomputed from files[] (were copied 411, patched 155, bytes 9942647; now copied 410, patched 156, bytes 9955998); duplicate deferred_patches.row66 keys merged; patch_rows += 25, 50b, 62, 77 (1.2.6 vendor rows that were missing). Report: docs/2026-11-12_swarm_1_2_6_patch/implementation/111a_provenance_audit.md",
-  "rowFX7a": "2026-11-13: 1.2.6 row FX-7 item a (C19d). 1 vendor file re-patched (files[].patch_rowFX7a): contract/schema/v2/figure-text.ts CAPTION_TOKEN_RE figure number 1-3 digits (\\d{1,3}); 4-digit years after the keyword are not a token. Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/fx7_diffs/. counts by delta: bytes 9955998 -> 9956227; status unchanged. patch_rows += FX-7a"
+  "rowFX7a": "2026-11-13: 1.2.6 row FX-7 item a (C19d). 1 vendor file re-patched (files[].patch_rowFX7a): contract/schema/v2/figure-text.ts CAPTION_TOKEN_RE figure number 1-3 digits (\\d{1,3}); 4-digit years after the keyword are not a token. Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/fx7_diffs/. counts by delta: bytes 9955998 -> 9956227; status unchanged. patch_rows += FX-7a",
+  "rowFX7b": "2026-11-13: 1.2.6 row FX-7 item b (C19f). 3 vendor files re-patched (files[].patch_rowFX7b): engine/docx/figures/store.ts (ABORTING_CODES removed; isJobAbort option decides the whole-job abort), services/render/figures.ts (isJobAbort = job.aborted; dead bridge tried once per job; raster job error names the figure; aborted job rethrows its own RENDER_TIMEOUT once), engine/docx/assemble/index.ts (marker does not hide a good fallback entry). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/fx7_diffs/. counts by delta: bytes 9956227 -> 9958171; status unchanged. patch_rows += FX-7b"
  },
  "counts": {
   "files": 608,
@@ -103,7 +104,7 @@
   "patched": 156,
   "replaced": 12,
   "added": 30,
-  "bytes": 9956227
+  "bytes": 9958171
  },
  "files": [
   {
@@ -2804,10 +2805,11 @@
   {
    "path": "src/lib/studio/engine/docx/assemble/index.ts",
    "status": "patched",
-   "bytes": 23822,
+   "bytes": 24064,
    "source_sha256": "fd8fead174950066a7a75a8738e21bea3df2742cf2fb6a99badb51efaf810b8e",
-   "sha256": "727f90a3ec3ed4d7ef25eabe2fc1dc77d6e03fc8db74eb0a27f2cb7c859e14bc",
-   "patch_row165A": {"id": "row165A-cover-control-furniture", "row": "165A", "decision": "C188 F113-6", "summary": "the section-break paragraph of the last unit before Bab 1 carries the _StSheet0 bookmark read by the register formula. Status copied -> patched", "before_sha256": "fd8fead174950066a7a75a8738e21bea3df2742cf2fb6a99badb51efaf810b8e", "after_sha256": "727f90a3ec3ed4d7ef25eabe2fc1dc77d6e03fc8db74eb0a27f2cb7c859e14bc", "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/138_row165A_diffs/engine_docx_assemble_index.ts.diff", "diff_sha256": "cb3d84ad8abdb6d2428e28b2147a13c6ddd238377ce4cb2cc16ac9edb7e2b8fe"}
+   "sha256": "aaac3a894e1cad15d994a6d17cd0f5a50bda323f97fceb60aded39dd3abd0906",
+   "patch_row165A": {"id": "row165A-cover-control-furniture", "row": "165A", "decision": "C188 F113-6", "summary": "the section-break paragraph of the last unit before Bab 1 carries the _StSheet0 bookmark read by the register formula. Status copied -> patched", "before_sha256": "fd8fead174950066a7a75a8738e21bea3df2742cf2fb6a99badb51efaf810b8e", "after_sha256": "727f90a3ec3ed4d7ef25eabe2fc1dc77d6e03fc8db74eb0a27f2cb7c859e14bc", "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/138_row165A_diffs/engine_docx_assemble_index.ts.diff", "diff_sha256": "cb3d84ad8abdb6d2428e28b2147a13c6ddd238377ce4cb2cc16ac9edb7e2b8fe"},
+   "patch_rowFX7b": {"id": "fx-7b-n4-fallback", "row": "FX-7b", "decision": "1.2.6 review wave F, C19f (M3 S1, N4, N5; follow-up of row 68 T-15)", "summary": "svgFor + ctx.figures: a FIGURE_PREPARE_FAILED marker in the prepared store no longer hides a good fallback entry (M3 N4)", "before_sha256": "727f90a3ec3ed4d7ef25eabe2fc1dc77d6e03fc8db74eb0a27f2cb7c859e14bc", "after_sha256": "aaac3a894e1cad15d994a6d17cd0f5a50bda323f97fceb60aded39dd3abd0906", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/fx7_diffs/FX-7b_src_lib_studio_engine_docx_assemble_index.ts.diff", "diff_sha256": "3fb0b07ee74d2fd48a4e80f6ccdcd42891729bad97437fab378dea5b7d7405a7"}
   },
   {
    "path": "src/lib/studio/engine/docx/assemble/media.ts",
@@ -3044,10 +3046,11 @@
   {
    "path": "src/lib/studio/engine/docx/figures/store.ts",
    "status": "patched",
-   "bytes": 6287,
+   "bytes": 6491,
    "source_sha256": "e49c175293178c18cf695f174edba21e2c5d6a142a27d6f3a8e8fd33ad6650fc",
-   "sha256": "c7fc8778fb423545dd9dfa63c7dcd14f6cd2bd351fdf775b533b82926bf8a98c",
-   "patch_row68": {"id": "row68-t15-partial-docx", "row": "68", "decision": "1.2.6 patch T-15 (U3; register N-036 FIGURE_PREPARE_FAILED, E-15 FIGURE_PLACEHOLDER reused; row143a CHAR unchanged)", "summary": "prepareFigureStore no longer rethrows a per-figure failure: an svgFor or rasterize error (or a failure the caller reports through NEW option failureFor when svgFor returns undefined) stores a FIGURE_PREPARE_FAILED marker entry (no svg/png, `failed: {code, message, causeCode}`), logs it at error level with that code, and drops partial sheets of that figure; other figures stay intact. RENDER_TIMEOUT still rethrows. Re-exports FIGURE_PREPARE_FAILED, FigurePrepareFailure, figurePrepareFailureOf from ./log", "before_sha256": "e49c175293178c18cf695f174edba21e2c5d6a142a27d6f3a8e8fd33ad6650fc", "after_sha256": "c7fc8778fb423545dd9dfa63c7dcd14f6cd2bd351fdf775b533b82926bf8a98c", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/68_row68_diffs/src_lib_studio_engine_docx_figures_store.ts.diff", "diff_sha256": "9e2970492fcbdfd9e09ac3f03ce6394c578408780f044151e0c5bddd96b9dde7"}
+   "sha256": "e52e5df552206908cc0c6d0d30ca8ea42b819ce51914178647a13e2e43769b3e",
+   "patch_row68": {"id": "row68-t15-partial-docx", "row": "68", "decision": "1.2.6 patch T-15 (U3; register N-036 FIGURE_PREPARE_FAILED, E-15 FIGURE_PLACEHOLDER reused; row143a CHAR unchanged)", "summary": "prepareFigureStore no longer rethrows a per-figure failure: an svgFor or rasterize error (or a failure the caller reports through NEW option failureFor when svgFor returns undefined) stores a FIGURE_PREPARE_FAILED marker entry (no svg/png, `failed: {code, message, causeCode}`), logs it at error level with that code, and drops partial sheets of that figure; other figures stay intact. RENDER_TIMEOUT still rethrows. Re-exports FIGURE_PREPARE_FAILED, FigurePrepareFailure, figurePrepareFailureOf from ./log", "before_sha256": "e49c175293178c18cf695f174edba21e2c5d6a142a27d6f3a8e8fd33ad6650fc", "after_sha256": "c7fc8778fb423545dd9dfa63c7dcd14f6cd2bd351fdf775b533b82926bf8a98c", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/68_row68_diffs/src_lib_studio_engine_docx_figures_store.ts.diff", "diff_sha256": "9e2970492fcbdfd9e09ac3f03ce6394c578408780f044151e0c5bddd96b9dde7"},
+   "patch_rowFX7b": {"id": "fx-7b-c19f-job-abort", "row": "FX-7b", "decision": "1.2.6 review wave F, C19f (M3 S1, N4, N5; follow-up of row 68 T-15)", "summary": "ABORTING_CODES (RENDER_TIMEOUT by code) removed; new option isJobAbort(): the caller's job state decides whether a figure failure aborts the whole job (default never). A per-figure browser RENDER_TIMEOUT is a FIGURE_PREPARE_FAILED marker", "before_sha256": "c7fc8778fb423545dd9dfa63c7dcd14f6cd2bd351fdf775b533b82926bf8a98c", "after_sha256": "e52e5df552206908cc0c6d0d30ca8ea42b819ce51914178647a13e2e43769b3e", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/fx7_diffs/FX-7b_src_lib_studio_engine_docx_figures_store.ts.diff", "diff_sha256": "f37818495d02c55b4c7de70d48913c9c662737a4f2a698f3582d0d506e6d1338"}
   },
   {
    "path": "src/lib/studio/engine/docx/fonts/catalog.ts",
@@ -5133,9 +5136,9 @@
   {
    "path": "src/lib/studio/services/render/figures.ts",
    "status": "patched",
-   "bytes": 13626,
+   "bytes": 15124,
    "source_sha256": "58003ca9140dc752efaf2a6ef824763f8129763c966f4639008a22928218fc7c",
-   "sha256": "8bb8ba33659217274b96fcc05c6692d2ea548b2708c3768af819c56c9ebffde9",
+   "sha256": "32a764681a4b425bc75d8dee1179717914ee7515b1b35a845eeae6d70b4faef1",
    "patch_row163b": {"id": "row163b-render-figures-vega", "row": "163b", "decision": "C155 (Vega chart family on the agent render path)", "summary": "chart branch of buildFigures: a spec whose kind vegaCodeOf maps (V-01..V-08, DF-01/02/03/07/09/13) goes through assertFigureCapacity then `await renderVegaFigure(...)` (vega-figure.ts); other charts unchanged. Applied on top of row162b", "diff_base": "patch_row162b.after_sha256", "before_sha256": "54159a43f080a4ee3210863f3cba23e54439e85e8d9b98c7cc027ba050db99db", "after_sha256": "2907a709f92b103d7c0224817b33cf3b0e52a24c0705e06cabb48cb47d001b79", "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/122_row163b_diffs/services_render_figures.ts.diff", "diff_sha256": "c5d26babac5fcd427e501a5e9c59c206c6e72ec52ed50d5dfe63916e8b6ee490"},
    "patch_row162b": {
     "id": "row162b-render-figures-elk-auto",
@@ -5169,7 +5172,8 @@
     "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/37_row109_diffs/render_figures.ts.diff",
     "diff_sha256": "d5382a57541129cd35607d95c8a76f6362d79cf77a884600d37bc4c64fddf663"
    },
-   "patch_row68": {"id": "row68-t15-partial-docx", "row": "68", "decision": "1.2.6 patch T-15 (U3; register N-036 FIGURE_PREPARE_FAILED, E-15 FIGURE_PLACEHOLDER reused; row143a CHAR unchanged)", "summary": "buildFigures: a figure whose SVG fails stays a job error (PARTIAL) and is now also reported to prepareFigureStore through failureFor (marker instead of a skipped key); NEW rasterize wrapper records a raster failure as a job error and rethrows it to the store (marker). svgFor contract unchanged (still returns undefined on failure)", "before_sha256": "2907a709f92b103d7c0224817b33cf3b0e52a24c0705e06cabb48cb47d001b79", "after_sha256": "8bb8ba33659217274b96fcc05c6692d2ea548b2708c3768af819c56c9ebffde9", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/68_row68_diffs/src_lib_studio_services_render_figures.ts.diff", "diff_sha256": "c24b01fa951164d5f29cdbdf49b646d59bcc6c8edc57e6800c7a333c0c53d7dd"}
+   "patch_row68": {"id": "row68-t15-partial-docx", "row": "68", "decision": "1.2.6 patch T-15 (U3; register N-036 FIGURE_PREPARE_FAILED, E-15 FIGURE_PLACEHOLDER reused; row143a CHAR unchanged)", "summary": "buildFigures: a figure whose SVG fails stays a job error (PARTIAL) and is now also reported to prepareFigureStore through failureFor (marker instead of a skipped key); NEW rasterize wrapper records a raster failure as a job error and rethrows it to the store (marker). svgFor contract unchanged (still returns undefined on failure)", "before_sha256": "2907a709f92b103d7c0224817b33cf3b0e52a24c0705e06cabb48cb47d001b79", "after_sha256": "8bb8ba33659217274b96fcc05c6692d2ea548b2708c3768af819c56c9ebffde9", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/68_row68_diffs/src_lib_studio_services_render_figures.ts.diff", "diff_sha256": "c24b01fa951164d5f29cdbdf49b646d59bcc6c8edc57e6800c7a333c0c53d7dd"},
+   "patch_rowFX7b": {"id": "fx-7b-c19f-job-abort", "row": "FX-7b", "decision": "1.2.6 review wave F, C19f (M3 S1, N4, N5; follow-up of row 68 T-15)", "summary": "buildFigures passes isJobAbort = job.aborted; rasterize wrapper: after a LAUNCH_FAILED/SANDBOX_UNAVAILABLE bridge failure the remaining figures are not handshaken again (each still a named job error + marker); job error names the figure (M3 N5); once the job is aborted it rethrows the job's RENDER_TIMEOUT without a figure error", "before_sha256": "8bb8ba33659217274b96fcc05c6692d2ea548b2708c3768af819c56c9ebffde9", "after_sha256": "32a764681a4b425bc75d8dee1179717914ee7515b1b35a845eeae6d70b4faef1", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/fx7_diffs/FX-7b_src_lib_studio_services_render_figures.ts.diff", "diff_sha256": "233d2d6c263fb109199a0d000ec357e09c9ab03ff11d30641d0daa376078dce8"}
   },
   {
    "path": "src/lib/studio/services/render/final-name.ts",
@@ -6169,6 +6173,7 @@
   "50b",
   "62",
   "77",
-  "FX-7a"
+  "FX-7a",
+  "FX-7b"
  ]
 }

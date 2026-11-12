@@ -36,9 +36,6 @@ export interface FigureStoreEntry {
   failed?: FigurePrepareFailure;
 }
 
-/** Galat yang tetap menghentikan job (bukan kegagalan satu figur): batas waktu job. */
-const ABORTING_CODES: ReadonlySet<string> = new Set(["RENDER_TIMEOUT"]);
-
 export interface PrepareFigureStoreOptions {
   /** SVG per blok figur (`chart`, `diagram`, `symbolSheet`; `image` opsional). undefined = lewati. */
   svgFor: (block: NormBlock) => FigureSvgSheet | readonly FigureSvgSheet[] | undefined | Promise<FigureSvgSheet | readonly FigureSvgSheet[] | undefined>;
@@ -47,6 +44,12 @@ export interface PrepareFigureStoreOptions {
    * (layanan render mencatat galat job lalu melewati figur). Ada = entri penanda FIGURE_PREPARE_FAILED, bukan lewati.
    */
   failureFor?: (block: NormBlock) => { message: string; causeCode?: string } | undefined;
+  /**
+   * Swarm 1.2.6 (FX-7, C19f): true = job pemanggil sendiri sudah dihentikan (aborted/timeout); galat figur saat itu
+   * dilempar ulang dan menghentikan seluruh job. Keputusan dari status job, bukan dari kode galat: RENDER_TIMEOUT satu
+   * operasi browser (figur lambat) tetap hanya penanda FIGURE_PREPARE_FAILED. Default: tidak pernah menghentikan.
+   */
+  isJobAbort?: () => boolean;
   /** Default: `rasterizeSvg` engine/browser (S25). */
   rasterize?: (svg: string, i: { widthMm: number; heightMm: number; dpi: 300; tpl?: ResolvedTemplate }) => Promise<Uint8Array>;
   /** IMPL-W4 (review 15 F4): templat dokumen; aset fon templat dipakai untuk fon tertanam raster. */
@@ -118,7 +121,7 @@ export async function prepareFigureStore(snapshot: NormDocSnapshot, opts: Prepar
     } catch (e) {
       const causeCode = e instanceof StudioEngineError ? e.code : undefined;
       const cause = e instanceof Error ? e.message : String(e);
-      if (causeCode !== undefined && ABORTING_CODES.has(causeCode)) {
+      if (opts.isJobAbort?.() === true) {
         opts.log({ level: "error", message: `${FIGURES_MODULE}: figur ${key} gagal disiapkan: ${cause}`, code: causeCode, address, at: opts.fixedDate });
         throw e;
       }
