@@ -87,20 +87,36 @@ export function elkTierOrder(plan: ElkPlan, tier: string, group: readonly Diagra
 }
 
 /**
+ * Swarm 1.2.6 (FX-7, M2 S3): the one two-pass clamp of a tier's left x values (mm), used by the ELK
+ * tier placement below and by the ranked-flow TB placement (layout-a/flow.ts `underPredecessors`).
+ * Left to right each x is pushed to >= 0 and >= its left neighbour + `w + gap`; right to left it is
+ * pulled to <= `xMax` (the last node) and <= its right neighbour - `w - gap`. `xMax` is the caller's
+ * explicit window (largest left x of a node). Mutates and returns `xs`; undefined when the first x
+ * still falls left of 0 (the tier does not fit the window).
+ */
+export function clampTierXs(xs: number[], w: number, gap: number, xMax: number): number[] | undefined {
+  const m = xs.length;
+  for (let i = 0; i < m; i++) xs[i] = Math.max(xs[i], i === 0 ? 0 : xs[i - 1] + w + gap);
+  for (let i = m - 1; i >= 0; i--) xs[i] = Math.min(xs[i], i === m - 1 ? xMax : xs[i + 1] - w - gap);
+  return m && xs[0] < -1e-6 ? undefined : xs;
+}
+
+/**
  * Left x (mm, on the lattice `lx`) of each node of one tier, from the ELK centres: each node as near
  * its ELK centre as the lattice allows, kept `gap` apart and inside [0, W]. Undefined when the tier
  * does not fit (the caller then centres the tier as the original layout does).
+ * FX-7 (M2 S3): `win` = explicit lattice window [0, win] for the node boxes (ranked flow TB passes the
+ * T-02 inset window); absent = the full sheet width W as before (layered/topology bytes unchanged).
  */
-export function elkTierXs(plan: ElkPlan, group: readonly DiagramNode[], w: number, gap: number, W: number, lx: number): number[] | undefined {
+export function elkTierXs(plan: ElkPlan, group: readonly DiagramNode[], w: number, gap: number, W: number, lx: number, win?: number): number[] | undefined {
   const m = group.length;
-  if (!m || m * w + (m - 1) * gap > W + 1e-6) return undefined;
+  const fit = win ?? W;
+  if (!m || m * w + (m - 1) * gap > fit + 1e-6) return undefined;
   const xs = group.map((n) => {
     const c = plan.cx[n.id];
     return Number.isFinite(c) ? snap(c - w / 2, lx) : Number.NaN;
   });
   if (xs.some((x) => !Number.isFinite(x))) return undefined;
-  for (let i = 0; i < m; i++) xs[i] = Math.max(xs[i], i === 0 ? 0 : xs[i - 1] + w + gap);
-  for (let i = m - 1; i >= 0; i--) xs[i] = Math.min(xs[i], i === m - 1 ? Math.floor((W - w) / lx + 1e-9) * lx : xs[i + 1] - w - gap);
-  if (xs[0] < -1e-6) return undefined;
-  return xs.map((x) => Number(x.toFixed(6)) || 0); // never -0 (printed as "-0.0")
+  const out = clampTierXs(xs, w, gap, win === undefined ? Math.floor((W - w) / lx + 1e-9) * lx : win - w);
+  return out?.map((x) => Number(x.toFixed(6)) || 0); // never -0 (printed as "-0.0")
 }

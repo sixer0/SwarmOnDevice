@@ -97,7 +97,8 @@
   "row111a": "2026-11-12: 1.2.6 row 111a (INV-E provenance audit). Every vendor file in git diff --name-only e363918a69..HEAD (70 files + this file) has an entry whose sha256/bytes equal the file at HEAD and a patch record; counts recomputed from files[] (were copied 411, patched 155, bytes 9942647; now copied 410, patched 156, bytes 9955998); duplicate deferred_patches.row66 keys merged; patch_rows += 25, 50b, 62, 77 (1.2.6 vendor rows that were missing). Report: docs/2026-11-12_swarm_1_2_6_patch/implementation/111a_provenance_audit.md",
   "rowFX7a": "2026-11-13: 1.2.6 row FX-7 item a (C19d). 1 vendor file re-patched (files[].patch_rowFX7a): contract/schema/v2/figure-text.ts CAPTION_TOKEN_RE figure number 1-3 digits (\\d{1,3}); 4-digit years after the keyword are not a token. Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/fx7_diffs/. counts by delta: bytes 9955998 -> 9956227; status unchanged. patch_rows += FX-7a",
   "rowFX7b": "2026-11-13: 1.2.6 row FX-7 item b (C19f). 3 vendor files re-patched (files[].patch_rowFX7b): engine/docx/figures/store.ts (ABORTING_CODES removed; isJobAbort option decides the whole-job abort), services/render/figures.ts (isJobAbort = job.aborted; dead bridge tried once per job; raster job error names the figure; aborted job rethrows its own RENDER_TIMEOUT once), engine/docx/assemble/index.ts (marker does not hide a good fallback entry). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/fx7_diffs/. counts by delta: bytes 9956227 -> 9958171; status unchanged. patch_rows += FX-7b",
-  "rowFX10": "2026-11-13: 1.2.6 fix row FX-10 (review wave F guides; C19a, gate 04 F6/F8/F12). 3 vendor files re-patched (files[].patch_rowFX10, before = previous sha256; statuses unchanged): docs/STUDIO-AGENT-GUIDE.md, scripts/studio/mcp/resources.ts, scripts/studio/mcp/figure-tools.ts. Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/fx10_diffs/. counts by delta: bytes 9958171 -> 9958945; files/copied/patched/replaced/added unchanged. patch_rows += FX-10"
+  "rowFX10": "2026-11-13: 1.2.6 fix row FX-10 (review wave F guides; C19a, gate 04 F6/F8/F12). 3 vendor files re-patched (files[].patch_rowFX10, before = previous sha256; statuses unchanged): docs/STUDIO-AGENT-GUIDE.md, scripts/studio/mcp/resources.ts, scripts/studio/mcp/figure-tools.ts. Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/fx10_diffs/. counts by delta: bytes 9958171 -> 9958945; files/copied/patched/replaced/added unchanged. patch_rows += FX-10",
+  "rowFX7c": "2026-11-13: 1.2.6 row FX-7 item c (M2 S3). 2 vendor files re-patched (files[].patch_rowFX7c): engine/diagram/elk/plan.ts (clampTierXs shared clamp; elkTierXs optional window), engine/diagram/layout-a/flow.ts (underPredecessors uses clampTierXs; ranked TB ELK branch passes the T-02 inset window). Layered/topology callers unchanged (full-width window). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/fx7_diffs/. counts by delta: bytes 9958945 -> 9960240; status unchanged. patch_rows += FX-7c"
  },
  "counts": {
   "files": 608,
@@ -105,7 +106,7 @@
   "patched": 156,
   "replaced": 12,
   "added": 30,
-  "bytes": 9958945
+  "bytes": 9960240
  },
  "files": [
   {
@@ -2597,10 +2598,11 @@
   {
    "path": "src/lib/studio/engine/diagram/elk/plan.ts",
    "status": "added",
-   "bytes": 5161,
+   "bytes": 6193,
    "source_sha256": null,
-   "sha256": "0c68f8d9052907c9e523bcb0e3d0d4cff545225763ce4b6d2a34381b67ccda45",
+   "sha256": "ce4eebece49448ffd9fc0c567e251deaf52e8f368197909578afac60f580e800",
    "patch_row46": {"id": "row46-t11-ranked-flow", "row": "46", "decision": "1.2.6 patch T-11 ranked layout (U5, D4=A, C7 S17-1..S17-5; register N-109, N-111, N-112, N-161..N-164; 01e §4.1-§4.2, §4.5, §5, §6.5-6.8)", "summary": "ElkPlan.direction?: TB | LR (N-164; absent = TB, cx documented as cross-axis centre); elkPlanKey adds direction when the spec has one (spec without direction keeps the 1.2.5 key)", "diff_base": "sha256 before this row", "before_sha256": "a2e87a1409288fee984e15f05f33be85368fa01be7bf41755676e03878069b75", "after_sha256": "0c68f8d9052907c9e523bcb0e3d0d4cff545225763ce4b6d2a34381b67ccda45", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/46_row46_diffs/src_lib_studio_engine_diagram_elk_plan.ts.diff", "diff_sha256": "fc2aac00919b6188c0d8556ac0242ab475b68c456749211064f117e5f2373fd2"},
+   "patch_rowFX7c": {"id": "fx-7c-s3-clamp", "row": "FX-7c", "decision": "1.2.6 review wave F, M2 S3 (+N1; follow-up of rows 46/47, T-11/T-02)", "summary": "new exported clampTierXs(xs, w, gap, xMax): the one two-pass tier clamp; elkTierXs uses it and gains an optional lattice window `win` (absent = full sheet W as before, so layered/topology bytes are unchanged)", "before_sha256": "0c68f8d9052907c9e523bcb0e3d0d4cff545225763ce4b6d2a34381b67ccda45", "after_sha256": "ce4eebece49448ffd9fc0c567e251deaf52e8f368197909578afac60f580e800", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/fx7_diffs/FX-7c_src_lib_studio_engine_diagram_elk_plan.ts.diff", "diff_sha256": "26491814fefff72699cde7ba1d631dfd7b469fe6e813e96c83660afe46815faa"},
    "added_by": "162",
    "note": "NEW Swarm file of row 162: ElkPlan type, withElkPlan / elkPlanFor (active plan for one synchronous build), elkTierOrder, elkTierXs. No ELK import. Copy: implementation/114_row162_diffs/engine__diagram__elk__plan.ts.new"
   },
@@ -2682,12 +2684,13 @@
   {
    "path": "src/lib/studio/engine/diagram/layout-a/flow.ts",
    "status": "patched",
-   "bytes": 24457,
+   "bytes": 24720,
    "source_sha256": "90afeff371687137694305bba1d5cd595f80fb06f3bc3a79211001203e021b1a",
-   "sha256": "4a6c826d67d971b7382d44f78da98de66dd5bc867bf8801ddd731d3ee23d2a4c",
+   "sha256": "cd217a453f494e05432f13167d4b055fcf12ec36284eede2ab1e8c735b23efa3",
    "patch_row63": {"id": "row63-t07-diamond-height", "row": "63", "decision": "1.2.6 patch T-07, U5 (01_specs T-07; register N-017)", "summary": "inline diamond h*1.25 removed from the per_row branch and ranked baseSize (nodeSize carries it; byte-identical there); legacy list flow diamonds now take the factor (INTENT dg_flow)", "before_sha256": "9b270e5d010022769d90836b7a1c82a1221909a33f9ce9ddf696f3d55555ea40", "after_sha256": "4a6c826d67d971b7382d44f78da98de66dd5bc867bf8801ddd731d3ee23d2a4c", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/63_row63_diffs/engine_diagram_layout-a_flow.ts.diff", "diff_sha256": "4a1da80da71d7402a4bba48a0281a4c7ce994f08e9ba781828748ed91437e268"},
    "patch_row46": {"id": "row46-t11-ranked-flow", "row": "46", "decision": "1.2.6 patch T-11 ranked layout (U5, D4=A, C7 S17-1..S17-5; register N-109, N-111, N-112, N-161..N-164; 01e §4.1-§4.2, §4.5, §5, §6.5-6.8)", "summary": "direction present (flowDirectionOf: flow + TB/LR) -> NEW ranked flow layout (layoutRankedFlow); absent -> legacy list layout unchanged (byte-identical, row 45 A15 goldens). NEW exports FLOW_RANK_NODE_MIN_UNITS 2, FLOW_RANK_GAP_BASELINES 4, FLOW_LR_CORRIDOR_UNITS 2, FLOW_LR_MAX_PARALLEL 6, flowRanks (DFS back edges, longest path, mean-predecessor order), flowTbCap/flowTbMaxPerRank/flowLrMaxRanks (lattice capacity inside the T-02 inset), flowRankOverload, rankedFlowSizes (shared with the ELK adapter); over-capacity refused before placement as DiagramOverCapacity DATUM-37-lebar; sheet.edgeInset unit rank (row 59 hook); ELK plan order (TB also x) when a plan for this spec is active", "diff_base": "sha256 before this row", "before_sha256": "90afeff371687137694305bba1d5cd595f80fb06f3bc3a79211001203e021b1a", "after_sha256": "241e74568c19bb66ee9ed28ae506af204e78c86805c39c46a011a6a3734e7633", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/46_row46_diffs/src_lib_studio_engine_diagram_layout-a_flow.ts.diff", "diff_sha256": "5867439cd7b5b766d838f16a4654d38956bc38257249c2cf714ba7db2e0ec261"},
-   "patch_row47": {"id": "row47-t11-acceptance", "row": "47", "decision": "1.2.6 patch T-11 acceptance (U3, U5, D4=A, C7; register N-160; 01e §4.3-§4.5, §7.2 A2-A6, A9-A11, A13-A15)", "summary": "NEW FLOW_SERIALISED (N-160) + flowSerialisedNote (01e §4.4: legacy flow with a rank of >= 2 nodes, widest rank named, REPORT only); TB ranked flow: ranks r > 0 placed under their predecessors (underPredecessors, lattice window inside the T-02 inset, centred-row fallback) and the corridor above a rank grows by one baseline per extra edge-label row (corridorLabelRows, knockout widths at default places) so labels leave no GEOM_STUB_SEGMENT tick (01e §4.3 realised by placement)", "diff_base": "sha256 before this row", "before_sha256": "241e74568c19bb66ee9ed28ae506af204e78c86805c39c46a011a6a3734e7633", "after_sha256": "9b270e5d010022769d90836b7a1c82a1221909a33f9ce9ddf696f3d55555ea40", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/47_row47_diffs/src_lib_studio_engine_diagram_layout-a_flow.ts.diff", "diff_sha256": "ce3d2c8e6145595bb2ad59fd0c59cf80300b8d99ead69f199800f981340b20e3"}
+   "patch_row47": {"id": "row47-t11-acceptance", "row": "47", "decision": "1.2.6 patch T-11 acceptance (U3, U5, D4=A, C7; register N-160; 01e §4.3-§4.5, §7.2 A2-A6, A9-A11, A13-A15)", "summary": "NEW FLOW_SERIALISED (N-160) + flowSerialisedNote (01e §4.4: legacy flow with a rank of >= 2 nodes, widest rank named, REPORT only); TB ranked flow: ranks r > 0 placed under their predecessors (underPredecessors, lattice window inside the T-02 inset, centred-row fallback) and the corridor above a rank grows by one baseline per extra edge-label row (corridorLabelRows, knockout widths at default places) so labels leave no GEOM_STUB_SEGMENT tick (01e §4.3 realised by placement)", "diff_base": "sha256 before this row", "before_sha256": "241e74568c19bb66ee9ed28ae506af204e78c86805c39c46a011a6a3734e7633", "after_sha256": "9b270e5d010022769d90836b7a1c82a1221909a33f9ce9ddf696f3d55555ea40", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/47_row47_diffs/src_lib_studio_engine_diagram_layout-a_flow.ts.diff", "diff_sha256": "ce3d2c8e6145595bb2ad59fd0c59cf80300b8d99ead69f199800f981340b20e3"},
+   "patch_rowFX7c": {"id": "fx-7c-s3-clamp", "row": "FX-7c", "decision": "1.2.6 review wave F, M2 S3 (+N1; follow-up of rows 46/47, T-11/T-02)", "summary": "underPredecessors uses clampTierXs on the inset window (dead xs[0] < 0 branch gone, M2 N1); ranked TB ELK branch calls elkTierXs with insetWindow(W, lx) = floor((W - 2 x GRAPH_EDGE_INSET_MM)/lx) x lx, so an ELK plan near a sheet edge is clamped inside the T-02 inset instead of throwing DATUM-37-lebar (R4 discard)", "before_sha256": "4a6c826d67d971b7382d44f78da98de66dd5bc867bf8801ddd731d3ee23d2a4c", "after_sha256": "cd217a453f494e05432f13167d4b055fcf12ec36284eede2ab1e8c735b23efa3", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/fx7_diffs/FX-7c_src_lib_studio_engine_diagram_layout-a_flow.ts.diff", "diff_sha256": "2f80f582beaf808de529405cc064675ba021f5199c6e8016e5b82cf9fc49aee6"}
   },
   {
    "path": "src/lib/studio/engine/diagram/layout-a/geometry.ts",
@@ -6179,6 +6182,7 @@
   "77",
   "FX-7a",
   "FX-7b",
-  "FX-10"
+  "FX-10",
+  "FX-7c"
  ]
 }

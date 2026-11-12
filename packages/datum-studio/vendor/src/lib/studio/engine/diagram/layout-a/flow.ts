@@ -8,7 +8,7 @@ import type { DiagramBox, DiagramNode, DiagramSheet, LayoutResult, StudioDiagram
 import { DiagramOverCapacity } from "../../figure-capacity";
 import { GRAPH_EDGE_INSET_MM, type SheetEdgeInset } from "../core/sheet";
 import { snapFloor } from "../core/tokens";
-import { elkPlanFor, elkTierOrder, elkTierXs } from "../elk/plan";
+import { clampTierXs, elkPlanFor, elkTierOrder, elkTierXs } from "../elk/plan";
 import { diagramFitActive, diagramFitAllows, diagramFitNote } from "../fit/state";
 import { knockWidthMm } from "../fit/labels";
 import { fitTierWidth, grownHeight, planNodeText } from "../fit/text";
@@ -243,6 +243,11 @@ function usableWidth(W: number): number {
   return W - 2 * GRAPH_EDGE_INSET_MM;
 }
 
+/** FX-7 (M2 S3): right end of the lattice window inside the T-02 inset, floor((W - 2 x inset) / lx) x lx. */
+function insetWindow(W: number, lx: number): number {
+  return Math.floor(usableWidth(W) / lx + 1e-9) * lx;
+}
+
 /** TB node-width cap for a rank of `m` nodes (01e §4.2 `cap_m`, on the usable width). */
 export function flowTbCap(m: number, W: number, lx: number): number {
   return Math.floor((usableWidth(W) - (m - 1) * lx) / m / lx + 1e-9) * lx;
@@ -455,7 +460,7 @@ function underPredecessors(
 ): number[] {
   const m = group.length;
   const centred = group.map((_, i) => x0 + i * (w + gap));
-  const hi = Math.floor(usableWidth(W) / lx + 1e-9) * lx;
+  const hi = insetWindow(W, lx);
   if (m * w + (m - 1) * gap > hi + 1e-6) return centred;
   const xs = group.map((n, i) => {
     const cs: number[] = [];
@@ -468,9 +473,9 @@ function underPredecessors(
     const want = cs.reduce((a, c) => a + c, 0) / cs.length - w / 2;
     return Math.ceil(want / lx - 0.5 - 1e-9) * lx;
   });
-  for (let i = 0; i < m; i++) xs[i] = Math.max(xs[i], 0, i ? xs[i - 1] + w + gap : 0);
-  for (let i = m - 1; i >= 0; i--) xs[i] = Math.min(xs[i], hi - w, i < m - 1 ? xs[i + 1] - w - gap : hi - w);
-  return xs[0] < -1e-6 ? centred : xs;
+  // FX-7 (M2 S3): the shared clamp (elk/plan.ts) on the inset window; the fit check above means it never
+  // returns undefined here (the former `xs[0] < 0` branch was dead, M2 N1), the fallback stays for safety.
+  return clampTierXs(xs, w, gap, hi - w) ?? centred;
 }
 
 /**
@@ -526,7 +531,7 @@ function layoutRankedFlow(s: StudioDiagramV1, sheet: DiagramSheet, dir: FlowDire
       const total = m * w + (m - 1) * gap;
       const x0 = snapFloor((W - total) / 2, lat.x);
       const xs = elk
-        ? elkTierXs(elk, group, w, gap, W, lat.x)
+        ? elkTierXs(elk, group, w, gap, W, lat.x, insetWindow(W, lat.x))
         : r > 0
           ? underPredecessors(s, group, w, gap, W, lat.x, boxes, x0)
           : undefined;
