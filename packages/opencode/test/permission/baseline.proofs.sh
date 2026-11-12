@@ -41,7 +41,7 @@ if (p.bash?.["curl*"] !== "ask" || p.bash?.["sudo*"] !== "deny") f.push("bash cl
 if (Object.keys(p).slice(-2).join(",") !== "graft_*,swarm-web_*") f.push("gate keys not last")
 if (j.agent?.researcher?.mode !== "subagent") f.push("researcher mode")
 if (j.agent?.researcher?.permission?.["*"] !== "deny") f.push("researcher deny-all")
-if (j.experimental?.mcp_timeout !== 30000) f.push("mcp_timeout missing (schema-validity: core v1/config/config.ts:182)")
+if (j.experimental?.mcp_timeout !== 600000) f.push("mcp_timeout missing (schema-validity: core v1/config/config.ts:199)")
 if (f.length) { console.log(f.join("; ")); process.exit(1) }
 ' "$T/cfg.json") && ok 2 || bad 2 "${c:-debug config exited nonzero: $(head -c 200 "$T/cfg.err")}"
 

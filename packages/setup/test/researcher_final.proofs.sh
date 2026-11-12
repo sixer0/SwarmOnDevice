@@ -227,7 +227,7 @@ if (JSON.stringify(tail) !== JSON.stringify(mcpPermissionGates().map((x) => [...
 if (p["*"] !== "ask") f.push("baseline catch-all ask lost");
 if (p.webfetch !== "deny") f.push("baseline webfetch deny lost");
 if (j.agent?.researcher?.mode !== "subagent") f.push("agent.researcher missing from resolved config");
-if (j.experimental?.mcp_timeout !== 30000) f.push("experimental.mcp_timeout lost");
+if (j.experimental?.mcp_timeout !== 600000) f.push("experimental.mcp_timeout lost");
 console.log(f.length ? "FAIL|" + f.join(" | ") : "OK|gates-last intact, researcher present");
 ' "$WORK/cfg.json" 2>&1)
   case "$CFG" in

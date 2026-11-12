@@ -2341,3 +2341,27 @@ it.effect("the baseline's catch-all still counts as shipped when no source write
     }),
   ),
 )
+
+// 1.2.6 row 31b, CFG-02 T2b (01d_spec_config.md §7): the shipped experimental.mcp_timeout
+// is 600000 (milliseconds) and sits below the user's global file, so a user value wins.
+describe("CFG-02 T2b experimental.mcp_timeout merge", () => {
+  const resolved = (config?: object) =>
+    Effect.gen(function* () {
+      const project = yield* tmpdirScoped()
+      return yield* withGlobalConfig({ config, name: "swarm.jsonc" }, () =>
+        withInstanceDir(project, Config.use.get()),
+      )
+    })
+
+  it.effect("no user value resolves to the shipped 600000", () =>
+    Effect.gen(function* () {
+      expect((yield* resolved()).experimental?.mcp_timeout).toBe(600000)
+    }),
+  )
+
+  it.effect("a user swarm.jsonc value of 45000 wins over the shipped value", () =>
+    Effect.gen(function* () {
+      expect((yield* resolved({ experimental: { mcp_timeout: 45000 } })).experimental?.mcp_timeout).toBe(45000)
+    }),
+  )
+})
