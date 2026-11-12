@@ -16,6 +16,7 @@ import { createStudioMcpServer } from "../../vendor/scripts/studio/mcp/server"
 import { executeTool, McpSession, newCallId, TOOLS, type ToolDef } from "../../vendor/scripts/studio/mcp/tools"
 import { MISSION_GUIDE_NAME, MISSION_GUIDE_URI, missionGuideText } from "./mission/mission-guide.ts"
 import { DIAGRAM_GUIDE_NAME, DIAGRAM_GUIDE_URI, diagramGuideText } from "./diagram-guide.ts"
+import { ASSET_TOOL_NAME, assetHostExtension } from "./asset-tool.ts"
 import { HOST_DROPPED_TOOLS, HOST_EXTRA_TOOLSETS, HOST_KEPT_TOOLS, sessionForCall, type HostRememberedBasis, type HostToolExtension, type HostToolNext, type HostToolSession } from "./tool-table.ts"
 
 export interface HostServerDeps {
@@ -72,7 +73,10 @@ export function createHostMcpServer(deps: HostServerDeps): Server {
   // `documents`-only selection although spec §5.1 moved it to `documents`).
   const execConfig: StudioMcpConfig = { ...config, toolsets: [...TOOLSETS] }
   const server = createStudioMcpServer({ config, fetchImpl: deps.fetchImpl, repoRoot: deps.repoRoot, log: deps.log, ...(deps.nfs ? { nfs: deps.nfs } : {}), ...(deps.now ? { now: deps.now } : {}) })
-  const active = activeHostTools(config.toolsets, deps.extensions)
+  // Row 50c (1.2.6, W-13 N-106): `studio_asset_put` is a host built-in (toolset `write`), listed after the given
+  // extensions; a caller that registers its own extension of that name keeps it (no name twice).
+  const extensions = deps.extensions.some((e) => e.name === ASSET_TOOL_NAME) ? deps.extensions : [...deps.extensions, assetHostExtension()]
+  const active = activeHostTools(config.toolsets, extensions)
   const toolDeps = { config: execConfig, fetchImpl: deps.fetchImpl, nfs: deps.nfs ?? REAL_NODE_FS, session: new McpSession(), ...(deps.now ? { now: deps.now } : {}) }
   const emit = (rec: Record<string, unknown>) =>
     deps.log(redactSecret(JSON.stringify({ ts: new Date().toISOString(), source: "datum-studio-host.mcp", sessionId: deps.session.sessionId, agentId: deps.session.agentId, ...rec }), secret))
