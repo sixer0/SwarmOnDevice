@@ -47,3 +47,31 @@ describe("1.2.6 row 102 working norms in swarm-workflow.md", () => {
     expect(WORKFLOW).not.toMatch(/\b004\b|Gambar|ukur_prosa|dotgen|Graphviz/)
   })
 })
+
+// Row 103 (1.2.6): W-06 release blockers before cosmetic loops (section 2), W-08 the mission is the one decision
+// source and the docs/ file is its export (section 5, matches row 89: done lists the decision ids,
+// studio_mission_export renders the file), W-18 one contract file, corrections revise it (section 5).
+describe("1.2.6 row 103 blockers, decisions and contracts in swarm-workflow.md", () => {
+  test("W-06: section 2 orders the release blocker before cosmetic loops, with the paged findings", () => {
+    const text = section(2)
+    expect(text).toContain("- Release blockers first:")
+    expect(text).toContain("before any cosmetic or layout loop")
+    expect(text).toContain("studio_document_status with findings")
+  })
+
+  test("W-08: section 5 records decisions in the mission; the docs/ file is its export", () => {
+    const text = section(5)
+    expect(text).toContain("- One decision source:")
+    expect(text).toContain("studio_mission_record_decision")
+    expect(text).toContain("is its export (studio_mission_export)")
+    expect(text).toContain("never a second register edited by hand")
+    expect(text).not.toContain("in docs/<task>/decisions.md when it happens")
+  })
+
+  test("W-18: section 5 keeps one contract file and a correction revises it", () => {
+    const text = section(5)
+    expect(text).toContain("- One contract, one file:")
+    expect(text).toContain("A correction is a revision of that file")
+    expect(text).toContain("never an appended override or correction section")
+  })
+})

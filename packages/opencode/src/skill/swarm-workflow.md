@@ -60,6 +60,7 @@ Write the blueprint to docs/<task>/plan.md as one table:
 - Say in one line which optional steps you skip for a small job and why.
 - Measure a tool before promising a shape: run the layout, format or feature on one small sample first and write in the plan what it produced. Promise only what the sample showed.
 - Declare every tool or command outside Swarm a row will run (a converter, renderer, interpreter, package manager) in that row, so the person approves it with the plan. Swarm's permission prompts still apply.
+- Release blockers first: when a check marks the work FAIL (a lint FAIL, a failed gate), the rows that fix those findings come before any cosmetic or layout loop. Read every finding, not only the first page: studio_document_status with findings {checkId, offset} pages through them.
 
 ## 3. Approval
 
@@ -97,7 +98,8 @@ Return: status complete, blocked or needs-review; files created or changed; the 
 - Rows whose dependencies are met may run in parallel, in one message, when they write different files. One writer per file; one lockfile, migration, build or port user at a time.
 - After each agent returns, read its output files yourself. Missing or empty: send the row back once to the same agent with the missing paths. Still failing: mark the row blocked with a note and tell the person.
 - A change after approval: a wording fix or an extra check is noted in the row. A new row or a changed scope is a decision first (record it, then add the row with the decision id). A much larger scope goes back to the person.
-- Record every decision the person makes, and every one you make on their behalf, in docs/<task>/decisions.md when it happens.
+- One decision source: record every decision the person makes, and every one you make on their behalf, in the mission with studio_mission_record_decision when it happens. The decisions file under docs/ is its export (studio_mission_export), never a second register edited by hand; setting the mission done lists the decision ids. Without Mission Control, docs/<task>/decisions.md is the register.
+- One contract, one file: a brief, contract or spec the agents work to lives in one file. A correction is a revision of that file (the changed rule rewritten in place, the revision noted at the top), never an appended override or correction section that contradicts the body.
 
 ## 6. Verify
 

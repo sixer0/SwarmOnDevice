@@ -310,7 +310,8 @@ describe("SW-08, SW-09: the built-in swarm-workflow skill", () => {
     // Row 197 (L57, S194-01): +84 B to 9185 for "Swarm's autonomous mode setting (the person turns it on)".
     // Row 198 (L61, B2 + B5): general's tier "session model" -> "worker" (-7 B) and the Activity -> Agents line (+90 B).
     // Row 102 (1.2.6, W-07/W-04/W-11/W-02): +902 B to 10170 for four working-norm bullets (sections 0, 2, 6).
-    expect(Buffer.byteLength(WORKFLOW)).toBe(10170)
+    // Row 103 (1.2.6, W-06/W-08/W-18): +829 B to 10999 (one bullet in section 2, line 100 rewritten plus one bullet in section 5).
+    expect(Buffer.byteLength(WORKFLOW)).toBe(10999)
   })
 })
 
