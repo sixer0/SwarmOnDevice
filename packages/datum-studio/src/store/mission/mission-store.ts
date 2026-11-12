@@ -482,10 +482,13 @@ export class MissionStore {
     to: MissionStatus,
     args: { decision?: string; supersededBy?: string; note?: string } = {},
     opts?: MissionWriteOptions,
-  ): { id: string; from: MissionStatus; to: MissionStatus; snapshotId: string } {
+  ): { id: string; from: MissionStatus; to: MissionStatus; snapshotId?: string; unchanged?: true } {
     const actor = this.actorOf(opts)
     const m = this.openMission(tx, mission)
     const from = m.status
+    // 1.2.6 row 84 (MC-06, U5 alternative A): a move to the current status is a no-op, not a refusal. Nothing is
+    // written: no status update, no event, no snapshot. approved stays reachable only through approve().
+    if (to === from && to !== "approved") return { id: mission, from, to, unchanged: true }
     const allowed = MISSION_TRANSITIONS[from]
     if (to === "approved" || !allowed.includes(to)) throw err("STATUS_TRANSITION", `mission ${from} -> ${to} is not allowed`, { from, to, allowed, ...(to === "approved" ? { via: "approve" } : {}) })
     if (args.supersededBy !== undefined && to !== "cancelled") throw err("SUPERSEDE_TARGET", "supersededBy is allowed only with cancelled", { mission, supersededBy: args.supersededBy })

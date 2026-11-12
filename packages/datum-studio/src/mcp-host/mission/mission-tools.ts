@@ -372,7 +372,7 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
     tool(
       "studio_mission_set_status",
       "Change mission status",
-      "Mission status (§2.2): running, paused, done (all rows done or dropped) or cancelled (needs decision; optional supersededBy). done and cancelled are terminal; closing releases locks and withdraws open decision requests.",
+      "Mission status (§2.2): running, paused, done (all rows done or dropped) or cancelled (needs decision; optional supersededBy). done and cancelled are terminal; closing releases locks and withdraws open decision requests. Setting the current status again returns unchanged: true and writes nothing.",
       false,
       async (a, s) => {
         const r = await write(dry(a), (tx) =>
@@ -384,6 +384,7 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
             writeOptions(a, s),
           ),
         )
+        if (r.unchanged) return { text: `mission ${r.id}: already ${r.to}, unchanged (no event, no snapshot)${dryNote(a)}`, data: { ...r, dryRun: dry(a) } }
         return { text: `mission ${r.id}: ${r.from} -> ${r.to}${dryNote(a)}`, data: { ...r, dryRun: dry(a) } }
       },
     ),
