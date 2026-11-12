@@ -1135,10 +1135,10 @@ export function newCallId(): string {
   return `mcp-${randomUUID()}`;
 }
 
-/** C3: baris cid untuk teks hasil (ringkas bila banyak; daftar lengkap di structuredContent). */
+/** C3: baris cid untuk teks hasil. Swarm 1.2.6 row 74b (M-03): setiap cid tertulis (model tidak melihat structuredContent bila ada teks); > 3 cid ditambah jumlah eksplisit. */
 function cidLine(cids: readonly string[], callId: string): string {
   if (cids.length === 0) return `correlationIds: - (tanpa panggilan server; mcpCallId ${callId})`;
-  const shown = cids.length <= 3 ? cids.join(", ") : `${cids[0]}, ${cids[1]}, ... ${cids[cids.length - 1]} (${cids.length} cid; lengkap di structuredContent.correlationIds)`;
+  const shown = cids.length <= 3 ? cids.join(", ") : `${cids.join(", ")} (${cids.length} cid)`;
   return `correlationIds: ${shown}`;
 }
 
