@@ -990,6 +990,31 @@ export function lintFindingsOf(lint: unknown, checkId: string): LintFindingEntry
   });
 }
 
+/**
+ * FX-7 (M2 S6): truncation marker of one check's stored list (E/lint/structure/context.ts LINT_FINDINGS_STORED_MAX):
+ * the real total and how many findings were not stored; null when the stored list is complete.
+ */
+export function lintFindingsTruncation(lint: unknown, checkId: string): { total: number; notStored: number } | null {
+  if (!isRecord(lint) || !Array.isArray(lint.checks)) return null;
+  const row = (lint.checks as unknown[]).filter(isRecord).find((r) => String(r.checkId ?? "") === checkId && Array.isArray(r.findingsAll));
+  const total = row?.findingsTotal;
+  const notStored = row?.findingsNotStored;
+  return typeof total === "number" && typeof notStored === "number" && notStored > 0 ? { total, notStored } : null;
+}
+
+/** FX-7 (M2 S6): detail-mode lintReport without the stored finding lists (count only; page them with `findings`). */
+function lintReportOf(lint: unknown): unknown {
+  if (!isRecord(lint) || !Array.isArray(lint.checks)) return lint ?? null;
+  return {
+    ...lint,
+    checks: (lint.checks as unknown[]).map((r) => {
+      if (!isRecord(r) || !Array.isArray(r.findingsAll)) return r;
+      const { findingsAll, ...rest } = r;
+      return { ...rest, findingsAllCount: (findingsAll as unknown[]).length };
+    }),
+  };
+}
+
 // Compact on purpose: tools/list budget (mcp-doc-tools.test.ts, < 30 500 B); defaults (offset 0, limit 100) in run().
 const FINDINGS_PARAM = {
   ...obj(
@@ -1029,7 +1054,7 @@ const statusTool: ToolDef = {
       // Swarm row 206 (1.2.3): tri-state lint (ran / verdict / findings with codes, messages, rule explanations);
       // detail lists every FAIL and NOT_RUN item and keeps the full report in lintReport.
       lint: lintSum,
-      ...(detail ? { lintReport: b.lint ?? null } : {}),
+      ...(detail ? { lintReport: lintReportOf(b.lint) } : {}),
       outputs: detail ? outputs : cap(outputs, STATUS_OUTPUTS_LISTED).map((o) => pick(o, ["id", "format", "scope", "draft", "finalFileName", "sha256"])),
       ...(detail ? {} : { outputCount: outputs.length, detail: false }),
     };
@@ -1103,9 +1128,10 @@ const statusTool: ToolDef = {
       const list = lintFindingsOf(b.lint, checkId).filter((f) => chapter === null || f.chapter === chapter);
       const page = list.slice(offset, offset + limit);
       const next = offset + page.length < list.length ? offset + page.length : null;
-      data.findingsPage = { checkId, chapter, total: list.length, offset, returned: page.length, nextOffset: next };
+      const cut = lintFindingsTruncation(b.lint, checkId);
+      data.findingsPage = { checkId, chapter, total: list.length, offset, returned: page.length, nextOffset: next, ...(cut ? { truncated: cut } : {}) };
       data.findings = page;
-      text += `\n  temuan ${tok(checkId)}${chapter !== null ? ` bab ${tok(chapter)}` : ""}: ${list.length} total; offset ${offset}; ${page.length} dikembalikan; nextOffset ${next ?? "null"}\n`;
+      text += `\n  temuan ${tok(checkId)}${chapter !== null ? ` bab ${tok(chapter)}` : ""}: ${list.length} total; offset ${offset}; ${page.length} dikembalikan; nextOffset ${next ?? "null"}${cut ? `; cek menemukan ${cut.total}, ${cut.notStored} tidak disimpan (plafon simpan)` : ""}\n`;
       text += untrustedBlock(
         [
           `temuan ${checkId} ${list.length}`,
