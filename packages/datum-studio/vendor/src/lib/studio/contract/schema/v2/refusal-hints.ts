@@ -38,8 +38,22 @@ const ROOTS: ReadonlyMap<string, S> = new Map(
 export const DIAGRAM_ALIASES: Readonly<Record<string, Readonly<Record<string, string>>>> = {
   edge: { color: "kind", colour: "kind", style: "kind", stroke: "kind", dash: "kind", pattern: "kind", type: "kind", width: "kind", line: "kind" },
   node: { type: "shape", kind: "shape", name: "label", text: "label", title: "label" },
-  spec: { title: "caption", name: "caption", direction: "family", dir: "family", rankdir: "family", rankDir: "family", orientation: "family", layout: "family" },
+  // Swarm 1.2.6 row 48 (T-11, N-110, 01e §3.2): `direction` is a spec field (row 45), so it leaves this list; the
+  // reading-direction aliases (incl. Indonesian `arah`) name it. `layout` still means the family.
+  spec: {
+    title: "caption",
+    name: "caption",
+    dir: "direction",
+    rankdir: "direction",
+    rankDir: "direction",
+    orientation: "direction",
+    arah: "direction",
+    layout: "family",
+  },
 };
+
+/** Swarm 1.2.6 row 48 (T-11, 01e §3.2/§6.1): extra clause after `for "<alias>" use "direction" (TB, LR)`. */
+export const DIRECTION_ALIAS_CLAUSE = "direction berlaku untuk family flow; nilai rankdir TB/LR sama, RL/BT tidak didukung";
 
 function decode(seg: string): string {
   return seg.replace(/~1/g, "/").replace(/~0/g, "~");
@@ -150,6 +164,7 @@ export function additionalPropertyHint(schemaPath: string, field: string): strin
   if (alias !== undefined) {
     if (alias === "caption") parts.push(`"${field}" is not a diagram field: the title is the block's caption`);
     else parts.push(`for "${field}" use "${alias}"${enumText(resolve((node?.properties as S)[alias], root))}`);
+    if (alias === "direction") parts.push(DIRECTION_ALIAS_CLAUSE);
   }
   return parts.join("; ");
 }

@@ -63,7 +63,8 @@
   "row45": "2026-11-12: 1.2.6 row 45 (T-11 contract, SEC-23; register N-109, N-159, N-165; 01e §3.1, §6.2-6.4). 8 vendor files patched (files[].patch_row45, before = previous sha256): contract/schema/diagram.schema.ts and contract/schema/v2/common.schema.ts (direction enum TB/LR), contract/types/diagram.ts and contract/types/v2/doc.ts (direction?: TB | LR), services/compose/blocks.ts and services/adapt-v1/blocks.ts (allow-list copies), engine/diagram/core/spec.ts (copied -> patched: P1-direction in SPEC_CHECK_IDS after P1-sources, NEW directionIssue, check runs only when direction is present), services/ingest/by-construction.ts (copied -> patched: NEW diagramDirectionIssues, wired into evaluateByConstruction). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/45_row45_diffs/. Re-applied after the row 50b incident (row 45 commit 6d74dda80f carried no row 45 entry). counts by delta: files/replaced/added unchanged, copied 433 -> 430, patched 133 -> 136; bytes 9822838 + 5059 = 9827897. patch_rows += 45",
   "row54a": "2026-11-12: 1.2.6 row 54a (M-02, U5; register N-050, E-06). 1 vendor file re-patched (files[].patch_row54a, before = previous sha256; status unchanged): scripts/studio/_http-client.ts (NEW export IN_PROCESS_ENDPOINT_LABEL; REMOTE_UNREACHABLE text names method + route (query dropped), the in-process label instead of http://127.0.0.1:1, on a timeout the limit constant STUDIO_RENDER_CALL_TIMEOUT_MS / STUDIO_HTTP_TIMEOUT_MS and the follow-up studio_document_status). Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/54a_row54a_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9828083 + 1700 = 9829783. patch_rows += 54a",
   "row27b": "2026-11-12: 1.2.6 row 27b (T-01 follow-up, C12; register N-013 amended to \\s*). 1 vendor file re-patched (files[].patch_row27b, before = previous sha256; status unchanged): contract/schema/v2/figure-text.ts (CAPTION_TOKEN_RE keyword-number separator \\s+ -> \\s*, comment). Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/27b_row27b_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9827897 + 186 = 9828083. patch_rows += 27b",
-  "row77": "2026-11-12: 1.2.6 row 77 (M-07, U5; register N-037, N-038). 1 vendor file re-patched (files[].patch_row77, before = previous sha256; status unchanged): scripts/studio/mcp/tools.ts (studio_file_verify line FILE_VERIFIED(sha256) <64 hex>). Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/77_row77_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9829783 -> 9830004 (tools.ts 80786 -> 81007, +221). patch_rows += 77"
+  "row77": "2026-11-12: 1.2.6 row 77 (M-07, U5; register N-037, N-038). 1 vendor file re-patched (files[].patch_row77, before = previous sha256; status unchanged): scripts/studio/mcp/tools.ts (studio_file_verify line FILE_VERIFIED(sha256) <64 hex>). Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/77_row77_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9829783 -> 9830004 (tools.ts 80786 -> 81007, +221). patch_rows += 77",
+  "row48": "2026-11-12: 1.2.6 row 48 (T-11 refusals; register N-110; 01e §3.2, §6.1). 1 vendor file re-patched (files[].patch_row48, before = previous sha256; status unchanged, added): contract/schema/v2/refusal-hints.ts (aliases dir/rankdir/rankDir/orientation/arah -> direction, direction leaves the alias map, layout stays family, NEW DIRECTION_ALIAS_CLAUSE in the alias hint). P1-direction itself landed in row 45; by-construction.ts unchanged by row 48. Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/48_row48_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9830004 + 565 = 9830569. patch_rows += 48"
  },
  "counts": {
   "files": 608,
@@ -71,7 +72,7 @@
   "patched": 136,
   "replaced": 12,
   "added": 30,
-  "bytes": 9830004
+  "bytes": 9830569
  },
  "files": [
   {
@@ -984,9 +985,10 @@
   {
    "path": "src/lib/studio/contract/schema/v2/refusal-hints.ts",
    "status": "added",
-   "bytes": 8545,
+   "bytes": 9110,
    "source_sha256": null,
-   "sha256": "557747abcf25ff915261d8ca3cd19b561b62875cbc84ae238d22eec88b93a0ec",
+   "sha256": "ad032672159da9549937416b23c0358676d1ae97d5ff58f74ca594236cca61c9",
+   "patch_row48": {"id": "row48-t11-direction-aliases", "row": "48", "decision": "1.2.6 patch T-11 refusals (register N-110; 01e §3.2, §6.1)", "summary": "DIAGRAM_ALIASES.spec: dir, rankdir, rankDir, orientation, arah -> direction (was family; arah new); direction removed (a field since row 45); layout stays family. NEW export DIRECTION_ALIAS_CLAUSE appended by additionalPropertyHint after 'for \"<alias>\" use \"direction\" (TB, LR)'. Schema unchanged; every alias still refused", "before_sha256": "557747abcf25ff915261d8ca3cd19b561b62875cbc84ae238d22eec88b93a0ec", "after_sha256": "ad032672159da9549937416b23c0358676d1ae97d5ff58f74ca594236cca61c9", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/48_row48_diffs/src_lib_studio_contract_schema_v2_refusal-hints.ts.diff", "diff_sha256": "c9bd26d611ed34b88529f9d78e4651edf647fc4cf2999e64994422a08e13e411"},
    "note": "NEW Swarm file of row 178 (no clone original): refusal hints read from the v2/v1 schemas (allowed property names, object fields, discriminator values, misplaced-field and alias hints) and DIAGRAM_GUIDE_URI; used by forbidden.ts classifySchemaV2Errors and src/mcp-host/diagram-guide.ts"
   },
   {
@@ -5990,6 +5992,7 @@
   "27",
   "45",
   "54a",
-  "27b"
+  "27b",
+  "48"
  ]
 }
