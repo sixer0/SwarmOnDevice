@@ -117,7 +117,9 @@ describe("row 158: at-capacity figures render unchanged (sha256 before the patch
     graph5: "d53b6de116c453f1d6bcb53cf3598d2d0e7588eba17c78b847976ec988b3a2d4",
     bars30: "4c083a8330ada122686d85bce992ef43590e83479b0261f0c01eca1bb956390f",
     columns12: "1060e9b9d8043480cde380c532614a7f5ec3331e64590f5e20217cc19f90a107",
-    columns20: "319d26993d5eeb7011530be6bda27249035d55b5155bb3c7741c91e35f63a1f6",
+    // Swarm 1.2.6 row 66 (T-10, N-030, controller ruling): the 20 long labels now wrap to two lines under the
+    // 0.30 W gutter cap (no cut text); gutter 47.3 -> 25.0 mm, bars longer. Before: 319d26993d5eeb70...
+    columns20: "e6f8851a42e53232cc4fd82d9816ab71dcb33caffebb548c8e9fb6831a7d27b5",
   };
   for (const [name, f] of Object.entries(AT_CAPACITY)) {
     it(`${name}: sha256 unchanged`, () => {
