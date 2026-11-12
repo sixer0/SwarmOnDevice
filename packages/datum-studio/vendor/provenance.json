@@ -65,15 +65,16 @@
   "row27b": "2026-11-12: 1.2.6 row 27b (T-01 follow-up, C12; register N-013 amended to \\s*). 1 vendor file re-patched (files[].patch_row27b, before = previous sha256; status unchanged): contract/schema/v2/figure-text.ts (CAPTION_TOKEN_RE keyword-number separator \\s+ -> \\s*, comment). Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/27b_row27b_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9827897 + 186 = 9828083. patch_rows += 27b",
   "row77": "2026-11-12: 1.2.6 row 77 (M-07, U5; register N-037, N-038). 1 vendor file re-patched (files[].patch_row77, before = previous sha256; status unchanged): scripts/studio/mcp/tools.ts (studio_file_verify line FILE_VERIFIED(sha256) <64 hex>). Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/77_row77_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9829783 -> 9830004 (tools.ts 80786 -> 81007, +221). patch_rows += 77",
   "row48": "2026-11-12: 1.2.6 row 48 (T-11 refusals; register N-110; 01e §3.2, §6.1). 1 vendor file re-patched (files[].patch_row48, before = previous sha256; status unchanged, added): contract/schema/v2/refusal-hints.ts (aliases dir/rankdir/rankDir/orientation/arah -> direction, direction leaves the alias map, layout stays family, NEW DIRECTION_ALIAS_CLAUSE in the alias hint). P1-direction itself landed in row 45; by-construction.ts unchanged by row 48. Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/48_row48_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9830004 + 565 = 9830569. patch_rows += 48",
-  "row78": "2026-11-12: 1.2.6 row 78 (M-08, U5; register N-042, N-043). 1 vendor file re-patched (files[].patch_row78, before = previous sha256; status unchanged): scripts/studio/mcp/doc-tools.ts (default studio_document_status text: status line, FAIL per kode, per output the full sha256 and file name for up to STATUS_OUTPUTS_LISTED outputs, within DOCUMENT_STATUS_TEXT_MAX_BYTES; lint details and outputs over the cap behind detail=true markers). Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/78_row78_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9830569 + 4344 = 9834913. patch_rows += 78"
+  "row78": "2026-11-12: 1.2.6 row 78 (M-08, U5; register N-042, N-043). 1 vendor file re-patched (files[].patch_row78, before = previous sha256; status unchanged): scripts/studio/mcp/doc-tools.ts (default studio_document_status text: status line, FAIL per kode, per output the full sha256 and file name for up to STATUS_OUTPUTS_LISTED outputs, within DOCUMENT_STATUS_TEXT_MAX_BYTES; lint details and outputs over the cap behind detail=true markers). Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/78_row78_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9830569 + 4344 = 9834913. patch_rows += 78",
+  "row77b": "2026-11-12: 1.2.6 row 77b (M-07 remainder of row 77, U5; register N-037..N-040). 2 vendor files patched (files[].patch_row77b, before = previous sha256): scripts/studio/mcp/write-tools.ts (status copied -> patched; work-report render line FILE_VERIFIED(sha256)/FILE_UNVERIFIED(sha256)) and scripts/studio/mcp/write-client-run.ts (status unchanged; client-document render line FILE_VERIFIED(sha256)/FILE_UNVERIFIED(sha256)). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/77b_row77b_diffs/. counts by delta: copied 430 -> 429, patched 136 -> 137, files/replaced/added unchanged; bytes 9834913 + 17 = 9834930. patch_rows += 77b"
  },
  "counts": {
   "files": 608,
-  "copied": 430,
-  "patched": 136,
+  "copied": 429,
+  "patched": 137,
   "replaced": 12,
   "added": 30,
-  "bytes": 9834913
+  "bytes": 9834930
  },
  "files": [
   {
@@ -364,9 +365,9 @@
   {
    "path": "scripts/studio/mcp/write-client-run.ts",
    "status": "patched",
-   "bytes": 37520,
+   "bytes": 37525,
    "source_sha256": "4dd6e435a198099949e8edf86e3f8856629f4a52a245b9da458cb32b2108750b",
-   "sha256": "b9d5929d74e321909c4dd9f7a538ab7165142b9057488715b78a06991393b685",
+   "sha256": "14c237e6d555e41e9e8882a4c6acd21d28a24636d55c99daa24192ae6d691579",
    "patch_row69c": {
     "id": "row69c-write-preflight-archived-code",
     "row": "69c",
@@ -377,6 +378,16 @@
     "after_sha256": "b9d5929d74e321909c4dd9f7a538ab7165142b9057488715b78a06991393b685",
     "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/70_row69c_diffs/write-client-run.ts.diff",
     "diff_sha256": "dfba1bc46111b2aefff2b52b2f5252d0c791e2fb6be152f3e2be2324c71f52ae"
+   },
+   "patch_row77b": {
+    "id": "row77b-m07-client-file-label",
+    "row": "77b",
+    "decision": "1.2.6 patch M-07 remainder (U5; register N-037..N-040)",
+    "summary": "client-document (studio_write / studio_edit) render line names its check family: 'berkas: <id> DOCX sha256 <16 hex> FILE_VERIFIED(sha256)' (FILE_UNVERIFIED(sha256) otherwise) instead of 'terverifikasi server' / 'BELUM terverifikasi'; it reports the R10 x-studio-sha256-verified check; 1 changed line, no schema, description or structuredContent change",
+    "before_sha256": "b9d5929d74e321909c4dd9f7a538ab7165142b9057488715b78a06991393b685",
+    "after_sha256": "14c237e6d555e41e9e8882a4c6acd21d28a24636d55c99daa24192ae6d691579",
+    "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/77b_row77b_diffs/scripts_studio_mcp_write-client-run.ts.diff",
+    "diff_sha256": "c745da7baa3480142e86837c5b72dd1d464eb09a91ae18dc45514075e749ac82"
    }
   },
   {
@@ -437,10 +448,20 @@
   },
   {
    "path": "scripts/studio/mcp/write-tools.ts",
-   "status": "copied",
-   "bytes": 55262,
+   "status": "patched",
+   "bytes": 55274,
    "source_sha256": "0f7e2787cedd3522727213af4b02be81a54906a5b9634b18c89bcb7beb2f3148",
-   "sha256": "0f7e2787cedd3522727213af4b02be81a54906a5b9634b18c89bcb7beb2f3148"
+   "sha256": "3dc892d1657bd9822f929cea2586b3b18474e9cd5e8cbeed99e34a1a88a08316",
+   "patch_row77b": {
+    "id": "row77b-m07-write-report-file-label",
+    "row": "77b",
+    "decision": "1.2.6 patch M-07 remainder (U5; register N-037..N-040)",
+    "summary": "studio_write / studio_edit work-report render line names its check family: 'berkas: <id> <fmt> sha256 <16 hex> FILE_VERIFIED(sha256)' (FILE_UNVERIFIED(sha256) otherwise) instead of 'terverifikasi' / 'BELUM terverifikasi'; it reports the R10 x-studio-sha256-verified check; 1 changed line, no schema, description or structuredContent change",
+    "before_sha256": "0f7e2787cedd3522727213af4b02be81a54906a5b9634b18c89bcb7beb2f3148",
+    "after_sha256": "3dc892d1657bd9822f929cea2586b3b18474e9cd5e8cbeed99e34a1a88a08316",
+    "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/77b_row77b_diffs/scripts_studio_mcp_write-tools.ts.diff",
+    "diff_sha256": "32d5e236d0cb18fc66fbaba33abb8f89f6a1daa07717136556a8592944703f8a"
+   }
   },
   {
    "path": "scripts/studio/mcp/write-verify.ts",
@@ -5997,6 +6018,7 @@
   "54a",
   "27b",
   "48",
-  "78"
+  "78",
+  "77b"
  ]
 }

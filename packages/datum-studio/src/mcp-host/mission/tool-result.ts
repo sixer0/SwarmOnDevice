@@ -81,7 +81,7 @@ export function refusal(tool: string, code: string, message: string, rawDetails:
   const next = nextCall(code)
   const error = { code, message, details, next, skill: MISSION_SKILL }
   return {
-    content: [{ type: "text", text: `ditolak ${code}: ${message}\nrincian: ${JSON.stringify(brief).slice(0, 4000)}${block ? `\nperiksa (per keluaran belum terverifikasi):\n${block}` : ""}\nnext: ${next}` }],
+    content: [{ type: "text", text: `ditolak ${code}: ${message}\nrincian: ${JSON.stringify(brief).slice(0, 4000)}${block ? `\nperiksa (per keluaran RENDER_UNVERIFIED(U24)):\n${block}` : ""}\nnext: ${next}` }],
     structuredContent: { ok: false, tool, code, error, next, ...untrusted },
     isError: true,
   }

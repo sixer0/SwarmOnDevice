@@ -222,7 +222,7 @@ export function clientOutput(tool: string, id: string, docNumber: string | null,
   ];
   const lines = [
     `${tool}: dokumen klien ${tok(docNumber)} (documentId ${tok(id)}) rev ${tok(rev)} ${state}; kelengkapan ${f.completeness.status}${f.completeness.missingRequired > 0 ? ` (kurang ${f.completeness.missingRequired})` : ""}`,
-    ...(f.render && verify !== null && !detail ? [] : [f.render ? `berkas: ${tok(f.render.fileId)} DOCX sha256 ${f.render.sha256.slice(0, 16)} ${f.render.verified ? "terverifikasi server" : "BELUM terverifikasi"}` : `berkas: tidak dirender${f.renderError ? ` (galat ${f.renderError})` : ""}`]),
+    ...(f.render && verify !== null && !detail ? [] : [f.render ? `berkas: ${tok(f.render.fileId)} DOCX sha256 ${f.render.sha256.slice(0, 16)} ${f.render.verified ? "FILE_VERIFIED(sha256)" : "FILE_UNVERIFIED(sha256)"}` : `berkas: tidak dirender${f.renderError ? ` (galat ${f.renderError})` : ""}`]),
     ...(verify !== null ? [verify.line, ...(verify.block !== null ? [verify.block] : [])] : []),
     ...(detail ? nextSteps.map((s) => `lanjut: ${s}`) : []),
   ];

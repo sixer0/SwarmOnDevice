@@ -141,7 +141,7 @@ function resultOutput(tool: string, r: ReportResult, warnings: ToolWarning[], ex
   const lines = [
     `${tool}: laporan kerja ${tok(r.docNumber)} (documentId ${tok(r.documentId)}) rev ${tok(r.revisionNo)} ${state}; bagian terkirim ${sent}`,
     `kelengkapan: ${tok(r.completeness.status)}${r.completeness.missingRequired.length > 0 ? ` (kurang ${r.completeness.missingRequired.length})` : ""}`,
-    render ? `berkas: ${tok(render.fileId)} ${render.format} sha256 ${render.sha256.slice(0, 16)} ${render.verified ? "terverifikasi" : "BELUM terverifikasi"}` : `berkas: tidak dirender (${r.completeness.status === "COMPLETE" ? "-" : "belum lengkap"})`,
+    render ? `berkas: ${tok(render.fileId)} ${render.format} sha256 ${render.sha256.slice(0, 16)} ${render.verified ? "FILE_VERIFIED(sha256)" : "FILE_UNVERIFIED(sha256)"}` : `berkas: tidak dirender (${r.completeness.status === "COMPLETE" ? "-" : "belum lengkap"})`,
     ...nextSteps.map((s) => `lanjut: ${s}`),
   ];
   return {
