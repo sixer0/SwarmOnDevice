@@ -931,10 +931,69 @@ function statusOutputLine(o: Record<string, unknown>): string {
   return `berkas ${tok(o.id)} ${tok(o.format)} ${scope} lint ${tok(o.lintVerdict)}${o.draft === true ? " draf" : ""} sha256 ${sha} ${name}`;
 }
 
+// Swarm patch (1.2.6 row 49, T-14): `findings` (register N-033) pages the full finding list of one lint check of the
+// revision; result `findingsPage` (N-034) plus `findings` (the page). Page size at most LINT_FINDINGS_PAGE_MAX (N-035).
+// The engine summary cap (E-16, 100 itemised per check) stays: past it the summary row carries `findingsAll`
+// (E/lint/structure/context.ts); otherwise the check's own FAIL/REPORT rows are the list.
+export const LINT_FINDINGS_PAGE_MAX = 500;
+const LINT_FINDINGS_PAGE_DEFAULT = 100;
+
+export interface LintFindingEntry {
+  /** `<checkId>#<index>`: stable for one revision lint, independent of the chapter filter. */
+  id: string;
+  index: number;
+  checkId: string;
+  status: string;
+  chapter: string | null;
+  address: string | null;
+  pointer: string | null;
+  detail: string;
+}
+
+/** Chapter key from a body address `<key>.<section>.<n>` when the entry carries none. */
+const chapterOfAddress = (a: string | null): string | null => /^([1-9][0-9]{0,2}|[A-Z])\.\d/.exec(a ?? "")?.[1] ?? null;
+
+/** Full ordered finding list (FAIL/REPORT) of one check from a revision lint record (engine `checks[]` or older `findings[]`). */
+export function lintFindingsOf(lint: unknown, checkId: string): LintFindingEntry[] {
+  if (!isRecord(lint)) return [];
+  const engine = Array.isArray(lint.checks);
+  const rows = (engine ? (lint.checks as unknown[]) : Array.isArray(lint.findings) ? lint.findings : Array.isArray(lint.issues) ? lint.issues : []).filter(isRecord);
+  const mine = rows.filter((r) => String(r.checkId ?? r.rule ?? r.code ?? "") === checkId);
+  const carrier = mine.find((r) => Array.isArray(r.findingsAll));
+  const src = carrier ? (carrier.findingsAll as unknown[]).filter(isRecord) : engine ? mine.filter((r) => r.status === "FAIL" || r.status === "REPORT") : mine;
+  return src.map((r, index) => {
+    const address = typeof r.address === "string" && r.address !== "" ? r.address : null;
+    return {
+      id: `${checkId}#${index}`,
+      index,
+      checkId,
+      status: String(r.status ?? "FAIL"),
+      chapter: typeof r.chapter === "string" && r.chapter !== "" ? r.chapter : chapterOfAddress(address),
+      address,
+      pointer: typeof r.pointer === "string" && r.pointer !== "" ? r.pointer : null,
+      detail: String(r.detail ?? r.message ?? ""),
+    };
+  });
+}
+
+// Compact on purpose: tools/list budget (mcp-doc-tools.test.ts, < 30 500 B); defaults (offset 0, limit 100) in run().
+const FINDINGS_PARAM = {
+  ...obj(
+    {
+      checkId: { type: "string", maxLength: 64 },
+      chapter: { type: "string", maxLength: 32 },
+      offset: { type: "integer", minimum: 0 },
+      limit: { type: "integer", minimum: 1, maximum: LINT_FINDINGS_PAGE_MAX },
+    },
+    ["checkId"],
+  ),
+  description: "Halaman temuan 1 cek lint; chapter persis.",
+};
+
 const statusTool: ToolDef = {
   name: "studio_document_status",
   description: `Status dokumen: kelengkapan (R15: slot wajib, bab hadir/kurang, langkah berikut, boleh render penuh) + ringkasan lint dan berkas terakhir (R05). detail=true: penuh. ${DATA_NOT_INSTRUCTIONS}`,
-  inputSchema: obj({ documentId: S.documentId, rev: { ...S.rev, description: "Bawaan terkini." }, detail: S.detail }, ["documentId"]),
+  inputSchema: obj({ documentId: S.documentId, rev: { ...S.rev, description: "Bawaan terkini." }, detail: S.detail, findings: FINDINGS_PARAM }, ["documentId"]),
   annotations: { title: "Status dokumen (R15)", ...READ },
   toolsets: ["documents"],
   async run(a, ctx) {
@@ -1015,8 +1074,33 @@ const statusTool: ToolDef = {
         if (!fits(text)) text = render(last, n, false, 80);
       }
     }
+    // Swarm patch (1.2.6 row 49, T-14): the requested findings page follows the status text in its own untrusted block
+    // (explicitly asked for, so it is not cut by the default text budget).
+    const fq = isRecord(a.findings) ? a.findings : null;
+    if (fq !== null) {
+      const checkId = String(fq.checkId ?? "");
+      const chapter = typeof fq.chapter === "string" ? fq.chapter : null;
+      const offset = typeof fq.offset === "number" ? fq.offset : 0;
+      const limit = typeof fq.limit === "number" ? fq.limit : LINT_FINDINGS_PAGE_DEFAULT;
+      if (!Number.isInteger(offset) || offset < 0 || !Number.isInteger(limit) || limit < 1 || limit > LINT_FINDINGS_PAGE_MAX) {
+        throw new McpToolError("INVALID_ARGUMENT", `findings: offset bilangan bulat >= 0, limit 1..${LINT_FINDINGS_PAGE_MAX}`);
+      }
+      const list = lintFindingsOf(b.lint, checkId).filter((f) => chapter === null || f.chapter === chapter);
+      const page = list.slice(offset, offset + limit);
+      const next = offset + page.length < list.length ? offset + page.length : null;
+      data.findingsPage = { checkId, chapter, total: list.length, offset, returned: page.length, nextOffset: next };
+      data.findings = page;
+      text += `\n  temuan ${tok(checkId)}${chapter !== null ? ` bab ${tok(chapter)}` : ""}: ${list.length} total; offset ${offset}; ${page.length} dikembalikan; nextOffset ${next ?? "null"}\n`;
+      text += untrustedBlock(
+        [
+          `temuan ${checkId} ${list.length}`,
+          ...page.map((f) => `- ${f.id} ${f.status}${f.chapter !== null ? ` bab ${f.chapter}` : ""}${f.address !== null ? ` @ ${f.address}` : ""}: ${f.detail.replace(/[\r\n\t]+/g, " ").slice(0, 300)}`),
+        ].join("\n"),
+        { jenis: "temuan-lint", documentId: id },
+      );
+    }
     // Swarm row 210 (security review 209 I-2): detail-mode lintReport (engine messages) is listed as untrusted too.
-    return { text, data: { ...(neutralizeDeep(data) as Rec), ...untrustedFields(["document.title", "completeness.nextSteps", "completeness.message", "lint", "outputs", ...(detail ? ["lintReport"] : [])]) } };
+    return { text, data: { ...(neutralizeDeep(data) as Rec), ...untrustedFields(["document.title", "completeness.nextSteps", "completeness.message", "lint", "outputs", ...(detail ? ["lintReport"] : []), ...(fq !== null ? ["findings"] : [])]) } };
   },
 };
 

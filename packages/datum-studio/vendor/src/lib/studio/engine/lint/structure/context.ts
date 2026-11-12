@@ -136,7 +136,47 @@ export function toIssues(ctx: StructCtx, checkId: string, out: CheckOutcome): Li
   const rest = out.findings.length - MAX_FINDINGS_PER_CHECK;
   if (rest > 0) {
     const anyFail = out.findings.slice(MAX_FINDINGS_PER_CHECK).some((f) => (f.status ?? "FAIL") === "FAIL");
-    issues.push({ checkId, status: anyFail ? "FAIL" : "REPORT", detail: `${rest} temuan lain tidak dirinci (plafon ${MAX_FINDINGS_PER_CHECK} per cek)` });
+    // Swarm patch (1.2.6 row 49, T-14): the summary row keeps the cap (E-16, 100 itemised) and carries the full
+    // ordered list of this check's findings with the chapter key of each, so studio_document_status `findings`
+    // (register N-033) can page all of them and filter per chapter.
+    const summary: LintIssue & { findingsAll: FullFinding[] } = {
+      checkId,
+      status: anyFail ? "FAIL" : "REPORT",
+      detail: `${rest} temuan lain tidak dirinci (plafon ${MAX_FINDINGS_PER_CHECK} per cek)`,
+      findingsAll: out.findings.map((f) => fullFinding(ctx, f)),
+    };
+    issues.push(summary);
   }
   return issues;
+}
+
+/** Swarm patch (1.2.6 row 49, T-14): one entry of the full finding list kept on the summary row. */
+export interface FullFinding {
+  status: "FAIL" | "REPORT";
+  detail: string;
+  address?: string;
+  pointer?: string;
+  /** Key of the chapter or appendix unit holding the pointer (`ch.key` or its number), when there is one. */
+  chapter?: string;
+}
+
+function fullFinding(ctx: StructCtx, f: Finding): FullFinding {
+  const address = f.address ?? (f.pointer ? addressFor(ctx.walk, f.pointer) : undefined);
+  let chapter: string | undefined;
+  if (f.pointer) {
+    let best = -1;
+    for (const u of ctx.walk.units) {
+      if ((f.pointer === u.pointer || f.pointer.startsWith(`${u.pointer}/`)) && u.pointer.length > best) {
+        best = u.pointer.length;
+        chapter = u.key;
+      }
+    }
+  }
+  return {
+    status: f.status ?? "FAIL",
+    detail: f.detail,
+    ...(address ? { address } : {}),
+    ...(f.pointer ? { pointer: f.pointer } : {}),
+    ...(chapter !== undefined ? { chapter } : {}),
+  };
 }

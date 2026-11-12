@@ -72,15 +72,16 @@
   "row76": "2026-11-12: 1.2.6 row 76 (M-06, U5; register E-19, E-20). 3 vendor files patched (files[].patch_row76, before = previous sha256): scripts/studio/mcp/write-normalize.ts (copied -> patched: studio_edit keeps `change`, no ARG_IGNORED), scripts/studio/mcp/write-tools.ts (status unchanged: studio_edit inputSchema change = CHANGE; work-report update adds the change to R12/R13 bodies), scripts/studio/mcp/write-client-run.ts (status unchanged: client-document edit sends the caller change instead of the automatic one). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/76_row76_diffs/. counts by delta: copied 427 -> 426, patched 139 -> 140, files/replaced/added unchanged; bytes 9859975 + 1648 (write-tools.ts +1276, write-client-run.ts +149, write-normalize.ts +223) = 9861623. patch_rows += 76",
   "row69": "2026-11-12: 1.2.6 row 69 (T-16, U5; register E-17, E-18). 1 vendor file re-patched (files[].patch_row69, before = previous sha256; status unchanged): scripts/studio/mcp/figure-tools.ts (mergeFigurePatch deep-merges spec: objects merge, arrays replace, null removes; a spec patch leaving a diagram.schema required key missing is SCHEMA_INVALID naming the key, before any write). Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/69_row69_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9858273 + 1702 = 9859975. patch_rows += 69",
   "row72": "2026-11-12: 1.2.6 row 72 (T-18/W-10, U5; register N-113, N-114, N-115). 7 vendor files (files[].patch_row72, before = previous sha256): params/figure.ts (copied -> patched, 36089 -> 36997); params/index.ts (re-patched, 2823 -> 2913); registry/lint.ts (re-patched, 22315 -> 22696); registry/slots.ts (copied -> patched, 14214 -> 14403); registry/essentials.ts (re-patched, 20208 -> 20355); engine/lint/structure/checks-d.ts (copied -> patched, 42932 -> 44798); components/studio/template-editor/param-categories.ts (copied -> patched, 18761 -> 18908). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/72_row72_diffs/. counts by delta: copied 426 -> 422, patched 140 -> 144, files/replaced/added unchanged; bytes 9861623 + 3728 = 9865351. patch_rows += 72",
-  "row60": "2026-11-12: 1.2.6 row 60 (T-04, U3; register E-11 LABEL_LEADER, no new name). 1 vendor file patched (files[].patch_row60, before = previous sha256): engine/diagram/fit/labels.ts (copied -> patched, 12694 -> 14653: onPath falls back to NEW scanPath, a 0.5 mm slide along each segment longest first, only when every fixed spot t = 1/2, 1/4, 3/4 collides; leader/number only when no collision-free on-path spot exists). Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/60_row60_diffs/. counts by delta: copied 422 -> 421, patched 144 -> 145, files/replaced/added unchanged; bytes 9865351 + 1959 = 9867310. patch_rows += 60"
+  "row60": "2026-11-12: 1.2.6 row 60 (T-04, U3; register E-11 LABEL_LEADER, no new name). 1 vendor file patched (files[].patch_row60, before = previous sha256): engine/diagram/fit/labels.ts (copied -> patched, 12694 -> 14653: onPath falls back to NEW scanPath, a 0.5 mm slide along each segment longest first, only when every fixed spot t = 1/2, 1/4, 3/4 collides; leader/number only when no collision-free on-path spot exists). Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/60_row60_diffs/. counts by delta: copied 422 -> 421, patched 144 -> 145, files/replaced/added unchanged; bytes 9865351 + 1959 = 9867310. patch_rows += 60",
+  "row49": "2026-11-12: 1.2.6 row 49 (T-14, U5, C2; register N-033..N-035, E-16). 2 vendor files (files[].patch_row49, before = previous sha256): scripts/studio/mcp/doc-tools.ts (re-patched: studio_document_status `findings` paging with chapter filter, findingsPage, LINT_FINDINGS_PAGE_MAX 500) and engine/lint/structure/context.ts (copied -> patched: summary row past the 100 cap carries findingsAll with chapter keys). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/49_row49_diffs/. counts by delta: copied 421 -> 420, patched 145 -> 146, files/replaced/added unchanged; bytes 9867310 + 6119 = 9873429. patch_rows += 49"
  },
  "counts": {
   "files": 608,
-  "copied": 421,
-  "patched": 145,
+  "copied": 420,
+  "patched": 146,
   "replaced": 12,
   "added": 30,
-  "bytes": 9867310
+  "bytes": 9873429
  },
  "files": [
   {
@@ -227,9 +228,9 @@
   {
    "path": "scripts/studio/mcp/doc-tools.ts",
    "status": "patched",
-   "bytes": 69351,
+   "bytes": 74004,
    "source_sha256": "af47f4e9a923028b33ead625d6b22d9c7a308e5d430cf1bde5f09a9e32fc7df8",
-   "sha256": "52be99ce2d84bf075e42a579a0921fd7898380478022631ebe64acc97792e5e2",
+   "sha256": "d22c77cb51becc10e100657904326fa9d8bed3b6a43846702ed08c7becafeead",
    "patch_row69c": {
     "id": "row69c-chapter-import-archived-code",
     "row": "69c",
@@ -245,7 +246,8 @@
    "patch_row206": {"id": "row206-findings-lint-tristate", "row": "206", "decision": "1.2.3 patch P3 (row 206)", "summary": "studio_document_status: lint is the tri-state summary (ran/verdict/findings with code, address, message, rule explanation); text line lint: <VERDICT> or NOT_RUN, status block lists each finding with its rule once; detail lists FAIL + NOT_RUN and keeps lintReport", "before_sha256": "87c6085dbede8491588d8a8ba122ffd75669d61d483db5ddb8b0c028c0111a75", "after_sha256": "f391cbe330fbef5d319b2398b5d75ea431d176f2bcaffcef2ff43585bd65ce2d", "diff": "docs/2026-11-09_swarm_1_2_3_patch/implementation/206_row206_diffs/scripts_studio_mcp_doc-tools.ts.diff"},
    "patch_row210": {"id": "row210-security-209", "row": "210", "decision": "1.2.3 patch P5 (row 210)", "summary": "studio_document_status detail: lintReport added to untrustedFields (security review 209 I-2)", "before_sha256": "f391cbe330fbef5d319b2398b5d75ea431d176f2bcaffcef2ff43585bd65ce2d", "after_sha256": "362c920ef42e49eeb455e5d7a41cf9a0a13aa7a51e8db15232100f453c25fa98", "diff": "docs/2026-11-09_swarm_1_2_3_patch/implementation/210_row210_diffs/scripts_studio_mcp_doc-tools.ts.diff", "diff_sha256": "81ef97f79ada2c2faf09e59b351092b156fc7594c6da00a63822757b9f81a1ef"}
 ,
-   "patch_row78": {"id": "row78-m08-status-text", "row": "78", "decision": "1.2.6 patch M-08 (U5; register N-042, N-043)", "summary": "studio_document_status default text: '  status: rilis <releaseStatus>; lint <verdict>; <n> berkas' and '  FAIL per kode: <code>=<n>, ...' (safe tokens, outside the block); inside the status block one line per output 'berkas <id> <format> <scope> lint <lintVerdict> sha256 <64 hex> <file name>' for up to STATUS_OUTPUTS_LISTED (50) outputs instead of cap(outputs, 5) without sha; text within DOCUMENT_STATUS_TEXT_MAX_BYTES (8192) incl. the correlationIds line: rule explanations, then finding lines, then outputs from the end are dropped with detail=true markers; non-detail data.outputs capped at 50 (same keys); detail text unbudgeted; schema and description unchanged", "before_sha256": "362c920ef42e49eeb455e5d7a41cf9a0a13aa7a51e8db15232100f453c25fa98", "after_sha256": "52be99ce2d84bf075e42a579a0921fd7898380478022631ebe64acc97792e5e2", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/78_row78_diffs/scripts_studio_mcp_doc-tools.ts.diff", "diff_sha256": "223b3df54bcb5d69ae4357090cfe7165a89bc5435230374634f7bc8b1570f905"}
+   "patch_row78": {"id": "row78-m08-status-text", "row": "78", "decision": "1.2.6 patch M-08 (U5; register N-042, N-043)", "summary": "studio_document_status default text: '  status: rilis <releaseStatus>; lint <verdict>; <n> berkas' and '  FAIL per kode: <code>=<n>, ...' (safe tokens, outside the block); inside the status block one line per output 'berkas <id> <format> <scope> lint <lintVerdict> sha256 <64 hex> <file name>' for up to STATUS_OUTPUTS_LISTED (50) outputs instead of cap(outputs, 5) without sha; text within DOCUMENT_STATUS_TEXT_MAX_BYTES (8192) incl. the correlationIds line: rule explanations, then finding lines, then outputs from the end are dropped with detail=true markers; non-detail data.outputs capped at 50 (same keys); detail text unbudgeted; schema and description unchanged", "before_sha256": "362c920ef42e49eeb455e5d7a41cf9a0a13aa7a51e8db15232100f453c25fa98", "after_sha256": "52be99ce2d84bf075e42a579a0921fd7898380478022631ebe64acc97792e5e2", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/78_row78_diffs/scripts_studio_mcp_doc-tools.ts.diff", "diff_sha256": "223b3df54bcb5d69ae4357090cfe7165a89bc5435230374634f7bc8b1570f905"},
+   "patch_row49": {"id": "row49-t14-findings-paging", "row": "49", "decision": "1.2.6 patch T-14 (U5, C2; register N-033..N-035, E-16)", "summary": "studio_document_status input `findings` {checkId, chapter?, offset? = 0, limit? = 100, 1..LINT_FINDINGS_PAGE_MAX (500)} (register N-033, N-035): one page of the full finding list of one lint check of the revision, chapter exact match; result `findingsPage` {checkId, chapter, total, offset, returned, nextOffset} (N-034) plus `findings` (entries id `<checkId>#<index>`, status, chapter, address, pointer, detail) and a second untrusted text block; list from the summary row `findingsAll` past the engine cap, else the check's FAIL/REPORT rows (chapter from the address); new exports LINT_FINDINGS_PAGE_MAX, LintFindingEntry, lintFindingsOf; schema kept compact for the tools/list budget; default output unchanged", "before_sha256": "52be99ce2d84bf075e42a579a0921fd7898380478022631ebe64acc97792e5e2", "after_sha256": "d22c77cb51becc10e100657904326fa9d8bed3b6a43846702ed08c7becafeead", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/49_row49_diffs/scripts_studio_mcp_doc-tools.ts.diff", "diff_sha256": "0c6be85eb9181bfcdbc9a90c6cd525560275d286ca613908b3a42b4992921b49"}
   },
   {
    "path": "scripts/studio/mcp/figure-tools.ts",
@@ -3990,10 +3992,11 @@
   },
   {
    "path": "src/lib/studio/engine/lint/structure/context.ts",
-   "status": "copied",
-   "bytes": 5401,
+   "status": "patched",
+   "bytes": 6867,
    "source_sha256": "65f3ede94d65f9afc15faafd3da9baa5b68be9e0868ec40d1a0e31169b9c7400",
-   "sha256": "65f3ede94d65f9afc15faafd3da9baa5b68be9e0868ec40d1a0e31169b9c7400"
+   "sha256": "8835cfd1eb28dd325cf183d45ab48f427f348b66ff47294f43330c5358c0cf25",
+   "patch_row49": {"id": "row49-t14-findings-all", "row": "49", "decision": "1.2.6 patch T-14 (U5, C2; register N-033..N-035, E-16)", "summary": "toIssues: past MAX_FINDINGS_PER_CHECK (E-16, stays 100) the summary row (same checkId, status and detail) carries `findingsAll`, the full ordered finding list with status, detail, address, pointer and the chapter key of the unit holding the pointer; new export FullFinding; issues up to the cap unchanged", "before_sha256": "65f3ede94d65f9afc15faafd3da9baa5b68be9e0868ec40d1a0e31169b9c7400", "after_sha256": "8835cfd1eb28dd325cf183d45ab48f427f348b66ff47294f43330c5358c0cf25", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/49_row49_diffs/src_lib_studio_engine_lint_structure_context.ts.diff", "diff_sha256": "7460a81d71a010bbc427be8a1649b2ee57e41d126a260c7f0340ef9894647c55"}
   },
   {
    "path": "src/lib/studio/engine/lint/structure/enforcement.ts",
@@ -6079,6 +6082,7 @@
   "69",
   "76",
   "72",
-  "60"
+  "60",
+  "49"
  ]
 }
