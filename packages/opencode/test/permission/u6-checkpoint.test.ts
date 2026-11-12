@@ -633,6 +633,34 @@ describe("U6 checkpoint through the real gate and audit", () => {
     }),
   )
 
+  // 1.2.6 FX-12 (C23 SF3): edit, write, apply_patch and the shell share one save-or-stop helper. A checkpoint call that
+  // throws is a `failed` checkpoint under the edit tool too: the call is refused, nothing is written, and the audit gets
+  // its `not_run` line from `system:checkpoint_failed`. At HEAD before FX-12 the edit tool did not go through the seam
+  // (and a rejection would have been a defect with no audit line).
+  full.instance("CK-12b: under the edit tool a checkpoint call that throws refuses the edit and writes the not_run line", () =>
+    Effect.gen(function* () {
+      const test = yield* TestInstance
+      const file = path.join(test.directory, "a.md")
+      fs.writeFileSync(file, "old text\n")
+      const { root, autonomy } = yield* start
+      const ctx = yield* context(root.id, false)
+      const editing = yield* (yield* EditTool).init()
+      const real = checkpointSeam.create
+      checkpointSeam.create = () => Promise.reject(new Error("seam"))
+      const exit = yield* editing
+        .execute({ filePath: file, oldString: "old", newString: "new" }, ctx)
+        .pipe(Effect.exit, Effect.ensuring(Effect.sync(() => (checkpointSeam.create = real))))
+      expect(failure(exit)).toBe(checkpointFailedText("failed"))
+      expect(fs.readFileSync(file, "utf8")).toBe("old text\n")
+      const lines = yield* audit(autonomy, root.id)
+      expect(lines.filter((line) => line.type === "outcome" && line.outcome === "not_run")).toEqual([
+        expect.objectContaining({ by: "system:checkpoint_failed", requestID: ctx.callID }),
+      ])
+      expect(lines.some((line) => line.outcome === "checkpointed")).toBe(false)
+      fs.rmSync(modeFolder, { recursive: true, force: true })
+    }),
+  )
+
   full.instance("CK-7: the write tool's outside_edit of an existing file outside the project is copied under _outside first", () =>
     Effect.gen(function* () {
       const test = yield* TestInstance

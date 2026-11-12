@@ -89,24 +89,43 @@ export const checkpointBefore = Effect.fn("EditTool.checkpointBefore")(function*
   const sessions = yield* Effect.serviceOption(Session.Service)
   const on = yield* Autonomy.activeFor(Option.getOrUndefined(sessions), ctx.sessionID)
   if (!on) return undefined
-  const requestID = ctx.callID || ctx.messageID
+  const saved = yield* saveCheckpointOrStop(on, {
+    directory: on.where.directory,
+    targets: due.map((item) => item.file),
+    allowOutside: due.some((item) => item.outside),
+    sessionID: ctx.sessionID,
+    requestID: ctx.callID || ctx.messageID,
+    command: `${tool} ${due.map((item) => path.basename(item.file)).join(" ")}`,
+  })
+  if (!saved.ok) throw new Error(saved.stop)
+  return saved.text
+})
+
+/** Test seam for the one checkpoint call of every tool (edit, write, apply_patch, shell); shell.ts re-exports it. */
+export const checkpointSeam: { create: typeof ActionCheckpoint.create } = { create: (input) => ActionCheckpoint.create(input) }
+
+/**
+ * 1.2.6 FX-12 (C23 SF3): the one save-or-stop sequence of the edit, write and apply_patch tools and the shell. It saves a
+ * checkpoint of `input`'s targets (and refs) with the `checkpointed` audit line, and returns the text for the agent. A
+ * checkpoint that cannot be made, a rejected call included (counted as `failed`), writes the `not_run` audit line
+ * (`Autonomy.recordCheckpointFailed`) and returns `{ ok: false, stop }` with the `checkpointFailedText` for the reason:
+ * the caller then does not run the call. A checkpoint whose audit line could not be written is logged, never thrown.
+ */
+export const saveCheckpointOrStop = Effect.fn("ActionCheckpoint.saveOrStop")(function* (
+  on: { readonly where: Autonomy.Where; readonly autonomy: Pick<Autonomy.Interface, "record"> },
+  input: Omit<ActionCheckpoint.CreateInput, "record" | "requestID"> & { readonly requestID: string },
+) {
   const result = yield* Effect.promise(() =>
-    ActionCheckpoint.create({
-      directory: on.where.directory,
-      targets: due.map((item) => item.file),
-      allowOutside: due.some((item) => item.outside),
-      sessionID: ctx.sessionID,
-      requestID,
-      command: `${tool} ${due.map((item) => path.basename(item.file)).join(" ")}`,
-      record: Autonomy.checkpointRecorder(on.autonomy.record, on.where),
-    }),
+    checkpointSeam
+      .create({ ...input, record: Autonomy.checkpointRecorder(on.autonomy.record, on.where) })
+      .catch((): ActionCheckpoint.CreateResult => ({ ok: false, reason: "failed", message: "" })),
   )
   if (!result.ok) {
-    yield* Autonomy.recordCheckpointFailed(on, requestID)
-    throw new Error(checkpointFailedText(result.reason))
+    yield* Autonomy.recordCheckpointFailed(on, input.requestID)
+    return { ok: false as const, stop: checkpointFailedText(result.reason) }
   }
   if (!result.recorded) yield* Effect.logError("could not record a checkpoint", { checkpoint: result.id })
-  return ActionCheckpoint.savedText(result.manifest.entries.length, result.id)
+  return { ok: true as const, text: ActionCheckpoint.savedText(result.manifest.entries.length, result.id, result.manifest.refs?.length ?? 0) }
 })
 
 export const Parameters = Schema.Struct({

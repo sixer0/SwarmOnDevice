@@ -34,6 +34,7 @@ import { Archive } from "./archive"
 import { DELETE_COMPOUND_TEXT, SCRIPT_CHANGED_TEXT, checkpointFailedText } from "@/permission/autonomy-texts"
 import { AutonomyTable } from "@/permission/autonomy-table"
 import { ActionCheckpoint } from "./checkpoint"
+import { saveCheckpointOrStop } from "./edit"
 import { ScriptScreen } from "@/permission/script-screen"
 import { DeletionWords, type Deletion } from "./deletion"
 import { BypassLists } from "@/permission/bypass-lists"
@@ -1060,9 +1061,10 @@ async function gitCheckpoint(plan: Extract<AutonomyTable.CheckpointPlan, { kind:
 
 /**
  * 1.2.6 row 37b: where the shell makes its checkpoints. A test seam (CK-9 cap, CK-12 and T-INV-4 failure); production
- * always calls `ActionCheckpoint.create`. A create that throws counts as a checkpoint that could not be made.
+ * always calls `ActionCheckpoint.create`. A create that throws counts as a checkpoint that could not be made. Since FX-12
+ * the one seam lives in edit.ts beside the shared `saveCheckpointOrStop`, and is re-exported here for the shell's tests.
  */
-export const checkpointSeam: { create: typeof ActionCheckpoint.create } = { create: (input) => ActionCheckpoint.create(input) }
+export { checkpointSeam } from "./edit"
 
 // Every call asks, unless a rule a person wrote says otherwise. How the text parses never lowers that: the parse only names
 // the patterns, labels the prompt and withholds "Allow always", which is offered for one plain command and answers only that.
@@ -1490,23 +1492,16 @@ export const ShellTool = Tool.define(
         // A target the gate saw as missing appeared since and could not be archived: it is kept as a checkpoint copy
         // instead (C4), or the copy does not run (01b 3.2 rule 4). One the gate saw keeps the archive's answer.
         if (paths.every((file) => gate.archived.includes(file))) return stopped(result.message)
-        const saved = yield* Effect.promise(() =>
-          checkpointSeam
-            .create({
-              directory: on.place.directory,
-              cwd,
-              targets: paths,
-              refs: [],
-              sessionID: ctx.sessionID,
-              requestID: ctx.callID || ctx.messageID,
-              command,
-              record: Autonomy.checkpointRecorder(on.autonomy.record, on.where),
-            })
-            .catch((): ActionCheckpoint.CreateResult => ({ ok: false, reason: "failed", message: "" })),
-        )
-        if (!saved.ok) return yield* notRun(saved.reason)
-        if (!saved.recorded) yield* Effect.logError("could not record a checkpoint", { checkpoint: saved.id })
-        return { text: ActionCheckpoint.savedText(saved.manifest.entries.length, saved.id, 0) }
+        const saved = yield* saveCheckpointOrStop(on, {
+          directory: on.place.directory,
+          cwd,
+          targets: paths,
+          refs: [],
+          sessionID: ctx.sessionID,
+          requestID: ctx.callID || ctx.messageID,
+          command,
+        })
+        return saved.ok ? { text: saved.text } : stopped(saved.stop)
       }
       if (!result.recorded) yield* Effect.logError("could not record an archived replacement", { archive: result.id })
       return { text: result.moved.length > 0 ? Archive.movedText(result.moved.length, result.id) : "" }
@@ -1537,25 +1532,19 @@ export const ShellTool = Tool.define(
           ? yield* Effect.promise(() => gitCheckpoint(plan, cwd, on.place.directory))
           : { targets: [...plan.targets], refs: [] as string[] }
       if (!found) return yield* stop("git")
-      const result = yield* Effect.promise(() =>
-        checkpointSeam
-          .create({
-            directory: on.place.directory,
-            cwd,
-            targets: found.targets,
-            refs: found.refs,
-            sessionID: ctx.sessionID,
-            requestID,
-            command,
-            record: Autonomy.checkpointRecorder(on.autonomy.record, on.where),
-          })
-          .catch((): ActionCheckpoint.CreateResult => ({ ok: false, reason: "failed", message: "" })),
-      )
-      if (!result.ok) return yield* stop(result.reason)
-      if (!result.recorded) yield* Effect.logError("could not record a checkpoint", { checkpoint: result.id })
+      const saved = yield* saveCheckpointOrStop(on, {
+        directory: on.place.directory,
+        cwd,
+        targets: found.targets,
+        refs: found.refs,
+        sessionID: ctx.sessionID,
+        requestID,
+        command,
+      })
+      if (!saved.ok) return stoppedResult(command, saved.stop)
       const clean = plan.kind === "git" && plan.clean ? cleanSparing(plan.clean, cwd, on.place.directory) : undefined
       return {
-        text: ActionCheckpoint.savedText(result.manifest.entries.length, result.id, result.manifest.refs?.length ?? 0),
+        text: saved.text,
         // The clean the plan read, run with the session's `.swarm` left out (`cleanSparing`).
         command: clean ? ["git", "clean", ...clean].map((word) => (/^[\w./@%+,:=-]+$/.test(word) ? word : `'${word}'`)).join(" ") : undefined,
       }
