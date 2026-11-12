@@ -156,8 +156,11 @@ interface State {
   sessionExact: Map<SessionID, SessionExact[]>
   /** Each with the root of the session it was given to: an answer at the root is good for its subagents too. */
   grants: (Grant & { root: SessionID; since?: number })[]
-  /** Sessions whose last request went unanswered: nobody is there, so the next one is not worth a long wait. */
-  away: Set<PermissionV1.Request["sessionID"]>
+  /**
+   * Session families (by root) where a request went unanswered and none was answered since: nobody is there, so a new
+   * ask of the family is queued at once instead of waiting again (P-03). A reply to any request of the family clears it.
+   */
+  away: Set<SessionID>
   /** Roots already reported as full. One report for each time it fills up, however many calls find it so. */
   full: Set<SessionID>
 }
@@ -1452,19 +1455,24 @@ const layer = Layer.effect(
 
       // A repeating call stops the run on purpose until a person looks. Carrying on would defeat that guard.
       // The same goes for a spend limit: nobody being there is exactly when it must hold.
-      const wait = needsPerson(request.permission) ? undefined : Unattended.wait(away.has(request.sessionID))
+      const wait = needsPerson(request.permission) ? undefined : Unattended.wait(away.has(family))
+      // P-03: the family is away (one of its requests went unanswered, none answered since), so this one is queued at
+      // once, listed and answerable, instead of each ask of the task waiting again. Before that, asks wait as before.
+      const queued = wait !== undefined && away.has(family)
       const info: PermissionV1.Request = wait ? { ...asked, movesOnAt: Date.now() + wait } : asked
       yield* Effect.logInfo("asking", { id, permission: info.permission })
 
       if (gated?.decision === "defer") return yield* heldOrRefused(gated)
       const offMode = gated === undefined ? ({ offMode: true } as const) : {}
-      pending.set(id, { info, deferred, noAlways, follows, ...offMode })
-      yield* events.publish(Event.Asked, info)
+      if (!queued) {
+        pending.set(id, { info, deferred, noAlways, follows, ...offMode })
+        yield* events.publish(Event.Asked, info)
+      }
       const moveOn = Effect.gen(function* () {
         // The request stays listed and answerable. The agent is released, not the decision.
         const moved: PermissionV1.Request = { ...asked, movedOnAt: Date.now() }
         pending.set(id, { info: moved, deferred, noAlways, follows, ...offMode })
-        away.add(request.sessionID)
+        away.add(family)
         yield* Effect.logInfo("moved on", { id, permission: info.permission })
         yield* events.publish(Event.Asked, moved)
         // An unattended night can skip far more of these than anyone will read. The oldest are the least likely to matter.
@@ -1484,10 +1492,11 @@ const layer = Layer.effect(
         }
         return yield* new PermissionV1.AwayError()
       })
+      const answered = wait
+        ? Effect.raceFirst(Deferred.await(deferred), Effect.sleep(wait).pipe(Effect.andThen(moveOn)))
+        : Deferred.await(deferred)
       return yield* Effect.ensuring(
-        wait
-          ? Effect.raceFirst(Deferred.await(deferred), Effect.sleep(wait).pipe(Effect.andThen(moveOn)))
-          : Deferred.await(deferred),
+        queued ? moveOn : answered,
         Effect.sync(() => {
           if (!pending.get(id)?.info.movedOnAt) pending.delete(id)
         }),
@@ -1510,7 +1519,8 @@ const layer = Layer.effect(
       }
 
       pending.delete(input.requestID)
-      away.delete(existing.info.sessionID)
+      // P-03: a reply to any request of the family means somebody is there; the family's next ask waits again.
+      away.delete(existing.root ?? (yield* rootOf(existing.info.sessionID)).id)
       if (input.abandoned) yield* close(existing, "abandoned", "system:session_closed")
       else yield* close(existing, input.reply === "reject" ? "rejected_later" : "approved_later", "person")
       yield* events.publish(Event.Replied, {
@@ -1710,7 +1720,7 @@ const layer = Layer.effect(
         const calls = covered.map((item) => item.held)
         if (rest.length === 0) {
           pending.delete(entry.info.id)
-          away.delete(entry.info.sessionID)
+          away.delete(root)
           yield* close(entry, "approved_later", "person")
           yield* events.publish(Event.Replied, {
             sessionID: entry.info.sessionID,
