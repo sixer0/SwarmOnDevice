@@ -135,7 +135,7 @@ export const MISSION_TOOL_SCHEMAS: Record<string, Schema> = {
   studio_mission_update_row: {
     ...obj({
       mission: missionId,
-      rows: { type: "array", minItems: 1, maxItems: 200, items: rowPatch, description: "1-200 row patches applied in order in one job." },
+      rows: { type: "array", minItems: 1, maxItems: 200, items: rowPatch, description: "1-200 row patches applied in order in one job; each patch applies or is refused on its own (results)." },
       messages: { type: "array", minItems: 1, maxItems: 50, items: message, description: "C57 (c)/(d): messages appended after the row patches, in the same job." },
       decision: { type: "string", pattern: DECISION_ID_PATTERN },
       ...writeCommon,

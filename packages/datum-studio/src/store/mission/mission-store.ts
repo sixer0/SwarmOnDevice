@@ -146,6 +146,25 @@ function err(code: ConstructorParameters<typeof StoreError>[0], message: string,
   return new StoreError(code, message, details)
 }
 
+/** Row 85 (1.2.6, MC-07, register N-061): one entry per row patch of a studio_mission_update_row job. */
+export interface RowPatchResult {
+  id: string
+  ok: boolean
+  code?: string
+  message?: string
+}
+
+/** What updateRows returns: applied rows, the per-patch results, and the derived waves / ready rows after the job. */
+export interface RowPatchJobResult {
+  changed: string[]
+  results: RowPatchResult[]
+  waves: Array<{ wave: number; rows: string[] }>
+  ready: string[]
+}
+
+/** Row 85: the savepoint name each row patch runs under (one at a time, released before the next patch). */
+const ROW_PATCH_SAVEPOINT = "mission_row_patch"
+
 /** Row 197 (S194-01): a self-approval while Swarm's autonomous mode is off (the person turns it on, never the agent). */
 function autonomousModeOff(mission: string, decision: string): StoreError {
   return err("AUTONOMOUS_MODE_OFF", "autonomous: true needs Swarm's autonomous mode setting to be on for this session (the person turns it on); it is off", { mission, decision })
@@ -508,29 +527,57 @@ export class MissionStore {
 
   // ── rows ──────────────────────────────────────────────────────────────────
 
-  /** studio_mission_update_row (§8.3): 1-200 patches applied in order, all in this job. */
-  updateRows(tx: StoreTx, mission: string, patches: readonly RowPatch[], args: { decision?: string } = {}, opts?: MissionWriteOptions): { changed: string[]; waves: Array<{ wave: number; rows: string[] }>; ready: string[] } {
+  /**
+   * studio_mission_update_row (§8.3): 1-200 patches applied in order in this job.
+   * Row 85 (1.2.6, MC-07, N-061): each patch runs under its own SAVEPOINT. A patch refused with a StoreError is rolled
+   * back alone and reported in `results` ({id, ok: false, code, message}); the other patches stay applied. A job in
+   * which no patch applies throws the first patch's error unchanged. Any other error is a
+   * fault, not a refusal, and still fails the whole job.
+   */
+  updateRows(tx: StoreTx, mission: string, patches: readonly RowPatch[], args: { decision?: string } = {}, opts?: MissionWriteOptions): RowPatchJobResult {
     const actor = this.actorOf(opts)
     if (!Array.isArray(patches) || patches.length < 1 || patches.length > MISSION_PATCH_MAX) throw err("SCHEMA_INVALID", `1-${MISSION_PATCH_MAX} row patches`, { count: Array.isArray(patches) ? patches.length : null })
     const m = this.openMission(tx, mission)
     const type = this.getType(m.type_id, m.type_version, tx)!
     const changed: string[] = []
+    const results: RowPatchResult[] = []
+    let firstRefusal: StoreError | undefined
     for (const p of patches) {
-      const keys = Object.keys(p ?? {}).filter((k) => !["id", "add", "set", "status", "note", "acquire", "release", "retire"].includes(k))
-      if (keys.length > 0) throw err("SCHEMA_INVALID", "unknown patch fields", { row: p?.id, fields: keys })
-      if (p.add) this.addRow(tx, m, type, p, args.decision, actor)
-      if (p.set) this.setRow(tx, m, type, p.id, p.set, args.decision, actor)
-      // Row 174 (C218 F146b-3): retire before the status move, so `{retire, status: "done"}` is judged without the draft.
-      if (p.retire !== undefined) this.retireDeliverables(tx, m, p.id, p.retire, p.note, actor)
-      if (p.status) this.transitionRow(tx, m, p.id, p.status, { note: p.note, decision: args.decision, actor, cause: "update_row" })
-      else if (p.note !== undefined && !p.add) this.setNote(tx, m, p.id, p.note, actor)
-      for (const res of p.acquire ?? []) this.acquireLock(tx, m, p.id, res, actor)
-      for (const res of p.release ?? []) this.releaseLock(tx, m, p.id, res, actor)
+      tx.run(`SAVEPOINT ${ROW_PATCH_SAVEPOINT}`)
+      try {
+        this.applyRowPatch(tx, m, type, p, args.decision, actor)
+        tx.run(`RELEASE SAVEPOINT ${ROW_PATCH_SAVEPOINT}`)
+      } catch (e) {
+        tx.run(`ROLLBACK TO SAVEPOINT ${ROW_PATCH_SAVEPOINT}`)
+        tx.run(`RELEASE SAVEPOINT ${ROW_PATCH_SAVEPOINT}`)
+        if (!(e instanceof StoreError)) throw e
+        // transitionRow may have flipped the in-memory mission status (autoRun); re-read it after the rollback.
+        m.status = this.openMission(tx, mission).status
+        firstRefusal ??= e
+        results.push({ id: String(p?.id), ok: false, code: e.code, message: e.message.slice(e.code.length + 2) })
+        continue
+      }
       changed.push(p.id)
+      results.push({ id: p.id, ok: true })
     }
+    if (changed.length === 0 && firstRefusal) throw firstRefusal
     this.afterWrite(tx, mission, opts)
     const g = this.graph(tx, mission)
-    return { changed, waves: computeWaves(g.rows, g.deps), ready: readyRows(g.rows, g.deps, new Set(this.requestBlocks(tx, mission).keys())) }
+    return { changed, results, waves: computeWaves(g.rows, g.deps), ready: readyRows(g.rows, g.deps, new Set(this.requestBlocks(tx, mission).keys())) }
+  }
+
+  /** One row patch (row 85 split it out of updateRows so each patch can run under its own savepoint). */
+  private applyRowPatch(tx: StoreTx, m: MissionDbRow, type: MissionTypeDoc, p: RowPatch, decision: string | undefined, actor: string): void {
+    const keys = Object.keys(p ?? {}).filter((k) => !["id", "add", "set", "status", "note", "acquire", "release", "retire"].includes(k))
+    if (keys.length > 0) throw err("SCHEMA_INVALID", "unknown patch fields", { row: p?.id, fields: keys })
+    if (p.add) this.addRow(tx, m, type, p, decision, actor)
+    if (p.set) this.setRow(tx, m, type, p.id, p.set, decision, actor)
+    // Row 174 (C218 F146b-3): retire before the status move, so `{retire, status: "done"}` is judged without the draft.
+    if (p.retire !== undefined) this.retireDeliverables(tx, m, p.id, p.retire, p.note, actor)
+    if (p.status) this.transitionRow(tx, m, p.id, p.status, { note: p.note, decision, actor, cause: "update_row" })
+    else if (p.note !== undefined && !p.add) this.setNote(tx, m, p.id, p.note, actor)
+    for (const res of p.acquire ?? []) this.acquireLock(tx, m, p.id, res, actor)
+    for (const res of p.release ?? []) this.releaseLock(tx, m, p.id, res, actor)
   }
 
   private addRow(tx: StoreTx, m: MissionDbRow, type: MissionTypeDoc, p: RowPatch, decision: string | undefined, actor: string): void {
