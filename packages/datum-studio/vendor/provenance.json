@@ -78,6 +78,7 @@
   "row68": "2026-11-12: 1.2.6 row 68 (T-15, U3; register N-036 FIGURE_PREPARE_FAILED, E-15 FIGURE_PLACEHOLDER reused, no new verification code). 4 vendor files (files[].patch_row68, before = previous sha256): engine/docx/figures/store.ts (copied -> patched: a failing figure becomes a FIGURE_PREPARE_FAILED marker entry, assembly continues), engine/docx/figures/log.ts (copied -> patched: marker constant, type, reader), engine/docx/figures/figure.ts (re-patched: marked placeholder paragraph instead of a picture), services/render/figures.ts (re-patched: failureFor + rasterize wrapper, job stays PARTIAL). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/68_row68_diffs/. counts by delta: copied 418 -> 416, patched 148 -> 150, files/replaced/added unchanged; bytes 9872615 + 7156 = 9879771. patch_rows += 68",
   "row64": "2026-11-12: 1.2.6 row 64 (T-08 fan-out sub-ranking, N-018; 01e §8; ranked-flow forward sides 01e §4.2 routed by row 46). 1 vendor file re-patched (files[].patch_row64, before = previous sha256): engine/diagram/build/route.ts (status patched unchanged). counts.bytes by delta +8531",
   "row47": "2026-11-12: 1.2.6 row 47 (T-11 acceptance; register N-160; 01e §4.3-§4.5; C7). 3 vendor files re-patched (files[].patch_row47, before = previous sha256; statuses unchanged): engine/diagram/layout-a/flow.ts (FLOW_SERIALISED note helper, TB placement under predecessors, label-corridor growth), engine/diagram/elk/index.ts (R1 gate admits ranked flow), engine/diagram/build/svg.ts (one FLOW_SERIALISED call site). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/47_row47_diffs/. counts.bytes by delta +5722. patch_rows += 47",
+  "row70": "2026-11-12: 1.2.6 row 70 (T-17 vendor part, U5; register N-055 BACKUP_DIR_NAME, N-057 backupResidue, E-22). 2 vendor files re-patched (files[].patch_row70, before = previous sha256; status unchanged): scripts/studio/mcp/safety.ts (writeFileGuarded backups in <dir>/.bak/ created 0700, backupResidue) and scripts/studio/mcp/tools.ts (backupResidue in studio_report_refresh/studio_file_verify). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/70_row70_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9895940 + 2723 = 9898663 (safety.ts 18995 -> 21221, tools.ts 81007 -> 81504). patch_rows += 70",
   "row61": "2026-11-12: 1.2.6 row 61 (T-05, U5; no new register name). 1 vendor file re-patched (files[].patch_row61, before = previous sha256; status unchanged): engine/diagram/core/svg.ts (provenance glyph inset by node shape: parallelogram inside, diamond outside the slanted side; box byte-identical). Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/61_row61_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9894024 + 1916 = 9895940. patch_rows += 61"
  },
  "counts": {
@@ -86,7 +87,7 @@
   "patched": 150,
   "replaced": 12,
   "added": 30,
-  "bytes": 9895940
+  "bytes": 9898663
  },
  "files": [
   {
@@ -295,9 +296,10 @@
   {
    "path": "scripts/studio/mcp/safety.ts",
    "status": "patched",
-   "bytes": 18995,
+   "bytes": 21221,
    "source_sha256": "b04720fc51e015a6ba41ddb153d183306763971f423e00b9963842b1108a0d0a",
-   "sha256": "fc36cb950e377822bf5270d9ceb11cb03f06b79d8285d6e062bcc76befc28474",
+   "sha256": "09e5cbdcddbe3465b4e3d17ae0817f31558101cfaab99be850a73f35972a7aef",
+   "patch_row70": {"id": "row70-t17-bak-folder", "row": "70", "decision": "1.2.6 patch T-17 vendor part (U5; register N-055, N-057, E-22; P-8)", "summary": "writeFileGuarded: overwrite backups go to <dir>/.bak/ (BACKUP_DIR_NAME, N-055; created 0700, validated as a folder inside the roots before and after creation, before the target is touched) with the unchanged basename <name>.bak-<stamp> (E-22); result gains backupResidue (N-057, backups of that file in .bak/); NodeFs.mkdirp(p, mode?) and optional NodeFs.readdir; OUT_EXISTS text names .bak/", "before_sha256": "fc36cb950e377822bf5270d9ceb11cb03f06b79d8285d6e062bcc76befc28474", "after_sha256": "09e5cbdcddbe3465b4e3d17ae0817f31558101cfaab99be850a73f35972a7aef", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/70_row70_diffs/scripts_studio_mcp_safety.ts.diff", "diff_sha256": "1516e9bdca7804a87e8788f71b9a55a51d2db9b49df4e06c078c82e1258d4a75"},
    "patch_row50b": {"id": "row50b-w13-read-asset", "row": "50b", "decision": "1.2.6 W-13 (01f §3.3 R1-R7, register N-167; C6)", "summary": "PathPurpose += \"read-asset\": lexical + inside-root (lexical and realpath), ext .png/.jpg/.jpeg (PATH_INVALID), exists and regular file (FILE_UNREADABLE), stat size > maxBytes -> ASSET_TOO_LARGE before any read; returns the real path; protected-name check not applied to reads (R9); other purposes unchanged", "before_sha256": "af9ff9336450deaf811797361fd73472fd120c57a9a68152d4c77c6d14834ee1", "after_sha256": "fc36cb950e377822bf5270d9ceb11cb03f06b79d8285d6e062bcc76befc28474", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/50b_row50b_diffs/safety.ts.diff"},
    "patch": {
     "id": "row107-L6",
@@ -348,9 +350,10 @@
   {
    "path": "scripts/studio/mcp/tools.ts",
    "status": "patched",
-   "bytes": 81007,
+   "bytes": 81504,
    "source_sha256": "afe82e84205ea4167feb0d0afafc81bf7a168e25213ed5fbbfbfd19e5d71e154",
-   "sha256": "5aabf6be173897f9e3d9c9dfc39679c86dd784b057f6786a1fbec6b81719094f",
+   "sha256": "36155d016a82945be547c06800ea0df2b62178ad720128eb9a38f52d82815461",
+   "patch_row70": {"id": "row70-t17-bak-folder", "row": "70", "decision": "1.2.6 patch T-17 vendor part (U5; register N-055, N-057, E-22; P-8)", "summary": "studio_report_refresh and studio_file_verify carry backupResidue in structuredContent and print '(backupResidue N di .bak/)' after the backup path; OUT_EXISTS text names .bak/; schema and description unchanged", "before_sha256": "5aabf6be173897f9e3d9c9dfc39679c86dd784b057f6786a1fbec6b81719094f", "after_sha256": "36155d016a82945be547c06800ea0df2b62178ad720128eb9a38f52d82815461", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/70_row70_diffs/scripts_studio_mcp_tools.ts.diff", "diff_sha256": "6e4964a0e88032fa8add3434dc6f98645fee3dd988747471c235d98ed3c9f963"},
    "patch_row77": {"id": "row77-m07-file-verified-label", "row": "77", "decision": "1.2.6 patch M-07 (U5; register N-037, N-038)", "summary": "studio_file_verify text line names its check family: 'berkas <id>: FILE_VERIFIED(sha256) <64 hex>' (FILE_UNVERIFIED(sha256) otherwise; '-' when the sha header is not 64 hex) instead of 'TERVERIFIKASI (sha256 <16 hex>)'; error texts, schema, description and structuredContent unchanged", "before_sha256": "fdee7081ad0b179f4af4ab3fb729dd31306ad6929e32066b816a7f51cb89fd8d", "after_sha256": "5aabf6be173897f9e3d9c9dfc39679c86dd784b057f6786a1fbec6b81719094f", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/77_row77_diffs/scripts_studio_mcp_tools.ts.diff", "diff_sha256": "4291686c4d4a8a871f9b59f31dcce91d12dc08a3e8c2d52090c0dbba7a24cadc"},
    "patch_row74b": {"id": "row74b-m03-cidline", "row": "74b", "decision": "1.2.6 patch M-03 (U5; register cidLine, N-041)", "summary": "cidLine: more than 3 correlation ids now prints every cid plus the explicit count '(N cid)' instead of first, second, ... last; 0 and 1-3 cid lines unchanged; no schema, description or structuredContent change", "before_sha256": "814e9b5bcce83fe368890874aa8f1f256a1176d4a403429f74de73c44ef2c7f6", "after_sha256": "fdee7081ad0b179f4af4ab3fb729dd31306ad6929e32066b816a7f51cb89fd8d", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/74b_row74b_diffs/scripts_studio_mcp_tools.ts.diff", "diff_sha256": "71d9345ba300ae15d973dece52b18d073ce71e6bf40278b78091d891bf4ca4bc"},
    "patch_row53a": {"id": "row53a-m01-render-timeout", "row": "53a", "decision": "1.2.6 patch M-01 (U1; register N-044; 01d L1, F3)", "summary": "studio_render passes timeoutMs STUDIO_RENDER_CALL_TIMEOUT_MS to http() for R17; NEW export renderTimeoutHint: a timed-out render (REMOTE_UNREACHABLE, extra.timedOut) says the render may still finish and to check studio_document_status; tool description untouched (row 99)", "before_sha256": "9867287d0d8a3670cb0f21f370c412d737cda63c5db5f4ed21fad1d6ec62b01c", "after_sha256": "814e9b5bcce83fe368890874aa8f1f256a1176d4a403429f74de73c44ef2c7f6", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/53a_row53a_diffs/scripts_studio_mcp_tools.ts.diff", "diff_sha256": "4254623c8fc6eba7409526f2e3642e35295c077e81a6a4a9cd5cf0b0172020af"},
@@ -6104,6 +6107,7 @@
   "68",
   "64",
   "47",
-  "61"
+  "61",
+  "70"
  ]
 }

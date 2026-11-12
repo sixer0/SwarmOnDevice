@@ -589,10 +589,11 @@ const refreshTool: ToolDef = {
       allow = resolveAllowedPath(write ? src.file : (outRaw as string), roots, "write-report", nfs);
       // Gagal cepat SEBELUM jaringan; diperiksa ulang tepat sebelum tulis (writeFileGuarded).
       if (!overwrite && nfs.exists(allow)) {
-        throw new McpToolError("OUT_EXISTS", `${allow} sudah ada; tidak ditimpa. Pakai outPath berkas baru, atau overwrite=true (cadangan <nama>.bak-<waktu> dibuat otomatis lebih dulu). Tidak ada yang dibaca dari server`);
+        throw new McpToolError("OUT_EXISTS", `${allow} sudah ada; tidak ditimpa. Pakai outPath berkas baru, atau overwrite=true (cadangan .bak/<nama>.bak-<waktu> dibuat otomatis lebih dulu). Tidak ada yang dibaca dari server`);
       }
     }
-    const wr: { backup: string | null; error: unknown } = { backup: null, error: null };
+    // Swarm 1.2.6 row 70 (T-17, N-057): backupResidue = cadangan berkas ini di `<folder>/.bak/` sesudah tulis.
+    const wr: { backup: string | null; backupResidue: number | null; error: unknown } = { backup: null, backupResidue: null, error: null };
     const writer =
       allow === null
         ? null
@@ -600,7 +601,9 @@ const refreshTool: ToolDef = {
             allowTextWrite: allow,
             writeText: (p: string, d: string) => {
               try {
-                wr.backup = writeFileGuarded(p, Buffer.from(d, "utf8"), { roots, purpose: "write-report", overwrite, nfs, now: ctx.now, log: ctx.fsLog.writes }).backup;
+                const g = writeFileGuarded(p, Buffer.from(d, "utf8"), { roots, purpose: "write-report", overwrite, nfs, now: ctx.now, log: ctx.fsLog.writes });
+                wr.backup = g.backup;
+                wr.backupResidue = g.backupResidue;
               } catch (e) {
                 wr.error = e;
                 throw e;
@@ -616,10 +619,10 @@ const refreshTool: ToolDef = {
     }
     if (r.unrepresentable.length === 0) ctx.session.remember(r.documentId, r.basis.to, "studio_report_refresh", ctx.now());
     const lines = [mcpText(formatRefreshHuman(r).replace(/\n$/, ""))];
-    if (wr.backup !== null) lines.push(`  cadangan berkas lama: ${wr.backup}`);
+    if (wr.backup !== null) lines.push(`  cadangan berkas lama: ${wr.backup} (backupResidue ${wr.backupResidue ?? 1} di .bak/)`);
     if (r.written === null && r.unrepresentable.length === 0) lines.push("Lewat MCP: laporan gabungan ada di medan markdown; pakai teks itu untuk studio_report_update (basis terkini diingat sesi), atau simpan dengan outPath berkas baru.");
     lines.push(`Medan markdown memuat bagian yang ditulis pihak lain. ${UNTRUSTED_NOTICE}`);
-    return { text: lines.join("\n"), data: { ...(mcpTextDeep(r) as Record<string, unknown>), backup: wr.backup, ...untrustedFields(["markdown"]) } };
+    return { text: lines.join("\n"), data: { ...(mcpTextDeep(r) as Record<string, unknown>), backup: wr.backup, ...(wr.backupResidue !== null ? { backupResidue: wr.backupResidue } : {}), ...untrustedFields(["markdown"]) } };
   },
 };
 
@@ -961,6 +964,7 @@ const fileVerifyTool: ToolDef = {
     let downloadCid: string | null = null;
     let bytes: number | null = null;
     let backup: string | null = null;
+    let backupResidue = 0;
     let alreadyPresent = false;
     let deliveredName: string | null = null;
     if (dir !== null) {
@@ -983,6 +987,7 @@ const fileVerifyTool: ToolDef = {
       prepareDownloadDir(dir, ctx.deps.config.fileRoots, nfs);
       const w = writeFileGuarded(dest, buf, { roots: ctx.deps.config.fileRoots, purpose: "write-file", overwrite: bool(a, "overwrite"), nfs, now: ctx.now, log: ctx.fsLog.writes, isSame: (existing) => sha256Hex(existing) === got });
       backup = w.backup;
+      backupResidue = w.backupResidue;
       alreadyPresent = w.unchanged;
       savedTo = dest;
       bytes = buf.length;
@@ -991,12 +996,12 @@ const fileVerifyTool: ToolDef = {
     // the untrusted block and marked untrusted in structuredContent (MCP-D4 L-5); the folder alone stays outside.
     const viaDatum = savedTo !== null && datumName !== null && deliveredName === datumName;
     const savedLine = savedTo === null ? "" : viaDatum ? `  diunduh ke folder: ${dir} dengan nama DATUM (judul; nama di blok di bawah) (${bytes} B)` : `  diunduh ke: ${savedTo} (${bytes} B)`;
-    const saved = savedTo !== null ? `${savedLine}${alreadyPresent ? " — sudah ada dengan isi sama, tidak ditulis ulang" : ""}${backup !== null ? `; cadangan berkas lama: ${backup}` : ""}${viaDatum ? `\n${untrustedBlock(String(datumName), { jenis: "nama-berkas-datum", fileId })}` : ""}` : "  tidak diunduh (berikan downloadDir untuk menyimpan)";
+    const saved = savedTo !== null ? `${savedLine}${alreadyPresent ? " — sudah ada dengan isi sama, tidak ditulis ulang" : ""}${backup !== null ? `; cadangan berkas lama: ${backup} (backupResidue ${backupResidue} di .bak/)` : ""}${viaDatum ? `\n${untrustedBlock(String(datumName), { jenis: "nama-berkas-datum", fileId })}` : ""}` : "  tidak diunduh (berikan downloadDir untuk menyimpan)";
     const nameShown = nameOk ? finalFileName : finalFileName === "" ? "-" : "(tidak dicetak; lihat structuredContent.finalFileName, data tak tepercaya)";
     // Swarm 1.2.6 row 77 (M-07, N-037/N-038): the line names its check family (sha256 on disk, not the U24 page verdict)
     // and prints the full sha (64 hex) or "-" when the header is not 64 hex.
     const text = [`berkas ${fileId}: ${verified ? "FILE_VERIFIED(sha256)" : "FILE_UNVERIFIED(sha256)"} ${HEX64.test(sha) ? sha : "-"}`,`  nama final: ${nameShown} (${nameOk ? "lolos pola C51" : "TIDAK lolos pola C51"})`, saved].join("\n");
-    const raw = { fileId, verified, sha256: sha || null, finalFileName: finalFileName || null, finalNameValid: nameOk, fileName: datumName, deliveredFileName: deliveredName, savedTo, bytes, ...(savedTo !== null ? { alreadyPresent, backup } : {}), correlationId: cid, downloadCorrelationId: downloadCid };
+    const raw = { fileId, verified, sha256: sha || null, finalFileName: finalFileName || null, finalNameValid: nameOk, fileName: datumName, deliveredFileName: deliveredName, savedTo, bytes, ...(savedTo !== null ? { alreadyPresent, backup, backupResidue } : {}), correlationId: cid, downloadCorrelationId: downloadCid };
     const suspect = (finalFileName !== "" && !nameOk) || (sha !== "" && !HEX64.test(sha));
     const marked = [...(suspect ? ["finalFileName", "sha256"] : []), ...(datumName !== null ? ["fileName", "deliveredFileName", "savedTo"] : [])];
     return { text, data: marked.length > 0 ? { ...(neutralizeDeep(raw) as Record<string, unknown>), ...untrustedFields(marked) } : raw };

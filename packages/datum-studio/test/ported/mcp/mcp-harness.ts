@@ -72,6 +72,12 @@ export function memNodeFs(files: Record<string, string> = {}, dirs: string[] = [
       writes.push(`mkdir ${p}`);
       dirSet.add(path.resolve(p));
     },
+    // Swarm 1.2.6 row 70 (T-17): names directly inside a folder (backupResidue counts `.bak/` entries).
+    readdir: (p) => {
+      calls.push(`readdir ${p}`);
+      const d = path.resolve(p);
+      return [...store.keys(), ...dirSet].filter((k) => path.dirname(k) === d && k !== d).map((k) => path.basename(k));
+    },
   };
   return { nfs, writes, calls, store, read: (p: string) => store.get(path.resolve(p))?.toString('utf8') ?? null };
 }

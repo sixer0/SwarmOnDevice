@@ -81,9 +81,11 @@ describe('M-1: tulis berkas hanya dengan STUDIO_MCP_FILE_ROOTS eksplisit, tanpa 
     expect(o.isError).toBeFalsy();
     const bak = o.data.backup as string;
     expect(path.basename(bak)).toMatch(/^catatan\.md\.bak-\d{8}T\d{6}Z$/);
+    // Swarm 1.2.6 row 70 (T-17 INTENT, 01g): the backup directory moves to <dir>/.bak/ (created first); basename unchanged (E-22).
+    expect(path.dirname(bak)).toBe(path.join(ROOT, '.bak'));
     expect(mem.read(bak)).toBe('ISI-ASLI\n');
     expect(mem.read(victim)).toContain('# Laporan uji R3-F2');
-    expect(mem.writes.slice(1)).toEqual([`copy ${bak}`, `atomic ${victim}`]);
+    expect(mem.writes.slice(1)).toEqual([`mkdir ${path.join(ROOT, '.bak')}`, `copy ${bak}`, `atomic ${victim}`]);
     expect(o.text).toContain(`cadangan berkas lama: ${bak}`);
     // Cadangan kedua pada detik yang sama tidak menimpa cadangan pertama.
     const o2 = await call('studio_report_refresh', { documentId: DOC, markdown: MD(), outPath: victim, overwrite: true });
