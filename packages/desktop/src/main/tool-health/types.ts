@@ -72,7 +72,17 @@ export type ToolHealthProbe =
       timeoutMs?: number
     }
   | { kind: "http-unix"; socketPath: string; path: string; expectStatus: number; timeoutMs?: number }
-  | { kind: "file"; path: string; timeoutMs?: number }
+  | {
+      kind: "file"
+      path: string
+      timeoutMs?: number
+      /**
+       * TH-06 / N-127, shipped `layout-runtime` only (a user file refuses the key): the probe checks the file
+       * `resolveElkBundle({STUDIO_VENDOR_ROOT: elkVendorRoot})` returns at probe time, so it follows the host's own
+       * rule (staged root only with studio-manifest.json). `path` stays the expected staged file, for display.
+       */
+      elkVendorRoot?: string
+    }
   | { kind: "process"; check: "render-bridge"; timeoutMs?: number }
 
 /** N-120 (amended RA-4): `builtin` only on shipped components; `argv` absolute, no shell. */

@@ -155,8 +155,67 @@ describe("file probe (01c 11.3 item 5)", () => {
     const lr = reg.find((c) => c.id === "layout-runtime")!.probe
     expect(await runProbe(lr)).toMatchObject({ healthy: false, reason: "FILE_MISSING" })
     mkdirSync(join(res, "datum-studio", "third_party", "elkjs"), { recursive: true })
+    // Row 95 (TH-06) intended change: a staged root counts only with its manifest (resolveElkBundle rule).
+    writeFileSync(join(res, "datum-studio", "studio-manifest.json"), "{}")
     writeFileSync(join(res, "datum-studio", "third_party", "elkjs", "elk.bundled.js"), "x")
     expect(await runProbe(lr)).toMatchObject({ healthy: true, reason: "OK" })
+  })
+})
+
+// TH-06 (1.2.6 row 95, 01_specs TH-06, 01c 4.5 / N-127): the layout-runtime probe answers what the host's
+// resolveElkBundle (datum-studio-host/elk-runtime.ts) would load, at probe time. No revive.
+describe("layout-runtime probe (TH-06)", () => {
+  const elk = (root: string) => join(root, "third_party", "elkjs", "elk.bundled.js")
+  function packaged() {
+    const res = join(dir, "res")
+    const root = join(res, "datum-studio")
+    const comp = createToolHealthRegistry({ home: dir, platform: "darwin", isPackaged: true, resourcesPath: res, appPath: dir }).find(
+      (c) => c.id === "layout-runtime",
+    )!
+    return { root, comp }
+  }
+
+  test("staged root: bundle removed is dead FILE_MISSING with resolveElkBundle's text; present is healthy", async () => {
+    const { root, comp } = packaged()
+    expect(comp.revive).toBeUndefined()
+    mkdirSync(join(root, "third_party", "elkjs"), { recursive: true })
+    writeFileSync(join(root, "studio-manifest.json"), "{}")
+    writeFileSync(elk(root), "x")
+    expect(await runProbe(comp.probe)).toMatchObject({ healthy: true, reason: "OK" })
+    rmSync(elk(root))
+    expect(await runProbe(comp.probe)).toEqual({
+      healthy: false,
+      reason: "FILE_MISSING",
+      detail: "third_party/elkjs/elk.bundled.js missing under the staged Studio root",
+    })
+  })
+
+  test("staged root without studio-manifest.json: the host loads nothing, so the bundle alone is not healthy", async () => {
+    const { root, comp } = packaged()
+    mkdirSync(join(root, "third_party", "elkjs"), { recursive: true })
+    writeFileSync(elk(root), "x")
+    const r = await runProbe(comp.probe)
+    expect(r).toMatchObject({ healthy: false, reason: "FILE_MISSING" })
+    expect(r.detail).toBe("elkjs/lib/elk.bundled.js not found beside the repo vendor root")
+  })
+
+  test("a directory where the bundle should be is dead, not healthy", async () => {
+    const { root, comp } = packaged()
+    mkdirSync(elk(root), { recursive: true })
+    writeFileSync(join(root, "studio-manifest.json"), "{}")
+    expect(await runProbe(comp.probe)).toMatchObject({ healthy: false, reason: "FILE_MISSING" })
+  })
+
+  test("repo layout: the dev elkjs beside the vendor root decides", async () => {
+    const app = join(dir, "desktop")
+    const comp = createToolHealthRegistry({ home: dir, platform: "linux", isPackaged: false, appPath: app }).find(
+      (c) => c.id === "layout-runtime",
+    )!
+    expect(await runProbe(comp.probe)).toMatchObject({ healthy: false, reason: "FILE_MISSING" })
+    const lib = join(dir, "datum-studio", "node_modules", "elkjs", "lib")
+    mkdirSync(lib, { recursive: true })
+    writeFileSync(join(lib, "elk.bundled.js"), "x")
+    expect(await runProbe(comp.probe)).toMatchObject({ healthy: true, reason: "OK" })
   })
 })
 

@@ -7,6 +7,7 @@
 
 import { request as httpRequest } from "node:http"
 import { stat } from "node:fs/promises"
+import { resolveElkBundle } from "../datum-studio-host/elk-runtime"
 import { HEALTH_PROBE_TIMEOUT_MS, PROBE_BODY_MAX_BYTES, type ToolHealthProbe, type ToolHealthReason } from "./types"
 
 export type ProbeResult = {
@@ -167,6 +168,12 @@ export function probeHttpUnix(probe: Extract<ToolHealthProbe, { kind: "http-unix
 }
 
 export async function probeFile(probe: Extract<ToolHealthProbe, { kind: "file" }>): Promise<ProbeResult> {
+  if (probe.elkVendorRoot !== undefined) {
+    // TH-06 (01c 4.5): the file the host would load, by the host's own rule; `{error}` is dead with its text.
+    const where = resolveElkBundle({ STUDIO_VENDOR_ROOT: probe.elkVendorRoot })
+    if ("error" in where) return { healthy: false, reason: "FILE_MISSING", detail: where.error }
+    return probeFile({ kind: "file", path: where.file })
+  }
   try {
     const st = await stat(probe.path)
     if (st.isFile()) return { healthy: true, reason: "OK", detail: "file present" }

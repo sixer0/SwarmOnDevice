@@ -26,7 +26,15 @@ function statusRange(from: number, to: number): number[] {
   return out
 }
 
-/** The ELK bundle the host would load for this layout; mirrors resolveElkBundle without touching the disk. */
+/** STUDIO_VENDOR_ROOT the host gets for this layout (lifecycle.ts createHostEnv = layout.vendorRoot). */
+export function layoutVendorRoot(ctx: ToolHealthContext): string {
+  return resolveStudioLayout({ isPackaged: ctx.isPackaged, resourcesPath: ctx.resourcesPath, appPath: ctx.appPath }).vendorRoot
+}
+
+/**
+ * The ELK bundle the host is expected to load for this layout, without touching the disk (display value). The probe
+ * itself resolves through resolveElkBundle at probe time (elkVendorRoot), which also requires studio-manifest.json.
+ */
 export function layoutRuntimeBundlePath(ctx: ToolHealthContext): string {
   const layout = resolveStudioLayout({ isPackaged: ctx.isPackaged, resourcesPath: ctx.resourcesPath, appPath: ctx.appPath })
   if (layout.kind === "repo") return join(layout.vendorRoot, "..", "node_modules", "elkjs", "lib", "elk.bundled.js")
@@ -95,7 +103,8 @@ export function createToolHealthRegistry(ctx: ToolHealthContext): ToolHealthComp
       id: "layout-runtime",
       label: "Diagram layout runtime (ELK)",
       // No revive: the only fix is a reinstall or re-patch, and the regime never installs (01c 4.5, TH-06).
-      probe: { kind: "file", path: layoutRuntimeBundlePath(ctx) },
+      // TH-06 (row 95): elkVendorRoot makes the probe resolve the file through resolveElkBundle at probe time.
+      probe: { kind: "file", path: layoutRuntimeBundlePath(ctx), elkVendorRoot: layoutVendorRoot(ctx) },
       startup: "probe",
       consent: "auto",
     },

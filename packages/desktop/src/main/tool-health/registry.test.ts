@@ -79,7 +79,12 @@ describe("TH-01 shipped registry (01c 11.1)", () => {
     expect(fc.url).toBe("http://127.0.0.1:9022/")
     expect(fc.expectStatus as number[]).toEqual(expect.arrayContaining([200, 302, 399, 401, 403]))
     expect(fc.expectStatus as number[]).not.toContain(404)
-    expect(byId["layout-runtime"]!.probe).toEqual({ kind: "file", path: `${RES}/datum-studio/third_party/elkjs/elk.bundled.js` })
+    // Row 95 (TH-06) intended change: the probe also carries the vendor root it resolves through resolveElkBundle.
+    expect(byId["layout-runtime"]!.probe).toEqual({
+      kind: "file",
+      path: `${RES}/datum-studio/third_party/elkjs/elk.bundled.js`,
+      elkVendorRoot: `${RES}/datum-studio`,
+    })
   })
 
   test("3: serialised registry has no /Users/ or Default Project; every path is under home or resources", () => {
@@ -138,6 +143,11 @@ describe("TH-01 shipped registry (01c 11.1)", () => {
   test("layout-runtime path follows the studio layout (repo layout = dev elkjs)", () => {
     const reg = createToolHealthRegistry({ home: HOME, platform: "linux", isPackaged: false, appPath: "/tmp/nowhere/desktop" })
     const lr = reg.find((c) => c.id === "layout-runtime")!
-    expect(lr.probe).toEqual({ kind: "file", path: "/tmp/nowhere/datum-studio/node_modules/elkjs/lib/elk.bundled.js" })
+    // Row 95 (TH-06) intended change: + elkVendorRoot (the repo vendor root).
+    expect(lr.probe).toEqual({
+      kind: "file",
+      path: "/tmp/nowhere/datum-studio/node_modules/elkjs/lib/elk.bundled.js",
+      elkVendorRoot: "/tmp/nowhere/datum-studio/vendor",
+    })
   })
 })
