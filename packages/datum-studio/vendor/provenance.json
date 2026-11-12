@@ -91,7 +91,8 @@
   "row99": "2026-11-12: 1.2.6 row 99 (G-06 with M-06, W-09, W-14, T-14, T-16; U5). 4 vendor files re-patched (files[].patch_row99, before = previous sha256; status unchanged): scripts/studio/mcp/tools.ts, doc-tools.ts, figure-tools.ts, write-tools.ts (tool descriptions; default tools/list reports,documents,query 30468 -> 29937 B; full 40-tool host list 73012 -> 72500 B; tools.ts also prints backupRemoved, controller add-on to row 71)",
   "row62": "2026-11-12: 1.2.6 row 62 (T-06, U5; register E-10 DATUM-25 message change only). 2 vendor files re-patched (files[].patch_row62, before = previous sha256; status unchanged): engine/diagram/core/colour.ts (NEW diagramColourSources: the diagramColourValues token model keyed by hex with its spec sources; diagramColourValues = its sorted keys, output unchanged; NEW colourCountDetail), engine/diagram/build/svg.ts (DATUM-25 refusal appends 'dihitung N: #hex (sources), ... \u2014 sisa R'; limit unchanged). Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/62_row62_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9927793 + 2015 = 9929808. patch_rows += 62",
   "row98": "2026-11-12: 1.2.6 row 98 (G-04 render/verify/lint/assets/quota parts, W-09, T-14, W-13, T-18; U5; register N-033..N-040, N-044, N-053, N-055..N-057, N-106, N-113, N-114). 1 vendor file re-patched (files[].patch_row98, before = previous sha256; status unchanged): docs/STUDIO-AGENT-GUIDE.md (NEW §8.3-§8.7 and §10.1, §1.1 pointer; §4.1.2 untouched). Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/98_row98_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9929808 + 9844 = 9939652. patch_rows += \"98\".",
-  "rowINT1_item2": "2026-11-12: 1.2.6 row INT-1 (INT1_item2). Stale step-3 comment in services/render/pure/render.ts fixed (comment only, no behaviour change). 1 vendor file re-patched (files[].patch_rowINT1_item2, before = previous sha256; status unchanged): src/lib/studio/services/render/pure/render.ts. Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/int1_diffs/src_lib_studio_services_render_pure_render.ts.diff. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9939652 + 260 = 9939912. patch_rows += \"INT-1\" (once)."
+  "rowINT1_item2": "2026-11-12: 1.2.6 row INT-1 (INT1_item2). Stale step-3 comment in services/render/pure/render.ts fixed (comment only, no behaviour change). 1 vendor file re-patched (files[].patch_rowINT1_item2, before = previous sha256; status unchanged): src/lib/studio/services/render/pure/render.ts. Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/int1_diffs/src_lib_studio_services_render_pure_render.ts.diff. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9939652 + 260 = 9939912. patch_rows += \"INT-1\" (once).",
+  "rowINT1_item5": "2026-11-12: 1.2.6 row INT-1 (INT1_item5). DATUM-25 estimate refusal uses colourCountDetail like build/svg.ts (row 62). 1 vendor file re-patched (files[].patch_rowINT1_item5, before = previous sha256; status unchanged): src/lib/studio/engine/diagram/core/estimate.ts. Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/int1_diffs/src_lib_studio_engine_diagram_core_estimate.ts.diff. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9939912 + 278 = 9940190. patch_rows += \"INT-1\" (once)."
  },
  "counts": {
   "files": 608,
@@ -99,7 +100,7 @@
   "patched": 155,
   "replaced": 12,
   "added": 30,
-  "bytes": 9939912
+  "bytes": 9940190
  },
  "files": [
   {
@@ -2420,9 +2421,10 @@
   {
    "path": "src/lib/studio/engine/diagram/core/estimate.ts",
    "status": "patched",
-   "bytes": 5926,
+   "bytes": 6204,
    "source_sha256": "d4b599ce20ffe1c0047b067c6c5ccce2796a94d9398c55777906b86b0084d6db",
-   "sha256": "75bcb5ff733943de9410d54ebefefa9d17677ec8300cfb6fdcb546a8d847bf9e",
+   "sha256": "c8bd0f8bb658346aa5e4ee255a9ff80e05f486292e6ffe9654eb51f14b72fcaa",
+   "patch_rowINT1_item5": {"id": "rowINT1_item5", "row": "INT-1", "decision": "1.2.6 integration pass INT-1 item 5 (row 62 follow-up, T-06; register E-10)", "summary": "estimate-time DATUM-25 refusal (twin of build/svg.ts) appends colourCountDetail: each counted value (diagramColourValues) with its sources (diagramColourSources) and the remainder 'sisa'; id, count, limit and leading text unchanged", "diff_base": "sha256 before this row", "before_sha256": "75bcb5ff733943de9410d54ebefefa9d17677ec8300cfb6fdcb546a8d847bf9e", "after_sha256": "c8bd0f8bb658346aa5e4ee255a9ff80e05f486292e6ffe9654eb51f14b72fcaa", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/int1_diffs/src_lib_studio_engine_diagram_core_estimate.ts.diff", "diff_sha256": "2fae1ad508451667cb24949eb231e07c938d7df15eadd7add5915d1b0bbc531c"},
    "patch_row158": {
     "id": "row158-diagram-estimate-over-capacity",
     "row": 158,

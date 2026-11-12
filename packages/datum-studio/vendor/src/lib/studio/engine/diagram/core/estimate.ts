@@ -13,7 +13,7 @@ import type { LayoutFn, StudioDiagramV1 } from "../../../contract";
 import { DiagramDefect } from "./defect";
 import { DiagramOverCapacity } from "../../figure-capacity";
 import { pyFixed, pyRound0 } from "./pyfmt";
-import { diagramColourValues } from "./colour";
+import { colourCountDetail, diagramColourSources, diagramColourValues } from "./colour"; // INT-1 (row 62 twin)
 import { Sheet, footReserveMm } from "./sheet";
 import { assertValidSpec } from "./spec";
 import { baselineStepMm } from "./geometry";
@@ -118,7 +118,8 @@ export function estimate(s: StudioDiagramV1, layout?: LayoutFn, opts: { grid?: D
   const colourValues = diagramColourValues(s, sheet);
   if (colourValues.length > LIMITS.max_colour_values) {
     throw new DiagramDefect(
-      `DATUM-25: ${colourValues.length} nilai warna dalam satu gambar, maksimum ${LIMITS.max_colour_values} (temuan E-16: plafon ini nyata) (P5/P8)`,
+      // Swarm 1.2.6 INT-1 (twin of build/svg.ts row 62, T-06): name each counted value, its sources and the remainder.
+      `DATUM-25: ${colourValues.length} nilai warna dalam satu gambar, maksimum ${LIMITS.max_colour_values} (temuan E-16: plafon ini nyata) (P5/P8); ${colourCountDetail(colourValues, diagramColourSources(s, sheet), LIMITS.max_colour_values)}`,
       { checkId: "DATUM-25" },
     );
   }
