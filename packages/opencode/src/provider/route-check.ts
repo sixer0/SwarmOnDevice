@@ -24,9 +24,31 @@ export type Probe = (host: string) => Promise<string | undefined>
 export type Warning = { code: typeof CODE; host: string; iface?: string; sessionID?: string; message: string }
 export type Sink = (warning: Warning) => void
 
-/** A Tailscale interface: macOS names it `utunN`, Linux and Windows `tailscale0` / "Tailscale". */
-export const isTailscale = (iface: string | undefined) =>
-  !!iface && (/^utun\d+$/.test(iface) || /tailscale/i.test(iface))
+/** What the OS says about an interface's IPv4 addresses, or undefined when it cannot tell. */
+export type Addresses = (iface: string) => Promise<string[] | undefined>
+
+/** An IPv4 address in Tailscale's carrier-grade NAT range, 100.64.0.0/10 (100.64.0.0 to 100.127.255.255). */
+export const inTailscaleRange = (address: string) => {
+  const parts = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(address.trim())
+  if (!parts) return false
+  const [a, b, c, d] = parts.slice(1).map(Number) as [number, number, number, number]
+  if ([a, b, c, d].some((n) => n > 255)) return false
+  return a === 100 && b >= 64 && b <= 127
+}
+
+const namedByTailscale = (iface: string) => /tailscale/i.test(iface)
+const isUtun = (iface: string) => /^utun\d+$/.test(iface)
+
+/**
+ * A Tailscale interface. Linux and Windows name it `tailscale0` / "Tailscale". On macOS it is a `utunN`, but so is the
+ * tunnel of every other VPN client (WireGuard, Cisco and so on), so 1.2.6 (M1 S1) counts a utun only when it carries an
+ * IPv4 address in 100.64.0.0/10. No addresses known: not verified.
+ */
+export const isTailscale = (iface: string | undefined, addresses?: readonly string[]) => {
+  if (!iface) return false
+  if (namedByTailscale(iface)) return true
+  return isUtun(iface) && !!addresses?.some(inTailscaleRange)
+}
 
 const run = (cmd: string, args: string[]) =>
   new Promise<string | undefined>((resolve) => {
@@ -63,6 +85,19 @@ export const osProbe: Probe = async (host) => {
   return undefined
 }
 
+/** Default address lookup. macOS: `ifconfig <iface>`; Linux: `ip -4 -o addr show dev <iface>`. The `inet` lines. */
+export const osAddresses: Addresses = async (iface) => {
+  if (!/^[\w.-]+$/.test(iface)) return undefined
+  const out =
+    process.platform === "darwin"
+      ? await run("/sbin/ifconfig", [iface])
+      : process.platform === "linux"
+        ? await run("ip", ["-4", "-o", "addr", "show", "dev", iface])
+        : undefined
+  if (!out) return undefined
+  return [...out.matchAll(/\binet\s+(\d{1,3}(?:\.\d{1,3}){3})/g)].map((m) => m[1]!)
+}
+
 // The existing notice surface: the log, and the toast event the session view already shows (no new panel, INV-K).
 export const defaultSink: Sink = (warning) => {
   Effect.runFork(
@@ -83,18 +118,21 @@ export const defaultSink: Sink = (warning) => {
 }
 
 let probe: Probe = osProbe
+let addressesOf: Addresses = osAddresses
 let sink: Sink = defaultSink
 let now = () => Date.now()
 const routes = new Map<string, { at: number; iface?: string; verified: boolean }>()
 const warnedAt = new Map<string, number>()
 const pending = new Set<Promise<void>>()
 
-/** Test seam: replace the probe, the sink or the clock; `reset()` restores the defaults and empties the caches. */
+/** Test seam: replace the probe, the address lookup, the sink or the clock; `reset()` restores the defaults. */
 export const setProbe = (next: Probe) => void (probe = next)
+export const setAddresses = (next: Addresses) => void (addressesOf = next)
 export const setSink = (next: Sink) => void (sink = next)
 export const setClock = (next: () => number) => void (now = next)
 export const reset = () => {
   probe = osProbe
+  addressesOf = osAddresses
   sink = defaultSink
   now = () => Date.now()
   routes.clear()
@@ -116,7 +154,7 @@ const warnOnce = (host: string, iface: string | undefined, sessionID: string | u
   }
 }
 
-/** Looks at the route to `host` (cached CACHE_MS) and warns when it is not a Tailscale interface. Never throws. */
+/** Looks at the route to `host` (cached CACHE_MS) and warns when it is not a verified Tailscale interface. Never throws. */
 export function check(host: string, sessionID?: string) {
   const cached = routes.get(host)
   if (cached && now() - cached.at < CACHE_MS) {
@@ -128,8 +166,18 @@ export function check(host: string, sessionID?: string) {
   const task = Promise.resolve()
     .then(() => probe(host))
     .catch(() => undefined)
-    .then((iface) => {
-      const verified = isTailscale(iface)
+    .then(async (iface) => {
+      // Only a utun needs its addresses read; a name Tailscale gives, or any other interface, decides by itself.
+      const addresses =
+        iface && isUtun(iface) && !namedByTailscale(iface)
+          ? await Promise.resolve()
+              .then(() => addressesOf(iface))
+              .catch(() => undefined)
+          : undefined
+      return { iface, addresses }
+    })
+    .then(({ iface, addresses }) => {
+      const verified = isTailscale(iface, addresses)
       routes.set(host, { at: now(), iface, verified })
       if (!verified) warnOnce(host, iface, sessionID)
     })

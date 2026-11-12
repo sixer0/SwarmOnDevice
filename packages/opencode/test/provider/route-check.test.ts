@@ -147,6 +147,8 @@ it.instance("SEC-08 stubbed Tailscale utun route: requests are sent and no warni
     const route = yield* Effect.promise(loadRoute)
     const probed: string[] = []
     route?.setProbe(async (host) => (probed.push(host), "utun4"))
+    // 1.2.6 FX-5/6 (M1 S1, intended change): a utun counts as Tailscale only with an address in 100.64.0.0/10.
+    route?.setAddresses?.(async () => ["100.101.7.9"])
     const warnings = watchWarnings()
     try {
       yield* sendThree()
@@ -196,5 +198,69 @@ it.live("SEC-08 the check never holds a request back and warns again only after 
     await route.settled()
     expect(warned.length).toBe(2)
     expect(sent).toBe(4)
+  }),
+)
+
+// 1.2.6 FX-5/6 (M1 S1): on macOS every VPN client makes a `utunN`. A utun is Tailscale only when it carries an IPv4
+// address in Tailscale's 100.64.0.0/10 range (or the interface is named by Tailscale). Another VPN's utun warns.
+it.live("SEC-08 S1 a utun is Tailscale only with a 100.64.0.0/10 address or a Tailscale name", () =>
+  Effect.promise(async () => {
+    const route = await loadRoute()
+    expect(route).toBeDefined()
+    if (!route) return
+    expect(route.isTailscale("utun3", ["100.101.7.9"])).toBe(true)
+    expect(route.isTailscale("utun3", ["10.8.0.2", "100.64.0.1"])).toBe(true)
+    expect(route.isTailscale("utun3", ["100.127.255.254"])).toBe(true)
+    expect(route.isTailscale("utun3", ["10.8.0.2"])).toBe(false)
+    expect(route.isTailscale("utun3", ["100.128.0.1"])).toBe(false)
+    expect(route.isTailscale("utun3", ["100.63.255.255"])).toBe(false)
+    expect(route.isTailscale("utun3", [])).toBe(false)
+    expect(route.isTailscale("utun3", undefined)).toBe(false)
+    expect(route.isTailscale("utun3")).toBe(false)
+    expect(route.isTailscale("tailscale0")).toBe(true)
+    expect(route.isTailscale("Tailscale")).toBe(true)
+    expect(route.isTailscale("en0", ["100.101.7.9"])).toBe(false)
+    expect(route.isTailscale(undefined)).toBe(false)
+  }),
+)
+
+it.live("SEC-08 S1 another VPN's utun no longer suppresses the warning; a Tailscale utun still does", () =>
+  Effect.promise(async () => {
+    const route = await loadRoute()
+    expect(route).toBeDefined()
+    if (!route) return
+    const asked: string[] = []
+    const warned: { code: string; iface?: string }[] = []
+    route.setSink((w) => warned.push({ code: w.code, iface: w.iface }))
+    route.setProbe(async () => "utun7")
+    route.setAddresses?.(async (iface) => (asked.push(iface), ["10.8.0.2"]))
+    let sent = 0
+    const fetchFn = route.guard(async (_input: string) => (sent++, new Response("ok")))
+    await fetchFn("http://100.102.23.27:11400/v1/chat/completions")
+    await route.settled()
+    expect(sent).toBe(1)
+    expect(warned).toEqual([{ code: CODE, iface: "utun7" }])
+    expect(asked).toEqual(["utun7"])
+
+    route.reset()
+    route.setSink((w) => warned.push({ code: w.code, iface: w.iface }))
+    route.setProbe(async () => "utun7")
+    route.setAddresses?.(async () => ["100.102.0.5"])
+    await fetchFn("http://100.102.23.27:11400/v1/chat/completions")
+    await route.settled()
+    expect(sent).toBe(2)
+    expect(warned.length).toBe(1)
+
+    // An address lookup that fails counts as unverified and never throws into the request.
+    route.reset()
+    route.setSink((w) => warned.push({ code: w.code, iface: w.iface }))
+    route.setProbe(async () => "utun7")
+    route.setAddresses?.(async () => {
+      throw new Error("ifconfig missing")
+    })
+    await fetchFn("http://100.102.23.27:11400/v1/chat/completions")
+    await route.settled()
+    expect(sent).toBe(3)
+    expect(warned.length).toBe(2)
   }),
 )
