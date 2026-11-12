@@ -768,6 +768,62 @@ export function archiveEmptyInput(rootID: string, entries: readonly AutonomyArch
   return { sessionID: rootID, ids: entries.map((entry) => entry.id) }
 }
 
+// P-01c: a checkpoint the server can put back. The first `checkpointed` line names it (that line, written at creation,
+// is what the route checks the manifest against), so a later line cannot change what is listed. Latest first.
+export type CheckpointItem = { id: string; at: number; entries?: number; reverted: boolean }
+
+export function checkpointsOf(lines: readonly AutonomyAuditLine[]): CheckpointItem[] {
+  const found = new Map<string, CheckpointItem>()
+  const reverted = new Set<string>()
+  for (const line of lines) {
+    if (line.type !== "outcome" || !line.checkpoint) continue
+    if (line.outcome === "checkpointed" && line.manifestSha256 && !found.has(line.checkpoint))
+      found.set(line.checkpoint, { id: line.checkpoint, at: line.at, entries: line.entries, reverted: false })
+    if (line.outcome === "undone" && line.requestID === `revert_${line.checkpoint}`) reverted.add(line.checkpoint)
+  }
+  return [...found.values()].map((item) => ({ ...item, reverted: reverted.has(item.id) })).reverse()
+}
+
+// SEC-06: the two person-only routes want the per-launch nonce of the desktop app. Asked for on each click and never
+// kept: without it (web build, a server the app did not start) nothing is added and the route refuses with 403.
+export const DESKTOP_NONCE_HEADER = "x-swarm-desktop-nonce"
+export type NonceSource = () => Promise<string | null | undefined>
+
+type NonceBridge = { api?: { desktopNonce?: () => Promise<string | null> } }
+
+// The preload's `window.api.desktopNonce` (row 38b); absent outside the desktop app.
+export const desktopNonce: NonceSource = async () => {
+  try {
+    return (await (globalThis as NonceBridge).api?.desktopNonce?.()) ?? null
+  } catch {
+    return null
+  }
+}
+
+export function nonceHeader(nonce: string | null | undefined): { [DESKTOP_NONCE_HEADER]?: string } {
+  return nonce ? { [DESKTOP_NONCE_HEADER]: nonce } : {}
+}
+
+type WithNonce = { [DESKTOP_NONCE_HEADER]?: string }
+
+// The route call is passed in, so a test can see exactly what is sent.
+export async function sendCheckpointRevert<R>(
+  send: (input: { sessionID: string; checkpointID: string } & WithNonce) => Promise<R>,
+  nonce: NonceSource,
+  rootID: string,
+  checkpointID: string,
+) {
+  return send({ sessionID: rootID, checkpointID, ...nonceHeader(await nonce()) })
+}
+
+export async function sendArchiveEmpty<R>(
+  send: (input: { sessionID: string; ids: string[] } & WithNonce) => Promise<R>,
+  nonce: NonceSource,
+  input: { sessionID: string; ids: string[] },
+) {
+  return send({ ...input, ...nonceHeader(await nonce()) })
+}
+
 const SIZE_UNITS = ["byte", "kilobyte", "megabyte", "gigabyte", "terabyte"] as const
 
 // A size in the person's locale, decimal units as the system file browsers show them.

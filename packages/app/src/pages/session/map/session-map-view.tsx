@@ -40,16 +40,20 @@ import {
   archiveEmptyInput,
   archiveShown,
   archiveSize,
+  checkpointsOf,
   consentAllowInput,
   consentShown,
   consentTicked,
   decisionGroups,
+  desktopNonce,
   formatDuration,
   heldAlways,
   heldCalls,
   historyOf,
   relativePath,
   reuseById,
+  sendArchiveEmpty,
+  sendCheckpointRevert,
   type ConsentItem,
   type ConsentList,
   type DecisionEntry,
@@ -718,15 +722,20 @@ function DialogEmptyArchive(props: { entries: readonly AutonomyArchiveEntry[]; o
   )
 }
 
-function DialogUndoDecision(props: { onConfirm: () => void }) {
+// Also the confirmation of a checkpoint's Revert (P-01c), with its own two labels.
+function DialogUndoDecision(props: {
+  onConfirm: () => void
+  labels?: { action: "session.autonomy.checkpoint.revert"; description: "session.autonomy.checkpoint.confirm" }
+}) {
   const language = useLanguage()
   const dialog = useDialog()
+  const action = () => language.t(props.labels?.action ?? "command.session.undo")
   return (
     <DialogV2 fit>
       <DialogHeader hideClose>
         <DialogTitleGroup
-          title={language.t("command.session.undo")}
-          description={language.t("session.map.decisions.undo.confirm")}
+          title={action()}
+          description={language.t(props.labels?.description ?? "session.map.decisions.undo.confirm")}
         />
       </DialogHeader>
       <DialogFooter>
@@ -734,13 +743,14 @@ function DialogUndoDecision(props: { onConfirm: () => void }) {
           {language.t("common.cancel")}
         </ButtonV2>
         <ButtonV2
+          data-decision-confirm
           variant="danger"
           onClick={() => {
             dialog.close()
             props.onConfirm()
           }}
         >
-          {language.t("command.session.undo")}
+          {action()}
         </ButtonV2>
       </DialogFooter>
     </DialogV2>
@@ -765,6 +775,8 @@ function createDecisions(rootID: () => string | undefined) {
     archive: undefined as AutonomyArchive | undefined,
     // Until the session's own update arrives, or for a child whose session was never read here.
     reverted: {} as Record<string, string | undefined>,
+    // P-01c: what the last Revert of a checkpoint answered, by checkpoint id, until the panel moves to another root.
+    revertResult: {} as Record<string, { preRevert: string } | { error: string } | undefined>,
   })
   const report = (source: string, cause: unknown) => {
     void sdk()
@@ -843,6 +855,7 @@ function createDecisions(rootID: () => string | undefined) {
         consent: undefined,
         ticks: {},
         archive: undefined,
+        revertResult: {},
       })
       void load()
     }),
@@ -937,7 +950,9 @@ function createDecisions(rootID: () => string | undefined) {
       const id = rootID()
       const input = id ? archiveEmptyInput(id, entries, !!store.archive?.unsafe) : undefined
       if (!input) return
-      act("archive", "archive", () => sdk().client.autonomy.archiveEmpty(input))
+      act("archive", "archive", () =>
+        sendArchiveEmpty((body) => sdk().client.autonomy.archiveEmpty(body), desktopNonce, input),
+      )
     },
     // Only the root's own lines get here: `decisionGroups` gives a subagent's line no button.
     undo: (entry: DecisionEntry) => {
@@ -950,6 +965,23 @@ function createDecisions(rootID: () => string | undefined) {
       )
     },
     confirm: () => act("confirm", "confirm", () => sdk().client.autonomy.confirm()),
+    // P-01c: the one way to put a checkpoint back. The nonce is asked for on the click only.
+    checkpointBusy: (id: string) => !!store.acting[`checkpoint:${id}`],
+    checkpointResult: (id: string) => store.revertResult[id],
+    revertCheckpoint: (id: string) => {
+      const root = rootID()
+      if (!root) return
+      setStore("revertResult", id, undefined)
+      act(`checkpoint:${id}`, "checkpoint", () =>
+        sendCheckpointRevert((body) => sdk().client.autonomy.checkpointRevert(body), desktopNonce, root, id).then(
+          (result) => setStore("revertResult", id, { preRevert: result.data?.preRevert ?? "" }),
+          (cause) => {
+            setStore("revertResult", id, { error: errorMessage(cause, language.t("common.requestFailed")) })
+            throw cause
+          },
+        ),
+      )
+    },
   }
 }
 
@@ -964,6 +996,7 @@ function DecisionWaiting(props: {
   const dialog = useDialog()
   const consent = () => props.decisions.consent()
   const archive = () => props.decisions.archive()
+  const checkpoints = createMemo(() => checkpointsOf(props.decisions.store.state?.lines ?? []))
   return (
     <section data-decision-group="waiting" class="flex flex-col">
       <Show when={consent()}>
@@ -993,8 +1026,70 @@ function DecisionWaiting(props: {
           />
         )}
       </Show>
+      <Show when={checkpoints().length > 0}>
+        <div data-decision-checkpoints class="flex min-w-0 flex-col gap-1 rounded-[6px] px-2 py-1.5 leading-[18px]">
+          <span class="text-v2-text-text-base [font-weight:440]">
+            {language.t("session.autonomy.checkpoint.title", { count: checkpoints().length })}
+          </span>
+          <For each={checkpoints()}>
+            {(item) => {
+              const result = () => props.decisions.checkpointResult(item.id)
+              const reverted = () => {
+                const value = result()
+                return item.reverted || (!!value && "preRevert" in value)
+              }
+              const failed = () => {
+                const value = result()
+                return value && "error" in value ? value.error : undefined
+              }
+              return (
+                <div data-checkpoint={item.id} class="flex min-w-0 flex-col gap-0.5">
+                  <span class="flex flex-wrap items-center gap-x-2">
+                    <span class="min-w-0 break-all font-mono text-[12px] text-v2-text-text-muted">{item.id}</span>
+                    <Show
+                      when={!reverted()}
+                      fallback={
+                        <span data-checkpoint-reverted class="text-v2-text-text-faint [font-weight:440]">
+                          {language.t("session.review.group.undone")}
+                        </span>
+                      }
+                    >
+                      <ButtonV2
+                        data-checkpoint-revert
+                        size="small"
+                        variant="ghost"
+                        disabled={props.decisions.checkpointBusy(item.id)}
+                        onClick={() =>
+                          void dialog.show(() => (
+                            <DialogUndoDecision
+                              labels={{
+                                action: "session.autonomy.checkpoint.revert",
+                                description: "session.autonomy.checkpoint.confirm",
+                              }}
+                              onConfirm={() => props.decisions.revertCheckpoint(item.id)}
+                            />
+                          ))
+                        }
+                      >
+                        {language.t("session.autonomy.checkpoint.revert")}
+                      </ButtonV2>
+                    </Show>
+                  </span>
+                  <Show when={failed()}>
+                    {(message) => (
+                      <span data-checkpoint-error class="break-words text-v2-state-fg-warning [font-weight:440]">
+                        {message()}
+                      </span>
+                    )}
+                  </Show>
+                </div>
+              )
+            }}
+          </For>
+        </div>
+      </Show>
       <Show
-        when={props.entries.length > 0 || consent() || archive()}
+        when={props.entries.length > 0 || consent() || archive() || checkpoints().length > 0}
         fallback={
           <div class="px-2 py-1 text-v2-text-text-faint [font-weight:440]">
             {language.t("session.map.filter.empty")}
