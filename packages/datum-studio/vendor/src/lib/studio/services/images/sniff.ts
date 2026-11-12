@@ -283,3 +283,42 @@ export function sniffRaster(b: Uint8Array): SniffResult {
   const kind = rejectedKind(b);
   return { ok: false, kind, reason: kind === "unknown" ? "not a PNG or JPEG" : `${kind} is not supported (PNG/JPEG only)` };
 }
+
+/**
+ * Swarm patch (1.2.6 row 50a, W-13 SEC-12 / SR-12): dimensi yang DINYATAKAN
+ * header saja, sebelum validasi struktur penuh (`sniffRaster`) dan pemindaian
+ * metadata, agar batas piksel menolak lebih dulu. PNG: IHDR pertama dengan
+ * CRC sah; JPEG: SOFn pertama (berhenti di SOS). `null` bila belum terbaca
+ * (keputusan diserahkan ke `sniffRaster`). Tidak pernah melempar.
+ */
+export function peekRasterDims(b: Uint8Array): { mime: RasterMime; widthPx: number; heightPx: number } | null {
+  if (startsWith(b, PNG_SIG)) {
+    if (b.length < 33 || u32be(b, 8) !== 13 || ascii(b, 12, 4) !== "IHDR") return null;
+    if (crc32(b, 12, 29) !== u32be(b, 29)) return null;
+    const w = u32be(b, 16);
+    const h = u32be(b, 20);
+    return w >= 1 && h >= 1 ? { mime: "image/png", widthPx: w, heightPx: h } : null;
+  }
+  if (b.length >= 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) {
+    let off = 2;
+    for (let n = 0; n < MAX_JPEG_SEGMENTS; n++) {
+      if (off >= b.length || b[off] !== 0xff) return null;
+      while (off < b.length && b[off] === 0xff) off++;
+      if (off >= b.length) return null;
+      const m = b[off++];
+      if (m === 0xd9 || m === 0xda) return null;
+      if ((m >= 0xd0 && m <= 0xd7) || m === 0x01 || m === 0xd8 || m === 0x00) continue;
+      if (off + 2 > b.length) return null;
+      const len = u16be(b, off);
+      if (len < 2 || off + len > b.length) return null;
+      if (isSof(m)) {
+        if (len < 8) return null;
+        const h = u16be(b, off + 3);
+        const w = u16be(b, off + 5);
+        return w >= 1 && h >= 1 ? { mime: "image/jpeg", widthPx: w, heightPx: h } : null;
+      }
+      off += len;
+    }
+  }
+  return null;
+}

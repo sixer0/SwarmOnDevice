@@ -54,15 +54,16 @@
   "row206": "2026-11-09: 1.2.3 patch row 206 (verification details reach the client; lint tri-state; DATUM-37 parity with OVERLAP_CLIP). 5 vendor files re-patched (files[].patch_row206, before = previous sha256; all already patched): scripts/studio/mcp/doc-tools.ts, scripts/studio/mcp/tool-kit.ts, src/lib/studio/engine/browser/index.ts, src/lib/studio/engine/browser/measure.ts, src/lib/studio/engine/lint/render/index.ts. NEW src/lib/studio/registry/lint-explain.ts (status added). Diffs and new file in docs/2026-11-09_swarm_1_2_3_patch/implementation/206_row206_diffs/. counts by delta: files 606 -> 607, added 28 -> 29, copied/patched/replaced unchanged; bytes 9782980 +4525 (re-patched) + 10060 (lint-explain.ts) = 9797565. patch_rows += 206",
   "row210": "2026-11-09: 1.2.3 patch P5 row 210 (security review 209 fixes L-1, L-3, I-2). 4 vendor files re-patched (files[].patch_row210, before = previous sha256; statuses unchanged): scripts/studio/mcp/doc-tools.ts (+152), scripts/studio/mcp/write-client-edit.ts (+183), src/lib/studio/contract/schema/v2/verification-entry.ts (+249), src/lib/studio/registry/lint-explain.ts (+155). Diffs in docs/2026-11-09_swarm_1_2_3_patch/implementation/210_row210_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9797565 + 739 = 9798304. patch_rows += 210",
   "row213": "2026-11-09: 1.2.4 patch P15 row 213 (cover colophon shape for agents). 2 vendor files re-patched (files[].patch_row213, before = previous sha256; statuses unchanged): docs/STUDIO-AGENT-GUIDE.md (+703: colophon shape in the 5.4 cover table, minimal valid cover payload with colophon after the 5.7 D16 table), scripts/studio/mcp/resources.ts (+64: colophon shape on the cover line). Diffs in docs/2026-11-09_swarm_1_2_3_patch/implementation/213_row213_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9798304 + 767 = 9799071. patch_rows += 213",
-  "row215": "2026-11-10: 1.2.5 row 215 (C-27 removed entirely, user decision). 7 vendor files re-patched (files[].patch_row215, before = previous sha256): engine/lint/language/{checks,index,prose}.ts, params/{governance-language,index}.ts, registry/lint.ts, services/templates/sample-render.ts; 5 of them copied -> patched. Diffs in docs/2026-11-09_swarm_1_2_3_patch/implementation/215_row215_diffs/. counts by delta: files/replaced/added unchanged, copied 446 -> 441, patched 120 -> 125; bytes 9799071 -1155 = 9797916. patch_rows += 215"
+  "row215": "2026-11-10: 1.2.5 row 215 (C-27 removed entirely, user decision). 7 vendor files re-patched (files[].patch_row215, before = previous sha256): engine/lint/language/{checks,index,prose}.ts, params/{governance-language,index}.ts, registry/lint.ts, services/templates/sample-render.ts; 5 of them copied -> patched. Diffs in docs/2026-11-09_swarm_1_2_3_patch/implementation/215_row215_diffs/. counts by delta: files/replaced/added unchanged, copied 446 -> 441, patched 120 -> 125; bytes 9799071 -1155 = 9797916. patch_rows += 215",
+  "row50a": "2026-11-12: 1.2.6 row 50a (W-13 image guard, C8: SEC-12 header-first pixel limit, SEC-10 metadata detection). 3 vendor files patched (files[].patch_row50a, before = previous sha256; copied -> patched): services/images/{decode,index,sniff}.ts. NEW services/images/metadata.ts (status added). Diffs in docs/2026-11-12_swarm_1_2_6_patch/implementation/50a_row50a_diffs/. counts by delta: files 607 -> 608, added 29 -> 30, copied 441 -> 438, patched 125 -> 128; bytes 9799785 + 994 + 201 + 1680 + 9284 = 9811944. patch_rows += 50a"
  },
  "counts": {
-  "files": 607,
-  "copied": 441,
-  "patched": 125,
+  "files": 608,
+  "copied": 438,
+  "patched": 128,
   "replaced": 12,
-  "added": 29,
-  "bytes": 9799785
+  "added": 30,
+  "bytes": 9811944
  },
  "files": [
   {
@@ -4616,10 +4617,11 @@
   },
   {
    "path": "src/lib/studio/services/images/decode.ts",
-   "status": "copied",
-   "bytes": 9174,
+   "status": "patched",
+   "bytes": 10168,
    "source_sha256": "f79d1017a2e8a84ac0e3ace812394d11a8d1cc9f38570538f63d02f12d57ce81",
-   "sha256": "f79d1017a2e8a84ac0e3ace812394d11a8d1cc9f38570538f63d02f12d57ce81"
+   "sha256": "4e05a573df4affceb02577e4f7981413472b233250c6b75cc0079a55a6a373b1",
+   "patch_row50a": {"id": "row50a-w13-image-guard", "row": "50a", "decision": "C8 (SR-10, SR-12; verification/00_security_spec_review.md)", "summary": "SEC-12: pixel limit from declared header dims (peekRasterDims) before sniffRaster and the metadata scan (assertPixelLimits, stage header|parsed); SEC-10: DecodedImageDetail.metadata {gps, exifTags, pngTextKeys} via readImageMetadata; bytes unchanged", "before_sha256": "f79d1017a2e8a84ac0e3ace812394d11a8d1cc9f38570538f63d02f12d57ce81", "after_sha256": "4e05a573df4affceb02577e4f7981413472b233250c6b75cc0079a55a6a373b1", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/50a_row50a_diffs/src_lib_studio_services_images_decode.ts.diff", "diff_sha256": "266282e099aaded555f0b2ecb94413d32fc135d8e51024aff075eed7326f877f"}
   },
   {
    "path": "src/lib/studio/services/images/guard.ts",
@@ -4630,17 +4632,27 @@
   },
   {
    "path": "src/lib/studio/services/images/index.ts",
-   "status": "copied",
-   "bytes": 2338,
+   "status": "patched",
+   "bytes": 2539,
    "source_sha256": "04d60ad0856fa0fca67c920ecd1a6602842d929aa11ae2eb8ddf59764e6bea60",
-   "sha256": "04d60ad0856fa0fca67c920ecd1a6602842d929aa11ae2eb8ddf59764e6bea60"
+   "sha256": "6766b8aabf34057f2974382b56997d47da26396971727d18f8a3904b411775f4",
+   "patch_row50a": {"id": "row50a-w13-image-guard", "row": "50a", "decision": "C8 (SR-10, SR-12)", "summary": "exports readImageMetadata, type ImageMetadata, peekRasterDims", "before_sha256": "04d60ad0856fa0fca67c920ecd1a6602842d929aa11ae2eb8ddf59764e6bea60", "after_sha256": "6766b8aabf34057f2974382b56997d47da26396971727d18f8a3904b411775f4", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/50a_row50a_diffs/src_lib_studio_services_images_index.ts.diff", "diff_sha256": "7061bf2418fe97d453b297ed179b340b60712e399be45d10fb8e43b4eb55a19b"}
+  },
+  {
+   "path": "src/lib/studio/services/images/metadata.ts",
+   "status": "added",
+   "bytes": 9284,
+   "source_sha256": null,
+   "sha256": "c654214f79d6bc34e4b1b2919255430a2e89dfa231f89a40c3fa3fdfabf58c78",
+   "note": "NEW Swarm file of row 50a (1.2.6, W-13 SEC-10 / SR-10, decision C8; no clone original): readImageMetadata(bytes, mime) -> {gps, exifTags, pngTextKeys} from JPEG APP1 EXIF/XMP and PNG tEXt/zTXt/iTXt/eXIf (raw EXIF profile inflated, capped 1 MiB); bounded, never throws, report only. Copy in docs/2026-11-12_swarm_1_2_6_patch/implementation/50a_row50a_diffs/src_lib_studio_services_images_metadata.ts.new"
   },
   {
    "path": "src/lib/studio/services/images/sniff.ts",
-   "status": "copied",
-   "bytes": 12424,
+   "status": "patched",
+   "bytes": 14104,
    "source_sha256": "8b55bf2a1db7e21738dc9885bff60c6a0251f04fe8e8dacd072abb8f83c76752",
-   "sha256": "8b55bf2a1db7e21738dc9885bff60c6a0251f04fe8e8dacd072abb8f83c76752"
+   "sha256": "cd4c5258aa82af154cfe0b644b9f1dc80b810428579d3c4d8aa067f2bb2db44b",
+   "patch_row50a": {"id": "row50a-w13-image-guard", "row": "50a", "decision": "C8 (SR-12)", "summary": "NEW peekRasterDims(b): declared dims from the first PNG IHDR (CRC checked) or JPEG SOFn, null otherwise, never throws; sniffRaster unchanged", "before_sha256": "8b55bf2a1db7e21738dc9885bff60c6a0251f04fe8e8dacd072abb8f83c76752", "after_sha256": "cd4c5258aa82af154cfe0b644b9f1dc80b810428579d3c4d8aa067f2bb2db44b", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/50a_row50a_diffs/src_lib_studio_services_images_sniff.ts.diff", "diff_sha256": "ac369d723c3a09ba381280f1d18d3f51d6a87cf7ee75ebb25f7b6bb66896f9be"}
   },
   {
    "path": "src/lib/studio/services/images/store.ts",
@@ -5936,6 +5948,7 @@
   "206",
   "210",
   "213",
-  "55a"
+  "55a",
+  "50a"
  ]
 }

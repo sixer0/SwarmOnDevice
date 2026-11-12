@@ -30,6 +30,9 @@ export {
   IMAGE_SOURCE,
 } from "./decode";
 export type { DecodedImage, DecodedImageDetail } from "./decode";
+// Swarm patch (1.2.6 row 50a, W-13 SEC-10/SEC-12): metadata tertanam + dimensi header.
+export { readImageMetadata } from "./metadata";
+export type { ImageMetadata } from "./metadata";
 export {
   effectiveDpi,
   formatFixed0,
@@ -40,7 +43,7 @@ export {
   PX_GUARD_MIN_DPI_CHART,
   PX_GUARD_MIN_DPI_DEFAULT,
 } from "./guard";
-export { sniffRaster } from "./sniff";
+export { peekRasterDims, sniffRaster } from "./sniff";
 export type { RasterHeader, RasterMime, RejectedKind, SniffResult } from "./sniff";
 export { assetFileName, assetRelPath, assetShardRelPath, ASSETS_DIR, imageExt, linkAssetCopy, readImageAsset, storeImageAsset, writeAssetFile } from "./store";
 export type { StoredImageAsset } from "./store";
