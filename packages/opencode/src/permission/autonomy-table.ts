@@ -4045,7 +4045,8 @@ function existingFile(file: string) {
 }
 
 /**
- * 1.1.3 (T7 F3, T9 G6): the file words of the text's redirects that replace (`>`, `N>`, `>|`, `&>`), read outside quotes
+ * 1.1.3 (T7 F3, T9 G6): the file words of the text's redirects that replace (`>`, `N>`, `>|`, `&>`, and zsh's `>!`,
+ * `&>!`, `>&|`, `>&!`), read outside quotes
  * and comments. An append (`>>`, `&>>`) replaces nothing, a stream move (`2>&1`, `>&-`) names no file, and `<>` opens
  * without emptying. A `>` inside quotes (`"a -> b"`, `awk '$1 > 5'`) is no redirect.
  */
@@ -4087,7 +4088,11 @@ export function replacingTargets(command: string): string[] {
         continue
       }
       at++
-    } else if (command[at] === "|") at++
+    }
+    // 1.2.7 row 47i (C72, M1-04): zsh's noclobber overrides `>|`, `>!`, `N>!`, `&>!`, `>&|`, `>&!` (and `>!f`) replace
+    // like `>`; the `|`/`!` touching the operator is no part of the file word. bash knows `>|` only, and the shell leaves
+    // its `!` spellings unread, so nothing it reads changes.
+    if (command[at] === "|" || command[at] === "!") at++
     while (command[at] === " " || command[at] === "\t") at++
     let word = ""
     let inner: string | undefined

@@ -213,10 +213,9 @@ const checkpointedAndRevertible = (command: string, written: string) =>
 
 // zsh's overrides that replace the file. `&>|` is the one the bash grammar does not know (an error node for the `|`).
 const REPLACING = ["echo new >| notes.txt", "echo new 1>| notes.txt", "echo new &>| notes.txt"]
-// The `!` spellings and `>&|`: the shell reads them exactly where the table reads the same file as replaced (row 47h
-// request to OC-autonomy-table: `replacingTargets` skips a `!` after `>`/`>&`, and a `|` after `>&`).
+// The `!` spellings and `>&|`: the shell reads them exactly where the table reads the same file as replaced (row 47i,
+// C72: `replacingTargets` skips a `!` after `>`/`>&`, and a `|` after `>&`).
 const BANG = ["echo new >! notes.txt", "echo new 1>! notes.txt", "echo new &>! notes.txt", "echo new >&! notes.txt", "echo new >&| notes.txt", "echo new >!notes.txt"]
-const tableReadsBang = BANG.every((command) => AutonomyTable.replacingTargets(command).includes("notes.txt"))
 
 describe("rel127 47h: zsh noclobber-override redirects are checkpointed like `>` (U6, AC-F5)", () => {
   zshOnly("plain `>` is unchanged: checkpointed, the old bytes copied first, and revertible", () =>
@@ -229,7 +228,7 @@ describe("rel127 47h: zsh noclobber-override redirects are checkpointed like `>`
     }),
   )
 
-  ;(tableReadsBang ? zshOnly : it.live.skip)(
+  zshOnly(
     "`>!`, `1>!`, `&>!`, `>&!`, `>&|` and `>!notes.txt`: checkpointed first, and revertible",
     () =>
       Effect.gen(function* () {
@@ -247,11 +246,16 @@ describe("rel127 47h: zsh noclobber-override redirects are checkpointed like `>`
       // Appends stay appends (`>>|`, `>>!`, `&>>!`): read, nothing replaced.
       for (const command of ["echo new >>| notes.txt", "echo new >>! notes.txt", "echo new &>>! notes.txt"])
         expect({ command, writes: (yield* zsh(command))?.writes }).toEqual({ command, writes: [notes] })
-      // One source with the table: a `!` spelling is read exactly when the table reads notes.txt as replaced.
+      // One source with the table (row 47i): the table reads each `!` spelling and `>&|` as replacing notes.txt, and the
+      // shell reads the same write in zsh.
       for (const command of BANG) {
-        const replaced = AutonomyTable.replacingTargets(command).includes("notes.txt")
-        expect({ command, writes: (yield* zsh(command))?.writes }).toEqual({ command, writes: replaced ? [notes] : undefined })
+        expect({ command, replaced: AutonomyTable.replacingTargets(command) }).toEqual({ command, replaced: ["notes.txt"] })
+        expect({ command, writes: (yield* zsh(command))?.writes }).toEqual({ command, writes: [notes] })
       }
+      // The table: appends replace nothing, a stream move names no file, `> ! f` (apart) names the file `!`.
+      for (const command of ["echo new >>| notes.txt", "echo new >>! notes.txt", "echo new &>>! notes.txt", "echo new 2>&1"])
+        expect({ command, replaced: AutonomyTable.replacingTargets(command) }).toEqual({ command, replaced: [] })
+      expect(AutonomyTable.replacingTargets("echo new > ! notes.txt")).toEqual(["!"])
       // `> ! f` (apart) writes a file named `!` in zsh too, and passes `f` on; it is not an override.
       expect((yield* zsh("echo new > ! notes.txt"))?.writes).not.toEqual([notes])
       // bash: `>! f` writes `!` and passes `f` to the program, `>!f` writes `!f`, `&>|` is a syntax error: all stay
