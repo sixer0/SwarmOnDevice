@@ -507,8 +507,11 @@ describe("a look through the shell", () => {
       expect([command, judge(command)]).toEqual([command, READ])
     // `find`, `tree` and `rg` walk into folders, which rule 1 cannot vouch for. 1.2.6 row 36 (U12 R5, INTENT 01b 10.1):
     // a walk only reads, so it runs as protected_read instead of waiting (was HELD outside_folder).
-    for (const command of ["find / -name x", "rg foo ../", "tree ..", `rg foo ${away.path}`])
+    for (const command of ["find / -name x", "tree ..", `rg foo ${away.path}`])
       expect([command, judge(command)]).toEqual([command, PROTECTED_READ])
+    // 1.2.7 N-1 (SR OP-2, INTENT row 29b): a content search on a folder that holds Swarm's own state is X `app_state`. In
+    // a test run `..` is the temporary folder that holds the run's state folder (preload), so `rg foo ../` is that case.
+    expect(["rg foo ../", judge("rg foo ../")]).toEqual(["rg foo ../", { class: "X", decidedBy: "gate", category: "app_state" }])
     // 1.2.6 row 36 (U12 R3, INTENT 01b 10.1 :511): a secret beyond the folder, by its name or by the folder that holds it,
     // is read as protected_read (was class D, a person's call).
     for (const command of ["cat ~/.ssh/id_rsa", "ls ~/.ssh", "cat ~/.aws/credentials", `cat ${away.path}/.env`])
@@ -1594,11 +1597,13 @@ describe("writing the trust store (ADV-A13)", () => {
             [`printf x | tee ${store()}`, "X"],
             ["printf x > $HOME/.local/state/swarm/trust.json", "X"],
             ["tee state-dir/trust.json", "X"],
-            ["printf x > $XDG_STATE_HOME/swarm/tr*", "D"],
-            ["cp src/a.ts state-dir/tr", "D"],
-            ["mv src/a.ts state-dir/tr", "D"],
-            ["rm state-dir/tr", "D"],
-            ["cd state-dir && touch tr", "D"],
+            // 1.2.7 N-1 (SR7-01, INTENT row 29b): a variable, a glob or a link into the state folder is resolved as the
+            // shell would, so these writes are refused (X app_state) instead of held (D).
+            ["printf x > $XDG_STATE_HOME/swarm/tr*", "X"],
+            ["cp src/a.ts state-dir/tr", "X"],
+            ["mv src/a.ts state-dir/tr", "X"],
+            ["rm state-dir/tr", "X"],
+            ["cd state-dir && touch tr", "X"],
           ]
           for (const [command, expected] of named) {
             const verdict = yield* classifyCommand(command)

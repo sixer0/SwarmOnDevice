@@ -60,9 +60,20 @@ export const STOPS_SWARM_TEXT =
 const PLAN_MODE_TEXT =
   "This call did not run. The plan agent only reads and writes its plan file. Put the change in the plan, or hand it to the build agent."
 
-/** 1.2.6 (P-01d, SEC-04): X `app_state`, an agent's write to Swarm's own state or settings (tool-health.json included). */
+/**
+ * 1.2.6 (P-01d, SEC-04): X `app_state`, an agent's write to Swarm's own state or settings (tool-health.json included).
+ * 1.2.7 N-1 (N7-050, K7-06): also a look there the SR OP-2 allowlist does not take (a count, a byte dump, a search); the
+ * text names the looks that do run.
+ */
 const APP_STATE_TEXT =
-  "This call did not run. Autonomous mode never changes Swarm's own state or settings. Write what should change into your final message for the person."
+  "This call did not run. Autonomous mode never changes Swarm's own state or settings. To look at those files, use the Read tool or an inspection command such as ls, cat or head; reading them is allowed. Write what should change into your final message for the person."
+
+/**
+ * 1.2.7 U4 (N7-054): the refusal a read role (`planner`, `data-collector`; `READ_SHELL_ROLES`) gets for a shell call
+ * outside the read class (`isReadOnlyShell`), in every mode, whatever a person's "always", a task grant or user config say.
+ */
+export const ROLE_SHELL_OUTSIDE_READ_TEXT =
+  "This agent role only runs inspection commands (for example ls, head, git log). Hand this command to a coder subagent."
 
 /**
  * 1.2.7 F-4 (N7-052): X `own_api`, a call to Swarm's own running server whose address the call itself names (a literal

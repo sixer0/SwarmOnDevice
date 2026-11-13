@@ -23,6 +23,7 @@ import * as path from "path"
 import { MCP } from "@/mcp"
 import { RoleAlias } from "../agent/role-alias"
 import { Permission } from "@/permission"
+import { READ_SHELL_ROLES } from "@/permission/autonomy-table"
 import type { PermissionV1 } from "@opencode-ai/core/v1/permission"
 
 export interface TaskPromptOps {
@@ -123,8 +124,7 @@ const GRANT_MAX_LENGTH = 500
 const GRANT_NOT_LITERAL = /[*?$`<>|;&(){}[\]]/
 const GRANT_CONTROL = /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/
 const GRANT_ASSIGNMENT = /^\s*[A-Za-z_][A-Za-z0-9_]*=/
-// The read roles (U4): a grant never widens them past their read class, so they take none.
-const GRANT_READ_ROLES: ReadonlySet<string> = new Set(["planner", "data-collector"])
+// The read roles (U4, N7-130 `READ_SHELL_ROLES`): a grant never widens them past their read class, so they take none.
 
 const shown = (pattern: string) => JSON.stringify(pattern.length > 120 ? pattern.slice(0, 120) + "…" : pattern)
 
@@ -155,7 +155,7 @@ export function taskGrantRefusal(input: {
   for (const pattern of input.patterns.map((item) => item.trim())) {
     if (Permission.evaluate("bash", pattern, input.parent).action === "deny")
       return `${TASK_GRANT_EXCEEDS_PARENT} Task not started: permissions grants ${shown(pattern)}, which this session may not run itself.`
-    if (GRANT_READ_ROLES.has(input.role) || Permission.evaluate("bash", pattern, input.child).action === "deny")
+    if (READ_SHELL_ROLES.has(input.role) || Permission.evaluate("bash", pattern, input.child).action === "deny")
       return `${TASK_GRANT_ROLE_DENIED} Task not started: the ${input.role} role may not run ${shown(pattern)}. Hand it to a coder subagent.`
   }
   return undefined

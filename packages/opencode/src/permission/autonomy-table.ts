@@ -1319,7 +1319,11 @@ function editTargets(input: Input) {
 }
 
 function writesAppState(input: Input) {
-  if (typeof input.metadata.command === "string" && mentionsAppState(input.metadata.command, input.instance)) return true
+  // 1.2.7 N-1 (SR OP-2, SR7-01): a command that reaches Swarm's own state by any spelling counts as a change there unless
+  // it only looks as the allowlist takes it (`appStateRead`); that look runs as a protected read (`readsAppState`).
+  const command = input.metadata.command
+  if (typeof command === "string" && touchesAppState(command, input.cwd, input.instance) && !appStateRead(command, input.cwd, input.instance))
+    return true
   if (input.permission === "edit") return editTargets(input).some((file) => inAppState(file, input.instance))
   // A read of the same place only asks to look, which is the ordinary outside-the-project case.
   if (input.permission !== "external_directory" || !input.follows?.some((prompt) => prompt.permission === "edit")) return false
@@ -2085,6 +2089,297 @@ function probe(command: string, cwd: string, instance: InstanceContext) {
     (program === "go" && flag === "version") ||
     (flag !== undefined && PROBE_FLAGS.has(flag) && !(LONG_PROBE_ONLY.has(program) && (flag === "-v" || flag === "-h")))
   return form && !programInProject(program, cwd, instance)
+}
+
+// 1.2.7 U4 + N-1 (K7-05, SR §3.2 "U4 read class" and OP-2): the read and diagnostic shell class. One source for the read
+// roles (`planner`, `data-collector`) and for looks at Swarm's own state, so the two cannot drift. It is the 1.2.6 look
+// grammar (`protectedLook`, `probe`, `gitReads`) plus the additions below, and nothing else: no second list (SR7-20).
+
+/** N7-115: the programs of the read class. Each still has to pass its own argument rules (`readClassPaths`). */
+export const READ_SHELL_COMMANDS: ReadonlySet<string> = new Set([...READS.keys(), "git", "mdls", "pdftotext", "unzip", "graft"])
+
+/**
+ * N7-130: the roles whose shell runs only the read class, in every mode. The role check refuses anything else with
+ * `ROLE_SHELL_OUTSIDE_READ_TEXT` (N7-054) ahead of a person's "always", a task grant or user config. Defined here, where
+ * the permission check can import it, and re-exported from `agent/agent.ts`.
+ */
+export const READ_SHELL_ROLES: ReadonlySet<string> = new Set(["planner", "data-collector"])
+
+const CHECKSUMS = new Set(["shasum", "sha256sum", "sha1sum", "md5", "md5sum", "cksum"])
+// A run of short flags (`-bc`), which has the letter when any of them is it.
+const shortHas = (word: string, letter: string) => /^-[A-Za-z0-9]+$/.test(word) && word.slice(1).includes(letter)
+
+/**
+ * SR7-06: what the read class refuses beyond the 1.2.6 rules. `file -f` and a checksum's `-c` read names from a file, which
+ * reaches past what the command named. The root's U12 looks keep 1.2.6 (`READS`), so this is checked only here.
+ */
+function readClassRefuses(words: readonly string[]) {
+  const [program, ...args] = words
+  if (program === "file") return args.some((word) => shortHas(word, "f") || Risk.abbreviates(word, ["--files-from"]))
+  if (CHECKSUMS.has(program!)) return args.some((word) => shortHas(word, "c") || Risk.abbreviates(word, ["--check"]))
+  return false
+}
+
+/** SR §3.2 `mdls`: `-name`/`-attr`/`-n <attr>`, `-raw`/`-r`, `-nullMarker`/`-m <s>`, `-s`/`-sdb`, and one path or more. Never `-plist`. */
+function mdlsPaths(args: readonly string[]) {
+  const paths: string[] = []
+  for (let index = 0; index < args.length; index++) {
+    const word = args[index]!
+    if (["-name", "-attr", "-n", "-nullMarker", "-m"].includes(word)) {
+      if (args[index + 1] === undefined) return undefined
+      index++
+      continue
+    }
+    if (["-raw", "-r", "-s", "-sdb"].includes(word)) continue
+    if (word.startsWith("-")) return undefined
+    paths.push(word)
+  }
+  return paths.length > 0 ? paths : undefined
+}
+
+/** SR §3.2 `pdftotext`: the last word is exactly `-` (stdout), one input path before it, and only the listed flags. */
+function pdftotextPaths(args: readonly string[]) {
+  if (args.at(-1) !== "-") return undefined
+  const rest = args.slice(0, -1)
+  const paths: string[] = []
+  for (let index = 0; index < rest.length; index++) {
+    const word = rest[index]!
+    const value = rest[index + 1]
+    if (word === "-f" || word === "-l") {
+      if (value === undefined || !/^\d+$/.test(value)) return undefined
+      index++
+      continue
+    }
+    if (word === "-enc") {
+      if (value === undefined || !/^[A-Za-z0-9-]+$/.test(value)) return undefined
+      index++
+      continue
+    }
+    if (word === "-eol") {
+      if (value !== "unix" && value !== "dos" && value !== "mac") return undefined
+      index++
+      continue
+    }
+    if (["-layout", "-raw", "-nopgbrk", "-q"].includes(word)) continue
+    if (word.startsWith("-")) return undefined
+    paths.push(word)
+  }
+  return paths.length === 1 ? paths : undefined
+}
+
+/** SR §3.2 `unzip`: exactly `unzip -l <archive> [member …]`; no combined flag (`-lo`), no `-` archive, no wildcard in it. */
+function unzipPaths(args: readonly string[]) {
+  const [flag, archive, ...members] = args
+  if (flag !== "-l" || archive === undefined || archive.startsWith("-") || /[*?[]/.test(archive)) return undefined
+  if (members.some((word) => word.startsWith("-"))) return undefined
+  return [archive]
+}
+
+const GRAFT_QUERIES = new Set(["ask", "map", "skeleton", "callers", "grep", "blast"])
+const GRAFT_GLOBAL_REFUSED = ["--dir", "--provider", "--model", "--api-key", "--base-url"]
+
+/**
+ * SR §3.2 `graft` (SR7-05 b): a query sub-command with `--no-refresh` (without it the query rebuilds `graft/` and may add a
+ * `.gitignore` line), `blast` without `--export-viz`, and none of the options that move where graft writes or connects.
+ * `graft --version` is a probe. A query names no file the table has to judge, so it gives no paths.
+ */
+function graftPaths(args: readonly string[]) {
+  if (args.some((word) => Risk.abbreviates(word, GRAFT_GLOBAL_REFUSED))) return undefined
+  const sub = args.find((word) => !word.startsWith("-"))
+  if (sub === undefined || !GRAFT_QUERIES.has(sub) || !args.includes("--no-refresh")) return undefined
+  if (sub === "blast" && args.some((word) => Risk.abbreviates(word, ["--export-viz"]))) return undefined
+  return [] as string[]
+}
+
+/** SR7-05 d: `git reflog` only bare or as `show`, `list` or `exists`; `expire` and `delete` change the repository. */
+function gitReflogLooks(words: readonly string[]) {
+  const moved = words[1] === "-C" && words[2] !== undefined
+  const [sub, ...args] = words.slice(moved ? 3 : 1)
+  return sub !== "reflog" || args.length === 0 || ["show", "list", "exists"].includes(args[0]!)
+}
+
+/** The words one read-class piece names as places, or undefined when the piece is not in the read class. */
+function readClassPaths(words: readonly string[], here: string, instance: InstanceContext): string[] | undefined {
+  const [program, ...args] = words
+  if (program === undefined) return undefined
+  if (READS.has(program)) {
+    if (!onlyLooks(words) || readClassRefuses(words)) return undefined
+    const paths = args.filter((word) => !word.startsWith("-"))
+    const cap = READS.get(program)?.maxPaths
+    return cap !== undefined && paths.length > cap ? undefined : paths
+  }
+  if (program === "git") return gitReads(words, here, instance) && gitReflogLooks(words) ? [] : undefined
+  if (program === "mdls") return mdlsPaths(args)
+  if (program === "pdftotext") return pdftotextPaths(args)
+  if (program === "unzip") return unzipPaths(args)
+  if (program === "graft") return graftPaths(args)
+  return undefined
+}
+
+type ReadPiece = { words: string[]; here: string; paths: string[] }
+// No control, format or line-separator character anywhere (`\r`, NUL, a line break, a bidi mark): the line a person reads
+// is the line that runs (SR7-20).
+const UNSEEN_TEXT = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u
+
+/**
+ * The pieces of a read-class command line, or undefined. The shape is SR §3.2's: `[cd <path> && ]<look>[ && <look>]…`, each
+ * piece may end with ` 2>/dev/null`, the line may end with ` 2>&1` and ` | tail -N` or ` | head -N`; each piece's words
+ * pass `Risk.plainWords` or whole-word quotes, so no other operator, substitution, assignment or redirect survives. A
+ * probe (`<installed program> --version`) is the whole command and names nothing.
+ */
+function readClass(command: string, cwd: string, instance: InstanceContext): ReadPiece[] | undefined {
+  if (!command || UNSEEN_TEXT.test(command)) return undefined
+  if (probe(command, cwd, instance)) return []
+  let here = cwd
+  const pieces: ReadPiece[] = []
+  const named: string[] = []
+  for (const [index, raw] of command.replace(OUTPUT_TAIL, "").split(" && ").entries()) {
+    const words = lookWords(raw.replace(DROP_ERRORS, ""))
+    if (!words || words.length === 0) return undefined
+    if (index === 0 && words[0] === "cd" && words.length === 2 && !words[1]!.startsWith("-")) {
+      here = path.resolve(cwd, words[1]!)
+      named.push(here)
+      continue
+    }
+    const paths = readClassPaths(words, here, instance)
+    if (!paths) return undefined
+    named.push(...paths.map((word) => path.resolve(here, word)))
+    pieces.push({ words, here, paths })
+  }
+  if (pieces.length === 0 || nearLibrary([cwd, ...named])) return undefined
+  return programInProject(command, cwd, instance) ? undefined : pieces
+}
+
+/**
+ * N7-116 (K7-05): whether a shell command line is in the read and diagnostic class (SR §3.2), judged on its text as the
+ * shell will run it. Used by the read roles' check and by the app-state allowlist (N-1).
+ */
+export function isReadOnlyShell(command: string, cwd: string, instance: InstanceContext): boolean {
+  return readClass(command, cwd, instance) !== undefined
+}
+
+/**
+ * U4: whether a read role's call is refused, before any rule, grant or "always" is looked at. Only a shell call (or the
+ * shell's folder prompt, which carries its command) by a `READ_SHELL_ROLES` agent is judged; it is refused when its
+ * command is not in the read class. The caller answers with `ROLE_SHELL_OUTSIDE_READ_TEXT`.
+ */
+export function readRoleRefuses(
+  input: { agent?: string; permission: string; metadata: Readonly<Record<string, unknown>> },
+  instance: InstanceContext,
+): boolean {
+  if (input.agent === undefined || !READ_SHELL_ROLES.has(input.agent)) return false
+  const command = input.metadata.command
+  if (input.permission !== "bash" && !(input.permission === "external_directory" && command !== undefined)) return false
+  if (typeof command !== "string") return true
+  const workdir = input.metadata.workdir
+  const cwd = typeof workdir === "string" && path.isAbsolute(workdir) ? workdir : instance.directory
+  return !isReadOnlyShell(command, cwd, instance)
+}
+
+// SR OP-2: inside an app-state root only these look, and only at literal names. `cat`/`head`/`tail` output is masked
+// (U16); every other program there is X `app_state`, so no count, offset or byte dump of a password file comes back.
+const APP_STATE_LOOKS = new Set(["ls", "stat", "du", "wc", "file", "tree", "find", ...CHECKSUMS, "mdls", "cat", "head", "tail"])
+// SR OP-2: on a folder that holds app state (home, `~/.local`, `~/.config`), content search is refused.
+const CONTENT_SEARCH = new Set(["rg", "grep", "egrep"])
+const NOT_LITERAL = /[*?[{$]/
+const BYTES_FLAG = (word: string) => /^-[A-Za-z0-9]*c/.test(word) || Risk.abbreviates(word, ["--bytes"])
+
+/** Where a place lies against Swarm's own state: inside a root, above one (a folder that holds it), or neither. */
+function stateRelation(file: string, instance: InstanceContext): "inside" | "above" | undefined {
+  const target = Reach.real(file) ?? file
+  if (ownCheckout(target, instance)) return undefined
+  const roots = appStateRoots()
+  if (roots.some((root) => within(root, file) || within(root, target))) return "inside"
+  if (roots.some((root) => within(file, root) || within(target, root))) return "above"
+  return undefined
+}
+
+/** One glob segment as a pattern; like the shell, `*` and `?` do not match a leading dot. */
+function segmentMatches(pattern: string, name: string) {
+  if (name.startsWith(".") && !pattern.startsWith(".")) return false
+  const source = pattern.replace(/[.+^${}()|\\]/g, "\\$&").replaceAll("*", ".*").replaceAll("?", ".")
+  try {
+    return new RegExp(`^${source}$`).test(name)
+  } catch {
+    return true
+  }
+}
+
+/** Whether a glob could match a place inside an app-state root (1.2.6 residual R-1: a glob names no root by its spelling). */
+function globReachesState(file: string) {
+  const parts = file.split(path.sep)
+  return appStateRoots().some((root) => {
+    const rootParts = root.split(path.sep)
+    return parts.length >= rootParts.length && rootParts.every((part, index) => segmentMatches(parts[index]!, part))
+  })
+}
+
+const SPELLED_BREAK = /[\s<>|;&()`=,]+/
+const MAX_DIRS = 16
+
+/**
+ * SR7-01: the places a command's words name, as the shell would resolve them: relative to its folder and to every `cd` in
+ * it, with `~`, `$HOME`, `${HOME}` (under every home Swarm knows) and set environment variables expanded. Over-reads on
+ * purpose: a word that is not a path resolves to a name nobody has.
+ */
+function spelledPlaces(command: string, cwd: string) {
+  const words = command.replace(/['"\\]/g, "").split(SPELLED_BREAK).filter(Boolean)
+  const expand = (word: string): string[] => {
+    const home = HOME_WORD.exec(word)
+    if (home) return homes().map((place) => path.join(place, word.slice(home[0].length)))
+    return [word.replace(/\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?/g, (whole, name: string) => process.env[name] ?? whole)]
+  }
+  let dirs = [cwd]
+  const places: { file: string; glob: boolean }[] = []
+  for (const [index, word] of words.entries()) {
+    const resolved = expand(word).flatMap((spelling) => dirs.map((dir) => path.resolve(dir, spelling)))
+    places.push(...resolved.map((file) => ({ file, glob: /[*?[]/.test(word) })))
+    if (words[index - 1] === "cd") dirs = [...new Set([...dirs, ...resolved])].slice(0, MAX_DIRS)
+  }
+  const programs = new Set(words.map((word) => path.basename(word)))
+  return { places, dirs, search: [...CONTENT_SEARCH].some((name) => programs.has(name)), rg: programs.has("rg") }
+}
+
+/** SR7-01: whether a command reaches into Swarm's own state by any spelling, or searches the contents of a folder above it. */
+function touchesAppState(command: string, cwd: string, instance: InstanceContext) {
+  if (mentionsAppState(command, instance)) return true
+  const spelled = spelledPlaces(command, cwd)
+  // `rg` with no path searches where it runs, so its folder counts as a place it names.
+  const places = [...spelled.places, ...(spelled.rg ? spelled.dirs.map((file) => ({ file, glob: false })) : [])]
+  return places.some(({ file, glob }) => {
+    if (glob) return globReachesState(file)
+    const relation = stateRelation(file, instance)
+    return relation === "inside" || (relation === "above" && spelled.search)
+  })
+}
+
+/**
+ * SR OP-2 (N-1): whether a command that reaches Swarm's own state only looks there in a way the allowlist takes: it is in
+ * the read class, every operand inside an app-state root (after `cd`, relative, `~` and real path) is a literal name read by
+ * `APP_STATE_LOOKS` (`head`/`tail` without `-c`), and no content search runs on a folder that holds app state.
+ */
+function appStateRead(command: string, cwd: string, instance: InstanceContext) {
+  const pieces = readClass(command, cwd, instance)
+  if (!pieces) return false
+  return pieces.every(({ words, here, paths }) => {
+    const program = words[0]!
+    // A look with no name looks where it runs; `rg` also searches there when given only a pattern.
+    const operands = paths.length > 0 ? (program === "rg" ? [...paths, "."] : paths) : ["."]
+    return operands.every((word) => {
+      const relation = stateRelation(path.resolve(here, word), instance)
+      if (relation === "above") return !CONTENT_SEARCH.has(program)
+      if (relation !== "inside") return true
+      if (!APP_STATE_LOOKS.has(program) || NOT_LITERAL.test(word)) return false
+      return !((program === "head" || program === "tail") && words.slice(1).some(BYTES_FLAG))
+    })
+  })
+}
+
+/** N-1: a shell call (or its folder prompt) that reaches Swarm's own state and only looks there as OP-2 allows. */
+function readsAppState(input: Input) {
+  const command = input.metadata.command
+  if (typeof command !== "string" || (input.permission !== "bash" && input.permission !== "external_directory")) return false
+  return touchesAppState(command, input.cwd, input.instance) && appStateRead(command, input.cwd, input.instance)
 }
 
 /** The home folders a protected place may be spelled under: the one Swarm reads (pinned in tests) and the system's. */
@@ -2875,6 +3170,9 @@ export function classifyBase(input: Input, checkClass: CheckClass = CHECK_CLASS)
 
   if (input.rule === "user_catch_all") return held("asks_every_time")
   if (planFile) return { class: "A", decidedBy: "gate" }
+  // 1.2.7 N-1 (N7-091): a look at Swarm's own state the OP-2 allowlist takes runs as a protected read; `cat`/`head`/`tail`
+  // output stays masked (U16, SR7-07).
+  if (readsAppState(input)) return PROTECTED_READ
   if (input.plan === true && input.permission === "bash") return classifyPlanBash(input, checkClass)
   // Before the labels: a deletion the shell moves to the archive takes nothing away, whatever Undo could have restored.
   if (input.permission === "bash") {

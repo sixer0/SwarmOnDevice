@@ -67,6 +67,9 @@ export const wholeSecretFile = (file: string) => fileKind(file) === "whole"
 // Row 36b (SEC-03): a shell's history keeps `export KEY=...` lines. It is masked line by line like a .env file, for what
 // is shown only: `secretFile` (and so `Reach.secret` and every verdict built on it) does not change.
 const HISTORY_FILE = /^(\.[\w-]*_?history|fish_history)$/
+// 1.2.7 N-1 (SR7-07): Swarm's own settings file holds provider `apiKey`s, `headers` and MCP `environment` tokens as JSON
+// values. A read of it now runs (OP-2), so it is masked line by line like a .env file, for what is shown only, as above.
+const SETTINGS_JSON = /^(swarm|opencode)\.jsonc?$/
 
 const caseFolds = process.platform === "darwin" || process.platform === "win32"
 const fold = (file: string) => {
@@ -115,7 +118,8 @@ export function underPlaces(file: string, places: readonly string[]) {
 export function outputKind(file: string, places: readonly string[] = []): "whole" | "lines" | undefined {
   const names = [file, landing(file)].filter((name): name is string => name !== undefined)
   if (names.some((name) => fileKind(name) === "whole") || underPlaces(file, places)) return "whole"
-  if (names.some((name) => fileKind(name) !== undefined || HISTORY_FILE.test(path.basename(name)))) return "lines"
+  if (names.some((name) => fileKind(name) !== undefined || HISTORY_FILE.test(path.basename(name)) || SETTINGS_JSON.test(path.basename(name).toLowerCase())))
+    return "lines"
   return undefined
 }
 
@@ -148,7 +152,8 @@ function fileValues(file: string, text: string) {
   const out = pairs(text)
   for (const line of text.split("\n")) {
     const yaml = line.match(/^\s*(?:-\s*)?["']?([A-Za-z_][\w.-]*)["']?\s*:\s*(\S.*)$/)
-    const value = yaml ? unquoted(yaml[2]) : ""
+    // A JSON value ends with the comma before the next key (SR7-07): `"apiKey": "…",`.
+    const value = yaml ? unquoted(yaml[2].replace(/,\s*$/, "")) : ""
     if (yaml && secretPair(yaml[1], value)) out.push([yaml[1], urlPassword(value) ?? value])
     for (const match of line.matchAll(/\b(password|passwd|account)\s+(\S+)/gi)) out.push([match[1], match[2]])
     const fields = line.split(":")
