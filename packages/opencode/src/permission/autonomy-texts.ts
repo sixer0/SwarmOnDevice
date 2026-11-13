@@ -88,7 +88,7 @@ export const OWN_API_TEXT =
  * Swarm's server listens: a config file that could not be read, or a host or port from a variable, a command or a list.
  */
 export const OWN_API_UNRESOLVED_TEXT =
-  "This call did not run. Autonomous mode cannot tell where this network call goes (the address comes from a variable, a config file or another command), and it never calls Swarm's own server. Write the host and port into the command itself."
+  "This call did not run. Autonomous mode cannot tell where this network call goes (the address comes from a variable, a config file or another command). Agents may call Swarm's own server, but a call whose route cannot be read is refused, because it might be a route that acts as the person. Write the host, port and route into the command itself."
 
 /**
  * 1.2.7 U-10 (C63): X `own_api` with reason `person_only`, an agent's shell running `swarm autonomy` (the 1.1.1 rule: only

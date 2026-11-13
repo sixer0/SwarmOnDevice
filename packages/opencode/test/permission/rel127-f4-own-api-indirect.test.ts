@@ -118,7 +118,8 @@ describe("F-4 texts and category (N7-051, N7-052, N7-135, N7-136)", () => {
       "This call did not run. Agents may call Swarm's own server, but not the routes that act as the person (the autonomous mode and consent, answers to permissions and questions, reverts, folder trust, configuration, shell commands run as the person, control of the person's app, repository commits and patches, upgrades and shutdowns), and not by a socket or program code whose route cannot be read. Use the tools you were given, or write what is needed into your final message for the person.",
     )
     expect(textOf("OWN_API_UNRESOLVED_TEXT")).toBe(
-      "This call did not run. Autonomous mode cannot tell where this network call goes (the address comes from a variable, a config file or another command), and it never calls Swarm's own server. Write the host and port into the command itself.",
+      // 1.2.7 row 47m (C80, INTENT): like OWN_API_TEXT, agents may call Swarm's server; an unreadable route is refused.
+      "This call did not run. Autonomous mode cannot tell where this network call goes (the address comes from a variable, a config file or another command). Agents may call Swarm's own server, but a call whose route cannot be read is refused, because it might be a route that acts as the person. Write the host, port and route into the command itself.",
     )
   })
   test("refusals name the text by reason, with and without consent", () => {

@@ -945,6 +945,14 @@ const PERSON_ONLY_ROUTES: readonly RegExp[] = [
   /(?:^|\/)(?:global|instance)\/dispose(?:\/|$)/,
   // Attaching to a terminal session types into it (a GET that upgrades to a websocket).
   /(?:^|\/)pty\/[^/]+\/connect(?:\/|$)/,
+  // 1.2.7 row 47m (C80): the same principle for the routes row 47l left open. Reverting a session is the person's (U6);
+  // moving a session into a workspace (`experimental/workspace/warp`), taking over a sync (`sync/steal`) and connecting an
+  // MCP server (`mcp/:name/connect`, which starts the server's process from configuration) change files or start programs
+  // outside the permission system.
+  /(?:^|\/)session\/[^/]+\/(?:revert|unrevert)(?:\/|$)/,
+  /(?:^|\/)experimental\/workspace\/warp(?:\/|$)/,
+  /(?:^|\/)sync\/steal(?:\/|$)/,
+  /(?:^|\/)mcp\/[^/]+\/connect(?:\/|$)/,
 ]
 /**
  * 1.2.7 row 47k (U10-1): routes whose writes only the person makes: configuration (`/config`, `/global/config`, the lane
@@ -958,6 +966,12 @@ const PERSON_ONLY_WRITES: readonly RegExp[] = [
   /(?:^|\/)autonomy(?:\/|$)/,
   // 1.2.7 row 47l (C79): a terminal session (`pty`) spawns any program it is given, with no permission check.
   /(?:^|\/)pty(?:\/|$)/,
+  // 1.2.7 row 47m (C80): worktree create, remove and reset (`experimental/worktree`, `.../reset`; the list is a GET and
+  // runs), workspace remove (`DELETE experimental/workspace/:id`; its other routes have fixed names), and adding an MCP
+  // server (`POST /mcp`; the status is a GET and runs).
+  /(?:^|\/)experimental\/worktree(?:\/|$)/,
+  /(?:^|\/)experimental\/workspace\/(?!(?:adapter|sync-list|status|warp)(?:\/|$))[^/]+(?:\/|$)/,
+  /(?:^|\/)mcp$/,
 ]
 const READ_METHODS: ReadonlySet<string> = new Set(["GET", "HEAD", "OPTIONS"])
 
