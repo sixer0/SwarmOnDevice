@@ -16,6 +16,10 @@
  *                 sesudah/sebelum -> caption; `Sumber: ...` -> source.
  *   kode       -> `monoBlock` (label dari info string); kutipan -> `aside` (`> [!DOCTRINE]` dsb.
  *                 memilih varian).
+ *   pagar `diagram` / `json` + `"type": "diagram"` -> `diagram` (DiagramV2, Swarm 1.2.8 row 32, H-N13);
+ *                 baris `Gambar: ...` / `Sumber: ...` sesudahnya -> caption/source; pagar yang ditolak
+ *                 validator v2 tetap `monoBlock` (`DIAGRAM_FENCE_INVALID`), `json` bertipe lain tetap kode
+ *                 (`FENCE_KEPT_AS_CODE`); keduanya dihitung "kept as code" di ringkasan alat.
  * Dibuang + dilaporkan: nomor tampilan, perataan kolom, garis pemisah, front matter, HTML mentah
  * (tag dibuang, teks dipertahankan; style/script/komentar/tabel HTML dibuang seluruhnya),
  * placeholder `[FIGUR: ...]`, gambar tanpa caption/sumber/rujukan aset sah.
@@ -32,6 +36,7 @@ import {
   type CellV2,
   type ChapterV2,
   type ColumnV2,
+  type DiagramV2,
   type InlineV2,
   type ParagraphRoleV2,
   type ProvenanceMark,
@@ -53,6 +58,7 @@ import {
   type MdImportReport,
 } from "./types";
 import { validateImported } from "./validate";
+import { CAPTION_TOKEN_DUPLICATE } from "../../contract/schema/v2/figure-text";
 
 /**
  * Batas panjang Markdown (karakter) per bab; badan JSON route juga dibatasi transport
@@ -298,6 +304,49 @@ function assetOf(ref: string, rep: Reporter): string | null {
 interface Attach {
   caption?: { text: string; line: number; num?: string };
   source?: { text: string; line: number };
+  /** Paragraf yang dikonsumsi (pagar diagram yang jatuh kembali ke kode mengeluarkannya lagi). */
+  taken?: MdBlock[];
+}
+
+/**
+ * Swarm 1.2.8 row 32 (H-N13, N8-207): pagar ber-info `diagram`, atau `json` yang objek puncaknya
+ * `"type": "diagram"`, menjadi blok `DiagramV2`; caption dan sumber dari baris sesudahnya.
+ */
+export const DIAGRAM_FENCE_INFOS = ["diagram", "json"] as const;
+/** N8-208: pagar yang tampak diagram tetapi ditolak validator v2; tetap `monoBlock`. */
+export const DIAGRAM_FENCE_INVALID = "DIAGRAM_FENCE_INVALID";
+/** N8-209: pagar `json` dengan `type` selain `diagram`; tetap kode dan disebut di ringkasan. */
+export const FENCE_KEPT_AS_CODE = "FENCE_KEPT_AS_CODE";
+const FENCE_TYPE_TOKEN_RE = /^[A-Za-z][A-Za-z0-9_-]{0,39}$/;
+const DIAGRAM_FENCE_MAX_MESSAGES = 5;
+
+type Rec = Record<string, unknown>;
+type Fence = { kind: "diagram"; block: Rec } | { kind: "invalid"; message: string } | { kind: "kept"; type: string };
+
+const isRec = (v: unknown): v is Rec => typeof v === "object" && v !== null && !Array.isArray(v);
+
+/** Pagar `diagram`/`json` -> klasifikasi; null = blok kode biasa (perilaku lama). */
+function fenceOf(b: Extract<MdBlock, { kind: "code" }>): Fence | null {
+  const info = (b.info.split(/\s+/)[0] ?? "").toLowerCase();
+  if (!(DIAGRAM_FENCE_INFOS as readonly string[]).includes(info)) return null;
+  const parsed = parseJson(b.lines.join("\n"));
+  if (info === "json") {
+    if (!parsed.ok || !isRec(parsed.value) || !("type" in parsed.value)) return null;
+    const t = parsed.value.type;
+    if (t === "diagram") return { kind: "diagram", block: parsed.value };
+    return { kind: "kept", type: typeof t === "string" && FENCE_TYPE_TOKEN_RE.test(t) ? t : typeof t };
+  }
+  if (!parsed.ok) return { kind: "invalid", message: `body is not JSON (${parsed.error})` };
+  if (!isRec(parsed.value)) return { kind: "invalid", message: 'body must be a JSON object: a diagram spec {family, nodes, edges} or a {"type": "diagram", spec, caption, source} block' };
+  return { kind: "diagram", block: parsed.value.type === "diagram" ? parsed.value : { type: "diagram", spec: parsed.value } };
+}
+
+function parseJson(text: string): { ok: true; value: unknown } | { ok: false; error: string } {
+  try {
+    return { ok: true, value: JSON.parse(text) as unknown };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message.slice(0, 120) : "parse error" };
+  }
 }
 
 function paragraphText(b: MdBlock | undefined): string | null {
@@ -305,12 +354,15 @@ function paragraphText(b: MdBlock | undefined): string | null {
 }
 
 /** Pasangkan baris caption/sumber dengan tabel dan gambar di dekatnya (konsumsi paragrafnya). */
-function attachFigures(blocks: MdBlock[]): { attach: Map<number, Attach>; consumed: Set<number> } {
+function attachFigures(blocks: MdBlock[], fences: Map<number, Fence>): { attach: Map<number, Attach>; consumed: Set<number> } {
   const attach = new Map<number, Attach>();
   const consumed = new Set<number>();
   blocks.forEach((b, t) => {
     const isImage = b.kind === "paragraph" && IMAGE_RE.test(b.text.trim());
-    if (b.kind !== "table" && !isImage) return;
+    // Row 32 (H-N13): pagar diagram mengambil baris Gambar:/Sumber: yang belum ada di JSON-nya sendiri.
+    const fence = fences.get(t);
+    const diagram = fence?.kind === "diagram" ? fence.block : null;
+    if (b.kind !== "table" && !isImage && diagram === null) return;
     const capRe = b.kind === "table" ? TABLE_CAP_RE : FIG_CAP_RE;
     const a: Attach = {};
     for (let k = t + 1; k <= t + 2 && k < blocks.length; k++) {
@@ -318,10 +370,11 @@ function attachFigures(blocks: MdBlock[]): { attach: Map<number, Attach>; consum
       if (pt === null || consumed.has(k)) break;
       const cm = capRe.exec(pt);
       const sm = SOURCE_RE.exec(pt);
-      if (cm && !a.caption) a.caption = { text: cm[2], line: blocks[k].line, ...(cm[1] ? { num: cm[1].trim() } : {}) };
-      else if (sm && !a.source) a.source = { text: sm[1], line: blocks[k].line };
+      if (cm && !a.caption && diagram?.caption === undefined) a.caption = { text: cm[2], line: blocks[k].line, ...(cm[1] ? { num: cm[1].trim() } : {}) };
+      else if (sm && !a.source && diagram?.source === undefined) a.source = { text: sm[1], line: blocks[k].line };
       else break;
       consumed.add(k);
+      a.taken = [...(a.taken ?? []), blocks[k]];
     }
     if (!a.caption && b.kind === "table" && t > 0 && !consumed.has(t - 1)) {
       const pt = paragraphText(blocks[t - 1]);
@@ -549,7 +602,56 @@ class Converter {
     this.emit({ type: "table", ...(caption ? { caption } : {}), columns, rows, ...(source ? { source } : {}) }, "table");
   }
 
-  code(b: Extract<MdBlock, { kind: "code" }>): void {
+  code(b: Extract<MdBlock, { kind: "code" }>, fence?: Fence, attach?: Attach): void {
+    if (fence?.kind === "diagram" && this.diagram(fence.block, attach)) return;
+    if (fence?.kind === "invalid") this.fenceInvalid([fence.message]);
+    if (fence?.kind === "kept") {
+      this.rep.warn(FENCE_KEPT_AS_CODE, `json fence with "type": "${fence.type}" kept as code (monoBlock): only "type": "diagram" maps to a block; write a table as a GFM table`);
+    }
+    this.codeBlock(b);
+    // Pagar diagram yang jatuh kembali ke kode: baris Gambar:/Sumber: yang diambilnya tetap paragraf.
+    if (fence?.kind !== "diagram") return;
+    for (const p of attach?.taken ?? []) {
+      if (p.kind !== "paragraph") continue;
+      this.rep.line = p.line;
+      this.paragraph(p, undefined);
+    }
+  }
+
+  /** Blok diagram dari pagar; false (+ `DIAGRAM_FENCE_INVALID`) bila validator v2 menolaknya. */
+  private diagram(raw: Rec, attach: Attach | undefined): boolean {
+    const block: Rec = { ...raw };
+    if (attach?.caption) {
+      block.caption = this.inline(attach.caption.text.trim());
+      if (attach.caption.num) this.rep.drop("NUMBERING", "display", attach.caption.num, attach.caption.line);
+    }
+    if (attach?.source) {
+      const source = sourceOf(attach.source.text, this.rep);
+      if (source !== null) block.source = source;
+    }
+    // Validator v2 bersama atas bab uji berisi blok ini saja. Token label di caption tidak menolak pagar:
+    // blok tetap diagram dan validasi bab melaporkan CAPTION_TOKEN_DUPLICATE, sama dengan chapter_submit.
+    const at = "/chapter/intro/0";
+    const probe: ChapterV2 = { key: this.opts.chapterKey, title: { text: "x" }, intro: [block as unknown as BlockV2], sections: [] };
+    const issues = validateImported(probe).issues.filter((i) => i.checkId !== CAPTION_TOKEN_DUPLICATE);
+    if (issues.length > 0) {
+      this.fenceInvalid(issues.map((i) => `${i.pointer.startsWith(at) ? i.pointer.slice(at.length) || "/" : i.pointer} ${i.message}`));
+      return false;
+    }
+    this.emit(block as unknown as DiagramV2, "code");
+    return true;
+  }
+
+  private fenceInvalid(messages: string[]): void {
+    const shown = messages.slice(0, DIAGRAM_FENCE_MAX_MESSAGES);
+    const more = messages.length > shown.length ? `; ${messages.length - shown.length} more` : "";
+    this.rep.warn(
+      DIAGRAM_FENCE_INVALID,
+      `diagram fence kept as code (monoBlock): the v2 validator refused it (caption and source come from "Gambar: ..." and "Sumber: ..." lines after the fence): ${shown.join("; ")}${more}`,
+    );
+  }
+
+  private codeBlock(b: Extract<MdBlock, { kind: "code" }>): void {
     if (b.unclosed) this.rep.warn("CODE_FENCE_UNCLOSED", "code fence is not closed; it runs to the end of the file");
     const words = b.info.split(/\s+/).filter(Boolean);
     let label = words.length > 1 ? words.slice(1).join(" ") : (words[0] ?? "");
@@ -630,7 +732,12 @@ class Converter {
   }
 
   run(blocks: MdBlock[]): void {
-    const { attach, consumed } = attachFigures(blocks);
+    const fences = new Map<number, Fence>();
+    blocks.forEach((b, idx) => {
+      const f = b.kind === "code" ? fenceOf(b) : null;
+      if (f !== null) fences.set(idx, f);
+    });
+    const { attach, consumed } = attachFigures(blocks, fences);
     blocks.forEach((b, idx) => {
       this.rep.line = b.line;
       // Penanda peran hanya berlaku untuk blok TEPAT sesudahnya, dan hanya bila itu paragraf biasa.
@@ -655,7 +762,7 @@ class Converter {
           this.table(b, attach.get(idx));
           return;
         case "code":
-          this.code(b);
+          this.code(b, fences.get(idx), attach.get(idx));
           return;
         case "quote":
           this.quote(b);

@@ -616,6 +616,8 @@ const importTool: ToolDef = {
     const dry = isRecord(r.dryRun) ? r.dryRun : {};
     const warnings = arr(report.warnings).map((w) => pick(w, ["code", "line", "message"]) as Rec);
     const dropped: Rec[] = arr(report.dropped).map((d) => ({ ...(pick(d, ["code", "line", "kind"]) as Rec), excerpt: typeof d.excerpt === "string" ? d.excerpt.slice(0, 120) : "" }));
+    // Swarm 1.2.8 row 32 (H-N13): pagar yang tetap kode (DIAGRAM_FENCE_INVALID, FENCE_KEPT_AS_CODE) dihitung terpisah dari "dibuang".
+    const keptAsCode = warnings.filter((w) => w.code === "DIAGRAM_FENCE_INVALID" || w.code === "FENCE_KEPT_AS_CODE").length;
     const issues = [...arr(validation.issues), ...(validation.valid === true ? arr(dry.issues) : [])];
     const valid = validation.valid === true && dry.valid === true;
     const sp = isRecord(dry.submitPreview) ? dry.submitPreview : {};
@@ -625,6 +627,7 @@ const importTool: ToolDef = {
       valid,
       sections: Array.isArray(chapter.sections) ? chapter.sections.length : 0,
       mapped: Array.isArray(report.mapping) ? report.mapping.length : 0,
+      keptAsCode,
       warnings: cap(warnings, 20),
       warningCount: warnings.length,
       dropped: cap(dropped, 20),
@@ -635,7 +638,7 @@ const importTool: ToolDef = {
     };
     // MCP-D4 L-5: pesan isu (importer/R08) dan peringatan importer = teks server -> satu blok bertanda.
     const lines = [
-      `impor ${tok(summary.importer)} bab ${String(str(a, "chapterKey"))}: ${valid ? "SAH" : "TIDAK SAH"}; ${summary.sections} section, ${summary.mapped} konstruk dipetakan, ${warnings.length} peringatan, ${dropped.length} dibuang${issues.length > 0 ? `, ${issues.length} isu` : ""}`,
+      `impor ${tok(summary.importer)} bab ${String(str(a, "chapterKey"))}: ${valid ? "SAH" : "TIDAK SAH"}; ${summary.sections} section, ${summary.mapped} konstruk dipetakan, ${keptAsCode} kept as code, ${warnings.length} peringatan, ${dropped.length} dibuang${issues.length > 0 ? `, ${issues.length} isu` : ""}`,
     ];
     const issueBlock = serverBlock(
       [...cap(issues, 10).map((i) => serverIssueLine(i, "isu ")), ...cap(warnings, 10).map((w) => `peringatan baris ${String(w.line)} ${String(w.code)}: ${String(w.message)}`)],

@@ -121,11 +121,11 @@
  },
  "counts": {
   "files": 608,
-  "copied": 408,
-  "patched": 158,
+  "copied": 407,
+  "patched": 159,
   "replaced": 12,
   "added": 30,
-  "bytes": 10001458
+  "bytes": 10007846
  },
  "files": [
   {
@@ -281,9 +281,10 @@
   {
    "path": "scripts/studio/mcp/doc-tools.ts",
    "status": "patched",
-   "bytes": 77629,
+   "bytes": 77935,
    "source_sha256": "af47f4e9a923028b33ead625d6b22d9c7a308e5d430cf1bde5f09a9e32fc7df8",
-   "sha256": "6ade167842fae5b4a145def40b6c35b7beb1ddc0414ce55e1af8123e92ccc06d",
+   "sha256": "0cf32b93b0bc57e35d21756eb9ff1a4d0c0b8bd12c69ee3f34e8655014c879e5",
+   "patch_row32": {"id": "128-32-hn13", "row": "32", "decision": "1.2.8 row 32 (AC-HN13, H-N13; N8-208, N8-209)", "summary": "studio_chapter_import_markdown summary counts fences kept as code (warnings DIAGRAM_FENCE_INVALID + FENCE_KEPT_AS_CODE): importSummary.keptAsCode and text '<n> konstruk dipetakan, <m> kept as code, <w> peringatan, <d> dibuang'; description and schema unchanged", "before_sha256": "6ade167842fae5b4a145def40b6c35b7beb1ddc0414ce55e1af8123e92ccc06d", "after_sha256": "0cf32b93b0bc57e35d21756eb9ff1a4d0c0b8bd12c69ee3f34e8655014c879e5", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/32_row32_diffs/scripts_studio_mcp_doc-tools.ts.diff", "diff_sha256": "75c1c2b588a83c32d44f103c6a0ae2dacb4f208d293d515bfc3a75cf94ab24ab"},
    "patch_row35b": {"id": "127-35b-n3-status-counts", "row": "35b", "decision": "1.2.7 row 35b (AC-N3, N7-063)", "summary": "studio_document_status text: FAIL per kode counts findings, not rows (a code whose FAIL summary row carries findingsAll counts its real total; the summary row is never a finding); one line per such code after FAIL per kode: '<CODE>: total N (dirinci I, tidak dirinci R)' (N7-063); the '+N temuan lain' line subtracts what the listed rows stand for (a listed summary row stands for its rest). Under 100 findings per code the text is byte-identical; description and schema unchanged", "before_sha256": "019ebf9473a4576b6b538790c5be7a02e3a99ed00b03869a253535f05bd63cf4", "after_sha256": "6ade167842fae5b4a145def40b6c35b7beb1ddc0414ce55e1af8123e92ccc06d", "diff": "docs/2026-11-13_swarm_1_2_7_patch/implementation/35b_row35b_diffs/scripts_studio_mcp_doc-tools.ts.diff", "diff_sha256": "28d2d9adb76210d0e2037a66e434410e8d76aaf1ea8c36aaea784cea238cf886"},
    "patch_row78b": {"id": "row78b-status-render-verdict", "row": "78b", "decision": "1.2.6 C16 (U24)", "summary": "studio_document_status default text: each output line carries the stored U24 page verdict from R05 outputs[].renderVerification (RENDER_VERIFIED(U24) / RENDER_UNVERIFIED(U24) [STALE] fail= unknown=, OVERLAP_CLIP coverage line; RENDER_VERIFY_PENDING when absent), within DOCUMENT_STATUS_TEXT_MAX_BYTES; export RENDER_VERIFY_PENDING; description and schema unchanged", "before_sha256": "662ae158ac9979aa492ec2cda5a343484c52798e513f2c23e126523c5328bdf7", "after_sha256": "70fea230599bbdb987270c3af5167e237f6804ff4db4fe4dc1a590c6b5ee0e47", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/78b_row78b_diffs/scripts_studio_mcp_doc-tools.ts.diff", "diff_sha256": "c297a6ceb76078675001f1719163962137364578ae653754c290a06b34947eec"},
    "patch_row99": {"id": "row99-g06-tool-descriptions", "row": "99", "decision": "1.2.6 G-06 (U5; M-06, W-09, W-14, T-14, T-16)", "summary": "studio_document_status description names findings paging (T-14); trimmed texts of studio_templates_list, studio_document_create, studio_chapter_import_markdown, studio_chapter_submit, studio_slot_fill and the ADOPT, FINDINGS_PARAM, submit, withTier, baseRevisionNo param descriptions (tools/list budget); no schema type or behaviour change", "before_sha256": "d22c77cb51becc10e100657904326fa9d8bed3b6a43846702ed08c7becafeead", "after_sha256": "662ae158ac9979aa492ec2cda5a343484c52798e513f2c23e126523c5328bdf7", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/99_row99_diffs/scripts_studio_mcp_doc-tools.ts.diff", "diff_sha256": "7beef52dcefb976107687a2d989f12ee8a9a8f716e048bdaddc5616bd0d11af4"},
@@ -4942,10 +4943,11 @@
   },
   {
    "path": "src/lib/studio/services/import/markdown.ts",
-   "status": "copied",
-   "bytes": 32405,
+   "status": "patched",
+   "bytes": 38487,
    "source_sha256": "46f3732bdcf0c3ea2c45f6bbcf94336378d6b9e25356bf9478b35372c68e0925",
-   "sha256": "46f3732bdcf0c3ea2c45f6bbcf94336378d6b9e25356bf9478b35372c68e0925"
+   "sha256": "a0a0de5b0bb0a41f373ddafc8c18f6234e0dedfd10526f60cdb97cd9402b8e65",
+   "patch_row32": {"id": "128-32-hn13", "row": "32", "decision": "1.2.8 row 32 (AC-HN13, H-N13; N8-207, N8-208, N8-209)", "summary": "NEW DIAGRAM_FENCE_INFOS ['diagram','json']: a diagram fence (spec or {type:'diagram'} block) and a json fence whose top object has type 'diagram' become a DiagramV2 block, caption/source from the adjacent Gambar:/Sumber: lines when the JSON has none; the shared v2 validator runs on the block (CAPTION_TOKEN_DUPLICATE left to the chapter validation, as chapter_submit); refused -> monoBlock + DIAGRAM_FENCE_INVALID with up to 5 validator messages and the taken lines re-emitted as paragraphs; json fence with another type -> monoBlock + FENCE_KEPT_AS_CODE. Other fences unchanged (MONOBLOCK_LABEL_DEFAULTED). Copied -> patched", "before_sha256": "46f3732bdcf0c3ea2c45f6bbcf94336378d6b9e25356bf9478b35372c68e0925", "after_sha256": "a0a0de5b0bb0a41f373ddafc8c18f6234e0dedfd10526f60cdb97cd9402b8e65", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/32_row32_diffs/src_lib_studio_services_import_markdown.ts.diff", "diff_sha256": "4ca45fc13cc72b9afe9f9324f7c499f4f2c1102ca3142145310b2d6baf88df9a"}
   },
   {
    "path": "src/lib/studio/services/import/types.ts",
@@ -6267,6 +6269,7 @@
   "37c",
   "31",
   "52",
-  "35b"
+  "35b",
+  "32"
  ]
 }
