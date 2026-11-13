@@ -61,6 +61,8 @@ import { toggleMcp } from "./global-sync/mcp"
 import { providerRouteToast } from "./global-sync/provider-route-toast"
 import { createServerSession, type ServerSession } from "./server-session"
 import { desktopNonce, nonceHeader } from "@/pages/session/map/session-map-model"
+import { applyProjectRehomed, type RehomedListener } from "./project-rehomed"
+import { usePlatform } from "./platform"
 
 type GlobalStore = {
   ready: boolean
@@ -210,6 +212,10 @@ export function createServerSyncContextInner(serverSDK: ServerSDK) {
   if (!owner) throw new Error("ServerSync must be created within owner")
 
   const sdkCache = new Map<string, OpencodeClient>()
+  // 1.2.8 row 44c (AC-PROJd): project.rehomed needs this server's project list and the platform storage.
+  const serverCtx = useServer()
+  const platform = usePlatform()
+  const rehomedListeners = new Set<RehomedListener>()
   const booting = new Map<string, Promise<void>>()
   const sessionLoads = new Map<string, Promise<void>>()
   const sessionMeta = new Map<string, { limit: number }>()
@@ -569,6 +575,16 @@ export function createServerSyncContextInner(serverSDK: ServerSDK) {
         eventType === "project.directories.updated"
       )
         bootstrap.refetch()
+      // 1.2.8 row 44c (AC-PROJd): a mission folder moved into a group; the group joins the project list, the moved
+      // sessions' persisted state follows them and open routes are re-pointed (project-rehomed.ts).
+      if (eventType === "project.rehomed")
+        void applyProjectRehomed({
+          event,
+          scope: serverSDK.scope,
+          platform,
+          projects: serverCtx.projects.forServer(ServerConnection.key(serverSDK.server)),
+          listeners: [...rehomedListeners],
+        }).catch(() => {})
       if (eventType === "server.connected" || eventType === "global.disposed") {
         if (recent) return
         for (const directory of Object.keys(children.children)) {
@@ -697,6 +713,11 @@ export function createServerSyncContextInner(serverSDK: ServerSDK) {
     // bootstrap,
     updateConfig: updateConfigMutation.mutateAsync,
     project: projectApi,
+    // 1.2.8 row 44c (AC-PROJd): routes inside the router re-point an open moved session (directory-layout.tsx).
+    onProjectRehomed(listener: RehomedListener) {
+      rehomedListeners.add(listener)
+      return () => rehomedListeners.delete(listener)
+    },
     session,
     homeSessions,
     mcp: {
