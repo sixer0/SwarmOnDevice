@@ -148,6 +148,8 @@ const LOCAL_TOOLS = new Set([
   "todowrite",
   "remember",
   "skill",
+  // 1.2.8 row 47 (C54): a draft is written from the session's own text and brings nothing in from outside.
+  "skill_draft",
   "apply_patch",
   "lsp",
   "plan_exit",

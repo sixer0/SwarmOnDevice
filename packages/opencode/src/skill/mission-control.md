@@ -14,7 +14,7 @@ Read the resource studio://skema/mission once per session. It lists the mission 
 
 ## 2. Create the mission (dry run, then real)
 
-Call studio_mission_create with dryRun: true, fix what it reports, then call it again without dryRun. Leave out project.dir and session: Swarm fills both from your session. Never invent a session id.
+Call studio_mission_create with dryRun: true, fix what it reports, then call it again without dryRun. Leave out project.dir and session: Swarm fills both from your session. Never invent a session id. When your session folder is the Default Project root, load the project-folders skill after the real create: you propose a group, the person chooses, you never move the mission.
 
 ```json
 {"dryRun":true,"mission":{"id":"2026-11-08_example-mission","title":"Example mission","type":"feature-release","owner":"swarm-workflow","rows":[
@@ -94,6 +94,8 @@ Stopping unfinished: studio_mission_set_status {"mission":"2026-11-08_example-mi
 
 Before closing, check that each row's status matches the work actually done (a skipped step is dropped with a note saying why): studio_mission_get {"mission":"2026-11-08_example-mission","include":["rows","findings","deliverables"]}
 
+Before closing, write the final report and its mission index entry: remember {kind: "index", missionId, text: "YYYY-MM-DD <mission-id> | <outcome> | triggers: k1, k2 | docs/<mission-id>/10_report/report.md"}.
+
 Close in one call: studio_mission_set_status {"mission":"2026-11-08_example-mission","to":"done"}. It is refused MISSION_ROWS_OPEN while a row is not done or dropped; on success it returns the decision register, decisions {count, ids}. Then write the record files: studio_mission_export {"mission":"2026-11-08_example-mission","write":true}. They go under docs/<mission>/ in numbered folders (01_identification/ .. 10_report/, then 11_deliverables/); a folder that already holds an older unnumbered export keeps it (folderLayout: legacy) and nothing is moved. When they exist add "overwrite":true and the old copies are kept in that folder's .bak/. Save final deliverables with studio_file_verify, downloadDir "docs/<mission>/11_deliverables".
 
 ## Refusals: what each code means and the next call
@@ -111,5 +113,6 @@ A refusal reads "ditolak CODE: message", then rincian (details) and next (the ne
 - DECISION_PENDING: an open decision request blocks the row. Wait for the person's answer in Mission Control, then retry.
 - MISSION_PAUSED: the mission is paused, so no row may go running. Resume with studio_mission_set_status running first.
 - MISSION_ROWS_OPEN: rincian.rows are not done or dropped. Finish them, or drop them with a note (and a decision after approval), then close again.
+- MEMORY_INDEX_MISSING: the project memory has no index entry for this mission. Write it with remember {kind: "index", missionId}, then close again. Other clients get warning MEMORY_INDEX_UNCHECKED instead.
 
 Swarm's permission prompts and safety rules stay in force.

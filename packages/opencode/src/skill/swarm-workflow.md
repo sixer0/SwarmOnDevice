@@ -112,8 +112,9 @@ Return: status complete, blocked or needs-review; files created or changed; the 
 ## 7. Close
 
 1. With studio_mission_get, check that each row's status matches the work actually done. A skipped step is dropped with a note saying why. Never drop a row to get past a gate.
-2. Set the mission done (mission-control step 6).
-3. Write docs/<task>/10_report/report.md and give the person the same report: what was done, the checks and their results, the decisions made on their behalf, the files created or changed, and what is still open.
+2. Write docs/<task>/10_report/report.md and give the person the same report: what was done, the checks and their results, the decisions made on their behalf, the files created or changed, and what is still open.
+3. After the final report: write one mission index entry with remember {kind: "index", missionId} in the format "YYYY-MM-DD <mission-id> | <outcome> | triggers: k1, k2, k3 | <report path>" (one line, <= 300 characters), then close the mission as done. A done close without it is refused (MEMORY_INDEX_MISSING).
+4. Set the mission done (mission-control step 6).
 
 ## docs/ folder (kept light)
 
