@@ -397,12 +397,31 @@ function neutraliseLine(line: string, whole: boolean): { text: string; open: boo
 }
 
 const FENCE_OPEN = /^ {0,3}(`{3,}|~{3,})(.*)$/
+// S-02 (row 43i): a fence after any container prefix — block quote or callout markers, list markers, continuation
+// indentation of any width — in any order and depth. Each repeat ends on a marker character, so a run of blanks can be
+// taken in one way only (no backtracking blow-up on long lines).
+const NESTED_FENCE_OPEN = /^((?:[ \t]*(?:>|(?:[-*+]|\d{1,9}[.)])(?=[ \t])))*[ \t]*)(`{3,}|~{3,})(.*)$/
 const PLACEHOLDERS = new RegExp(Secrets.PLACEHOLDER.source, "g")
+
+/**
+ * A fence opened inside a container (`> ```dataviewjs`, `- ```dataviewjs`, an indented continuation) that the
+ * top-level pass does not see: its info string becomes `text` unless it is on `MIRROR_PLAIN_FENCE_LANGS`. The line is
+ * otherwise kept, so a plain nested fence and its container are unchanged.
+ */
+function neutraliseNestedFence(line: string): string {
+  const fence = NESTED_FENCE_OPEN.exec(line)
+  if (!fence) return line
+  const [, prefix, mark, info] = fence as unknown as [string, string, string, string]
+  if (mark.startsWith("`") && info.includes("`")) return line
+  const lang = info.trim().split(/\s+/)[0]!.toLowerCase()
+  return PLAIN_LANGS.has(lang) ? line : prefix + mark + "text"
+}
 
 /**
  * Report Markdown made safe to open in Obsidian. Every fence is written again at column 0, longer than any run of its
  * character inside, so Obsidian sees exactly the fences seen here; its info string is kept only when it is on
- * `MIRROR_PLAIN_FENCE_LANGS`, else `text`. Then every line passes the secret masking: `Secrets.scrubText`, and a line
+ * `MIRROR_PLAIN_FENCE_LANGS`, else `text`; a fence opened inside a quote, callout or list keeps its place and gets the
+ * same info string rule (S-02). Then every line passes the secret masking: `Secrets.scrubText`, and a line
  * that still looks secret becomes `[hidden]` (masked, never cut: the line count is kept).
  */
 export function neutraliseReport(text: string): string {
@@ -429,7 +448,7 @@ export function neutraliseReport(text: string): string {
       continue
     }
     if (line.trim() === "") whole = false
-    const next = neutraliseLine(line, whole)
+    const next = neutraliseLine(neutraliseNestedFence(line), whole)
     whole = whole || next.open
     out.push(next.text)
     i++
