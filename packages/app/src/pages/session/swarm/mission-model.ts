@@ -211,7 +211,7 @@ export type MissionVM = {
   /** 1.2.8 row 46: Swarm sessions linked to the mission (join/new wait while one of them is busy, 01d §4). */
   sessions?: string[]
   /**
-   * 1.2.8 row 46b (C98): the person answered a placement with join/new in Mission Control (by user, attested) but the
+   * 1.2.8 row 46b (C98): the person chose join/new for a placement in Mission Control (by user, attested) but the
    * mission is not in that group: the move did not finish and can be retried from the card.
    */
   unplaced?: { id: string; option: string; group: string; groupKind?: string }
