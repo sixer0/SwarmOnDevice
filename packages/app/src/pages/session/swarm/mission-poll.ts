@@ -12,6 +12,7 @@ import {
   type MissionVM,
 } from "./mission-model"
 import { registerStudioOutputs } from "../studio-output-registry"
+import { MISSION_DELIVERABLES_DIR } from "./mission-deliverables-model"
 
 export type MissionControlResult<T> = { ok: true; data: T } | { ok: false; code: string; message: string }
 
@@ -105,7 +106,8 @@ export function createMissionPoller(input: {
   /** Row 183: read per list, never fetched here (the session store already holds the run's sessions) */
   sessions?: () => readonly string[] | undefined
   lang: () => "en" | "id"
-  /** names of the files in `docs/<mission>` of the session (§7.3); called once per `get` change */
+  /** names of the files in `docs/<mission>` and `docs/<mission>/11_deliverables` of the session (§7.3, 1.2.7 U-2);
+   * called once per `get` change, per folder */
   listFiles?: (path: string) => Promise<string[]>
   onState: (state: MissionControlState) => void
   timers?: Timers
@@ -250,11 +252,21 @@ export function createMissionPoller(input: {
       ? new Set((await within(() => listFiles(`docs/${selected}`))) ?? [])
       : new Set<string>()
     if (stale()) return
+    // 1.2.7 U-2 (C10): also docs/<m>/11_deliverables (numbered export, row 28): Studio outputs found there and the
+    // folder lines. One more call, only when the mission is re-read; a missing folder lists as empty.
+    const delivered = listFiles
+      ? new Set((await within(() => listFiles(`docs/${selected}/${MISSION_DELIVERABLES_DIR}`))) ?? [])
+      : new Set<string>()
+    if (stale()) return
     failures = 0
     seen = { directory, key, selected }
-    const mission = buildMission(got.data, input.lang(), present)
+    const mission = buildMission(got.data, input.lang(), present, delivered)
     // Row 165E (C192): the deliverables found in the project are the registered Studio outputs the file tab renders.
-    registerStudioOutputs(directory, mission.deliverables.map((d) => d.projectPath))
+    // Folder lines (1.2.7 U-2) are never registered: a non-Studio .html opens as code (C101).
+    registerStudioOutputs(
+      directory,
+      mission.deliverables.filter((d) => d.origin !== "folder").map((d) => d.projectPath),
+    )
     emit({ options, selected, mission, readFailed: false })
   }
 

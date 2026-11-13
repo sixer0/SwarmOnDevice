@@ -401,7 +401,8 @@ describe("row 165E: registered Studio outputs", () => {
       directory: () => "/repo",
       sessions: () => SES,
       lang: () => "en",
-      listFiles: async () => [HTML, OTHER],
+      // INTENT 1.2.7 U-2: the poll also lists docs/<m>/11_deliverables; this case is about the flat folder only.
+      listFiles: async (path) => (path === "docs/m-run" ? [HTML, OTHER] : []),
       onState: () => {},
       timers: fakeTimers().timers,
     })

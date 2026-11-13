@@ -2,6 +2,9 @@
 // Pure: mission JSON from the Studio host -> the HQ model the view draws. The view never re-derives.
 // All mission text is agent-written; the view renders it as text only (§12).
 
+// 1.2.7 U-2 (N7-018): the deliverables folder name; that module imports only types from here, so no runtime cycle.
+import { MISSION_DELIVERABLES_DIR } from "./mission-deliverables-model"
+
 // ── Wire types (§9.1). Restated from datum-studio/src/store/mission/types.ts; only the fields used here.
 
 export type MissionStatus = "draft" | "approved" | "running" | "paused" | "done" | "cancelled"
@@ -165,6 +168,11 @@ export type MissionDeliverableVM = {
   /** Row 165D: `fileName` = the delivered DATUM title name when the host sent a plain one. */
   files: Array<{ format: DeliverableFormat; finalFileName: string; fileName?: string }>
   projectPath: string | null
+  /**
+   * 1.2.7 U-2 (N7-123, C10): "studio" = a Studio deliverable; "folder" = a file in docs/<m>/11_deliverables/ that no
+   * Studio output claims (no status badge, not counted in n/m final). Absent (older callers) = studio.
+   */
+  origin?: "studio" | "folder"
 }
 export type MissionVM = {
   id: string
@@ -288,6 +296,7 @@ function deliverableVM(
   missionId: string,
   rows: Map<string, MissionRowWire>,
   present: Set<string>,
+  delivered: Set<string>,
 ): MissionDeliverableVM {
   const rowId = wire.rowId ?? rowIdOfKey(wire.docKey)
   const row = rowId ? rows.get(rowId) : undefined
@@ -311,10 +320,14 @@ function deliverableVM(
     return [{ format, finalFileName: out.finalFileName, ...(datum ? { fileName: datum } : {}) }]
   })
   // The file in the project carries the DATUM name (studio_file_verify since row 165D) or, from older downloads, the
-  // C51 final name; the DATUM name is preferred.
-  const hitName = files
-    .map((file) => (file.fileName && present.has(file.fileName) ? file.fileName : present.has(file.finalFileName) ? file.finalFileName : undefined))
-    .find((name): name is string => name !== undefined)
+  // C51 final name; the DATUM name is preferred. 1.2.7 U-2: docs/<m>/11_deliverables/ (numbered export, row 28) first,
+  // then the legacy flat docs/<m>/.
+  const hitIn = (names: Set<string>) =>
+    files
+      .map((file) => (file.fileName && names.has(file.fileName) ? file.fileName : names.has(file.finalFileName) ? file.finalFileName : undefined))
+      .find((name): name is string => name !== undefined)
+  const inFolder = hitIn(delivered)
+  const flat = inFolder ? undefined : hitIn(present)
   return {
     documentId: wire.documentId,
     title: wire.title,
@@ -325,8 +338,41 @@ function deliverableVM(
     status,
     verified,
     files,
-    projectPath: hitName ? `docs/${missionId}/${hitName}` : null,
+    projectPath: inFolder
+      ? `docs/${missionId}/${MISSION_DELIVERABLES_DIR}/${inFolder}`
+      : flat
+        ? `docs/${missionId}/${flat}`
+        : null,
+    origin: "studio",
   }
+}
+
+/**
+ * 1.2.7 U-2 (C10, N7-123): the files in docs/<m>/11_deliverables/ that no Studio output of this mission claims, one
+ * line each, sorted by name. Hidden files and unsafe names are skipped. Name = file name; the tile and the open rule
+ * come from the final extension (mission-deliverables-model.ts); no status, never verified, never final.
+ */
+function folderDeliverables(missionId: string, wires: DeliverableWire[], delivered: Set<string>): MissionDeliverableVM[] {
+  const claimed = new Set<string>()
+  for (const wire of wires)
+    for (const out of wire.outputs) {
+      claimed.add(out.finalFileName)
+      if (typeof out.fileName === "string") claimed.add(out.fileName)
+    }
+  return [...delivered]
+    .filter((name) => PLAIN_NAME.test(name) && !name.startsWith(".") && !claimed.has(name))
+    .sort((a, b) => a.localeCompare(b))
+    .map((name) => ({
+      documentId: `folder:${name}`,
+      title: name,
+      docRev: "",
+      formats: [],
+      status: "draft",
+      verified: false,
+      files: [],
+      projectPath: `docs/${missionId}/${MISSION_DELIVERABLES_DIR}/${name}`,
+      origin: "folder",
+    }))
 }
 
 /**
@@ -361,8 +407,16 @@ function timeOf(value: string | undefined) {
   return Number.isFinite(ms) ? ms : 0
 }
 
-/** §5-§7: the whole HQ model for one `studio_mission_get` answer. `present` = file names found in docs/<mission>/. */
-export function buildMission(get: MissionGetWire, lang: "en" | "id", present: Set<string> = new Set()): MissionVM {
+/**
+ * §5-§7: the whole HQ model for one `studio_mission_get` answer. `present` = file names found in docs/<mission>/;
+ * `delivered` (1.2.7 U-2) = names found in docs/<mission>/11_deliverables/.
+ */
+export function buildMission(
+  get: MissionGetWire,
+  lang: "en" | "id",
+  present: Set<string> = new Set(),
+  delivered: Set<string> = new Set(),
+): MissionVM {
   const { mission, derived } = get
   const requests = get.requests ?? []
   const open = requests.filter((req) => req.status === "open")
@@ -375,7 +429,10 @@ export function buildMission(get: MissionGetWire, lang: "en" | "id", present: Se
   const phaseDefs = [...derived.phases].sort((a, b) => a.order - b.order)
   const phaseFamilyById = new Map(phaseDefs.map((p, i) => [p.id, phaseFamily(p.id, i + 1, phaseDefs.length)]))
 
-  const deliverables = rowDeliverables(get.deliverables ?? []).map((d) => deliverableVM(d, mission.id, rows, present))
+  const deliverables = [
+    ...rowDeliverables(get.deliverables ?? []).map((d) => deliverableVM(d, mission.id, rows, present, delivered)),
+    ...folderDeliverables(mission.id, get.deliverables ?? [], delivered),
+  ]
 
   const agents: Record<string, MissionAgentVM> = {}
   for (const row of shown) {

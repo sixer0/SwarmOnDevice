@@ -1195,7 +1195,9 @@ export default function Page() {
       if (root === params.id) appendToComposer(text)
       else if (root) openRunStep(root)
     },
-    watching: () => sessionMap.opened() && sessionMap.view.filter === "agents",
+    // 1.2.7 C26: the "Shared files" view (row 26b) draws the swarm model's overlaps and its "check" action needs it.
+    watching: () =>
+      sessionMap.opened() && (sessionMap.view.filter === "agents" || sessionMap.view.filter === "shared"),
   })
   // Row 133 (spec §11): mission control in the Agents view; absent when the platform has no `missions`.
   const missionControl = createMissionControl({
@@ -1207,10 +1209,16 @@ export default function Page() {
     lang: () => (language.locale() === "id" ? "id" : "en"),
     watching: () => sessionMap.opened() && sessionMap.view.filter === "agents",
     mapOpen: () => sessionMap.opened(),
+    // 1.2.7 U-2: a macOS app bundle (`*.app`) is a folder; it is listed so the deliverable can be revealed (never run).
+    // Symlinks are never listed (core FileSystem.list), so a link out of the project gets no line.
     listFiles: (path) =>
       sdk()
         .client.file.list({ path })
-        .then((result) => (result.data ?? []).filter((node) => node.type === "file").map((node) => node.name)),
+        .then((result) =>
+          (result.data ?? [])
+            .filter((node) => node.type === "file" || (node.type === "directory" && /\.app$/i.test(node.name)))
+            .map((node) => node.name),
+        ),
   })
   const missions: MissionControlMount | undefined = missionControl.available
     ? {
