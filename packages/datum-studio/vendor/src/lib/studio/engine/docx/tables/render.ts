@@ -64,7 +64,7 @@ import { APPARATUS_TEXT, apparatusLabelRunText, apparatusLabelWords, artifactLab
 import { mmToTw, mmWidthsToTw, solveWidthsImpl, twToMm } from "./widths";
 import { type ParaAdjust, apparatusParaAdjust } from "../blocks/apparatus";
 import { baselineSnapTw, rowWrappedTw, snapUpTw } from "../blocks/rhythm";
-import { assertTableFits } from "../../table-fit";
+import { assertTableFits, tableBreakRuns } from "../../table-fit";
 
 /** Python `_NUM_RE` datum_docx.py: kolom angka bila >= 70 % sel badan cocok. */
 const NUM_RE = /^[\d.,%±\s-]+\s*(%|x|mm|m|kVA|kW|Hz)?$/;
@@ -360,12 +360,17 @@ function tcXml(env: Env, b: TableFamilyBlock, cell: Cell, cols: ColumnInfo[], gr
   const jc = jcFor(rc.kind, col);
   const paraBase: ParaFormat = { ...st.para, ...(jc ? { jc } : {}) };
   let inner = "";
+  const breakable = !(span === 1 && (col.role === "numeral" || col.role === "unit" || col.role === "id"));
   for (const p of parts.paragraphs) {
     if (p.runs === null) {
       inner += "<w:p/>";
       continue;
     }
-    inner += paragraphXml({ ...paraBase, ...(p.format ?? {}) }, runsXml(symbolRuns(p.runs, env.tpl.params, role), base, env.tpl.params));
+    // Swarm 1.2.7 row 40 (N-11, C12 O-6): U+200B (Word's no-width optional break) after each separator of a long ID
+    // list joined without spaces, the breaks DT-10a counts (table-fit.ts); never in numeral / unit / id columns.
+    const runs = symbolRuns(p.runs, env.tpl.params, role);
+    const broken = breakable ? tableBreakRuns(runs, "\u200B") : null;
+    inner += paragraphXml({ ...paraBase, ...(p.format ?? {}) }, runsXml(broken ?? runs, base, env.tpl.params));
   }
   if (cell.nested) {
     if (env.depth >= 1) {

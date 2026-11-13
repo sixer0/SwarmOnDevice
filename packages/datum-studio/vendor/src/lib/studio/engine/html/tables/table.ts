@@ -26,6 +26,7 @@ import type {
   ColumnSpec,
   NormBlock,
   ParaFormat,
+  ParamMap,
   RenderContext,
   RoleKey,
   Row,
@@ -35,12 +36,12 @@ import type {
 import { apparatusReserveTw } from "../../docx/blocks/rail";
 import { baselineSnapTw } from "../../docx/blocks/rhythm";
 import { mmToTw } from "../../tokens";
-import { assertTableFits } from "../../table-fit";
+import { assertTableFits, tableBreakRuns } from "../../table-fit";
 import { scaleRun } from "../../tokens/roles";
 import { artifactLabel, captionHtml, sourceInner, sourceParagraphCss, sourceParagraphHtml } from "./apparatus";
 import { attr, escText } from "./escape";
 import { symbolBoundRuns } from "../blocks/semantic";
-import { inlineHtml, paraHtml, runsHtml } from "./inline";
+import { inlineHtml, paraHtml, parseMdLite, runsHtml } from "./inline";
 import {
   borderCss,
   color,
@@ -164,6 +165,24 @@ interface CellPos {
   zebraIndex: number;
 }
 
+/**
+ * Swarm 1.2.7 row 40 (N-11): the cell paragraph with `<wbr>` after each separator of a long ID list joined without
+ * spaces (table-fit.ts `breakableSegments`, the same breaks DT-10a counts). Null when no break applies (the caller's
+ * output stays byte-identical) or when the text already holds U+200B (the marker used here).
+ */
+function brokenParaHtml(para: CellParagraph, p: ParamMap, rk: RoleKey | "unit"): string | null {
+  const runs =
+    "runs" in para && Array.isArray(para.runs)
+      ? symbolBoundRuns(para.runs, p, rk === "unit" ? undefined : rk)
+      : "text" in para && typeof para.text === "string"
+        ? parseMdLite(para.text)
+        : null;
+  if (!runs || runs.some((r) => "t" in r && r.t.includes(ZWSP))) return null;
+  const broken = tableBreakRuns(runs, ZWSP);
+  return broken ? runsHtml(broken, {}, p).split(ZWSP).join("<wbr>") : null;
+}
+const ZWSP = "\u200B";
+
 function cellHtml(env: TableEnv, cell: Cell, colIdx: number, pos: CellPos, rowspan: number, tag: "td" | "th"): string {
   const { ctx, cols, rules } = env;
   const p = ctx.tpl.params;
@@ -197,7 +216,7 @@ function cellHtml(env: TableEnv, cell: Cell, colIdx: number, pos: CellPos, rowsp
         "runs" in para && Array.isArray(para.runs)
           ? runsHtml(symbolBoundRuns(para.runs, p, rk === "unit" ? undefined : rk), {}, p)
           : inlineHtml(para, {}, p);
-      inner += paraHtml(body, fmt, pStyle);
+      inner += paraHtml((!nowrap && brokenParaHtml(para, p, rk)) || body, fmt, pStyle);
     }
   }
   // Satuan tunggal di kepala (P5-06 pengecualian): kolom numeral dengan `unit`.

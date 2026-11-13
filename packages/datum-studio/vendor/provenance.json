@@ -109,7 +109,8 @@
   "row35b": "2026-11-13: 1.2.7 row 35b (N-3 AC-N3, N-7 AC-N7; N7-063, N7-067, N7-139, K7-09). 4 vendor files re-patched (files[].patch_row35b, before = previous sha256; status unchanged): scripts/studio/mcp/doc-tools.ts and registry/lint-explain.ts (FAIL per kode and lint findingsTotal count findings, not rows; labelled <CODE>: total N (dirinci I, tidak dirinci R) line), engine/diagram/build/autofit.ts and capacity.ts (AUTO_FIT remainder counts T-03 defects via autoFitRestText). None is a lint-closure file (guard.ts isLintClosurePath): skillSha unchanged. Diffs in docs/2026-11-13_swarm_1_2_7_patch/implementation/35b_row35b_diffs/. counts by delta: bytes 9965779 -> 9970083 (+4304); files/copied/patched/replaced/added unchanged. patch_rows += 35b",
   "row37f": "2026-11-13: 1.2.7 row 37 follow-up (controller request: DS-guide sentences for rows 35/35b). 1 vendor file re-patched (files[].patch_row37f, before = previous sha256; status unchanged): docs/STUDIO-AGENT-GUIDE.md (8.4: full sha256 and fail per code line in the studio_render text (M-03/M-08), html added as measured source when formats lack html (N-4), witness-pNNN.png is a witness image (N-5); 8.5: total/dirinci line and FAIL per kode counts findings (N-3)). Diff in docs/2026-11-13_swarm_1_2_7_patch/implementation/37_row37_diffs/STUDIO-AGENT-GUIDE.md.followup.diff. counts by delta: bytes 9970083 -> 9970514 (+431); files/copied/patched/replaced/added unchanged. patch_rows += 37f",
   "row38": "2026-11-13: 1.2.7 row 38 (N-10 part 1, AC-N10, N7-144; C8 D-14). 1 vendor file re-patched (files[].patch_row38, before = previous sha256; status unchanged): scripts/studio/mcp/write-client-run.ts (finishDoc: a failed R17 render names the first server error code plus its check id, e.g. FIGURE_OVER_CAPACITY (DT-10a), instead of NO_DOCX_OUTPUT; the server messages go only into an untrusted galat-render block and renderErrors (untrustedFields); NO_DOCX_OUTPUT stays when the reply has no error). Diff in docs/2026-11-13_swarm_1_2_7_patch/implementation/38_row38_diffs/. counts by delta: bytes 9970514 -> 9972254 (+1740); files/copied/patched/replaced/added unchanged. patch_rows += 38",
-  "row39": "2026-11-13: 1.2.7 row 39 (T-11 + SF-2, AC-T11; N-9 description, AC-N9; T-12 text line for row 36b; C8 D-14). 1 vendor file re-patched (files[].patch_row39, before = previous sha256; status unchanged): scripts/studio/mcp/figure-tools.ts (INLINE_V2_DIAGRAM_REQUIRED; mergeFigurePatch checks a spec without $schema against it; top-level direction refusal names the spec route; N7-070/N7-072 description text; perabot line). Default tools/list 29974 -> 29960 B (texts shortened, no pin moved). Diff in docs/2026-11-13_swarm_1_2_7_patch/implementation/39_row39_diffs/. counts by delta: bytes 9972254 -> 9973784 (+1530); files/copied/patched/replaced/added unchanged. patch_rows += 39"
+  "row39": "2026-11-13: 1.2.7 row 39 (T-11 + SF-2, AC-T11; N-9 description, AC-N9; T-12 text line for row 36b; C8 D-14). 1 vendor file re-patched (files[].patch_row39, before = previous sha256; status unchanged): scripts/studio/mcp/figure-tools.ts (INLINE_V2_DIAGRAM_REQUIRED; mergeFigurePatch checks a spec without $schema against it; top-level direction refusal names the spec route; N7-070/N7-072 description text; perabot line). Default tools/list 29974 -> 29960 B (texts shortened, no pin moved). Diff in docs/2026-11-13_swarm_1_2_7_patch/implementation/39_row39_diffs/. counts by delta: bytes 9972254 -> 9973784 (+1530); files/copied/patched/replaced/added unchanged. patch_rows += 39",
+  "row40": "2026-11-13: 1.2.7 row 40 (N-11, AC-N11, C12 O-6). 3 vendor files re-patched (files[].patch_row40, before = previous sha256; status unchanged, table-fit.ts stays added): engine/table-fit.ts (TABLE_BREAK_AFTER, TABLE_BREAK_MIN_CHARS = 16, breakableSegments, tableBreakRuns; longestWord measures the longest segment; DT-10a suggestion names the ID-list break), engine/html/tables/table.ts (<wbr> after each separator of a long ID list in wrapping cells), engine/docx/tables/render.ts (U+200B at the same positions). Not lint closure (skillSha unchanged). Diffs in docs/2026-11-13_swarm_1_2_7_patch/implementation/40_row40_diffs/. counts by delta: bytes 9973784 -> 9977681 (+3897); files/copied/patched/replaced/added unchanged. patch_rows += 40"
  },
  "counts": {
   "files": 608,
@@ -117,7 +118,7 @@
   "patched": 157,
   "replaced": 12,
   "added": 30,
-  "bytes": 9973784
+  "bytes": 9977681
  },
  "files": [
   {
@@ -3315,9 +3316,10 @@
   {
    "path": "src/lib/studio/engine/docx/tables/render.ts",
    "status": "patched",
-   "bytes": 34415,
+   "bytes": 34872,
    "source_sha256": "7a5d80a40ee98f4048f7dbc1e1969a577518d9656ddefa85d973643e17980173",
-   "sha256": "7ec332350c76e04544203f176c93d3b359670a8bd73dd6f23afe7a28d58ef1b1",
+   "sha256": "6a099afd593e95bdb4b68514fb8933e685c022d1e038e71bad02afc0296271a0",
+   "patch_row40": {"id": "127-40-N11", "row": "40", "decision": "1.2.7 C12 O-6 (N-11, AC-N11)", "summary": "tcXml: a wrapping cell (not single-column numeral/unit/id) gets U+200B (Word's no-width optional break) after each separator of a long ID list joined without spaces (table-fit tableBreakRuns), never inside an ID; other cells byte-identical", "before_sha256": "7ec332350c76e04544203f176c93d3b359670a8bd73dd6f23afe7a28d58ef1b1", "after_sha256": "6a099afd593e95bdb4b68514fb8933e685c022d1e038e71bad02afc0296271a0", "diff": "docs/2026-11-13_swarm_1_2_7_patch/implementation/40_row40_diffs/engine_docx_tables_render.ts.diff", "diff_sha256": "d94ca8500de917b55734aeb6457fb3eea5f9bb8811f78a91278ba10927f368f2"},
    "patch_row143a": {"id": "row143a-engine-faults", "row": "143a", "decision": "C177 F143-1 (b) (verification/16_row143_app_studio_1_2_1.md section 6)", "summary": "renderTableBlock: same full-span refusal as HTML (assertTableFits) before building the table XML", "before_sha256": "5ace630a86dd415e1ef13d6e0fa80d57b98bd6fa3608caec32966c0921a12679", "after_sha256": "7ec332350c76e04544203f176c93d3b359670a8bd73dd6f23afe7a28d58ef1b1", "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/132_row143a_diffs/engine_docx_tables_render.ts.diff", "diff_sha256": "4f43d41ec215f3685b60c24ad8ee7ad422b646b0cd166c513f44d7898a7d01a7"},
    "patch": {
     "id": "row122-cp28-cp51-tables",
@@ -3467,10 +3469,11 @@
   {
    "path": "src/lib/studio/engine/table-fit.ts",
    "status": "added",
-   "bytes": 6737,
+   "bytes": 9197,
    "source_sha256": null,
-   "sha256": "6f83370593c9eb50a530cb903a57327a2bb8b977fb9366bc8eb8072595f7b349",
+   "sha256": "0bbf3b7767a0155dcde0ca2d47d53a350a1efae6803e071d1aac05a42abd67d3",
    "added_by": "143a",
+   "patch_row40": {"id": "127-40-N11", "row": "40", "decision": "1.2.7 C12 O-6 (N-11, AC-N11)", "summary": "TABLE_BREAK_AFTER [, ; /] and TABLE_BREAK_MIN_CHARS 16; exported breakableSegments (a whitespace-free run longer than 16 characters splits after each separator, kept on the left) and tableBreakRuns (inserts a break mark at those positions across a paragraph's runs, null when none); longestWord measures the longest segment, so an ID list joined without spaces is no longer one unbreakable word; DT-10a suggestion adds the ID-list break sentence", "before_sha256": "6f83370593c9eb50a530cb903a57327a2bb8b977fb9366bc8eb8072595f7b349", "after_sha256": "0bbf3b7767a0155dcde0ca2d47d53a350a1efae6803e071d1aac05a42abd67d3", "diff": "docs/2026-11-13_swarm_1_2_7_patch/implementation/40_row40_diffs/engine_table-fit.ts.diff", "diff_sha256": "d03cc554a63f601829c6faceb9b24918b11fa2eac19660813e98255d11cd7666"},
    "note": "NEW Swarm file of row 143a (C177 F143-1 (b), Manual Rev A ID p.51 DT-10a; no clone original): tableMinWidthMm (lower bound of a table's width from its unbreakable content: single-column numeral/id cells in Plex Mono 0.6 em, unit/header cells 0.42 em, longest word elsewhere, 2.5 mm gaps), tableSpanLimitMm (largest grid.allowedFigureWidthsMm, 166 mm on A4), assertTableFits (throws TableOverCapacity, code FIGURE_OVER_CAPACITY, figure table, checkId DT-10a). Used by engine/html/tables/table.ts and engine/docx/tables/render.ts. Copy: implementation/132_row143a_diffs/engine_table-fit.ts.new"
   },
   {
@@ -3924,9 +3927,10 @@
   {
    "path": "src/lib/studio/engine/html/tables/table.ts",
    "status": "patched",
-   "bytes": 20485,
+   "bytes": 21465,
    "source_sha256": "f4b73634cd3dc4373cf727a7e7a0c9b89bec02ab53bcd2457a98141f38b2a519",
-   "sha256": "03883b0e8774e8db20ec4d696ddd1ab35f28e111aedc28d6841e00e23f59e06a",
+   "sha256": "e7e3284abd8afaac493a8bf85ce90d220cd2a7b861082a6958294e9d2b929192",
+   "patch_row40": {"id": "127-40-N11", "row": "40", "decision": "1.2.7 C12 O-6 (N-11, AC-N11)", "summary": "cellHtml: a wrapping cell (not single-column numeral/unit/id) whose paragraph holds a long ID list joined without spaces gets <wbr> after each separator (brokenParaHtml via table-fit tableBreakRuns, the breaks DT-10a counts); no break applies, or the text already holds U+200B: output byte-identical", "before_sha256": "03883b0e8774e8db20ec4d696ddd1ab35f28e111aedc28d6841e00e23f59e06a", "after_sha256": "e7e3284abd8afaac493a8bf85ce90d220cd2a7b861082a6958294e9d2b929192", "diff": "docs/2026-11-13_swarm_1_2_7_patch/implementation/40_row40_diffs/engine_html_tables_table.ts.diff", "diff_sha256": "344d8998a198c42ec68cca614618cc5bad6b2428e43796c6d6829e1220d942c9"},
    "patch_row143a": {"id": "row143a-engine-faults", "row": "143a", "decision": "C177 F143-1 (b) (verification/16_row143_app_studio_1_2_1.md section 6)", "summary": "cellHtml: white-space:pre only for single-column (gridSpan 1) numeral/unit/id cells, so a spanning total/band label wraps (case 01 Table 3.1 was 176.9 mm > 166 mm); renderTableBlock refuses a table whose unbreakable content cannot fit (assertTableFits, FIGURE_OVER_CAPACITY figure table, DT-10a)", "before_sha256": "3d90f7a92f728b23cf8e6ba455a3b6d67c230f9df23d54c3c4b1033553ebe78e", "after_sha256": "03883b0e8774e8db20ec4d696ddd1ab35f28e111aedc28d6841e00e23f59e06a", "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/132_row143a_diffs/engine_html_tables_table.ts.diff", "diff_sha256": "40b67e7e78c036da7187b820a712d5d9cd78cda0fdce3abc258b27bbec1c52cd"},
    "patch": {
     "id": "row123-html-table",
@@ -6220,6 +6224,7 @@
   "35b",
   "37f",
   "38",
-  "39"
+  "39",
+  "40"
  ]
 }

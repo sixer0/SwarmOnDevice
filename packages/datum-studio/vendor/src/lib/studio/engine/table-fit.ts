@@ -50,7 +50,78 @@ export function cellTexts(c: Cell): string[] {
 }
 
 const cps = (s: string): number => Array.from(s).length;
-const longestWord = (s: string): string => s.split(/\s+/).reduce((a, w) => (cps(w) > cps(a) ? w : a), "");
+
+/**
+ * Swarm 1.2.7 row 40 (N-11, C12 O-6): an ID list joined without spaces (`R-01/R-02/.../R-12`) is not one unbreakable
+ * word. A whitespace-free run longer than `TABLE_BREAK_MIN_CHARS` may break after each of `TABLE_BREAK_AFTER`; both
+ * renderers make that break (HTML `<wbr>`, DOCX U+200B, Word's own no-width optional break), never inside an ID.
+ */
+export const TABLE_BREAK_AFTER: readonly string[] = [",", ";", "/"];
+export const TABLE_BREAK_MIN_CHARS = 16;
+
+/** Segments of a whitespace-free run: split after each separator (kept on the left) when the run is long, else whole. */
+export function breakableSegments(word: string): string[] {
+  const chars = Array.from(word);
+  if (chars.length <= TABLE_BREAK_MIN_CHARS) return [word];
+  const out: string[] = [];
+  let cur = "";
+  for (const ch of chars) {
+    cur += ch;
+    if (TABLE_BREAK_AFTER.includes(ch)) {
+      out.push(cur);
+      cur = "";
+    }
+  }
+  if (cur) out.push(cur);
+  return out;
+}
+
+/**
+ * The paragraph's runs with `mark` inserted at every break `breakableSegments` allows, words read across run
+ * boundaries (a run without `t` is whitespace, as in `cellTexts`). Null when no break applies, so callers keep their
+ * output byte-identical.
+ */
+export function tableBreakRuns<R extends object>(runs: readonly R[], mark: string): R[] | null {
+  const texts = runs.map((r) => ("t" in r && typeof (r as { t?: unknown }).t === "string" ? (r as unknown as { t: string }).t : null));
+  const joined = texts.map((t) => t ?? " ").join("");
+  const at: number[] = [];
+  for (const m of joined.matchAll(/\S+/g)) {
+    const segs = breakableSegments(m[0]);
+    let off = m.index ?? 0;
+    for (let i = 0; i < segs.length - 1; i++) {
+      off += segs[i].length;
+      at.push(off);
+    }
+  }
+  if (at.length === 0) return null;
+  let start = 0;
+  return runs.map((r, i) => {
+    const t = texts[i];
+    const len = t === null ? 1 : t.length;
+    const end = start + len;
+    let out = r;
+    if (t !== null) {
+      const cuts = at.filter((x) => x >= start && x < end).map((x) => x - start);
+      if (cuts.length) {
+        let s = "";
+        let prev = 0;
+        for (const c of cuts) {
+          s += t.slice(prev, c) + mark;
+          prev = c;
+        }
+        out = { ...r, t: s + t.slice(prev) };
+      }
+    }
+    start = end;
+    return out;
+  });
+}
+
+const longestWord = (s: string): string =>
+  s
+    .split(/\s+/)
+    .flatMap((w) => breakableSegments(w))
+    .reduce((a, w) => (cps(w) > cps(a) ? w : a), "");
 
 export interface TableMinWidth {
   /** Lower bound of the table width (mm). */
@@ -133,7 +204,7 @@ export function assertTableFits(
     limit,
     measured: Math.round(m.minMm * 10) / 10,
     suggestion:
-      "pecah tabel menjadi dua (kolom kunci diulang), kurangi jumlah kolom angka, atau pindahkan teks panjang dari kolom ID/angka/satuan ke kolom teks agar dapat dibungkus",
+      "pecah tabel menjadi dua (kolom kunci diulang), kurangi jumlah kolom angka, atau pindahkan teks panjang dari kolom ID/angka/satuan ke kolom teks agar dapat dibungkus; daftar ID tanpa spasi dipatah setelah , ; / bila lebih dari 16 karakter",
     ...(where.address ? { pointer: where.address } : {}),
   });
 }

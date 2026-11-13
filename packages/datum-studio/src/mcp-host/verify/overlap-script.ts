@@ -217,15 +217,24 @@ export const OVERLAP_SCRIPT = String.raw`(function (o) {
     return out;
   }
   function contentHeightMm() {
+    // Swarm 1.2.7 row 40 (T-13): the first selector-less rule may be a margin-box rule without margins (the
+    // chapter-scope DRAF watermark); pick the first selector-less rule whose margins read, then any rule whose
+    // margins read, else null (MARGINS_UNREADABLE).
     var rules = pageRules();
-    var rule = null;
-    for (var i = 0; i < rules.length; i++) if (!rules[i].selectorText) { rule = rules[i]; break; }
-    if (!rule && rules.length) rule = rules[0];
-    if (!rule) return null;
-    var top = lengthMm(rule.style.getPropertyValue('margin-top'));
-    var bottom = lengthMm(rule.style.getPropertyValue('margin-bottom'));
-    if (top === null || bottom === null) return null;
-    return o.pageHeightMm - top - bottom;
+    function vertical(r) {
+      var t = lengthMm(r.style.getPropertyValue('margin-top'));
+      var b = lengthMm(r.style.getPropertyValue('margin-bottom'));
+      return t === null || b === null ? null : t + b;
+    }
+    var pass, i, v;
+    for (pass = 0; pass < 2; pass++) {
+      for (i = 0; i < rules.length; i++) {
+        if (pass === 0 && rules[i].selectorText) continue;
+        v = vertical(rules[i]);
+        if (v !== null) return o.pageHeightMm - v;
+      }
+    }
+    return null;
   }
   var marginsUnreadable = false;
   var contentH = null;
