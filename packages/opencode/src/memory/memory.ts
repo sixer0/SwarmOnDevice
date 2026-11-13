@@ -50,6 +50,17 @@ const MISSION_ID = new RegExp(MISSION_ID_PATTERN)
  */
 export const INDEX_ROLLUP_PERIOD = "quarter"
 
+/**
+ * The memory store key of a project folder (N8-446, 01d §2.2): the store file is `<data>/memory/<key>.json`. Every folder
+ * without git shares the "global" project, and their notes must not mix, so such a folder gets `dir-<sha256>` of its
+ * path. The re-home primitive (`Rehome`, N8-132) computes both stores of a move with this same function.
+ */
+export function storeKey(projectId: string, directory: string) {
+  return projectId === "global"
+    ? "dir-" + createHash("sha256").update(directory).digest("hex").slice(0, 24)
+    : String(projectId)
+}
+
 const CONSOLIDATE_STEP = 100
 const VERSION = 2
 
@@ -124,12 +135,7 @@ export const layer = Layer.effect(
 
     const file = Effect.fnUntraced(function* () {
       const ctx = yield* InstanceState.context
-      // Every folder without git shares the "global" project, and their notes must not mix.
-      const key =
-        ctx.project.id === "global"
-          ? "dir-" + createHash("sha256").update(ctx.directory).digest("hex").slice(0, 24)
-          : String(ctx.project.id)
-      return path.join(Global.Path.data, "memory", `${key}.json`)
+      return path.join(Global.Path.data, "memory", `${storeKey(ctx.project.id, ctx.directory)}.json`)
     })
 
     const read = (target: string) => Effect.promise(() => readStore(target))
