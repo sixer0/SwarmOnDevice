@@ -19,6 +19,7 @@ import PROMPT_VERIFIER from "./prompt/verifier.txt"
 import PROMPT_DATA_COLLECTOR from "./prompt/data-collector.txt"
 import PROMPT_DOCUMENT_WRITER from "./prompt/document-writer.txt"
 import { Permission } from "@/permission"
+import { AutonomyTable } from "@/permission/autonomy-table"
 import { DATUM_STUDIO_MCP, DatumStudioMcp } from "@/mcp/datum-studio"
 import { AGENT_BASELINE, STUDIO_SUBAGENT_TOOLS } from "@opencode-ai/core/swarm-permission-baseline"
 import { studioToolsBound, withoutStudioAllows } from "./subagent-permissions"
@@ -40,6 +41,13 @@ import { Location } from "@opencode-ai/core/location"
 import { PluginV2 } from "@opencode-ai/core/plugin"
 
 /** Row 198 (D1): the Studio tool that records the person's answer to a mission decision, as it reaches the model. */
+/**
+ * 1.2.7 U4 (N7-130): the read roles. Their shell is visible and runs the read and diagnostic class only; everything else
+ * is refused by the role check that runs first in `Permission.ask` (ROLE_SHELL_OUTSIDE_READ_TEXT, N7-054). Defined in
+ * `permission/autonomy-table.ts`, so the permission code needs no import of this file.
+ */
+export const READ_SHELL_ROLES = AutonomyTable.READ_SHELL_ROLES
+
 export const ANSWER_DECISION_TOOL = `${DATUM_STUDIO_MCP}_studio_mission_answer_decision`
 
 /** S-02 (row 56): the agents whose shipped block carries the STUDIO_SUBAGENT_TOOLS allows (planner, document-writer). */
@@ -171,7 +179,9 @@ const layer = Layer.effect(
             } as Parameters<typeof Permission.fromConfig>[0],
             { shipped: true },
           )
-        const markdownOnly = { edit: { "*": "deny", "*.md": "ask" }, bash: "deny" }
+        // 1.2.7 U4: the read roles (READ_SHELL_ROLES) keep their shell. The baseline's bash rules apply (ask, sudo deny), and
+        // the role check first in Permission.ask refuses anything outside the read class, whatever rule or grant says.
+        const markdownOnly = { edit: { "*": "deny", "*.md": "ask" } }
         // Row 198 (decision L61, checklist D1, S194-02 / S186-03): answering a mission decision is the person's answer.
         // Mission Control answers it through the desktop bridge (window.api.missions -> mission-client.ts, straight to the
         // Studio host), never through an agent's tools, so no agent may call the Studio tool. Merged into every agent
@@ -275,7 +285,7 @@ const layer = Layer.effect(
           },
           planner: {
             name: "planner",
-            description: `Plans and analyses without changing code: states the intent, writes a blueprint or spec, or analyses collected findings and recommends. Reads the project and may write Markdown documents only. No shell and no web tools. Use for intent, blueprint, analysis and spec steps. Also the role called request-translator, task-architect, data-analyst, pm-analyst or pm-planner in workflow texts.`,
+            description: `Plans and analyses without changing code: states the intent, writes a blueprint or spec, or analyses collected findings and recommends. Reads the project and may write Markdown documents only. Shell for inspection commands only (read-only shell: ls, head, git log ...); no web tools. Use for intent, blueprint, analysis and spec steps. Also the role called request-translator, task-architect, data-analyst, pm-analyst or pm-planner in workflow texts.`,
             prompt: PROMPT_PLANNER,
             permission: Permission.merge(defaults, user, specialist(markdownOnly)),
             options: {},
@@ -293,7 +303,7 @@ const layer = Layer.effect(
           },
           "data-collector": {
             name: "data-collector",
-            description: `Reads and digests material the person already has: project files, notes, PDF, DOCX and XLSX documents, earlier reports. Returns facts with their source paths and may write a Markdown collection file. No shell and no web tools. Use for read-and-summarise jobs, inventories and extractions. Also the role called data-collector or document-reader. For code search use explore; for the public web use researcher.`,
+            description: `Reads and digests material the person already has: project files, notes, PDF, DOCX and XLSX documents, earlier reports. Returns facts with their source paths and may write a Markdown collection file. Shell for inspection commands only (read-only shell: ls, head, pdftotext file -, git log ...); no web tools. Use for read-and-summarise jobs, inventories and extractions. Also the role called data-collector or document-reader. For code search use explore; for the public web use researcher.`,
             prompt: PROMPT_DATA_COLLECTOR,
             permission: Permission.merge(defaults, user, specialist(markdownOnly)),
             options: {},

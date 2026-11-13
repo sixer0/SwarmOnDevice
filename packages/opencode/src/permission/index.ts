@@ -23,6 +23,7 @@ import { Secrets } from "@/tool/secrets"
 import {
   MAIN_AGENT_UNAVAILABLE_TEXT,
   REFUSED_TEXT,
+  ROLE_SHELL_OUTSIDE_READ_TEXT,
   SPEND_STOPPED_TEXT,
   UNJUDGED_TEXT,
   checkpointFailedText,
@@ -297,6 +298,16 @@ export interface Decided {
   readonly costUsd?: number
   /** Calls made to the model for this answer, retries after a timeout included. */
   readonly attempts?: number
+}
+
+/**
+ * 1.2.7 U4 (N7-054): a read role (`READ_SHELL_ROLES`: planner, data-collector) ran a shell command outside the read class.
+ * Shipped and final: the text names the substitute (a coder subagent), so the agent hands the command on.
+ */
+export class RoleShellRefusedError extends PermissionV1.DeniedError {
+  override get message() {
+    return ROLE_SHELL_OUTSIDE_READ_TEXT
+  }
 }
 
 /**
@@ -1257,6 +1268,14 @@ const layer = Layer.effect(
       )
 
     const ask = Effect.fn("Permission.ask")(function* (input: PermissionV1.AskInput) {
+      // 1.2.7 U4 (01b 5.1 Part B): the read roles get the read and diagnostic shell only. Checked first, ahead of every
+      // rule, so neither a person's "always" (approved, sessionRules), a P-01a task grant, a one-call grant, user config
+      // (`agent.planner.permission.bash`) nor a later mode can reopen it. A rule could not hold this: a deny on "*" hides
+      // the tool, and session allow rules are last-match-wins.
+      if (AutonomyTable.readRoleRefuses(input, yield* InstanceState.context)) {
+        yield* recordQuiet(input, { action: "deny", shipped: true })
+        return yield* new RoleShellRefusedError({ ruleset: [] })
+      }
       const { approved, away, grants, pending, sessionRules, sessionExact } = yield* InstanceState.get(state)
       const { ruleset, harmless, noAlways, follows, call: toolCall, ...request } = input
       let needsAsk = false
