@@ -323,8 +323,9 @@ export function buildSessionMap(input: SessionMapInput): SessionMapModel {
   }
 }
 
-// "agents" and "decisions" are views of the panel, not filters over steps: each shows its own list instead.
-export type MapFilter = "all" | "problems" | "edits" | "agents" | "decisions"
+// "agents", "decisions" and "shared" are views of the panel, not filters over steps: each shows its own list instead.
+// "shared" (1.2.7 U-3) lists the files more than one agent changed; it is offered only while there is one.
+export type MapFilter = "all" | "problems" | "edits" | "agents" | "decisions" | "shared"
 
 export type MapRow =
   | { type: "chapter"; id: string; chapter: MapChapter; open: boolean }
@@ -386,7 +387,7 @@ export function mapRows(input: {
   query: string
   open: (id: string, chapter: MapChapter | undefined) => boolean
 }): MapRow[] {
-  if (input.filter === "decisions") return []
+  if (input.filter === "decisions" || input.filter === "shared") return []
   const query = input.query.trim().toLowerCase()
   if (query) return searchRows(input.model, input.filter, query)
   if (input.filter === "edits") {

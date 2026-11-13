@@ -20,6 +20,7 @@ import {
   createMemo,
   createSignal,
   For,
+  Index,
   Match,
   on,
   onCleanup,
@@ -30,7 +31,8 @@ import {
 } from "solid-js"
 import { createStore } from "solid-js/store"
 import type { SwarmController } from "../swarm/swarm-controller"
-import { SwarmAgents } from "../swarm/swarm-view"
+import { OverlapRow, SwarmAgents } from "../swarm/swarm-view"
+import type { SwarmModel } from "../swarm/swarm-model"
 import type { MissionControlMount } from "../swarm/mission-control"
 import { offersAgentsView } from "../swarm/mission-control-layout"
 import { shownPatterns } from "@/pages/home/agent-board-model"
@@ -1281,6 +1283,18 @@ export function SessionMapPanel(props: {
 
   const decisions = createDecisions(() => props.swarm.rootID())
   const counts = () => props.map.model().counts
+  // 1.2.7 U-3: the last swarm model read for this run. The model is only built while a swarm view is on screen, so the
+  // "Shared files" entry keeps the count it last saw while the person looks at another view of the strip.
+  const swarmSeen = createMemo<{ root?: string; model?: SwarmModel }>(
+    (previous) => {
+      const root = props.swarm.rootID()
+      const model = props.swarm.model()
+      if (model) return { root, model }
+      return previous.root === root ? previous : { root }
+    },
+    {},
+  )
+  const sharedCount = () => swarmSeen().model?.overlaps.length ?? 0
   const filters = createMemo<{ id: MapFilter; label: string; count?: number; tone?: "danger" | "warning" }[]>(() => [
     { id: "all", label: language.t("session.map.filter.all") },
     {
@@ -1290,6 +1304,17 @@ export function SessionMapPanel(props: {
       tone: "danger",
     },
     { id: "edits", label: language.t("session.map.filter.edits"), count: props.map.model().files.length },
+    // 1.2.7 U-3 (C6): files more than one agent changed, a conditional entry like Agents and Decisions.
+    ...(sharedCount() > 0
+      ? [
+          {
+            id: "shared" as const,
+            label: language.t("session.map.filter.shared"),
+            count: sharedCount(),
+            tone: "warning" as const,
+          },
+        ]
+      : []),
     // Row 133 (C127): a one-agent session with a mission still reaches mission control.
     ...(offersAgentsView(props.swarm.pulse().agents, props.missions?.control.state.options.length ?? 0)
       ? [
@@ -1314,6 +1339,11 @@ export function SessionMapPanel(props: {
   ])
   const showingAgents = () => props.map.view.filter === "agents"
   const showingDecisions = () => props.map.view.filter === "decisions"
+  const showingShared = () => props.map.view.filter === "shared"
+  // 1.2.7 U-3: with no shared file left the entry goes away, and the view returns to All.
+  createEffect(() => {
+    if (showingShared() && sharedCount() === 0) props.map.setFilter("all")
+  })
   // Row 133b (C175): the expand toggle in mission control's header widens THIS pane (no new panel). The remembered
   // choice only applies while mission control is on screen; every other view keeps the 372 px pane.
   const missionShown = () => showingAgents() && (props.missions?.control.state.options.length ?? 0) > 0
@@ -1618,10 +1648,20 @@ export function SessionMapPanel(props: {
       </div>
 
       <Show
-        when={!showingAgents() && !showingDecisions()}
+        when={!showingAgents() && !showingDecisions() && !showingShared()}
         fallback={
           showingAgents() ? (
             <SwarmAgents swarm={props.swarm} missions={missionMount()} />
+          ) : showingShared() ? (
+            <div data-scrollable class="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pb-2">
+              <Show when={swarmSeen().model}>
+                {(model) => (
+                  <Index each={model().overlaps}>
+                    {(overlap) => <OverlapRow swarm={props.swarm} overlap={overlap()} model={model()} />}
+                  </Index>
+                )}
+              </Show>
+            </div>
           ) : (
             <DecisionList decisions={decisions} directory={props.directory} />
           )
