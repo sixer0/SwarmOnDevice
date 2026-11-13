@@ -544,7 +544,12 @@ export const READ_THROUGH = BypassLists.SAFE_ASSIGNMENT
 
 class Unread extends Error {}
 
-export function decompose(root: Node, cwd: string): ShellReading | undefined {
+/**
+ * 1.2.7 row 47h: `zsh` reads zsh's noclobber overrides (`>!`, `N>!`, `&>|`/`&>!`, `>&|`/`>&!`, and the `>>`
+ * forms `>>|`, `>>!`, `&>>|`, `>>&!`, ...) as the redirect without the `|`/`!`: one replaces the file as `>` does, the other
+ * appends. bash writes `>! f` to a file named `!` and passes `f` to the program, so outside zsh they stay unread.
+ */
+export function decompose(root: Node, cwd: string, options: { zsh?: boolean } = {}): ShellReading | undefined {
   const steps: ShellStep[] = []
   const writes = new Set<string>()
   // 1.1.1 F22 (CR10-1): each place once, keyed by where it is taken from and how it is written. A `cd` or a redirect the
@@ -840,13 +845,18 @@ export function decompose(root: Node, cwd: string): ShellReading | undefined {
             continue
           }
           if (redirect.type !== "file_redirect") return fail()
+          const read = options.zsh ? clobbered(redirect) : undefined
           const destinations = redirect.childrenForFieldName("destination").filter((child) => child !== null)
-          const destination = destinations[0]
-          if (destinations.length !== 1 || !destination) return fail()
-          const operator = redirect.text.slice(0, redirect.text.lastIndexOf(destination.text)).trim()
+          const destination = read?.destination ?? destinations[0]
+          if ((!read && destinations.length !== 1) || !destination) return fail()
+          const operator = read?.operator ?? redirect.text.slice(0, redirect.text.lastIndexOf(destination.text)).trim()
           // `2>&1` and `>&-` move a stream and name no file.
           if (/^\d*[<>]&$/.test(operator) && /^(\d+|-)$/.test(destination.text)) continue
-          const target = value(destination)
+          // `>!f`: the file is the word after the `!`, and only a plain one is read.
+          const target = read?.strip ? plainAfterBang(destination.text) ?? fail() : value(destination)
+          // A replacing override is read only where the table reads the same file as replaced (`replacingTargets`), so
+          // the checkpoint the table asks for and the one the shell takes name one file; else the text stays unread.
+          if (read && !operator.includes(">>") && !AutonomyTable.replacingTargets(redirect.text).includes(target)) return fail()
           if (target === "/dev/null" && /^\d*>>?$|^&>>?$/.test(operator)) continue
           // bash opens `/dev/tcp/host/port` and `/dev/udp/...` as a network connection in a redirect, never as a file.
           if (target.startsWith("/dev/")) return fail()
@@ -882,7 +892,7 @@ export function decompose(root: Node, cwd: string): ShellReading | undefined {
   }
 
   try {
-    if (root.type !== "program" || root.hasError) return undefined
+    if (root.type !== "program" || (root.hasError && !(options.zsh && clobberErrorsOnly(root)))) return undefined
     sequence(named(root), new Set([cwd]), true)
     if (steps.length === 0 && writes.size === 0) return undefined
     return {
@@ -899,11 +909,65 @@ export function decompose(root: Node, cwd: string): ShellReading | undefined {
   }
 }
 
+/**
+ * 1.2.7 row 47h: a zsh noclobber override as the plain redirect it overrides, or undefined for any other redirect. The
+ * bash grammar has `>|` only: `>! f` comes as `>` with the words `!` and `f`, `>!f` as `>` with `!f`, and `&>| f` as `&>`
+ * with an error node for the `|`. The `|` or `!` must touch the operator; `> ! f` writes a file named `!` in zsh too.
+ */
+function clobbered(redirect: Node) {
+  const destinations = redirect.childrenForFieldName("destination").filter((child): child is Node => child !== null)
+  const first = destinations[0]
+  if (!first) return undefined
+  const before = redirect.text.slice(0, first.startIndex - redirect.startIndex)
+  const op = before.trim()
+  if (/\s/.test(op)) return undefined
+  const plain = (text: string) => {
+    const found = /^(\d*)(>>?)$/.exec(text)
+    if (found) return `${found[1]}${found[2]}`
+    if (/^(&>|>&)$/.test(text)) return "&>"
+    if (/^(&>>|>>&)$/.test(text)) return "&>>"
+    return undefined
+  }
+  // `&>| f`, `>&| f`, `>>| f`: the `|`/`!` is already part of the text before the one destination.
+  if (destinations.length === 1 && /[|!]$/.test(op) && !/^\d*>\|$/.test(op)) {
+    const operator = plain(op.slice(0, -1))
+    return operator ? { operator, destination: first, strip: false } : undefined
+  }
+  const operator = plain(op)
+  if (!operator || /\s$/.test(before)) return undefined
+  // `>! f`: `!` is a word of its own, followed by the file.
+  if (destinations.length === 2 && first.text === "!") return { operator, destination: destinations[1]!, strip: false }
+  // `>!f`: one word, `!` first and unquoted.
+  if (destinations.length === 1 && first.type === "word" && first.text.startsWith("!"))
+    return { operator, destination: first, strip: true }
+  return undefined
+}
+
+/** `>!f`'s file: the word after the `!` when it is a plain name, else undefined. */
+function plainAfterBang(text: string) {
+  const rest = text.slice(1)
+  return /^[\w./@%+:,-][\w./@%+:,=-]*$/.test(rest) ? rest : undefined
+}
+
+/**
+ * 1.2.7 row 47h: the only errors in the tree are the `|` of zsh's `&>|`, `>&|` or `>>|`, which the bash grammar does not
+ * know (`>|` it does). Any other error, or a node the parser had to make up, and the text stays unread.
+ */
+function clobberErrorsOnly(root: Node) {
+  const errors = root.descendantsOfType("ERROR").filter((node): node is Node => node !== null)
+  const missing = (node: Node): boolean => node.isMissing || node.children.some((child) => child !== null && missing(child))
+  return (
+    errors.length > 0 &&
+    !missing(root) &&
+    errors.every((node) => node.text === "|" && node.parent?.type === "file_redirect" && clobbered(node.parent) !== undefined)
+  )
+}
+
 /** `decompose` over a text parsed as bash, for the tests and the inventory replay (`research/20_shell_command_inventory.md`). */
-export async function readSteps(text: string, cwd: string) {
+export async function readSteps(text: string, cwd: string, options: { zsh?: boolean } = {}) {
   const tree = (await parser()).bash.parse(text)
   if (!tree) return undefined
-  const found = decompose(tree.rootNode, cwd)
+  const found = decompose(tree.rootNode, cwd, options)
   tree.delete()
   return found
 }
@@ -1848,7 +1912,8 @@ export const ShellTool = Tool.define(
                   const copyGate: CopyAtGate | undefined = copy
                     ? { targets: Risk.copyTargets(copy, cwd), archived: archiveTargets ?? [] }
                     : undefined
-                  const steps = on ? decompose(tree.rootNode, cwd) : undefined
+                  // 1.2.7 row 47h: zsh's `>!`/`&>|` overwrite as `>` does, so they are read (and checkpointed) as `>`.
+                  const steps = on ? decompose(tree.rootNode, cwd, { zsh: name === "zsh" }) : undefined
                   // 1.2.6 row 37b: never both archived and checkpointed (01b section 3.3 rule 5). The folder's trust is the
                   // gate's to judge; the shell only says what it would save.
                   const plan =
