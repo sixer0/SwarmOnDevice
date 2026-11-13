@@ -38,6 +38,7 @@ import { DASH_PATTERNS, DiagramDefect, EDGE_KINDS, SHAPES, Sheet, type SheetNode
 import { placeDiagram } from "../../diagram/build/place";
 import { routePlaced } from "../../diagram/build/route";
 import { layoutFlow } from "../../diagram/layout-a";
+import { ANNOTATION_BRACKET_MM, dataFoldMm, isLabelBelow, LABEL_BELOW_GAP_MM, labelBelowOutline, SHAPE_GLYPH_MM, taskRadiusMm } from "../../diagram/fit/text";
 import { defect, figureGrid } from "../core/guards";
 import { kindKey } from "../core/palette";
 import { escAttr, num, ptToMm, textWidthMm } from "../core/svg";
@@ -92,7 +93,8 @@ export function renderFlowchart(spec: StudioChartV1, canvas: ChartCanvas, tpl: R
   // Garis A (DATUM-24) mewajibkan label pada setiap konektor; flowchart ISO 5807 hanya
   // mewajibkan label pada keluaran keputusan (P3-diamond-exits tetap ditegakkan).
   // Label kosong konektor berurutan diisi penanda hanya untuk validasi, tidak digambar.
-  const decisions = new Set(s.nodes.filter((n) => n.shape === "diamond").map((n) => n.id));
+  // Swarm 1.2.8 row 54b (VIS-3b, 01f §1.5): the four BPMN gateways are decisions too (P3-diamond-exits).
+  const decisions = new Set(s.nodes.filter((n) => n.shape === "diamond" || n.shape?.startsWith("gateway_") === true).map((n) => n.id));
   const forCheck: StudioDiagramV1 = {
     ...s,
     edges: (s.edges ?? []).map((e) => (e && e.label === "" && !decisions.has(e.from) ? { ...e, label: "-" } : e)),
@@ -332,16 +334,95 @@ function drawNode(ctx: GCtx, n: SheetNode, b: Box, index: number, stroke: string
         [x, y + h * 0.7],
       ]);
       break;
+    // Swarm 1.2.8 row 54b (VIS-3b, 01f §1.3; same geometry as diagram/core/svg.ts shapeSvg, mapped to the chart scale).
+    case "task":
+    case "subprocess": {
+      const r = taskRadiusMm(n.h) * Math.min(w / n.w, h / n.h);
+      doc.rect(x, y, w, h, pal.paper, { ...o, attrs: `${o.attrs} rx="${num(r)}" ry="${num(r)}"` });
+      if (shape === "subprocess") {
+        const g = SHAPE_GLYPH_MM;
+        const gy = y + h - strokeW / 2 - 0.4 - g;
+        const gx = x + w / 2 - g / 2;
+        doc.path(`M${num(gx)} ${num(gy)}L${num(gx + g)} ${num(gy)}L${num(gx + g)} ${num(gy + g)}L${num(gx)} ${num(gy + g)}Z`, "none", { stroke, strokeWidthMm: 0.2 });
+        doc.path(`M${num(x + w / 2 - g * 0.3)} ${num(gy + g / 2)}L${num(x + w / 2 + g * 0.3)} ${num(gy + g / 2)}M${num(x + w / 2)} ${num(gy + g * 0.2)}L${num(x + w / 2)} ${num(gy + g * 0.8)}`, "none", { stroke, strokeWidthMm: 0.2 });
+      }
+      break;
+    }
+    case "data_object": {
+      const f = dataFoldMm(n.w) * Math.min(w / n.w, h / n.h);
+      poly([[x, y], [x + w - f, y], [x + w, y + f], [x + w, y + h], [x, y + h]]);
+      doc.path(`M${num(x + w - f)} ${num(y)}L${num(x + w - f)} ${num(y + f)}L${num(x + w)} ${num(y + f)}`, "none", { stroke, strokeWidthMm: 0.2 });
+      break;
+    }
+    case "annotation":
+      doc.path(`M${num(x)} ${num(y)}L${num(x + w)} ${num(y)}L${num(x + w)} ${num(y + h)}L${num(x)} ${num(y + h)}Z`, "none", { mark, attrs: o.attrs });
+      doc.path(`M${num(x + ANNOTATION_BRACKET_MM)} ${num(y)}L${num(x)} ${num(y)}L${num(x)} ${num(y + h)}L${num(x + ANNOTATION_BRACKET_MM)} ${num(y + h)}`, "none", { stroke, strokeWidthMm: strokeW });
+      break;
+    case "event_start":
+    case "event_intermediate":
+    case "event_end":
+    case "gateway_exclusive":
+    case "gateway_parallel":
+    case "gateway_inclusive":
+    case "gateway_complex":
+      return drawLabelBelow(ctx, n, b, o, stroke, strokeW, basePt);
     default:
       doc.rect(x, y, w, h, pal.paper, o);
   }
   const fit = fitLines(ctx, n.spec.label ?? n.id, textRoom(shape, b), basePt);
   const lh = ptToMm(fit.size) * 1.2;
-  // row 53: document / offpage centre their text above the wave / point
-  const textH = shape === "document" ? h * (1 - 2 * 0.08) : shape === "offpage" ? h * 0.7 : h;
+  // row 53: document / offpage centre their text above the wave / point; row 54b: a sub-process above its [+] band
+  const textH = shape === "document" ? h * (1 - 2 * 0.08) : shape === "offpage" ? h * 0.7 : shape === "subprocess" ? h - SHAPE_GLYPH_MM - 1 : h;
   const y0 = y + textH / 2 - ((fit.lines.length - 1) * lh) / 2 + ptToMm(fit.size) * 0.35;
   fit.lines.forEach((l, k) => doc.text(x + w / 2, y0 + k * lh, l, { sizePt: fit.size, fill: pal.ink900, anchor: "middle" }));
   return fit.fits;
+}
+
+/**
+ * Swarm 1.2.8 row 54b (VIS-3b, C12 OP-18-4): a BPMN event or gateway in the chart flowchart. The outline is the diagram
+ * engine's outline (fixed size at the top centre of the layout cell) mapped to the chart scale, so the routed connector
+ * ends (glued onto that outline by `routePlaced`) touch it; the marker is centred in it and the label sits below it.
+ */
+function drawLabelBelow(ctx: GCtx, n: SheetNode, b: Box, o: { mark: { mark: "node"; series: string; index: number }; stroke: string; strokeWidthMm: number; attrs: string }, stroke: string, strokeW: number, basePt: number): boolean {
+  const { doc, pal } = ctx;
+  const shape = n.spec.shape ?? "box";
+  const sx = b.w / n.w;
+  const sy = b.h / n.h;
+  const ol = labelBelowOutline(n);
+  const ox = b.x + (ol.x - n.x) * sx;
+  const oy = b.y + (ol.y - n.y) * sy;
+  const ow = ol.w * sx;
+  const oh = ol.h * sy;
+  const cx = ox + ow / 2;
+  const cy = oy + oh / 2;
+  const line = { stroke, strokeWidthMm: strokeW };
+  if (shape.startsWith("gateway_")) {
+    doc.path(`M${num(cx)} ${num(oy)}L${num(ox + ow)} ${num(cy)}L${num(cx)} ${num(oy + oh)}L${num(ox)} ${num(cy)}Z`, pal.paper, o);
+    const ax = (ow / 2) * 0.5;
+    const ay = (oh / 2) * 0.5;
+    const plus = `M${num(cx - ax)} ${num(cy)}L${num(cx + ax)} ${num(cy)}M${num(cx)} ${num(cy - ay)}L${num(cx)} ${num(cy + ay)}`;
+    const dx = ax / Math.SQRT2;
+    const dy = ay / Math.SQRT2;
+    const cross = `M${num(cx - dx)} ${num(cy - dy)}L${num(cx + dx)} ${num(cy + dy)}M${num(cx - dx)} ${num(cy + dy)}L${num(cx + dx)} ${num(cy - dy)}`;
+    if (shape === "gateway_exclusive") doc.path(cross, "none", line);
+    else if (shape === "gateway_parallel") doc.path(plus, "none", line);
+    else if (shape === "gateway_complex") doc.path(`${cross}${plus}`, "none", line);
+    else doc.path(ellipseD(cx, cy, (ow / 2) * 0.45, (oh / 2) * 0.45), "none", line);
+  } else {
+    const w = shape === "event_end" ? strokeW * 2 : strokeW;
+    doc.path(ellipseD(cx, cy, ow / 2, oh / 2), pal.paper, { ...o, strokeWidthMm: w });
+    if (shape === "event_intermediate") doc.path(ellipseD(cx, cy, ow / 2 - 0.6 * sx, oh / 2 - 0.6 * sy), "none", line);
+  }
+  const top = oy + oh + strokeW + LABEL_BELOW_GAP_MM;
+  const fit = fitLines(ctx, n.spec.label ?? n.id, { w: b.w * 0.88, h: Math.max(b.y + b.h - top, ptToMm(ctx.minFontPt) * 1.2) }, basePt);
+  const lh = ptToMm(fit.size) * 1.2;
+  fit.lines.forEach((l, k) => doc.text(cx, top + ptToMm(fit.size) * 0.75 + k * lh, l, { sizePt: fit.size, fill: pal.ink900, anchor: "middle" }));
+  return fit.fits;
+}
+
+/** Row 54b: closed ellipse as two arcs (chart outlines may be curved; the chart scale is not uniform). */
+function ellipseD(cx: number, cy: number, rx: number, ry: number): string {
+  return `M${num(cx - rx)} ${num(cy)}A${num(rx)} ${num(ry)} 0 1 0 ${num(cx + rx)} ${num(cy)}A${num(rx)} ${num(ry)} 0 1 0 ${num(cx - rx)} ${num(cy)}Z`;
 }
 
 // ── Konektor ──────────────────────────────────────────────────────────────

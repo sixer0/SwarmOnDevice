@@ -17,7 +17,7 @@ import { activeElkRoutes } from "../elk/routes";
 import { edgeConflicts, ENTRY_COLLISION_MM } from "../fit/lint";
 import { flowDirectionOf, flowRanks } from "../layout-a/flow";
 import { CURVE_SAMPLES } from "../core/tokens";
-import { isLabelBelow, labelBelowOutline } from "../fit/text";
+import { ANNOTATION_BRACKET_MM, isLabelBelow, labelBelowOutline } from "../fit/text";
 import { clearFirstRender, noteFirstRender } from "./autofit";
 
 type Pt = readonly [number, number];
@@ -114,15 +114,25 @@ function anchor(node: SheetNode, side: Side, slot: number, slots: number): Pt {
   // then moves each end from the cell box onto the outline (a bottom end stays under the label block).
   if (isLabelBelow(node.spec.shape)) {
     const o = labelBelowOutline(node);
-    if (side === "right" || side === "left") return [side === "right" ? node.x + node.w : node.x, o.y + o.h / 2];
+    // Row 54b (VIS-3b, C86): several ends on one side are spread over the middle of the outline height (+-0.45 x half
+    // size), so two exits of a gateway never share its vertex; one end stays at the centre height (row 54 bytes).
+    const spread = slots > 1 ? (o.h / 2) * SIDE_SPREAD_FRAC * ((2 * slot) / (slots - 1) - 1) : 0;
+    if (side === "right" || side === "left") return [side === "right" ? node.x + node.w : node.x, o.y + o.h / 2 + spread];
     const x = o.x + o.w * (0.25 + 0.5 * frac);
     return [x, side === "top" ? node.y : node.y + node.h];
+  }
+  // Row 54b (VIS-3b, 01f §1.3): a text annotation connects on its bracket: top/bottom ends on the bracket arm.
+  if (node.spec.shape === "annotation" && (side === "top" || side === "bottom")) {
+    return [node.x + ANNOTATION_BRACKET_MM / 2, side === "top" ? node.y : node.y + node.h];
   }
   if (side === "bottom") return [node.x + node.w * frac, node.y + node.h];
   if (side === "top") return [node.x + node.w * frac, node.y];
   if (side === "right") return [node.x + node.w, node.y + node.h * frac];
   return [node.x, node.y + node.h * frac];
 }
+
+/** Row 54b (C86): share of the half outline height over which side ends of a label-below node are spread. */
+const SIDE_SPREAD_FRAC = 0.45;
 
 /**
  * Swarm 1.2.8 row 53 (VIS-1b, 01f §1.1, connection points): the bottom side of a document is its wave and the bottom of an
@@ -173,9 +183,19 @@ function glueLabelBelow(pts: Pt[], node: SheetNode, atEnd: boolean): Pt[] {
     return diamond ? R - dy : Math.sqrt(R * R - dy * dy);
   };
   const out = atEnd ? [...pts].reverse() : [...pts];
+  // row 54b: repeated end points (zero-length stub pieces) do not count as the first piece
+  while (out.length > 2 && Math.abs(out[1][0] - out[0][0]) < 1e-9 && Math.abs(out[1][1] - out[0][1]) < 1e-9) out.splice(1, 1);
   const p = out[0];
   const q = out[1];
   const onSide = Math.abs(p[0] - node.x) < 1e-6 || Math.abs(p[0] - (node.x + node.w)) < 1e-6;
+  // Row 54b (VIS-3b): a detour can leave a side end vertically along the cell edge; it then gets a horizontal piece
+  // from the outline (at its height when that is within half the outline, else at the centre height) to the cell edge.
+  if (onSide && Math.abs(q[0] - p[0]) < 1e-6 && Math.abs(q[1] - p[1]) > 1e-9) {
+    const sign = p[0] > cx ? 1 : -1;
+    const y = halfAt(p[1]) !== null && Math.abs(p[1] - cy) <= R * 0.5 ? p[1] : cy;
+    out.splice(0, 1, [cx + sign * (halfAt(y) ?? 0), y], [p[0], y]);
+    return atEnd ? out.reverse() : out;
+  }
   if (onSide && Math.abs(q[1] - p[1]) < 1e-6 && Math.abs(q[0] - p[0]) > 1e-9) {
     const sign = p[0] > cx ? 1 : -1;
     let y = p[1];
@@ -364,7 +384,13 @@ function routeRackSide(s: StudioDiagramV1, sheet: Sheet): RoutedEdge[] {
  */
 function throughEnds(pts: readonly Pt[], a: SheetNode, b: SheetNode): boolean {
   // A bus tap lands on the bus centre line by design (E-17): the bus is never an end box here.
-  const ends = [a, b].filter((n) => n.spec.shape !== "bus");
+  // Row 54b (VIS-3b): an event/gateway end is glued onto its outline inside its cell, so its own box is the core of the
+  // outline (half its size, centred): a glued end (on the circle, or on a diamond side within the spread band) lies outside.
+  const core = (n: SheetNode): SheetNode => {
+    const o = labelBelowOutline(n);
+    return { ...n, x: o.x + o.w / 4, y: o.y + o.h / 4, w: o.w / 2, h: o.h / 2 };
+  };
+  const ends = [a, b].filter((n) => n.spec.shape !== "bus").map((n) => (isLabelBelow(n.spec.shape) ? core(n) : n));
   for (let i = 0; i + 1 < pts.length; i++) if (ends.some((n) => rectHit(pts[i], pts[i + 1], n))) return true;
   return false;
 }
@@ -386,6 +412,17 @@ function belowSides(pair: SidePair, a: SheetNode, b: SheetNode): SidePair {
   let [sa, sb] = pair;
   if (sa === "bottom" && isLabelBelow(a.spec.shape)) sa = facing(a, b) ?? sa;
   if (sb === "bottom" && isLabelBelow(b.spec.shape)) sb = facing(b, a) ?? sb;
+  return sa === pair[0] && sb === pair[1] ? pair : [sa, sb];
+}
+
+/**
+ * Swarm 1.2.8 row 54b (VIS-3b, 01f §1.3): a text annotation is drawn as an open bracket on the left of its box; its right
+ * side is empty paper. An end there uses the top or bottom side (toward the other node), whose end lies on the bracket arm.
+ */
+function annotationSides(pair: SidePair, a: SheetNode, b: SheetNode): SidePair {
+  const vert = (n: SheetNode, other: SheetNode): Side => (other.y + other.h / 2 < n.y + n.h / 2 ? "top" : "bottom");
+  const sa = pair[0] === "right" && a.spec.shape === "annotation" ? vert(a, b) : pair[0];
+  const sb = pair[1] === "right" && b.spec.shape === "annotation" ? vert(b, a) : pair[1];
   return sa === pair[0] && sb === pair[1] ? pair : [sa, sb];
 }
 
@@ -438,7 +475,7 @@ export function routePlaced(s: StudioDiagramV1, sheet: Sheet): RoutedEdge[] {
     const nodes = [...sheet.nodes.values()];
     let pick: SidePair | undefined;
     // Row 54 (VIS-3a): a candidate that ends on the bottom of an event/gateway cell is taken with `belowSides`.
-    for (const pair of sideCandidates(a, b).slice(1).map((p) => belowSides(p, a, b))) {
+    for (const pair of sideCandidates(a, b).slice(1).map((p) => annotationSides(belowSides(p, a, b), a, b))) {
       const trial = new Map(over).set(bad, pair);
       let pts: Pt[];
       try {
@@ -598,13 +635,20 @@ function routeWithSides(s: StudioDiagramV1, sheet: Sheet, over: ReadonlyMap<numb
   const sidesOf = (e: DiagramEdge, i: number): SidePair => {
     const o = over.get(i);
     if (o) return o;
+    const a = nodeOf(sheet, e.from);
+    const b = nodeOf(sheet, e.to);
     if (rankOf) {
       const ra = rankOf.get(e.from);
       const rb = rankOf.get(e.to);
-      if (ra !== undefined && rb !== undefined && ra < rb) return dir === "LR" ? ["right", "left"] : ["bottom", "top"];
+      if (ra !== undefined && rb !== undefined && ra < rb) {
+        const fixed: SidePair = dir === "LR" ? ["right", "left"] : ["bottom", "top"];
+        // Row 54b (VIS-3b, C86): a gateway exit in a TB flow leaves by the vertex facing a node beside it (not under its label).
+        const gw = a.spec.shape?.startsWith("gateway_") === true || b.spec.shape?.startsWith("gateway_") === true;
+        return annotationSides(gw ? belowSides(fixed, a, b) : fixed, a, b);
+      }
     }
-    const sa = sideOf(nodeOf(sheet, e.from), nodeOf(sheet, e.to));
-    return belowSides([sa, OPP[sa]], nodeOf(sheet, e.from), nodeOf(sheet, e.to));
+    const sa = sideOf(a, b);
+    return annotationSides(belowSides([sa, OPP[sa]], a, b), a, b);
   };
   const grouped = new Map<string, DiagramEdge[]>();
   const gk = (id: string, side: Side) => `${side}\u0000${id}`;
@@ -618,6 +662,18 @@ function routeWithSides(s: StudioDiagramV1, sheet: Sheet, over: ReadonlyMap<numb
     push(gk(e.from, sa), e);
     push(gk(e.to, sb), e);
   });
+  // Row 54b (VIS-3b, C86): the spread side ends of an event/gateway are ordered by the other node's centre height, so
+  // the upper end goes to the upper node and the two runs do not cross. Other nodes keep the edge order.
+  for (const [k, g] of grouped) {
+    const [side, id] = k.split("\u0000");
+    if (g.length < 2 || (side !== "left" && side !== "right") || !isLabelBelow(nodeOf(sheet, id).spec.shape)) continue;
+    const cyOf = (e: DiagramEdge) => {
+      const o = nodeOf(sheet, e.from === id ? e.to : e.from);
+      return isLabelBelow(o.spec.shape) ? labelBelowOutline(o).y + labelBelowOutline(o).h / 2 : o.y + o.h / 2;
+    };
+    const idx = new Map(g.map((e, i) => [e, i]));
+    g.sort((a, b) => cyOf(a) - cyOf(b) || idx.get(a)! - idx.get(b)!);
+  }
   // FIG-02b2 P1-12: saat fit dengan cacat rute terukur, slot jangkar per sisi diurutkan menurut
   // pusat simpul di ujung lain (x untuk sisi atas/bawah, y untuk kiri/kanan) agar kipas tidak bersilang.
   const laneFix = diagramFitRoute("edgeCollinear", "edgeCross");
@@ -638,12 +694,30 @@ function routeWithSides(s: StudioDiagramV1, sheet: Sheet, over: ReadonlyMap<numb
     const [sa, sb] = sidesOf(e, ei);
     const ga = grouped.get(gk(e.from, sa))!;
     const gb = grouped.get(gk(e.to, sb))!;
-    const p = anchor(a, sa, indexOfEdge(ga, e), ga.length);
-    const q = anchor(b, sb, indexOfEdge(gb, e), gb.length);
+    let p = anchor(a, sa, indexOfEdge(ga, e), ga.length);
+    let q = anchor(b, sb, indexOfEdge(gb, e), gb.length);
     let pts: Pt[];
     const vertA = sa === "bottom" || sa === "top";
     const vertB = sb === "bottom" || sb === "top";
     const style = edgeRouteOf(e);
+    // Swarm 1.2.8 row 54b (VIS-3b): side ends of an event/gateway sit on its cell edge; the outline lies inside the cell,
+    // so `glueEnd` later draws the stub from the outline to the cell edge. Here that end gets no outer stub, the middle
+    // run stays between the two stubs (no back-jog in a one-column gap), and a single end whose height is within the
+    // spread band of the other end takes that height, so the connector is one straight run.
+    const sideA = !vertA && isLabelBelow(a.spec.shape);
+    const sideB = !vertB && isLabelBelow(b.spec.shape);
+    if (!style && !vertA && !vertB && (sideA || sideB)) {
+      // the end may take the other end's height when that lies within the spread band of its outline and keeps
+      // ENTRY_COLLISION_MM from the spread ends of the other edges on the same side
+      const fits = (n: SheetNode, side: Side, g: DiagramEdge[], own: Pt, y: number) => {
+        const o = labelBelowOutline(n);
+        if (Math.abs(y - (o.y + o.h / 2)) > (o.h / 2) * SIDE_SPREAD_FRAC + 1e-9) return false;
+        const k = indexOfEdge(g, e);
+        return g.every((_, j) => j === k || Math.abs(anchor(n, side, j, g.length)[1] - y) >= ENTRY_COLLISION_MM) && Math.abs(own[1] - y) > 1e-9;
+      };
+      if (sideB && fits(b, sb, gb, q, p[1])) q = [q[0], p[1]];
+      else if (sideA && fits(a, sa, ga, p, q[1])) p = [p[0], q[1]];
+    }
     if (style === "straight") {
       pts = [p, q]; // row 56 (VIS-4): one segment, diagonal allowed
     } else if (style === "curved") {
@@ -657,10 +731,10 @@ function routeWithSides(s: StudioDiagramV1, sheet: Sheet, over: ReadonlyMap<numb
       const midy = between(snap((pa[1] + pb[1]) / 2.0, LATTICE_Y), pa[1], pb[1], laneFix);
       pts = [p, pa, [pa[0], midy], [pb[0], midy], pb, q];
     } else {
-      const pa: Pt = [p[0] + (sa === "right" ? stub : -stub), p[1]];
-      const pb: Pt = [q[0] + (sb === "right" ? stub : -stub), q[1]];
-      const midx = between(snap((pa[0] + pb[0]) / 2.0, sheet.colMm), pa[0], pb[0], laneFix);
-      pts = [p, pa, [midx, pa[1]], [midx, pb[1]], pb, q];
+      const pa: Pt = [p[0] + (sideA ? 0 : sa === "right" ? stub : -stub), p[1]];
+      const pb: Pt = [q[0] + (sideB ? 0 : sb === "right" ? stub : -stub), q[1]];
+      const midx = between(snap((pa[0] + pb[0]) / 2.0, sheet.colMm), pa[0], pb[0], laneFix || sideA || sideB);
+      pts = Math.abs(p[1] - q[1]) < 1e-9 && (sideA || sideB) ? [p, q] : [p, pa, [midx, pa[1]], [midx, pb[1]], pb, q];
     }
     raw.push(pts);
   });

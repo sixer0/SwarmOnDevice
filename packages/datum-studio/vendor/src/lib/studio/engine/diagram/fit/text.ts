@@ -92,11 +92,44 @@ function labelBelowTop(shape: string | undefined): number {
   return labelBelowSizeMm(shape) + STROKE_PRIMARY + LABEL_BELOW_GAP_MM;
 }
 
+// ---------------------------------------------------------------- row 54b (VIS-3b)
+/**
+ * Swarm 1.2.8 row 54b (VIS-3b, 01f §1.3 / G-3, register N8-470): side (mm) of the collapsed sub-process [+] square, which
+ * sits centred at the bottom inside its own band. Kept here beside the label-below names (V-core-tokens; file request
+ * row 54b -> tokens.ts). Gateway markers are sized from the gateway (core/svg.ts), not from this value (eye check).
+ */
+export const SHAPE_GLYPH_MM = 2.4;
+/** Row 54b: clearance (mm) between the [+] square and the outline stroke below it, and between the square and the text. */
+export const SUBPROCESS_GLYPH_CLEAR_MM = 0.4;
+
+/** Row 54b (01f §1.3): arm length (mm) of the text annotation's open bracket (`M x+1.6 y L x y L x y+h L x+1.6 y+h`). */
+export const ANNOTATION_BRACKET_MM = 1.6;
+
+/** Row 54b (01f §1.3): corner radius (mm) of a BPMN task / sub-process, rx = ry = min(1.6 mm, h / 4). */
+export function taskRadiusMm(h: number): number {
+  return Math.min(1.6, h / 4);
+}
+
+/** Row 54b (01f §1.3): fold (mm) of a BPMN data object, f = min(0.25 w, 2.4 mm). */
+export function dataFoldMm(w: number): number {
+  return Math.min(0.25 * w, 2.4);
+}
+
+/** Row 54b: height (mm) of the bottom band of a sub-process: half the outline stroke, clearance, [+] square, clearance. */
+export function subprocessBandMm(): number {
+  return STROKE_PRIMARY / 2 + SUBPROCESS_GLYPH_CLEAR_MM + SHAPE_GLYPH_MM + SUBPROCESS_GLYPH_CLEAR_MM;
+}
+
 /** Lebar dalam bentuk simpul tempat teks dibungkus (mm), di garis tengah vertikal. */
 export function innerWidthMm(shape: DiagramShape | undefined, w: number, h: number): number {
   const pad = padMm();
   if (isLabelBelow(shape)) return w - pad; // row 54: the label block wraps to the layout cell width
   switch (shape) {
+    case "task": // row 54b (VIS-3b, 01f §1.3): w - pad - 2 rx x 0.3
+    case "subprocess":
+      return w - pad - 2 * taskRadiusMm(h) * 0.3;
+    case "data_object": // row 54b: w - pad - f / 2
+      return w - pad - dataFoldMm(w) / 2;
     case "diamond":
       return w * 0.5 - pad * 0.5;
     case "hexagon":
@@ -162,7 +195,8 @@ function neededHeight(n: Pick<DiagramNode, "shape" | "tag">, labelLines: number,
   if (isLabelBelow(n.shape)) return labelBelowTop(n.shape) + tagH(n) + b + V_MARGIN_MM;
   const core = n.shape === "diamond" || n.shape === "hexagon" ? b * 2 : b;
   // row 53: document / offpage need the text box above the wave / point (needed height / (1 - foot))
-  return (core + 2 * V_MARGIN_MM + tagH(n)) / (1 - footFrac(n.shape));
+  // row 54b (VIS-3b, G-3): a sub-process adds its bottom [+] band below the text box
+  return (core + 2 * V_MARGIN_MM + tagH(n)) / (1 - footFrac(n.shape)) + (n.shape === "subprocess" ? subprocessBandMm() : 0);
 }
 
 /**
@@ -276,7 +310,8 @@ export function nodeTextLayout(nd: { x: number; y: number; w: number; h: number;
   // Silinder: busur tutup atas (ry = 0,16 h, digambar sampai y + 2 ry) memotong label di pusat.
   const lid = n.shape === "cylinder" ? nd.h * 0.16 * 2 + 0.3 : 0;
   // Row 53 (VIS-1b): document / offpage keep their text above the wave / point, so they always get a layout.
-  const foot = nd.h * footFrac(n.shape);
+  // Row 54b (VIS-3b): a sub-process keeps its text above the [+] band, so it always gets a layout too.
+  const foot = nd.h * footFrac(n.shape) + (n.shape === "subprocess" ? subprocessBandMm() : 0);
   const probe = planNodeText(n, nd.w, nd.h, NODE_HARD_MAX_LINES);
   // Row 53 (H-TAG): with a tag the cylinder's free top is below the lid AND the tag line.
   const lidTop = lid > 0 && tagH(n) > 0 ? lid + tagH(n) : lid;

@@ -6,7 +6,7 @@
 // figures, one notation set each; `bus` = the OP-18-10 probe). Labels synthetic.
 // Red at BASE e1f9673772: the stadium tag sits at x + 1.5 pt, its ink crosses the rounded corner, and the lint reports 0
 // defects; the new shape tokens are refused. Label-below shapes (BPMN events and gateways, C12 OP-18-4) carry the tag
-// in their label block: row 54 draws them (test.todo below).
+// in their label block: row 54 draws the events, row 54b the gateways (tests below).
 // Namespace imports, so the red run fails on assertions, not on a link error.
 import { useStudioEnv } from "../ported/_env"
 useStudioEnv()
@@ -270,5 +270,32 @@ describe("H-TAG tag inset (N8-218, N8-371)", () => {
       expect((lintMod as J).lintDiagramGeometry(svg).defects).toEqual([])
     }
   })
-  test.todo("label-below gateways carry the tag in their label block above the label text (row 54b, AC-VIS3b)", () => {})
+  // Row 54b (AC-VIS3b, C86): the gateway part of the former test.todo (four gateways, two figures: each gateway needs an exit).
+  test("label-below gateways (C12 OP-18-4) carry the tag in their label block, centred one line above the label text, 0 defects", () => {
+    const fig = (shapes: string[], id: string) => ({
+      $schema: "studio.diagram/v1", family: "flow", direction: "LR", id, title: "Uji tag gerbang.", classification: "BIASA",
+      apparatus: "page", labels_verified: true, sources: ["Sumber sintetis uji"],
+      nodes: [...shapes.map((s, i) => ({ id: `n${i + 1}`, label: `Alfa ${i + 1}`, shape: s, tag: `T${i + 1}`, class: {} })), { id: "n3", label: "Alfa 3", class: {} }],
+      edges: [{ from: "n1", to: "n2", kind: "data", label: "ya" }, { from: "n2", to: "n3", kind: "data", label: "ke" }],
+    })
+    for (const shapes of [["gateway_exclusive", "gateway_parallel"], ["gateway_inclusive", "gateway_complex"]]) {
+      for (const W of WIDTHS) {
+        const svg = (buildMod as J).buildDiagramSvg({ ...clone(fig(shapes, "9.9")), width_mm: W }, O).svg as string
+        shapes.forEach((shape, i) => {
+          const poly = new RegExp(`<polygon\\b[^>]*data-node="n${i + 1}"[^>]*/>`).exec(svg)![0]
+          const p = attr(poly, "points")!.split(" ").map((xy) => xy.split(",").map(Number))
+          const [cx, bottom] = [p[0][0], p[2][1]]
+          const group = /<g data-label-pos="below">([\s\S]*?)<\/g>/.exec(svg.slice(svg.indexOf(poly)))![1]
+          const t = tags(group).find((x) => x.text === `T${i + 1}`)!
+          expect(t, `${shape} T${i + 1}`).toBeDefined()
+          expect(attr(t.el, "text-anchor")).toBe("middle")
+          expect(Number(attr(t.el, "x"))).toBeCloseTo(cx, 1)
+          expect(t.box[1]).toBeGreaterThanOrEqual(bottom + Number(attr(poly, "stroke-width")) / 2 + 1.0 - 1e-6)
+          const label = new RegExp(`<text\\b[^>]*>Alfa ${i + 1}</text>`).exec(group)![0]
+          expect(Number(attr(label, "y")) - Number(attr(t.el, "y"))).toBeCloseTo(2.68 * 1.2, 1) // one tag line (caption x 1.2)
+        })
+        expect((lintMod as J).lintDiagramGeometry(svg).defects, `${shapes} @${W}`).toEqual([])
+      }
+    }
+  })
 })

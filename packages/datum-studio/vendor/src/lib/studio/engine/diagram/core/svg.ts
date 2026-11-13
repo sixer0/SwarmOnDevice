@@ -14,7 +14,18 @@ import type { DiagramEdgeKind, FaceRole, ProvenanceMark } from "../../../contrac
 import { symbolBody } from "../../symbols";
 import { FONT_ASCENT_EM, FONT_DESCENT_EM, measure, tspanLines } from "../../chart/core/textfit";
 import { diagramFitActive } from "../fit/state";
-import { isLabelBelow, labelBelowOutline, labelBelowStrokeMm, nodeTextLayout, type TextBlockLayout } from "../fit/text";
+import {
+  ANNOTATION_BRACKET_MM,
+  dataFoldMm,
+  isLabelBelow,
+  labelBelowOutline,
+  labelBelowStrokeMm,
+  nodeTextLayout,
+  SHAPE_GLYPH_MM,
+  SUBPROCESS_GLYPH_CLEAR_MM,
+  taskRadiusMm,
+  type TextBlockLayout,
+} from "../fit/text";
 import { type PyNumber, pyLen, pyNum, pyStr, pyStrNum } from "./pyfmt";
 import type { SheetNode } from "./sheet";
 import { nodeStrokeToken, nodeSymbolId } from "./sheet";
@@ -271,17 +282,80 @@ export function shapeSvg(
           : "";
       return ring + inner + eventGlyphSvg(nd.spec.event_type, cx, cy, r, col);
     }
-    // Row 54: the gateway outline (diamond in its fixed square); the marker glyphs are row 54b (VIS-3b).
+    // Row 54: the gateway outline (diamond in its fixed square); row 54b (VIS-3b): + the marker glyph, centred.
     case "gateway_exclusive":
     case "gateway_parallel":
     case "gateway_inclusive":
     case "gateway_complex": {
       const pts = `${r2(x + w / 2)},${r2(y)} ${r2(x + w)},${r2(y + h / 2)} ${r2(x + w / 2)},${r2(y + h)} ${r2(x)},${r2(y + h / 2)}`;
-      return `<polygon points="${pts}" ${common}/>`;
+      return `<polygon points="${pts}" ${common}/>` + gatewayGlyphSvg(shape, x + w / 2, y + h / 2, Math.min(w, h) / 2, col);
     }
+    // Swarm 1.2.8 row 54b (VIS-3b, 01f §1.3, G-1/G-2): BPMN task, collapsed sub-process, data object, text annotation.
+    case "task":
+    case "subprocess": {
+      const rr = taskRadiusMm(h);
+      const box = `<rect x="${r2(x)}" y="${r2(y)}" width="${r2(w)}" height="${r2(h)}" rx="${r2(rr)}" ry="${r2(rr)}" ${common}/>`;
+      return shape === "task" ? box : box + subprocessGlyphSvg(x + w / 2, y + h, col);
+    }
+    case "data_object": {
+      const f = dataFoldMm(w);
+      const hair = `fill="none" stroke="${col}" stroke-width="${r2(STROKE_HAIR)}"`;
+      return (
+        `<polygon points="${dataObjectOutline(x, y, w, h).map(([px, py]) => `${r2(px)},${r2(py)}`).join(" ")}" ${common}/>` +
+        `<path d="M ${r2(x + w - f)} ${r2(y)} L ${r2(x + w - f)} ${r2(y + f)} L ${r2(x + w)} ${r2(y + f)}" ${hair}/>`
+      );
+    }
+    case "annotation":
+      // the node box is an invisible rect (it carries data-node for the lint); the open bracket on the left is drawn
+      return (
+        `<rect x="${r2(x)}" y="${r2(y)}" width="${r2(w)}" height="${r2(h)}" data-node="${escAttr(nd.id)}" fill="none" stroke="none" stroke-width="${pyStrNum(sw)}"${markAttrs("node", opts)}/>` +
+        `<path d="M ${r2(x + ANNOTATION_BRACKET_MM)} ${r2(y)} L ${r2(x)} ${r2(y)} L ${r2(x)} ${r2(y + h)} L ${r2(x + ANNOTATION_BRACKET_MM)} ${r2(y + h)}" fill="none" stroke="${col}" stroke-width="${pyStrNum(sw)}"/>`
+      );
     default:
       return `<rect x="${r2(x)}" y="${r2(y)}" width="${r2(w)}" height="${r2(h)}" ${common}/>`;
   }
+}
+
+/** Row 54b (01f §1.3): data object outline, clockwise from the top-left corner, the top-right corner folded by f. */
+function dataObjectOutline(x: number, y: number, w: number, h: number): OutlinePt[] {
+  const f = dataFoldMm(w);
+  return [[x, y], [x + w - f, y], [x + w, y + f], [x + w, y + h], [x, y + h]];
+}
+
+/**
+ * Row 54b (VIS-3b, 01f §1.3 [+], G-2/G-3): the collapsed sub-process marker, a `SHAPE_GLYPH_MM` square with a plus, hair
+ * stroke, centred on `cx`, its bottom `SUBPROCESS_GLYPH_CLEAR_MM` above the outline stroke at `bottom`.
+ */
+function subprocessGlyphSvg(cx: number, bottom: number, col: string): string {
+  const g = SHAPE_GLYPH_MM;
+  const y1 = bottom - STROKE_PRIMARY / 2 - SUBPROCESS_GLYPH_CLEAR_MM;
+  const y0 = y1 - g;
+  const a = g * 0.3; // half-arm of the plus
+  const cy = y0 + g / 2;
+  const hair = `fill="none" stroke="${col}" stroke-width="${r2(STROKE_HAIR)}"`;
+  return (
+    `<rect x="${r2(cx - g / 2)}" y="${r2(y0)}" width="${r2(g)}" height="${r2(g)}" ${hair}/>` +
+    `<path d="M ${r2(cx - a)} ${r2(cy)} L ${r2(cx + a)} ${r2(cy)} M ${r2(cx)} ${r2(cy - a)} L ${r2(cx)} ${r2(cy + a)}" ${hair}/>`
+  );
+}
+
+/**
+ * Row 54b (VIS-3b, 01f §1.3, G-2): gateway marker centred on the diamond centre, primary stroke in the node colour, no
+ * fill, no data-node/data-mark. Sized from the half-diagonal R of the diamond (row 54b eye check: `SHAPE_GLYPH_MM` 2.4 mm
+ * and the 1.0 mm inclusive circle read as specks in the 11 mm gateway, as the event markers did in row 54): plus arms
+ * `GATEWAY_GLYPH_FRAC` x R; X arms the same length on the diagonals; complex = both; inclusive circle r = 0.45 R.
+ */
+const GATEWAY_GLYPH_FRAC = 0.5;
+function gatewayGlyphSvg(shape: string, cx: number, cy: number, R: number, col: string): string {
+  const a = R * GATEWAY_GLYPH_FRAC;
+  const d = a / Math.SQRT2;
+  const stroke = `fill="none" stroke="${col}" stroke-width="${pyStrNum(STROKE_PRIMARY)}"`;
+  const plus = `M ${r2(cx - a)} ${r2(cy)} L ${r2(cx + a)} ${r2(cy)} M ${r2(cx)} ${r2(cy - a)} L ${r2(cx)} ${r2(cy + a)}`;
+  const cross = `M ${r2(cx - d)} ${r2(cy - d)} L ${r2(cx + d)} ${r2(cy + d)} M ${r2(cx - d)} ${r2(cy + d)} L ${r2(cx + d)} ${r2(cy - d)}`;
+  if (shape === "gateway_exclusive") return `<path d="${cross}" ${stroke}/>`;
+  if (shape === "gateway_parallel") return `<path d="${plus}" ${stroke}/>`;
+  if (shape === "gateway_complex") return `<path d="${cross} ${plus}" ${stroke}/>`;
+  return `<circle cx="${r2(cx)}" cy="${r2(cy)}" r="${r2(R * 0.45)}" ${stroke}/>`;
 }
 
 /** Row 54 (VIS-3a, 01f §1.3): ring distance (mm) of the intermediate event's inner circle (r - 0.6 mm). */
@@ -663,6 +737,11 @@ function clipShapeSvg(shape: string, x: number, y: number, w: number, h: number)
       return `<polygon points="${r2(x + w / 2)},${r2(y)} ${r2(x + w)},${r2(y + h / 2)} ${r2(x + w / 2)},${r2(y + h)} ${r2(x)},${r2(y + h / 2)}"/>`;
     case "document": // row 53 (VIS-1b)
       return `<path d="${outlineD(documentOutline(x, y, w, h))}"/>`;
+    case "task": // row 54b (VIS-3b)
+    case "subprocess":
+      return `<rect x="${r2(x)}" y="${r2(y)}" width="${r2(w)}" height="${r2(h)}" rx="${r2(taskRadiusMm(h))}" ry="${r2(taskRadiusMm(h))}"/>`;
+    case "data_object":
+      return `<polygon points="${dataObjectOutline(x, y, w, h).map(([px, py]) => `${r2(px)},${r2(py)}`).join(" ")}"/>`;
     case "offpage":
       return `<polygon points="${offpageOutline(x, y, w, h).map(([px, py]) => `${r2(px)},${r2(py)}`).join(" ")}"/>`;
     default:
@@ -723,6 +802,9 @@ export function tagAnchor(
       return { x: x + TAG_INSET_MM.bar + P, y: y + capMm, anchor: "start" };
     case "stadium":
       return { x: x + h / 2, y: y + capMm, anchor: "start" };
+    case "task": // row 54b (VIS-3b, 01f §5.4, R20-C37): x + rx + 0.53
+    case "subprocess":
+      return { x: x + taskRadiusMm(h) + P, y: y + capMm, anchor: "start" };
     case "parallelogram":
     case "hexagon":
       return { x: x + w * TAG_INSET_MM.skew[nd.spec.shape] + P, y: y + capMm, anchor: "start" };
@@ -841,7 +923,8 @@ export function nodeTextGroundSvg(
 function firstRenderLayout(nd: SheetNode): ReturnType<typeof nodeTextLayout> {
   const shape = nd.spec.shape;
   const tagged = nd.spec.tag !== undefined && nd.spec.tag !== null && nd.spec.tag !== "";
-  if (shape === "document" || shape === "offpage" || (shape === "cylinder" && tagged) || isLabelBelow(shape)) return nodeTextLayout(nd);
+  // row 54b (VIS-3b): a sub-process keeps its text above the [+] band
+  if (shape === "document" || shape === "offpage" || shape === "subprocess" || (shape === "cylinder" && tagged) || isLabelBelow(shape)) return nodeTextLayout(nd);
   return null;
 }
 
