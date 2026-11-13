@@ -324,6 +324,18 @@ exports[`tool parameters JSON Schema (wire shape) task 1`] = `
       },
       "type": "array",
     },
+    "permissions": {
+      "description": "Extra shell command patterns this subagent may run without asking, e.g. ["sh ./scripts/check.sh"]. Only patterns this session may run itself are accepted. planner and data-collector stay limited to the read class (U4).",
+      "properties": {
+        "bash": {
+          "items": {
+            "type": "string",
+          },
+          "type": "array",
+        },
+      },
+      "type": "object",
+    },
     "prompt": {
       "description": "The task for the agent to perform",
       "type": "string",

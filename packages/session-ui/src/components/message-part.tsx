@@ -712,7 +712,8 @@ export function renderable(part: PartType, showReasoningSummaries = true) {
     return true
   }
   if (part.type === "text") return !!part.text?.trim()
-  if (part.type === "reasoning") return showReasoningSummaries && !!part.text?.trim()
+  // U-9 (C11): reasoning with text is always drawn; the setting only decides whether its block starts open.
+  if (part.type === "reasoning") return !!part.text?.trim()
   return !!PART_MAPPING[part.type]
 }
 
@@ -809,7 +810,11 @@ export function AssistantParts(props: {
                         showAssistantCopyPartID={props.showAssistantCopyPartID}
                         turnDurationMs={props.turnDurationMs}
                         useV2Actions={props.useV2Actions}
-                        defaultOpen={partDefaultOpen(item()!, props.shellToolDefaultOpen, props.editToolDefaultOpen)}
+                        defaultOpen={
+                          item()!.type === "reasoning"
+                            ? (props.showReasoningSummaries ?? true)
+                            : partDefaultOpen(item()!, props.shellToolDefaultOpen, props.editToolDefaultOpen)
+                        }
                       />
                     </Show>
                   </Show>
@@ -1805,11 +1810,30 @@ PART_MAPPING["reasoning"] = function ReasoningPartDisplay(props) {
     () => props.message.role === "assistant" && typeof (props.message as AssistantMessage).time.completed !== "number",
   )
   const text = () => readPartText(data.store.part_text_accum_delta, part())
+  // U-9: same open/close contract as a tool part. The caller's per-part store (`toolOpen`) wins, then the block's own
+  // choice, then the default the "Show reasoning summaries" setting gives.
+  const i18n = useI18n()
+  const [localOpen, setLocalOpen] = createSignal<boolean | undefined>(undefined)
+  const open = () => props.toolOpen ?? localOpen() ?? props.defaultOpen ?? false
+  const handleOpenChange = (value: boolean) => {
+    setLocalOpen(value)
+    props.onToolOpenChange?.(value)
+  }
 
   return (
     <Show when={text()}>
       <div data-component="reasoning-part" data-timeline-part-id={part().id}>
-        <PacedMarkdown text={text()} cacheKey={part().id} streaming={streaming()} />
+        <Collapsible open={open()} onOpenChange={handleOpenChange} variant="ghost" class="tool-collapsible">
+          <Collapsible.Trigger data-slot="reasoning-toggle">
+            <span data-slot="reasoning-toggle-label">
+              {open() ? i18n.t("ui.messagePart.reasoning.hide") : i18n.t("ui.messagePart.reasoning.show")}
+            </span>
+            <Collapsible.Arrow />
+          </Collapsible.Trigger>
+          <Collapsible.Content>
+            <PacedMarkdown text={text()} cacheKey={part().id} streaming={streaming()} />
+          </Collapsible.Content>
+        </Collapsible>
       </div>
     </Show>
   )

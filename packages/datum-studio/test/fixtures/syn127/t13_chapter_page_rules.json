@@ -1,0 +1,61 @@
+{
+  "$comment": "Swarm 1.2.7 row 20 (T-13): chapter-scope @page order (probe9 T-13 chapter, 6 rules): margin-box rule first, margin rule second. getPropertyValue(name) returns style[name] or ''. Shorthand margin is expanded to longhands as a browser does. pageHeightMm 297; expected content height 297 - 26 - 24 = 247.",
+  "pageHeightMm": 297,
+  "expectedContentHeightMm": 247,
+  "rules": [
+    {
+      "type": 6,
+      "selectorText": "",
+      "cssText": "@page { @top-right-corner { content: \"DRAF\"; } }",
+      "style": {}
+    },
+    {
+      "type": 6,
+      "selectorText": "",
+      "cssText": "@page { size: 210mm 297mm; margin: 26mm 20mm 24mm 24mm; }",
+      "style": {
+        "size": "210mm 297mm",
+        "margin-top": "26mm",
+        "margin-right": "20mm",
+        "margin-bottom": "24mm",
+        "margin-left": "24mm"
+      }
+    },
+    {
+      "type": 6,
+      "selectorText": "st-sheet",
+      "cssText": "@page st-sheet { size: 210mm 297mm; margin: 0; }",
+      "style": {
+        "size": "210mm 297mm",
+        "margin-top": "0",
+        "margin-right": "0",
+        "margin-bottom": "0",
+        "margin-left": "0"
+      }
+    },
+    {
+      "type": 6,
+      "selectorText": "",
+      "cssText": "@page { background: #FCFCFB; @top-left { content: \"KEPALA SINTETIS\"; } }",
+      "style": {
+        "background": "#FCFCFB"
+      }
+    },
+    {
+      "type": 6,
+      "selectorText": "st-sheet",
+      "cssText": "@page st-sheet { background: #FCFCFB; @top-left { content: none; } }",
+      "style": {
+        "background": "#FCFCFB"
+      }
+    },
+    {
+      "type": 6,
+      "selectorText": "st-u-0",
+      "cssText": "@page st-u-0 { background: #FCFCFB; @top-left { content: \"KEPALA SINTETIS\"; } }",
+      "style": {
+        "background": "#FCFCFB"
+      }
+    }
+  ]
+}

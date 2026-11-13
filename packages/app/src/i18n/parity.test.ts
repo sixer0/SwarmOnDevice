@@ -146,8 +146,13 @@ const pluralCategories = new Map(
 //   - four more for 1.2.6 (row 109 of docs/2026-11-12_swarm_1_2_6_patch, UX-03): the Mission Control drift line
 //     (`session.mission.line.drift`, MC-09) and the checkpoint group with its Revert action and confirm
 //     (`session.autonomy.checkpoint.title`, `.revert`, `.confirm`, P-01c), EN and ID only.
+//   - twelve more for 1.2.7 (row 22 of docs/2026-11-13_swarm_1_2_7_patch): `session.mission.emptySession`,
+//     `session.mission.deliverable.revealOnly`, `session.map.filter.shared`, the `toast.project.folderMissing.*` group (five),
+//     `session.map.decisions.category.own_api` and the ui pair `ui.messagePart.reasoning.show`/`.hide` (EN and ID only).
+//   - one more for 1.2.7 U-12 (row U12 of the same task): the composer's Add folder item and palette command
+//     `ui.promptInput.addFolder` (EN and ID only).
 // Widening this list is a decision, not drift: `parity-exemption-guard.test.ts` fails the suite on any
-// two-hundred-and-twenty-second entry, on any non-literal/wildcard, and if `en` or `id` ever stops carrying an exempt key.
+// two-hundred-and-thirty-fifth entry, on any non-literal/wildcard, and if `en` or `id` ever stops carrying an exempt key.
 const UNTRANSLATED_KEY_PRESENCE_EXEMPTION: readonly string[] = [
   "command.project.openNumber",
   "settings.tab.servers",
@@ -370,6 +375,19 @@ const UNTRANSLATED_KEY_PRESENCE_EXEMPTION: readonly string[] = [
   "session.autonomy.checkpoint.title",
   "session.autonomy.checkpoint.revert",
   "session.autonomy.checkpoint.confirm",
+  "session.mission.emptySession",
+  "session.mission.deliverable.revealOnly",
+  "session.map.filter.shared",
+  "toast.project.folderMissing.title",
+  "toast.project.folderMissing.description",
+  "toast.project.folderMissing.restore",
+  "toast.project.folderMissing.recreate",
+  "toast.project.folderMissing.choose",
+  "toast.project.folderMissing.recreateFailed",
+  "session.map.decisions.category.own_api",
+  "ui.messagePart.reasoning.show",
+  "ui.messagePart.reasoning.hide",
+  "ui.promptInput.addFolder",
 ]
 // Locales the exemption never applies to. `en` is every domain's source, and `id` is the second
 // maintained locale: it already carries every exempt key, so it stays fully enforced like the rest.

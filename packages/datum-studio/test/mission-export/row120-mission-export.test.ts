@@ -245,9 +245,10 @@ describe.skipIf(!HAVE_TASK)("row 120: slice mission (9 rows + dropped 38, 5 deci
     files = w.files
     quote("slice export", { written: w.written, files: files.map((f) => ({ path: f.path, bytes: f.bytes, sha256: f.sha256 })) })
     expect(files.map((f) => f.path)).toEqual([
-      `docs/${SLICE}/identification/02_structured_rows.md`,
+      // 1.2.7 row 28 (U-6, N7-013, INTENT): new exports use the numbered folders.
+      `docs/${SLICE}/01_identification/02_structured_rows.md`,
       `docs/${SLICE}/status_tasks.md`,
-      `docs/${SLICE}/decisions/decisions.md`,
+      `docs/${SLICE}/09_decisions/decisions.md`,
       `docs/${SLICE}/delegation_progress_report.md`,
     ])
     for (const f of files) {
@@ -257,6 +258,7 @@ describe.skipIf(!HAVE_TASK)("row 120: slice mission (9 rows + dropped 38, 5 deci
     }
     // nothing outside the session root: the task's real docs folder has no generated rows file
     expect(existsSync(path.join(TASK, "identification", "02_structured_rows.md"))).toBe(false)
+    expect(existsSync(path.join(TASK, "01_identification", "02_structured_rows.md"))).toBe(false) // 1.2.7 row 28 INTENT
   })
 
   test("blueprint and profile tables: byte-identical to the hand-written lines of the slice (diff quoted)", () => {
@@ -336,7 +338,7 @@ describe.skipIf(!HAVE_TASK)("row 120: slice mission (9 rows + dropped 38, 5 deci
     const before = readdirSync(path.join(PROJECT, "docs", SLICE)).length
     const preview = await ok(swarm, "studio_mission_export", { mission: SLICE, files: ["decisions"] })
     expect(preview.written).toBe(false)
-    expect(preview.files.map((f: S) => f.path)).toEqual([`docs/${SLICE}/decisions/decisions.md`])
+    expect(preview.files.map((f: S) => f.path)).toEqual([`docs/${SLICE}/09_decisions/decisions.md`]) // 1.2.7 row 28 INTENT
     expect(readdirSync(path.join(PROJECT, "docs", SLICE)).length).toBe(before)
   })
 

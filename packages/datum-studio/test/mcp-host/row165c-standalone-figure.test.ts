@@ -79,6 +79,8 @@ describe("F56-3: stand-alone render of a document diagram block", () => {
       id: "4.1",
       title: "Arsitektur sistem pemantauan iklim ruang simpan arsip.",
       fileName: { svg: "Gambar 4.1 Arsitektur sistem pemantauan iklim ruang simpan arsip.svg", png: "Gambar 4.1 Arsitektur sistem pemantauan iklim ruang simpan arsip.png" },
+      // Swarm 1.2.7 row 36b (T-12 INTENT, N7-068): the stand-alone info now carries the furniture report.
+      furniture: { keyLines: expect.any(Number), sourceLines: expect.any(Number), heightMm: expect.any(Number) },
     });
     expect(r.size.widthMm).toBe(128);
     expect(r.png).toBeUndefined();

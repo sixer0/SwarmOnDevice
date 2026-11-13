@@ -147,7 +147,8 @@ describe("row 132 Deliverables panel", () => {
     expect(ui.opened.length).toBe(2)
     expect(ui.selects).toEqual(["1", "3", "2"])
     expect(ui.line("doc-b").dataset.openable).toBe("false")
-    expect(ui.text("doc-b", "absent")).toBe("Not in this project yet. The agent saves it to docs/m-doc-1.")
+    // INTENT 1.2.7 U-2 (N7-020, row 22): the text names docs/<m>/11_deliverables.
+    expect(ui.text("doc-b", "absent")).toBe("Not in this project yet. The agent saves it to docs/m-doc-1/11_deliverables.")
   })
 
   test("no deliverables: the panel is not shown", () => {

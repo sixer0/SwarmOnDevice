@@ -11,14 +11,44 @@
 import type { DeliverableWire } from "../deliverables.ts"
 import { ROW_KIND_LABELS, type MissionDecision, type MissionDerived, type MissionDoc, type MissionEventRecord, type MissionRow, type MissionStatusSnapshot, type RowStatus } from "../../../store/mission/types.ts"
 
-/** The four files under docs/<mission>/ (§9), keyed by the `files` argument of studio_mission_export. */
+/**
+ * Swarm 1.2.7 row 28 (U-6, decision U1/Q3): the numbered folders of docs/<mission>/, in the standard order
+ * (identification .. report, then deliverables). Only folders that get a file are created; this list sets the
+ * order and the texts (mission guide, skills).
+ */
+export const MISSION_DOC_FOLDERS = [
+  "01_identification",
+  "02_research",
+  "03_masterplan",
+  "04_initialization",
+  "05_implementation",
+  "06_gateway_check",
+  "07_test",
+  "08_verification",
+  "09_decisions",
+  "10_report",
+  "11_deliverables",
+] as const
+
+/** The four files under docs/<mission>/ (§9), keyed by the `files` argument of studio_mission_export. 1.2.7 row 28: numbered folders. */
 export const EXPORT_PATHS = {
+  blueprint: "01_identification/02_structured_rows.md",
+  status: "status_tasks.md",
+  decisions: "09_decisions/decisions.md",
+  delegation: "delegation_progress_report.md",
+} as const
+export type ExportFileKey = keyof typeof EXPORT_PATHS
+
+/**
+ * 1.2.7 row 28 (U-6): the frozen 1.2.6 paths. A mission folder that already holds a 1.2.6 export keeps this layout
+ * (studio_mission_export folderLayout: "legacy"); nothing is renamed or moved.
+ */
+export const LEGACY_EXPORT_PATHS: Readonly<Record<ExportFileKey, string>> = {
   blueprint: "identification/02_structured_rows.md",
   status: "status_tasks.md",
   decisions: "decisions/decisions.md",
   delegation: "delegation_progress_report.md",
-} as const
-export type ExportFileKey = keyof typeof EXPORT_PATHS
+}
 
 export const BLUEPRINT_HEADER = "| Step | Task Description | Agent_to_Invoke | Expected Output | Depends On | Verification | Phase |"
 export const BLUEPRINT_RULE = "|------|------------------|-----------------|-----------------|------------|--------------|-------|"

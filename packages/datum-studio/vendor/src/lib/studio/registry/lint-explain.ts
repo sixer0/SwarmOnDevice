@@ -57,6 +57,45 @@ export interface LintSummaryFinding {
   address: string | null;
   message: string;
   rule: string | null;
+  /**
+   * Swarm 1.2.7 row 35b (N-3): only on a check's summary (carrier) row, which carries `findingsAll`: the number of
+   * findings the row stands for (the ones not itemised as their own rows).
+   */
+  represents?: number;
+}
+
+/** Swarm 1.2.7 row 35b (N-3, N7-063): real count of one check code that has a summary (carrier) row. */
+export interface LintCarrierCount {
+  /** Findings of the carrier's status (row 48b, M2-06: REPORT findings of a FAIL carrier are not counted). */
+  total: number;
+  /** Findings itemised as their own rows (rows of the code with the carrier's status, other than the carrier). */
+  itemised: number;
+  /** Findings not itemised (total - itemised). */
+  rest: number;
+}
+
+/**
+ * Swarm 1.2.7 row 35b (N-3, N7-063): per check code of an engine lint record (`checks[]`), the real counts of the codes
+ * whose summary row (engine/lint/structure/context.ts `toIssues`, the row with `findingsAll`) has the given status.
+ * The summary row itself is never a finding. Codes without a carrier are absent (their rows are their findings).
+ */
+export function lintCarrierCounts(lint: unknown, status: string = "FAIL"): Map<string, LintCarrierCount> {
+  const out = new Map<string, LintCarrierCount>();
+  if (!isRec(lint) || !Array.isArray(lint.checks)) return out;
+  const rows = lint.checks.filter(isRec);
+  for (const c of rows) {
+    if (c.status !== status || !Array.isArray(c.findingsAll) || typeof c.checkId !== "string") continue;
+    // Swarm 1.2.7 row 48b (M2-06): a check may emit FAIL and REPORT findings (engine/lint/structure/context.ts
+    // `toIssues`); only findings of `status` count (an entry without status is FAIL, the engine default). Findings
+    // past the stored bound (`findingsTotal` > stored) have no recorded status and count under the carrier's.
+    const stored = c.findingsAll.length;
+    const matching = c.findingsAll.filter((f) => (isRec(f) && typeof f.status === "string" ? f.status : "FAIL") === status).length;
+    const unstored = typeof c.findingsTotal === "number" && Number.isFinite(c.findingsTotal) ? Math.max(0, c.findingsTotal - stored) : 0;
+    const total = matching + unstored;
+    const itemised = rows.filter((r) => r !== c && r.checkId === c.checkId && !Array.isArray(r.findingsAll) && r.status === status).length;
+    out.set(c.checkId, { total, itemised, rest: Math.max(0, total - itemised) });
+  }
+  return out;
 }
 
 export interface LintSummary {
@@ -95,12 +134,24 @@ export function summarizeLint(lint: unknown, opts: { max?: number; withNotRun?: 
     const rs = lint.releaseStatus;
     const verdict: LintVerdict = !ran ? "NOT_RUN" : rs === "FAIL" || rs === "PASS" || rs === "NOT_RUN" ? rs : counts.FAIL > 0 ? "FAIL" : "PASS";
     const listed = checks.filter((c) => c.status === "FAIL" || (opts.withNotRun === true && c.status === "NOT_RUN"));
+    // Swarm 1.2.7 row 35b (N-3, K7-09): findingsTotal is the real finding count. A code whose listed summary row
+    // carries `findingsAll` counts that row's total once and its itemised rows not again; other codes count rows.
+    const carriers = lintCarrierCounts(lint, "FAIL");
     const findings = listed.slice(0, max).map((c) => {
       const code = String(c.checkId);
       const where = typeof c.address === "string" && c.address ? c.address : typeof c.pointer === "string" && c.pointer ? c.pointer : null;
-      return { code, status: String(c.status), address: where, message: cut(typeof c.detail === "string" ? c.detail : "", messageMax), rule: lintRuleExplanation(code) };
+      const carrier = c.status === "FAIL" && Array.isArray(c.findingsAll) ? carriers.get(code) : undefined;
+      return {
+        code,
+        status: String(c.status),
+        address: where,
+        message: cut(typeof c.detail === "string" ? c.detail : "", messageMax),
+        rule: lintRuleExplanation(code),
+        ...(carrier ? { represents: carrier.rest } : {}),
+      };
     });
-    return { ran, verdict, tier, counts, findings, findingsTotal: listed.length, reason: ran ? null : checks.length === 0 ? "lint record lists no checks" : "no lint check ran (every check NOT_RUN)" };
+    const findingsTotal = listed.reduce((n, c) => n + (c.status === "FAIL" && carriers.has(String(c.checkId)) ? 0 : 1), 0) + [...carriers.values()].reduce((n, x) => n + x.total, 0);
+    return { ran, verdict, tier, counts, findings, findingsTotal, reason: ran ? null : checks.length === 0 ? "lint record lists no checks" : "no lint check ran (every check NOT_RUN)" };
   }
   const raw = Array.isArray(lint.findings) ? lint.findings : Array.isArray(lint.issues) ? lint.issues : null;
   const v = typeof lint.verdict === "string" ? lint.verdict : typeof lint.status === "string" ? lint.status : null;

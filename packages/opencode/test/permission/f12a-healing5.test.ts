@@ -201,7 +201,13 @@ async function opens(commands: readonly string[], cwd = dir, extra: Partial<Inpu
     expect([command, before.class === "A"]).toEqual([command, false])
     const expected = opened(before)
     expect([command, root(input)]).toEqual([command, expected])
-    expect([command, subagent(input)]).toEqual([command, expected])
+    // 1.2.7 U-7 (INTENT, SR7-02): a subagent's compound names a step in a decided category before a local one (here
+    // `npm test`'s `check` beside an install), so it reaches the main agent; otherwise it is the root's verdict.
+    const sub = subagent(input)
+    const asRoot: Record<string, unknown> = { ...sub, bypassed: expected.bypassed }
+    expect({ command, verdict: asRoot }).toEqual({ command, verdict: { ...expected } })
+    const decidedFirst = sub.bypassed === expected.bypassed || !AutonomyTable.SUBAGENT_RUNS_LIKE_ROOT.has(sub.bypassed ?? "")
+    expect({ command, decidedFirst }).toEqual({ command, decidedFirst: true })
   }
 }
 

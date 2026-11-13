@@ -10,6 +10,7 @@
 import { MISSION_SCHEMA_V1 } from "../../store/mission/schema.ts"
 import { BUILTIN_MISSION_TYPES } from "../../store/mission/builtin-types.ts"
 import { MISSION_TRANSITIONS, ROW_RUNNING_DONE_RULE, ROW_TRANSITIONS } from "../../store/mission/mission-store.ts"
+import { EXPORT_PATHS, MISSION_DOC_FOLDERS } from "./export/render.ts"
 
 export const MISSION_GUIDE_URI = "studio://skema/mission"
 export const MISSION_GUIDE_NAME = "skema-mission"
@@ -79,9 +80,9 @@ export const MISSION_GUIDE_EXAMPLE = {
   owner: "master-controller",
   project: { dir: "/absolute/path/to/project" },
   rows: [
-    { id: "1", phase: "identification", kind: "spec", title: "Write the spec", agent: "task-architect", model: { tier: "thinker" }, deps: [], size: "S", status: "pending", output: "identification/spec.md", verification: "spec reviewed" },
-    { id: "2", phase: "implementation", kind: "implementation", title: "Build it", agent: "coder-execution", model: { tier: "worker", reason: "spec is fixed" }, deps: ["1:C"], size: "M", status: "pending", output: "implementation/02.md", verification: "tests pass" },
-    { id: "3", phase: "verification", kind: "test", title: "Run the tests", agent: "test-expert", model: { tier: "worker-fast", reason: "mechanical run" }, deps: ["2:B"], size: "S", status: "pending", output: "test/report.md", verification: "suite green" },
+    { id: "1", phase: "identification", kind: "spec", title: "Write the spec", agent: "task-architect", model: { tier: "thinker" }, deps: [], size: "S", status: "pending", output: "01_identification/spec.md", verification: "spec reviewed" },
+    { id: "2", phase: "implementation", kind: "implementation", title: "Build it", agent: "coder-execution", model: { tier: "worker", reason: "spec is fixed" }, deps: ["1:C"], size: "M", status: "pending", output: "05_implementation/02.md", verification: "tests pass" },
+    { id: "3", phase: "verification", kind: "test", title: "Run the tests", agent: "test-expert", model: { tier: "worker-fast", reason: "mechanical run" }, deps: ["2:B"], size: "S", status: "pending", output: "07_test/report.md", verification: "suite green" },
   ],
 } as const
 
@@ -153,6 +154,8 @@ export function missionGuideText(): string {
     "- A row marked done delivers Studio outputs the done gate verified (docKey row-<id>-<name>, OUTPUT_UNVERIFIED otherwise). For a format Studio does not make (e.g. XLSX), the row note names the check that was run and its result file, and that file must exist.",
     "- A draft linked to the row that the row no longer delivers: studio_mission_update_row rows: [{id, retire: [documentId], note}] (one live deliverable must stay); never drop the row to get past the gate.",
     "- studio_mission_get {include: [deliverables]} also lists documents another mission owns that a work report of this mission named as an output (linked: true, ownerMission).",
+    // 1.2.7 row 28 (U-6): the docs/<mission>/ folder order, printed from MISSION_DOC_FOLDERS and EXPORT_PATHS.
+    `- docs/<mission>/ folders, in order: ${MISSION_DOC_FOLDERS.join(", ")}. studio_mission_export writes ${EXPORT_PATHS.blueprint}, ${EXPORT_PATHS.decisions}, ${EXPORT_PATHS.status} and ${EXPORT_PATHS.delegation}; final deliverables go in ${MISSION_DOC_FOLDERS[10]}/. A folder holding an older unnumbered export keeps it (folderLayout: legacy).`,
     "",
     "Minimal valid example:",
     "```json",

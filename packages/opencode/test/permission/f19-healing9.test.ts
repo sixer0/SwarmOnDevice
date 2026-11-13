@@ -104,7 +104,14 @@ async function opens(commands: readonly string[], cwd: string, scope: InstanceCo
     const before = base(input)
     expect([command, before.class === "A"]).toEqual([command, false])
     expect([command, root(input)]).toEqual([command, opened(before)])
-    expect([command, subagent(input)]).toEqual([command, opened(before)])
+    // 1.2.7 U-7 (INTENT, SR7-02): a subagent's compound names a step in a decided category before a local one, so it
+    // reaches the main agent; otherwise it is the root's verdict.
+    const expected = opened(before)
+    const sub = subagent(input)
+    const asRoot: Record<string, unknown> = { ...sub, bypassed: expected.bypassed }
+    expect({ command, verdict: asRoot }).toEqual({ command, verdict: { ...expected } })
+    const decidedFirst = sub.bypassed === expected.bypassed || !AutonomyTable.SUBAGENT_RUNS_LIKE_ROOT.has(sub.bypassed ?? "")
+    expect({ command, decidedFirst }).toEqual({ command, decidedFirst: true })
   }
 }
 

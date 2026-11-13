@@ -34,9 +34,9 @@ export const STOPS_SWARM =
 /** X `plan_mode` (1.2.6). */
 export const PLAN_MODE =
   "This call did not run. The plan agent only reads and writes its plan file. Put the change in the plan, or hand it to the build agent."
-/** X `app_state` (1.2.6, SEC-04 included). */
+/** X `app_state` (1.2.6, SEC-04 included; 1.2.7 N-1 text K7-06, INTENT row 29b). */
 export const APP_STATE =
-  "This call did not run. Autonomous mode never changes Swarm's own state or settings. Write what should change into your final message for the person."
+  "This call did not run. Autonomous mode never changes Swarm's own state or settings. To look at those files, use the Read tool or an inspection command such as ls, cat or head; reading them is allowed. Write what should change into your final message for the person."
 /** X `folder_not_trusted` (1.2.6). */
 export const FOLDER_NOT_TRUSTED =
   "This call did not run. Only the person can trust a folder. Carry on with reads and with work that runs nothing of this folder, and list it in your final message."

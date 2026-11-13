@@ -1,0 +1,573 @@
+{
+  "$comment": "Swarm 1.2.7 row 20 (F-6): the 8 probe fan-in configurations of row 9 (probe9_engine N-6), filler labels. Each must build with edgeEntryCollision 0.",
+  "specs": [
+    {
+      "name": "graph fan-in 2 to top",
+      "spec": {
+        "$schema": "studio.diagram/v1",
+        "family": "graph",
+        "id": "9.1",
+        "title": "Gambar sintetis uji.",
+        "classification": "BIASA",
+        "width_mm": 166,
+        "apparatus": "page",
+        "labels_verified": true,
+        "sources": [
+          "Sumber sintetis uji"
+        ],
+        "nodes": [
+          {
+            "id": "a",
+            "label": "Sumber A",
+            "class": {
+              "col": 0,
+              "row": 0
+            }
+          },
+          {
+            "id": "b",
+            "label": "Sumber B",
+            "class": {
+              "col": 2,
+              "row": 0
+            }
+          },
+          {
+            "id": "c",
+            "label": "Tujuan",
+            "class": {
+              "col": 1,
+              "row": 1
+            }
+          }
+        ],
+        "edges": [
+          {
+            "from": "a",
+            "to": "c",
+            "kind": "data",
+            "label": "m1"
+          },
+          {
+            "from": "b",
+            "to": "c",
+            "kind": "data",
+            "label": "m2"
+          }
+        ]
+      }
+    },
+    {
+      "name": "graph fan-in 3 to top",
+      "spec": {
+        "$schema": "studio.diagram/v1",
+        "family": "graph",
+        "id": "9.1",
+        "title": "Gambar sintetis uji.",
+        "classification": "BIASA",
+        "width_mm": 166,
+        "apparatus": "page",
+        "labels_verified": true,
+        "sources": [
+          "Sumber sintetis uji"
+        ],
+        "nodes": [
+          {
+            "id": "s0",
+            "label": "Sumber 0",
+            "class": {
+              "col": 0,
+              "row": 0
+            }
+          },
+          {
+            "id": "s1",
+            "label": "Sumber 1",
+            "class": {
+              "col": 1,
+              "row": 0
+            }
+          },
+          {
+            "id": "s2",
+            "label": "Sumber 2",
+            "class": {
+              "col": 2,
+              "row": 0
+            }
+          },
+          {
+            "id": "c",
+            "label": "Tujuan",
+            "class": {
+              "col": 1,
+              "row": 1
+            }
+          }
+        ],
+        "edges": [
+          {
+            "from": "s0",
+            "to": "c",
+            "kind": "data",
+            "label": "m1"
+          },
+          {
+            "from": "s1",
+            "to": "c",
+            "kind": "data",
+            "label": "m2"
+          },
+          {
+            "from": "s2",
+            "to": "c",
+            "kind": "data",
+            "label": "m3"
+          }
+        ]
+      }
+    },
+    {
+      "name": "graph fan-in 4 to one side",
+      "spec": {
+        "$schema": "studio.diagram/v1",
+        "family": "graph",
+        "id": "9.1",
+        "title": "Gambar sintetis uji.",
+        "classification": "BIASA",
+        "width_mm": 166,
+        "apparatus": "page",
+        "labels_verified": true,
+        "sources": [
+          "Sumber sintetis uji"
+        ],
+        "nodes": [
+          {
+            "id": "s0",
+            "label": "Sumber 0",
+            "class": {
+              "col": 0,
+              "row": 0
+            }
+          },
+          {
+            "id": "s1",
+            "label": "Sumber 1",
+            "class": {
+              "col": 0,
+              "row": 1
+            }
+          },
+          {
+            "id": "s2",
+            "label": "Sumber 2",
+            "class": {
+              "col": 0,
+              "row": 2
+            }
+          },
+          {
+            "id": "s3",
+            "label": "Sumber 3",
+            "class": {
+              "col": 0,
+              "row": 3
+            }
+          },
+          {
+            "id": "c",
+            "label": "Tujuan",
+            "class": {
+              "col": 2,
+              "row": 1
+            }
+          }
+        ],
+        "edges": [
+          {
+            "from": "s0",
+            "to": "c",
+            "kind": "data",
+            "label": "m1"
+          },
+          {
+            "from": "s1",
+            "to": "c",
+            "kind": "data",
+            "label": "m2"
+          },
+          {
+            "from": "s2",
+            "to": "c",
+            "kind": "data",
+            "label": "m3"
+          },
+          {
+            "from": "s3",
+            "to": "c",
+            "kind": "data",
+            "label": "m4"
+          }
+        ]
+      }
+    },
+    {
+      "name": "graph same-column stack into neighbour",
+      "spec": {
+        "$schema": "studio.diagram/v1",
+        "family": "graph",
+        "id": "9.1",
+        "title": "Gambar sintetis uji.",
+        "classification": "BIASA",
+        "width_mm": 166,
+        "apparatus": "page",
+        "labels_verified": true,
+        "sources": [
+          "Sumber sintetis uji"
+        ],
+        "nodes": [
+          {
+            "id": "a",
+            "label": "Atas",
+            "class": {
+              "col": 0,
+              "row": 0
+            }
+          },
+          {
+            "id": "b",
+            "label": "Bawah",
+            "class": {
+              "col": 0,
+              "row": 1
+            }
+          },
+          {
+            "id": "c",
+            "label": "Kanan",
+            "class": {
+              "col": 1,
+              "row": 0
+            }
+          }
+        ],
+        "edges": [
+          {
+            "from": "a",
+            "to": "c",
+            "kind": "data",
+            "label": "m1"
+          },
+          {
+            "from": "b",
+            "to": "c",
+            "kind": "data",
+            "label": "m2"
+          }
+        ]
+      }
+    },
+    {
+      "name": "flow TB fan-in 3",
+      "spec": {
+        "$schema": "studio.diagram/v1",
+        "family": "flow",
+        "id": "9.1",
+        "title": "Gambar sintetis uji.",
+        "classification": "BIASA",
+        "width_mm": 166,
+        "apparatus": "page",
+        "labels_verified": true,
+        "sources": [
+          "Sumber sintetis uji"
+        ],
+        "direction": "TB",
+        "nodes": [
+          {
+            "id": "s0",
+            "label": "Sumber 0",
+            "class": {
+              "col": 0,
+              "row": 0
+            }
+          },
+          {
+            "id": "s1",
+            "label": "Sumber 1",
+            "class": {
+              "col": 1,
+              "row": 0
+            }
+          },
+          {
+            "id": "s2",
+            "label": "Sumber 2",
+            "class": {
+              "col": 2,
+              "row": 0
+            }
+          },
+          {
+            "id": "c",
+            "label": "Tujuan",
+            "class": {
+              "col": 1,
+              "row": 1
+            }
+          }
+        ],
+        "edges": [
+          {
+            "from": "s0",
+            "to": "c",
+            "kind": "data",
+            "label": "m1"
+          },
+          {
+            "from": "s1",
+            "to": "c",
+            "kind": "data",
+            "label": "m2"
+          },
+          {
+            "from": "s2",
+            "to": "c",
+            "kind": "data",
+            "label": "m3"
+          }
+        ]
+      }
+    },
+    {
+      "name": "flow legacy fan-in 4",
+      "spec": {
+        "$schema": "studio.diagram/v1",
+        "family": "flow",
+        "id": "9.1",
+        "title": "Gambar sintetis uji.",
+        "classification": "BIASA",
+        "width_mm": 166,
+        "apparatus": "page",
+        "labels_verified": true,
+        "sources": [
+          "Sumber sintetis uji"
+        ],
+        "nodes": [
+          {
+            "id": "s0",
+            "label": "Sumber 0",
+            "class": {
+              "col": 0,
+              "row": 0
+            }
+          },
+          {
+            "id": "s1",
+            "label": "Sumber 1",
+            "class": {
+              "col": 0,
+              "row": 1
+            }
+          },
+          {
+            "id": "s2",
+            "label": "Sumber 2",
+            "class": {
+              "col": 0,
+              "row": 2
+            }
+          },
+          {
+            "id": "s3",
+            "label": "Sumber 3",
+            "class": {
+              "col": 0,
+              "row": 3
+            }
+          },
+          {
+            "id": "c",
+            "label": "Tujuan",
+            "class": {
+              "col": 1,
+              "row": 1
+            }
+          }
+        ],
+        "edges": [
+          {
+            "from": "s0",
+            "to": "c",
+            "kind": "data",
+            "label": "m1"
+          },
+          {
+            "from": "s1",
+            "to": "c",
+            "kind": "data",
+            "label": "m2"
+          },
+          {
+            "from": "s2",
+            "to": "c",
+            "kind": "data",
+            "label": "m3"
+          },
+          {
+            "from": "s3",
+            "to": "c",
+            "kind": "data",
+            "label": "m4"
+          }
+        ]
+      }
+    },
+    {
+      "name": "layered fan-in 4",
+      "spec": {
+        "$schema": "studio.diagram/v1",
+        "family": "layered",
+        "id": "9.1",
+        "title": "Gambar sintetis uji.",
+        "classification": "BIASA",
+        "width_mm": 166,
+        "apparatus": "page",
+        "labels_verified": true,
+        "sources": [
+          "Sumber sintetis uji"
+        ],
+        "nodes": [
+          {
+            "id": "s0",
+            "label": "Sumber 0",
+            "class": {
+              "tier": 0
+            }
+          },
+          {
+            "id": "s1",
+            "label": "Sumber 1",
+            "class": {
+              "tier": 0
+            }
+          },
+          {
+            "id": "s2",
+            "label": "Sumber 2",
+            "class": {
+              "tier": 0
+            }
+          },
+          {
+            "id": "s3",
+            "label": "Sumber 3",
+            "class": {
+              "tier": 0
+            }
+          },
+          {
+            "id": "c",
+            "label": "Tujuan",
+            "class": {
+              "tier": 1
+            }
+          }
+        ],
+        "edges": [
+          {
+            "from": "s0",
+            "to": "c",
+            "kind": "data",
+            "label": "m1"
+          },
+          {
+            "from": "s1",
+            "to": "c",
+            "kind": "data",
+            "label": "m2"
+          },
+          {
+            "from": "s2",
+            "to": "c",
+            "kind": "data",
+            "label": "m3"
+          },
+          {
+            "from": "s3",
+            "to": "c",
+            "kind": "data",
+            "label": "m4"
+          }
+        ]
+      }
+    },
+    {
+      "name": "graph loop back into source side",
+      "spec": {
+        "$schema": "studio.diagram/v1",
+        "family": "graph",
+        "id": "9.1",
+        "title": "Gambar sintetis uji.",
+        "classification": "BIASA",
+        "width_mm": 166,
+        "apparatus": "page",
+        "labels_verified": true,
+        "sources": [
+          "Sumber sintetis uji"
+        ],
+        "nodes": [
+          {
+            "id": "a",
+            "label": "Awal",
+            "class": {
+              "col": 0,
+              "row": 0
+            }
+          },
+          {
+            "id": "b",
+            "label": "Proses",
+            "class": {
+              "col": 1,
+              "row": 0
+            }
+          },
+          {
+            "id": "c",
+            "label": "Ulang",
+            "class": {
+              "col": 1,
+              "row": 1
+            }
+          }
+        ],
+        "edges": [
+          {
+            "from": "a",
+            "to": "b",
+            "kind": "data",
+            "label": "m1"
+          },
+          {
+            "from": "b",
+            "to": "c",
+            "kind": "data",
+            "label": "m2"
+          },
+          {
+            "from": "c",
+            "to": "a",
+            "kind": "control",
+            "label": "m3"
+          },
+          {
+            "from": "c",
+            "to": "b",
+            "kind": "control",
+            "label": "m4"
+          }
+        ]
+      }
+    }
+  ]
+}

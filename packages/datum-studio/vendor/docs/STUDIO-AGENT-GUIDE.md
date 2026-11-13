@@ -297,6 +297,8 @@ Teks (`Inline`) memakai tepat satu dari:
 
 `source` = teks + `provenance` opsional (`TERUKUR`, `DITURUNKAN`, `PEMASOK`, `ASUMSI`). Studio
 menambahkan label SUMBER dan PROVENANS sendiri.
+Lebar tabel (DT-10a): daftar ID tanpa spasi dipatah setelah , ; / bila lebih dari 16 karakter dan tidak muat di kolomnya; URL
+(`://`, `www.`, `mailto:`), nomor dokumen, dan path tidak pernah dipatah dan dihitung utuh.
 
 Yang ditolak (`400 SCHEMA_INVALID`):
 
@@ -519,6 +521,8 @@ tindakannya; norma kerja diagram lengkap (batas label, warna aksen, jenis garis)
    kunci). `{ spec: { nodes: [...] } }` mempertahankan `family`, `edges`, dan `direction`, tetapi
    `nodes` yang dikirim menggantikan seluruh daftar simpul. Hasil gabungan yang kehilangan medan wajib
    spec ditolak `SCHEMA_INVALID` dengan nama medan itu (`pointer` `/spec/<medan>`), 0 tulis.
+   Diagram v2 inline (tanpa `$schema`) hanya wajib `family` dan `nodes`, jadi patch `spec` sebagian
+   berlaku. Arah alur: patch {spec:{direction:"LR"}} (TB/LR); kunci direction di tingkat atas ditolak.
 3. **Baca `FIGURE_GRAPH_DELTA`.** Bila simpul atau tepi berubah, hasil revisi memuat baris
    `FIGURE_GRAPH_DELTA` (jumlah simpul dan tepi sebelum dan sesudah) dan `structuredContent.graphDelta`
    (`nodes.added`, `nodes.removed`, `edges.added`, `edges.removed`, `edges.rewired`; tepi ditulis
@@ -567,6 +571,10 @@ memperbaikinya sendiri; perbaikan datang dari spec.
 | `GEOM_ENTRY_COLLISION` / `edgeEntryCollision` | dua ujung konektor di sisi simpul yang sama lebih dekat dari 1,5 mm, sedikitnya satu ujung masuk | kurangi konektor yang masuk ke sisi simpul yang sama atau pecah menjadi 2 diagram |
 | `GEOM_STUB_SEGMENT` / `stubSegment` | potongan konektor lurus di bawah 2,0 mm yang tidak menuju apa pun | pindahkan label tepi ke segmen terpanjang atau persingkat label tepi (maks ~20 karakter) |
 | `GEOM_ARROW_TANGENT` / `arrowTangent` | ruas terakhir dalam 15 derajat dari sisi simpul yang dituju: kepala panah sejajar sisi, bukan tegak lurus | ubah urutan simpul agar konektor masuk tegak lurus ke sisi simpul sasaran |
+
+Cakupan: GEOM_ENTRY_COLLISION muncul pada SVG gambar tangan atau impor; tata letak mesin menjaga ujung
+konektor sedikitnya 1,5 mm, jadi pada figur buatan mesin yang biasa muncul GEOM_STUB_SEGMENT atau
+GEOM_ARROW_TANGENT.
 
 ### 4.2 Peran paragraf dan rel bukti
 
@@ -651,7 +659,7 @@ Respons `201`:
 <!-- studio:response -->
 ```json
 {
-  "document": { "id": "cmw1doc8k2p4x7q9z3", "docNumber": "014/GSP/KT/X/2026", "missionFolder": "2026-10-23_misi_a",
+  "document": { "id": "cmw1doc8k2p4x7q9z3", "docNumber": "000/GSP/KT/X/2026", "missionFolder": "2026-10-23_misi_a",
                 "docKey": "laporan-survei", "template": { "slug": "datum-gsp", "versionNo": 2 }, "tier": "TERBIT" },
   "created": true, "unchanged": false, "rebased": false,
   "revision": { "revisionNo": 1, "changeScope": "create", "changeAuto": true },
@@ -673,8 +681,8 @@ Respons `201`:
       "Kirim isi Lembar Kendali, Tanda Tangan: POST /api/studio/slots",
       "Kirim bab pertama: POST /api/studio/chapters",
       "Opsional: tetapkan daftar bab yang direncanakan: PATCH /api/studio/documents/cmw1doc8k2p4x7q9z3/structure {op: setOutline}" ],
-    "message": "Dokumen 014/GSP/KT/X/2026 (misi 2026-10-23_misi_a, laporan-survei) belum lengkap pada revisi 1: isi wajib belum ada untuk Lembar Kendali, Tanda Tangan, Isi. Render penuh ditolak; render bab/slot tersedia sebagai draf.",
-    "forwardToController": "Dokumen 014/GSP/KT/X/2026 (misi 2026-10-23_misi_a) dibuat kosong pada revisi 1. Isi wajib belum ada: Lembar Kendali, Tanda Tangan, Isi. Langkah berikut: kirim Lembar Kendali dan Tanda Tangan (POST /api/studio/slots) serta bab (POST /api/studio/chapters), lalu minta render penuh."
+    "message": "Dokumen 000/GSP/KT/X/2026 (misi 2026-10-23_misi_a, laporan-survei) belum lengkap pada revisi 1: isi wajib belum ada untuk Lembar Kendali, Tanda Tangan, Isi. Render penuh ditolak; render bab/slot tersedia sebagai draf.",
+    "forwardToController": "Dokumen 000/GSP/KT/X/2026 (misi 2026-10-23_misi_a) dibuat kosong pada revisi 1. Isi wajib belum ada: Lembar Kendali, Tanda Tangan, Isi. Langkah berikut: kirim Lembar Kendali dan Tanda Tangan (POST /api/studio/slots) serta bab (POST /api/studio/chapters), lalu minta render penuh."
   }
 }
 ```
@@ -742,7 +750,7 @@ tidak memuat `job` atau `outputs`; draf bab 3 diminta terpisah lewat seksi 8:
 <!-- studio:response -->
 ```json
 {
-  "document": { "id": "cmw1doc8k2p4x7q9z3", "docNumber": "014/GSP/KT/X/2026", "missionFolder": "2026-10-23_misi_a",
+  "document": { "id": "cmw1doc8k2p4x7q9z3", "docNumber": "000/GSP/KT/X/2026", "missionFolder": "2026-10-23_misi_a",
                 "docKey": "laporan-survei", "template": { "slug": "datum-gsp", "versionNo": 2 }, "tier": "TERBIT" },
   "created": true, "unchanged": false, "rebased": false,
   "revision": { "revisionNo": 1, "changeScope": "create;chapter:3", "changeAuto": true },
@@ -776,8 +784,8 @@ tidak memuat `job` atau `outputs`; draf bab 3 diminta terpisah lewat seksi 8:
       "Kirim isi Lembar Kendali, Tanda Tangan: POST /api/studio/slots",
       "Kirim bab 1, 2: POST /api/studio/chapters",
       "Opsional: tetapkan daftar bab yang direncanakan: PATCH /api/studio/documents/cmw1doc8k2p4x7q9z3/structure {op: setOutline}" ],
-    "message": "Dokumen 014/GSP/KT/X/2026 (misi 2026-10-23_misi_a, laporan-survei) belum lengkap pada revisi 1: isi wajib belum ada untuk Lembar Kendali, Tanda Tangan; bab belum ada 1, 2. Render penuh ditolak; render bab/slot tersedia sebagai draf.",
-    "forwardToController": "Dokumen 014/GSP/KT/X/2026 (misi 2026-10-23_misi_a) belum lengkap pada revisi 1. Isi wajib belum ada: Lembar Kendali, Tanda Tangan. Bab belum ada: 1, 2. Terakhir mengisi: bab 3 oleh agent:gsp-analis-01 pukul 09:05 WIB. Langkah berikut: kirim Lembar Kendali dan Tanda Tangan (POST /api/studio/slots) serta bab 1 dan 2 (POST /api/studio/chapters), lalu minta render penuh."
+    "message": "Dokumen 000/GSP/KT/X/2026 (misi 2026-10-23_misi_a, laporan-survei) belum lengkap pada revisi 1: isi wajib belum ada untuk Lembar Kendali, Tanda Tangan; bab belum ada 1, 2. Render penuh ditolak; render bab/slot tersedia sebagai draf.",
+    "forwardToController": "Dokumen 000/GSP/KT/X/2026 (misi 2026-10-23_misi_a) belum lengkap pada revisi 1. Isi wajib belum ada: Lembar Kendali, Tanda Tangan. Bab belum ada: 1, 2. Terakhir mengisi: bab 3 oleh agent:gsp-analis-01 pukul 09:05 WIB. Langkah berikut: kirim Lembar Kendali dan Tanda Tangan (POST /api/studio/slots) serta bab 1 dan 2 (POST /api/studio/chapters), lalu minta render penuh."
   }
 }
 ```
@@ -900,7 +908,7 @@ Referensi (opsional):
 {
   "$schema": "studio.slot/v2",
   "agentId": "gsp-analis-02",
-  "target": { "docNumber": "014/GSP/KT/X/2026" },
+  "target": { "docNumber": "000/GSP/KT/X/2026" },
   "slot": "references",
   "payload": {
     "type": "sourceRegister",
@@ -1164,7 +1172,7 @@ Baca bab 3 untuk disunting: `GET /api/studio/documents/cmw1doc8k2p4x7q9z3/conten
 <!-- studio:response -->
 ```json
 {
-  "document": { "id": "cmw1doc8k2p4x7q9z3", "docNumber": "014/GSP/KT/X/2026" },
+  "document": { "id": "cmw1doc8k2p4x7q9z3", "docNumber": "000/GSP/KT/X/2026" },
   "revisionNo": 7,
   "slot": "content",
   "content": {
@@ -1291,8 +1299,8 @@ Respons agen 1 (`201`, revisi 5; `document` dan `chapter` dihilangkan di sini):
     "nextSteps": [
       "Kirim isi Lembar Kendali, Tanda Tangan: POST /api/studio/slots",
       "Kirim bab 5: POST /api/studio/chapters" ],
-    "message": "Dokumen 014/GSP/KT/X/2026 (misi 2026-10-23_misi_a, laporan-survei) belum lengkap pada revisi 5: isi wajib belum ada untuk Lembar Kendali, Tanda Tangan; bab belum ada 5. Render penuh ditolak; render bab/slot tersedia sebagai draf.",
-    "forwardToController": "Dokumen 014/GSP/KT/X/2026 (misi 2026-10-23_misi_a) belum lengkap pada revisi 5. Isi wajib belum ada: Lembar Kendali, Tanda Tangan. Bab belum ada: 5. Terakhir mengisi: bab 4 oleh agent:gsp-analis-01 pukul 16:12 WIB. Langkah berikut: kirim Lembar Kendali dan Tanda Tangan (POST /api/studio/slots) serta bab 5 (POST /api/studio/chapters), lalu minta render penuh."
+    "message": "Dokumen 000/GSP/KT/X/2026 (misi 2026-10-23_misi_a, laporan-survei) belum lengkap pada revisi 5: isi wajib belum ada untuk Lembar Kendali, Tanda Tangan; bab belum ada 5. Render penuh ditolak; render bab/slot tersedia sebagai draf.",
+    "forwardToController": "Dokumen 000/GSP/KT/X/2026 (misi 2026-10-23_misi_a) belum lengkap pada revisi 5. Isi wajib belum ada: Lembar Kendali, Tanda Tangan. Bab belum ada: 5. Terakhir mengisi: bab 4 oleh agent:gsp-analis-01 pukul 16:12 WIB. Langkah berikut: kirim Lembar Kendali dan Tanda Tangan (POST /api/studio/slots) serta bab 5 (POST /api/studio/chapters), lalu minta render penuh."
   }
 }
 ```
@@ -1326,8 +1334,8 @@ Respons agen 2 (`201`, berbasis revisi 4, digabung di atas revisi 5):
       "appendices": { "expected": [], "expectedSource": "contiguous", "present": [], "missing": [] } },
     "missingRequired": ["controlSheet", "signature"],
     "nextSteps": ["Kirim isi Lembar Kendali, Tanda Tangan: POST /api/studio/slots"],
-    "message": "Dokumen 014/GSP/KT/X/2026 (misi 2026-10-23_misi_a, laporan-survei) belum lengkap pada revisi 6: isi wajib belum ada untuk Lembar Kendali, Tanda Tangan. Render penuh ditolak; render bab/slot tersedia sebagai draf.",
-    "forwardToController": "Dokumen 014/GSP/KT/X/2026 (misi 2026-10-23_misi_a) belum lengkap pada revisi 6. Isi wajib belum ada: Lembar Kendali, Tanda Tangan. Terakhir mengisi: bab 5 oleh agent:gsp-analis-02 pukul 16:12 WIB. Langkah berikut: kirim Lembar Kendali dan Tanda Tangan (POST /api/studio/slots), lalu minta render penuh."
+    "message": "Dokumen 000/GSP/KT/X/2026 (misi 2026-10-23_misi_a, laporan-survei) belum lengkap pada revisi 6: isi wajib belum ada untuk Lembar Kendali, Tanda Tangan. Render penuh ditolak; render bab/slot tersedia sebagai draf.",
+    "forwardToController": "Dokumen 000/GSP/KT/X/2026 (misi 2026-10-23_misi_a) belum lengkap pada revisi 6. Isi wajib belum ada: Lembar Kendali, Tanda Tangan. Terakhir mengisi: bab 5 oleh agent:gsp-analis-02 pukul 16:12 WIB. Langkah berikut: kirim Lembar Kendali dan Tanda Tangan (POST /api/studio/slots), lalu minta render penuh."
   }
 }
 ```
@@ -1432,10 +1440,10 @@ Render penuh pada revisi 6 (Lembar Kendali dan Tanda Tangan belum ada) menghasil
         { "slotKey": "signature", "label": "Tanda Tangan", "sectionType": "signatureBlock", "state": "EMPTY", "required": true, "lastFilledBy": null, "lastFilledAt": null, "lastFilledRevisionNo": null } ],
       "missingRequired": ["controlSheet", "signature"],
       "nextSteps": ["Kirim isi Lembar Kendali, Tanda Tangan: POST /api/studio/slots"],
-      "message": "Dokumen 014/GSP/KT/X/2026 (misi 2026-10-23_misi_a, laporan-survei) belum lengkap pada revisi 6: isi wajib belum ada untuk Lembar Kendali, Tanda Tangan. Render penuh ditolak; render bab/slot tersedia sebagai draf."
+      "message": "Dokumen 000/GSP/KT/X/2026 (misi 2026-10-23_misi_a, laporan-survei) belum lengkap pada revisi 6: isi wajib belum ada untuk Lembar Kendali, Tanda Tangan. Render penuh ditolak; render bab/slot tersedia sebagai draf."
     },
     "allowedScopes": ["chapter", "slot"],
-    "forwardToController": "Dokumen 014/GSP/KT/X/2026 (misi 2026-10-23_misi_a) belum lengkap pada revisi 6. Isi wajib belum ada: Lembar Kendali, Tanda Tangan. Terakhir mengisi: bab 5 oleh agent:gsp-analis-02 pukul 16:12 WIB. Langkah berikut: kirim Lembar Kendali dan Tanda Tangan (POST /api/studio/slots), lalu minta render penuh."
+    "forwardToController": "Dokumen 000/GSP/KT/X/2026 (misi 2026-10-23_misi_a) belum lengkap pada revisi 6. Isi wajib belum ada: Lembar Kendali, Tanda Tangan. Terakhir mengisi: bab 5 oleh agent:gsp-analis-02 pukul 16:12 WIB. Langkah berikut: kirim Lembar Kendali dan Tanda Tangan (POST /api/studio/slots), lalu minta render penuh."
   }
 }
 ```
@@ -1516,6 +1524,11 @@ formats: ["docx", "html"], figures: ["png"] }`.
   (`FIGURE_PLACEHOLDER` di HTML, `PLACEHOLDER_IN_OUTPUT` di DOCX), jadi berkas itu
   `RENDER_UNVERIFIED(U24)`. Perbaiki figurnya (pratinjau, seksi 4.1.2) lalu render lagi. Berkas
   berplaceholder tidak diserahkan.
+- **Render dari `studio_write`.** Baris berkasnya `berkas: tidak dirender (galat <kode> (<cek>))`.
+  Render gagal: teks memuat kode dan cek (mis. FIGURE_OVER_CAPACITY (DT-10a)); perbaiki isi lalu ulangi
+  studio_write yang sama (dokumen yang sama dipakai). Draf gagal dilepas lewat `retire` di
+  `studio_mission_update_row`; penolakan `DELIVERABLE_NOT_RETIRABLE` disengaja: `NOT_BOUND_TO_ROW`
+  (docKey bukan `row-<id>-<nama>`) dan `NO_CURRENT_DELIVERABLE` (baris jadi tanpa hasil).
 
 **Render tidak menjawab dalam 540 detik.** Tandanya galat MCP `-32001` (batas waktu klien), atau
 `REMOTE_UNREACHABLE` dengan pesan `render <id> (R17) tidak menjawab dalam 540 detik
@@ -1548,12 +1561,15 @@ Baris berkas yang gagal: `<FMT> <id> RENDER_UNVERIFIED(U24) fail=<cek> unknown=<
 baris berkas yang memuat pengukuran ada baris `OVERLAP_CLIP <STATUS> diukur m/n halaman`. Halaman
 diukur per kelompok 20 halaman (`MEASURE_BATCH_PAGES`). Halaman yang tidak sempat diukur membuat cek
 itu `UNKNOWN:MEASURE_TRUNCATED`, dan berkasnya `RENDER_UNVERIFIED(U24)`.
+Teks studio_render memuat sha256 penuh tiap berkas dan baris "fail per code". formats ["pdf"] atau
+["docx"] tanpa html: Studio menambah html sebagai sumber ukur verifikasi (formats added), bukan hasil kirim.
 
 **Aturan.** Berkas boleh diserahkan bila lulus dua gerbang:
 
 1. Gerbang mesin: `RENDER_VERIFIED(U24)` di hasil render, dan `FILE_VERIFIED(sha256)` untuk berkas
    yang diserahkan.
-2. Gerbang mata: buka PNG halaman dari baris `pages:` dan lihat setiap halaman yang memuat figur. Bila
+2. Gerbang mata: buka PNG halaman dari baris `pages:` (`witness-pNNN.png`: gambar saksi, perkiraan
+   halaman cetak, bukan hasil kirim) dan lihat setiap halaman yang memuat figur. Bila
    barisnya `pages: none imaged`, buka PDF atau HTML-nya.
 
 Dalam laporan, tulis label yang dimaksud, jangan "terverifikasi" saja. Gerbang selesai baris misi
@@ -1564,12 +1580,16 @@ setelah gerbang mesin DAN gerbang mata atas PNG hasil render. Langkahnya di seks
 `studio_figure_preview { documentId, pid, standalone: true, downloadDir, png: true }` memeriksa figur
 sendirian (caption, KUNCI, dan SUMBER di dalam gambar) dengan batas angka figur. Pratinjau mandiri
 tidak menggantikan pratinjau inline atau pemeriksaan halaman.
+png: true hanya bersama standalone: true dan downloadDir; selain itu INVALID_ARGUMENT.
+Hasil mandiri memuat perabot: jumlah baris KUNCI dan SUMBER serta tingginya (mm), dicetak
+`perabot: KUNCI <k> baris, SUMBER <s> baris, tinggi <h> mm`.
 
 ### 8.5 Lint: semua temuan satu cek
 
 Ringkasan lint di `studio_document_status` merinci paling banyak 100 temuan per cek
-(`MAX_FINDINGS_PER_CHECK`). Sisanya ditulis sebagai "N temuan lain tidak dirinci". Daftar penuh satu
-cek dibaca per halaman:
+(`MAX_FINDINGS_PER_CHECK`). Sisanya ditulis sebagai "N temuan lain tidak dirinci". Baris "<kode>: total N
+(dirinci 100, tidak dirinci M)" memberi jumlah nyata; nilai "FAIL per kode" adalah jumlah temuan, bukan
+jumlah baris. Daftar penuh satu cek dibaca per halaman:
 
 ```
 studio_document_status { documentId, findings: { checkId, chapter, offset, limit } }
@@ -1592,6 +1612,7 @@ adalah blok `chart`, `diagram`, dan `image`. Bawaannya `null`, artinya tanpa kuo
 menggagalkan dokumen yang melampaui kuota, pada figur pertama yang melewati batas:
 `<n> gambar melebihi kuota <q> per dokumen (figure.quota.maxPerDocument; T-18); kurangi gambar atau
 catat alasan pada figure.quota.exceptionReason`.
+Tidak ada kode kuota terpisah (mis. R-70 atau KUOTA): kuota dan pengecualiannya adalah keadaan cek D22.
 
 Ada dua tindakan agen:
 
@@ -1672,7 +1693,7 @@ Respons `200` (`completeness` dipersingkat):
   "rebased": true, "baseRevisionNo": 7, "appliedOnRevisionNo": 9,
   "completeness": { "status": "COMPLETE", "revisionNo": 10, "fullRenderAllowed": true, "missingRequired": [],
     "nextSteps": ["Minta render penuh: POST /api/studio/documents/cmw1doc8k2p4x7q9z3/render {scope: \"document\"}"],
-    "message": "Dokumen 014/GSP/KT/X/2026 lengkap pada revisi 10; render penuh tersedia." }
+    "message": "Dokumen 000/GSP/KT/X/2026 lengkap pada revisi 10; render penuh tersedia." }
 }
 ```
 

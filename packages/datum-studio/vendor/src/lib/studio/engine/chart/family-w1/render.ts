@@ -24,6 +24,7 @@ import { num, ptToMm, textWidthMm } from "../core/svg";
 import { type Frame, type W1Style, drawAxes, drawFoot, drawGrid, layoutFrame, spreadLabels, styleMetrics } from "./frame";
 import { type AccentRequest, type W1Code, accentRequest, w1Bool, w1Int } from "./params";
 import { categoryIndex } from "./timeaxis";
+import { colourCountDetail } from "../../diagram/core/colour";
 import { kindAxis, kindEnum } from "../core/read";
 
 type StepMode = "post" | "pre" | "mid";
@@ -93,6 +94,23 @@ interface SeriesAccent {
   point?: { si: number; ci: number };
 }
 
+/**
+ * Swarm 1.2.7 row 48b (M2-04): the one accent-series rule — series with `accent`, plus the series named by the
+ * accent request (`series`, `group`); the lowest index is drawn as the accent. Shared by the drawing
+ * (`resolveSeriesAccent`) and the line-count refusal detail (`lineCountDetail`), so the refusal names the colours
+ * the chart would draw. `onMissing` receives a requested name that is not in the data.
+ */
+function seriesAccentIndex(series: readonly SeriesIn[], req: AccentRequest, onMissing?: (name: string) => void): { set: Set<number>; index: number } {
+  const set = new Set<number>(series.flatMap((s, i) => (s.accent ? [i] : [])));
+  for (const name of [req.series, req.group]) {
+    if (name === undefined) continue;
+    const i = series.findIndex((s) => s.name === name);
+    if (i >= 0) set.add(i);
+    else onMissing?.(name);
+  }
+  return { set, index: set.size ? Math.min(...set) : -1 };
+}
+
 /** Aksen seri dan titik pada data series; melempar DATUM-26 bila subjek > maks. */
 function resolveSeriesAccent(
   spec: StudioChartV1,
@@ -106,14 +124,7 @@ function resolveSeriesAccent(
   allowPoint: boolean,
 ): SeriesAccent {
   const fid = figureLabel(spec);
-  const set = new Set<number>(series.flatMap((s, i) => (s.accent ? [i] : [])));
-  for (const name of [req.series, req.group]) {
-    if (name === undefined) continue;
-    const i = series.findIndex((s) => s.name === name);
-    if (i >= 0) set.add(i);
-    else issues.push(ignoredAccent(`seri beraksen "${name}" tidak ada di data`));
-  }
-  const sIdx = set.size ? Math.min(...set) : -1;
+  const { set, index: sIdx } = seriesAccentIndex(series, req, (name) => issues.push(ignoredAccent(`seri beraksen "${name}" tidak ada di data`)));
   let point: SeriesAccent["point"];
   if (req.point) {
     if (!allowPoint) {
@@ -173,6 +184,26 @@ function lineLooks(style: W1Style, pal: ChartPalette, n: number, accent: number)
     }
   }
   return out;
+}
+
+/**
+ * Swarm 1.2.7 row 36 (T-06): detail of the line-count refusal. Counted = one line per series, listed as
+ * `seri "<name>" (#HEX[, putus-putus])` with the stroke `lineLooks` would give it (accent from
+ * `series[].accent` or the accent request, as the drawing would resolve it before layout), then the
+ * remaining allowance (negative when over the limit, U+2212).
+ */
+function lineCountDetail(style: W1Style, pal: ChartPalette, series: readonly SeriesIn[], req: AccentRequest, limit: number): string {
+  // Row 48b (M2-04): the accent index comes from the drawing rule (seriesAccentIndex), and `sources` is keyed
+  // case-exactly (series names are unique case-exactly, requireSeries), so "a" and "A" keep their own colours.
+  const looks = lineLooks(style, pal, series.length, seriesAccentIndex(series, req).index);
+  const values = series.map((s) => `seri "${s.name}"`);
+  const sources = new Map<string, string[]>(
+    series.map((s, i) => {
+      const hex = `#${looks[i].stroke.replace(/^#/, "").toUpperCase()}`;
+      return [values[i], looks[i].dash ? [hex, "putus-putus"] : [hex]];
+    }),
+  );
+  return colourCountDetail(values, sources, limit, { caseExact: true });
 }
 
 /**
@@ -236,7 +267,10 @@ function renderLine(code: "W-01" | "W-03", spec: StudioChartV1, canvas: ChartCan
 
   const maxLines = code === "W-01" ? w1Int(spec, tpl, "W-01", "maxLines", 3) : W03_MAX_LINES;
   if (series.length > maxLines) {
-    throw defect(code === "W-01" ? kindKey("W-01", "maxLines") : "DATUM-25", `${fid} — ${series.length} garis > ${maxLines}; sorot satu garis atau pecah gambarnya`, {
+    // Swarm 1.2.7 row 36 (T-06, AC-T06): name what was counted — each series with the colour it would be
+    // drawn with — and the remainder, in the diagram DATUM-25 detail shape (colourCountDetail, row 62).
+    const detail = lineCountDetail(style, pal, series, accentRequest(spec), maxLines);
+    throw defect(code === "W-01" ? kindKey("W-01", "maxLines") : "DATUM-25", `${fid} — ${series.length} garis > ${maxLines}; sorot satu garis atau pecah gambarnya; ${detail}`, {
       code,
       lines: series.length,
     });

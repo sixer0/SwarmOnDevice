@@ -151,6 +151,7 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
     sessionID: () => params.id,
     directory: () => sdk().directory,
     confirm: () => confirmAutonomyBypass(dialog),
+    event: () => sdk().event,
   })
   // Settings and the add menu change the mode too. Opening any dialog, the palette included, reads it again.
   createEffect(

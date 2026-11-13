@@ -4,6 +4,7 @@
 // what a poisoned page can make an agent repeat, and how many transcripts and logs end up holding a production key.
 import fs from "node:fs"
 import path from "node:path"
+import { PathSpelling } from "../permission/path-spelling"
 
 export const PLACEHOLDER = /\[hidden:[^\]\n]*\]/
 
@@ -67,6 +68,9 @@ export const wholeSecretFile = (file: string) => fileKind(file) === "whole"
 // Row 36b (SEC-03): a shell's history keeps `export KEY=...` lines. It is masked line by line like a .env file, for what
 // is shown only: `secretFile` (and so `Reach.secret` and every verdict built on it) does not change.
 const HISTORY_FILE = /^(\.[\w-]*_?history|fish_history)$/
+// 1.2.7 N-1 (SR7-07): Swarm's own settings file holds provider `apiKey`s, `headers` and MCP `environment` tokens as JSON
+// values. A read of it now runs (OP-2), so it is masked line by line like a .env file, for what is shown only, as above.
+const SETTINGS_JSON = /^(swarm|opencode)\.jsonc?$/
 
 const caseFolds = process.platform === "darwin" || process.platform === "win32"
 const fold = (file: string) => {
@@ -115,8 +119,64 @@ export function underPlaces(file: string, places: readonly string[]) {
 export function outputKind(file: string, places: readonly string[] = []): "whole" | "lines" | undefined {
   const names = [file, landing(file)].filter((name): name is string => name !== undefined)
   if (names.some((name) => fileKind(name) === "whole") || underPlaces(file, places)) return "whole"
-  if (names.some((name) => fileKind(name) !== undefined || HISTORY_FILE.test(path.basename(name)))) return "lines"
+  if (names.some((name) => fileKind(name) !== undefined || HISTORY_FILE.test(path.basename(name)) || SETTINGS_JSON.test(path.basename(name).toLowerCase())))
+    return "lines"
   return undefined
+}
+
+/** 1.2.7 M1-02: whether a file's name alone makes what a reader prints of it masked or withheld (no disk access). */
+export function maskedByName(file: string) {
+  const base = path.basename(file.replaceAll("\\", "/")).normalize("NFC").toLowerCase()
+  return fileKind(file) !== undefined || HISTORY_FILE.test(base) || SETTINGS_JSON.test(base)
+}
+
+// 1.2.7 M1-02 (U16, SR7-07): the masking scan resolves the files a shell command reads the way the permission table's
+// app-state reader does: `~`, `$HOME` and `${HOME}` under every home Swarm knows, set environment variables expanded, and
+// relative names under every folder a `cd` may lead to. 47f (C68): with the table's own resolver (`PathSpelling`, the
+// object `AutonomyTable.spelling`), not a copy of its rules.
+const CHANGES_FOLDER = new Set(["cd", "chdir", "pushd"])
+
+/** A word as the shell would expand it. `certain` is false when some part of it could not be expanded here. */
+export const expandSpelling = PathSpelling.expand
+
+/**
+ * Every folder a command's words may be read from: the call's folder and each `cd`, `chdir` or `pushd` target, each
+ * resolved under every folder reached before it (an over-read on purpose, as the table's). `certain` is false when a change
+ * of folder could not be followed: `cd -`, `popd`, a stack entry, a CDPATH lookup, an expansion that did not resolve.
+ */
+export function workingFolders(
+  commands: readonly (readonly string[])[],
+  cwd: string,
+  homes: readonly string[],
+): { folders: string[]; certain: boolean } {
+  let folders = [cwd]
+  let certain = true
+  const add = (more: string[]) => {
+    const next = PathSpelling.widen(folders, more)
+    if (next.capped) certain = false
+    folders = next.folders
+  }
+  for (const command of commands) {
+    const words = command[0] === "builtin" || command[0] === "command" ? command.slice(1) : command
+    const program = words[0]
+    if (program === "popd") certain = false
+    if (!program || !CHANGES_FOLDER.has(program)) continue
+    const args = words.slice(1).filter((word) => !/^-[LPe@]+$/.test(word))
+    if (args.length === 0) {
+      add([...homes])
+      continue
+    }
+    const target = args[0]!
+    if (args.length > 1 || /^[-+]/.test(target)) {
+      certain = false
+      continue
+    }
+    if (process.env.CDPATH && !/^(\/|~|\$|\.{1,2}(\/|$))/.test(target)) certain = false
+    const spelled = expandSpelling(target, homes)
+    if (!spelled.certain) certain = false
+    add(spelled.names.flatMap((name) => folders.map((folder) => path.resolve(folder, name))))
+  }
+  return { folders, certain }
 }
 
 const PAIR = /^(\s*(?:export\s+)?)([A-Za-z_./:@-][A-Za-z0-9_./:@-]*)(\s*=\s*)(.*)$/
@@ -148,7 +208,8 @@ function fileValues(file: string, text: string) {
   const out = pairs(text)
   for (const line of text.split("\n")) {
     const yaml = line.match(/^\s*(?:-\s*)?["']?([A-Za-z_][\w.-]*)["']?\s*:\s*(\S.*)$/)
-    const value = yaml ? unquoted(yaml[2]) : ""
+    // A JSON value ends with the comma before the next key (SR7-07): `"apiKey": "…",`.
+    const value = yaml ? unquoted(yaml[2].replace(/,\s*$/, "")) : ""
     if (yaml && secretPair(yaml[1], value)) out.push([yaml[1], urlPassword(value) ?? value])
     for (const match of line.matchAll(/\b(password|passwd|account)\s+(\S+)/gi)) out.push([match[1], match[2]])
     const fields = line.split(":")
@@ -257,6 +318,19 @@ function known(root: string): [string, string][] {
 export function learn(text: string, file = ".env") {
   for (const [name, value] of fileValues(file, text)) if (value.length >= MIN_KNOWN) learned.set(value, name)
   learnedVersion++
+}
+
+/** 1.2.7 M1-02: a file that is there to be printed but whose values `learnFile` cannot read (too large, unreadable). */
+export function unlearnable(file: string) {
+  try {
+    const stat = fs.statSync(file)
+    if (!stat.isFile()) return false
+    if (stat.size > MAX_SECRET_FILE) return true
+    fs.accessSync(file, fs.constants.R_OK)
+    return false
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === "EACCES" || (error as NodeJS.ErrnoException).code === "EPERM"
+  }
 }
 
 /** A command named this file, which may be anywhere, so what it prints can be recognised. */

@@ -53,6 +53,14 @@ const layers = (input: Input): [string, Verdict][] => [
 const expectAppState = (input: Input) => {
   for (const [layer, verdict] of layers(input)) expect({ layer, ...verdict }).toEqual({ layer, ...APP_STATE })
 }
+// 1.2.7 row 31 (F-4, CHAR-03 INTENT): the own-API refusal has its own category; the refusal, spellings and controls stay.
+const OWN_API: Verdict = { class: "X", decidedBy: "gate", category: "own_api" }
+const expectOwnApi = (input: Input) => {
+  for (const [layer, verdict] of layers(input)) expect({ layer, ...verdict }).toEqual({ layer, ...OWN_API })
+}
+const expectNotOwnApi = (input: Input) => {
+  for (const [layer, verdict] of layers(input)) expect({ layer, category: verdict.category }).not.toEqual({ layer, category: "own_api" })
+}
 const expectNotAppState = (input: Input) => {
   for (const [layer, verdict] of layers(input)) expect({ layer, category: verdict.category }).not.toEqual({ layer, category: "app_state" })
 }
@@ -74,32 +82,37 @@ describe("F-2: home spellings of Swarm's own state are X app_state (C8)", () => 
   })
 })
 
-describe("F-1: a call to the running Swarm server's own address is X app_state", () => {
+// 1.2.7 row 47k (U10-1, C76, INTENT): a call whose route can be read runs under the consent unless the route is
+// person-only, so the probes name person-only routes (mode, permission reply, trust, config write) instead of `/session`.
+describe("F-1: a call to the running Swarm server's own address is X own_api (1.2.7 F-4 INTENT, was app_state)", () => {
   const self = { hostname: "127.0.0.1", port: 4096 }
   beforeAll(() => SelfAddress.add(self))
   afterEach(() => SelfAddress.add(self))
   afterAll(() => SelfAddress.remove(self))
 
-  test("probe: `curl -s -K cfg.txt http://127.0.0.1:4096/session`", () =>
-    expectAppState(bash("curl -s -K cfg.txt http://127.0.0.1:4096/session")))
-  test("probe: `curl -s -u \"opencode:$PASSWORD\" http://127.0.0.1:4096/session`", () =>
-    expectAppState(bash('curl -s -u "opencode:$PASSWORD" http://127.0.0.1:4096/session')))
+  test("probe: `curl -s -K cfg.txt -X PUT http://127.0.0.1:4096/autonomy/mode`", () => {
+    // The config the sed probe writes (synthetic); an unread one is refused with reason `config_file` (rel127-f4).
+    fs.writeFileSync(path.join(dir, "cfg.txt"), 'user = "opencode:synthetic"\n')
+    expectOwnApi(bash("curl -s -K cfg.txt -X PUT http://127.0.0.1:4096/autonomy/mode"))
+  })
+  test("probe: `curl -s -u \"opencode:$PASSWORD\" -X POST http://127.0.0.1:4096/permission/per_1/reply`", () =>
+    expectOwnApi(bash('curl -s -u "opencode:$PASSWORD" -X POST http://127.0.0.1:4096/permission/per_1/reply')))
   test("other spellings of the same listener", () => {
     for (const command of [
-      "curl -s http://localhost:4096/session",
-      "curl -s localhost:4096/global/health",
-      "curl -s http://[::1]:4096/session",
-      "curl -s http://0.0.0.0:4096/session",
-      "wget -qO- http://127.0.0.2:4096/",
-      "http POST :4096/session",
+      "curl -s -X PUT http://localhost:4096/autonomy/mode",
+      "curl -s -X PATCH localhost:4096/global/config",
+      "curl -s -X POST http://[::1]:4096/project/trust",
+      "curl -s http://0.0.0.0:4096/autonomy/mode",
+      "wget -qO- http://127.0.0.2:4096/project/trust",
+      "http POST :4096/question/que_1/reply",
       "exec 3<>/dev/tcp/127.0.0.1/4096",
       "nc 127.0.0.1 4096",
-      "cd /tmp && curl -s 'http://127.0.0.1:4096/permission' | head",
+      "cd /tmp && curl -s -X POST 'http://127.0.0.1:4096/permission/per_1/reply' | head",
     ])
-      expectAppState(bash(command))
+      expectOwnApi(bash(command))
   })
   test("a webfetch of the listener", () =>
-    expectAppState(request("webfetch", { patterns: ["http://127.0.0.1:4096/session"], metadata: { url: "http://127.0.0.1:4096/session" } })))
+    expectOwnApi(request("webfetch", { patterns: ["http://127.0.0.1:4096/autonomy/mode"], metadata: { url: "http://127.0.0.1:4096/autonomy/mode" } })))
   test("control: other loopback ports keep their verdict (FLUX 7863, SearXNG, a dev server)", () => {
     for (const command of [
       "curl -s http://127.0.0.1:7863/health",
@@ -109,10 +122,10 @@ describe("F-1: a call to the running Swarm server's own address is X app_state",
       "head -c 4096 th.json",
       "ls /4096",
     ])
-      expectNotAppState(bash(command))
+      expectNotOwnApi(bash(command))
   })
   test("control: once the listener stopped, the same call keeps its verdict", () => {
     SelfAddress.remove(self)
-    expectNotAppState(bash("curl -s http://127.0.0.1:4096/session"))
+    expectNotOwnApi(bash("curl -s http://127.0.0.1:4096/session"))
   })
 })

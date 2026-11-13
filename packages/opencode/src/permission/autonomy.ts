@@ -94,6 +94,9 @@ export const BLOCKED_DEBOUNCE_MS = 5000
  */
 export const Blocked = AutonomyEvent.Blocked
 
+/** 1.2.7 row 58c: a change through `setMode`, so an open window follows a switch made elsewhere (the CLI, F-5). */
+export const ModeChanged = AutonomyEvent.ModeChanged
+
 export type StateFile = typeof MODE_FILE | typeof TRUST_FILE
 
 export interface Mode {
@@ -118,7 +121,13 @@ interface ModeConsent {
 }
 
 export type ModeChange =
-  | ({ readonly scope: "session"; readonly root: SessionID; readonly on: boolean } & ModeConsent)
+  | ({
+      readonly scope: "session"
+      readonly root: SessionID
+      readonly on: boolean
+      /** The root's own folder, where its windows hear of the change. Without it, the folder of the request. */
+      readonly directory?: string
+    } & ModeConsent)
   | ({ readonly scope: "directory"; readonly directory: string; readonly on: boolean } & ModeConsent)
 
 export interface Check {
@@ -203,8 +212,10 @@ const Decision = Schema.Struct({
   // Under the consented bypass: the category the call had before the overlay changed it (S1.43).
   bypassed: Schema.optional(DecisionCategory),
   // `main_agent`: the root's own call, decided by the main agent; `for_subagent`: the main agent decided for a subagent.
+  // `task_grant` (1.2.7 P-01a, N7-134): a child's call judged with its parent's caller through a task grant, or the grant's
+  // own line when it was issued.
   via: Schema.optional(
-    Schema.Literals(["grant", "duplicate", "consent", "outward", "user_request", "main_agent", "for_subagent"]),
+    Schema.Literals(["grant", "duplicate", "consent", "outward", "user_request", "main_agent", "for_subagent", "task_grant"]),
   ),
   duplicateOf: Schema.optional(Schema.String),
   consentID: Schema.optional(Schema.String),
@@ -1553,6 +1564,18 @@ export const layer = Layer.effect(
       )
     })
 
+    // Which scope changed, never to what: whoever hears it reads the mode again. A notice that fails changes nothing.
+    const announceMode = (input: ModeChange) =>
+      Effect.gen(function* () {
+        if (!events) return
+        const directory = input.directory
+        yield* events.publish(
+          ModeChanged,
+          input.scope === "session" ? { scope: "session", sessionID: input.root } : { scope: "directory" },
+          directory ? { location: { directory: AbsolutePath.make(directory) } } : undefined,
+        )
+      }).pipe(Effect.catchCause((cause) => Effect.logWarning("could not announce the mode change", { cause })))
+
     const setMode = Effect.fn("Autonomy.setMode")(function* (input: ModeChange) {
       const key = input.scope === "session" ? `session:${input.root}` : `directory:${input.directory}`
       const consented = input.on && input.bypassConsent === BYPASS_CONSENT
@@ -1587,6 +1610,8 @@ export const layer = Layer.effect(
         Effect.tapError((error) => Effect.logError("could not save the autonomous mode", { input, error })),
         Effect.mapError(() => new WriteError({ message: "Could not save the autonomous mode" })),
         Effect.ensuring(endStaleRuns()),
+        // Also when saving failed: off holds in memory all the same, and a window must not keep showing on (row 58c).
+        Effect.ensuring(announceMode(input)),
       )
     })
 

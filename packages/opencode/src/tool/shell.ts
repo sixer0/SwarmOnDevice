@@ -149,6 +149,13 @@ function parts(node: Node) {
   return out
 }
 
+/** 1.2.7 M1-02: a bash command's words as written (unquoted), expansions included, without assignments or redirects. */
+function words(node: Node) {
+  return node.namedChildren
+    .filter((child): child is Node => child !== null && child.type !== "variable_assignment" && !child.type.endsWith("redirect") && child.type !== "comment")
+    .map((child) => unquote(child.text))
+}
+
 function source(node: Node) {
   return (node.parent?.type === "redirected_statement" ? node.parent.text : node.text).trim()
 }
@@ -537,7 +544,12 @@ export const READ_THROUGH = BypassLists.SAFE_ASSIGNMENT
 
 class Unread extends Error {}
 
-export function decompose(root: Node, cwd: string): ShellReading | undefined {
+/**
+ * 1.2.7 row 47h: `zsh` reads zsh's noclobber overrides (`>!`, `N>!`, `&>|`/`&>!`, `>&|`/`>&!`, and the `>>`
+ * forms `>>|`, `>>!`, `&>>|`, `>>&!`, ...) as the redirect without the `|`/`!`: one replaces the file as `>` does, the other
+ * appends. bash writes `>! f` to a file named `!` and passes `f` to the program, so outside zsh they stay unread.
+ */
+export function decompose(root: Node, cwd: string, options: { zsh?: boolean } = {}): ShellReading | undefined {
   const steps: ShellStep[] = []
   const writes = new Set<string>()
   // 1.1.1 F22 (CR10-1): each place once, keyed by where it is taken from and how it is written. A `cd` or a redirect the
@@ -833,13 +845,18 @@ export function decompose(root: Node, cwd: string): ShellReading | undefined {
             continue
           }
           if (redirect.type !== "file_redirect") return fail()
+          const read = options.zsh ? clobbered(redirect) : undefined
           const destinations = redirect.childrenForFieldName("destination").filter((child) => child !== null)
-          const destination = destinations[0]
-          if (destinations.length !== 1 || !destination) return fail()
-          const operator = redirect.text.slice(0, redirect.text.lastIndexOf(destination.text)).trim()
+          const destination = read?.destination ?? destinations[0]
+          if ((!read && destinations.length !== 1) || !destination) return fail()
+          const operator = read?.operator ?? redirect.text.slice(0, redirect.text.lastIndexOf(destination.text)).trim()
           // `2>&1` and `>&-` move a stream and name no file.
           if (/^\d*[<>]&$/.test(operator) && /^(\d+|-)$/.test(destination.text)) continue
-          const target = value(destination)
+          // `>!f`: the file is the word after the `!`, and only a plain one is read.
+          const target = read?.strip ? plainAfterBang(destination.text) ?? fail() : value(destination)
+          // A replacing override is read only where the table reads the same file as replaced (`replacingTargets`), so
+          // the checkpoint the table asks for and the one the shell takes name one file; else the text stays unread.
+          if (read && !operator.includes(">>") && !AutonomyTable.replacingTargets(redirect.text).includes(target)) return fail()
           if (target === "/dev/null" && /^\d*>>?$|^&>>?$/.test(operator)) continue
           // bash opens `/dev/tcp/host/port` and `/dev/udp/...` as a network connection in a redirect, never as a file.
           if (target.startsWith("/dev/")) return fail()
@@ -875,7 +892,7 @@ export function decompose(root: Node, cwd: string): ShellReading | undefined {
   }
 
   try {
-    if (root.type !== "program" || root.hasError) return undefined
+    if (root.type !== "program" || (root.hasError && !(options.zsh && clobberErrorsOnly(root)))) return undefined
     sequence(named(root), new Set([cwd]), true)
     if (steps.length === 0 && writes.size === 0) return undefined
     return {
@@ -892,11 +909,65 @@ export function decompose(root: Node, cwd: string): ShellReading | undefined {
   }
 }
 
+/**
+ * 1.2.7 row 47h: a zsh noclobber override as the plain redirect it overrides, or undefined for any other redirect. The
+ * bash grammar has `>|` only: `>! f` comes as `>` with the words `!` and `f`, `>!f` as `>` with `!f`, and `&>| f` as `&>`
+ * with an error node for the `|`. The `|` or `!` must touch the operator; `> ! f` writes a file named `!` in zsh too.
+ */
+function clobbered(redirect: Node) {
+  const destinations = redirect.childrenForFieldName("destination").filter((child): child is Node => child !== null)
+  const first = destinations[0]
+  if (!first) return undefined
+  const before = redirect.text.slice(0, first.startIndex - redirect.startIndex)
+  const op = before.trim()
+  if (/\s/.test(op)) return undefined
+  const plain = (text: string) => {
+    const found = /^(\d*)(>>?)$/.exec(text)
+    if (found) return `${found[1]}${found[2]}`
+    if (/^(&>|>&)$/.test(text)) return "&>"
+    if (/^(&>>|>>&)$/.test(text)) return "&>>"
+    return undefined
+  }
+  // `&>| f`, `>&| f`, `>>| f`: the `|`/`!` is already part of the text before the one destination.
+  if (destinations.length === 1 && /[|!]$/.test(op) && !/^\d*>\|$/.test(op)) {
+    const operator = plain(op.slice(0, -1))
+    return operator ? { operator, destination: first, strip: false } : undefined
+  }
+  const operator = plain(op)
+  if (!operator || /\s$/.test(before)) return undefined
+  // `>! f`: `!` is a word of its own, followed by the file.
+  if (destinations.length === 2 && first.text === "!") return { operator, destination: destinations[1]!, strip: false }
+  // `>!f`: one word, `!` first and unquoted.
+  if (destinations.length === 1 && first.type === "word" && first.text.startsWith("!"))
+    return { operator, destination: first, strip: true }
+  return undefined
+}
+
+/** `>!f`'s file: the word after the `!` when it is a plain name, else undefined. */
+function plainAfterBang(text: string) {
+  const rest = text.slice(1)
+  return /^[\w./@%+:,-][\w./@%+:,=-]*$/.test(rest) ? rest : undefined
+}
+
+/**
+ * 1.2.7 row 47h: the only errors in the tree are the `|` of zsh's `&>|`, `>&|` or `>>|`, which the bash grammar does not
+ * know (`>|` it does). Any other error, or a node the parser had to make up, and the text stays unread.
+ */
+function clobberErrorsOnly(root: Node) {
+  const errors = root.descendantsOfType("ERROR").filter((node): node is Node => node !== null)
+  const missing = (node: Node): boolean => node.isMissing || node.children.some((child) => child !== null && missing(child))
+  return (
+    errors.length > 0 &&
+    !missing(root) &&
+    errors.every((node) => node.text === "|" && node.parent?.type === "file_redirect" && clobbered(node.parent) !== undefined)
+  )
+}
+
 /** `decompose` over a text parsed as bash, for the tests and the inventory replay (`research/20_shell_command_inventory.md`). */
-export async function readSteps(text: string, cwd: string) {
+export async function readSteps(text: string, cwd: string, options: { zsh?: boolean } = {}) {
   const tree = (await parser()).bash.parse(text)
   if (!tree) return undefined
-  const found = decompose(tree.rootNode, cwd)
+  const found = decompose(tree.rootNode, cwd, options)
   tree.delete()
   return found
 }
@@ -966,6 +1037,8 @@ const METADATA_VIEWERS = new Set([
   "sha512sum", "b2sum", "test", "[", "true", "false", "pwd", "cd",
 ])
 const VERBATIM_VIEWERS = new Set([...METADATA_VIEWERS, "cat", "head", "tail", "grep", "egrep", "fgrep", "rg", "diff", "cmp", "nl", "sort", "uniq", "echo"])
+// 1.2.7 M1-02: the verbatim viewers that print a file's contents. Any other reader of a secret file is withheld already.
+const CONTENT_READERS = new Set([...VERBATIM_VIEWERS].filter((name) => !METADATA_VIEWERS.has(name) && name !== "echo"))
 const programOf = (tokens: string[]) => (tokens[0] ? path.basename(tokens[0]) : "")
 
 function verbatim(tokens: string[]) {
@@ -1159,6 +1232,35 @@ function cmd(shell: string, command: string, cwd: string, env: NodeJS.ProcessEnv
     detached: process.platform !== "win32",
   })
 }
+/**
+ * 1.2.7 row 47j (U9-6): the files whose values a consented content search over app-state folders may print, for the
+ * masking to learn before it runs. Bounded (depth, count), and the app's own checkouts, caches and logs are left out:
+ * they are projects or bulk, not settings. Values are learned by name (`Secrets.learnFile`), never read into the output.
+ */
+const STATE_SKIP = new Set(["worktree", "repos", "node_modules", ".git", "snapshot", "log", "logs", "bin", "cache", "tool-output"])
+const STATE_DEPTH = 3
+const STATE_MAX_FILES = 400
+function stateFiles(folders: readonly string[]) {
+  const out: string[] = []
+  const walk = (folder: string, depth: number) => {
+    if (out.length >= STATE_MAX_FILES) return
+    let entries: import("node:fs").Dirent[]
+    try {
+      entries = readdirSync(folder, { withFileTypes: true })
+    } catch {
+      return
+    }
+    for (const entry of entries) {
+      if (out.length >= STATE_MAX_FILES) return
+      const file = path.join(folder, entry.name)
+      if (entry.isFile()) out.push(file)
+      else if (entry.isDirectory() && depth < STATE_DEPTH && !STATE_SKIP.has(entry.name)) walk(file, depth + 1)
+    }
+  }
+  for (const folder of folders) walk(folder, 0)
+  return out
+}
+
 const parser = lazy(async () => {
   const { Parser } = await import("web-tree-sitter")
   const { default: treeWasm } = await import("web-tree-sitter/tree-sitter.wasm" as string, {
@@ -1277,22 +1379,49 @@ export const ShellTool = Tool.define(
       // Row 36b (SEC-01, SEC-03): what a secret file or a protected place shows is judged by its name and where it lands,
       // so a link `notes.txt` to `.env` and a glob `.en?` count, and Swarm's own credential files and the key folders in
       // the home folder are whole-secret for output (reads of them run without asking now, U12).
-      const places = BypassLists.protectedOutputPlaces([Global.Path.home, os.homedir()], Global.Path.data)
+      // 47f (C68): the homes, like the resolver below, are the permission table's own (`AutonomyTable.spelling`).
+      const homes = AutonomyTable.spelling.homes()
+      const places = BypassLists.protectedOutputPlaces(homes, Global.Path.data)
+      // 1.2.7 M1-02 (U16): a name is resolved in every folder the command may read it from (`cd X && cat swarm.jsonc`,
+      // `(cd X; cat ./f)`), with `~`, `$HOME` and set variables expanded, as the permission table resolves the same read.
+      const reach = ps
+        ? { folders: [cwd], certain: true }
+        : Secrets.workingFolders(
+            commands(root).map(words),
+            cwd,
+            homes,
+          )
       const kinds = new Map<string, "whole" | "lines">()
       const kindOf = (word: string) => {
-        const file = absolute(word)
-        for (const name of [file, ...globbed(file)]) {
-          const kind = Secrets.outputKind(name, places)
-          if (kind) kinds.set(name, kind)
-          if (kind) return { file: name, kind }
+        const spelled = ps ? { names: [home(word)], certain: true } : Secrets.expandSpelling(home(word), homes)
+        const files = spelled.names.flatMap((name) =>
+          path.isAbsolute(name) ? [name] : reach.folders.map((folder) => path.resolve(folder, name)),
+        )
+        const found: { file: string; kind: "whole" | "lines" }[] = []
+        for (const file of new Set(files)) {
+          for (const name of [file, ...globbed(file)]) {
+            const kind = Secrets.outputKind(name, places)
+            if (kind) kinds.set(name, kind)
+            if (kind) {
+              found.push({ file: name, kind })
+              break
+            }
+          }
         }
-        return undefined
+        // Fail closed: a secret by its name whose file could not be located for certain, or is there but cannot be learned.
+        const relative = spelled.names.some((name) => !path.isAbsolute(name))
+        const unsure =
+          Secrets.maskedByName(word) &&
+          (!spelled.certain || (relative && !reach.certain) || found.some((item) => Secrets.unlearnable(item.file)))
+        return { found, unsure }
       }
       const named = new Set<string>()
       const read = new Set<string>()
+      let unsureRead: string | undefined
       for (const word of redirects.reads) {
-        const found = kindOf(word)
-        if (found) named.add(found.file), read.add(found.file)
+        const { found, unsure } = kindOf(word)
+        for (const item of found) named.add(item.file), read.add(item.file)
+        if (unsure) unsureRead = unsureRead ?? path.basename(word)
       }
       let reshaped = false
       let transformed = false
@@ -1303,7 +1432,8 @@ export const ShellTool = Tool.define(
         const tokens = command.map((item) => item.text)
         const cmd = ps || shellKind === "cmd" ? tokens[0]?.toLowerCase() : tokens[0]
         if (!ps) {
-          const plain = tokens.map(unquote)
+          // 1.2.7 M1-02: every word, `$NAME` and `${NAME}` included, which `parts` leaves out.
+          const plain = words(node)
           reshaped = reshaped || reshapes(plain)
           transformed = transformed || !verbatim(plain)
           content = content || !METADATA_VIEWERS.has(programOf(plain))
@@ -1313,11 +1443,15 @@ export const ShellTool = Tool.define(
             printed = printed ?? plain.slice(1).find((name) => !name.startsWith("-") && Secrets.secretPair(name, "x"))
           const loads = LOADERS.has(program)
           for (const word of plain.slice(1).flatMap((token) => token.split(WORD_BREAK))) {
-            const found = word ? kindOf(word) : undefined
-            if (!found) continue
-            named.add(found.file)
+            if (!word) continue
+            const { found, unsure } = kindOf(word)
             // `docker run --env-file .env` and `source .env` load the values; what they then print is scrubbed as before.
-            if (!loads && !plain.some((arg) => arg === "--env-file" || arg.startsWith("--env-file="))) read.add(found.file)
+            const reads = !loads && !plain.some((arg) => arg === "--env-file" || arg.startsWith("--env-file="))
+            for (const item of found) {
+              named.add(item.file)
+              if (reads) read.add(item.file)
+            }
+            if (unsure && reads && CONTENT_READERS.has(program)) unsureRead = unsureRead ?? path.basename(word)
           }
         }
 
@@ -1354,8 +1488,20 @@ export const ShellTool = Tool.define(
       // A secret file read by anything but a verbatim viewer (SEC-01 item 2), or loaded and then reshaped (1.2.5).
       else if ((read.size > 0 && transformed) || (reshaped && named.size > 0))
         scan.withheld = WITHHELD_TRANSFORMED(path.basename([...read, ...named][0]!))
+      // 1.2.7 M1-02: a verbatim reader of a secret-named file that could not be located for certain shows nothing of it.
+      else if (unsureRead) scan.withheld = WITHHELD_WHOLE(unsureRead)
       else if (printed) scan.withheld = `[hidden:${printed}]`
       if (read.size > 0) scan.masked = true
+      // 1.2.7 row 47j (U9-6, C76): a content search over a folder that holds Swarm's state (`rg x ~`, `grep -r x
+      // ~/.config`) runs under the consent; the values of the state files it may print are learned before it runs and its
+      // output is masked, with the table's own reading of which folders it searches.
+      if (!ps) {
+        const searched = AutonomyTable.searchedStateFolders(root.text, cwd, instance)
+        if (searched.length > 0) {
+          for (const file of stateFiles(searched)) scan.secretFiles.add(file)
+          scan.masked = true
+        }
+      }
 
       return scan
     })
@@ -1806,7 +1952,8 @@ export const ShellTool = Tool.define(
                   const copyGate: CopyAtGate | undefined = copy
                     ? { targets: Risk.copyTargets(copy, cwd), archived: archiveTargets ?? [] }
                     : undefined
-                  const steps = on ? decompose(tree.rootNode, cwd) : undefined
+                  // 1.2.7 row 47h: zsh's `>!`/`&>|` overwrite as `>` does, so they are read (and checkpointed) as `>`.
+                  const steps = on ? decompose(tree.rootNode, cwd, { zsh: name === "zsh" }) : undefined
                   // 1.2.6 row 37b: never both archived and checkpointed (01b section 3.3 rule 5). The folder's trust is the
                   // gate's to judge; the shell only says what it would save.
                   const plan =
@@ -1836,43 +1983,49 @@ export const ShellTool = Tool.define(
                     },
                     posix ? Reach.alwaysFor(params.command, cwd, instanceCtx) : undefined,
                   )
-                  return { ...scan, deletion: found, scripts, copy, copyGate, saving }
+                  // 1.2.7 F-5: a call that archives or checkpoints holds the folder's checkpoint hold from that step to its
+                  // exit. Other commands do not (residual R-F5: a build writing during a revert is not held up).
+                  const holds = Boolean(on) && (typeof found === "object" || Boolean(copy) || Boolean(saving))
+                  return { ...scan, deletion: found, scripts, copy, copyGate, saving, holds }
                 }),
               )
               scanned.secretFiles.forEach(Secrets.learnFile)
 
-              if (scanned.deletion) {
-                const archived = yield* archive(scanned.deletion, params.command, cwd, ctx)
-                if (archived) return archived
-              }
+              const rest = Effect.gen(function* () {
+                if (scanned.deletion) {
+                  const archived = yield* archive(scanned.deletion, params.command, cwd, ctx)
+                  if (archived) return archived
+                }
 
-              const env = yield* shellEnv(ctx, cwd)
-              if (scanned.scripts && scanned.scripts.size > 0) {
-                const changed = yield* scriptChanged(scanned.scripts, cwd, instanceCtx, ctx)
-                if (changed) return { ...changed, title: params.command }
-              }
-              const kept =
-                scanned.copy && scanned.copyGate
-                  ? yield* archiveReplaced(scanned.copy, params.command, cwd, ctx, scanned.copyGate)
-                  : undefined
-              if (kept && "stopped" in kept) return kept.stopped
-              // 1.2.6 row 37b: the checkpoint exists before anything of the command runs, or the command does not run.
-              const saved = scanned.saving ? yield* checkpoint(scanned.saving, params.command, cwd, ctx) : undefined
-              if (saved && "stopped" in saved) return saved.stopped
-              const result = yield* run(
-                {
-                  shell,
-                  command: saved?.command ?? params.command,
-                  cwd,
-                  env,
-                  timeout,
-                  withheld: scanned.withheld,
-                  masked: scanned.masked,
-                },
-                ctx,
-              )
-              const told = [kept && "text" in kept ? kept.text : undefined, saved?.text].filter(Boolean).join("\n")
-              return told ? { ...result, output: `${told}\n${result.output}` } : result
+                const env = yield* shellEnv(ctx, cwd)
+                if (scanned.scripts && scanned.scripts.size > 0) {
+                  const changed = yield* scriptChanged(scanned.scripts, cwd, instanceCtx, ctx)
+                  if (changed) return { ...changed, title: params.command }
+                }
+                const kept =
+                  scanned.copy && scanned.copyGate
+                    ? yield* archiveReplaced(scanned.copy, params.command, cwd, ctx, scanned.copyGate)
+                    : undefined
+                if (kept && "stopped" in kept) return kept.stopped
+                // 1.2.6 row 37b: the checkpoint exists before anything of the command runs, or the command does not run.
+                const saved = scanned.saving ? yield* checkpoint(scanned.saving, params.command, cwd, ctx) : undefined
+                if (saved && "stopped" in saved) return saved.stopped
+                const result = yield* run(
+                  {
+                    shell,
+                    command: saved?.command ?? params.command,
+                    cwd,
+                    env,
+                    timeout,
+                    withheld: scanned.withheld,
+                    masked: scanned.masked,
+                  },
+                  ctx,
+                )
+                const told = [kept && "text" in kept ? kept.text : undefined, saved?.text].filter(Boolean).join("\n")
+                return told ? { ...result, output: `${told}\n${result.output}` } : result
+              })
+              return yield* scanned.holds ? rest.pipe(ActionCheckpoint.checkpointWriteHold(instanceCtx.directory)) : rest
             }),
         }
       })

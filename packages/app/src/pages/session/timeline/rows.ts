@@ -153,7 +153,8 @@ export namespace Timeline {
       lastItem?.type === "part" &&
       (lastItem.group.type === "context" ||
         (lastRef?.part.type === "tool" && ["pending", "running"].includes(lastRef.part.state.status)) ||
-        ((lastRef?.part.type === "text" || lastRef?.part.type === "reasoning") &&
+        // U-9: with the setting off a reasoning block is a collapsed line, not a working indicator; the Thinking row stays.
+        ((lastRef?.part.type === "text" || (lastRef?.part.type === "reasoning" && showReasoning)) &&
           assistantMessages[lastRef.messageIndex]?.time.completed === undefined))
     const thinking =
       isActive && status === "busy" && !error && !partLive && (showReasoning ? assistantPartRefs.length === 0 : true)

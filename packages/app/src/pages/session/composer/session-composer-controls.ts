@@ -15,6 +15,7 @@ import { useSDK } from "@/context/sdk"
 import { useSync } from "@/context/sync"
 import { useTabs } from "@/context/tabs"
 import { useProviders } from "@/hooks/use-providers"
+import { openCheckedFolder, useFolderMissingNotice } from "@/pages/layout/folder-missing"
 import { pathKey } from "@/utils/path-key"
 
 export function createPromptInputController(input: {
@@ -84,8 +85,15 @@ export function createPromptProjectControls() {
         .map((project) => ({ ...project, server: item }))
     })
   })
+  // Row 58b (U-8): a project whose folder is gone gets the missing-folder notice; the draft and route stay as they are.
+  const folderMissing = useFolderMissingNotice()
   const selectProject = (worktree: string, serverKey?: string) => {
     const conn = serverKey ? server.list.find((conn) => ServerConnection.key(conn) === serverKey) : projectServer()
+    void openCheckedFolder(folderMissing, worktree, () => openProject(worktree, conn, serverKey), {
+      local: ServerConnection.local(conn),
+    })
+  }
+  const openProject = (worktree: string, conn: ServerConnection.Any | undefined, serverKey?: string) => {
     if (search.draftId) {
       if (!conn) return
       const target = global.ensureServerCtx(conn)

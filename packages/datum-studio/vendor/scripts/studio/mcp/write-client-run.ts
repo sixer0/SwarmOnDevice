@@ -11,7 +11,7 @@ import { CONTRACT_KIND_DEFS } from "../../../src/lib/studio/registry/contracts";
 import { safeFinalName, sameContent } from "../studio-report";
 import { checkOwnership, findMissionDoc, requesterOf, type ExistingDoc } from "./doc-tools";
 import { McpToolError } from "./safety";
-import { archivedIssueCode, bool, headWithRetry, http, isRecord, query, str, tok, untrustedFields, type Args, type ToolContext, type ToolOutput, type ToolWarning } from "./tool-kit";
+import { archivedIssueCode, bool, headWithRetry, http, isRecord, neutralizeDeep, query, str, tok, untrustedBlock, untrustedFields, type Args, type ToolContext, type ToolOutput, type ToolWarning } from "./tool-kit";
 import { buildClient, labelLangOf, type ClientSection } from "./write-client";
 import type { WrapperLang } from "../../../src/lib/studio/engine/front/texts";
 import { requireOwnParts } from "./write-parts";
@@ -170,6 +170,27 @@ export interface Finished {
   completeness: { status: string; missingRequired: number };
   render: { fileId: string; format: string; sha256: string; verified: boolean; bytes: number | null; finalFileName?: string } | null;
   renderError: string | null;
+  /** 1.2.7 N-10 (N7-144): galat render dari server (isi asal dokumen) -> hanya blok/medan tak tepercaya. */
+  renderMessages?: Array<{ code: string; message: string }>;
+}
+
+/** 1.2.7 N-10: id cek di pesan galat render, mis. `(DT-10a)` / `(DATUM-25)`. */
+const RENDER_CHECK_ID = /\((DT-\d+[a-z]?|DATUM-\d+)\)/;
+
+/**
+ * 1.2.7 N-10 (N7-144, C8 D-14): R17 balasan job gagal (HTTP OK, `outputs []`, `errors [{code, message}]`) -> kode
+ * pertama sebagai token aman + ` (<id cek>)` bila pesan memuatnya. `NO_DOCX_OUTPUT` hanya bila balasan tanpa galat.
+ */
+function renderFailure(body: unknown): { renderError: string; renderMessages?: Array<{ code: string; message: string }> } {
+  const b = isRecord(body) ? body : {};
+  const list = arr(b.errors).length > 0 ? arr(b.errors) : isRecord(b.job) ? arr(b.job.errors) : [];
+  const first = list.find((e) => tok(e.code, "") !== "");
+  if (first === undefined) return { renderError: "NO_DOCX_OUTPUT" };
+  const check = RENDER_CHECK_ID.exec(String(first.message ?? ""))?.[1];
+  return {
+    renderError: `${tok(first.code)}${check !== undefined ? ` (${check})` : ""}`,
+    renderMessages: list.slice(0, 8).map((e) => ({ code: tok(e.code), message: String(e.message ?? "").slice(0, 2000) })),
+  };
 }
 
 /** R15 kelengkapan; COMPLETE -> R17 render docx + R10 HEAD verifikasi sha (satu panggilan alat = dokumen siap unduh). */
@@ -187,7 +208,7 @@ export async function finishDoc(ctx: ToolContext, id: string, agentId: string | 
     throw e;
   }
   const out = arr(isRecord(reply.body) ? reply.body.outputs : null).find((o) => String(o.format).toUpperCase() === "DOCX");
-  if (out === undefined || typeof out.id !== "string") return { completeness, render: null, renderError: "NO_DOCX_OUTPUT" };
+  if (out === undefined || typeof out.id !== "string") return { completeness, render: null, ...renderFailure(reply.body) };
   const head = await headWithRetry(ctx, `${studioRoutePath("R10", { id: out.id })}?verify=1`, "HEAD /api/studio/files/{id}?verify=1");
   const sha = (head.headers.get("x-studio-sha256") ?? String(out.sha256 ?? "")).toLowerCase();
   const name = head.headers.get("x-studio-final-filename") ?? "";
@@ -220,9 +241,13 @@ export function clientOutput(tool: string, id: string, docNumber: string | null,
     `studio_edit { documentId: "${tok(id)}", edits: [{ find, replace }] } untuk teks; { figure: "<teks keterangan>", chart: { categories?, series? } } untuk data grafik`,
     ...(f.render ? [`studio_file_verify { fileId: "${tok(f.render.fileId)}", downloadDir } untuk mengunduh DOCX`] : ["lengkapi isi lalu studio_write lagi (render penuh hanya bila COMPLETE)"]),
   ];
+  const failed = f.render === null ? (f.renderMessages ?? []) : [];
+  const verifyFields = verify !== null ? (detail ? ["verify.headings", "verify.captions", "verify.meta"] : ["verify.meta"]) : [];
+  const flagged = [...(failed.length > 0 ? ["renderErrors"] : []), ...verifyFields];
   const lines = [
     `${tool}: dokumen klien ${tok(docNumber)} (documentId ${tok(id)}) rev ${tok(rev)} ${state}; kelengkapan ${f.completeness.status}${f.completeness.missingRequired > 0 ? ` (kurang ${f.completeness.missingRequired})` : ""}`,
     ...(f.render && verify !== null && !detail ? [] : [f.render ? `berkas: ${tok(f.render.fileId)} DOCX sha256 ${f.render.sha256.slice(0, 16)} ${f.render.verified ? "FILE_VERIFIED(sha256)" : "FILE_UNVERIFIED(sha256)"}` : `berkas: tidak dirender${f.renderError ? ` (galat ${f.renderError})` : ""}`]),
+    ...(failed.length > 0 ? [untrustedBlock(failed.map((e) => `${e.code}: ${e.message}`).join("\n"), { jenis: "galat-render", documentId: id })] : []),
     ...(verify !== null ? [verify.line, ...(verify.block !== null ? [verify.block] : [])] : []),
     ...(detail ? nextSteps.map((s) => `lanjut: ${s}`) : []),
   ];
@@ -236,9 +261,11 @@ export function clientOutput(tool: string, id: string, docNumber: string | null,
       completeness: f.completeness,
       render: compactRender(f.render, detail),
       ...(f.renderError ? { renderError: f.renderError } : {}),
+      ...(failed.length > 0 ? { renderErrors: neutralizeDeep(failed) } : {}),
       ...(detail ? { nextSteps } : {}),
       ...extra,
-      ...(verify !== null ? { verify: compactVerify(verify.data, detail), ...untrustedFields(detail ? ["verify.headings", "verify.captions", "verify.meta"] : ["verify.meta"]) } : {}),
+      ...(verify !== null ? { verify: compactVerify(verify.data, detail) } : {}),
+      ...(flagged.length > 0 ? untrustedFields(flagged) : {}),
     },
     ...(warnings.length > 0 ? { warnings } : {}),
   };

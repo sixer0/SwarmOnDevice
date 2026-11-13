@@ -500,6 +500,8 @@ describe("decision card text (row 167)", () => {
     expect(card.querySelectorAll(".truncate,.whitespace-nowrap,.text-ellipsis").length).toBe(0)
     for (const sel of ["[data-mission-question]", "[data-mission-context]", "[data-mission-consequence]"])
       for (const el of all(card, sel)) expect(el.className).toContain("[overflow-wrap:anywhere]")
-    for (const b of all(card, "[data-mission-option]")) expect(b.className).toMatch(/\bw-full\b.*\bmin-w-0\b/)
+    // INTENT 1.2.7 row 58a (F-3): the options wrap in a row and grow from 8rem (a lone option, or one per line in a
+    // narrow card, still spans the card); min-w-0 keeps their text wrapping inside.
+    for (const b of all(card, "[data-mission-option]")) expect(b.className).toMatch(/\bmin-w-0\b.*\bflex-\[1_1_8rem\]/)
   })
 })

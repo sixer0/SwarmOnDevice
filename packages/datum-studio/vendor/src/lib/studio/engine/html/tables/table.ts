@@ -26,6 +26,7 @@ import type {
   ColumnSpec,
   NormBlock,
   ParaFormat,
+  ParamMap,
   RenderContext,
   RoleKey,
   Row,
@@ -35,12 +36,12 @@ import type {
 import { apparatusReserveTw } from "../../docx/blocks/rail";
 import { baselineSnapTw } from "../../docx/blocks/rhythm";
 import { mmToTw } from "../../tokens";
-import { assertTableFits } from "../../table-fit";
+import { assertTableFits, tableBreakBudget, tableBreakRuns, type TableBreakBudget } from "../../table-fit";
 import { scaleRun } from "../../tokens/roles";
 import { artifactLabel, captionHtml, sourceInner, sourceParagraphCss, sourceParagraphHtml } from "./apparatus";
 import { attr, escText } from "./escape";
 import { symbolBoundRuns } from "../blocks/semantic";
-import { inlineHtml, paraHtml, runsHtml } from "./inline";
+import { inlineHtml, paraHtml, parseMdLite, runsHtml } from "./inline";
 import {
   borderCss,
   color,
@@ -83,6 +84,8 @@ interface TableEnv {
   marginLR: { left: number; right: number };
   hasHead: boolean;
   depth: number;
+  /** Row 40d (C50): room per column before an ID list is broken (table-fit.ts `tableBreakBudget`). */
+  breakBudget: TableBreakBudget;
 }
 
 function rowKind(r: Row): RowKind {
@@ -164,6 +167,24 @@ interface CellPos {
   zebraIndex: number;
 }
 
+/**
+ * Swarm 1.2.7 row 40 (N-11): the cell paragraph with `<wbr>` after each separator of a long ID list joined without
+ * spaces (table-fit.ts `breakableSegments`, the same breaks DT-10a counts). Null when no break applies (the caller's
+ * output stays byte-identical) or when the text already holds U+200B (the marker used here).
+ */
+function brokenParaHtml(para: CellParagraph, p: ParamMap, rk: RoleKey | "unit", budgetMm: number): string | null {
+  const runs =
+    "runs" in para && Array.isArray(para.runs)
+      ? symbolBoundRuns(para.runs, p, rk === "unit" ? undefined : rk)
+      : "text" in para && typeof para.text === "string"
+        ? parseMdLite(para.text)
+        : null;
+  if (!runs || runs.some((r) => "t" in r && r.t.includes(ZWSP))) return null;
+  const broken = tableBreakRuns(runs, ZWSP, budgetMm);
+  return broken ? runsHtml(broken, {}, p).split(ZWSP).join("<wbr>") : null;
+}
+const ZWSP = "\u200B";
+
 function cellHtml(env: TableEnv, cell: Cell, colIdx: number, pos: CellPos, rowspan: number, tag: "td" | "th"): string {
   const { ctx, cols, rules } = env;
   const p = ctx.tpl.params;
@@ -197,7 +218,7 @@ function cellHtml(env: TableEnv, cell: Cell, colIdx: number, pos: CellPos, rowsp
         "runs" in para && Array.isArray(para.runs)
           ? runsHtml(symbolBoundRuns(para.runs, p, rk === "unit" ? undefined : rk), {}, p)
           : inlineHtml(para, {}, p);
-      inner += paraHtml(body, fmt, pStyle);
+      inner += paraHtml((!nowrap && brokenParaHtml(para, p, rk, env.breakBudget.cellMm(colIdx, gs))) || body, fmt, pStyle);
     }
   }
   // Satuan tunggal di kepala (P5-06 pengecualian): kolom numeral dengan `unit`.
@@ -356,6 +377,7 @@ export function tableHtml(t: TableBlock, ctx: RenderContext, opts: TableHtmlOpti
     marginLR: { left: twToMm(Number(cm.left ?? 0) || 0), right: twToMm(Number(cm.right ?? 0) || 0) },
     hasHead: head.length > 0,
     depth: opts.depth,
+    breakBudget: tableBreakBudget(t, p),
   };
 
   // Lebar tabel dan kolom.

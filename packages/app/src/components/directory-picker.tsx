@@ -14,6 +14,8 @@ type DirectoryPickerInput = {
   server: ServerConnection.Any
   title?: string
   multiple?: boolean
+  /** Where the native picker opens (U-12: the project folder). The in-app dialog keeps its own start. */
+  defaultPath?: string
   onSelect: (result: string | string[] | null) => void
 }
 
@@ -24,7 +26,9 @@ export function useDirectoryPicker() {
 
   return (input: DirectoryPickerInput) => {
     if (directoryPickerKind(platform.platform, input.server) === "native" && platform.platform === "desktop") {
-      void platform.openDirectoryPickerDialog({ title: input.title, multiple: input.multiple }).then(input.onSelect)
+      void platform
+        .openDirectoryPickerDialog({ title: input.title, multiple: input.multiple, defaultPath: input.defaultPath })
+        .then(input.onSelect)
       return
     }
 

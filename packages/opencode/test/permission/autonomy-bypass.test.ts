@@ -206,7 +206,9 @@ describe("S1.13 the overlay, rule by rule (P8)", () => {
     // 1.1.3 (matrix row 8): the kept not_routine verdict runs.
     expect(AutonomyTable.classify(await sh("kill -l"))).toEqual(HELD("not_routine"))
     expect(consented(await sh("kill -l"))).toEqual(OPENED("not_routine"))
-    expect(consented(await sh("bash -c 'make'"))).toEqual(OPENED("unreadable_command"))
+    // 1.2.7 U-7 (INTENT, C21 b): a `-c` literal the shell's reader reads in full is judged as the command it runs.
+    expect(consented(await sh("bash -c 'make'"))).toEqual(OPENED("not_routine"))
+    expect(consented(await sh("bash -c 'make $X'"))).toEqual(OPENED("unreadable_command"))
     expect(consented(await sh("source .venv/bin/activate"))).toEqual(OPENED("unreadable_command"))
     expect(consented(await sh("make", {}, { risk: "remote" }))).toMatchObject(OPENED("outward"))
   })

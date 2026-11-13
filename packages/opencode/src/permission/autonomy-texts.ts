@@ -60,9 +60,54 @@ export const STOPS_SWARM_TEXT =
 const PLAN_MODE_TEXT =
   "This call did not run. The plan agent only reads and writes its plan file. Put the change in the plan, or hand it to the build agent."
 
-/** 1.2.6 (P-01d, SEC-04): X `app_state`, an agent's write to Swarm's own state or settings (tool-health.json included). */
+/**
+ * 1.2.6 (P-01d, SEC-04): X `app_state`, an agent's write to Swarm's own state or settings (tool-health.json included).
+ * 1.2.7 N-1 (N7-050, K7-06): also a look there the SR OP-2 allowlist does not take (a count, a byte dump, a search); the
+ * text names the looks that do run.
+ */
 const APP_STATE_TEXT =
-  "This call did not run. Autonomous mode never changes Swarm's own state or settings. Write what should change into your final message for the person."
+  "This call did not run. Autonomous mode never changes Swarm's own state or settings. To look at those files, use the Read tool or an inspection command such as ls, cat or head; reading them is allowed. Write what should change into your final message for the person."
+
+/**
+ * 1.2.7 U4 (N7-054): the refusal a read role (`planner`, `data-collector`; `READ_SHELL_ROLES`) gets for a shell call
+ * outside the read class (`isReadOnlyShell`), in every mode, whatever a person's "always", a task grant or user config say.
+ */
+export const ROLE_SHELL_OUTSIDE_READ_TEXT =
+  "This agent role only runs inspection commands (for example ls, head, git log). Hand this command to a coder subagent."
+
+/**
+ * 1.2.7 F-4 (N7-052): X `own_api`, a call to Swarm's own running server whose address the call itself names (a literal
+ * host and port, a variable assigned in the same text, a config file that was read).
+ */
+// 1.2.7 row 47l (C79): agents may call Swarm's own server; only the routes that act as the person get this text.
+export const OWN_API_TEXT =
+  "This call did not run. Agents may call Swarm's own server, but not the routes that act as the person (the autonomous mode and consent, answers to permissions and questions, reverts, folder trust, configuration, shell commands run as the person, control of the person's app, repository commits and patches, upgrades and shutdowns), and not by a socket or program code whose route cannot be read. Use the tools you were given, or write what is needed into your final message for the person."
+
+/**
+ * 1.2.7 F-4 (N7-135): X `own_api` with a reason (N7-136), a network call whose address could not be worked out while
+ * Swarm's server listens: a config file that could not be read, or a host or port from a variable, a command or a list.
+ */
+export const OWN_API_UNRESOLVED_TEXT =
+  "This call did not run. Autonomous mode cannot tell where this network call goes (the address comes from a variable, a config file or another command). Agents may call Swarm's own server, but a call whose route cannot be read is refused, because it might be a route that acts as the person. Write the host, port and route into the command itself."
+
+/**
+ * 1.2.7 U-10 (C63): X `own_api` with reason `person_only`, an agent's shell running `swarm autonomy` (the 1.1.1 rule: only
+ * the person turns the mode on, never an agent).
+ */
+export const OWN_API_PERSON_ONLY_TEXT =
+  "This call did not run. Only the person turns autonomous mode on or off, in the app or by typing swarm autonomy at their own terminal; an agent never runs that command. Carry on without it, and if the mode should change, say so in your final message for the person."
+
+/**
+ * 1.2.7 F-4 (N7-136): the closed reason list of an X `own_api`. Without a reason the address was named in the call.
+ * 1.2.7 U-10: `person_only`, the `swarm autonomy` command.
+ */
+export type OwnApiReason = "config_file" | "unresolved_target" | "person_only"
+
+/** The text of an X `own_api`: `OWN_API_UNRESOLVED_TEXT` for a reason of the closed list, else `OWN_API_TEXT`. */
+export function ownApiText(reason: string | undefined): string {
+  if (reason === "person_only") return OWN_API_PERSON_ONLY_TEXT
+  return reason === "config_file" || reason === "unresolved_target" ? OWN_API_UNRESOLVED_TEXT : OWN_API_TEXT
+}
 
 /** 1.2.6 (P-01d): X `folder_not_trusted`, an agent's ask to trust a folder. Module-local (N-149). */
 const FOLDER_NOT_TRUSTED_TEXT =
@@ -136,7 +181,8 @@ export const REFUSED_TEXT: Readonly<
     | "plan_mode"
     | "app_state"
     | "folder_not_trusted"
-    | "checkpoint_failed",
+    | "checkpoint_failed"
+    | "own_api",
     string
   >
 > = {
@@ -154,6 +200,8 @@ export const REFUSED_TEXT: Readonly<
   app_state: APP_STATE_TEXT,
   folder_not_trusted: FOLDER_NOT_TRUSTED_TEXT,
   checkpoint_failed: CHECKPOINT_FAILED_TEXT,
+  // 1.2.7 F-4: the text without a reason; `ownApiText` picks N7-135 for a reason.
+  own_api: OWN_API_TEXT,
 }
 
 /**

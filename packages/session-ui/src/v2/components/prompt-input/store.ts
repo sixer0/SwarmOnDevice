@@ -82,6 +82,15 @@ export function createPromptInputV2Store(input: PromptInputV2StoreInput) {
       setStore()("prompt", insertMention(store().prompt, start < 0 ? end : start, end, mention))
       setStore()("cursor", (start < 0 ? end : start) + mention.content.length + 1)
     },
+    // A mention picked outside the `@` popover (Add folder): goes in at the cursor and never consumes typed text, so
+    // an earlier "@" in the draft (an e-mail address) stays as written (U-12, 1.2.7).
+    insertMentionAtCursor(mention: PromptInputV2FilePart) {
+      const length = promptLength(store().prompt)
+      const at = Math.min(store().cursor ?? length, length)
+      const placed = insertMentionOnce(store().prompt, at, mention)
+      setStore()("prompt", placed.prompt)
+      setStore()("cursor", (placed.inserted ? at : length) + mention.content.length + 1)
+    },
     addAttachment(attachment: PromptInputV2Attachment) {
       setStore()("prompt", (prompt) => [...prompt, attachment])
     },
@@ -135,6 +144,26 @@ function insertMention(
     ]
   })
   return withOffsets(parts)
+}
+
+function insertMentionOnce(prompt: PromptInputV2Prompt, at: number, mention: PromptInputV2FilePart) {
+  let position = 0
+  let inserted = false
+  const parts = prompt.flatMap<PromptInputV2Prompt[number]>((part) => {
+    if (part.type === "image") return [part]
+    const partStart = position
+    position += part.content.length
+    if (inserted || part.type !== "text" || at < partStart || at > position) return [part]
+    inserted = true
+    const before = part.content.slice(0, at - partStart)
+    return [
+      ...(before ? [{ type: "text" as const, content: before, start: 0, end: 0 }] : []),
+      mention,
+      { type: "text" as const, content: ` ${part.content.slice(at - partStart)}`, start: 0, end: 0 },
+    ]
+  })
+  if (!inserted) parts.push(mention, { type: "text", content: " ", start: 0, end: 0 })
+  return { prompt: withOffsets(parts), inserted }
 }
 
 function withOffsets(prompt: PromptInputV2Prompt): PromptInputV2Prompt {

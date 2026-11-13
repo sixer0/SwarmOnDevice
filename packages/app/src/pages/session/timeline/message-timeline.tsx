@@ -1099,6 +1099,8 @@ export function MessageTimeline(props: {
     const defaultOpen = createMemo(() => {
       const item = part()
       if (!item) return
+      // U-9 (C11): a reasoning block starts open only when "Show reasoning summaries" is on; its own toggle overrides.
+      if (item.type === "reasoning") return settings.general.showReasoningSummaries()
       return partDefaultOpen(item, settings.general.shellToolPartsExpanded(), settings.general.editToolPartsExpanded())
     })
 

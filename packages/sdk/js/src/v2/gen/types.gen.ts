@@ -74,6 +74,7 @@ export type Event =
   | EventPermissionAsked
   | EventPermissionReplied
   | EventAutonomyBlocked
+  | EventAutonomyModeChanged
   | EventTuiPromptAppend2
   | EventTuiCommandExecute2
   | EventTuiToastShow2
@@ -1704,6 +1705,14 @@ export type GlobalEvent = {
       }
     | {
         id: string
+        type: "autonomy.mode.changed"
+        properties: {
+          scope: "session" | "directory"
+          sessionID?: string
+        }
+      }
+    | {
+        id: string
         type: "tui.prompt.append"
         properties: {
           text: string
@@ -2433,6 +2442,7 @@ export type AutonomyAuditLine =
         | "irreversible"
         | "admin_rights"
         | "checkpoint_failed"
+        | "own_api"
         | "outside_read"
         | "outside_copy"
         | "outside_edit"
@@ -2477,6 +2487,7 @@ export type AutonomyAuditLine =
         | "irreversible"
         | "admin_rights"
         | "checkpoint_failed"
+        | "own_api"
         | "outside_read"
         | "outside_copy"
         | "outside_edit"
@@ -2487,7 +2498,15 @@ export type AutonomyAuditLine =
         | "by_main_agent"
         | "protected_read"
         | "checkpointed"
-      via?: "grant" | "duplicate" | "consent" | "outward" | "user_request" | "main_agent" | "for_subagent"
+      via?:
+        | "grant"
+        | "duplicate"
+        | "consent"
+        | "outward"
+        | "user_request"
+        | "main_agent"
+        | "for_subagent"
+        | "task_grant"
       duplicateOf?: string
       consentID?: string
       destination?: string
@@ -3546,6 +3565,7 @@ export type V2Event =
   | PermissionAsked
   | PermissionReplied
   | AutonomyBlocked
+  | AutonomyModeChanged
   | TuiPromptAppend
   | TuiCommandExecute
   | TuiToastShow
@@ -6423,6 +6443,24 @@ export type AutonomyBlocked = {
   }
 }
 
+export type AutonomyModeChanged = {
+  id: string
+  metadata?: {
+    [key: string]: unknown
+  }
+  type: "autonomy.mode.changed"
+  durable?: {
+    aggregateID: string
+    seq: number
+    version: number
+  }
+  location?: LocationRef
+  data: {
+    scope: "session" | "directory"
+    sessionID?: string
+  }
+}
+
 export type TuiPromptAppend = {
   id: string
   metadata?: {
@@ -7596,6 +7634,15 @@ export type EventAutonomyBlocked = {
     sessionID: string
     level: "b0" | "b1"
     count: number
+  }
+}
+
+export type EventAutonomyModeChanged = {
+  id: string
+  type: "autonomy.mode.changed"
+  properties: {
+    scope: "session" | "directory"
+    sessionID?: string
   }
 }
 

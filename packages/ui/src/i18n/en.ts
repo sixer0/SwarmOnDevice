@@ -89,6 +89,8 @@ export const dict: Record<string, string> = {
   "ui.sessionTurn.status.runningCommands": "Running commands",
   "ui.sessionTurn.status.thinking": "Thinking",
   "ui.sessionTurn.status.thinkingWithTopic": "Thinking - {{topic}}",
+  "ui.messagePart.reasoning.show": "Show thinking",
+  "ui.messagePart.reasoning.hide": "Hide thinking",
   "ui.sessionTurn.status.gatheringThoughts": "Gathering thoughts",
   "ui.sessionTurn.status.consideringNextSteps": "Considering next steps",
 
@@ -131,6 +133,7 @@ export const dict: Record<string, string> = {
   "ui.promptInput.placeholder.normal": "Ask anything, {{slash}} for commands, {{at}} for context...",
   "ui.promptInput.add": "Add images and files",
   "ui.promptInput.attachments": "Images and files",
+  "ui.promptInput.addFolder": "Add folder",
   "ui.promptInput.context": "Context",
   "ui.promptInput.shell": "Shell command",
   "ui.promptInput.chooseAgent": "Choose agent",

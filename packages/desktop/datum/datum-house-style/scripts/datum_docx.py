@@ -387,7 +387,7 @@ datatable('Tabel 5.2',
             '155.000', '574.647.000'],
            ['5', 'Kabel NYFGBY 4 × 2,5 mm², sambungan titik', '962,5', 'm', '80.000', '77.000.000']],
           ('Subtotal kelompok A + B, Arsenal Timur, sebelum PPN', '1.524.613.400'),
-          'Register koordinat Rev B · Peta 001–014 · AHS 008/GSP/RAB/VIII/2026, disusun menurut '
+          'Register koordinat Rev B · Peta 001–014 · AHS 000/GSP/RAB/VIII/2026, disusun menurut '
           'Permen PUPR No. 8 Tahun 2023.     PROVENANS  volume [DITURUNKAN] · harga satuan [PEMASOK, '
           '3 kutipan, median diambil, keandalan B2].     PPN 11 % diperhitungkan pada lembar '
           'REKAPITULASI, tidak pada harga satuan.')

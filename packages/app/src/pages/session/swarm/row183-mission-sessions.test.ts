@@ -76,13 +76,14 @@ describe("row 183: the poll passes the sessions to list", () => {
     poller.dispose()
   })
 
-  test("no sessions accessor or an empty list: the input is {directory} as before", async () => {
+  // INTENT 1.2.7 U-1 (U2): without session ids the panel lists nothing, so there is no list call at all.
+  test("no sessions accessor or an empty list: no list call, the known-empty state", async () => {
     for (const sessions of [undefined, () => [] as string[]]) {
       const r = recorder()
       const poller = createMissionPoller({ source: r.source, directory: () => "/repo", sessions, lang: () => "en", onState: () => {}, timers: timers().timers })
       poller.setMode("live")
       await flush()
-      expect(r.inputs).toEqual([{ directory: "/repo" }])
+      expect(r.inputs).toEqual([])
       poller.dispose()
     }
   })

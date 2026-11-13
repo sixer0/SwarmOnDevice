@@ -20,6 +20,7 @@ import {
   createMemo,
   createSignal,
   For,
+  Index,
   Match,
   on,
   onCleanup,
@@ -30,7 +31,8 @@ import {
 } from "solid-js"
 import { createStore } from "solid-js/store"
 import type { SwarmController } from "../swarm/swarm-controller"
-import { SwarmAgents } from "../swarm/swarm-view"
+import { OverlapRow, SwarmAgents } from "../swarm/swarm-view"
+import type { SwarmModel } from "../swarm/swarm-model"
 import type { MissionControlMount } from "../swarm/mission-control"
 import { offersAgentsView } from "../swarm/mission-control-layout"
 import { shownPatterns } from "@/pages/home/agent-board-model"
@@ -294,6 +296,7 @@ const CATEGORY_LABEL = {
   folder_not_trusted: "session.map.decisions.category.folder_not_trusted",
   plan_mode: "session.map.decisions.category.plan_mode",
   app_state: "session.map.decisions.category.app_state",
+  own_api: "session.map.decisions.category.own_api",
   asks_every_time: "session.map.decisions.category.asks_every_time",
   irreversible: "session.map.decisions.category.irreversible",
   admin_rights: "session.map.decisions.category.admin_rights",
@@ -420,34 +423,110 @@ export function DecisionRow(props: {
   }
   return (
     <div data-decision={props.entry.id} class="flex min-w-0 flex-col gap-1 rounded-[6px] px-2 py-1.5 leading-[18px]">
-      <span data-decision-summary class="min-w-0 break-words text-v2-text-text-base [font-weight:440]">
-        <span data-decision-what>
-          {language.t(whatOf(props.entry.permission))}
-          <Show when={subject()}>
+      {/* 1.2.7 U-5 (C6, D-11): the summary and Details scroll in a bounded body; the buttons stay below it. */}
+      <div data-map-decision-body class="flex max-h-[min(50vh,320px)] min-h-0 flex-col gap-1 overflow-y-auto overscroll-contain">
+        <span data-decision-summary class="min-w-0 break-words text-v2-text-text-base [font-weight:440]">
+          <span data-decision-what>
+            {language.t(whatOf(props.entry.permission))}
+            <Show when={subject()}>
+              {(text) => (
+                <>
+                  {": "}
+                  <span class="break-all font-mono text-[12px]">{text()}</span>
+                </>
+              )}
+            </Show>
+          </span>
+          {" · "}
+          <span data-decision-state>{state()}</span>
+          {" · "}
+          <span data-decision-who>{language.t(whoOf(props.entry.by))}</span>
+          <Show when={why()}>
             {(text) => (
               <>
-                {": "}
-                <span class="break-all font-mono text-[12px]">{text()}</span>
+                {" · "}
+                <span data-decision-why class="text-v2-text-text-muted">
+                  {text()}
+                </span>
               </>
             )}
           </Show>
         </span>
-        {" · "}
-        <span data-decision-state>{state()}</span>
-        {" · "}
-        <span data-decision-who>{language.t(whoOf(props.entry.by))}</span>
-        <Show when={why()}>
-          {(text) => (
-            <>
-              {" · "}
-              <span data-decision-why class="text-v2-text-text-muted">
-                {text()}
+        <Show when={open()}>
+          <div data-decision-details class="flex min-w-0 flex-col gap-1">
+            <span class="text-v2-text-text-faint [font-weight:440]">{props.entry.permission}</span>
+            <For each={shownPatterns(props.entry.patterns)}>
+              {(pattern) => (
+                <span
+                  data-decision-pattern
+                  class="min-w-0 whitespace-pre-wrap break-all font-mono text-[12px] text-v2-text-text-base"
+                >
+                  {pattern}
+                </span>
+              )}
+            </For>
+            <Show when={props.entry.patternsTruncated}>
+              <span class="font-mono text-[12px] text-v2-text-text-faint">…</span>
+            </Show>
+            <For each={props.entry.follows}>
+              {(next) => (
+                <span data-decision-follows class="flex min-w-0 flex-col">
+                  <span class="text-v2-text-text-faint [font-weight:440]">{next.permission}</span>
+                  <For each={shownPatterns(next.patterns)}>
+                    {(pattern) => (
+                      <span class="min-w-0 whitespace-pre-wrap break-all font-mono text-[12px] text-v2-text-text-base">
+                        {pattern}
+                      </span>
+                    )}
+                  </For>
+                </span>
+              )}
+            </For>
+            <For each={props.calls}>
+              {(call) => (
+                <span data-decision-call class="flex min-w-0 flex-col gap-1">
+                  <span class="text-v2-text-text-faint [font-weight:440]">{call.tool}</span>
+                  <For each={call.args}>
+                    {(arg) => (
+                      <span class="flex min-w-0 flex-col">
+                        <span class="text-v2-text-text-faint [font-weight:440]">{arg.name}</span>
+                        <span class="max-h-60 min-w-0 overflow-y-auto whitespace-pre-wrap break-all font-mono text-[12px] text-v2-text-text-base">
+                          {arg.value}
+                        </span>
+                      </span>
+                    )}
+                  </For>
+                </span>
+              )}
+            </For>
+            <Show when={category()}>
+              {(key) => <span class="text-v2-text-text-muted [font-weight:440]">{language.t(key())}</span>}
+            </Show>
+            <Show when={props.entry.reason}>
+              {(reason) => (
+                <span
+                  data-decision-reason
+                  class="min-w-0 whitespace-pre-wrap break-words text-v2-text-text-muted [font-weight:440]"
+                >
+                  {reason()}
+                </span>
+              )}
+            </Show>
+            <Show when={by() || outcome()}>
+              <span class="flex flex-wrap items-center gap-x-2 text-v2-text-text-faint [font-weight:440]">
+                <Show when={by()}>{(value) => <span class="min-w-0 break-all">{value()}</span>}</Show>
+                <Show when={outcome()}>{(key) => <span>{language.t(key())}</span>}</Show>
               </span>
-            </>
-          )}
+            </Show>
+            <Show when={cannotUndo()}>
+              <span data-decision-no-undo class="text-v2-text-text-faint [font-weight:440]">
+                {language.t("session.permission.cannotUndo")}
+              </span>
+            </Show>
+          </div>
         </Show>
-      </span>
-      <span class="mt-0.5 flex flex-wrap gap-1">
+      </div>
+      <span data-map-decision-actions class="mt-0.5 flex shrink-0 flex-wrap gap-1">
         <Show when={props.onReply}>
           {(reply) => (
             <>
@@ -486,79 +565,6 @@ export function DecisionRow(props: {
           {language.t(open() ? "session.map.decisions.details.hide" : "session.map.decisions.details.show")}
         </ButtonV2>
       </span>
-      <Show when={open()}>
-        <div data-decision-details class="flex min-w-0 flex-col gap-1">
-          <span class="text-v2-text-text-faint [font-weight:440]">{props.entry.permission}</span>
-          <For each={shownPatterns(props.entry.patterns)}>
-            {(pattern) => (
-              <span
-                data-decision-pattern
-                class="min-w-0 whitespace-pre-wrap break-all font-mono text-[12px] text-v2-text-text-base"
-              >
-                {pattern}
-              </span>
-            )}
-          </For>
-          <Show when={props.entry.patternsTruncated}>
-            <span class="font-mono text-[12px] text-v2-text-text-faint">…</span>
-          </Show>
-          <For each={props.entry.follows}>
-            {(next) => (
-              <span data-decision-follows class="flex min-w-0 flex-col">
-                <span class="text-v2-text-text-faint [font-weight:440]">{next.permission}</span>
-                <For each={shownPatterns(next.patterns)}>
-                  {(pattern) => (
-                    <span class="min-w-0 whitespace-pre-wrap break-all font-mono text-[12px] text-v2-text-text-base">
-                      {pattern}
-                    </span>
-                  )}
-                </For>
-              </span>
-            )}
-          </For>
-          <For each={props.calls}>
-            {(call) => (
-              <span data-decision-call class="flex min-w-0 flex-col gap-1">
-                <span class="text-v2-text-text-faint [font-weight:440]">{call.tool}</span>
-                <For each={call.args}>
-                  {(arg) => (
-                    <span class="flex min-w-0 flex-col">
-                      <span class="text-v2-text-text-faint [font-weight:440]">{arg.name}</span>
-                      <span class="max-h-60 min-w-0 overflow-y-auto whitespace-pre-wrap break-all font-mono text-[12px] text-v2-text-text-base">
-                        {arg.value}
-                      </span>
-                    </span>
-                  )}
-                </For>
-              </span>
-            )}
-          </For>
-          <Show when={category()}>
-            {(key) => <span class="text-v2-text-text-muted [font-weight:440]">{language.t(key())}</span>}
-          </Show>
-          <Show when={props.entry.reason}>
-            {(reason) => (
-              <span
-                data-decision-reason
-                class="min-w-0 whitespace-pre-wrap break-words text-v2-text-text-muted [font-weight:440]"
-              >
-                {reason()}
-              </span>
-            )}
-          </Show>
-          <Show when={by() || outcome()}>
-            <span class="flex flex-wrap items-center gap-x-2 text-v2-text-text-faint [font-weight:440]">
-              <Show when={by()}>{(value) => <span class="min-w-0 break-all">{value()}</span>}</Show>
-              <Show when={outcome()}>{(key) => <span>{language.t(key())}</span>}</Show>
-            </span>
-          </Show>
-          <Show when={cannotUndo()}>
-            <span data-decision-no-undo class="text-v2-text-text-faint [font-weight:440]">
-              {language.t("session.permission.cannotUndo")}
-            </span>
-          </Show>
-        </div>
-      </Show>
     </div>
   )
 }
@@ -1226,7 +1232,10 @@ export function DecisionList(props: { decisions: ReturnType<typeof createDecisio
       </Show>
       <Show when={props.decisions.groups()}>
         {(groups) => (
-          <AccordionV2 multiple collapsible defaultValue={["waiting"]}>
+          // 1.2.7 row 58g (F-11): the accordion clips (overflow: hidden), and a clipping flex item may shrink to 0, so
+          // in a short list it took the list's height and cut off an expanded entry's actions with nothing to scroll.
+          // shrink-0 keeps its content height; the list `[data-map-decisions]` is then the one scroll container.
+          <AccordionV2 multiple collapsible defaultValue={["waiting"]} class="shrink-0">
             <AccordionV2.Item value="waiting" data-decision-section="waiting">
               <AccordionV2.Header>
                 <AccordionV2.Trigger>
@@ -1281,6 +1290,18 @@ export function SessionMapPanel(props: {
 
   const decisions = createDecisions(() => props.swarm.rootID())
   const counts = () => props.map.model().counts
+  // 1.2.7 U-3: the last swarm model read for this run. The model is only built while a swarm view is on screen, so the
+  // "Shared files" entry keeps the count it last saw while the person looks at another view of the strip.
+  const swarmSeen = createMemo<{ root?: string; model?: SwarmModel }>(
+    (previous) => {
+      const root = props.swarm.rootID()
+      const model = props.swarm.model()
+      if (model) return { root, model }
+      return previous.root === root ? previous : { root }
+    },
+    {},
+  )
+  const sharedCount = () => swarmSeen().model?.overlaps.length ?? 0
   const filters = createMemo<{ id: MapFilter; label: string; count?: number; tone?: "danger" | "warning" }[]>(() => [
     { id: "all", label: language.t("session.map.filter.all") },
     {
@@ -1290,6 +1311,17 @@ export function SessionMapPanel(props: {
       tone: "danger",
     },
     { id: "edits", label: language.t("session.map.filter.edits"), count: props.map.model().files.length },
+    // 1.2.7 U-3 (C6): files more than one agent changed, a conditional entry like Agents and Decisions.
+    ...(sharedCount() > 0
+      ? [
+          {
+            id: "shared" as const,
+            label: language.t("session.map.filter.shared"),
+            count: sharedCount(),
+            tone: "warning" as const,
+          },
+        ]
+      : []),
     // Row 133 (C127): a one-agent session with a mission still reaches mission control.
     ...(offersAgentsView(props.swarm.pulse().agents, props.missions?.control.state.options.length ?? 0)
       ? [
@@ -1314,6 +1346,11 @@ export function SessionMapPanel(props: {
   ])
   const showingAgents = () => props.map.view.filter === "agents"
   const showingDecisions = () => props.map.view.filter === "decisions"
+  const showingShared = () => props.map.view.filter === "shared"
+  // 1.2.7 U-3: with no shared file left the entry goes away, and the view returns to All.
+  createEffect(() => {
+    if (showingShared() && sharedCount() === 0) props.map.setFilter("all")
+  })
   // Row 133b (C175): the expand toggle in mission control's header widens THIS pane (no new panel). The remembered
   // choice only applies while mission control is on screen; every other view keeps the 372 px pane.
   const missionShown = () => showingAgents() && (props.missions?.control.state.options.length ?? 0) > 0
@@ -1618,10 +1655,20 @@ export function SessionMapPanel(props: {
       </div>
 
       <Show
-        when={!showingAgents() && !showingDecisions()}
+        when={!showingAgents() && !showingDecisions() && !showingShared()}
         fallback={
           showingAgents() ? (
             <SwarmAgents swarm={props.swarm} missions={missionMount()} />
+          ) : showingShared() ? (
+            <div data-scrollable class="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pb-2">
+              <Show when={swarmSeen().model}>
+                {(model) => (
+                  <Index each={model().overlaps}>
+                    {(overlap) => <OverlapRow swarm={props.swarm} overlap={overlap()} model={model()} />}
+                  </Index>
+                )}
+              </Show>
+            </div>
           ) : (
             <DecisionList decisions={decisions} directory={props.directory} />
           )

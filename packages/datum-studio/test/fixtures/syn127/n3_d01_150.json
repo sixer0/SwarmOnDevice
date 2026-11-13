@@ -1,0 +1,792 @@
+{
+  "$comment": "Swarm 1.2.7 row 20 (N-3): SERAH document, 3 chapters x 50 paragraphs, each with one untracked decimal-comma number = 150 D01 findings (> 100 cap, so a carrier row exists). As probe9 N-3. Host-harness document: create with studio_document_create {template, docKey, title, meta?, mission}, fill `slots` with studio_slot_fill, submit each `chapters[i]` with studio_chapter_submit after setting chapter submission target.documentId. Render html (scope document) before studio_document_status.",
+  "template": "datum-nota",
+  "docKey": "syn127-n3",
+  "title": "Dokumen uji N-3",
+  "meta": {
+    "tier": "SERAH"
+  },
+  "slots": {
+    "cover": {
+      "type": "cover",
+      "tagline": {
+        "text": "Alfa Bravo"
+      },
+      "titleLines": [
+        {
+          "text": "Echo Foxtrot"
+        }
+      ],
+      "standfirst": {
+        "text": "Juliett kilo lima mike."
+      },
+      "scopeLine": {
+        "text": "Quebec romeo"
+      },
+      "addressLine": {
+        "text": "Uniform victor"
+      },
+      "control": [
+        [
+          {
+            "text": "Nomor dokumen"
+          },
+          {
+            "text": "001/UJI/KT/XI/2026"
+          },
+          {
+            "text": "Revisi"
+          },
+          {
+            "text": "A"
+          }
+        ],
+        [
+          {
+            "text": "Penyusun"
+          },
+          {
+            "text": "Alfa Bravo"
+          },
+          {
+            "text": "Kustodian"
+          },
+          {
+            "text": "ALFA-01"
+          }
+        ],
+        [
+          {
+            "text": "Ditujukan kepada"
+          },
+          {
+            "text": "Charlie Delta"
+          },
+          {
+            "text": "Halaman"
+          },
+          {
+            "text": "4"
+          }
+        ],
+        [
+          {
+            "text": "Tingkat"
+          },
+          {
+            "text": "SERAH"
+          },
+          {
+            "text": "Verifikasi"
+          },
+          {
+            "text": "V2"
+          }
+        ]
+      ],
+      "colophon": {
+        "left": {
+          "text": "ALFA BRAVO"
+        },
+        "right": {
+          "text": "// 20261113 ID A · SERAH"
+        }
+      }
+    },
+    "controlSheet": {
+      "type": "controlSheet",
+      "revisionHistory": [
+        {
+          "rev": "A",
+          "date": "2026-11-13",
+          "what": "Terbitan 1",
+          "by": "Alfa Bravo"
+        }
+      ],
+      "verificationChain": [
+        {
+          "layer": "V2",
+          "role": "Verifikasi",
+          "name": "lulus"
+        }
+      ]
+    },
+    "signature": {
+      "type": "signatureBlock",
+      "roles": [
+        {
+          "role": {
+            "text": "Penyusun"
+          },
+          "holder": {
+            "text": "Alfa Bravo"
+          },
+          "date": {
+            "text": "2026-11-13"
+          }
+        }
+      ]
+    }
+  },
+  "chapters": [
+    {
+      "$schema": "studio.chapter/v2",
+      "chapter": {
+        "key": "1",
+        "title": {
+          "text": "Uraian 1"
+        },
+        "sections": [
+          {
+            "title": {
+              "text": "Bagian uji"
+            },
+            "blocks": [
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 1,3 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 2,3 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 3,3 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 4,3 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 5,3 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 6,3 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 7,3 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 8,3 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 9,3 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 1,3 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 2,3 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 3,3 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 4,3 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 5,3 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 6,3 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 7,3 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 8,3 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 9,3 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 1,3 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 2,3 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 3,3 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 4,3 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 5,3 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 6,3 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 7,3 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 8,3 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 9,3 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 1,3 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 2,3 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 3,3 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 4,3 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 5,3 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 6,3 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 7,3 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 8,3 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 9,3 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 1,3 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 2,3 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 3,3 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 4,3 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 5,3 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 6,3 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 7,3 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 8,3 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 9,3 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 1,3 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 2,3 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 3,3 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 4,3 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 5,3 ton barang campuran sepanjang pekan."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "$schema": "studio.chapter/v2",
+      "chapter": {
+        "key": "2",
+        "title": {
+          "text": "Uraian 2"
+        },
+        "sections": [
+          {
+            "title": {
+              "text": "Bagian uji"
+            },
+            "blocks": [
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 1,4 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 2,4 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 3,4 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 4,4 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 5,4 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 6,4 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 7,4 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 8,4 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 9,4 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 1,4 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 2,4 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 3,4 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 4,4 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 5,4 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 6,4 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 7,4 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 8,4 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 9,4 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 1,4 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 2,4 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 3,4 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 4,4 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 5,4 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 6,4 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 7,4 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 8,4 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 9,4 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 1,4 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 2,4 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 3,4 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 4,4 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 5,4 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 6,4 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 7,4 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 8,4 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 9,4 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 1,4 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 2,4 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 3,4 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 4,4 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 5,4 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 6,4 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 7,4 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 8,4 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 9,4 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 1,4 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 2,4 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 3,4 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 4,4 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 5,4 ton barang campuran sepanjang pekan."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "$schema": "studio.chapter/v2",
+      "chapter": {
+        "key": "3",
+        "title": {
+          "text": "Uraian 3"
+        },
+        "sections": [
+          {
+            "title": {
+              "text": "Bagian uji"
+            },
+            "blocks": [
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 1,5 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 2,5 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 3,5 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 4,5 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 5,5 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 6,5 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 7,5 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 8,5 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 9,5 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 1,5 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 2,5 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 3,5 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 4,5 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 5,5 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 6,5 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 7,5 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 8,5 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 9,5 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 1,5 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 2,5 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 3,5 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 4,5 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 5,5 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 6,5 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 7,5 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 8,5 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 9,5 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 1,5 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 2,5 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 3,5 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 4,5 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 5,5 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 6,5 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 7,5 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 8,5 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 9,5 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 1,5 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 2,5 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 3,5 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 4,5 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 5,5 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 6,5 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 7,5 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 8,5 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 9,5 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 1,5 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 2,5 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 3,5 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 4,5 ton barang campuran sepanjang pekan."
+              },
+              {
+                "type": "paragraph",
+                "text": "Gudang alfa bravo menyimpan muatan 5,5 ton barang campuran sepanjang pekan."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "expected": {
+    "d01Total": 150,
+    "d01Listed": 100,
+    "d01NotListed": 50
+  }
+}

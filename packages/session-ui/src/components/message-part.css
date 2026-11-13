@@ -295,6 +295,51 @@
   color: var(--v2-text-text-muted);
   line-height: var(--line-height-normal);
 
+  /* U-9: the toggle is the collapsible trigger under its own slot name, so it takes the trigger look here. */
+  [data-slot="reasoning-toggle"] {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    height: var(--session-row, 32px);
+    padding: 0;
+    border: none;
+    background-color: transparent;
+    color: var(--v2-text-text-muted);
+    cursor: pointer;
+    user-select: none;
+    font-family: var(--font-family-sans);
+    font-size: var(--font-size-small);
+    font-weight: var(--font-weight-medium);
+    line-height: var(--line-height-large);
+    text-align: left;
+
+    &:focus-visible {
+      outline: none;
+      background-color: var(--surface-raised-base-hover);
+    }
+
+    [data-slot="collapsible-arrow"] {
+      flex-shrink: 0;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    [data-slot="collapsible-arrow-icon"] {
+      display: inline-flex;
+      color: var(--icon-weaker);
+      transform: rotate(-90deg);
+      transition: transform 0.15s ease;
+    }
+
+    &[aria-expanded="true"] [data-slot="collapsible-arrow-icon"] {
+      transform: rotate(0deg);
+    }
+  }
+
   [data-component="markdown"] {
     margin-top: 16px;
     font-style: normal;
@@ -752,8 +797,10 @@
   flex-direction: column;
   gap: 0;
   min-height: 0;
-  max-height: 100dvh;
+  /* 1.2.7 U-5 (C6, D-11): bounded; set by the app dock (N7-036) under the session's sticky header. */
+  max-height: var(--permission-prompt-max-height, 60dvh);
 
+  /* The body is the one scroll area, scrollbar visible; the footer buttons sit outside it and stay visible. */
   [data-slot="permission-body"] {
     display: flex;
     flex-direction: column;
@@ -761,6 +808,21 @@
     flex: 1;
     min-height: 0;
     padding: 12px 12px 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  /* SR7-14 (N7-149): while text is hidden below, a fade at the bottom of the body says so, in both scrollbar modes.
+     Net height 0 (gap 16 + height 24 - 40), so the cue toggling does not move the content. */
+  [data-slot="permission-body"][data-permission-body-more]::after {
+    content: "";
+    position: sticky;
+    bottom: 0;
+    flex-shrink: 0;
+    height: 24px;
+    margin-top: -40px;
+    pointer-events: none;
+    background: linear-gradient(to bottom, transparent, var(--surface-raised-stronger-non-alpha));
   }
 
   [data-slot="permission-header"] {
@@ -821,15 +883,6 @@
     margin-top: 8px;
     margin-bottom: 16px;
     padding: 1px 0 8px;
-    flex: 1;
-    min-height: 0;
-    overflow-y: auto;
-    scrollbar-width: none;
-    -ms-overflow-style: none;
-
-    &::-webkit-scrollbar {
-      display: none;
-    }
 
     code {
       font-size: 14px;

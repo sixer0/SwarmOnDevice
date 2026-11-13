@@ -4,7 +4,10 @@ import { createEffect, createMemo, createResource, onCleanup, type Accessor } fr
 import type { AutonomyModeUpdateData } from "@opencode-ai/sdk/v2/client"
 import type { DirectorySDK } from "@/context/sdk"
 
-/** The server sends no event when the mode changes, so whoever changes it away from the composer announces it here. */
+/**
+ * Whoever changes the mode in this window away from the composer announces it here, at once. A change from anywhere
+ * else (the CLI, another window) arrives as the server's `autonomy.mode.changed` (1.2.7 row 58c).
+ */
 export const AUTONOMY_CHANGED = "swarm:autonomy-changed"
 
 type ModeBody = NonNullable<AutonomyModeUpdateData["body"]>
@@ -49,6 +52,14 @@ export async function nextMode(
   return { on: true, consent: consentPayload(ask.language()) }
 }
 
+/**
+ * The server's `autonomy.mode.changed`, any scope, on or off: a folder change can decide a session's mode, and the read
+ * that `refresh` starts says which answer holds. Shared by the composer's marker and the palette's toggle (row 58f).
+ * Returns the unsubscribe.
+ */
+export const followModeChanges = (event: Pick<DirectorySDK["event"], "on">, refresh: () => void) =>
+  event.on("autonomy.mode.changed", () => refresh())
+
 // The session read goes through the whole audit file, so a burst of decisions reads it once.
 const REFRESH_DELAY = 250
 
@@ -92,6 +103,7 @@ export function createPromptAutonomy(input: {
     )
     onCleanup(event.on("permission.replied", queueMoved))
     onCleanup(event.on("autonomy.blocked", queueMoved))
+    onCleanup(followModeChanges(event, refresh))
   })
   makeEventListener(window, AUTONOMY_CHANGED, () => refresh())
   makeEventListener(window, "focus", () => refresh())

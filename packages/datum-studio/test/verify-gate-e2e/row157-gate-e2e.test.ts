@@ -323,7 +323,7 @@ e2e("row 157: good render on the real bridge", () => {
     expect(imaged.length).toBe(Math.min(12, pdfPages))
     expect(pdf.pages.map((p: S) => p.png)).toEqual(html.pages.map((p: S) => p.png))
     for (const p of imaged) {
-      expect(p.png).toBe(path.join(store.rootDir, "verify", html.outputId, `p${String(p.n).padStart(3, "0")}.png`))
+      expect(p.png).toBe(path.join(store.rootDir, "verify", html.outputId, `witness-p${String(p.n).padStart(3, "0")}.png`)) // 1.2.7 row 35 (C19, N7-066): witness page names
       const b = readFileSync(p.png)
       expect(b.subarray(0, 8).toString("hex")).toBe("89504e470d0a1a0a")
       const w = b.readUInt32BE(16)

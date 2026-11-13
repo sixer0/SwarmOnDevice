@@ -216,6 +216,21 @@ export const LAUNCHERS: Readonly<Record<string, Spec>> = {
   asdf: { subs: { exec: {} } },
   "nix-shell": { codeFlags: ["--run", "--command"] },
   su: { codeFlags: ["-c", "--command"], values: ["-s", "--shell", "-g", "--group"] },
+  // 1.2.7 row 47a (M1-04): zsh, the default shell, runs a text or the next command through these builtins too.
+  // `noglob`, `nocorrect` and `-` are precommand modifiers. `emulate [-lLR] <mode> [flags] -c <text>` evaluates the text
+  // (`-o name` takes a value; a `+o`/`+x` set or a run of flags holding `c` cannot be read word by word). `trap <text>
+  // <signal>…` runs the text (on exit at the latest); the joined rest is read as the text, the signal names as its words.
+  noglob: {},
+  nocorrect: {},
+  "-": {},
+  emulate: {
+    values: ["-o"],
+    positional: 1,
+    positionalIf: /^(zsh|sh|ksh|csh)$/,
+    codeFlags: ["-c"],
+    unreadable: /^(\+|-[A-Za-z]*c[A-Za-z]+$|-[A-Za-z]+c$)/,
+  },
+  trap: { rest: "code" },
 }
 
 /** What a step runs once its launchers are out of the way. */

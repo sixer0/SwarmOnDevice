@@ -288,9 +288,9 @@ describe("render bridge over the socket", () => {
     expect(res).toMatchObject({ id: "pp", ok: true, layout: "paged", media: "print", pageCount: 3, dpi: 150 })
     expect(res.pageSizeMm).toEqual({ wMm: 210, hMm: 297 })
     expect(res.pages.map((p: any) => [p.n, p.dst, p.width, p.height])).toEqual([
-      [1, join(out, "p001.png"), 10, 14],
-      [2, join(out, "p002.png"), 20, 28],
-      [3, join(out, "p003.png"), 30, 42],
+      [1, join(out, "witness-p001.png"), 10, 14],
+      [2, join(out, "witness-p002.png"), 20, 28],
+      [3, join(out, "witness-p003.png"), 30, 42],
     ])
     for (const p of res.pages) expect(p.sha256).toBe(createHash("sha256").update(readFileSync(p.dst)).digest("hex"))
     const job = jobs.findLast((j) => j.kind === "pagePngs")!
@@ -313,9 +313,9 @@ describe("render bridge over the socket", () => {
       { op: "pagePng", src: join(work, "sheet.html"), dstDir: out },
     ])
     expect(res[0]).toMatchObject({ ok: true, dpi: 96, pageSizeMm: { wMm: 148, hMm: 210 } })
-    expect(res[0].pages.map((p: any) => p.dst)).toEqual([join(out, "p002.png")])
+    expect(res[0].pages.map((p: any) => p.dst)).toEqual([join(out, "witness-p002.png")])
     expect(res.slice(1).map((r) => r.code)).toEqual(["PATH_REFUSED", "PATH_REFUSED", "PATH_REFUSED", "BAD_REQUEST", "UNAUTHORIZED"])
-    expect(existsSync(join(out, "p001.png"))).toBe(false)
+    expect(existsSync(join(out, "witness-p001.png"))).toBe(false)
     expect(jobs.filter((j) => j.kind === "pagePngs").length - before).toBe(1)
   })
 

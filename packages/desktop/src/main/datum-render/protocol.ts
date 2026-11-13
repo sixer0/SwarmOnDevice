@@ -39,7 +39,8 @@ export type CheckPageRequest = {
   viewportWidth?: number
   viewportHeight?: number
 }
-/** Row 151b: one PNG per printed page of an HTML file, written as <dstDir>/p001.png, p002.png, ... */
+/** Row 151b: one PNG per printed page of an HTML file, written as <dstDir>/witness-p001.png, witness-p002.png, ...
+ *  (1.2.7 N-5: witness images, an approximation of the printed page, not deliverables) */
 export type PagePngRequest = {
   op: "pagePng"
   src: string

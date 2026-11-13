@@ -101,6 +101,8 @@ const mcpCall = (sessionID: SessionID, pattern = "*") =>
 
 // 1.1.1 F9 (P15 G2-5, P16): an MCP or plugin tool now keeps its 1.1.0 verdict under the consent, so the call these tests
 // route through the main agent is a shell call the allowlist opens: `bun install`, D `not_routine` in 1.1.0.
+// 1.2.7 U-7 (INTENT, C7/C21): `not_routine` is now a local category a subagent runs like the root (`SUBAGENT_RUNS_LIKE_ROOT`),
+// so the fixture is a decided one that still reaches the main agent: `launchctl list`, D `system_service` in 1.1.0.
 const openedCall = (sessionID: SessionID) =>
   Effect.gen(function* () {
     const test = yield* TestInstance
@@ -108,7 +110,7 @@ const openedCall = (sessionID: SessionID) =>
     // (n41): and only when nothing above the repository's top holds one, which this machine must give.
     expectNoManifestAbove(test.directory)
     writeFileSync(path.join(test.directory, "package.json"), "{}\n")
-    return bash(sessionID, "bun install", test.directory)
+    return bash(sessionID, "launchctl list", test.directory)
   })
 
 const bash = (sessionID: SessionID, command: string, directory: string) =>
@@ -197,7 +199,7 @@ it.instance("the main agent's own opened call runs on the consent, on its line, 
     expect(line).toMatchObject({
       class: "A",
       category: "by_main_agent",
-      bypassed: "not_routine",
+      bypassed: "system_service",
       decidedBy: "agent:main/build",
       via: "main_agent",
       decision: "allow",
@@ -212,7 +214,7 @@ it.instance("a subagent's opened call goes to the main agent, with forSubagent, 
     const { root, child } = yield* family()
     expect(Exit.isSuccess(yield* settled(yield* openedCall(child.id)))).toBe(true)
     expect(stub.calls).toEqual([
-      { permission: "bash", category: "not_routine", options: { forSubagent: { agent: "build" } } },
+      { permission: "bash", category: "system_service", options: { forSubagent: { agent: "build" } } },
     ])
     const [line] = yield* decisions(root.id)
     // On the main agent's name, whatever name the decider gave.
@@ -220,7 +222,7 @@ it.instance("a subagent's opened call goes to the main agent, with forSubagent, 
       sessionID: child.id,
       class: "A",
       category: "by_main_agent",
-      bypassed: "not_routine",
+      bypassed: "system_service",
       decidedBy: "agent:main/build",
       via: "for_subagent",
       decision: "allow",
@@ -495,11 +497,16 @@ it.instance("a subagent's compound call of two allowed steps reaches the main ag
         return { ...call, metadata: { ...call.metadata, ...(steps ? { steps } : {}) } }
       })
     // 1.1.1 F20 (P34, S9-4): `ls` reads only; `mkdir` beside an install would be a write beside one, which keeps 1.1.0.
+    // 1.2.7 U-7 (INTENT, C7/C21): an install is a local category now, so the compound runs like the root's in either
+    // order; one with a decided piece (`launchctl list`) still reaches the main agent in either order (M1, SR7-02).
     for (const command of ["ls && bun install", "bun install && ls"])
       expect(Exit.isSuccess(yield* settled(yield* compound(command)))).toBe(true)
+    expect(stub.calls).toEqual([])
+    for (const command of ["bun install && launchctl list", "launchctl list && bun install"])
+      expect(Exit.isSuccess(yield* settled(yield* compound(command)))).toBe(true)
     expect(stub.calls.map((call) => [call.permission, call.category, call.options])).toEqual([
-      ["bash", "not_routine", { forSubagent: { agent: "build" } }],
-      ["bash", "not_routine", { forSubagent: { agent: "build" } }],
+      ["bash", "system_service", { forSubagent: { agent: "build" } }],
+      ["bash", "system_service", { forSubagent: { agent: "build" } }],
     ])
   }),
 )

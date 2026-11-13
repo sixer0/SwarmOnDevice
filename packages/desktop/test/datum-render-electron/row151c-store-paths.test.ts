@@ -192,8 +192,8 @@ describe.skipIf(!runnable)("row 151c: the installed store layout in real Electro
     // must end .html). The link db.html -> sqlite reaches it and is refused by its real path.
     const nonHtml = new Set(["src_sqlite", "src_auth_json"])
     for (const [k, v] of Object.entries(r.refused as Record<string, string>)) expect([k, v]).toEqual([k, nonHtml.has(k) ? "BAD_REQUEST" : "PATH_REFUSED"])
-    expect(existsSync(join(store, "p001.png"))).toBe(false)
-    expect(existsSync(join(store, "tmp", "p001.png"))).toBe(false)
+    expect(existsSync(join(store, "witness-p001.png"))).toBe(false)
+    expect(existsSync(join(store, "tmp", "witness-p001.png"))).toBe(false)
   })
 })
 

@@ -72,6 +72,8 @@ import {
   type PromptInputSubmission,
 } from "./prompt-input/contracts"
 import { createPromptSubmit } from "./prompt-input/submit"
+import { usePromptFolderPicker } from "./prompt-input/folder"
+import { promptInputV2FolderPart } from "@opencode-ai/session-ui/v2/prompt-input/interaction"
 import { PromptPopover, type AtOption, type SlashCommand } from "./prompt-input/slash-popover"
 import { PromptContextItems } from "./prompt-input/context-items"
 import { PromptImageAttachments } from "./prompt-input/image-attachments"
@@ -431,6 +433,13 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     })
   }
 
+  const pickFolder = usePromptFolderPicker()
+  // U-12: palette-only in the v1 composer (decision C63 D-12c); same path reference as the v2 menu item.
+  const addFolder = async () => {
+    const path = await pickFolder()
+    if (path) addPart(promptInputV2FolderPart(path))
+  }
+
   const setMode = (mode: "normal" | "shell") => {
     setStore("mode", mode)
     setStore({ popover: null, slashMenu: false, slashMenuQuery: "" })
@@ -448,6 +457,13 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
       keybind: "mod+u",
       disabled: store.mode !== "normal",
       onSelect: pick,
+    },
+    {
+      id: "file.attachFolder",
+      title: language.t("ui.promptInput.addFolder"),
+      category: language.t("command.category.file"),
+      disabled: store.mode !== "normal",
+      onSelect: () => void addFolder(),
     },
     {
       id: "prompt.mode.shell",

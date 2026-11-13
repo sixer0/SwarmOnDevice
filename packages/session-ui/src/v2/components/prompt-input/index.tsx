@@ -220,11 +220,13 @@ export function PromptInputV2(props: PromptInputV2Props) {
               keybind={props.attachKeybind ?? ["Mod", "U"]}
               attachLabel={i18n.t("ui.promptInput.attachments")}
               attachShortcut={props.attachShortcut ?? "Mod+U"}
+              folderLabel={i18n.t("ui.promptInput.addFolder")}
               commandsLabel={i18n.t("ui.promptInput.commands")}
               contextLabel={i18n.t("ui.promptInput.context")}
               shellLabel={i18n.t("ui.promptInput.shell")}
               autonomy={props.autonomy}
               onAttach={props.controller.attach}
+              onAddFolder={props.controller.canAddFolder ? () => void props.controller.addFolder() : undefined}
               onCommands={props.controller.openCommands}
               onContext={props.controller.openContext}
               onShell={props.controller.openShell}
@@ -504,11 +506,13 @@ export function PromptInputV2AddMenu(props: {
   keybind?: string[]
   attachLabel: string
   attachShortcut?: string
+  folderLabel?: string
   commandsLabel: string
   contextLabel: string
   shellLabel: string
   autonomy?: PromptInputV2Autonomy
   onAttach: () => void
+  onAddFolder?: () => void
   onCommands: () => void
   onContext: () => void
   onShell: () => void
@@ -539,6 +543,11 @@ export function PromptInputV2AddMenu(props: {
             <MenuV2.Item onSelect={props.onAttach} shortcut={props.attachShortcut}>
               {props.attachLabel}
             </MenuV2.Item>
+            <Show when={props.onAddFolder}>
+              <MenuV2.Item data-action="prompt-add-folder" onSelect={() => props.onAddFolder?.()}>
+                {props.folderLabel}
+              </MenuV2.Item>
+            </Show>
             <MenuV2.Separator />
             <MenuV2.Item onSelect={props.onCommands} shortcut="/">
               {props.commandsLabel}

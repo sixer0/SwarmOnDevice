@@ -29,10 +29,12 @@ put it there deliberately.
 ## Applying changes
 
 Config is loaded once when Swarm starts and is not hot-reloaded. After
-saving changes to `swarm.json`, an agent file, a skill, a plugin, or any
+saving changes to `swarm.json`, an agent file, a plugin, or any
 other config-time file, **tell the user to quit and restart Swarm** for
 the changes to take effect. The running session will keep using the
-already-loaded config until then.
+already-loaded config until then. Skills are the exception: Swarm re-scans
+the skill folders on each request, so a new or edited `SKILL.md` is picked
+up by the next message without a restart.
 
 ## Where files live
 
@@ -190,8 +192,20 @@ file is named `SKILL.md` exactly, and lives in its own folder named after the
 skill:
 
 ```
-.swarm/skills/my-skill/SKILL.md
+~/.config/swarm/skills/my-skill/SKILL.md
 ```
+
+Where to put a new skill: write a new skill to `~/.config/swarm/skills/<name>/SKILL.md` by default,
+so it is available in every project on this machine. Use the project folder
+`.swarm/skills/<name>/SKILL.md` only when the skill belongs to the repository (the user says so,
+or it only makes sense for this codebase and should travel with it). The Swarm app and the `swarm` CLI on one machine read the same `~/.config/swarm/skills` folder,
+so a skill made in either one shows in the other. Another computer has its
+own folder: copy or sync the skill there. When you create a skill, tell the person the path you wrote.
+
+A project skill whose text runs programs (a `!` command in backticks) loads
+only when the project folder is trusted. Trust is kept per state home, so a
+standalone CLI and the app can disagree about one folder; Swarm logs
+`project skill hidden by trust` with the skill's name when it leaves one out.
 
 Frontmatter:
 

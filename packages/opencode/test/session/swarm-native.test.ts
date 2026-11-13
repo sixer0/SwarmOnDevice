@@ -312,7 +312,8 @@ describe("SW-08, SW-09: the built-in swarm-workflow skill", () => {
     // Row 102 (1.2.6, W-07/W-04/W-11/W-02): +902 B to 10170 for four working-norm bullets (sections 0, 2, 6).
     // Row 103 (1.2.6, W-06/W-08/W-18): +829 B to 10999 (one bullet in section 2, line 100 rewritten plus one bullet in section 5).
     // Fix row FX-10 (1.2.6, C19a): +158 B to 11157, section 6 states the shared figure-gate sentence.
-    expect(Buffer.byteLength(WORKFLOW)).toBe(11157)
+    // 1.2.7 row 28 (U-6, C9, R-3, INTENT): +447 B to 11604, numbered docs/ folders in sections 2, 3, 5, 7 and the folder block.
+    expect(Buffer.byteLength(WORKFLOW)).toBe(11604)
   })
 })
 

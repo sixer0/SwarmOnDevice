@@ -15,6 +15,7 @@ import { useLanguage } from "@/context/language"
 import { ServerConnection } from "@/context/server"
 import { sessionHasOpenTab, useTabs } from "@/context/tabs"
 import { compareSessionTime, displayName, errorMessage, projectForSession } from "@/pages/layout/helpers"
+import { openCheckedFolder, useFolderMissingNotice } from "@/pages/layout/folder-missing"
 import { useSessionTabAvatarState } from "@/pages/layout/project-avatar-state"
 import { canonicalPathKey, pathKey } from "@/utils/path-key"
 import { showToast } from "@/utils/toast"
@@ -51,6 +52,8 @@ export function createHomeSessionsController(home: HomeController, options?: Hom
   const command = useCommand()
   const dialog = useDialog()
   const language = useLanguage()
+  // Row 58b (U-8): opening a session of a project whose folder is gone shows the missing-folder notice instead.
+  const folderMissing = useFolderMissingNotice()
   const projectDirectories = createMemo(() => {
     const project = home.project.selected()
     if (!project) return home.project.list().flatMap(directories)
@@ -165,12 +168,19 @@ export function createHomeSessionsController(home: HomeController, options?: Hom
                 const sessionID = entry.sessionID
                 const server = entry.server
                 const directory = entry.project?.worktree ?? entry.directory
-                ctx.projects.open(directory)
-                ctx.projects.touch(directory)
-                void startTransition(() => {
-                  const tab = tabs.addSessionTab({ server, sessionId: sessionID })
-                  tabs.select(tab, entry.anchor)
-                })
+                void openCheckedFolder(
+                  folderMissing,
+                  directory,
+                  () => {
+                    ctx.projects.open(directory)
+                    ctx.projects.touch(directory)
+                    void startTransition(() => {
+                      const tab = tabs.addSessionTab({ server, sessionId: sessionID })
+                      tabs.select(tab, entry.anchor)
+                    })
+                  },
+                  { local: ServerConnection.local(conn) },
+                )
               }}
             />
           ))
@@ -209,16 +219,23 @@ export function createHomeSessionsController(home: HomeController, options?: Hom
         const directory = project?.worktree ?? session.directory
         const ctx = home.server.focusedContext()
         if (!ctx) return
-        ctx.projects.open(directory)
-        if (options?.background) {
-          tabs.addSessionTab({ server: ServerConnection.key(conn), sessionId: session.id })
-          return
-        }
-        ctx.projects.touch(directory)
-        void startTransition(() => {
-          const tab = tabs.addSessionTab({ server: ServerConnection.key(conn), sessionId: session.id })
-          tabs.select(tab)
-        })
+        void openCheckedFolder(
+          folderMissing,
+          directory,
+          () => {
+            ctx.projects.open(directory)
+            if (options?.background) {
+              tabs.addSessionTab({ server: ServerConnection.key(conn), sessionId: session.id })
+              return
+            }
+            ctx.projects.touch(directory)
+            void startTransition(() => {
+              const tab = tabs.addSessionTab({ server: ServerConnection.key(conn), sessionId: session.id })
+              tabs.select(tab)
+            })
+          },
+          { local: ServerConnection.local(conn) },
+        )
       },
       archive: async (session: Session) => {
         const conn = home.server.focused()

@@ -22,7 +22,7 @@ import { flowDirectionOf, flowRankOverload, flowRanks } from "../layout-a/flow";
 import { DiagramOverCapacity, type FigureOverCapacityDetails } from "../../figure-capacity";
 import { lintDiagramGeometry, type DiagramGeomLint } from "../fit/lint";
 import { withDiagramFit, type DiagramFitState } from "../fit/state";
-import { diagramGeometryIssues, type DiagramGeometryIssue } from "./autofit";
+import { autoFitRestText, diagramGeometryIssues, type DiagramGeometryIssue } from "./autofit";
 import type { DiagramSvgResult } from "./svg";
 
 const ADAPTIVE = new Set(["graph", "swimlane"]);
@@ -246,8 +246,9 @@ export function capacityRetry(s: StudioDiagramV1, original: unknown, rebuild: ()
     {
       checkId: "AUTO_FIT",
       status: "REPORT",
-      detail: `render pertama ditolak ${checkIdOf(original)}; tata letak kapasitas -> sisa ${best.g.score}; dicoba: ${tried.join("; ")}`,
-      suggest: best.g.score ? "lihat isu GEOM_* berikut" : "tidak ada",
+      // Swarm 1.2.7 row 35b (N-7): the remainder counts the T-03 defects too (autoFitRestText).
+      detail: `render pertama ditolak ${checkIdOf(original)}; tata letak kapasitas -> ${autoFitRestText(best.g).rest}; dicoba: ${tried.join("; ")}`,
+      suggest: autoFitRestText(best.g).suggest,
     },
     ...best.state.notes.map((n) => ({ checkId: n.checkId, status: "REPORT" as const, detail: n.suggest ? `${n.detail}; saran: ${n.suggest}` : n.detail, suggest: n.suggest ?? "tidak ada" })),
     ...diagramGeometryIssues(best.g),

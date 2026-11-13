@@ -2,6 +2,8 @@
 export { missionDocsExporter } from "./exporter.ts"
 export {
   EXPORT_PATHS,
+  LEGACY_EXPORT_PATHS,
+  MISSION_DOC_FOLDERS,
   BLUEPRINT_HEADER,
   BLUEPRINT_RULE,
   PROFILE_HEADER,

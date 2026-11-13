@@ -64,7 +64,7 @@ describe("1.2.6 row 30 T-13: coverage in the verdict text", () => {
     const r = await runOverlapClip({ format: "HTML", html: HTML, ...A4 }, deps(false))
     expect(r.check.status).toBe("PASS")
     const text = lines([out("HTML", [r.check], "o-html")])
-    const i = text.indexOf("  HTML o-html RENDER_VERIFIED(U24)")
+    const i = text.indexOf(`  HTML o-html RENDER_VERIFIED(U24) sha256=${"a".repeat(64)}`) // 1.2.7 row 35 (M-03, N7-065): full sha256 closes the line
     expect(i).toBeGreaterThanOrEqual(0)
     expect(text[i + 1]).toBe("    OVERLAP_CLIP PASS diukur 60/60 halaman")
   })
@@ -74,7 +74,7 @@ describe("1.2.6 row 30 T-13: coverage in the verdict text", () => {
     expect(r.check).toMatchObject({ status: "UNKNOWN", reason: "MEASURE_TRUNCATED" })
     const text = lines([out("HTML", [r.check], "o-html")])
     // The summary line keeps its shape (row 206 parses it) and its UNKNOWN reason.
-    expect(text).toContain("  HTML o-html RENDER_UNVERIFIED(U24) fail=- unknown=OVERLAP_CLIP:MEASURE_TRUNCATED")
+    expect(text).toContain(`  HTML o-html RENDER_UNVERIFIED(U24) fail=- unknown=OVERLAP_CLIP:MEASURE_TRUNCATED sha256=${"a".repeat(64)}`)
     const cov = text.find((l) => l.startsWith("    OVERLAP_CLIP "))
     expect(cov).toMatch(/^ {4}OVERLAP_CLIP UNKNOWN:MEASURE_TRUNCATED diukur (\d+)\/60 halaman$/)
     const m = Number(/diukur (\d+)\//.exec(cov!)![1])
@@ -85,7 +85,7 @@ describe("1.2.6 row 30 T-13: coverage in the verdict text", () => {
   it("the PDF that took its OVERLAP_CLIP from the same job's HTML reports the coverage too", async () => {
     const r = await runOverlapClip({ format: "PDF", html: HTML, ...A4 }, deps(true))
     const text = lines([out("PDF", [r.check], "o-pdf")])
-    expect(text.join("\n")).toMatch(/ {2}PDF o-pdf RENDER_UNVERIFIED\(U24\) fail=- unknown=OVERLAP_CLIP:MEASURE_TRUNCATED\n {4}OVERLAP_CLIP UNKNOWN:MEASURE_TRUNCATED diukur \d+\/60 halaman/)
+    expect(text.join("\n")).toMatch(/ {2}PDF o-pdf RENDER_UNVERIFIED\(U24\) fail=- unknown=OVERLAP_CLIP:MEASURE_TRUNCATED sha256=a{64}\n {4}OVERLAP_CLIP UNKNOWN:MEASURE_TRUNCATED diukur \d+\/60 halaman/)
   })
 
   it("overlapCoverageText: the check text, null without well-formed coverage", () => {

@@ -32,6 +32,7 @@ import { availableStartupServer, readyWslConnections } from "./wsl/connections"
 import "./styles.css"
 import { Splash } from "@opencode-ai/ui/logo"
 import { useTheme } from "@opencode-ai/ui/theme/context"
+import { directoryPickerArgs } from "./picker-options"
 
 const root = document.getElementById("root")
 if (import.meta.env.DEV && !(root instanceof HTMLElement)) {
@@ -174,10 +175,7 @@ const createPlatform = (windowState: DesktopWindowState): Platform => {
     windowID: windowState.id,
 
     async openDirectoryPickerDialog(opts) {
-      return window.api.openDirectoryPicker({
-        multiple: opts?.multiple ?? false,
-        title: opts?.title,
-      })
+      return window.api.openDirectoryPicker(directoryPickerArgs(opts))
     },
 
     async openAttachmentPickerDialog(opts, onFile) {
@@ -313,6 +311,16 @@ const createPlatform = (windowState: DesktopWindowState): Platform => {
 
     checkAppExists: async (appName: string) => {
       return window.api.checkAppExists(appName)
+    },
+
+    // 1.2.7 row 32 (U-8): row 33's missing-folder notice calls these; recreate only after the user's click.
+    // Row 47c (M1-03): the check is tri-state; only "missing" starts the notice.
+    checkDirectoryExists: async (path: string) => {
+      return window.api.checkDirectoryExists(path)
+    },
+
+    recreateDirectory: async (path: string) => {
+      return window.api.recreateDirectory(path)
     },
 
     async readClipboardImage() {

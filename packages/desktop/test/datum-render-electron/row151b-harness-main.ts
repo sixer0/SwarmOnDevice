@@ -126,7 +126,7 @@ app.whenReady().then(async () => {
     mkdirSync(ssh, { recursive: true })
     writeFileSync(join(ssh, "id.html"), "<p>fixture, not a key</p>")
     mkdirSync(join(work, "out", "link"), { recursive: true })
-    symlinkSync(join(work, "out", "elsewhere.png"), join(work, "out", "link", "p001.png"))
+    symlinkSync(join(work, "out", "elsewhere.png"), join(work, "out", "link", "witness-p001.png"))
     const refused: Record<string, unknown> = {}
     refused.protectedDst = await call({ op: "pagePng", src: src("paged3"), dstDir: ssh })
     refused.relativeDst = await call({ op: "pagePng", src: src("paged3"), dstDir: "out" })

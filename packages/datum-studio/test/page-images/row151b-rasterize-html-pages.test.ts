@@ -31,7 +31,7 @@ afterAll(() => {
 })
 
 const sha = "a".repeat(64)
-const page = (n: number, dir = "/s/verify/o1") => ({ n, dst: `${dir}/p00${n}.png`, width: 1239, height: 1753, bytes: 10, sha256: sha })
+const page = (n: number, dir = "/s/verify/o1") => ({ n, dst: `${dir}/witness-p00${n}.png`, width: 1239, height: 1753, bytes: 10, sha256: sha })
 
 describe("rasterizeHtmlPages over the render bridge", () => {
   test("sends one pagePng with only the given fields and maps the reply to pages[].png paths", async () => {
@@ -55,8 +55,8 @@ describe("rasterizeHtmlPages over the render bridge", () => {
       pageSizeSource: "css",
       dpi: 150,
       pages: [
-        { n: 1, png: "/s/verify/o1/p001.png", width: 1239, height: 1753, sha256: sha },
-        { n: 3, png: "/s/verify/o1/p003.png", width: 1239, height: 1753, sha256: sha },
+        { n: 1, png: "/s/verify/o1/witness-p001.png", width: 1239, height: 1753, sha256: sha },
+        { n: 3, png: "/s/verify/o1/witness-p003.png", width: 1239, height: 1753, sha256: sha },
       ],
     })
   })

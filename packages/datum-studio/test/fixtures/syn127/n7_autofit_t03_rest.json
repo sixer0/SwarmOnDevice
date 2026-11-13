@@ -1,0 +1,78 @@
+{
+  "$comment": "Swarm 1.2.7 row 20 (N-7): constructed (C12 O-4 fallback NOT needed). Graph, 3 nodes, 4 labelled edges, filler words (found by a seeded search over random synthetic graphs). At the working tree on release/1.2.7 before row 35 (release:false, buildDiagramSvg and elk buildDiagramSvgAuto): first render score 1; AUTO_FIT (penuh) -> sisa 0 with suggest \"tidak ada\" while exactly 1 GEOM_STUB_SEGMENT follows in report.geometry. Expected after N-7: AUTO_FIT detail sisa 1 (termasuk 1 isu GEOM T-03), suggest \"lihat isu GEOM_* berikut\".",
+  "buildOptions": {
+    "release": false
+  },
+  "expected": {
+    "firstScore": 1,
+    "restScoreBase": 0,
+    "t03": {
+      "stubSegment": 1
+    }
+  },
+  "spec": {
+    "$schema": "studio.diagram/v1",
+    "family": "graph",
+    "id": "9.1",
+    "title": "Gambar sintetis uji.",
+    "classification": "BIASA",
+    "width_mm": 128,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "nodes": [
+      {
+        "id": "n0",
+        "label": "lima",
+        "class": {
+          "col": 1,
+          "row": 0
+        }
+      },
+      {
+        "id": "n1",
+        "label": "alfa bravo delta",
+        "class": {
+          "col": 2,
+          "row": 0
+        }
+      },
+      {
+        "id": "n2",
+        "label": "charlie alfa",
+        "class": {
+          "col": 1,
+          "row": 1
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "n0",
+        "to": "n1",
+        "kind": "data",
+        "label": "lima echo"
+      },
+      {
+        "from": "n2",
+        "to": "n0",
+        "kind": "data",
+        "label": "juliett"
+      },
+      {
+        "from": "n0",
+        "to": "n2",
+        "kind": "data",
+        "label": "golf hotel"
+      },
+      {
+        "from": "n2",
+        "to": "n0",
+        "kind": "data",
+        "label": "alfa foxtrot golf"
+      }
+    ]
+  }
+}

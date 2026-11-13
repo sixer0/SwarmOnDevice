@@ -64,7 +64,7 @@ import { APPARATUS_TEXT, apparatusLabelRunText, apparatusLabelWords, artifactLab
 import { mmToTw, mmWidthsToTw, solveWidthsImpl, twToMm } from "./widths";
 import { type ParaAdjust, apparatusParaAdjust } from "../blocks/apparatus";
 import { baselineSnapTw, rowWrappedTw, snapUpTw } from "../blocks/rhythm";
-import { assertTableFits } from "../../table-fit";
+import { assertTableFits, tableBreakBudget, tableBreakRuns, type TableBreakBudget } from "../../table-fit";
 
 /** Python `_NUM_RE` datum_docx.py: kolom angka bila >= 70 % sel badan cocok. */
 const NUM_RE = /^[\d.,%±\s-]+\s*(%|x|mm|m|kVA|kW|Hz)?$/;
@@ -332,6 +332,8 @@ interface RowCtx {
   kind: RowKind;
   zebra?: Shading;
   catalogHeaderVAlign?: Cell["vAlign"];
+  /** Row 40d (C50): room per column before an ID list is broken (table-fit.ts `tableBreakBudget`). */
+  breakBudget?: TableBreakBudget;
 }
 
 function tcXml(env: Env, b: TableFamilyBlock, cell: Cell, cols: ColumnInfo[], grid: number[], startCol: number, rc: RowCtx): string {
@@ -360,12 +362,18 @@ function tcXml(env: Env, b: TableFamilyBlock, cell: Cell, cols: ColumnInfo[], gr
   const jc = jcFor(rc.kind, col);
   const paraBase: ParaFormat = { ...st.para, ...(jc ? { jc } : {}) };
   let inner = "";
+  const breakable = !(span === 1 && (col.role === "numeral" || col.role === "unit" || col.role === "id"));
   for (const p of parts.paragraphs) {
     if (p.runs === null) {
       inner += "<w:p/>";
       continue;
     }
-    inner += paragraphXml({ ...paraBase, ...(p.format ?? {}) }, runsXml(symbolRuns(p.runs, env.tpl.params, role), base, env.tpl.params));
+    // Swarm 1.2.7 row 40 (N-11, C12 O-6): U+200B (Word's no-width optional break) after each separator of a long ID
+    // list joined without spaces, the breaks DT-10a counts (table-fit.ts); never in numeral / unit / id columns.
+    // Row 40d (C50): only in a list that would overflow its column; never in a URL, document number or path.
+    const runs = symbolRuns(p.runs, env.tpl.params, role);
+    const broken = breakable && rc.breakBudget ? tableBreakRuns(runs, "\u200B", rc.breakBudget.cellMm(startCol, span)) : null;
+    inner += paragraphXml({ ...paraBase, ...(p.format ?? {}) }, runsXml(broken ?? runs, base, env.tpl.params));
   }
   if (cell.nested) {
     if (env.depth >= 1) {
@@ -625,6 +633,7 @@ export function tableXmlParts(b: TableFamilyBlock, env: Env, opts: { totalTw?: n
   // header rows and the first body row stay on one page, so a heading or caption is never stranded at a page foot
   // above a table that starts on the next page. Rows after the first body row may break (cantSplit per row as before).
   let keepRows = env.depth === 0;
+  const breakBudget = tableBreakBudget(effBlock as Parameters<typeof tableBreakBudget>[0], p);
   for (const row of rows) {
     const kind = rowKindOf(row);
     if (kind !== "header") leadingHeader = false;
@@ -638,7 +647,7 @@ export function tableXmlParts(b: TableFamilyBlock, env: Env, opts: { totalTw?: n
     let tcs = "";
     let ci = 0;
     for (const cell of row.cells) {
-      tcs += tcXml(env, effBlock, cell, cols, grid, ci, { kind, zebra: rowZebra, catalogHeaderVAlign });
+      tcs += tcXml(env, effBlock, cell, cols, grid, ci, { kind, zebra: rowZebra, catalogHeaderVAlign, breakBudget });
       ci += Math.max(1, cell.gridSpan ?? 1);
     }
     // CT_TrPrBase (urutan Word): cantSplit, trHeight, tblHeader.

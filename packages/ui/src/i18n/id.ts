@@ -88,6 +88,8 @@ export const dict: Record<string, string> = {
   "ui.sessionTurn.status.runningCommands": "Menjalankan perintah",
   "ui.sessionTurn.status.thinking": "Berpikir",
   "ui.sessionTurn.status.thinkingWithTopic": "Berpikir - {{topic}}",
+  "ui.messagePart.reasoning.show": "Tampilkan proses berpikir",
+  "ui.messagePart.reasoning.hide": "Sembunyikan proses berpikir",
   "ui.sessionTurn.status.gatheringThoughts": "Mengumpulkan pemikiran",
   "ui.sessionTurn.status.consideringNextSteps": "Mempertimbangkan langkah selanjutnya",
 
@@ -130,6 +132,7 @@ export const dict: Record<string, string> = {
   "ui.promptInput.placeholder.normal": "Tanyakan apa saja, {{slash}} untuk perintah, {{at}} untuk konteks...",
   "ui.promptInput.add": "Tambah gambar dan berkas",
   "ui.promptInput.attachments": "Gambar dan berkas",
+  "ui.promptInput.addFolder": "Tambah folder",
   "ui.promptInput.context": "Konteks",
   "ui.promptInput.shell": "Perintah shell",
   "ui.promptInput.chooseAgent": "Pilih agen",

@@ -197,11 +197,13 @@ export function incomplete(out: ToolOutput, missing: readonly string[]): ToolOut
 
 // ── studio_write ────────────────────────────────────────────────────────
 
-const WRITE_EXAMPLE = `{"mission":"2026-11-03_x","docKey":"lap-1","sections":[{"heading":"Ringkasan","blocks":["Teks."]},{"heading":"Rincian kerja","blocks":[[["judul","status"],["Bab 2","done"]]]}]}`;
+// 1.2.7 row 41 (T-18, N7-074): one-section example and shorter wording so the D22 quota sentence fits <= 450 chars;
+// the table form stays documented in SECTIONS.description.
+const WRITE_EXAMPLE = `{"mission":"2026-11-03_x","docKey":"lap-1","sections":[{"heading":"Bukti","blocks":["Teks."]}]}`;
 
 const writeTool: ToolDef = {
   name: "studio_write",
-  description: `Tulis/ganti dokumen dari isi saja; mesin memformat, menomori, cek, render, sha. Laporan: bab Ringkasan, Rincian kerja, Bukti, Isu terbuka, Langkah berikut. Klien: template "latest" + meta {title,author,number}. Argumen harus objek JSON, bukan string berisi JSON. Contoh: ${WRITE_EXAMPLE}`,
+  description: `Tulis/ganti dokumen, isi saja; mesin memformat, cek, render, sha. Laporan: Ringkasan, Rincian kerja, Bukti, Isu terbuka, Langkah berikut. Klien: template "latest", meta {title,author,number}. Kuota gambar: cek D22; pengecualian: admin, agen tanya orang (figure.quota.exceptionReason, REPORT). Argumen harus objek JSON, bukan string berisi JSON. Contoh: ${WRITE_EXAMPLE}`,
   inputSchema: obj({ mission: S.mission, docKey: S.docKey, template: TEMPLATE, title: { type: "string", minLength: 1, maxLength: 200 }, meta: META, sections: SECTIONS, agentId: S.agentId, detail: DETAIL }, ["mission", "docKey", "sections"]),
   annotations: { title: "Tulis dokumen (isi saja)", readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   toolsets: ["write"],

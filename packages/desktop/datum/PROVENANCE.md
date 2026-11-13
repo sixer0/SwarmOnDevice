@@ -22,7 +22,9 @@ Patch 1.2.6 row 101 (item W-01, re-hashed by row 111 under G-02) changed the fig
 
 Patch 1.2.6 fix row FX-10 (review wave F, gate 04 F5/F8/F11) changed SKILL.md (caption refusal named 400 SCHEMA_INVALID with checkId CAPTION_TOKEN_DUPLICATE; file-name example rev11/rev12 instead of a project's revision numbers), references/03-tabel-gambar-apparatus.md (§1.1 and §9.5: Studio prints the TABEL/GAMBAR label, the caption text never starts with it; 03-3 row updated) and references/08-skema-diagram.md (refusal code). Only those three files changed; file counts are unchanged.
 
-## 1. Base files that differ from the row 4 inventory (16)
+Patch 1.2.7 row 43 (F-3, C12 O-1, C13 O-5) replaced every GSP document-number literal in shipped samples that the Rev A manual does not print itself with the neutral `000/GSP/<TYPE>/<ROMAN>/<YEAR>` (type, month and year kept; `000` is never an issued number): scripts/datum_diagram.py (2 sample source lines), scripts/datum_pptx.py (1), scripts/datum_docx.py (1) and assets/Sumber Lembar Bukti.html (10 lines), and removed the agent scratch path from references/rev-a/README.md. Each replacement keeps the byte length. SKILL.md is unchanged (its literal is a manual format example), so skillSha is unchanged. assets/Sumber Lembar Bukti.html moves from section 3 to section 1: of the 54 base files, 17 differ and 37 are byte-identical; total file count unchanged (66).
+
+## 1. Base files that differ from the row 4 inventory (17)
 
 | File | Old sha256 (row 4 / v1.7) | New sha256 | Row |
 |---|---|---|---|
@@ -36,10 +38,11 @@ Patch 1.2.6 fix row FX-10 (review wave F, gate 04 F5/F8/F11) changed SKILL.md (c
 | references/07-ekosistem-routing.md | d475d43d1440f64d5d16ffd85a0cadd5ecf7dc0f9f5a241fef83c6f644c672ce | c39fd7e0336e05c89f99d6a25bda8b68b7006fdf8780405ce786e50925b252e5 | 117 |
 | references/08-skema-diagram.md | bf76d02217faded7c97947ff1643adcb5ab6e2fc26de282176d2aaeca5d7cdfa | 315cbd389493eced2bdf5979f21d415e4b0cc990235268781c4342e79f99d020 | 117, 1.2.6 row 101/111 (W-01 caption rule), 1.2.6 FX-10 (refusal code; final) |
 | references/09-simbol-standar.md | ae943e0d9ff29a5a69ccbbe181db0e9ecd7a416f1230de4059a0ee7676e711e9 | e435789c79278f6712041737b5131f6abb9574ea563e4d01b3c2d69a7e0edef7 | 117 |
-| scripts/datum_diagram.py | be8155fe88c35275c7f6f9ac548f2cae3691b88c79157bca0459840df2366a92 | 5adba0cdb441a9ddec6ac1fb791589a96c2b214cb1e6f0b20c0b7ec1297062cf | 48a (C103) |
-| scripts/datum_docx.py | 9871d5fd565e291fb0abc3144878166976279a6a9ebe3ce87866c9ec70d60365 | d7dd62b2b013db01a48cdce8691be4a8568c517e0cf44136d4a4dd03deacdb17 | 49b (C106) |
+| scripts/datum_diagram.py | be8155fe88c35275c7f6f9ac548f2cae3691b88c79157bca0459840df2366a92 | 0a7f612c0dfef41b04f1bbf34d2155842e8334b49473126fabbb422a27ebf2e1 | 48a (C103), 1.2.7 row 43 (F-3 neutral sample numbers; final) |
+| scripts/datum_docx.py | 9871d5fd565e291fb0abc3144878166976279a6a9ebe3ce87866c9ec70d60365 | aaa299210e2086e66d77d0c2bdc077e0118425e74df94bcff740823ac06edd78 | 49b (C106), 1.2.7 row 43 (F-3 neutral sample number; final) |
 | scripts/datum_lint.py | 8db92376a0ecb2eae1733e5c23c62eabb3f5a4a188bb38744df900ae814db5d4 | 4ed435a051d6dea907e5f76d2e62449acdd50ca9428aef9ee436b32e4b433bd0 | 102 |
-| scripts/datum_pptx.py | 531454e006065cb30eba1c819613d3b8eea2358bc45c1cbe6679cbe399442323 | 4aec32f45badadf0e4ca825f5828f2c2d7c5d29f1a404a34978e9dc2b76ebc57 | 101 (101c final, C87) |
+| scripts/datum_pptx.py | 531454e006065cb30eba1c819613d3b8eea2358bc45c1cbe6679cbe399442323 | 0e9d7cbd167122ebddfff766f73e16a0607f9fd88953c92b1cacf0cc9ebcb715 | 101 (101c, C87), 1.2.7 row 43 (F-3 neutral sample number; final) |
+| assets/Sumber Lembar Bukti.html | ca564063efd658b173f2be0ac0dd817a9ce8250a8093bded0c9f152df075502e | 3402e6b8e98ab675f95c7ef0bf34614e730c4374a41bcc3d016b31c0e7215e31 | 1.2.7 row 43 (F-3 neutral sample numbers, 10 lines; was byte-identical) |
 | scripts/datum_xlsx.py | 2cf62971939019e8c35dc51de7ec9be9dcb0cb2b859b518152f5bd728d020c1d | 121a2e9f4e0edd3bf2795994011e9cdb638c77f02cf064b919150cefd2878fb9 | 48a (C103) |
 | tokens.json | c440232809f66c19befc75ad76848bf210c6c8db8e48707a79c21618edb644f6 | ff23a87ced75ef81dfc29480ec89c974dbbb1af0d015c8aac70c9990b98849b9 | 99 |
 
@@ -51,7 +54,7 @@ Patch 1.2.6 fix row FX-10 (review wave F, gate 04 F5/F8/F11) changed SKILL.md (c
 | assets/fonts/DejaVuSans-Bold.ttf | e6476c1b80502924294eed40894c5b18e06c181444ca953e5334262df9c27724 | 23 (C46 ruling 1, C49; cp -p from packages/datum-studio/vendor/src/lib/studio/assets/fonts/DejaVuSans-Bold.ttf, sha equal to source) |
 | assets/fonts/LICENSE-DejaVu.txt | 0009b5daa1ebfab20b9206c467c62100e1853d379744511ba0f7860f149f7b64 | 23 (C46 ruling 1, C49; cp -p from packages/datum-studio/vendor/src/lib/studio/assets/fonts/LICENSE-DejaVu.txt, sha equal to source) |
 | assets/logo/gsp-seal.png | a43657da7dd8e5c06e3474a15b349036a0066011d8272597840f5b3bb8dfe95d | 117b (derived from gsp-tinta.png, recoloured #6E1420, C46 ruling 2) |
-| references/rev-a/README.md | a36c86f80f2e05d74068e10438079452ec6302b598abc71a5fe26936f8bf48a4 | 117, 117b (final) |
+| references/rev-a/README.md | 3970c17fe49af3e69310d359a145018c1a11a21cd8a3cd52543540ffd9cb9094 | 117, 117b, 1.2.7 row 43 (C13 O-5 scratch path removed; final) |
 | references/rev-a/manual_en.txt | c345e440607c4f7364046f27f070416a02f84abf693b1f632270f8dd91dbac42 | 117 |
 | references/rev-a/manual_id.txt | 56ba042d594ba39309f839d1b98613dbd8e574dd3c13d5ed96550f847322266c | 117 |
 | tests/test_datum_xlsx_rev_a.py | e0ad347cebf9c3b80b10ddeba5eae5080304905613b415ce11180efa61ee7402 | 100 (100c final, C87) |
@@ -61,11 +64,10 @@ Patch 1.2.6 fix row FX-10 (review wave F, gate 04 F5/F8/F11) changed SKILL.md (c
 | tests/test_row49b_docx_classification.py | 941f055ad726cd716f677ae7c69907c1b1d0a70a15e43824d5bc99cb11685070 | 49b (C106) |
 
 
-## 3. Byte-identical to the row 4 inventory (38)
+## 3. Byte-identical to the row 4 inventory (37)
 
 ```
 0dca86af29a162a2c6d8f6eaf100bffe9787122e505044f2d140d228cceef980  assets/DATUM Lembar Bukti.pdf
-ca564063efd658b173f2be0ac0dd817a9ce8250a8093bded0c9f152df075502e  assets/Sumber Lembar Bukti.html
 eed67babf14f4b45de0a57017c1291f37cc96ceede2bc98cbf7873bbd0c0a784  assets/fonts/IBMPlexMono-Italic.ttf
 73ac3f3d34ea63d0336449d8312fb8ae163d4bd922c2e78d16b4d7504baa0528  assets/fonts/IBMPlexMono-Regular.ttf
 5801cade8aa6cc81bdb3a463e05d55819339b738db383d55863e4a24139d99fd  assets/fonts/IBMPlexMono-SemiBold.ttf

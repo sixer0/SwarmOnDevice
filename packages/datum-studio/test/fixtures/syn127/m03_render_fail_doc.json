@@ -1,0 +1,91 @@
+{
+  "$comment": "Swarm 1.2.7 row 20 (M-03/M-08): the probe9 M-03 document (one paragraph + one diagram). Rendered html WITHOUT the bridge (AccSession bridge:false) the output is RENDER_UNVERIFIED with fail=EMPTY_SLOTS (EMPTY_SLOTS/FIGURE_PLACEHOLDER: the figure is printed without its graphic) and OVERLAP_CLIP/PAGE_COUNT/FIGURE_FIT UNKNOWN BRIDGE_UNAVAILABLE (probe_logs/probe9_host.log M-03). With a bridge the figure rasterises and EMPTY_SLOTS may pass. Host-harness document: create with studio_document_create {template, docKey, title, meta?, mission}, fill `slots` with studio_slot_fill, submit each `chapters[i]` with studio_chapter_submit after setting chapter submission target.documentId.",
+  "template": "datum-nota",
+  "docKey": "syn127-m03",
+  "title": "Dokumen uji M-03",
+  "slots": {},
+  "chapters": [
+    {
+      "$schema": "studio.chapter/v2",
+      "chapter": {
+        "key": "1",
+        "title": {
+          "text": "Uraian uji"
+        },
+        "sections": [
+          {
+            "title": {
+              "text": "Bagian uji"
+            },
+            "blocks": [
+              {
+                "type": "paragraph",
+                "text": "Paragraf pembuka sintetis untuk render."
+              },
+              {
+                "type": "diagram",
+                "spec": {
+                  "family": "flow",
+                  "labels_verified": true,
+                  "nodes": [
+                    {
+                      "id": "a",
+                      "label": "Gudang alfa",
+                      "class": {
+                        "col": 0,
+                        "row": 0
+                      }
+                    },
+                    {
+                      "id": "b",
+                      "label": "Periksa bravo",
+                      "class": {
+                        "col": 0,
+                        "row": 1
+                      }
+                    },
+                    {
+                      "id": "c",
+                      "label": "Rak charlie",
+                      "class": {
+                        "col": 0,
+                        "row": 2
+                      }
+                    }
+                  ],
+                  "edges": [
+                    {
+                      "from": "a",
+                      "to": "b",
+                      "kind": "data",
+                      "label": "kirim"
+                    },
+                    {
+                      "from": "b",
+                      "to": "c",
+                      "kind": "data",
+                      "label": "lolos"
+                    }
+                  ]
+                },
+                "caption": {
+                  "text": "Alur sintetis penerimaan barang."
+                },
+                "source": {
+                  "text": "Sumber sintetis uji."
+                }
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "harness": {
+    "bridge": false
+  },
+  "expected": {
+    "failCode": "EMPTY_SLOTS",
+    "outputs": 1
+  }
+}

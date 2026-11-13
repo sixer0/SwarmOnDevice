@@ -15,6 +15,9 @@ import { OutwardConsent } from "./outward-consent"
 import { ScriptScreen } from "./script-screen"
 import { BypassLists } from "./bypass-lists"
 import { BypassScreen } from "./bypass-screen"
+import { NetOptions } from "./net-options"
+import { PathSpelling } from "./path-spelling"
+import { ScriptReader } from "./script-reader"
 import { containsPath, type InstanceContext } from "../project/instance-context"
 import { LibraryRoot } from "../skill/library-root"
 import { SelfAddress } from "../server/self-address"
@@ -25,7 +28,7 @@ import { Risk } from "../tool/risk"
 import { DeletionWords, type Deletion } from "../tool/deletion"
 import { Secrets } from "../tool/secrets"
 import { findProgram } from "../util/find-program"
-import type { CheckpointFailedReason } from "./autonomy-texts"
+import type { CheckpointFailedReason, OwnApiReason } from "./autonomy-texts"
 
 export type Class = "A" | "P" | "D" | "B" | "X"
 export type CheckClass = Extract<Class, "P" | "D">
@@ -74,7 +77,7 @@ export type Verdict = {
    * 1.2.6 row 37b (P-01b): on an X `checkpoint_failed`, why no checkpoint could be made, from the closed list of
    * `checkpointFailedText` (autonomy-texts.ts). Never command text.
    */
-  reason?: CheckpointFailedReason
+  reason?: CheckpointFailedReason | OwnApiReason
 }
 
 /**
@@ -116,6 +119,11 @@ export type Input = {
    * 1.1.0 table, to the byte.
    */
   bypass?: { readonly caller: "root" | "subagent" }
+  /**
+   * 1.2.7 row 47j (C76): the agent that asked, as the gate passes it. Only read to keep the read roles (`READ_SHELL_ROLES`)
+   * at their U4 limits where the consent opens more for the main agent and other subagents. Absent: no read role.
+   */
+  agent?: string
   /** The processes Swarm started (S1.28), for `kill` under the bypass. Absent: none is known to be Swarm's. */
   ownProcesses?: ReadonlySet<number>
   /**
@@ -345,10 +353,12 @@ const READS = new Map<string, { short?: string; long?: readonly string[]; exact?
   ["tail", { short: "fF", long: ["--follow", "--retry"] }],
   ["wc", { long: ["--files0-from"] }],
   ["stat", {}],
-  ["file", { short: "C", long: ["--compile"] }],
+  // 1.2.7 row 47a (M1-01): `-z`/`-Z` decompress, which libmagic may hand to an outside program (gzip, xz, zstd …).
+  ["file", { short: "CzZ", long: ["--compile", "--uncompress", "--uncompress-noreport"] }],
   ["pwd", {}],
   ["tree", { short: "oR", long: ["--output", "--fromfile"] }],
-  ["rg", { short: "uLz.", long: ["--pre", "--pre-glob", "--hidden", "--no-ignore", "--follow", "--search-zip", "--unrestricted"] }],
+  // 1.2.7 row 47a (M1-01): `--hostname-bin=<program>` runs that program (ripgrep 13+), as `--pre` and `-z` do.
+  ["rg", { short: "uLz.", long: ["--pre", "--pre-glob", "--hostname-bin", "--hidden", "--no-ignore", "--follow", "--search-zip", "--unrestricted"] }],
   ["grep", { short: "rRdD", long: ["--recursive", "--dereference-recursive", "--directories", "--devices"] }],
   ["egrep", { short: "rRdD", long: ["--recursive", "--dereference-recursive", "--directories", "--devices"] }],
   ["find", { exact: ["-exec", "-execdir", "-ok", "-okdir", "-delete", "-fprint", "-fprint0", "-fprintf", "-fls"] }],
@@ -356,7 +366,8 @@ const READS = new Map<string, { short?: string; long?: readonly string[]; exact?
   ["uniq", { maxPaths: 1 }],
   ["cut", {}],
   ["tr", {}],
-  ["diff", { long: ["--output", "--to-file", "--from-file"] }],
+  // 1.2.7 row 47a (M1-01): `-l`/`--paginate` pipes the output through `pr`, a program diff starts.
+  ["diff", { short: "l", long: ["--output", "--to-file", "--from-file", "--paginate"] }],
   ["cmp", {}],
   ["comm", {}],
   ["paste", {}],
@@ -580,6 +591,12 @@ const GIT_LISTS: Readonly<Record<string, RegExp>> = {
 const GIT_ACTS = /^(--output(=.*)?|--ext-diff|--open-files-in-pager(=.*)?|-O.*|--no-index|--exec(=.*)?|--textconv)$/
 // 1.1.1 F10a (G3-1): the same options by name, as git also takes them shortened (one list, in `bypass-lists.ts`).
 const gitActs = (word: string) => GIT_ACTS.test(word) || Risk.abbreviates(word, BypassLists.GIT_ACT_NAMES, BypassLists.GIT_ACT_EXACT)
+// 1.2.7 row 47a (M1-12): options with which a look starts a program the user's own (unvetted, OP-6) git config names:
+// `cat-file --filters` runs the smudge and textconv drivers, `--show-signature` and the signature placeholders of a format
+// (`%G?`, `%GS`, `%(signature)`) run `gpg.program`. git takes `cat-file`'s long options shortened too.
+const GIT_RUNS_NAMES: readonly string[] = ["--filters", "--show-signature"]
+const GIT_SIGNATURE_FORMAT = /%G|%\(signature/
+const gitRuns = (word: string) => Risk.abbreviates(word, GIT_RUNS_NAMES) || GIT_SIGNATURE_FORMAT.test(word)
 // The one word after these flags is a revision, not a name to make.
 const GIT_REV_FLAG = /^--(contains|merged|no-merged|points-at)$/
 
@@ -610,7 +627,7 @@ function nestedGitAllowed(cwd: string, instance: InstanceContext) {
 }
 
 function gitLook(sub: string, args: readonly string[]) {
-  if (args.some(gitActs)) return false
+  if (args.some(gitActs) || args.some(gitRuns)) return false
   if (GIT_READS.has(sub)) return true
   const flags = GIT_LISTS[sub]
   if (!flags) return false
@@ -774,7 +791,7 @@ function mentionsAppState(command: string, instance: InstanceContext) {
 
 // Breaks a command into words the way a path ends: blanks, redirects, pipes, separators, `=` of an option or assignment.
 const PATH_BREAK = /[\s<>|;&()`=,]+/
-const HOME_WORD = /^(?:~|\$HOME\b|\$\{HOME\})(?=\/|$)/
+const HOME_WORD = PathSpelling.HOME_SPELLING
 
 /** The places a command names with a home spelling (`~`, `$HOME`, `${HOME}`), resolved under every home Swarm knows. */
 function homeSpelled(command: string) {
@@ -798,39 +815,890 @@ function inAppStateSpelled(file: string, instance: InstanceContext) {
 const LOOPBACK_NAME = /^(?:localhost|ip6-localhost|ip6-loopback|[\w.-]+\.localhost|127(?:\.\d{1,3}){3}|0|0\.0\.0\.0|::|::1|::ffff:127(?:\.\d{1,3}){3}|0:0:0:0:0:0:0:1)$/i
 const WILDCARD = new Set(["0.0.0.0", "::", ""])
 
+/**
+ * 1.2.7 F-4 (SR7-08): one spelling per host, so every spelling of loopback reads as one. An IPv4 address in any form
+ * `inet_aton` takes (1 to 4 parts, each decimal, hex `0x…` or octal `0…`: `127.1`, `2130706433`, `0x7f000001`,
+ * `0177.0.0.1`, `0`) becomes its dotted quad; an IPv6 address its short form, an IPv4-mapped one (`::ffff:127.0.0.1`)
+ * that IPv4 address; a name loses its trailing dot (`localhost.`). Lower case, brackets dropped.
+ */
+function normaliseHost(host: string): string {
+  const name = host.replace(/^\[|\]$/g, "").toLowerCase()
+  const v4 = ipv4(name)
+  if (v4 !== undefined) return v4
+  if (name.includes(":")) return ipv6(name) ?? name
+  return name.replace(/\.$/, "")
+}
+
+function ipv4(name: string): string | undefined {
+  if (!/^[0-9a-fx]+(?:\.[0-9a-fx]+){0,3}$/.test(name)) return undefined
+  const values = name.split(".").map((part) =>
+    /^0x[0-9a-f]*$/.test(part)
+      ? parseInt(part.slice(2) || "0", 16)
+      : /^0[0-7]*$/.test(part)
+        ? parseInt(part, 8)
+        : /^[1-9]\d*$/.test(part)
+          ? parseInt(part, 10)
+          : NaN,
+  )
+  if (values.some((value) => !Number.isFinite(value))) return undefined
+  const last = values.pop()!
+  if (values.some((value) => value > 255) || last >= 256 ** (4 - values.length)) return undefined
+  const whole = values.reduce((sum, value, index) => sum + value * 256 ** (3 - index), last)
+  return [Math.floor(whole / 2 ** 24) % 256, Math.floor(whole / 2 ** 16) % 256, Math.floor(whole / 2 ** 8) % 256, whole % 256].join(".")
+}
+
+function ipv6(name: string): string | undefined {
+  let text = name.replace(/%.*$/, "")
+  const tail = /(\d+\.\d+\.\d+\.\d+)$/.exec(text)
+  if (tail) {
+    const quad = ipv4(tail[1]!)
+    if (quad === undefined) return undefined
+    const [a, b, c, d] = quad.split(".").map(Number) as [number, number, number, number]
+    text = `${text.slice(0, tail.index)}${((a << 8) | b).toString(16)}:${((c << 8) | d).toString(16)}`
+  }
+  const halves = text.split("::")
+  if (halves.length > 2) return undefined
+  const head = halves[0] ? halves[0].split(":") : []
+  const rest = halves.length === 2 && halves[1] ? halves[1].split(":") : []
+  const fill = halves.length === 2 ? 8 - head.length - rest.length : 0
+  if (fill < 0) return undefined
+  const groups = [...head, ...Array<string>(fill).fill("0"), ...rest]
+  if (groups.length !== 8 || !groups.every((group) => /^[0-9a-f]{1,4}$/.test(group))) return undefined
+  const words = groups.map((group) => parseInt(group, 16))
+  // IPv4-mapped (`::ffff:a.b.c.d`) and IPv4-compatible (`::a.b.c.d`) addresses reach that IPv4 address.
+  if (words.slice(0, 5).every((word) => word === 0) && (words[5] === 0xffff || (words[5] === 0 && words[6] !== 0)))
+    return [words[6]! >> 8, words[6]! & 255, words[7]! >> 8, words[7]! & 255].join(".")
+  if (words.every((word) => word === 0)) return "::"
+  if (words.slice(0, 7).every((word) => word === 0) && words[7] === 1) return "::1"
+  return words.map((word) => word.toString(16)).join(":")
+}
+
+const isIpAddress = (normal: string) => /^\d{1,3}(?:\.\d{1,3}){3}$/.test(normal) || normal.includes(":")
+
 /** Whether a host names this computer as Swarm's own listener at `listener` can be reached there. */
 function ownHost(host: string, listener: SelfAddress.Address) {
-  const name = host.replace(/^\[|\]$/g, "").toLowerCase()
-  const bound = listener.hostname.replace(/^\[|\]$/g, "").toLowerCase()
+  const name = normaliseHost(host)
+  const bound = normaliseHost(listener.hostname)
   if (name === "" || LOOPBACK_NAME.test(name) || name === bound) return true
   if (!WILDCARD.has(bound)) return false
   // Bound on every interface: this computer's own addresses reach it too.
-  return Object.values(networkInterfaces()).some((list) => list?.some((item) => item.address.toLowerCase() === name))
+  return Object.values(networkInterfaces()).some((list) => list?.some((item) => normaliseHost(item.address) === name))
 }
 
 /**
- * 1.2.6 FX-14 (F-1, decision C24): a shell or fetch call that talks to Swarm's own running server, the listener this
- * process opened (`SelfAddress`). With the password from `app-server.env` such a call could answer the agent's own
- * prompts or change its mode, past every hold. Only that host and port: every other local port runs as C19c decided.
- * Read from the call's words: `host:port` (a URL or not), `/dev/tcp/host/port`, `host port` for a loopback name, and
- * httpie's bare `:port`.
+ * D1 (1.2.6 FX-14): whether a text names `listener` literally: `host:port` (a URL or not), `[v6]:port`,
+ * `/dev/tcp/host/port`, httpie's bare `:port`, and `host port` (`nc 127.0.0.1 port`) for a host that is not a bare number.
  */
-export function callsOwnServer(input: Input) {
+function namesListener(raw: string, listener: SelfAddress.Address) {
+  const text = raw.replace(/['"\\]/g, "")
+  const at = String.raw`0*${listener.port}(?!\d)`
+  const named = new RegExp(String.raw`(\[[0-9A-Fa-f:.]*\]|[\w.-]+):${at}|/dev/(?:tcp|udp)/([^/\s]+)/${at}`, "g")
+  for (const match of text.matchAll(named)) if (ownHost(match[1] ?? match[2]!, listener)) return true
+  // httpie and xh read a bare `:port` as localhost; `nc 127.0.0.1 port` names the host and the port apart.
+  if (new RegExp(String.raw`(?:^|\s):${at}`).test(text)) return true
+  for (const match of text.matchAll(new RegExp(String.raw`(?:^|\s)(\[[0-9A-Fa-f:.]*\]|[\w.:-]*[A-Za-z.:][\w.:-]*)\s+${at}`, "g")))
+    if (ownHost(match[1]!, listener)) return true
+  return false
+}
+
+/** 1.2.7 F-4: an X `own_api`; a reason (N7-136) when the address could not be worked out (N7-135), none when it was. */
+// 1.2.7 row 47k (U10-1, C76): a hit without a reason may carry the request it makes (`route`); such a hit runs under the
+// consent unless the route is one only the person may call (`personOnlyRoute`). A hit with neither is refused as before.
+type OwnApiHit = { readonly reason?: OwnApiReason; readonly route?: OwnRoute }
+
+/**
+ * 1.2.7 row 47k (U10-1): the request one call makes of Swarm's own server, read from its words: the method (undefined when
+ * it could not be worked out: a variable, a method-override header, an unread config) and the path, normalised as the
+ * server would route it (percent-decoded once, `.`/`..` and empty segments folded, lower case).
+ */
+type OwnRoute = { readonly method: string | undefined; readonly path: string }
+
+/**
+ * 1.2.7 row 47k (U10-1, U10 user ruling): the routes of Swarm's own server only the person calls, whatever the method:
+ * the autonomous mode and the person's "that change was mine" (`/autonomy/mode`, `/autonomy/confirm`), every consent route,
+ * emptying the archive and putting a checkpoint back (the desktop nonce routes), answering a permission, a question or a
+ * TUI control request on the person's behalf, and folder trust; since row 47l (C79) also the user's shell, the person's
+ * UI, repository commits and patches, upgrade and dispose. Matched as segments anywhere in the path, so a prefix
+ * (a workspace proxy) does not hide them.
+ */
+const PERSON_ONLY_ROUTES: readonly RegExp[] = [
+  /(?:^|\/)autonomy\/(?:mode|confirm)(?:\/|$)/,
+  /(?:^|\/)consent(?:\/|$)/,
+  /(?:^|\/)autonomy\/archive\/empty(?:\/|$)/,
+  /(?:^|\/)autonomy\/checkpoint(?:\/|$)/,
+  /(?:^|\/)permission\/[^/]+\/reply(?:\/|$)/,
+  /(?:^|\/)session\/[^/]+\/permissions(?:\/|$)/,
+  /(?:^|\/)question\/[^/]+\/(?:reply|reject)(?:\/|$)/,
+  /(?:^|\/)tui\/control\/response(?:\/|$)/,
+  /(?:^|\/)trust(?:\/|$)/,
+  // 1.2.7 row 47l (C79): routes that run a command or change files outside the permission system, or act in the person's
+  // UI. `session/:id/shell` runs a command recorded as "executed by the user" with no permission check (session/prompt.ts
+  // shellImpl); every `tui` route drives the person's terminal UI (submit or append a prompt, execute a command, open a
+  // dialog, show a toast, select a session, the control queue); `vcs/commit` and `vcs/apply` and `project/git/init` write
+  // the repository outside the checkpoint and classifier path; `global/upgrade` replaces Swarm; the dispose routes stop the
+  // person's instances.
+  /(?:^|\/)session\/[^/]+\/shell(?:\/|$)/,
+  /(?:^|\/)tui(?:\/|$)/,
+  /(?:^|\/)vcs\/(?:commit|apply)(?:\/|$)/,
+  /(?:^|\/)project\/git\/init(?:\/|$)/,
+  /(?:^|\/)global\/upgrade(?:\/|$)/,
+  /(?:^|\/)(?:global|instance)\/dispose(?:\/|$)/,
+  // Attaching to a terminal session types into it (a GET that upgrades to a websocket).
+  /(?:^|\/)pty\/[^/]+\/connect(?:\/|$)/,
+  // 1.2.7 row 47m (C80): the same principle for the routes row 47l left open. Reverting a session is the person's (U6);
+  // moving a session into a workspace (`experimental/workspace/warp`), taking over a sync (`sync/steal`) and connecting an
+  // MCP server (`mcp/:name/connect`, which starts the server's process from configuration) change files or start programs
+  // outside the permission system.
+  /(?:^|\/)session\/[^/]+\/(?:revert|unrevert)(?:\/|$)/,
+  /(?:^|\/)experimental\/workspace\/warp(?:\/|$)/,
+  /(?:^|\/)sync\/steal(?:\/|$)/,
+  /(?:^|\/)mcp\/[^/]+\/connect(?:\/|$)/,
+]
+/**
+ * 1.2.7 row 47k (U10-1): routes whose writes only the person makes: configuration (`/config`, `/global/config`, the lane
+ * controls `/global/lanes`, provider and MCP credentials under `auth`) and every write under `autonomy`. A read of them
+ * (GET, HEAD, OPTIONS) runs under the consent; a method not worked out counts as a write.
+ */
+const PERSON_ONLY_WRITES: readonly RegExp[] = [
+  /(?:^|\/)config(?:\/|$)/,
+  /(?:^|\/)global\/lanes(?:\/|$)/,
+  /(?:^|\/)auth(?:\/|$)/,
+  /(?:^|\/)autonomy(?:\/|$)/,
+  // 1.2.7 row 47l (C79): a terminal session (`pty`) spawns any program it is given, with no permission check.
+  /(?:^|\/)pty(?:\/|$)/,
+  // 1.2.7 row 47m (C80): worktree create, remove and reset (`experimental/worktree`, `.../reset`; the list is a GET and
+  // runs), workspace remove (`DELETE experimental/workspace/:id`; its other routes have fixed names), and adding an MCP
+  // server (`POST /mcp`; the status is a GET and runs).
+  /(?:^|\/)experimental\/worktree(?:\/|$)/,
+  /(?:^|\/)experimental\/workspace\/(?!(?:adapter|sync-list|status|warp)(?:\/|$))[^/]+(?:\/|$)/,
+  /(?:^|\/)mcp$/,
+]
+const READ_METHODS: ReadonlySet<string> = new Set(["GET", "HEAD", "OPTIONS"])
+
+/** 1.2.7 row 47k (U10-1): whether a request of Swarm's own server is one only the person makes. */
+export function personOnlyRoute(route: OwnRoute) {
+  if (PERSON_ONLY_ROUTES.some((pattern) => pattern.test(route.path))) return true
+  const writes = route.method === undefined || !READ_METHODS.has(route.method)
+  return writes && PERSON_ONLY_WRITES.some((pattern) => pattern.test(route.path))
+}
+
+/**
+ * 1.2.7 row 47k (U10-1): the path a URL-like word asks for, as the server routes it; undefined when it is not written out
+ * (a variable or command, curl's `{}`/`[]` globbing, a `;` parameter, a double encoding, a backslash) or a `_method`
+ * override rides in the query.
+ */
+function routePath(word: string): string | undefined {
+  const rest = word.replace(/^[A-Za-z][\w+.-]*:\/\//, "")
+  const start = rest.search(/[/?#]/)
+  if (start < 0) return "/"
+  const tail = rest.slice(start)
+  if (/[$`{}[\]\s\\;]/.test(tail)) return undefined
+  const cut = tail.search(/[?#]/)
+  const raw = cut < 0 ? tail : tail.slice(0, cut)
+  if (cut >= 0 && /_method/i.test(tail.slice(cut))) return undefined
+  let decoded: string
+  try {
+    decoded = decodeURIComponent(raw)
+  } catch {
+    return undefined
+  }
+  if (/%[0-9A-Fa-f]{2}/.test(decoded) || /[\\;]/.test(decoded)) return undefined
+  const parts: string[] = []
+  for (const part of decoded.split("/")) {
+    if (part === "" || part === ".") continue
+    if (part === "..") parts.pop()
+    else parts.push(part.toLowerCase())
+  }
+  return `/${parts.join("/")}`
+}
+
+/** 1.2.7 row 47k (U10-1): what a call's options say of its request: the method, and whether the path is not the URL's. */
+type RequestInfo = { method: string | undefined; targetUnknown: boolean }
+
+/** curl's short options that shape the request, by their long name. */
+const CURL_SHORT_REQUEST: Readonly<Record<string, string>> = {
+  X: "--request", d: "--data", F: "--form", T: "--upload-file", I: "--head", G: "--get", H: "--header", K: "--config", ":": "--next",
+}
+/** curl's long options that shape the method or the path; a word that abbreviates one of them is not worked out. */
+const CURL_REQUEST_LONG = [
+  "--request", "--request-target", "--data", "--data-raw", "--data-binary", "--data-urlencode", "--data-ascii", "--json",
+  "--form", "--form-string", "--upload-file", "--head", "--get", "--header", "--next", "--variable", "--expand-url",
+  "--expand-data", "--url",
+]
+
+/** The request curl makes from its options, those given on the line and those its config files add (`configs`). */
+function curlRequest(options: readonly [string, string | undefined][]): RequestInfo {
+  let method: string | undefined
+  let unknown = false
+  let targetUnknown = false
+  let [body, upload, head, get] = [false, false, false, false]
+  for (const [flag, value] of options) {
+    if (flag === "?") {
+      unknown = true
+      targetUnknown = true
+    } else if (flag === "--request") {
+      if (value === undefined || /[$`]/.test(value)) unknown = true
+      else method = value.toUpperCase()
+    } else if (flag === "--request-target" || flag === "--next" || flag === "--variable" || flag.startsWith("--expand-"))
+      targetUnknown = true
+    else if (flag.startsWith("--data") || flag === "--json" || flag.startsWith("--form")) body = true
+    else if (flag === "--upload-file") upload = true
+    else if (flag === "--head") head = true
+    else if (flag === "--get") get = true
+    else if (flag === "--header" && (value === undefined || /method-override|[$`]/i.test(value))) unknown = true
+  }
+  if (unknown) return { method: undefined, targetUnknown }
+  return { method: method ?? (head ? "HEAD" : get ? "GET" : upload ? "PUT" : body ? "POST" : "GET"), targetUnknown }
+}
+
+/** One curl option word (and its value) as a long name: an abbreviation of a request option reads as `?`. */
+function curlLong(flag: string): string {
+  if (CURL_REQUEST_LONG.includes(flag) || netOptions.curl.long.has(flag)) return flag
+  return CURL_REQUEST_LONG.some((name) => name.startsWith(flag) && flag.length >= 3) ? "?" : flag
+}
+
+/** The curl options of a config file's lines (`request = PATCH`, `-X PATCH`, `head`, `-sI`), nested configs two deep. */
+function curlConfigOptions(file: string, depth = 0): [string, string | undefined][] {
+  const text = configText(file)
+  if (text === undefined) return [["?", undefined]]
+  const options: [string, string | undefined][] = []
+  for (const line of text.split(/\r?\n/)) {
+    const entry = /^\s*(-{0,2})([A-Za-z:][\w-]*)\s*(?:[=:\s]\s*"?([^"]*?)"?\s*)?$/.exec(line)
+    if (!entry || line.trim().startsWith("#")) continue
+    const [dashes, key, value] = [entry[1]!, entry[2]!, entry[3] || undefined]
+    if (dashes === "-" || (dashes === "" && key.length === 1)) {
+      for (let at = 0; at < key.length; at++) {
+        const long = CURL_SHORT_REQUEST[key[at]!]
+        if (long) options.push([long, netOptions.curl.short.has(key[at]!) ? key.slice(at + 1) || value : undefined])
+        if (netOptions.curl.short.has(key[at]!)) break
+      }
+      continue
+    }
+    const long = curlLong(`--${key.toLowerCase()}`)
+    if (long === "--config" && value !== undefined && depth < 2) {
+      const next = commandFile(value, path.dirname(file))
+      options.push(...(next === undefined ? [["?", undefined] as [string, undefined]] : curlConfigOptions(next, depth + 1)))
+    } else options.push([long, value])
+  }
+  return options
+}
+
+/** wget's long options that shape the method or the path; a word that abbreviates one of them is not worked out. */
+const WGET_REQUEST_LONG = ["--method", "--post-data", "--post-file", "--body-data", "--body-file", "--header", "--execute"]
+
+/** The method wget asks with: `--method`, a post option, a `.wgetrc` command (`-e`, a config file) or GET. */
+function wgetRequest(args: readonly string[], configs: readonly string[]): RequestInfo {
+  let method: string | undefined
+  let unknown = false
+  let body = false
+  const command = (key: string, value: string | undefined) => {
+    const name = key.toLowerCase().replace(/[-_]/g, "")
+    if (name === "method") {
+      if (value === undefined || /[$`]/.test(value)) unknown = true
+      else method = value.trim().toUpperCase()
+    } else if (name === "postdata" || name === "postfile") body = true
+    else if (name === "header" && (value === undefined || /method-override|[$`]/i.test(value))) unknown = true
+  }
+  for (let index = 0; index < args.length; index++) {
+    const word = args[index]!
+    if (word === "--") break
+    if (word === "-e" || word.startsWith("-e") || word === "--execute" || word.startsWith("--execute=")) {
+      const value = word === "-e" || word === "--execute" ? args[++index] : word.startsWith("--execute=") ? word.slice(10) : word.slice(2)
+      const match = value === undefined ? undefined : /^\s*([\w-]+)\s*=\s*(.*)$/.exec(value)
+      if (match) command(match[1]!, match[2])
+      else unknown = true
+      continue
+    }
+    if (!word.startsWith("--")) continue
+    const equals = word.indexOf("=")
+    const flag = equals < 0 ? word : word.slice(0, equals)
+    const value = equals < 0 ? (netOptions.wget.long.has(flag) ? args[++index] : undefined) : word.slice(equals + 1)
+    if (WGET_REQUEST_LONG.includes(flag)) command(flag.slice(2), value)
+    else if (!netOptions.wget.long.has(flag) && WGET_REQUEST_LONG.some((name) => name.startsWith(flag) && flag.length >= 4)) unknown = true
+  }
+  for (const file of configs) {
+    const text = configText(file)
+    if (text === undefined) {
+      unknown = true
+      continue
+    }
+    for (const line of text.split(/\r?\n/)) {
+      const match = /^\s*([\w-]+)\s*=\s*(.*)$/.exec(line)
+      if (match) command(match[1]!, match[2])
+    }
+  }
+  if (unknown) return { method: undefined, targetUnknown: false }
+  return { method: method ?? (body ? "POST" : "GET"), targetUnknown: false }
+}
+
+/** httpie's and xh's method: the first word when it is a bare word with a URL after it, else POST with data items, GET without. */
+function httpieRequest(positional: readonly string[]): RequestInfo {
+  const named = positional.length > 1 && /^[A-Za-z]+$/.test(positional[0]!)
+  const items = positional.slice(named ? 2 : 1)
+  if (items.some((item) => /^[^:=]*:(?!=)/.test(item) && /method-override/i.test(item))) return { method: undefined, targetUnknown: false }
+  if (named) return { method: positional[0]!.toUpperCase(), targetUnknown: false }
+  // Without a method, data items (`a=b`, `a:=1`, `f@file`) make it a POST; with none, a body from stdin may too.
+  if (items.some((item) => /(?:^|[^=:])(?:=|:=|@)/.test(item) && !/^[^=]*==/.test(item))) return { method: "POST", targetUnknown: false }
+  return { method: items.length === 0 ? undefined : "GET", targetUnknown: false }
+}
+
+/** F-4: the network clients whose address a call may hide (`BypassLists.OUTWARD` less the remote shells, mail and sync). */
+// 1.2.7 row 47j (U9-5): zsh's `ztcp` and `zftp` too, so a call to Swarm's own server through them is judged as curl's is.
+const NETWORK_CLIENTS: ReadonlySet<string> = new Set(["curl", "wget", "nc", "ncat", "netcat", "socat", "http", "https", "xh", "telnet", "ztcp", "zftp"])
+/** Words that run the command after them; `xargs` builds it at run time, a shell's `-c` and `eval` run a text. */
+const CLIENT_WRAPPERS: ReadonlySet<string> = new Set([
+  "rtk", "env", "exec", "command", "builtin", "nohup", "time", "nice", "timeout", "stdbuf", "sudo", "doas", "eval", "xargs",
+  "sh", "bash", "zsh", "dash",
+])
+/** 1.2.7 47f (M1-08): curl's and wget's value-taking options, the same table objects the outward-consent reader uses. */
+export const netOptions = { curl: NetOptions.CURL, wget: NetOptions.WGET } as const
+/** httpie's and xh's options that take a value; `--proxy` is `scheme:url`. */
+const HTTPIE_VALUE = new Set(["-a", "--auth", "-A", "--auth-type", "--session", "--session-read-only", "-o", "--output", "--verify", "--cert", "--cert-key", "--proxy", "--timeout", "-p", "--print", "-s", "--style", "--pretty", "--format-options", "--boundary", "--max-redirects", "--raw"])
+/** nc, ncat, netcat and telnet options that take a value; `x` and `--proxy` are an address. */
+const NC_VALUE = new Set(["-p", "-s", "-w", "-x", "-X", "-i", "-O", "-I", "-T", "-V", "-e", "-c", "-o", "--proxy", "--proxy-type", "--sh-exec", "--exec"])
+const TELNET_VALUE = new Set(["-l", "-e", "-n", "-b"])
+const SOCAT_ADDRESS = /^(?:tcp[46]?(?:-connect)?|udp[46]?(?:-connect|-sendto)?|openssl(?:-connect)?|ssl|socks4a?|socks5|proxy):(.*)$/i
+/** F-4 (D2, OP-4): a config file is read only as a regular file of 64 KiB or less, never from a protected place. */
+const CONFIG_MAX_BYTES = 64 * 1024
+
+const unresolvedWord = (word: string | undefined) => word !== undefined && /[$`]/.test(word)
+
+/** The host and port a URL-like word names; scheme, user info, path and query left out. */
+function hostAndPort(word: string): { host: string; port?: string } {
+  const rest = word.replace(/^[A-Za-z][\w+.-]*:\/\//, "")
+  const end = rest.search(/[/?#]/)
+  let auth = end < 0 ? rest : rest.slice(0, end)
+  const at = auth.lastIndexOf("@")
+  if (at >= 0) auth = auth.slice(at + 1)
+  const v6 = /^(\[[^\]]*\])(?::(.*))?$/.exec(auth)
+  if (v6) return { host: v6[1]!, port: v6[2] }
+  const colon = auth.lastIndexOf(":")
+  return colon < 0 ? { host: auth } : { host: auth.slice(0, colon), port: auth.slice(colon + 1) }
+}
+
+/**
+ * One word in an address position. U2: the host is not written out. U3: a loopback host with a port that is not.
+ * D: the listener's port on one of its hosts. SR7-08: a name that is not an IP address with a listener's port, which a
+ * DNS name could point back here. A literal host that is not this computer's is not refused, whatever the port.
+ */
+function judgeAddress(word: string, listeners: readonly SelfAddress.Address[], literal = false): OwnApiHit | undefined {
+  const { host, port } = hostAndPort(word)
+  if (!literal && unresolvedWord(host)) return { reason: "unresolved_target" }
+  const normal = normaliseHost(host)
+  for (const listener of listeners) {
+    const own = ownHost(host, listener)
+    if (own && !literal && unresolvedWord(port)) return { reason: "unresolved_target" }
+    if (port === undefined || !/^\d+$/.test(port) || Number(port) !== listener.port) continue
+    if (own) return {}
+    if (normal !== "" && !isIpAddress(normal)) return { reason: "unresolved_target" }
+  }
+  return undefined
+}
+
+/** A config file's text, or undefined when it may not or cannot be read. Only checked, never shown (OP-4). */
+function configText(file: string): string | undefined {
+  try {
+    if (protectedOutside(file, "read") || !Reach.readable(file)) return undefined
+    const stat = fs.statSync(file)
+    if (!stat.isFile() || stat.size > CONFIG_MAX_BYTES) return undefined
+    return fs.readFileSync(file, "utf8")
+  } catch {
+    return undefined
+  }
+}
+
+/** Where a file named in a command is: `~`, `$HOME` and `${HOME}` under the home the shell has, the rest from `cwd`. */
+function commandFile(word: string, cwd: string) {
+  const home = /^(?:~|\$HOME\b|\$\{HOME\})(?=\/|$)/.exec(word)
+  if (home) return path.join(homedir(), word.slice(home[0].length))
+  return unresolvedWord(word) ? undefined : path.resolve(cwd, word)
+}
+
+/** D2/D4: what a curl or wget config file (or wget URL list) names, followed into the configs it names, two deep. */
+function judgeConfig(file: string, listeners: readonly SelfAddress.Address[], info: RequestInfo, depth = 0): OwnApiHit[] {
+  const text = configText(file)
+  if (text === undefined) return [{ reason: "config_file" }]
+  const hits: OwnApiHit[] = []
+  for (const line of text.split(/\r?\n/)) {
+    const entry = /^\s*-{0,2}([A-Za-z][\w-]*)\s*(?:=|:|\s)\s*"?([^"\s]+)"?/.exec(line)
+    const bare = /^\s*([a-z]+:\/\/\S+)\s*$/i.exec(line)
+    if (bare) {
+      // 1.2.7 row 47k (U10-1): a URL of a list (`wget -i`) is a request, judged by its route.
+      const hit = judgeAddress(bare[1]!, listeners, true)
+      if (hit) hits.push(routed(bare[1]!, hit, info))
+      continue
+    }
+    if (!entry) continue
+    const [key, value] = [entry[1]!.toLowerCase(), entry[2]!]
+    if (/^(?:url|x|proxy|preproxy|https?_proxy|ftp_proxy|all_proxy)$/.test(key)) {
+      const hit = judgeAddress(value, listeners, true)
+      // A `url` is a request; a proxy entry reaches the server with no route that can be read.
+      if (hit) hits.push(key === "url" ? routed(value, hit, info) : hit)
+    }
+    if ((key === "k" || key === "config") && depth < 2) {
+      const next = commandFile(value, path.dirname(file))
+      hits.push(...(next === undefined ? [{ reason: "config_file" as const }] : judgeConfig(next, listeners, info, depth + 1)))
+    }
+  }
+  // The listener named anywhere else in the file (a header, an unread option): refused as before (D2).
+  if (listeners.some((listener) => namesListener(text, listener)) && !hits.some((hit) => hit.reason === undefined)) hits.push({})
+  return hits
+}
+
+/**
+ * 1.2.7 row 47k (U10-1): a request word's hit with the route it asks for. A hit with a reason stays; a path that is not
+ * written out, or a request whose path an option replaces (`--request-target`), is `unresolved_target` (refused).
+ */
+function routed(word: string, hit: OwnApiHit, info: RequestInfo): OwnApiHit {
+  if (hit.reason !== undefined) return hit
+  const route = routePath(word)
+  if (route === undefined || info.targetUnknown) return { reason: "unresolved_target" }
+  return { route: { method: info.method, path: route } }
+}
+
+/** D4: the config files curl or wget reads by itself, those that exist. */
+function defaultConfigs(program: "curl" | "wget") {
+  const env = process.env
+  const files =
+    program === "curl"
+      ? [
+          ...(env.CURL_HOME ? [path.join(env.CURL_HOME, ".curlrc")] : []),
+          ...(env.XDG_CONFIG_HOME ? [path.join(env.XDG_CONFIG_HOME, ".curlrc"), path.join(env.XDG_CONFIG_HOME, "curlrc")] : []),
+          ...homes().map((home) => path.join(home, ".curlrc")),
+        ]
+      : [...(env.WGETRC ? [env.WGETRC] : []), ...homes().map((home) => path.join(home, ".wgetrc"))]
+  return [...new Set(files)].filter((file) => fs.lstatSync(file, { throwIfNoEntry: false }) !== undefined)
+}
+
+type ClientCall = { program: string; args: string[]; runtime: boolean }
+
+/**
+ * A command's simple commands as the shell splits them into words: quotes and backslashes removed, `;`, `|`, `&` and line
+ * breaks between commands, and every redirection (`> out`, `2>&1`, `< cfg`) left out with its target.
+ */
+function shellSegments(text: string): string[][] {
+  const segments: string[][] = [[]]
+  let word = ""
+  let inWord = false
+  let drop = false
+  let quote: string | undefined
+  const end = () => {
+    if (inWord) {
+      if (!drop) segments.at(-1)!.push(word)
+      drop = false
+    }
+    word = ""
+    inWord = false
+  }
+  for (let index = 0; index < text.length; index++) {
+    const char = text[index]!
+    if (quote !== undefined) {
+      if (char === quote) quote = undefined
+      else if (char === "\\" && quote === '"' && index + 1 < text.length) word += text[++index]
+      else word += char
+      continue
+    }
+    if (char === "'" || char === '"') {
+      quote = char
+      inWord = true
+      continue
+    }
+    if (char === "\\" && index + 1 < text.length) {
+      word += text[++index]
+      inWord = true
+      continue
+    }
+    if (char === "<" || char === ">") {
+      if (inWord && /^\d+$/.test(word)) {
+        word = ""
+        inWord = false
+      } else end()
+      while (index + 1 < text.length && "<>&|".includes(text[index + 1]!)) index++
+      drop = true
+      continue
+    }
+    if (char === "\n" || char === ";" || char === "|" || char === "&") {
+      end()
+      if (segments.at(-1)!.length > 0) segments.push([])
+      continue
+    }
+    if (/\s/.test(char)) {
+      end()
+      continue
+    }
+    word += char
+    inWord = true
+  }
+  end()
+  return segments.filter((segment) => segment.length > 0)
+}
+
+/**
+ * The network client one simple command runs, past the words that run what follows them; or the text a shell's `-c` or
+ * an `eval` runs, to be read as a command of its own; or undefined.
+ */
+function clientCall(words: readonly string[]): ClientCall | { nested: string } | undefined {
+  let runtime = false
+  let index = 0
+  while (index < words.length) {
+    const word = words[index]!
+    if (/^[A-Za-z_]\w*=/.test(word)) {
+      // A proxy set from something not written out may point anywhere, this computer included.
+      if (/^(?:https?|all|ftp)_proxy=.*[$`]/i.test(word)) runtime = true
+      index++
+      continue
+    }
+    const name = path.basename(word)
+    if (!CLIENT_WRAPPERS.has(name)) break
+    index++
+    if (name === "xargs") runtime = true
+    while (index < words.length && (words[index]!.startsWith("-") || /^\d+[smhd]?$/.test(words[index]!))) index++
+    if (name === "eval" || DeletionWords.SHELLS.has(name)) return { nested: words.slice(index).join(" ") }
+  }
+  const program = words[index] === undefined ? undefined : path.basename(words[index]!)
+  if (program === undefined || !NETWORK_CLIENTS.has(program)) return undefined
+  return { program, args: words.slice(index + 1), runtime }
+}
+
+/**
+ * What one client call names: address words, config files, URL lists, and whether it reads its default config. 1.2.7 row
+ * 47k (U10-1): `requests` are the URLs it asks for (curl's and wget's operands and `--url`, httpie's URL), `curl` the
+ * options that shape curl's request, `positional` httpie's words; every other address (a proxy, `--resolve`, a socket)
+ * reaches a server with no route that can be read.
+ */
+function clientParts(call: ClientCall) {
+  const addresses: string[] = []
+  const requests: string[] = []
+  const configs: string[] = []
+  const lists: string[] = []
+  const curlOptions: [string, string | undefined][] = []
+  const { program, args } = call
+  // 1.2.7 row 47j (U9-5): `ztcp [-v] [-d fd] host [port]` (a listen, accept, close or list names no host to call) and
+  // `zftp open|params host [port]`.
+  if (program === "ztcp" || program === "zftp") {
+    const named: string[] = []
+    let local = false
+    for (let index = 0; index < args.length; index++) {
+      const word = args[index]!
+      if (word === "-d") index++
+      else if (program === "ztcp" && /^-[lacL]/.test(word)) local = true
+      else if (!word.startsWith("-")) named.push(word)
+    }
+    const [host, port] = program === "zftp" ? (["open", "params"].includes(named[0] ?? "") ? named.slice(1) : []) : named
+    if (!local && host !== undefined) addresses.push(port === undefined || !/^\d+$/.test(port) ? host : `${host}:${port}`)
+    return { addresses, requests, configs, lists, defaults: false, curlOptions, positional: [] as string[] }
+  }
+  let defaults = program === "curl" || program === "wget"
+  if (program === "curl" && (args[0] === "-q" || args[0] === "--disable")) defaults = false
+  if (program === "wget" && args.includes("--no-config")) defaults = false
+  const curl = program === "curl"
+  const wget = program === "wget"
+  const httpie = program === "http" || program === "https" || program === "xh"
+  const socat = program === "socat"
+  const positional: string[] = []
+  for (let index = 0; index < args.length; index++) {
+    const word = args[index]!
+    if (word === "--") {
+      positional.push(...args.slice(index + 1))
+      break
+    }
+    if (word.startsWith("--")) {
+      const equals = word.indexOf("=")
+      const flag = equals < 0 ? word : word.slice(0, equals)
+      const takes = (curl ? netOptions.curl.long : wget ? netOptions.wget.long : httpie ? HTTPIE_VALUE : NC_VALUE).has(flag)
+      const value = equals < 0 ? (takes ? args[++index] : undefined) : word.slice(equals + 1)
+      if (curl) curlOptions.push([curlLong(flag), value])
+      if (value === undefined) continue
+      if (flag === "--config") configs.push(value)
+      else if (curl && flag === "--url") requests.push(value)
+      else if (flag === "--input-file") lists.push(value)
+      else if (curl && netOptions.curl.address.has(flag)) addresses.push(flag === "--resolve" ? value.split(":").slice(-1)[0]! : flag === "--connect-to" ? value.split(":").slice(2).join(":") : value)
+      else if (flag === "--proxy") addresses.push(value.replace(/^(?:https?|all):(?!\/\/)/, ""))
+      else if (wget && flag === "--execute") addresses.push(...wgetProxy(value))
+      continue
+    }
+    if (word.startsWith("-") && word.length > 1 && !socat) {
+      if (httpie || !(curl || wget)) {
+        const values = httpie ? HTTPIE_VALUE : program === "telnet" ? TELNET_VALUE : NC_VALUE
+        if (values.has(word)) {
+          const value = args[++index]
+          if (value !== undefined && (word === "-x" || word === "--proxy")) addresses.push(value)
+        }
+        continue
+      }
+      const shorts = curl ? netOptions.curl.short : netOptions.wget.short
+      for (let at = 1; at < word.length; at++) {
+        const letter = word[at]!
+        const long = curl ? CURL_SHORT_REQUEST[letter] : undefined
+        if (!shorts.has(letter)) {
+          if (long) curlOptions.push([long, undefined])
+          continue
+        }
+        const value = word.slice(at + 1) || args[++index]
+        if (long) curlOptions.push([long, value])
+        if (value === undefined) break
+        if (curl && letter === "K") configs.push(value)
+        else if (curl && letter === "x") addresses.push(value)
+        else if (wget && letter === "i") lists.push(value)
+        else if (wget && letter === "e") addresses.push(...wgetProxy(value))
+        break
+      }
+      continue
+    }
+    positional.push(word)
+  }
+  if (curl || wget) requests.push(...positional)
+  else if (httpie) {
+    // 1.2.7 row 47k: a bare first word with more after it is the method (`http post :4096/x`), as `httpieRequest` reads it.
+    const url = positional.length > 1 && /^[A-Za-z]+$/.test(positional[0]!) ? positional[1] : positional[0]
+    if (url !== undefined) requests.push(url)
+  } else if (socat) {
+    for (const word of positional) {
+      const match = SOCAT_ADDRESS.exec(word)
+      if (match) addresses.push(match[1]!.split(",")[0]!.split(":").slice(-2).join(":"))
+    }
+  } else if (positional.length > 0) {
+    // nc, ncat, netcat, telnet: `host [port]`. A host alone may still carry a port once the shell splits it.
+    addresses.push(positional[1] === undefined ? positional[0]! : `${positional[0]}:${positional[1]}`)
+  }
+  return { addresses, requests, configs, lists, defaults, curlOptions, positional }
+}
+
+/** A `.wgetrc` command given with `-e`: a proxy setting is an address. */
+const wgetProxy = (command: string) => {
+  const match = /^\s*(\w+)\s*=\s*(.*)$/.exec(command)
+  return match && /proxy$/i.test(match[1]!) ? [match[2]!] : []
+}
+
+/** The verdicts one client call gets (D2, D4, U1-U4), none when it cannot reach Swarm's server. */
+function judgeClient(call: ClientCall, cwd: string, listeners: readonly SelfAddress.Address[]): OwnApiHit[] {
+  if (call.runtime) return [{ reason: "unresolved_target" }]
+  const { addresses, requests, configs, lists, defaults, curlOptions, positional } = clientParts(call)
+  const hits: OwnApiHit[] = []
+  for (const word of addresses) {
+    if (word === "") continue
+    const hit = judgeAddress(word, listeners)
+    if (hit) hits.push(hit)
+  }
+  // 1.2.7 row 47k (U10-1): what the request asks for, from the line and from every config file the client reads.
+  const read = [...configs.filter((word) => word !== "").map((word) => (word === "-" ? undefined : commandFile(word, cwd)))]
+  const defaultFiles = defaults && (call.program === "curl" || call.program === "wget") ? defaultConfigs(call.program) : []
+  const info: RequestInfo =
+    call.program === "curl"
+      ? curlRequest([
+          ...curlOptions,
+          ...[...read, ...defaultFiles].flatMap((file): [string, string | undefined][] =>
+            file === undefined ? [["?", undefined]] : curlConfigOptions(file),
+          ),
+        ])
+      : call.program === "wget"
+        ? read.includes(undefined)
+          ? { method: undefined, targetUnknown: false }
+          : wgetRequest(call.args, [...read.filter((file) => file !== undefined), ...defaultFiles])
+        : call.program === "http" || call.program === "https" || call.program === "xh"
+          ? httpieRequest(positional)
+          : { method: undefined, targetUnknown: true }
+  for (const word of requests) {
+    if (word === "") continue
+    const hit = judgeAddress(word, listeners)
+    if (hit) hits.push(routed(word, hit, info))
+  }
+  for (const [word, stdin] of [
+    ...configs.map((word) => [word, "config_file"] as const),
+    ...lists.map((word) => [word, "unresolved_target"] as const),
+  ]) {
+    // U1/U4: read from stdin, or from a file whose name is not written out.
+    const file = word === "-" ? undefined : commandFile(word, cwd)
+    if (file === undefined) hits.push({ reason: word === "-" ? stdin : "config_file" })
+    else hits.push(...judgeConfig(file, listeners, info))
+  }
+  for (const file of defaultFiles) hits.push(...judgeConfig(file, listeners, info))
+  return hits
+}
+
+/** `$(…)` and backquoted commands, each a text of its own, and the text with each replaced by a word not written out. */
+function liftSubstitutions(text: string) {
+  const inner: string[] = []
+  let outer = text
+  for (let round = 0; round < 8; round++) {
+    const next = outer.replace(/\$\(([^()]*)\)|`([^`]*)`/g, (_whole, a: string | undefined, b: string | undefined) => {
+      inner.push(a ?? b ?? "")
+      return "$__"
+    })
+    if (next === outer) break
+    outer = next
+  }
+  return [outer, ...inner]
+}
+
+/**
+ * D3: the text with `$NAME` and `${NAME}` replaced by a literal value assigned earlier in it (`H=127.0.0.1; curl $H:…`,
+ * `export P=…`), in text order. Anything else (`${H:-x}`, an assignment from a command) stays as written.
+ */
+function substituteAssignments(text: string) {
+  const known = new Map<string, string>()
+  const reference = /\$\{([A-Za-z_]\w*)\}|\$([A-Za-z_]\w*)/g
+  return text.replace(
+    /(?<=^|[\s;&|(])(?:export\s+)?([A-Za-z_]\w*)=("[^"]*"|'[^']*'|[^\s;&|()]*)|\$\{([A-Za-z_]\w*)\}|\$([A-Za-z_]\w*)/g,
+    (whole, name: string | undefined, value: string | undefined, braced: string | undefined, bare: string | undefined) => {
+      if (name !== undefined) {
+        const literal = value!.replace(/^(['"])([\s\S]*)\1$/, "$2")
+        known.set(name, literal.replace(reference, (ref, a: string | undefined, b: string | undefined) => known.get((a ?? b)!) ?? ref))
+        return whole
+      }
+      return known.get((braced ?? bare)!) ?? whole
+    },
+  )
+}
+
+/** The verdicts for a call by its words (D1, D3, and per client D2, D4, U1-U4), shell `-c` and `eval` text two deep. */
+function judgeOwnServer(text: string, cwd: string, listeners: readonly SelfAddress.Address[], depth = 0): OwnApiHit[] {
+  const hits: OwnApiHit[] = []
+  for (const part of liftSubstitutions(text)) {
+    const resolved = substituteAssignments(part)
+    const names = (text: string) => listeners.some((listener) => namesListener(text, listener))
+    for (const match of resolved.matchAll(/\/dev\/(?:tcp|udp)\/([^/\s]+)\/([^\s;&|)]+)/g)) {
+      const hit = judgeAddress(`${match[1]}:${match[2]}`, listeners)
+      if (hit) hits.push(hit)
+    }
+    // 1.2.7 row 47k (U10-1): the listener named in a simple command counts as a call with no route that can be read (a
+    // socket, interpreter code, an echo), unless that command is a client whose call to it was read (routed or refused).
+    let segmentNamed = false
+    for (const words of shellSegments(resolved)) {
+      const named = names(words.join(" "))
+      segmentNamed ||= named
+      const call = clientCall(words)
+      if (call !== undefined && "nested" in call) {
+        if (depth < 2) hits.push(...judgeOwnServer(call.nested, cwd, listeners, depth + 1))
+        else if (named) hits.push({})
+        continue
+      }
+      const found = call === undefined ? [] : judgeClient(call, cwd, listeners)
+      hits.push(...found)
+      if (named && found.length === 0) hits.push({})
+    }
+    // Named only where the words leave it out (a redirection's target, a here-document): refused as before.
+    if (!segmentNamed && names(resolved)) hits.push({})
+  }
+  return hits
+}
+
+/**
+ * 1.2.6 FX-14 (F-1, decision C24), 1.2.7 F-4 (OP-4, SR7-08): a shell or fetch call that talks to Swarm's own running
+ * server, the listener this process opened (`SelfAddress`). With the password from `app-server.env` such a call could
+ * answer the agent's own prompts or change its mode, past every hold. Only that host and port: every other local port
+ * runs as C19c decided, and nothing is refused while no listener exists.
+ * - D1-D5, no reason: the call names it, literally, through a variable assigned in the same text, or through a config
+ *   file (`-K`, `--config`, `.curlrc`, `.wgetrc`, `-i`) that was read.
+ * - U1 `config_file`: a config file from stdin, or one that is missing, unreadable, larger than 64 KiB or protected.
+ * - U2-U4 `unresolved_target`: a network client whose host is not written out (`$URL`, `$(…)`, `eval`, `xargs`, `-i -`),
+ *   a loopback host with a port that is not, or a name that is not an IP address with a listener's port (SR7-08).
+ * Residual (R-F4, SR7-03): interpreter code that builds the address at run time (`python -c`, `node -e`, a script) is not
+ * decidable here; a subagent's goes to the main agent by the script screen's `network` flag. The backstop is the masking
+ * of the server password file (U16), X `app_state` for any shell write out of app state (C8), the app-state read
+ * allowlist (no oracle), and the desktop nonce on revert and archive-empty only. The permission reply, consent and mode
+ * routes are password-only.
+ * 1.2.7 row 47k (U10-1, user ruling U10, C76): narrowed to the routes only the person calls. A request whose method and
+ * path were read from its words (curl/wget operands and options, their config files, httpie's method and items, a
+ * webfetch URL) runs under the consent like any other local call unless `personOnlyRoute` names it; that one is X
+ * `own_api` with no reason. Every form whose route cannot be read stays refused as before: a path or method not written
+ * out (`unresolved_target`), an unread config (`config_file`), a socket, a proxy or interpreter code naming the listener
+ * (no reason).
+ */
+function ownServerCall(input: Input): OwnApiHit | undefined {
   const listeners = SelfAddress.list()
-  if (listeners.length === 0) return false
-  const texts = [input.metadata.command, input.metadata.url].filter((text): text is string => typeof text === "string")
-  if (texts.length === 0) return false
-  return listeners.some((listener) =>
-    texts.some((raw) => {
-      const text = raw.replace(/['"\\]/g, "")
-      const port = String(listener.port)
-      const at = String.raw`0*${port}(?!\d)`
-      // `host:port`, in a URL or bare; `[v6]:port`; `/dev/tcp/host/port` (bash's own sockets).
-      const named = new RegExp(String.raw`(\[[0-9A-Fa-f:.]*\]|[\w.-]+):${at}|/dev/(?:tcp|udp)/([^/\s]+)/${at}`, "g")
-      for (const match of text.matchAll(named)) if (ownHost(match[1] ?? match[2]!, listener)) return true
-      // httpie and xh read a bare `:port` as localhost; `nc 127.0.0.1 port` names the host and the port apart.
-      if (new RegExp(String.raw`(?:^|\s):${at}`).test(text)) return true
-      return new RegExp(String.raw`(?:^|\s)(?:localhost|127(?:\.\d{1,3}){3}|::1|\[::1\])\s+${at}`, "i").test(text)
+  if (listeners.length === 0) return undefined
+  const hits: OwnApiHit[] = []
+  const url = input.metadata.url
+  if (typeof url === "string") {
+    // A webfetch only ever asks with GET.
+    const hit = judgeAddress(url, listeners, true)
+    if (hit) hits.push(routed(url, hit, { method: "GET", targetUnknown: false }))
+    else if (listeners.some((listener) => namesListener(url, listener))) hits.push({})
+  }
+  const command = input.metadata.command
+  if (typeof command === "string") hits.push(...judgeOwnServer(command, input.cwd, listeners))
+  if (hits.some((hit) => hit.route !== undefined && personOnlyRoute(hit.route))) return {}
+  const refused = hits.filter((hit) => hit.route === undefined)
+  if (refused.length === 0) return undefined
+  return refused.find((hit) => hit.reason === undefined) ?? refused.find((hit) => hit.reason === "config_file") ?? refused[0]
+}
+
+/** Whether a call to Swarm's own running server is refused, by `ownServerCall` (1.2.7 row 47k: a readable, not person-only route is not). */
+export function callsOwnServer(input: Input) {
+  return ownServerCall(input) !== undefined
+}
+
+/** The Swarm CLI by any name it ships under (`swarm`, `swarm-launcher.sh`, `opencode`), as a program's last path part. */
+const SWARM_CLI = /^(?:swarm|opencode)(?:-launcher)?(?:\.sh|\.exe)?$/i
+/** Programs that run other code: their arguments are read as text for the CLI followed by `autonomy`. */
+const AUTONOMY_RUNNERS = new Set([
+  "script", "expect", "unbuffer", "python", "python3", "node", "bun", "bunx", "npx", "deno", "tsx", "perl", "ruby",
+  "osascript",
+])
+const AUTONOMY_IN_TEXT =
+  /(?:^|[\s'"[(,/=])(?:(?:swarm|opencode)(?:-launcher)?(?:\.sh|\.exe)?|index\.[cm]?[jt]s)['"]?(?:\s*,\s*|[\s\\]+)['"]?autonomy(?![\w.-])/i
+
+/**
+ * 1.2.7 U-10 (C63, D-10b): a shell command that runs `swarm autonomy …`, by its name or a path to it, a program name not
+ * written out (`$B`, `$(…)`), through `sh -c`/`eval` two deep, or inside a program that runs other code (a pseudo
+ * terminal wrapper, an interpreter's code). A mention in another program's arguments (`git commit -m`) is not a run.
+ * Residual, as R-F4: a script file that calls it is not read here.
+ */
+function runsAutonomyCommand(command: unknown, depth = 0): boolean {
+  if (typeof command !== "string") return false
+  return liftSubstitutions(command).some((part) =>
+    shellSegments(substituteAssignments(part)).some((words) => {
+      // Past assignments and the words that run what follows them, as `clientCall` reads them.
+      let index = 0
+      while (index < words.length) {
+        const word = words[index]!
+        if (/^[A-Za-z_]\w*=/.test(word)) {
+          index++
+          continue
+        }
+        const name = path.basename(word)
+        if (!CLIENT_WRAPPERS.has(name)) break
+        index++
+        while (index < words.length && (words[index]!.startsWith("-") || /^\d+[smhd]?$/.test(words[index]!))) index++
+        if (name === "eval" || DeletionWords.SHELLS.has(name))
+          return depth < 2 && runsAutonomyCommand(words.slice(index).join(" "), depth + 1)
+      }
+      const program = words[index]
+      if (program === undefined) return false
+      const rest = words.slice(index + 1)
+      if (SWARM_CLI.test(path.basename(program)) || program.startsWith("$")) return rest.includes("autonomy")
+      return AUTONOMY_RUNNERS.has(path.basename(program)) && AUTONOMY_IN_TEXT.test(` ${rest.join(" ")}`)
+    }),
+  )
+}
+
+/**
+ * 1.2.7 row 47j (U9-3): a simple command (past assignments and wrappers, through a shell's `-c` or an `eval`, as
+ * `runsAutonomyCommand` reads it) whose program is `graft` and whose first word that is no option is `init`. A program
+ * not written out (`$G init`) is not read here; the consent's other rules judge it (`unreadable_command`).
+ */
+function runsGraftInit(command: unknown, depth = 0): boolean {
+  if (typeof command !== "string") return false
+  return liftSubstitutions(command).some((part) =>
+    shellSegments(substituteAssignments(part)).some((words) => {
+      let index = 0
+      while (index < words.length) {
+        const word = words[index]!
+        if (/^[A-Za-z_]\w*=/.test(word)) {
+          index++
+          continue
+        }
+        const name = path.basename(word)
+        if (!CLIENT_WRAPPERS.has(name)) break
+        index++
+        while (index < words.length && (words[index]!.startsWith("-") || /^\d+[smhd]?$/.test(words[index]!))) index++
+        if (name === "eval" || DeletionWords.SHELLS.has(name))
+          return depth < 2 && runsGraftInit(words.slice(index).join(" "), depth + 1)
+      }
+      const program = words[index]
+      if (program === undefined || path.basename(program) !== "graft") return false
+      return words.slice(index + 1).find((word) => !word.startsWith("-")) === "init"
     }),
   )
 }
@@ -842,7 +1710,16 @@ function editTargets(input: Input) {
 }
 
 function writesAppState(input: Input) {
-  if (typeof input.metadata.command === "string" && mentionsAppState(input.metadata.command, input.instance)) return true
+  // 1.2.7 N-1 (SR OP-2, SR7-01): a command that reaches Swarm's own state by any spelling counts as a change there unless
+  // it only looks as the allowlist takes it (`appStateRead`); that look runs as a protected read (`readsAppState`).
+  const command = input.metadata.command
+  if (
+    typeof command === "string" &&
+    touchesAppState(command, input.cwd, input.instance) &&
+    !appStateRead(command, input.cwd, input.instance) &&
+    !consentedStateSearch(input, command)
+  )
+    return true
   if (input.permission === "edit") return editTargets(input).some((file) => inAppState(file, input.instance))
   // A read of the same place only asks to look, which is the ordinary outside-the-project case.
   if (input.permission !== "external_directory" || !input.follows?.some((prompt) => prompt.permission === "edit")) return false
@@ -1124,9 +2001,15 @@ function classifySteps(input: Input, checkClass: CheckClass, reading: Reading): 
   // overlay opened; then the first opened step, as in 1.1.1.
   const openedSteps = strongest.filter((verdict) => verdict.class === "A" && verdict.bypassed !== undefined)
   const sends = (verdict: Verdict) => verdict.bypassed !== undefined && OUTWARD_HELD.has(verdict.bypassed)
+  const subagent = input.bypass?.caller === "subagent"
   const chosen =
     openedSteps.find((verdict) => OPENED_BY_NO_WAIT.has(verdict) && sends(verdict)) ??
     openedSteps.find((verdict) => sends(verdict)) ??
+    // 1.2.7 U-7 (SR7-02): for a subagent, a step opened in a decided category before one in a local category, so a
+    // compound that holds one decided piece reaches the main agent whatever the order of its steps. The root's line is
+    // chosen as in 1.2.6.
+    (subagent ? openedSteps.find((verdict) => OPENED_BY_NO_WAIT.has(verdict) && !SUBAGENT_RUNS_LIKE_ROOT.has(verdict.bypassed!)) : undefined) ??
+    (subagent ? openedSteps.find((verdict) => !SUBAGENT_RUNS_LIKE_ROOT.has(verdict.bypassed!)) : undefined) ??
     openedSteps.find((verdict) => OPENED_BY_NO_WAIT.has(verdict)) ??
     openedSteps[0] ??
     strongest.find((verdict) => verdict.category !== undefined) ??
@@ -1582,6 +2465,8 @@ const NO_PROBE = new Set([
   "sudo", "su", "doas", "login", "passwd", "shutdown", "reboot", "halt", "poweroff", "init", "telinit", "systemctl",
   "launchctl", "security", "osascript", "open", "xargs", "nohup", "nice", "time", "watch", "caffeinate", "eval", "exec",
   "source", "command", "builtin", "kill", "killall", "pkill",
+  // 1.2.7 row 47a (M1-04): zsh builtins that run the next command or a text.
+  "noglob", "nocorrect", "emulate", "trap",
 ])
 // Shells and interpreters read `-v` and `-h` as something else (verbose, a host), so only the long forms and `-V` are probes.
 const LONG_PROBE_ONLY = new Set(["sh", "bash", "zsh", "dash", "ksh", "fish", "csh", "tcsh", "python", "python2", "python3", "perl", "ruby", "php", "lua"])
@@ -1604,9 +2489,438 @@ function probe(command: string, cwd: string, instance: InstanceContext) {
   return form && !programInProject(program, cwd, instance)
 }
 
-/** The home folders a protected place may be spelled under: the one Swarm reads (pinned in tests) and the system's. */
+// 1.2.7 U4 + N-1 (K7-05, SR §3.2 "U4 read class" and OP-2): the read and diagnostic shell class. One source for the read
+// roles (`planner`, `data-collector`) and for looks at Swarm's own state, so the two cannot drift. It is the 1.2.6 look
+// grammar (`protectedLook`, `probe`, `gitReads`) plus the additions below, and nothing else: no second list (SR7-20).
+
+/** N7-115: the programs of the read class. Each still has to pass its own argument rules (`readClassPaths`). */
+export const READ_SHELL_COMMANDS: ReadonlySet<string> = new Set([...READS.keys(), "git", "mdls", "pdftotext", "unzip", "graft"])
+
+/**
+ * N7-130: the roles whose shell runs only the read class, in every mode. The role check refuses anything else with
+ * `ROLE_SHELL_OUTSIDE_READ_TEXT` (N7-054) ahead of a person's "always", a task grant or user config. Defined here, where
+ * the permission check can import it, and re-exported from `agent/agent.ts`.
+ */
+export const READ_SHELL_ROLES: ReadonlySet<string> = new Set(["planner", "data-collector"])
+
+const CHECKSUMS = new Set(["shasum", "sha256sum", "sha1sum", "md5", "md5sum", "cksum"])
+// A run of short flags (`-bc`), which has the letter when any of them is it.
+const shortHas = (word: string, letter: string) => /^-[A-Za-z0-9]+$/.test(word) && word.slice(1).includes(letter)
+
+/**
+ * SR7-06: what the read class refuses beyond the 1.2.6 rules. `file -f` and a checksum's `-c` read names from a file, which
+ * reaches past what the command named. The root's U12 looks keep 1.2.6 (`READS`), so this is checked only here.
+ */
+function readClassRefuses(words: readonly string[]) {
+  const [program, ...args] = words
+  if (program === "file") return args.some((word) => shortHas(word, "f") || Risk.abbreviates(word, ["--files-from"]))
+  if (CHECKSUMS.has(program!)) return args.some((word) => shortHas(word, "c") || Risk.abbreviates(word, ["--check"]))
+  return false
+}
+
+/** SR §3.2 `mdls`: `-name`/`-attr`/`-n <attr>`, `-raw`/`-r`, `-nullMarker`/`-m <s>`, `-s`/`-sdb`, and one path or more. Never `-plist`. */
+function mdlsPaths(args: readonly string[]) {
+  const paths: string[] = []
+  for (let index = 0; index < args.length; index++) {
+    const word = args[index]!
+    if (["-name", "-attr", "-n", "-nullMarker", "-m"].includes(word)) {
+      if (args[index + 1] === undefined) return undefined
+      index++
+      continue
+    }
+    if (["-raw", "-r", "-s", "-sdb"].includes(word)) continue
+    if (word.startsWith("-")) return undefined
+    paths.push(word)
+  }
+  return paths.length > 0 ? paths : undefined
+}
+
+/** SR §3.2 `pdftotext`: the last word is exactly `-` (stdout), one input path before it, and only the listed flags. */
+function pdftotextPaths(args: readonly string[]) {
+  if (args.at(-1) !== "-") return undefined
+  const rest = args.slice(0, -1)
+  const paths: string[] = []
+  for (let index = 0; index < rest.length; index++) {
+    const word = rest[index]!
+    const value = rest[index + 1]
+    if (word === "-f" || word === "-l") {
+      if (value === undefined || !/^\d+$/.test(value)) return undefined
+      index++
+      continue
+    }
+    if (word === "-enc") {
+      if (value === undefined || !/^[A-Za-z0-9-]+$/.test(value)) return undefined
+      index++
+      continue
+    }
+    if (word === "-eol") {
+      if (value !== "unix" && value !== "dos" && value !== "mac") return undefined
+      index++
+      continue
+    }
+    if (["-layout", "-raw", "-nopgbrk", "-q"].includes(word)) continue
+    if (word.startsWith("-")) return undefined
+    paths.push(word)
+  }
+  return paths.length === 1 ? paths : undefined
+}
+
+/** SR §3.2 `unzip`: exactly `unzip -l <archive> [member …]`; no combined flag (`-lo`), no `-` archive, no wildcard in it. */
+function unzipPaths(args: readonly string[]) {
+  const [flag, archive, ...members] = args
+  if (flag !== "-l" || archive === undefined || archive.startsWith("-") || /[*?[]/.test(archive)) return undefined
+  if (members.some((word) => word.startsWith("-"))) return undefined
+  return [archive]
+}
+
+/**
+ * 1.2.7 row 47a (M1-11): per query sub-command, exactly the options its `--help` lists that only shape the answer (graft
+ * 0.x): `flags` take no value, `values` take one word (or `--long=value`) that must match its rule, and `positionals` caps
+ * the bare words (`<query>`/`<symbol>`/`<file>` and `[dir]`). Not allowed: `blast --name` (an LLM call), `--pr-author` (a
+ * GitHub lookup), `--export-viz`/`--title` (a written page), `-h`, and any option graft adds later.
+ */
+type GraftRule = { flags: readonly string[]; values: Readonly<Record<string, RegExp>>; positionals: number }
+const GRAFT_COUNT = /^\d{1,4}$/
+const GRAFT_PREFIX = /^[\w./@-]+$/
+const GRAFT_DEPTH = /^(\d{1,3}|all)$/
+const GRAFT_QUERIES: Readonly<Record<string, GraftRule>> = {
+  ask: {
+    flags: ["--source", "--full", "--json", "--no-graph-rank", "--no-refresh"],
+    values: { "-n": GRAFT_COUNT, "--limit": GRAFT_COUNT, "--in": GRAFT_PREFIX },
+    positionals: 2,
+  },
+  map: { flags: ["--json", "--no-refresh"], values: { "--max-dirs": GRAFT_COUNT }, positionals: 1 },
+  skeleton: { flags: ["--json", "--no-refresh"], values: {}, positionals: 2 },
+  callers: {
+    flags: ["--json", "--no-refresh"],
+    values: { "--direction": /^(in|out)$/, "-d": GRAFT_DEPTH, "--depth": GRAFT_DEPTH, "--in": GRAFT_PREFIX },
+    positionals: 2,
+  },
+  grep: { flags: ["-i", "--ignore-case", "--fixed", "--json", "--no-refresh"], values: { "--in": GRAFT_PREFIX }, positionals: 2 },
+  blast: {
+    flags: ["--no-owners", "--no-refresh"],
+    values: { "--base": /^[\w./^~@{}-]+$/, "-d": GRAFT_DEPTH, "--depth": GRAFT_DEPTH, "--format": /^(text|markdown|mermaid|json)$/ },
+    positionals: 1,
+  },
+}
+
+/**
+ * SR §3.2 `graft` (SR7-05 b; 1.2.7 row 47a, M1-11): `graft <query> …` with only the options `GRAFT_QUERIES` allows for
+ * that query. No option before the sub-command. `graft --version` is a probe. A query names no file the table has to
+ * judge, so it gives no paths. 1.2.7 row 47j (U9-3, C76): with or without `--no-refresh`: a refresh only rebuilds graft's
+ * own cache (`graft/`), which the person ruled a Swarm-controlled tool may do; `build`, `init` and every other
+ * sub-command stay outside the read class.
+ */
+function graftPaths(args: readonly string[]) {
+  const [sub, ...rest] = args
+  const rule = sub !== undefined && Object.hasOwn(GRAFT_QUERIES, sub) ? GRAFT_QUERIES[sub] : undefined
+  if (!rule) return undefined
+  let positionals = 0
+  for (let index = 0; index < rest.length; index++) {
+    const word = rest[index]!
+    if (!word.startsWith("-")) {
+      positionals++
+      continue
+    }
+    if (rule.flags.includes(word)) continue
+    const [name, inline] = word.startsWith("--") && word.includes("=") ? [word.slice(0, word.indexOf("=")), word.slice(word.indexOf("=") + 1)] : [word, undefined]
+    const value = Object.hasOwn(rule.values, name) ? rule.values[name] : undefined
+    if (!value) return undefined
+    const given = inline ?? rest[++index]
+    if (given === undefined || !value.test(given)) return undefined
+  }
+  return positionals <= rule.positionals ? ([] as string[]) : undefined
+}
+
+/** SR7-05 d: `git reflog` only bare or as `show`, `list` or `exists`; `expire` and `delete` change the repository. */
+function gitReflogLooks(words: readonly string[]) {
+  const moved = words[1] === "-C" && words[2] !== undefined
+  const [sub, ...args] = words.slice(moved ? 3 : 1)
+  return sub !== "reflog" || args.length === 0 || ["show", "list", "exists"].includes(args[0]!)
+}
+
+/** The words one read-class piece names as places, or undefined when the piece is not in the read class. */
+function readClassPaths(words: readonly string[], here: string, instance: InstanceContext): string[] | undefined {
+  const [program, ...args] = words
+  if (program === undefined) return undefined
+  if (READS.has(program)) {
+    if (!onlyLooks(words) || readClassRefuses(words)) return undefined
+    const paths = args.filter((word) => !word.startsWith("-"))
+    const cap = READS.get(program)?.maxPaths
+    return cap !== undefined && paths.length > cap ? undefined : paths
+  }
+  if (program === "git") return gitReads(words, here, instance) && gitReflogLooks(words) ? [] : undefined
+  if (program === "mdls") return mdlsPaths(args)
+  if (program === "pdftotext") return pdftotextPaths(args)
+  if (program === "unzip") return unzipPaths(args)
+  if (program === "graft") return graftPaths(args)
+  return undefined
+}
+
+type ReadPiece = { words: string[]; here: string; paths: string[] }
+// No control, format or line-separator character anywhere (`\r`, NUL, a line break, a bidi mark): the line a person reads
+// is the line that runs (SR7-20).
+const UNSEEN_TEXT = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u
+
+/**
+ * The pieces of a read-class command line, or undefined. The shape is SR §3.2's: `[cd <path> && ]<look>[ && <look>]…`, each
+ * piece may end with ` 2>/dev/null`, the line may end with ` 2>&1` and ` | tail -N` or ` | head -N`; each piece's words
+ * pass `Risk.plainWords` or whole-word quotes, so no other operator, substitution, assignment or redirect survives. A
+ * probe (`<installed program> --version`) is the whole command and names nothing.
+ */
+function readClass(command: string, cwd: string, instance: InstanceContext): ReadPiece[] | undefined {
+  if (!command || UNSEEN_TEXT.test(command)) return undefined
+  if (probe(command, cwd, instance)) return []
+  let here = cwd
+  const pieces: ReadPiece[] = []
+  const named: string[] = []
+  for (const [index, raw] of command.replace(OUTPUT_TAIL, "").split(" && ").entries()) {
+    const words = lookWords(raw.replace(DROP_ERRORS, ""))
+    if (!words || words.length === 0) return undefined
+    if (index === 0 && words[0] === "cd" && words.length === 2 && !words[1]!.startsWith("-")) {
+      here = path.resolve(cwd, words[1]!)
+      named.push(here)
+      continue
+    }
+    const paths = readClassPaths(words, here, instance)
+    if (!paths) return undefined
+    named.push(...paths.map((word) => path.resolve(here, word)))
+    pieces.push({ words, here, paths })
+  }
+  if (pieces.length === 0 || nearLibrary([cwd, ...named])) return undefined
+  return programInProject(command, cwd, instance) ? undefined : pieces
+}
+
+/**
+ * N7-116 (K7-05): whether a shell command line is in the read and diagnostic class (SR §3.2), judged on its text as the
+ * shell will run it. Used by the read roles' check and by the app-state allowlist (N-1).
+ */
+export function isReadOnlyShell(command: string, cwd: string, instance: InstanceContext): boolean {
+  return readClass(command, cwd, instance) !== undefined
+}
+
+/**
+ * U4: whether a read role's call is refused, before any rule, grant or "always" is looked at. Only a shell call (or the
+ * shell's folder prompt, which carries its command) by a `READ_SHELL_ROLES` agent is judged; it is refused when its
+ * command is not in the read class. The caller answers with `ROLE_SHELL_OUTSIDE_READ_TEXT`.
+ */
+export function readRoleRefuses(
+  input: { agent?: string; permission: string; metadata: Readonly<Record<string, unknown>> },
+  instance: InstanceContext,
+): boolean {
+  if (input.agent === undefined || !READ_SHELL_ROLES.has(input.agent)) return false
+  const command = input.metadata.command
+  if (input.permission !== "bash" && !(input.permission === "external_directory" && command !== undefined)) return false
+  if (typeof command !== "string") return true
+  const workdir = input.metadata.workdir
+  const cwd = typeof workdir === "string" && path.isAbsolute(workdir) ? workdir : instance.directory
+  return !isReadOnlyShell(command, cwd, instance)
+}
+
+// SR OP-2: inside an app-state root only these look, and only at literal names. `cat`/`head`/`tail` output is masked
+// (U16); every other program there is X `app_state`, so no count, offset or byte dump of a password file comes back.
+const APP_STATE_LOOKS = new Set(["ls", "stat", "du", "wc", "file", "tree", "find", ...CHECKSUMS, "mdls", "cat", "head", "tail"])
+// SR OP-2: on a folder that holds app state (home, `~/.local`, `~/.config`), content search is refused.
+const CONTENT_SEARCH = new Set(["rg", "grep", "egrep"])
+const NOT_LITERAL = /[*?[{$]/
+const BYTES_FLAG = (word: string) => /^-[A-Za-z0-9]*c/.test(word) || Risk.abbreviates(word, ["--bytes"])
+
+/** Where a place lies against Swarm's own state: inside a root, above one (a folder that holds it), or neither. */
+function stateRelation(file: string, instance: InstanceContext): "inside" | "above" | undefined {
+  const target = Reach.real(file) ?? file
+  if (ownCheckout(target, instance)) return undefined
+  const roots = appStateRoots()
+  if (roots.some((root) => within(root, file) || within(root, target))) return "inside"
+  if (roots.some((root) => within(file, root) || within(target, root))) return "above"
+  return undefined
+}
+
+/** One glob segment as a pattern; like the shell, `*` and `?` do not match a leading dot. */
+function segmentMatches(pattern: string, name: string) {
+  if (name.startsWith(".") && !pattern.startsWith(".")) return false
+  const source = pattern.replace(/[.+^${}()|\\]/g, "\\$&").replaceAll("*", ".*").replaceAll("?", ".")
+  try {
+    return new RegExp(`^${source}$`).test(name)
+  } catch {
+    return true
+  }
+}
+
+/** Whether a glob could match a place inside an app-state root (1.2.6 residual R-1: a glob names no root by its spelling). */
+function globReachesState(file: string) {
+  const parts = file.split(path.sep)
+  return appStateRoots().some((root) => {
+    const rootParts = root.split(path.sep)
+    return parts.length >= rootParts.length && rootParts.every((part, index) => segmentMatches(parts[index]!, part))
+  })
+}
+
+const SPELLED_BREAK = /[\s<>|;&()`=,]+/
+
+/** 1.2.7 47f (C68): the word resolver this reader uses, the same object the shell's output masking uses. */
+export const spelling = PathSpelling
+
+/**
+ * SR7-01: the places a command's words name, as the shell would resolve them: relative to its folder and to every `cd` in
+ * it, with `~`, `$HOME`, `${HOME}` (under every home Swarm knows) and set environment variables expanded. Over-reads on
+ * purpose: a word that is not a path resolves to a name nobody has.
+ */
+function spelledPlaces(command: string, cwd: string) {
+  const words = command.replace(/['"\\]/g, "").split(SPELLED_BREAK).filter(Boolean)
+  const expand = (word: string): string[] => spelling.expand(word, homes()).names
+  let dirs = [cwd]
+  const places: { file: string; glob: boolean }[] = []
+  for (const [index, word] of words.entries()) {
+    const resolved = expand(word).flatMap((spelling) => dirs.map((dir) => path.resolve(dir, spelling)))
+    places.push(...resolved.map((file) => ({ file, glob: /[*?[]/.test(word) })))
+    if (words[index - 1] === "cd") dirs = spelling.widen(dirs, resolved).folders
+  }
+  const programs = new Set(words.map((word) => path.basename(word)))
+  return { places, dirs, search: [...CONTENT_SEARCH].some((name) => programs.has(name)), rg: programs.has("rg") }
+}
+
+/** SR7-01: whether a command reaches into Swarm's own state by any spelling, or searches the contents of a folder above it. */
+function touchesAppState(command: string, cwd: string, instance: InstanceContext) {
+  if (mentionsAppState(command, instance)) return true
+  const spelled = spelledPlaces(command, cwd)
+  // `rg` with no path searches where it runs, so its folder counts as a place it names.
+  const places = [...spelled.places, ...(spelled.rg ? spelled.dirs.map((file) => ({ file, glob: false })) : [])]
+  return places.some(({ file, glob }) => {
+    if (glob) return globReachesState(file)
+    const relation = stateRelation(file, instance)
+    return relation === "inside" || (relation === "above" && spelled.search)
+  })
+}
+
+/** 1.2.7 row 47j (U9-6): the programs a consented search over state folders may be made of (no writer, no other reader). */
+const STATE_SEARCH_STEPS: ReadonlySet<string> = new Set([...CONTENT_SEARCH, "head", "tail", "wc"])
+
+/** An existing folder; anything that cannot be read is none (fails closed, unlike `isFolder`). */
+const existingFolder = (file: string) => {
+  try {
+    return fs.statSync(file).isDirectory()
+  } catch {
+    return false
+  }
+}
+
+/**
+ * 1.2.7 row 47j (U9-6, C76): the app-state folders a content search (`rg`, `grep`, `egrep`) reaches through the folders it names, when
+ * that is the only way the command reaches app state: a content search runs, and every place the command names in or
+ * above an app-state root (after `cd`, `~`, `$HOME`, real path: `spelledPlaces`, which over-reads on purpose) is an
+ * existing folder, never a file or a glob. A pattern word or a write resolved inside a root names a file there and fails
+ * it. Returned: each app-state root below a named folder, or the named folder itself when it lies inside a root. Empty: no
+ * such search. The shell masks what such a search prints (`tool/shell.ts` learns the values of the files in these).
+ */
+export function searchedStateFolders(command: string, cwd: string, instance: InstanceContext): string[] {
+  const spelled = spelledPlaces(command, cwd)
+  if (!spelled.search) return []
+  const places = [...spelled.places, ...(spelled.rg ? spelled.dirs.map((file) => ({ file, glob: false })) : [])]
+  const folders: string[] = []
+  for (const { file, glob } of places) {
+    if (glob) {
+      if (globReachesState(file)) return []
+      continue
+    }
+    const relation = stateRelation(file, instance)
+    if (relation === undefined) continue
+    if (!existingFolder(file)) return []
+    // What the search can reach of app state: the folder itself inside a root, or each root below the folder.
+    const target = Reach.real(file) ?? file
+    if (relation === "inside") folders.push(file)
+    else folders.push(...appStateRoots().filter((root) => within(file, root) || within(target, root)))
+  }
+  return [...new Set(folders)]
+}
+
+/**
+ * 1.2.7 row 47j (U9-6, C76; supersedes SR7-01's refusal of a content search on a folder that holds app state under
+ * consent, as the person ruled): under the consent, for the main agent and its subagents but never a read role (U4 keeps
+ * its limit), a call that is only a content search over folders holding Swarm's state is no change there: it is judged
+ * as any other look of the consented caller, and its output is masked. The call must be read in full by the shell's own
+ * reader, every step one of `STATE_SEARCH_STEPS`, nothing written into app state. Searches of a state FILE, oracles on a
+ * named file, globs and every write stay X `app_state`.
+ */
+function consentedStateSearch(input: Input, command: string) {
+  if (!input.bypass || input.permission !== "bash") return false
+  if (input.agent !== undefined && READ_SHELL_ROLES.has(input.agent)) return false
+  const reading = shellReading(input.metadata.steps, input.instance) ?? shellReading(ScriptReader.read(command, input.cwd), input.instance)
+  // A step of a compound (`classifySteps`) comes without the shell's reading: its text is rebuilt from the step's words,
+  // so one command with plain or whole-word-quoted words (no operator, redirect or expansion) is read as itself.
+  const literal = reading ? undefined : Risk.quotedWords(command)
+  const steps = reading ? reading.steps : literal ? [{ argv: literal }] : []
+  if ((reading && !reading.complete) || steps.length === 0) return false
+  if (reading?.writes.some((file) => inAppState(file, input.instance))) return false
+  const only = steps.every((step) => !("code" in step && step.code !== undefined) && STATE_SEARCH_STEPS.has(path.basename(step.argv[0]!)))
+  return only && searchedStateFolders(command, input.cwd, input.instance).length > 0
+}
+
+/**
+ * SR OP-2 (N-1): whether a command that reaches Swarm's own state only looks there in a way the allowlist takes: it is in
+ * the read class, every operand inside an app-state root (after `cd`, relative, `~` and real path) is a literal name read by
+ * `APP_STATE_LOOKS` (`head`/`tail` without `-c`), and no content search runs on a folder that holds app state.
+ */
+function appStateRead(command: string, cwd: string, instance: InstanceContext) {
+  const pieces = readClass(command, cwd, instance)
+  if (!pieces) return false
+  return pieces.every(({ words, here, paths }) => {
+    const program = words[0]!
+    // A look with no name looks where it runs; `rg` also searches there when given only a pattern.
+    const operands = paths.length > 0 ? (program === "rg" ? [...paths, "."] : paths) : ["."]
+    return operands.every((word) => {
+      const relation = stateRelation(path.resolve(here, word), instance)
+      if (relation === "above") return !CONTENT_SEARCH.has(program)
+      if (relation !== "inside") return true
+      if (!APP_STATE_LOOKS.has(program) || NOT_LITERAL.test(word)) return false
+      return !((program === "head" || program === "tail") && words.slice(1).some(BYTES_FLAG))
+    })
+  })
+}
+
+/** N-1: a shell call (or its folder prompt) that reaches Swarm's own state and only looks there as OP-2 allows. */
+/** 1.2.7 row 47k (U9-7): programs that only write the places they name; none prints what a place holds. */
+const STATE_WRITERS: ReadonlySet<string> = new Set(["printf", "echo", "print", "touch", "mkdir", "rmdir", "rm", "cp", "mv", "ln", "install", "truncate", "tee", "true", ":"])
+/** Of those, the ones whose words are text, not places. */
+const TEXT_WRITERS: ReadonlySet<string> = new Set(["printf", "echo", "print", "true", ":"])
+
+/**
+ * 1.2.7 row 47k (U9-7, C76, user ruling U9 item 7): an autonomous shell call outside the consent that reaches Swarm's
+ * state only through a glob, a link or a variable (no spelling `mentionsAppState` knows) and only writes there: every
+ * simple command is a `cd` or one of `STATE_WRITERS`, no input redirect or command substitution, and no operand a copy
+ * or move reads from (all but the last of `cp`, `ln`, `install`, `mv`) lies in or may glob into app state. Such a call is
+ * held for the person as in 1.2.6 (R-1); everything else that `writesAppState` finds stays X `app_state` (SR7-01).
+ */
+function indirectStateWrite(input: Input) {
+  const command = input.metadata.command
+  if (input.bypass || input.permission !== "bash" || typeof command !== "string") return false
+  if (mentionsAppState(command, input.instance) || /[<`]|\$\(/.test(command)) return false
+  let dirs = [input.cwd]
+  const places = (word: string) => spelling.expand(word, homes()).names.flatMap((name) => dirs.map((dir) => path.resolve(dir, name)))
+  return shellSegments(command).every((words) => {
+    const program = path.basename(words[0]!)
+    if (program === "cd") {
+      if (words[1] !== undefined) dirs = spelling.widen(dirs, places(words[1])).folders
+      return true
+    }
+    if (!STATE_WRITERS.has(program)) return false
+    if (TEXT_WRITERS.has(program)) return true
+    const operands = words.slice(1).filter((word) => !word.startsWith("-"))
+    const read = ["cp", "ln", "install", "mv"].includes(program) ? operands.slice(0, -1) : []
+    return !read.some((word) =>
+      places(word).some((file) => (/[*?[]/.test(word) ? globReachesState(file) : stateRelation(file, input.instance) === "inside")),
+    )
+  })
+}
+
+function readsAppState(input: Input) {
+  const command = input.metadata.command
+  if (typeof command !== "string" || (input.permission !== "bash" && input.permission !== "external_directory")) return false
+  return touchesAppState(command, input.cwd, input.instance) && appStateRead(command, input.cwd, input.instance)
+}
+
+/** The home folders a protected place may be spelled under (47f: the shared resolver's list). */
 function homes() {
-  return [...new Set([Global.Path.home, homedir()])]
+  return PathSpelling.homes()
 }
 
 /** The protected roots for a read or a write, each also by its real path (`/etc` is `/private/etc` on macOS). */
@@ -2131,9 +3445,32 @@ const BRANCH_NAME = /^[\w][\w./-]*$/
 /** A word that names a file the plain way: no glob, no `~`, no `..`, no option. */
 const plainPath = (word: string) => PLAIN_PATH.test(word) && !word.split("/").includes("..")
 
+/**
+ * 1.2.7 row 47j (U9-9, C76): zsh's `print`, as a printer for the checkpoint only (it is no read of its own: `single` and
+ * the read class do not take it). Words, `--`, and only the options that shape the text: `-r` raw, `-n` no newline, `-l`
+ * one per line, `-N` NUL-separated, `-c` columns, `-a` across, `-o`/`-O`/`-i` sorted, `-D`/`-P` named directories
+ * and prompt escapes, `-R` echo-like. Not `-C n` (takes a value), `-u n` (another descriptor), `-p` (the coprocess), `-s`/`-S` (history), `-z`
+ * (the editing buffer), `-v name` (a variable), `-f` (a format reading `%` escapes is still text, but kept out with the
+ * rest as nothing here needs it).
+ */
+const ZSH_PRINT_FLAG = /^-[rnlNcaoOiDPR]+$/
+function zshPrints(words: readonly string[]) {
+  if (words[0] !== "print") return false
+  let options = true
+  for (const word of words.slice(1)) {
+    if (!options || !word.startsWith("-") || word === "-") {
+      options = false
+      continue
+    }
+    if (word === "--") options = false
+    else if (!ZSH_PRINT_FLAG.test(word)) return false
+  }
+  return true
+}
+
 /** A step that only prints, or only looks at files inside the project that are readable and hold no secret. */
 function checkpointLooks(step: Step, instance: InstanceContext) {
-  if (printsOnly(step.argv)) return true
+  if (printsOnly(step.argv) || zshPrints(step.argv)) return true
   if (!onlyLooks(step.argv)) return false
   return step.argv
     .slice(1)
@@ -2385,11 +3722,25 @@ export function classifyBase(input: Input, checkClass: CheckClass = CHECK_CLASS)
   const planEdit = input.plan === true && input.permission === "edit"
   const planFile = planEdit && isPlanFile(input)
   if (planEdit && !planFile) return refused("plan_mode")
-  if (!planFile && writesAppState(input)) return refused("app_state")
-  if (callsOwnServer(input)) return refused("app_state")
+  // 1.2.7 row 47k (U9-7, C76): a write that reaches the state folder only through a glob, a link or a variable is held
+  // for the person (D), as in 1.2.6; spelled out, or under the consent (where nothing waits for a person), it is refused.
+  if (!planFile && writesAppState(input)) return indirectStateWrite(input) ? held("app_state") : refused("app_state")
+  // 1.2.7 U-10 (C63): only the person turns the mode on (1.1.1 rule); an agent's `swarm autonomy` never runs.
+  if (input.permission === "bash" && runsAutonomyCommand(input.metadata.command))
+    return { ...refused("own_api"), reason: "person_only" }
+  // 1.2.7 row 47j (U9-3, C76): every graft sub-command runs under the consent except `graft init`, which writes the
+  // machine's own hook and MCP configuration: refused in autonomous mode, the root's as a subagent's, as a write of a
+  // protected place is (the consent never turns it into a held write outside, which the main agent could open).
+  if (input.permission === "bash" && runsGraftInit(input.metadata.command)) return refused("protected_path")
+  // 1.2.7 F-4 (N7-051): Swarm's own API has its own category, split from `app_state`; a reason names an unresolved form.
+  const ownApi = ownServerCall(input)
+  if (ownApi) return ownApi.reason ? { ...refused("own_api"), reason: ownApi.reason } : refused("own_api")
 
   if (input.rule === "user_catch_all") return held("asks_every_time")
   if (planFile) return { class: "A", decidedBy: "gate" }
+  // 1.2.7 N-1 (N7-091): a look at Swarm's own state the OP-2 allowlist takes runs as a protected read; `cat`/`head`/`tail`
+  // output stays masked (U16, SR7-07).
+  if (readsAppState(input)) return PROTECTED_READ
   if (input.plan === true && input.permission === "bash") return classifyPlanBash(input, checkClass)
   // Before the labels: a deletion the shell moves to the archive takes nothing away, whatever Undo could have restored.
   if (input.permission === "bash") {
@@ -2450,6 +3801,9 @@ export function classify(input: Input, checkClass: CheckClass = CHECK_CLASS): Ve
   if (!input.bypass) return classifyBase(input, checkClass)
   // 1.1.3 (T3): under consent no verdict waits, the plan lineage's included; rule 8 still refuses what it refused.
   if (input.plan === true) return noWait(input, classifyBase(input, checkClass))
+  // 1.2.7 U-7 (C21 b): `sh|bash|zsh -c '<literal>'` is judged as the command line it runs, for root and subagent alike.
+  const inner = shellTextCall(input)
+  if (inner) return classify(inner, checkClass)
   // 1.1.1 F12b (Perf P2): one classify asks git about a file once, however many steps or scripts write it. 1.1.1 F14
   // (G5-P1): the one scope covers the whole consented classify, the steps' own overlays (reached from `classifySteps`,
   // whose nested scopes share this one), the call-level check and the kept path's `classifyBase` included.
@@ -2469,6 +3823,412 @@ export function classify(input: Input, checkClass: CheckClass = CHECK_CLASS): Ve
     }
     return noWait(input, verdict)
   })
+}
+
+/**
+ * 1.2.7 U-7 (C7, C21, OP-1, N7-129): the opened categories a subagent's call runs in like the root's under the person's
+ * consent (the gate in `index.ts`, which re-exports this one list): no decider call, the root's line with the child's
+ * `sessionID`. A positive list, pinned by an equality test (SR7-02); every other opened category still goes to the main
+ * agent, where "cannot tell" refuses. `classifySteps` names a decided step before a local one on a compound's line.
+ * Row 29c (C41): `check` too, a recognised test or build command (`CHECKS`), which the root's consent already runs.
+ */
+export const SUBAGENT_RUNS_LIKE_ROOT: ReadonlySet<string> = new Set(["not_routine", "script", "outside_folder", "check"])
+
+/** Row 29d (C46): the package tools whose `add` / `install <name>` fetches a named package from a registry. */
+const REGISTRY_ADDERS: ReadonlySet<string> = new Set(["npm", "bun", "pnpm", "yarn"])
+const ADD_WORDS: ReadonlySet<string> = new Set(["add", "install", "i", "in", "isntall"])
+/** A word that names a local package, not one from a registry: a path or a local protocol. */
+const LOCAL_PACKAGE = /^(\.{1,2}(\/|$)|\/|~|file:|link:|workspace:|portal:)/
+
+/** Row 29d (C46): `npm|bun|pnpm|yarn add|install <pkg>`; a lockfile install (`bun install`, `npm ci`) names none. */
+function addsRegistryPackage(name: string, args: readonly string[]) {
+  if (!REGISTRY_ADDERS.has(name)) return false
+  const words = args.filter((word) => !word.startsWith("-"))
+  return ADD_WORDS.has(words[0] ?? "") && words.slice(1).some((word) => !LOCAL_PACKAGE.test(word))
+}
+
+/**
+ * Row 47e (M1-07, C61): the other package tools' named adds, by tool: the sub-command words, the options whose value is
+ * no package (skipped), and what a word names that is local. A requirements or lockfile install (`pip install -r`,
+ * `uv sync`, `cargo build`, `bundle install`, `composer install`) names none and keeps parity.
+ */
+type AddRule = { readonly subs: readonly string[]; readonly values: ReadonlySet<string>; readonly local?: (word: string) => boolean }
+const PIP_VALUES: ReadonlySet<string> = new Set([
+  "-r", "--requirement", "-c", "--constraint", "-i", "--index-url", "--extra-index-url", "-f", "--find-links", "-t", "--target",
+  "--prefix", "--root", "--src", "--platform", "--python-version", "--implementation", "--abi", "--progress-bar", "--log",
+  "--cache-dir", "--trusted-host", "--proxy", "--retries", "--timeout", "--exists-action", "--upgrade-strategy",
+  "--global-option", "--config-settings", "-C", "--report", "-p", "--python",
+])
+/** A path a pip-family tool installs from (`dist/x.whl`, `./pkg`), not a name from an index; a URL is not local. */
+const PIP_LOCAL = (word: string) => LOCAL_PACKAGE.test(word) || (word.includes("/") && !word.includes(":") && !word.includes("@"))
+const CARGO_VALUES: ReadonlySet<string> = new Set([
+  "--version", "--vers", "--branch", "--tag", "--rev", "--root", "--index", "--registry", "-j", "--jobs", "--target",
+  "--features", "-F", "--profile", "--bin", "--example", "--rename", "--package", "-p", "--manifest-path", "--target-dir",
+  "--config", "-Z", "--color",
+])
+const OTHER_ADDERS: Readonly<Record<string, readonly AddRule[]>> = {
+  pip: [{ subs: ["install"], values: PIP_VALUES, local: PIP_LOCAL }],
+  pip3: [{ subs: ["install"], values: PIP_VALUES, local: PIP_LOCAL }],
+  uv: [
+    { subs: ["add"], values: new Set(["--group", "--optional", "--extra", "--tag", "--branch", "--rev", "--index", "--default-index", "-p", "--python", "--package", "--script", "--directory", "--project", "--bounds"]) },
+    { subs: ["pip", "install"], values: PIP_VALUES, local: PIP_LOCAL },
+  ],
+  poetry: [{ subs: ["add"], values: new Set(["-G", "--group", "-E", "--extras", "--source", "--python", "--platform", "--markers", "-C", "--directory", "-P", "--project"]) }],
+  pdm: [{ subs: ["add"], values: new Set(["-G", "--group", "-p", "--project"]) }],
+  pipenv: [{ subs: ["install"], values: new Set(["-r", "--requirements", "--python", "-i", "--index"]), local: PIP_LOCAL }],
+  cargo: [
+    { subs: ["add"], values: CARGO_VALUES },
+    { subs: ["install"], values: CARGO_VALUES },
+  ],
+  go: [
+    { subs: ["get"], values: new Set(["-C", "-modfile", "-tags", "-ldflags", "-gcflags"]) },
+    { subs: ["install"], values: new Set(["-C", "-modfile", "-tags", "-ldflags", "-gcflags", "-o", "-p"]) },
+  ],
+  gem: [{ subs: ["install"], values: new Set(["-v", "--version", "-i", "--install-dir", "-n", "--bindir", "-s", "--source", "--platform", "-P", "--trust-policy", "-g", "--file"]), local: (word) => LOCAL_PACKAGE.test(word) || word.endsWith(".gem") }],
+  composer: [{ subs: ["require"], values: new Set(["-d", "--working-dir"]) }],
+  bundle: [{ subs: ["add"], values: new Set(["-v", "--version", "-g", "--group", "-s", "--source", "--require", "--path", "--git", "--github", "--branch", "--ref", "--glob"]) }],
+}
+const PYTHONS = /^python(\d+(\.\d+)?)?$/
+
+/** Row 47e (M1-07): `name args` adds a named package from a registry (pip/uv/poetry/cargo/go/gem/composer and kin). */
+function addsOtherRegistryPackage(name: string, args: readonly string[]): boolean {
+  // `python3 -m pip install x` is pip's own add.
+  if (PYTHONS.test(name) && args[0] === "-m" && (args[1] === "pip" || args[1] === "pip3"))
+    return addsOtherRegistryPackage("pip", args.slice(2))
+  const rules = Object.hasOwn(OTHER_ADDERS, name) ? OTHER_ADDERS[name]! : []
+  return rules.some((rule) => {
+    const words: string[] = []
+    for (let index = 0; index < args.length; index++) {
+      const word = args[index]!
+      if (word === "--") continue
+      if (word.startsWith("-")) {
+        // An editable (`-e <spec>`) is a package spec; a value option's word is not.
+        if ((word === "-e" || word === "--editable") && index + 1 < args.length) words.push(args[++index]!)
+        else if (!word.includes("=") && rule.values.has(word)) index++
+        else if (/^--(git|editable)=/.test(word)) words.push(word.slice(word.indexOf("=") + 1))
+        continue
+      }
+      words.push(word)
+    }
+    if (!rule.subs.every((sub, at) => words[at] === sub)) return false
+    const local = rule.local ?? ((word: string) => LOCAL_PACKAGE.test(word))
+    return words.slice(rule.subs.length).some((word) => !local(word))
+  })
+}
+
+/** Row 47e (M1-06): gh's options that take a value before the sub-command (`gh -R owner/repo pr create`). */
+const GH_VALUES: ReadonlySet<string> = new Set(["-R", "--repo", "--hostname", "-X", "--method", "-H", "--header", "-f", "--field", "-F", "--raw-field", "--input", "-q", "--jq", "-t", "--template", "--cache"])
+/** Row 47e (M1-06): the gh sub-commands that write to GitHub (a pull request, a release, a repository, an issue, a gist). */
+const GH_WRITE = /^(pr (create|merge|comment|review|edit|close|reopen|ready|lock|unlock)|release (create|upload|edit|delete|delete-asset)|repo (create|fork|sync|edit|delete|rename|archive|unarchive|deploy-key add|set-default)|issue (create|comment|edit|close|reopen|delete|lock|unlock|transfer|pin|unpin|develop)|gist (create|edit|delete|clone)|label (create|edit|delete|clone)|secret (set|delete|remove)|variable (set|delete)|workflow (run|enable|disable)|run (rerun|cancel|delete)|cache delete|ruleset|project|codespace|ssh-key (add|delete)|gpg-key (add|delete)|org|attestation)\b/
+/** Row 47e (M1-06): a gh call that writes: a write sub-command, or `gh api` with a method other than GET or with fields. */
+function ghWrites(args: readonly string[]): boolean {
+  const words: string[] = []
+  let method: string | undefined
+  let fields = false
+  for (let index = 0; index < args.length; index++) {
+    const word = args[index]!
+    const [flag, inline] = word.startsWith("--") && word.includes("=") ? [word.slice(0, word.indexOf("=")), word.slice(word.indexOf("=") + 1)] : [word, undefined]
+    if (/^-X./.test(word)) method = word.slice(2)
+    else if (flag === "-X" || flag === "--method") method = inline ?? args[++index]
+    else if (["-f", "-F", "--field", "--raw-field", "--input"].includes(flag) || /^-[fF]./.test(word)) {
+      fields = true
+      if (inline === undefined && !/^-[fF]./.test(word)) index++
+    } else if (word.startsWith("-")) {
+      if (inline === undefined && GH_VALUES.has(flag)) index++
+    } else words.push(word)
+  }
+  if (words[0] === "api") return fields || (method !== undefined && method.toUpperCase() !== "GET")
+  return GH_WRITE.test(words.join(" "))
+}
+
+/** Row 47e (M1-05): how deep a script file or recipe that runs another one is read; past it, the call goes to the decider. */
+const MAX_BODY_DEPTH = 3
+/** Row 47e (M1-05): the largest script file or Makefile read. Larger is not read in full: the decider. */
+const MAX_BODY_BYTES = 64 * 1024
+/** A script file's first line that names a shell this reader reads (`#!/bin/sh`, `#!/usr/bin/env bash`). */
+const SHELL_SHEBANG = /^#!\s*\S*\/(env\s+(-\S+\s+)*)?(sh|bash|zsh|dash|ksh)(\s|$)/
+/** The words that run a file's text in the shell itself. */
+const SOURCES: ReadonlySet<string> = new Set(["source", "."])
+/** `make`'s options that change nothing about which recipe runs. Any other option is not read: the decider. */
+const MAKE_PLAIN = /^(-s|--silent|--quiet|-k|--keep-going|-w|--print-directory|--no-print-directory|-j\d*|--jobs(=\d+)?|-B|--always-make|-r|--no-builtin-rules|-R|--no-builtin-variables)$/
+/** Makefile lines this reader does not follow (includes, conditionals, a changed shell or recipe prefix): the decider. */
+const MAKE_UNREAD = /^\s*(-?include|sinclude|define|endef|ifeq|ifneq|ifdef|ifndef|else|endif|override|vpath|load)\b|^\s*(SHELL|\.SHELLFLAGS|MAKEFLAGS|MFLAGS|MAKEFILES|\.RECIPEPREFIX|\.ONESHELL|\.DEFAULT|\.SUFFIXES)\b/
+
+/** What a step runs from a file: the texts and the folder they run in, `unreadable`, or undefined for no such step. */
+type Body = { readonly texts: readonly string[]; readonly cwd: string } | "unreadable"
+
+/**
+ * Row 47e (M1-05): the text of a local script file a step runs (`./deploy.sh`, `scripts/x.sh`, `bash x.sh`, `. ./env.sh`),
+ * read as a shell text. `unreadable` when it cannot be read in full: missing, not a regular file, too large, a first line
+ * naming another interpreter, or a binary inside the project. A program outside the project that is no script (a system
+ * binary named by its path) is no body.
+ */
+function scriptFileBody(word: string, cwd: string, instance: InstanceContext): Body | undefined {
+  const file = path.resolve(cwd, word)
+  const inside = Reach.inside(file, instance)
+  let text: string
+  try {
+    const stat = fs.statSync(file)
+    if (!stat.isFile() || stat.size > MAX_BODY_BYTES) return inside ? "unreadable" : undefined
+    text = fs.readFileSync(file, "utf8")
+  } catch {
+    return "unreadable"
+  }
+  const first = text.split("\n", 1)[0] ?? ""
+  if (first.startsWith("#!")) return SHELL_SHEBANG.test(first) ? { texts: [text], cwd } : "unreadable"
+  if (text.includes("\0")) return inside ? "unreadable" : undefined
+  return { texts: [text], cwd }
+}
+
+/**
+ * Row 47e (M1-05): the recipe lines `make <args>` runs in `cwd`, each a shell text, with the recipes of the targets it
+ * depends on. `unreadable` for anything this small reader does not follow: an option it does not know, a variable on the
+ * line, no Makefile, a target with no rule of its own, a `$` in a reached rule or recipe, a double-colon rule, includes and
+ * conditionals.
+ */
+function makeBody(args: readonly string[], cwd: string, instance: InstanceContext): Body {
+  let dir = cwd
+  let named: string | undefined
+  const goals: string[] = []
+  for (let index = 0; index < args.length; index++) {
+    const word = args[index]!
+    if (word === "-C" || word === "--directory") dir = path.resolve(dir, args[++index] ?? "")
+    else if (word.startsWith("--directory=")) dir = path.resolve(dir, word.slice(12))
+    else if (/^-C./.test(word)) dir = path.resolve(dir, word.slice(2))
+    else if (word === "-f" || word === "--file" || word === "--makefile") named = args[++index]
+    else if (/^--(file|makefile)=/.test(word)) named = word.slice(word.indexOf("=") + 1)
+    else if (word === "-j" && /^\d+$/.test(args[index + 1] ?? "")) index++
+    else if (MAKE_PLAIN.test(word)) continue
+    else if (word.startsWith("-") || word.includes("=") || word.includes("$")) return "unreadable"
+    else goals.push(word)
+  }
+  if (named?.includes("$") || dir.includes("$")) return "unreadable"
+  const file = named !== undefined ? path.resolve(dir, named) : ["GNUmakefile", "makefile", "Makefile"].map((name) => path.join(dir, name)).find((each) => fs.existsSync(each))
+  if (file === undefined || !Reach.inside(file, instance)) return "unreadable"
+  let text: string
+  try {
+    if (fs.statSync(file).size > MAX_BODY_BYTES) return "unreadable"
+    text = fs.readFileSync(file, "utf8")
+  } catch {
+    return "unreadable"
+  }
+  const rules = new Map<string, { prereqs: string[]; recipe: string[]; bad: boolean }>()
+  let first: string | undefined
+  let current: { prereqs: string[]; recipe: string[]; bad: boolean }[] = []
+  let patterns = false
+  const lines = text.split("\n")
+  for (let index = 0; index < lines.length; index++) {
+    let line = lines[index]!.replace(/\r$/, "")
+    if (line.startsWith("\t")) {
+      if (current.length === 0) return "unreadable"
+      // A recipe line, with its `\` continuations: one shell text.
+      while (line.endsWith("\\") && index + 1 < lines.length) line = line.slice(0, -1) + lines[++index]!.replace(/^\t/, "")
+      for (const rule of current) rule.recipe.push(line.slice(1))
+      continue
+    }
+    while (line.endsWith("\\") && index + 1 < lines.length) line = line.slice(0, -1) + " " + lines[++index]!
+    const bare = line.replace(/(^|\s)#.*$/, "").trimEnd()
+    if (bare.trim() === "") continue
+    if (MAKE_UNREAD.test(bare)) return "unreadable"
+    if (/^\s*(export\s+|unexport\s+)?[\w.-]+\s*(\?|:|::|\+|!)?=/.test(bare)) {
+      current = []
+      continue
+    }
+    const rule = /^([^:=#\t][^:=#]*?)\s*(::?)(?!=)\s*([^;]*?)\s*(?:;\s*(.*))?$/.exec(bare)
+    if (!rule) return "unreadable"
+    const targets = rule[1]!.trim().split(/\s+/)
+    const prereqs = (rule[3] ?? "").split(/\s+/).filter((word) => word !== "" && word !== "|")
+    const bad = rule[2] === "::" || prereqs.some((word) => word.includes("=")) || [...targets, ...prereqs].some((word) => word.includes("$"))
+    if (targets.some((target) => target.includes("%"))) patterns = true
+    current = targets.map((target) => {
+      const known = rules.get(target) ?? { prereqs: [], recipe: [], bad: false }
+      // A second recipe for a target replaces the first (GNU make warns): not read.
+      if (known.recipe.length > 0 && (rule[4] !== undefined || lines[index + 1]?.startsWith("\t"))) known.bad = true
+      known.prereqs.push(...prereqs)
+      known.bad ||= bad
+      rules.set(target, known)
+      return known
+    })
+    if (rule[4] !== undefined) for (const each of current) each.recipe.push(rule[4])
+    first ??= targets.find((target) => !target.startsWith(".") && !target.includes("%"))
+  }
+  const wanted = goals.length > 0 ? goals : first !== undefined ? [first] : []
+  if (wanted.length === 0) return "unreadable"
+  const texts: string[] = []
+  const seen = new Set<string>()
+  const walk = (target: string, depth: number, goal: boolean): boolean => {
+    if (seen.has(target)) return true
+    seen.add(target)
+    const rule = rules.get(target)
+    // A goal needs a rule of its own; a prerequisite with none is a file, unless pattern rules may build it.
+    if (!rule) return !goal && !patterns
+    if (rule.bad || depth > 20) return false
+    for (const prereq of rule.prereqs) if (!walk(prereq, depth + 1, false)) return false
+    for (const line of rule.recipe) {
+      const command = line.replace(/^[\s@+-]+/, "")
+      if (command.includes("$")) return false
+      if (command.trim() !== "") texts.push(command)
+    }
+    return true
+  }
+  for (const goal of wanted) if (!walk(goal, 0, true)) return "unreadable"
+  return { texts, cwd: dir }
+}
+
+/**
+ * Row 47e (M1-05): what a step runs from a file one level down: a local script file (by its path, through `sh|bash|zsh
+ * <file>`, or `source`/`.`), or a Makefile recipe (`make`, `gmake`). Undefined for any other step.
+ */
+function stepBody(argv: readonly string[], cwd: string, instance: InstanceContext): Body | undefined {
+  const found = BypassScreen.unwrap(argv)
+  if (found.kind !== "program") return undefined
+  if (found.name === "make" || found.name === "gmake") return makeBody(found.args, cwd, instance)
+  if (SOURCES.has(found.name)) return found.args[0] === undefined ? undefined : scriptFileBody(found.args[0], cwd, instance)
+  if (DeletionWords.SHELLS.has(found.name) && BypassScreen.runText(argv) === undefined) {
+    // The first word past the shell's options is the file it runs; `-o <name>` takes a value. None: it reads stdin.
+    for (let index = 0; index < found.args.length; index++) {
+      const word = found.args[index]!
+      if (word === "-o" || word === "+o" || word === "-O" || word === "+O") index++
+      else if (word === "-s" || word === "--") return undefined
+      else if (!/^[-+]/.test(word)) return scriptFileBody(word, cwd, instance)
+    }
+    return undefined
+  }
+  if (found.spelled.includes("/")) return scriptFileBody(found.spelled, cwd, instance)
+  return undefined
+}
+
+/**
+ * Row 47e (alias residual of 47a, C70): a step list that defines an alias (`alias x=...`) or a function (`function f`)
+ * and names it in a later step. The alias's value is text no step shows, so what `x` runs cannot be told.
+ */
+function definesAndUses(steps: readonly { argv: readonly string[] }[]): boolean {
+  const defined = new Set<string>()
+  for (const step of steps) {
+    const [program, ...args] = step.argv
+    if (program === undefined) continue
+    if (step.argv.some((word) => defined.has(word))) return true
+    if (program === "alias")
+      for (const word of args) if (!word.startsWith("-") && word.includes("=")) defined.add(word.slice(0, word.indexOf("=")))
+    if (program === "function" && args[0] !== undefined) defined.add(args[0].replace(/\(\)$/, ""))
+  }
+  return false
+}
+
+/**
+ * Row 29d (C46, OP-1): a SUBAGENT's shell call that leaves the parity path although its category is in
+ * `SUBAGENT_RUNS_LIKE_ROOT`: one of its steps (texts and project scripts unwrapped, `BypassScreen.deepSteps`) is a form the
+ * 1.1.1 rules recognise as leaving the machine (`BypassLists.OUTWARD_FORMS`: a hosted deploy, a publish, an image push), or
+ * adds a named registry package. It goes to the main agent, where "cannot tell" refuses. The root is never asked here,
+ * and nothing is reclassified: the line's category stays the table's.
+ * Row 47e (C61): also a gh write (M1-06), another tool's named add (M1-07), an alias defined and used later in the call
+ * (47a residual), and one level further down (M1-05): a local script file a step runs, or a Makefile recipe, read through
+ * the same step reader; a file or recipe that cannot be read in full goes to the main agent too. The gate also asks this
+ * of a call a P-01a task grant lifted to the root (M1-18): a grant never skips it.
+ */
+export function subagentSendsAnyway(input: Input): boolean {
+  if (input.bypass?.caller !== "subagent") return false
+  return sendsAnyway(input, 0)
+}
+
+function sendsAnyway(input: Input, depth: number): boolean {
+  const deep = BypassScreen.deepSteps(input)
+  // A body read one level down must be read in full; the call itself keeps the table's reading.
+  if (depth > 0 && (deep.unreadable.length > 0 || deep.steps.length === 0)) return true
+  if (definesAndUses(deep.steps)) return true
+  return deep.steps.some((step) => {
+    const found = BypassScreen.unwrap(step.argv)
+    if (found.kind !== "program") return false
+    const form = Object.hasOwn(BypassLists.OUTWARD_FORMS, found.name) ? BypassLists.OUTWARD_FORMS[found.name] : undefined
+    if (form !== undefined && form(found.args)) return true
+    if (addsRegistryPackage(found.name, found.args) || addsOtherRegistryPackage(found.name, found.args)) return true
+    if (found.name === "gh" && ghWrites(found.args)) return true
+    if (step.code !== undefined) return false
+    return step.cwds.some((cwd) => {
+      const body = stepBody(step.argv, cwd, input.instance)
+      if (body === undefined) return false
+      if (body === "unreadable" || depth >= MAX_BODY_DEPTH) return true
+      return body.texts.some((text) => bodySends(input, text, body.cwd, depth + 1))
+    })
+  })
+}
+
+/** Row 47e (M1-05): a script file's or recipe line's text, read by the shell's own reader in full, sends anyway. */
+function bodySends(input: Input, text: string, cwd: string, depth: number): boolean {
+  if (/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(text.replace(/[\n\t\r]/g, ""))) return true
+  const steps = ScriptReader.read(text, cwd)
+  const reading = shellReading(steps, input.instance)
+  // Not read (an expansion, a function, a reader not ready) or not in full: what runs cannot be told.
+  if (!steps || !reading?.complete) return true
+  if (reading.steps.length === 0) return false
+  return sendsAnyway({ ...input, cwd, patterns: [text], metadata: { command: text, steps } }, depth)
+}
+
+/** 1.2.7 U-7 (C21 b, c): the shells whose `-c` text is read as a command line, and whose script file is screened as one. */
+const SHELL_TEXT_PROGRAMS: ReadonlySet<string> = new Set(["sh", "bash", "zsh"])
+
+/** 1.2.7 row 47a (M1-04): the modes of zsh's `emulate`, whose `-c <text>` evaluates the text as `sh -c` does. */
+const EMULATE_MODES: ReadonlySet<string> = new Set(["zsh", "sh", "ksh", "csh"])
+
+/**
+ * The text of a step that is exactly `sh|bash|zsh -c <text>`, or (row 47a, M1-04) zsh's `emulate [-lLR] <mode> -c <text>`;
+ * undefined for any other shape, which then keeps the 1.2.6 path.
+ */
+function shellTextOf(argv: readonly string[]) {
+  if (argv.length === 3 && SHELL_TEXT_PROGRAMS.has(argv[0]!) && argv[1] === "-c") return argv[2]
+  if (argv[0] !== "emulate") return undefined
+  let index = 1
+  while (/^-[lLR]+$/.test(argv[index] ?? "")) index++
+  return EMULATE_MODES.has(argv[index] ?? "") && argv[index + 1] === "-c" && argv.length === index + 3 ? argv[index + 2] : undefined
+}
+
+/**
+ * 1.2.7 U-7 (C21 b): a call that is exactly `sh|bash|zsh -c '<one literal>'` (row 47a, M1-04: or zsh
+ * `emulate <mode> -c '<literal>'`, `shellTextOf`) (one command, nothing before or after it, no
+ * redirect, no `cd`, no `NAME=value`), as the text the shell will run: the literal read by the shell's own reader
+ * (`ScriptReader`, the same tree-sitter `decompose` the shell tool gives `metadata.steps` with). undefined keeps the call
+ * as it was (decided `unreadable_command`): the reader is not ready; the literal has an expansion, a substitution, a
+ * variable, a glob or anything else the reader does not read in full; a control or format character, or a backslash before
+ * a line break, that the reader and the shell might take differently (SR7-20); or it runs a shell text, an `eval` or a
+ * launcher's code itself (one level only); or it deletes or replaces a file (`DeletionWords.deletesOrReplacesWide`), which
+ * is refused on the 1.2.6 path with its 1.2.6 line. What the shell said about the outer text (archive, checkpoint) is not about the
+ * inner one, so it is dropped: an inner deletion or overwrite is judged with nothing saved first.
+ */
+function shellTextCall(input: Input): Input | undefined {
+  if (input.permission !== "bash") return undefined
+  const command = input.metadata.command
+  if (typeof command !== "string") return undefined
+  const outer = ScriptReader.read(command, input.cwd)
+  if (!outer || outer.steps.length !== 1 || outer.writes.length > 0 || outer.upward || outer.chdirs || outer.assigned)
+    return undefined
+  const step = outer.steps[0]!
+  if (step.code !== undefined || step.cwds.length !== 1 || step.cwds[0] !== input.cwd) return undefined
+  const text = shellTextOf(step.argv)
+  if (text === undefined || text.trim() === "") return undefined
+  if (/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(text.replace(/[\n\t]/g, "")) || text.includes("\\\n")) return undefined
+  const steps = ScriptReader.read(text, input.cwd)
+  const reading = shellReading(steps, input.instance)
+  if (!steps || !reading?.complete || reading.steps.length === 0) return undefined
+  if (reading.steps.some((each) => BypassScreen.runText(each.argv) !== undefined)) return undefined
+  // A deletion or a replacement in the text keeps the 1.2.6 path (refused, archive first), its line included (CHAR-05).
+  if (reading.steps.some((each) => DeletionWords.deletesOrReplacesWide(each.argv, commandWords))) return undefined
+  return {
+    ...input,
+    patterns: [text],
+    metadata: { ...input.metadata, command: text, steps, archive: undefined, archiveTargets: undefined, checkpointTargets: undefined },
+    whole: input.whole ?? command,
+  }
+}
+
+/**
+ * 1.2.7 U-7 (C21 c): `sh|bash|zsh <file> [args]` the table judged P `script` (`scriptForm`: screened, hashed by the shell)
+ * runs that file as `./<file>` does, so the wide reader's "a shell with a script file cannot be read" is no deletion: the
+ * script screen's `delete` flag is what refuses a script that deletes (`noWait` rule 3).
+ */
+function shellRunsScreenedScript(input: Input, category: string | undefined) {
+  if (category !== "script" || input.permission !== "bash" || typeof input.metadata.command !== "string") return false
+  const form = scriptForm(input.metadata.command)
+  return form?.file !== undefined && form.program !== undefined && SHELL_TEXT_PROGRAMS.has(form.program)
 }
 
 /**
@@ -2753,7 +4513,8 @@ function existingFile(file: string) {
 }
 
 /**
- * 1.1.3 (T7 F3, T9 G6): the file words of the text's redirects that replace (`>`, `N>`, `>|`, `&>`), read outside quotes
+ * 1.1.3 (T7 F3, T9 G6): the file words of the text's redirects that replace (`>`, `N>`, `>|`, `&>`, and zsh's `>!`,
+ * `&>!`, `>&|`, `>&!`), read outside quotes
  * and comments. An append (`>>`, `&>>`) replaces nothing, a stream move (`2>&1`, `>&-`) names no file, and `<>` opens
  * without emptying. A `>` inside quotes (`"a -> b"`, `awk '$1 > 5'`) is no redirect.
  */
@@ -2795,7 +4556,11 @@ export function replacingTargets(command: string): string[] {
         continue
       }
       at++
-    } else if (command[at] === "|") at++
+    }
+    // 1.2.7 row 47i (C72, M1-04): zsh's noclobber overrides `>|`, `>!`, `N>!`, `&>!`, `>&|`, `>&!` (and `>!f`) replace
+    // like `>`; the `|`/`!` touching the operator is no part of the file word. bash knows `>|` only, and the shell leaves
+    // its `!` spellings unread, so nothing it reads changes.
+    if (command[at] === "|" || command[at] === "!") at++
     while (command[at] === " " || command[at] === "\t") at++
     let word = ""
     let inner: string | undefined
@@ -3031,7 +4796,8 @@ export function noWait(input: Input, verdict: Verdict): Verdict {
     if (flags.includes("sudo")) return { ...refused("admin_rights"), bypassed }
     if (flags.includes("delete")) return { ...refused("delete_compound"), bypassed }
   }
-  if (category === "not_reversible" || destroys(input)) return { ...refused("not_reversible"), bypassed }
+  if (category === "not_reversible" || (destroys(input) && !shellRunsScreenedScript(input, category)))
+    return { ...refused("not_reversible"), bypassed }
   const destinations = category !== undefined && OUTWARD_HELD.has(category) ? destinationsOf(input) : undefined
   return openedByNoWait({
     class: "A",

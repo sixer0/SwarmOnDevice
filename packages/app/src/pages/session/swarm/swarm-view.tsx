@@ -310,7 +310,8 @@ function LaneDetail(props: { swarm: SwarmController; lane: SwarmLane }) {
   )
 }
 
-function OverlapRow(props: { swarm: SwarmController; overlap: SwarmOverlap; model: SwarmModel }) {
+/** One file more than one agent changed. 1.2.7 U-3: drawn by the Activity strip's "Shared files" view, not here. */
+export function OverlapRow(props: { swarm: SwarmController; overlap: SwarmOverlap; model: SwarmModel }) {
   const language = useLanguage()
   const who = () =>
     [
@@ -430,10 +431,6 @@ export function SwarmAgents(props: { swarm: SwarmController; missions?: MissionC
                 </span>
               </Show>
             </div>
-
-            <Index each={model().overlaps}>
-              {(overlap) => <OverlapRow swarm={props.swarm} overlap={overlap()} model={model()} />}
-            </Index>
 
             <div
               ref={(el) => {

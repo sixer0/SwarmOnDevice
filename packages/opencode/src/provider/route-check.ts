@@ -1,4 +1,5 @@
 import { execFile } from "child_process"
+import { accessSync, constants } from "fs"
 import { Effect } from "effect"
 import { GlobalBus } from "@/bus/global"
 
@@ -27,6 +28,22 @@ export type Sink = (warning: Warning) => void
 /** What the OS says about an interface's IPv4 addresses, or undefined when it cannot tell. */
 export type Addresses = (iface: string) => Promise<string[] | undefined>
 
+/** What the Tailscale CLI says are this machine's own Tailscale IPv4 addresses, or undefined when it cannot tell. */
+export type TailscaleSelf = () => Promise<string[] | undefined>
+
+/**
+ * macOS places the Tailscale CLI may live, tried in this order (absolute paths only, no PATH lookup, no shell): the CLI
+ * bundled in the app binary (App Store and standalone builds), the standalone "CLI integration" link, and Homebrew.
+ */
+export const TAILSCALE_CLI_PATHS = [
+  "/Applications/Tailscale.app/Contents/MacOS/Tailscale",
+  "/usr/local/bin/tailscale",
+  "/opt/homebrew/bin/tailscale",
+] as const
+
+/** Linux places the Tailscale CLI may live (package installs), absolute only, tried in order: no PATH lookup, no shell. */
+export const TAILSCALE_LINUX_CLI_PATHS = ["/usr/bin/tailscale", "/usr/sbin/tailscale", "/usr/local/bin/tailscale"] as const
+
 /** An IPv4 address in Tailscale's carrier-grade NAT range, 100.64.0.0/10 (100.64.0.0 to 100.127.255.255). */
 export const inTailscaleRange = (address: string) => {
   const parts = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(address.trim())
@@ -40,9 +57,10 @@ const namedByTailscale = (iface: string) => /tailscale/i.test(iface)
 const isUtun = (iface: string) => /^utun\d+$/.test(iface)
 
 /**
- * A Tailscale interface. Linux and Windows name it `tailscale0` / "Tailscale". On macOS it is a `utunN`, but so is the
- * tunnel of every other VPN client (WireGuard, Cisco and so on), so 1.2.6 (M1 S1) counts a utun only when it carries an
- * IPv4 address in 100.64.0.0/10. No addresses known: not verified.
+ * A Tailscale interface by name and address range. Linux and Windows name it `tailscale0` / "Tailscale". On macOS it
+ * is a `utunN`, but so is the tunnel of every other VPN client (WireGuard, Cisco and so on), so 1.2.6 (M1 S1) counts a
+ * utun only when it carries an IPv4 address in 100.64.0.0/10. No addresses known: not verified. 1.2.7 F-7 adds the
+ * Tailscale CLI self-address match in `check()` (verifiedRoute).
  */
 export const isTailscale = (iface: string | undefined, addresses?: readonly string[]) => {
   if (!iface) return false
@@ -50,10 +68,26 @@ export const isTailscale = (iface: string | undefined, addresses?: readonly stri
   return isUtun(iface) && !!addresses?.some(inTailscaleRange)
 }
 
-const run = (cmd: string, args: string[]) =>
+/**
+ * 1.2.7 F-7 (C8): the route check itself. An interface named by Tailscale counts as before. A `utunN` counts only when
+ * one of its 100.64.0.0/10 addresses is also one the Tailscale CLI reports as this machine's own: another VPN client
+ * that uses CGNAT space no longer passes. No self addresses known (CLI missing, daemon stopped): not verified.
+ */
+const verifiedRoute = (
+  iface: string | undefined,
+  addresses: readonly string[] | undefined,
+  self: readonly string[] | undefined,
+) => {
+  if (!iface) return false
+  if (namedByTailscale(iface)) return true
+  if (!isTailscale(iface, addresses)) return false
+  return !!addresses?.some((a) => inTailscaleRange(a) && !!self?.includes(a.trim()))
+}
+
+const run = (cmd: string, args: string[], env?: NodeJS.ProcessEnv) =>
   new Promise<string | undefined>((resolve) => {
     try {
-      execFile(cmd, args, { timeout: PROBE_TIMEOUT_MS, windowsHide: true }, (error, stdout) =>
+      execFile(cmd, args, { timeout: PROBE_TIMEOUT_MS, windowsHide: true, env }, (error, stdout) =>
         resolve(error ? undefined : String(stdout)),
       )
     } catch {
@@ -98,6 +132,38 @@ export const osAddresses: Addresses = async (iface) => {
   return [...out.matchAll(/\binet\s+(\d{1,3}(?:\.\d{1,3}){3})/g)].map((m) => m[1]!)
 }
 
+const executable = (file: string) => {
+  try {
+    accessSync(file, constants.X_OK)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Default self lookup: `tailscale ip -4` (macOS: the first TAILSCALE_CLI_PATHS entry that exists, run with
+ * TAILSCALE_BE_CLI=1 so the app binary acts as the CLI; Linux: the first TAILSCALE_LINUX_CLI_PATHS entry that exists; never a PATH lookup). The lines in
+ * 100.64.0.0/10; none = undefined. Windows is not asked: its probe already asks `tailscale status --json`.
+ * The result is compared in memory only; it is never logged, shown or written.
+ */
+export const osTailscaleSelf: TailscaleSelf = async () => {
+  const bin =
+    process.platform === "darwin"
+      ? TAILSCALE_CLI_PATHS.find(executable)
+      : process.platform === "linux"
+        ? TAILSCALE_LINUX_CLI_PATHS.find(executable)
+        : undefined
+  if (!bin) return undefined
+  const out = await run(bin, ["ip", "-4"], { ...process.env, TAILSCALE_BE_CLI: "1" })
+  if (!out) return undefined
+  const self = out
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(inTailscaleRange)
+  return self.length ? self : undefined
+}
+
 // The existing notice surface: the log, and the toast event the session view already shows (no new panel, INV-K).
 export const defaultSink: Sink = (warning) => {
   Effect.runFork(
@@ -119,20 +185,23 @@ export const defaultSink: Sink = (warning) => {
 
 let probe: Probe = osProbe
 let addressesOf: Addresses = osAddresses
+let tailscaleSelf: TailscaleSelf = osTailscaleSelf
 let sink: Sink = defaultSink
 let now = () => Date.now()
 const routes = new Map<string, { at: number; iface?: string; verified: boolean }>()
 const warnedAt = new Map<string, number>()
 const pending = new Set<Promise<void>>()
 
-/** Test seam: replace the probe, the address lookup, the sink or the clock; `reset()` restores the defaults. */
+/** Test seam: replace the probe, the address lookups, the sink or the clock; `reset()` restores the defaults. */
 export const setProbe = (next: Probe) => void (probe = next)
 export const setAddresses = (next: Addresses) => void (addressesOf = next)
+export const setTailscaleSelf = (next: TailscaleSelf) => void (tailscaleSelf = next)
 export const setSink = (next: Sink) => void (sink = next)
 export const setClock = (next: () => number) => void (now = next)
 export const reset = () => {
   probe = osProbe
   addressesOf = osAddresses
+  tailscaleSelf = osTailscaleSelf
   sink = defaultSink
   now = () => Date.now()
   routes.clear()
@@ -167,17 +236,21 @@ export function check(host: string, sessionID?: string) {
     .then(() => probe(host))
     .catch(() => undefined)
     .then(async (iface) => {
-      // Only a utun needs its addresses read; a name Tailscale gives, or any other interface, decides by itself.
-      const addresses =
-        iface && isUtun(iface) && !namedByTailscale(iface)
-          ? await Promise.resolve()
-              .then(() => addressesOf(iface))
-              .catch(() => undefined)
-          : undefined
-      return { iface, addresses }
+      // Only a utun needs its addresses read, and the Tailscale CLI asked for this machine's own; a name Tailscale
+      // gives, or any other interface, decides by itself.
+      if (!iface || !isUtun(iface) || namedByTailscale(iface)) return { iface, addresses: undefined, self: undefined }
+      const addresses = await Promise.resolve()
+        .then(() => addressesOf(iface))
+        .catch(() => undefined)
+      const self = addresses?.some(inTailscaleRange)
+        ? await Promise.resolve()
+            .then(() => tailscaleSelf())
+            .catch(() => undefined)
+        : undefined
+      return { iface, addresses, self }
     })
-    .then(({ iface, addresses }) => {
-      const verified = isTailscale(iface, addresses)
+    .then(({ iface, addresses, self }) => {
+      const verified = verifiedRoute(iface, addresses, self)
       routes.set(host, { at: now(), iface, verified })
       if (!verified) warnOnce(host, iface, sessionID)
     })

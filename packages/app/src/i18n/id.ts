@@ -1,3 +1,5 @@
+import { BYPASS_CONSENT_TEXT } from "@opencode-ai/core/permission/bypass-consent"
+
 export const dict = {
   "desktop.menu.app": "Swarm",
   "desktop.menu.file": "Berkas",
@@ -736,22 +738,16 @@ export const dict = {
   "toast.permissions.autonomous.off.title": "Mode otonom mati. Putusan yang sudah menunggu tetap di Aktivitas.",
   "toast.permissions.autonomous.scan.title":
     "Aplikasi sudah mendaftar berkas rahasia dan sensitif serta tujuan yang mungkin dibutuhkan tugas ini. Setujui di Aktivitas sebelum Anda pergi.",
-  "dialog.autonomyBypass.title": "Nyalakan mode otonom?",
-  "dialog.autonomyBypass.intro":
-    "Selama mode ini menyala, tidak ada yang menunggu Anda. Persetujuan di-*bypass* dan agen utama yang memutuskan, untuk Anda dan untuk subagennya. Setiap tindakan dijalankan, atau agen langsung menerima jawaban yang memberi tahu apa yang harus dilakukan sebagai gantinya, sehingga pekerjaan tidak pernah berhenti untuk bertanya kepada Anda. Tes, *build*, dan instalasi menjalankan kode proyek dan kode paketnya apa adanya, dan Swarm tidak memeriksa apa yang dilakukan kode itu. Setiap putusan dicatat di Aktivitas, termasuk tindakan yang tidak dijalankan.",
-  "dialog.autonomyBypass.archive":
-    "Berkas dan folder yang dihapus Swarm dipindahkan ke arsip. Tindakan lokal yang tidak bisa dibatalkan, misalnya git reset --hard, git clean, atau menghapus *branch*, dijalankan setelah Swarm menyimpan titik pemulihan (*checkpoint*) berkas dan *ref* Git yang diubahnya, dan Anda dapat memulihkan titik itu nanti. Penghapusan atau penimpaan yang tidak bisa diarsipkan maupun dibuatkan titik pemulihan oleh Swarm tidak dijalankan: agen langsung diminta menyebut jalurnya dalam perintah biasa, atau menyalin berkas sebelum menimpanya.",
-  "dialog.autonomyBypass.refused":
-    "Tindakan di luar berkas komputer ini tidak dijalankan, karena tidak ada titik pemulihan yang bisa membatalkannya: *force push*, penghapusan di *remote* atau *cloud*, serta mematikan atau memulai ulang mesin. Tindakan lokal yang tidak bisa dicakup titik pemulihan, misalnya menghapus tabel basis data, mengosongkan penyimpanan data, atau menghapus isi disk, juga tidak dijalankan. Agen langsung diminta bertanya kepada Anda melalui putusan atau mencantumkan langkah itu di pesan akhirnya. Hak admin (sudo) dan perubahan kredensial dilewati: agen diminta melanjutkan tanpa langkah itu, karena sudo memerlukan kata sandi Anda dan tidak bisa berjalan tanpa diawasi.",
-  "dialog.autonomyBypass.waits":
-    "Semua tindakan lain berjalan tanpa bertanya, termasuk permintaan jaringan ke situs mana pun, *upload* berkas dari komputer Anda, pengiriman *token* dan kunci (juga dari variabel lingkungan), git push tanpa *force*, *deploy* dan *publish*, menulis di luar folder proyek, layanan sistem, menghentikan proses yang tidak dijalankan sesi ini, menyunting berkas konfigurasi alat dan kompiler, serta perintah atau *script* yang tidak dikenali Swarm. Anda tidak ditanya tentang semua itu, jadi bacalah laporannya saat mode dimatikan.",
-  "dialog.autonomyBypass.secrets":
-    "Berkas rahasia dan berkas yang dilindungi boleh dibaca. Nilainya tetap disembunyikan sebagai [hidden:NAME] dari agen, laporan, dan ekspor.",
-  "dialog.autonomyBypass.report":
-    "Saat mode dimatikan, laporan dikirim. Laporan itu memuat apa yang dikerjakan, apa yang diputuskan, apa yang dialihkan ke metode arsip, dan apa yang ditolak, serta mendaftar setiap pengiriman dan tujuannya. Berkas laporan yang dibuat ikut dilampirkan.",
-  "dialog.autonomyBypass.scope":
-    "Jika dinyalakan di dalam sesi, persetujuan ini berlaku untuk sesi itu. Jika dinyalakan tanpa sesi yang terbuka, persetujuan ini berlaku untuk sesi di folder ini yang tidak punya pengaturan sendiri. Persetujuan berlaku sampai mode dimatikan atau Swarm dimulai ulang. Anda akan ditanya lagi lain kali.",
-  "dialog.autonomyBypass.accept": "Saya setuju, nyalakan",
+  // 1.2.7 U-10: the bypass-v1 consent text has one source, shared with `swarm autonomy on` (core permission/bypass-consent).
+  "dialog.autonomyBypass.title": BYPASS_CONSENT_TEXT.id.title,
+  "dialog.autonomyBypass.intro": BYPASS_CONSENT_TEXT.id.intro,
+  "dialog.autonomyBypass.archive": BYPASS_CONSENT_TEXT.id.archive,
+  "dialog.autonomyBypass.refused": BYPASS_CONSENT_TEXT.id.refused,
+  "dialog.autonomyBypass.waits": BYPASS_CONSENT_TEXT.id.waits,
+  "dialog.autonomyBypass.secrets": BYPASS_CONSENT_TEXT.id.secrets,
+  "dialog.autonomyBypass.report": BYPASS_CONSENT_TEXT.id.report,
+  "dialog.autonomyBypass.scope": BYPASS_CONSENT_TEXT.id.scope,
+  "dialog.autonomyBypass.accept": BYPASS_CONSENT_TEXT.id.accept,
 
   "toast.model.none.title": "Tidak ada model dipilih",
   "toast.model.none.description": "Hubungkan penyedia untuk meringkas sesi ini",
@@ -786,6 +782,12 @@ export const dict = {
 
   "toast.session.listFailed.title": "Gagal memuat sesi untuk {{project}}",
   "toast.project.reloadFailed.title": "Gagal memuat ulang {{project}}",
+  "toast.project.folderMissing.title": "Folder proyek tidak ditemukan",
+  "toast.project.folderMissing.description": "{{path}} sudah tidak ada. Kembalikan foldernya lalu tekan Pulihkan, buat ulang sebagai folder kosong, atau pilih folder lain.",
+  "toast.project.folderMissing.restore": "Pulihkan",
+  "toast.project.folderMissing.recreate": "Buat ulang",
+  "toast.project.folderMissing.choose": "Pilih folder",
+  "toast.project.folderMissing.recreateFailed": "{{path}} tidak bisa dibuat ulang karena folder induknya juga tidak ada. Pilih folder lain.",
 
   "toast.update.title": "Pembaruan tersedia",
   "toast.update.description": "Versi baru Swarm ({{version}}) sekarang tersedia untuk diinstal.",
@@ -1067,6 +1069,7 @@ export const dict = {
   "session.mission.approval.autonomous": "Disetujui sendiri (otonom): Swarm menyetujui misi ini sendiri dalam mode otonom.",
   "session.mission.line.paused": "Misi dijeda - langkah ditahan. Jawab keputusan di sini, atau minta Swarm melanjutkan.",
   "session.mission.line.drift": "{{count}} langkah ditambahkan setelah persetujuan.",
+  "session.mission.emptySession": "Belum ada misi di sesi ini. Misi yang dimulai di sesi lain tampil di jendela sesi tersebut.",
   "session.mission.type.research": "Riset",
   "session.mission.type.debug": "Debug",
   "session.mission.type.featureRelease": "Fitur / rilis",
@@ -1114,7 +1117,8 @@ export const dict = {
   "session.mission.deliverable.final": "Final",
   "session.mission.deliverable.verified": "Terverifikasi",
   "session.mission.deliverable.unverified": "Belum terverifikasi",
-  "session.mission.deliverable.notInProject": "Belum ada di proyek ini. Agen menyimpannya ke docs/{{mission}}.",
+  "session.mission.deliverable.notInProject": "Belum ada di proyek ini. Agen menyimpannya ke docs/{{mission}}/11_deliverables.",
+  "session.mission.deliverable.revealOnly": "Swarm tidak pernah menjalankan skrip atau aplikasi dari sini.",
   "session.mission.deliverable.open": "Buka {{name}}",
   "session.mission.prompt.answer": "Kendali misi: {{request}} dijawab dengan opsi {{option}} (dicatat sebagai {{decision}}) di misi {{mission}}. Baca dengan studio_mission_get lalu lanjutkan.",
   "session.mission.prompt.instruction": "Instruksi kendali misi untuk misi {{mission}}: {{text}}",
@@ -1126,6 +1130,7 @@ export const dict = {
   "session.map.filter.all": "Semua",
   "session.map.filter.problems": "Masalah",
   "session.map.filter.edits": "Berkas",
+  "session.map.filter.shared": "Berkas bersama",
   "session.map.filter.agents": "Agen",
   "session.map.filter.decisions": "Putusan",
   "session.map.filter.empty": "Belum ada apa-apa",
@@ -1166,6 +1171,7 @@ export const dict = {
   "session.map.decisions.category.folder_not_trusted": "Folder belum dipercaya",
   "session.map.decisions.category.plan_mode": "Agen Plan tidak mengubah berkas",
   "session.map.decisions.category.app_state": "Pengaturan Swarm sendiri",
+  "session.map.decisions.category.own_api": "Memanggil server Swarm sendiri",
   "session.map.decisions.category.asks_every_time": "Aturan Anda selalu bertanya",
   "session.map.decisions.outcome.ran": "Berjalan",
   "session.map.decisions.outcome.notRun": "Tidak dijalankan",

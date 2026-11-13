@@ -95,6 +95,12 @@ export interface DiagramBuildReport {
    * digabung ke `issues` (uji kontrak `issues == []` per fixture; keputusan controller).
    */
   geometry?: DiagramGeometryIssue[];
+  /**
+   * Swarm 1.2.7 row 36b (T-12, N7-138): apparatus furniture the SVG draws itself, only for apparatus "figure":
+   * KUNCI lines, SUMBER lines (after wrapping) and the furniture height in mm (caption, KUNCI, SUMBER).
+   * Report only; the SVG bytes are unchanged.
+   */
+  furniture?: { keyLines: number; sourceLines: number; heightMm: number };
 }
 
 export interface DiagramSvgResult extends SvgResult {
@@ -647,6 +653,8 @@ function buildOnce(s: StudioDiagramV1, opts: DiagramBuildOptions, deps: DiagramB
       nEdges: paths.length,
       apparatus,
       family: s.family,
+      // Swarm 1.2.7 row 36b (T-12, N7-138): furniture counts for the stand-alone figure (feeds N7-068).
+      ...(apparatus === "figure" ? { furniture: { keyLines: keyTexts.length, sourceLines: srcLines.length, heightMm: furnitureMm } } : {}),
     },
   };
 }

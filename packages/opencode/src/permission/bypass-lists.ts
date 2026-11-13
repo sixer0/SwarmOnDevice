@@ -14,6 +14,9 @@ export const ADMIN: ReadonlySet<string> = new Set(["sudo", "doas", "su", "pkexec
 export const OUTWARD: ReadonlySet<string> = new Set([
   "curl", "wget", "nc", "ncat", "netcat", "socat", "ssh", "scp", "sftp", "ftp", "lftp", "telnet", "rsync", "rclone",
   "http", "https", "xh", "aria2c", "gh", "glab", "hub", "croc", "wormhole",
+  // 1.2.7 row 47e (M1-06): zsh's network builtins (loaded by `zmodload zsh/net/tcp|socket`, `zsh/zftp`), for both callers.
+  // Row 47j (U9-5): under consent a `ztcp`/`zftp` to a host curl may reach opens as curl's request does (`zshNetSend`).
+  "ztcp", "zsocket", "zftp",
   // Mail.
   "mail", "mailx", "sendmail", "mutt", "neomutt", "msmtp", "swaks", "s-nail",
 ])
@@ -79,6 +82,8 @@ export const OUTWARD_FORMS: Readonly<Record<string, (args: readonly string[]) =>
   dotnet: first(/^nuget push\b/),
   eas: first(/^(submit|update|build)\b/),
   expo: first(/^publish\b/),
+  // 1.2.7 row 47j (U9-5, C76): `zmodload zsh/net/*` is no longer here. Loading a module sends nothing; the builtin it loads
+  // (`ztcp`, `zftp`) is judged as curl is for the same destination (`bypass-screen.ts` `zshNetSend`), with no extra block.
 }
 
 /**

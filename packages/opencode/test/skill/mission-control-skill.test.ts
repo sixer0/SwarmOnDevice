@@ -103,6 +103,11 @@ describe("mission-control built-in skill", () => {
   test("every studio tool it names exists, and the lifecycle tools are all named", async () => {
     const { schemas } = await studio()
     const known = new Set<string>([...schemas.MISSION_TOOL_NAMES, ...Object.keys(schemas.REPORT_EXTRA_PROPERTIES)])
+    // 1.2.7 row 28 (U-6, INTENT): the close step names studio_file_verify (downloadDir docs/<mission>/11_deliverables);
+    // it is a vendor Studio tool, checked by name in the vendor tool table.
+    const vendorTools = await Bun.file(path.join(STUDIO, "..", "vendor", "scripts", "studio", "mcp", "tools.ts")).text()
+    expect(vendorTools).toContain('"studio_file_verify"')
+    known.add("studio_file_verify")
     const named = new Set([...TEXT.matchAll(/\bstudio_[a-z_]*[a-z]\b/g)].map((m) => m[0]))
     for (const name of named) expect(known.has(name) ? name : `unknown tool ${name}`).toBe(name)
     for (const name of [

@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createResource, createSignal, on, onMount, type Accessor } from "solid-js"
+import { createEffect, createMemo, createResource, createSignal, on, onCleanup, onMount, type Accessor } from "solid-js"
 import { createStore } from "solid-js/store"
 import type { ColorScheme } from "@opencode-ai/ui/theme/context"
 import { useTheme } from "@opencode-ai/ui/theme/context"
@@ -22,6 +22,7 @@ import {
 } from "@/context/settings"
 import {
   AUTONOMY_CHANGED,
+  followModeChanges,
   nextMode,
   notBypassed,
   reportLanguageOf,
@@ -73,6 +74,8 @@ export function createAutonomousToggle(input: {
   /** Asked before turning on, never before turning off. Without it a turn-on carries no consent (1.1.0). */
   confirm?: () => Promise<boolean>
   language?: () => ReportLanguage
+  /** The server's events for this view's folder: `autonomy.mode.changed` reads the mode again (row 58f). */
+  event?: Accessor<Parameters<typeof followModeChanges>[0] | undefined>
 }) {
   const [state, setState] = createStore<{ on: boolean; bypass?: boolean; known: boolean; pending: boolean }>({
     on: false,
@@ -142,6 +145,11 @@ export function createAutonomousToggle(input: {
     return scope && `${scope.sessionID ?? ""}\0${scope.directory}\0${scope.server ?? ""}`
   })
   createEffect(on(where, () => void load()))
+  // A change made elsewhere (the CLI, another window) arrives as an event; the same subscription as the composer's.
+  createEffect(() => {
+    const event = input.event?.()
+    if (event) onCleanup(followModeChanges(event, () => void refresh()))
+  })
 
   return {
     accepting: () => state.on,
@@ -172,6 +180,8 @@ export function createAutonomousModeController(input: {
   server?: Accessor<ServerConnection.Key | undefined>
   /** The consent dialog; asked before turning on only. */
   confirm?: () => Promise<boolean>
+  /** The events of the folder the palette is open in; a mode changed elsewhere reaches the toggle through them. */
+  event?: Accessor<Parameters<typeof followModeChanges>[0] | undefined>
 }) {
   const language = useLanguage()
   const global = useGlobal()
@@ -186,7 +196,7 @@ export function createAutonomousModeController(input: {
       throwOnError: true,
     }).autonomy
   }
-  // The server sends no event when the mode changes: this is how the composer learns of it.
+  // A change made here is announced to the composer at once; one made elsewhere reaches both as `autonomy.mode.changed`.
   const announce = () => window.dispatchEvent(new Event(AUTONOMY_CHANGED))
 
   return createAutonomousToggle({
@@ -212,6 +222,7 @@ export function createAutonomousModeController(input: {
         .modeUpdate({ on, sessionID: scope.sessionID, ...consent })
         .then((result) => modeOf(result.data!)),
     confirm: input.confirm,
+    event: input.event,
     language: () => reportLanguageOf(language.locale()),
     changed: (on) => {
       announce()

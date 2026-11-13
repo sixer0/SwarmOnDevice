@@ -1,0 +1,35 @@
+{
+  "$comment": "Swarm 1.2.7 row 20 (N-4): one chapter, two paragraphs, no figure; studio_render {formats:[\"docx\"]} renders without the bridge and the wrapper adds html. Host-harness document: create with studio_document_create {template, docKey, title, meta?, mission}, fill `slots` with studio_slot_fill, submit each `chapters[i]` with studio_chapter_submit after setting chapter submission target.documentId.",
+  "template": "datum-nota",
+  "docKey": "syn127-n4",
+  "title": "Dokumen uji N-4",
+  "slots": {},
+  "chapters": [
+    {
+      "$schema": "studio.chapter/v2",
+      "chapter": {
+        "key": "1",
+        "title": {
+          "text": "Uraian uji"
+        },
+        "sections": [
+          {
+            "title": {
+              "text": "Bagian uji"
+            },
+            "blocks": [
+              {
+                "type": "paragraph",
+                "text": "Paragraf pembuka sintetis alfa bravo charlie."
+              },
+              {
+                "type": "paragraph",
+                "text": "Paragraf kedua sintetis delta echo foxtrot."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

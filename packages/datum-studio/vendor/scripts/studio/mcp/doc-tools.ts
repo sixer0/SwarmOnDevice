@@ -23,7 +23,7 @@
  */
 import { studioRoutePath } from "../../../src/lib/studio/contract/env";
 import { normalizeControlSheetKeys } from "../../../src/lib/studio/contract/schema/v2/verification-entry";
-import { summarizeLint, type LintSummary } from "../../../src/lib/studio/registry/lint-explain";
+import { lintCarrierCounts, summarizeLint, type LintSummary } from "../../../src/lib/studio/registry/lint-explain";
 import type { SubmitPlanItem } from "../studio-report";
 import { MAX_INPUT_BYTES } from "./config";
 import { McpToolError } from "./safety";
@@ -893,7 +893,10 @@ function lintLines(l: LintSummary): string[] {
     if (f.rule && !explained.has(f.code)) out.push(`  aturan: ${f.rule}`);
     explained.add(f.code);
   }
-  if (l.findingsTotal > l.findings.length) out.push(`- (+${l.findingsTotal - l.findings.length} temuan lain; detail=true)`);
+  // Swarm 1.2.7 row 35b (N-3): N = real total minus the findings the listed rows stand for (a listed summary row
+  // stands for its unitemised rest); without a summary row this is findingsTotal - findings.length, as before.
+  const shown = l.findings.reduce((n, f) => n + (f.represents ?? 1), 0);
+  if (l.findingsTotal > shown) out.push(`- (+${l.findingsTotal - shown} temuan lain; detail=true)`);
   return out;
 }
 
@@ -905,16 +908,22 @@ function lintLines(l: LintSummary): string[] {
 export const DOCUMENT_STATUS_TEXT_MAX_BYTES = 8192;
 export const STATUS_OUTPUTS_LISTED = 50;
 
-/** FAIL count per check code of the revision lint (engine `checks[]` or older `findings[]`), most frequent first. */
+/**
+ * FAIL count per check code of the revision lint (engine `checks[]` or older `findings[]`), most frequent first.
+ * Swarm 1.2.7 row 35b (N-3, N7-063): a finding count, not a row count: a code whose FAIL summary row carries
+ * `findingsAll` counts that row's real total; the summary row is never counted as a finding.
+ */
 function failCountsByCode(lint: unknown): Array<[string, number]> {
   if (!isRecord(lint)) return [];
   const m = new Map<string, number>();
-  const add = (code: unknown) => {
+  const add = (code: unknown, n = 1) => {
     const k = tok(code, "?");
-    m.set(k, (m.get(k) ?? 0) + 1);
+    m.set(k, (m.get(k) ?? 0) + n);
   };
   if (Array.isArray(lint.checks)) {
-    for (const c of lint.checks) if (isRecord(c) && c.status === "FAIL") add(c.checkId);
+    const carriers = lintCarrierCounts(lint, "FAIL");
+    for (const c of lint.checks) if (isRecord(c) && c.status === "FAIL" && !carriers.has(String(c.checkId))) add(c.checkId);
+    for (const [code, x] of carriers) add(code, x.total);
   } else {
     const raw = Array.isArray(lint.findings) ? lint.findings : Array.isArray(lint.issues) ? lint.issues : [];
     const v = typeof lint.verdict === "string" ? lint.verdict : typeof lint.status === "string" ? lint.status : null;
@@ -1075,6 +1084,10 @@ const statusTool: ToolDef = {
       `  status: rilis ${tok(doc.releaseStatus)}; lint ${lintSum.verdict}; ${outputs.length} berkas`,
       `  FAIL per kode: ${fails.length === 0 ? "-" : fails.slice(0, 40).map(([k, n]) => `${k}=${n}`).join(", ")}${fails.length > 40 ? ` (+${fails.length - 40} kode lain; detail=true)` : ""}`,
     );
+    // Swarm 1.2.7 row 35b (N-3, N7-063): one labelled line per code whose findings exceed the itemised cap.
+    for (const [code, x] of [...lintCarrierCounts(b.lint, "FAIL")].sort((p, q) => (p[0] < q[0] ? -1 : p[0] > q[0] ? 1 : 0))) {
+      lines.push(`  ${tok(code, "?")}: total ${x.total} (dirinci ${x.itemised}, tidak dirinci ${x.rest})`);
+    }
     const listed = cap(outputs, STATUS_OUTPUTS_LISTED);
     const verdicts = new Map(arr(b.outputs).filter(isRecord).map((o) => [o.id, o.renderVerification] as const));
     const lintFull = lintLines(lintSum);

@@ -106,10 +106,8 @@ function partState(part: PartType, showReasoningSummaries: boolean) {
     return "visible" as const
   }
   if (part.type === "text") return part.text?.trim() ? ("visible" as const) : undefined
-  if (part.type === "reasoning") {
-    if (showReasoningSummaries && part.text?.trim()) return "visible" as const
-    return
-  }
+  // U-9 (C11): reasoning with text is always drawn (collapsed when the setting is off), whatever the setting.
+  if (part.type === "reasoning") return part.text?.trim() ? ("visible" as const) : undefined
   if (PART_MAPPING[part.type]) return "visible" as const
   return
 }

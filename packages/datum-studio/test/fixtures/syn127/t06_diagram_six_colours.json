@@ -1,0 +1,145 @@
+{
+  "$comment": "Swarm 1.2.7 row 20 (T-06 CHAR): diagram whose emitted SVG has 6 colour values (limit 5). Filler labels.",
+  "spec": {
+    "$schema": "studio.diagram/v1",
+    "family": "layered",
+    "id": "4.1",
+    "title": "Arsitektur sintetis alfa bravo untuk uji hitung warna.",
+    "classification": "BIASA",
+    "width_mm": 128,
+    "apparatus": "figure",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji warna"
+    ],
+    "notes": [
+      "jumlah titik [TERUKUR, keandalan A1] · daya [PEMASOK, keandalan B2]"
+    ],
+    "nodes": [
+      {
+        "id": "s1",
+        "label": "Sensor Alfa",
+        "sub": "25 titik",
+        "mark": "TERUKUR",
+        "class": {
+          "tier": 0
+        }
+      },
+      {
+        "id": "s2",
+        "label": "Sensor Bravo",
+        "sub": "23 titik",
+        "mark": "TERUKUR",
+        "class": {
+          "tier": 0
+        }
+      },
+      {
+        "id": "g1",
+        "label": "Gerbang Charlie",
+        "sub": "32 kanal",
+        "class": {
+          "tier": 1
+        }
+      },
+      {
+        "id": "g2",
+        "label": "Gerbang Delta",
+        "sub": "32 kanal",
+        "class": {
+          "tier": 1
+        }
+      },
+      {
+        "id": "srv",
+        "label": "Server Echo",
+        "sub": "1U",
+        "class": {
+          "tier": 2,
+          "accent": true
+        }
+      },
+      {
+        "id": "db",
+        "label": "Arsip Foxtrot",
+        "sub": "retensi 5 tahun",
+        "shape": "cylinder",
+        "mark": "ASUMSI",
+        "class": {
+          "tier": 3
+        }
+      },
+      {
+        "id": "ups",
+        "label": "Catu Golf",
+        "sub": "1 kVA",
+        "mark": "DITURUNKAN",
+        "class": {
+          "tier": 3
+        }
+      },
+      {
+        "id": "op",
+        "label": "Konsol Hotel",
+        "sub": "ruang kendali",
+        "mark": "PEMASOK",
+        "class": {
+          "tier": 3
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "s1",
+        "to": "g1",
+        "kind": "data",
+        "label": "alfa"
+      },
+      {
+        "from": "s2",
+        "to": "g2",
+        "kind": "data",
+        "label": "bravo"
+      },
+      {
+        "from": "g1",
+        "to": "srv",
+        "kind": "data",
+        "label": "charlie"
+      },
+      {
+        "from": "g2",
+        "to": "srv",
+        "kind": "data",
+        "label": "delta"
+      },
+      {
+        "from": "srv",
+        "to": "db",
+        "kind": "verify",
+        "label": "echo"
+      },
+      {
+        "from": "ups",
+        "to": "srv",
+        "kind": "control",
+        "label": "foxtrot"
+      },
+      {
+        "from": "srv",
+        "to": "op",
+        "kind": "data",
+        "label": "golf"
+      }
+    ],
+    "legend": [
+      "data = aliran data",
+      "control = catu daya",
+      "verify = pemeriksaan",
+      "DITURUNKAN = nilai turunan",
+      "TERUKUR = nilai terukur",
+      "PEMASOK = data pemasok",
+      "ASUMSI = asumsi retensi"
+    ]
+  }
+}

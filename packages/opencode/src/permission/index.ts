@@ -19,14 +19,17 @@ import { ScriptScreen } from "./script-screen"
 import { Unattended } from "./unattended"
 import { Reach } from "../tool/reach"
 import { Risk } from "../tool/risk"
+import { Secrets } from "@/tool/secrets"
 import {
   MAIN_AGENT_UNAVAILABLE_TEXT,
   REFUSED_TEXT,
+  ROLE_SHELL_OUTSIDE_READ_TEXT,
   SPEND_STOPPED_TEXT,
   UNJUDGED_TEXT,
   checkpointFailedText,
   consentedRefusalText,
   mainAgentDeclined,
+  ownApiText,
   subagentStoppedMessage,
 } from "./autonomy-texts"
 import { ProcessTree } from "./process-tree"
@@ -108,6 +111,19 @@ export interface Interface {
    * for the caller to run (C98). Optional only so stand-ins elsewhere need not change; the real service always has it.
    */
   readonly consentTicked?: (root: SessionID) => Effect.Effect<ReadonlyArray<Answered>>
+  /**
+   * 1.2.7 P-01a (N7-133, SR7-04): the literal shell commands a task's parent vouched for, for that child session only.
+   * Memory only: never a session allow rule, gone on restart, dropped when the child ends or is aborted (an empty
+   * `patterns` drops it), and never copied to a grandchild (keyed by the child's own id). `caller` is the parent's kind.
+   * It acts only in the gate, only under consent, and only by judging an exactly granted call with that caller: the
+   * table, `noWait`, X, `forged` and `unsaved` run unchanged. One audit line is written when a grant is issued.
+   * Optional only so stand-ins elsewhere need not change; the real service always has it.
+   */
+  readonly grantTask?: (
+    child: SessionID,
+    patterns: readonly string[],
+    caller: "root" | "subagent",
+  ) => Effect.Effect<void>
 }
 
 interface PendingEntry {
@@ -285,6 +301,16 @@ export interface Decided {
 }
 
 /**
+ * 1.2.7 U4 (N7-054): a read role (`READ_SHELL_ROLES`: planner, data-collector) ran a shell command outside the read class.
+ * Shipped and final: the text names the substitute (a coder subagent), so the agent hands the command on.
+ */
+export class RoleShellRefusedError extends PermissionV1.DeniedError {
+  override get message() {
+    return ROLE_SHELL_OUTSIDE_READ_TEXT
+  }
+}
+
+/**
  * The decider's no. A denial to everything that reads one, so the agent goes on, in words that are true: nobody wrote a
  * rule. The reason is fixed on purpose. The model's own stays in the audit, since repository text can steer it.
  */
@@ -315,6 +341,13 @@ const mainAgentRefused = (text: string) => {
 export const BYPASS_REASON = "the person agreed that the main agent decides during this run"
 
 /**
+ * 1.2.7 U-7 (C7, C21, OP-1, N7-129): the opened categories a subagent's call runs in like the root's under the person's
+ * consent: no decider call, the root's line (`via: main_agent`) with the child's `sessionID`. A positive list, pinned by
+ * an equality test (SR7-02); every other opened category still goes to the main agent, where "cannot tell" refuses.
+ */
+export const SUBAGENT_RUNS_LIKE_ROOT: ReadonlySet<string> = AutonomyTable.SUBAGENT_RUNS_LIKE_ROOT
+
+/**
  * Defence in depth (S1.36): categories the overlay never opens. A verdict that claims to have opened one of them did not
  * come from `underConsent`, and runs nowhere near the main agent. The X ones are refused, the rest held for a person.
  */
@@ -327,6 +360,8 @@ const NEVER_OPENED_X: ReadonlySet<string> = new Set([
   "credential_change",
   "plan_mode",
   "app_state",
+  // 1.2.7 F-4 (N7-051, CHAR-10): a call to Swarm's own server is never opened either.
+  "own_api",
 ])
 // 1.1.3: the KEPT_D categories, outward sends and soft script flags are opened by `noWait` under consent, so the gate
 // believes them there; only the X categories above stay forged (spec section 3), and (T9 G7) a script flagged for sudo
@@ -382,7 +417,13 @@ const stoppedByMode = (input: PermissionV1.AskInput) => {
  */
 export const refusedUnderConsent = (category: string | undefined, reason?: string) => {
   // 1.2.6 row 37b: a checkpoint that could not be made names why, from the closed list (never command text).
-  const text = category === "checkpoint_failed" ? checkpointFailedText(reason) : consentedRefusalText(category)
+  // 1.2.7 F-4: an own-API refusal names the substitute by its reason (N7-052 / N7-135).
+  const text =
+    category === "checkpoint_failed"
+      ? checkpointFailedText(reason)
+      : category === "own_api"
+        ? ownApiText(reason)
+        : consentedRefusalText(category)
   if (text === undefined) return new RefusedByModeError({ ruleset: [] })
   const error = new RefusedWithTextError({ ruleset: [] })
   error.text = text
@@ -393,6 +434,8 @@ export const refusedByMode = (category: string | undefined, reason?: string) => 
   const text =
     category === "checkpoint_failed"
       ? checkpointFailedText(reason)
+      : category === "own_api"
+      ? ownApiText(reason)
       : category !== undefined && Object.hasOwn(REFUSED_TEXT, category)
       ? REFUSED_TEXT[category as keyof typeof REFUSED_TEXT]
       : undefined
@@ -555,6 +598,8 @@ const layer = Layer.effect(
     const sessions = yield* Session.Service
     const autonomy = yield* Autonomy.Service
     const decider = yield* Decider
+    // 1.2.7 P-01a (N7-133): per-task grants, by child session id. Memory only (fail-closed on restart).
+    const taskGrants = new Map<SessionID, { readonly patterns: ReadonlySet<string>; readonly caller: "root" | "subagent" }>()
     const state = yield* InstanceState.make<State>(
       Effect.fn("Permission.state")(function* (ctx) {
         const state = {
@@ -720,6 +765,8 @@ const layer = Layer.effect(
         plan: input.agent === "plan" || last === undefined || last.agent === "plan",
         rule: userCatchAll ? "user_catch_all" : undefined,
         follows: input.follows,
+        // 1.2.7 row 47j (C76): the read roles keep their U4 limits where the consent opens more for other callers.
+        ...(input.agent !== undefined && { agent: input.agent }),
         ...(bypass && { bypass }),
         ...(ownProcesses && { ownProcesses }),
         ...context,
@@ -775,9 +822,20 @@ const layer = Layer.effect(
               .bypassOf({ root: root.id, directory })
               .pipe(Effect.catchCause(() => Effect.succeed(undefined)))
           : undefined
-      const bypass = consentNow
-        ? ({ caller: root.id === input.sessionID ? "root" : "subagent" } as const)
-        : undefined
+      const natural = root.id === input.sessionID ? ("root" as const) : ("subagent" as const)
+      // 1.2.7 P-01a (N7-133): a shell call that is, to the letter, a command the task's parent granted this child is judged
+      // with the parent's caller kind, under consent only. Never wider than the parent: the table and every refusal below
+      // run unchanged, and a nested parent passes on only "subagent".
+      const taskGrant = consentNow && input.permission === "bash" ? taskGrants.get(input.sessionID) : undefined
+      const grantCommand = (input.metadata as Record<string, unknown> | undefined)?.command
+      const granted =
+        taskGrant !== undefined &&
+        taskGrant.caller !== natural &&
+        typeof grantCommand === "string" &&
+        taskGrant.patterns.has(grantCommand.trim()) &&
+        input.patterns.length > 0 &&
+        input.patterns.every((pattern) => taskGrant.patterns.has(pattern))
+      const bypass = consentNow ? ({ caller: granted ? taskGrant.caller : natural } as const) : undefined
       // The table reads project scripts synchronously; its shell reader starts asynchronously, so wait for it once.
       // 1.1.1 F12a (P4, m29): for at most `SCRIPT_READER_WAIT`; a reader still not ready leaves scripts at 1.1.0.
       // 1.1.1 F14 (G5-P4): the bound counts from when the start began, so a start that hangs is waited for once in all.
@@ -786,7 +844,7 @@ const layer = Layer.effect(
         const left = ScriptReader.waitLeft(SCRIPT_READER_WAIT_MS)
         if (left > 0) yield* Effect.promise(() => starting).pipe(Effect.timeoutOption(Duration.millis(left)))
       }
-      const { last, cwd, canUndo, table: judgedTable, via } = yield* judge(input, userCatchAll, root.id, bypass)
+      const { last, cwd, canUndo, table: judgedTable, via, tableInput } = yield* judge(input, userCatchAll, root.id, bypass)
       // S1.36, defence in depth: only the consent overlay opens a call, only under consent, and never one of the X
       // categories. A verdict that says otherwise is not believed: what nothing may run is refused, the rest (1.1.0 path
       // only) waits for a person. 1.1.3: `noWait` opens the KEPT_D categories, outward sends and soft script flags, so under
@@ -857,7 +915,21 @@ const layer = Layer.effect(
       // S1.32/S1.33: a call the consented bypass opened. The main agent's own call runs on the person's consent; a
       // subagent's goes to the main agent, which answers yes or no and never holds it.
       const overlaid = !answered && bypass !== undefined && verdict.class === "A" && verdict.bypassed !== undefined
-      const forSubagent = overlaid && bypass.caller === "subagent"
+      // 1.2.7 U-7 (C7, C21): except a shell call in a local category (`SUBAGENT_RUNS_LIKE_ROOT`), which runs as the root's
+      // does. Only the shell (its `bash` ask, and its `external_directory` ask, which carries the command): what an MCP,
+      // plugin or other tool does the table cannot read, so it stays the main agent's.
+      const shellCall =
+        input.permission === "bash" ||
+        (input.permission === "external_directory" &&
+          typeof (input.metadata as Record<string, unknown> | undefined)?.command === "string")
+      // Row 29d (C46): a subagent's deploy or registry add leaves that path and goes to the main agent; the root's is unchanged.
+      const runsLikeRoot =
+        shellCall && SUBAGENT_RUNS_LIKE_ROOT.has(verdict.bypassed as string) && !AutonomyTable.subagentSendsAnyway(tableInput)
+      // Row 47e (M1-18, C61): a P-01a grant lifts a subagent's call to the root's, but never past that rule: a granted
+      // deploy, add or indirect send is still the subagent's own and goes to the main agent.
+      const grantedSends =
+        granted && natural === "subagent" && AutonomyTable.subagentSendsAnyway({ ...tableInput, bypass: { caller: "subagent" } })
+      const forSubagent = overlaid && ((bypass.caller === "subagent" && !runsLikeRoot) || grantedSends)
       const mainAgent = `agent:main/${last?.agent ?? "build"}` as const
       const asked =
         verdict.class === "P"
@@ -1010,7 +1082,9 @@ const layer = Layer.effect(
               ? "grant"
               : into
                 ? "duplicate"
-                : overlaid
+                : granted && !forSubagent
+                  ? "task_grant"
+                  : overlaid
                   ? forSubagent
                     ? "for_subagent"
                     : "main_agent"
@@ -1200,6 +1274,14 @@ const layer = Layer.effect(
       )
 
     const ask = Effect.fn("Permission.ask")(function* (input: PermissionV1.AskInput) {
+      // 1.2.7 U4 (01b 5.1 Part B): the read roles get the read and diagnostic shell only. Checked first, ahead of every
+      // rule, so neither a person's "always" (approved, sessionRules), a P-01a task grant, a one-call grant, user config
+      // (`agent.planner.permission.bash`) nor a later mode can reopen it. A rule could not hold this: a deny on "*" hides
+      // the tool, and session allow rules are last-match-wins.
+      if (AutonomyTable.readRoleRefuses(input, yield* InstanceState.context)) {
+        yield* recordQuiet(input, { action: "deny", shipped: true })
+        return yield* new RoleShellRefusedError({ ruleset: [] })
+      }
       const { approved, away, grants, pending, sessionRules, sessionExact } = yield* InstanceState.get(state)
       const { ruleset, harmless, noAlways, follows, call: toolCall, ...request } = input
       let needsAsk = false
@@ -1773,7 +1855,42 @@ const layer = Layer.effect(
       return answers
     })
 
-    return Service.of({ ask, reply, grant, list, consentTicked })
+    /** 1.2.7 P-01a (N7-133, SR7-04): holds a task's grant in memory, or drops it on empty `patterns`; one audit line at issue. */
+    const grantTask = Effect.fn("Permission.grantTask")(function* (
+      child: SessionID,
+      patterns: readonly string[],
+      caller: "root" | "subagent",
+    ) {
+      if (patterns.length === 0) {
+        taskGrants.delete(child)
+        return
+      }
+      taskGrants.set(child, { patterns: new Set(patterns), caller })
+      const instance = yield* InstanceState.context
+      const root = yield* rootOf(child)
+      const session = yield* sessions.get(child).pipe(Effect.catchCause(() => Effect.succeed(undefined)))
+      yield* autonomy
+        .record(root.id, {
+          type: "decision",
+          sessionID: child,
+          requestID: PermissionV1.ID.ascending(),
+          agent: session?.agent ?? "unknown",
+          directory: root.directory ?? instance.directory,
+          permission: "task",
+          // SR7-04: through `scrubAssigned`, so a value typed into a granted command never reaches the file.
+          patterns: patterns.map((pattern) => Secrets.scrubAssigned(pattern)),
+          class: "A",
+          canUndo: false,
+          decidedBy: "gate",
+          decision: "allow",
+          reason: `task grant from parent session ${session?.parentID ?? "unknown"} (judged as ${caller})`,
+          via: "task_grant",
+        })
+        // The grant changes no answer outside the consented gate, and a missing line is logged by record.
+        .pipe(Effect.ignore)
+    })
+
+    return Service.of({ ask, reply, grant, list, consentTicked, grantTask })
   }),
 )
 

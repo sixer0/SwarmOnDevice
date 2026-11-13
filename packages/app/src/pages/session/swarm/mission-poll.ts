@@ -12,6 +12,7 @@ import {
   type MissionVM,
 } from "./mission-model"
 import { registerStudioOutputs } from "../studio-output-registry"
+import { MISSION_DELIVERABLES_DIR } from "./mission-deliverables-model"
 
 export type MissionControlResult<T> = { ok: true; data: T } | { ok: false; code: string; message: string }
 
@@ -105,7 +106,8 @@ export function createMissionPoller(input: {
   /** Row 183: read per list, never fetched here (the session store already holds the run's sessions) */
   sessions?: () => readonly string[] | undefined
   lang: () => "en" | "id"
-  /** names of the files in `docs/<mission>` of the session (§7.3); called once per `get` change */
+  /** names of the files in `docs/<mission>` and `docs/<mission>/11_deliverables` of the session (§7.3, 1.2.7 U-2);
+   * called once per `get` change, per folder */
   listFiles?: (path: string) => Promise<string[]>
   onState: (state: MissionControlState) => void
   timers?: Timers
@@ -198,7 +200,14 @@ export function createMissionPoller(input: {
       emit(emptyMissionState())
     }
     const sessions = [...(input.sessions?.() ?? [])].slice(0, MISSION_SESSIONS_MAX)
-    const listed = await within(() => input.source.list(sessions.length > 0 ? { directory, sessions } : { directory }))
+    // 1.2.7 U-1 (U2): the panel lists only missions linked to this window's sessions. No session, no mission.
+    if (sessions.length === 0) {
+      failures = 0
+      seen = { directory }
+      emit({ ...emptyMissionState(), listed: true })
+      return
+    }
+    const listed = await within(() => input.source.list({ directory, sessions }))
     if (current() === "stopped" || disposed || directory !== input.directory()) return
     if (!listed || !listed.ok) {
       emit({ unavailable: listed?.code === "HOST_UNAVAILABLE" })
@@ -243,11 +252,21 @@ export function createMissionPoller(input: {
       ? new Set((await within(() => listFiles(`docs/${selected}`))) ?? [])
       : new Set<string>()
     if (stale()) return
+    // 1.2.7 U-2 (C10): also docs/<m>/11_deliverables (numbered export, row 28): Studio outputs found there and the
+    // folder lines. One more call, only when the mission is re-read; a missing folder lists as empty.
+    const delivered = listFiles
+      ? new Set((await within(() => listFiles(`docs/${selected}/${MISSION_DELIVERABLES_DIR}`))) ?? [])
+      : new Set<string>()
+    if (stale()) return
     failures = 0
     seen = { directory, key, selected }
-    const mission = buildMission(got.data, input.lang(), present)
+    const mission = buildMission(got.data, input.lang(), present, delivered)
     // Row 165E (C192): the deliverables found in the project are the registered Studio outputs the file tab renders.
-    registerStudioOutputs(directory, mission.deliverables.map((d) => d.projectPath))
+    // Folder lines (1.2.7 U-2) are never registered: a non-Studio .html opens as code (C101).
+    registerStudioOutputs(
+      directory,
+      mission.deliverables.filter((d) => d.origin !== "folder").map((d) => d.projectPath),
+    )
     emit({ options, selected, mission, readFailed: false })
   }
 
@@ -296,7 +315,10 @@ export function createMissionPoller(input: {
 export function pollModeOf(view: { docVisible: boolean; watching: boolean; mapOpen: boolean }): PollMode {
   // Row 173 (F146b-1): a hidden window (display off, screen locked, another window on top) no longer freezes the
   // Agents view at its last state; it reads at the slow cadence and at once when the window is visible again.
-  if (!view.docVisible) return view.watching ? "background" : "stopped"
+  // 1.2.7 row 58d (F-6): with the map open but another filter shown, a hidden window still lists (discover: list only,
+  // 15 s). After a restart the window can start hidden; without the first list the Agents entry, which needs a known
+  // mission (offersAgentsView), was never offered for a one-agent session with missions.
+  if (!view.docVisible) return view.watching ? "background" : view.mapOpen ? "discover" : "stopped"
   if (view.watching) return "live"
   if (view.mapOpen) return "discover"
   return "stopped"

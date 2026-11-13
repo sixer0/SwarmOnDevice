@@ -1,0 +1,96 @@
+{
+  "$comment": "Swarm 1.2.7 row 20 (N-5): constructed OutputVerificationReport (DS/src/mcp-host/verify/types.ts), one verified HTML output with 2 page images. Synthetic ids and paths.",
+  "report": {
+    "$schema": "studio.output-verification/v1",
+    "checksVersion": 1,
+    "documentId": "syn127doc0000000000000n5",
+    "revisionNo": 2,
+    "renderJobId": "syn127job0000000000000n5",
+    "scope": "DOCUMENT",
+    "draft": false,
+    "layout": "paged",
+    "formatsAdded": [],
+    "layoutWitness": true,
+    "overall": "verified",
+    "outputs": [
+      {
+        "outputId": "syn127out0000000000000n5",
+        "format": "HTML",
+        "role": "PRIMARY",
+        "figureLabel": null,
+        "sha256": "000000000000000000000000000000000000000000000000000000005a5a5a5a",
+        "state": "verified",
+        "checks": [
+          {
+            "id": "LINT",
+            "status": "PASS",
+            "basis": "revision-lint",
+            "reason": null,
+            "findings": [],
+            "truncated": 0,
+            "ms": 0
+          },
+          {
+            "id": "OVERLAP_CLIP",
+            "status": "PASS",
+            "basis": "self",
+            "reason": null,
+            "findings": [],
+            "truncated": 0,
+            "ms": 0
+          },
+          {
+            "id": "FIDELITY",
+            "status": "NOT_APPLICABLE",
+            "basis": "self",
+            "reason": null,
+            "findings": [],
+            "truncated": 0,
+            "ms": 0
+          },
+          {
+            "id": "PAGE_COUNT",
+            "status": "PASS",
+            "basis": "self",
+            "reason": null,
+            "findings": [],
+            "truncated": 0,
+            "ms": 0
+          },
+          {
+            "id": "FIGURE_FIT",
+            "status": "PASS",
+            "basis": "same-job-html",
+            "reason": null,
+            "findings": [],
+            "truncated": 0,
+            "ms": 0
+          },
+          {
+            "id": "EMPTY_SLOTS",
+            "status": "PASS",
+            "basis": "revision-store",
+            "reason": null,
+            "findings": [],
+            "truncated": 0,
+            "ms": 0
+          }
+        ],
+        "pages": [
+          {
+            "n": 1,
+            "png": "/tmp/syn127/pages/p001.png",
+            "findings": 0
+          },
+          {
+            "n": 2,
+            "png": "/tmp/syn127/pages/p002.png",
+            "findings": 0
+          }
+        ]
+      }
+    ],
+    "bridgeJobs": 2,
+    "ms": 0
+  }
+}

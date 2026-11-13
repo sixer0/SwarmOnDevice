@@ -1,0 +1,50 @@
+{
+  "$comment": "Swarm 1.2.7 row 20 / 48c (N-10): studio_write args of probe9 N-10 (add `mission`). Cells are one unbreakable token each (R01R02...R20, 60 characters, no separator at all, so no break rule of rows 40/40b/40d can split them); the 3-column table is refused DT-10a at render (FIGURE_OVER_CAPACITY, unbreakable wider than the 166 mm text width).",
+  "args": {
+    "docKey": "syn127-n10",
+    "template": "datum-nota",
+    "meta": {
+      "title": "Nota uji N-10",
+      "author": "Alfa Bravo",
+      "number": "002/UJI/NT/XI/2026"
+    },
+    "sections": [
+      {
+        "heading": "Pendahuluan",
+        "blocks": [
+          "Paragraf pembuka sintetis untuk tulis ulang."
+        ]
+      },
+      {
+        "heading": "Rincian",
+        "blocks": [
+          {
+            "table": [
+              [
+                "Kode A",
+                "Kode B",
+                "Kode C"
+              ],
+              [
+                "R01R02R03R04R05R06R07R08R09R10R11R12R13R14R15R16R17R18R19R20",
+                "R01R02R03R04R05R06R07R08R09R10R11R12R13R14R15R16R17R18R19R20",
+                "R01R02R03R04R05R06R07R08R09R10R11R12R13R14R15R16R17R18R19R20"
+              ],
+              [
+                "R01R02R03R04R05R06R07R08R09R10R11R12R13R14R15R16R17R18R19R20",
+                "R01R02R03R04R05R06R07R08R09R10R11R12R13R14R15R16R17R18R19R20",
+                "R01R02R03R04R05R06R07R08R09R10R11R12R13R14R15R16R17R18R19R20"
+              ]
+            ],
+            "caption": "Daftar kode sintetis",
+            "source": "Sumber sintetis uji."
+          }
+        ]
+      }
+    ]
+  },
+  "expected": {
+    "renderError": "FIGURE_OVER_CAPACITY",
+    "checkId": "DT-10a"
+  }
+}

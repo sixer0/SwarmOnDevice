@@ -13,7 +13,24 @@ import {
   type MissionWriter,
   type Translate,
 } from "./mission-command-model"
-import type { MissionVM } from "./mission-model"
+import { FEED_VISIBLE_ROWS, type MissionVM } from "./mission-model"
+
+// 1.2.7 U-4 (C6, R-5): about FEED_VISIBLE_ROWS feed entries show, the rest scroll. An entry is two text lines (who,
+// text) plus the 0.25rem gap; `lh` is the line height of the list.
+const FEED_MAX_HEIGHT = `max-height: calc(${FEED_VISIBLE_ROWS} * (2lh + 0.25rem))`
+// 1.2.7 row 58a (F-2): the floor the feed keeps when the panel is too short for everything; below it the panel
+// itself scrolls. At most two entries, so a short feed adds no empty space.
+const FEED_FLOOR_ROWS = 2
+const feedStyle = (entries: number) =>
+  `${FEED_MAX_HEIGHT}; min-height: calc(${Math.min(entries, FEED_FLOOR_ROWS)} * (2lh + 0.25rem))`
+
+// 1.2.7 row 58a (F-2, F-3) layout contract. `[data-mission-command]` and `[data-mission-command-card]` are
+// `display: contents`, so the decision card, the feed and the rows around them are direct flex items of the side
+// panel (`[data-mission-side]`, a column with a definite height in both layouts). Then the panel's own flex sizing
+// does the work: the feed is the one shrinkable list (ONE scroll container, max FEED_VISIBLE_ROWS entries, the rest
+// of the panel's height when shorter) and the panel only scrolls when the fixed rows alone do not fit. The decision
+// card is capped at the panel height (`max-h-full`); inside it the bounded body shrinks first and the actions,
+// outside the body (U-5, C6), keep their height and wrap, so they stay inside the panel.
 
 export function MissionCommand(props: {
   model: MissionVM
@@ -60,64 +77,53 @@ export function MissionCommand(props: {
   }
 
   return (
-    <div data-mission-command class="flex min-w-0 flex-col gap-2">
+    <div data-mission-command class="contents">
+      {/* 1.2.7 row 58g (C101): only an open decision has a card. An answered one leaves the side panel; its answer
+          is the feed entry "<id>: <option>" (mission-model.ts), so nothing lingers to push the feed out. */}
       <Show
         when={props.model.decision}
-        fallback={
-          <Show when={props.model.answered}>
-            {(answered) => (
-              <section data-mission-answered class="flex min-w-0 flex-col gap-1 rounded-[8px] bg-v2-overlay-simple-overlay-hover p-2">
-                <div class="flex items-baseline justify-between gap-2">
-                  <h2 class="min-w-0 [overflow-wrap:anywhere] text-v2-text-text-base [font-weight:500]">{answered().question}</h2>
-                  <span class="shrink-0 text-v2-text-text-faint">{answered().id}</span>
-                </div>
-                <div class="text-v2-text-text-muted">
-                  {t("session.mission.decision.answered", { option: answered().optionLabel })}
-                </div>
-                <div class="text-v2-text-text-faint">
-                  {t("session.mission.decision.recorded", { decision: answered().decision })}
-                </div>
-              </section>
-            )}
-          </Show>
-        }
       >
         {(decision) => (
           <section
             data-mission-decision
-            class="flex min-w-0 flex-col gap-1.5 rounded-[8px] p-2 [box-shadow:inset_0_0_0_1px_var(--v2-border-border-strong)]"
+            class="mb-0.5 flex max-h-full min-w-0 shrink-0 flex-col gap-1.5 overflow-y-auto rounded-[8px] p-2 [box-shadow:inset_0_0_0_1px_var(--v2-border-border-strong)]"
           >
-            <div class="flex items-baseline justify-between gap-2">
-              <h2 data-mission-question class="min-w-0 [overflow-wrap:anywhere] text-v2-text-text-base [font-weight:500]">{decision().question}</h2>
-              <span class="shrink-0 text-v2-text-text-faint">{decision().id}</span>
+            {/* 1.2.7 U-5 (C6, D-11): the question and its context scroll in a bounded body; the options stay outside it. */}
+            <div data-mission-decision-body class="flex max-h-[min(40vh,240px)] min-h-0 shrink flex-col gap-1.5 overflow-y-auto overscroll-contain">
+              <div class="flex items-baseline justify-between gap-2">
+                <h2 data-mission-question class="min-w-0 [overflow-wrap:anywhere] text-v2-text-text-base [font-weight:500]">{decision().question}</h2>
+                <span class="shrink-0 text-v2-text-text-faint">{decision().id}</span>
+              </div>
+              <Show when={decision().context}>
+                {(context) => <p data-mission-context class="min-w-0 [overflow-wrap:anywhere] text-v2-text-text-muted">{context()}</p>}
+              </Show>
             </div>
-            <Show when={decision().context}>
-              {(context) => <p data-mission-context class="min-w-0 [overflow-wrap:anywhere] text-v2-text-text-muted">{context()}</p>}
-            </Show>
-            <For each={options()}>
-              {(option) => (
-                <button
-                  type="button"
-                  data-mission-option={option.id}
-                  data-recommended={option.tag ? "" : undefined}
-                  disabled={answerLocked()}
-                  class="flex w-full min-w-0 flex-col items-stretch gap-0.5 rounded-[6px] bg-v2-overlay-simple-overlay-hover px-2 py-1.5 text-left disabled:opacity-60"
-                  onClick={() => void command.answer(props.model.id, decision(), option.id)}
-                >
-                  <span class="flex min-w-0 flex-wrap items-center gap-1.5 [overflow-wrap:anywhere] text-v2-text-text-base [font-weight:500]">
-                    {option.label}
-                    <Show when={option.tag}>
-                      {(tag) => (
-                        <span data-mission-recommended class="rounded-[4px] px-1 text-v2-state-fg-success [font-weight:440]">
-                          {tag()}
-                        </span>
-                      )}
-                    </Show>
-                  </span>
-                  <span data-mission-consequence class="min-w-0 [overflow-wrap:anywhere] text-v2-text-text-muted">{option.consequence}</span>
-                </button>
-              )}
-            </For>
+            <div data-mission-decision-actions class="flex min-w-0 shrink-0 flex-wrap gap-1.5">
+              <For each={options()}>
+                {(option) => (
+                  <button
+                    type="button"
+                    data-mission-option={option.id}
+                    data-recommended={option.tag ? "" : undefined}
+                    disabled={answerLocked()}
+                    class="flex min-w-0 flex-[1_1_8rem] flex-col items-stretch gap-0.5 rounded-[6px] bg-v2-overlay-simple-overlay-hover px-2 py-1.5 text-left disabled:opacity-60"
+                    onClick={() => void command.answer(props.model.id, decision(), option.id)}
+                  >
+                    <span class="flex min-w-0 flex-wrap items-center gap-1.5 [overflow-wrap:anywhere] text-v2-text-text-base [font-weight:500]">
+                      {option.label}
+                      <Show when={option.tag}>
+                        {(tag) => (
+                          <span data-mission-recommended class="rounded-[4px] px-1 text-v2-state-fg-success [font-weight:440]">
+                            {tag()}
+                          </span>
+                        )}
+                      </Show>
+                    </span>
+                    <span data-mission-consequence class="min-w-0 [overflow-wrap:anywhere] text-v2-text-text-muted">{option.consequence}</span>
+                  </button>
+                )}
+              </For>
+            </div>
             <Show when={props.model.openDecisions > 1}>
               <div class="text-v2-text-text-faint">
                 {t("session.mission.decision.more", { count: props.model.openDecisions - 1 })}
@@ -134,14 +140,18 @@ export function MissionCommand(props: {
         )}
       </Show>
 
-      <section data-mission-command-card class="flex flex-col gap-1.5">
+      <section data-mission-command-card class="contents">
         <div class="flex items-baseline justify-between gap-2">
           <h2 data-mission-command-head class="text-v2-text-text-base [font-weight:500]">
             {commandHead(props.model, t)}
           </h2>
           <span class="text-v2-text-text-faint">{t("session.mission.command")}</span>
         </div>
-        <ul data-mission-feed class="flex flex-col gap-1">
+        <ul
+          data-mission-feed
+          class="flex min-h-0 shrink flex-col gap-1 overflow-y-auto overscroll-contain"
+          style={feedStyle(feed().length)}
+        >
           <For each={feed()}>
             {(line) => (
               <li class="flex min-w-0 flex-col" data-local={line.local ? "" : undefined}>

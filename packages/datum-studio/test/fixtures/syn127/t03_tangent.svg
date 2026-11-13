@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 80" width="100mm" height="80mm">
+<!-- syn127 synthetic fixture (Swarm 1.2.7 row 20): AC-T03 arrow tangent, the last piece runs along the left border of the target. Filler labels; no document content. -->
+<defs><marker id="head-data" viewBox="0 0 4 4" refX="4" refY="2" markerWidth="4" markerHeight="4" orient="auto"><path d="M 0 0 L 4 2 L 0 4 z" fill="#101418"/></marker><marker id="head-control" viewBox="0 0 4 4" refX="4" refY="2" markerWidth="4" markerHeight="4" orient="auto"><path d="M 0 0 L 4 2 L 0 4 z" fill="#B4532A"/></marker></defs>
+<rect x="0" y="0" width="100" height="80" fill="#FCFCFB"/>
+<rect x="30" y="62" width="20" height="10" data-node="a" fill="none" stroke="#2B3640" stroke-width="0.45" data-mark="node"/>
+<rect x="40" y="20" width="30" height="10" data-node="b" fill="none" stroke="#2B3640" stroke-width="0.45" data-mark="node"/>
+<path d="M 40 62 L 40 25" fill="none" stroke="#101418" stroke-width="0.45" marker-end="url(#head-data)" data-mark="link"/>
+</svg>

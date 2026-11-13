@@ -31,6 +31,7 @@ import {
   IRREVERSIBLE_ARCHIVE_TEXT,
   MAIN_AGENT_UNAVAILABLE_TEXT,
   OUTSIDE_WRITE_TEXT,
+  OWN_API_TEXT,
   PROTECTED_PATH_TEXT,
   SPEND_STOPPED_TEXT,
   UNJUDGED_TEXT,
@@ -451,7 +452,18 @@ describe("1.1.3 matrix rows 1-23: categories", () => {
   it.instance("row 7 no_undo (a script with no Undo): runs / M", () =>
     both("row 7", bash(`python3 -c 'x = 1'`, {}, { canUndo: false }), runs("no_undo")),
   )
-  it.instance("row 8 not_routine (T1): runs / M", () => both("row 8", bash("node x.js"), runs("not_routine")))
+  // 1.2.7 U-7 (INTENT, C7/C21): `not_routine` is a local category, so a subagent's call runs like the root's: no decider.
+  it.instance("row 8 not_routine (T1): runs / M", () =>
+    Effect.gen(function* () {
+      const test = yield* TestInstance
+      populate(test.directory)
+      yield* Effect.promise(() => ScriptReader.prepare())
+      const want = runs("not_routine")
+      yield* check("row 8 (root)", bash("node x.js"), want.root)
+      yield* check("row 8 (subagent)", bash("node x.js"), want.subagent, { caller: "subagent" })
+      expect(stub.calls).toEqual([])
+    }),
+  )
   it.instance("row 11 folder_not_trusted (the folder state unreadable): runs / M", () =>
     both("row 11", bash("bun test"), runs("folder_not_trusted"), realTableWith({ folder: undefined })),
   )
@@ -649,9 +661,11 @@ describe("1.1.3 matrix rows 40-49: decider outcomes", () => {
         yield* check(`row ${40 + index} root P`, bash("make build"), runs("check").root)
         yield* check(`row ${40 + index} root D`, bash("node x.js"), runs("not_routine").root)
         expect(stub.calls).toEqual([])
-        yield* check(`row ${40 + index} subagent`, bash("node x.js"), {
+        // 1.2.7 U-7 (INTENT): `not_routine` and (row 29c, C41) `check` run like the root's for a subagent now, so a decided
+        // category (`system_service`) is used.
+        yield* check(`row ${40 + index} subagent`, bash("launchctl list"), {
           answer: MAIN_AGENT_UNAVAILABLE_TEXT,
-          line: { class: "A", category: "by_main_agent", bypassed: "not_routine", decision: "reject", decidedBy: "system:main_agent_unavailable" },
+          line: { class: "A", category: "by_main_agent", bypassed: "system_service", decision: "reject", decidedBy: "system:main_agent_unavailable" },
           sections: ["I"],
         }, { caller: "subagent" })
         expect(stub.calls.map((call) => call.options?.forSubagent !== undefined)).toEqual([true])
@@ -667,9 +681,11 @@ describe("1.1.3 matrix rows 40-49: decider outcomes", () => {
       stub.answer = () => Effect.succeed({ decision: "reject", decidedBy: "agent:test/stub", reason: "a person should look." } as Permission.Decided)
       yield* check("row 48 root", bash("make build"), runs("check").root)
       expect(stub.calls).toEqual([])
-      yield* check("row 48 subagent", bash("node x.js"), {
+      // 1.2.7 U-7 (INTENT): a decided category (`system_service`); `not_routine` and (row 29c, C41) `check` run like the
+      // root's for a subagent now.
+      yield* check("row 48 subagent", bash("launchctl list"), {
         answer: mainAgentDeclined("a person should look."),
-        line: { class: "A", category: "by_main_agent", bypassed: "not_routine", decision: "reject", decidedBy: "agent:main/build" },
+        line: { class: "A", category: "by_main_agent", bypassed: "system_service", decision: "reject", decidedBy: "agent:main/build" },
         sections: ["M"],
       }, { caller: "subagent" })
     }),
@@ -718,6 +734,8 @@ const NEVER_OPENED: Readonly<Record<string, readonly [string, Section]>> = {
   // 1.2.6 row 39 (P-01d, INTENT): their own texts, not the general refusal.
   plan_mode: [PLAN_MODE, "F"],
   app_state: [APP_STATE, "F"],
+  // 1.2.7 row 31 (F-4, CHAR-10, INTENT): Swarm's own API is never opened either.
+  own_api: [OWN_API_TEXT, "F"],
 }
 
 /**

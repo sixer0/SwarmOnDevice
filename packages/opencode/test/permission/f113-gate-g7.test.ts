@@ -460,5 +460,17 @@ describe("T9 G1, G3, G5 through the gate", () => {
   it.instance("G5 the whole crontab removed: ARCHIVE_FIRST_TEXT / Rd", () =>
     refusedBoth("G5 crontab", bash("crontab -r"), answered(ARCHIVE_FIRST_TEXT, "X", "not_reversible", "Rd", "system_service")),
   )
-  it.instance("negative G1: a harmless bash -c runs / M", () => both("G1 echo", bash(`bash -c "echo hi"`), runs("unreadable_command")))
+  // 1.2.7 U-7 (INTENT, C21 b): a `-c` literal with an expansion is still unread (decided); one read in full is the command.
+  it.instance("negative G1: a harmless bash -c runs / M", () => both("G1 echo", bash(`bash -c 'echo $X'`), runs("unreadable_command")))
+  it.instance("negative G1 (1.2.7 C21 b): a readable harmless bash -c runs as its command, for root and subagent alike", () =>
+    Effect.gen(function* () {
+      const test = yield* TestInstance
+      populate(test.directory)
+      yield* Effect.promise(() => ScriptReader.prepare())
+      const want: Want = { answer: "ran", line: { class: "A", category: undefined, bypassed: undefined, decision: "allow" }, sections: [] }
+      yield* check("G1 echo hi (root)", bash(`bash -c "echo hi"`), want)
+      yield* check("G1 echo hi (subagent)", bash(`bash -c "echo hi"`), want, { caller: "subagent" })
+      expect(stub.calls).toEqual([])
+    }),
+  )
 })

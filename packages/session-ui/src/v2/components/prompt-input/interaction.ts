@@ -49,6 +49,22 @@ export type PromptInputV2ViewConfig = {
   onDrop?: (event: DragEvent) => void
 }
 
+// U-12 (1.2.7): a folder joins the prompt as a path reference, never as uploaded content. The server reads the
+// directory listing for an `application/x-directory` file part (opencode session/prompt.ts), and a folder outside the
+// project meets the normal external_directory permission there.
+export function promptInputV2FolderPart(path: string) {
+  const name = path.replace(/[\\/]+$/, "").split(/[\\/]/).pop() || path
+  return {
+    type: "file" as const,
+    path,
+    content: `@${name}`,
+    start: 0,
+    end: 0,
+    mime: "application/x-directory",
+    filename: name,
+  }
+}
+
 export function createPromptInputV2State() {
   return createStore(createPromptInputV2InteractionState())
 }
@@ -68,6 +84,8 @@ export function createPromptInputV2Controller(input: {
   onSuggestionSelect?: (item: PromptInputV2Suggestion) => (() => void) | void
   view: PromptInputV2ViewConfig
   attachments?: PromptInputV2AttachmentConfig
+  /** Opens the host's folder picker; resolves to the chosen path, or nothing when cancelled. */
+  pickFolder?: () => Promise<string | null | undefined>
 }) {
   let editor: HTMLElement | undefined
   let fileInput: HTMLInputElement | undefined
@@ -105,6 +123,13 @@ export function createPromptInputV2Controller(input: {
       return
     }
     attachments.pick(() => fileInput?.click())
+  }
+  const addFolder = async () => {
+    const path = await input.pickFolder?.()
+    if (!path) return false
+    draft.insertMentionAtCursor(promptInputV2FolderPart(path))
+    editor?.focus()
+    return true
   }
   const contextList = useFilteredList<PromptInputV2Suggestion>({
     items: async (query) => {
@@ -420,6 +445,8 @@ export function createPromptInputV2Controller(input: {
       input.view.onDrop?.(event)
     },
     attach,
+    addFolder,
+    canAddFolder: !!input.pickFolder,
     setFileInput(element: HTMLInputElement) {
       fileInput = element
     },
