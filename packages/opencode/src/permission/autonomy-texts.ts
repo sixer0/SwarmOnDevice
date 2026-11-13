@@ -64,6 +64,28 @@ const PLAN_MODE_TEXT =
 const APP_STATE_TEXT =
   "This call did not run. Autonomous mode never changes Swarm's own state or settings. Write what should change into your final message for the person."
 
+/**
+ * 1.2.7 F-4 (N7-052): X `own_api`, a call to Swarm's own running server whose address the call itself names (a literal
+ * host and port, a variable assigned in the same text, a config file that was read).
+ */
+export const OWN_API_TEXT =
+  "This call did not run. Autonomous mode never calls Swarm's own server, because that would act with the person's rights. Use the tools you were given, or write what is needed into your final message for the person."
+
+/**
+ * 1.2.7 F-4 (N7-135): X `own_api` with a reason (N7-136), a network call whose address could not be worked out while
+ * Swarm's server listens: a config file that could not be read, or a host or port from a variable, a command or a list.
+ */
+export const OWN_API_UNRESOLVED_TEXT =
+  "This call did not run. Autonomous mode cannot tell where this network call goes (the address comes from a variable, a config file or another command), and it never calls Swarm's own server. Write the host and port into the command itself."
+
+/** 1.2.7 F-4 (N7-136): the closed reason list of an X `own_api`. Without a reason the address was named in the call. */
+export type OwnApiReason = "config_file" | "unresolved_target"
+
+/** The text of an X `own_api`: `OWN_API_UNRESOLVED_TEXT` for a reason of the closed list, else `OWN_API_TEXT`. */
+export function ownApiText(reason: string | undefined): string {
+  return reason === "config_file" || reason === "unresolved_target" ? OWN_API_UNRESOLVED_TEXT : OWN_API_TEXT
+}
+
 /** 1.2.6 (P-01d): X `folder_not_trusted`, an agent's ask to trust a folder. Module-local (N-149). */
 const FOLDER_NOT_TRUSTED_TEXT =
   "This call did not run. Only the person can trust a folder. Carry on with reads and with work that runs nothing of this folder, and list it in your final message."
@@ -136,7 +158,8 @@ export const REFUSED_TEXT: Readonly<
     | "plan_mode"
     | "app_state"
     | "folder_not_trusted"
-    | "checkpoint_failed",
+    | "checkpoint_failed"
+    | "own_api",
     string
   >
 > = {
@@ -154,6 +177,8 @@ export const REFUSED_TEXT: Readonly<
   app_state: APP_STATE_TEXT,
   folder_not_trusted: FOLDER_NOT_TRUSTED_TEXT,
   checkpoint_failed: CHECKPOINT_FAILED_TEXT,
+  // 1.2.7 F-4: the text without a reason; `ownApiText` picks N7-135 for a reason.
+  own_api: OWN_API_TEXT,
 }
 
 /**

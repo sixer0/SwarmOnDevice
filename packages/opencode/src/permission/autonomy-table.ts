@@ -26,7 +26,7 @@ import { Risk } from "../tool/risk"
 import { DeletionWords, type Deletion } from "../tool/deletion"
 import { Secrets } from "../tool/secrets"
 import { findProgram } from "../util/find-program"
-import type { CheckpointFailedReason } from "./autonomy-texts"
+import type { CheckpointFailedReason, OwnApiReason } from "./autonomy-texts"
 
 export type Class = "A" | "P" | "D" | "B" | "X"
 export type CheckClass = Extract<Class, "P" | "D">
@@ -75,7 +75,7 @@ export type Verdict = {
    * 1.2.6 row 37b (P-01b): on an X `checkpoint_failed`, why no checkpoint could be made, from the closed list of
    * `checkpointFailedText` (autonomy-texts.ts). Never command text.
    */
-  reason?: CheckpointFailedReason
+  reason?: CheckpointFailedReason | OwnApiReason
 }
 
 /**
@@ -799,41 +799,517 @@ function inAppStateSpelled(file: string, instance: InstanceContext) {
 const LOOPBACK_NAME = /^(?:localhost|ip6-localhost|ip6-loopback|[\w.-]+\.localhost|127(?:\.\d{1,3}){3}|0|0\.0\.0\.0|::|::1|::ffff:127(?:\.\d{1,3}){3}|0:0:0:0:0:0:0:1)$/i
 const WILDCARD = new Set(["0.0.0.0", "::", ""])
 
+/**
+ * 1.2.7 F-4 (SR7-08): one spelling per host, so every spelling of loopback reads as one. An IPv4 address in any form
+ * `inet_aton` takes (1 to 4 parts, each decimal, hex `0x…` or octal `0…`: `127.1`, `2130706433`, `0x7f000001`,
+ * `0177.0.0.1`, `0`) becomes its dotted quad; an IPv6 address its short form, an IPv4-mapped one (`::ffff:127.0.0.1`)
+ * that IPv4 address; a name loses its trailing dot (`localhost.`). Lower case, brackets dropped.
+ */
+function normaliseHost(host: string): string {
+  const name = host.replace(/^\[|\]$/g, "").toLowerCase()
+  const v4 = ipv4(name)
+  if (v4 !== undefined) return v4
+  if (name.includes(":")) return ipv6(name) ?? name
+  return name.replace(/\.$/, "")
+}
+
+function ipv4(name: string): string | undefined {
+  if (!/^[0-9a-fx]+(?:\.[0-9a-fx]+){0,3}$/.test(name)) return undefined
+  const values = name.split(".").map((part) =>
+    /^0x[0-9a-f]*$/.test(part)
+      ? parseInt(part.slice(2) || "0", 16)
+      : /^0[0-7]*$/.test(part)
+        ? parseInt(part, 8)
+        : /^[1-9]\d*$/.test(part)
+          ? parseInt(part, 10)
+          : NaN,
+  )
+  if (values.some((value) => !Number.isFinite(value))) return undefined
+  const last = values.pop()!
+  if (values.some((value) => value > 255) || last >= 256 ** (4 - values.length)) return undefined
+  const whole = values.reduce((sum, value, index) => sum + value * 256 ** (3 - index), last)
+  return [Math.floor(whole / 2 ** 24) % 256, Math.floor(whole / 2 ** 16) % 256, Math.floor(whole / 2 ** 8) % 256, whole % 256].join(".")
+}
+
+function ipv6(name: string): string | undefined {
+  let text = name.replace(/%.*$/, "")
+  const tail = /(\d+\.\d+\.\d+\.\d+)$/.exec(text)
+  if (tail) {
+    const quad = ipv4(tail[1]!)
+    if (quad === undefined) return undefined
+    const [a, b, c, d] = quad.split(".").map(Number) as [number, number, number, number]
+    text = `${text.slice(0, tail.index)}${((a << 8) | b).toString(16)}:${((c << 8) | d).toString(16)}`
+  }
+  const halves = text.split("::")
+  if (halves.length > 2) return undefined
+  const head = halves[0] ? halves[0].split(":") : []
+  const rest = halves.length === 2 && halves[1] ? halves[1].split(":") : []
+  const fill = halves.length === 2 ? 8 - head.length - rest.length : 0
+  if (fill < 0) return undefined
+  const groups = [...head, ...Array<string>(fill).fill("0"), ...rest]
+  if (groups.length !== 8 || !groups.every((group) => /^[0-9a-f]{1,4}$/.test(group))) return undefined
+  const words = groups.map((group) => parseInt(group, 16))
+  // IPv4-mapped (`::ffff:a.b.c.d`) and IPv4-compatible (`::a.b.c.d`) addresses reach that IPv4 address.
+  if (words.slice(0, 5).every((word) => word === 0) && (words[5] === 0xffff || (words[5] === 0 && words[6] !== 0)))
+    return [words[6]! >> 8, words[6]! & 255, words[7]! >> 8, words[7]! & 255].join(".")
+  if (words.every((word) => word === 0)) return "::"
+  if (words.slice(0, 7).every((word) => word === 0) && words[7] === 1) return "::1"
+  return words.map((word) => word.toString(16)).join(":")
+}
+
+const isIpAddress = (normal: string) => /^\d{1,3}(?:\.\d{1,3}){3}$/.test(normal) || normal.includes(":")
+
 /** Whether a host names this computer as Swarm's own listener at `listener` can be reached there. */
 function ownHost(host: string, listener: SelfAddress.Address) {
-  const name = host.replace(/^\[|\]$/g, "").toLowerCase()
-  const bound = listener.hostname.replace(/^\[|\]$/g, "").toLowerCase()
+  const name = normaliseHost(host)
+  const bound = normaliseHost(listener.hostname)
   if (name === "" || LOOPBACK_NAME.test(name) || name === bound) return true
   if (!WILDCARD.has(bound)) return false
   // Bound on every interface: this computer's own addresses reach it too.
-  return Object.values(networkInterfaces()).some((list) => list?.some((item) => item.address.toLowerCase() === name))
+  return Object.values(networkInterfaces()).some((list) => list?.some((item) => normaliseHost(item.address) === name))
 }
 
 /**
- * 1.2.6 FX-14 (F-1, decision C24): a shell or fetch call that talks to Swarm's own running server, the listener this
- * process opened (`SelfAddress`). With the password from `app-server.env` such a call could answer the agent's own
- * prompts or change its mode, past every hold. Only that host and port: every other local port runs as C19c decided.
- * Read from the call's words: `host:port` (a URL or not), `/dev/tcp/host/port`, `host port` for a loopback name, and
- * httpie's bare `:port`.
+ * D1 (1.2.6 FX-14): whether a text names `listener` literally: `host:port` (a URL or not), `[v6]:port`,
+ * `/dev/tcp/host/port`, httpie's bare `:port`, and `host port` (`nc 127.0.0.1 port`) for a host that is not a bare number.
  */
-export function callsOwnServer(input: Input) {
-  const listeners = SelfAddress.list()
-  if (listeners.length === 0) return false
-  const texts = [input.metadata.command, input.metadata.url].filter((text): text is string => typeof text === "string")
-  if (texts.length === 0) return false
-  return listeners.some((listener) =>
-    texts.some((raw) => {
-      const text = raw.replace(/['"\\]/g, "")
-      const port = String(listener.port)
-      const at = String.raw`0*${port}(?!\d)`
-      // `host:port`, in a URL or bare; `[v6]:port`; `/dev/tcp/host/port` (bash's own sockets).
-      const named = new RegExp(String.raw`(\[[0-9A-Fa-f:.]*\]|[\w.-]+):${at}|/dev/(?:tcp|udp)/([^/\s]+)/${at}`, "g")
-      for (const match of text.matchAll(named)) if (ownHost(match[1] ?? match[2]!, listener)) return true
-      // httpie and xh read a bare `:port` as localhost; `nc 127.0.0.1 port` names the host and the port apart.
-      if (new RegExp(String.raw`(?:^|\s):${at}`).test(text)) return true
-      return new RegExp(String.raw`(?:^|\s)(?:localhost|127(?:\.\d{1,3}){3}|::1|\[::1\])\s+${at}`, "i").test(text)
-    }),
+function namesListener(raw: string, listener: SelfAddress.Address) {
+  const text = raw.replace(/['"\\]/g, "")
+  const at = String.raw`0*${listener.port}(?!\d)`
+  const named = new RegExp(String.raw`(\[[0-9A-Fa-f:.]*\]|[\w.-]+):${at}|/dev/(?:tcp|udp)/([^/\s]+)/${at}`, "g")
+  for (const match of text.matchAll(named)) if (ownHost(match[1] ?? match[2]!, listener)) return true
+  // httpie and xh read a bare `:port` as localhost; `nc 127.0.0.1 port` names the host and the port apart.
+  if (new RegExp(String.raw`(?:^|\s):${at}`).test(text)) return true
+  for (const match of text.matchAll(new RegExp(String.raw`(?:^|\s)(\[[0-9A-Fa-f:.]*\]|[\w.:-]*[A-Za-z.:][\w.:-]*)\s+${at}`, "g")))
+    if (ownHost(match[1]!, listener)) return true
+  return false
+}
+
+/** 1.2.7 F-4: an X `own_api`; a reason (N7-136) when the address could not be worked out (N7-135), none when it was. */
+type OwnApiHit = { readonly reason?: OwnApiReason }
+
+/** F-4: the network clients whose address a call may hide (`BypassLists.OUTWARD` less the remote shells, mail and sync). */
+const NETWORK_CLIENTS: ReadonlySet<string> = new Set(["curl", "wget", "nc", "ncat", "netcat", "socat", "http", "https", "xh", "telnet"])
+/** Words that run the command after them; `xargs` builds it at run time, a shell's `-c` and `eval` run a text. */
+const CLIENT_WRAPPERS: ReadonlySet<string> = new Set([
+  "rtk", "env", "exec", "command", "builtin", "nohup", "time", "nice", "timeout", "stdbuf", "sudo", "doas", "eval", "xargs",
+  "sh", "bash", "zsh", "dash",
+])
+/** curl's short options that take a value; `K` is a config file, `x` a proxy. */
+const CURL_VALUE_SHORT = new Set("AbcCdDeEFHKmoPQrtTuUwxXyYz".split(""))
+/** curl's long options whose value is an address. */
+const CURL_ADDRESS_LONG = new Set(["--url", "--proxy", "--preproxy", "--doh-url", "--connect-to", "--resolve", "--socks4", "--socks4a", "--socks5", "--socks5-hostname"])
+const CURL_VALUE_LONG = new Set([
+  "--config", "--data", "--data-raw", "--data-binary", "--data-urlencode", "--data-ascii", "--json", "--header", "--proxy-header",
+  "--user", "--user-agent", "--output", "--output-dir", "--request", "--cookie", "--cookie-jar", "--referer", "--form",
+  "--form-string", "--write-out", "--max-time", "--connect-timeout", "--retry", "--retry-delay", "--retry-max-time", "--range",
+  "--upload-file", "--cacert", "--capath", "--cert", "--key", "--cert-type", "--key-type", "--proxy-user", "--oauth2-bearer",
+  "--limit-rate", "--max-filesize", "--dump-header", "--trace", "--trace-ascii", "--stderr", "--interface", "--dns-servers",
+  "--unix-socket", "--abstract-unix-socket", "--aws-sigv4", "--variable", "--url-query", "--time-cond", "--continue-at",
+  "--speed-limit", "--speed-time", "--local-port", "--keepalive-time", "--max-redirs", "--expect100-timeout", "--pass",
+  "--ciphers", "--crlfile", "--pinnedpubkey", "--quote", "--telnet-option", "--create-file-mode", "--happy-eyeballs-timeout-ms",
+  ...CURL_ADDRESS_LONG,
+])
+/** wget's short options that take a value; `i` is a URL list read at run time, `e` a `.wgetrc` command. */
+const WGET_VALUE_SHORT = new Set("OoaiBtTwePUQlARDXI".split(""))
+const WGET_VALUE_LONG = new Set([
+  "--output-document", "--output-file", "--append-output", "--input-file", "--base", "--tries", "--timeout", "--wait",
+  "--execute", "--directory-prefix", "--user-agent", "--quota", "--level", "--accept", "--reject", "--domains", "--header",
+  "--user", "--password", "--http-user", "--http-password", "--post-data", "--post-file", "--body-data", "--body-file",
+  "--method", "--config", "--load-cookies", "--save-cookies", "--referer", "--ca-certificate", "--certificate", "--private-key",
+  "--limit-rate", "--bind-address", "--read-timeout", "--connect-timeout", "--dns-timeout", "--waitretry",
+])
+/** httpie's and xh's options that take a value; `--proxy` is `scheme:url`. */
+const HTTPIE_VALUE = new Set(["-a", "--auth", "-A", "--auth-type", "--session", "--session-read-only", "-o", "--output", "--verify", "--cert", "--cert-key", "--proxy", "--timeout", "-p", "--print", "-s", "--style", "--pretty", "--format-options", "--boundary", "--max-redirects", "--raw"])
+/** nc, ncat, netcat and telnet options that take a value; `x` and `--proxy` are an address. */
+const NC_VALUE = new Set(["-p", "-s", "-w", "-x", "-X", "-i", "-O", "-I", "-T", "-V", "-e", "-c", "-o", "--proxy", "--proxy-type", "--sh-exec", "--exec"])
+const TELNET_VALUE = new Set(["-l", "-e", "-n", "-b"])
+const SOCAT_ADDRESS = /^(?:tcp[46]?(?:-connect)?|udp[46]?(?:-connect|-sendto)?|openssl(?:-connect)?|ssl|socks4a?|socks5|proxy):(.*)$/i
+/** F-4 (D2, OP-4): a config file is read only as a regular file of 64 KiB or less, never from a protected place. */
+const CONFIG_MAX_BYTES = 64 * 1024
+
+const unresolvedWord = (word: string | undefined) => word !== undefined && /[$`]/.test(word)
+
+/** The host and port a URL-like word names; scheme, user info, path and query left out. */
+function hostAndPort(word: string): { host: string; port?: string } {
+  const rest = word.replace(/^[A-Za-z][\w+.-]*:\/\//, "")
+  const end = rest.search(/[/?#]/)
+  let auth = end < 0 ? rest : rest.slice(0, end)
+  const at = auth.lastIndexOf("@")
+  if (at >= 0) auth = auth.slice(at + 1)
+  const v6 = /^(\[[^\]]*\])(?::(.*))?$/.exec(auth)
+  if (v6) return { host: v6[1]!, port: v6[2] }
+  const colon = auth.lastIndexOf(":")
+  return colon < 0 ? { host: auth } : { host: auth.slice(0, colon), port: auth.slice(colon + 1) }
+}
+
+/**
+ * One word in an address position. U2: the host is not written out. U3: a loopback host with a port that is not.
+ * D: the listener's port on one of its hosts. SR7-08: a name that is not an IP address with a listener's port, which a
+ * DNS name could point back here. A literal host that is not this computer's is not refused, whatever the port.
+ */
+function judgeAddress(word: string, listeners: readonly SelfAddress.Address[], literal = false): OwnApiHit | undefined {
+  const { host, port } = hostAndPort(word)
+  if (!literal && unresolvedWord(host)) return { reason: "unresolved_target" }
+  const normal = normaliseHost(host)
+  for (const listener of listeners) {
+    const own = ownHost(host, listener)
+    if (own && !literal && unresolvedWord(port)) return { reason: "unresolved_target" }
+    if (port === undefined || !/^\d+$/.test(port) || Number(port) !== listener.port) continue
+    if (own) return {}
+    if (normal !== "" && !isIpAddress(normal)) return { reason: "unresolved_target" }
+  }
+  return undefined
+}
+
+/** A config file's text, or undefined when it may not or cannot be read. Only checked, never shown (OP-4). */
+function configText(file: string): string | undefined {
+  try {
+    if (protectedOutside(file, "read") || !Reach.readable(file)) return undefined
+    const stat = fs.statSync(file)
+    if (!stat.isFile() || stat.size > CONFIG_MAX_BYTES) return undefined
+    return fs.readFileSync(file, "utf8")
+  } catch {
+    return undefined
+  }
+}
+
+/** Where a file named in a command is: `~`, `$HOME` and `${HOME}` under the home the shell has, the rest from `cwd`. */
+function commandFile(word: string, cwd: string) {
+  const home = /^(?:~|\$HOME\b|\$\{HOME\})(?=\/|$)/.exec(word)
+  if (home) return path.join(homedir(), word.slice(home[0].length))
+  return unresolvedWord(word) ? undefined : path.resolve(cwd, word)
+}
+
+/** D2/D4: what a curl or wget config file (or wget URL list) names, followed into the configs it names, two deep. */
+function judgeConfig(file: string, listeners: readonly SelfAddress.Address[], depth = 0): OwnApiHit[] {
+  const text = configText(file)
+  if (text === undefined) return [{ reason: "config_file" }]
+  if (listeners.some((listener) => namesListener(text, listener))) return [{}]
+  const hits: OwnApiHit[] = []
+  for (const line of text.split(/\r?\n/)) {
+    const entry = /^\s*-{0,2}([A-Za-z][\w-]*)\s*(?:=|:|\s)\s*"?([^"\s]+)"?/.exec(line)
+    const bare = /^\s*([a-z]+:\/\/\S+)\s*$/i.exec(line)
+    if (bare) {
+      const hit = judgeAddress(bare[1]!, listeners, true)
+      if (hit) hits.push(hit)
+      continue
+    }
+    if (!entry) continue
+    const [key, value] = [entry[1]!.toLowerCase(), entry[2]!]
+    if (/^(?:url|x|proxy|preproxy|https?_proxy|ftp_proxy|all_proxy)$/.test(key)) {
+      const hit = judgeAddress(value, listeners, true)
+      if (hit) hits.push(hit)
+    }
+    if ((key === "k" || key === "config") && depth < 2) {
+      const next = commandFile(value, path.dirname(file))
+      hits.push(...(next === undefined ? [{ reason: "config_file" as const }] : judgeConfig(next, listeners, depth + 1)))
+    }
+  }
+  return hits
+}
+
+/** D4: the config files curl or wget reads by itself, those that exist. */
+function defaultConfigs(program: "curl" | "wget") {
+  const env = process.env
+  const files =
+    program === "curl"
+      ? [
+          ...(env.CURL_HOME ? [path.join(env.CURL_HOME, ".curlrc")] : []),
+          ...(env.XDG_CONFIG_HOME ? [path.join(env.XDG_CONFIG_HOME, ".curlrc"), path.join(env.XDG_CONFIG_HOME, "curlrc")] : []),
+          ...homes().map((home) => path.join(home, ".curlrc")),
+        ]
+      : [...(env.WGETRC ? [env.WGETRC] : []), ...homes().map((home) => path.join(home, ".wgetrc"))]
+  return [...new Set(files)].filter((file) => fs.lstatSync(file, { throwIfNoEntry: false }) !== undefined)
+}
+
+type ClientCall = { program: string; args: string[]; runtime: boolean }
+
+/**
+ * A command's simple commands as the shell splits them into words: quotes and backslashes removed, `;`, `|`, `&` and line
+ * breaks between commands, and every redirection (`> out`, `2>&1`, `< cfg`) left out with its target.
+ */
+function shellSegments(text: string): string[][] {
+  const segments: string[][] = [[]]
+  let word = ""
+  let inWord = false
+  let drop = false
+  let quote: string | undefined
+  const end = () => {
+    if (inWord) {
+      if (!drop) segments.at(-1)!.push(word)
+      drop = false
+    }
+    word = ""
+    inWord = false
+  }
+  for (let index = 0; index < text.length; index++) {
+    const char = text[index]!
+    if (quote !== undefined) {
+      if (char === quote) quote = undefined
+      else if (char === "\\" && quote === '"' && index + 1 < text.length) word += text[++index]
+      else word += char
+      continue
+    }
+    if (char === "'" || char === '"') {
+      quote = char
+      inWord = true
+      continue
+    }
+    if (char === "\\" && index + 1 < text.length) {
+      word += text[++index]
+      inWord = true
+      continue
+    }
+    if (char === "<" || char === ">") {
+      if (inWord && /^\d+$/.test(word)) {
+        word = ""
+        inWord = false
+      } else end()
+      while (index + 1 < text.length && "<>&|".includes(text[index + 1]!)) index++
+      drop = true
+      continue
+    }
+    if (char === "\n" || char === ";" || char === "|" || char === "&") {
+      end()
+      if (segments.at(-1)!.length > 0) segments.push([])
+      continue
+    }
+    if (/\s/.test(char)) {
+      end()
+      continue
+    }
+    word += char
+    inWord = true
+  }
+  end()
+  return segments.filter((segment) => segment.length > 0)
+}
+
+/**
+ * The network client one simple command runs, past the words that run what follows them; or the text a shell's `-c` or
+ * an `eval` runs, to be read as a command of its own; or undefined.
+ */
+function clientCall(words: readonly string[]): ClientCall | { nested: string } | undefined {
+  let runtime = false
+  let index = 0
+  while (index < words.length) {
+    const word = words[index]!
+    if (/^[A-Za-z_]\w*=/.test(word)) {
+      // A proxy set from something not written out may point anywhere, this computer included.
+      if (/^(?:https?|all|ftp)_proxy=.*[$`]/i.test(word)) runtime = true
+      index++
+      continue
+    }
+    const name = path.basename(word)
+    if (!CLIENT_WRAPPERS.has(name)) break
+    index++
+    if (name === "xargs") runtime = true
+    while (index < words.length && (words[index]!.startsWith("-") || /^\d+[smhd]?$/.test(words[index]!))) index++
+    if (name === "eval" || DeletionWords.SHELLS.has(name)) return { nested: words.slice(index).join(" ") }
+  }
+  const program = words[index] === undefined ? undefined : path.basename(words[index]!)
+  if (program === undefined || !NETWORK_CLIENTS.has(program)) return undefined
+  return { program, args: words.slice(index + 1), runtime }
+}
+
+/** What one client call names: address words, config files, URL lists, and whether it reads its default config. */
+function clientParts(call: ClientCall) {
+  const addresses: string[] = []
+  const configs: string[] = []
+  const lists: string[] = []
+  const { program, args } = call
+  let defaults = program === "curl" || program === "wget"
+  if (program === "curl" && (args[0] === "-q" || args[0] === "--disable")) defaults = false
+  if (program === "wget" && args.includes("--no-config")) defaults = false
+  const curl = program === "curl"
+  const wget = program === "wget"
+  const httpie = program === "http" || program === "https" || program === "xh"
+  const socat = program === "socat"
+  const positional: string[] = []
+  for (let index = 0; index < args.length; index++) {
+    const word = args[index]!
+    if (word === "--") {
+      positional.push(...args.slice(index + 1))
+      break
+    }
+    if (word.startsWith("--")) {
+      const equals = word.indexOf("=")
+      const flag = equals < 0 ? word : word.slice(0, equals)
+      const takes = (curl ? CURL_VALUE_LONG : wget ? WGET_VALUE_LONG : httpie ? HTTPIE_VALUE : NC_VALUE).has(flag)
+      const value = equals < 0 ? (takes ? args[++index] : undefined) : word.slice(equals + 1)
+      if (value === undefined) continue
+      if (flag === "--config") configs.push(value)
+      else if (flag === "--input-file") lists.push(value)
+      else if (curl && CURL_ADDRESS_LONG.has(flag)) addresses.push(flag === "--resolve" ? value.split(":").slice(-1)[0]! : flag === "--connect-to" ? value.split(":").slice(2).join(":") : value)
+      else if (flag === "--proxy") addresses.push(value.replace(/^(?:https?|all):(?!\/\/)/, ""))
+      else if (wget && flag === "--execute") addresses.push(...wgetProxy(value))
+      continue
+    }
+    if (word.startsWith("-") && word.length > 1 && !socat) {
+      if (httpie || !(curl || wget)) {
+        const values = httpie ? HTTPIE_VALUE : program === "telnet" ? TELNET_VALUE : NC_VALUE
+        if (values.has(word)) {
+          const value = args[++index]
+          if (value !== undefined && (word === "-x" || word === "--proxy")) addresses.push(value)
+        }
+        continue
+      }
+      const shorts = curl ? CURL_VALUE_SHORT : WGET_VALUE_SHORT
+      for (let at = 1; at < word.length; at++) {
+        const letter = word[at]!
+        if (!shorts.has(letter)) continue
+        const value = word.slice(at + 1) || args[++index]
+        if (value === undefined) break
+        if (curl && letter === "K") configs.push(value)
+        else if (curl && letter === "x") addresses.push(value)
+        else if (wget && letter === "i") lists.push(value)
+        else if (wget && letter === "e") addresses.push(...wgetProxy(value))
+        break
+      }
+      continue
+    }
+    positional.push(word)
+  }
+  if (curl || wget) addresses.push(...positional)
+  else if (httpie) {
+    const url = positional.find((word, index) => !(index === 0 && /^[A-Z]+$/.test(word)))
+    if (url !== undefined) addresses.push(url)
+  } else if (socat) {
+    for (const word of positional) {
+      const match = SOCAT_ADDRESS.exec(word)
+      if (match) addresses.push(match[1]!.split(",")[0]!.split(":").slice(-2).join(":"))
+    }
+  } else if (positional.length > 0) {
+    // nc, ncat, netcat, telnet: `host [port]`. A host alone may still carry a port once the shell splits it.
+    addresses.push(positional[1] === undefined ? positional[0]! : `${positional[0]}:${positional[1]}`)
+  }
+  return { addresses, configs, lists, defaults }
+}
+
+/** A `.wgetrc` command given with `-e`: a proxy setting is an address. */
+const wgetProxy = (command: string) => {
+  const match = /^\s*(\w+)\s*=\s*(.*)$/.exec(command)
+  return match && /proxy$/i.test(match[1]!) ? [match[2]!] : []
+}
+
+/** The verdicts one client call gets (D2, D4, U1-U4), none when it cannot reach Swarm's server. */
+function judgeClient(call: ClientCall, cwd: string, listeners: readonly SelfAddress.Address[]): OwnApiHit[] {
+  if (call.runtime) return [{ reason: "unresolved_target" }]
+  const { addresses, configs, lists, defaults } = clientParts(call)
+  const hits: OwnApiHit[] = []
+  for (const word of addresses) {
+    if (word === "") continue
+    const hit = judgeAddress(word, listeners)
+    if (hit) hits.push(hit)
+  }
+  for (const [word, stdin] of [
+    ...configs.map((word) => [word, "config_file"] as const),
+    ...lists.map((word) => [word, "unresolved_target"] as const),
+  ]) {
+    // U1/U4: read from stdin, or from a file whose name is not written out.
+    const file = word === "-" ? undefined : commandFile(word, cwd)
+    if (file === undefined) hits.push({ reason: word === "-" ? stdin : "config_file" })
+    else hits.push(...judgeConfig(file, listeners))
+  }
+  if (defaults && (call.program === "curl" || call.program === "wget"))
+    for (const file of defaultConfigs(call.program)) hits.push(...judgeConfig(file, listeners))
+  return hits
+}
+
+/** `$(…)` and backquoted commands, each a text of its own, and the text with each replaced by a word not written out. */
+function liftSubstitutions(text: string) {
+  const inner: string[] = []
+  let outer = text
+  for (let round = 0; round < 8; round++) {
+    const next = outer.replace(/\$\(([^()]*)\)|`([^`]*)`/g, (_whole, a: string | undefined, b: string | undefined) => {
+      inner.push(a ?? b ?? "")
+      return "$__"
+    })
+    if (next === outer) break
+    outer = next
+  }
+  return [outer, ...inner]
+}
+
+/**
+ * D3: the text with `$NAME` and `${NAME}` replaced by a literal value assigned earlier in it (`H=127.0.0.1; curl $H:…`,
+ * `export P=…`), in text order. Anything else (`${H:-x}`, an assignment from a command) stays as written.
+ */
+function substituteAssignments(text: string) {
+  const known = new Map<string, string>()
+  const reference = /\$\{([A-Za-z_]\w*)\}|\$([A-Za-z_]\w*)/g
+  return text.replace(
+    /(?<=^|[\s;&|(])(?:export\s+)?([A-Za-z_]\w*)=("[^"]*"|'[^']*'|[^\s;&|()]*)|\$\{([A-Za-z_]\w*)\}|\$([A-Za-z_]\w*)/g,
+    (whole, name: string | undefined, value: string | undefined, braced: string | undefined, bare: string | undefined) => {
+      if (name !== undefined) {
+        const literal = value!.replace(/^(['"])([\s\S]*)\1$/, "$2")
+        known.set(name, literal.replace(reference, (ref, a: string | undefined, b: string | undefined) => known.get((a ?? b)!) ?? ref))
+        return whole
+      }
+      return known.get((braced ?? bare)!) ?? whole
+    },
   )
+}
+
+/** The verdicts for a call by its words (D1, D3, and per client D2, D4, U1-U4), shell `-c` and `eval` text two deep. */
+function judgeOwnServer(text: string, cwd: string, listeners: readonly SelfAddress.Address[], depth = 0): OwnApiHit[] {
+  const hits: OwnApiHit[] = []
+  for (const part of liftSubstitutions(text)) {
+    const resolved = substituteAssignments(part)
+    if (listeners.some((listener) => namesListener(resolved, listener))) hits.push({})
+    for (const match of resolved.matchAll(/\/dev\/(?:tcp|udp)\/([^/\s]+)\/([^\s;&|)]+)/g)) {
+      const hit = judgeAddress(`${match[1]}:${match[2]}`, listeners)
+      if (hit) hits.push(hit)
+    }
+    for (const words of shellSegments(resolved)) {
+      const call = clientCall(words)
+      if (call === undefined) continue
+      if ("nested" in call) {
+        if (depth < 2) hits.push(...judgeOwnServer(call.nested, cwd, listeners, depth + 1))
+        continue
+      }
+      hits.push(...judgeClient(call, cwd, listeners))
+    }
+  }
+  return hits
+}
+
+/**
+ * 1.2.6 FX-14 (F-1, decision C24), 1.2.7 F-4 (OP-4, SR7-08): a shell or fetch call that talks to Swarm's own running
+ * server, the listener this process opened (`SelfAddress`). With the password from `app-server.env` such a call could
+ * answer the agent's own prompts or change its mode, past every hold. Only that host and port: every other local port
+ * runs as C19c decided, and nothing is refused while no listener exists.
+ * - D1-D5, no reason: the call names it, literally, through a variable assigned in the same text, or through a config
+ *   file (`-K`, `--config`, `.curlrc`, `.wgetrc`, `-i`) that was read.
+ * - U1 `config_file`: a config file from stdin, or one that is missing, unreadable, larger than 64 KiB or protected.
+ * - U2-U4 `unresolved_target`: a network client whose host is not written out (`$URL`, `$(…)`, `eval`, `xargs`, `-i -`),
+ *   a loopback host with a port that is not, or a name that is not an IP address with a listener's port (SR7-08).
+ * Residual (R-F4, SR7-03): interpreter code that builds the address at run time (`python -c`, `node -e`, a script) is not
+ * decidable here; a subagent's goes to the main agent by the script screen's `network` flag. The backstop is the masking
+ * of the server password file (U16), X `app_state` for any shell write out of app state (C8), the app-state read
+ * allowlist (no oracle), and the desktop nonce on revert and archive-empty only. The permission reply, consent and mode
+ * routes are password-only.
+ */
+function ownServerCall(input: Input): OwnApiHit | undefined {
+  const listeners = SelfAddress.list()
+  if (listeners.length === 0) return undefined
+  const hits: OwnApiHit[] = []
+  const url = input.metadata.url
+  if (typeof url === "string") {
+    if (listeners.some((listener) => namesListener(url, listener))) return {}
+    const hit = judgeAddress(url, listeners, true)
+    if (hit) hits.push(hit)
+  }
+  const command = input.metadata.command
+  if (typeof command === "string") hits.push(...judgeOwnServer(command, input.cwd, listeners))
+  if (hits.length === 0) return undefined
+  return hits.find((hit) => hit.reason === undefined) ?? hits.find((hit) => hit.reason === "config_file") ?? hits[0]
+}
+
+/** Whether a call reaches Swarm's own running server, by `ownServerCall`. */
+export function callsOwnServer(input: Input) {
+  return ownServerCall(input) !== undefined
 }
 
 function editTargets(input: Input) {
@@ -2393,7 +2869,9 @@ export function classifyBase(input: Input, checkClass: CheckClass = CHECK_CLASS)
   const planFile = planEdit && isPlanFile(input)
   if (planEdit && !planFile) return refused("plan_mode")
   if (!planFile && writesAppState(input)) return refused("app_state")
-  if (callsOwnServer(input)) return refused("app_state")
+  // 1.2.7 F-4 (N7-051): Swarm's own API has its own category, split from `app_state`; a reason names an unresolved form.
+  const ownApi = ownServerCall(input)
+  if (ownApi) return ownApi.reason ? { ...refused("own_api"), reason: ownApi.reason } : refused("own_api")
 
   if (input.rule === "user_catch_all") return held("asks_every_time")
   if (planFile) return { class: "A", decidedBy: "gate" }

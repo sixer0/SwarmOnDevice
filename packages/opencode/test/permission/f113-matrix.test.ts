@@ -31,6 +31,7 @@ import {
   IRREVERSIBLE_ARCHIVE_TEXT,
   MAIN_AGENT_UNAVAILABLE_TEXT,
   OUTSIDE_WRITE_TEXT,
+  OWN_API_TEXT,
   PROTECTED_PATH_TEXT,
   SPEND_STOPPED_TEXT,
   UNJUDGED_TEXT,
@@ -733,6 +734,8 @@ const NEVER_OPENED: Readonly<Record<string, readonly [string, Section]>> = {
   // 1.2.6 row 39 (P-01d, INTENT): their own texts, not the general refusal.
   plan_mode: [PLAN_MODE, "F"],
   app_state: [APP_STATE, "F"],
+  // 1.2.7 row 31 (F-4, CHAR-10, INTENT): Swarm's own API is never opened either.
+  own_api: [OWN_API_TEXT, "F"],
 }
 
 /**

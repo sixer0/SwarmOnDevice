@@ -53,6 +53,14 @@ const layers = (input: Input): [string, Verdict][] => [
 const expectAppState = (input: Input) => {
   for (const [layer, verdict] of layers(input)) expect({ layer, ...verdict }).toEqual({ layer, ...APP_STATE })
 }
+// 1.2.7 row 31 (F-4, CHAR-03 INTENT): the own-API refusal has its own category; the refusal, spellings and controls stay.
+const OWN_API: Verdict = { class: "X", decidedBy: "gate", category: "own_api" }
+const expectOwnApi = (input: Input) => {
+  for (const [layer, verdict] of layers(input)) expect({ layer, ...verdict }).toEqual({ layer, ...OWN_API })
+}
+const expectNotOwnApi = (input: Input) => {
+  for (const [layer, verdict] of layers(input)) expect({ layer, category: verdict.category }).not.toEqual({ layer, category: "own_api" })
+}
 const expectNotAppState = (input: Input) => {
   for (const [layer, verdict] of layers(input)) expect({ layer, category: verdict.category }).not.toEqual({ layer, category: "app_state" })
 }
@@ -74,16 +82,16 @@ describe("F-2: home spellings of Swarm's own state are X app_state (C8)", () => 
   })
 })
 
-describe("F-1: a call to the running Swarm server's own address is X app_state", () => {
+describe("F-1: a call to the running Swarm server's own address is X own_api (1.2.7 F-4 INTENT, was app_state)", () => {
   const self = { hostname: "127.0.0.1", port: 4096 }
   beforeAll(() => SelfAddress.add(self))
   afterEach(() => SelfAddress.add(self))
   afterAll(() => SelfAddress.remove(self))
 
   test("probe: `curl -s -K cfg.txt http://127.0.0.1:4096/session`", () =>
-    expectAppState(bash("curl -s -K cfg.txt http://127.0.0.1:4096/session")))
+    expectOwnApi(bash("curl -s -K cfg.txt http://127.0.0.1:4096/session")))
   test("probe: `curl -s -u \"opencode:$PASSWORD\" http://127.0.0.1:4096/session`", () =>
-    expectAppState(bash('curl -s -u "opencode:$PASSWORD" http://127.0.0.1:4096/session')))
+    expectOwnApi(bash('curl -s -u "opencode:$PASSWORD" http://127.0.0.1:4096/session')))
   test("other spellings of the same listener", () => {
     for (const command of [
       "curl -s http://localhost:4096/session",
@@ -96,10 +104,10 @@ describe("F-1: a call to the running Swarm server's own address is X app_state",
       "nc 127.0.0.1 4096",
       "cd /tmp && curl -s 'http://127.0.0.1:4096/permission' | head",
     ])
-      expectAppState(bash(command))
+      expectOwnApi(bash(command))
   })
   test("a webfetch of the listener", () =>
-    expectAppState(request("webfetch", { patterns: ["http://127.0.0.1:4096/session"], metadata: { url: "http://127.0.0.1:4096/session" } })))
+    expectOwnApi(request("webfetch", { patterns: ["http://127.0.0.1:4096/session"], metadata: { url: "http://127.0.0.1:4096/session" } })))
   test("control: other loopback ports keep their verdict (FLUX 7863, SearXNG, a dev server)", () => {
     for (const command of [
       "curl -s http://127.0.0.1:7863/health",
@@ -109,10 +117,10 @@ describe("F-1: a call to the running Swarm server's own address is X app_state",
       "head -c 4096 th.json",
       "ls /4096",
     ])
-      expectNotAppState(bash(command))
+      expectNotOwnApi(bash(command))
   })
   test("control: once the listener stopped, the same call keeps its verdict", () => {
     SelfAddress.remove(self)
-    expectNotAppState(bash("curl -s http://127.0.0.1:4096/session"))
+    expectNotOwnApi(bash("curl -s http://127.0.0.1:4096/session"))
   })
 })

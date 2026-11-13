@@ -107,6 +107,9 @@ export const DeferredCategory = Schema.Literals([
   "admin_rights",
   // X (1.2.6, U6): an irreversible local action whose checkpoint could not be made, so it did not run
   "checkpoint_failed",
+  // X (1.2.7 F-4, N7-051): a call to Swarm's own running server, literal or indirect (a config file, a host or port in a
+  // variable), split from `app_state`. Refused with or without the consented bypass, and never opened.
+  "own_api",
 ]).annotate({ identifier: "PermissionDeferredCategory" })
 export type DeferredCategory = typeof DeferredCategory.Type
 

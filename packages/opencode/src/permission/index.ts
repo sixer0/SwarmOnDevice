@@ -27,6 +27,7 @@ import {
   checkpointFailedText,
   consentedRefusalText,
   mainAgentDeclined,
+  ownApiText,
   subagentStoppedMessage,
 } from "./autonomy-texts"
 import { ProcessTree } from "./process-tree"
@@ -334,6 +335,8 @@ const NEVER_OPENED_X: ReadonlySet<string> = new Set([
   "credential_change",
   "plan_mode",
   "app_state",
+  // 1.2.7 F-4 (N7-051, CHAR-10): a call to Swarm's own server is never opened either.
+  "own_api",
 ])
 // 1.1.3: the KEPT_D categories, outward sends and soft script flags are opened by `noWait` under consent, so the gate
 // believes them there; only the X categories above stay forged (spec section 3), and (T9 G7) a script flagged for sudo
@@ -389,7 +392,13 @@ const stoppedByMode = (input: PermissionV1.AskInput) => {
  */
 export const refusedUnderConsent = (category: string | undefined, reason?: string) => {
   // 1.2.6 row 37b: a checkpoint that could not be made names why, from the closed list (never command text).
-  const text = category === "checkpoint_failed" ? checkpointFailedText(reason) : consentedRefusalText(category)
+  // 1.2.7 F-4: an own-API refusal names the substitute by its reason (N7-052 / N7-135).
+  const text =
+    category === "checkpoint_failed"
+      ? checkpointFailedText(reason)
+      : category === "own_api"
+        ? ownApiText(reason)
+        : consentedRefusalText(category)
   if (text === undefined) return new RefusedByModeError({ ruleset: [] })
   const error = new RefusedWithTextError({ ruleset: [] })
   error.text = text
@@ -400,6 +409,8 @@ export const refusedByMode = (category: string | undefined, reason?: string) => 
   const text =
     category === "checkpoint_failed"
       ? checkpointFailedText(reason)
+      : category === "own_api"
+      ? ownApiText(reason)
       : category !== undefined && Object.hasOwn(REFUSED_TEXT, category)
       ? REFUSED_TEXT[category as keyof typeof REFUSED_TEXT]
       : undefined
