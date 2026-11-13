@@ -1,6 +1,6 @@
 import { Agent } from "@/agent/agent"
 import type { Config } from "@/config/config"
-import { KNOWLEDGE_LIBRARY_SKILL_NAME } from "@/skill"
+import { KNOWLEDGE_LIBRARY_SKILL_NAME, Skill } from "@/skill"
 import { LibraryRoot } from "@/skill/library-root"
 import { PermissionV1 } from "@opencode-ai/core/v1/permission"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
@@ -32,6 +32,7 @@ import { isRecord } from "@/util/record"
 import { RuntimeFlags } from "@/effect/runtime-flags"
 import { InstanceState } from "@/effect/instance-state"
 import { Secrets } from "@/tool/secrets"
+import { missionTypeSuggestion } from "./system"
 
 const MCP_RESOURCE_TOOLS = {
   list: "list_mcp_resources",
@@ -117,6 +118,8 @@ export const resolve = Effect.fn("SessionTools.resolve")(function* (input: {
   // Row 197 (S194-01): optional, as in tool.ts, so a resolve without them (unit tests) reads the mode as off.
   const autonomy = Option.getOrUndefined(yield* Effect.serviceOption(Autonomy.Service))
   const sessions = Option.getOrUndefined(yield* Effect.serviceOption(Session.Service))
+  // SK-g (N8-048): optional too; without it no mission-type line is added.
+  const skills = Option.getOrUndefined(yield* Effect.serviceOption(Skill.Service))
 
   const context = (args: Record<string, unknown>, options: ToolExecutionOptions): Tool.Context => ({
     sessionID: input.session.id,
@@ -585,6 +588,19 @@ export const resolve = Effect.fn("SessionTools.resolve")(function* (input: {
                 })
               }
             }
+          }
+
+          // SK-g (N8-048): a created mission's type suggests skills; a line in the result, never a load, and never in
+          // the cached system prompt.
+          if (
+            studio &&
+            skills &&
+            entry.def.name === "studio_mission_create" &&
+            !result.isError &&
+            !Permission.disabled(["skill"], input.agent.permission).has("skill")
+          ) {
+            const line = missionTypeSuggestion(yield* skills.available(input.agent), toRecord(args).type)
+            if (line) textParts.push(line)
           }
 
           const truncated = yield* truncate.output(

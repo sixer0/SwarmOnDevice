@@ -27,6 +27,8 @@ import { Reference } from "@opencode-ai/core/reference"
 import { MCP } from "@/mcp"
 import { PermissionV1 } from "@opencode-ai/core/v1/permission"
 import { InstalledTools } from "./installed-tools"
+import { Glob } from "@opencode-ai/core/util/glob"
+import { escapeHtml } from "@/util/html"
 
 /** One fixed line per component (U14 register, identification/04_structured_u14.md section 3). Only these strings
  *  reach the prompt: the state file decides which lines appear, never what they say. */
@@ -47,7 +49,9 @@ const INSTALLED_TOOL_LINES: Record<InstalledTools.ComponentId, { text: string; m
     mcp: InstalledTools.SWARM_WEB_MCP,
   },
   obsidian: {
-    text: "notes: use swarm-web `vault_inbox` to drop a note in the Obsidian inbox. It is not the memory store.",
+    // N8-122 (OBS-g, R20-C26): the vault rule shows only where the inbox tool is connected, since it cannot be followed
+    // without it.
+    text: "notes: use swarm-web `vault_inbox` to drop a note in the Obsidian inbox. It is not the memory store. The vault folder swarm-memory/ is generated from project memory: never edit it. When a mission closes or a lasting decision is recorded, write one inbox note (skill obsidian-memory).",
     mcp: InstalledTools.SWARM_WEB_MCP,
   },
 }
@@ -166,9 +170,141 @@ export function autoWorkflow(
 
 export { PROMPT_GSP_WORKFLOW, PROMPT_AUTO_WORKFLOW }
 
+// --- SK-g: skill suggestions (01b section 8). Triggers suggest a skill; they never load one. -----------------------
+
+/** What `<suggested_skills>` is matched against: the session's first user message (its non-synthetic text and the paths
+ *  of its file parts), so the block stays the same for the whole session (prompt cache, P-05; R20-C08). */
+export type SkillFocus = { readonly text: string; readonly files: readonly string[] }
+
+/** N8-045: at most this many suggestion lines (and names on the N8-048 line). */
+const SUGGEST_MAX = 5
+const SUGGEST_VALUE_MAX = 100
+const MISSION_TYPE_MAX = 64
+// Discovered skill names are not validated; one that could break the block is never printed (R20-C11).
+const SUGGEST_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/
+
+/** The focus of a message: non-synthetic text parts joined by a newline (the same text memory ranks on) and the paths
+ *  its file parts name (attachments and `@` mentions). */
+export function skillFocus(parts: readonly unknown[]): SkillFocus {
+  const text: string[] = []
+  const files: string[] = []
+  for (const part of parts) {
+    if (!part || typeof part !== "object") continue
+    const item = part as {
+      type?: unknown
+      text?: unknown
+      synthetic?: unknown
+      filename?: unknown
+      url?: unknown
+      source?: { path?: unknown }
+    }
+    if (item.type === "text" && typeof item.text === "string" && !item.synthetic) text.push(item.text)
+    if (item.type !== "file") continue
+    const found = [
+      typeof item.source?.path === "string" ? item.source.path : undefined,
+      typeof item.filename === "string" ? item.filename : undefined,
+      typeof item.url === "string" && item.url.startsWith("file://") ? decodeFileUrl(item.url) : undefined,
+    ]
+    for (const value of found) if (value && !files.includes(value)) files.push(value)
+  }
+  return { text: text.join("\n"), files }
+}
+
+function decodeFileUrl(url: string) {
+  try {
+    return decodeURIComponent(new URL(url).pathname)
+  } catch {
+    return undefined
+  }
+}
+
+// 01b section 3.2: NFKC, lower case, tokens split on anything that is not a letter, digit or `.`; dots at a token's
+// edge are sentence punctuation ("the invoice." holds "invoice").
+function suggestTokens(value: string) {
+  return value
+    .normalize("NFKC")
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}.]+/u)
+    .map((token) => token.replace(/^\.+|\.+$/g, ""))
+    .filter((token) => token.length > 0)
+}
+
+function containsSequence(haystack: readonly string[], needle: readonly string[]) {
+  if (needle.length === 0 || needle.length > haystack.length) return false
+  for (let start = 0; start + needle.length <= haystack.length; start++) {
+    if (needle.every((token, index) => haystack[start + index] === token)) return true
+  }
+  return false
+}
+
+// Words of the text that look like a path: a `/`, or a `.` followed by 1..8 letters or digits.
+function textFileCandidates(text: string) {
+  return text
+    .split(/\s+/)
+    .map((word) => word.replace(/^["'`([{<]+/, "").replace(/["'`)\]}>,.;:]+$/, ""))
+    .filter((word) => word.length > 0 && (word.includes("/") || /\.[\p{L}\p{N}]{1,8}/u.test(word)))
+}
+
+function fileMatches(pattern: string, candidate: string) {
+  const glob = pattern.toLowerCase()
+  const file = candidate.toLowerCase().replaceAll("\\", "/")
+  // A pattern without `/` matches the base name.
+  if (!glob.includes("/")) return Glob.match(glob, file.slice(file.lastIndexOf("/") + 1))
+  return Glob.match(glob, file) || (file.startsWith("/") && Glob.match(glob, file.replace(/^\/+/, "")))
+}
+
+/** The `<suggested_skills>` block (N8-045) for `list` (the agent's `available` skills, so turned-off and denied skills
+ *  never appear), or undefined when nothing matches. Text only: it never loads a skill. */
+export function suggestedSkills(list: readonly Skill.Info[], focus: SkillFocus | undefined) {
+  if (!focus) return
+  const words = suggestTokens(focus.text)
+  const candidates = [...focus.files, ...textFileCandidates(focus.text)].filter(
+    (value, index, all) => all.indexOf(value) === index,
+  )
+  const matches = list.flatMap((skill): { name: string; kind: "keywords" | "files"; value: string }[] => {
+    if (!skill.triggers || !SUGGEST_NAME.test(skill.name)) return []
+    const keyword = skill.triggers.keywords.find((value) => containsSequence(words, suggestTokens(value)))
+    if (keyword !== undefined) return [{ name: skill.name, kind: "keywords", value: keyword }]
+    const patterns = skill.triggers.files
+    const file = candidates.find((candidate) => patterns.some((pattern) => fileMatches(pattern, candidate)))
+    if (file !== undefined) return [{ name: skill.name, kind: "files", value: file }]
+    return []
+  })
+  if (matches.length === 0) return
+  const lines = matches
+    .toSorted((a, b) => (a.kind === b.kind ? a.name.localeCompare(b.name) : a.kind === "keywords" ? -1 : 1))
+    .slice(0, SUGGEST_MAX)
+    .map((match) => `- ${match.name}: matched ${match.kind} "${escapeHtml(match.value.slice(0, SUGGEST_VALUE_MAX))}"`)
+  return [
+    "<suggested_skills>",
+    "These skills match the person's request. Load one with the skill tool only if it fits; nothing is loaded for you.",
+    ...lines,
+    "</suggested_skills>",
+  ].join("\n")
+}
+
+/** N8-048: the line appended to a successful `studio_mission_create` result when `available` skills list the mission's
+ *  type in `triggers.missionTypes` (exact, case-insensitive), or undefined. */
+export function missionTypeSuggestion(list: readonly Skill.Info[], type: unknown) {
+  if (typeof type !== "string" || type.length === 0) return
+  const wanted = type.toLowerCase()
+  const names = list
+    .filter(
+      (skill) =>
+        SUGGEST_NAME.test(skill.name) &&
+        (skill.triggers?.missionTypes ?? []).some((value) => value.toLowerCase() === wanted),
+    )
+    .map((skill) => skill.name)
+    .toSorted((a, b) => a.localeCompare(b))
+    .slice(0, SUGGEST_MAX)
+  if (names.length === 0) return
+  return `Skills suggested for mission type "${escapeHtml(type.slice(0, MISSION_TYPE_MAX))}": ${names.join(", ")}. Load one with the skill tool if it helps.`
+}
+
 export interface Interface {
   readonly environment: (model: Provider.Model) => Effect.Effect<string[]>
-  readonly skills: (agent: Agent.Info) => Effect.Effect<string | undefined>
+  /** `focus`: the session's first user message, for `<suggested_skills>` (SK-g). Without a match the output is as before. */
+  readonly skills: (agent: Agent.Info, focus?: SkillFocus) => Effect.Effect<string | undefined>
   readonly mcp: (agent: Agent.Info, permission?: PermissionV1.Ruleset) => Effect.Effect<string | undefined>
 }
 
@@ -233,10 +369,11 @@ const layer = Layer.effect(
         ].filter((part): part is string => part !== undefined)
       }),
 
-      skills: Effect.fn("SystemPrompt.skills")(function* (agent: Agent.Info) {
+      skills: Effect.fn("SystemPrompt.skills")(function* (agent: Agent.Info, focus?: SkillFocus) {
         if (Permission.disabled(["skill"], agent.permission).has("skill")) return
 
         const list = yield* skill.available(agent)
+        const suggested = suggestedSkills(list, focus)
 
         return [
           "Skills provide specialized instructions and workflows for specific tasks.",
@@ -244,6 +381,7 @@ const layer = Layer.effect(
           // the agents seem to ingest the information about skills a bit better if we present a more verbose
           // version of them here and a less verbose version in tool description, rather than vice versa.
           Skill.fmt(list, { verbose: true }),
+          ...(suggested ? [suggested] : []),
         ].join("\n")
       }),
 

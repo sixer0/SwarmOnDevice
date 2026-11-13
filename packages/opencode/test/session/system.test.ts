@@ -490,7 +490,9 @@ describe("session.system", () => {
       rtk: "rtk: prefix commands with long output with `rtk` (for example `rtk bun test`, `rtk git log`).",
       searxng: "web search: use the swarm-web `search` tool (local SearXNG) as the default web search.",
       firecrawl: "crawl: use swarm-web `fetch` with mode=crawl (local Firecrawl); mode=page for a single page.",
-      obsidian: "notes: use swarm-web `vault_inbox` to drop a note in the Obsidian inbox. It is not the memory store.",
+      // 1.2.8 row 41: N8-122 as corrected (R20-C26), the OBS-g vault rule.
+      obsidian:
+        "notes: use swarm-web `vault_inbox` to drop a note in the Obsidian inbox. It is not the memory store. The vault folder swarm-memory/ is generated from project memory: never edit it. When a mission closes or a lasting decision is recorded, write one inbox note (skill obsidian-memory).",
     } satisfies Record<InstalledTools.ComponentId, string>
 
     const stateFile = () => InstalledTools.stateFilePath()
