@@ -54,16 +54,34 @@ export const followedByEdit = (ctx: Tool.Context, patterns: readonly string[]): 
  * the file's own label. The edit prompt names both, so a role whose rules allow `*.md` but deny the rest (planner,
  * data-collector, verifier) cannot write `src/a.ts` through a link named `notes.md`. A link loop adds nothing: the write
  * fails on it anyway.
+ *
+ * 1.2.8 row 28g (G1-02): the same when a folder on the way is a link (`docs -> src`, writing `docs/x.md`), so a person's
+ * path rule on where it really lands (deny `src/**`) applies. Only folders below the nearest folder the file shares with
+ * the project are looked at: a system link above both (macOS `/var`) moves the project too and names nothing new. Only
+ * ever adds a label, never removes one.
  */
 export function linkedLabels(worktree: string, files: readonly string[]): string[] {
   const root = Reach.real(worktree) ?? worktree
   return files.flatMap((file) => {
-    if (!Reach.isLink(file)) return []
+    if (!Reach.isLink(file) && !linkedFolder(worktree, file)) return []
     const target = Reach.real(file)
     if (target === undefined) return []
     const label = path.relative(root, target).replaceAll("\\", "/")
     return label === path.relative(worktree, file).replaceAll("\\", "/") ? [] : [label]
   })
+}
+
+/** A folder between `file` and the nearest folder that also holds the project is a link. */
+function linkedFolder(worktree: string, file: string): boolean {
+  const holdsProject = (dir: string) => {
+    const rel = path.relative(dir, worktree)
+    return rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel))
+  }
+  for (let dir = path.dirname(file); !holdsProject(dir); dir = path.dirname(dir)) {
+    if (Reach.isLink(dir)) return true
+    if (path.dirname(dir) === dir) return false
+  }
+  return false
 }
 
 export function lock(filePath: string) {

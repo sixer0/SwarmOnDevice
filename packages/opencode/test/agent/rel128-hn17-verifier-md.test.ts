@@ -5,7 +5,6 @@ import { Effect } from "effect"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { CrossSpawnSpawner } from "@opencode-ai/core/cross-spawn-spawner"
 import { FSUtil } from "@opencode-ai/core/fs-util"
-import { PermissionV1 } from "@opencode-ai/core/v1/permission"
 import { Agent } from "../../src/agent/agent"
 import { Auth } from "../../src/auth"
 import { Config } from "../../src/config/config"
@@ -50,6 +49,7 @@ const it = testEffect(
       Format.node,
       CrossSpawnSpawner.node,
       Truncate.node,
+      Permission.node,
     ]),
     [[RuntimeFlags.node, RuntimeFlags.layer({})]],
   ),
@@ -130,23 +130,29 @@ it.instance("SR8-03: AGENTS.md, .swarm/x.md and .claude/x.md are held under cons
   }),
 )
 
-const ctxFor = (agent: Agent.Info, asked: string[][]): Tool.Context => ({
-  sessionID: SessionID.make("ses_rel128-hn17"),
-  messageID: MessageID.make("msg_rel128-hn17"),
-  callID: "",
-  agent: agent.name,
-  abort: AbortSignal.any([]),
-  messages: [],
-  metadata: () => Effect.void,
-  // The agent-rule half of Permission.ask: a deny on any pattern of the call refuses it (S163-01, final).
-  ask: (request) =>
-    Effect.gen(function* () {
-      if (request.permission !== "edit") return
-      asked.push([...request.patterns])
-      if (request.patterns.some((pattern) => Permission.evaluate("edit", pattern, agent.permission).action === "deny"))
-        return yield* Effect.fail(new PermissionV1.DeniedError({ ruleset: [] }))
-    }) as never,
-})
+// 1.2.8 row 28g (G1-02): the real Permission.ask, on the verifier's own rules plus a person's allow for Markdown (so a
+// Markdown write runs without waiting for an answer). A deny on any pattern of the call refuses it (S163-01, final).
+const ctxFor = (agent: Agent.Info, asked: string[][]) =>
+  Effect.gen(function* () {
+    const permission = yield* Permission.Service
+    const sessionID = SessionID.make("ses_rel128-hn17")
+    const ruleset = [...agent.permission, ...Permission.fromConfig({ edit: { "*.md": "allow" } })]
+    const ctx: Tool.Context = {
+      sessionID,
+      messageID: MessageID.make("msg_rel128-hn17"),
+      callID: "",
+      agent: agent.name,
+      abort: AbortSignal.any([]),
+      messages: [],
+      metadata: () => Effect.void,
+      ask: (request) =>
+        Effect.gen(function* () {
+          if (request.permission === "edit") asked.push([...request.patterns])
+          return yield* permission.ask({ ...request, sessionID, ruleset })
+        }) as never,
+    }
+    return ctx
+  })
 
 it.instance("SR8-03: a .md link to a non-.md file stays denied for the verifier (write and edit)", () =>
   Effect.gen(function* () {
@@ -159,21 +165,22 @@ it.instance("SR8-03: a .md link to a non-.md file stays denied for the verifier 
     const writeInfo = yield* WriteTool
     const write = yield* writeInfo.init()
     const asked: string[][] = []
-    const exit = yield* write.execute({ filePath: "notes.md", content: "overwritten\n" }, ctxFor(verifier, asked)).pipe(Effect.exit)
+    const ctx = yield* ctxFor(verifier, asked)
+    const exit = yield* write.execute({ filePath: "notes.md", content: "overwritten\n" }, ctx).pipe(Effect.exit)
     expect(exit._tag).toBe("Failure")
     expect(asked.at(-1)).toEqual(["notes.md", "src/a.ts"])
 
     const editInfo = yield* EditTool
     const edit = yield* editInfo.init()
     const edited = yield* edit
-      .execute({ filePath: "notes.md", oldString: "export const a = 1", newString: "export const a = 2" }, ctxFor(verifier, asked))
+      .execute({ filePath: "notes.md", oldString: "export const a = 1", newString: "export const a = 2" }, ctx)
       .pipe(Effect.exit)
     expect(edited._tag).toBe("Failure")
     expect(yield* Effect.promise(() => fs.readFile(path.join(test.directory, "src/a.ts"), "utf8"))).toBe("export const a = 1\n")
 
-    // A plain Markdown file is written after the ask; its prompt names only itself.
+    // A plain Markdown file is written once the ask allows it; the ask names only itself.
     const plain: string[][] = []
-    yield* write.execute({ filePath: "docs/report.md", content: "# Report\n" }, ctxFor(verifier, plain))
+    yield* write.execute({ filePath: "docs/report.md", content: "# Report\n" }, yield* ctxFor(verifier, plain))
     expect(plain).toEqual([["docs/report.md"]])
     expect(yield* Effect.promise(() => fs.readFile(path.join(test.directory, "docs/report.md"), "utf8"))).toBe("# Report\n")
   }),
