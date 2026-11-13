@@ -34,8 +34,9 @@ export type HeldCategory = PermissionV1.DeferredCategory
 /**
  * What the edit tools learned from `Reach.editTrust`. Absent means nobody said, and that is held. 1.2.8 row 40e (SK-e,
  * N8-411): `skill_folder` never reaches a prompt from the edit tools (`Reach.SkillFolderRefused`); the table refuses it.
+ * 1.2.8 row 40f (AC-SEC11, N8-441): `vault_mirror` likewise (`Reach.VaultMirrorRefused`).
  */
-export type EditClass = "ordinary" | "not_ordinary" | "no_undo" | "sensitive" | "secret" | "skill_folder"
+export type EditClass = "ordinary" | "not_ordinary" | "no_undo" | "sensitive" | "secret" | "skill_folder" | "vault_mirror"
 
 export type Verdict = {
   class: Class

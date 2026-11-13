@@ -106,6 +106,8 @@ export const ApplyPatchTool = Tool.define(
       // 1.2.8 row 40h (SK-e, C82): a skill folder is refused before any outside-folder prompt; nothing is asked or written
       // (Reach.editTrust checks again with the service's newest list).
       if (targets.some((file) => Reach.skillFolder(file, instance))) return yield* Effect.fail(new Reach.SkillFolderRefused())
+      // 1.2.8 row 40f (AC-SEC11): the vault mirror folder likewise, before any prompt, mode on and off.
+      if (targets.some((file) => Reach.vaultMirror(file, instance))) return yield* Effect.fail(new Reach.VaultMirrorRefused())
       const outside: Parameters<Tool.Context["ask"]>[0][] = []
       const scout: Tool.Context = { ...ctx, ask: (request) => Effect.sync(() => void outside.push(request)) }
       for (const target of targets) yield* assertExternalDirectoryEffect(scout, target)

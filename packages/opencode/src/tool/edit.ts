@@ -195,6 +195,8 @@ export const EditTool = Tool.define(
           // 1.2.8 row 40h (SK-e, C82): a skill folder is refused before the outside-folder prompt, so an edit in
           // ~/.agents/skills asks nothing first (Reach.editTrust checks again with the service's newest list).
           if ([filePath, target.landing].some((file) => Reach.skillFolder(file, instance))) throw new Reach.SkillFolderRefused()
+          // 1.2.8 row 40f (AC-SEC11): the vault mirror folder likewise, before any prompt, mode on and off.
+          if ([filePath, target.landing].some((file) => Reach.vaultMirror(file, instance))) throw new Reach.VaultMirrorRefused()
           yield* assertExternalDirectoryEffect(followedByEdit(ctx, [label]), filePath)
           if (target.landing !== filePath) yield* assertExternalDirectoryEffect(followedByEdit(ctx, [label]), target.landing)
 

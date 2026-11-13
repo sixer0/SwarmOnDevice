@@ -118,6 +118,7 @@ export function classifyConsented(input: Input, files: readonly string[], catego
 
 function classifyEdit(input: Input): Verdict {
   if (input.editClass === "skill_folder") return refused("skill_folder")
+  if (input.editClass === "vault_mirror") return refused("vault_mirror")
   if (input.editClass === "secret") return classifyConsented(input, editTargets(input), "secret_file")
   if (input.editClass === "sensitive") return classifyConsented(input, editTargets(input), "sensitive_file")
   // Not the absence of `risk`: an edit nothing can undo carries no risk label either.
@@ -184,6 +185,23 @@ function writesSkillFolder(input: Input) {
   }
   if (input.permission !== "bash") return false
   return shellWriteNames(input).some((file) => Reach.skillFolder(file, instance))
+}
+
+/**
+ * 1.2.8 row 40f (AC-SEC11, SR8-11, N8-441): a write into the vault mirror folder `<vault>/swarm-memory/**`, an edit's or
+ * the shell's, judged by the same names as a skill-folder write (`shellWriteNames`: redirects, `tee`, `sed -i`, a copy's
+ * destination, every operand of a program that is not a look, in each folder a `cd`/`pushd` walk reaches).
+ */
+function writesVaultMirror(input: Input) {
+  const instance = input.instance
+  if (input.permission === "edit")
+    return input.editClass === "vault_mirror" || editTargets(input).some((file) => Reach.vaultMirror(file, instance))
+  if (input.permission === "external_directory" && input.follows?.some((prompt) => prompt.permission === "edit")) {
+    const filepath = input.metadata.filepath
+    return typeof filepath === "string" && Reach.vaultMirror(filepath, instance)
+  }
+  if (input.permission !== "bash") return false
+  return shellWriteNames(input).some((file) => Reach.vaultMirror(file, instance))
 }
 
 /**
@@ -923,6 +941,9 @@ export function classifyBase(input: Input, checkClass: CheckClass = CHECK_CLASS)
   if (planEdit && !planFile) return refused("plan_mode")
   // 1.2.7 row 47k (U9-7, C76): a write that reaches the state folder only through a glob, a link or a variable is held
   // for the person (D), as in 1.2.6; spelled out, or under the consent (where nothing waits for a person), it is refused.
+  // 1.2.8 row 40f (AC-SEC11, SR8-11): a write into the vault mirror folder is refused in every mode, before the state
+  // folder rule, so the default vault under ~/.swarm gets its own category and the guard does not rest on that rule.
+  if (!planFile && writesVaultMirror(input)) return refused("vault_mirror")
   if (!planFile && writesAppState(input)) return indirectStateWrite(input) ? held("app_state") : refused("app_state")
   // 1.2.8 row 40e (SK-e, S14-D2, N8-411): a write into a skill folder, an edit's or the shell's, is refused in every mode;
   // a consent item never opens it (`underConsent` keeps every X but `outside_write`). Reads stay as they are.
