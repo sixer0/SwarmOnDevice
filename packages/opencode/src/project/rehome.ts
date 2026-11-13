@@ -52,7 +52,8 @@ export interface Input {
   groupKind?: GroupKind
 }
 
-export type Moved = { folder: boolean; notes: number; sessions: number }
+/** `renamed` (row 44g, R-02): old id -> new id of moved notes whose id the target store already used; only when any. */
+export type Moved = { folder: boolean; notes: number; sessions: number; renamed?: Record<string, string> }
 export type Planned = { folder: boolean; notes: number; sessions: number; createsGroup: boolean }
 export type Refused = { refused: Code; detail?: string; step?: StepName; journal?: string }
 export type Result = { journalId: string; moved: Moved; replayed?: boolean } | { planned: Planned } | Refused
@@ -169,10 +170,15 @@ async function writeJournal(ports: Ports, journal: Journal) {
   const dir = journalDir(ports)
   await fs.mkdir(dir, { recursive: true, mode: 0o700 })
   const target = path.join(dir, `${journal.journalId}.json`)
-  const temporary = `${target}.${process.pid}.tmp`
+  await writeSynced(`${target}.${process.pid}.tmp`, target, JSON.stringify(journal, null, 2) + "\n")
+}
+
+/** Temp file (0600) + fsync + rename: the one durable writer for the journal and the memory stores (R-10, row 44g). */
+async function writeSynced(temporary: string, target: string, body: string | Uint8Array) {
   const handle = await fs.open(temporary, "w", 0o600)
   try {
-    await handle.writeFile(JSON.stringify(journal, null, 2) + "\n")
+    await handle.chmod(0o600)
+    await handle.writeFile(body)
     await handle.sync()
   } finally {
     await handle.close()
@@ -212,9 +218,7 @@ async function readRaw(file: string): Promise<RawStore | undefined> {
 
 async function writeRaw(file: string, store: RawStore) {
   await fs.mkdir(path.dirname(file), { recursive: true, mode: 0o700 })
-  const temporary = `${file}.${process.pid}.rehome.tmp`
-  await fs.writeFile(temporary, JSON.stringify(store, null, 2) + "\n", { mode: 0o600 })
-  await fs.rename(temporary, file)
+  await writeSynced(`${file}.${process.pid}.rehome.tmp`, file, JSON.stringify(store, null, 2) + "\n")
 }
 
 const isInside = (child: string, parent: string) => child === parent || child.startsWith(parent + path.sep)
@@ -521,35 +525,48 @@ async function doStep(ports: Ports, journal: Journal, step: JournalStep, plan: P
           }
           const target = (await readRaw(targetFile)) ?? { version: 2, enabled: true, items: [] }
           const used = new Set(target.items.map((item) => String(item.id)))
+          const fresh = (): string => {
+            const id = randomBytes(3).toString("hex")
+            if (used.has(id)) return fresh()
+            used.add(id)
+            return id
+          }
+          // R-02 (row 44g): a picked note whose id the target store already uses gets a fresh id there; text, refs and
+          // every other field stay. Ids are reserved for the whole pick first, so a fresh id never takes a later note's id.
+          for (const item of pick) used.add(String(item.id))
+          const renamed: Record<string, string> = {}
+          const taken = new Set(target.items.map((item) => String(item.id)))
+          for (const item of pick) if (taken.has(String(item.id))) renamed[String(item.id)] = fresh()
           let items = [...target.items]
+          const written = new Set<Record<string, unknown>>()
           for (const item of pick) {
-            if (used.has(String(item.id))) continue
             // A full index rolls up first, exactly as a new entry written by the store would (MEM-b, N8-003).
             if (item.kind === "index" && items.filter(liveIndex).length >= ProjectMemory.INDEX_LIMITS.entries) {
               const rolled = Memory.rollUp(items as unknown as Memory.Item[], {
                 date: String(item.text ?? "").slice(0, 10),
                 time: Date.now(),
-                id: () => {
-                  const fresh = (): string => {
-                    const id = randomBytes(3).toString("hex")
-                    if (used.has(id)) return fresh()
-                    used.add(id)
-                    return id
-                  }
-                  return fresh()
-                },
+                id: fresh,
               })
               if ("refused" in rolled) throw new Error("target index full")
               items = rolled.items as unknown as Record<string, unknown>[]
             }
-            items.push(rewriteRefs(item, plan.from, journal.missionId))
-            used.add(String(item.id))
+            const id = renamed[String(item.id)]
+            const into = typeof item.rolledInto === "string" ? renamed[item.rolledInto] : undefined
+            items.push(
+              rewriteRefs(
+                { ...item, ...(id ? { id } : {}), ...(into ? { rolledInto: into } : {}) },
+                plan.from,
+                journal.missionId,
+              ),
+            )
+            written.add(item)
           }
+          if (Object.keys(renamed).length) data.renamed = renamed
           await writeRaw(targetFile, { ...target, items })
           if (options(journal).faultAt === "memory") throw new Error("fault injected at memory")
-          const moved = new Set(pick.map((item) => item.id))
-          await writeRaw(sourceFile, { ...source, items: source.items.filter((item) => !moved.has(item.id)) })
-          data.notes = pick.length
+          // Only the notes actually written to the target leave the source (by object, not by id: ids may repeat).
+          await writeRaw(sourceFile, { ...source, items: source.items.filter((item) => !written.has(item)) })
+          data.notes = written.size
         }),
       )
       return
@@ -642,10 +659,7 @@ async function undoStep(ports: Ports, journal: Journal, step: JournalStep) {
             if (typeof saved !== "string") throw new UndoRefused("no backup recorded")
             const savedStat = await lstatOrUndefined(saved)
             if (!savedStat?.isFile()) throw new UndoRefused("backup missing")
-            const temporary = `${file}.${process.pid}.rehome.tmp`
-            await fs.copyFile(saved, temporary)
-            await fs.chmod(temporary, 0o600)
-            await fs.rename(temporary, file)
+            await writeSynced(`${file}.${process.pid}.rehome.tmp`, file, await fs.readFile(saved))
           }
         }),
       )
@@ -802,6 +816,7 @@ async function run(ports: Ports, input: Input, opts: Options): Promise<Result> {
       folder: plan.folder,
       notes: typeof memoryStep?.data.notes === "number" ? memoryStep.data.notes : 0,
       sessions: plan.sessions.length,
+      ...(memoryStep?.data.renamed ? { renamed: memoryStep.data.renamed as Record<string, string> } : {}),
     }
     journal.state = "complete"
     await writeJournal(ports, journal)

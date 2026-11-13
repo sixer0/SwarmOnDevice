@@ -297,6 +297,44 @@ describe("Rehome.run (AC-PROJc, N8-364)", () => {
     expect(published).toEqual([])
   })
 
+  // 1.2.8 row 44g (R-02, C143): note ids are 6 hex per store, so a moved note's id can already be used in the target.
+  // Red at bf4c9fb55b: the colliding note was skipped in the target and still removed from the source (lost).
+  test("id collision: the moved note gets a fresh id, keeps text and refs; nothing is lost; rollback byte-identical", async () => {
+    const to = path.join(R, "Lumen")
+    const resident = { id: "a1b2c3", text: "A note the group already had", source: "user", deviceOnly: false, time: 1 }
+    await writeStore(to, [resident])
+    const stores = [await fileHash(storeOf(R)), await fileHash(storeOf(to))]
+    const tree = await treeHash(R)
+
+    // Interrupted re-key with a collision: both stores come back byte for byte.
+    const failed = await Rehome.make(ports(), { faultAt: "memory" }).run(call())
+    expect(failed).toMatchObject({ refused: "REHOME_ROLLED_BACK", step: "memory" })
+    expect([await fileHash(storeOf(R)), await fileHash(storeOf(to))]).toEqual(stores)
+    expect(await treeHash(R)).toBe(tree)
+
+    const result = await Rehome.make(ports()).run(call())
+    if (!("journalId" in result)) throw new Error(JSON.stringify(result))
+    const original = notes()
+    const target = await readItems(to)
+    expect(target).toHaveLength(3)
+    expect(target[0]).toEqual(resident)
+    const fresh = target.find((item) => item.text === original[0]!.text)
+    expect(fresh).toBeDefined()
+    expect(fresh!.id).not.toBe("a1b2c3")
+    expect(String(fresh!.id)).toMatch(/^[0-9a-f]{6}$/)
+    expect({ ...fresh, id: "a1b2c3" }).toEqual(original[0])
+    expect(target.find((item) => item.id === "d4e5f6")).toEqual(original[1])
+    expect(await readItems(R)).toEqual([original[2]])
+    expect(result.moved).toEqual({ folder: true, notes: 2, sessions: 1, renamed: { a1b2c3: String(fresh!.id) } })
+    const journal = JSON.parse(
+      await fs.readFile(path.join(data, "rehome", `${result.journalId}.json`), "utf8"),
+    ) as Rehome.Journal
+    expect(journal.steps.find((s) => s.name === "memory")?.data).toMatchObject({
+      notes: 2,
+      renamed: { a1b2c3: String(fresh!.id) },
+    })
+  })
+
   test("faultAt sessions: the moved notes and folder come back too", async () => {
     const tree = await treeHash(R)
     const store = await fileHash(storeOf(R))
