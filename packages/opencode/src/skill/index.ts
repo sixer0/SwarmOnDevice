@@ -217,6 +217,7 @@ const add = Effect.fnUntraced(function* (
   match: string,
   events: EventV2Bridge.Service["Service"],
   trusted: boolean,
+  warned?: Set<string>,
 ) {
   const md = yield* Effect.tryPromise({
     try: () => ConfigMarkdown.parse(match),
@@ -243,11 +244,13 @@ const add = Effect.fnUntraced(function* (
   if (!trusted && !ProjectTrust.isUserLevel(match) && !ProjectTrust.isTextSkill(md.content)) {
     // U-11: say why a project skill is missing. trust.json lives in the state home, so a standalone CLI and the app can
     // disagree about one folder. Names and the path only; the skill's text is never logged.
-    yield* Effect.logWarning("project skill hidden by trust", {
-      name: md.data.name,
-      skill: match,
-      reason: "project folder not trusted in this state home and the skill runs programs; trust the folder to load it",
-    })
+    // U-11b: once per skill path and reason; a rebuild for an unrelated change does not repeat the line.
+    const reason = "project folder not trusted in this state home and the skill runs programs; trust the folder to load it"
+    const cause = `trust-hidden\u0000${match}\u0000${reason}`
+    if (!warned || !warned.has(cause)) {
+      warned?.add(cause)
+      yield* Effect.logWarning("project skill hidden by trust", { name: md.data.name, skill: match, reason })
+    }
     return
   }
 
@@ -498,8 +501,9 @@ const loadSkills = Effect.fnUntraced(function* (
   discovered: DiscoveryState,
   events: EventV2Bridge.Service["Service"],
   trusted: boolean,
+  warned?: Set<string>,
 ) {
-  yield* Effect.forEach(discovered.matches, (match) => add(state, match, events, trusted), {
+  yield* Effect.forEach(discovered.matches, (match) => add(state, match, events, trusted, warned), {
     concurrency: "unbounded",
     discard: true,
   })
@@ -524,10 +528,16 @@ const layer = Layer.effect(
     // URL sources are pulled once per instance. A global config change still disposes every instance (handlers/global.ts).
     type Snapshot = { key: string; discovered: DiscoveryState; state: State }
     const holder = yield* InstanceState.make(() =>
-      Effect.succeed({ pulled: new Map<string, string[]>(), last: undefined as Snapshot | undefined, lock: Semaphore.makeUnsafe(1) }),
+      Effect.succeed({
+        pulled: new Map<string, string[]>(),
+        last: undefined as Snapshot | undefined,
+        // U-11b: warnings already logged in this instance, and the config failure last warned about.
+        warned: new Set<string>(),
+        configCause: undefined as string | undefined,
+        lock: Semaphore.makeUnsafe(1) }),
     )
 
-    const build = Effect.fnUntraced(function* (discovered: DiscoveryState, trusted: boolean) {
+    const build = Effect.fnUntraced(function* (discovered: DiscoveryState, trusted: boolean, warned: Set<string>) {
       const s: State = { skills: {}, dirs: new Set() }
       // Register the built-in skill BEFORE disk discovery so a user-disk
       // skill with the same name can override it.
@@ -537,7 +547,7 @@ const layer = Layer.effect(
         location: "<built-in>",
         content: CUSTOMIZE_SWARM_SKILL_BODY,
       }
-      yield* loadSkills(s, discovered, events, trusted)
+      yield* loadSkills(s, discovered, events, trusted, warned)
       yield* registerDatum(s)
       s.skills[MISSION_CONTROL_SKILL_NAME] = {
         name: MISSION_CONTROL_SKILL_NAME,
@@ -594,12 +604,24 @@ const layer = Layer.effect(
       return yield* h.lock.withPermits(1)(
         Effect.gen(function* () {
           // Global config only (a project cannot turn it on); the env flags still force it off.
+          // U-11b: a broken global config is warned about once per distinct cause, not on every request. A working
+          // read clears the memory, so a later break warns again.
           const claudeCompat =
             !flags.disableClaudeCodeSkills &&
             (yield* config.getGlobal().pipe(
-              Effect.map((item) => item.claude_compat === true),
-              Effect.catchDefect(() =>
-                Effect.logWarning("global config unreadable, Claude Code skills stay off").pipe(Effect.as(false)),
+              Effect.map((item) => {
+                h.configCause = undefined
+                return item.claude_compat === true
+              }),
+              Effect.catchDefect((defect) =>
+                Effect.gen(function* () {
+                  const signature = defect instanceof Error ? `${defect.name}: ${defect.message}` : String(defect)
+                  if (h.configCause !== signature) {
+                    h.configCause = signature
+                    yield* Effect.logWarning("global config unreadable, Claude Code skills stay off")
+                  }
+                  return false
+                }),
               ),
             ))
           const discovered = yield* discoverSkills(
@@ -616,7 +638,7 @@ const layer = Layer.effect(
           const trusted = ProjectTrust.isTrusted(ctx.directory)
           const key = yield* Effect.promise(() => fingerprint(discovered.matches, [trusted, claudeCompat]))
           if (h.last?.key === key) return h.last
-          const next: Snapshot = { key, discovered, state: yield* build(discovered, trusted) }
+          const next: Snapshot = { key, discovered, state: yield* build(discovered, trusted, h.warned) }
           h.last = next
           return next
         }),
