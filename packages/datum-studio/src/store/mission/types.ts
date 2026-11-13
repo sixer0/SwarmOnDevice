@@ -302,7 +302,11 @@ export interface DecisionRequest extends NewDecisionRequest {
   requestedBy: string
   createdAt: string
   closedAt?: string
-  answer?: { option: string; by: "user" | "controller"; decision: string }
+  /**
+   * 1.2.8 row 45b (SR8-05, N8-461): `via` = the answering MCP session's agent id; `attested` = that session presented the
+   * per-launch Mission Control key. Both absent for answers recorded before 1.2.8 or by store code without a session.
+   */
+  answer?: { option: string; by: "user" | "controller"; decision: string; via?: string; attested?: boolean }
 }
 
 export interface DecisionAnswer {
@@ -314,6 +318,10 @@ export interface DecisionAnswer {
   date?: string
   /** default: "<question> -> <option label> (<request id>)" */
   text?: string
+  /** 1.2.8 row 45b (SR8-05, N8-461): set by the host from the calling MCP session, never from tool arguments. */
+  via?: string
+  /** 1.2.8 row 45b: true only for a session attested with the per-launch Mission Control key (N8-459). */
+  attested?: boolean
 }
 
 export type MessageParty = "controller" | "agent" | "owner"

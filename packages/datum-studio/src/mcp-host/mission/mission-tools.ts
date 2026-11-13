@@ -610,12 +610,15 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
         }
         const missing = ["option", "by", "decisionId"].filter((k) => a[k] === undefined)
         if (missing.length > 0) throw new MissionToolError("SCHEMA_INVALID", "an answer needs option, by and decisionId", { def: "studio_mission_answer_decision input", missing })
-        const answer = pick(a, ["option", "by", "decisionId", "date", "text"]) as never
+        // 1.2.8 row 45b (SR8-05, N8-461): provenance from the session, never from the arguments. Unattested by: user
+        // answers are recorded (not refused; general refusal is 1.2.9 backlog RN-6) and shown with the N8-462 label.
+        const answer = { ...pick(a, ["option", "by", "decisionId", "date", "text"]), via: s.agentId, attested: s.attested === true } as never
         const r = await write(dry(a), (tx) => M.answerDecision(tx, mission, request, answer, o))
         return { text: `decision request ${request} answered ${String(a.option)} -> ${r.decision.id}; released ${r.released.join(", ") || "-"}${dryNote(a)}`, data: { ...r, dryRun: dry(a) } }
       },
     ),
-    // 1.2.8 row 45 (PROJ-b, N8-142/N8-143). Row 45b adds SESSION_NOT_ATTESTED (N8-460) for a session that is not attested.
+    // 1.2.8 row 45 (PROJ-b, N8-142/N8-143). Row 45b (SR8-05): only an attested Mission Control session places a
+    // mission; any other session is refused SESSION_NOT_ATTESTED (N8-460) before the store is read.
     tool(
       "studio_mission_place",
       "Place a mission",
@@ -624,6 +627,10 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
       async (a, s) => {
         const mission = a.mission as string
         const dir = a.projectDir as string
+        if (s.attested !== true) {
+          opts.log("warn", "datum-studio-host.mission.studio_mission_place", "SESSION_NOT_ATTESTED", { mission, agent: s.agentId, sessionId: s.sessionId })
+          throw new MissionToolError("SESSION_NOT_ATTESTED", "only Mission Control in the Swarm app places a mission (this MCP session is not attested)", { mission, agent: s.agentId })
+        }
         const actor = actorOf(a, s)
         const r = await write(false, (tx) => {
           const out = M.setProjectDir(tx, mission, dir, { request: a.decision as string, ...(str(a, "tidyMission") ? { tidyMission: str(a, "tidyMission") } : {}) }, actor ? { actor } : {})

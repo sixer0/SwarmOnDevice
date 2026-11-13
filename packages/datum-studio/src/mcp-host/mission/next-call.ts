@@ -42,6 +42,8 @@ const NEXT: Record<string, string> = {
   MEMORY_INDEX_MISSING: 'write the mission index entry first: remember {kind: "index", missionId: "<id>", text: "YYYY-MM-DD <id> | <outcome> | triggers: k1, k2 | <report path>"}, then studio_mission_set_status {to: done}',
   // 1.2.8 row 45 (PROJ-b, N8-145).
   PLACE_DECISION_UNANSWERED: 'ask the person with studio_mission_request_decision {topic: "project-placement", …} and wait for the answer; only the answer moves a mission',
+  // 1.2.8 row 45b (SR8-05, N8-460).
+  SESSION_NOT_ATTESTED: 'agents never move a mission: ask the person with studio_mission_request_decision {topic: "project-placement", …}; Mission Control places it on their answer',
   OUTPUT_UNVERIFIED: "verify the row's Studio outputs (done gate) or name the check and its result file in the row note, then retry done",
   // 1.2.8 row 31 (H-N12, N8-202).
   SESSION_UNKNOWN: "omit session; Swarm links the calling session itself",

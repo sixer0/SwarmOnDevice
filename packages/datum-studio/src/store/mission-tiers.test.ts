@@ -69,7 +69,7 @@ describe("migration 0005: mission_row model tiers", () => {
     try {
       db2.exec("PRAGMA foreign_keys = ON")
       const ftsBefore = Number(db2.get<{ n: number }>("SELECT count(*) AS n FROM mission_fts WHERE ref_kind = 'row'")!.n)
-      expect(applyMigrations(db2, { release: "1.2.0", now: clock })).toEqual([MIGRATION_0005_ID, MIGRATION_0006_ID, "20261112000000_datum_mission_document_link"]) // 1.2.6 row 86: + 0007
+      expect(applyMigrations(db2, { release: "1.2.0", now: clock })).toEqual([MIGRATION_0005_ID, MIGRATION_0006_ID, "20261112000000_datum_mission_document_link", "20261114000000_datum_decision_provenance"]) // 1.2.6 row 86: + 0007, 1.2.8 row 45b: + 0008
       // the runner restores foreign keys after the rebuild
       expect(Number(db2.get<{ foreign_keys: number }>("PRAGMA foreign_keys")!.foreign_keys)).toBe(1)
       const tiers = db2.all<{ m: string; r: string; t: string; why: string | null }>("SELECT mission_id AS m, row_id AS r, model_tier AS t, model_reason AS why FROM mission_row ORDER BY m, r")

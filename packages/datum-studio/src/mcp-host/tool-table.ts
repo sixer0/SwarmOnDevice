@@ -78,6 +78,13 @@ export interface HostToolSession {
    * else is ignored, never refused. A compliance check, not access control (SR8-22, R20-C05).
    */
   memoryIndex?: { missionId: string; present: boolean }
+  /**
+   * 1.2.8 row 45b (SR8-05, AC-SEC05): `true` only when this MCP session's initialize carried the per-launch Mission
+   * Control key (`x-swarm-mission-control-key`, N8-459) and it matched (timing-safe). Set once per session by the host
+   * endpoint, never from a call's `_meta` or arguments. Person-only host tools (`studio_mission_place`) refuse a session
+   * without it (SESSION_NOT_ATTESTED, N8-460); decision answers record it (N8-461).
+   */
+  attested?: true
 }
 
 /** Row 188: `_meta` key of a tools/call that names the caller's session. */

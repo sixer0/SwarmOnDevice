@@ -32,7 +32,9 @@ afterAll(async () => {
   await store.close()
 })
 const tools = missionTools(store, { log: () => {} })
-const session = { sessionId: "mcp-45", agentId: "swarm", fileRoot: R }
+// Row 45b (AC-SEC05, INTENT): placement runs from an attested Mission Control session (AC-PROJb "From an attested
+// Mission Control session"); the unattested case is the last test.
+const session = { sessionId: "mcp-45", agentId: "swarm", fileRoot: R, attested: true as const }
 
 async function call(name: string, args: S): Promise<S & { text: string }> {
   const r = await tools.find((t) => t.name === name)!.call(args, session)
@@ -232,6 +234,39 @@ describe("N8-363 PROJ-b: studio_mission_place and setProjectDir", () => {
     expect(listed.map((t) => t.name)).toEqual(["studio_mission_get", "studio_mission_answer_decision"])
   })
 
-  // AC-SEC05 / SR8-05: the attested Mission Control session check (N8-460) lands with row 45b.
-  test.todo("row 45b: studio_mission_place from a session that is not attested -> SESSION_NOT_ATTESTED (N8-460)", () => {})
+  // Row 45b (C49, N8-C08): the host copies of the group-name rule must not drift from opencode's (OC/project/rehome.ts).
+  test("N8-C08 drift: GROUP_NAME_PATTERN, RESERVED_GROUP_NAMES and groupNameOk equal opencode's rule", async () => {
+    const host = (await import("../../src/store/mission/validate.ts")) as S
+    const oc = (await import(path.resolve(PKG, "..", "opencode", "src", "project", "rehome.ts"))) as S
+    expect(host.GROUP_NAME_PATTERN.source).toBe(oc.GROUP_NAME_PATTERN.source)
+    expect(host.GROUP_NAME_PATTERN.flags).toBe(oc.GROUP_NAME_PATTERN.flags)
+    expect([...host.RESERVED_GROUP_NAMES]).toEqual([...oc.RESERVED_GROUP_NAMES])
+    const names = ["Lumen", "Kemenkeu", "Pasang Surut", "Arsip Lama", "docs", "Docs", "DOCS", ".hidden", "a/b", "a\\b", "x".repeat(60), "x".repeat(61), "Lumen.", " Lumen", "Lumen ", "Lu\u202emen", "Lu\u200bmen", "Lu\u2028men", "Lu\u2029men", "Lu\u0007men", "Cafe\u0301", "Caf\u00e9", "", "-", "a.b", "..", "Ünïcödé"]
+    for (const n of names) expect(host.groupNameOk(n), JSON.stringify(n)).toBe(oc.groupNameOk(n))
+    // Same checks in the same order (the host adds only the non-string guard).
+    const body = (src: string) => {
+      const start = src.indexOf("function groupNameOk(")
+      const lines = src.slice(start, src.indexOf("\n}\n", start)).split("\n").slice(1).map((l) => l.trim())
+      return lines.map((l) => l.replace(/^if \(typeof name !== "string" \|\| /, "if (")).join("\n")
+    }
+    const hostSrc = await Bun.file(path.join(PKG, "src", "store", "mission", "validate.ts")).text()
+    const ocSrc = await Bun.file(path.resolve(PKG, "..", "opencode", "src", "project", "rehome.ts")).text()
+    expect(body(hostSrc)).toBe(body(ocSrc))
+  })
+
+  // AC-SEC05 / SR8-05 (row 45b): the attested Mission Control session check (N8-460).
+  test("row 45b: studio_mission_place from a session that is not attested -> SESSION_NOT_ATTESTED (N8-460); nothing moves", async () => {
+    const m = mission(7)
+    await create(m.id, m.title)
+    const before = dirOf(m.id)
+    const place = tools.find((t) => t.name === "studio_mission_place")!
+    for (const s of [{ sessionId: "mcp-agent", agentId: "swarm", fileRoot: R }, { sessionId: "mcp-claude", agentId: "claude", fileRoot: R }]) {
+      const r = await place.call({ mission: m.id, projectDir: path.join(R, "Lumen"), decision: "D-1" }, s)
+      const sc = r.structuredContent as S
+      expect(sc.ok).toBe(false)
+      expect(sc.code).toBe("SESSION_NOT_ATTESTED")
+      expect(sc.next).toContain("agents never move a mission")
+    }
+    expect(dirOf(m.id)).toBe(before)
+  })
 })

@@ -1012,8 +1012,8 @@ export class MissionStore {
     for (const r of req.blockingRows ?? []) this.rowDb(tx, mission, r)
     if (tx.get("SELECT 1 FROM mission_decision_request WHERE mission_id = ? AND request_id = ?", [mission, req.id])) throw err("DECISION_REQUEST_ID_TAKEN", "decision request id exists", { mission, request: req.id })
     tx.run(
-      "INSERT INTO mission_decision_request (mission_id, request_id, question, context, options, recommended, blocking_rows, status, requested_by, time_created) VALUES (?, ?, ?, ?, ?, ?, ?, 'open', ?, ?)",
-      [mission, req.id, req.question, req.context ?? null, JSON.stringify(packRequestOptions(req)), req.recommended ?? null, JSON.stringify(req.blockingRows ?? []), actor, tx.now],
+      "INSERT INTO mission_decision_request (mission_id, request_id, question, context, options, recommended, blocking_rows, status, requested_by, time_created, topic, proposal) VALUES (?, ?, ?, ?, ?, ?, ?, 'open', ?, ?, ?, ?)",
+      [mission, req.id, req.question, req.context ?? null, JSON.stringify(req.options), req.recommended ?? null, JSON.stringify(req.blockingRows ?? []), actor, tx.now, req.topic ?? null, req.proposal ? JSON.stringify(req.proposal) : null],
     )
     this.event(tx, { mission, verb: "decision", actor, detail: { request: req.id, action: "request", blockingRows: req.blockingRows ?? [] } })
     this.afterWrite(tx, mission, opts)
@@ -1037,16 +1037,22 @@ export class MissionStore {
       text: answer.text ?? `${req.question} -> ${option.label} (${req.id})`.slice(0, 8000),
       ...(req.blockingRows && req.blockingRows.length > 0 ? { rows: req.blockingRows } : {}),
     }
+    // 1.2.8 row 45b (SR8-05, N8-461): the host passes the answering session's agent id and attestation; trusted store
+    // code without a session leaves both NULL (no label). An attestation without a session is not recorded.
+    const via = typeof answer.via === "string" && VIA_RE.test(answer.via) ? answer.via : null
+    const attested = via === null ? null : answer.attested === true ? 1 : 0
     this.insertDecision(tx, mission, decision, actor)
-    tx.run("UPDATE mission_decision_request SET status = 'answered', answer_option = ?, answered_by = ?, answer_decision_id = ?, time_closed = ? WHERE mission_id = ? AND request_id = ?", [
+    tx.run("UPDATE mission_decision_request SET status = 'answered', answer_option = ?, answered_by = ?, answer_decision_id = ?, time_closed = ?, answered_via = ?, answered_attested = ? WHERE mission_id = ? AND request_id = ?", [
       option.id,
       answer.by,
       decision.id,
       tx.now,
+      via,
+      attested,
       mission,
       requestId,
     ])
-    this.event(tx, { mission, verb: "decision", actor, decision: decision.id, detail: { request: requestId, action: "answer", option: option.id } })
+    this.event(tx, { mission, verb: "decision", actor, decision: decision.id, detail: { request: requestId, action: "answer", option: option.id, ...(via !== null ? { via, attested: attested === 1 } : {}) } })
     this.afterWrite(tx, mission, opts)
     const g = this.graph(tx, mission)
     const ready = new Set(readyRows(g.rows, g.deps, new Set(this.requestBlocks(tx, mission).keys())))
@@ -1504,37 +1510,26 @@ function findingOf(f: Row): MissionFinding {
   }
 }
 
-/**
- * 1.2.8 row 45 (N8-146, N8-148): the request-level `topic` and `proposal` ride on the first stored option under
- * REQUEST_META_KEY, because the 0003 CHECK keeps `options` a 2-8 item array and row 45 adds no migration (45b is the
- * single migration writer). Readers before 1.2.8 see one extra option field and ignore it.
- */
-const REQUEST_META_KEY = "$request"
-
-function packRequestOptions(req: NewDecisionRequest): unknown[] {
-  if (req.topic === undefined) return req.options
-  const [first, ...rest] = req.options
-  return [{ ...first, [REQUEST_META_KEY]: { topic: req.topic, ...(req.proposal ? { proposal: req.proposal } : {}) } }, ...rest]
-}
+/** 1.2.8 row 45b: an answering session's agent id (= the host's X-Studio-Agent rule, http-server.ts AGENT_RE). */
+const VIA_RE = /^[A-Za-z0-9_.-]{1,40}$/
 
 function decisionRequestOf(r: Row): DecisionRequest {
   const blockingRows = JSON.parse(r.blocking_rows as string) as string[]
-  const stored = JSON.parse(r.options as string) as Array<DecisionRequest["options"][number] & { [REQUEST_META_KEY]?: Pick<DecisionRequest, "topic" | "proposal"> }>
-  const meta = stored[0]?.[REQUEST_META_KEY]
+  // 1.2.8 row 45b: topic and proposal have their own columns (migration 0008 moved row 45's options[0]["$request"]).
   return {
     id: r.request_id as string,
     question: r.question as string,
     ...(r.context ? { context: r.context as string } : {}),
-    ...(meta?.topic ? { topic: meta.topic } : {}),
-    ...(meta?.proposal ? { proposal: meta.proposal } : {}),
-    options: stored.map(({ [REQUEST_META_KEY]: _meta, ...o }) => o),
+    ...(r.topic ? { topic: r.topic as DecisionRequest["topic"] & string } : {}),
+    ...(r.proposal ? { proposal: JSON.parse(r.proposal as string) as NonNullable<DecisionRequest["proposal"]> } : {}),
+    options: JSON.parse(r.options as string) as DecisionRequest["options"],
     ...(r.recommended ? { recommended: r.recommended as string } : {}),
     blockingRows,
     status: r.status as DecisionRequest["status"],
     requestedBy: r.requested_by as string,
     createdAt: iso(r.time_created as number)!,
     ...(r.time_closed !== null && r.time_closed !== undefined ? { closedAt: iso(r.time_closed as number)! } : {}),
-    ...(r.status === "answered" ? { answer: { option: r.answer_option as string, by: r.answered_by as "user" | "controller", decision: r.answer_decision_id as string } } : {}),
+    ...(r.status === "answered" ? { answer: { option: r.answer_option as string, by: r.answered_by as "user" | "controller", decision: r.answer_decision_id as string, ...(typeof r.answered_via === "string" ? { via: r.answered_via } : {}), ...(r.answered_attested !== null && r.answered_attested !== undefined ? { attested: Number(r.answered_attested) === 1 } : {}) } } : {}),
   }
 }
 
