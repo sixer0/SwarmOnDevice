@@ -18,6 +18,7 @@ import { PromptPreflight } from "@/components/prompt-input/preflight-panel"
 import type { PreflightWorktree } from "@/components/prompt-input/preflight-controller"
 import { createPromptAutonomy, reportLanguageOf } from "@/components/prompt-input/autonomy"
 import { createPromptSubmit } from "@/components/prompt-input/submit"
+import { usePromptFolderPicker } from "@/components/prompt-input/folder"
 import { autonomousToast } from "@/components/settings-v2/general-controllers"
 import { selectionFromLines, type SelectedLineRange, useFile } from "@/context/file"
 import { useComments } from "@/context/comments"
@@ -354,7 +355,9 @@ export function usePromptInputV2Controller(props: PromptInputV2ControllerProps):
     })),
   )
   const variants = createMemo(() => ["default", ...props.controls.model.selection.variant.list()])
+  const pickFolder = usePromptFolderPicker()
   const controller = createPromptInputV2Controller({
+    pickFolder,
     store: () => prompt.capture().store,
     state: interaction,
     identity: () => prompt.capture(),
@@ -477,6 +480,13 @@ export function usePromptInputV2Controller(props: PromptInputV2ControllerProps):
       keybind: "mod+u",
       disabled: controller.state.mode !== "normal",
       onSelect: () => controller.attach(),
+    },
+    {
+      id: "file.attachFolder",
+      title: language.t("ui.promptInput.addFolder"),
+      category: language.t("command.category.file"),
+      disabled: controller.state.mode !== "normal",
+      onSelect: () => void controller.addFolder(),
     },
     {
       id: "prompt.mode.shell",
