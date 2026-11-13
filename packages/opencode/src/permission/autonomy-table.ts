@@ -346,10 +346,12 @@ const READS = new Map<string, { short?: string; long?: readonly string[]; exact?
   ["tail", { short: "fF", long: ["--follow", "--retry"] }],
   ["wc", { long: ["--files0-from"] }],
   ["stat", {}],
-  ["file", { short: "C", long: ["--compile"] }],
+  // 1.2.7 row 47a (M1-01): `-z`/`-Z` decompress, which libmagic may hand to an outside program (gzip, xz, zstd …).
+  ["file", { short: "CzZ", long: ["--compile", "--uncompress", "--uncompress-noreport"] }],
   ["pwd", {}],
   ["tree", { short: "oR", long: ["--output", "--fromfile"] }],
-  ["rg", { short: "uLz.", long: ["--pre", "--pre-glob", "--hidden", "--no-ignore", "--follow", "--search-zip", "--unrestricted"] }],
+  // 1.2.7 row 47a (M1-01): `--hostname-bin=<program>` runs that program (ripgrep 13+), as `--pre` and `-z` do.
+  ["rg", { short: "uLz.", long: ["--pre", "--pre-glob", "--hostname-bin", "--hidden", "--no-ignore", "--follow", "--search-zip", "--unrestricted"] }],
   ["grep", { short: "rRdD", long: ["--recursive", "--dereference-recursive", "--directories", "--devices"] }],
   ["egrep", { short: "rRdD", long: ["--recursive", "--dereference-recursive", "--directories", "--devices"] }],
   ["find", { exact: ["-exec", "-execdir", "-ok", "-okdir", "-delete", "-fprint", "-fprint0", "-fprintf", "-fls"] }],
@@ -357,7 +359,8 @@ const READS = new Map<string, { short?: string; long?: readonly string[]; exact?
   ["uniq", { maxPaths: 1 }],
   ["cut", {}],
   ["tr", {}],
-  ["diff", { long: ["--output", "--to-file", "--from-file"] }],
+  // 1.2.7 row 47a (M1-01): `-l`/`--paginate` pipes the output through `pr`, a program diff starts.
+  ["diff", { short: "l", long: ["--output", "--to-file", "--from-file", "--paginate"] }],
   ["cmp", {}],
   ["comm", {}],
   ["paste", {}],
@@ -581,6 +584,12 @@ const GIT_LISTS: Readonly<Record<string, RegExp>> = {
 const GIT_ACTS = /^(--output(=.*)?|--ext-diff|--open-files-in-pager(=.*)?|-O.*|--no-index|--exec(=.*)?|--textconv)$/
 // 1.1.1 F10a (G3-1): the same options by name, as git also takes them shortened (one list, in `bypass-lists.ts`).
 const gitActs = (word: string) => GIT_ACTS.test(word) || Risk.abbreviates(word, BypassLists.GIT_ACT_NAMES, BypassLists.GIT_ACT_EXACT)
+// 1.2.7 row 47a (M1-12): options with which a look starts a program the user's own (unvetted, OP-6) git config names:
+// `cat-file --filters` runs the smudge and textconv drivers, `--show-signature` and the signature placeholders of a format
+// (`%G?`, `%GS`, `%(signature)`) run `gpg.program`. git takes `cat-file`'s long options shortened too.
+const GIT_RUNS_NAMES: readonly string[] = ["--filters", "--show-signature"]
+const GIT_SIGNATURE_FORMAT = /%G|%\(signature/
+const gitRuns = (word: string) => Risk.abbreviates(word, GIT_RUNS_NAMES) || GIT_SIGNATURE_FORMAT.test(word)
 // The one word after these flags is a revision, not a name to make.
 const GIT_REV_FLAG = /^--(contains|merged|no-merged|points-at)$/
 
@@ -611,7 +620,7 @@ function nestedGitAllowed(cwd: string, instance: InstanceContext) {
 }
 
 function gitLook(sub: string, args: readonly string[]) {
-  if (args.some(gitActs)) return false
+  if (args.some(gitActs) || args.some(gitRuns)) return false
   if (GIT_READS.has(sub)) return true
   const flags = GIT_LISTS[sub]
   if (!flags) return false
@@ -2069,6 +2078,8 @@ const NO_PROBE = new Set([
   "sudo", "su", "doas", "login", "passwd", "shutdown", "reboot", "halt", "poweroff", "init", "telinit", "systemctl",
   "launchctl", "security", "osascript", "open", "xargs", "nohup", "nice", "time", "watch", "caffeinate", "eval", "exec",
   "source", "command", "builtin", "kill", "killall", "pkill",
+  // 1.2.7 row 47a (M1-04): zsh builtins that run the next command or a text.
+  "noglob", "nocorrect", "emulate", "trap",
 ])
 // Shells and interpreters read `-v` and `-h` as something else (verbose, a host), so only the long forms and `-V` are probes.
 const LONG_PROBE_ONLY = new Set(["sh", "bash", "zsh", "dash", "ksh", "fish", "csh", "tcsh", "python", "python2", "python3", "perl", "ruby", "php", "lua"])
@@ -2175,20 +2186,61 @@ function unzipPaths(args: readonly string[]) {
   return [archive]
 }
 
-const GRAFT_QUERIES = new Set(["ask", "map", "skeleton", "callers", "grep", "blast"])
-const GRAFT_GLOBAL_REFUSED = ["--dir", "--provider", "--model", "--api-key", "--base-url"]
+/**
+ * 1.2.7 row 47a (M1-11): per query sub-command, exactly the options its `--help` lists that only shape the answer (graft
+ * 0.x): `flags` take no value, `values` take one word (or `--long=value`) that must match its rule, and `positionals` caps
+ * the bare words (`<query>`/`<symbol>`/`<file>` and `[dir]`). Not allowed: `blast --name` (an LLM call), `--pr-author` (a
+ * GitHub lookup), `--export-viz`/`--title` (a written page), `-h`, and any option graft adds later.
+ */
+type GraftRule = { flags: readonly string[]; values: Readonly<Record<string, RegExp>>; positionals: number }
+const GRAFT_COUNT = /^\d{1,4}$/
+const GRAFT_PREFIX = /^[\w./@-]+$/
+const GRAFT_DEPTH = /^(\d{1,3}|all)$/
+const GRAFT_QUERIES: Readonly<Record<string, GraftRule>> = {
+  ask: {
+    flags: ["--source", "--full", "--json", "--no-graph-rank", "--no-refresh"],
+    values: { "-n": GRAFT_COUNT, "--limit": GRAFT_COUNT, "--in": GRAFT_PREFIX },
+    positionals: 2,
+  },
+  map: { flags: ["--json", "--no-refresh"], values: { "--max-dirs": GRAFT_COUNT }, positionals: 1 },
+  skeleton: { flags: ["--json", "--no-refresh"], values: {}, positionals: 2 },
+  callers: {
+    flags: ["--json", "--no-refresh"],
+    values: { "--direction": /^(in|out)$/, "-d": GRAFT_DEPTH, "--depth": GRAFT_DEPTH, "--in": GRAFT_PREFIX },
+    positionals: 2,
+  },
+  grep: { flags: ["-i", "--ignore-case", "--fixed", "--json", "--no-refresh"], values: { "--in": GRAFT_PREFIX }, positionals: 2 },
+  blast: {
+    flags: ["--no-owners", "--no-refresh"],
+    values: { "--base": /^[\w./^~@{}-]+$/, "-d": GRAFT_DEPTH, "--depth": GRAFT_DEPTH, "--format": /^(text|markdown|mermaid|json)$/ },
+    positionals: 1,
+  },
+}
 
 /**
- * SR §3.2 `graft` (SR7-05 b): a query sub-command with `--no-refresh` (without it the query rebuilds `graft/` and may add a
- * `.gitignore` line), `blast` without `--export-viz`, and none of the options that move where graft writes or connects.
- * `graft --version` is a probe. A query names no file the table has to judge, so it gives no paths.
+ * SR §3.2 `graft` (SR7-05 b; 1.2.7 row 47a, M1-11): `graft <query> …` with `--no-refresh` (without it the query rebuilds
+ * `graft/` and may add a `.gitignore` line) and only the options `GRAFT_QUERIES` allows for that query. No option before
+ * the sub-command. `graft --version` is a probe. A query names no file the table has to judge, so it gives no paths.
  */
 function graftPaths(args: readonly string[]) {
-  if (args.some((word) => Risk.abbreviates(word, GRAFT_GLOBAL_REFUSED))) return undefined
-  const sub = args.find((word) => !word.startsWith("-"))
-  if (sub === undefined || !GRAFT_QUERIES.has(sub) || !args.includes("--no-refresh")) return undefined
-  if (sub === "blast" && args.some((word) => Risk.abbreviates(word, ["--export-viz"]))) return undefined
-  return [] as string[]
+  const [sub, ...rest] = args
+  const rule = sub !== undefined && Object.hasOwn(GRAFT_QUERIES, sub) ? GRAFT_QUERIES[sub] : undefined
+  if (!rule || !rest.includes("--no-refresh")) return undefined
+  let positionals = 0
+  for (let index = 0; index < rest.length; index++) {
+    const word = rest[index]!
+    if (!word.startsWith("-")) {
+      positionals++
+      continue
+    }
+    if (rule.flags.includes(word)) continue
+    const [name, inline] = word.startsWith("--") && word.includes("=") ? [word.slice(0, word.indexOf("=")), word.slice(word.indexOf("=") + 1)] : [word, undefined]
+    const value = Object.hasOwn(rule.values, name) ? rule.values[name] : undefined
+    if (!value) return undefined
+    const given = inline ?? rest[++index]
+    if (given === undefined || !value.test(given)) return undefined
+  }
+  return positionals <= rule.positionals ? ([] as string[]) : undefined
 }
 
 /** SR7-05 d: `git reflog` only bare or as `show`, `list` or `exists`; `expire` and `delete` change the repository. */
@@ -3299,8 +3351,24 @@ export function subagentSendsAnyway(input: Input): boolean {
 /** 1.2.7 U-7 (C21 b, c): the shells whose `-c` text is read as a command line, and whose script file is screened as one. */
 const SHELL_TEXT_PROGRAMS: ReadonlySet<string> = new Set(["sh", "bash", "zsh"])
 
+/** 1.2.7 row 47a (M1-04): the modes of zsh's `emulate`, whose `-c <text>` evaluates the text as `sh -c` does. */
+const EMULATE_MODES: ReadonlySet<string> = new Set(["zsh", "sh", "ksh", "csh"])
+
 /**
- * 1.2.7 U-7 (C21 b): a call that is exactly `sh|bash|zsh -c '<one literal>'` (one command, nothing before or after it, no
+ * The text of a step that is exactly `sh|bash|zsh -c <text>`, or (row 47a, M1-04) zsh's `emulate [-lLR] <mode> -c <text>`;
+ * undefined for any other shape, which then keeps the 1.2.6 path.
+ */
+function shellTextOf(argv: readonly string[]) {
+  if (argv.length === 3 && SHELL_TEXT_PROGRAMS.has(argv[0]!) && argv[1] === "-c") return argv[2]
+  if (argv[0] !== "emulate") return undefined
+  let index = 1
+  while (/^-[lLR]+$/.test(argv[index] ?? "")) index++
+  return EMULATE_MODES.has(argv[index] ?? "") && argv[index + 1] === "-c" && argv.length === index + 3 ? argv[index + 2] : undefined
+}
+
+/**
+ * 1.2.7 U-7 (C21 b): a call that is exactly `sh|bash|zsh -c '<one literal>'` (row 47a, M1-04: or zsh
+ * `emulate <mode> -c '<literal>'`, `shellTextOf`) (one command, nothing before or after it, no
  * redirect, no `cd`, no `NAME=value`), as the text the shell will run: the literal read by the shell's own reader
  * (`ScriptReader`, the same tree-sitter `decompose` the shell tool gives `metadata.steps` with). undefined keeps the call
  * as it was (decided `unreadable_command`): the reader is not ready; the literal has an expansion, a substitution, a
@@ -3318,9 +3386,9 @@ function shellTextCall(input: Input): Input | undefined {
   if (!outer || outer.steps.length !== 1 || outer.writes.length > 0 || outer.upward || outer.chdirs || outer.assigned)
     return undefined
   const step = outer.steps[0]!
-  if (step.code !== undefined || step.argv.length !== 3 || step.cwds.length !== 1 || step.cwds[0] !== input.cwd) return undefined
-  const [program, flag, text] = step.argv as [string, string, string]
-  if (!SHELL_TEXT_PROGRAMS.has(program) || flag !== "-c" || text.trim() === "") return undefined
+  if (step.code !== undefined || step.cwds.length !== 1 || step.cwds[0] !== input.cwd) return undefined
+  const text = shellTextOf(step.argv)
+  if (text === undefined || text.trim() === "") return undefined
   if (/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(text.replace(/[\n\t]/g, "")) || text.includes("\\\n")) return undefined
   const steps = ScriptReader.read(text, input.cwd)
   const reading = shellReading(steps, input.instance)
