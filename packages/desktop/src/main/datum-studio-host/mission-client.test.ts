@@ -80,7 +80,8 @@ describe("allow-list", () => {
       return { ok: true, tool: name, changed: [], waves: [], ready: [], checkpoints: [], messages: [{ seq: 7 }], dryRun: false }
     })
     const c = client(host.fetch)
-    expect(await c.list({ directory: "/Users/x/proj" })).toEqual({ ok: true, data: { items: [{ id: MISSION }] as never } })
+    // INTENT 1.2.7 U-1: list sends the session ids and no projectDir; U-4 (N7-031): messagesTail 50.
+    expect(await c.list({ directory: "/Users/x/proj", sessions: ["ses_abc123"] })).toEqual({ ok: true, data: { items: [{ id: MISSION }] as never } })
     expect((await c.get({ mission: MISSION })).ok).toBe(true)
     expect(await c.answer({ mission: MISSION, request: "D-1", option: "A" })).toEqual({ ok: true, data: { decision: "U1", released: ["3"] } })
     expect(await c.instruct({ mission: MISSION, text: "  hurry up  ", row: "4a" })).toEqual({ ok: true, data: { seq: 7 } })
@@ -92,8 +93,8 @@ describe("allow-list", () => {
       "studio_mission_answer_decision",
       "studio_mission_update_row",
     ])
-    expect(tc[0].arguments).toEqual({ projectDir: "/Users/x/proj", status: ["draft", "approved", "running", "paused", "done"], take: 20 })
-    expect(tc[1].arguments).toEqual({ mission: MISSION, include: ["rows", "decisions", "requests", "messages", "deliverables"], messagesTail: 20 })
+    expect(tc[0].arguments).toEqual({ status: ["draft", "approved", "running", "paused", "done"], take: 20, sessions: ["ses_abc123"] })
+    expect(tc[1].arguments).toEqual({ mission: MISSION, include: ["rows", "decisions", "requests", "messages", "deliverables"], messagesTail: 50 })
     expect(tc[2].arguments).toEqual({ mission: MISSION, include: ["decisions"] })
     expect(tc[3].arguments).toEqual({ mission: MISSION, request: "D-1", option: "A", by: "user", decisionId: "U1", actor: "mission-control" })
     expect(tc[4].arguments).toEqual({
@@ -162,7 +163,7 @@ describe("token isolation", () => {
     const host = fakeHost(() => ({ ok: true, tool: "studio_mission_list", items: [] }))
     const cwd = join(dir, "mission-control-cwd")
     const c = client(host.fetch, { callerCwd: cwd })
-    const r = await c.list({ directory: "/Users/x/proj" })
+    const r = await c.list({ directory: "/Users/x/proj", sessions: ["ses_abc123"] })
     expect(JSON.stringify(r)).not.toContain(TOKEN)
     for (const call of host.calls) {
       expect(call.url).toBe(URL_OK)
@@ -187,7 +188,7 @@ describe("token isolation", () => {
     const c = client(async () => {
       throw new Error(`connect failed ${TOKEN}`)
     }, { log: (...a) => void logs.push(a) })
-    const r = await c.list({ directory: "/a" })
+    const r = await c.list({ directory: "/a", sessions: ["ses_abc123"] })
     expect(r).toMatchObject({ ok: false, code: "HOST_UNAVAILABLE" })
     expect(JSON.stringify(r) + JSON.stringify(logs)).not.toContain(TOKEN)
   })
@@ -196,7 +197,7 @@ describe("token isolation", () => {
     for (const bad of ["http://localhost:1/mcp", "https://127.0.0.1:1/mcp", "http://127.0.0.1:1/other", "http://u:p@127.0.0.1:1/mcp", "http://127.0.0.1/mcp", "http://10.0.0.1:1/mcp", "nonsense"]) {
       expect(loopbackMcpUrl(bad)).toBeNull()
       const host = fakeHost(() => ({ ok: true }))
-      const r = await createMissionControlClient({ url: bad, token: TOKEN, callerCwd: join(dir, "mc"), fetch: host.fetch }).list({ directory: "/a" })
+      const r = await createMissionControlClient({ url: bad, token: TOKEN, callerCwd: join(dir, "mc"), fetch: host.fetch }).list({ directory: "/a", sessions: ["ses_abc123"] })
       expect(r).toMatchObject({ ok: false, code: "HOST_UNAVAILABLE" })
       expect(host.calls).toHaveLength(0)
     }
@@ -249,7 +250,7 @@ describe("answer id rule and session handling", () => {
   test("one initialize per client; session id and protocol version ride on later calls; SSE replies are read", async () => {
     const host = fakeHost((name) => ({ ok: true, tool: name, items: [] }), { sse: true })
     const c = client(host.fetch)
-    await Promise.all([c.list({ directory: "/a" }), c.list({ directory: "/b" })])
+    await Promise.all([c.list({ directory: "/a", sessions: ["ses_abc123"] }), c.list({ directory: "/b", sessions: ["ses_abc123"] })])
     expect(host.calls.filter((x) => x.body.method === "initialize")).toHaveLength(1)
     for (const call of host.toolCalls()) {
       expect(call.headers["mcp-session-id"]).toBe("s1")
@@ -259,19 +260,19 @@ describe("answer id rule and session handling", () => {
 
   test("404 on a call re-initialises once", async () => {
     const host = fakeHost((name) => ({ ok: true, tool: name, items: [] }), { status: (n) => (n === 3 ? 404 : undefined) })
-    expect(await client(host.fetch).list({ directory: "/a" })).toEqual({ ok: true, data: { items: [] } })
+    expect(await client(host.fetch).list({ directory: "/a", sessions: ["ses_abc123"] })).toEqual({ ok: true, data: { items: [] } })
     expect(host.calls.filter((x) => x.body.method === "initialize")).toHaveLength(2)
   })
 
   test("401 means HOST_UNAVAILABLE; a stopped host is not contacted; a slow host times out", async () => {
     const h401 = fakeHost(() => ({ ok: true }), { status: () => 401 })
-    expect(await client(h401.fetch).list({ directory: "/a" })).toMatchObject({ ok: false, code: "HOST_UNAVAILABLE" })
+    expect(await client(h401.fetch).list({ directory: "/a", sessions: ["ses_abc123"] })).toMatchObject({ ok: false, code: "HOST_UNAVAILABLE" })
     const stopped = fakeHost(() => ({ ok: true }))
-    expect(await client(stopped.fetch, { running: () => false }).list({ directory: "/a" })).toMatchObject({ ok: false, code: "HOST_UNAVAILABLE" })
+    expect(await client(stopped.fetch, { running: () => false }).list({ directory: "/a", sessions: ["ses_abc123"] })).toMatchObject({ ok: false, code: "HOST_UNAVAILABLE" })
     expect(stopped.calls).toHaveLength(0)
     const slow: FetchLike = (_u, init) =>
       new Promise((_r, reject) => init.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError"))))
-    expect(await client(slow, { timeoutMs: 50 }).list({ directory: "/a" })).toMatchObject({ ok: false, code: "TIMEOUT" })
+    expect(await client(slow, { timeoutMs: 50 }).list({ directory: "/a", sessions: ["ses_abc123"] })).toMatchObject({ ok: false, code: "TIMEOUT" })
   })
 
   test("row 136 M1: a hung tool call (SSE headers sent, body never ends) times out; the session stays usable", async () => {
@@ -286,17 +287,17 @@ describe("answer id rule and session handling", () => {
     }
     const c = client(fetch, { timeoutMs: 100 })
     const t0 = Date.now()
-    const r = await Promise.race([c.list({ directory: "/a" }), Bun.sleep(1500).then(() => "STILL_PENDING" as const)])
+    const r = await Promise.race([c.list({ directory: "/a", sessions: ["ses_abc123"] }), Bun.sleep(1500).then(() => "STILL_PENDING" as const)])
     expect(r).toMatchObject({ ok: false, code: "TIMEOUT" })
     expect(Date.now() - t0).toBeLessThan(1000)
     hang = false
-    expect(await c.list({ directory: "/a" })).toEqual({ ok: true, data: { items: [] } })
+    expect(await c.list({ directory: "/a", sessions: ["ses_abc123"] })).toEqual({ ok: true, data: { items: [] } })
   })
 
   test("row 136 M1: a hung initialize body also times out", async () => {
     const fetch: FetchLike = async () =>
       new Response(new ReadableStream({ start() {} }), { status: 200, headers: { "content-type": "application/json", "mcp-session-id": "s1" } })
-    const r = await Promise.race([client(fetch, { timeoutMs: 100 }).list({ directory: "/a" }), Bun.sleep(1500).then(() => "STILL_PENDING" as const)])
+    const r = await Promise.race([client(fetch, { timeoutMs: 100 }).list({ directory: "/a", sessions: ["ses_abc123"] }), Bun.sleep(1500).then(() => "STILL_PENDING" as const)])
     expect(r).toMatchObject({ ok: false, code: "TIMEOUT" })
   })
 })

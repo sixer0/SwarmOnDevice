@@ -198,7 +198,14 @@ export function createMissionPoller(input: {
       emit(emptyMissionState())
     }
     const sessions = [...(input.sessions?.() ?? [])].slice(0, MISSION_SESSIONS_MAX)
-    const listed = await within(() => input.source.list(sessions.length > 0 ? { directory, sessions } : { directory }))
+    // 1.2.7 U-1 (U2): the panel lists only missions linked to this window's sessions. No session, no mission.
+    if (sessions.length === 0) {
+      failures = 0
+      seen = { directory }
+      emit({ ...emptyMissionState(), listed: true })
+      return
+    }
+    const listed = await within(() => input.source.list({ directory, sessions }))
     if (current() === "stopped" || disposed || directory !== input.directory()) return
     if (!listed || !listed.ok) {
       emit({ unavailable: listed?.code === "HOST_UNAVAILABLE" })

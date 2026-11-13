@@ -71,6 +71,9 @@ const WORK = realpathSync(mkdtempSync(join(BASE, "run-")))
 const MC_CWD = join(WORK, "state", "swarm", "datum-studio-mission-control")
 const RENDERER_URL = "oc://renderer/index.html"
 const quote = (label: string, v: unknown) => console.log(`[row134] ${label}: ${JSON.stringify(v)}`)
+// INTENT 1.2.7 U-1 (U2): the panel lists only missions linked (client swarm) to the window's sessions. The fixture
+// missions are made by agent "claude", so beforeAll links them to this session the way a Swarm agent write would.
+const FX_SESSION = "ses_0134f0000001Row134Fixture1"
 
 type S = Record<string, any>
 type Manifest = {
@@ -165,7 +168,11 @@ function buildBridge() {
   }
   // preload/index.ts:74-89 (the renderer gets only these four functions)
   missions = {
-    list: (input: S) => invoke(MISSION_CONTROL_IPC.list, { directory: input?.directory }),
+    list: (input: S) =>
+      invoke(MISSION_CONTROL_IPC.list, {
+        directory: input?.directory,
+        ...(input?.sessions === undefined ? {} : { sessions: Array.isArray(input.sessions) ? [...input.sessions] : input.sessions }),
+      }),
     get: (input: S) => invoke(MISSION_CONTROL_IPC.get, { mission: input?.mission }),
     answer: (input: S) => invoke(MISSION_CONTROL_IPC.answer, { mission: input?.mission, request: input?.request, option: input?.option }),
     instruct: (input: S) =>
@@ -193,6 +200,18 @@ async function hostGet(mission: string, include: string[]) {
   await post({ jsonrpc: "2.0", method: "notifications/initialized" }, init.sid)
   const r = await post({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "studio_mission_get", arguments: { mission, include } } }, init.sid)
   return r.json.result?.structuredContent as S
+}
+
+/** Test setup (INTENT 1.2.7 U-1): link every fixture mission to FX_SESSION under client swarm, as an agent write does. */
+function linkFixtureSession() {
+  const db = new Database(join(fx.store, "datum-studio.sqlite"))
+  try {
+    db.exec("PRAGMA busy_timeout = 5000")
+    const insert = db.prepare("INSERT OR IGNORE INTO mission_session (mission_id, client, session_ref, role, time_linked) VALUES (?, 'swarm', ?, NULL, ?)")
+    for (const m of fx.missions) insert.run(m.id, FX_SESSION, Date.now())
+  } finally {
+    db.close()
+  }
 }
 
 /** Store truth for G4, read straight from the SQLite file (read-only): verified = state verified AND sha matches. */
@@ -255,6 +274,7 @@ function mount() {
     const control = createMissionControl({
       source: timed,
       directory: () => fx.project,
+      sessions: () => [FX_SESSION],
       lang: () => "en",
       watching,
       mapOpen,
@@ -280,6 +300,7 @@ async function show(id: string, title: string) {
 
 beforeAll(async () => {
   fx = await startHost()
+  linkFixtureSession()
   quote("fixtures generated through the real host", { missions: fx.missions.map((m) => [m.id, m.type]), generatedMs: fx.generatedMs, mutation: fx.mutation })
   buildBridge()
   mount()
@@ -496,7 +517,7 @@ describe("row 134: four fixture missions from the real host, through the desktop
     for (let i = 0; i < 20; i++) {
       for (const m of fx.missions) {
         let t0 = performance.now()
-        const l = await missions.list({ directory: fx.project })
+        const l = await missions.list({ directory: fx.project, sessions: [FX_SESSION] })
         lists.push(performance.now() - t0)
         expect(l.ok).toBe(true)
         t0 = performance.now()
@@ -568,6 +589,7 @@ describe("row 134: four fixture missions from the real host, through the desktop
       control = createMissionControl({
         source: missionSourceOf({ missions })!,
         directory: () => fx.project,
+        sessions: () => [FX_SESSION],
         lang: () => "en",
         watching: () => filter() === "agents",
         mapOpen: () => true,

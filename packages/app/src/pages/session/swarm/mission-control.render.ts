@@ -48,6 +48,8 @@ const { MissionControl, widePaneWidth, missionStageWidth, WIDE_PANE } = await im
 const { createSessionMap } = await import(new URL("../map/session-map-controller.ts", import.meta.url).pathname)
 const { SwarmAgents } = await import(new URL("./swarm-view.tsx", import.meta.url).pathname)
 const { createMissionControl } = await import(new URL("./mission-poll.ts", import.meta.url).pathname)
+// INTENT 1.2.7 U-1 (U2): the poll lists only by the window's session ids, so each control here has one.
+const RENDER_SES = ["ses_render0001"]
 
 // ── Fake source: two missions in the project, one with an open decision
 
@@ -225,6 +227,7 @@ async function mount(options: MountOptions) {
     const control = createMissionControl({
       source: source ?? undefined,
       directory: () => "/repo",
+      sessions: () => RENDER_SES,
       lang: () => "en",
       watching: () => options.watching ?? true,
       mapOpen: () => true,
@@ -497,6 +500,7 @@ describe("SwarmAgents mount line", () => {
       const control = createMissionControl({
         source,
         directory: () => "/repo",
+        sessions: () => RENDER_SES,
         lang: () => "en",
         watching: () => true,
         mapOpen: () => true,
@@ -531,6 +535,7 @@ describe("row 133b: expand toggle widens the existing Activity pane", () => {
       const control = createMissionControl({
         source: fakeSource(["m-doc-1"]),
         directory: () => "/repo",
+        sessions: () => RENDER_SES,
         lang: () => "en",
         watching: () => true,
         mapOpen: () => true,

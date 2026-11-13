@@ -127,6 +127,9 @@ export function MissionControl(props: MissionControlMount & { width?: number }) 
           <p data-mission-empty-hint class={`text-12-regular ${FAINT}`}>
             {t("session.mission.emptyHint")}
           </p>
+          <p data-mission-empty-session class={`text-12-regular ${FAINT}`}>
+            {t("session.mission.emptySession")}
+          </p>
         </section>
       </Match>
       <Match when={shown()}>

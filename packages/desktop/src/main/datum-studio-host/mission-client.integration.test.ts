@@ -26,6 +26,8 @@ const PROJECT = join(HOME, "project-127")
 const MC_CWD = join(WORK, "state", "swarm", "datum-studio-mission-control")
 for (const d of [HOME, RES, PROJECT, join(WORK, "data", "swarm")]) mkdirSync(d, { recursive: true })
 const M = "2026-11-07_m127-bridge"
+// INTENT 1.2.7 U-1 (U2): the panel lists by session ids only; the mission is linked to this Swarm session at create.
+const IT_SES = "ses_0127b0000001Row127Bridge01"
 const quote = (label: string, v: unknown) => console.log(`[row127] ${label}: ${JSON.stringify(v)}`)
 
 type Host = { child: ChildProcessWithoutNullStreams; url: string; token: string; stderr: () => string }
@@ -161,7 +163,7 @@ describe("row 127: mission bridge against the real host", () => {
   beforeAll(async () => {
     const call = raw(host!)
     const created = await call("studio_mission_create", {
-      mission: { id: M, title: "Row 127 bridge mission", type: "feature-release", owner: "master-controller", project: { dir: PROJECT }, rows: [row("1"), row("2", ["1:B"])], decisions: [{ id: "U1", by: "user", date: "2026-11-07", text: "go" }] },
+      mission: { id: M, title: "Row 127 bridge mission", type: "feature-release", owner: "master-controller", project: { dir: PROJECT }, sessions: [{ client: "swarm", ref: IT_SES }], rows: [row("1"), row("2", ["1:B"])], decisions: [{ id: "U1", by: "user", date: "2026-11-07", text: "go" }] },
     })
     if (!created.ok) quote("mission create refused", created)
     expect(created.ok).toBe(true)
@@ -181,14 +183,14 @@ describe("row 127: mission bridge against the real host", () => {
   }, 60_000)
 
   test("list returns the session's missions as JSON", async () => {
-    const r = await client.list({ directory: PROJECT })
+    const r = await client.list({ directory: PROJECT, sessions: [IT_SES] })
     results.push(r)
     quote("list", r.ok ? { items: r.data.items.map((i) => ({ id: i.id, status: i.status, activityAt: i.activityAt })) } : r)
     expect(r.ok).toBe(true)
     if (!r.ok) return
     expect(r.data.items.map((i) => i.id)).toEqual([M])
     expect(r.data.items[0]).toMatchObject({ id: M, status: "running" })
-    expect(await client.list({ directory: join(HOME, "other") })).toEqual({ ok: true, data: { items: [] } })
+    expect(await client.list({ directory: PROJECT, sessions: ["ses_0127b0000002Row127Other002"] })).toEqual({ ok: true, data: { items: [] } })
   })
 
   test("get returns mission, derived, requests, messages, deliverables", async () => {

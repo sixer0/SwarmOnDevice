@@ -46,6 +46,9 @@ const flush = async () => {
   for (let i = 0; i < 10; i++) await Promise.resolve()
 }
 
+// INTENT 1.2.7 U-1 (U2): the poll lists only by the window's session ids, so each poller here has one.
+const SES = ["ses_poll0001"]
+
 const item = (id: string, status: MissionListItemWire["status"], updatedAt = "t1"): MissionListItemWire => ({
   id,
   title: id,
@@ -85,6 +88,7 @@ function setup(items: () => MissionListItemWire[], directory = () => "/repo" as 
   const poller = createMissionPoller({
     source: fake.source,
     directory,
+    sessions: () => SES,
     lang: () => "en",
     listFiles: async () => [],
     onState: (s) => states.push(s),
@@ -172,7 +176,7 @@ describe("mission poller", () => {
       get: async (input) => ({ ok: true, data: getWire(input.mission) }),
     }
     const states: MissionControlState[] = []
-    const poller = createMissionPoller({ source, directory: () => "/repo", lang: () => "en", onState: (s) => states.push(s), timers: fakeTimers().timers })
+    const poller = createMissionPoller({ source, directory: () => "/repo", sessions: () => SES, lang: () => "en", onState: (s) => states.push(s), timers: fakeTimers().timers })
     poller.setMode("discover")
     await flush()
     expect(states.every((s) => !s.listed)).toBe(true)
@@ -240,7 +244,7 @@ describe("mission poller", () => {
     const fake = gated(() => [item("a", "running", updatedAt), item("b", "paused")])
     const clock = fakeTimers()
     const states: MissionControlState[] = []
-    const poller = createMissionPoller({ source: fake.source, directory: () => "/repo", lang: () => "en", onState: (s) => states.push(s), timers: clock.timers })
+    const poller = createMissionPoller({ source: fake.source, directory: () => "/repo", sessions: () => SES, lang: () => "en", onState: (s) => states.push(s), timers: clock.timers })
     poller.setMode("live")
     await flush()
     expect(states.at(-1)!.mission?.id).toBe("a")
@@ -273,6 +277,7 @@ describe("mission poller", () => {
     const poller = createMissionPoller({
       source: fake.source,
       directory: () => "/repo",
+      sessions: () => SES,
       lang: () => "en",
       listFiles: () => (holdFiles ? new Promise<string[]>((resolve) => (releaseFiles = () => resolve([]))) : Promise.resolve([])),
       onState: (s) => states.push(s),
@@ -330,7 +335,7 @@ describe("mission poller", () => {
     }
     const clock = fakeTimers()
     const states: MissionControlState[] = []
-    const poller = createMissionPoller({ source, directory: () => "/repo", lang: () => "en", onState: (s) => states.push(s), timers: clock.timers })
+    const poller = createMissionPoller({ source, directory: () => "/repo", sessions: () => SES, lang: () => "en", onState: (s) => states.push(s), timers: clock.timers })
     poller.setMode("live")
     await flush()
     expect(calls).toEqual(["list:/repo"])
@@ -349,7 +354,7 @@ describe("mission poller", () => {
     const fake = gated(() => [item("a", "running")])
     const clock = fakeTimers()
     const states: MissionControlState[] = []
-    const poller = createMissionPoller({ source: fake.source, directory: () => "/repo", lang: () => "en", onState: (s) => states.push(s), timers: clock.timers })
+    const poller = createMissionPoller({ source: fake.source, directory: () => "/repo", sessions: () => SES, lang: () => "en", onState: (s) => states.push(s), timers: clock.timers })
     fake.hold(true)
     poller.setMode("live")
     await flush()
@@ -394,6 +399,7 @@ describe("row 165E: registered Studio outputs", () => {
     const poller = createMissionPoller({
       source,
       directory: () => "/repo",
+      sessions: () => SES,
       lang: () => "en",
       listFiles: async () => [HTML, OTHER],
       onState: () => {},

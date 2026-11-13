@@ -78,17 +78,18 @@ describe("row 183: the client passes sessions to studio_mission_list", () => {
     return { fetch, args }
   }
 
-  test("sessions present -> passed; absent or empty -> the arguments of before", async () => {
+  // INTENT 1.2.7 U-1 (U2): sessions only, no projectDir; absent or empty sessions give an empty list with no host call.
+  test("sessions present -> passed without projectDir; absent or empty -> no host call", async () => {
     const host = fakeHost()
     const c = createMissionControlClient({ url: "http://127.0.0.1:47999/mcp", token: "f".repeat(64), callerCwd: join(dir, "mc"), fetch: host.fetch })
     expect((await c.list({ directory: SESSION_DIR, sessions: [MAIN_SES, CHILD_SES] })).ok).toBe(true)
-    expect((await c.list({ directory: SESSION_DIR })).ok).toBe(true)
-    expect((await c.list({ directory: SESSION_DIR, sessions: [] })).ok).toBe(true)
-    const base = { projectDir: SESSION_DIR, status: ["draft", "approved", "running", "paused", "done"], take: 20 }
-    expect(host.args).toEqual([{ ...base, sessions: [MAIN_SES, CHILD_SES] }, base, base])
+    expect(await c.list({ directory: SESSION_DIR })).toEqual({ ok: true, data: { items: [] } })
+    expect(await c.list({ directory: SESSION_DIR, sessions: [] })).toEqual({ ok: true, data: { items: [] } })
+    const base = { status: ["draft", "approved", "running", "paused", "done"], take: 20 }
+    expect(host.args).toEqual([{ ...base, sessions: [MAIN_SES, CHILD_SES] }])
     // a bad sessions value never reaches the host
     expect(await c.list({ directory: SESSION_DIR, sessions: ["nope"] } as never)).toMatchObject({ ok: false, code: "BAD_ARGUMENT" })
-    expect(host.args).toHaveLength(3)
+    expect(host.args).toHaveLength(1)
   })
 })
 

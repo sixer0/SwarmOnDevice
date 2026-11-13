@@ -35,8 +35,8 @@ export const MISSION_CALL_TIMEOUT_MS = 5_000
 export const MISSION_LIST_STATUSES = ["draft", "approved", "running", "paused", "done"] as const
 export const MISSION_LIST_TAKE = 20
 export const MISSION_GET_INCLUDE = ["rows", "decisions", "requests", "messages", "deliverables"] as const
-/** G3 (row 126): the newest 20 messages; the feed shows the last 4 (mission-model.ts feed, V6:370). */
-export const MISSION_MESSAGES_TAIL = 20
+/** G3 (row 126); 1.2.7 U-4 (N7-031): the newest 50 messages, the schema maximum (schemas.ts messagesTail). */
+export const MISSION_MESSAGES_TAIL = 50
 export const INSTRUCTION_MAX_CHARS = 2000
 export const DIRECTORY_MAX_CHARS = 4096
 /** Row 183 (L36): the current session and its subagent sessions, at most this many ids per list. */
@@ -86,6 +86,7 @@ const isString = (v: unknown): v is string => typeof v === "string"
 
 // Row 185 (S186-02, L42): shape validation only. The directory and session ids are the renderer's choice; main does
 // not check that they are the window's own session, so the mission-ipc.ts scope is a consistency check, not isolation.
+// 1.2.7 U-1: the directory scopes the IPC basis only; the host list is filtered by the session ids alone.
 export function parseListInput(input: unknown): Parsed<{ directory: string; sessions?: string[] }> {
   const r = plain(input, ["directory"], ["sessions"])
   if (!r) return bad("list takes {directory, sessions?}")
@@ -385,8 +386,11 @@ export function createMissionControlClient(opts: MissionControlClientOptions): M
   async function list(input: unknown): Promise<MissionControlResult<{ items: MissionListItemWire[] }>> {
     const p = parseListInput(input)
     if (!p.ok) return p
-    const sessions = p.value.sessions?.length ? { sessions: p.value.sessions } : {}
-    const r = await callTool("studio_mission_list", { projectDir: p.value.directory, status: [...MISSION_LIST_STATUSES], take: MISSION_LIST_TAKE, ...sessions })
+    // 1.2.7 U-1 (U2): sessions only, never the project folder - the store's linked-session branch alone answers.
+    // No session ids: an empty list without a host call, so a renderer that omits them never sees the whole project.
+    const sessions = p.value.sessions ?? []
+    if (sessions.length === 0) return { ok: true, data: { items: [] } }
+    const r = await callTool("studio_mission_list", { status: [...MISSION_LIST_STATUSES], take: MISSION_LIST_TAKE, sessions })
     if (!r.ok) return r
     return { ok: true, data: { items: Array.isArray(r.data.items) ? (r.data.items as MissionListItemWire[]) : [] } }
   }
