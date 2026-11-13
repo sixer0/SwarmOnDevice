@@ -191,11 +191,11 @@ describe("buildMission per mission type", () => {
       expect(vm.waves.map((w) => w.wave)).toEqual([2, 3, 4, 5])
       expect(vm.waves[1].tone).toBe("issue")
 
-      // Decision: oldest open; answered: latest answered.
+      // Decision: oldest open (1.2.8 R-6: no latest-answered VM field; the answered request still feeds the list below).
       expect(vm.decision?.id).toBe("D-01")
       expect(vm.decision?.options.find((o) => o.recommended)?.id).toBe("narrow")
       expect(vm.openDecisions).toBe(2)
-      expect(vm.answered).toEqual({ id: "D-00", question: "Approve plan?", optionLabel: "Approve", decision: "U1" })
+      expect("answered" in vm).toBe(false)
 
       // Feed: INTENT 1.2.7 U-4 (C6) newest first, up to FEED_SIZE 50 (was last 4, oldest first), answered request merged in.
       expect(vm.feed.map((f) => f.key)).toEqual(["m4", "m3", "m2", "aD-00", "m1"])
@@ -229,7 +229,7 @@ describe("edge states", () => {
       "en",
     )
     expect(vm).toMatchObject({ progress: { done: 0, total: 0, pct: 0 }, held: 0, layout: "lanes", decision: null })
-    expect(vm).toMatchObject({ answered: null, feed: [], deliverables: [], finalCount: 0, waves: [] })
+    expect(vm).toMatchObject({ feed: [], deliverables: [], finalCount: 0, waves: [] })
     expect(blockingSummary(vm)).toEqual([])
   })
 

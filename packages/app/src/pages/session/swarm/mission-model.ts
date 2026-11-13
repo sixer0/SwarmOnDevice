@@ -145,7 +145,6 @@ export type MissionDecisionVM = {
   context?: string
   options: Array<{ id: string; label: string; consequence: string; recommended: boolean }>
 }
-export type MissionAnsweredVM = { id: string; question: string; optionLabel: string; decision: string }
 export type MissionFeedLine = {
   key: string
   from: "owner" | "controller" | "agent"
@@ -187,7 +186,6 @@ export type MissionVM = {
   waves: MissionWaveVM[]
   decision: MissionDecisionVM | null
   openDecisions: number
-  answered: MissionAnsweredVM | null
   feed: MissionFeedLine[]
   deliverables: MissionDeliverableVM[]
   finalCount: number
@@ -510,10 +508,6 @@ export function buildMission(
     .sort((a, b) => timeOf(a.closedAt) - timeOf(b.closedAt))
   const labelOf = (req: DecisionRequestWire) =>
     req.options.find((opt) => opt.id === req.answer?.option)?.label ?? req.answer?.option ?? ""
-  const latest = answeredReqs.at(-1)
-  const answered: MissionAnsweredVM | null = latest
-    ? { id: latest.id, question: latest.question, optionLabel: labelOf(latest), decision: latest.answer!.decision }
-    : null
 
   // Messages in write order (seq) first, so the stable time sort below keeps "written last shows first" when several
   // messages share one time (one store job, 1.2.7 row 58a F-1) whatever order the wire sent them in.
@@ -555,7 +549,6 @@ export function buildMission(
     waves,
     decision,
     openDecisions: open.length,
-    answered,
     feed,
     deliverables,
     finalCount: deliverables.filter((d) => d.status === "final").length,
