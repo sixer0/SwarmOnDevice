@@ -33,13 +33,14 @@ describe("rel127 37b: guide sentences for N-10, N-11, T-11, T-12", () => {
     expect(S83).toContain("`NO_CURRENT_DELIVERABLE`")
   })
 
-  test("N-11 (4): ID lists without spaces break after , ; / above 16 characters; URLs never break", () => {
+  // INTENT change (1.2.7 row 37c, C54): the sentence follows the overflow-only rule of row 40d (d2c1b053b0).
+  test("N-11 (4): ID lists without spaces break after , ; / above 16 characters only when they overflow the column; URLs, document numbers and paths never break", () => {
     expect(TABLE_BREAK_MIN_CHARS).toBe(16)
     expect([...TABLE_BREAK_AFTER]).toEqual([",", ";", "/"])
     expect(isUrlToken("https://example.test/a")).toBe(true)
     const min = String(TABLE_BREAK_MIN_CHARS)
     expect(S4).toContain(
-      `Lebar tabel (DT-10a): daftar ID tanpa spasi dipatah setelah , ; / bila lebih dari ${min} karakter; URL (\`://\`, \`www.\`, \`mailto:\`) tidak pernah dipatah dan dihitung utuh.`,
+      `Lebar tabel (DT-10a): daftar ID tanpa spasi dipatah setelah , ; / bila lebih dari ${min} karakter dan tidak muat di kolomnya; URL (\`://\`, \`www.\`, \`mailto:\`), nomor dokumen, dan path tidak pernah dipatah dan dihitung utuh.`,
     )
   })
 

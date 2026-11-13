@@ -297,8 +297,8 @@ Teks (`Inline`) memakai tepat satu dari:
 
 `source` = teks + `provenance` opsional (`TERUKUR`, `DITURUNKAN`, `PEMASOK`, `ASUMSI`). Studio
 menambahkan label SUMBER dan PROVENANS sendiri.
-Lebar tabel (DT-10a): daftar ID tanpa spasi dipatah setelah , ; / bila lebih dari 16 karakter; URL
-(`://`, `www.`, `mailto:`) tidak pernah dipatah dan dihitung utuh.
+Lebar tabel (DT-10a): daftar ID tanpa spasi dipatah setelah , ; / bila lebih dari 16 karakter dan tidak muat di kolomnya; URL
+(`://`, `www.`, `mailto:`), nomor dokumen, dan path tidak pernah dipatah dan dihitung utuh.
 
 Yang ditolak (`400 SCHEMA_INVALID`):
 
