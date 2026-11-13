@@ -123,8 +123,11 @@ describe('P2-15 caption/SUMBER berbungkus', () => {
     const fx = parityDiagramSpecs().find((x) => x.file === 'dg_swimlane.json')!.spec as unknown as StudioDiagramV1;
     // Swarm 1.2.6 row FX-11 consequence edit (C21, S-115-1): lint score 0 keeps the old path (no AUTO_FIT, no
     // re-layout); the T-03 kinds outside the score (this fixture has a stubSegment) are now reported, nothing else.
+    // Swarm 1.2.8 row 57c (C71, INTENT): this swimlane's first render has labels over arrowheads (GEOM_LABEL_COLLISION),
+    // so auto-fit re-places them; the lines it may add are AUTO_FIT and the label notes, nothing else.
     const r = build(fx);
     expect(lintDiagramGeometry(r.svg).score).toBe(0);
-    expect(ids(r).filter((id) => !['GEOM_ENTRY_COLLISION', 'GEOM_STUB_SEGMENT', 'GEOM_ARROW_TANGENT'].includes(id))).toEqual([]);
+    const fitNotes = ['AUTO_FIT', 'LABEL_MOVED', 'LABEL_LEADER', 'LABEL_NUMBERED'];
+    expect(ids(r).filter((id) => !['GEOM_ENTRY_COLLISION', 'GEOM_STUB_SEGMENT', 'GEOM_ARROW_TANGENT', ...fitNotes].includes(id))).toEqual([]);
   });
 });

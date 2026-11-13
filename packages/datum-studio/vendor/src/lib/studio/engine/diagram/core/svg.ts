@@ -222,11 +222,24 @@ export const DOUBLED_DIVIDER_CLEAR_MM = 0.4;
 const DOUBLED_INSET_MM = 1.2;
 
 export function shadowUnderlaySvg(x: number, y: number, w: number, h: number): string {
+  return shadowRectSvg(x, y, w, h) + `<rect x="${r2(x)}" y="${r2(y)}" width="${r2(w)}" height="${r2(h)}" fill="${PAPER}"/>`;
+}
+
+/** Row 57c (C123 item 1): the offset shadow rectangle alone (the first element of `shadowUnderlaySvg`). */
+export function shadowRectSvg(x: number, y: number, w: number, h: number): string {
   const off = snap(LATTICE_Y / 2, 0.1);
-  return (
-    `<rect x="${r2(x + off)}" y="${r2(y + off)}" width="${r2(w)}" height="${r2(h)}" fill="none" stroke="${colourOf("ink200")}" stroke-width="${r2(STROKE_HAIR)}"/>` +
-    `<rect x="${r2(x)}" y="${r2(y)}" width="${r2(w)}" height="${r2(h)}" fill="${PAPER}"/>`
-  );
+  return `<rect x="${r2(x + off)}" y="${r2(y + off)}" width="${r2(w)}" height="${r2(h)}" fill="none" stroke="${colourOf("ink200")}" stroke-width="${r2(STROKE_HAIR)}"/>`;
+}
+
+/**
+ * Row 57c (C123 item 1): the shadow of a `shadowed` node, drawn by the sheet before the connectors (so a connector or its
+ * label leaving that side lies over the shadow); `nodeSvg` with `shadowDrawn` then draws only the paper interior. Null
+ * for other shapes.
+ */
+export function nodeShadowSvg(nd: SheetNode, canvas?: NodeSvgOptions["canvas"]): string | null {
+  if ((nd.spec.shape ?? "box") !== "shadowed") return null;
+  const g = insetForStroke(nd, canvas, STROKE_PRIMARY);
+  return shadowRectSvg(g.x, g.y, g.w, g.h);
 }
 
 /** Row 53b: y of the doubled divider below a text block whose ink ends at `textBottom`, or null when no band fits. */
@@ -984,19 +997,24 @@ function firstRenderLayout(nd: SheetNode): ReturnType<typeof nodeTextLayout> {
   const tagged = nd.spec.tag !== undefined && nd.spec.tag !== null && nd.spec.tag !== "";
   // row 54b (VIS-3b): a sub-process keeps its text above the [+] band
   if (shape === "document" || shape === "offpage" || shape === "subprocess" || (shape === "cylinder" && tagged) || isLabelBelow(shape)) return nodeTextLayout(nd);
+  // Swarm 1.2.8 row 57c (C119): an untagged cylinder whose centred label would cross the lid's front rim gets the layout
+  // below the lid (nodeTextLayout is null when the centred label clears the lid, so those bytes are unchanged)
+  if (shape === "cylinder") return nodeTextLayout(nd);
   return null;
 }
 
 /** Row 165C: options of `nodeSvg` (sheet size for the half-stroke inset of F113-9). */
 export interface NodeSvgOptions extends SvgMarkOptions {
   canvas?: { widthMm: number; heightMm: number };
+  /** Row 57c (C123): the sheet drew this node's shadow already (`nodeShadowSvg`); only the paper interior is drawn here. */
+  shadowDrawn?: boolean;
 }
 
 export function nodeSvg(nd: SheetNode, opts: NodeSvgOptions = {}): string[] {
   if (isLabelBelow(nd.spec.shape)) return labelBelowNodeSvg(nd, opts);
   const n = nd.spec;
   // Row 165C (F113-9/F113-10): outline inset at the sheet edge; hatch drawn as vector lines under the outline.
-  const { canvas, ...markOpts } = opts;
+  const { canvas, shadowDrawn, ...markOpts } = opts;
   const g = insetForStroke(nd, canvas, STROKE_PRIMARY);
   const angle = (n.shape ?? "box") === "bus" ? null : nodeHatchAngle(nd);
   const out: string[] = [];
@@ -1007,7 +1025,7 @@ export function nodeSvg(nd: SheetNode, opts: NodeSvgOptions = {}): string[] {
   const fit = diagramFitActive() ? nodeTextLayout(nd) : firstRenderLayout(nd);
   // Row 53b (C75 item 3): a shadowed node's shadow and paper interior go first, under the hatch and the outline.
   const shadowed = (n.shape ?? "box") === "shadowed";
-  if (shadowed) out.push(shadowUnderlaySvg(g.x, g.y, g.w, g.h));
+  if (shadowed) out.push(shadowDrawn ? `<rect x="${r2(g.x)}" y="${r2(g.y)}" width="${r2(g.w)}" height="${r2(g.h)}" fill="${PAPER}"/>` : shadowUnderlaySvg(g.x, g.y, g.w, g.h));
   if (angle !== null) {
     const shape = n.shape ?? "box";
     const clipShape = BOX_SHAPES.has(shape) ? null : clipShapeSvg(shape, g.x, g.y, g.w, g.h);

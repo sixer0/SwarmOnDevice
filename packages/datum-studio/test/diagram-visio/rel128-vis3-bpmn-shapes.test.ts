@@ -171,10 +171,19 @@ describe("events", () => {
           const { texts } = labelGroup(svg, el)
           const label = texts.find((t) => t.s.replace(/\s+/g, " ").includes(String(n.label).split(" ")[0]))!
           expect(label, `${fig}/${n.id}`).toBeDefined()
+          // Swarm 1.2.8 row 57c (C86, INTENT): in the top-to-bottom flow an event left downward (a, c) is labelled beside
+          // the circle (right, >= LABEL_BESIDE_GAP_MM off the stroke, block centred on its height), so its connector
+          // starts on the circle; every other event keeps its label below.
+          const beside = fig === "events_tb" && (FX[fig].edges as J[]).some((e) => e.from === n.id)
           for (const t of texts) {
+            if (beside) {
+              expect(t.box[0] - (cx + r + sw / 2), `${fig}/${n.id} ${t.s}`).toBeGreaterThanOrEqual(1.0 - 0.02) // 0.01 mm output grid
+              continue
+            }
             expect(t.box[1] - (cy + r + sw / 2), `${fig}/${n.id} ${t.s}`).toBeGreaterThanOrEqual(1.0 - 1e-6)
             expect((t.box[0] + t.box[2]) / 2, `${fig}/${n.id} ${t.s}`).toBeCloseTo(cx, 1)
           }
+          if (beside) expect((Math.min(...texts.map((t) => t.box[1])) + Math.max(...texts.map((t) => t.box[3]))) / 2, `${fig}/${n.id}`).toBeCloseTo(cy, 0)
           // the layout cell: top = outline top, height = nodeSize (label-below height, lattice-locked; graph pad 1 is the lowest)
           const [, h] = (geomMod as J).nodeSize(n, { x: 128 / 12, y: (13.5 * 25.4) / 72 }, undefined, 1)
           for (const t of texts) expect(t.box[3], `${fig}/${n.id}`).toBeLessThanOrEqual(cy - r + h + 1e-6)

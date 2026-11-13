@@ -17,7 +17,7 @@ import { activeElkRoutes } from "../elk/routes";
 import { edgeConflicts, ENTRY_COLLISION_MM, STUB_SEGMENT_MIN_MM } from "../fit/lint";
 import { flowDirectionOf, flowRanks } from "../layout-a/flow";
 import { ARROW_SIZES_MM, CURVE_SAMPLES } from "../core/tokens";
-import { ANNOTATION_BRACKET_MM, isLabelBelow, labelBelowOutline } from "../fit/text";
+import { ANNOTATION_BRACKET_MM, isLabelBelow, isLabelBeside, labelBelowOutline, labelBesideBox, setLabelBeside } from "../fit/text";
 import { clearFirstRender, noteFirstRender } from "./autofit";
 
 type Pt = readonly [number, number];
@@ -493,7 +493,35 @@ function glueLabelBelow(pts: Pt[], node: SheetNode, atEnd: boolean): Pt[] {
     out[0] = [p[0], top];
     return atEnd ? out.reverse() : out;
   }
+  // Row 57c (C86): with the label beside the circle, a vertical end on the cell bottom moves up onto the circle.
+  if (isLabelBeside(node) && Math.abs(p[1] - (node.y + node.h)) < 1e-6 && Math.abs(q[0] - p[0]) < 1e-6) {
+    const hw = Math.abs(p[0] - cx);
+    if (hw >= R - 1e-9) return pts;
+    out[0] = [p[0], diamond ? cy + (R - hw) : cy + Math.sqrt(R * R - hw * hw)];
+    return atEnd ? out.reverse() : out;
+  }
   return pts;
+}
+
+/**
+ * Row 57c (C86): mark the event nodes labelled beside their circle (`setLabelBeside`): an event without tag and mark,
+ * at least one end on its bottom and none on its right, whose beside block stays on the sheet and clear (0.5 mm) of
+ * every other node. All other label-below nodes are unmarked (labels below, as before).
+ */
+function markLabelBeside(sheet: Sheet, nodes: readonly SheetNode[], ends: ReadonlyArray<readonly [DiagramEdge, SidePair]>): void {
+  for (const nd of nodes) {
+    if (!isLabelBelow(nd.spec.shape)) continue;
+    let on = nd.spec.shape?.startsWith("event_") === true && !nd.spec.tag && !nd.spec.mark;
+    if (on) {
+      const sidesHere = ends.flatMap(([e, [sa, sb]]) => [...(e.from === nd.id ? [sa] : []), ...(e.to === nd.id ? [sb] : [])]);
+      on = sidesHere.includes("bottom") && !sidesHere.includes("right");
+    }
+    if (on) {
+      const b = labelBesideBox(nd);
+      on = b[2] <= sheet.widthMm - 0.5 && nodes.every((o) => o === nd || b[2] + 0.5 <= o.x || b[0] - 0.5 >= o.x + o.w || b[3] + 0.5 <= o.y || b[1] - 0.5 >= o.y + o.h);
+    }
+    setLabelBeside(nd, on);
+  }
 }
 
 /** Row 53: `glueEnd` over routes built elsewhere (ELK); `d` is rebuilt only for a moved edge. */
@@ -996,6 +1024,66 @@ function forwardRun(p: Pt, pa: Pt, pb: Pt, q: Pt, mid: number, vertical: boolean
 /** Row 56c (C51 (b)): a straight connector meets the target border at least this steeply, so its head stands clear of it. */
 const STRAIGHT_END_MIN_DEG = 40;
 
+/** Row 57c (C123 item 3): coordinate `k` of the points never turns back (an out-and-back run is not monotone). */
+function monotone(pts: readonly Pt[], k: 0 | 1): boolean {
+  let dir = 0;
+  for (let i = 0; i + 1 < pts.length; i++) {
+    const d = pts[i + 1][k] - pts[i][k];
+    if (Math.abs(d) < 1e-9) continue;
+    const sgn = Math.sign(d);
+    if (dir !== 0 && sgn !== dir) return false;
+    dir = sgn;
+  }
+  return true;
+}
+
+/** Row 57c (C123 item 3): a sideways offset below this (one vertical lattice step) between facing ends is aligned. */
+const JOG_ALIGN_MM = LATTICE_Y;
+
+/** Row 57c (C123): least distance (mm) of a straightened run from the corners of either node. */
+const SHARED_BAND_CLEAR_MM = 1.5;
+
+/**
+ * Row 57c (C123 item 3): the straight part [lo, hi] of a node side along which an end may move (x for top/bottom, y for
+ * right/left), as core/svg.ts draws it: a box-like node its whole side; the top and bottom of a parallelogram (slant
+ * 0.18 w, top edge shifted right), a hexagon (corner inset 0.22 w) and a stadium (caps of radius h/2). Null otherwise.
+ */
+function straightSpan(n: SheetNode, side: Side): [number, number] | null {
+  const vert = side === "top" || side === "bottom";
+  if (boxLike(n)) return vert ? [n.x, n.x + n.w] : [n.y, n.y + n.h];
+  if (!vert) return null;
+  const sh = n.spec.shape ?? "box";
+  if (sh === "parallelogram") return side === "top" ? [n.x + 0.18 * n.w, n.x + n.w] : [n.x, n.x + 0.82 * n.w];
+  if (sh === "hexagon") return [n.x + 0.22 * n.w, n.x + 0.78 * n.w];
+  if (sh === "stadium") return [n.x + n.h / 2, n.x + n.w - n.h / 2];
+  return null;
+}
+
+/** Row 57c: a node whose side is a straight border along its whole box (not an outline shape, event, bus or annotation). */
+function boxLike(n: SheetNode): boolean {
+  const sh = n.spec.shape ?? "box";
+  return !OUTLINE_SHAPES.has(sh) && !isLabelBelow(sh) && sh !== "bus" && sh !== "annotation";
+}
+
+/**
+ * Row 57c (C123 F-53b-1): the cross coordinate (y for right/left, x for bottom/top) of a straight run between facing
+ * sides of two box-like nodes whose spans overlap by more than twice `SHARED_BAND_CLEAR_MM`: the middle of the shared
+ * band. Null when the sides do not face each other, a node is not box-like, the ends already line up, or there is no band.
+ */
+function sharedBand(a: SheetNode, sa: Side, b: SheetNode, sb: Side): number | null {
+  if (!boxLike(a) || !boxLike(b) || sb !== OPP[sa]) return null;
+  const horiz = sa === "right" || sa === "left";
+  const ahead = horiz ? (sa === "right" ? b.x >= a.x + a.w : b.x + b.w <= a.x) : sa === "bottom" ? b.y >= a.y + a.h : b.y + b.h <= a.y;
+  if (!ahead) return null;
+  const lo = horiz ? Math.max(a.y, b.y) : Math.max(a.x, b.x);
+  const hi = horiz ? Math.min(a.y + a.h, b.y + b.h) : Math.min(a.x + a.w, b.x + b.w);
+  if (hi - lo <= 2 * SHARED_BAND_CLEAR_MM) return null;
+  const ca = horiz ? a.y + a.h / 2 : a.x + a.w / 2;
+  const cb = horiz ? b.y + b.h / 2 : b.x + b.w / 2;
+  if (Math.abs(ca - cb) < 1e-9) return null;
+  return (lo + hi) / 2;
+}
+
 /** Row 56c: angle (deg, 0..90) between the segment p -> q and the border `side` it ends on. */
 function incidenceDeg(p: Pt, q: Pt, side: Side): number {
   const dx = Math.abs(q[0] - p[0]);
@@ -1075,6 +1163,9 @@ function routeWithSides(s: StudioDiagramV1, sheet: Sheet, over: ReadonlyMap<numb
     if (slotField(e, "from") === undefined) push(gk(e.from, sa), e);
     if (slotField(e, "to") === undefined) push(gk(e.to, sb), e);
   });
+  // Row 57c (C86): an event left downward (an end on its bottom, none on its right) with room on its right is labelled
+  // beside the circle, so the bottom end starts on the circle (`glueLabelBelow`) instead of under the label block.
+  markLabelBeside(sheet, nodes, edges.map((e, i) => [e, sidesOf(e, i)] as const));
   // Row 54b (VIS-3b, C86): the spread side ends of an event/gateway are ordered by the other node's centre height, so
   // the upper end goes to the upper node and the two runs do not cross. Other nodes keep the edge order.
   for (const [k, g] of grouped) {
@@ -1131,6 +1222,36 @@ function routeWithSides(s: StudioDiagramV1, sheet: Sheet, over: ReadonlyMap<numb
       if (sideB && fits(b, sb, gb, q, p[1])) q = [q[0], p[1]];
       else if (sideA && fits(a, sa, ga, p, q[1])) p = [p[0], q[1]];
     }
+    // Swarm 1.2.8 row 57c (C123 F-53b-1): two box-like nodes side by side whose spans overlap (same row, different
+    // heights) are joined by one straight run in the middle of the shared band, not by a Z with two short stubs; only
+    // single ends on facing sides, so no fan position moves.
+    if (!style && !glued(e) && ga.length === 1 && gb.length === 1) {
+      const band = sharedBand(a, sa, b, sb);
+      if (band !== null) {
+        if (vertA) {
+          p = [band, p[1]];
+          q = [band, q[1]];
+        } else {
+          p = [p[0], band];
+          q = [q[0], band];
+        }
+      }
+    }
+    // Row 57c (C123 item 3): facing ends offset sideways by less than `JOG_ALIGN_MM` draw a short jog the reader sees as a
+    // stray piece (`stubSegment` (a) below 2 mm, a dash fragment above); a single end on a box-like node moves in line
+    // with the other end when that stays `SHARED_BAND_CLEAR_MM` inside its side, so the run is straight.
+    if (!style && !glued(e) && sb === OPP[sa]) {
+      const k = vertA ? 0 : 1;
+      const off = Math.abs(p[k] - q[k]);
+      if (off > 1e-9 && off < JOG_ALIGN_MM) {
+        const inSide = (n: SheetNode, side: Side, v: number) => {
+          const span = straightSpan(n, side);
+          return span !== null && v >= span[0] + SHARED_BAND_CLEAR_MM && v <= span[1] - SHARED_BAND_CLEAR_MM;
+        };
+        if (gb.length === 1 && inSide(b, sb, p[k])) q = k === 0 ? [p[0], q[1]] : [q[0], p[1]];
+        else if (ga.length === 1 && inSide(a, sa, q[k])) p = k === 0 ? [q[0], p[1]] : [p[0], q[1]];
+      }
+    }
     // Swarm 1.2.8 row 56b (VIS-5/VIS-6): a slot puts the end at that fraction of its side; `via` bends the route there.
     const slotA = slotField(e, "from");
     const slotB = slotField(e, "to");
@@ -1156,7 +1277,11 @@ function routeWithSides(s: StudioDiagramV1, sheet: Sheet, over: ReadonlyMap<numb
       // never runs back (an end-on pair, same x, overlays its own line and keeps its route).
       const fwd = !same && Math.abs(p[0] - q[0]) > 1e-9 && ((sa === "bottom" && sb === "top" && q[1] > p[1]) || (sa === "top" && sb === "bottom" && q[1] < p[1]));
       const midy = same ? (sa === "bottom" ? Math.max(pa[1], pb[1]) : Math.min(pa[1], pb[1])) : between(snap((pa[1] + pb[1]) / 2.0, LATTICE_Y), pa[1], pb[1], laneFix || fwd);
-      pts = fwd ? forwardRun(p, pa, pb, q, midy, true) : [p, pa, [pa[0], midy], [pb[0], midy], pb, q];
+      // Row 57c (C123 item 3): an end-on facing pair whose stubs cross (a gap narrower than two stubs) is one run, not a
+      // run out and back under its label.
+      const endOn = !same && Math.abs(p[0] - q[0]) < 1e-9 && ((sa === "bottom" && sb === "top" && q[1] > p[1]) || (sa === "top" && sb === "bottom" && q[1] < p[1]));
+      const run: Pt[] = fwd ? forwardRun(p, pa, pb, q, midy, true) : [p, pa, [pa[0], midy], [pb[0], midy], pb, q];
+      pts = endOn && !monotone(run, 1) ? [p, q] : run;
     } else {
       const pa: Pt = [p[0] + (sideA ? 0 : sa === "right" ? stub : -stub), p[1]];
       const pb: Pt = [q[0] + (sideB ? 0 : sb === "right" ? stub : -stub), q[1]];
@@ -1165,7 +1290,10 @@ function routeWithSides(s: StudioDiagramV1, sheet: Sheet, over: ReadonlyMap<numb
       // never runs back (an end-on pair, same y, overlays its own line and keeps its route).
       const fwd = !same && Math.abs(p[1] - q[1]) > 1e-9 && ((sa === "right" && sb === "left" && q[0] > p[0]) || (sa === "left" && sb === "right" && q[0] < p[0]));
       const midx = same ? (sa === "right" ? Math.max(pa[0], pb[0]) : Math.min(pa[0], pb[0])) : between(snap((pa[0] + pb[0]) / 2.0, sheet.colMm), pa[0], pb[0], laneFix || sideA || sideB || fwd);
-      pts = Math.abs(p[1] - q[1]) < 1e-9 && (sideA || sideB) ? [p, q] : fwd ? forwardRun(p, pa, pb, q, midx, false) : [p, pa, [midx, pa[1]], [midx, pb[1]], pb, q];
+      // Row 57c (C123 item 3): an end-on facing pair whose stubs cross is one run (no out-and-back under its label).
+      const endOn = !same && Math.abs(p[1] - q[1]) < 1e-9 && ((sa === "right" && sb === "left" && q[0] > p[0]) || (sa === "left" && sb === "right" && q[0] < p[0]));
+      const run: Pt[] = fwd ? forwardRun(p, pa, pb, q, midx, false) : [p, pa, [midx, pa[1]], [midx, pb[1]], pb, q];
+      pts = Math.abs(p[1] - q[1]) < 1e-9 && (sideA || sideB) ? [p, q] : endOn && !monotone(run, 0) ? [p, q] : run;
     }
     raw.push(pts);
   });

@@ -72,8 +72,10 @@ import { capacityRetry, isCapacityReject, withAction } from "./capacity";
 import { crossingHops, routePlaced, routeStyleOfPath, type HoppedEdge } from "./route";
 import { canonicalSymbolId } from "../../symbols";
 import { colourCountDetail, diagramColourSources } from "../core/colour"; // row 62 (T-06)
-import { edgeArrowsOfPaths, type EdgeArrows } from "../core/svg"; // row 57 (VIS-7); row 57b: shared path-edge matching
-import { labelAtBaseline } from "../fit/labels"; // row 57b (VIS-9)
+import { edgeArrowsOfPaths, nodeShadowSvg, type EdgeArrows } from "../core/svg"; // row 57 (VIS-7); row 57b: shared path-edge matching; row 57c: node shadow
+import { labelAtBaseline, runOrder, spotClear } from "../fit/labels"; // row 57b (VIS-9); row 57c: runOrder, spotClear
+import type { HeadSize } from "../fit/lint"; // row 57c
+import { ARROW_SIZES_MM } from "../core/tokens"; // row 57c
 
 /**
  * Laporan rakitan (HS `report`) di atas `SvgResult.report`.
@@ -198,20 +200,69 @@ function midLabel(pts: RoutedEdge["points"]): [number, number] {
  * pilih yang pertama di luar kotak simpul mana pun (diperbesar setengah kotak
  * label); semua bertabrakan = titik tengah terpanjang.
  */
-function labelPos(pts: RoutedEdge["points"], nodes: readonly SheetNode[], lw: number, lh: number): [number, number] {
+function labelPos(pts: RoutedEdge["points"], nodes: readonly SheetNode[], lw: number, lh: number, heads?: LabelHeads): [number, number] {
   const segs = segsOf(pts);
   if (!segs.length) return [0.0, 0.0];
   const order = segs.map((_, i) => i).sort((a, b) => segLen(segs[b]) - segLen(segs[a]) || a - b);
   const padX = lw / 2.0 + 0.8;
   const padY = lh / 2.0 + 0.4;
+  const hit = (mx: number, my: number) => nodes.some((nd) => nd.x - padX <= mx && mx <= nd.x + nd.w + padX && nd.y - padY <= my && my <= nd.y + nd.h + padY);
+  let first: [number, number] | null = null;
   for (const i of order) {
     const [[ax, ay], [bx, by]] = segs[i];
     const mx = (ax + bx) / 2.0;
     const my = (ay + by) / 2.0;
-    const hit = nodes.some((nd) => nd.x - padX <= mx && mx <= nd.x + nd.w + padX && nd.y - padY <= my && my <= nd.y + nd.h + padY);
-    if (!hit) return [mx, my];
+    if (!hit(mx, my)) {
+      first = [mx, my];
+      break;
+    }
   }
-  return midLabel(pts);
+  if (!first) return midLabel(pts);
+  if (!heads) return first;
+  // Row 57c (C71/C101/C102): the band (`labelKnockoutSvg`: lw + 1.6 wide, baseline = point - 1.2 pt) must keep the
+  // connector's own heads visible and leave no stray piece; else the nearest spot that does, on the longest segment
+  // run first (straight runs, `runOrder`; 0.25 mm steps out from the midpoint). None: the spot above (auto-fit then
+  // re-places it).
+  const rail = pt2mm(role("evidence_rail").size);
+  const band = (x: number, y: number): [number, number, number, number] => {
+    const base = y - pt2mm(1.2);
+    return [x - (lw + 1.6) / 2, base - rail * 1.15, x + (lw + 1.6) / 2, base + rail * 0.55];
+  };
+  // the band also stays 0.3 mm off every node box (the point test above only pads by half the label height)
+  const clear = (x: number, y: number) => {
+    const b = band(x, y);
+    return spotClear(pts, heads, b) && !nodes.some((nd) => b[0] < nd.x + nd.w + 0.3 && b[2] > nd.x - 0.3 && b[1] < nd.y + nd.h + 0.3 && b[3] > nd.y - 0.3);
+  };
+  if (clear(first[0], first[1])) return first;
+  for (const run of runOrder(pts)) {
+    const [[ax, ay], [bx, by]] = run;
+    const len = Math.hypot(bx - ax, by - ay);
+    const n = Math.max(1, Math.floor(len / 2 / 0.25));
+    for (let k = 0; k <= n; k++) {
+      for (const sgn of k === 0 ? [1] : [-1, 1]) {
+        const t = 0.5 + (sgn * k * 0.25) / Math.max(len, 1e-9);
+        if (t < 0 || t > 1) continue;
+        const mx = ax + (bx - ax) * t;
+        const my = ay + (by - ay) * t;
+        if (!hit(mx, my) && clear(mx, my)) return [mx, my];
+      }
+    }
+  }
+  return first;
+}
+
+/** Row 57c: marker sizes of a connector's heads (core/svg.ts `arrowMarkerSvg`: L by size, W = 0.89 L). */
+type LabelHeads = { end?: HeadSize | null; start?: HeadSize | null };
+
+function headSizeOf(h: EdgeArrows["end"] | EdgeArrows["start"]): HeadSize | null {
+  if (!h) return null;
+  const L = ARROW_SIZES_MM[h === "kind" ? "m" : h.size];
+  return { L, W: 0.89 * L };
+}
+
+/** Row 57c: the drawn heads of each routed connector, for `labelPos`. */
+function labelHeadsOf(s: StudioDiagramV1, paths: readonly RoutedEdge[]): LabelHeads[] {
+  return edgeArrowsOfPaths(s.edges ?? [], paths).map((a) => ({ end: headSizeOf(a.end), start: headSizeOf(a.start) }));
 }
 
 // ------------------------------------------------------- D-290 lembar graph
@@ -245,6 +296,7 @@ function graphFit(s: StudioDiagramV1, sheet: Sheet, paths: readonly RoutedEdge[]
   for (const nd of nodes) ys.push(nd.y, nd.y + nd.h);
   const railMm = pt2mm(role("evidence_rail").size);
   const fixedAt = edgeArrowsOfPaths(s.edges ?? [], paths).map((a) => a.labelAt); // row 57b (VIS-9)
+  const heads = labelHeadsOf(s, paths); // row 57c
   paths.forEach((p, i) => {
     for (const [, y] of p.points) ys.push(y);
     if (bands) {
@@ -254,7 +306,7 @@ function graphFit(s: StudioDiagramV1, sheet: Sheet, paths: readonly RoutedEdge[]
     // pita knockout `labelKnockoutSvg`: y = my - 1,15 size, tinggi 1,7 size; my = labelPos - pt2mm(1,2)
     // Row 57b (VIS-9): a `label_at` label sits at its fixed baseline (`labelAtBaseline`), no lift.
     const at = fixedAt[i];
-    const my = at ? labelAtBaseline(p.points, at)[1] : labelPos(p.points, nodes, estTextMm(p.label, "evidence_rail"), railMm * 1.4)[1] - pt2mm(1.2);
+    const my = at ? labelAtBaseline(p.points, at)[1] : labelPos(p.points, nodes, estTextMm(p.label, "evidence_rail"), railMm * 1.4, heads[i])[1] - pt2mm(1.2);
     ys.push(my - railMm * 1.15, my - railMm * 1.15 + railMm * 1.7);
   });
   for (const z of s.zones ?? []) {
@@ -302,6 +354,32 @@ function assertInsideSheet(svg: string, H: number, furnitureMm: number): void {
       checkId: "DATUM-37-tinggi",
     });
   }
+}
+
+/**
+ * Swarm 1.2.8 row 57c: the swimlane decoration in drawing order (frame, pools, plain lanes with their gutter rule), the
+ * elements the sheet draws under the connectors. Empty for other families.
+ */
+function laneDecorSvg(s: StudioDiagramV1, place: Placement, sheet: Sheet, W: number): string[] {
+  const out: string[] = [];
+  const gutter = sheet.gutterW ?? 0;
+  // Swarm 1.2.8 row 55 (VIS-2a, 01f §2.3): fase dan lajur vertikal dari bingkai layout-b; tanpa bingkai = lama.
+  const frame = s.family === "swimlane" ? (place.layout as { frame?: SwimFrame }).frame : undefined;
+  if (frame) out.push(...swimFrameSvg(frame, W));
+  // Row 55b (VIS-2b): kolam menggambar lajurnya sendiri (strip kepala kolam + kolom label lajur).
+  if (frame?.pools) out.push(...swimPoolsSvg(frame, frame.pools, W));
+  for (const lane of frame?.orientation === "vertical" || frame?.pools ? [] : sheet.lanes) {
+    out.push(lineSvg(pyInt(0), lane.y, W, lane.y, "ink200", STROKE_HAIR));
+    out.push(
+      svgText(0.5, lane.y + pt2mm(role("table_header").size) + LATTICE_Y / 2.0, lane.name, {
+        role: "table_header",
+        colourToken: "ink400",
+        anchor: "start",
+      }),
+    );
+    if (gutter) out.push(lineSvg(gutter, lane.y, gutter, lane.y + lane.h, "ink200", STROKE_HAIR));
+  }
+  return out;
 }
 
 /**
@@ -533,6 +611,9 @@ function buildOnce(s: StudioDiagramV1, opts: DiagramBuildOptions, deps: DiagramB
     sheet.msgEnd = msgEnd;
     ran.push("P2-sequence-time-vertical");
   }
+  // Row 57c: the lane / phase / pool decoration is built once, before the labels: the fit placement keeps label bands
+  // off its rules and header texts (`fitEdgeLabels` decoration), and the sheet draws the same elements below.
+  const laneDecor = laneDecorSvg(s, place, sheet, W);
   // FIG-02b: saat fit, label tepi ditempatkan tanpa tabrakan (posisi bawaan = `labelPos`).
   const fitOn = diagramFitActive();
   if (fitOn && s.family !== "graph" && s.family !== "sequence" && diagramFitRoute("lineThroughText")) {
@@ -542,11 +623,13 @@ function buildOnce(s: StudioDiagramV1, opts: DiagramBuildOptions, deps: DiagramB
     if (Number.isFinite(rb) && rb > nb + 1e-6) sheet.routeBottom = rb;
   }
   const rail = pt2mm(role("evidence_rail").size);
-  const origOf = (ps: readonly RoutedEdge[]): Array<[number, number]> =>
-    ps.map((p) => {
-      const [mx, my] = labelPos(p.points, [...sheet.nodes.values()], estTextMm(p.label, "evidence_rail"), rail * 1.4);
+  const origOf = (ps: readonly RoutedEdge[]): Array<[number, number]> => {
+    const heads = labelHeadsOf(s, ps); // row 57c
+    return ps.map((p, i) => {
+      const [mx, my] = labelPos(p.points, [...sheet.nodes.values()], estTextMm(p.label, "evidence_rail"), rail * 1.4, heads[i]);
       return [mx, my - pt2mm(1.2)];
     });
+  };
   let plan: EdgeLabelPlan | undefined;
   if (fitOn && s.family === "graph") {
     // Lembar graph (D-290) pas isi: label dijaga di dalam rentang y isi bawaan (simpul, rute,
@@ -560,7 +643,7 @@ function buildOnce(s: StudioDiagramV1, opts: DiagramBuildOptions, deps: DiagramB
       const ms = (z.members ?? []).map((m) => sheet.nodes.get(m)).filter((m): m is SheetNode => m !== undefined);
       if (ms.length) ys.push(Math.min(...ms.map((m) => m.y)) - LATTICE_Y * 2, Math.max(...ms.map((m) => m.y + m.h)) + LATTICE_Y * 2);
     }
-    plan = fitEdgeLabels({ s, sheet, nodes: [...sheet.nodes.values()], paths, orig, yMin: Math.min(...ys), yMax: Math.max(...ys) });
+    plan = fitEdgeLabels({ s, sheet, nodes: [...sheet.nodes.values()], paths, orig, yMin: Math.min(...ys), yMax: Math.max(...ys), decoration: laneDecor });
   }
   // D-290: graph = lembar pas kotak pembatas semua unsur + rem tetap.
   const fit = s.family === "graph" ? graphFit(s, sheet, paths, plan ? planBands(plan) : undefined) : undefined;
@@ -597,7 +680,7 @@ function buildOnce(s: StudioDiagramV1, opts: DiagramBuildOptions, deps: DiagramB
     if (!fit) {
       const nFoot = Math.round(sheet.foot / LATTICE_Y);
       const yMax = nFoot > 0 ? H - LATTICE_Y * 2 - (nFoot - 1) * LATTICE_Y - 3.0 : H;
-      plan = fitEdgeLabels({ s, sheet, nodes: [...sheet.nodes.values()], paths: hopped, orig: origOf(hopped), yMax });
+      plan = fitEdgeLabels({ s, sheet, nodes: [...sheet.nodes.values()], paths: hopped, orig: origOf(hopped), yMax, decoration: laneDecor });
     }
     if (plan && plan.numbered.length) {
       // Baris catatan menempati posisi kaki lama; kaki turun sebanyak baris catatan.
@@ -631,22 +714,8 @@ function buildOnce(s: StudioDiagramV1, opts: DiagramBuildOptions, deps: DiagramB
   );
   sheet.add(paperRectSvg(W, H));
 
-  // lajur akuntabilitas + pemisah rambut (P2 swimlane), urutan kemunculan lajur
-  const gutter = sheet.gutterW ?? 0;
-  // Swarm 1.2.8 row 55 (VIS-2a, 01f §2.3): fase dan lajur vertikal dari bingkai layout-b; tanpa bingkai = lama.
-  const frame = s.family === "swimlane" ? (place.layout as { frame?: SwimFrame }).frame : undefined;
-  if (frame) sheet.addAll(swimFrameSvg(frame, W));
-  // Row 55b (VIS-2b): kolam menggambar lajurnya sendiri (strip kepala kolam + kolom label lajur).
-  if (frame?.pools) sheet.addAll(swimPoolsSvg(frame, frame.pools, W));
-  for (const lane of frame?.orientation === "vertical" || frame?.pools ? [] : sheet.lanes) {
-    sheet.add(lineSvg(pyInt(0), lane.y, W, lane.y, "ink200", STROKE_HAIR));
-    sheet.add(svgText(0.5, lane.y + pt2mm(role("table_header").size) + LATTICE_Y / 2.0, lane.name, {
-      role: "table_header",
-      colourToken: "ink400",
-      anchor: "start",
-    }));
-    if (gutter) sheet.add(lineSvg(gutter, lane.y, gutter, lane.y + lane.h, "ink200", STROKE_HAIR));
-  }
+  // lajur akuntabilitas + pemisah rambut (P2 swimlane), urutan kemunculan lajur (row 57c: built before the labels)
+  sheet.addAll(laneDecor);
   for (const ll of sheet.lifelines) {
     sheet.add(lineSvg(ll.x, ll.top, ll.x, H - LATTICE_Y, "ink200", STROKE_HAIR, DASH_PATTERNS.dashed));
   }
@@ -668,6 +737,10 @@ function buildOnce(s: StudioDiagramV1, opts: DiagramBuildOptions, deps: DiagramB
     sheet.add(svgText(lx, group ? ly + 0.8 : ly, label, { role: "table_header", colourToken: "ink400", anchor: "start" }));
   }
 
+  // Row 57c (C123 item 1): shadows of `shadowed` nodes before the connectors (a connector and its label lie over them).
+  const canvas = { widthMm: W, heightMm: H };
+  const shadows = nodes.map((nd) => nodeShadowSvg(nd, canvas));
+  for (const sh of shadows) if (sh) sheet.add(sh);
   // konektor: semua jalur + busur dulu, baru pita knockout dan label (garis tak menimpa teks)
   const labels: Array<[number, number, string, RoutedEdge["kind"]]> = [];
   const railMm = pt2mm(role("evidence_rail").size);
@@ -681,6 +754,7 @@ function buildOnce(s: StudioDiagramV1, opts: DiagramBuildOptions, deps: DiagramB
       sheet.addAll(edgeLabelSvg(pl.x, pl.y, pl.text, p.kind, W, pl.kw));
     });
   } else {
+    const heads = labelHeadsOf(s, hopped); // row 57c
     hopped.forEach((p, i) => {
       sheet.add(edgePathSvg(p.points, p.kind, { index: i, route: routeStyleOfPath(p), arrows: arrows[i] }));
       const lw = estTextMm(p.label, "evidence_rail");
@@ -691,7 +765,7 @@ function buildOnce(s: StudioDiagramV1, opts: DiagramBuildOptions, deps: DiagramB
         labels.push([ax, ay, p.label, p.kind]);
         return;
       }
-      const [mx, my] = labelPos(p.points, nodes, lw, railMm * 1.4);
+      const [mx, my] = labelPos(p.points, nodes, lw, railMm * 1.4, heads[i]);
       labels.push([mx, my - pt2mm(1.2), p.label, p.kind]);
     });
     hopped.forEach((p, i) => p.hops.forEach(([hx, hy]) => sheet.add(hopSvg(hx, hy, p.kind, arrows[i])))); // row 57b: hop stroke = weight
@@ -700,7 +774,7 @@ function buildOnce(s: StudioDiagramV1, opts: DiagramBuildOptions, deps: DiagramB
 
   // simpul + label + glif asal + tag
   // Row 165C (F113-9, CP-37): the sheet size lets nodeSvg keep every outline stroke inside the canvas.
-  nodes.forEach((nd, i) => sheet.addAll(nodeSvg(nd, { index: i, canvas: { widthMm: W, heightMm: H } })));
+  nodes.forEach((nd, i) => sheet.addAll(nodeSvg(nd, { index: i, canvas, ...(shadows[i] ? { shadowDrawn: true } : {}) })));
 
   // apparatus figure: SVG memikul caption, baris KUNCI dan SUMBER sendiri (P6)
   // D-288: baris KEY tidak digambar bila halaman mencetak baris KUNCI figur ini (satu aparatus).

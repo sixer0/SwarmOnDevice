@@ -1,5 +1,5 @@
 {
-  "$comment": "Swarm 1.2.8 row 54b (AC-VIS3b, AT-V3-task/-subprocess/-gateway_*/-data_object/-annotation, register N8-373, N8-475). Synthetic labels only. `gallery`: swimlane, 2 lanes: exclusive and parallel gateways, task, sub-process. `shapes`: flow LR, task, sub-process, data object and annotation on sync associations. `gateways`: graph, the four gateways and a task. `split` / `merge`: flow LR, an exclusive gateway with two exits on its right side, a parallel gateway with two entries on its left side (C86 spread). `split_tb`: flow TB, gateway exits to the nodes beside it leave by its side vertices. `process`: graph LR at 166 mm only (five columns), start -> task -> exclusive gateway -> two tasks -> end, data object and annotation (eye check figure). `gateways_tagged`: tags and subs (N8-371 gateway case), a hatched gateway. `gateway_no_exit`: P3-diamond-exits. `iso_chart`: ISO 5807 shapes for the chart flowchart REPORT. Built at 128 and 166 mm unless the test says otherwise. Not part of the 52b CHAR corpus (new shape tokens).",
+  "$comment": "Swarm 1.2.8 row 54b (AC-VIS3b, AT-V3-task/-subprocess/-gateway_*/-data_object/-annotation, register N8-373, N8-475). Synthetic labels only. `gallery`: swimlane, 2 lanes: exclusive and parallel gateways, task, sub-process. `shapes`: flow LR, task, sub-process, data object and annotation on sync associations. `gateways`: graph, the four gateways and a task. `split` / `merge`: flow LR, an exclusive gateway with two exits on its right side, a parallel gateway with two entries on its left side (C86 spread). `split_tb`: flow TB, gateway exits to the nodes beside it leave by its side vertices. `process`: graph LR at 166 mm only (five columns), start -> task -> exclusive gateway -> two tasks -> end, data object and annotation (eye check figure). `gateways_tagged`: tags and subs (N8-371 gateway case), a hatched gateway. `gateway_no_exit`: P3-diamond-exits. `iso_chart`: ISO 5807 shapes for the chart flowchart REPORT. Built at 128 and 166 mm unless the test says otherwise. Not part of the 52b CHAR corpus (new shape tokens). Row 57c (C111): the two annotation associations (`shapes` p -> a, `process` a -> t3) draw `arrow_end: \"none\"` (BPMN association, no head).",
   "gallery": {
     "$schema": "studio.diagram/v1",
     "classification": "BIASA",
@@ -123,7 +123,8 @@
         "from": "p",
         "to": "a",
         "kind": "sync",
-        "label": "cat"
+        "label": "cat",
+        "arrow_end": "none"
       }
     ]
   },
@@ -526,7 +527,8 @@
         "from": "a",
         "to": "t3",
         "kind": "sync",
-        "label": "cat"
+        "label": "cat",
+        "arrow_end": "none"
       }
     ]
   },

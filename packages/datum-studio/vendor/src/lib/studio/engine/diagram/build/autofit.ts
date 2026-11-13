@@ -27,6 +27,7 @@ const CHECK: Record<DiagramDefectKind, string> = {
   edgeEntryCollision: "GEOM_ENTRY_COLLISION",
   stubSegment: "GEOM_STUB_SEGMENT",
   arrowTangent: "GEOM_ARROW_TANGENT",
+  labelCollision: "GEOM_LABEL_COLLISION",
 };
 
 const WHAT: Record<DiagramDefectKind, string> = {
@@ -41,6 +42,7 @@ const WHAT: Record<DiagramDefectKind, string> = {
   edgeEntryCollision: "ujung konektor bertemu di satu titik sisi simpul",
   stubSegment: "potongan konektor pendek yang tidak menuju apa pun",
   arrowTangent: "kepala panah sejajar sisi simpul, bukan tegak lurus",
+  labelCollision: "label tepi menutup kepala panah, garis tepi simpul atau garis wadah",
 };
 
 const SUGGEST: Record<DiagramDefectKind, string> = {
@@ -56,6 +58,8 @@ const SUGGEST: Record<DiagramDefectKind, string> = {
   // Swarm 1.2.8 row 35 (H-NB3, AC-HNB3): the remedy for a stub is a longer run, not a label change.
   stubSegment: "perpanjang potongan pendek: beri jarak lebih antara kedua simpul (kolom atau baris lain) atau pakai sisi simpul lain",
   arrowTangent: "ubah urutan simpul agar konektor masuk tegak lurus ke sisi simpul sasaran",
+  // Swarm 1.2.8 row 57c: the label needs a free run on its connector.
+  labelCollision: "persingkat label tepi (maks ~20 karakter) atau beri jarak lebih antara kedua simpul",
 };
 
 /** Isu REPORT per jenis cacat tersisa, dengan contoh teks dan `suggest`. */

@@ -339,7 +339,9 @@ describe("pools", () => {
     for (const b of box.values()) expect(b[0]).toBeGreaterThan(Math.max(...laneHeads.map((t) => t.x)))
     expect(r.report.issues.some((i: J) => i.status === "FAIL")).toBe(false)
     expect(lintDiagramGeometry(r.svg).defects.length).toBe(0)
-    expect(previewDefects(r).length).toBe(0)
+    // Swarm 1.2.8 row 57c (C116, INTENT): CEK and ISI run 4.8 mm between rows with a lane rule across the run, so no
+    // spot on or beside the line keeps the 3.2 mm head visible; they take a leader (LABEL_LEADER, a preview defect).
+    expect(previewDefects(r).map((i: J) => i.checkId)).toEqual(["LABEL_LEADER", "LABEL_LEADER"])
     // decoration carries no data-mark (G-2)
     expect((r.svg.match(/data-mark="node"/g) ?? []).length).toBe(6)
   })
@@ -374,7 +376,8 @@ describe("pools", () => {
     expect(w[0].detail).toBe("aliran urutan d -> f melintasi kolam; antarkolam pakai kind control (aliran pesan)")
     expect(typeof w[0].suggest).toBe("string")
     expect(previewIssueClass("POOL_FLOW_CROSSES", "REPORT")).toBe("notice")
-    expect(previewDefects(r).length).toBe(0)
+    // row 57c (INTENT): the same two leaders as the collaboration figure
+    expect(previewDefects(r).map((i: J) => i.checkId)).toEqual(["LABEL_LEADER", "LABEL_LEADER"])
     expect(lintDiagramGeometry(r.svg).defects.length).toBe(0)
     // the control twin (message flow) gives none
     expect(crossing(buildDiagramSvg(P.spec, O)).length).toBe(0)

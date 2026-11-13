@@ -581,6 +581,56 @@ const CHAR_ROUTE_INTENT: Record<string, [string, string, string]> = {
   "fixtures/syn128/hna_flow_v2.json#/writeBlock/diagram/spec": ["diamond exits start on the diamond's slanted sides (defect 2)", "83825ace228e8e9e", "83825ace228e8e9e"],
 }
 
+/**
+ * Swarm 1.2.8 row 57c (C71, C86, C101, C102, C111, C116, C119, C121, C123; user item 7): intended changes of the bytes
+ * outside <marker>, key -> [reason, HEAD sync hash, HEAD auto hash]; they replace the BASE and row 56c values. Edge labels
+ * move off arrowheads, node outlines and container rules (new lint kind labelCollision, first-render spot search, fit
+ * placement beside the line, leaders that cross nothing); facing ends offset by less than a lattice step are aligned;
+ * markers and nodes keep their bytes. Generated on the row 57c engine (isolated copy of HEAD 77962be76e + row 57c files).
+ */
+const CHAR_LABEL_INTENT: Record<string, [string, string, string]> = {
+  "engine-rev-a/svg/fixtures/row162_large_layered.json#": ["labels kept off arrowheads, node outlines and lane rules; short facing jogs straightened (row 57c)", "39a5c8a813948b23", "4efb8e9e79c49e53"],
+  "fixtures/syn127/f6_fan_in_specs.json#/specs/1/spec": ["labels kept off arrowheads, node outlines and lane rules; short facing jogs straightened (row 57c)", "a7d28110ec1ea34a", "a7d28110ec1ea34a"],
+  "fixtures/syn127/f6_fan_in_specs.json#/specs/2/spec": ["labels kept off arrowheads, node outlines and lane rules; short facing jogs straightened (row 57c)", "8e22cf2e87ac7500", "8e22cf2e87ac7500"],
+  "fixtures/syn127/f6_fan_in_specs.json#/specs/3/spec": ["labels kept off arrowheads, node outlines and lane rules; short facing jogs straightened (row 57c)", "ced011660b2adbdd", "ced011660b2adbdd"],
+  "fixtures/syn127/f6_fan_in_specs.json#/specs/5/spec": ["labels kept off arrowheads, node outlines and lane rules; short facing jogs straightened (row 57c)", "d2b33a30d1f5a8fc", "d2b33a30d1f5a8fc"],
+  "fixtures/syn127/f6_fan_in_specs.json#/specs/7/spec": ["labels kept off arrowheads, node outlines and lane rules; short facing jogs straightened (row 57c)", "bea4a01c2ac6470f", "bea4a01c2ac6470f"],
+  "fixtures/syn127/m03_render_fail_doc.json#/chapters/0/chapter/sections/0/blocks/1/spec": ["labels kept off arrowheads, node outlines and lane rules; short facing jogs straightened (row 57c)", "668c54af22c276b9", "668c54af22c276b9"],
+  "fixtures/syn127/n7_autofit_t03_rest.json#/spec": ["labels kept off arrowheads, node outlines and lane rules; short facing jogs straightened (row 57c)", "b43b463b515318dd", "b43b463b515318dd"],
+  "fixtures/syn127/t11_flow_inline_v2.json#/block/spec": ["labels kept off arrowheads, node outlines and lane rules; short facing jogs straightened (row 57c)", "86f47140fb3ec869", "86f47140fb3ec869"],
+  "fixtures/syn127/t12_standalone_key_source.json#/block/spec": ["labels kept off arrowheads, node outlines and lane rules; short facing jogs straightened (row 57c)", "a9958856c7274b37", "a9958856c7274b37"],
+  "fixtures/syn128/hn13_import.md#/fence0": ["labels kept off arrowheads, node outlines and lane rules; short facing jogs straightened (row 57c)", "fe49fe4879b8cd19", "fe49fe4879b8cd19"],
+  "fixtures/syn128/hn13_import.md#/fence1/spec": ["labels kept off arrowheads, node outlines and lane rules; short facing jogs straightened (row 57c)", "c0b1477e7e5b29d5", "c0b1477e7e5b29d5"],
+  "fixtures/syn128/hn6_engine_entry_collision.json#/spec": ["labels kept off arrowheads, node outlines and lane rules; short facing jogs straightened (row 57c)", "f79b7fdde2e95ab0", "f79b7fdde2e95ab0"],
+  "fixtures/syn128/hna_flow_v2.json#/block/spec": ["labels kept off arrowheads, node outlines and lane rules; short facing jogs straightened (row 57c)", "8d3cca73928bf5a1", "8d3cca73928bf5a1"],
+  "fixtures/syn128/hna_flow_v2.json#/writeBlock/diagram/spec": ["labels kept off arrowheads, node outlines and lane rules; short facing jogs straightened (row 57c)", "8d3cca73928bf5a1", "8d3cca73928bf5a1"],
+  "fixtures/syn128/hna_flow_v2.json#/chapter/chapter/sections/0/blocks/1/spec": ["labels kept off arrowheads, node outlines and lane rules; short facing jogs straightened (row 57c)", "8d3cca73928bf5a1", "8d3cca73928bf5a1"],
+  "fixtures/syn128/r18g_lr_166.json#/spec": ["labels kept off arrowheads, node outlines and lane rules; short facing jogs straightened (row 57c)", "487395b7bf79a636", "487395b7bf79a636"],
+}
+/** Row 57c: verdict lines that change with the placement (stubs gone, AUTO_FIT re-places labels); key -> [AC, line]. */
+const CHAR_LABEL_VERDICT: Record<string, [string, string]> = {
+  "engine-rev-a/svg/fixtures/row162_large_layered.json#":
+    ["AC-VIS-57c", "39a5c8a813948b23 ea8f7d397f16783f 4efb8e9e79c49e53 ea8f7d397f16783f | V[] I[P1-labels_verified:NOT_RUN] G[AUTO_FIT:REPORT,GEOM_EDGE_COLLINEAR:REPORT,GEOM_EDGE_CROSS:REPORT,LABEL_MOVED:REPORT,NODE_ORDER:REPORT] E[] | V[] I[P1-labels_verified:NOT_RUN] G[AUTO_FIT:REPORT,EDGE_LANES:REPORT,ELK_LAYOUT:REPORT,LABEL_MOVED:REPORT] E[R3/R4]"],
+  "fixtures/syn127/f6_fan_in_specs.json#/specs/2/spec":
+    ["AC-VIS-57c", "8e22cf2e87ac7500 d88b640769644364 8e22cf2e87ac7500 d88b640769644364 | V[] I[] G[] E[] | V[] I[] G[] E[R1]"],
+  "fixtures/syn127/f6_fan_in_specs.json#/specs/3/spec":
+    ["AC-VIS-57c", "ced011660b2adbdd d88b640769644364 ced011660b2adbdd d88b640769644364 | V[] I[] G[] E[] | V[] I[] G[] E[R1]"],
+  "fixtures/syn127/f6_fan_in_specs.json#/specs/7/spec":
+    ["AC-VIS-57c", "bea4a01c2ac6470f 411292684f467f10 bea4a01c2ac6470f 411292684f467f10 | V[] I[] G[] E[] | V[] I[] G[] E[R1]"],
+  "fixtures/syn127/n7_autofit_t03_rest.json#/spec":
+    ["AC-VIS-57c", "b43b463b515318dd d88b640769644364 b43b463b515318dd d88b640769644364 | V[] I[] G[AUTO_FIT:REPORT,LABEL_LEADER:REPORT,LABEL_MOVED:REPORT] E[] | V[] I[] G[AUTO_FIT:REPORT,LABEL_LEADER:REPORT,LABEL_MOVED:REPORT] E[R1]"],
+  "fixtures/syn128/hn6_engine_entry_collision.json#/spec":
+    ["AC-VIS-57c", "f79b7fdde2e95ab0 d88b640769644364 f79b7fdde2e95ab0 d88b640769644364 | V[] I[] G[] E[] | V[] I[] G[] E[R1]"],
+  "fixtures/syn128/hna_flow_v2.json#/block/spec":
+    ["AC-VIS-57c", "8d3cca73928bf5a1 411292684f467f10 8d3cca73928bf5a1 411292684f467f10 | V[] I[] G[AUTO_FIT:REPORT,GEOM_ARROW_TANGENT:REPORT,LABEL_MOVED:REPORT] E[] | V[] I[] G[AUTO_FIT:REPORT,GEOM_ARROW_TANGENT:REPORT,LABEL_MOVED:REPORT] E[R1]"],
+  "fixtures/syn128/hna_flow_v2.json#/writeBlock/diagram/spec":
+    ["AC-VIS-57c", "8d3cca73928bf5a1 411292684f467f10 8d3cca73928bf5a1 411292684f467f10 | V[] I[] G[AUTO_FIT:REPORT,GEOM_ARROW_TANGENT:REPORT,LABEL_MOVED:REPORT] E[] | V[] I[] G[AUTO_FIT:REPORT,GEOM_ARROW_TANGENT:REPORT,LABEL_MOVED:REPORT] E[R1]"],
+  "fixtures/syn128/hna_flow_v2.json#/chapter/chapter/sections/0/blocks/1/spec":
+    ["AC-VIS-57c", "8d3cca73928bf5a1 411292684f467f10 8d3cca73928bf5a1 411292684f467f10 | V[] I[] G[AUTO_FIT:REPORT,GEOM_ARROW_TANGENT:REPORT,LABEL_MOVED:REPORT] E[] | V[] I[] G[AUTO_FIT:REPORT,GEOM_ARROW_TANGENT:REPORT,LABEL_MOVED:REPORT] E[R1]"],
+  "fixtures/syn128/r18g_lr_166.json#/spec":
+    ["AC-VIS-57c", "487395b7bf79a636 411292684f467f10 487395b7bf79a636 411292684f467f10 | V[] I[] G[AUTO_FIT:REPORT,LABEL_MOVED:REPORT] E[] | V[] I[] G[AUTO_FIT:REPORT,LABEL_MOVED:REPORT] E[R2]"],
+}
+
 describe("char", () => {
   let corpus: CharEntry[] = []
   const now: Record<string, string> = {}
@@ -601,7 +651,7 @@ describe("char", () => {
     for (const c of corpus) {
       const b = parts(CHAR_BASE[c.key]!)
       const n = parts(now[c.key]!)
-      const route = CHAR_ROUTE_INTENT[c.key] // row 56c INTENT: the listed HEAD hashes replace BASE's
+      const route = CHAR_LABEL_INTENT[c.key] ?? CHAR_ROUTE_INTENT[c.key] // row 56c / row 57c INTENT: listed HEAD hashes replace BASE's
       expect([n.so, n.ao], c.key).toEqual(route ? [route[1], route[2]] : [b.so, b.ao])
     }
   })
@@ -618,7 +668,7 @@ describe("char", () => {
     for (const c of corpus) {
       const b = parts(CHAR_BASE[c.key]!)
       const n = parts(now[c.key]!)
-      const intent = CHAR_INTENT[c.key]
+      const intent = CHAR_LABEL_VERDICT[c.key] ?? CHAR_INTENT[c.key] // row 57c verdicts replace earlier ones for their keys
       const ok = (n.vs === b.vs && n.va === b.va) || (!!intent && n.vs === parts(intent[1]).vs && n.va === parts(intent[1]).va)
       expect(ok ? "ok" : { base: [b.vs, b.va], now: [n.vs, n.va], intent }, c.key).toBe("ok")
     }

@@ -7,25 +7,25 @@
 </defs>
 <rect x="0" y="0" width="128.0" height="200.025" fill="#FCFCFB"/>
 <path d="M 49.07 23.81 L 49.07 28.57 L 58.67 28.57 L 58.67 33.34" fill="none" stroke="#2B3640" stroke-width="0.45" stroke-dasharray="3.2,1.6" marker-end="url(#head-control)" data-mark="link" data-series="control" data-index="0"/>
-<path d="M 55.47 23.81 L 55.47 28.57 L 32.0 28.57 L 32.0 52.09 L 58.67 52.09 L 58.67 57.15" fill="none" stroke="#2B3640" stroke-width="0.45" stroke-dasharray="3.2,1.6" marker-end="url(#head-control)" data-mark="link" data-series="control" data-index="1"/>
-<path d="M 61.87 23.81 L 61.87 29.77 L 85.33 29.77 L 85.33 76.5 L 58.67 76.5 L 58.67 80.96" fill="none" stroke="#2B3640" stroke-width="0.45" stroke-dasharray="3.2,1.6" marker-end="url(#head-control)" data-mark="link" data-series="control" data-index="2"/>
+<path d="M 55.47 23.81 L 55.47 28.57 L 32.0 28.57 L 32.0 52.69 L 55.47 52.69 L 55.47 57.15" fill="none" stroke="#2B3640" stroke-width="0.45" stroke-dasharray="3.2,1.6" marker-end="url(#head-control)" data-mark="link" data-series="control" data-index="1"/>
+<path d="M 61.87 23.81 L 61.87 29.77 L 85.33 29.77 L 85.33 76.5 L 61.87 76.5 L 61.87 80.96" fill="none" stroke="#2B3640" stroke-width="0.45" stroke-dasharray="3.2,1.6" marker-end="url(#head-control)" data-mark="link" data-series="control" data-index="2"/>
 <path d="M 68.27 23.81 L 68.27 27.39 L 85.33 27.39 L 85.33 100.01 L 58.67 100.01 L 58.67 104.77" fill="none" stroke="#2B3640" stroke-width="0.45" stroke-dasharray="3.2,1.6" marker-end="url(#head-control)" data-mark="link" data-series="control" data-index="3"/>
-<path d="M 58.67 47.62 L 58.67 52.69 L 32.0 52.69 L 32.0 123.82 L 53.33 123.82 L 53.33 128.59" fill="none" stroke="#2B3640" stroke-width="0.45" stroke-dasharray="3.2,1.6" marker-end="url(#head-control)" data-mark="link" data-series="control" data-index="4"/>
+<path d="M 58.67 47.62 L 58.67 52.09 L 32.0 52.09 L 32.0 123.82 L 53.33 123.82 L 53.33 128.59" fill="none" stroke="#2B3640" stroke-width="0.45" stroke-dasharray="3.2,1.6" marker-end="url(#head-control)" data-mark="link" data-series="control" data-index="4"/>
 <path d="M 58.67 71.44 L 58.67 75.9 L 85.33 75.9 L 85.33 124.12 L 64.0 124.12 L 64.0 128.59" fill="none" stroke="#2B3640" stroke-width="0.45" stroke-dasharray="3.2,1.6" marker-end="url(#head-control)" data-mark="link" data-series="control" data-index="5"/>
 <path d="M 58.67 95.25 L 58.67 100.01 L 32.0 100.01 L 32.0 147.94 L 53.33 147.94 L 53.33 152.4" fill="none" stroke="#2B3640" stroke-width="0.45" stroke-dasharray="3.2,1.6" marker-end="url(#head-control)" data-mark="link" data-series="control" data-index="6"/>
 <path d="M 58.67 119.06 L 58.67 123.53 L 85.33 123.53 L 85.33 147.64 L 64.0 147.64 L 64.0 152.4" fill="none" stroke="#2B3640" stroke-width="0.45" stroke-dasharray="3.2,1.6" marker-end="url(#head-control)" data-mark="link" data-series="control" data-index="7"/>
 <path d="M 58.67 142.87 L 58.67 147.34 L 32.0 147.34 L 32.0 171.45 L 53.33 171.45 L 53.33 176.21" fill="none" stroke="#2B3640" stroke-width="0.45" stroke-dasharray="3.2,1.6" marker-end="url(#head-control)" data-mark="link" data-series="control" data-index="8"/>
 <path d="M 58.67 166.69 L 58.67 171.45 L 64.0 171.45 L 64.0 176.21" fill="none" stroke="#2B3640" stroke-width="0.45" stroke-dasharray="3.2,1.6" marker-end="url(#head-control)" data-mark="link" data-series="control" data-index="9"/>
-<rect x="50.57" y="25.76" width="6.6" height="3.54" fill="#FCFCFB"/>
-<text x="53.87" y="28.15" font-family="IBM Plex Mono" font-size="2.081" font-weight="400" fill="#2B3640" text-anchor="middle">SATU</text>
-<rect x="42.66" y="49.27" width="5.35" height="3.54" fill="#FCFCFB"/>
-<text x="45.33" y="51.66" font-family="IBM Plex Mono" font-size="2.081" font-weight="400" fill="#2B3640" text-anchor="middle">DUA</text>
+<rect x="50.09" y="29.33" width="6.6" height="3.54" fill="#FCFCFB"/>
+<text x="53.39" y="31.73" font-family="IBM Plex Mono" font-size="2.081" font-weight="400" fill="#2B3640" text-anchor="middle">SATU</text>
+<rect x="29.33" y="37.81" width="5.35" height="3.54" fill="#FCFCFB"/>
+<text x="32.0" y="40.21" font-family="IBM Plex Mono" font-size="2.081" font-weight="400" fill="#2B3640" text-anchor="middle">DUA</text>
 <rect x="82.04" y="50.32" width="6.6" height="3.54" fill="#FCFCFB"/>
 <text x="85.33" y="52.71" font-family="IBM Plex Mono" font-size="2.081" font-weight="400" fill="#2B3640" text-anchor="middle">TIGA</text>
 <rect x="81.41" y="60.88" width="7.84" height="3.54" fill="#FCFCFB"/>
 <text x="85.33" y="63.28" font-family="IBM Plex Mono" font-size="2.081" font-weight="400" fill="#2B3640" text-anchor="middle">EMPAT</text>
-<rect x="30.58" y="85.44" width="2.85" height="3.54" fill="#FCFCFB"/>
-<text x="32.0" y="87.83" font-family="IBM Plex Mono" font-size="2.081" font-weight="400" fill="#2B3640" text-anchor="middle">A</text>
+<rect x="30.58" y="85.14" width="2.85" height="3.54" fill="#FCFCFB"/>
+<text x="32.0" y="87.53" font-family="IBM Plex Mono" font-size="2.081" font-weight="400" fill="#2B3640" text-anchor="middle">A</text>
 <rect x="83.91" y="97.2" width="2.85" height="3.54" fill="#FCFCFB"/>
 <text x="85.33" y="99.59" font-family="IBM Plex Mono" font-size="2.081" font-weight="400" fill="#2B3640" text-anchor="middle">B</text>
 <rect x="30.58" y="121.16" width="2.85" height="3.54" fill="#FCFCFB"/>

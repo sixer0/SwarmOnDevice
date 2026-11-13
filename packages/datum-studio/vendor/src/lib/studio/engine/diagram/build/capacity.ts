@@ -59,7 +59,17 @@ export function capacityAction(s: StudioDiagramV1, checkId: string): string | nu
       ? `rapatkan class.col (ada kolom kosong di antara kolom ${cols.join(", ")}); maks ${maxCols} kolom pada ${W} mm`
       : `maks ${maxCols} kolom pada ${W} mm; bagi menjadi dua gambar atau pakai layered`;
   }
-  if (fam === "swimlane") return `kurangi simpul per lajur, bagi lajur, atau pecah menjadi 2 diagram (lebar ${W} mm)`;
+  if (fam === "swimlane") {
+    // Swarm 1.2.8 row 57c (C71 R3, C116 D55b-1): with phases the remedy names the phase; horizontal pools (2 x gutter of
+    // header) point to vertical pools. A swimlane without phases or pools keeps today's text.
+    const phases = Array.isArray(s.phases) && s.phases.length > 0;
+    const pools = Array.isArray(s.pools) && s.pools.length > 0;
+    const vertical = (s as { lane_orientation?: unknown }).lane_orientation === "vertical";
+    if (!phases && !pools) return `kurangi simpul per lajur, bagi lajur, atau pecah menjadi 2 diagram (lebar ${W} mm)`;
+    const per = phases ? "kurangi simpul per lajur atau per fase, kurangi fase" : "kurangi simpul per lajur, bagi lajur";
+    const alt = pools && !vertical ? ', pakai lane_orientation "vertical" (kolam tegak memuat lebih banyak kolom)' : "";
+    return `${per}${alt}, atau pecah menjadi 2 diagram (lebar ${W} mm)`;
+  }
   if (fam === "sld") return `maks 3 cabang per tingkat pada ${W} mm; pecah rel atau bagi menjadi dua gambar`;
   // Swarm 1.2.6 row 46 (T-11): the flow text names `direction` (ranked flow) beside per_row.
   if (fam === "flow") {

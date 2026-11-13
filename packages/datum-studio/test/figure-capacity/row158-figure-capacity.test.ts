@@ -79,7 +79,8 @@ describe("row 158: over-capacity diagrams are refused with limit, measured and s
     const e = caught(() => render(OVER_CAPACITY.swimlaneMessy));
     expect(e.code).toBe(FIGURE_OVER_CAPACITY);
     expect(det(e)).toMatchObject({ family: "swimlane", measured: 4, limit: 3 });
-    expect(e.message).toContain("tata letak kapasitas tidak bersih (dicoba: time: 2 (ditolak: tidak bersih)");
+    // Swarm 1.2.8 row 57c (INTENT): the time layout scores 1 (was 2: a label no longer leaves a stub); still refused
+    expect(e.message).toContain("tata letak kapasitas tidak bersih (dicoba: time: 1 (ditolak: tidak bersih)");
   });
 });
 
@@ -112,14 +113,18 @@ describe("row 158: at-capacity figures render unchanged (sha256 before the patch
     // Swarm 1.2.8 row 57 (AC-HARW INTENT, C10 OP13-5 / C12 OP-18-2): the arrowhead markers are drawn in mm
     // (userSpaceOnUse, 3.2 mm); only the <marker> elements changed, the bytes outside them are equal (sha256 without
     // markers f5ce6c1c902c7fd4... before and after). Before: 2da10275ebe1460c...
-    swimlane6: "d380829ffd2c726b9d81af1df84829570421610134f2f594a3547d79311fb5cf",
+    // Swarm 1.2.8 row 57c (C71/C123, INTENT): edge labels off arrowheads, outlines and lane rules (one leader, AUTO_FIT
+    // 0 defects; the old figure had 3: labels over 4 heads and a stub). Before: d380829ffd2c726b...
+    swimlane6: "35fc58a4b53635a5216b44ae074c798d2c5897392eac7ec0f84e38837b2a7917",
     // Row 165C (F113-9, C23 recorded diff): node g0 sits on the sheet edge, its outline is now drawn half a stroke
     // inside (x 0.0 -> 0.23, width 21.33 -> 21.1); the only changed line. Before: 28b63edf50ac499f...
     // Swarm 1.2.6 row 59 (T-02, N-016, controller ruling): the compacted block (x0 = 0) is translated inside the
     // 2 mm edge inset (centred, lattice spacing kept). Before: cd9dc8569bbc20b8...
     // Swarm 1.2.8 row 57 (AC-HARW INTENT): <marker> elements only (sha256 without markers fd07a1a3f0e509c3... before
     // and after). Before: d53b6de116c453f1...
-    graph5: "83560e3921069988ff4b76600f8e7a293053c0f2599d52b3d0b566bd5542bc8b",
+    // Swarm 1.2.8 row 57c (C71, INTENT): the four DATA labels sit above their lines, clear of the heads they covered.
+    // Before: 83560e3921069988...
+    graph5: "48a7d3cd8534b2c75d27dcf5520ec2b8f171666327cfbc8903639ee8e97a7f2e",
     bars30: "4c083a8330ada122686d85bce992ef43590e83479b0261f0c01eca1bb956390f",
     columns12: "1060e9b9d8043480cde380c532614a7f5ec3331e64590f5e20217cc19f90a107",
     // Swarm 1.2.6 row 66 (T-10, N-030, controller ruling): the 20 long labels now wrap to two lines under the

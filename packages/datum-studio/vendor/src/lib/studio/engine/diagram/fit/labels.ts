@@ -19,12 +19,18 @@
  * Swarm 1.2.8 row 57b (VIS-9, 01f §3.4): a label with `label_at` is fixed (`fixed`): its centre sits at
  * `LABEL_AT_FRACTION` of the drawn path length (`labelAtBaseline`), it is placed first and never moved; a collision
  * stays and is reported by the geometry lint (`textOverlap`, `lineThroughText`, `textOverNode`).
+ * Swarm 1.2.8 row 57c (C71/C86/C101/C102/C116/C119): a position also collides (hard) when its band covers an
+ * arrowhead (`heads`, the lint's `headQuad`), crosses a container rule no connector runs along (`rules`: lane rules,
+ * phase separators, pool borders), covers the start or end of another connector, or leaves a stray piece of its own
+ * connector beside it (shorter than `STUB_SEGMENT_MIN_MM` at the source border, shorter than 1 mm of line before the
+ * head, or between `SLIVER` and 1 mm at a bend). The same tests feed the lint kind `labelCollision`, so a figure whose
+ * first render breaks them is re-placed by auto-fit.
  * Murni dan deterministik.
  */
 import type { DiagramEdgeKind, DiagramLabelAt } from "../../../contract";
 import { measure } from "../../chart/core/textfit";
 import { LABEL_AT_FRACTION, pt2mm, role } from "../core/tokens";
-import type { Box } from "./lint";
+import { headQuad, polyHitsBox, STUB_SEGMENT_MIN_MM, type Box, type HeadSize } from "./lint";
 
 type Pt = readonly [number, number];
 
@@ -36,6 +42,8 @@ export interface EdgeLabelInput {
   orig: Pt;
   /** Row 57b (VIS-9): `orig` is a `label_at` position: kept as it is, never moved. */
   fixed?: boolean;
+  /** Row 57c: the connector's arrowheads (marker size), absent = none. */
+  heads?: { end?: HeadSize | null; start?: HeadSize | null };
 }
 
 export type EdgeLabelMode = "keep" | "moved" | "leader" | "numbered" | "unplaced";
@@ -63,6 +71,8 @@ export interface EdgeLabelCtx {
   obstacles: readonly Box[];
   /** Label bernomor diizinkan (bawaan benar). Tidak -> posisi terbaik di jalur, mode `unplaced`. */
   allowNumbered?: boolean;
+  /** Row 57c: container rules (lane rules, phase separators, pool borders) a band may not cross. */
+  rules?: ReadonlyArray<{ a: Pt; b: Pt; half: number }>;
 }
 
 const railPt = (): number => role("evidence_rail").size;
@@ -147,7 +157,146 @@ interface Scorer {
   soft(b: Box, self: number): number;
 }
 
+/** Row 57c: penalty (in the hard score's mm² unit) of one placement rule broken by a band. */
+const RULE_PENALTY = 1.0;
+/** Row 57c: length (mm) of a connector's start and end that a label of another connector may not cover. */
+const END_CLEAR_MM = 3.0;
+/** Row 57c: a visible piece shorter than this beside a band is not seen (lint `SLIVER_MM`). */
+const SLIVER = 0.25;
+/** Row 57c: least visible line between a band and the base of its connector's arrowhead, and beside a band at a bend. */
+const HEAD_LINE_MM = 1.0;
+
+/** Row 57c: parameter interval of segment a-b inside box `r`, or null (Liang-Barsky). */
+function clipSeg(a: Pt, b: Pt, r: Box): [number, number] | null {
+  let t0 = 0;
+  let t1 = 1;
+  const d = [b[0] - a[0], b[1] - a[1]];
+  const ps = [-d[0], d[0], -d[1], d[1]];
+  const qs = [a[0] - r[0], r[2] - a[0], a[1] - r[1], r[3] - a[1]];
+  for (let i = 0; i < 4; i++) {
+    if (Math.abs(ps[i]) < 1e-12) {
+      if (qs[i] < 0) return null;
+      continue;
+    }
+    const t = qs[i] / ps[i];
+    if (ps[i] < 0) t0 = Math.max(t0, t);
+    else t1 = Math.min(t1, t);
+    if (t0 > t1) return null;
+  }
+  return t1 - t0 > 1e-9 ? [t0, t1] : null;
+}
+
+/**
+ * Row 57c: the band leaves a stray piece of its own connector: on each segment it covers, the visible piece between the
+ * band and the segment's end is too short for its end (source border < `STUB_SEGMENT_MIN_MM`, head end < head + 1 mm,
+ * bend between `SLIVER` and 1 mm).
+ */
+function strayPiece(e: EdgeLabelInput, b: Box): boolean {
+  const runs = straightRuns(e.points);
+  const n = runs.length;
+  const headL = e.heads?.end ? e.heads.end.L : 0;
+  const tailL = e.heads?.start ? e.heads.start.L : 0;
+  for (let i = 0; i < n; i++) {
+    const [a, c] = runs[i];
+    const len = Math.hypot(c[0] - a[0], c[1] - a[1]);
+    const t = clipSeg(a, c, b);
+    if (!t) continue;
+    const pieces: Array<[number, "start" | "end"]> = [];
+    if (t[0] > 1e-9) pieces.push([t[0] * len, "start"]);
+    if (t[1] < 1 - 1e-9) pieces.push([(1 - t[1]) * len, "end"]);
+    for (const [piece, side] of pieces) {
+      if (piece <= SLIVER) continue;
+      const src = side === "start" && i === 0;
+      const head = side === "end" && i === n - 1;
+      // the lint's `stubSegment` rules: a source piece under half the threshold is a tick (c); under the threshold it is
+      // detached (d) when the band also covers the bend after it, so the connector comes out of the band turned
+      const srcNeed = t[1] < 1 - 1e-9 ? STUB_SEGMENT_MIN_MM / 2 : STUB_SEGMENT_MIN_MM;
+      const need = src ? (tailL > 0 ? tailL + HEAD_LINE_MM : srcNeed) : head ? headL + HEAD_LINE_MM : HEAD_LINE_MM;
+      if (piece < need) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Row 57c: a band at `b` on connector `points` keeps the connector's own arrowheads visible and leaves no stray piece of
+ * it (`strayPiece`); used by the first-render label position (`build/svg.ts` `labelPos`) before auto-fit is needed.
+ */
+export function spotClear(points: ReadonlyArray<Pt>, heads: EdgeLabelInput["heads"], b: Box): boolean {
+  const e: EdgeLabelInput = { points, label: "", kind: "data", orig: [0, 0], heads };
+  if (strayPiece(e, b)) return false;
+  const g = grow(b, 0.1);
+  if (heads?.end) {
+    const q = headQuad(points, heads.end);
+    if (q && polyHitsBox(q, g)) return false;
+  }
+  if (heads?.start) {
+    const q = headQuad([...points].reverse(), heads.start);
+    if (q && polyHitsBox(q, g)) return false;
+  }
+  return true;
+}
+
+/** Row 57c: an axis rule crosses band `b` where no connector runs along it (the lint's rule test, on input points). */
+function ruleCrosses(r: { a: Pt; b: Pt; half: number }, b: Box, edges: readonly EdgeLabelInput[]): boolean {
+  const t = clipSeg(r.a, r.b, [b[0] - r.half, b[1] - r.half, b[2] + r.half, b[3] + r.half]);
+  if (!t) return false;
+  const hor = Math.abs(r.a[1] - r.b[1]) < 1e-6;
+  const ver = Math.abs(r.a[0] - r.b[0]) < 1e-6;
+  if (!hor && !ver) return true;
+  const k = hor ? 0 : 1;
+  const at = (u: number) => r.a[k] + (r.b[k] - r.a[k]) * u;
+  const lo = Math.min(at(t[0]), at(t[1]));
+  const hi = Math.max(at(t[0]), at(t[1]));
+  const line = hor ? r.a[1] : r.a[0];
+  const cover: Array<[number, number]> = [];
+  for (const e of edges) {
+    for (let i = 0; i + 1 < e.points.length; i++) {
+      const p = e.points[i];
+      const q = e.points[i + 1];
+      const along = hor ? Math.abs(p[1] - q[1]) < 1e-6 && Math.abs(p[1] - line) < 0.3 : Math.abs(p[0] - q[0]) < 1e-6 && Math.abs(p[0] - line) < 0.3;
+      if (along) cover.push([Math.min(p[k], q[k]), Math.max(p[k], q[k])]);
+    }
+  }
+  cover.sort((x, y) => x[0] - y[0]);
+  let reach = lo;
+  for (const [s0, e0] of cover) {
+    if (s0 > reach + 0.05) break;
+    reach = Math.max(reach, e0);
+  }
+  return reach < hi - 0.05;
+}
+
 function scorer(ctx: EdgeLabelCtx, edges: readonly EdgeLabelInput[], placed: Map<number, Box>): Scorer {
+  // Row 57c: arrowhead regions of every connector (end and start heads).
+  const quads: Pt[][] = [];
+  for (const e of edges) {
+    if (e.heads?.end) {
+      const q = headQuad(e.points, e.heads.end);
+      if (q) quads.push(q);
+    }
+    if (e.heads?.start) {
+      const q = headQuad([...e.points].reverse(), e.heads.start);
+      if (q) quads.push(q);
+    }
+  }
+  // Row 57c: the end pieces of every connector (END_CLEAR_MM along the route from each end).
+  const ends: Array<{ edge: number; a: Pt; b: Pt }> = [];
+  edges.forEach((e, i) => {
+    if (e.points.length < 2) return;
+    for (const pts of [e.points, [...e.points].reverse()]) {
+      let rest = END_CLEAR_MM;
+      for (let k = 0; k + 1 < pts.length && rest > 1e-9; k++) {
+        const p = pts[k];
+        const q = pts[k + 1];
+        const len = Math.hypot(q[0] - p[0], q[1] - p[1]);
+        if (len < 1e-9) continue;
+        const f = Math.min(1, rest / len);
+        ends.push({ edge: i, a: p, b: [p[0] + (q[0] - p[0]) * f, p[1] + (q[1] - p[1]) * f] });
+        rest -= len * f;
+      }
+    }
+  });
   return {
     hard(b, self) {
       let a = 0;
@@ -155,6 +304,13 @@ function scorer(ctx: EdgeLabelCtx, edges: readonly EdgeLabelInput[], placed: Map
       for (const o of ctx.obstacles) a += inter(b, o);
       for (const [i, p] of placed) if (i !== self) a += inter(b, grow(p, 0.4));
       const out = Math.max(0, -b[0], b[2] - ctx.W, (ctx.yMin ?? 0) - b[1], b[3] - ctx.yMax);
+      // Row 57c: arrowheads, container rules, other connectors' ends, stray pieces of the own connector.
+      const g = grow(b, 0.1);
+      for (const q of quads) if (polyHitsBox(q, g)) a += RULE_PENALTY;
+      for (const r of ctx.rules ?? []) if (ruleCrosses(r, b, edges)) a += RULE_PENALTY;
+      // another connector's first or last END_CLEAR_MM (where the reader sees it start or arrive) stays uncovered
+      for (let i = 0; i < ends.length; i++) if (ends[i].edge !== self && segHitsBox(ends[i].a, ends[i].b, g)) a += RULE_PENALTY;
+      if (edges[self] && strayPiece(edges[self], b)) a += RULE_PENALTY;
       return a + out * (b[3] - b[1]) * 4;
     },
     soft(b, self) {
@@ -168,6 +324,42 @@ function scorer(ctx: EdgeLabelCtx, edges: readonly EdgeLabelInput[], placed: Map
   };
 }
 
+/**
+ * Row 57c: the straight runs of a polyline (zero-length steps dropped, consecutive collinear steps in the same direction
+ * merged), longest first (stable). A route's stubs split one visible run into pieces; the slide searches use the run.
+ */
+export function runOrder(points: ReadonlyArray<Pt>): Array<[Pt, Pt]> {
+  const runs = straightRuns(points);
+  const len = (s: [Pt, Pt]) => Math.hypot(s[1][0] - s[0][0], s[1][1] - s[0][1]);
+  return runs.map((s, i) => ({ s, i })).sort((a, b) => len(b.s) - len(a.s) || a.i - b.i).map((x) => x.s);
+}
+
+/** Row 57c: the straight runs of a polyline in path order (see `runOrder`). */
+function straightRuns(points: ReadonlyArray<Pt>): Array<[Pt, Pt]> {
+  const pts: Pt[] = [];
+  for (const p of points) {
+    const q = pts[pts.length - 1];
+    if (!q || Math.hypot(p[0] - q[0], p[1] - q[1]) > 1e-9) pts.push(p);
+  }
+  const runs: Array<[Pt, Pt]> = [];
+  for (let i = 0; i + 1 < pts.length; i++) {
+    const a = pts[i];
+    const b = pts[i + 1];
+    const last = runs[runs.length - 1];
+    if (last) {
+      const [la, lb] = last;
+      const cross = (lb[0] - la[0]) * (b[1] - a[1]) - (lb[1] - la[1]) * (b[0] - a[0]);
+      const dot = (lb[0] - la[0]) * (b[0] - a[0]) + (lb[1] - la[1]) * (b[1] - a[1]);
+      if (Math.abs(cross) < 1e-9 && dot > 0 && Math.abs(lb[0] - a[0]) < 1e-9 && Math.abs(lb[1] - a[1]) < 1e-9) {
+        runs[runs.length - 1] = [la, b];
+        continue;
+      }
+    }
+    runs.push([a, b]);
+  }
+  return runs;
+}
+
 /** Segmen jalur, terpanjang dulu (urut stabil). */
 function segOrder(points: ReadonlyArray<Pt>): Array<[Pt, Pt]> {
   const segs: Array<[Pt, Pt]> = [];
@@ -177,6 +369,8 @@ function segOrder(points: ReadonlyArray<Pt>): Array<[Pt, Pt]> {
 }
 
 const T_STEPS = [0.5, 0.25, 0.75] as const;
+/** Row 57c: least distance (mm) of a leader's anchor from a node outline. */
+const LEADER_CLEAR_MM = 1.0;
 
 interface Cand {
   x: number;
@@ -216,14 +410,15 @@ function onPath(e: EdgeLabelInput, kw: number, W: number, sc: Scorer, self: numb
   // caller falls back to a leader line or a number, slide the label along each segment (longest
   // first) and take a collision-free spot: fewest covered connectors, then nearest the segment
   // midpoint. Only reached when every fixed spot collides, so placements found above are unchanged.
-  return scanPath(e, kw, W, sc, self) ?? best;
+  return scanPath(e, kw, W, sc, self) ?? scanPath(e, kw, W, sc, self, runOrder(e.points)) ?? best;
 }
 
 /** T-04: collision-free spot anywhere on a segment, longest segment first (null = none). */
-function scanPath(e: EdgeLabelInput, kw: number, W: number, sc: Scorer, self: number): Cand | null {
+function scanPath(e: EdgeLabelInput, kw: number, W: number, sc: Scorer, self: number, segs = segOrder(e.points)): Cand | null {
   const stepMm = 0.5;
   let best: { c: Cand; d: number } | null = null;
-  for (const [a, b] of segOrder(e.points)) {
+  // row 57c: also over the straight runs (`runOrder`) when no segment of the route has a free spot
+  for (const [a, b] of segs) {
     const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
     const n = Math.max(1, Math.ceil(len / stepMm));
     let seg: { c: Cand; d: number } | null = null;
@@ -247,12 +442,96 @@ function scanPath(e: EdgeLabelInput, kw: number, W: number, sc: Scorer, self: nu
 }
 
 /**
+ * Row 57c: a label beside its connector, off the line (no knock-out over it): above or below a horizontal segment,
+ * right or left of a vertical one, its near band edge `BESIDE_GAP_MM` plus half the widest stroke off the line, slid along
+ * the segment (longest segment first, 0.5 mm steps) to the collision-free spot nearest the segment midpoint. Used when no
+ * spot on the line is free (a run shorter than label plus heads, a rule across the run).
+ */
+function besidePath(e: EdgeLabelInput, kw: number, W: number, sc: Scorer, self: number): Cand | null {
+  const s = railMm();
+  const bh = s * 1.7;
+  // off the line by the gap plus half the widest stroke (accent 0.72 mm), or, when that band would touch a head, by the
+  // gap plus half the widest head (the band then runs over the head); the scorer's head test decides
+  const headHalf = Math.max(e.heads?.end?.W ?? 0, e.heads?.start?.W ?? 0) / 2 + 0.1;
+  const offs = headHalf > 0.36 ? [BESIDE_GAP_MM + 0.36, BESIDE_GAP_MM + headHalf] : [BESIDE_GAP_MM + 0.36];
+  let best: { c: Cand; d: number } | null = null;
+  for (const [a, b] of runOrder(e.points)) {
+    const horiz = Math.abs(b[1] - a[1]) < 1e-6;
+    const vert = Math.abs(b[0] - a[0]) < 1e-6;
+    if (!horiz && !vert) continue;
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    const n = Math.max(1, Math.ceil(len / 0.5));
+    for (const side of [-1, 1]) for (const off of offs) {
+      for (let k = 0; k <= n; k++) {
+        const t = k / n;
+        const px = a[0] + (b[0] - a[0]) * t;
+        const py = a[1] + (b[1] - a[1]) * t;
+        // band centre: beside the line by `off` plus half the band
+        const cx = horiz ? px : px + side * (off + kw / 2);
+        const cy = horiz ? py + side * (off + bh / 2) : py;
+        const x = Math.min(Math.max(cx, kw / 2), Math.max(kw / 2, W - kw / 2));
+        const y = cy + s * 0.3; // band centre -> baseline (knockBox: baseline - 1.15 s .. + 0.55 s)
+        const box = knockBox(x, y, kw);
+        const hard = sc.hard(box, self);
+        if (hard > HARD_EPS) continue;
+        const c: Cand = { x, y, box, hard, soft: sc.soft(box, self) };
+        const d = Math.abs(t - 0.5) * len + (side < 0 ? 0 : 1e-3); // above / left first on a tie
+        if (!best || c.soft < best.c.soft || (c.soft === best.c.soft && d < best.d - 1e-9)) best = { c, d };
+      }
+    }
+    const found = best as { c: Cand; d: number } | null;
+    if (found && found.c.soft === 0) return found.c;
+  }
+  const found = best as { c: Cand; d: number } | null;
+  return found ? found.c : null;
+}
+
+/** Row 57c: some point of segment a-b (9 samples) lies within `d` of polyline `pl`. */
+function nearLine(a: Pt, b: Pt, pl: ReadonlyArray<Pt>, d: number): boolean {
+  const dist = (p: Pt, u: Pt, v: Pt) => {
+    const dx = v[0] - u[0];
+    const dy = v[1] - u[1];
+    const l2 = dx * dx + dy * dy;
+    const t = l2 > 0 ? Math.max(0, Math.min(1, ((p[0] - u[0]) * dx + (p[1] - u[1]) * dy) / l2)) : 0;
+    return Math.hypot(p[0] - u[0] - t * dx, p[1] - u[1] - t * dy);
+  };
+  for (let k = 0; k <= 8; k++) {
+    const p: Pt = [a[0] + ((b[0] - a[0]) * k) / 8, a[1] + ((b[1] - a[1]) * k) / 8];
+    for (let i = 0; i + 1 < pl.length; i++) if (dist(p, pl[i], pl[i + 1]) < d) return true;
+  }
+  return false;
+}
+
+/** Row 57c: segments a-b and c-d cross or touch (orientation test, collinear overlap included). */
+function segCross(a: Pt, b: Pt, c: Pt, d: Pt): boolean {
+  const o = (p: Pt, q: Pt, r: Pt) => (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0]);
+  const on = (p: Pt, q: Pt, r: Pt) => Math.min(p[0], q[0]) - 1e-9 <= r[0] && r[0] <= Math.max(p[0], q[0]) + 1e-9 && Math.min(p[1], q[1]) - 1e-9 <= r[1] && r[1] <= Math.max(p[1], q[1]) + 1e-9;
+  const d1 = o(c, d, a);
+  const d2 = o(c, d, b);
+  const d3 = o(a, b, c);
+  const d4 = o(a, b, d);
+  if (((d1 > 1e-12 && d2 < -1e-12) || (d1 < -1e-12 && d2 > 1e-12)) && ((d3 > 1e-12 && d4 < -1e-12) || (d3 < -1e-12 && d4 > 1e-12))) return true;
+  return (Math.abs(d1) <= 1e-12 && on(c, d, a)) || (Math.abs(d2) <= 1e-12 && on(c, d, b)) || (Math.abs(d3) <= 1e-12 && on(a, b, c)) || (Math.abs(d4) <= 1e-12 && on(a, b, d));
+}
+
+/** Row 57c: gap (mm) between a connector and the near edge of a label placed beside it. */
+const BESIDE_GAP_MM = 0.4;
+
+/**
  * Kandidat di luar jalur dengan garis penunjuk dari titik segmen ke tepi kotak terdekat.
  * Jarak bertingkat menjauhi segmen (tegak lurus) dengan tiga geseran sejajar; penunjuk tidak boleh
  * menembus simpul lain (simpul yang memuat titik jangkar sendiri dikecualikan, mis. rak).
  * Pilihan: konektor tertutup paling sedikit, lalu penunjuk terpendek.
  */
-function withLeader(e: EdgeLabelInput, kw: number, ctx: EdgeLabelCtx, sc: Scorer, self: number): Cand | null {
+function withLeader(
+  e: EdgeLabelInput,
+  kw: number,
+  ctx: EdgeLabelCtx,
+  sc: Scorer,
+  self: number,
+  edges: readonly EdgeLabelInput[] = [],
+  placed: ReadonlyMap<number, Box> = new Map(),
+): Cand | null {
   const s = railMm();
   const bh = s * 1.7;
   let best: { c: Cand; len: number } | null = null;
@@ -262,6 +541,13 @@ function withLeader(e: EdgeLabelInput, kw: number, ctx: EdgeLabelCtx, sc: Scorer
       const ax = a[0] + (b[0] - a[0]) * t;
       const ay = a[1] + (b[1] - a[1]) * t;
       const inside = (n: Box) => ax >= n[0] && ax <= n[2] && ay >= n[1] && ay <= n[3];
+      // Row 57c: a leader starts on the free run of its connector: not within LEADER_CLEAR_MM of a node outline (a leader
+      // along a border reads as part of the node; an anchor deep inside a node, e.g. a rack, keeps the old rule) and not
+      // under its own arrowhead.
+      const nearOutline = ctx.nodeBoxes.some((n) => inside(grow(n, LEADER_CLEAR_MM)) && !inside(grow(n, -LEADER_CLEAR_MM)));
+      const end = e.points[e.points.length - 1];
+      const underHead = e.heads?.end ? Math.hypot(end[0] - ax, end[1] - ay) < e.heads.end.L : false;
+      if (nearOutline || underHead) continue;
       const centres: Array<[number, number]> = [];
       for (const sign of [-1, 1]) {
         for (let k = 0; k < 10; k++) {
@@ -291,6 +577,11 @@ function withLeader(e: EdgeLabelInput, kw: number, ctx: EdgeLabelCtx, sc: Scorer
         const py = Math.min(Math.max(ay, box[1]), box[3]);
         if (ctx.nodeBoxes.some((n) => !inside(n) && segHitsBox([ax, ay], [px, py], grow(n, -0.3)))) continue;
         if (ctx.obstacles.some((o) => segHitsBox([ax, ay], [px, py], o))) continue; // penunjuk tidak mencoret teks
+        // Row 57c: a leader crosses no other label band and no other connector (it would read as a connector itself).
+        if ([...placed].some(([j, b]) => j !== self && segHitsBox([ax, ay], [px, py], grow(b, 0.2)))) continue;
+        if (edges.some((o, j) => j !== self && o.points.some((p, k) => k + 1 < o.points.length && segCross([ax, ay], [px, py], p, o.points[k + 1])))) continue;
+        // ... and does not run beside another connector closer than LEADER_CLEAR_MM (it would read as a doubled line)
+        if (edges.some((o, j) => j !== self && nearLine([ax, ay], [px, py], o.points, LEADER_CLEAR_MM))) continue;
         const c: Cand = { x: cx, y, box, hard, soft: sc.soft(box, self), leader: [ax, ay, px, py] };
         const len = Math.hypot(px - ax, py - ay);
         if (!best || c.soft < best.c.soft || (c.soft === best.c.soft && len < best.len - 1e-9)) best = { c, len };
@@ -342,7 +633,14 @@ export function placeEdgeLabels(edges: readonly EdgeLabelInput[], ctx: EdgeLabel
       placed.set(i, c.box);
       return;
     }
-    const l = withLeader(e, kw, ctx, sc, i);
+    // Row 57c: beside the line before a leader.
+    const side = besidePath(e, kw, ctx.W, sc, i);
+    if (side) {
+      out[i] = { mode: "moved", x: side.x, y: side.y, text: e.label, kw };
+      placed.set(i, side.box);
+      return;
+    }
+    const l = withLeader(e, kw, ctx, sc, i, edges, placed);
     if (l && l.leader) {
       out[i] = { mode: "leader", x: l.x, y: l.y, text: e.label, kw, leader: l.leader };
       placed.set(i, l.box);

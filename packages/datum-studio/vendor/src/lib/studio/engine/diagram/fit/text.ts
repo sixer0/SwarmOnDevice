@@ -341,11 +341,59 @@ function labelBelowLayout(nd: { x: number; y: number; w: number; h: number; spec
   const n = nd.spec;
   const probe = planNodeText(n, nd.w, nd.h, NODE_HARD_MAX_LINES);
   const plan = planNodeText(n, nd.w, nd.h, linesForHeight(n, nd.h, probe.sub.length));
+  if (labelBesideNodes.has(nd)) return besideLayout(nd, plan);
   const cx = nd.x + nd.w / 2.0;
   const y = nd.y + labelBelowTop(n.shape) + tagH(n) + FONT_ASCENT_EM * capMm();
   const out: NodeTextLayout = { label: { x: cx, y, lines: plan.label, lineMm: capLineMm() }, plan };
   if (plan.sub.length > 0) out.sub = { x: cx, y: y + plan.label.length * capLineMm(), lines: plan.sub, lineMm: subLineMm() };
   return out;
+}
+
+// ---------------------------------------------------------------- row 57c (C86, label beside)
+/**
+ * Swarm 1.2.8 row 57c (C86): event nodes whose label is drawn beside the outline (right of the circle, block centred on
+ * its centre height) instead of below it, so a connector leaving downward starts on the circle. Set per build by the
+ * router (`build/route.ts`), keyed by the sheet node object (a new sheet = no node marked).
+ */
+const labelBesideNodes = new WeakSet<object>();
+
+/** Row 57c: gap (mm) between the outer edge of the outline stroke and a label drawn beside it. */
+export const LABEL_BESIDE_GAP_MM = 1.0;
+
+/** Row 57c: mark (`on`) or unmark a label-below node as labelled beside its outline. */
+export function setLabelBeside(nd: object, on: boolean): void {
+  if (on) labelBesideNodes.add(nd);
+  else labelBesideNodes.delete(nd);
+}
+
+/** Row 57c: the node's label is drawn beside its outline. */
+export function isLabelBeside(nd: object): boolean {
+  return labelBesideNodes.has(nd);
+}
+
+function besideLayout(nd: { x: number; y: number; w: number; h: number; spec: DiagramNode }, plan: NodeTextPlan): NodeTextLayout {
+  const o = labelBelowOutline(nd);
+  const wide = Math.max(0, ...plan.label.map(capWidthMm), ...plan.sub.map(subWidthMm));
+  const x0 = o.x + o.w + labelBelowStrokeMm(nd.spec.shape) / 2 + LABEL_BESIDE_GAP_MM;
+  const cx = x0 + wide / 2;
+  const total = blockMm(plan.label.length, plan.sub.length);
+  const y = o.y + o.h / 2 - total / 2 + FONT_ASCENT_EM * capMm();
+  const out: NodeTextLayout = { label: { x: cx, y, lines: plan.label, lineMm: capLineMm() }, plan };
+  if (plan.sub.length > 0) out.sub = { x: cx, y: y + plan.label.length * capLineMm(), lines: plan.sub, lineMm: subLineMm() };
+  return out;
+}
+
+/**
+ * Row 57c: the box [x0, y0, x1, y1] the label block of `nd` would take beside its outline (for the router's room test).
+ */
+export function labelBesideBox(nd: { x: number; y: number; w: number; h: number; spec: DiagramNode }): [number, number, number, number] {
+  const n = nd.spec;
+  const probe = planNodeText(n, nd.w, nd.h, NODE_HARD_MAX_LINES);
+  const plan = planNodeText(n, nd.w, nd.h, linesForHeight(n, nd.h, probe.sub.length));
+  const lay = besideLayout(nd, plan);
+  const wide = Math.max(0, ...plan.label.map(capWidthMm), ...plan.sub.map(subWidthMm));
+  const top = lay.label.y - FONT_ASCENT_EM * capMm();
+  return [lay.label.x - wide / 2, top, lay.label.x + wide / 2, top + blockMm(plan.label.length, plan.sub.length)];
 }
 
 /** Row 54 (VIS-3a, §5.3): height (mm, not lattice-locked) of the layout cell of a label-below node of width `w`. */
