@@ -123,6 +123,77 @@ export function outputKind(file: string, places: readonly string[] = []): "whole
   return undefined
 }
 
+/** 1.2.7 M1-02: whether a file's name alone makes what a reader prints of it masked or withheld (no disk access). */
+export function maskedByName(file: string) {
+  const base = path.basename(file.replaceAll("\\", "/")).normalize("NFC").toLowerCase()
+  return fileKind(file) !== undefined || HISTORY_FILE.test(base) || SETTINGS_JSON.test(base)
+}
+
+// 1.2.7 M1-02 (U16, SR7-07): the masking scan resolves the files a shell command reads the way the permission table's
+// app-state reader does (`spelledPlaces` in `permission/autonomy-table.ts`, not exported): `~`, `$HOME` and `${HOME}` under
+// every home Swarm knows, set environment variables expanded, and relative names under every folder a `cd` may lead to.
+const HOME_SPELLING = /^(?:~|\$HOME\b|\$\{HOME\})(?=\/|$)/
+const VARIABLE = /\$(?:\{([A-Za-z_][A-Za-z0-9_]*)\}|([A-Za-z_][A-Za-z0-9_]*))/g
+const CHANGES_FOLDER = new Set(["cd", "chdir", "pushd"])
+const MAX_FOLDERS = 16
+
+/** A word as the shell would expand it. `certain` is false when some part of it could not be expanded here. */
+export function expandSpelling(word: string, homes: readonly string[]): { names: string[]; certain: boolean } {
+  const home = HOME_SPELLING.exec(word)
+  const starts = home ? homes.map((place) => place + word.slice(home[0].length)) : [word]
+  // `~user` names another user's home.
+  let certain = !/^~[^/]/.test(word)
+  const names = starts.map((start) =>
+    start.replace(VARIABLE, (whole, braced: string | undefined, bare: string | undefined) => {
+      const value = process.env[(braced ?? bare)!]
+      if (value === undefined) certain = false
+      return value ?? whole
+    }),
+  )
+  if (names.some((name) => /[$`]/.test(name))) certain = false
+  return { names: [...new Set(names)], certain }
+}
+
+/**
+ * Every folder a command's words may be read from: the call's folder and each `cd`, `chdir` or `pushd` target, each
+ * resolved under every folder reached before it (an over-read on purpose, as the table's). `certain` is false when a change
+ * of folder could not be followed: `cd -`, `popd`, a stack entry, a CDPATH lookup, an expansion that did not resolve.
+ */
+export function workingFolders(
+  commands: readonly (readonly string[])[],
+  cwd: string,
+  homes: readonly string[],
+): { folders: string[]; certain: boolean } {
+  let folders = [cwd]
+  let certain = true
+  const add = (more: string[]) => {
+    const next = [...new Set([...folders, ...more])]
+    if (next.length > MAX_FOLDERS) certain = false
+    folders = next.slice(0, MAX_FOLDERS)
+  }
+  for (const command of commands) {
+    const words = command[0] === "builtin" || command[0] === "command" ? command.slice(1) : command
+    const program = words[0]
+    if (program === "popd") certain = false
+    if (!program || !CHANGES_FOLDER.has(program)) continue
+    const args = words.slice(1).filter((word) => !/^-[LPe@]+$/.test(word))
+    if (args.length === 0) {
+      add([...homes])
+      continue
+    }
+    const target = args[0]!
+    if (args.length > 1 || /^[-+]/.test(target)) {
+      certain = false
+      continue
+    }
+    if (process.env.CDPATH && !/^(\/|~|\$|\.{1,2}(\/|$))/.test(target)) certain = false
+    const spelled = expandSpelling(target, homes)
+    if (!spelled.certain) certain = false
+    add(spelled.names.flatMap((name) => folders.map((folder) => path.resolve(folder, name))))
+  }
+  return { folders, certain }
+}
+
 const PAIR = /^(\s*(?:export\s+)?)([A-Za-z_./:@-][A-Za-z0-9_./:@-]*)(\s*=\s*)(.*)$/
 
 function unquoted(value: string) {
@@ -262,6 +333,19 @@ function known(root: string): [string, string][] {
 export function learn(text: string, file = ".env") {
   for (const [name, value] of fileValues(file, text)) if (value.length >= MIN_KNOWN) learned.set(value, name)
   learnedVersion++
+}
+
+/** 1.2.7 M1-02: a file that is there to be printed but whose values `learnFile` cannot read (too large, unreadable). */
+export function unlearnable(file: string) {
+  try {
+    const stat = fs.statSync(file)
+    if (!stat.isFile()) return false
+    if (stat.size > MAX_SECRET_FILE) return true
+    fs.accessSync(file, fs.constants.R_OK)
+    return false
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === "EACCES" || (error as NodeJS.ErrnoException).code === "EPERM"
+  }
 }
 
 /** A command named this file, which may be anywhere, so what it prints can be recognised. */

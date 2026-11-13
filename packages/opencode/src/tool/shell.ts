@@ -149,6 +149,13 @@ function parts(node: Node) {
   return out
 }
 
+/** 1.2.7 M1-02: a bash command's words as written (unquoted), expansions included, without assignments or redirects. */
+function words(node: Node) {
+  return node.namedChildren
+    .filter((child): child is Node => child !== null && child.type !== "variable_assignment" && !child.type.endsWith("redirect") && child.type !== "comment")
+    .map((child) => unquote(child.text))
+}
+
 function source(node: Node) {
   return (node.parent?.type === "redirected_statement" ? node.parent.text : node.text).trim()
 }
@@ -966,6 +973,8 @@ const METADATA_VIEWERS = new Set([
   "sha512sum", "b2sum", "test", "[", "true", "false", "pwd", "cd",
 ])
 const VERBATIM_VIEWERS = new Set([...METADATA_VIEWERS, "cat", "head", "tail", "grep", "egrep", "fgrep", "rg", "diff", "cmp", "nl", "sort", "uniq", "echo"])
+// 1.2.7 M1-02: the verbatim viewers that print a file's contents. Any other reader of a secret file is withheld already.
+const CONTENT_READERS = new Set([...VERBATIM_VIEWERS].filter((name) => !METADATA_VIEWERS.has(name) && name !== "echo"))
 const programOf = (tokens: string[]) => (tokens[0] ? path.basename(tokens[0]) : "")
 
 function verbatim(tokens: string[]) {
@@ -1277,22 +1286,48 @@ export const ShellTool = Tool.define(
       // Row 36b (SEC-01, SEC-03): what a secret file or a protected place shows is judged by its name and where it lands,
       // so a link `notes.txt` to `.env` and a glob `.en?` count, and Swarm's own credential files and the key folders in
       // the home folder are whole-secret for output (reads of them run without asking now, U12).
-      const places = BypassLists.protectedOutputPlaces([Global.Path.home, os.homedir()], Global.Path.data)
+      const homes = [Global.Path.home, os.homedir()]
+      const places = BypassLists.protectedOutputPlaces(homes, Global.Path.data)
+      // 1.2.7 M1-02 (U16): a name is resolved in every folder the command may read it from (`cd X && cat swarm.jsonc`,
+      // `(cd X; cat ./f)`), with `~`, `$HOME` and set variables expanded, as the permission table resolves the same read.
+      const reach = ps
+        ? { folders: [cwd], certain: true }
+        : Secrets.workingFolders(
+            commands(root).map(words),
+            cwd,
+            homes,
+          )
       const kinds = new Map<string, "whole" | "lines">()
       const kindOf = (word: string) => {
-        const file = absolute(word)
-        for (const name of [file, ...globbed(file)]) {
-          const kind = Secrets.outputKind(name, places)
-          if (kind) kinds.set(name, kind)
-          if (kind) return { file: name, kind }
+        const spelled = ps ? { names: [home(word)], certain: true } : Secrets.expandSpelling(home(word), homes)
+        const files = spelled.names.flatMap((name) =>
+          path.isAbsolute(name) ? [name] : reach.folders.map((folder) => path.resolve(folder, name)),
+        )
+        const found: { file: string; kind: "whole" | "lines" }[] = []
+        for (const file of new Set(files)) {
+          for (const name of [file, ...globbed(file)]) {
+            const kind = Secrets.outputKind(name, places)
+            if (kind) kinds.set(name, kind)
+            if (kind) {
+              found.push({ file: name, kind })
+              break
+            }
+          }
         }
-        return undefined
+        // Fail closed: a secret by its name whose file could not be located for certain, or is there but cannot be learned.
+        const relative = spelled.names.some((name) => !path.isAbsolute(name))
+        const unsure =
+          Secrets.maskedByName(word) &&
+          (!spelled.certain || (relative && !reach.certain) || found.some((item) => Secrets.unlearnable(item.file)))
+        return { found, unsure }
       }
       const named = new Set<string>()
       const read = new Set<string>()
+      let unsureRead: string | undefined
       for (const word of redirects.reads) {
-        const found = kindOf(word)
-        if (found) named.add(found.file), read.add(found.file)
+        const { found, unsure } = kindOf(word)
+        for (const item of found) named.add(item.file), read.add(item.file)
+        if (unsure) unsureRead = unsureRead ?? path.basename(word)
       }
       let reshaped = false
       let transformed = false
@@ -1303,7 +1338,8 @@ export const ShellTool = Tool.define(
         const tokens = command.map((item) => item.text)
         const cmd = ps || shellKind === "cmd" ? tokens[0]?.toLowerCase() : tokens[0]
         if (!ps) {
-          const plain = tokens.map(unquote)
+          // 1.2.7 M1-02: every word, `$NAME` and `${NAME}` included, which `parts` leaves out.
+          const plain = words(node)
           reshaped = reshaped || reshapes(plain)
           transformed = transformed || !verbatim(plain)
           content = content || !METADATA_VIEWERS.has(programOf(plain))
@@ -1313,11 +1349,15 @@ export const ShellTool = Tool.define(
             printed = printed ?? plain.slice(1).find((name) => !name.startsWith("-") && Secrets.secretPair(name, "x"))
           const loads = LOADERS.has(program)
           for (const word of plain.slice(1).flatMap((token) => token.split(WORD_BREAK))) {
-            const found = word ? kindOf(word) : undefined
-            if (!found) continue
-            named.add(found.file)
+            if (!word) continue
+            const { found, unsure } = kindOf(word)
             // `docker run --env-file .env` and `source .env` load the values; what they then print is scrubbed as before.
-            if (!loads && !plain.some((arg) => arg === "--env-file" || arg.startsWith("--env-file="))) read.add(found.file)
+            const reads = !loads && !plain.some((arg) => arg === "--env-file" || arg.startsWith("--env-file="))
+            for (const item of found) {
+              named.add(item.file)
+              if (reads) read.add(item.file)
+            }
+            if (unsure && reads && CONTENT_READERS.has(program)) unsureRead = unsureRead ?? path.basename(word)
           }
         }
 
@@ -1354,6 +1394,8 @@ export const ShellTool = Tool.define(
       // A secret file read by anything but a verbatim viewer (SEC-01 item 2), or loaded and then reshaped (1.2.5).
       else if ((read.size > 0 && transformed) || (reshaped && named.size > 0))
         scan.withheld = WITHHELD_TRANSFORMED(path.basename([...read, ...named][0]!))
+      // 1.2.7 M1-02: a verbatim reader of a secret-named file that could not be located for certain shows nothing of it.
+      else if (unsureRead) scan.withheld = WITHHELD_WHOLE(unsureRead)
       else if (printed) scan.withheld = `[hidden:${printed}]`
       if (read.size > 0) scan.masked = true
 
