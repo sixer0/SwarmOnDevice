@@ -63,7 +63,8 @@ describe("N-7 autoFitRestText (unit, N7-139)", () => {
   });
 
   test("both AUTO_FIT sites (autofit.ts, capacity.ts) build their remainder with autoFitRestText", () => {
-    expect(SRC("autofit.ts")).toMatch(/-> \$\{autoFitRestText\([^)]*\)\.rest\}/);
+    // Swarm 1.2.8 row 35 (AC-HNB, INTENT): the lead now reads `sebelum fit <n>, sesudah fit <rest>`; the remainder is still autoFitRestText.
+    expect(SRC("autofit.ts")).toMatch(/sesudah fit \$\{autoFitRestText\([^)]*\)\.rest\}/);
     expect(SRC("capacity.ts")).toMatch(/import \{[^}]*\bautoFitRestText\b[^}]*\} from "\.\/autofit"/);
     expect(SRC("capacity.ts")).toMatch(/autoFitRestText\(best\.g\)/);
     expect(SRC("capacity.ts")).not.toMatch(/-> sisa \$\{best\.g\.score\}/);

@@ -569,7 +569,7 @@ memperbaikinya sendiri; perbaikan datang dari spec.
 | Pratinjau / `FIGURE_FIT` | Artinya | Tindakan |
 |---|---|---|
 | `GEOM_ENTRY_COLLISION` / `edgeEntryCollision` | dua ujung konektor di sisi simpul yang sama lebih dekat dari 1,5 mm, sedikitnya satu ujung masuk | kurangi konektor yang masuk ke sisi simpul yang sama atau pecah menjadi 2 diagram |
-| `GEOM_STUB_SEGMENT` / `stubSegment` | potongan konektor lurus di bawah 2,0 mm yang tidak menuju apa pun | pindahkan label tepi ke segmen terpanjang atau persingkat label tepi (maks ~20 karakter) |
+| `GEOM_STUB_SEGMENT` / `stubSegment` | potongan konektor lurus di bawah 2,0 mm yang tidak menuju apa pun | perpanjang potongan pendek: beri jarak lebih antara kedua simpul (kolom atau baris lain) atau pakai sisi simpul lain |
 | `GEOM_ARROW_TANGENT` / `arrowTangent` | ruas terakhir dalam 15 derajat dari sisi simpul yang dituju: kepala panah sejajar sisi, bukan tegak lurus | ubah urutan simpul agar konektor masuk tegak lurus ke sisi simpul sasaran |
 
 Cakupan: GEOM_ENTRY_COLLISION muncul pada SVG gambar tangan atau impor; tata letak mesin menjaga ujung

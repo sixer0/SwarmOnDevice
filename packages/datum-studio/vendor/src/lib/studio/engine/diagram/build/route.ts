@@ -17,6 +17,7 @@ import { activeElkRoutes } from "../elk/routes";
 import { edgeConflicts, ENTRY_COLLISION_MM } from "../fit/lint";
 import { flowDirectionOf, flowRanks } from "../layout-a/flow";
 import { CURVE_SAMPLES } from "../core/tokens";
+import { clearFirstRender, noteFirstRender } from "./autofit";
 
 type Pt = readonly [number, number];
 type Side = "bottom" | "top" | "right" | "left";
@@ -293,6 +294,7 @@ function sideCandidates(a: SheetNode, b: SheetNode): SidePair[] {
 
 /** HS `route_edges` atas lembar tertempat (keluarga selain sequence). */
 export function routePlaced(s: StudioDiagramV1, sheet: Sheet): RoutedEdge[] {
+  clearFirstRender(); // Swarm 1.2.8 row 35 (H-NB2): a new first-render routing starts with no recorded self-correction
   const elk = activeElkRoutes(s, sheet);
   if (elk) return elk;
   if (s.family === "rack" && diagramFitRoute("lineThroughText")) {
@@ -599,7 +601,11 @@ function routeWithSides(s: StudioDiagramV1, sheet: Sheet, over: ReadonlyMap<numb
     fanKept += members.length;
   }
   if (laneFix && moved) diagramFitNote("EDGE_LANES", `${moved} segmen konektor berimpit dipindah ke jalur sendiri`, "kurangi konektor yang berbagi kanal bila jalur terlalu rapat");
-  if (fanKept) diagramFitNote("EDGE_LANES", `${fanKept} konektor kipas diberi titik keluar dan tingkat belok sendiri`, "kurangi cabang dari satu sisi simpul bila kipas terlalu rapat");
+  const fanNote = { checkId: "EDGE_LANES", detail: `${fanKept} konektor kipas diberi titik keluar dan tingkat belok sendiri`, suggest: "kurangi cabang dari satu sisi simpul bila kipas terlalu rapat" };
+  if (fanKept) diagramFitNote(fanNote.checkId, fanNote.detail, fanNote.suggest);
+  // Swarm 1.2.8 row 35 (H-NB2, AC-HNB2): the fan split also runs on the first render, where diagramFitNote records
+  // nothing; this pass's record (the last pass is the one drawn) goes to autoFitDiagram. No-op inside the fit.
+  noteFirstRender(s, fanKept ? [fanNote] : []);
   edges.forEach((e, i) => {
     const pts = routes[i];
     const style = edgeRouteOf(e);

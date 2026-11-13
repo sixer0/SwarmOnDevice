@@ -10,7 +10,7 @@
  */
 import type { LintIssue } from "../../../contract";
 import { lintDiagramGeometry, type DiagramDefectKind, type DiagramGeomLint } from "../fit/lint";
-import { withDiagramFit, type DiagramFitState } from "../fit/state";
+import { diagramFitActive, withDiagramFit, type DiagramFitNote, type DiagramFitState } from "../fit/state";
 import type { DiagramSvgResult } from "./svg";
 
 export type DiagramGeometryIssue = LintIssue & { suggest: string };
@@ -53,7 +53,8 @@ const SUGGEST: Record<DiagramDefectKind, string> = {
   edgeCollinear: "kurangi konektor yang berbagi jalur atau pecah menjadi 2 diagram (maks ~12 simpul per tingkat 166 mm)",
   edgeThroughNode: "ubah urutan simpul agar konektor tidak melewati simpul lain",
   edgeEntryCollision: "kurangi konektor yang masuk ke sisi simpul yang sama atau pecah menjadi 2 diagram",
-  stubSegment: "pindahkan label tepi ke segmen terpanjang atau persingkat label tepi (maks ~20 karakter)",
+  // Swarm 1.2.8 row 35 (H-NB3, AC-HNB3): the remedy for a stub is a longer run, not a label change.
+  stubSegment: "perpanjang potongan pendek: beri jarak lebih antara kedua simpul (kolom atau baris lain) atau pakai sisi simpul lain",
   arrowTangent: "ubah urutan simpul agar konektor masuk tegak lurus ke sisi simpul sasaran",
 };
 
@@ -82,6 +83,54 @@ export function autoFitRestText(g: DiagramGeomLint): { rest: string; suggest: st
   return { rest: `sisa ${left}${t03 > 0 ? ` (termasuk ${t03} isu GEOM T-03)` : ""}`, suggest: left > 0 ? "lihat isu GEOM_* berikut" : "tidak ada" };
 }
 
+/**
+ * Swarm 1.2.8 row 35 (H-NB2, AC-HNB2): self-corrections made during the FIRST render (outside `withDiagramFit`,
+ * where `diagramFitNote` records nothing), e.g. the T-08 fan split of `build/route.ts`. The router replaces this
+ * record on each routing pass of a first render (the last pass is the one drawn); `autoFitDiagram` takes it and
+ * clears it. The record carries the family and edge count of its spec, so a record left by a render that never
+ * reached `autoFitDiagram` (a refusal, a capacity retry, a bare `routeEdges` call) is not given to another figure.
+ */
+let firstRender: { family: string; edges: number; notes: DiagramFitNote[] } | null = null;
+
+/** Record the self-corrections of a first-render routing pass (no-op inside `withDiagramFit`). */
+export function noteFirstRender(spec: { family?: unknown; edges?: unknown }, notes: readonly DiagramFitNote[]): void {
+  if (diagramFitActive()) return;
+  firstRender = { family: String(spec.family), edges: Array.isArray(spec.edges) ? spec.edges.length : 0, notes: [...notes] };
+}
+
+/** Drop the first-render record (start of a new first-render routing). No-op inside `withDiagramFit`. */
+export function clearFirstRender(): void {
+  if (!diagramFitActive()) firstRender = null;
+}
+
+function takeFirstRender(first: DiagramSvgResult): DiagramFitNote[] {
+  const rec = firstRender;
+  firstRender = null;
+  const rep = first.report as { family?: unknown; nEdges?: unknown } | undefined;
+  if (!rec || rep?.family !== rec.family || rep?.nEdges !== rec.edges) return [];
+  return rec.notes;
+}
+
+const noteIssue = (n: DiagramFitNote): DiagramGeometryIssue => ({
+  checkId: n.checkId,
+  status: "REPORT",
+  detail: n.suggest ? `${n.detail}; saran: ${n.suggest}` : n.detail,
+  suggest: n.suggest ?? "tidak ada",
+});
+
+/** Notes as REPORT entries, each checkId+detail once (the `diagramFitNote` rule), in order of first appearance. */
+function noteIssues(...lists: ReadonlyArray<readonly DiagramFitNote[]>): DiagramGeometryIssue[] {
+  const seen = new Set<string>();
+  const out: DiagramGeometryIssue[] = [];
+  for (const n of lists.flat()) {
+    const k = `${n.checkId}\u0000${n.detail}`;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push(noteIssue(n));
+  }
+  return out;
+}
+
 function checkIdOf(e: unknown): string {
   const d = (e as { details?: { checkId?: string } } | null)?.details;
   return d?.checkId ?? (e instanceof Error ? e.message.slice(0, 80) : String(e));
@@ -103,13 +152,15 @@ const ROUTE_KINDS: readonly DiagramDefectKind[] = ["edgeCross", "edgeCollinear",
 
 /** Pilih render pertama atau rakitan ulang fit (lihat kepala berkas). */
 export function autoFitDiagram(first: DiagramSvgResult, rerender: () => DiagramSvgResult): DiagramSvgResult {
+  // Swarm 1.2.8 row 35 (H-NB2): the first render's own self-corrections, reported on every path below.
+  const own = takeFirstRender(first);
   const g0 = lintDiagramGeometry(first.svg);
   if (g0.score === 0) {
     // Swarm 1.2.6 row FX-11 (C21, S-115-1): the T-03 kinds are not in `score` (no re-layout, row 25 U3), so a
     // render whose only defects are T-03 kinds takes this path. SVG and decision stay as they are; the kinds are
     // still reported (GEOM_* REPORT), so the figure preview lists what the FIGURE_FIT gate fails.
-    if (g0.defects.length === 0) return first;
-    return { ...first, report: { ...first.report, geometry: [...(first.report.geometry ?? []), ...diagramGeometryIssues(g0)] } };
+    if (g0.defects.length === 0 && own.length === 0) return first;
+    return { ...first, report: { ...first.report, geometry: [...(first.report.geometry ?? []), ...noteIssues(own), ...diagramGeometryIssues(g0)] } };
   }
   const tried: string[] = [];
   let best: { res: DiagramSvgResult; g: DiagramGeomLint; state: DiagramFitState; label: string } | undefined;
@@ -135,14 +186,15 @@ export function autoFitDiagram(first: DiagramSvgResult, rerender: () => DiagramS
   }
   if (best) {
     const { res, g, state } = best;
+    // Swarm 1.2.8 row 35 (H-NB, AC-HNB): the lead count is marked as the pre-fit one, next to the post-fit rest.
     const geometry: DiagramGeometryIssue[] = [
       {
         checkId: "AUTO_FIT",
         status: "REPORT",
-        detail: `cacat geometri terdeteksi (${g0.score}); tata letak otomatis (${best.label}) -> ${autoFitRestText(g).rest}; dicoba: ${tried.join("; ")}`,
+        detail: `cacat geometri sebelum fit ${g0.score}, sesudah fit ${autoFitRestText(g).rest}; tata letak otomatis (${best.label}); dicoba: ${tried.join("; ")}`,
         suggest: autoFitRestText(g).suggest,
       },
-      ...state.notes.map((n) => ({ checkId: n.checkId, status: "REPORT" as const, detail: n.suggest ? `${n.detail}; saran: ${n.suggest}` : n.detail, suggest: n.suggest ?? "tidak ada" })),
+      ...noteIssues(state.notes, own),
       ...diagramGeometryIssues(g),
     ];
     return { ...res, report: { ...res.report, geometry } };
@@ -151,9 +203,10 @@ export function autoFitDiagram(first: DiagramSvgResult, rerender: () => DiagramS
     {
       checkId: "AUTO_FIT",
       status: "REPORT",
-      detail: `cacat geometri terdeteksi (${g0.score}); tata letak otomatis tidak lebih baik (${tried.join("; ")}); render pertama dipertahankan`,
+      detail: `cacat geometri sebelum fit ${g0.score}; tidak lebih baik dengan tata letak otomatis (${tried.join("; ")}); render pertama dipertahankan`,
       suggest: "lihat isu GEOM_* berikut",
     },
+    ...noteIssues(own),
     ...diagramGeometryIssues(g0),
   ];
   return { ...first, report: { ...first.report, geometry } };
