@@ -113,6 +113,7 @@
   "row40": "2026-11-13: 1.2.7 row 40 (N-11, AC-N11, C12 O-6). 3 vendor files re-patched (files[].patch_row40, before = previous sha256; status unchanged, table-fit.ts stays added): engine/table-fit.ts (TABLE_BREAK_AFTER, TABLE_BREAK_MIN_CHARS = 16, breakableSegments, tableBreakRuns; longestWord measures the longest segment; DT-10a suggestion names the ID-list break), engine/html/tables/table.ts (<wbr> after each separator of a long ID list in wrapping cells), engine/docx/tables/render.ts (U+200B at the same positions). Not lint closure (skillSha unchanged). Diffs in docs/2026-11-13_swarm_1_2_7_patch/implementation/40_row40_diffs/. counts by delta: bytes 9973784 -> 9977681 (+3897); files/copied/patched/replaced/added unchanged. patch_rows += 40",
   "row40b": "2026-11-13: 1.2.7 row 40b (AC-N11 follow-up, C39). engine/table-fit.ts re-patched (files[].patch_row40b, before = previous sha256; status stays added): NEW isUrlToken; breakableSegments keeps URLs whole, so neither renderer breaks a URL (no U+200B in DOCX, no <wbr> in HTML) and the DT-10a estimate does not assume a break. html/tables/table.ts and docx/tables/render.ts unchanged (both read the shared rule through tableBreakRuns). Not lint closure. Diff in docs/2026-11-13_swarm_1_2_7_patch/implementation/40b_row40b_diffs/. counts by delta: bytes 9978454 -> 9978966 (+512); files/copied/patched/replaced/added unchanged. patch_rows += 40b",
   "row41": "2026-11-13: 1.2.7 row 41 (T-18, AC-T18, N7-074; C3 no new codes). 1 vendor file re-patched (files[].patch_row41, before = previous sha256; status unchanged): scripts/studio/mcp/write-tools.ts (studio_write description names D22 and figure.quota.exceptionReason; one-section example and shorter wording keep it <= 450 chars). studio_write is in toolset write only: default tools/list 29960 -> 29960 B, list with write 39638 -> 39624 B (no pin moved). Not lint closure (skillSha unchanged); registry 103 unchanged. Diff in docs/2026-11-13_swarm_1_2_7_patch/implementation/41_row41_diffs/. counts by delta: bytes 9977681 -> 9977858 (+177); files/copied/patched/replaced/added unchanged. patch_rows += 41",
+  "row41b": "2026-11-13: 1.2.7 row 41b (M2-02, C50; T-18 N7-074). 1 vendor file re-patched (files[].patch_row41b, before = previous sha256; status unchanged): scripts/studio/mcp/write-tools.ts (studio_write description: the quota exception is set by an admin, agents ask the person; D22 and figure.quota.exceptionReason kept). Description 448 chars; default tools/list 29960 B unchanged. Diff in docs/2026-11-13_swarm_1_2_7_patch/implementation/41b_diffs/. counts by delta: bytes 9979969 -> 9979970 (+1); files/copied/patched/replaced/added unchanged. patch_rows += 41b",
   "row36b": "2026-11-13: 1.2.7 row 36b (T-12, AC-T12, N7-138 feeding N7-068). 1 vendor file re-patched (files[].patch_row36b, before = previous sha256; status unchanged): engine/diagram/build/svg.ts (DiagramBuildReport.furniture {keyLines, sourceLines, heightMm} set only for apparatus figure from keyTexts, srcLines and furnitureMm; report only, SVG bytes unchanged). Not lint closure (guard.ts isLintClosurePath; skillSha unchanged). Diff in docs/2026-11-13_swarm_1_2_7_patch/implementation/36b_row36b_diffs/. counts by delta: bytes 9977858 -> 9978454 (+596); files/copied/patched/replaced/added unchanged. patch_rows += 36b",
   "row37b": "2026-11-13: 1.2.7 row 37b (C32/C42 integration: guide sentences for N-10, N-11, T-11, T-12; file requests rows 38, 39). 1 vendor file re-patched (files[].patch_row37b, before = previous sha256; status unchanged): docs/STUDIO-AGENT-GUIDE.md (4: DT-10a ID-list break after , ; / above 16 characters, URLs never break (N-11, rows 40/40b); 4.1.2 step 2: inline v2 needs only family and nodes, direction through patch {spec:{direction:\"LR\"}}, top-level direction refused (T-11, row 39); 8.3: studio_write render failure names code and check, retry reuses the document, NOT_BOUND_TO_ROW / NO_CURRENT_DELIVERABLE are by design (N-10, row 38); 8.4: standalone preview prints the perabot line (T-12, row 36b)). Diff in docs/2026-11-13_swarm_1_2_7_patch/implementation/37b_row37b_diffs/. counts by delta: bytes 9978966 -> 9979969 (+1003); files/copied/patched/replaced/added unchanged. patch_rows += 37b"
  },
@@ -122,7 +123,7 @@
   "patched": 157,
   "replaced": 12,
   "added": 30,
-  "bytes": 9979969
+  "bytes": 9979970
  },
  "files": [
   {
@@ -544,10 +545,11 @@
   {
    "path": "scripts/studio/mcp/write-tools.ts",
    "status": "patched",
-   "bytes": 56746,
+   "bytes": 56747,
    "source_sha256": "0f7e2787cedd3522727213af4b02be81a54906a5b9634b18c89bcb7beb2f3148",
-   "sha256": "2ae3f60b55d07695df46363aa060c16e7998dfb387dadeee798e53e2b696a83b",
+   "sha256": "55d6b3d4c50cdeef7f45bf8546f15e849bf7a2968a385d91730974dedd1aa181",
    "patch_row41": {"id": "127-41-T18", "row": "41", "decision": "1.2.7 C3 / D-7 (T-18, AC-T18, N7-074)", "summary": "studio_write description: N7-074 sentence (Kuota gambar: cek D22; pengecualian lewat parameter figure.quota.exceptionReason (tercatat REPORT).); WRITE_EXAMPLE reduced to one section, intro and chapter/client wording shortened so the description stays <= 450 chars (447); table form stays in SECTIONS.description; no schema or behaviour change", "before_sha256": "7ab6e9d6ebe2da9350de28a1806de1850f7a3a869229af50d507e374560a7ac7", "after_sha256": "2ae3f60b55d07695df46363aa060c16e7998dfb387dadeee798e53e2b696a83b", "diff": "docs/2026-11-13_swarm_1_2_7_patch/implementation/41_row41_diffs/write-tools.ts.diff", "diff_sha256": "4c993699c9b346d8ef0bc03e2f10509622c619c052f0eecb74d1c8255b5de571"},
+   "patch_row41b": {"id": "127-41b-T18", "row": "41b", "decision": "1.2.7 C50 / M2-02 (T-18, N7-074)", "summary": "studio_write description: T-18 sentence says the exception is set by an admin and agents ask the person (no agent-sent parameter; guide 8.6); D22 and figure.quota.exceptionReason stay findable; description 447 -> 448 chars (<= 450); no schema or behaviour change", "before_sha256": "2ae3f60b55d07695df46363aa060c16e7998dfb387dadeee798e53e2b696a83b", "after_sha256": "55d6b3d4c50cdeef7f45bf8546f15e849bf7a2968a385d91730974dedd1aa181", "diff": "docs/2026-11-13_swarm_1_2_7_patch/implementation/41b_diffs/write-tools.ts.diff", "diff_sha256": "3e6f6e786d941c0d64b6b17304a0f0176424d0c4556eb97ba0203cae48b41b53"},
    "patch_row99": {"id": "row99-g06-tool-descriptions", "row": "99", "decision": "1.2.6 G-06 (U5; M-06, W-09, W-14, T-14, T-16)", "summary": "studio_edit description: find also reaches figure captions/sources, change {what,why,impact} goes to the revision history (M-06); addRow example shortened (<= 450 chars); no schema or behaviour change", "before_sha256": "f3486cc67e329b3f4b5b98a590ed109fdfaab0753f2fd965d2444d176f7b4575", "after_sha256": "7ab6e9d6ebe2da9350de28a1806de1850f7a3a869229af50d507e374560a7ac7", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/99_row99_diffs/scripts_studio_mcp_write-tools.ts.diff", "diff_sha256": "6fbb07a4e110c5107301bf7a452b4c8b37551cc6021d6dff08cbd71e38dac04a"},
    "patch_row77b": {
     "id": "row77b-m07-write-report-file-label",
@@ -6237,6 +6239,7 @@
   "41",
   "36b",
   "40b",
-  "37b"
+  "37b",
+  "41b"
  ]
 }

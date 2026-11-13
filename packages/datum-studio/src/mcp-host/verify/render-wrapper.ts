@@ -37,7 +37,7 @@ import { allUnknownOutput, isVerifyFormat, outputState, verifyOutputs, type Veri
 export const RENDER_VERIFY_TOOL = "studio_render"
 // 1.2.7 row 35 for row 41 (T-18, N7-074, K7-08): the D22 figure-quota sentence lives here, not in the byte-pinned V tools.ts.
 export const RENDER_VERIFY_DESCRIPTION_SUFFIX =
-  "Returns a verification report; each output is verified or unverified (U24). Read it before you report the work. Kuota gambar: cek D22; pengecualian lewat parameter figure.quota.exceptionReason (tercatat REPORT)."
+  "Returns a verification report; each output is verified or unverified (U24). Read it before you report the work. Kuota gambar: cek D22; pengecualian: admin, agen tanya orang (figure.quota.exceptionReason, REPORT)."
 const SAFE = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}$/
 const SHA256 = /^[0-9a-f]{64}$/
 /** 1.2.7 row 35 (N-4, N7-064): why an added format is in the outputs. */

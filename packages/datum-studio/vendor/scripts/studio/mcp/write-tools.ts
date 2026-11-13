@@ -203,7 +203,7 @@ const WRITE_EXAMPLE = `{"mission":"2026-11-03_x","docKey":"lap-1","sections":[{"
 
 const writeTool: ToolDef = {
   name: "studio_write",
-  description: `Tulis/ganti dokumen, isi saja; mesin memformat, cek, render, sha. Laporan: Ringkasan, Rincian kerja, Bukti, Isu terbuka, Langkah berikut. Klien: template "latest", meta {title,author,number}. Kuota gambar: cek D22; pengecualian lewat parameter figure.quota.exceptionReason (tercatat REPORT). Argumen harus objek JSON, bukan string berisi JSON. Contoh: ${WRITE_EXAMPLE}`,
+  description: `Tulis/ganti dokumen, isi saja; mesin memformat, cek, render, sha. Laporan: Ringkasan, Rincian kerja, Bukti, Isu terbuka, Langkah berikut. Klien: template "latest", meta {title,author,number}. Kuota gambar: cek D22; pengecualian: admin, agen tanya orang (figure.quota.exceptionReason, REPORT). Argumen harus objek JSON, bukan string berisi JSON. Contoh: ${WRITE_EXAMPLE}`,
   inputSchema: obj({ mission: S.mission, docKey: S.docKey, template: TEMPLATE, title: { type: "string", minLength: 1, maxLength: 200 }, meta: META, sections: SECTIONS, agentId: S.agentId, detail: DETAIL }, ["mission", "docKey", "sections"]),
   annotations: { title: "Tulis dokumen (isi saja)", readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   toolsets: ["write"],

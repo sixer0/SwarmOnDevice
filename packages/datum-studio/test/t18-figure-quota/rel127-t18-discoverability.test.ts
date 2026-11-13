@@ -14,7 +14,7 @@ import { LINT_REGISTRY } from '../../vendor/src/lib/studio/registry/lint';
 import { RENDER_VERIFY_DESCRIPTION_SUFFIX } from '../../src/mcp-host/verify/render-wrapper';
 import { connect } from '../ported/mcp/mcp-harness';
 
-const N7_074 = 'Kuota gambar: cek D22; pengecualian lewat parameter figure.quota.exceptionReason (tercatat REPORT).';
+const N7_074 = 'Kuota gambar: cek D22; pengecualian: admin, agen tanya orang (figure.quota.exceptionReason, REPORT).';
 const GUIDE = path.resolve(import.meta.dir, '..', '..', 'vendor', 'docs', 'STUDIO-AGENT-GUIDE.md');
 const d = (name: string): string => TOOLS.find((t) => t.name === name)!.description;
 
