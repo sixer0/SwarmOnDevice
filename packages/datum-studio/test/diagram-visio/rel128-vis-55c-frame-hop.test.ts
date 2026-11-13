@@ -236,6 +236,16 @@ describe("55c G3-01: horizontal pools at 128 mm are refused DATUM-37 with the ve
       expect(String(e!.message)).toContain("keluar kolam")
       expect(String(e!.message)).toContain('lane_orientation "vertical"')
     })
+    test(`vis2_pools_group ${v} at 128 mm: the capacity line counts the pool strip (max below the measured count)`, async () => {
+      const e = await refusal(pg(v, 128))
+      expect(e, "refused").not.toBeNull()
+      const d = e!.details ?? e!
+      expect(typeof d.measured).toBe("number")
+      expect(d.limit).toBeLessThan(d.measured)
+      const m = /maks (\d+) per baris lajur/.exec(String(d.suggestion ?? e!.message))
+      expect(m, "capacity line present").not.toBeNull()
+      expect(Number(m![1])).toBeLessThan(d.measured)
+    })
     test(`vis2_pools_group ${v} at 166 mm: drawn, every node and frame inside the figure`, async () => {
       const r = await autoOf(pg(v, 166))
       const [W] = viewBox(r.svg)

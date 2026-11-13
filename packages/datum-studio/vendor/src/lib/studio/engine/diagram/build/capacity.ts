@@ -146,7 +146,14 @@ function swimlaneLoad(s: StudioDiagramV1): { lane: string; count: number; perRow
   let count = 0;
   for (const [k, v] of per) if (v > count) [lane, count] = [k, v];
   // gutter 3 kisi + 1 kisi tepi, simpul 3 kisi + 1 kisi jarak (swimlane.ts gutter, swimcap.ts x0/pitch)
-  const perRow = Math.max(1, Math.floor((W - LATTICE_X * 4 + LATTICE_X) / (LATTICE_X * 4) + 1e-9));
+  let perRow = Math.max(1, Math.floor((W - LATTICE_X * 4 + LATTICE_X) / (LATTICE_X * 4) + 1e-9));
+  // Swarm 1.2.8 row 55d (C135 R3): horizontal pools put a second gutter (the pool header strip, 3 lattice) left of the lane
+  // headers (swimlane.ts startX = 2 x gutter) and keep half a lattice column inside the pool frame (the DATUM-37-sheet
+  // limit W - x/2). Without this the line read "maks 2 ... terukur 2" next to a refusal. Vertical pools and figures
+  // without pools keep the formula above, so their messages are byte-identical.
+  if (Array.isArray(s.pools) && s.pools.length > 0 && s.lane_orientation !== "vertical") {
+    perRow = Math.max(1, Math.floor((W - LATTICE_X * 6 - LATTICE_X / 2 + LATTICE_X) / (LATTICE_X * 4) + 1e-9));
+  }
   return { lane, count, perRow, width: W };
 }
 
