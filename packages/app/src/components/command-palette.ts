@@ -12,6 +12,7 @@ import { ServerConnection } from "@/context/server"
 import { useSDK } from "@/context/sdk"
 import { useServerSDK } from "@/context/server-sdk"
 import { useTabs } from "@/context/tabs"
+import { openCheckedFolder, useFolderMissingNotice } from "@/pages/layout/folder-missing"
 import { displayName, projectForSession } from "@/pages/layout/helpers"
 import { createSessionTabs } from "@/pages/session/helpers"
 import { useSessionLayout } from "@/pages/session/session-layout"
@@ -94,6 +95,7 @@ export function createCommandPaletteModel(props: { filesOnly?: () => boolean; on
   const serverSDK = useServerSDK()()
   const serverCtx = global.ensureServerCtx(serverSDK.server)
   const appTabs = useTabs()
+  const folderMissing = useFolderMissingNotice()
   const { tabs: sessionTabs, view } = useSessionLayout()
   const sdk = useSDK()
   const openFile = createCommandPaletteFileOpener(props.onOpenFile)
@@ -188,16 +190,20 @@ export function createCommandPaletteModel(props: { filesOnly?: () => boolean; on
     }
     if (item.type === "session") {
       if (!item.sessionID || !item.server) return
+      const sessionId = item.sessionID
+      const server = item.server
       const directory = item.project?.worktree ?? item.directory
-      if (directory) {
-        serverCtx.projects.open(directory)
-        serverCtx.projects.touch(directory)
+      const open = () => {
+        if (directory) {
+          serverCtx.projects.open(directory)
+          serverCtx.projects.touch(directory)
+        }
+        const tab = appTabs.addSessionTab({ server, sessionId })
+        appTabs.select(tab, item.anchor)
       }
-      const tab = appTabs.addSessionTab({
-        server: item.server,
-        sessionId: item.sessionID,
-      })
-      appTabs.select(tab, item.anchor)
+      // Row 58b (U-8): a session whose project folder is gone gets the missing-folder notice instead.
+      if (!directory) return open()
+      void openCheckedFolder(folderMissing, directory, open, { local: ServerConnection.local(serverSDK.server) })
       return
     }
     if (!item.path) return

@@ -76,6 +76,7 @@ import {
   drainPendingDeepLinks,
 } from "./layout/deep-links"
 import { createInlineEditorController } from "./layout/inline-editor"
+import { createFolderMissingNotice } from "./layout/folder-missing"
 import {
   LocalWorkspace,
   SortableWorkspace,
@@ -1267,75 +1268,24 @@ export default function LegacyLayout(props: ParentProps) {
     navigateWithSidebarReset(`/${base64Encode(session.directory)}/session/${session.id}`)
   }
 
-  // 1.2.7 row 33 (U-8): a project folder that is gone is neither added nor entered. One persistent toast offers
-  // Restore (re-check, then open the same path), Recreate (stored projects only, and only for a path this window
-  // saw missing; desktop makes the leaf alone) and Choose (the picker at home). SR7-13 rules 5-7.
-  const missingFolders = new Set<string>()
-  const missingFolderToasts = new Map<string, number>()
+  // 1.2.7 row 33 (U-8): a project folder that is gone is neither added nor entered. The check and its notice
+  // (Restore / Recreate / Choose, SR7-13 rules 5-7) are the shared helper in ./layout/folder-missing (row 58b), the
+  // same one the new layout uses. Without the desktop check (web, remote server) the folder opens at once.
+  const folderMissing = createFolderMissingNotice({
+    check: () => (server.isLocal() ? platform.checkDirectoryExists : undefined),
+    recreate: () => platform.recreateDirectory,
+    stored: (directory) =>
+      server.projects.last() === directory || layout.projects.list().some((project) => project.worktree === directory),
+    t: (key, params) => language.t(key, params),
+    choose: chooseFolderAtHome,
+  })
 
-  // Resolves to whether the project was opened; without the desktop check (web, remote server) it opens at once.
+  // Resolves to whether the project was opened.
   function openProject(directory: string, navigate = true): Promise<boolean> {
-    const check = platform.checkDirectoryExists
-    if (!check || !server.isLocal()) return openFoundProject(directory, navigate)
-    // Row 47c (M1-03): only "missing" is a gone folder. "exists", "refused" (the desktop may not look there: /net,
-    // UNC, system and Swarm state places) and a failed check open the folder exactly as 1.2.6 did.
-    return check(directory)
-      .catch(() => "refused" as const)
-      .then((state) => {
-        if (state !== "missing") return openFoundProject(directory, navigate)
-        missingFolders.add(directory)
-        showFolderMissing(directory, navigate)
-        return false
-      })
-  }
-
-  async function openFoundProject(directory: string, navigate: boolean) {
-    missingFolders.delete(directory)
-    closeFolderMissing(directory)
-    layout.projects.open(directory)
-    if (navigate) await navigateToProject(directory)
-    return true
-  }
-
-  function closeFolderMissing(directory: string) {
-    const toastId = missingFolderToasts.get(directory)
-    if (toastId === undefined) return
-    missingFolderToasts.delete(directory)
-    dismissToast(toastId)
-  }
-
-  function showFolderMissing(directory: string, navigate: boolean, recreateFailed = false) {
-    closeFolderMissing(directory)
-    const stored =
-      server.projects.last() === directory || layout.projects.list().some((project) => project.worktree === directory)
-    const restore = {
-      label: language.t("toast.project.folderMissing.restore"),
-      onClick: () => void openProject(directory, navigate),
-    }
-    const recreate = {
-      label: language.t("toast.project.folderMissing.recreate"),
-      onClick: () => void recreateFolder(directory, navigate),
-    }
-    const choose = { label: language.t("toast.project.folderMissing.choose"), onClick: chooseFolderAtHome }
-    const toastId = showToast({
-      persistent: true,
-      title: language.t("toast.project.folderMissing.title"),
-      description: language.t(
-        recreateFailed ? "toast.project.folderMissing.recreateFailed" : "toast.project.folderMissing.description",
-        { path: directory },
-      ),
-      actions: stored && !recreateFailed ? [restore, recreate, choose] : [restore, choose],
+    return folderMissing.open(directory, async () => {
+      layout.projects.open(directory)
+      if (navigate) await navigateToProject(directory)
     })
-    missingFolderToasts.set(directory, toastId)
-  }
-
-  async function recreateFolder(directory: string, navigate: boolean) {
-    const recreateDirectory = platform.recreateDirectory
-    if (!recreateDirectory || !missingFolders.has(directory)) return
-    if (await recreateDirectory(directory).catch(() => false)) return openFoundProject(directory, navigate)
-    // false: the folder came back meanwhile, or the desktop refused (parent missing, excluded place).
-    if (await openProject(directory, navigate)) return
-    showFolderMissing(directory, navigate, true)
   }
 
   function chooseFolderAtHome() {

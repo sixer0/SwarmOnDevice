@@ -4,6 +4,7 @@ import { ServerConnection, useServer } from "@/context/server"
 import { useServerSync } from "@/context/server-sync"
 import { useTabs } from "@/context/tabs"
 import { toggleHomeProjectSelection } from "@/pages/layout/helpers"
+import { openCheckedFolder, useFolderMissingNotice } from "@/pages/layout/folder-missing"
 import { createEffect, createMemo } from "solid-js"
 
 export type HomeControllerOptions = {
@@ -20,6 +21,7 @@ export function createHomeController(options?: HomeControllerOptions) {
   const server = useServer()
   const global = useGlobal()
   const tabs = useTabs()
+  const folderMissing = useFolderMissingNotice()
   const scope = options?.scope
   const selection = scope ?? layout.home.selection
   const focusedServer = createMemo(
@@ -57,11 +59,19 @@ export function createHomeController(options?: HomeControllerOptions) {
     layout.home.setSelection(next)
   }
 
+  // Row 58b (U-8): a project whose folder is gone gets the missing-folder notice, not a draft.
   function openProjectNewSession(conn: ServerConnection.Any, directory: string) {
     const ctx = global.ensureServerCtx(conn)
-    ctx.projects.open(directory)
-    ctx.projects.touch(directory)
-    void tabs.newDraft({ server: ServerConnection.key(conn), directory })
+    return openCheckedFolder(
+      folderMissing,
+      directory,
+      () => {
+        ctx.projects.open(directory)
+        ctx.projects.touch(directory)
+        void tabs.newDraft({ server: ServerConnection.key(conn), directory })
+      },
+      { local: ServerConnection.local(conn) },
+    )
   }
 
   return {
@@ -119,13 +129,13 @@ export function createHomeController(options?: HomeControllerOptions) {
         ctx.projects.touch(directory)
         setSelection({ server: ServerConnection.key(conn), directory })
         // Somebody opening their first project is here to give it a task, and that is the only thing it can offer yet.
-        if (first) openProjectNewSession(conn, directory)
+        if (first) void openProjectNewSession(conn, directory)
       },
       openNewSession: () => {
         const conn = focusedServer()
         const project = newSessionProject()
         if (!conn || !project) return
-        openProjectNewSession(conn, project.worktree)
+        void openProjectNewSession(conn, project.worktree)
       },
       openProjectNewSession,
     },
