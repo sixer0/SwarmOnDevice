@@ -78,26 +78,10 @@ export function MissionCommand(props: {
 
   return (
     <div data-mission-command class="contents">
+      {/* 1.2.7 row 58g (C101): only an open decision has a card. An answered one leaves the side panel; its answer
+          is the feed entry "<id>: <option>" (mission-model.ts), so nothing lingers to push the feed out. */}
       <Show
         when={props.model.decision}
-        fallback={
-          <Show when={props.model.answered}>
-            {(answered) => (
-              <section data-mission-answered class="flex min-w-0 flex-col gap-1 rounded-[8px] bg-v2-overlay-simple-overlay-hover p-2">
-                <div class="flex items-baseline justify-between gap-2">
-                  <h2 class="min-w-0 [overflow-wrap:anywhere] text-v2-text-text-base [font-weight:500]">{answered().question}</h2>
-                  <span class="shrink-0 text-v2-text-text-faint">{answered().id}</span>
-                </div>
-                <div class="text-v2-text-text-muted">
-                  {t("session.mission.decision.answered", { option: answered().optionLabel })}
-                </div>
-                <div class="text-v2-text-text-faint">
-                  {t("session.mission.decision.recorded", { decision: answered().decision })}
-                </div>
-              </section>
-            )}
-          </Show>
-        }
       >
         {(decision) => (
           <section

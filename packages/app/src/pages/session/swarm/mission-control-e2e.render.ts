@@ -463,12 +463,12 @@ describe("row 134: four fixture missions from the real host, through the desktop
     expect(q('[data-hq-agent="6"]')!.dataset.status).toBe("blocked")
     const before = calls.length
     click(q('[data-mission-option="B"]'))
-    await until(() => !!q("[data-mission-answered]"), 8000, "answered state")
-    const answered = q("[data-mission-answered]")!.textContent
-    quote("answered card", answered)
-    expect(answered).toContain("Answered: verifier")
-    expect(answered).toContain("Recorded as U2")
-    expect(q("[data-mission-decision]")).toBeNull()
+    // 1.2.7 row 58g (C101, INTENT): an answered decision leaves no card; the answer shows as the feed entry.
+    await until(() => !q("[data-mission-decision]"), 8000, "answered state")
+    expect(q("[data-mission-answered]")).toBeNull()
+    const answered = q("[data-mission-feed]")!.textContent
+    quote("answered feed", answered)
+    expect(answered).toContain("D-1: verifier")
     const host = await hostGet(e.id, ["decisions", "requests", "events"])
     const req = (host.requests as S[]).find((r) => r.id === "D-1")!
     quote("host request after answer", { status: req.status, answer: req.answer })

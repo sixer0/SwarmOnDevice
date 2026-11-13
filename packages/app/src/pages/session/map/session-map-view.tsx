@@ -1232,7 +1232,10 @@ export function DecisionList(props: { decisions: ReturnType<typeof createDecisio
       </Show>
       <Show when={props.decisions.groups()}>
         {(groups) => (
-          <AccordionV2 multiple collapsible defaultValue={["waiting"]}>
+          // 1.2.7 row 58g (F-11): the accordion clips (overflow: hidden), and a clipping flex item may shrink to 0, so
+          // in a short list it took the list's height and cut off an expanded entry's actions with nothing to scroll.
+          // shrink-0 keeps its content height; the list `[data-map-decisions]` is then the one scroll container.
+          <AccordionV2 multiple collapsible defaultValue={["waiting"]} class="shrink-0">
             <AccordionV2.Item value="waiting" data-decision-section="waiting">
               <AccordionV2.Header>
                 <AccordionV2.Trigger>
