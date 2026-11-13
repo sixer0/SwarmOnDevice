@@ -1,0 +1,61 @@
+{
+  "$comment": "Swarm 1.2.7 row 20 (T-12): labelled diagram block (Gambar 1.1) for standalone:true; 2 edge kinds so KUNCI is drawn; source wraps to 2 SUMBER lines at 128 mm. Filler text.",
+  "figureLabel": "Gambar 1.1",
+  "block": {
+    "type": "diagram",
+    "spec": {
+      "family": "flow",
+      "labels_verified": true,
+      "nodes": [
+        {
+          "id": "a",
+          "label": "Terima",
+          "class": {
+            "col": 0,
+            "row": 0
+          }
+        },
+        {
+          "id": "b",
+          "label": "Periksa",
+          "class": {
+            "col": 0,
+            "row": 1
+          }
+        },
+        {
+          "id": "c",
+          "label": "Simpan",
+          "class": {
+            "col": 0,
+            "row": 2
+          }
+        }
+      ],
+      "edges": [
+        {
+          "from": "a",
+          "to": "b",
+          "kind": "data",
+          "label": "isi"
+        },
+        {
+          "from": "b",
+          "to": "c",
+          "kind": "control",
+          "label": "lolos"
+        }
+      ],
+      "legend": [
+        "data = aliran barang",
+        "control = perintah periksa"
+      ]
+    },
+    "caption": {
+      "text": "Alur sintetis pemeriksaan barang."
+    },
+    "source": {
+      "text": "Sumber sintetis uji alfa bravo charlie delta echo foxtrot golf hotel india juliett kilo lima mike november oscar papa quebec romeo"
+    }
+  }
+}

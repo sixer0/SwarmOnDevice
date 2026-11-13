@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 80" width="100mm" height="80mm">
+<!-- syn127 synthetic fixture (Swarm 1.2.7 row 20): AC-T03 two line colours in one segment, a data and a control connector share one trunk into one port. Filler labels; no document content. -->
+<defs><marker id="head-data" viewBox="0 0 4 4" refX="4" refY="2" markerWidth="4" markerHeight="4" orient="auto"><path d="M 0 0 L 4 2 L 0 4 z" fill="#101418"/></marker><marker id="head-control" viewBox="0 0 4 4" refX="4" refY="2" markerWidth="4" markerHeight="4" orient="auto"><path d="M 0 0 L 4 2 L 0 4 z" fill="#B4532A"/></marker></defs>
+<rect x="0" y="0" width="100" height="80" fill="#FCFCFB"/>
+<rect x="8" y="5" width="24" height="10" data-node="a" fill="none" stroke="#2B3640" stroke-width="0.45" data-mark="node"/>
+<rect x="68" y="5" width="24" height="10" data-node="b" fill="none" stroke="#2B3640" stroke-width="0.45" data-mark="node"/>
+<rect x="20" y="50" width="30" height="10" data-node="c" fill="none" stroke="#2B3640" stroke-width="0.45" data-mark="node"/>
+<path d="M 20 15 L 20 30 L 35 30 L 35 50" fill="none" stroke="#101418" stroke-width="0.45" marker-end="url(#head-data)" data-mark="link"/>
+<path d="M 80 15 L 80 30 L 35 30 L 35 50" fill="none" stroke="#B4532A" stroke-width="0.45" stroke-dasharray="1.2 0.8" marker-end="url(#head-control)" data-mark="link"/>
+</svg>

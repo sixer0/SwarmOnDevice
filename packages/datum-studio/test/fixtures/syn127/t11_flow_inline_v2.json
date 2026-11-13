@@ -1,0 +1,84 @@
+{
+  "$comment": "Swarm 1.2.7 row 20 (T-11): inline v2 diagram block (flow, no direction): chain a-b-c-d plus branch b-e. Filler labels.",
+  "block": {
+    "type": "diagram",
+    "spec": {
+      "family": "flow",
+      "labels_verified": true,
+      "nodes": [
+        {
+          "id": "a",
+          "label": "Terima",
+          "class": {
+            "col": 0,
+            "row": 0
+          }
+        },
+        {
+          "id": "b",
+          "label": "Periksa",
+          "class": {
+            "col": 0,
+            "row": 1
+          }
+        },
+        {
+          "id": "c",
+          "label": "Simpan",
+          "class": {
+            "col": 0,
+            "row": 2
+          }
+        },
+        {
+          "id": "d",
+          "label": "Kirim",
+          "class": {
+            "col": 0,
+            "row": 3
+          }
+        },
+        {
+          "id": "e",
+          "label": "Tolak",
+          "class": {
+            "col": 1,
+            "row": 2
+          }
+        }
+      ],
+      "edges": [
+        {
+          "from": "a",
+          "to": "b",
+          "kind": "data",
+          "label": "isi"
+        },
+        {
+          "from": "b",
+          "to": "c",
+          "kind": "data",
+          "label": "lolos"
+        },
+        {
+          "from": "c",
+          "to": "d",
+          "kind": "data",
+          "label": "siap"
+        },
+        {
+          "from": "b",
+          "to": "e",
+          "kind": "control",
+          "label": "gagal"
+        }
+      ]
+    },
+    "caption": {
+      "text": "Alur sintetis penerimaan barang."
+    },
+    "source": {
+      "text": "Sumber sintetis uji."
+    }
+  }
+}

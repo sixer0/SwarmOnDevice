@@ -1,0 +1,58 @@
+{
+  "$comment": "Swarm 1.2.7 row 20 (N-11): 3 variants of a 3-column table whose cells are 12 IDs (R-01..R-12) joined without spaces by '/', ',' or ';'. Build the table block with write-client tableBlock(rows, caption, source, null, warn, where, chapterTitle, issue, unit) as probe9 N-11; at BASE each is refused DT-10a.",
+  "caption": "Tabel kode sintetis",
+  "source": "Sumber sintetis uji.",
+  "variants": {
+    "slash": [
+      [
+        "Kode A",
+        "Kode B",
+        "Kode C"
+      ],
+      [
+        "R-01/R-02/R-03/R-04/R-05/R-06/R-07/R-08/R-09/R-10/R-11/R-12",
+        "R-01/R-02/R-03/R-04/R-05/R-06/R-07/R-08/R-09/R-10/R-11/R-12",
+        "R-01/R-02/R-03/R-04/R-05/R-06/R-07/R-08/R-09/R-10/R-11/R-12"
+      ],
+      [
+        "R-01/R-02/R-03/R-04/R-05/R-06/R-07/R-08/R-09/R-10/R-11/R-12",
+        "R-01/R-02/R-03/R-04/R-05/R-06/R-07/R-08/R-09/R-10/R-11/R-12",
+        "R-01/R-02/R-03/R-04/R-05/R-06/R-07/R-08/R-09/R-10/R-11/R-12"
+      ]
+    ],
+    "comma": [
+      [
+        "Kode A",
+        "Kode B",
+        "Kode C"
+      ],
+      [
+        "R-01,R-02,R-03,R-04,R-05,R-06,R-07,R-08,R-09,R-10,R-11,R-12",
+        "R-01,R-02,R-03,R-04,R-05,R-06,R-07,R-08,R-09,R-10,R-11,R-12",
+        "R-01,R-02,R-03,R-04,R-05,R-06,R-07,R-08,R-09,R-10,R-11,R-12"
+      ],
+      [
+        "R-01,R-02,R-03,R-04,R-05,R-06,R-07,R-08,R-09,R-10,R-11,R-12",
+        "R-01,R-02,R-03,R-04,R-05,R-06,R-07,R-08,R-09,R-10,R-11,R-12",
+        "R-01,R-02,R-03,R-04,R-05,R-06,R-07,R-08,R-09,R-10,R-11,R-12"
+      ]
+    ],
+    "semicolon": [
+      [
+        "Kode A",
+        "Kode B",
+        "Kode C"
+      ],
+      [
+        "R-01;R-02;R-03;R-04;R-05;R-06;R-07;R-08;R-09;R-10;R-11;R-12",
+        "R-01;R-02;R-03;R-04;R-05;R-06;R-07;R-08;R-09;R-10;R-11;R-12",
+        "R-01;R-02;R-03;R-04;R-05;R-06;R-07;R-08;R-09;R-10;R-11;R-12"
+      ],
+      [
+        "R-01;R-02;R-03;R-04;R-05;R-06;R-07;R-08;R-09;R-10;R-11;R-12",
+        "R-01;R-02;R-03;R-04;R-05;R-06;R-07;R-08;R-09;R-10;R-11;R-12",
+        "R-01;R-02;R-03;R-04;R-05;R-06;R-07;R-08;R-09;R-10;R-11;R-12"
+      ]
+    ]
+  }
+}
