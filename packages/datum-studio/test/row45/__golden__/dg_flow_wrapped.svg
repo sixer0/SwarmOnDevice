@@ -22,8 +22,8 @@
 <text x="117.33" y="29.34" font-family="IBM Plex Mono" font-size="2.081" font-weight="400" fill="#101418" text-anchor="middle">HARGA</text>
 <rect x="54.12" y="44.79" width="9.09" height="3.54" fill="#FCFCFB"/>
 <text x="58.67" y="47.18" font-family="IBM Plex Mono" font-size="2.081" font-weight="400" fill="#101418" text-anchor="middle">BARANG</text>
-<rect x="107.91" y="37.66" width="2.85" height="3.54" fill="#FCFCFB"/>
-<text x="109.33" y="40.06" font-family="IBM Plex Mono" font-size="2.081" font-weight="400" fill="#2F6F6B" text-anchor="middle">1</text>
+<rect x="109.61" y="37.66" width="2.85" height="3.54" fill="#FCFCFB"/>
+<text x="111.03" y="40.06" font-family="IBM Plex Mono" font-size="2.081" font-weight="400" fill="#2F6F6B" text-anchor="middle">1</text>
 <rect x="10.67" y="9.52" width="42.67" height="14.29" rx="7.14" ry="7.14" data-node="a" fill="none" stroke="#2B3640" stroke-width="0.45" data-mark="node" data-index="0"/>
 <text x="32.0" y="16.67" font-family="IBM Plex Sans Condensed" font-size="2.681" font-weight="400" fill="#101418" text-anchor="middle">Permintaan</text>
 <rect x="64.0" y="9.52" width="42.67" height="14.29" data-node="b" fill="none" stroke="#2B3640" stroke-width="0.45" data-mark="node" data-index="1"/>

@@ -631,6 +631,25 @@ const CHAR_LABEL_VERDICT: Record<string, [string, string]> = {
     ["AC-VIS-57c", "487395b7bf79a636 411292684f467f10 487395b7bf79a636 411292684f467f10 | V[] I[] G[AUTO_FIT:REPORT,LABEL_MOVED:REPORT] E[] | V[] I[] G[AUTO_FIT:REPORT,LABEL_MOVED:REPORT] E[R2]"],
 }
 
+/**
+ * Swarm 1.2.8 row 56d (C134 G3-06): intended changes of the bytes outside <marker>, key -> [reason, HEAD sync hash, HEAD
+ * auto hash]; they replace the BASE, row 56c and row 57c values. A single end facing a fanned end (one of several on
+ * its side) moves in line with it when the straight run is free, so the drop is straight instead of a jog under the
+ * source (undone when the straight drop would add a crossing, C137); the fan slots on that side follow the other
+ * nodes' order; edge labels move with their runs. Nodes and markers keep their bytes. Generated with REL128_VIS0_CHAR_PRINT=1 on the row 56d engine (shared tree at HEAD 7454cb5d2a).
+ */
+const JOG_56D = "single end in line with the fanned end facing it: straight drop, no jog (row 56d, G3-06)"
+const CHAR_JOG_INTENT: Record<string, [string, string, string]> = {
+  "engine-rev-a/svg/fixtures/case04.studio.json#": [JOG_56D, "0567cc9b62698c72", "0567cc9b62698c72"],
+  "engine-rev-a/svg/fixtures/case04_v2.studio.json#": [JOG_56D, "f377f4bee674d8be", "f377f4bee674d8be"],
+  "engine-rev-a/svg/fixtures/case05_diagram_block.json#/spec": [JOG_56D, "b388bb76ca20b73e", "b388bb76ca20b73e"],
+  "engine-rev-a/svg/fixtures/row162_elk_not_better.json#": [JOG_56D, "8ed87a4c41f652c2", "8ed87a4c41f652c2"],
+  "engine-rev-a/svg/fixtures/row162_large_layered.json#": [JOG_56D, "192905692ab71637", "28e3b2983ce685e1"],
+  "fixtures/syn127/t11_flow_inline_v2.json#/block/spec": [JOG_56D, "2873c132980f279b", "2873c132980f279b"],
+  "fixtures/syn128/hna_flow_v2.json#/block/spec": [JOG_56D, "ac8c1dbc22b0a5c2", "ac8c1dbc22b0a5c2"],
+  "fixtures/syn128/hna_flow_v2.json#/writeBlock/diagram/spec": [JOG_56D, "ac8c1dbc22b0a5c2", "ac8c1dbc22b0a5c2"],
+  "fixtures/syn128/hna_flow_v2.json#/chapter/chapter/sections/0/blocks/1/spec": [JOG_56D, "ac8c1dbc22b0a5c2", "ac8c1dbc22b0a5c2"],
+}
 describe("char", () => {
   let corpus: CharEntry[] = []
   const now: Record<string, string> = {}
@@ -651,7 +670,7 @@ describe("char", () => {
     for (const c of corpus) {
       const b = parts(CHAR_BASE[c.key]!)
       const n = parts(now[c.key]!)
-      const route = CHAR_LABEL_INTENT[c.key] ?? CHAR_ROUTE_INTENT[c.key] // row 56c / row 57c INTENT: listed HEAD hashes replace BASE's
+      const route = CHAR_JOG_INTENT[c.key] ?? CHAR_LABEL_INTENT[c.key] ?? CHAR_ROUTE_INTENT[c.key] // row 56c / 57c / 56d INTENT: listed HEAD hashes replace BASE's
       expect([n.so, n.ao], c.key).toEqual(route ? [route[1], route[2]] : [b.so, b.ao])
     }
   })

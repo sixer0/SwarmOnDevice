@@ -44,6 +44,8 @@ export interface EdgeLabelInput {
   fixed?: boolean;
   /** Row 57c: the connector's arrowheads (marker size), absent = none. */
   heads?: { end?: HeadSize | null; start?: HeadSize | null };
+  /** Row 56d (C134 G3-09): the drawn `stroke-dasharray` (mm, from the path start), absent = solid. */
+  dash?: readonly number[];
 }
 
 export type EdgeLabelMode = "keep" | "moved" | "leader" | "numbered" | "unplaced";
@@ -163,6 +165,11 @@ const RULE_PENALTY = 1.0;
 const END_CLEAR_MM = 3.0;
 /** Row 57c: a visible piece shorter than this beside a band is not seen (lint `SLIVER_MM`). */
 const SLIVER = 0.25;
+/**
+ * Row 56d (C134 G3-09): least visible source piece beside a band that stops before the run's end (the lint's tick limit
+ * is half `STUB_SEGMENT_MIN_MM`; 1.24 mm beside a 2.85 mm band still read as a stray piece in the M3 eye check).
+ */
+const SOURCE_PIECE_MIN_MM = 1.5;
 /** Row 57c: least visible line between a band and the base of its connector's arrowhead, and beside a band at a bend. */
 const HEAD_LINE_MM = 1.0;
 
@@ -210,9 +217,80 @@ function strayPiece(e: EdgeLabelInput, b: Box): boolean {
       const head = side === "end" && i === n - 1;
       // the lint's `stubSegment` rules: a source piece under half the threshold is a tick (c); under the threshold it is
       // detached (d) when the band also covers the bend after it, so the connector comes out of the band turned
-      const srcNeed = t[1] < 1 - 1e-9 ? STUB_SEGMENT_MIN_MM / 2 : STUB_SEGMENT_MIN_MM;
+      // Row 56d (C134 G3-09): a source piece under `SOURCE_PIECE_MIN_MM` beside a band reads as a stray tick even when
+      // the band stops before the bend (gallery "1"/"2": 1.24 mm on a 10.7 mm run); the band then sits further along.
+      const srcNeed = t[1] < 1 - 1e-9 ? SOURCE_PIECE_MIN_MM : STUB_SEGMENT_MIN_MM;
       const need = src ? (tailL > 0 ? tailL + HEAD_LINE_MM : srcNeed) : head ? headL + HEAD_LINE_MM : HEAD_LINE_MM;
       if (piece < need) return true;
+    }
+  }
+  return dashFragment(e, b);
+}
+
+/**
+ * Row 56d (C134 G3-09): two bands over one straight run of a connector leave a visible piece between them shorter than
+ * `STUB_SEGMENT_MIN_MM` (a floating stub, lint `stubSegment` (b); row162: 1.11 mm between two labels on one run).
+ */
+function floatBetween(points: ReadonlyArray<Pt>, b: Box, p: Box): boolean {
+  for (const [a, c] of straightRuns(points)) {
+    const t1 = clipSeg(a, c, b);
+    const t2 = clipSeg(a, c, p);
+    if (!t1 || !t2) continue;
+    const gap = (Math.max(t1[0], t2[0]) - Math.min(t1[1], t2[1])) * Math.hypot(c[0] - a[0], c[1] - a[1]);
+    if (gap > SLIVER && gap < STUB_SEGMENT_MIN_MM) return true;
+  }
+  return false;
+}
+
+/** Row 56d (C134 G3-09): least visible length (mm) of a dash cut by a band: half the dash, at most 1 mm. */
+const DASH_FRAGMENT_MM = 1.0;
+
+/** Row 56d: distance (mm) along `points` from the start to `pt` on the path (first segment that holds it). */
+function alongPath(points: ReadonlyArray<Pt>, pt: Pt): number {
+  let cum = 0;
+  for (let i = 0; i + 1 < points.length; i++) {
+    const [a, c] = [points[i], points[i + 1]];
+    const len = Math.hypot(c[0] - a[0], c[1] - a[1]);
+    const d = Math.hypot(pt[0] - a[0], pt[1] - a[1]);
+    if (len > 1e-9 && Math.abs(d + Math.hypot(c[0] - pt[0], c[1] - pt[1]) - len) < 1e-6) return cum + d;
+    cum += len;
+  }
+  return cum;
+}
+
+/**
+ * Row 56d (C134 G3-09): on a dashed connector a band edge that cuts a dash leaves the piece of it beside the band; a
+ * piece shorter than `DASH_FRAGMENT_MM` (or half the dash) reads as a stray dot (MINTA / PESAN: 0.17 mm under the band).
+ * Dashes of a dot pattern (<= 0.5 mm) are dots by design and never count.
+ */
+function dashFragment(e: EdgeLabelInput, b: Box): boolean {
+  const dash = e.dash;
+  if (!dash || dash.length < 2) return false;
+  const pat = dash.length % 2 ? [...dash, ...dash] : [...dash];
+  const period = pat.reduce((x, y) => x + y, 0);
+  if (!(period > 0)) return false;
+  // [start, end] of each dash in one period, with its own minimum visible piece
+  const dashes: Array<[number, number, number]> = [];
+  for (let i = 0, at = 0; i < pat.length; at += pat[i], i++) if (i % 2 === 0 && pat[i] > 0.5) dashes.push([at, at + pat[i], Math.min(DASH_FRAGMENT_MM, pat[i] / 2)]);
+  if (!dashes.length) return false;
+  const total = alongPath(e.points, e.points[e.points.length - 1]);
+  for (const [a, c] of straightRuns(e.points)) {
+    const t = clipSeg(a, c, b);
+    if (!t) continue;
+    const s0 = alongPath(e.points, a);
+    const len = Math.hypot(c[0] - a[0], c[1] - a[1]);
+    const cut = [
+      { s: s0 + t[0] * len, before: true },
+      { s: s0 + t[1] * len, before: false },
+    ];
+    for (const { s, before } of cut) {
+      if (s <= 1e-6 || s >= total - 1e-6) continue; // the band reaches the path end: no piece on that side
+      const ph = ((s % period) + period) % period;
+      for (const [d0, d1, min] of dashes) {
+        if (ph <= d0 + 1e-6 || ph >= d1 - 1e-6) continue;
+        const piece = Math.min(before ? ph - d0 : d1 - ph, before ? s : total - s);
+        if (piece > 1e-6 && piece < min - 1e-9) return true;
+      }
     }
   }
   return false;
@@ -222,8 +300,8 @@ function strayPiece(e: EdgeLabelInput, b: Box): boolean {
  * Row 57c: a band at `b` on connector `points` keeps the connector's own arrowheads visible and leaves no stray piece of
  * it (`strayPiece`); used by the first-render label position (`build/svg.ts` `labelPos`) before auto-fit is needed.
  */
-export function spotClear(points: ReadonlyArray<Pt>, heads: EdgeLabelInput["heads"], b: Box): boolean {
-  const e: EdgeLabelInput = { points, label: "", kind: "data", orig: [0, 0], heads };
+export function spotClear(points: ReadonlyArray<Pt>, heads: EdgeLabelInput["heads"], b: Box, dash?: readonly number[]): boolean {
+  const e: EdgeLabelInput = { points, label: "", kind: "data", orig: [0, 0], heads, ...(dash ? { dash } : {}) };
   if (strayPiece(e, b)) return false;
   const g = grow(b, 0.1);
   if (heads?.end) {
@@ -311,6 +389,8 @@ function scorer(ctx: EdgeLabelCtx, edges: readonly EdgeLabelInput[], placed: Map
       // another connector's first or last END_CLEAR_MM (where the reader sees it start or arrive) stays uncovered
       for (let i = 0; i < ends.length; i++) if (ends[i].edge !== self && segHitsBox(ends[i].a, ends[i].b, g)) a += RULE_PENALTY;
       if (edges[self] && strayPiece(edges[self], b)) a += RULE_PENALTY;
+      // Row 56d (C134 G3-09): this band and another placed band on one connector run leave no floating piece between them
+      for (const [i, p] of placed) if (i !== self && edges.some((e) => floatBetween(e.points, b, p))) a += RULE_PENALTY;
       return a + out * (b[3] - b[1]) * 4;
     },
     soft(b, self) {

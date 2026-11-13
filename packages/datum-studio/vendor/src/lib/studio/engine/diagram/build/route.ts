@@ -12,7 +12,7 @@
 import type { DiagramEdge, RoutedEdge, StudioDiagramV1 } from "../../../contract";
 import { DiagramDefect, LATTICE_Y, polylineD, snap, type Sheet, type SheetNode } from "../core";
 import { diagramFitNote, diagramFitRoute } from "../fit/state";
-import { nudgeRoutes } from "./lanesroute";
+import { nudgeRoutes, offRules, routeRulesOf } from "./lanesroute";
 import { activeElkRoutes } from "../elk/routes";
 import { edgeConflicts, ENTRY_COLLISION_MM, STUB_SEGMENT_MIN_MM } from "../fit/lint";
 import { flowDirectionOf, flowRanks } from "../layout-a/flow";
@@ -1059,6 +1059,27 @@ function straightSpan(n: SheetNode, side: Side): [number, number] | null {
   return null;
 }
 
+/**
+ * Row 56d (C134 G3-06): share of the radius around the centre height over which a horizontal end may sit on the round
+ * right/left side of a stadium (cap radius h/2) or a circle (radius min(w, h)/2). `glueOutline` puts the end on the arc
+ * at that height; within 0.6 r the end meets the arc at most 37 deg off its normal, so the connector still reads as
+ * entering the shape head-on.
+ */
+const ARC_SPAN_FRAC = 0.6;
+
+/**
+ * Row 56d (C134 G3-06): the band [lo, hi] (y) of a stadium's or circle's right/left side where a horizontal end may
+ * move (`ARC_SPAN_FRAC`); null for other shapes and for top/bottom sides (`straightSpan` covers those).
+ */
+function arcSpan(n: SheetNode, side: Side): [number, number] | null {
+  if (side !== "right" && side !== "left") return null;
+  const sh = n.spec.shape ?? "box";
+  if (sh !== "stadium" && sh !== "circle") return null;
+  const r = sh === "stadium" ? n.h / 2 : Math.min(n.w, n.h) / 2;
+  const cy = n.y + n.h / 2;
+  return [cy - r * ARC_SPAN_FRAC, cy + r * ARC_SPAN_FRAC];
+}
+
 /** Row 57c: a node whose side is a straight border along its whole box (not an outline shape, event, bus or annotation). */
 function boxLike(n: SheetNode): boolean {
   const sh = n.spec.shape ?? "box";
@@ -1181,6 +1202,31 @@ function routeWithSides(s: StudioDiagramV1, sheet: Sheet, over: ReadonlyMap<numb
   // FIG-02b2 P1-12: saat fit dengan cacat rute terukur, slot jangkar per sisi diurutkan menurut
   // pusat simpul di ujung lain (x untuk sisi atas/bawah, y untuk kiri/kanan) agar kipas tidak bersilang.
   const laneFix = diagramFitRoute("edgeCollinear", "edgeCross");
+  // Row 56d (C134 G3-06): a fan side with a member whose other end is the single end on the facing side of a node beyond
+  // it (that end moves in line with the fan slot below) is ordered by the other nodes' centres on the first render too,
+  // so the straightened drop does not cross a sibling. Other fan sides keep the edge order (auto-fit sorts them above).
+  if (!laneFix) {
+    const ahead = (n: SheetNode, side: Side, o: SheetNode) =>
+      side === "bottom" ? o.y >= n.y + n.h : side === "top" ? o.y + o.h <= n.y : side === "right" ? o.x >= n.x + n.w : o.x + o.w <= n.x;
+    for (const [k, g] of grouped) {
+      const [side, id] = k.split("\u0000") as [Side, string];
+      if (g.length < 2 || isLabelBelow(nodeOf(sheet, id).spec.shape)) continue;
+      const n = nodeOf(sheet, id);
+      const faces = g.some((e) => {
+        const out = e.from === id;
+        const oid = out ? e.to : e.from;
+        if (oid === id || edgeRouteOf(e) || glued(e) || viaOf(e)) return false;
+        const [sa, sb] = sidesOf(e, edges.indexOf(e));
+        const oSide = out ? sb : sa;
+        return (out ? sa : sb) === side && oSide === OPP[side] && grouped.get(gk(oid, oSide))?.length === 1 && ahead(n, side, nodeOf(sheet, oid));
+      });
+      if (!faces) continue;
+      const other = (e: DiagramEdge) => nodeOf(sheet, e.from === id ? e.to : e.from);
+      const key = (e: DiagramEdge) => (side === "top" || side === "bottom" ? other(e).x + other(e).w / 2 : other(e).y + other(e).h / 2);
+      const idx = new Map(g.map((e, i) => [e, i]));
+      g.sort((a, b) => key(a) - key(b) || idx.get(a)! - idx.get(b)!);
+    }
+  }
   if (laneFix) {
     for (const [k, g] of grouped) {
       const [side, id] = k.split("\u0000");
@@ -1192,6 +1238,7 @@ function routeWithSides(s: StudioDiagramV1, sheet: Sheet, over: ReadonlyMap<numb
   }
   const stub = snap(LATTICE_Y, LATTICE_Y);
   const raw: Pt[][] = [];
+  const alignedAlt = new Map<number, Pt[]>(); // row 56d: fan-aligned edge -> its route from the unaligned ends
   edges.forEach((e, ei) => {
     const a = nodeOf(sheet, e.from);
     const b = nodeOf(sheet, e.to);
@@ -1200,7 +1247,7 @@ function routeWithSides(s: StudioDiagramV1, sheet: Sheet, over: ReadonlyMap<numb
     const gb = grouped.get(gk(e.to, sb)) ?? [e];
     let p = anchor(a, sa, indexOfEdge(ga, e), ga.length);
     let q = anchor(b, sb, indexOfEdge(gb, e), gb.length);
-    let pts: Pt[];
+    let unaligned: [Pt, Pt] | undefined; // row 56d: the ends before a fan alignment
     const vertA = sa === "bottom" || sa === "top";
     const vertB = sb === "bottom" || sb === "top";
     const style = edgeRouteOf(e);
@@ -1243,59 +1290,83 @@ function routeWithSides(s: StudioDiagramV1, sheet: Sheet, over: ReadonlyMap<numb
     if (!style && !glued(e) && sb === OPP[sa]) {
       const k = vertA ? 0 : 1;
       const off = Math.abs(p[k] - q[k]);
+      // Row 56d (C134 G3-06): a stadium's or circle's round side also takes the end (`arcSpan`), so an LR start ->
+      // decision link (the diamond has one vertex, the stadium no straight right side) is one straight run.
+      const inSide = (n: SheetNode, side: Side, v: number) => {
+        const span = straightSpan(n, side) ?? arcSpan(n, side);
+        return span !== null && v >= span[0] + SHARED_BAND_CLEAR_MM && v <= span[1] - SHARED_BAND_CLEAR_MM;
+      };
+      // Row 56d (C134 G3-06): the other end is fanned (one of several on its side, so it cannot move) and lies ahead
+      // across the gap: the single end moves in line with it when that stays inside its side, at any offset, so a node
+      // with two bottom exits drops straight onto the node below instead of jogging under it.
+      const ahead = (sa === "bottom" && q[1] > p[1]) || (sa === "top" && q[1] < p[1]) || (sa === "right" && q[0] > p[0]) || (sa === "left" && q[0] < p[0]);
       if (off > 1e-9 && off < JOG_ALIGN_MM) {
-        const inSide = (n: SheetNode, side: Side, v: number) => {
-          const span = straightSpan(n, side);
-          return span !== null && v >= span[0] + SHARED_BAND_CLEAR_MM && v <= span[1] - SHARED_BAND_CLEAR_MM;
-        };
         if (gb.length === 1 && inSide(b, sb, p[k])) q = k === 0 ? [p[0], q[1]] : [q[0], p[1]];
         else if (ga.length === 1 && inSide(a, sa, q[k])) p = k === 0 ? [q[0], p[1]] : [p[0], q[1]];
+      } else if (off > 1e-9 && ahead && !viaOf(e) && slotField(e, "from") === undefined && slotField(e, "to") === undefined) {
+        // only when the straight run is free: a route that detours round other nodes keeps its ends
+        const free = (u: Pt, v: Pt) => blocked([u, v], [e.from, e.to], nodes, sheet.widthMm) === null;
+        const qa: Pt = k === 0 ? [p[0], q[1]] : [q[0], p[1]];
+        const pa: Pt = k === 0 ? [q[0], p[1]] : [p[0], q[1]];
+        if (ga.length > 1 && gb.length === 1 && inSide(b, sb, p[k]) && free(p, qa)) {
+          unaligned = [p, q];
+          q = qa;
+        } else if (gb.length > 1 && ga.length === 1 && inSide(a, sa, q[k]) && free(pa, q)) {
+          unaligned = [p, q];
+          p = pa;
+        }
       }
     }
-    // Swarm 1.2.8 row 56b (VIS-5/VIS-6): a slot puts the end at that fraction of its side; `via` bends the route there.
-    const slotA = slotField(e, "from");
-    const slotB = slotField(e, "to");
-    if (slotA !== undefined) p = slotAnchor(a, sa, slotA);
-    if (slotB !== undefined) q = slotAnchor(b, sb, slotB);
-    const vias = viaPoints(e, ei, sheet);
-    if (vias) {
-      pts = viaRoute(p, sa, vias, q, sb, style === "straight");
-    } else if (style === "straight") {
-      // row 56 (VIS-4): one segment, diagonal allowed; row 56c: its end meets the border steeply (glued ends stay)
-      pts = [p, sideField(e, "to") === undefined ? straightEnd(p, b, sb, q) : q];
-    } else if (style === "curved") {
-      pts = curvedPoints(p, sa, q, sb); // row 56 (VIS-4): sampled Bezier, ends normal to the sides
-    } else if (vertA !== vertB) {
-      pts = cornerRoute(p, sa, q, sb, stub); // row 124 (CP-41): L pair
-    } else if (vertA) {
-      const pa: Pt = [p[0], p[1] + (sa === "bottom" ? stub : -stub)];
-      // E-17: stub target arah balik dari batas (masuk dari luar).
-      const pb: Pt = [q[0], q[1] + (sb === "bottom" ? stub : -stub)];
-      // Row 56b (VIS-5): a glued same-side pair (top to top, bottom to bottom) runs beyond the outer stub, not between.
-      const same = sa === sb && glued(e);
-      // Row 56c (C51 (a), defect 1): a forward pair (bottom -> top below it, top -> bottom above it) with a sideways offset
-      // never runs back (an end-on pair, same x, overlays its own line and keeps its route).
-      const fwd = !same && Math.abs(p[0] - q[0]) > 1e-9 && ((sa === "bottom" && sb === "top" && q[1] > p[1]) || (sa === "top" && sb === "bottom" && q[1] < p[1]));
-      const midy = same ? (sa === "bottom" ? Math.max(pa[1], pb[1]) : Math.min(pa[1], pb[1])) : between(snap((pa[1] + pb[1]) / 2.0, LATTICE_Y), pa[1], pb[1], laneFix || fwd);
-      // Row 57c (C123 item 3): an end-on facing pair whose stubs cross (a gap narrower than two stubs) is one run, not a
-      // run out and back under its label.
-      const endOn = !same && Math.abs(p[0] - q[0]) < 1e-9 && ((sa === "bottom" && sb === "top" && q[1] > p[1]) || (sa === "top" && sb === "bottom" && q[1] < p[1]));
-      const run: Pt[] = fwd ? forwardRun(p, pa, pb, q, midy, true) : [p, pa, [pa[0], midy], [pb[0], midy], pb, q];
-      pts = endOn && !monotone(run, 1) ? [p, q] : run;
-    } else {
-      const pa: Pt = [p[0] + (sideA ? 0 : sa === "right" ? stub : -stub), p[1]];
-      const pb: Pt = [q[0] + (sideB ? 0 : sb === "right" ? stub : -stub), q[1]];
-      const same = sa === sb && glued(e); // row 56b: left to left / right to right beyond the outer stub
-      // Row 56c (C51 (a), defect 1): a forward pair (right -> left beyond it, left -> right before it) with a height offset
-      // never runs back (an end-on pair, same y, overlays its own line and keeps its route).
-      const fwd = !same && Math.abs(p[1] - q[1]) > 1e-9 && ((sa === "right" && sb === "left" && q[0] > p[0]) || (sa === "left" && sb === "right" && q[0] < p[0]));
-      const midx = same ? (sa === "right" ? Math.max(pa[0], pb[0]) : Math.min(pa[0], pb[0])) : between(snap((pa[0] + pb[0]) / 2.0, sheet.colMm), pa[0], pb[0], laneFix || sideA || sideB || fwd);
-      // Row 57c (C123 item 3): an end-on facing pair whose stubs cross is one run (no out-and-back under its label).
-      const endOn = !same && Math.abs(p[1] - q[1]) < 1e-9 && ((sa === "right" && sb === "left" && q[0] > p[0]) || (sa === "left" && sb === "right" && q[0] < p[0]));
-      const run: Pt[] = fwd ? forwardRun(p, pa, pb, q, midx, false) : [p, pa, [midx, pa[1]], [midx, pb[1]], pb, q];
-      pts = Math.abs(p[1] - q[1]) < 1e-9 && (sideA || sideB) ? [p, q] : endOn && !monotone(run, 0) ? [p, q] : run;
-    }
-    raw.push(pts);
+    // Row 56d: the route from the two ends (also built from the unaligned ends, for the crossing check below).
+    const buildPts = (p: Pt, q: Pt): Pt[] => {
+      let pts: Pt[];
+      // Swarm 1.2.8 row 56b (VIS-5/VIS-6): a slot puts the end at that fraction of its side; `via` bends the route there.
+      const slotA = slotField(e, "from");
+      const slotB = slotField(e, "to");
+      if (slotA !== undefined) p = slotAnchor(a, sa, slotA);
+      if (slotB !== undefined) q = slotAnchor(b, sb, slotB);
+      const vias = viaPoints(e, ei, sheet);
+      if (vias) {
+        pts = viaRoute(p, sa, vias, q, sb, style === "straight");
+      } else if (style === "straight") {
+        // row 56 (VIS-4): one segment, diagonal allowed; row 56c: its end meets the border steeply (glued ends stay)
+        pts = [p, sideField(e, "to") === undefined ? straightEnd(p, b, sb, q) : q];
+      } else if (style === "curved") {
+        pts = curvedPoints(p, sa, q, sb); // row 56 (VIS-4): sampled Bezier, ends normal to the sides
+      } else if (vertA !== vertB) {
+        pts = cornerRoute(p, sa, q, sb, stub); // row 124 (CP-41): L pair
+      } else if (vertA) {
+        const pa: Pt = [p[0], p[1] + (sa === "bottom" ? stub : -stub)];
+        // E-17: stub target arah balik dari batas (masuk dari luar).
+        const pb: Pt = [q[0], q[1] + (sb === "bottom" ? stub : -stub)];
+        // Row 56b (VIS-5): a glued same-side pair (top to top, bottom to bottom) runs beyond the outer stub, not between.
+        const same = sa === sb && glued(e);
+        // Row 56c (C51 (a), defect 1): a forward pair (bottom -> top below it, top -> bottom above it) with a sideways offset
+        // never runs back (an end-on pair, same x, overlays its own line and keeps its route).
+        const fwd = !same && Math.abs(p[0] - q[0]) > 1e-9 && ((sa === "bottom" && sb === "top" && q[1] > p[1]) || (sa === "top" && sb === "bottom" && q[1] < p[1]));
+        const midy = same ? (sa === "bottom" ? Math.max(pa[1], pb[1]) : Math.min(pa[1], pb[1])) : between(snap((pa[1] + pb[1]) / 2.0, LATTICE_Y), pa[1], pb[1], laneFix || fwd);
+        // Row 57c (C123 item 3): an end-on facing pair whose stubs cross (a gap narrower than two stubs) is one run, not a
+        // run out and back under its label.
+        const endOn = !same && Math.abs(p[0] - q[0]) < 1e-9 && ((sa === "bottom" && sb === "top" && q[1] > p[1]) || (sa === "top" && sb === "bottom" && q[1] < p[1]));
+        const run: Pt[] = fwd ? forwardRun(p, pa, pb, q, midy, true) : [p, pa, [pa[0], midy], [pb[0], midy], pb, q];
+        pts = endOn && !monotone(run, 1) ? [p, q] : run;
+      } else {
+        const pa: Pt = [p[0] + (sideA ? 0 : sa === "right" ? stub : -stub), p[1]];
+        const pb: Pt = [q[0] + (sideB ? 0 : sb === "right" ? stub : -stub), q[1]];
+        const same = sa === sb && glued(e); // row 56b: left to left / right to right beyond the outer stub
+        // Row 56c (C51 (a), defect 1): a forward pair (right -> left beyond it, left -> right before it) with a height offset
+        // never runs back (an end-on pair, same y, overlays its own line and keeps its route).
+        const fwd = !same && Math.abs(p[1] - q[1]) > 1e-9 && ((sa === "right" && sb === "left" && q[0] > p[0]) || (sa === "left" && sb === "right" && q[0] < p[0]));
+        const midx = same ? (sa === "right" ? Math.max(pa[0], pb[0]) : Math.min(pa[0], pb[0])) : between(snap((pa[0] + pb[0]) / 2.0, sheet.colMm), pa[0], pb[0], laneFix || sideA || sideB || fwd);
+        // Row 57c (C123 item 3): an end-on facing pair whose stubs cross is one run (no out-and-back under its label).
+        const endOn = !same && Math.abs(p[1] - q[1]) < 1e-9 && ((sa === "right" && sb === "left" && q[0] > p[0]) || (sa === "left" && sb === "right" && q[0] < p[0]));
+        const run: Pt[] = fwd ? forwardRun(p, pa, pb, q, midx, false) : [p, pa, [midx, pa[1]], [midx, pb[1]], pb, q];
+        pts = Math.abs(p[1] - q[1]) < 1e-9 && (sideA || sideB) ? [p, q] : endOn && !monotone(run, 0) ? [p, q] : run;
+      }
+      return pts;
+    };
+    raw.push(buildPts(p, q));
+    if (unaligned) alignedAlt.set(ei, buildPts(unaligned[0], unaligned[1]));
   });
   const out: RoutedEdge[] = [];
   const finish = (rawPts: readonly Pt[][]): { routes: Pt[][]; moved: number } => {
@@ -1315,9 +1386,22 @@ function routeWithSides(s: StudioDiagramV1, sheet: Sheet, over: ReadonlyMap<numb
       routes = n.paths.map((r, i) => (edgeRouteOf(edges[i]) || glued(edges[i]) ? routes[i] : r)); // row 56b: glued ends stay put
       moved = n.moved;
     }
+    // Swarm 1.2.8 row 56d (C134 G3-07): inner runs lying on a lane / phase / pool rule move off it (swimlanes only);
+    // styled, glued and via routes keep their geometry.
+    routes = offRules(routes, routeRulesOf(sheet), edges.map((e) => [e.from, e.to] as const), nodes, sheet.widthMm, edges.map((e) => !!edgeRouteOf(e) || glued(e) || !!viaOf(e)));
     return { routes, moved };
   };
   let { routes, moved } = finish(raw);
+  // Row 56d (C134 G3-06, C137): a straightened drop that crosses another finished route where its jogged route did not
+  // is undone (prefer no new crossing; f6_fan_in spec 5), edge by edge in edge order.
+  for (const [i, alt] of alignedAlt) {
+    const trialRaw = raw.map((r, j) => (j === i ? alt : r));
+    const trial = finish(trialRaw);
+    if (edgeConflicts(trial.routes).cross < edgeConflicts(routes).cross) {
+      raw[i] = alt;
+      ({ routes, moved } = trial);
+    }
+  }
   // 1.2.6 row 64 (T-08, 01e §8): fan groups whose members conflict get sorted slots, distinct exits and
   // staggered turn levels; kept per group only if the group's conflicts strictly drop and the figure's
   // do not rise. A figure without a conflicting fan group never enters the loop body (byte-identical).

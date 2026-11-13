@@ -5,7 +5,7 @@
 import type { DiagramZone, RoutedEdge, StudioDiagramV1 } from "../../../contract";
 import { FONT_ASCENT_EM, FONT_DESCENT_EM, measure } from "../../chart/core/textfit";
 import { EDGE_KINDS, LATTICE_Y, pt2mm, role, STROKE_PRIMARY, svgText, type Sheet, type SheetNode } from "../core";
-import { edgeArrowsOfPaths, type EdgeArrows } from "../core/svg";
+import { edgeArrowsOfPaths, edgeLineDash, type EdgeArrows } from "../core/svg";
 import { ARROW_SIZES_MM } from "../core/tokens";
 import { decorationOf, type Box, type HeadSize } from "../fit/lint";
 import { labelAtBaseline, placeEdgeLabels, type EdgeLabelInput, type EdgeLabelPlan, layoutNotes } from "../fit/labels";
@@ -127,7 +127,9 @@ export function fitEdgeLabels(a: FitLabelInputs): EdgeLabelPlan {
     const fixedAt = at[i];
     // Row 57c: the drawn heads, so a band keeps them visible.
     const heads = { end: headSize(arrows[i]?.end ?? null), start: headSize(arrows[i]?.start ?? null) };
-    const base = { points: p.points, label: String(p.label ?? ""), kind: p.kind, heads };
+    // Row 56d (C134 G3-09): the drawn dash pattern, so a band leaves no stray dash fragment.
+    const dash = edgeLineDash(p.kind, arrows[i]?.line)?.split(",").map(Number).filter((v) => Number.isFinite(v));
+    const base = { points: p.points, label: String(p.label ?? ""), kind: p.kind, heads, ...(dash?.length ? { dash } : {}) };
     return fixedAt ? { ...base, orig: labelAtBaseline(p.points, fixedAt), fixed: true } : { ...base, orig: a.orig[i] };
   });
   const plan = placeEdgeLabels(edges, {

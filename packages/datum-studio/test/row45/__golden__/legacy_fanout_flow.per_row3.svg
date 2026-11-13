@@ -26,8 +26,8 @@
 <text x="26.67" y="27.9" font-family="IBM Plex Mono" font-size="2.081" font-weight="400" fill="#2B3640" text-anchor="middle">TIGA</text>
 <rect x="44.08" y="26.35" width="7.84" height="3.54" fill="#FCFCFB"/>
 <text x="48.0" y="28.75" font-family="IBM Plex Mono" font-size="2.081" font-weight="400" fill="#2B3640" text-anchor="middle">EMPAT</text>
-<rect x="89.24" y="25.76" width="2.85" height="3.54" fill="#FCFCFB"/>
-<text x="90.67" y="28.15" font-family="IBM Plex Mono" font-size="2.081" font-weight="400" fill="#2B3640" text-anchor="middle">A</text>
+<rect x="89.24" y="31.71" width="2.85" height="3.54" fill="#FCFCFB"/>
+<text x="90.67" y="34.1" font-family="IBM Plex Mono" font-size="2.081" font-weight="400" fill="#2B3640" text-anchor="middle">A</text>
 <rect x="110.58" y="25.51" width="2.85" height="3.54" fill="#FCFCFB"/>
 <text x="112.0" y="27.9" font-family="IBM Plex Mono" font-size="2.081" font-weight="400" fill="#2B3640" text-anchor="middle">B</text>
 <rect x="25.24" y="49.32" width="2.85" height="3.54" fill="#FCFCFB"/>
@@ -36,8 +36,8 @@
 <text x="53.33" y="51.96" font-family="IBM Plex Mono" font-size="2.081" font-weight="400" fill="#2B3640" text-anchor="middle">D</text>
 <rect x="105.24" y="49.32" width="2.85" height="3.54" fill="#FCFCFB"/>
 <text x="106.67" y="51.71" font-family="IBM Plex Mono" font-size="2.081" font-weight="400" fill="#2B3640" text-anchor="middle">E</text>
-<rect x="54.58" y="63.86" width="2.85" height="3.54" fill="#FCFCFB"/>
-<text x="56.0" y="66.25" font-family="IBM Plex Mono" font-size="2.081" font-weight="400" fill="#2B3640" text-anchor="middle">F</text>
+<rect x="56.76" y="63.86" width="2.85" height="3.54" fill="#FCFCFB"/>
+<text x="58.18" y="66.25" font-family="IBM Plex Mono" font-size="2.081" font-weight="400" fill="#2B3640" text-anchor="middle">F</text>
 <rect x="10.67" y="9.52" width="32.0" height="14.29" data-node="n1" fill="none" stroke="#2B3640" stroke-width="0.45" data-mark="node" data-index="0"/>
 <text x="26.67" y="16.67" font-family="IBM Plex Sans Condensed" font-size="2.681" font-weight="400" fill="#101418" text-anchor="middle">Masukan diterima</text>
 <rect x="53.33" y="9.52" width="32.0" height="14.29" data-node="n2" fill="none" stroke="#2B3640" stroke-width="0.45" data-mark="node" data-index="1"/>

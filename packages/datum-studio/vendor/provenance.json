@@ -121,11 +121,11 @@
  },
  "counts": {
   "files": 608,
-  "copied": 402,
-  "patched": 164,
+  "copied": 400,
+  "patched": 166,
   "replaced": 12,
   "added": 30,
-  "bytes": 10209466
+  "bytes": 10228167
  },
  "files": [
   {
@@ -2371,9 +2371,10 @@
   {
    "path": "src/lib/studio/engine/diagram/build/fitlabels.ts",
    "status": "patched",
-   "bytes": 8705,
+   "bytes": 8962,
    "source_sha256": "da41b8084aecd1bb3b2d85d2f41c75b649a89cf27a574d4858dcfbe181c0c24f",
-   "sha256": "954c8efebcfc421783c50cd755c83ee9e810724506e2bf342f39229060ddab77",
+   "sha256": "da3b097721ddcaf85544ead1f2a7b501c8a6a45549edc61339377618fd21c4d0",
+   "patch_row56d": {"id": "128-56d-jogs-rules", "row": "56d", "decision": "C134, C137 (1.2.8 row 56d; M3 gate G3-06, G3-07, G3-09)", "summary": "G3-09: each EdgeLabelInput carries the drawn dash pattern (edgeLineDash of kind + line)", "diff_base": "sha256 before this row", "before_sha256": "954c8efebcfc421783c50cd755c83ee9e810724506e2bf342f39229060ddab77", "after_sha256": "da3b097721ddcaf85544ead1f2a7b501c8a6a45549edc61339377618fd21c4d0", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/56d_row56d_diffs/engine_diagram_build_fitlabels.ts.diff", "diff_sha256": "9fe9c5fe3b431fcdb7fc57fd1603b218d75b3cd390b91092037b3bcd8ceb8dd0"},
    "patch_row57c": {"id": "128-57c-label-placement", "row": "57c", "decision": "1.2.8 row 57c (C71, C86, C101, C102, C116)", "summary": "fitEdgeLabels takes the sheet's lane/phase/pool decoration (decorationOf: rules + header texts as obstacles) and each edge's drawn head sizes (headSize from edgeArrowsOfPaths)", "diff_base": "sha256 before this row", "before_sha256": "0207661b6b66d833008ea371d9a73f1ca92f8472f61e2c76b5f76c5133ce9bb9", "after_sha256": "954c8efebcfc421783c50cd755c83ee9e810724506e2bf342f39229060ddab77", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/57c_row57c_diffs/engine_diagram_build_fitlabels.ts.diff", "diff_sha256": "1c394fe31c3cec5f66bd4115e414d178bad894dc4de6d1d5c62d4da3f3357413"},
    "patch_row57b": {"id": "128-57b-vis8-vis9", "row": "57b", "decision": "1.2.8 row 57b (AC-VIS8, AC-VIS9; 01f 3.1-3.5; C78, C86, C101, C111; N8-212, N8-262..266, N8-468, N8-471, N8-477..479)", "summary": "fitEdgeLabels: an edge with label_at gets its fixed position (labelAtBaseline) and fixed: true (edgeArrowsOfPaths matching)", "diff_base": "sha256 before this row", "before_sha256": "da41b8084aecd1bb3b2d85d2f41c75b649a89cf27a574d4858dcfbe181c0c24f", "after_sha256": "0207661b6b66d833008ea371d9a73f1ca92f8472f61e2c76b5f76c5133ce9bb9", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/57b_row57b_diffs/engine_diagram_build_fitlabels.ts.diff", "diff_sha256": "488b338e31b3988f75387c2ea4d1776220e6b56995c19e68acbf51e13e8b5e29"}
   },
@@ -2394,10 +2395,11 @@
   },
   {
    "path": "src/lib/studio/engine/diagram/build/lanesroute.ts",
-   "status": "copied",
-   "bytes": 7785,
+   "status": "patched",
+   "bytes": 16284,
    "source_sha256": "2e41b2636751072f6e3ac890f2facdc6f5d42131dcca89d463af52b8226a9b48",
-   "sha256": "2e41b2636751072f6e3ac890f2facdc6f5d42131dcca89d463af52b8226a9b48"
+   "sha256": "3b028263b0cd6b18ed1a34ea9e52125b2e327c9b1682b654e5830dae17bcfdcd",
+   "patch_row56d": {"id": "128-56d-jogs-rules", "row": "56d", "decision": "C134, C137 (1.2.8 row 56d; M3 gate G3-06, G3-07, G3-09)", "summary": "G3-07 NEW RouteRule, RULE_CLEAR_MM 1.0, RULE_OFFSET_MM 1.5, setRouteRules (frame -> rules as build/svg.ts draws them, WeakMap per sheet), routeRulesOf, offRules: an inner connector run within 1 mm of a parallel lane/phase/pool rule (overlap > 1 mm) moves 1.5 mm off it where the route stays valid (direction kept, source run >= min(own, 2 mm), head run >= min(own, 4.2 mm), no node crossed, no rule within 1 mm, conflicts not rising); no rules = input returned unchanged", "diff_base": "sha256 before this row", "before_sha256": "2e41b2636751072f6e3ac890f2facdc6f5d42131dcca89d463af52b8226a9b48", "after_sha256": "3b028263b0cd6b18ed1a34ea9e52125b2e327c9b1682b654e5830dae17bcfdcd", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/56d_row56d_diffs/engine_diagram_build_lanesroute.ts.diff", "diff_sha256": "f952881bae382b3ea4bbe28642c8974576cd1719f9ee37d580c5a98e879cfca5"}
   },
   {
    "path": "src/lib/studio/engine/diagram/build/order.ts",
@@ -2408,17 +2410,19 @@
   },
   {
    "path": "src/lib/studio/engine/diagram/build/place.ts",
-   "status": "copied",
-   "bytes": 5355,
+   "status": "patched",
+   "bytes": 5692,
    "source_sha256": "a6a5c3860a8a4391a67f6aee9fb1b3e66c2739d27b000966248c79c37249cb30",
-   "sha256": "a6a5c3860a8a4391a67f6aee9fb1b3e66c2739d27b000966248c79c37249cb30"
+   "sha256": "5aecb3ea82a4ccdb56a6d2440a8594f7a466a871981079b3aba1a241143d95b8",
+   "patch_row56d": {"id": "128-56d-jogs-rules", "row": "56d", "decision": "C134, C137 (1.2.8 row 56d; M3 gate G3-06, G3-07, G3-09)", "summary": "G3-07 (out of area): placeDiagram records the swimlane frame's rules for the router (setRouteRules); other families record none", "diff_base": "sha256 before this row", "before_sha256": "a6a5c3860a8a4391a67f6aee9fb1b3e66c2739d27b000966248c79c37249cb30", "after_sha256": "5aecb3ea82a4ccdb56a6d2440a8594f7a466a871981079b3aba1a241143d95b8", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/56d_row56d_diffs/engine_diagram_build_place.ts.diff", "diff_sha256": "3b26847dc032e3cff8fe43a4d43f0d77b541caf5b05c58419bf88e0acf4f847f"}
   },
   {
    "path": "src/lib/studio/engine/diagram/build/route.ts",
    "status": "patched",
-   "bytes": 74495,
+   "bytes": 80024,
    "source_sha256": "2189c545c59473987ba23d3dc64eeeaf9c336c0624c0e9029a34a29773ffa769",
-   "sha256": "7f73cea8e17c5377bd6051761c613da584e4508a6ef8aa2067d9d0305580bcee",
+   "sha256": "4fdec5c12515d1aa4d3072d7750bb2e81b75a5e368deab3fe32feddbb0ef6e1e",
+   "patch_row56d": {"id": "128-56d-jogs-rules", "row": "56d", "decision": "C134, C137 (1.2.8 row 56d; M3 gate G3-06, G3-07, G3-09)", "summary": "G3-06: arcSpan lets a horizontal end move on a stadium/circle round side (ARC_SPAN_FRAC 0.6 r), so an LR start -> decision link is straight; a single end facing a fanned end (one of several on its side) moves in line with it at any offset when its side holds it and the straight run is free; a fan side with such a member is ordered by the other nodes' centres on the first render too; an alignment whose finished route adds a crossing is undone (C137). G3-07: finish() runs offRules on the routes with the sheet's recorded container rules (styled, glued and via routes skipped)", "diff_base": "sha256 before this row", "before_sha256": "7f73cea8e17c5377bd6051761c613da584e4508a6ef8aa2067d9d0305580bcee", "after_sha256": "4fdec5c12515d1aa4d3072d7750bb2e81b75a5e368deab3fe32feddbb0ef6e1e", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/56d_row56d_diffs/engine_diagram_build_route.ts.diff", "diff_sha256": "88033840eb7c2ef3446cdae893d9cf51efd5f8f72851cea97d57b821f1700950"},
    "patch_row57c": {"id": "128-57c-label-placement", "row": "57c", "decision": "1.2.8 row 57c (C86, C123)", "summary": "markLabelBeside: an untagged, unmarked event with a bottom end and no right end, with room on its right, is labelled beside the circle (setLabelBeside) and glueLabelBelow moves its bottom end onto the circle; sharedBand: two box-like nodes side by side with overlapping spans are joined in the middle of the shared band (single facing ends); facing ends offset sideways by less than one lattice step are aligned on a straight part of the side (straightSpan: box sides, parallelogram/hexagon/stadium top and bottom); an end-on facing pair whose run would turn back is one run (monotone)", "diff_base": "sha256 before this row", "before_sha256": "b3851a5b8b971fdfd882f33b8b08a4c00842b6106f526279ab9796c6d9eaeb7d", "after_sha256": "7f73cea8e17c5377bd6051761c613da584e4508a6ef8aa2067d9d0305580bcee", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/57c_row57c_diffs/engine_diagram_build_route.ts.diff", "diff_sha256": "2c3b6190cd6cf2e2a2da2db8690eee6d7b36032083501cf485c39c646a469f96"},
    "patch_row56c": {"id": "128-56c-outline-ends", "row": "56c", "decision": "1.2.8 row 56c (C51, C71, C75, C101; user item 7, Visio minimum for connector ends)", "summary": "Connector ends on the true outline: ends on the box of a diamond, cylinder, circle, stadium, hexagon or parallelogram move along their first piece onto the drawn outline (glueOutline); a decision diamond connects at its vertices, one end per vertex where the far node allows (diamondVertexSides); a horizontal entry on a shallow diamond side drops onto it; a forward Z pair with a sideways offset keeps its middle run between the stubs and drops crossed stubs (forwardRun), an L drops a stub that passes its corner (cornerRoute); a straight connector meeting its border below 40 deg moves its end to the facing side (straightEnd); glued ends are checked from the box side (boxEnds). Same-line pairs, styled/glued edges and gateways (C86) unchanged", "diff_base": "sha256 before this row", "before_sha256": "253586b16e0a60aa021af844ab2f8776de4449590e1eae121b5e8ab4f7f014da", "after_sha256": "b3851a5b8b971fdfd882f33b8b08a4c00842b6106f526279ab9796c6d9eaeb7d", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/56c_row56c_diffs/engine_diagram_build_route.ts.diff", "diff_sha256": "b866f93b657143eee7f4da9e2d768c30983004018477ad2cd09d14b8efb9d026"},
    "patch_row56b": {"id": "128-56b-vis5-vis6", "row": "56b", "decision": "1.2.8 row 56b (AC-VIS5 glue to sides and slots, AC-VIS6 bend points on the layout lattice; D-V3)", "summary": "VIS-5: from_side/to_side override the router's side pair (bus ends keep their taps); from_slot/to_slot put the end at that fraction of the side (outline for events/gateways) and take no fan position; a glued same-side pair runs beyond the outer stub. VIS-6: via lattice points (col x col_mm, row x row_mm) joined by L-legs (orthogonal) or straight segments; no detour; build-level P1-via for a point outside the laid-out sheet (sheet size in lattice units); curved + via refused P1-edge-style; routeLattice/viaFamily exported for the preview figure.lattice. Glued edges are never rerouted (CP-41), fanned (T-08) or lane-nudged; specs without the fields route unchanged", "diff_base": "sha256 before this row", "before_sha256": "3d06079180afd39c0abfbe92835e74d7c8b7a805d9b533b832c21a3444ef67b7", "after_sha256": "253586b16e0a60aa021af844ab2f8776de4449590e1eae121b5e8ab4f7f014da", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/56b_row56b_diffs/engine_diagram_build_route.ts.diff", "diff_sha256": "896c60091f7d3ebf8560954ce4823cfadcf4ddae52ca9d21f38f0e5beea7a397"},
@@ -2725,9 +2729,10 @@
   {
    "path": "src/lib/studio/engine/diagram/fit/labels.ts",
    "status": "patched",
-   "bytes": 31777,
+   "bytes": 35856,
    "source_sha256": "b9f4e67979a24d3247e1d60ef34f2f33aa53a8615e742609b4323115133ea38f",
-   "sha256": "304e10bf2a5663bc261d5644039ce39e00acc8c0b59ffa9bde4b12962acfc512",
+   "sha256": "a5fa72fefd37a7a234a4faced6a5ffd89904928844783cff01485bbbf2f718ce",
+   "patch_row56d": {"id": "128-56d-jogs-rules", "row": "56d", "decision": "C134, C137 (1.2.8 row 56d; M3 gate G3-06, G3-07, G3-09)", "summary": "G3-09: SOURCE_PIECE_MIN_MM 1.5 for the source piece beside a band that stops before the run end (was 1.0); dashFragment: a band edge that cuts a dash leaves at least min(1 mm, dash/2) of it (dots never count); floatBetween: two placed bands on one run leave no piece between SLIVER and 2 mm (hard penalty); spotClear takes an optional dash", "diff_base": "sha256 before this row", "before_sha256": "304e10bf2a5663bc261d5644039ce39e00acc8c0b59ffa9bde4b12962acfc512", "after_sha256": "a5fa72fefd37a7a234a4faced6a5ffd89904928844783cff01485bbbf2f718ce", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/56d_row56d_diffs/engine_diagram_fit_labels.ts.diff", "diff_sha256": "880244d4a92d868d8f2ccdf1508161493fd2b57db6115c8fd32c544cfd21f2fa"},
    "patch_row57c": {"id": "128-57c-label-placement", "row": "57c", "decision": "1.2.8 row 57c (C71, C86, C101, C102, C116, C119, C123)", "summary": "hard collisions also for arrowheads (headQuad), container rules no connector runs along, another connector's first/last 3 mm, and stray pieces of the own connector (strayPiece over straight runs, lint stub rules); NEW besidePath (label beside a horizontal/vertical run, two offsets) before a leader; leaders start 1 mm off outlines and outside the own head, cross no other band or connector and keep 1 mm from other connectors; scanPath also over straight runs (runOrder); NEW spotClear, runOrder", "diff_base": "sha256 before this row", "before_sha256": "de221669955e6ec33b6ff5192fb7c96363dbd4d1c19b3f32429ebfdf339d814e", "after_sha256": "304e10bf2a5663bc261d5644039ce39e00acc8c0b59ffa9bde4b12962acfc512", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/57c_row57c_diffs/engine_diagram_fit_labels.ts.diff", "diff_sha256": "69344cf253cd03fa7cf038b885fe4bbcc9ac46d211fd8359563567b247e1e686"},
    "patch_row57b": {"id": "128-57b-vis8-vis9", "row": "57b", "decision": "1.2.8 row 57b (AC-VIS8, AC-VIS9; 01f 3.1-3.5; C78, C86, C101, C111; N8-212, N8-262..266, N8-468, N8-471, N8-477..479)", "summary": "EdgeLabelInput.fixed; NEW pointAtFraction and labelAtBaseline (band centred on the point at LABEL_AT_FRACTION of the path length); placeEdgeLabels places fixed labels first and never moves them (collisions stay for the geometry lint)", "diff_base": "sha256 before this row", "before_sha256": "e24f81ac0d9aa5691f1c50816e2209d651259bb934d01d2c55210cc95aff41ad", "after_sha256": "de221669955e6ec33b6ff5192fb7c96363dbd4d1c19b3f32429ebfdf339d814e", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/57b_row57b_diffs/engine_diagram_fit_labels.ts.diff", "diff_sha256": "f3905dad3002610b81672d42a6470944af46b675e198e67dd708ff6f01d268a1"},
    "patch_row60": {"id": "row60-t04-edge-labels", "row": "60", "decision": "1.2.6 patch T-04 edge labels on the longest segment (U3; register E-11 LABEL_LEADER, no new name; 01g §3.4 probe 1 CHAR, alternative L-path fixture FIX)", "summary": "onPath keeps its fixed spots (t = 1/2, 1/4, 3/4 per segment, longest first) and returns early as before; only when every fixed spot collides it now calls NEW scanPath: slide the knockout band along each segment (longest first, 0.5 mm steps), take a collision-free spot with the fewest covered connectors, nearest the segment midpoint; withLeader / numbered only when no such spot exists. Placements that found a free fixed spot are unchanged", "before_sha256": "b9f4e67979a24d3247e1d60ef34f2f33aa53a8615e742609b4323115133ea38f", "after_sha256": "e24f81ac0d9aa5691f1c50816e2209d651259bb934d01d2c55210cc95aff41ad", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/60_row60_diffs/src_lib_studio_engine_diagram_fit_labels.ts.diff", "diff_sha256": "8b794eb651ccb5aeb2121e14e179f6b552422c896866156e8214c62febe82bfc"}
@@ -6369,6 +6374,7 @@
   "58",
   "58a",
   "55c",
-  "55d"
+  "55d",
+  "56d"
  ]
 }
