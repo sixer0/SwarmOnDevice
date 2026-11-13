@@ -598,3 +598,134 @@ describe("char", () => {
     expect(twins).toBe(corpus.length)
   }, 120_000)
 })
+
+// ---------------------------------------------------------------- carry (AC-VISNA, row 33b)
+// AT-NA-VIS (01f §4.2): a diagram using every 1.2.8 field survives the five write channels unchanged. Fixtures
+// vis0_carry_a.json (swimlane, BPMN, spec-level fields) and vis0_carry_b.json (flow, ISO 5807, the other enum values);
+// two because one figure cannot hold every field within DATUM-25L and DATUM-35. Channels, on the real host over a temp
+// store (diagram-persist/hna-host.ts, binds 127.0.0.1 port 0: run with the command sandbox off): chapter_submit as an
+// object, chapter_submit as a JSON string, studio_write {diagram}, studio_edit append [{diagram}], and the markdown
+// import fence (studio_chapter_import_markdown submit=true). Each is read back with studio_document_get: the stored spec
+// is deep-equal (canonical JSON, keys sorted) to the submitted one, caption and source as {text}. Then a style-only
+// studio_figure_revise patch round-trips with no FIGURE_GRAPH_DELTA. Red at BASE e1f9673772: every channel refuses the
+// new fields (SCHEMA_INVALID / INVALID_ARGUMENT), so nothing is stored.
+type HnaHost = typeof import("../diagram-persist/hna-host")
+const CARRY_FIXTURES = ["vis0_carry_a", "vis0_carry_b"] as const
+const carryFixture = (name: string): { spec: J; caption: string; source: string } => JSON.parse(readFileSync(path.join(TEST_ROOT, "fixtures", "syn128", `${name}.json`), "utf8"))
+/** Every 1.2.8 field name a spec uses, as "<at>.<field>" (at = spec, node, class, edge, zone). */
+function carryFieldsOf(spec: J): Set<string> {
+  const out = new Set<string>()
+  const add = (at: keyof typeof NEW_FIELDS, o: unknown) => {
+    if (o && typeof o === "object") for (const f of NEW_FIELDS[at]) if (Object.prototype.hasOwnProperty.call(o, f)) out.add(`${at}.${f}`)
+  }
+  add("spec", spec)
+  for (const n of (spec.nodes ?? []) as J[]) {
+    add("node", n)
+    add("class", n.class)
+  }
+  for (const e of (spec.edges ?? []) as J[]) add("edge", e)
+  for (const z of (spec.zones ?? []) as J[]) add("zone", z)
+  return out
+}
+
+describe("carry", () => {
+  let hh: HnaHost
+  let h: Awaited<ReturnType<HnaHost["startHost"]>>
+  beforeAll(async () => {
+    hh = await import("../diagram-persist/hna-host")
+    h = await hh.startHost("carry")
+  }, 120_000)
+  afterAll(async () => {
+    await h?.close()
+  })
+
+  const MISSION = "2026-11-14_visna"
+  const expected = (fx: { spec: J; caption: string; source: string }): J => ({ type: "diagram", spec: fx.spec, caption: { text: fx.caption }, source: { text: fx.source } })
+  /** Every stored diagram of the document (n of them) equals the fixture block (spec, caption, source; id ignored). */
+  async function expectStored(documentId: string, fx: { spec: J; caption: string; source: string }, n: number, channel: string): Promise<J[]> {
+    const ds = hh.diagramsOf(await h.content(documentId))
+    expect(ds.length, channel).toBe(n)
+    for (const d of ds) {
+      expect(hh.canon(d.spec), `${channel}: spec`).toBe(hh.canon(fx.spec))
+      expect(hh.canon(hh.withoutId(d)), `${channel}: block`).toBe(hh.canon(expected(fx)))
+    }
+    return ds
+  }
+  const ok = (r: J, what: string) => expect(r.ok, `${what}: ${String(r._text).slice(0, 600)}`).not.toBe(false)
+
+  test("the two fixtures together use every 1.2.8 field; each passes the v2 validator and validateSpec", () => {
+    const used = new Set<string>()
+    for (const name of CARRY_FIXTURES) {
+      const fx = carryFixture(name)
+      for (const f of carryFieldsOf(fx.spec)) used.add(f)
+      expect(validateBlockV2(expected(fx), "/block") as Issue[], name).toEqual([])
+      const fails = validateSpec(loadSpec(v1(fx.spec))).filter((i: J) => i.status !== "PASS")
+      expect(fails, name).toEqual([])
+    }
+    const all = Object.entries(NEW_FIELDS).flatMap(([at, fs]) => fs.map((f) => `${at}.${f}`))
+    expect(all.filter((f) => !used.has(f))).toEqual([])
+  })
+
+  for (const name of CARRY_FIXTURES) {
+    const fx = carryFixture(name)
+    // One client document per channel group: the host rate-limits document creation.
+    let docSubmit = ""
+    let docWrite = ""
+
+    test(`${name}: studio_chapter_submit (object, then JSON string) stores the spec unchanged`, async () => {
+      docSubmit = await hh.newClientDoc(h, `visna-${name.slice(-1)}-submit`)
+      const submission = () => ({
+        $schema: "studio.chapter/v2",
+        target: { documentId: docSubmit },
+        chapter: { key: "1", title: { text: "Uraian uji bawa" }, sections: [{ title: { text: "Bagian uji" }, blocks: [{ type: "paragraph", text: "Paragraf sintetis alfa bravo." }, expected(hh.clone(fx))] }] },
+      })
+      ok(await h.call("studio_chapter_submit", { submission: submission() }), "submit object")
+      await expectStored(docSubmit, fx, 1, "submit object")
+      ok(await h.call("studio_chapter_submit", { submission: JSON.stringify(submission()) }), "submit string")
+      await expectStored(docSubmit, fx, 1, "submit string")
+    }, 120_000)
+
+    test(`${name}: markdown import fence (studio_chapter_import_markdown submit=true) stores the spec unchanged`, async () => {
+      expect(docSubmit).not.toBe("")
+      const markdown = ["# Bab uji impor bawa", "", "Paragraf sintetis charlie delta.", "", "```diagram", JSON.stringify(fx.spec, null, 2), "```", "", `Gambar: ${fx.caption}`, "", `Sumber: ${fx.source}`, ""].join("\n")
+      const r = await h.call("studio_chapter_import_markdown", { markdown, chapterKey: "2", documentId: docSubmit, submit: true, change: hh.CHANGE })
+      ok(r, "import")
+      expect(r.importSummary?.keptAsCode, "import keptAsCode").toBe(0)
+      await expectStored(docSubmit, fx, 2, "import fence")
+    }, 120_000)
+
+    test(`${name}: studio_write {diagram} and studio_edit append [{diagram}] store the spec unchanged`, async () => {
+      const sections = [
+        { heading: "Pendahuluan", blocks: ["Paragraf pembuka sintetis alfa bravo charlie."] },
+        { heading: "Uraian uji bawa", blocks: ["Paragraf sintetis sebelum diagram.", { diagram: { spec: hh.clone(fx.spec), caption: fx.caption, source: fx.source } }] },
+      ]
+      const w = await h.call("studio_write", { mission: MISSION, docKey: `visna-${name.slice(-1)}-write`, template: "datum-nota", meta: hh.META, sections })
+      ok(w, "write")
+      docWrite = String(w.documentId)
+      await expectStored(docWrite, fx, 1, "write")
+      const e = await h.call("studio_edit", { documentId: docWrite, edits: [{ section: "Pendahuluan", append: [{ diagram: { spec: hh.clone(fx.spec), caption: fx.caption, source: fx.source } }] }], change: hh.CHANGE })
+      ok(e, "edit append")
+      await expectStored(docWrite, fx, 2, "edit append")
+    }, 120_000)
+
+    test(`${name}: a style-only studio_figure_revise round-trips with no FIGURE_GRAPH_DELTA; get shows the patch and every other field`, async () => {
+      expect(docWrite).not.toBe("")
+      const before = hh.diagramsOf(await h.content(docWrite))
+      expect(before).toHaveLength(2)
+      // Style only: jumps flipped; on the first edge the end-head size and label position change. Arrays replace whole.
+      const edges = hh.clone(fx.spec.edges) as J[]
+      edges[0].arrow_end_size = edges[0].arrow_end_size === "s" ? "l" : "s"
+      edges[0].label_at = edges[0].label_at === "end" ? "start" : "end"
+      const patch = { spec: { jumps: fx.spec.jumps === "off" ? "on" : "off", edges } }
+      const r = await h.call("studio_figure_revise", { documentId: docWrite, pid: String(before[0].id), patch, change: hh.CHANGE, preview: false })
+      ok(r, "figure_revise")
+      expect(r.graphDelta, "graphDelta").toBeUndefined()
+      expect(String(r._text)).not.toContain("FIGURE_GRAPH_DELTA")
+      const want = { ...hh.clone(fx.spec), ...patch.spec }
+      const after = hh.diagramsOf(await h.content(docWrite)).map((d) => hh.canon(d.spec)).sort()
+      expect(after).toEqual([hh.canon(want), hh.canon(fx.spec)].sort())
+      // the revised spec still carries every 1.2.8 field the fixture had
+      expect([...carryFieldsOf(want)].sort()).toEqual([...carryFieldsOf(fx.spec)].sort())
+    }, 120_000)
+  }
+})

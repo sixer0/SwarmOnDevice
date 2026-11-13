@@ -1,0 +1,180 @@
+{
+  "$comment": "Swarm 1.2.8 row 33b (AC-VISNA, AT-NA-VIS, register N8-369 describe \"carry\", N8-475). Synthetic labels only. Inline DiagramV2 spec (no $schema) carrying the 1.2.8 spec-level fields (lane_orientation, phases, pools, jumps), node event_type, class.phase/pool, every edge field and zone style; BPMN notation only (DATUM-35), 3 line-style keys (DATUM-25L). Pair: vis0_carry_b.json (ISO 5807 shapes, the other enum values). `caption` / `source` are the studio_write strings; chapter_submit and import use {text}.",
+  "spec": {
+    "family": "swimlane",
+    "labels_verified": true,
+    "lane_orientation": "vertical",
+    "jumps": "off",
+    "phases": [
+      {
+        "id": "f1",
+        "label": "Fase 1"
+      },
+      {
+        "id": "f2",
+        "label": "Fase 2"
+      }
+    ],
+    "pools": [
+      {
+        "id": "p1",
+        "label": "Kolam X"
+      },
+      {
+        "id": "p2",
+        "label": "Kolam Y"
+      }
+    ],
+    "nodes": [
+      {
+        "id": "a",
+        "label": "Mulai A",
+        "shape": "event_start",
+        "event_type": "message",
+        "class": {
+          "lane": "Lajur 1",
+          "phase": "f1",
+          "pool": "p1"
+        }
+      },
+      {
+        "id": "b",
+        "label": "Tugas B",
+        "shape": "task",
+        "class": {
+          "lane": "Lajur 1",
+          "phase": "f1",
+          "pool": "p1"
+        }
+      },
+      {
+        "id": "c",
+        "label": "Cek C",
+        "shape": "gateway_exclusive",
+        "class": {
+          "lane": "Lajur 2",
+          "phase": "f1",
+          "pool": "p1"
+        }
+      },
+      {
+        "id": "d",
+        "label": "Tunggu D",
+        "shape": "event_intermediate",
+        "event_type": "timer",
+        "class": {
+          "lane": "Lajur 1",
+          "phase": "f2",
+          "pool": "p2"
+        }
+      },
+      {
+        "id": "e",
+        "label": "Data E",
+        "shape": "data_object",
+        "class": {
+          "lane": "Lajur 2",
+          "phase": "f2",
+          "pool": "p2"
+        }
+      },
+      {
+        "id": "f",
+        "label": "Selesai F",
+        "shape": "event_end",
+        "event_type": "none",
+        "class": {
+          "lane": "Lajur 2",
+          "phase": "f2",
+          "pool": "p2"
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "a",
+        "to": "b",
+        "kind": "data",
+        "label": "mulai",
+        "route": "orthogonal",
+        "from_side": "bottom",
+        "to_side": "top",
+        "from_slot": 0.5,
+        "to_slot": 0.25,
+        "via": [
+          {
+            "col": 0,
+            "row": 1
+          }
+        ],
+        "arrow_start": "circle",
+        "arrow_start_size": "s",
+        "arrow_end": "triangle",
+        "arrow_end_size": "l",
+        "dash": "solid",
+        "weight": "normal",
+        "label_at": "start"
+      },
+      {
+        "from": "b",
+        "to": "c",
+        "kind": "data",
+        "label": "cek",
+        "route": "straight",
+        "label_at": "middle"
+      },
+      {
+        "from": "c",
+        "to": "d",
+        "kind": "control",
+        "label": "ya",
+        "route": "curved",
+        "dash": "dashed",
+        "weight": "thick",
+        "arrow_end": "open",
+        "label_at": "end"
+      },
+      {
+        "from": "c",
+        "to": "f",
+        "kind": "control",
+        "label": "tidak",
+        "dash": "dashed",
+        "weight": "thick",
+        "to_side": "right"
+      },
+      {
+        "from": "d",
+        "to": "e",
+        "kind": "data",
+        "label": "simpan",
+        "dash": "dotted",
+        "weight": "thin",
+        "arrow_end": "diamond",
+        "arrow_end_size": "m"
+      },
+      {
+        "from": "e",
+        "to": "f",
+        "kind": "data",
+        "label": "tutup",
+        "dash": "dotted",
+        "weight": "thin",
+        "arrow_end": "none"
+      }
+    ],
+    "zones": [
+      {
+        "id": "z1",
+        "label": "Grup 1",
+        "members": [
+          "a",
+          "b"
+        ],
+        "style": "group"
+      }
+    ]
+  },
+  "caption": "Alur sintetis kolam dan fase.",
+  "source": "Sumber sintetis uji."
+}

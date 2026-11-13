@@ -1,0 +1,147 @@
+{
+  "$comment": "Swarm 1.2.8 row 33b (AC-VISNA, AT-NA-VIS, register N8-369 describe \"carry\", N8-475). Synthetic labels only. Inline DiagramV2 spec: flow without direction (via allowed), ISO 5807 shapes only (predefined, document, offpage, annotation; DATUM-35), jumps on, edge fields with the enum values vis0_carry_a.json does not use (left/right sides, open start head, longdash, dashdot), zone style zone; 4 line-style keys (DATUM-25L).",
+  "spec": {
+    "family": "flow",
+    "labels_verified": true,
+    "jumps": "on",
+    "nodes": [
+      {
+        "id": "a",
+        "label": "Mulai A",
+        "shape": "stadium",
+        "class": {
+          "col": 0,
+          "row": 0
+        }
+      },
+      {
+        "id": "b",
+        "label": "Proses B",
+        "shape": "predefined",
+        "class": {
+          "col": 0,
+          "row": 1
+        }
+      },
+      {
+        "id": "c",
+        "label": "Dokumen C",
+        "shape": "document",
+        "class": {
+          "col": 1,
+          "row": 1
+        }
+      },
+      {
+        "id": "d",
+        "label": "Cek D",
+        "shape": "diamond",
+        "class": {
+          "col": 0,
+          "row": 2
+        }
+      },
+      {
+        "id": "e",
+        "label": "Lanjut E",
+        "shape": "offpage",
+        "class": {
+          "col": 0,
+          "row": 3
+        }
+      },
+      {
+        "id": "n",
+        "label": "Catatan N",
+        "shape": "annotation",
+        "class": {
+          "col": 1,
+          "row": 0
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "a",
+        "to": "b",
+        "kind": "data",
+        "label": "masuk",
+        "route": "orthogonal",
+        "via": [
+          {
+            "col": 0,
+            "row": 0
+          },
+          {
+            "col": 0,
+            "row": 1
+          }
+        ]
+      },
+      {
+        "from": "b",
+        "to": "c",
+        "kind": "data",
+        "label": "salin",
+        "route": "straight",
+        "from_side": "right",
+        "to_side": "left",
+        "from_slot": 0.25,
+        "to_slot": 0.75,
+        "arrow_start": "open",
+        "arrow_start_size": "m",
+        "label_at": "end"
+      },
+      {
+        "from": "b",
+        "to": "d",
+        "kind": "data",
+        "label": "cek",
+        "dash": "longdash",
+        "weight": "thick",
+        "from_side": "auto",
+        "to_side": "auto"
+      },
+      {
+        "from": "d",
+        "to": "e",
+        "kind": "control",
+        "label": "ya",
+        "route": "curved",
+        "dash": "dashdot",
+        "arrow_end": "triangle",
+        "arrow_end_size": "s"
+      },
+      {
+        "from": "d",
+        "to": "c",
+        "kind": "control",
+        "label": "tidak",
+        "dash": "dashdot",
+        "label_at": "start"
+      },
+      {
+        "from": "n",
+        "to": "b",
+        "kind": "data",
+        "label": "catatan",
+        "dash": "dotted",
+        "weight": "thin",
+        "arrow_end": "none"
+      }
+    ],
+    "zones": [
+      {
+        "id": "z",
+        "label": "Zona Z",
+        "members": [
+          "b",
+          "c"
+        ],
+        "style": "zone"
+      }
+    ]
+  },
+  "caption": "Alur sintetis dokumen dan sambungan.",
+  "source": "Sumber sintetis uji."
+}
