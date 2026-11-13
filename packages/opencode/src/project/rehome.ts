@@ -13,6 +13,7 @@ import fs from "node:fs/promises"
 import path from "node:path"
 import { Global } from "@opencode-ai/core/global"
 import { Flock } from "@opencode-ai/core/util/flock"
+import { Project } from "@opencode-ai/schema/project"
 import { ProjectMemory } from "@opencode-ai/schema/project-memory"
 import { Memory } from "@/memory/memory"
 
@@ -20,6 +21,9 @@ import { Memory } from "@/memory/memory"
 export const GROUP_NAME_PATTERN = /^[^./\\][^/\\]{0,59}$/
 /** Child folders of R that are never a group (N8-445), compared case-insensitively (APFS default). */
 export const RESERVED_GROUP_NAMES = ["docs"] as const
+
+/** `project.rehomed` (N8-131, R20-C28), published after a completed move (row 44b; the app follows it in row 44c). */
+export const Event = { Rehomed: Project.Event.Rehomed }
 
 export type GroupKind = "product" | "institution" | "theme"
 const KINDS: readonly string[] = ["product", "institution", "theme"]

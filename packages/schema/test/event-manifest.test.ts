@@ -10,7 +10,7 @@ import { WorkspaceEvent } from "../src/workspace-event"
 describe("public event manifest", () => {
   test("owns the complete public event surface", () => {
     expect(EventManifest.ServerDefinitions.length).toBe(60)
-    expect(EventManifest.Definitions.length).toBe(91)
+    expect(EventManifest.Definitions.length).toBe(93)
     expect(SessionV1.Event.Definitions).toEqual([
       SessionV1.Event.Created,
       SessionV1.Event.Updated,
@@ -23,7 +23,7 @@ describe("public event manifest", () => {
       SessionV1.Event.Diff,
       SessionV1.Event.Error,
     ])
-    expect(EventManifest.Latest.size).toBe(91)
+    expect(EventManifest.Latest.size).toBe(93)
     expect(EventManifest.Durable.size).toBe(35)
   })
 
@@ -35,7 +35,8 @@ describe("public event manifest", () => {
     expect(EventManifest.Latest.get("session.next.step.ended")).toBe(SessionEvent.Step.Ended)
     expect(EventManifest.Latest.get("todo.updated")).toBe(SessionTodo.Event.Updated)
     expect(EventManifest.Latest.get("project.updated")).toBe(Project.Event.Updated)
-    expect(Project.Event.Definitions).toEqual([Project.Event.Updated])
+    // 1.2.8 row 44b: project.rehomed (N8-131) joins the project events; the two counts above: +1 for it, +1 for autonomy.mode.changed (1.2.7 row 58c, stale here).
+    expect(Project.Event.Definitions).toEqual([Project.Event.Updated, Project.Event.Rehomed])
     expect(FileSystem.Event.Definitions).toEqual([FileSystem.Event.Edited])
     expect(Integration.Event.Definitions).toEqual([Integration.Event.Updated, Integration.Event.ConnectionUpdated])
     expect(Permission.Event.Definitions).toEqual([Permission.Event.Asked, Permission.Event.Replied])
