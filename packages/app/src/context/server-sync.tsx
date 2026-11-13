@@ -60,6 +60,7 @@ import type {
 import { toggleMcp } from "./global-sync/mcp"
 import { providerRouteToast } from "./global-sync/provider-route-toast"
 import { createServerSession, type ServerSession } from "./server-session"
+import { desktopNonce, nonceHeader } from "@/pages/session/map/session-map-model"
 
 type GlobalStore = {
   ready: boolean
@@ -664,7 +665,10 @@ export function createServerSyncContextInner(serverSDK: ServerSDK) {
   }
 
   const updateConfigMutation = useMutation(() => ({
-    mutationFn: (config: Config) => serverSDK.client.global.config.update({ config }),
+    // 1.2.8 row 40g (SR8-04, AC-SEC04): a server the desktop app started takes config writes only with the
+    // per-launch nonce, asked for on each write and never kept. Outside the desktop app nothing is added.
+    mutationFn: async (config: Config) =>
+      serverSDK.client.global.config.update({ config }, { headers: nonceHeader(await desktopNonce()) }),
     onSuccess: () => {
       bootstrap.refetch()
       // Invalidate all provider queries so newly configured custom providers

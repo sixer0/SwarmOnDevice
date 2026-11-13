@@ -21,6 +21,7 @@ import { HttpApiBuilder } from "effect/unstable/httpapi"
 import * as Sse from "effect/unstable/encoding/Sse"
 import { RootHttpApi } from "../api"
 import { GlobalUpgradeInput } from "../groups/global"
+import { configPersonOnly } from "./config"
 
 function eventData(data: unknown): Sse.Event {
   return {
@@ -156,6 +157,8 @@ export const globalHandlers = HttpApiBuilder.group(RootHttpApi, "global", (handl
     })
 
     const configUpdate = Effect.fn("GlobalHttpApi.configUpdate")(function* (ctx) {
+      // 1.2.8 row 40g (SR8-04, AC-SEC04): person-only while the server holds the desktop nonce.
+      yield* configPersonOnly(ctx.headers)
       const result = yield* config.updateGlobal(ctx.payload)
       if (result.changed) bridge.fork(disposeAllInstancesAndEmitGlobalDisposed({ swallowErrors: true }))
       return result.info
