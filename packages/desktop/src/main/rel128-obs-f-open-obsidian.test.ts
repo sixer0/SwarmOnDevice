@@ -155,3 +155,133 @@ describe("CHAR-URL and wiring", () => {
     expect(preload.match(/open-obsidian-note/g)?.length).toBe(1)
   })
 })
+
+// 1.2.8 row 42d (U3, C150): no registered obsidian:// handler -> the Install-tools staged app at
+// <home>/.swarm/tools/obsidian/<version>/Obsidian.app, launched with execFile("/usr/bin/open", ["-a", app, url]) only
+// after its Contents/MacOS/Obsidian hashes to current.json's appBinarySha256. mkdtemp HOME; execFile is a stub, so
+// nothing is launched and the real ~/.swarm is never read.
+describe("staged Obsidian fallback (row 42d)", () => {
+  type Handler = (event: unknown, ...args: unknown[]) => Promise<unknown>
+  const binaryBytes = "#!/bin/sh\n# synthetic staged obsidian\n"
+  const sha = (text: string) => new Bun.CryptoHasher("sha256").update(text).digest("hex")
+
+  function stage(options: { digest?: string; version?: string; symlinkApp?: boolean } = {}) {
+    const home = mkdtempSync(join(tmpdir(), "obsd-"))
+    const root = join(home, ".swarm", "tools", "obsidian")
+    const version = options.version ?? "v1.14.4"
+    if (options.symlinkApp) {
+      const elsewhere = join(home, "elsewhere", "Obsidian.app", "Contents", "MacOS")
+      mkdirSync(elsewhere, { recursive: true })
+      writeFileSync(join(elsewhere, "Obsidian"), binaryBytes)
+      mkdirSync(join(root, version), { recursive: true })
+      symlinkSync(join(home, "elsewhere", "Obsidian.app"), join(root, version, "Obsidian.app"))
+    } else {
+      const macos = join(root, version, "Obsidian.app", "Contents", "MacOS")
+      mkdirSync(macos, { recursive: true })
+      writeFileSync(join(macos, "Obsidian"), binaryBytes)
+    }
+    mkdirSync(root, { recursive: true })
+    writeFileSync(
+      join(root, "current.json"),
+      JSON.stringify({
+        version,
+        appBinarySha256: options.digest ?? sha(binaryBytes),
+        observedTeamIdentifier: "TEAMID0000",
+        installedAt: "2026-11-09T00:00:00.000Z",
+      }),
+    )
+    return { home, app: join(root, version, "Obsidian.app") }
+  }
+
+  function setup(home: string, options: { launchFails?: boolean } = {}) {
+    const handlers = new Map<string, Handler>()
+    const opened: string[] = []
+    const launched: { file: string; args: string[] }[] = []
+    const logs: { message: string; context: Record<string, unknown> }[] = []
+    const frame = { url: "oc://renderer/index.html" }
+    const sender = { mainFrame: frame }
+    const win = { isDestroyed: () => false, webContents: sender }
+    ext.registerOpenObsidianNoteHandler({
+      ipcMain: { handle: (channel: string, fn: Handler) => handlers.set(channel, fn) },
+      windowOf: (s: unknown) => (s === sender ? win : null),
+      isRendererUrl: (url: string | undefined) => url === frame.url,
+      vaultRoot: () => vault,
+      protocolApp: () => "",
+      openExternal: async (url: string) => void opened.push(url),
+      log: (message: string, context: Record<string, unknown>) => logs.push({ message, context }),
+      setupHome: () => home,
+      execFile: async (file: string, args: string[]) => {
+        launched.push({ file, args })
+        if (options.launchFails) throw new Error("open failed")
+      },
+    })
+    return { handler: handlers.get("open-obsidian-note")!, own: { sender, senderFrame: frame }, opened, launched, logs }
+  }
+
+  const homes: string[] = []
+  afterAll(() => homes.forEach((h) => rmSync(h, { recursive: true, force: true })))
+
+  test("no handler + verified staged app -> opened via /usr/bin/open -a <app> <url>, no openExternal", async () => {
+    const st = stage()
+    homes.push(st.home)
+    const s = setup(st.home)
+    expect(await s.handler(s.own, hub)).toBe("opened")
+    expect(s.launched).toEqual([
+      {
+        file: "/usr/bin/open",
+        args: ["-a", realpathSync(st.app), "obsidian://open?path=" + encodeURIComponent(realpathSync(hub))],
+      },
+    ])
+    expect(s.opened.length).toBe(0)
+    expect(s.logs.length).toBe(0)
+  })
+
+  test("digest mismatch -> failed, nothing launched, reason only in the log", async () => {
+    const st = stage({ digest: "0".repeat(64) })
+    homes.push(st.home)
+    const s = setup(st.home)
+    expect(await s.handler(s.own, hub)).toBe("failed")
+    expect(s.launched.length).toBe(0)
+    expect(s.opened.length).toBe(0)
+    expect(s.logs.map((l) => l.context.reason)).toEqual(["staged-digest"])
+    expect(JSON.stringify(s.logs).includes(st.home)).toBe(false)
+  })
+
+  test("neither a handler nor a staged app -> no-app, nothing launched", async () => {
+    const home = mkdtempSync(join(tmpdir(), "obsd-"))
+    homes.push(home)
+    const s = setup(home)
+    expect(await s.handler(s.own, hub)).toBe("no-app")
+    expect(s.launched.length).toBe(0)
+    expect(s.opened.length).toBe(0)
+    expect(s.logs.map((l) => l.context.reason)).toEqual(["no-app"])
+  })
+
+  test("symlinked app, unsafe version, failed launch -> failed; nothing escapes the tool root", async () => {
+    const link = stage({ symlinkApp: true })
+    const unsafe = stage({ version: "../escape" })
+    homes.push(link.home, unsafe.home)
+    const a = setup(link.home)
+    expect(await a.handler(a.own, hub)).toBe("failed")
+    expect(a.launched.length).toBe(0)
+    expect(a.logs.map((l) => l.context.reason)).toEqual(["staged-escape"])
+    const b = setup(unsafe.home)
+    expect(await b.handler(b.own, hub)).toBe("failed")
+    expect(b.launched.length).toBe(0)
+    expect(b.logs.map((l) => l.context.reason)).toEqual(["staged-invalid"])
+    const ok = stage()
+    homes.push(ok.home)
+    const c = setup(ok.home, { launchFails: true })
+    expect(await c.handler(c.own, hub)).toBe("failed")
+    expect(c.logs.map((l) => l.context.reason)).toEqual(["staged-launch"])
+  })
+
+  test("ipc.ts wires the setup home and execFile without a shell", () => {
+    const ipc = source("ipc.ts")
+    expect(ipc.includes("setupHome: () => resolveSetupHome(process.env, userInfo().homedir)")).toBe(true)
+    expect(ipc.includes("execFile(file, args, (err) => (err ? reject(err) : resolve()))")).toBe(true)
+    const handlerSrc = source("external-url.ts")
+    expect(handlerSrc.includes('deps.execFile("/usr/bin/open", ["-a", staged.app, resolved.url])')).toBe(true)
+    expect(/shell:\s*true/.test(ipc + handlerSrc)).toBe(false)
+  })
+})

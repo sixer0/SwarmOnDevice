@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process"
 import { stat } from "node:fs/promises"
+import { userInfo } from "node:os"
 import { basename, dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { app, BrowserWindow, clipboard, dialog, ipcMain, shell } from "electron"
@@ -29,7 +30,7 @@ import { nativeT } from "./native-translations"
 import { getLogger, write as writeLog } from "./logging"
 import { obsidianVaultRoot, registerOpenObsidianNoteHandler } from "./external-url"
 import { isSetupToolsOfferPending, markSetupToolsOffered } from "./onboarding"
-import { createSetupRunner, setupDir, type SetupRunner } from "./setup-runner"
+import { createSetupRunner, resolveSetupHome, setupDir, type SetupRunner } from "./setup-runner"
 import { createInstallConfirm, registerSetupToolsHandlers } from "./setup-tools-ipc"
 import { createRehomeCaller, registerMissionControlHandlers } from "./datum-studio-host/mission-ipc"
 import { registerDesktopNonceHandler } from "./desktop-nonce"
@@ -357,6 +358,10 @@ export function registerIpcHandlers(deps: Deps) {
     protocolApp: (url) => app.getApplicationNameForProtocol(url),
     openExternal: (url) => shell.openExternal(url),
     log: (message, context) => writeLog("window", message, context, "warn"),
+    // Row 42d (U3): the Install-tools staged app when obsidian:// has no registered handler; no shell.
+    setupHome: () => resolveSetupHome(process.env, userInfo().homedir),
+    execFile: (file, args) =>
+      new Promise<void>((resolve, reject) => execFile(file, args, (err) => (err ? reject(err) : resolve()))),
   })
 
   // 1.2.7 row 25 (U-2, SR7-11): only a path inside this window's roots and outside Swarm's and the credential places;

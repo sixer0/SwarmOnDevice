@@ -1,4 +1,6 @@
-import { lstat, realpath } from "node:fs/promises"
+import { createHash } from "node:crypto"
+import { createReadStream } from "node:fs"
+import { lstat, readFile, realpath } from "node:fs/promises"
 import { homedir } from "node:os"
 import { isAbsolute, join, normalize, sep } from "node:path"
 import { fileURLToPath } from "node:url"
@@ -70,6 +72,66 @@ export async function resolveObsidianNoteURL(
   return { url: "obsidian://open?path=" + encodeURIComponent(real) }
 }
 
+// 1.2.8 row 42d (U3, C150): Install tools stages Obsidian in user space at <home>/.swarm/tools/obsidian/<version>/
+// Obsidian.app and writes <home>/.swarm/tools/obsidian/current.json { version, appBinarySha256, ... }
+// (packages/setup/src/steps/obsidian/index.ts). A staged copy that was never launched may not be registered with
+// LaunchServices for obsidian://, so the handler falls back to it — only after the same check the setup step makes:
+// the staged Contents/MacOS/Obsidian hashes to the recorded appBinarySha256. Paths come from main only.
+const OBSIDIAN_TOOL_REL = [".swarm", "tools", "obsidian"] as const
+const OBSIDIAN_POINTER = "current.json"
+const OBSIDIAN_APP = "Obsidian.app"
+const OBSIDIAN_BINARY_REL = ["Contents", "MacOS", "Obsidian"] as const
+const POINTER_MAX_BYTES = 64 * 1024
+const SAFE_VERSION = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/
+const SHA256_HEX = /^[0-9a-f]{64}$/
+
+export type StagedObsidianApp =
+  | { app: string }
+  | { reason: "absent" }
+  | { reason: "staged-invalid" | "staged-escape" | "staged-digest" }
+
+async function sha256File(file: string) {
+  const hash = createHash("sha256")
+  for await (const chunk of createReadStream(file)) hash.update(chunk as Buffer)
+  return hash.digest("hex")
+}
+
+/**
+ * The Install-tools staged Obsidian.app, verified: pointer present and well formed, version a single safe path
+ * segment, app dir a real directory (not a symlink) whose real path stays under the real tool root, binary a regular
+ * file inside the real app whose sha256 equals the pointer's appBinarySha256. No pointer or no app dir -> absent.
+ */
+export async function resolveStagedObsidianApp(home: string): Promise<StagedObsidianApp> {
+  const root = join(home, ...OBSIDIAN_TOOL_REL)
+  const pointerFile = join(root, OBSIDIAN_POINTER)
+  const pointerInfo = await lstat(pointerFile).catch(() => undefined)
+  if (!pointerInfo) return { reason: "absent" }
+  if (!pointerInfo.isFile() || pointerInfo.size > POINTER_MAX_BYTES) return { reason: "staged-invalid" }
+  const pointer = await readFile(pointerFile, "utf8")
+    .then((text) => JSON.parse(text) as unknown)
+    .catch(() => undefined)
+  if (!pointer || typeof pointer !== "object" || Array.isArray(pointer)) return { reason: "staged-invalid" }
+  const { version, appBinarySha256 } = pointer as Record<string, unknown>
+  if (typeof version !== "string" || !SAFE_VERSION.test(version) || version.includes(".."))
+    return { reason: "staged-invalid" }
+  if (typeof appBinarySha256 !== "string" || !SHA256_HEX.test(appBinarySha256)) return { reason: "staged-invalid" }
+  const app = join(root, version, OBSIDIAN_APP)
+  const appInfo = await lstat(app).catch(() => undefined)
+  if (!appInfo) return { reason: "absent" }
+  if (appInfo.isSymbolicLink() || !appInfo.isDirectory()) return { reason: "staged-escape" }
+  const realRoot = await realpath(root).catch(() => undefined)
+  const realApp = await realpath(app).catch(() => undefined)
+  if (!realRoot || !realApp || !realApp.startsWith(realRoot + sep)) return { reason: "staged-escape" }
+  const binary = join(realApp, ...OBSIDIAN_BINARY_REL)
+  const binInfo = await lstat(binary).catch(() => undefined)
+  if (!binInfo || binInfo.isSymbolicLink() || !binInfo.isFile()) return { reason: "staged-escape" }
+  const realBinary = await realpath(binary).catch(() => undefined)
+  if (!realBinary || !realBinary.startsWith(realApp + sep)) return { reason: "staged-escape" }
+  const digest = await sha256File(realBinary).catch(() => undefined)
+  if (digest !== appBinarySha256) return { reason: "staged-digest" }
+  return { app: realApp }
+}
+
 export type ObsidianNoteIpcDeps = {
   ipcMain: Pick<IpcMain, "handle">
   windowOf: (sender: WebContents) => Pick<BrowserWindow, "isDestroyed" | "webContents"> | null
@@ -81,6 +143,10 @@ export type ObsidianNoteIpcDeps = {
   openExternal: (url: string) => Promise<void>
   /** Reason only: never the path (it holds the home folder and the project name). */
   log: (message: string, context: { reason: string }) => void
+  /** Row 42d: the setup home (setup-runner resolveSetupHome) holding .swarm/tools/obsidian; absent = no fallback. */
+  setupHome?: () => string
+  /** Row 42d: child_process.execFile (no shell); called only as ("/usr/bin/open", ["-a", app, url]). */
+  execFile?: (file: string, args: string[]) => Promise<void>
 }
 
 // SR8-15: the mission-ipc.ts / desktop-nonce.ts sender rule: the main frame of a live window main created, on the
@@ -106,7 +172,16 @@ export function registerOpenObsidianNoteHandler(deps: ObsidianNoteIpcDeps) {
     if (!obsidianSenderOk(deps, event)) return refuse("sender", "outside")
     const resolved = await resolveObsidianNoteURL(hubPath, deps.vaultRoot())
     if ("reason" in resolved) return refuse(resolved.reason, resolved.reason)
-    if (!deps.protocolApp("obsidian://open")) return refuse("no-app", "no-app")
+    if (!deps.protocolApp("obsidian://open")) {
+      // Row 42d: no registered handler -> the verified Install-tools staged app, else "no-app".
+      if (!deps.setupHome || !deps.execFile) return refuse("no-app", "no-app")
+      const staged = await resolveStagedObsidianApp(deps.setupHome()).catch(() => ({ reason: "staged-invalid" as const }))
+      if ("reason" in staged) return staged.reason === "absent" ? refuse("no-app", "no-app") : refuse(staged.reason, "failed")
+      return deps.execFile("/usr/bin/open", ["-a", staged.app, resolved.url]).then(
+        () => "opened" as const,
+        () => refuse("staged-launch", "failed"),
+      )
+    }
     return deps.openExternal(resolved.url).then(
       () => "opened" as const,
       () => refuse("failed", "failed"),
