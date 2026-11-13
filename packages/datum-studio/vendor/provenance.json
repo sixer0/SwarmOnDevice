@@ -125,7 +125,7 @@
   "patched": 167,
   "replaced": 12,
   "added": 30,
-  "bytes": 10243317
+  "bytes": 10243520
  },
  "files": [
   {
@@ -154,9 +154,10 @@
   {
    "path": "docs/STUDIO-AGENT-GUIDE.md",
    "status": "patched",
-   "bytes": 197588,
+   "bytes": 197791,
    "source_sha256": "b5429f89523246431aacbfc37749d22c0cf062bbf3f634c4bc269db295e783bb",
-   "sha256": "559add502bedf4eea2ea73ec978d2efcd184c798e38beea0384378a873247211",
+   "sha256": "a392f5fde4b5fcb5af3d5333d6345c331b92259504d3521384b8417fea819b34",
+   "patch_row35f": {"id": "128-35f-hn6-entry-collision-guide", "row": "35f", "decision": "1.2.8 C144 (AC-HN6, N8-341)", "summary": "4.1.2 Cakupan sentence: GEOM_ENTRY_COLLISION is reported by the engine when two connectors are glued to the same side slot (row 56b) and on hand-drawn or imported SVG; remedy: move one end to another slot or side, or unglue so the router chooses", "diff_base": "sha256 before this row", "before_sha256": "559add502bedf4eea2ea73ec978d2efcd184c798e38beea0384378a873247211", "after_sha256": "a392f5fde4b5fcb5af3d5333d6345c331b92259504d3521384b8417fea819b34", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/35f_row35f_diffs/STUDIO-AGENT-GUIDE.md.diff", "diff_sha256": "7e37cbeec2bcc72799236907d7bfaccb18253add30b80267d21b2dce74393c23"},
    "patch_row58": {"id": "128-58-vis10-guide", "row": "58", "decision": "1.2.8 row 58 (AC-VIS10, N8-382; user item 7)", "summary": "4.1.2 after step 5: paragraph Bentuk dan konektor setara Visio (three shape sets, studio://skema/diagram-visio, persistence channels, diagram-flow skill) and a 17-row table Visio -> Studio field/token for every 01f shape, container and connector row; notation, label-below, figure.lattice per width, width limits, group in swimlane, one-lattice gap, decision entry rules", "diff_base": "sha256 before this row", "before_sha256": "97c67cad6046fdd88136d36c71edf205267f4ad5a3b215a17f1fb0f89abd697e", "after_sha256": "559add502bedf4eea2ea73ec978d2efcd184c798e38beea0384378a873247211", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/58_row58_diffs/STUDIO-AGENT-GUIDE.md.diff", "diff_sha256": "ff59520d9255cab826a51dff289bf99bff41759b3956f6f7441b66feda2d7551"},
    "patch_row35":{"id": "128-35-hnb3", "row": "35", "decision": "1.2.8 row 35 (AC-HNB, AC-HNB2, AC-HNB3; N8-339; C25)", "summary": "4.1.2 connector-end table: GEOM_STUB_SEGMENT suggestion cell = the new engine text (row97b pin quotes the engine suggestion)", "diff_base": "sha256 before this row", "before_sha256": "c74e80c4fdd137edd765cf1920f37cd12f53ca4ffa3372fb04965c1852c97210", "after_sha256": "97c67cad6046fdd88136d36c71edf205267f4ad5a3b215a17f1fb0f89abd697e", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/35_row35_diffs/STUDIO-AGENT-GUIDE.md.diff", "diff_sha256": "be4679aa624605b17ce41f985892729531fa6920265e462c2700504509a9a5cb"},
    "patch_row37c": {"id": "row37c-n11-overflow-only-sentence", "row": "37c", "decision": "1.2.7 C54 (row 40d overflow-only rule, d2c1b053b0; AC-N11)", "summary": "4: Lebar tabel (DT-10a) sentence: ID list without spaces breaks after , ; / above 16 characters and only when it does not fit its column; URL, document number and path never break and are counted whole", "before_sha256": "7c061826b4fa96e1a4d0f0d8606c1cc2c7804c419c13198cfe79c43ca6322013", "after_sha256": "c74e80c4fdd137edd765cf1920f37cd12f53ca4ffa3372fb04965c1852c97210", "diff": "docs/2026-11-13_swarm_1_2_7_patch/implementation/37c_row37c_diffs/STUDIO-AGENT-GUIDE.md.diff", "diff_sha256": "7ff9d24a7862f0cd6061c6f14edfb6a6929660f67cd7a637e9aa0bbf2f7405c9"},
@@ -6377,6 +6378,7 @@
   "55c",
   "55d",
   "56d",
-  "55g"
+  "55g",
+  "35f"
  ]
 }

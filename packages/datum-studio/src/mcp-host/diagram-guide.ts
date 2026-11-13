@@ -144,8 +144,8 @@ export function diagramGuideText(): string {
     "- Preview a shape before promising it.",
     "- A/B: randomise which side each version is on before a judge sees them.",
     "- After every revision read FIGURE_GRAPH_DELTA; fix any unplanned change.",
-    // Row 37 (1.2.7, N-6/F-6, N7-069): the T-03 codes and where ENTRY_COLLISION fires; shortened for the 3000 B budget.
-    `- T-03: ${GEOM_T03_CODES.join(", ")}; ENTRY_COLLISION only on hand-drawn or imported SVG (engine ends at least ${ENTRY_COLLISION_MM} mm apart).`,
+    // Row 37 (1.2.7, N-6/F-6, N7-069): the T-03 codes and when ENTRY_COLLISION fires (row 35f: also two glued ends on one slot); shortened for the 3000 B budget.
+    `- T-03: ${GEOM_T03_CODES.join(", ")}; ENTRY_COLLISION when glued ends share a slot: move one or let router pick (ends at least ${ENTRY_COLLISION_MM} mm apart).`,
     "",
     "Example:",
     "```json",

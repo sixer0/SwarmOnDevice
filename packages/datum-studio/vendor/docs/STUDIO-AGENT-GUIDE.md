@@ -612,9 +612,10 @@ memperbaikinya sendiri; perbaikan datang dari spec.
 | `GEOM_STUB_SEGMENT` / `stubSegment` | potongan konektor lurus di bawah 2,0 mm yang tidak menuju apa pun | perpanjang potongan pendek: beri jarak lebih antara kedua simpul (kolom atau baris lain) atau pakai sisi simpul lain |
 | `GEOM_ARROW_TANGENT` / `arrowTangent` | ruas terakhir dalam 15 derajat dari sisi simpul yang dituju: kepala panah sejajar sisi, bukan tegak lurus | ubah urutan simpul agar konektor masuk tegak lurus ke sisi simpul sasaran |
 
-Cakupan: GEOM_ENTRY_COLLISION muncul pada SVG gambar tangan atau impor; tata letak mesin menjaga ujung
-konektor sedikitnya 1,5 mm, jadi pada figur buatan mesin yang biasa muncul GEOM_STUB_SEGMENT atau
-GEOM_ARROW_TANGENT.
+Cakupan: GEOM_ENTRY_COLLISION dilaporkan mesin sendiri bila dua konektor dilekatkan (glue) ke slot sisi
+yang sama (ujung kurang dari 1,5 mm), dan pada SVG gambar tangan atau impor. Perbaikan: pindahkan satu ujung
+ke slot atau sisi lain, atau lepas pelekatannya agar router memilih. Tanpa pelekatan, tata letak mesin menjaga
+ujung konektor sedikitnya 1,5 mm, jadi yang biasa muncul GEOM_STUB_SEGMENT atau GEOM_ARROW_TANGENT.
 
 ### 4.2 Peran paragraf dan rel bukti
 
