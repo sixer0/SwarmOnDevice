@@ -20,7 +20,11 @@ import { applyChartIntent, orientationTarget } from "@/lib/studio/engine/chart/c
 import { figureGrid } from "@/lib/studio/engine/chart/core/guards";
 import type { ChartLang } from "@/lib/studio/engine/chart/core/lang";
 import { buildDiagramSvgAuto } from "@/lib/studio/engine/diagram/elk";
-import type { DiagramBuildOptions, DiagramBuildReport } from "@/lib/studio/engine/diagram/build";
+import { placeDiagram, type DiagramBuildOptions, type DiagramBuildReport } from "@/lib/studio/engine/diagram/build";
+import { routeLattice, viaFamily, type RouteLattice } from "@/lib/studio/engine/diagram/build/route";
+import { Sheet } from "@/lib/studio/engine/diagram/core";
+import { resolveDiagramGrid } from "@/lib/studio/engine/diagram/core/grid";
+import { DIAGRAM_LAYOUTS } from "@/lib/studio/contract/dispatch";
 import { APPARATUS_TEXT, provenanceMarkLabelText } from "@/lib/studio/engine/front/texts";
 import { glyphSet, mapBlock, storedComposeContext } from "@/lib/studio/services/compose";
 import { templateForDoc } from "@/lib/studio/services/render/common";
@@ -168,6 +172,12 @@ export interface FigurePreview {
   standalone?: { id: string; title: string; fileName: { svg: string; png: string }; furniture?: NonNullable<DiagramBuildReport["furniture"]> };
   /** Row 165C (F56-3): base64 PNG (300 dpi) of the stand-alone figure, only with `png: true`. */
   png?: string;
+  /**
+   * Swarm 1.2.8 row 56b (VIS-6, R18-5, OP-18-3, register N8-472): the layout lattice of a diagram whose family takes
+   * `via` (flow without direction, graph, swimlane), so an author can choose bend points: lattice size in mm, sheet size
+   * in lattice units and each node's cell `[col0, row0, col1, row1]`. Structured content only (no text line).
+   */
+  lattice?: RouteLattice;
 }
 
 type Rec = Record<string, unknown>;
@@ -384,6 +394,7 @@ export async function renderResolved(
   let code: string | null;
   let data: FigurePreview["data"] = null;
   let rendered: FigurePreview["rendered"] = null;
+  let lattice: RouteLattice | undefined;
   const vega = f.type === "chart" ? vegaCodeOf(f.spec.kind) : null;
   if (f.type === "chart" && vega !== null) {
     // Row 163b (C155): V-01..V-08 (or a DF code vegaChartFor maps) through the Vega family, as buildFigures does.
@@ -402,6 +413,7 @@ export async function renderResolved(
     const provenance = solo ? standaloneProvenance(solo, f.block, o.lang) : undefined;
     r = await buildDiagramSvgAuto(solo ?? f.spec, { release: false, grid: figureGrid(tpl.params), ...(o.lang ? diagramApparatusOptions(o.lang) : {}), ...(provenance ? { provenance } : {}) });
     code = typeof f.spec.family === "string" ? f.spec.family : null;
+    lattice = figureLattice(solo ?? f.spec, tpl);
   }
   const issues = issuesOf(r);
   const split = splitPreviewIssues(issues);
@@ -426,7 +438,20 @@ export async function renderResolved(
     ...(solo !== null ? { standalone: standaloneInfo(solo, block.artifactLabel ?? null, (r.report as Partial<DiagramBuildReport>).furniture) } : {}),
     // Row 165C (F56-3): PNG through the render bridge (same raster as the document figures: 300 dpi).
     ...(solo !== null && o.png === true ? { png: Buffer.from(await rasterizeSvg(r.svg, { widthMm: r.widthMm, heightMm: r.heightMm, dpi: 300, tpl })).toString("base64") } : {}),
+    ...(lattice ? { lattice } : {}),
   };
+}
+
+/**
+ * Row 56b (VIS-6, N8-472): the lattice the router maps `via` on, from the first-render placement on the same sheet as the
+ * build (template lattice column); undefined for families that place and route nodes themselves (D-V3). The figure was
+ * just built from this spec, so the placement cannot fail here.
+ */
+function figureLattice(spec: StudioDiagramV1, tpl: ResolvedTemplate): RouteLattice | undefined {
+  if (!viaFamily(spec)) return undefined;
+  const sheet = new Sheet(Number(spec.width_mm), undefined, resolveDiagramGrid(figureGrid(tpl.params)).latticeXMm);
+  placeDiagram(spec, sheet, DIAGRAM_LAYOUTS);
+  return routeLattice(sheet);
 }
 
 /** Row 165C (F56-3): number, title and DATUM file names (`Gambar 4.1 <Judul>.svg`, p.11-12) of a stand-alone figure. */

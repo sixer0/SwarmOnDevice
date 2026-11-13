@@ -1,0 +1,501 @@
+{
+  "$comment": "Swarm 1.2.8 row 56b (AC-VIS6, AT-V6-via, register N8-377). Synthetic labels only. Lattice of a 128 mm sheet: col = 10.667 mm, row = 4.7625 mm. `graph`: 2 x 2 graph; edge a->d orthogonal via (10,5) round b into d's right side; edge c->b straight via (1,8) (1,1) (7,1) into b's top at slot 1/3. `flow`: flow without direction, a->d via (3,6) (8,6) with slots on the lattice. `swimlane`: two lanes, a->c via (3,3) (3,7) in the lane gutter. `outside`: via beyond the sheet (build-level P1-via). `nine`: 9 via points, `negative`: col -1 (spec-level P1-via). `curved`: curved + via (P1-edge-style).",
+  "graph": {
+    "$schema": "studio.diagram/v1",
+    "family": "graph",
+    "id": "9.6",
+    "title": "Gambar sintetis titik belok.",
+    "classification": "BIASA",
+    "width_mm": 128,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "nodes": [
+      {
+        "id": "a",
+        "label": "Langkah A",
+        "class": {
+          "col": 0,
+          "row": 0
+        }
+      },
+      {
+        "id": "b",
+        "label": "Langkah B",
+        "class": {
+          "col": 1,
+          "row": 0
+        }
+      },
+      {
+        "id": "c",
+        "label": "Langkah C",
+        "class": {
+          "col": 0,
+          "row": 1
+        }
+      },
+      {
+        "id": "d",
+        "label": "Langkah D",
+        "class": {
+          "col": 1,
+          "row": 1
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "a",
+        "to": "d",
+        "kind": "control",
+        "label": "satu",
+        "from_side": "bottom",
+        "to_side": "right",
+        "via": [
+          {
+            "col": 10,
+            "row": 5
+          }
+        ]
+      },
+      {
+        "from": "c",
+        "to": "b",
+        "kind": "control",
+        "label": "dua",
+        "route": "straight",
+        "from_side": "left",
+        "to_side": "top",
+        "to_slot": 0.3333333333333333,
+        "via": [
+          {
+            "col": 1,
+            "row": 8
+          },
+          {
+            "col": 1,
+            "row": 1
+          },
+          {
+            "col": 7,
+            "row": 1
+          }
+        ]
+      }
+    ]
+  },
+  "flow": {
+    "$schema": "studio.diagram/v1",
+    "family": "flow",
+    "id": "9.6",
+    "title": "Gambar sintetis titik belok alur.",
+    "classification": "BIASA",
+    "width_mm": 128,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "per_row": 2,
+    "nodes": [
+      {
+        "id": "a",
+        "label": "Langkah A",
+        "class": {
+          "col": 0,
+          "row": 0
+        }
+      },
+      {
+        "id": "b",
+        "label": "Langkah B",
+        "class": {
+          "col": 1,
+          "row": 0
+        }
+      },
+      {
+        "id": "c",
+        "label": "Langkah C",
+        "class": {
+          "col": 0,
+          "row": 1
+        }
+      },
+      {
+        "id": "d",
+        "label": "Langkah D",
+        "class": {
+          "col": 1,
+          "row": 1
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "a",
+        "to": "d",
+        "kind": "control",
+        "label": "satu",
+        "from_side": "bottom",
+        "from_slot": 0.6,
+        "to_side": "top",
+        "to_slot": 0.4,
+        "via": [
+          {
+            "col": 3,
+            "row": 6
+          },
+          {
+            "col": 8,
+            "row": 6
+          }
+        ]
+      }
+    ]
+  },
+  "swimlane": {
+    "$schema": "studio.diagram/v1",
+    "family": "swimlane",
+    "id": "9.6",
+    "title": "Gambar sintetis titik belok lajur.",
+    "classification": "BIASA",
+    "width_mm": 128,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "nodes": [
+      {
+        "id": "a",
+        "label": "Langkah A",
+        "class": {
+          "lane": "Lajur 1"
+        }
+      },
+      {
+        "id": "b",
+        "label": "Langkah B",
+        "class": {
+          "lane": "Lajur 1"
+        }
+      },
+      {
+        "id": "c",
+        "label": "Langkah C",
+        "class": {
+          "lane": "Lajur 2"
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "a",
+        "to": "b",
+        "kind": "control",
+        "label": "satu"
+      },
+      {
+        "from": "a",
+        "to": "c",
+        "kind": "control",
+        "label": "dua",
+        "from_side": "left",
+        "from_slot": 0.3333333333333333,
+        "to_side": "left",
+        "to_slot": 0.3333333333333333,
+        "via": [
+          {
+            "col": 3,
+            "row": 3
+          },
+          {
+            "col": 3,
+            "row": 7
+          }
+        ]
+      }
+    ]
+  },
+  "outside": {
+    "$schema": "studio.diagram/v1",
+    "family": "graph",
+    "id": "9.6",
+    "title": "Gambar sintetis via di luar lembar.",
+    "classification": "BIASA",
+    "width_mm": 128,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "nodes": [
+      {
+        "id": "a",
+        "label": "Langkah A",
+        "class": {
+          "col": 0,
+          "row": 0
+        }
+      },
+      {
+        "id": "b",
+        "label": "Langkah B",
+        "class": {
+          "col": 1,
+          "row": 0
+        }
+      },
+      {
+        "id": "c",
+        "label": "Langkah C",
+        "class": {
+          "col": 0,
+          "row": 1
+        }
+      },
+      {
+        "id": "d",
+        "label": "Langkah D",
+        "class": {
+          "col": 1,
+          "row": 1
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "a",
+        "to": "d",
+        "kind": "control",
+        "label": "satu",
+        "via": [
+          {
+            "col": 40,
+            "row": 1
+          }
+        ]
+      }
+    ]
+  },
+  "nine": {
+    "$schema": "studio.diagram/v1",
+    "family": "graph",
+    "id": "9.6",
+    "title": "Gambar sintetis via sembilan.",
+    "classification": "BIASA",
+    "width_mm": 128,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "nodes": [
+      {
+        "id": "a",
+        "label": "Langkah A",
+        "class": {
+          "col": 0,
+          "row": 0
+        }
+      },
+      {
+        "id": "b",
+        "label": "Langkah B",
+        "class": {
+          "col": 1,
+          "row": 0
+        }
+      },
+      {
+        "id": "c",
+        "label": "Langkah C",
+        "class": {
+          "col": 0,
+          "row": 1
+        }
+      },
+      {
+        "id": "d",
+        "label": "Langkah D",
+        "class": {
+          "col": 1,
+          "row": 1
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "a",
+        "to": "d",
+        "kind": "control",
+        "label": "satu",
+        "via": [
+          {
+            "col": 0,
+            "row": 5
+          },
+          {
+            "col": 1,
+            "row": 5
+          },
+          {
+            "col": 2,
+            "row": 5
+          },
+          {
+            "col": 3,
+            "row": 5
+          },
+          {
+            "col": 4,
+            "row": 5
+          },
+          {
+            "col": 5,
+            "row": 5
+          },
+          {
+            "col": 6,
+            "row": 5
+          },
+          {
+            "col": 7,
+            "row": 5
+          },
+          {
+            "col": 8,
+            "row": 5
+          }
+        ]
+      }
+    ]
+  },
+  "negative": {
+    "$schema": "studio.diagram/v1",
+    "family": "graph",
+    "id": "9.6",
+    "title": "Gambar sintetis via negatif.",
+    "classification": "BIASA",
+    "width_mm": 128,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "nodes": [
+      {
+        "id": "a",
+        "label": "Langkah A",
+        "class": {
+          "col": 0,
+          "row": 0
+        }
+      },
+      {
+        "id": "b",
+        "label": "Langkah B",
+        "class": {
+          "col": 1,
+          "row": 0
+        }
+      },
+      {
+        "id": "c",
+        "label": "Langkah C",
+        "class": {
+          "col": 0,
+          "row": 1
+        }
+      },
+      {
+        "id": "d",
+        "label": "Langkah D",
+        "class": {
+          "col": 1,
+          "row": 1
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "a",
+        "to": "d",
+        "kind": "control",
+        "label": "satu",
+        "via": [
+          {
+            "col": -1,
+            "row": 5
+          }
+        ]
+      }
+    ]
+  },
+  "curved": {
+    "$schema": "studio.diagram/v1",
+    "family": "graph",
+    "id": "9.6",
+    "title": "Gambar sintetis lengkung via.",
+    "classification": "BIASA",
+    "width_mm": 128,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "nodes": [
+      {
+        "id": "a",
+        "label": "Langkah A",
+        "class": {
+          "col": 0,
+          "row": 0
+        }
+      },
+      {
+        "id": "b",
+        "label": "Langkah B",
+        "class": {
+          "col": 1,
+          "row": 0
+        }
+      },
+      {
+        "id": "c",
+        "label": "Langkah C",
+        "class": {
+          "col": 0,
+          "row": 1
+        }
+      },
+      {
+        "id": "d",
+        "label": "Langkah D",
+        "class": {
+          "col": 1,
+          "row": 1
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "a",
+        "to": "d",
+        "kind": "control",
+        "label": "satu",
+        "route": "curved",
+        "via": [
+          {
+            "col": 10,
+            "row": 5
+          }
+        ]
+      }
+    ]
+  }
+}

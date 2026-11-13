@@ -85,6 +85,130 @@ export function curvedPoints(p: Pt, sa: Side, q: Pt, sb: Side, samples: number =
   return out;
 }
 
+/**
+ * Swarm 1.2.8 row 56b (VIS-5, AC-VIS5, 01f §3.1, §3.3 "Glue sides" / "Slots", register N8-256, N8-257): the side an end
+ * is glued to ("auto" and absent = the router's choice) and the slot along it (0 < v < 1, only with a side). A bus keeps
+ * its fixed taps (the spec refuses a side there, P1-edge-style; the router ignores it).
+ */
+function sideField(e: DiagramEdge, end: "from" | "to"): Side | undefined {
+  const v = end === "from" ? e.from_side : e.to_side;
+  return v === "top" || v === "right" || v === "bottom" || v === "left" ? v : undefined;
+}
+
+function slotField(e: DiagramEdge, end: "from" | "to"): number | undefined {
+  const v = end === "from" ? e.from_slot : e.to_slot;
+  return typeof v === "number" && v > 0 && v < 1 && sideField(e, end) ? v : undefined;
+}
+
+/** Row 56b (VIS-6, N8-258): bend points of an edge; absent or empty = the router owns every bend. */
+function viaOf(e: DiagramEdge): ReadonlyArray<{ col: number; row: number }> | undefined {
+  return Array.isArray(e.via) && e.via.length > 0 ? e.via : undefined;
+}
+
+/** Row 56b: an edge whose geometry the author fixed (side, slot or via) is never rerouted, fanned or lane-nudged. */
+function glued(e: DiagramEdge): boolean {
+  return sideField(e, "from") !== undefined || sideField(e, "to") !== undefined || viaOf(e) !== undefined;
+}
+
+/** Row 56b: the explicit sides of `e` over the router's pair (a bus end keeps its tap side). */
+function withSides(e: DiagramEdge, pair: SidePair, a: SheetNode, b: SheetNode): SidePair {
+  const sa = a.spec.shape === "bus" ? undefined : sideField(e, "from");
+  const sb = b.spec.shape === "bus" ? undefined : sideField(e, "to");
+  return sa === undefined && sb === undefined ? pair : [sa ?? pair[0], sb ?? pair[1]];
+}
+
+/**
+ * Row 56b (VIS-5): the end at fraction `f` along `side` (left to right on top/bottom, top to bottom on left/right). An
+ * event/gateway measures along its outline (row 54); `glueEnd` then moves the end from the cell onto the outline.
+ */
+function slotAnchor(node: SheetNode, side: Side, f: number): Pt {
+  if (isLabelBelow(node.spec.shape)) {
+    const o = labelBelowOutline(node);
+    if (side === "right" || side === "left") return [side === "right" ? node.x + node.w : node.x, o.y + o.h * f];
+    return [o.x + o.w * f, side === "top" ? node.y : node.y + node.h];
+  }
+  if (side === "bottom") return [node.x + node.w * f, node.y + node.h];
+  if (side === "top") return [node.x + node.w * f, node.y];
+  if (side === "right") return [node.x + node.w, node.y + node.h * f];
+  return [node.x, node.y + node.h * f];
+}
+
+/**
+ * Row 56b (VIS-6, R18-5, register N8-472): the layout lattice `via` is mapped on: x = col x col_mm, y = row x row_mm from
+ * the top-left of the laid-out sheet (`geometry.ts` lattice), the sheet in whole lattice units and each node's cell.
+ * The figure preview returns it as `figure.lattice`. A graph sheet fitted to its content (D-290) moves nodes and routes
+ * by the same offset, so via points keep their place relative to the nodes.
+ */
+export interface RouteLattice {
+  col_mm: number;
+  row_mm: number;
+  cols: number;
+  rows: number;
+  nodes: Record<string, [number, number, number, number]>;
+}
+
+export function routeLattice(sheet: Sheet): RouteLattice {
+  const r2 = (v: number) => Math.round(v * 100) / 100;
+  const nodes: Record<string, [number, number, number, number]> = {};
+  for (const n of sheet.nodes.values()) nodes[n.id] = [r2(n.x / sheet.colMm), r2(n.y / sheet.rowMm), r2((n.x + n.w) / sheet.colMm), r2((n.y + n.h) / sheet.rowMm)];
+  return {
+    col_mm: Math.round(sheet.colMm * 1e4) / 1e4,
+    row_mm: Math.round(sheet.rowMm * 1e4) / 1e4,
+    cols: Math.floor(sheet.widthMm / sheet.colMm + 1e-6),
+    rows: Math.floor(sheet.heightMm / sheet.rowMm + 1e-6),
+    nodes,
+  };
+}
+
+/** Row 56b (D-V3, 01f §3.3 "via families"): families that take `via` (the spec check P3-via-family refuses the rest). */
+export function viaFamily(s: Pick<StudioDiagramV1, "family"> & { direction?: unknown }): boolean {
+  return s.family === "graph" || s.family === "swimlane" || (s.family === "flow" && s.direction === undefined);
+}
+
+/**
+ * Row 56b (VIS-6, 01f §3.3 "via bounds"): via points in sheet mm. Build-level P1-via: a point outside the laid-out sheet
+ * is refused (BY_CONSTRUCTION_FAILED) with the sheet size in lattice units. `curved` + via is refused here too
+ * (P1-edge-style; the spec check refuses it first, row 52c).
+ */
+function viaPoints(e: DiagramEdge, i: number, sheet: Sheet): Pt[] | undefined {
+  const via = viaOf(e);
+  if (!via) return undefined;
+  if (edgeRouteOf(e) === "curved") {
+    throw new DiagramDefect('route "curved" tidak dapat digabung dengan via; pakai orthogonal atau straight (P1-edge-style)', { checkId: "P1-edge-style", pointer: `/edges/${i}/via` });
+  }
+  const lat = routeLattice(sheet);
+  return via.map((v, j) => {
+    if (!(v.col >= 0 && v.row >= 0 && v.col <= lat.cols && v.row <= lat.rows)) {
+      throw new DiagramDefect(
+        `via[${j}] {col ${v.col}, row ${v.row}} pada konektor ${e.from}->${e.to} di luar lembar ${lat.cols} x ${lat.rows} kisi (col 0..${lat.cols}, row 0..${lat.rows}); lihat figure.lattice pada pratinjau (P1-via)`,
+        { checkId: "P1-via", pointer: `/edges/${i}/via/${j}` },
+      );
+    }
+    return [v.col * sheet.colMm, v.row * sheet.rowMm] as Pt;
+  });
+}
+
+/**
+ * Row 56b (VIS-6, 01f §3.3 "via"): anchor -> via1 -> ... -> anchor. `straight` joins the points with straight segments.
+ * Orthogonal joins each pair with one L-leg: the first leg horizontal first when it leaves a left/right side (vertical
+ * first otherwise), each next leg turns across the direction the previous one ended in (the via point is the bend), and
+ * the last leg ends along the target side's normal (horizontal first into top/bottom), so the arrowhead meets the side.
+ */
+function viaRoute(p: Pt, sa: Side, vias: readonly Pt[], q: Pt, sb: Side, straight: boolean): Pt[] {
+  const pts = [p, ...vias, q];
+  const out: Pt[] = [p];
+  let horizFirst = sa === "left" || sa === "right";
+  for (let k = 1; k < pts.length; k++) {
+    const a = pts[k - 1];
+    const b = pts[k];
+    const hf = k === pts.length - 1 ? sb === "top" || sb === "bottom" : horizFirst;
+    if (!straight && Math.abs(a[0] - b[0]) > 1e-9 && Math.abs(a[1] - b[1]) > 1e-9) out.push(hf ? [b[0], a[1]] : [a[0], b[1]]);
+    horizFirst = Math.abs(out[out.length - 1][0] - b[0]) < 1e-9; // this leg ended vertical: the next one starts across
+    out.push(b);
+  }
+  return out.filter((c, k) => k === 0 || Math.abs(c[0] - out[k - 1][0]) > 1e-9 || Math.abs(c[1] - out[k - 1][1]) > 1e-9);
+}
+
 function sideOf(a: SheetNode, b: SheetNode): Side {
   const acx = a.x + a.w / 2.0;
   const acy = a.y + a.h / 2.0;
@@ -467,7 +591,7 @@ export function routePlaced(s: StudioDiagramV1, sheet: Sheet): RoutedEdge[] {
   for (let round = 0; round < edges.length; round++) {
     const out = routeWithSides(s, sheet, over);
     // Row 56 (VIS-4): straight and curved edges are never rerouted (a crossing is reported, 01f §3.3).
-    const bad = edges.findIndex((e, i) => !over.has(i) && !kept.has(i) && !edgeRouteOf(e) && throughEnds(out[i].points, nodeOf(sheet, e.from), nodeOf(sheet, e.to)));
+    const bad = edges.findIndex((e, i) => !over.has(i) && !kept.has(i) && !edgeRouteOf(e) && !glued(e) && throughEnds(out[i].points, nodeOf(sheet, e.from), nodeOf(sheet, e.to)));
     if (bad < 0) return out;
     const e = edges[bad];
     const a = nodeOf(sheet, e.from);
@@ -537,7 +661,7 @@ function fanGroups(
       const members: number[] = [];
       for (const e of g) {
         const i = edges.indexOf(e);
-        if (i < 0 || e.from === e.to || edgeRouteOf(e)) continue; // row 56: styled routes never fan
+        if (i < 0 || e.from === e.to || edgeRouteOf(e) || glued(e)) continue; // rows 56/56b: styled or glued routes never fan
         const [sa, sb] = sides[i];
         if (out ? e.from === node && sa === side && sb === OPP[side] : e.to === node && sb === side && sa === OPP[side]) members.push(i);
       }
@@ -632,7 +756,9 @@ function routeWithSides(s: StudioDiagramV1, sheet: Sheet, over: ReadonlyMap<numb
   // `direction` (legacy) is untouched.
   const dir = flowDirectionOf(s as StudioDiagramV1 & { direction?: unknown });
   const rankOf = dir ? flowRanks(s).rankOf : undefined;
-  const sidesOf = (e: DiagramEdge, i: number): SidePair => {
+  // Row 56b (VIS-5): explicit sides win over the router's pair.
+  const sidesOf = (e: DiagramEdge, i: number): SidePair => withSides(e, autoSides(e, i), nodeOf(sheet, e.from), nodeOf(sheet, e.to));
+  const autoSides = (e: DiagramEdge, i: number): SidePair => {
     const o = over.get(i);
     if (o) return o;
     const a = nodeOf(sheet, e.from);
@@ -659,8 +785,9 @@ function routeWithSides(s: StudioDiagramV1, sheet: Sheet, over: ReadonlyMap<numb
   };
   edges.forEach((e, i) => {
     const [sa, sb] = sidesOf(e, i);
-    push(gk(e.from, sa), e);
-    push(gk(e.to, sb), e);
+    // Row 56b (VIS-5): a slotted end takes no fan position on its side.
+    if (slotField(e, "from") === undefined) push(gk(e.from, sa), e);
+    if (slotField(e, "to") === undefined) push(gk(e.to, sb), e);
   });
   // Row 54b (VIS-3b, C86): the spread side ends of an event/gateway are ordered by the other node's centre height, so
   // the upper end goes to the upper node and the two runs do not cross. Other nodes keep the edge order.
@@ -692,8 +819,8 @@ function routeWithSides(s: StudioDiagramV1, sheet: Sheet, over: ReadonlyMap<numb
     const a = nodeOf(sheet, e.from);
     const b = nodeOf(sheet, e.to);
     const [sa, sb] = sidesOf(e, ei);
-    const ga = grouped.get(gk(e.from, sa))!;
-    const gb = grouped.get(gk(e.to, sb))!;
+    const ga = grouped.get(gk(e.from, sa)) ?? [e]; // row 56b: a side of slotted ends only has no fan group
+    const gb = grouped.get(gk(e.to, sb)) ?? [e];
     let p = anchor(a, sa, indexOfEdge(ga, e), ga.length);
     let q = anchor(b, sb, indexOfEdge(gb, e), gb.length);
     let pts: Pt[];
@@ -706,7 +833,7 @@ function routeWithSides(s: StudioDiagramV1, sheet: Sheet, over: ReadonlyMap<numb
     // spread band of the other end takes that height, so the connector is one straight run.
     const sideA = !vertA && isLabelBelow(a.spec.shape);
     const sideB = !vertB && isLabelBelow(b.spec.shape);
-    if (!style && !vertA && !vertB && (sideA || sideB)) {
+    if (!style && !glued(e) && !vertA && !vertB && (sideA || sideB)) {
       // the end may take the other end's height when that lies within the spread band of its outline and keeps
       // ENTRY_COLLISION_MM from the spread ends of the other edges on the same side
       const fits = (n: SheetNode, side: Side, g: DiagramEdge[], own: Pt, y: number) => {
@@ -718,7 +845,15 @@ function routeWithSides(s: StudioDiagramV1, sheet: Sheet, over: ReadonlyMap<numb
       if (sideB && fits(b, sb, gb, q, p[1])) q = [q[0], p[1]];
       else if (sideA && fits(a, sa, ga, p, q[1])) p = [p[0], q[1]];
     }
-    if (style === "straight") {
+    // Swarm 1.2.8 row 56b (VIS-5/VIS-6): a slot puts the end at that fraction of its side; `via` bends the route there.
+    const slotA = slotField(e, "from");
+    const slotB = slotField(e, "to");
+    if (slotA !== undefined) p = slotAnchor(a, sa, slotA);
+    if (slotB !== undefined) q = slotAnchor(b, sb, slotB);
+    const vias = viaPoints(e, ei, sheet);
+    if (vias) {
+      pts = viaRoute(p, sa, vias, q, sb, style === "straight");
+    } else if (style === "straight") {
       pts = [p, q]; // row 56 (VIS-4): one segment, diagonal allowed
     } else if (style === "curved") {
       pts = curvedPoints(p, sa, q, sb); // row 56 (VIS-4): sampled Bezier, ends normal to the sides
@@ -728,12 +863,15 @@ function routeWithSides(s: StudioDiagramV1, sheet: Sheet, over: ReadonlyMap<numb
       const pa: Pt = [p[0], p[1] + (sa === "bottom" ? stub : -stub)];
       // E-17: stub target arah balik dari batas (masuk dari luar).
       const pb: Pt = [q[0], q[1] + (sb === "bottom" ? stub : -stub)];
-      const midy = between(snap((pa[1] + pb[1]) / 2.0, LATTICE_Y), pa[1], pb[1], laneFix);
+      // Row 56b (VIS-5): a glued same-side pair (top to top, bottom to bottom) runs beyond the outer stub, not between.
+      const same = sa === sb && glued(e);
+      const midy = same ? (sa === "bottom" ? Math.max(pa[1], pb[1]) : Math.min(pa[1], pb[1])) : between(snap((pa[1] + pb[1]) / 2.0, LATTICE_Y), pa[1], pb[1], laneFix);
       pts = [p, pa, [pa[0], midy], [pb[0], midy], pb, q];
     } else {
       const pa: Pt = [p[0] + (sideA ? 0 : sa === "right" ? stub : -stub), p[1]];
       const pb: Pt = [q[0] + (sideB ? 0 : sb === "right" ? stub : -stub), q[1]];
-      const midx = between(snap((pa[0] + pb[0]) / 2.0, sheet.colMm), pa[0], pb[0], laneFix || sideA || sideB);
+      const same = sa === sb && glued(e); // row 56b: left to left / right to right beyond the outer stub
+      const midx = same ? (sa === "right" ? Math.max(pa[0], pb[0]) : Math.min(pa[0], pb[0])) : between(snap((pa[0] + pb[0]) / 2.0, sheet.colMm), pa[0], pb[0], laneFix || sideA || sideB);
       pts = Math.abs(p[1] - q[1]) < 1e-9 && (sideA || sideB) ? [p, q] : [p, pa, [midx, pa[1]], [midx, pb[1]], pb, q];
     }
     raw.push(pts);
@@ -742,7 +880,7 @@ function routeWithSides(s: StudioDiagramV1, sheet: Sheet, over: ReadonlyMap<numb
   const finish = (rawPts: readonly Pt[][]): { routes: Pt[][]; moved: number } => {
     let routes = edges.map((e, i) => {
       const pts = rawPts[i];
-      if (edgeRouteOf(e)) return [...pts]; // row 56 (VIS-4): no detour; a crossed node is reported by the lint
+      if (edgeRouteOf(e) || viaOf(e)) return [...pts]; // rows 56/56b: no detour (styled or via); a crossed node is reported by the lint
       if (!laneFix) return detour(pts, [e.from, e.to], nodes, sheet.widthMm, sheet.colMm);
       // FIG-02b2: detur mulai dari ujung stub agar konektor keluar tegak lurus sisi simpul
       // (bukan menyusuri garis tepi simpul) dan segmen dalamnya dapat dipisah jalurnya.
@@ -753,7 +891,7 @@ function routeWithSides(s: StudioDiagramV1, sheet: Sheet, over: ReadonlyMap<numb
     if (laneFix) {
       const n = nudgeRoutes(routes, edges.map((e) => [e.from, e.to] as const), nodes, sheet.widthMm);
       // Row 56 (VIS-4): lane nudging moves orthogonal segments only; styled routes keep their geometry.
-      routes = n.paths.map((r, i) => (edgeRouteOf(edges[i]) ? routes[i] : r));
+      routes = n.paths.map((r, i) => (edgeRouteOf(edges[i]) || glued(edges[i]) ? routes[i] : r)); // row 56b: glued ends stay put
       moved = n.moved;
     }
     return { routes, moved };

@@ -125,7 +125,7 @@
   "patched": 164,
   "replaced": 12,
   "added": 30,
-  "bytes": 10104538
+  "bytes": 10112528
  },
  "files": [
   {
@@ -2407,9 +2407,10 @@
   {
    "path": "src/lib/studio/engine/diagram/build/route.ts",
    "status": "patched",
-   "bytes": 42759,
+   "bytes": 50749,
    "source_sha256": "2189c545c59473987ba23d3dc64eeeaf9c336c0624c0e9029a34a29773ffa769",
-   "sha256": "3d06079180afd39c0abfbe92835e74d7c8b7a805d9b533b832c21a3444ef67b7",
+   "sha256": "253586b16e0a60aa021af844ab2f8776de4449590e1eae121b5e8ab4f7f014da",
+   "patch_row56b": {"id": "128-56b-vis5-vis6", "row": "56b", "decision": "1.2.8 row 56b (AC-VIS5 glue to sides and slots, AC-VIS6 bend points on the layout lattice; D-V3)", "summary": "VIS-5: from_side/to_side override the router's side pair (bus ends keep their taps); from_slot/to_slot put the end at that fraction of the side (outline for events/gateways) and take no fan position; a glued same-side pair runs beyond the outer stub. VIS-6: via lattice points (col x col_mm, row x row_mm) joined by L-legs (orthogonal) or straight segments; no detour; build-level P1-via for a point outside the laid-out sheet (sheet size in lattice units); curved + via refused P1-edge-style; routeLattice/viaFamily exported for the preview figure.lattice. Glued edges are never rerouted (CP-41), fanned (T-08) or lane-nudged; specs without the fields route unchanged", "diff_base": "sha256 before this row", "before_sha256": "3d06079180afd39c0abfbe92835e74d7c8b7a805d9b533b832c21a3444ef67b7", "after_sha256": "253586b16e0a60aa021af844ab2f8776de4449590e1eae121b5e8ab4f7f014da", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/56b_row56b_diffs/engine_diagram_build_route.ts.diff", "diff_sha256": "896c60091f7d3ebf8560954ce4823cfadcf4ddae52ca9d21f38f0e5beea7a397"},
    "patch_row54b": {"id": "128-54b-vis3b", "row": "54b", "decision": "1.2.8 row 54b (AC-VIS3b BPMN task, sub-process, gateways, data object, annotation; C86 gateway exits spread; out of area under V-build-route)", "summary": "C86: side ends of an event/gateway spread +-0.45 half size, ordered by the other node height, aligned to the other end inside the band; no outer stub at an event/gateway side end, middle run kept between the stubs; a vertical first piece at a side end is glued with a horizontal piece from the outline; throughEnds measures an event/gateway end against its outline core; gateway exits in TB flows use the facing vertex; annotation ends on the bracket (right side -> top/bottom, top/bottom ends on the arm)", "diff_base": "sha256 before this row", "before_sha256": "f4898e54695bf82f5e8cc80a0672245ba54c40e491574cd11076ab65069a69f2", "after_sha256": "3d06079180afd39c0abfbe92835e74d7c8b7a805d9b533b832c21a3444ef67b7", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/54b_row54b_diffs/engine_diagram_build_route.ts.diff", "diff_sha256": "e8a33ba45e82921ed930dcccbfb0f8945578c5d242354543592508061e37b2ce"},
    "patch_row54": {"id": "128-54-vis3a", "row": "54", "decision": "1.2.8 row 54 (AC-VIS3a connection points; out of area under V-build-route)", "summary": "anchor: label-below nodes connect at the outline's centre height (sides) or over the middle half of its width (top/bottom); belowSides: a bottom end beside the other node uses the facing side (also for the CP-41 candidates); glueLabelBelow: side ends extended onto the circle/diamond (run moved or jogged to the centre height when it misses), top ends moved down onto the outline, bottom ends stay under the label block", "diff_base": "sha256 before this row", "before_sha256": "89cc66b0c08b25856c2928c2b81e0c147496af99183f5b5f1f399dcaa2b9f9f2", "after_sha256": "f4898e54695bf82f5e8cc80a0672245ba54c40e491574cd11076ab65069a69f2", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/54_row54_diffs/engine_diagram_build_route.ts.diff", "diff_sha256": "63e841d525b17d96961cf996b1f6f2901940f2af7af072f3aef70d009b4a392d"},
    "patch_row53": {"id": "128-53-vis1b", "row": "53", "decision": "1.2.8 row 53 (AC-VIS1b connection points; out of area under V-build-route)", "summary": "glueEnd / glueToOutlines: a connector end on the box bottom of a document or offpage whose last piece is vertical moves up onto the wave / pentagon point at the same x (Studio routes and ELK routes); other shapes unchanged", "diff_base": "sha256 before this row", "before_sha256": "5f1ac4ebbcdd0be44e3ea914d1a51b0c18ccd92253c5b4821063c5b429de6a1e", "after_sha256": "89cc66b0c08b25856c2928c2b81e0c147496af99183f5b5f1f399dcaa2b9f9f2", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/53_row53_diffs/engine_diagram_build_route.ts.diff", "diff_sha256": "80a42d769195fd7c180d22d2f49a7e8d5182efc62f4891afc6693e83b6df5407"},
@@ -6322,6 +6323,7 @@
   "53",
   "35c",
   "54",
-  "54b"
+  "54b",
+  "56b"
  ]
 }
