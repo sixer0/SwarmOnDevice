@@ -83,6 +83,9 @@ describe("SR §3.2 abuse checks: allowed", () => {
     "graft ask 'where is the gate' --no-refresh",
     "graft callers classify --no-refresh",
     "graft blast --no-refresh",
+    // INTENT row 47j (U9-3, C76): a graft query with or without a refresh of graft's own cache.
+    "graft ask 'where'",
+    "graft callers classify -d all",
     "git --version",
     "cd . && ls -la && wc -l a.md",
     "ls -la 2>/dev/null",
@@ -140,7 +143,7 @@ describe("SR §3.2 abuse checks and N7-054 set: refused", () => {
     "mdls -p out.plist a.pdf",
     "graft build .",
     "graft init",
-    "graft ask 'where'",
+    // INTENT row 47j (U9-3, C76): `graft ask 'where'` (a query without --no-refresh) is in the read class now; see below.
     "graft blast --export-viz out --no-refresh",
     "graft --dir /tmp ask x --no-refresh",
     "graft ask x --no-refresh --api-key k",

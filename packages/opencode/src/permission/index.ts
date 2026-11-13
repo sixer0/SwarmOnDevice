@@ -765,6 +765,8 @@ const layer = Layer.effect(
         plan: input.agent === "plan" || last === undefined || last.agent === "plan",
         rule: userCatchAll ? "user_catch_all" : undefined,
         follows: input.follows,
+        // 1.2.7 row 47j (C76): the read roles keep their U4 limits where the consent opens more for other callers.
+        ...(input.agent !== undefined && { agent: input.agent }),
         ...(bypass && { bypass }),
         ...(ownProcesses && { ownProcesses }),
         ...context,

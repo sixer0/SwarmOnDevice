@@ -26,7 +26,7 @@ import { Agent } from "../../src/agent/agent"
 import { Plugin } from "../../src/plugin"
 import { Instruction } from "../../src/session/instruction"
 import { MessageID, SessionID } from "../../src/session/schema"
-import { ShellTool } from "../../src/tool/shell"
+import { ShellTool, readSteps } from "../../src/tool/shell"
 import { disposeAllInstances, provideInstance, testInstanceStoreLayer, tmpdir, tmpdirScoped } from "../fixture/fixture"
 import { testEffect } from "../lib/effect"
 
@@ -192,11 +192,9 @@ describe("SR7-01: counting, offset and dump oracles on app state stay X app_stat
     `cd ${path.dirname(state())} && grep -c PASSWORD=P swarm/app-server.env`,
     `cd ${path.dirname(state())} && cut -c1-12 swarm/app-server.env`,
     "cd ~/.config && grep -c PASSWORD=P swarm/secret.env",
-    // Content search on a folder that holds app state.
-    "rg PASSWORD ~",
-    "rg -c PASSWORD ~/.config",
+    // INTENT row 47j (U9-6, C76): a content search over a FOLDER that holds app state (`rg PASSWORD ~`, `rg -c PASSWORD
+    // ~/.config`, `grep -r PASSWORD <state>`) runs under the consent now; it moved to the describe below. A state file stays.
     "grep PASSWORD ~/.config/swarm/secret.env",
-    `grep -r PASSWORD ${state()}`,
     `xxd ${env()}`,
     `od -c ${env()}`,
     `hexdump -C ${env()}`,
@@ -210,7 +208,7 @@ describe("SR7-01: counting, offset and dump oracles on app state stay X app_stat
     `cat ${env()} > copy.txt`,
     `cat $XDG_STATE_HOME/swarm/app-server.env`,
   ]
-  for (const index of Array.from({ length: 28 }, (_, i) => i))
+  for (const index of Array.from({ length: 25 }, (_, i) => i))
     test(`oracle form ${index + 1}`, () => {
       const command = forms()[index]!
       expectVerdict(bash(command), APP_STATE)
@@ -219,6 +217,35 @@ describe("SR7-01: counting, offset and dump oracles on app state stay X app_stat
     expect(AutonomyTexts.REFUSED_TEXT.app_state).toBe(APP_STATE_TEXT)
     expect(AutonomyTexts.consentedRefusalText("app_state")).toStartWith(APP_STATE_TEXT)
   })
+})
+
+// INTENT row 47j (U9-6, C76; supersedes SR7-01 for these forms as the person ruled): a content search over folders that
+// hold app state is X app_state without the consent (autonomous mode on, nothing consented) and is no app_state refusal
+// under it, for the root and a subagent; a read role keeps it refused (U4). The shell's own reading is given, as the gate
+// gets it. What it prints is masked (below, SR7-07 / U9-6).
+describe("U9-6: a content search over folders holding app state runs under the consent", () => {
+  const steps = (command: string) => readSteps(command, dir)
+  const forms = () => ["rg PASSWORD ~", "rg -c PASSWORD ~/.config", `grep -r PASSWORD ${state()}`, `rg PASSWORD ${home}`]
+  for (const index of [0, 1, 2, 3])
+    test(`folder search ${index + 1}`, async () => {
+      const command = forms()[index]!
+      const read = await steps(command)
+      expect(read).toBeDefined()
+      const input = request("bash", { patterns: [command], metadata: { command, workdir: dir, steps: read } })
+      expect({ command, category: AutonomyTable.classify(input).category }).toEqual({ command, category: "app_state" })
+      for (const caller of ["root", "subagent"] as const) {
+        const verdict = AutonomyTable.classify({ ...input, bypass: { caller } })
+        expect({ command, caller, class: verdict.class, category: verdict.category }).not.toEqual({
+          command,
+          caller,
+          class: "X",
+          category: "app_state",
+        })
+        expect({ command, caller, runs: verdict.class === "A" }).toEqual({ command, caller, runs: true })
+      }
+      const planner = AutonomyTable.classify({ ...input, bypass: { caller: "subagent" }, agent: "planner" })
+      expect({ command, category: planner.category }).toEqual({ command, category: "app_state" })
+    })
 })
 
 describe("writes into app state stay X app_state (CHAR-06)", () => {
@@ -357,6 +384,30 @@ describe("SR7-07 / N1-R3: what an allowed app-state read prints is masked", () =
         }),
       ),
     )
+  // Row 47j (U9-6): a content search over a folder holding app state prints the matching lines with their values masked.
+  // Each case writes a value of its own that nothing before it read (so no earlier read taught the masker it), into a
+  // state file only the search names. The home folder is the test's own, named by its absolute path (the shell's `~`
+  // would be the real one); rg skips the hidden `.config` unless told not to.
+  const SEARCHED = [
+    ["rg --hidden SEARCH_TOKEN <home>", () => homeConfig, "Wd4Kq9Zt2Lm7Rx5Vb8Nc3Hp6"],
+    ["grep -r SEARCH_TOKEN <home>/.config", () => homeConfig, "Tz8Mv3Qw6Kd1Lr9Xb4Np7Hc2"],
+    ["rg -n SEARCH_TOKEN <state>", state, "Gq2Ws7Ry4Lk9Zm3Xt6Bv8Hn1"],
+  ] as const
+  for (const [form, where, value] of SEARCHED)
+    it.live(`\`${form}\` shows the line with [hidden:SEARCH_TOKEN]`, () => {
+      const file = () => path.join(where(), "search.env")
+      return Effect.acquireUseRelease(
+        Effect.sync(() => writeFileSync(file(), `SEARCH_TOKEN=${value}\n`)),
+        () =>
+          shell(form.replace("<home>", home).replace("<state>", state())).pipe(
+            Effect.map((text) => {
+              expect(text).toContain("SEARCH_TOKEN=[hidden:SEARCH_TOKEN]")
+              noPiece(text, value)
+            }),
+          ),
+        () => Effect.sync(() => rmSync(file(), { force: true })),
+      )
+    })
   it.live("a project symlink to app-server.env, read with `cat`, is masked (kind by real path)", () =>
     shell("cat link.txt", (project) => symlinkSync(path.join(state(), "app-server.env"), path.join(project, "link.txt"))).pipe(
       Effect.map((text) => {

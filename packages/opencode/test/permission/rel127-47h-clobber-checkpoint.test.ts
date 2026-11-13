@@ -236,6 +236,34 @@ describe("rel127 47h: zsh noclobber-override redirects are checkpointed like `>`
       }),
   )
 
+  // INTENT row 47j (U9-9, C76): zsh's `print` with a noclobber override was refused (X not_reversible: `print` was no
+  // checkpoint printer, 47h/47i residual). It is one now, for its text-only options: checkpointed first and revertible.
+  zshOnly("zsh `print` with `>|` / `>!`: checkpointed first, and the revert brings the old bytes back (row 47j)", () =>
+    Effect.gen(function* () {
+      for (const [command, written] of [
+        ["print new >| notes.txt", "new\n"],
+        ["print -r new >! notes.txt", "new\n"],
+        ["print -n new >| notes.txt", "new"],
+        ["print -- -x >| notes.txt", "-x\n"],
+      ] as const)
+        yield* checkpointedAndRevertible(command, written)
+    }),
+  )
+
+  zshOnly("zsh `print -u`, `-s`, `-z`, `-v` are no checkpoint printers: refused, the file untouched (row 47j)", () =>
+    Effect.gen(function* () {
+      for (const command of ["print -u 1 new >| notes.txt", "print -s new >| notes.txt", "print -v x new >| notes.txt"]) {
+        const dir = yield* tmpdirScoped()
+        const notes = path.join(dir, "notes.txt")
+        fs.writeFileSync(notes, "old\n")
+        const { result, asked } = yield* runShell(dir, command, { canUndo: false })
+        expect({ command, refused: failure(result) !== "" }).toEqual({ command, refused: true })
+        expect({ command, consent: (asked[0]?.consent as Line | undefined)?.category }).not.toEqual({ command, consent: "checkpointed" })
+        expect(fs.readFileSync(notes, "utf8")).toBe("old\n")
+      }
+    }),
+  )
+
   it.live("the shell reads a zsh override as the redirect it overrides, and only in zsh", () =>
     Effect.gen(function* () {
       const dir = yield* tmpdirScoped()

@@ -234,10 +234,12 @@ const INDIRECT = [
 ] as const
 // M1-06: gh writes the consent lets out for the root (`not_routine`), and zsh's network builtins.
 const GH_WRITES = ["gh pr create --fill", "gh release create v1"] as const
+// INTENT row 47j (U9-5, C76): zsh's network builtins are judged as curl is for the same destination, with no extra block:
+// `zmodload zsh/net/socket` alone sends nothing and is no longer here (it runs like the root's call, pinned below), and a
+// ztcp to a local host runs as curl's does (`rel127-47j-consent-loosening`). A remote ztcp stays outward, as curl's is.
 const ZSH_NET = [
   "zmodload zsh/net/tcp && ztcp example.com 80",
   "ztcp example.com 80",
-  "zmodload zsh/net/socket",
   "zsh -c 'zmodload zsh/net/tcp; ztcp example.com 80'",
 ] as const
 // M1-07: named registry adds outside the JS tools.
@@ -270,6 +272,9 @@ it.instance(
         seen.push([command, got.ran, got.decider, got.via])
       }
       expect(seen).toEqual(all.map((command) => [command, false, 1, "for_subagent"]))
+      // INTENT row 47j (U9-5): loading the module alone is no network call, for a subagent as for curl with no address.
+      const loaded = yield* outcome(child.id, root.id, "zmodload zsh/net/socket", dir)
+      expect([loaded.ran, loaded.decider]).toEqual([true, 0])
     }),
   { git: true },
 )

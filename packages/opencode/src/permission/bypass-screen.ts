@@ -419,9 +419,50 @@ function sendStep(argv: readonly string[], cwd: string, input: SendContext): Out
   const whole = input.whole ?? (typeof input.metadata?.command === "string" ? input.metadata.command : "")
   return (
     OutwardConsent.request(found.name, found.args, input.outward, whole) ??
+    zshNetSend(found.name, found.args, input.outward, whole) ??
     OutwardConsent.sendForm(found.name, found.args, cwd, context) ??
     (found.name === "git" ? consentPush(["git", ...found.args], cwd, input) : undefined)
   )
+}
+
+/**
+ * 1.2.7 row 47j (U9-5, C76): zsh's network builtins under consent, judged as curl's request is for the same destination
+ * (`OutwardConsent.hostOpens`: a local host, or one the person named), with no rule beyond curl's. `ztcp [-v] [-d fd] host
+ * [port]` and `zftp open|params host [port] …` name their host; a `<` in the call holds, as it holds curl (an upload). A
+ * close (`ztcp -c`), a list (`ztcp`, `ztcp -L`) or another `zftp` sub-command sends nothing of its own (each call is a new
+ * shell, so no session is open before it). A listen or accept (`ztcp -l`, `-a`), `zsocket` (a unix socket, as curl's
+ * `--unix-socket` is not read either) and anything not written out stay unread: undefined, so `outward` judges them.
+ */
+const ZTCP_VALUE = new Set(["-d"])
+function zshNetSend(name: string, args: readonly string[], known: Parameters<typeof OutwardConsent.hostOpens>[1], whole: string): OutwardConsent.Reading | undefined {
+  if (name !== "ztcp" && name !== "zftp") return undefined
+  if (args.some((word) => /[$`\\{}*?[\]]/.test(word))) return undefined
+  const opened = (host: string | undefined, port: string | undefined): OutwardConsent.Reading => {
+    if (host === undefined || host === "" || (port !== undefined && !/^\d{1,5}$/.test(port))) return { held: "unread" }
+    if (whole.includes("<")) return { held: "upload" }
+    if (!OutwardConsent.hostOpens(host, known)) return { held: "host" }
+    return { destinations: [port === undefined ? host : `${host}:${port}`], outputs: [] }
+  }
+  if (name === "zftp") {
+    const [sub, host, port] = args
+    if (sub === "open" || sub === "params") return opened(host, port !== undefined && /^\d+$/.test(port) ? port : undefined)
+    return sub === undefined || sub.startsWith("-") ? undefined : { destinations: [], outputs: [] }
+  }
+  const positional: string[] = []
+  for (let index = 0; index < args.length; index++) {
+    const word = args[index]!
+    if (ZTCP_VALUE.has(word)) {
+      index++
+      continue
+    }
+    if (word === "-v" || word === "-t") continue
+    if (word === "-c" || word === "-L") return { destinations: [], outputs: [] }
+    if (word.startsWith("-")) return undefined
+    positional.push(word)
+  }
+  if (positional.length === 0) return { destinations: [], outputs: [] }
+  if (positional.length > 2) return { held: "unread" }
+  return opened(positional[0], positional[1])
 }
 
 /**

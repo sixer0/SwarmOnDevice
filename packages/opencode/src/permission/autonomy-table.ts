@@ -119,6 +119,11 @@ export type Input = {
    * 1.1.0 table, to the byte.
    */
   bypass?: { readonly caller: "root" | "subagent" }
+  /**
+   * 1.2.7 row 47j (C76): the agent that asked, as the gate passes it. Only read to keep the read roles (`READ_SHELL_ROLES`)
+   * at their U4 limits where the consent opens more for the main agent and other subagents. Absent: no read role.
+   */
+  agent?: string
   /** The processes Swarm started (S1.28), for `kill` under the bypass. Absent: none is known to be Swarm's. */
   ownProcesses?: ReadonlySet<number>
   /**
@@ -900,7 +905,8 @@ function namesListener(raw: string, listener: SelfAddress.Address) {
 type OwnApiHit = { readonly reason?: OwnApiReason }
 
 /** F-4: the network clients whose address a call may hide (`BypassLists.OUTWARD` less the remote shells, mail and sync). */
-const NETWORK_CLIENTS: ReadonlySet<string> = new Set(["curl", "wget", "nc", "ncat", "netcat", "socat", "http", "https", "xh", "telnet"])
+// 1.2.7 row 47j (U9-5): zsh's `ztcp` and `zftp` too, so a call to Swarm's own server through them is judged as curl's is.
+const NETWORK_CLIENTS: ReadonlySet<string> = new Set(["curl", "wget", "nc", "ncat", "netcat", "socat", "http", "https", "xh", "telnet", "ztcp", "zftp"])
 /** Words that run the command after them; `xargs` builds it at run time, a shell's `-c` and `eval` run a text. */
 const CLIENT_WRAPPERS: ReadonlySet<string> = new Set([
   "rtk", "env", "exec", "command", "builtin", "nohup", "time", "nice", "timeout", "stdbuf", "sudo", "doas", "eval", "xargs",
@@ -1108,6 +1114,21 @@ function clientParts(call: ClientCall) {
   const configs: string[] = []
   const lists: string[] = []
   const { program, args } = call
+  // 1.2.7 row 47j (U9-5): `ztcp [-v] [-d fd] host [port]` (a listen, accept, close or list names no host to call) and
+  // `zftp open|params host [port]`.
+  if (program === "ztcp" || program === "zftp") {
+    const named: string[] = []
+    let local = false
+    for (let index = 0; index < args.length; index++) {
+      const word = args[index]!
+      if (word === "-d") index++
+      else if (program === "ztcp" && /^-[lacL]/.test(word)) local = true
+      else if (!word.startsWith("-")) named.push(word)
+    }
+    const [host, port] = program === "zftp" ? (["open", "params"].includes(named[0] ?? "") ? named.slice(1) : []) : named
+    if (!local && host !== undefined) addresses.push(port === undefined || !/^\d+$/.test(port) ? host : `${host}:${port}`)
+    return { addresses, configs, lists, defaults: false }
+  }
   let defaults = program === "curl" || program === "wget"
   if (program === "curl" && (args[0] === "-q" || args[0] === "--disable")) defaults = false
   if (program === "wget" && args.includes("--no-config")) defaults = false
@@ -1345,6 +1366,36 @@ function runsAutonomyCommand(command: unknown, depth = 0): boolean {
   )
 }
 
+/**
+ * 1.2.7 row 47j (U9-3): a simple command (past assignments and wrappers, through a shell's `-c` or an `eval`, as
+ * `runsAutonomyCommand` reads it) whose program is `graft` and whose first word that is no option is `init`. A program
+ * not written out (`$G init`) is not read here; the consent's other rules judge it (`unreadable_command`).
+ */
+function runsGraftInit(command: unknown, depth = 0): boolean {
+  if (typeof command !== "string") return false
+  return liftSubstitutions(command).some((part) =>
+    shellSegments(substituteAssignments(part)).some((words) => {
+      let index = 0
+      while (index < words.length) {
+        const word = words[index]!
+        if (/^[A-Za-z_]\w*=/.test(word)) {
+          index++
+          continue
+        }
+        const name = path.basename(word)
+        if (!CLIENT_WRAPPERS.has(name)) break
+        index++
+        while (index < words.length && (words[index]!.startsWith("-") || /^\d+[smhd]?$/.test(words[index]!))) index++
+        if (name === "eval" || DeletionWords.SHELLS.has(name))
+          return depth < 2 && runsGraftInit(words.slice(index).join(" "), depth + 1)
+      }
+      const program = words[index]
+      if (program === undefined || path.basename(program) !== "graft") return false
+      return words.slice(index + 1).find((word) => !word.startsWith("-")) === "init"
+    }),
+  )
+}
+
 function editTargets(input: Input) {
   const named = input.patterns.filter((pattern) => pattern !== "*").map((pattern) => path.resolve(input.instance.worktree, pattern))
   const filepath = input.metadata.filepath
@@ -1355,7 +1406,12 @@ function writesAppState(input: Input) {
   // 1.2.7 N-1 (SR OP-2, SR7-01): a command that reaches Swarm's own state by any spelling counts as a change there unless
   // it only looks as the allowlist takes it (`appStateRead`); that look runs as a protected read (`readsAppState`).
   const command = input.metadata.command
-  if (typeof command === "string" && touchesAppState(command, input.cwd, input.instance) && !appStateRead(command, input.cwd, input.instance))
+  if (
+    typeof command === "string" &&
+    touchesAppState(command, input.cwd, input.instance) &&
+    !appStateRead(command, input.cwd, input.instance) &&
+    !consentedStateSearch(input, command)
+  )
     return true
   if (input.permission === "edit") return editTargets(input).some((file) => inAppState(file, input.instance))
   // A read of the same place only asks to look, which is the ordinary outside-the-project case.
@@ -2242,14 +2298,16 @@ const GRAFT_QUERIES: Readonly<Record<string, GraftRule>> = {
 }
 
 /**
- * SR §3.2 `graft` (SR7-05 b; 1.2.7 row 47a, M1-11): `graft <query> …` with `--no-refresh` (without it the query rebuilds
- * `graft/` and may add a `.gitignore` line) and only the options `GRAFT_QUERIES` allows for that query. No option before
- * the sub-command. `graft --version` is a probe. A query names no file the table has to judge, so it gives no paths.
+ * SR §3.2 `graft` (SR7-05 b; 1.2.7 row 47a, M1-11): `graft <query> …` with only the options `GRAFT_QUERIES` allows for
+ * that query. No option before the sub-command. `graft --version` is a probe. A query names no file the table has to
+ * judge, so it gives no paths. 1.2.7 row 47j (U9-3, C76): with or without `--no-refresh`: a refresh only rebuilds graft's
+ * own cache (`graft/`), which the person ruled a Swarm-controlled tool may do; `build`, `init` and every other
+ * sub-command stay outside the read class.
  */
 function graftPaths(args: readonly string[]) {
   const [sub, ...rest] = args
   const rule = sub !== undefined && Object.hasOwn(GRAFT_QUERIES, sub) ? GRAFT_QUERIES[sub] : undefined
-  if (!rule || !rest.includes("--no-refresh")) return undefined
+  if (!rule) return undefined
   let positionals = 0
   for (let index = 0; index < rest.length; index++) {
     const word = rest[index]!
@@ -2425,6 +2483,69 @@ function touchesAppState(command: string, cwd: string, instance: InstanceContext
     const relation = stateRelation(file, instance)
     return relation === "inside" || (relation === "above" && spelled.search)
   })
+}
+
+/** 1.2.7 row 47j (U9-6): the programs a consented search over state folders may be made of (no writer, no other reader). */
+const STATE_SEARCH_STEPS: ReadonlySet<string> = new Set([...CONTENT_SEARCH, "head", "tail", "wc"])
+
+/** An existing folder; anything that cannot be read is none (fails closed, unlike `isFolder`). */
+const existingFolder = (file: string) => {
+  try {
+    return fs.statSync(file).isDirectory()
+  } catch {
+    return false
+  }
+}
+
+/**
+ * 1.2.7 row 47j (U9-6, C76): the app-state folders a content search (`rg`, `grep`, `egrep`) reaches through the folders it names, when
+ * that is the only way the command reaches app state: a content search runs, and every place the command names in or
+ * above an app-state root (after `cd`, `~`, `$HOME`, real path: `spelledPlaces`, which over-reads on purpose) is an
+ * existing folder, never a file or a glob. A pattern word or a write resolved inside a root names a file there and fails
+ * it. Returned: each app-state root below a named folder, or the named folder itself when it lies inside a root. Empty: no
+ * such search. The shell masks what such a search prints (`tool/shell.ts` learns the values of the files in these).
+ */
+export function searchedStateFolders(command: string, cwd: string, instance: InstanceContext): string[] {
+  const spelled = spelledPlaces(command, cwd)
+  if (!spelled.search) return []
+  const places = [...spelled.places, ...(spelled.rg ? spelled.dirs.map((file) => ({ file, glob: false })) : [])]
+  const folders: string[] = []
+  for (const { file, glob } of places) {
+    if (glob) {
+      if (globReachesState(file)) return []
+      continue
+    }
+    const relation = stateRelation(file, instance)
+    if (relation === undefined) continue
+    if (!existingFolder(file)) return []
+    // What the search can reach of app state: the folder itself inside a root, or each root below the folder.
+    const target = Reach.real(file) ?? file
+    if (relation === "inside") folders.push(file)
+    else folders.push(...appStateRoots().filter((root) => within(file, root) || within(target, root)))
+  }
+  return [...new Set(folders)]
+}
+
+/**
+ * 1.2.7 row 47j (U9-6, C76; supersedes SR7-01's refusal of a content search on a folder that holds app state under
+ * consent, as the person ruled): under the consent, for the main agent and its subagents but never a read role (U4 keeps
+ * its limit), a call that is only a content search over folders holding Swarm's state is no change there: it is judged
+ * as any other look of the consented caller, and its output is masked. The call must be read in full by the shell's own
+ * reader, every step one of `STATE_SEARCH_STEPS`, nothing written into app state. Searches of a state FILE, oracles on a
+ * named file, globs and every write stay X `app_state`.
+ */
+function consentedStateSearch(input: Input, command: string) {
+  if (!input.bypass || input.permission !== "bash") return false
+  if (input.agent !== undefined && READ_SHELL_ROLES.has(input.agent)) return false
+  const reading = shellReading(input.metadata.steps, input.instance) ?? shellReading(ScriptReader.read(command, input.cwd), input.instance)
+  // A step of a compound (`classifySteps`) comes without the shell's reading: its text is rebuilt from the step's words,
+  // so one command with plain or whole-word-quoted words (no operator, redirect or expansion) is read as itself.
+  const literal = reading ? undefined : Risk.quotedWords(command)
+  const steps = reading ? reading.steps : literal ? [{ argv: literal }] : []
+  if ((reading && !reading.complete) || steps.length === 0) return false
+  if (reading?.writes.some((file) => inAppState(file, input.instance))) return false
+  const only = steps.every((step) => !("code" in step && step.code !== undefined) && STATE_SEARCH_STEPS.has(path.basename(step.argv[0]!)))
+  return only && searchedStateFolders(command, input.cwd, input.instance).length > 0
 }
 
 /**
@@ -2983,9 +3104,32 @@ const BRANCH_NAME = /^[\w][\w./-]*$/
 /** A word that names a file the plain way: no glob, no `~`, no `..`, no option. */
 const plainPath = (word: string) => PLAIN_PATH.test(word) && !word.split("/").includes("..")
 
+/**
+ * 1.2.7 row 47j (U9-9, C76): zsh's `print`, as a printer for the checkpoint only (it is no read of its own: `single` and
+ * the read class do not take it). Words, `--`, and only the options that shape the text: `-r` raw, `-n` no newline, `-l`
+ * one per line, `-N` NUL-separated, `-c` columns, `-a` across, `-o`/`-O`/`-i` sorted, `-D`/`-P` named directories
+ * and prompt escapes, `-R` echo-like. Not `-C n` (takes a value), `-u n` (another descriptor), `-p` (the coprocess), `-s`/`-S` (history), `-z`
+ * (the editing buffer), `-v name` (a variable), `-f` (a format reading `%` escapes is still text, but kept out with the
+ * rest as nothing here needs it).
+ */
+const ZSH_PRINT_FLAG = /^-[rnlNcaoOiDPR]+$/
+function zshPrints(words: readonly string[]) {
+  if (words[0] !== "print") return false
+  let options = true
+  for (const word of words.slice(1)) {
+    if (!options || !word.startsWith("-") || word === "-") {
+      options = false
+      continue
+    }
+    if (word === "--") options = false
+    else if (!ZSH_PRINT_FLAG.test(word)) return false
+  }
+  return true
+}
+
 /** A step that only prints, or only looks at files inside the project that are readable and hold no secret. */
 function checkpointLooks(step: Step, instance: InstanceContext) {
-  if (printsOnly(step.argv)) return true
+  if (printsOnly(step.argv) || zshPrints(step.argv)) return true
   if (!onlyLooks(step.argv)) return false
   return step.argv
     .slice(1)
@@ -3241,6 +3385,10 @@ export function classifyBase(input: Input, checkClass: CheckClass = CHECK_CLASS)
   // 1.2.7 U-10 (C63): only the person turns the mode on (1.1.1 rule); an agent's `swarm autonomy` never runs.
   if (input.permission === "bash" && runsAutonomyCommand(input.metadata.command))
     return { ...refused("own_api"), reason: "person_only" }
+  // 1.2.7 row 47j (U9-3, C76): every graft sub-command runs under the consent except `graft init`, which writes the
+  // machine's own hook and MCP configuration: refused in autonomous mode, the root's as a subagent's, as a write of a
+  // protected place is (the consent never turns it into a held write outside, which the main agent could open).
+  if (input.permission === "bash" && runsGraftInit(input.metadata.command)) return refused("protected_path")
   // 1.2.7 F-4 (N7-051): Swarm's own API has its own category, split from `app_state`; a reason names an unresolved form.
   const ownApi = ownServerCall(input)
   if (ownApi) return ownApi.reason ? { ...refused("own_api"), reason: ownApi.reason } : refused("own_api")

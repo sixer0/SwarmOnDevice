@@ -125,6 +125,30 @@ describe("M1-01 / M1-12: nor A without consent, nor the root's U12 look under co
   })
 })
 
+// INTENT row 47j (U9-2, C76; supersedes C61/C70's refusal of these for the consented callers): the options the person's
+// ruling names leave the read class (above) and run as running a program under the consent, root and subagent alike:
+// A with `bypassed` set (opened by the consent, on record), never a read. The read roles keep them out (U4).
+describe("U9-2: under the consent a program-running read option runs as a program, root and subagent", () => {
+  for (const command of [
+    "rg --hostname-bin=./marker.sh foo f",
+    "rg --pre ./marker.sh foo f",
+    "diff -l a.md b.md",
+    "file -z f",
+    "git cat-file --filters HEAD:a.md",
+    "git log --show-signature -1",
+    "git log --pretty=format:%GS -1",
+  ])
+    test(command, async () => {
+      const input = await sh(command)
+      for (const verdict of [root(input), subagent(input)]) {
+        expect([command, verdict.class, verdict.bypassed !== undefined]).toEqual([command, "A", true])
+        expect(verdict.category === "protected_read" || verdict.bypassed === "protected_read").toBe(false)
+      }
+      expect(AutonomyTable.SUBAGENT_RUNS_LIKE_ROOT.has(subagent(input).bypassed!)).toBe(true)
+      expect(base(input).class).not.toBe("A")
+    })
+})
+
 describe("M1-01: the looks themselves stay reads", () => {
   for (const command of [
     "rg foo f",
@@ -219,6 +243,9 @@ describe("M1-11: graft read rule allowlist", () => {
     "graft grep -i foo --fixed --no-refresh",
     "graft blast --no-refresh",
     "graft blast --base main -d 2 --format json --no-owners --no-refresh",
+    // INTENT row 47j (U9-3, C76): with or without --no-refresh (a refresh only rebuilds graft's own cache).
+    "graft ask 'where is the gate'",
+    "graft blast --base main --no-owners",
   ])
     test(`allowed: ${command}`, () => expect(readOnly(command)).toBe(true))
   for (const command of [

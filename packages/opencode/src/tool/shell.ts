@@ -1232,6 +1232,35 @@ function cmd(shell: string, command: string, cwd: string, env: NodeJS.ProcessEnv
     detached: process.platform !== "win32",
   })
 }
+/**
+ * 1.2.7 row 47j (U9-6): the files whose values a consented content search over app-state folders may print, for the
+ * masking to learn before it runs. Bounded (depth, count), and the app's own checkouts, caches and logs are left out:
+ * they are projects or bulk, not settings. Values are learned by name (`Secrets.learnFile`), never read into the output.
+ */
+const STATE_SKIP = new Set(["worktree", "repos", "node_modules", ".git", "snapshot", "log", "logs", "bin", "cache", "tool-output"])
+const STATE_DEPTH = 3
+const STATE_MAX_FILES = 400
+function stateFiles(folders: readonly string[]) {
+  const out: string[] = []
+  const walk = (folder: string, depth: number) => {
+    if (out.length >= STATE_MAX_FILES) return
+    let entries: import("node:fs").Dirent[]
+    try {
+      entries = readdirSync(folder, { withFileTypes: true })
+    } catch {
+      return
+    }
+    for (const entry of entries) {
+      if (out.length >= STATE_MAX_FILES) return
+      const file = path.join(folder, entry.name)
+      if (entry.isFile()) out.push(file)
+      else if (entry.isDirectory() && depth < STATE_DEPTH && !STATE_SKIP.has(entry.name)) walk(file, depth + 1)
+    }
+  }
+  for (const folder of folders) walk(folder, 0)
+  return out
+}
+
 const parser = lazy(async () => {
   const { Parser } = await import("web-tree-sitter")
   const { default: treeWasm } = await import("web-tree-sitter/tree-sitter.wasm" as string, {
@@ -1463,6 +1492,16 @@ export const ShellTool = Tool.define(
       else if (unsureRead) scan.withheld = WITHHELD_WHOLE(unsureRead)
       else if (printed) scan.withheld = `[hidden:${printed}]`
       if (read.size > 0) scan.masked = true
+      // 1.2.7 row 47j (U9-6, C76): a content search over a folder that holds Swarm's state (`rg x ~`, `grep -r x
+      // ~/.config`) runs under the consent; the values of the state files it may print are learned before it runs and its
+      // output is masked, with the table's own reading of which folders it searches.
+      if (!ps) {
+        const searched = AutonomyTable.searchedStateFolders(root.text, cwd, instance)
+        if (searched.length > 0) {
+          for (const file of stateFiles(searched)) scan.secretFiles.add(file)
+          scan.masked = true
+        }
+      }
 
       return scan
     })
