@@ -49,6 +49,9 @@ type PlatformBase = {
   /** Reveal a local path in the system file manager; false when the path does not exist (desktop only) */
   revealPath?(path: string): Promise<boolean>
 
+  /** Open the project's vault hub note in Obsidian; main checks the path and builds the URL (desktop only, N8-116) */
+  openObsidianNote?(hubPath: string): Promise<"opened" | "missing" | "outside" | "no-app" | "failed">
+
   /** Restart the app  */
   restart(): Promise<void>
 

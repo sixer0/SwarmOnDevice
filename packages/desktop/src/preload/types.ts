@@ -192,6 +192,8 @@ export type ElectronAPI = {
   openLocalFile: (url: string) => void
   openPath: (path: string, app?: string) => Promise<void>
   revealPath: (path: string) => Promise<boolean>
+  /** 1.2.8 row 42c (AC-OBSf, N8-116): opens the project's vault hub note in Obsidian; main checks the path. */
+  openObsidianNote: (hubPath: string) => Promise<"opened" | "missing" | "outside" | "no-app" | "failed">
   readClipboardImage: () => Promise<{ buffer: ArrayBuffer; width: number; height: number } | null>
   getWindowFocused: () => Promise<boolean>
   getWindowFullscreen: () => Promise<boolean>

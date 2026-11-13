@@ -26,7 +26,8 @@ import type { UpdaterController } from "./updater-controller"
 import { createUpdaterSubscriptions } from "./updater-subscriptions"
 import { createDesktopDraftStore } from "./draft-store"
 import { nativeT } from "./native-translations"
-import { getLogger } from "./logging"
+import { getLogger, write as writeLog } from "./logging"
+import { obsidianVaultRoot, registerOpenObsidianNoteHandler } from "./external-url"
 import { isSetupToolsOfferPending, markSetupToolsOffered } from "./onboarding"
 import { createSetupRunner, setupDir, type SetupRunner } from "./setup-runner"
 import { createInstallConfirm, registerSetupToolsHandlers } from "./setup-tools-ipc"
@@ -342,6 +343,18 @@ export function registerIpcHandlers(deps: Deps) {
         process.platform === "darwin" ? (["open", ["-a", app, path]] as const) : ([app, [path]] as const)
       execFile(cmd, args, (err) => (err ? reject(err) : resolve()))
     })
+  })
+
+  // 1.2.8 row 42c (AC-OBSf, D-O2, SR8-15): the memory view's "Open graph in Obsidian". Only the app's own window;
+  // only a note in <vault>/swarm-memory/; the URL is built here. Refusals log the reason, never the path (as C55).
+  registerOpenObsidianNoteHandler({
+    ipcMain,
+    windowOf: (sender) => BrowserWindow.fromWebContents(sender),
+    isRendererUrl,
+    vaultRoot: () => obsidianVaultRoot(process.env, app.getPath("home")),
+    protocolApp: (url) => app.getApplicationNameForProtocol(url),
+    openExternal: (url) => shell.openExternal(url),
+    log: (message, context) => writeLog("window", message, context, "warn"),
   })
 
   // 1.2.7 row 25 (U-2, SR7-11): only a path inside this window's roots and outside Swarm's and the credential places;

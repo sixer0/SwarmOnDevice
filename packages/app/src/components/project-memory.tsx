@@ -11,6 +11,7 @@ import type { MemoryItem, MemoryRef, MemoryRefusal, MemoryResult } from "@openco
 import { ProjectMemory } from "@opencode-ai/schema/project-memory"
 import { createEffect, createResource, createSignal, For, onCleanup, Show } from "solid-js"
 import { useLanguage } from "@/context/language"
+import { usePlatform } from "@/context/platform"
 import { useSDK } from "@/context/sdk"
 import { showToast } from "@/utils/toast"
 
@@ -59,6 +60,14 @@ function memoryGroups(items: readonly Item[]) {
 function memoryRefLabel(ref: MemoryRef) {
   if ("symbol" in ref) return ref.path ? `${ref.symbol} (${ref.path})` : ref.symbol
   return ref.line ? `${ref.path}:${ref.line}` : ref.path
+}
+
+function optionalPlatform() {
+  try {
+    return usePlatform()
+  } catch {
+    return undefined
+  }
 }
 
 function createProjectMemory() {
@@ -162,6 +171,35 @@ export function DialogProjectMemory() {
   }
 
   const client = () => memory.sdk().client.memory
+
+  // 1.2.8 OBS-f (01c §7.1, N8-114..N8-121): ask the server where the hub note is, then hand only that path to the
+  // desktop, which checks it and opens Obsidian. No hub yet -> say so and never call the desktop.
+  // Without a platform provider (the view's own render tests) there is simply no Obsidian action.
+  const platform = optionalPlatform()
+  const [opening, setOpening] = createSignal(false)
+  const obsidianText = {
+    missing: "memory.obsidian.notYet",
+    "no-app": "memory.obsidian.noApp",
+    outside: "memory.obsidian.failed",
+    failed: "memory.obsidian.failed",
+  } as const
+  const openObsidian = async () => {
+    const open = platform?.openObsidianNote
+    if (!open || opening()) return
+    setOpening(true)
+    const result = await client()
+      .vault({ language: language.locale() === "id" ? "id" : "en" })
+      .then((response) => {
+        const vault = response.data
+        if (!vault) return "failed" as const
+        if (!vault.exists) return "missing" as const
+        return open(vault.hubPath)
+      })
+      .catch(() => "failed" as const)
+      .finally(() => setOpening(false))
+    if (result === "opened") return
+    showToast({ variant: "error", title: language.t(obsidianText[result]) })
+  }
 
   const add = async (event: SubmitEvent) => {
     event.preventDefault()
@@ -283,6 +321,20 @@ export function DialogProjectMemory() {
               <p class="text-[12px] leading-[18px] text-v2-text-text-faint">
                 {info().enabled ? language.t("memory.privacy") : language.t("memory.off")}
               </p>
+              {/* 1.2.8 OBS-f (01c §7.1): the one Obsidian action; desktop only, no new panel. */}
+              <Show when={platform?.openObsidianNote}>
+                <ButtonV2
+                  type="button"
+                  data-action="open-obsidian"
+                  variant="neutral"
+                  class="self-start"
+                  title={language.t("memory.obsidian.hint")}
+                  disabled={opening()}
+                  onClick={() => void openObsidian()}
+                >
+                  {language.t("memory.obsidian.open")}
+                </ButtonV2>
+              </Show>
             </div>
           </>
         )}
