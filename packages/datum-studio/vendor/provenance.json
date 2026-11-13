@@ -125,7 +125,7 @@
   "patched": 164,
   "replaced": 12,
   "added": 30,
-  "bytes": 10199672
+  "bytes": 10200313
  },
  "files": [
   {
@@ -4626,9 +4626,10 @@
   {
    "path": "src/lib/studio/services/adapt-v1/blocks.ts",
    "status": "patched",
-   "bytes": 24495,
+   "bytes": 25136,
    "source_sha256": "6b28fb502660a4e619018e997c4c268babeca1fe90ab23695cc64eb62599ae54",
-   "sha256": "1d2bd0d0cfdb160969d2a1a86e218816141112c93f3bbfbf19763f29d8a7f6c4",
+   "sha256": "41b76027e1b2acdd0306dd16ae468f95c45af7fa4c8a18b7c45f822333e24aa2",
+   "patch_row58a": {"id": "128-58a-adapt-v1-spec-fields", "row": "58a", "decision": "C132 (1.2.8 row 58a; schema row 52, C30)", "summary": "adaptDiagramSpec: lane_orientation, phases, pools, jumps added to the rec.rest allow-list and copied when present (absent = no key, older v1 specs adapt byte-identical); before, a studio.doc/v1 document lost them (counted as stripped) and its class.phase/class.pool named unknown ids", "before_sha256": "1d2bd0d0cfdb160969d2a1a86e218816141112c93f3bbfbf19763f29d8a7f6c4", "after_sha256": "41b76027e1b2acdd0306dd16ae468f95c45af7fa4c8a18b7c45f822333e24aa2", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/58a_row58a_diffs/services_adapt-v1_blocks.ts.diff", "diff_sha256": "680d465cc1c41dfd1ccbc496a447b4b7cc1f2b2aba01b8eeaed30bbeeab870f0"},
    "patch_row45": {"id": "row45-t11-direction-contract", "row": "45", "decision": "1.2.6 patch T-11 contract (register N-109; 01e §3.1)", "summary": "adaptDiagramSpec: direction added to the rec.rest allow-list and copied", "before_sha256": "6b28fb502660a4e619018e997c4c268babeca1fe90ab23695cc64eb62599ae54", "after_sha256": "1d2bd0d0cfdb160969d2a1a86e218816141112c93f3bbfbf19763f29d8a7f6c4", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/45_row45_diffs/src_lib_studio_services_adapt-v1_blocks.ts.diff", "diff_sha256": "33d8cd5ab87875965bdf7cc921284a2010f22b50969445b0045de01bd7a5a7d5"}
   },
   {
@@ -6360,6 +6361,7 @@
   "56c",
   "53b",
   "57c",
-  "58"
+  "58",
+  "58a"
  ]
 }
