@@ -1,0 +1,87 @@
+{
+  "comment": "Synthetic store for N8-359 (1.2.8 row 43b, AC-OBSc). Names kajian-tarif, tarif-check, lumen are test values (01c 4.6), not client data.",
+  "key": "dir-3fa9c1d2e4b5a6978c0d1e2f",
+  "folder": "default-project-3fa9c1",
+  "projectName": "Default Project",
+  "items": [
+    {
+      "id": "a1b2c3",
+      "text": "Tabel tarif dibaca dari lampiran B, bukan A.",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1763000000000,
+      "sessionID": "ses_1",
+      "refs": [{ "path": "docs/2026-11-13_kajian-tarif/02_data/tarif.md", "line": 12 }]
+    },
+    {
+      "id": "b2c3d4",
+      "text": "Selalu pakai format tanggal YYYY-MM-DD di laporan.",
+      "source": "user",
+      "deviceOnly": false,
+      "time": 1763000100000,
+      "body": "Berlaku untuk semua misi.\nTermasuk lampiran dan tabel.",
+      "refs": [{ "path": "docs/2026-11-13_kajian-tarif/02_data/tarif.md" }]
+    },
+    {
+      "id": "c3d4e5",
+      "text": "bun test di packages/opencode butuh --timeout 30000",
+      "source": "learned",
+      "deviceOnly": false,
+      "time": 1763000200000,
+      "sessionID": "ses_2",
+      "untrusted": true,
+      "refs": [{ "symbol": "Flock.withLock", "path": "packages/core/src/util/flock.ts" }]
+    },
+    {
+      "id": "d4e5f6",
+      "text": "Skill tarif-check (project): Check tariff tables against the annex. Triggers: tarif, lampiran.",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1763000300000,
+      "sessionID": "ses_1",
+      "body": "Path: .opencode/skills/tarif-check/SKILL.md\nKeywords: tarif, lampiran",
+      "refs": [{ "path": ".opencode/skills/tarif-check/SKILL.md" }]
+    },
+    {
+      "id": "e5f6a7",
+      "kind": "index",
+      "missionId": "2026-11-13_kajian-tarif",
+      "text": "2026-11-13 2026-11-13_kajian-tarif | selesai, tarif baru dihitung | triggers: tarif, lampiran | docs/2026-11-13_kajian-tarif/10_report/report.md",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1763000400000,
+      "sessionID": "ses_1",
+      "body": "Tarif baru dihitung dengan tarif-check.",
+      "refs": [{ "path": "docs/2026-11-13_kajian-tarif/10_report/report.md" }]
+    },
+    {
+      "id": "f6a7b8",
+      "kind": "index_rollup",
+      "text": "2026-Q3 roll-up | 2 missions | triggers: lumen, sync, crash | body",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1762000000000,
+      "body": "[0a1b2c] 2026-09-04 2026-09-04_lumen-offline-sync | sinkron luring selesai | triggers: lumen, sync | docs/2026-09-04_lumen-offline-sync/report/report.md\n[1b2c3d] 2026-09-06 2026-09-06_lumen-crash-triage | crash dipilah | triggers: lumen, crash | docs/2026-09-06_lumen-crash-triage/report/report.md"
+    },
+    {
+      "id": "0a1b2c",
+      "kind": "index",
+      "missionId": "2026-09-04_lumen-offline-sync",
+      "rolledInto": "f6a7b8",
+      "text": "2026-09-04 2026-09-04_lumen-offline-sync | sinkron luring selesai | triggers: lumen, sync | docs/2026-09-04_lumen-offline-sync/report/report.md",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1757000000000
+    },
+    {
+      "id": "1b2c3d",
+      "kind": "index",
+      "missionId": "2026-09-06_lumen-crash-triage",
+      "rolledInto": "f6a7b8",
+      "text": "2026-09-06 2026-09-06_lumen-crash-triage | crash dipilah | triggers: lumen, crash | docs/2026-09-06_lumen-crash-triage/report/report.md",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1757100000000
+    }
+  ]
+}
