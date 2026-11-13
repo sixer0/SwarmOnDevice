@@ -294,13 +294,17 @@ export function MissionControl(props: MissionControlMount & { width?: number }) 
                   </div>
                 </Show>
 
+                {/* 1.2.7 row 58a (F-2, F-3): the panel has a definite height in both layouts (sheet: h-[72%] of the main
+                    area, was max-h; sidebar: the grid row) so the feed and the decision card size against it; see the
+                    layout contract in mission-command.tsx. gap-1.5 is the command card's own spacing (its wrappers are
+                    display: contents); mt-1.5 keeps the 12 px before the deliverables. */}
                 <aside
                   data-mission-side
                   inert={sheetMode() && !sheet() ? true : undefined}
                   class={
                     sheetMode()
-                      ? "absolute inset-x-0 bottom-0 z-[5] flex max-h-[72%] flex-col gap-3 overflow-y-auto rounded-t-[14px] bg-v2-background-bg-base p-2 transition-transform duration-[250ms] [box-shadow:0_-12px_30px_rgba(0,0,0,.35)] motion-reduce:transition-none"
-                      : "flex min-h-0 flex-col gap-3 overflow-y-auto"
+                      ? "absolute inset-x-0 bottom-0 z-[5] flex h-[72%] flex-col gap-1.5 overflow-y-auto rounded-t-[14px] bg-v2-background-bg-base p-2 transition-transform duration-[250ms] [box-shadow:0_-12px_30px_rgba(0,0,0,.35)] motion-reduce:transition-none"
+                      : "flex min-h-0 flex-col gap-1.5 overflow-y-auto"
                   }
                   classList={{ "translate-y-[105%]": sheetMode() && !sheet() }}
                 >
@@ -316,6 +320,7 @@ export function MissionControl(props: MissionControlMount & { width?: number }) 
                     )}
                   </Show>
                   <div
+                    class="mt-1.5 shrink-0"
                     ref={(el) => {
                       deliverables = el
                     }}

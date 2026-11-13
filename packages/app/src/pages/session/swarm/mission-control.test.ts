@@ -91,5 +91,5 @@ test("mount renders with a fake source, switches missions, toggles the sheet, an
   const [output, code] = await Promise.all([new Response(run.stderr).text(), run.exited])
   if (code !== 0) throw new Error(output)
   expect(output).toContain(" 0 fail")
-  expect(output).toContain(" 27 pass") // row 88 (1.2.6): +3 drift line; row 197: +3 approved line / self-approved label; row 190: +5 status line; row 136a: +2 M6 tests; row 133b: +5 expand toggle tests; row 180: +3 empty/unavailable
+  expect(output).toContain(" 29 pass") // 1.2.7 row 58a: +2 side panel layout (F-2/F-3, INTENT); row 88 (1.2.6): +3 drift line; row 197: +3 approved line / self-approved label; row 190: +5 status line; row 136a: +2 M6 tests; row 133b: +5 expand toggle tests; row 180: +3 empty/unavailable
 }, 60_000)

@@ -281,6 +281,28 @@ describe("MissionControl mount", () => {
     })
   }
 
+  // 1.2.7 row 58a (F-2, F-3): the side panel is a flex column with a definite height in both layouts (the sheet is
+  // h-[72%], was max-h-[72%]), so the feed and the decision card size against it; the deliverables keep their height.
+  for (const width of [1280, 420]) {
+    test(`side panel: definite-height flex column, command wrappers display: contents (${width} px)`, async () => {
+      await mount({ width, ids: ["m-debug-2"] })
+      await until(() => !!q("[data-mission-hq]") && !!q("[data-mission-decision]"))
+      const side = q("[data-mission-side]")!.className.split(/\s+/)
+      for (const c of ["flex", "flex-col", "overflow-y-auto"]) expect(side).toContain(c)
+      if (width === 420) {
+        expect(side).toContain("h-[72%]")
+        expect(side).not.toContain("max-h-[72%]")
+      } else expect(side).toContain("min-h-0")
+      expect(q("[data-mission-command]")!.className).toBe("contents")
+      expect(q("[data-mission-command-card]")!.className).toBe("contents")
+      expect(q("[data-mission-decision]")!.parentElement).toBe(q("[data-mission-command]"))
+      expect(q("[data-mission-command]")!.parentElement).toBe(q("[data-mission-side]"))
+      const deliverables = q("[data-mission-deliverables]")!.parentElement!
+      expect(deliverables.parentElement).toBe(q("[data-mission-side]"))
+      expect(deliverables.className.split(/\s+/)).toContain("shrink-0")
+    })
+  }
+
   test("900 px is still the sidebar (above 760)", async () => {
     await mount({ width: 900 })
     await until(() => !!q("[data-mission-hq]"))

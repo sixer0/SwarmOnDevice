@@ -75,12 +75,14 @@ const time = (at: string) => {
   return Number.isFinite(ms) ? ms : 0
 }
 
-/** Store feed + local lines of this mission, by time, newest first, at most FEED_SIZE (1.2.7 U-4). */
+/**
+ * Store feed + local lines of this mission, by time, newest first, at most FEED_SIZE (1.2.7 U-4).
+ * `model.feed` is already newest first and `local` is in write order (oldest first). Both are put newest first and
+ * sorted descending with a stable sort, so lines with the same time keep "written last shows first" (1.2.7 row 58a,
+ * F-1: a batch written in one store job shares one time). On a tie a local line shows above a store line.
+ */
 export function mergeFeed(model: MissionVM, local: MissionFeedLine[]) {
-  return [...model.feed, ...local]
-    .sort((a, b) => time(a.at) - time(b.at))
-    .slice(-FEED_SIZE)
-    .reverse()
+  return [...[...local].reverse(), ...model.feed].sort((a, b) => time(b.at) - time(a.at)).slice(0, FEED_SIZE)
 }
 
 /** "What's blocking?" (§5.6): computed locally, never stored. */

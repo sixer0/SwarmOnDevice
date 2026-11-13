@@ -515,8 +515,10 @@ export function buildMission(
     ? { id: latest.id, question: latest.question, optionLabel: labelOf(latest), decision: latest.answer!.decision }
     : null
 
+  // Messages in write order (seq) first, so the stable time sort below keeps "written last shows first" when several
+  // messages share one time (one store job, 1.2.7 row 58a F-1) whatever order the wire sent them in.
   const feed: MissionFeedLine[] = [
-    ...(get.messages ?? []).map((msg) => ({
+    ...[...(get.messages ?? [])].sort((a, b) => a.seq - b.seq).map((msg) => ({
       key: `m${msg.seq}`,
       from: msg.from,
       to: msg.to,
