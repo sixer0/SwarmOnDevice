@@ -156,7 +156,7 @@ await override("@/context/command", {
       register: (name: string, options: () => never[]) => world.commands.set(name, options),
     }),
 })
-await override("@/context/sdk", { useSDK: () => () => partly({ directory: "/work/proj" }) })
+await override("@/context/sdk", { useSDK: () => () => partly({ directory: "/work/proj", event: { on: () => () => {} } }) })
 await override("@/pages/session/session-layout", {
   useSessionLayout: () => partly({ params: { id: "ses_a" } }),
 })

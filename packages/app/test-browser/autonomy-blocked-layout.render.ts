@@ -46,8 +46,31 @@ mock.module("@/context/platform", () => ({
     },
   }),
 }))
-mock.module("@/context/server", () => ({ useServer: () => ({ key: "local" }), ServerConnection: {} }))
+mock.module("@/context/server", () => ({
+  // The folder-missing notice (layout-new.tsx) reads these; isLocal() is false so it checks nothing.
+  useServer: () => ({
+    key: "local",
+    isLocal: () => false,
+    current: undefined,
+    ready: { promise: Promise.resolve() },
+    projects: { last: () => undefined, touch: () => {} },
+  }),
+  ServerConnection: {},
+  // Imported by the @/context/global chain that layout-new.tsx now pulls in; never called by this test.
+  createServerProjects: () => ({}),
+  RECENTLY_CLOSED_DISPLAY_LIMIT: 5,
+  visibleRecentlyClosed: () => [],
+}))
+mock.module("@/context/layout", () => ({
+  useLayout: () => ({
+    ready: { promise: Promise.resolve() },
+    projects: { list: () => [], open: () => {} },
+    home: { setSelection: () => {} },
+  }),
+}))
+mock.module("@/components/directory-picker", () => ({ useDirectoryPicker: () => () => {} }))
 mock.module("@/context/server-sdk", () => ({
+  createServerSdkContext: () => ({}),
   useServerSDK: () => () => ({
     event: {
       listen: (listener: Listener) => {
@@ -60,6 +83,7 @@ mock.module("@/context/server-sdk", () => ({
   }),
 }))
 mock.module("@/context/server-sync", () => ({
+  createServerSyncContext: () => ({}),
   useServerSync: () => () => ({ session: { data: { info: { root: { title: "Fix login" } } } } }),
 }))
 mock.module("@/context/settings", () => ({
