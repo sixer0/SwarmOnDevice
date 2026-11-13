@@ -317,7 +317,9 @@ describe("guide", () => {
 // services/render/figures.ts). Each render is split into the <marker> elements and the rest; both are hashed (sha256,
 // first 16 hex) and compared with CHAR_BASE, which was generated with this describe at BASE e1f9673772 (red-base
 // worktree, REL128_VIS0_CHAR_PRINT=1). Green at BASE by construction, green at HEAD while the engine keeps old output.
-// - "outside markers": every path, node, text, hop and label byte of BASE (clause 1). No exception.
+// - "outside markers": every path, node, text, hop and label byte of BASE (clause 1). Only exception: the specs listed in
+//   CHAR_ROUTE_INTENT (row 56c, C51/C75/C101: connector ends moved onto the true outline, back-jogs removed), whose
+//   outside-marker hashes must equal the listed HEAD hashes instead.
 // - "marker elements": the H-ARW marker set (row 57, AC-HARW INTENT): each BASE `mk` hash maps to its H-ARW hash in
 //   CHAR_HARW_MK; CHAR_BASE keeps the BASE hashes as generated.
 // - "verdicts": validateSpec non-PASS ids, build issues, geometry ids, ELK decision, refusal id (clause 5); an entry may
@@ -550,6 +552,33 @@ const CHAR_INTENT: Record<string, [string, string]> = {
     ["AC-HNB4", "- - - - | V[] X[DATUM-37-rank] E[] | V[] X[DATUM-37-rank] E[]"],
   "fixtures/syn128/hnb4_graph_sheet_overflow.json#/spec":
     ["AC-HNB4", "- - - - | V[] X[DATUM-37-sheet] E[] | V[] X[DATUM-37-sheet] E[R1]"],
+  // Row 56c (C51, C75): the diamond exits land on the diamond outline; the fan-in stub on Langkah D's top is gone, so
+  // GEOM_STUB_SEGMENT is no longer reported (GEOM_ARROW_TANGENT stays, pre-existing).
+  "fixtures/syn128/hna_flow_v2.json#/block/spec":
+    ["AC-VIS-56c", "83825ace228e8e9e 411292684f467f10 83825ace228e8e9e 411292684f467f10 | V[] I[] G[GEOM_ARROW_TANGENT:REPORT] E[] | V[] I[] G[GEOM_ARROW_TANGENT:REPORT] E[R1]"],
+  "fixtures/syn128/hna_flow_v2.json#/chapter/chapter/sections/0/blocks/1/spec":
+    ["AC-VIS-56c", "83825ace228e8e9e 411292684f467f10 83825ace228e8e9e 411292684f467f10 | V[] I[] G[GEOM_ARROW_TANGENT:REPORT] E[] | V[] I[] G[GEOM_ARROW_TANGENT:REPORT] E[R1]"],
+  "fixtures/syn128/hna_flow_v2.json#/writeBlock/diagram/spec":
+    ["AC-VIS-56c", "83825ace228e8e9e 411292684f467f10 83825ace228e8e9e 411292684f467f10 | V[] I[] G[GEOM_ARROW_TANGENT:REPORT] E[] | V[] I[] G[GEOM_ARROW_TANGENT:REPORT] E[R1]"],
+}
+/**
+ * Swarm 1.2.8 row 56c (C51, C75, C101; user item 7): intended changes of the bytes outside <marker>, key -> [reason,
+ * HEAD sync hash, HEAD auto hash]. Only connector paths (and the edge labels placed on them) move; nodes and markers
+ * keep their bytes. Generated with REL128_VIS0_CHAR_PRINT=1 on the row 56c engine (isolated copy of HEAD 2a85a24cbb).
+ */
+const CHAR_ROUTE_INTENT: Record<string, [string, string, string]> = {
+  "engine-rev-a/svg/fixtures/case04.studio.json#": ["srv->db ends on the cylinder's front lid rim (defect 3)", "057ab411e94da281", "057ab411e94da281"],
+  "engine-rev-a/svg/fixtures/case04_v2.studio.json#": ["srv->db ends on the cylinder's front lid rim (defect 3)", "c89fa5f3cb3736ab", "c89fa5f3cb3736ab"],
+  "engine-rev-a/svg/fixtures/case05_diagram_block.json#/spec": ["srv->db ends on the cylinder's front lid rim (defect 3)", "698931f960562706", "698931f960562706"],
+  "fixtures/syn127/f6_fan_in_specs.json#/specs/0/spec": ["fan-in Z routes bend in the gap, no back-jog along the target side (defect 1)", "50b7fec1619a6c96", "50b7fec1619a6c96"],
+  "fixtures/syn127/f6_fan_in_specs.json#/specs/1/spec": ["fan-in Z routes bend in the gap, no back-jog along the target side (defect 1)", "36042e0c807d0821", "36042e0c807d0821"],
+  "fixtures/syn127/f6_fan_in_specs.json#/specs/2/spec": ["fan-in Z routes bend in the gap, no back-jog along the target side (defect 1)", "69be5fda0acc21af", "69be5fda0acc21af"],
+  "fixtures/syn127/f6_fan_in_specs.json#/specs/3/spec": ["fan-in Z routes bend in the gap, no back-jog along the target side (defect 1)", "276aab6f31e9fd03", "276aab6f31e9fd03"],
+  "fixtures/syn127/f6_fan_in_specs.json#/specs/7/spec": ["fan-in Z routes bend in the gap, no back-jog along the target side (defect 1)", "d187d02cb19263ef", "d187d02cb19263ef"],
+  "fixtures/syn128/hn6_engine_entry_collision.json#/spec": ["Z routes bend in the gap, no back-jog along the target side (defect 1)", "b3894b84e247a4a9", "b3894b84e247a4a9"],
+  "fixtures/syn128/hna_flow_v2.json#/block/spec": ["diamond exits start on the diamond's slanted sides (defect 2)", "83825ace228e8e9e", "83825ace228e8e9e"],
+  "fixtures/syn128/hna_flow_v2.json#/chapter/chapter/sections/0/blocks/1/spec": ["diamond exits start on the diamond's slanted sides (defect 2)", "83825ace228e8e9e", "83825ace228e8e9e"],
+  "fixtures/syn128/hna_flow_v2.json#/writeBlock/diagram/spec": ["diamond exits start on the diamond's slanted sides (defect 2)", "83825ace228e8e9e", "83825ace228e8e9e"],
 }
 
 describe("char", () => {
@@ -572,7 +601,8 @@ describe("char", () => {
     for (const c of corpus) {
       const b = parts(CHAR_BASE[c.key]!)
       const n = parts(now[c.key]!)
-      expect([n.so, n.ao], c.key).toEqual([b.so, b.ao])
+      const route = CHAR_ROUTE_INTENT[c.key] // row 56c INTENT: the listed HEAD hashes replace BASE's
+      expect([n.so, n.ao], c.key).toEqual(route ? [route[1], route[2]] : [b.so, b.ao])
     }
   })
 

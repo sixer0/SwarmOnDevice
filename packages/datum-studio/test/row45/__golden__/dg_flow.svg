@@ -8,9 +8,9 @@
 </defs>
 <rect x="0" y="0" width="128.0" height="114.3" fill="#FCFCFB"/>
 <path d="M 58.67 23.81 L 58.67 28.57 L 58.67 28.57 L 58.67 28.57 L 58.67 28.57 L 58.67 33.34" fill="none" stroke="#101418" stroke-width="0.45" marker-end="url(#head-data)" data-mark="link" data-series="data" data-index="0"/>
-<path d="M 53.33 47.62 L 53.33 52.39 L 53.33 52.39 L 60.44 52.39 L 60.44 52.39 L 60.44 57.15" fill="none" stroke="#101418" stroke-width="0.45" marker-end="url(#head-data)" data-mark="link" data-series="data" data-index="1"/>
+<path d="M 53.33 47.62 L 53.33 52.39 L 53.33 52.39 L 60.44 52.39 L 60.44 52.39 L 60.44 60.32" fill="none" stroke="#101418" stroke-width="0.45" marker-end="url(#head-data)" data-mark="link" data-series="data" data-index="1"/>
 <path d="M 69.33 76.2 L 69.33 80.96 L 69.33 80.96 L 58.67 80.96 L 58.67 80.96 L 58.67 85.72" fill="none" stroke="#2B3640" stroke-width="0.45" stroke-dasharray="3.2,1.6" marker-end="url(#head-control)" data-mark="link" data-series="control" data-index="2"/>
-<path d="M 78.22 57.15 L 78.22 52.39 L 78.22 52.39 L 64.0 52.39 L 64.0 52.39 L 64.0 47.62" fill="none" stroke="#2B3640" stroke-width="0.45" stroke-dasharray="3.2,1.6" marker-end="url(#head-control)" data-mark="link" data-series="control" data-index="3"/>
+<path d="M 78.22 60.32 L 78.22 52.39 L 78.22 52.39 L 64.0 52.39 L 64.0 52.39 L 64.0 47.62" fill="none" stroke="#2B3640" stroke-width="0.45" stroke-dasharray="3.2,1.6" marker-end="url(#head-control)" data-mark="link" data-series="control" data-index="3"/>
 <rect x="54.74" y="24.57" width="7.84" height="3.54" fill="#FCFCFB"/>
 <text x="58.67" y="26.96" font-family="IBM Plex Mono" font-size="2.081" font-weight="400" fill="#101418" text-anchor="middle">TIKET</text>
 <rect x="52.97" y="49.57" width="7.84" height="3.54" fill="#FCFCFB"/>

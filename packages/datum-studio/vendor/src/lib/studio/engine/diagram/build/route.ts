@@ -14,9 +14,9 @@ import { DiagramDefect, LATTICE_Y, polylineD, snap, type Sheet, type SheetNode }
 import { diagramFitNote, diagramFitRoute } from "../fit/state";
 import { nudgeRoutes } from "./lanesroute";
 import { activeElkRoutes } from "../elk/routes";
-import { edgeConflicts, ENTRY_COLLISION_MM } from "../fit/lint";
+import { edgeConflicts, ENTRY_COLLISION_MM, STUB_SEGMENT_MIN_MM } from "../fit/lint";
 import { flowDirectionOf, flowRanks } from "../layout-a/flow";
-import { CURVE_SAMPLES } from "../core/tokens";
+import { ARROW_SIZES_MM, CURVE_SAMPLES } from "../core/tokens";
 import { ANNOTATION_BRACKET_MM, isLabelBelow, labelBelowOutline } from "../fit/text";
 import { clearFirstRender, noteFirstRender } from "./autofit";
 
@@ -276,6 +276,7 @@ function outlineBottomY(node: SheetNode, x: number): number | null {
 }
 function glueEnd(pts: Pt[], node: SheetNode, atEnd: boolean): Pt[] {
   if (pts.length >= 2 && isLabelBelow(node.spec.shape)) return glueLabelBelow(pts, node, atEnd);
+  if (pts.length >= 2 && OUTLINE_SHAPES.has(node.spec.shape ?? "")) return glueOutline(pts, node, atEnd);
   if (pts.length < 2 || (node.spec.shape !== "document" && node.spec.shape !== "offpage")) return pts;
   const k = atEnd ? pts.length - 1 : 0;
   const nb = atEnd ? pts.length - 2 : 1;
@@ -287,6 +288,152 @@ function glueEnd(pts: Pt[], node: SheetNode, atEnd: boolean): Pt[] {
   out[k] = [p[0], yy];
   return out;
 }
+/**
+ * Swarm 1.2.8 row 56c (C51, C75, C101; user item 7, Visio minimum): shapes whose outline leaves the node box on a side,
+ * so a connector end on the box would stop short of the drawn line. Fractions as `core/svg.ts` draws them: diamond
+ * vertices at the side midpoints; cylinder lid and base = front half of an ellipse of ry = 0.16 h; circle r = min(w, h)/2
+ * centred; stadium caps of radius h/2; hexagon corner inset 0.22 w; parallelogram slant 0.18 w (top edge shifted right).
+ */
+const OUTLINE_SHAPES: ReadonlySet<string> = new Set(["diamond", "cylinder", "circle", "stadium", "hexagon", "parallelogram"]);
+/**
+ * Row 56c (C101): a diamond side flatter than this (deg from the horizontal) takes no horizontal arrowhead: the head's
+ * half-angle (atan(0.89 / 2) = 24 deg, row 57 `arrowMarkerSvg`) plus 10 deg clearance.
+ */
+const DIAMOND_HEAD_CLEAR_DEG = 34;
+/**
+ * Row 56c: shortest last piece of a connector re-ended on a diamond (the drop onto a shallow side, the run into a
+ * neighbouring vertex): the default arrowhead (`ARROW_SIZES_MM.m`, row 57) plus 0.5 mm of line behind it.
+ */
+const HEAD_RUN_MM = ARROW_SIZES_MM.m + 0.5;
+
+/** Row 56c: y of the drawn outline on the vertical line at x (top = upper outline), or null when x misses it. */
+function outlineYAt(node: SheetNode, x: number, top: boolean): number | null {
+  const { x: nx, y, w, h } = node;
+  const cx = nx + w / 2;
+  const cy = y + h / 2;
+  const dx = Math.abs(x - cx);
+  if (!(w > 0 && h > 0) || dx > w / 2 + 1e-6) return null;
+  const sgn = top ? -1 : 1;
+  switch (node.spec.shape) {
+    case "diamond":
+      return cy + sgn * (h / 2) * Math.max(0, 1 - dx / (w / 2));
+    case "cylinder": {
+      const ry = h * 0.16;
+      const u = Math.min(1, dx / (w / 2));
+      const rim = ry * Math.sqrt(1 - u * u); // front half of the lid / base ellipse
+      return top ? y + ry + rim : y + h - ry + rim;
+    }
+    case "circle": {
+      const r = Math.min(w, h) / 2;
+      return dx >= r ? null : cy + sgn * Math.sqrt(r * r - dx * dx);
+    }
+    case "stadium": {
+      const r = h / 2;
+      const flat = w / 2 - r;
+      if (dx <= flat) return top ? y : y + h;
+      const d = dx - flat;
+      return d >= r ? null : cy + sgn * Math.sqrt(r * r - d * d);
+    }
+    case "hexagon": {
+      const k = w * 0.22;
+      const edge = Math.min(x - nx, nx + w - x); // distance from the nearer side vertex column
+      return edge >= k ? (top ? y : y + h) : cy + sgn * (h / 2) * Math.max(0, edge / k);
+    }
+    case "parallelogram": {
+      const k = w * 0.18;
+      if (top) return x >= nx + k ? y : y + h * Math.max(0, 1 - (x - nx) / k);
+      return x <= nx + w - k ? y + h : y + h * Math.max(0, (nx + w - x) / k);
+    }
+    default:
+      return null;
+  }
+}
+
+/** Row 56c: x of the drawn outline on the horizontal line at height yy (left = left outline), or null when yy misses it. */
+function outlineXAt(node: SheetNode, yy: number, left: boolean): number | null {
+  const { x, y, w, h } = node;
+  const cx = x + w / 2;
+  const cy = y + h / 2;
+  const dy = Math.abs(yy - cy);
+  if (!(w > 0 && h > 0) || dy > h / 2 + 1e-6) return null;
+  const sgn = left ? -1 : 1;
+  switch (node.spec.shape) {
+    case "diamond":
+      return cx + sgn * (w / 2) * Math.max(0, 1 - dy / (h / 2));
+    case "circle": {
+      const r = Math.min(w, h) / 2;
+      return dy >= r ? null : cx + sgn * Math.sqrt(r * r - dy * dy);
+    }
+    case "stadium": {
+      const r = h / 2;
+      return cx + sgn * (w / 2 - r + Math.sqrt(Math.max(0, r * r - dy * dy)));
+    }
+    case "hexagon": {
+      const k = w * 0.22;
+      return left ? x + k * (dy / (h / 2)) : x + w - k * (dy / (h / 2));
+    }
+    case "parallelogram": {
+      const k = w * 0.18;
+      const t = Math.min(1, Math.max(0, (yy - y) / h));
+      return left ? x + k * (1 - t) : x + w - k * t;
+    }
+    default:
+      return null; // cylinder: the body sides are the box sides
+  }
+}
+
+/**
+ * Row 56c (defects 2, 3): a connector end on the node box of an `OUTLINE_SHAPES` node lands on the drawn outline. An end
+ * on the box top/bottom whose first piece is vertical moves along it to the outline at the same x (diamond side, the
+ * front rim of a cylinder lid, a circle); an end on the box left/right whose first piece is horizontal moves to the
+ * outline at the same y (diamond side, circle, stadium cap, hexagon/parallelogram slant). Both keep the piece's
+ * direction, so the route stays orthogonal. Diagonal (straight) ends and ends elsewhere: unchanged.
+ */
+function glueOutline(pts: Pt[], node: SheetNode, atEnd: boolean): Pt[] {
+  const k = atEnd ? pts.length - 1 : 0;
+  const step = atEnd ? -1 : 1;
+  const p = pts[k];
+  let nb = k + step;
+  while (nb >= 0 && nb < pts.length && Math.abs(pts[nb][0] - p[0]) < 1e-9 && Math.abs(pts[nb][1] - p[1]) < 1e-9) nb += step;
+  if (nb < 0 || nb >= pts.length) return pts;
+  const q = pts[nb];
+  const vertical = Math.abs(q[0] - p[0]) < 1e-6;
+  const horizontal = Math.abs(q[1] - p[1]) < 1e-6;
+  let np: Pt | null = null;
+  const onTop = Math.abs(p[1] - node.y) < 1e-6;
+  const onBottom = Math.abs(p[1] - (node.y + node.h)) < 1e-6;
+  const onLeft = Math.abs(p[0] - node.x) < 1e-6;
+  const onRight = Math.abs(p[0] - (node.x + node.w)) < 1e-6;
+  if (vertical && (onTop || onBottom) && (onTop ? q[1] < p[1] : q[1] > p[1])) {
+    const yy = outlineYAt(node, p[0], onTop);
+    if (yy !== null) np = [p[0], yy];
+  } else if (horizontal && (onLeft || onRight) && (onLeft ? q[0] < p[0] : q[0] > p[0])) {
+    const cy = node.y + node.h / 2;
+    const dy = Math.abs(p[1] - cy);
+    const shallow = (Math.atan2(node.h, node.w) * 180) / Math.PI < DIAMOND_HEAD_CLEAR_DEG;
+    if (atEnd && node.spec.shape === "diamond" && shallow && dy > 1e-6) {
+      // Row 56c (C101, defect 4): a horizontal arrowhead on a shallow diamond side would lie across the slanted line. The
+      // entry turns before the outline and drops onto the side from outside (along the box normal, at 90 - slope degrees).
+      // the drop ends at least half `ENTRY_COLLISION_MM` (+ 0.05) from the vertex height, so a mirrored entry stays apart
+      const d = Math.min(dy - ENTRY_COLLISION_MM / 2 - 0.05, HEAD_RUN_MM);
+      if (d >= HEAD_RUN_MM - 1e-9) {
+        const y2 = p[1] + Math.sign(cy - p[1]) * d;
+        const x2 = outlineXAt(node, y2, onLeft);
+        if (x2 !== null) {
+          return [...pts.slice(0, nb + 1), [x2, p[1]], [x2, y2]];
+        }
+      }
+    }
+    const xx = outlineXAt(node, p[1], onLeft);
+    if (xx !== null) np = [xx, p[1]];
+  }
+  if (!np || Math.hypot(np[0] - p[0], np[1] - p[1]) < 1e-9) return pts;
+  const out = [...pts];
+  // the repeated end points of a zero-length stub move with the end
+  for (let i = k; i !== nb; i += step) out[i] = np;
+  return out;
+}
+
 /**
  * Row 54 (VIS-3a, §5.3): an end on the cell box of a BPMN event/gateway lands on its outline. A horizontal last piece
  * whose y crosses the outline is extended to the outline at that y (circle or diamond); one that misses it (ELK end at
@@ -515,8 +662,29 @@ function throughEnds(pts: readonly Pt[], a: SheetNode, b: SheetNode): boolean {
     return { ...n, x: o.x + o.w / 4, y: o.y + o.h / 4, w: o.w / 2, h: o.h / 2 };
   };
   const ends = [a, b].filter((n) => n.spec.shape !== "bus").map((n) => (isLabelBelow(n.spec.shape) ? core(n) : n));
-  for (let i = 0; i + 1 < pts.length; i++) if (ends.some((n) => rectHit(pts[i], pts[i + 1], n))) return true;
+  // Row 56c: an end glued onto an `OUTLINE_SHAPES` outline lies inside its box; it is checked from the box side it entered.
+  const chk = boxEnds(boxEnds(pts, a, false), b, true);
+  for (let i = 0; i + 1 < chk.length; i++) if (ends.some((n) => rectHit(chk[i], chk[i + 1], n))) return true;
   return false;
+}
+
+/** Row 56c: `glueOutline` undone for the box checks: an axis-aligned end piece entering the box ends on the box side. */
+function boxEnds(pts: readonly Pt[], node: SheetNode, atEnd: boolean): readonly Pt[] {
+  if (pts.length < 2 || !OUTLINE_SHAPES.has(node.spec.shape ?? "")) return pts;
+  const inside = (c: Pt) => c[0] > node.x + 1e-6 && c[0] < node.x + node.w - 1e-6 && c[1] > node.y + 1e-6 && c[1] < node.y + node.h - 1e-6;
+  const seq = atEnd ? [...pts].reverse() : [...pts];
+  // the glued tail (one point, or the turn and drop onto a shallow diamond side) lies inside the box
+  let j = 0;
+  while (j + 1 < seq.length && inside(seq[j])) j++;
+  if (j === 0 || j === seq.length - 1 && inside(seq[j])) return pts;
+  const p = seq[j - 1];
+  const q = seq[j];
+  let np: Pt | null = null;
+  if (Math.abs(q[0] - p[0]) < 1e-6 && (q[1] <= node.y || q[1] >= node.y + node.h)) np = [p[0], q[1] <= node.y ? node.y : node.y + node.h];
+  else if (Math.abs(q[1] - p[1]) < 1e-6 && (q[0] <= node.x || q[0] >= node.x + node.w)) np = [q[0] <= node.x ? node.x : node.x + node.w, p[1]];
+  if (!np) return pts;
+  const out = [np, ...seq.slice(j)];
+  return atEnd ? out.reverse() : out;
 }
 
 type SidePair = readonly [Side, Side];
@@ -625,7 +793,21 @@ function cornerRoute(p: Pt, sa: Side, q: Pt, sb: Side, stub: number): Pt[] {
   const pa = out(p, sa);
   const pb = out(q, sb);
   const corner: Pt = sa === "top" || sa === "bottom" ? [pa[0], pb[1]] : [pb[0], pa[1]];
-  return [p, pa, corner, pb, q];
+  // Swarm 1.2.8 row 56c (defect 1): a stub that would pass the corner (the corner lies outside the side, nearer than one
+  // stub) is dropped, so the L does not double back over its own line; a corner behind the side keeps both stubs.
+  const along = (side: Side, from: Pt): number => {
+    const n = NORMAL[side];
+    return (corner[0] - from[0]) * n[0] + (corner[1] - from[1]) * n[1];
+  };
+  const cut = (side: Side, from: Pt) => {
+    const d = along(side, from);
+    return d > 1e-9 && d < stub - 1e-9;
+  };
+  const dropA = cut(sa, p);
+  const dropB = cut(sb, q);
+  if (!dropA && !dropB) return [p, pa, corner, pb, q];
+  const c: Pt = sa === "top" || sa === "bottom" ? [p[0], dropB ? q[1] : pb[1]] : [dropB ? q[0] : pb[0], p[1]];
+  return [p, ...(dropA ? [] : [pa]), c, ...(dropB ? [] : [pb]), q];
 }
 
 /** N-018 (T-08, 01e §8): members on one node side at which fan-out (or fan-in) sub-ranking applies. */
@@ -746,6 +928,104 @@ function fanRaw(
   return next;
 }
 
+/**
+ * Swarm 1.2.8 row 56c (C75 (1), C101; Visio minimum: a decision has four connection points, its vertices). Several
+ * router ends on one side of a `diamond` node would be fanned over the box side, below/beside the slanted outline
+ * (visible gap, and a horizontal arrowhead on a shallow side crosses it). Per side with two or more such ends the end
+ * whose far node is most in line with the vertex keeps it; each other end whose far node's centre lies beyond the
+ * neighbouring vertex by at least `HEAD_RUN_MM` for an entry, `STUB_SEGMENT_MIN_MM` for an exit (and beyond the vertex
+ * of the side by a stub along its normal)
+ * moves to that neighbouring vertex, when no end uses it yet; the route becomes an L (`cornerRoute`). Styled, glued and self edges keep
+ * their sides; gateways keep row 54b's spread (C86). Ends left on a shared side are fanned and land on the outline
+ * (`glueOutline`). A figure without two ends on one diamond side is unchanged.
+ */
+function diamondVertexSides(edges: readonly DiagramEdge[], pairs: readonly SidePair[], sheet: Sheet): SidePair[] {
+  const out = pairs.map((p) => [p[0], p[1]] as [Side, Side]);
+  for (const node of sheet.nodes.values()) {
+    if (node.spec.shape !== "diamond") continue;
+    const cx = node.x + node.w / 2;
+    const cy = node.y + node.h / 2;
+    const ends: { i: number; end: 0 | 1; other: SheetNode; free: boolean }[] = [];
+    edges.forEach((e, i) => {
+      if (e.from === e.to) return;
+      const free = !edgeRouteOf(e) && !glued(e);
+      if (e.from === node.id) ends.push({ i, end: 0, other: nodeOf(sheet, e.to), free });
+      if (e.to === node.id) ends.push({ i, end: 1, other: nodeOf(sheet, e.from), free });
+    });
+    const used = (s: Side) => ends.some((x) => out[x.i][x.end] === s);
+    for (const side of ["bottom", "top", "right", "left"] as const) {
+      const on = ends.filter((x) => out[x.i][x.end] === side);
+      if (on.length < 2) continue;
+      const vert = side === "top" || side === "bottom";
+      const off = (o: SheetNode) => (vert ? o.x + o.w / 2 - cx : o.y + o.h / 2 - cy);
+      const half = vert ? node.w / 2 : node.h / 2;
+      const ahead = (o: SheetNode) =>
+        side === "bottom" ? o.y >= cy + LATTICE_Y : side === "top" ? o.y + o.h <= cy - LATTICE_Y : side === "right" ? o.x >= cx + LATTICE_Y : o.x + o.w <= cx - LATTICE_Y;
+      const order = on.map((x, k) => ({ x, k })).sort((a, b) => Math.abs(off(a.x.other)) - Math.abs(off(b.x.other)) || a.k - b.k);
+      for (const { x } of order.slice(1)) {
+        if (!x.free) continue;
+        const o = off(x.other);
+        // an entry's last run carries the arrowhead; an exit's needs only a visible piece
+        if (Math.abs(o) < half + (x.end === 1 ? HEAD_RUN_MM : STUB_SEGMENT_MIN_MM) || !ahead(x.other)) continue;
+        const to: Side = vert ? (o > 0 ? "right" : "left") : o > 0 ? "bottom" : "top";
+        if (used(to)) continue;
+        out[x.i][x.end] = to;
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * Row 56c (C51 (a), C71; defect 1, back-jog in a narrow gap): the Z route of a forward pair. The middle run already lies
+ * between the two stub ends (`between`, also outside the fit). When the gap is narrower than two stubs the stub ends pass
+ * each other and the stubs would double back over the same line: the stubs are dropped and the route bends once, at the
+ * middle of the gap (rounded to 0.001 mm as `between`). `vertical`: stubs along y (bottom/top). Otherwise the original
+ * six points.
+ */
+function forwardRun(p: Pt, pa: Pt, pb: Pt, q: Pt, mid: number, vertical: boolean): Pt[] {
+  const ax = vertical ? 1 : 0;
+  const dir = Math.sign(q[ax] - p[ax]);
+  if (dir * (pb[ax] - pa[ax]) < -1e-9) {
+    const m = Number(((p[ax] + q[ax]) / 2.0).toFixed(3));
+    return vertical ? [p, [p[0], m], [q[0], m], q] : [p, [m, p[1]], [m, q[1]], q];
+  }
+  return vertical ? [p, pa, [pa[0], mid], [pb[0], mid], pb, q] : [p, pa, [mid, pa[1]], [mid, pb[1]], pb, q];
+}
+
+/** Row 56c (C51 (b)): a straight connector meets the target border at least this steeply, so its head stands clear of it. */
+const STRAIGHT_END_MIN_DEG = 40;
+
+/** Row 56c: angle (deg, 0..90) between the segment p -> q and the border `side` it ends on. */
+function incidenceDeg(p: Pt, q: Pt, side: Side): number {
+  const dx = Math.abs(q[0] - p[0]);
+  const dy = Math.abs(q[1] - p[1]);
+  return (Math.atan2(side === "top" || side === "bottom" ? dy : dx, side === "top" || side === "bottom" ? dx : dy) * 180) / Math.PI;
+}
+
+/**
+ * Row 56c (C51 (b), defect 5): the end of a `straight` connector on a box. A diagonal that meets the side at a grazing
+ * angle hides its arrowhead against the border. When the router's end meets its side below `STRAIGHT_END_MIN_DEG`, the
+ * end moves to the point of a box side facing the start (the side the start lies beyond), at the start's projection
+ * clamped to the middle two thirds of that side, that meets its side most steeply. Ends at or above the minimum, and
+ * nodes whose outline is not their box, are unchanged.
+ */
+function straightEnd(p: Pt, node: SheetNode, side: Side, q: Pt): Pt {
+  if (incidenceDeg(p, q, side) >= STRAIGHT_END_MIN_DEG) return q;
+  const shape = node.spec.shape;
+  if (shape === "bus" || isLabelBelow(shape) || OUTLINE_SHAPES.has(shape ?? "") || shape === "document" || shape === "offpage" || shape === "annotation") return q;
+  const clamp = (v: number, a: number, len: number) => Math.min(a + (len * 5) / 6, Math.max(a + len / 6, v));
+  const cands: { pt: Pt; side: Side }[] = [{ pt: q, side }];
+  if (p[1] < node.y) cands.push({ pt: [clamp(p[0], node.x, node.w), node.y], side: "top" });
+  if (p[1] > node.y + node.h) cands.push({ pt: [clamp(p[0], node.x, node.w), node.y + node.h], side: "bottom" });
+  if (p[0] < node.x) cands.push({ pt: [node.x, clamp(p[1], node.y, node.h)], side: "left" });
+  if (p[0] > node.x + node.w) cands.push({ pt: [node.x + node.w, clamp(p[1], node.y, node.h)], side: "right" });
+  let best = cands[0];
+  for (const c of cands.slice(1)) if (incidenceDeg(p, c.pt, c.side) > incidenceDeg(p, best.pt, best.side) + 1e-9) best = c;
+  const r2 = (v: number) => Math.round(v * 100) / 100;
+  return best === cands[0] ? q : [r2(best.pt[0]), r2(best.pt[1])];
+}
+
 /** The original `route_edges` body; `over` = side pair per edge index chosen by row 124 (CP-41). */
 function routeWithSides(s: StudioDiagramV1, sheet: Sheet, over: ReadonlyMap<number, SidePair>): RoutedEdge[] {
   const edges = s.edges ?? [];
@@ -757,7 +1037,13 @@ function routeWithSides(s: StudioDiagramV1, sheet: Sheet, over: ReadonlyMap<numb
   const dir = flowDirectionOf(s as StudioDiagramV1 & { direction?: unknown });
   const rankOf = dir ? flowRanks(s).rankOf : undefined;
   // Row 56b (VIS-5): explicit sides win over the router's pair.
-  const sidesOf = (e: DiagramEdge, i: number): SidePair => withSides(e, autoSides(e, i), nodeOf(sheet, e.from), nodeOf(sheet, e.to));
+  const sidesOf0 = (e: DiagramEdge, i: number): SidePair => withSides(e, autoSides(e, i), nodeOf(sheet, e.from), nodeOf(sheet, e.to));
+  // Row 56c (C75 (1), C101): a decision diamond connects at its four vertices, one end per vertex where the far node allows.
+  let vertexSides: SidePair[] | undefined;
+  const sidesOf = (e: DiagramEdge, i: number): SidePair => {
+    vertexSides ??= diamondVertexSides(edges, edges.map((x, j) => sidesOf0(x, j)), sheet);
+    return vertexSides[i];
+  };
   const autoSides = (e: DiagramEdge, i: number): SidePair => {
     const o = over.get(i);
     if (o) return o;
@@ -854,7 +1140,8 @@ function routeWithSides(s: StudioDiagramV1, sheet: Sheet, over: ReadonlyMap<numb
     if (vias) {
       pts = viaRoute(p, sa, vias, q, sb, style === "straight");
     } else if (style === "straight") {
-      pts = [p, q]; // row 56 (VIS-4): one segment, diagonal allowed
+      // row 56 (VIS-4): one segment, diagonal allowed; row 56c: its end meets the border steeply (glued ends stay)
+      pts = [p, sideField(e, "to") === undefined ? straightEnd(p, b, sb, q) : q];
     } else if (style === "curved") {
       pts = curvedPoints(p, sa, q, sb); // row 56 (VIS-4): sampled Bezier, ends normal to the sides
     } else if (vertA !== vertB) {
@@ -865,14 +1152,20 @@ function routeWithSides(s: StudioDiagramV1, sheet: Sheet, over: ReadonlyMap<numb
       const pb: Pt = [q[0], q[1] + (sb === "bottom" ? stub : -stub)];
       // Row 56b (VIS-5): a glued same-side pair (top to top, bottom to bottom) runs beyond the outer stub, not between.
       const same = sa === sb && glued(e);
-      const midy = same ? (sa === "bottom" ? Math.max(pa[1], pb[1]) : Math.min(pa[1], pb[1])) : between(snap((pa[1] + pb[1]) / 2.0, LATTICE_Y), pa[1], pb[1], laneFix);
-      pts = [p, pa, [pa[0], midy], [pb[0], midy], pb, q];
+      // Row 56c (C51 (a), defect 1): a forward pair (bottom -> top below it, top -> bottom above it) with a sideways offset
+      // never runs back (an end-on pair, same x, overlays its own line and keeps its route).
+      const fwd = !same && Math.abs(p[0] - q[0]) > 1e-9 && ((sa === "bottom" && sb === "top" && q[1] > p[1]) || (sa === "top" && sb === "bottom" && q[1] < p[1]));
+      const midy = same ? (sa === "bottom" ? Math.max(pa[1], pb[1]) : Math.min(pa[1], pb[1])) : between(snap((pa[1] + pb[1]) / 2.0, LATTICE_Y), pa[1], pb[1], laneFix || fwd);
+      pts = fwd ? forwardRun(p, pa, pb, q, midy, true) : [p, pa, [pa[0], midy], [pb[0], midy], pb, q];
     } else {
       const pa: Pt = [p[0] + (sideA ? 0 : sa === "right" ? stub : -stub), p[1]];
       const pb: Pt = [q[0] + (sideB ? 0 : sb === "right" ? stub : -stub), q[1]];
       const same = sa === sb && glued(e); // row 56b: left to left / right to right beyond the outer stub
-      const midx = same ? (sa === "right" ? Math.max(pa[0], pb[0]) : Math.min(pa[0], pb[0])) : between(snap((pa[0] + pb[0]) / 2.0, sheet.colMm), pa[0], pb[0], laneFix || sideA || sideB);
-      pts = Math.abs(p[1] - q[1]) < 1e-9 && (sideA || sideB) ? [p, q] : [p, pa, [midx, pa[1]], [midx, pb[1]], pb, q];
+      // Row 56c (C51 (a), defect 1): a forward pair (right -> left beyond it, left -> right before it) with a height offset
+      // never runs back (an end-on pair, same y, overlays its own line and keeps its route).
+      const fwd = !same && Math.abs(p[1] - q[1]) > 1e-9 && ((sa === "right" && sb === "left" && q[0] > p[0]) || (sa === "left" && sb === "right" && q[0] < p[0]));
+      const midx = same ? (sa === "right" ? Math.max(pa[0], pb[0]) : Math.min(pa[0], pb[0])) : between(snap((pa[0] + pb[0]) / 2.0, sheet.colMm), pa[0], pb[0], laneFix || sideA || sideB || fwd);
+      pts = Math.abs(p[1] - q[1]) < 1e-9 && (sideA || sideB) ? [p, q] : fwd ? forwardRun(p, pa, pb, q, midx, false) : [p, pa, [midx, pa[1]], [midx, pb[1]], pb, q];
     }
     raw.push(pts);
   });
